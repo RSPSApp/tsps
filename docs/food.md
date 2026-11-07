@@ -179,3 +179,9 @@ The [Draynor Manor cabbage](https://oldschool.runescape.wiki/w/Cabbage_%28Drayno
 uses a different item id from regular cabbage despite sharing its cache name. It heals one
 Hitpoint and boosts Defence by one plus 2% of its base level, rounded down. Its two eat
 messages come from the Wiki item page; their live timing has not been captured here.
+
+## Food and run energy
+
+[Gout tuber](https://oldschool.runescape.wiki/w/Gout_tuber) restores 50 run energy
+points, and [Purple sweets](https://oldschool.runescape.wiki/w/Purple_sweets) restore 10.
+Both use the existing food energy-restoration path, which caps energy at its maximum.

@@ -1158,3 +1158,108 @@ test("both cabbage identities remain food while their notes do not", () => {
     assert.equal(ids.includes(noted), false);
   }
 });
+
+// Observe the committed food effect before any later player-processing energy recovery.
+const STRANGE_FRUIT_ENERGY = 464;
+const GOUT_TUBER_ENERGY = 6311;
+const PURPLE_SWEETS_ENERGY = 10476;
+
+for (const [name, id, expectedOp, expectedGain] of [
+  ["Gout tuber", GOUT_TUBER_ENERGY, 6, 5000],
+  ["Purple sweets", PURPLE_SWEETS_ENERGY, 2, 1000],
+]) {
+  test(`${name} restores its run energy when eaten`, async t => {
+    const actions = [];
+    const eaten = [];
+    const originalAction = PM.emitItemAction;
+    const originalEvent = PM.emitCustomEvent;
+    t.mock.method(PM, "emitItemAction", function(event) {
+      const observed = { player: event.player, item: event.item, itemId: event.itemId,
+        heldId: event.item?.getId(), slot: event.slot, clickType: event.clickType, option: event.option };
+      const result = originalAction.call(this, event);
+      observed.handled = result;
+      actions.push(observed);
+      return result;
+    });
+    t.mock.method(PM, "emitCustomEvent", function(eventName, payload) {
+      const observed = eventName === "food:eaten" ? { player: payload.player, itemId: payload.itemId,
+        meta: payload.meta, hitpointsBefore: payload.hitpointsBefore, heal: payload.heal } : null;
+      const result = originalEvent.call(this, eventName, payload);
+      if (observed) { observed.energy = payload.player.getRunEnergyUnits(); eaten.push(observed); }
+      return result;
+    });
+    function energyActor() {
+      const f = divineActor(t, 50);
+      f.p.setRunEnergyUnits(1000); // Declared ordinary fixture state; not a claimed movement history.
+      assert.equal(f.p.getRunEnergyUnits(), 1000);
+      assert.equal(f.p.getHitpoints(), 50);
+      assert.equal(core.WorldDefinition.isMembersWorld(), true);
+      assert.equal(f.p.isRegistered(), true);
+      assert.equal(f.p.isPlayerBot(), false);
+      assert.equal(f.p.isDyingReturn() ?? false, false);
+      assert.equal(f.p.isTeleportingReturn() ?? false, false);
+      assert.equal(f.p.getPrivateArea(), null);
+      assert.equal(f.p.getCombat().getTarget() ?? null, null);
+      assert.equal(f.p.getCombat().getAttacker() ?? null, null);
+      assert.equal(f.eq.getItems().filter(held => held && held.getId() > 0 && held.getAmount() > 0).length, 0);
+      assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false);
+      assert.equal(f.p.getTimers().has(core.TimerKey.STUN), false);
+      return f;
+    }
+    async function eatObserved(f, foodId, foodName, op, amount) {
+      const definition = core.CacheDefinitions.getItem(foodId);
+      assert.equal(definition.name, foodName);
+      assert.equal(definition.inventoryActions[op === 6 ? 3 : 0], "Eat");
+      assert.equal(definition.noteTemplate, -1);
+      assert.equal(definition.placeholderTemplate, -1);
+      assert.equal(core.ItemDefinition.forId(foodId).isNoted(), false);
+      assert.equal(widgetOpFor(foodId, "Eat"), op);
+      const held = put(f, item(foodId, amount), 0);
+      assert.equal(f.inv.getItems()[0], held);
+      assert.equal(held.getId(), foodId);
+      assert.equal(held.getAmount(), amount);
+      assert.equal(held.getMeta(), null);
+      const start = f.p.getRunEnergyUnits();
+      assert.equal(start, 1000);
+      const actionCount = actions.length, eventCount = eaten.length;
+      await heldOp(f, 0, "Eat");
+      assert.equal(actions.length, actionCount + 1);
+      const action = actions[actionCount];
+      assert.equal(action.player, f.p);
+      assert.equal(action.item, held);
+      assert.equal(action.itemId, foodId);
+      assert.equal(action.heldId, foodId);
+      assert.equal(action.slot, 0);
+      assert.equal(action.clickType, op === 6 ? 4 : 1);
+      assert.equal(action.option, "Eat");
+      assert.equal(action.handled, true);
+      assert.equal(eaten.length, eventCount + 1);
+      const event = eaten[eventCount];
+      assert.equal(event.player, f.p);
+      assert.equal(event.itemId, foodId);
+      return { start, event };
+    }
+    const control = energyActor();
+    const fruit = await eatObserved(control, STRANGE_FRUIT_ENERGY, "Strange fruit", 2, 1);
+    assert.equal(fruit.event.energy - fruit.start, 3000, "the same Eat path restores fruit energy");
+    assert.equal(control.inv.getAmount(STRANGE_FRUIT_ENERGY), 0);
+    assert.equal(control.p.getHitpoints(), 50);
+    assert.equal(fruit.event.meta, null);
+    assert.equal(control.p.getTimers().has(core.TimerKey.FOOD), true);
+
+    const target = energyActor();
+    const amount = id === PURPLE_SWEETS_ENERGY ? 2 : 1;
+    const observed = await eatObserved(target, id, name, expectedOp, amount);
+    assert.equal(observed.event.energy - observed.start, expectedGain, "the committed food restores its run energy");
+    assert.equal(target.inv.getAmount(id), amount - 1);
+    if (amount > 1) assert.equal(target.inv.getItems()[0].getMeta(), null);
+    const hp = target.p.getHitpoints();
+    if (id === GOUT_TUBER_ENERGY) assert.equal(hp, 62);
+    else assert.ok(hp >= 51 && hp <= 53);
+    assert.equal(target.p.getSkillManager().getExperience(core.Skill.HITPOINTS), core.SkillManager.getExperienceForLevel(99));
+    assert.equal(target.p.getTimers().has(core.TimerKey.FOOD), true);
+    assert.equal(observed.event.meta, null);
+    assert.equal(observed.event.hitpointsBefore, 50);
+    assert.ok(target.messages.some(message => typeof message === "string" && message.length > 0));
+  });
+}

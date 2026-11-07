@@ -1731,7 +1731,8 @@ module.exports = function registerTheFeudQuest(api) {
       const reward = held(player, WILLOW_BLACKJACK_ITEM_ID)
         ? ADAMANT_SCIMITAR_ITEM_ID
         : WILLOW_BLACKJACK_ITEM_ID;
-      player.getInventory().adds(reward, 1);
+      // The drop table leaves these to this handler, so a full inventory must not lose it: it lands under the player.
+      giveReward(player, reward, 1);
       if (stage(player) === STAGE_CHAMPION) {
         quest.setStage(player, STAGE_MAYOR);
         syncVarbits(player);

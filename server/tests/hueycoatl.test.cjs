@@ -373,6 +373,16 @@ test("private Hueycoatl fees follow the current Hard Combat Achievement threshol
   for (let i = 0; i < 5; i++) World.process();
   assert.equal(eligible.player.getPrivateArea(), solo.area);
 
+  const leaver = actor("hueyleaver", 50000);
+  await openFlag(leaver); await choose(leaver, FRIENDS);
+  const left = [...Shared.sessions].find((session) => session.owner === leaver.player);
+  assert.ok(left, "the fight is made when the fee is paid");
+  leaver.player.setRegistered(false); // logged out during the fade in
+  for (let i = 0; i < 5; i++) World.process();
+  assert.equal(Shared.sessions.has(left), false, "a fight its owner never reached is torn down");
+  assert.equal(left.area.isDestroyed(), true);
+  leaver.player.setRegistered(true);
+
   // The existing fee message is estimated wording; check that it uses the same
   // discounted amount as the actual funds check, without claiming a live line.
   assert.equal(Progress.complete(poor.player, Data.tiers()[0].tasks[0], { silent: true }), true);

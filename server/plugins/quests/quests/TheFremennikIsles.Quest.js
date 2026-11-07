@@ -72,8 +72,7 @@
  *    placed in this cache).
  *  - Bridges keep their broken appearance after Repair (the swap object has no
  *    placement here); clicking Walk-across on a repaired bridge moves the
- *    player over it. The 56 Woodcutting gate on the shield is not enforced (the
- *    shop path does not need it); rope spinning enforces Crafting 30 with a
+ *    player over it. Rope spinning enforces Crafting 30 with a
  *    system message. The chest, splitting, curing, shield-making and head-taking
  *    steps use short system messages where the wiki transcript has no line.
  *  - The weapon/shield "hands free" check follows Cold War: WEAPON_SLOT and
@@ -1658,6 +1657,9 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         hasItem(player, HAMMER)
       ) {
         event.handled = true;
+        if (player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING) < 56) {
+          return;
+        }
         player.getInventory().deleteNumber(ARCTIC_PINE_LOGS, 2);
         player.getInventory().deleteNumber(ROPE, 1);
         player.getInventory().deleteNumber(BRONZE_NAILS, 1);

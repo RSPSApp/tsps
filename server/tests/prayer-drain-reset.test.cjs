@@ -10,6 +10,8 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Altars = require("../plugins/objects/Altars.plugin");
 const Pool = require("../plugins/objects/RejuvenationPool.plugin");
+const Prison = require("../plugins/bosses/nex/Prison.Nex");
+const NexCommon = require("../plugins/bosses/nex/Common.Nex");
 
 test("praying at an altar and drinking from a Rejuvenation pool clear the prayer drain counter (Wiki)", async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -18,6 +20,7 @@ test("praying at an altar and drinking from a Rejuvenation pool clear the prayer
   core.RegionManager.init();
   const api = PluginManager.createApi("PrayerDrainResetTest");
   Altars.register(api);
+  NexCommon.init(api);
 
   let index = 2000;
   function actor() {
@@ -74,4 +77,12 @@ test("praying at an altar and drinking from a Rejuvenation pool clear the prayer
     drink(name, player);
     assert.equal(player.getPrayerPointDrain(), cleared ? 0 : 40, name);
   }
+
+  // The Ancient Prison altar restores Prayer by its own code.
+  const nex = actor();
+  nex.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 1);
+  nex.setPrayerPointDrain(40);
+  Prison.pray({ player: nex });
+  assert.equal(nex.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 10, "Ancient Prison restores");
+  assert.equal(nex.getPrayerPointDrain(), 0, "Ancient Prison altar");
 });

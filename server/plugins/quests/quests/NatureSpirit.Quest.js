@@ -1197,6 +1197,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.performAnimation(new Animation(645));
     skills.setCurrentLevels(Skill.PRAYER, maximum);
     skills.updateSkill(Skill.PRAYER);
+    player.setPrayerPointDrain(0);
     player.getPacketSender().sendSoundEffect(api.core.Sound.PRAYER_RECHARGE.getId(), 1, 0, 0);
     player.sendMessage("You recharge your Prayer points.");
     return true;

@@ -56,7 +56,8 @@ const TASKS = {
 };
 
 const MARTIN_ID = 5832;
-const CHAELDAR_ID = 404;
+// The slayer:task-assigned event carries the master ID, not the NPC ID.
+const CHAELDAR_MASTER_ID = 4;
 const BELLADONNA_PATCH_ID = 7572;
 const ZANARIS_JUTTING_WALLS = new Set([[2400, 4403].join(","), [2409, 4401].join(",")]);
 
@@ -198,7 +199,7 @@ function thieved({ player, kind, succeeded, npc } = {}) {
 }
 
 function assignedSlayerTask({ player, master } = {}) {
-  if (master === CHAELDAR_ID) complete(player, TASKS.chaeldar);
+  if (master === CHAELDAR_MASTER_ID) complete(player, TASKS.chaeldar);
 }
 
 function caughtImpling({ player, npcId, puro } = {}) {

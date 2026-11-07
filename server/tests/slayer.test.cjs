@@ -496,6 +496,23 @@ test("kurask only take damage from leaf-bladed weapons", () => {
   assert.equal(hitWith(core.ItemIdentifiers.LEAF_BLADED_SWORD), 20);
 });
 
+// Wiki (Harpie Bug Swarm): a lit bug lantern "is required to damage these monsters (the lantern must be lit and
+// equipped)".
+test("a harpie bug swarm only takes damage while a lit bug lantern is worn", () => {
+  const swarm = npcNamed("Harpie Bug Swarm");
+  const hitWearing = (slots) => {
+    const player = equip(createPlayer(), slots);
+    let damage = 20;
+    const hit = { getAttacker: () => player, getCombatType: () => core.CombatType.MELEE, setTotalDamage: (value) => { damage = value; } };
+    player.getAsPlayer = () => player;
+    Equipment.npcHit({ npc: swarm, hit });
+    return damage;
+  };
+  assert.equal(hitWearing({ 3: 4587 }), 0, "no lantern: no damage");
+  assert.equal(hitWearing({ 3: 4587, 5: core.ItemIdentifiers.UNLIT_BUG_LANTERN }), 0, "an unlit lantern does nothing");
+  assert.equal(hitWearing({ 3: 4587, 5: core.ItemIdentifiers.LIT_BUG_LANTERN }), 20, "a lit lantern worn: the hit lands");
+});
+
 test("a gargoyle waits at 0 hitpoints for the rock hammer", () => {
   const player = createPlayer();
   player.inventory.push([4162, 1]);

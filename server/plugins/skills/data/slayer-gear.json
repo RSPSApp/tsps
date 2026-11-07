@@ -11,6 +11,10 @@
   ],
   "_smokeDevilNote": "Smoke devils: no unprotected max is documented (protected max is 20), so unprotected hits stay accurate with the drain and prayers keep working (Wiki: Protect from Missiles negates them). Thermonuclear: the Wiki confirms unprotected hits land above its max 8 ('even more damage'); the 15 is Near-Reality's number, kept as a behavior-oracle estimate.",
   "_immune": "Monsters only some attacks hurt (Wiki, Kurask and Turoth): leaf-bladed melee weapons, broad arrows and bolts, and Magic Dart.",
+  "_needsWorn": "Monsters only harmed while the attacker wears an item (Wiki, Harpie Bug Swarm: a lit bug lantern \"is required to damage these monsters (the lantern must be lit and equipped)\").",
+  "needsWorn": [
+    {"names": ["Harpie Bug Swarm"], "worn": ["Lit bug lantern"]}
+  ],
   "immune": {
     "names": ["Kurask", "Turoth", "King kurask", "Spiked Turoth"],
     "weapons": ["Leaf-bladed"],

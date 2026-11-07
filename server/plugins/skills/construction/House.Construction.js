@@ -1008,6 +1008,13 @@ function completeFurniture(player, house, target, buildable, materials) {
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
   // Wiki (Spirit tree (Construction), Spirit tree & fairy ring): a planted spirit tree gives Farming experience too.
   if (buildable.farmingExperience > 0) player.getSkillManager().addExperiences(Skill.FARMING, buildable.farmingExperience);
+  // Wiki (Mithril armour (Construction), Rune case space): 25 experience in the piece's second skill too.
+  if (buildable.secondSkillExperience > 0) {
+    for (const requirement of buildable.secondaryLevels ?? []) {
+      const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
+      if (skill) player.getSkillManager().addExperiences(skill, buildable.secondSkillExperience);
+    }
+  }
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
   api.emitCustomEvent("construction:furniture-built", { player, buildable });
@@ -1469,4 +1476,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

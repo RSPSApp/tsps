@@ -404,6 +404,7 @@ module.exports = {
     api.persistAttribute(SELECTED_TRACK_ATTRIBUTE, -1);
     api.onPlayerLogin(onMusicLogin);
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
+    api.onCustomEvent("gameframe:ready", onMusicWelcomeAction);
     api.onInterfaceActionButton((MUSIC_GROUP_ID << 16) | MUSIC_JUKEBOX_CHILD_ID, selectMusicTrack);
   // A tab mounted again later (Tutorial Island's unlocks) lost its flags too.
   api.onCustomEvent("gameframe:tab-mounted", ({ player, group }) => {

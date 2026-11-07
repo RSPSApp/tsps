@@ -288,6 +288,14 @@ test('music tab restores native jukebox row and now-playing actions after root m
     [(239 << 16) | 4, -1, -1, 60],
   ]);
   assert.deepEqual(player.scripts, [[3936]]);
+  const mountedFlags = player.flags.slice();
+  player.flags.length = 0;
+  player.scripts.length = 0;
+  // Welcome's settled mount event runs even when a later plugin consumes its Play click.
+  api.emitCustomEvent('gameframe:ready', { player });
+  await Promise.resolve();
+  assert.deepEqual(player.flags, mountedFlags, 'restore row operations after the actual welcome bootstrap');
+  assert.deepEqual(player.scripts, [[3936]]);
 });
 
 test('invalid music cape is banked when full and destroyed for ultimate ironmen', async () => {

@@ -16,6 +16,7 @@ The plugin is `server/plugins/bosses/Kraken.plugin.js`, with its units in
 | `MagicOnly.Kraken.js` | Style rules: Ranged 1/7th, Melee immune with the Wiki message; Magic unaffected. |
 | `Typeless.Kraken.js` | Boss + tentacles ignore Protect from Magic (Wiki typeless); cave krakens stay prayable. |
 | `Crevice.Kraken.js` | Crevice 537 Enter into the boss pool (2280, 10022), Crevice 538 Use back out (2280, 10016). No squeeze animation captured, so none plays (estimate). |
+| `Instance.Kraken.js` | Private-room ownership, actors and teardown. |
 | `Fight.Kraken.js` | Attack script for 492/494/5535: Magic, Fire-Wave-like projectiles (156 boss, 162 cave/tentacle; real spotanims in rev 241), impacts 157/163, splash on miss. Speeds/max hits stay the dump's. |
 | `Area.Kraken.js` | Kraken Cove multicombat over the Slayer-area box, so boss + tentacles can pile one player. |
 | `Respawn.Kraken.js` | No mid-fight trickle: tentacles killed while the boss is up stay dead; killing the boss kills the rest and respawns all five whirlpools together on the boss timer. |
@@ -49,13 +50,20 @@ teleports (`loc-teleports.json`: cave entrance/exit 30177/30178), kill tracking
 - **Respawn:** deaths come back as whirlpools via the engine (transformation cleared before
   the respawn is queued).
 
-## Not yet implemented
+## Private room
 
-- **Private instance:** live lets you pay 25,000 coins for a private Kraken room
-  (the crevice's Private option). Not implemented — Enter uses the shared public pool;
-  Private/Peek on the crevice do nothing.
-- **Slayer-task-only attacks:** live requires a Kraken/cave kraken task (plus 50 Magic) to
-  damage them. Not enforced here — only the 87 Slayer level is (via Combat.Slayer).
+The crevice's Private option asks for 25,000 coins from either inventory or bank;
+the room is visible only to its owner and closes when they leave. The choice of
+payment source, prompt wording and closing on any completed teleport are this
+server's policies, rather than captured retail wording or internal-teleport rules.
+The public Enter and Use options remain available. [Jagex's original update](https://secure.runescape.com/m=news/boss-pets-sets-chat--more?oldschool=1)
+describes the fee, payment sources and room lifetime.
+
+Peek remains unimplemented: it reports the number of players in the public boss
+room on OSRS, but this server's broad Kraken Cove area also includes the exterior.
+The boss-room membership boundary has not been established here. The cove's
+attack hook checks the player's Kraken task; the existing Slayer combat checks
+also apply.
 
 ## To verify
 

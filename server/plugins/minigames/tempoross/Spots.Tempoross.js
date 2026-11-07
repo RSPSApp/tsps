@@ -208,10 +208,13 @@ function harpoonSpot(event) {
       inventoryFull(player);
       return false;
     }
+    // As Fishing does: a harpoon dropped or banked mid-catch ends it; a better one picked up is used.
+    const held = harpoonOf(player);
+    if (!held) return false;
     if (ticks % harpoonTicks !== 0) return true;
     Shared.animate(player, ANIM.HARPOON);
-    if (Math.random() < catchChance(level, DATA.catch[harpoon.tier])) {
-      catchFish(player, fight, harpoon, event.npcId === NPC.SPOT_SPECIAL);
+    if (Math.random() < catchChance(level, DATA.catch[held.tier])) {
+      catchFish(player, fight, held, event.npcId === NPC.SPOT_SPECIAL);
     }
     return true;
   });

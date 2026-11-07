@@ -425,10 +425,18 @@ module.exports = function registerHolyGrailQuest(api) {
   }
 
   /** The whistle travels between the Brimhaven tower and the Fisher Realm. */
+  /** The whistle's travel follows the usual teleport rules (busy, Tele Block, areas that forbid it). */
+  function whistleTo(player, tile) {
+    const { TeleportHandler, TeleportType } = api.core;
+    const destination = toLocation(tile);
+    if (!TeleportHandler.checkReqs(player, destination)) return;
+    TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false);
+  }
+
   function blowWhistle({ player }) {
     const location = player.getLocation();
     if (inFisherRealm(location)) {
-      player.moveTo(toLocation(BRIMHAVEN_TILE));
+      whistleTo(player, BRIMHAVEN_TILE);
       return;
     }
     if (!inWhistleArea(location)) {
@@ -436,7 +444,7 @@ module.exports = function registerHolyGrailQuest(api) {
       return;
     }
     const restored = quest.getStage(player) >= STAGE_GIVEN_WHISTLE;
-    player.moveTo(toLocation(restored ? RESTORED_ARRIVAL_TILE : WITHERED_ARRIVAL_TILE));
+    whistleTo(player, restored ? RESTORED_ARRIVAL_TILE : WITHERED_ARRIVAL_TILE);
   }
 
   /** Ringing the bell by the dismantled bricks: the transcript's two conditions pick the outcome. */

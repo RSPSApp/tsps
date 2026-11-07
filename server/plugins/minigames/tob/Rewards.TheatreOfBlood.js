@@ -467,6 +467,17 @@ function showClaimChest({ player }) {
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, lootOf(player).length > 0 ? 1 : 0);
 }
 
+/**
+ * The chest's buttons answer only while it is open: a click on them with it closed took or banked the loot from
+ * anywhere (the Wilderness and other no-bank areas too).
+ */
+function whileOpen(handler) {
+  return function openChestOnly(event) {
+    if (event?.player?.getInterfaceId?.() !== INTERFACE) return true;
+    return handler(event);
+  };
+}
+
 module.exports = function registerTheatreRewards(api) {
   Shared.bind(api);
   Raid.registerRoom("REWARDS", RewardsRoom);
@@ -477,10 +488,10 @@ module.exports = function registerTheatreRewards(api) {
   api.onPlayerLogin(showClaimChest);
   api.onPlayerLogout(({ player }) => loseLoot(player));
   api.onCustomEvent("tob:raid-entered", enterRaid);
-  api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.BANK_ALL, clickBankAll);
-  api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, clickTakeAll);
-  api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, clickDiscardAll);
-  api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
+  api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.BANK_ALL, whileOpen(clickBankAll));
+  api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, whileOpen(clickTakeAll));
+  api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, whileOpen(clickDiscardAll));
+  api.onInterfaceActionButton(ITEMS_UID, whileOpen(clickLootItem));
 };
 
 Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, loseLoot, logLoot, openLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });

@@ -187,3 +187,79 @@ for (const [label, openerY, followerY, leaderY, blockedAt] of [
     b.setFollowing(null);
   });
 }
+
+// The same pass-through mechanism on Dragon Slayer I's other doors (revision 242 capture 20261106T101002).
+// A maze door (red door 2596 at 2926,3253, face 0, ticks 2108-2111): the key is spent as it opens, INVISWALL
+// goes on the doorway and reddoor_open (9464) on the tile west, the player walks across and the door is back
+// two ticks later. The Champions' Guild door (1805 at 3191,3363, face 3, ticks 969-973): championdoor_open
+// (23637) on the tile south, crossed by an ordinary walk.
+const locAt = (id, x, y, z = 0) => {
+  for (const list of core.MapObjects.mapObjects.values()) {
+    for (const object of list) {
+      const where = object.getLocation();
+      if (object.getId() === id && where.getX() === x && where.getY() === y && where.getZ() === z) return object;
+    }
+  }
+  return null;
+};
+const INVISWALL = 38848;
+
+test("Melzar's red door opens as captured: key spent, blocker and open leaf, walked across, shut again", (t) => {
+  core.RegionManager.loadMapFiles(2926, 3253);
+  const RED_DOOR = core.ObjectIdentifiers.RED_DOOR, RED_KEY = core.ItemIdentifiers.KEY_3;
+  const { player, messages } = actor(t, 2, 2927, 3253);
+  player.getInventory().adds(RED_KEY, 1);
+  settle();
+  assert.ok(locAt(RED_DOOR, 2926, 3253), "the closed red door is on the map");
+  new ObjectActionPacketListener().executeAction(player, RED_DOOR, 2926, 3253, 1);
+  assert.ok(until(() => locAt(9464, 2925, 3253) !== null, 6), "the open leaf is on the tile west");
+  assert.ok(locAt(INVISWALL, 2926, 3253), "a blocker stands on the doorway");
+  assert.equal(player.getInventory().getAmount(RED_KEY), 0);
+  assert.ok(messages.includes("The key disintegrates as it unlocks the door."));
+  assert.ok(until(() => at(player)[0] === 2925, 6), "walked across");
+  assert.ok(!player.getForceMovement(), "an ordinary walk, not a forced movement");
+  settle();
+  assert.equal(locAt(9464, 2925, 3253), null, "the door shuts again");
+  assert.ok(locAt(RED_DOOR, 2926, 3253), "the closed door is back");
+
+  const { player: keyless, messages: refused } = actor(t, 2, 2927, 3253);
+  settle();
+  new ObjectActionPacketListener().executeAction(keyless, RED_DOOR, 2926, 3253, 1);
+  settle();
+  assert.ok(refused.includes("This door is securely locked."));
+  assert.ok(at(keyless)[0] >= 2926, "the keyless player never crosses the door");
+});
+
+test("the Champions' Guild door is a pass-through door: the open leaf south, walked across, shut again", (t) => {
+  core.RegionManager.loadMapFiles(3191, 3363);
+  const DOOR = core.ObjectIdentifiers.DOOR_45;
+  const { player } = actor(t, 0, 3191, 3364);
+  player.setAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE, 32);
+  settle();
+  new ObjectActionPacketListener().executeAction(player, DOOR, 3191, 3363, 1);
+  assert.ok(until(() => locAt(23637, 3191, 3362) !== null, 6), "championdoor_open is on the tile south");
+  assert.ok(until(() => at(player)[1] === 3362, 8), "walked into the guild");
+  assert.ok(player.getDialogueManager().getCurrent(), "the Guildmaster's greeting is open as they walk in (tick 971)");
+  settle();
+  assert.equal(locAt(23637, 3191, 3362), null, "the door shuts again");
+  assert.ok(locAt(DOOR, 3191, 3363), "the closed door is back");
+});
+
+test("Melzar's basement exit door lets the room side out and keeps the corridor side out, through Doors", (t) => {
+  core.RegionManager.loadMapFiles(2931, 9640);
+  const EXIT = core.ObjectIdentifiers.EXIT_DOOR, LEAF = 10254; // funexit_open, paired by cache name
+  const { player: corridor } = actor(t, 2, 2930, 9640);
+  settle();
+  new ObjectActionPacketListener().executeAction(corridor, EXIT, 2931, 9640, 1);
+  settle();
+  assert.ok(at(corridor)[0] <= 2930, "the corridor side is refused, not carried back through");
+  assert.equal(locAt(LEAF, 2930, 9640), null, "and the door never opened");
+
+  const { player: room } = actor(t, 2, 2932, 9640);
+  settle();
+  new ObjectActionPacketListener().executeAction(room, EXIT, 2931, 9640, 1);
+  assert.ok(until(() => locAt(LEAF, 2930, 9640) !== null, 6), "the room side opens it: funexit_open on the tile west");
+  assert.ok(until(() => at(room)[0] === 2930, 8), "and walks out into the corridor");
+  settle();
+  assert.equal(locAt(LEAF, 2930, 9640), null, "the door shuts again");
+});

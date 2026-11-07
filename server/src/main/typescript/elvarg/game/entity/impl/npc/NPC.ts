@@ -243,6 +243,7 @@ export class NPC extends Mobile {
     }
 
     public onAdd() {
+        PluginManager.emitCustomEvent("npc:added", { npc: this });
         const spawnAnim = this.getCurrentDefinition().getSpawnAnim();
         if (Number.isInteger(spawnAnim) && spawnAnim >= 0) {
             this.performAnimation(new Animation(spawnAnim));

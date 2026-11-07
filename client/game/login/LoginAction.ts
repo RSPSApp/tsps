@@ -33,6 +33,7 @@ export type LoginAction =
     | { type: "toggle_music" }
     | { type: "field_click"; field: number };
 
+
 /**
  * Pre-allocated action objects to avoid allocations during input handling.
  * Critical for mobile performance.

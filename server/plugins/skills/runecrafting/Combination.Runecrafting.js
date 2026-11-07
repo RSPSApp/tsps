@@ -98,11 +98,20 @@ function useNecklace(player) {
   player.sendMessage("Your Binding necklace disintegrates.");
 }
 
+/** FreeToPlay's line for a members item. */
+const MEMBERS_MESSAGE = "To use this item please login to a members' world.";
+
 function combine(event) {
   const rune = !event.handled && TABLE.get(event.objectId)?.get(event.itemId);
   if (!rune) return;
   event.handled = true;
   const { player } = event;
+  // Combination runes are members-only; the four altars stand in free land, and the elemental rune used on them is
+  // the only item the free-world item check sees (FreeToPlay), so the pure essence and the product went unchecked.
+  if (!core.WorldDefinition.isMembersWorld()) {
+    player.sendMessage(MEMBERS_MESSAGE);
+    return;
+  }
   const I = core.ItemIdentifiers, inventory = player.getInventory();
   if (player.getSkillManager().getCurrentLevel(core.Skill.RUNECRAFTING) < rune.level) {
     player.sendMessage(`You need a Runecrafting level of at least ${rune.level} to craft this.`);

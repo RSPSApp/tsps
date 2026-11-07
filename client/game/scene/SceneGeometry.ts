@@ -4,8 +4,9 @@
  * host; units are tiles, with height negative upwards, as the renderers use them.
  */
 export interface SceneGeometry {
-    /** Terrain height (tiles, negative up) at a fractional world tile position on a plane. */
-    tileHeight(worldX: number, worldY: number, plane: number): number;
+    /** Bridge-aware terrain height (tiles, negative up) on a server plane.
+     * Polygons pass their center as the anchor so every corner samples the same height plane. */
+    tileHeight(worldX: number, worldY: number, plane: number, anchorX?: number, anchorY?: number): number;
     /** Canvas device pixels for a scene point (world x, height, world y), or undefined off-screen. */
     worldToScreen(x: number, height: number, y: number): readonly [number, number] | undefined;
     /** The NPC's posed model triangles in scene units (x, height, y), for hulls and outlines. */
@@ -33,4 +34,17 @@ export interface MinimapGeometry {
     scale: number;
     /** Canvas device pixels for a fractional world tile, or undefined beyond the minimap's reach. */
     worldToMinimap(worldX: number, worldY: number): readonly [number, number] | undefined;
+}
+
+/** Resolve the server plane at the polygon center, then sample its individual corners. */
+export function sceneTileHeight(
+    host: {
+        getHeightSamplePlaneForTile(x: number, y: number, plane: number): number;
+        getTileHeightAtPlane(x: number, y: number, plane: number): number;
+    },
+    x: number, y: number, plane: number, anchorX = x, anchorY = y,
+): number {
+    return host.getTileHeightAtPlane(
+        x, y, host.getHeightSamplePlaneForTile(Math.floor(anchorX), Math.floor(anchorY), plane),
+    );
 }

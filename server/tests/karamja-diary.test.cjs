@@ -169,6 +169,10 @@ test("teak, mahogany, karambwan, oomlie wrap and nature runes", () => {
   emit("runecrafting:success", { player: small, runeId: core.ItemIdentifiers.NATURE_RUNE, rolls: 27, amountPerEssence: 2 });
   assert.ok(done(small).has("craft-some-nature-runes-from-essence"));
   assert.equal(done(small).has("craft-56-nature-runes-simultaneously-from-essenc"), false);
+
+  // The Raiments of the Eye's bonus runes count toward the total (Wiki: Raiments of the Eye).
+  emit("runecrafting:success", { player: small, runeId: core.ItemIdentifiers.NATURE_RUNE, rolls: 27, amountPerEssence: 2, bonusRunes: 2 });
+  assert.ok(done(small).has("craft-56-nature-runes-simultaneously-from-essenc"));
 });
 
 test("Horseshoe mine antivenom, Mor Ul Rek cape, graahk and Shilo Slayer master", () => {

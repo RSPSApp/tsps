@@ -23,21 +23,35 @@ function later(player, ticks, action) {
   })());
 }
 
+/** Check again at the delayed commit: a condition may change while a boat is selected. */
+function boardingAllowed(api, player, dock) {
+  const event = { player, dock, allow: true, reason: null };
+  api.emitCustomEvent("sailing:can-board", event);
+  if (event.allow !== false) return true;
+  if (event.reason) player.sendMessage(event.reason);
+  return false;
+}
+
 /** With more than one boat, Board asks which (the boat selection interface, as in OSRS). */
 function boardBoat({ player, location }) {
   const dock = dockAtGangplank(location);
   if (!dock) return false;
+  if (!boardingAllowed(this, player, dock)) return true;
   if (player.getSailing().boats.length > 1) {
-    openBoatSelection(player, MODE.BOARD, dock, (slot) => boardSlot(player, dock, slot));
+    openBoatSelection(player, MODE.BOARD, dock, (slot) => boardSlot(this, player, dock, slot));
   } else {
-    boardSlot(player, dock, undefined);
+    boardSlot(this, player, dock, undefined);
   }
 }
 
 /** Boards the boat in `slot`, or with none given the one moored here. */
-function boardSlot(player, dock, slot) {
+function boardSlot(api, player, dock, slot) {
   fade(player, true);
   later(player, 1, () => {
+    if (!boardingAllowed(api, player, dock)) {
+      fade(player, false);
+      return;
+    }
     const refusal = Sailing.board(player, dock.id, slot);
     if (refusal) {
       fade(player, false);
@@ -104,8 +118,8 @@ module.exports = {
   members: true,
   register(api) {
     content();
-    api.onObjectInteraction("Gangplank", { Board: boardBoat, Disembark: disembarkBoat });
-    api.onObjectInteraction("Mooring point", { Board: boardBoat, Disembark: disembarkBoat });
+    api.onObjectInteraction("Gangplank", { Board: boardBoat.bind(api), Disembark: disembarkBoat });
+    api.onObjectInteraction("Mooring point", { Board: boardBoat.bind(api), Disembark: disembarkBoat });
     api.onObjectInteraction("Buoy", { Dock: dockAtBuoyOp });
     api.setUsableFromDeck?.(["Gangplank", "Mooring point", "Buoy"]);
   },

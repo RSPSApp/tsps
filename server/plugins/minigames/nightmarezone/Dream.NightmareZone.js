@@ -230,6 +230,7 @@ function start(player) {
     ended: false,
   };
   dreams.set(player, state);
+  player.setAttribute(IN_DREAM_ATTRIBUTE, true);
   Common.later(1, () => dreamOf(player) === state && Common.setPreparedDream(player, null));
   Common.later(3, () => enter(player, state));
 }
@@ -244,6 +245,7 @@ function cancelEntry(player) {
   state.ended = true;
   state.phase = PHASE.ENDING;
   dreams.delete(player);
+  player.setAttribute(IN_DREAM_ATTRIBUTE, false);
   Common.setCoffer(player, Common.coffer(player) + state.cost);
   Common.setPreparedDream(player, state.dream);
   sender(player).closeSubInterface?.(Common.component("toplevel_osrs_stretch:overlay_atmosphere"));
@@ -347,6 +349,7 @@ function endDream(player) {
   state.ended = true;
   state.phase = PHASE.ENDING;
   dreams.delete(player);
+  player.setAttribute(IN_DREAM_ATTRIBUTE, false);
   // The dream's points (nzone_currentpoints, up to 1,048,575) are paid as it ends (Wiki's cap).
   if (state.points > 0) Common.addPoints(player, state.points);
   Common.varbit(player, "nzone_currentpoints", 0);
@@ -429,7 +432,22 @@ function advanceTime({ player, ms, handledBy }) {
   handledBy?.push("Nightmare Zone");
 }
 
+/**
+ * Saved as true while a dream runs. A server restart saves players without their logout (no postLeave), so a dreamer
+ * came back at the dream's instance tiles, where nothing exists any more. Logging in still marked as dreaming, with no
+ * dream here, wakes them by Dominic as an ending dream would (its potion effects and boosts gone).
+ */
+const IN_DREAM_ATTRIBUTE = "nightmare-zone:in-dream";
+
+function recoverInterruptedDream(player) {
+  if (player.getAttribute(IN_DREAM_ATTRIBUTE) !== true || dreams.has(player)) return;
+  player.setAttribute(IN_DREAM_ATTRIBUTE, false);
+  Potions.dreamEnded(player);
+  player.moveTo?.(Common.toLocation(Common.data.lobby.afterDream));
+}
+
 function loggedIn({ player }) {
+  recoverInterruptedDream(player);
   Common.varbit(player, "nzone_purchaseddream", Common.dreamCode(Common.preparedDream(player)));
   Common.varbit(player, "nzone_previousdream", Common.dreamCode(Common.previousDream(player)));
   const id = Common.core.CacheDefinitions.getVarpId(Common.data.pointsVarp);
@@ -440,6 +458,7 @@ function attachDream(api) {
   api.persistAttribute(Common.POINTS_ATTRIBUTE, 0);
   api.persistAttribute(Common.DREAM_ATTRIBUTE, "");
   api.persistAttribute(Common.PREVIOUS_ATTRIBUTE, "");
+  api.persistAttribute(IN_DREAM_ATTRIBUTE, false);
   api.onPlayerLogin(loggedIn);
   api.onPlayerLogout(loggedOut);
   api.onPlayerDisconnect(disconnected);

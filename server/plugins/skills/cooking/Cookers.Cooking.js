@@ -66,12 +66,14 @@ function cookableFor(itemId) {
 const KARAMBWAN_TAUGHT_ATTRIBUTE = "quest.tai_bwo_wannai_trio.tinsay";
 const KARAMBWAN_TAUGHT_VALUE = 8;
 
+function untrainedKarambwan(player, cookable) {
+  return cookable.raw === Common.core.ItemIds.RAW_KARAMBWAN
+    && (Number(player.getAttribute?.(KARAMBWAN_TAUGHT_ATTRIBUTE)) || 0) < KARAMBWAN_TAUGHT_VALUE;
+}
+
 function cookedResult(player, cookable) {
   const { ItemIds } = Common.core;
-  if (cookable.raw !== ItemIds.RAW_KARAMBWAN) return cookable;
-  if ((Number(player.getAttribute?.(KARAMBWAN_TAUGHT_ATTRIBUTE)) || 0) >= KARAMBWAN_TAUGHT_VALUE) {
-    return cookable;
-  }
+  if (!untrainedKarambwan(player, cookable)) return cookable;
   return { ...cookable, cooked: ItemIds.POISON_KARAMBWAN, xp: 80, message: "You cook the karambwan. It looks very dodgy." };
 }
 
@@ -203,8 +205,9 @@ function canCook(player, object, cookable) {
       return false;
     }
   }
-  if (Common.level(player) < cookable.level) {
-    Common.mesbox(player, `You need a Cooking level of ${cookable.level} to cook ${withArticle(cookable)}.`);
+  const requiredLevel = untrainedKarambwan(player, cookable) ? 1 : cookable.level;
+  if (Common.level(player) < requiredLevel) {
+    Common.mesbox(player, `You need a Cooking level of ${requiredLevel} to cook ${withArticle(cookable)}.`);
     return false;
   }
   return true;
@@ -263,14 +266,18 @@ function carriedCookables(player, onFire) {
  * item, several are "What would you like to cook?" showing what they cook into. The most it
  * offers is the most carried of one food. One raw item on its own cooks without a menu.
  */
-function offerCook(player, object, cookables) {
+function offerCook(player, object, cookables, singleClick = false) {
   const inventory = player.getInventory();
   if (cookables.length === 1) {
     const [cookable] = cookables;
     if (!canCook(player, object, cookable)) return;
     const carried = inventory.getAmount(cookable.raw);
     if (carried <= 1) {
-      startCooking(player, object, cookable, activeSessions, 1);
+      if (startCooking(player, object, cookable, activeSessions, 1) && singleClick && cookable.firstCookTicks === undefined) {
+        // Wiki Cooking#2-tick_cooking: left-clicking a range with one raw item cooks without delay.
+        cookStep(player, activeSessions.get(player), cookingTask.cycle);
+        stopCooking(player, false);
+      }
       return;
     }
     openCookMenu(player, ONE_TYPE_TITLE, [cookable.raw], carried, (id, amount) => {
@@ -300,7 +307,7 @@ function openCookMenu(player, title, items, most, choose) {
 /** One step of the cook loop for every cooking player, once a tick. */
 function cookTick(task) {
   task.cycle++;
-  const { MapObjects, Sound, Sounds } = Common.core;
+  const { MapObjects } = Common.core;
 
   for (const [player, session] of activeSessions) {
     if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
@@ -330,20 +337,25 @@ function cookTick(task) {
     if (task.cycle < session.nextCookTick) {
       continue;
     }
-    // Content may cook faster ("skills:action-interval", a league relic's 2-tick pace).
-    const pace = session.cooked === 0 ? SECOND_COOK_TICKS : COOK_INTERVAL_TICKS;
-    session.nextCookTick = task.cycle + actionInterval(Common.api, player, Common.core.Skill.COOKING, "cook", pace);
-    if (session.cooked === 0) Common.sendVarbit(player, BUSY_VARBIT, 0);
-    session.cooked++;
-    session.remaining--;
-    Sounds.sendSound(player, Sound.COOKING_COOK);
-    player.performAnimation(session.animation);
+    cookStep(player, session, task.cycle);
+  }
+}
 
-    // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once).
-    const actions = Common.actionsPerCycle(player, "cook");
-    for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
-      if (cookOne(player, session) === false) { stopCooking(player); break; }
-    }
+function cookStep(player, session, cycle) {
+  const { Sound, Sounds } = Common.core;
+  // Content may cook faster ("skills:action-interval", a league relic's 2-tick pace).
+  const pace = session.cooked === 0 ? SECOND_COOK_TICKS : COOK_INTERVAL_TICKS;
+  session.nextCookTick = cycle + actionInterval(Common.api, player, Common.core.Skill.COOKING, "cook", pace);
+  if (session.cooked === 0) Common.sendVarbit(player, BUSY_VARBIT, 0);
+  session.cooked++;
+  session.remaining--;
+  Sounds.sendSound(player, Sound.COOKING_COOK);
+  player.performAnimation(session.animation);
+
+  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once).
+  const actions = Common.actionsPerCycle(player, "cook");
+  for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
+    if (cookOne(player, session) === false) { stopCooking(player); break; }
   }
 }
 
@@ -473,7 +485,7 @@ function handleRangeCook(event) {
     Common.mesbox(event.player, NOTHING_TO_COOK_MESSAGE);
     return;
   }
-  offerCook(event.player, event.object, cookables);
+  offerCook(event.player, event.object, cookables, true);
 }
 
 /** "cooking:cooked": what request.rawId cooks into and the XP, for content that cooks as it gathers (a league relic). */

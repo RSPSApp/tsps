@@ -135,6 +135,27 @@ function harness(questModule, completedQuests = new Set()) {
 }
 
 const throne = () => require('../plugins/quests/quests/ThroneOfMiscellania.Quest');
+
+test('Throne: Frodi work notifies actual approval and respects its admission checks', () => {
+  const h = harness(throne(), new Set(['fremennik_trials', 'heroes_quest'])), p = h.player(), seen = [];
+  h.api.onCustomEvent('miscellania:approval-changed', event => seen.push({ player: event.player, value: event.value, max: event.max }));
+  h.quest.setStage(p, 90); p.attributes.set('throne-of-miscellania:approval-native', 125); p.items.set(I.RAW_LOBSTER, 1);
+  h.itemOnNpc(p, N.FISHERMAN_FRODI, I.BONES);
+  assert.equal(p.items.get(I.RAW_LOBSTER), 1); assert.deepEqual(seen, []);
+  h.itemOnNpc(p, N.FISHERMAN_FRODI, I.RAW_LOBSTER);
+  assert.equal(p.items.get(I.RAW_LOBSTER), 0); assert.equal(p.varbits.get(72), 126);
+  assert.deepEqual(seen, [{ player: p, value: 126, max: 127 }]);
+  h.itemOnNpc(p, N.FISHERMAN_FRODI, I.RAW_LOBSTER);
+  assert.equal(p.varbits.get(72), 126); assert.equal(seen.length, 1);
+  p.items.set(I.RAW_LOBSTER, 1); h.itemOnNpc(p, N.FISHERMAN_FRODI, I.RAW_LOBSTER);
+  assert.equal(p.items.get(I.RAW_LOBSTER), 0); assert.equal(p.varbits.get(72), 127);
+  assert.deepEqual(seen, [{ player: p, value: 126, max: 127 }, { player: p, value: 127, max: 127 }]);
+  p.items.set(I.RAW_LOBSTER, 1); h.itemOnNpc(p, N.FISHERMAN_FRODI, I.RAW_LOBSTER);
+  assert.equal(p.items.get(I.RAW_LOBSTER), 1); assert.equal(seen.length, 2);
+  h.quest.setStage(p, 100); p.attributes.set('throne-of-miscellania:approval-native', 126);
+  h.itemOnNpc(p, N.FISHERMAN_FRODI, I.RAW_LOBSTER);
+  assert.equal(p.items.get(I.RAW_LOBSTER), 1); assert.equal(seen.length, 2);
+});
 const royal = () => require('../plugins/quests/quests/RoyalTrouble.Quest');
 
 /** Play one real NpcDialogues Talk-to through the production transcript graph. */

@@ -260,6 +260,21 @@ export class ServerPacketReader {
     }
 }
 
+export interface CharacterSummary {
+    name: string;
+    combatLevel: number;
+    totalLevel: number;
+    lastPlayedAt: number;
+    primary: boolean;
+    hasSave: boolean;
+}
+
+export interface CharacterListPayload {
+    maxCharacters: number;
+    defaultIndex: number;
+    characters: CharacterSummary[];
+}
+
 /**
  * Decoded message type (same format as JSON messages)
  */
@@ -1938,6 +1953,36 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         // ========================================
         // LOGIN/LOGOUT RESPONSE
         // ========================================
+
+        case ServerPacketId.CHARACTER_LIST: {
+            const maxCharacters = reader.readByte();
+            const defaultIndex = reader.readByte();
+            const count = reader.readByte();
+            const characters: CharacterSummary[] = [];
+            for (let i = 0; i < count; i++) {
+                const name = reader.readString();
+                const combatLevel = reader.readByte();
+                const totalLevel = reader.readShort();
+                const lastPlayedAt = Number(reader.readLong());
+                const flags = reader.readByte();
+                characters.push({
+                    name,
+                    combatLevel,
+                    totalLevel,
+                    lastPlayedAt,
+                    primary: (flags & 1) !== 0,
+                    hasSave: (flags & 2) !== 0,
+                });
+            }
+            return { type: "character_list", payload: { maxCharacters, defaultIndex, characters } };
+        }
+
+        case ServerPacketId.CHARACTER_RESULT: {
+            const ok = reader.readBoolean();
+            const code = reader.readByte();
+            const message = reader.readString();
+            return { type: "character_result", payload: { ok, code, message } };
+        }
 
         case ServerPacketId.LOGIN_RESPONSE: {
             // What's left once this packet is read: a batch carries more packets after it.

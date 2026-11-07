@@ -62,8 +62,6 @@ module.exports = function registerTasteOfHopeQuest(api) {
     NpcIdentifiers,
     Skill,
     TaskManager,
-    TeleportHandler,
-    TeleportType,
   } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
 
@@ -271,7 +269,6 @@ module.exports = function registerTasteOfHopeQuest(api) {
   const VERTIDA_NEW_BASE_TILE = { x: 3599, y: 9611, z: 0 };
   const KAEL_NEW_BASE_TILE = { x: 3594, y: 9613, z: 0 };
   const ABOMINATION_TILE = { x: 3627, y: 9645, z: 0 };
-  const VER_SINHAZA_TELEPORT = { x: 3649, y: 3230, z: 0 };
   const RANIS_TILE = { x: 3649, y: 3227, z: 0 };
   const RANIS_PLAYER_TILE = { x: 3649, y: 3234, z: 0 };
   const HIDEOUT_SURFACE_TILE = { x: 3639, y: 3251, z: 0 };
@@ -1818,15 +1815,6 @@ module.exports = function registerTasteOfHopeQuest(api) {
     return true;
   }
 
-  function teleportMedallion(event) {
-    if (event.itemId !== DRAKANS_MEDALLION_ITEM_ID) return false;
-    const { player } = event;
-    const destination = new Location(VER_SINHAZA_TELEPORT.x, VER_SINHAZA_TELEPORT.y, VER_SINHAZA_TELEPORT.z);
-    if (!TeleportHandler.checkReqs(player, destination, 20)) return true;
-    TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false);
-    return true;
-  }
-
   // ---------------------------------------------------------------------------
   // Harpert: claimed by name because his live content id is not indexed
   // ---------------------------------------------------------------------------
@@ -1998,7 +1986,6 @@ module.exports = function registerTasteOfHopeQuest(api) {
   api.onItemAction("Old notes", { Read: readOldNotes });
   api.onItemAction("Old diary", { Read: readOldDiary });
   api.onItemAction("Tome of Experience", { Read: readTome });
-  api.onItemAction("Drakan's medallion", { Teleport: teleportMedallion });
   api.registerArea(new HideoutWarningArea([HIDEOUT_BOUNDS]));
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

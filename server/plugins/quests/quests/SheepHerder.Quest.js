@@ -8,6 +8,9 @@
  * choice, and drives the herding loop: prod each coloured sheep into the pen, feed
  * it, then burn its bones in the incinerator.
  *
+ * The reward is 3,100 coins and 1,000 Hunter experience (the wiki's 3 November 2026
+ * changelog added the experience).
+ *
  * Stages (varp 60): 1 needs protective clothing, 2 disposing the sheep, 3 complete.
  * The per-sheep progress (0 loose / 1 penned / 2 bones / 6 burnt) is kept in the
  * persisted "quest.sheep_herder.disposal" attribute (varp 61 is bit-packed in the
@@ -49,6 +52,8 @@ module.exports = function registerSheepHerderQuest(api) {
   const TROUSERS_ITEM_ID = ItemIdentifiers.PLAGUE_TROUSERS;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const COST = 100;
+  // The wiki's 3 November 2026 changelog added 1,000 Hunter experience to the reward.
+  const HUNTER_XP = 1000;
 
   const INCINERATOR_LOC_ID = ObjectIdentifiers.INCINERATOR; // 165
   const GATE_LOC_IDS = new Set([ObjectIdentifiers.GATE_14, ObjectIdentifiers.GATE_15]); // 166,167
@@ -190,6 +195,7 @@ module.exports = function registerSheepHerderQuest(api) {
     // The generic 1-coin reward item completes the 3,100 total. forceAdd drops the
     // coins at the reward tile when a full bag has no coin stack, like other quests.
     player.getInventory().forceAdd(player, new api.core.Item(COINS_ITEM_ID, 3099));
+    player.getSkillManager().addExperiences(Skill.HUNTER, HUNTER_XP);
   }
 
   /** Asks the neighbouring quest whether it owns this shared NPC's conversation now. */

@@ -12,6 +12,7 @@ import { subscribeTick } from "../../network/serverConnection/timing";
 import { subscribeChatMessages, subscribeSkills } from "../../network/serverConnection/subscriptions/ui";
 import { setManagedMenus } from "../../ui/menu/menuTransforms";
 import { ConfigManager } from "./config/ConfigManager";
+import { watchNotificationSettings } from "./Notifier";
 import { ChatboxPanelManager } from "./game/chatbox/ChatboxPanelManager";
 import { MenuManager } from "./menus/MenuManager";
 import { EventBus } from "./eventbus/EventBus";
@@ -58,6 +59,7 @@ export class RuneLite {
         private readonly loadPlugins: boolean,
     ) {
         this.configManager = new ConfigManager(this.eventBus);
+        watchNotificationSettings(this.configManager);
         this.worldMapPointManager = new WorldMapPointManager(() => syncWorldMapPoints(client, this.worldMapPointManager));
         this.widgetSources = new WidgetSourceBinder(client, (event) => this.eventBus.post(event));
         bindOverlayFonts(this.configManager);

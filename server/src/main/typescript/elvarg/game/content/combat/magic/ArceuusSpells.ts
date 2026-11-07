@@ -15,6 +15,7 @@ import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
 import { Animation } from "../../../model/Animation";
 import { Graphic } from "../../../model/Graphic";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 type TeleportSpell = {
     level: number;
@@ -22,6 +23,8 @@ type TeleportSpell = {
     runes: Item[];
     destination: Location;
     cooldown?: { attribute: string; duration: number };
+    /** A quest the teleport needs completed (Wiki: Arceuus spellbook). */
+    quest?: { key: string; name: string; message?: string };
 };
 
 type SelfSpell = {
@@ -84,6 +87,16 @@ class ArceuusTeleportSpell extends Spell {
     protected getCastCooldown() { return this.data.cooldown ?? null; }
 
     cast(player: Player): boolean {
+        const quest = this.data.quest;
+        if (quest) {
+            const query = { player, key: quest.key, complete: false };
+            PluginManager.emitCustomEvent("quest:is-complete", query);
+            if (!query.complete) {
+                // A quest without its own line (West Ardougne, Harmony Island) uses TSPS wording.
+                player.sendMessage(quest.message ?? `You need to complete ${quest.name} to cast this spell.`);
+                return true;
+            }
+        }
         if (!TeleportHandler.checkReqs(player, this.data.destination) || !this.canCast(player, false)) {
             return true;
         }
@@ -97,8 +110,18 @@ class ArceuusTeleportSpell extends Spell {
 }
 
 const rune = (id: number, amount = 1) => new Item(id, amount);
-const teleport = (level: number, experience: number, runes: Item[], x: number, y: number, z = 0, cooldown?: TeleportSpell["cooldown"]) =>
-    new ArceuusTeleportSpell({ level, experience, runes, destination: new Location(x, y, z), cooldown });
+const teleport = (level: number, experience: number, runes: Item[], x: number, y: number, z = 0, cooldown?: TeleportSpell["cooldown"],
+    quest?: TeleportSpell["quest"]) =>
+    new ArceuusTeleportSpell({ level, experience, runes, destination: new Location(x, y, z), cooldown, quest });
+/**
+ * Wiki (Salve Graveyard Teleport): "You must have completed Priest in Peril and received Drezel's warning to cast
+ * this spell." Fenkenstrain's Castle Teleport has the same requirement, so the same line (inferred).
+ */
+const PRIEST_IN_PERIL = {
+    key: "priest_in_peril",
+    name: "Priest in Peril",
+    message: "You must have completed Priest in Peril and received Drezel's warning to cast this spell.",
+};
 const THRALL_COOLDOWN = { attribute: "arceuus:thrall-until", duration: 10_000 };
 /**
  * Resurrect, as in rsprox captures: the caster plays human_spellcast_resurrect with its kind's cast
@@ -208,10 +231,10 @@ export class ArceuusSpells {
         ["battlefront teleport", teleport(23, 19, [rune(557), rune(554), rune(563)], 1348, 3739)],
         ["mind altar teleport", teleport(28, 22, [rune(558), rune(563, 2)], 2980, 3510)],
         ["respawn teleport", teleport(34, 27, [rune(4695), rune(563)], GameConstants.DEFAULT_LOCATION.getX(), GameConstants.DEFAULT_LOCATION.getY(), GameConstants.DEFAULT_LOCATION.getZ())],
-        ["salve graveyard teleport", teleport(40, 30, [rune(566, 2), rune(563)], 3432, 3461)],
-        ["fenkenstrain's castle teleport", teleport(48, 50, [rune(557), rune(4695), rune(563)], 3548, 3528)],
-        ["west ardougne teleport", teleport(61, 68, [rune(4695, 2), rune(563, 2)], 2500, 3291)],
-        ["harmony island teleport", teleport(65, 74, [rune(4695), rune(561), rune(563)], 3797, 2866)],
+        ["salve graveyard teleport", teleport(40, 30, [rune(566, 2), rune(563)], 3432, 3461, 0, undefined, PRIEST_IN_PERIL)],
+        ["fenkenstrain's castle teleport", teleport(48, 50, [rune(557), rune(4695), rune(563)], 3548, 3528, 0, undefined, PRIEST_IN_PERIL)],
+        ["west ardougne teleport", teleport(61, 68, [rune(4695, 2), rune(563, 2)], 2500, 3291, 0, undefined, { key: "biohazard", name: "Biohazard" })],
+        ["harmony island teleport", teleport(65, 74, [rune(4695), rune(561), rune(563)], 3797, 2866, 0, undefined, { key: "great_brain_robbery", name: "The Great Brain Robbery" })],
         ["cemetery teleport", teleport(71, 82, [rune(565), rune(4695), rune(563)], 2978, 3763)],
         ["barrows teleport", teleport(83, 90, [rune(4695, 2), rune(565), rune(563, 2)], 3565, 3315)],
         ["ape atoll teleport", teleport(90, 100, [rune(4695, 2), rune(565, 2), rune(563, 2)], 2770, 9100)],

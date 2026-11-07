@@ -225,6 +225,52 @@ test("impling and drift-net rewards choose boxes after the quest", () => {
   } finally { C.H.api = previous.api; C.H.core = previous.core; Math.random = random; }
 });
 
+for (const complete of [false, true]) for (const banked of [false, true]) {
+  test(`drift-net clue roll gives pufferfish at the medium cap (quest ${complete}, bank ${banked})`, () => {
+    const f = fixture(complete), C = require("../plugins/skills/hunter/Context.Hunter");
+    const previous = {api: C.H.api, core: C.H.core}, random = Math.random;
+    try {
+      C.H.api = f.api; C.H.core = core;
+      f.player.getSkillManager = () => ({getMaxLevel: () => 47});
+      const held = new core.Item(core.ItemIdentifiers[`${complete ? "SCROLL_BOX" : "CLUE_BOTTLE"}_MEDIUM_`], complete ? 2 : 1);
+      if (banked) f.banks[0] = [held];
+      else f.inventory.setItem(0, held);
+      const draws = [0.5, 0, 0];
+      Math.random = () => draws.shift() ?? 0.5;
+      assert.deepEqual(require("../plugins/skills/hunter/DriftNets.Hunter").rewards(f.player, 1),
+        [[core.ItemIdentifiers.PUFFERFISH, 1]], "a won but unavailable clue is replaced by pufferfish, not a random fish");
+    } finally { C.H.api = previous.api; C.H.core = previous.core; Math.random = random; }
+  });
+}
+
+test("drift-net repeated clue wins in one harvest give pufferfish after its clue", () => {
+  const f = fixture(false), C = require("../plugins/skills/hunter/Context.Hunter");
+  const previous = {api: C.H.api, core: C.H.core}, random = Math.random;
+  try {
+    C.H.api = f.api; C.H.core = core;
+    f.player.getSkillManager = () => ({getMaxLevel: () => 47});
+    const draws = [0.5, 0, 0.5, 0, 0];
+    Math.random = () => draws.shift() ?? 0.5;
+    assert.deepEqual(require("../plugins/skills/hunter/DriftNets.Hunter").rewards(f.player, 2),
+      [[core.ItemIdentifiers.CLUE_BOTTLE_MEDIUM_, 1], [core.ItemIdentifiers.PUFFERFISH, 1]]);
+  } finally { C.H.api = previous.api; C.H.core = previous.core; Math.random = random; }
+});
+
+test("drift-net failed clue rolls still give fish and empty fossil rolls stay empty", () => {
+  const f = fixture(false), C = require("../plugins/skills/hunter/Context.Hunter");
+  const previous = {api: C.H.api, core: C.H.core}, random = Math.random;
+  try {
+    C.H.api = f.api; C.H.core = core;
+    f.player.getSkillManager = () => ({getMaxLevel: () => 47});
+    f.inventory.setItem(0, new core.Item(core.ItemIdentifiers.CLUE_BOTTLE_MEDIUM_));
+    const Drift = require("../plugins/skills/hunter/DriftNets.Hunter");
+    let draws = [0.5, 0.5, 0]; Math.random = () => draws.shift() ?? 0.5;
+    assert.deepEqual(Drift.rewards(f.player, 1), [[core.ItemIdentifiers.OYSTER, 1]]);
+    draws = [0, 0.99];
+    assert.deepEqual(Drift.rewards(f.player, 1), []);
+  } finally { C.H.api = previous.api; C.H.core = previous.core; Math.random = random; }
+});
+
 test("case registration retains consumed bonuses through the actual player save/load path", () => {
   const {Player} = require("../dist/game/entity/impl/player/Player");
   const {PlayerSave} = require("../dist/game/entity/impl/player/persistence/PlayerSave");

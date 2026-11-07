@@ -138,3 +138,29 @@ coordinates/varbits adapt [Void](https://github.com/GregHib/void)'s data (BSD-3,
 Near-Reality as a behaviour sketch; no code from it is used (it has no license).
 
 Check: `yarn build && node --test tests/skill-max-level.test.cjs` from `server/`.
+
+## Drift-net clue rewards
+
+The [OSRS Wiki's drift net fishing reward table](https://oldschool.runescape.wiki/w/Drift_net_fishing)
+specifies pufferfish when a successful medium-clue roll cannot award another clue. The harvest
+now retains that outcome when the medium-clue capacity is reached in inventory or bank, and
+when a clue has already been rolled earlier in the same harvest. Previously those successful
+rolls instead chose an ordinary fish from the level-dependent table.
+
+The reward path still checks the fossil pre-roll before the clue roll. An empty fossil roll
+stays empty, as the Wiki's cited explanation specifies. A failed clue roll still selects an
+ordinary fish. The server's explicit clue-vessel opt-out continues to skip the clue roll and
+select fish; its existing quest-dependent scroll-box conversion and capacity rules are preserved.
+
+Regression coverage exercises the real reward generator with the shared clue-capacity policy,
+both inventory and bank ownership, and repeated clue wins within a harvest. Five regressions
+failed before the fix. A native harvest regression takes the generated rewards through the
+registered object interaction and collection dialogue. Rare clue-roll branches are selected
+deterministically in regressions; no direct drift-net reward capture was found in the indexed
+recordings, so these changes rely on the Wiki rather than a recording ID.
+
+A live check used supplied ordinary equipment and skills plus Bone Voyage completion as setup:
+Ceto charged 200 numulite, setting a net consumed one net, one passive catch at level 99 gave
+77 Fishing XP and no Hunter XP, and taking the harvest delivered one oyster and cleared the
+net. This checks the normal collection path; the rare clue outcomes were verified by the
+regressions, not by that live catch.

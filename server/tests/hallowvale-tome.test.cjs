@@ -87,3 +87,25 @@ test("a skill below 30 can't be chosen; the chapter stays unread", async (t) => 
   assert.equal(xp(f, core.Skill.COOKING), before);
   assert.equal(held(f), 9656);
 });
+
+function reclaim(f) {
+  const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === "darkness_of_hallowvale");
+  quest.setStage(f.p, quest.completionValue);
+  PM.emitCustomEvent("npc-dialogue:action", { player: f.p, stepId: "DnjVLC", handled: false });
+}
+
+test("Veliaf replaces a lost tome at the charge it had, and gives none once all three chapters are read", async (t) => {
+  const f = actor(t);
+  f.inv.add(new core.Item(9656, 1), true);
+  await read(f, core.Skill.FISHING);
+  f.inv.deleteNumber(9657, 1); // the (2) lost
+  reclaim(f);
+  assert.equal(held(f), 9657, "the (2) back, not a fresh (3)");
+  await read(f, core.Skill.FISHING);
+  await read(f, core.Skill.FISHING);
+  assert.equal(held(f), null, "crumbled after the third chapter");
+  const before = xp(f, core.Skill.FISHING);
+  reclaim(f);
+  assert.equal(held(f), null, "no new tome after all three chapters");
+  assert.equal(xp(f, core.Skill.FISHING), before);
+});

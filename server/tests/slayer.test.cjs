@@ -416,6 +416,21 @@ test("rewards: the Buy tab sells enum 840's items for enum 842's prices", () => 
   assert.equal(varbit(player, "slayer_points"), 65);
 });
 
+test("rewards: the buttons answer only while the rewards are open at a master", () => {
+  const buttons = new Map();
+  Rewards.attach({ onCustomEvent() {}, onInterfaceActionButton: (id, fn) => buttons.set(id, fn) });
+  const player = createPlayer({ points: 100 });
+  const slot = [...CacheDefinitions.getEnumValues(840)].find(([, item]) => item === 4160)[0];
+  const buy = buttons.get((426 << 16) | 25);
+  player.getInterfaceId = () => -1;
+  buy({ player, slot, opId: 2 });
+  assert.deepEqual(player.inventory, [], "closed: nothing bought");
+  assert.equal(varbit(player, "slayer_points"), 100);
+  player.getInterfaceId = () => 426;
+  buy({ player, slot, opId: 2 });
+  assert.deepEqual(player.inventory, [[4160, 250]], "open: bought");
+});
+
 test("slayer:grant-points and slayer:current-task", () => {
   const player = createPlayer();
   handlers.events.get("slayer:grant-points")[0]({ player, points: 30 });

@@ -292,7 +292,9 @@ function onDeath({ player, killer }) {
   player.setAttribute(FEE_PAID_ATTRIBUTE, false);
   if (!byPlayer) return;
   if (inside) player.sendMessage("You died to another player in the Revenant Cave, you've lost your entry fee.");
-  core.ItemOnGroundManager.registerLocation(killer.getAsPlayer?.() ?? killer, new core.Item(COINS, FEE), location.clone());
+  // An Ironman killer takes no other player's loot: the fee drops for the victim (PlayerDeathTask.lootOwner).
+  const owner = core.PlayerDeathTask.lootOwner(player, killer.getAsPlayer?.() ?? killer);
+  core.ItemOnGroundManager.registerLocation(owner, new core.Item(COINS, FEE), location.clone());
 }
 
 function sendStateOnLogin({ player }) {

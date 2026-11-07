@@ -38,8 +38,12 @@ function bonemeal(player) {
   return null;
 }
 
+/** The game cycle of each player's last worship: one a tick (every queued click ran in one turn, a whole load at once). */
+const lastWorship = new WeakMap();
+
 function worship({ player }) {
   const { ItemIdentifiers, Skill } = Common.core;
+  if (lastWorship.get(player) === Common.core.World.getProcessCycle()) return true;
   const slime = player.getInventory().contains(ItemIdentifiers.BUCKET_OF_SLIME);
   const pot = bonemeal(player);
   if (!slime && !pot) {
@@ -58,6 +62,7 @@ function worship({ player }) {
     Common.mesbox(player, "There isn't room to put any more in.");
     return true;
   }
+  lastWorship.set(player, Common.core.World.getProcessCycle());
   if (!savesOffering(player)) {
     Common.swap(player, ItemIdentifiers.BUCKET_OF_SLIME, ItemIdentifiers.BUCKET);
     Common.swap(player, pot.id, ItemIdentifiers.POT);

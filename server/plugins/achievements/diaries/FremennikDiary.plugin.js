@@ -307,10 +307,10 @@ function onShieldMade({ player }) {
   if (active(player)) complete(player, "craft-a-neitiznot-shield-on-neitiznot");
 }
 
-function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence }) {
+function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence, bonusRunes }) {
   if (!active(player) || runeId !== api.core.ItemIdentifiers.ASTRAL_RUNE) return;
   // Astral multiplies at 82; Ourania's single-rune rolls are excluded by the multiplier.
-  if ((Number(rolls) || 0) * (Number(amountPerEssence) || 0) >= 56
+  if ((Number(rolls) || 0) * (Number(amountPerEssence) || 0) + (Number(bonusRunes) || 0) >= 56
     && Number(amountPerEssence) >= 2 && questComplete(player, LUNAR_DIPLOMACY)) {
     complete(player, "craft-56-astral-runes-simultaneously-from-essenc");
   }
@@ -380,6 +380,7 @@ module.exports = {
     api.onCustomEvent("runecrafting:success", onRunecraftingSuccess);
     api.onCustomEvent("godwars:kill", onGodWarsKill);
     api.onCustomEvent("diary:task", onDiaryTask);
+    require("./NotedDrops.FremennikDiary")(api);
   },
   _test: {
     inBox, questComplete, questStarted, onShopOpened, onHunterSuccess, onNpcDeath, onGroundItemsTaken,

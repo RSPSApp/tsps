@@ -322,11 +322,8 @@ module.exports = function registerBiohazardQuest(api) {
 
   function giveCoins(player, amount) {
     const inventory = player.getInventory();
-    if (held(player, COINS_ITEM_ID)) {
-      inventory.adds(COINS_ITEM_ID, amount);
-      return true;
-    }
-    if (freeSlots(player) < 1) {
+    // Every coin must fit: a stack near the cap, or one with other metadata and no free slot, kept part or none.
+    if (inventory.getAddableAmount(new api.core.Item(COINS_ITEM_ID, amount)) < amount) {
       player.sendMessage("You need a free inventory space to take the coins.");
       return false;
     }

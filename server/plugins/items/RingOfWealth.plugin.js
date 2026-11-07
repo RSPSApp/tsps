@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { TeleportHandler } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportHandler");
 const { TeleportType } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
@@ -230,7 +231,7 @@ function handleRingAction(event, action) {
  * An imbued ring lost to a player killer reverts, and the killer gets the imbue's coins (as broken items pay theirs).
  * Kept, or lost to anything but a player, it stays as it is: every PvM death put 50,000 new coins on the floor.
  */
-function removeImbueOnDeath(event) {
+function removeImbueOnDeath(event, itemOnGroundManager) {
   const unimbuedId = UNIMBUED_RING_IDS.get(event.item?.getId?.());
   if (!unimbuedId) {
     return;
@@ -241,15 +242,12 @@ function removeImbueOnDeath(event) {
   }
   event.item.setId(unimbuedId);
   const coins = new Item(COINS, IMBUE_COST);
-  // An Ironman takes no other player's PvP loot: the coins go on the floor for the victim (Loot.Ironman).
-  if (isIronman(killer) && event.location) pluginApi.getItemOnGroundManager().registerLocation(event.player, coins, event.location);
-  else if (!isIronman(killer)) killer.getInventory().forceAdd(killer, coins);
-}
-
-function isIronman(player) {
-  const query = { player, mode: "none" };
-  pluginApi?.emitCustomEvent?.("ironman:mode", query);
-  return query.mode != null && query.mode !== "none";
+  // An Ironman killer doesn't get the coins: they drop for the victim (PlayerDeathTask.lootOwner), as the ring does.
+  if (PlayerDeathTask.lootOwner(event.player, killer) === killer) {
+    killer.getInventory().forceAdd(killer, coins);
+  } else {
+    itemOnGroundManager.registerLocation(event.player, coins, event.location);
+  }
 }
 
 module.exports = {
@@ -258,6 +256,7 @@ module.exports = {
   ACTIONS,
   register(api) {
     pluginApi = api;
+    const itemOnGroundManager = api.getItemOnGroundManager();
     api.onItemAction((event) => {
       if (!isRingOfWealth(event.itemId)) {
         return;
@@ -300,7 +299,7 @@ module.exports = {
       event.handled = imbue(event.player, ring);
     });
 
-    api.onPlayerDeathItemDrop(removeImbueOnDeath);
+    api.onPlayerDeathItemDrop((event) => removeImbueOnDeath(event, itemOnGroundManager));
   },
   isWearingRingOfWealth,
   isWearingImbuedRingOfWealth,

@@ -55,7 +55,7 @@ before(async () => {
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {},
-    onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerDeath() {},
+    onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, game);
   AreaManager.areas.push(...registered);
   pendingAreaRemovals.push(...registered);

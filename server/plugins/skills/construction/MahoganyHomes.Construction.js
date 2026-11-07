@@ -308,6 +308,8 @@ function shopClick(event) {
   if (event.groupId !== SHOP) return;
   event.handled = true;
   const player = event.player;
+  // Only while Amy's shop is open: a click on it closed bought rewards anywhere.
+  if (player.getInterfaceId?.() !== SHOP) return;
   if (event.childId === SHOP_OPTIONS && SHOP_SLOTS[event.slot] !== undefined) return picked.set(player, SHOP_SLOTS[event.slot]);
   if (event.childId !== SHOP_CONFIRM) return;
   const reward = REWARDS[picked.get(player)];

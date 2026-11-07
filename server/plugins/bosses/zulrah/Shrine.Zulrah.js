@@ -241,6 +241,9 @@ function onlyWhenSurfaced(event) {
  * A death at the shrine: what would drop is held by Zul-Gwenwynig. A later unsafe death
  * anywhere else, before collecting, loses what she holds.
  */
+/** The game cycle of each player's death whose items she is taking, so one death's items gather and a new one starts over. */
+const heldDeathCycle = new WeakMap();
+
 function holdForPriestess(event) {
   const { player, item } = event;
   const atShrine = Fight.fightOf(player) != null || Shared.inShrine(player.getLocation());
@@ -251,7 +254,12 @@ function holdForPriestess(event) {
     return;
   }
   if (!event.dropEligible) return;
-  const held = heldItems(player) ?? { items: [], paid: false };
+  // A new death here (Zulrah's deaths are unsafe): what she held from the last one is lost (Wiki, Zulrah: "permanently
+  // lost if the player dies an unsafe death before reclaiming them"), as Nex's chest does. The items came on top of it.
+  const cycle = Shared.core().World.getProcessCycle();
+  const newDeath = heldDeathCycle.get(player) !== cycle;
+  heldDeathCycle.set(player, cycle);
+  const held = (!newDeath && heldItems(player)) || { items: [], paid: false };
   held.items.push([item.getId(), item.getAmount()]);
   player.setAttribute(Shared.ATTR.RETRIEVAL, held);
   event.handled = true;

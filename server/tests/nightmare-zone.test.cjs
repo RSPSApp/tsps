@@ -127,6 +127,8 @@ function fakePlayer({ quests = QUESTS().slice(0, 12), coins = 0 } = {}) {
         sendConfig: (id, value) => { p.varps.set(id, value); return sender; },
         sendString: (text, id) => { p.texts.set(id, text); return sender; },
         sendSubInterface: () => sender, closeSubInterface: () => sender, sendInterfaceScript: () => sender,
+        // A player at the reward chest: its interface is open unless a test closes it.
+        isSubInterfaceOpen: () => p.shopClosed !== true,
         sendInterface: (id) => { p.interface = id; return sender; },
         sendClientScript: (id, ...args) => { p.script = [id, ...args]; return sender; },
         sendInterfaceFlagsRange: () => sender, sendInterfaceRemoval: () => sender, sendSound: () => sender, sendSong: () => sender,
@@ -399,6 +401,23 @@ test("overload keeps the potion delay and the food delay, and is refused while s
   Dream.wake({ player: p });
 });
 
+test('a restart mid-dream: logging in still marked as dreaming wakes the player by Dominic, effects gone', () => {
+  const p = fakePlayer();
+  p.location = new Location(9000, 9000, 0); // the gone dream's instance tiles
+  p.setAttribute('nightmare-zone:in-dream', true);
+  p.setAttribute('nightmare-zone:absorb', 500);
+  p.levels.Strength = 118;
+  for (const fn of hooks.login) fn({ player: p });
+  const [x, y, z] = Common.data.lobby.afterDream;
+  assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [x, y, z ?? 0], 'by Dominic');
+  assert.equal(p.getAttribute('nightmare-zone:in-dream'), false);
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 0, 'absorption gone');
+  const outside = fakePlayer();
+  const start = outside.location;
+  for (const fn of hooks.login) fn({ player: outside });
+  assert.equal(outside.location, start, 'a player not dreaming stays put');
+});
+
 test('real executeHit protects before absorption spends points', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');
@@ -518,6 +537,15 @@ test('the rewards chest: the recorded opening (invs 464 and 108, the modal, the 
   assert.equal(p.invs[464].find((item) => item.id === 11737).amount, 1000, 'absorption: 1,000 a dose');
   assert.equal(p.invs[108].find((item) => item.id === 11864).amount, 1250, 'slayer helmet: 1,250,000 / 1000');
   assert.equal(hooks.objects.get('Rewards chest:Search')({ player: p, object: { getId: () => 1 } }), false, 'only its own chest');
+});
+
+test('the reward chest answers only while open: a Buy with it closed buys nothing', () => {
+  const p = fakePlayer();
+  Common.addPoints(p, 1000);
+  p.shopClosed = true;
+  button('resources', { player: p, slot: 0, opId: 3 });
+  assert.equal(p.inventory.getAmount(1780), 0);
+  assert.equal(Common.points(p), 1000);
 });
 
 test('Resources: Buy-10 of flax (sub 0) gives noted flax for 750 points; too few points buys nothing', () => {

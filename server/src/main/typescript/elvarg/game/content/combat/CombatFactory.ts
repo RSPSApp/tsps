@@ -108,6 +108,8 @@ export class CombatFactory {
     public static readonly RECOIL_IMMUNE_ATTRIBUTE = "combat:recoil-immune";
     public static readonly CRYSTAL_BOW_SHOTS_ATTRIBUTE = "crystal-bow:shots-in-stage";
     public static readonly CRYSTAL_BOW_ITEM_ATTRIBUTE = "crystal-bow:tracked-item";
+    /** Shots fired in the bow's current stage, on the bow itself (item meta): each bow keeps its own count. */
+    public static readonly CRYSTAL_BOW_SHOTS_META = "crystal-bow:shots-in-stage";
     /**
      * The default melee combat method.
      */
@@ -506,6 +508,8 @@ export class CombatFactory {
             return;
         }
         const base = Math.min(...delays);
+        const queue = target.getCombat().getHitQueue();
+        const generation = queue.getIncomingGeneration();
         for (let i = 0; i < hits.length; i++) {
             const extra = Math.max(0, delays[i] - base);
             if (extra <= 0) {
@@ -517,8 +521,10 @@ export class CombatFactory {
                     super(extra);
                 }
                 execute(): void {
-                    if (target.isRegistered() && target.getHitpoints() > 0) {
-                        target.getCombat().getHitQueue().addPendingDamage([hits[i]]);
+                    // Dropped when the queue's incoming hits were cleared meanwhile (phoenix necklace).
+                    if (target.isRegistered() && target.getHitpoints() > 0
+                        && queue.getIncomingGeneration() === generation) {
+                        queue.addPendingDamage([hits[i]]);
                     }
                     this.stop();
                 }
@@ -1264,9 +1270,15 @@ export class CombatFactory {
         return damage > 0 ? Math.floor(damage / 10) + 1 : 0;
     }
 
-    /** Content may disable ring recoil without suppressing other reflected damage. */
+    /**
+     * Content may disable ring recoil without suppressing other reflected damage: with the
+     * attribute, or by answering `combat:recoil-target` (`{ target, allow }`; `allow = false`).
+     */
     public static canReceiveRecoil(target: Mobile): boolean {
-        return target.getAttribute?.(CombatFactory.RECOIL_IMMUNE_ATTRIBUTE) !== true;
+        if (target.getAttribute?.(CombatFactory.RECOIL_IMMUNE_ATTRIBUTE) === true) return false;
+        const check = { target, allow: true };
+        PluginManager.emitCustomEvent("combat:recoil-target", check);
+        return check.allow !== false;
     }
 
     /**
@@ -1453,6 +1465,10 @@ export class CombatFactory {
     }
 
     static handleRetaliation(attacker: Mobile, target: Mobile) {
+        // Auto-retaliation must obey the same viewer-resolved NPC options as a direct Attack.
+        const attackable = () => !target.isPlayer() || !attacker.isNpc()
+            || attacker.getAsNpc().getCurrentDefinition(target.getAsPlayer())?.isAttackable() === true;
+        if (!attackable()) return;
         const currentTarget = target.getCombat().getTarget();
         const playerIsBusy = () => target.isPlayer() && (
             target.getMovementQueue().size() > 0 ||
@@ -1518,6 +1534,7 @@ export class CombatFactory {
                 target.getCombat().extendAttackDelay(Math.floor(attackSpeed / 2));
             }
             TaskManager.submit(new CombatFactoryTask(1, target, false, () => {
+                if (!attackable()) return;
                 if (target.isPlayer() &&
                     (!target.getAsPlayer().autoRetaliateReturn() || playerIsBusy()
                         || target.hasFlag?.("combat:no-retaliate") === true)) {
@@ -1726,9 +1743,17 @@ export class CombatFactory {
             if (!isChargedCrystalBow(weaponId)) {
                 return;
             }
-            let shotsInStage = player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
-                ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
-                : 0;
+            // The count lives on the bow. On the player, keyed by item id, swapping to another bow and back reset it,
+            // so two bows never degraded (and two at one stage shared a count). An older save's player count is
+            // read once, for the bow it was tracking.
+            const storedShots = Number(weaponItem.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META));
+            let shotsInStage = Number.isFinite(storedShots)
+                ? storedShots
+                : player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
+                    ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
+                    : 0;
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, null);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, null);
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
@@ -1750,8 +1775,7 @@ export class CombatFactory {
                 weaponItem.setId(nextWeaponId);
             }
 
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, currentWeaponId);
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, shotsInStage);
+            weaponItem.setMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META, shotsInStage);
             player.getEquipment().refreshItems();
             BonusManager.update(player);
             player.getUpdateFlag().flag(Flag.APPEARANCE);

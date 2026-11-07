@@ -372,9 +372,37 @@ test("the slayer ring teleports up to level 30 Wilderness (Wiki)", () => {
   const player = createPlayer();
   const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
   player.inventory.setItem(0, ring);
-  inventoryClick(player, ring, "Rub", { subOpId: 2 });
-  pick("Slayer Tower");
+  doneQuestKeys.add("priest_in_peril"); // Slayer Tower needs it (Wiki)
+  try {
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick("Slayer Tower");
+  } finally {
+    doneQuestKeys.delete("priest_in_peril");
+  }
   assert.equal(teleports.at(-1).wildernessLevel, 30);
+});
+
+test("the slayer ring's Slayer Tower, Tarn's Lair and Dark Beasts need their quests (Wiki)", () => {
+  for (const [label, key, name] of [
+    ["Slayer Tower", "priest_in_peril", "Priest in Peril"],
+    ["Tarn's Lair", "haunted_mine", "Haunted Mine"],
+    ["Dark Beasts", "mournings_end_part_ii", "Mourning's End Part II"],
+  ]) {
+    const player = createPlayer();
+    const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+    player.inventory.setItem(0, ring);
+    const before = teleports.length;
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick(label);
+    assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
+    assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
+    assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge used");
+    doneQuestKeys.add(key);
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick(label);
+    assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
+    doneQuestKeys.delete(key);
+  }
 });
 
 test("the charge is spent on arrival even if the piece was equipped mid-teleport", () => {
@@ -472,11 +500,29 @@ test("banking and death keep jewellery's charge id", async () => {
   assert.deepEqual(PlayerDeathTask.getItemsToKeep(victim).map((item) => item.getId()).sort(),
     carried.map((item) => item.getId()).sort());
 
-  // An imbued ring of wealth loses its imbue on death but keeps its three charges.
+  // An imbued ring of wealth always loses its imbue on death, keeping its three charges (Wiki: Ring of wealth (i)). A
+  // player killer gets its 50,000 coins; any other death adds them to what it loses (ring-of-wealth-death.test.cjs).
   const { removeImbueOnDeath } = require("../plugins/items/RingOfWealth.plugin")._test;
+  const paid = [];
+  const killer = { isPlayer: () => true, getInventory: () => ({ forceAdd: (_who, coins) => paid.push(coins.getAmount()) }) };
   const ring = new Item(20788, 1);
-  removeImbueOnDeath({ item: ring, killer: { getInventory: () => ({ forceAdd() {} }) } }, null);
+  removeImbueOnDeath({ item: ring, killer });
   assert.equal(ring.getId(), 11984, "ring of wealth (3)");
+  assert.deepEqual(paid, [50000]);
+  for (const [name, event] of [
+    ["a PvM death", { killer: null }],
+    ["an NPC kill", { killer: { isPlayer: () => false, getInventory: () => ({ forceAdd: () => paid.push("npc") }) } }],
+  ]) {
+    const extraDrops = [];
+    const lost = new Item(20788, 1);
+    removeImbueOnDeath({ item: lost, ...event, extraDrops });
+    assert.equal(lost.getId(), 11984, `${name}: unimbued`);
+    assert.deepEqual(extraDrops.map((item) => [item.getId(), item.getAmount()]), [[995, 50000]], `${name}: coins go with the death`);
+  }
+  const kept = new Item(20788, 1);
+  removeImbueOnDeath({ item: kept, killer, kept: true });
+  assert.equal(kept.getId(), 11984, "a kept ring is unimbued too");
+  assert.deepEqual(paid, [50000, 50000], "a player killer is paid for a kept ring as well; no NPC is");
 });
 
 test("the ring of wealth spends its charge on arrival, from wherever the ring is", () => {
@@ -738,4 +784,24 @@ test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Sla
     assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
     doneQuestKeys.delete(key);
   }
+});
+
+test("the games necklace's Tears of Guthix needs Tears of Guthix (Wiki)", () => {
+  const player = createPlayer();
+  const necklace = new Item(ItemIds.GAMES_NECKLACE_8_, 1);
+  player.inventory.setItem(0, necklace);
+  const before = teleports.length;
+  inventoryClick(player, necklace, "Rub");
+  pick("Tears of Guthix");
+  assert.equal(teleports.length, before, "no teleport before the quest");
+  assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
+  assert.equal(necklace.getId(), ItemIds.GAMES_NECKLACE_8_, "no charge used");
+  doneQuestKeys.add("tears_of_guthix");
+  try {
+    inventoryClick(player, necklace, "Rub");
+    pick("Tears of Guthix");
+  } finally {
+    doneQuestKeys.delete("tears_of_guthix");
+  }
+  assert.equal(teleports.length, before + 1, "teleports after it");
 });

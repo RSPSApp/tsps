@@ -1,6 +1,6 @@
 /** Wiki's thirteen potion recipes, eight random statues, and their dolmens. */
 module.exports=function registerTemple({api,stage,advance,held,give,val,replace,ATTRIBUTES}){
- const {PrivateArea,Boundary,Location,Item,ItemIdentifiers:I,ItemOnGroundManager,MapObjects,ObjectManager,Skill,Animation}=api.core;
+ const {PrivateArea,Boundary,Location,Item,CacheDefinitions,ItemIdentifiers:I,ItemOnGroundManager,MapObjects,ObjectManager,Skill,Animation}=api.core;
  const PUZZLE_ATTRIBUTE='while-guthix-sleeps:temple-puzzle',POUCHES_ATTRIBUTE='while-guthix-sleeps:temple-pouches';
  ATTRIBUTES.push(PUZZLE_ATTRIBUTE,POUCHES_ATTRIBUTE);
  const SKELETON=54088,SKELETONS=[53813,53814],TABLE=54083,TABLES=[53666,53667,53668,53669,53670,53671,53672,53673,53674];
@@ -140,8 +140,10 @@ module.exports=function registerTemple({api,stage,advance,held,give,val,replace,
   if(r[3].some(recipe=>recipe.every((item,n)=>inserted[n]===item))){s.finished|=1<<i;s.ingredients[i]=[];give(p,r[2]);refreshStatue(p,i);}
   store(p,s);
  }
+ // Every sickle and flail with Bloom in its cache menu casts it, not only the plain blessed silver sickle.
+ function hasBloomOption(itemId){return (CacheDefinitions.getItem(itemId)?.inventoryActions??[]).some(a=>/bloom/i.test(a??''));}
  function bloom(e){
-  const p=e.player;if(e.itemId!==SICKLE||!String(e.option).toLowerCase().includes('bloom')||!sessions.has(p))return;e.handled=true;
+  const p=e.player;if(!hasBloomOption(e.itemId)||!String(e.option).toLowerCase().includes('bloom')||!sessions.has(p))return;e.handled=true;
   const skill=p.getSkillManager(),prayer=skill.getCurrentLevel(Skill.PRAYER);if(prayer<1){p.sendMessage('You need Prayer points to cast Bloom.');return;}
   const l=p.getLocation();api.core.RegionManager.loadMapFiles(l.getX(),l.getY());const plants=[];
   for(let x=l.getX()-2;x<=l.getX()+2;x++)for(let y=l.getY()-2;y<=l.getY()+2;y++)for(const o of MapObjects.mapObjects.get(MapObjects.getHash(x,y,0))||[])if(o.getId()===DEAD_VINE)plants.push(o);

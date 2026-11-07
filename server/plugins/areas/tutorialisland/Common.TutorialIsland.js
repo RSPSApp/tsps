@@ -10,6 +10,19 @@ const fs = require("fs");
 const path = require("path");
 
 const PROGRESS_ATTRIBUTE = "tutorial-island:progress";
+/** Saved once the tutorial's 25 bank coins have been given, by the booth or the starter kit. */
+const BANK_COINS_ATTRIBUTE = "tutorial-island:bank-coins-given";
+const BANK_COINS = 25;
+
+/**
+ * The tutorial's 25 coins in the bank, once. They topped the first bank tab back up to 25 on every booth click and
+ * again with the starter kit, so moving them to another tab (or withdrawing them) and clicking again gave more.
+ */
+function giveBankCoins(player) {
+  if (player.getAttribute(BANK_COINS_ATTRIBUTE) === true) return;
+  player.setAttribute(BANK_COINS_ATTRIBUTE, true);
+  player.getBank(0).adds(core.ItemIdentifiers.COINS, BANK_COINS);
+}
 /** The past-experience answer: "new", "returning" or "experienced". */
 const EXPERIENCE_ATTRIBUTE = "tutorial-island:experience";
 /** Before the varp values: a 0..53 stage index of our own. Read once at login and migrated. */
@@ -170,7 +183,7 @@ function showBoxes(player, boxes, then) {
 }
 
 module.exports = {
-  init, data, STEP, ORDER, IDS, NPCS, PROGRESS_ATTRIBUTE, LEGACY_STAGE_ATTRIBUTE, EXPERIENCE_ATTRIBUTE,
+  init, data, STEP, ORDER, IDS, NPCS, PROGRESS_ATTRIBUTE, LEGACY_STAGE_ATTRIBUTE, EXPERIENCE_ATTRIBUTE, BANK_COINS_ATTRIBUTE, giveBankCoins,
   progress, isActive, setProgress, advance, advanceFrom, onStep, step,
   inTutorial, atTutorial, hasItem, worn, pronoun, later, showBoxes,
   get api() { return api; },

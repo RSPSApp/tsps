@@ -158,8 +158,11 @@ function giveDust(player) {
   // Each stardust counts in tracking_ore_mined, which Mining owns (237/01101: +4 for four).
   Common.api.emitCustomEvent("mining:count-ore", { player, amount: award.points });
   player.getPacketSender().sendSound(DATA.sounds.dust, 1, 0);
-  const xp = Common.isMembersWorld() ? DATA.mining.xp : DATA.mining.freeToPlayXp;
-  player.getSkillManager().addExperiences(core.Skill.MINING, xp);
+  const base = Common.isMembersWorld() ? DATA.mining.xp : DATA.mining.freeToPlayXp;
+  // The prospector outfit raises it ("mining:xp-multiplier"; the Wiki gives 32.8 for 32 with the full kit).
+  const xp = { player, multiplier: 1 };
+  Common.api.emitCustomEvent("mining:xp-multiplier", xp);
+  player.getSkillManager().addExperiences(core.Skill.MINING, base * xp.multiplier);
   if (bonus) countDownBonus(player);
   Common.api.emitCustomEvent("mining:success", { player, skill: core.Skill.MINING, petBase: DATA.mining.petBase });
 }

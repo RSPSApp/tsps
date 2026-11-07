@@ -12,9 +12,12 @@ activating is indexed, so no recording ID backs any detail below).
   multi-hit special). The wearer's own pending damage (poison, recoil) stays.
 - It fires before a ring of life or a Defence cape (`phoenix-necklace:will-trigger`, asked by
   `RingOfLife.plugin.js`) and before Redemption, which then does not activate.
-- No effect in the Bounty Hunter arena (`phoenix-necklace:eligible`, answered by
-  `Area.BountyHunter.js`) or where food is refused: a duel with No Food, the Tombs of Amascut
-  On a Diet invocation (`onCanEat`).
+- No effect in the Bounty Hunter arena or where food is refused: a duel with No Food, the Tombs
+  of Amascut On a Diet invocation, a Last Stand. Each answers the side-effect-free
+  `phoenix-necklace:eligible` question; `onCanEat` is asked only once, when the necklace really
+  fires (the Tombs count it as food), so refusals and tallies do not repeat per hit.
+- Later splats of a delayed multi-hit special are dropped through `HitQueue.getIncomingGeneration`,
+  and hits held by an animation stall go with `clearIncoming`. The heal uses `Player.heal`.
 - The core only emits `combat:damage-applied` from `Mobile.decrementHealth` after HP is taken.
 
 ## Not verified

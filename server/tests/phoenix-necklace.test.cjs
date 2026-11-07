@@ -16,8 +16,10 @@ const PhoenixNecklace = require("../plugins/items/PhoenixNecklace.plugin");
 const listeners = new Map();
 let canEat = null;
 let blocked = false;
+let eatCalls = 0;
 PhoenixNecklace.register({
-  emitCanEat: () => canEat,
+  core: { Equipment, Skill },
+  emitCanEat: () => { eatCalls++; return canEat; },
   emitCustomEvent(name, request) {
     if (name === "phoenix-necklace:eligible") request.blocked = blocked;
   },
@@ -39,8 +41,8 @@ function createPlayer({ hp = 100, max = 99, necklace = "Phoenix necklace" } = {}
     getSkillManager: () => ({
       getCurrentLevel: () => state.hp,
       getMaxLevel: () => max,
-      setCurrentLevels: (skill, level) => { assert.equal(skill, Skill.HITPOINTS); state.hp = level; },
     }),
+    heal: (amount) => { state.heals = (state.heals ?? 0) + 1; state.hp = Math.min(state.hp + amount, max); },
     getCombat: () => ({ getHitQueue: () => ({ clearIncoming: () => state.cleared++ }) }),
     sendMessage: (message) => state.messages.push(message),
   };
@@ -76,7 +78,7 @@ test("without the necklace, or where food is refused or the arena blocks it, not
   canEat = false;
   const dueling = createPlayer({ hp: 5 });
   damaged(dueling);
-  assert.equal(dueling.state.hp, 5, "No Food / On a Diet");
+  assert.equal(dueling.state.hp, 5, "food refused");
   canEat = null;
   blocked = true;
   const arena = createPlayer({ hp: 5 });
@@ -111,4 +113,33 @@ test("clearing incoming drops delayed hits and other combatants' damage but keep
   queue.clearIncoming();
   assert.equal(queue.hasPendingHitFrom(other), false);
   assert.equal(queue.getQueuedDamage(), 5, "own and unsourced damage stay (2 + 3)");
+});
+
+test("the food hook runs once per activation and never while only asking or blocked", () => {
+  canEat = null;
+  blocked = false;
+  eatCalls = 0;
+  const request = { player: createPlayer({ hp: 100 }), remaining: 9, active: false };
+  listeners.get("phoenix-necklace:will-trigger")(request);
+  assert.equal(eatCalls, 0, "the ring of life's question has no side effects");
+  damaged(createPlayer({ hp: 9 }));
+  assert.equal(eatCalls, 1);
+  blocked = true;
+  damaged(createPlayer({ hp: 9 }));
+  assert.equal(eatCalls, 1, "a blocked necklace never asks the food hook");
+  blocked = false;
+});
+
+test("the heal goes through Player.heal", () => {
+  const player = createPlayer({ hp: 10 });
+  damaged(player);
+  assert.equal(player.state.heals, 1);
+});
+
+test("hits held by an animation stall and deferred multi-hit splats are cancelled", () => {
+  const owner = { isRegistered: () => true, getHitpoints: () => 50 };
+  const queue = new HitQueue(owner);
+  const generation = queue.getIncomingGeneration();
+  queue.clearIncoming();
+  assert.notEqual(queue.getIncomingGeneration(), generation, "deferred hits compare this before landing");
 });

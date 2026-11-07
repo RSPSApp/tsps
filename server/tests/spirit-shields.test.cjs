@@ -34,6 +34,7 @@ SpiritShields.register({
     if (!bless) bless = handler;
     else attachSigil = handler;
   },
+  // Only the blessing is an inventory recipe: sigils go on at an anvil (the Corporeal Beast's unit).
 });
 SpiritShieldEffects({
   registerPrayerDrainModifier: (modifier) => { prayerDrain = modifier; },
@@ -47,7 +48,7 @@ function item(id) {
   };
 }
 
-function createPlayer({ prayer = 99, smithing = 99, hammer = true } = {}) {
+function createPlayer({ prayer = 99, basePrayer = prayer, smithing = 99, hammer = true } = {}) {
   const messages = [];
   const inventory = { items: hammer ? [item(ItemIds.HAMMER)] : [] };
   let smithingXp = 0;
@@ -67,6 +68,7 @@ function createPlayer({ prayer = 99, smithing = 99, hammer = true } = {}) {
     }),
     getSkillManager: () => ({
       getCurrentLevel: (skill) => (skill === Skill.PRAYER ? prayer : smithing),
+      getMaxLevel: (skill) => (skill === Skill.PRAYER ? basePrayer : smithing),
       addExperience: (skill, amount) => { if (skill === Skill.SMITHING) smithingXp += amount; },
     }),
     sendMessage: (message) => messages.push(message),
@@ -106,34 +108,18 @@ test("a holy elixir blesses the spirit shield at 85 Prayer", () => {
   assert.match(low.messages.at(-1), /Prayer level of 85/);
 });
 
-test("sigils attach to a blessed shield with 90 Prayer, 85 Smithing and a hammer", () => {
-  const player = createPlayer();
-  const sigil = item(ItemIds.ARCANE_SIGIL);
-  const shield = item(ItemIds.BLESSED_SPIRIT_SHIELD);
-  const event = { player, usedItem: sigil, usedWithItem: shield, usedItemId: ItemIds.ARCANE_SIGIL, usedWithItemId: ItemIds.BLESSED_SPIRIT_SHIELD, handled: false };
-  attachSigil(event);
-  assert.equal(event.handled, true);
-  assert.equal(shield.getId(), ItemIds.ARCANE_SPIRIT_SHIELD);
-  assert.deepEqual(player.animations, [898]);
-  assert.deepEqual(player.sounds, [3790]);
-  assert.equal(player.smithingXp, 1800);
+// Wiki (Arcane spirit shield): sigils go on "using a hammer at an anvil" (bosses/corporealbeast covers that), so a sigil
+// on the shield in the inventory is no recipe; and the blessing's 85 Prayer "cannot be boosted".
+test("a sigil used on the shield in the inventory is not a recipe", () => {
+  assert.equal(attachSigil, undefined, "only the blessing is registered for item-on-item");
+});
 
-  const noHammer = createPlayer({ hammer: false });
-  const elysian = item(ItemIds.BLESSED_SPIRIT_SHIELD);
-  attachSigil({ player: noHammer, usedItem: item(ItemIds.ELYSIAN_SIGIL), usedWithItem: elysian, usedItemId: ItemIds.ELYSIAN_SIGIL, usedWithItemId: ItemIds.BLESSED_SPIRIT_SHIELD, handled: false });
-  assert.equal(elysian.getId(), ItemIds.BLESSED_SPIRIT_SHIELD);
-  assert.match(noHammer.messages.at(-1), /hammer/);
-
-  const low = createPlayer({ smithing: 84 });
-  const spectral = item(ItemIds.BLESSED_SPIRIT_SHIELD);
-  attachSigil({ player: low, usedItem: item(ItemIds.SPECTRAL_SIGIL), usedWithItem: spectral, usedItemId: ItemIds.SPECTRAL_SIGIL, usedWithItemId: ItemIds.BLESSED_SPIRIT_SHIELD, handled: false });
-  assert.equal(spectral.getId(), ItemIds.BLESSED_SPIRIT_SHIELD);
-  assert.match(low.messages.at(-1), /Smithing/);
-
-  const wrongBase = item(ItemIds.SPIRIT_SHIELD);
-  const notHandled = { player, usedItem: item(ItemIds.ARCANE_SIGIL), usedWithItem: wrongBase, usedItemId: ItemIds.ARCANE_SIGIL, usedWithItemId: ItemIds.SPIRIT_SHIELD, handled: false };
-  attachSigil(notHandled);
-  assert.equal(notHandled.handled, false);
+test("a boosted Prayer does not bless the shield", () => {
+  const boosted = createPlayer({ prayer: 90, basePrayer: 84 });
+  const shield = item(ItemIds.SPIRIT_SHIELD);
+  bless({ player: boosted, usedItem: item(ItemIds.HOLY_ELIXIR), usedWithItem: shield, usedItemId: ItemIds.HOLY_ELIXIR, usedWithItemId: ItemIds.SPIRIT_SHIELD, handled: false });
+  assert.equal(shield.getId(), ItemIds.SPIRIT_SHIELD);
+  assert.match(boosted.messages.at(-1), /Prayer level of 85/);
 });
 
 test("the shields carry the Wiki's attack, defence and magic-damage stats", () => {

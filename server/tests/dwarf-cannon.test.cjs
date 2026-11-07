@@ -784,3 +784,15 @@ for (const steelHeadroom of [1, 20]) {
     }
   });
 }
+
+// Wiki (Turoth): "the dwarf multicannon is ineffective"; (Vyrewatch Sentinel): Cannons "Immune". The cannon targeted
+// both, and on Turoth its cannonballs could even land with the owner's broad ammo worn.
+test("a Turoth and a Vyrewatch Sentinel are never targeted (Wiki)", () => {
+  const p = gunner();
+  built(p);
+  for (const [id, x, y] of [[core.NpcIdentifiers.TUROTH, 3260, 3262], [core.NpcIdentifiers.VYREWATCH_SENTINEL, 3261, 3262]]) {
+    const npc = spawnNpc(id, x, y);
+    npc.getCombat().setUnderAttack(p);
+    assert.equal(Firing.canTarget(p, npc), false, `${npc.getDefinition().getName()} ${id}`);
+  }
+});

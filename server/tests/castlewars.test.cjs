@@ -239,7 +239,7 @@ test("leaving a waiting room restores stats (Wiki) but keeps the player's own sk
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const waitingRoom = registered.find((area) => area.getName().includes('waiting room'));
   const p = new Player(null);
@@ -285,7 +285,7 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
 
   const waitingRooms = registered.filter((area) => area.getName().includes('waiting room'));
@@ -544,11 +544,63 @@ test('a carrier whose banner was stripped before the drop hook still drops the f
   game.restoreFlagToBase(TEAM.ZAMORAK);
 });
 
+test('a carrier who logs out drops the flag before the banner is stripped, as a death does', () => {
+  const Areas = require('../plugins/minigames/castlewars/Areas.CastleWars');
+  const registered = [];
+  const calls = [];
+  const island = {
+    data, BOT_KEY: {}, TRANSITION_KEY: {},
+    getTeamData: (team) => data.TEAM_DATA[team], getTeamId: () => TEAM.ZAMORAK, setTeamId: () => {},
+    closeOverlay: () => {}, clearBraceletEffect: () => {}, equipTeamColours: () => {},
+    dropCarriedFlag: () => calls.push('drop flag'), clearCastleWarsItems: () => calls.push('strip items'),
+    returnToLobby: () => calls.push('lobby'), releaseSeededBots: () => false, checkTeamsRemain: () => {},
+    beginStartCountdown: () => {}, startSecondsLeft: () => 0, checkStartCountdown: () => {},
+  };
+  Areas({
+    core,
+    registerArea: (area) => registered.push(area),
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
+  }, island);
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const gameArea = island.gameArea;
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  gameArea.postLeave(p, true);
+  assert.deepEqual(calls, ['drop flag', 'strip items', 'lobby']);
+});
+
+// The exit portal (and the idle kick) go through returnToLobby, which moves the player before the area's leave hook
+// runs: the flag must drop where the carrier stood, not in the lobby.
+test('a carrier who leaves by the exit portal drops the flag in the game, not in the lobby', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const carrier = new Player(new PlayerSession(channel));
+  carrier.setUsername('cwportal');
+  const standing = new core.Location(2426, 3080, 0); // the Saradomin castle's ground floor
+  assert.ok(game.inGameBounds(standing));
+  carrier.setLocation(standing);
+  game.setTeamId(carrier, TEAM.SARADOMIN);
+  game.carryFlag(carrier, TEAM.ZAMORAK);
+  assert.equal(game.flagStatus[TEAM.ZAMORAK], 1, 'carried');
+  const portal = { getId: () => [...data.GAME_EXIT_IDS][0], getLocation: () => standing };
+  objectHandler({ player: carrier, object: portal, clickType: 1, handled: false });
+  assert.equal(game.flagStatus[TEAM.ZAMORAK], 2, 'the flag was dropped');
+  const dropped = game.getDroppedFlagObject(TEAM.ZAMORAK);
+  assert.ok(dropped?.getLocation().equals(standing), `dropped where the carrier stood, not at ${dropped?.getLocation()}`);
+  assert.ok(game.inGameBounds(dropped.getLocation()), 'inside the game, where it can be picked up');
+  assert.ok(!game.inGameBounds(carrier.getLocation()), 'and the carrier was sent out to the lobby');
+  game.restoreFlagToBase(TEAM.ZAMORAK);
+  game.setTeamId(carrier, null);
+});
+
 test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let deathPolicy;
   let respawn;
+  let beforeDeath;
   const calls = [];
   const deathApi = PluginManager.createApi('Castle Wars death regression');
   const island = {
@@ -561,6 +613,7 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   Areas({
     core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
+    onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
     onPlayerDeath: (handler) => { respawn = handler; },
   }, island);
   t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', (player) => {
@@ -620,6 +673,21 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   }
   assert.equal(bones.mock.callCount(), 2, 'outside bones still drop for both safe and dangerous deaths');
   assert.equal(drop.mock.callCount(), 1, 'only the dangerous outside death processes gear');
+
+  // The game ends during a death: the player is moved to the lobby (not a Castle Wars area) before tick 0.
+  let where = island.gameArea;
+  const ending = { getArea: () => where };
+  beforeDeath({ player: ending });
+  where = island.lobbyArea;
+  const late = { player: ending, shouldDrop: null };
+  deathPolicy(late);
+  assert.equal(late.shouldDrop, false, 'a death begun in the game keeps its gear in the lobby');
+  const settle = { player: ending, handled: false };
+  respawn(settle);
+  assert.equal(settle.handled, true, 'and the player stays in the lobby');
+  const after = { player: ending, shouldDrop: null };
+  deathPolicy(after);
+  assert.equal(after.shouldDrop, null, 'a later lobby death follows the world rules');
 });
 
 test('the arena is multi-combat: several enemies may hit one player, the lobby and waiting rooms are not', (t) => {
@@ -634,7 +702,7 @@ test('the arena is multi-combat: several enemies may hit one player, the lobby a
   const registered = [];
   Areas({
     core, registerArea: (area) => registered.push(area), onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {},
-    onCanUnequip() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerDeath() {},
+    onCanUnequip() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, island);
   AreaManager.areas.push(...registered);
   t.after(() => {

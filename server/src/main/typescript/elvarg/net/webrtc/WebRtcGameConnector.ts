@@ -63,7 +63,7 @@ export class WebRtcGameConnector {
   ): WebRtcGameConnector | undefined {
     const signalUrl = process.env.WEBRTC_SIGNAL_URL?.trim() || DEFAULT_SIGNAL_URL;
     const worldId = process.env.WEBRTC_WORLD_ID?.trim();
-    const worldName = process.env.WEBRTC_WORLD_NAME?.trim() || worldId;
+    const worldName = getWorldDefinition().name;
     const token = process.env.WEBRTC_WORLD_TOKEN?.trim();
     if (!worldId && !token) return undefined;
     if (!worldId || !token) {

@@ -1305,6 +1305,8 @@ module.exports = function registerKingsRansomQuest(api) {
         minLevel: LAMP_MIN_LEVEL,
         title: "Choose the stat you wish to be advanced!",
         onConfirm: (skill, name) => {
+          // The lamp must still be held at Confirm: the XP came first and the delete quietly did nothing without it.
+          if (!player.getInventory().contains(ANTIQUE_LAMP_ITEM)) return null;
           player.getSkillManager().addExperience(skill, LAMP_XP, false);
           player.getInventory().deleteNumber(ANTIQUE_LAMP_ITEM, 1);
           return `You rub the lamp and feel your ${name} skill advance.`;

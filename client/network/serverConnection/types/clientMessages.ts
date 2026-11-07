@@ -95,6 +95,9 @@ type ClientToServer =
           payload: { username: string; password: string; revision: number; flags?: number };
       }
     | { type: "login_forget"; payload: { username: string; token: string } }
+    | { type: "character_select"; payload: { name: string } }
+    | { type: "character_create"; payload: { name: string } }
+    | { type: "character_delete"; payload: { name: string; confirmName: string } }
     | { type: "chat"; payload: Record<string, unknown> }
     | { type: "clan_chat"; payload: { text: string; clanType: number } }
     | { type: "clan_channel_action"; payload: { action: "kick" | "ban" | "mute"; name: string; value: number } }

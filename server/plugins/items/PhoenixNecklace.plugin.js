@@ -12,9 +12,6 @@
  * "phoenix-necklace:eligible"). The Wiki does not quote the activation message, so ours is
  * our own wording.
  */
-const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
-const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
-
 const PHOENIX_NECKLACE = "Phoenix necklace";
 const ACTIVATION_PERCENT = 20;
 const HEAL_PERCENT = 30;
@@ -22,6 +19,8 @@ const ELIGIBLE_EVENT = "phoenix-necklace:eligible";
 const WILL_TRIGGER_EVENT = "phoenix-necklace:will-trigger";
 
 let pluginApi = null;
+let Equipment = null;
+let Skill = null;
 
 function wornNecklace(player) {
   const necklace = player.getEquipment().get(Equipment.AMULET_SLOT);
@@ -33,11 +32,14 @@ function isLowEnough(hitpoints, maxHitpoints) {
   return hitpoints > 0 && hitpoints * 100 <= maxHitpoints * ACTIVATION_PERCENT;
 }
 
-/** Worn, not blocked by the area (Bounty Hunter), and food is allowed (duel rules, On a Diet). */
-function isUsable(player, necklace) {
+/**
+ * Not blocked by the area or the rules (Bounty Hunter, No Food duels, On a Diet, Last Stand). A
+ * side-effect-free question: asking never eats, tallies food or sends a refusal message.
+ */
+function isUsable(player) {
   const eligibility = { player, blocked: false };
   pluginApi.emitCustomEvent(ELIGIBLE_EVENT, eligibility);
-  return !eligibility.blocked && pluginApi.emitCanEat(player, necklace.getId()) !== false;
+  return !eligibility.blocked;
 }
 
 function onDamageApplied({ target }) {
@@ -49,13 +51,17 @@ function onDamageApplied({ target }) {
   const skills = player.getSkillManager();
   const max = skills.getMaxLevel(Skill.HITPOINTS);
   const hitpoints = skills.getCurrentLevel(Skill.HITPOINTS);
-  if (!necklace || !isLowEnough(hitpoints, max) || !isUsable(player, necklace)) {
+  if (!necklace || !isLowEnough(hitpoints, max) || !isUsable(player)) {
+    return;
+  }
+  // The one real "eat": the Tombs of Amascut count the necklace as food, once per activation.
+  if (pluginApi.emitCanEat(player, necklace.getId()) === false) {
     return;
   }
   player.getEquipment().deleteNumber(necklace.getId(), 1);
   player.getEquipment().refreshItems();
   player.getCombat().getHitQueue().clearIncoming();
-  skills.setCurrentLevels(Skill.HITPOINTS, hitpoints + Math.floor((max * HEAL_PERCENT) / 100));
+  player.heal(Math.floor((max * HEAL_PERCENT) / 100));
   player.sendMessage("Your phoenix necklace heals you, but is destroyed in the process.");
 }
 
@@ -67,7 +73,7 @@ function onWillTrigger(request) {
     return;
   }
   const max = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
-  if (isLowEnough(request.remaining, max) && isUsable(player, necklace)) {
+  if (isLowEnough(request.remaining, max) && isUsable(player)) {
     request.active = true;
   }
 }
@@ -78,6 +84,8 @@ module.exports = {
   _test: { onDamageApplied, onWillTrigger, isLowEnough },
   register(api) {
     pluginApi = api;
+    Equipment = api.core.Equipment;
+    Skill = api.core.Skill;
     api.onCustomEvent("combat:damage-applied", onDamageApplied);
     api.onCustomEvent(WILL_TRIGGER_EVENT, onWillTrigger);
   },

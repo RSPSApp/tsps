@@ -199,8 +199,15 @@ function pickedOpen(player) {
   });
 }
 
+/**
+ * Each player's current attempts at the lock. A new Pick-lock click starts over and the old attempts stop: each click
+ * started its own chain, and none stopped the last, so N clicks paid N fail XP every 11 ticks.
+ */
+const picking = new WeakMap();
+
 /** One attempt, then another every 11 ticks until the lock gives or the player moves off. */
-function attemptPick(player, failures, from) {
+function attemptPick(player, failures, from, attempt) {
+  if (picking.get(player) !== attempt) return;
   const at = player.getLocation();
   if (at.getX() !== from.getX() || at.getY() !== from.getY()) return;
   player.sendMessage("You attempt to pick the lock on the door.");
@@ -212,7 +219,7 @@ function attemptPick(player, failures, from) {
   Common.later(player, 1, () => {
     player.performAnimation(new (Common.getCore().Animation)(PICK_LOCK_ANIMATION));
     player.getPacketSender().sendSound(PICK_LOCK_SOUND, 1, 0);
-    Common.later(player, PICK_LOCK_RETRY_TICKS - 1, () => attemptPick(player, failures + 1, from));
+    Common.later(player, PICK_LOCK_RETRY_TICKS - 1, () => attemptPick(player, failures + 1, from, attempt));
   });
 }
 
@@ -225,7 +232,9 @@ function pickPortSarimLock(event) {
   }
   const doorSide = Common.tile(...OPEN_PORT_SARIM_DOOR_TILE);
   player.getMovementQueue().reset();
-  const start = () => attemptPick(player, 0, player.getLocation().clone());
+  const attempt = {};
+  picking.set(player, attempt);
+  const start = () => attemptPick(player, 0, player.getLocation().clone(), attempt);
   if (!player.getLocation().equals?.(doorSide)) {
     Common.step(player, OPEN_PORT_SARIM_DOOR_TILE);
     Common.later(player, 1, start);
@@ -258,4 +267,4 @@ function attach(api) {
 }
 
 module.exports = attach;
-Object.assign(module.exports, { lockUp, release, sendToPortSarim, pickChance, SHANTAY_CELL, PORT_SARIM_CELL });
+Object.assign(module.exports, { lockUp, release, sendToPortSarim, pickChance, pickPortSarimLock, SHANTAY_CELL, PORT_SARIM_CELL });

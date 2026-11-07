@@ -358,6 +358,31 @@ test('a save taken mid-fight writes their own character in the Emir\'s Arena, ne
   for (const handler of hooks.shutdowns) handler();
 });
 
+test("the arena's antifire and anti-venom never leave it, even through a mid-fight save; the player's own antifire comes back", (t) => {
+  const Dragonfire = require('../plugins/combat/DragonfireProtection');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const [a, b] = toLoadouts(t, 1);
+  Dragonfire.setDragonfireProtection(a, { tier: Dragonfire.DragonfireProtectionTier.ANTIFIRE, seconds: 300, label: 'antifire potion' });
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  assert.ok(Battle.fightFor(a));
+  assert.equal(Dragonfire.getDragonfireProtectionTier(a), Dragonfire.DragonfireProtectionTier.NONE, 'their own antifire waits outside');
+  const combat = a.getCombat();
+  Dragonfire.setDragonfireProtection(a, { tier: Dragonfire.DragonfireProtectionTier.SUPER_ANTIFIRE, seconds: 360, label: 'extended super antifire' });
+  combat.getTeleblockTimer().start(300);
+  combat.getPoisonClock().protectBriefly(300);
+  const save = PlayerSave.fromPlayer(a);
+  Stash.snapshot({ player: a, save });
+  assert.equal(save.teleblockTimer, 0, 'no arena Tele Block in the save');
+  assert.ok(save.fireImmunityTimer > 290 && save.fireImmunityTimer <= 300, `their own antifire timer (${save.fireImmunityTimer})`);
+  assert.equal(save.poisonClock, undefined, 'no poison clock of their own');
+  assert.equal(save.getPoisonImmunityTimer(), 0, 'the arena anti-venom is not rebuilt from the legacy seconds');
+  assert.equal(save.attributes[Dragonfire.ATTR_DRAGONFIRE_STATE]?.tier, Dragonfire.DragonfireProtectionTier.ANTIFIRE, 'their own antifire, not the arena super antifire');
+  Stash.restore(a);
+  assert.equal(Dragonfire.getDragonfireProtectionTier(a), Dragonfire.DragonfireProtectionTier.ANTIFIRE, 'their own antifire back');
+  for (const handler of hooks.shutdowns) handler();
+});
+
 test('a fight never starts on top of a character already put aside', (t) => {
   const [a, b] = toLoadouts(t, 1);
   a.getInventory().add(new core.Item(995, 5));

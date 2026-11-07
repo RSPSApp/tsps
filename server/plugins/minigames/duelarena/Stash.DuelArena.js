@@ -13,6 +13,7 @@
  *   runs.
  */
 const Common = require("./Common.DuelArena");
+const Dragonfire = require("../../combat/DragonfireProtection");
 
 const COMBAT_SKILLS = ["ATTACK", "DEFENCE", "STRENGTH", "HITPOINTS", "RANGED", "PRAYER", "MAGIC"];
 const INVENTORY_SIZE = 28;
@@ -92,14 +93,27 @@ function timersOf(player) {
   return {
     teleblock: combat.getTeleblockTimer().secondsRemaining(),
     fire: combat.getFireImmunityTimer().secondsRemaining(),
+    dragonfire: dragonfireOf(player),
     poison: combat.getPoisonClock().finished() ? null : combat.getPoisonClock().snapshot(),
   };
+}
+
+/**
+ * The antifire itself (tier, label, end time) lives in an attribute the fire timer only mirrors, and is what
+ * dragonfire reads first: kept as its tier, label and remaining time, so the pause doesn't run it down.
+ */
+function dragonfireOf(player) {
+  const state = player.getAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE);
+  if (!state || !Number.isFinite(state.endsAt)) return null;
+  const seconds = Math.ceil((state.endsAt - Date.now()) / 1000);
+  return seconds > 0 ? { tier: state.tier, label: state.label, seconds } : null;
 }
 
 function stopTimers(player) {
   const combat = player.getCombat();
   combat.getTeleblockTimer().stop();
   combat.getFireImmunityTimer().stop();
+  player.setAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE, null);
   combat.getPoisonClock().stop();
   player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
 }
@@ -112,7 +126,8 @@ function restoreTimers(player, timers) {
     combat.getTeleblockTimer().start(timers.teleblock);
     player.getPacketSender().sendEffectTimer?.(timers.teleblock, Common.core.EffectTimer?.TELE_BLOCK);
   }
-  if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
+  if (timers.dragonfire) Dragonfire.setDragonfireProtection(player, timers.dragonfire);
+  else if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
   if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 
@@ -184,6 +199,8 @@ function snapshot({ player, save: playerSave }) {
   playerSave.teleblockTimer = stash.timers?.teleblock ?? 0;
   playerSave.fireImmunityTimer = stash.timers?.fire ?? 0;
   playerSave.poisonClock = stash.timers?.poison ?? undefined;
+  // Without a stashed clock the legacy immunity seconds would rebuild the arena's anti-venom on load.
+  playerSave.setPoisonImmunityTimer(0);
   playerSave.autocastSpellId = stash.autocast?.spellId?.() ?? -1;
   playerSave.setPosition(new Location(stash.exit[0], stash.exit[1], 0));
   const attributes = { ...(playerSave.attributes ?? {}) };
@@ -191,6 +208,10 @@ function snapshot({ player, save: playerSave }) {
     if (value === undefined || value === null) delete attributes[key];
     else attributes[key] = value;
   }
+  const dragonfire = stash.timers?.dragonfire;
+  attributes[Dragonfire.ATTR_DRAGONFIRE_STATE] = dragonfire
+    ? { tier: dragonfire.tier, label: dragonfire.label, endsAt: Date.now() + dragonfire.seconds * 1000, warned: false }
+    : null;
   playerSave.attributes = attributes;
 }
 

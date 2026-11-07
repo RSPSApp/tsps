@@ -39,9 +39,13 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
   (clientscript argument 6). One kind of food: "How many would you like to cook?" with the raw
   item, offering as many as are carried. Several kinds ("Cook" only): "What would you like to
   cook?" with what each cooks into. A single raw item cooks without a menu.
-- **Timing.** The first food is 2 ticks after the choice (or after reaching the cooker with a
+- **Timing.** The first food is 2 ticks after the choice (or after item-on-object admission with a
   single item), the second 3 ticks after that, then every 4. `busy` is 1 from the choice to the
   first food.
+- **Single-item Cook clicks.** [Wiki 2-tick cooking](https://oldschool.runescape.wiki/w/Cooking#2-tick_cooking)
+  alternates ground pickup and left-clicking the range. With exactly one raw food and no
+  food-specific delay, the Cook action skips the menu and cooks in that interaction turn.
+  Item-on-object and menu choices retain the captured delays above.
 - **Animation.** Fires and a house's firepits and stoves, ovens included, play
   `human_firecooking`; every other range and oven (`range`, `cooksquestrange`, `fortis_stove`
   "Oven") plays `human_cooking`. Each food plays `synth_sound 2577`. Pies and pizzas bake the

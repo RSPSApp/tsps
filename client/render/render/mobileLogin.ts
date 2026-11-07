@@ -192,11 +192,9 @@ import { RENDER_CONSTANTS } from "./constants";
 export function shouldUseMobileLoginInput(host: WebGLOsrsRendererHost, ): boolean {
 
         const state = host.osrsClient.loginState;
-        return (
-            host.osrsClient.isOnLoginScreen() &&
-            state.loginIndex === LoginIndex.LOGIN_FORM &&
-            state.virtualKeyboardVisible === true
-        );
+        if (!host.osrsClient.isOnLoginScreen()) return false;
+        if (state.extension) return state.extension.textInput?.() !== undefined;
+        return state.loginIndex === LoginIndex.LOGIN_FORM && state.virtualKeyboardVisible === true;
     
 }
 
@@ -211,6 +209,12 @@ export function getCanvasTouchPos(host: WebGLOsrsRendererHost, touch: Touch): { 
 }
 
 export function resolveLoginFieldAt(host: WebGLOsrsRendererHost, y: number): 0 | 1 | undefined {
+
+        const state = host.osrsClient.loginState;
+        if (state.extension) {
+            const input = state.extension.textInput?.();
+            return input && y >= input.y - 12 && y < input.y + 3 ? 0 : undefined;
+        }
 
         if (y >= host.LOGIN_FIELD_BASE_Y - 12 && y < host.LOGIN_FIELD_BASE_Y + 3) {
             return 0;
@@ -412,6 +416,7 @@ export function syncLoginRendererLayoutForCanvas(host: WebGLOsrsRendererHost, ):
 export function getActiveLoginFieldValue(host: WebGLOsrsRendererHost, ): string {
 
         const state = host.osrsClient.loginState;
+        if (state.extension) return state.extension.textInput?.()?.value ?? "";
         return state.currentLoginField === 0 ? state.username : state.password;
     
 }
@@ -419,6 +424,7 @@ export function getActiveLoginFieldValue(host: WebGLOsrsRendererHost, ): string 
 export function setActiveLoginFieldValue(host: WebGLOsrsRendererHost, raw: string): void {
 
         const state = host.osrsClient.loginState;
+        if (state.extension) { state.extension.textInput?.()?.setValue(raw); return; }
         if (state.currentLoginField === 0) {
             state.username = raw.slice(0, 320);
         } else {
@@ -503,13 +509,14 @@ export function syncMobileLoginInput(host: WebGLOsrsRendererHost, focus: boolean
         if (!input) return;
 
         const state = host.osrsClient.loginState;
-        const wantsPassword = state.currentLoginField === 1;
+        const wantsPassword =
+            !state.extension && state.currentLoginField === 1;
         const nextType = wantsPassword ? "password" : "text";
         if (input.type !== nextType) {
             input.type = nextType;
         }
-        input.inputMode = wantsPassword ? "text" : "email";
-        (input as any).enterKeyHint = wantsPassword ? "go" : "next";
+        input.inputMode = state.extension || wantsPassword ? "text" : "email";
+        (input as any).enterKeyHint = state.extension || wantsPassword ? "go" : "next";
 
         const value = host.getActiveLoginFieldValue();
         if (input.value !== value) {

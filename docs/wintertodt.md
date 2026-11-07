@@ -243,6 +243,15 @@ The hitsplat shows that number (75 to yourself, 76 to others), and the meter los
 - A potion dose restores 30%.
 - Regeneration is 8% plus 1% per warm item, every 100 ticks (Wiki: per minute; the capture's +120 came on a 100-tick beat).
 
+**Below 10%:** a worn ring of life activates, as it does at 10% Hitpoints (Wiki,
+[Wintertodt](https://oldschool.runescape.wiki/w/Wintertodt): "A ring of life will activate if warmth drops
+below 10%."). `Warmth.hurt` asks the RingOfLife plugin through `ring-of-life:activate`; it destroys the ring,
+teleports the wearer to their respawn point (leaving the prison, so the round's points are lost) and sends
+"Your Ring of Life saves you and is destroyed in the process." Tele Block still stops it. Exactly 10% does not
+activate it, and a hit that takes warmth to 0 is the death below. The Wiki does not say whether warmth is
+restored on activation; the meter resets on leaving the prison. No capture of this exists, so the message and
+teleport are the ring's ordinary ones. A worn Defence cape takes the same path as in combat; the Wiki's Wintertodt page does not mention it. The phoenix necklace's warmth restore is not implemented here.
+
 **At 0:** "<col=ef1020>The cold of the Wintertodt has overcome you!" and a hit for all your hitpoints (capture). It is an ordinary, unsafe death.
 
 ## The Wintertodt's attacks

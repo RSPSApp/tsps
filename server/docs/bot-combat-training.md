@@ -299,6 +299,96 @@ Hotspot bots count towards that region's target. Persistent Wilderness clusters 
 12 low-level, 10 mid-level and 14 main bots at Edgeville, 40 at Varrock Ditch, and 4 each at
 Green Dragons and the Revenant Caves entrance. Safe tiles and buildings still cannot spawn bots.
 
+### Regional density overrides
+
+`pvp.activeRegionBotsByRegion` in `bot-sites.json` optionally sets a target for individual
+64×64 map squares. Deployments can instead set `PlayerBots:activeRegionBotsByRegion` in
+`world.local.json` without editing the shipped population file:
+
+```json
+{
+  "pluginConfig": {
+    "PlayerBots:activeRegionBotsByRegion": {
+      "0:50:158": 3,
+      "0:50:159": 0
+    }
+  }
+}
+```
+
+Keys are exactly `plane:regionX:regionY`, where `regionX = floor(tileX / 64)` and
+`regionY = floor(tileY / 64)`. Thus `0:50:158` covers x=3200–3263, y=10112–10175 on
+plane 0. This is a whole map square, including tiles outside a named cave or area;
+it is not a packed region id or an area rectangle. There are no overlapping rules.
+
+The world setting replaces the entire file mapping, including when it is `{}`. Normal
+world configuration layering applies: the local mapping replaces the world's mapping.
+Missing keys use `activeRegionBotsPerRegion` (still 16 as shipped). A value of 0 requests
+no regional roamers in that square; positive entries also work when the global target is 0.
+Counts must be JSON integers from 0 through `botPool`; planes are 0–3 and region axes
+0–255, with no leading zeroes. Invalid mappings or entries warn and use the global
+fallback, rather than being coerced or partially interpreting a key. Restart after changes.
+
+These are population targets, not a hard cap on all players. Fixed hotspot bots consume
+target slots but keep their own configured population even when the target is zero. Site
+farmers, recruits and manually created bots are not regional roamers. The shared name
+pool, active-region inset, attackable land and valid/reachable spawn tiles can limit filling.
+Roamers crossing map squares count where they currently are; their home/respawn bounds
+remain unchanged. Refills are paced and excess roamers normally leave after 30 seconds,
+with departures delayed during combat or pending hits and retried on the next population
+reconciliation (for example a map-square change or logout). Compare settled counts, including
+queued additions and hotspot bots, rather than an immediate post-login sample.
+
+Overrides do not activate squares. Current world activation follows connected human
+players (and their pending removals); bots alone do not keep a square active. Without
+overrides, existing defaults, fixed sites and activation rules are unchanged. These controls
+are custom server population policy, not OSRS mechanics or recommended cave balancing.
+
+#### Wilderness boss lairs
+
+Each Wilderness boss lair interior is its own map square, separate from the square holding its
+surface entrance. A regional roamer is placed anywhere valid in a square, so with the global
+target a lair interior can fill with bots that never paid the fee or crawled in, have no NPC
+policy, and fight the boss. A deployment can set the interior square lower (such as 0, or a
+number sized for the room) and leave the surface square at the global target, so the Wilderness
+PK population stays outside. Squares come from `box` and the entrance tile in
+`plugins/bosses/data/wilderness-bosses.json`:
+
+| Lair | Interior square | Entrance's surface square |
+| --- | --- | --- |
+| Callisto's Den | `0:52:161` | `0:51:60` |
+| Vet'ion's Rest | `1:51:159` | `0:50:59` |
+| Venenatis (Silk Chasm) | `2:53:159` | `0:51:59` |
+| Artio (Hunter's End) | `0:27:180` | `0:48:57` |
+| Calvar'ion (Skeletal Tomb) | `1:29:180` | `0:49:57` |
+| Spindel (Web Chasm) | `2:25:180` | `0:49:58` |
+| Scorpia's Cave | `0:50:161` | `0:50:61` (crevice at 3231, 3936) |
+
+Callisto's, Vet'ion's and Venenatis's exits lead into the Escape Caves, which are a separate square
+(`0:52:160`). The surface squares are whole map squares and also cover other nearby Wilderness
+tiles. This example lowers every interior to 0 and lists no surface square, so each surface
+keeps the global target:
+
+```json
+{
+  "pluginConfig": {
+    "PlayerBots:activeRegionBotsByRegion": {
+      "0:52:161": 0,
+      "1:51:159": 0,
+      "2:53:159": 0,
+      "0:27:180": 0,
+      "1:29:180": 0,
+      "2:25:180": 0,
+      "0:50:161": 0
+    }
+  }
+}
+```
+
+To give a lair a small number of bots instead, replace its `0` with that count. The number is a
+deployment's balance choice, and this page does not recommend one. No shipped default or config
+value changes.
+
 Regional bots give the low-level pure and rusher loadouts higher weights, so roughly a third
 of their members-world population is one Defence with no protection prayers.
 Novice and standard bots eat at 35% and 40% HP and use single food; veterans and elites can

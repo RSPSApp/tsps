@@ -83,6 +83,7 @@ const FIELDS = {
     field("attackLevel", "int"), field("defenceLevel", "int"), field("strengthLevel", "int"),
     field("hitpoints", "int"), field("rangedLevel", "int"), field("magicLevel", "int"),
     field("attackSpeed", "int"),
+    field("recolorFrom", "int[]"), field("recolorTo", "int[]"),
     field("actions", "string[]"),
     field("idleSeqId", "int", { ref: "seq" }),
     field("walkSeqId", "int", { ref: "seq" }), field("walkBackSeqId", "int", { ref: "seq" }),

@@ -16,10 +16,14 @@
  */
 const Common = require("./tutorialisland/Common.TutorialIsland");
 
+/** Other plugins query the loaded tutorial, including worlds using legacy plugin switches. */
+function availability(query) { query.available = true; }
+
 module.exports = {
   name: "TutorialIsland",
   register(api) {
     Common.init(api);
+    api.onCustomEvent("tutorial:availability", availability);
     require("./tutorialisland/Interface.TutorialIsland")(api);
     require("./tutorialisland/Instructors.TutorialIsland")(api);
     require("./tutorialisland/Skills.TutorialIsland")(api);

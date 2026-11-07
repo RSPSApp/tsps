@@ -18,11 +18,14 @@ const events = [];
 const tasks = [];
 /** What the plank sack holds, by item id ("storage:amount" / "storage:take"). */
 const sack = new Map();
+/** What the Carpenter's outfit multiplies Construction experience by ("construction:outfit-multiplier"). */
+let outfit = 1;
 const api = {
   core,
   emitCustomEvent: (name, payload) => {
     events.push({ name, ...payload });
     if (name === "storage:amount") payload.amount += sack.get(payload.itemId) ?? 0;
+    if (name === "construction:outfit-multiplier") payload.multiplier *= outfit;
     if (name === "storage:take") sack.set(payload.itemId, (sack.get(payload.itemId) ?? 0) - payload.amount);
   },
   getTaskManager: () => ({ submit: (task) => tasks.push(task) }),
@@ -39,6 +42,7 @@ beforeEach(() => {
   events.length = 0;
   tasks.length = 0;
   sack.clear();
+  outfit = 1;
 });
 
 /** 28 slots; nails and swamp paste stack, everything else takes a slot each. */
@@ -169,6 +173,15 @@ test("oak hull parts: swing on the pick, product 3 ticks later, every 4 ticks, u
   assert.equal(player.getInventory().getAmount(id("sailing_boat_hull_part_oak")), 2);
   assert.equal(player.getInventory().getAmount(id("plank_oak")), 1);
   assert.equal(player.getAttribute(TASK_ATTRIBUTE), null);
+});
+
+test("the Carpenter's outfit's bonus applies to the experience (Wiki: since 26 November 2025)", () => {
+  outfit = 1.025;
+  const player = createPlayer({ ...tools(), ...planks("plank_oak", 5) });
+  openMenu(player, "hull", ANCHOR);
+  player.menu().execute(id("sailing_boat_hull_part_oak"), 1);
+  run(3);
+  assert.deepEqual(player.xp, [150 * 1.025]);
 });
 
 test("repair kits: the plank sack's planks after the inventory's; a set of two kits", () => {

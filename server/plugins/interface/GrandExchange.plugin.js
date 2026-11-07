@@ -657,8 +657,21 @@ function bankPayment(player, inventory, total) {
   return { inventory: result, banks };
 }
 
+/**
+ * Wiki (Grand Exchange): "free players may only purchase free-to-play items, and not members' items"; selling has
+ * no restriction. Every buy offer reaches confirm, however the item was picked. TSPS wording for the line.
+ */
+function freeWorldBuyRefused(player, offer) {
+  if (offer.sell || pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  const item = CacheDefinitions.getItem(ItemDefinition.forId(offer.itemId).unNote());
+  if (item?.isMembers !== true) return false;
+  player.getPacketSender().sendMessage("You can only buy free-to-play items on a free world.");
+  return true;
+}
+
 function confirm(player, offer) {
   if (!active(player, offer) || !exchangeable(offer.itemId)) return;
+  if (freeWorldBuyRefused(player, offer)) return;
   const amount = offer.quantity;
   const unitPrice = offerPrice(offer);
   offer.price = unitPrice;

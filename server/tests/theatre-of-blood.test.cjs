@@ -149,12 +149,14 @@ function fakePlayer(name) {
     setRunEnergy() {},
     getDialogueManager: () => ({ startDialogues: (chain) => p.statements.push(chain) }),
     setEnteredAmountAction(action) { p.amountAction = action; },
+    interfaceId: -1,
+    getInterfaceId: () => p.interfaceId,
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
+        sendInterface: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
         sendSubInterface: (uid, id) => { p.subs.set(uid, id); return sender; },
         closeSubInterface: (uid) => { p.subs.delete(uid); return sender; },
         sendInterfaceRemoval: () => sender,
@@ -462,6 +464,21 @@ test('team size scales hitpoints down, rounding down as the Wiki\'s nylocas do',
     raid.scale(npc);
     assert.equal(npc.hp, expected, `${size} players`);
   }
+  raid.dispose();
+});
+
+test('the supplies sell only while open at the chest: a click with them closed buys nothing', () => {
+  const Supplies = require('../plugins/minigames/tob/Supplies.TheatreOfBlood');
+  const { raid, players: [solo] } = startRaid(['Remote']);
+  raid.member(solo).supplyPoints = 10;
+  const prayer = Supplies.STOCK[1];
+  const click = () => Supplies.clickSupply({ player: solo, slot: 1, opId: 2 });
+  click();
+  assert.equal(solo.inventory.getAmount(prayer.id), 0, 'no chest open: nothing bought');
+  assert.equal(raid.member(solo).supplyPoints, 10);
+  solo.interfaceId = Shared.INTERFACE.SUPPLIES;
+  click();
+  assert.equal(solo.inventory.getAmount(prayer.id), 1, 'open: bought');
   raid.dispose();
 });
 
@@ -1382,4 +1399,39 @@ test('Theatre preserves Recent Party, OFF, ignore and existing event veto behavi
   f.chooseName('Member');
   assert.equal(f.entered(), 3, 'an earlier veto remains effective');
   assert.equal(f.raid.spectators.has(f.viewer), false);
+});
+
+// A save made mid-raid (shutdown, saveall, a requested save) has no logout record. Back in the theatre with no raid,
+// the player is put outside and leaves the Theatre's own items: the Dawnbringer and the bandages.
+test('a login from a mid-raid save in the theatre leaves the Dawnbringer and bandages behind', () => {
+  const player = fakePlayer('Crashed');
+  player.location = new Location(3168, 4303, 0);
+  assert.equal(Shared.inTheatre(player.location), true, 'standing in the theatre');
+  player.inventory.setItem(0, new Item(Shared.ITEM.BANDAGES, 4));
+  player.inventory.setItem(1, new Item(4151, 1));
+  // A worn one goes through the real weapon reset: tests/tob-relog-items.test.cjs.
+  player.inventory.setItem(2, new Item(Shared.ITEM.DAWNBRINGER, 1));
+  RaidUnit.returnAfterLogout({ player });
+  assert.equal(player.inventory.getAmount(Shared.ITEM.BANDAGES), 0, 'bandages gone');
+  assert.equal(player.inventory.getAmount(Shared.ITEM.DAWNBRINGER), 0, 'Dawnbringer gone');
+  assert.equal(player.inventory.getAmount(4151), 1, 'own items kept');
+  assert.deepEqual([player.location.getX(), player.location.getY()], [Shared.OUTSIDE.x, Shared.OUTSIDE.y]);
+});
+
+test('a logout whose raid is gone leaves the Dawnbringer behind, and never in the retrieval chest', () => {
+  const { raid, players: [ann, bob] } = startRaid(['Ann4', 'Bob4']);
+  raid.room.start();
+  raid.member(ann).inFight = true;
+  raid.onLogout(ann);
+  const saved = ann.getAttribute(Raid.ATTR_LOGOUT);
+  raid.dispose();
+  const returning = fakePlayer('Ann4');
+  returning.setAttribute(Raid.ATTR_LOGOUT, saved);
+  returning.inventory.setItem(0, new Item(Shared.ITEM.DAWNBRINGER, 1));
+  returning.inventory.setItem(1, new Item(4151, 1));
+  RaidUnit.returnAfterLogout({ player: returning });
+  assert.equal(returning.inventory.getAmount(Shared.ITEM.DAWNBRINGER), 0);
+  assert.equal((Retrieval.lotOf(returning)?.items ?? []).some((item) => item.id === Shared.ITEM.DAWNBRINGER), false);
+  assert.equal((Retrieval.lotOf(returning)?.items ?? []).some((item) => item.id === 4151), true, 'the death still stores the rest');
+  void bob;
 });

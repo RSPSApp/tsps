@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { decodeClientPacket, encodeLoginResponse } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { LoginIndex } from "../game/login/GameState";
 import { LoginState } from "../game/login/LoginState";
-import { resetClientPreferencesCache } from "../game/preferences/ClientPreferences";
+import { getClientPreference, resetClientPreferencesCache, updateClientPreferences } from "../game/preferences/ClientPreferences";
 import { clientEncoder } from "../network/packet/ClientBinaryEncoder";
 import { decodeBatchedServerPackets, decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { LOGIN_FLAG_REMEMBER, LOGIN_FLAG_TOKEN } from "../network/serverConnection/constants";
@@ -174,3 +174,54 @@ for (const [key, value] of Object.entries(defaultServerEnv)) {
     else process.env[envKey] = value;
 }
 console.log("remembered login: ok");
+
+async function worldNameMetadata() {
+    const originalFetch = globalThis.fetch;
+    try {
+        const state = new LoginState();
+        state.serverAddress = "solar.example:43594";
+        state.serverSecure = true;
+        state.serverTransport = "websocket";
+        state.serverSignalUrl = undefined;
+        state.serverWorldId = undefined;
+        let requested = "";
+        globalThis.fetch = (async url => {
+            requested = String(url);
+            return { ok: true, json: async () => ({ name: "Solaris RSPS" }) } as Response;
+        }) as typeof fetch;
+        updateClientPreferences({ lastServer: undefined });
+        await state.refreshServerName();
+        assert.equal(requested, "https://solar.example:43594/api/world-info");
+        assert.equal(state.serverName, "Solaris RSPS");
+        assert.equal(getClientPreference("lastServer"), undefined, "a refreshed default world is not saved as a choice");
+        state.saveLastServer();
+        state.serverTransport = "webrtc";
+        state.serverSignalUrl = "wss://relay.example/signal";
+        state.serverWorldId = "solar";
+        globalThis.fetch = (async url => {
+            requested = String(url);
+            return { ok: true, json: async () => ({ worlds: [{ worldId: "solar", name: "Browser Solaris" }] }) } as Response;
+        }) as typeof fetch;
+        await state.refreshServerName();
+        assert.equal(requested, "https://relay.example/worlds");
+        assert.equal(state.serverName, "Browser Solaris");
+        assert.equal(getClientPreference("lastServer")?.name, "Browser Solaris", "a chosen world remembers its refreshed name");
+        let reply!: (value: Response) => void;
+        globalThis.fetch = (() => new Promise<Response>(resolve => { reply = resolve; })) as typeof fetch;
+        const pending = state.refreshServerName();
+        state.serverWorldId = "another-world";
+        reply({ ok: true, json: async () => ({ worlds: [{ worldId: "solar", name: "Stale world" }] }) } as Response);
+        await pending;
+        assert.equal(state.serverName, "Browser Solaris", "stale metadata cannot rename the next selection");
+        for (const name of ["<col=ff0000>World", "x".repeat(65), "", "bad\nname"]) {
+            globalThis.fetch = (async () => ({ ok: true, json: async () => ({ worlds: [{ worldId: "another-world", name }] }) })) as typeof fetch;
+            await state.refreshServerName();
+            assert.equal(state.serverName, "Browser Solaris", "invalid metadata retains the fallback");
+        }
+        globalThis.fetch = (async () => { throw new Error("offline or older server"); }) as typeof fetch;
+        await state.refreshServerName();
+        assert.equal(state.serverName, "Browser Solaris");
+        console.log("pre-login world name metadata: ok");
+    } finally { globalThis.fetch = originalFetch; }
+}
+void worldNameMetadata().catch(error => { console.error(error); process.exitCode = 1; });

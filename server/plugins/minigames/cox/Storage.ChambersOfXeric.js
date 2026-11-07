@@ -187,8 +187,21 @@ function tierOf(raid) {
 // ---------------------------------------------------------------- the interfaces
 
 /** What the player has open: { kind: "private" | "shared", size, raid }. */
+/**
+ * The storage the player has open: only while its interface is open, and the raid's own storage only inside the raid
+ * (the mountain's withdraw-only unit is outside it). The view was kept after the interface closed, so a click on the
+ * storage or side components from anywhere (the Wilderness too) deposited and withdrew: a remote bank.
+ */
 function viewOf(player) {
-  return player.getAttribute(ATTR_VIEW) ?? null;
+  const view = player.getAttribute(ATTR_VIEW) ?? null;
+  if (!view) return null;
+  const expected = view.kind === "private" ? Shared.INTERFACE.PRIVATE_STORAGE : Shared.INTERFACE.SHARED_STORAGE;
+  const raid = Raid.raidOf(player);
+  const open = player.getInterfaceId?.() === expected
+    && (view.mount || (raid != null && (view.kind !== "shared" || view.raid === raid)));
+  if (open) return view;
+  player.setAttribute(ATTR_VIEW, null);
+  return null;
 }
 
 function sendSide(player, privateView) {
@@ -441,15 +454,17 @@ function dragPrivate(event) {
   refresh(player);
 }
 
+/** The storage's own switch buttons: only from the other storage, open at a unit in the raid. */
 function switchToShared({ player }) {
   const raid = Raid.raidOf(player);
-  if (raid && tierOf(raid) > 0) openShared(player, raid);
+  const view = viewOf(player);
+  if (raid && view?.kind === "private" && !view.mount && tierOf(raid) > 0) openShared(player, raid);
   return true;
 }
 
 function switchToPrivate({ player }) {
   const raid = Raid.raidOf(player);
-  openPrivate(player, TIERS[tierOf(raid)].personal);
+  if (raid && viewOf(player)?.kind === "shared") openPrivate(player, TIERS[tierOf(raid)].personal);
   return true;
 }
 

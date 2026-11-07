@@ -6,6 +6,7 @@ const { isMembersArea, isMembersWorld } = require("../../../../src/main/typescri
 const { isLoadoutAvailable } = require("./PvpLoadoutRegistry.PlayerBots");
 const { listPvpProfiles } = require("./PvpProfileRegistry.PlayerBots");
 const { readBotSites } = require("../../brain/Sites.PlayerBots");
+const { normalizeRegionDensity } = require("./RegionDensity.PlayerBots");
 const fs = require("fs");
 const path = require("path");
 
@@ -55,6 +56,10 @@ const SMITE_ONLY_REGIONS = new Set(PVP_BOT_CONFIG.smiteOnlyRegions ?? []);
 const PVP_BOT_SETTINGS = Object.freeze({
   botPool: Math.max(0, Math.floor(Number(PVP_BOT_CONFIG.botPool ?? 0))),
   activeRegionBotsPerRegion: Math.max(0, Math.floor(Number(PVP_BOT_CONFIG.activeRegionBotsPerRegion ?? 0))),
+  activeRegionBotsByRegion: normalizeRegionDensity(
+    PVP_BOT_CONFIG.activeRegionBotsByRegion,
+    Math.max(0, Math.floor(Number(PVP_BOT_CONFIG.botPool ?? 0)))
+  ),
   activeRegionInset: Math.max(0, Math.floor(Number(PVP_BOT_CONFIG.activeRegionInset ?? 0))),
 });
 

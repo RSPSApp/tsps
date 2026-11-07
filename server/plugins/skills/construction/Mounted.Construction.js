@@ -1,8 +1,8 @@
 "use strict";
 
-const { Location, Animation, Graphic, Priority, TeleportHandler, TeleportType } = require("./Core.Construction");
+const { Location, Animation, Graphic, Priority, TeleportHandler, TeleportType, Task, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
-const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL } = require("../../items/Teleports.Jewellery");
+const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE } = require("../../items/Teleports.Jewellery");
 const House = require("./House.Construction");
 const Menu = require("./Menu.Construction");
 
@@ -12,7 +12,10 @@ const XERICS_TELEPORT = new TeleportType(3, new Animation(Ids.seq("arceuus_necro
 const MYTHS_GUILD = [2458, 2850, 0];
 
 const destinationsOf = key => JEWELLERY.find(piece => piece.key === key).destinations;
-const tileOf = (key, label) => destinationsOf(key).find(entry => entry.label === label || entry.aliases?.includes(label)).tile;
+const entryOf = (key, label) => destinationsOf(key).find(entry => entry.label === label || entry.aliases?.includes(label));
+const tileOf = (key, label) => entryOf(key, label).tile;
+/** Wiki (Digsite pendant): the mounted one has "the same locations as the normal unmounted version", quests included. */
+const questOf = (key, label) => entryOf(key, label).quest ?? null;
 
 /**
  * Mounted amulets in the portal nexus room. Each left-click setting is its own loc, so configuring
@@ -30,8 +33,9 @@ const AMULETS = {
       { label: "Xeric's Lookout", option: "Look out", loc: Ids.loc("poh_amulet_xeric_lookout"), tile: [1578, 3529, 0] },
       { label: "Xeric's Glade", option: "Glade", loc: Ids.loc("poh_amulet_xeric_glade"), tile: [1751, 3566, 0] },
       { label: "Xeric's Inferno", option: "Inferno", loc: Ids.loc("poh_amulet_xeric_inferno"), tile: [1505, 3819, 0] },
-      { label: "Xeric's Heart", option: "Heart", loc: Ids.loc("poh_amulet_xeric_heart"), tile: [1642, 3673, 0] },
-      { label: "Xeric's Honour", option: "Honour", loc: Ids.loc("poh_amulet_xeric_honour"), tile: [1254, 3563, 0] },
+      { label: "Xeric's Heart", option: "Heart", loc: Ids.loc("poh_amulet_xeric_heart"), tile: [1642, 3673, 0], diaryDestination: "heart" },
+      // As the worn talisman: Honour needs its ancient tablet unlock (KourendTravelItems answers).
+      { label: "Xeric's Honour", option: "Honour", loc: Ids.loc("poh_amulet_xeric_honour"), tile: [1254, 3563, 0], honour: true },
     ],
   },
   "Digsite Pendant": {
@@ -41,8 +45,8 @@ const AMULETS = {
     teleportType: TeleportType.NORMAL,
     destinations: [
       { label: "Digsite", option: "Digsite", loc: Ids.loc("poh_amulet_dig_digsite"), tile: tileOf("digsite", "Digsite") },
-      { label: "Fossil Island", option: "Fossil Island", loc: Ids.loc("poh_amulet_dig_fossil"), tile: tileOf("digsite", "Fossil Island") },
-      { label: "Lithkren", option: "Lithkren", loc: Ids.loc("poh_amulet_dig_lithkren"), tile: tileOf("digsite", "Lithkren") },
+      { label: "Fossil Island", option: "Fossil Island", loc: Ids.loc("poh_amulet_dig_fossil"), tile: tileOf("digsite", "Fossil Island"), quest: questOf("digsite", "Fossil Island") },
+      { label: "Lithkren", option: "Lithkren", loc: Ids.loc("poh_amulet_dig_lithkren"), tile: tileOf("digsite", "Lithkren"), quest: questOf("digsite", "Lithkren") },
     ],
   },
 };
@@ -52,10 +56,10 @@ function inHouse(event) {
   return House.houseFor(event.player) ? event.player : null;
 }
 
-function teleport(player, tile, teleportType = TeleportType.NORMAL) {
+function teleport(player, tile, teleportType = TeleportType.NORMAL, onArrival) {
   const target = new Location(...tile);
   if (!TeleportHandler.checkReqs(player, target, DEFAULT_WILDERNESS_LEVEL)) return;
-  TeleportHandler.teleport(player, target, teleportType, false);
+  TeleportHandler.teleport(player, target, teleportType, false, onArrival);
 }
 
 /** Mounted amulet of glory: each op is a destination, in the amulet's order. */
@@ -77,11 +81,45 @@ function amuletOf(event) {
   return inHouse(event) ? AMULETS[event.definition?.getName()] : null;
 }
 
+let pluginApi = null;
+
+// The house area is left in player processing after the teleport task lands.
+class XericDiaryArrival extends Task {
+  constructor(player) { super(1, player); this.player = player; }
+  execute() {
+    this.stop();
+    pluginApi.emitCustomEvent("xerics-talisman:teleported", { player: this.player, destination: "heart" });
+  }
+}
+
+function mountedArrival(player, destination) {
+  return destination.diaryDestination === "heart"
+    ? () => TaskManager.submit(new XericDiaryArrival(player))
+    : undefined;
+}
+
+/** A mounted destination's quest lock, as the worn piece checks it; refused with the Wiki's line. */
+function destinationUnlocked(player, destination) {
+  if (destination.honour) {
+    const query = { player, unlocked: false };
+    pluginApi.emitCustomEvent("xerics-talisman:honour-unlocked", query);
+    if (query.unlocked === true) return true;
+  } else {
+    if (!destination.quest) return true;
+    const query = { player, key: destination.quest.key, complete: false };
+    pluginApi.emitCustomEvent("quest:is-complete", query);
+    if (query.complete === true) return true;
+  }
+  const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LOCKED_DESTINATION_MESSAGE)));
+  return false;
+}
+
 function amuletTeleport(event) {
   const amulet = amuletOf(event);
   const destination = amulet?.destinations.find(entry => entry.loc === event.objectId);
   if (!destination) return false;
-  teleport(event.player, destination.tile, amulet.teleportType);
+  if (destinationUnlocked(event.player, destination)) teleport(event.player, destination.tile, amulet.teleportType, mountedArrival(event.player, destination));
   return true;
 }
 
@@ -91,7 +129,7 @@ function amuletTeleportMenu(event) {
   const labels = [...amulet.destinations.map(entry => entry.label), NOWHERE];
   Menu.openMenu(event.player, amulet.teleportTitle, labels, index => {
     const destination = amulet.destinations[index];
-    if (destination) teleport(event.player, destination.tile, amulet.teleportType);
+    if (destination && destinationUnlocked(event.player, destination)) teleport(event.player, destination.tile, amulet.teleportType, mountedArrival(event.player, destination));
   });
   return true;
 }
@@ -126,6 +164,7 @@ const AMULET_OPTIONS = {
 };
 
 function attachMountedItems(api) {
+  pluginApi = api;
   api.onObjectInteraction("Amulet of Glory", GLORY_OPTIONS);
   api.onObjectInteraction("Mythical cape", { Teleport: mythicalCapeTeleport });
   for (const name of Object.keys(AMULETS)) api.onObjectInteraction(name, AMULET_OPTIONS);

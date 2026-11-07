@@ -16,6 +16,7 @@ const {
 const { SPAWNS_PER_BATCH, SPAWN_BATCH_DELAY_MS, runPaced } = require("./SpawnPacing.PlayerBots");
 
 const { generateBotName } = require("../lib/BotNames.PlayerBots");
+const { normalizeRegionDensity } = require("../behaviours/pvp/RegionDensity.PlayerBots");
 
 const WILDERNESS_SPAWN_TILE_PROBE_LIMIT = 256;
 const WILDERNESS_REGION_SIZE = 64;
@@ -31,6 +32,7 @@ function createBotRegistry(options) {
     botCount,
     wildernessRoamerBotCount = 0,
     wildernessActiveRegionBotsPerRegion = 0,
+    wildernessActiveRegionBotsByRegion,
     wildernessActiveRegionInset = 0,
     botBaseCooldownMs,
     spawn,
@@ -55,6 +57,7 @@ function createBotRegistry(options) {
     randomInRange,
     startupLogger,
     onActiveRegionsUpdated,
+    onPlayerMapSquareChange,
     getActiveRegionSnapshot,
     botStatesByName: providedBotStatesByName,
     botmeUsernames: providedBotmeUsernames,
@@ -63,6 +66,7 @@ function createBotRegistry(options) {
     entriesByUsername: providedEntriesByUsername,
   } = options;
   const RegionManager = botApi.getRegionManager();
+  const regionalTargets = normalizeRegionDensity(wildernessActiveRegionBotsByRegion, wildernessRoamerBotCount);
   let routeFinder = null;
   const applyForcedModeForDiagnosis =
     typeof applyForcedModeForDiagnosisFn === "function"
@@ -357,7 +361,6 @@ function createBotRegistry(options) {
   function buildRegionalWildernessPlans(snapshot, hotspotCountsByRegion = null) {
     if (
       wildernessRoamerBotCount <= 0 ||
-      wildernessActiveRegionBotsPerRegion <= 0 ||
       !Array.isArray(snapshot?.regions) ||
       snapshot.regions.length === 0
     ) {
@@ -377,7 +380,8 @@ function createBotRegistry(options) {
     for (const region of activeRegions) {
       const hotspotCount = hotspotCountsByRegion?.get?.(region.key) ?? 0;
       // One target for every PvP region, levelled Wilderness or not, so the setting means what it says.
-      const desiredCount = Math.max(0, wildernessActiveRegionBotsPerRegion - hotspotCount);
+      const target = regionalTargets[region.key] ?? wildernessActiveRegionBotsPerRegion;
+      const desiredCount = Math.max(0, target - hotspotCount);
       desiredCountsByRegion.set(region.key, desiredCount);
       totalDesired += desiredCount;
     }
@@ -732,7 +736,7 @@ function createBotRegistry(options) {
   }
 
   function reconcileRegionalWildernessBots(snapshot = null) {
-    if (wildernessRoamerBotCount <= 0 || wildernessActiveRegionBotsPerRegion <= 0) {
+    if (wildernessRoamerBotCount <= 0) {
       return;
     }
     const nextSnapshot =
@@ -752,17 +756,17 @@ function createBotRegistry(options) {
 
     const liveRegionalRegionKeys = getLiveRegionalBotRegionKeys();
     const currentAssignedUsernamesByRegion = new Map();
-    for (const [username, assignment] of wildernessRegionalAssignments.entries()) {
+    for (const [username] of wildernessRegionalAssignments.entries()) {
       if (!entriesByUsername.has(username)) {
         continue;
       }
       const liveRegionKey = liveRegionalRegionKeys.get(username);
-      if (liveRegionKey !== assignment.regionKey) {
+      if (!liveRegionKey) {
         continue;
       }
-      const bucket = currentAssignedUsernamesByRegion.get(assignment.regionKey) ?? [];
+      const bucket = currentAssignedUsernamesByRegion.get(liveRegionKey) ?? [];
       bucket.push(username);
-      currentAssignedUsernamesByRegion.set(assignment.regionKey, bucket);
+      currentAssignedUsernamesByRegion.set(liveRegionKey, bucket);
     }
 
     const cancelRegionalDespawnTimer = (username) => {
@@ -790,7 +794,7 @@ function createBotRegistry(options) {
           typeof getActiveRegionSnapshot === "function"
             ? getActiveRegionSnapshot()
             : null;
-        const livePlans = buildRegionalWildernessPlans(liveSnapshot);
+        const livePlans = buildRegionalWildernessPlans(liveSnapshot, countLiveHotspotBotsByRegion());
         const desiredCountsByRegion = new Map();
         for (const plan of livePlans) {
           desiredCountsByRegion.set(
@@ -798,19 +802,17 @@ function createBotRegistry(options) {
             (desiredCountsByRegion.get(plan.regionKey) ?? 0) + 1
           );
         }
-        const desiredCount = desiredCountsByRegion.get(assignment.regionKey) ?? 0;
+        const liveRegionKey = getRegionKeyForLocation(entriesByUsername.get(username)?.player?.getLocation?.());
+        const desiredCount = desiredCountsByRegion.get(liveRegionKey) ?? 0;
         const aliveInRegion = [];
-        for (const [otherUsername, otherAssignment] of wildernessRegionalAssignments.entries()) {
-          if (otherAssignment?.regionKey !== assignment.regionKey) {
-            continue;
-          }
+        for (const [otherUsername] of wildernessRegionalAssignments.entries()) {
           if (!entriesByUsername.has(otherUsername)) {
             continue;
           }
           const otherLiveRegionKey = getRegionKeyForLocation(
             entriesByUsername.get(otherUsername)?.player?.getLocation?.()
           );
-          if (otherLiveRegionKey !== assignment.regionKey) {
+          if (otherLiveRegionKey !== liveRegionKey) {
             continue;
           }
           aliveInRegion.push(otherUsername);
@@ -989,7 +991,18 @@ function createBotRegistry(options) {
         reconcileRegionalWildernessBots(snapshot);
       });
     }
+    // Bots do not keep map squares active. Their movement can still change how many
+    // bots occupy an overridden square; batch those changes without changing activation.
+    if (Object.keys(regionalTargets).length > 0 && typeof onPlayerMapSquareChange === "function") {
+      onPlayerMapSquareChange(regionalBotMoved);
+    }
     setTimeout(() => spawnConfiguredBots(), 0);
+  }
+
+  function regionalBotMoved({ player }) {
+    const username = player?.getUsername?.();
+    if (!wildernessRegionalAssignments.has(username) && !wildernessHotspotAssignments.has(username)) return;
+    scheduleTopUp("regional", () => reconcileRegionalWildernessBots());
   }
 
   /**

@@ -277,10 +277,23 @@ export class AccuracyFormulasDpsCalc {
         if (enemy.isNpc()) {
             defRoll = Math.floor(defRoll * enemy.getAsNpc().getDefenceRollFactor());
         }
+        if (attackStyle === CombatType.MAGIC && defenceStyle === CombatType.MAGIC) {
+            defRoll = AccuracyFormulasDpsCalc.magicDefenceRollEvent(entity, enemy, defRoll);
+        }
 
         attRoll = Math.floor(attRoll * AccuracyFormulasDpsCalc.scopedAccuracyScale);
 
         return { attack: attRoll, defence: defRoll };
+    }
+
+    /**
+     * Lets plugins change a magic attack's defence roll (combat:magic-defence-roll: attacker, target,
+     * spell, defenceRoll), after the target's gear and defence factor are settled.
+     */
+    private static magicDefenceRollEvent(entity: any, enemy: any, defenceRoll: number): number {
+        const request = { attacker: entity, target: enemy, spell: entity.getCombat?.()?.getSelectedSpell?.(), defenceRoll };
+        PluginManager.emitCustomEvent("combat:magic-defence-roll", request);
+        return Number.isFinite(request.defenceRoll) && request.defenceRoll >= 0 ? Math.floor(request.defenceRoll) : defenceRoll;
     }
 
     private static scopedAccuracyScale = 1;
@@ -303,7 +316,7 @@ export class AccuracyFormulasDpsCalc {
         }
         const attackRolled = this.randomInclusive(rolls.attack);
         const defenceRolled = this.randomInclusive(rolls.defence);
-        // Plugins may grant a further roll (the Osmumten's fang) by setting `accurate`.
+        // Plugins may grant a further roll by changing `accurate` (combat:accuracy-rolled).
         const rolled = { attacker: entity, target: enemy, combatType: style, attack: rolls.attack, defence: rolls.defence, attackRolled, defenceRolled, accurate: attackRolled > defenceRolled };
         PluginManager.emitCustomEvent("combat:accuracy-rolled", rolled);
         return rolled.accurate === true;

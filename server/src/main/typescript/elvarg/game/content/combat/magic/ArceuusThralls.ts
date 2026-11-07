@@ -92,6 +92,11 @@ export class ArceuusThralls {
 
                 if (++attackTicks % 4 === 0) {
                     thrall.performAnimation(new Animation(thrall.getAttackAnim()));
+                    // Content may cancel the attack's damage (a monster thralls can't hurt): the thrall still attacks,
+                    // but no hit is queued. Its hit skips the hit-modify hooks, so this is where such immunity goes.
+                    const attack = { player, thrall, target, cancelled: false };
+                    PluginManager.emitCustomEvent("magic:thrall-attack", attack);
+                    if (attack.cancelled === true) return;
                     // Content may raise each attack's max hit (a league fragment), as for the duration.
                     const max = { player, thrall, target, maxHit };
                     PluginManager.emitCustomEvent("magic:thrall-max-hit", max);

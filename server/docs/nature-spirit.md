@@ -67,3 +67,21 @@ timed exterior disappearance has been verified.
 Remaining: the transformation presentation uses the quest's Bloom effect and a short held
 line. Its full live camera/cinematic sequence still needs a recording; this change does not
 claim exact cutscene fidelity. No generated dialogue/data files are modified.
+
+## Bloom items and the Morytania hard diary
+
+- [Wiki: Bloom](https://oldschool.runescape.wiki/w/Bloom) lists every blessed silver sickle
+  variant (emerald, ruby and diamond, plain and enchanted), the Blisterwood sickle and its
+  (e) form, and the Ivandis, Blisterwood and Hallowed flails as Bloom items. The active
+  `osrs-241_2026-10-20` cache agrees: each of those items carries "Cast Bloom" (sickles) or
+  "Bloom" (flails) in its inventory menu. The handler therefore keys on that cache menu entry
+  instead of the plain blessed sickle's id, so the same cast, Prayer cost, animation and
+  plant growth apply to all of them. The Ancient Guthixian Temple's dead-vine Bloom
+  (`wgs/Temple.WhileGuthixSleeps.js`) uses the same check.
+- The unblessed silver sickle has no Bloom entry and still does nothing.
+- [Wiki: Morytania Diary](https://oldschool.runescape.wiki/w/Morytania_Diary) gives the hard
+  tier "Double Mort myre fungi when casting Bloom"; the Bloom page repeats it for the blessed
+  silver sickle and Ivandis flail. Picking fungi from a bloomed log gives two Mort myre fungi
+  (when a second slot is free) once the player's hard Morytania diary is complete; stems and
+  pears are not doubled. No capture of this was found, so the doubling is applied when
+  the fungi are picked, which is an inference.

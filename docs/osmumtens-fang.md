@@ -7,18 +7,20 @@ Source: [OSRS Wiki, Osmumten's fang](https://oldschool.runescape.wiki/w/Osmumten
 
 ## Passive (normal attacks)
 
-- **Damage:** a successful hit deals 15% to 85% of the max hit instead of 0 to max. Verified on
-  a level 99 account with no gear bonuses besides the fang (max hit 28): hits were 4 to 23.
+- **Damage:** a successful hit deals 15% to 85% of the max hit instead of 0 to max, with the Wiki
+  calculator's rounding: shrink = trunc(max * 3 / 20), range shrink to max - shrink (max 28 gives
+  4 to 24). A forced or fixed max hit (minimum equal to maximum) is left alone. The listener also
+  narrows `minimum`/`maximum`, so later `combat:hit-rolled` listeners keep the range.
 - **Accuracy:** with a stab-bonus style, outside the Tombs of Amascut the player's accuracy is
   rolled a second time against the same defence roll, and the hit lands if either beats it.
-  Inside the raid the whole check, defence included, is rolled again.
+  Inside the raid (the `toa:in-tombs` event) the whole check, defence included, is rolled again.
 - The second roll is the core event `combat:accuracy-rolled` (attack and defence rolls, the
   result in `accurate`), fired by every accuracy roll. The damage range uses `combat:hit-rolled`.
 
 ## Eviscerate
 
-Unchanged: 25% energy, 1.5x accuracy, 15% to 100% of the max hit. The Wiki does not say whether
-the extra roll applies to the special; it is applied here because the special is a stab attack.
+Unchanged: 25% energy, 1.5x accuracy, 15% to 100% of the max hit. The Wiki's DPS calculator applies the
+fang's extra accuracy roll during the special, and so does this plugin.
 
 ## Checked against rsprox captures
 

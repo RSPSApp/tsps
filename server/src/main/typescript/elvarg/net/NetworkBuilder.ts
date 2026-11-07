@@ -85,6 +85,8 @@ import { TeleportHandler } from "../game/model/teleportation/TeleportHandler";
 import { ArceuusSpells } from "../game/content/combat/magic/ArceuusSpells";
 import { SpellTeleports } from "../game/content/combat/magic/SpellTeleports";
 import { LEAGUE_PROFILE, MAIN_PROFILE, type PlayerProfile } from "../game/entity/impl/player/persistence/PlayerProfile";
+import { Accounts } from "../game/entity/impl/player/Accounts";
+import type { PluginLoginExtension, PluginLoginPending } from "../plugins/PluginTypes";
 import {
   LOGIN_FLAG_REMEMBER,
   LOGIN_FLAG_TOKEN,
@@ -128,7 +130,15 @@ async function forgetLoginToken(rawUsername: string, token: string): Promise<voi
   const protocolName = Misc.formatNameForProtocol(username);
   if (protocolName.length < 1 || protocolName.length > 12 || !Misc.isValidName(protocolName)) return;
   const profile = GameConstants.WORLD_PROFILE;
-  const online = World.getPlayerByName(username);
+  // Remembered logins live on the account's primary, whichever character name was typed.
+  let owner = username;
+  try {
+    const account = Accounts.accountOf(username);
+    owner = (account && Accounts.primaryOf(account)) || username;
+  } catch (error) {
+    console.warn(`[login] could not read the account of ${username}`, error);
+  }
+  const online = World.getPlayerByName(owner);
   if (online) {
     const entries = readLoginTokens(online.getAttribute(LOGIN_TOKENS_ATTRIBUTE), Date.now());
     const check = checkLoginToken(entries, token);
@@ -137,9 +147,9 @@ async function forgetLoginToken(rawUsername: string, token: string): Promise<voi
   }
   try {
     // Only a token the account holds causes a write, so made-up requests cost nothing.
-    const save = GameConstants.PLAYER_PERSISTENCE.load(username, profile);
+    const save = GameConstants.PLAYER_PERSISTENCE.load(owner, profile);
     if (!save || checkLoginToken(readLoginTokens(save.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now()), token).kind !== "valid") return;
-    await GameConstants.PLAYER_PERSISTENCE.updateOffline(username, (stored) => {
+    await GameConstants.PLAYER_PERSISTENCE.updateOffline(owner, (stored) => {
       const entries = readLoginTokens(stored.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now());
       const check = checkLoginToken(entries, token);
       if (check.kind !== "valid") return;
@@ -215,6 +225,9 @@ const IMMEDIATE_PACKETS = new Set([
   "raw",
   "login",
   "login_forget",
+  "character_select",
+  "character_create",
+  "character_delete",
   "handshake",
   "plugin_message",
   "movement_input",
@@ -234,15 +247,21 @@ const NON_INPUT_PACKETS = new Set([
   "local_trigger",
 ]);
 
-type PendingLogin = {
-  username: string;
-  /** Which of the account's characters is logging in: the league one on a league world. */
-  profile: PlayerProfile;
-  passwordHash: string;
-  save: any | null;
-  /** The account's remembered logins after this one, or null when they didn't change. */
-  loginTokens: LoginTokenEntry[] | null;
-};
+type PendingLogin = PluginLoginPending;
+
+class LoginRejection extends Error {
+  constructor(public readonly code: number, message: string) { super(message); }
+}
+
+/** The pendingNames key for a name: the protocol form of its login key. */
+function pendingKey(name: string): string {
+  return Misc.formatNameForProtocol(DisplayNames.key(name));
+}
+
+/** Whether this character name is on the ban list (it can't enter the world). */
+function isBanned(name: string): boolean {
+  return PlayerPunishment.banned(name);
+}
 
 /** Whether `username` is one of `DEV_USERNAME`'s accounts (comma-separated). */
 export function isConfiguredDeveloperUsername(username: string): boolean {
@@ -348,7 +367,7 @@ export class ClientConnection {
 
   /** Whether a login with this name is between its checks and entering the world. */
   public static isLoginPending(name: string): boolean {
-    return ClientConnection.pendingNames.has(Misc.formatNameForProtocol(DisplayNames.key(name)));
+    return ClientConnection.pendingNames.has(pendingKey(name));
   }
   /**
    * A logged-in connection that sends nothing for this long is dead: the client pings every 5 s
@@ -362,8 +381,16 @@ export class ClientConnection {
   /** Set by the first ping: a client from before the keepalive is never timed out. */
   private sendsKeepalive = false;
   private idleCheck?: ReturnType<typeof setInterval>;
+  /**
+   * A login that never reaches the handshake (a player left on the character picker) holds its
+   * account and character names; the connection is closed after this long so they are released.
+   */
+  public static readonly PENDING_LOGIN_TIMEOUT_MS = 5 * 60_000;
+  private pendingLoginTimeout?: ReturnType<typeof setTimeout>;
   private pending?: PendingLogin;
-  private reservedName?: string;
+  private loginExtension?: PluginLoginExtension;
+  /** The pendingNames keys this connection holds: its account and the character it will enter. */
+  private reservedNames: string[] = [];
   private player?: Player;
   private pluginMessageWindow = 0;
   private pluginMessageCount = 0;
@@ -401,6 +428,33 @@ export class ClientConnection {
       this.cleanup("socket_error");
     });
     channel.onClose(() => this.cleanup("socket_close"));
+    try {
+      this.loginExtension = PluginManager.createLoginExtension({
+        send: (packet) => this.send(packet),
+        pending: () => this.pending,
+        isActive: (pending) => this.pending === pending && !this.player && !this.closed,
+        reserveName: (name) => this.reservePendingName(pendingKey(name)),
+        releaseName: (name) => {
+          const key = pendingKey(name);
+          if (this.reservedNames.includes(key)) {
+            this.reservedNames = this.reservedNames.filter((reserved) => reserved !== key);
+            ClientConnection.pendingNames.delete(key);
+          }
+        },
+        isNameBusy: (name) => {
+          const key = pendingKey(name);
+          return !!World.getPlayerByName(name)
+            || World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === key)
+            || (ClientConnection.pendingNames.has(key) && !this.reservedNames.includes(key));
+        },
+        reject: (code, message) => { throw new LoginRejection(code, message); },
+      });
+    } catch (error) {
+      console.error("[login] extension setup failed", error);
+      this.cleanup("login_extension_error");
+      channel.close(1011, "Login extension failed");
+      return;
+    }
     this.send(encodeWelcome(GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE, Date.now()));
   }
 
@@ -493,6 +547,17 @@ export class ClientConnection {
           !(packet.type === "inventory_action" && EquipPacketListener.preservesInterfaceOnEquip(this.player))
         ) {
           this.player.closeInterruptibleInterfaces();
+        }
+      }
+      if (this.loginExtension?.packet) {
+        try {
+          const handled = this.loginExtension.packet(packet);
+          if (handled === true || (handled && await handled)) continue;
+        } catch (error) {
+          console.error("[login] extension packet failed", error);
+          this.cleanup("login_extension_error");
+          this.channel.close(1011, "Login extension failed");
+          return;
         }
       }
       switch (packet.type) {
@@ -779,7 +844,8 @@ export class ClientConnection {
               // Only op1 is Remove; ops 2+ are the item's worn options (Check, Activate...),
               // which never take the item off, even when nothing handles them.
               if (!itemActionHandled && actionPacket.buttonNum === 1) {
-                EquipPacketListener.unequip(this.player, equipmentSlot);
+                // As equipping refuses: no gear comes off mid-teleport (the left-click and Wield routes' rule).
+                if (!this.player.isTeleportingReturn()) EquipPacketListener.unequip(this.player, equipmentSlot);
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }
@@ -1116,6 +1182,14 @@ export class ClientConnection {
     }
   }
 
+  private rejectLoginExtension(error: unknown): void {
+    if (error instanceof LoginRejection) this.failLogin(error.code, error.message);
+    else {
+      console.error("[login] extension failed", error);
+      this.failLogin(8, "The login server is busy.");
+    }
+  }
+
   private async login(rawUsername: string, password: string, revision: number, flags = 0): Promise<void> {
     const tokenLogin = (flags & LOGIN_FLAG_TOKEN) !== 0;
     // A league world logs the account's league character in: a separate save under the same name.
@@ -1147,20 +1221,51 @@ export class ClientConnection {
       this.failLogin(27, "Your IP address has been banned.");
       return;
     }
+    // The typed name is the account's, or one of its characters'; either logs in to the account.
+    let account: string;
+    let primaryName: string;
+    let accountNames: string[];
+    let deletedName = false;
+    try {
+      const owner = Accounts.accountOf(typedName);
+      // A deleted character's name is never a new login (only its own account re-creates it):
+      // its display names, clan rank and punishments are still keyed by it.
+      deletedName = owner === undefined && Accounts.isDeleted(typedName);
+      account = owner ?? "";
+      primaryName = (account ? Accounts.primaryOf(account) : undefined) ?? typedName;
+      accountNames = [...Accounts.charactersOf(account).map((character) => character.name), typedName];
+    } catch (error) {
+      console.error(`[login] failed to read the account of ${typedName}`, error);
+      this.failLogin(8, "The login server is busy.");
+      return;
+    }
+    if (deletedName) {
+      this.failLogin(3, "That name belonged to a deleted character and can't be used again.");
+      return;
+    }
+    // A banned primary bans the whole account, whichever of its characters' names was typed.
+    if (isBanned(primaryName)) {
+      this.failLogin(4, "Your account has been disabled.");
+      return;
+    }
+    // One account online at a time, whichever of its characters.
+    const accountKeys = accountNames.map(pendingKey);
+    const accountKey = pendingKey(account || typedName);
     if (
       World.getPlayers().isFull() ||
-      World.getPlayerByName(typedName) ||
-      World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === protocolName) ||
-      ClientConnection.pendingNames.has(key)
+      accountNames.some((name) => World.getPlayerByName(name)) ||
+      World.getAddPlayerQueue().some((player) => accountKeys.includes(Misc.formatNameForProtocol(player.getUsername()))) ||
+      ClientConnection.pendingNames.has(accountKey) ||
+      accountKeys.some((name) => ClientConnection.pendingNames.has(name))
     ) {
       this.failLogin(World.getPlayers().isFull() ? 2 : 5, World.getPlayers().isFull()
         ? "This world is full."
         : "Your account is already logged in.");
       return;
     }
-    ClientConnection.pendingNames.add(key);
-    this.reservedName = key;
+    this.reservePendingName(accountKey);
 
+    // `save` is the primary character's save for this world: it holds the remembered logins.
     let save: any | null = null;
     // The account's credential is its main character's save; a league character's own hash only
     // stands in while no main character exists (an account first made on a league world), on
@@ -1168,9 +1273,9 @@ export class ClientConnection {
     // a password change (PlayerPersistence.changePassword) reaches both characters.
     let credentials: any | null = null;
     try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(typedName, profile);
-      const main = profile === MAIN_PROFILE ? save : GameConstants.PLAYER_PERSISTENCE.load(typedName, MAIN_PROFILE);
-      credentials = main ?? save ?? (profile === MAIN_PROFILE ? GameConstants.PLAYER_PERSISTENCE.load(typedName, LEAGUE_PROFILE) : null);
+      save = GameConstants.PLAYER_PERSISTENCE.load(primaryName, profile);
+      const main = profile === MAIN_PROFILE ? save : GameConstants.PLAYER_PERSISTENCE.load(primaryName, MAIN_PROFILE);
+      credentials = main ?? save ?? (profile === MAIN_PROFILE ? GameConstants.PLAYER_PERSISTENCE.load(primaryName, LEAGUE_PROFILE) : null);
     } catch (error) {
       console.error(`[login] failed to load ${typedName}`, error);
       this.releasePendingName();
@@ -1196,7 +1301,7 @@ export class ClientConnection {
       }
     }
 
-    // A remembered login only signs in to a character that exists (its tokens live in its own save).
+    // A remembered login only signs in to an account whose primary exists (its tokens live in that save).
     if (tokenLogin && !save) {
       this.releasePendingName();
       this.failLogin(3, "Invalid username or password.");
@@ -1214,14 +1319,14 @@ export class ClientConnection {
         if (check.kind !== "valid") {
           if (check.kind === "reused") {
             console.warn(`[login] ${typedName}: a replaced login token was used again; revoking it`);
-            await this.saveLoginTokens(typedName, profile, save, revokeLoginToken(entries, check.index));
+            await this.saveLoginTokens(primaryName, profile, save, revokeLoginToken(entries, check.index));
           }
           this.releasePendingName();
           this.failLogin(3, "Invalid username or password.");
           return;
         }
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now, check.index));
-        await this.saveLoginTokens(typedName, profile, save, loginTokens);
+        await this.saveLoginTokens(primaryName, profile, save, loginTokens);
         passwordHash = String(save.getPasswordHashWithSalt?.() ?? "");
       } else if (credentials) {
         const stored = String(credentials.getPasswordHashWithSalt?.() ?? "");
@@ -1250,7 +1355,7 @@ export class ClientConnection {
         const now = Date.now();
         const entries = readLoginTokens(save?.attributes?.[LOGIN_TOKENS_ATTRIBUTE], now);
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now));
-        if (save) await this.saveLoginTokens(typedName, profile, save, loginTokens);
+        if (save) await this.saveLoginTokens(primaryName, profile, save, loginTokens);
       }
     } catch (error) {
       console.error(`[login] failed to authenticate ${typedName}`, error);
@@ -1265,21 +1370,67 @@ export class ClientConnection {
       this.releasePendingName();
       return;
     }
-    // An account keeps the name it was first saved with (either character's); the typed one only names a new account.
+    let username = primaryName;
+    if (!this.loginExtension && account && Accounts.key(typedName) !== Accounts.key(primaryName)) username = typedName;
+    let characterSave = save;
+    if (username !== primaryName) {
+      try { characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null; }
+      catch (error) { this.releasePendingName(); this.failLogin(8, "The login server is busy."); return; }
+      // The alt enters with the capitals its save was made with, not the typed ones (PlayerSave
+      // writes the entered name back as the display name).
+      const altSaved = String(characterSave?.getDisplayName?.() ?? "");
+      if (altSaved && Accounts.key(altSaved) === Accounts.key(username)) username = altSaved;
+    }
+    const pending: PendingLogin = { username, credentialName: primaryName, profile, passwordHash, save: characterSave, loginTokens };
     const savedName = String((save ?? credentials)?.getDisplayName?.() ?? "");
-    const username = Misc.formatNameForProtocol(savedName) === protocolName ? savedName : typedName;
-    this.pending = { username, profile, passwordHash, save, loginTokens };
-    this.send(encodeLoginResponse(true, -1, "", username, loginToken));
+    let responseName = savedName && Accounts.key(savedName) === Accounts.key(primaryName) ? savedName : primaryName;
+    if (Accounts.key(pending.username) === Accounts.key(primaryName)) pending.username = responseName;
+    try {
+      responseName = this.loginExtension?.authenticated?.(pending, { typedName, flags, credentials }) ?? responseName;
+    } catch (error) {
+      this.releasePendingName();
+      this.rejectLoginExtension(error);
+      return;
+    }
+    if (this.closed) { this.releasePendingName(); return; }
+    username = pending.username;
+    this.reservePendingName(pendingKey(username));
+    this.pending = pending;
+    this.startPendingLoginTimeout();
+    this.send(encodeLoginResponse(true, -1, "", responseName, loginToken));
+    try { this.loginExtension?.accepted?.(pending); }
+    catch (error) { this.cleanup("login_extension_error"); this.channel.close(1011, "Login extension failed"); }
     console.info(`[login] accepted ${username} from ${this.channel.remoteAddress}`);
   }
 
   private enterWorld(clientType: number = 0, capabilities: number = 0): void {
     if (!this.pending || this.player) return;
+    this.clearPendingLoginTimeout();
     if (this.closed) {
       this.releasePendingName();
       return;
     }
     const pending = this.pending;
+    if (PlayerPunishment.banned(pending.username)) {
+      this.releasePendingName();
+      this.failLogin(4, "Your account has been disabled.");
+      return;
+    }
+    // A banned primary bans the account, also when the ban lands after login.
+    let primaryBanned: boolean;
+    try {
+      primaryBanned = isBanned(pending.credentialName);
+    } catch (error) {
+      console.error(`[login] failed to read the account of ${pending.credentialName}`, error);
+      this.releasePendingName();
+      this.failLogin(8, "The login server is busy.");
+      return;
+    }
+    if (primaryBanned) {
+      this.releasePendingName();
+      this.failLogin(4, "Your account has been disabled.");
+      return;
+    }
     const session = new PlayerSession(this.channel);
     session.setTurnPacketProcessor(() => this.processTurnPackets());
     const player = new Player(session, GameConstants.DEFAULT_LOCATION.clone());
@@ -1301,7 +1452,10 @@ export class ClientConnection {
     else PlayerSave.applyAttributeDefaults(player);
     if (isConfiguredDeveloperUsername(player.getUsername())) player.setRights(PlayerRights.DEVELOPER);
     player.setPasswordHashWithSalt(pending.passwordHash);
-    if (pending.loginTokens) player.setAttribute(LOGIN_TOKENS_ATTRIBUTE, pending.loginTokens);
+    // Remembered logins live on the primary; a non-primary's were saved there at login.
+    if (pending.loginTokens && (Accounts.key(pending.credentialName) === Accounts.key(pending.username))) {
+      player.setAttribute(LOGIN_TOKENS_ATTRIBUTE, pending.loginTokens);
+    }
     player.setLastKnownRegion(player.getLocation().clone());
     player.getUpdateFlag().flag(Flag.APPEARANCE);
 
@@ -1315,6 +1469,8 @@ export class ClientConnection {
     this.startIdleCheck();
     CONNECTIONS.set(player, this);
     this.releasePendingName();
+    try { this.loginExtension?.entered?.(pending); }
+    catch (error) { console.warn(`[login] post-entry extension failed for ${pending.username}`, error); }
     // Back aboard a boat they logged out on at sea.
     Sailing.onLogin(player);
     World.refreshActiveRegions();
@@ -1389,6 +1545,8 @@ export class ClientConnection {
     // Quest greegrees have equipment slots but no cache Wield action.
     if (/^(wield|wear|equip|hold)$/.test(option)
       && ItemDefinition.forId(packet.itemId).getEquipmentType().getSlot() >= 0) {
+      // As the left-click route refuses (ItemActionPacketListener): no gear swap mid-teleport or while dead.
+      if (player.isTeleportingReturn() || player.getHitpoints() <= 0) return;
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
       return;
     }
@@ -1554,9 +1712,35 @@ export class ClientConnection {
   }
 
   private releasePendingName(): void {
-    if (this.reservedName) ClientConnection.pendingNames.delete(this.reservedName);
-    this.reservedName = undefined;
+    for (const name of this.reservedNames) ClientConnection.pendingNames.delete(name);
+    this.reservedNames = [];
     this.pending = undefined;
+  }
+
+  private reservePendingName(key: string): void {
+    if (this.reservedNames.includes(key)) return;
+    ClientConnection.pendingNames.add(key);
+    this.reservedNames.push(key);
+  }
+
+  /** Closes a connection whose login hasn't reached the handshake in PENDING_LOGIN_TIMEOUT_MS. */
+  private startPendingLoginTimeout(): void {
+    this.clearPendingLoginTimeout();
+    if (this.closed) return;
+    this.pendingLoginTimeout = setTimeout(() => {
+      this.pendingLoginTimeout = undefined;
+      if (this.player || !this.pending) return;
+      this.cleanup("pending_login_timeout");
+      try {
+        this.channel.close(1001, "login timeout");
+      } catch {}
+    }, ClientConnection.PENDING_LOGIN_TIMEOUT_MS);
+    this.pendingLoginTimeout.unref?.();
+  }
+
+  private clearPendingLoginTimeout(): void {
+    if (this.pendingLoginTimeout) clearTimeout(this.pendingLoginTimeout);
+    this.pendingLoginTimeout = undefined;
   }
 
   /** Drops the logged-in connection once a client that pings goes quiet (IDLE_TIMEOUT_MS). */
@@ -1577,6 +1761,7 @@ export class ClientConnection {
     this.closed = true;
     this.stalledInput = null;
     if (this.idleCheck) clearInterval(this.idleCheck);
+    this.clearPendingLoginTimeout();
     this.releasePendingName();
     if (!this.player) return;
     // The disconnect hooks fire when the player leaves the world, which a player in

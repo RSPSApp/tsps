@@ -324,6 +324,26 @@ for (const [name, id, price] of SALES) {
   });
 }
 
+test("Yanni Salika doesn't take an antique whose price wouldn't fit: a coin stack 50 under the cap keeps the bone key", async (t) => {
+  const f = actor(t, [2835, 2985]);
+  const npc = yanni(f);
+  f.inv.adds(COINS, 2147483647 - 50);
+  f.inv.adds(I.BONE_KEY, 1);
+  await show(f, npc, I.BONE_KEY);
+  assert.equal(f.inv.getAmount(I.BONE_KEY), 1, "the key stays");
+  assert.equal(coins(f), 2147483647 - 50, "no coins lost");
+});
+
+test("Yanni Salika pays into the slot a sold antique frees when the inventory is otherwise full", async (t) => {
+  const f = actor(t, [2835, 2985]);
+  const npc = yanni(f);
+  f.inv.adds(I.BONE_KEY, 1);
+  while (f.inv.getFreeSlots() > 0) f.inv.adds(I.BRONZE_SWORD, 1);
+  await show(f, npc, I.BONE_KEY);
+  assert.equal(coins(f), 100);
+  assert.equal(f.inv.getAmount(I.BONE_KEY), 0);
+});
+
 const zogre = () => QuestRuntime.getRegisteredQuests().find((quest) => quest.key === "zogre_flesh_eaters");
 
 test("#2643 Yanni Salika asks about the black prism: Yes pays 5000 once and takes every prism owned, No keeps it", async (t) => {

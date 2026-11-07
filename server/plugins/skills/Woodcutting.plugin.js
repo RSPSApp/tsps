@@ -1348,7 +1348,10 @@ function requestedChop(event) {
 
 function requestedAxe(event) {
   const candidate = event.itemId == null ? null : AXES.find((axe) => axe.id === event.itemId);
-  event.axe = event.itemId == null ? findBestUsableAxe(event.player) : candidate && canUseAxe(event.player, candidate) ? candidate : null;
+  // Free worlds: a members axe answers no request (canoes, vines), as it chops no tree there.
+  event.axe = event.itemId == null
+    ? findBestUsableAxe(event.player, choppingAxeEligible)
+    : candidate && choppingAxeEligible(candidate) && canUseAxe(event.player, candidate) ? candidate : null;
 }
 
 function pauseWoodcutting(event) {

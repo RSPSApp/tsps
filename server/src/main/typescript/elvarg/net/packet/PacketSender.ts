@@ -52,6 +52,7 @@ import {
   encodeCameraUnlock,
   encodeCameraRotateBy,
   encodeCameraMoveArc,
+  encodeCameraRotateToCoordinate,
   encodeCameraTranslate,
   CameraMovementOptions,
   CameraEasing,
@@ -1090,6 +1091,11 @@ export class PacketSender {
 
   sendCameraRotateBy(pitch: number, yaw: number, cycles: number, easing: CameraEasing = "linear"): this {
     this.player.getSession().sendClientPacket(encodeCameraRotateBy(pitch, yaw, cycles, easing));
+    return this;
+  }
+
+  sendCameraRotateToCoordinate(x: number, y: number, height: number, cycles: number, easing: CameraEasing = "linear"): this {
+    this.player.getSession().sendClientPacket(encodeCameraRotateToCoordinate(x, y, height, cycles, easing));
     return this;
   }
 

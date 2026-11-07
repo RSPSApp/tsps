@@ -1817,6 +1817,13 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 if (!easing) return null;
                 return { type: "camera", payload: { mode: "rotate", pitch, yaw, cycles, easing } };
             }
+            if (mode === 13) {
+                const x = reader.readShort(), y = reader.readShort(), height = reader.readSignedShort();
+                const cycles = reader.readShort(), easing = CAMERA_EASINGS[reader.readByte()];
+                reader.readByte(); // Reserved flags: coordinate rotations use absolute, fixed endpoints.
+                if (!easing) return null;
+                return { type: "camera", payload: { mode: "rotate_coordinate", x, y, height, cycles, easing } };
+            }
             if (mode === 11) {
                 const centreX = reader.readShort(), centreY = reader.readShort(), x = reader.readShort(), y = reader.readShort();
                 const height = reader.readSignedShort(), cycles = reader.readShort();

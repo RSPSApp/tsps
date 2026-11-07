@@ -144,14 +144,14 @@ export function handleInboundWorld(msg: any): boolean {
             }
             // Camera packets carry global tile coordinates and height above that tile's
             // ground, in 1/128-tile units. Both movement and look target tile centres.
-            if (payload.mode === "move" || payload.mode === "look") {
+            if (payload.mode === "move" || payload.mode === "look" || payload.mode === "rotate_coordinate") {
                 const x = (Number(payload.x) || 0) + 0.5;
                 const z = (Number(payload.y) || 0) + 0.5;
                 const capturedRates = Number.isInteger(payload.rate) && Number.isInteger(payload.rate2);
                 client.followPlayerCamera = false;
                 const capturedCycles = Number.isInteger(payload.cycles) && payload.cycles > 0;
                 if (capturedRates || capturedCycles) {
-                    const packetHeight = client.camera.resolveScriptedHeight(payload.mode, payload.height, payload.heightRelative === true);
+                    const packetHeight = client.camera.resolveScriptedHeight(payload.mode === "move" ? "move" : "look", payload.height, payload.heightRelative === true);
                     const heightAt = (targetX: number, targetZ: number): number | undefined => {
                         const controlledIndex = client.playerEcs?.getIndexForServerId?.(client.controlledPlayerServerId) ?? 0;
                         const plane = client.playerEcs?.getLevel?.(controlledIndex) ?? 0;

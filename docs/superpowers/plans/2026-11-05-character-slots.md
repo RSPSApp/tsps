@@ -20,7 +20,7 @@
 - `LOGIN_RESPONSE` stays byte-for-byte as today (success, code, error, displayName, token). The displayName returned is the **account's primary name**.
 - New ids: server packets `CHARACTER_LIST = 7` (length -2), `CHARACTER_RESULT = 8` (length -1); client packets `CHARACTER_SELECT = 206`, `CHARACTER_CREATE = 208`, `CHARACTER_DELETE = 209` (all length -1); login flag `LOGIN_FLAG_CHARACTER_SELECT = 4`; `LoginIndex.CHARACTER_SELECT = 15`.
 - `CHARACTER_RESULT` codes: 1 name taken, 2 invalid name, 3 slot limit reached, 4 unknown character / not allowed now, 5 primary cannot be deleted, 6 confirmation did not match, 7 character online, 8 storage error, 9 primary has not entered the world yet, 10 character disabled (banned).
-- Config key `characters:maxPerAccount` (pluginConfig), default `3`, clamped to 1..20; forced to `1` when `process.env.BROWSER_HOST === "1"`.
+- Current configuration (updated after this original plan): Characters is disabled by default. When enabled, `characters:maxPerAccount` (pluginConfig) defaults to `6`, clamped to 1..6. Browser hosts stay limited to `1` unless `BROWSER_HOST_ACCOUNT_PERSISTENCE === "1"` advertises durable account, character and deletion checkpoints; see [current host requirements](../../character-slots.md#enabling-characters).
 - Account file `data/saves/accounts.json`, env override `TSPS_ACCOUNTS_FILE`. Every server test that drives a login sets `process.env.TSPS_ACCOUNTS_FILE` to a temp file before requiring `dist`.
 - Name rules for a new character are the login-name rules: 1–12 chars after `Misc.formatNameForProtocol`, `Misc.isValidName`, and not in use per `DisplayNames.loginNameInUse`.
 - Commit after each task; messages in the imperative, no attribution lines.

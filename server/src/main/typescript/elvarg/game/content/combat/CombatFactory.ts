@@ -1264,9 +1264,15 @@ export class CombatFactory {
         return damage > 0 ? Math.floor(damage / 10) + 1 : 0;
     }
 
-    /** Content may disable ring recoil without suppressing other reflected damage. */
+    /**
+     * Content may disable ring recoil without suppressing other reflected damage: with the
+     * attribute, or by answering `combat:recoil-target` (`{ target, allow }`; `allow = false`).
+     */
     public static canReceiveRecoil(target: Mobile): boolean {
-        return target.getAttribute?.(CombatFactory.RECOIL_IMMUNE_ATTRIBUTE) !== true;
+        if (target.getAttribute?.(CombatFactory.RECOIL_IMMUNE_ATTRIBUTE) === true) return false;
+        const check = { target, allow: true };
+        PluginManager.emitCustomEvent("combat:recoil-target", check);
+        return check.allow !== false;
     }
 
     /**

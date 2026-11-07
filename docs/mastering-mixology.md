@@ -87,3 +87,19 @@ These aren't in the captures, so they are reasoned from what is:
 ## Rewards
 
 The shop sells everything at the cache's prices. Buying potion storage sets 11295. The rewards' own behaviour is a follow-up: the potion packs' Open, the goggles' and amulet's Herblore effects, the reagent pouch, the chugging barrel, and the potion storage bank section.
+
+## Chugging barrel Drink
+
+Drinking from an assembled barrel drinks one dose of each stored potion in the barrel's order
+(`plugins/items/ChuggingBarrel.plugin.js`). Facts from rsprox captures 4236 and 4242:
+
+- The drink plays the swig animation (11645) and one synth sound (9491, delay 30) per click, however many
+  potions drink.
+- Each stored potion is checked on its own, one after another. One that cannot be drunk (a divine potion at
+  10 Hitpoints or fewer: "You need more than 10 hitpoints to survive the power of a divine potion.") sends its
+  message and keeps its dose; the other potions still drink. In 4242 the five-potion barrel drank three with two
+  divine potions refused, and the potion counter rose by three.
+- Away from a bank: "You must be near a bank to use that barrel."; an empty barrel: "You have no potions in
+  your barrel that you can drink." (4236).
+
+What happens when every stored potion is refused was not captured; no swig, sound or delay starts then.

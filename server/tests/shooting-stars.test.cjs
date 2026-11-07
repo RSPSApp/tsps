@@ -279,6 +279,26 @@ test("mining: swing message, dust each success, 32 xp (16 on free-to-play), bonu
   assert.equal(success.payload.petBase, 521550);
 });
 
+test("the full prospector kit raises a stardust's 32 Mining XP to 32.8 (Wiki Shooting_Stars)", () => {
+  require("../plugins/skills/mining/ProspectorOutfit.Mining").attach(fakeApi);
+  const star = landedStar(9);
+  star.discoveredBy = "someone";
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  const worn = p.getEquipment().getItems();
+  worn[core.Equipment.HEAD_SLOT] = new core.Item(I.PROSPECTOR_HELMET, 1);
+  worn[core.Equipment.BODY_SLOT] = new core.Item(I.PROSPECTOR_JACKET, 1);
+  worn[core.Equipment.LEG_SLOT] = new core.Item(I.PROSPECTOR_LEGS, 1);
+  worn[core.Equipment.FEET_SLOT] = new core.Item(I.PROSPECTOR_BOOTS, 1);
+  const gains = [];
+  const skills = p.getSkillManager();
+  const addExperiences = skills.addExperiences.bind(skills);
+  skills.addExperiences = (skill, xp) => (gains.push(xp), addExperiences(skill, xp));
+  click(p, star, "Mine");
+  runTicks(4, () => 0.1);
+  assert.ok(gains.length > 0 && gains.every((xp) => Math.abs(xp - 32.8) < 1e-9), JSON.stringify(gains));
+});
+
 test("the swing is the pickaxe's noreachforward sequence; Mine and Prospect send the size and time since landing", () => {
   const star = landedStar(9);
   star.discoveredBy = "someone";

@@ -14,6 +14,7 @@ const ClueGeodes = require("./mining/ClueGeodes.Mining");
 const CalcifiedWater = require("./mining/CalcifiedWater.Mining");
 const Saltpetre = require("./mining/Saltpetre.Mining");
 const VarrockArmour = require("./mining/VarrockArmour.Mining");
+const ProspectorOutfit = require("./mining/ProspectorOutfit.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -853,7 +854,7 @@ class MiningTask extends Task {
       // Only a charged crystal pickaxe mining spends a charge: one carried beside the pickaxe in use (a rune pickaxe
       // below the crystal's 50 Agility) is left alone.
       if (state.pickaxe?.id === ItemIds.CRYSTAL_PICKAXE) CrystalPickaxe.tryUseCharge(player);
-      player.getSkillManager().addExperiences(Skill.MINING, outcome?.xp ?? state.rock.xp);
+      player.getSkillManager().addExperiences(Skill.MINING, (outcome?.xp ?? state.rock.xp) * ProspectorOutfit.xpMultiplier(player));
       // OSRS gives a winning pet the last backpack slot before the resource.
       // Storage and XP retain their order; ordinary success consumers run after delivery.
       const petRoll = { player, skill: Skill.MINING, petBase: state.rock.petBase, handled: false };
@@ -968,7 +969,7 @@ function mineExtraOre(player, rock, outcome, minedOreId) {
     if (inventoryBlocks(player, oreId) || giveOre(player, oreId, 1, xp) !== 1) break;
     if (bonus.message) spam(player, bonus.message);
     countOre(player);
-    player.getSkillManager().addExperiences(Skill.MINING, xp);
+    player.getSkillManager().addExperiences(Skill.MINING, xp * ProspectorOutfit.xpMultiplier(player));
   }
 }
 
@@ -1105,6 +1106,7 @@ module.exports = {
     CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock, minersKeepStanding);
     Saltpetre.attach(api);
     VarrockArmour.attach(api);
+    ProspectorOutfit.attach(api);
 
     api.log("registered", {
       rocks: ROCKS.length,

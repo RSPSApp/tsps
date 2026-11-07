@@ -544,6 +544,32 @@ test('a carrier whose banner was stripped before the drop hook still drops the f
   game.restoreFlagToBase(TEAM.ZAMORAK);
 });
 
+test('a carrier who logs out drops the flag before the banner is stripped, as a death does', () => {
+  const Areas = require('../plugins/minigames/castlewars/Areas.CastleWars');
+  const registered = [];
+  const calls = [];
+  const island = {
+    data, BOT_KEY: {}, TRANSITION_KEY: {},
+    getTeamData: (team) => data.TEAM_DATA[team], getTeamId: () => TEAM.ZAMORAK, setTeamId: () => {},
+    closeOverlay: () => {}, clearBraceletEffect: () => {}, equipTeamColours: () => {},
+    dropCarriedFlag: () => calls.push('drop flag'), clearCastleWarsItems: () => calls.push('strip items'),
+    returnToLobby: () => calls.push('lobby'), releaseSeededBots: () => false, checkTeamsRemain: () => {},
+    beginStartCountdown: () => {}, startSecondsLeft: () => 0, checkStartCountdown: () => {},
+  };
+  Areas({
+    core,
+    registerArea: (area) => registered.push(area),
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+  }, island);
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const gameArea = island.gameArea;
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  gameArea.postLeave(p, true);
+  assert.deepEqual(calls, ['drop flag', 'strip items', 'lobby']);
+});
+
 test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');

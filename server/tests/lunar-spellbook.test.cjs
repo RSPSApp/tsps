@@ -107,12 +107,13 @@ test("the potion shares are cast on a potion, not on a player", () => {
 });
 
 /** A player for the player-target spells: `hp` of 99, full special bar and run energy unless given. */
-function fighter({ hp = 99, special = 100, run = 100 } = {}) {
+function fighter({ hp = 99, special = 100, run = 100, dueling = false } = {}) {
   const state = { hp, special, run, messages: [] };
   const sink = { updateSpecialAttackOrb: () => sink, sendRunEnergy: () => sink };
   return Object.assign(state, {
     getIndex: () => 2, isRegistered: () => true, performAnimation() {}, performGraphic() {}, getPrivateArea: () => null,
     getAttribute: () => null,
+    getDueling: () => ({ inDuel: () => dueling }),
     getLocation: () => ({ isWithinDistance: () => true }),
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
     getHitpoints: () => state.hp, setHitpoints(next) { state.hp = next; },
@@ -142,6 +143,18 @@ test("Energy Transfer costs 10 Hitpoints and gives a full special bar and full r
   const weak = fighter({ hp: 10 });
   castable(() => LunarSpells.handlePlayerTarget(weak, fighter(), "Energy Transfer"));
   assert.deepEqual(weak.messages, ["You need more hitpoints to cast this spell."]);
+});
+
+test("aid spells don't reach a duelist, and a duelist aids no one (the duel is the two duelists' alone)", () => {
+  const spectator = fighter(), duelist = fighter({ hp: 50, special: 0, run: 5, dueling: true });
+  assert.equal(LunarSpells.handlePlayerTarget(spectator, duelist, "Heal Other"), false);
+  assert.equal(LunarSpells.handlePlayerTarget(spectator, duelist, "Energy Transfer"), false);
+  assert.equal(LunarSpells.handlePlayerTarget(spectator, duelist, "Vengeance Other"), false);
+  assert.deepEqual([duelist.hp, duelist.special, duelist.run], [50, 0, 5], "nothing reached the duelist");
+  assert.deepEqual([spectator.hp, spectator.special], [99, 100], "and nothing was paid");
+  const hurt = fighter({ hp: 50 });
+  assert.equal(LunarSpells.handlePlayerTarget(fighter({ dueling: true }), hurt, "Heal Other"), false);
+  assert.equal(hurt.hp, 50);
 });
 
 test("Monster Examine sends interface 522 the text live sends script 1179", () => {

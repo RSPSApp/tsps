@@ -298,6 +298,19 @@ test('a full bag refuses the Dramen branch without advancing the stage', () => {
   assert.ok(h.messages.includes('You need a free inventory space.'));
 });
 
+test('low Woodcutting refuses the Dramen tree without spawning or consuming anything', () => {
+  const h = setup();
+  h.stage(2);
+  h.items.set(I.BRONZE_AXE, 1);
+  h.levels.set(core.Skill.WOODCUTTING, 35);
+  assert.equal(h.object(O.DRAMEN_TREE).handled, true);
+  assert.equal(h.items.get(I.BRONZE_AXE), 1);
+  assert.equal(h.spawned.length, 0);
+  assert.equal(h.chops.length, 0);
+  assert.equal(h.quest.getStage(h.player), 2);
+  assert.ok(h.messages.includes('You need level 36 Woodcutting to chop this tree.'));
+});
+
 test('low Crafting refuses to carve the staff and keeps the branch', () => {
   const h = setup();
   h.stage(4);

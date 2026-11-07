@@ -1781,9 +1781,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
         if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "bottle") policyQueries++;
         return emit.apply(this, arguments);
       };
-      const draws = enabled
-        ? [0.5, 0, ...Array.from({length: 9}, () => [0.5, 0, 0]).flat()]
-        : Array.from({length: 10}, () => [0.5, 0]).flat();
+      const draws = Array.from({length: 10}, () => [0.5, 0]).flat();
       Math.random = () => {
         const stack = new Error().stack;
         if (stack.includes("rewards") && stack.includes("DriftNets.Hunter")) return draws[randomCalls++] ?? 0.5;
@@ -1804,7 +1802,8 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
       }
       assert.equal(policyQueries, 1);
       assert.equal(inventory.getAmount(I.SCROLL_BOX_MEDIUM_), enabled ? 1 : 0);
-      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 9 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 0 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(inventory.getAmount(I.PUFFERFISH), enabled ? 9 : 0, "repeated clue wins become pufferfish");
       assert.equal(DriftNets.state(player).nets[anchorId], undefined, "the real take action completes");
     } finally {
       Date.now = originalNow;

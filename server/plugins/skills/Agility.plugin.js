@@ -588,7 +588,7 @@ function unmet(player, requirement) {
 function usable(player, obstacle, level) {
   if (!obstacle.requires) {
     return agilityLevel(player) < level
-      ? { refusal: `You need an Agility level of at least ${level} to attempt this.` }
+      ? { refusal: obstacle.levelMessage ?? `You need an Agility level of at least ${level} to attempt this.` }
       : { obstacle };
   }
   let refusal = null;
@@ -608,7 +608,7 @@ function attemptObstacle(player, context, entry) {
   const level = resolve(entry.level, context);
   const { obstacle, refusal } = usable(player, entry, level);
   if (refusal) {
-    player.sendMessage(refusal);
+    ObstacleRunner.sendMessage(player, refusal);
     return;
   }
   const blocked = obstacle.precondition?.(context);
@@ -708,7 +708,7 @@ function operateNpcObstacle(event) {
   const { refusal } = usable(player, obstacle, obstacle.level);
   const blocked = refusal ?? obstacle.precondition?.({ player, npc, core });
   if (blocked) {
-    player.sendMessage(blocked);
+    ObstacleRunner.sendMessage(player, blocked);
     return true;
   }
   finishObstacle(player, obstacle, true, true);

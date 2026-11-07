@@ -12,15 +12,23 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 ## Smelting
 
 - **Smelt** on a furnace opens the shared skillmulti menu (`CreationMenu`) titled "What would you like to smelt?", listing Bronze, Blurite, Iron, Silver, Steel, Gold, Mithril, Adamantite and Runite: every bar, whatever the player holds, as normal worlds do (recs 69, 73, 83, 91, 331, 3315, rev 227-235). Leagues VI (rev 237) lists only bars the player has ore for; that is left as Leagues behaviour.
-- **No ore at all:** message box "You don't have any ore to smelt." (rec 4283).
+- **Neither ore nor complete glass ingredients:** message box "You don't have any ore to smelt." (rec 4283).
 - **Too low a level:** message box "You need a Smithing level of 40 to smelt a gold bar." (rec 1102).
 - **The loop:** on the choosing tick, "You smelt the ... in the furnace." with `human_furnace` (899) and sound 2725; 4 ticks later the ore goes in, the bar comes out with `human_furnace` again, "You retrieve a bar of ..." and the experience; the next ore starts on the 5th tick (recs 73, 83, 1102, 1105, 1106, 4308). The smelt, retrieve and impure-ore lines are on the spam channel.
   - Messages are the rev 237 wording where captured (bronze, iron, steel, gold, silver). Mithril, adamantite, runite, blurite and lovakite follow the same pattern **(unverified)**.
   - Iron fails half the time: "The ore is too impure and you fail to refine it." The ore is lost, no experience (recs 69, 73, 83, 1102, 3315).
   - Running out mid-loop: "You need at least one iron ore and two coal to smelt a steel bar." (rec 1102); the other bars follow that pattern **(unverified)**.
-- **Ore used on a furnace** opens the Smelt menu. Sand or soda ash opens molten glass (Crafting), which gives back the bucket (rec 3432). 'perfect' gold ore opens its own bar; the Gold bar choice also uses it when the player has no normal gold ore.
+- **Ore used on a furnace** opens the Smelt menu. Sand or soda ash opens molten glass (Crafting). The empty bucket return is captured in recording 4283. 'perfect' gold ore opens its own bar; the Gold bar choice also uses it when the player has no normal gold ore.
 - **Blurite** needs The Knight's Sword **(Wiki)**. **Lovakite** is smelted only at the Lovakite furnace in Lovakengj (45 Smithing, 1 ore + 2 coal, 20 XP) **(Wiki)**.
 - **Coal bag:** a carried coal bag's coal is used after the inventory's (docs/storage-items.md).
+
+### Molten glass
+
+- [Molten glass](https://oldschool.runescape.wiki/w/Molten_glass) specifies members-only furnace crafting at level 1: one sand bucket and one soda ash become one glass, 20 Crafting XP, two ticks per glass. Glass has its own recipe timing rather than the metal bars' five-tick cycle.
+- [Furnace](https://oldschool.runescape.wiki/w/Furnace) documents the glass choice when Smelt is clicked with sand and soda ash but no ore. Recording 4283 (revision 239) shows a single pair made directly without a quantity menu, three ticks after arrival. The exchange returns an empty bucket; `human_furnace`, sound 2725 and the spam-channel message "You heat the sand and soda ash in the furnace to make glass." occur together. No glass-specific graphic or variable update is shown in that attempt.
+- The existing quantity menu remains for multiple pairs and item-on-furnace use. Recipe membership checks protect the new Smelt route and stale selections. Ordinary ore and cannonball menus retain priority. Walking or losing an ingredient stops production without spending a partial recipe.
+- Verification: four added regression tests failed against the original implementation. All 57 Smithing tests pass after the fix, covering glass cadence, synchronized feedback, quantities, XP, buckets, missing ingredients, walking and F2P guards as well as the existing metal-bar cases. Live verification at Falador's furnace covered direct single-pair Smelt, soda ash used on the furnace with quantity two, the remaining single pair, and walking cancellation; each completed glass returned its bucket and awarded 20 Crafting XP.
+- Evidence limits: recording 4283 contains only one completed glass, so the repeated two-tick rate and 20 XP use the Wiki. Its indexed XP delta is 5, which does not independently confirm the Wiki's XP award; no XP change is inferred from that recording. The exact multiple-pair menu presentation and visual animation playback were not compared with live OSRS.
 
 ## Anvils
 

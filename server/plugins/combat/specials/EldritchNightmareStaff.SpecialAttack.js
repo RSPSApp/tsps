@@ -12,6 +12,9 @@ module.exports = function registerEldritchNightmareStaffSpecialAttack(api) {
   const CAST_ANIMATION = new Animation(8532);
   const CAST_GRAPHIC = new Graphic(1762);
   const HIT_GRAPHIC = new Graphic(1761);
+  // Wiki (Eldritch nightmare staff): Invocate restores Prayer from "potential damage", not what the target's
+  // Hitpoints let land - the roll as made, before PendingHit caps it to them.
+  const potentialDamage = new WeakMap();
 
   // TODO: core's magic hit path (getMagicMaxhit) ignores maximumHitSource /
   // visibleMagicMaximumHit and damageMultiplier, so the Invocate max hit is not
@@ -33,7 +36,9 @@ module.exports = function registerEldritchNightmareStaffSpecialAttack(api) {
 
     handleAfterHitEffects(hit) {
       hit.getTarget().performGraphic(hit.isAccurate() ? HIT_GRAPHIC : MagicCombatMethod.SPLASH_GRAPHIC);
-      if (!hit.isAccurate() || Math.floor(hit.getTotalDamage()) <= 0) {
+      const rolled = potentialDamage.get(hit);
+      const damage = Math.max(0, Math.floor(hit.getTotalDamage()), rolled === undefined ? 0 : Math.floor(rolled));
+      if (!hit.isAccurate() || damage <= 0) {
         return;
       }
       const attacker = hit.getAttacker();
@@ -42,7 +47,7 @@ module.exports = function registerEldritchNightmareStaffSpecialAttack(api) {
       }
       const skillManager = attacker.getAsPlayer().getSkillManager();
       const current = skillManager.getCurrentLevel(Skill.PRAYER);
-      const restored = Math.floor(Math.floor(hit.getTotalDamage()) * PRAYER_RESTORE_FRACTION);
+      const restored = Math.floor(damage * PRAYER_RESTORE_FRACTION);
       skillManager.setCurrentLevels(Skill.PRAYER, Math.min(MAXIMUM_PRAYER_LEVEL, current + restored));
     }
 
@@ -54,6 +59,12 @@ module.exports = function registerEldritchNightmareStaffSpecialAttack(api) {
       return 10;
     }
   }
+
+  api.onCombatHitDamage?.(function recordInvocateRoll({ hit, damage }) {
+    if (hit?.getCombatMethod?.() instanceof EldritchNightmareStaffCombatMethod) {
+      potentialDamage.set(hit, damage.getDamage());
+    }
+  });
 
   api.registerCombatSpecial({
     id: "eldritch_nightmare_staff",

@@ -35,8 +35,9 @@
  * dump has no "lacks the requirements" condition). There are no hard skill
  * requirements; the wiki's Woodcutting/Mining/Fishing/Farming levels only
  * unlock the optional support-gaining methods. Rewards per the wiki: 1 Quest
- * point and access to Managing Miscellania (10,000 coins inside the coffers,
- * ring of wealth teleport).
+ * point, access to Managing Miscellania (10,000 coins inside the coffers,
+ * ring of wealth teleport), and since 3 November 2026 1,000 Woodcutting,
+ * Mining, Fishing and Farming experience.
  *
  * Gaps / approximations:
  *  - The dance/clap and blow-kiss steps are real emote gates (`player:emote`),
@@ -70,7 +71,7 @@
  *    inventory are not dropped to the ground as the wiki annotations say.
  */
 module.exports = function registerThroneOfMiscellaniaQuest(api) {
-  const { ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { ItemIdentifiers, NpcIdentifiers, Skill } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const QUEEN_SIGRID_NPC_ID = NpcIdentifiers.QUEEN_SIGRID; // 765
@@ -1385,6 +1386,7 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
   api.persistAttribute(APPROVAL_ATTRIBUTE);
   api.persistAttribute(APPROVAL_NATIVE_ATTRIBUTE, -1);
 
+  const THRONE_XP = [[Skill.WOODCUTTING, 1000], [Skill.MINING, 1000], [Skill.FISHING, 1000], [Skill.FARMING, 1000]];
   quest = registerQuest(api, {
     key: "throne_of_miscellania",
     name: "Throne of Miscellania",
@@ -1392,8 +1394,13 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    // Wiki (Throne of Miscellania, Rewards; Changes, 3 November 2026): 1,000 experience in each.
+    xpRewards: THRONE_XP.map(([skill, amount]) => ({ skillId: skill.getIndex(), amount, label: skill.getName() })),
     otherRewards: ["Access to Managing Miscellania", "10,000 coins in the Miscellania coffers"],
     buildJournal,
+    onReward: (player) => {
+      for (const [skill, amount] of THRONE_XP) player.getSkillManager().addExperiences(skill, amount);
+    },
   });
 
   api.onNpcDialogueVariant(selectVariant);

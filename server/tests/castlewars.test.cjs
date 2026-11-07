@@ -239,7 +239,7 @@ test("leaving a waiting room restores stats (Wiki) but keeps the player's own sk
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const waitingRoom = registered.find((area) => area.getName().includes('waiting room'));
   const p = new Player(null);
@@ -285,7 +285,7 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
 
   const waitingRooms = registered.filter((area) => area.getName().includes('waiting room'));
@@ -549,6 +549,7 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let deathPolicy;
   let respawn;
+  let beforeDeath;
   const calls = [];
   const deathApi = PluginManager.createApi('Castle Wars death regression');
   const island = {
@@ -561,6 +562,7 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   Areas({
     core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
+    onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
     onPlayerDeath: (handler) => { respawn = handler; },
   }, island);
   t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', (player) => {
@@ -620,6 +622,21 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   }
   assert.equal(bones.mock.callCount(), 2, 'outside bones still drop for both safe and dangerous deaths');
   assert.equal(drop.mock.callCount(), 1, 'only the dangerous outside death processes gear');
+
+  // The game ends during a death: the player is moved to the lobby (not a Castle Wars area) before tick 0.
+  let where = island.gameArea;
+  const ending = { getArea: () => where };
+  beforeDeath({ player: ending });
+  where = island.lobbyArea;
+  const late = { player: ending, shouldDrop: null };
+  deathPolicy(late);
+  assert.equal(late.shouldDrop, false, 'a death begun in the game keeps its gear in the lobby');
+  const settle = { player: ending, handled: false };
+  respawn(settle);
+  assert.equal(settle.handled, true, 'and the player stays in the lobby');
+  const after = { player: ending, shouldDrop: null };
+  deathPolicy(after);
+  assert.equal(after.shouldDrop, null, 'a later lobby death follows the world rules');
 });
 
 test('the arena is multi-combat: several enemies may hit one player, the lobby and waiting rooms are not', (t) => {
@@ -634,7 +651,7 @@ test('the arena is multi-combat: several enemies may hit one player, the lobby a
   const registered = [];
   Areas({
     core, registerArea: (area) => registered.push(area), onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {},
-    onCanUnequip() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerDeath() {},
+    onCanUnequip() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, island);
   AreaManager.areas.push(...registered);
   t.after(() => {

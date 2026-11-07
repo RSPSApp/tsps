@@ -312,10 +312,23 @@ function friendlyFireVerdict(attackerMobile, targetMobile) {
   return true;
 }
 
+/**
+ * Players whose death began in a Castle Wars area. The game ending during the death animation moves them to the lobby,
+ * which is not one, and the death then dropped their items there: a Castle Wars death is safe (as LMS guards).
+ */
+const dyingInCastleWars = new WeakSet();
+
+function rememberDying(event) {
+  if (game.castleWarsAreas.has(event.player?.getArea?.())) dyingInCastleWars.add(event.player);
+}
+
 function respawnInStartRoom(event) {
   const { player } = event;
+  const diedInCastleWars = dyingInCastleWars.delete(player);
   const teamId = player?.getArea?.() === game.gameArea ? game.getTeamId(player) : null;
   if (!teamId) {
+    // The game ended while they were dying: they are in the lobby already, and stay there.
+    if (diedInCastleWars && !game.castleWarsAreas.has(player?.getArea?.())) event.handled = true;
     return;
   }
   game.dropCarriedFlag(player);
@@ -326,7 +339,7 @@ function respawnInStartRoom(event) {
 }
 
 function keepItemsOnDeath(event) {
-  if (game.castleWarsAreas.has(event.player?.getArea?.())) {
+  if (game.castleWarsAreas.has(event.player?.getArea?.()) || dyingInCastleWars.has(event.player)) {
     event.shouldDrop = false;
   }
 }
@@ -352,6 +365,7 @@ module.exports = function attachCastleWarsAreas(api, castleWars) {
   api.onPlayerLogin(restoreLoginInsideCastleWars);
   api.onCanEquip(protectTeamColours);
   api.onCanUnequip(protectTeamColours);
+  api.onPlayerBeforeDeath(rememberDying);
   api.onPlayerDeath(respawnInStartRoom);
   api.onShouldDropItemsOnDeath(keepItemsOnDeath);
 };

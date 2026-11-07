@@ -11,6 +11,7 @@ const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 const { EffectTimer } = require("../../../src/main/typescript/elvarg/game/model/EffectTimer");
+const { PluginManager } = require("../../../src/main/typescript/elvarg/plugins/PluginManager");
 const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
@@ -51,6 +52,21 @@ let pluginApi = null;
  * "presets:can-use" { player, allow, message }: other content may keep a player from presets
  * (an Ironman). `quiet` skips the message (the automatic opening after a death).
  */
+/**
+ * Not mid-fight or mid-duel, and not in an area that keeps its own gear and won't let the player teleport out
+ * (Last Man Standing, Castle Wars, raids): a preset there would re-gear them, bank the minigame's items and reset
+ * their stats.
+ */
+function presetBusyRefusal(player) {
+  // Bots re-gear from presets wherever they fight, by design (as bankRefusal exempts them).
+  if (player.isPlayerBot?.()) return null;
+  if (player.getDueling?.()?.inDuel?.()) return "You can't load a preset during a duel.";
+  if (pluginApi?.core?.CombatFactory?.inCombat?.(player)) return "You can't load a preset during combat.";
+  const area = player.getArea?.();
+  if (area && area.canTeleport?.(player, 20) === false) return "You can't load a preset here.";
+  return null;
+}
+
 function canUsePresets(player, quiet = false) {
   const request = { player, allow: true, message: null };
   pluginApi?.emitCustomEvent?.("presets:can-use", request);
@@ -596,6 +612,21 @@ function applyPreset(player, preset) {
   if (isPresetBlockedInWilderness(player)) {
     sender.sendMessage("You can't load a preset in the wilderness!");
     return false;
+  }
+  const busyText = presetBusyRefusal(player);
+  if (busyText) {
+    sender.sendMessage(busyText);
+    return false;
+  }
+  // The gear goes straight into the slots below: each piece must pass what wearing it would (duel rules, minigame
+  // and quest gear, members items). Checked before anything is banked or cleared.
+  for (const item of player.isPlayerBot?.() ? [] : preset.getEquipment() ?? []) {
+    if (!isValidItem(item)) continue;
+    const slot = equipmentSlotOf(item.getId());
+    if (slot >= 0 && PluginManager.emitCanEquip(player, slot, item) === false) {
+      sender.sendMessage(`You can't wear the ${item.getDefinition().getName()} here.`);
+      return false;
+    }
   }
   // Inventory weapons must follow the same rules when the player switches gear later.
   for (const item of [...(preset.getEquipment() ?? []), ...(preset.getInventory() ?? [])]) {

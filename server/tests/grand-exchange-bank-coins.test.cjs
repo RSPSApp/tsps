@@ -242,3 +242,46 @@ test("aborting a bank-paid offer refunds its full price through the collection",
   assert.equal(f.inv.getAmount(I.COINS), COST, "the whole price came back");
   assert.equal(bankAmount(f, I.COINS), 0);
 });
+
+/** Banked coins in `coinTab` and 5,000 tokens in `tokenTab`; the buy needs tokens, with change. */
+const tokenChange = (coins) => {
+  const tokens = Math.ceil((COST - coins) / 1_000);
+  return { tokens, change: tokens * 1_000 - (COST - coins) };
+};
+const coinSlots = (f, tab) => f.p.getBank(tab).getItems().filter((held) => held.getId() === I.COINS);
+
+test("a full bank still takes a token-paid buy: the change stays in the coin stack", async (t) => {
+  const f = actor(t);
+  bank(f, 0, item(I.COINS, 10));
+  bank(f, 1, item(I.PLATINUM_TOKEN, 5_000));
+  const filler = f.p.getBank(4);
+  for (let id = 1_000; core.Bank.freeSlots(f.p) > 0; id++) filler.setItem(filler.freeSlot(), item(id));
+  assert.equal(core.Bank.freeSlots(f.p), 0, "the bank is full");
+  await buy(f);
+  assert.ok(!f.messages.some((message) => /bank space|couldn't hold/.test(message)), "no space refusal");
+  assert.equal(placed(f).length, 1, "the offer is placed");
+  const { tokens, change } = tokenChange(10);
+  assert.equal(bankAmount(f, I.PLATINUM_TOKEN), 5_000 - tokens);
+  assert.equal(f.p.getBank(0).getAmount(I.COINS), change, "the change is in the coin stack");
+});
+
+test("token change goes to the coins' tab, not the tokens'", async (t) => {
+  const f = actor(t);
+  bank(f, 2, item(I.COINS, 10));
+  bank(f, 0, item(I.PLATINUM_TOKEN, 5_000));
+  await buy(f);
+  assert.equal(placed(f).length, 1, "the offer is placed");
+  assert.equal(f.p.getBank(2).getAmount(I.COINS), tokenChange(10).change, "the change stayed in tab 2");
+  assert.equal(coinSlots(f, 0).length, 0, "no coins moved into the tokens' tab");
+});
+
+test("token change with no banked coins fills the coins placeholder", async (t) => {
+  const f = actor(t);
+  f.p.getBank(3).setItem(0, item(I.COINS, 0));
+  bank(f, 0, item(I.PLATINUM_TOKEN, 5_000));
+  assert.equal(core.Bank.getTabForItem(f.p, I.COINS), 3, "the placeholder marks tab 3");
+  await buy(f);
+  assert.equal(placed(f).length, 1, "the offer is placed");
+  assert.deepEqual(coinSlots(f, 3).map((held) => held.getAmount()), [tokenChange(0).change], "the placeholder holds the change");
+  assert.equal(coinSlots(f, 0).length, 0, "no coins in the tokens' tab");
+});

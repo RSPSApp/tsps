@@ -596,41 +596,62 @@ function bankPayment(player, inventory, total) {
     }
     return banks.get(tab);
   };
-  let tokenTab = -1;
-  for (const tab of realBankTabs(player)) {
-    for (const [slot, amount] of plainStacks(player.getBank(tab), COINS)) {
+  const coinStacks = realBankTabs(player).flatMap((tab) =>
+    plainStacks(player.getBank(tab), COINS).map(([slot, amount]) => ({ tab, slot, amount })));
+  const bankCoins = coinStacks.reduce((sum, stack) => sum + stack.amount, 0);
+  if (left <= bankCoins) {
+    for (const { tab, slot, amount } of coinStacks) {
       if (left <= 0) break;
       const taken = Math.min(left, amount);
       copy(tab).deleteAtSlot(slot, taken, false);
       left -= taken;
     }
-  }
-  for (const tab of realBankTabs(player)) {
-    for (const [slot, amount] of plainStacks(player.getBank(tab), PLATINUM_TOKEN)) {
-      if (left <= 0) break;
-      const taken = Math.min(Math.ceil(left / COINS_PER_TOKEN), amount);
-      copy(tab).deleteAtSlot(slot, taken, false);
-      left -= taken * COINS_PER_TOKEN;
-      tokenTab = tab;
+  } else {
+    // Whole tokens pay what the bank's coins cannot; the change (under 1,000) is what the bank's
+    // plain coins come to afterwards.
+    let short = left - bankCoins;
+    let freed = 0;
+    for (const tab of realBankTabs(player)) {
+      for (const [slot, amount] of plainStacks(player.getBank(tab), PLATINUM_TOKEN)) {
+        if (short <= 0) break;
+        const taken = Math.min(Math.ceil(short / COINS_PER_TOKEN), amount);
+        copy(tab).deleteAtSlot(slot, taken, false);
+        if (taken === amount) freed++;
+        short -= taken * COINS_PER_TOKEN;
+      }
     }
-  }
-  if (left > 0) {
-    // Preset or other restricted copies are never spent; say so when they are what is missing.
-    const restrictedBank = realBankTabs(player).reduce((sum, tab) => {
-      const bank = player.getBank(tab);
-      return sum + [[COINS, 1], [PLATINUM_TOKEN, COINS_PER_TOKEN]].reduce((s, [id, value]) =>
-        s + (bank.getAmount(id) - plainStacks(bank, id).reduce((n, [, a]) => n + a, 0)) * value, 0);
-    }, 0);
-    return { message: restrictedValue + restrictedBank >= left ? PRESET_TEXT : "You do not have enough coins." };
-  }
-  if (left < 0) {
-    // The bank's coins were all spent before a token was, so the change (under 1,000) cannot
-    // overflow; it can still have no bank slot to land in.
-    const change = -left;
-    const bank = copy(tokenTab);
-    const before = bank.getAmount(COINS);
-    bank.add(new Item(COINS, change), false);
-    if (bank.getAmount(COINS) !== before + change) return { message: "You don't have enough bank space for your change." };
+    if (short > 0) {
+      // Preset or other restricted copies are never spent; say so when they are what is missing.
+      const restrictedBank = realBankTabs(player).reduce((sum, tab) => {
+        const bank = player.getBank(tab);
+        return sum + [[COINS, 1], [PLATINUM_TOKEN, COINS_PER_TOKEN]].reduce((s, [id, value]) =>
+          s + (bank.getAmount(id) - plainStacks(bank, id).reduce((n, [, a]) => n + a, 0)) * value, 0);
+      }, 0);
+      return { message: restrictedValue + restrictedBank >= short ? PRESET_TEXT : "You do not have enough coins." };
+    }
+    const change = -short;
+    // Change goes where the bank keeps its coins, as collect picks it. Only the copies have
+    // changed so far, so this reads the live tabs.
+    const coinTab = Bank.getTabForItem(player, COINS);
+    if (bankCoins > 0) {
+      // One coin stack is left holding the change, so it needs no new slot.
+      const keep = coinStacks.find((stack) => stack.tab === coinTab) ?? coinStacks[0];
+      for (const { tab, slot, amount } of coinStacks) {
+        if (tab === keep.tab && slot === keep.slot && change > 0) copy(tab).getItems()[slot].setAmount(change);
+        else copy(tab).deleteAtSlot(slot, amount, false);
+      }
+    } else if (change > 0) {
+      const bank = copy(coinTab >= 0 ? coinTab : 0);
+      const items = bank.getItems();
+      // A coins placeholder takes the change in place; otherwise it needs a free slot, counting
+      // the token stacks this payment empties.
+      const held = items.findIndex((item) => item?.getAmount() === 0 && item.getId() >= 0 &&
+        (item.getId() === COINS || Bank.sharesPlaceholder(item.getId(), COINS)));
+      const slot = held >= 0 ? held : (Bank.freeSlots(player) + freed > 0 ? bank.freeSlot() : -1);
+      if (slot < 0) return { message: "You don't have enough bank space for your change." };
+      bank.setItem(slot, new Item(COINS, change));
+    }
+    left = 0;
   }
   for (const bank of banks.values()) bank.sortItems();
   return { inventory: result, banks };

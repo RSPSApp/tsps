@@ -12,6 +12,7 @@ const registerSpiritShieldEffects = require("./effects/SpiritShields.EquipmentEf
 const registerBlackjackEffects = require("./effects/Blackjack.EquipmentEffects");
 const registerColossalBladeEffects = require("./effects/ColossalBlade.EquipmentEffects");
 const registerRondacheEffects = require("./effects/Rondache.EquipmentEffects");
+const registerBrimstoneRingEffects = require("./effects/BrimstoneRing.EquipmentEffects");
 const registerRegenBraceletEffects = require("./effects/RegenBracelet.EquipmentEffects");
 
 module.exports = {
@@ -32,5 +33,6 @@ module.exports = {
     registerColossalBladeEffects(api);
     registerRegenBraceletEffects(api);
     registerRondacheEffects(api);
+    registerBrimstoneRingEffects(api);
   },
 };

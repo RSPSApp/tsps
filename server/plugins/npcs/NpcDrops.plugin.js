@@ -1066,22 +1066,26 @@ function placeDrops(player, drops, location, options = {}) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
     }
+    let amount = drop.amount;
     if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
+      // Into the pack up to the stack cap; anything past it drops to the ground as it would without the ring.
       const inventory = player.getInventory();
-      if (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0) {
-        inventory.adds(drop.itemId, drop.amount);
-        continue;
-      }
+      const collected = typeof inventory.getAddableAmount === "function"
+        ? inventory.getAddableAmount(new Item(drop.itemId, amount))
+        : (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0 ? amount : 0);
+      if (collected > 0) inventory.adds(drop.itemId, collected);
+      amount -= collected;
+      if (amount <= 0) continue;
     }
     const itemId = droppedItemId(drop);
-    const item = new Item(itemId, drop.amount);
+    const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
       itemOnGroundManager.registerLocation(player, item, location, undefined, options);
     } else {
-      for (let i = 0; i < drop.amount; i++) {
+      for (let i = 0; i < amount; i++) {
         itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
       }
     }

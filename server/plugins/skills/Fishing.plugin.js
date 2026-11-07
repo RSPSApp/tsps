@@ -4,6 +4,8 @@ const { Animation } = require("../../src/main/typescript/elvarg/game/model/Anima
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const { ItemIds, NpcIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
+const WorldDefinition = require("../../src/main/typescript/elvarg/game/definition/WorldDefinition");
+const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const QuestRuntime = require("../quests/QuestRuntime");
 const InfernalHarpoon = require("./fishing/InfernalHarpoon.Fishing");
 const CrystalHarpoon = require("./fishing/CrystalHarpoon.Fishing");
@@ -538,7 +540,9 @@ function questAllows(player, name) {
 /** The best variant of the tool the player can use, carried or wielded; null if none. */
 function findTool(player, tool) {
   const level = getFishingLevel(player);
-  const has = (id) => player.getInventory().contains(id) || player.getEquipment?.()?.contains(id);
+  // Free worlds: a members tool (dragon, infernal or crystal harpoon) is no tool there, as Mining and Woodcutting rule.
+  const usableHere = (id) => WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(id)?.isMembers !== true;
+  const has = (id) => (player.getInventory().contains(id) || player.getEquipment?.()?.contains(id)) && usableHere(id);
   // Wiki (Crystal harpoon): "71 Fishing, 70 Attack, and 50 Agility to wield".
   const agility = player.getSkillManager().getCurrentLevel(Skill.AGILITY);
   const found = tool.variants.find((variant) => variant.level <= level && agility >= (variant.agility ?? 1) &&

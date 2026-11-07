@@ -40,6 +40,19 @@ class ChargeSpell extends Spell {
     }
 
     cast(player: Player): boolean {
+        // Wiki (Charge): it needs the Mage Arena I miniquest, which ends with the statues' god cape (the Mage Arena
+        // plugin answers "mage-arena:cape-received"). Refused before the runes; TSPS wording for the line.
+        const arena = { player, received: null as boolean | null };
+        PluginManager.emitCustomEvent("mage-arena:cape-received", arena);
+        if (arena.received !== true) {
+            // A league relic may lift every spell's quest requirement (Wiki: Grimoire), as for Dream Mentor's spells.
+            const unlock = { player, name: "charge", unlocked: false };
+            PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+            if (unlock.unlocked !== true) {
+                player.sendMessage("You need to complete the Mage Arena to cast this spell.");
+                return true;
+            }
+        }
         // The cooldown is checked before the runes are taken, so a refused cast costs nothing.
         if (!this.canCast(player, false) || !this.canCast(player, true)) {
             return true;

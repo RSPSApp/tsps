@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  api, Animation, GameObject, HitDamage, HitMask, Location, Misc, PluginManager, Skill, ItemIdentifiers,
+  api, Animation, GameObject, HitDamage, HitMask, Item, Location, Misc, PluginManager, Skill, ItemIdentifiers,
   DialogueChainBuilder, StatementDialogue,
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
@@ -322,8 +322,10 @@ function openChest(event) {
   if (!inChallengeMode(house)) return player.sendMessage("The chest is locked."), true;
   if (guardianAlive(house, chest.roomPosition)) return player.sendMessage("You must defeat the guardian first."), true;
   if (treasure.coins <= 0) return say(player, "The chest is empty."), true;
-  const coins = treasure.coins;
-  treasure.coins = 0;
+  // Only what the inventory can hold leaves the chest: the rest stays for the next guest (it was zeroed and lost).
+  const coins = player.getInventory().getAddableAmount(new Item(COINS, treasure.coins));
+  if (coins <= 0) return player.getInventory().full(), true;
+  treasure.coins -= coins;
   player.getInventory().adds(COINS, coins);
   House.saveHouse(house);
   player.sendMessage(`You find ${coins.toLocaleString("en-US")} coins in the chest!`);
@@ -359,4 +361,4 @@ function attachDungeon(api) {
   api.onNpcDeath(monsterDied);
 }
 
-Object.assign(module.exports, { attachDungeon, refreshMonsters, processOccupant, setChallengeMode, inChallengeMode, isGuest });
+Object.assign(module.exports, { attachDungeon, refreshMonsters, processOccupant, setChallengeMode, inChallengeMode, isGuest, openChest });

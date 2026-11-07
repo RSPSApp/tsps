@@ -120,21 +120,24 @@ function onGround(f, id) {
 const PATHS = [
   {
     name: "Lunar Chest",
-    seed: (t, f, amount) => f.p.setAttribute("moons-of-peril:chest", [{ id: I.COINS, amount }]),
+    // At the chest: its interface (868) is open, as the buttons need.
+    seed: (t, f, amount) => { f.p.setInterfaceId(868); f.p.setAttribute("moons-of-peril:chest", [{ id: I.COINS, amount }]); },
     left: (f) => f.p.getAttribute("moons-of-peril:chest")?.[0]?.amount ?? 0,
     takeAll: (f) => button(f, 868, 4),
     bankAll: (f) => button(f, 868, 20),
   },
   {
     name: "Doom pile",
-    seed: (t, f, amount) => f.p.setAttribute("doom:unclaimed", [{ id: I.COINS, amount }]),
+    // At the chest: its interface (919) is open, as the buttons need.
+    seed: (t, f, amount) => { f.p.setInterfaceId(919); f.p.setAttribute("doom:unclaimed", [{ id: I.COINS, amount }]); },
     left: (f) => f.p.getAttribute("doom:unclaimed")?.[0]?.amount ?? 0,
     takeAll: (f) => button(f, 919, 17),
     bankAll: (f) => button(f, 919, 26),
   },
   {
     name: "Theatre chest",
-    seed: (t, f, amount) => f.p.setAttribute("tob:loot", [{ id: I.COINS, amount }]),
+    // At the chest: its interface (23) is open, as the buttons need.
+    seed: (t, f, amount) => { f.p.setInterfaceId(23); f.p.setAttribute("tob:loot", [{ id: I.COINS, amount }]); },
     left: (f) => f.p.getAttribute("tob:loot")?.[0]?.amount ?? 0,
     takeAll: (f) => button(f, 23, 8),
     bankAll: (f) => button(f, 23, 6),
@@ -216,6 +219,19 @@ for (const route of PATHS) {
     assert.equal(route.left(f), 400, "the other 400 stay in the chest");
   });
 }
+
+test("Lunar Chest, Doom pile and Theatre chest buttons do nothing with the chest closed", async (t) => {
+  for (const route of PATHS.slice(0, 3)) {
+    const f = actor(t);
+    route.seed(t, f, 500);
+    f.p.setInterfaceId(-1);
+    await route.takeAll(f);
+    await route.bankAll(f);
+    assert.equal(f.inv.getAmount(I.COINS), 0, `${route.name}: nothing taken`);
+    assert.equal(f.p.getBank(0).getAmount(I.COINS), 0, `${route.name}: nothing banked`);
+    assert.equal(route.left(f), 500, `${route.name}: the loot stays`);
+  }
+});
 
 test("Gauntlet chest: shards past the cap land on the floor, not nowhere", (t) => {
   const shard = GauntletRewards.ID.CRYSTAL_SHARD;

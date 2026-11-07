@@ -18,5 +18,6 @@ module.exports = {
     require("./ironman/Ultimate.Ironman")(api);
     require("./ironman/Hardcore.Ironman")(api);
     require("./ironman/Setup.Ironman")(api);
+    require("./ironman/Onboarding.Ironman")(api);
   },
 };

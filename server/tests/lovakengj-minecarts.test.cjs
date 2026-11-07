@@ -66,6 +66,9 @@ function fakePlayer(x = 1519, y = 3732, coins = 100) {
     getMovementQueue: () => ({ setBlockMovement: (b) => { player.blocked = b; }, reset() {} }),
     getDialogueManager: () => ({ startDialogues: (chain) => player.dialogues.push(chain) }),
     getPacketSender: () => ({
+      // This legacy mock models main-slot occupancy; native lifetime identity is checked in npc-services-room.
+      getSubInterfaceAt: (targetUid) => targetUid === ((161 << 16) | 16) && player.interface >= 0
+        ? Object.freeze({ targetUid, groupId: player.interface, type: 0 }) : undefined,
       sendInterfaceRemoval: () => { player.interface = -1; },
       sendInterface: (id) => { player.interface = id; },
       sendClientScript: (...args) => player.scripts.push(args),
@@ -250,6 +253,10 @@ test('native task order lets a death cancel the three-tick ride before respawn',
   player.setHitpoints(0);
   player.appendDeath();
   core.TaskManager.process();
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(player.isDyingReturn(), true, 'the death task is still pending after states 4, 3 and 2');
+  // The native death task completes at state 0, two further cycles after state 2.
   core.TaskManager.process();
   core.TaskManager.process();
   assert.equal(player.isDyingReturn(), false, 'the actual death task completed');

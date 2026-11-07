@@ -185,6 +185,8 @@ test("runecrafting needs the simultaneous threshold, not any craft", () => {
   assert.deepEqual(run("custom:runecrafting:success", { player: p, runeId: 558, rolls: 69, amountPerEssence: 2 }), []);
   assert.deepEqual(run("custom:runecrafting:success", { player: p, runeId: 556, rolls: 28, amountPerEssence: 9 }), ["craft-252-air-runes-simultaneously-from-essence"]);
   assert.deepEqual(run("custom:runecrafting:success", { player: p, runeId: 556, rolls: 28, amountPerEssence: 8 }), []);
+  // The Raiments of the Eye's bonus runes count toward the total (Wiki: Raiments of the Eye).
+  assert.deepEqual(run("custom:runecrafting:success", { player: p, runeId: 558, rolls: 69, amountPerEssence: 2, bonusRunes: 2 }), ["craft-140-mind-runes-simultaneously-from-essence"]);
 });
 
 test("willow needs both a chop and a burn in Taverley", () => {

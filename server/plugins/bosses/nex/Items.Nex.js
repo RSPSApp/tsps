@@ -72,6 +72,12 @@ function grindShard({ player }) {
   const { ItemIdentifiers } = Common.core;
   const inventory = player.getInventory();
   if (!inventory.contains(ItemIdentifiers.NIHIL_SHARD)) return true;
+  // Shards stack, so taking one from a stack frees no slot: the dust needs room of its own, or it was lost.
+  const lastShard = inventory.getAmount(ItemIdentifiers.NIHIL_SHARD) === 1;
+  if (!lastShard && inventory.getAddableAmount(new Common.core.Item(ItemIdentifiers.NIHIL_DUST, 1)) < 1) {
+    player.sendMessage("You don't have enough inventory space.");
+    return true;
+  }
   inventory.delete(ItemIdentifiers.NIHIL_SHARD, 1);
   inventory.adds(ItemIdentifiers.NIHIL_DUST, 1);
   player.performAnimation(Common.animation(GRIND_ANIM));

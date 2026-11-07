@@ -69,6 +69,17 @@ test("a Mahogany Homes reward purchase credits the item it adds", (t) => {
   const click = (childId, slot) => PM.emitInterfaceActionClick({
     player, buttonId: (shop << 16) | childId, action: 1, groupId: shop, childId, slot, handled: false,
   });
+  // With the shop closed, its buttons buy nothing (a click anywhere in the world used to).
+  assert.equal(click(3, 22), true);
+  assert.equal(click(6, 0), true);
+  assert.equal(player.getInventory().getAmount(24872), 0, "a closed shop buys nothing");
+  assert.equal(player.getAttribute("construction:carpenter-points"), 1000, "and takes no points");
+  // Amy's Rewards option opens it.
+  const amy = core.NPC.create(core.NpcIdentifiers.AMY_2, new core.Location(3000, 3001, 0));
+  const rewardsOp = (amy.getCurrentDefinition?.(player) ?? amy.getDefinition()).getActions().indexOf("Rewards") + 1; // Amy in Falador (7417)
+  assert.ok(rewardsOp > 0, "Amy has a Rewards option");
+  assert.equal(PM.emitNpcInteraction({ player, npc: amy, npcId: core.NpcIdentifiers.AMY_2, clickType: rewardsOp, handled: false }), true);
+  assert.equal(player.getInterfaceId(), shop, "the shop is open");
   assert.equal(click(3, 22), true, "select the Carpenter's helmet");
   assert.equal(click(6, 0), true, "confirm it");
   assert.equal(player.getInventory().getAmount(24872), 1);

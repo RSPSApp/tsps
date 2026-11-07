@@ -7,17 +7,20 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Common = require("../plugins/skills/ectofuntus/Common.Ectofuntus");
 
-let core, worship, useOnEctofuntus;
+let core, worship, useOnEctofuntus, worshipNow;
+// The game cycle: each test click below is its own tick; worshipNow clicks within the same tick.
+let cycle = 0;
 before(async () => {
   await CachePipeline.initialize();
   core = PluginManager.getCoreApi();
   const api = {
-    core,
+    core: { ...core, World: Object.assign(Object.create(core.World), { getProcessCycle: () => cycle }) },
     onObjectInteraction(name, actions) {
       assert.equal(name, "Ectofuntus");
-      worship = actions.Worship;
+      worshipNow = actions.Worship;
+      worship = (event) => { cycle++; return actions.Worship(event); };
     },
-    onItemOnObject(handler) { useOnEctofuntus = handler; },
+    onItemOnObject(handler) { useOnEctofuntus = (event) => { cycle++; return handler(event); }; },
     emitCustomEvent() {},
   };
   Common.init(api);
@@ -69,6 +72,15 @@ test("bat bonemeal awards 21.2 XP per worship, retaining tenths across repeated 
   assert.equal(h.p.getInventory().getAmount(core.ItemIdentifiers.POT), 5);
   assert.equal(h.p.getInventory().getAmount(core.ItemIdentifiers.BUCKET), 5);
   assert.equal(Common.tokens(h.p), 25);
+});
+
+test("several Worship clicks in one tick worship once", () => {
+  const h = player({ count: 5 });
+  cycle++;
+  for (let i = 0; i < 5; i++) worshipNow({ player: h.p });
+  assert.equal(Math.round(h.xp() * 10), 212, "one worship");
+  assert.equal(h.p.getInventory().getAmount(core.ItemIdentifiers.POT), 1);
+  assert.equal(Common.tokens(h.p), 5);
 });
 
 test("ground-only bones have no Ectofuntus bonemeal mapping", () => {

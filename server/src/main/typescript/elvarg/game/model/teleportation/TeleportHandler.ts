@@ -173,6 +173,11 @@ export class TeleportHandler {
             return false;
         }
 
+        // Content can refuse a teleport without changing the area's existing override policy.
+        const restriction = { player, destination: targetLocation, wildernessLevelLimit, spellName, allow: null as boolean | null };
+        PluginManager.emitCustomEvent("teleport:can-start", restriction);
+        if (restriction.allow === false) return false;
+
         const area = player.getArea();
         const canTeleport = (area ? PluginManager.callArea(area, "canTeleport", player, wildernessLevelLimit, targetLocation) : null)
             ?? PluginManager.emitCanTeleport(player, wildernessLevelLimit, targetLocation, spellName);

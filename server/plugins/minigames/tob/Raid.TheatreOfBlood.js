@@ -138,9 +138,19 @@ function roomHoldsOn(event) {
 // ---------------------------------------------------------------- logging in
 
 /**
+ * The Theatre's own items stay behind with anyone not going back in: the Dawnbringer ("never leaves Verzik's room")
+ * and the bandages (Wiki: neither tradeable nor bankable). The Blood Moon Rises gives the same two.
+ */
+function leaveTheatreItems(player) {
+  Shared.removeDawnbringer(player);
+  Shared.removeBandages(player);
+}
+
+/**
  * Back after a logout: into the party's room if the raid is still on. If it isn't, a logout
  * mid-fight was a death, and the items go to the retrieval chest; anyone still standing in
- * the theatre is put outside.
+ * the theatre (a save made mid-raid, a Blood Moon Rises encounter) is put outside. Whoever
+ * doesn't go back in leaves the Theatre's own items behind.
  */
 function returnAfterLogout({ player }) {
   const left = player.getAttribute(Raid.ATTR_LOGOUT);
@@ -149,21 +159,24 @@ function returnAfterLogout({ player }) {
     // Wiki (Escape crystal, 26 March 2025): one carried is used up, and the player returns outside.
     if (EscapeCrystal.usedOnLogin(player)) {
       raid?.forget(player);
-      Shared.removeBandages(player);
+      leaveTheatreItems(player);
       player.setAttribute(Raid.ATTR_LOGOUT, null);
       player.moveTo(Shared.loc(Shared.OUTSIDE));
       return;
     }
     if (raid?.rejoin(player)) return;
     player.setAttribute(Raid.ATTR_LOGOUT, null);
-    // Not back in the raid, so its bandages stay behind (before anything is stored for retrieval).
-    Shared.removeBandages(player);
+    // Not back in the raid, so its items stay behind (before anything is stored for retrieval).
+    leaveTheatreItems(player);
     if (left.fight) {
       Retrieval.storeAfterWipe(player, { free: left.mode === "entry" });
       player.sendMessage("Your party could not be found. A magical chest has retrieved some of your items; you can collect them from it outside of the Theatre of Blood.");
     }
   }
-  if (Shared.inTheatre(player.getLocation())) player.moveTo(Shared.loc(Shared.OUTSIDE));
+  if (Shared.inTheatre(player.getLocation())) {
+    leaveTheatreItems(player);
+    player.moveTo(Shared.loc(Shared.OUTSIDE));
+  }
 }
 
 /**

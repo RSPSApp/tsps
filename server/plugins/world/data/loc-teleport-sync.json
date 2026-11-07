@@ -118,6 +118,22 @@
       "requires": [
         {"varbit": 3759, "atLeast": 3, "refuse": {"message": "You must learn barbarian firemaking from Otto before diving into the Ancient Cavern."}},
         {"varbit": 3764, "atLeast": 1, "refuse": {"message": "You must speak to Otto about pyre ships before diving into the Ancient Cavern."}}
+      ]},
+    {"name": "prif_wall_gate_left", "source": "https://oldschool.runescape.wiki/w/Prifddinas (All methods of entering the city require completion of Song of the Elves); TSPS wording for the refusal",
+      "requires": [
+        {"quest": "song_of_the_elves", "refuse": {"message": "You need to complete Song of the Elves to enter Prifddinas."}}
+      ]},
+    {"name": "prif_wall_gate_right", "source": "https://oldschool.runescape.wiki/w/Prifddinas (All methods of entering the city require completion of Song of the Elves); TSPS wording for the refusal",
+      "requires": [
+        {"quest": "song_of_the_elves", "refuse": {"message": "You need to complete Song of the Elves to enter Prifddinas."}}
+      ]},
+    {"name": "dorgesh_city_entrance_left", "source": "https://oldschool.runescape.wiki/w/Dorgesh-Kaan (It can only be accessed after completion of the Death to the Dorgeshuun quest); TSPS wording for the refusal",
+      "requires": [
+        {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "You need to complete Death to the Dorgeshuun to enter Dorgesh-Kaan."}}
+      ]},
+    {"name": "dorgesh_city_entrance_right", "source": "https://oldschool.runescape.wiki/w/Dorgesh-Kaan (It can only be accessed after completion of the Death to the Dorgeshuun quest); TSPS wording for the refusal",
+      "requires": [
+        {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "You need to complete Death to the Dorgeshuun to enter Dorgesh-Kaan."}}
       ]}
   ],
   "dialogues": [

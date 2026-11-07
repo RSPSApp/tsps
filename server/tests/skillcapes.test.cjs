@@ -80,7 +80,7 @@ function container(ids, size) {
 }
 
 /** A player with the given 99s (skill keys), worn cape, inventory and bank. */
-function player({ ninetyNines = [], cape = -1, inventory = [], bank = [], coins = 0, location = { x: 3000, y: 3000, z: 0 } } = {}) {
+function player({ ninetyNines = [], cape = -1, inventory = [], bank = [], coins = 0, location = { x: 3000, y: 3000, z: 0 }, username = "capes" } = {}) {
   const equipment = Array(14).fill(null).map(() => item(-1, 0));
   equipment[core.Equipment.CAPE_SLOT] = item(cape);
   const inv = container(inventory, 28);
@@ -93,6 +93,7 @@ function player({ ninetyNines = [], cape = -1, inventory = [], bank = [], coins 
   const levelOf = (skill) => (ninetyNines.includes("ALL") || ninetyNines.some((key) => core.Skill[key] === skill) ? 99 : 50);
   return {
     messages, attributes, varbits, location,
+    getUsername: () => username,
     getEquipment: () => ({ ...container([], 0), getItems: () => equipment, contains: (id) => equipment.some((i) => i.getId() === id), refreshItems() {} }),
     getInventory: () => inv,
     getBanks: () => banks,
@@ -268,7 +269,15 @@ test("Boost raises the skill to 100 once until it drops back; Hitpoints waits a 
   p.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99);
   boost(p, hp);
   assert.equal(p.messages.at(-1), "Your Skillcape of Hitpoints can only provide a hitpoint boost once per minute.");
-  lastBoost.delete(p);
+  const relogged = player({ ninetyNines: ["HITPOINTS"] });
+  boost(relogged, hp);
+  assert.equal(relogged.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), 99, "a relog doesn't reset the minute");
+  assert.equal(relogged.messages.at(-1), "Your Skillcape of Hitpoints can only provide a hitpoint boost once per minute.");
+  const other = player({ ninetyNines: ["HITPOINTS"], username: "someone else" });
+  other.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99);
+  boost(other, hp);
+  assert.equal(other.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), 100, "another player's minute is their own");
+  lastBoost.clear();
 });
 
 test("daily allowances count today's uses and reset on a new day", () => {

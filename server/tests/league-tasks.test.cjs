@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "prayer-restore", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -244,6 +244,12 @@ test("Demonic Pacts, the cache's own league: no catalog overrides, and a task's 
   assert.equal(emitted.filter(([name, payload]) => name === "league:task-completed" && payload.id === "defeat-a-tzhaar").at(-1)[1].pactTask, true);
   kill(pacts, "Hill Giant");
   assert.deepEqual(completed(pacts), ["defeat-a-tzhaar", "defeat-a-hill-giant"]);
+  const gwdBosses = ["Kree'arra", "General Graardor", "Commander Zilyana", "K'ril Tsutsaroth", "Nex"];
+  assert.equal(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-100-times").trigger, undefined, "any one boss 100 times is not a shared total");
+  assert.equal(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-250-times").trigger, undefined);
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-500-times").trigger, { kind: "kill", npcs: gwdBosses, count: 500 });
+  assert.equal(catalog.leagues["6"].tasks.find((task) => task.id === "equip-all-zenyte-jewelry").trigger, undefined, "the amulet and the necklace share the neck slot");
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "restore-75-prayer-points-at-an-altar").trigger, { kind: "prayer-restore", amount: 75, count: 1 });
   assert.equal(pacts.sent.varps.get(bitVarp(giant.position)), 1 << (giant.position % 32), "the bit the client's script 9470 reads");
   assert.equal(pacts.sent.messages.at(-1), "Congratulations, you've completed an easy task: <col=FE206A>Defeat a Hill Giant</col>.", "in the league's colour");
 });
@@ -581,7 +587,14 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   // A set the cache has no item set for: its Wiki page's table of pieces.
   assert.deepEqual(trigger("equip-a-full-armadyl-armour-set"), { kind: "equip-all", items: ["Armadyl helmet", "Armadyl chestplate", "Armadyl chainskirt"] });
   assert.equal(trigger("equip-a-full-void-knight-set").sets.length, 3, "one table per helm, sharing the rest");
-  assert.equal(trigger("equip-a-full-crystal-armour-set"), undefined, "weapons, armour and tools are three things");
+  assert.deepEqual(trigger("equip-a-full-crystal-armour-set"), {
+    kind: "equip-all",
+    items: [
+      ["Crystal helm", "Crystal helm (attuned)", "Crystal helm (basic)", "Crystal helm (beta)", "Crystal helm (inactive)", "Crystal helm (perfected)"],
+      ["Crystal body", "Crystal body (attuned)", "Crystal body (basic)", "Crystal body (beta)", "Crystal body (inactive)", "Crystal body (perfected)"],
+      ["Crystal legs", "Crystal legs (attuned)", "Crystal legs (basic)", "Crystal legs (beta)", "Crystal legs (inactive)", "Crystal legs (perfected)"],
+    ],
+  }, "the armour section, not the page's weapons and tools");
 
   // Fires, burnt food and bones: the logs or bones named, any bones for "Remains of any kind".
   assert.deepEqual(trigger("burn-100-willow-logs"), { kind: "burn", items: ["Willow logs"], count: 100 });

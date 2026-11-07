@@ -36,6 +36,9 @@ before(async () => {
       events.push([name, event]);
       if (name === 'quest:is-complete') event.complete = questDone;
       if (name === 'mining:best-pickaxe') event.pickaxe = { id: 1275, requiredLevel: 41, attemptIntervalTicks: 3 };
+      // As Mining answers it (Wiki, Pickaxe: dragon "3 ticks by default, 1/6 chance to be 2 ticks").
+      if (name === 'mining:roll-interval') event.ticks ??= event.pickaxe.attemptIntervalTicks - (event.pickaxe.fastRollChance && Math.random() < event.pickaxe.fastRollChance ? 1 : 0);
+      if (name === 'skills:action-interval' && zalcanoPace) event.ticks = zalcanoPace;
       if (name === 'npc-drops:roll-table') {
         const entries = [
           { item_id: 2353, quantity: [16, 699], weight: 3 },
@@ -138,6 +141,8 @@ function flush() {
   tasks = [];
   for (const task of due) task.execute();
 }
+
+let zalcanoPace = null;
 
 test('every id resolves from the cache', () => {
   const { npcs, locs, items, varps } = Common.ids;
@@ -721,4 +726,28 @@ test("a blue symbol's power pulses every 5 ticks while stood on; a burn says Agh
   fight.tickCount = 10;
   fight.tickSymbols([burnt]);
   assert.deepEqual([burnt.messages, burnt.chat, burnt.graphic], [[Common.message('burning')], ['Agh!'], Common.ids.spotanims.burning]);
+});
+
+test("a rock's next swing follows Mining's roll interval and content's pace, not the raw pickaxe figure", (t) => {
+  const [x, y] = Common.data.prison.rocks[0];
+  const player = fakePlayer(x - 1, y);
+  player.getSkillManager = () => ({ addExperiences() {}, getCurrentLevel: () => 99 });
+  player.performAnimation = () => {};
+  const prisonState = { tickCount: 0, fight: { glowing: 1, phase: 'armoured' } };
+  Tephra.mineRock(prisonState, { player, objectId: Common.ids.locs.rock });
+  const fast = { id: 11920, requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6 };
+  const emit = Common.api.emitCustomEvent.bind(Common.api);
+  t.mock.method(Common.api, 'emitCustomEvent', (name, event) => {
+    emit(name, event);
+    if (name === 'mining:best-pickaxe') event.pickaxe = fast;
+  });
+  t.mock.method(Math, 'random', () => 0);
+  prisonState.tickCount = 10;
+  Tephra.tickActions(prisonState, [player], () => 0.99);
+  assert.equal(Tephra.actions.get(player)?.next, 12, 'the quick roll: 2 ticks');
+  zalcanoPace = 1;
+  t.after(() => { zalcanoPace = null; Tephra.actions.delete(player); });
+  prisonState.tickCount = 12;
+  Tephra.tickActions(prisonState, [player], () => 0.99);
+  assert.equal(Tephra.actions.get(player)?.next, 13, "content's pace (a league relic) answers after Mining");
 });

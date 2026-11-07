@@ -48,7 +48,10 @@ function ownsBonecrusher(player) {
 
 function hasRoomForTokens(player) {
   const inventory = player.getInventory();
-  return inventory.contains(Common.core.ItemIdentifiers.ECTO_TOKEN) || inventory.getFreeSlots() > 0;
+  const count = Common.tokens(player);
+  if (count <= 0) return false;
+  // add() can clamp an existing token stack even when the inventory has a free slot.
+  return inventory.getAddableAmount(new Common.core.Item(Common.core.ItemIdentifiers.ECTO_TOKEN, count)) === count;
 }
 
 function dialogueVariant({ player, definition }) {

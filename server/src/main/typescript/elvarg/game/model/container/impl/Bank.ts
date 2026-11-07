@@ -1427,6 +1427,18 @@ export class Bank extends ItemContainer {
             return this;
         }
 
+        // The room checks above go by id: a stack of the same id with other metadata (a preset copy) is not one this
+        // item joins, so with no free slot the add below would fail after the bank's stack was already taken.
+        const arriving = item.clone();
+        if (this.getPlayer().withdrawAsNote() && canWithdrawAsNote) arriving.setId(noteId);
+        const room = to.getAddableAmount(arriving);
+        if (room <= 0) {
+            if (to instanceof Inventory) this.getPlayer().sendMessage(INVENTORY_FULL_MESSAGE);
+            else to.full();
+            return this;
+        }
+        if (room < item.getAmount()) item.setAmount(room);
+
         if (to instanceof Inventory && this.getPlayer().isPlaceholders()
                 && item.getAmount() >= this.getItems()[slot].getAmount()
                 && Bank.placeholderBankId(item.getId()) < 0) {

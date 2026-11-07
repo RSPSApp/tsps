@@ -40,9 +40,15 @@ function modifierStubs() {
   return stubs;
 }
 
+let nextName = 0;
 function player({ at = WILDERNESS, timer = 0, type = SkullType.WHITE_SKULL } = {}) {
   const equipment = [];
+  const attributes = new Map();
+  const username = `skuller${nextName++}`;
   const p = {
+    getUsername: () => username,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
     skullTimer: timer,
     skullType: type,
     messages: [],
@@ -105,6 +111,20 @@ test("retaliating does not skull, and nothing changes outside the Wilderness", (
   const skulled = player({ at: new Location(3222, 3218, 0), timer: 100 });
   CombatFactory.handleSkull(skulled, player({ at: new Location(3222, 3219, 0) }));
   assert.equal(skulled.skullTimer, 100);
+});
+
+test("hitting back after a splash, or before the first hit lands, does not skull (Wiki: attacked, not damaged)", () => {
+  // The attack is queued and splashes (or is still in flight): no damage map entry and no attacker set on impact.
+  const aggressor = player();
+  const victim = player();
+  CombatFactory.handleSkull(aggressor, victim);
+  assert.ok(aggressor.skullTimer > 0, "the aggressor is skulled for attacking first");
+  CombatFactory.handleSkull(victim, aggressor);
+  assert.equal(victim.skullTimer, 0, "the victim hits back unskulled");
+  // A third player the victim never attacked: attacking them still skulls.
+  const bystander = player();
+  CombatFactory.handleSkull(victim, bystander);
+  assert.ok(victim.skullTimer > 0, "attacking someone who didn't attack first still skulls");
 });
 
 test("the skull icon is redrawn on the tick the skull runs out", () => {

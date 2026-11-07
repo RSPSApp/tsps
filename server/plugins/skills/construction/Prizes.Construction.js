@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, DialogueChainBuilder, ItemIdentifiers, StatementDialogue } = require("./Core.Construction");
+const { api, DialogueChainBuilder, Item, ItemIdentifiers, StatementDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -61,7 +61,9 @@ function open(event) {
     return true;
   }
   if (prize <= 0) return say(player, "The chest is empty."), true;
-  if (!player.getInventory().contains(COINS) && player.getInventory().getFreeSlots() === 0) {
+  // The whole prize or none (a key is spent per take): a coin stack near the cap, or one with other metadata and no
+  // free slot, passed the old slot check and the add kept only part, or none, of the zeroed prize.
+  if (player.getInventory().getAddableAmount(new Item(COINS, prize)) < prize) {
     return player.sendMessage("You don't have enough inventory space."), true;
   }
   if (keyed) player.getInventory().delete(PRIZE_KEY, 1);
@@ -120,4 +122,4 @@ function attachPrizes(api) {
   api.onItemOnObject(deposit);
 }
 
-Object.assign(module.exports, { attachPrizes, offer, award, withdraw });
+Object.assign(module.exports, { attachPrizes, offer, award, withdraw, open });

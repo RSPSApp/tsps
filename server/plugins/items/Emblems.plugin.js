@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
@@ -76,7 +77,7 @@ module.exports = {
       }
 
       ItemOnGroundManager.registerNonGlobals(
-        event.killer,
+        PlayerDeathTask.lootOwner(event.player, event.killer),
         new Item(downgradedEmblemId),
         dropLocation
       );

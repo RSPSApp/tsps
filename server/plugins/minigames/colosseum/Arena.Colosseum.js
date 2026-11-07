@@ -57,12 +57,15 @@ function confirm(event) {
   return true;
 }
 
-/** Nothing in a run is safe: what drops lands in the lobby, as the grave would be. */
-function dropInLobby(event) {
-  if (!Run.runOf(event.player) || !event.dropEligible) return;
-  const { ItemOnGroundManager } = Shared.core();
-  ItemOnGroundManager.registerLocation(event.player, event.item, Shared.loc(Shared.LOBBY_RESPAWN));
-  event.handled = true;
+/**
+ * Nothing in a run is safe, and the grave stands in the lobby (Wiki, Fortis Colosseum: "Their grave is also located there. All
+ * unprotected items are moved to the grave"). Tradeables went to the lobby floor here instead, and untradeables to a
+ * grave at the world spawn (an instance that names no grave tile): one death split in two.
+ */
+function graveInLobby(request) {
+  if (!Run.runOf(request.player)) return;
+  const at = Shared.loc(Shared.LOBBY_RESPAWN);
+  request.tile = { x: at.getX(), y: at.getY(), z: at.getZ() };
 }
 
 function dieInRun(event) {
@@ -99,7 +102,7 @@ module.exports = function registerColosseumArena(api) {
   api.onNpcInteraction("Minimus", { "Start-wave": startWave, Leave: leave });
   api.onInterfaceActionButton(MOD_BUTTONS, pickModifier);
   api.onInterfaceActionButton(CONFIRM_BUTTON, confirm);
-  api.onPlayerDeathItemDrop(dropInLobby);
+  api.onCustomEvent("gravestones:grave-location", graveInLobby);
   api.onPlayerDeath(dieInRun);
   api.onPlayerLogin(returnToLobby);
   api.onCanAttack(ownRunOnly);

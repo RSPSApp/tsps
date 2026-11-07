@@ -114,3 +114,47 @@ test("someone else killing it gives the caster nothing", (t) => {
   assert.equal(prayerXp(f), before);
   assert.equal(other.p.getSkillManager().getExperience(core.Skill.PRAYER), otherBefore);
 });
+
+// Wiki (Ensouled head, Zealot's robes): each worn piece gives a 1.25% chance, the full set 5%, that a reanimation
+// spares the head; the message is "Your Zealot's robes save the ensouled head but still grant you experience."
+function wearZealot(f, pieces) {
+  const slots = [
+    [core.Equipment.HEAD_SLOT, I.ZEALOTS_HELM],
+    [core.Equipment.BODY_SLOT, I.ZEALOTS_ROBE_TOP],
+    [core.Equipment.LEG_SLOT, I.ZEALOTS_ROBE_BOTTOM],
+    [core.Equipment.FEET_SLOT, core.CacheDefinitions.getObjId("shades_prayer_boots")],
+  ];
+  for (const [slot, id] of slots.slice(0, pieces)) f.p.getEquipment().set(slot, new core.Item(id, 1));
+}
+
+const headCount = (f, id) => f.inv.getItems().filter((item) => item?.getId() === id).length;
+const magicXp = (f) => f.p.getSkillManager().getExperience(core.Skill.MAGIC);
+
+test("Zealot's robes can save the head: the creature rises, the runes and Magic XP are still spent", (t) => {
+  const f = caster(t);
+  wearZealot(f, 4);
+  t.mock.method(Math, "random", () => 0.04); // under the full set's 5%
+  const id = head("GOBLIN");
+  const xp = magicXp(f);
+  const npc = cast(f, Spells.BASIC_REANIMATION, id);
+  assert.ok(npc, "the creature still rises");
+  assert.equal(headCount(f, id), 1, "the head is kept");
+  assert.equal(f.messages.at(-1), "Your Zealot's robes save the ensouled head but still grant you experience.");
+  assert.equal(f.inv.getAmount?.(I.BODY_RUNE) ?? f.inv.getItems()[10].getAmount(), 96, "runes are still used");
+  assert.ok(magicXp(f) > xp);
+});
+
+test("without the robes, or when the roll fails, the head is used up", (t) => {
+  const f = caster(t);
+  t.mock.method(Math, "random", () => 0);
+  const id = head("GOBLIN");
+  assert.ok(cast(f, Spells.BASIC_REANIMATION, id));
+  assert.equal(headCount(f, id), 0, "no robes, no save even on a 0 roll");
+  wearZealot(f, 1);
+  Math.random.mock.mockImplementation(() => 0.0126); // above one piece's 1.25%
+  assert.ok(cast(f, Spells.BASIC_REANIMATION, id));
+  assert.equal(headCount(f, id), 0);
+  Math.random.mock.mockImplementation(() => 0.0124);
+  assert.ok(cast(f, Spells.BASIC_REANIMATION, id));
+  assert.equal(headCount(f, id), 1, "one piece saves under 1.25%");
+});

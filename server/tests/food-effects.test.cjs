@@ -134,7 +134,7 @@ test("the data: every food and bite is an Eat item in the cache, and every Eat i
     if (!core.CacheDefinitions.hasItem(itemId)) continue;
     const definition = core.CacheDefinitions.getItem(itemId);
     if (definition.noteTemplate >= 0 || definition.placeholderTemplate >= 0) continue;
-    if ((definition.inventoryActions ?? []).some(option => option === "Eat" || (option === "Consume" && DATA.foods.some(food => food.name === definition.name && food.option === "Consume")))) eatNames.add(definition.name);
+    if ((definition.inventoryActions ?? []).some(option => option === "Eat" || (option !== "Eat" && DATA.foods.some(food => food.name === definition.name && food.option === option)))) eatNames.add(definition.name);
   }
   const foodNames = new Set();
   for (const food of DATA.foods) {
@@ -348,10 +348,10 @@ function inCombatAt(x, y, target = null, attacker = null) {
 }
 
 test("anglerfish cannot over-heal while in combat in a PvP area", () => {
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3200, 3600)), true, "idle in the Wilderness");
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3200, 3600, {})), false, "fighting an NPC");
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3200, 3600, null, {})), false, "being attacked");
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3222, 3222, {})), true, "Edgeville is not a PvP area");
+  assert.equal(Food._test.canOverheal(inCombatAt(3200, 3600)), true, "idle in the Wilderness");
+  assert.equal(Food._test.canOverheal(inCombatAt(3200, 3600, {})), false, "fighting an NPC");
+  assert.equal(Food._test.canOverheal(inCombatAt(3200, 3600, null, {})), false, "being attacked");
+  assert.equal(Food._test.canOverheal(inCombatAt(3222, 3222, {})), true, "Edgeville is not a PvP area");
   assert.equal(Food._test.getAnglerfishHeal(99), 22);
 });
 
@@ -365,6 +365,49 @@ test("anglerfish heals off the Hitpoints level levelled up to, not the health le
   shallow.give(0, id("ANGLERFISH"));
   shallow.eat(0);
   assert.equal(shallow.hp, 28, "a level-40 eater gets the level-40 heal of 8");
+});
+
+test("haddock overheals by 20% of the Hitpoints level, at most 10, and not in PvP combat (Wiki: Haddock)", () => {
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 10), 2, "level 10");
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 14), 2, "level 14");
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 50), 10, "level 50");
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 99), 10, "level 99");
+  assert.equal(Food._test.overhealAllowance(undefined, 99), 0, "ordinary food never overheals");
+
+  const full = createPlayer({ hp: 99, maxHp: 99 });
+  full.give(0, id("HADDOCK"));
+  full.eat(0);
+  assert.equal(full.hp, 109, "a full level-99 eater rises to 109");
+
+  const boosted = createPlayer({ hp: 105, maxHp: 99 });
+  boosted.give(0, id("HADDOCK"));
+  boosted.eat(0);
+  assert.equal(boosted.hp, 109, "an overhealed eater is brought to 109, no further");
+
+  const low = createPlayer({ hp: 90, maxHp: 99 });
+  low.give(0, id("HADDOCK"));
+  low.eat(0);
+  assert.equal(low.hp, 108, "the heal of 18 is not cut short of the cap");
+
+  const shark = createPlayer({ hp: 99, maxHp: 99 });
+  shark.give(0, id("SHARK"));
+  shark.eat(0);
+  assert.equal(shark.hp, 99, "a shark still stops at the base level");
+
+  const fighting = createPlayer({ hp: 99, maxHp: 99, at: new Location(3200, 3600, 0) });
+  fighting.getCombat = () => ({ delayAttack() {}, getTarget: () => ({}), getAttacker: () => null });
+  fighting.give(0, id("HADDOCK"));
+  fighting.eat(0);
+  assert.equal(fighting.hp, 99, "no overheal in combat in a PvP area");
+});
+
+test("yellowfin heals 19 and restores 20% run energy (Wiki: Yellowfin)", () => {
+  const player = createPlayer({ hp: 50 });
+  player.give(0, id("YELLOWFIN"));
+  player.eat(0);
+  assert.equal(player.hp, 69);
+  assert.equal(player.energy, 70, "from 50% to 70%");
+  assert.deepEqual(player.messages.slice(0, 1), ["You eat the yellowfin."]);
 });
 
 test("strange fruit restores energy and cures poison, without healing", () => {
@@ -407,4 +450,41 @@ test('quest supplies restore bounded Prayer and share stamina, with their real c
 test("eating a Mackerel names the Mackerel, not the cod (issue #2455)", () => {
   const mackerel = DATA.foods.find((food) => food.name === "Mackerel");
   assert.equal(mackerel.message, "You eat the mackerel.");
+});
+
+test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki effects and leave the vessel", () => {
+  const drink = (name, setup = () => {}) => {
+    const player = createPlayer({ hp: 40 });
+    setup(player);
+    player.give(0, id(name));
+    player.eat(0);
+    return player;
+  };
+
+  const wine = drink("JUG_OF_WINE");
+  assert.equal(wine.hp, 51, "Jug of wine heals 11 (Wiki: Jug of wine)");
+  assert.equal(wine.level(core.Skill.ATTACK), 58, "and lowers Attack by 2");
+  assert.equal(wine.slots[0].getId(), id("JUG"));
+  assert.equal(wine.messages[0], "You drink the wine.");
+
+  const half = drink("HALF_FULL_WINE_JUG");
+  assert.equal(half.hp, 47, "Half full wine jug heals 7 (Wiki: Half full wine jug)");
+  assert.equal(half.level(core.Skill.ATTACK), 58);
+  assert.equal(half.slots[0].getId(), id("JUG"));
+
+  for (const tea of ["CUP_OF_TEA", "CUP_OF_TEA_2"]) {
+    const cup = drink(tea);
+    assert.equal(cup.hp, 43, "a cup of tea heals 3 (Wiki: Cup of tea)");
+    assert.equal(cup.level(core.Skill.ATTACK), 63, "and boosts Attack by 2 + 2% (3 from level 50)");
+    assert.equal(cup.slots[0].getId(), id("EMPTY_CUP"));
+    assert.deepEqual(cup.messages, ["Aaah, nothing like a nice cuppa tea!"]);
+  }
+  assert.equal(Food.isFoodItem(id("CUP_OF_TEA_4")), false, "tea with an Empty option is another tea");
+
+  for (const [name, heal] of [["FRUIT_BLAST", 9], ["PINEAPPLE_PUNCH", 9]]) {
+    const cocktail = drink(name);
+    assert.equal(cocktail.hp, 40 + heal, `${name} heals ${heal} (Wiki)`);
+    assert.equal(cocktail.slots[0].getId(), id("COCKTAIL_GLASS"));
+    assert.deepEqual(cocktail.messages, ["You drink the cocktail. It tastes great."]);
+  }
 });

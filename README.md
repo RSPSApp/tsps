@@ -60,11 +60,10 @@ Create a server token at [RSPS.app](https://rsps.app/) under **Settings → Serv
 
 ```dotenv
 WEBRTC_WORLD_ID=my-world
-WEBRTC_WORLD_NAME=My World
 WEBRTC_WORLD_TOKEN=paste-your-token-here
 ```
 
-`WEBRTC_WORLD_NAME` is the name shown in the World list; it defaults to `WEBRTC_WORLD_ID`. The list also shows the `description` (up to 120 characters) and `spawn` from [`server/data/definitions/world.json`](server/data/definitions/world.json).
+Set `"name": "My World"` in `server/data/definitions/world.local.json` to choose the display name; it defaults to `Old School RuneScape`. This name is used by the login page, World list, welcome messages and bank title. `WEBRTC_WORLD_NAME` is no longer used. The list also shows the `description` (up to 120 characters) and `spawn` from [`server/data/definitions/world.json`](server/data/definitions/world.json).
 
 Run `yarn start`. Your world appears in the World list once it registers. Keep the token private.
 

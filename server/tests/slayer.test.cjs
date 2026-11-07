@@ -92,6 +92,12 @@ function createPlayer({ combat = 126, slayer = 99, levels = {}, points = 0 } = {
       getFreeSlots: () => 28 - inventory.length,
       contains: (id) => inventory.some(([item]) => item === id),
       adds: (id, amount) => inventory.push([id, amount]),
+      deleteNumber: (id, amount) => {
+        const index = inventory.findIndex(([item]) => item === id);
+        if (index < 0) return;
+        inventory[index][1] -= amount;
+        if (inventory[index][1] <= 0) inventory.splice(index, 1);
+      },
     }),
   };
   const sender = new PacketSender(player);
@@ -416,6 +422,21 @@ test("rewards: the Buy tab sells enum 840's items for enum 842's prices", () => 
   assert.equal(varbit(player, "slayer_points"), 65);
 });
 
+test("rewards: the buttons answer only while the rewards are open at a master", () => {
+  const buttons = new Map();
+  Rewards.attach({ onCustomEvent() {}, onInterfaceActionButton: (id, fn) => buttons.set(id, fn) });
+  const player = createPlayer({ points: 100 });
+  const slot = [...CacheDefinitions.getEnumValues(840)].find(([, item]) => item === 4160)[0];
+  const buy = buttons.get((426 << 16) | 25);
+  player.getInterfaceId = () => -1;
+  buy({ player, slot, opId: 2 });
+  assert.deepEqual(player.inventory, [], "closed: nothing bought");
+  assert.equal(varbit(player, "slayer_points"), 100);
+  player.getInterfaceId = () => 426;
+  buy({ player, slot, opId: 2 });
+  assert.deepEqual(player.inventory, [[4160, 250]], "open: bought");
+});
+
 test("slayer:grant-points and slayer:current-task", () => {
   const player = createPlayer();
   handlers.events.get("slayer:grant-points")[0]({ player, points: 30 });
@@ -548,6 +569,29 @@ test("a gargoyle waits at 0 hitpoints for the rock hammer", () => {
   const auto = { npc: fresh, preventDeath: false };
   Finishers.beforeDeath(auto);
   assert.equal(auto.preventDeath, false, "Gargoyle Smasher with a hammer finishes it");
+});
+
+test("a bag of salt or ice cooler is consumed when used too early, and salt works from 4 hitpoints", () => {
+  const player = createPlayer();
+  player.performAnimation = () => {};
+  const cases = [["Rockslug", 4161, 4, 5], ["Desert Lizard", 6696, 4, 5]];
+  for (const [name, item, threshold, early] of cases) {
+    player.inventory.push([item, 2]);
+    const npc = npcNamed(name);
+    let hitpoints = early;
+    Object.assign(npc, {
+      getAttribute: () => undefined, setAttribute() {},
+      getHitpoints: () => hitpoints, setHitpoints: (value) => { hitpoints = value; },
+      getCombat: () => ({ getKiller: () => player }),
+    });
+    Finishers.itemOnNpc({ player, target: npc, itemId: item, handled: false });
+    assert.match(player.messages.at(-1), /isn't weak enough/, name);
+    assert.equal(player.inventory.filter(([id]) => id === item).reduce((n, [, a]) => n + a, 0), 1, `${name}: the early use is consumed`);
+    hitpoints = threshold;
+    Finishers.itemOnNpc({ player, target: npc, itemId: item, handled: false });
+    assert.equal(player.messages.at(-1), require("../plugins/skills/data/slayer-finishers.json").finishers.find((f) => f.names.includes(name)).finished, name);
+    assert.equal(player.inventory.filter(([id]) => id === item).length, 0, `${name}: the finishing use is consumed`);
+  }
 });
 
 test("the rock hammer also finishes the Grotesque Guardians, each with its own line ('Dusk cracks apart.')", () => {

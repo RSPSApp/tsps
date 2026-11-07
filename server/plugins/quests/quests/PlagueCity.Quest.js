@@ -7,22 +7,21 @@
  * conditions, completes the quest through Edmond's own action and mixes the
  * hangover cure from the transcript's item recipes.
  *
+ * Sources: OSRS Wiki Plague City/Quick guide and Transcript:Plague City;
+ * locs and varbits verified against the revision 241 cache.
+ * Warrant house entry, tunnel digging/travel, the Edmond pull scene and sewer/manhole return travel
+ * still need native movement/scene evidence; these handlers do not simulate them.
+ *
  * Stages (varp 165): 1 find dwellberries, 2 gas mask, 3 soften the mud, 4-7
  * one to four buckets of water, 8 tunnel open, 9 rope tied, 10 pipe open,
  * 20 shown picture, 21 returned book, 22 spoke to the Rehnisons, 23 spoke to
  * Milli, 24 need clearance, 25 clerk permission, 26 hangover cure, 27 warrant,
  * 28 freed Elena, 29 complete, 30 read scroll.
  *
- * Gaps: the mud/water/spade/rope object actions, the cupboard, the manhole and
- * the cell door are not wired here, so the transcript plays by stage but the
- * world edits and movement are missing. Elena and Edmond's main-world spawn ids
- * (6206/6204) are not the ids in npc-dialogue-index.json, so their Talk-to is
- * driven by the indexed ids only. The small key and scruffy note are not
- * handed out by this plugin.
  */
 module.exports = function registerPlagueCityQuest(api) {
-  const { Skill, Equipment, ItemIdentifiers, NpcIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { Skill, Equipment, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const EDMOND_NPC_ID = NpcIdentifiers.EDMOND_2; // 4256
   const ALRENA_NPC_IDS = new Set([
@@ -77,6 +76,18 @@ module.exports = function registerPlagueCityQuest(api) {
 
   const START_HOOK = "quest:plague-city:start";
   const COMPLETE_ACTION_ID = "aGVmkR";
+
+  const MUD_MULTILOC_ID = 2532; // cache plaguemudpatch2, varbit 1785
+  const GRILL_MULTILOC_ID = 11422; // cache plague_grill, varbit 1787
+  const HOUSE_DOOR_MULTILOC_ID = 37321; // cache plagueelenadoorshut
+  const GRILL_CHECKED_ATTRIBUTE = "plague-city:grill-checked";
+  const CELL_UNLOCKED_ATTRIBUTE = "plague-city:cell-unlocked";
+  const CURE_GIVEN_ATTRIBUTE = "plague-city:cure-given";
+  const VARBIT_DUG_HOLE = 1785;
+  const VARBIT_CHECKED_GRILL = 1786;
+  const VARBIT_PIPE = 1787;
+
+  const pendingDoors = new WeakMap();
 
   let quest;
 
@@ -163,6 +174,7 @@ module.exports = function registerPlagueCityQuest(api) {
   }
 
   function alrenaVariant(stage, player) {
+    if (stage < STAGE_FIND_DWELLBERRIES) return null;
     if (stage >= STAGE_FREED_ELENA) return "after-freeing-elena-talking-to-alrena-after-freeing-elena";
     if (stage >= STAGE_SHOWN_PICTURE) return "entering-west-ardougne-talking-to-alrena-after-jethick-asks-for-elena-s-picture";
     if (stage >= STAGE_PIPE_OPEN) return "entering-west-ardougne-talking-to-alrena-after-unlocking-west-ardougne";
@@ -171,8 +183,6 @@ module.exports = function registerPlagueCityQuest(api) {
     if (stage >= STAGE_SOFTEN_MUD) return "starting-the-quest-talking-to-alrena-before-pouring-water-on-the-mud-patch";
     if (stage === STAGE_GAS_MASK) return "starting-the-quest-talking-to-alrena-after-getting-the-gas-mask";
     if (held(player, DWELLBERRIES_ITEM_ID)) {
-      player.getInventory().deleteNumber(DWELLBERRIES_ITEM_ID, 1);
-      quest.setStage(player, STAGE_GAS_MASK);
       return "starting-the-quest-talking-to-alrena-after-getting-dwellberries";
     }
     return "starting-the-quest-talking-to-alrena-before-getting-dwellberries";
@@ -203,7 +213,10 @@ module.exports = function registerPlagueCityQuest(api) {
 
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
-    if (npcId === EDMOND_NPC_ID) return edmondVariant(stage);
+    if (npcId === EDMOND_NPC_ID) {
+      if (stage === STAGE_TUNNEL_OPEN && player.getAttribute(GRILL_CHECKED_ATTRIBUTE)) return "starting-the-quest-talking-to-edmond-after-trying-to-pull-the-grill";
+      return edmondVariant(stage);
+    }
     if (ALRENA_NPC_IDS.has(npcId)) return alrenaVariant(stage, player);
     if (JETHICK_NPC_IDS.has(npcId)) return jethickVariant(stage, player);
     if (npcId === TED_REHNISON_NPC_ID) {
@@ -238,7 +251,6 @@ module.exports = function registerPlagueCityQuest(api) {
         return "finding-elena-talking-to-the-clerk-after-getting-permission-to-speak-to-bravek";
       }
       if (stage === STAGE_NEED_CLEARANCE) {
-        quest.setStage(player, STAGE_CLERK_PERMISSION);
         return "finding-elena-talking-to-the-clerk-before-getting-permission-to-speak-to-bravek";
       }
       return "entering-west-ardougne-talking-to-main-clerk-in-west-ardougne";
@@ -246,10 +258,8 @@ module.exports = function registerPlagueCityQuest(api) {
     if (BRAVEK_NPC_IDS.has(npcId)) {
       if (stage >= STAGE_HAVE_WARRANT) return "finding-elena-talking-to-bravek-after-receiving-the-warrant";
       if (stage === STAGE_NEED_HANGOVER_CURE) {
+        if (player.getAttribute(CURE_GIVEN_ATTRIBUTE)) return "finding-elena-talking-to-bravek-before-getting-the-warrant";
         if (held(player, HANGOVER_CURE_ITEM_ID)) {
-          player.getInventory().deleteNumber(HANGOVER_CURE_ITEM_ID, 1);
-          if (!held(player, WARRANT_ITEM_ID)) player.getInventory().adds(WARRANT_ITEM_ID, 1);
-          quest.setStage(player, STAGE_HAVE_WARRANT);
           return "finding-elena-talking-to-bravek-after-getting-the-hangover-cure";
         }
         return "finding-elena-talking-to-bravek-talking-to-bravek-again-before-getting-the-hangover-cure";
@@ -261,11 +271,11 @@ module.exports = function registerPlagueCityQuest(api) {
       return "finding-elena-attempting-to-open-the-door-to-bravek-before-the-clerk-lets-you-in";
     }
     if (ELENA_NPC_IDS.has(npcId)) {
-      if (stage === STAGE_HAVE_WARRANT) {
+      if (stage === STAGE_HAVE_WARRANT && player.getAttribute(CELL_UNLOCKED_ATTRIBUTE)) {
         quest.setStage(player, STAGE_FREED_ELENA);
         return "freeing-elena-talking-to-elena-after-unlocking-the-basement-door";
       }
-      if (stage < STAGE_HAVE_WARRANT) return null;
+      if (stage < STAGE_FREED_ELENA) return null;
       return "freeing-elena-talking-to-elena-after-unlocking-the-basement-door";
     }
     return null;
@@ -275,9 +285,9 @@ module.exports = function registerPlagueCityQuest(api) {
     if (![ALRENA_NPC_IDS, JETHICK_NPC_IDS, CLERK_NPC_IDS, BRAVEK_NPC_IDS, ELENA_NPC_IDS].some(ids => ids.has(npcId)) && ![EDMOND_NPC_ID, TED_REHNISON_NPC_ID, MARTHA_REHNISON_NPC_ID, MILLI_REHNISON_NPC_ID].includes(npcId)) return null;
     const value = String(text).toLowerCase();
     const inventory = player.getInventory();
-    if (value.includes("already has the gas mask")) return held(player, GAS_MASK_ITEM_ID);
+    if (value.includes("already has the gas mask")) return held(player, GAS_MASK_ITEM_ID) || wearingGasMask(player);
     if (value.includes("does not have the gas mask") || value.includes("does not have a gas mask")) {
-      return !held(player, GAS_MASK_ITEM_ID);
+      return !held(player, GAS_MASK_ITEM_ID) && !wearingGasMask(player);
     }
     if (value.includes("has a gas mask")) return held(player, GAS_MASK_ITEM_ID);
     if (value.includes("has no inventory space")) return inventory.isFull();
@@ -298,9 +308,34 @@ module.exports = function registerPlagueCityQuest(api) {
   }
 
   function handleAction({ player, npcId, stepId }) {
+    const stage = quest.getStage(player);
+    const inventory = player.getInventory();
+    if (ALRENA_NPC_IDS.has(npcId) && stepId === "Br9tOd" && stage === STAGE_FIND_DWELLBERRIES && held(player, DWELLBERRIES_ITEM_ID)) {
+      inventory.deleteNumber(DWELLBERRIES_ITEM_ID, 1);
+      inventory.adds(GAS_MASK_ITEM_ID, 1);
+      quest.setStage(player, STAGE_GAS_MASK);
+    }
+    if (ALRENA_NPC_IDS.has(npcId) && stepId === "jG6mG3" && stage >= STAGE_GAS_MASK && !held(player, GAS_MASK_ITEM_ID) && !wearingGasMask(player) && inventory.getFreeSlots() > 0) inventory.adds(GAS_MASK_ITEM_ID, 1);
+    if (npcId === EDMOND_NPC_ID && stepId === "oCU2uO" && stage === STAGE_ROPE_TIED) quest.setStage(player, STAGE_PIPE_OPEN);
+    if (npcId === TED_REHNISON_NPC_ID && stepId === "zQse1w" && stage === STAGE_SHOWN_PICTURE && held(player, ItemIdentifiers.BOOK_2)) {
+      inventory.deleteNumber(ItemIdentifiers.BOOK_2, 1);
+      quest.setStage(player, STAGE_RETURNED_BOOK);
+      openPendingDoor(player);
+    }
+    if (BRAVEK_NPC_IDS.has(npcId) && ["nxSgWb", "sY8emd"].includes(stepId) && stage === STAGE_NEED_HANGOVER_CURE && !held(player, ItemIdentifiers.A_SCRUFFY_NOTE) && inventory.getFreeSlots() > 0) inventory.adds(ItemIdentifiers.A_SCRUFFY_NOTE, 1);
+    if (BRAVEK_NPC_IDS.has(npcId) && stepId === "Z2OftI" && stage === STAGE_NEED_HANGOVER_CURE && held(player, HANGOVER_CURE_ITEM_ID)) {
+      inventory.deleteNumber(HANGOVER_CURE_ITEM_ID, 1);
+      player.setAttribute(CURE_GIVEN_ATTRIBUTE, true);
+    }
+    if (BRAVEK_NPC_IDS.has(npcId) && stepId === "Pn2ogc" && stage === STAGE_NEED_HANGOVER_CURE && player.getAttribute(CURE_GIVEN_ATTRIBUTE) && inventory.getFreeSlots() > 0) {
+      inventory.adds(WARRANT_ITEM_ID, 1);
+      quest.setStage(player, STAGE_HAVE_WARRANT);
+    }
+    if (stepId === "LILHam" && stage === STAGE_SPOKE_TO_MILLI) quest.setStage(player, STAGE_NEED_CLEARANCE);
     // "Jethick gives you a book." - he has shown the player Elena's picture.
     if (JETHICK_NPC_IDS.has(npcId) && stepId === "_dk_wV") {
-      if (!held(player, ItemIdentifiers.BOOK_2)) player.getInventory().adds(ItemIdentifiers.BOOK_2, 1);
+      if (stage !== STAGE_PIPE_OPEN || !held(player, ItemIdentifiers.PICTURE) || inventory.getFreeSlots() < 1) return;
+      if (!held(player, ItemIdentifiers.BOOK_2)) inventory.adds(ItemIdentifiers.BOOK_2, 1);
       quest.setStage(player, STAGE_SHOWN_PICTURE);
       return;
     }
@@ -311,12 +346,130 @@ module.exports = function registerPlagueCityQuest(api) {
     }
   }
 
+  function openPendingDoor(player) {
+    const object = pendingDoors.get(player);
+    pendingDoors.delete(player);
+    if (object && player.getLocation().getDistance(object.getLocation()) <= 2) api.emitCustomEvent("door:open", { player, object, handled: false });
+  }
+
+  function handleDoor(event) {
+    const { player, object, objectId, location } = event;
+    const stage = quest.getStage(player);
+    if (objectId === ObjectIdentifiers.DOOR_80 && location.x === 2530 && location.y === 3314 && location.z === 0 && stage < STAGE_CLERK_PERMISSION) {
+      event.handled = true;
+      startTranscript(api, player, NpcIdentifiers.BRAVEK, "Plague City", "finding-elena-attempting-to-open-the-door-to-bravek-before-the-clerk-lets-you-in");
+      return;
+    }
+    if (objectId === ObjectIdentifiers.DOOR_85 && location.x === 2531 && location.y === 3328 && location.z === 0) {
+      if (stage >= STAGE_RETURNED_BOOK) return;
+      event.handled = true;
+      if (stage === STAGE_SHOWN_PICTURE && held(player, ItemIdentifiers.BOOK_2)) {
+        pendingDoors.set(player, object);
+        startTranscript(api, player, TED_REHNISON_NPC_ID, "Plague City", "finding-elena-returning-the-book-to-ted-rehnison");
+      } else startTranscript(api, player, TED_REHNISON_NPC_ID, "Plague City", "entering-west-ardougne-talking-to-ted-rehnison-before-getting-the-book-from-jethick");
+      return;
+    }
+    if (objectId === HOUSE_DOOR_MULTILOC_ID && [2533, 2540].includes(location.x) && [3272, 3273].includes(location.y) && location.z === 0) {
+      if (stage >= STAGE_HAVE_WARRANT) return;
+      event.handled = true;
+      const variant = stage === STAGE_SPOKE_TO_MILLI
+        ? "finding-elena-attempting-to-enter-the-plague-house-elena-is-in-first-attempt-after-talking-to-milli-rehnison"
+        : "finding-elena-attempting-to-enter-the-plague-house-elena-is-in-attempting-before-talking-to-milli-rehnison-and-subsequent-attempts";
+      startTranscript(api, player, NpcIdentifiers.MOURNER, "Plague City", variant);
+      return;
+    }
+    if (objectId === ObjectIdentifiers.DOOR_78 && location.x === 2539 && location.y === 9672 && location.z === 0) {
+      if (stage >= STAGE_HAVE_WARRANT && (player.getAttribute(CELL_UNLOCKED_ATTRIBUTE) || held(player, ItemIdentifiers.A_SMALL_KEY))) {
+        if (!player.getAttribute(CELL_UNLOCKED_ATTRIBUTE)) player.sendMessage("You unlock the door.");
+        player.setAttribute(CELL_UNLOCKED_ATTRIBUTE, true);
+      } else {
+        event.handled = true;
+        startTranscript(api, player, NpcIdentifiers.ELENA_2, "Plague City", "freeing-elena-attempting-to-open-the-basement-door-of-the-plague-house-without-the-key");
+      }
+    }
+  }
+
+  function useCure(event) {
+    if (!BRAVEK_NPC_IDS.has(event.npcId) || event.itemId !== HANGOVER_CURE_ITEM_ID || quest.getStage(event.player) !== STAGE_NEED_HANGOVER_CURE || !held(event.player, HANGOVER_CURE_ITEM_ID)) return;
+    event.handled = true;
+    startTranscript(api, event.player, event.npcId, "Plague City", "finding-elena-talking-to-bravek-after-getting-the-hangover-cure");
+  }
+
+  function openGrill(event) {
+    if (![GRILL_MULTILOC_ID, ObjectIdentifiers.GRILL_4].includes(event.objectId) || event.location.x !== 2514 || event.location.y !== 9739 || event.location.z !== 0) return false;
+    if (quest.getStage(event.player) === STAGE_TUNNEL_OPEN) {
+      event.player.setAttribute(GRILL_CHECKED_ATTRIBUTE, true);
+      event.player.getPacketSender().sendVarbit(VARBIT_CHECKED_GRILL, 1);
+    }
+    event.player.sendMessage("The grill is too secure. You can't pull it off alone.");
+    return true;
+  }
+
+  function cupboard(event) {
+    if (![ObjectIdentifiers.CUPBOARD_16, ObjectIdentifiers.CUPBOARD_17].includes(event.objectId) || event.location.x !== 2574 || event.location.y !== 3334 || event.location.z !== 0) return false;
+    const { player, object } = event;
+    if (event.option === "search") {
+      if (quest.getStage(player) < STAGE_GAS_MASK) return false;
+      startTranscript(api, player, NpcIdentifiers.ALRENA, "Plague City", "starting-the-quest-searching-the-cupboard");
+    } else {
+      const id = event.option === "close" ? ObjectIdentifiers.CUPBOARD_16 : ObjectIdentifiers.CUPBOARD_17;
+      api.core.ObjectManager.deregister(object, true);
+      api.core.ObjectManager.register(new api.core.GameObject(id, object.getLocation().clone(), object.getType(), object.getFace()), true);
+    }
+    return true;
+  }
+
+  function searchBarrel(event) {
+    if (event.objectId !== ObjectIdentifiers.BARREL_11 || event.location.x !== 2534 || event.location.y !== 3268 || event.location.z !== 0) return false;
+    const { player } = event;
+    const inventory = player.getInventory();
+    if (quest.getStage(player) === STAGE_HAVE_WARRANT && !held(player, ItemIdentifiers.A_SMALL_KEY) && inventory.getFreeSlots() > 0) {
+      inventory.adds(ItemIdentifiers.A_SMALL_KEY, 1);
+      player.sendMessage("You find a small key in the barrel.");
+    }
+    return true;
+  }
+
+  function handleItemOnObject(event) {
+    const { player, objectId, itemId, location } = event;
+    if (itemId === ItemIdentifiers.BUCKET_OF_WATER && [MUD_MULTILOC_ID, ObjectIdentifiers.MUD_PATCH_2, ObjectIdentifiers.MUD_PATCH_3].includes(objectId) && location.x === 2566 && location.y >= 3331 && location.y <= 3333 && location.z === 0) {
+      event.handled = true;
+      const stage = quest.getStage(player);
+      if (stage < STAGE_SOFTEN_MUD) {
+        player.sendMessage("You see no reason to do that at the moment.");
+      } else if (stage < STAGE_WATER_4 && held(player, ItemIdentifiers.BUCKET_OF_WATER)) {
+        player.getInventory().deleteNumber(ItemIdentifiers.BUCKET_OF_WATER, 1);
+        player.getInventory().adds(ItemIdentifiers.BUCKET, 1);
+        quest.setStage(player, stage + 1);
+        player.sendMessage(stage + 1 === STAGE_WATER_4 ? "You pour water onto the soil. The soil is now soft enough to dig into." : "You pour water onto the soil. The soil softens slightly.");
+      }
+    }
+    if (itemId === ItemIdentifiers.ROPE && [GRILL_MULTILOC_ID, ObjectIdentifiers.GRILL_4].includes(objectId) && location.x === 2514 && location.y === 9739 && location.z === 0 && quest.getStage(player) === STAGE_TUNNEL_OPEN) {
+      event.handled = true;
+      if (!player.getAttribute(GRILL_CHECKED_ATTRIBUTE)) {
+        startTranscript(api, player, EDMOND_NPC_ID, "Plague City", "starting-the-quest-interacting-with-the-pipe-using-rope-on-the-grill-before-trying-to-open-it-first");
+      } else if (held(player, ItemIdentifiers.ROPE)) {
+        player.getInventory().deleteNumber(ItemIdentifiers.ROPE, 1);
+        quest.setStage(player, STAGE_ROPE_TIED);
+        player.sendMessage("You tie the end of the rope to the sewer pipe's grill.");
+      }
+    }
+    if (itemId === ItemIdentifiers.A_SMALL_KEY && objectId === ObjectIdentifiers.DOOR_78 && location.x === 2539 && location.y === 9672 && location.z === 0 && held(player, ItemIdentifiers.A_SMALL_KEY) && quest.getStage(player) >= STAGE_HAVE_WARRANT) {
+      event.handled = true;
+      player.setAttribute(CELL_UNLOCKED_ATTRIBUTE, true);
+      player.sendMessage("You unlock the door.");
+      api.emitCustomEvent("door:open", { player, object: event.object, handled: false });
+    }
+  }
+
   /**
    * Wiki (Ardougne teleport scroll): "If a player loses this scroll, they can go back to Edmond." His after-quest
    * transcript ("Do you have any more of those scrolls?" / "Yes, here you go.") has no item step, so the line gives it.
    */
   function handleLine(event) {
     const { player, npcId, text } = event;
+    if (CLERK_NPC_IDS.has(npcId) && text === "I suppose they can come in then. If they keep it short." && quest.getStage(player) === STAGE_NEED_CLEARANCE) quest.setStage(player, STAGE_CLERK_PERMISSION);
+    if (npcId === EDMOND_NPC_ID && text === "I've already tried digging down to them but the soil is rock hard. You'll need to pour on several buckets of water to soften it up. I reckon four buckets should do it." && quest.getStage(player) === STAGE_GAS_MASK) quest.setStage(player, STAGE_SOFTEN_MUD);
     if (npcId !== EDMOND_NPC_ID || text !== "Yes, here you go." || !quest.isComplete(player)) return;
     if (held(player, ARDOUGNE_SCROLL_ITEM_ID)) return;
     const inventory = player.getInventory();
@@ -348,7 +501,17 @@ module.exports = function registerPlagueCityQuest(api) {
     }
   }
 
+  function syncObjects({ player, key }) {
+    if (key !== undefined && key !== "plague_city") return;
+    const stage = quest.getStage(player);
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_DUG_HOLE, stage >= STAGE_TUNNEL_OPEN ? 1 : 0);
+    sender.sendVarbit(VARBIT_CHECKED_GRILL, player.getAttribute(GRILL_CHECKED_ATTRIBUTE) ? 1 : 0);
+    sender.sendVarbit(VARBIT_PIPE, stage >= STAGE_PIPE_OPEN ? 2 : stage >= STAGE_ROPE_TIED ? 1 : 0);
+  }
+
   function handleLogin({ player }) {
+    syncObjects({ player });
     refreshQuestList(player);
   }
 
@@ -389,6 +552,16 @@ module.exports = function registerPlagueCityQuest(api) {
     onReward: grantReward,
   });
 
+  api.persistAttribute(GRILL_CHECKED_ATTRIBUTE, false);
+  api.persistAttribute(CELL_UNLOCKED_ATTRIBUTE, false);
+  api.persistAttribute(CURE_GIVEN_ATTRIBUTE, false);
+  api.onCustomEvent("quest:stage-changed", syncObjects);
+  api.onCustomEvent("door:toggle", handleDoor);
+  api.onObjectInteraction("Grill", { Open: openGrill });
+  api.onObjectInteraction("Cupboard", { Open: cupboard, Close: cupboard, Search: cupboard });
+  api.onObjectInteraction("Barrel", { Search: searchBarrel });
+  api.onItemOnObject(handleItemOnObject);
+  api.onItemOnNpc(useCure);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);

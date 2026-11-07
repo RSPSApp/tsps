@@ -3842,7 +3842,8 @@
       "object": [53234,53236],
       "at": [[2832,3248,0],[2832,3251,0]],
       "level": 84,
-      "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
+      "levelMessage": {"itembox": {"item": 6517, "text": "You need an Agility level of at least 84 to climb up these rocks."}},
+      "unverified": "the reverse direction (only one direction was captured; it mirrors that one); the top rock's refusal (only the bottom rock was clicked below 84)",
       "between": {
         "ends": [[2832,3247,0],[2832,3252,0]],
         "cross": [
@@ -3851,7 +3852,7 @@
           {"anim":-1}
         ]
       },
-      "note": "rsprox captures 362"
+      "note": "rsprox captures 362; the refusal from 20261106T101002 (revision 242) tick 3375, item agility_climb 6517"
     },
     {
       "name": "Crevice (Deepfin Mine)",

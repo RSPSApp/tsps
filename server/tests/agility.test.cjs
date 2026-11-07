@@ -946,6 +946,27 @@ test("an obstacle above the player's level is refused without moving them", () =
   assert.equal(player.state.xp, 0);
 });
 
+test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as captured (rev242 tick 3375)", () => {
+  const ItemStatementDialogue = PluginManager.getCoreApi().ItemStatementDialogue;
+  const text = "You need an Agility level of at least 84 to climb up these rocks.";
+  const player = createPlayer(2832, 3247, 0, 1);
+  const shown = [];
+  player.getDialogueManager = () => ({ startDialogues: (chain) => shown.push(...chain.getDialogues().values()) });
+  operate(player, 53234, [2832, 3248, 0]);
+  assert.deepEqual(tileOf(player), [2832, 3247, 0], "refused: not moved");
+  assert.equal(shown.length, 1);
+  assert.ok(shown[0] instanceof ItemStatementDialogue);
+  assert.equal(shown[0].getItemId(), 6517);
+  assert.equal(shown[0].getText(), text);
+  // Only the message box's chat log line (mesbox channel), not a second generic game message.
+  assert.deepEqual(player.state.messages, [text]);
+
+  const able = createPlayer(2832, 3247, 0, 84);
+  operate(able, 53234, [2832, 3248, 0]);
+  for (let i = 0; i < 10; i++) tick();
+  assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
+});
+
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
   const obstacles = [
     { index: 2, object: ObjectIds.CLOTHES_LINE, start: [3214, 3414, 3], tile: [3213, 3414, 3], xp: 23 },

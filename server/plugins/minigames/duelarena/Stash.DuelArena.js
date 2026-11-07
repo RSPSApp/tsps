@@ -72,13 +72,48 @@ function save(player, exit) {
     special: player.getSpecialPercentage(),
     run: player.getRunEnergy(),
     autocast: player.getCombat().getAutocastSpell?.() ?? null,
+    timers: timersOf(player),
     attributes: characterAttributes(player),
     exit: exit ?? Common.data.arena.sides[0].exits[0],
   });
   clear(player);
+  stopTimers(player);
   for (const key of characterKeys()) player.setAttribute(key, Common.data.characterAttributes[key]);
   player.setHasVengeance(false);
   return true;
+}
+
+/**
+ * The player's own Tele Block, antifire and poison/venom protection are put aside with the character, and the fight's
+ * stopped when it ends: a Tele Block cast in the arena (no Wilderness there) or an arena anti-venom never leaves it.
+ */
+function timersOf(player) {
+  const combat = player.getCombat();
+  return {
+    teleblock: combat.getTeleblockTimer().secondsRemaining(),
+    fire: combat.getFireImmunityTimer().secondsRemaining(),
+    poison: combat.getPoisonClock().finished() ? null : combat.getPoisonClock().snapshot(),
+  };
+}
+
+function stopTimers(player) {
+  const combat = player.getCombat();
+  combat.getTeleblockTimer().stop();
+  combat.getFireImmunityTimer().stop();
+  combat.getPoisonClock().stop();
+  player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
+}
+
+function restoreTimers(player, timers) {
+  stopTimers(player);
+  if (!timers) return;
+  const combat = player.getCombat();
+  if (timers.teleblock > 0) {
+    combat.getTeleblockTimer().start(timers.teleblock);
+    player.getPacketSender().sendEffectTimer?.(timers.teleblock, Common.core.EffectTimer?.TELE_BLOCK);
+  }
+  if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
+  if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 
 function itemOf([id, amount, meta]) {
@@ -116,6 +151,7 @@ function restore(player) {
   player.setRunEnergy(stash.run ?? 100);
   for (const [key, value] of Object.entries(stash.attributes)) player.setAttribute(key, value);
   player.setHasVengeance(false);
+  restoreTimers(player, stash.timers);
   player.getCombat().setAutocastSpell(stash.autocast);
   WeaponInterfaceManager.assign(player);
   BonusManager.update(player);
@@ -144,6 +180,10 @@ function snapshot({ player, save: playerSave }) {
   playerSave.setSpecPercentage(stash.special ?? 100);
   playerSave.setRunEnergy(stash.run ?? 100);
   playerSave.setHasVengeance(false);
+  // The player's own timers, not the fight's.
+  playerSave.teleblockTimer = stash.timers?.teleblock ?? 0;
+  playerSave.fireImmunityTimer = stash.timers?.fire ?? 0;
+  playerSave.poisonClock = stash.timers?.poison ?? undefined;
   playerSave.autocastSpellId = stash.autocast?.spellId?.() ?? -1;
   playerSave.setPosition(new Location(stash.exit[0], stash.exit[1], 0));
   const attributes = { ...(playerSave.attributes ?? {}) };

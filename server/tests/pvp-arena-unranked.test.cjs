@@ -324,6 +324,20 @@ test('a load-out\'s charged items come full: the Max/Med toxic staff has its sca
   Stash.restore(a);
 });
 
+test("a Tele Block or antifire from the fight stays in the arena; the player's own come back", (t) => {
+  const a = realPlayer(t, 'Alpha');
+  const combat = a.getCombat();
+  combat.getFireImmunityTimer().start(300); // their own antifire, from before the fight
+  Stash.save(a);
+  assert.equal(combat.getFireImmunityTimer().secondsRemaining(), 0, 'the fight starts without it');
+  combat.getTeleblockTimer().start(300); // teleblocked in the arena (no Wilderness check there)
+  combat.getFireImmunityTimer().start(360); // an arena antifire
+  Stash.restore(a);
+  assert.equal(combat.getTeleblockTimer().secondsRemaining(), 0, "the arena's Tele Block stays behind");
+  const fire = combat.getFireImmunityTimer().secondsRemaining();
+  assert.ok(fire > 290 && fire <= 300, `their own antifire back (${fire}s)`);
+});
+
 test('a save taken mid-fight writes their own character in the Emir\'s Arena, never the arena\'s', (t) => {
   const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
   const [a, b] = toLoadouts(t, 1);

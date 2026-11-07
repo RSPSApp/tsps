@@ -386,3 +386,14 @@ test('native plain mining: an outside-range approach settles before starting and
   assert.equal(oreTotal(),1,'ordinary approach must retain one owned copper ore: '+state());
   assert.equal(f.p.getInventory().getAmount(ids.BRONZE_PICKAXE),1);
 });
+
+test('below 50 Agility a carried crystal pickaxe keeps its charges while the rune pickaxe mines',async t=>{
+  const f=actor(t);const skills=f.p.getSkillManager();
+  skills.setCurrentLevel(core.Skill.MINING,99);skills.setMaxLevel(core.Skill.MINING,99);skills.setCurrentLevel(core.Skill.AGILITY,49);
+  const crystal=new core.Item(core.ItemIdentifiers.CRYSTAL_PICKAXE);crystal.setMetaValue('crystal-pickaxe',{charges:100});
+  f.p.getInventory().add(crystal,true);f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RUNE_PICKAXE),true);
+  const xp=skills.getExperience(core.Skill.MINING);
+  await mineOnce(t,f);
+  assert.ok(skills.getExperience(core.Skill.MINING)>xp,'the rune pickaxe mined');
+  assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers.CRYSTAL_PICKAXE).getMetaValue('crystal-pickaxe').charges,100,'no crystal charge spent');
+});

@@ -835,7 +835,9 @@ class MiningTask extends Task {
         if (state.rock.gameMessage) player.sendMessage(line);
         else spam(player, line);
       }
-      CrystalPickaxe.tryUseCharge(player);
+      // Only a charged crystal pickaxe mining spends a charge: one carried beside the pickaxe in use (a rune pickaxe
+      // below the crystal's 50 Agility) is left alone.
+      if (state.pickaxe?.id === ItemIds.CRYSTAL_PICKAXE) CrystalPickaxe.tryUseCharge(player);
       player.getSkillManager().addExperiences(Skill.MINING, outcome?.xp ?? state.rock.xp);
       // OSRS gives a winning pet the last backpack slot before the resource.
       // Storage and XP retain their order; ordinary success consumers run after delivery.

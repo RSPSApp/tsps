@@ -140,7 +140,7 @@ function catchNpc({ player, npc, npcId }) {
     if (!exchange(player, inputs, outputs)) return;
     xp(player, def.xp, "butterfly", npcId);
     if (!jarred) freed(player, def);
-    player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature barehanded and release it.");
+    player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature in your net and release it.");
   });
   return true;
 }

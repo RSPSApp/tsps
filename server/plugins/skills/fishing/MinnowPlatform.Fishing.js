@@ -211,6 +211,8 @@ function leavePlatform({ player }) {
 
 // --- Kylie's minnow exchange: 40 minnows for one noted raw shark (Wiki: Kylie Minnow) ---
 
+const NO_SHARK_ROOM_TEXT = "I can't trade you any sharks while you don't have any space for them!";
+
 function exchangeMinnows(player) {
   const { ItemIdentifiers: I, NpcIdentifiers: N, ItemDefinition, Item } = core;
   const affordable = Math.floor(minnows(player) / MINNOWS_PER_SHARK);
@@ -219,13 +221,18 @@ function exchangeMinnows(player) {
   }
   const notedShark = ItemDefinition.forId(I.RAW_SHARK).getNoteId();
   if (player.getInventory().getFreeSlots() === 0 && !player.getInventory().contains(notedShark)) {
-    return sayAsKylie(player, N.KYLIE_MINNOW_2, [{ npc: "I can't trade you any sharks while you don't have any space for them!" }]);
+    return sayAsKylie(player, N.KYLIE_MINNOW_2, [{ npc: NO_SHARK_ROOM_TEXT }]);
   }
   player.getPacketSender().sendInterfaceRemoval();
   player.setEnteredAmountAction({
     execute: (amount) => {
       const sharks = Math.min(Math.floor(Number(amount)), Math.floor(minnows(player) / MINNOWS_PER_SHARK));
       if (!(sharks > 0)) return;
+      // Room was asked before the prompt; gear taken off while it is open can fill the last slot.
+      if (player.getInventory().getFreeSlots() === 0 && !player.getInventory().contains(notedShark)) {
+        player.sendMessage(NO_SHARK_ROOM_TEXT);
+        return;
+      }
       player.getInventory().deleteNumber(I.MINNOW, sharks * MINNOWS_PER_SHARK);
       player.getInventory().addItem(new Item(notedShark, sharks));
     },

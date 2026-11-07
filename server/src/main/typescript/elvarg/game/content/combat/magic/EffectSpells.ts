@@ -38,7 +38,10 @@ export class EffectSpells extends Spell {
                     player.sendMessage("You do not have any bones in your inventory.");
                     return true;
                 }
-                player.getInventory().deleteItemSet(spell.itemsToConsume(player));
+                // Pays the runes as they were counted: the inventory and any rune source (rune pouch), as Vengeance.
+                if (!spell.canCast(player, true)) {
+                    return true;
+                }
                 let i = 0;
                 player.getInventory().getValidItems().forEach(invItem => {
                     if (invItem.getId() == 526) {

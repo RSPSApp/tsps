@@ -92,8 +92,12 @@ let core;
 let candleShopId = null;
 
 const pending = new WeakMap();
-/** Chest relock: the Wiki's 90 seconds, kept per player to stop repeat loot. */
-const chestLooted = new WeakMap();
+/**
+ * Chest relock: the Wiki's 90 seconds, kept per account (by username) to stop repeat loot. Keyed by the
+ * name, not the Player object, so logging out and back in does not reset it.
+ */
+const chestLooted = new Map();
+const chestKey = (player) => String(player.getUsername?.() ?? "").toLowerCase();
 const CHEST_RELOCK_MS = 90_000;
 
 function state(player) {
@@ -362,7 +366,9 @@ function hemensterChest(event) {
   const at = event.object?.getLocation?.();
   if (!at || at.getX() !== HEMENSTER_CHEST.x || at.getY() !== HEMENSTER_CHEST.y || at.getZ() !== HEMENSTER_CHEST.z) return false;
   // ponytail: per-player relock, not a shared object timer; enough to stop repeat loot here.
-  if (Date.now() < (chestLooted.get(player) ?? 0)) {
+  const relock = chestLooted.get(chestKey(player));
+  if (relock !== undefined && Date.now() >= relock) chestLooted.delete(chestKey(player));
+  if (Date.now() < (relock ?? 0)) {
     player.sendMessage("The chest is empty.");
     return true;
   }
@@ -385,7 +391,10 @@ function hemensterChest(event) {
   inventory.adds(core.ItemIdentifiers.STEEL_ARROWTIPS, 5);
   inventory.adds(core.ItemIdentifiers.COINS, 20);
   player.getSkillManager().addExperiences(core.Skill.THIEVING, 150);
-  chestLooted.set(player, Date.now() + CHEST_RELOCK_MS);
+  // Expired relocks of other accounts are dropped as new ones are set, so the map stays small.
+  const now = Date.now();
+  for (const [key, until] of chestLooted) if (until <= now) chestLooted.delete(key);
+  chestLooted.set(chestKey(player), now + CHEST_RELOCK_MS);
   credit(player, TASK.hemensterChest);
   return true;
 }

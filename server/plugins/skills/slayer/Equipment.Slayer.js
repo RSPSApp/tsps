@@ -16,7 +16,7 @@ let api = null;
 const HELMET = "Slayer helmet";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
-const thrallImmuneNames = new Set([...GEAR.immune.names, ...GEAR.thrallImmune]);
+const thrallImmuneNames = new Set(GEAR.thrallImmune);
 
 function init(pluginApi) {
   api = pluginApi;

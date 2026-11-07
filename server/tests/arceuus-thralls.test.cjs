@@ -78,6 +78,15 @@ test('a thrall deals no damage to a kurask, a turoth or a Vyrewatch Sentinel',t=
   }
 });
 
+// The superiors share the kurask's and turoth's weapon rule, but the Wiki lists no thrall immunity for them.
+test('a thrall still hits a King kurask and a Spiked Turoth',t=>{
+  for(const name of ['King kurask','Spiked Turoth']){
+    const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
+    ArceuusThralls.summon(f.p,10880,0,3,6);f.step(4);
+    assert.ok(f.shown.length>0&&f.shown[0]>0,name);assert.ok(f.target.hp<100,name);
+  }
+});
+
 // The immunity is content's: core only respects the cancel flag. The thrall still attacks, but no hit is queued (a max
 // hit of 0 would still queue and show a 0).
 test('a cancelled thrall attack still animates but queues no hit',t=>{

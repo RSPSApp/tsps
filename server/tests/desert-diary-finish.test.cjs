@@ -19,14 +19,16 @@ let core = null;
 let api = null;
 let ready = null;
 let Trophies = null;
+let hard = false;
 
 async function setup() {
   if (ready) return ready;
   ready = (async () => {
     await CachePipeline.initialize(path.resolve(__dirname, ".."));
     core = PluginManager.getCoreApi();
-    // Dream Mentor gives these Lunar spells (Wiki); the quest plugins are not loaded here.
-    PluginManager.createApi("DreamMentorDone").onCustomEvent("quest:is-complete", (q) => { if (q.key === "dream_mentor") q.complete = true; });
+    // Dream Mentor gives these Lunar spells, and the Jaldraocht altar's Ancients need Desert Treasure I (Wiki);
+    // the quest plugins are not loaded here.
+    PluginManager.createApi("DreamMentorDone").onCustomEvent("quest:is-complete", (q) => { if (q.key === "dream_mentor" || q.key === "desert_treasure_i") q.complete = true; });
     core.ObjectDefinition.init();
     core.RegionManager.init();
     api = PluginManager.createApi("DesertDiaryFinishTest");
@@ -60,6 +62,7 @@ function fakePlayer({ x = 3300, y = 3000, name = "desert-test" } = {}) {
     isPlayer: () => true,
     getPrivateArea: () => null,
     getPacketSender: () => ({
+      sendTypedMessage: (type, message) => messages.push(message),
       sendVarbit() {},
       sendTabInterface() {},
       sendInterfaceRemoval() {},
@@ -135,13 +138,63 @@ test("a Camulet rub teleports inside Enakhra's Temple, spends one shared charge 
   arrivals.length = 0;
   Camulet._test.onItemAction({ ...event, handled: false });
   assert.equal(arrivals.length, 0, "an empty Camulet cannot teleport");
-  assert.equal(player.messages.at(-1), "Your Camulet has no charges left.");
+  assert.equal(player.messages.at(-1), "You rub the amulet...", "rsprox 3021, 3160, 3165: the rub message comes first");
+  assert.equal(player.dialogues.at(-1).getDialogues?.()?.length ?? 1, 1, "the empty Camulet answers in a message box");
 
   player.setAttribute("quest.enakhras_lament.camulet-unlimited", 1);
   Camulet._test.setCharges(player, 0);
   Camulet._test.onItemAction({ ...event, handled: false });
   assert.deepEqual(arrivals, [[3105, 9315, 0]], "the upgraded Camulet teleports without spending a charge");
   assert.equal(Camulet._test.charges(player), 0);
+});
+
+test("a Camulet with the hard diary asks for the destination; Check-charge and ugthanki dung follow the live texts", async (t) => {
+  await setup();
+  const arrivals = [];
+  t.mock.method(core.TeleportHandler, "checkReqs", () => true);
+  t.mock.method(core.TeleportHandler, "teleport", (player, target, type, warn, onArrival) => {
+    arrivals.push([target.getX(), target.getY(), target.getZ()]);
+    onArrival?.();
+  });
+  const prompts = [];
+  const player = fakePlayer();
+  const originalPrompt = api.sendMultiChatboxPrompt;
+  api.sendMultiChatboxPrompt = (who, title, ...rest) => prompts.push({ title, rest });
+  const event = { player, item: new core.Item(core.ItemIdentifiers.CAMULET, 1), itemId: core.ItemIdentifiers.CAMULET, interfaceId: 0, option: "Rub", clickType: 4, handled: false };
+
+  Camulet._test.onItemAction(event);
+  assert.equal(prompts.length, 0, "without the hard diary the rub goes straight to the temple");
+  assert.deepEqual(arrivals, [[3105, 9315, 0]]);
+
+  api.onCustomEvent("diary:is-complete", (query) => { if (query.tier === "hard" && query.diary === "desert" && hard) query.complete = true; });
+  hard = true;
+  arrivals.length = 0;
+  Camulet._test.onItemAction({ ...event, handled: false });
+  assert.equal(arrivals.length, 0, "the prompt comes before any teleport");
+  assert.equal(prompts[0].title, "Where would you like to teleport to?");
+  assert.deepEqual(prompts[0].rest.filter((x) => typeof x === "string"), ["Enakhra's Temple.", "Enakhra's Temple Entrance.", "Nowhere."]);
+  prompts[0].rest[3]();
+  assert.deepEqual(arrivals, [[3191, 2924, 0]], "the entrance lands near the quarry");
+  assert.equal(done(player, "teleport-to-enakhra-s-temple-with-the-camulet"), true);
+
+  // Check-charge on an empty Camulet (rsprox 3021).
+  Camulet._test.setCharges(player, 0);
+  const check = { ...event, option: "Check-charge", handled: false };
+  Camulet._test.onItemAction(check);
+  assert.equal(check.handled, true);
+  assert.equal(player.messages.at(-1), "Your Camulet has no charges left.<br>You can recharge it by applying camel dung.");
+
+  // Wiki: a bucket of dung fully recharges and none is wasted on a full Camulet.
+  const slots = [new core.Item(core.ItemIdentifiers.UGTHANKI_DUNG, 1)];
+  player.getInventory = () => ({ setItem: (slot, item) => { slots[slot] = item; return { refreshItems() {} }; } });
+  const dung = { player, usedItemId: core.ItemIdentifiers.UGTHANKI_DUNG, usedItemSlot: 0, usedWithItemId: core.ItemIdentifiers.CAMULET, usedWithItemSlot: 1, handled: false };
+  Camulet._test.rechargeWithDung(dung);
+  assert.equal(Camulet._test.charges(player), 4);
+  assert.equal(slots[0].getId(), core.ItemIdentifiers.BUCKET, "the bucket comes back empty");
+  slots[0] = new core.Item(core.ItemIdentifiers.UGTHANKI_DUNG, 1);
+  Camulet._test.rechargeWithDung({ ...dung, handled: false });
+  assert.equal(slots[0].getId(), core.ItemIdentifiers.UGTHANKI_DUNG, "a full Camulet wastes no dung");
+  api.sendMultiChatboxPrompt = originalPrompt;
 });
 
 test("Humidify credits waterskins refilled in the desert, but not in a settlement or with another vessel", async () => {

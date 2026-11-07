@@ -123,6 +123,7 @@
     {"product": "3dosepotionofsaradomin", "level": 81, "xp": 180, "ticks": 2, "ingredients": [["toadflaxvial", 1], ["crushed_bird_nest", 1]], "message": "You mix the crushed bird nest into your potion."},
     {"product": "3dosesurge", "level": 81, "xp": 185, "ticks": 2, "ingredients": [["torstolvial", 1], ["demonic_tallow", 1]], "message": "You mix the tallow with a bit of your blood into the potion."},
     {"product": "unfinished_weapon_poison++", "level": 82, "xp": 0, "ticks": 2, "ingredients": [["vial_coconut_milk", 1], ["nightshade", 1]], "message": "You put the nightshade into the coconut milk."},
+    {"product": "unfinished_weapon_poison++", "level": 82, "xp": 0, "ticks": 2, "ingredients": [["vial_coconut_milk", 1], ["stackable_nightshade", 1]], "message": "You put the nightshade into the coconut milk."},
     {"product": "weapon_poison++", "level": 82, "xp": 190, "ticks": 2, "ingredients": [["unfinished_weapon_poison++", 1], ["poisonivy_berries", 1]], "message": "You mix the poison ivy berries into your potion."},
     {"product": "1dose2antidragon", "level": 84, "xp": 27.5, "ticks": 2, "ingredients": [["1dose1antidragon", 1], ["lava_shard", 1]], "message": "You mix {count} lava scale shards into your potion.", "upgrade": true},
     {"product": "2dose2antidragon", "level": 84, "xp": 55, "ticks": 2, "ingredients": [["2dose1antidragon", 1], ["lava_shard", 2]], "message": "You mix {count} lava scale shards into your potion.", "upgrade": true},

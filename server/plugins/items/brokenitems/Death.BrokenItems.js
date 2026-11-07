@@ -1,4 +1,5 @@
 "use strict";
+const { PlayerDeathTask } = require("../../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 
 /**
  * What a PvP death does to the breakable items it doesn't protect (Wiki: Items Kept on Death,
@@ -28,7 +29,8 @@ function wildernessLevel(player) {
 function dropCoins(event, amount) {
   if (amount <= 0 || !event.location) return;
   const { Item, ItemIdentifiers, ItemOnGroundManager } = Common.getCore();
-  ItemOnGroundManager.registerLocation(event.killer, new Item(ItemIdentifiers.COINS, amount), event.location);
+  const owner = PlayerDeathTask.lootOwner(event.player, event.killer);
+  ItemOnGroundManager.registerLocation(owner, new Item(ItemIdentifiers.COINS, amount), event.location);
 }
 
 function breakOnPvpDeath(event) {

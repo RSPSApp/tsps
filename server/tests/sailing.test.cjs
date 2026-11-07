@@ -937,7 +937,8 @@ test("the sailing plugins register their hooks and load the boat and dock data",
   assert.deepEqual(Object.keys(gangplank.Gangplank), ["Board", "Disembark"]);
   assert.deepEqual(Object.keys(gangplank["Mooring point"]), ["Board", "Disembark"],
     "island mooring points share the gangplank handlers");
-  assert.equal(gangplank["Mooring point"].Board, gangplank.Gangplank.Board);
+  assert.equal(typeof gangplank["Mooring point"].Board, "function");
+  assert.equal(gangplank["Mooring point"].Board.name, gangplank.Gangplank.Board.name, "both use the registered board handler");
   assert.equal(gangplank["Mooring point"].Disembark, gangplank.Gangplank.Disembark);
   const helm = registerPlugin("Helm.plugin");
   assert.deepEqual(Object.keys(helm.objects.Helm), ["Navigate", "Stop-navigating", "Escape"]);

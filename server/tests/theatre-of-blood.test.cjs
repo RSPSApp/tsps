@@ -149,12 +149,14 @@ function fakePlayer(name) {
     setRunEnergy() {},
     getDialogueManager: () => ({ startDialogues: (chain) => p.statements.push(chain) }),
     setEnteredAmountAction(action) { p.amountAction = action; },
+    interfaceId: -1,
+    getInterfaceId: () => p.interfaceId,
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
+        sendInterface: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
         sendSubInterface: (uid, id) => { p.subs.set(uid, id); return sender; },
         closeSubInterface: (uid) => { p.subs.delete(uid); return sender; },
         sendInterfaceRemoval: () => sender,
@@ -462,6 +464,21 @@ test('team size scales hitpoints down, rounding down as the Wiki\'s nylocas do',
     raid.scale(npc);
     assert.equal(npc.hp, expected, `${size} players`);
   }
+  raid.dispose();
+});
+
+test('the supplies sell only while open at the chest: a click with them closed buys nothing', () => {
+  const Supplies = require('../plugins/minigames/tob/Supplies.TheatreOfBlood');
+  const { raid, players: [solo] } = startRaid(['Remote']);
+  raid.member(solo).supplyPoints = 10;
+  const prayer = Supplies.STOCK[1];
+  const click = () => Supplies.clickSupply({ player: solo, slot: 1, opId: 2 });
+  click();
+  assert.equal(solo.inventory.getAmount(prayer.id), 0, 'no chest open: nothing bought');
+  assert.equal(raid.member(solo).supplyPoints, 10);
+  solo.interfaceId = Shared.INTERFACE.SUPPLIES;
+  click();
+  assert.equal(solo.inventory.getAmount(prayer.id), 1, 'open: bought');
   raid.dispose();
 });
 

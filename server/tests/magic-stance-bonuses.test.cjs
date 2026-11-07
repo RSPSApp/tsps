@@ -225,8 +225,11 @@ test('Mark of Darkness: 3 ticks per base Magic level (x5 with a purging staff), 
 test('Vile Vigour spends only the prayer that fills run energy; Death Charge restores once per cast (Wiki)', () => {
     const { ArceuusSpells } = require('../dist/game/content/combat/magic/ArceuusSpells');
     const { Spell } = require('../dist/game/content/combat/magic/Spell');
+    const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
     const canCast = Spell.prototype.canCast;
+    const getVarbitId = CacheDefinitions.getVarbitId;
     Spell.prototype.canCast = () => true;
+    CacheDefinitions.getVarbitId = () => null;
     try {
         const player = arceuusPlayer({ prayer: 50, energy: 80 });
         ArceuusSpells.handleSpell(player, 'Vile Vigour');
@@ -247,6 +250,7 @@ test('Vile Vigour spends only the prayer that fills run energy; Death Charge res
         assert.equal(killer.graphics.at(-1), 1855);
     } finally {
         Spell.prototype.canCast = canCast;
+        CacheDefinitions.getVarbitId = getVarbitId;
     }
 });
 

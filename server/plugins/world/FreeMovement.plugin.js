@@ -71,7 +71,11 @@ function input(core, { player, packet }) {
   const mobility = queue.getMobility();
   state.blocked = player.getHitpoints() <= 0 || !mobility.canMove() ||
     player.getForceMovement() != null || player.isNeedsPlacement();
-  if (!state.active && !state.blocked) {
+  if (state.blocked) {
+    cancel(core, player, state, location, true);
+    return;
+  }
+  if (!state.active) {
     queue.reset();
     queue.walkToReset();
     player.getCombat().reset();

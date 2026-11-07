@@ -112,3 +112,16 @@ test("the occult altar's choice of the book already in use needs no unlock", (t)
   assert.ok(!f.messages.includes("You need to complete Lunar Diplomacy to use that spellbook."), f.messages.join(" | "));
   assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
 });
+
+// The Jaldraocht altar's Ancients need Desert Treasure I too (core SpellbookLocks), refused before its Prayer drain.
+test("the Jaldraocht altar gives no Ancients before Desert Treasure I, and drains nothing", (t) => {
+  const f = wizard(t);
+  f.p.getSkillManager().setMaxLevels(core.Skill.PRAYER, 70, false).setCurrentLevel(core.Skill.PRAYER, 70, false);
+  Altars.handleJaldraochtAltar(f.p);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.NORMAL);
+  assert.ok(f.messages.includes("You need to complete Desert Treasure I to use that spellbook."), f.messages.join(" | "));
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 70, "no drain");
+  const done = wizard(t, { dt1: true });
+  Altars.handleJaldraochtAltar(done.p);
+  assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "after the quest it switches");
+});

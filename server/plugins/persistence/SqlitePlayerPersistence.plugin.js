@@ -72,9 +72,13 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     }
     /** Saves sent to the writer and not yet committed: username -> { seq, json }. Loads read these first. */
     this.unwritten = new Map();
+    /** Keys whose delete the writer hasn't committed: key -> seq. load/exists treat them as absent. */
+    this.deleted = new Map();
     /** Messages the writer hasn't answered, by seq, to resend if it dies. */
     this.inFlight = new Map();
     this.failedWrites = new Map();
+    /** Callers waiting for one message's answer: seq -> { resolve, reject } (see waitForWrite). */
+    this.writeWaiters = new Map();
     this.idleWaiters = [];
     this.sequence = 0;
     this.writerFailures = 0;
@@ -105,6 +109,8 @@ class SqlitePlayerPersistence extends PlayerPersistence {
         console.error("[persistence]", error);
         this.writerError = error;
         for (const resolve of this.idleWaiters.splice(0)) resolve();
+        for (const waiter of this.writeWaiters.values()) waiter.reject(error);
+        this.writeWaiters.clear();
         return;
       }
       console.error(`[persistence] SQLite save writer exited (${code}); restarting it with ${this.inFlight.size} unwritten save(s)`);
@@ -119,7 +125,10 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     const seq = ++this.sequence;
     const message = { seq, username, savedAt: new Date().toISOString(), writes };
     const row = writes.find((write) => write.kind === "row");
-    if (row) this.unwritten.set(username, { seq, json: row.json });
+    if (row) {
+      this.unwritten.set(username, { seq, json: row.json });
+      this.deleted.delete(username);
+    }
     this.inFlight.set(seq, message);
     if (!this.writer) {
       this.writerFailures = 0;
@@ -130,11 +139,22 @@ class SqlitePlayerPersistence extends PlayerPersistence {
       if (this.inFlight.size === 1) this.writer.ref();
       this.writer.postMessage(message);
     }
+    return seq;
+  }
+
+  /** Resolves once the writer commits message `seq`; rejects if that message (only) failed. */
+  waitForWrite(seq) {
+    if (!this.inFlight.has(seq)) return Promise.resolve();
+    if (this.writerError) return Promise.reject(this.writerError);
+    return new Promise((resolve, reject) => this.writeWaiters.set(seq, { resolve, reject }));
   }
 
   onWritten({ seq, username, ok, error }) {
     this.inFlight.delete(seq);
+    const waiter = this.writeWaiters.get(seq);
+    this.writeWaiters.delete(seq);
     if (this.unwritten.get(username)?.seq === seq) this.unwritten.delete(username);
+    if (this.deleted.get(username) === seq) this.deleted.delete(username);
     if (ok) {
       this.failedWrites.delete(username);
     } else {
@@ -142,6 +162,8 @@ class SqlitePlayerPersistence extends PlayerPersistence {
       console.error(`[persistence] Failed to save ${username}: ${error}`);
       this.failedWrites.set(username, new Error(error));
     }
+    if (ok) waiter?.resolve();
+    else waiter?.reject(new Error(error));
     if (this.inFlight.size === 0) {
       this.writer?.unref();
       for (const resolve of this.idleWaiters.splice(0)) resolve();
@@ -159,6 +181,7 @@ class SqlitePlayerPersistence extends PlayerPersistence {
 
   /** The player's newest save JSON: one waiting for the writer, else the stored one. */
   currentJson(username) {
+    if (this.deleted.has(username)) return undefined;
     return this.unwritten.get(username)?.json ?? this.findSave.get(username)?.saveJson;
   }
 
@@ -231,12 +254,14 @@ class SqlitePlayerPersistence extends PlayerPersistence {
   }
 
   listSnapshots(username, limit = 15, profile = MAIN_PROFILE) {
-    return this.history.list(this.saveKey(username, profile), limit);
+    const key = this.saveKey(username, profile);
+    return this.deleted.has(key) ? [] : this.history.list(key, limit);
   }
 
   /** See PlayerPersistence.restoreSnapshot. An offline player's current save goes in the history first. */
   restoreSnapshot(username, id, { online = false } = {}, profile = MAIN_PROFILE) {
     const name = this.saveKey(username, profile);
+    if (this.deleted.has(name)) return null;
     const copy = this.history.get(name, id);
     if (!copy) return null;
     if (online) {
@@ -254,7 +279,25 @@ class SqlitePlayerPersistence extends PlayerPersistence {
 
   exists(username, profile = MAIN_PROFILE) {
     const name = this.saveKey(username, profile);
+    if (this.deleted.has(name)) return false;
     return this.unwritten.has(name) || this.findSave.get(name) !== undefined;
+  }
+
+  /**
+   * Removes the save. Its history, the final copy included, is kept under `deleted:<time>:<key>`
+   * so the name starts clean; load/exists stop seeing it at once.
+   */
+  async delete(username, profile = MAIN_PROFILE) {
+    const key = this.saveKey(username, profile);
+    const current = this.currentJson(key);
+    this.pendingRestores.delete(key);
+    if (typeof current !== "string") return;
+    this.unwritten.delete(key);
+    const historyKey = `deleted:${Date.now()}:${key}`;
+    const seq = this.enqueue(key, [{ kind: "history", json: current, reason: "character-delete" }, { kind: "delete", historyKey }]);
+    this.deleted.set(key, seq);
+    // Only this delete's own write decides the result: another player's failed save doesn't.
+    await this.waitForWrite(seq);
   }
 
   normalizeUsername(username) {

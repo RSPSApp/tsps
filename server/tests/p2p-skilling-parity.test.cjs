@@ -80,6 +80,7 @@ function player() {
     getFrameUpdater: () => ({ clear() {} }), getDialogueManager: () => ({ reset: () => { current = null; }, getCurrent: () => current, isActive: () => !!current, startDialogues: chain => { current = chain; } }),
     getMovementQueue: () => ({ setBlockMovement: value => { blocked = value; }, reset() {} }), isBlocked: () => blocked,
     getSkillManager: () => ({ getMaxLevel: () => 50, getCurrentLevel: () => 50, addExperiences: (skill, amount) => xp.push([skill, amount]) }),
+    forcePositionToFace: to => { p.facing = to; },
     sendMessage: text => messages.push(text), setUntargetable() {}, performAnimation() {}, performGraphic() {},
     getCombat: () => ({ reset() {} }), setForceMovement: value => { force = value; }, getForceMovement: () => force,
   }; return p;
@@ -108,6 +109,22 @@ test('Porcine note opens native interface before the private camera scene; logou
   assert.equal(q.quest.getStage(p), 3); assert.ok(p.packets.some(([m]) => m === 'sendCameraReset'));
 });
 
+test('Porcine interrupted fade is closed on logout and the rope remains usable after login', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player();
+  q.quest.setStage(p, 3);
+  sceneAction(q, p, 'K_pMcL'); q.emit('interface:closed', {player:p, interfaceId:222});
+  sceneAction(q, p, 'GiFHeZ'); q.tick(7);
+  q.call('onPlayerLogout', {player:p});
+  const closed = p.packets.length;
+  assert.ok(p.packets.some(([m,uid]) => m === 'closeSubInterface' && uid === ((161<<16)|1)));
+  q.tick(60);
+  assert.equal(p.packets.length, closed, 'cancelled scene cannot restore a fade or camera');
+  q.call('onPlayerLogin', {player:p});
+  q.call('onObjectInteraction', {player:p,objectId:40330,clickType:1});
+  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()], [3149,3347]);
+  assert.equal(p.isBlocked(), false); assert.equal(p.getPrivateArea(), null);
+});
+
 test('Porcine note opens before closing the real current-cache chatbox and preserves its modal', () => {
   const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 3);
   const sent = [];
@@ -133,7 +150,9 @@ test('Porcine note opens before closing the real current-cache chatbox and prese
 test('Porcine Pig Thing attack and Spria rescue retain recorded camera paths and advance only after waking', () => {
   const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 3);
   sceneAction(q,p,'K_pMcL'); q.emit('interface:closed',{player:p,interfaceId:222}); q.tick(1);
-  sceneAction(q,p,'eShaqt'); q.tick(13); sceneAction(q,p,'GiFHeZ'); q.tick(56);
+  sceneAction(q,p,'eShaqt'); q.tick(13); sceneAction(q,p,'GiFHeZ');
+  assert.deepEqual([p.facing.getX(), p.facing.getY()], [3167, 9676]);
+  q.tick(56);
   assert.ok(p.packets.some(([m,,,,,id]) => m === 'sendProjectile' && id === 1817));
   assert.ok(p.packets.some(([m,x,y,h,r]) => m === 'sendCameraMoveTo' && x === 3167 && y === 9693 && h === 900 && r.rate2 === 10));
   sceneAction(q,p,'32r40G'); q.tick(16); sceneAction(q,p,'Rb2zDN'); q.tick(6);
@@ -142,6 +161,10 @@ test('Porcine Pig Thing attack and Spria rescue retain recorded camera paths and
   assert.equal(q.quest.getStage(p),3); sceneAction(q,p,'EaeUfj'); q.tick(4);
   assert.equal(q.quest.getStage(p),4); assert.equal(p.vars.get(10582),20); assert.equal(p.getLocation().getX(),3095); assert.equal(p.getLocation().getY(),3267); assert.equal(p.isBlocked(),false);
   assert.deepEqual(cameras(p), PORCINE_CAMERA);
+  const fades = p.packets.filter(([m]) => m === 'mountSubInterface');
+  assert.ok(fades.length > 0);
+  assert.deepEqual(fades[0].slice(1), [(161 << 16) | 1, 174, 1, {postScripts: [{scriptId: 948, args: [0,255,0,0,50]}]}]);
+  assert.ok(p.packets.some(([m,uid]) => m === 'closeSubInterface' && uid === ((161<<16)|1)));
   const sounds = [], sender = new PacketSender({ getSession: () => ({ sendClientPacket: packet => { sounds.push(packet); return true; } }) });
   for (const [method, ...args] of p.packets) if (['sendSound', 'sendSoundEffect'].includes(method)) sender[method](...args);
   assert.deepEqual(sounds, [[2313,77],[3308,86],[694,0],[2453,40]].map(([id,delay]) => encodeSound(id, { loops: 1, delay })));

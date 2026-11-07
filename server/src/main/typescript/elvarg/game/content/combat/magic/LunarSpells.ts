@@ -498,7 +498,10 @@ export class LunarSpells {
         const key = name?.trim().toLowerCase() ?? "";
         if (!["energy transfer", "heal other", "vengeance other", "stat spy"].includes(key)) return false;
         if (refuseBeforeDreamMentor(player, key)) return true;
-        if (target === player || !this.acceptsAid(target) || !this.sameInstance(player, target) ||
+        // Stat Spy only reads the target's stats: the duel rule is for the spells that aid one.
+        const aid = key !== "stat spy";
+        if (target === player || !this.acceptsAid(target) || (aid && (this.inDuel(player) || this.inDuel(target))) ||
+            !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
         if (key === "vengeance other") return this.castVengeanceOther(player, target);
@@ -694,10 +697,18 @@ export class LunarSpells {
         return spell.cast(player, share.apply);
     }
 
-    /** Players other than the caster within `distance` who accept aid and are alive. */
+    /**
+     * A duel is the two duelists' alone: no one else's Vengeance, healing or energy reaches them (the Duel Arena's open
+     * map would otherwise let a spectator within range aid one, past the No Magic rule too), and a duelist aids no one.
+     */
+    private static inDuel(player: Player): boolean {
+        return player.getDueling?.()?.inDuel?.() === true;
+    }
+
+    /** Players other than the caster within `distance` who accept aid, are alive and aren't in a duel. */
     private static forNearbyPlayers(player: Player, distance: number, effect: (target: Player) => void): void {
         World.getPlayers().forEach(target => {
-            if (target && target !== player && this.acceptsAid(target) && target.getHitpoints() > 0 &&
+            if (target && target !== player && this.acceptsAid(target) && !this.inDuel(target) && target.getHitpoints() > 0 &&
                 this.sameInstance(player, target) &&
                 player.getLocation().isWithinDistance(target.getLocation(), distance)) effect(target);
         });

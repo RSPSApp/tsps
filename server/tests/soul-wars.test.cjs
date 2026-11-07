@@ -154,6 +154,8 @@ function fakePlayer({ combat = 100, total = 1500, at = new Location(2192, 2842, 
         sendInterface: (iid) => { (p.interfaces ??= []).push(iid); return sender; },
         sendSubInterface: (uid, iid) => { p.subs.push(iid); return sender; },
         closeSubInterface: () => sender,
+        // A player at the Nomad's rewards: open unless a test closes them.
+        isSubInterfaceOpen: () => p.shopClosed !== true,
         sendInterfaceScript: (sid, args) => { p.scripts.push([sid, args]); return sender; },
         sendSong: () => sender, sendEnterAmountPrompt: (title) => { p.prompts = [...(p.prompts ?? []), title]; return sender; },
         sendInterfaceFlagsRange: (uid, from, to, flags) => { (p.flags ??= []).push([uid, from, to, flags]); return sender; },
@@ -817,6 +819,15 @@ test("the Nomad's Trade opens interface 442 in place of the generic shop, with t
   const other = { player: p, shopId: 1, allow: null };
   hooks.canShop(other);
   assert.equal(other.allow, null, 'other shops are left alone');
+});
+
+test('the rewards answer only while open: a confirm with them closed spends no tokens', () => {
+  const p = fakePlayer();
+  Common.addVarp(p, 'zeal_tokens', 15);
+  p.shopClosed = true;
+  button('confirm_xp')({ player: p, slot: 5 });
+  assert.equal(zealTokens(p), 15);
+  assert.deepEqual(p.xp ?? [], []);
 });
 
 test('experience: floor(L*L/600) * 30 a token at 99, from level 30; tokens and level checked again, quietly', () => {

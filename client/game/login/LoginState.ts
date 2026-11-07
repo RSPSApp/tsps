@@ -21,6 +21,7 @@ import {
     type RememberedLoginPreference,
 } from "../preferences/ClientPreferences";
 import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
+import type { LoginScreenExtension } from "./LoginScreenExtension";
 import { LoginIndex } from "./GameState";
 
 const STORAGE_KEY_IOS_PWA_LOGIN_STATE = "osrs:iosPwaLoginState";
@@ -154,6 +155,30 @@ export class LoginState {
         this.serverSignalUrl = lastServer.signalUrl;
         this.serverWorldId = lastServer.worldId;
         this.serverIceServers = lastServer.iceServers ?? [];
+    }
+
+    /** Public metadata resolves the selected world's name without changing the login exchange. */
+    async refreshServerName(): Promise<void> {
+        const { serverAddress: address, serverSecure: secure, serverTransport: transport,
+            serverSignalUrl: signalUrl, serverWorldId: worldId } = this;
+        try {
+            const url = new URL(transport === "webrtc" && signalUrl ? signalUrl : `${secure ? "https" : "http"}://${address}`);
+            if (url.protocol === "ws:") url.protocol = "http:";
+            if (url.protocol === "wss:") url.protocol = "https:";
+            url.pathname = transport === "webrtc" ? "/worlds" : "/api/world-info";
+            url.search = ""; url.hash = "";
+            const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            if (!response.ok) return;
+            const metadata = await response.json();
+            const name = transport === "webrtc" ? metadata?.worlds?.find((world: any) => world.worldId === worldId)?.name : metadata?.name;
+            if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) return;
+            // A slow response must not rename a different world selected in the meantime.
+            if (this.serverAddress !== address || this.serverSecure !== secure || this.serverTransport !== transport
+                || this.serverSignalUrl !== signalUrl || this.serverWorldId !== worldId) return;
+            this.serverName = name.trim();
+            // Renaming must not pin the build's default server as a chosen world.
+            if (getClientPreference("lastServer")) this.saveLastServer();
+        } catch { /* Older servers and offline worlds retain their configured or remembered name. */ }
     }
 
     /** Save title music disabled setting to localStorage */
@@ -433,6 +458,9 @@ export class LoginState {
             iceServers: this.serverIceServers,
         });
     }
+
+    /** A plugin-provided login screen, when one is active. */
+    extension?: LoginScreenExtension;
 
     // ========== World Select ==========
 

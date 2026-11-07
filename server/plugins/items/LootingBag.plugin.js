@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 /**
  * The looting bag (docs/looting-bag.md), from the Wiki and rsprox captures 448-464 (rev 233),
  * 821 (rev 234) and 1541/1545 (rev 224). Items go in only in the Wilderness (and the Ferox
@@ -499,8 +500,10 @@ function giveToKiller({ killer, victim }) {
   const pending = pendingDeaths.get(victim);
   pendingDeaths.delete(victim);
   if (!pending) return;
+  // An Ironman killer takes none of it: it drops for the victim (PlayerDeathTask.lootOwner).
+  const owner = PlayerDeathTask.lootOwner(victim, killer);
   for (const item of pending.items) {
-    if (!isSupply(item.id)) ItemOnGroundManager.registerLocation(killer ?? victim, new Item(item.id, item.amount, item.meta), pending.location);
+    if (!isSupply(item.id)) ItemOnGroundManager.registerLocation(owner, new Item(item.id, item.amount, item.meta), pending.location);
   }
 }
 

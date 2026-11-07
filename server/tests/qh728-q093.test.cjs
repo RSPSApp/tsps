@@ -451,3 +451,23 @@ test('Felkrash trains an overgrown cat at completion and afterwards, as the Pets
   assert.equal(early.stage(), 22);
   assert.equal(earlyTrained.length, 1, 'completion trains the overgrown cat');
 });
+
+// Ali took the coins before handing over the charm and scroll with no space check, so a full inventory paid and lost
+// them. With no room he keeps them and the coins stay; with room he hands both over.
+test("Ali needs room for the snake charm and music scroll before taking the coins", () => {
+  const h = setup();
+  const I = core.ItemIdentifiers, N = core.NpcIdentifiers;
+  h.quest.setStage(h.player, 19);
+  h.inventory.set(I.COINS, 150);
+  h.setFreeSlots(1);
+  h.line("It's not that difficult. Here, take these.", N.ALI_THE_SNAKE_CHARMER);
+  assert.equal(h.inventory.get(I.COINS), 150, "not paid");
+  assert.equal(h.inventory.get(I.SNAKE_CHARM) ?? 0, 0);
+  assert.equal(h.stage(), 19, "the quest waits");
+  assert.ok(h.messages.includes("You don't have enough inventory space."), h.messages.join(" | "));
+  h.setFreeSlots(2);
+  h.line("It's not that difficult. Here, take these.", N.ALI_THE_SNAKE_CHARMER);
+  assert.equal(h.inventory.get(I.SNAKE_CHARM), 1);
+  assert.equal(h.inventory.get(I.MUSIC_SCROLL), 1);
+  assert.equal(h.stage(), 20);
+});

@@ -138,7 +138,9 @@ import {
     sendBankCustomQuantity,
     LOGIN_FLAG_REMEMBER,
     LOGIN_FLAG_TOKEN,
+    disposeServerConnection,
     forgetRememberedLogin,
+    sendHandshake,
     sendLogin,
     sendInteractStop,
     sendLogout,
@@ -5484,6 +5486,7 @@ export class OsrsClient {
     // URL/search params are not supported
 
     init(): void {
+        void this.loginState.refreshServerName();
         // Initialize default controlled player if not set by server
         if (this.controlledPlayerServerId === -1) {
             this.controlledPlayerServerId = 0; // Default server ID
@@ -5522,6 +5525,7 @@ export class OsrsClient {
 
     /** Enter on the login screen: Play for the remembered account, else Login on the form. */
     submitLoginFromKeyboard(): void {
+        if (this.loginState.extension) { this.loginState.extension.submit(); return; }
         if (this.gameState === GameState.CONNECTING) return;
         if (this.loginState.loginIndex === LoginIndex.WELCOME_DISPLAY_NAME) {
             if (this.processLoginAction(LoginActions.PLAY) === "connect") this.sendLoginRequest();
@@ -5920,7 +5924,7 @@ export class OsrsClient {
         if (!this.isOnLoginScreen()) return false;
 
         const handled = this.loginRenderer.handleKeyInput(this.loginState, key, char);
-        if (handled && this.loginState.loginIndex === LoginIndex.LOGIN_FORM) {
+        if (handled && !this.loginState.extension && this.loginState.loginIndex === LoginIndex.LOGIN_FORM) {
             this.loginState.savePersistedLoginState();
         }
         return handled;
@@ -6134,6 +6138,7 @@ export class OsrsClient {
                               }
                             : null,
                     );
+                    void this.loginState.refreshServerName();
                     this.loginState.saveLastServer();
                     this.loginState.showRememberedLogin();
                 }

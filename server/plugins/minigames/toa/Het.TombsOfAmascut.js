@@ -658,6 +658,8 @@ class HetPuzzleRoom extends Raid.Room {
     this.later(wallBreakTicks(pickaxe), () => {
       const entry = this.layout.get(key(location.getX(), location.getY()));
       if (!entry || (entry.id !== BREAKABLE_RISING - 1 && entry.id !== BREAKABLE_END_RISING - 1)) return;
+      // A pickaxe dropped or banked during the swing breaks nothing, as Mining stops without one.
+      if (!Mining.findBestPickaxe(player)) return;
       player.performAnimation(new (Shared.core().Animation)(-1));
       player.sendMessage("The barrier crumbles apart.");
       entry.id = BROKEN_WALL;
@@ -693,7 +695,13 @@ class HetPuzzleRoom extends Raid.Room {
         this.miners.delete(player);
         return false;
       }
-      this.swingAtSeal(player, pickaxe);
+      // As Mining does each tick: a pickaxe dropped or banked ends it; a better one picked up is used.
+      const held = Mining.findBestPickaxe(player);
+      if (!held) {
+        this.miners.delete(player);
+        return false;
+      }
+      this.swingAtSeal(player, held);
       return true;
     };
     this.later(SEAL_FIRST_SWING, () => {

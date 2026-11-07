@@ -1,0 +1,27 @@
+{
+  "_description": "Crossbow Bolt Enchantments (https://oldschool.runescape.wiki/w/Enchant_Crossbow_Bolt): level, runes per cast and base XP for each gem, with the unenchanted bolts it works on and what they become (ItemIds constant names). One cast enchants up to `boltsPerCast` bolts.",
+  "spell": "Crossbow Bolt Enchantments",
+  "boltsPerCast": 10,
+  "gems": [
+    { "gem": "Opal", "level": 4, "xp": 9, "runes": [["AIR_RUNE", 2], ["COSMIC_RUNE", 1]],
+      "bolts": [["OPAL_BOLTS", "OPAL_BOLTS_E_"], ["OPAL_DRAGON_BOLTS", "OPAL_DRAGON_BOLTS_E_"]] },
+    { "gem": "Sapphire", "level": 7, "xp": 17.5, "runes": [["WATER_RUNE", 1], ["COSMIC_RUNE", 1], ["MIND_RUNE", 1]],
+      "bolts": [["SAPPHIRE_BOLTS", "SAPPHIRE_BOLTS_E_"], ["SAPPHIRE_DRAGON_BOLTS", "SAPPHIRE_DRAGON_BOLTS_E_"]] },
+    { "gem": "Jade", "level": 14, "xp": 19, "runes": [["EARTH_RUNE", 2], ["COSMIC_RUNE", 1]],
+      "bolts": [["JADE_BOLTS", "JADE_BOLTS_E_"], ["JADE_DRAGON_BOLTS", "JADE_DRAGON_BOLTS_E_"]] },
+    { "gem": "Pearl", "level": 24, "xp": 29.5, "runes": [["WATER_RUNE", 2], ["COSMIC_RUNE", 1]],
+      "bolts": [["PEARL_BOLTS", "PEARL_BOLTS_E_"], ["PEARL_DRAGON_BOLTS", "PEARL_DRAGON_BOLTS_E_"]] },
+    { "gem": "Emerald", "level": 27, "xp": 37, "runes": [["AIR_RUNE", 3], ["COSMIC_RUNE", 1], ["NATURE_RUNE", 1]],
+      "bolts": [["EMERALD_BOLTS", "EMERALD_BOLTS_E_"], ["EMERALD_DRAGON_BOLTS", "EMERALD_DRAGON_BOLTS_E_"]] },
+    { "gem": "Red Topaz", "level": 29, "xp": 33, "runes": [["FIRE_RUNE", 2], ["COSMIC_RUNE", 1]],
+      "bolts": [["TOPAZ_BOLTS", "TOPAZ_BOLTS_E_"], ["TOPAZ_DRAGON_BOLTS", "TOPAZ_DRAGON_BOLTS_E_"]] },
+    { "gem": "Ruby", "level": 49, "xp": 59, "runes": [["FIRE_RUNE", 5], ["BLOOD_RUNE", 1], ["COSMIC_RUNE", 1]],
+      "bolts": [["RUBY_BOLTS", "RUBY_BOLTS_E_"], ["RUBY_DRAGON_BOLTS", "RUBY_DRAGON_BOLTS_E_"]] },
+    { "gem": "Diamond", "level": 57, "xp": 67, "runes": [["EARTH_RUNE", 10], ["COSMIC_RUNE", 1], ["LAW_RUNE", 2]],
+      "bolts": [["DIAMOND_BOLTS", "DIAMOND_BOLTS_E_"], ["DIAMOND_DRAGON_BOLTS", "DIAMOND_DRAGON_BOLTS_E_"], ["DIAMOND_ASCENSION_BOLTS", "DIAMOND_ASCENSION_BOLTS_E_"]] },
+    { "gem": "Dragonstone", "level": 68, "xp": 78, "runes": [["EARTH_RUNE", 15], ["COSMIC_RUNE", 1], ["SOUL_RUNE", 1]],
+      "bolts": [["DRAGONSTONE_BOLTS", "DRAGONSTONE_BOLTS_E_"], ["DRAGONSTONE_DRAGON_BOLTS", "DRAGONSTONE_DRAGON_BOLTS_E_"]] },
+    { "gem": "Onyx", "level": 87, "xp": 97, "runes": [["FIRE_RUNE", 20], ["COSMIC_RUNE", 1], ["DEATH_RUNE", 1]],
+      "bolts": [["ONYX_BOLTS", "ONYX_BOLTS_E_"], ["ONYX_DRAGON_BOLTS", "ONYX_DRAGON_BOLTS_E_"], ["ONYX_ASCENSION_BOLTS", "ONYX_ASCENSION_BOLTS_E_"]] }
+  ]
+}

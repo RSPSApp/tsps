@@ -54,6 +54,13 @@ function onIncomingDamage(entity, hitDamage) {
     return;
   }
 
+  // A phoenix necklace that is about to heal the wearer goes first, and the ring stays on.
+  const phoenix = { player, remaining, active: false };
+  pluginApi?.emitCustomEvent("phoenix-necklace:will-trigger", phoenix);
+  if (phoenix.active) {
+    return;
+  }
+
   const equipment = player.getEquipment();
   const ringItem = equipment.get(Equipment.RING_SLOT);
   const ringId = ringItem?.getId?.();

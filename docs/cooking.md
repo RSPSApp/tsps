@@ -90,6 +90,13 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
 
 ## From the Wiki only
 
+- Ordinary wine production stops at 60,000 unfermented jugs across the inventory and real
+  bank tabs ([Jug of wine](https://oldschool.runescape.wiki/w/Jug_of_wine), 10 January 2024
+  change). The limit is checked when starting a queued action and before each jug, including
+  submission of an already-open quantity menu. A refused jug consumes no ingredients and
+  does not reset fermentation. Once the pending jugs ferment, production can resume.
+  The limit lives on the ordinary wine recipe; the Wine of Zamorak page does not establish
+  an equivalent cap.
 - Wine's success chance: about 60% at 35 Cooking and sure at 68 (low 48, high 352); Zamorak's
   wine about 50% at 65 and sure at 98 (low -125, high 260). A stack rolls as 15 equal batches,
   plus one roll for each jug left over. A failed jug is a jug of bad wine, with no XP.
@@ -113,6 +120,9 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
   bread and pitta dough lines; the topping lines ("You add the meat to the pizza."); the mud,
   garden, fish, admiral, wild and summer part pies' lines (none are sent for the captured
   fillings).
+- The exact message at the 60,000-jug limit: no recording or Wiki wording was found, so
+  reaching the limit stops the action without adding a new refusal line. The cap is
+  Wiki evidence, independent of the mixing recordings cited above.
 - What happens to wine still fermenting at logout: it ferments 20 ticks after the next login.
 - A full bank: the banked jugs' wine and bad wine join stacks the bank holds, or take the
   unfermented stack's slot or a free one. When they would not fit, the banked jugs stay
@@ -127,3 +137,14 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
 
 Sinew on the Lumbridge range ("What would you like to cook?|Cooked meat|Sinew"), potatoes, stew,
 cakes and the Hosidius Kitchen's lower burn chance.
+
+## Pending wine limit regression coverage
+
+The boundary checks cover a batch crossing 60,000, a single jug attempted at the cap,
+submission of a quantity menu after the total changes, unchanged ingredients and timer on
+refusal, and making wine again after fermentation. All three boundary regressions fail
+against the previous implementation. Live validation with a 59,999-jug bank fixture and
+three ingredient pairs made one pending jug, preserved two pairs, fermented all 60,000 for
+12,000,000 Cooking XP, and then made the two remaining jugs normally. Existing cooking
+regressions also cover the two-tick mixing cadence, 20-tick fermentation, levels, success
+and failure XP, and bank capacity handling.

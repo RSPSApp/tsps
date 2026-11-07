@@ -80,11 +80,13 @@ function makeOne(player, recipe) {
 
 /**
  * Makes `amount` on the recipe's timing. `hooks.cycle(remaining)` runs as each item is started
- * (the choice, then each item that has another after it), `hooks.made()` after each item and
+ * (the choice, then each item that has another after it), `hooks.canMake()` before spending
+ * each item's ingredients, `hooks.made()` after each item and
  * `hooks.done()` after the last one made.
  */
 function start(player, recipe, amount, hooks = {}) {
   Common.core.TaskManager.cancelTasks(player.getIndex());
+  if (hooks.canMake?.() === false) return;
   let remaining = amount;
   let made = 0;
   let wait = recipe.timing[0];
@@ -93,7 +95,7 @@ function start(player, recipe, amount, hooks = {}) {
     if (--wait > 0) return true;
     const actions = Common.actionsPerCycle(player, "make");
     for (let done = 0; done < actions && remaining > 0; done++) {
-      if (!makeOne(player, recipe)) {
+      if (hooks.canMake?.() === false || !makeOne(player, recipe)) {
         if (made > 0) hooks.done?.();
         return false;
       }
@@ -101,7 +103,7 @@ function start(player, recipe, amount, hooks = {}) {
       remaining--;
       hooks.made?.();
     }
-    if (remaining <= 0 || !hasIngredients(player.getInventory(), recipe)) {
+    if (remaining <= 0 || !hasIngredients(player.getInventory(), recipe) || hooks.canMake?.() === false) {
       hooks.done?.();
       return false;
     }

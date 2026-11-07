@@ -144,7 +144,7 @@
     {"product":"chocolate_bomb","level":1,"xp":110,"ingredients":[[9564,1],["chocolate_dust",1],["pot_of_cream",2]],"timing":[1,2]}
   ],
   "wines": [
-    {"grapes": "grapes", "unfermented": "jug_unfermented_wine", "wine": "jug_wine", "bad": "jug_bad_wine", "level": 35, "xp": 200, "chance": [48, 352]},
+    {"grapes": "grapes", "unfermented": "jug_unfermented_wine", "wine": "jug_wine", "bad": "jug_bad_wine", "level": 35, "xp": 200, "chance": [48, 352], "pendingLimit": 60000},
     {"grapes": "zamorak_grapes", "unfermented": "jug_unfermented_zamorak_wine", "wine": "wine_of_zamorak", "bad": "jug_bad_wine", "level": 65, "xp": 200, "chance": [-125, 260]}
   ]
 }

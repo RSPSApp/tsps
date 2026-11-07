@@ -23369,3 +23369,48 @@ test('Edmond Talk-to routes a fresh player to Plague City instead of Song of the
     else PluginManager.customEventHooks.delete('quest:get-stage');
   }
 });
+
+test('Alrena gives the Song of the Elves tabard only for the silk and purple dye handed over', () => {
+  const { api, handlers } = mockApi();
+  delete require.cache[require.resolve('../plugins/quests/quests/SongOfTheElves.Quest')];
+  require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
+  const { ItemIdentifiers } = api.core;
+  const attributes = new Map();
+  const items = new Map();
+  const messages = [];
+  const player = {
+    isPlayerBot: () => true,
+    getAttribute: key => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getLocation: () => new api.core.Location(2614, 3291, 0),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+    getInventory: () => ({
+      getAmount: id => items.get(id) ?? 0,
+      contains: id => (items.get(id) ?? 0) > 0,
+      deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) ?? 0) - amount)),
+      adds: (id, amount) => { items.set(id, (items.get(id) ?? 0) + amount); return true; },
+      getFreeSlots: () => 28,
+    }),
+    sendMessage: text => messages.push(text),
+  };
+  const step = stepId => {
+    const event = { player, npcId: 8721, kind: 'message', stepId, handled: false };
+    for (const handler of handlers.custom.get('npc-dialogue:action')) handler(event);
+    return event;
+  };
+  const tabard = () => items.get(ItemIdentifiers.ARDOUGNE_KNIGHT_TABARD) ?? 0;
+
+  assert.equal(step('tNiXqt').handled, true, 'handing over nothing stops the dialogue');
+  step('Y45282');
+  assert.equal(tabard(), 0, 'no tabard without the silk and dye');
+
+  items.set(ItemIdentifiers.SILK, 2);
+  items.set(ItemIdentifiers.PURPLE_DYE, 2);
+  step('0nVxB-');
+  step('bGd6H8');
+  assert.equal(tabard(), 1);
+  assert.equal(items.get(ItemIdentifiers.SILK), 1, 'one silk is taken, not two');
+  assert.equal(items.get(ItemIdentifiers.PURPLE_DYE), 1, 'one purple dye is taken, not two');
+  step('bGd6H8');
+  assert.equal(tabard(), 1, 'one hand-over makes one tabard');
+});

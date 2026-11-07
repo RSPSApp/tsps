@@ -84,6 +84,25 @@ test("the coin reward still lands alongside the experience", (t) => {
   assert.equal(p.getInventory().getAmount(COINS), 3100, "the 3,100 coin reward is unchanged");
 });
 
+test("the completion scroll lists the Hunter experience", (t) => {
+  const p = actor(t);
+  const sheepHerder = quest("sheep_herder");
+  const strings = [];
+  t.mock.method(p.getPacketSender(), "sendString", (text) => {
+    strings.push(String(text));
+    return p.getPacketSender();
+  });
+
+  sheepHerder.complete(p);
+  // The scroll is deferred a tick so a hand-in action's interface removal cannot wipe it.
+  core.TaskManager.process();
+
+  // rewardLines() only lists what the definition's xpRewards names, so the scroll is the
+  // check that the experience is declared and not just paid.
+  assert.ok(strings.includes("1,000 Hunter XP"), `scroll lines: ${JSON.stringify(strings)}`);
+  assert.ok(strings.includes("3,100 Coins"), "the coin line is still listed");
+});
+
 test("completing twice does not grant the experience twice", (t) => {
   const p = actor(t);
   const sheepHerder = quest("sheep_herder");

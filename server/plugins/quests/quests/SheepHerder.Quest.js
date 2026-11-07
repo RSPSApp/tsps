@@ -474,6 +474,9 @@ module.exports = function registerSheepHerderQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 4,
+    // The completion scroll lists only what xpRewards names, so the experience paid in
+    // grantReward has to be declared here too.
+    xpRewards: [{ skillId: Skill.HUNTER.getIndex(), amount: HUNTER_XP, label: "Hunter" }],
     rewardItemId: COINS_ITEM_ID,
     rewardItemLabel: "3,100 Coins",
     buildJournal,

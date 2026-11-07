@@ -257,8 +257,8 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 Amy (Falador), then Marlo, Ellie and Angelo give contracts at the Wiki's tiers for a random
 client's home. Each home's hotspots show, per player, broken (Repair: a plank, or a steel bar
 for a sink, range or bath), old (Remove), empty (Build: the Wiki's planks) or the new piece.
-The client pays the tier's experience and Carpenter points and restores run energy; the full
-Carpenter's outfit adds 2.5%. Last-tier contract repeats the last tier; Rewards opens the shop
+The client pays the tier's experience and Carpenter points and restores run energy (the Carpenter's
+outfit adds to the experience, see below). Last-tier contract repeats the last tier; Rewards opens the shop
 (673) with the Wiki's prices; the supply crate rolls the Wiki's table. One Leagues capture
 (recording 1863, rev 227) gives the tier menu ("Select an option": "Beginner Contract", "Novice
 Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
@@ -390,3 +390,17 @@ furniture can be built with the agent MCP: `object_option` Build on the hotspot,
 `send_packet` `dialogue_continue` on 458:2 with the menu choice (1-based) once 458 is open. Rooms
 are picked from a door hotspot the same way with 212:4 and the room id, then built with
 `dialogue_choose` "Build" (or "Rotate clockwise" first).
+
+## Carpenter's outfit
+
+`construction/CarpenterOutfit.Construction.js`. OSRS Wiki (Carpenter's outfit): helmet +0.4%, shirt
++0.8%, trousers +0.6%, boots +0.2% Construction experience, and +0.5% more with all four worn
+(2.5% in all). The Wiki describes it as a boost to the experience received when training
+Construction, names the Mahogany Homes contract experience (since 19 June 2024) and the
+shipwrights' workbench (since 26 November 2025), and excludes the experience Barlak pays for long
+and curved bones. Each piece counts on its own. Here it applies to the Construction experience of
+furniture built in the player-owned house, workbench flatpacks, staircases, Mahogany Homes and the
+shipwrights' workbench; a piece's second skill (Smithing, Runecraft, Farming) is not boosted. Plugins
+outside Construction ask for the multiplier with the `construction:outfit-multiplier` custom event
+(`{ player, multiplier }`); the shipwrights' workbench does. Tested in `tests/carpenter-outfit.test.cjs`
+and `tests/shipwrights-workbench.test.cjs`.

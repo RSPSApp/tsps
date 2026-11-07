@@ -22,6 +22,7 @@
 const Common = require("./Common.DuelArena");
 const Loadouts = require("./Loadouts.DuelArena");
 const Battle = require("./Battle.DuelArena");
+const Matchmaking = require("./Matchmaking.DuelArena");
 
 const SCREEN = "pvp_arena_unrankedduel";
 const PVP_ARENA_WORLD = "DuelArena:pvpArenaWorld";
@@ -49,7 +50,7 @@ function nearby(a, b) {
 }
 
 function busy(player) {
-  return sessions.has(player) || Battle.fightFor(player) != null || legacy.busy(player)
+  return sessions.has(player) || Battle.fightFor(player) != null || legacy.busy(player) || Matchmaking.matchOf.has(player)
     || player.getHitpoints() <= 0 || player.isDying;
 }
 

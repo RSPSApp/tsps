@@ -86,4 +86,15 @@ These aren't in the captures, so they are reasoned from what is:
 
 ## Rewards
 
-The shop sells everything at the cache's prices. Buying potion storage sets 11295. The rewards' own behaviour is a follow-up: the potion packs' Open, the goggles' and amulet's Herblore effects, the reagent pouch, the chugging barrel, and the potion storage bank section.
+The shop sells everything at the cache's prices. Buying potion storage sets 11295. The rewards' own behaviour is a follow-up: the potion packs' Open, the alchemist's amulet's Herblore effect, the reagent pouch, the chugging barrel, and the potion storage bank section.
+
+### Prescription goggles
+
+`Goggles.Mixology.js`. Wiki (https://oldschool.runescape.wiki/w/Prescription_goggles): worn, they give a 10% chance to save a secondary ingredient when mixing potions, with no message. Herblore offers each mix to `herblore:mix` before it takes anything and the goggles set what they keep to nothing.
+
+- **Worn:** `mm_alchemist_hat` and `mm_alchemist_hat_alt`, the two worn items (the Wiki says the focused and unfocused variants both apply the effect; which id is which was not checked). Only worn items count.
+- **Once per potion:** one roll covers the whole mix. A save keeps every copy the recipe takes: the Wiki's example is 20 Zulrah's scales kept on a four-dose anti-venom (5 a dose).
+- **What counts as a secondary:** an ingredient after the first that is not a potion or a vial. That covers the Wiki's list: the herb of an antidote+ (unf) or antidote++ (unf) (made from a vial of coconut milk), weapon poison++'s nightshade and poison ivy berries, a haemostatic dressing's squid paste and cotton yarn, a barbarian potion's caviar or roe, and a super combat potion's or anti-venom+'s torstol. The torstol potion (unf) also counts there, and keeps the vial it came in. Unfinished potions made from a vial of water, and the other potions' primaries, are not secondaries.
+- **Never saved:** crystal dust (divine potions). Serum 207 has no recipe here yet.
+- **Not captured:** the live recordings that wear the goggles (rev 237, Leagues) only show the equip itself; the saving is server-side and silent, so its rules come from the Wiki page alone.
+- **Assumed:** the goggles page names weapon poison++ only; weapon poison and weapon poison+ count here as any other secondary ("most potions").

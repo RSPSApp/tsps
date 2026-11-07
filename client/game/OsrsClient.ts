@@ -5536,10 +5536,12 @@ export class OsrsClient {
             loginIndex: state.loginIndex,
             expected,
             sessionCharacter: getSessionCharacter(),
+            characters: payload.characters,
+            maxCharacters: payload.maxCharacters,
         });
         if (decision === "ignore") return;
-        if (decision === "reselect") {
-            const name = getSessionCharacter() ?? payload.characters[payload.defaultIndex]?.name;
+        if (decision === "reselect" || decision === "select_default") {
+            const name = decision === "select_default" ? payload.characters[payload.defaultIndex]?.name : getSessionCharacter() ?? payload.characters[payload.defaultIndex]?.name;
             if (!name) return;
             this.pendingCharacterRequest = { kind: "select", name };
             sendCharacterSelect(name);
@@ -5577,6 +5579,12 @@ export class OsrsClient {
                 this.updateGameState(GameState.LOGIN_SCREEN);
                 return;
             case "show_message":
+                if (state.loginIndex !== LoginIndex.CHARACTER_SELECT) {
+                    this.pendingCharacterRequest = undefined;
+                    leaveRefusedReconnect(state, result.message, { suppressReconnection, disposeServerConnection });
+                    this.updateGameState(GameState.LOGIN_SCREEN);
+                    return;
+                }
                 this.pendingCharacterRequest = undefined;
                 state.pickerMessage = result.message || "That isn't possible right now.";
                 return;

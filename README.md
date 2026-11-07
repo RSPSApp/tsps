@@ -32,6 +32,17 @@ If setup is interrupted, run `npm run setup` again.
 
 Running several branches at once, one worktree each on its own ports: see [docs/worktrees.md](docs/worktrees.md).
 
+### Local world settings
+
+Put overrides in `server/data/definitions/world.local.json` to keep them separate from shipped
+`world.json` settings. `pluginConfig` and `plugins` merge by key; other top-level keys replace
+those in `world.json`. Restart the server after edits. For example, enable three character slots
+(default: one, with no picker):
+
+```json
+{ "pluginConfig": { "characters:maxPerAccount": 3 } }
+```
+
 ### Optional: Java sidecars
 
 Two optional local services are Java; neither is needed to run the server.

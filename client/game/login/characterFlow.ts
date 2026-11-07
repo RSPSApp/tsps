@@ -21,15 +21,20 @@ export function decideCharacterList(args: {
     loginIndex: LoginIndex;
     expected: boolean;
     sessionCharacter: string | null;
-}): "show_picker" | "reopen_picker" | "reselect" | "ignore" {
+    maxCharacters: number;
+    characters: readonly { primary: boolean; hasSave: boolean }[];
+}): "show_picker" | "reopen_picker" | "reselect" | "select_default" | "ignore" {
     const { gameState, loginIndex, expected, sessionCharacter } = args;
     if (gameState === GameState.CONNECTING) {
+        if (expected && (args.maxCharacters === 1 || (args.characters.length === 1 && args.characters[0].primary && !args.characters[0].hasSave))) {
+            return "select_default";
+        }
         // The picker's own refresh after a create or delete, or the list a login waited for.
         return expected || loginIndex === LoginIndex.CHARACTER_SELECT ? "show_picker" : "ignore";
     }
     if (!expected || !isReconnecting(gameState)) return "ignore";
     // Dropped while still choosing: ask again rather than entering the default character.
-    if (sessionCharacter === null && loginIndex === LoginIndex.CHARACTER_SELECT) return "reopen_picker";
+    if (sessionCharacter === null && loginIndex === LoginIndex.CHARACTER_SELECT && args.maxCharacters > 1) return "reopen_picker";
     return "reselect";
 }
 

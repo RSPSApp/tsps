@@ -4,7 +4,7 @@ One login can own several characters on a server. The characters belong to that 
 
 ## What players see
 
-- After the password, the browser client shows the account's characters. The player picks one and presses Play, or makes a new one in the empty slot.
+- With multiple slots enabled, the browser client shows the account's characters after the password. The first login enters the primary automatically. The player picks one and presses Play, or makes a new one in the empty slot.
 - Logging out returns to the login screen. To switch characters: log out, log in, pick.
 - Typing a character's name at the login screen works too. The password is the account's, and that character is preselected.
 - Only one character of an account can be online at a time.
@@ -19,8 +19,8 @@ Set `characters:maxPerAccount` in `world.local.json` under `pluginConfig`:
 "pluginConfig": { "characters:maxPerAccount": 3 }
 ```
 
-- The default is 3. Values are rounded down and kept between 1 and 6, the most rows the picker can show. A value that is not a number falls back to 3.
-- 1 turns creation off. The picker still shows the one character with Play.
+- The default is 1 (additional characters disabled). Values are rounded down and kept between 1 and 6, the most rows the picker can show. A value that is not a number falls back to 1.
+- 1 turns creation off and skips the picker, entering the default character automatically.
 - The in-browser host (IndexedDB saves) keeps no account file between reloads, so it always has 1.
 
 ## Where accounts live

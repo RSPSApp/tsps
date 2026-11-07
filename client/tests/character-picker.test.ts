@@ -139,7 +139,33 @@ assert.equal(pending, undefined);
 
 // CHARACTER_LIST: the list a login waited for shows the picker; strays are ignored.
 const list = (gameState: GameState, loginIndex: LoginIndex, expected: boolean, sessionCharacter: string | null = null) =>
-    decideCharacterList({ gameState, loginIndex, expected, sessionCharacter });
+    decideCharacterList({ gameState, loginIndex, expected, sessionCharacter, maxCharacters: 3, characters: [zezima] });
+assert.equal(decideCharacterList({
+    gameState: GameState.CONNECTING,
+    loginIndex: LoginIndex.LOGIN_FORM,
+    expected: true,
+    sessionCharacter: null,
+    maxCharacters: 3,
+    characters: [{ ...zezima, hasSave: false }],
+}), "select_default", "a first login enters the primary without an extra click");
+assert.equal(decideCharacterList({
+    gameState: GameState.CONNECTING,
+    loginIndex: LoginIndex.LOGIN_FORM,
+    expected: false,
+    sessionCharacter: null,
+    maxCharacters: 3,
+    characters: [{ ...zezima, hasSave: false }],
+}), "ignore", "a late list must not auto-select");
+for (const characters of [[zezima], [zezima, alt]]) {
+    assert.equal(decideCharacterList({
+        gameState: GameState.CONNECTING,
+        loginIndex: LoginIndex.LOGIN_FORM,
+        expected: true,
+        sessionCharacter: null,
+        maxCharacters: 1,
+        characters,
+    }), "select_default", "disabled slots bypass the picker, including accounts with old alts");
+}
 assert.equal(list(GameState.CONNECTING, LoginIndex.LOGIN_FORM, true), "show_picker");
 assert.equal(list(GameState.CONNECTING, LoginIndex.CHARACTER_SELECT, false), "show_picker", "the refresh after a create");
 assert.equal(list(GameState.CONNECTING, LoginIndex.LOGIN_FORM, false), "ignore", "late, after the fallback handshake");
@@ -154,6 +180,15 @@ assert.equal(
     "reopen_picker",
     "dropped while choosing: the picker again, no select sent",
 );
+
+assert.equal(decideCharacterList({
+    gameState: GameState.CONNECTION_LOST,
+    loginIndex: LoginIndex.CHARACTER_SELECT,
+    expected: true,
+    sessionCharacter: null,
+    maxCharacters: 1,
+    characters: [zezima],
+}), "reselect", "disabled slots also skip reopening a dropped picker");
 
 // CHARACTER_RESULT: matched to the request it answers.
 const result = (pending: "select" | "create" | "delete" | undefined, ok: boolean, gameState = GameState.CONNECTING) =>

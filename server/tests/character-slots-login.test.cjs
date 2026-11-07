@@ -80,7 +80,8 @@ const persistence = {
   encryptPassword: (password) => PasswordUtil.generatePasswordHashWithSalt(password),
 };
 
-beforeEach(() => {
+beforeEach((t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => key === 'characters:maxPerAccount' ? 3 : fallback);
   saves.clear();
   persistence.deleted.length = 0;
   persistence.failDelete = null;
@@ -498,7 +499,7 @@ test('the default: the typed character (primary only without the picker), else t
 
 test('the character cap reads its plugin config, clamped, and is one in the browser host', (t) => {
   const config = t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
-  assert.equal(maxCharactersPerAccount(), 3);
+  assert.equal(maxCharactersPerAccount(), 1);
   config.mock.mockImplementation(() => 50);
   assert.equal(maxCharactersPerAccount(), 6, 'the picker draws at most six rows');
   config.mock.mockImplementation(() => 6.9);
@@ -506,7 +507,7 @@ test('the character cap reads its plugin config, clamped, and is one in the brow
   config.mock.mockImplementation(() => 2.9);
   assert.equal(maxCharactersPerAccount(), 2, 'rounded down');
   config.mock.mockImplementation(() => 'lots');
-  assert.equal(maxCharactersPerAccount(), 3, 'a non-numeric value falls back to the default');
+  assert.equal(maxCharactersPerAccount(), 1, 'a non-numeric value falls back to the default');
   config.mock.mockImplementation(() => 0);
   assert.equal(maxCharactersPerAccount(), 1);
   config.mock.mockImplementation(() => 5);

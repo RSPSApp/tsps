@@ -379,7 +379,7 @@ export function drawCharacterSelect(host: LoginRendererHost, ctx: RenderContext,
                 continue;
             }
             const color = i === state.selectedCharacter ? 0xffff00 : 0xffffff;
-            const stats = `Cmb ${character.combatLevel} · Total ${character.totalLevel}`;
+            const stats = `Combat lvl ${character.combatLevel} · Total ${character.totalLevel}`;
             const right = rowX + PICKER_ROW_W - 6;
             const statsW = measureText(host, host.fontPlain12, stats);
             drawText(host, ctx, host.fontBold12, ellipsis(host, character.name, PICKER_ROW_W - statsW - 18), rowX + 6, nameY, color, true);

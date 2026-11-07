@@ -7,7 +7,7 @@ import { Misc } from "../../util/Misc";
 import type { CharacterListEntry } from "../protocol/ClientProtocol";
 
 /** Characters per account by default (pluginConfig `characters:maxPerAccount`). */
-const DEFAULT_MAX_CHARACTERS = 3;
+const DEFAULT_MAX_CHARACTERS = 1;
 /** The picker draws at most this many legible rows. */
 const MAX_CHARACTERS_LIMIT = 6;
 

@@ -16,6 +16,10 @@
  * Not recorded: every line here but the empty barrel's, and the overload's hit timing.
  */
 const Common = require("./Common.NightmareZone");
+const { drinkTimerRefusal } = require("../../items/Potions.plugin");
+
+/** The tick each player last drank a quick dream potion (absorption, super magic, super ranging). */
+const lastQuickDose = new WeakMap();
 
 const ABSORB_ATTRIBUTE = "nightmare-zone:absorb";
 const OVERLOAD_ATTRIBUTE = "nightmare-zone:overload";
@@ -69,26 +73,38 @@ function drink({ player, itemId }) {
     player.sendMessage(Common.message("onlyInDream"));
     return true;
   }
-  if (found.name === "overload" && player.getHitpoints() < potions().overload.minimumHitpoints) {
-    player.sendMessage(Common.message("overloadLowHp", { hp: potions().overload.minimumHitpoints }));
+  // Every dream potion: none while stunned, and none where drinking is barred (Potions.plugin's own checks and text).
+  const refusal = drinkTimerRefusal(player);
+  if (refusal?.kind === "stun") {
+    player.sendMessage(refusal.message);
     return true;
   }
-  if (found.name === "overload" && overloads.has(player)) {
-    player.sendMessage(Common.message("overloadActive"));
+  if (Common.api.emitCanDrink(player, itemId) === false) {
+    player.sendMessage("You cannot use potions here.");
     return true;
   }
-  // The delay every potion keeps (Potions.plugin's drink path): one dose per 3 ticks, none while stunned, and areas
-  // that bar drinking still do. Without it several Drink clicks in a tick each took effect (4 absorption doses at once).
-  const { TimerKey } = Common.core;
-  const timers = player.getTimers();
-  if (timers.has(TimerKey.STUN)) {
-    player.sendMessage("You're currently stunned and cannot use potions.");
-    return true;
+  if (found.name === "overload") {
+    if (player.getHitpoints() < potions().overload.minimumHitpoints) {
+      player.sendMessage(Common.message("overloadLowHp", { hp: potions().overload.minimumHitpoints }));
+      return true;
+    }
+    if (overloads.has(player)) {
+      player.sendMessage(Common.message("overloadActive"));
+      return true;
+    }
+    // An overload keeps the normal potion delay: one dose per 3 ticks, and it delays eating as any potion does.
+    if (refusal?.kind === "potion") return true;
+    const { TimerKey } = Common.core;
+    player.getTimers().extendOrRegister(TimerKey.POTION, 3);
+    player.getTimers().extendOrRegister(TimerKey.FOOD, 3);
+  } else {
+    // Wiki (Nightmare Zone, Benefits): the other dream potions, "excluding overloads", can be drunk "extremely
+    // quickly" without delaying hits, at herb-cleaning speed and mixed with food: no potion or food delay, one dose a
+    // tick (several Drink clicks in one tick each took effect).
+    const tick = Common.core.World.getProcessCycle();
+    if (lastQuickDose.get(player) === tick) return true;
+    lastQuickDose.set(player, tick);
   }
-  if (timers.has(TimerKey.POTION)) return true;
-  if (Common.api.emitCanDrink(player, itemId) === false) return true;
-  timers.extendOrRegister(TimerKey.POTION, 3);
-  timers.extendOrRegister(TimerKey.FOOD, 3);
   const inventory = player.getInventory();
   inventory.delete(itemId, 1);
   const next = found.potion.doses[found.dose + 1] ?? VIAL_LESS;

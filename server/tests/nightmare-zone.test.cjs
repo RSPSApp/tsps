@@ -16,6 +16,9 @@ const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/Npc
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Location } = require('../dist/game/model/Location');
 const { TimerRepository } = require('../dist/util/timers/TimerRepository');
+const { World } = require('../dist/game/World');
+/** The next game tick, as far as a once-a-tick check sees. */
+const nextTick = () => { World.processCycle++; };
 
 let Common, Dominic, Coffer, Dream, Potions, PowerUps, hooks, core;
 
@@ -327,7 +330,7 @@ test("absorption: only in a dream; 50 a dose up to 1,000; it takes monsters' dam
   assert.equal(p.inventory.getAmount(11735), 1, 'the next dose is left');
   for (let i = 0; i < 25; i++) {
     p.inventory.add(new core.Item(11737, 1));
-    for (let tick = 0; tick < 3; tick++) p.getTimers().process(); // one dose per 3 ticks
+    nextTick(); // one dose a tick
     drink(p, 11737);
   }
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 1000, 'capped');
@@ -340,17 +343,30 @@ test("absorption: only in a dream; 50 a dose up to 1,000; it takes monsters' dam
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 0);
 });
 
-test("a dream's potions keep the potion delay: one dose per 3 ticks, none while stunned or where drinking is barred", () => {
+// Wiki (Nightmare Zone, Benefits): the dream potions "excluding overloads" can be drunk "extremely quickly" without
+// delaying hits, at herb-cleaning speed and mixed with food. Overload keeps the normal potion delay.
+test("absorption, super magic and super ranging: no potion or food delay, one dose a tick, none stunned or barred", () => {
   const p = dreamer();
   p.inventory.add(new core.Item(11737, 4));
+  nextTick();
   drink(p, 11737);
   drink(p, 11737);
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 50, 'a second dose the same tick does nothing');
   assert.equal(p.inventory.getAmount(11737), 3);
-  for (let tick = 0; tick < 3; tick++) p.getTimers().process();
+  assert.equal(p.getTimers().has(core.TimerKey.POTION), false, 'no potion delay');
+  assert.equal(p.getTimers().has(core.TimerKey.FOOD), false, 'and no food delay');
+  nextTick();
   drink(p, 11737);
-  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100);
-  for (let tick = 0; tick < 3; tick++) p.getTimers().process();
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100, 'the next tick takes another dose');
+  for (const [id, skill] of [[11726, 'Magic'], [11722, 'Ranged']]) {
+    p.inventory.add(new core.Item(id, 1));
+    p.getTimers().registers(core.TimerKey.POTION, 3); // another potion's delay doesn't hold these back either
+    nextTick();
+    drink(p, id);
+    assert.equal(p.levels[skill], 99 + 14 + 5, `${skill} boosted at once`);
+    p.getTimers().cancel(core.TimerKey.POTION);
+  }
+  nextTick();
   p.getTimers().registers(core.TimerKey.STUN, 5);
   drink(p, 11737);
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100, 'not while stunned');
@@ -359,6 +375,27 @@ test("a dream's potions keep the potion delay: one dose per 3 ticks, none while 
   p.canDrink = false;
   drink(p, 11737);
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100, 'not where drinking is barred');
+  assert.equal(p.messages.at(-1), 'You cannot use potions here.');
+  Dream.wake({ player: p });
+});
+
+test("overload keeps the potion delay and the food delay, and is refused while stunned before its own checks", () => {
+  const p = dreamer();
+  p.inventory.add(new core.Item(11730, 1));
+  p.hp = 50;
+  p.getTimers().registers(core.TimerKey.STUN, 5);
+  drink(p, 11730);
+  assert.equal(p.messages.at(-1), "You're currently stunned and cannot use potions.", 'the stun is told first');
+  p.getTimers().cancel(core.TimerKey.STUN);
+  p.hp = 99;
+  p.getTimers().registers(core.TimerKey.POTION, 3);
+  drink(p, 11730);
+  assert.equal(varbit(p, 'nzone_overload_potion_effects') ?? 0, 0, "not inside another potion's delay");
+  p.getTimers().cancel(core.TimerKey.POTION);
+  drink(p, 11730);
+  assert.equal(varbit(p, 'nzone_overload_potion_effects'), 20);
+  assert.equal(p.getTimers().has(core.TimerKey.POTION), true, 'it sets the potion delay');
+  assert.equal(p.getTimers().has(core.TimerKey.FOOD), true, 'and the food delay');
   Dream.wake({ player: p });
 });
 

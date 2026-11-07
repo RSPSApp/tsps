@@ -16,6 +16,11 @@ const { EQUIPMENT_SLOTS, addEquipmentWidgets } = require("../modes/pvp/PresetsWi
 const Scoreboard = require("./duelarena/Scoreboard.DuelArena");
 const Hospital = require("./duelarena/Hospital.DuelArena");
 const Matchmaking = require("./duelarena/Matchmaking.DuelArena");
+const Common = require("./duelarena/Common.DuelArena");
+const Stash = require("./duelarena/Stash.DuelArena");
+const Loadouts = require("./duelarena/Loadouts.DuelArena");
+const Battle = require("./duelarena/Battle.DuelArena");
+const UnrankedDuel = require("./duelarena/UnrankedDuel.DuelArena");
 
 // Cache 237: confirmation group 756 and rule config varp 286.
 const ARENA = new Boundary(3326, 3383, 3197, 3295, 0);
@@ -62,7 +67,12 @@ for (const [index, { rule }] of RULE_ROWS.entries()) {
   }
 }
 const DUEL_INTERFACE = buildDuelInterface();
-const DUEL_OPTION = 4; // OPPLAYER1/2/3 are Attack/Trade/Follow.
+/**
+ * The Emir's Arena's player options, as the PvP Arena world shows them: 1 Challenge (an
+ * unranked duel, or on a normal world the choice of one or a Legacy Duel), 4 Load-outs.
+ */
+const DUEL_OPTION = 1;
+const LOADOUTS_OPTION = Loadouts.LOADOUTS_OPTION;
 const FORFEIT_OPTION = 6;
 const uid = (group, child) => (group << 16) | child;
 const EQUIPMENT_RULES = [
@@ -281,13 +291,38 @@ function setRules(session, mask, notifyBots = true) {
   if (notifyBots) acceptBots(session, "duelarena:rules-changed");
 }
 function updateMenu({ player }) {
+  // An unranked fight's arena sets its own options (Battle.DuelArena.js).
+  if (UnrankedDuel.inFight(player)) return;
   const active = player.getDueling().inDuel();
   const mode = active ? "fight" : inZone(player) ? "offer" : "none";
   if (menuState.get(player) === mode) return;
   menuState.set(player, mode);
-  player.getPacketSender().sendPlayerOption(DUEL_OPTION, mode === "offer" ? "Challenge" : "")
-    .sendPlayerOption(1, active ? "Attack" : "", true)
+  player.getPacketSender().sendPlayerOption(DUEL_OPTION, active ? "Attack" : mode === "offer" ? "Challenge" : "", active)
+    .sendPlayerOption(LOADOUTS_OPTION, mode === "offer" ? "Load-outs" : "")
     .sendPlayerOption(FORFEIT_OPTION, active && !hasRule(player, DuelRule.NO_FORFEIT) ? "Forfeit" : "");
+}
+/** Back from an unranked fight: the Emir's Arena's options again. */
+function refreshMenu(player) {
+  menuState.delete(player);
+  updateMenu({ player });
+}
+/** Whether option 1 reads Challenge (and 4 Load-outs) for this player now; in an arena it's Fight. */
+function offersChallenge(player) {
+  return menuState.get(player) === "offer" && !UnrankedDuel.inFight(player) && inZone(player);
+}
+/** Challenge (option 1 while the menu offers it): walk up, then UnrankedDuel asks which duel. */
+function routeChallenge(route) {
+  if (route.option !== DUEL_OPTION || !offersChallenge(route.player)) return;
+  route.handled = true;
+  const { player, target } = route;
+  player.getMovementQueue().walkToEntity(target, () => UnrankedDuel.challenge(player, target));
+}
+/** Whether `target` has asked `player` for a Legacy Duel (Challenge back accepts it). */
+function legacyPending(player, target) {
+  return requests.get(target) === player;
+}
+function legacyBusy(player) {
+  return sessions.has(player);
 }
 function syncDuelIcon(player) {
   if (player.isPlayerBot()) return;
@@ -705,20 +740,18 @@ function handleInterface(event) {
     setRules(session, rules.reduce((mask, rule) => mask | rule.getConfigId(), 0));
   }
 }
-function handleOption(event) {
-  if (event.option === DUEL_OPTION) {
-    event.handled = true;
-    const session = sessions.get(event.player);
-    const expectedInterface = session?.stage === "options" ? (stakingEnabled ? OPTIONS : CACHE_OPTIONS) : CONFIRM;
-    if (session && session.stage !== "fight" && session.players.some(player => !player.isPlayerBot()
-      && (player.getInterfaceId() !== expectedInterface || player.getStatus() !== PlayerStatus.DUELING))) {
-      end(session);
-    }
-    if (sessions.has(event.player)) return;
-    if (inZone(event.player) && inZone(event.target) && nearby(event.player, event.target)) {
-      request(event);
-    }
+/** A Legacy Duel challenge: the choice on a normal world, or Challenge back on their request. */
+function legacyChallenge(player, target) {
+  const session = sessions.get(player);
+  const expectedInterface = session?.stage === "options" ? (stakingEnabled ? OPTIONS : CACHE_OPTIONS) : CONFIRM;
+  if (session && session.stage !== "fight" && session.players.some(p => !p.isPlayerBot()
+    && (p.getInterfaceId() !== expectedInterface || p.getStatus() !== PlayerStatus.DUELING))) {
+    end(session);
   }
+  if (sessions.has(player)) return;
+  if (inZone(player) && inZone(target) && nearby(player, target)) request({ player, target });
+}
+function handleOption(event) {
   if (event.option === FORFEIT_OPTION) {
     const session = sessions.get(event.player);
     if (session?.stage === "fight" && event.player.getDueling().getInteract() === event.target) {
@@ -804,6 +837,7 @@ module.exports = {
   enableStaking,
   register(api) {
     pluginApi = api;
+    Common.attachCommon(api);
     api.registerCustomInterface(DUEL_INTERFACE);
     api.onPlayerLogin(processPlayer);
     api.onPlayerProcess(processPlayer);
@@ -828,7 +862,12 @@ module.exports = {
     Scoreboard.attach(api);
     Hospital.attach(api);
     Matchmaking.attach(api, { startArranged });
+    Stash.attachStash(api);
+    Loadouts.attachLoadouts(api, { offersLoadouts: offersChallenge });
+    Battle.attachBattle(api, { leftFight: refreshMenu });
+    UnrankedDuel.attachUnranked(api, { request: legacyChallenge, pending: legacyPending, busy: legacyBusy });
+    api.onCustomEvent("player:option-route", routeChallenge);
   },
   /** For server/tests/pvp-arena-scoreboard.test.cjs and server/tests/ironman.test.cjs. */
-  _test: { accept, end, sessions, snapshot },
+  _test: { accept, end, sessions, snapshot, legacyChallenge, routeChallenge },
 };

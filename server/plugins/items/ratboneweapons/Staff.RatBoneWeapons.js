@@ -174,6 +174,7 @@ function attach(pluginApi) {
   api.onItemAction("Bone staff", { Check: check, Uncharge: uncharge });
   api.onItemOnItem(charge, { noted: false });
   api.registerCombatMethodResolver(staff.resolver);
+  api.onCustomEvent("item:fill-charges", staff.fillCharges);
   api.onCombatHitResolved(onHitResolved);
 }
 

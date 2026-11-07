@@ -1,3 +1,4 @@
+import type { ChatRequest } from "../chatRequests";
 import { ClickMode } from "../InputManager";
 import type { InputManager } from "../InputManager";
 import type { WidgetManager } from "../../widgets/WidgetManager";
@@ -20,7 +21,7 @@ export type WidgetInteractionControllerDeps = {
     getWidgetManager: () => WidgetManager | undefined;
     getInputManager: () => InputManager | undefined;
     getRendererCanvas: () => unknown;
-    getTradeRequestTargetsByName: () => ReadonlyMap<string, number>;
+    getChatRequestsByName: () => ReadonlyMap<string, ChatRequest>;
 };
 
 /**
@@ -194,7 +195,7 @@ export class WidgetInteractionController {
     handleTradeRequestChatClick(widgets: readonly any[]): boolean {
         return handleTradeRequestChatClick(
             widgets,
-            this.deps.getTradeRequestTargetsByName(),
+            this.deps.getChatRequestsByName(),
         );
     }
 

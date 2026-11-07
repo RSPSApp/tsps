@@ -145,6 +145,11 @@ function answerSpell(request) {
   autocasting.answerSpell(request);
 }
 
+/** "item:fill-charges": a sceptre handed out ready to use (PvP Arena load-outs) comes activated and full. */
+function fillCharges(event) {
+  variantOf(event.item?.getId?.())?.fillCharges(event);
+}
+
 // ------------------------------------------------------------------ charges
 
 function isActivated(item) {
@@ -300,6 +305,7 @@ module.exports = {
     defineSceptres();
     pluginApi.registerCombatMethodResolver({ resolve: resolveSceptre });
     pluginApi.onCustomEvent("powered-staff:spell", answerSpell);
+    pluginApi.onCustomEvent("item:fill-charges", fillCharges);
     pluginApi.onCustomEvent("combat:magic-max-hit", boostMaxHit);
     pluginApi.onCustomEvent("combat:magic-attack-roll-modify", boostAccuracy);
     pluginApi.onCustomEvent("magic:cast-committed", spellCast);

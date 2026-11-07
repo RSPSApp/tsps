@@ -85,6 +85,7 @@ Scythe.register({
     persistAttribute: () => {},
     onItemAction: () => {},
     onItemOnItem: () => {},
+    onCustomEvent: () => {},
     onItemOnObject: (handler) => { itemOnObject = handler; },
     onObjectInteraction: (name, actions) => { wellActions = actions; },
     onPlayerLogin: (handler) => { loginHook = handler; },

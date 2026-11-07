@@ -218,7 +218,6 @@ function addEther(player, item, amount) {
   if (!activated) {
     item.setId(staff.chargedByUncharged.get(item.getId()));
     item.setMetaValue(DEPOSIT_META, true);
-    item.setMetaValue(UNPAID_META, undefined);
     player.sendMessage(`You use ${format(ACTIVATION_ETHER)} ether to activate the weapon.`);
   }
   staff.setCharges(item, current + added);
@@ -257,7 +256,7 @@ function uncharge({ player, item }) {
   }
   if (returned > 0) inventory.addItem(refund);
   staff.setCharges(item, 0);
-  item.setMetaValue(UNPAID_META, depositOf(item) > 0 ? undefined : true);
+  if (!(depositOf(item) > 0)) item.setMetaValue(UNPAID_META, true);
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   inventory.refreshItems();
@@ -339,7 +338,7 @@ function deathItemDrop(event) {
   const lost = depositOf(item) + staff.chargesOf(item);
   if (lost > 0) core.ItemOnGroundManager.registerLocation(killer, new core.Item(ids().REVENANT_ETHER, lost), location);
   staff.setCharges(item, 0);
-  item.setMetaValue(UNPAID_META, depositOf(item) > 0 ? undefined : true);
+  if (!(depositOf(item) > 0)) item.setMetaValue(UNPAID_META, true);
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   // Core already returns kept items; report the ether drop without dropping the sceptre as well.

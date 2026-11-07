@@ -259,7 +259,7 @@ test("a weapon bought before the deposit rule cannot be Uncharged then Dismantle
   }
 });
 
-test("activating an unpaid weapon again pays the deposit, so it dismantles once uncharged", () => {
+test("activating an unpaid weapon again does not clear the mark, so Dismantle stays refused", () => {
   const p = player();
   const bought = new core.Item(CRAW.charged, 1);
   p.getInventory().addItem(bought);
@@ -270,5 +270,6 @@ test("activating an unpaid weapon again pays the deposit, so it dismantles once 
   actions[CRAW.name].Uncharge({ player: p, item });
   assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1000);
   actions[`${CRAW.name} (u)`].Dismantle({ player: p, item });
-  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 8500);
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1000);
+  assert.equal(p.getInventory().getAmount(CRAW.uncharged), 1);
 });

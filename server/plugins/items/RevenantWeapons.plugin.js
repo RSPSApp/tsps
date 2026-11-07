@@ -21,7 +21,7 @@ const CHARGES_META = "revenant-weapon:charges";
 // Set only when addEther takes the activation ether: a weapon from a shop, spawn or older save has no
 // paid reserve to refund or drop.
 const DEPOSIT_META = "revenant-weapon:deposit";
-// Set when a weapon with no paid deposit is emptied: its ether was never paid in, so Dismantle refuses it.
+// Set when a weapon with no paid deposit is emptied: its ether was never paid in, so Dismantle refuses it. Never cleared.
 const UNPAID_META = "revenant-weapon:unpaid";
 const ACTIVATION_ETHER = 1000;
 const MAX_CHARGES = 16000;
@@ -104,7 +104,6 @@ function addEther(player, item, amount) {
   takePlain(inventory, core.ItemIdentifiers.REVENANT_ETHER, deposit + added);
   item.setId(weapon.charged);
   item.setMetaValue(DEPOSIT_META, true);
-  item.setMetaValue(UNPAID_META, undefined);
   setCharges(item, current + added);
   inventory.refreshItems();
   if (deposit) player.sendMessage(`You use ${format(ACTIVATION_ETHER)} ether to activate the weapon.`);
@@ -120,7 +119,7 @@ function emptyWeapon(item) {
   const paid = depositOf(item) > 0;
   setCharges(item, 0);
   item.setMetaValue(DEPOSIT_META, undefined);
-  item.setMetaValue(UNPAID_META, paid ? undefined : true);
+  if (!paid) item.setMetaValue(UNPAID_META, true);
   item.setId(weaponFor(item).uncharged);
 }
 

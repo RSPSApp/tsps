@@ -230,13 +230,29 @@ pages cover the later rock entries. As elsewhere on this page, this is the sourc
 ## Varrock armour and extra ore
 
 On members worlds the worn armour has a 10% extra-ore roll on the ordinary metal rocks supported here:
-tier 1 or higher for copper, tin, iron, silver, coal, gold and lead; tier 2 for mithril; tier 3 for
+tier 1 or higher for clay, copper, tin, iron, silver, coal, gold and lead; tier 2 for mithril; tier 3 for
 adamantite; tier 4 for runite. The Mining cape and charged celestial ring roll independently where each
 is eligible. Each delivered bonus gives normal XP and counts as an ore; each must fit in the inventory
 or an accepting storage path. A charged ring loses one charge on the base gather, including when its
 bonus roll misses. Treat the single charge in a simultaneous multi-enhancer case as the implementation's
 nonrecursive interpretation, not a captured retail observation. See the Wiki's [Mining enhancers](https://oldschool.runescape.wiki/w/Mining_enhancers),
 [Iron rocks](https://oldschool.runescape.wiki/w/Iron_rocks) and [Lead rocks](https://oldschool.runescape.wiki/w/Lead_rocks).
+
+## Bracelet of clay
+
+Plugin `plugins/items/BraceletOfClay.plugin.js`; Mining asks `mining:ore-yield` for the ore and amount of each
+success and calls the answer's `spend` once the ore is kept (not when it is handed over or combusted). Per the Wiki
+([Bracelet of clay](https://oldschool.runescape.wiki/w/Bracelet_of_clay), [Soft clay rocks](https://oldschool.runescape.wiki/w/Soft_clay_rocks)):
+worn, a mined clay is soft clay, and a soft clay rock gives two soft clay a success; one bracelet softens 28, the
+count belongs to the player (`bracelet-of-clay:charges`) and the bracelet is gone at 0. A Varrock armour, Mining
+cape or celestial ring extra from a clay rock is soft clay as well (the armour asks by the rock's own ore, clay
+tier 1 per [Mining enhancers](https://oldschool.runescape.wiki/w/Mining_enhancers)).
+
+No recording in the index has a bracelet of clay worn, so nothing here is from a capture. Not verified: the crumble
+line (ours), whether the second soft clay of a soft clay rock and an enhancer's extra use a charge (here the
+bracelet's own soft clay each cost one, extras cost none), and the Wiki's soft clay armour tier (its table says 2,
+its prose 3), so soft clay rocks are not yet in the Varrock armour table. The Wiki's worn Check option is not in
+the rev 241 cache (the item has no worn option params), so there is none.
 
 ## Gems while mining
 

@@ -1424,11 +1424,6 @@ module.exports = function registerLegendsQuest(api) {
     const ids = [event.usedItemId, event.usedWithItemId];
     const isPair = (a, b) => (ids[0] === a && ids[1] === b) || (ids[0] === b && ids[1] === a);
 
-    if (isPair(SKETCH, GOLD_BAR)) {
-      smithGoldenBowl(player);
-      event.handled = true;
-      return;
-    }
     if (isPair(GOLDEN_BOWL_4, YOMMI_TREE_SEEDS)) {
       germinateSeeds(player);
       event.handled = true;
@@ -1545,6 +1540,20 @@ module.exports = function registerLegendsQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     if (!player) return;
+
+    // These named anvils are restricted to their own specialist work (Wiki: Anvil).
+    if (itemId === GOLD_BAR && questStage(player) >= STAGE_ASKED_HOLY_WATER && event.object) {
+      const specialAnvils = ["chasm_anvil", "ds2_ac_forge_anvil"].map(name => api.core.CacheDefinitions.getLocId(name));
+      const definition = api.core.ObjectDefinition.forPlayer(objectId, player);
+      if (specialAnvils.every(Number.isInteger) && definition?.getName() === "Anvil"
+          && !specialAnvils.includes(objectId) && !specialAnvils.includes(definition.id)) {
+        event.handled = true;
+        const access = { player, object: event.object, denied: false };
+        api.emitCustomEvent("smithing:anvil-access", access);
+        if (!access.denied) smithGoldenBowl(player);
+        return;
+      }
+    }
 
     if (FIRE_WALLS.has(objectId)) {
       if (itemId === GOLDEN_BOWL_4) {

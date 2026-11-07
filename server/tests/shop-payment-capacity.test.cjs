@@ -75,6 +75,18 @@ for (const [shopName, ids] of [['Bandit Duty Free', ['POT']], ['Lumbridge Genera
     assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), 0, 'for 0 coins');
   });
 }
+// The shop's own currency isn't bought for 0 of itself: coins keep main's refusal at a stock-priced general store.
+test('Lumbridge General Store refuses coins with "This item has no value."', async t => {
+  const f = actor(t), inv = f.p.getInventory(), coins = core.ItemIdentifiers.COINS;
+  const shop = core.ShopDefinition.all().find(s => s.getName() === 'Lumbridge General Store');
+  inv.add(new core.Item(coins, 10), false);
+  open(f, shop.getId());
+  await sale(f, coins, 1);
+  await sale(f, coins, 3);
+  assert.deepEqual(f.messages, ['This item has no value.', 'This item has no value.'], 'Value and Sell 5 refused');
+  assert.equal(inv.getAmount(coins), 10, 'no coins taken');
+  assert.equal(stock(f, coins), undefined, 'coins not listed in the shop');
+});
 test('returning original stock has the same payment in bulk and single sales', async t => {
   const f = actor(t), inv = f.p.getInventory(), id = core.ItemIdentifiers.ROPE, coins = core.ItemIdentifiers.COINS;
   const shop = core.ShopDefinition.all().find(s => s.getName() === "Martin Thwait's Lost and Found.");

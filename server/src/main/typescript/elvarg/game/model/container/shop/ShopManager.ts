@@ -611,7 +611,8 @@ export class ShopManager {
             return;
         }
         const price = fromShop ? this.buyPrice(player, shop, definition) : this.sellPrice(shop, definition, player);
-        if (price <= 0 && !((fromShop || this.stockPriced(shop)) && this.itemPrice(shop, definition) > 0)) {
+        if ((!fromShop && this.isOwnCurrency(shop, itemId))
+            || (price <= 0 && !((fromShop || this.stockPriced(shop)) && this.itemPrice(shop, definition) > 0))) {
             player.sendMessage("This item has no value.");
             return;
         }
@@ -769,7 +770,7 @@ export class ShopManager {
         const price = this.sellPrice(shop, definition, player);
         // Wiki (Lumbridge General Store, Bandit Duty Free): a stocked pot, jug or chisel is "bought at" 0 coins. A
         // stock-priced general store refuses only an item of no value, not one its formula rounds down to 0.
-        if (this.stockPriced(shop) ? this.itemPrice(shop, definition) <= 0 : price <= 0) {
+        if (this.isOwnCurrency(shop, stockId) || (this.stockPriced(shop) ? this.itemPrice(shop, definition) <= 0 : price <= 0)) {
             player.sendMessage("This item has no value.");
             return;
         }
@@ -978,6 +979,13 @@ export class ShopManager {
         };
         PluginManager.emitCustomEvent("shop:buy-price", request);
         return Number.isSafeInteger(request.price) && request.price >= 0 ? request.price : price;
+    }
+
+    /** The shop's own currency item (coins to a coin shop): never bought, even where the price formula would allow 0. */
+    private static isOwnCurrency(shop: RuntimeShop, itemId: number): boolean {
+        const currencyId = this.currencyHandlers.get(shop.definition.getCurrency())?.itemId
+            ?? this.currencyItemId(shop.definition.getCurrency());
+        return currencyId > 0 && ItemDefinition.forId(itemId).unNote() === currencyId;
     }
 
     /** A coin general store with the Wiki's buy percentage and change per item: its price follows its stock. */

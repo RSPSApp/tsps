@@ -37,6 +37,9 @@ function harness(questFile) {
       ObjectManager: { register: object => objects.push(object), deregister: noop },
     },
     persistAttribute: noop,
+    onItemAction: (name, actions) => (hooks.onItemAction ??= []).push(typeof name === "function" ? name : event => {
+      if (core.CacheDefinitions.getItem(event.itemId)?.name === name) actions[event.option]?.(event);
+    }),
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
     emitCustomEvent: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
     onInterfaceActionButton: (ids, handler) => (hooks.onInterfaceActionButton ??= []).push(handler),
@@ -111,6 +114,7 @@ function player() {
     setAttribute: (key, value) => attributes.set(key, value),
     setEnteredAmountAction: action => { p.amountAction = action; },
     getInventory: () => inventory,
+    getBanks: () => [],
     getPacketSender: () => packet,
     getDialogueManager: () => ({ startDialogues: builder => { lastBuilder = builder; }, reset: noop, isActive: () => false }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.movementBlocked = value === true; return this; } }),

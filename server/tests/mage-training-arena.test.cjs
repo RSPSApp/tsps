@@ -988,7 +988,7 @@ for (const count of [1, 3]) test(`Bones to Peaches core XP is per cast with ${co
   const level=70, initial=core.SkillManager.getExperienceForLevel(level);
   skill.setCurrentLevel(magic,level,false).setMaxLevels(magic,level,false).setExperience(magic,initial);
   assert.equal(skill.getCurrentLevel(magic),level); assert.equal(skill.getMaxLevel(magic),level);
-  assert.equal(skill.getExperience(magic),initial); assert.equal(core.SkillManager.getLevelForExperience(initial),level);
+  assert.equal(skill.getExperience(magic),initial); assert.equal(skill.getSkills().getExperiences()[magic.getIndex()],initial); assert.equal(core.SkillManager.getLevelForExperience(initial),level);
   assert.notEqual(player.getAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE),true);
   assert.equal(core.GameConstants.EXPERIENCE_MULTIPLIER,1);
   giveRunes(player); const inventory=player.getInventory(); inventory.add(new core.Item(526,count),false);
@@ -1007,7 +1007,7 @@ for (const count of [1, 3]) test(`Bones to Peaches core XP is per cast with ${co
   assert.equal(calls[0],35.5,'one cast requests 35.5 base Magic XP');
   assert.equal(inventory.getAmount(526),0); assert.equal(inventory.getAmount(6883),count);
   assert.equal(inventory.getAmount(561),0); assert.equal(inventory.getAmount(555),0); assert.equal(inventory.getAmount(557),0);
-  assert.equal(skill.getExperience(magic)-initial,35.5); assert.deepEqual(drops,[35.5]); assert.deepEqual(events,[{experience:35.5,multiplied:true}]);
+  assert.equal(skill.getSkills().getExperiences()[magic.getIndex()]-initial,35.5); assert.deepEqual(drops,[35.5]); assert.deepEqual(events,[{experience:35.5,multiplied:true}]);
 });
 
 for (const [name, fruit] of [['BONES_TO_BANANAS', 1963], ['BONES_TO_PEACHES', 6883]]) {

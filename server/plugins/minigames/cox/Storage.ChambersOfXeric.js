@@ -102,7 +102,6 @@ function stacks(id) {
   return definition(id)?.isStackable?.() === true || definition(id)?.isNoted?.() === true;
 }
 
-/** A store of items: a list of { id, amount, meta? } with a size. Stackables stack, others take a slot each. */
 /** The most one stack can hold, as in the inventory and the bank. */
 const MAX_STACK = 2147483647;
 
@@ -114,6 +113,7 @@ function restricted(item) {
   return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
 }
 
+/** A store of items: a list of { id, amount, meta? } with a size. Stackables stack, others take a slot each. */
 function addTo(list, size, id, amount, meta = null) {
   if (stacks(id)) {
     const existing = list.find((entry) => entry.id === id);
@@ -405,9 +405,12 @@ function depositOrBankAll({ player }) {
   const items = privateItems(player);
   for (const entry of [...items]) {
     const bank = player.getBank(Bank.getTabForItem(player, entry.id));
-    if (bank.getFreeSlots() <= 0 && !bank.contains(entry.id)) continue;
-    bank.add(new Item(entry.id, entry.amount), false);
-    takeFrom(items, entry.id, entry.amount);
+    // Only what the bank can hold leaves the storage (the stack cap, its space), with the entry's own meta, and
+    // from that entry: the rest stays stored rather than being deleted.
+    const moving = bank.getAddableAmount(new Item(entry.id, entry.amount, entry.meta ?? null));
+    if (moving <= 0) continue;
+    bank.add(new Item(entry.id, moving, entry.meta ?? null), false);
+    pullFrom(items, entry.id, moving, entry);
   }
   if (items.length > 0) player.sendMessage("Not enough space in your bank.");
   refresh(player);
@@ -626,5 +629,5 @@ module.exports = function registerCoxStorage(api) {
 
 Object.assign(module.exports, {
   TIERS, sharedItem, addTo, pullFrom, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
-  dragPrivate, isUltimateIronman,
+  dragPrivate, isUltimateIronman, depositOrBankAll,
 });

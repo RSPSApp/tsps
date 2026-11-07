@@ -98,3 +98,14 @@ test("depositing onto a stored stack near the cap stores only what fits", (t) =>
   assert.equal(stored(f, I.COINS), 2147483647);
   assert.equal(f.inv.getAmount(I.COINS), 1000 - 647, "the rest stays in the inventory");
 });
+
+test("banking the storage from the mountain moves only what the bank can hold, keeping the rest stored", (t) => {
+  const f = actor(t);
+  f.p.setAttribute("cox:storage-view", { kind: "private", size: 120, mount: true });
+  f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 1500000000 }]);
+  const tab = f.p.getBank(core.Bank.getTabForItem(f.p, I.COINS));
+  tab.add(new core.Item(I.COINS, 1000000000), false);
+  Storage.depositOrBankAll({ player: f.p });
+  assert.equal(tab.getAmount(I.COINS), 2147483647);
+  assert.equal(stored(f, I.COINS), 2500000000 - 2147483647, "nothing deleted");
+});

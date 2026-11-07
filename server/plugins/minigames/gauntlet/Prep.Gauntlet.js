@@ -20,6 +20,8 @@ const Items = require("./Items.Gauntlet");
 const Resources = require("./Resources.Gauntlet");
 const Rewards = require("./Rewards.Gauntlet");
 
+/** The Gauntlet's own full-inventory line (takeTools). */
+const NO_ROOM_TEXT = "You don't have enough inventory space.";
 const ANIMATION = { FILL: 827, COOK: 896, GRIND: 364, MIX: 363 };
 /** synth_sound 2577 with each cooked fish (rsprox captures). */
 const COOK_SOUND = 2577;
@@ -75,7 +77,7 @@ function takeTools(event) {
   const give = (tools) => () => {
     for (const [key] of tools) {
       if (player.getInventory().getFreeSlots() <= 0) {
-        player.sendMessage("You don't have enough inventory space.");
+        player.sendMessage(NO_ROOM_TEXT);
         break;
       }
       player.getInventory().adds(items[key], 1);
@@ -193,10 +195,15 @@ function sing(player, run, recipe, amount) {
   const times = recipe.gear ? 1 : Math.max(1, amount);
   let made = 0;
   let changedSlot = -1;
+  let noRoom = false;
   for (; made < times; made++) {
     const affordable = count(player, items.shards) >= recipe.shards
       && recipe.needs.every(([id, need]) => count(player, id) + (equipmentSlotOf(player, id) >= 0 ? 1 : 0) >= need);
     if (!affordable) break;
+    if (!roomFor(player, recipe, items)) {
+      noRoom = true;
+      break;
+    }
     // An upgraded piece that is worn is upgraded where it is.
     let wornSlot = -1;
     for (const [id, need] of recipe.needs) {
@@ -227,11 +234,26 @@ function sing(player, run, recipe, amount) {
   player.getInventory().refreshItems();
   player.getEquipment().refreshItems();
   if (made === 0) {
-    Shared.statement(player, "You do not have the materials required to make that.");
+    if (noRoom) player.sendMessage(NO_ROOM_TEXT);
+    else Shared.statement(player, "You do not have the materials required to make that.");
     return;
   }
   if (changedSlot >= 0) refreshGear(player, changedSlot);
   player.sendMessage("With the help of the crystal bowl, you sing a beautiful song and shape the crystals.");
+}
+
+/** Whether one more of `recipe` has somewhere to go: a free slot, the worn piece it upgrades, or a slot its inputs free. */
+function roomFor(player, recipe, items) {
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() > 0) return true;
+  const { ItemDefinition } = Shared.core();
+  const stackable = (id) => ItemDefinition.forId(id)?.isStackable?.() === true;
+  if (stackable(recipe.id) && inventory.contains(recipe.id)) return true;
+  if (recipe.shards > 0 && count(player, items.shards) === recipe.shards) return true;
+  return recipe.needs.some(([id, need]) => {
+    if (equipmentSlotOf(player, id) >= 0 && count(player, id) < need) return true;
+    return count(player, id) >= need && (!stackable(id) || count(player, id) === need);
+  });
 }
 
 function equipmentSlotOf(player, id) {
@@ -287,8 +309,13 @@ function grindShards(event) {
     player.sendMessage(`You need at least ${Items.DUST_PER_POTION} shards to make anything useful.`);
     return true;
   }
-  player.getInventory().delete(items.shards, Items.DUST_PER_POTION);
-  player.getInventory().adds(items.dust, Items.DUST_PER_POTION);
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() <= 0 && !inventory.contains(items.dust) && count(player, items.shards) !== Items.DUST_PER_POTION) {
+    player.sendMessage(NO_ROOM_TEXT);
+    return true;
+  }
+  inventory.delete(items.shards, Items.DUST_PER_POTION);
+  inventory.adds(items.dust, Items.DUST_PER_POTION);
   player.getInventory().refreshItems();
   animate(player, ANIMATION.GRIND);
   player.sendMessage("You grind the shards into dust.");

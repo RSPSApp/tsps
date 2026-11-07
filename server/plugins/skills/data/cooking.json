@@ -114,7 +114,7 @@
     {"product":"unfinished_mud_pie_2","level":29,"ingredients":["bucket_water","unfinished_mud_pie_1"],"returns":["bucket_empty"]},
     {"product":"uncooked_mud_pie","level":29,"ingredients":["clay","unfinished_mud_pie_2"]},
     {"product":"uncooked_apple_pie","level":30,"ingredients":["cooking_apple","pie_shell"]},
-    {"product":"unfinished_garden_pie_1","level":34,"members":true,"ingredients":["tomato","pie_shell"]},
+    {"product":"unfinished_garden_pie_1","level":34,"ingredients":["tomato","pie_shell"]},
     {"product":"unfinished_garden_pie_2","level":34,"ingredients":["onion","unfinished_garden_pie_1"]},
     {"product":"uncooked_garden_pie","level":34,"ingredients":["cabbage","unfinished_garden_pie_2"]},
     {"product":"incomplete_pizza","level":35,"ingredients":["tomato","pizza_base"],"message":"You add the tomato to the pizza."},

@@ -110,6 +110,7 @@ function evictFromMembersArea({ player }) {
 
 module.exports = {
   name: "FreeToPlay",
+  ITEM_MESSAGE,
   register(api) {
     // Members worlds need none of these hooks.
     if (api.core.WorldDefinition.isMembersWorld()) return;

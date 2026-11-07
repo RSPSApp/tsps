@@ -157,3 +157,17 @@ test('the chosen sets cap the casts, and every gem takes its Wiki runes, level a
     for (const [name] of gem.runes) assert.equal(player.amounts.get(core.ItemIds[name]), 0, `${gem.gem} ${name}`);
   }
 });
+
+test('a cast with no room for the enchanted bolts keeps its runes', () => {
+  tasks.length = 0;
+  const fillers = Array.from({ length: 24 }, (_, i) => [900000 + i, 1]);
+  const player = playerWith([[core.ItemIds.RUBY_BOLTS, 20], ...rubyRunes(2), ...fillers]);
+  assert.equal(player.getInventory().getFreeSlots(), 0);
+  cast(player);
+  player.menu.execute(core.ItemIds.RUBY_BOLTS_E_, 1);
+  assert.equal(player.amounts.get(core.ItemIds.RUBY_BOLTS), 20);
+  assert.equal(player.amounts.get(core.ItemIds.RUBY_BOLTS_E_) ?? 0, 0);
+  for (const [id, n] of rubyRunes(2)) assert.equal(player.amounts.get(id), n);
+  assert.ok(player.log.some(([kind, text]) => kind === 'message' && /enough inventory space/.test(text)));
+  assert.equal(player.log.some(([kind]) => kind === 'xp'), false);
+});

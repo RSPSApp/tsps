@@ -87,12 +87,13 @@ function hasRoom(player, recipe, count) {
 /** One cast: up to ten bolts, its runes and XP. False when it could not be cast. */
 function castOnce(player, recipe) {
   const held = carried(player, recipe);
-  if (held <= 0 || !recipe.spell.canCast(player, true)) return false;
+  if (held <= 0 || !recipe.spell.canCast(player, false)) return false;
   const count = Math.min(held, DATA.boltsPerCast);
   if (!hasRoom(player, recipe, count)) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
+  if (!recipe.spell.canCast(player, true)) return false;
   const inventory = player.getInventory();
   inventory.deleteNumber(recipe.inputId, count);
   inventory.adds(recipe.outputId, count);

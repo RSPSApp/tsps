@@ -23,7 +23,11 @@ before(async () => {
 function miller() {
   const player = new Player(null);
   const messages = [];
-  const sender = new Proxy({}, { get: () => () => sender });
+  const varbits = new Map();
+  const sender = new Proxy(
+    { sendVarbit: (id, value) => { varbits.set(id, value); return sender; } },
+    { get: (target, key) => target[key] ?? (() => sender) }
+  );
   player.getPacketSender = () => sender;
   player.sendMessage = message => messages.push(message);
   const inventory = player.getInventory();
@@ -32,7 +36,7 @@ function miller() {
     return { player, object, objectId: id, location: { x: 3166, y: 3307, z: 2 }, handled: false };
   }
   return {
-    player, messages, inventory,
+    player, messages, inventory, varbits,
     add: (id, amount = 1) => inventory.add(new core.Item(id, amount), false),
     use(id, objectId = hopper) {
       const itemSlot = inventory.getSlotForItemId(id);
@@ -85,6 +89,42 @@ test('noted grain, quest grain, unrelated items and other scenery fall through',
   assert.equal(m.inventory.getAmount(Items.GRAIN), 1);
   assert.deepEqual(m.messages, []);
   assert.equal(m.player.getAttribute('windmill:hopper'), undefined);
+});
+
+test('milling writes the cache flour count varbit, not just the bin flag', () => {
+  const m = miller();
+  m.add(Items.GRAIN);
+  assert.equal(m.use(Items.GRAIN), true);
+  assert.equal(m.varbits.has(4920), false, 'nothing has been milled yet');
+  assert.equal(m.click(controls, 'Operate'), true);
+  assert.equal(m.varbits.get(4920), 1, 'mill_flour carries the bin count for the client');
+  assert.equal(m.varbits.get(5325), 1, 'the bin flag still selects the full model');
+  assert.equal(m.varbits.has(4923), false, 'wheat leaves the cornflour count alone');
+});
+
+test('sweetcorn writes the cornflour count instead of the wheat one', () => {
+  const m = miller();
+  m.add(Items.SWEETCORN);
+  assert.equal(m.use(Items.SWEETCORN), true);
+  assert.equal(m.click(controls, 'Operate'), true);
+  assert.equal(m.varbits.get(4923), 1, 'mill_cornflour carries the count');
+  assert.equal(m.varbits.has(4920), false, 'and the wheat count stays untouched');
+});
+
+test('emptying the bin zeroes the count it wrote', () => {
+  const m = miller();
+  const bin = core.CacheDefinitions.getLocId('millbase_flour');
+  assert.equal(bin, core.ObjectIdentifiers.FLOUR_BIN);
+  m.add(Items.GRAIN);
+  m.add(Items.POT);
+  assert.equal(m.use(Items.GRAIN), true);
+  assert.equal(m.click(controls, 'Operate'), true);
+  assert.equal(m.varbits.get(4920), 1);
+  const potOfFlour = m.inventory.getAmount(Items.POT_OF_FLOUR);
+  assert.equal(m.click(bin, 'Empty'), true);
+  assert.equal(m.inventory.getAmount(Items.POT_OF_FLOUR), potOfFlour + 1, 'a flour leaves the bin');
+  assert.equal(m.varbits.get(4920), 0, 'the count returns to zero');
+  assert.equal(m.varbits.get(5325), 0, 'and the bin flag with it');
 });
 
 test('grain does not replace sweetcorn already in the hopper', () => {

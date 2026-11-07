@@ -156,3 +156,17 @@ test("archery: shots use the judge's plain arrows before preset ones", (t) => {
   assert.equal(amount(f.inv, I.BRONZE_ARROW, false), 0, "the judge's arrows were shot");
   assert.equal(amount(f.inv, I.BRONZE_ARROW, true), 100, "the preset ones are untouched");
 });
+
+test("Shadow of the Storm: a preset black dye is refused; a plain dye on a cape leaves its own vial", (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, preset(new core.Item(I.BLACK_DYE, 1)));
+  f.inv.setItem(1, new core.Item(I.RED_CAPE, 1));
+  itemOnItem(f, I.BLACK_DYE, I.RED_CAPE);
+  assert.equal(f.messages.at(-1), PRESET_TEXT);
+  assert.equal(f.inv.getAmount(I.RED_CAPE), 1);
+  f.inv.setItem(0, new core.Item(I.BLACK_DYE, 1));
+  itemOnItem(f, I.BLACK_DYE, I.RED_CAPE);
+  assert.equal(f.inv.getAmount(I.RED_CAPE), 0);
+  assert.equal(f.inv.getAmount(I.VIAL), 1, "the dye's vial comes back");
+  assert.equal(f.inv.getAmount(I.BLACK_DYE), 0);
+});

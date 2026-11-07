@@ -244,6 +244,17 @@ function confirm(player, text, onYes) {
 
 // --- Clicks
 
+/**
+ * The rewards' buttons answer only while the rewards are open (a master's Rewards option): a click on them with the
+ * interface closed bought, unlocked, cancelled and blocked tasks anywhere, with no master there.
+ */
+function whileOpen(handler) {
+  return function openRewardsOnly(event) {
+    if (event?.player?.getInterfaceId?.() !== REWARDS) return true;
+    return handler(event);
+  };
+}
+
 function confirmClick({ player, slot }) {
   if (!Number.isInteger(slot)) return true;
   if (slot === SLOT.CANCEL) cancel(player);
@@ -290,9 +301,9 @@ function buy({ player, slot, opId, action }) {
 function attach(pluginApi) {
   pluginApi.onCustomEvent("slayer:open-rewards", open);
   pluginApi.onCustomEvent("slayer:cancel-task", cancelEvent);
-  pluginApi.onInterfaceActionButton(CONFIRM_BUTTON, confirmClick);
-  pluginApi.onInterfaceActionButton(VIEW_TASKS, viewTasks);
-  pluginApi.onInterfaceActionButton(BUY_ITEMS, buy);
+  pluginApi.onInterfaceActionButton(CONFIRM_BUTTON, whileOpen(confirmClick));
+  pluginApi.onInterfaceActionButton(VIEW_TASKS, whileOpen(viewTasks));
+  pluginApi.onInterfaceActionButton(BUY_ITEMS, whileOpen(buy));
 }
 
 module.exports = {

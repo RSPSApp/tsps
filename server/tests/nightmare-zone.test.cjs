@@ -127,6 +127,8 @@ function fakePlayer({ quests = QUESTS().slice(0, 12), coins = 0 } = {}) {
         sendConfig: (id, value) => { p.varps.set(id, value); return sender; },
         sendString: (text, id) => { p.texts.set(id, text); return sender; },
         sendSubInterface: () => sender, closeSubInterface: () => sender, sendInterfaceScript: () => sender,
+        // A player at the reward chest: its interface is open unless a test closes it.
+        isSubInterfaceOpen: () => p.shopClosed !== true,
         sendInterface: (id) => { p.interface = id; return sender; },
         sendClientScript: (id, ...args) => { p.script = [id, ...args]; return sender; },
         sendInterfaceFlagsRange: () => sender, sendInterfaceRemoval: () => sender, sendSound: () => sender, sendSong: () => sender,
@@ -518,6 +520,15 @@ test('the rewards chest: the recorded opening (invs 464 and 108, the modal, the 
   assert.equal(p.invs[464].find((item) => item.id === 11737).amount, 1000, 'absorption: 1,000 a dose');
   assert.equal(p.invs[108].find((item) => item.id === 11864).amount, 1250, 'slayer helmet: 1,250,000 / 1000');
   assert.equal(hooks.objects.get('Rewards chest:Search')({ player: p, object: { getId: () => 1 } }), false, 'only its own chest');
+});
+
+test('the reward chest answers only while open: a Buy with it closed buys nothing', () => {
+  const p = fakePlayer();
+  Common.addPoints(p, 1000);
+  p.shopClosed = true;
+  button('resources', { player: p, slot: 0, opId: 3 });
+  assert.equal(p.inventory.getAmount(1780), 0);
+  assert.equal(Common.points(p), 1000);
 });
 
 test('Resources: Buy-10 of flax (sub 0) gives noted flax for 750 points; too few points buys nothing', () => {

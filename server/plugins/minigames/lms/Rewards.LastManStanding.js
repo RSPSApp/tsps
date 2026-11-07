@@ -82,6 +82,18 @@ function buy(player, entry, count) {
   player.getPacketSender().sendSound(Common.data.sounds.bought, 100, 0);
 }
 
+/**
+ * The shop's buttons answer only while it is open (mounted in the main modal): a click on them with the shop closed,
+ * anywhere in the world, bought and imbued with no shopkeeper there.
+ */
+function whileOpen(handler) {
+  return function openShopOnly(event) {
+    const group = Common.interfaceId("br_reward_shop");
+    if (!event?.player?.getPacketSender?.()?.isSubInterfaceOpen?.(group)) return true;
+    return handler(event);
+  };
+}
+
 function confirm({ player, slot }) {
   const entry = stockOf()[slot];
   if (!entry) return true;
@@ -110,7 +122,7 @@ function confirm({ player, slot }) {
 
 function attachRewards(api) {
   api.onCanShop(canShop);
-  api.onInterfaceActionButton(Common.component("br_reward_shop:confirm"), confirm);
+  api.onInterfaceActionButton(Common.component("br_reward_shop:confirm"), whileOpen(confirm));
 }
 
 module.exports = { attachRewards, open, confirm, buy, canShop, SHOP_ID };

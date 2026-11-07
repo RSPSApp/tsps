@@ -357,6 +357,28 @@ test('a withdrawal fills only what the coin stack can hold, and the coffer keeps
   assert.equal(Profile.coffer(p), 4000, 'nothing taken, nothing deducted');
 });
 
+test('a withdrawal answered after a High Stakes fee was paid can take only what is left', (t) => {
+  const Coffer = require('../plugins/minigames/lms/Coffer.LastManStanding');
+  const p = realPlayer(t);
+  const initWith = (extra) => Common.init({
+    core,
+    getPluginConfig: (_key, fallback) => fallback,
+    getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
+    ...extra,
+  });
+  initWith({ sendMultiChatboxPrompt: () => {} });
+  t.after(() => initWith({}));
+  let entered;
+  t.mock.method(p, 'setEnteredAmountAction', (action) => { entered = action; });
+  Profile.setCoffer(p, 500000);
+  Coffer.withdraw(p); // the prompt opens with 500,000 stored
+  assert.equal(Coffer.pay(p, 500000), true, 'meanwhile a High Stakes game takes its fee from the coffer');
+  entered.execute(500000);
+  assert.equal(p.getInventory().getAmount(id('coins')), 0, 'nothing left to withdraw');
+  assert.equal(Profile.coffer(p), 0, 'and the coffer is not overdrawn');
+});
+
 test('Justine explains the win requirement and refuses tradeable purchases before a win', (t) => {
   const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
   const p = realPlayer(t);

@@ -476,6 +476,25 @@ test('chopping a root: the swing, the anim again 2 ticks on and every 4, bark th
   }
 });
 
+test('a root chop ends when the axe is gone: it is looked up again each swing, as tree chopping does', () => {
+  const p = fakePlayer({ level: 70 });
+  const event = startEvent('roots', [p]);
+  const root = [...event.roots][0];
+  const lookup = Woodcutting.findBestUsableAxe;
+  Math.random = () => 0;
+  try {
+    hooks.objects.get('Tree roots:Chop down')({ player: p, object: root.object });
+    assert.equal(Roots.sessions.has(p), true);
+    Woodcutting.findBestUsableAxe = () => null; // the axe dropped or banked
+    ticks(2);
+    assert.equal(Roots.sessions.has(p), false, 'the chop stops');
+    assert.equal(bark(p), 0, 'no bark without an axe');
+  } finally {
+    Woodcutting.findBestUsableAxe = lookup;
+    Math.random = random;
+  }
+});
+
 test('a boosted Woodcutting level past 99 still pays the top band', () => {
   const p = fakePlayer({ level: 105 });
   const event = startEvent('roots', [p]);

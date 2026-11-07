@@ -48,11 +48,21 @@ function ledger(player) {
   return Number(player.getAttribute(LEDGER_ATTRIBUTE)) || 0;
 }
 
-/** Tokens earned in a room, after "minigame:points" (a league's tier passive multiplies them). */
+/** A tier must be claimed and still meet its current point threshold. */
+function tokenMultiplier(player) {
+  const easy = { player, tier: "Easy", claimed: false, currentThresholdMet: false };
+  pluginApi.emitCustomEvent("combat-achievements:tier", easy);
+  if (!easy.claimed || !easy.currentThresholdMet) return 1;
+  const medium = { player, tier: "Medium", claimed: false, currentThresholdMet: false };
+  pluginApi.emitCustomEvent("combat-achievements:tier", medium);
+  return medium.claimed && medium.currentThresholdMet ? 3 : 2;
+}
+
+/** Apply the claimed-tier bonus after the existing minigame points event. */
 function credit(player, amount) {
   const award = { player, minigame: "warriors-guild", points: amount };
   pluginApi.emitCustomEvent("minigame:points", award);
-  player.setAttribute(LEDGER_ATTRIBUTE, ledger(player) + award.points);
+  player.setAttribute(LEDGER_ATTRIBUTE, ledger(player) + award.points * tokenMultiplier(player));
 }
 
 /** Pays the ledger out as tokens; false when there is nowhere to put them. */
@@ -210,7 +220,7 @@ function damage(player, amount) {
 }
 
 module.exports = {
-  init, ITEMS, NPCS, LEDGER_ATTRIBUTE, ledger, credit, payOut, baseLevel, later, every, tile, at,
+  init, ITEMS, NPCS, LEDGER_ATTRIBUTE, ledger, credit, tokenMultiplier, payOut, baseLevel, later, every, tile, at,
   npcNear, talk, npcSays, playTranscript, crossDoor, spawnFor, despawn, wearing, wearsAttackCape, random, damage,
   get core() { return core; },
 };

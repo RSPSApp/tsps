@@ -149,7 +149,8 @@ function braceletDeathDrop(event) {
   if (id !== ITEMS.BRACELET_CHARGED || !event.shouldDropItems) return;
   const { core } = Revenants;
   const ether = emptyForDeathDrop(event.item);
-  const owner = event.killer?.isPlayer?.() ? event.killer.getAsPlayer() : event.player;
+  // An Ironman killer takes neither: they drop for the victim (PlayerDeathTask.lootOwner).
+  const owner = event.killer?.isPlayer?.() ? core.PlayerDeathTask.lootOwner(event.player, event.killer.getAsPlayer()) : event.player;
   core.ItemOnGroundManager.registerLocation(owner, new core.Item(ITEMS.BRACELET_UNCHARGED, 1), event.location);
   if (ether > 0) core.ItemOnGroundManager.registerLocation(owner, new core.Item(ITEMS.ETHER, ether), event.location);
   event.handled = true;

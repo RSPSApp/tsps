@@ -86,9 +86,12 @@ function mine(event) {
   let next = FIRST_SUCCESS_TICKS;
   Shared.startAction(player, "mining", (ticks) => {
     if (!Game.isRunning() || !Game.isPlaying(player)) return false;
+    // As Mining does each tick: a pickaxe dropped or banked mid-swing ends it; a better one picked up is used.
+    const held = bestPickaxe(player);
+    if (!held) return false;
     if (ticks < next) return true;
-    next = ticks + rollInterval(pickaxe);
-    return success(player, rock, pickaxe);
+    next = ticks + rollInterval(held);
+    return success(player, rock, held);
   });
   return true;
 }

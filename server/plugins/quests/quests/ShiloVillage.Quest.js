@@ -738,9 +738,22 @@ module.exports = function registerShiloVillageQuest(api) {
     return false;
   }
 
+  /** Room for `price` coins once `item` (one of it) is sold: now, or in the slot it frees when there's no plain stack. */
+  function priceFits(inventory, item, price) {
+    const coins = new api.core.Item(COINS, price);
+    if (inventory.getAddableAmount(coins) >= price) return true;
+    const plainStack = inventory.getItems().some((held) => held.getId() === COINS && held.getMeta() == null);
+    return item.getAmount() === 1 && !plainStack;
+  }
+
   function paidFor(player, itemId, slot, item, price) {
     const inventory = player.getInventory();
     if (inventory.getItems()[slot] !== item || item.getId() !== itemId) return false;
+    // The sold item goes only if every coin of its price fits: the add stops at the stack cap.
+    if (!priceFits(inventory, item, price)) {
+      player.sendMessage("You don't have enough inventory space.");
+      return false;
+    }
     inventory.deleteAtSlot(slot, 1, true);
     inventory.adds(COINS, price);
     return true;

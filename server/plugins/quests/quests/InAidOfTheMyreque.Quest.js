@@ -246,14 +246,12 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const SPADE_ITEM_ID = ItemIdentifiers.SPADE; // 952
   const PLANK_ITEM_ID = ItemIdentifiers.PLANK; // 960
   const HAMMER_ITEM_IDS = new Set([ItemIdentifiers.HAMMER, ItemIdentifiers.HAMMER_2]); // 2347/2348
-  const PICKAXE_ITEM_IDS = new Set([
-    ItemIdentifiers.BRONZE_PICKAXE,
-    ItemIdentifiers.IRON_PICKAXE,
-    ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.MITHRIL_PICKAXE,
-    ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-  ]);
+  /** Whether `itemId` is a pickaxe at all (Mining's own list), for one used on the rubble. */
+  function isPickaxe(itemId) {
+    const request = { itemId, pickaxe: null };
+    api.emitCustomEvent("mining:pickaxe", request);
+    return request.pickaxe != null;
+  }
   const NAIL_ITEM_IDS = [
     ItemIdentifiers.BRONZE_NAILS, // 4819
     ItemIdentifiers.IRON_NAILS, // 4820
@@ -457,8 +455,11 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     return count;
   }
 
+  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
   function hasPickaxe(player) {
-    return [...PICKAXE_ITEM_IDS].some((id) => held(player, id));
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
   }
 
   function wearingRod(player) {
@@ -2020,12 +2021,12 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       advance(player, STAGE_FOOD_PLACED);
       return;
     }
-    if (objectId === RUBBLE_ENTRANCE_ID && PICKAXE_ITEM_IDS.has(itemId)) {
+    if (objectId === RUBBLE_ENTRANCE_ID && isPickaxe(itemId)) {
       event.handled = true;
       mineEntranceRubble(player);
       return;
     }
-    if (RUBBLE_BASEMENT_IDS.includes(objectId) && PICKAXE_ITEM_IDS.has(itemId)) {
+    if (RUBBLE_BASEMENT_IDS.includes(objectId) && isPickaxe(itemId)) {
       event.handled = true;
       mineBasementRubble(player, objectId, location);
       return;

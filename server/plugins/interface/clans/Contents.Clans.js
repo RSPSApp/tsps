@@ -221,8 +221,10 @@ function burst({ player, location }) {
   if (hall.chest.length === 0 || Math.random() >= DROP_CHANCE) return true;
   const index = Math.floor(Math.random() * hall.chest.length);
   const [stack] = hall.chest.splice(index, 1);
+  // Owned by who popped it and seen by everyone, as the Party Room's: with no owner, Loot.Ironman let any Ironman
+  // in the hall pick up the item other players put in the chest (the Wiki's Ironman page bars balloon items).
   const drop = new core.ItemOnGround(
-    core.GroundItemState.SEEN_BY_EVERYONE, undefined,
+    core.GroundItemState.SEEN_BY_EVERYONE, player.getUsername(),
     new core.Location(location.x, location.y, location.z ?? 0), new core.Item(stack.id, stack.amount),
     false, -1, hall,
   );

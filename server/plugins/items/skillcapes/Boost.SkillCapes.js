@@ -14,7 +14,21 @@ const COOLDOWN_MESSAGES = {
   PRAYER: "Your Skillcape of Prayer can only provide a prayer boost once per minute.",
 };
 
-const lastBoost = new WeakMap();
+/**
+ * Each player's last Hitpoints/Prayer cape boost cycle, by username: kept on the Player object, a relog (a new Player)
+ * cleared it and the once-a-minute boost could be had again at once. Entries past the cooldown are dropped as boosts go.
+ */
+const lastBoost = new Map();
+
+function boostKey(player) {
+  return String(player.getUsername?.() ?? "").toLowerCase();
+}
+
+function forgetExpiredBoosts(now) {
+  for (const [key, boosts] of lastBoost) {
+    if (Object.values(boosts).every((cycle) => now - cycle >= COOLDOWN_TICKS)) lastBoost.delete(key);
+  }
+}
 const wornCape = new WeakMap();
 
 function boost(player, cape) {
@@ -23,14 +37,16 @@ function boost(player, cape) {
   if (skills.getCurrentLevel(cape.skill) > Capes.MAX_LEVEL) return;
   const cooldown = COOLDOWN_MESSAGES[cape.skillKey];
   if (cooldown) {
-    const boosts = lastBoost.get(player) ?? {};
+    const key = boostKey(player);
+    const boosts = lastBoost.get(key) ?? {};
     const now = Capes.core.World.getProcessCycle();
     const last = boosts[cape.skillKey];
     if (last !== undefined && now - last < COOLDOWN_TICKS) {
       player.sendMessage(cooldown);
       return;
     }
-    lastBoost.set(player, { ...boosts, [cape.skillKey]: now });
+    forgetExpiredBoosts(now);
+    lastBoost.set(key, { ...(lastBoost.get(key) ?? {}), [cape.skillKey]: now });
   }
   skills.setCurrentLevel(cape.skill, Math.min(BOOSTED_LEVEL, skills.getCurrentLevel(cape.skill) + 1), true);
 }

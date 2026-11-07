@@ -29,6 +29,7 @@
     "668": {"name": "Goblin", "anims": {"attack": 6188, "block": 6189, "death": 6190}, "sounds": {"death": 512}},
     "816": {"anims": {"attack": 81, "block": 89, "death": 4642}, "deathTicks": 5},
     "817": {"anims": {"attack": 81, "block": 89, "death": 4642}, "deathTicks": 5},
+    "823": {"name": "Melzar the Mad", "respawn": 30},
     "1020": {"name": "Rat", "anims": {"attack": 2705, "block": 2706, "death": 2707}, "sounds": {"death": 512}},
     "1021": {"name": "Rat", "anims": {"attack": 2705, "block": 2706, "death": 2707}, "sounds": {"death": 512}},
     "1022": {"name": "Rat", "anims": {"attack": 2705, "block": 2706, "death": 2707}, "sounds": {"death": 512}},

@@ -796,3 +796,14 @@ test('free worlds: the shared axe request (canoes) skips a members axe and falls
   const fallback={player:f.p,axe:null}; PM.emitCustomEvent('woodcutting:axe',fallback);
   assert.equal(fallback.axe?.id,ids.BRONZE_AXE,'the free Bronze axe is used instead');
 });
+
+test('free worlds: findBestUsableAxe skips a members axe by default (Forestry roots, Wintertodt, the Ent trunk)', t => {
+  const f=actor(t), ids=core.ItemIdentifiers, Woodcutting=require('../plugins/skills/Woodcutting.plugin');
+  const skills=f.p.getSkillManager(); skills.setMaxLevel(core.Skill.WOODCUTTING,61); skills.setCurrentLevel(core.Skill.WOODCUTTING,61);
+  f.p.getInventory().add(new core.Item(ids.DRAGON_AXE),true);
+  assert.equal(Woodcutting.findBestUsableAxe(f.p)?.id,ids.DRAGON_AXE,'members world: the Dragon axe');
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+  assert.equal(Woodcutting.findBestUsableAxe(f.p),null,'free world: no usable axe');
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  assert.equal(Woodcutting.findBestUsableAxe(f.p)?.id,ids.BRONZE_AXE,'free world: the free Bronze axe');
+});

@@ -72,7 +72,7 @@ export class TileIndicatorsOverlay implements WidgetOverlay {
         const corners: [number, number][] = [[tile.x, tile.y], [tile.x + 1, tile.y], [tile.x + 1, tile.y + 1], [tile.x, tile.y + 1]];
         const out: Point[] = [];
         for (const [cx, cy] of corners) {
-            const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, tile.plane), cy);
+            const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, tile.plane, tile.x + 0.5, tile.y + 0.5), cy);
             if (!p) return undefined;
             out.push([p[0], p[1]]);
         }

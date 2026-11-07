@@ -150,6 +150,29 @@ function questAllows(player) {
 }
 
 /** Content can resolve a code differently without changing the cache's ordinary destination. */
+/**
+ * Codes whose destination needs a quest done (Wiki, Fairy ring: AJQ "Completion of Death to the Dorgeshuun is
+ * required", BJS "Requires completion of the Regicide quest", CIP "...The Fremennik Trials quest", CLR "...the Monkey
+ * Madness I quest", DLS "...the In Search of the Myreque quest"). The partial-completion and travelled-first codes
+ * (BJR, BLQ, AIS, AJP, CKQ, AKP) aren't here: the stage each needs isn't stated.
+ */
+const CODE_QUESTS = new Map([
+  ["AJQ", { key: "death_to_the_dorgeshuun", name: "Death to the Dorgeshuun" }],
+  ["BJS", { key: "regicide", name: "Regicide" }],
+  ["CIP", { key: "fremennik_trials", name: "The Fremennik Trials" }],
+  ["CLR", { key: "monkey_madness_i", name: "Monkey Madness I" }],
+  ["DLS", { key: "in_search_of_the_myreque", name: "In Search of the Myreque" }],
+]);
+
+/** The refusal for a code whose quest the player hasn't done (TSPS wording: the Wiki quotes none), or null. */
+function codeQuestRefusal(player, code) {
+  const quest = CODE_QUESTS.get(code);
+  if (!quest) return null;
+  const query = { player, key: quest.key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", query);
+  return query.complete === true ? null : `You need to complete ${quest.name} to travel there.`;
+}
+
 function resolveRing(player, ring, origin) {
   if (!ring) return null;
   const request = { player, code: ring.code, destination: ring.destination, origin };
@@ -394,6 +417,11 @@ function confirmDial(player) {
     player.sendMessage("The fairy ring combination is not a valid destination.");
     return;
   }
+  const locked = codeQuestRefusal(player, ring.code);
+  if (locked) {
+    player.sendMessage(locked);
+    return;
+  }
   // The open dials count as busy for the teleport checks, so they close first.
   closeDials(player, true);
   const sender = player.getPacketSender();
@@ -507,6 +535,11 @@ function lastDestination({ player, location }) {
   const ring = resolveRing(player, rings.get(String(player.getAttribute(LAST_CODE_ATTRIBUTE) ?? "")), ringTile(location));
   if (!ring?.destination) {
     player.sendMessage("You haven't used the fairy ring teleportation system yet.");
+    return;
+  }
+  const locked = codeQuestRefusal(player, ring.code);
+  if (locked) {
+    player.sendMessage(locked);
     return;
   }
   if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) return;

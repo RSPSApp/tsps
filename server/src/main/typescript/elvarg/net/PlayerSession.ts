@@ -117,9 +117,13 @@ export class PlayerSession {
   private lastMusicMode = -1;
   private lastResolvedMusicTrack?: number;
 
-  /** The automatic area/region track last started, or -1: what a jingle resumes. */
+  /** The selected track last started, or -1: what a jingle resumes. */
   public getCurrentMusicTrack(): number {
     return this.lastMusicTrack;
+  }
+
+  public setCurrentMusicTrack(trackId: number): void {
+    this.lastMusicTrack = trackId;
   }
   private lastGroundItemRegion = -1;
   private lastGroundItemLevel = -1;

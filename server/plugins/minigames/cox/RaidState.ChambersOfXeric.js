@@ -661,6 +661,9 @@ class Raid {
   destroy(reason) {
     if (this.destroyed) return;
     this.destroyed = true;
+    // Nobody can rejoin a raid that's gone: drop its entries, or a raider who never came back kept this raid (its map,
+    // rooms and party) in memory until a restart.
+    for (const [username, raid] of rejoining) if (raid === this) rejoining.delete(username);
     this.timer?.stop?.();
     raids.delete(this);
     if (this.party.raid === this) this.party.raid = null;
@@ -691,4 +694,4 @@ function takeRejoin(username) {
   return raid && !raid.destroyed && raid.original.has(username) ? raid : null;
 }
 
-module.exports = { ATTR_RAID, STAGE, DEATH, POINTS_PER_DAMAGE, Room, EntranceRoom, Raid, registerRoom, onTick, onComplete, onLeave, onRaidArea: CoxMap.onRaidArea, raidOf, all, takeRejoin, roomTypes };
+module.exports = { ATTR_RAID, STAGE, DEATH, POINTS_PER_DAMAGE, Room, EntranceRoom, Raid, registerRoom, onTick, onComplete, onLeave, onRaidArea: CoxMap.onRaidArea, raidOf, all, takeRejoin, roomTypes, _test: { rejoining } };

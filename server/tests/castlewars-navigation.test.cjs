@@ -339,7 +339,7 @@ test('both starting-room trapdoors intercept generic door handling and descend i
 
 test('leaving either respawn room by ladder renews the idle allowance on return', (t) => {
   attachAreas({
-    ...registry, registerArea() {}, onPlayerLogin() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {},
+    ...registry, registerArea() {}, onPlayerLogin() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {},
   }, game);
   attachNavigation(registry, game);
   const ejected = [];

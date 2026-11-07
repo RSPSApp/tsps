@@ -10,6 +10,7 @@ const MUSIC_GROUP_ID = 239;
 const MUSIC_JUKEBOX_CHILD_ID = 11;
 const MUSIC_NOW_PLAYING_CHILD_ID = 4;
 const CURRENT_MUSIC_TRACK_VARP = 3883;
+const SELECTED_TRACK_ATTRIBUTE = "music:selected-track";
 const MUSIC_NOW_PLAYING_REFRESH_SCRIPT = 3936;
 const MUSIC_JUKEBOX_ROW_FLAGS = 62;
 const MUSIC_NOW_PLAYING_FLAGS = 60;
@@ -31,6 +32,7 @@ let nonHolidayTrackIds;
 let slotByTrackId;
 let canonicalTrackBySlot;
 let autoUnlockTrackIds;
+let selectableTracks;
 /** Quest-hinted tracks and the quest names they name (QuestUnlocks.Music). */
 let questUnlocks = { entries: [], questNames: [] };
 
@@ -263,9 +265,50 @@ function onTrackPlayed(event) {
   }
 }
 
+/** music_list_setup indexes db_find(music:hidden, false), not the sorted display names. */
+function selectMusicTrack(event) {
+  if (event.groupId !== MUSIC_GROUP_ID || event.childId !== MUSIC_JUKEBOX_CHILD_ID
+      || (event.opId ?? event.action) !== 1) return;
+  event.handled = true;
+  if (!Number.isInteger(event.slot) || event.slot < 0) return;
+  const track = selectableTracks[event.slot];
+  if (!track || !track.released) return;
+  const { player } = event;
+  const slot = slotByTrackId[track.id];
+  if (!slot || !Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) {
+    // Captured locked-track refusal, rsprox 226/01702 L14857 (if_button1 music:frame, then this message_game).
+    player.sendMessage("You have not unlocked this track yet.");
+    return;
+  }
+  // Cache musicplay: 0 Area, 1 Shuffle, 2 Single. Area switches to Single so the area tick doesn't
+  // replace the choice; Shuffle stays Shuffle (rsprox 236/03935: the Play at L25846 after Shuffle
+  // at L24943 sends no musicplay change).
+  if ((player.getAudioSettings?.()[MUSIC_MODE_VARP] ?? 0) === 0) {
+    player.setAudioSetting(MUSIC_MODE_VARP, 2);
+    player.getPacketSender().sendConfig(MUSIC_MODE_VARP, 2);
+  }
+  player.setAttribute(SELECTED_TRACK_ATTRIBUTE, track.id);
+  player.getSession().setCurrentMusicTrack(track.id);
+  // The real sender also announces audio:play-song, including to Treasure Trails' Cecilia listener.
+  player.getPacketSender().sendSong(track.id);
+}
+
 function onMusicLogin({ player }) {
   unlockCompletedQuestTracks(player);
   syncMusicVarps(player);
+  if (player.getAudioSettings?.()[MUSIC_MODE_VARP] === 2) {
+    const selected = player.getAttribute(SELECTED_TRACK_ATTRIBUTE);
+    const track = selectableTracks.find(track => track.id === selected && track.released);
+    const slot = slotByTrackId[selected];
+    if (track && slot && Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) {
+      player.getSession().setCurrentMusicTrack(selected);
+      player.getPacketSender().sendSong(selected);
+    } else {
+      // Legacy Single saves have no selection. Let the next area update supply a valid song.
+      player.setAudioSetting(MUSIC_MODE_VARP, 0);
+      player.getPacketSender().sendConfig(MUSIC_MODE_VARP, 0);
+    }
+  }
   queueMicrotask(() => enableMusicActions(player));
 }
 
@@ -324,12 +367,24 @@ function restartMusicAfterVolumeRaised({ player, varpId, previous, value }) {
   })());
 }
 
+/**
+ * The Music tab's rows in the order its Play slot counts them: music_list_setup indexes
+ * db_find(music:hidden, false), before sorting. Column 13 is whether the track is released.
+ */
+function buildSelectableTracks(tracks) {
+  const tracksByRow = new Map(tracks.map(track => [track.rowId, track]));
+  return core.CacheDefinitions.getDbTableRows(44)
+    .filter(row => row.int(9, 0) === 0)
+    .map(row => ({ ...tracksByRow.get(row.id), released: row.int(13, 1) === 1 }));
+}
+
 module.exports = {
   name: "Music",
   register(api) {
     core = api.core;
     pluginApi = api;
     const tracks = core.Music.tracks();
+    selectableTracks = buildSelectableTracks(tracks);
     trackNames = Object.fromEntries(tracks.map(({ id, name }) => [id, name]));
     rowIdByTrackId = Object.fromEntries(tracks.map(({ id, rowId }) => [id, rowId]));
     slotByTrackId = {};
@@ -358,8 +413,11 @@ module.exports = {
     api.persistAttribute(Progress.UNLOCKED_TRACKS_ATTRIBUTE);
     api.persistAttribute(Progress.CAPE_OWNED_ATTRIBUTE);
     api.persistAttribute(Progress.AIR_GUITAR_UNLOCKED_ATTRIBUTE, false);
+    api.persistAttribute(SELECTED_TRACK_ATTRIBUTE, -1);
     api.onPlayerLogin(onMusicLogin);
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
+    api.onCustomEvent("gameframe:ready", onMusicWelcomeAction);
+    api.onInterfaceActionButton((MUSIC_GROUP_ID << 16) | MUSIC_JUKEBOX_CHILD_ID, selectMusicTrack);
   // A tab mounted again later (Tutorial Island's unlocks) lost its flags too.
   api.onCustomEvent("gameframe:tab-mounted", ({ player, group }) => {
     if (group === MUSIC_GROUP_ID) queueMicrotask(() => enableMusicActions(player));

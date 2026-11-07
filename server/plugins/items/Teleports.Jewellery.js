@@ -280,11 +280,13 @@ const JEWELLERY = [
     // Rub's submenu is actions, not destinations (item params 451-455); Teleport picks one.
     subOps: ["check", "teleport", "master", "partner", "log"],
     destinations: [
-      { label: "Slayer Tower", tile: [3429, 3538, 0] },
+      // Wiki (Slayer ring, Teleports): Slayer Tower needs Priest in Peril, Tarn's Lair Haunted Mine, Dark Beasts
+      // Mourning's End Part II.
+      { label: "Slayer Tower", tile: [3429, 3538, 0], quest: { key: "priest_in_peril", name: "Priest in Peril" } },
       { label: "Fremennik Slayer Dungeon", tile: [2807, 10002, 0] },
-      { label: "Tarn's Lair", tile: [3185, 4601, 0] },
+      { label: "Tarn's Lair", tile: [3185, 4601, 0], quest: { key: "haunted_mine", name: "Haunted Mine" } },
       { label: "Stronghold Slayer Cave", tile: [2431, 3424, 0] },
-      { label: "Dark Beasts", tile: [2027, 4637, 0] },
+      { label: "Dark Beasts", tile: [2027, 4637, 0], quest: { key: "mournings_end_part_ii", name: "Mourning's End Part II" } },
     ],
   },
   {

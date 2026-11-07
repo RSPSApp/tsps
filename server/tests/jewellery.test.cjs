@@ -372,9 +372,37 @@ test("the slayer ring teleports up to level 30 Wilderness (Wiki)", () => {
   const player = createPlayer();
   const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
   player.inventory.setItem(0, ring);
-  inventoryClick(player, ring, "Rub", { subOpId: 2 });
-  pick("Slayer Tower");
+  doneQuestKeys.add("priest_in_peril"); // Slayer Tower needs it (Wiki)
+  try {
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick("Slayer Tower");
+  } finally {
+    doneQuestKeys.delete("priest_in_peril");
+  }
   assert.equal(teleports.at(-1).wildernessLevel, 30);
+});
+
+test("the slayer ring's Slayer Tower, Tarn's Lair and Dark Beasts need their quests (Wiki)", () => {
+  for (const [label, key, name] of [
+    ["Slayer Tower", "priest_in_peril", "Priest in Peril"],
+    ["Tarn's Lair", "haunted_mine", "Haunted Mine"],
+    ["Dark Beasts", "mournings_end_part_ii", "Mourning's End Part II"],
+  ]) {
+    const player = createPlayer();
+    const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+    player.inventory.setItem(0, ring);
+    const before = teleports.length;
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick(label);
+    assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
+    assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
+    assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge used");
+    doneQuestKeys.add(key);
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick(label);
+    assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
+    doneQuestKeys.delete(key);
+  }
 });
 
 test("the charge is spent on arrival even if the piece was equipped mid-teleport", () => {

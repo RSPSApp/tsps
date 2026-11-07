@@ -680,7 +680,9 @@ function canUseAxe(player, axe) {
   );
 }
 
-function findBestUsableAxe(player, eligible = () => true) {
+// The default skips members axes on free worlds, as every chop does (Forestry's roots, Wintertodt and the Ent
+// trunk call it without a filter).
+function findBestUsableAxe(player, eligible = choppingAxeEligible) {
   const equippedWeaponId = getEquippedWeaponId(player);
   const inventory = player.getInventory();
 
@@ -1123,6 +1125,8 @@ function depleteTree(player, treeObject, tree) {
 
 // Skip held axes marked members-only on free worlds.
 function choppingAxeEligible(axe) {
+  // Before register (a fixture calling the helpers directly) there is no world to ask: every axe counts.
+  if (!pluginApi) return true;
   const { WorldDefinition, CacheDefinitions } = pluginApi.core;
   return WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(axe.id)?.isMembers !== true;
 }

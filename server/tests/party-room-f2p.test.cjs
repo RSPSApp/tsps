@@ -448,3 +448,144 @@ test('a free-world range does not cook members-only raw mackerel', async t => {
     await cook(child, 'rangemac', 3171, 353, 355, 357, 0, controlTurns);
   });
 });
+
+// Native free-world object use with a carried, previously owned pickaxe.
+test('a free world does not start mining with a members-only carried pickaxe', async t => {
+  const Mining = require('../plugins/skills/Mining.plugin');
+  assert.equal(world.isMembersWorld(), false, 'SETUP: configured free world');
+  const bronze = 1265, dragon = 11920;
+  for (const [id, members] of [[bronze, false], [dragon, true]]) {
+    assert.equal(core.CacheDefinitions.getItem(id).isMembers, members, 'SETUP: active cache membership');
+    assert.equal(core.CacheDefinitions.getItem(id).isTradable, true, 'SETUP: ordinary tradable tool');
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false, 'SETUP: unnoted tool');
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false, 'SETUP: nonstackable tool');
+  }
+  // The configured free-land square covers the Al Kharid mining area. The actual map loader,
+  // not a fabricated loc, must provide a public copper rock and a reachable approach.
+  const [minX, maxX, minY, maxY] = [3264, 3327, 3264, 3327];
+  assert.equal(world.isMembersArea(minX, minY), false, 'SETUP: configured free land');
+  core.RegionManager.loadMapFiles(minX, minY);
+  assert.equal(core.RegionManager.getRegion(minX, minY)?.isLoaded(), true, 'SETUP: map region loaded');
+  const rocks = [...core.MapObjects.mapObjects.values()].flat().filter(object => {
+    const loc = object.getLocation(), def = object.getDefinition();
+    return object.getPrivateArea() == null && loc.getZ() === 0 && loc.getX() >= minX && loc.getX() <= maxX
+      && loc.getY() >= minY && loc.getY() <= maxY && !world.isMembersArea(loc.getX(), loc.getY())
+      && def?.getName() === 'Copper rocks' && def.getInteractions()?.[0]?.toLowerCase() === 'mine';
+  }).sort((a, b) => a.getLocation().getX() - b.getLocation().getX()
+    || a.getLocation().getY() - b.getLocation().getY() || a.getId() - b.getId());
+  const rock = rocks[0];
+  assert.ok(rock, 'SETUP: actual indexed public copper rock with Mine');
+  const loc = rock.getLocation(), x = loc.getX(), y = loc.getY(), objectId = rock.getId();
+  const start = [[-4, 0], [4, 0], [0, -4], [0, 4], [-3, 0], [3, 0], [0, -3], [0, 3]]
+    .map(([dx, dy]) => new core.Location(x + dx, y + dy, 0))
+    .find(tile => !world.isMembersArea(tile.getX(), tile.getY()) && !core.RegionManager.blocked(tile, null)
+      && !rock.isWithinInteractionDistance(tile));
+  assert.ok(start, 'SETUP: unblocked free-land approach outside the rock');
+
+  async function attempt(child, tool, username, index, expectedActive) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(index); p.setUsername(username); p.setRegistered(true); p.setLocation(start.clone()); p.needsPlacement = false;
+    const connection = new ClientConnection(channel), inventory = p.getInventory(), skills = p.getSkillManager(); connection.player = p;
+    PM.emitPlayerLogin({ player: p, username: p.getUsername() }); p.closeInterruptibleInterfaces();
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      PM.emitPlayerLogout({ player: p, username: p.getUsername() }); p.setRegistered(false);
+      core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      assert.equal(Mining.isMiningActive(p), false, 'SETUP: disconnect retires mining session');
+    });
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0 && !p.busy(), 'SETUP: living idle actor');
+    assert.equal(core.RegionManager.blocked(start, p.getPrivateArea()), false);
+    assert.equal(core.MapObjects.getPrivateArea(p, objectId, loc), rock, 'SETUP: player resolves same indexed rock');
+    assert.equal(core.MapObjects.stillStands(p, objectId, loc, rock), true);
+    const level = 61, skill = core.Skill.MINING, xp = core.SkillManager.getExperienceForLevel(level);
+    skills.setExperience(skill, xp).setMaxLevels(skill, level, false).setCurrentLevels(skill, level, false);
+    assert.deepEqual([skills.getExperience(skill), skills.getMaxLevel(skill), skills.getCurrentLevel(skill)], [xp, level, level]);
+    assert.ok(p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId() < 0, 'SETUP: no equipped tool');
+    assert.equal(inventory.getItems().filter(item => item.getId() >= 0 && item.getAmount() > 0).length, 0, 'SETUP: empty inventory');
+    inventory.add(new core.Item(tool, 1), false);
+    const slot = inventory.getSlotForItemId(tool);
+    assert.ok(slot >= 0); assert.equal(inventory.getItems()[slot].getMeta(), null, 'SETUP: plain carried tool');
+    assert.equal(inventory.getAmount(tool), 1); assert.equal(Mining.isMiningActive(p), false);
+    const calls = [], fallback = [], attempts = [], objectDispatch = PM.emitObjectInteraction.bind(PM), custom = PM.emitCustomEvent.bind(PM);
+    child.mock.method(PM, 'emitObjectInteraction', event => {
+      const result = objectDispatch(event);
+      if (event.player === p) calls.push({ object: event.object, option: event.option, result });
+      return result;
+    });
+    child.mock.method(PM, 'emitCustomEvent', (name, event) => {
+      if (name === 'mining:tool' && event?.player === p) fallback.push(event);
+      if (name === 'mining:attempt' && event?.player === p) attempts.push(event);
+      return custom(name, event);
+    });
+    const frame = Buffer.from([96, (x + 128) & 255, x >> 8, y & 255, y >> 8, 0, objectId >> 8, (objectId + 128) & 255]);
+    const decoded = decodeClientPackets(frame);
+    assert.deepEqual(decoded, [{ type: 'object_option', id: objectId, x, y, clickType: 1 }], 'SETUP: decoded Mine click');
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 64, 'SETUP: bounded native approach');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); connection.processTurnPackets();
+      const movement = p.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+      if (movement.hasPendingWork()) movement.process();
+      core.TaskManager.processWalkTo(p.getIndex());
+    };
+    // Record only existing native state; do not alter the click, path, timing or movement.
+    const routeTrace = [];
+    const snapshot = () => {
+      const pos = p.getLocation(), movement = p.getMovementQueue();
+      return { turn: turns, at: [pos.getX(), pos.getY(), pos.getZ()],
+        registered: p.isRegistered(), hp: p.getHitpoints(), busy: p.busy(),
+        sameArea: p.getPrivateArea() === rock.getPrivateArea(),
+        stillStands: core.MapObjects.stillStands(p, objectId, loc, rock),
+        queue: movement.size(), moving: movement.isMovings(), pending: movement.hasPendingWork(),
+        hasRoute: movement.hasRoute(), invalidated: movement.wasRouteInvalidated(),
+        blockedByEntity: movement.wasBlockedByDynamicOccupancy(), calls: calls.length };
+    };
+    await connection.dispatch(decoded, true);
+    routeTrace.push(snapshot());
+    for (let n = 0; n < 60 && calls.length === 0; n++) { turn(); routeTrace.push(snapshot()); }
+    if (calls.length !== 1) {
+      assert.fail('SETUP: actual object dispatch ' + JSON.stringify({
+        rock: { id: objectId, at: [x, y, loc.getZ()], type: rock.getType(), face: rock.getFace(),
+          name: rock.getDefinition()?.getName(), option: rock.getDefinition()?.getInteractions()?.[0] },
+        start: [start.getX(), start.getY(), start.getZ()], decoded, trace: routeTrace,
+      }));
+    }
+    assert.equal(calls[0].object, rock, 'SETUP: same indexed rock');
+    assert.equal(String(calls[0].option).toLowerCase(), 'mine');
+    assert.equal(p.getLocation().equals(start), false, 'SETUP: native approach moved');
+    assert.equal(rock.isWithinInteractionDistance(p.getLocation()), true);
+    assert.equal(p.getMovementQueue().size(), 0, 'SETUP: approach settled');
+    const admitted = Mining.isMiningActive(p);
+    if (expectedActive) {
+      assert.equal(calls[0].result, true, 'SETUP: registered Bronze Mine handled');
+      assert.equal(fallback.length, 0, 'SETUP: no substitute tool');
+      assert.equal(admitted, true, 'SETUP: Bronze starts actual Mining');
+    }
+    // Observe the next natural global task phase. A walk-cancelled transient session is setup,
+    // not proof that the tool can be used. No roll or movement state is forced.
+    turn();
+    assert.equal(attempts.length, 0, 'SETUP: no ore roll during the first observed task phase');
+    assert.equal(p.getMovementQueue().size(), 0, 'SETUP: approach remains drained');
+    assert.equal(p.getMovementQueue().isMovings(), false, 'SETUP: actor is settled');
+    if (expectedActive || admitted) {
+      assert.equal(Mining.isMiningActive(p), true, 'SETUP: admitted session survives the next real task phase');
+      assert.equal(fallback.length, 0, 'SETUP: admitted session did not use a substitute');
+    }
+    if (!expectedActive) {
+      const diagnostic = `rock=${objectId}@${x},${y} start=${start.getX()},${start.getY()} admitted=${admitted}, fallback=${fallback.length}, survived=${Mining.isMiningActive(p)}, attempts=${attempts.length}`;
+      assert.equal(admitted, false, `members-only carried tool must not start Mining (${diagnostic})`);
+      assert.equal(Mining.isMiningActive(p), false, `members-only carried tool must remain inactive (${diagnostic})`);
+    }
+  }
+  let bronzePassed = false;
+  await t.test('ordinary Bronze pickaxe starts Mining', async child => {
+    await attempt(child, bronze, 'bronze78', 3270, true); bronzePassed = true;
+  });
+  assert.equal(bronzePassed, true, 'SETUP: Bronze control passed');
+  await t.test('carried Dragon pickaxe is unavailable on a free world', async child => {
+    await attempt(child, dragon, 'dragon78', 3271, false);
+  });
+});

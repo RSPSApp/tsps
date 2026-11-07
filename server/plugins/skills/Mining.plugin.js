@@ -4,6 +4,8 @@ const { Animation } = require("../../src/main/typescript/elvarg/game/model/Anima
 const { Task } = require("../../src/main/typescript/elvarg/game/task/Task");
 const { MapObjects } = require("../../src/main/typescript/elvarg/game/entity/impl/object/MapObjects");
 const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/impl/object/GameObject");
+const WorldDefinition = require("../../src/main/typescript/elvarg/game/definition/WorldDefinition");
+const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const { ItemIds, ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const InfernalPickaxe = require("./mining/InfernalPickaxe.Mining");
@@ -441,6 +443,7 @@ function findBestPickaxe(player) {
       continue;
     }
     if (weaponId === pickaxe.id || player.getInventory().contains(pickaxe.id)) {
+      if (!WorldDefinition.isMembersWorld() && CacheDefinitions.getItem(pickaxe.id)?.isMembers === true) continue;
       return pickaxe;
     }
   }

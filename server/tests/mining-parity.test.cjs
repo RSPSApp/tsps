@@ -563,7 +563,6 @@ test("dragon, infernal and crystal pickaxes sometimes roll a tick early on membe
   // Face 40 (0.158): under the dragon's 1/6 and the crystal's 1/4, so every interval is 2 ticks.
   for (const pickaxe of [ItemIds.DRAGON_PICKAXE, ItemIds.INFERNAL_PICKAXE, ItemIds.CRYSTAL_PICKAXE]) {
     assert.deepEqual(rollTicks({ pickaxe, rest: face(40) }), [2, 4, 6, 8, 10, 12], `pickaxe ${pickaxe}`);
-    assert.deepEqual(rollTicks({ pickaxe, rest: face(40), members: false }), [2, 5, 8, 11], `pickaxe ${pickaxe} on F2P`);
   }
   // Face 50 (0.197): past the dragon's 1/6, still under the crystal's 1/4.
   assert.deepEqual(rollTicks({ pickaxe: ItemIds.DRAGON_PICKAXE, rest: face(50) }), [2, 5, 8, 11]);
@@ -585,6 +584,11 @@ test("\"mining:roll-interval\" answers other mining content with the pickaxe's i
     Math.random = () => 0.1;
     assert.equal(ask({ attemptIntervalTicks: 3, fastRollChance: 1 / 6 }), 2, "a dragon pickaxe's early roll");
     assert.equal(ask({ attemptIntervalTicks: 3 }), 3, "a rune pickaxe never rolls early");
+    core.WorldDefinition.isMembersWorld = () => false;
+    for (const chance of [1 / 6, 1 / 4]) {
+      assert.equal(ask({ attemptIntervalTicks: 3, fastRollChance: chance }), 3, "a virtual fast profile does not roll early on F2P");
+    }
+    core.WorldDefinition.isMembersWorld = () => true;
     Math.random = () => 0.5;
     assert.equal(ask({ attemptIntervalTicks: 3, fastRollChance: 1 / 6 }), 3);
   } finally {
@@ -1418,5 +1422,24 @@ test("sulphur mining stops when the breathing filter is removed before the roll"
     assert.equal(player.xp.length, 0);
   } finally {
     restore();
+  }
+});
+
+test("free worlds skip members pickaxes and keep the best free tool", () => {
+  const original = core.WorldDefinition.isMembersWorld;
+  try {
+    core.WorldDefinition.isMembersWorld = () => false;
+    harness();
+    assert.equal(core.CacheDefinitions.getItem(ItemIds.DRAGON_PICKAXE).isMembers, true);
+    assert.equal(core.CacheDefinitions.getItem(ItemIds.BRONZE_PICKAXE).isMembers, false);
+    const player = createPlayer({ pickaxe: ItemIds.DRAGON_PICKAXE });
+    const inventory = player.getInventory();
+    inventory.contains = id => id === ItemIds.DRAGON_PICKAXE || id === ItemIds.BRONZE_PICKAXE;
+    player.getInventory = () => inventory;
+    assert.equal(Mining.findBestPickaxe(player)?.id, ItemIds.BRONZE_PICKAXE);
+    core.WorldDefinition.isMembersWorld = () => true;
+    assert.equal(Mining.findBestPickaxe(player)?.id, ItemIds.DRAGON_PICKAXE);
+  } finally {
+    core.WorldDefinition.isMembersWorld = original;
   }
 });

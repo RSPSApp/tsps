@@ -70,12 +70,13 @@ test('Spirit Tree build requires Farming 83 and accepts boosts',async t=>{
 });
 
 // Real Workbench consumer, directly invoked; this is not a UI-routing test.
-test('workbench preserves existing deferred Cooking behavior',async t=>{
+// Wiki (Beer barrel): Construction 7 and Cooking 5, both boostable.
+test('a beer barrel flatpack needs Cooking 5, and a boost to 5 counts',async t=>{
   const Workbench=require('../plugins/skills/construction/Workbench.Construction')._test;
   const barrel=Data.BUILDABLE_BY_KEY.get('BEER_BARREL'), flatpack=Workbench.FLATPACK_OF.get('BEER_BARREL');
   const limit=require('../plugins/skills/construction/data/workbench.json').benches.WOODEN_WORKBENCH; assert.equal(limit,20); assert.ok(barrel.level<=limit);
   assert.ok(barrel); assert.ok(Number.isInteger(flatpack));
-  for(const [index,current,allowed] of [[1304,4,true],[1305,5,true]]) await t.test(`Cooking ${current}`,async t=>{
+  for(const [index,current,allowed] of [[1304,4,false],[1305,5,true]]) await t.test(`Cooking ${current}`,async t=>{
     const f=actor(t,index,83,83),skills=f.p.getSkillManager(),inv=f.inv;
     skills.setMaxLevels(core.Skill.COOKING,4,false).setExperiences(core.Skill.COOKING,core.SkillManager.getExperienceForLevel(4),false).setCurrentLevel(core.Skill.COOKING,current,false);
     for(const material of barrel.materials){if(material.itemId!=null)inv.add(new core.Item(material.itemId,material.amount),false);else if(material.source==='NAILS')inv.add(new core.Item(core.ItemIdentifiers.STEEL_NAILS,material.amount),false);else assert.fail(`unexpected barrel material ${material.source}`);}
@@ -88,6 +89,18 @@ test('workbench preserves existing deferred Cooking behavior',async t=>{
     assert.equal(inv.getAmount(core.ItemIdentifiers.HAMMER),1);assert.equal(inv.getAmount(core.ItemIdentifiers.SAW),1);
     if(!allowed)assert.equal(skills.getExperience(core.Skill.CONSTRUCTION),xp);
   });
+});
+
+test('every second skill the cache gives is checked: Smithing for the armour displays, Runecraft for the rune cases',async t=>{
+  const House=require('../plugins/skills/construction/House.Construction');
+  const refusal=(key,skill,level)=>{const f=actor(t,1306+level,83,83);const skills=f.p.getSkillManager();
+    skills.setMaxLevels(skill,level,false).setExperiences(skill,core.SkillManager.getExperienceForLevel(level),false).setCurrentLevel(skill,level,false);
+    f.inv.add(new core.Item(core.ItemIdentifiers.HAMMER,1),false);f.inv.add(new core.Item(core.ItemIdentifiers.SAW,1),false);
+    const result=House.getBuildMaterials(f.p,f.house,null,Data.BUILDABLE_BY_KEY.get(key));
+    return typeof result==='string'?result:null;};
+  assert.equal(refusal('MITHRIL_ARMOUR',core.Skill.SMITHING,67),'You need Smithing level 68 to build that.');
+  assert.notEqual(refusal('MITHRIL_ARMOUR',core.Skill.SMITHING,68),'You need Smithing level 68 to build that.');
+  assert.equal(refusal('RUNE_CASE_1',core.Skill.RUNECRAFTING,13),'You need Runecrafting level 14 to build that.');
 });
 
 test('the spirit tree & fairy ring pays 885 Construction and 885 Farming (Wiki), the fairy ring alone 535 Construction',()=>{

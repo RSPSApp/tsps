@@ -844,7 +844,8 @@ export class ClientConnection {
               // Only op1 is Remove; ops 2+ are the item's worn options (Check, Activate...),
               // which never take the item off, even when nothing handles them.
               if (!itemActionHandled && actionPacket.buttonNum === 1) {
-                EquipPacketListener.unequip(this.player, equipmentSlot);
+                // As equipping refuses: no gear comes off mid-teleport (the left-click and Wield routes' rule).
+                if (!this.player.isTeleportingReturn()) EquipPacketListener.unequip(this.player, equipmentSlot);
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }

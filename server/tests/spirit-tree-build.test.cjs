@@ -26,7 +26,7 @@ before(async()=>{
   assert.ok(Data.HOTSPOT_BY_KEY.get('TELEPORT_SPACE').buildables.includes('SPIRIT_TREE'));
 });
 after(()=>{try{PM.emitServerShutdown({});assert.deepEqual(errors,[]);}finally{console.error=originalError;}});
-function actor(t,index,base,current){
+function actor(t,index,base,current,{key='SPIRIT_TREE',can='WATERING_CAN_8_',tools=true}={}){
   const ch={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
   const p=new Player(new PlayerSession(ch)),conn=new ClientConnection(ch);conn.player=p;
   p.setUsername('tree'+index);p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));assert.notEqual(p.getLongUsername(),0n);p.setAttribute('bot-skip-persistence',true);
@@ -34,17 +34,22 @@ function actor(t,index,base,current){
   assert.equal(core.World.getPlayers().add(p),true);
   const originalIndex=p.getIndex(); let house;
   t.after(()=>{try{PM.emitPlayerLogout({player:p,username:p.getUsername()});}finally{try{House.releaseHouse(p,true);}finally{core.World.getPlayers().remove(p);core.TaskManager.cancelTasks(p);core.TaskManager.cancelTasks(originalIndex);if(house)core.TaskManager.cancelTasks(house);}} if(house)assert.equal(house.isDestroyed(),true);assert.equal(House.houseFor(p),null);assert.equal(Instance.PlayerHouseInstance.isAllocationLocation(p.getLocation()),false);assert.equal(p.isRegistered(),false);assert.equal(core.TaskManager.hasActiveTask(p),false);assert.equal(core.TaskManager.hasActiveTask(originalIndex),false);if(house)assert.equal(core.TaskManager.hasActiveTask(house),false);assert.equal([...core.World.getNpcs()].some(npc=>npc?.getOwner?.()===p),false);});
-  for(const [skill,level,now] of [[core.Skill.CONSTRUCTION,75,75],[core.Skill.FARMING,base,current]]) p.getSkillManager().setMaxLevels(skill,level,false).setExperiences(skill,core.SkillManager.getExperienceForLevel(level),false).setCurrentLevel(skill,now,false);
+  const construction=Data.BUILDABLE_BY_KEY.get(key).level;
+  for(const [skill,level,now] of [[core.Skill.CONSTRUCTION,construction,construction],[core.Skill.FARMING,base,current]]) p.getSkillManager().setMaxLevels(skill,level,false).setExperiences(skill,core.SkillManager.getExperienceForLevel(level),false).setCurrentLevel(skill,now,false);
   assert.equal(House.enterHouse(p,true),true);house=House.houseFor(p);assert.ok(house instanceof Instance.PlayerHouseInstance);assert.equal(house.owner,p);assert.equal(house.buildingMode,true);
-  const build=Data.BUILDABLE_BY_KEY.get('SPIRIT_TREE'), inv=p.getInventory(), sapling=build.materials[0].itemId;
-  for(const id of [core.ItemIdentifiers.HAMMER,core.ItemIdentifiers.SAW,sapling]) inv.add(new core.Item(id,1),false);
-  for(const id of [core.ItemIdentifiers.HAMMER,core.ItemIdentifiers.SAW,sapling]) {assert.equal(inv.getAmount(id),1);assert.equal(core.ItemDefinition.forId(id).isNoted(),false);}
+  const buildable=Data.BUILDABLE_BY_KEY.get(key), inv=p.getInventory(), sapling=Data.BUILDABLE_BY_KEY.get('SPIRIT_TREE').materials[0].itemId;
+  const materials=buildable.materials.filter(m=>m.itemId!=null);
+  for(const m of materials) inv.add(new core.Item(m.itemId,m.amount),false);
+  if(tools) for(const id of [core.ItemIdentifiers.HAMMER,core.ItemIdentifiers.SAW]) inv.add(new core.Item(id,1),false);
+  const canId=can?core.ItemIdentifiers[can]:null;
+  if(can) {assert.ok(Number.isInteger(canId),can);inv.add(new core.Item(canId,1),false);}
+  for(const m of materials) {assert.equal(inv.getAmount(m.itemId),m.amount);assert.equal(core.ItemDefinition.forId(m.itemId).isNoted(),false);}
   const position={plane:1,x:4,y:6}; const tiles=house.hotspotTiles(position).filter(o=>Data.hotspotIn('SUPERIOR_GARDEN',o.id)?.key==='TELEPORT_SPACE');assert.equal(tiles.length,1);
   const tile=tiles[0],loc=new core.Location(tile.x,tile.y,tile.plane),target=house.getFurnitureTarget({x:tile.x,y:tile.y,z:tile.plane},tile.id);assert.ok(target);assert.equal(target.hotspotKey,'TELEPORT_SPACE');
   const ghost=core.MapObjects.getPrivateArea(p,tile.id,loc);assert.ok(ghost);assert.equal(ghost.getPrivateArea(),house);
   const def=core.ObjectDefinition.forPlayer(tile.id,p);assert.ok(def.getInteractions().some(a=>a?.toLowerCase()==='build'));
   p.moveTo(new core.Location(tile.x-1,tile.y,tile.plane));p.setNeedsPlacement(false);
-  return {p,conn,house,inv,sapling,tile,target};
+  return {p,conn,house,inv,sapling,tile,target,buildable,canId,materials};
 }
 function turn(f){f.p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();f.conn.processTurnPackets();const q=f.p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(f.p.getIndex());}
 async function build(f,t,allowed){
@@ -52,7 +57,7 @@ async function build(f,t,allowed){
   t.mock.method(sender,'sendClientScript',(id,...args)=>{scripts.push([id,...args]);return original(id,...args);});
   await f.conn.dispatch([{type:'object_option',id:f.tile.id,x:f.tile.x,y:f.tile.y,action:'Build'}]);
   const group=core.CacheDefinitions.getInterfaceId('poh_furniture_creation');
-  let row;for(let i=0;i<30;i++){turn(f);row=scripts.find(s=>s[0]===1404&&s[2]===5970);if(row&&f.p.getInterfaceId()===group&&!f.p.getMovementQueue().hasPendingWork())break;}
+  let row;for(let i=0;i<30;i++){turn(f);row=scripts.find(s=>s[0]===1404&&s[2]===f.buildable.menuRowId);if(row&&f.p.getInterfaceId()===group&&!f.p.getMovementQueue().hasPendingWork())break;}
   assert.equal(f.p.getInterfaceId(),group);assert.ok(row,'actual visible Spirit Tree menu row');assert.equal(f.p.getMovementQueue().hasPendingWork(),false,'movement settled before selection');if(allowed)assert.equal(row[5],1);
   const action=row[1];assert.ok(Number.isInteger(action)&&action>0);const widgetId=(group<<16)|2;
   const seen=[],emit=PM.emitInterfaceActionClick.bind(PM);t.mock.method(PM,'emitInterfaceActionClick',event=>{const result=emit(event);if(event.player===f.p&&event.groupId===group&&event.childId===2&&event.action===action)seen.push({handled:event.handled,result});return result;});
@@ -107,4 +112,27 @@ test('the spirit tree & fairy ring pays 885 Construction and 885 Farming (Wiki),
   const both=Data.BUILDABLE_BY_KEY.get('SPIRIT_TREE_AND_FAIRY_RING'), ring=Data.BUILDABLE_BY_KEY.get('FAIRY_RING');
   assert.deepEqual([both.experience,both.farmingExperience],[885,885]);
   assert.deepEqual([ring.experience,ring.farmingExperience??0],[535,0]);
+});
+
+test('natural teleport builds use water instead of a saw and hammer',async t=>{
+  let index=1320;
+  for(const key of ['SPIRIT_TREE','FAIRY_RING','SPIRIT_TREE_AND_FAIRY_RING']) {
+    for(const [name,can,tools,allowed] of [
+      ['last water dose, no construction tools','WATERING_CAN_1_',false,true],
+      ['tools but no can',null,true,false],
+      ['tools but empty can','WATERING_CAN',true,false],
+    ]) await t.test(`${key}: ${name}`,async t=>{
+      const f=actor(t,index++,83,83,{key,can,tools}),skills=f.p.getSkillManager();
+      const before=[skills.getExperience(core.Skill.CONSTRUCTION),skills.getExperience(core.Skill.FARMING)];
+      await build(f,t,allowed);
+      assert.equal(f.house.getFurnitureAtTarget(f.target)?.buildableKey??null,allowed?key:null);
+      for(const m of f.materials) assert.equal(f.inv.getAmount(m.itemId),allowed?0:m.amount);
+      assert.equal(skills.getExperience(core.Skill.CONSTRUCTION)-before[0],allowed?f.buildable.experience:0);
+      assert.equal(skills.getExperience(core.Skill.FARMING)-before[1],allowed?(f.buildable.farmingExperience??0):0);
+      if(allowed){assert.equal(f.inv.getAmount(f.canId),0);assert.equal(f.inv.getAmount(core.ItemIdentifiers.WATERING_CAN),1);}
+      else if(can) assert.equal(f.inv.getAmount(f.canId),1);
+      assert.equal(f.inv.getAmount(core.ItemIdentifiers.HAMMER),tools?1:0);
+      assert.equal(f.inv.getAmount(core.ItemIdentifiers.SAW),tools?1:0);
+    });
+  }
 });

@@ -881,7 +881,8 @@ function getBuildMaterials(player, house, target, buildable) {
     if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
       return `You need ${skill.getName()} level ${requirement.level} to build that.`;
   }
-  if (!player.getInventory().contains(HAMMER_ID) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
+  // Natural teleports use a filled watering can instead (Wiki: Teleport space).
+  if (buildable.tool !== "watering-can" && (!player.getInventory().contains(HAMMER_ID) || !hasSaw(player))) return "You need a saw and a hammer in order to make furniture.";
   // A flatpack is made away from any hotspot: no furniture there to upgrade.
   const existing = target ? house.getFurnitureAtTarget(target)?.buildableKey : undefined;
   const previous = buildable.materials.find(material => Data.BUILDABLE_BY_KEY.has(material.source))?.source;

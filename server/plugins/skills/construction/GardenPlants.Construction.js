@@ -41,7 +41,7 @@ function water(player, check) {
 
 /** Why the plant can't go in yet, or null. */
 function refusal(player, buildable) {
-  return isGardenPlant(buildable) && !water(player, true) ? NO_WATER : null;
+  return (isGardenPlant(buildable) || buildable.tool === "watering-can") && !water(player, true) ? NO_WATER : null;
 }
 
 /** The pick's animation: watering for a plant. False for other furniture (the hammer plays). */
@@ -55,6 +55,8 @@ function animate(player, buildable) {
 
 /** On completion: a plant takes a charge of water and gives its experience in Farming as well. */
 function complete(player, buildable) {
+  // Natural teleports consume water too, but own their Farming XP in furniture.json.
+  if (buildable.tool === "watering-can") water(player, false);
   if (!isGardenPlant(buildable)) return;
   water(player, false);
   if (!NO_FARMING_EXPERIENCE.has(buildable.key)) player.getSkillManager().addExperiences(Skill.FARMING, buildable.experience);

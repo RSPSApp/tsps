@@ -41,6 +41,7 @@ const STORE_X_OP = 4;
 /** The bank's looting bag view (captured): bank_viewcontainer 1, its items' OP1-OP7 and OP10. */
 const BANK_VIEW = 1;
 const BANK_VIEW_OP = 1;
+const BANK_EMPTY_OP = 9;
 const BANK_ITEM_FLAGS = 0b11111110 | (1 << 10);
 const BANK_SIDE = 15;
 const BANK_X_PROMPT_OP = 6;
@@ -371,7 +372,15 @@ function bankComponents() {
 
 /** The bag's op1 in the bank's inventory panel shows its contents in place of the inventory. */
 function viewInBank(event) {
-  if (!isBag(event.item) || event.op !== BANK_VIEW_OP) return;
+  if (!isBag(event.item) || !core.Bank.isOpen(event.player)) return;
+  if (event.op === BANK_EMPTY_OP) {
+    event.handled = true;
+    bankAll(event.player, event.item);
+    refreshBank(event.player);
+    if (bankViewing(event.player)) sendContents(event.player, event.item);
+    return;
+  }
+  if (event.op !== BANK_VIEW_OP) return;
   event.handled = true;
   const { player, item } = event;
   const { Bank } = core;
@@ -407,18 +416,26 @@ function bankSlot(player, bag, slot, amount) {
     if (left <= 0) break;
     const stored = items[index];
     const moving = Math.min(stored.amount, left);
-    const banked = new Item(stored.id, moving, stored.meta);
-    if (tab.getAddableAmount(banked) < moving) {
-      tab.full();
-      break;
-    }
-    tab.add(banked, false);
-    stored.amount -= moving;
-    left -= moving;
+    const source = new core.Inventory(player);
+    source.setItem(0, new Item(stored.id, moving, stored.meta));
+    if (core.PluginManager.emitCanBankItem(player, source.forSlot(0)) === false) continue;
+    // Use the inventory transfer's note conversion, metadata, capacity and search rules without sending a staged inventory.
+    source.switchItem(tab, source.forSlot(0).clone(), false, 0, false);
+    const moved = moving - source.forSlot(0).getAmount();
+    stored.amount -= moved;
+    left -= moved;
     if (!stored.amount) emptied.add(index);
   }
   setBagItems(bag, items.filter((_, index) => !emptied.has(index)));
   return left < amount;
+}
+
+function emptyContainers({ player }) {
+  if (!core.Bank.isOpen(player)) return;
+  for (const bag of player.getInventory().getValidItems().filter(isBag)) bankAll(player, bag);
+  refreshBank(player);
+  const bag = bagFor(player);
+  if (bag && bankViewing(player)) sendContents(player, bag);
 }
 
 function bankAll(player, bag) {
@@ -526,6 +543,7 @@ module.exports = {
     api.onCustomEvent("looting-bag:store", storeLoot);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, viewInBank);
+    api.onCustomEvent("bank:empty-containers", emptyContainers);
     api.onGroundItemPickup(pickUp);
     api.onItemOnItem(useItemOnBag);
     api.onItemAction("Looting bag", { Open: openBag, Close: closeBag, Check: checkBag, Deposit: depositOption, Settings: settings });

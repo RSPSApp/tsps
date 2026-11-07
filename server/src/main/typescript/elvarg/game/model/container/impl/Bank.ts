@@ -133,6 +133,7 @@ export class Bank extends ItemContainer {
     /** bank_requestedquantity: the remembered X amount. */
     public static readonly REQUESTED_QUANTITY_VARBIT = 3960;
     public static readonly PLACEHOLDER_CHILD = 40; // bankmain:placeholder
+    public static readonly DEPOSIT_CONTAINERS_CHILD = 45; // bankmain:depositcontainers
     public static readonly DEPOSIT_INVENTORY_CHILD = 47; // bankmain:depositinv
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
     /** bankmain:incinerator_target (0x36), a drop target that destroys the dragged bank stack. */
@@ -957,6 +958,8 @@ export class Bank extends ItemContainer {
         } else if (packet.childId === Bank.PLACEHOLDER_CHILD) {
             player.setPlaceholders(!player.isPlaceholders());
             sender.sendVarbit(3755, player.isPlaceholders() ? 1 : 0);
+        } else if (packet.childId === Bank.DEPOSIT_CONTAINERS_CHILD) {
+            getPluginManager().emitCustomEvent("bank:empty-containers", { player });
         } else if (packet.childId === Bank.DEPOSIT_INVENTORY_CHILD) Bank.depositItems(player, player.getInventory(), false);
         else if (packet.childId === Bank.DEPOSIT_WORN_CHILD) Bank.depositItems(player, player.getEquipment(), false);
         else return false;

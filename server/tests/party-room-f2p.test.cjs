@@ -189,9 +189,13 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
   const TOMATO = 1982, SHELL = 2315, PART = 7172, REDBERRIES = 1951, BERRY_PIE = 2321;
   assert.equal(world.isMembersWorld(), false);
   assert.equal(world.isMembersArea(3222, 3218), false, 'the actor is on configured free land');
+  const TROUT = core.CacheDefinitions.getObjId('trout'), FISH_PART = core.CacheDefinitions.getObjId('unfinished_fish_pie_1');
+  const SALMON = core.CacheDefinitions.getObjId('salmon'), ADMIRAL_PART = core.CacheDefinitions.getObjId('unfinished_admiral_pie_1');
+  const BEAR = core.CacheDefinitions.getObjId('raw_bear_meat'), WILD_PART = core.CacheDefinitions.getObjId('unfinished_wild_pie_1');
   assert.deepEqual(['tomato', 'pie_shell', 'unfinished_garden_pie_1', 'redberries', 'uncooked_redberry_pie']
     .map(name => core.CacheDefinitions.getObjId(name)), [TOMATO, SHELL, PART, REDBERRIES, BERRY_PIE]);
-  for (const [id, members] of [[TOMATO, false], [SHELL, false], [PART, true], [REDBERRIES, false], [BERRY_PIE, false]]) {
+  for (const [id, members] of [[TOMATO, false], [SHELL, false], [PART, true], [REDBERRIES, false], [BERRY_PIE, false],
+    [TROUT, false], [FISH_PART, true], [SALMON, false], [ADMIRAL_PART, true], [BEAR, false], [WILD_PART, true]]) {
     assert.equal(core.CacheDefinitions.getItem(id).isMembers, members);
     assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
     assert.equal(core.ItemDefinition.forId(id).isStackable(), false);
@@ -199,13 +203,16 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
   for (const id of [TOMATO, SHELL, REDBERRIES]) assert.equal(core.CacheDefinitions.getItem(id).isTradable, true);
   core.RegionManager.loadMapFiles(3222, 3218);
 
-  for (const [name, ingredient, product] of [['redberry control', REDBERRIES, BERRY_PIE], ['garden pie', TOMATO, PART]]) {
+  // Members-only first steps made only from free items, which the item gate alone cannot catch.
+  const cases = [['redberry control', REDBERRIES, BERRY_PIE, 10], ['garden pie', TOMATO, PART, 34],
+    ['fish pie', TROUT, FISH_PART, 47], ['admiral pie', SALMON, ADMIRAL_PART, 70], ['wild pie', BEAR, WILD_PART, 85]];
+  for (const [index, [name, ingredient, product, level]] of cases.entries()) {
     await t.test(name, async (child) => {
       const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
         send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
       const p = new Player(new PlayerSession(channel));
-      p.setIndex(name === 'redberry control' ? 2910 : 2911);
-      p.setUsername(name === 'redberry control' ? 'freeberry' : 'freegarden');
+      p.setIndex(2910 + index);
+      p.setUsername('freepie' + index);
       p.setRegistered(true);
       p.setLocation(new core.Location(3222, 3218, 0));
       p.needsPlacement = false;
@@ -223,9 +230,9 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
       });
       assert.ok(p.isRegistered() && p.getHitpoints() > 0);
       assert.equal(core.RegionManager.blocked(p.getLocation(), p.getPrivateArea()), false);
-      const xp = core.SkillManager.getExperienceForLevel(34);
-      skills.setExperience(cooking, xp).setMaxLevels(cooking, 34, false).setCurrentLevels(cooking, 34, false);
-      assert.deepEqual([skills.getExperience(cooking), skills.getMaxLevel(cooking), skills.getCurrentLevel(cooking)], [xp, 34, 34]);
+      const xp = core.SkillManager.getExperienceForLevel(level);
+      skills.setExperience(cooking, xp).setMaxLevels(cooking, level, false).setCurrentLevels(cooking, level, false);
+      assert.deepEqual([skills.getExperience(cooking), skills.getMaxLevel(cooking), skills.getCurrentLevel(cooking)], [xp, level, level]);
       for (const id of [ingredient, SHELL]) {
         assert.equal(inv.getAmount(id), 0);
         inv.add(new core.Item(id, 1), false);
@@ -259,6 +266,8 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
         if (task.key === p.getIndex() && task.pluginName === 'Cooking') tasks.push(task);
         return submit(task);
       });
+      const messages = [];
+      child.mock.method(p, 'sendMessage', (text) => { messages.push(text); });
       let turns = 0;
       const turn = () => {
         assert.ok(++turns <= 6);
@@ -284,12 +293,14 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
         assert.equal(owned(BERRY_PIE), 1, 'a free recipe completes through the same path');
         assert.deepEqual([inv.getAmount(REDBERRIES), inv.getAmount(SHELL)], [0, 0]);
         assert.deepEqual(produced, [[BERRY_PIE, 1, 0, 'make']]);
+        assert.deepEqual(messages, []);
       } else {
         assert.equal(tasks.length, 0, 'a members-only recipe does not start a Cooking task');
         for (let i = 0; i < 4; i++) turn();
-        assert.equal(owned(PART), 0, 'free worlds must not make the members-only garden-pie part');
-        assert.deepEqual([inv.getAmount(TOMATO), inv.getAmount(SHELL)], [1, 1]);
-        assert.deepEqual([owned(TOMATO), owned(SHELL)], [1, 1]);
+        assert.equal(owned(product), 0, `free worlds must not make the members-only ${name} part`);
+        assert.deepEqual([inv.getAmount(ingredient), inv.getAmount(SHELL)], [1, 1]);
+        assert.deepEqual([owned(ingredient), owned(SHELL)], [1, 1]);
+        assert.deepEqual(messages, ["To use this item please login to a members' world."], 'the refusal says why');
         for (const slot of slots) assert.equal(inv.getItems()[slot].getMeta(), null);
         assert.deepEqual(produced, []);
       }

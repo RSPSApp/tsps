@@ -7,8 +7,9 @@
  * Gianne jnr. hands out an easy (6 minutes, coins tip) or hard (11 minutes, item tip) order:
  * a random gnome dish or cocktail and a random customer, plus an Aluft Aloft box carrying the
  * details. The dish is handed over with item-on-NPC (Delivery.GnomeRestaurant.js) within the
- * limit; the box must be held. Declining a tier locks it for 5 minutes (the wiki says 5:30,
- * the task 5:00). 12 credits earn a reward token. Only one order at a time; logout, death and
+ * limit; the box must be held. Confirming refusal locks hard orders for 5:30 (Wiki mechanics);
+ * easy orders retain the transcript's five-minute wait. 12 credits earn a reward token. Only
+ * one order at a time; logout, death and
  * disconnection abandon it with no reward.
  *
  * Aluft Gianne snr. and Blurberry provide the tutorial recommendations before orders.
@@ -22,7 +23,8 @@ const BOX_NAME = "Aluft Aloft box";
 const TIER_EASY = "easy";
 const TIER_HARD = "hard";
 const MIN_COOKING = 29;
-const LOCKOUT_MS = 300_000;
+const EASY_LOCKOUT_MS = 300_000;
+const HARD_LOCKOUT_MS = 330_000;
 const CREDITS_PER_TOKEN = 12;
 const MAX_CREDITS = 120;
 const CREDITS_ATTRIBUTE = "gnome-restaurant:credits";
@@ -41,6 +43,10 @@ const CHANGED_MIND = "I've changed my mind, there's something else I need to do 
 const TAKE_EASY = "Easy-peasy! I'll get started.";
 const TAKE_HARD = "Easy-peasy! I'm on the job.";
 const DECLINE_OPTION = "I don't think I can complete this one.";
+const DECLINE_HARD_OPTION = "I won't be able to do this order.";
+const REFUSE_TITLE = "Do you want to refuse this order";
+const TAKE_AFTER_WARNING = "I'll take this order then!";
+const CONFIRM_REFUSAL = "Yes I'm sure.";
 const START_LINE = "You'd better get a move on then. The clock is already running!";
 
 let api;
@@ -198,7 +204,17 @@ function offerOrder(player, tier, rng = Math.random) {
   const order = rollOrder(tier, rng);
   npcThenPrompt(player, [`${order.npcName} wants a ${order.itemName}.`, order.hint], TAKE_TITLE, [
     [tier === TIER_EASY ? TAKE_EASY : TAKE_HARD, () => acceptOrder(player, order)],
-    [DECLINE_OPTION, () => declineOrder(player, tier)],
+    [tier === TIER_EASY ? DECLINE_OPTION : DECLINE_HARD_OPTION, () => confirmDecline(player, order)],
+  ]);
+}
+
+function confirmDecline(player, order) {
+  const warning = order.tier === TIER_EASY
+    ? "Are you sure you want to turn this order down, you'll have to wait 5 minutes before I can give you another easy order. I may have a hard one available for you though..."
+    : "Are you sure you want to turn this order down, you'll have to wait 5 minutes for another hard order, although I may be able to give you an easy one.";
+  npcThenPrompt(player, [warning], REFUSE_TITLE, [
+    [TAKE_AFTER_WARNING, () => acceptOrder(player, order)],
+    [CONFIRM_REFUSAL, () => declineOrder(player, order.tier)],
   ]);
 }
 
@@ -221,7 +237,9 @@ function acceptOrder(player, order) {
 }
 
 function declineOrder(player, tier) {
-  const lockouts = { ...lockoutsOf(player), [tier]: Date.now() + LOCKOUT_MS };
+  // Spoken warnings round to five minutes; the Wiki specifies 5:30 for hard refusals.
+  const duration = tier === TIER_HARD ? HARD_LOCKOUT_MS : EASY_LOCKOUT_MS;
+  const lockouts = { ...lockoutsOf(player), [tier]: Date.now() + duration };
   player.setAttribute(LOCKOUTS_ATTRIBUTE, lockouts);
   const line = tier === TIER_EASY
     ? "Fine, your loss. If you want another easy job, come back in five minutes and maybe I'll be able to find you one."

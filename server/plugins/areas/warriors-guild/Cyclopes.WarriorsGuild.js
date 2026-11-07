@@ -280,6 +280,19 @@ function leaveRooms({ player }) {
   inside.delete(player);
 }
 
+/**
+ * A login inside a room picks its time back up: a relog is a new Player, so without this the tokens stopped crumbling
+ * and the defenders stopped dropping. The tier is the door's rule; the entry fee was paid on the way in.
+ */
+function resumeRoom({ player }) {
+  const location = player.getLocation?.();
+  if (!location) return;
+  const room = inTopRoom(location) ? "top" : inBasementRoom(location) ? "basement" : null;
+  if (!room) return;
+  const tier = room === "top" ? Math.min(ownedTier(player) + 1, 6) : DRAGON_TIER;
+  inside.set(player, { room, tier, ticks: 0, graceTicks: -1, free: Guild.wearsAttackCape(player), arriving: 0 });
+}
+
 // --- Defender drops.
 
 function dropDefenders({ player, npc, npcId, drops }) {
@@ -316,6 +329,7 @@ module.exports = function attachCyclopes(pluginApi) {
   api.onPlayerProcess(spendTime);
   api.onCanUnequip(keepCapeOn);
   api.onPlayerLogout(leaveRooms);
+  api.onPlayerLogin(resumeRoom);
   api.onCustomEvent("npc-drops:roll", dropDefenders);
   api.onNpcHitModify(meleeOnly);
 };

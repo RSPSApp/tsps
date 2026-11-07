@@ -1244,6 +1244,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         if (freeSlots(player) > 0) {
           if (!hasItem(player, KERIS_PARTISAN_ITEM)) player.getInventory().adds(KERIS_PARTISAN_ITEM, 1);
           flag(player, PARTISAN_GIVEN_ATTRIBUTE, true);
+          setOwedPartisan(player, false);
         } else {
           setOwedPartisan(player, true);
         }
@@ -1253,13 +1254,16 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         if (freeSlots(player) > 0) {
           if (!hasItem(player, CIRCLET_OF_WATER_ITEM)) player.getInventory().adds(CIRCLET_OF_WATER_ITEM, 1);
           flag(player, CIRCLET_GIVEN_ATTRIBUTE, true);
+          setOwedCirclet(player, false);
         } else {
           setOwedCirclet(player, true);
         }
         return;
       case "MCAnTF": // the High Priest hands you a Circlet of Water
         event.handled = true;
-        if (freeSlots(player) > 0 && !hasItem(player, CIRCLET_OF_WATER_ITEM)) {
+        if (hasFlag(player, CIRCLET_GIVEN_ATTRIBUTE)) {
+          setOwedCirclet(player, false);
+        } else if (freeSlots(player) > 0 && !hasItem(player, CIRCLET_OF_WATER_ITEM)) {
           player.getInventory().adds(CIRCLET_OF_WATER_ITEM, 1);
           flag(player, CIRCLET_GIVEN_ATTRIBUTE, true);
           player.sendMessage("The High Priest hands you a Circlet of Water.");
@@ -1272,7 +1276,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         if (quest.getStage(player) < STAGE_MAISA_DEPARTS) setStage(player, STAGE_MAISA_DEPARTS);
         return;
       case "eRrcx2": // Keris partisan found in the tent
-        if (freeSlots(player) > 0 && !hasItem(player, KERIS_PARTISAN_ITEM)) {
+        if (hasFlag(player, PARTISAN_GIVEN_ATTRIBUTE)) {
+          setOwedPartisan(player, false);
+        } else if (freeSlots(player) > 0 && !hasItem(player, KERIS_PARTISAN_ITEM)) {
           player.getInventory().adds(KERIS_PARTISAN_ITEM, 1);
           flag(player, PARTISAN_GIVEN_ATTRIBUTE, true);
           player.sendMessage("You find a Keris partisan in the tent.");

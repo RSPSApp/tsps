@@ -44,3 +44,26 @@ test("the partisan and circlet are given once, however often the chain replays",
   action(p, "VenWhi");
   assert.equal(inv.getAmount(I.CIRCLET_OF_WATER), 0, "nor a second circlet");
 });
+
+test("owed at a full showing, given on a replay: the tent and the hand-over give no second copy", (t) => {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(9011); p.setUsername("sands9011"); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  t.after(() => p.setRegistered(false));
+  QuestRuntime.questNamed("Beneath Cursed Sands").setStage(p, 102);
+  const inv = p.getInventory();
+  for (let slot = 0; slot < 28; slot++) inv.setItem(slot, new core.Item(I.LOGS, 1));
+  action(p, "aHisly");
+  action(p, "VenWhi");
+  assert.equal(inv.getAmount(I.KERIS_PARTISAN) + inv.getAmount(I.CIRCLET_OF_WATER), 0, "a full inventory: both owed");
+  inv.setItem(0, new core.Item(-1, 0));
+  inv.setItem(1, new core.Item(-1, 0));
+  action(p, "aHisly");
+  action(p, "VenWhi");
+  assert.deepEqual([inv.getAmount(I.KERIS_PARTISAN), inv.getAmount(I.CIRCLET_OF_WATER)], [1, 1], "the replay with room gives both");
+  inv.delete(I.KERIS_PARTISAN, 1);
+  inv.delete(I.CIRCLET_OF_WATER, 1); // banked
+  action(p, "eRrcx2"); // the tent's owed partisan
+  action(p, "MCAnTF"); // the High Priest's owed circlet
+  assert.deepEqual([inv.getAmount(I.KERIS_PARTISAN), inv.getAmount(I.CIRCLET_OF_WATER)], [0, 0], "no second copy of either");
+});

@@ -20,6 +20,7 @@ import { PluginManager } from "./plugins/PluginManager";
 import { Flooder } from "./util/flood/Flooder";
 import { ServerLogger } from "./util/ServerLogger";
 import { PlayerPunishment } from "./util/PlayerPunishment";
+import { Accounts } from "./game/entity/impl/player/Accounts";
 
 export class Server {
   private static flooder: Flooder = new Flooder();
@@ -160,6 +161,8 @@ export class Server {
       );
       PluginManager.emitServerShutdown({ timestamp: Date.now() });
       const saved = World.savePlayers("shutdown");
+      // Last-played times are written lazily (Accounts.touchLastPlayed).
+      Accounts.flush();
       await Promise.all([GameConstants.PLAYER_PERSISTENCE.flush(), PlayerPunishment.flush()]);
       if (saved.failed > 0) throw new Error(`${saved.failed} player snapshot(s) failed`);
       console.info("[shutdown] Player persistence completed.");

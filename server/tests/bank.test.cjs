@@ -128,7 +128,14 @@ test('a new bank opening resets noted withdrawal while an open-bank refresh pres
   player.setUsername('bankreset');
   t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true }));
   player.setNoteWithdrawal(true);
+  const world = require('../dist/game/definition/WorldDefinition');
+  t.mock.method(world, 'getWorldDefinition', () => ({ name: 'Solaris RSPS' }));
+  const titles = [];
+  const sender = player.getPacketSender();
+  const sendString = sender.sendString.bind(sender);
+  sender.sendString = (text, uid) => { titles.push(text); return sendString(text, uid); };
   player.getBank(0).open();
+  assert.ok(titles.includes('Bank of Solaris RSPS'));
   assert.equal(player.withdrawAsNote(), false);
   assert.equal(player.getPacketSender().getVarbit(3958), 0);
   player.setNoteWithdrawal(true);

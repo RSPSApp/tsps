@@ -140,7 +140,7 @@ function loc(name) {
   return core.CacheDefinitions.getLocId(name);
 }
 
-function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false, amulet = -1 } = {}) {
+function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false, amulet = -1, worn = {} } = {}) {
   const attributes = new Map();
   const packets = { sounds: [], configs: [], scripts: [] };
   const added = [];
@@ -170,7 +170,11 @@ function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false
       add: (item) => added.push([item.getId(), item.getAmount()]),
       getItems: () => [],
     }),
-    getEquipment: () => ({ getItems: () => (amulet > 0 ? [null, null, { getId: () => amulet }] : []) }),
+    getEquipment: () => {
+      const items = amulet > 0 ? [null, null, { getId: () => amulet }] : [];
+      for (const [slot, id] of Object.entries(worn)) items[slot] = { getId: () => id };
+      return { getItems: () => items };
+    },
     getSkillManager: () => ({
       getCurrentLevel: () => level,
       addExperiences: (skill, amount) => xp.push([skill, amount]),
@@ -233,6 +237,42 @@ test("rock level, experience and respawn follow the Wiki rock pages", () => {
   for (const [name, [level, xp, respawn]] of Object.entries(expected)) {
     const rock = byName.get(name);
     assert.deepEqual([rock.level, rock.xp, rock.respawnTicks], [level, xp, respawn], name);
+  }
+});
+
+// Wiki Prospector_outfit: helmet 0.4%, jacket 0.8%, legs 0.6%, boots 0.2% and 0.5% for the set (2.5%);
+// golden pieces count the same; Varrock_armour_4 "acts as a prospector jacket in terms of XP bonus".
+test("the prospector outfit adds its Wiki Mining XP to every ore, extra ores included", () => {
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  const slots = { head: E.HEAD_SLOT, body: E.BODY_SLOT, legs: E.LEG_SLOT, feet: E.FEET_SLOT };
+  const outfits = [
+    [{}, 35],
+    [{ [slots.head]: I.PROSPECTOR_HELMET }, 35 * 1.004],
+    [{ [slots.head]: I.PROSPECTOR_HELMET, [slots.body]: I.PROSPECTOR_JACKET }, 35 * 1.012],
+    [{ [slots.body]: I.GOLDEN_PROSPECTOR_JACKET, [slots.legs]: I.PROSPECTOR_LEGS_3 }, 35 * 1.014],
+    [{ [slots.head]: I.PROSPECTOR_HELMET, [slots.body]: I.PROSPECTOR_JACKET, [slots.legs]: I.PROSPECTOR_LEGS,
+      [slots.feet]: I.PROSPECTOR_BOOTS }, 35 * 1.025],
+    [{ [slots.head]: I.GOLDEN_PROSPECTOR_HELMET, [slots.body]: I.PROSPECTOR_JACKET, [slots.legs]: I.GOLDEN_PROSPECTOR_LEGS,
+      [slots.feet]: I.PROSPECTOR_BOOTS_2 }, 35 * 1.025],
+    [{ [slots.head]: I.PROSPECTOR_HELMET, [slots.body]: I.VARROCK_ARMOUR_4, [slots.legs]: I.PROSPECTOR_LEGS,
+      [slots.feet]: I.PROSPECTOR_BOOTS }, 35 * 1.025],
+    [{ [slots.body]: I.VARROCK_ARMOUR_3 }, 35],
+  ];
+  for (const [worn, expected] of outfits) {
+    // A Mining cape's extra ore gives the same XP again, with the same outfit bonus (Varrock_armour_4 changes).
+    const h = harness({ emit: (key, request) => { if (key === "mining:extra-ore") request.bonuses.push({}); } });
+    const player = createPlayer({ worn });
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    const { restore } = mineRock(h, player, "Iron rocks", loc("ironrock2"));
+    try {
+      h.tick(9);
+      assert.deepEqual(player.xp.length, 2, JSON.stringify(worn));
+      for (const [, amount] of player.xp) assert.ok(Math.abs(amount - expected) < 1e-9, JSON.stringify(worn));
+    } finally {
+      Math.random = originalRandom;
+      restore();
+    }
   }
 });
 
@@ -1441,5 +1481,82 @@ test("free worlds skip members pickaxes and keep the best free tool", () => {
     assert.equal(Mining.findBestPickaxe(player)?.id, ItemIds.DRAGON_PICKAXE);
   } finally {
     core.WorldDefinition.isMembersWorld = original;
+  }
+});
+
+// A bracelet of clay softens clay and doubles soft clay (Wiki Bracelet_of_clay, Soft_clay_rocks). Mining
+// only asks "mining:ore-yield"; the item plugin (tests/bracelet-of-clay.test.cjs) answers.
+function yieldHarness({ oreId, amount, taker = null, extra = false }) {
+  const spent = [];
+  const extraAsked = [];
+  const h = harness({
+    emit: (key, request) => {
+      if (key === "mining:ore-yield") {
+        request.oreId = oreId ?? request.oreId;
+        request.amount = amount ?? request.amount;
+        request.spend = () => spent.push(request.oreId);
+      } else if (key === "mining:hand-over") request.taker = taker;
+      else if (key === "mining:extra-ore" && extra) { extraAsked.push(request.oreId); request.bonuses.push({}); }
+    },
+  });
+  return { h, spent, extraAsked };
+}
+
+test("\"mining:ore-yield\" decides the ore and amount a success gives, and a charge is spent once it is kept", () => {
+  const { h, spent } = yieldHarness({ oreId: ItemIds.SOFT_CLAY, amount: 2 });
+  const player = createPlayer();
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Clay rocks", loc("clayrock1"));
+  try {
+    h.tick(3);
+    assert.deepEqual(player.added, [[ItemIds.SOFT_CLAY, 2]]);
+    assert.deepEqual(spent, [ItemIds.SOFT_CLAY]);
+  } finally {
+    restoreRandom();
+    restore();
+  }
+});
+
+test("an ore handed over as it is mined spends no \"mining:ore-yield\" charge", () => {
+  const { h, spent } = yieldHarness({ oreId: ItemIds.SOFT_CLAY, taker: "Miner Magnus" });
+  const player = createPlayer();
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Clay rocks", loc("clayrock1"));
+  try {
+    h.tick(3);
+    assert.deepEqual(player.added, []);
+    assert.deepEqual(spent, []);
+  } finally {
+    restoreRandom();
+    restore();
+  }
+});
+
+test("an extra ore is asked for by the rock's own ore but given as what the success yielded", () => {
+  const { h, extraAsked } = yieldHarness({ oreId: ItemIds.SOFT_CLAY, extra: true });
+  const player = createPlayer();
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Clay rocks", loc("clayrock1"));
+  try {
+    h.tick(3);
+    assert.deepEqual(extraAsked, [ItemIds.CLAY]);
+    assert.deepEqual(player.added, [[ItemIds.SOFT_CLAY, 1], [ItemIds.SOFT_CLAY, 1]]);
+  } finally {
+    restoreRandom();
+    restore();
+  }
+});
+
+test("Varrock armour 1 may add an extra clay (Wiki Mining_enhancers: clay is armour tier 1)", () => {
+  let handler;
+  require("../plugins/skills/mining/VarrockArmour.Mining").attach({ core, onCustomEvent: (key, fn) => { if (key === "mining:extra-ore") handler = fn; } });
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    const request = { player: { getEquipment: () => ({ getItems: () => ({ [core.Equipment.BODY_SLOT]: { getId: () => ItemIds.VARROCK_ARMOUR_1 } }) }) }, oreId: ItemIds.CLAY, bonuses: [] };
+    handler(request);
+    assert.equal(request.bonuses.length, 1);
+  } finally {
+    Math.random = original;
   }
 });

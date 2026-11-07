@@ -950,6 +950,11 @@ module.exports = function registerBetweenARockQuest(api) {
   // Combat
   // ==========================================================================
 
+  function handleDropContext({ context }) {
+    // The quest awards this page with its mine, stage and inventory checks.
+    context.handledItemIds.add(BOOK_PAGE_1_ITEM);
+  }
+
   function handleNpcDeath(event) {
     const killer = event?.killer?.isPlayer?.() ? event.killer : null;
     if (!killer) return;
@@ -1182,6 +1187,7 @@ module.exports = function registerBetweenARockQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("mining:success", handleMiningSuccess);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:context", handleDropContext);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.registerArea(createArzinianMineArea());

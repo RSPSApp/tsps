@@ -105,11 +105,13 @@ function itemOnNpc(event) {
     player.sendMessage(finisher.empty);
     return;
   }
+  const item = { id: event.itemId, kind: finisher.sprays?.includes(event.itemId) ? "spray" : finisher.consumed?.includes(event.itemId) ? "consumed" : "tool" };
   if (target.getHitpoints() > finisher.threshold) {
+    // Wiki: a bag of salt or ice cooler used too early is consumed with no effect.
+    if (finisher.wastedEarly && item.kind === "consumed") spend(player, finisher, item);
     player.sendMessage(finisher.tooStrong);
     return;
   }
-  const item = { id: event.itemId, kind: finisher.sprays?.includes(event.itemId) ? "spray" : finisher.consumed?.includes(event.itemId) ? "consumed" : "tool" };
   finish(player, target, finisher, item);
 }
 

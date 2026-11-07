@@ -6,7 +6,6 @@ import { PlayerRights } from "./model/rights/PlayerRights"
 
 
 export class GameConstants {
-    public static readonly NAME: string = "RspsApp";
     public static readonly NPC_BITS: number = 18;
     // Process NPC mechanics near active players while carrying active off-region state.
     public static readonly PROCESS_NPCS_BY_ACTIVE_REGIONS: boolean = true;

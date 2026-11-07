@@ -1,8 +1,8 @@
 import { LoginIndex } from "../../GameState";
 import type { LoginState } from "../../LoginState";
 import type { LoginRendererHost } from "../host";
-
 export function handleKeyInput(host: LoginRendererHost, state: LoginState, key: string, char: string) {
+        if (state.extension) return state.extension.key(key, char);
 
         if (state.loginIndex === LoginIndex.LOGIN_FORM) {
             if (key === "Tab") {

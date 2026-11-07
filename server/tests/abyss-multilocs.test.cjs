@@ -220,3 +220,34 @@ test("the Abyss: varbit 13783 swaps the two ops, so the label decides, not the s
   assert.deepEqual(teleports, [], "op1 is now Exit-through (Kourend)");
   assert.ok(strings.some((text) => text.includes(KOUREND_TEXT)), strings.join(" | "));
 });
+
+// Wiki (Abyss): the rock needs a "Pickaxe"; "the quality of the pickaxe does not impact success rate". Any one the
+// player can use passes, as Mining judges them, not only bronze to dragon.
+for (const name of ["INFERNAL_PICKAXE", "CRYSTAL_PICKAXE", "_3RD_AGE_PICKAXE"]) {
+  test(`the Abyss: ${name} mines the rock`, async (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const seen = spy(t, "emitObjectInteraction");
+    const tile = [3026, 4813, 0];
+    const id = core.ItemIdentifiers[name];
+    assert.ok(id > 0, name);
+    const f = await fromASide(t, seen, tile, (a) => {
+      for (const skill of [core.Skill.MINING, core.Skill.AGILITY]) {
+        a.p.getSkillManager().setMaxLevels(skill, 99, false);
+        a.p.getSkillManager().setCurrentLevels(skill, 99, false);
+      }
+      a.p.getInventory().setItem(0, new core.Item(id, 1));
+    }, { type: "object_option", id: 26188, x: tile[0], y: tile[1], clickType: 1 });
+    assert.equal(seen[0].handled, true);
+    assert.equal(f.messages.includes("You need a pickaxe to mine through the rock."), false, f.messages.join(" | "));
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.MINING) > 0, true, "passing it earns the XP");
+  });
+}
+
+test("the Abyss: without a pickaxe the rock is refused", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const seen = spy(t, "emitObjectInteraction");
+  const tile = [3026, 4813, 0];
+  const f = await fromASide(t, seen, tile, () => {}, { type: "object_option", id: 26188, x: tile[0], y: tile[1], clickType: 1 });
+  assert.ok(f.messages.includes("You need a pickaxe to mine through the rock."), f.messages.join(" | "));
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.MINING), 0);
+});

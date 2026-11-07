@@ -37,6 +37,8 @@ export function drawLoginScreenToCtx(host: LoginRendererHost, ctx: RenderContext
                 drawSprite(host, ctx, host.titleboxSprite, host.LOGIN_BOX_X, host.TITLEBOX_Y);
             }
 
+            if (state.extension) { state.extension.draw(host, ctx); return; }
+
             // Route to appropriate screen
             switch (state.loginIndex) {
                 case LoginIndex.WELCOME:

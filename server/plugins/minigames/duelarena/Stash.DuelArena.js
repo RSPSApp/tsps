@@ -13,6 +13,7 @@
  *   runs.
  */
 const Common = require("./Common.DuelArena");
+const Dragonfire = require("../../combat/DragonfireProtection");
 
 const COMBAT_SKILLS = ["ATTACK", "DEFENCE", "STRENGTH", "HITPOINTS", "RANGED", "PRAYER", "MAGIC"];
 const INVENTORY_SIZE = 28;
@@ -72,13 +73,62 @@ function save(player, exit) {
     special: player.getSpecialPercentage(),
     run: player.getRunEnergy(),
     autocast: player.getCombat().getAutocastSpell?.() ?? null,
+    timers: timersOf(player),
     attributes: characterAttributes(player),
     exit: exit ?? Common.data.arena.sides[0].exits[0],
   });
   clear(player);
+  stopTimers(player);
   for (const key of characterKeys()) player.setAttribute(key, Common.data.characterAttributes[key]);
   player.setHasVengeance(false);
   return true;
+}
+
+/**
+ * The player's own Tele Block, antifire and poison/venom protection are put aside with the character, and the fight's
+ * stopped when it ends: a Tele Block cast in the arena (no Wilderness there) or an arena anti-venom never leaves it.
+ */
+function timersOf(player) {
+  const combat = player.getCombat();
+  return {
+    teleblock: combat.getTeleblockTimer().secondsRemaining(),
+    fire: combat.getFireImmunityTimer().secondsRemaining(),
+    dragonfire: dragonfireOf(player),
+    poison: combat.getPoisonClock().finished() ? null : combat.getPoisonClock().snapshot(),
+  };
+}
+
+/**
+ * The antifire itself (tier, label, end time) lives in an attribute the fire timer only mirrors, and is what
+ * dragonfire reads first: kept as its tier, label and remaining time, so the pause doesn't run it down.
+ */
+function dragonfireOf(player) {
+  const state = player.getAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE);
+  if (!state || !Number.isFinite(state.endsAt)) return null;
+  const seconds = Math.ceil((state.endsAt - Date.now()) / 1000);
+  return seconds > 0 ? { tier: state.tier, label: state.label, seconds } : null;
+}
+
+function stopTimers(player) {
+  const combat = player.getCombat();
+  combat.getTeleblockTimer().stop();
+  combat.getFireImmunityTimer().stop();
+  player.setAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE, null);
+  combat.getPoisonClock().stop();
+  player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
+}
+
+function restoreTimers(player, timers) {
+  stopTimers(player);
+  if (!timers) return;
+  const combat = player.getCombat();
+  if (timers.teleblock > 0) {
+    combat.getTeleblockTimer().start(timers.teleblock);
+    player.getPacketSender().sendEffectTimer?.(timers.teleblock, Common.core.EffectTimer?.TELE_BLOCK);
+  }
+  if (timers.dragonfire) Dragonfire.setDragonfireProtection(player, timers.dragonfire);
+  else if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
+  if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 
 function itemOf([id, amount, meta]) {
@@ -116,6 +166,7 @@ function restore(player) {
   player.setRunEnergy(stash.run ?? 100);
   for (const [key, value] of Object.entries(stash.attributes)) player.setAttribute(key, value);
   player.setHasVengeance(false);
+  restoreTimers(player, stash.timers);
   player.getCombat().setAutocastSpell(stash.autocast);
   WeaponInterfaceManager.assign(player);
   BonusManager.update(player);
@@ -144,6 +195,12 @@ function snapshot({ player, save: playerSave }) {
   playerSave.setSpecPercentage(stash.special ?? 100);
   playerSave.setRunEnergy(stash.run ?? 100);
   playerSave.setHasVengeance(false);
+  // The player's own timers, not the fight's.
+  playerSave.teleblockTimer = stash.timers?.teleblock ?? 0;
+  playerSave.fireImmunityTimer = stash.timers?.fire ?? 0;
+  playerSave.poisonClock = stash.timers?.poison ?? undefined;
+  // Without a stashed clock the legacy immunity seconds would rebuild the arena's anti-venom on load.
+  playerSave.setPoisonImmunityTimer(0);
   playerSave.autocastSpellId = stash.autocast?.spellId?.() ?? -1;
   playerSave.setPosition(new Location(stash.exit[0], stash.exit[1], 0));
   const attributes = { ...(playerSave.attributes ?? {}) };
@@ -151,6 +208,10 @@ function snapshot({ player, save: playerSave }) {
     if (value === undefined || value === null) delete attributes[key];
     else attributes[key] = value;
   }
+  const dragonfire = stash.timers?.dragonfire;
+  attributes[Dragonfire.ATTR_DRAGONFIRE_STATE] = dragonfire
+    ? { tier: dragonfire.tier, label: dragonfire.label, endsAt: Date.now() + dragonfire.seconds * 1000, warned: false }
+    : null;
   playerSave.attributes = attributes;
 }
 

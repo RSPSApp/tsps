@@ -87,6 +87,8 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     RegionManager,
     Skill,
     TaskManager,
+    TeleportHandler,
+    TeleportType,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -343,11 +345,15 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     const { player, itemId } = event ?? {};
     if (!player || !TELEPORT_CRYSTALS.has(itemId) || itemId === ItemIdentifiers.CRYSTAL_TELEPORT_SEED) return;
     event.handled = true;
+    const lletya = new Location(LLETYA_SQUARE.x, LLETYA_SQUARE.y, LLETYA_SQUARE.z);
+    // The usual teleport rules (level 20 Wilderness, Tele Block, busy) first, so a refused crystal keeps its charge;
+    // the Wiki gives the crystal no Wilderness level of its own.
+    if (!TeleportHandler.checkReqs(player, lletya)) return;
     take(player, itemId, 1);
     if (itemId < ItemIdentifiers.TELEPORT_CRYSTAL_1_) give(player, itemId + 1, 1);
     else give(player, ItemIdentifiers.CRYSTAL_TELEPORT_SEED, 1);
-    player.moveTo(new Location(LLETYA_SQUARE.x, LLETYA_SQUARE.y, LLETYA_SQUARE.z));
-    player.sendMessage("You activate the teleport crystal and arrive in Lletya.");
+    TeleportHandler.teleport(player, lletya, TeleportType.NORMAL, false,
+      () => player.sendMessage("You activate the teleport crystal and arrive in Lletya."));
   }
 
   function advance(player, stage) {

@@ -123,6 +123,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     ObjectIdentifiers,
     ObjectManager,
     Skill,
+    TeleportHandler,
+    TeleportType,
   } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
@@ -321,6 +323,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   const CHARGED_ONYX_ITEM = ItemIdentifiers.CHARGED_ONYX; // 19560
   const DECONSTRUCTED_ONYX_ITEM = ItemIdentifiers.DECONSTRUCTED_ONYX; // 19562
   const ROYAL_SEED_POD_ITEM = ItemIdentifiers.ROYAL_SEED_POD; // 19564
+  const SEED_POD_WILDERNESS_LIMIT = 30;
   const BANANA_ITEM = ItemIdentifiers.BANANA; // 1963
 
   // The cache resolves these multi-locs per player through the mm2 varbits, but the
@@ -1641,8 +1644,10 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     const option = String(event.option ?? "").toLowerCase();
     if (itemId === ROYAL_SEED_POD_ITEM && option === "commune") {
       event.handled = true;
-      player.moveTo(GRAND_TREE_KING);
-      player.sendMessage("The royal seed pod carries you to the Grand Tree.");
+      // Wiki (Royal seed pod): it "can teleport up to level 30 wilderness"; the usual teleport rules apply otherwise.
+      if (!TeleportHandler.checkReqs(player, GRAND_TREE_KING, SEED_POD_WILDERNESS_LIMIT)) return;
+      TeleportHandler.teleport(player, GRAND_TREE_KING.clone(), TeleportType.NORMAL, false,
+        () => player.sendMessage("The Royal seed pod teleports you to the Grand Tree."));
       return;
     }
     if (option !== "read") return;

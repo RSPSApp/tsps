@@ -28,6 +28,16 @@ function abyssDone(h) {
   h.api.onCustomEvent('quest:is-complete', event => { if (event.key === 'enter_the_abyss') event.complete = true; });
 }
 
+/** Stands in for Mining's mining:best-pickaxe / mining:pickaxe answers with the plain bronze-to-dragon tools. */
+function answerPickaxes(api) {
+  const I = core.ItemIdentifiers;
+  const ids = [I.BRONZE_PICKAXE, I.IRON_PICKAXE, I.STEEL_PICKAXE, I.BLACK_PICKAXE, I.MITHRIL_PICKAXE, I.ADAMANT_PICKAXE, I.RUNE_PICKAXE, I.DRAGON_PICKAXE];
+  const holds = (player, id) => player.getInventory?.().getAmount?.(id) > 0 || player.getInventory?.().contains?.(id)
+    || player.getEquipment?.().getItems?.()?.some?.((item) => item?.getId?.() === id);
+  api.onCustomEvent('mining:best-pickaxe', (request) => { request.pickaxe ??= ids.find((id) => holds(request.player, id)) != null ? { id: 0 } : null; });
+  api.onCustomEvent('mining:pickaxe', (request) => { request.pickaxe ??= ids.includes(request.itemId) ? { id: request.itemId } : null; });
+}
+
 function harness(name) {
   const itemOnObjectNamed = new Map();
   const hooks = {}, events = {}, tasks = [], areas = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), buttons = new Map(), namedNpcs = new Map(), namedObjects = new Map(), persisted = new Map();
@@ -71,6 +81,9 @@ function harness(name) {
       }; npcs.push(npc); return npc;
     }, removeNpc: npc => { npc.removed = true; removed.push(npc); },
   }, { get: (target, key) => target[key] ?? ((...args) => (hooks[key] ??= []).push(args.find(x => typeof x === 'function'))) });
+  // The quests ask Mining for the player's pickaxe; Mining isn't loaded here, so this stands in for it with the plain
+  // tools these routes carry (held or wielded).
+  answerPickaxes(api);
   require(`../plugins/quests/quests/${name}.Quest`)(api);
   PluginManager.emitNpcDialogueCondition = event => {
     for (const fn of hooks.onNpcDialogueCondition ?? []) { const answer = fn(event); if (answer !== null && answer !== undefined) return answer; }
@@ -280,7 +293,8 @@ test('the captured chant opens an owner-only portal for the scene only, and neve
 test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, altars and the tutorial', () => {
   const h = harness('TempleOfTheEye'), p = player();
   abyssDone(h);
-  h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new core.Animation(625), attemptIntervalTicks: 3 }; });
+  // As Mining: only while a pickaxe is held (the quest also asks whether to lay a spare one by the tables).
+  h.api.onCustomEvent('mining:best-pickaxe', event => { if (event.player?.getInventory?.().contains(core.ItemIdentifiers.BRONZE_PICKAXE)) event.pickaxe = { animation: new core.Animation(625), attemptIntervalTicks: 3 }; });
   p.getLocalNpcs = () => h.npcs;
   p.level = 99; p.attrs.set('quest.rune_mysteries.stage', 6);
   const stage = () => h.quest.getStage(p);
@@ -980,7 +994,8 @@ test('Temple of the Eye tutorial progress survives relog and lost cells/chisel a
 
 test('Temple of the Eye: essence lost after the first workbench round can be made again', () => {
   const h = harness('TempleOfTheEye'), p = player();
-  h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new core.Animation(625), attemptIntervalTicks: 3 }; });
+  // As Mining: only while a pickaxe is held (the quest also asks whether to lay a spare one by the tables).
+  h.api.onCustomEvent('mining:best-pickaxe', event => { if (event.player?.getInventory?.().contains(core.ItemIdentifiers.BRONZE_PICKAXE)) event.pickaxe = { animation: new core.Animation(625), attemptIntervalTicks: 3 }; });
   const at = (x, y) => ({ x, y, z: 0 });
   h.quest.setStage(p, 115);
   p.attrs.set('temple-of-the-eye:stage-schema', 2);

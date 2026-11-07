@@ -72,6 +72,7 @@ class SqliteSaveHistory {
       "SELECT id, saved_at AS savedAt FROM player_save_history WHERE username = ?"
     );
     this.deleteCopy = database.prepare("DELETE FROM player_save_history WHERE id = ?");
+    this.rekeyCopies = database.prepare("UPDATE player_save_history SET username = ? WHERE username = ?");
     this.findList = database.prepare(`
       SELECT id, saved_at AS savedAt, reason, length(save_gz) AS bytes FROM player_save_history
       WHERE username = ? ORDER BY saved_at DESC, id DESC LIMIT ?
@@ -88,6 +89,11 @@ class SqliteSaveHistory {
     this.insertCopy.run(username, savedAt, reason, hash, zlib.gzipSync(serialized));
     for (const id of idsToPrune(this.findTimes.all(username), Date.parse(savedAt))) this.deleteCopy.run(id);
     return true;
+  }
+
+  /** Moves every copy kept under `fromUsername` to `toUsername` (a deleted character's history). */
+  rekey(fromUsername, toUsername) {
+    this.rekeyCopies.run(toUsername, fromUsername);
   }
 
   /** The player's copies, newest first: `{ id, savedAt, reason, bytes }`. */

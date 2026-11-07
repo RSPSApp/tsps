@@ -95,6 +95,17 @@ test("fishing spots, catch chances and the catch cascade follow OSRS", async () 
   // Wiki (Crystal harpoon): 50 Agility to wield; below it the crystal harpoon isn't a tool, and a plain one is.
   assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON), null, "crystal harpoon at 49 Agility");
   assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON_INACTIVE_, I.HARPOON] }), TOOLS.HARPOON).bonus, 100);
+  // Free worlds: the members harpoons are no tool there (dragon 120, crystal 135); the plain harpoon still fishes.
+  const World = require("../dist/game/definition/WorldDefinition");
+  const members = World.isMembersWorld;
+  World.isMembersWorld = () => false;
+  try {
+    assert.equal(findTool(player({ inventory: [I.DRAGON_HARPOON] }), TOOLS.HARPOON), null, "dragon harpoon alone on a free world");
+    assert.equal(findTool(player({ inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 100, "falls back to the free harpoon");
+    assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON, I.HARPOON] }), TOOLS.HARPOON).bonus, 100);
+  } finally {
+    World.isMembersWorld = members;
+  }
   assert.equal(findTool(player({ fishing: 60, inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 100);
   assert.equal(findTool(player({ fishing: 60, equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON), null);
   assert.equal(findTool(player({ inventory: [I.PEARL_FISHING_ROD] }), TOOLS.FISHING_ROD).bonus, 100, "pearl rod");

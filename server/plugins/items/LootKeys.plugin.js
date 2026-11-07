@@ -211,9 +211,24 @@ function neverKeepLootKey(event) {
   if (LootKeys.isLootKey(event.item)) event.keep = false;
 }
 
+/** Any Ironman mode (Setup.Ironman answers "ironman:mode"; "none" for a normal account). */
+function isIronman(player) {
+  const query = { player, mode: "none" };
+  pluginApi?.emitCustomEvent?.("ironman:mode", query);
+  return query.mode != null && query.mode !== "none";
+}
+
 function queueDrop(event) {
   const state = pending(event.player);
   if (LootKeys.isLootKey(event.item)) {
+    // Keys are never kept, but an Ironman takes no other player's loot: an Ironman's kill drops the victim's keys on
+    // the floor for the victim, as Ironman's own PvP rule does with the rest (Loot.Ironman playerLoot).
+    if (event.killer && isIronman(event.killer)) {
+      event.handled = true;
+      event.suppressDefaultDrop = true;
+      ItemOnGroundManager.registerLocation(event.player, event.item, event.location ?? event.player.getLocation().clone());
+      return;
+    }
     state.keys.push(event.item);
     event.handled = true; // Keys are never kept on the defeated player.
     return;

@@ -6,9 +6,10 @@
  * - "Enter Yama's domain." and Travel take the player into the domain (Domain.Yama).
  * Access requires A Kingdom Divided (Yama Wiki; Domain.Yama checks it before entry).
  *
- * OSRS keeps what a challenger drops in a gravestone by the Voice. tsps has no gravestones, so the
- * Voice holds it, as Zul-Gwenwynig does at Zulrah; Talk-to hands it back for the gravestone's fee
- * (Wiki), and an unsafe death anywhere else first loses it.
+ * OSRS keeps what a challenger drops in a gravestone by the Voice. Here the Voice holds what would
+ * drop, as Zul-Gwenwynig does at Zulrah; Talk-to hands it back for the gravestone's fee (Wiki),
+ * and an unsafe death anywhere else first loses it. Untradeables, which the Voice doesn't hold, go
+ * to a gravestone by the Voice (graveByVoice).
  */
 const Common = require("./Common.Yama");
 const Domain = require("./Domain.Yama");
@@ -74,6 +75,12 @@ const heldItems = (player) => {
   return held && Array.isArray(held.items) && held.items.length > 0 ? held : null;
 };
 
+/** An item's meta (charges, degradation) as the save keeps it, or null. */
+function metaOf(item) {
+  const meta = item.getMeta?.();
+  return meta == null ? null : JSON.parse(JSON.stringify(meta));
+}
+
 /** A death in the domain: what would drop stays with the Voice. Elsewhere, an unsafe death loses it. */
 function holdForVoice(event) {
   const { player, item } = event;
@@ -86,7 +93,9 @@ function holdForVoice(event) {
   }
   if (!event.dropEligible) return;
   const held = heldItems(player) ?? { items: [], paid: false };
-  held.items.push([item.getId(), item.getAmount()]);
+  held.items.push([item.getId(), item.getAmount(), metaOf(item)]);
+  // As a gravestone's merge (Grave.Gravestones.js): new items reopen the fee for the whole lot.
+  held.paid = false;
   held.announce = true;
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, held);
   event.handled = true;
@@ -138,18 +147,31 @@ function talkToVoice({ player }) {
   const { Item, ItemDefinition } = Common.core;
   const inventory = player.getInventory();
   const left = [];
-  for (const [id, amount] of held.items) {
-    const stackable = ItemDefinition.forId(id)?.isStackable?.();
+  for (const [id, amount, meta = null] of held.items) {
+    // An item with meta (charges, degradation) goes back as itself, into a slot of its own.
+    const stackable = meta == null && ItemDefinition.forId(id)?.isStackable?.();
     const fits = stackable ? inventory.contains(id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() > 0;
     // A stack can't grow past its cap: what it can't hold stays here.
     const moved = !fits ? 0 : stackable && inventory.contains(id) ? inventory.getAddableAmount(new Item(id, amount)) : amount;
-    if (moved > 0) inventory.add(new Item(id, moved), false);
-    if (moved < amount) left.push([id, amount - moved]);
+    if (moved > 0) inventory.add(meta == null ? new Item(id, moved) : new Item(id, moved, JSON.parse(JSON.stringify(meta))), false);
+    if (moved < amount) left.push([id, amount - moved, meta]);
   }
   inventory.refreshItems?.();
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { items: left, paid: true } : null);
   player.sendMessage(left.length > 0 ? retrieval.partialMessage : retrieval.collectedMessage);
   return true;
+}
+
+/**
+ * What the Voice doesn't hold (untradeables) goes to a grave. Wiki (Yama, Death mechanics): "Their grave is also
+ * located there", by the Voice, with Yama's discount until 10 kills, rather than at the default respawn.
+ */
+function graveByVoice(request) {
+  if (!Domain.sessionOf(request.player)) return;
+  const [x, y, z = 0] = Common.data.voice.respawn;
+  request.tile = { x, y, z };
+  const { discountedKills, discountFactor } = Common.data.retrieval;
+  if (Common.count(request.player, Common.SUCCESS_COUNT_ATTRIBUTE) < discountedKills) request.feeMultiplier = discountFactor;
 }
 
 function attachVoice(api) {
@@ -162,10 +184,11 @@ function attachVoice(api) {
   api.onCustomEvent("npc-dialogue:action", enterFromChat);
   api.onNpcInteraction("Voice of Yama", { "Talk-to": talkToVoice, Travel: travel, Join: join });
   api.onPlayerDeathItemDrop(holdForVoice);
+  api.onCustomEvent("gravestones:grave-location", graveByVoice);
 }
 
 function retrievalItems(request) {
   for (const [itemId, amount] of heldItems(request.player)?.items ?? []) request.items.push({itemId, amount});
 }
 
-module.exports = { attachVoice, retrievalFee, retrievalItems };
+module.exports = { attachVoice, retrievalFee, retrievalItems, graveByVoice };

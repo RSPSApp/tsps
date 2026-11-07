@@ -34,6 +34,15 @@ Nothing handled the explosive on the spots, so using it ended in "You can't reac
 Mogre could be summoned. Instead three standing Mogres (npc spawns on the three spot tiles) attacked
 anyone who walked up; those spawns are removed, as the Wiki has Mogres come only from the explosive.
 
+## Ownership and despawn
+
+The Mogre belongs to its thrower: nobody else can attack it. It is counted as out from the moment
+it is queued (a throw in that tick still gets "There is already one Mogre attacking you!"). It is
+removed when it dies, when the thrower logs out or dies, or when they teleport or walk more than 20
+tiles away or to another plane (estimate; the Wiki does not say), so a left-behind Mogre never
+blocks later throws. The third fishing explosive item (18809) is not handled, so it gets the default
+message.
+
 ## Estimates (not captured)
 
 - The Mogre stands on the nearest free 2x2 of land to the spot (the spot tile itself is water it

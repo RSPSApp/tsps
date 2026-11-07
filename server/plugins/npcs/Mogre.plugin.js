@@ -39,6 +39,8 @@ const VIAL_CYCLES_PER_TILE = 5;
 const THROW_RANGE = 10;
 const NEAR_SPOT_RANGE = 2;
 const SHORE_SEARCH = 5;
+/** Estimate: a Mogre whose thrower has gone this far (or to another plane) is taken away. */
+const LEASH = 20;
 
 const HURL_MESSAGE = "You hurl the shuddering vial into the water...";
 const APPEARS_MESSAGE = "...and a Mogre appears!";
@@ -69,11 +71,52 @@ function alive(npc) {
   return npc?.isRegistered?.() === true && npc.isDyingFunction?.() !== true;
 }
 
+/** A Mogre still waiting in the add queue counts as out: it is not registered yet but will be. */
+function present(npc) {
+  if (!npc || npc.isDyingFunction?.() === true) return false;
+  return npc.__mogreAdded !== true || npc.isRegistered?.() === true;
+}
+
 function mogreOf(player) {
   const npc = mogres.get(player);
-  if (alive(npc)) return npc;
+  if (present(npc)) return npc;
   mogres.delete(player);
   return null;
+}
+
+/** Takes the player's Mogre away; one still in the add queue is removed the moment it is added. */
+function dismiss(player) {
+  const npc = mogres.get(player);
+  mogres.delete(player);
+  if (!npc) return;
+  npc.__mogreCancelled = true;
+  if (npc.__mogreAdded === true && alive(npc)) core.World.getRemoveNPCQueue().push(npc);
+  if (player?.isRegistered?.() === true) player.getPacketSender().sendEntityHintRemoval(false);
+}
+
+function watchLeash(player, npc) {
+  const { Task, TaskManager } = core;
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(1, null, false);
+    }
+
+    execute() {
+      if (mogres.get(player) !== npc || !present(npc)) {
+        this.stop();
+        return;
+      }
+      if (npc.__mogreAdded !== true) return;
+      const at = player.getLocation();
+      const here = npc.getLocation();
+      const gone = player.isRegistered?.() !== true || player.getHitpoints() <= 0
+        || at.getZ() !== here.getZ() || distance(at, here) > LEASH;
+      if (gone) {
+        this.stop();
+        dismiss(player);
+      }
+    }
+  })());
 }
 
 function spotTile(event) {
@@ -152,10 +195,16 @@ function spawnMogre(player, spot) {
   npc.__skipDefaultRespawn = true;
   npc.onAdd = function onAdd() {
     core.NPC.prototype.onAdd.call(this);
+    this.__mogreAdded = true;
+    if (this.__mogreCancelled) {
+      World.getRemoveNPCQueue().push(this);
+      return;
+    }
     this.getCombat().attack(player);
   };
   mogres.set(player, npc);
   World.getAddNPCQueue().push(npc);
+  watchLeash(player, npc);
   return npc;
 }
 
@@ -173,7 +222,7 @@ function blast(player) {
 
 function throwExplosive(event) {
   const { player, itemId } = event;
-  if (!holdsExplosive(player, itemId)) return true;
+  if (!holdsExplosive(player, itemId)) return false;
   if (!questComplete(player)) {
     player.sendMessage(NOT_YET_MESSAGE);
     return true;
@@ -220,9 +269,12 @@ function onNpcDeath({ npc, killer }) {
 
 function onLeave({ player }) {
   throwing.delete(player);
-  const npc = mogres.get(player);
-  if (npc && alive(npc)) core.World.getRemoveNPCQueue().push(npc);
-  mogres.delete(player);
+  dismiss(player);
+}
+
+function onDeath({ player }) {
+  throwing.delete(player);
+  dismiss(player);
 }
 
 module.exports = {
@@ -234,6 +286,7 @@ module.exports = {
     api.onObjectInteraction(SPOT_NAME, { Lure: scareFish, Bait: scareFish });
     api.onObjectRoute(routeToSpot);
     api.onNpcDeath(onNpcDeath);
+    api.onPlayerDeath(onDeath);
     api.onPlayerLogout(onLeave);
     api.onPlayerDisconnect(onLeave);
   },

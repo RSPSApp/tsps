@@ -38,6 +38,7 @@ class FakeNpc {
     this.location = location;
     this.registered = true;
   }
+  getLocation() { return this.location; }
   setOwner(owner) { this.owner = owner; return this; }
   getOwner() { return this.owner; }
   isRegistered() { return this.registered; }
@@ -104,6 +105,7 @@ function register(questComplete) {
     onNpcDeath: (fn) => { handlers.death = fn; },
     onPlayerLogout: (fn) => { handlers.logout = fn; },
     onPlayerDisconnect: () => {},
+    onPlayerDeath: (fn) => { handlers.playerDeath = fn; },
     emitCustomEvent: (name, request) => {
       assert.equal(name, "quest:is-complete");
       assert.equal(request.key, "skippy_and_the_mogres");
@@ -237,8 +239,65 @@ test("logging out takes the Mogre away", () => {
   const player = makePlayer();
   throwAt(player);
   runTasks(5);
+  added[0].onAdd();
   handlers.logout({ player });
   assert.deepEqual(removed, [added[0]]);
+});
+
+test("a Mogre still waiting to be added counts as out, and is removed on arrival if its thrower left", () => {
+  register(true);
+  const player = makePlayer();
+  throwAt(player);
+  runTasks(5);
+  added[0].registered = false;
+  const before = player.owned.explosives;
+  player.sent.length = 0;
+  throwAt(player);
+  assert.deepEqual(player.sent, [["game", "There is already one Mogre attacking you!"]]);
+  assert.equal(player.owned.explosives, before);
+  handlers.logout({ player });
+  assert.deepEqual(removed, []);
+  added[0].onAdd();
+  added[0].registered = true;
+  assert.deepEqual(removed, [added[0]]);
+  assert.equal(state.attacked, undefined);
+});
+
+test("the thrower dying takes the Mogre away and frees later throws", () => {
+  register(true);
+  const player = makePlayer();
+  throwAt(player);
+  runTasks(5);
+  added[0].onAdd();
+  handlers.playerDeath({ player });
+  assert.deepEqual(removed, [added[0]]);
+  assert.deepEqual(player.sent.at(-1), ["hint-removed"]);
+  player.sent.length = 0;
+  throwAt(player);
+  assert.equal(player.sent[0][0], "animation");
+});
+
+test("teleporting or walking away from the Mogre takes it away", () => {
+  register(true);
+  const player = makePlayer();
+  throwAt(player);
+  runTasks(5);
+  added[0].onAdd();
+  const watch = tasks.find((task) => task.delay === 1);
+  watch.execute();
+  assert.deepEqual(removed, []);
+  player.location = new Location(2986 + 21, 3108, 0);
+  watch.execute();
+  assert.deepEqual(removed, [added[0]]);
+  assert.equal(watch.stopped, true);
+});
+
+test("a fishing explosive that is not handled falls through to the default message", () => {
+  register(true);
+  const player = makePlayer();
+  const handled = handlers.itemOnObject.fn({ player, itemId: 18809, object: { getLocation: () => SPOT } });
+  assert.equal(handled, false);
+  assert.equal(player.owned.explosives, 3);
 });
 
 test("the throw is made from where the player stands, within range of the spot only", () => {

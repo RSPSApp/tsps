@@ -391,7 +391,10 @@ function hemensterChest(event) {
   inventory.adds(core.ItemIdentifiers.STEEL_ARROWTIPS, 5);
   inventory.adds(core.ItemIdentifiers.COINS, 20);
   player.getSkillManager().addExperiences(core.Skill.THIEVING, 150);
-  chestLooted.set(chestKey(player), Date.now() + CHEST_RELOCK_MS);
+  // Expired relocks of other accounts are dropped as new ones are set, so the map stays small.
+  const now = Date.now();
+  for (const [key, until] of chestLooted) if (until <= now) chestLooted.delete(key);
+  chestLooted.set(chestKey(player), now + CHEST_RELOCK_MS);
   credit(player, TASK.hemensterChest);
   return true;
 }

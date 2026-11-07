@@ -886,8 +886,14 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     const ids = new Set([usedItemId, usedWithItemId]);
     if (ids.has(MUD_RUNE_ITEM_ID) && ids.has(PESTLE_AND_MORTAR_ITEM_ID)) {
       event.handled = true;
-      player.getInventory().deleteNumber(MUD_RUNE_ITEM_ID, 1);
-      player.getInventory().adds(GROUND_MUD_RUNES_ITEM_ID, 1);
+      // A rune taken from a larger stack frees no slot, and `adds` drops what has no room.
+      const inventory = player.getInventory();
+      if (inventory.getAddableAmount(new api.core.Item(GROUND_MUD_RUNES_ITEM_ID, 1)) < 1 && inventory.getAmount(MUD_RUNE_ITEM_ID) > 1) {
+        inventory.full();
+        return;
+      }
+      inventory.deleteNumber(MUD_RUNE_ITEM_ID, 1);
+      inventory.adds(GROUND_MUD_RUNES_ITEM_ID, 1);
       return;
     }
     if (ids.has(GROUND_MUD_RUNES_ITEM_ID) && ids.has(BUCKET_OF_SAP_ITEM_ID)) {

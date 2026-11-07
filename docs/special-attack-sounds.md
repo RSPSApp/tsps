@@ -137,7 +137,76 @@ producer: the checked normal-death recordings do not establish one. Zeal activat
 Dark Bow impact audio and a replacement for the archer's ordinary private Dark Bow launch also
 remain unverified.
 
-### Validation scope
+### Nearby hurt-voice follow-up (#3241)
+
+PR #2562 subsequently added body-type-1 variants 509/510, independently selected private
+variants for PvP listeners, Dark Bow non-dragon impacts and death jingle 90. Its shared
+listener sweep also broadcast NPC-inflicted player hurt voices to unrelated nearby players.
+Those private synths have no position or distance fade and could dominate neighbouring fights.
+
+The NPC-inflicted case now sends the voice only to the damaged player. In public Pest Control
+recordings 237/04014, 04025, 04028, 04029 and 04031, all 68 checked hurt packets accompany
+positive local damage, despite many nearby fights. The existing actual-HP-loss callback,
+current physical body, 20-client-cycle delay and bot-recipient suppression are retained.
+
+PvP ordinary hurt voices go to the damaged player and their player attacker, with independent
+variants as demonstrated by paired Legacy Duels recordings 225/01591 and 01592. The hit retains
+its original attacker through delayed application; changing the current combat target does not
+change its listeners. Bot recipients, other rooms/planes and an attacker outside the existing
+15-tile boundary remain excluded. Unrelated spectators no longer receive full-volume private
+hurt synths from every nearby fight.
+
+This audience limit is an explicitly bounded inference from the positively recorded participants,
+not a claim of universal OSRS spectator parity. Full numeric player-update replay of Soul Wars
+234/03277 finds no positive player hits at the checked respawn-voice ticks, so those voices cannot
+establish generic nearby player-damage broadcasting. The producer of those respawn voices remains
+unresolved; they do not establish this ordinary hit handler's audience. Spectator-camera forwarding
+is not established here.
+
+DDS special 2537 (237/03991), whip special 2713 (230/02878) and ordinary whip attacks use private
+synths in the checked recordings. They are not blanket-broadcast. Godsword special 3869 is an
+area sound with range 5 in recordings including 224/01545 and 237/04025; the ZGS activation
+already follows that contract. No additional barrage sound is inferred from its freeze graphic.
+
+The reported zero-damage/splash voice was not reproduced as a voice from that hit. Regression
+checks instead reproduce a nearby positive NPC hit adding a voice to an unrelated player who
+takes zero damage; that leakage is removed. Final-mitigation zero, poison, reflected damage and
+delayed multipart-hit checks retain their existing assertions. Broader PvP balance, ZGS freeze
+impact audio and animation/projectile synchronization need a reproducible case with the attack,
+listener position and both sound-volume settings identified; this follow-up does not claim
+complete combat-audio parity.
+
+### Recorded browser playback checks
+
+The follow-up records actual mono PCM after the effects and area gain buses in running Chrome
+WebAudio contexts at 48 kHz. The normal output connections remain intact; no microphone is used.
+Three disposable identities take attacker, target and unrelated-observer roles. Real inventory
+Wield and player/spell action packets reach the production combat methods; skill/quest requirements,
+positions, special activation and positive/zero damage are controlled fixtures. Natural misses are
+distinguished from controlled accurate-zero cases by the resolved accuracy flag. These checks verify rendered digital output,
+not the physical speaker, every bot AI or complete OSRS audience parity.
+
+- DDS normal 2501 and special 2537, whip normal 2720 and special 2713 are present in attacker
+  playback. The target retains its own hurt voices. Unrelated observers get neither those private
+  weapon synths nor ordinary hurt voices from these fights.
+- ZGS activation 3869 is recorded for combatants and observers. Observer gains are 0.8 at two
+  tiles and 0.4 at four tiles; at six tiles the packet is admitted but no source is scheduled,
+  and at fifteen/sixteen tiles it is not admitted by the client. Quiet environmental audio can
+  remain outside the combat sound's range.
+- Positive Fire Strike has impact 161 and the participants' hurt voice. Accurate zero damage
+  retains impact 161 without a hurt voice; a genuine failed accuracy roll has splash 227 without
+  a hurt voice. The target's existing block 511 is distinct from the hurt variants.
+- Native settings-panel mouse clicks independently mute effects and area sounds. Both muted
+  produces exact zero PCM even while the sound packets and source starts are observed. With
+  effects on and area muted, the unrelated observer remains silent during the ZGS special.
+- Native slider drags to 50 set the gain to 64/127: the same private DDS sample's peak falls
+  from 0.49609375 to 0.25; the observer's ZGS peak falls from about 0.395 to about 0.198.
+  Both sliders are restored to 100. Slider save/relogin is not asserted by this recording run.
+- Source scheduling retains the packet's 20-cycle hurt delay (400 ms) and cache sound onset,
+  including about 350 ms for the DDS stab and 150 ms for the godsword activation. No sample gain
+  or attack/projectile timing has been retuned to conceal audience noise.
+
+### Earlier validation scope
 
 Actual Player/HitQueue and encoded-recipient tests cover damage timing, per-part callbacks,
 room/exclusion boundaries, private synth preservation and refusal paths. Browser subscription

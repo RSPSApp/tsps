@@ -73,6 +73,9 @@ runtime.startTranscript = (_api, _player, npcId, page, variant) => {
   return true;
 };
 
+const FERRY_ROUTES = require('../plugins/world/data/ferries.json').routes;
+const landing = (route) => FERRY_ROUTES[route].to;
+
 function setup() {
   const questCore = { ...core, CountdownTask: undefined, TaskManager: undefined };
   const custom = new Map();
@@ -98,6 +101,11 @@ function setup() {
     emitCustomEvent(name, event) {
       if (name === 'quest:is-complete' && completedQuests.has(event.key)) event.complete = true;
       if (name === 'xpreward:open') xpreward.push(event);
+      // Routes.Ferries answers the shared handoff in the game; here it lands on the route's ferries.json tile.
+      if (name === 'ferries:travel' && FERRY_ROUTES[event.route]) {
+        event.player.moveTo(new core.Location(...FERRY_ROUTES[event.route].to));
+        event.handled = true;
+      }
       for (const handler of custom.get(name) ?? []) handler(event);
     },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
@@ -443,14 +451,14 @@ test('Client of Kourend leaves Port Sarim Veos to X Marks and sails to Piscarili
     'the destination is not applied before the departure line completes');
   voyage.after();
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
-    [1825, 3691, 0]);
+    landing('kourend-piscarilius'), 'the departure line hands the trip to the shared ferry route');
 
   h.choice(N.VEOS_4, "I'd like to travel to Land's End, please.");
   const landEnd = h.line(N.VEOS_4, "As you wish, I hope you don't get seasick, it is a long voyage.");
   assert.equal(typeof landEnd.after, 'function');
   landEnd.after();
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
-    [1504, 3401, 0], 'the accepted Port Sarim choice reaches the canonical Land\'s End landing');
+    landing('kourend-landsend'), 'the accepted Port Sarim choice takes the ferry route to Land\'s End landing');
 
   h.choice(N.VEOS_4, "I'd like to travel to Port Piscarilius, please.");
   h.variant(N.VEOS_4); // reopening Talk-to after cancelling the dialogue resets its choice context
@@ -478,7 +486,7 @@ test('post-quest Piscarilius Veos travel reaches Port Sarim and Land\'s End afte
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()], origin);
   portSarim.after();
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
-    [3054, 3245, 0]);
+    landing('kourend-sarim'));
 
   h.setLocation(...origin);
   h.choice(N.VEOS_5, "Travel to Land's End.");
@@ -486,7 +494,7 @@ test('post-quest Piscarilius Veos travel reaches Port Sarim and Land\'s End afte
   assert.equal(typeof landEnd.after, 'function', 'the referenced transcript branch keeps its canonical short line');
   landEnd.after();
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
-    [1504, 3401, 0]);
+    landing('kourend-landsend'));
 });
 
 test('Client of Kourend start-scroll handover with a full backpack is recoverable', () => {

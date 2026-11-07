@@ -44,6 +44,7 @@ before(async () => {
         onPlayerLogin: () => {},
         onSpellCast: (handler) => { castAlternate = handler; },
         onInterfaceActionClick: () => {},
+        onCustomEvent: () => {},
         sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { title, pairs }; return true; },
         emitCustomEvent: (name, request) => {
             if (name === 'diary:is-complete') request.complete = diaries.has(`${request.diary} ${request.tier}`);
@@ -79,6 +80,9 @@ function playerWith(itemId) {
         getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]) }),
         getInventory: () => ({
             contains: (id) => (inventory.get(id) ?? 0) > 0,
+            getAmount: (id) => inventory.get(id) ?? 0,
+            // Room enough for one more of anything (the fixture models no full inventory).
+            getAddableAmount: (item) => item.getAmount(),
             deleteNumber: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
             adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
         }),

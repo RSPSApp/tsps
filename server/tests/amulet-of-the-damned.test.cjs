@@ -30,6 +30,7 @@ BarrowsEquipment.register({
   onItemDropPolicy(handler) { dropPolicy = handler; },
   onPlayerDeathItemDrop(handler) { deathDrop = handler; },
   onNpcInteraction() {},
+  onItemAction() {},
   onCustomEvent() {},
   sendMultiChatboxPrompt() {},
 });

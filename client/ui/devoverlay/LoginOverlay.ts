@@ -292,6 +292,8 @@ export class LoginOverlay implements Overlay {
             renderLayoutHeight,
         );
 
+        loginRenderer.updateExtensionHover(loginState);
+
         // Performance: compute state hash to detect changes
         const cursorBlink = loginRenderer.cycle % 40 < 20;
         const stateHash = this.computeStateHash(
@@ -520,7 +522,9 @@ export class LoginOverlay implements Overlay {
             loginState.downloadCurrent
         }|${
             loginState.downloadTotal
-        }|${loginRenderer.getViewportTransformStateHash()}|${loginRenderer.getTitleAssetStateHash()}`;
+        }|${loginRenderer.getViewportTransformStateHash()}|${loginRenderer.getTitleAssetStateHash()}|${
+            loginState.extension?.hash() ?? ""
+        }`;
     }
 
     draw(phase: RenderPhase): void {

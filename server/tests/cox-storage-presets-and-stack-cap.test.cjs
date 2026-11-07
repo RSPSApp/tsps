@@ -54,8 +54,13 @@ const amount = (inv, id, wantPreset) => inv.getItems()
 const Storage = require("../plugins/minigames/cox/Storage.ChambersOfXeric");
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
+const Raid = require("../plugins/minigames/cox/RaidState.ChambersOfXeric");
+
+/** At a unit in a raid with the private storage open (a view counts only while its interface is open, in the raid). */
 function inStorage(t) {
   const f = actor(t);
+  t.mock.method(Raid, "raidOf", (player) => (player === f.p ? {} : null));
+  f.p.setInterfaceId(271);
   f.p.setAttribute("cox:storage-view", { kind: "private", size: 120, mount: false });
   return f;
 }
@@ -101,6 +106,7 @@ test("depositing onto a stored stack near the cap stores only what fits", (t) =>
 
 test("banking the storage from the mountain moves only what the bank can hold, keeping the rest stored", (t) => {
   const f = actor(t);
+  f.p.setInterfaceId(271);
   f.p.setAttribute("cox:storage-view", { kind: "private", size: 120, mount: true });
   f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 1500000000 }]);
   const tab = f.p.getBank(core.Bank.getTabForItem(f.p, I.COINS));
@@ -108,4 +114,21 @@ test("banking the storage from the mountain moves only what the bank can hold, k
   Storage.depositOrBankAll({ player: f.p });
   assert.equal(tab.getAmount(I.COINS), 2147483647);
   assert.equal(stored(f, I.COINS), 2500000000 - 2147483647, "nothing deleted");
+});
+
+test("the storage works only while its interface is open, at a unit in the raid: no remote deposits or withdrawals", (t) => {
+  const f = inStorage(t);
+  f.inv.setItem(0, new core.Item(I.DEATH_RUNE, 100));
+  f.p.setInterfaceId(-1); // closed and walked away
+  Storage.deposit(f.p, 0, 100);
+  assert.equal(stored(f, I.DEATH_RUNE), 0, "a closed storage takes nothing");
+  assert.equal(f.p.getAttribute("cox:storage-view"), null, "and its stale view is dropped");
+
+  f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 500 }]);
+  f.p.setInterfaceId(271);
+  f.p.setAttribute("cox:storage-view", { kind: "private", size: 120, mount: false });
+  Raid.raidOf.mock.mockImplementation(() => null); // left the raid with it open
+  Storage.withdraw(f.p, I.COINS, 500);
+  assert.equal(f.inv.getAmount(I.COINS), 0, "the raid's storage is gone outside the raid");
+  assert.equal(stored(f, I.COINS), 500);
 });

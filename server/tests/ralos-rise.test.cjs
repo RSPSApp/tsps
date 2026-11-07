@@ -221,8 +221,18 @@ test("a chisel breaks one blessed bone at once and one every 4 ticks, 5 Crafting
   // Break-down, and the already-blessed items.
   const statuette = playerWith(["chisel", "varlamore_bone_statuette02", "sun_kissed_bone"]);
   itemActions.get("Blessed bone statuette")["Break-down"]({ player: statuette, itemId: id("varlamore_bone_statuette02") });
+  cycle++; // the next click, a tick later: one break-down a tick
   itemActions.get("Sun-kissed bones")["Break-down"]({ player: statuette, itemId: id("sun_kissed_bone") });
   assert.equal(statuette.amountOf(id("blessed_bone_shard")), 170);
+});
+
+test("several chisel uses in one tick break one bone, not one each", () => {
+  const player = playerWith(["chisel", "blessed_bones", "blessed_bones", "blessed_bones"]);
+  const hook = itemOnItem.find((entry) => entry.b === "Blessed bones");
+  cycle++;
+  for (let i = 0; i < 3; i++) hook.handler({ player, usedItemId: id("chisel"), usedWithItemId: id("blessed_bones") });
+  assert.equal(player.amountOf(id("blessed_bone_shard")), 4, "one bone's shards");
+  assert.equal(player.amountOf(id("blessed_bones")), 2);
 });
 
 test("breaking down needs a chisel, and 70 Prayer for blessed superior dragon bones; other items pass through", () => {

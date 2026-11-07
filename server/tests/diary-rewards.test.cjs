@@ -10,11 +10,21 @@ const Rewards = require("../plugins/items/diaryrewards/Common.DiaryRewards");
 const Teleports = require("../plugins/items/diaryrewards/Teleports.DiaryRewards");
 const FaladorShield = require("../plugins/items/diaryrewards/FaladorShield.DiaryRewards");
 const ExplorersRing = require("../plugins/items/diaryrewards/ExplorersRing.DiaryRewards");
+const Pickpocketing = require("../plugins/items/diaryrewards/Pickpocketing.DiaryRewards");
 
 let core;
 const hooks = new Map();
 const teleports = [];
+const events = new Map();
+/** "<diary>:<tier>" keys the stand-in diary framework reports as complete. */
+const completedTiers = new Set();
 const api = new Proxy({
+  onCustomEvent(name, handler) {
+    events.set(name, handler);
+  },
+  emitCustomEvent(name, request) {
+    if (name === "diary:is-complete") request.complete = completedTiers.has(`${request.diary}:${request.tier}`);
+  },
   onItemAction(name, actions) {
     hooks.set(name, { ...(hooks.get(name) ?? {}), ...actions });
   },
@@ -37,11 +47,12 @@ before(async () => {
     TaskManager: { submit: (task) => task.execute() },
   };
   Rewards.init(api);
-  for (const unit of [Teleports, FaladorShield, ExplorersRing]) unit(api);
+  for (const unit of [Teleports, FaladorShield, ExplorersRing, Pickpocketing]) unit(api);
 });
 
 beforeEach(() => {
   teleports.length = 0;
+  completedTiers.clear();
 });
 
 function player({ prayer = 99, maxPrayer = 99, energy = 0 } = {}) {
@@ -213,4 +224,55 @@ test("Explorer's ring 2 Check also lists its cabbage patch teleports", () => {
   option("Explorer's ring 2", "Teleport", p);
   option("Explorer's ring 2", "Check", p);
   assert.equal(p.messages.at(-1), "You have 2 of your 3 teleports left for today.");
+});
+
+/** What the pickpocket asks content ("thieving:pickpocket-target") before its limit and chance are used. */
+function pickpocketRequest(x, y) {
+  const npc = { getLocation: () => ({ getX: () => x, getY: () => y }) };
+  const request = { player: player(), npc, pouchLimit: 28, chanceBonus: 0 };
+  events.get("thieving:pickpocket-target")(request);
+  return request;
+}
+const EAST_ARDOUGNE_MARKET = [2655, 3302];
+const FALADOR = [2964, 3380];
+const COMPLETE_TIERS = (...tiers) => tiers.forEach((tier) => completedTiers.add(`ardougne:${tier}`));
+
+test("without an Ardougne tier, a pickpocket keeps 28 coin pouches and its plain chance (Wiki)", () => {
+  const request = pickpocketRequest(...EAST_ARDOUGNE_MARKET);
+  assert.equal(request.pouchLimit, 28);
+  assert.equal(request.chanceBonus, 0);
+  COMPLETE_TIERS("easy");
+  assert.equal(pickpocketRequest(...EAST_ARDOUGNE_MARKET).chanceBonus, 0, "the easy tier gives neither");
+});
+
+test("the Medium Ardougne Diary: 56 coin pouches and +10% success, in Ardougne only (Wiki)", () => {
+  COMPLETE_TIERS("easy", "medium");
+  const inCity = pickpocketRequest(...EAST_ARDOUGNE_MARKET);
+  assert.deepEqual([inCity.pouchLimit, inCity.chanceBonus], [56, 10]);
+  const west = pickpocketRequest(2470, 3300);
+  assert.equal(west.chanceBonus, 10, "West Ardougne is Ardougne too");
+  const away = pickpocketRequest(...FALADOR);
+  assert.deepEqual([away.pouchLimit, away.chanceBonus], [56, 0], "the pouch limit is not tied to the city");
+  assert.equal(pickpocketRequest(2636, 3364).chanceBonus, 0, "the master farmer's patch north of the walls is outside it");
+});
+
+test("the Hard Ardougne Diary: 84 coin pouches and +10% success anywhere, not 20% in the city (Wiki)", () => {
+  COMPLETE_TIERS("easy", "medium", "hard");
+  for (const tile of [EAST_ARDOUGNE_MARKET, FALADOR]) {
+    const request = pickpocketRequest(...tile);
+    assert.deepEqual([request.pouchLimit, request.chanceBonus], [84, 10], String(tile));
+  }
+});
+
+test("the Elite Ardougne Diary: 140 coin pouches (Wiki)", () => {
+  COMPLETE_TIERS("easy", "medium", "hard", "elite");
+  assert.equal(pickpocketRequest(...FALADOR).pouchLimit, 140);
+});
+
+test("the Ardougne bonus adds to content's own chance bonus and never lowers a larger pouch limit", () => {
+  COMPLETE_TIERS("medium");
+  const npc = { getLocation: () => ({ getX: () => 2655, getY: () => 3302 }) };
+  const request = { player: player(), npc, pouchLimit: 100, chanceBonus: 15 };
+  events.get("thieving:pickpocket-target")(request);
+  assert.deepEqual([request.pouchLimit, request.chanceBonus], [100, 25]);
 });

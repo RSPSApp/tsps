@@ -1,4 +1,5 @@
 import { GameRenderer } from "../../game/GameRenderer";
+import { LoginIndex } from "../../game/login/GameState";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import {
     getActiveLoginFieldValue,
@@ -39,6 +40,10 @@ export function onMobileLoginKeyDown(host: WebGLOsrsRendererHost, event: Keyboar
     if (event.key !== "Enter") return;
     event.preventDefault();
     const state = host.osrsClient.loginState;
+    if (state.extension) {
+        host.osrsClient.submitLoginFromKeyboard();
+        return;
+    }
     if (state.currentLoginField === 0) {
         state.currentLoginField = 1;
         syncMobileLoginInput(host, true);

@@ -24,6 +24,8 @@ const CHANCY_REFUND_ATTRIBUTE = 'biohazard:chancy-refunds';
 const COINS = I.COINS;
 const ELENA_CAPACITY_REFUSAL = "Elena tries to give you some items but you don't have enough room for them.";
 
+const MAX_STACK = 2147483647;
+
 function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
   const completedKeys = new Set(completed);
   const questStages = new Map();
@@ -60,6 +62,12 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
     },
     isFull: () => slots <= 0,
     getFreeSlots: () => slots,
+    // As ItemContainer.getAddableAmount for a stackable: room left on the held stack, else a free slot's worth.
+    getAddableAmount(item) {
+      const id = item.getId(), amount = item.getAmount();
+      if (items.has(id)) return Math.min(amount, Math.max(0, MAX_STACK - items.get(id)));
+      return slots > 0 ? Math.min(amount, MAX_STACK) : 0;
+    },
   };
   const packetSender = new Proxy({}, { get: () => () => packetSender });
   const player = {
@@ -786,6 +794,29 @@ test('the wrong-vial refund is retryable per failed courier transaction', () => 
   run.invoke.action(N.CHANCY, 'WpMYWa', 'You give him the vial of ethenea.');
   run.invoke.action(N.CHANCY_2, 'dzf0rc', '10 coins', 'receive');
   assert.equal(run.items.get(COINS), 20, 'the retry of a failed transaction pays again');
+});
+
+// The refund pays only coins that fit (Biohazard giveCoins): a full bag with no coins, or a stack near the cap, is
+// refused with a message and stays owed, so it is paid once there is room.
+test('a wrong-vial refund that does not fit is refused and stays owed', () => {
+  for (const [name, prepare, makeRoom] of [
+    ['a full bag', (run) => run.setFreeSlots(0), (run) => run.setFreeSlots(1)],
+    ['a stack near the cap', (run) => run.items.set(COINS, MAX_STACK - 5), (run) => run.items.set(COINS, 0)],
+  ]) {
+    const run = setup({ stage: 12, completed: ['plague_city'] });
+    run.items.set(I.PLAGUE_SAMPLE, 1);
+    run.items.set(I.ETHENEA, 1);
+    run.items.set(I.SULPHURIC_BROLINE, 1);
+    run.invoke.action(N.CHANCY, 'WpMYWa', 'You give him the vial of ethenea.');
+    prepare(run);
+    const before = run.items.get(COINS) ?? 0;
+    run.invoke.action(N.CHANCY_2, 'dzf0rc', '10 coins', 'receive');
+    assert.equal(run.items.get(COINS) ?? 0, before, `${name}: nothing is paid`);
+    assert.equal(run.messages.at(-1), 'You need a free inventory space to take the coins.', name);
+    makeRoom(run);
+    run.invoke.action(N.CHANCY_2, 'dzf0rc', '10 coins', 'receive');
+    assert.equal(run.items.get(COINS), 10, `${name}: the refund is still owed and paid once there is room`);
+  }
 });
 
 test('Bedroom door open leaf is passable in both directions against cache geometry', async () => {

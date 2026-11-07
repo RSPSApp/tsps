@@ -368,7 +368,7 @@ export class GroundItemsOverlay implements WidgetOverlay {
 function tilePoly(scene: any, x: number, y: number, level: number, zOffset: number): Point[] | undefined {
     const out: Point[] = [];
     for (const [cx, cy] of [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]] as const) {
-        const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, level) - zOffset / 128, cy);
+        const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, level, x + 0.5, y + 0.5) - zOffset / 128, cy);
         if (!p) return undefined;
         out.push([p[0], p[1]]);
     }

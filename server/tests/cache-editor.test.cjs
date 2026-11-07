@@ -13,6 +13,9 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const Fields = require("../plugins/tools/cache-editor/Fields.CacheEditor");
 const Inspect = require("../plugins/tools/cache-editor/Inspect.CacheEditor");
+const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
+const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { CombatType } = require("../dist/game/content/combat/CombatType");
 
 const core = { CacheDefinitions, ObjectDefinition: require("../dist/game/definition/ObjectDefinition").ObjectDefinition };
 const inspect = (request) => Inspect.describe(core, request);
@@ -445,6 +448,66 @@ test("custom definitions keep their IDs, extend counts, preserve stock definitio
   assert.equal(CacheDefinitions.getNpc(50000).name, "Custom goblin");
   CacheDefinitions.registerCustomDefinitions([]);
   assert.deepEqual(CacheDefinitions.getCounts(), counts);
+});
+
+test("manager NPC recolours and damage stay on the new ID, leaving its cache base unchanged", () => {
+  let base;
+  for (let id = 0; id < CacheDefinitions.getBaseCounts().npcs; id++) {
+    const candidate = CacheDefinitions.getNpc(id);
+    if (candidate?.recolorFrom?.length && candidate.recolorTo?.length === candidate.recolorFrom.length) {
+      base = candidate;
+      break;
+    }
+  }
+  assert.ok(base, "the real cache has an NPC with built-in recolours");
+  const originalFrom = [...base.recolorFrom], originalTo = [...base.recolorTo];
+  const color = base.recolorTo[0];
+  const newColor = (color + 1) & 65535;
+  const composedTo = originalTo.map((value) => value === color ? newColor : value);
+  const document = {
+    version: 1,
+    rows: [{ kind: "npc", id: 50000, baseId: base.id, fields: {
+      name: "Custom colour test", recolorFrom: originalFrom, recolorTo: composedTo,
+    } }],
+  };
+  assert.deepEqual(Document.check(core, document), { ok: true, problems: [] });
+  try {
+    CacheDefinitions.registerCustomDefinitions(document.rows);
+    const custom = CacheDefinitions.getNpc(50000);
+    assert.equal(custom.recolorTo[0], newColor);
+    assert.equal(CacheDefinitions.getNpc(base.id), base);
+    assert.deepEqual(base.recolorFrom, originalFrom);
+    assert.deepEqual(base.recolorTo, originalTo);
+    const baseCombat = NpcDefinition.forId(base.id);
+    const originalMaxHit = baseCombat.getMaxHit(), originalStyle = baseCombat.getAttackType();
+    const customCombat = NpcDefinition.forId(50000);
+    NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    assert.equal(customCombat.getMaxHit(), 37);
+    assert.equal(customCombat.getAttackType(), CombatType.MELEE);
+    assert.equal(baseCombat.getMaxHit(), originalMaxHit);
+    assert.equal(baseCombat.getAttackType(), originalStyle);
+  } finally {
+    CacheDefinitions.registerCustomDefinitions([]);
+    NpcDefinition.invalidateCache(50000);
+  }
+});
+
+test("NPC recolour swaps and chains are rejected before the client applies them sequentially", () => {
+  const row = { kind: "npc", id: 50000, baseId: 1, fields: { recolorFrom: [1234, 4321], recolorTo: [4321, 1234] } };
+  assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  row.fields.recolorFrom = [918, 1234];
+  row.fields.recolorTo = [1234, 7777];
+  assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  row.fields.recolorFrom = [918, 1234];
+  row.fields.recolorTo = [7777, 4321];
+  assert.equal(Document.check(core, { rows: [row] }).ok, true);
+});
+
+test("recolour values outside the client's 16-bit colour range are rejected", () => {
+  for (const kind of ["npc", "item", "loc"]) {
+    const row = { kind, id: 50000, baseId: 1, fields: { recolorFrom: [70000], recolorTo: [-5] } };
+    assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /between 0 and 65535/);
+  }
 });
 
 test("malformed fields are refused before reaching the runtime", () => {

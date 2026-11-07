@@ -4,6 +4,7 @@ const { api, Animation, Item, Skill } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
 const House = require("./House.Construction");
+const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 const Menu = require("./Menu.Construction");
 const WORKBENCH = require("./data/workbench.json");
 
@@ -62,7 +63,7 @@ function makeFlatpack(player, bench, buildable) {
   player.performAnimation(new Animation(BUILD_ANIMATION));
   // Kept materials (a league fragment's planks) may leave no slot free: the flatpack then falls to the floor.
   player.getInventory().forceAdd(player, new Item(FLATPACK_OF.get(buildable.key), 1));
-  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, buildable.experience));
 }
 
 function interfaceClick(event) {

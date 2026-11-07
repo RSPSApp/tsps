@@ -567,6 +567,7 @@ export class MovementQueue {
         let previous = start;
         let steps = forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
         let moved = false;
+        let stepsMoved = 0;
         this.stepBlocked = false;
         this.stepBlockedByEntity = false;
 
@@ -604,6 +605,7 @@ export class MovementQueue {
                 this.character.setRunningDirection(direction);
             }
             moved = true;
+            stepsMoved++;
 
             if (checkpoint.position.equals(current)) {
                 this.points.shift();
@@ -614,7 +616,8 @@ export class MovementQueue {
             if (moved) {
                 this.handleRegionChange();
                 this.syncWildernessStateForMovedPlayer();
-                this.drainRunEnergy();
+                // Live OSRS: only a tick that covered two tiles is a run tick; a lone step is a walk.
+                this.drainRunEnergy(stepsMoved);
             }
         }
 
@@ -784,7 +787,7 @@ export class MovementQueue {
         return Math.max(0, Math.floor(applyRunEnergyRestoreModifiers(p, base)));
     }
 
-    private drainRunEnergy() {
+    private drainRunEnergy(stepsMoved: number) {
         const player = (this.character as Player);
         if (player.isPlayerBot?.() === true) {
             if (player.getRunEnergyUnits() !== GameConstants.RUN_ENERGY_MAX_UNITS) {
@@ -792,7 +795,7 @@ export class MovementQueue {
             }
             return;
         }
-        if (this.isRunToggled()) {
+        if (this.isRunToggled() && stepsMoved >= 2) {
             this.ranThisCycle = true;
             player.setRunEnergyUnits(player.getRunEnergyUnits() - MovementQueue.runEnergyDrainUnits(player));
             if (player.getRunEnergyUnits() <= 0) {

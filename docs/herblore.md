@@ -145,6 +145,36 @@ Otto might wish to talk to you more." Mixes are `manual`, one per use. The Wiki'
 optional Make-All setting (May 2024), which is not here. Caviar uses the same message, which has
 not been captured for caviar.
 
+## Amulet of chemistry
+
+`server/plugins/items/AmuletOfChemistry.plugin.js`; recordings 4211 and 4213 (rev 238) and
+https://oldschool.runescape.wiki/w/Amulet_of_chemistry (members).
+
+- **Effect:** worn while a potion is mixed, 5% of the time the potion has one dose more (a
+  3-dose potion comes as a 4-dose one, 4doseprayerrestore in recording 4213), with the XP of the
+  recipe and the usual "You mix ..." message first. Unfinished potions are left alone: recording
+  4213 has 111 herb-in-vial steps with the amulet worn and not one amulet message, against 5 in its
+  56 secondary mixes. The Wiki: no effect on products that already have 4 doses; variable-dose
+  upgrades (stamina) only when the input has fewer than 4 doses. The roll is the Wiki's 5%; no
+  recording gives a rate.
+- **Charges:** 5, kept on the player and not on the amulet (Wiki). A brew that used the amulet
+  says "Your amulet of chemistry helps you create a 4-dose potion. It has N charges left."
+  (spam filter for 4, 3 and 2; recording 4213), then with one left the same text ending
+  "<col=ff0000>It has one charge left.</col>" (game message), and on the last "<col=ff0000>It
+  then crumbles to dust.</col>". The amulet is removed and the next one starts afresh from 5.
+- **Options** (inventory option): a menu "Select an option" with "Check charges." (message "Your
+  amulet of chemistry has 5 charges left.", recordings 4211 and 4213) and "Toggle action when amulet
+  breaks." (a second menu "When your amulet breaks, what would you like to do?" with "Stop making
+  potions when my amulet breaks." and "Continue making potions when my amulet breaks."; no message
+  follows, recording 4211). Recording 4213 kept mixing after the amulet crumbled without the setting
+  ever being touched, so continuing is the default; stopping ends the batch with the potion that
+  broke the amulet (the Wiki: "decides whether you keep making potions or stop afterward").
+- **Break** (inventory option): a menu "Status: 5 charges left." with "Break the amulet." and
+  "Cancel."; breaking shows an object box "The amulet shatters. Your next amulet of chemistry will
+  start afresh from 5 charges." (recording 4211).
+- **Not captured:** the wording of Check/Status with one charge left, and what the Stop setting
+  does beyond its menu.
+
 ## Grinding
 
 A pestle and mortar on a secondary; no Herblore level or XP. Recordings 70 and 1875 (unicorn

@@ -108,6 +108,16 @@ function makePlayer() {
   };
 }
 
+/** Stands in for Mining's mining:best-pickaxe / mining:pickaxe answers with the plain bronze-to-dragon tools. */
+function answerPickaxes(api) {
+  const I = core.ItemIdentifiers;
+  const ids = [I.BRONZE_PICKAXE, I.IRON_PICKAXE, I.STEEL_PICKAXE, I.BLACK_PICKAXE, I.MITHRIL_PICKAXE, I.ADAMANT_PICKAXE, I.RUNE_PICKAXE, I.DRAGON_PICKAXE];
+  const holds = (player, id) => player.getInventory?.().getAmount?.(id) > 0 || player.getInventory?.().contains?.(id)
+    || player.getEquipment?.().getItems?.()?.some?.((item) => item?.getId?.() === id);
+  api.onCustomEvent('mining:best-pickaxe', (request) => { request.pickaxe ??= ids.find((id) => holds(request.player, id)) != null ? { id: 0 } : null; });
+  api.onCustomEvent('mining:pickaxe', (request) => { request.pickaxe ??= ids.includes(request.itemId) ? { id: request.itemId } : null; });
+}
+
 function harness() {
   transcriptCalls = [];
   const events = {};
@@ -175,6 +185,9 @@ function harness() {
     request.needsRod = tasteNeedsRod;
   });
   require('../plugins/items/ElementalStaves.plugin.js').register(api);
+  // The quests ask Mining for the player's pickaxe; Mining isn't loaded here, so this stands in for it with the plain
+  // tools these routes carry (held or wielded).
+  answerPickaxes(api);
   require(process.env.Q061_PLUGIN || '../plugins/quests/quests/InAidOfTheMyreque.Quest')(api);
   require('../plugins/skills/EnchantJewellery.plugin.js').register(api);
   const quest = runtime.getRegisteredQuests().at(-1);

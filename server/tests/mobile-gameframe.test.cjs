@@ -1,6 +1,8 @@
 // Run after `yarn build`: node --test tests/mobile-gameframe.test.cjs
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+// Accounts writes its file to this path; keep it off the real data/saves, before `dist` is required.
+process.env.TSPS_ACCOUNTS_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'accounts-')), 'accounts.json');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const {
@@ -55,7 +57,7 @@ test('handshake decodes the mobile client type byte', () => {
   ]);
 });
 
-function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {} } = {}) {
+function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {}, worldName = "Old School RuneScape" } = {}) {
   const hooks = {}, events = [], packets = [], messages = [];
   const player = {
     getLocation: () => ({ wilderness }),
@@ -71,7 +73,7 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
     }),
   };
   require('../plugins/interface/WelcomeScreen.plugin').register({
-    core: { MOBILE_CLIENT_ATTRIBUTE, XPDROPS_ENABLED_ATTRIBUTE, encodeGameframeBootstrap,
+    core: { WorldDefinition: { getWorldDefinition: () => ({ name: worldName }) }, MOBILE_CLIENT_ATTRIBUTE, XPDROPS_ENABLED_ATTRIBUTE, encodeGameframeBootstrap,
       resolveGameframeRoot, Wilderness: { isInLocation: location => location.wilderness } },
     onPlayerLogin: fn => { hooks.login = fn; },
     onCustomEvent: (name, fn) => { hooks[name] = fn; },
@@ -176,7 +178,7 @@ test('real login bootstraps before snapshots and completes recovery before deskt
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const connection = new ClientConnection(channel);
-    connection.pending = { username: 'BootstrapTester', profile: MAIN_PROFILE, passwordHash: '',
+    connection.pending = { username: 'BootstrapTester', credentialName: 'BootstrapTester', profile: MAIN_PROFILE, passwordHash: '',
       save: { applyToPlayer: p => p.setLocation(new Location(3210, 3220, 0)) } };
     try {
       connection.enterWorld(mobile ? 1 : 0);
@@ -208,4 +210,12 @@ test('real login bootstraps before snapshots and completes recovery before deskt
       clearInterval(connection.idleCheck);
     }
   }
+});
+
+test('welcome chat and default scroll use the configured world name', async () => {
+  const h = welcomeHarness({ worldName: 'Solaris RSPS' });
+  h.hooks.login({ player: h.player, isNewAccount: false });
+  await Promise.resolve();
+  assert.ok(h.messages.includes('Welcome to Solaris RSPS.'));
+  assert.ok(h.packets.some(packet => packet[0] === 'text' && packet[2] === 'Welcome to Solaris RSPS!'));
 });

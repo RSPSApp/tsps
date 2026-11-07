@@ -36,7 +36,14 @@ function chargesLeft(remaining) {
 function extraKills(player, npc, random = Math.random) {
   const equipment = player.getEquipment();
   if (!isBracelet(equipment.getItems()[core.Equipment.HANDS_SLOT])) return 0;
-  if (random() >= ACTIVATION_CHANCE) return 0;
+  // Content may change how often the bracelet works and whether it uses a charge ("slayer:bracelet", a league relic).
+  const proc = { player, npc, bracelet: "expeditious", chance: ACTIVATION_CHANCE, consumeCharge: true };
+  api.emitCustomEvent("slayer:bracelet", proc);
+  if (random() >= (Number.isFinite(proc.chance) ? proc.chance : ACTIVATION_CHANCE)) return 0;
+  if (proc.consumeCharge === false) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, ACTIVATION_MESSAGE);
+    return 1;
+  }
   const remaining = charges(player) - 1;
   player.setAttribute(CHARGES_ATTRIBUTE, remaining || MAX_CHARGES);
   let suffix;

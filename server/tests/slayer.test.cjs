@@ -1272,7 +1272,7 @@ test("an expeditious bracelet credits two kills on a 25% roll, with no extra Sla
   assert.equal(require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer").charges(player), 29);
 });
 
-test("without the bracelet worn, or with a slaughter bracelet, the count falls by one", t => {
+test("without the bracelet worn, or with a noted one, the count falls by one", t => {
   t.mock.method(Math, "random", () => 0);
   const bare = braceletPlayer(EXPEDITIOUS());
   bare.getEquipment().set(core.Equipment.HANDS_SLOT, new core.Item(-1));

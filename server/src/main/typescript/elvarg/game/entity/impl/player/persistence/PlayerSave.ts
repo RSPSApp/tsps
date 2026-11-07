@@ -592,7 +592,9 @@ export class PlayerSave {
         colorIndices.forEach((colorIndex, idx) => {
             const [min, max] = PlayerSave.COLOR_RANGES[idx];
             const candidate = PlayerSave.toFiniteInt(raw[colorIndex], defaults[colorIndex]);
-            sanitized[colorIndex] = PlayerSave.clamp(candidate, min, max);
+            // An unknown skin (a native client's red, 13) is no nearby colour: it goes back to the default.
+            const unknownSkin = colorIndex === Appearance.SKIN_COLOUR && (candidate < min || candidate > max);
+            sanitized[colorIndex] = unknownSkin ? defaults[colorIndex] : PlayerSave.clamp(candidate, min, max);
         });
 
         sanitized[Appearance.GENDER] = gender;

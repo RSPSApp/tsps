@@ -79,6 +79,12 @@ copy_deps() {
   for sub in node_modules server/node_modules client/node_modules server/caches; do
     [ -d "$MAIN/$sub" ] && [ ! -e "$dir/$sub" ] || continue
     cp -cR "$MAIN/$sub" "$dir/$sub" 2>/dev/null || cp -R --reflink=auto "$MAIN/$sub" "$dir/$sub"
+    # A copied dependency-root self-link sends webpack back to the main checkout's React.
+    if [ "$sub" != server/caches ] && [ ! -L "$dir/$sub" ] && [ -L "$MAIN/$sub/node_modules" ] &&
+       [ -L "$dir/$sub/node_modules" ] &&
+       [ "$(cd "$MAIN/$sub/node_modules" && pwd -P)" = "$(cd "$MAIN/$sub" && pwd -P)" ]; then
+      rm "$dir/$sub/node_modules"
+    fi
   done
 }
 

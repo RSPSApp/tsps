@@ -74,6 +74,7 @@ function actor(t) {
   const packets = [];
   const sender = {
     sendInterfaceRemoval() { player.setInterfaceId(-1); return sender; },
+    sendSoundEffect() { return sender; },
     sendInterface(id) { player.setInterfaceId(id); packets.push(["open", id]); return sender; },
     sendInventory(...args) { packets.push(["inventory", ...args]); return sender; },
     sendInterfaceFlagsRange(...args) { packets.push(["flags", ...args]); return sender; },
@@ -255,6 +256,78 @@ test("Drink applies one dose per stored type, emits potion events and starts sha
   itemAction(f, BARREL_NAME, "Drink", 0);
   assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the potion delay blocks another drink in the same tick");
   assert.equal(balance(f, "Prayer potion").doses, 2);
+});
+
+test("Drink skips only the refused potion and plays the barrel sound once (rsprox 4242)", (t) => {
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  const prayer = Potions.doseOf(I.PRAYER_POTION_4_);
+  const divine = Potions.doseOf(I.DIVINE_SUPER_COMBAT_POTION_4_);
+  const energy = Potions.doseOf(I.ENERGY_POTION_4_);
+  const effects = [];
+  for (const dose of [prayer, divine, energy]) {
+    t.mock.method(dose.potion, "effect", () => effects.push(dose.potion.name));
+  }
+  const sounds = [];
+  t.mock.method(core.Sounds, "sendSound", (_player, sound) => sounds.push([sound.getId(), sound.getDelay()]));
+  f.player.getSkillManager()
+    .setMaxLevels(core.Skill.HITPOINTS, 99, false)
+    .setCurrentLevels(core.Skill.HITPOINTS, 10, false);
+  seed(f.player, {
+    "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 3 },
+    [divine.potion.name]: { itemId: I.DIVINE_SUPER_COMBAT_POTION_4_, name: "divine super combat potion", doses: 2 },
+    "Energy potion": { itemId: I.ENERGY_POTION_4_, name: "energy potion", doses: 2 },
+  });
+  put(f, I.CHUGGING_BARREL, 0);
+
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the refused divine potion is skipped, the rest drink");
+  assert.deepEqual(f.messages, [
+    "You drink some of your prayer potion.",
+    "You need more than 10 hitpoints to survive the power of a divine potion.",
+    "You drink some of your energy potion.",
+  ]);
+  assert.equal(balance(f, "Prayer potion").doses, 2);
+  assert.equal(balance(f, divine.potion.name).doses, 2, "a refused potion keeps its dose");
+  assert.equal(balance(f, "Energy potion").doses, 1);
+  assert.equal(drunkEvents.length, 2);
+  assert.deepEqual(sounds, [[9491, 30]]);
+});
+
+test("Drink tells each refused divine potion's reason, one per potion (rsprox 4242)", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = actor(t);
+  const combat = Potions.doseOf(I.DIVINE_SUPER_COMBAT_POTION_4_);
+  const ranging = Potions.doseOf(I.DIVINE_RANGING_POTION_4_);
+  f.player.getSkillManager()
+    .setMaxLevels(core.Skill.HITPOINTS, 99, false)
+    .setCurrentLevels(core.Skill.HITPOINTS, 10, false);
+  seed(f.player, {
+    combat: { itemId: I.DIVINE_SUPER_COMBAT_POTION_4_, name: "divine super combat potion", doses: 2, slot: 0 },
+    ranging: { itemId: I.DIVINE_RANGING_POTION_4_, name: "divine ranging potion", doses: 2, slot: 1 },
+  });
+  put(f, I.CHUGGING_BARREL, 0);
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.ok(combat && ranging);
+  const reason = "You need more than 10 hitpoints to survive the power of a divine potion.";
+  assert.deepEqual(f.messages.filter((m) => m === reason).length, 2);
+  assert.equal(balance(f, combat.potion.name).doses, 2);
+  assert.equal(balance(f, ranging.potion.name).doses, 2);
+  assert.equal(drunkEvents.length, 0);
+});
+
+test("Drink tells a player-wide refusal once, not once per potion", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = actor(t);
+  rules.canDrink = false;
+  seed(f.player, {
+    prayer: { itemId: I.PRAYER_POTION_3_, name: "prayer potion", doses: 3, slot: 0 },
+    energy: { itemId: I.ENERGY_POTION_3_, name: "energy potion", doses: 2, slot: 1 },
+  });
+  put(f, I.CHUGGING_BARREL, 0);
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.equal(f.messages.filter((message) => message === "You cannot use potions here.").length, 1);
+  assert.equal(drunkEvents.length, 0);
 });
 
 test("Drink enforces bank, area, food permission, content and stun refusals", (t) => {

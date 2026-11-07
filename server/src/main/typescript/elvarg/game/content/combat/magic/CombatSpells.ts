@@ -39,6 +39,14 @@ class ChargeSpell extends Spell {
     }
 
     cast(player: Player): boolean {
+        // Wiki (Charge): it needs the Mage Arena I miniquest, which ends with the statues' god cape (the Mage Arena
+        // plugin answers "mage-arena:cape-received"). Refused before the runes; TSPS wording for the line.
+        const arena = { player, received: null as boolean | null };
+        PluginManager.emitCustomEvent("mage-arena:cape-received", arena);
+        if (arena.received !== true) {
+            player.sendMessage("You need to complete the Mage Arena to cast this spell.");
+            return true;
+        }
         // The cooldown is checked before the runes are taken, so a refused cast costs nothing.
         if (!this.canCast(player, false) || !this.canCast(player, true)) {
             return true;

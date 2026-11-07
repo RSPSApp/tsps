@@ -318,3 +318,28 @@ test("The Nightmare's loot roll is marked as loot, not a second kill: the fight 
   assert.equal(rolls[0].countKill, false);
   assert.equal(rolls[0].npc, fight.boss);
 });
+
+test("a team's kill gives its uniques once, to one player by weight of damage (Wiki), and everyone their own roll", (t) => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const STAFF = 24422;
+  fakeApi.emitCustomEvent = (name, payload) => {
+    // Every roll of her table comes up with a staff: a per-player unique roll would give one to everybody.
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: STAFF, amount: 1 }, { itemId: 995, amount: 1 });
+  };
+  const placed = [];
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation(player, item) { placed.push([player, item.itemId]); } });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526, NIGHTMARE_STAFF: STAFF };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const [a, b, c] = [fakePlayer(), fakePlayer(), fakePlayer()];
+  const fight = {
+    phosani: false, boss: {}, dream: { tile: () => ({}), area: {} },
+    contribution: new Map([[a, { shield: 1, totems: 1 }], [b, { shield: 1, totems: 1 }], [c, { shield: 97, totems: 1 }]]),
+  };
+  t.mock.method(Math, "random", () => 0.5); // halfway through the damage: player c's share
+  Loot.reward(fight, [a, b, c]);
+  const staffs = placed.filter(([, id]) => id === STAFF);
+  assert.equal(staffs.length, 1, "one staff for the kill, not one each");
+  assert.equal(staffs[0][0], c, "to the player whose damage the roll fell in");
+  for (const player of [a, b, c]) assert.ok(placed.some(([who, id]) => who === player && id === 995), "everyone rolls the rest");
+});

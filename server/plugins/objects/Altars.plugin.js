@@ -113,7 +113,11 @@ function lunarAltar({ player }) {
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.LUNAR ? MagicSpellbook.NORMAL : MagicSpellbook.LUNAR);
 }
 
-function darkAltar({ player }) {
+function darkAltar({ player, objectId }) {
+  if (Number.isInteger(objectId) && objectId === core.ObjectIdentifiers?.DARK_ALTAR) {
+    api.emitCustomEvent("runecrafting:dark-altar-venerate", { player });
+    return true;
+  }
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.ARCEUUS ? MagicSpellbook.NORMAL : MagicSpellbook.ARCEUUS);
 }
 

@@ -850,6 +850,22 @@ test("a quest gate refuses only when the quest plugin says it isn't done", () =>
   assert.ok(!unknown.state.messages.some((message) => message.includes("Prince Ali")), "a quest no plugin knows is no bar");
 });
 
+// Wiki (Shortcuts): the Al Kharid big window and broken wall are one shortcut that "Requires completion of Prince Ali
+// Rescue"; the Stalker Den cave is "after Shadows of Custodia". The broken wall and the cave had no quest gate.
+test("the Al Kharid broken wall and the Stalker Den cave need their quests", () => {
+  try {
+    hooks.answers["quest:is-complete"] = (request) => { request.complete = false; };
+    const wall = createPlayer(3295, 3157, 0);
+    operate(wall, 33344, [3295, 3157, 0]);
+    assert.ok(wall.state.messages.includes("You need to complete Prince Ali Rescue to use this shortcut."), wall.state.messages.join(" | "));
+    const cave = createPlayer(1324, 3363, 0);
+    operate(cave, 57279, [1324, 3364, 0]);
+    assert.ok(cave.state.messages.includes("You need to complete Shadows of Custodia to use this shortcut."), cave.state.messages.join(" | "));
+  } finally {
+    delete hooks.answers["quest:is-complete"];
+  }
+});
+
 test("diary gates are recorded but not enforced until the diary's tasks can be done", () => {
   hooks.events.length = 0;
   const player = createPlayer(2898, 9902, 0);

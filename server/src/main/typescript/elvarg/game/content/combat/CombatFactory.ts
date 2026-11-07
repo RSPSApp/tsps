@@ -1763,8 +1763,11 @@ export class CombatFactory {
             // Otherwise the device recovered it before it hit the floor.
         }
 
-        const ammoMeta = JSON.stringify(ammoItem.getMeta() ?? null);
-        const sameAmmo = (item: Item | null | undefined) => !!item && item.getId() === ammoItem.getId()
+        // Fixed at the shot: paying from the pack can empty this very object in place (an unequip moves it there).
+        const ammoId = ammoItem.getId();
+        const firedMeta = ammoItem.getMeta();
+        const ammoMeta = JSON.stringify(firedMeta ?? null);
+        const sameAmmo = (item: Item | null | undefined) => !!item && item.getId() === ammoId
             && JSON.stringify(item.getMeta() ?? null) === ammoMeta;
         const apply = () => {
             const consumed = lost + dropped;
@@ -1780,7 +1783,7 @@ export class CombatFactory {
                 const paid = Math.min(consumed, inventory.getItems()[at].getAmount());
                 inventory.deleteAtSlot(at, paid);
                 if (dropped > 0 && pos) {
-                    ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), Math.min(dropped, paid), ammoItem.getMeta()), pos);
+                    ItemOnGroundManager.registerLocation(player, new Item(ammoId, Math.min(dropped, paid), firedMeta), pos);
                 }
                 return;
             }

@@ -1270,6 +1270,7 @@ test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal 
   };
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
   require('../plugins/quests/quests/SinsOfTheFather.Quest')(api);
+  require('../plugins/items/DrakansMedallion.plugin').register(api);
   const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
   const quests = getRegisteredQuests();
   const quest = quests.filter((entry) => entry.key === 'the_blood_moon_rises').at(-1);

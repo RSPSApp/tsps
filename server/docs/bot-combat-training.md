@@ -299,6 +299,51 @@ Hotspot bots count towards that region's target. Persistent Wilderness clusters 
 12 low-level, 10 mid-level and 14 main bots at Edgeville, 40 at Varrock Ditch, and 4 each at
 Green Dragons and the Revenant Caves entrance. Safe tiles and buildings still cannot spawn bots.
 
+### Regional density overrides
+
+`pvp.activeRegionBotsByRegion` in `bot-sites.json` optionally sets a target for individual
+64×64 map squares. Deployments can instead set `PlayerBots:activeRegionBotsByRegion` in
+`world.local.json` without editing the shipped population file:
+
+```json
+{
+  "pluginConfig": {
+    "PlayerBots:activeRegionBotsByRegion": {
+      "0:50:158": 3,
+      "0:50:159": 0
+    }
+  }
+}
+```
+
+Keys are exactly `plane:regionX:regionY`, where `regionX = floor(tileX / 64)` and
+`regionY = floor(tileY / 64)`. Thus `0:50:158` covers x=3200–3263, y=10112–10175 on
+plane 0. This is a whole map square, including tiles outside a named cave or area;
+it is not a packed region id or an area rectangle. There are no overlapping rules.
+
+The world setting replaces the entire file mapping, including when it is `{}`. Normal
+world configuration layering applies: the local mapping replaces the world's mapping.
+Missing keys use `activeRegionBotsPerRegion` (still 16 as shipped). A value of 0 requests
+no regional roamers in that square; positive entries also work when the global target is 0.
+Counts must be JSON integers from 0 through `botPool`; planes are 0–3 and region axes
+0–255, with no leading zeroes. Invalid mappings or entries warn and use the global
+fallback, rather than being coerced or partially interpreting a key. Restart after changes.
+
+These are population targets, not a hard cap on all players. Fixed hotspot bots consume
+target slots but keep their own configured population even when the target is zero. Site
+farmers, recruits and manually created bots are not regional roamers. The shared name
+pool, active-region inset, attackable land and valid/reachable spawn tiles can limit filling.
+Roamers crossing map squares count where they currently are; their home/respawn bounds
+remain unchanged. Refills are paced and excess roamers normally leave after 30 seconds,
+with departures delayed during combat or pending hits and retried on the next population
+reconciliation (for example a map-square change or logout). Compare settled counts, including
+queued additions and hotspot bots, rather than an immediate post-login sample.
+
+Overrides do not activate squares. Current world activation follows connected human
+players (and their pending removals); bots alone do not keep a square active. Without
+overrides, existing defaults, fixed sites and activation rules are unchanged. These controls
+are custom server population policy, not OSRS mechanics or recommended cave balancing.
+
 Regional bots give the low-level pure and rusher loadouts higher weights, so roughly a third
 of their members-world population is one Defence with no protection prayers.
 Novice and standard bots eat at 35% and 40% HP and use single food; veterans and elites can

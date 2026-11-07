@@ -50,6 +50,7 @@
  *   `gather-with { skill, tools, items?, count }` (`woodcutting:success`'s axeId, `mining:success`'s pickaxeId),
  *   `teleport { spells, count }` (`spell:teleport-arrival`, by SpellTeleports' lower-cased name),
  *   `rifts { count }` (`guardians-of-the-rift:rift-closed`'s own total of rifts closed),
+ *   `prayer-restore { amount, count }` (`altars:prayed`'s `restored`, one prayer restoring at least that),
  *   `tob { modes, count }` (`tob:completed`, a raid of one of the modes), `emote { slots, count }`
  *   (`player:emote`, by the emote tab's slot), `take { items, source, count }` (`ground-items:taken`,
  *   picked up by hand, "pickup", or by Telekinetic Grab, "telegrab"), `pickpocket-loot { npcs, items,
@@ -367,6 +368,7 @@ const EVENT_KINDS = new Map([
     && (!trigger.items || trigger.items.some((each) => key(each) === key(itemName(event.itemId))))],
   ["bird-nest", () => true],
   ["alch", (trigger, event) => Number(event.coins) >= Number(trigger.coins)],
+  ["prayer-restore", (trigger, event) => Number(event.restored) >= Number(trigger.amount)],
   ["buy", (trigger, event) => trigger.shops.includes(event.shopName) && trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
   ["pickpocket-loot", (trigger, event) => trigger.npcs.some((npc) => key(npc) === key(event.target))
     && (event.loot ?? []).some((entry) => trigger.items.some((each) => key(each) === key(itemName(Number(entry?.id ?? entry?.itemId)))))],
@@ -494,6 +496,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));
   api.onCustomEvent("shop:purchase", onEvent("buy"));
   api.onCustomEvent("magic:alchemy-completed", onEvent("alch"));
+  api.onCustomEvent("altars:prayed", onEvent("prayer-restore"));
   api.onCustomEvent("bank:opened", onEvent("bank"));
   api.onCustomEvent("npc:operated", onEvent("npc-op"));
   api.onCustomEvent("agility:obstacle", onEvent("shortcut"));

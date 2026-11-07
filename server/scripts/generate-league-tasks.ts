@@ -348,7 +348,7 @@ function alternativesOf(description: string): string[] {
 }
 
 /** The cache names a trigger may name, each checked before it is written. */
-interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]>; npcIds?: Map<string, number[]>; subjects?: Map<string, string[]> }
+interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]>; npcIds?: Map<string, number[]>; subjects?: Map<string, string[]>; sections?: Map<string, string[]> }
 
 /** A condition in a task's description (where, how, how fast): not a plain count of the deed. */
 const CONDITION = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count|at once|in one|at the same time|in a row|whilst|before|after)\b/i;
@@ -1047,7 +1047,7 @@ function teleportOf(name: string, description: string, items: Map<string, string
   return null;
 }
 
-function deriveTrigger(fullName: string, rawDescription: string, names: Names): { trigger?: Trigger; unmapped?: string } {
+function deriveTrigger(fullName: string, rawDescription: string, names: Names, wikiDescription = ""): { trigger?: Trigger; unmapped?: string } {
   const { npcs, quests, items, homes } = names;
   // "Successfully Cut a Red Topaz" is cutting one.
   const name = fullName.replace(/^Successfully ([a-z])/i, (_all, letter: string) => letter.toUpperCase());
@@ -1279,6 +1279,12 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       const castes = ["TzHaar-Ket", "TzHaar-Xil", "TzHaar-Mej", "TzHaar-Hur"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
       if (castes.length === 4) return { trigger: { kind: "kill", npcs: castes, count } };
     }
+    // "Defeat any one of the God Wars Dungeon bosses N times" (and the combined 500): any of the
+    // five generals. A kill of one counts toward the same total.
+    if (/^Any God Wars Dungeon Boss$/i.test(subject)) {
+      const bosses = ["Kree'arra", "General Graardor", "Commander Zilyana", "K'ril Tsutsaroth", "Nex"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
+      if (bosses.length === 5) return { trigger: { kind: "kill", npcs: bosses, count } };
+    }
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
@@ -1461,10 +1467,29 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       if (sets && sets.length === 1) return { trigger: { kind: "equip-all", items: sets[0] } };
       // A set the cache has no item set for: its Wiki page's pieces, every one a cache item; one
       // table is that set, several are one set each (any of them whole).
-      const listed = wikiSetNamed(set[1], names);
-      if (listed?.length === 1) return { trigger: { kind: "equip-all", items: listed[0] } };
+      // "tier 5 Shayzien armour" is the Shayzien armour (tier 5) page, the "(tier 5)" dropped as a remark.
+      const titled = set[1].replace(/^tier \d+ /i, "");
+      const listed = wikiSetNamed(set[1], names) ?? wikiSetNamed(titled, names);
+      if (listed?.length === 1) {
+        // A piece that degrades (Crystal helm, and its body and legs) is still that piece.
+        const slots = listed[0].map((piece) => {
+          const forms = wornVariants(piece, items);
+          return forms.some((name) => /\(inactive\)$/i.test(name)) ? forms : piece;
+        });
+        return { trigger: { kind: "equip-all", items: slots } };
+      }
       if (listed && listed.length > 1) return { trigger: { kind: "equip-any-set", sets: listed } };
-    } else if ((set = /^(?:any |a )?piece of (?:the )?(?:any )?(.+?)(?: set)?$/i.exec(said))) {
+      // Graceful and the prospector kit: the page's plain {{plinkp}} names, the six and the four.
+      // A recolour is the same cache name, so it is this set; the cache cannot tell a recoloured
+      // one apart, and that task stays unmapped.
+      const outfits: Record<string, string[]> = {
+        "graceful gear": ["Graceful hood", "Graceful cape", "Graceful top", "Graceful legs", "Graceful gloves", "Graceful boots"],
+        "prospector gear": ["Prospector helmet", "Prospector jacket", "Prospector legs", "Prospector boots"],
+      };
+      const outfit = outfits[set[1].toLowerCase()] ?? outfits[titled.toLowerCase()];
+      if (outfit?.every((piece) => items.has(piece.toLowerCase()))) return { trigger: { kind: "equip-all", items: outfit.map((piece) => items.get(piece.toLowerCase())!) } };
+    } else if ((set = /^(?:every |all |any |a )?piece of (?:the )?(?:any )?(.+?)(?: set)?$/i.exec(said))) {
+      const everyPiece = /^(?:every |all )piece of /i.test(said);
       if (/^barrows armour$/i.test(set[1])) {
         // A piece of armour: the sets' weapons (the staff, the greataxe...) are no armour.
         const barrows = ["ahrim's", "dharok's", "guthan's", "karil's", "torag's", "verac's"].flatMap((key) => itemSetsByName().get(key)?.[0] ?? [])
@@ -1476,8 +1501,10 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       // "Equip any piece of Zenyte Jewelry": the four enchanted pieces (the Zenyte page's Magic
       // table; the task's link redirects there) and each piece's cache forms.
       if (/^zenyte jewelry$/i.test(set[1])) {
-        const pieces = ["Amulet of torture", "Necklace of anguish", "Tormented bracelet", "Ring of suffering"].flatMap((piece) => wornVariants(piece, items));
-        if (pieces.length) return { trigger: { kind: "equip", items: pieces } };
+        const slots = ["Amulet of torture", "Necklace of anguish", "Tormented bracelet", "Ring of suffering"].map((piece) => wornVariants(piece, items)).filter((slot) => slot.length);
+        if (slots.length === 4) return everyPiece
+          ? { trigger: { kind: "equip-all", items: slots } }
+          : { trigger: { kind: "equip", items: [...new Set(slots.flat())] } };
       }
       // "any piece of Moon equipment from the Blood, Frost, or Eclipse moon set": the linked set
       // page has one table per moon, and a piece of any of them counts (the same pieces as
@@ -1602,20 +1629,73 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
     }
   }
   // "Equip any Godsword": the versions its page's {{plinkt}} names, each ending with the page's
-  // title, and an ornament kit of one when the cache has it.
-  if ((match = /^Equip any (.+?)\.?$/i.exec(clean(description)))) {
-    const versions = names.subjects?.get(match[1].toLowerCase());
+  // title, and an ornament kit of one when the cache has it. "Equip any Team cape in the Wilderness":
+  // the cache's team capes, worn there. "Equip any Mithril weapon": the equipment page's Weapons
+  // tables, stored as that page's subject.
+  if ((match = /^Equip any (.+?)\.?$/i.exec(leagueAreaOf(clean(description).replace(/ while (?:inside|in) /i, " in ")).text))) {
+    const placed = leagueAreaOf(clean(description).replace(/ while (?:inside|in) /i, " in "));
+    let versions = names.subjects?.get(match[1].toLowerCase());
+    if (!versions?.length && /^team cape$/i.test(match[1])) {
+      versions = [...new Set([...items.values()].filter((item) => /^Team-\d+ cape$/i.test(item) || /^Team cape (?:zero|i|x)$/i.test(item)))].sort();
+    }
     if (versions?.length) {
       const worn = versions.flatMap((item) => {
         const kit = items.get(`${item} (or)`.toLowerCase());
         return kit ? [item, kit] : [item];
       });
-      return { trigger: { kind: "equip", items: worn } };
+      const trigger: Trigger = { kind: "equip", items: worn };
+      if (placed.area !== null) trigger.area = placed.area;
+      return { trigger };
     }
+  }
+  // "Equip a basic elemental staff", "either an elemental battlestaff or an elemental mystic staff":
+  // the linked page's section (Elemental staves#Standard staves, Battlestaves#Standard battlestaves).
+  // A plain battlestaff supplies no elemental runes, so it is not an elemental one.
+  if (/^Equip /i.test(name) && wikiDescription && !/\bfull set\b/i.test(wikiDescription)) {
+    const links = [...wikiDescription.matchAll(/\[\[([^\]|#]+)(?:#([^\]|]+))?\|([^\]]+)\]\]/g)];
+    if (links.length && links.every((link) => link[2])) {
+      const groups = links.map((link) => names.sections?.get(`${link[1].trim()}#${link[2].trim()}`.toLowerCase()) ?? []);
+      if (groups.every((group) => group.length) && (links.length === 1 || (/\bor\b/i.test(wikiDescription) && !/\band\b/i.test(wikiDescription)))) {
+        let listed = [...new Set(groups.flat())];
+        if (links.some((link) => /elemental battlestaff/i.test(link[3]))) listed = listed.filter((item) => item.toLowerCase() !== "battlestaff");
+        const worn = listed.flatMap((item) => {
+          const kit = items.get(`${item} (or)`.toLowerCase());
+          return kit ? [item, kit] : [item];
+        });
+        if (worn.length) return { trigger: { kind: "equip", items: [...new Set(worn)] } };
+      }
+    }
+  }
+  // "Equip a completed God Book": the six completed books (and a cache ornament of one).
+  // "Equip a Damaged God book": the cache names every damaged god book "Damaged book".
+  if (/^Equip a completed God book\.?$/i.test(clean(description))) {
+    const slots = ["Holy book", "Unholy book", "Book of balance", "Book of war", "Book of law", "Book of darkness"].map((book) => wornVariants(book, items));
+    if (slots.every((slot) => slot.length)) return { trigger: { kind: "equip", items: [...new Set(slots.flat())] } };
+  }
+  if (/^Equip a damaged god book\.?$/i.test(clean(description))) {
+    const forms = wornVariants("Damaged book", items);
+    if (forms.length) return { trigger: { kind: "equip", items: forms } };
+  }
+  // "Restore 75 or more Prayer Points at any altar": one prayer there restoring at least that
+  // (altars:prayed's restored). A place, or an exact amount, is not this.
+  if ((match = /^Restore (\d+) or more Prayer Points at any altar\.?$/i.exec(clean(description)))) {
+    return { trigger: { kind: "prayer-restore", amount: Number(match[1]), count: 1 } };
   }
   // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
   // no single item or NPC stands for it.
   if (CONDITION.test(clean(description)) || /\bany\b/i.test(clean(description))) return {};
+  // "Equip either the Crystal Helmet, Body or Legs": the Crystal armour section's three pieces.
+  // "Crystal Helmet" is the Crystal helm page, whose ids the cache duplicates, so it is no subject alias.
+  if (/^Equip either the Crystal Helmet, Crystal body or Crystal legs$/i.test(clean(description))) {
+    const bases = (names.sets?.get("crystal armour") ?? []).flat();
+    const forms = bases.flatMap((piece) => {
+      const named = items.get(piece.toLowerCase());
+      if (!named) return [];
+      const variants = wornVariants(named, items);
+      return variants.some((form) => /\(inactive\)$/i.test(form)) ? variants : [named];
+    });
+    if (forms.length) return { trigger: { kind: "equip", items: [...new Set(forms)] } };
+  }
   // The description's list: "Equip either a Saradomin Cape, a Zamorak Cape or a Guthix Cape" (any
   // one), "Equip an Archer's Ring, a Berserker Ring, a Seer's Ring and a Warrior Ring" (all at
   // once), "Equip an Adamant Platebody, a Adamant Full Helm and either some Adamant Platelegs or an
@@ -1625,8 +1705,16 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
     const article = (part: string) => part.replace(/^(?:a pair of |an? |the |some )/i, "").trim();
     const anyOf = / or /.test(list) && !/ and /.test(list);
     if (anyOf && /,| or /.test(list)) {
-      const named = list.split(/,\s*(?:or )?|\s+or\s+/).map(article).filter(Boolean).map((part) => wornNamed(part, items));
-      if (named.length > 1 && named.every(Boolean)) return { trigger: { kind: "equip", items: [...new Set(named as string[])] } };
+      // A linked page that is not itself an item ("Crystal Helmet") is what that page names.
+      // A piece with an inactive form still counts when it has degraded.
+      const resolveWorn = (part: string): string[] | null => {
+        const one = wornNamed(part, items);
+        if (one) return [one];
+        const versions = names.subjects?.get(part.toLowerCase());
+        return versions?.length ? versions : null;
+      };
+      const named = list.split(/,\s*(?:or )?|\s+or\s+/).map(article).filter(Boolean).map(resolveWorn);
+      if (named.length > 1 && named.every((part) => part?.length)) return { trigger: { kind: "equip", items: [...new Set((named as string[][]).flat())] } };
     } else if (/ and /.test(list)) {
       const slots = list.split(/,\s*(?:and )?|\s+and\s+/).map((part) => part.trim()).filter(Boolean).map((part) => {
         const either = /^either (.+?) or (.+)$/i.exec(part);
@@ -1777,7 +1865,7 @@ function cacheLeagueTasks(league: League, wikiRows: WikiRow[], names: Names, rep
     if (plain(wiki.name).toLowerCase() !== row.name.toLowerCase()) renamed.push(`${row.position}: Wiki "${plain(wiki.name)}", cache "${row.name}"`);
     // The trigger reads the Wiki's description, which keeps what the cache's short one drops
     // ("Reach level 10 in any skill (not including Agility and Hitpoints)"); the task shows the cache's.
-    const derived = deriveTrigger(row.name, plainTargets(wiki.description), names);
+    const derived = deriveTrigger(row.name, plainTargets(wiki.description), names, wiki.description);
     const task: Task = {
       id: slug(row.name), wikiId: wiki.id, name: row.name, description: row.description, tier: row.tier, points: league.points[row.tier],
       area: row.area, category: row.category, categorySource: "cache",
@@ -1839,7 +1927,7 @@ function setPagesOf(wikitext: string): string[] {
   const pages: string[] = [];
   for (const [, name, description] of wikitext.matchAll(/\{\{(?:DPL|REL|TRL)TaskRow\|([^|]*)\|([^\n]*?)\|s=/g)) {
     if (!/^Equip /i.test(name)) continue;
-    const link = /\b(?:full set of|full|piece of)\s+(?:the |any )?\[\[([^\]|#]+)/i.exec(description);
+    const link = /\b(?:full set of|full|piece of)\s+(?:the |any )?(?:[a-z0-9]+ ){0,3}\[\[([^\]|#]+)/i.exec(description);
     if (link) pages.push(link[1].trim());
   }
   return pages;
@@ -1855,8 +1943,40 @@ function setListsOf(wikitext: string): string[][] {
     .map((match) => match[1].split("|").map((arg) => arg.trim()).filter((arg) => arg && !arg.includes("=")).map((arg) => arg.replace(/#.*$/, "")));
   if (lists.length) return lists;
   const infobox = /\{\{Infobox Set[\s\S]*?\|image\s*=([^\n]*)/.exec(wikitext);
-  const pictured = infobox ? [...infobox[1].matchAll(/link=([^\]|]+)/g)].map((match) => match[1].trim()) : [];
+  // Beekeeper's outfit pictures its pieces with {{plinkp}}, Void Knight equipment with link=.
+  const pictured = infobox ? [...infobox[1].matchAll(/(?:link=|\{\{plinkp\|)([^\]|}]+)/g)].map((match) => match[1].trim()) : [];
   return pictured.length ? [pictured] : [];
+}
+
+/** The {{Infotable Bonuses}} pieces in a stretch of wikitext, a "#Unpoisoned" suffix dropped. */
+function tablePieces(wikitext: string): string[] {
+  return [...new Set([...wikitext.matchAll(/\{\{Infotable Bonuses\|([^{}]*)\}\}/g)].flatMap((match) => match[1].split("|").map((arg) => arg.trim()).filter((arg) => arg && !arg.includes("=")).map((arg) => arg.replace(/#.*$/, ""))))];
+}
+
+/** A heading's body, through the next heading of the same level or higher. */
+function wikiSection(wikitext: string, title: string): string | null {
+  const heading = new RegExp(`^(=+)\\s*${title.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*\\1\\s*$`, "im");
+  const start = heading.exec(wikitext);
+  if (!start) return null;
+  const rest = wikitext.slice(start.index + start[0].length);
+  const next = new RegExp(`^={2,${start[1].length}}[^=]`, "m").exec(rest);
+  return rest.slice(0, next ? next.index : undefined);
+}
+
+/**
+ * Equip tasks that point at a page section ("Dragon equipment#Weapons", "Mithril equipment" whose
+ * label is "Mithril weapon"): the page and the section the items are tabulated in.
+ */
+function sectionRefsOf(wikitext: string): Array<{ page: string; section: string }> {
+  const refs: Array<{ page: string; section: string }> = [];
+  for (const [, description] of wikitext.matchAll(/\{\{(?:DPL|REL|TRL)TaskRow\|[^|]*\|([^\n]*?)\|s=/g)) {
+    if (!/^Equip /i.test(description)) continue;
+    for (const link of description.matchAll(/\[\[([^\]|#]+)(?:#([^\]|]+))?\|([^\]]+)\]\]/g)) {
+      const section = (link[2] ?? (/weapon$/i.test(link[3].trim()) ? "Weapons" : "")).trim();
+      if (section) refs.push({ page: link[1].trim(), section });
+    }
+  }
+  return refs;
 }
 
 /**
@@ -1957,6 +2077,32 @@ async function wikiPageOf(kind: string, page: string, options: { from?: string; 
   return text;
 }
 
+/**
+ * A set page, following a redirect. A redirect at a section ("Crystal armour" is Crystal
+ * equipment's Crystal armour heading) is that section, so the page's other tables are not the set.
+ */
+async function setPageOf(page: string, options: { from?: string; save?: string }): Promise<string> {
+  const file = `${page.replace(/ /g, "_").replace(/\//g, "_")}.wikitext`;
+  if (options.from) return fs.readFileSync(path.join(options.from, "sets", file), "utf8");
+  let title = page;
+  let section: string | null = null;
+  let text = "";
+  for (let hop = 0; hop < 3; hop++) {
+    const url = `https://oldschool.runescape.wiki/w/${encodeURIComponent(title.replace(/ /g, "_")).replace(/%2F/g, "/")}?action=raw`;
+    text = await wikiText(url);
+    const redirect = /^#REDIRECT\s*\[\[([^\]#|]+)(?:#([^\]|]+))?\]\]/i.exec(text);
+    if (!redirect) break;
+    title = redirect[1].trim();
+    if (redirect[2]) section = redirect[2].trim();
+  }
+  if (section) text = wikiSection(text, section) ?? text;
+  if (options.save) {
+    fs.mkdirSync(path.join(options.save, "sets"), { recursive: true });
+    fs.writeFileSync(path.join(options.save, "sets", file), text);
+  }
+  return text;
+}
+
 /** A place's Wiki page, saved as <dir>/places/<page>.wikitext like the task pages. */
 async function placePageOf(page: string, options: { from?: string; save?: string }): Promise<string> {
   if (options.from) return fs.readFileSync(path.join(options.from, "places", `${page}.wikitext`), "utf8");
@@ -2036,12 +2182,34 @@ async function main() {
     else if (new Set(npcs).size === 1 && !items.length) names.npcs.set(key, npcs[0]);
     else if (listed.length > 1 && !npcs.length) names.subjects.set(key, [...new Set(listed)]);
   }
+  // A section an equip task links ("#Weapons", "#Standard staves"): its table's cache items.
+  // The Weapons section is also the subject of "Equip any Mithril weapon" (the link's page).
+  names.sections = new Map();
+  const sectionRefs = new Map<string, { page: string; section: string }>();
+  for (const ref of LEAGUES.flatMap((league) => sectionRefsOf(rawPages.get(league)!))) sectionRefs.set(`${ref.page}#${ref.section}`.toLowerCase(), ref);
+  for (const [key, ref] of [...sectionRefs.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
+    const wanted = tablePieces(wikiSection(await wikiPageOf("subjects", ref.page, options), ref.section) ?? "");
+    // The cache calls a shortsword a sword ("Mithril sword"). An ornament the cache does not name
+    // separately ("Lava battlestaff (or)") is the base item.
+    const resolvePiece = (piece: string) => names.items.get(piece.toLowerCase()) ?? names.items.get(piece.replace(/ shortsword$/i, " sword").toLowerCase()) ?? null;
+    const missing = wanted.filter((piece) => !resolvePiece(piece));
+    const pieces = wanted.map(resolvePiece).filter((piece): piece is string => !!piece);
+    if (!pieces.length || (missing.length && !missing.every((piece) => /\([^)]*\)$/.test(piece)))) continue;
+    names.sections.set(key, [...new Set(pieces)]);
+    if (/^weapons$/i.test(ref.section)) names.subjects.set(ref.page.toLowerCase(), [...new Set(pieces)]);
+  }
   // The ids of the NPCs the talk and pet tasks link to, by lower-cased page title.
   names.npcIds = new Map();
   for (const page of [...new Set(LEAGUES.flatMap((league) => operatedPagesOf(rawPages.get(league)!)))].sort()) names.npcIds.set(page.toLowerCase(), npcIdsOf(await wikiPageOf("npcs", page, options)));
   // The pieces of the sets equip tasks link to that the cache has no item set for.
   names.sets = new Map();
-  for (const page of [...new Set(LEAGUES.flatMap((league) => setPagesOf(rawPages.get(league)!)))].sort()) names.sets.set(page.toLowerCase(), setListsOf(await wikiPageOf("sets", page, options)));
+  for (const page of [...new Set(LEAGUES.flatMap((league) => setPagesOf(rawPages.get(league)!)))].sort()) {
+    const lists = setListsOf(await setPageOf(page, options));
+    names.sets.set(page.toLowerCase(), lists);
+    // "Shayzien armour (tier 5)" is also the "tier 5 Shayzien armour" task, "(tier 5)" a remark.
+    const bare = page.replace(/ \(tier \d+\)$/i, "");
+    if (bare !== page) names.sets.set(bare.toLowerCase(), lists);
+  }
   resolvePlaces();
 
   const output: Record<string, unknown> = {
@@ -2076,7 +2244,7 @@ async function main() {
       seenIds.set(row.id, plain(row.name));
       const name = plain(row.name);
       const description = plain(row.description);
-      const derived = deriveTrigger(name, plainTargets(row.description), names);
+      const derived = deriveTrigger(name, plainTargets(row.description), names, row.description);
       if (derived.unmapped) unmapped.push(derived.unmapped);
       const fromCache = cache.get(name.toLowerCase());
       const requirements = [plain(row.s), plain(row.other)].filter(Boolean).join("; ");

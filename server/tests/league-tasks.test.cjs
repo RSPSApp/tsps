@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "prayer-restore", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -244,6 +244,10 @@ test("Demonic Pacts, the cache's own league: no catalog overrides, and a task's 
   assert.equal(emitted.filter(([name, payload]) => name === "league:task-completed" && payload.id === "defeat-a-tzhaar").at(-1)[1].pactTask, true);
   kill(pacts, "Hill Giant");
   assert.deepEqual(completed(pacts), ["defeat-a-tzhaar", "defeat-a-hill-giant"]);
+  const gwd = catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-100-times");
+  assert.deepEqual(gwd.trigger, { kind: "kill", npcs: ["Kree'arra", "General Graardor", "Commander Zilyana", "K'ril Tsutsaroth", "Nex"], count: 100 });
+  assert.equal(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-500-times").trigger.count, 500);
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "restore-75-prayer-points-at-an-altar").trigger, { kind: "prayer-restore", amount: 75, count: 1 });
   assert.equal(pacts.sent.varps.get(bitVarp(giant.position)), 1 << (giant.position % 32), "the bit the client's script 9470 reads");
   assert.equal(pacts.sent.messages.at(-1), "Congratulations, you've completed an easy task: <col=FE206A>Defeat a Hill Giant</col>.", "in the league's colour");
 });

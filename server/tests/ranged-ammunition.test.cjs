@@ -894,3 +894,39 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
     step(p,npc,5); assert.ok(npc.getHitpoints()<hp);
   });
 });
+
+test('mithril crossbow fires mithril-shaft gem bolts while preserving other ammo exclusions', () => {
+  const accepted = [
+    Ammunition.BRONZE_BOLT, Ammunition.STEEL_BOLT, Ammunition.MITHRIL_BOLT,
+    Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT,
+    Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT,
+  ];
+  const rejected = [
+    Ammunition.ADAMANT_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT,
+    Ammunition.RUNITE_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT,
+    Ammunition.DRAGON_BOLTS, Ammunition.EMERALD_DRAGON_BOLT, Ammunition.ENCHANTED_EMERALD_DRAGON_BOLT,
+    Ammunition.BRONZE_ARROW, Ammunition.BONE_BOLT,
+  ];
+  for (const ammunition of [...accepted, ...rejected]) {
+    const items = Array.from({ length: 14 }, () => new GroundItem(-1, 0));
+    items[Slots.WEAPON_SLOT] = new GroundItem(Items.MITHRIL_CROSSBOW, 1);
+    items[Slots.AMMUNITION_SLOT] = new GroundItem(ammunition.getItemId(), 2);
+    const messages = [];
+    const player = {
+      getEquipment: () => ({ getItems: () => items }),
+      getCombat: () => ({
+        getRangedWeapon: () => RangedWeapon.getFor(player),
+        getAmmunition: () => Ammunition.getFor(player),
+      }),
+      sendMessage: message => messages.push(message),
+    };
+    const allowed = accepted.includes(ammunition);
+    assert.equal(Factory.checkAmmo(player, 1, true), allowed, 'ammo ' + ammunition.getItemId());
+    assert.equal(messages.length, allowed ? 0 : 1);
+  }
+  for (const crossbow of [RangedWeapon.BRONZE_CROSSBOW, RangedWeapon.IRON_CROSSBOW, RangedWeapon.STEEL_CROSSBOW]) {
+    for (const ammunition of accepted.slice(3)) {
+      assert.ok(!crossbow.getAmmunitionData().includes(ammunition), 'lower crossbows still refuse mithril gem bolts');
+    }
+  }
+});

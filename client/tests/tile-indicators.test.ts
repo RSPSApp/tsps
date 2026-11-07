@@ -1,3 +1,5 @@
+import { sceneTileHeight } from "../game/scene/SceneGeometry";
+import { resolveHeightSamplePlaneForLocal } from "../game/scene/PlaneResolver";
 import { strict as assert } from "node:assert";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { inject } from "@runelite/client/plugins/PluginInjector";
@@ -123,6 +125,35 @@ async function main(): Promise<void> {
     config.setConfigValue(TileMarkersConfig, "hoveredTileBorderWidth", 3.5);
     s = shapes();
     assert.deepEqual([s[0][1], s[0][2], s[0][3]], [[1, 0, 0, 0x80 / 255], [0, 0, 0, 0], 3.5]);
+
+    // A bridge edge has the bridge flag only under the polygon's center, not its north/east corners.
+    const originalHeight = client.sceneGeometry.tileHeight;
+    const map = { getTileRenderFlag: (level: number, x: number, y: number) =>
+        level === 1 && x === player.x && y === player.y ? 2 : 0 } as any;
+    const sampledPlanes: number[] = [];
+    const host = {
+        getHeightSamplePlaneForTile: (x: number, y: number, plane: number) =>
+            resolveHeightSamplePlaneForLocal(map, plane, x, y),
+        getTileHeightAtPlane: (x: number, y: number, plane: number) => {
+            sampledPlanes.push(plane);
+            return -plane * 2 + (x - player.x) / 8 + (y - player.y) / 4;
+        },
+    };
+    client.sceneGeometry.tileHeight = (x: number, y: number, plane: number, anchorX?: number, anchorY?: number) =>
+        sceneTileHeight(host, x, y, plane, anchorX, anchorY);
+    config.setConfigValue(TileMarkersConfig, "highlightHoveredTile", false);
+    config.setConfigValue(TileMarkersConfig, "highlightDestinationTile", false);
+    sampledPlanes.length = 0;
+    const bridged = overlay.build();
+    assert.deepEqual(sampledPlanes, [1, 1, 1, 1], "all four corners use the center's bridge plane");
+    assert.deepEqual(bridged[0].points, [[32220, 32160], [32230, 32161.25], [32230, 32173.75], [32220, 32172.5]],
+        "sloping bridge corners retain their individual heights");
+    for (const plane of [0, 1, 2, 3]) {
+        assert.equal(sceneTileHeight(host, player.x + 0.5, player.y + 0.5, plane), -Math.min(3, plane + 1) * 2 + 0.1875);
+        assert.equal(sceneTileHeight(host, player.x + 1.5, player.y + 0.5, plane), -plane * 2 + 0.3125,
+            "ordinary terrain/water keeps its own plane");
+    }
+    client.sceneGeometry.tileHeight = originalHeight;
 
     // Cutscenes, logging out, turning off.
     cutscene = 1;

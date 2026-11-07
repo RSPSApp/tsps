@@ -106,6 +106,17 @@ async function main(): Promise<void> {
     assert.equal(whipText[3], 0xffff9600, "over 1M: the high value colour");
     assert.equal(texts.find((t) => t[0].startsWith("Coins"))![3], 0xffffffff);
 
+    // Bridge height moves text by the sampled terrain delta and retains the item's model/support offset.
+    const originalHeight = client.sceneGeometry.tileHeight;
+    client.sceneGeometry.tileHeight = () => -2;
+    const bridgeTexts = JSON.parse(plugin.widgetOverlay.signature())[1] as any[];
+    for (const text of texts) {
+        const raised = bridgeTexts.find((entry) => entry[0] === text[0])!;
+        assert.equal(raised[2], text[2] - 20, "ground labels follow the bridge surface");
+    }
+    client.sceneGeometry.tileHeight = originalHeight;
+    plugin.widgetOverlay.signature();
+
     // Coverage: where the frame signature() built will draw, so moving labels redraw their own
     // rects rather than the whole UI. Unknown until a draw has supplied the font.
     const overlay = plugin.widgetOverlay as any;

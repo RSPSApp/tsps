@@ -210,15 +210,20 @@ function light({ player, object }) {
   // Each step is this burn's own: a pyre given up on logout is no longer it.
   const key = tileKey(object);
   const current = () => pyres.get(key) === use;
-  Common.later(p().fireTicks, () => {
-    if (!current()) return;
-    graphicAt(p().graphics.fire, at, nearbyPlayers(at));
+  // Paid once: at the fire, or when the burner leaves before it (forget).
+  use.payExperience = () => {
+    if (use.experienced) return;
+    use.experienced = true;
     // The experience is added in tenths (the skill manager drops the rest).
     const prayer = remains.prayer[wood.wood] * (diaryDone(player, "hard") ? p().diaryBonus : 1);
     const firemaking = wood.xp * (diaryDone(player, "elite") ? p().diaryBonus : 1);
     skills.addExperience(Common.core.Skill.PRAYER, prayer);
     skills.addExperience(Common.core.Skill.FIREMAKING, firemaking);
-    use.experienced = true;
+  };
+  Common.later(p().fireTicks, () => {
+    if (!current()) return;
+    graphicAt(p().graphics.fire, at, nearbyPlayers(at));
+    use.payExperience();
   });
   Common.later(p().fireTicks + p().spiritTicks, () => {
     if (!current()) return;
@@ -243,24 +248,21 @@ function light({ player, object }) {
 }
 
 /**
- * A pyre its burner leaves is emptied for the next player. What they put on it isn't lost: before the burn has
- * paid its experience the logs and remains go back to the pack, after it the burn's reward does (logout saves after
- * this hook).
+ * A pyre its burner leaves is emptied for the next player. An unlit one's logs and remains are lost, as unlit
+ * remains despawn (Wiki: Funeral Pyre). A lit one has already used them, so its burn is finished at once: the
+ * experience if not yet paid, the reward into the pack, and the cremation for the quest and diary (logout saves
+ * after this hook).
  */
 function forget({ player }) {
   for (const [key, use] of pyres) {
     if (use.player !== player) continue;
     pyres.delete(key);
     swap(use.object, Common.locId(EMPTY_PYRE));
-    const { Item } = Common.core;
-    const inventory = player.getInventory();
-    if (use.experienced && use.remains) {
-      const reward = rewardFor(use.remains);
-      inventory.forceAdd(player, new Item(reward.id, reward.amount));
-      continue;
-    }
-    inventory.forceAdd(player, new Item(use.wood.logs, 1));
-    if (use.remains) inventory.forceAdd(player, new Item(use.remains.itemId, 1));
+    if (!use.burning || !use.remains) continue;
+    use.payExperience?.();
+    const reward = rewardFor(use.remains);
+    player.getInventory().forceAdd(player, new Common.core.Item(reward.id, reward.amount));
+    Common.api.emitCustomEvent("shades-of-mortton:cremated", { player, remains: use.remains.itemId, wood: use.wood.wood, reward });
   }
 }
 

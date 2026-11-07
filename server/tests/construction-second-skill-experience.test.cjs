@@ -1,5 +1,5 @@
 // Run after `yarn build`: node --test tests/construction-second-skill-experience.test.cjs
-// Wiki (Mithril armour (Construction): "135 (25 Smithing)"; Rune case space: Runecraft XP 25 for each case). Building
+// Wiki (Armour space: each stand 25 Smithing; Rune case space: Runecraft XP 25 for each case). Building
 // them paid only the Construction experience. The piece's second skill is paid too now. Real engine: every plugin
 // loaded, a real Player, the plugin's own completeFurniture.
 const assert = require("node:assert/strict");
@@ -37,8 +37,11 @@ function gained(t, key) {
   return Object.fromEntries(watched.map((skill, i) => [skill.getName(), skills.getExperience(skill) - before[i]]));
 }
 
-test("mithril armour pays 135 Construction and 25 Smithing", (t) => {
-  assert.deepEqual(gained(t, "MITHRIL_ARMOUR"), { Construction: 135, Smithing: 25, Runecrafting: 0, Cooking: 0 });
+// Wiki (Armour space): Mithril 135 + 25 Smithing, Adamant 150 + 25, Rune 165 + 25.
+test("each armour stand pays its Construction and 25 Smithing", (t) => {
+  for (const [key, construction] of [["MITHRIL_ARMOUR", 135], ["ADAMANTITE_ARMOUR", 150], ["RUNITE_ARMOUR", 165]]) {
+    assert.deepEqual(gained(t, key), { Construction: construction, Smithing: 25, Runecrafting: 0, Cooking: 0 }, key);
+  }
 });
 
 test("each rune case pays 25 Runecraft on top of its Construction", (t) => {

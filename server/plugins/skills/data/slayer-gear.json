@@ -20,5 +20,7 @@
     "weapons": ["Leaf-bladed"],
     "ammo": ["broad"],
     "spells": ["MAGIC_DART"]
-  }
+  },
+  "_thrallImmune": "Monsters a thrall deals no damage to (Wiki, Thrall, 11 June 2025: \"Thralls will no longer deal damage to kurasks and turoths\"; the Turoth and Vyrewatch Sentinel infoboxes list Thralls as immune). King kurask and Spiked Turoth are left out: their pages list no thrall immunity.",
+  "thrallImmune": ["Kurask", "Turoth", "Vyrewatch Sentinel"]
 }

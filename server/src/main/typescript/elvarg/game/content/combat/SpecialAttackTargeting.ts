@@ -93,11 +93,12 @@ export class SpecialAttackTargetingResolver {
 
         if (targeting.pattern === "surrounding") {
             const origin = attacker.getLocation();
+            const radius = Math.max(1, Math.trunc(targeting.radius ?? 1));
             for (const candidate of candidates) {
                 const { x, y, size } = footprint(candidate);
                 if (
-                    origin.getX() >= x - 1 && origin.getX() <= x + size &&
-                    origin.getY() >= y - 1 && origin.getY() <= y + size &&
+                    origin.getX() >= x - radius && origin.getX() <= x + size - 1 + radius &&
+                    origin.getY() >= y - radius && origin.getY() <= y + size - 1 + radius &&
                     take(candidate)
                 ) {
                     break;

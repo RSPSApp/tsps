@@ -26,6 +26,7 @@ const { TimerKey } = require("../dist/util/timers/TimerKey");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { World } = require("../dist/game/World");
+const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 
 const items = JSON.parse(
@@ -47,6 +48,7 @@ before(() => {
     core: PluginManager.getCoreApi(),
     registerCombatSpecial: CombatSpecial.register,
     getBonusManager: () => require("../dist/game/model/equipment/BonusManager").BonusManager,
+    getAreaManager: () => AreaManager,
   };
   require("../plugins/combat/SpecialAttacks.plugin").register(
     new Proxy(api, { get: (target, key) => (key in target ? target[key] : () => {}) }),
@@ -651,4 +653,92 @@ test("broken dragon hastas are crafting items that cannot be equipped", async ()
     assert.notEqual(CacheDefinitions.getItem(id).wearPos, WEAPON_SLOT, `${id} is not wieldable in the cache`);
     assert.equal(CombatSpecial.getForWeaponId(id), null, `${id} has no special`);
   }
+});
+
+// --- Dinh's bulwark: Shield Bash -------------------------------------------------------------
+
+/** A mobile with levels, for the bulwark's drain; `npc` serves levels from the mobile itself. */
+function levelled(kind, levels) {
+  const current = new Map(levels);
+  const manager = {
+    getCurrentLevel: (skill) => current.get(skill),
+    setCurrentLevels: (skill, level) => { current.set(skill, level); },
+  };
+  return {
+    current,
+    isPlayer: () => kind === "player",
+    isNpc: () => kind === "npc",
+    getAsPlayer() { return { getSkillManager: () => manager }; },
+    getAsNpc() { return manager; },
+  };
+}
+
+test("Shield Bash rolls crush against crush and sweeps ten targets within five tiles, in multicombat only", () => {
+  const traits = special("dinhs_bulwark").getTraits();
+  assert.equal(traits.meleeAttackBonusIndex, 2, "crush attack bonuses");
+  assert.equal(traits.meleeDefenceBonusIndex, 2, "against crush defence");
+  assert.equal(traits.accuracyMultiplier, 1.2);
+  assert.equal(traits.hitCount, undefined, "the double hit is the primary target's alone, in multicombat");
+  assert.deepEqual(traits.targeting, {
+    pattern: "surrounding", radius: 5, width: 1, maxTargets: 10, maxPlayerTargets: 10, requiresMultiCombat: true,
+  });
+});
+
+test("Shield Bash hits the primary target twice in multicombat, everything else once", () => {
+  const method = special("dinhs_bulwark").getCombatMethod();
+  const realAccuracy = AccuracyFormulasDpsCalc.rollAccuracy;
+  const realDamage = CombatFactory.getHitDamage;
+  const realIsMulti = AreaManager.inMulti;
+  AccuracyFormulasDpsCalc.rollAccuracy = () => true;
+  CombatFactory.getHitDamage = () => new HitDamage(7, 1);
+  const bulwark = fakeFighter();
+  const primary = { ...fakeTarget(), getHitpoints: () => 99 };
+  const bystander = { ...fakeTarget(), getHitpoints: () => 99 };
+  bulwark.getCombat = () => ({ getTarget: () => primary });
+  bulwark.getCombatSpecial = () => special("dinhs_bulwark");
+  const splats = (target) => method.hits(bulwark, target)[0].getHits().length;
+  try {
+    AreaManager.inMulti = () => true;
+    assert.equal(splats(primary), 2, "primary, multicombat");
+    assert.equal(splats(bystander), 1, "other targets");
+    AreaManager.inMulti = () => false;
+    assert.equal(splats(primary), 1, "single combat");
+  } finally {
+    AccuracyFormulasDpsCalc.rollAccuracy = realAccuracy;
+    CombatFactory.getHitDamage = realDamage;
+    AreaManager.inMulti = realIsMulti;
+  }
+});
+
+test("Shield Bash drains 5% of a monster's or player's highest offensive stat once, only on a damaging hit", () => {
+  const { Skill } = PluginManager.getCoreApi();
+  const method = special("dinhs_bulwark").getCombatMethod();
+  const after = (target, damage) => method.handleAfterHitEffects({ getTotalDamage: () => damage, getTarget: () => target });
+  const levels = (attack, strength, ranged, magic) => [
+    [Skill.ATTACK, attack], [Skill.STRENGTH, strength], [Skill.RANGED, ranged], [Skill.MAGIC, magic],
+  ];
+
+  const meleeMonster = levels(200, 200, 100, 1);
+  const monster = levelled("npc", meleeMonster);
+  after(monster, 0);
+  assert.deepEqual([...monster.current], meleeMonster, "no damage, no drain");
+  after(monster, 12);
+  assert.equal(monster.current.get(Skill.ATTACK), 190, "Attack and Strength first");
+  assert.equal(monster.current.get(Skill.STRENGTH), 190);
+  assert.equal(monster.current.get(Skill.RANGED), 100);
+
+  const archer = levelled("npc", levels(1, 1, 120, 90));
+  after(archer, 5);
+  assert.equal(archer.current.get(Skill.RANGED), 114, "then Ranged");
+  const mage = levelled("player", levels(1, 1, 80, 99));
+  after(mage, 5);
+  assert.equal(mage.current.get(Skill.MAGIC), 95, "then Magic");
+  const tied = levelled("npc", levels(60, 60, 120, 120));
+  after(tied, 5);
+  assert.equal(tied.current.get(Skill.ATTACK), 57, "melee wins a tie with Ranged");
+  assert.equal(tied.current.get(Skill.RANGED), 120);
+  const rangedTie = levelled("npc", levels(1, 1, 120, 120));
+  after(rangedTie, 5);
+  assert.equal(rangedTie.current.get(Skill.RANGED), 114, "Ranged wins a tie with Magic");
+  assert.equal(rangedTie.current.get(Skill.MAGIC), 120);
 });

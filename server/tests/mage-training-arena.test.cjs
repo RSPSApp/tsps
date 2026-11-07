@@ -982,6 +982,34 @@ function giveRunes(player) {
   for (const [id, amount] of [[561, 2], [555, 4], [557, 4]]) player.getInventory().add(new core.Item(id, amount), false);
 }
 
+// Core arithmetic controls only: this partial fixture does not establish the MTA unlock.
+for (const count of [1, 3]) test(`Bones to Peaches core XP is per cast with ${count} plain bones`, (t) => {
+  const { player } = realCaster(t), skill=player.getSkillManager(), magic=core.Skill.MAGIC;
+  const level=70, initial=core.SkillManager.getExperienceForLevel(level);
+  skill.setCurrentLevel(magic,level,false).setMaxLevels(magic,level,false).setExperience(magic,initial);
+  assert.equal(skill.getCurrentLevel(magic),level); assert.equal(skill.getMaxLevel(magic),level);
+  assert.equal(skill.getExperience(magic),initial); assert.equal(core.SkillManager.getLevelForExperience(initial),level);
+  assert.notEqual(player.getAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE),true);
+  assert.equal(core.GameConstants.EXPERIENCE_MULTIPLIER,1);
+  giveRunes(player); const inventory=player.getInventory(); inventory.add(new core.Item(526,count),false);
+  assert.equal(inventory.getAmount(526),count); assert.equal(inventory.getAmount(561),2);
+  assert.equal(inventory.getAmount(555),4); assert.equal(inventory.getAmount(557),4); assert.equal(inventory.getAmount(6883),0);
+  const calls=[],gates=[],drops=[],events=[], add=skill.addExperiences.bind(skill);
+  const gate=PluginManager.emitCanGainExperience.bind(PluginManager), emit=PluginManager.emitCustomEvent.bind(PluginManager);
+  const sender=player.getPacketSender(), drop=sender.sendExpDrop.bind(sender);
+  t.mock.method(PluginManager,'emitCanGainExperience',(who,which,xp)=>{const result=gate(who,which,xp);if(who===player && which===magic) gates.push({allow:result.allow,multiplier:result.multiplier});return result;});
+  t.mock.method(PluginManager,'emitCustomEvent',(name,event)=>{if(name==='skills:experience-gained' && event.player===player && event.skill===magic) events.push({experience:event.experience,multiplied:event.multiplied});return emit(name,event);});
+  t.mock.method(sender,'sendExpDrop',(which,xp)=>{if(which===magic) drops.push(xp);return drop(which,xp);});
+  t.mock.method(skill,'addExperiences',(which,xp)=>{if(which===magic) calls.push(xp);return add(which,xp);});
+  core.EffectSpells.handleSpell(player,core.EffectSpells.BONES_TO_PEACHES.spellId());
+  assert.equal(calls.length,1); assert.equal(gates.length,1); assert.notEqual(gates[0].allow,false); assert.equal(gates[0].multiplier,1);
+  assert.equal(events.length,1,'original XP event shows credit');
+  assert.equal(calls[0],35.5,'one cast requests 35.5 base Magic XP');
+  assert.equal(inventory.getAmount(526),0); assert.equal(inventory.getAmount(6883),count);
+  assert.equal(inventory.getAmount(561),0); assert.equal(inventory.getAmount(555),0); assert.equal(inventory.getAmount(557),0);
+  assert.equal(skill.getExperience(magic)-initial,35.5); assert.deepEqual(drops,[35.5]); assert.deepEqual(events,[{experience:35.5,multiplied:true}]);
+});
+
 for (const [name, fruit] of [['BONES_TO_BANANAS', 1963], ['BONES_TO_PEACHES', 6883]]) {
   test(`the normal cast of ${name} plays sound 114 once, and none without bones`, (t) => {
     const spell = core.EffectSpells[name];

@@ -7,6 +7,7 @@ const MENU = "aluft_cooking";
 const MENU_TYPE = "aluft_cooking_type";
 const CHOSEN = "gnome_chosen_cuisine";
 const OP1 = 1 << 1;
+let cachedUi;
 const sessions = new WeakMap();
 const cuts = new WeakMap();
 
@@ -79,12 +80,13 @@ function apply(player, transaction, product, xp, kind) {
 }
 
 function ui() {
+  if (cachedUi) return cachedUi;
   const cache = Common.core.CacheDefinitions;
   const group = cache.getInterfaceId(MENU), click = cache.getComponentId(`${MENU}:cuisine_clickzone`);
   const create = cache.getComponentId(`${MENU}:confirmation`), type = cache.getVarbitId(MENU_TYPE);
   const chosen = cache.getVarbitId(CHOSEN), main = cache.getComponentId("toplevel_osrs_stretch:mainmodal");
   if (![group, click, create, type, chosen, main].every(Number.isInteger)) throw new Error("[Cooking] missing gnome cuisine interface definitions");
-  return { group, click, create, type, chosen, main };
+  return cachedUi = { group, click, create, type, chosen, main };
 }
 function valid(player, session) {
   return !!session && alive(player) && player.getInterfaceId() === ui().group
@@ -223,6 +225,7 @@ function useItems(event) {
 }
 
 function interfaceAction(event) {
+  if (!cachedUi || (event.buttonId >>> 16) !== cachedUi.group) return;
   const ids = ui();
   if (event.buttonId === ids.click) selectCuisine(event);
   else if (event.buttonId === ids.create) createCuisine(event);

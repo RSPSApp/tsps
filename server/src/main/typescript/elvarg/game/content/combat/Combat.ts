@@ -733,6 +733,8 @@ export class Combat {
         if (target == null) this.reset();
         else this.attack(target);
     }
+    /** Whether the current fight began as a reply to an attack (auto-retaliate), not a click. */
+    public isAutoRetaliating(): boolean { return this.autoRetaliating; }
     public stopAutoRetaliation(): void {
         // A target equal to the current attacker is retaliation, including
         // combat that began before the server started tagging its source.

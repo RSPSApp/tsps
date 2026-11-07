@@ -66,12 +66,14 @@ function cookableFor(itemId) {
 const KARAMBWAN_TAUGHT_ATTRIBUTE = "quest.tai_bwo_wannai_trio.tinsay";
 const KARAMBWAN_TAUGHT_VALUE = 8;
 
+function untrainedKarambwan(player, cookable) {
+  return cookable.raw === Common.core.ItemIds.RAW_KARAMBWAN
+    && (Number(player.getAttribute?.(KARAMBWAN_TAUGHT_ATTRIBUTE)) || 0) < KARAMBWAN_TAUGHT_VALUE;
+}
+
 function cookedResult(player, cookable) {
   const { ItemIds } = Common.core;
-  if (cookable.raw !== ItemIds.RAW_KARAMBWAN) return cookable;
-  if ((Number(player.getAttribute?.(KARAMBWAN_TAUGHT_ATTRIBUTE)) || 0) >= KARAMBWAN_TAUGHT_VALUE) {
-    return cookable;
-  }
+  if (!untrainedKarambwan(player, cookable)) return cookable;
   return { ...cookable, cooked: ItemIds.POISON_KARAMBWAN, xp: 80, message: "You cook the karambwan. It looks very dodgy." };
 }
 
@@ -203,8 +205,9 @@ function canCook(player, object, cookable) {
       return false;
     }
   }
-  if (Common.level(player) < cookable.level) {
-    Common.mesbox(player, `You need a Cooking level of ${cookable.level} to cook ${withArticle(cookable)}.`);
+  const requiredLevel = untrainedKarambwan(player, cookable) ? 1 : cookable.level;
+  if (Common.level(player) < requiredLevel) {
+    Common.mesbox(player, `You need a Cooking level of ${requiredLevel} to cook ${withArticle(cookable)}.`);
     return false;
   }
   return true;

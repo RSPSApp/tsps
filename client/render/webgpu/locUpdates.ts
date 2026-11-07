@@ -233,6 +233,8 @@ export class LocUpdates {
         const wasAdded = added !== undefined && (added.rotation & 0x3) === (rotation & 0x3);
         this.r.addedLocs.delete(key);
         if (wasAdded) {
+            // A replay can arrive before the cache index; its static copy must stay hidden too.
+            this.suppressLocAt(tile, level, added.locId);
             // Deleting a replay of the cache loc removes that loc; only scenery replaced
             // by a different added id comes back.
             for (const id of added.replacedIds ?? []) {

@@ -175,6 +175,23 @@ test("every condition and action in Shantay's transcript is one this plugin know
   assert.ok(!JSON.stringify(dialogue).includes('"reference":"above"'), "no jumps left to resolve");
 });
 
+test("several Pick-lock clicks pick the Port Sarim lock as one attempt chain, not one each", (t) => {
+  t.mock.method(Math, "random", () => 1); // every attempt fails, however easy the lock gets
+  const attempts = (clicks) => {
+    const player = createPlayer({ at: [3014, 3181] });
+    player.performAnimation = () => {};
+    player.isRegistered = () => true;
+    player.getSkillManager = () => ({ getCurrentLevel: () => 1, getMaxLevel: () => 1, addExperiences() {} }); // best chance 82%
+    const door = { player, objectId: 9565, location: { x: 3014, y: 3182, z: 0 } };
+    for (let i = 0; i < clicks; i++) Jail.pickPortSarimLock(door);
+    runTasks();
+    return player.log.filter((line) => line === "message You attempt to pick the lock on the door.").length;
+  };
+  const one = attempts(1);
+  assert.ok(one > 0, "the attempts run");
+  assert.equal(attempts(3), one, "three clicks make the same attempts as one");
+});
+
 test("the Port Sarim lock gets easier with each failure and with a lockpick", () => {
   const withLevel = (level, items = {}) => ({
     ...createPlayer({ items }),

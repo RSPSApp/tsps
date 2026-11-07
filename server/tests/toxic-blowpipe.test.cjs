@@ -284,6 +284,7 @@ function confirmPlugins() {
   const customEvents = new Map();
   const dropPolicies = [];
   let actions = null;
+  let itemOnItem = null;
   const api = new Proxy({}, {
     get: (_, name) => {
       if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
@@ -296,6 +297,7 @@ function confirmPlugins() {
         for (const handler of customEvents.get(event) ?? []) handler(payload);
       };
       if (name === "onItemDropPolicy") return (handler) => dropPolicies.push(handler);
+      if (name === "onItemOnItem") return (handler) => { itemOnItem = handler; };
       return () => {};
     },
   });
@@ -303,6 +305,7 @@ function confirmPlugins() {
   ToxicBlowpipe.register(api);
   return {
     actions: () => actions,
+    itemOnItem: (event) => itemOnItem(event),
     drop: (event) => {
       for (const policy of dropPolicies) {
         policy(event);
@@ -410,6 +413,20 @@ for (const action of ["Unload", "Uncharge"]) {
 function presetDarts(amount) {
   return new Item(DRAGON_DART, amount, { untradeable: true, unbankable: true, preset: true });
 }
+
+test("loading another kind of dart gives the old darts back and keeps every scale", () => {
+  const hooks = confirmPlugins();
+  const pipe = loadedPipe(5000, DRAGON_DART, 120);
+  const rune = new Item(ItemIdentifiers.RUNE_DART, 50);
+  const player = confirmPlayer(pipe, [rune]);
+  hooks.itemOnItem({ player, usedItem: rune, usedItemId: rune.getId(), usedItemSlot: 1, usedWithItem: pipe,
+    usedWithItemId: pipe.getId(), usedWithItemSlot: 0, handled: false });
+  assert.deepEqual(pipe.state(), { scales: 5000, dartId: ItemIdentifiers.RUNE_DART, dartAmount: 50 }, "the scales stay");
+  const idOf = (entry) => entry?.getId?.() ?? entry?.id;
+  const darts = player.inventory.getItems().filter((entry) => idOf(entry) === DRAGON_DART)
+    .reduce((n, entry) => n + (entry.getAmount?.() ?? entry.amount), 0);
+  assert.equal(darts, 120, "the old darts come back");
+});
 
 test("Uncharge refuses with preset darts and one free slot, because the two returns cannot merge", () => {
   const hooks = confirmPlugins();

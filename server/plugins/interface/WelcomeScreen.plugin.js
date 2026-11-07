@@ -5,9 +5,6 @@ const FIRST_OPTION_FLAG = 1 << 1;
 const MOTW_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 6;
 /** world.json pluginConfig: the scroll's text; league worlds replace it with their own. */
 const MOTW_CONFIG = "WelcomeScreen:messageOfTheWeek";
-const DEFAULT_MOTW = "Welcome to Old School RuneScape!";
-/** The chatbox line live sends on every login, whatever the welcome screen does. */
-const WELCOME_MESSAGE = "Welcome to Old School RuneScape.";
 const pending = new WeakSet();
 const visible = new WeakSet();
 let api;
@@ -17,7 +14,7 @@ function inWilderness(player) {
 }
 
 function login({ player, isNewAccount }) {
-  player.sendMessage(WELCOME_MESSAGE);
+  player.sendMessage(`Welcome to ${api.core.WorldDefinition.getWorldDefinition().name}.`);
   // Mobile, new accounts and Wilderness logins enter the world directly.
   if (isNewAccount || player.isPlayerBot?.() === true || inWilderness(player)
       || player.getAttribute(api.core.MOBILE_CLIENT_ATTRIBUTE) === true) return;
@@ -32,7 +29,7 @@ function showWelcomeScreen(player) {
   const sender = player.getPacketSender();
   sender.sendRootInterface(WELCOME_SCREEN_GROUP_ID);
   sender.sendInterfaceFlags(PLAY_BUTTON_UID, FIRST_OPTION_FLAG);
-  sender.sendString(String(api.getPluginConfig(MOTW_CONFIG, DEFAULT_MOTW)), MOTW_UID);
+  sender.sendString(String(api.getPluginConfig(MOTW_CONFIG, `Welcome to ${api.core.WorldDefinition.getWorldDefinition().name}!`)), MOTW_UID);
   api.emitCustomEvent("welcome-screen:shown", { player });
 }
 

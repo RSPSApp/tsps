@@ -136,8 +136,20 @@ no additional experience ([Kandarin headgear 1](https://oldschool.runescape.wiki
 [Kandarin Diary](https://oldschool.runescape.wiki/w/Kandarin_Diary)). No recording in the capture index mentions it, so the Wiki is the only source.
 
 - Only regular `Logs` double: oak and the other trees give one, and a headgear that is only carried does nothing.
-- Each chop still gives the tree's XP once. Both logs go through the same storage hand-off as a single log; a basket taking only part of the pair is not covered by a test.
+- Each chop still gives the tree's XP once. Both logs go through the same storage hand-off as a single log; a basket taking only part of the pair is not covered by a test. With one free slot, one log goes to the inventory and the other to the floor.
 - It is a members' benefit: on a free world a headgear saved as worn gives no extra log.
 - The unit is `server/plugins/skills/woodcutting/KandarinHeadgear.Woodcutting.js`; `Woodcutting.plugin.js` asks it for the logs per chop.
 - Not covered: whether the logs-chopped tracker counts the second log (it counts one per chop here); no capture says.
 - Tests: `server/tests/woodcutting-pet-priority.test.cjs` (worn tiers 1 to 4, carried, oak, free world).
+
+## Ardougne pickpocketing
+
+The Ardougne Diary improves pickpocketing, in `server/plugins/items/diaryrewards/Pickpocketing.DiaryRewards.js`, which answers the pickpocket's `thieving:pickpocket-target` request. Neither needs the Ardougne cloak worn or carried.
+
+| Tier completed | Coin pouches held | Success |
+| --- | --- | --- |
+| Medium | 56 | +10% on NPCs in Ardougne |
+| Hard | 84 | +10% on any NPC (not 20% in the city) |
+| Elite | 140 | as Hard |
+
+Sources, all fetched for this change: [Ardougne Diary](https://oldschool.runescape.wiki/w/Ardougne_Diary) (rewards list), [Pickpocketing](https://oldschool.runescape.wiki/w/Pickpocketing) ("a 10% increased success rate for pickpocketing NPCs in Ardougne", Hard "all NPCs around Gielinor", cloak not needed) and [Coin pouch](https://oldschool.runescape.wiki/w/Coin_pouch) (28 / 56 / 84 / 140 by completed tier). No capture shows these. Inferred and not on the Wiki: completing the tier is enough (the Wiki says "completing"), the bonus scales the success chart as the gloves of silence and the Thieving cape do, and "in Ardougne" is a rectangle over East and West Ardougne (x 2432-2690, y 3262-3336), judged by the NPC's tile and taken from where the city's guards, knights, paladins, heroes, men and women stand. The master farmer's patch north of the walls is outside it. The Easy tier's stall success bonus the Wiki mentions in its trivia is not built: it says stalls have no odds, only a chance of being seen.

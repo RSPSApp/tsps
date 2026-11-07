@@ -848,3 +848,10 @@ test('Kandarin headgear: a free world gives no extra log',async t=>{
   const free=await chopWithHeadgear(g,t,core.ObjectIdentifiers.TREE,ids.LOGS);
   assert.ok(free.logs>=1);assert.equal(free.logs*25,free.xp,'free world: one log per chop');
 });
+
+test('Kandarin headgear: with one free slot the log that fits is kept and only the other drops',async t=>{
+  const g=actor(t), ids=core.ItemIdentifiers;g.p.getEquipment().set(core.Equipment.HEAD_SLOT,new core.Item(ids.KANDARIN_HEADGEAR_1));
+  for(let i=0;i<26;i++)g.p.getInventory().add(new core.Item(ids.BONES),true);
+  const r=await chopWithHeadgear(g,t,core.ObjectIdentifiers.TREE,ids.LOGS);
+  assert.equal(r.logs,1,'one log in the free slot');assert.equal(r.xp,25,'one chop, since the full inventory then blocks');
+});

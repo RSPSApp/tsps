@@ -94,8 +94,9 @@ function prepareLog(player, logId, xp = 0, amount = 1) {
 
 function deliverLog(player, log) {
   if (!log) return;
-  if (player.getInventory().getAddableAmount(log) >= log.getAmount()) player.getInventory().add(log, true);
-  else ItemOnGroundManager.registers(player, log);
+  const fits = Math.min(player.getInventory().getAddableAmount(log), log.getAmount());
+  if (fits > 0) player.getInventory().add(new Item(log.getId(), fits), true);
+  if (fits < log.getAmount()) ItemOnGroundManager.registers(player, new Item(log.getId(), log.getAmount() - fits));
 }
 
 const BIRD_NESTS = Object.freeze({

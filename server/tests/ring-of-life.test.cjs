@@ -13,6 +13,7 @@ const RingOfLife = require("../plugins/items/RingOfLife.plugin");
 
 const teleports = [];
 const prompts = [];
+const customHandlers = {};
 let ardougneMedium = false;
 RingOfLife.register({
   core: {
@@ -27,6 +28,7 @@ RingOfLife.register({
   },
   registerIncomingDamageModifier() {},
   persistAttribute() {},
+  onCustomEvent(name, handler) { customHandlers[name] = handler; },
   onItemAction() {},
   sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
   // The Skillcapes plugin answers this; a worn Defence cape is all these tests need.
@@ -117,4 +119,22 @@ test("Toggle-respawn: after the medium Ardougne Diary the ring takes its wearer 
   teleports.length = 0;
   RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
   assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], RingOfLife._test.ARDOUGNE_MARKET.slice(0, 2));
+});
+
+test("Wintertodt asks for the ring when warmth drops below 10%: the ring is destroyed and the player teleports", () => {
+  teleports.length = 0;
+  const player = createPlayer({ hp: 99, ring: ItemIds.RING_OF_LIFE });
+  const request = { player, activated: false };
+  customHandlers["ring-of-life:activate"](request);
+  assert.equal(request.activated, true);
+  assert.equal(teleports.length, 1);
+  assert.deepEqual(player.deleted, [[ItemIds.RING_OF_LIFE, 1]]);
+
+  const bare = { player: createPlayer({ hp: 99 }), activated: false };
+  customHandlers["ring-of-life:activate"](bare);
+  assert.equal(bare.activated, false, "nothing worn saves nobody");
+  const blocked = { player: createPlayer({ hp: 99, ring: ItemIds.RING_OF_LIFE, teleblocked: true }), activated: false };
+  customHandlers["ring-of-life:activate"](blocked);
+  assert.equal(blocked.activated, false, "Tele Block stops it");
+  assert.equal(teleports.length, 1);
 });

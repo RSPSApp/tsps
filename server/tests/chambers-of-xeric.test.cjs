@@ -406,6 +406,19 @@ test('a death with few points costs the team 5% instead', () => {
   raid.destroyed = true;
 });
 
+test('a destroyed raid keeps no rejoin entries for raiders who never came back', () => {
+  const party = new Parties.Party(fakePlayer('Gone'), { key: 'Gone' });
+  const raid = new RaidModule.Raid(party);
+  const { rejoining } = RaidModule._test;
+  rejoining.set('Gone', raid);
+  rejoining.set('Elsewhere', { destroyed: false });
+  raid.destroy('empty');
+  assert.equal(rejoining.has('Gone'), false, 'this raid is no longer held');
+  assert.equal(rejoining.has('Elsewhere'), true, 'another raid entry stays');
+  rejoining.delete('Elsewhere');
+  Parties.clear();
+});
+
 // ------------------------------------------------------------------ phase 2: supplies
 
 test('storage: stackables share a slot, others take one each, within the size', () => {

@@ -4,8 +4,8 @@
  * spellbook from the inventory or worn. Its cache options are Change Spellbook (a choice of the
  * other books), Previous Spellbook (back to the book the last change left) and Check Previous. The
  * swap is the altars' (`MagicSpellbook.changeSpellbook`: Lunar's 40 Defence, autocast cleared, the
- * tab); this server's altars gate the books on nothing else, so neither does the grimoire (the
- * Trailblazer Reloaded relics page: "providing players have unlocked them"). Any league character
+ * tab). Like the altars and the magic cape it opens only unlocked books (the Trailblazer Reloaded
+ * relics page: "providing players have unlocked them"; core SpellbookLocks). Any league character
  * holding one can use it: the item is untradeable and only a relic grants it, so no relic check is
  * made. Its Book of the Dead role (the resurrection spells' requirement) is not covered.
  */
@@ -43,6 +43,11 @@ function allowed(player) {
 
 /** The core swap; the book left is remembered for Previous Spellbook only when the book changed (not when refused, nor when already on it after an altar). */
 function swap(player, book) {
+  const locked = core.SpellbookLocks.spellbookLockedRefusal(player, core.MagicSpellbook[book.key]);
+  if (locked) {
+    player.sendMessage(locked);
+    return;
+  }
   const from = currentBook(player);
   const before = player.getSpellbook();
   core.MagicSpellbook.changeSpellbook(player, core.MagicSpellbook[book.key]);

@@ -17,6 +17,8 @@ import { Spell } from "./Spell";
 import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
 import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDialogue";
+import { StatementDialogue } from "../../../model/dialogues/entries/impl/StatementDialogue";
+import { lockingQuest } from "./SpellbookLocks";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
@@ -104,6 +106,28 @@ const HEAL_GROUP_COOLDOWN_TICKS = 150;
 const DREAM_HEAL_TICKS = 33;
 /** Energy Transfer costs the caster 10 Hitpoints (Wiki). */
 const ENERGY_TRANSFER_HITPOINTS = 10;
+
+/**
+ * Wiki (Dream Mentor, Rewards): the quest gives "the ability to use" these seven Lunar spells; the rest of the book
+ * needs only Lunar Diplomacy's spellbook. Captured refusal (rec 1695 tick 219, rec 3448 tick 532): "You must have
+ * completed <Quest> to use this spell."
+ */
+const DREAM_MENTOR_SPELLS = new Set(["monster examine", "humidify", "hunter kit", "stat spy", "dream", "plank make", "spellbook swap"]);
+
+/** A Dream Mentor spell before the quest: refused (before any other check or cost), and true. */
+export function refuseBeforeDreamMentor(player: Player, key: string): boolean {
+    if (!DREAM_MENTOR_SPELLS.has(key)) return false;
+    const query = { player, key: "dream_mentor", complete: false };
+    PluginManager.emitCustomEvent("quest:is-complete", query);
+    if (query.complete === true) return false;
+    // Content may lift the requirement ("magic:spell-unlocked", the Grimoire league relic: "all ... spells regardless of
+    // area, quest, or diary requirements"), as the Mage Arena's god spells allow.
+    const unlock = { player, name: key, unlocked: false };
+    PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+    if (unlock.unlocked === true) return false;
+    player.sendMessage("You must have completed Dream Mentor to use this spell.");
+    return true;
+}
 
 class LunarSpell extends Spell {
     private requirements?: { level: number; runes: Item[] };
@@ -239,6 +263,7 @@ export class LunarSpells {
         const groupTeleport = this.GROUP_TELEPORTS.get(key);
         const spell = this.SELF.get(key);
         if (!teleport && !groupTeleport && !spell) return false;
+        if (spell && refuseBeforeDreamMentor(player, key)) return true;
         this.interrupt(player);
         if (teleport) return teleport.castTeleport(player);
         if (groupTeleport) return this.castGroupTeleport(player, groupTeleport);
@@ -348,16 +373,31 @@ export class LunarSpells {
         return false;
     }
 
-    /** Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. */
+    /**
+     * Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. Only an unlocked book is
+     * swapped to (Wiki): a locked quick pick is refused before the cast, and the menu lists only open books.
+     */
     private static castSpellbookSwap(player: Player, spell: LunarSpell, option: number): boolean {
         const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
         const quick = option >= 2 && option <= 4 ? books[option - 2] : undefined;
+        if (quick && this.refuseLockedBook(player, quick)) return true;
         return spell.cast(player, () => {
             // Spellbook Swap ends Magic Imbue (Wiki).
             player.setAttribute("lunar:magic-imbue-until", null);
             if (quick) this.swapTo(player, quick);
             else this.openSpellbookSwap(player);
         });
+    }
+
+    /** A book the player hasn't unlocked (core SpellbookLocks): refused with the captured message box, and true. */
+    private static refuseLockedBook(player: Player, book: MagicSpellbook): boolean {
+        const quest = lockingQuest(player, book);
+        if (!quest) return false;
+        // Captured (a league recording): "You need to have completed Desert Treasure I in order to use Ancient Magicks."
+        const bookName = book === MagicSpellbook.ANCIENT ? "Ancient Magicks" : "that spellbook";
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new StatementDialogue(0, `You need to have completed ${quest.name} in order to use ${bookName}.`)));
+        return true;
     }
 
     /** Bakes every uncooked pie one after another, a cast (runes and XP) per pie (Wiki: Bake Pie). */
@@ -457,6 +497,7 @@ export class LunarSpells {
     public static handlePlayerTarget(player: Player, target: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         if (!["energy transfer", "heal other", "vengeance other", "stat spy"].includes(key)) return false;
+        if (refuseBeforeDreamMentor(player, key)) return true;
         if (target === player || !this.acceptsAid(target) || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
@@ -523,6 +564,7 @@ export class LunarSpells {
     public static handleNpcTarget(player: Player, target: any, name: string | undefined): boolean {
         if (name?.trim().toLowerCase() !== "monster examine" || !target || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
+        if (refuseBeforeDreamMentor(player, "monster examine")) return true;
         this.interrupt(player);
         return this.SPELLS.get("monster examine")!.cast(player, () => {
             player.setPositionToFace(target.getLocation());
@@ -593,6 +635,7 @@ export class LunarSpells {
         if (key !== "plank make" && key !== "stat restore pot share" && key !== "boost potion share") return false;
         const item = player.getInventory().getItems()[slot];
         if (!item || item.getId() !== itemId) return false;
+        if (refuseBeforeDreamMentor(player, key)) return true;
         this.interrupt(player);
         const spell = this.SPELLS.get(key)!;
         if (key === "plank make") return this.castPlankMake(player, spell, itemId);
@@ -710,14 +753,16 @@ export class LunarSpells {
         player.sendMessage("You have 2 minutes before your spellbook changes back!");
     }
 
+    /** Wiki (Spellbook Swap): the menu offers only "the spellbooks they have access to". */
     private static openSpellbookSwap(player: Player): void {
-        const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
+        const books = ([[MagicSpellbook.NORMAL, "Standard"], [MagicSpellbook.ANCIENT, "Ancient"], [MagicSpellbook.ARCEUUS, "Arceuus"]] as const)
+            .filter(([book]) => lockingQuest(player, book) === null);
         const builder = new DialogueChainBuilder();
         builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
-            const book = books[(option as number) - 1];
+            const book = books[(option as number) - 1]?.[0];
             player.getPacketSender().sendInterfaceRemoval();
-            if (book) this.swapTo(player, book);
-        } }, "Standard", "Ancient", "Arceuus"));
+            if (book && !this.refuseLockedBook(player, book)) this.swapTo(player, book);
+        } }, ...books.map(([, label]) => label)));
         player.getDialogueManager().startDialogues(builder);
     }
 }

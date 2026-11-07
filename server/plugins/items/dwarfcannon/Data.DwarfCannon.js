@@ -65,8 +65,8 @@ const ZONES = [
   [[-18, 18], [-18, 7], [-7, 7], [-7, 5], [-6, 5], [-6, 4], [-5, 4], [-5, 3], [-3, 3], [-3, 1], [-3, 1], [0, 1], [0, 4], [-2, 4], [-2, 6], [-3, 6], [-3, 7], [-4, 7], [-4, 8], [-6, 8], [-6, 18]],
 ];
 
-/** Monsters a cannon can't hit (Wiki), by name. */
-const NO_CANNON_NPCS = ["Sand crab", "Ammonite crab", "Demonic gorilla", "Kurask"];
+/** Monsters a cannon can't hit (Wiki), by name; the Mage Arena's battle mages and Kolodion included. */
+const NO_CANNON_NPCS = ["Sand crab", "Ammonite crab", "Demonic gorilla", "Kurask", "Battle mage", "Kolodion"];
 
 /** Is (dx, dy) from the centre inside the polygon (even-odd rule on tile centres)? */
 function inZone(direction, dx, dy) {

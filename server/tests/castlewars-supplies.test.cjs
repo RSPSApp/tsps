@@ -44,6 +44,8 @@ const game = {
 };
 
 before(async () => {
+  // Dream Mentor gives these Lunar spells (Wiki); the quest plugins are not loaded here.
+  PluginManager.createApi("DreamMentorDone").onCustomEvent("quest:is-complete", (q) => { if (q.key === "dream_mentor") q.complete = true; });
   await CachePipeline.initialize(process.cwd());
   core.CacheDefinitions.registerCustomItems(require('../data/definitions/custom-items.json'));
   Potions.register(api);

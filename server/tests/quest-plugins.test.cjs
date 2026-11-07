@@ -23269,6 +23269,7 @@ test('Edmond Talk-to routes a fresh player to Plague City instead of Song of the
   const completed = new Set();
   const eventName = 'quest:is-complete';
   const previousHooks = PluginManager.customEventHooks.get(eventName);
+  const previousStageHooks = PluginManager.customEventHooks.get('quest:get-stage');
   const prerequisiteAnswers = (event) => {
     if (completed.has(event.key)) event.complete = true;
   };
@@ -23277,6 +23278,11 @@ test('Edmond Talk-to routes a fresh player to Plague City instead of Song of the
     require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
     require('../plugins/quests/quests/PlagueCity.Quest')(api);
     PluginManager.createApi('SoteEdmondPrerequisiteAnswers').onCustomEvent(eventName, prerequisiteAnswers);
+    // Plague City's stage: 29 complete, 30 once Edmond's scroll is read (asked after QuestRuntime answers).
+    let plagueCityStage = 0;
+    PluginManager.createApi('SoteEdmondStage').onCustomEvent('quest:get-stage', (event) => {
+      if (event.key === 'plague_city') event.stage = plagueCityStage;
+    });
 
     const attributes = new Map();
     const messages = [];
@@ -23323,6 +23329,12 @@ test('Edmond Talk-to routes a fresh player to Plague City instead of Song of the
     );
 
     completed.add('plague_city');
+    plagueCityStage = 29;
+    const unread = dispatch();
+    assert.equal(unread.handled, false, "Edmond's own dialogue (a new teleport scroll) while the scroll is unread and none is carried");
+    assert.deepEqual(messages, []);
+
+    plagueCityStage = 30;
     const refused = dispatch();
     assert.equal(refused.handled, true, 'Song of the Elves owns Edmond once Plague City is complete');
     assert.ok(messages.some((text) => text.includes("Mourning's End Part II")),
@@ -23342,5 +23354,7 @@ test('Edmond Talk-to routes a fresh player to Plague City instead of Song of the
     runtime.startTranscript = originalStartTranscript;
     if (previousHooks) PluginManager.customEventHooks.set(eventName, previousHooks);
     else PluginManager.customEventHooks.delete(eventName);
+    if (previousStageHooks) PluginManager.customEventHooks.set('quest:get-stage', previousStageHooks);
+    else PluginManager.customEventHooks.delete('quest:get-stage');
   }
 });

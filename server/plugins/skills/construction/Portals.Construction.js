@@ -1,12 +1,12 @@
 "use strict";
 
-const { api, Skill, TeleportHandler, TeleportType, Wilderness, SpellTeleports, LunarSpells, ArceuusSpells, ObjectIdentifiers, ItemIdentifiers, ItemDefinition } = require("./Core.Construction");
+const { api, Skill, TeleportHandler, TeleportType, Wilderness, SpellTeleports, LunarSpells, ArceuusSpells, SpellbookLocks, MagicSpellbook, ObjectIdentifiers, ItemIdentifiers, ItemDefinition } = require("./Core.Construction");
 const Data = require("./Data.Construction");
 const Instance = require("./Instance.Construction");
 const aliases = { moonclan: "LUNAR_ISLE", "ape atoll": "MARIM", "kourend castle": "KOUREND", "fenkenstrain's castle": "FENKENSTRAINS_CASTLE", waterbirth: "WATERBIRTH_ISLAND", watchtower: "YANILLE_WATCHTOWER", barbarian: "BARBARIAN_OUTPOST", khazard: "PORT_KHAZARD" };
 function houseDestinations() {
   // Reuse the spell system's costs and destinations; home/house spells cannot be directed.
-  return [...SpellTeleports.getTeleportDestinations(), ...LunarSpells.getTeleportDestinations(), ...ArceuusSpells.getTeleportDestinations().map(data => ({ ...data, name: data.name === "ape atoll teleport" ? "ape atoll dungeon teleport" : data.name }))]
+  return [...SpellTeleports.getTeleportDestinations(), ...LunarSpells.getTeleportDestinations().map(data => ({ ...data, spellbook: MagicSpellbook.LUNAR })), ...ArceuusSpells.getTeleportDestinations().map(data => ({ ...data, name: data.name === "ape atoll teleport" ? "ape atoll dungeon teleport" : data.name }))]
     .filter(data => data.runes.length && data.name !== "teleport to house")
     .map(data => {
       const name = data.name.replace(/ teleport$/, "");
@@ -37,8 +37,32 @@ function current(player, house, furniture) {
   return player.getPrivateArea() === house && house.save.rooms.flat(2).some(room => Object.values(room?.furnitureByLocation ?? {}).includes(furniture));
 }
 
+const DIRECT_ACTION = "direct this teleport";
+
+/**
+ * Wiki (Portal chamber): directing "requires the same Magic level and quest requirements as casting the spell", and the
+ * owner needn't be on that spellbook "provided they have unlocked it". So: the book's own quest (core SpellbookLocks;
+ * Desert Treasure I, Lunar Diplomacy), an Arceuus teleport's quest, then the standard spells' list (SpellTeleports).
+ */
+function questLockRefusal(player, name) {
+  const destination = houseDestinations().find(data => data.name === name);
+  if (!destination) return null;
+  const book = destination.spellbook === undefined ? null : SpellbookLocks.lockingQuest(player, destination.spellbook);
+  if (book) return `You need to complete ${book.name} to ${DIRECT_ACTION}.`;
+  if (destination.quest) {
+    const query = { player, key: destination.quest.key, complete: false };
+    api.emitCustomEvent("quest:is-complete", query);
+    if (!query.complete) return `You need to complete ${destination.quest.name} to ${DIRECT_ACTION}.`;
+  }
+  const lock = { player, name, action: DIRECT_ACTION, refusal: null };
+  api.emitCustomEvent("magic:teleport-quest-lock", lock);
+  return lock.refusal;
+}
+
 // The ordinary Ape Atoll destination requires its RFD rescue, including on older completed saves.
 function mayConfigureHouseDestination(player, name) {
+  const refusal = questLockRefusal(player, name);
+  if (refusal) { player.sendMessage(refusal); return false; }
   if (name !== "ape atoll teleport") return true;
   const rescue = { player, rescue: "king-awowogei", complete: false };
   api.emitCustomEvent("recipe-for-disaster:rescue-status", rescue);

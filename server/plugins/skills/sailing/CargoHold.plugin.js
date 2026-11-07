@@ -1,6 +1,7 @@
 // A boat's cargo hold: opening it, withdrawing and depositing by the selected quantity, the
 // deposit buttons, and the tools compartment. Packets, ids and messages follow live captures of
 // the raft's hold (docs/sailing-osrs-reference.md); what it accepts, the OSRS Wiki's Cargo hold.
+const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { ItemDefinition } = require("../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
@@ -200,6 +201,11 @@ function deposit(player, slot, itemId, amount) {
     player.sendMessage(CANNOT_STORE);
     return;
   }
+  // The hold keeps only ids and amounts, so a preset copy (PvP presets) would come back plain.
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (cargo.toolFor(itemId)) {
     storeTool(player, cargo.toolFor(itemId));
   } else {
@@ -211,9 +217,9 @@ function deposit(player, slot, itemId, amount) {
 /** Moves up to `amount` of an item from the inventory into the hold. */
 function storeItem(player, boat, itemId, amount) {
   const inventory = player.getInventory();
-  const wanted = Math.min(amount, inventory.getAmount(itemId));
+  const wanted = Math.min(amount, plainAmount(inventory, itemId));
   const stored = cargo.store(boat, itemId, wanted);
-  if (stored > 0) inventory.delete(itemId, stored);
+  if (stored > 0) takePlain(inventory, itemId, stored);
   if (stored < wanted) player.sendMessage("Your cargo hold is full.");
   return stored;
 }
@@ -282,8 +288,10 @@ function depositAll(player, category) {
     const tool = cargo.toolFor(id);
     if (tool) {
       if (inventory.contains(id)) storeTool(player, tool);
-    } else if (storeItem(player, boat, id, inventory.getAmount(id)) === 0) {
-      break;
+    } else {
+      // Preset copies stay in the pack (the hold would hand them back plain); the plain ones go in.
+      const plain = plainAmount(inventory, id);
+      if (plain > 0 && storeItem(player, boat, id, plain) === 0) break;
     }
   }
   playSound(player, SOUND_DEPOSIT_ALL);

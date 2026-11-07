@@ -1487,6 +1487,30 @@ test("depositing and withdrawing follow the selected quantity and the op", () =>
   }
 });
 
+test("the hold refuses preset food (PvP presets), so it never comes back plain; Deposit inventory leaves it", () => {
+  const h = holdHarness();
+  try {
+    const SHARK = 385;
+    const preset = (amount) => {
+      const item = new Item(SHARK, amount);
+      for (const meta of [Item.UNTRADEABLE_META, Item.UNBANKABLE_META, Item.PRESET_META]) item.setMetaValue(meta, true);
+      return item;
+    };
+    h.player.getInventory().add(preset(1), false);
+    h.player.getInventory().add(preset(1), false);
+    h.give(SHARK);
+    h.open();
+    h.click(944, 1, 1, h.slotOf(SHARK), SHARK);
+    assert.equal(cargo.countIn(h.boat(), SHARK), 0, "the preset shark clicked is refused");
+    assert.equal(h.player.messages.at(-1), "Preset items cannot be used for this.");
+    h.click(943, 15, 1); // Deposit inventory
+    assert.equal(cargo.countIn(h.boat(), SHARK), 1, "only the plain shark goes in");
+    assert.equal(h.player.getInventory().getAmount(SHARK), 2, "the two preset sharks stay");
+  } finally {
+    h.done();
+  }
+});
+
 test("X prompts for an amount, and the hold refuses what it can't store", () => {
   const h = holdHarness();
   try {

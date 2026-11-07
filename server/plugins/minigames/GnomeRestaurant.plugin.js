@@ -7,11 +7,13 @@
  */
 const Orders = require("./gnomerestaurant/Orders.GnomeRestaurant");
 const Delivery = require("./gnomerestaurant/Delivery.GnomeRestaurant");
+const Tutorial = require("./gnomerestaurant/Tutorial.GnomeRestaurant");
 
 module.exports = {
   name: "GnomeRestaurant",
   members: true,
   register(api) {
+    Tutorial(api);
     Orders(api);
     Delivery(api);
   },

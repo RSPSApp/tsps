@@ -35,6 +35,7 @@
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
 const Timeboard = require("./Timeboard.ChambersOfXeric");
+const Storage = require("./Storage.ChambersOfXeric");
 
 const INTERFACE = { REWARDS: 539, ITEMS: 5, BANK_ALL: 6, TAKE_ALL: 8, DISCARD_ALL: 10 };
 const INVENTORY = 581;
@@ -436,19 +437,39 @@ function discardAll({ player }) {
   return true;
 }
 
-/** Wiki: unclaimed loot is placed on the ground on leaving (outside the raid). */
+/** The mountain's private storage unit: the most it holds (Storage's own view of it). */
+const MOUNTAIN_STORAGE_SIZE = 120;
+
+/**
+ * Wiki (Chambers of Xeric, 26 January 2017): "If you leave a raid before collecting your reward, they are now sent
+ * to your raids private storage", "providing there is space. If not they are still dropped on the floor". Logging
+ * out leaves the raid too, and the private storage is saved (logout saves after this hook), so nothing is lost when
+ * the raid closes behind the player. Ultimate Ironmen can't use the storage: theirs drop (27 July 2022).
+ */
 function unclaimedLoot(raid, player, logout) {
   if (!raid.rewards) return;
   claimPetLoot(player, raid);
-  if (logout) return;
   const items = raid.rewards.get(player.getUsername()) ?? [];
   if (items.length === 0) return;
   raid.rewards.delete(player.getUsername());
+  const dropped = [];
+  let stored = false;
+  const storage = Storage.isUltimateIronman(player) ? null : Storage.privateItems(player);
+  for (const entry of items) {
+    const kept = storage ? Storage.addTo(storage, MOUNTAIN_STORAGE_SIZE, entry.id, entry.amount) : 0;
+    if (kept > 0) stored = true;
+    if (kept < entry.amount) dropped.push({ id: entry.id, amount: entry.amount - kept });
+  }
+  if (stored) player.sendMessage("Your unclaimed loot from the chest has been placed in your private storage.");
+  if (dropped.length === 0) return;
   const { Item, ItemOnGroundManager } = Shared.core();
-  Shared.later(player, 3, () => {
-    for (const entry of items) ItemOnGroundManager.registerLocation(player, new Item(entry.id, entry.amount), player.getLocation().clone());
+  const drop = () => {
+    for (const entry of dropped) ItemOnGroundManager.registerLocation(player, new Item(entry.id, entry.amount), player.getLocation().clone());
     player.sendMessage("Your unclaimed loot from the chest has been placed on the ground.");
-  });
+  };
+  // A logout cancels the player's tasks: drop it now rather than in three ticks.
+  if (logout) drop();
+  else Shared.later(player, 3, drop);
 }
 
 // ---------------------------------------------------------------- Captain Rimor's capes
@@ -491,4 +512,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, unclaimedLoot, UNIQUES, COMMONS });

@@ -858,6 +858,24 @@ test("the chest's reward book varbit clears as the rewards close, not when loot 
   raid.destroy();
 });
 
+test('loot left in the chest goes to the private storage when its raider logs out, and the closed raid keeps it', () => {
+  // Wiki (Chambers of Xeric, 26 January 2017): leaving before collecting sends the rewards to the private storage.
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const party = new Parties.Party(fakePlayer('Soloer'), { key: 'Soloer' });
+  const raid = new RaidModule.Raid(party);
+  const soloer = fakePlayer('Soloer');
+  raid.players.add(soloer);
+  raid.original.add('Soloer');
+  soloer.setAttribute(RaidModule.ATTR_RAID, raid);
+  raid.rewards = new Map([['Soloer', [{ id: 20997, amount: 1 }, { id: 560, amount: 500 }]]]); // a twisted bow, death runes
+  // A logout at the chest: the leave hook (Rewards registers it on the raid) runs, then the solo raid closes.
+  Rewards.unclaimedLoot(raid, soloer, true);
+  raid.playerLeftArea(soloer, true);
+  assert.equal(raid.destroyed, true);
+  const stored = soloer.getAttribute('cox:private-storage') ?? [];
+  assert.deepEqual(stored.map((entry) => [entry.id, entry.amount]), [[20997, 1], [560, 500]], 'both in the private storage');
+});
+
 test('the Challenge Timeboard keeps the five fastest Challenge Mode times and says so', (t) => {
   const fs = require('node:fs');
   const os = require('node:os');

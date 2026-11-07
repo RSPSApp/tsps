@@ -91,6 +91,8 @@ function makeInventory(items = {}) {
     getFreeSlots: () => 28 - [...store.values()].filter((amount) => amount > 0).length,
     addItem: (item) => store.set(item.getId(), (store.get(item.getId()) ?? 0) + item.getAmount()),
     adds: (id, amount) => store.set(id, (store.get(id) ?? 0) + amount),
+    // As the real forceAdd(player, item); this stand-in has room for anything, so nothing is floored.
+    forceAdd: (player, item) => store.set(item.getId(), (store.get(item.getId()) ?? 0) + item.getAmount()),
     deleteNumber: (id, amount) => store.set(id, (store.get(id) ?? 0) - amount),
   };
 }

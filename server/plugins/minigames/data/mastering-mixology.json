@@ -29,6 +29,13 @@
     "DWARF_WEED": ["aga", 42], "DWARF_WEED_POTION_UNF_": ["aga", 42],
     "TORSTOL": ["aga", 44], "TORSTOL_POTION_UNF_": ["aga", 44]
   },
+  "goggles": {
+    "_comment": "Prescription goggles (mm_alchemist_hat, and the _alt look): a 10% chance, rolled once per potion, to keep its secondaries (Wiki: Prescription goggles). A torstol potion (unf) in a super combat potion or anti-venom+ counts as a secondary; crystal dust (divine potions) never does.",
+    "worn": ["mm_alchemist_hat", "mm_alchemist_hat_alt"],
+    "secondarySaveChance": 0.1,
+    "alsoSaved": ["torstolvial"],
+    "neverSaved": ["prif_crystal_shard_crushed"]
+  },
   "shopDescriptions": {
     "mixology_stock_low_potion_pack": "<col=ffffff>Requires level 60 Herblore.</col> A pack of potions made by an apprentice alchemist.",
     "mixology_stock_med_potion_pack": "<col=ffffff>Requires level 70 Herblore.</col> A pack of potions made by an adept alchemist.",

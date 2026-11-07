@@ -1345,10 +1345,15 @@ test("a course mark picked up finishes a lap only when agility:mark-taken says s
   const inventory = player.getInventory();
   player.getInventory = () => ({ ...inventory, getAddableAmount: (item) => item.getAmount(), adds: (id, amount) => added.push([id, amount]) });
   player.setAttribute("agility.progress", { course: "draynor", index: 2 });
-  const mark = { getItem: () => ({ getId: () => MARK_OF_GRACE }), getgoesGlobal: () => false, getDespawnDelay: () => 1000 };
-  const pickUp = (groundItem = mark, location = { x: 3098, y: 3281, z: 3 }) => hooks.pickup({ player, groundItem, groundItemId: MARK_OF_GRACE, clickType: 1, location, handled: false });
+  const mark = {
+    getItem: () => ({ getId: () => MARK_OF_GRACE }), getgoesGlobal: () => false, getDespawnDelay: () => 1000,
+    getPosition: () => new Location(3098, 3281, 3),
+  };
+  // The mark credited to the inventory (ItemOnGroundManager's "ground-items:taken"); a click that took nothing sends none.
+  const taken = (groundItem = mark, source = "pickup") => hooks.listeners["ground-items:taken"]({ player, groundItem, source, itemId: MARK_OF_GRACE, amount: 1 });
+  assert.equal(hooks.pickup, undefined, "clicking a mark pays nothing before the pickup succeeds");
   hooks.events.length = 0;
-  pickUp();
+  taken();
   assert.deepEqual(hooks.events.find((event) => event.name === "agility:mark-taken")?.payload.course, "draynor");
   assert.deepEqual(player.getAttribute("agility.progress"), { course: "draynor", index: 2 }, "unanswered: nothing but the pick-up");
   assert.equal(player.getAttribute("agility.laps")?.draynor, undefined);
@@ -1358,9 +1363,11 @@ test("a course mark picked up finishes a lap only when agility:mark-taken says s
   };
   try {
     hooks.events.length = 0;
-    pickUp({ ...mark, getgoesGlobal: () => true });
+    taken({ ...mark, getgoesGlobal: () => true });
     assert.equal(hooks.events.length, 0, "a dropped mark is not a course's");
-    pickUp();
+    taken(mark, "telegrab");
+    assert.equal(player.getAttribute("agility.laps")?.draynor, undefined, "only a picked-up mark finishes a lap");
+    taken();
     assert.equal(player.getAttribute("agility.laps").draynor, 1);
     assert.equal(player.getAttribute("agility.progress"), null);
     assert.deepEqual(added, [[995, 10]]);

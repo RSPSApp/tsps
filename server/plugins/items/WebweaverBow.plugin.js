@@ -136,13 +136,21 @@ function boost(attacker, target, value) {
   return passiveApplies(attacker, target) ? Math.floor(value * 1.5) : value;
 }
 
+/** An Ironman takes no other player's PvP loot: what this death drops goes to the victim instead (Loot.Ironman). */
+function pvpLootOwner(api, killer, victim) {
+  if (!killer || killer === victim) return victim;
+  const query = { player: killer, mode: "none" };
+  api?.emitCustomEvent?.("ironman:mode", query);
+  return query.mode != null && query.mode !== "none" ? victim : killer;
+}
+
 function deathItemDrop(event) {
   const { player, killer, item, location } = event;
   if (!event.shouldDropItems || !killer || killer === player || !activated(item) || restricted(item)
       || !core.Wilderness.isInLocation(location)) return;
   const lost = depositOf(item) + chargesOf(item);
   // Wiki: in Wilderness PvP all ether is lost, even when the bow is protected.
-  if (lost > 0) core.ItemOnGroundManager.registerLocation(killer, new core.Item(core.ItemIdentifiers.REVENANT_ETHER, lost), location);
+  if (lost > 0) core.ItemOnGroundManager.registerLocation(pvpLootOwner(api, killer, player), new core.Item(core.ItemIdentifiers.REVENANT_ETHER, lost), location);
   emptyBow(item);
   paidOn.delete(item);
   // Core already returns kept items; report the ether drop without dropping the bow as well.

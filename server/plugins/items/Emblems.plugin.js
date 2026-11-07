@@ -37,6 +37,14 @@ function toLocation(rawLocation, fallbackLocation) {
 
 let ItemOnGroundManager;
 
+/** An Ironman takes no other player's PvP loot: what this death drops goes to the victim instead (Loot.Ironman). */
+function pvpLootOwner(api, killer, victim) {
+  if (!killer || killer === victim) return victim;
+  const query = { player: killer, mode: "none" };
+  api?.emitCustomEvent?.("ironman:mode", query);
+  return query.mode != null && query.mode !== "none" ? victim : killer;
+}
+
 module.exports = {
   name: "Emblems",
   register(api) {
@@ -76,7 +84,7 @@ module.exports = {
       }
 
       ItemOnGroundManager.registerNonGlobals(
-        event.killer,
+        pvpLootOwner(api, event.killer, event.player),
         new Item(downgradedEmblemId),
         dropLocation
       );

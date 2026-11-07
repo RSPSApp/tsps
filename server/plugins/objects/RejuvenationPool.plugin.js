@@ -43,7 +43,7 @@ function restoreLoweredStats(player) {
 
 function restorePrayer(player) {
   // Wiki: Prayer - a rejuvenation pool clears the prayer drain counter.
-  player.setPrayerPointDrain?.(0);
+  player.setPrayerPointDrain(0);
   const skillManager = player.getSkillManager?.();
   if (!skillManager) {
     return;

@@ -36,7 +36,7 @@ function rechargePrayer(player, tier) {
   }
   const restore = Math.floor(max * shield().restorePercent[tier] / 100);
   skills.setCurrentLevel(Skill.PRAYER, Math.min(max, current + restore), true);
-  player.setPrayerPointDrain?.(0);
+  player.setPrayerPointDrain(0);
   player.performGraphic(new Graphic(Rewards.gamevalId("spotanim", shield().spotanim), GraphicHeight.LOW));
   const used = Rewards.useDaily(player, DAILY_KEY);
   Rewards.sendCount(player, Rewards.gamevalId("varbit", shield().varbit), used);

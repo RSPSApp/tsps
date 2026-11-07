@@ -125,6 +125,8 @@ function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
   match.allocation.release();
   // Four completed turns before ranking comes only from the historical reference.
   // It prevents instant-resign rank transfers; current capture confirmation is absent.
+  // Runeversi reuses this existing rating policy; its formula and four-turn
+  // threshold are not established by a current Runeversi recording.
   if(match.settings.ranked&&winner!=null&&match.turns>=4) {
     const w=match.players[winner],l=match.players[1-winner],wr=rank(w,match.game),lr=rank(l,match.game),delta=Rules.rankChange(wr,lr);
     w.setAttribute(RANK_ATTRIBUTES[match.game],Math.min(60000,wr+delta));l.setAttribute(RANK_ATTRIBUTES[match.game],Math.max(1,lr-delta));
@@ -183,6 +185,8 @@ function click(event) {
       if(edge)return move(player,match,edge);
     } else if(match.game==='runelink') {
       for(let col=0;col<7;col++)if(is(`${prefix}:column${col}`))return move(player,match,{column:col});
+    } else if(match.game==='runeversi') {
+      for(let to=0;to<64;to++)if(is(`${prefix}:square_${to}`))return move(player,match,{to});
     } else if(is(`${prefix}:boardinv`)&&Number.isInteger(event.slot)&&event.slot>=0&&event.slot<64&&match.players[match.state.turn]===player) {
       const from=match.selected.get(player),to=event.slot;
       if(from!==undefined&&move(player,match,{from,to}))return;
@@ -241,6 +245,8 @@ function processPlayer(player) {
   if(departed.length)return finish(match,departed.length===1?1-departed[0]:null,'Player left the game.');
   Seating.process(match,player,now());
   if(match.players[match.state.turn]===player&&now()>=match.deadline) {
+    // Runeversi uses the existing legal random auto-move policy too. The cache
+    // establishes its clock choices, but its timeout policy is not captured.
     const auto=Rules.chooseAutoMove(match.state);if(auto)move(player,match,auto);
   }
 }

@@ -1,5 +1,6 @@
 'use strict';
 const Screen = require('./Interface.GamesRoom');
+const { GAMES } = require('./Games.GamesRoom');
 const views = new Map();
 const audiences = new Map();
 let core, services;
@@ -53,8 +54,8 @@ function click(event) {
   if (!match) return false;
   // Consume every board/options action while viewing, including forged player
   // actions. The viewer never enters Runtime's player match or result maps.
-  if (![Screen.group('draughts'), Screen.group('runelink'), Screen.optionsGroup('draughts'),
-    Screen.optionsGroup('runelink')].includes(event.buttonId >>> 16)) return false;
+  if (!Object.keys(GAMES).flatMap(game => [Screen.group(game), Screen.optionsGroup(game)])
+    .includes(event.buttonId >>> 16)) return false;
   event.handled = true;
   if ((event.opId ?? event.action) === 1 && valid(event.player)
       && event.buttonId === Screen.component(`boardgames_${match.game}:close`)) leave(event.player, true);

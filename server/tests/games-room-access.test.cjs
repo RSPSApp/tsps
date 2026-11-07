@@ -189,6 +189,46 @@ for(const [game,x] of [['draughts',2198],['runelink',2217]]) {
   });
 }
 
+test('Runeversi native ladder and west-facing experienced gate enforce only its independent rank', async t => {
+  const ladder = map('boardgames_runeversi_ladderup_experienced',2231,4951,0);
+  const a = actor(t,[2230,4951,0],60000);
+  a.player.setAttribute('games-room:runeversi-rank',1499);
+  await click(a,ladder);
+  assert.deepEqual(loc(a.player),[2230,4951,0]);
+  assert.ok(a.messages.some(m=>m.includes('Runeversi')&&m.includes('1500')));
+  a.player.setAttribute('games-room:runeversi-rank',1500);
+  await click(a,ladder);
+  assert.equal(a.player.getLocation().getZ(),1);
+  const gate = map('boardgames_runeversi_door_experienced',2224,4950,1);
+  const low = actor(t,[2223,4950,1],60000);
+  low.player.setAttribute('games-room:runeversi-rank',1499);
+  await click(low,gate);
+  assert.ok(low.messages.some(m=>m.includes('Runeversi')&&m.includes('1500')));
+  assert.equal(core.MapObjects.get(gate.getId(),gate.getLocation(),null),gate);
+  // Rankless players may always exit toward the west through a closed gate.
+  low.player.setLocation(new core.Location(2225,4950,1));low.player.setNeedsPlacement(false);
+  await click(low,gate);
+  const state={objects:[gate]};PM.emitCustomEvent('door:state',state);
+  assert.notEqual(state.objects[0].getId(),gate.getId());
+  await click(low,state.objects[0]);
+});
+
+test('Runeversi room bounds, return landing and open-gate area entry use the east room', t => {
+  const {AreaManager}=require('../dist/game/model/areas/AreaManager');
+  for (const z of [0,1]) {
+    assert.equal(Access.roomGame(new core.Location(2224,4944,z)),'runeversi');
+    assert.equal(Access.roomGame(new core.Location(2231,4951,z)),'runeversi');
+    assert.equal(Access.roomGame(new core.Location(2223,4950,z)),null);
+    assert.deepEqual(loc({getLocation:()=>Access.gameRoom('runeversi',z)}),[2228,4948,z]);
+  }
+  const low=actor(t,[2226,4948,1]);low.player.setAttribute('games-room:runeversi-rank',1499);
+  AreaManager.process(low.player);
+  assert.deepEqual(loc(low.player),[2223,4950,1]);
+  low.player.setAttribute('games-room:runeversi-rank',1500);
+  low.player.setLocation(new core.Location(2226,4948,1));AreaManager.process(low.player);
+  assert.deepEqual(loc(low.player),[2226,4948,1]);
+});
+
 test('RuneSquares west-room ladder/door enforce independent rank and eject east',async t=>{
   const up=map('boardgames_runesquares_ladderup_experienced',2184,4951,0);
   const a=actor(t,[2185,4951,0],1499);

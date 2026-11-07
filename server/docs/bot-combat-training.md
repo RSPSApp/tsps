@@ -344,6 +344,51 @@ players (and their pending removals); bots alone do not keep a square active. Wi
 overrides, existing defaults, fixed sites and activation rules are unchanged. These controls
 are custom server population policy, not OSRS mechanics or recommended cave balancing.
 
+#### Wilderness boss lairs
+
+Each Wilderness boss lair interior is its own map square, separate from the square holding its
+surface entrance. A regional roamer is placed anywhere valid in a square, so with the global
+target a lair interior can fill with bots that never paid the fee or crawled in, have no NPC
+policy, and fight the boss. A deployment can set the interior square lower (such as 0, or a
+number sized for the room) and leave the surface square at the global target, so the Wilderness
+PK population stays outside. Squares come from `box` and the entrance tile in
+`plugins/bosses/data/wilderness-bosses.json`:
+
+| Lair | Interior square | Entrance's surface square |
+| --- | --- | --- |
+| Callisto's Den | `0:52:161` | `0:51:60` |
+| Vet'ion's Rest | `1:51:159` | `0:50:59` |
+| Venenatis (Silk Chasm) | `2:53:159` | `0:51:59` |
+| Artio (Hunter's End) | `0:27:180` | `0:48:57` |
+| Calvar'ion (Skeletal Tomb) | `1:29:180` | `0:49:57` |
+| Spindel (Web Chasm) | `2:25:180` | `0:49:58` |
+| Scorpia's Cave | `0:50:161` | `0:50:61` (crevice at 3231, 3936) |
+
+Callisto's and Vet'ion's exits lead into the Escape Caves, which are a separate square
+(`0:52:160`). The surface squares are whole map squares and also cover other nearby Wilderness
+tiles. This example lowers every interior to 0 and lists no surface square, so each surface
+keeps the global target:
+
+```json
+{
+  "pluginConfig": {
+    "PlayerBots:activeRegionBotsByRegion": {
+      "0:52:161": 0,
+      "1:51:159": 0,
+      "2:53:159": 0,
+      "0:27:180": 0,
+      "1:29:180": 0,
+      "2:25:180": 0,
+      "0:50:161": 0
+    }
+  }
+}
+```
+
+To give a lair a small number of bots instead, replace its `0` with that count. The number is a
+deployment's balance choice, and this page does not recommend one. No shipped default or config
+value changes.
+
 Regional bots give the low-level pure and rusher loadouts higher weights, so roughly a third
 of their members-world population is one Defence with no protection prayers.
 Novice and standard bots eat at 35% and 40% HP and use single food; veterans and elites can

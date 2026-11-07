@@ -500,11 +500,25 @@ test("banking and death keep jewellery's charge id", async () => {
   assert.deepEqual(PlayerDeathTask.getItemsToKeep(victim).map((item) => item.getId()).sort(),
     carried.map((item) => item.getId()).sort());
 
-  // An imbued ring of wealth loses its imbue on death but keeps its three charges.
+  // An imbued ring of wealth lost to a player killer loses its imbue (the killer gets its coins) but keeps its three
+  // charges. Kept, or lost to anything but a player, it stays imbued and pays nothing.
   const { removeImbueOnDeath } = require("../plugins/items/RingOfWealth.plugin")._test;
+  const paid = [];
+  const killer = { isPlayer: () => true, getInventory: () => ({ forceAdd: (_who, coins) => paid.push(coins.getAmount()) }) };
   const ring = new Item(20788, 1);
-  removeImbueOnDeath({ item: ring, killer: { getInventory: () => ({ forceAdd() {} }) } }, null);
+  removeImbueOnDeath({ item: ring, killer });
   assert.equal(ring.getId(), 11984, "ring of wealth (3)");
+  assert.deepEqual(paid, [50000]);
+  const pvm = new Item(20788, 1);
+  removeImbueOnDeath({ item: pvm, killer: null, location: null });
+  assert.equal(pvm.getId(), 20788, "a PvM death leaves it imbued, and no coins appear");
+  const npcKill = new Item(20788, 1);
+  removeImbueOnDeath({ item: npcKill, killer: { isPlayer: () => false, getInventory: () => ({ forceAdd: () => paid.push("npc") }) } });
+  assert.equal(npcKill.getId(), 20788);
+  const kept = new Item(20788, 1);
+  removeImbueOnDeath({ item: kept, killer, kept: true });
+  assert.equal(kept.getId(), 20788, "a kept ring stays imbued");
+  assert.deepEqual(paid, [50000], "only the PvP loss paid");
 });
 
 test("the ring of wealth spends its charge on arrival, from wherever the ring is", () => {

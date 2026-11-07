@@ -226,18 +226,30 @@ function handleRingAction(event, action) {
   return true;
 }
 
-function removeImbueOnDeath(event, itemOnGroundManager) {
+/**
+ * An imbued ring lost to a player killer reverts, and the killer gets the imbue's coins (as broken items pay theirs).
+ * Kept, or lost to anything but a player, it stays as it is: every PvM death put 50,000 new coins on the floor.
+ */
+function removeImbueOnDeath(event) {
   const unimbuedId = UNIMBUED_RING_IDS.get(event.item?.getId?.());
   if (!unimbuedId) {
     return;
   }
+  const killer = event.killer;
+  if (event.kept || !killer || killer === event.player || killer.isPlayer?.() !== true || !killer.getInventory) {
+    return;
+  }
   event.item.setId(unimbuedId);
   const coins = new Item(COINS, IMBUE_COST);
-  if (event.killer?.getInventory) {
-    event.killer.getInventory().forceAdd(event.killer, coins);
-  } else {
-    itemOnGroundManager.registerLocation(event.player, coins, event.location);
-  }
+  // An Ironman takes no other player's PvP loot: the coins go on the floor for the victim (Loot.Ironman).
+  if (isIronman(killer) && event.location) pluginApi.getItemOnGroundManager().registerLocation(event.player, coins, event.location);
+  else if (!isIronman(killer)) killer.getInventory().forceAdd(killer, coins);
+}
+
+function isIronman(player) {
+  const query = { player, mode: "none" };
+  pluginApi?.emitCustomEvent?.("ironman:mode", query);
+  return query.mode != null && query.mode !== "none";
 }
 
 module.exports = {
@@ -246,7 +258,6 @@ module.exports = {
   ACTIONS,
   register(api) {
     pluginApi = api;
-    const itemOnGroundManager = api.getItemOnGroundManager();
     api.onItemAction((event) => {
       if (!isRingOfWealth(event.itemId)) {
         return;
@@ -289,7 +300,7 @@ module.exports = {
       event.handled = imbue(event.player, ring);
     });
 
-    api.onPlayerDeathItemDrop((event) => removeImbueOnDeath(event, itemOnGroundManager));
+    api.onPlayerDeathItemDrop(removeImbueOnDeath);
   },
   isWearingRingOfWealth,
   isWearingImbuedRingOfWealth,

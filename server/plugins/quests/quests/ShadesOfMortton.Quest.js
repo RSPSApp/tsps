@@ -210,14 +210,18 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     [ItemIdentifiers.OLIVE_OIL_1_, ItemIdentifiers.SACRED_OIL_1_],
   ]);
 
-  /** Logs -> pyre logs and the sacred-oil doses OSRS charges (approximate). */
+  /**
+   * Logs -> pyre logs and the sacred-oil doses each takes. Wiki (Pyre logs): regular and oak 2, willow and maple 3, yew
+   * and magic 4; making them gives "a flat rate of 5 experience per dose of oil used" in Firemaking.
+   */
+  const PYRE_XP_PER_DOSE = 5;
   const PYRE_LOG_RECIPES = new Map([
     [ItemIdentifiers.LOGS, { product: ItemIdentifiers.PYRE_LOGS, doses: 2 }],
     [ItemIdentifiers.OAK_LOGS, { product: ItemIdentifiers.OAK_PYRE_LOGS, doses: 2 }],
     [ItemIdentifiers.WILLOW_LOGS, { product: ItemIdentifiers.WILLOW_PYRE_LOGS, doses: 3 }],
     [ItemIdentifiers.MAPLE_LOGS, { product: ItemIdentifiers.MAPLE_PYRE_LOGS, doses: 3 }],
     [ItemIdentifiers.YEW_LOGS, { product: ItemIdentifiers.YEW_PYRE_LOGS, doses: 4 }],
-    [ItemIdentifiers.MAGIC_LOGS, { product: ItemIdentifiers.MAGIC_PYRE_LOGS, doses: 5 }],
+    [ItemIdentifiers.MAGIC_LOGS, { product: ItemIdentifiers.MAGIC_PYRE_LOGS, doses: 4 }],
   ]);
 
   const KILLS_ATTRIBUTE = "quest.shades_of_mortton.shade_kills";
@@ -766,6 +770,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     drainDoses(player, SACRED_OIL_ITEM_IDS, recipe.doses);
     player.getInventory().deleteNumber(logId, 1);
     player.getInventory().adds(recipe.product, 1);
+    player.getSkillManager().addExperiences(Skill.FIREMAKING, recipe.doses * PYRE_XP_PER_DOSE);
     player.sendMessage("You use the sacred oil on the logs and get pyre logs.");
     if (quest.getStage(player) < STAGE_CREATED_PYRE_LOGS) {
       quest.setStage(player, STAGE_CREATED_PYRE_LOGS);

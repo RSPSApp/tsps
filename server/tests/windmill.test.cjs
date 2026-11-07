@@ -138,3 +138,16 @@ test('grain does not replace sweetcorn already in the hopper', () => {
   assert.equal(m.inventory.getAmount(Items.GRAIN), 1);
   assert.equal(m.player.getAttribute('windmill:hopper'), 'sweetcorn');
 });
+
+test('a relog sends the saved flour count back on mill_flour and the bin flag (capture 237/01099)', () => {
+  const m = miller();
+  m.player.setAttribute('windmill:flour', 4);
+  PluginManager.emitPlayerLogin({ player: m.player, username: 'miller', isNewAccount: false });
+  assert.equal(m.varbits.get(4920), 4, 'mill_flour carries the saved count');
+  assert.equal(m.varbits.get(5325), 1, 'the bin shows full');
+  const corn = miller();
+  corn.player.setAttribute('windmill:flour', 2);
+  corn.player.setAttribute('windmill:flour-kind', 'sweetcorn');
+  PluginManager.emitPlayerLogin({ player: corn.player, username: 'miller2', isNewAccount: false });
+  assert.equal(corn.varbits.get(4923), 2, 'cornflour on its own varbit');
+});

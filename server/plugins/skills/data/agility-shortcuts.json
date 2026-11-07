@@ -2631,7 +2631,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
-          "skills": {"agility":32,"strength":32,"ranged":35},
+          "skills": {"agility":32,"strength":35,"ranged":35},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
             {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}

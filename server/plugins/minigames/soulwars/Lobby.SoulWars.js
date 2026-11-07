@@ -107,7 +107,8 @@ function barrier({ player, object }) {
   const [bx, by] = Common.data.lobby.barrier;
   if (waiting(player)) {
     Common.api.sendMultiChatboxPrompt(player, Common.message("leaveWaiting"),
-      "Yes.", () => player.moveTo(new Common.core.Location(bx, by, 0)),
+      // The game can start while the question is open; Yes then must not walk them out of it.
+      "Yes.", () => { if (waiting(player)) player.moveTo(new Common.core.Location(bx, by, 0)); },
       "No.", () => {});
     return true;
   }

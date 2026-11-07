@@ -19,6 +19,20 @@
  */
 const Capes = require("./Common.SkillCapes");
 
+/**
+ * Wiki: the POH altars switch to a spellbook only when "they have the requirements to access those spellbooks"
+ * (Occult altar; the Lunar altar names Lunar Diplomacy), and the magic cape "to any spellbook they have unlocked":
+ * Desert Treasure I for the Ancients, Lunar Diplomacy for the Lunars. TSPS wording for the refusal.
+ */
+const SPELLBOOK_QUESTS = new Map([["ANCIENT", ["desert_treasure_i", "Desert Treasure I"]], ["LUNAR", ["lunar_diplomacy", "Lunar Diplomacy"]]]);
+function spellbookLocked(pluginApi, player, key) {
+  const quest = SPELLBOOK_QUESTS.get(key);
+  if (!quest) return null;
+  const query = { player, key: quest[0], complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", query);
+  return query.complete ? null : `You need to complete ${quest[1]} to use that spellbook.`;
+}
+
 const STAMINA_KEY = "stamina";
 const GRAPPLE_KEY = "grapple";
 const SPELLBOOK_KEY = "spellbook";
@@ -131,6 +145,11 @@ function changeSpellbook(player, name) {
   }
   if (Capes.dailyUses(player, SPELLBOOK_KEY) >= SPELLBOOKS_PER_DAY) {
     player.sendMessage(spellbookChanges(player));
+    return;
+  }
+  const locked = spellbookLocked(Capes.api, player, book.key);
+  if (locked) {
+    player.sendMessage(locked);
     return;
   }
   if (book.key === "LUNAR" && Capes.baseLevel(player, Skill.DEFENCE) < 40) {

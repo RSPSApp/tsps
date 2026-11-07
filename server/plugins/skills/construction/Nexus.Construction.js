@@ -221,7 +221,12 @@ function doneClicked(player, session) {
 
 /** Done: pay for new destinations (inventory runes, the spell's Magic level), then save. */
 function done(player, session) {
-  if (session.house.owner !== player || !Portals.current(player, session.house, session.furniture)) return;
+  if (session.house.owner !== player || !Portals.current(player, session.house, session.furniture)) {
+    if (open.get(player) === session) open.delete(player);
+    // TSPS fallback; the exact retail stale-session wording is not established.
+    player.sendMessage("This nexus is no longer available for configuration.");
+    return;
+  }
   const added = session.slots.filter(id => !stateOf(player, session.furniture).slots.includes(id));
   for (const id of added) {
     const destination = destinations().get(id);

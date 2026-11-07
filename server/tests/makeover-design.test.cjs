@@ -71,6 +71,17 @@ test('hw15_skincols opens black and white only; each unlock opens its own colour
   assert.deepEqual(skins(all.player, all.state, SKIN_RIGHT, 6), [8, 9, 10, 11, 12, 0]);
 });
 
+test('a kept locked skin colour steps to its open neighbour, as in the browser designer', () => {
+  const { state, player } = designer([0, 0, 18, 26, 33, 36, 42, 10, 0, 0, 0, 0, 9]);
+  assert.deepEqual(skins(player, state, SKIN_RIGHT, 1), [12], 'locked black, right -> 12');
+  state.look[12] = 9;
+  assert.deepEqual(skins(player, state, SKIN_LEFT, 1), [7], 'locked black, left -> 7');
+  const hw15 = designer([0, 0, 18, 26, 33, 36, 42, 10, 0, 0, 0, 0, 11], { [HW15]: true });
+  assert.deepEqual(skins(hw15.player, hw15.state, SKIN_RIGHT, 1), [12], 'locked blue, right -> 12');
+  hw15.state.look[12] = 11;
+  assert.deepEqual(skins(hw15.player, hw15.state, SKIN_LEFT, 1), [10], 'locked blue, left -> white');
+});
+
 test('a completed Halloween event unlocks every Halloween skin colour and shows the varbits', () => {
   const { state, player } = designer([0, 0, 18, 26, 33, 36, 42, 10, 0, 0, 0, 0, 7]);
   MakeOverMage._test.unlockHalloweenSkins({ player });

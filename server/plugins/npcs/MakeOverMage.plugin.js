@@ -102,11 +102,11 @@ function cycleKit(player, part, direction) {
 }
 
 function cycleColour(player, slot, direction) {
-  const colours = slot === DESIGN_SKIN_ROW
-    ? player.getAppearance().unlockedSkinColours()
-    : Array.from({ length: DESIGN_COLOUR_COUNTS[slot] }, (_, colour) => colour);
   designLook(player, (look) => {
-    look[DESIGN_COLOUR_SLOTS[slot]] = step(colours, look[DESIGN_COLOUR_SLOTS[slot]], direction);
+    const current = look[DESIGN_COLOUR_SLOTS[slot]];
+    look[DESIGN_COLOUR_SLOTS[slot]] = slot === DESIGN_SKIN_ROW
+      ? core.Appearance.stepSkinColour(current, direction, player.getAppearance().unlockedSkinColours())
+      : step(Array.from({ length: DESIGN_COLOUR_COUNTS[slot] }, (_, colour) => colour), current, direction);
   });
 }
 

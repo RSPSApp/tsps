@@ -124,6 +124,22 @@ export class Appearance {
             .filter((colour) => this.isSkinColourUnlocked(colour));
     }
 
+    /**
+     * The next skin colour from `current` in `direction` (1 or -1) through the palette, wrapping and
+     * skipping colours not in `unlocked`. A locked or out-of-palette `current` steps off it, so a kept
+     * locked colour moves to its neighbour, as in the browser designer (stepSkinColour).
+     */
+    static stepSkinColour(current: number, direction: number, unlocked: readonly number[]): number {
+        const count = Appearance.SKIN_COLOUR_COUNT;
+        const dir = direction < 0 ? -1 : 1;
+        let colour = Number.isInteger(current) && current >= 0 && current < count ? current : dir === 1 ? -1 : count;
+        for (let i = 0; i < count; i++) {
+            colour = (colour + dir + count) % count;
+            if (unlocked.includes(colour)) return colour;
+        }
+        return current;
+    }
+
     isMale(): boolean {
         return this.look[Appearance.GENDER] == 0;
     }

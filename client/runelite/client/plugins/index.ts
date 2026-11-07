@@ -1,3 +1,4 @@
+import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
@@ -125,6 +126,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     SpellbookPlugin,
     PrayerPlugin,
     PestControlPlugin,
+    CharactersPlugin,
     FairyRingPlugin,
     PuzzleSolverPlugin,
     StretchedModePlugin,

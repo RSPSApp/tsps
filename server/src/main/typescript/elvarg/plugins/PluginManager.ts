@@ -76,6 +76,8 @@ import {
   PluginActiveRegionsEvent,
   PluginPlayerDisconnectEvent,
   PluginPlayerLoginEvent,
+  PluginLoginConnection,
+  PluginLoginExtension,
   PluginPlayerMapSquareChangeEvent,
   PluginServerLifecycleEvent,
   PluginFriendEvent,
@@ -239,6 +241,7 @@ export class PluginManager {
   private static initialized = false;
   private static loadedPlugins: string[] = [];
   private static lastPersistenceOverride: string | null = null;
+  private static loginExtensionFactory?: { pluginName: string; factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined };
   private static loginHooks: PluginHook<PluginPlayerLoginEvent>[] = [];
   private static mapSquareChangeHooks: PluginHook<PluginPlayerMapSquareChangeEvent>[] = [];
   private static disconnectHooks: PluginHook<PluginPlayerDisconnectEvent>[] = [];
@@ -742,6 +745,12 @@ export class PluginManager {
     if (enabledPluginFiles.length > 0 && PluginManager.loadedPlugins.length === 0) {
       console.warn(`[plugins] no valid plugins loaded from ${pluginDirectory}`);
     }
+  }
+
+  public static createLoginExtension(connection: Omit<PluginLoginConnection, "api">): PluginLoginExtension | undefined {
+    const entry = PluginManager.loginExtensionFactory;
+    // Authentication extensions fail closed; ordinary hook error suppression is unsafe here.
+    return entry?.factory({ ...connection, api: PluginManager.createApi(entry.pluginName) });
   }
 
   public static emitPlayerLogin(event: PluginPlayerLoginEvent): void {
@@ -2462,6 +2471,13 @@ export class PluginManager {
       }),
       World: require("../game/World").World,
       DisplayNames: require("../game/entity/impl/player/DisplayNames").DisplayNames,
+      encodeCharacterList: require("../net/protocol/ClientProtocol").encodeCharacterList,
+      encodeCharacterResult: require("../net/protocol/ClientProtocol").encodeCharacterResult,
+      LOGIN_FLAG_CHARACTER_SELECT: require("../net/login/LoginTokens").LOGIN_FLAG_CHARACTER_SELECT,
+      MAIN_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").MAIN_PROFILE,
+      LEAGUE_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").LEAGUE_PROFILE,
+      Skills: require("../game/content/skill/SkillManager").Skills,
+      Accounts: require("../game/entity/impl/player/Accounts").Accounts,
       BoatManager: require("../game/content/sailing/BoatManager").BoatManager,
       BOAT_VIEW_DISTANCE: require("../game/content/sailing/WorldEntitySync").BOAT_VIEW_DISTANCE,
       Sailing: require("../game/content/sailing/Sailing").Sailing,
@@ -2922,6 +2938,11 @@ export class PluginManager {
         if (typeof handler === "function") {
           PluginManager.mapSquareChangeHooks.push({ ...hookProfile(handler), handler });
         }
+      },
+      registerLoginExtension: (factory) => {
+        if (typeof factory !== "function") throw new Error("Login extension must be a function");
+        if (PluginManager.loginExtensionFactory) throw new Error("A login extension is already registered");
+        PluginManager.loginExtensionFactory = { pluginName, factory };
       },
       onPlayerLogin: (handler) => {
         if (typeof handler !== "function") {

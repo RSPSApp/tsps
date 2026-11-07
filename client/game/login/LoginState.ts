@@ -21,6 +21,7 @@ import {
     type RememberedLoginPreference,
 } from "../preferences/ClientPreferences";
 import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
+import type { LoginScreenExtension } from "./LoginScreenExtension";
 import { LoginIndex } from "./GameState";
 
 const STORAGE_KEY_IOS_PWA_LOGIN_STATE = "osrs:iosPwaLoginState";
@@ -433,6 +434,9 @@ export class LoginState {
             iceServers: this.serverIceServers,
         });
     }
+
+    /** A plugin-provided login screen, when one is active. */
+    extension?: LoginScreenExtension;
 
     // ========== World Select ==========
 

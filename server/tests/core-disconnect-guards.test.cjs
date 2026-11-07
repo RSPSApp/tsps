@@ -4,6 +4,8 @@ const { test } = require('node:test');
 const { once } = require('node:events');
 const { WebSocket, WebSocketServer } = require('ws');
 
+// Accounts writes its file to this path; keep it off the real data/saves, before `dist` is required.
+process.env.TSPS_ACCOUNTS_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'accounts-')), 'accounts.json');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 

@@ -563,3 +563,28 @@ test('in a game Piety\'s slot is Zeal without the unlock, and Augury puts it out
   assert.ok(!p.getPrayerActive()[PrayerHandler.ZEAL], 'the next orb click puts Zeal out');
   game.area.destroy();
 });
+
+test('a forfeit answered Yes after the game has started leaves the player in it, stash untouched', (t) => {
+  const p = realPlayer(t);
+  const casual = Lobby.modeOf('casual');
+  const inside = [casual.waiting[0], casual.waiting[1]]; // the waiting box is [x0, y0, x1, y1]
+  const hooks = {};
+  const prompts = [];
+  Common.api.sendMultiChatboxPrompt = (player, title, ...pairs) => prompts.push(pairs);
+  t.after(() => { delete Common.api.sendMultiChatboxPrompt; });
+  const fake = new Proxy({}, { get: (_, key) =>
+    (key === 'onObjectFirstClick' ? (ids, fn) => { if (ids.includes(Common.locId(casual.entrance))) hooks.barrier = fn; } : () => {}) });
+  Lobby.attachLobby(fake);
+  p.setLocation(new core.Location(inside[0], inside[1], casual.plane));
+  assert.equal(Lobby.waiting(p, casual), true, 'in the casual waiting room');
+  const entrance = { getId: () => Common.locId(casual.entrance), getLocation: () => p.getLocation() };
+  hooks.barrier({ player: p, object: entrance });
+  assert.equal(prompts.length, 1, 'the forfeit question');
+  // The match fills and starts while the question is open.
+  t.mock.method(Match, 'gameOf', () => ({}));
+  const restore = t.mock.method(Stash, 'restore', () => {});
+  const at = p.getLocation();
+  prompts[0][1]();
+  assert.equal(restore.mock.callCount(), 0, 'no stash handed back mid-game');
+  assert.equal(p.getLocation(), at, 'not moved out of the game');
+});

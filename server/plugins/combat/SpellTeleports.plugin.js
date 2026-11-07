@@ -321,8 +321,22 @@ function teleportQuestLock(event) {
   event.refusal = questLockRefusal(event.player, event.name?.trim().toLowerCase(), event.action ?? "cast this spell");
 }
 
+/**
+ * Teleport to House without a house went to Rimmington and spent its runes. It is refused first, with the house
+ * tablet's line (Construction answers "construction:owns-house"), so nothing is spent.
+ */
+function hasHouse(player) {
+  const request = { player, owns: true };
+  pluginApi.emitCustomEvent("construction:owns-house", request);
+  return request.owns !== false;
+}
+
 /** The standard spell requires the Awowogei rescue; the Arceuus spell and tablet are separate. */
 function mayCastApeAtoll(player, name) {
+  if (name === HOUSE_TABLET && player.getSpellbook() === core.MagicSpellbook.NORMAL && !hasHouse(player)) {
+    player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
+    return false;
+  }
   if (QUEST_LOCKED_SPELLS.has(name) && player.getSpellbook() === core.MagicSpellbook.NORMAL) {
     const refusal = questLockRefusal(player, name, "cast this spell");
     if (refusal) player.sendMessage(refusal);

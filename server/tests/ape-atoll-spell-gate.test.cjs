@@ -32,10 +32,10 @@ async function cast(f,name='Ape Atoll Teleport'){
 function tick(){core.TaskManager.process();}
 function arrive(f){for(let i=0;i<8;i++)tick();const at=f.p.getLocation();assert.ok(Math.abs(at.getX()-2796)<=2 && Math.abs(at.getY()-2798)<=2 && at.getZ()===0,'actual normal teleport arrival');assert.equal(f.p.isTeleporting,false);}
 test('incomplete Awowogei cannot cast despite seeded client varbit, without spending resources',async t=>{
- const f=actor(t);rescue(f,false);f.p.getPacketSender().sendVarbit(1914,50);assert.equal(f.p.getPacketSender().getVarbit(1914),50);const before=inventory(f);await cast(f);for(let i=0;i<8;i++)tick();assert.deepEqual(inventory(f),before);assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200]);assert.equal(f.p.isTeleporting,false);
+ const f=actor(t);rescue(f,false);f.p.getPacketSender().sendVarbit(1914,50);assert.equal(f.p.getPacketSender().getVarbit(1914),50);const messages=[],send=f.p.sendMessage.bind(f.p);t.mock.method(f.p,'sendMessage',(...args)=>{messages.push(args[0]);return send(...args);});const before=inventory(f);await cast(f);assert.equal(messages.filter(text=>text==='You must free King Awowogei before casting this spell.').length,1,'the server sends its fallback refusal');for(let i=0;i<8;i++)tick();assert.deepEqual(inventory(f),before);assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200]);assert.equal(f.p.isTeleporting,false);
 });
 test('saved Awowogei rescue unlocks the normal spell without completing full RFD',async t=>{
- const f=actor(t,{rescues:128});rescue(f,true);assert.equal(f.q.isComplete(f.p),false);await cast(f);assert.deepEqual(inventory(f),[0,0,0,0]);arrive(f);
+ const f=actor(t,{rescues:128});rescue(f,true);assert.equal(f.q.isComplete(f.p),false);const messages=[],send=f.p.sendMessage.bind(f.p);t.mock.method(f.p,'sendMessage',(...args)=>{messages.push(args[0]);return send(...args);});await cast(f);assert.equal(messages.includes('You must free King Awowogei before casting this spell.'),false,'the completed rescue does not receive the refusal');assert.deepEqual(inventory(f),[0,0,0,0]);arrive(f);
 });
 test('full RFD completion remains eligible on a legacy save without rescue bits',async t=>{
  const f=actor(t,{full:true});rescue(f,false);await cast(f);assert.deepEqual(inventory(f),[0,0,0,0]);arrive(f);

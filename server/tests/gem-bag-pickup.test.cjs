@@ -9,6 +9,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/pvp-mode-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -717,10 +718,7 @@ test("inventory withdrawal capacity respects preset metadata", async (t) => {
   const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
   const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
   const Presets = require("../plugins/modes/pvp/Presets.PvpMode");
-  if (!Presets.isEnabled()) {
-    t.skip("preset items are unavailable when PvP mode is disabled");
-    return;
-  }
+  assert.ok(Presets.isEnabled(), "helpers/pvp-mode-on.cjs keeps the Presets plugin loaded");
   for (const freeSlots of [0, 1]) {
     await t.test(`${freeSlots} free slots with a marked same-id stack`, (t) => {
       const f = actor(t, HOME, false);

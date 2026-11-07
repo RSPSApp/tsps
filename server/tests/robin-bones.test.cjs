@@ -22,6 +22,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/pvp-mode-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");

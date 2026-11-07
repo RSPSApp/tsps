@@ -42,7 +42,9 @@ export class ArceuusItemSpells {
     ]);
 
     private static reanimation(spellId: number, npcId: number): ReanimationSpell | null {
-        const data = npcId <= 7026 ? BASIC : npcId <= 7031 ? ADEPT : npcId <= 7036 ? EXPERT : MASTER;
+        // Wiki (Ensouled heads): goblin to unicorn are Basic; dog and chaos druid to horror Adept; kalphite to
+        // demon and the hellhound (11463) Expert; aviansie, abyssal and dragon Master.
+        const data = npcId <= 7024 ? BASIC : npcId <= 7031 ? ADEPT : npcId <= 7036 || npcId === 11463 ? EXPERT : MASTER;
         if (spellId === this.BASIC_REANIMATION && data !== BASIC ||
             spellId === this.ADEPT_REANIMATION && data !== ADEPT ||
             spellId === this.EXPERT_REANIMATION && data !== EXPERT ||

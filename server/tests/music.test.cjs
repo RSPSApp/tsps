@@ -788,4 +788,10 @@ test('native music Play selects the visible cache row, refuses locked tracks and
   player.applyAudioSettingFromClient(18, 0);
   session.flush(2);
   assert.equal(session.getCurrentMusicTrack(), core.Music.forRegion(12850), 'Area mode still restores region music');
+  // Live keeps Shuffle on Play (rsprox 236/03935 L24943 sets Shuffle; the Play at L25846 sends no musicplay change).
+  player.applyAudioSettingFromClient(18, 1);
+  const played = events.length;
+  await click(rows.indexOf(row));
+  assert.equal(player.getAudioSettings()[18], 1, 'Play in Shuffle mode keeps Shuffle');
+  assert.deepEqual(events.slice(played), [track.id], 'and plays the clicked track');
 });

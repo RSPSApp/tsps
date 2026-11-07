@@ -276,13 +276,17 @@ function selectMusicTrack(event) {
   const { player } = event;
   const slot = slotByTrackId[track.id];
   if (!slot || !Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) {
-    // Captured locked-track refusal, rsprox 229/02375.
+    // Captured locked-track refusal, rsprox 226/01702 L14857 (if_button1 music:frame, then this message_game).
     player.sendMessage("You have not unlocked this track yet.");
     return;
   }
-  // Cache musicplay: 0 Area, 1 Shuffle, 2 Single. Keep the area tick from replacing the choice.
-  player.setAudioSetting(MUSIC_MODE_VARP, 2);
-  player.getPacketSender().sendConfig(MUSIC_MODE_VARP, 2);
+  // Cache musicplay: 0 Area, 1 Shuffle, 2 Single. Area switches to Single so the area tick doesn't
+  // replace the choice; Shuffle stays Shuffle (rsprox 236/03935: the Play at L25846 after Shuffle
+  // at L24943 sends no musicplay change).
+  if ((player.getAudioSettings?.()[MUSIC_MODE_VARP] ?? 0) === 0) {
+    player.setAudioSetting(MUSIC_MODE_VARP, 2);
+    player.getPacketSender().sendConfig(MUSIC_MODE_VARP, 2);
+  }
   player.setAttribute(SELECTED_TRACK_ATTRIBUTE, track.id);
   player.getSession().setCurrentMusicTrack(track.id);
   // The real sender also announces audio:play-song, including to Treasure Trails' Cecilia listener.
@@ -363,16 +367,24 @@ function restartMusicAfterVolumeRaised({ player, varpId, previous, value }) {
   })());
 }
 
+/**
+ * The Music tab's rows in the order its Play slot counts them: music_list_setup indexes
+ * db_find(music:hidden, false), before sorting. Column 13 is whether the track is released.
+ */
+function buildSelectableTracks(tracks) {
+  const tracksByRow = new Map(tracks.map(track => [track.rowId, track]));
+  return core.CacheDefinitions.getDbTableRows(44)
+    .filter(row => row.int(9, 0) === 0)
+    .map(row => ({ ...tracksByRow.get(row.id), released: row.int(13, 1) === 1 }));
+}
+
 module.exports = {
   name: "Music",
   register(api) {
     core = api.core;
     pluginApi = api;
     const tracks = core.Music.tracks();
-    const tracksByRow = new Map(tracks.map(track => [track.rowId, track]));
-    selectableTracks = core.CacheDefinitions.getDbTableRows(44)
-      .filter(row => row.int(9, 0) === 0)
-      .map(row => ({ ...tracksByRow.get(row.id), released: row.int(13, 1) === 1 }));
+    selectableTracks = buildSelectableTracks(tracks);
     trackNames = Object.fromEntries(tracks.map(({ id, name }) => [id, name]));
     rowIdByTrackId = Object.fromEntries(tracks.map(({ id, rowId }) => [id, rowId]));
     slotByTrackId = {};

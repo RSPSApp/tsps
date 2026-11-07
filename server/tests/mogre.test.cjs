@@ -59,7 +59,7 @@ const core = {
   Task,
   TaskManager: { submit: (task) => tasks.push(task) },
   World: {
-    getAddNPCQueue: () => ({ push: (npc) => added.push(npc) }),
+    getAddNPCQueue: () => added,
     getRemoveNPCQueue: () => ({ push: (npc) => removed.push(npc) }),
   },
   RegionManager: { blocked: (tile) => waterTiles.some(([x, y]) => x === tile.getX() && y === tile.getY()) },
@@ -261,6 +261,20 @@ test("a Mogre still waiting to be added counts as out, and is removed on arrival
   added[0].registered = true;
   assert.deepEqual(removed, [added[0]]);
   assert.equal(state.attacked, undefined);
+});
+
+test("a Mogre the world failed to add is gone, so the thrower can throw again", () => {
+  register(true);
+  const player = makePlayer();
+  throwAt(player);
+  runTasks(5);
+  const before = player.owned.explosives;
+  // World.npcs.add failed: the Mogre left the add queue without onAdd running.
+  added.shift();
+  player.sent.length = 0;
+  throwAt(player);
+  assert.equal(player.owned.explosives, before - 1);
+  assert.ok(!player.sent.some(([, text]) => text === "There is already one Mogre attacking you!"));
 });
 
 test("the thrower dying takes the Mogre away and frees later throws", () => {

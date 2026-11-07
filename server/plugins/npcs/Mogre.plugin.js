@@ -71,10 +71,14 @@ function alive(npc) {
   return npc?.isRegistered?.() === true && npc.isDyingFunction?.() !== true;
 }
 
-/** A Mogre still waiting in the add queue counts as out: it is not registered yet but will be. */
+/**
+ * A Mogre still waiting in the add queue counts as out: it is not registered yet but will be.
+ * One the world dropped from the queue without adding it (no free NPC slot) is gone for good.
+ */
 function present(npc) {
   if (!npc || npc.isDyingFunction?.() === true) return false;
-  return npc.__mogreAdded !== true || npc.isRegistered?.() === true;
+  if (npc.__mogreAdded === true) return npc.isRegistered?.() === true;
+  return core.World.getAddNPCQueue().includes(npc);
 }
 
 function mogreOf(player) {

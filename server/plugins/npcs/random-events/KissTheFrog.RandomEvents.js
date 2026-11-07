@@ -315,9 +315,10 @@ module.exports = function attach(api, Events) {
       onEnd: () => {
         const inventory = player.getInventory();
         if (!inventory.containsNumber(I.FROG_TOKEN)) return;
-        // The token's slot frees only when it's the last one; the royal sets are two pieces, so a full inventory
-        // lost the second.
-        const freed = inventory.getAmount(I.FROG_TOKEN) === 1 ? 1 : 0;
+        // Using the token frees its slot: the cache token doesn't stack, so every token has a slot of its own (a
+        // stacked one would free it only as the last). The royal sets are two pieces, so a full inventory lost the second.
+        const stacks = new api.core.Item(I.FROG_TOKEN, 1).getDefinition().isStackable();
+        const freed = !stacks || inventory.getAmount(I.FROG_TOKEN) === 1 ? 1 : 0;
         if (inventory.getFreeSlots() + freed < rewards.length) {
           player.sendMessage("You don't have enough inventory space.");
           return;

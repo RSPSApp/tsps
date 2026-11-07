@@ -1251,6 +1251,26 @@ test('Thessalia keeps the token when a two-piece costume will not fit', t => {
   assert.equal(p.rewards.length, 2, "the token's slot and one free slot hold both pieces");
 });
 
+// The frog token doesn't stack (cache), so each token has its own slot and using one always frees it.
+test('Thessalia: with two tokens, a full bag still takes the mask and one free slot a royal set', t => {
+  assert.equal(new Item(I.FROG_TOKEN, 1).getDefinition().isStackable(), false, 'the cache token is unstackable');
+  const h = harness(t), p = h.player();
+  p.slots[0] = new Item(I.FROG_TOKEN, 1); p.slots[1] = new Item(I.FROG_TOKEN, 1);
+  p.free = 0;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 0);
+  endChat(p);
+  assert.deepEqual(p.rewards, [I.FROG_MASK], "the mask takes the used token's slot");
+  assert.ok(!p.messages.includes("You don't have enough inventory space."), p.messages.join(' | '));
+  p.slots[0] = new Item(I.FROG_TOKEN, 1);
+  p.free = 1;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 2);
+  endChat(p);
+  assert.deepEqual(p.rewards.slice(1), [I.ROYAL_FROG_BLOUSE, I.ROYAL_FROG_SKIRT], "the token's slot and the free one");
+  assert.ok(!p.messages.includes("You don't have enough inventory space."), p.messages.join(' | '));
+});
+
 // A player whose packet sender records everything and chains like the real one, for the events
 // that draw through packets the base harness doesn't fake (Capt' Arnav, Pillory, Quiz Master).
 function eventPlayer(h) {

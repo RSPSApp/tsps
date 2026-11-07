@@ -11,7 +11,10 @@ function scene() {
   const items = [new core.Item(I.COWBELL_AMULET, 1)], equipment = [], counts = new Map();
   const sounds = [], varbits = [], messages = [], teleports = [], events = [];
   let actions, useItem, canTeleport = true;
-  const inventory = { getItems: () => items, refreshItems: noop, getAmount: id => counts.get(id) ?? 0,
+  // Like a real container, the runes sit in slots too (after the amulets), so slot-based takes see them.
+  const slots = () => [...items, ...[...counts].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n))];
+  const inventory = { getItems: slots, refreshItems: noop, getAmount: id => counts.get(id) ?? 0,
+    deleteAtSlot(slot, amount) { const id = slots()[slot].getId(); assert.ok(counts.get(id) >= amount); counts.set(id, counts.get(id) - amount); },
     getFreeSlots: () => p.full ? 0 : 28 - items.length,
     adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
     containsNumber: id => (counts.get(id) ?? 0) > 0,

@@ -681,6 +681,33 @@ test("a grapple needs the gear and skills, or the barehanded Agility level (Wiki
   assert.ok(!fires(climber), "no grapple fired");
 });
 
+test("the Catherby rocks grapple needs 35 Strength (Wiki: 32 Agility, 35 Strength, 35 Ranged)", () => {
+  const rocks = [2869, 3429, 0];
+  const weak = createPlayer(2869, 3428, 0, 32, { skills: { strength: 34, ranged: 35 }, worn: grappleGear() });
+  operate(weak, 17042, rocks);
+  assert.ok(weak.state.messages.includes("You need a Strength level of at least 35 to attempt this."), weak.state.messages.join(" | "));
+  assert.deepEqual(tileOf(weak), [2869, 3428, 0], "refused at 34 Strength");
+  const strong = createPlayer(2869, 3428, 0, 32, { skills: { strength: 35, ranged: 35 }, worn: grappleGear() });
+  operate(strong, 17042, rocks);
+  assert.ok(!strong.state.messages.some((m) => /Strength level/.test(m)), "35 Strength is enough");
+});
+
+test("the Strong Tree crosses barehanded at 78 Agility, with no grapple fired (Wiki: Shortcuts)", () => {
+  const tree = [2873, 3134, 0];
+  const fires = (player) => player.state.animations.includes(4455); // ShortcutAnim.FIRE_GRAPPLE
+  const short = createPlayer(2874, 3142, 0, 77);
+  operate(short, 17074, tree);
+  assert.deepEqual(tileOf(short), [2874, 3142, 0], "refused: no crossbow, and short of the barehanded 78");
+  const climber = createPlayer(2874, 3142, 0, 78);
+  operate(climber, 17074, tree);
+  assert.deepEqual(tileOf(climber), [2874, 3136, 0], "barehanded across the north channel at 78");
+  assert.ok(!fires(climber), "no grapple fired");
+  const geared = createPlayer(2874, 3142, 0, 53, { skills: { strength: 21, ranged: 42 }, worn: grappleGear() });
+  operate(geared, 17074, tree);
+  assert.deepEqual(tileOf(geared), [2874, 3136, 0], "the grapple still crosses at 53");
+  assert.ok(fires(geared), "fires the grapple");
+});
+
 test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
   const wall = [2556, 3074, 0];
   const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");
@@ -917,6 +944,27 @@ test("an obstacle above the player's level is refused without moving them", () =
   assert.deepEqual(tileOf(player), [2673, 3297, 0]);
   assert.deepEqual(player.state.messages, ["You need an Agility level of at least 90 to attempt this."]);
   assert.equal(player.state.xp, 0);
+});
+
+test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as captured (rev242 tick 3375)", () => {
+  const ItemStatementDialogue = PluginManager.getCoreApi().ItemStatementDialogue;
+  const text = "You need an Agility level of at least 84 to climb up these rocks.";
+  const player = createPlayer(2832, 3247, 0, 1);
+  const shown = [];
+  player.getDialogueManager = () => ({ startDialogues: (chain) => shown.push(...chain.getDialogues().values()) });
+  operate(player, 53234, [2832, 3248, 0]);
+  assert.deepEqual(tileOf(player), [2832, 3247, 0], "refused: not moved");
+  assert.equal(shown.length, 1);
+  assert.ok(shown[0] instanceof ItemStatementDialogue);
+  assert.equal(shown[0].getItemId(), 6517);
+  assert.equal(shown[0].getText(), text);
+  // Only the message box's chat log line (mesbox channel), not a second generic game message.
+  assert.deepEqual(player.state.messages, [text]);
+
+  const able = createPlayer(2832, 3247, 0, 84);
+  operate(able, 53234, [2832, 3248, 0]);
+  for (let i = 0; i < 10; i++) tick();
+  assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
 });
 
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {

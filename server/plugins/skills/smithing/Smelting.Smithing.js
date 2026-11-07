@@ -132,7 +132,8 @@ function beginSmelt(player, recipe) {
     return false;
   }
   if (recipe.smeltMessage) spam(player, recipe.smeltMessage);
-  player.performAnimation(animation("human_furnace"));
+  // Immediate recipes animate at the exchange below, once rather than twice.
+  if ((recipe.finishDelay ?? SMELT_FINISH_TICKS) > 0) player.performAnimation(animation("human_furnace"));
   Core.Sounds.sendSound(player, Core.Sound.SMELTING);
   return true;
 }
@@ -188,8 +189,9 @@ function startSmelting(player, chosen, amount, furnaceId = -1) {
     // Molten glass is a Crafting recipe at the same furnace: its batching is Crafting's question.
     skill: recipe.skill ?? Core.Skill.SMITHING,
     remaining: amount,
-    interval: SMELT_INTERVAL_TICKS,
-    finishDelay: SMELT_FINISH_TICKS,
+    firstDelay: recipe.firstDelay ?? 0,
+    interval: recipe.interval ?? SMELT_INTERVAL_TICKS,
+    finishDelay: recipe.finishDelay ?? SMELT_FINISH_TICKS,
     begin: (smelter) => beginSmelt(smelter, recipe),
     step: (smelter) => finishSmelt(smelter, recipe, furnaceId),
   });
@@ -237,6 +239,15 @@ function smelt({ player, objectId }) {
   const hasOre = Data.SMELTING_RECIPES.some((recipe) => !recipe.skill && !recipe.furnace && recipe.ingredients.some(([id]) => id !== Core.ItemIdentifiers.COAL && available(player, id) > 0));
   const extras = extraEntries(player);
   if (!hasOre && extras.length === 0) {
+    const crafting = Data.SMELTING_RECIPES.filter((recipe) => recipe.skill && !recipe.furnace
+      && (!recipe.members || Core.WorldDefinition.isMembersWorld()) && hasIngredients(player, recipe));
+    if (crafting.length > 0) {
+      const entries = recipeEntries(player, crafting, objectId);
+      // Recording 4283: with one pair, Smelt makes glass directly.
+      if (entries.length === 1 && entries[0].most === 1) entries[0].start(player, 1);
+      else openMenu(player, entries);
+      return;
+    }
     statement(player, NO_ORE_MESSAGE);
     return;
   }
@@ -251,7 +262,9 @@ function smelt({ player, objectId }) {
 function useOnFurnace(event) {
   const furnace = event.object.getDefinition().getName();
   if (furnace === LOVAKITE_FURNACE) return smeltLovakite(event);
-  const recipes = Data.SMELTING_RECIPES.filter((recipe) => !recipe.furnace && recipe.ingredients.some(([id]) => id === event.itemId));
+  const recipes = Data.SMELTING_RECIPES.filter((recipe) => !recipe.furnace
+    && (!recipe.members || Core.WorldDefinition.isMembersWorld())
+    && recipe.ingredients.some(([id]) => id === event.itemId));
   if (recipes.length === 0) return;
   event.handled = true;
   const ready = recipes.filter((recipe) => !recipe.skill && !recipe.notInMenu && hasIngredients(event.player, recipe));

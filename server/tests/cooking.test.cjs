@@ -420,7 +420,6 @@ function bankedMaker(cooking, carried, banked, fill) {
     setBank: (tab, bank) => { tabs[tab] = bank; return p; },
     isSearchingBank: () => false,
     getCurrentBankTab: () => 0,
-    getPacketSender: () => new Proxy({}, { get: (_t, _k) => function sender() { return this; } }),
   });
   Bank.withoutLimit(p, () => {
     for (let id = 0, added = 0; added < fill; id++) {
@@ -447,6 +446,67 @@ test("wine ferments 20 ticks after the last jug, carried and banked at once, wit
   assert.equal(amount(obj("jug_unfermented_wine")), 0);
   assert.equal(amount(obj("jug_wine")), 40);
   assert.deepEqual(p.xp, [41 * 200]);
+});
+
+// Wiki (Jug of wine): no more than 60,000 unfermented jugs at once.
+test("wine stops at 60000 pending jugs across inventory and bank without spending the next ingredients", () => {
+  const Wine = Cooking._test.wine;
+  const pending = obj("jug_unfermented_wine");
+  const { p, tabs } = bankedMaker(99, [[obj("grapes"), 3], [obj("jug_water"), 3], [pending, 1]], [[pending, 59998]], 0);
+  tabs[2] = null; // Player banks are initialized lazily.
+  tabs[core.Bank.BANK_SEARCH_TAB_INDEX].add(new core.Item(pending, 60000), false);
+  useItems(p, "grapes", "jug_water");
+  p.sent.menu.execute(pending, 3);
+  ticks(2);
+  assert.equal(tabs[0].getAmount(pending) + p.getInventory().getAmount(pending), 60000);
+  const timer = Wine.fermenting.get(p);
+  ticks(4);
+  assert.equal(tabs[0].getAmount(pending) + p.getInventory().getAmount(pending), 60000);
+  assert.equal(p.getInventory().getAmount(obj("grapes")), 2);
+  assert.equal(p.getInventory().getAmount(obj("jug_water")), 2);
+  assert.deepEqual(p.xp, []);
+  assert.equal(Wine.fermenting.get(p), timer, "the refused jug does not reset fermentation");
+  Wine.fermenting.delete(p);
+});
+
+test("wine at the pending cap preserves single-jug ingredients and resumes after fermentation", () => {
+  const Wine = Cooking._test.wine;
+  const pending = obj("jug_unfermented_wine");
+  const { p, tabs } = bankedMaker(99, [[obj("grapes"), 1], [obj("jug_water"), 1]], [[pending, 60000]], 0);
+  Wine.fermenting.set(p, 7);
+  useItems(p, "jug_water", "grapes");
+  ticks(2);
+  assert.equal(p.getInventory().getAmount(pending), 0);
+  assert.equal(p.getInventory().getAmount(obj("grapes")), 1);
+  assert.equal(p.getInventory().getAmount(obj("jug_water")), 1);
+  assert.equal(Wine.fermenting.get(p), 7);
+  assert.deepEqual(p.xp, []);
+  for (let i = 0; i < 7; i++) Wine.fermentTick();
+  assert.equal(tabs[0].getAmount(pending), 0);
+  assert.equal(tabs[0].getAmount(obj("jug_wine")), 60000);
+  assert.deepEqual(p.xp, [12000000]);
+  useItems(p, "grapes", "jug_water");
+  ticks(2);
+  assert.equal(p.getInventory().getAmount(pending), 1);
+  assert.equal(p.getInventory().getAmount(obj("grapes")), 0);
+  assert.equal(Wine.fermenting.get(p), Wine.FERMENT_TICKS);
+  Wine.fermenting.delete(p);
+});
+
+test("wine rechecks the pending cap when a previously opened quantity menu is submitted", () => {
+  const Wine = Cooking._test.wine;
+  const pending = obj("jug_unfermented_wine");
+  const { p, tabs } = bankedMaker(99, [[obj("grapes"), 2], [obj("jug_water"), 2]], [[pending, 59998]], 0);
+  useItems(p, "grapes", "jug_water");
+  tabs[1].add(new core.Item(pending, 2), false);
+  Wine.fermenting.set(p, 5);
+  p.sent.menu.execute(pending, 2);
+  ticks(4);
+  assert.equal(p.getInventory().getAmount(pending), 0);
+  assert.equal(p.getInventory().getAmount(obj("grapes")), 2);
+  assert.equal(p.getInventory().getAmount(obj("jug_water")), 2);
+  assert.equal(Wine.fermenting.get(p), 5);
+  Wine.fermenting.delete(p);
 });
 
 test("a full bank's wine ferments without losing any: the outcome takes the unfermented stack's slot", () => {

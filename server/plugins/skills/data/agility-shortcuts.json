@@ -2631,7 +2631,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
-          "skills": {"agility":32,"strength":32,"ranged":35},
+          "skills": {"agility":32,"strength":35,"ranged":35},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
             {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
@@ -3842,7 +3842,8 @@
       "object": [53234,53236],
       "at": [[2832,3248,0],[2832,3251,0]],
       "level": 84,
-      "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
+      "levelMessage": {"itembox": {"item": 6517, "text": "You need an Agility level of at least 84 to climb up these rocks."}},
+      "unverified": "the reverse direction (only one direction was captured; it mirrors that one); the top rock's refusal (only the bottom rock was clicked below 84)",
       "between": {
         "ends": [[2832,3247,0],[2832,3252,0]],
         "cross": [
@@ -3851,7 +3852,7 @@
           {"anim":-1}
         ]
       },
-      "note": "rsprox captures 362"
+      "note": "rsprox captures 362; the refusal from 20261106T101002 (revision 242) tick 3375, item agility_climb 6517"
     },
     {
       "name": "Crevice (Deepfin Mine)",
@@ -4169,9 +4170,15 @@
             {"slot": "weapon", "name": "crossbow", "message": "You need a crossbow equipped to do that."},
             {"slot": "ammunition", "ids": [9419], "message": "You need a mithril grapple tipped bolt with a rope to do that."}
           ]
+        },
+        {
+          "method": "barehanded",
+          "skills": {"agility": 78},
+          "params": {"barehanded": true}
         }
       ],
-      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
+      "unverified": "the barehanded crossing's animation and timing (no capture; the other barehanded river crossings' climb)",
+      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged, or barehanded at 78 Agility. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
     }
   ]
 }

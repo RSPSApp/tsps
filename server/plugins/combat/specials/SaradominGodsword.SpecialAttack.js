@@ -12,6 +12,9 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
   const HEALING_BLADE_MINIMUM_PRAYER_RESTORE = 5;
   const ANIMATION = new Animation(7640);
   const GRAPHIC = new Graphic(1209, Priority.HIGH);
+  // Wiki (Saradomin godsword): the heal is "calculated from the potential damage of a swing", not what the target's
+  // Hitpoints let land - the roll as made, before PendingHit caps it to them (as the toxic blowpipe keeps it).
+  const potentialDamage = new WeakMap();
 
   class SaradominGodswordCombatMethod extends MeleeCombatMethod {
     start(character, target) {
@@ -25,7 +28,9 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
       if (!hit.getAttacker().isPlayer()) {
         return;
       }
-      const damage = Math.max(0, Math.floor(hit.getTotalDamage()));
+      const rolled = potentialDamage.get(hit);
+      const potential = rolled === undefined ? 0 : Math.floor(rolled * Number(hit.damageMultiplier ?? 1));
+      const damage = Math.max(0, Math.floor(hit.getTotalDamage()), potential);
       if (damage <= 0) {
         return;
       }
@@ -53,6 +58,12 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
       }
     }
   }
+
+  api.onCombatHitDamage?.(({ attacker, hit, damage }) => {
+    if (attacker?.isPlayer?.() && attacker.isSpecialActivated?.() && attacker.getCombatSpecial?.()?.getId() === "saradomin_godsword") {
+      potentialDamage.set(hit, damage.getDamage());
+    }
+  });
 
   api.registerCombatSpecial({
     id: "saradomin_godsword",

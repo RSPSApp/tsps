@@ -674,18 +674,18 @@ function canUseAxe(player, axe) {
   );
 }
 
-function findBestUsableAxe(player) {
+function findBestUsableAxe(player, eligible = () => true) {
   const equippedWeaponId = getEquippedWeaponId(player);
   const inventory = player.getInventory();
 
   for (const axe of AXES_BEST_FIRST) {
-    if ((equippedWeaponId === axe.id || inventory.contains(axe.id)) && canUseAxe(player, axe)) {
+    if ((equippedWeaponId === axe.id || inventory.contains(axe.id)) && canUseAxe(player, axe) && eligible(axe)) {
       // An equally strong felling axe may supply its bonus even beside the ordinary axe.
       // Keep Infernal and no-ration priority; never promote a lower or unusable profile.
       if (!axe.felling && !axe.requiredFiremaking) {
         const felling = AXES_BEST_FIRST.find((candidate) => candidate.felling &&
           candidate.tier === axe.tier && candidate.requiredLevel === axe.requiredLevel &&
-          (equippedWeaponId === candidate.id || inventory.contains(candidate.id)) && canUseAxe(player, candidate));
+          (equippedWeaponId === candidate.id || inventory.contains(candidate.id)) && canUseAxe(player, candidate) && eligible(candidate));
         if (felling && availableFellingRations(player) > 0) return felling;
       }
       return axe;
@@ -699,9 +699,9 @@ function findBestUsableAxe(player) {
 }
 
 // Bots only ever get the standard bronze-to-dragon axes.
-function findBestUsableAxeByLevel(level) {
+function findBestUsableAxeByLevel(level, eligible = () => true) {
   for (const axe of AXES_BEST_FIRST) {
-    if (axe.standard && level >= axe.requiredLevel) {
+    if (axe.standard && level >= axe.requiredLevel && eligible(axe)) {
       return axe;
     }
   }
@@ -1100,11 +1100,17 @@ function depleteTree(player, treeObject, tree) {
   return true;
 }
 
+// Skip held axes marked members-only on free worlds.
+function choppingAxeEligible(axe) {
+  const { WorldDefinition, CacheDefinitions } = pluginApi.core;
+  return WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(axe.id)?.isMembers !== true;
+}
+
 function startWoodcutting(player, treeObject, tree, activeSessions) {
   const request = { player, object: treeObject, allow: true };
   pluginApi.emitCustomEvent("woodcutting:validate-tree", request);
   if (!request.allow) return false;
-  const axe = findBestUsableAxe(player);
+  const axe = findBestUsableAxe(player, choppingAxeEligible);
   if (!axe) {
     player.sendMessage(NO_AXE_MESSAGE);
     return false;
@@ -1200,7 +1206,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       continue;
     }
 
-    const axe = findBestUsableAxe(player);
+    const axe = findBestUsableAxe(player, choppingAxeEligible);
     if (!axe) {
       player.sendMessage(NO_AXE_MESSAGE);
       stopWoodcutting(activeSessions, player);
@@ -1342,7 +1348,10 @@ function requestedChop(event) {
 
 function requestedAxe(event) {
   const candidate = event.itemId == null ? null : AXES.find((axe) => axe.id === event.itemId);
-  event.axe = event.itemId == null ? findBestUsableAxe(event.player) : candidate && canUseAxe(event.player, candidate) ? candidate : null;
+  // Free worlds: a members axe answers no request (canoes, vines), as it chops no tree there.
+  event.axe = event.itemId == null
+    ? findBestUsableAxe(event.player, choppingAxeEligible)
+    : candidate && choppingAxeEligible(candidate) && canUseAxe(event.player, candidate) ? candidate : null;
 }
 
 function pauseWoodcutting(event) {

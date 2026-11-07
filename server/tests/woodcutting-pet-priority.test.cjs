@@ -83,7 +83,7 @@ for (const row of [
   {name:'below the 20 percent boundary gives XP and a pet roll without a log', axe:'BRONZE_FELLING_AXE', ration:'inventory', draw:0.199999, xp:27.5, logs:0, left:1},
   {name:'carried kit supplies the ration', axe:'BRONZE_FELLING_AXE', ration:'kit', draw:0.2, xp:27.5, logs:1, left:1},
   {name:'worn kit supplies the ration for a skipped log', axe:'BRONZE_FELLING_AXE', ration:'worn-kit', draw:0, xp:27.5, logs:0, left:1},
-  {name:'free worlds cannot spend a members ration', axe:'BRONZE_FELLING_AXE', ration:'inventory', freeWorld:true, draw:0, xp:25, logs:1, left:2},
+  {name:'free worlds cannot spend a members ration with an ordinary axe', axe:'BRONZE_AXE', ration:'inventory', freeWorld:true, draw:0, xp:25, logs:1, left:2},
   {name:'equal-best carried felling axe takes precedence with rations', axe:'BRONZE_AXE', otherAxe:'BRONZE_FELLING_AXE', ration:'inventory', selected:'BRONZE_FELLING_AXE', draw:0.2, xp:27.5, logs:1, left:1},
   {name:'equal-best felling axe can be carried beside a worn ordinary axe', axe:'BRONZE_AXE', wearAxe:true, otherAxe:'BRONZE_FELLING_AXE', ration:'inventory', selected:'BRONZE_FELLING_AXE', draw:0.2, xp:27.5, logs:1, left:1},
   {name:'a higher ordinary axe prevents a lower felling bonus', axe:'IRON_AXE', otherAxe:'BRONZE_FELLING_AXE', ration:'inventory', selected:'IRON_AXE', draw:0, xp:25, logs:1, left:2},
@@ -96,7 +96,10 @@ for (const row of [
   test('native felling ration: '+row.name, async t => {
     const f=actor(t), ids=core.ItemIdentifiers, ration=ids.FORESTERS_RATION;
     assert.ok(Number.isInteger(ration), 'the generated ration identifier must exist');
-    if(row.freeWorld) t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+    if(row.freeWorld) {
+      assert.equal(core.CacheDefinitions.getItem(ids.BRONZE_AXE).isMembers,false,'SETUP: active cache marks ordinary Bronze axe free');
+      t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+    }
     if(row.levels) {
       f.p.getSkillManager().setMaxLevel(core.Skill.WOODCUTTING,row.levels[0]);
       f.p.getSkillManager().setCurrentLevel(core.Skill.WOODCUTTING,row.levels[0]);
@@ -732,4 +735,64 @@ test('native seed nests conserve their rolled contents at stack capacity', async
     assert.deepEqual(gains, [], 'Search awards no XP');
     assert.deepEqual(xp(), initialXp, 'stored skill XP is unchanged');
   });
+});
+
+// A members-only felling axe is not an ordinary free-world chopping tool.
+test('free-world members felling axe leaves the ration and tree untouched', async t => {
+  const f=actor(t), ids=core.ItemIdentifiers, Woodcutting=require('../plugins/skills/Woodcutting.plugin');
+  assert.equal(core.CacheDefinitions.getItem(ids.BRONZE_FELLING_AXE).isMembers,true,'SETUP: active cache marks this axe members-only');
+  assert.equal(core.CacheDefinitions.getItem(ids.BRONZE_AXE).isMembers,false,'SETUP: ordinary Bronze axe is free');
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+  f.p.getInventory().add(new core.Item(ids.BRONZE_FELLING_AXE),true);
+  f.p.getInventory().add(new core.Item(ids.FORESTERS_RATION,2),true);
+  const skill=f.p.getSkillManager(), beforeXp=skill.getExperience(core.Skill.WOODCUTTING);
+  const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+  core.ObjectManager.register(tree,true); t.after(()=>core.ObjectManager.deregister(tree,true));
+  assert.equal(Woodcutting.isWoodcuttingActive(f.p),false,'SETUP: fresh inactive session');
+  assert.equal(core.MapObjects.getPrivateArea(f.p,tree.getId(),tree.getLocation()),tree,'SETUP: actor resolves test tree');
+  assert.equal(core.MapObjects.stillStands(f.p,tree.getId(),tree.getLocation(),tree),true,'SETUP: test tree stands');
+  const dispatch=PM.emitObjectInteraction.bind(PM), custom=PM.emitCustomEvent.bind(PM), calls=[], validation=[];
+  t.mock.method(PM,'emitObjectInteraction',event=>{const result=dispatch(event);if(event.player===f.p) calls.push({object:event.object,option:event.option,result,active:Woodcutting.isWoodcuttingActive(f.p)});return result;});
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{const result=custom(name,event);if(name==='woodcutting:validate-tree'&&event?.player===f.p) validation.push({object:event.object,allow:event.allow});return result;});
+  await send(f,{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'});
+  assert.equal(calls.length,1,'SETUP: real Chop dispatch reached');
+  assert.equal(calls[0].object,tree,'SETUP: same test tree');
+  assert.equal(String(calls[0].option).toLowerCase(),'chop down');
+  assert.equal(calls[0].result,true,'SETUP: original Chop handler ran');
+  assert.ok(validation.some(v=>v.object===tree&&v.allow===true),'SETUP: original tree validation allowed');
+  assert.equal(calls[0].active,false,'the members axe did not start a session at dispatch');
+  for(let i=0;i<20;i++) core.TaskManager.process();
+  assert.equal(Woodcutting.isWoodcuttingActive(f.p),false,'the members axe did not start a session');
+  assert.equal(f.p.getInventory().getAmount(ids.FORESTERS_RATION),2,'the ration was not spent');
+  assert.equal(skill.getExperience(core.Skill.WOODCUTTING),beforeXp,'no Woodcutting XP');
+  assert.equal(f.p.getInventory().getAmount(ids.LOGS)+groundLogs(f).reduce((n,g)=>n+g.getItem().getAmount(),0),0,'no carried or owned floor log');
+});
+
+test('registered axe selection preserves members choices and filters felling promotion', t => {
+  const f=actor(t), ids=core.ItemIdentifiers, Woodcutting=require('../plugins/skills/Woodcutting.plugin');
+  assert.equal(core.WorldDefinition.isMembersWorld(),true,'SETUP: configured members world');
+  const skills=f.p.getSkillManager(); skills.setMaxLevel(core.Skill.WOODCUTTING,61); skills.setCurrentLevel(core.Skill.WOODCUTTING,61);
+  f.p.getInventory().add(new core.Item(ids.DRAGON_AXE),true);
+  assert.equal(Woodcutting.findBestUsableAxe(f.p).id,ids.DRAGON_AXE,'default selector preserves members Dragon');
+  f.p.getInventory().deleteNumber(ids.DRAGON_AXE,1);
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  f.p.getInventory().add(new core.Item(ids.BRONZE_FELLING_AXE),true);
+  f.p.getInventory().add(new core.Item(ids.FORESTERS_RATION,1),true);
+  assert.equal(Woodcutting.findBestUsableAxe(f.p).id,ids.BRONZE_FELLING_AXE,'default keeps ration promotion');
+  assert.equal(Woodcutting.findBestUsableAxe(f.p,axe=>axe.id!==ids.BRONZE_FELLING_AXE).id,ids.BRONZE_AXE,'rejected felling axe cannot be promoted');
+});
+
+test('free worlds: the shared axe request (canoes) skips a members axe and falls back to a free one', t => {
+  const f=actor(t), ids=core.ItemIdentifiers;
+  assert.equal(core.CacheDefinitions.getItem(ids.DRAGON_AXE).isMembers,true,'SETUP: active cache marks the Dragon axe members-only');
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+  const skills=f.p.getSkillManager(); skills.setMaxLevel(core.Skill.WOODCUTTING,61); skills.setCurrentLevel(core.Skill.WOODCUTTING,61);
+  f.p.getInventory().add(new core.Item(ids.DRAGON_AXE),true);
+  const best={player:f.p,axe:null}; PM.emitCustomEvent('woodcutting:axe',best);
+  assert.equal(best.axe,null,'a Dragon axe alone answers nothing on a free world');
+  const named={player:f.p,itemId:ids.DRAGON_AXE,axe:null}; PM.emitCustomEvent('woodcutting:axe',named);
+  assert.equal(named.axe,null,'nor when asked for by id (a canoe station stored axe)');
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  const fallback={player:f.p,axe:null}; PM.emitCustomEvent('woodcutting:axe',fallback);
+  assert.equal(fallback.axe?.id,ids.BRONZE_AXE,'the free Bronze axe is used instead');
 });

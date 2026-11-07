@@ -333,6 +333,7 @@ module.exports = {
     core = pluginApi.core;
     staff = defineEye();
     pluginApi.registerCombatMethodResolver(staff.resolver);
+    pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.onCustomEvent("powered-staff:spell", staff.answerSpell);
     pluginApi.onItemAction("Eye of Ayak", { Check: checkCharges, Uncharge: uncharge });
     pluginApi.onItemAction("Eye of Ayak (uncharged)", { Charge: chargeOption, Dismantle: dismantle });

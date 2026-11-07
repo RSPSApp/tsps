@@ -159,9 +159,13 @@
     {
       "name": "Molten glass",
       "bar": "MOLTEN_GLASS",
+      "members": true,
       "level": 1,
       "xp": 20,
       "skill": "CRAFTING",
+      "firstDelay": 2,
+      "finishDelay": 0,
+      "interval": 2,
       "notInMenu": true,
       "ingredients": [["BUCKET_OF_SAND", 1], ["SODA_ASH", 1]],
       "missingMessage": "You need sand and soda ash to make glass.",

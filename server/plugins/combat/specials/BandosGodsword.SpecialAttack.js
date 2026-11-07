@@ -10,14 +10,15 @@ function buildSpecial(api) {
   const ANIMATION = new Animation(7642);
   const GRAPHIC = new Graphic(1212, Priority.HIGH);
 
-  // OSRS drains one damage per level in this order; NPCs have no Prayer stat.
+  // OSRS drains one damage per level in this order; NPCs have no Prayer stat. Wiki (Bandos godsword): "the current stat
+  // that is being drained must hit 0" before the rest moves on ("20 Defence … would lose 20 Defence levels").
   const PLAYER_DRAIN_ORDER = [
-    [Skill.DEFENCE, 1],
-    [Skill.STRENGTH, 1],
+    [Skill.DEFENCE, 0],
+    [Skill.STRENGTH, 0],
     [Skill.PRAYER, 0],
-    [Skill.ATTACK, 1],
-    [Skill.MAGIC, 1],
-    [Skill.RANGED, 1],
+    [Skill.ATTACK, 0],
+    [Skill.MAGIC, 0],
+    [Skill.RANGED, 0],
   ];
 
   function warstrike(target, damage) {

@@ -128,6 +128,19 @@ function chargeStaff(event) {
   event.handled = true;
 }
 
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a staff ready to use
+ * (the PvP Arena's load-outs) asks for a full one: charged, with every scale it holds.
+ */
+function fillCharges(event) {
+  const { item } = event;
+  const id = item?.getId?.();
+  if (!chargedIds.has(id) && !chargedByUncharged.has(id)) return;
+  if (chargedByUncharged.has(id)) item.setId(chargedByUncharged.get(id));
+  item.setMetaValue(CHARGES_META_KEY, MAX_CHARGES);
+  event.handled = true;
+}
+
 function uncharge({ player, item }) {
   const left = charges(item);
   if (left <= 0) {
@@ -150,7 +163,7 @@ function uncharge({ player, item }) {
 module.exports = {
   name: "ToxicStaffOfTheDead",
   members: true,
-  _test: { charges, isWieldingCharged, consumeCharges, processCombatUpkeep, onHitResolved, chargeStaff, uncharge, MAX_CHARGES },
+  _test: { charges, isWieldingCharged, consumeCharges, processCombatUpkeep, onHitResolved, chargeStaff, uncharge, fillCharges, MAX_CHARGES },
   register(api) {
     core = api.core;
     zulrahScalesId = core.ItemIdentifiers.ZULRAHS_SCALES;
@@ -181,6 +194,7 @@ module.exports = {
       }
     });
     api.onItemOnItem(chargeStaff, { noted: false });
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onCombatHitResolved(onHitResolved);
     api.onPlayerProcess(({ player }) => {
       if (!player?.isPlayerBot?.()) {

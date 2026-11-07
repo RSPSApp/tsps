@@ -2637,7 +2637,6 @@ function sourceStartChoice(page, hook) {
 }
 
 for (const [page, key, npcKey, hook, reasons] of [
-  ['Lost City', 'lost_city', 'WARRIOR', 'quest:lost-city:start', ['Crafting level of at least 31', 'Woodcutting level of at least 36']],
   ['In Search of the Myreque', 'in_search_of_the_myreque', 'VANSTROM_KLAUSE_8', 'quest:in-search-of-the-myreque:start', ['Agility level of at least 25']],
 ]) test(`${page} native start refusal exposes existing reasons without playing accepted dialogue`, async t => {
   const f = fixture(t), quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
@@ -2659,16 +2658,10 @@ for (const [page, key, npcKey, hook, reasons] of [
     for (const reason of expected) assert.ok(packets.includes(reason), reason);
   };
   await refuse(reasons);
-  if (key === 'lost_city') {
-    f.player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 31, false);
-    await refuse(['Woodcutting level of at least 36']);
-    f.player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, 36, false);
-  } else {
-    f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
-    await refuse(['You must complete Nature Spirit to start this quest.']);
-    const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
-    prerequisite.setStage(f.player, prerequisite.completionValue);
-  }
+  f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
+  await refuse(['You must complete Nature Spirit to start this quest.']);
+  const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
+  prerequisite.setStage(f.player, prerequisite.completionValue);
   show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
   assert.ok(quest.getStage(f.player) > 0, 'meeting the existing requirements starts normally');
   assert.ok(f.player.getDialogueManager().getCurrent(), 'the canonical accepted branch is still played');

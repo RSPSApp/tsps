@@ -209,14 +209,6 @@ module.exports = function registerLostCityQuest(api) {
     return REQUIRED_SKILLS.filter((requirement) => skills.getMaxLevel(requirement.skill) < requirement.level);
   }
 
-  function notifySkillRequirements(player) {
-    for (const requirement of missingSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a ${requirement.label} level of at least ${requirement.level} to start this quest.`
-      );
-    }
-  }
-
   function answerCondition({ player, text }) {
     const value = String(text).toLowerCase();
     if (value.includes("lower than 45 combat")) {
@@ -288,11 +280,6 @@ module.exports = function registerLostCityQuest(api) {
     const { player, npcId, hook } = event;
     if (npcId !== WARRIOR_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
-      if (missingSkillRequirements(player).length > 0) {
-        event.end = true;
-        notifySkillRequirements(player);
-        return;
-      }
       quest.setStage(player, STAGE_STARTED);
     }
   }

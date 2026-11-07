@@ -226,6 +226,7 @@ module.exports = {
     api.onItemOnItem(chargeStaff, { noted: false });
     api.onCombatHitResolved(onHitResolved);
     api.registerCombatMethodResolver(staff.resolver);
+    api.onCustomEvent("item:fill-charges", staff.fillCharges);
   },
   _test: {
     chargesOf,

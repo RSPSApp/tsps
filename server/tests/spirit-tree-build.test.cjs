@@ -136,3 +136,73 @@ test('natural teleport builds use water instead of a saw and hammer',async t=>{
     });
   }
 });
+
+// Ordinary furniture shares the build gate with the spirit trees above.
+function chairActor(t,index,tool){
+  const f=actor(t,index,83,83),I=core.ItemIdentifiers;
+  f.inv.deleteNumber(I.HAMMER,1);
+  f.house.save.rooms[1][4][6]={roomKey:'PARLOUR',rotation:0,furniture:{}};
+  House.rebuildHouse(f.p,f.house);
+  f.buildable=Data.BUILDABLE_BY_KEY.get('CRUDE_WOODEN_CHAIR');
+  f.materials=f.buildable.materials.map(m=>[m.itemId??I.STEEL_NAILS,m.amount]);
+  for(const [id,n] of f.materials) f.inv.add(new core.Item(id,n),false);
+  if(tool!=null) f.inv.add(new core.Item(tool,1),false);
+  const tile=f.house.hotspotTiles({plane:1,x:4,y:6}).find(o=>Data.hotspotIn('PARLOUR',o.id)?.key==='CHAIR_1');assert.ok(tile);
+  f.tile=tile;f.target=f.house.getFurnitureTarget({x:tile.x,y:tile.y,z:tile.plane},tile.id);assert.ok(f.target);
+  f.p.moveTo(new core.Location(tile.x+1,tile.y,tile.plane));f.p.setNeedsPlacement(false);
+  return f;
+}
+async function chairMenu(f,t,enabled,usedTool){
+  const scripts=[],sender=f.p.getPacketSender(),send=sender.sendClientScript.bind(sender);
+  t.mock.method(sender,'sendClientScript',(id,...args)=>{scripts.push([id,...args]);return send(id,...args);});
+  if(usedTool!=null) await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(usedTool),itemId:usedTool,target:{kind:'loc',id:f.tile.id,x:f.tile.x,y:f.tile.y}}]);
+  else await f.conn.dispatch([{type:'object_option',id:f.tile.id,x:f.tile.x,y:f.tile.y,action:'Build'}]);
+  let row;for(let i=0;i<30;i++){turn(f);row=scripts.find(s=>s[0]===1404&&s[2]===f.buildable.menuRowId);if(row&&f.p.getInterfaceId()===458&&!f.p.getMovementQueue().hasPendingWork())break;}
+  assert.equal(f.p.getInterfaceId(),458);assert.ok(row,'native chair row');assert.equal(row[5],enabled?1:0);
+  return async()=>{await f.conn.dispatch([{type:'dialogue_continue',widgetId:(458<<16)|2,childIndex:row[1]}]);for(let i=0;i<10;i++)turn(f);};
+}
+
+test('ordinary furniture accepts repaired carried and natively wielded Imcando hammers',async t=>{
+  const I=core.ItemIdentifiers;
+  let index=1350;
+  for(const [name,tool,wearSlot,allowed] of [
+    ['ordinary hammer',I.HAMMER,null,true],
+    ['carried main-hand',I.IMCANDO_HAMMER,null,true],
+    ['carried off-hand',I.IMCANDO_HAMMER_OFF_HAND_,null,true],
+    ['wielded main-hand',I.IMCANDO_HAMMER,core.Equipment.WEAPON_SLOT,true],
+    ['wielded off-hand',I.IMCANDO_HAMMER_OFF_HAND_,core.Equipment.SHIELD_SLOT,true],
+    ['missing hammer',null,null,false],
+    ['broken hammer',I.IMCANDO_HAMMER_BROKEN_,null,false],
+    ['main-hand placeholder',I.IMCANDO_HAMMER_2,null,false],
+    ['off-hand placeholder',I.IMCANDO_HAMMER_OFF_HAND__2,null,false],
+  ]) await t.test(name,async t=>{
+    const f=chairActor(t,index++,tool),xp=f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+    if(wearSlot!=null){await f.conn.dispatch([{type:'inventory_action',widgetId:149<<16,slot:f.inv.getSlotForItemId(tool),itemId:tool,option:'Wield'}]);turn(f);assert.equal(f.p.getEquipment().get(wearSlot)?.getId(),tool);assert.equal(f.inv.getAmount(tool),0);}
+    const select=await chairMenu(f,t,allowed);await select();
+    assert.equal(f.house.getFurnitureAtTarget(f.target)?.buildableKey??null,allowed?f.buildable.key:null);
+    for(const [id,n] of f.materials) assert.equal(f.inv.getAmount(id),allowed?0:n);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION)-xp,allowed?f.buildable.experience:0);
+    if(tool!=null) assert.equal(wearSlot==null?f.inv.getAmount(tool):f.p.getEquipment().get(wearSlot)?.getId(),wearSlot==null?1:tool);
+    assert.equal(f.inv.getAmount(I.SAW),1);
+  });
+});
+
+test('using a carried Imcando hammer on a hotspot opens its native build menu',async t=>{
+  for(const tool of [core.ItemIdentifiers.IMCANDO_HAMMER,core.ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_]) await t.test(String(tool),async t=>{
+    const f=chairActor(t,1380+(tool===core.ItemIdentifiers.IMCANDO_HAMMER?0:1),tool);
+    const select=await chairMenu(f,t,true,tool);await select();
+    assert.equal(f.house.getFurnitureAtTarget(f.target)?.buildableKey,f.buildable.key);assert.equal(f.inv.getAmount(tool),1);
+  });
+});
+
+test('Imcando hammers also qualify flatpack creation and installation',async t=>{
+  const W=require('../plugins/skills/construction/Workbench.Construction')._test,I=core.ItemIdentifiers;
+  for(const tool of [I.IMCANDO_HAMMER,I.IMCANDO_HAMMER_OFF_HAND_]) await t.test(String(tool),async t=>{
+    const f=chairActor(t,1390+(tool===I.IMCANDO_HAMMER?0:1),tool),flatpack=W.FLATPACK_OF.get(f.buildable.key),xp=f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+    W.makeFlatpack(f.p,{house:f.house,limit:20},f.buildable);
+    assert.equal(f.inv.getAmount(flatpack),1);assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION)-xp,f.buildable.experience);
+    await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(flatpack),itemId:flatpack,target:{kind:'loc',id:f.tile.id,x:f.tile.x,y:f.tile.y}}]);for(let i=0;i<10;i++)turn(f);
+    assert.equal(f.house.getFurnitureAtTarget(f.target)?.buildableKey,f.buildable.key);assert.equal(f.inv.getAmount(flatpack),0);assert.equal(f.inv.getAmount(tool),1);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION)-xp,f.buildable.experience,'installation adds no XP');
+  });
+});

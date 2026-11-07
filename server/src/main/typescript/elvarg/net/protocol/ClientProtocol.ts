@@ -1089,6 +1089,8 @@ export const ChatType = {
   SPAM: 105,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
   NPC_SAY: 116,
+  /** A message box's text, logged in the chatbox as live does when one opens (rsprox `type=mesbox`). */
+  MESBOX: 115,
 } as const;
 
 /**

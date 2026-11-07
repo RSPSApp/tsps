@@ -278,9 +278,16 @@ function wearsRunecraftCape(player) {
   return request.result === true;
 }
 
-/** Wiki: pouches decay with the essence stored in them; a worn Runecraft or max cape stops it. */
+/** A worn Redwood-lit abyssal lantern prevents pouch degradation, including outside the Rift. */
+function wearsRedwoodLantern(player) {
+  const shield = player.getEquipment?.()?.getItems?.()?.[core.Equipment.SHIELD_SLOT];
+  const lantern = objId("abyssal_lantern_redwood");
+  return Number.isInteger(lantern) && shield?.getId?.() === lantern;
+}
+
+/** Wiki: pouches decay with stored essence; a worn Runecraft cape or Redwood lantern stops it. */
 function decay(player, pouch, state, stored) {
-  if (!pouch.degraded || stored <= 0 || wearsRunecraftCape(player) || isDegraded(player, pouch)) return;
+  if (!pouch.degraded || stored <= 0 || wearsRunecraftCape(player) || wearsRedwoodLantern(player) || isDegraded(player, pouch)) return;
   state.decay = (state.decay ?? 0) + stored;
   if (state.decay < pouch.decaysAfter) return;
   const inventory = player.getInventory();

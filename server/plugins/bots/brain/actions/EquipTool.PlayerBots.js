@@ -4,18 +4,26 @@ const { Equipment } = require("../../../../src/main/typescript/elvarg/game/model
 const { Item } = require("../../../../src/main/typescript/elvarg/game/model/Item");
 const { Flag } = require("../../../../src/main/typescript/elvarg/game/model/Flag");
 const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
+const WorldDefinition = require("../../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
+const { CacheDefinitions } = require("../../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const Woodcutting = require("../../../skills/Woodcutting.plugin");
 const Mining = require("../../../skills/Mining.plugin");
+
+/** Free worlds: a members tool is no tool there (as Woodcutting and Mining refuse it), so bots don't wield one. */
+function usableOnWorld(tool) {
+  return WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(tool.id)?.isMembers !== true;
+}
 
 const TOOL_RESOLVERS = {
   axe(player) {
     const level = player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING);
-    return Woodcutting.findBestUsableAxeByLevel(level)?.id ?? null;
+    return Woodcutting.findBestUsableAxeByLevel(level, usableOnWorld)?.id ?? null;
   },
   pickaxe(player) {
     const level = player.getSkillManager().getCurrentLevel(Skill.MINING);
     const pickaxe = (Mining.PICKAXES_DESC ?? []).find(
-      (entry) => level >= entry.requiredLevel
+      // Only the standard pickaxes, as for axes: not the league's Echo pickaxe or a crystal one that needs Agility.
+      (entry) => entry.standard && level >= entry.requiredLevel && usableOnWorld(entry)
     );
     return pickaxe?.id ?? null;
   },

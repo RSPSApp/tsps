@@ -31,6 +31,7 @@ Sanguinesti.register({
     registerCombatMethodResolver: (resolver) => resolvers.push(resolver),
     onItemAction: (name, actions) => itemActions.set(name, actions),
     onItemOnItem: () => {},
+    onCustomEvent: () => {},
     onCombatHitResolved: (handler) => hitResolved.push(handler),
 });
 

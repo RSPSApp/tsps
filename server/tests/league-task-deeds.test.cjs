@@ -440,6 +440,11 @@ test("deed: the Lunar spellbook switched to at an altar, the run turned off from
   const skills = f.player.getSkillManager();
   skills.setMaxLevel(core.Skill.DEFENCE, 40);
   skills.setCurrentLevel(core.Skill.DEFENCE, 40);
+  // The altar switches only to unlocked books (Wiki: Occult altar): Desert Treasure I and Lunar Diplomacy done.
+  for (const key of ["desert_treasure_i", "lunar_diplomacy"]) {
+    const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === key);
+    quest.setStage(f.player, quest.completionValue);
+  }
   const altar = new core.GameObject(core.ObjectIdentifiers.ALTAR_OF_THE_OCCULT, new core.Location(1667, 3136, 0), 10, 0, null);
   core.ObjectManager.register(altar, true);
   t.after(() => core.ObjectManager.deregister(altar, true));

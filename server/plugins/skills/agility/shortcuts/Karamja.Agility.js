@@ -1,6 +1,11 @@
 const { Anim } = require("../Constants.Agility");
 const { hops, between, ShortcutAnim } = require("./Builders.Agility");
 
+/** Tiles across a channel, from one end to the other. */
+function channelLength(from, to) {
+  return Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1]));
+}
+
 /** Karamja shortcut scripts (agility-shortcuts.json). */
 module.exports = {
   /**
@@ -34,11 +39,15 @@ module.exports = {
    * The Strong Tree's grapple across the two channels between Musa Point (north) and the
    * Harpie bug swarms (south). The tree sits on the island between them, so the player
    * grapples to the island, walks across it, then grapples again. The pair is chosen by
-   * which side of the tree the player is on.
+   * which side of the tree the player is on. `barehanded` (Wiki: 78 Agility, no grapple) climbs across each
+   * channel instead, as the other barehanded river crossings do.
    */
-  karamjaStrongTree: ({ islandY, north, south }) => between({
+  karamjaStrongTree: ({ islandY, north, south, barehanded = false }) => between({
     ends: (context) => (context.pos.y >= islandY ? north : south),
-    cross: (from, to, context) => [
+    cross: (from, to, context) => barehanded ? [
+      { move: to, anim: Anim.CLIMB_ROCKS, speed: [0, 30 * channelLength(from, to)], ticks: channelLength(from, to) },
+      { anim: -1 },
+    ] : [
       { face: [context.obj.x, context.obj.y] },
       { anim: ShortcutAnim.FIRE_GRAPPLE },
       { gfx: ShortcutAnim.GRAPPLE_GRAPHIC },

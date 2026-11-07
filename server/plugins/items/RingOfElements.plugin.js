@@ -4,7 +4,7 @@
  * charged by using one air, water, earth, fire and law rune per charge on it, and uncharged
  * (runes back) at a bank. Live behaviour is in docs/ring-of-the-elements.md.
  */
-const { refundsFit } = require("./PoweredStaff");
+const { refundsFit, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
 const MAX_CHARGES = 10000;
 const CHARGES_ATTRIBUTE = "ring-of-elements:charges";
@@ -224,6 +224,10 @@ function uncharge(event) {
     noCharges(player);
     return;
   }
+  // The charge is spent on landing, so uncharging mid-teleport would be a free teleport.
+  if (player.isTeleportingReturn?.()) {
+    return;
+  }
   if (!nearBank(player)) {
     statement(player, `The Ring of the Elements has ${charges} ${chargeNoun(charges)}. You can uncharge it at a bank.`);
     return;
@@ -231,7 +235,7 @@ function uncharge(event) {
   startDialogue(player, new core.OptionDialogue(0, {
     executeOption(option) {
       player.getPacketSender().sendInterfaceRemoval();
-      if (Number(option) === 1) refundRunes(player);
+      if (Number(option) === 1 && nearBank(player)) refundRunes(player);
     },
   }, "Yes - uncharge it", "No - keep the charges").setTitle(`Ring of the Elements charges: ${charges}. Uncharge it?`));
 }
@@ -239,7 +243,7 @@ function uncharge(event) {
 /** One of each rune per charge comes back; nothing is taken unless every stack fits. */
 function refundRunes(player) {
   const charges = getCharges(player);
-  if (charges <= 0) {
+  if (charges <= 0 || player.isTeleportingReturn?.()) {
     return;
   }
   const inventory = player.getInventory();
@@ -256,11 +260,12 @@ function refundRunes(player) {
 /** Using any of the five runes on the ring asks how many charges to add. */
 function chargeAttempt(player, ring) {
   const inventory = player.getInventory();
-  if (runeIds.some((runeId) => inventory.getAmount(runeId) <= 0)) {
-    statement(player, MISSING_RUNES);
+  if (runeIds.some((runeId) => plainAmount(inventory, runeId) <= 0)) {
+    if (runeIds.every((runeId) => inventory.getAmount(runeId) > 0)) player.sendMessage(PRESET_TEXT);
+    else statement(player, MISSING_RUNES);
     return false;
   }
-  const most = Math.min(MAX_CHARGES - getCharges(player), ...runeIds.map((runeId) => inventory.getAmount(runeId)));
+  const most = Math.min(MAX_CHARGES - getCharges(player), ...runeIds.map((runeId) => plainAmount(inventory, runeId)));
   if (most <= 0) {
     player.sendMessage("Your ring of the elements is fully charged.");
     return false;
@@ -278,12 +283,12 @@ function chargeAttempt(player, ring) {
 function addCharges(player, ring, requested) {
   const inventory = player.getInventory();
   const room = MAX_CHARGES - getCharges(player);
-  const amount = Math.min(Math.floor(Number(requested)) || 0, room, ...runeIds.map((runeId) => inventory.getAmount(runeId)));
+  const amount = Math.min(Math.floor(Number(requested)) || 0, room, ...runeIds.map((runeId) => plainAmount(inventory, runeId)));
   if (amount <= 0) {
     return false;
   }
   for (const runeId of runeIds) {
-    inventory.deleteNumber(runeId, amount);
+    takePlain(inventory, runeId, amount);
   }
   setCharges(player, getCharges(player) + amount);
   syncRing(player, ring);

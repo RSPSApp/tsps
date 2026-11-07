@@ -31,7 +31,11 @@ item (26815 uncharged, 26818 charged) and the varbits/spotanims named below.
 - **Uncharge** (the charged ring's fifth inventory option). Away from a bank a message box says
   "The Ring of the Elements has N charges. You can uncharge it at a bank." At a bank a choice
   asks "Ring of the Elements charges: N. Uncharge it?" with "Yes - uncharge it" and
-  "No - keep the charges".
+  "No - keep the charges". Uncharge and its Yes do nothing during a teleport (the charge is spent
+  on landing), and Yes checks the bank again.
+- **Restricted runes** (preset, untradeable or unbankable) never pay for charges, so Uncharge
+  cannot turn them into ordinary runes; with only restricted copies the player is told
+  "Preset items cannot be used for this." (the same rule as the Eye of Ayak).
 
 ## Wiki
 

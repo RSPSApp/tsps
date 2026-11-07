@@ -50,12 +50,19 @@ const ringItem = (id) => ({
 });
 
 /** A player with a real-looking inventory (runes by count), equipment, dialogue and packet recorder. */
-function createPlayer({ runes = 0, freeSlots = 28 } = {}) {
+function createPlayer({ runes = 0, freeSlots = 28, restrictedRunes = [] } = {}) {
   const attributes = new Map();
   const counts = new Map(RUNES().map((id) => [id, runes]));
   const state = { messages: [], varbits: new Map(), dialogue: null, prompt: null, amountAction: null, deleted: [] };
   const inventory = new Array(28).fill(null);
   const equipment = new Array(14).fill(null);
+  // Restricted (preset) rune stacks sit in their own slots after the 28 real ones.
+  const restrictedStacks = restrictedRunes.map(([id, amount]) => ({ id, amount }));
+  const slots = () => [
+    ...inventory,
+    ...[...counts].map(([id, amount]) => ({ getId: () => id, getAmount: () => amount, isPresetItem: () => false })),
+    ...restrictedStacks.map((stack) => ({ getId: () => stack.id, getAmount: () => stack.amount, isPresetItem: () => true })),
+  ];
   const player = {
     state, inventory, equipment, counts,
     getAttribute: (key) => attributes.get(key),
@@ -64,9 +71,14 @@ function createPlayer({ runes = 0, freeSlots = 28 } = {}) {
     getLocation: () => ({ getX: () => 3200, getY: () => 3200, getZ: () => 0, getDistance: () => 99 }),
     getLocalNpcs: () => [],
     getInventory: () => ({
-      getItems: () => inventory,
+      getItems: slots,
       refreshItems() {},
-      getAmount: (id) => counts.get(id) ?? 0,
+      deleteAtSlot: (slot, amount) => {
+        const id = slots()[slot].getId();
+        state.deleted.push([id, amount]);
+        counts.set(id, counts.get(id) - amount);
+      },
+      getAmount: (id) => (counts.get(id) ?? 0) + restrictedStacks.filter((s) => s.id === id).reduce((n, s) => n + s.amount, 0),
       deleteNumber: (id, amount) => { state.deleted.push([id, amount]); counts.set(id, counts.get(id) - amount); },
       getFreeSlots: () => freeSlots,
       getAddableAmount: () => Infinity,
@@ -318,4 +330,58 @@ test("Uncharge keeps the charges when the runes would not fit", () => {
   Ring._test.refundRunes(player);
   assert.equal(Ring._test.getCharges(player), 50);
   assert.deepEqual(player.state.messages, ["You don't have enough inventory space to do that."]);
+});
+
+const bankBooth = () => ({ getDefinition: () => ({ getActions: () => ["Bank", "Collect"] }) });
+
+test("restricted runes never pay for charges, so Uncharge cannot turn them into tradeable ones", () => {
+  const player = createPlayer({ runes: 0, restrictedRunes: [[ItemIdentifiers.LAW_RUNE, 100]] });
+  for (const runeId of RUNES()) if (runeId !== ItemIdentifiers.LAW_RUNE) player.counts.set(runeId, 100);
+  const ring = ringItem(ItemIdentifiers.RING_OF_THE_ELEMENTS);
+  handlers.itemOnItem({
+    player, usedItemId: ItemIdentifiers.LAW_RUNE, usedWithItemId: ring.id, usedWithItem: ring, usedItem: null,
+  });
+  assert.equal(player.state.prompt, null, "no amount is asked");
+  assert.deepEqual(player.state.messages, ["Preset items cannot be used for this."]);
+  assert.equal(Ring._test.addCharges(player, ring, 100), false);
+  assert.equal(Ring._test.getCharges(player), 0);
+  assert.deepEqual(player.state.deleted, []);
+});
+
+test("with some plain runes, only those pay and the restricted stack is left alone", () => {
+  const player = createPlayer({ runes: 10, restrictedRunes: [[ItemIdentifiers.LAW_RUNE, 100]] });
+  const ring = ringItem(ItemIdentifiers.RING_OF_THE_ELEMENTS);
+  Ring._test.addCharges(player, ring, 50);
+  assert.equal(Ring._test.getCharges(player), 10, "capped by the 10 plain runes of each kind");
+  assert.equal(player.counts.get(ItemIdentifiers.LAW_RUNE), 0);
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.LAW_RUNE), 100, "the restricted law runes stay");
+});
+
+test("Uncharge and its Yes are refused while a teleport is in progress, and Yes needs the bank still", () => {
+  const { MapObjects } = core;
+  const hash = MapObjects.getHash(3200, 3201, 0);
+  const player = createPlayer({ runes: 10 });
+  Ring._test.setCharges(player, 1);
+  const ring = ringItem(ItemIdentifiers.RING_OF_THE_ELEMENTS_4);
+  player.inventory[0] = ring;
+  MapObjects.mapObjects.set(hash, [bankBooth()]);
+  try {
+    handlers.action({ player, itemId: ring.id, item: ring, option: "Uncharge" });
+    const dialogue = player.state.dialogue;
+    player.isTeleportingReturn = () => true;
+    dialogue.executeOption?.(1) ?? dialogue.actions?.executeOption(1);
+    assert.equal(Ring._test.getCharges(player), 1, "Yes while teleporting refunds nothing");
+    assert.equal(player.counts.get(ItemIdentifiers.AIR_RUNE), 10);
+    player.state.dialogue = null;
+    handlers.action({ player, itemId: ring.id, item: ring, option: "Uncharge" });
+    assert.equal(player.state.dialogue, null, "Uncharge itself is refused");
+    player.isTeleportingReturn = () => false;
+    handlers.action({ player, itemId: ring.id, item: ring, option: "Uncharge" });
+    const again = player.state.dialogue;
+    MapObjects.mapObjects.delete(hash);
+    again.executeOption?.(1) ?? again.actions?.executeOption(1);
+    assert.equal(Ring._test.getCharges(player), 1, "Yes after walking away from the bank refunds nothing");
+  } finally {
+    MapObjects.mapObjects.delete(hash);
+  }
 });

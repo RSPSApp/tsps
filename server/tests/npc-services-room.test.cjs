@@ -652,3 +652,130 @@ test('deferred Thormac enchanting preserves a newer native main shop', async t =
     const closed = resources(); await input(enchant); assert.deepEqual(resources(), closed, 'only closing332 ends the admitted service; stale clicks cannot bill another staff');
   });
 });
+
+
+// Declared preowned barter inputs; no Wintertodt rewards are earned in this test.
+test('Ignisia exchanges a glove for the full fifty owned burnt pages or refuses', async t => {
+  const GLOVE = 20712, PAGE = 20718, NPC = 7374, X = 1634, Y = 3948;
+  assert.equal(I.WARM_GLOVES, GLOVE); assert.equal(I.BURNT_PAGE, PAGE);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  for (const [id, name, stackable] of [[GLOVE, 'Warm gloves', false], [PAGE, 'Burnt page', true]]) {
+    const definition = core.ItemDefinition.forId(id);
+    assert.equal(definition.getName(), name); assert.equal(definition.isNoted(), false);
+    assert.equal(definition.isStackable(), stackable);
+  }
+  const spawns = require('../data/definitions/npc-spawns.json');
+  assert.ok(spawns.some(n => n.id === NPC && n.name === 'Ignisia' && n.x === X && n.y === Y
+    && (n.level ?? 0) === 0 && n.wanderRadius === 0));
+  const cases = [
+    {name:'fifty headroom', gap:50, control:true},
+    {name:'fifty-one headroom', gap:51, control:true},
+    {name:'No at the real confirmation', gap:51, control:true, no:true},
+    {name:'no glove offers nothing', gap:51, control:true, noGlove:true},
+    {name:'full bag frees the glove slot', gap:MAX_STACK_AMOUNT, control:true, fullBag:true},
+    {name:'twenty-five headroom', gap:25},
+    {name:'full page stack', gap:0},
+  ];
+  let controlsPassed = 0;
+  for (const mode of cases) await t.test(mode.name, async child => {
+    if (!mode.control) assert.equal(controlsPassed, 5, 'all native controls qualify before a target');
+    const f = actor(child, {desertDiary:false}), p = f.p, inv = f.inv;
+    const sender = p.getPacketSender(), manager = p.getDialogueManager();
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 96, 'bounded native input/task/movement turns');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); f.c.processTurnPackets();
+      const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const input = async packet => { await f.c.dispatch([packet]); for (let n = 0; n < 6; n++) turn(); };
+    const stores = id => ({inventory:inv.getAmount(id), equipment:p.getEquipment().getAmount(id),
+      banks:p.getBanks().reduce((sum,b,tab) => sum + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id)
+        .reduce((sum,g) => sum + g.getItem().getAmount(), 0)});
+    const total = vector => Object.values(vector).reduce((sum,n) => sum+n, 0);
+    const xp = () => core.Skill.values().map(skill => p.getSkillManager().getExperience(skill));
+    const current = (Type, group) => {
+      const entry = manager.getCurrent(); assert.ok(entry instanceof Type);
+      assert.equal(sender.getChatboxGroupId(), group);
+      assert.equal(manager.getOwner(), undefined); assert.equal(sender.getChatboxOwner(), undefined);
+      const mount = sender.subInterfaceTargets.get(group); assert.ok(mount);
+      assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      return entry;
+    };
+    const option = (title, options) => {
+      assert.equal(core.MultiChatboxPrompt.getPending(p), null, 'this is the native OptionDialogue route');
+      const entry = current(core.OptionDialogue, 219);
+      assert.equal(entry.getTitle(), title); assert.deepEqual(entry.getOptions(), options);
+      return entry;
+    };
+    const choose = number => input({type:'dialogue_continue', widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex:number});
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0); assert.equal(p.getPrivateArea(), null);
+    assert.equal(total(stores(GLOVE)), 0); assert.equal(total(stores(PAGE)), 0);
+    if (!mode.noGlove) inv.add(plain(GLOVE), false);
+    if (MAX_STACK_AMOUNT-mode.gap > 0) inv.add(plain(PAGE, MAX_STACK_AMOUNT-mode.gap), false);
+    if (mode.fullBag) {
+      assert.equal(core.ItemDefinition.forId(229).getName(), 'Vial');
+      assert.equal(core.ItemDefinition.forId(229).isStackable(), false);
+      for (let n = 0; n < 27; n++) inv.add(plain(229), false);
+    }
+    inv.refreshItems();
+    const initialVials = stores(229);
+    assert.equal(inv.getAmount(GLOVE), mode.noGlove ? 0 : 1);
+    assert.equal(inv.getAmount(PAGE), MAX_STACK_AMOUNT-mode.gap);
+    for (const id of [GLOVE, PAGE]) {
+      const slot = inv.getSlotForItemId(id);
+      if (slot >= 0) assert.equal(inv.getItems()[slot].getMeta(), null);
+    }
+    assert.equal(inv.getAddableAmount(plain(PAGE, 50)), mode.fullBag ? 0 : Math.min(mode.gap,50));
+    assert.equal(inv.getFreeSlots(), mode.fullBag ? 0 : mode.noGlove ? 27 : 26, 'observed physical capacity before the trade');
+    const initial = {glove:stores(GLOVE), pages:stores(PAGE), xp:xp()};
+    core.RegionManager.loadMapFiles(X,Y);
+    const stand = [[0,-1],[0,1],[-1,0],[1,0]].map(([dx,dy]) => new core.Location(X+dx,Y+dy,0))
+      .find(at => !core.RegionManager.blocked(at,null));
+    assert.ok(stand, 'a collision-checked adjacent approach at the actual indexed spawn');
+    p.setLocation(stand); p.needsPlacement = false;
+    const npc = core.NPC.create(NPC, new core.Location(X,Y,0));
+    assert.equal(core.World.getNpcs().add(npc), true);
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p, username:p.getUsername()});
+      core.TaskManager.cancelTasks(p); core.World.getNpcs().remove(npc);
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(g);
+    });
+    const definition = npc.getCurrentDefinition(p); assert.equal(definition.getName(), 'Ignisia');
+    const clickType = definition.getActions().indexOf('Exchange')+1; assert.ok(clickType > 0, 'actual cache Exchange operation');
+    await input({type:'npc_option', index:npc.getIndex(), clickType});
+    const greeting = current(core.NpcDialogue,231);
+    assert.equal(greeting.getNpcId(), NPC);
+    assert.equal(greeting.getText().replace(/\s+/g,' ').trim(), 'Do you have something for me?');
+    assert.deepEqual({glove:stores(GLOVE),pages:stores(PAGE),xp:xp()}, initial);
+    await input({type:'dialogue_continue', widgetId:(231<<16)|5, childIndex:-1});
+    option(undefined, ['Yes, I do.', 'Err... nope. Sorry.']); await choose(1);
+    if (mode.noGlove) {
+      assert.equal(manager.isActive(), false); assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+      assert.deepEqual({glove:stores(GLOVE),pages:stores(PAGE),xp:xp()}, initial);
+      controlsPassed++; return;
+    }
+    option('What would you like to trade for?', ['Extra Crate.', 'Burnt Pages.']); await choose(2);
+    option('Trade in 1x Warm gloves for 50x burnt pages?', ['Yes.', 'No.']);
+    assert.equal(inv.getAmount(GLOVE), 1, 'the same declared glove is still carried at the actual confirmation');
+    assert.equal(inv.getAddableAmount(plain(PAGE,50)), mode.fullBag ? 0 : Math.min(mode.gap,50));
+    assert.deepEqual({glove:stores(GLOVE),pages:stores(PAGE),xp:xp()}, initial);
+    await choose(mode.no ? 2 : 1);
+    const after = {glove:stores(GLOVE),pages:stores(PAGE),xp:xp()};
+    const spent = total(initial.glove)-total(after.glove), credited = total(after.pages)-total(initial.pages);
+    // First economic target: the fixed invoice is fully delivered across owned stores or refused atomically.
+    assert.equal(credited, spent*50, 'fixed fifty-page barter must conserve: '+JSON.stringify({mode:mode.name,initial,after,spent,credited}));
+    assert.ok(spent === 0 || spent === 1);
+    if (mode.control && !mode.no) { assert.equal(spent,1); assert.equal(credited,50); }
+    if (mode.no) assert.deepEqual(after, initial);
+    assert.deepEqual(after.xp, initial.xp);
+    assert.deepEqual(stores(229), initialVials, 'barter retains all declared filler items');
+    if (mode.control) {
+      assert.equal(manager.isActive(), false); assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+      controlsPassed++;
+    }
+  });
+});

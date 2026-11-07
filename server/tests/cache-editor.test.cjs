@@ -13,6 +13,10 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const Fields = require("../plugins/tools/cache-editor/Fields.CacheEditor");
 const Inspect = require("../plugins/tools/cache-editor/Inspect.CacheEditor");
+const CustomNpcOverrides = require("../plugins/tools/cache-editor/CustomNpcOverrides.CacheEditor.cjs");
+const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
+const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { CombatType } = require("../dist/game/content/combat/CombatType");
 
 const core = { CacheDefinitions, ObjectDefinition: require("../dist/game/definition/ObjectDefinition").ObjectDefinition };
 const inspect = (request) => Inspect.describe(core, request);
@@ -445,6 +449,44 @@ test("custom definitions keep their IDs, extend counts, preserve stock definitio
   assert.equal(CacheDefinitions.getNpc(50000).name, "Custom goblin");
   CacheDefinitions.registerCustomDefinitions([]);
   assert.deepEqual(CacheDefinitions.getCounts(), counts);
+});
+
+test("manager NPC recolours and damage stay on the new ID, leaving its cache base unchanged", () => {
+  let base;
+  for (let id = 0; id < CacheDefinitions.getBaseCounts().npcs; id++) {
+    const candidate = CacheDefinitions.getNpc(id);
+    if (candidate?.recolorFrom?.length && candidate.recolorTo?.length === candidate.recolorFrom.length) {
+      base = candidate;
+      break;
+    }
+  }
+  assert.ok(base, "the real cache has an NPC with built-in recolours");
+  const originalFrom = [...base.recolorFrom], originalTo = [...base.recolorTo];
+  const color = base.recolorTo[0];
+  const newColor = (color + 1) & 65535;
+  const document = CustomNpcOverrides.withCustomNpcRecolors(core, {
+    version: 1, rows: [{ kind: "npc", id: 50000, baseId: base.id, fields: { name: "Custom colour test" } }],
+  }, { npcs: { "50000": { recolorFrom: [color], recolorTo: [newColor] } } });
+  assert.deepEqual(Document.check(core, document), { ok: true, problems: [] });
+  try {
+    CacheDefinitions.registerCustomDefinitions(document.rows);
+    const custom = CacheDefinitions.getNpc(50000);
+    assert.equal(custom.recolorTo[0], newColor);
+    assert.equal(CacheDefinitions.getNpc(base.id), base);
+    assert.deepEqual(base.recolorFrom, originalFrom);
+    assert.deepEqual(base.recolorTo, originalTo);
+    const baseCombat = NpcDefinition.forId(base.id);
+    const originalMaxHit = baseCombat.getMaxHit(), originalStyle = baseCombat.getAttackType();
+    const customCombat = NpcDefinition.forId(50000);
+    NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    assert.equal(customCombat.getMaxHit(), 37);
+    assert.equal(customCombat.getAttackType(), CombatType.MAGIC);
+    assert.equal(baseCombat.getMaxHit(), originalMaxHit);
+    assert.equal(baseCombat.getAttackType(), originalStyle);
+  } finally {
+    CacheDefinitions.registerCustomDefinitions([]);
+    NpcDefinition.invalidateCache(50000);
+  }
 });
 
 test("malformed fields are refused before reaching the runtime", () => {

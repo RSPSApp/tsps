@@ -6,6 +6,7 @@ const path = require("node:path");
 const inspect = require("./Inspect.CacheEditor");
 const Document = require("./Document.CacheEditor.cjs");
 const Assets = require("./Assets.CacheEditor.cjs");
+const CustomNpcOverrides = require("./CustomNpcOverrides.CacheEditor.cjs");
 
 function need(query, name) {
   const value = query.get(name);
@@ -34,8 +35,11 @@ function register(api) {
       const document = Document.read(root);
       const verdict = Document.check(core, document);
       if (!verdict.ok) throw new Error(verdict.problems.join("; "));
+      const combined = CustomNpcOverrides.withCustomNpcRecolors(core, document, CustomNpcOverrides.readCustomNpcCombat(root));
+      const combinedVerdict = Document.check(core, combined);
+      if (!combinedVerdict.ok) throw new Error(combinedVerdict.problems.join("; "));
       // NPC/object spawn loaders run before startup hooks, so definitions must exist at registration.
-      applied = core.CacheDefinitions.registerCustomDefinitions(document.rows);
+      applied = core.CacheDefinitions.registerCustomDefinitions(combined.rows);
   } catch (error) {
       console.error("[cache-editor] overlay document not applied:", error.message);
   }

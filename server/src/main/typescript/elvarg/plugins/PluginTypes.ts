@@ -1487,6 +1487,7 @@ export interface PluginCoreApi {
   MeleeCombatMethod: any;
   RangedCombatMethod: any;
   MagicCombatMethod: any;
+  TeleBlock: any;
   CombatMethod: any;
   CombatSpecial: any;
   CombatFactory: any;

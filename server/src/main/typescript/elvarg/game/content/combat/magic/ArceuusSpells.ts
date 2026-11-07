@@ -15,6 +15,7 @@ import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
 import { Animation } from "../../../model/Animation";
 import { Graphic } from "../../../model/Graphic";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 type TeleportSpell = {
     level: number;
@@ -26,13 +27,27 @@ type TeleportSpell = {
 
 type SelfSpell = {
     id: number; level: number; experience: number; runes: Item[]; effect: (player: Player) => void;
-    cooldown?: { attribute: string; duration: number; message?: string };
+    cooldown?: { attribute: string; duration: number; message?: string | ((player: Player) => string) };
     castDelay?: boolean;
     /** The cast's animation and graphic (cache ids), and the message it sends. */
     animation?: number; graphic?: number; message?: string;
     /** Why the spell can't be cast now (a message), checked before runes are taken. */
     blocked?: (player: Player) => string | null;
 };
+
+/** Death Charge, as in rsprox recordings 4102 (cast, fade) and 3340 (recast refusals, kill). */
+const DEATH_CHARGE_TICKS = 100;
+const DEATH_CHARGE_COOLDOWN_VARBIT = "arceuus_death_charge_cooldown";
+const DEATH_CHARGE_ACTIVE_VARBIT = "arceuus_death_charge_active";
+const DEATH_CHARGE_CAST_SOUND = 5034;
+const DEATH_CHARGE_FADE_SOUND = 5056;
+/** Wiki: the killed creature must be within 16 tiles of the caster. */
+const DEATH_CHARGE_RANGE = 16;
+const DEATH_CHARGE_PENDING = "You already have a Death Charge pending on you.";
+const DEATH_CHARGE_COOLDOWN = "You can only cast Death Charge every 60 seconds.";
+const DEATH_CHARGE_CAST = "<col=a53fff>Upon the death of your next foe, some of your special attack energy will be restored.</col>";
+const DEATH_CHARGE_RESTORED = "<col=a53fff>Some of your special attack energy has been restored.</col>";
+const DEATH_CHARGE_FADED = "<col=a53fff>Your Death Charge has faded away.</col>";
 
 /** The cache's self-cast Arceuus animation (human_cast_selfimbue). */
 const SELF_IMBUE = 8970;
@@ -51,7 +66,8 @@ class ArceuusSelfSpell extends Spell {
     cast(player: Player): boolean {
         const cooldown = this.data.cooldown;
         if (cooldown && Number(player.getAttribute(cooldown.attribute) ?? 0) > World.getProcessCycle()) {
-            if (cooldown.message) player.sendMessage(cooldown.message);
+            const message = typeof cooldown.message === "function" ? cooldown.message(player) : cooldown.message;
+            if (message) player.sendMessage(message);
             return true;
         }
         const blocked = this.data.blocked?.(player);
@@ -114,6 +130,7 @@ const ZOMBIE = { cast: 1875, impact: 1905, rise: 13685 };
 export class ArceuusSpells {
     public static readonly WARD_UNTIL = "arceuus:ward-until";
     public static readonly DEATH_CHARGE_UNTIL = "arceuus:death-charge-until";
+    private static readonly DEATH_CHARGE_TOKEN = "arceuus:death-charge-token";
     public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadow-veil-until";
     public static readonly MARK_UNTIL = "arceuus:mark-until";
     private static readonly CORRUPTION = "arceuus:corruption";
@@ -160,12 +177,15 @@ export class ArceuusSpells {
             blocked: (player) => player.getSkillManager().getMaxLevel(Skill.PRAYER) < 70 ? "You require a Prayer level of 70 to do that." : null,
             effect: (player) => ArceuusOfferings.sinister(player),
         })],
-        // Wiki: a minute to make one kill, once every 60 seconds.
+        // Wiki: a minute to make one kill, once every 60 seconds; recording 4102 for the cast's state.
         ["death charge", new ArceuusSelfSpell({
             id: 15309, level: 80, experience: 90, runes: [rune(560), rune(565), rune(566)],
             animation: SELF_IMBUE, graphic: 1854,
-            cooldown: { attribute: "arceuus:death-charge-cooldown", duration: 60_000, message: "You can only cast Death Charge every 60 seconds." },
-            effect: (player) => player.setAttribute(this.DEATH_CHARGE_UNTIL, World.getProcessCycle() + 100),
+            cooldown: {
+                attribute: "arceuus:death-charge-cooldown", duration: 60_000,
+                message: (player) => this.hasDeathCharge(player) ? DEATH_CHARGE_PENDING : DEATH_CHARGE_COOLDOWN,
+            },
+            effect: (player) => this.startDeathCharge(player),
         })],
         ["degrime", new ArceuusSelfSpell({
             id: 15345, level: 70, experience: 83, runes: [rune(557, 4), rune(561, 2)],
@@ -310,11 +330,51 @@ export class ArceuusSpells {
         player.setAttribute(this.CORRUPTION_MARKED, this.hasMark(player));
     }
 
-    /** Death Charge restores energy once per cast (Wiki), with its end graphic (cache 1855). */
-    public static useDeathCharge(player: Player): boolean {
+    private static sendDeathChargeVarbit(player: Player, name: string, value: number): void {
+        const id = CacheDefinitions.getVarbitId(name);
+        if (id != null) player.getPacketSender().sendVarbit(id, value);
+    }
+
+    /**
+     * The cast: the spellbook's cooldown and active varbits go up with the message, and 100 ticks
+     * later the cooldown ends and an unused charge fades with its message and sound (recording 4102).
+     */
+    public static startDeathCharge(player: Player): void {
+        player.setAttribute(this.DEATH_CHARGE_UNTIL, World.getProcessCycle() + DEATH_CHARGE_TICKS);
+        const token = Number(player.getAttribute(this.DEATH_CHARGE_TOKEN) ?? 0) + 1;
+        player.setAttribute(this.DEATH_CHARGE_TOKEN, token);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 1);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 1);
+        player.sendMessage(DEATH_CHARGE_CAST);
+        player.getPacketSender().sendSoundEffect(DEATH_CHARGE_CAST_SOUND, 1, 0, 255);
+        TaskManager.submit(new class extends Task {
+            // Not keyed to the player, so clearing their tasks (a click) doesn't cancel it.
+            constructor() { super(DEATH_CHARGE_TICKS, false); }
+            execute(): void {
+                this.stop();
+                if (!player.isRegistered() || player.getAttribute(ArceuusSpells.DEATH_CHARGE_TOKEN) !== token) return;
+                ArceuusSpells.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 0);
+                if (player.getAttribute(ArceuusSpells.DEATH_CHARGE_UNTIL) == null) return; // spent on a kill
+                player.setAttribute(ArceuusSpells.DEATH_CHARGE_UNTIL, null);
+                ArceuusSpells.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
+                player.sendMessage(DEATH_CHARGE_FADED);
+                player.getPacketSender().sendSoundEffect(DEATH_CHARGE_FADE_SOUND, 1, 0, 255);
+            }
+        });
+    }
+
+    /**
+     * A kill uses the charge up (Wiki: restores energy once per cast, and only when the killed
+     * creature is within 16 tiles; a full bar still spends it), with its end graphic (cache 1855),
+     * the varbit going down and the restored message (recording 3340).
+     */
+    public static useDeathCharge(player: Player, killed?: { getLocation(): Location }): boolean {
         if (!this.hasDeathCharge(player)) return false;
+        if (killed && !player.getLocation().isWithinDistance(killed.getLocation(), DEATH_CHARGE_RANGE)) return false;
         player.setAttribute(this.DEATH_CHARGE_UNTIL, null);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
         player.performGraphic(new Graphic(1855));
+        player.sendMessage(DEATH_CHARGE_RESTORED);
         return true;
     }
 

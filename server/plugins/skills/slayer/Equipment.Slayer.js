@@ -107,7 +107,18 @@ function hurtsImmune(player, hit) {
   return GEAR.immune.weapons.some((prefix) => weapon.startsWith(prefix));
 }
 
+/** The item a monster needs worn to be harmed (GEAR.needsWorn), by its name. */
+const needsWornByName = new Map((GEAR.needsWorn ?? []).flatMap((rule) => rule.names.map((name) => [name, rule])));
+
 function npcHit({ npc, hit }) {
+  const needs = needsWornByName.get(npcName(npc));
+  if (needs) {
+    const attacker = hit?.getAttacker?.();
+    if (attacker?.isPlayer?.() && !equippedNames(attacker.getAsPlayer?.() ?? attacker).some((name) => needs.worn.includes(name))) {
+      hit.setTotalDamage(0);
+    }
+    return;
+  }
   if (!immuneNames.has(npcName(npc))) return;
   const attacker = hit?.getAttacker?.();
   if (!attacker?.isPlayer?.()) return;

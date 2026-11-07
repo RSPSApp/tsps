@@ -114,3 +114,31 @@ test('malformed, duplicate, unreliable and congested auxiliary channels leave ga
     assert.equal(f.peerCloses(), 0);
   }
 });
+
+test('public world metadata exposes only the configured name over HTTP and the content channel', t => {
+  const world = require('../dist/game/definition/WorldDefinition');
+  t.mock.method(world, 'getWorldDefinition', () => ({ name: 'Solaris RSPS', pluginConfig: { secret: 'private' } }));
+  assert.deepEqual(JSON.parse(ContentApi.resolve('GET', '/api/world-info').body), { name: 'Solaris RSPS' });
+  assert.equal(ContentApi.resolve('POST', '/api/world-info').status, 405);
+  const h = connect();
+  const frames = response(h.channel, { type: 'content-request', id: 100, path: '/api/world-info' });
+  assert.ok(JSON.stringify(frames).includes('Solaris RSPS'));
+  assert.ok(!JSON.stringify(frames).includes('private'));
+  h.channel.close();
+});
+
+test('native world registration uses the world definition name, not the legacy environment label', t => {
+  const world = require('../dist/game/definition/WorldDefinition');
+  t.mock.method(world, 'getWorldDefinition', () => ({ name: 'Solaris RSPS' }));
+  t.mock.method(WebRtcGameConnector.prototype, 'connect', () => {});
+  const keys = ['WEBRTC_WORLD_ID', 'WEBRTC_WORLD_TOKEN', 'WEBRTC_WORLD_NAME'];
+  const previous = keys.map(key => process.env[key]);
+  try {
+    process.env.WEBRTC_WORLD_ID = 'solar';
+    process.env.WEBRTC_WORLD_TOKEN = 'test-token';
+    process.env.WEBRTC_WORLD_NAME = 'Old label';
+    assert.equal(WebRtcGameConnector.startFromEnv(() => {}).worldName, 'Solaris RSPS');
+  } finally {
+    keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index]; });
+  }
+});

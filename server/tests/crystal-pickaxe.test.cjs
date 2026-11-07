@@ -71,6 +71,18 @@ test("an elven signet saves the charge one time in ten", () => {
   assert.equal(CrystalPickaxe.charges(pickaxe), 9999);
 });
 
+test("a celestial signet, charged or not, saves the charge one time in ten", () => {
+  for (const signetId of [ItemIds.CELESTIAL_SIGNET, ItemIds.CELESTIAL_SIGNET_UNCHARGED_]) {
+    const pickaxe = item(ItemIds.CRYSTAL_PICKAXE);
+    const player = createPlayer(pickaxe);
+    player.getEquipment().getItems()[Equipment.RING_SLOT] = item(signetId);
+    assert.equal(CrystalPickaxe.tryUseCharge(player, () => 0.05), false);
+    assert.equal(CrystalPickaxe.charges(pickaxe), 10000);
+    assert.equal(CrystalPickaxe.tryUseCharge(player, () => 0.5), true);
+    assert.equal(CrystalPickaxe.charges(pickaxe), 9999);
+  }
+});
+
 test("poisoned spears and the 3rd Age bow are wired in the item data", () => {
   const fs = require("node:fs");
   const path = require("node:path");

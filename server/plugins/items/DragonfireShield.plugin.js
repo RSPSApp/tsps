@@ -1,12 +1,16 @@
 /**
- * Dragonfire shield (https://oldschool.runescape.wiki/w/Dragonfire_shield): charges, Inspect,
- * Check, Empty, Bottled dragonbreath, absorbing dragonfire and the Activate blast. Live behaviour from a rev 242 RSProx
- * recording; see docs/dragonfire-shield.md.
+ * The charged shields: the Dragonfire shield (https://oldschool.runescape.wiki/w/Dragonfire_shield),
+ * the Dragonfire ward and the Ancient wyvern shield. Charges, Inspect, Check, Empty, Bottled
+ * dragonbreath, absorbing dragonfire, the Activate / Operate blast, the +1 defence per charge and
+ * the wyvern shield's fossils. Live behaviour from a rev 242 RSProx recording and a rev 227 one;
+ * see docs/dragonfire-shield.md.
  */
 const { DRAGONFIRE_BREATH_EVENT } = require("../combat/DragonfireProtection");
 
 const CHARGES_META_KEY = "dragonfire-shield";
 const MAX_CHARGES = 50;
+// Cache gamevals: defence_stab, defence_slash, defence_crush, defence_ranged in the bonus array.
+const CHARGE_DEFENCE_BONUSES = [5, 6, 7, 9];
 const RECHARGE_ATTRIBUTE = "dragonfire-shield:recharge";
 const ARMED_ATTRIBUTE = "dragonfire-shield:armed";
 
@@ -23,6 +27,12 @@ const ABSORB_ANIMATION = 6695; // qip_dragon_slayer_player_absorbing_fire
 const CHARGE_GRAPHICS = [1160, 1161, 1162, 1163, 1164]; // qip_dragon_slayer_shield_charge_one .. _five
 const ABSORB_DELAY = 30; // Live: animation and graphic both delay 30
 const ABSORB_SOUNDS = [3750, 3740];
+const WYVERN_RELEASE_ANIMATION = 7700; // fossil_wyvern_shield_release_charge
+const WYVERN_RELEASE_GRAPHIC = 1401; // fossil_wyvern_player_releasing_charge
+const WYVERN_ATTACK_GRAPHIC = 1402; // fossil_wyvern_shield_attack_spotanim
+const WARD_RELEASE_ANIMATION = 7873; // dragonfire_ward_releasing_charge
+const FOSSIL_SOUND = 3740; // Live (rev 227): synth_sound on every fossil used on the wyvern shield
+const NUMULITES_PER_CHARGE = 500; // Wiki
 const UNLEASH_SOUND = 3761;
 const IMPACT_SOUND = 161;
 const VENT_SOUND = 3760;
@@ -37,6 +47,7 @@ const PROJECTILE_CYCLES_PER_TILE = 5;
 const BLAST_HEIGHT = 120;
 const BLAST_RANGE = 10; // Wiki
 const BLAST_MAX_HIT = 25; // Wiki
+const WYVERN_BLAST_MAX_HIT = 15; // Wiki (Ancient wyvern shield: "roughly 15")
 const PROTECTED_MAX_HIT = 3; // Wiki (Mod Ash): against an anti-dragon shield
 const DEFENCE_XP_PER_DAMAGE = 4; // Live: 9 damage gave 36 Defence xp on the blast tick
 
@@ -45,17 +56,74 @@ const VENT_MESSAGE = "You vent the shield's remaining charges harmlessly into th
 const DRAGONBREATH_MESSAGE = "You charge your shield using the bottled dragonbreath.";
 const FULLY_CHARGED_MESSAGE = "Your dragonfire shield is already fully charged."; // Wiki
 const GLOW_MESSAGE = "Your dragonfire shield glows more brightly.";
+const WYVERN_GLOW_MESSAGE = "Your ancient wyvern shield glows more brightly."; // Live (rev 227)
 // Live has charge_one at 1 charge; the other four are assumed to follow in tens (11-20 -> two...).
 const CHARGES_PER_GRAPHIC = 10;
 
 let core = null;
-let chargedId = -1;
-let unchargedId = -1;
 let blastMethod = null;
 const rechargeTasks = new WeakMap();
 
+/**
+ * The three shields share the charge mechanic. `dragonbreath` and `absorbs` say how one is
+ * charged (Wiki: the wyvern shield only takes fossils and numulites), `maxHit` is its blast's,
+ * and `releaseAnimation` / `releaseGraphic` are what Empty plays; `fossils` takes fossils and numulites.
+ */
+const SHIELDS = [];
+const shieldsById = new Map();
+
+function createShields(ItemIdentifiers) {
+  SHIELDS.length = 0;
+  shieldsById.clear();
+  SHIELDS.push(
+    {
+      name: "Dragonfire shield",
+      charged: ItemIdentifiers.DRAGONFIRE_SHIELD,
+      uncharged: ItemIdentifiers.DRAGONFIRE_SHIELD_2,
+      dragonbreath: true,
+      absorbs: true,
+      maxHit: BLAST_MAX_HIT,
+      releaseAnimation: VENT_ANIMATION,
+      releaseGraphic: VENT_GRAPHIC,
+      attackGraphic: UNLEASH_GRAPHIC,
+    },
+    {
+      name: "Dragonfire ward",
+      charged: ItemIdentifiers.DRAGONFIRE_WARD,
+      uncharged: ItemIdentifiers.DRAGONFIRE_WARD_2,
+      dragonbreath: true,
+      absorbs: true,
+      maxHit: BLAST_MAX_HIT,
+      releaseAnimation: WARD_RELEASE_ANIMATION,
+      releaseGraphic: VENT_GRAPHIC,
+      attackGraphic: UNLEASH_GRAPHIC,
+    },
+    {
+      name: "Ancient wyvern shield",
+      charged: ItemIdentifiers.ANCIENT_WYVERN_SHIELD,
+      uncharged: ItemIdentifiers.ANCIENT_WYVERN_SHIELD_2,
+      dragonbreath: false,
+      absorbs: false,
+      fossils: true,
+      maxHit: WYVERN_BLAST_MAX_HIT,
+      releaseAnimation: WYVERN_RELEASE_ANIMATION,
+      releaseGraphic: WYVERN_RELEASE_GRAPHIC,
+      attackGraphic: WYVERN_ATTACK_GRAPHIC,
+    }
+  );
+  for (const shield of SHIELDS) {
+    shieldsById.set(shield.charged, shield);
+    shieldsById.set(shield.uncharged, shield);
+  }
+}
+
+function shieldOf(item) {
+  return item ? shieldsById.get(item.getId()) ?? null : null;
+}
+
 function charges(item) {
-  if (!item || item.getId() !== chargedId) return 0;
+  const shield = shieldOf(item);
+  if (!shield || item.getId() !== shield.charged) return 0;
   const saved = Number(item.getMetaValue?.(CHARGES_META_KEY));
   // A charged shield with no saved count (spawned, or from before charges were tracked) is full.
   return Number.isFinite(saved) ? Math.max(0, Math.min(MAX_CHARGES, Math.floor(saved))) : MAX_CHARGES;
@@ -63,8 +131,9 @@ function charges(item) {
 
 /** Stores the charges and swaps between the charged and uncharged shield to match. */
 function setCharges(item, amount) {
+  const shield = shieldOf(item);
   const left = Math.max(0, Math.min(MAX_CHARGES, Math.floor(amount)));
-  item.setId(left > 0 ? chargedId : unchargedId);
+  item.setId(left > 0 ? shield.charged : shield.uncharged);
   item.setMetaValue(CHARGES_META_KEY, left > 0 && left < MAX_CHARGES ? left : undefined);
 }
 
@@ -77,7 +146,7 @@ function refresh(player) {
 
 function wornShield(player) {
   const shield = player.getEquipment().getItems()[core.Equipment.SHIELD_SLOT];
-  return shield && (shield.getId() === chargedId || shield.getId() === unchargedId) ? shield : null;
+  return shieldOf(shield) ? shield : null;
 }
 
 function inspect({ player, item }) {
@@ -142,8 +211,9 @@ function empty({ player, item }) {
   setCharges(item, 0);
   refresh(player);
   player.sendMessage(VENT_MESSAGE);
-  player.performAnimation(new core.Animation(VENT_ANIMATION));
-  player.performGraphic(new core.Graphic(VENT_GRAPHIC));
+  const { releaseAnimation, releaseGraphic } = shieldOf(item);
+  player.performAnimation(new core.Animation(releaseAnimation));
+  player.performGraphic(new core.Graphic(releaseGraphic));
   player.getPacketSender().sendSoundEffect(VENT_SOUND, 1, 0);
   return true;
 }
@@ -167,6 +237,7 @@ function absorbDragonfire({ player, messages }) {
   const shield = player ? wornShield(player) : null;
   if (!shield || !Array.isArray(messages)) return;
   const current = charges(shield);
+  if (!shieldOf(shield).absorbs) return;
   if (current >= MAX_CHARGES) {
     messages.push({ text: FULLY_CHARGED_MESSAGE, spam: true });
     return;
@@ -180,10 +251,10 @@ function absorbDragonfire({ player, messages }) {
   for (const sound of ABSORB_SOUNDS) player.getPacketSender().sendSoundEffect(sound, 1, 0);
 }
 
-function blastMaxHit(target) {
+function blastMaxHit(shield, target) {
   return target.isPlayer() && core.CombatEquipment.hasDragonProtectionGear(target.getAsPlayer())
     ? PROTECTED_MAX_HIT
-    : BLAST_MAX_HIT;
+    : shieldOf(shield).maxHit;
 }
 
 /** Wiki (Mod Ash): the attacker's Defence against the target's Magic defence; exact formula unpublished. */
@@ -217,7 +288,8 @@ function createBlastMethod() {
 
     hits(character, target) {
       const player = character.getAsPlayer();
-      const damage = blastAccurate(player, target) ? Math.floor(Math.random() * (blastMaxHit(target) + 1)) : 0;
+      const shield = wornShield(player);
+      const damage = shield && blastAccurate(player, target) ? Math.floor(Math.random() * (blastMaxHit(shield, target) + 1)) : 0;
       const dealt = Math.min(damage, Math.max(0, target.getHitpoints()));
       if (dealt > 0) {
         player.getSkillManager().addExperience(Skill.DEFENCE, dealt * DEFENCE_XP_PER_DAMAGE);
@@ -238,7 +310,7 @@ function createBlastMethod() {
       }
       const end = projectileEnd(player, target);
       player.performAnimation(new Animation(UNLEASH_ANIMATION));
-      player.performGraphic(new Graphic(UNLEASH_GRAPHIC));
+      player.performGraphic(new Graphic(shield ? shieldOf(shield).attackGraphic : UNLEASH_GRAPHIC));
       target.performGraphic(new Graphic(IMPACT_GRAPHIC, end, BLAST_HEIGHT));
       Projectile.createProjectile(player, target, BLAST_PROJECTILE, PROJECTILE_START, end, BLAST_HEIGHT / 4, BLAST_HEIGHT / 4)
         .sendProjectile();
@@ -260,6 +332,73 @@ function resolveBlast(attacker) {
   return blastMethod;
 }
 
+/** Charges one identified or unidentified fossil gives (Wiki); the identified rare ones give none. */
+function fossilCharges(item) {
+  const name = item?.getDefinition?.().getName?.() ?? "";
+  if (/^Unidentified .+ fossil$/.test(name) || /^Small fossilised /.test(name)) return 1;
+  if (/^Medium fossilised /.test(name) || /^Fossilised (roots|stump|branch|leaf|mushroom)$/.test(name)) return 2;
+  if (/^Large fossilised /.test(name)) return 3;
+  return 0;
+}
+
+/**
+ * Charges the item gives the wyvern shield: a fossil's (live: rev 227, Leagues world), or one for
+ * every 500 numulites (Wiki), as many as still fit.
+ */
+function wyvernChargesFrom(item, current) {
+  if (item.getId() === core.ItemIdentifiers.NUMULITE) {
+    return Math.min(MAX_CHARGES - current, Math.floor(item.getAmount() / NUMULITES_PER_CHARGE));
+  }
+  return fossilCharges(item);
+}
+
+/** Spends the source on the shield; false when it would add nothing. */
+function chargeFrom(player, shield, source) {
+  const current = charges(shield);
+  const added = current < MAX_CHARGES ? wyvernChargesFrom(source, current) : 0;
+  if (added <= 0) return false;
+  const used = source.getId() === core.ItemIdentifiers.NUMULITE ? added * NUMULITES_PER_CHARGE : 1;
+  player.getInventory().deleteNumber(source.getId(), used);
+  setCharges(shield, current + added);
+  return true;
+}
+
+function glow(player) {
+  refresh(player);
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, WYVERN_GLOW_MESSAGE);
+  player.getPacketSender().sendSoundEffect(FOSSIL_SOUND, 1, 0);
+}
+
+/** A fossil or numulites used on the shield in the inventory. */
+function chargeWyvernShield(event) {
+  const { player, usedItem, usedWithItem } = event;
+  const shield = shieldOf(usedItem)?.fossils ? usedItem : usedWithItem;
+  if (!shieldOf(shield)?.fossils) return;
+  const source = shield === usedItem ? usedWithItem : usedItem;
+  if (!chargeFrom(player, shield, source)) return;
+  event.handled = true;
+  glow(player);
+}
+
+/** Wiki: the worn Recharge uses the fossils and numulites in the inventory. */
+function recharge({ player, item }) {
+  let charged = false;
+  for (const source of player.getInventory().getItems().slice()) {
+    if (source && source.getId() > 0) charged = chargeFrom(player, item, source) || charged;
+  }
+  if (!charged) return false;
+  glow(player);
+  return true;
+}
+
+/** Wiki: every charge adds 1 to the stab, slash, crush and ranged defence bonuses (the item data holds the uncharged ones). */
+function chargeDefence({ player, bonuses }) {
+  const shield = wornShield(player);
+  const gained = shield ? charges(shield) : 0;
+  if (gained <= 0) return;
+  for (const index of CHARGE_DEFENCE_BONUSES) bonuses[index] += gained;
+}
+
 function login({ player }) {
   const steps = rechargeSteps(player);
   if (steps > 0) {
@@ -270,8 +409,7 @@ function login({ player }) {
 
 function attach(api) {
   core = api.core;
-  chargedId = core.ItemIdentifiers.DRAGONFIRE_SHIELD;
-  unchargedId = core.ItemIdentifiers.DRAGONFIRE_SHIELD_2;
+  createShields(core.ItemIdentifiers);
   blastMethod = createBlastMethod();
 }
 
@@ -283,9 +421,14 @@ module.exports = {
     api.persistAttribute(RECHARGE_ATTRIBUTE, 0);
     api.onPlayerLogin(login);
     api.onItemAction("Dragonfire shield", { Inspect: inspect, Check: inspect, Activate: activate, Empty: empty });
+    api.onItemAction("Dragonfire ward", { Inspect: inspect, Check: inspect, Activate: activate, Empty: empty });
+    api.onItemAction("Ancient wyvern shield", { Inspect: inspect, Check: inspect, Operate: activate, Recharge: recharge, Empty: empty });
     api.onItemOnItem("Bottled dragonbreath", "Dragonfire shield", chargeWithDragonbreath, { noted: false });
+    api.onItemOnItem("Bottled dragonbreath", "Dragonfire ward", chargeWithDragonbreath, { noted: false });
+    api.onItemOnItem(chargeWyvernShield, { noted: false });
+    api.registerBonusProvider({ apply: chargeDefence });
     api.registerCombatMethodResolver({ resolve: resolveBlast, overridesWeapon: true });
     api.onCustomEvent(DRAGONFIRE_BREATH_EVENT, absorbDragonfire);
   },
-  _test: { charges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },
+  _test: { blastMaxHit, charges, chargeWyvernShield, recharge, chargeDefence, fossilCharges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },
 };

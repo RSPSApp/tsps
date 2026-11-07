@@ -193,6 +193,14 @@ function chopTick() {
     }
     if (cycle < session.next) continue;
     session.next = cycle + R().chopTicks;
+    // The axe is looked up again each swing, as tree chopping does: a dropped or banked axe ends the chop.
+    const axe = Woodcutting.findBestUsableAxe(player);
+    if (!axe) {
+      player.sendMessage(Common.message("noAxe"));
+      sessions.delete(player);
+      continue;
+    }
+    session.axe = axe;
     player.performAnimation(new Common.core.Animation(session.axe.animationId));
     if (Math.random() >= cutChance(player, session.axe)) continue;
     session.bark = { at: cycle + R().barkDelay, event: session.event, kind: session.root.kind };

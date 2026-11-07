@@ -322,11 +322,8 @@ module.exports = function registerBiohazardQuest(api) {
 
   function giveCoins(player, amount) {
     const inventory = player.getInventory();
-    if (held(player, COINS_ITEM_ID)) {
-      inventory.adds(COINS_ITEM_ID, amount);
-      return true;
-    }
-    if (freeSlots(player) < 1) {
+    // Every coin must fit: a stack near the cap, or one with other metadata and no free slot, kept part or none.
+    if (inventory.getAddableAmount(new api.core.Item(COINS_ITEM_ID, amount)) < amount) {
       player.sendMessage("You need a free inventory space to take the coins.");
       return false;
     }
@@ -365,7 +362,7 @@ module.exports = function registerBiohazardQuest(api) {
 
   function nearWatchtower(player) {
     const location = player.getLocation?.();
-    if (!location) return false;
+    if (!location || (location.getZ?.() ?? location.z ?? 0) !== 0) return false;
     const x = location.getX?.() ?? location.x ?? 0;
     const y = location.getY?.() ?? location.y ?? 0;
     return Math.max(Math.abs(x - WATCHTOWER_TILE.x), Math.abs(y - WATCHTOWER_TILE.y)) <= 5;
@@ -811,7 +808,7 @@ module.exports = function registerBiohazardQuest(api) {
     if (event.objectId !== WATCHTOWER_OBJECT_ID) return false;
     const { player } = event;
     event.handled = true;
-    if (quest.getStage(player) !== STAGE_SPOKEN_TO_JERICO) return true;
+    if (quest.getStage(player) !== STAGE_SPOKEN_TO_JERICO || !nearWatchtower(player)) return true;
     if (!held(player, BIRD_FEED_ITEM_ID) || !held(player, PIGEON_CAGE_ITEM_ID)) {
       player.sendMessage("You need bird feed and a pigeon cage to distract the watchtower.");
       return true;
@@ -858,6 +855,12 @@ module.exports = function registerBiohazardQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
+    // The Wiki route uses bird feed on the watchtower fence. Keep Investigate
+    // on the same transaction so either route consumes feed only once.
+    if (itemId === BIRD_FEED_ITEM_ID && objectId === WATCHTOWER_OBJECT_ID) {
+      investigateWatchtower(event);
+      return;
+    }
     if (itemId !== ROTTEN_APPLE_ITEM_ID || objectId !== CAULDRON_OBJECT_ID) return;
     event.handled = true;
     if (quest.getStage(player) !== STAGE_CLIMBED_LADDER) return;

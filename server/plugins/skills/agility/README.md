@@ -19,6 +19,7 @@ Each entry in `agility-shortcuts.json`'s `shortcuts`:
 | `object` | Cache loc id, or a list of ids (`yarn dump:loc <id\|name>` lists where they are placed) |
 | `at` | Optional: the loc's tile, or a list of tiles, when one id is several shortcuts |
 | `level`, `xp` | Agility level and experience (Wiki) |
+| `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }` |
 | `start`, `end` | Optional messages at the start and on success |
 | `render` | Optional walk animation for the whole crossing (`"BALANCE_WALK"`) |
 | `route` | Optional tile the player walks to before starting |

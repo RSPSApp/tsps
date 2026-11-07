@@ -26,9 +26,10 @@ const CRYSTAL_HARPOON_AGILITY = 50;
 const HARPOONS = [
   { tier: "crystal", ids: ["CRYSTAL_HARPOON", "CRYSTAL_HARPOON_3"], level: 71, agility: CRYSTAL_HARPOON_AGILITY },
   { tier: "dragon", ids: ["CRYSTAL_HARPOON_INACTIVE_"], level: 71, agility: CRYSTAL_HARPOON_AGILITY },
+  // The infernal harpoons need 75 Fishing (charged or not), as Fishing's own table has them; the dragon ones 61.
   { tier: "dragon", ids: ["INFERNAL_HARPOON", "INFERNAL_HARPOON_OR_", "INFERNAL_HARPOON_OR__3",
-    "INFERNAL_HARPOON_UNCHARGED_", "INFERNAL_HARPOON_UNCHARGED__2", "INFERNAL_HARPOON_UNCHARGED__4",
-    "DRAGON_HARPOON", "DRAGON_HARPOON_OR_", "DRAGON_HARPOON_OR__3"], level: 61 },
+    "INFERNAL_HARPOON_UNCHARGED_", "INFERNAL_HARPOON_UNCHARGED__2", "INFERNAL_HARPOON_UNCHARGED__4"], level: 75 },
+  { tier: "dragon", ids: ["DRAGON_HARPOON", "DRAGON_HARPOON_OR_", "DRAGON_HARPOON_OR__3"], level: 61 },
   { tier: "harpoon", ids: ["HARPOON", "BARB_TAIL_HARPOON"], level: 1 },
 ];
 
@@ -207,10 +208,13 @@ function harpoonSpot(event) {
       inventoryFull(player);
       return false;
     }
+    // As Fishing does: a harpoon dropped or banked mid-catch ends it; a better one picked up is used.
+    const held = harpoonOf(player);
+    if (!held) return false;
     if (ticks % harpoonTicks !== 0) return true;
     Shared.animate(player, ANIM.HARPOON);
-    if (Math.random() < catchChance(level, DATA.catch[harpoon.tier])) {
-      catchFish(player, fight, harpoon, event.npcId === NPC.SPOT_SPECIAL);
+    if (Math.random() < catchChance(level, DATA.catch[held.tier])) {
+      catchFish(player, fight, held, event.npcId === NPC.SPOT_SPECIAL);
     }
     return true;
   });

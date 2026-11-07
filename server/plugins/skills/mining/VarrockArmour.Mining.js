@@ -20,7 +20,7 @@ function attach(api) {
     [I.VARROCK_ARMOUR_3, 3], [I.VARROCK_ARMOUR_4, 4],
   ]);
   tierByOre = new Map([
-    [I.COPPER_ORE, 1], [I.TIN_ORE, 1], [I.IRON_ORE, 1], [I.SILVER_ORE, 1],
+    [I.CLAY, 1], [I.COPPER_ORE, 1], [I.TIN_ORE, 1], [I.IRON_ORE, 1], [I.SILVER_ORE, 1],
     [I.COAL, 1], [I.GOLD_ORE, 1], [I.LEAD_ORE, 1], [I.MITHRIL_ORE, 2], [I.ADAMANTITE_ORE, 3],
     [I.RUNITE_ORE, 4],
   ]);

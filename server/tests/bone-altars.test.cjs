@@ -168,7 +168,10 @@ function useOnHouseAltar(player, bone) {
   return Altars.offerHouseBones({ player, object, objectId: 13197, location: object.getLocation(), itemId: CacheDefinitions.getObjId(bone), itemSlot: player.inventory.indexOf(CacheDefinitions.getObjId(bone)) });
 }
 
-const runTicks = (ticks) => { for (let i = 0; i < ticks; i++) submitted.forEach((task) => task.tick()); };
+// A tick also moves the game cycle on, as World.process does: offerings are one a tick.
+let cycle = 0;
+api.core.World = Object.assign(Object.create(api.core.World), { getProcessCycle: () => cycle });
+const runTicks = (ticks) => { for (let i = 0; i < ticks; i++) { cycle++; submitted.forEach((task) => task.tick()); } };
 
 test("a house altar gives the Wiki's experience for every buryable bone, with its message by burners lit", () => {
   Math.random = () => 0.99;
@@ -215,6 +218,14 @@ test("using a bone again offers at once instead of waiting for the loop", () => 
   useOnHouseAltar(player, "bones");
   assert.equal(player.sent.xp.length, 2);
   assert.equal(submitted[0].isRunning(), false, "the old loop stopped");
+});
+
+test("several uses in one tick offer one bone, not one each", () => {
+  Math.random = () => 0.99;
+  const player = housePlayer(houseWith("GILDED_ALTAR", 0), ["bones", "bones", "bones", "bones"]);
+  for (let i = 0; i < 4; i++) useOnHouseAltar(player, "bones");
+  assert.equal(player.sent.xp.length, 1, "one offering this tick");
+  assert.equal(player.inventory.length, 3);
 });
 
 test("a house altar stops when the player leaves, refuses low Prayer, and lets the Zealot's robes keep a bone", () => {

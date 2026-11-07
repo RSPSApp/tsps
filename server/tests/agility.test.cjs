@@ -850,6 +850,22 @@ test("a quest gate refuses only when the quest plugin says it isn't done", () =>
   assert.ok(!unknown.state.messages.some((message) => message.includes("Prince Ali")), "a quest no plugin knows is no bar");
 });
 
+// Wiki (Shortcuts): the Al Kharid big window and broken wall are one shortcut that "Requires completion of Prince Ali
+// Rescue"; the Stalker Den cave is "after Shadows of Custodia". The broken wall and the cave had no quest gate.
+test("the Al Kharid broken wall and the Stalker Den cave need their quests", () => {
+  try {
+    hooks.answers["quest:is-complete"] = (request) => { request.complete = false; };
+    const wall = createPlayer(3295, 3157, 0);
+    operate(wall, 33344, [3295, 3157, 0]);
+    assert.ok(wall.state.messages.includes("You need to complete Prince Ali Rescue to use this shortcut."), wall.state.messages.join(" | "));
+    const cave = createPlayer(1324, 3363, 0);
+    operate(cave, 57279, [1324, 3364, 0]);
+    assert.ok(cave.state.messages.includes("You need to complete Shadows of Custodia to use this shortcut."), cave.state.messages.join(" | "));
+  } finally {
+    delete hooks.answers["quest:is-complete"];
+  }
+});
+
 test("diary gates are recorded but not enforced until the diary's tasks can be done", () => {
   hooks.events.length = 0;
   const player = createPlayer(2898, 9902, 0);
@@ -944,6 +960,27 @@ test("an obstacle above the player's level is refused without moving them", () =
   assert.deepEqual(tileOf(player), [2673, 3297, 0]);
   assert.deepEqual(player.state.messages, ["You need an Agility level of at least 90 to attempt this."]);
   assert.equal(player.state.xp, 0);
+});
+
+test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as captured (rev242 tick 3375)", () => {
+  const ItemStatementDialogue = PluginManager.getCoreApi().ItemStatementDialogue;
+  const text = "You need an Agility level of at least 84 to climb up these rocks.";
+  const player = createPlayer(2832, 3247, 0, 1);
+  const shown = [];
+  player.getDialogueManager = () => ({ startDialogues: (chain) => shown.push(...chain.getDialogues().values()) });
+  operate(player, 53234, [2832, 3248, 0]);
+  assert.deepEqual(tileOf(player), [2832, 3247, 0], "refused: not moved");
+  assert.equal(shown.length, 1);
+  assert.ok(shown[0] instanceof ItemStatementDialogue);
+  assert.equal(shown[0].getItemId(), 6517);
+  assert.equal(shown[0].getText(), text);
+  // Only the message box's chat log line (mesbox channel), not a second generic game message.
+  assert.deepEqual(player.state.messages, [text]);
+
+  const able = createPlayer(2832, 3247, 0, 84);
+  operate(able, 53234, [2832, 3248, 0]);
+  for (let i = 0; i < 10; i++) tick();
+  assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
 });
 
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
@@ -1308,10 +1345,15 @@ test("a course mark picked up finishes a lap only when agility:mark-taken says s
   const inventory = player.getInventory();
   player.getInventory = () => ({ ...inventory, getAddableAmount: (item) => item.getAmount(), adds: (id, amount) => added.push([id, amount]) });
   player.setAttribute("agility.progress", { course: "draynor", index: 2 });
-  const mark = { getItem: () => ({ getId: () => MARK_OF_GRACE }), getgoesGlobal: () => false, getDespawnDelay: () => 1000 };
-  const pickUp = (groundItem = mark, location = { x: 3098, y: 3281, z: 3 }) => hooks.pickup({ player, groundItem, groundItemId: MARK_OF_GRACE, clickType: 1, location, handled: false });
+  const mark = {
+    getItem: () => ({ getId: () => MARK_OF_GRACE }), getgoesGlobal: () => false, getDespawnDelay: () => 1000,
+    getPosition: () => new Location(3098, 3281, 3),
+  };
+  // The mark credited to the inventory (ItemOnGroundManager's "ground-items:taken"); a click that took nothing sends none.
+  const taken = (groundItem = mark, source = "pickup") => hooks.listeners["ground-items:taken"]({ player, groundItem, source, itemId: MARK_OF_GRACE, amount: 1 });
+  assert.equal(hooks.pickup, undefined, "clicking a mark pays nothing before the pickup succeeds");
   hooks.events.length = 0;
-  pickUp();
+  taken();
   assert.deepEqual(hooks.events.find((event) => event.name === "agility:mark-taken")?.payload.course, "draynor");
   assert.deepEqual(player.getAttribute("agility.progress"), { course: "draynor", index: 2 }, "unanswered: nothing but the pick-up");
   assert.equal(player.getAttribute("agility.laps")?.draynor, undefined);
@@ -1321,9 +1363,11 @@ test("a course mark picked up finishes a lap only when agility:mark-taken says s
   };
   try {
     hooks.events.length = 0;
-    pickUp({ ...mark, getgoesGlobal: () => true });
+    taken({ ...mark, getgoesGlobal: () => true });
     assert.equal(hooks.events.length, 0, "a dropped mark is not a course's");
-    pickUp();
+    taken(mark, "telegrab");
+    assert.equal(player.getAttribute("agility.laps")?.draynor, undefined, "only a picked-up mark finishes a lap");
+    taken();
     assert.equal(player.getAttribute("agility.laps").draynor, 1);
     assert.equal(player.getAttribute("agility.progress"), null);
     assert.deepEqual(added, [[995, 10]]);

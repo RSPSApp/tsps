@@ -582,6 +582,10 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
     refreshQuestList(player);
   }
 
+  function notifyApprovalWork(player) {
+    api.emitCustomEvent("miscellania:approval-changed", { player, value: approval(player), max: APPROVAL_MAX });
+  }
+
   /** Managing Miscellania reads and moves approval after the quest (it keeps varbit misc_approval here). */
   function handleGetApproval(request) {
     if (request?.player) request.value = approval(request.player);
@@ -1206,6 +1210,7 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
       if (!held(player, RAW_LOBSTER_ITEM_ID) || approval(player) >= APPROVAL_MAX) return;
       player.getInventory().deleteNumber(RAW_LOBSTER_ITEM_ID, 1);
       setApproval(player, approval(player) + APPROVAL_PER_ACTION);
+      notifyApprovalWork(player);
       player.sendMessage("You give Fisherman Frodi the lobster.");
       return;
     }
@@ -1299,6 +1304,7 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
       player.sendMessage("You catch a lobster and give it to Fisherman Frodi.");
     }
     setApproval(player, before + APPROVAL_PER_ACTION);
+    notifyApprovalWork(player);
     if (before < APPROVAL_THRESHOLD && approval(player) >= APPROVAL_THRESHOLD) {
       player.sendMessage("You have gained enough support to become regent. Speak to King Vargas.");
     }

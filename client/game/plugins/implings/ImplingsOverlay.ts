@@ -162,7 +162,7 @@ function area(scene: any, x: number, y: number, size: number, plane: number): Po
     const corners: [number, number][] = [[x, y], [x + size, y], [x + size, y + size], [x, y + size]];
     const out: Point[] = [];
     for (const [cx, cy] of corners) {
-        const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, plane), cy);
+        const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, plane, x + size / 2, y + size / 2), cy);
         if (!p) return undefined;
         out.push([p[0], p[1]]);
     }

@@ -182,17 +182,20 @@ function mine(event) {
   const mining = () => current(token) && Game.gameOf(player) === game && game.phase === "running"
     && !game.boulder.moving && game.boulder.stage === stageAt && player.getLocation().equals(from);
   const swing = () => {
-    if (!mining()) return;
-    player.performAnimation(pickaxe.animation);
+    // As Mining does each tick: a pickaxe dropped or banked mid-swing ends it; a better one picked up is used.
+    const held = mining() && Common.bestPickaxe(player);
+    if (!held) return;
+    player.performAnimation(held.animation);
     Common.sound(player, "pick");
     chip(game, player);
-    Common.later(Common.rollInterval(pickaxe), swing);
+    Common.later(Common.rollInterval(held), swing);
   };
   Common.later(1, () => {
-    if (!mining()) return;
+    const held = mining() && Common.bestPickaxe(player);
+    if (!held) return;
     Common.spam(player, Common.message("swing"));
-    player.performAnimation(pickaxe.animation);
-    Common.later(Common.rollInterval(pickaxe), swing);
+    player.performAnimation(held.animation);
+    Common.later(Common.rollInterval(held), swing);
   });
   return true;
 }

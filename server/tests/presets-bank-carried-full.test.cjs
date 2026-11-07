@@ -80,3 +80,96 @@ test("a full bank holding the item's placeholder still takes it, so the load goe
   assert.equal(f.p.getInventory().getAmount(I.SHARK), 5, "the preset is loaded");
   assert.equal(tab.getAmount(I.ABYSSAL_WHIP), 1, "the whip fills its placeholder");
 });
+
+// A custom preset's non-spawnable item must come from a real copy. Counting the preset's own spawned copy (which is
+// wiped, not banked) let the load take nothing and spawn a plain, tradeable item: free preset items became real ones.
+test("a custom preset does not turn a preset copy into a real item", (t) => {
+  const f = actor(t);
+  const ags = I.ARMADYL_GODSWORD;
+  const copy = new core.Item(ags, 1);
+  copy.setMetaValue(core.Item.UNTRADEABLE_META, true);
+  copy.setMetaValue(core.Item.UNBANKABLE_META, true);
+  copy.setMetaValue(core.Item.PRESET_META, true);
+  f.p.getInventory().setItem(0, copy);
+  const custom = new Presetable("mine", [new core.Item(ags, 1)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, custom);
+  const plain = [...f.p.getInventory().getValidItems(), ...f.p.getEquipment().getValidItems()]
+    .filter((item) => item.getId() === ags && !item.isPresetItem());
+  assert.equal(plain.length, 0, "no real godsword appears");
+  assert.ok(f.messages.some((m) => /non-spawnable item/.test(m)), f.messages.join(" | "));
+});
+
+test("a custom preset still takes a real non-spawnable item from the bank", (t) => {
+  const f = actor(t);
+  const ags = I.ARMADYL_GODSWORD;
+  f.p.getBank(0).add(new core.Item(ags, 1), false);
+  const custom = new Presetable("mine", [new core.Item(ags, 1)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, custom);
+  assert.equal(f.p.getInventory().getAmount(ags), 1, "the godsword is carried");
+  const banked = Array.from({ length: 10 }, (_, tab) => f.p.getBank(tab)?.getAmount?.(ags) ?? 0).reduce((a, b) => a + b, 0);
+  assert.equal(banked, 0, "and taken from the bank");
+});
+
+// The preset saves each item with its meta (charges). Loading took any copy from the bank by id but gave back a clone
+// carrying the saved meta, so a charged item came back full on every reload. It now keeps the taken copy's own meta.
+test("a custom preset gives back the real item as it is, not as it was saved", (t) => {
+  const f = actor(t);
+  const ags = I.ARMADYL_GODSWORD;
+  const saved = new core.Item(ags, 1);
+  saved.setMetaValue("test-charges", 11000);
+  const real = new core.Item(ags, 1);
+  real.setMetaValue("test-charges", 100);
+  f.p.getBank(0).add(real, false);
+  const custom = new Presetable("charged", [saved], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, custom);
+  const loaded = f.p.getInventory().getValidItems().find((item) => item.getId() === ags);
+  assert.ok(loaded, "the item is carried");
+  assert.equal(loaded.getMetaValue("test-charges"), 100, "with the bank copy's charges, not the saved ones");
+});
+
+// One id can sit in several bank stacks: different meta, a legacy split of plain stacks, or a carried stack banked
+// beside one with meta. Loading took the amount from the first stack only but still spawned the preset's full amount,
+// so the total grew on every reload. Each case loads a preset needing 100 dragon knives (stackable, not spawnable).
+const knifeTotal = (p) => {
+  const id = I.DRAGON_KNIFE;
+  const bank = Array.from({ length: 10 }, (_, tab) => p.getBank(tab)?.getAmount?.(id) ?? 0).reduce((a, b) => a + b, 0);
+  return bank + p.getInventory().getAmount(id) + p.getEquipment().getAmount(id);
+};
+const knifePreset = () => new Presetable("knives", [new core.Item(I.DRAGON_KNIFE, 100)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+const metaKnives = (amount) => {
+  const item = new core.Item(I.DRAGON_KNIFE, amount);
+  item.setMetaValue("test-mark", 1);
+  return item;
+};
+for (const [name, setup, total] of [
+  ["60 with meta and 60 plain banked", (p) => { p.getBank(0).add(metaKnives(60), false); p.getBank(0).add(new core.Item(I.DRAGON_KNIFE, 60), false); }, 120],
+  ["two plain stacks of 60 (a legacy split)", (p) => { p.getBank(0).setItem(0, new core.Item(I.DRAGON_KNIFE, 60)); p.getBank(0).setItem(1, new core.Item(I.DRAGON_KNIFE, 60)); }, 120],
+  ["70 plain carried and 40 with meta banked", (p) => { p.getBank(0).add(metaKnives(40), false); p.getInventory().setItem(0, new core.Item(I.DRAGON_KNIFE, 70)); }, 110],
+]) {
+  test(`a custom preset needing more than one stack keeps the total: ${name}`, (t) => {
+    const f = actor(t);
+    assert.equal(new core.Item(I.DRAGON_KNIFE, 1).getDefinition().isStackable(), true, "dragon knives stack");
+    setup(f.p);
+    assert.equal(knifeTotal(f.p), total);
+    Presets.applyPreset(f.p, knifePreset());
+    assert.equal(f.p.getInventory().getAmount(I.DRAGON_KNIFE), 100, "the preset's 100 are carried");
+    assert.equal(knifeTotal(f.p), total, "and none were made: the rest stay banked");
+    Presets.applyPreset(f.p, knifePreset());
+    assert.equal(knifeTotal(f.p), total, "a reload keeps the total too");
+  });
+}
+
+test("a worn preset stack from two stacks wears the first and carries the rest, each with its own meta", (t) => {
+  const f = actor(t);
+  f.p.getBank(0).add(metaKnives(60), false);
+  f.p.getBank(0).add(new core.Item(I.DRAGON_KNIFE, 60), false);
+  const worn = new Presetable("worn knives", [], [new core.Item(I.DRAGON_KNIFE, 100)], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, worn);
+  const weapon = f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
+  assert.equal(weapon.getId(), I.DRAGON_KNIFE);
+  assert.equal(weapon.getAmount(), 60, "the first stack is worn");
+  assert.equal(weapon.getMetaValue("test-mark"), 1, "with its own meta");
+  const carried = f.p.getInventory().getValidItems().filter((item) => item.getId() === I.DRAGON_KNIFE);
+  assert.deepEqual(carried.map((item) => [item.getAmount(), item.getMetaValue("test-mark") ?? null]), [[40, null]], "the plain rest is carried");
+  assert.equal(knifeTotal(f.p), 120, "and the total is kept");
+});

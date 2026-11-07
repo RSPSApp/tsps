@@ -57,11 +57,11 @@ Only changed vars are sent, as in the capture; all of them are sent again on log
 
 **From the Wiki:**
 - **Damage:** up to 30, or 35 with granite.
-- **Accuracy:** the owner's Ranged roll with a ranged weapon, otherwise melee, against the target's Ranged defence.
+- **Accuracy:** the owner's Ranged roll with a ranged weapon, otherwise melee (any magic staff included), against the target's heavy Ranged defence. A powered staff takes whichever of its Ranged and melee rolls is higher (Wiki, Dwarf multicannon, "Accuracy with powered staves").
 - **XP:** 2 Ranged XP per damage, no Hitpoints XP. Core's `PendingHitConfig.experience: false` skips the usual combat XP for these hits.
 - **Targets:**
   - in singles, only what fights the owner or nothing at all, and only while the owner isn't fighting something else; in multi, anything attackable;
-  - never sand crabs, ammonite crabs, demonic gorillas or kurasks;
+  - never sand crabs, ammonite crabs, demonic gorillas, kurasks, the Mage Arena's battle mages or Kolodion (Wiki: "The cannon no longer works on the Mage Arena mages and Kolodion");
   - in line of sight from the cannon's footprint.
   - **Ours:** a target fighting the owner first, otherwise the nearest.
 - **Granite:** granite balls load first, and steel only once the granite is used up. Granite fires first (projectile 1443).
@@ -141,5 +141,6 @@ A further **18 previously missing outlines** are now supported:
 These four remain listed without guessed rectangles. Older imported Near-Reality outlines also retain their explicit unverified provenance.
 
 ## Follow-ups
+- not yet done, from the Wiki: a Forestry event spawning where the cannon stands decays it; the Kalphite Queen, King Black Dragon, thermonuclear smoke devil, God Wars Dungeon inhabitants and the Giant Roc destroy cannons; the cannon no longer fires at sea creatures; a very low accuracy bonus can deal 1 instead of 0;
 - the four unsupported active outlines listed above, and independent verification of older imported outlines;
 - the real messages for the parts marked "ours".

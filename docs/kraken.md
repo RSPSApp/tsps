@@ -59,6 +59,11 @@ server's policies, rather than captured retail wording or internal-teleport rule
 The public Enter and Use options remain available. [Jagex's original update](https://secure.runescape.com/m=news/boss-pets-sets-chat--more?oldschool=1)
 describes the fee, payment sources and room lifetime.
 
+Respawn: live OSRS respawns the Kraken more slowly in a private instance (Wiki: "The boss
+respawns more slowly in a private instance than the public arena"), but no figure is
+documented, and the public infobox gives 10-14 ticks. This server uses the public delay in
+private rooms because no private figure is known; it is an estimate, not retail timing.
+
 Peek remains unimplemented: it reports the number of players in the public boss
 room on OSRS, but this server's broad Kraken Cove area also includes the exterior.
 The boss-room membership boundary has not been established here. The cove's

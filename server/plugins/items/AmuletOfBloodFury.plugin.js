@@ -201,6 +201,17 @@ function revert({ player, item }) {
   if (item.getId() === AMULET_OF_BLOOD_FURY_ID) revertBloodFury(player, item);
 }
 
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out the amulet ready to use
+ * (the PvP Arena's load-outs) asks for a full one.
+ */
+function fillCharges(event) {
+  const { item } = event;
+  if (item?.getId?.() !== AMULET_OF_BLOOD_FURY_ID) return;
+  setBloodFuryCharges(item, BLOOD_FURY_MAX_CHARGES);
+  event.handled = true;
+}
+
 module.exports = {
   name: "AmuletOfBloodFury",
   members: true,
@@ -209,6 +220,7 @@ module.exports = {
     api.onItemOnItem("Blood shard", "Amulet of fury", createFromShard, { noted: false });
     api.onItemOnItem("Blood shard", "Amulet of blood fury", chargeFromShard, { noted: false });
     api.onItemAction("Amulet of blood fury", { Check: check, Revert: revert });
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onCombatHitResolved(onHitResolved);
   },
 };

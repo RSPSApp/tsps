@@ -78,6 +78,19 @@ function swapToUncharged(player, item) {
   refresh(player);
 }
 
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a scythe ready to use
+ * (the PvP Arena's load-outs) asks for a full one: charged, at its most charges.
+ */
+function fillCharges(event) {
+  const { item } = event;
+  const id = item?.getId?.();
+  if (!chargedIds.has(id) && !chargedByUncharged.has(id)) return;
+  if (chargedByUncharged.has(id)) item.setId(chargedByUncharged.get(id));
+  item.setMetaValue(CHARGE_META_KEY, MAX_CHARGES);
+  event.handled = true;
+}
+
 /** Hits per swing: the target's size, 1 to 3. Players are 1x1. */
 function hitCount(target) {
   const size = target?.isNpc?.() ? Number(target.getAsNpc().getSize?.() ?? 1) : 1;
@@ -475,6 +488,7 @@ module.exports = {
     api.onItemAction("Holy Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Sanguine Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeScythe, { noted: false });
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onItemOnObject(depositScythe);
     api.onObjectInteraction(WELL_OBJECT, {
       "Charge-at": chargeAtWell,

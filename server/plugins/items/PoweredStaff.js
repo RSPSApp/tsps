@@ -66,6 +66,16 @@ function definePoweredStaff(api, config) {
     return charges;
   }
 
+  /**
+   * "item:fill-charges" { player, item, handled }: content that hands out a staff ready to use
+   * (the PvP Arena's load-outs) asks for a full one: charged, at its most charges.
+   */
+  function fillCharges(event) {
+    if (!isStaff(event.item?.getId?.())) return;
+    setCharges(event.item, config.maxCharges);
+    event.handled = true;
+  }
+
   function spellFor(player) {
     let spell = spells.get(player);
     if (spell) return spell;
@@ -232,6 +242,7 @@ function definePoweredStaff(api, config) {
     useCharge,
     chargesOf,
     setCharges,
+    fillCharges,
     weaponOf,
     wields,
     isStaff,

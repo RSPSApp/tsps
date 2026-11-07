@@ -43,4 +43,19 @@ function wholePages(state) {
   return Math.floor(state.charges / common().CHARGES_PER_PAGE);
 }
 
-module.exports = { read, set, wholePages };
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a tome ready to use
+ * (the PvP Arena's load-outs) asks for a full one, charged with its own pages.
+ */
+function fillCharges(event) {
+  const definition = event.item && common().getDefinition(event.item.getId());
+  if (!definition) return;
+  set(event.item, definition, common().MAX_CHARGES, definition.pageId);
+  event.handled = true;
+}
+
+function attach(api) {
+  api.onCustomEvent('item:fill-charges', fillCharges);
+}
+
+module.exports = { read, set, wholePages, fillCharges, attach };

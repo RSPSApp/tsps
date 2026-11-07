@@ -236,6 +236,7 @@ module.exports = {
     api = pluginApi;
     staff = defineShadow();
     pluginApi.registerCombatMethodResolver(staff.resolver);
+    pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.registerBonusProvider({ apply: shadowBonuses });
     for (const rune of ["Soul rune", "Chaos rune"]) {
       pluginApi.onItemOnItem(rune, "Tumeken's shadow", chargeShadow);

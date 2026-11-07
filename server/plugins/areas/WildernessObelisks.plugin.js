@@ -174,9 +174,9 @@ function resetActive() {
 }
 
 function hardDiary(player) {
-  const request = { player, diary: "wilderness", tier: "hard", complete: false };
-  api.emitCustomEvent("diary:is-complete", request);
-  return request.complete === true;
+  const request = { player, diary: "wilderness", tier: "hard", claimed: false };
+  api.emitCustomEvent("diary:is-reward-claimed", request);
+  return request.claimed === true;
 }
 
 /** The saved choice, 1-6, or 0. */

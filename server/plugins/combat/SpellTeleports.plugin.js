@@ -296,22 +296,37 @@ const QUEST_LOCKED_SPELLS = new Map([
   ["trollheim teleport", { key: "eadgars_ruse", name: "Eadgar's Ruse" }],
 ]);
 
+/**
+ * The refusal for a quest-locked standard teleport the player hasn't unlocked, or null. `action` ends the line
+ * ("cast this spell", or "direct this teleport" for the house portals).
+ */
+function questLockRefusal(player, name, action) {
+  const locked = QUEST_LOCKED_SPELLS.get(name);
+  if (!locked) return null;
+  const quest = { player, key: locked.key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", quest);
+  if (!quest.complete) return `You need to complete ${locked.name} to ${action}.`;
+  if (locked.stage === undefined) return null;
+  const stage = { player, key: locked.key, stage: null };
+  pluginApi.emitCustomEvent("quest:get-stage", stage);
+  if (Number(stage.stage) >= locked.stage) return null;
+  return locked.unread.replace("cast this spell", action);
+}
+
+/**
+ * Wiki (Portal chamber, Portal nexus): directing a portal "requires the same Magic level and quest requirements as
+ * casting the spell". The house portals ask here so the two share one list; sets `event.refusal`.
+ */
+function teleportQuestLock(event) {
+  event.refusal = questLockRefusal(event.player, event.name?.trim().toLowerCase(), event.action ?? "cast this spell");
+}
+
 /** The standard spell requires the Awowogei rescue; the Arceuus spell and tablet are separate. */
 function mayCastApeAtoll(player, name) {
-  const locked = QUEST_LOCKED_SPELLS.get(name);
-  if (locked && player.getSpellbook() === core.MagicSpellbook.NORMAL) {
-    const quest = { player, key: locked.key, complete: false };
-    pluginApi.emitCustomEvent("quest:is-complete", quest);
-    if (!quest.complete) {
-      player.sendMessage(`You need to complete ${locked.name} to cast this spell.`);
-      return false;
-    }
-    if (locked.stage === undefined) return true;
-    const stage = { player, key: locked.key, stage: null };
-    pluginApi.emitCustomEvent("quest:get-stage", stage);
-    if (Number(stage.stage) >= locked.stage) return true;
-    player.sendMessage(locked.unread);
-    return false;
+  if (QUEST_LOCKED_SPELLS.has(name) && player.getSpellbook() === core.MagicSpellbook.NORMAL) {
+    const refusal = questLockRefusal(player, name, "cast this spell");
+    if (refusal) player.sendMessage(refusal);
+    return !refusal;
   }
   if (name !== "ape atoll teleport" || player.getSpellbook() !== core.MagicSpellbook.NORMAL) return true;
   const rescue = { player, rescue: "king-awowogei", complete: false };
@@ -354,5 +369,6 @@ module.exports = {
     api.onSpellCast(toggleWarning);
     api.onSpellCast(castAlternate);
     api.onInterfaceActionClick(castSpell);
+    api.onCustomEvent("magic:teleport-quest-lock", teleportQuestLock);
   },
 };

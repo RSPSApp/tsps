@@ -558,6 +558,46 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     );
   }
 
+  // Native 20260814T112547-59bcb26: front4375, ruby4507, emerald4885; restored at +2.
+  const INVISIBLE_DOOR_WALL_ID = 38848, DOOR_OPEN_SOUND_ID = 56;
+  const DOOR_VISUALS = [
+    [30110,1636,4824,1,11446,1636,4825,0],
+    [30111,1637,4824,1,11447,1637,4825,2],
+    [30116,1640,4828,2,34650,1641,4828,3],
+    [30117,1633,4837,0,34651,1632,4837,1],
+  ];
+  function openDoorVisuals(area, object, id) {
+    const at=object.getLocation();
+    const door=DOOR_VISUALS.find(row=>row[0]===id&&row[1]===at.x&&row[2]===at.y&&row[3]===object.getFace()&&at.z===0);
+    if(!door)return null;
+    const rows=FRONT_DOOR_LOC_IDS.has(id)?DOOR_VISUALS.slice(0,2):[door];
+    const key=rows[0][0];
+    area.openDoors??=new Map();
+    if(area.openDoors.has(key))return null;
+    const opened=rows.map(([closedId,x,y,face,openId,openX,openY,openFace])=>({
+      closed:new GameObject(closedId,new Location(x,y,0),0,face,area),
+      wall:new GameObject(INVISIBLE_DOOR_WALL_ID,new Location(x,y,0),0,face,area),
+      open:new GameObject(openId,new Location(openX,openY,0),0,openFace,area),
+    }));
+    const restore=()=>{
+      if(area.openDoors.get(key)!==restore)return;
+      area.openDoors.delete(key);
+      if(area.isDestroyed())return;
+      for(const door of opened){
+        ObjectManager.deregister(door.open,true);
+        ObjectManager.register(door.closed,true);
+      }
+    };
+    area.openDoors.set(key,restore);
+    for(const door of opened){
+      ObjectManager.register(door.wall,true);
+      ObjectManager.register(door.open,true);
+    }
+    area.owner.getPacketSender().sendSoundEffect(DOOR_OPEN_SOUND_ID,1,0);
+    later(area,2,restore);
+    return restore;
+  }
+
   /** Cross the edge blocked by the door's face, between its tile and its neighbour. */
   function crossDoor(event) {
     const { player, object } = event;
@@ -565,7 +605,13 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     const position = player.getLocation();
     const crossing = crossingFor(object, position);
     if (!crossing || !Location.isSameTile(position, crossing.approach)) return;
-    ObstacleRunner.run(event, [{ wait: 1 }, { walk: [[crossing.destination.x, crossing.destination.y]] }]);
+    const area=island(player);
+    let restore=null;
+    ObstacleRunner.run(event, [
+      { wait: 1 },
+      { run: ()=>{if(area&&!area.isDestroyed()&&island(player)===area)restore=openDoorVisuals(area,object,resolvedObjectId(event));} },
+      { walk: [[crossing.destination.x, crossing.destination.y]] },
+    ], { onFinish: completed=>{if(!completed)restore?.();} });
   }
 
   function buildJournal(player, questHandle) {

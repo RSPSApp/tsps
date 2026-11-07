@@ -464,3 +464,60 @@ test('leaving the explosives room at the door tile triggers the captured four-ti
   const h=harness('MisthalinMystery'),p=player(),area=island(h,p,60);p.moveTo(new core.Location(1641,4828,0));area.process(p);h.tick(5);assert.equal(h.quest.getStage(p),60);
   p.moveTo(new core.Location(1640,4828,0));area.process(p);h.tick(3);assert.equal(h.quest.getStage(p),60);assert.equal(p.blocked,true);h.tick(1);assert.equal(h.quest.getStage(p),65);assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===1487));h.tick(1);assert.equal(p.blocked,false);
 });
+
+test('native door models open on the walk tick, restore after two ticks, and stay private on both sides',()=>{
+  const obstacle=require('../plugins/skills/agility/ObstacleRunner.Agility'),run=obstacle.run;
+  const rows=[[30110,1636,4824,1,11446,1636,4825,0],[30111,1637,4824,1,11447,1637,4825,2],[30116,1640,4828,2,34650,1641,4828,3],[30117,1633,4837,0,34651,1632,4837,1]];
+  try{
+    for(const row of rows)for(const side of [0,1]){
+      const [id,x,y,face,openId,ox,oy,oface]=row,h=harness('MisthalinMystery'),p=player(),area=island(h,p,130),removed=[];
+      h.api.core.ObjectManager.deregister=(object)=>removed.push(object);
+      const [dx,dy]=[[-1,0],[0,1],[1,0],[0,-1]][face];
+      p.moveTo(new core.Location(x+dx*side,y+dy*side,0));
+      let steps,finish;
+      obstacle.run=(event,value,options)=>{steps=value;finish=options.onFinish;};
+      const event={player:p,objectId:id,definition:{id},object:new core.GameObject(id,new core.Location(x,y,0),0,face)};
+      h.hooks.onObjectInteraction[0](event);
+      assert.equal(h.objects.length,0);
+      assert.deepEqual(steps[0],{wait:1});
+      assert.deepEqual(steps.at(-1),{walk:[[x+dx*(1-side),y+dy*(1-side)]]});
+      steps[1].run();
+      const opens=h.objects.filter(o=>o.getId()===openId);
+      assert.equal(opens.length,1);
+      assert.deepEqual([opens[0].getLocation().x,opens[0].getLocation().y,opens[0].getFace()],[ox,oy,oface]);
+      assert.ok(h.objects.every(o=>o.getPrivateArea()===area));
+      assert.equal(p.log.filter(row=>row[0]==='sendSoundEffect'&&row[1]===56).length,1);
+      const count=id===30110||id===30111?2:1;
+      assert.equal(h.objects.filter(o=>o.getId()===38848).length,count);
+      h.tick(1);assert.equal(removed.length,0);
+      h.tick(1);assert.equal(removed.length,count);
+      assert.equal(h.objects.filter(o=>o.getId()===id).length,1);
+      finish(false);assert.equal(removed.length,count,'late cancellation cannot restore twice');
+    }
+  }finally{obstacle.run=run;}
+});
+test('door cancellation restores once, logout cancels restoration, and other quest door callers keep their walk',()=>{
+  const obstacle=require('../plugins/skills/agility/ObstacleRunner.Agility'),run=obstacle.run;
+  try{
+    for(const cancel of [true,false]){
+      const h=harness('MisthalinMystery'),p=player(),area=island(h,p,130),removed=[];
+      h.api.core.ObjectManager.deregister=o=>removed.push(o);
+      let steps,finish;obstacle.run=(event,value,options)=>{steps=value;finish=options.onFinish;};
+      p.moveTo(new core.Location(1640,4828,0));
+      h.hooks.onObjectInteraction[0]({player:p,objectId:30116,definition:{id:30116},object:new core.GameObject(30116,new core.Location(1640,4828,0),0,2)});
+      steps[1].run();assert.equal(h.objects.length,2);
+      if(cancel){
+        finish(false);assert.equal(removed.length,1);h.tick(1);
+        steps[1].run();assert.equal(h.objects.length,5);
+        h.tick(1);assert.equal(removed.length,1,'the cancelled timer cannot close a newer crossing');
+        h.tick(1);assert.equal(removed.length,2);
+      }
+      else {h.hooks.onPlayerLogout[0]({player:p});assert.equal(area.isDestroyed(),true);h.tick(3);assert.equal(h.objects.length,2);}
+    }
+    for(const id of [30112,30118,30119]){
+      const h=harness('MisthalinMystery'),p=player();island(h,p,130);p.moveTo(new core.Location(1635,4838,0));
+      let steps;obstacle.run=(event,value)=>{steps=value;};
+      object(h,p,id,1635,4838);assert.ok(steps.at(-1).walk);steps[1].run();assert.equal(h.objects.length,0);
+    }
+  }finally{obstacle.run=run;}
+});

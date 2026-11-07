@@ -24,6 +24,7 @@ function harness(name) {
   }, ObjectManager: { register: object => objects.push(object), deregister: noop }, ItemOnGroundManager: { registerLocation: (...args) => {
       ground.push(args);return { getItem:()=>args[1],getPosition:()=>args[2],getPrivateArea:()=>args[3]??args[0].getPrivateArea() };
     },deregister:item=>removedGround.push(item) } },
+    getTaskManager: () => api.core.TaskManager,
     persistAttribute: noop,
     onNpcInteraction: (name, actions) => npcActions.set(name, actions),
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
@@ -78,6 +79,7 @@ function player() {
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
   const p = { attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
+    getHitpoints: () => 10, getForceMovement: () => null, setSkillAnimation: noop,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
     getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => p.weapon ? { getId: () => p.weapon } : null, deleteNumber: () => { p.weapon = null; } }),
     getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),
@@ -87,6 +89,7 @@ function player() {
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getForceMovement: () => p.forceMovement, setForceMovement: value => { p.forceMovement = value; },
     performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -198,6 +201,36 @@ test('the native gemstone panel waits for six switches and gives the key only on
   object(h,p,core.ObjectIdentifiers.FIREPLACE_24);for(const child of [19,3,11,23,7,15])press(child);assert.equal(h.quest.getStage(p),105);assert.equal(p.items.get(I.SAPPHIRE_KEY_2),undefined);
   object(h,p,core.ObjectIdentifiers.FIREPLACE_24);h.continueUntil(p,()=>!p.manager.getCurrent());assert.equal(p.items.get(I.SAPPHIRE_KEY_2),1);
 });
+test('gemstone indicators retain each chosen gem in input order and clear on a new attempt',()=>{
+  const h=harness('MisthalinMystery'),p=player();h.quest.setStage(p,100);
+  const models=()=>p.log.filter(row=>row[0]==='sendInterfaceRawModel');
+  const defaults=Array.from({length:6},(_,i)=>['sendInterfaceRawModel',(555<<16)|(35+i),32348]);
+  object(h,p,core.ObjectIdentifiers.FIREPLACE_24);assert.deepEqual(models(),defaults);
+  const press=child=>h.hooks.onInterfaceActionButton.at(-1)({player:p,buttonId:(555<<16)|child});
+  for(const child of [3,15,7,19,11])press(child);
+  assert.deepEqual(models().slice(6),[32333,2586,32342,32345,32349].map((id,i)=>['sendInterfaceRawModel',(555<<16)|(35+i),id]));
+  assert.equal(p.varbits.get(4050),5);assert.equal(h.quest.getStage(p),100);
+  press(23);assert.deepEqual(models().slice(-7),[['sendInterfaceRawModel',(555<<16)|40,32334],...defaults]);
+  object(h,p,core.ObjectIdentifiers.FIREPLACE_24);assert.deepEqual(models().slice(-6),defaults);
+  press(19);press(19);assert.deepEqual(models().slice(-2),[35,36].map(child=>['sendInterfaceRawModel',(555<<16)|child,32345]));
+});
+
+test('taking the table knife plays the native pickup before its grant without duplicate or refused pickups',()=>{
+  const h=harness('MisthalinMystery'),p=player();
+  object(h,p,core.ObjectIdentifiers.TABLE_258);object(h,p,core.ObjectIdentifiers.TABLE_258);
+  assert.equal(p.items.get(I.KNIFE),undefined);h.tick(1);
+  assert.deepEqual(p.animations,[832]);assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===2581));
+  assert.equal(p.items.get(I.KNIFE),undefined);h.tick(1);
+  assert.equal(p.items.get(I.KNIFE),1);assert.equal(p.blocked,false);assert.deepEqual(p.animations,[832]);
+  object(h,p,core.ObjectIdentifiers.TABLE_258);h.tick(2);
+  assert.equal(p.items.get(I.KNIFE),1);assert.deepEqual(p.animations,[832]);
+  const full=player();full.full=true;object(h,full,core.ObjectIdentifiers.TABLE_258);h.tick(2);
+  assert.equal(full.items.get(I.KNIFE),undefined);assert.deepEqual(full.animations,[]);
+  const leaving=player();object(h,leaving,core.ObjectIdentifiers.TABLE_258);h.tick(1);
+  h.hooks.onPlayerLogout[0]({player:leaving});h.tick(2);
+  assert.equal(leaving.items.get(I.KNIFE),undefined);assert.equal(leaving.blocked,false);
+});
+
 test('riddle notes open the captured parchment rather than chat spam',()=>{
   const h=harness('MisthalinMystery'),p=player();h.quest.setStage(p,35);h.hooks.onItemAction[0]({player:p,itemId:I.NOTES_5,option:'Read'});
   assert.equal(h.quest.getStage(p),40);assert.ok(p.log.some(row=>row[0]==='sendInterface'&&row[1]===70));assert.ok(p.log.some(row=>row[0]==='text'&&row[1]===((70<<16)|3)&&row[2].includes('work of art')));assert.equal(p.messages.length,0);
@@ -358,6 +391,42 @@ test('the mirror cannot move below its captured south boundary or score on a wro
   h.tick(21);
   const mirror=area.actors.get(7436);p.moveTo(new core.Location(1622,4829,0));h.npcActions.get('<col=00ffff>Mirror</col>').Push({player:p,npc:mirror});h.tick(2);assert.equal(mirror.getLocation().getY(),4828);assert.ok(p.messages.includes("The mirror can't go any further in that direction."));
   area.warning=[1619,4828,0];h.tick(16);assert.equal(area.reflections,0);assert.equal(h.quest.getStage(p),111);assert.ok(p.log.some(row=>row[0]==='sendProjectile'));
+});
+test('mirror pushes place both actors with captured exactmove and reset next tick in all directions',()=>{
+  for(const [dx,dy,direction] of [[0,1,0],[1,0,1],[0,-1,2],[-1,0,3]]){
+    const h=harness('MisthalinMystery'),p=player(),area=island(h,p,110);
+    object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);h.continueUntil(p,()=>h.quest.getStage(p)===111);
+    const mirror=area.actors.get(7436),at=new core.Location(1623,4829,0),from=new core.Location(1623-dx,4829-dy,0);
+    mirror.moveTo(at);p.moveTo(from);
+    const push=()=>h.npcActions.get('<col=00ffff>Mirror</col>').Push({player:p,npc:mirror});
+    push();const movement=p.getForceMovement();
+    assert.ok(movement instanceof core.ForceMovement);
+    assert.ok(movement.getStart().equals(from));
+    assert.deepEqual([movement.getEnd().getX(),movement.getEnd().getY(),movement.getSpeed(),movement.getReverseSpeed(),movement.getDirection(),movement.getAnimation()],[dx,dy,0,29,direction,3065]);
+    assert.ok(p.getLocation().equals(at));assert.ok(mirror.getLocation().equals(new core.Location(1623+dx,4829+dy,0)));
+    const { Player }=require('../dist/game/entity/impl/player/Player'),{ PlayerSession }=require('../dist/net/PlayerSession');
+    const wirePlayer=new Player(null);wirePlayer.setIndex(nextIndex++);wirePlayer.setUsername('MirrorWire');wirePlayer.getSession=()=>({sendClientPacket:()=>true});
+    wirePlayer.moveTo(p.getLocation().clone());wirePlayer.setForceMovement(movement);wirePlayer.performAnimation(new core.Animation(3065));
+    const session=new PlayerSession(null);session.setPlayer(wirePlayer);
+    const view=session.createPlayerView(wirePlayer);
+    assert.deepEqual(view.forcedMovement,{startDeltaX:0-dx,startDeltaY:0-dy,endDeltaX:0,endDeltaY:0,startCycleOffset:0,endCycleOffset:29,direction:[1024,1536,0,512][direction]});
+    assert.equal(view.resetPath,true);assert.equal(view.animation.id,3065);
+    assert.equal(p.animations.at(-1),3065);push();assert.equal(p.getForceMovement(),movement,'duplicate push is ignored');
+    h.tick(1);assert.equal(p.getForceMovement(),null);assert.equal(p.animations.at(-1),core.Animation.DEFAULT_RESET_ANIMATION.getId());assert.equal(area.pushing,false);
+    h.hooks.onPlayerLogout[0]({player:p});
+  }
+});
+test('mirror exactmove is released on logout and area destruction without clearing another movement',()=>{
+  for(const cancel of ['logout','destroy','replacement']){
+    const h=harness('MisthalinMystery'),p=player(),area=island(h,p,110);
+    object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);h.continueUntil(p,()=>h.quest.getStage(p)===111);
+    const mirror=area.actors.get(7436);p.moveTo(new core.Location(1622,4827,0));
+    h.npcActions.get('<col=00ffff>Mirror</col>').Push({player:p,npc:mirror});
+    const replacement={};
+    if(cancel==='replacement')p.setForceMovement(replacement);
+    if(cancel==='destroy')area.destroy();else h.hooks.onPlayerLogout[0]({player:p});
+    h.tick(2);assert.equal(p.getForceMovement(),cancel==='replacement'?replacement:null);assert.equal(area.pushing,false);
+  }
 });
 test('mirror pushes retain their direction and encoded knife routes use captured heights and wardrobe endpoints', (t) => {
   const wardrobes = [[1622,4834,1],[1627,4831,2],[1624,4825,3],[1619,4828,0]];

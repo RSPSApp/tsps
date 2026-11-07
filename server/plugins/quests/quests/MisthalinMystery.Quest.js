@@ -1,6 +1,6 @@
 /** Misthalin Mystery: OSRS Wiki and supplied live capture. See docs/misthalin-mystery.md. */
 module.exports = function registerMisthalinMysteryQuest(api) {
-  const { Skill, Location, Direction, ObjectDefinition, PrivateArea, Boundary, Animation, Graphic, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, GameObject, ObjectManager, Item, ItemOnGroundManager, Equipment, HitDamage, HitMask, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Location, Direction, ObjectDefinition, PrivateArea, Boundary, Animation, ForceMovement, Graphic, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, GameObject, ObjectManager, Item, ItemOnGroundManager, Equipment, HitDamage, HitMask, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
@@ -36,6 +36,8 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   const PIANO_GROUP = 554, GEM_GROUP = 555, NOTES_GROUP = 70;
   const PIANO_BUTTONS = Array.from({length: 15}, (_,i) => (PIANO_GROUP<<16)|(20+i));
   const GEM_BUTTONS = new Map([[19,"Sapphire"],[3,"Diamond"],[11,"Zenyte"],[23,"Emerald"],[7,"Onyx"],[15,"Ruby"]]);
+  const GEM_MODELS = new Map([["Sapphire",32345],["Diamond",32333],["Zenyte",32349],["Emerald",32334],["Onyx",32342],["Ruby",2586]]);
+  const EMPTY_GEM_MODEL = 32348;
   const STAGE_STARTED = 5;
   const STAGE_BRIEFED = 10;
   const STAGE_SID_DEAD = 20;
@@ -256,10 +258,10 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       if(stage===STAGE_FUSE_LIT&&at.getX()<=1640&&!this.exploding)explodeWall(this);
     }
     postLeave(actor,logout){
-      if(actor===this.owner){TaskManager.cancelTasks(this);if(this.cameraKey)TaskManager.cancelTasks(this.cameraKey);if(this.resetKey)TaskManager.cancelTasks(this.resetKey);islands.delete(actor);const mandy=mandyByPlayer.get(actor);if(mandy)api.removeNpc(mandy);mandyByPlayer.delete(actor);if(!rowingPlayers.has(actor)){controls(actor,false);actor.getPacketSender().sendInterfaceRemoval();}}
+      if(actor===this.owner){finishMirrorPush(this);TaskManager.cancelTasks(this);if(this.cameraKey)TaskManager.cancelTasks(this.cameraKey);if(this.resetKey)TaskManager.cancelTasks(this.resetKey);islands.delete(actor);const mandy=mandyByPlayer.get(actor);if(mandy)api.removeNpc(mandy);mandyByPlayer.delete(actor);if(!rowingPlayers.has(actor)){controls(actor,false);actor.getPacketSender().sendInterfaceRemoval();}}
       super.postLeave(actor,logout);
     }
-    destroy(){if(this.isDestroyed())return;for(const npc of this.actors.values())api.removeNpc(npc);super.destroy();}
+    destroy(){if(this.isDestroyed())return;finishMirrorPush(this);for(const npc of this.actors.values())api.removeNpc(npc);super.destroy();}
   }
   function explodeWall(area){
     area.exploding=true;const player=area.owner;
@@ -410,14 +412,22 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     const to=new Location(at.getX()+dx,at.getY()+dy,0);
     // Keep the mirror within the captured push limits inside the wardrobe room.
     if(to.getX()<1622||to.getX()>1624||to.getY()<4828||to.getY()>4831){player.sendMessage("The mirror can't go any further in that direction.");return true;}
-    area.pushing=true;player.performAnimation(new Animation(3065));
-    later(area,1,()=>{
-      mirrorScenery(area,at,false);mirror.moveTo(to);mirrorScenery(area,to,true);
-      area.mirrorDirection=[dx,dy];
-      mirror.setFace(Direction.fromDeltas(dx,dy));mirror.faceTile(new Location(to.getX()+dx,to.getY()+dy,0));
-      player.getPacketSender().sendSoundEffect(1395,1,0);player.moveTo(at.clone());
-    });
-    later(area,2,()=>{area.pushing=false;player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);});return true;
+    // Rsprox 20260814T112547-59bcb26, tick5227: placement and exactmove share a tick.
+    const movement=new ForceMovement(p.clone(),new Location(at.getX()-p.getX(),at.getY()-p.getY(),0),0,29,dy>0?0:dx>0?1:dy<0?2:3,3065);
+    area.pushing=movement;player.getMovementQueue().reset();player.setForceMovement(movement);
+    player.performAnimation(new Animation(3065));
+    mirrorScenery(area,at,false);mirror.moveTo(to);mirrorScenery(area,to,true);
+    area.mirrorDirection=[dx,dy];
+    mirror.setFace(Direction.fromDeltas(dx,dy));mirror.faceTile(new Location(to.getX()+dx,to.getY()+dy,0));
+    player.getPacketSender().sendSoundEffect(1395,1,0);player.moveTo(at.clone());
+    later(area,1,()=>finishMirrorPush(area));return true;
+  }
+  function finishMirrorPush(area){
+    if(!area.pushing)return;
+    if(area.owner.getForceMovement()===area.pushing){
+      area.owner.setForceMovement(null);area.owner.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    }
+    area.pushing=false;
   }
   function dropKillerKnife(player){
     const area=island(player);if(!area||area.knifeDropped||held(player,KILLER_KNIFE_ITEM_ID)||player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId()===KILLER_KNIFE_ITEM_ID)return;
@@ -1024,7 +1034,12 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   }
 
   function takeTool(event, variant) {
-    startTranscript(api, event.player, NpcIdentifiers.KILLER, PAGE, variant);
+    const {player}=event;
+    if(resolvedObjectId(event)!==ObjectIdentifiers.TABLE_258||held(player,KNIFE_ITEM_ID)||freeSlots(player)<1){
+      startTranscript(api,player,NpcIdentifiers.KILLER,PAGE,variant);return;
+    }
+    if(ObstacleRunner.isBusy(player))return;
+    ObstacleRunner.run(event,[{anim:832},{sound:2581},{wait:1},{run:()=>startTranscript(api,player,NpcIdentifiers.KILLER,PAGE,variant)}],{keepAnimation:true});
   }
 
   function takeBucket(event) {
@@ -1502,6 +1517,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     const first=group===PIANO_GROUP?4044:4051,count=group===PIANO_GROUP?4:6;
     for(let i=0;i<count;i++)player.getPacketSender().sendVarbit(first+i,0);
     player.getPacketSender().sendVarbit(group===PIANO_GROUP?4049:4050,0);
+    if(group===GEM_GROUP)for(let i=0;i<6;i++)player.getPacketSender().sendInterfaceRawModel((GEM_GROUP<<16)|(35+i),EMPTY_GEM_MODEL);
     pianoProgressByPlayer.delete(player);gemProgressByPlayer.delete(player);
   }
   function openPianoPrompt(player) {
@@ -1539,6 +1555,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   function flipGem(player,gem) {
     player.sendMessage(`You flip the ${gem.toLowerCase()} switch.`);player.getPacketSender().sendSoundEffect(2266,1,0);
     const entered=gemProgressByPlayer.get(player)??[];entered.push(gem);gemProgressByPlayer.set(player,entered);
+    player.getPacketSender().sendInterfaceRawModel((GEM_GROUP<<16)|(34+entered.length),GEM_MODELS.get(gem));
     player.getPacketSender().sendVarbit(4051+GEM_ORDER.indexOf(gem),1);
     if(entered.length<6){player.getPacketSender().sendVarbit(4050,entered.length);return;}
     const correct=entered.join(",")===GEM_ORDER.join(",");resetPuzzle(player,GEM_GROUP);puzzleOpen.delete(player);player.getPacketSender().sendInterfaceRemoval();

@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Animation, Item, ItemIdentifiers, Skill } = require("./Core.Construction");
+const { api, Animation, Item, Skill } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
 const House = require("./House.Construction");
@@ -100,7 +100,7 @@ function installFlatpack(event) {
     return player.sendMessage("This furniture cannot be upgraded. Remove the previous furniture if you wish to install a flatpack here.");
   }
   if (House.constructionLevel(player) < buildable.level) return player.sendMessage(`You need Construction level ${buildable.level} to build that.`);
-  if (!player.getInventory().contains(ItemIdentifiers.HAMMER)) return player.sendMessage("You need a hammer in order to install flatpack furniture.");
+  if (!House.hasHammer(player)) return player.sendMessage("You need a hammer in order to install flatpack furniture.");
   player.getInventory().delete(event.itemId, 1);
   House.hammer(player);
   house.setFurniture(target, buildable);

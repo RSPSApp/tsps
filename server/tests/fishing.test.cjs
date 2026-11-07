@@ -92,6 +92,9 @@ test("fishing spots, catch chances and the catch cascade follow OSRS", async () 
   assert.equal(findTool(player({ inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 120);
   assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON).bonus, 135);
   assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON_INACTIVE_] }), TOOLS.HARPOON).bonus, 120);
+  // Wiki (Crystal harpoon): 50 Agility to wield; below it the crystal harpoon isn't a tool, and a plain one is.
+  assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON), null, "crystal harpoon at 49 Agility");
+  assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON_INACTIVE_, I.HARPOON] }), TOOLS.HARPOON).bonus, 100);
   assert.equal(findTool(player({ fishing: 60, inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 100);
   assert.equal(findTool(player({ fishing: 60, equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON), null);
   assert.equal(findTool(player({ inventory: [I.PEARL_FISHING_ROD] }), TOOLS.FISHING_ROD).bonus, 100, "pearl rod");

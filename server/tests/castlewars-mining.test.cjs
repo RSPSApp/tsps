@@ -97,6 +97,18 @@ test('rune mining uses its canonical shorter interval and works when equipped', 
   assert.equal(m.half(), null);
 });
 
+// Wiki (Crystal pickaxe): "50 Agility and 70 Attack required to wield it".
+test('a crystal pickaxe needs 50 Agility; below it the next pickaxe is used', (t) => {
+  for (const crystal of [core.ItemIdentifiers.CRYSTAL_PICKAXE, core.ItemIdentifiers.CRYSTAL_PICKAXE_INACTIVE_]) {
+    const m = miner(t, { id: core.ItemIdentifiers.RUNE_PICKAXE, level: 99 });
+    m.p.getInventory().add(new core.Item(crystal));
+    m.p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 49);
+    assert.equal(Mining.findBestPickaxe(m.p).id, core.ItemIdentifiers.RUNE_PICKAXE, 'at 49 Agility');
+    m.p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 50);
+    assert.equal(Mining.findBestPickaxe(m.p).id, crystal, 'at 50 Agility');
+  }
+});
+
 test('carrying both level-one pickaxes selects faster iron over bronze', (t) => {
   const m = miner(t);
   m.p.getInventory().add(new core.Item(core.ItemIdentifiers.IRON_PICKAXE));

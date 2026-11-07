@@ -101,9 +101,10 @@ function methodClass() {
       const delay = core.Projectile.ticksToLand(this.landing);
       const hit = new PendingHit(npc, target, this, delay);
       if (this.teleBlock) {
-        // The roll decides the block; the cast itself deals no damage.
+        // The roll decides the block; the cast deals no damage. It still returns a splat-less hit so
+        // the swing counts as an attack (under attack, retaliation) and a miss shows the splash.
         if (hit.isAccurate()) this.landTeleBlock(npc, target);
-        return [];
+        return [hit.withoutHitsplat()];
       }
       CombatFactory.applyStyleDamage(hit, npc.getDefinition().getMaxHit());
       return [hit];
@@ -119,7 +120,7 @@ function methodClass() {
 
     handleAfterHitEffects(hit) {
       const target = hit.getTarget?.();
-      if (!target || this.teleBlock) return;
+      if (!target) return;
       if (hit.isAccurate()) return;
       target.performGraphic(core.MagicCombatMethod.SPLASH_GRAPHIC);
     }
@@ -141,5 +142,5 @@ module.exports = {
   name: "ElderChaosDruid",
   members: true,
   register: attach,
-  _test: { blockWanted },
+  _test: { blockWanted, methodClass },
 };

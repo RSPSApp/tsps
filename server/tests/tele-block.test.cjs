@@ -107,3 +107,22 @@ test("an Elder Chaos druid casts Tele Block only when none is running or it is n
   assert.equal(blockWanted(target), true, "about 20 ticks left");
   assert.equal(blockWanted({ isPlayer: () => false }), false, "never at a monster");
 });
+
+test("an Elder Chaos druid's Tele Block swing returns a splat-less hit that splashes on a miss", () => {
+  const Druid = DruidPlugin._test.methodClass();
+  const method = new Druid();
+  method.teleBlock = true;
+  method.landing = 69;
+  const hitFor = (accurate) => {
+    const hit = { isAccurate: () => accurate, withoutHitsplat() { this.bare = true; return this; }, getTarget: () => target };
+    return hit;
+  };
+  const splashes = [];
+  const target = { performGraphic: (g) => splashes.push(g) };
+  const hit = hitFor(false);
+  // handleAfterHitEffects splashes a missed Tele Block and ignores an accurate one.
+  method.handleAfterHitEffects(hit);
+  assert.equal(splashes.length, 1, "a missed Tele Block splashes");
+  method.handleAfterHitEffects(hitFor(true));
+  assert.equal(splashes.length, 1, "a landed Tele Block does not");
+});

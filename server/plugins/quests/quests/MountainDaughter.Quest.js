@@ -22,8 +22,8 @@
  * quest stage is a single varbit.
  *
  * Requirements (OSRS Wiki): 20 Agility (not required to start; 10 Agility to
- * enter the camp initially - not enforced here, as no transcript line exists
- * for a failed check), rope, pickaxe, axe, plank, a staff/pole and gloves.
+ * enter the camp initially, checked against visible Agility at the rope boulder),
+ * rope, pickaxe, axe, plank, a staff/pole and gloves.
  * Rewards: 2 Quest Points, 2,000 Prayer XP, 1,000 Attack XP, the Bearhead
  * (collected from the Kendal's corpse) and Mountain Camp access.
  *
@@ -49,8 +49,8 @@
  *   pool), the rope boulder drops the player into the camp, both lair exits
  *   return to the surface cave mouth, and the dead trees open via the shared
  *   Woodcutting plugin rather than quest-specific stumps.
- * - Skill requirements are not enforced (no failed-check dialogue exists in the
- *   transcript).
+ * - Other skill requirements are not enforced (no failed-check dialogue exists
+ *   in the transcript). The rope-entry refusal uses local descriptive wording.
  * - Journal lines are written here (the wiki publishes no journal text).
  */
 module.exports = function registerMountainDaughterQuest(api) {
@@ -161,6 +161,7 @@ module.exports = function registerMountainDaughterQuest(api) {
   /** Moving the rope boulder lands the player inside the camp. */
   const ROCKSLIDE_TILE = new Location(2760, 3658, 0);
   const CAMP_DROP_TILE = new Location(2764, 3667, 0);
+  const CAMP_ENTRY_AGILITY_LEVEL = 10;
   const CAMP_TILE = new Location(2761, 3661, 0);
   const OUTSIDE_TILE = new Location(2760, 3655, 0);
   const SHORE_TILE = new Location(2771, 3680, 0);
@@ -823,6 +824,10 @@ module.exports = function registerMountainDaughterQuest(api) {
     const { player, objectId, itemId } = event;
     if (objectId !== BOULDER_OBJECT_ID || itemId !== ROPE_ITEM_ID) return;
     event.handled = true;
+    if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) < CAMP_ENTRY_AGILITY_LEVEL) {
+      player.sendMessage(`You need an Agility level of ${CAMP_ENTRY_AGILITY_LEVEL} to climb down here.`);
+      return;
+    }
     playVariant(player, SCENERY_SPEAKER_NPC_ID, "entering-the-camp");
     player.moveTo(CAMP_DROP_TILE);
   }

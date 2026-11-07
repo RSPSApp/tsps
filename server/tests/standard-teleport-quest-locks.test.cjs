@@ -34,7 +34,20 @@ test('Ardougne Teleport is refused before Plague City, and spends nothing',async
  assert.equal(f.p.getInventory().getAmount(563),2,'no law runes spent');
 });
 
-test('after Plague City it casts',async t=>{
+async function readScroll(f){const id=core.ItemIdentifiers.ARDOUGNE_TELEPORT_SCROLL;await f.conn.dispatch([{type:'inventory_action',slot:f.p.getInventory().getSlotForItemId(id),itemId:id,widgetId:3214,option:'Read'}]);f.conn.processTurnPackets();}
+
+test("after Plague City the spell waits for Edmond's scroll; reading it teaches the spell (Wiki)",async t=>{
  const f=actor(t,{plagueCity:true});await cast(f);
+ assert.ok(f.messages.includes("You need to read Edmond's magic scroll to cast this spell."),f.messages.join(' | '));
+ assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200],'not moved before reading');
+ const scroll=core.ItemIdentifiers.ARDOUGNE_TELEPORT_SCROLL;
+ f.p.getInventory().add(new core.Item(scroll,2),false);
+ await readScroll(f);
+ assert.ok(f.messages.includes('You memorise what is written on the scroll. You can now use the Ardougne Teleport Spell.'));
+ assert.equal(f.p.getInventory().getAmount(scroll),1,'the read scroll is used up');
+ await readScroll(f);
+ assert.equal(f.p.getInventory().getAmount(scroll),0,'a further scroll explodes');
+ assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.ASHES),1,'into ashes');
+ await cast(f);
  assert.notDeepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200],'teleported');
 });

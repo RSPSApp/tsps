@@ -336,6 +336,28 @@ module.exports = function registerPlagueCityQuest(api) {
     refreshQuestList(player);
   }
 
+  /**
+   * Wiki (Ardougne teleport scroll): reading it after the quest teaches the Ardougne Teleport spell and uses the
+   * scroll up; any further scroll "will explode on use, converting into ashes" (no line is given for that).
+   */
+  function readScroll(event) {
+    const { player, item, slot } = event;
+    if (event.itemId !== ARDOUGNE_SCROLL_ITEM_ID) return false;
+    event.handled = true;
+    const inventory = player.getInventory();
+    if (inventory.get(slot) !== item || !quest.isComplete(player)) return true;
+    if (quest.getStage(player) >= STAGE_READ_SCROLL) {
+      inventory.setItem(slot, new api.core.Item(ItemIdentifiers.ASHES, 1));
+      inventory.refreshItems();
+      return true;
+    }
+    inventory.deleteAtSlot(slot, 1);
+    quest.setStage(player, STAGE_READ_SCROLL);
+    player.sendMessage("You memorise what is written on the scroll. You can now use the Ardougne Teleport Spell.");
+    refreshQuestList(player);
+    return true;
+  }
+
   quest = registerQuest(api, {
     key: "plague_city",
     name: "Plague City",
@@ -356,5 +378,6 @@ module.exports = function registerPlagueCityQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemOnItem(handleItemOnItem);
+  api.onItemAction("Ardougne teleport scroll", { Read: readScroll });
   api.onPlayerLogin(handleLogin);
 };

@@ -1,0 +1,68 @@
+// Run after `yarn build`: node --test tests/house-teleport-no-house.test.cjs
+// Teleport to House with no house went to Rimmington and spent its runes. It is now refused first with the house
+// tablet's line, spending nothing; with a house it still casts. Real engine: every plugin loaded, a real Player, the
+// spell cast by a native widget_action packet.
+process.env.DISABLE_PLAYER_BOTS = "1";
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { before, after, test } = require("node:test");
+require("../dist/Server").Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { PluginManager: PM } = require("../dist/plugins/PluginManager");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
+
+let core, next = 9970;
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core = PM.getCoreApi();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3200, 3200);
+  PM.emitServerStartup({});
+});
+after(() => PM.emitServerShutdown({}));
+
+function actor(t, owned) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++); p.setUsername("hometele" + p.getIndex()); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  p.setLocation(new core.Location(3200, 3200, 0)); p.needsPlacement = false;
+  const conn = new ClientConnection(channel); conn.player = p;
+  t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); p.setRegistered(false); });
+  p.setSpellbook(core.MagicSpellbook.NORMAL);
+  p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false); p.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 99, false);
+  if (owned) p.setAttribute("construction:house", require("../plugins/skills/construction/Instance.Construction").createDefaultHouseSave());
+  for (const [id, n] of [[563, 1], [556, 1], [557, 1]]) p.getInventory().add(new core.Item(id, n), false);
+  const owns = { player: p, owns: true };
+  PM.emitCustomEvent("construction:owns-house", owns);
+  assert.equal(owns.owns, owned, "the saved house state");
+  const messages = [], send = p.sendMessage.bind(p);
+  t.mock.method(p, "sendMessage", (...args) => { messages.push(args[0]); return send(...args); });
+  return { p, conn, messages };
+}
+
+async function cast(f) {
+  const spell = core.CacheDefinitions.getSpellByName("Teleport to House");
+  assert.ok(spell);
+  const w = spell.widgetId;
+  await f.conn.dispatch([{ type: "widget_action", widgetId: w, groupId: w >>> 16, childId: w & 65535, slot: -1, buttonNum: 1 }]);
+  f.conn.processTurnPackets();
+  for (let i = 0; i < 8; i++) core.TaskManager.process();
+}
+
+test("Teleport to House without a house is refused and spends nothing", async (t) => {
+  const f = actor(t, false);
+  await cast(f);
+  assert.ok(f.messages.includes("You do not own a house. Speak to an Estate agent to buy one."), f.messages.join(" | "));
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY()], [3200, 3200], "not moved");
+  assert.equal(f.p.getInventory().getAmount(563), 1, "no law rune spent");
+});
+
+test("Teleport to House with a house still casts", async (t) => {
+  const f = actor(t, true);
+  await cast(f);
+  assert.equal(f.messages.includes("You do not own a house. Speak to an Estate agent to buy one."), false);
+  assert.equal(f.p.getInventory().getAmount(563), 0, "the law rune is spent");
+});

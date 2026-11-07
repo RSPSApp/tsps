@@ -25,7 +25,7 @@ The `Characters` plugin is disabled by default. Enable it in `server/data/defini
 
 - `pluginConfig` alone cannot enable the plugin. With `Characters` absent or false, the original login exchange runs: no capability announcement, character packets, selection flag or fallback delay, and no new character-account records.
 - When enabled, the limit defaults to 6, is rounded down and clamped to 1–6, and falls back to 6 for non-numeric values. Setting it to 1 skips the picker and additional-character behavior.
-- The in-browser host always uses 1 because it cannot persist account ownership.
+- Browser hosts must checkpoint `data/saves/accounts.json` (or the path set by `TSPS_ACCOUNTS_FILE`) together with character saves and profile deletions before advertising `BROWSER_HOST_ACCOUNT_PERSISTENCE=1`. The account file is outside `data/saves/indexeddb/characters`, so syncing only that directory is insufficient. Older hosts stay limited to 1. The companion website host change supplies this capability automatically; enabling Characters is still opt-in.
 - Disabling the plugin later preserves existing ownership, account passwords, bans and deleted-name reservations. Players enter the character whose name they typed, without a picker. Back up the account file with saves even while the plugin is disabled.
 
 ## How the client detects support

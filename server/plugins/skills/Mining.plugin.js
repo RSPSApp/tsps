@@ -427,6 +427,13 @@ function answerBestPickaxe(request) {
   }
 }
 
+/** "mining:pickaxe": the pickaxe `itemId` is (Mining's own list), or null; no level check, only "is it a pickaxe". */
+function answerPickaxe(request) {
+  if (request && request.itemId != null && request.pickaxe == null) {
+    request.pickaxe = PICKAXES.find((pickaxe) => pickaxe.id === request.itemId) ?? null;
+  }
+}
+
 /** "mining:roll-interval": ticks to the next roll with `pickaxe`, for other mining content (stars, GotR, Volcanic Mine). */
 function answerRollInterval(request) {
   if (request && request.pickaxe && request.ticks == null) {
@@ -1069,6 +1076,7 @@ module.exports = {
     api.onPlayerDisconnect(endMiningSession);
     api.onCustomEvent("level-up:popup-opened", pauseMining);
     api.onCustomEvent("mining:best-pickaxe", answerBestPickaxe);
+    api.onCustomEvent("mining:pickaxe", answerPickaxe);
     api.onCustomEvent("mining:roll-interval", answerRollInterval);
     api.persistAttribute(ORE_MINED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendOresMined);

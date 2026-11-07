@@ -193,14 +193,6 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   const REDUCED_CADAVA_POTION_ITEM_ID = ItemIdentifiers.REDUCED_CADAVA_POTION; // 22589
   const GOAT_DUNG_ITEM_ID = ItemIdentifiers.GOAT_DUNG; // 22590
   const WEISS_FIRE_NOTES_ITEM_ID = ItemIdentifiers.WEISS_FIRE_NOTES; // 22591
-  const PICKAXE_ITEM_IDS = new Set([
-    ItemIdentifiers.BRONZE_PICKAXE,
-    ItemIdentifiers.IRON_PICKAXE,
-    ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.MITHRIL_PICKAXE,
-    ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-  ]);
   const COFFIN_PLANK_COUNT = 5;
   const COFFIN_CONSTRUCTION_XP = 715;
   const FIREMAKING_REQUIREMENT = 66;
@@ -314,9 +306,11 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
     if (!held(player, itemId, amount)) player.getInventory().adds(itemId, amount);
   };
 
+  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
   function hasPickaxe(player) {
-    for (const itemId of PICKAXE_ITEM_IDS) if (held(player, itemId)) return true;
-    return false;
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
   }
 
   function isQuestComplete(player, key) {

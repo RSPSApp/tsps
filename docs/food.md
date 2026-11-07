@@ -106,6 +106,30 @@ separate audits; this correction does not establish complete food/potion parity.
   foods ("a bowl of ...") leave one the same way.
 - Mackerel's "You eat the cod." is live's own text (recorded).
 
+## Drinks eaten as food
+
+Some drinks use the food rules (`"option": "Drink"`): they heal, share the food timers and
+leave their vessel. Checked 7 November 2026 against the Wiki pages
+[Jug of wine](https://oldschool.runescape.wiki/w/Jug_of_wine),
+[Half full wine jug](https://oldschool.runescape.wiki/w/Half_full_wine_jug),
+[Cup of tea](https://oldschool.runescape.wiki/w/Cup_of_tea),
+[Fruit blast](https://oldschool.runescape.wiki/w/Fruit_blast) and
+[Pineapple punch](https://oldschool.runescape.wiki/w/Pineapple_punch):
+
+- A jug of wine heals 11 and lowers Attack by 2; a half full wine jug heals 7 and lowers Attack
+  by 2. Both leave a jug (the Wiki states the leftover only for the cocktails and the tea, so the
+  half full jug's follows the full one's). The Wiki gives no messages; "You drink the wine." is
+  ours.
+- A standard cup of tea (the two ids with only Drink and Drop; the ones with an Empty option are
+  other teas) heals 3, boosts Attack by 2 + 2% of the level and leaves an empty cup. The Wiki
+  quotes "Aaah, nothing like a nice cuppa tea!"; it is the only message.
+- Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
+  cocktail. It tastes great.".
+
+Not covered, because the Wiki gives only formulas for their stat changes or no figures: the dizzy cocktails (wizard blizzard, short green guy, drunk dragon,
+choc saturday, blurberry special), chocolatey milk, the other teas and the tea flask, and
+the other spirits and quest drinks, which still do nothing.
+
 ## Not food here
 
 Items with an Eat option that aren't in the data, each listed with its reason in the test:

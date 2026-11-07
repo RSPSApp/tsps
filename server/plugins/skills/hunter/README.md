@@ -10,6 +10,12 @@ nets, rumours, pursuit charges) is persisted and restored on login.
 - **Trap families** (`Traps.Hunter.js`, `Rabbits.Hunter.js`, `Broavs.Hunter.js`): bird snares, box traps, deadfalls,
   net traps (swamp/orange/red/black/tecu salamanders), magic boxes/imp banking, monkey deadfall,
   rabbit snares flushed by ferret, and pitfalls with teasing (`Pitfalls.Hunter.js`).
+- **Imp-in-a-box** (`MagicBoxes.Hunter.js`): use it on an item, or "Bank" opens the Imp Release
+  Negotiation Form (widget 478, rsprox recording 2256). The imp banks two items or stacks, then
+  becomes a magic box. It refuses under Tele Block, above Wilderness level 30 and for the items
+  the Wiki lists (https://oldschool.runescape.wiki/w/Imp-in-a-box). The refusal messages for Tele
+  Block and the listed items are not captured; the form closing after the second item and the
+  Deposit click being op 1 are assumed, not recorded.
 - **Bait and scent**: tars, spicy tomato/minced meat, jerboa tail and kebbit baits (3% bonus for
   the matching creature), smoke from a lit/bruma torch or auto-applied anti-odour salt (2%).
   Ownership, per-kind trap limits (extra in the Wilderness), expiry/collapse and preflighted

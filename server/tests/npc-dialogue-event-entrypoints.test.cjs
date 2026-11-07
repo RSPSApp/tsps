@@ -155,6 +155,250 @@ test('a missing explicit activity page or variant cannot replace the current con
   assert.equal(MultiChatboxPrompt.getPending(player), null);
 });
 
+// Troll Stronghold: exercise the registered sleeping-guard action with real
+// players and cache definitions. These helpers are separate from the annual
+// event fixture above and from the Tourist Trap block at the end of the file.
+let trollIndex = 1450;
+function trollGuardFixture(t, name, level = 30, stage = 30) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  let npc, inWorld = false;
+  const oldCycle = core.World.processCycle;
+  const priorAddQueue = new Set(core.World.getAddNPCQueue());
+  const priorGroundItems = new Set(core.World.getItems());
+  const createdTasks = [];
+  const originalSubmit = core.TaskManager.submit;
+  t.after(() => {
+    let cleanupError;
+    const clean = fn => { try { fn(); } catch (error) { cleanupError ??= error; } };
+    const npcIndex = npc?.getIndex();
+    try {
+      clean(() => player.closeInterruptibleInterfaces());
+      clean(() => { player.getCombat().reset(); player.getCombat().getHitQueue().clear(); });
+      if (npc) clean(() => {
+        npc.getCombat().reset(); npc.getCombat().setUnderAttack(null); npc.getCombat().getHitQueue().clear();
+      });
+      // NPCDeathTask.stop schedules a respawn even after completion. Cancel the
+      // still-running owned tasks through the base method without replaying it.
+      clean(() => { for (const task of createdTasks) if (task.isRunning()) core.Task.prototype.stop.call(task); });
+      clean(() => { core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex()); });
+      // Preserve unrelated ground items; remove only this actor's new drops.
+      clean(() => {
+        const manager = PM.createApi('TrollFixtureCleanup').getItemOnGroundManager();
+        const items = core.World.getItems();
+        for (const item of [...items]) {
+          if (priorGroundItems.has(item) || item.getOwner() !== player.getUsername()) continue;
+          manager.deregister(item);
+          const index = items.indexOf(item);
+          if (index >= 0) items.splice(index, 1);
+        }
+      });
+      clean(() => core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(player));
+      if (npc) {
+        clean(() => core.TaskManager.cancelTasks(npc));
+        clean(() => { const local=player.getLocalNpcs(), index=local.indexOf(npc); if(index>=0)local.splice(index,1); });
+        clean(() => { const removed=core.World.getRemoveNPCQueue(); while(removed.includes(npc))removed.splice(removed.indexOf(npc),1); });
+        // MobileList.remove must see the actor registered to release its slot and indexes.
+        clean(() => { if(inWorld)core.World.getNpcs().remove(npc); });
+      }
+      clean(() => { for (const task of createdTasks) if (task.isRunning()) core.Task.prototype.stop.call(task); });
+    } finally {
+      core.TaskManager.submit = originalSubmit;
+      clean(() => core.World.unregisterPlayerPosition(player));
+      player.setRegistered(false); core.World.processCycle = oldCycle;
+    }
+    if (cleanupError) throw cleanupError;
+    assert.ok(createdTasks.every(task => !task.isRunning()), 'owned tasks are stopped');
+    assert.ok(core.World.getItems().every(item => priorGroundItems.has(item) || item.getOwner() !== player.getUsername()),
+      'no new ground items owned by this actor remain');
+    assert.ok([...priorGroundItems].every(item => core.World.getItems().includes(item)),
+      'preexisting ground item identities remain registered');
+    assert.equal(core.TaskManager.hasActiveTask(player),false);
+    assert.equal(core.TaskManager.hasActiveTask(player.getIndex()),false);
+    if (npc) {
+      assert.equal(npc.isRegistered(),false); assert.equal(core.World.getNpcs().get(npcIndex)===npc,false);
+      assert.ok(!player.getLocalNpcs().includes(npc));
+      assert.ok([...core.World.npcTileOccupants.values()].every(bucket=>!bucket.includes(npc)));
+      assert.ok([...core.World.npcRegionOccupants.values()].every(bucket=>!bucket.has(npc)));
+      assert.ok(!core.World.getRemoveNPCQueue().includes(npc));
+      assert.ok(!core.World.getAddNPCQueue().some(entry => !priorAddQueue.has(entry)
+        && entry.getRealId() === npc.getRealId() && entry.getSpawnPosition().equals(npc.getSpawnPosition())),
+        'the test did not enqueue a respawn clone');
+    }
+  });
+  const skip = require('../plugins/bots/runtime/PersistenceConstants.PlayerBots').ATTR_SKIP_PERSISTENCE;
+  player.setAttribute(skip, true); player.setIndex(trollIndex++);
+  const username = `troll${player.getIndex()}`;
+  player.setUsername(username); player.setLongUsername(core.Misc.stringToLongBigInt(username));
+  assert.ok([...priorGroundItems].every(item => item.getOwner() !== username), 'actor has no preexisting ground items');
+  assert.ok(player.getLongUsername() !== 0n); assert.ok(player.getIndex() < core.World.MAX_PLAYERS);
+  player.setRegistered(true);
+  const quests = require('../plugins/quests/QuestRuntime');
+  const prerequisite = quests.questNamed('Death Plateau');
+  assert.ok(prerequisite); prerequisite.setStage(player, prerequisite.completionValue);
+  assert.equal(prerequisite.isComplete(player), true);
+  const quest = quests.questNamed('Troll Stronghold'); assert.ok(quest);
+  quest.setStage(player, stage); assert.equal(quest.getStage(player), stage);
+  const skills = player.getSkillManager();
+  for (const [skill, amount] of [[core.Skill.AGILITY, 15], [core.Skill.THIEVING, level], [core.Skill.HITPOINTS, 40]]) {
+    skills.setExperiences(skill, core.SkillManager.getExperienceForLevel(amount), false);
+    skills.setMaxLevels(skill, amount, false).setCurrentLevel(skill, amount, false);
+  }
+  assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), level);
+  const id = name === 'Twig' ? core.NpcIdentifiers.TWIG_3 : core.NpcIdentifiers.BERRY_2;
+  const awake = name === 'Twig' ? core.NpcIdentifiers.TWIG_2 : core.NpcIdentifiers.BERRY;
+  const key = name === 'Twig' ? core.ItemIdentifiers.CELL_KEY_1 : core.ItemIdentifiers.CELL_KEY_2;
+  const otherKey = name === 'Twig' ? core.ItemIdentifiers.CELL_KEY_2 : core.ItemIdentifiers.CELL_KEY_1;
+  const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === id && row.name === name);
+  assert.ok(spawn, `${name} has an authored sleeping spawn`);
+  const z = spawn.level ?? 0; core.RegionManager.init(); core.RegionManager.loadMapFiles(spawn.x, spawn.y);
+  const candidates = [[2,0,1,0],[2,1,1,1],[-1,0,0,0],[-1,1,0,1],[0,2,0,1],[1,2,1,1],[0,-1,0,0],[1,-1,1,0]];
+  const adjacent = candidates.find(([dx,dy,ax,ay]) =>
+    core.RegionManager.canMove(spawn.x+ax,spawn.y+ay,spawn.x+dx,spawn.y+dy,z,1,1,null)
+    && core.RegionManager.canMove(spawn.x+dx,spawn.y+dy,spawn.x+ax,spawn.y+ay,z,1,1,null));
+  assert.ok(adjacent, `${name} has an accessible adjacent tile`);
+  player.setLocation(new core.Location(spawn.x+adjacent[0],spawn.y+adjacent[1],z)); player.setNeedsPlacement(false);
+  npc = core.NPC.create(id,new core.Location(spawn.x,spawn.y,z)); npc.setNeedsPlacement(false);
+  assert.equal(player.isNeedsPlacement(),false); assert.equal(npc.isNeedsPlacement(),false);
+  npc.getMovementCoordinator().setRadius(0);
+  inWorld = core.World.getNpcs().add(npc); assert.equal(inWorld,true); npc.setRegistered(true);
+  player.getLocalNpcs().push(npc);
+  assert.equal(npc.getCurrentDefinition(player).getId(),id);
+  assert.equal(npc.getCurrentDefinition(player).getName(),name);
+  assert.ok(npc.getCurrentDefinition(player).getActions().includes('Pickpocket'));
+  assert.equal(npc.getDefinition().doesFightBack(),true);
+  assert.equal(npc.getDefinition().getHitpoints(),90);
+  assert.equal(core.NpcDefinition.forId(awake).getMaxHit(),13);
+  assert.equal(core.NpcDefinition.forId(awake).getAttackSpeed(),6);
+  assert.ok(core.NpcDefinition.forId(awake).getActions().includes('Attack'));
+  assert.ok(!core.NpcDefinition.forId(awake).getActions().includes('Pickpocket'));
+  const connection = new ClientConnection(channel); connection.player = player;
+  core.TaskManager.submit = function(task) {
+    if (task.npc === npc || task.key === npc || task.key === player || task.key === player.getIndex()) createdTasks.push(task);
+    return originalSubmit.call(this, task);
+  };
+  return { player, npc, quest, connection, id, awake, key, otherKey };
+}
+async function trollPickpocket(f, forcedDraw, turns = 4) {
+  const clickType = f.npc.getCurrentDefinition(f.player).getActions().indexOf('Pickpocket') + 1;
+  assert.ok(clickType > 0, 'the active cache exposes the sleeping pickpocket action');
+  const original = Math.random; let draws = 0;
+  Math.random = function() {
+    const caller = String(new Error().stack).split('\n')[2] ?? '';
+    if (caller.includes('pickpocketGuard') && caller.includes('TrollStronghold.Quest.js')) { draws++; return forcedDraw; }
+    return original();
+  };
+  try {
+    await f.connection.dispatch([{ type:'npc_option', index:f.npc.getIndex(), clickType }]);
+    for (let i=0; i<turns; i++) {
+      f.player.resetUpdating(); core.TaskManager.process(); f.connection.processTurnPackets();
+      const movement=f.player.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+      if (movement.hasPendingWork()) movement.process(); core.TaskManager.processWalkTo(f.player.getIndex());
+    }
+  } finally { Math.random = original; }
+  return draws;
+}
+function trollNativeCombatTurns(f) {
+  let queued = false;
+  for (let i=0; i<8; i++) {
+    core.World.processCycle++; core.TaskManager.process();
+    f.npc.process();
+    queued ||= f.player.getCombat().getHitQueue().hasPendingHitFrom(f.npc);
+    f.player.getCombat().getHitQueue().process(core.World.getProcessCycle());
+  }
+  return queued;
+}
+test('Troll Stronghold sleeping guards resolve pickpocket attempts',async t=>{
+  const definitionMap=core.NpcDefinition.definitions, previousDefinitions=new Map(definitionMap);
+  t.after(()=>{
+    const sameMap=core.NpcDefinition.definitions===definitionMap;
+    definitionMap.clear();
+    for(const [id,definition] of previousDefinitions)definitionMap.set(id,definition);
+    core.NpcDefinition.definitions=definitionMap;
+    assert.equal(sameMap,true,'the loader uses the existing definition map');
+    assert.equal(core.NpcDefinition.definitions.size,previousDefinitions.size);
+    for(const [id,definition] of previousDefinitions) assert.equal(core.NpcDefinition.definitions.get(id)===definition,true,`definition ${id} identity restored`);
+  });
+  const { NpcDefinitionLoader }=require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  new NpcDefinitionLoader().load();
+  for (const name of ['Twig','Berry']) {
+  await t.test(`${name} failed pickpocket wakes the actual guard and starts combat`, async t => {
+    const f = trollGuardFixture(t,name), draws = await trollPickpocket(f,132/256);
+    assert.equal(f.npc.getCombat().getTarget()===f.player,true,'failed pickpocket starts the actual NPC combat target');
+    assert.equal(draws,1,'one attempt performs one scoped roll');
+    assert.equal(f.npc.getId(),f.awake); assert.equal(f.player.getInventory().getAmount(f.key),0);
+    assert.equal(f.quest.getStage(f.player),30);
+    assert.equal(f.player.getInventory().getAmount(f.otherKey),0);
+    assert.ok(!f.npc.getCurrentDefinition(f.player).getActions().includes('Pickpocket'));
+    assert.equal(trollNativeCombatTurns(f),true,'the real NPC combat turn queues an attack');
+    // Prime only the killing attribution, then let the real NPC death task emit
+    // its registered death event. This is not a player attack/playthrough.
+    f.player.closeInterruptibleInterfaces(); f.npc.getCombat().addDamage(f.player,f.npc.getHitpoints());
+    f.npc.setHitpoints(0);
+    for (let i=0;i<80 && f.player.getInventory().getAmount(f.key)===0;i++) core.TaskManager.process();
+    assert.equal(f.player.getInventory().getAmount(f.key),1,'the real death task reaches the kill fallback');
+    assert.ok(core.World.getItems().some(item => item.getOwner() === f.player.getUsername() && item.getItem().getId() === core.ItemIdentifiers.BIG_BONES),
+      'the registered NPC drop handler places the guard drop of big bones');
+    assert.equal(f.player.getInventory().getAmount(f.otherKey),0);
+  });
+  await t.test(`${name} successful pickpocket grants only the matching key`, async t => {
+    const f = trollGuardFixture(t,name), draws = await trollPickpocket(f,131/256);
+    assert.equal(f.player.getInventory().getAmount(f.key),1,'the successful native action grants the matching key');
+    assert.equal(draws,1); assert.equal(f.player.getInventory().getAmount(f.otherKey),0);
+    assert.equal(f.quest.getStage(f.player),30);
+    assert.equal(f.npc.getId(),f.id); assert.equal(f.npc.getCombat().getTarget()===null,true);
+    assert.equal(await trollPickpocket(f,0),0,'the already-held key is refused before another roll');
+    assert.equal(f.player.getInventory().getAmount(f.key),1,'an owned key is not duplicated');
+  });
+  }
+await t.test('the published level-81 endpoint succeeds for a high roll',async t=>{
+  const f=trollGuardFixture(t,'Berry',81), draws=await trollPickpocket(f,0.999999);
+  assert.equal(f.player.getInventory().getAmount(f.key),1);
+  assert.equal(f.npc.getCombat().getTarget()===null,true); assert.equal(draws,1);
+});
+await t.test('the second native guard key advances the existing quest stage',async t=>{
+  const f=trollGuardFixture(t,'Twig'); f.player.getInventory().adds(f.otherKey,1);
+  assert.equal(f.quest.getStage(f.player),30); assert.equal(f.player.getInventory().getAmount(f.otherKey),1);
+  const draws=await trollPickpocket(f,0);
+  assert.equal(f.player.getInventory().getAmount(f.key),1);
+  assert.equal(f.player.getInventory().getAmount(f.otherKey),1);
+  assert.equal(f.quest.getStage(f.player),40); assert.equal(draws,1);
+});
+await t.test('closing the failed guard overhead does not disturb a replacement dialogue',async t=>{
+  const f=trollGuardFixture(t,'Twig'), draws=await trollPickpocket(f,0.999999,1);
+  assert.equal(f.npc.getCombat().getTarget()===f.player,true,'the failed native interaction starts combat');
+  assert.equal(draws,1);
+  const manager=f.player.getDialogueManager(), old=manager.getCurrent();
+  assert.ok(old instanceof core.ActionDialogue,'the actual failure overhead is awaiting its continuation');
+  f.player.closeInterruptibleInterfaces();
+  const builder=new core.DialogueChainBuilder(); builder.add(new core.NpcDialogue(0,f.awake,'Replacement dialogue.'));
+  manager.startDialogues(builder); const replacement=manager.getCurrent(); assert.ok(replacement);
+  assert.equal(replacement===old,false);
+  for(let i=0;i<3;i++) core.TaskManager.process();
+  assert.equal(manager.getCurrent()===replacement,true,'the old overhead task does not close the replacement');
+  assert.equal(f.player.getInventory().getAmount(f.key),0);
+  assert.equal(f.quest.getStage(f.player),30);
+});
+for (const [label,stage,level,owned,full] of [
+  ['unstarted quest',0,30,false,false], ['low Thieving',30,29,false,false],
+  ['already owned key',30,30,true,false], ['full inventory',30,30,false,true],
+]) {
+  await t.test(`Twig pickpocket preserves the ${label} gate`,async t=>{
+    const f=trollGuardFixture(t,'Twig',level,stage), inventory=f.player.getInventory();
+    if (owned) inventory.adds(f.key,1);
+    if (full) {
+      assert.equal(core.ItemDefinition.forId(core.ItemIdentifiers.BONES).isStackable(),false);
+      for (let i=0;i<28;i++) inventory.adds(core.ItemIdentifiers.BONES,1);
+    }
+    if (full) assert.equal(inventory.isFull(),true);
+    const before=inventory.getAmount(f.key),draws=await trollPickpocket(f,0);
+    assert.equal(inventory.getAmount(f.key),before); assert.equal(f.npc.getId(),f.id);
+    assert.equal(f.npc.getCombat().getTarget()===null,true); assert.equal(draws,0,'denied interactions do not roll');
+  });
+}
+});
+
 const AGE_QUESTION = "Can you tell me how long I've been here?";
 const AGE_INTRO = "Ahh, I see all the newcomers arriving in Lumbridge, fresh-faced and eager for adventure. I remember you...";
 const AGE_TASK = 'learn-your-age-from-hans-in-lumbridge';

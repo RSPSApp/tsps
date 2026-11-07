@@ -30,6 +30,11 @@ captures 3, 738-742 and 1633 (no capture of Dad's arena exists).
 - Fixed: the Trollheim thrower path is multi-combat (Wiki multicombat map, capture 1633), and the
   throwers hold their tiles while throwing instead of chasing players down the mountain.
 - Fixed: a Troll general dropped two prison keys (the drop table's and the quest's own).
+- Fixed: a valid pickpocket of sleeping Twig or Berry now either yields that guard's cell key or
+  wakes the guard to attack. The integer-level success values follow the published [Twig](https://oldschool.runescape.wiki/w/Twig)
+  and [Berry](https://oldschool.runescape.wiki/w/Berry) charts; TSPS keeps the guaranteed
+  level-81 endpoint for higher levels. Equipment modifiers and exact retail timing are not
+  established here.
 - Fixed: the prison door opens and shuts behind the player (capture 740).
 - Fixed: cell doors swing open and lock again per unlock, so every player frees their own
   prisoners; Godric and Eadgar answer Talk-to from their cells (captures 740, 741).

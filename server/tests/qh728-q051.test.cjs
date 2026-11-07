@@ -251,15 +251,14 @@ test('fresh stage 0: early shared-NPC actions cannot skip the mandatory route', 
   }
 });
 
-test('quest start enforces 25 Agility without granting supplies on refusal', () => {
+test('quest start permits low Agility and grants the starting supplies', () => {
   const plugin = registerPlugin();
   try {
     const player = playerFixture(undefined, undefined, 24);
     start(player);
-    assert.equal(plugin.quest.getStage(player), 0);
-    assert.equal(player.inventory.getAmount(I.BARK_SAMPLE), 0);
-    assert.equal(player.inventory.getAmount(I.TRANSLATION_BOOK), 0);
-    assert.ok(player.messages.some(message => /25 Agility/.test(message)));
+    assert.equal(plugin.quest.getStage(player), 10);
+    assert.equal(player.inventory.getAmount(I.BARK_SAMPLE), 1);
+    assert.equal(player.inventory.getAmount(I.TRANSLATION_BOOK), 1);
   } finally {
     plugin.cleanup();
   }

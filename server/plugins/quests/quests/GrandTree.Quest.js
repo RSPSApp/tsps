@@ -393,10 +393,6 @@ module.exports = function registerGrandTreeQuest(api) {
   function handleStartHook({ player, npcId, hook }) {
     if (!NARNODE_IDS.has(npcId) || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
-    if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < 25) {
-      player.sendMessage("You need 25 Agility to start The Grand Tree.");
-      return;
-    }
     quest.setStage(player, STAGE_STARTED);
     if (!has(player, BARK_SAMPLE_ITEM_ID)) player.getInventory().adds(BARK_SAMPLE_ITEM_ID, 1);
     if (!has(player, TRANSLATION_BOOK_ITEM_ID)) player.getInventory().adds(TRANSLATION_BOOK_ITEM_ID, 1);

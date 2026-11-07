@@ -51,3 +51,18 @@ test("after Plague City the spell waits for Edmond's scroll; reading it teaches 
  await cast(f);
  assert.notDeepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200],'teleported');
 });
+
+test("Edmond gives a replacement scroll after the quest when none is carried (Wiki), and needs a free slot", async t => {
+ const f=actor(t,{plagueCity:true}),scroll=core.ItemIdentifiers.ARDOUGNE_TELEPORT_SCROLL,edmond=core.NpcIdentifiers.EDMOND_2;
+ const step={type:'line',speaker:'Edmond',text:'Yes, here you go.'};
+ const line=()=>PM.emitCustomEvent('npc-dialogue:line',{player:f.p,npcId:edmond,step,text:step.text,skip:false});
+ line();
+ assert.equal(f.p.getInventory().getAmount(scroll),1,'a new scroll');
+ line();
+ assert.equal(f.p.getInventory().getAmount(scroll),1,'not a second while one is carried');
+ const inv=f.p.getInventory();
+ inv.resetItems();
+ for(let slot=0;slot<inv.capacity();slot++)inv.setItem(slot,new core.Item(1511,1));
+ line();
+ assert.equal(inv.getAmount(scroll),0,'no room: none given');
+});

@@ -311,6 +311,22 @@ module.exports = function registerPlagueCityQuest(api) {
     }
   }
 
+  /**
+   * Wiki (Ardougne teleport scroll): "If a player loses this scroll, they can go back to Edmond." His after-quest
+   * transcript ("Do you have any more of those scrolls?" / "Yes, here you go.") has no item step, so the line gives it.
+   */
+  function handleLine(event) {
+    const { player, npcId, text } = event;
+    if (npcId !== EDMOND_NPC_ID || text !== "Yes, here you go." || !quest.isComplete(player)) return;
+    if (held(player, ARDOUGNE_SCROLL_ITEM_ID)) return;
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() < 1) {
+      player.sendMessage("You don't have enough inventory space.");
+      return;
+    }
+    inventory.adds(ARDOUGNE_SCROLL_ITEM_ID, 1);
+  }
+
   /** Bravek's hangover cure: chocolate dust + milk, then snape grass. */
   function handleItemOnItem(event) {
     const ids = [event.usedItemId, event.usedWithItemId];
@@ -377,6 +393,7 @@ module.exports = function registerPlagueCityQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Ardougne teleport scroll", { Read: readScroll });
   api.onPlayerLogin(handleLogin);

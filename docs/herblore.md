@@ -180,8 +180,9 @@ knife-specific timing and feedback are not yet implemented.
 Grinding rows in `server/plugins/skills/data/herblore.json` use a pestle and mortar by default. A row
 may declare `alternateTool` as a cache item gameval; the chocolate bar row declares `"knife"`.
 
-Herblore's grinding handler refuses preset (restricted) copies with "Preset items cannot be used for
-this." for the pestle and the knife, as in mixing; plain copies alongside are still ground.
+Herblore's grinding handler does not consume ingredient copies marked preset, untradeable or
+unbankable. If only restricted copies of the ingredient are held, it says "Preset items cannot be
+used for this."; if unrestricted copies are also held, it can grind those instead.
 
 Regression coverage exercises the registered item-on-item handler for quantity selection,
 partial/all messages, zero/invalid input, supply removal, capacity/stack limits and nihil

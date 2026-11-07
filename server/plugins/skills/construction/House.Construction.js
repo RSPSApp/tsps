@@ -41,6 +41,7 @@ const MaxHouse = require("./MaxHouse.Construction");
 const Nexus = require("./Nexus.Construction");
 
 const HAMMER_ID = ItemIdentifiers.HAMMER;
+const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 const SAW_ID = ItemIdentifiers.SAW;
 const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW];
 const TINDERBOX_ID = ItemIdentifiers.TINDERBOX;
@@ -881,7 +882,7 @@ function getBuildMaterials(player, house, target, buildable) {
     if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
       return `You need ${skill.getName()} level ${requirement.level} to build that.`;
   }
-  if (!player.getInventory().contains(HAMMER_ID) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
+  if (!hasHammer(player) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
   // A flatpack is made away from any hotspot: no furniture there to upgrade.
   const existing = target ? house.getFurnitureAtTarget(target)?.buildableKey : undefined;
   const previous = buildable.materials.find(material => Data.BUILDABLE_BY_KEY.has(material.source))?.source;
@@ -923,6 +924,13 @@ function getBuildMaterials(player, house, target, buildable) {
     }).join(", ")}`);
   }
   return requiredItems;
+}
+
+/** Wiki (Imcando hammer): either repaired variant works carried or wielded. */
+function hasHammer(player) {
+  const equipment = player.getEquipment();
+  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
+  return HAMMERS.some(id => player.getInventory().contains(id) || wielded.includes(id));
 }
 
 /** A saw, the crystal saw or Amy's saw, carried or (Amy's) in the off-hand. */
@@ -1132,7 +1140,7 @@ function onObject(event) {
 function onItemOnObject(event) {
   if (Altars.offerHouseBones(event) || Storage.storeItemOnFurniture(event)) return true;
   if ((event.itemId === TINDERBOX_ID || event.itemId === ItemIdentifiers.MARRENTILL) && Altars.lightHouseBurner(event)) return true;
-  if (event.itemId !== HAMMER_ID && event.itemId !== SAW_ID) return false;
+  if (!HAMMERS.includes(event.itemId) && event.itemId !== SAW_ID) return false;
   return openBuildMenu(event);
 }
 
@@ -1477,4 +1485,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

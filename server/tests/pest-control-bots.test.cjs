@@ -37,6 +37,7 @@ let objectHandler = null;
 const npcHandlers = {};
 const buttonHandlers = new Map();
 const emitted = [];
+const deathHooks = {};
 const api = {
   core: PluginManager.getCoreApi(),
   registerShopCurrency() {},
@@ -55,8 +56,9 @@ const api = {
   onCanAttack() {},
   onPlayerDealtDamage() {},
   onNpcDeath() {},
-  onPlayerDeath() {},
-  onShouldDropItemsOnDeath() {},
+  onPlayerBeforeDeath(handler) { deathHooks.before = handler; },
+  onPlayerDeath(handler) { deathHooks.death = handler; },
+  onShouldDropItemsOnDeath(handler) { deathHooks.drop = handler; },
   onCanTeleport() {},
   onSpellDisabled() {},
   emitObjectInteraction(event) {
@@ -572,6 +574,28 @@ test("a real match assigns roles, ticks every bot from its own tick, and drops a
     match.finish(false, "test over");
   }
   assert.equal(match.bots.size, 0, "finishing forgets every controller");
+});
+
+test("a game that ends during a death keeps that player's items, and they stay at the outpost", () => {
+  const boat = plugin._test.BOATS[0];
+  const human = realPlayer(boat.waitingLocation, { bot: false });
+  const match = new plugin._test.PestControlMatch(boat, [human], () => {});
+  deathHooks.before({ player: human });
+  human.getForcedLogoutTimer = () => ({ start() {} });
+  human.requestLogout = () => {};
+  match.finish(false, "The Void Knight was killed, another of our Order has fallen and that Island is lost.");
+  assert.equal(human.getAttribute("pest-control:match"), null, "the match is over");
+  const drop = { player: human, shouldDrop: null };
+  deathHooks.drop(drop);
+  assert.equal(drop.shouldDrop, false, "a death begun in the game is still safe");
+  const outpost = human.getLocation().clone();
+  const death = { player: human, handled: false };
+  deathHooks.death(death);
+  assert.equal(death.handled, true);
+  assert.ok(human.getLocation().equals(outpost), "and they stay where the game sent them");
+  const later = { player: human, shouldDrop: null };
+  deathHooks.drop(later);
+  assert.equal(later.shouldDrop, null, "a later death elsewhere is the world's own");
 });
 
 // --- Void Knights' Reward Options ---------------------------------------------------------

@@ -230,14 +230,14 @@ export class ArceuusSpells {
         ["draynor manor teleport", teleport(17, 16, [rune(557), rune(555), rune(563)], 3108, 3352)],
         ["battlefront teleport", teleport(23, 19, [rune(557), rune(554), rune(563)], 1348, 3739)],
         ["mind altar teleport", teleport(28, 22, [rune(558), rune(563, 2)], 2980, 3510)],
-        ["respawn teleport", teleport(34, 27, [rune(4695), rune(563)], GameConstants.DEFAULT_LOCATION.getX(), GameConstants.DEFAULT_LOCATION.getY(), GameConstants.DEFAULT_LOCATION.getZ())],
+        ["respawn teleport", teleport(34, 27, [rune(566), rune(563)], GameConstants.DEFAULT_LOCATION.getX(), GameConstants.DEFAULT_LOCATION.getY(), GameConstants.DEFAULT_LOCATION.getZ())],
         ["salve graveyard teleport", teleport(40, 30, [rune(566, 2), rune(563)], 3432, 3461, 0, undefined, PRIEST_IN_PERIL)],
-        ["fenkenstrain's castle teleport", teleport(48, 50, [rune(557), rune(4695), rune(563)], 3548, 3528, 0, undefined, PRIEST_IN_PERIL)],
-        ["west ardougne teleport", teleport(61, 68, [rune(4695, 2), rune(563, 2)], 2500, 3291, 0, undefined, { key: "biohazard", name: "Biohazard" })],
-        ["harmony island teleport", teleport(65, 74, [rune(4695), rune(561), rune(563)], 3797, 2866, 0, undefined, { key: "great_brain_robbery", name: "The Great Brain Robbery" })],
-        ["cemetery teleport", teleport(71, 82, [rune(565), rune(4695), rune(563)], 2978, 3763)],
-        ["barrows teleport", teleport(83, 90, [rune(4695, 2), rune(565), rune(563, 2)], 3565, 3315)],
-        ["ape atoll teleport", teleport(90, 100, [rune(4695, 2), rune(565, 2), rune(563, 2)], 2770, 9100)],
+        ["fenkenstrain's castle teleport", teleport(48, 50, [rune(557), rune(566), rune(563)], 3548, 3528, 0, undefined, PRIEST_IN_PERIL)],
+        ["west ardougne teleport", teleport(61, 68, [rune(566, 2), rune(563, 2)], 2500, 3291, 0, undefined, { key: "biohazard", name: "Biohazard" })],
+        ["harmony island teleport", teleport(65, 74, [rune(566), rune(561), rune(563)], 3797, 2866, 0, undefined, { key: "great_brain_robbery", name: "The Great Brain Robbery" })],
+        ["cemetery teleport", teleport(71, 82, [rune(565), rune(566), rune(563)], 2978, 3763)],
+        ["barrows teleport", teleport(83, 90, [rune(566, 2), rune(565), rune(563, 2)], 3565, 3315)],
+        ["ape atoll teleport", teleport(90, 100, [rune(566, 2), rune(565, 2), rune(563, 2)], 2770, 9100)],
     ]);
 
     public static getTeleportDestinations() {

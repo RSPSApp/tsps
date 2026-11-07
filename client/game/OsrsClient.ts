@@ -986,6 +986,12 @@ export class OsrsClient {
     tradeOfferInventory: Inventory = new Inventory(28);
     /** The other player's offered items use OSRS's inventory-other offset. */
     tradeOtherOfferInventory: Inventory = new Inventory(28);
+    /**
+     * Ids of the extra inventories (beyond inv/worn/bank) the server has actually sent. The CS2 VM
+     * map is seeded with empty trade/shop/collection inventories at startup, so presence in that
+     * map alone does not mean the server sent one; the RuneLite facade reads this set instead.
+     */
+    readonly serverSentInventoryIds = new Set<number>();
     private tradeState?: TradeWindowState;
     private inventorySeededFromServer: boolean = false;
     private readonly pendingInventoryMovePredictions: Array<{
@@ -3130,6 +3136,7 @@ export class OsrsClient {
                                 Array.isArray(snapshot.slots) ? snapshot.slots : [],
                                 { selectedSlot: null },
                             );
+                            this.serverSentInventoryIds.add(inventoryId);
                             // Interfaces listening to this inventory redraw, as for any update;
                             // an "other" inventory (id + 32768) notifies listeners of its id.
                             markInvTransmit(inventoryId & 0x7fff);

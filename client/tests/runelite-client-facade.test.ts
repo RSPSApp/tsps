@@ -76,6 +76,9 @@ const client: any = {
     inventory,
     equipment,
     bankInventory: new Inventory(816),
+    // As OsrsClient seeds the script VM: empty shop (516) inventory present before the server sends anything.
+    cs2Vm: { context: { inventories: new Map<number, Inventory>([[516, new Inventory(300)]]) } },
+    serverSentInventoryIds: new Set<number>(),
     npcEcs: npcs,
     widgetManager: {
         getWidgetByUid: (uid: number) => widgets.get(uid),
@@ -165,6 +168,10 @@ inventory.setSlot(2, ItemID.SPADE, 1);
 assert.ok(facade.getItemContainer(InventoryID.INV)!.contains(ItemID.SPADE));
 assert.equal(facade.getItemContainer(InventoryID.WORN)!.getItems().length, 14);
 assert.equal(facade.getItemContainer(12345), null);
+assert.equal(facade.getItemContainer(516), null, "a seeded-but-unsent inventory (the shop's) is null, as in RuneLite");
+client.serverSentInventoryIds.add(516);
+assert.ok(facade.getItemContainer(516), "the same inventory is a container once the server has sent it");
+client.serverSentInventoryIds.delete(516);
 
 // --- Plane, mouse ------------------------------------------------------------------------------------
 ClientState.plane = 2;

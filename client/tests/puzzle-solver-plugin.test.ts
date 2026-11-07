@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { GameState } from "../runelite/api/GameState";
 import * as InventoryID from "../runelite/api/gameval/InventoryID";
@@ -51,12 +51,19 @@ const grid = (rows: string) => {
 
 // ---------------------------------------------------------------- the plugin on the real cache
 
+// Everything below runs on the real installed cache (server/caches); without one, as on CI, it is
+// skipped and said so, as in runelite-client-facade.test.ts.
+if (!existsSync(resolve(__dirname, "../../server/caches/caches.json")) || process.env.RL_TEST_NO_CACHE) {
+    console.log("puzzle-solver-plugin: no server/caches, cache-backed sections skipped");
+    process.exit(0);
+}
+
 const { vm } = createCacheVm();
 const manager = vm.context.widgetManager;
 const vars = vm.context.varManager;
 manager.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent(createScriptEvent({ args: widget.onLoad, widget }), 200_000);
 manager.onLoadInvoker = (widget: any) => vm.invokeEventHandler(widget, "onLoad");
-const osrsClient: any = { widgetManager: manager, varManager: vars, cs2Vm: vm, gameState: 30 };
+const osrsClient: any = { widgetManager: manager, varManager: vars, cs2Vm: vm, gameState: 30, serverSentInventoryIds: new Set<number>() };
 const configManager = new ConfigManager(undefined);
 const plugin = new PluginInjector(configManager)
     .provide(CLIENT_TOKEN, osrsClient)
@@ -143,6 +150,8 @@ const client = new ClientImpl(osrsClient);
 assert.equal(client.getItemContainer(InventoryID.TRAIL_PUZZLEINV), null, "no puzzle inventory before the server sends one");
 const pieces = new Inventory(25);
 vm.context.inventories.set(InventoryID.TRAIL_PUZZLEINV, pieces);
+assert.equal(client.getItemContainer(InventoryID.TRAIL_PUZZLEINV), null, "a VM entry the server has not sent is not a container");
+osrsClient.serverSentInventoryIds.add(InventoryID.TRAIL_PUZZLEINV);
 assert.ok(client.getItemContainer(InventoryID.TRAIL_PUZZLEINV), "the puzzle's inventory is readable once sent");
 
 // ---- Puzzle box overlay: solve, follow the player along the solution, and re-solve off it.

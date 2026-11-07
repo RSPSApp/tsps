@@ -103,7 +103,7 @@
     {"name": "Green gloop soup", "heal": 2, "message": "You eat the soup."},
     {"name": "Grubs à la mode", "heal": 2, "message": "You eat the grubs.", "healMessage": "They heal some health."},
     {"name": "Guanic bat (0)", "heal": 5},
-    {"name": "Haddock", "heal": 18},
+    {"name": "Haddock", "heal": 18, "overheal": {"percent": 20, "max": 10}},
     {"name": "Half full wine jug", "option": "Drink", "heal": 7, "drain": {"attack": 2}, "leaves": "Jug", "message": "You drink the wine."},
     {"name": "Halibut", "heal": 20, "combo": true},
     {"name": "Herring", "heal": 5},
@@ -247,6 +247,6 @@
     {"name": "Worm batta", "heal": 11, "combo": true},
     {"name": "Worm crunchies", "heal": 8, "combo": true},
     {"name": "Worm hole", "heal": 12, "combo": true},
-    {"name": "Yellowfin", "heal": 19}
+    {"name": "Yellowfin", "heal": 19, "runEnergy": 20}
   ]
 }

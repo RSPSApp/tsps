@@ -17,6 +17,12 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
   that counts every bite. The animation (`human_eat`) and sound (2393) match them.
 - **The cache:** which items can be eaten (an Eat option), their names, and their ids.
 
+- **Haddock and yellowfin:** [Haddock](https://oldschool.runescape.wiki/w/Haddock) heals 18 and may
+  lift Hitpoints above the base level by 20% of it or 10, whichever is lower, and not in combat in
+  a PvP area; [Yellowfin](https://oldschool.runescape.wiki/w/Yellowfin) heals 19 and restores 20%
+  run energy. rsprox recording 4103 shows the yellowfin's "You eat the yellowfin." line, animation,
+  sound and bite count; it records no run-energy change.
+
 ## How eating works
 
 - **Timers (Wiki: Food):** a bite adds 3 ticks to the attack timer and blocks the next bite for
@@ -87,6 +93,7 @@ replacement, death, overheal boundaries and existing immunity. Potion intake,
 quest unlocks, broader antidote/anti-venom tiers and orb remedy selection remain
 separate audits; this correction does not establish complete food/potion parity.
 | `outcomes` | A table of results by `weight`, each with its heal, boosts, drains, `drainRandom` (a random skill but Hitpoints) and messages (kebabs). |
+| `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `wildernessOnly` | Can only be eaten in the Wilderness (blighted food). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |

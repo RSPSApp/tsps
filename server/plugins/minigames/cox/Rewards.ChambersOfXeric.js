@@ -463,13 +463,14 @@ function unclaimedLoot(raid, player, logout) {
   if (stored) player.sendMessage("Your unclaimed loot from the chest has been placed in your private storage.");
   if (dropped.length === 0) return;
   const { Item, ItemOnGroundManager } = Shared.core();
-  const drop = () => {
-    for (const entry of dropped) ItemOnGroundManager.registerLocation(player, new Item(entry.id, entry.amount), player.getLocation().clone());
+  const drop = (at) => {
+    for (const entry of dropped) ItemOnGroundManager.registerLocation(player, new Item(entry.id, entry.amount), at);
     player.sendMessage("Your unclaimed loot from the chest has been placed on the ground.");
   };
-  // A logout cancels the player's tasks: drop it now rather than in three ticks.
-  if (logout) drop();
-  else Shared.later(player, 3, drop);
+  // A logout cancels the player's tasks and leaves them standing in the raid, which may close behind them: drop it
+  // now, outside, where login puts them. A normal exit drops it three ticks on, once they are out.
+  if (logout) drop(Shared.loc(Shared.OUTSIDE));
+  else Shared.later(player, 3, () => drop(player.getLocation().clone()));
 }
 
 // ---------------------------------------------------------------- Captain Rimor's capes

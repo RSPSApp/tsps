@@ -168,3 +168,72 @@ test("a player who logged out outside the room logs back in with no room state",
   tick(h, second.p, ARRIVING_TICKS + MINUTE_TICKS);
   assert.equal(tokensOf(second.p), 190, "no clock was resumed for someone who was outside");
 });
+
+/** Saves a player who is still online (autosave, shutdown or a crash: no logout hook) and loads a fresh Player at the same spot. */
+function saveWithoutLogout(t, h, f) {
+  const save = PlayerSave.fromPlayer(f.p);
+  const fresh = actor(t, "cyclops");
+  save.applyToPlayer(fresh.p);
+  fresh.p.setLocation(f.p.getLocation().clone());
+  h.login({ player: fresh.p, username: fresh.p.getUsername(), isNewAccount: false });
+  return fresh;
+}
+
+test("a save taken while still online (no logout hook) resumes the room clock", (t) => {
+  const h = cyclopesHandlers();
+  const first = enterTopRoom(t, h, { tokens: 200, defender: I.BRONZE_DEFENDER });
+  tick(h, first.p, ARRIVING_TICKS + MINUTE_TICKS - 20);
+  const second = saveWithoutLogout(t, h, first);
+  assert.deepEqual(dropsFor(t, h, second.p), [I.IRON_DEFENDER], "the tier chosen at the door survives");
+  tick(h, second.p, 20);
+  assert.equal(tokensOf(second.p), 180, "the minute that was running finishes after the restart");
+});
+
+test("a save taken while still online keeps the grace minute running", (t) => {
+  const h = cyclopesHandlers();
+  const first = enterTopRoom(t, h, { tokens: 105 });
+  tick(h, first.p, ARRIVING_TICKS + MINUTE_TICKS * 9 + 50);
+  const second = saveWithoutLogout(t, h, first);
+  tick(h, second.p, 49);
+  assert.equal(second.p.getLocation().getX(), TOP_ROOM_TILE.x, "still inside with a tick of grace left");
+  tick(h, second.p, 2);
+  assert.notEqual(second.p.getLocation().getX(), TOP_ROOM_TILE.x, "moved out when the grace minute is over");
+});
+
+test("a save taken after leaving the room carries no room state", (t) => {
+  const h = cyclopesHandlers();
+  const first = enterTopRoom(t, h, { tokens: 200 });
+  first.p.setLocation(at(TOP_LOBBY_TILE));
+  tick(h, first.p, ARRIVING_TICKS + 1);
+  const second = saveWithoutLogout(t, h, first);
+  second.p.setLocation(at(TOP_ROOM_TILE));
+  tick(h, second.p, ARRIVING_TICKS + MINUTE_TICKS);
+  assert.equal(tokensOf(second.p), 190);
+});
+
+test("logging in inside a room with no saved state moves the player out", (t) => {
+  const h = cyclopesHandlers();
+  const f = actor(t, "cyclops");
+  f.p.setLocation(at(TOP_ROOM_TILE));
+  h.login({ player: f.p, username: f.p.getUsername(), isNewAccount: false });
+  assert.notEqual(f.p.getLocation().getX(), TOP_ROOM_TILE.x);
+  assert.equal(f.p.getLocation().getX(), TOP_DOOR_TILE.x - 1);
+});
+
+test("corrupt saved room state is treated as no state", (t) => {
+  const h = cyclopesHandlers();
+  const corrupt = [
+    { room: "top", tier: "1", ticks: 5, graceTicks: -1 },
+    { room: "top", tier: 1, ticks: NaN, graceTicks: -1 },
+    { room: "top", tier: 1, ticks: 5, graceTicks: "50" },
+    { room: "top", tier: 1.5, ticks: 5, graceTicks: -1 },
+    { room: "basement", tier: 1, ticks: 5, graceTicks: -1 },
+  ];
+  for (const state of corrupt) {
+    const f = actor(t, "cyclops");
+    f.p.setLocation(at(TOP_ROOM_TILE));
+    f.p.setAttribute("warriors-guild:room", state);
+    h.login({ player: f.p, username: f.p.getUsername(), isNewAccount: false });
+    assert.equal(f.p.getLocation().getX(), TOP_DOOR_TILE.x - 1, JSON.stringify(state));
+  }
+});

@@ -15,7 +15,7 @@ const { ArceuusSpells } = require("../dist/game/content/combat/magic/ArceuusSpel
 
 const SOUL = 566;
 const MIST = 4695;
-const QUESTS = ["priest_in_peril", "biohazard", "great_brain_robbery"];
+const QUESTS = ["priest_in_peril", "biohazard", "great_brain_robbery", "monkey_madness_i"];
 
 let core;
 before(async () => {

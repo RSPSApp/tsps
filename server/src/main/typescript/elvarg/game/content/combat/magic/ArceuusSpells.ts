@@ -236,8 +236,10 @@ export class ArceuusSpells {
         ["west ardougne teleport", teleport(61, 68, [rune(566, 2), rune(563, 2)], 2500, 3291, 0, undefined, { key: "biohazard", name: "Biohazard" })],
         ["harmony island teleport", teleport(65, 74, [rune(566), rune(561), rune(563)], 3797, 2866, 0, undefined, { key: "great_brain_robbery", name: "The Great Brain Robbery" })],
         ["cemetery teleport", teleport(71, 82, [rune(565), rune(566), rune(563)], 2978, 3763)],
-        ["barrows teleport", teleport(83, 90, [rune(566, 2), rune(565), rune(563, 2)], 3565, 3315)],
-        ["ape atoll teleport", teleport(90, 100, [rune(566, 2), rune(565, 2), rune(563, 2)], 2770, 9100)],
+        // Wiki (Barrows Teleport): "Completion of the quest Priest in Peril ... is required".
+        ["barrows teleport", teleport(83, 90, [rune(566, 2), rune(565), rune(563, 2)], 3565, 3315, 0, undefined, PRIEST_IN_PERIL)],
+        // Wiki (Ape Atoll Teleport (Arceuus)): "Completion of the Monkey Madness I quest is required to cast this spell."
+        ["ape atoll teleport", teleport(90, 100, [rune(566, 2), rune(565, 2), rune(563, 2)], 2770, 9100, 0, undefined, { key: "monkey_madness_i", name: "Monkey Madness I" })],
     ]);
 
     public static getTeleportDestinations() {

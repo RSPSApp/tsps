@@ -34,14 +34,9 @@ Running several branches at once, one worktree each on its own ports: see [docs/
 
 ### Local world settings
 
-Put overrides in `server/data/definitions/world.local.json` to keep them separate from shipped
-`world.json` settings. `pluginConfig` and `plugins` merge by key; other top-level keys replace
-those in `world.json`. Restart the server after edits. For example, enable three character slots
-(default: one, with no picker):
-
-```json
-{ "pluginConfig": { "characters:maxPerAccount": 3 } }
-```
+Create `server/data/definitions/world.local.json` with the settings you want to override from
+`world.json`; omitted settings keep their shipped values. This file is gitignored, so local
+customizations survive updates without changing tracked files. Restart the server after edits.
 
 ### Optional: Java sidecars
 

@@ -137,7 +137,38 @@ producer: the checked normal-death recordings do not establish one. Zeal activat
 Dark Bow impact audio and a replacement for the archer's ordinary private Dark Bow launch also
 remain unverified.
 
-### Validation scope
+### Nearby hurt-voice follow-up (#3241)
+
+PR #2562 subsequently added body-type-1 variants 509/510, independently selected private
+variants for PvP listeners, Dark Bow non-dragon impacts and death jingle 90. Its shared
+listener sweep also broadcast NPC-inflicted player hurt voices to unrelated nearby players.
+Those private synths have no position or distance fade and could dominate neighbouring fights.
+
+The NPC-inflicted case now sends the voice only to the damaged player. In public Pest Control
+recordings 237/04014, 04025, 04028, 04029 and 04031, all 68 checked hurt packets accompany
+positive local damage, despite many nearby fights. The existing actual-HP-loss callback,
+current physical body, 20-client-cycle delay and bot-recipient suppression are retained.
+
+PvP listener delivery is unchanged. Paired Legacy Duels recordings 225/01591 and 01592 establish
+independent participant variants, but not a general spectator radius. Soul Wars recording
+234/03277 also contains hurt voices while the local player waits at respawn; that mode-specific
+context does not establish whether general PvP should have the same audience. The existing
+15-tile PvP sweep remains an inference, not a verified distance-audio contract.
+
+DDS special 2537 (237/03991), whip special 2713 (230/02878) and ordinary whip attacks use private
+synths in the checked recordings. They are not blanket-broadcast. Godsword special 3869 is an
+area sound with range 5 in recordings including 224/01545 and 237/04025; the ZGS activation
+already follows that contract. No additional barrage sound is inferred from its freeze graphic.
+
+The reported zero-damage/splash voice was not reproduced as a voice from that hit. Regression
+checks instead reproduce a nearby positive NPC hit adding a voice to an unrelated player who
+takes zero damage; that leakage is removed. Final-mitigation zero, poison, reflected damage and
+delayed multipart-hit checks retain their existing assertions. Broader PvP balance, ZGS freeze
+impact audio and animation/projectile synchronization need a reproducible case with the attack,
+listener position and both sound-volume settings identified; this follow-up does not claim
+complete combat-audio parity.
+
+### Earlier validation scope
 
 Actual Player/HitQueue and encoded-recipient tests cover damage timing, per-part callbacks,
 room/exclusion boundaries, private synth preservation and refusal paths. Browser subscription

@@ -364,7 +364,7 @@ PK population stays outside. Squares come from `box` and the entrance tile in
 | Spindel (Web Chasm) | `2:25:180` | `0:49:58` |
 | Scorpia's Cave | `0:50:161` | `0:50:61` (crevice at 3231, 3936) |
 
-Callisto's and Vet'ion's exits lead into the Escape Caves, which are a separate square
+Callisto's, Vet'ion's and Venenatis's exits lead into the Escape Caves, which are a separate square
 (`0:52:160`). The surface squares are whole map squares and also cover other nearby Wilderness
 tiles. This example lowers every interior to 0 and lists no surface square, so each surface
 keeps the global target:

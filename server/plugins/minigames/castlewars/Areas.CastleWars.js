@@ -68,8 +68,9 @@ function defineAreas() {
       if (player.getAttribute(game.TRANSITION_KEY) === true) {
         return;
       }
+      // The waiting room is only a queue: leaving it takes back the game's items and team, not the player's own
+      // skull, Tele Block, poison, stats or timers (a full resetAttributes cleared those for free).
       game.clearCastleWarsItems(player);
-      player.resetAttributes();
       game.setTeamId(player, null);
       game.closeOverlay(player);
       if (player.isPlayerBot?.() !== true) {

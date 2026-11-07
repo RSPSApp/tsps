@@ -1138,12 +1138,26 @@ module.exports = function registerForgettableTaleQuest(api) {
     play(player, RED_AXE_DIRECTOR_CUTSCENE, "exploring-the-closed-tunnel-room-1-attempting-to-control-the-dwarven-machinery-without-any-square-stones");
   }
 
+  /**
+   * Room for every [itemId, amount] together (`adds` drops what has none, and the box moves the puzzle on as it
+   * gives): a stack needs one slot unless held, anything else a slot each. Without it, the inventory's own message.
+   */
+  function roomFor(player, items) {
+    const inventory = player.getInventory();
+    const slots = items.reduce((total, [itemId, amount]) => total
+      + (ItemDefinition.forId(itemId)?.isStackable?.() ? (inventory.contains(itemId) ? 0 : 1) : amount), 0);
+    if ((inventory.getFreeSlots?.() ?? slots) >= slots) return true;
+    inventory.full?.();
+    return false;
+  }
+
   function roomBoxInteraction(event) {
     const { player } = event;
     event.handled = true;
     if (stageOf(player) < STAGE_TUNNEL_ENTERED || quest.isComplete(player)) return;
     const phase = puzzle(player);
     if (phase === 0) {
+      if (!roomFor(player, [[SQUARE_STONE_GREEN, 1], [SQUARE_STONE_YELLOW, 1]])) return;
       player.getInventory().adds(SQUARE_STONE_GREEN, 1);
       player.getInventory().adds(SQUARE_STONE_YELLOW, 1);
       setPuzzle(player, PUZZLE_ROOM1_STONES);
@@ -1151,6 +1165,7 @@ module.exports = function registerForgettableTaleQuest(api) {
       return;
     }
     if (phase === PUZZLE_FINAL_SEARCH) {
+      if (!roomFor(player, [[SQUARE_STONE_GREEN, 2], [SQUARE_STONE_YELLOW, 2]])) return;
       player.getInventory().adds(SQUARE_STONE_GREEN, 2);
       player.getInventory().adds(SQUARE_STONE_YELLOW, 2);
       setPuzzle(player, PUZZLE_FINAL_STONES);

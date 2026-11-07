@@ -103,7 +103,25 @@ module.exports = function registerEadgarsRuseQuest(api) {
   const RAW_CHICKEN = ItemIdentifiers.RAW_CHICKEN;
   const GRAIN = ItemIdentifiers.GRAIN;
   const BURNT_MEAT = ItemIdentifiers.BURNT_MEAT;
-  const RANARR_WEED = ItemIdentifiers.RANARR_WEED;
+  /**
+   * Wiki (Sanfew, Goutweed Exchange): "Sanfew will trade any goutweed for a single herb, which is rolled off the
+   * standard herb drop table." Its rows, out of 128, all grimy.
+   */
+  const GOUTWEED_HERBS = [
+    [ItemIdentifiers.GRIMY_GUAM_LEAF, 32], [ItemIdentifiers.GRIMY_MARRENTILL, 24], [ItemIdentifiers.GRIMY_TARROMIN, 18],
+    [ItemIdentifiers.GRIMY_HARRALANDER, 14], [ItemIdentifiers.GRIMY_RANARR_WEED, 11], [ItemIdentifiers.GRIMY_IRIT_LEAF, 8],
+    [ItemIdentifiers.GRIMY_AVANTOE, 6], [ItemIdentifiers.GRIMY_KWUARM, 5], [ItemIdentifiers.GRIMY_CADANTINE, 4],
+    [ItemIdentifiers.GRIMY_LANTADYME, 3], [ItemIdentifiers.GRIMY_DWARF_WEED, 3],
+  ];
+
+  function goutweedHerb(random = Math.random) {
+    let roll = Math.floor(random() * 128);
+    for (const [herb, weight] of GOUTWEED_HERBS) {
+      if (roll < weight) return herb;
+      roll -= weight;
+    }
+    return GOUTWEED_HERBS[0][0];
+  }
   const LIQUOR_ITEM_IDS = new Set([
     ItemIdentifiers.VODKA,
     ItemIdentifiers.GIN,
@@ -693,7 +711,8 @@ module.exports = function registerEadgarsRuseQuest(api) {
     }
     if (npcId === SANFEW_NPC_ID && value.includes("more goutweed") && held(player, GOUTWEED)) {
       player.getInventory().deleteNumber(GOUTWEED, 1);
-      player.getInventory().adds(RANARR_WEED, 1);
+      // The goutweed's slot takes the herb, so a full inventory still has room.
+      player.getInventory().adds(goutweedHerb(), 1);
     }
   }
 

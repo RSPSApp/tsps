@@ -218,6 +218,8 @@ function refuse(player, refused) {
 
 /** Into a mode's waiting area, beside the barrier tile they used (captured). */
 function enterWaiting(player, mode, x) {
+  // Lisa's menu can be answered after a game has taken the player; a player in one isn't moved out of it.
+  if (Match.gameOf(player)) return;
   const refused = refusal(player, mode);
   if (refused) {
     refuse(player, refused);

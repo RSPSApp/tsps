@@ -487,6 +487,9 @@ function pouchCoins(pouchId, random = Math.random) {
 function register(api) {
   core = api.core;
   pluginApi = api;
+  // The gloves' wear and the necklace's charges outlast a relog (Wiki: both wear out on use, not per session).
+  api.persistAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
+  api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
   api.onNpcsInteraction([...new Set(TARGETS.filter((t) => !t.option).flatMap((t) => t.npcs))], { Pickpocket: pickpocket });
   api.onNpcInteraction("Digsite workman", { "Steal-from": pickpocket });
 }

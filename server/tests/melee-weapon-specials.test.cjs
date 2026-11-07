@@ -590,6 +590,7 @@ test("Blood Sacrifice heals only the damage it does to a target with fewer than 
   ags.handleAfterHitEffects(hit(target, 30, true, attacker));
   tasks[0].execute();
   assert.deepEqual(healed, [6], "the sacrifice can only take the 6 Hitpoints left");
+});
 
 test("Healing Blade heals from the swing's potential damage, not what a low target had left (Wiki)", () => {
   const sgs = special("saradomin_godsword").getCombatMethod();

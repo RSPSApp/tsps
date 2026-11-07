@@ -1367,8 +1367,11 @@ export class ClientConnection {
         ? Accounts.charactersOf(account)
         : [{ name: primaryName, createdAt: Date.now(), lastPlayedAt: 0 }];
       // Without the picker the typed character enters, primary included; with it, the typed
-      // non-primary is preselected, else the last played. Banned characters are never the default.
-      defaultIndex = defaultCharacterIndex(characters, key, { enterTyped: !wantsCharacterList, banned: isBanned });
+      // non-primary is preselected, else the last played. With one slot the browser enters the
+      // default with no picker, so the typed character enters there too: else an old alt played
+      // last would hide the primary. Banned characters are never the default.
+      const enterTyped = !wantsCharacterList || maxCharactersPerAccount() === 1;
+      defaultIndex = defaultCharacterIndex(characters, key, { enterTyped, banned: isBanned });
       if (defaultIndex < 0) {
         this.releasePendingName();
         this.failLogin(4, "Your account has been disabled.");

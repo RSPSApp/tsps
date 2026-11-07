@@ -315,6 +315,26 @@ test('a login without the picker enters the typed character, primary included', 
   assert.ok(Accounts.charactersOf('zezima')[1].lastPlayedAt >= before, 'last played is updated');
 });
 
+// With one slot the browser enters the list's default with no picker (the client's "disabled slots bypass the
+// picker, including accounts with old alts"), so the default is the typed character, as without the flag.
+test('with one slot the flagged login defaults to the typed character, not an old alt played last', async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  Accounts.touchLastPlayed('zezima', 'Alt', 3);
+  const { connection, list } = await loginWithList('Zezima', 'pw');
+  assert.equal(list.max, 1);
+  assert.equal(list.entries[list.defaultIndex].name, 'Zezima', 'the typed primary is the default');
+  await select(connection, list.entries[list.defaultIndex].name);
+  await handshake(t, connection, 'Zezima');
+  assert.equal(connection.getPlayer()?.getUsername(), 'Zezima', 'the primary enters');
+  net.ClientConnection.pendingNames.clear();
+  const alt = await loginWithList('Alt', 'pw');
+  assert.equal(alt.list.entries[alt.list.defaultIndex].name, 'Alt', 'a typed alt is still the default');
+  net.ClientConnection.pendingNames.clear();
+});
+
 test('select swaps the character, is refused after handshake, and refuses a banned one', async (t) => {
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);

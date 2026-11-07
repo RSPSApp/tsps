@@ -20,7 +20,7 @@ Set `characters:maxPerAccount` in `world.local.json` under `pluginConfig`:
 ```
 
 - The default is 1 (additional characters disabled). Values are rounded down and kept between 1 and 6, the most rows the picker can show. A value that is not a number falls back to 1.
-- 1 turns creation off and skips the picker, entering the default character automatically.
+- 1 turns creation off and skips the picker. The character whose name was typed enters, as on clients without a picker, so an alt kept from a higher cap never hides the primary.
 - The in-browser host (IndexedDB saves) keeps no account file between reloads, so it always has 1.
 
 ## Where accounts live

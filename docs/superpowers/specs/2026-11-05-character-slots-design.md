@@ -241,10 +241,11 @@ database access; there is no in-game restore of a deleted character.
 
 ### Configuration
 
-`pluginConfig["characters:maxPerAccount"]`, integer, default **3**, read through
-`PluginManager.getPluginConfig`, rounded down and clamped to 1..6 (the picker draws six legible
-rows); a non-numeric value falls back to 3. A value of 1 disables creation and the picker still shows (one
-card, Play). Documented in `world.local.json`'s `_help` block and in a new `docs/character-slots.md`.
+`pluginConfig["characters:maxPerAccount"]`, integer, default **1** (additional characters off), read
+through `PluginManager.getPluginConfig`, rounded down and clamped to 1..6 (the picker draws six legible
+rows); a non-numeric value falls back to 1. A value of 1 disables creation and skips the picker: the
+typed character enters, as on the gateway and native clients, so an alt left from a higher cap never
+hides the primary. Documented in `world.local.json`'s `_help` block and in a new `docs/character-slots.md`.
 
 ### New character entry
 

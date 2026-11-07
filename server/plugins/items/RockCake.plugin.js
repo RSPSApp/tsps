@@ -45,7 +45,7 @@ function hurt(player, damage) {
 /** Eat: 1 Hitpoint above 2; at 2 or less nothing moves, the player only hears and reads it. */
 function eatRockCake({ player, itemId }) {
   if (!isHot(itemId)) player.getPacketSender().sendSound(BITE_SOUND, 1, 0);
-  if (player.getHitpoints() > EAT_HURTS_ABOVE) hurt(player, EAT_DAMAGE);
+  if (player.getHitpointsAfterPendingDamage() > EAT_HURTS_ABOVE) hurt(player, EAT_DAMAGE);
   say(player, isHot(itemId) ? HOT_EAT_MESSAGES : COOL_EAT_MESSAGES);
 }
 
@@ -53,7 +53,7 @@ function eatRockCake({ player, itemId }) {
 function guzzleRockCake({ player, itemId }) {
   // Nothing was recorded guzzling a hot cake, so its messages are unknown: leave it unhandled.
   if (isHot(itemId)) return false;
-  const hitpoints = player.getHitpoints();
+  const hitpoints = player.getHitpointsAfterPendingDamage();
   player.getPacketSender().sendSound(BITE_SOUND, 1, 0);
   hurt(player, Math.min(Math.floor((hitpoints * GUZZLE_PERCENT) / 100) + 1, Math.max(0, hitpoints - 1)));
   say(player, COOL_GUZZLE_MESSAGES);

@@ -22,6 +22,7 @@ function createPlayer(hitpoints) {
   const player = { hits: [], messages: [], sounds: [], animations: [] };
   Object.assign(player, {
     getHitpoints: () => hitpoints,
+    getHitpointsAfterPendingDamage: () => hitpoints - player.hits.reduce((sum, hit) => sum + hit, 0),
     performAnimation: (animation) => player.animations.push(animation.getId()),
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => player.hits.push(...hits.map((hit) => hit.getDamage())) }) }),
     getPacketSender: () => ({
@@ -89,4 +90,15 @@ test("eating the hot cake burns the mouth (rsprox 3250); guzzling a hot cake is 
   assert.equal(guzzle(other, HOT()), false);
   assert.deepEqual(other.hits, []);
   assert.deepEqual(other.messages, []);
+});
+
+test("two guzzles or eats in the same tick count the queued hit and never kill", () => {
+  const guzzles = createPlayer(2);
+  guzzle(guzzles, COOL());
+  guzzle(guzzles, COOL());
+  assert.deepEqual(guzzles.hits, [1, 0]);
+  const eats = createPlayer(3);
+  eat(eats, COOL());
+  eat(eats, COOL());
+  assert.deepEqual(eats.hits, [1]);
 });

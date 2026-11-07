@@ -588,3 +588,24 @@ test('a forfeit answered Yes after the game has started leaves the player in it,
   assert.equal(restore.mock.callCount(), 0, 'no stash handed back mid-game');
   assert.equal(p.getLocation(), at, 'not moved out of the game');
 });
+
+test("Lisa's mode menu answered after a game has taken the player does nothing, stash untouched", (t) => {
+  const p = realPlayer(t);
+  const casual = Lobby.modeOf('casual');
+  const hooks = {};
+  const fake = new Proxy({}, { get: (_, key) =>
+    (key === 'onNpcThirdClick' ? (ids, fn) => { hooks.joinLisa = fn; } : () => {}) });
+  Lobby.attachLobby(fake);
+  Profile.finishTutorial(p);
+  hooks.joinLisa({ player: p });
+  const manager = p.getDialogueManager();
+  assert.equal(manager.isActive(), true, "Lisa's mode menu is open");
+  // The player is in a game (arena plane, no stash yet) when the answer arrives.
+  t.mock.method(Match, 'gameOf', () => ({}));
+  const save = t.mock.method(Stash, 'save', () => {});
+  const at = p.getLocation();
+  manager.handleResume(core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, 3); // the native resume for "Casual"
+  assert.equal(save.mock.callCount(), 0, 'nothing stashed from inside a game');
+  assert.equal(p.getLocation(), at, 'not moved to the waiting room');
+  assert.equal(Lobby.waiting(p, casual), false);
+});

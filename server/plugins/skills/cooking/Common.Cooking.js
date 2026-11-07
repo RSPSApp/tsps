@@ -37,7 +37,8 @@ function index() {
   cookablesByRaw = new Map();
   for (const row of DATA.cookables) {
     if (!cookablesByRaw.has(obj(row.raw))) {
-      cookablesByRaw.set(obj(row.raw), { ...row, raw: obj(row.raw), cooked: obj(row.cooked), burnt: obj(row.burnt) });
+      cookablesByRaw.set(obj(row.raw), { ...row, raw: obj(row.raw), cooked: obj(row.cooked), burnt: obj(row.burnt),
+        returnItem: row.returnItem === undefined ? undefined : obj(row.returnItem) });
     }
   }
   recipesByIngredient = new Map();

@@ -12,11 +12,11 @@
  * one order at a time; logout, death and
  * disconnection abandon it with no reward.
  *
- * The wiki tutorial (Aluft Gianne snr. + Blurberry recommendations) is not implemented, so
- * the gate is just the documented 29 Cooking.
+ * Aluft Gianne snr. and Blurberry provide the tutorial recommendations before orders.
  */
 
 const DATA = require("./data/gnome-restaurant-orders.json");
+const Tutorial = require("./Tutorial.GnomeRestaurant");
 
 const GIANNE_NAME = "Gianne jnr.";
 const BOX_NAME = "Aluft Aloft box";
@@ -33,6 +33,7 @@ const MS_PER_MINUTE = 60_000;
 
 const ALREADY_LINE = "You already have a delivery on the go. Check your Aluft Aloft box if you've forgotten the details.";
 const REFUSAL_LINE = "I'm afraid you don't have the required cooking experience for this job. If you want to work for me you'll have to train up to level 29 Cooking.";
+const TRAINING_LINE = "First of all you will need some basic Gnome Cooking and Cocktail making training. Go and talk to my Father, Aluft Gianne snr. and Blurberry, if you haven't already, and they'll tell you what you need to do.";
 const NO_ORDERS_LINE = "I'm afraid I have no orders for you at the moment - come back in";
 const OFFER_TITLE = "Do you want to take on an easy or a hard delivery?";
 const TAKE_TITLE = "Take this order?";
@@ -162,11 +163,18 @@ function questOwnsDialogue(event) {
   return selection != null;
 }
 
+/** The three entry paths and their delayed callbacks share the same prerequisites. */
+function canOrder(player) {
+  if (sessions.has(player)) { npcSays(player, ALREADY_LINE); return false; }
+  if (cookingLevel(player) < MIN_COOKING) { npcSays(player, REFUSAL_LINE); return false; }
+  if (!Tutorial.completed(player)) { npcSays(player, TRAINING_LINE); return false; }
+  return true;
+}
+
 function talkTo(event) {
   if (questOwnsDialogue(event)) return false;
   const { player } = event;
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
-  if (cookingLevel(player) < MIN_COOKING) return npcSays(player, REFUSAL_LINE);
+  if (!canOrder(player)) return;
   const available = [TIER_EASY, TIER_HARD].filter((tier) => !isLocked(player, tier));
   if (!available.length) return npcSays(player, `${NO_ORDERS_LINE} ${remainingText(player, TIER_EASY, TIER_HARD)}.`);
   const pairs = available.map((tier) => [
@@ -186,13 +194,12 @@ function getHardJob(event) {
 }
 
 function getJob({ player }, tier) {
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
-  if (cookingLevel(player) < MIN_COOKING) return npcSays(player, REFUSAL_LINE);
+  if (!canOrder(player)) return;
   offerOrder(player, tier);
 }
 
 function offerOrder(player, tier, rng = Math.random) {
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
+  if (!canOrder(player)) return;
   if (isLocked(player, tier)) return npcSays(player, lockedLine(player, tier));
   const order = rollOrder(tier, rng);
   npcThenPrompt(player, [`${order.npcName} wants a ${order.itemName}.`, order.hint], TAKE_TITLE, [
@@ -212,7 +219,7 @@ function confirmDecline(player, order) {
 }
 
 function acceptOrder(player, order) {
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
+  if (!canOrder(player)) return;
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < 1) {
     player.sendMessage("You need a free inventory space to carry your delivery box.");

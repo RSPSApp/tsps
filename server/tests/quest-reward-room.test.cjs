@@ -678,3 +678,76 @@ test("Luthas pays for a completed crate without losing earned wages", async (t) 
     });
   }
 });
+
+// A single tomato and pie shell make the first garden-pie part on a members world.
+test('a members-world player can assemble the first garden-pie part', async (t) => {
+  const TOMATO = 1982, SHELL = 2315, PART = 7172;
+  const world = core.WorldDefinition;
+  assert.equal(world.isMembersWorld(), true);
+  assert.ok(world.getWorldDefinition().zones.some(zone => zone.tags.includes('f2p') && world.zoneContains(zone, HOME[0], HOME[1])));
+  assert.deepEqual(['tomato', 'pie_shell', 'unfinished_garden_pie_1'].map(name => core.CacheDefinitions.getObjId(name)), [TOMATO, SHELL, PART]);
+  for (const [id, members] of [[TOMATO, false], [SHELL, false], [PART, true]]) {
+    assert.equal(core.CacheDefinitions.getItem(id).isMembers, members);
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false);
+  }
+  for (const id of [TOMATO, SHELL]) assert.equal(core.CacheDefinitions.getItem(id).isTradable, true);
+  const f = actor(t), p = f.p, inv = f.inv, skills = p.getSkillManager(), cooking = core.Skill.COOKING;
+  PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+  p.closeInterruptibleInterfaces();
+  t.after(() => PM.emitPlayerDisconnect({ player: p, username: p.getUsername() }));
+  assert.ok(p.isRegistered() && p.getHitpoints() > 0);
+  assert.equal(core.RegionManager.blocked(p.getLocation(), p.getPrivateArea()), false);
+  const xp = core.SkillManager.getExperienceForLevel(34);
+  skills.setExperience(cooking, xp).setMaxLevels(cooking, 34, false).setCurrentLevels(cooking, 34, false);
+  assert.deepEqual([skills.getExperience(cooking), skills.getMaxLevel(cooking), skills.getCurrentLevel(cooking)], [xp, 34, 34]);
+  for (const id of [TOMATO, SHELL]) {
+    assert.equal(inv.getAmount(id), 0);
+    inv.add(new core.Item(id, 1), false);
+    assert.notEqual(PM.emitCanUseItem(p, id, 'use'), false);
+  }
+  assert.notEqual(PM.emitCanUseItem(p, PART, 'use'), false);
+  const slots = [TOMATO, SHELL].map(id => inv.getSlotForItemId(id));
+  assert.ok(slots.every(slot => slot >= 0));
+  assert.notEqual(slots[0], slots[1]);
+  for (const slot of slots) assert.equal(inv.getItems()[slot].getMeta(), null);
+  assert.equal(inv.getAmount(PART), 0);
+  const uses = [], produced = [], tasks = [], original = PM.emitItemOnItem.bind(PM);
+  t.mock.method(PM, 'emitItemOnItem', event => {
+    const result = original(event);
+    if (event.player === p) uses.push([event.usedItemId, event.usedWithItemId, result]);
+    return result;
+  });
+  PM.createApi('GardenPieMembersObserver').onCustomEvent('skills:produced', event => {
+    if (event.player === p) produced.push([event.itemId, event.amount, event.xp, event.kind]);
+  });
+  const submit = core.TaskManager.submit.bind(core.TaskManager);
+  t.mock.method(core.TaskManager, 'submit', task => {
+    if (task.key === p.getIndex() && task.pluginName === 'Cooking') tasks.push(task);
+    return submit(task);
+  });
+  let turns = 0;
+  const turn = () => {
+    assert.ok(++turns <= 6);
+    p.resetUpdating();
+    core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    core.TaskManager.process();
+    f.c.processTurnPackets();
+    const movement = p.getMovementQueue();
+    movement.beginCycle(); movement.processEntityPursuit();
+    if (movement.hasPendingWork()) movement.process();
+    core.TaskManager.processWalkTo(p.getIndex());
+  };
+  await f.c.dispatch([{ type: 'inventory_use_on', slot: slots[0], itemId: TOMATO,
+    target: { kind: 'inventory', slot: slots[1], itemId: SHELL } }]);
+  turn();
+  assert.deepEqual(uses, [[TOMATO, SHELL, true]], 'the real item-on-item path handles the pair');
+  assert.equal(tasks.length, 1, 'the actual Cooking handler submits a task');
+  assert.equal(tasks[0].isRunning(), true);
+  assert.deepEqual([inv.getAmount(TOMATO), inv.getAmount(SHELL), inv.getAmount(PART)], [1, 1, 0]);
+  for (let i = 0; i < 4; i++) turn();
+  assert.equal(tasks[0].isRunning(), false, 'the actual Cooking task completes');
+  assert.deepEqual([inv.getAmount(TOMATO), inv.getAmount(SHELL), inv.getAmount(PART)], [0, 0, 1]);
+  assert.equal(skills.getExperience(cooking), xp);
+  assert.deepEqual(produced, [[PART, 1, 0, 'make']]);
+});

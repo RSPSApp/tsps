@@ -31,6 +31,7 @@
  */
 const Common = require("./Common.LeagueRelics");
 const Toggles = require("./Toggles.LeagueRelics");
+const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 
 /** The journal scroll, as the diaries open it (Journal.AchievementDiaries.js). */
 const JOURNAL_SCROLL = 741;
@@ -43,7 +44,6 @@ const SCRIPT_JOURNAL_RESET = 6844;
 const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_JOURNAL_SHOW = 6845;
 const MAGIC_TAB = 6;
-const PRESET_TEXT = "Preset items cannot be used for this.";
 
 let core;
 let effect;
@@ -51,10 +51,6 @@ let effect;
 let tiers = null;
 /** Per player: { readyAt (process cycle), task (the cast waiting, if any) }. */
 const casts = new WeakMap();
-
-function restricted(item) {
-  return item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true;
-}
 
 function active(player) {
   return Common.effectActive(player, effect);
@@ -122,15 +118,19 @@ function plan(player, item, productId) {
   const inventory = player.getInventory();
   const itemId = item.getId();
   const stack = itemId !== unnoted(itemId) || stacks(itemId);
-  const amount = Math.min(effect.perCast, stack ? item.getAmount() : inventory.getAmount(itemId));
+  // Loose copies: only the plain ones convert; a preset copy in another slot would come back plain.
+  const held = stack ? item.getAmount() : plainAmount(inventory, itemId);
+  const amount = Math.min(effect.perCast, held);
   if (stack && Toggles.on(player, effect.bankToggle) && Common.bankHasRoom(player, unnoted(productId))) {
     return { stack, amount, bank: true };
   }
   // Loose: the cast empties the slots it takes before the products go in, so all of them held
   // (10 or fewer) always fit; more held than one cast takes needs a free slot for each product.
+  // A stack's product is plain, so it merges only into a plain stack of it (a preset stack of the
+  // same id does not count), or takes a free slot.
   const room = stack
-    ? inventory.contains(productId) || inventory.getFreeSlots() > 0 || amount === item.getAmount()
-    : amount === inventory.getAmount(itemId) || inventory.getFreeSlots() >= amount;
+    ? amount === held || inventory.getAddableAmount(new core.Item(productId, amount)) >= amount
+    : amount === held || inventory.getFreeSlots() >= amount;
   return room ? { stack, amount, bank: false } : null;
 }
 
@@ -170,7 +170,7 @@ function cast(player, spellName, slot, itemId, clicked) {
     return;
   }
   if (how.stack) inventory.deleteAtSlot(slot, how.amount);
-  else inventory.deleteNumber(itemId, how.amount);
+  else takePlain(inventory, itemId, how.amount);
   if (how.bank) Common.bank(player, target, how.amount);
   else inventory.adds(productId, how.amount);
   player.getSkillManager().addExperiences(core.Skill.MAGIC, effect.xpPerItem * how.amount);

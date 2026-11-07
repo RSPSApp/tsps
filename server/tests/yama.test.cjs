@@ -12,7 +12,7 @@ let aKingdomDividedComplete = false;
 const fakeApi = {
   core: {
     ItemDefinition: { forId: (id) => ({ getGrandExchangeValue: () => VALUES[id] ?? 0, isStackable: () => id === 995 }) },
-    Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+    Item: class { constructor(id, amount, meta) { this.id = id; this.amount = amount; this.meta = meta; } },
     ItemIdentifiers: { FORGOTTEN_LOCKBOX: 30763 },
   },
   persistAttribute() {},
@@ -158,12 +158,87 @@ test("a death in the domain leaves the items with the Voice, who hands them back
   } finally {
     Domain.sessionOf = original;
   }
-  assert.deepEqual(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).items, [[4151, 1]]);
+  assert.deepEqual(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).items, [[4151, 1, null]]);
   // 10,000 for the 1.5m item, 75% off: 2,500 of the 5,000 coins.
   assert.equal(hooks.npc["Voice of Yama"]["Talk-to"]({ player }), true);
   assert.equal(inventory.get(995), 2_500);
   assert.equal(inventory.get(4151), 1);
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
+});
+
+test("a death while the Voice still holds a paid-for remainder is charged again, as a gravestone's merge is", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const inventory = new Map([[995, 20_000]]);
+  const player = fakePlayer({ [Common.HELD_ITEMS_ATTRIBUTE]: { items: [[385, 5]], paid: true } });
+  player.messages = [];
+  player.sendMessage = (text) => player.messages.push(text);
+  player.getInventory = () => ({
+    getAmount: (id) => inventory.get(id) ?? 0,
+    delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+    contains: (id) => inventory.has(id),
+    getFreeSlots: () => 20,
+    getAddableAmount: (item) => Math.min(item.amount, 2147483647 - (inventory.get(item.id) ?? 0)),
+    add: (item) => inventory.set(item.id, (inventory.get(item.id) ?? 0) + item.amount),
+    refreshItems() {},
+  });
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  try {
+    hooks.drop({ player, item: { getId: () => 4151, getAmount: () => 1 }, dropEligible: true, shouldDropItems: true, handled: false });
+  } finally {
+    Domain.sessionOf = original;
+  }
+  assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).paid, false, "the new death's items are not already paid for");
+  hooks.npc["Voice of Yama"]["Talk-to"]({ player });
+  assert.equal(inventory.get(4151), 1);
+  assert.ok(inventory.get(995) < 20_000, "the fee is taken for the merged lot");
+});
+
+test("the Voice hands an item back with its meta (charges), as it was when the player died", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const inventory = new Map([[995, 20_000]]);
+  const added = [];
+  const player = fakePlayer();
+  player.sendMessage = () => {};
+  player.getInventory = () => ({
+    getAmount: (id) => inventory.get(id) ?? 0,
+    delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+    contains: (id) => inventory.has(id),
+    getFreeSlots: () => 20,
+    getAddableAmount: (item) => item.amount,
+    add: (item) => added.push(item),
+    refreshItems() {},
+  });
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  try {
+    hooks.drop({ player, item: { getId: () => 6585, getAmount: () => 1, getMeta: () => ({ charges: 30000 }) }, dropEligible: true, shouldDropItems: true, handled: false });
+  } finally {
+    Domain.sessionOf = original;
+  }
+  hooks.npc["Voice of Yama"]["Talk-to"]({ player });
+  assert.equal(added.length, 1);
+  assert.equal(added[0].id, 6585);
+  assert.deepEqual(added[0].meta, { charges: 30000 });
+});
+
+test("a domain death's grave (for what the Voice doesn't hold) is by the Voice, with Yama's discount", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const player = fakePlayer();
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  const request = { player, location: null, tile: null, feeMultiplier: 1 };
+  try {
+    fakeApi.emitCustomEvent("gravestones:grave-location", request);
+  } finally {
+    Domain.sessionOf = original;
+  }
+  const [x, y, z = 0] = Common.data.voice.respawn;
+  assert.deepEqual(request.tile, { x, y, z });
+  assert.equal(request.feeMultiplier, Common.data.retrieval.discountFactor);
+  const outside = { player, location: null, tile: null, feeMultiplier: 1 };
+  fakeApi.emitCustomEvent("gravestones:grave-location", outside);
+  assert.equal(outside.tile, null, "a death elsewhere is left alone");
 });
 
 test("an unsafe death elsewhere loses what the Voice holds", () => {

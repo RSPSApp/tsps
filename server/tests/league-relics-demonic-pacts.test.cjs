@@ -1601,6 +1601,53 @@ test("Transmute: a preset stack (PvP presets on a league world) is refused, so i
   assert.equal(player.sent.messages.at(-1), "Preset items cannot be used for this.");
 });
 
+function presetStack(id, amount) {
+  const preset = new core.Item(id, amount);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
+  return preset;
+}
+
+test("Transmute: a preset stack of the product is no room for a plain one: a full inventory refuses with nothing deleted, a free slot takes it", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  inventory.adds(I.FIRE_RUNE, 25);
+  inventory.setItem(1, presetStack(I.CHAOS_RUNE, 7));
+  for (let slot = 2; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.BRONZE_BAR, 1));
+  assert.equal(inventory.getFreeSlots(), 0);
+  const messages = player.sent.messages.length;
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 25, "nothing deleted");
+  assert.equal(inventory.getItems()[1].getAmount(), 7, "the preset stack is untouched");
+  assert.equal(inventory.getAmount(I.CHAOS_RUNE), 7, "no chaos runes arrived");
+  assert.equal(player.sent.messages.at(-1), "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.");
+  assert.equal(player.sent.messages.length, messages + 1);
+  // One free slot: the plain product lands there, apart from the preset stack.
+  inventory.deleteAtSlot(27, 1);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 15);
+  assert.equal(inventory.getItems()[1].getAmount(), 7, "the preset stack is still 7");
+  assert.equal(inventory.getItems()[27].getId(), I.CHAOS_RUNE);
+  assert.equal(inventory.getItems()[27].getAmount(), 10, "a plain stack of 10 in the free slot");
+  assert.equal(inventory.getItems()[27].isPresetItem?.() === true, false);
+});
+
+test("Transmute: a loose item converts only its plain copies, never a preset copy in another slot", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  for (let count = 0; count < 3; count++) inventory.adds(I.UNCUT_RUBY, 1);
+  inventory.setItem(3, presetStack(I.UNCUT_RUBY, 1));
+  for (let slot = 4; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.BRONZE_BAR, 1));
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.UNCUT_DIAMOND), 3, "the 3 plain rubies");
+  assert.equal(inventory.getItems()[3].getId(), I.UNCUT_RUBY, "the preset ruby stays");
+  assert.equal(inventory.getItems()[3].isPresetItem?.(), true);
+  assert.equal(inventory.getAmount(I.UNCUT_RUBY), 1);
+});
+
 test("Transmute: with the bank toggle a stack's products go to the bank; with the alchemy toggle off the spells are alchemy", (t) => {
   withClock(t);
   const player = cases(TRANSMUTE).relic;

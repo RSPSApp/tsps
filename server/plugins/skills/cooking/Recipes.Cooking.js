@@ -39,8 +39,14 @@ function productName(recipe) {
   return Common.core.ItemDefinition.forId(recipe.productId).getName().toLowerCase();
 }
 
-/** Whether the player has the level; says why not in a message box. */
+/** A recipe can explicitly require a members world, regardless of its ingredients. */
+function availableOnWorld(recipe) {
+  return !recipe.members || Common.core.WorldDefinition.isMembersWorld();
+}
+
+/** Whether the player can make the recipe; says why not when the level is too low. */
 function canMake(player, recipe) {
+  if (!availableOnWorld(recipe)) return false;
   if (Common.level(player) >= recipe.level) return true;
   Common.mesbox(player, `You need a Cooking level of ${recipe.level} to make ${Common.withArticle(productName(recipe))}.`);
   return false;
@@ -50,7 +56,7 @@ function canMake(player, recipe) {
 function makeOne(player, recipe) {
   const { Item, Skill } = Common.core;
   const inventory = player.getInventory();
-  if (!hasIngredients(inventory, recipe) || !hasRoom(inventory, recipe)) return false;
+  if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe) || !hasRoom(inventory, recipe)) return false;
   for (const { id, count } of recipe.ingredients) inventory.deleteNumber(id, count);
   inventory.addItem(new Item(recipe.productId, 1));
   for (const { id, count } of recipe.returns) inventory.addItem(new Item(id, count));
@@ -118,6 +124,7 @@ function offer(player, recipe, hooks) {
 function doughRecipe(dough, water, product) {
   return {
     productId: product.productId,
+    members: product.members,
     level: product.level,
     xp: 0,
     message: product.message,

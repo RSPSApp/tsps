@@ -249,15 +249,19 @@ function bankRefusal(player) {
     if (pluginApi?.emitCanBankItem?.(player, item) === false || item.isUnbankable?.()) {
       return `Your ${item.getDefinition?.()?.getName?.() ?? "item"} can't be sent to the bank.`;
     }
-    const key = `${item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
+    const key = `${item.getDefinition?.()?.unNote?.() ?? item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
     if (counted.has(key)) continue;
     counted.add(key);
-    const tab = player.getBank(Bank.getTabForItem(player, item.getId()));
+    // As Bank.canTake: a live stack with the same meta, or a placeholder (its own or its family's), takes no new slot.
+    const id = item.getDefinition?.()?.unNote?.() ?? item.getId(); // a noted item is banked as its unnoted id
+    const tab = player.getBank(Bank.getTabForItem(player, id));
     const meta = JSON.stringify(item.getMeta?.() ?? null);
-    const stacked = (typeof tab?.getItems === "function" ? tab.getItems() : []).some((held) => held && held.getId() === item.getId() && held.getAmount() > 0
-      && JSON.stringify(held.getMeta?.() ?? null) === meta);
-    if (!stacked) slots++;
+    const reused = (typeof tab?.getItems === "function" ? tab.getItems() : []).some((held) => held != null && (
+      (held.getId() === id && (held.getAmount() === 0 || JSON.stringify(held.getMeta?.() ?? null) === meta))
+      || (held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), id))));
+    if (!reused) slots++;
   }
+  if (slots === 0) return null;
   return slots > Bank.freeSlots(player) ? "You don't have enough bank space for the items you are carrying." : null;
 }
 

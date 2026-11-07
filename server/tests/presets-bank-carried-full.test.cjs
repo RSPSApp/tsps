@@ -69,3 +69,14 @@ test("with room, the load banks what was carried as before", (t) => {
   assert.equal(f.p.getInventory().getAmount(I.SHARK), 5, "the preset is loaded");
   assert.equal(f.p.getBank(Bank.getTabForItem(f.p, I.ABYSSAL_WHIP)).getAmount(I.ABYSSAL_WHIP), 1, "the whip is banked");
 });
+
+test("a full bank holding the item's placeholder still takes it, so the load goes ahead", (t) => {
+  const f = actor(t);
+  f.p.getInventory().setItem(0, new core.Item(I.ABYSSAL_WHIP, 1));
+  const tab = f.p.getBank(Bank.getTabForItem(f.p, I.ABYSSAL_WHIP));
+  tab.setItem(0, new core.Item(I.ABYSSAL_WHIP, 0)); // the whip's placeholder
+  t.mock.method(Bank, "freeSlots", () => 0);
+  Presets.applyPreset(f.p, preset());
+  assert.equal(f.p.getInventory().getAmount(I.SHARK), 5, "the preset is loaded");
+  assert.equal(tab.getAmount(I.ABYSSAL_WHIP), 1, "the whip fills its placeholder");
+});

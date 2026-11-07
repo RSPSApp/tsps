@@ -1,4 +1,5 @@
 "use strict";
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 
 /**
  * Dizana's quiver: its extra ammunition slot, charges and death rules.
@@ -595,7 +596,7 @@ function shouldKeepQuiver({ player, item }) {
 function dropCoins(event, amount) {
   if (!event.location) return;
   const { Item, ItemOnGroundManager } = core();
-  ItemOnGroundManager.registerLocation(pvpLootOwner(pluginApi, event.killer, event.player), new Item(COINS, amount), event.location);
+  ItemOnGroundManager.registerLocation(PlayerDeathTask.lootOwner(event.player, event.killer), new Item(COINS, amount), event.location);
 }
 
 function clearQuiverState(player, item) {
@@ -625,17 +626,9 @@ function deathItemDrop(event) {
   // Above 20 a locked quiver is kept, but its ammo is lost rather than dropped (Wiki).
   if (ammo && event.location && (level <= 20 || !locked)) {
     const { Item, ItemOnGroundManager } = core();
-    ItemOnGroundManager.registerLocation(pvpLootOwner(pluginApi, event.killer, player), new Item(ammo.id, ammo.amount), event.location);
+    ItemOnGroundManager.registerLocation(PlayerDeathTask.lootOwner(player, event.killer), new Item(ammo.id, ammo.amount), event.location);
   }
   clearQuiverState(player, item);
-}
-
-/** An Ironman takes no other player's PvP loot: what this death drops goes to the victim instead (Loot.Ironman). */
-function pvpLootOwner(api, killer, victim) {
-  if (!killer || killer === victim) return victim;
-  const query = { player: killer, mode: "none" };
-  api?.emitCustomEvent?.("ironman:mode", query);
-  return query.mode != null && query.mode !== "none" ? victim : killer;
 }
 
 function login({ player }) {

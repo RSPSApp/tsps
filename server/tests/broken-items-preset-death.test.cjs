@@ -112,3 +112,93 @@ test("an Ironman killer's downgraded emblem drops for the victim; a normal kille
     assert.deepEqual(owners, [(ironman ? victim : killer).p.getUsername()], ironman ? "Ironman killer" : "normal killer");
   }
 });
+
+// One owner answer (PlayerDeathTask.lootOwner, answered by Loot.Ironman) covers every death drop a plugin makes, and
+// the core's own drop of an item a hook made tradeable. Each case runs the real death order: dropItems, then the
+// defeated and death hooks. `owners` maps each dropped item id to the owners it was registered for.
+function deathOwners(t, victim, killer, at = new core.Location(3100, 3600, 0)) {
+  victim.p.setLocation(at);
+  killer.p.setLocation(at);
+  core.CombatFactory.skull(victim.p, core.SkullType.WHITE_SKULL, core.CombatFactory.PVP_SKULL_SECONDS);
+  const owners = new Map();
+  const note = (owner, item) => owners.set(item.getId(), [...(owners.get(item.getId()) ?? []), owner?.getUsername?.()]);
+  for (const name of ["registerLocation", "registerNonGlobals"]) {
+    const original = core.ItemOnGroundManager[name];
+    t.mock.method(core.ItemOnGroundManager, name, (owner, item, ...rest) => {
+      note(owner, item);
+      return original.call(core.ItemOnGroundManager, owner, item, ...rest);
+    });
+  }
+  PlayerDeathTask.dropItems(victim.p, killer.p, at);
+  PM.emitPlayerDefeated(killer.p, victim.p);
+  PM.emitPlayerDeath({ player: victim.p, killer: killer.p });
+  return owners;
+}
+
+const ETHER = 21820;
+const cases = [
+  ["the looting bag's contents", (v) => {
+    v.inv.setItem(0, new core.Item(22586, 1)); // an open looting bag
+    const request = { player: v.p, items: [{ id: I.ABYSSAL_WHIP, amount: 1 }], result: null };
+    PM.emitCustomEvent("looting-bag:store", request);
+    assert.equal(request.result, "stored");
+  }, () => [I.ABYSSAL_WHIP]],
+  // The emptied bow keeps its untradeable id, so it is kept, not dropped: only its ether is loot.
+  ["the Webweaver bow's ether", (v) => {
+    const bow = new core.Item(I.WEBWEAVER_BOW, 1);
+    bow.setMetaValue("webweaver-bow:charges", 500);
+    v.inv.setItem(0, bow);
+  }, () => [ETHER]],
+  ["the bracelet of ethereum and its ether", (v) => {
+    const bracelet = new core.Item(21816, 1);
+    bracelet.setMetaValue("charges", 200);
+    v.inv.setItem(0, bracelet);
+  }, () => [21817, ETHER]],
+  // The ring is untradeable until its hook unimbues it: the core's own drop, after the hooks, asks the owner too.
+  ["the ring of wealth (i), unimbued by its hook", (v) => {
+    v.inv.setItem(0, new core.Item(12785, 1));
+  }, () => [2572]],
+];
+for (const [name, setup, idsOf] of cases) {
+  test(`an Ironman killer's PvP death drops go to the victim: ${name}; a normal killer's to the killer`, (t) => {
+    for (const ironman of [false, true]) {
+      const victim = actor(t), killer = actor(t);
+      if (ironman) killer.p.setAttribute("ironman:mode", "ironman");
+      setup(victim);
+      const ids = idsOf();
+      const owners = deathOwners(t, victim, killer);
+      const want = (ironman ? victim : killer).p.getUsername();
+      for (const id of ids) assert.deepEqual(owners.get(id), [want], `${ironman ? "Ironman" : "normal"} killer: item ${id}`);
+    }
+  });
+}
+
+// The imbue cost goes straight into a normal killer's pack (forceAdd); an Ironman's goes on the floor for the victim.
+test("an Ironman killer doesn't get a ring of wealth (i)'s imbue coins: they drop for the victim", (t) => {
+  for (const ironman of [false, true]) {
+    const victim = actor(t), killer = actor(t);
+    if (ironman) killer.p.setAttribute("ironman:mode", "ironman");
+    victim.inv.setItem(0, new core.Item(12785, 1));
+    const owners = deathOwners(t, victim, killer);
+    assert.equal(killer.inv.getAmount(I.COINS), ironman ? 0 : 50000, `Ironman ${ironman}: coins in the killer's pack`);
+    assert.deepEqual(owners.get(I.COINS), ironman ? [victim.p.getUsername()] : undefined, `Ironman ${ironman}: coins on the floor`);
+  }
+});
+
+test("an Ironman killer's entry fees (Revenant Caves, wilderness boss caves) drop for the victim", (t) => {
+  for (const ironman of [false, true]) {
+    const caves = actor(t), killer = actor(t);
+    if (ironman) killer.p.setAttribute("ironman:mode", "ironman");
+    caves.p.setAttribute("revenant-caves:fee-paid", true);
+    const inCaves = deathOwners(t, caves, killer, new core.Location(3200, 10100, 0));
+    assert.deepEqual(inCaves.get(I.COINS), [(ironman ? caves : killer).p.getUsername()], `Revenant Caves, Ironman ${ironman}`);
+
+    const boss = actor(t), bossKiller = actor(t);
+    if (ironman) bossKiller.p.setAttribute("ironman:mode", "ironman");
+    boss.p.setAttribute("wilderness-bosses:fee-paid", true);
+    boss.p.setAttribute("wilderness-bosses:fee-amount", 50000);
+    boss.p.setAttribute("wilderness-bosses:visited", true);
+    const atBoss = deathOwners(t, boss, bossKiller);
+    assert.deepEqual(atBoss.get(I.COINS), [(ironman ? boss : bossKiller).p.getUsername()], `boss caves, Ironman ${ironman}`);
+  }
+});

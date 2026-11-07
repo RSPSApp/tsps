@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
@@ -36,14 +37,6 @@ function toLocation(rawLocation, fallbackLocation) {
 }
 
 let ItemOnGroundManager;
-
-/** An Ironman takes no other player's PvP loot: what this death drops goes to the victim instead (Loot.Ironman). */
-function pvpLootOwner(api, killer, victim) {
-  if (!killer || killer === victim) return victim;
-  const query = { player: killer, mode: "none" };
-  api?.emitCustomEvent?.("ironman:mode", query);
-  return query.mode != null && query.mode !== "none" ? victim : killer;
-}
 
 module.exports = {
   name: "Emblems",
@@ -84,7 +77,7 @@ module.exports = {
       }
 
       ItemOnGroundManager.registerNonGlobals(
-        pvpLootOwner(api, event.killer, event.player),
+        PlayerDeathTask.lootOwner(event.player, event.killer),
         new Item(downgradedEmblemId),
         dropLocation
       );

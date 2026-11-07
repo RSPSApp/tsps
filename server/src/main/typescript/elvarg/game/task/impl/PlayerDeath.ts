@@ -246,8 +246,11 @@ export class PlayerDeathTask extends Task {
                 pluginHandledDrop = true;
             }
         }
+        // Asked after the item hooks: one can make an item tradeable (an emptied Webweaver bow, an unimbued ring), so it
+        // reaches here past the hooks' own eligibility check.
+        const owner = PlayerDeathTask.lootOwner(player, killer);
         for (const item of droppedItems) {
-            ItemOnGroundManager.registerLocation(killer ? killer : player, item, position);
+            ItemOnGroundManager.registerLocation(owner, item, position);
             dropped = true;
         }
         itemsToKeep.push(...lostUntradeables);
@@ -261,6 +264,18 @@ export class PlayerDeathTask extends Task {
         player.getInventory().resetItems().refreshItems();
         player.getEquipment().resetItems().refreshItems();
         return itemsToKeep;
+    }
+
+    /**
+     * Who a PvP death's loot is dropped for: the killer, unless content says otherwise
+     * (`player-death:loot-owner` { player, killer, owner }; an Ironman killer takes no other player's loot). Plugins
+     * that drop death loot of their own (repair coins, ether, fees) ask here too, so there is one answer.
+     */
+    public static lootOwner(player: Player, killer: Player | null | undefined): Player {
+        if (!killer || killer === player) return player;
+        const query = { player, killer, owner: killer as Player };
+        PluginManager.emitCustomEvent("player-death:loot-owner", query);
+        return query.owner ?? player;
     }
 
     /** The items a death let the player keep, back in the inventory. */

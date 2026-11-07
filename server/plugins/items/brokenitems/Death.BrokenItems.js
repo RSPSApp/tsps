@@ -1,4 +1,5 @@
 "use strict";
+const { PlayerDeathTask } = require("../../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 
 /**
  * What a PvP death does to the breakable items it doesn't protect (Wiki: Items Kept on Death,
@@ -25,18 +26,10 @@ function wildernessLevel(player) {
   return Number(Common.getCore().Wilderness.levelAt(location.getX(), location.getY())) || 0;
 }
 
-/** An Ironman takes no other player's PvP loot: what this death drops goes to the victim instead (Loot.Ironman). */
-function pvpLootOwner(api, killer, victim) {
-  if (!killer || killer === victim) return victim;
-  const query = { player: killer, mode: "none" };
-  api?.emitCustomEvent?.("ironman:mode", query);
-  return query.mode != null && query.mode !== "none" ? victim : killer;
-}
-
 function dropCoins(event, amount) {
   if (amount <= 0 || !event.location) return;
   const { Item, ItemIdentifiers, ItemOnGroundManager } = Common.getCore();
-  const owner = pvpLootOwner(Common.getApi(), event.killer, event.player);
+  const owner = PlayerDeathTask.lootOwner(event.player, event.killer);
   ItemOnGroundManager.registerLocation(owner, new Item(ItemIdentifiers.COINS, amount), event.location);
 }
 

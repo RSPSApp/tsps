@@ -255,6 +255,10 @@ test('native task order lets a death cancel the three-tick ride before respawn',
   core.TaskManager.process();
   core.TaskManager.process();
   core.TaskManager.process();
+  assert.equal(player.isDyingReturn(), true, 'the death task is still pending after states 4, 3 and 2');
+  // The native death task completes at state 0, two further cycles after state 2.
+  core.TaskManager.process();
+  core.TaskManager.process();
   assert.equal(player.isDyingReturn(), false, 'the actual death task completed');
   assert.deepEqual(at(player), [3089, 3524], 'the death respawn owns the final position');
   assert.equal(player.getInventory().getAmount(995), 100, 'the cancelled ride took no fare');

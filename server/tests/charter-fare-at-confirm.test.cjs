@@ -59,6 +59,105 @@ function yes(f) {
   core.MultiChatboxPrompt.handleInterfaceActionClick({ player: f.p, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: 1, action: 1 });
 }
 
+/** Picks option `slot` (1 Yes, 3 Yes and don't ask again) as the client would, whatever is open. */
+function click(f, slot = 1) {
+  core.MultiChatboxPrompt.handleInterfaceActionClick({ player: f.p, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot, action: slot });
+}
+const nextTick = () => { core.World.processCycle++; };
+const asks = (f, fare) => new RegExp(`for ${fare.toLocaleString("en-US")} coins`).test(core.MultiChatboxPrompt.getPending(f.p)?.title ?? "");
+const RING = () => new core.Item(I.RING_OF_CHAROS_A_, 1);
+const NONE = () => new core.Item(-1, 0);
+
+/** A player at the route's first port, `coins` in the inventory, the ring worn or not. */
+function setup(t, { ring, coins = 100000 }) {
+  const f = actor(t);
+  const r = route();
+  f.p.setLocation(r.tile);
+  f.p.getEquipment().setItem(core.Equipment.RING_SLOT, ring ? RING() : NONE());
+  f.inv.setItem(0, new core.Item(I.COINS, coins));
+  f.to = r.to;
+  f.fare = () => Charter.fareFor(f.p, Charter.portAt(r.tile), r.to);
+  f.ring = (on) => f.p.getEquipment().setItem(core.Equipment.RING_SLOT, on ? RING() : NONE());
+  return f;
+}
+
+test("Yes and don't ask again after the ring came off is asked again at the full fare, nothing charged or skipped", (t) => {
+  const f = setup(t, { ring: true });
+  const half = f.fare();
+  Charter.offerFare(f.p, f.to, half);
+  f.ring(false);
+  const full = f.fare();
+  assert.ok(full > half);
+  click(f, 3);
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "nothing charged unseen");
+  assert.ok(asks(f, full), "the full fare is asked");
+  assert.notEqual(f.p.getAttribute(Charter.SKIP_CONFIRMATION_ATTRIBUTE), true, "not skipped for a fare never seen");
+  nextTick();
+  click(f, 3);
+  assert.equal(f.inv.getAmount(I.COINS), 100000 - full, "charged at the second answer");
+  assert.equal(f.p.getAttribute(Charter.SKIP_CONFIRMATION_ATTRIBUTE), true, "skip set once the sail starts");
+});
+
+test("a second click on the same tick does not answer the re-asked question; a later tick does", (t) => {
+  const f = setup(t, { ring: true });
+  Charter.offerFare(f.p, f.to, f.fare());
+  f.ring(false);
+  const full = f.fare();
+  click(f);
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "the double click charged nothing");
+  assert.ok(asks(f, full), "the full-fare question is still open");
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "still the same tick");
+  nextTick();
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000 - full);
+});
+
+test("putting the ring on after the full-fare question is asked again at half", (t) => {
+  const f = setup(t, { ring: false });
+  const full = f.fare();
+  Charter.offerFare(f.p, f.to, full);
+  f.ring(true);
+  const half = f.fare();
+  assert.ok(half < full);
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "nothing charged at the old fare");
+  assert.ok(asks(f, half));
+  nextTick();
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000 - half);
+});
+
+test("exactly the fare in coins sails and leaves none", (t) => {
+  const f = setup(t, { ring: false, coins: 0 });
+  const fare = f.fare();
+  f.inv.setItem(0, new core.Item(I.COINS, fare));
+  Charter.offerFare(f.p, f.to, fare);
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 0);
+});
+
+test("one coin short at Yes charges nothing and says what it costs", (t) => {
+  const f = setup(t, { ring: false });
+  const fare = f.fare();
+  f.inv.setItem(0, new core.Item(I.COINS, fare));
+  Charter.offerFare(f.p, f.to, fare);
+  f.inv.setItem(0, new core.Item(I.COINS, fare - 1));
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), fare - 1);
+  assert.match(core.MultiChatboxPrompt.getPending(f.p).title, /costs/);
+});
+
+test("a normal double Yes with the fare unchanged charges once", (t) => {
+  const f = setup(t, { ring: false });
+  const fare = f.fare();
+  Charter.offerFare(f.p, f.to, fare);
+  click(f);
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000 - fare);
+});
+
 test("taking off a ring of charos(a) after the half-fare question is asked again at the full fare", (t) => {
   const f = actor(t);
   const { to, tile } = route();
@@ -74,6 +173,7 @@ test("taking off a ring of charos(a) after the half-fare question is asked again
   const full = Charter.fareFor(f.p, Charter.portAt(tile), to);
   assert.ok(full > half);
   assert.match(core.MultiChatboxPrompt.getPending(f.p).title, new RegExp(`for ${full.toLocaleString("en-US")} coins`), "asked again at the full fare");
+  nextTick();
   yes(f);
   assert.equal(f.inv.getAmount(I.COINS), 100000 - full);
 });

@@ -17,7 +17,9 @@ const NO_SLOT = -1;
 // its palette, and A/B switch body type to the first selectable kit of each part.
 const DESIGN_KIT_SLOTS = [1, 7, 2, 3, 4, 5, 6]; // Appearance HEAD, BEARD, CHEST, ARMS, HANDS, LEGS, FEET
 const DESIGN_COLOUR_SLOTS = [8, 9, 10, 11, 12]; // Appearance HAIR, TORSO, LEG, FEET, SKIN colours
-const DESIGN_COLOUR_COUNTS = [30, 29, 29, 6, 8]; // the palettes; skin offers its first 8
+// The palettes (client PLAYER_BODY_RECOLOR_TO_1). Skin offers all 13: OSRS's 8 plus its unlockable
+// green, black, white, blue and purple.
+const DESIGN_COLOUR_COUNTS = [30, 29, 29, 6, 13];
 const DESIGN_GENDER_SLOT = 0;
 const FEMALE_BODY_PARTS = 7;
 const DESIGN_BODY_TYPE_VARBIT = 14021; // player_design_bodytype, which the A/B buttons show

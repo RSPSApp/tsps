@@ -42,7 +42,7 @@ test('the arrows cycle a body part through its selectable kits, and a colour thr
   clickDesign({ player, buttonId: button(15) });
   assert.equal(state.look[1], heads[heads.length - 1], 'head left wraps');
   clickDesign({ player, buttonId: button(62) });
-  assert.equal(state.look[12], 7, 'skin left wraps within the designer\'s 8');
+  assert.equal(state.look[12], 12, 'skin left wraps to purple, the last of the 13');
 });
 
 test('body type B takes the first female kit of each part; Confirm closes the designer', () => {

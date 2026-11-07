@@ -114,25 +114,6 @@ export class PlayerModelLoader {
                             md.retexture(kit.retextureFrom[r], kit.retextureTo[r]);
                         }
                     }
-                    // Apply PlayerComposition body color recolors (hair/torso/legs/feet/skin).
-                    // Reference: PlayerComposition.getModel recolor loops.
-                    for (let c = 0; c < 5; c++) {
-                        const idx = (colors[c] ?? 0) | 0;
-                        const pal1 = PLAYER_BODY_RECOLOR_TO_1[c] ?? [];
-                        if (idx >= 0 && idx < pal1.length) {
-                            md.recolor(
-                                asUnsignedHsl(PLAYER_BODY_RECOLOR_FROM_1[c] | 0),
-                                asUnsignedHsl(pal1[idx] | 0),
-                            );
-                        }
-                        const pal2 = PLAYER_BODY_RECOLOR_TO_2[c] ?? [];
-                        if (idx >= 0 && idx < pal2.length) {
-                            md.recolor(
-                                asUnsignedHsl(PLAYER_BODY_RECOLOR_FROM_2[c] | 0),
-                                asUnsignedHsl(pal2[idx] | 0),
-                            );
-                        }
-                    }
                     modelDatas.push(md);
                     modelRenderLayers.push(
                         part === 2 ? null : part === 5 || part === 6 ? LEGS_RENDER_LAYER : 7,
@@ -207,6 +188,26 @@ export class PlayerModelLoader {
         }
 
         const merged = ModelData.merge(modelDatas, modelDatas.length);
+        // PlayerComposition body color recolors (hair/torso/legs/feet/skin) run on the merged
+        // model, as in PlayerComposition.getModel, so worn items' bare skin (the default skin
+        // colour 4550, e.g. a woven top's arms) takes the player's chosen colours too.
+        for (let c = 0; c < 5; c++) {
+            const idx = (colors[c] ?? 0) | 0;
+            const pal1 = PLAYER_BODY_RECOLOR_TO_1[c] ?? [];
+            if (idx >= 0 && idx < pal1.length) {
+                merged.recolor(
+                    asUnsignedHsl(PLAYER_BODY_RECOLOR_FROM_1[c] | 0),
+                    asUnsignedHsl(pal1[idx] | 0),
+                );
+            }
+            const pal2 = PLAYER_BODY_RECOLOR_TO_2[c] ?? [];
+            if (idx >= 0 && idx < pal2.length) {
+                merged.recolor(
+                    asUnsignedHsl(PLAYER_BODY_RECOLOR_FROM_2[c] | 0),
+                    asUnsignedHsl(pal2[idx] | 0),
+                );
+            }
+        }
         const model = merged.light(this.textureLoader, 64, 850, -30, -50, -30);
         model.faceRenderLayers = new Uint8Array(merged.faceCount);
         // Default every face to the priority it came out of the cache with, then override the

@@ -81,6 +81,9 @@ export class SpellTeleports {
     static handleSelf(player: Player, name: string | undefined, destination?: Location): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         const spell = this.SPELLS.get(key);
-        return spell ? spell.cast(player, key, destination) : false;
+        // A spell of another book isn't this one's: the Arceuus Ape Atoll Teleport shares the standard one's name, and
+        // the standard spell took its click (refused for the book, yet handled), so the Arceuus spell never ran.
+        if (!spell || spell.data.spellbook !== player.getSpellbook()) return false;
+        return spell.cast(player, key, destination);
     }
 }

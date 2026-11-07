@@ -661,8 +661,15 @@ module.exports = function registerGrandTreeQuest(api) {
     openChest(event);
   }
 
+  // Wiki (The Grand Tree): the watchtower tree "requires 25 Agility to climb", boostable (the current level counts).
+  const WATCHTOWER_AGILITY = 25;
+
   function climbWatchtower(event) {
     if (event.objectId !== WATCHTOWER_TREE_ID) return false;
+    if (event.player.getSkillManager().getCurrentLevel(Skill.AGILITY) < WATCHTOWER_AGILITY) {
+      event.player.sendMessage(`You need an Agility level of ${WATCHTOWER_AGILITY} to climb this tree.`);
+      return true;
+    }
     api.emitCustomEvent("ladders:climbUp", {
       player: event.player,
       destination: at(WATCHTOWER_DESTINATION),

@@ -239,7 +239,7 @@ test("leaving a waiting room restores stats (Wiki) but keeps the player's own sk
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const waitingRoom = registered.find((area) => area.getName().includes('waiting room'));
   const p = new Player(null);
@@ -285,7 +285,7 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
 
   const waitingRooms = registered.filter((area) => area.getName().includes('waiting room'));
@@ -560,7 +560,7 @@ test('a carrier who logs out drops the flag before the banner is stripped, as a 
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
-    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onCustomEvent: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const gameArea = island.gameArea;

@@ -14,7 +14,8 @@ export abstract class Dialogue {
         const PAUSE_BUTTON = 1;
         // A "<br>" in the text is a break the line was authored with; the rest wraps to width.
         const lines = text.split("<br>").flatMap((part) => Misc.wrapText(part, 53)).slice(0, 4);
-        const lineHeight = lines.length === 2 ? 28 : lines.length === 3 ? 20 : 16;
+        // Native chat_left/chat_right text widgets use 16, even when the client wraps again.
+        const lineHeight = 16;
         player.getPacketSender()
             .sendString(lines.join("<br>"), textUid)
             .sendClientScript(SET_TEXT_ALIGN, 1, 1, lineHeight, textUid)

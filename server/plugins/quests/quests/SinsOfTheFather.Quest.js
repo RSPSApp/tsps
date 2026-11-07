@@ -3695,6 +3695,8 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     return true;
   }
 
+  const MEDALLION_WILDERNESS_LIMIT = 20;
+
   function teleportMedallion(event) {
     const { player, itemId } = event;
     if (itemId !== DRAKANS_MEDALLION_ITEM_ID) return false;
@@ -3707,9 +3709,12 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     // Later Myreque chapters can add a destination unlocked by their own
     // world interaction without replacing this shared medallion menu.
     api.emitCustomEvent("drakan-medallion:destinations", { player, destinations });
+    // Wiki (Drakan's medallion): "Players cannot teleport past level 20" Wilderness; the usual teleport rules apply.
     const options = destinations.flatMap(({ label, tile, onTeleport }) => [label, () => {
-      teleport(player, tile);
-      onTeleport?.();
+      const { TeleportHandler, TeleportType } = api.core;
+      const destination = new Location(tile.x, tile.y, tile.z);
+      if (!TeleportHandler.checkReqs(player, destination, MEDALLION_WILDERNESS_LIMIT)) return;
+      TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => onTeleport?.());
     }]);
     api.sendMultiChatboxPrompt(
       player,

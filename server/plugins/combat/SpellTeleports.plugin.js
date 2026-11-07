@@ -144,9 +144,16 @@ function toggleDestination(event, alternate) {
 function revertTablet(event) {
   const { player } = event;
   event.handled = true;
-  if (!player.getInventory().contains(event.itemId)) return;
-  player.getInventory().deleteNumber(event.itemId, 1);
-  player.getInventory().adds(core.ItemIdentifiers.TELEPORT_TO_HOUSE, 1);
+  const inventory = player.getInventory();
+  if (!inventory.contains(event.itemId)) return;
+  // Tablets stack, so reverting one of several frees no slot: the house tablet needs room, or it was lost.
+  const last = inventory.getAmount(event.itemId) === 1;
+  if (!last && inventory.getAddableAmount(new core.Item(core.ItemIdentifiers.TELEPORT_TO_HOUSE, 1)) < 1) {
+    player.sendMessage("You don't have enough inventory space.");
+    return;
+  }
+  inventory.deleteNumber(event.itemId, 1);
+  inventory.adds(core.ItemIdentifiers.TELEPORT_TO_HOUSE, 1);
 }
 
 function houseDestination(event, option) {

@@ -195,6 +195,7 @@ function harness(t, members = true) {
       }),
       getInventory: () => ({ get: slot => slots[slot], getItems: () => slots, getFreeSlots: () => p.free,
         containsNumber: id => slots.some(item => item?.getId() === id && item.getAmount() > 0),
+        getAmount: id => slots.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0),
         getAddableAmount(item) {
           if (!item.getDefinition().isStackable()) return Math.min(item.getAmount(), p.free);
           const stack = slots.find(slot => slot?.getId() === item.getId());
@@ -1230,6 +1231,44 @@ test('Thessalia exchanges a frog token for costume pieces, keeping the rest', t 
   assert.deepEqual(pageTexts(p), ["I'll take the reward lamp, thanks."]);
   endChat(p);
   assert.equal(p.rewards.at(-1), I.LAMP);
+});
+
+// The royal sets are two pieces for one token: with no room for the second, the token is kept and nothing is lost.
+test('Thessalia keeps the token when a two-piece costume will not fit', t => {
+  const h = harness(t), p = h.player();
+  p.slots[0] = new Item(I.FROG_TOKEN, 1);
+  p.free = 0;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 1);
+  endChat(p);
+  assert.ok(p.slots[0], 'the token is kept');
+  assert.deepEqual(p.rewards, [], 'no piece given');
+  assert.ok(p.messages.includes("You don't have enough inventory space."), p.messages.join(' | '));
+  p.free = 1;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 1);
+  endChat(p);
+  assert.equal(p.rewards.length, 2, "the token's slot and one free slot hold both pieces");
+});
+
+// The frog token doesn't stack (cache), so each token has its own slot and using one always frees it.
+test('Thessalia: with two tokens, a full bag still takes the mask and one free slot a royal set', t => {
+  assert.equal(new Item(I.FROG_TOKEN, 1).getDefinition().isStackable(), false, 'the cache token is unstackable');
+  const h = harness(t), p = h.player();
+  p.slots[0] = new Item(I.FROG_TOKEN, 1); p.slots[1] = new Item(I.FROG_TOKEN, 1);
+  p.free = 0;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 0);
+  endChat(p);
+  assert.deepEqual(p.rewards, [I.FROG_MASK], "the mask takes the used token's slot");
+  assert.ok(!p.messages.includes("You don't have enough inventory space."), p.messages.join(' | '));
+  p.slots[0] = new Item(I.FROG_TOKEN, 1);
+  p.free = 1;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 2);
+  endChat(p);
+  assert.deepEqual(p.rewards.slice(1), [I.ROYAL_FROG_BLOUSE, I.ROYAL_FROG_SKIRT], "the token's slot and the free one");
+  assert.ok(!p.messages.includes("You don't have enough inventory space."), p.messages.join(' | '));
 });
 
 // A player whose packet sender records everything and chains like the real one, for the events
@@ -2909,4 +2948,33 @@ test('native random-event followers and Count Check use real movement, account m
     for (let tick = 0; tick < 3; tick++) turn();
     assert.deepEqual(rewards(), received, 'a stale Confirm after return cannot award again');
   });
+});
+
+test('spoken dialogue keeps native cache spacing for short and multi-line pages', () => {
+  // Cache 241 chat_left:6 and chat_right:6 both use a 16-pixel line height.
+  const { Misc } = require('../dist/util/Misc');
+  const strings = [], scripts = [], flags = [];
+  const sender = {
+    sendChatboxInterface() { return this; }, sendNpcHeadOnInterface() { return this; },
+    sendPlayerHeadOnInterface() { return this; }, sendInterfaceAnimation() { return this; },
+    sendString(...args) { strings.push(args); return this; },
+    sendClientScript(...args) { scripts.push(args); return this; },
+    sendInterfaceFlagsRange(...args) { flags.push(args); return this; },
+  };
+  const player = { getPacketSender: () => sender, getDisplayName: () => 'AgentWhisky' };
+  const texts = ['Hello.', 'Hey, AgentWhisky, can you come and help me with some pheasants?',
+    'First line.<br>Second line.<br>Third line.', 'One.<br>Two.<br>Three.<br>Four.'];
+  for (const [group, make] of [
+    [231, text => new NpcDialogue(0, N.FREAKY_FORESTER_2, text, 'Freaky Forester')],
+    [217, text => new PlayerDialogue(0, text)],
+  ]) {
+    for (const text of texts) {
+      strings.length = scripts.length = flags.length = 0;
+      make(text).send(player);
+      assert.deepEqual(scripts, [[600, 1, 1, 16, (group << 16) | 6]]);
+      assert.ok(strings.some(([value, uid]) => uid === ((group << 16) | 6) &&
+        value === text.split('<br>').flatMap(part => Misc.wrapText(part, 53)).join('<br>')));
+      assert.deepEqual(flags, [[(group << 16) | 5, -1, -1, 1]]);
+    }
+  }
 });

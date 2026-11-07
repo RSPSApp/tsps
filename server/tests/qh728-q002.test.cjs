@@ -841,7 +841,10 @@ test('Another Slice of H.A.M.: Sigmund and the H.A.M. members are named interact
   assert.ok(h.messages.some((text) => text.includes('too busy fighting the goblins')));
 });
 
-test('Another Slice of H.A.M.: quest items expose their checks and route use', () => {
+test('Another Slice of H.A.M.: quest items expose their checks and route use', (t) => {
+  // The teleport goes through TeleportHandler, whose checks need a real player: they pass, and it moves at once.
+  t.mock.method(PluginManager.getCoreApi().TeleportHandler, 'checkReqs', () => true);
+  t.mock.method(PluginManager.getCoreApi().TeleportHandler, 'teleport', (player, to, _type, _warn, onArrival) => { player.moveTo(to); onArrival?.(); });
   const h = setup();
   h.quest.setStage(h.player, 10);
 

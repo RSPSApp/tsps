@@ -37,6 +37,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   RegionManager.init();
   new NpcDefinitionLoader().load();
+  require("../plugins/quests/quests/AnimalMagnetism.Quest")(PluginManager.createApi("Undead tree collision regression"));
 });
 
 /** The world's own add/remove queue pass, without the rest of its tick. */
@@ -502,4 +503,42 @@ test("requeue hands a live spawn back to its pending list once, and never a dead
   } finally {
     NpcSpawnDefinition.replace([]);
   }
+});
+
+
+// The cache's nasty_tree (4418) has a one-tile Tree/Undead tree footprint.
+// The nearby tree at 3108,3346 also has map clipping; 3111,3348 does not,
+// so use the latter to exercise actor collision rather than an incidental loc.
+test("undead trunks block player steps after deferred creation and spawn reload", () => {
+  const row = { id: 4418, x: 3111, y: 3348, wanderRadius: 0 };
+  const tile = new Location(row.x, row.y, 0);
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null, tile.transform(-1, 0));
+  const movement = player.getMovementQueue();
+  assert.equal(CacheDefinitions.getNpc(row.id).size, 1);
+  assert.equal(movement.isDynamicallyOccupied(tile), false);
+
+  spawnFile([row], false);
+  assert.equal(live(row.id).length, 0, "the tree is deferred, not covered by a startup scan");
+  NpcSpawnDefinitionLoader.activateNear(tile);
+  flushNpcQueues();
+  const first = live(row.id)[0];
+  assert.ok(first.hasFlag(NPC.BLOCKS_PLAYERS_FLAG));
+  assert.equal(movement.isDynamicallyOccupied(tile), true, "the normal movement consumer blocks the trunk");
+  assert.equal(movement.isDynamicallyOccupied(tile.transform(-1, 0)), false, "adjacent tiles stay open");
+
+  spawnFile([row]);
+  flushNpcQueues();
+  const replacement = live(row.id)[0];
+  assert.notEqual(first, replacement);
+  assert.ok(replacement.hasFlag(NPC.BLOCKS_PLAYERS_FLAG), "the replacement receives the same collision");
+  assert.equal(movement.isDynamicallyOccupied(tile), true);
+
+  World.getNpcs().remove(replacement);
+  assert.equal(movement.isDynamicallyOccupied(tile), false, "removal clears actor collision");
+
+  const man = new NPC(MAN, tile);
+  World.getNpcs().add(man);
+  assert.equal(man.hasFlag(NPC.BLOCKS_PLAYERS_FLAG), false, "ordinary NPCs remain walk-through");
+  assert.equal(movement.isDynamicallyOccupied(tile), false);
 });

@@ -360,6 +360,11 @@ module.exports = function registerElementalWorkshopIQuest(api) {
           event.handled = true;
           return;
         }
+        if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 20) {
+          player.sendMessage("You need level 20 Smithing to smelt elemental metal.");
+          event.handled = true;
+          return;
+        }
         player.getInventory().deleteNumber(ItemIdentifiers.ELEMENTAL_ORE, 1);
         player.getInventory().deleteNumber(ItemIdentifiers.COAL, 4);
         player.getInventory().adds(ItemIdentifiers.ELEMENTAL_METAL, 1);

@@ -70,6 +70,10 @@ Runecraft 5; Twisted Herblore 3; Shattered Relics none, its skills being unlocke
 main character never has a league, whatever its attributes say. Leagues I-III have their names,
 colours and screens here but no relic, area or task catalogs yet.
 
+### Characters and profiles
+
+An account can own several characters ([character slots](../../docs/character-slots.md)), and each has its own league save. The character picker lists them on a league world too; picking one loads its `league:` save, and a character with none starts a new league character. Credentials still come from the primary character's main save, with the existing fallback to its league save when it has no main save.
+
 ## Events
 
 | Event | Payload | Who answers |

@@ -1249,8 +1249,11 @@ test('Sins of the Father opens its boat route from the Slepe rowboat after compl
 });
 
 
-test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal starts its chapter', () => {
+test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal starts its chapter', (t) => {
   const { api, handlers } = mockApi();
+  // The medallion teleports through TeleportHandler, whose checks need a real player: they pass, and it moves at once.
+  t.mock.method(api.core.TeleportHandler, 'checkReqs', () => true);
+  t.mock.method(api.core.TeleportHandler, 'teleport', (player, to, _type, _warn, onArrival) => { player.moveTo(to); onArrival?.(); });
   const spawned = [];
   let castleVeliafHook;
   api.spawnNpc = spec => {
@@ -22821,6 +22824,7 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
   });
   const inventory = {
     getAmount: (id) => items.get(id) ?? 0,
+    contains: (id) => (items.get(id) ?? 0) > 0,
     getItems: () => [...items.entries()].map(([id, amount]) => ({ id, getId: () => id, getAmount: () => amount })),
     adds: (id, amount) => items.set(id, (items.get(id) ?? 0) + amount),
     deleteNumber: (id, amount) => {

@@ -32,6 +32,12 @@ If setup is interrupted, run `npm run setup` again.
 
 Running several branches at once, one worktree each on its own ports: see [docs/worktrees.md](docs/worktrees.md).
 
+### Local world settings
+
+Create `server/data/definitions/world.local.json` with the settings you want to override from
+`world.json`; omitted settings keep their shipped values. This file is gitignored, so local
+customizations survive updates without changing tracked files. Restart the server after edits.
+
 ### Optional: Java sidecars
 
 Two optional local services are Java; neither is needed to run the server.

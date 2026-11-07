@@ -8,6 +8,35 @@ import type { DefinitionSource } from "../game/definition/loader/DefinitionLoade
 import type { FriendsChatAction } from "../net/protocol/ClientProtocol";
 import type { PlayerRights } from "../game/model/rights/PlayerRights";
 
+/** Mutable login state after core credential checks, before a player is created. */
+export interface PluginLoginPending {
+  username: string;
+  credentialName: string;
+  profile: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile;
+  passwordHash: string;
+  save: any | null;
+  loginTokens: import("../net/login/LoginTokens").LoginTokenEntry[] | null;
+}
+
+export interface PluginLoginConnection {
+  api: PluginApi;
+  send(packet: Buffer): void;
+  pending(): PluginLoginPending | undefined;
+  isActive(pending: PluginLoginPending): boolean;
+  reserveName(name: string): void;
+  releaseName(name: string): void;
+  isNameBusy(name: string): boolean;
+  reject(code: number, message: string): never;
+}
+
+/** A plugin can extend an authenticated login without owning credentials or socket cleanup. */
+export interface PluginLoginExtension {
+  authenticated?(pending: PluginLoginPending, event: { typedName: string; flags: number; credentials: any }): string | undefined;
+  accepted?(pending: PluginLoginPending): void;
+  packet?(packet: import("../net/protocol/ClientProtocol").ClientMessage): boolean | Promise<boolean>;
+  entered?(pending: PluginLoginPending): void;
+}
+
 /** A player entered a different 64x64 map square (or plane), by walking or teleporting. */
 export interface PluginPlayerMapSquareChangeEvent {
   player: any;
@@ -949,6 +978,7 @@ export interface PluginRangedCombatModifier {
 export interface PluginApi {
   /** Attributes registered hook/area timings to this label while retaining plugin ownership. */
   withProfileLabel(label: string): PluginApi;
+  registerLoginExtension(factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined): void;
   onPlayerLogin(handler: (event: PluginPlayerLoginEvent) => void): void;
   /** Fires per map square crossed, not per tile: content spread over the map (patches, bird
    * houses) syncs here instead of checking every player every tick. */
@@ -1552,6 +1582,12 @@ export interface PluginCoreApi {
   Sounds: any;
   Location: any;
   Mobile: any;
+  encodeCharacterList: typeof import("../net/protocol/ClientProtocol").encodeCharacterList;
+  encodeCharacterResult: typeof import("../net/protocol/ClientProtocol").encodeCharacterResult;
+  LOGIN_FLAG_CHARACTER_SELECT: number;
+  MAIN_PROFILE: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile;
+  LEAGUE_PROFILE: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile;
+  Skills: any;
   encodePluginMessage: typeof import("../net/protocol/ClientProtocol").encodePluginMessage;
   encodeChatMessage: typeof import("../net/protocol/ClientProtocol").encodeChatMessage;
   encodeClanSettingsFull: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsFull;
@@ -1578,6 +1614,7 @@ export interface PluginCoreApi {
   };
   World: any;
   DisplayNames: any;
+  Accounts: any;
   BoatManager: any;
   Sailing: any;
   BOAT_VIEW_DISTANCE: number;

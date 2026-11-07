@@ -1453,6 +1453,10 @@ export class CombatFactory {
     }
 
     static handleRetaliation(attacker: Mobile, target: Mobile) {
+        // Auto-retaliation must obey the same viewer-resolved NPC options as a direct Attack.
+        const attackable = () => !target.isPlayer() || !attacker.isNpc()
+            || attacker.getAsNpc().getCurrentDefinition(target.getAsPlayer())?.isAttackable() === true;
+        if (!attackable()) return;
         const currentTarget = target.getCombat().getTarget();
         const playerIsBusy = () => target.isPlayer() && (
             target.getMovementQueue().size() > 0 ||
@@ -1518,6 +1522,7 @@ export class CombatFactory {
                 target.getCombat().extendAttackDelay(Math.floor(attackSpeed / 2));
             }
             TaskManager.submit(new CombatFactoryTask(1, target, false, () => {
+                if (!attackable()) return;
                 if (target.isPlayer() &&
                     (!target.getAsPlayer().autoRetaliateReturn() || playerIsBusy()
                         || target.hasFlag?.("combat:no-retaliate") === true)) {

@@ -41,7 +41,7 @@ Community-reported completion accepted for scheduling (skip full manual replay).
   - the Guildmaster's full-inventory reply, "Ask me about Melzar's map piece again when you have enough free
     inventory space for the key." It returns to his follow-up menu (tick 1146) and gives no key.
 
-  The import is producer master `39ee9b5bc5`, which main already imports, plus that correction. Only the
+  The import is producer master `7ff2a7f2ed` (with the Prince Ali Rescue correction), which main already imports, plus that correction: osrsreboxed-db#50 at `0166af04b6`. Only the
   `Dragon Slayer I` record differs, and `npc-dialogue-index.json`, `dialogue-types.json` and
   `event-dialogues.json` are byte-identical.
 

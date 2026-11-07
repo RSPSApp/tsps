@@ -495,6 +495,8 @@ export interface PluginPlayerDeathItemDropEvent {
   /** Prevent the normal floor-item spawn without stopping later death-drop hooks. */
   suppressDefaultDrop: boolean;
   handled: boolean;
+  /** Items a hook adds to the death's losses (to the grave or the floor with the rest); set by core. */
+  extraDrops?: any[];
 }
 
 /**

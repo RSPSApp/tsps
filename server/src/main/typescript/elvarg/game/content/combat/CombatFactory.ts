@@ -108,6 +108,8 @@ export class CombatFactory {
     public static readonly RECOIL_IMMUNE_ATTRIBUTE = "combat:recoil-immune";
     public static readonly CRYSTAL_BOW_SHOTS_ATTRIBUTE = "crystal-bow:shots-in-stage";
     public static readonly CRYSTAL_BOW_ITEM_ATTRIBUTE = "crystal-bow:tracked-item";
+    /** Shots fired in the bow's current stage, on the bow itself (item meta): each bow keeps its own count. */
+    public static readonly CRYSTAL_BOW_SHOTS_META = "crystal-bow:shots-in-stage";
     /**
      * The default melee combat method.
      */
@@ -1737,9 +1739,17 @@ export class CombatFactory {
             if (!isChargedCrystalBow(weaponId)) {
                 return;
             }
-            let shotsInStage = player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
-                ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
-                : 0;
+            // The count lives on the bow. On the player, keyed by item id, swapping to another bow and back reset it,
+            // so two bows never degraded (and two at one stage shared a count). An older save's player count is
+            // read once, for the bow it was tracking.
+            const storedShots = Number(weaponItem.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META));
+            let shotsInStage = Number.isFinite(storedShots)
+                ? storedShots
+                : player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
+                    ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
+                    : 0;
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, null);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, null);
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
@@ -1761,8 +1771,7 @@ export class CombatFactory {
                 weaponItem.setId(nextWeaponId);
             }
 
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, currentWeaponId);
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, shotsInStage);
+            weaponItem.setMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META, shotsInStage);
             player.getEquipment().refreshItems();
             BonusManager.update(player);
             player.getUpdateFlag().flag(Flag.APPEARANCE);

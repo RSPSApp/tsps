@@ -697,6 +697,14 @@ module.exports = function registerSongOfTheElves(api) {
     }
   }
 
+  /** Plague City done but the scroll unread (stage 30, Plague City's) and none carried: Edmond's own dialogue first. */
+  function needsEdmondScroll(player) {
+    const request = { player, key: PLAGUE_CITY_KEY, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    const READ_SCROLL_STAGE = 30;
+    return Number(request.stage) < READ_SCROLL_STAGE && player.getInventory().getAmount(api.core.ItemIdentifiers.ARDOUGNE_TELEPORT_SCROLL) === 0;
+  }
+
   function hasQuest(player, key) {
     const request = { player, key, complete: null };
     api.emitCustomEvent("quest:is-complete", request);
@@ -1431,6 +1439,8 @@ module.exports = function registerSongOfTheElves(api) {
       if (npcName !== "edmond") return false;
       // Edmond starts Plague City too; leave him to that quest until it is complete.
       if (!hasQuest(player, PLAGUE_CITY_KEY)) return false;
+      // ...and while the player still needs his teleport scroll: Plague City's dialogue hands out a new one.
+      if (needsEdmondScroll(player)) return false;
       if (!requirementsMet(player)) { explainRequirements(player); return true; }
       return startTranscript(api, player, event.npcId, PAGE, "starting-out-talking-to-edmond");
     }

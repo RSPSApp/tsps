@@ -27,6 +27,8 @@ test.before(async () => {
   core = PluginManager.getCoreApi();
   const handlers = new Map();
   dispatch = (name, event) => {
+    // Dream Mentor gives Plank Make (Wiki); the quest plugins are not loaded here.
+    if (name === "quest:is-complete" && event?.key === "dream_mentor") event.complete = true;
     if (name === "museum:get-kudos") event.kudos = kudos;
     for (const handler of handlers.get(name) ?? []) handler(event);
   };

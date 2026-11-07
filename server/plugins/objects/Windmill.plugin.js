@@ -47,6 +47,14 @@ function setFlourAmount(player, amount) {
   return value;
 }
 
+/**
+ * The saved bin count goes back on its varbits at login, as live sends it (capture 237/01099: mill_flour 0 -> 4):
+ * otherwise the client reads 0 after a relog, the bin looks empty and Quest Helper's Cook's Assistant step regresses.
+ */
+function syncFlourOnLogin({ player }) {
+  setFlourAmount(player, flourAmount(player));
+}
+
 function hopperContents(player) {
   const contents = player.getAttribute(HOPPER_ATTRIBUTE);
   return contents === true ? "grain" : contents === "sweetcorn" ? "sweetcorn" : null;
@@ -211,6 +219,7 @@ module.exports = {
     api.persistAttribute(HOPPER_ATTRIBUTE);
     api.persistAttribute(FLOUR_ATTRIBUTE);
     api.persistAttribute(FLOUR_KIND_ATTRIBUTE);
+    api.onPlayerLogin(syncFlourOnLogin);
     api.onObjectInteraction("Hopper", { Fill: fillHopper });
     api.onObjectInteraction("Hopper controls", { Operate: operateHopperControls });
     api.onObjectInteraction("Flour bin", { Empty: emptyFlourBin });

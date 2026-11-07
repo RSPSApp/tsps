@@ -36,6 +36,42 @@ async function sale(f,itemId,buttonNum=2){
   await input(f,{type:'widget_action',widgetId:301<<16,groupId:301,childId:0,buttonNum,slot,itemId});
 }
 const stock=(f,id)=>core.ShopManager.getOpenShop(f.p).stock.find(s=>s.itemId===id)?.amount;
+for (const [shopName, delta] of [["Martin Thwait's Lost and Found.", 20], ['Bandit Duty Free', 30]]) {
+  test(`${shopName} accepts an off-stock item at high alchemy value then depreciates each sale`, async t => {
+    const f = actor(t), inv = f.p.getInventory(), id = core.ItemIdentifiers.RUNE_KITESHIELD;
+    const shop = core.ShopDefinition.all().find(s => s.getName() === shopName);
+    assert.ok(shop);
+    inv.add(new core.Item(id, 2), false);
+    open(f, shop.getId());
+    const value = core.ItemDefinition.forId(id).getValue();
+    await sale(f, id);
+    assert.equal(inv.getAmount(id), 1, f.messages.join('\n'));
+    assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), Math.floor(value * 600 / 1000));
+    await sale(f, id);
+    assert.equal(inv.getAmount(id), 0);
+    assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), Math.floor(value * 600 / 1000) + Math.floor(value * (600 - delta) / 1000));
+    assert.equal(stock(f, id), 2);
+  });
+}
+test('returning original stock has the same payment in bulk and single sales', async t => {
+  const f = actor(t), inv = f.p.getInventory(), id = core.ItemIdentifiers.ROPE, coins = core.ItemIdentifiers.COINS;
+  const shop = core.ShopDefinition.all().find(s => s.getName() === "Martin Thwait's Lost and Found.");
+  inv.add(new core.Item(coins, 1000), false);
+  open(f, shop.getId());
+  const buyFive = async () => {
+    const slot = core.ShopManager.getOpenShop(f.p).stock.findIndex(s => s.itemId === id);
+    await input(f, {type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:3,slot:slot+1,itemId:id});
+    assert.equal(inv.getAmount(id), 5);
+  };
+  await buyFive();
+  let start = inv.getAmount(coins);
+  await sale(f, id, 3);
+  const bulk = inv.getAmount(coins) - start;
+  await buyFive();
+  start = inv.getAmount(coins);
+  for (let i = 0; i < 5; i++) await sale(f, id);
+  assert.equal(bulk, inv.getAmount(coins) - start);
+});
 async function refund(f,itemId){
   await sale(f,itemId,1);
   const line=f.messages.findLast(m=>/shop will buy for [\d,]+/.test(m));assert.ok(line,f.messages.join('\n'));

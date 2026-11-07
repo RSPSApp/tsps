@@ -200,7 +200,7 @@ export class QuestHelperSceneOverlay implements WidgetOverlay {
         const tile = (x: number, y: number, size = 1): Point[] | undefined => {
             const out: Point[] = [];
             for (const [cx, cy] of [[x, y], [x + size, y], [x + size, y + size], [x, y + size]]) {
-                const p = geom.worldToScreen(cx, geom.tileHeight(cx, cy, plane), cy);
+                const p = geom.worldToScreen(cx, geom.tileHeight(cx, cy, plane, x + size / 2, y + size / 2), cy);
                 if (!p) return undefined;
                 out.push([p[0], p[1]]);
             }

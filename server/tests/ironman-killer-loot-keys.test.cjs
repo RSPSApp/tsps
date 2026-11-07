@@ -35,3 +35,18 @@ test("an Ironman killer with loot keys on gets no key of loot that dropped for t
   assert.ok(dropped >= 1, "the lost daggers are on the floor for the victim");
   assert.equal(keysOf(killer), 0, "and not in a loot key for the Ironman");
 });
+
+test("an Ironman killer doesn't get the victim's loot keys: they drop on the floor for the victim", (t) => {
+  const killer = wp(t), victim = wp(t);
+  killer.setAttribute("ironman:mode", "ironman");
+  victim.getInventory().setItem(0, L.createKey([new core.Item(I.ABYSSAL_WHIP, 1)], 0));
+  const onFloor = () => [...World.getItems().values()].filter((g) => g && L.isLootKey(g.getItem())
+    && g.getOwner?.()?.toLowerCase() === victim.getUsername().toLowerCase()).length;
+  const before = onFloor();
+  const kept = PlayerDeathTask.dropItems(victim, killer, victim.getLocation());
+  PlayerDeathTask.returnKeptItems(victim, kept);
+  PM.emitPlayerDefeated(killer, victim);
+  assert.equal(keysOf(killer), 0, "the Ironman gets no key");
+  assert.equal(keysOf(victim), 0, "keys are never kept");
+  assert.equal(onFloor() - before, 1, "the key is on the floor for the victim");
+});

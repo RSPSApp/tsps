@@ -344,6 +344,11 @@ function travel(player, move) {
   Shared.later(TRAVEL.closeTicks, () => player.isRegistered() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));
 }
 
+/** A private fight its owner never reached (they logged out on the way in) is torn down. */
+function abandonUnentered(session) {
+  if (session.members.size === 0 && !session.area.isDestroyed()) session.area.destroy();
+}
+
 function intoPrivate(player, session) {
   travel(player, () => {
     if (session.area.isDestroyed()) return;
@@ -378,6 +383,8 @@ function createPrivate(player, kind) {
   session.setLoc(PRIVATE_ROCKSLIDE_TILE, Shared.SCENERY_SHAPE, 0, Shared.LOC.ROCKSLIDE_PRIVATE);
   Fight.newFight(session);
   intoPrivate(player, session);
+  // Logged out during the fade, the owner never arrives: a fight nobody entered goes with its NPCs.
+  Shared.later(TRAVEL.moveTicks + 1, () => abandonUnentered(session));
 }
 
 function joinFriend(player, name) {

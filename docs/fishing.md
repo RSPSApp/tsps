@@ -133,7 +133,7 @@ of Xeric and Leechfin are excluded; those do not run through this loop.
   top of it, so a flaked fish with Rada's blessing 4 has a 58% chance of one extra fish (the Wiki
   says the effects stack; adding them is our reading). The extra is never a third fish.
 - A flake is used for each landed fish, also when the roll fails or there is no room for the
-  extra. Junk (seaweed, park items) is not a fish: no flake, no extra.
+  extra. Big net junk (seaweed, boots, gloves, oysters, caskets) also uses a flake and can double (Wiki: non-fish catches are eligible); Rada's blessing stays fish-only. Park finds are left out.
 - Only flakes in the inventory count. The Wiki does not say a tackle box feeds them, so those are
   not used.
 - The flakes have no message; the blessing keeps "Rada's blessing enabled you to catch an extra

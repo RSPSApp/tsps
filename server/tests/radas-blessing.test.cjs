@@ -217,8 +217,8 @@ test("Spirit flakes: 50% for a second fish, one flake per fish caught, stacking 
     assert.equal(amount(none, I.RAW_LOBSTER), 1, "no flakes, no blessing");
     const junk = fisher({ items: [[I.BIG_FISHING_NET], [I.SPIRIT_FLAKES, 10]] });
     Fishing.landCatch(junk, TOOLS.BIG_NET, Fishing.findTool(junk, TOOLS.BIG_NET), [FISH.SEAWEED]);
-    assert.equal(amount(junk, I.SEAWEED), 1, "junk is not a fish");
-    assert.equal(amount(junk, I.SPIRIT_FLAKES), 10, "and uses no flake");
+    assert.equal(amount(junk, I.SEAWEED), 2, "Wiki: non-fish catches are eligible for the flakes");
+    assert.equal(amount(junk, I.SPIRIT_FLAKES), 9, "and use a flake");
     // Wiki: they cannot activate with one empty slot left; the fish takes it, the flake is still lost.
     const crowded = fisher({ items: [[I.LOBSTER_POT], [I.SPIRIT_FLAKES, 10], ...new Array(25).fill([I.LOGS])] });
     lobster(crowded);

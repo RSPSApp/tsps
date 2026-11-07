@@ -745,12 +745,12 @@ function inventoryBlocks(player, tool) {
  * an extra fish." for the blessing; the flakes have no message. An infernal harpoon gives the extra
  * its own chance to be cooked (Wiki: Infernal harpoon), which gives Cooking XP and uses an infernal
  * charge. That the extra uses no crystal harpoon charge is inferred, not Wiki.
- * Junk is left out: the Wiki says "fish" and doesn't settle it.
+ * Wiki (Spirit flakes): non-fish catches and tertiary items are eligible for the flakes' double
+ * catch, so big net junk doubles; Rada's blessing text is silent on junk, so it stays fish-only.
  */
 function landExtra(player, variant, fish, amount, flaked) {
-  if (fish.junk) return;
   const source = RadasBlessing.rollExtraFish(player, flaked ? SpiritFlakes.EXTRA_FISH_CHANCE : 0);
-  if (!source) return;
+  if (!source || (source === "blessing" && fish.junk)) return;
   const message = source === "blessing" ? RadasBlessing.EXTRA_FISH_MESSAGE : null;
   if (variant.infernal && InfernalHarpoon.tryCookFish(player, fish.id)) {
     if (message) spam(player, message);
@@ -769,7 +769,7 @@ function landCatch(player, tool, variant, caught, spotId = null) {
   for (const fish of caught) {
     if (!hasRoom(player, fish)) break;
     const amount = fish.amount(player);
-    landed.push({ fish, amount, flaked: !fish.junk && SpiritFlakes.consumeFlake(player) });
+    landed.push({ fish, amount, flaked: tool !== TOOLS.PARK_NET && SpiritFlakes.consumeFlake(player) });
     if (!variant.infernal || !InfernalHarpoon.tryCookFish(player, fish.id)) {
       giveCatch(player, fish.id, amount, fish.experience * xpMultiplier);
       spam(player, fish.message(amount));

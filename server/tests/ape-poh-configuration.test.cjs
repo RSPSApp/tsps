@@ -298,6 +298,9 @@ for (const kind of ['chamber', 'nexus']) {
 
 test('nexus: Arceuus Ape Atoll Dungeon is a distinct configuration', async t => {
   const f = actor(t, 'nexus'), name = 'ape atoll dungeon teleport', cost = setupCost(f, 'nexus', name);
+  // Wiki (Ape Atoll Teleport (Arceuus)): the spell needs Monkey Madness I, and directing needs the spell's quest.
+  const mm1 = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'monkey_madness_i');
+  assert.ok(mm1); mm1.setStage(f.p, mm1.completionValue);
   await nexusReady(f, 30); await nexusConfirm(f);
   assert.ok((f.p.getAttribute('construction:nexus')?.slots ?? []).includes(30));
   for (const [id] of cost) assert.equal(f.p.getInventory().getAmount(id), 0);

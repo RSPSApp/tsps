@@ -56,3 +56,27 @@ test("after Priest in Peril it casts", (t) => {
   const f = caster(t, true);
   assert.equal(f.teleports.length, 1);
 });
+
+// Wiki (Barrows Teleport): Priest in Peril "is required"; Wiki (Ape Atoll Teleport (Arceuus)): "Completion of the
+// Monkey Madness I quest is required to cast this spell."
+for (const [spell, key, line, runes] of [
+  ["Barrows Teleport", "priest_in_peril", "You must have completed Priest in Peril and received Drezel's warning to cast this spell.", [[566, 2], [565, 1], [563, 2]]],
+  ["Ape Atoll Teleport", "monkey_madness_i", "You need to complete Monkey Madness I to cast this spell.", [[566, 2], [565, 2], [563, 2]]],
+]) {
+  test(`Arceuus ${spell} needs ${key}`, (t) => {
+    const f = caster(t, false);
+    f.teleports.length = 0; f.messages.length = 0;
+    f.p.getInventory().resetItems();
+    for (const [id, n] of runes) f.p.getInventory().add(new core.Item(id, n), false);
+    const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === key);
+    assert.ok(quest);
+    quest.setStage(f.p, 0);
+    ArceuusSpells.handleSpell(f.p, spell);
+    assert.equal(f.teleports.length, 0);
+    assert.ok(f.messages.includes(line), f.messages.join(" | "));
+    for (const [id, n] of runes) assert.equal(f.p.getInventory().getAmount(id), n, `rune ${id} kept`);
+    quest.setStage(f.p, quest.completionValue);
+    ArceuusSpells.handleSpell(f.p, spell);
+    assert.equal(f.teleports.length, 1, f.messages.join(" | "));
+  });
+}

@@ -36,6 +36,8 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   const PIANO_GROUP = 554, GEM_GROUP = 555, NOTES_GROUP = 70;
   const PIANO_BUTTONS = Array.from({length: 15}, (_,i) => (PIANO_GROUP<<16)|(20+i));
   const GEM_BUTTONS = new Map([[19,"Sapphire"],[3,"Diamond"],[11,"Zenyte"],[23,"Emerald"],[7,"Onyx"],[15,"Ruby"]]);
+  const GEM_MODELS = new Map([["Sapphire",32345],["Diamond",32333],["Zenyte",32349],["Emerald",32334],["Onyx",32342],["Ruby",2586]]);
+  const EMPTY_GEM_MODEL = 32348;
   const STAGE_STARTED = 5;
   const STAGE_BRIEFED = 10;
   const STAGE_SID_DEAD = 20;
@@ -978,7 +980,12 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   }
 
   function takeTool(event, variant) {
-    startTranscript(api, event.player, NpcIdentifiers.KILLER, PAGE, variant);
+    const {player}=event;
+    if(resolvedObjectId(event)!==ObjectIdentifiers.TABLE_258||held(player,KNIFE_ITEM_ID)||freeSlots(player)<1){
+      startTranscript(api,player,NpcIdentifiers.KILLER,PAGE,variant);return;
+    }
+    if(ObstacleRunner.isBusy(player))return;
+    ObstacleRunner.run(event,[{anim:832},{sound:2581},{wait:1},{run:()=>startTranscript(api,player,NpcIdentifiers.KILLER,PAGE,variant)}],{keepAnimation:true});
   }
 
   function takeBucket(event) {
@@ -1456,6 +1463,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     const first=group===PIANO_GROUP?4044:4051,count=group===PIANO_GROUP?4:6;
     for(let i=0;i<count;i++)player.getPacketSender().sendVarbit(first+i,0);
     player.getPacketSender().sendVarbit(group===PIANO_GROUP?4049:4050,0);
+    if(group===GEM_GROUP)for(let i=0;i<6;i++)player.getPacketSender().sendInterfaceRawModel((GEM_GROUP<<16)|(35+i),EMPTY_GEM_MODEL);
     pianoProgressByPlayer.delete(player);gemProgressByPlayer.delete(player);
   }
   function openPianoPrompt(player) {
@@ -1493,6 +1501,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   function flipGem(player,gem) {
     player.sendMessage(`You flip the ${gem.toLowerCase()} switch.`);player.getPacketSender().sendSoundEffect(2266,1,0);
     const entered=gemProgressByPlayer.get(player)??[];entered.push(gem);gemProgressByPlayer.set(player,entered);
+    player.getPacketSender().sendInterfaceRawModel((GEM_GROUP<<16)|(34+entered.length),GEM_MODELS.get(gem));
     player.getPacketSender().sendVarbit(4051+GEM_ORDER.indexOf(gem),1);
     if(entered.length<6){player.getPacketSender().sendVarbit(4050,entered.length);return;}
     const correct=entered.join(",")===GEM_ORDER.join(",");resetPuzzle(player,GEM_GROUP);puzzleOpen.delete(player);player.getPacketSender().sendInterfaceRemoval();

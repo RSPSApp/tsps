@@ -1763,25 +1763,40 @@ export class CombatFactory {
             // Otherwise the device recovered it before it hit the floor.
         }
 
+        const ammoMeta = JSON.stringify(ammoItem.getMeta() ?? null);
+        const sameAmmo = (item: Item | null | undefined) => !!item && item.getId() === ammoItem.getId()
+            && JSON.stringify(item.getMeta() ?? null) === ammoMeta;
         const apply = () => {
-            // A swap mid-flight moved this stack out of the slot; don't touch the new one.
-            if (player.getEquipment().get(slot) !== ammoItem) {
+            const consumed = lost + dropped;
+            const worn = player.getEquipment().get(slot);
+            if (worn !== ammoItem && !sameAmmo(worn)) {
+                // Unequipping mid-flight puts this stack in the pack, and re-equipping wears a copy: the shot is
+                // still paid from the same ammo. A different stack swapped in is left alone.
+                const inventory = player.getInventory();
+                const at = inventory.getItems().findIndex(sameAmmo);
+                if (at < 0 || consumed <= 0) {
+                    return;
+                }
+                const paid = Math.min(consumed, inventory.getItems()[at].getAmount());
+                inventory.deleteAtSlot(at, paid);
+                if (dropped > 0 && pos) {
+                    ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), Math.min(dropped, paid), ammoItem.getMeta()), pos);
+                }
                 return;
             }
 
             if (dropped > 0 && pos) {
                 // The dropped shots keep the stack's meta: preset ammo (PvP presets) stays untradeable on the floor
                 // and comes back as preset ammo, owner-only like any untradeable ground item.
-                ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), dropped, ammoItem.getMeta()), pos);
+                ItemOnGroundManager.registerLocation(player, new Item(worn.getId(), dropped, worn.getMeta()), pos);
             }
 
-            const consumed = lost + dropped;
             if (consumed > 0) {
-                ammoItem.decrementAmountBy(consumed);
+                worn.decrementAmountBy(consumed);
             }
 
             // If we are at 0 ammo remove the item from the equipment completely.
-            if (ammoItem.getAmount() == 0) {
+            if (worn.getAmount() == 0) {
                 player.sendMessage("You have run out of ammunition!");
                 player.getEquipment().set(slot, new Item(-1));
 

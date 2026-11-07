@@ -19,13 +19,15 @@ const TIER_TWO_NPCS = new Set(["vampyre juvinate"]);
 const TIER_THREE_NPCS = new Set(["vyrewatch", "vyrewatch sentinel", "ancient feral vyre", "venator", "blood-starved venator"]);
 /** Weapons that deal full damage to juvinates but cannot hurt tier 3 (Wiki, Silver weaponry). */
 const SILVER_WEAPONS = new Set([
-  "blessed axe", "rod of ivandis", "silver sickle", "silver sickle (b)", "emerald sickle (b)",
+  "blessed axe", "silver sickle", "silver sickle (b)", "emerald sickle (b)",
   "enchanted emerald sickle (b)", "ruby sickle (b)", "enchanted ruby sickle (b)", "diamond sickle (b)",
   "enchanted diamond sickle (b)", "blisterwood sickle (e)", "silverlight", "silverlight (dyed)", "darklight",
   "arclight", "emberlight", "wolfbane",
 ]);
 /** In the vampyrebane table for its bonus, but the Wiki lists it among the tier 2 weapons only. */
 const TIER_TWO_ONLY = new Set(["blisterwood sickle (e)"]);
+/** The rod is named "Rod of Ivandis (10)" to "(1)" in the cache, so it is matched by prefix. */
+const SILVER_WEAPON_PREFIXES = ["rod of ivandis"];
 const TIER_ONE_SILVER_BONUS = new Set(["silverlight", "silverlight (dyed)", "darklight"]);
 
 const MELEE = new Map([
@@ -54,7 +56,8 @@ function wearsEfaritaysAid(player) {
 
 /** Silver in hand for a tier 2 vampyre: a silver weapon, or silver bolts fired from a crossbow. */
 function isSilver(player, table) {
-  return SILVER_WEAPONS.has(weaponName(player)) || (table === RANGED && wornName(player, Equipment.AMMUNITION_SLOT).startsWith(SILVER_BOLTS));
+  const weapon = weaponName(player);
+  return SILVER_WEAPONS.has(weapon) || SILVER_WEAPON_PREFIXES.some((prefix) => weapon.startsWith(prefix)) || (table === RANGED && wornName(player, Equipment.AMMUNITION_SLOT).startsWith(SILVER_BOLTS));
 }
 
 /** Whether the attack is made with a weapon the tier lets through. */

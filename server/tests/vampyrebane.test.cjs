@@ -20,6 +20,8 @@ const NAMES = new Map([
   [2402, "Silverlight"],
   [1333, "Rune scimitar"],
   [2952, "Wolfbane"],
+  [7639, "Rod of Ivandis (10)"],
+  [7648, "Rod of Ivandis (1)"],
   [21140, "Efaritay's aid"],
   [9145, "Silver bolts"],
   [9292, "Silver bolts (p)"],
@@ -106,6 +108,11 @@ test("tier 2 vampyre juvinates take damage from silver only, half from other wea
   const juvinate = "Vampyre Juvinate";
   assert.equal(effect.meleeDamage(createPlayer(RUNE_SCIMITAR, "vampyre", juvinate), 100), 0);
   assert.equal(effect.meleeDamage(createPlayer(WOLFBANE, "vampyre", juvinate), 100), 100);
+  for (const rod of [7639, 7648]) {
+    assert.equal(effect.meleeDamage(createPlayer(rod, "vampyre", juvinate), 100), 100, "a charged Rod of Ivandis hurts juvinates");
+    assert.equal(effect.meleeAccuracy(createPlayer(rod, "vampyre", juvinate, { ring: EFARITAYS_AID }), 100), 115);
+    assert.equal(effect.meleeDamage(createPlayer(rod, "vampyre", "Vyrewatch"), 100), 0, "but not tier 3");
+  }
   assert.equal(effect.meleeDamage(createPlayer(22398, "vampyre", juvinate), 100), 120, "an ivandis flail still gets its bonus");
   assert.equal(effect.meleeDamage(createPlayer(RUNE_SCIMITAR, "vampyre", juvinate, { ring: EFARITAYS_AID }), 100), 50);
   assert.equal(effect.meleeDamage(createPlayer(WOLFBANE, "vampyre", juvinate, { ring: EFARITAYS_AID }), 100), 110);

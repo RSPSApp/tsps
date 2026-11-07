@@ -729,7 +729,10 @@ test("Shield Bash hits the primary target twice in multicombat, everything else 
 test("Shield Bash drains 5% of a monster's or player's highest offensive stat once, only on a damaging hit", () => {
   const { Skill } = PluginManager.getCoreApi();
   const method = special("dinhs_bulwark").getCombatMethod();
-  const after = (target, damage) => method.handleAfterHitEffects({ getTotalDamage: () => damage, getTarget: () => target });
+  const after = (target, ...splats) => method.handleAfterHitEffects({
+    getHits: () => splats.map((damage) => ({ getDamage: () => damage })),
+    getTarget: () => target,
+  });
   const levels = (attack, strength, ranged, magic) => [
     [Skill.ATTACK, attack], [Skill.STRENGTH, strength], [Skill.RANGED, ranged], [Skill.MAGIC, magic],
   ];
@@ -738,7 +741,9 @@ test("Shield Bash drains 5% of a monster's or player's highest offensive stat on
   const monster = levelled("npc", meleeMonster);
   after(monster, 0);
   assert.deepEqual([...monster.current], meleeMonster, "no damage, no drain");
-  after(monster, 12);
+  after(monster, 0, 9);
+  assert.deepEqual([...monster.current], meleeMonster, "a miss then a hit (the doubled hit) does not drain");
+  after(monster, 12, 0);
   assert.equal(monster.current.get(Skill.ATTACK), 190, "Attack and Strength first");
   assert.equal(monster.current.get(Skill.STRENGTH), 190);
   assert.equal(monster.current.get(Skill.RANGED), 100);

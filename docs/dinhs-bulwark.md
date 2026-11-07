@@ -14,8 +14,9 @@ on it), so everything here is from the
   every other target once.
 - In single combat the double hit and the multi-target effect do not happen: one hit, one target.
 - Each target that takes a successful hit has its highest offensive stat lowered by 5%,
-  once per target; the primary's second hit does not drain again. Ties resolve Attack and
-  Strength, then Ranged, then Magic. Monsters are drained as well as players.
+  once per target; only the first hitsplat decides it, so the primary's doubled hit never drains
+  on its own (a miss then a hit does not drain). Ties resolve Attack and
+  Strength, then Ranged, then Magic. Monsters are drained as well as players (the Wiki mentions only monsters; players kept the old drain).
 - It counts as a melee attack against every affected target.
 
 ## How it is built
@@ -26,7 +27,7 @@ on it), so everything here is from the
 - The double hit is a `hitAmount: 2` on the primary target's pending hit, only when the player
   and the primary stand in multicombat. Other targets get the ordinary single hit. A fixed
   `hitCount` trait would double every target's hit, so the trait is not used.
-- One pending hit holds both of the primary's splats, so the drain runs once per target.
+- One pending hit holds both of the primary's splats, so the drain runs once per target, decided from the first splat.
 
 ## Not covered
 

@@ -3,7 +3,7 @@
  * 50% energy, +20% accuracy rolled with crush attack bonuses against the target's crush defence.
  * In multicombat it strikes up to ten targets within five tiles of the player (an 11x11 square),
  * hitting the primary target twice and every other target once. Each target that takes a
- * successful hit loses 5% of its highest offensive stat, once per target, never for the
+ * successful first hit loses 5% of its highest offensive stat, once per target, never for the
  * primary's second hit. In single combat it is one hit on one target.
  */
 module.exports = function registerDinhsBulwarkSpecialAttack(api) {
@@ -55,9 +55,10 @@ module.exports = function registerDinhsBulwarkSpecialAttack(api) {
       return [new PendingHit(character, target, this, config)];
     }
 
-    /** One pending hit per target holds both of the primary's splats, so this drains once. */
+    /** One pending hit holds both of the primary's splats; only the first decides the drain. */
     handleAfterHitEffects(hit) {
-      if (Math.floor(hit.getTotalDamage()) <= 0) return;
+      const first = hit.getHits()[0];
+      if (!first || Math.floor(first.getDamage()) <= 0) return;
       drainHighestOffensiveStat(hit.getTarget());
     }
   }

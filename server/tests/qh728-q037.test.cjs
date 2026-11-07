@@ -430,7 +430,7 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   assert.equal(h.varbits.get(2326), 75);
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FAIRY_QUEEN_2));
   h.action('SuXalx', N.FAIRY_QUEEN_2, 'message');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP), 1);
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
   h.action('Vca-Ck', N.FAIRY_QUEEN_2);
   assert.equal(h.quest.getStage(h.player), 90);
   assert.equal(h.quest.isComplete(h.player), true);
@@ -441,7 +441,7 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   ]);
   h.action('Vca-Ck', N.FAIRY_QUEEN_2);
   assert.equal(h.xp.length, 2, 'repeat completion does not award again');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP), 1);
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
 
   // Login replay keeps the completion wire and does not duplicate the reward.
   h.varbits.set(2326, 0);
@@ -470,12 +470,13 @@ test('full-bag reward branch stays pending until a slot is free', () => {
   assert.equal(h.condition('-LSx7-', QUEEN), true);
   assert.equal(h.condition('e2I60y', QUEEN), false);
   h.action('SuXalx', QUEEN, 'message');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP) ?? 0, 0, 'a stale receipt cannot grant into a full bag');
+  // Wiki (Antique lamp (A Tail of Two Cats)): the Fairy Queen gives that quest's lamp, 6543.
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2) ?? 0, 0, 'a stale receipt cannot grant into a full bag');
   h.setFull(false);
   assert.equal(h.condition('-LSx7-', QUEEN), false);
   assert.equal(h.condition('e2I60y', QUEEN), true);
   h.action('SuXalx', QUEEN, 'message');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP), 1);
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
   h.action('Vca-Ck', QUEEN);
   assert.equal(h.quest.getStage(h.player), 90);
   assert.equal(h.quest.isComplete(h.player), true);

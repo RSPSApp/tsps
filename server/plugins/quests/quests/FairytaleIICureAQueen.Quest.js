@@ -153,9 +153,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const VIAL_OF_WATER_ITEM_ID = ItemIdentifiers.VIAL_OF_WATER; // 227
   const VIAL_ITEM_ID = ItemIdentifiers.VIAL; // 229
   const PESTLE_AND_MORTAR_ITEM_ID = ItemIdentifiers.PESTLE_AND_MORTAR; // 233
-  const ANTIQUE_LAMP_ITEM_ID = ItemIdentifiers.ANTIQUE_LAMP; // 4447
-  const LAMP_XP = 2500;
-  const LAMP_MIN_LEVEL = 30;
+  // Wiki (Antique lamp (A Tail of Two Cats)): the Fairy Queen's lamp is that quest's 2,500 XP lamp, rubbed there.
+  const ANTIQUE_LAMP_ITEM_ID = ItemIdentifiers.ANTIQUE_LAMP_2; // 6543
 
   // Placement ids: the certificate and the sleeping queen are varbit-transformed
   // multi locs, so they have no generated identifier (as FT1's grove wall).
@@ -274,7 +273,6 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const pickpocket = new WeakMap();
   const starflowers = new Map(); // player -> spawned NPCs
   const awakeQueen = new Map(); // player -> spawned NPC
-  const pendingLamp = new WeakMap();
   const hideoutSequence = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -818,32 +816,6 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     startTranscript(api, player, NpcIdentifiers.FAIRY_QUEEN_2, PAGE, WAKE_VARIANT);
   }
 
-  function handleLampRub(event) {
-    if (event.itemId !== ANTIQUE_LAMP_ITEM_ID) return false;
-    const { player, item, slot } = event;
-    pendingLamp.set(player, { item, slot });
-    api.emitCustomEvent("xpreward:open", {
-      player,
-      minLevel: LAMP_MIN_LEVEL,
-      title: "Choose the stat you wish to be advanced!",
-      onConfirm: (skill, name) => confirmLamp(player, item, slot, skill, name),
-    });
-    return true;
-  }
-
-  function confirmLamp(player, item, slot, skill, name) {
-    if (pendingLamp.get(player)?.item !== item) return null;
-    pendingLamp.delete(player);
-    const inventory = player.getInventory();
-    if (inventory.get(slot) !== item) return null;
-    const manager = player.getSkillManager();
-    const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_XP, false);
-    if (manager.getExperience(skill) === before) return null;
-    inventory.deleteAtSlot(slot, 1);
-    return `You have been awarded ${LAMP_XP} ${name ?? skill.getName()} XP!`;
-  }
-
   // ==========================================================================
   // World interactions
   // ==========================================================================
@@ -1220,7 +1192,6 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handlePotionOnQueen, { noted: false });
   api.onItemAction("Nuff's certificate", { Read: handleReadCertificate, Study: handleStudyCertificate });
-  api.onItemAction("Antique lamp", { Rub: handleLampRub });
   api.onNpcInteraction("Fairy Godfather", { "Pick-pocket": handlePickpocket });
   api.onNpcInteraction(handleNuffTalk);
   api.onNpcInteraction(handleStarflowerPick);

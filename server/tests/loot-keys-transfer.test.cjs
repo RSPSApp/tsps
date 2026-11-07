@@ -11,6 +11,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
 
 let core;
 let I;
@@ -64,4 +65,16 @@ test("a killer already holding five keys gets none of the victim's, as the Wiki'
   victim.getInventory().setItem(0, L.createKey([new core.Item(I.ABYSSAL_WHIP, 1)], 0));
   kill(killer, victim);
   assert.equal(keysOf(killer), 5, "still five");
+});
+
+test("a victim's loot key never takes a kept slot, so it isn't both kept and handed over", (t) => {
+  const killer = wildernessPlayer(t);
+  const victim = wildernessPlayer(t);
+  // A key and nothing else: unskulled, it would rank into the three kept slots.
+  victim.getInventory().setItem(0, LootKeysPlugin.createKey([new core.Item(I.ABYSSAL_WHIP, 1)], 0));
+  const kept = PlayerDeathTask.dropItems(victim, killer, victim.getLocation());
+  PlayerDeathTask.returnKeptItems(victim, kept);
+  PM.emitPlayerDefeated(killer, victim);
+  assert.equal(keysOf(victim), 0, "not kept by the victim");
+  assert.equal(keysOf(killer), 1, "handed to the killer");
 });

@@ -207,6 +207,10 @@ function killerCannotReceiveKey(killer) {
   return defeatedAt !== undefined && World.getProcessCycle() - defeatedAt < RECENT_DEATH_WINDOW_TICKS;
 }
 
+function neverKeepLootKey(event) {
+  if (LootKeys.isLootKey(event.item)) event.keep = false;
+}
+
 function queueDrop(event) {
   const state = pending(event.player);
   if (LootKeys.isLootKey(event.item)) {
@@ -521,6 +525,8 @@ module.exports = {
       queueDrop(event);
     });
     api.onPlayerDefeated((event) => { warnedAtKeyLimit.delete(event.victim); createLootKey(event); });
+    // A key never takes a kept slot: the death drop hands it over, and a kept copy would come back to the victim too.
+    api.onShouldKeepItemOnDeath(neverKeepLootKey);
     api.onCanBankItem((event) => {
       if (LootKeys.isLootKey(event.item)) {
         event.player.sendMessage("Loot keys cannot be banked.");

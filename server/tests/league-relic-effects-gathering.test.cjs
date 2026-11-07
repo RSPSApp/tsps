@@ -286,6 +286,14 @@ test("Power Miner: with the pickaxe, a second chance, four ores a rock, ore bank
   assert.ok(xp(who.relic, Skill.CRAFTING) > crafting);
   assert.equal(gather(who.relic, I.COAL, 1, Skill.MINING, 50).stored, 1);
   assert.deepEqual([banked(who.relic, I.COAL), banked(who.relic, I.STEEL_BAR)], [1, 1], "coal is banked as coal");
+  // Two ores, one already taken by another store: only the banked one is smelted, and only it pays Smithing XP.
+  const before = xp(who.relic, Skill.SMITHING);
+  gather(who.relic, I.IRON_ORE, 1, Skill.MINING, 35);
+  const one = xp(who.relic, Skill.SMITHING) - before;
+  const split = xp(who.relic, Skill.SMITHING);
+  assert.equal(gather(who.relic, I.IRON_ORE, 2, Skill.MINING, 35, 1).stored, 2);
+  // Steel's 17.5 rounds to 18 or 17 in the stored total; two bars' would be about 35.
+  assert.ok(Math.abs(xp(who.relic, Skill.SMITHING) - split - one) <= 1, "one bar's XP for one bar");
   assert.equal(gather(who.relic, I.LOGS, 1, Skill.WOODCUTTING, 25).stored, 0, "not another skill's take");
 
   const toggle = itemActions.get("Echo pickaxe").Toggle;

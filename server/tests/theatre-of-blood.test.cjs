@@ -149,12 +149,14 @@ function fakePlayer(name) {
     setRunEnergy() {},
     getDialogueManager: () => ({ startDialogues: (chain) => p.statements.push(chain) }),
     setEnteredAmountAction(action) { p.amountAction = action; },
+    interfaceId: -1,
+    getInterfaceId: () => p.interfaceId,
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
+        sendInterface: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
         sendSubInterface: (uid, id) => { p.subs.set(uid, id); return sender; },
         closeSubInterface: (uid) => { p.subs.delete(uid); return sender; },
         sendInterfaceRemoval: () => sender,

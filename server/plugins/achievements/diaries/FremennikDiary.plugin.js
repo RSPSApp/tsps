@@ -7,6 +7,7 @@
  * (the Wiki's notes): the Rellekka tiara and the Dagannoth Kings.
  */
 const Common = require("../../bosses/godwars/Common.GodWars");
+const Chambers = require("../../bosses/godwars/Chambers.GodWars");
 const DiaryProgress = require("./Progress.AchievementDiaries");
 const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get("fremennik");
 
@@ -316,7 +317,10 @@ function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence }) {
 }
 
 function onGodWarsKill({ player, npcId, faction }) {
-  if (!active(player) || GENERAL_BY_FACTION[faction] !== npcId) return;
+  const privateArea = player?.getPrivateArea?.() ?? null;
+  const chamber = privateArea ? Chambers.instanceOf(player) : null;
+  if (privateArea && (chamber !== privateArea || !chamber.hasMember(player))) return;
+  if (!active(player, privateArea) || GENERAL_BY_FACTION[faction] !== npcId) return;
   const generals = new Set(player.getAttribute(GENERALS_ATTRIBUTE) ?? []);
   const previousSize = generals.size;
   generals.add(faction);

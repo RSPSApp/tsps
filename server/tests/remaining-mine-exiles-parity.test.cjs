@@ -424,15 +424,13 @@ test('Haunted crystal shortcut cannot complete before the crystal-key stage', ()
   assert.equal(h.inventory.get(I.SALVE_SHARD), 1);
 });
 
-test('Fremennik Exiles requirements follow Quest Helper (no Trials, Mining 60)', () => {
+test('Fremennik Exiles start does not require Mining 60', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
   const N = NPCS(h), S = h.core.Skill;
   h.inventory.set(ITEMS(h).SEAL_OF_PASSAGE, 1);
   h.setSkill(S.CRAFTING, 65); h.setSkill(S.SLAYER, 60); h.setSkill(S.SMITHING, 60);
   h.setSkill(S.FISHING, 60); h.setSkill(S.RUNECRAFTING, 55); h.setSkill(S.MINING, 59);
   h.api.emitCustomEvent('quest:is-complete', { player: h.player, key: 'fremennik_trials', complete: true });
-  assert.equal(h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_6 }), false);
-  h.setSkill(S.MINING, 60);
   assert.equal(h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_6 }), true);
   h.choice(N.BRUNDT_THE_CHIEFTAIN_6, 'Yes.');
   assert.equal(h.quest.getStage(h.player), 5);

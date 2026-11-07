@@ -31,6 +31,19 @@ once per tick while a prayer is on. Tests: `server/tests/prayer-drain.test.cjs`.
   of Prayer points!", sent on the same tick, with an extra copy of the switch-off sound on
   top of the per-prayer ones; the recordings have only the per-prayer sounds.
 
+## Resetting the counter
+
+The Wiki's [Prayer](https://oldschool.runescape.wiki/w/Prayer) page says the prayer fraction (the
+drain counter) "can be reset through a rejuvenation pool, the Falador shield prayer recharge, or
+dying", and that drinking a Prayer potion does not reset it. The
+[Falador shield 4](https://oldschool.runescape.wiki/w/Falador_shield_4) page dates the recharge
+reset to April 2023. So `FaladorShield.DiaryRewards.js` (only on a recharge that spends a charge,
+not at full Prayer or with no charge left) and `RejuvenationPool.plugin.js` (the pools that restore
+Prayer) call `player.setPrayerPointDrain(0)`; Prayer potions leave it alone. Before, the counter
+carried over, so the next point went early. Checked in game with Thick Skin on: with the counter at
+about 40, a recharge moved the next point from about 10 ticks away to a full 60 ticks away. Test:
+`server/tests/diary-rewards.test.cjs`. Dying already clears it, as the prayers are switched off.
+
 ## Not covered
 
 - Redemption (`CombatFactory.handleRedemption`) still switches the prayers off at once with its

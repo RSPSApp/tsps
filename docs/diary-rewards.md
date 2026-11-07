@@ -41,7 +41,7 @@ Every option works whether the item is worn or carried. The inventory names and 
 
 - **Daily limits** reset at 00:00 UTC.
 - **Counting is per destination,** not per item. Upgrading keeps the day's uses: Ardougne cloak 2's 3 farm teleports used leaves cloak 3 with 2 of 5 (Wiki trivia).
-- **The Falador shield** spends nothing when Prayer is already full (Wiki changelog). The restore rounds down.
+- **The Falador shield** spends nothing when Prayer is already full (Wiki changelog). The restore rounds down. A recharge that spends a charge also clears the prayer drain counter ([prayer-drain.md](prayer-drain.md)).
 
 ## From the captures
 

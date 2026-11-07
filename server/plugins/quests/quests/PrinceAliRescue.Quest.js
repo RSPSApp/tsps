@@ -76,6 +76,8 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   const SKIN_PASTE_ITEM_ID = ItemIdentifiers.PASTE;
 
   const KEY_REPLACEMENT_COST = 15;
+  /** human_furnace: played as Smelt makes the key (rev 242 capture). */
+  const FURNACE_ANIMATION_ID = 899;
 
   /** Quest transcript step ids whose action we execute. */
   const LEELA_GIVES_KEY = "NVdPNU";
@@ -121,6 +123,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     held(player, BLONDE_WIG_ITEM_ID) &&
     held(player, PINK_SKIRT_ITEM_ID) &&
     held(player, SKIN_PASTE_ITEM_ID);
+  const readyForRescue = (player) => hasDisguise(player) && held(player, BRONZE_KEY_ITEM_ID) && held(player, ROPE_ITEM_ID);
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -230,7 +233,9 @@ module.exports = function registerPrinceAliRescueQuest(api) {
 
   function leelaVariant(player, stage) {
     if (stage >= STAGE_PRINCE_SAVED) return PAR("prince-ali-rescued-talking-to-leela");
-    if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && hasDisguise(player) && held(player, BRONZE_KEY_ITEM_ID) && held(player, ROPE_ITEM_ID)) {
+    // Live: meeting Leela with everything takes the first-visit variant's prepared branch.
+    if (stage === STAGE_SPOKEN_TO_OSMAN && readyForRescue(player)) return PAR("starting-out-talking-to-leela");
+    if (stage > STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && readyForRescue(player)) {
       return PAR("preparations-for-rescue-talking-to-leela-after-having-all-the-required-items");
     }
     if (stage >= STAGE_KEY_CLAIMED) {
@@ -294,8 +299,10 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   }
 
   function reward(player) {
-    // Coins merge with an existing stack; a full bag with no coin stack keeps the
-    // 700-coin reward as a ground drop instead of completing and losing it.
+    // Live: Hassan takes the bronze key in the same update as the payment, so a
+    // full bag's freed slot takes the coins. Coins merge with an existing stack;
+    // a full bag with no coin stack keeps the 700-coin reward as a ground drop.
+    if (held(player, BRONZE_KEY_ITEM_ID)) player.getInventory().deleteNumber(BRONZE_KEY_ITEM_ID, 1);
     player.getInventory().forceAdd(player, new Item(COINS_ITEM_ID, 700));
   }
 
@@ -332,6 +339,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
       if (value.includes("has the key print in their inventory")) return held(player, KEY_PRINT_ITEM_ID);
       if (value.includes("does not have 15 coins")) return !held(player, COINS_ITEM_ID, KEY_REPLACEMENT_COST);
       if (value.includes("has 15 coins")) return held(player, COINS_ITEM_ID, KEY_REPLACEMENT_COST);
+      if (value.includes("has the disguise, the key and a rope")) return readyForRescue(player);
       return null;
     }
 
@@ -424,7 +432,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     };
     if (npcId === LEELA_NPC_ID && line.startsWith("Good work. Now, before breaking the Prince out")) event.before = () => {
       const stage = quest.getStage(player);
-      if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && hasDisguise(player) && held(player, BRONZE_KEY_ITEM_ID) && held(player, ROPE_ITEM_ID)) quest.setStage(player, STAGE_PREPARATION_COMPLETE);
+      if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && readyForRescue(player)) quest.setStage(player, STAGE_PREPARATION_COMPLETE);
     };
   }
 
@@ -460,17 +468,6 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     const task = new Task(ticks, player, false);
     task.execute = () => { task.stop(); if (player.isRegistered?.() !== false) action(); };
     TaskManager.submit(task);
-  }
-
-  function firstPreparedVisit(event) {
-    if (event.npcId !== LEELA_NPC_ID || quest.getStage(event.player) !== STAGE_SPOKEN_TO_OSMAN) return;
-    if (!hasDisguise(event.player) || !held(event.player, BRONZE_KEY_ITEM_ID) || !held(event.player, ROPE_ITEM_ID)) return;
-    event.handled = true;
-    startTranscript(api, event.player, LEELA_NPC_ID, "Prince Ali Rescue", "preparations-for-rescue-talking-to-leela-after-having-all-the-required-items", (steps) => [
-      { player: "You must be Leela. Your father sent me to help rescue Prince Ali." },
-      { npc: "Yes, he sent word ahead that you'd be coming. Are you aware of the plan?" },
-      { player: "Yes. In fact, I already have everything we need." }, ...steps.slice(2),
-    ]);
   }
 
   function handleAction(event) {
@@ -618,7 +615,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
       if (!held(player, BRONZE_KEY_ITEM_ID) || !hasDisguise(player)) return;
       if (escaping.has(player)) { event.handled = true; return; }
       escaping.add(player);
-      later(player, 4, () => {
+      later(player, 3, () => {
         escaping.delete(player);
         if (quest.getStage(player) !== STAGE_KELI_TIED || !hasDisguise(player)) return;
         player.getInventory().deleteNumber(BLONDE_WIG_ITEM_ID, 1);
@@ -715,7 +712,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   function tieKeli(player) {
     if (quest.getStage(player) !== STAGE_GUARD_DRUNK || !held(player, ROPE_ITEM_ID) || tying.has(player)) return false;
     tying.add(player);
-    later(player, 4, () => {
+    later(player, 3, () => {
       tying.delete(player);
       if (quest.getStage(player) !== STAGE_GUARD_DRUNK || !held(player, ROPE_ITEM_ID)) return;
       player.getInventory().deleteNumber(ROPE_ITEM_ID, 1);
@@ -724,22 +721,37 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     return true;
   }
 
+  const isFurnace = (definition) => String(definition?.getName?.() ?? "").toLowerCase().includes("furnace");
+
+  /** Live: the furnace animation, then the key and 2 Crafting XP a tick later; no prompt or message. */
+  function createKey(player) {
+    player.performAnimation(new Animation(FURNACE_ANIMATION_ID));
+    later(player, 1, () => {
+      if (!held(player, KEY_PRINT_ITEM_ID) || !held(player, BRONZE_BAR_ITEM_ID)) return;
+      player.getInventory().deleteNumber(KEY_PRINT_ITEM_ID, 1);
+      player.getInventory().deleteNumber(BRONZE_BAR_ITEM_ID, 1);
+      player.getInventory().adds(BRONZE_KEY_ITEM_ID, 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, 2);
+    });
+  }
+
   function makeKey(event) {
-    if (event.itemId !== KEY_PRINT_ITEM_ID || !String(event.definition?.getName?.() ?? event.object?.getDefinition?.()?.getName?.() ?? "").toLowerCase().includes("furnace")) return;
+    if (event.itemId !== KEY_PRINT_ITEM_ID || !isFurnace(event.definition ?? event.object?.getDefinition?.())) return;
     if (!held(event.player, KEY_PRINT_ITEM_ID) || quest.getStage(event.player) < STAGE_SPOKEN_TO_OSMAN) return;
     event.handled = true;
-    api.sendMultiChatboxPrompt(event.player, "Create a key using the key print?", "Yes", () => {
-      const player = event.player;
-      if (!held(player, KEY_PRINT_ITEM_ID) || !held(player, BRONZE_BAR_ITEM_ID)) { player.sendMessage("You need a bronze bar to make the key."); return; }
-      player.performAnimation(new Animation(899));
-      later(player, 1, () => {
-        if (!held(player, KEY_PRINT_ITEM_ID) || !held(player, BRONZE_BAR_ITEM_ID)) return;
-        player.getInventory().deleteNumber(KEY_PRINT_ITEM_ID, 1);
-        player.getInventory().deleteNumber(BRONZE_BAR_ITEM_ID, 1);
-        player.getInventory().adds(BRONZE_KEY_ITEM_ID, 1);
-        player.getSkillManager().addExperiences(Skill.CRAFTING, 2);
-      });
-    }, "No", () => {});
+    if (!held(event.player, BRONZE_BAR_ITEM_ID)) { event.player.sendMessage("You need a bronze bar to make the key."); return; }
+    createKey(event.player);
+  }
+
+  /** "Smelt" with the key print and a bronze bar makes the key before the smelting menu. */
+  function makeKeyOnSmelt(event) {
+    // The object packet lowercases the option ("smelt").
+    if (String(event.option ?? "").toLowerCase() !== "smelt" || !isFurnace(event.definition)) return;
+    const { player } = event;
+    if (quest.getStage(player) < STAGE_SPOKEN_TO_OSMAN) return;
+    if (!held(player, KEY_PRINT_ITEM_ID) || !held(player, BRONZE_BAR_ITEM_ID)) return;
+    event.handled = true;
+    createKey(player);
   }
 
   function openCell(event) {
@@ -790,8 +802,8 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
-  api.onNpcInteraction(firstPreparedVisit);
   api.onItemOnObject("Key print", "Furnace", makeKey, { noted: false });
+  api.onBeforeObjectInteraction(makeKeyOnSmelt);
   api.onItemOnObject(useKeyOnCell);
   api.onObjectInteraction("Prison Gate", { Open: openCell });
 };

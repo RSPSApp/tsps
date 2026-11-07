@@ -794136,6 +794136,26 @@
           "text": "Yes, he sent word ahead that you'd be coming. Are you aware of the plan?"
         },
         {
+          "type": "condition",
+          "text": "If the player has the disguise, the key and a rope:",
+          "steps": [
+            {
+              "player": "Yes. In fact, I already have everything we need."
+            },
+            {
+              "type": "line",
+              "speaker": "Leela",
+              "text": "Good work. Now, before breaking the Prince out, you'll need to find a way to deal with his personal guard. He's talkative, so try to find a weakness. Remember, we don't want any unneeded violence."
+            },
+            {
+              "player": "Alright. I'll go have a chat to this guard."
+            },
+            {
+              "type": "end"
+            }
+          ]
+        },
+        {
           "player": "I need to obtain a copy of the key to the Prince's cell, create a disguise for him that makes him look like Keli and then break him out of the jail."
         },
         {
@@ -795174,7 +795194,7 @@
                     {
                       "type": "line",
                       "speaker": "Aggie",
-                      "text": "Yes I can. I see you already have the ingredients. Would you like me to mix some for you now?"
+                      "text": "Yes, I can. I see you already have the ingredients - the water, flour, ashes and redberries. Would you like me to mix some for you now?"
                     },
                     {
                       "type": "choice",
@@ -796127,12 +796147,12 @@
                   "text": "That was perfect! I can't thank you enough."
                 },
                 {
-                  "player": "How are you? Still okay? Not too drunk?"
-                },
-                {
                   "type": "condition",
                   "text": "If the player has less than three beers:",
                   "steps": [
+                    {
+                      "player": "How are you? Still okay? Not too drunk?"
+                    },
                     {
                       "type": "line",
                       "speaker": "Joe",
@@ -798061,12 +798081,12 @@
           "text": "That was perfect! I can't thank you enough."
         },
         {
-          "player": "How are you? Still okay? Not too drunk?"
-        },
-        {
           "type": "condition",
           "text": "If the player has less than three beers:",
           "steps": [
+            {
+              "player": "How are you? Still okay? Not too drunk?"
+            },
             {
               "type": "line",
               "speaker": "Joe",

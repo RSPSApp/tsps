@@ -194,22 +194,45 @@ test("Pirate's Treasure crate packing uses the captured message boxes and Luthas
   assert.equal(p.items.get(995), 30);
 });
 
+const furnace = { getName: () => 'Furnace' };
+const smeltAt = (q, p) => { const event = { player: p, objectId: 24009, option: 'smelt', definition: furnace }; q.call('onBeforeObjectInteraction', event); return event; };
+
+test('as captured: Smelt on a furnace makes the Prince Ali key with no prompt, and smelting keeps other cases', () => {
+  const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player();
+  p.items.set(2423, 1); p.items.set(2349, 1);
+  q.quest.setStage(p, 10); assert.equal(smeltAt(q, p).handled, undefined, 'before Osman the furnace smelts normally');
+  q.quest.setStage(p, 20); p.items.delete(2349);
+  assert.equal(smeltAt(q, p).handled, undefined, 'without a bronze bar the furnace smelts normally');
+  p.items.set(2349, 1);
+  assert.equal(smeltAt(q, p).handled, true); assert.equal(q.prompts.length, 0);
+  assert.equal(p.items.get(2418) ?? 0, 0); q.tick(1);
+  assert.equal(p.items.get(2418), 1); assert.equal(p.items.get(2423), 0); assert.equal(p.items.get(2349), 0);
+  assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 2]]); assert.equal(q.quest.getStage(p), 20);
+  assert.equal(smeltAt(q, p).handled, undefined, 'with the print used up Smelt opens the normal menu');
+});
+
 test('Prince Ali key can be made at a furnace without Osman and Leela accepts the prepared player at state20', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
-  p.items.set(2423, 1); p.items.set(2349, 1);
-  q.call('onItemOnObject', { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => ({ getName: () => 'Furnace' }) } });
-  assert.equal(q.prompts.at(-1).title, 'Create a key using the key print?'); choose(q.prompts.at(-1), 'No'); assert.equal(p.items.get(2423), 1);
-  q.call('onItemOnObject', { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => ({ getName: () => 'Furnace' }) } });
-  choose(q.prompts.at(-1), 'Yes'); q.tick(1);
+  p.items.set(2423, 1);
+  q.call('onItemOnObject', { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => furnace } });
+  assert.deepEqual(p.messages, ['You need a bronze bar to make the key.']); assert.equal(p.items.get(2423), 1);
+  p.items.set(2349, 1);
+  q.call('onItemOnObject', { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => furnace } });
+  assert.equal(q.prompts.length, 0); q.tick(1);
   assert.equal(p.items.get(2418), 1); assert.equal(q.quest.getStage(p), 20); assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 2]]);
   for (const id of [2419, 1013, 2424, 954]) p.items.set(id, 1);
   const variant = q.hooks.get('onNpcDialogueVariant')[0]({ player: p, npcId: core.NpcIdentifiers.LEELA });
-  assert.equal(variant.variant, 'preparations-for-rescue-talking-to-leela-after-having-all-the-required-items');
+  assert.equal(variant.variant, 'starting-out-talking-to-leela', 'as captured: the first visit takes its prepared branch');
+  const prepared = require('../data/definitions/npc-dialogues.json')['Prince Ali Rescue'].variants[variant.variant][2];
+  const condition = (text) => q.hooks.get('onNpcDialogueCondition')[0]({ player: p, npcId: core.NpcIdentifiers.LEELA, text });
+  assert.equal(condition(prepared.text), true);
+  assert.equal(prepared.steps[0].player, 'Yes. In fact, I already have everything we need.');
+  p.items.delete(954); assert.equal(condition(prepared.text), false, 'without the rope Leela explains the plan'); p.items.set(954, 1);
   const ready = { player: p, npcId: core.NpcIdentifiers.LEELA, text: "Good work. Now, before breaking the Prince out, you'll need to find a way to deal with his personal guard." };
   q.emit('npc-dialogue:line', ready); assert.equal(q.quest.getStage(p), 20); ready.before(); assert.equal(q.quest.getStage(p), 30);
 });
 
-test('Prince Ali three beers progress30→31→40, rescue needs Keli tied and retains the key', () => {
+test('Prince Ali three beers progress30→31→40, rescue needs Keli tied, and Hassan takes the key with the payment', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 30); p.items.set(1917, 3);
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.JOE_5, stepId: 'TDhBVe' });
   assert.equal(q.quest.getStage(p), 31); assert.equal(p.items.get(1917), 2);
@@ -217,13 +240,13 @@ test('Prince Ali three beers progress30→31→40, rescue needs Keli tied and re
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.JOE_5, stepId: 'KxLvNg' }); assert.equal(q.quest.getStage(p), 40);
   for (const id of [2418, 2419, 1013, 2424, 954]) p.items.set(id, 1);
   const escape = { player: p, npcId: core.NpcIdentifiers.PRINCE_ALI, stepId: 'WQdAq1' };
-  q.emit('npc-dialogue:action', escape); q.tick(4); assert.equal(q.quest.getStage(p), 40);
+  q.emit('npc-dialogue:action', escape); q.tick(3); assert.equal(q.quest.getStage(p), 40);
   q.call('onItemOnNpc', { player: p, npcId: core.NpcIdentifiers.LADY_KELI, itemId: 954 });
-  assert.equal(q.quest.getStage(p), 40); q.tick(4); assert.equal(q.quest.getStage(p), 50);
-  q.emit('npc-dialogue:action', escape); assert.equal(q.quest.getStage(p), 50); q.tick(4);
+  q.tick(2); assert.equal(q.quest.getStage(p), 40); q.tick(1); assert.equal(q.quest.getStage(p), 50);
+  q.emit('npc-dialogue:action', escape); q.tick(2); assert.equal(q.quest.getStage(p), 50); q.tick(1);
   assert.equal(q.quest.getStage(p), 100); assert.equal(p.items.get(2418), 1); assert.equal(p.items.get(2419), 0);
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.CHANCELLOR_HASSAN, stepId: 'ctDkjC' });
-  assert.equal(q.quest.getStage(p), 110); assert.equal(p.items.get(995), 700);
+  assert.equal(q.quest.getStage(p), 110); assert.equal(p.items.get(995), 700); assert.equal(p.items.get(2418), 0);
 });
 
 const reachLine = (q, p, npcId, text) => {

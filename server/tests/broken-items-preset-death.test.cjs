@@ -3,6 +3,7 @@
 // on Death). A preset copy (untradeable, unbankable, preset, as Presets.PvpMode tags it) was never paid for, so
 // it pays nothing: otherwise every free preset fire cape, torso or defender mints coins for the killer. Real
 // engine: every plugin loaded, a real victim and killer in the Wilderness, and the real PlayerDeathTask.dropItems.
+// An Ironman killer takes no other player's loot, so these death drops (and the downgraded emblem) go to the victim.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -84,4 +85,30 @@ test("a real fire cape still pays the killer its repair cost", (t) => {
   const killer = actor(t);
   victim.inv.setItem(0, new core.Item(I.FIRE_CAPE, 1));
   assert.deepEqual(die(t, victim, killer), [[killer.p.getUsername(), 150000]]);
+});
+
+test("an Ironman killer's repair-cost coins drop for the victim instead (Ironman Mode: no other players' loot)", (t) => {
+  const victim = actor(t);
+  const killer = actor(t);
+  killer.p.setAttribute("ironman:mode", "ironman");
+  victim.inv.setItem(0, new core.Item(I.FIRE_CAPE, 1));
+  assert.deepEqual(die(t, victim, killer), [[victim.p.getUsername(), 150000]]);
+});
+
+test("an Ironman killer's downgraded emblem drops for the victim; a normal killer's for the killer", (t) => {
+  for (const ironman of [false, true]) {
+    const victim = actor(t);
+    const killer = actor(t);
+    if (ironman) killer.p.setAttribute("ironman:mode", "ironman");
+    victim.inv.setItem(0, new core.Item(12750, 1)); // a tier 4 emblem: drops as tier 3
+    const owners = [];
+    const register = core.ItemOnGroundManager.registerNonGlobals;
+    const mock = t.mock.method(core.ItemOnGroundManager, "registerNonGlobals", (owner, item, ...rest) => {
+      if (item.getId() === 12749) owners.push(owner?.getUsername?.());
+      return register.call(core.ItemOnGroundManager, owner, item, ...rest);
+    });
+    die(t, victim, killer);
+    mock.mock.restore();
+    assert.deepEqual(owners, [(ironman ? victim : killer).p.getUsername()], ironman ? "Ironman killer" : "normal killer");
+  }
 });

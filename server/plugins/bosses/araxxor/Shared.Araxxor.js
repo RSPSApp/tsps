@@ -98,6 +98,15 @@ const MIRRORBACK_REDIRECT_FACTOR = 0.2;
 const MIRRORBACK_RECOIL_FACTOR = 0.5;
 /** On-hit drains (Wiki): a ranged hit drains 9% defence, a magic hit 9% prayer. */
 const DRAIN_RANGED_DEFENCE = 0.09;
+/**
+ * Aranea boots (Wiki; rsprox 4060, 4067): the ranged shot is negated at most once every 8 ticks and the
+ * enraged cleave once every 20, only when the attack would have hurt; magic and melee are not.
+ */
+const ARANEA_RANGED_COOLDOWN_TICKS = 8;
+const ARANEA_CLEAVE_COOLDOWN_TICKS = 20;
+const ARANEA_MESSAGE = "Your Aranea boots let you avoid the spider-based attack.";
+const ARANEA_RANGED_ATTRIBUTE = "araxxor:aranea-ranged-ready";
+const ARANEA_CLEAVE_ATTRIBUTE = "araxxor:aranea-cleave-ready";
 const DRAIN_MAGIC_PRAYER = 0.09;
 
 const ENRAGE_THRESHOLD = 0.25;
@@ -365,6 +374,11 @@ module.exports = {
   MIRRORBACK_REDIRECT_FACTOR,
   MIRRORBACK_RECOIL_FACTOR,
   DRAIN_RANGED_DEFENCE,
+  ARANEA_RANGED_COOLDOWN_TICKS,
+  ARANEA_CLEAVE_COOLDOWN_TICKS,
+  ARANEA_MESSAGE,
+  ARANEA_RANGED_ATTRIBUTE,
+  ARANEA_CLEAVE_ATTRIBUTE,
   DRAIN_MAGIC_PRAYER,
   ENRAGE_THRESHOLD,
   MINION_HITPOINTS,

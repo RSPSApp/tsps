@@ -41,3 +41,11 @@ count from the click.
 
 Check for Snakes, Charm Snake, the scarab swarm, the mummy, the sarcophagus's Strength
 refusal and the sceptre with a full pack keep the wording in `Common.PyramidPlunder.js`.
+
+## From the Wiki
+
+- **Sceptre on a failed push:** the sceptre is rolled whether the sarcophagus opens or not (since
+  2023), so every failed push rolls the room's chance too, and finding it ends the run with no
+  artefact (https://oldschool.runescape.wiki/w/Sarcophagus_(Pyramid_Plunder)).
+- **Scarab trap damage:** the Grand Gold Chest's trap deals 1-4 damage
+  (https://oldschool.runescape.wiki/w/Pyramid_Plunder), not a fixed amount.

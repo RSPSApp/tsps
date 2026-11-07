@@ -15,6 +15,7 @@ import { Misc } from "../../../../util/Misc";
 import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
 import { Equipment } from "../../../model/container/impl/Equipment";
 import { PrayerHandler } from "../../PrayerHandler";
+import { TeleBlock } from "./TeleBlock";
 import { CombatEffectSpell } from "./CombatEffectSpell";
 import { CombatNormalSpell, CombatNormalSpellOptions } from "./CombatNormalSpell";
 import { CombatSpell } from "./CombatSpell";
@@ -1594,10 +1595,7 @@ export class CombatSpells {
                     return;
                 }
                 // Wiki: 5 minutes, halved when Protect from Magic was already up.
-                const seconds = player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC] ? 150 : 300;
-                player.getCombat().getTeleblockTimer().start(seconds);
-                player.getPacketSender().sendEffectTimer(seconds, EffectTimer.TELE_BLOCK)
-                    .sendMessage("You have just been teleblocked!");
+                TeleBlock.apply(player, cast.isPlayer() ? (cast as Player).getUsername() : "a monster");
             } else if (castOn.isNpc()) {
                 if (cast.isPlayer()) {
                     (cast as Player).sendMessage("Your spell has no effect on this target.");

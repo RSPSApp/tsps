@@ -61,6 +61,8 @@ Back up `accounts.json` together with the saves database (`players.sqlite`, or t
 
 If the file exists but can't be read (for example, damaged or hand-edited JSON), every login is refused. Players see "The login server is busy."; the server log names the file and says to repair it or restore it from the backup. A missing file is not an error: the server starts a new one, so restoring the backup must come before the server is started again.
 
+A character whose own save can't be read refuses its login the same way ("The login server is busy."); it does not fall back to the primary.
+
 ## The primary character
 
 The first character has the account's login name. It is the primary character.

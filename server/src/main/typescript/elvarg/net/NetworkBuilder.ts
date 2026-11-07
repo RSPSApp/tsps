@@ -1375,6 +1375,10 @@ export class ClientConnection {
     if (username !== primaryName) {
       try { characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null; }
       catch (error) { this.releasePendingName(); this.failLogin(8, "The login server is busy."); return; }
+      // The alt enters with the capitals its save was made with, not the typed ones (PlayerSave
+      // writes the entered name back as the display name).
+      const altSaved = String(characterSave?.getDisplayName?.() ?? "");
+      if (altSaved && Accounts.key(altSaved) === Accounts.key(username)) username = altSaved;
     }
     const pending: PendingLogin = { username, credentialName: primaryName, profile, passwordHash, save: characterSave, loginTokens };
     const savedName = String((save ?? credentials)?.getDisplayName?.() ?? "");

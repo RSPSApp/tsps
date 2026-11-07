@@ -397,6 +397,19 @@ test('a disabled plugin still protects existing ownership and enters the typed c
   assert.equal((await login('Alt', 'pw')).success, false, 'switching off cannot release a deleted identity');
 });
 
+test('a disabled plugin enters a typed alt with the capitals of its save, not the typed ones', async (t) => {
+  t.mock.method(PluginManager, 'createLoginExtension', () => undefined);
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  seedSave('Alt Two');
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt Two', 2);
+  const { connection, response } = await connect('alt two', 'pw', 0);
+  assert.equal(response.success, true);
+  await handshake(t, connection, 'alt two');
+  assert.equal(connection.getPlayer()?.getUsername(), 'Alt Two', 'the saved capitals, so the save keeps them');
+  net.ClientConnection.pendingNames.clear();
+});
+
 test('select swaps the character, is refused after handshake, and refuses a banned one', async (t) => {
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);

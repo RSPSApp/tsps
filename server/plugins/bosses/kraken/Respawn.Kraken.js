@@ -133,6 +133,9 @@ function tentacleDied({ npc }) {
   if (area?.isKrakenInstance === true) {
     npc.__skipDefaultRespawn = true;
     const entries = [{ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition(), previous: npc }];
+    // Live OSRS respawns the Kraken more slowly in a private instance (Wiki Kraken page:
+    // "respawns more slowly in a private instance than the public arena"), but no figure is
+    // documented, so private rooms use the public delay here (estimate; no invented number).
     const delay = npc.getDefinition?.()?.getRespawn?.() ?? 25;
     schedulePrivate(area, delay, entries);
     return;
@@ -184,6 +187,9 @@ function bossDied({ npc }) {
       // Already dying; its death event still joins the respawn.
     }
   }
+  // Live OSRS respawns the Kraken more slowly in a private instance (Wiki Kraken page:
+  // "respawns more slowly in a private instance than the public arena"), but no figure is
+  // documented, so private rooms use the public delay here (estimate; no invented number).
   const delay = npc.getDefinition?.()?.getRespawn?.() ?? 25;
   if (area?.isKrakenInstance === true) schedulePrivate(area, delay);
   else later(delay, () => respawnAll(area));

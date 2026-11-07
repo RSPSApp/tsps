@@ -219,6 +219,19 @@ test("the Arcane grimoire changes spellbook, goes back to the previous one and r
   const league = character("sorcerer", "league");
   login(league);
   assert.equal(league.getSpellbook(), MagicSpellbook.NORMAL);
+  // Only unlocked books (the relics page: "providing players have unlocked them"; core SpellbookLocks). The quest
+  // plugins aren't loaded here, so this answers "quest:is-complete" for the quests the test marks done.
+  const done = new Set();
+  PluginManager.createApi("GrimoireQuests").onCustomEvent("quest:is-complete", (query) => {
+    if (query.player === league && done.has(query.key)) query.complete = true;
+  });
+  const setQuest = (key, complete) => (complete ? done.add(key) : done.delete(key));
+  click(league, 1);
+  pick(league, "Ancient");
+  assert.equal(league.getSpellbook(), MagicSpellbook.NORMAL, "no Ancients before Desert Treasure I");
+  assert.equal(league.sent.messages.at(-1), "You need to complete Desert Treasure I to use that spellbook.");
+  setQuest("desert_treasure_i", true);
+  setQuest("lunar_diplomacy", true);
 
   assert.equal(click(league, 4), true, "Check Previous");
   assert.equal(league.sent.messages.at(-1), "You haven't changed spellbook with the grimoire yet.");

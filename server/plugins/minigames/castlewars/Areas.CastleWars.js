@@ -11,6 +11,19 @@ let game;
 let core;
 let data;
 
+/**
+ * Wiki (Castle Wars, 2013 update): "Your prayer points and other stats are now restored when you leave Castle Wars".
+ * Drained skills, Hitpoints and Prayer back to their levels and run energy full, prayers off; a boost stays.
+ */
+function restoreStats(player) {
+  const skills = player.getSkillManager();
+  for (const skill of core.Skill.values()) {
+    if (skills.getCurrentLevel(skill) < skills.getMaxLevel(skill)) skills.setCurrentLevel(skill, skills.getMaxLevel(skill), true);
+  }
+  player.setRunEnergy(100);
+  core.PrayerHandler.deactivatePrayers(player);
+}
+
 function playerOf(character) {
   return character.getAsPlayer?.() ?? null;
 }
@@ -68,8 +81,10 @@ function defineAreas() {
       if (player.getAttribute(game.TRANSITION_KEY) === true) {
         return;
       }
+      // Leaving takes back the game's items and team and restores stats (Wiki), but not the player's own skull,
+      // Tele Block, poison, antifire or boosts: a full resetAttributes cleared those for free.
       game.clearCastleWarsItems(player);
-      player.resetAttributes();
+      restoreStats(player);
       game.setTeamId(player, null);
       game.closeOverlay(player);
       if (player.isPlayerBot?.() !== true) {

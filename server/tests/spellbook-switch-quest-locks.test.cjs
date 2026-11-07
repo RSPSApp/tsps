@@ -67,3 +67,47 @@ test("no Lunars from the POH altars or the magic cape before Lunar Diplomacy", (
   Cape.changeSpellbook(f.p, "Lunar");
   assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR, "after the quest, the cape switches");
 });
+
+// Lunar's Spellbook Swap (LunarSpells.ts) shares the books' locks (core SpellbookLocks). Captured (a league
+// recording): "You need to have completed Desert Treasure I in order to use Ancient Magicks." in a message box.
+function swapper(t, dt1) {
+  const f = wizard(t, { dt1, lunar: true });
+  f.p.setSpellbook(core.MagicSpellbook.LUNAR);
+  for (const [id, n] of [[9075, 10], [564, 10], [563, 10]]) f.p.getInventory().add(new core.Item(id, n), false);
+  const boxes = [];
+  const start = f.p.getDialogueManager().startDialogues.bind(f.p.getDialogueManager());
+  t.mock.method(f.p.getDialogueManager(), "startDialogues", (chain, ...rest) => { boxes.push(chain); return start(chain, ...rest); });
+  return { ...f, boxes, runes: () => f.p.getInventory().getAmount(9075) };
+}
+
+test("Spellbook Swap's Ancient quick pick is refused before Desert Treasure I, and spends nothing", (t) => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = swapper(t, false);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 3);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
+  assert.equal(f.runes(), 10, "no runes spent");
+  assert.equal(f.boxes.length, 1, "the refusal box");
+  const done = swapper(t, true);
+  LunarSpells.handleSelf(done.p, "spellbook swap", 3);
+  assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "after the quest, the swap works");
+});
+
+test("Spellbook Swap's menu offers only the books the player has access to (Wiki)", (t) => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = swapper(t, false);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  assert.deepEqual(f.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Arceuus"], "no Ancient before Desert Treasure I");
+  f.p.getDialogueManager().handleOption(2);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ARCEUUS, "the paid cast swaps to the book chosen");
+  const done = swapper(t, true);
+  LunarSpells.handleSelf(done.p, "spellbook swap", 1);
+  assert.deepEqual(done.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Ancient", "Arceuus"]);
+});
+
+test("the occult altar's choice of the book already in use needs no unlock", (t) => {
+  const f = wizard(t, { lunar: false });
+  f.p.setSpellbook(core.MagicSpellbook.LUNAR);
+  require("../plugins/objects/Altars.plugin")._test.lunarSpellbook({ player: f.p });
+  assert.ok(!f.messages.includes("You need to complete Lunar Diplomacy to use that spellbook."), f.messages.join(" | "));
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
+});

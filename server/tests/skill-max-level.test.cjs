@@ -1254,6 +1254,9 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   });
   const change = core.MagicSpellbook.changeSpellbook;
   core.MagicSpellbook.changeSpellbook = (p, spellbook) => { p.spellbook = spellbook; };
+  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself.
+  const emit = PluginManager.emitCustomEvent;
+  PluginManager.emitCustomEvent = (name, query) => { if (name === "quest:is-complete") query.complete = true; else return emit.call(PluginManager, name, query); };
   try {
     const cases = [["Ancient Altar", "Venerate", core.MagicSpellbook.ANCIENT],
       ["Lunar Altar", "Venerate", core.MagicSpellbook.LUNAR],
@@ -1269,7 +1272,7 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
       assert.equal(p.spellbook, expected, `${name}: ${action}`);
       assert.deepEqual(p.sent.filter(([type]) => type === "sendSoundEffect"), [["sendSoundEffect", 2674, 0, 0, 1]]);
     }
-  } finally { core.MagicSpellbook.changeSpellbook = change; }
+  } finally { core.MagicSpellbook.changeSpellbook = change; PluginManager.emitCustomEvent = emit; }
 
   const regions = require("../data/definitions/music-data.json").regions;
   const [region, tracks] = Object.entries(regions).find(([, tracks]) => tracks.length > 0);

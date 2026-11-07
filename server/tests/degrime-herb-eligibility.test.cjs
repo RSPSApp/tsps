@@ -60,7 +60,7 @@ function caster(t, herblore) {
   assert.equal(p.busy(), false, 'PRE: placement complete');
   return { p, conn };
 }
-async function cast(f) {
+async function cast(f, includeGuam = true) {
   const spell = core.CacheDefinitions.getSpellByName('Degrime');
   assert.ok(spell && spell.widgetId, 'PRE: cache Degrime widget');
   const widgetId = spell.widgetId;
@@ -74,8 +74,8 @@ async function cast(f) {
     const query = { grimyId, clean: null, level: null }; PM.emitCustomEvent('herblore:clean', query);
     assert.equal(query.clean, clean, 'PRE: canonical clean output'); assert.equal(query.level, level, 'PRE: canonical level');
   }
-  for (const [id, n] of [[557, 4], [561, 2], [199, 1], [219, 1]]) f.p.getInventory().add(new core.Item(id, n), false);
-  for (const id of [557, 561, 199, 219]) assert.ok(f.p.getInventory().getAmount(id) > 0, `PRE: item ${id}`);
+  for (const [id, n] of [[557, 4], [561, 2], ...(includeGuam ? [[199, 1]] : []), [219, 1]]) f.p.getInventory().add(new core.Item(id, n), false);
+  for (const id of [557, 561, ...(includeGuam ? [199] : []), 219]) assert.ok(f.p.getInventory().getAmount(id) > 0, `PRE: item ${id}`);
   await f.conn.dispatch([{ type: 'widget_action', widgetId, groupId: widgetId >>> 16, childId: widgetId & 65535, slot: -1, buttonNum: 1 }]);
   const queued = f.conn.turnPackets.splice(0); assert.equal(queued.length, 1, 'PRE: queued decoded widget action');
   await f.conn.dispatch(queued, true); // same turn dispatch as processTurnPackets, awaited to surface errors
@@ -94,4 +94,16 @@ test('Degrime cleans both herbs at Herblore 75', async t => {
   assert.equal(f.p.getInventory().getAmount(269), 1, 'CONTROL: torstol cleaned');
   assert.equal(f.p.getInventory().getAmount(199), 0); assert.equal(f.p.getInventory().getAmount(219), 0);
   assert.deepEqual(f.p.getInventory().getValidItems().map(i => [i.getId(), i.getAmount()]).sort((a,b) => a[0]-b[0]), [[249, 1], [269, 1]], 'CONTROL: entire inventory conserved');
+});
+
+test('Degrime preserves runes and Magic XP when no herb is eligible', async t => {
+  const f = caster(t, 50);
+  const xp = f.p.getSkillManager().getExperience(core.Skill.MAGIC);
+  await cast(f, false);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.MAGIC), xp, 'TARGET: Magic XP unchanged');
+  assert.equal(f.p.getInventory().getAmount(557), 4, 'TARGET: earth runes unchanged');
+  assert.equal(f.p.getInventory().getAmount(561), 2, 'TARGET: nature runes unchanged');
+  assert.equal(f.p.getInventory().getAmount(219), 1, 'TARGET: grimy torstol unchanged');
+  assert.equal(f.p.getInventory().getAmount(269), 0, 'TARGET: no clean torstol');
+  assert.deepEqual(f.p.getInventory().getValidItems().map(i => [i.getId(), i.getAmount()]).sort((a,b) => a[0]-b[0]), [[219, 1], [557, 4], [561, 2]], 'TARGET: entire inventory unchanged');
 });

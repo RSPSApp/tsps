@@ -399,6 +399,205 @@ for (const [label,stage,level,owned,full] of [
 }
 });
 
+// Darkness of Hallowvale: seed the prerequisite checkpoint, then use the
+// registered, cache-backed Veliaf route and the actual quest-start prompt.
+let hallowvaleIndex = 1800;
+function hallowvaleStartFixture(t, { skill = null, boosted = false, missingAid = false } = {}) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  const connection = new ClientConnection(channel); connection.player = player;
+  const oldCycle = core.World.processCycle, originalSubmit = core.TaskManager.submit;
+  const ownedTasks = [], messages = [], operated = [], starts = [];
+  let npc, originalSend = player.sendMessage;
+  const ownedNpc = () => [...new Set([...core.World.getNpcs(), ...core.World.getAddNPCQueue()])]
+    .filter(actor => actor?.getOwner?.() === player);
+  const subscriptions = [];
+  t.after(() => {
+    let error;
+    const clean = fn => { try { fn(); } catch (caught) { error ??= caught; } };
+    try {
+      clean(() => player.closeInterruptibleInterfaces());
+      clean(() => { player.getCombat().reset(); player.getCombat().getHitQueue().clear(); });
+      clean(() => { for (const task of ownedTasks) if (task.isRunning()) core.Task.prototype.stop.call(task); });
+      clean(() => { core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex()); });
+      clean(() => core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(player));
+      clean(() => { for (const actor of ownedNpc()) {
+        core.TaskManager.cancelTasks(actor);
+        const local = player.getLocalNpcs(), index = local.indexOf(actor); if (index >= 0) local.splice(index, 1);
+        PM.removeNpc(actor);
+      } });
+      clean(() => { for (const [hooks, hook] of subscriptions) { const index = hooks.indexOf(hook); if (index >= 0) hooks.splice(index, 1); } });
+    } finally {
+      core.TaskManager.submit = originalSubmit;
+      player.sendMessage = originalSend;
+      clean(() => core.World.unregisterPlayerPosition(player));
+      player.setRegistered(false); core.World.processCycle = oldCycle;
+    }
+    if (error) throw error;
+    assert.ok(ownedTasks.every(task => !task.isRunning()), 'owned tasks stopped');
+    assert.equal(core.TaskManager.hasActiveTask(player), false);
+    assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
+    assert.equal(ownedNpc().length, 0, 'no actor-owned NPC remains registered or queued');
+    if (npc) {
+      assert.equal(npc.isRegistered(), false);
+      assert.notEqual(core.World.getNpcs().get(npc.getIndex()), npc);
+      assert.ok(!core.World.getAddNPCQueue().includes(npc));
+      assert.ok(!player.getLocalNpcs().includes(npc));
+      assert.ok([...core.World.npcTileOccupants.values()].every(bucket => !bucket.includes(npc)));
+      assert.ok([...core.World.npcRegionOccupants.values()].every(bucket => !bucket.has(npc)));
+    }
+  });
+  core.TaskManager.submit = function(task) {
+    if (task.key === player || task.key === player.getIndex() || task.key?.getOwner?.() === player || task.npc?.getOwner?.() === player) ownedTasks.push(task);
+    return originalSubmit.call(this, task);
+  };
+  const skip = require('../plugins/bots/runtime/PersistenceConstants.PlayerBots').ATTR_SKIP_PERSISTENCE;
+  player.setAttribute(skip, true); player.setIndex(hallowvaleIndex++);
+  const username = `hallow${player.getIndex()}`;
+  player.setUsername(username); player.setLongUsername(core.Misc.stringToLongBigInt(username));
+  assert.ok(player.getLongUsername() !== 0n); assert.ok(player.getIndex() < core.World.MAX_PLAYERS);
+  player.setRegistered(true);
+  player.sendMessage = function(message) { messages.push(String(message)); return originalSend.call(this, message); };
+  const skills = player.getSkillManager();
+  const requirements = [[core.Skill.CONSTRUCTION, 5], [core.Skill.MINING, 20], [core.Skill.THIEVING, 22],
+    [core.Skill.AGILITY, 26], [core.Skill.CRAFTING, 32], [core.Skill.MAGIC, 33], [core.Skill.STRENGTH, 40]];
+  for (const [entry, target] of [...requirements, [core.Skill.HITPOINTS, 40]]) {
+    const base = entry === skill ? target - 1 : target;
+    skills.setExperiences(entry, core.SkillManager.getExperienceForLevel(base), false);
+    skills.setMaxLevels(entry, base, false).setCurrentLevel(entry, base, false);
+    if (entry === skill && boosted) skills.setCurrentLevel(entry, target, false);
+    assert.equal(skills.getMaxLevel(entry), base); assert.equal(skills.getCurrentLevel(entry), entry === skill && boosted ? target : base);
+    assert.equal(skills.getExperience(entry), core.SkillManager.getExperienceForLevel(base));
+  }
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const quest = key => { const found = quests.find(entry => entry.key === key); assert.ok(found, key); return found; };
+  for (const key of ['the_restless_ghost', 'priest_in_peril', 'nature_spirit', 'in_search_of_the_myreque']) {
+    const prerequisite = quest(key); prerequisite.setStage(player, prerequisite.completionValue);
+    assert.equal(prerequisite.isComplete(player), true, `${key} checkpoint`);
+  }
+  const aid = quest('in_aid_of_the_myreque');
+  aid.setStage(player, missingAid ? 300 : aid.completionValue);
+  assert.equal(aid.isComplete(player), !missingAid);
+  const targetQuest = quest('darkness_of_hallowvale'); assert.equal(targetQuest.getStage(player), 0);
+  const snapshot = () => requirements.map(([entry]) => ({ skill: entry.getIndex(), base: skills.getMaxLevel(entry),
+    current: skills.getCurrentLevel(entry), xp: skills.getExperience(entry) }));
+  function observe(name, callback) {
+    PM.createApi('HallowvaleStartFixture').onCustomEvent(name, callback);
+    const hooks = PM.customEventHooks.get(name); subscriptions.push([hooks, hooks.at(-1)]);
+  }
+  observe('npc:operated', event => { if (event.player === player) operated.push({ npcId: event.npcId, option: event.option, levels: snapshot() }); });
+  observe('npc-dialogue:hook', event => { if (event.player === player && event.hook === 'quest:darkness-of-hallowvale:start')
+    starts.push({ npcId: event.npcId, levels: snapshot(), stage: targetQuest.getStage(player) }); });
+  // This is the same actor ID, tile and owner-only policy used by In Aid's
+  // post-quest spawn; this test creates it directly, not through quest login.
+  const tile = new core.Location(3494, 9628, 0);
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+  const candidates = [[1,0],[-1,0],[0,1],[0,-1]];
+  const adjacent = candidates.find(([dx,dy]) =>
+    core.RegionManager.canMove(tile.getX(), tile.getY(), tile.getX()+dx, tile.getY()+dy, 0, 1, 1, null)
+    && core.RegionManager.canMove(tile.getX()+dx, tile.getY()+dy, tile.getX(), tile.getY(), 0, 1, 1, null));
+  assert.ok(adjacent, 'the canonical cellar actor has a reachable adjacent tile');
+  player.setLocation(new core.Location(tile.getX()+adjacent[0], tile.getY()+adjacent[1], 0));
+  player.setNeedsPlacement(false);
+  npc = PM.spawnNpc({ id: core.NpcIdentifiers.VELIAF_HURTZ_2, x: tile.getX(), y: tile.getY(), z: 0,
+    wanderRadius: 0, owner: player, ownerOnly: true }, 'HallowvaleStartFixture');
+  assert.ok(npc && npc.isRegistered()); assert.equal(npc.getOwner(), player); npc.setNeedsPlacement(false);
+  assert.equal(npc.getCurrentDefinition(player).getName(), 'Veliaf Hurtz');
+  assert.ok(npc.getCurrentDefinition(player).getActions().includes('Talk-to'));
+  player.getLocalNpcs().push(npc);
+  return { player, connection, npc, skills, quest: targetQuest, aid, requirements, messages, operated, starts, snapshot };
+}
+async function hallowvaleTalk(f) {
+  const actions = f.npc.getCurrentDefinition(f.player).getActions(), clickType = actions.indexOf('Talk-to') + 1;
+  assert.ok(clickType > 0);
+  const before = f.operated.length;
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType }]);
+  for (let i=0; i<4; i++) {
+    core.World.processCycle++; f.player.resetUpdating(); core.TaskManager.process(); f.connection.processTurnPackets();
+    const movement = f.player.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+    if (movement.hasPendingWork()) movement.process(); core.TaskManager.processWalkTo(f.player.getIndex());
+  }
+  assert.equal(f.operated.length, before + 1, 'real registered Veliaf operation reached');
+  assert.equal(f.operated.at(-1).npcId, f.npc.getContentId(f.player));
+  assert.equal(f.operated.at(-1).option, 'talk-to');
+}
+async function hallowvaleMenu(f) {
+  for (let i=0; i<24 && !MultiChatboxPrompt.getPending(f.player) && f.player.getDialogueManager().getCurrent(); i++) await nextLine(f);
+  return MultiChatboxPrompt.getPending(f.player);
+}
+async function hallowvaleStartPrompt(f) {
+  const menu = await hallowvaleMenu(f);
+  const help = menu?.options.indexOf('Is there something I can do to help out?') ?? -1;
+  assert.ok(help >= 0, `eligible Veliaf action offers quest help; messages=${JSON.stringify(f.messages)}`);
+  await choose(f, help + 1);
+  const start = await hallowvaleMenu(f);
+  assert.equal(start?.title, 'Start the Darkness of Hallowvale quest?');
+  assert.ok(start.options.includes('Yes.'));
+  const owner = MultiChatboxPrompt.pendingPrompts.get(f.player);
+  assert.ok(owner, 'the actual native prompt owns a pending callback');
+  assert.equal(f.player.getPacketSender().isChatboxInterface(219), true);
+  return { start, owner };
+}
+async function hallowvaleAccept(f, observed) {
+  assert.equal(MultiChatboxPrompt.pendingPrompts.get(f.player), observed.owner, 'the same native prompt still owns the choice');
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.player), observed.start);
+  assert.equal(f.player.getPacketSender().isChatboxInterface(219), true);
+  await choose(f, observed.start.options.indexOf('Yes.') + 1);
+}
+test('Darkness of Hallowvale applies boostable start skills at both registered checks', async t => {
+  const targets = [[core.Skill.CONSTRUCTION, 5, 'Construction'], [core.Skill.AGILITY, 26, 'Agility'], [core.Skill.MAGIC, 33, 'Magic']];
+  for (const [skill, level, label] of targets) {
+    await t.test(`${label} temporary level can start the quest`, async t => {
+      const f = hallowvaleStartFixture(t, { skill, boosted: true });
+      await hallowvaleTalk(f);
+      const observed = f.operated.at(-1).levels.find(row => row.skill === skill.getIndex());
+      assert.equal(observed.base, level - 1); assert.equal(observed.current, level);
+      const start = await hallowvaleStartPrompt(f);
+      assert.equal(f.quest.getStage(f.player), 0);
+      await hallowvaleAccept(f, start);
+      assert.equal(f.quest.getStage(f.player), 10, 'decoded Yes starts the quest');
+      const atStart = f.starts.at(-1); assert.ok(atStart); assert.equal(atStart.stage, 10);
+      assert.equal(atStart.levels.find(row => row.skill === skill.getIndex()).current, level);
+    });
+    await t.test(`${label} below requirement without boost is refused`, async t => {
+      const f = hallowvaleStartFixture(t, { skill }); await hallowvaleTalk(f);
+      assert.equal(f.quest.getStage(f.player), 0);
+      assert.ok(f.messages.some(message => message.includes(`You need ${level} ${label}`)));
+      assert.equal(MultiChatboxPrompt.getPending(f.player), null);
+      assert.equal(f.starts.length, 0);
+    });
+  }
+  await t.test('base requirements normally reach the same native start', async t => {
+    const f = hallowvaleStartFixture(t); await hallowvaleTalk(f);
+    const start = await hallowvaleStartPrompt(f); await hallowvaleAccept(f, start);
+    assert.equal(f.quest.getStage(f.player), 10); assert.equal(f.starts.length, 1);
+  });
+  await t.test('boosted Mining does not replace its required base level', async t => {
+    const f = hallowvaleStartFixture(t, { skill: core.Skill.MINING, boosted: true }); await hallowvaleTalk(f);
+    const mining = f.operated.at(-1).levels.find(row => row.skill === core.Skill.MINING.getIndex());
+    assert.equal(mining.base, 19); assert.equal(mining.current, 20);
+    assert.equal(f.quest.getStage(f.player), 0); assert.ok(f.messages.some(message => message.includes('You need 20 Mining')));
+    assert.equal(MultiChatboxPrompt.getPending(f.player), null);
+  });
+  await t.test('incomplete In Aid does not start Darkness', async t => {
+    const f = hallowvaleStartFixture(t, { missingAid: true }); await hallowvaleTalk(f);
+    assert.equal(f.aid.isComplete(f.player), false); assert.equal(f.quest.getStage(f.player), 0);
+    assert.equal(f.starts.length, 0);
+    assert.notEqual(MultiChatboxPrompt.getPending(f.player)?.title, 'Start the Darkness of Hallowvale quest?');
+  });
+  await t.test('the Yes choice rechecks a temporary boost that expired after Talk-to', async t => {
+    const f = hallowvaleStartFixture(t, { skill: core.Skill.AGILITY, boosted: true });
+    await hallowvaleTalk(f); const start = await hallowvaleStartPrompt(f);
+    f.skills.setCurrentLevel(core.Skill.AGILITY, 25, false);
+    await hallowvaleAccept(f, start);
+    assert.equal(f.quest.getStage(f.player), 0);
+    const observed = f.starts.at(-1); assert.ok(observed); assert.equal(observed.stage, 0);
+    assert.equal(observed.levels.find(row => row.skill === core.Skill.AGILITY.getIndex()).current, 25);
+    assert.ok(f.messages.some(message => message.includes('You need 26 Agility')));
+  });
+});
+
 const AGE_QUESTION = "Can you tell me how long I've been here?";
 const AGE_INTRO = "Ahh, I see all the newcomers arriving in Lumbridge, fresh-faced and eager for adventure. I remember you...";
 const AGE_TASK = 'learn-your-age-from-hans-in-lumbridge';

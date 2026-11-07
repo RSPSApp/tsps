@@ -26,7 +26,7 @@ function remember({ player }) {
   if (active(player)) before.set(player, ids(player));
 }
 
-function eaten({ player, itemId }) {
+function eaten({ player, itemId, meta }) {
   const snapshot = before.get(player);
   before.delete(player);
   if (!snapshot || !active(player)) return;
@@ -34,7 +34,8 @@ function eaten({ player, itemId }) {
   const slot = snapshot.findIndex((id, index) => id === itemId && now[index] !== itemId);
   if (slot < 0) return;
   const inventory = player.getInventory();
-  inventory.setItem(slot, new core.Item(itemId, 1));
+  // The food comes back as it was: a preset copy (PvP presets) keeps its untradeable/unbankable/preset meta.
+  inventory.setItem(slot, new core.Item(itemId, 1, meta ? JSON.parse(JSON.stringify(meta)) : undefined));
   inventory.refreshItems();
 }
 

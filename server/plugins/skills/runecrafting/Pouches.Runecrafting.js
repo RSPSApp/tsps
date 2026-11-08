@@ -307,8 +307,13 @@ function decay(player, pouch, state, stored) {
   const inventory = player.getInventory();
   inventory.delete(objId(pouch.item), 1);
   inventory.adds(objId(pouch.degraded), 1);
-  inventory.refreshItems();
+  const excess = Math.max(0, state.amount - pouch.decayedCapacity);
   state.amount = Math.min(state.amount, pouch.decayedCapacity);
+  // Wiki: return the excess only when all of it fits; stored excess is otherwise lost.
+  if (excess > 0 && inventory.getFreeSlots() >= excess) {
+    inventory.adds(objId(essenceOfType(state.type).item), excess);
+  }
+  inventory.refreshItems();
   player.sendMessage("Your pouch has decayed through use.");
 }
 

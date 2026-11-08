@@ -96,11 +96,12 @@ function deposit(event) {
  * A game is starting: when its starter is the owner and the chest holds an unclaimed prize, ask
  * "Offer the prize for this game?" first. `start` runs either way.
  */
-function offer(player, house, game, start) {
-  if (house.owner !== player || prizeOf(house) <= 0 || offeredTo.has(house) || !chestIn(house)) return start();
+function offer(player, house, game, start, valid = null) {
+  const canStart = () => !valid || valid();
+  if (house.owner !== player || prizeOf(house) <= 0 || offeredTo.has(house) || !chestIn(house)) return canStart() && start();
   api.sendMultiChatboxPrompt(player, "Offer the prize for this game?",
-    "Yes", () => { offeredTo.set(house, game); start(); },
-    "No", () => start());
+    "Yes", () => { if (canStart()) { if (!valid || !offeredTo.has(house)) offeredTo.set(house, game); start(); } },
+    "No", () => { if (canStart()) start(); });
 }
 
 /** The game is over: its winner gets the key when the prize was on it. */

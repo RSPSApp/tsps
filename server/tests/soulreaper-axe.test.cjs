@@ -112,3 +112,19 @@ test("the Soulreaper axe is two-handed", () => {
   const { player } = fighter();
   assert.equal(player.getEquipment().get(Equipment.WEAPON_SLOT).getDefinition().isDoubleHanded(), true);
 });
+
+test("Behead counts as a special attack performed, and costs no energy (league deeds)", (t) => {
+  const performed = [];
+  const original = PluginManager.emitCustomEvent.bind(PluginManager);
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "combat-special:performed") performed.push(event);
+    return original(name, event);
+  });
+  const { player } = fighter();
+  player.setSpecialPercentage?.(100);
+  player.setSpecialActivated(true);
+  CombatSpecial.getForWeaponId(ItemIdentifiers.SOULREAPER_AXE_2).getCombatMethod().start(player, player);
+  assert.equal(performed.length, 1, "one combat-special:performed");
+  assert.equal(performed[0].player, player);
+  assert.equal(player.getSpecialPercentage(), 100, "no energy spent");
+});

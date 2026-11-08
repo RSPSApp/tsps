@@ -68,9 +68,10 @@ class Fish {
    * message: the catch message, when it isn't "You catch <caught>." (given the amount landed).
    * junk: not a fish (a big net's boots), so no pet roll and no "fishing:success".
    * catchAnimation: this fish's own finishing animation, in place of the tool's (barehanded fishing).
+   * big: [item id, 1 in n, name]: the trophy fish that lands in place of this one (Wiki: Big bass).
    */
   constructor({ id, level, rolls, xp, caught, petBase = null, requires = [], extraXp = [], amount = () => 1, message = null, junk = false,
-    catchAnimation = null }) {
+    catchAnimation = null, big = null }) {
     this.id = id;
     this.level = level;
     this.rolls = rolls;
@@ -85,7 +86,18 @@ class Fish {
     this.message = message ?? (() => `You catch ${caught}.`);
     this.junk = junk;
     this.catchAnimation = catchAnimation;
+    this.big = big && Object.assign(Object.create(Fish.prototype), this, {
+      id: big[0], chance: big[1], caught: `an enormous ${big[2]}`, message: () => `You catch an enormous ${big[2]}!`, big: null,
+    });
   }
+}
+
+/**
+ * Wiki (Big bass, Big swordfish, Big shark): "a 1/1,000 [1/2,500, 1/5,000] chance to receive a big bass in place of a
+ * raw bass", with the raw fish's XP and the line "You catch an enormous bass!". No recording lands one.
+ */
+function bigOrFish(fish, random = Math.random) {
+  return fish.big && random() < 1 / fish.big.chance ? fish.big : fish;
 }
 
 class FishingTool {
@@ -211,14 +223,16 @@ const FISH = Object.freeze({
   SALMON: new Fish({ id: ItemIds.RAW_SALMON, level: 30, rolls: [[16, 96]], xp: 70, caught: "a raw salmon", petBase: 923616, message: () => "You catch a raw salmon" }),
   TUNA: new Fish({ id: ItemIds.RAW_TUNA, level: 35, rolls: [[8, 64]], xp: 80, caught: "a raw tuna", petBase: 257770 }),
   LOBSTER: new Fish({ id: ItemIds.RAW_LOBSTER, level: 40, rolls: [[6, 95]], xp: 90, caught: "a lobster", petBase: 116129 }),
-  SWORDFISH: new Fish({ id: ItemIds.RAW_SWORDFISH, level: 50, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770 }),
+  SWORDFISH: new Fish({ id: ItemIds.RAW_SWORDFISH, level: 50, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770,
+    big: [ItemIds.BIG_SWORDFISH, 2500, "swordfish"] }),
   SHARK: new Fish({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243, message: () => "You catch a shark!",
+    big: [ItemIds.BIG_SHARK, 5000, "shark"],
   }),
   // Wiki (Barbarian Training#Barehanded fishing): barehand shark gives 11 Strength XP too.
   SHARK_BAREHAND: new Fish({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243,
-    message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]],
+    message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]], big: [ItemIds.BIG_SHARK, 5000, "shark"],
   }),
   // Wiki (Barbarian Training#Barehanded fishing): tuna at 55 Fishing and 35 Strength (80 XP, 8 Strength XP), swordfish
   // at 70 and 50 (100, 10), on the harpoon charts. rsprox_transcripts/237/01149.txt: "You catch a raw tuna." with
@@ -230,6 +244,7 @@ const FISH = Object.freeze({
   SWORDFISH_BAREHAND: new Fish({
     id: ItemIds.RAW_SWORDFISH, level: 70, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770,
     requires: [[Skill.STRENGTH, 50]], extraXp: [[Skill.STRENGTH, 10]], catchAnimation: 6707,
+    big: [ItemIds.BIG_SWORDFISH, 2500, "swordfish"],
   }),
 
   // Big net: charts from the Wiki (Fishing spot (big net, harpoon)); lines from rsprox captures
@@ -241,7 +256,8 @@ const FISH = Object.freeze({
   CASKET: new Fish({ id: ItemIds.CASKET, level: 16, rolls: [[1, 2]], xp: 10, caught: "a casket", junk: true }),
   MACKEREL: new Fish({ id: ItemIds.RAW_MACKEREL, level: 16, rolls: [[5, 65], [10, 10]], xp: 20, caught: "a raw mackerel", petBase: 1147827 }),
   COD: new Fish({ id: ItemIds.RAW_COD, level: 23, rolls: [[4, 55]], xp: 45, caught: "a raw cod", petBase: 1147827 }),
-  BASS: new Fish({ id: ItemIds.RAW_BASS, level: 46, rolls: [[3, 40]], xp: 100, caught: "a raw bass", petBase: 1147827 }),
+  BASS: new Fish({ id: ItemIds.RAW_BASS, level: 46, rolls: [[3, 40]], xp: 100, caught: "a raw bass", petBase: 1147827,
+    big: [ItemIds.BIG_BASS, 1000, "bass"] }),
   MONKFISH: new Fish({ id: ItemIds.RAW_MONKFISH, level: 62, rolls: [[48, 90]], xp: 120, caught: "a raw monkfish", petBase: 138583 }),
 
   FROG_SPAWN: new Fish({ id: ItemIds.FROG_SPAWN, level: 33, rolls: [[16, 96]], xp: 75, caught: "some frog spawn" }),
@@ -803,10 +819,11 @@ function landCatch(player, tool, variant, caught, spotId = null) {
   // Each fish needs a free slot, its own stack or room in an open fish barrel. Holy Lake shrimps
   // are lost to a full inventory that still takes karambwanji (Wiki: Fishing spot (karambwanji)).
   const landed = [];
-  for (const fish of caught) {
+  for (const kind of caught) {
+    const fish = bigOrFish(kind);
     if (!hasRoom(player, fish)) break;
     const amount = fish.amount(player);
-    landed.push({ fish, amount, flaked: tool !== TOOLS.PARK_NET && SpiritFlakes.consumeFlake(player) });
+    landed.push({ fish, kind, amount, flaked: tool !== TOOLS.PARK_NET && SpiritFlakes.consumeFlake(player) });
     if (!variant.infernal || !InfernalHarpoon.tryCookFish(player, fish.id)) {
       giveCatch(player, fish.id, amount, fish.experience * xpMultiplier);
       spam(player, fish.message(amount));
@@ -827,7 +844,7 @@ function landCatch(player, tool, variant, caught, spotId = null) {
   // The tutorial pond is outside the supported scope; no retail exclusion is inferred.
   // The park uses its own base even though its successful catches are labelled junk.
   if (spotId !== NpcIds.FISHING_SPOT_43) {
-    const clueFish = landed.find(({ fish }) => CLUE_BOTTLE_FISH.has(fish))?.fish;
+    const clueFish = landed.find(({ kind }) => CLUE_BOTTLE_FISH.has(kind))?.kind;
     const clueBase = landed.length && tool === TOOLS.PARK_NET ? PARK_CLUE_BASE : clueFish?.petBase;
     if (clueBase > 0) ClueBottles.rollClueBottles(player, clueBase);
   }

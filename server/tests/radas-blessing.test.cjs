@@ -114,9 +114,9 @@ test("Rada's blessing doubles a stackable catch, says so, and cooks the extra fi
     p.weapon = weapon;
     return p;
   }
-  // Rolls in order: the first shark's cook roll, the blessing roll, the extra shark's cook roll.
+  // Rolls in order: the 1/5,000 big shark roll (missed), the first shark's cook roll, the blessing roll, the extra shark's cook roll.
   const sequence = (values) => () => values.shift();
-  await withRandom(sequence([0.9, 0.001, 0.1]), async () => {
+  await withRandom(sequence([0.9, 0.9, 0.001, 0.1]), async () => {
     const p = harpooner();
     Fishing.landCatch(p, TOOLS.SHARK_HARPOON, Fishing.findTool(p, TOOLS.SHARK_HARPOON), [FISH.SHARK]);
     assert.equal(amount(p, I.RAW_SHARK), 1, "the first shark is kept, the extra one is cooked");
@@ -124,7 +124,7 @@ test("Rada's blessing doubles a stackable catch, says so, and cooks the extra fi
     assert.equal(p.xp, FISH.SHARK.experience);
     assert.ok(p.messages.includes(MESSAGE));
   });
-  await withRandom(sequence([0.1, 0.001, 0.9]), async () => {
+  await withRandom(sequence([0.9, 0.1, 0.001, 0.9]), async () => {
     const p = harpooner();
     Fishing.landCatch(p, TOOLS.SHARK_HARPOON, Fishing.findTool(p, TOOLS.SHARK_HARPOON), [FISH.SHARK]);
     assert.equal(amount(p, I.RAW_SHARK), 1, "a cooked first fish still rolls the blessing");

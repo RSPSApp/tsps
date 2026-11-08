@@ -37,6 +37,8 @@ before(async () => {
     { id: MAN, x: 3300, y: 3300, level: 0, wanderRadius: 3 },
     { id: MAN, x: 3310, y: 3310, level: 0, wanderRadius: 3 },
     { id: MAN, x: 3310, y: 3310, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3320, y: 3320, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3320, y: 3320, level: 0, wanderRadius: 3 },
   ];
   const patch = [
     { id: MAN, x: 3200, y: 3200, level: 0, wanderRadius: 0 },
@@ -58,6 +60,10 @@ before(async () => {
     // The editor's save for one stacked spawn deleted and the other's wander changed: the override goes first.
     { id: MAN, x: 3310, y: 3310, level: 0, wanderRadius: 0 },
     { id: MAN, x: 3310, y: 3310, level: 0, remove: true },
+    // The editor's save for one stacked spawn deleted and the other moved four tiles east.
+    { id: MAN, x: 3320, y: 3320, level: 0, remove: true },
+    { id: MAN, x: 3320, y: 3320, level: 0, remove: true },
+    { id: MAN, x: 3324, y: 3320, level: 0, wanderRadius: 3 },
   ];
   DefinitionLoader.registerSource("npc_spawns", "test", {
     name: "canonical",
@@ -100,7 +106,7 @@ test("a spawn moved back onto its original tile survives the removal", () => {
 test("a removal after an addition in the same patch still drops it", () => {
   assert.equal(spawnAt(3260, 3260, 0), undefined);
   assert.ok(spawnAt(3250, 3250, 0), "an untouched canonical spawn stays");
-  assert.equal(NpcSpawnDefinition.all().length, 11);
+  assert.equal(NpcSpawnDefinition.all().length, 12);
 });
 
 function spawnsAt(x, y, level) {
@@ -121,4 +127,9 @@ test("a stacked spawn moved back onto its own tile keeps its sibling", () => {
 
 test("one stacked spawn removed and the other's wander changed loads only that one", () => {
   assert.deepEqual(spawnsAt(3310, 3310, 0).map((spawn) => spawn.getRadius()), [0]);
+});
+
+test("one stacked spawn deleted and the other moved away leaves neither on the tile", () => {
+  assert.deepEqual(spawnsAt(3320, 3320, 0), []);
+  assert.deepEqual(spawnsAt(3324, 3320, 0).map((spawn) => spawn.getRadius()), [3]);
 });

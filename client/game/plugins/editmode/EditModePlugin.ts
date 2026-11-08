@@ -1292,13 +1292,11 @@ export class EditModePlugin {
             this.selection = undefined;
             host.clearSelectionHighlight?.();
             const customIndex = this.customNpcEditIndex(moving);
-            // Moving a replacement away leaves the canonical spawn's removal
-            // marker in place, exactly as deleting it does; otherwise the
-            // original returns beside the moved copy.
+            // Moving a spawn away leaves the tile's removal markers in place, exactly as deleting it does: a
+            // replacement's marker suppresses the canonical spawn (otherwise the original returns beside the
+            // moved copy), and a stacked sibling's marker keeps that one deleted.
             this.undoGroup(() => {
-                this.removeEdits(customIndex >= 0
-                    ? this.npcReplacementIndicesAt(moving)
-                    : this.npcEditIndicesAt(moving));
+                this.removeEdits(this.npcReplacementIndicesAt(moving));
                 if (moving.npcWanderRadius !== undefined) edit.wanderRadius = moving.npcWanderRadius;
                 if (moving.npcSpawn?.direction !== undefined) edit.direction = moving.npcSpawn.direction;
                 const edits: EditModeEdit[] = [];

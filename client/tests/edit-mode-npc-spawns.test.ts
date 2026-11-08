@@ -169,6 +169,22 @@ assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.wanderR
     [["npcWander", 1], ["npcDelete", undefined]], "a second change still goes before the marker");
 plugin.clearEdits();
 
+// Deleting one stacked spawn, then moving the other away, keeps the first marker: both leave the tile.
+selected = spawnSelection();
+plugin.applyAtPointer();
+canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Delete", code: "Delete", bubbles: true }));
+selected = { ...spawnSelection(), npcServerId: 60001 };
+plugin.applyAtPointer();
+plugin.moveSelection();
+calls.length = 0;
+pointer = { tileX: 3226, tileY: 3218, plane: 0 };
+plugin.applyAtPointer();
+pointer = { tileX: 3222, tileY: 3218, plane: 0 };
+assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.tileX]),
+    [["npcDelete", 3222], ["npcDelete", 3222], ["npc", 3226]], "one marker per spawn gone from 3222");
+assert.ok(!calls.some(([name]) => name === "showNpcSpawn"), "the deleted spawn is not shown again");
+plugin.clearEdits();
+
 // Delete key removes a selected object too.
 plugin.clearEdits();
 selected = { kind: "loc", ...pointer, locId: 1276, locName: "Tree", shape: 10, rotation: 0 };

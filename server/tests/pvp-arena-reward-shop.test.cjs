@@ -22,20 +22,36 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-test("the PvP Arena Rewards shop sells for the Reward Points won in fights", (t) => {
+function shopper(t, index, points) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
-  p.setIndex(9790);
-  p.setUsername("pvparenashop");
+  p.setIndex(index);
+  p.setUsername("pvparenashop" + index);
   p.setRegistered(true);
   p.setAttribute("bot-skip-persistence", true);
-  t.after(() => p.setRegistered(false));
-  p.setAttribute(POINTS, 5000);
-  const stock = require("../data/definitions/shops.json").find((shop) => shop.id === SHOP).originalStock[0];
+  t.after(() => { ShopManager.close(p); p.setRegistered(false); });
+  p.setAttribute(POINTS, points);
   ShopManager.open(p, SHOP);
-  ShopManager.handleWidgetAction(p, { groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 0, option: "Buy 1", slot: 1, itemId: stock.id });
-  const spent = 5000 - p.getAttribute(POINTS);
-  assert.ok(spent > 0, "the Reward Points paid for it");
-  assert.equal(p.getInventory().getAmount(stock.id), 1, "bought");
-  ShopManager.close(p);
+  return p;
+}
+const SACK = 26705, SCROLL = 26706;
+const slotOf = (id) => require("../data/definitions/shops.json").find((shop) => shop.id === SHOP).originalStock.findIndex((e) => e.id === id) + 1;
+const buy1 = (p, id) => ShopManager.handleWidgetAction(p, { groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 0, option: "Buy 1", slot: slotOf(id), itemId: id });
+
+// Wiki (PvP Arena Rewards): "Blighted surge sack (x50)" for 10 points, Scroll of Imbuing for 200.
+test("the PvP Arena Rewards shop sells for the Reward Points won in fights, at the Wiki's prices", (t) => {
+  const p = shopper(t, 9790, 5000);
+  buy1(p, SACK);
+  assert.equal(5000 - p.getAttribute(POINTS), 10, "a Blighted surge sack (x50) costs 10 points");
+  assert.equal(p.getInventory().getAmount(SACK), 50, "and one purchase gives 50 sacks");
+  buy1(p, SCROLL);
+  assert.equal(4990 - p.getAttribute(POINTS), 200, "a Scroll of Imbuing costs 200 points");
+  assert.equal(p.getInventory().getAmount(SCROLL), 1);
+});
+
+test("too few points buys nothing", (t) => {
+  const p = shopper(t, 9791, 199);
+  buy1(p, SCROLL);
+  assert.equal(p.getAttribute(POINTS), 199, "nothing spent");
+  assert.equal(p.getInventory().getAmount(SCROLL), 0, "nothing bought");
 });

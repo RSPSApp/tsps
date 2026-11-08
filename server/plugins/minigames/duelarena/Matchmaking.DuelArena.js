@@ -210,6 +210,14 @@ const REWARD_POINTS_CURRENCY = {
   remove: (player, value) => player.setAttribute(REWARD_POINTS_ATTRIBUTE, Math.max(0, rewardPoints(player) - Math.floor(value))),
 };
 
+/** Wiki (PvP Arena Rewards): "Blighted surge sack (x50)" for 10 points, so one purchase hands over 50. */
+const SURGE_SACK_BUNDLE = 50;
+function rewardShopDelivery(event) {
+  if (event?.currency === "PVP ARENA POINTS" && event.itemId === core.ItemIdentifiers.BLIGHTED_SURGE_SACK) {
+    event.amount = SURGE_SACK_BUNDLE;
+  }
+}
+
 function grant(player, points, result) {
   const total = Math.min(REWARD_POINTS_CAP, (Number(player.getAttribute(REWARD_POINTS_ATTRIBUTE)) || 0) + points);
   player.setAttribute(REWARD_POINTS_ATTRIBUTE, total);
@@ -243,6 +251,7 @@ function attach(api, hooks) {
   sideoptionsCloseUid = core.CacheDefinitions.getComponentId(SIDEOPTIONS_CLOSE);
   api.persistAttribute(REWARD_POINTS_ATTRIBUTE, 0);
   api.registerShopCurrency?.("PVP ARENA POINTS", REWARD_POINTS_CURRENCY);
+  api.onCustomEvent("shop:delivery", rewardShopDelivery);
   api.onInterfaceActionClick(openPvpArena);
   api.onInterfaceActionClick(sidePanelButton);
   api.onPlayerProcess(expireInvitation);

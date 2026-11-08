@@ -27,6 +27,7 @@ function eventApi(events) {
 
 function trawlerPlayer({ room = 2, rewardCount = 2 } = {}) {
   const events = [];
+  const dialogues = [];
   const banked = new Map();
   const attributes = new Map([[Shared.REWARD_ATTRIBUTE, { items: [[mantaId, rewardCount]], xp: 96 }]]);
   const location = new core.Location(2670, 3170, 0);
@@ -47,10 +48,11 @@ function trawlerPlayer({ room = 2, rewardCount = 2 } = {}) {
     getInventory: () => ({ getAmount: () => 0 }),
     getEquipment: () => ({ getAmount: () => 0 }),
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
+    getDialogueManager: () => ({ startDialogues: chain => dialogues.push(chain) }),
     sendMessage() {},
   };
   Shared.bind({ core, ...eventApi(events) });
-  return { player, events, banked, attributes, location };
+  return { player, events, banked, attributes, location, dialogues };
 }
 
 test("the trawler net reports only manta rays accepted into the bank", () => {
@@ -103,6 +105,7 @@ test("a generated manta catch emits an immutable fish snapshot before net collec
   Rewards.inspectNet({ player: f.player });
   assert.equal(f.events.filter(([type]) => type === "fishing-trawler:catch-awarded").length, 1);
   assert.equal(f.events.filter(([type]) => type === "items:obtained").length, 1);
+  assert.equal(f.dialogues.length, 1, "a second inspection reaches the empty-net dialogue");
 });
 
 test("a generated non-manta catch does not include a manta fish", () => {

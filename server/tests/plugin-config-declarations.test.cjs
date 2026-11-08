@@ -90,6 +90,14 @@ test('a disabled plugin cannot clash with a loading one', () => {
   assert.equal(PluginManager.getConfigDeclarations().get('Shared:count').owner, 'Beta');
 });
 
+test('a clashed key goes to the first claimant that loads when the earlier one fails its dependsOn', () => {
+  const alpha = `module.exports = { name: "Alpha", dependsOn: ["Nope"], config: ${JSON.stringify({ 'Shared:k': COUNT })}, register() {} };`;
+  const { errors } = load({ A: alpha, B: plugin('Beta', { 'Shared:k': COUNT }) });
+  assert.deepEqual(loaded(), ['Beta']);
+  assert.ok(errors.some((e) => /Shared:k/.test(e) && /Alpha is expected to own it/.test(e)), errors.join('\n'));
+  assert.equal(PluginManager.getConfigDeclarations().get('Shared:k').owner, 'Beta');
+});
+
 test('a config that is not an object is logged and ignored; the plugin still loads', () => {
   const { errors } = load({ A: 'module.exports={name:"Alpha",config:[1],register(){}}' });
   assert.deepEqual(loaded(), ['Alpha']);

@@ -465,3 +465,27 @@ test('a player who died with the screen open is not taken into a fight', (t) => 
   assert.equal(Battle.fightFor(b), null);
   a.isDying = false;
 });
+
+test("a load-out item the build's levels can't wear isn't worn: no 70 Defence armour on a 1 Def Pure", (t) => {
+  const { EquipmentRequirements } = require('../dist/game/model/equipment/EquipmentRequirements');
+  // The items' wear requirements, as the server loads them.
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const a = realPlayer(t, 'Alpha');
+  Stash.save(a);
+  // An enum 4390 body that needs more than 1 Defence, put in the 1 Def Pure's (build 2) body slot.
+  const values = core.CacheDefinitions.getEnumValues(4390);
+  let pick = null;
+  for (const [index, id] of values) {
+    const definition = core.ItemDefinition.forId(id);
+    if (definition.getEquipmentType?.()?.getSlot?.() !== core.Equipment.BODY_SLOT) continue;
+    const pure = { getSkillManager: () => ({ getMaxLevel: (skill) => (skill === core.Skill.DEFENCE ? 1 : 99), getCombatLevel: () => 90 }), getCombat: () => ({}) };
+    if (EquipmentRequirements.getUnmet(pure, definition) != null) { pick = { index, id }; break; }
+  }
+  assert.ok(pick, 'a body needing Defence is in the list');
+  const value = Loadouts.loadout(a, 2);
+  value.worn.torso = pick.index;
+  a.setAttribute('pvp-arena:loadouts', { c: value });
+  Loadouts.equip(a, 2);
+  assert.notEqual(a.getEquipment().getItems()[core.Equipment.BODY_SLOT]?.getId?.(), pick.id, 'the body is not worn');
+  Stash.restore(a);
+});

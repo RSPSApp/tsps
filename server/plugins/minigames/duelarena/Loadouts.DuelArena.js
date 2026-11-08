@@ -24,6 +24,7 @@
  * chest does; load-outs carry no supply limits (none are captured).
  */
 const Common = require("./Common.DuelArena");
+const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 
 const BUILD_LETTERS = ["a", "b", "c"];
 const INVENTORY_SIZE = 28;
@@ -190,7 +191,16 @@ function equip(player, build) {
   const items = itemsOf(value);
   const equipment = player.getEquipment();
   for (let slot = 0; slot < WORN_SIZE; slot++) {
-    if (items[slot]) equipment.setItem(slot, supplied(player, items[slot].id, items[slot].amount));
+    if (!items[slot]) continue;
+    const item = supplied(player, items[slot].id, items[slot].amount);
+    // Worn only at the build's own levels (set just above), as the PvP presets check: writing the slot directly let a
+    // 1 Defence pure fight in 70 Defence armour.
+    const unmet = EquipmentRequirements.getUnmet(player, item.getDefinition());
+    if (unmet != null) {
+      player.sendMessage(EquipmentRequirements.message(unmet, `your ${item.getDefinition().getName()}`));
+      continue;
+    }
+    equipment.setItem(slot, item);
   }
   equipment.refreshItems();
   const inventory = player.getInventory();

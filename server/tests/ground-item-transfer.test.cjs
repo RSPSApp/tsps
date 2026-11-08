@@ -286,6 +286,8 @@ for (const [label,id,x,y,z,delay] of [
   ["Aldarin Hammer",2347,1373,2949,0,100],
   ["Fortis Chisel",1755,1657,3142,0,100],
   ["Overlook Tinderbox",590,1625,3287,0,100],
+  ["Outer Fortis Spade",952,1641,3052,0,100],
+  ["Aldarin Spade",952,1405,2938,0,100],
 ]) test("audited "+label+" definition preserves full-bag refusal and its real respawn delay", t=>{
   const f=respawnFixture(t);
   const definition=require("../data/definitions/ground-items.json").find(row=>

@@ -213,6 +213,25 @@ function passiveApplies(attacker, target, style) {
 
 // Applied after equipment bonuses, so a Salve amulet (i) still multiplies the passive.
 const rangedBoost = (attacker, target, value) => (passiveApplies(attacker, target, RANGED) ? Math.floor(value * WILDERNESS_MULTIPLIER) : value);
+
+function imbuedSlayerActive(player) {
+  const query = { player, style: RANGED, active: false };
+  api.emitCustomEvent("slayer:imbued-active", query);
+  return query.active === true;
+}
+
+/** Wiki DPS 701b2dac: ranged damage is33/20 with imbued Slayer, accuracy still multiplies. */
+function rangedDamageBoost(attacker, target, value) {
+  if (!passiveApplies(attacker, target, RANGED) || imbuedSlayerActive(attacker.getAsPlayer())) return value;
+  return Math.floor(value * WILDERNESS_MULTIPLIER);
+}
+
+function addToSlayerBonus(payload) {
+  if (passiveApplies(payload?.player, payload?.player?.getCombat?.()?.getTarget?.(), RANGED)) {
+    payload.numerator += 10;
+  }
+}
+
 const meleeBoost = (attacker, value) => (passiveApplies(attacker, attacker?.getCombat?.()?.getTarget?.(), MELEE) ? Math.floor(value * WILDERNESS_MULTIPLIER) : value);
 
 // ------------------------------------------------------------------ death
@@ -233,15 +252,16 @@ function deathItemDrop(event) {
 module.exports = {
   name: "RevenantWeapons",
   members: true,
-  _test: { CHARGES_META, DEPOSIT_META, UNPAID_META, ACTIVATION_ETHER, MAX_CHARGES, DISMANTLE_ETHER, chargesOf, addEther, chargeWithEther, uncharge, dismantle, attackStarted, checkAmmo, decrementAmmo, rangedBoost, meleeBoost, deathItemDrop },
+  _test: { CHARGES_META, DEPOSIT_META, UNPAID_META, ACTIVATION_ETHER, MAX_CHARGES, DISMANTLE_ETHER, chargesOf, addEther, chargeWithEther, uncharge, dismantle, attackStarted, checkAmmo, decrementAmmo, rangedBoost, rangedDamageBoost, addToSlayerBonus, meleeBoost, deathItemDrop },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     defineWeapons();
     pluginApi.onItemOnItem(chargeWithEther, { noted: false });
     pluginApi.onCustomEvent("combat:attack-started", attackStarted);
+    pluginApi.onCustomEvent("slayer:imbued-ranged-bonus", addToSlayerBonus);
     pluginApi.registerRangedAmmoHandler({ checkAmmo, decrementAmmo });
-    pluginApi.registerRangedCombatModifier({ modifyMaxHit: rangedBoost, modifyAttackRoll: rangedBoost });
+    pluginApi.registerRangedCombatModifier({ modifyMaxHit: rangedDamageBoost, modifyAttackRoll: rangedBoost });
     pluginApi.registerMeleeHitModifier(meleeBoost);
     pluginApi.registerMeleeAttackAccuracyModifier(meleeBoost);
     pluginApi.onPlayerDeathItemDrop(deathItemDrop);

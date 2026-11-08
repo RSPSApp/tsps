@@ -155,6 +155,8 @@ function transcriptStep(event) {
   event.handled = true;
   event.end = true;
   if (Common.travelling(player)) return;
+  // A destination the passenger may not go to refuses before the fare is taken.
+  if (!Voyages.canGo(player, route)) return;
   if (fare) {
     const inventory = player.getInventory();
     const coins = Common.core.ItemIdentifiers.COINS;

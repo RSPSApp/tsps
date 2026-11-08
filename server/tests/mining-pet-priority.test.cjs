@@ -407,8 +407,14 @@ for (const route of ['legacy', 'widget', 'equipment']) test('native iron mining:
   skills.setExperience(core.Skill.MINING, core.SkillManager.getExperienceForLevel(99));
   skills.setCurrentLevel(core.Skill.MINING, 99);
   f.p.setHitpoints(3);
-  if (route === 'equipment') f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(ids.RUNE_PICKAXE));
-  else f.p.getInventory().add(new core.Item(ids.RUNE_PICKAXE), true);
+  if (route === 'equipment') {
+    skills.setExperience(core.Skill.ATTACK, core.SkillManager.getExperienceForLevel(40));
+    skills.setMaxLevel(core.Skill.ATTACK, 40);
+    skills.setCurrentLevel(core.Skill.ATTACK, 40);
+    assert.ok(skills.getCurrentLevel(core.Skill.ATTACK) >= core.ItemDefinition.forId(ids.RUNE_PICKAXE).getRequirements()[core.Skill.ATTACK.getIndex()],
+      'the supplied worn pickaxe must be legal to wield');
+    f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(ids.RUNE_PICKAXE));
+  } else f.p.getInventory().add(new core.Item(ids.RUNE_PICKAXE), true);
   f.p.getInventory().add(new core.Item(ids.TROUT), true);
   const rockId = core.CacheDefinitions.getLocId('ironrock2'), emptyId = core.CacheDefinitions.getLocId('rocks2');
   const at = new core.Location(3223, 3218, 0), rock = new core.GameObject(rockId, at, 10, 0, null);

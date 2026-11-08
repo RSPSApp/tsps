@@ -84,6 +84,13 @@ function jsonLiteral(expr) {
   try { return { value: JSON.parse(text) }; } catch { return undefined; }
 }
 
+/** A numeric constant a default names, e.g. `const MAX = 60 * 60_000`, as a literal; undefined for anything else. */
+function constNumber(expr, file) {
+  if (!file || !/^[\w$]+$/.test(expr)) return undefined;
+  const m = new RegExp('const\\s+' + expr + '\\s*=\\s*([\\d_ *()+-]+);').exec(sourceOf(file));
+  return m ? { value: Function('return ' + m[1].replace(/_/g, ''))() } : undefined;
+}
+
 const fileCache = new Map();
 const sourceOf = (file) => {
   if (!fileCache.has(file)) fileCache.set(file, stripComments(fs.readFileSync(file, 'utf8')));
@@ -158,15 +165,15 @@ function scanReads() {
       if (args.length === 0 || /^\w+\s*:\s*\w/.test(args[0])) continue; // a signature, not a read
       const literal = stringLiteral(args[0]);
       if (isDefinitionFile && literal === undefined) continue;
-      if (literal !== undefined) { reads.push({ key: literal, defaultExpr: args[1], where }); continue; }
+      if (literal !== undefined) { reads.push({ key: literal, defaultExpr: args[1], where, file }); continue; }
       const name = /^(?:[\w$]+\.)*([\w$]+)$/.exec(args[0])?.[1];
       const resolved = name ? constString(name, file) : undefined;
-      if (resolved !== undefined) { reads.push({ key: resolved, defaultExpr: args[1], where }); continue; }
+      if (resolved !== undefined) { reads.push({ key: resolved, defaultExpr: args[1], where, file }); continue; }
       const forwarded = name && /^\w+$/.test(args[0]) ? forwardedCalls(text, m.index, name) : null;
       const keys = forwarded?.map((call) => {
         const callName = /^(?:[\w$]+\.)*([\w$]+)$/.exec(call.keyExpr)?.[1];
         const key = stringLiteral(call.keyExpr) ?? (callName ? constString(callName, file) : undefined);
-        return key === undefined ? null : { key, defaultExpr: call.defaultExpr, where };
+        return key === undefined ? null : { key, defaultExpr: call.defaultExpr, where, file };
       });
       if (keys?.length && keys.every(Boolean)) reads.push(...keys);
       else reads.push({ unresolved: args[0], where });
@@ -248,7 +255,7 @@ test('inline defaults match the declared default', () => {
   for (const r of reads.filter((x) => x.key && declared.has(x.key))) {
     if (r.defaultExpr === undefined) continue; // the call site supplies no default
     const { decl } = declared.get(r.key);
-    const literal = jsonLiteral(r.defaultExpr);
+    const literal = jsonLiteral(r.defaultExpr) ?? constNumber(r.defaultExpr, r.file);
     if (literal === undefined) {
       if (decl.defaultText === undefined) problems.push(`${r.where}: ${r.key} default "${r.defaultExpr}" is not a literal, so it needs defaultText`);
     } else if (decl.default !== undefined) {

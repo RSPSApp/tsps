@@ -84,10 +84,14 @@ export function checkConfigValue(decl: ConfigOptionDeclaration, value: unknown):
         }
         case "string":
             return typeof value === "string" ? { ok: true, value } : { ok: false, error: "must be text" };
-        case "enum":
-            return decl.values?.some((v) => v.value === value)
-                ? { ok: true, value }
+        case "enum": {
+            // Numeric options are read with Number(), so "5" counts as 5.
+            const asNumber = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+            const match = decl.values?.find((v) => v.value === value || (typeof v.value === "number" && v.value === asNumber));
+            return match
+                ? { ok: true, value: match.value }
                 : { ok: false, error: `must be one of ${(decl.values ?? []).map((v) => v.value).join(", ")}` };
+        }
         case "date": {
             if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
                 return { ok: false, error: "must be a date as YYYY-MM-DD" };

@@ -11,12 +11,18 @@
  */
 const Common = require("./league/Common.LeagueMode");
 
+// The leagues the data file names, so the option's list follows the data.
+const LEAGUE_OPTIONS = [
+  { value: 0, label: "Not a league world" },
+  ...Object.entries(require("./data/leagues.json").leagues).map(([type, league]) => ({ value: Number(type), label: league.name })),
+];
+
 module.exports = {
   name: "LeagueMode",
   config: {
     "league:type": {
-      type: "number", label: "League", default: 0, integer: true, min: 0,
-      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. 0 is a normal world. Current leagues: 1 Twisted, 2 Trailblazer, 3 Shattered Relics, 4 Trailblazer Reloaded, 5 Raging Echoes, 6 Demonic Pacts. Also read by LeagueAreaUnlocks. Restart to change.",
+      type: "enum", label: "League", default: 0, values: LEAGUE_OPTIONS,
+      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change.",
     },
     "league:start": {
       type: "date", label: "League start date", defaultText: "Not set",

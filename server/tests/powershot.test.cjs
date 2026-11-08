@@ -16,6 +16,7 @@ const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
 const { DamageFormulas } = require('../dist/game/content/combat/formula/DamageFormulas');
 const { AccuracyFormulasDpsCalc } = require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
 const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+const { Projectile } = require('../dist/game/model/Projectile');
 
 before(async () => {
   await CachePipeline.initialize(process.cwd());
@@ -81,3 +82,34 @@ test('Powershot remains guaranteed accurate even when its damage roll is zero', 
   assert.equal(hit.getTotalDamage(), 0);
   assert.equal(hit.isAccurate(), true);
 });
+
+for (const weapon of [Items.MAGIC_LONGBOW, Items.MAGIC_COMP_BOW]) {
+  // RSProx 4017/4031: bow draw 426, spotanim 250 (slot 1, height 96), projectile 249 from 41
+  // to 46 + 5 per tile at angle 15, progress 11 - not the arrow's own draw graphic and flight.
+  test(`Powershot (${weapon}) plays the glow-arrow launch graphic and projectile`, t => {
+    const attacker = fighter(t, 3100), target = fighter(t, 3104);
+    attacker.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weapon));
+    attacker.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(Items.RUNE_ARROW, 100));
+    // The harness loads no weapon-interface plugins; the special plays the normal shot's draw.
+    t.mock.method(attacker, 'getAttackAnim', () => 426);
+    const sent = [];
+    t.mock.method(Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+    const slots = [];
+    t.mock.method(attacker, 'performGraphicInSlot', (slot, graphic) => slots.push([slot, graphic]));
+    const animations = [];
+    t.mock.method(attacker, 'performAnimation', animation => animations.push(animation));
+    CombatSpecial.getById('magic_longbow').getCombatMethod().start(attacker, target);
+
+    assert.equal(animations.length, 1);
+    assert.equal(animations[0].getId(), 426);
+    assert.equal(slots.length, 1);
+    assert.equal(slots[0][0], 1);
+    assert.equal(slots[0][1].getId(), 250);
+    assert.equal(slots[0][1].getHeight(), 96);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].projectileId, 249);
+    const timing = sent[0].getTiming();
+    assert.equal(timing.startCycleOffset, 41);
+    assert.equal(timing.endCycleOffset, 41 + 5 + 5 * 4);
+  });
+}

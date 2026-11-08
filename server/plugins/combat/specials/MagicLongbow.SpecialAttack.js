@@ -1,9 +1,17 @@
-// TODO: Powershot special attack animation/graphic ids not found; skipped.
 module.exports = function registerMagicLongbowSpecialAttack(api) {
-  const { CombatPosition, CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, Sound } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Equipment, Graphic, ItemIdentifiers, Misc, PendingHit, Projectile, RangedCombatMethod, Skill, Sound, Sounds, WeaponProfiles } = api.core;
 
   const DRAIN = 35;
   const RANGED_STRENGTH_BONUS_INDEX = 11;
+
+  // RSProx 4017 and 4031 (players wielding a magic longbow): Powershot plays the normal bow
+  // draw (426) with the glowing arrow's launch spotanim (sp_attack_glow_arrow_launch, 250) in
+  // slot 1 at height 96, and fires projectile 249 (sp_attack_glow_arrow_travel) from 41 to
+  // 46 + 5 per tile, heights 163/146 quarter-units (40.75/36.5), angle 15, progress 11. The
+  // shot replaces the ammunition's own draw graphic and projectile.
+  const LAUNCH_GRAPHIC = new Graphic(250, 0, 96);
+  const PROJECTILE_ID = 249;
+  const PROJECTILE = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 40.75, endHeight: 36.5 };
 
   // Powershot uses the visible Ranged level and only the equipped arrow's Ranged Strength.
   function resolvePowershotMaxHit(player) {
@@ -43,8 +51,20 @@ module.exports = function registerMagicLongbowSpecialAttack(api) {
     }
 
     start(character, target) {
+      const player = character.getAsPlayer();
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
+      const animation = character.getAttackAnim(target);
+      if (animation !== -1) character.performAnimation(new Animation(animation));
+      character.performGraphicInSlot(1, LAUNCH_GRAPHIC);
+
+      const end = RangedCombatMethod.projectileEnd(PROJECTILE, CombatPosition.edgeDistance(character, target));
+      Projectile.createProjectile(character, target, PROJECTILE_ID, PROJECTILE.delay, end, PROJECTILE.startHeight, PROJECTILE.endHeight)
+        .withAngle(15).withProgress(11).sendProjectile();
+      Sounds.sendSound(character, this.fireSound(character));
+
+      // The arrow is consumed when the hit lands, like an ordinary shot.
+      const flightTicks = Math.max(1, ...RangedCombatMethod.landingDelays(character, target).map((ticks) => ticks + (target.isNpc() ? 1 : 0)));
+      CombatFactory.decrementAmmo(player, target.getLocation(), WeaponProfiles.ranged(player)?.ammoRequired ?? 1, flightTicks);
     }
 
     fireSound() {

@@ -36,7 +36,16 @@ the target wearing an Elysian and prayer off produced 9/11/13 and 3/12/6
 respectively. Individual shield activations were not observable in these
 checks; the deterministic regressions establish their reduction.
 
-No rsprox recordings of either bow's weapon actions were present in the
-capture index when this change was checked. The sources above establish the
-gameplay rules; exact special animation, graphic and packet timing have not
-been compared against a live recording.
+## Visuals
+
+Powershot plays the normal bow draw (animation 426) with the glowing arrow's launch
+spotanim (`sp_attack_glow_arrow_launch`, 250) in slot 1 at height 96, and fires projectile
+249 (`sp_attack_glow_arrow_travel`) instead of the arrow's own: launched at 41, landing at
+46 + 5 per tile, heights 40.75/36.5, angle 15, progress 11. The arrow's usual draw graphic
+is not shown. Source: RSProx captures 4017 and 4031, where players wielding a magic longbow
+produce exactly this combination (projectile 249 from the player, spotanim 250 on the player
+in the same tick); the RuneLite spotanim names come from `SpotanimID`.
+
+The captures' wielders are other players, so the special-attack toggle itself was not seen;
+the weapon, graphic and projectile were. No capture was found of the local player firing
+either bow's special.

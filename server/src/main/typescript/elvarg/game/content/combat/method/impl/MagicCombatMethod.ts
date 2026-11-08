@@ -10,6 +10,7 @@ import { CombatFactory } from "../../CombatFactory";
 import { CombatType } from "../../CombatType";
 import { PendingHit } from "../../hit/PendingHit";
 import { Mobile } from "../../../../entity/impl/Mobile";
+import { AreaManager } from "../../../../model/areas/AreaManager";
 import { Player } from "../../../../entity/impl/player/Player";
 import { GraphicHeight } from "../../../../model/GraphicHeight";
 import { MagicSpellbook } from "../../../../model/MagicSpellbook";
@@ -126,6 +127,14 @@ export class MagicCombatMethod extends CombatMethod {
                     : 0;
             const isAncientSpell = spell.getSpellbook() === MagicSpellbook.ANCIENT;
             if (!hit.isAccurate() || !isAncientSpell || spellRadius <= 0) {
+                continue;
+            }
+            // Wiki (Ancient Magicks; Multicombat area): the area spells hit more than one target only in multicombat, and
+            // the target's zone decides: a caster on a single-way tile still splashes opponents standing in multi. A
+            // target in single-way splashes no one (an always-multi NPC on either side counts as multi). Each other
+            // victim must be in multi too (canAttackSecondaryTarget).
+            const alwaysMulti = (mobile: Mobile) => mobile.isNpc() && mobile.getAsNpc().isMultiCombat();
+            if (!alwaysMulti(character) && !alwaysMulti(target) && !AreaManager.inMulti(target)) {
                 continue;
             }
 

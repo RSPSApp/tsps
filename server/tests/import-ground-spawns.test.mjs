@@ -82,10 +82,10 @@ test("audited member tools retain source world policy and cannot widen rune or s
  assert.equal(result.definitions[0].respawn,500);
  assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
  const pages=[["Air rune",556],["Body rune",559],["Earth rune",557],["Fire rune",554],
-  ["Mind rune",558],["Nature rune",561],["Water rune",555],["Small fishing net",303]];
+  ["Mind rune",558],["Water rune",555],["Small fishing net",303]];
  const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
  assert.equal(rejected.definitions.length,0);
- assert.equal(rejected.report.counts["members-world-scope-deferred"],8);
+ assert.equal(rejected.report.counts["members-world-scope-deferred"],7);
 });
 test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
@@ -96,4 +96,12 @@ test("audited member tools report conflicting world policy instead of silently g
  const result=importSpawns(source([member]),[old]);
  assert.deepEqual(result.definitions,[old]);
  assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+});
+
+test("audited member Nature rune rows preserve telegrab location text/quantity/timer while Air stays held",()=>{
+ const nature=row({page:"Nature rune",id:561,x:2671,y:3737,quantity:2,infobox_respawn_ticks:200,members:true,location:"Rellekka island (requires Telekinetic Grab)"});
+ const result=importSpawns(source([nature,row({page:"Air rune",id:556,members:true})]),[]);
+ assert.equal(result.definitions.length,1);assert.deepEqual([result.definitions[0].id,result.definitions[0].amt,result.definitions[0].respawn,result.definitions[0].members],[561,2,200,true]);
+ assert.match(result.definitions[0].description,/Telekinetic Grab/);assert.equal(result.report.counts["members-world-scope-deferred"],1);
+ assert.deepEqual(importSpawns(source([nature]),result.definitions).definitions,result.definitions);
 });

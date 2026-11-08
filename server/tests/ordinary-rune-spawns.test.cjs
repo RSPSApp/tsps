@@ -23,7 +23,7 @@ const EXPECTED = [
 ];
 test("audited ordinary F2P rune spawns use real cache IDs, exact tiles, quantities and timers", () => {
   const runeIds = new Set(EXPECTED.map(row => row[0]));
-  assert.equal(spawns.filter(row => runeIds.has(row.id)).length, EXPECTED.length, "this audited batch is exactly23 rune spawns");
+  assert.equal(spawns.filter(row => runeIds.has(row.id) && row.members !== true).length, EXPECTED.length, "this audited batch is exactly23 rune spawns");
   for (const [id,x,y,amount,respawn] of EXPECTED) {
     assert.match(CacheDefinitions.getItem(id)?.name ?? "", /rune$/);
     const found = spawns.filter(s => s.id === id && s.location.x === x && s.location.y === y && s.location.z === 0);

@@ -1876,5 +1876,7 @@
   {"id":1735,"location":{"x":2930,"y":3285,"z":1},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Crafting Guild]] ({{FloorNumber|uk=1}})"},
   {"id":837,"location":{"x":1512,"y":3423,"z":0},"amt":1,"respawn":500,"members":true,"description":"OSRS Wiki: Crossbow — [[Land's End]] - [[Hugor]]'s house"},
   {"id":1735,"location":{"x":1653,"y":3571,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - [[Watson's house]]"},
-  {"id":1735,"location":{"x":1776,"y":3654,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - east of flax field"}
+  {"id":1735,"location":{"x":1776,"y":3654,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - east of flax field"},
+  {"id":561,"location":{"x":2671,"y":3737,"z":0},"amt":2,"respawn":200,"members":true,"description":"OSRS Wiki: Nature rune — [[Rellekka]] - on a small island near the [[rock crab]]s{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"},
+  {"id":561,"location":{"x":2672,"y":3738,"z":0},"amt":2,"respawn":200,"members":true,"description":"OSRS Wiki: Nature rune — [[Rellekka]] - on a small island near the [[rock crab]]s{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"}
 ]

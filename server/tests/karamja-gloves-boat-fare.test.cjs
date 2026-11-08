@@ -11,6 +11,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 
 let core;
 const boats = {};
+let answerCondition;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
@@ -18,6 +19,7 @@ before(async () => {
   const api = new Proxy({ core, getPluginConfig: real.getPluginConfig?.bind(real) }, {
     get: (object, name) => {
       if (name === "onNpcsInteraction") return (names, options) => { for (const n of names) boats[n] = options; };
+      if (name === "onNpcDialogueCondition") return (handler) => { answerCondition = handler; };
       return object[name] ?? real[name] ?? (() => {});
     },
   });
@@ -50,4 +52,21 @@ test("without the gloves the fare stays 30", (t) => {
   const p = traveller(t, null);
   boats["Captain Tobias"].Travel({ player: p });
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.COINS), 70);
+});
+
+test("the boats' not-enough-money answer uses the gloves' 15-coin fare", (t) => {
+  const I = core.ItemIdentifiers;
+  // PWA2Z3, 4EHa7z, FUAwJK: "Oh dear, I don't seem to have enough money." on the Port Sarim boats.
+  const short = (gloves, coins, stepId = "PWA2Z3") => {
+    const p = traveller(t, gloves);
+    p.getInventory().resetItems();
+    if (coins) p.getInventory().setItem(0, new core.Item(I.COINS, coins));
+    return answerCondition({ npcId: -1, player: p, text: "", stepId });
+  };
+  for (const stepId of ["PWA2Z3", "4EHa7z", "FUAwJK"]) {
+    assert.equal(short(I.KARAMJA_GLOVES_1, 15, stepId), false, `${stepId}: 15 coins pay the gloves' fare`);
+    assert.equal(short(I.KARAMJA_GLOVES_1, 14, stepId), true, `${stepId}: 14 coins do not`);
+    assert.equal(short(null, 29, stepId), true, `${stepId}: without gloves 29 coins are short of 30`);
+    assert.equal(short(null, 30, stepId), false, `${stepId}: 30 coins pay without gloves`);
+  }
 });

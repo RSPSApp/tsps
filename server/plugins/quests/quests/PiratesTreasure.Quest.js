@@ -253,7 +253,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
     }
 
     if (SAIL_FARE_CONDITION_IDS.has(stepId)) {
-      return player.getInventory().getAmount(COINS_ITEM_ID) < FARE;
+      // "Not enough money" uses the fare the Travel click charges: 15 in Karamja gloves (Wiki, Seaman Lorris).
+      return player.getInventory().getAmount(COINS_ITEM_ID) < (wearsKaramjaGloves(player) ? GLOVES_FARE : FARE);
     }
 
     if (npcId === ZEMBO_NPC_ID && value === "during alfred grimhand's barcrawl:") {

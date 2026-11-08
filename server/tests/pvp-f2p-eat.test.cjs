@@ -84,6 +84,7 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
   const delays = [];
   const attributes = new Map();
   const combat = { getTarget: () => target, getAttacker: () => attacker, delayAttack: ticks => delays.push(ticks) };
+  let runEnergy = 50;
   const player = {
     getSkillManager: () => ({ getCurrentLevel: () => hp, getMaxLevel: () => 60, stopSkillable() {} }),
     getCombat: () => combat,
@@ -101,9 +102,12 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
       refreshItems: () => {},
     }),
     getTimers: () => timers,
-    getPacketSender: () => ({ sendInterfaceRemoval() {}, sendConfig() {} }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {}, sendConfig() {}, sendRunEnergy() {} }),
     performAnimation: () => {},
     setHitpoints: value => { hp = value; },
+    // Purple sweets also restore run energy (ConsumableEffects.restoreRunEnergy, since 4b1eb224c).
+    getRunEnergy: () => runEnergy,
+    setRunEnergy: value => { runEnergy = value; },
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     isPlayerBot: () => true,

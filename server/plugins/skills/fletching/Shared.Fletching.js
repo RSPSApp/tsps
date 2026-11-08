@@ -259,12 +259,34 @@ function heldAmount(player, material, amountOf = plainAmount) {
   return total;
 }
 
-function batchesAvailable(player, recipe) {
+function fullBatches(player, recipe) {
   let batches = Number.MAX_SAFE_INTEGER;
   for (const material of recipe.materials) {
     batches = Math.min(batches, Math.floor(heldAmount(player, material) / material.amount));
   }
   return batches === Number.MAX_SAFE_INTEGER ? 0 : batches;
+}
+
+/**
+ * Fewer than a set of a one-for-one recipe (feathers on 7 unfinished bolts): as many as are held, live's "You fletch 7
+ * bolts." (rsprox_transcripts/227/01749.txt tick 2824, a Leagues V world). 0 when a full set is held or the recipe
+ * isn't one-for-one.
+ */
+function partialSize(player, recipe) {
+  if (!(recipe.amount > 1) || recipe.amountMax !== recipe.amount || !recipe.materials.every((material) => material.amount === recipe.amount)) return 0;
+  const held = Math.min(...recipe.materials.map((material) => heldAmount(player, material)));
+  return held > 0 && held < recipe.amount ? held : 0;
+}
+
+function scaledRecipe(recipe, made) {
+  return { ...recipe, amount: made, amountMax: made, xp: (recipe.xp * made) / recipe.amount,
+    materials: recipe.materials.map((material) => ({ ...material, amount: made })) };
+}
+
+/** Batches the player can make: full sets, and a last partial one. */
+function batchesAvailable(player, recipe) {
+  const full = fullBatches(player, recipe);
+  return full > 0 ? full : partialSize(player, recipe) > 0 ? 1 : 0;
 }
 
 function hasTools(player, recipe) {
@@ -362,12 +384,13 @@ function formatMessage(message, amount) {
 }
 
 /** One batch: checks, materials out, product in, XP, animation, sound and message. */
-function makeBatch(player, recipe, via, provenance = null) {
-  if (fletchingLevel(player) < recipe.level) {
-    player.sendMessage(`You need a Fletching level of at least ${recipe.level} to do this.`);
+function makeBatch(player, wholeRecipe, via, provenance = null) {
+  if (fletchingLevel(player) < wholeRecipe.level) {
+    player.sendMessage(`You need a Fletching level of at least ${wholeRecipe.level} to do this.`);
     return false;
   }
-  if (!hasTools(player, recipe) || batchesAvailable(player, recipe) <= 0) return false;
+  if (!hasTools(player, wholeRecipe) || batchesAvailable(player, wholeRecipe) <= 0) return false;
+  const recipe = fullBatches(player, wholeRecipe) > 0 ? wholeRecipe : scaledRecipe(wholeRecipe, partialSize(player, wholeRecipe));
   const plan = materialPlan(player, recipe, via);
   if (!plan.complete) return false;
   const amount = recipe.amountMax > recipe.amount

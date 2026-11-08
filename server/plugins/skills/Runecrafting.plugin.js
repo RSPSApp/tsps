@@ -36,6 +36,8 @@ let OURANIA_ALTAR;
 let OURANIA_RUNES;
 let OURANIA_ESSENCE;
 let ABYSS_INNER_RING;
+/** Where the Mage of Zamorak lands a player: the outer ring (Wiki: Abyss; rsprox_transcripts/226/01636.txt). */
+let ABYSS_OUTER_RING_LANDING;
 
 const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
@@ -149,6 +151,7 @@ function initialize(api) {
   CRAFT_RUNES_ANIMATION = new Animation(791);
   RUNE_ESSENCE_MINE = new Location(2913, 4832, 0);
   ABYSS_INNER_RING = new Location(3040, 4839, 0);
+  ABYSS_OUTER_RING_LANDING = new Location(3063, 4824, 0);
   // rc_zmi_dungeon_cracked_center_altar.
   OURANIA_ALTAR = ObjectIdentifiers.ALTAR_31;
   OURANIA_RUNES = OURANIA_DATA.runes.map((rune) => ({ ...rune, runeId: ItemIdentifiers[rune.rune] }));
@@ -904,7 +907,7 @@ function teleportToAbyss(player) {
     player.sendMessage(ABYSS_LOCKED_MESSAGE);
     return;
   }
-  if (!TeleportHandler.checkReqs(player, ABYSS_INNER_RING)) {
+  if (!TeleportHandler.checkReqs(player, ABYSS_OUTER_RING_LANDING)) {
     return;
   }
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
@@ -913,7 +916,8 @@ function teleportToAbyss(player) {
     pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
   }
   // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
-  requestTeleport(player, ABYSS_INNER_RING, () => {
+  // The outer ring: its obstacles (the inner ring's way in) and its monsters come first.
+  requestTeleport(player, ABYSS_OUTER_RING_LANDING.clone(), () => {
     pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
   });
 }

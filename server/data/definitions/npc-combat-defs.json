@@ -886,7 +886,22 @@
     "16659": {"name": "Archive Guardian", "anims": {"attack": 14751, "block": -1, "death": 14749}},
     "16660": {"name": "Archive Guardian", "anims": {"attack": 14752, "block": -1, "death": 14749}},
     "16662": {"name": "Inert Guardian", "anims": {"block": -1, "death": 15025}},
-    "16664": {"name": "Vine", "anims": {"attack": 14768, "block": -1, "death": 14769}}
+    "16664": {"name": "Vine", "anims": {"attack": 14768, "block": -1, "death": 14769}},
+    "796": {"name": "Locust rider", "projectile": 13, "launchGraphic": 22},
+    "3160": {"name": "Spiritual ranger", "projectile": 15, "launchGraphic": 24},
+    "3272": {"name": "Guard", "projectile": 10, "launchGraphic": 19},
+    "3274": {"name": "Guard", "projectile": 10, "launchGraphic": 19, "anims": {"attack": 426}},
+    "3428": {"name": "Iorwerth Archer", "projectile": 249, "launchGraphic": 250},
+    "4096": {"name": "Archer", "projectile": 9, "launchGraphic": 18},
+    "7420": {"name": "Zamorak ranger", "projectile": 12, "launchGraphic": 21},
+    "7421": {"name": "Zamorak ranger", "projectile": 12, "launchGraphic": 21},
+    "11947": {"name": "Guard", "projectile": 10, "launchGraphic": 19, "anims": {"attack": 426}},
+    "13467": {"name": "Elite Dark Ranger", "projectile": 14, "launchGraphic": 23, "anims": {"attack": 426}},
+    "13468": {"name": "Elite Dark Ranger", "projectile": 14, "launchGraphic": 23, "anims": {"attack": 426}},
+    "14407": {"name": "Emissary Archer", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
+    "14408": {"name": "Emissary Archer", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
+    "14665": {"name": "Guard", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
+    "14666": {"name": "Guard", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}}
   },
   "refs": {
     "$comment": "Additional NPC combat sequences inferred from cache-backed reference sequence names.",

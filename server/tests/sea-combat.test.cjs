@@ -24,6 +24,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
 const { CombatPosition } = require("../dist/game/content/combat/CombatPosition");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
+const { FightType } = require("../dist/game/content/combat/FightType");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 
 const common = require("../plugins/skills/sailing/seacombat/Common.SeaCombat");
@@ -242,9 +243,11 @@ test("a player's cannon max hit: their ranged max hit with the cannon's and cann
   player.getPacketSender = () => sender;
   player.getSkillManager().setCurrentLevel(Skill.RANGED, 99, false);
   player.getSkillManager().setMaxLevel?.(Skill.RANGED, 99, false);
+  // Fresh accounts default to Punch (Accurate, +3) since b8210f5d9; this case is the style with no level bonus.
+  player.setFightType(FightType.UNARMED_KICK);
   const rune = common.cannonAt(59451);
   const ball = common.ballByItem(RUNE_CANNONBALL);
-  // 99 Ranged, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49.
+  // 99 Ranged, no style bonus, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49.
   assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49);
 });
 

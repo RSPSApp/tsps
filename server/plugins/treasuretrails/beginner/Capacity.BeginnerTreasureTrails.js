@@ -87,7 +87,8 @@ module.exports = function attachCapacity(pluginApi) {
     request.handled = true;
   });
   api.onCustomEvent("npc-drops:roll", filterDrops);
-  api.onItemAction("Scroll box (beginner)", { Open: openBox });
+  // "Scroll box (beginner)" Open belongs to ClueCapacity alone: it registers after this plugin, and a handler here
+  // took the click first and skipped its refusal while a beginner clue is held (bank, grave or retrieval included).
   api.onItemAction("Minor beginner scroll case", { Open: openCase });
   api.onItemAction("Major beginner scroll case", { Open: openCase });
   api.onPlayerLogin(sync);

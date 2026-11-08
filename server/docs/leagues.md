@@ -1395,7 +1395,10 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   damage node's "+10% accuracy in all combat styles" is applied by its own style's unit (7 Magic,
   14 Melee, 15 Ranged); General has the +% accuracy pact. PvP (Wiki): stat boosts, attack speed
   and melee range apply against players; Thorns, Echoes, Blindbag, reflect and the hit-forcing
-  pacts do not.
+  pacts do not. Thorns pays combat XP for its damage like a melee hit, on the tick the NPC's hit
+  lands: the current melee style's skills and Hitpoints, or Attack with a weapon that is no melee
+  weapon or while autocasting, whatever style came before (rsprox captures, Leagues VI: 237/01104,
+  237/04057, 237/04099, 238/04142); its second hit pays too (ours, not captured).
 - **Readings of ours** (the units' heads list every one): off-hands are shield-slot items that are
   not shields, and shields go by name (the cache's category 18 agrees but for the crystal shield,
   and plugins cannot read it); min-hit pacts act only on hits past accuracy (a miss stays 0, as

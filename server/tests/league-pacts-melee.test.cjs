@@ -31,6 +31,7 @@ let realRandomInclusive;
 const ITEMS = {
   runeKiteshield: 1201, dragonDefender: 12954, whip: 4151, runeScimitar: 1333, godsword: 11802,
   halberd: 3204, bulwark: 21015, graniteMaul: 4153, elderMaul: 21003, ringOfRecoil: 2550,
+  magicShortbow: 861, earthBattlestaff: 1399,
 };
 const HILL_GIANT = 2098;
 
@@ -482,6 +483,76 @@ test("Thorns: with a shield, an NPC's attack takes 3 per hitsplat, also on 0; tw
     hooks.onCombatHitResolved({ attacker, target: other, hit: landed(core.CombatType.MELEE, [splat(0)]) });
   }
   assert.deepEqual(attacker.damage, [4, 2]);
+});
+
+test("Thorns pays the current melee style's XP; Attack off a melee weapon or autocasting (rsprox captures)", () => {
+  const xp = (player) => {
+    const gained = {};
+    const skills = player.getSkillManager();
+    skills.addExperience = (skill, amount) => {
+      gained[skill.getName?.() ?? String(skill)] = (gained[skill.getName?.() ?? String(skill)] ?? 0) + amount;
+      return skills;
+    };
+    return gained;
+  };
+  const style = (player, fightStyle) => (player.getFightType = () => ({ getStyle: () => fightStyle }));
+  const thornsHit = (player, attacker = giant()) =>
+    hooks.onCombatHitResolved({ attacker, target: player, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  const name = (skill) => skill.getName?.() ?? String(skill);
+  const { ATTACK, STRENGTH, DEFENCE, HITPOINTS } = Skill;
+  const close = (actual, expected, message) => {
+    assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort(), message);
+    for (const [key, amount] of Object.entries(expected)) assert.ok(Math.abs(actual[key] - amount) < 1e-9, `${message}: ${key} ${actual[key]}`);
+  };
+
+  const thorns = { [effect("thorns_damage")]: 1 };
+  const player = character("pact-thorns-xp", { pacts: thorns });
+  shield(player, ITEMS.runeKiteshield);
+  wield(player, ITEMS.runeScimitar);
+  for (const [fightStyle, expected, message] of [
+    [core.FightStyle.ACCURATE, { [name(ATTACK)]: 12, [name(HITPOINTS)]: 4 }, "Accurate: Attack"],
+    [core.FightStyle.AGGRESSIVE, { [name(STRENGTH)]: 12, [name(HITPOINTS)]: 4 }, "Aggressive: Strength"],
+    [core.FightStyle.DEFENSIVE, { [name(DEFENCE)]: 12, [name(HITPOINTS)]: 4 }, "Defensive: Defence"],
+    [core.FightStyle.CONTROLLED, { [name(ATTACK)]: 4, [name(STRENGTH)]: 4, [name(DEFENCE)]: 4, [name(HITPOINTS)]: 4 }, "Controlled: shared"],
+  ]) {
+    style(player, fightStyle);
+    const gained = xp(player);
+    thornsHit(player);
+    close(gained, expected, message);
+  }
+
+  // 238/04142: a tentacle on Controlled, then a shadowflame quadrant: Attack. 237/04099: a thrown knife.
+  wield(player, ITEMS.magicShortbow);
+  style(player, core.FightStyle.AGGRESSIVE);
+  let gained = xp(player);
+  thornsHit(player);
+  close(gained, { [name(ATTACK)]: 12, [name(HITPOINTS)]: 4 }, "a ranged weapon on Rapid: Attack");
+  // 237/04057: an earth battlestaff autocasting (its pound style is Aggressive here): Attack.
+  wield(player, ITEMS.earthBattlestaff);
+  player.getCombat().setAutocastSpell({});
+  gained = xp(player);
+  thornsHit(player);
+  close(gained, { [name(ATTACK)]: 12, [name(HITPOINTS)]: 4 }, "autocasting: Attack");
+  player.getCombat().setAutocastSpell(null);
+  gained = xp(player);
+  thornsHit(player);
+  close(gained, { [name(STRENGTH)]: 12, [name(HITPOINTS)]: 4 }, "the staff in melee: its style");
+
+  const double = character("pact-thorns-xp-double", { pacts: { ...thorns, [effect("thorns_double_hit")]: 1 } });
+  shield(double, ITEMS.runeKiteshield);
+  wield(double, ITEMS.runeScimitar);
+  style(double, core.FightStyle.ACCURATE);
+  gained = xp(double);
+  thornsHit(double);
+  close(gained, { [name(ATTACK)]: 16, [name(HITPOINTS)]: 16 / 3 }, "the second hit (1) pays too");
+
+  shield(player, ITEMS.dragonDefender);
+  gained = xp(player);
+  thornsHit(player);
+  close(gained, {}, "no Thorns with an off-hand: no XP");
+  gained = xp(double);
+  thornsHit(double, character("pact-thorns-xp-pker"));
+  close(gained, {}, "nor on a player's attack");
 });
 
 test("a shield reflects an NPC's whole hit on 0.1% per Defence level", () => {

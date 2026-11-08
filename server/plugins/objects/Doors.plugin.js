@@ -652,6 +652,9 @@ const COORD_OFFSETS = Object.freeze([
   [0, -1],
 ]);
 
+// Normals of each closed diagonal leaf, used to retain the opener's approach side.
+const DIAGONAL_DOOR_NORMALS = Object.freeze([[1, -1], [-1, -1], [-1, 1], [1, 1]]);
+
 // Double-door leaves turn opposite ways when they open: the face each closed face turns to.
 const LEFT_LEAF_OPEN_FACES = Object.freeze([3, 0, 1, 0]);
 const RIGHT_LEAF_OPEN_FACES = Object.freeze([1, 2, 3, 2]);
@@ -1307,20 +1310,38 @@ function handleMappedDoor(player, object, objectId, location) {
   const nextRotation = open ? ((rotation + 1) & 0x3) : rotation;
   const offsetIndex = type === 9 ? ((nextRotation + 1) & 0x3) : nextRotation;
   const [dx, dy] = inPlace || OWN_TILE_DOOR_IDS.has(closedId) ? [0, 0] : (COORD_OFFSETS[offsetIndex] ?? [0, 0]);
+  const approach = DIAGONAL_DOOR_APPROACHES.get(player);
+  DIAGONAL_DOOR_APPROACHES.delete(player);
   const previousObject = activeObject;
-  const nextObject = open && existingState?.closed?.[0]
-    ? objectFromSnapshot(existingState.closed[0])
-    : new core.GameObject(
-      nextId,
-      cloneLocation(
-        (activeLocation.getX?.() ?? activeLocation.x ?? 0) + dx,
-        (activeLocation.getY?.() ?? activeLocation.y ?? 0) + dy,
-        activeLocation.getZ?.() ?? activeLocation.z ?? 0
-      ),
-      type,
-      inPlace ? rotation : open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
-      privateArea
+  const closedSnapshot = open ? existingState?.closed?.[0] : null;
+  const nextLocation = closedSnapshot
+    ? cloneLocation(closedSnapshot.location.x, closedSnapshot.location.y, closedSnapshot.location.z)
+    : cloneLocation(
+      (activeLocation.getX?.() ?? activeLocation.x ?? 0) + dx,
+      (activeLocation.getY?.() ?? activeLocation.y ?? 0) + dy,
+      activeLocation.getZ?.() ?? activeLocation.z ?? 0
     );
+  const nextFace = closedSnapshot?.face ?? (inPlace ? rotation : (rotation + (open ? -1 : 1)) & 3);
+  if (type === 9 && player.getLocation().equals(nextLocation)) {
+    // A reachable leaf can swing onto the opener: keep their original approach side clear.
+    const closedLocation = open ? nextLocation : activeLocation;
+    const [normalX, normalY] = DIAGONAL_DOOR_NORMALS[open ? nextFace : rotation];
+    const [stepX, stepY] = open ? [normalX, normalY] : COORD_OFFSETS[rotation];
+    const source = approach?.object === object && approach.area === privateArea && approach.source?.z === nextLocation.getZ()
+      ? approach.source : player.getLocation();
+    const sideOf = (at) => (at.x - closedLocation.getX()) * normalX + (at.y - closedLocation.getY()) * normalY;
+    const normalSide = Math.sign(sideOf(source)) || Math.sign(sideOf(player.getLocation())) || 1;
+    const reverse = normalSide * (stepX * normalX + stepY * normalY) < 0 ? -1 : 1;
+    const steps = [[stepX * reverse, stepY * reverse], [normalX * normalSide, 0], [0, normalY * normalSide]];
+    const destination = steps.map(([x, y]) => cloneLocation(nextLocation.getX() + x,
+      nextLocation.getY() + y, nextLocation.getZ()))
+      .find((at) => sideOf(at) * normalSide > 0 && player.getMovementQueue().canWalkTo(at));
+    if (!destination) return true;
+    player.moveTo(destination);
+  }
+  const nextObject = closedSnapshot
+    ? objectFromSnapshot(closedSnapshot)
+    : new core.GameObject(nextId, nextLocation, type, nextFace, privateArea);
 
   core.ObjectManager.deregister(previousObject, true);
   core.ObjectManager.register(nextObject, true);
@@ -1781,10 +1802,17 @@ function readDoorState(event) {
   event.objects = [...current];
 }
 
+const DIAGONAL_DOOR_APPROACHES = new WeakMap();
+
 function routeWallDoor(event) {
+  DIAGONAL_DOOR_APPROACHES.delete(event.player);
   const name = event.definition?.getName?.() ?? "";
-  if (event.object?.getType?.() !== 0 ||
-    (!DOOR_NAMES.has(name) && !/\b(?:doors?|doorway|gates?)\b/i.test(name))) return;
+  if (!DOOR_NAMES.has(name) && !/\b(?:doors?|doorway|gates?)\b/i.test(name)) return;
+  if (event.object?.getType?.() === 9) {
+    DIAGONAL_DOOR_APPROACHES.set(event.player, { object: event.object, area: event.player.getPrivateArea?.() ?? null, source: { ...event.sourceLocation } });
+    return;
+  }
+  if (event.object?.getType?.() !== 0) return;
   // A closed straight wall door is used across its face, never from either end of the wall.
   // An open leaf stands across the doorway instead, and the tile inside the doorway is at its
   // end, so it keeps ordinary wall reach: closing it from inside doesn't walk the player out.

@@ -231,7 +231,7 @@ export class PendingHit {
         this.protectionBypassed = true;
     }
 
-    /** The attack kind whose protection prayer is checked at impact. */
+    /** The attack kind whose protection prayer is checked when the hit is queued. */
     public getProtectionType(): CombatType {
         return this.protectionType;
     }

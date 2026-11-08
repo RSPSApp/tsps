@@ -303,13 +303,6 @@ export class CombatFactory {
     }
 
     /**
-     * Applies the victim's defensive reactions when a pre-rolled hit actually lands.
-     * Protection prayers are read now (a last-tick flick counts) and Elysian / incoming
-     * damage modifiers react now rather than when the attack was launched. The roll was
-     * already capped to the target's HP at roll time, so a heal after the roll can make
-     * the hit non-lethal.
-     */
-    /**
      * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
      * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
      * hit, and before its XP); a hit queued when it lands (Scurrius' bolts, the Leviathan's bite) is read then. The
@@ -341,6 +334,13 @@ export class CombatFactory {
         if (typeof hit.updateTotalDamage === "function") hit.updateTotalDamage();
     }
 
+    /**
+     * Applies the victim's defensive reactions when a pre-rolled hit actually lands.
+     * Elysian and other incoming-damage modifiers react now rather than when the attack
+     * was launched; the protection prayer was already applied when the hit was queued
+     * (applyProtectionPrayer). The roll was already capped to the target's HP at roll
+     * time, so a heal after the roll can make the hit non-lethal.
+     */
     public static applyHitTimeDefences(hit: PendingHit): void {
         if (!hit || typeof hit.getHits !== "function") {
             return;
@@ -423,8 +423,8 @@ export class CombatFactory {
      * NpcDefinitions carry a single max hit (the wiki's highest style), so a boss
      * whose styles cap differently passes the cap for the style it rolled - the
      * bounds ride as flat bonuses so the exact integer max survives
-     * rollSpecialDamage's floor. Protection prayers still reduce the result at
-     * impact unless bypassProtectionPrayer is set. Damage is capped to the
+     * rollSpecialDamage's floor. Protection prayers still reduce the result
+     * when the hit is queued unless bypassProtectionPrayer is set. Damage is capped to the
      * target's current hitpoints, matching the cap PendingHit rolls with.
      */
     public static applyStyleDamage(
@@ -977,8 +977,9 @@ export class CombatFactory {
             return;
         }
 
-        // Defensive reactions are read on the impact tick, not when the attack was rolled,
-        // and before target-side consumers such as Nightmare Zone absorption spend the hit.
+        // Defensive reactions are read on the impact tick, not when the attack was rolled (the protection
+        // prayer was applied when the hit was queued), and before target-side consumers such as Nightmare
+        // Zone absorption spend the hit.
         CombatFactory.applyHitTimeDefences(qHit);
 
         // Before target takes damage, manipulate the hit to handle last-second effects.

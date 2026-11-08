@@ -57,7 +57,11 @@ function guardDoor(request) {
   if (request.handled || request.objectId !== core.ObjectIdentifiers.GUILD_DOOR) return;
   const { player } = request;
   if (inside(player)) return; // leaving is never stopped
-  if (rangedLevel(player) >= REQUIRED_LEVEL) return; // let the gate carry them across
+  if (rangedLevel(player) >= REQUIRED_LEVEL) {
+    // Let the gate carry them across: entering by the door is the Kandarin Diary's "Enter the Ranging Guild".
+    api.emitCustomEvent("diary:task", { player, diary: "kandarin", task: "enter-the-ranging-guild" });
+    return;
+  }
   request.handled = true;
   refuse(player);
 }

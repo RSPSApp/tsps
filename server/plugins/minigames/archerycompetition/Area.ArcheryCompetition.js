@@ -14,14 +14,9 @@ const PLANE = 0;
 
 module.exports = function registerArea(pluginApi) {
   const { core } = pluginApi;
+  // "Enter the Ranging Guild" is credited by the guild door (RangingGuild.plugin): this rectangle runs past the
+  // diagonal fence, so arriving at its north-west corner (a combat bracelet's 2655,3443) isn't entering the guild.
   class RangingGuildRange extends core.Area {
-    postEnter(mobile) {
-      if (!mobile.isPlayer()) return;
-      pluginApi.emitCustomEvent("diary:task", {
-        player: mobile.getAsPlayer(), diary: "kandarin", task: "enter-the-ranging-guild",
-      });
-    }
-
     postLeave(mobile) {
       if (!mobile.isPlayer()) return;
       Session.endRound(mobile.getAsPlayer());

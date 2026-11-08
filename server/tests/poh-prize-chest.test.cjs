@@ -75,28 +75,30 @@ function gamesActor(t) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
   const connection = new ClientConnection(channel); connection.player = p;
+  let index;
+  t.after(() => {
+    try {
+      if (p.isRegistered()) PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+    } finally {
+      try { House.releaseHouse(p, true); }
+      finally {
+        p.closeInterruptibleInterfaces();
+        if (index !== undefined) core.TaskManager.cancelTasks(`construction:ranging:${index}`);
+        if (p.isRegistered()) core.World.getPlayers().remove(p);
+      }
+    }
+    assert.equal(House.houseFor(p), null);
+    if (index !== undefined) assert.equal(core.TaskManager.hasActiveTask(`construction:ranging:${index}`), false);
+  });
   p.setUsername(`pohgame${++nativeActorId}`);
   p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
   p.setAttribute("bot-skip-persistence", true);
   assert.equal(core.World.getPlayers().add(p), true);
-  const index = p.getIndex(), messages = [], strings = [];
+  index = p.getIndex();
+  const messages = [], strings = [];
   const sendMessage = p.sendMessage.bind(p), sendString = p.getPacketSender().sendString.bind(p.getPacketSender());
   t.mock.method(p, "sendMessage", text => { messages.push(text); return sendMessage(text); });
   t.mock.method(p.getPacketSender(), "sendString", (text, component) => { strings.push({ text, component }); return sendString(text, component); });
-  t.after(() => {
-    try { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); }
-    finally {
-      try { House.releaseHouse(p, true); }
-      finally {
-        p.closeInterruptibleInterfaces();
-        core.TaskManager.cancelTasks(`construction:ranging:${index}`);
-        core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(index);
-        core.World.getPlayers().remove(p);
-      }
-    }
-    assert.equal(House.houseFor(p), null);
-    assert.equal(core.TaskManager.hasActiveTask(`construction:ranging:${index}`), false);
-  });
   return { p, connection, messages, strings };
 }
 
@@ -220,4 +222,33 @@ test("a delayed owner answer cannot replace a game started by a visitor", async 
   assert.ok(guest.strings.some(value => value.text === "Winner!"));
   assert.equal(guest.messages.includes("A little key appears in your pack!"), false);
   assert.equal(scene.house.save.prize, 1000);
+});
+
+test("a prize taken while the offer is open is not awarded by the later answer", async t => {
+  const owner = gamesActor(t), guest = gamesActor(t), scene = gamesHouse(owner);
+  scene.house.enter(guest.p); equipDarts(owner); shootAt(owner, scene);
+  const key = require("../plugins/skills/construction/Ids.Construction").obj("poh_prize_key");
+  guest.p.getInventory().add(new core.Item(key, 1), false);
+  const chest = scene.house.furnitureEntries().find(entry => entry.furniture.buildableKey === "OAK_PRIZE_CHEST")?.furniture;
+  assert.ok(chest);
+  const object = scene.house.furnitureObjects.find(candidate => {
+    const at = candidate.getLocation();
+    return scene.house.getFurnitureAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, candidate.getId(), candidate.getType()) === chest;
+  });
+  assert.ok(object);
+  const at = object.getLocation(), id = object.getId();
+  const definition = core.ObjectDefinition.forPlayer(id, guest.p) ?? core.ObjectDefinition.forId(id);
+  const click = definition.getInteractions().findIndex(action => action?.toLowerCase() === "open") + 1;
+  assert.ok(click > 0);
+  const location = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  guest.p.moveTo(new core.Location(location.x - 1, location.y, location.z));
+  assert.equal(PM.emitObjectInteraction({ player: guest.p, object, objectId: id, definition, clickType: click,
+    location, sourceLocation: { x: location.x - 1, y: location.y, z: location.z }, handled: false }), true);
+  assert.equal(scene.house.save.prize, 0);
+  assert.equal(guest.p.getInventory().getAmount(I.COINS), 1000);
+  await chooseGamePrompt(owner, "Yes");
+  for (let shot = 1; shot < 10; shot++) { gameTicks(3); shootAt(owner, scene); }
+  gameTicks(3);
+  assert.ok(owner.strings.some(value => value.text === "Winner!"));
+  assert.equal(owner.messages.includes("A little key appears in your pack!"), false);
 });

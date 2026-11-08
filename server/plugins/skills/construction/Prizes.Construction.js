@@ -100,7 +100,7 @@ function offer(player, house, game, start, valid = null) {
   const canStart = () => !valid || valid();
   if (house.owner !== player || prizeOf(house) <= 0 || offeredTo.has(house) || !chestIn(house)) return canStart() && start();
   api.sendMultiChatboxPrompt(player, "Offer the prize for this game?",
-    "Yes", () => { if (canStart()) { if (!valid || !offeredTo.has(house)) offeredTo.set(house, game); start(); } },
+    "Yes", () => { if (canStart()) { if (!valid || (!offeredTo.has(house) && prizeOf(house) > 0 && chestIn(house))) offeredTo.set(house, game); start(); } },
     "No", () => { if (canStart()) start(); });
 }
 

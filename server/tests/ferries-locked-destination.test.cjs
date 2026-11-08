@@ -66,3 +66,17 @@ test('control: an open landing takes the fare and sails', (t) => {
   assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.COINS), 4000);
   assert.equal(Common.travelling(f.p), true);
 });
+
+// #3809 review: TeleportHandler.checkReqs ends a running teleblock outside the Wilderness, so asking it before every
+// boat trip ended the teleblock; the boats now ask only the destination (TeleportHandler.destinationAllowed).
+test('a teleblocked passenger keeps the teleblock through a refused and a successful ferry trip', (t) => {
+  for (const refuse of [true, false]) {
+    const f = passenger(t);
+    refused = refuse ? 'waterbirth' : null;
+    const timer = f.p.getCombat().getTeleblockTimer();
+    timer.start(300);
+    Routes.transcriptStep({ player: f.p, stepId: STEP, handled: false });
+    assert.equal(Common.travelling(f.p), !refuse, refuse ? 'refused' : 'sails');
+    assert.equal(timer.finished(), false, `the teleblock still runs (${refuse ? 'refused' : 'sailed'})`);
+  }
+});

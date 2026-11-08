@@ -252,3 +252,22 @@ test("a destination the passenger may not go to is refused before the fare is ta
   assert.equal(f.p.getLocation().getX(), start.getX(), "not sailed");
   assert.equal(f.p.getLocation().getY(), start.getY());
 });
+
+test("a teleblocked passenger keeps the teleblock through a refused and a successful charter", (t) => {
+  for (const refuse of [true, false]) {
+    const f = setup(t, { ring: false });
+    const deck = f.to.deck;
+    let on = true;
+    PM.createApi(`CharterTeleblock${refuse}`).onCanTeleport((event) => {
+      if (!on || !refuse || event.player !== f.p || event.destination?.getX?.() !== deck.x || event.destination?.getY?.() !== deck.y) return;
+      event.allow = false;
+    });
+    t.after(() => { on = false; });
+    const timer = f.p.getCombat().getTeleblockTimer();
+    timer.start(300);
+    Charter.offerFare(f.p, f.to, f.fare());
+    click(f);
+    assert.equal(f.inv.getAmount(I.COINS), refuse ? 100000 : 100000 - f.fare(), refuse ? "no fare" : "the fare paid");
+    assert.equal(timer.finished(), false, `the teleblock still runs (${refuse ? "refused" : "sailed"})`);
+  }
+});

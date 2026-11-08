@@ -370,8 +370,9 @@ function sail(player, destination, fare, dontAskAgain = false) {
   }
   // The deck must be a place the passenger may go before the fare is taken: a league area still locked refuses
   // here ("You haven't unlocked that area yet.") rather than taking the coins and sending them back on landing
-  // (Wiki: Charter ship). The same check BarnabyFerry makes.
-  if (!core.TeleportHandler.checkReqs(player, new core.Location(destination.deck.x, destination.deck.y, destination.deck.z))) {
+  // (Wiki: Charter ship). Only the destination is asked (TeleportHandler.destinationAllowed): a voyage is no teleport,
+  // so it leaves a teleblock running, as before.
+  if (!core.TeleportHandler.destinationAllowed(player, new core.Location(destination.deck.x, destination.deck.y, destination.deck.z))) {
     return;
   }
   const voyage = { landing: false, from: port };

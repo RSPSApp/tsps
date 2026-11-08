@@ -287,13 +287,13 @@ const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, r
 
 /**
  * Whether the passenger may go where the route lands: a league area still locked refuses, with its own line, through
- * the teleport checks every travel asks (TeleportHandler.checkReqs, as BarnabyFerry and the charter ships do), so a
- * trip never starts (nor a fare goes) only to be sent back on landing.
+ * the content checks teleports ask (TeleportHandler.destinationAllowed, as the charter ships do; not checkReqs, which
+ * would end a running teleblock), so a trip never starts (nor a fare goes) only to be sent back on landing.
  */
 function canGo(player, routeName) {
   const route = Common.route(routeName);
   if (!route?.to) return true;
-  return Common.core.TeleportHandler.checkReqs(player, Common.toLocation(route.to));
+  return Common.core.TeleportHandler.destinationAllowed(player, Common.toLocation(route.to));
 }
 
 /** Sends the player on a route by name; false if they're already travelling, it's unknown or they may not go. */

@@ -36,6 +36,19 @@ Amascut) and other reward chests are not affected.
 }
 ```
 
+## Skilling pet rates
+
+`pluginConfig` `"Pets:skillingPetMultiplier"` makes every skilling pet roll that many times likelier.
+`1` (or leaving it out) is the OSRS rate: 1 in (base - level x 25) per action, fifteen times as
+likely at 200M XP. At `10` a 1/5,000 roll is 1/500; a roll never gets better than 1/1. It covers
+every skill's pet (Rift Guardian and the chinchompa colours included), not boss or minigame pets.
+
+```json
+{
+  "pluginConfig": { "Pets:skillingPetMultiplier": 10 }
+}
+```
+
 ## Cross-floor visibility and combat
 
 Set `pluginConfig` `"CrossFloor:visibility"` to sync nearby players, NPCs, ground items and

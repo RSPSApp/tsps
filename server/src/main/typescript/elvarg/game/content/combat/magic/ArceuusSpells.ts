@@ -197,7 +197,7 @@ export class ArceuusSpells {
             id: 8796, level: 92, experience: 180, runes: [rune(565), rune(21880)],
             cooldown: { attribute: "arceuus:offering-until", duration: 5_400 },
             animation: 8975, graphic: 1872,
-            blocked: (player) => player.getSkillManager().getMaxLevel(Skill.PRAYER) < 70 ? "You require a Prayer level of 70 to do that." : null,
+            blocked: (player) => ArceuusOfferings.sinisterRefusal(player),
             effect: (player) => ArceuusOfferings.sinister(player),
         })],
         // Wiki: a minute to make one kill, once every 60 seconds; recording 4102 for the cast's state.

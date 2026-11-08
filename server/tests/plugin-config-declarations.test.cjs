@@ -28,32 +28,72 @@ function load(plugins, pluginConfig = {}) {
   PluginManager.pluginConfigDeclarations.clear();
   PluginManager.pluginConfigCache = pluginConfig;
   const warnings = [];
+  const errors = [];
   const originalWarn = console.warn;
   const originalInfo = console.info;
+  const originalError = console.error;
   console.warn = (...args) => warnings.push(args.join(' '));
+  console.error = (...args) => errors.push(args.join(' '));
   console.info = () => {};
   try {
     PluginManager.loadFromDirectory(dir);
   } finally {
     console.warn = originalWarn;
     console.info = originalInfo;
+    console.error = originalError;
     fs.rmSync(dir, { recursive: true, force: true });
   }
+  warnings.errors = errors;
   return warnings;
 }
 
-test('two plugins declaring the same key fail the load, naming both and the key', () => {
-  assert.throws(
-    () => load({ A: plugin('Alpha', { 'Shared:count': COUNT }), B: plugin('Beta', { 'Shared:count': COUNT }) }),
-    (err) => /Shared:count/.test(err.message) && /Alpha/.test(err.message) && /Beta/.test(err.message),
-  );
+const loaded = () => [...PluginManager.loadedPlugins].sort();
+
+test('two loading plugins declaring the same key: logged, the later one loses the key, both still load', () => {
+  const { errors } = load({ A: plugin('Alpha', { 'Shared:count': COUNT }), B: plugin('Beta', { 'Shared:count': COUNT, 'Beta:own': COUNT }) });
+  assert.deepEqual(loaded(), ['Alpha', 'Beta']);
+  assert.ok(errors.some((e) => /Shared:count/.test(e) && /Alpha/.test(e) && /Beta/.test(e)), errors.join('\n'));
+  const all = PluginManager.getConfigDeclarations();
+  assert.equal(all.get('Shared:count').owner, 'Alpha');
+  assert.equal(all.get('Beta:own').owner, 'Beta');
 });
 
-test('an invalid declaration fails the load with the validation problem', () => {
-  assert.throws(
-    () => load({ A: plugin('Alpha', { 'Alpha:bad': { type: 'number', label: 'Bad', help: 'x' } }) }),
-    /Alpha:bad: set exactly one of default or defaultText/,
-  );
+test('a plugin redeclaring a core key keeps loading and the core keeps the key', () => {
+  const { errors } = load({ A: plugin('Alpha', { 'CrossFloor:combat': COUNT }) });
+  assert.deepEqual(loaded(), ['Alpha']);
+  assert.ok(errors.some((e) => /CrossFloor:combat/.test(e) && /core/.test(e)), errors.join('\n'));
+  assert.equal(PluginManager.getConfigDeclarations().get('CrossFloor:combat').owner, 'core');
+});
+
+test('an invalid declaration is logged and dropped; the plugin still loads', () => {
+  const { errors } = load({ A: plugin('Alpha', { 'Alpha:bad': { type: 'number', label: 'Bad', help: 'x' }, 'Alpha:good': COUNT }) });
+  assert.deepEqual(loaded(), ['Alpha']);
+  assert.ok(errors.some((e) => /Alpha:bad: set exactly one of default or defaultText/.test(e)), errors.join('\n'));
+  const all = PluginManager.getConfigDeclarations();
+  assert.equal(all.has('Alpha:bad'), false);
+  assert.equal(all.get('Alpha:good').owner, 'Alpha');
+});
+
+test('a malformed declaration on an enabled:false plugin does not throw and the load continues', () => {
+  const off = 'module.exports={name:"Off",enabled:false,config:{"X:y":{type:"number",label:"L",help:"H"}},register(){}}';
+  const { errors } = load({ Off: off, On: plugin('On', { 'On:count': COUNT }) });
+  assert.deepEqual(loaded(), ['On']);
+  assert.deepEqual(errors, []);
+  assert.equal(PluginManager.getConfigDeclarations().get('On:count').owner, 'On');
+});
+
+test('a disabled plugin cannot clash with a loading one', () => {
+  const off = `module.exports={name:"Off",enabled:false,config:${JSON.stringify({ 'Shared:count': COUNT })},register(){}}`;
+  const { errors } = load({ A: off, B: plugin('Beta', { 'Shared:count': COUNT }) });
+  assert.deepEqual(loaded(), ['Beta']);
+  assert.deepEqual(errors, []);
+  assert.equal(PluginManager.getConfigDeclarations().get('Shared:count').owner, 'Beta');
+});
+
+test('a config that is not an object is logged and ignored; the plugin still loads', () => {
+  const { errors } = load({ A: 'module.exports={name:"Alpha",config:[1],register(){}}' });
+  assert.deepEqual(loaded(), ['Alpha']);
+  assert.ok(errors.some((e) => /Alpha: config must be an object/.test(e)), errors.join('\n'));
 });
 
 test('a configured value that fails its declaration is warned about once and still returned', () => {

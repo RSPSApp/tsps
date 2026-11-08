@@ -26,6 +26,38 @@ export type ConfigCheck = { ok: true; value: unknown } | { ok: false; error: str
 
 const TYPES: readonly string[] = ["boolean", "number", "string", "enum", "date", "json"];
 
+const DECLARATION_FIELDS: readonly string[] = [
+    "type", "label", "help", "default", "defaultText", "values", "min", "max", "integer", "exclusiveMin", "members",
+];
+
+/** A default must already have its declared type: no "5" for a number, no "true" for a boolean. */
+function defaultTypeProblem(type: ConfigOptionType, value: unknown): string | null {
+    switch (type) {
+        case "boolean":
+            return typeof value === "boolean" ? null : "must be true or false";
+        case "number":
+            return typeof value === "number" ? null : "must be a number, not text";
+        case "string":
+        case "date":
+            return typeof value === "string" ? null : "must be text";
+        case "enum":
+            return typeof value === "string" || typeof value === "number" ? null : "must be one of the values";
+        case "json":
+            return isJsonValue(value) ? null : "must be a JSON value";
+    }
+}
+
+function isJsonValue(value: unknown): boolean {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+    if (typeof value === "number") return Number.isFinite(value);
+    if (Array.isArray(value)) return value.every(isJsonValue);
+    if (typeof value === "object") {
+        const proto = Object.getPrototypeOf(value);
+        return (proto === Object.prototype || proto === null) && Object.values(value as object).every(isJsonValue);
+    }
+    return false;
+}
+
 /** Problems with a plugin's option declaration; an empty list means it is valid. */
 export function validateDeclaration(key: string, decl: unknown): string[] {
     const problems: string[] = [];
@@ -44,11 +76,16 @@ export function validateDeclaration(key: string, decl: unknown): string[] {
     if (hasText && (typeof d.defaultText !== "string" || !d.defaultText.trim())) {
         problems.push(`${key}: defaultText must be a non-empty string`);
     }
+    for (const field of Object.keys(d)) {
+        if (!DECLARATION_FIELDS.includes(field)) problems.push(`${key}: unknown field ${field}`);
+    }
     if (d.type === "enum") {
         const values = d.values;
         if (!Array.isArray(values) || values.length === 0 ||
             !values.every((v) => v && typeof v === "object" && ["string", "number"].includes(typeof v.value) && typeof v.label === "string")) {
             problems.push(`${key}: enum needs a non-empty values list of { value, label }`);
+        } else if (new Set(values.map((v) => v.value)).size !== values.length) {
+            problems.push(`${key}: enum values must be unique`);
         }
     } else if (d.values !== undefined) {
         problems.push(`${key}: values is only for enum`);
@@ -59,9 +96,26 @@ export function validateDeclaration(key: string, decl: unknown): string[] {
     for (const field of ["min", "max"]) {
         if (d[field] !== undefined && !Number.isFinite(d[field])) problems.push(`${key}: ${field} must be a finite number`);
     }
-    if (hasDefault && problems.length === 0 && d.type !== "json") {
-        const check = checkConfigValue(decl as ConfigOptionDeclaration, d.default);
-        if (check.ok === false) problems.push(`${key}: default is invalid: ${check.error}`);
+    for (const field of ["integer", "exclusiveMin", "members"]) {
+        if (d[field] !== undefined && typeof d[field] !== "boolean") problems.push(`${key}: ${field} must be true or false`);
+    }
+    if (d.exclusiveMin !== undefined && d.min === undefined) problems.push(`${key}: exclusiveMin needs min`);
+    if (Number.isFinite(d.min) && Number.isFinite(d.max) && (d.min as number) > (d.max as number)) {
+        problems.push(`${key}: min must not be greater than max`);
+    }
+    if (hasDefault && problems.length === 0) {
+        const typeProblem = defaultTypeProblem(d.type as ConfigOptionType, d.default);
+        if (typeProblem) {
+            problems.push(`${key}: default is invalid: ${typeProblem}`);
+        } else if (d.type === "enum") {
+            const values = d.values as { value: unknown }[];
+            if (!values.some((v) => v.value === d.default)) {
+                problems.push(`${key}: default is invalid: must be exactly one of ${values.map((v) => JSON.stringify(v.value)).join(", ")}`);
+            }
+        } else if (d.type !== "json") {
+            const check = checkConfigValue(decl as ConfigOptionDeclaration, d.default);
+            if (check.ok === false) problems.push(`${key}: default is invalid: ${check.error}`);
+        }
     }
     return problems;
 }

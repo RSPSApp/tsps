@@ -74,3 +74,26 @@ test("small fishing net scenery rows remain excluded from the audited ordinary s
  // Raw source headings call these Scenery object spawns; the export does not carry headings.
  // Any future net-page scope extension must resolve that distinction rather than adding this page.
 });
+
+test("audited member tools retain source world policy and cannot widen rune or scenery scope",()=>{
+ const member=row({page:"Crossbow",id:837,x:1512,y:3423,members:true,quantity:1,infobox_respawn_ticks:500});
+ const result=importSpawns(source([member]),[]);
+ assert.equal(result.definitions.length,1);assert.equal(result.definitions[0].members,true);
+ assert.equal(result.definitions[0].respawn,500);
+ assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
+ const pages=[["Air rune",556],["Body rune",559],["Earth rune",557],["Fire rune",554],
+  ["Mind rune",558],["Nature rune",561],["Water rune",555],["Small fishing net",303]];
+ const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
+ assert.equal(rejected.definitions.length,0);
+ assert.equal(rejected.report.counts["members-world-scope-deferred"],8);
+});
+test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
+ const member=row({page:"Shears",id:1735,members:true,quantity:1});
+ const conflicting=importSpawns(source([member,{...member,members:false}]),[]);
+ assert.equal(conflicting.definitions.length,0);
+ assert.equal(conflicting.report.counts["conflicting-source-quantity-timer-or-membership"],2);
+ const old={id:1735,location:{x:3304,y:3311,z:0},amt:1,respawn:100};
+ const result=importSpawns(source([member]),[old]);
+ assert.deepEqual(result.definitions,[old]);
+ assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+});

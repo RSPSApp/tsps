@@ -163,8 +163,11 @@ export class CombatSpecial {
         return CombatSpecial.cost(player, special, special.getDrainAmountForWeaponId(weaponId), "check").cost;
     }
 
-    /** `isCost` false spends an amount directly (Unleash), without cost modifiers. */
-    public static drain(character: Mobile, amount: number, isCost = true) {
+    /**
+     * `isCost` false spends an amount directly (Unleash), without cost modifiers. `itemId`: the item whose special
+     * this was, for "combat-special:performed", when it isn't the wielded weapon (a shield's).
+     */
+    public static drain(character: Mobile, amount: number, isCost = true, itemId?: number) {
         const special: CombatSpecial | null = character.isPlayer?.() ? ((character as any).getAsPlayer?.()?.getCombatSpecial?.() ?? null) : null;
         const weaponId = character.isPlayer?.() ? character.getAsPlayer().getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() : undefined;
         const settings = weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
@@ -177,9 +180,12 @@ export class CombatSpecial {
         if (character.isPlayer()) {
             let p = character.getAsPlayer();
             CombatSpecial.updateBar(p);
-            // "combat-special:performed" { player, itemId }: a special attack performed, with the weapon wielded.
+            // "combat-special:performed" { player, itemId }: a special attack performed, with the item whose special it
+            // was (the wielded weapon unless the caller names another).
             const { PluginManager } = require("../../../plugins/PluginManager");
-            PluginManager.emitCustomEvent("combat-special:performed", { player: p, itemId: p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1 });
+            PluginManager.emitCustomEvent("combat-special:performed", {
+                player: p, itemId: itemId ?? p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1,
+            });
         }
     }
 

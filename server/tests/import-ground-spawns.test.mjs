@@ -75,17 +75,17 @@ test("small fishing net scenery rows remain excluded from the audited ordinary s
  // Any future net-page scope extension must resolve that distinction rather than adding this page.
 });
 
-test("audited member tools retain source world policy and cannot widen rune or scenery scope",()=>{
+test("audited member tools retain source world policy and cannot widen unaudited rune or scenery scope",()=>{
  const member=row({page:"Crossbow",id:837,x:1512,y:3423,members:true,quantity:1,infobox_respawn_ticks:500});
  const result=importSpawns(source([member]),[]);
  assert.equal(result.definitions.length,1);assert.equal(result.definitions[0].members,true);
  assert.equal(result.definitions[0].respawn,500);
  assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
- const pages=[["Air rune",556],["Body rune",559],["Earth rune",557],["Fire rune",554],
-  ["Mind rune",558],["Nature rune",561],["Water rune",555],["Small fishing net",303]];
+ const pages=[["Air rune",556],["Body rune",559],["Fire rune",554],
+  ["Nature rune",561],["Water rune",555],["Small fishing net",303]];
  const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
  assert.equal(rejected.definitions.length,0);
- assert.equal(rejected.report.counts["members-world-scope-deferred"],8);
+ assert.equal(rejected.report.counts["members-world-scope-deferred"],6);
 });
 test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
@@ -96,6 +96,16 @@ test("audited member tools report conflicting world policy instead of silently g
  const result=importSpawns(source([member]),[old]);
  assert.deepEqual(result.definitions,[old]);
  assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+});
+
+test("audited member Earth/Mind runes retain quantities/world policy while the uncertain Air row stays held",()=>{
+ const earth=row({page:"Earth rune",id:557,x:1394,y:3116,quantity:4,members:true});
+ const mind=row({page:"Mind rune",id:558,x:1392,y:3118,quantity:2,members:true});
+ const air=row({page:"Air rune",id:556,x:1399,y:3158,quantity:1,members:true});
+ const result=importSpawns(source([earth,mind,air]),[]);
+ assert.deepEqual(result.definitions.map(r=>[r.id,r.amt,r.respawn,r.members]),[[557,4,100,true],[558,2,100,true]]);
+ assert.equal(result.report.counts["members-world-scope-deferred"],1);
+ assert.deepEqual(importSpawns(source([earth,mind]),result.definitions).definitions,result.definitions);
 });
 
 const easternShellTiles=[[3258,2481],[3257,2477],[3259,2469],[3261,2458],[3260,2451],

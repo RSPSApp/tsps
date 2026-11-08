@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Barbarian Training's rod fishing and Herblore sections (Wiki: Barbarian Training).
+ * Barbarian Training's bow-firemaking, rod fishing and Herblore sections (Wiki: Barbarian Training).
  *
  * Otto Godblessed teaches rod fishing first: the rod is under his bed, and a leaping fish caught
  * with it completes the section once Otto hears of it. Herblore comes after rod fishing. Otto
@@ -15,8 +15,11 @@
  * brut_fishing_r and brut_herb_potion (Quest Helper: 1 tasked, 2 done, 3 told Otto).
  *
  * Otto's agricultural topic stays Farming's: choosing it hands the Talk-to over to
- * skills/farming/Services.Farming's own Otto menu. The other sections (firemaking, harpoon
+ * skills/farming/Services.Farming's own Otto menu. The other sections (harpoon
  * fishing, spears and hastae) have no topic here yet.
+ * Bow firemaking uses its existing instruction and return transcript, with saved internal
+ * lesson progress: taught, an oak-log bow fire, then acknowledgement. It neither changes
+ * Logs' lighting permissions nor publishes an unverified retail Firemaking varbit.
  */
 
 const STATE_ATTRIBUTE = "barbarian-training";
@@ -32,11 +35,14 @@ const TRANSCRIPT = {
   first: "starting-off-after-speaking-to-him-once",
   again: "starting-off-after-speaking-to-him-once-talking-to-otto-again-without-doing-as-he-asks",
   fishing: "fishing",
+  firemaking: "firemaking",
   herblore: "herblore",
   herbloreAgain: "herblore-speaking-to-otto-again-without-an-attack-mix",
   herbloreDone: "herblore-speaking-to-otto-with-an-attack-mix",
 };
 const TOPIC = {
+  firemaking: "I'm ready for your firemaking wisdom. Please instruct me.",
+  firemakingDone: "I've set fire to logs with a bow!",
   rod: "What can I learn about the use of a fishing rod?",
   rodDone: "I've fished with a barbarian rod!",
   herblore: "What was that secret knowledge of herblore we talked of?",
@@ -64,6 +70,7 @@ function state(player) {
   const current = saved && typeof saved === "object" ? saved : {};
   current.fishingRod = stage(current.fishingRod);
   current.herblore = stage(current.herblore);
+  current.firemaking = stage(current.firemaking);
   if (saved !== current) player.setAttribute(STATE_ATTRIBUTE, current);
   return current;
 }
@@ -169,6 +176,8 @@ function holdsAttackMix(player) {
 function topics(player, talk) {
   const current = state(player);
   const list = [];
+  if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
+  else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
   if (current.fishingRod === DONE) list.push([TOPIC.rodDone, () => rodDone(player, talk)]);
   else if (current.fishingRod < DONE) list.push([TOPIC.rod, () => rodLesson(player, talk)]);
   if (current.fishingRod === TOLD && current.herblore < TOLD) {
@@ -198,20 +207,50 @@ function afterTopic(player, talk) {
 }
 
 /**
- * The topic's transcript lines; `onReply`, if given, runs as Otto starts to answer. False, with
+ * The topic's transcript lines; `onReply`, if given, runs as Otto starts to answer. `onFinished`
+ * runs after the actual spoken transcript and requires it to exist. False, with
  * the chatbox closed, when Otto has wandered off.
  */
-function lesson(player, talk, variant, option, onReply = null) {
+function lesson(player, talk, variant, option, onReply = null, onFinished = null) {
   if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return false; }
   const found = topicLines(player, talk.npc, talk.npcId, variant, option);
+  if (onFinished && !found.length) { player.getPacketSender().sendInterfaceRemoval(); return false; }
   const lines = found.length ? found : [{ player: option }];
-  const after = () => afterTopic(player, talk);
+  const after = () => {
+    if (onFinished) {
+      if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
+      onFinished();
+    }
+    afterTopic(player, talk);
+  };
   if (!onReply) { play(player, talk.npcId, lines, after); return true; }
   play(player, talk.npcId, lines.slice(0, 1), () => {
     onReply();
     play(player, talk.npcId, lines.slice(1), after);
   });
   return true;
+}
+
+/** Complete the spoken instruction before recording that this player has heard it. */
+function firemakingLesson(player, talk) {
+  lesson(player, talk, TRANSCRIPT.first, TOPIC.firemaking, null, () => {
+    const current = state(player);
+    current.firemaking = Math.max(current.firemaking, TASKED);
+  });
+}
+
+function firemakingDone(player, talk) {
+  if (state(player).firemaking !== DONE) return;
+  lesson(player, talk, TRANSCRIPT.firemaking, TOPIC.firemakingDone, null, () => {
+    if (state(player).firemaking === DONE) state(player).firemaking = TOLD;
+  });
+}
+
+/** Observe the existing successful skill action, not a request or another training section. */
+function madeBowFire({ player, itemId, bow } = {}) {
+  if (!player || bow !== true || itemId !== core.ItemIdentifiers.OAK_LOGS) return;
+  const current = player.getAttribute(STATE_ATTRIBUTE);
+  if (current && stage(current.firemaking) === TASKED) current.firemaking = DONE;
 }
 
 function rodLesson(player, talk) {
@@ -297,6 +336,7 @@ function attach(pluginApi) {
   api.persistAttribute(STATE_ATTRIBUTE, {});
   api.onPlayerLogin(loggedIn);
   api.onBeforeNpcInteraction(talkToOtto);
+  api.onCustomEvent("firemaking:success", madeBowFire);
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
   api.onCustomEvent("herblore:made", madePotion);

@@ -204,6 +204,26 @@ function runRegisteredTranscript(h, player, npcId) {
   }
 }
 
+function killCaptain(h, player, dropsFirst = false) {
+  const NpcDrops = require('../plugins/npcs/NpcDrops.plugin');
+  const ground = [];
+  const definition = {getName:()=> 'Mercenary Captain'};
+  const npc = {getId:()=>core.NpcIdentifiers.MERCENARY_CAPTAIN,
+    getLocation:()=>player.getLocation(),getDefinition:()=>definition,getCurrentDefinition:()=>definition};
+  NpcDrops.register(new Proxy({
+    core:{},
+    getItemOnGroundManager:()=>({registerLocation:(_player,item)=>ground.push({id:item.getId(),amount:item.getAmount()})}),
+    emitCustomEvent:(name,event)=>(h.events[name]??[]).forEach(handler=>handler(event)),
+  },{get:(target,key)=>target[key]??noop}));
+  NpcDrops.__internals.loadDrops();
+  player.isPlayer=()=>true;
+  const drop = () => NpcDrops.__internals.dropFor(player,npc,core.NpcIdentifiers.MERCENARY_CAPTAIN,player.getLocation());
+  if (dropsFirst) drop();
+  h.deaths.forEach(handler=>handler({npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,killer:player,npc}));
+  if (!dropsFirst) drop();
+  return ground;
+}
+
 test('fresh stage 0 starts, the captain drops the metal key, and the slave trade swaps the desert outfit', () => {
   const h = harness();
   const p = makePlayer();
@@ -213,9 +233,9 @@ test('fresh stage 0 starts, the captain drops the metal key, and the slave trade
   hook(h, { player: p, npcId: core.NpcIdentifiers.IRENA, hook: 'quest:the-tourist-trap:start' });
   assert.equal(stage(h, p), 1);
 
-  p.isPlayer = () => true;
-  h.deaths.forEach(handler => handler({ npcId: core.NpcIdentifiers.MERCENARY_CAPTAIN, killer: p }));
-  assert.equal(p.items.get(K.METAL_KEY), 1, 'the captain drops the camp key');
+  const ground = killCaptain(h,p);
+  assert.equal(p.items.get(K.METAL_KEY)??0, 1, 'the captain automatically awards one inventory key');
+  assert.deepEqual(ground.filter(item=>item.id===K.METAL_KEY),[], 'the shared table does not duplicate the key');
   assert.equal(stage(h, p), 2);
 
   // Fixture: the player has entered the camp and brought the required outfit.
@@ -571,16 +591,15 @@ test('stage migration keeps a previously versioned save when the namespaced key 
   assert.equal(h.persistedDefaults.get(STAGE_VERSION_ATTRIBUTE), 0);
 });
 
-test('a full bag refuses the captain key without advancing', () => {
-  const h = harness();
-  const p = makePlayer();
-  seedStage(h, p, 1);
-  p.setFull(true);
-  p.isPlayer = () => true;
-  h.deaths.forEach(handler => handler({ npcId: core.NpcIdentifiers.MERCENARY_CAPTAIN, killer: p }));
-  assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY) ?? 0, 0);
-  assert.equal(stage(h, p), 1);
-  assert.ok(p.messages.some(text => text.includes('no space')));
+test('the captain drops one ground key even with a full bag, without an inventory grant', () => {
+  const h=harness(),p=makePlayer();
+  seedStage(h,p,1);p.setFull(true);
+  const ground=killCaptain(h,p);
+  assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,0);
+  assert.deepEqual(ground.filter(item=>item.id===core.ItemIdentifiers.METAL_KEY),
+    [{id:core.ItemIdentifiers.METAL_KEY,amount:1}]);
+  assert.equal(stage(h,p),2);
+  assert.ok(!p.messages.some(text=>text.includes('no space')||text.includes('pick it up')));
 });
 
 test('the cache transforms the quest NPCs and locs by the varbits the plugin sets', () => {
@@ -872,5 +891,76 @@ test('Tourist Trap registered before Tribal Totem releases the real mansion ches
       core.ObjectManager.register(new core.GameObject(2709, anchor, closed.getType(), closed.getFace(), null), true);
     }
     Object.assign(PluginManager, saved);
+  }
+});
+
+test('the canonical captain challenge closes dialogue before initiating ordinary NPC combat', () => {
+  const h=harness(),p=makePlayer(),order=[];
+  seedStage(h,p,1);
+  p.getPacketSender=()=>({sendInterfaceRemoval:()=>order.push('close')});
+  const npc={isRegistered:()=>true,getCombat:()=>({attack:target=>{
+    assert.equal(target,p);order.push('attack');
+  }})};
+  const event=action(h,{player:p,npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'elFnbt'});
+  assert.equal(event.handled,true);assert.equal(event.end,true);
+  assert.deepEqual(order,['close','attack']);
+  assert.equal(stage(h,p),1);
+  assert.ok(JSON.stringify(dialogueData['The Tourist Trap'].variants[
+    'getting-into-the-camp-talking-to-the-mercenary-captain']).includes('"id":"elFnbt"'));
+});
+
+test('captain combat kickoff ignores other actions, actors, missing NPCs and an unstarted quest', () => {
+  const h=harness(),p=makePlayer();
+  const npc={isRegistered:()=>true,getCombat:()=>({attack:()=>assert.fail('must not attack')})};
+  seedStage(h,p,1);
+  for(const event of [
+    {npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'another-action'},
+    {npcId:core.NpcIdentifiers.IRENA,npc,stepId:'elFnbt'},
+    {npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,stepId:'elFnbt'},
+    {npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc:{isRegistered:()=>false},stepId:'elFnbt'},
+  ])assert.notEqual(action(h,{player:p,...event}).handled,true);
+  seedStage(h,p,0);
+  assert.notEqual(action(h,{player:p,npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'elFnbt'}).handled,true);
+  assert.equal(stage(h,p),0);
+});
+
+
+test('captain key auto-collection and ground fallback work in either death callback order', () => {
+  for (const dropsFirst of [false, true]) {
+    for (const mode of ['room', 'full', 'failed-add']) {
+      const h=harness(),p=makePlayer();
+      seedStage(h,p,1);
+      if(mode==='full')p.setFull(true);
+      if(mode==='failed-add')p.setFailAdds(true);
+      const ground=killCaptain(h,p,dropsFirst).filter(item=>item.id===core.ItemIdentifiers.METAL_KEY);
+      assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,mode==='room'?1:0,`${mode}, dropsFirst=${dropsFirst}`);
+      assert.deepEqual(ground,mode==='room'?[]:[{id:core.ItemIdentifiers.METAL_KEY,amount:1}]);
+      assert.equal(stage(h,p),2);
+    }
+  }
+});
+
+test('already held captain keys are not duplicated by repeat kills or quest stage changes', () => {
+  for(const dropsFirst of [false,true]) {
+    const h=harness(),p=makePlayer();
+    seedStage(h,p,1);p.items.set(core.ItemIdentifiers.METAL_KEY,1);
+    for(const currentStage of [1,2,10,30]) {
+      seedStage(h,p,currentStage);
+      const ground=killCaptain(h,p,dropsFirst);
+      assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY),1);
+      assert.deepEqual(ground.filter(item=>item.id===core.ItemIdentifiers.METAL_KEY),[]);
+      assert.equal(stage(h,p),Math.max(2,currentStage));
+    }
+  }
+});
+
+test('captain key auto-collection ignores other actors and an unstarted quest', () => {
+  const h=harness(),p=makePlayer();
+  for(const [npcId,currentStage] of [[core.NpcIdentifiers.IRENA,1],[core.NpcIdentifiers.MERCENARY_CAPTAIN,0]]) {
+    seedStage(h,p,currentStage);
+    const context={handledItemIds:new Set()};
+    for(const fn of h.events['npc-drops:context']??[])fn({player:p,npcId,context});
+    assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,0);
+    assert.equal(context.handledItemIds.has(core.ItemIdentifiers.METAL_KEY),false);
   }
 });

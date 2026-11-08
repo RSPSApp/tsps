@@ -30,6 +30,7 @@ const FEROCIOUS_SPIRIT_LIFETIME_TICKS = 300;
 /** Wiki Table/Pyre ships: logs -> { craft, firemaking, craftXp, firemakingXp }. */
 const PYRE_LOGS = new Map([
   [1511, { craft: 11, firemaking: 11, craftXp: 10, firemakingXp: 40 }], // logs
+  [2862, { craft: 11, firemaking: 11, craftXp: 10, firemakingXp: 40 }], // achey tree
   [1521, { craft: 25, firemaking: 25, craftXp: 15, firemakingXp: 60 }], // oak
   [1519, { craft: 40, firemaking: 40, craftXp: 22.5, firemakingXp: 90 }], // willow
   [6333, { craft: 45, firemaking: 45, craftXp: 26.2, firemakingXp: 105 }], // teak
@@ -37,8 +38,11 @@ const PYRE_LOGS = new Map([
   [1517, { craft: 55, firemaking: 55, craftXp: 33.7, firemakingXp: 135 }], // maple
   [6332, { craft: 60, firemaking: 60, craftXp: 39.3, firemakingXp: 157.5 }], // mahogany
   [1515, { craft: 70, firemaking: 70, craftXp: 50.6, firemakingXp: 202.5 }], // yew
+  [32904, { craft: 76, firemaking: 76, craftXp: 61.2, firemakingXp: 245 }], // camphor
   [1513, { craft: 85, firemaking: 85, craftXp: 75.9, firemakingXp: 303.8 }], // magic
+  [32907, { craft: 90, firemaking: 90, craftXp: 80, firemakingXp: 320 }], // ironwood
   [19672, { craft: 95, firemaking: 95, craftXp: 87, firemakingXp: 350 }], // redwood
+  [32910, { craft: 97, firemaking: 97, craftXp: 105, firemakingXp: 420 }], // rosewood
 ]);
 
 const NON_FIREMAKING_BOWS = new Set([

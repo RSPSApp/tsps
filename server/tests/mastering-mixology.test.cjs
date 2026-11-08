@@ -11,6 +11,8 @@ const Shared = require('../plugins/minigames/mixology/Shared.Mixology');
 const Orders = require('../plugins/minigames/mixology/Orders.Mixology');
 const Stations = require('../plugins/minigames/mixology/Stations.Mixology');
 const Mixer = require('../plugins/minigames/mixology/Mixer.Mixology');
+const Goggles = require('../plugins/minigames/mixology/Goggles.Mixology');
+const HERBLORE = require('../plugins/skills/data/herblore.json');
 
 before(() => {
   CachePipeline.initialize();
@@ -498,4 +500,123 @@ test('station controls: agitator retains its two-hit window and literal XP rewar
   assert.deepEqual(f.xp, [14, 2]);
   f.finish();
   assert.deepEqual(f.xp, [14, 2]);
+});
+
+/** The request Herblore offers "herblore:mix" for a recipe (Mixing.Herblore.js makeOne), by the recipe's product and a named ingredient. */
+function mixRequest(product, secondaryName, wearsGoggles) {
+  const { CacheDefinitions } = PluginManager.getCoreApi();
+  const recipe = HERBLORE.recipes.find((candidate) => candidate.product === product
+    && candidate.ingredients.some(([name]) => name === secondaryName));
+  assert.ok(recipe, `${product} with ${secondaryName}`);
+  const id = (name) => CacheDefinitions.getObjId(name);
+  const head = wearsGoggles ? { getId: () => id(wearsGoggles) } : { getId: () => -1 };
+  const runtimeRecipe = { ...recipe, ingredients: recipe.ingredients.map(([name, count]) => ({ id: id(name), count })) };
+  return {
+    recipe: runtimeRecipe,
+    player: { getEquipment: () => ({ getItems: () => ({ [PluginManager.getCoreApi().Equipment.HEAD_SLOT]: head }) }) },
+    consume: recipe.ingredients.map(([name, count]) => ({ id: id(name), count })),
+    returns: (recipe.returns ?? []).map(([name, count]) => ({ id: id(name), count })),
+  };
+}
+
+function withRoll(roll, run) {
+  const random = Math.random;
+  Math.random = () => roll;
+  try { run(); } finally { Math.random = random; }
+}
+
+test('prescription goggles: a 10% roll, once per potion, keeps the secondary (Wiki: Prescription goggles)', () => {
+  withRoll(0.05, () => {
+    const request = mixRequest('3dose1attack', 'eye_of_newt', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(request);
+    assert.deepEqual(request.consume.map((item) => item.count), [1, 0]); // the potion goes, the eye of newt stays
+  });
+  withRoll(0.1, () => {
+    const request = mixRequest('3dose1attack', 'eye_of_newt', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(request);
+    assert.deepEqual(request.consume.map((item) => item.count), [1, 1]); // 10% is below 0.1 only
+  });
+});
+
+test('prescription goggles: the unfocused look works, and nothing is saved without them', () => {
+  withRoll(0, () => {
+    const alt = mixRequest('3dose1attack', 'eye_of_newt', 'mm_alchemist_hat_alt');
+    Goggles.saveSecondaries(alt);
+    assert.equal(alt.consume[1].count, 0);
+    const bare = mixRequest('3dose1attack', 'eye_of_newt', null);
+    Goggles.saveSecondaries(bare);
+    assert.equal(bare.consume[1].count, 1);
+  });
+});
+
+test('prescription goggles: a vial of water step and the herb into it are not secondaries', () => {
+  withRoll(0, () => {
+    const vial = mixRequest('guamvial', 'guam_leaf', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(vial);
+    assert.deepEqual(vial.consume.map((item) => item.count), [1, 1]);
+  });
+});
+
+test('prescription goggles: the herb or coral added to a vial of water is never saved', () => {
+  withRoll(0, () => {
+    for (const [product, herb] of [['cadantinevial', 'cadantine'], ['elkhornvial', 'coral_elkhorn'], ['pillarvial', 'coral_pillar'], ['umbralvial', 'coral_umbral'], ['toadflaxvial', 'toadflax']]) {
+      const request = mixRequest(product, herb, 'mm_alchemist_hat');
+      Goggles.saveSecondaries(request);
+      assert.ok(request.consume.every((item) => item.count > 0), product);
+    }
+  });
+});
+
+test('prescription goggles: every copy of a stacked secondary is kept (20 Zulrah scales on an anti-venom(4))', () => {
+  withRoll(0, () => {
+    const request = mixRequest('antivenom4', 'snakeboss_scale', 'mm_alchemist_hat');
+    assert.equal(request.consume[1].count, 20);
+    Goggles.saveSecondaries(request);
+    assert.deepEqual(request.consume.map((item) => item.count), [1, 0]);
+  });
+});
+
+test('prescription goggles: an (unf) potion made from a coconut milk vial saves its herb (antidote+, antidote++, weapon poison++)', () => {
+  withRoll(0, () => {
+    for (const [product, herb] of [['unfinished_antidote+', 'toadflax'], ['unfinished_antidote++', 'irit_leaf'], ['unfinished_weapon_poison++', 'nightshade']]) {
+      const request = mixRequest(product, herb, 'mm_alchemist_hat');
+      Goggles.saveSecondaries(request);
+      assert.deepEqual(request.consume.map((item) => item.count), [1, 0], product);
+    }
+  });
+});
+
+test('prescription goggles: barbarian potions keep their caviar, haemostatic dressings their squid paste and cotton yarn', () => {
+  withRoll(0, () => {
+    const brutal = mixRequest('brutal_2dose1attack', 'brut_caviar', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(brutal);
+    assert.deepEqual(brutal.consume.map((item) => item.count), [1, 0]);
+    const paste = mixRequest('haemostatic_poultice', 'squid_paste', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(paste);
+    assert.deepEqual(paste.consume.map((item) => item.count), [1, 0]);
+    const yarn = mixRequest('3dosehaemostaticdressing', 'cotton_yarn', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(yarn);
+    assert.deepEqual(yarn.consume.map((item) => item.count), [1, 0]);
+  });
+});
+
+test('prescription goggles: a super combat potion keeps its torstol, or its torstol potion (unf) and the vial that came with it', () => {
+  withRoll(0, () => {
+    const herb = mixRequest('4dose2combat', 'torstol', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(herb);
+    assert.deepEqual(herb.consume.map((item) => item.count), [1, 1, 1, 0]); // the three potions go, the torstol stays
+    const vialed = mixRequest('4dose2combat', 'torstolvial', 'mm_alchemist_hat');
+    assert.equal(vialed.returns[0].count, 3);
+    Goggles.saveSecondaries(vialed);
+    assert.deepEqual(vialed.consume.map((item) => item.count), [1, 1, 1, 0]);
+    assert.equal(vialed.returns[0].count, 2); // the torstol potion (unf) stays whole, so its vial is not handed back
+  });
+});
+
+test('prescription goggles: crystal dust is never saved (divine potions)', () => {
+  withRoll(0, () => {
+    const request = mixRequest('4dosedivineattack', 'prif_crystal_shard_crushed', 'mm_alchemist_hat');
+    Goggles.saveSecondaries(request);
+    assert.deepEqual(request.consume.map((item) => item.count), [1, 4]);
+  });
 });

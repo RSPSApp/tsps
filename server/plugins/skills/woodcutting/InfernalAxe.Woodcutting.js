@@ -54,7 +54,10 @@ function tryBurnLog(player, axeId, logId) {
   if (!item || !(request.xp > 0)) {
     return false;
   }
-  player.getSkillManager().addExperiences(core.Skill.FIREMAKING, request.xp / 2);
+  // Wiki (Infernal axe): half the log's Firemaking XP, "increased by the Pyromancer outfit bonus".
+  const outfit = { player, multiplier: 1 };
+  api.emitCustomEvent("firemaking:xp-multiplier", outfit);
+  player.getSkillManager().addExperiences(core.Skill.FIREMAKING, (request.xp / 2) * outfit.multiplier);
   player.performGraphic(new core.Graphic(BURN_GRAPHIC, 0, BURN_GRAPHIC_HEIGHT));
   player.getPacketSender().sendSoundEffect(core.Sound.FIRE_SUCCESSFUL.getId(), 1, 0, 1);
   useCharge(player, item);

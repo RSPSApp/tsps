@@ -62,22 +62,37 @@ assert.equal(created.length, 2);
 console.log("gpu-plugin tests passed");
 
 
-test("brightness applies through the bound client, including settings changed while disabled", async () => {
+test("brightness stays one setting: the Settings slider wins on start and the option follows it", async () => {
     const events = new EventBus();
     const config = new ConfigManager(events);
     const manager = new PluginManager(events, config);
-    const applied: number[] = [];
-    manager.getInjector().provide(CLIENT_TOKEN, { applyScreenBrightness: (value: number) => applied.push(value) });
+    let settings = 50;
+    const client = {
+        screenBrightnessListener: undefined as undefined | ((value: number) => void),
+        getScreenBrightness: () => settings,
+        applyScreenBrightness(value: number) {
+            settings = value;
+            client.screenBrightnessListener?.(value);
+        },
+    };
+    manager.getInjector().provide(CLIENT_TOKEN, client);
     manager.loadCorePlugins([GpuPlugin]);
-    await manager.setPluginEnabled(GpuPlugin, true);
-    assert.deepEqual(applied, [], "an unset plugin brightness preserves the Settings-tab value");
-    config.setConfigValue(GpuConfig, "brightness", 90);
-    assert.deepEqual(applied, [90], "the event runs after the constructor injector scope ends");
-    await manager.setPluginEnabled(GpuPlugin, false);
+    // A stale saved GPU option, as left by an earlier session.
     config.setConfigValue(GpuConfig, "brightness", 20);
-    assert.deepEqual(applied, [90], "disabled plugins do not receive config events");
+    settings = 100;
     await manager.setPluginEnabled(GpuPlugin, true);
-    assert.deepEqual(applied, [90, 20], "enabling picks up the saved brightness");
+    assert.equal(settings, 100, "starting the plugin does not overwrite the Settings value");
+    assert.equal(config.getConfig(GpuConfig).brightness(), 100, "the option shows the Settings value");
+    client.applyScreenBrightness(35);
+    assert.equal(config.getConfig(GpuConfig).brightness(), 35, "slider changes reach the option");
+    config.setConfigValue(GpuConfig, "brightness", 80);
+    assert.equal(settings, 80, "the option still drives the Settings value");
+    await manager.setPluginEnabled(GpuPlugin, false);
+    assert.equal(client.screenBrightnessListener, undefined, "the listener is released on shutdown");
+    client.applyScreenBrightness(10);
+    settings = 60;
+    await manager.setPluginEnabled(GpuPlugin, true);
+    assert.equal(config.getConfig(GpuConfig).brightness(), 60, "re-enabling picks up the slider value set while off");
     await manager.setPluginEnabled(GpuPlugin, false);
 });
 
@@ -89,6 +104,7 @@ test("a picked sky colour reaches the active renderer, and an unpicked one leave
     let clears = 0;
     manager.getInjector().provide(CLIENT_TOKEN, {
         applyScreenBrightness: () => {},
+        getScreenBrightness: () => 50,
         renderer: {
             setSkyColor: (r: number, g: number, b: number) => colours.push([r, g, b]),
             clearSkyColorOverride: () => clears++,

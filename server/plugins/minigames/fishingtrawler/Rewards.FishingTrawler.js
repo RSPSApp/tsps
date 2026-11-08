@@ -113,7 +113,12 @@ function rollHeron(player, points) {
 function inspectNet({ player }) {
   const reward = player.getAttribute(Shared.REWARD_ATTRIBUTE);
   if (!reward || !Array.isArray(reward.items) || reward.items.length === 0) {
-    player.sendMessage(Shared.message("nothingInNet"));
+    // Wiki: Transcript:Trawler_net, inspecting when no rewards are waiting.
+    const { DialogueChainBuilder, PlayerDialogue, EndDialogue } = Shared.core();
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new PlayerDialogue(0, "I'd better not steal other people's fish!"),
+      new EndDialogue(1),
+    ));
     return true;
   }
   const { Bank, Item } = Shared.core();

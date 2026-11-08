@@ -141,6 +141,7 @@ export class IdleNotifierPlugin extends Plugin {
 
     /** RuneLite's onHitsplatApplied: a hitsplat on the local player. */
     onHitsplat(event: HitsplatEventPayload): void {
+        if (!this.isStarted()) return;
         const local = this.osrsClient?.controlledPlayerServerId;
         if (event.targetType === "player" && local !== undefined && event.targetId === local) {
             this.lastCombatCountdown = HIGHEST_MONSTER_ATTACK_SPEED;

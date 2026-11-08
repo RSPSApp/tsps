@@ -179,7 +179,8 @@ function bounceTargets(player, primary) {
 function arrowEndCycle(player, target) {
   const { RangedCombatMethod, WeaponProfiles } = core;
   const projectile = WeaponProfiles.ranged(player).projectiles?.[0];
-  const distance = core.CombatPosition.projectileDistance(player, target);
+  // Edge distance, as RangedCombatMethod sends the arrow: a large target's south-west tile isn't where it lands.
+  const distance = core.CombatPosition.edgeDistance(player, target);
   return projectile ? RangedCombatMethod.projectileEnd(projectile, distance) : 0;
 }
 
@@ -432,6 +433,7 @@ module.exports = {
     MAX_CHARGES,
     CHARGE_META_KEY,
     bounceDistance,
+    arrowEndCycle,
     charges,
   },
 };

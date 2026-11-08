@@ -51,9 +51,12 @@ function fakeNpc(definition) {
     heal: (amount) => { npc.hp = Math.min(npc.getMaxHitpoints(), npc.hp + amount); },
     setNpcTransformationId: (id) => { npc.transform = id; return npc; },
     getMovementQueue: () => ({ setBlockMovement() {}, reset() {}, size: () => 0, routes: npc.routes }),
-    performAnimation: (animation) => npc.animations.push(animation.getId?.() ?? animation.id),
+    performAnimation: (animation) => {
+      npc.animations.push(animation.getId?.() ?? animation.id);
+      npc.animationDelays.push(animation.getDelay?.() ?? animation.delay ?? 0);
+    },
     forceChat() {},
-    flags: new Set(), routes: [], animations: [], splats: [],
+    flags: new Set(), routes: [], animations: [], animationDelays: [], splats: [],
     setFlag: (flag) => npc.flags.add(flag),
     getSize: () => Shared.core().NpcDefinition.forId(npc.id).getSize?.() ?? 1,
     setPositionToFace() {},
@@ -1404,6 +1407,34 @@ test('a rift guardian goes after a creature across the temple, not only within 1
   t.mock.method(Shared.core().PathFinder, 'calculateWalkRoute', (npc, x, y) => routes.push([npc, x, y]));
   ticks(1);
   assert.ok(routes.some(([npc, x, y]) => npc === guardian && x === 3606 && y === 9503), 'walks at the far leech');
+});
+
+test('a new rift guardian rises for 4 ticks, then its first step ends the spawn sequence (issue 3837)', () => {
+  const player = fakePlayer();
+  openGame(player);
+  Game._game.phase = Game.PHASE.ATTACK;
+  const leech = fakeNpc({ id: Shared.npc('gotr_abyssal_leech'), x: 3611, y: 9517 });
+  Creatures.creatures.set(leech, { kind: 'leech', nextAttack: Infinity, attacker: null });
+  player.inventory.add(Shared.obj('chisel'), 1);
+  player.inventory.add(CELL(1), 1);
+  hooks.objects['Essence pile (elemental)'].Assemble({ player, objectId: Shared.loc('gotr_guardian_spawn_east') });
+  ticks(5);
+  const guardian = hooks.npcsSpawned.find((npc) => npc.id === Shared.npc('gotr_guardian_air'));
+  assert.ok(guardian, 'the guardian comes to life');
+  const spawn = Shared.seq('rift_guardian_spawn');
+  const reset = Shared.core().Animation.DEFAULT_RESET_ANIMATION.getId();
+  assert.deepEqual(guardian.animations, [spawn]);
+  ticks(3);
+  assert.deepEqual(guardian.routes, [], 'still rising: no step, even with a leech to fight');
+  assert.deepEqual(guardian.animations, [spawn]);
+  ticks(1);
+  // Capture 20261020T162558: the first step carries sequence -1, delay 95. The spawn sequence loops
+  // at priority 10, so left on, the client froze the guardian and dropped its attacks.
+  assert.deepEqual(guardian.animations, [spawn, reset]);
+  assert.equal(guardian.animationDelays.at(-1), 95);
+  assert.equal(guardian.routes.length, 1, 'walks out to its post');
+  ticks(1);
+  assert.deepEqual(guardian.routes.at(-1), [3611, 9517], 'then goes for the leech');
 });
 
 test('full power kills every creature', () => {

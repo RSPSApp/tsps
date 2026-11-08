@@ -1386,7 +1386,13 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
   enemy.p.moveTo(patient.p.getLocation().clone()); enemy.p.setNeedsPlacement(false);
   enemy.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevel(core.Skill.HITPOINTS, 50, true);
   enemy.p.setRunEnergy(21);
-  game.activity.set(healer.p, 17);
+  const activityAfterTicks = (initial, start) => {
+    const { drain, from } = Common.data.activity;
+    const drainingTicks = Math.max(0, game.elapsed - Math.max(start, from - 1));
+    return Math.max(0, initial - drainingTicks * drain);
+  };
+  game.activity.set(healer.p, 100);
+  const enemyActivityStart = game.elapsed;
   const healerHpBeforeRefusals = healer.p.getHitpoints(), healerRunBeforeRefusals = healer.p.getRunEnergy();
   const beforeEnemy = nativeItemUses.length, enemyMessages = enemy.messages.length, healerBeforeEnemy = healer.messages.length;
   await use(enemy.p, 0);
@@ -1396,10 +1402,13 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
   assert.equal(healer.messages.length, healerBeforeEnemy + 1);
   assert.equal(healer.messages.at(-1), "You can't bandage an opposing player.");
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'enemy use spends nothing');
-  assert.equal(enemy.p.getRunEnergy(), 21); assert.equal(game.activity.get(healer.p), 17, 'enemy refusal is not activity');
+  assert.equal(enemy.p.getRunEnergy(), 21);
+  assert.equal(game.activity.get(healer.p), activityAfterTicks(100, enemyActivityStart), 'enemy refusal does not reset activity');
   assert.equal(healer.p.getHitpoints(), healerHpBeforeRefusals); assert.equal(healer.p.getRunEnergy(), healerRunBeforeRefusals);
   patient.p.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, true);
   patient.p.setRunEnergy(100); patient.p.setPoisonDamage(0); patient.p.setVenomed(false);
+  game.activity.set(healer.p, 100);
+  const noNeedActivityStart = game.elapsed;
   const beforeNoNeed = nativeItemUses.length, beforeNoNeedMessages = patient.messages.length, healerBeforeNoNeed = healer.messages.length;
   await use(patient.p, 0);
   assert.equal(nativeItemUses.length, beforeNoNeed + 1, 'full teammate request reaches the registered path');
@@ -1407,7 +1416,7 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
   assert.equal(healer.messages.length, healerBeforeNoNeed + 1);
   assert.equal(healer.messages.at(-1), `${patient.p.getDisplayName()} does not currently need bandaging.`);
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'full healthy teammate does not consume a bandage under TSPS policy');
-  assert.equal(game.activity.get(healer.p), 17, 'no-need refusal is not activity');
+  assert.equal(game.activity.get(healer.p), activityAfterTicks(100, noNeedActivityStart), 'no-need refusal does not reset activity');
   assert.equal(patient.p.getHitpoints(), 99); assert.equal(patient.p.getRunEnergy(), 100);
   assert.equal(healer.p.getHitpoints(), healerHpBeforeRefusals); assert.equal(healer.p.getRunEnergy(), healerRunBeforeRefusals);
   patient.p.setPoisonDamage(6); patient.p.setVenomed(true);

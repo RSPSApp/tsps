@@ -1612,6 +1612,30 @@ test('an application accepted while away adds the member when they are offline',
   assert.equal(CoreClans().memberOf(clan, 'away').rank, 0);
 });
 
+test('an applicant banned after applying is not accepted, online or offline', () => {
+  const { owner, clan } = clanOfThree();
+  const Management = require('../plugins/interface/clans/Management.Clans');
+  const Guests = require('../plugins/interface/clans/Guests.Clans');
+  clan.inviting = true;
+  const hopeful = player('Hopeful');
+  seek(hopeful, 'Blur');
+  Guests.toggleApplication(hopeful, clan);
+  assert.equal(clan.applicants.length, 1);
+  Management.addBan(owner, clan, 'Hopeful');
+  clickGroup(owner, 690, 21);
+  pause(owner, 699, 11, 0);
+  pause(owner, 699, 1, 3);
+  assert.equal(CoreClans().clanOf(hopeful) ?? null, null);
+  assert.deepEqual(clan.applicants, []);
+  assert.match(owner.messages.at(-1), /banned/);
+  clan.applicants = [{ account: 'away', name: 'Away', stats: 'Away|3|32' }];
+  Management.addBan(owner, clan, 'Away');
+  clickGroup(owner, 690, 21);
+  pause(owner, 699, 11, 0);
+  pause(owner, 699, 1, 3);
+  assert.equal(CoreClans().memberOf(clan, 'away'), undefined);
+});
+
 test('minimums block applying, and the board lists clans that are inviting (2778)', () => {
   const { owner, clan } = clanOfThree();
   clan.inviting = true;

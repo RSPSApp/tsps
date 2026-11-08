@@ -95,9 +95,10 @@ function put(f, value, slot) {
   return f.inv.getItems()[slot];
 }
 
-function charged(id, key, charges) {
+function charged(id, key, charges, meta = {}) {
   const held = item(id);
   held.setMetaValue(key, charges);
+  for (const [name, value] of Object.entries(meta)) held.setMetaValue(name, value);
   return held;
 }
 
@@ -125,7 +126,9 @@ const SINGLE = () => [
   { name: "Sanguinesti staff", id: I.SANGUINESTI_STAFF, key: "sanguinesti-staff-charges", refund: I.BLOOD_RUNE, owed: 200, preset: true },
   { name: "Toxic staff of the dead", id: I.TOXIC_STAFF_OF_THE_DEAD, key: "toxic-staff-charges", refund: I.ZULRAHS_SCALES, owed: 100 },
   { name: "Dizana's quiver", id: Quiver._test.idFor("charged", false), key: Quiver.CHARGE_META, refund: I.SUNFIRE_SPLINTERS, owed: 100 },
-  { name: "Accursed sceptre", id: I.ACCURSED_SCEPTRE_A_, key: "accursed-sceptre-charges", refund: I.REVENANT_ETHER, owed: 1100 },
+  // An activated sceptre carries its paid 1,000-ether deposit (AccursedSceptre's deposit record), refunded with the charges.
+  { name: "Accursed sceptre", id: I.ACCURSED_SCEPTRE_A_, key: "accursed-sceptre-charges", refund: I.REVENANT_ETHER, owed: 1100,
+    meta: { "accursed-sceptre-deposit": true } },
   { name: "Venator bow", id: I.VENATOR_BOW, key: "venator-bow:charges", refund: I.ANCIENT_ESSENCE, owed: 100 },
   { name: "Bone staff", id: I.BONE_STAFF, key: "bone-staff-charges", refund: I.CHAOS_RUNE, owed: 100, preset: true },
 ];
@@ -135,7 +138,7 @@ test("Uncharge onto a stack: paid when it fits exactly, refused one past it", as
     const run = async (held) => {
       const f = actor(t);
       put(f, item(c.refund, held), 0);
-      const staff = put(f, charged(c.id, c.key, 100), 1);
+      const staff = put(f, charged(c.id, c.key, 100, c.meta), 1);
       await heldOp(f, 1, "Uncharge");
       return [f.inv.getAmount(c.refund), chargesOf(staff, c.key)];
     };

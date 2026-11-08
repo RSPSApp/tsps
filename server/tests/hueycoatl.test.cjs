@@ -497,3 +497,36 @@ test("under-25 body damage reduces only the pet contribution chance by 95 percen
   assert.equal(Kills._test.lootFor({}, {}, low, 6, false).drops.some(drop => drop.itemId === PET), false,
     "half contribution times 0.05 is exactly 0.025, with the existing exclusive roll boundary");
 });
+
+test("an Ironman in a team keeps their own Hueycoatl share (Wiki: group-boss rewards), the real Ironman rule applied", t => {
+  const IronCommon = require("../plugins/modes/ironman/Common.Ironman");
+  const events = new Map();
+  const placed = [];
+  const api = new Proxy({ core,
+    getItemOnGroundManager: () => ({ registerLocation(player, item) { placed.push([player, item.getId()]); } }),
+    onCustomEvent(name, fn) { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
+    emitCustomEvent(name, request) {
+      if (name === "npc-drops:roll-table") { if (request.entryFilter({ section: "Main" })) request.drops.push({ itemId: 557, amount: 2000 }); return; }
+      for (const fn of events.get(name) ?? []) fn(request);
+    } }, { get: (target, key) => target[key] ?? (() => {}) });
+  IronCommon.init(api);
+  require("../plugins/modes/ironman/Loot.Ironman")(api);
+  Kills.attach(api);
+  t.mock.method(Math, "random", () => 0.5);
+  const fighter = (name) => {
+    const attributes = new Map();
+    return { name, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+      sendMessage() {}, getDisplayName: () => name, getUsername: () => name, getEquipment: () => ({ getItems: () => [] }) };
+  };
+  const [iron, other] = [fighter("Iron"), fighter("Main")];
+  iron.setAttribute(IronCommon.MODE_ATTRIBUTE, "ironman");
+  const head = {};
+  const fight = { head, spawnedAt: 0, joinedAt: new Map(), damage: new Map([[iron, { body: 200, head: 400, tail: 0 }], [other, { body: 200, head: 400, tail: 0 }]]) };
+  const session = { fight, arenaPlayers: () => [iron, other], tile: () => ({}), graphic() {} };
+  Kills.killed(session);
+  assert.ok(placed.some(([who]) => who === iron), "the Ironman's share is placed");
+  assert.ok(placed.some(([who]) => who === other));
+  const shared = { player: iron, npc: {}, npcId: 1, drops: [{ itemId: 995, amount: 1 }], damagers: [iron, other] };
+  api.emitCustomEvent("npc-drops:roll", shared);
+  assert.deepEqual(shared.drops, [], "another monster's shared kill is still lost");
+});

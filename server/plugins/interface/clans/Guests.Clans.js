@@ -282,7 +282,11 @@ function settleApplicant(player, clan, accept) {
   selectedApplicant.delete(player);
   const online = Core.onlinePlayer(chosen.account);
   online?.getPacketSender().sendVarbit(APPLYING_VARBIT, 0);
-  if (!accept) {
+  // A ban placed after they applied withdraws the application: accepting it would override the ban.
+  if (accept && Core.isBanned(clan, chosen.name)) {
+    Store.save();
+    player.sendMessage(`${chosen.name} is banned from ${clan.name}, so their application has been withdrawn.`);
+  } else if (!accept) {
     Store.save();
     online?.sendMessage(`Your application to ${clan.name} has been declined.`);
   } else if (online && !Core.clanOf(online)) {

@@ -344,6 +344,40 @@ test("a team's kill gives its uniques once, to one player by weight of damage (W
   for (const player of [a, b, c]) assert.ok(placed.some(([who, id]) => who === player && id === 995), "everyone rolls the rest");
 });
 
+test("an Ironman in a team keeps their own Nightmare roll (Wiki: group-boss rewards), the real Ironman rule applied", () => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const IronCommon = require("../plugins/modes/ironman/Common.Ironman");
+  const events = new Map();
+  const ironApi = new Proxy({
+    core: fakeApi.core,
+    onCustomEvent(name, fn) { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
+    emitCustomEvent(name, payload) { for (const fn of events.get(name) ?? []) fn(payload); },
+  }, { get: (target, key) => key in target ? target[key] : () => {} });
+  IronCommon.init(ironApi);
+  require("../plugins/modes/ironman/Loot.Ironman")(ironApi);
+  ironApi.onCustomEvent("ironman:shared-kill-keeps", Loot.ironmanKeeps);
+  fakeApi.emitCustomEvent = (name, payload) => {
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: 995, amount: 1 });
+    else ironApi.emitCustomEvent(name, payload);
+  };
+  const placed = [];
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation(player, item) { placed.push([player, item.itemId]); } });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526 };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const [iron, main] = [fakePlayer(), fakePlayer()];
+  iron.setAttribute(IronCommon.MODE_ATTRIBUTE, "ironman");
+  const fight = { phosani: false, boss: {}, dream: { tile: () => ({}), area: {} },
+    contribution: new Map([[iron, { shield: 1, totems: 1 }], [main, { shield: 1, totems: 1 }]]) };
+  Loot.reward(fight, [iron, main]);
+  assert.ok(placed.some(([who, id]) => who === iron && id === 995), "the Ironman's roll is placed");
+  assert.ok(placed.some(([who, id]) => who === main && id === 995));
+  // Another monster's shared kill is still lost for the Ironman.
+  const other = { player: iron, npc: {}, npcId: 1, drops: [{ itemId: 995, amount: 1 }], damagers: [iron, main] };
+  ironApi.emitCustomEvent("npc-drops:roll", other);
+  assert.deepEqual(other.drops, []);
+});
+
 test("the pet's 1/800 is shared by party size (Wiki: 1/800 solo, 1/2,400 for 3, 1/4,000 at 5 or more)", (t) => {
   const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
   const PET = 24491;

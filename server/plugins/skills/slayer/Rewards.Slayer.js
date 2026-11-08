@@ -48,11 +48,7 @@ const QUEST_POINTS_VARP = 101;
 const LUMBRIDGE_ELITE_VARBIT = 4538;
 
 /** Unlocks whose confirm, once bought, turns a toggle instead of locking them (script 414). */
-const TOGGLES = new Map([
-  [35, "slayer_toggleoff_superiormobs"],
-  [43, "slayer_toggleoff_fossilwyvernblock"],
-  [53, "slayer_toggleoff_longerrevenants"],
-]);
+const TOGGLES = Tasks.TOGGLES;
 
 /** Buy tab enums: items, amounts per purchase, prices. */
 const BUY_ITEMS_ENUM = 840;
@@ -210,6 +206,13 @@ function block(player) {
 }
 
 function blockNow(player, master, task) {
+  // The confirm's Yes can come after the task changed (finished, cancelled, a new one): block only the one still held.
+  const held = Tasks.current(player);
+  if (!held || held.taskId !== task.taskId) return;
+  if (BLOCK_SLOTS.some((candidate) => hasVarbit(blockVarbit(master, candidate)) && State.varbit(player, blockVarbit(master, candidate)) === task.taskId)) {
+    player.sendMessage("You have already blocked this task with this master.");
+    return;
+  }
   const slot = BLOCK_SLOTS.find((candidate) => hasVarbit(blockVarbit(master, candidate))
     && slotOpen(player, candidate) && State.varbit(player, blockVarbit(master, candidate)) === 0);
   if (!slot) {

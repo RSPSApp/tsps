@@ -95,6 +95,13 @@ function makePottery(player, recipe, firing) {
   const inventory = player.getInventory();
   const input = firing ? recipe.unfiredId : Shared.getCore().ItemIds.SOFT_CLAY;
   if (!inventory.contains(input) || (!firing && !canShape(player, recipe))) return false;
+  // A shaping that makes several (a set of four cups) needs room for all of them: the clay frees one slot, and the
+  // rest of the set was dropped by the add ("You couldn't hold all those items."), XP paid and the loop going on.
+  const made = firing ? 1 : recipe.shaped ?? 1;
+  if (made > 1 && inventory.getFreeSlots() + 1 < made) {
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
   inventory.deleteNumber(input, 1);
   if (firing && recipe.cracks !== false && Math.random() >= firingChance(Shared.craftingLevel(player))) {
     return true; // Cracked pottery is destroyed, with no product or XP.

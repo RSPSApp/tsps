@@ -759,9 +759,16 @@ function reclaimPets(event) {
   Recovery.open(event);
 }
 
-/** Boss pets come straight to the killer instead of landing on the floor. */
-function awardDroppedPets({ player, drops }) {
+/**
+ * Boss pets come straight to the killer instead of landing on the floor. A boss whose loot waits for a claim (the Royal
+ * Titans' corpses) holds its death roll back ("pets:hold-for-claim" { player, npc, npcId, claim, hold }): its pet then
+ * comes with the claim's own roll (marked `claim` on npc-drops:roll), to whoever claims, not to the last hitter.
+ */
+function awardDroppedPets({ player, npc, npcId, drops, claim }) {
   if (!player || !Array.isArray(drops)) return;
+  const hold = { player, npc, npcId, claim: claim === true, hold: false };
+  pluginApi?.emitCustomEvent?.("pets:hold-for-claim", hold);
+  if (hold.hold === true) return;
   for (let index = drops.length - 1; index >= 0; index--) {
     const itemId = drops[index]?.itemId ?? drops[index]?.id;
     if (!getPetForItemId(itemId)) continue;

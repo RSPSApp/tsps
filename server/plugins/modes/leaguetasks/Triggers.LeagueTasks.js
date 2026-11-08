@@ -207,12 +207,29 @@ function npcName(npc) {
 }
 
 /**
+ * How long a death and its plugin's own report of that kill are one kill. Araxxor's corpse reports 5 ticks after the
+ * death and Skotizo's report comes about 15 ticks before it, so a same-tick merge counted both. Within the window each
+ * source still adds up on its own (two deaths are two kills), so only a death paired with its own report collapses.
+ */
+const CREDIT_WINDOW_TICKS = 20;
+
+/**
  * `amount` kills of the NPC `name` from `source` ("deaths" or "events") for the character's open
- * kill tasks that accept it: each task's progress takes this tick's larger count, then any task
+ * kill tasks that accept it: each task's progress takes the window's larger count, then any task
  * that reached its count completes.
  */
+/** "The Hueycoatl" and "Hueycoatl, The" are one name: a plugin's kill report may use either form. */
+function articleSwapped(key) {
+  const leading = /^the (.+)$/.exec(key);
+  if (leading) return `${leading[1]}, the`;
+  const trailing = /^(.+), the$/.exec(key);
+  return trailing ? `the ${trailing[1]}` : null;
+}
+
 function credit(player, type, name, source, amount, tile = null) {
-  const tasks = indexOf(type).kills.get(String(name ?? "").toLowerCase());
+  const kills = indexOf(type).kills;
+  const key = String(name ?? "").toLowerCase();
+  const tasks = kills.get(key) ?? kills.get(articleSwapped(key));
   if (!tasks || !(amount > 0)) return;
   const done = new Set(Common.completedIds(player));
   // A `credited` task (a minigame's completion: "Complete the TzHaar Fight Cave") counts only the
@@ -226,7 +243,9 @@ function credit(player, type, name, source, amount, tile = null) {
   const progress = { ...killsOf(player) };
   for (const task of open) {
     let entry = perTask.get(task.id);
-    if (!entry || entry.tick !== tick) perTask.set(task.id, (entry = { tick, deaths: 0, events: 0, credited: 0 }));
+    if (!entry || tick - entry.tick > CREDIT_WINDOW_TICKS || tick < entry.tick) {
+      perTask.set(task.id, (entry = { tick, deaths: 0, events: 0, credited: 0 }));
+    }
     entry[source] += amount;
     const due = Math.max(entry.deaths, entry.events) - entry.credited;
     if (due <= 0) continue;

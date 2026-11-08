@@ -135,7 +135,7 @@ Shop stock, an NPC drop, a clue reward or a plugin hands these out. None is a co
 
 | Kind | Items |
 | --- | --- |
-| Charge or status Check, no charge system here | Abyssal tentacle, Amulet of the Damned, Binding necklace, Blade of Saeldor, Bow of Faerdhinen, Craw's bow, Crystal shield, Echo boots, Expeditious bracelet, Gloves of silence, Gnomish firelighter, Hat of the Eye, Iban's staff (u), Infernal pickaxe, Merfolk trident, Pendant of Ates (inert), Ring of shadows, Santa's list, Slayer's staff (e), Soul bearer, Thammaron's sceptre, Treat cauldron, Trident of the Seas (full), Webweaver bow, Xeric's talisman (inert), the Barrows equipment, slayer helmets |
+| Charge or status Check, no charge system here | Abyssal tentacle, Amulet of the Damned, Binding necklace, Blade of Saeldor, Bow of Faerdhinen, Craw's bow, Crystal shield, Echo boots, Gloves of silence, Gnomish firelighter, Hat of the Eye, Iban's staff (u), Infernal pickaxe, Merfolk trident, Pendant of Ates (inert), Ring of shadows, Santa's list, Slayer's staff (e), Soul bearer, Thammaron's sceptre, Treat cauldron, Trident of the Seas (full), Webweaver bow, Xeric's talisman (inert), the Barrows equipment, slayer helmets |
 | Wiki gives the behaviour | Jar of Darkness View: "You view the darkness." with the screen going black for a moment (Wiki trivia; not captured) |
 | Wiki gives no behaviour | Tea flask Look-in (holds 5 cups), Dizana's max cape Open (most likely the blessed quiver's ammo interface) |
 | Listed by #1765 | Jar of Swamp, Heavy casket, Master scroll book |

@@ -289,7 +289,9 @@ function finishRun(player, wavesCleared, wonJad) {
 function rescueGroundItems(player, area) {
   const { ItemOnGroundManager, World } = core;
   for (const item of [...World.getItems()]) {
-    if (item.getPrivateArea() !== area) continue;
+    // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
+    // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
+    if (item.isPendingRemoval?.() || item.getPrivateArea() !== area) continue;
     ItemOnGroundManager.deregister(item);
     ItemOnGroundManager.registerLocation(player, item.getItem(), tile(EXIT), null);
   }

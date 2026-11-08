@@ -22,7 +22,9 @@ function countedKills(player) {
 function rollDrops(player, npc) {
   const drops = [];
   Common.api.emitCustomEvent("npc-drops:roll-table", { player, npc, table: Common.data.drops, drops });
-  Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: npc.getId?.(), drops });
+  // NpcDrops' own death roll for Dusk (empty: she has no dumped table, but it carries the contextual drops) already
+  // counts the kill in the collection log; this roll only logs the loot.
+  Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: npc.getId?.(), drops, countKill: false });
   Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: npc.getLocation() });
 }
 

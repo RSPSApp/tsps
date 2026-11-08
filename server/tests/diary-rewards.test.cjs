@@ -63,6 +63,8 @@ function player({ prayer = 99, maxPrayer = 99, energy = 0 } = {}) {
   let runEnergy = energy;
   return {
     messages, varbits,
+    drain: 40,
+    setPrayerPointDrain(value) { this.drain = value; },
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (text) => messages.push(text),
@@ -186,6 +188,18 @@ test("the Falador shield restores its share of Prayer once a day, and full Praye
   option("Falador shield 4", "Recharge-prayer", full);
   option("Falador shield 4", "Check", full);
   assert.equal(full.messages.at(-1), "Your shield has 2 prayer restores left for today.");
+});
+
+test("a Falador shield recharge clears the prayer drain counter, a refused one does not (Wiki)", () => {
+  const p = player({ prayer: 10, maxPrayer: 70 });
+  option("Falador shield 1", "Recharge-prayer", p);
+  assert.equal(p.drain, 0);
+  p.drain = 40;
+  option("Falador shield 1", "Recharge-prayer", p);
+  assert.equal(p.drain, 40, "no charge left");
+  const full = player({ prayer: 70, maxPrayer: 70 });
+  option("Falador shield 4", "Recharge-prayer", full);
+  assert.equal(full.drain, 40, "full Prayer");
 });
 
 test("Falador shield 4 restores fully twice a day", () => {

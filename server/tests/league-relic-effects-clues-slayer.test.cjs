@@ -350,6 +350,20 @@ test("Bloodthirsty: superiors 1 in 25, a quarter bloodthirsty; points and six (n
     assert.equal(player.getAttribute(Bracelet.CHARGES_ATTRIBUTE), 29, `${player.getUsername()} uses a charge`);
   }
 
+  // The expeditious bracelet: 35% and no charge.
+  const Expeditious = require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer");
+  const expedited = (player, roll) => {
+    player.getEquipment().setItem(core.Equipment.HANDS_SLOT, new Item(I.EXPEDITIOUS_BRACELET));
+    return Expeditious.extraKills(player, npcOf("Nechryael"), () => roll);
+  };
+  assert.equal(expedited(who.relic, 0.3), 1, "a 30 works (35%)");
+  assert.equal(who.relic.getAttribute(Expeditious.CHARGES_ATTRIBUTE), undefined, "no charge used");
+  for (const player of others(who)) {
+    assert.equal(expedited(player, 0.3), 0, `${player.getUsername()}'s expeditious bracelet works 25% of the time`);
+    assert.equal(expedited(player, 0.2), 1);
+    assert.equal(player.getAttribute(Expeditious.CHARGES_ATTRIBUTE), 29, `${player.getUsername()} uses a charge`);
+  }
+
   // The gem's check offers a task from anywhere.
   const master = core.CacheDefinitions.getVarbitId("slayer_master");
   for (const player of [who.relic, ...others(who)]) player.getPacketSender().sendVarbit(master, 6); // Duradel

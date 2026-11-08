@@ -990,13 +990,22 @@ export class ClientConnection {
         case "widget":
           if (this.player && packet.action === "close") this.player.getPacketSender().closeInterface(packet.groupId);
           continue;
-        case "widget_target":
-          if (this.player && !LunarSpells.handleItemTarget(
+        case "widget_target": {
+          // A spell cast on an inventory item (High Alchemy, Plank Make) is an inventory interaction: it closes the
+          // dialogue and any amount prompt, as an inventory click does. With the dialogue left open, an item a
+          // dialogue had just checked could be alched before its action ran, and the action still paid.
+          // The spell-on-item routes below act on the inventory's slot, whatever the target names, so they only run
+          // for a target in the inventory: another group (a bank or dialogue widget) can't alch past an open dialogue.
+          const onInventory = (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID;
+          if (this.player && onInventory) {
+            this.player.closeInterruptibleInterfaces();
+          }
+          if (this.player && !(onInventory && (LunarSpells.handleItemTarget(
             this.player,
             packet.targetItemId,
             packet.targetSlot,
             CacheDefinitions.getSpellName(packet.sourceWidgetId, packet.sourceItemId),
-          ) && !PluginManager.emitSpellOnItem({
+          ) || PluginManager.emitSpellOnItem({
             player: this.player,
             spellName: CacheDefinitions.getSpellName(packet.sourceWidgetId, packet.sourceItemId),
             spellWidget: packet.sourceWidgetId,
@@ -1004,7 +1013,7 @@ export class ClientConnection {
             itemId: packet.targetItemId,
             slot: packet.targetSlot,
             handled: false,
-          }) && !MAGIC_ITEMS.castOnItem(
+          }) || MAGIC_ITEMS.castOnItem(
             this.player,
             this.resolveClientCombatSpellId(
               packet.sourceWidgetId,
@@ -1013,7 +1022,7 @@ export class ClientConnection {
             ),
             packet.targetItemId,
             packet.targetSlot
-          )) {
+          )))) {
             InterfaceActionClickOpcode.handle(this.player, packet.targetWidgetId, packet.sourceSlot, {
               targetWidgetId: packet.targetWidgetId,
               targetSlot: packet.targetSlot,
@@ -1024,6 +1033,7 @@ export class ClientConnection {
             });
           }
           continue;
+        }
         case "widget_drag":
           if (this.player) {
             const widgetDrag = { player: this.player, packet, handled: false };

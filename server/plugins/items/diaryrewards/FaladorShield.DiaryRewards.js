@@ -2,7 +2,8 @@
  * Falador shield (Wiki: Falador shield 1-4): Recharge-prayer restores 25%, 50% or 100% of the
  * Prayer level (rounded down) once a day, twice with shield 4; full Prayer spends no charge.
  * The restore plays the Elysian spirit shield's graphic (Wiki trivia). Check tells the charges
- * left. Uses count in varbit falador_shield_recharge.
+ * left. Uses count in varbit falador_shield_recharge. A recharge also clears the prayer drain
+ * counter (Wiki: Prayer, Falador shield 4), so the next point is a whole drain-resistance away.
  */
 const Rewards = require("./Common.DiaryRewards");
 
@@ -35,6 +36,7 @@ function rechargePrayer(player, tier) {
   }
   const restore = Math.floor(max * shield().restorePercent[tier] / 100);
   skills.setCurrentLevel(Skill.PRAYER, Math.min(max, current + restore), true);
+  player.setPrayerPointDrain(0);
   player.performGraphic(new Graphic(Rewards.gamevalId("spotanim", shield().spotanim), GraphicHeight.LOW));
   const used = Rewards.useDaily(player, DAILY_KEY);
   Rewards.sendCount(player, Rewards.gamevalId("varbit", shield().varbit), used);

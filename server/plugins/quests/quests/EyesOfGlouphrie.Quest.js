@@ -204,6 +204,15 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const puzzleProgress = new WeakMap();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+  /** A crystal saw or seed held, worn, or in any bank tab but the search tab (not a placeholder). */
+  function ownsSawOrSeed(player) {
+    const searchTab = api.core.Bank.BANK_SEARCH_TAB_INDEX;
+    return [CRYSTAL_SAW_ITEM_ID, CRYSTAL_SAW_SEED_ITEM_ID].some((id) => held(player, id)
+      || (player.getEquipment?.().contains?.(id) ?? false)
+      // A real banked amount: a placeholder (amount 0) left by withdrawing it is not a seed.
+      || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.getAmount?.(id) > 0));
+  }
   const isBrimstail = (npcId) => BRIMSTAIL_NPC_IDS.has(npcId);
   const isHazelmere = (npcId) => HAZELMERE_NPC_IDS.has(npcId);
 
@@ -523,11 +532,12 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     if (value.includes("after the eyes of glouphrie")) {
       return quest.isComplete(player);
     }
+    // Owned counts the bank: inventory only, a banked saw or seed let Brimstail hand out seeds (value 10,000) forever.
     if (value.includes("does not have a crystal saw or crystal seed")) {
-      return !held(player, CRYSTAL_SAW_ITEM_ID) && !held(player, CRYSTAL_SAW_SEED_ITEM_ID);
+      return !ownsSawOrSeed(player);
     }
     if (value.includes("has a crystal saw or crystal seed")) {
-      return held(player, CRYSTAL_SAW_ITEM_ID) || held(player, CRYSTAL_SAW_SEED_ITEM_ID);
+      return ownsSawOrSeed(player);
     }
     if (value.includes("crystal seed or uses it on brimstail")) {
       return held(player, CRYSTAL_SAW_SEED_ITEM_ID);

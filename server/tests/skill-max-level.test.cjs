@@ -57,6 +57,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const { PluginManager } = require("../dist/plugins/PluginManager");
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
+  require("../plugins/skills/farming/Core.Farming").init({ core });
   const C = require("../plugins/skills/hunter/Context.Hunter"), { H } = C;
   const Traps = require("../plugins/skills/hunter/Traps.Hunter");
   const Houses = require("../plugins/skills/hunter/Birdhouses.Hunter");
@@ -163,8 +164,8 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(Traps.limit(p, "box"), 5);
     assert.equal(Traps.limit({ ...p, getWildernessLevel: () => 10 }, "box"), 6);
     assert.equal(Traps.limit(p, "deadfall"), 2);
-    p.levels.set(Skill.HUNTER, 19); assert.equal(Traps.limit(p, "bird"), 1);
-    p.levels.set(Skill.HUNTER, 20); assert.equal(Traps.limit(p, "bird"), 2, "temporary boosts unlock the next trap");
+    p.levels.set(Skill.HUNTER, 19); assert.equal(Traps.limit(p, "bird"), 2);
+    p.levels.set(Skill.HUNTER, 20); assert.equal(Traps.limit(p, "bird"), 2, "level 20 keeps the two-trap minimum");
     p.levels.delete(Skill.HUNTER);
     let npcLocation = trap.location.clone(), visible = true, blocked = false;
     const npc = {

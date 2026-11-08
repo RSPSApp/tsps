@@ -157,26 +157,27 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const MITHRIL_ARROW_ITEM_ID = ItemIdentifiers.MITHRIL_ARROW; // 888
 
   // Ava's Devices (cache interface 67): each row is a Buy-1/5/X/All button (ops 1-4, click
-  // mask 0x1e in the cache) whose child model and the text below it are filled in by the server.
+  // mask 0x1e in the cache) whose child model and the cost text beside it are filled in by the
+  // server. The cost text follows the Wiki's interface image (File:Ava's_Devices_interface.png):
+  // each part the player can't pay is struck through, the "OR"/"AND" joins never are.
   const DEVICES_INTERFACE = 67;
   const DEVICES_INTERFACE_NAME = "Ava's Devices";
   const DEVICE_OP = { ONE: 1, FIVE: 2, X: 3, ALL: 4 };
   const DEVICE_ROWS = [
     {
       button: 2, model: 4, info: 6, itemId: AVAS_ATTRACTOR_ITEM_ID, name: "Ava's attractor",
-      text: "999 coins.",
       coins: 999, arrows: null, head: false, tradeIn: null,
     },
     {
       button: 7, model: 9, info: 11, itemId: AVAS_ACCUMULATOR_ITEM_ID, name: "Ava's accumulator",
-      text: "75 steel arrows, plus 999 coins<br>or an attractor. Needs 50 Ranged.",
       coins: 999, arrows: STEEL_ARROW_ITEM_ID, head: false, tradeIn: AVAS_ATTRACTOR_ITEM_ID,
+      arrowsName: "steel arrows", tradeInName: "Attractor",
       rangedLevel: 50, diary: true,
     },
     {
       button: 12, model: 14, info: 16, itemId: AVAS_ASSEMBLER_ITEM_ID, name: "Ava's assembler",
-      text: "Vorkath's head, 75 mithril arrows,<br>plus 4,999 coins or an accumulator.",
       coins: 4999, arrows: MITHRIL_ARROW_ITEM_ID, head: true, tradeIn: AVAS_ACCUMULATOR_ITEM_ID,
+      arrowsName: "mithril arrows", tradeInName: "Accumulator",
       quest: "dragon_slayer_ii", questName: "Dragon Slayer II", diary: true,
     },
   ];
@@ -1078,7 +1079,34 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     sender.sendInterface(DEVICES_INTERFACE);
     for (const row of DEVICE_ROWS) {
       sender.sendInterfaceModel((DEVICES_INTERFACE << 16) | row.model, row.itemId, 1);
-      sender.sendString(row.text, (DEVICES_INTERFACE << 16) | row.info);
+    }
+    refreshDeviceCosts(player);
+  }
+
+  /** The cost text for one row, striking through each part the player can't pay right now. */
+  function deviceCostText(player, row) {
+    const inventory = player.getInventory();
+    const part = (text, payable) => (payable ? text : `<str>${text}</str>`);
+    const lines = [];
+    let first = part(`${row.coins} coins`, plainAmount(inventory, COINS_ITEM_ID) >= row.coins);
+    if (row.tradeIn) {
+      first += ` OR an ${part(row.tradeInName, canTradeIn(inventory, row))}`;
+    }
+    lines.push(first);
+    if (row.arrows) {
+      lines.push(`AND ${part(`${DEVICE_ARROW_COST} ${row.arrowsName}`, plainAmount(inventory, row.arrows) >= DEVICE_ARROW_COST)}`);
+    }
+    if (row.head) {
+      lines.push(`AND ${part("the head of Vorkath", plainAmount(inventory, VORKATHS_HEAD_ITEM_ID) >= 1)}`);
+    }
+    return lines.join(",<br>");
+  }
+
+  function refreshDeviceCosts(player) {
+    if (player.getInterfaceId() !== DEVICES_INTERFACE) return;
+    const sender = player.getPacketSender();
+    for (const row of DEVICE_ROWS) {
+      sender.sendString(deviceCostText(player, row), (DEVICES_INTERFACE << 16) | row.info);
     }
   }
 
@@ -1145,6 +1173,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       bought++;
     }
     if (bought === 0) return;
+    refreshDeviceCosts(player);
     player.sendMessage(bought === 1 ? `Ava gives you ${row.name}.` : `Ava gives you ${bought} of her devices.`);
     if (row.diary) {
       api.emitCustomEvent("diary:task", {

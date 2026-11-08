@@ -183,6 +183,20 @@ test("Ava's Devices: a preset accumulator is never traded for a plain assembler;
   assert.equal(f.inv.getAmount(I.MITHRIL_ARROW), 0);
 });
 
+test("Ava's Devices: the cost text strikes through what the player can't pay, like the Wiki's interface", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism");
+  const texts = new Map();
+  t.mock.method(f.p.getPacketSender(), "sendString", (text, id) => { texts.set(id & 0xffff, text); return f.p.getPacketSender(); });
+  f.inv.setItem(0, new core.Item(I.COINS, 1000));
+  f.inv.setItem(1, preset(new core.Item(I.STEEL_ARROW, 75)));
+  avaDevices(f, 2, 1);
+  assert.equal(texts.get(6), "<str>999 coins</str>", "refreshed after buying an attractor with 999 of the 1,000 coins");
+  assert.equal(texts.get(11), "<str>999 coins</str> OR an Attractor,<br>AND <str>75 steel arrows</str>",
+    "the new attractor can be traded in; preset arrows don't count");
+  assert.equal(texts.get(16), "<str>4999 coins</str> OR an <str>Accumulator</str>,<br>AND <str>75 mithril arrows</str>,<br>AND <str>the head of Vorkath</str>");
+});
+
 test("Death Plateau: preset climbing boots become preset spiked boots", (t) => {
   const f = actor(t);
   f.inv.setItem(0, preset(new core.Item(I.CLIMBING_BOOTS, 1)));

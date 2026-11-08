@@ -188,7 +188,7 @@ function operateHopperControls(event) {
   if (bin) refreshBinObject(player, bin);
 }
 
-function emptyFlourBin(event) {
+function emptyFlourBin(api, event) {
   const { player } = event;
   if (flourAmount(player) <= 0) {
     player.sendMessage(
@@ -210,6 +210,7 @@ function emptyFlourBin(event) {
       ? "You fill a pot with the last of the flour in the bin."
       : "You fill a pot with flour from the bin."
   );
+  if (!isCornflour) api.emitCustomEvent("windmill:flour-collected", { player });
   refreshBinObject(player, event.object);
 }
 
@@ -222,7 +223,7 @@ module.exports = {
     api.onPlayerLogin(syncFlourOnLogin);
     api.onObjectInteraction("Hopper", { Fill: fillHopper });
     api.onObjectInteraction("Hopper controls", { Operate: operateHopperControls });
-    api.onObjectInteraction("Flour bin", { Empty: emptyFlourBin });
+    api.onObjectInteraction("Flour bin", { Empty: emptyFlourBin.bind(null, api) });
     api.onItemOnObject("Grain", "Hopper", useGrainOnHopper, { noted: false });
     api.onItemOnObject((event) => fillSweetcornHopper(event, api), { noted: false });
   },

@@ -580,7 +580,8 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   the token, so it keeps working when the set comes off. The crystal's Teleport-back returns to
   where the character's last teleport began, from the core's new `teleport:landed` (`from`,
   `fromInstance`), unless that was in an instance, Fossil Island's underwater area, Entrana, the
-  rune essence mine, Pyramid Plunder or the Agility Pyramid's upper floors (the Wiki's exclusions
+  rune essence mine, Pyramid Plunder, the Agility Pyramid's upper floors, Mogre Camp or Crash
+  Island's dungeon (the Wiki's exclusions
   this server has; boxes ours), up to Wilderness level 20 (ours); Check-memories says whether one
   is kept, and Save-memory that it keeps itself. Every teleport counts, the crystal's own too, so a
   second Teleport-back returns to where the first was used. Home teleports, fairy rings, spirit

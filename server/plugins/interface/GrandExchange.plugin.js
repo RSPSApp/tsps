@@ -774,9 +774,11 @@ function confirm(player, offer) {
   inventory.setItems(result.getItems()).refreshItems();
   for (const [tab, bank] of fromBank?.banks ?? []) player.getBank(tab).setItems(bank.getItems());
   const delay = fillDelayMs(offer);
-  const finished = { ...offer, total, finished: false, placedAt: Date.now(), completesAt: delay === null ? null : Date.now() + delay };
+  // One clock reading: releaseLimit matches placedAt against the window recordLimit opens here.
+  const now = Date.now();
+  const finished = { ...offer, total, finished: false, placedAt: now, completesAt: delay === null ? null : now + delay };
   completedOffers(player)[offer.slot] = finished;
-  if (!offer.sell) recordLimit(player, offer.itemId, amount);
+  if (!offer.sell) recordLimit(player, offer.itemId, amount, now);
   saveOffers(player);
   offers.delete(player);
   viewing.set(player, offer.slot);

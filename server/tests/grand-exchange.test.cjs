@@ -496,6 +496,19 @@ test('aborting a buy that bought nothing gives its quantity back to the buy limi
   assert.equal(place(false, LIMITED, 50, 1).quantity, 50, 'the item can be bid on again');
 });
 
+test('aborting the first buy of a window gives back the full limit even when the clock ticks between reads', t => {
+  t.mock.method(Math, 'random', () => 0.99);
+  let clock = Date.now();
+  t.mock.method(Date, 'now', () => clock++);
+  const { p, inventory, place, click } = exchange(t);
+  inventory.add(new Item(995, 1_000), false);
+  assert.equal(place(false, LIMITED, 150, 1).finished, false, 'the bid has not filled yet');
+  assert.equal(remainingLimit(p, LIMITED), 0);
+  click(23);
+  click(24);
+  assert.equal(remainingLimit(p, LIMITED), 150, 'the offer was counted in the window it opened');
+});
+
 test('an abort never frees a later buy-limit window that did not count the offer', t => {
   const { p } = exchange(t);
   const start = Date.now();

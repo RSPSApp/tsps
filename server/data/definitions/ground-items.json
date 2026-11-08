@@ -1905,5 +1905,7 @@
   {"id":995,"location":{"x":3001,"y":9798,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Dwarven Mine]]"},
   {"id":1925,"location":{"x":1667,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Bucket — [[Civitas illa Fortis]]"},
   {"id":1925,"location":{"x":1644,"y":3093,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Bucket — [[Civitas illa Fortis]]"},
-  {"id":1931,"location":{"x":1666,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Pot — [[Civitas illa Fortis]]"}
+  {"id":1931,"location":{"x":1666,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Pot — [[Civitas illa Fortis]]"},
+  {"id":952,"location":{"x":1641,"y":3052,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Spade — [[Outer Fortis]]"},
+  {"id":952,"location":{"x":1405,"y":2938,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Spade — [[Aldarin]]"}
 ]

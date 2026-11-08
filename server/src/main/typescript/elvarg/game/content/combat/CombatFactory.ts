@@ -309,6 +309,38 @@ export class CombatFactory {
      * already capped to the target's HP at roll time, so a heal after the roll can make
      * the hit non-lethal.
      */
+    /**
+     * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
+     * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
+     * hit, and before its XP); a hit queued when it lands (Scurrius' bolts, the Leviathan's bite) is read then. The
+     * impact pass only covers hits that skipped the queue (a manipulateHit replacement).
+     */
+    public static applyProtectionPrayer(hit: PendingHit): void {
+        if (typeof hit.hasAppliedImpactProtection === "function" && hit.hasAppliedImpactProtection()) return;
+        const hits = typeof hit.getHits === "function" ? hit.getHits() : null;
+        const attacker = hit.getAttacker();
+        const victim = hit.getTarget();
+        if (!Array.isArray(hits) || hits.length === 0 || !attacker || !victim) return;
+        const bypassProtection = typeof hit.bypassesProtectionPrayer === "function"
+            && hit.bypassesProtectionPrayer();
+        const protectionType = typeof hit.getProtectionType === "function"
+            ? hit.getProtectionType()
+            : hit.getCombatType();
+        if (!bypassProtection && protectionType !== undefined) {
+            const prayer = PrayerHandler.getProtectingPrayer(protectionType);
+            if (PrayerHandler.isActivated(victim, prayer)) {
+                const reduction = attacker.isNpc()
+                    ? CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS
+                    : CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+                for (const damage of hits) damage.multiplyDamage(reduction);
+            }
+        }
+        if (typeof hit.markImpactProtectionApplied === "function") {
+            hit.markImpactProtectionApplied();
+        }
+        if (typeof hit.updateTotalDamage === "function") hit.updateTotalDamage();
+    }
+
     public static applyHitTimeDefences(hit: PendingHit): void {
         if (!hit || typeof hit.getHits !== "function") {
             return;
@@ -323,27 +355,7 @@ export class CombatFactory {
             return;
         }
 
-        const protectionApplied = typeof hit.hasAppliedImpactProtection === "function"
-            && hit.hasAppliedImpactProtection();
-        if (!protectionApplied) {
-            const bypassProtection = typeof hit.bypassesProtectionPrayer === "function"
-                && hit.bypassesProtectionPrayer();
-            const protectionType = typeof hit.getProtectionType === "function"
-                ? hit.getProtectionType()
-                : hit.getCombatType();
-            if (!bypassProtection && protectionType !== undefined) {
-                const prayer = PrayerHandler.getProtectingPrayer(protectionType);
-                if (PrayerHandler.isActivated(victim, prayer)) {
-                    const reduction = attacker.isNpc()
-                        ? CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS
-                        : CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
-                    for (const damage of hits) damage.multiplyDamage(reduction);
-                }
-            }
-            if (typeof hit.markImpactProtectionApplied === "function") {
-                hit.markImpactProtectionApplied();
-            }
-        }
+        CombatFactory.applyProtectionPrayer(hit);
 
         const incomingApplied = typeof hit.hasAppliedImpactIncoming === "function"
             && hit.hasAppliedImpactIncoming();
@@ -906,6 +918,8 @@ export class CombatFactory {
             });
         }
 
+        // The protection prayer is read on the attack's tick, before the XP is paid on what the hit deals.
+        CombatFactory.applyProtectionPrayer(qHit);
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {

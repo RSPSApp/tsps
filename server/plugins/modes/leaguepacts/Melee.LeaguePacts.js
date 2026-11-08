@@ -49,7 +49,15 @@
  *   talent_defence_recoil_scaling (+N% of the summed defence bonuses on Thorns, and on reflected
  *   damage landing (`combat:damage-apply`) from a wearer of a ring of recoil or suffering:
  *   approximation, a vengeance at the same time is counted as well). Thorns is reflected damage
- *   (no XP, respects `combat:recoil-immune`) and never hits players.
+ *   (respects `combat:recoil-immune`) and never hits players. Each Thorns hit (the second one too)
+ *   pays combat XP for its damage as it is queued, on the tick the NPC's hit lands: 4 per damage
+ *   split across the current melee style's skills (Controlled shares Attack, Strength and Defence)
+ *   and 4/3 to Hitpoints, by the NPC's combat XP multiplier. With a weapon that is no melee weapon,
+ *   or while autocasting, it is Attack, whatever melee style came before (rsprox captures, Leagues
+ *   VI, 237/01104, 237/04057, 237/04099, 238/04142: 194 of 194 Thorns hits on idle players paid
+ *   it; a rune pickaxe or dragon dagger on Strength, then an earth battlestaff, and a tentacle on
+ *   Controlled, then a shadowflame quadrant, all paid Attack). The second hit's XP is ours: no
+ *   capture shows it.
  * - 23 talent_shield_reflect: with a shield, 0.1% per Defence level (current, with
  *   talent_defence_boost's visible boost) that an NPC's hit is
  *   reflected whole: the player takes 0 and the attacker the damage (`onPlayerHitModify`, after
@@ -351,6 +359,19 @@ function recoilBonus(player) {
   return Math.max(0, Math.floor((total * percent) / 100));
 }
 
+/** Thorns' XP for a hit of `damage`: the melee style's skills, or Attack off a melee weapon. */
+function thornsExperience(player, attacker, damage) {
+  if (damage <= 0) return;
+  const { Skill } = core;
+  const rate = 4 * (attacker.getCombatXpMultiplier?.() ?? 1);
+  const held = weapon(player);
+  const melee = player.getCombat().getAutocastSpell?.() == null && (held === null || isMeleeWeapon(held));
+  const indices = melee ? player.getFightType().getStyle().skill(core.CombatType.MELEE) : [Skill.ATTACK.getIndex()];
+  const skills = player.getSkillManager();
+  for (const index of indices) skills.addExperience(Skill.values()[index], (damage * rate) / indices.length, true);
+  skills.addExperience(Skill.HITPOINTS, (damage * rate) / 3, true);
+}
+
 function reflect(player, attacker, damage) {
   const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
@@ -363,10 +384,21 @@ function thorns(player, attacker, hit) {
   const damage = thornsDamage(player);
   const second = value(player, "thornsDouble") ? Math.floor(damage * THORNS_SECOND_FRACTION) : 0;
   const splats = Math.max(1, hit.getHits?.()?.length ?? 1);
+  // The XP budget: the hitpoints the NPC has left after damage already queued, shared by every splat.
+  let remaining = attacker.getHitpoints() - (attacker.getCombat().getHitQueue().getQueuedDamage?.() ?? 0);
+  const paid = (amount) => {
+    const counted = Math.max(0, Math.min(amount, remaining));
+    remaining -= counted;
+    return counted;
+  };
   for (let i = 0; i < splats; i++) {
-    if (attacker.getHitpoints() <= 0) return;
+    if (attacker.getHitpoints() <= 0 || remaining <= 0) return;
     thornsHits.add(reflect(player, attacker, damage));
-    if (second > 0) thornsHits.add(reflect(player, attacker, second));
+    thornsExperience(player, attacker, paid(damage));
+    if (second > 0) {
+      thornsHits.add(reflect(player, attacker, second));
+      thornsExperience(player, attacker, paid(second));
+    }
     distanceHeal(player, attacker);
   }
 }

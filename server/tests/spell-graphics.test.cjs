@@ -58,3 +58,24 @@ test("Magic Dart has no cast graphic", () => {
   assert.equal(CombatSpells.MAGIC_DART.startGraphic(), null);
   assert.equal(projectileOf(CombatSpells.MAGIC_DART), spotanim("slayer_magicdart_travel"));
 });
+
+// These legacy callers stored height100 in a packed high word; Graphic takes an unpacked height.
+for (const [name, graphic] of Object.entries({
+  CRUMBLE_UNDEAD: "crumbleundead_casting", IBAN_BLAST: "ibanblast_casting",
+  VULNERABILITY: "vulnerability_casting", ENFEEBLE: "enfeeble_casting",
+  STUN: "stun_casting", ICE_BLITZ: "ice_burst_travel",
+})) test(`${name} starts its caster graphic at height100 with zero delay`, (t) => {
+  const played = [];
+  const caster = {
+    isNpc: () => false, isPlayer: () => true,
+    getAsPlayer: () => ({ getEquipment: () => ({ hasStaffEquipped: () => false }) }),
+    performAnimation() {}, performGraphic: (graphic) => played.push(graphic),
+  };
+  const spell = CombatSpells[name];
+  t.mock.method(spell, "castProjectile", () => null);
+  spell.startCast(caster, {});
+  assert.equal(played.length, 1);
+  assert.equal(played[0].getId(), spotanim(graphic));
+  assert.equal(played[0].getHeight(), 100);
+  assert.equal(played[0].getDelay(), 0);
+});

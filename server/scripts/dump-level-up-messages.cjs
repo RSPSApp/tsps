@@ -15,6 +15,10 @@ const { execFileSync } = require("node:child_process");
 const SKILLS = ["Attack", "Strength", "Defence", "Ranged", "Prayer", "Magic", "Runecrafting",
   "Hitpoints", "Crafting", "Mining", "Smithing", "Fishing", "Cooking", "Firemaking", "Woodcutting",
   "Agility", "Herblore", "Thieving", "Fletching", "Slayer", "Farming", "Construction", "Hunter", "Sailing"];
+// The skill's name on the server, then the Wiki page that holds its transcript where they
+// differ: `Transcript:Runecrafting` is only a 34-byte `#REDIRECT [[Transcript:Runecraft]]`,
+// which `action=raw` returns as a 200, so nothing follows it and the skill comes out empty.
+const WIKI_PAGE = { Runecrafting: "Runecraft" };
 const DEST = path.join(__dirname, "..", "plugins", "interface", "data", "level-up-messages.json");
 const SOURCE_NOTE = "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read "
   + "as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the "
@@ -94,7 +98,9 @@ function clean(text) {
   out = out.replace(/'''?/g, "");
   out = out.replace(/<[^>]+>/g, "");
   out = out.replace(/&nbsp;/g, " ");
-  return out.replace(/\s+/g, " ").trim();
+  out = out.replace(/\s+/g, " ").trim();
+  // Defence 25's wiki line ends `armour.'` — a transcription stray, not something the game says.
+  return out.replace(/([.!?])'$/, "$1");
 }
 
 const TERM = /\b(?:level\s+)?(\d+)\s+([A-Za-z]+)\s*$/;
@@ -189,28 +195,50 @@ function parseSkill(skill, raw) {
       const text = clean(bullet[1]);
       if (text && !/^transcript/i.test(text)) entries.push(when ? { text, when: condition(when) } : text);
     }
-    if (entries.length) levels[level] = entries;
+    // Appended, not replaced: Magic gives a level its own box in each spellbook section
+    // (Water Bolt on Standard, a Battlefront teleport on Arceuus), and the last one won.
+    if (entries.length) levels[level] = (levels[level] ?? []).concat(entries);
   }
   return levels;
 }
 
 /**
- * The raw wikitext for a skill. `curl` does the fetching: Node's own TLS stack rejects the
- * wiki's certificate chain on some networks (a TLS-inspecting proxy), while curl trusts it.
+ * The raw wikitext for a skill, from the Wiki page that holds its transcript.
  * `--from <dir>` reads `<dir>/<Skill>.txt` instead, for an offline or reproducible dump.
+ * Fetching prefers Node's own `fetch`; behind a TLS-inspecting proxy whose certificate Node's
+ * store lacks it throws, and `curl`, which trusts the system store, tries instead.
  */
-function fetchRaw(skill, fromDir) {
+async function fetchRaw(skill, fromDir) {
   if (fromDir) return fs.readFileSync(path.join(fromDir, skill + ".txt"), "utf8");
-  const url = "https://oldschool.runescape.wiki/index.php?title=Transcript:" + encodeURIComponent(skill) + "&action=raw";
-  return execFileSync("curl", ["-sS", "--fail", "-A", "tsps-level-up-dump/1.0 (tsps dev tooling)", url],
-    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const page = WIKI_PAGE[skill] ?? skill;
+  const url = "https://oldschool.runescape.wiki/index.php?title=Transcript:" + encodeURIComponent(page) + "&action=raw";
+  const userAgent = "tsps-level-up-dump/1.0 (tsps dev tooling)";
+  try {
+    const response = await fetch(url, { headers: { "user-agent": userAgent } });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return await response.text();
+  } catch (error) {
+    // stdin is ignored: with no terminal attached curl otherwise reports "stdin is not a tty"
+    // and the dump fails in a script or CI even though the fetch would have worked.
+    return execFileSync("curl", ["-sS", "--fail", "-A", userAgent, url],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  }
 }
 
 (async () => {
   const fromIndex = process.argv.indexOf("--from");
   const fromDir = fromIndex > 0 ? process.argv[fromIndex + 1] : null;
   const data = { _source: SOURCE_NOTE };
-  for (const skill of SKILLS) data[skill] = parseSkill(skill, fetchRaw(skill, fromDir));
+  const empty = [];
+  for (const skill of SKILLS) {
+    data[skill] = parseSkill(skill, await fetchRaw(skill, fromDir));
+    if (Object.keys(data[skill]).length === 0) empty.push(skill);
+  }
+  // A redirect stub or a renamed section parses to nothing, which is a silent data loss.
+  if (empty.length) {
+    console.error("no level-up messages parsed for: " + empty.join(", "));
+    process.exit(1);
+  }
   const text = JSON.stringify(data, null, 1) + "\n";
 
   const messages = SKILLS.reduce((total, skill) =>

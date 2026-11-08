@@ -223,7 +223,7 @@
    "You can now wear Mithril Armour. Members can fight Shayzien soldiers for their armour."
   ],
   "25": [
-   "Members can now wear frog-leather armour.'"
+   "Members can now wear frog-leather armour."
   ],
   "30": [
    "You can now wear Adamant Armour!"
@@ -570,6 +570,7 @@
    "You can now cast Low Level Alchemy!"
   ],
   "23": [
+   "You can now cast Water Bolt!",
    "Members can now cast Battlefront teleport."
   ],
   "24": [
@@ -603,6 +604,7 @@
    "Members can now cast Respawn teleport."
   ],
   "35": [
+   "You can now cast Fire Bolt!",
    "Members can now cast Ghostly Grasp."
   ],
   "37": [
@@ -618,6 +620,7 @@
    "Members can now cast Teleport to House and can now wear Mystic, Enchanted & Elder chaos druid robes, and Skeletal armour!"
   ],
   "41": [
+   "You can now cast Wind Blast!",
    "Members can now cast Adept Reanimation."
   ],
   "42": [
@@ -647,160 +650,392 @@
    "Members can now Teleport to Camelot!"
   ],
   "47": [
+   "You can now cast Water Blast!",
    "Members can now cast Shadow Veil."
   ],
   "48": [
+   "Members can now Teleport to Kourend Castle!",
    "Members can now cast Fenkenstrain's Castle teleport."
   ],
   "49": [
    "You can now enchant Ruby Jewellery and members can now enchant Ruby tipped Crossbow Bolts and Red Topaz Jewellery!"
   ],
   "50": [
+   "You have unlocked: Snare. Members have unlocked: Apprentice wand, Swampbark armour, Infinity robes, Dark Lure, Smoke Rush, Magic Dart, Iban Blast and more.",
    "Members can now cast Dark Lure."
   ],
   "51": [
    "Members have unlocked: Ardougne Teleport."
   ],
   "52": [
+   "Members have unlocked: Shadow Rush.",
    "Members can now cast Shadow Rush!"
   ],
   "53": [
    "You have unlocked: Earth Blast."
   ],
   "54": [
+   "Members have unlocked: Paddewwa Teleport and Civitas illa Fortis Teleport.",
    "Members can now Teleport to Paddewwa!"
   ],
   "55": [
    "You have unlocked: High Level Alchemy. Members have unlocked: Teacher wand."
   ],
   "56": [
+   "Members have unlocked: Skeletal Grasp, Blood Rush, Summon Boat and Charge Water Orb.",
+   "Members can now cast Skeletal Grasp.",
    "Members can now cast Blood Rush!"
   ],
   "57": [
+   "You have unlocked: Leevl 4 Enchant. Members have unlocked: Diamond-tipped crossbow bolts, Resurrect Superior Zombie, Resurrect Superior Skeleton and Resurrect Superior Ghost.",
    "Members can now cast Superior Resurrection spells."
   ],
   "58": [
+   "Members have unlocked: Ice Rush and Watchtower Teleport.",
    "Members can now cast Ice Rush!"
   ],
   "59": [
+   "You have unlocked: Fire Blast. Members have unlocked: Mark of Darkness.",
    "Members can now cast Mark of Darknesss."
   ],
   "60": [
+   "Members have unlocked: Bloodbark armour, God capes, Senntisten Teleport, Saradomin Strike, Flames of Zamorak, Claws of Guthix, Bones to Peaches, Charge Earth Orb and more.",
    "Members can now Teleport to Senntisten and equip Thammaron's Sceptre!"
   ],
   "61": [
+   "Members have unlocked: West Ardougne Teleport and Trollheim Teleport.",
    "Members can now cast West Ardougne teleport."
   ],
   "62": [
+   "Members have unlocked: Warped sceptre, Superior Demonbane, Smoke Burst and Wind Wave.",
+   "Members can now cast Superior Demonbane.",
    "Members can now cast Smoke Burst!"
   ],
   "63": [
    "Members have unlocked: Charge Fire Orb."
   ],
   "64": [
+   "Members have unlocked: Lesser Corruption, Shadow Burst and Ape Atoll Teleport.",
+   "Members can now cast Lesser Corruption.",
    "Members can now cast Shadow Burst!"
   ],
   "65": [
+   "Members have unlocked: Dragon Hunter wand, 3rd Age wand, 3rd Age robes, Lunar armour, Harmony Island Teleport, Geomancy, Bake Pie, Water Wave and more.",
+   "Members can now cast Harmony Island teleport.",
    "Members can now cast Bake Pie and Geomancy!"
   ],
   "66": [
+   "Members have unlocked: Make Ancient Wyvern shield, Vile Vigour, Monster Examine, Cure Plant, Kharyrll Teleport, Vulnerability and Charge Air Orb.",
+   "Members can now cast Vile Vigour.",
    "Members can now cast Cure Plant and Monster Examine!"
   ],
   "67": [
+   "Members have unlocked: Astral Contact and Teleport to Boat.",
    "Members can now cast Astral Contact!"
   ],
   "68": [
+   "Members have unlocked: Dragonstone-tipped crossbow bolts, Cure Other, Blood Burst and Level 5 Enchant.",
+   "Members can now cast Blood Burst!",
    "Members can now cast Cure Other and Humidify!"
   ],
   "69": [
+   "Members have unlocked: Moonclan Teleport.",
    "Members can now Teleport to Moonclan Island!"
   ],
   "70": [
+   "Members have unlocked: Boots of Brimstone, Ahrim's robes, Dagon'hai robes, Occult necklace, Degrime, Tele Group Moonclan, Ice Burst, Earth Wave and more.",
+   "Members can now cast Degrime, wear Dagon'hai robes and wield the Ancient Sceptre and Accursed Sceptre!",
+   "Members can now cast Ice Burst!",
    "Members can now Group Teleport to Moonclan Island, wear Dagon'hai robes and wield the Ancient Sceptre and Accursed Sceptre!"
   ],
   "71": [
+   "Members have unlocked: Cemetery Teleport, Ourania Teleport, Hunter Kit and Cure Me.",
+   "Members can now cast Cemetery teleport.",
    "Members can now cast Cure Me, Hunter Kit and Teleport to Ourania!"
   ],
   "72": [
+   "Members have unlocked: Expert Reanimation, Waterbirth Teleport, Lassar Teleport and Nightmare Staff (without orb).",
+   "Members can now cast Adept Reanimation and equip the Nightmare Staff (without orb).",
+   "Members can now Teleport to Lassar and equip the Nightmare Staff (without orb)!",
    "Members can now Teleport to Waterbirth and equip the Nightmare Staff (without orb)!"
   ],
   "73": [
+   "Members have unlocked: Ward of Arceuus, Tele Group Waterbirth and Enfeeble.",
+   "Members can now cast Ward of Arceuus.",
    "Members can now Group Teleport to Waterbirth!"
   ],
   "74": [
+   "Members have unlocked: Cure Group, Smoke Blitz and Teleother Lumbridge.",
+   "Members can now cast Smoke Blitz!",
    "Members can now cast Cure Group!"
   ],
   "75": [
+   "Members have unlocked: Upgraded Ancient Sceptre, Staff of the Dead, Ancestral robes, Frostmoon robes, Eternal boots, Barbarian Teleport, Stat Spy, Fire Wave and more.",
    "Members can now cast Barbarian Outpost Teleport and Stat Spy, and wield the Staff of the Dead, Staff of Light, Staff of Balance, Trident of the Seas, Slayer's Staff (e) and Eternal boots!"
   ],
   "76": [
+   "Members have unlocked: Resurrect Greater Zombie, Resurrect Greater Skeleton, Resurrect Greater Ghost, Spin Flax, Tele Group Barbarian and Shadow Blitz.",
+   "Members can now cast Greater Resurrection spells.",
+   "Members can now cast Shadow Blitz!",
    "Members can now Group Teleport to the Barbarian Outpost and cast Spin Flax!"
   ],
   "77": [
+   "Members have unlocked: Purging staff and Superglass Make.",
    "Members can now cast Superglass Make!"
   ],
   "78": [
+   "Members have unlocked: Trident of the Swamp, Virtus robes, Resurrect Crops, Khazard Teleport, Tan Leather and Dareeyak Teleport.",
+   "Members can now Resurrect crops, wield the Trident of the Swamp and wear Virtus robes.",
+   "Members can now Teleport to Dareeyak, wield the Trident of the Swamp and wear Virtus robes!",
    "Members can now Teleport to Port Khazard, cast Tan Leather, wield the Trident of the Swamp and wear Virtus robes!"
   ],
   "79": [
+   "Members have unlocked: Undead Grasp, Dream, Tele Group Khazard and Entangle.",
+   "Members can now cast Undead Grasp.",
    "Members can now Group Teleport to Port Khazard and Dream!"
   ],
   "80": [
+   "Members have unlocked: Soulflame Horn, Kodai Wand, Avernic treads, Death Charge, String Jewellery, Blood Blitz, Charge, Stun and more.",
+   "Members can now cast Death Charge and wield the Kodai Wand.",
+   "Members can now cast Blood Blitz and wield the Kodai Wand!",
    "Members can now cast String Jewellery, wield the Kodai Wand and Elidinis' Ward!"
   ],
   "81": [
+   "Members have unlocked: Stat Restore Pot Share and Wind Surge.",
    "Members can now cast Stat Restore Potion Share!"
   ],
   "82": [
+   "Members have unlocked: Sanguinesti staff, Dark Demonbane, Magic Imbue, Ice Blitz, Teleother Falador and Nightmare Staff (with orb).",
+   "Members can now cast Dark Demonbane and wield the Sanguinesti Staff and Nightmare Staff (with orb).",
+   "Members can now cast Ice Blitz and wield the Sanguinesti Staff and Nightmare Staff (with orb)!",
    "Members can now cast Magic Imbue and wield the Sanguinesti Staff and Nightmare Staff (with orb)!"
   ],
   "83": [
+   "Members have unlocked: Eye of Ayak, Barrows Teleport and Fertile Soil.",
+   "Members can now cast Barrows teleport.",
    "Members can now cast Fertile Soil!"
   ],
   "84": [
+   "Members can now cast Demonic Offering.",
+   "Members can now Teleport to Carrallangar!",
    "Members can now cast Boost Potion Share!"
   ],
   "85": [
+   "Members can now cast Water Surge, Teleport Block, Teleport to Target and equip the Tumeken's Shadow!",
+   "Members can now cast Greater Corruption and equip the Tumeken's Shadow.",
    "Members can now Teleport to the Fishing Guild, cast Teleport to Target and equip the Tumeken's Shadow."
   ],
   "86": [
+   "Members can now cast Smoke Barrage!",
    "Members can now Group Teleport to the Fishing Guild and Plank Make!"
   ],
   "87": [
+   "Members can now enchant Onyx Jewellery and Onyx tipped Crossbow Bolts!",
    "Members can now Teleport to Catherby!"
   ],
   "88": [
+   "Members can now cast Shadow Barrage!",
    "Members can now Group Teleport to Catherby!"
   ],
   "89": [
    "Members can now Teleport to the Ice Plateau and cast Recharge Dragonstone!"
   ],
   "90": [
+   "Members can now cast Earth Surge and Teleother Camelot!",
+   "Members can now cast Master reanimation and Ape Atoll teleport.",
+   "Members can now Teleport to Annakarl!",
    "Members can now Group Teleport to the Ice Plateau!"
   ],
   "91": [
    "Members can now cast Energy Transfer!"
   ],
   "92": [
+   "Members can now cast Sinister Offering.",
+   "Members can now cast Blood Barrage!",
    "Members can now cast Heal Other!"
   ],
   "93": [
+   "Members can now enchant Zenyte Jewellery!",
    "Members can now cast Vengeance Other!"
   ],
   "94": [
+   "Members can now cast Ice Barrage!",
    "Members can now cast Vengeance!"
   ],
   "95": [
+   "Members can now cast Fire Surge!",
    "Members can now cast Heal Group!"
   ],
   "96": [
+   "Members have unlocked: Spellbook Swap and Ghorrock Teleport.",
+   "Members can now Teleport to Ghorrock!",
    "Members can now cast Spellbook Swap!"
   ],
   "99": [
    "Congratulations! You are now a master of Magic. Why not visit the robe store in the Wizards' Guild, where you can buy something special that is only available to true masters of the Magic skill!"
   ]
  },
- "Runecrafting": {},
+ "Runecrafting": {
+  "2": [
+   "You can now craft Mind Runes."
+  ],
+  "5": [
+   "You can now craft Water Runes."
+  ],
+  "6": [
+   "Members can now craft Mist Runes from Pure Rune Essence."
+  ],
+  "9": [
+   "You can now craft Earth Runes."
+  ],
+  "10": [
+   "Members can now craft Dust Runes from Pure Rune Essence."
+  ],
+  "11": [
+   "You will now receive 2 Air Runes from each Essence."
+  ],
+  "13": [
+   "Members can now craft Mud Runes from Pure Rune Essence."
+  ],
+  "14": [
+   "You can now craft Fire Runes and will now receive 2 Mind Runes from each Essence."
+  ],
+  "15": [
+   "Members can now craft Smoke Runes from Pure Rune Essence."
+  ],
+  "19": [
+   "Members can now craft Steam Runes from Pure Rune Essence and will now receive 2 Water Runes from each Essence."
+  ],
+  "20": [
+   "You can now craft Body Runes."
+  ],
+  "22": [
+   "You will now receive 3 Air Runes from each Essence."
+  ],
+  "23": [
+   "Members can now craft Lava Runes from Pure Rune Essence."
+  ],
+  "25": [
+   "Members: You can now use Medium Pouches and Colossal Pouches to carry additional Essence."
+  ],
+  "26": [
+   "You will now receive 2 Earth Runes from each Essence."
+  ],
+  "27": [
+   "Members can now craft Cosmic Runes from Pure Rune Essence and participate in the Guardians of the Rift minigame (after completion of the Temple of the Eye quest)."
+  ],
+  "28": [
+   "You will now receive 3 Mind Runes from each Essence."
+  ],
+  "33": [
+   "You will now receive 4 Air Runes from each Essence, and members can now craft Sunfire Runes."
+  ],
+  "35": [
+   "Members can now craft Chaos Runes from Pure Rune Essence and you will now receive 2 Fire Runes from each Essence."
+  ],
+  "38": [
+   "You will now receive 3 Water Runes from each Essence."
+  ],
+  "40": [
+   "Members can now craft Astral Runes from Pure Rune Essence."
+  ],
+  "42": [
+   "You will now receive 4 Mind Runes from each Essence and Members can now infuse Splitbark boots and gauntlets with Nature Runes."
+  ],
+  "44": [
+   "Members can now craft Nature Runes from Pure Rune Essence and you will now receive 5 Air Runes from each Essence."
+  ],
+  "46": [
+   "You will now receive 2 Body Runes from each Essence and Members can now infuse the Splitbark helm with Nature Runes."
+  ],
+  "48": [
+   "Members can now infuse Splitbark body and legs with Nature Runes."
+  ],
+  "50": [
+   "Members have unlocked: Soiled page (via desiccated pages), Soaked page (via desiccated pages), Burnt page (via desiccated pages) and Large pouch."
+  ],
+  "52": [
+   "You have unlocked: 3 Earth runes per essence."
+  ],
+  "54": [
+   "Members have unlocked: Law runes."
+  ],
+  "55": [
+   "Youhave unlocked: 6 Air runes per essence."
+  ],
+  "56": [
+   "You have unlocked: 5 Mind runes per essence."
+  ],
+  "57": [
+   "You have unlocked: 4 Water runes per essence."
+  ],
+  "59": [
+   "Members have unlocked: 2 Cosmic runes per essence."
+  ],
+  "60": [
+   "Members have unlocked: Avernic treads, Primordial boots, Pegasian boots and Eternal boots."
+  ],
+  "65": [
+   "Members have unlocked: Death runes."
+  ],
+  "66": [
+   "You have unlocked: 7 Air runes per essence."
+  ],
+  "70": [
+   "You have unlocked: 3 Fire runes per essence and 6 Mind runes per essence."
+  ],
+  "74": [
+   "Members have unlocked: 2 Chaos runes per essence."
+  ],
+  "75": [
+   "Members have unlocked: Giant pouch."
+  ],
+  "76": [
+   "You have unlocked: 5 Water runes per essence."
+  ],
+  "77": [
+   "You have unlocked: 8 Air runes per essence. Members have unlocked: Bloodbark boots and gauntlets and Blood runes."
+  ],
+  "78": [
+   "You have unlocked: 4 Earth runes per essence."
+  ],
+  "79": [
+   "Members have unlocked: Bloodbark helm."
+  ],
+  "81": [
+   "Members have unlocked: Bloodbark body and legs."
+  ],
+  "82": [
+   "Members have unlocked: 2 Astral runes per essence."
+  ],
+  "84": [
+   "You have unlocked: 7 Mind runes per essence."
+  ],
+  "85": [
+   "Members with 56 Crafting can now make Colossal Pouches to carry more essence."
+  ],
+  "88": [
+   "You have unlocked: 9 Air runes per essence."
+  ],
+  "90": [
+   "Members have unlocked: Aether runes and Soul runes."
+  ],
+  "91": [
+   "Members have unlocked: 2 Nature runes per essence."
+  ],
+  "92": [
+   "You have unlocked: 3 Body runes per essence."
+  ],
+  "95": [
+   "You have unlocked: 6 Water runes per essence. Members have unlocked: 2 Law runes per essence and Wrath runes."
+  ],
+  "98": [
+   "You have unlocked: 8 Mind runes per essence. Members have unlocked: 3 Sunfire runes per essence."
+  ],
+  "99": [
+   "Congratulations! You are now a master Runecrafter. Why not visit Aubury, who runs the rune shop in Varrock, where you can buy something special that is only available to true masters of the Runecraft skill!"
+  ]
+ },
  "Hitpoints": {
   "42": [
    "Members can now wield Void Knight equipment!"

@@ -1024,6 +1024,12 @@ test("every level-up message is player-facing text with no wiki markup left", ()
   }
   assert.deepEqual(offenders, []);
   assert.ok(total > 1200, `expected the whole wiki, got ${total} messages`);
+  // Every skill must have lines: `Transcript:Runecrafting` is a redirect stub, and reading it
+  // emptied Runecrafting silently.
+  const skills = Object.keys(messages).filter((key) => key !== "_source");
+  assert.equal(skills.length, 24, "all 24 skills");
+  assert.deepEqual(skills.filter((skill) => Object.keys(messages[skill]).length === 0), []);
+  assert.ok(Object.keys(messages.Runecrafting).length > 40, "Runecrafting reads Transcript:Runecraft");
 });
 
 test("Show level & unlocks: continuing opens a box with them, and the skill resumes when it closes", () => {

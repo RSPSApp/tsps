@@ -238,37 +238,42 @@ function peerAction(event) {
   event.steps = [{ type: "message", id: PEER_LEARN_MESSAGE_ID, text: PEER_LEARN_TEXT }];
 }
 
+const ICON_HINT = "It's an icon from an old ring. With the help of a Fremennik, you might be able to combine it with something else.";
+const VESTIGE_HINT = "It's an ancient vestige filled with power. You might be able to combine it with something else.";
+const UPGRADED_HINT = "It's an ancient icon filled with power. You might be able to use it to craft a powerful ring.";
+
+/** Item name -> its Inspect text (capture 3432). */
+const INSPECT_TEXT = new Map([
+  ["Berserker icon", ICON_HINT], ["Archer icon", ICON_HINT], ["Warrior icon", ICON_HINT], ["Seers icon", ICON_HINT],
+  ["Ultor vestige", VESTIGE_HINT], ["Venator vestige", VESTIGE_HINT],
+  ["Bellator vestige", VESTIGE_HINT], ["Magus vestige", VESTIGE_HINT],
+  ["Ultor icon", UPGRADED_HINT], ["Venator icon", UPGRADED_HINT], ["Bellator icon", UPGRADED_HINT], ["Magus icon", UPGRADED_HINT],
+]);
+
+/** Cache names of the Fremennik rings the chisel breaks down. */
+const RING_NAMES = ["Berserker ring", "Archers ring", "Warrior ring", "Seers ring"];
+/** [icon, vestige] name pairs, one per ring. */
+const ICON_VESTIGE_PAIRS = [["Berserker icon", "Ultor vestige"], ["Archer icon", "Venator vestige"],
+  ["Warrior icon", "Bellator vestige"], ["Seers icon", "Magus vestige"]];
+
+function inspectIcon({ player, itemId }) {
+  const text = INSPECT_TEXT.get(api.core.ItemDefinition.forId(itemId)?.getName?.());
+  if (!text) return false;
+  player.sendMessage(text);
+  statement(player, text, [itemId]);
+  return true;
+}
+
 module.exports = {
   name: "AncientRingCrafting",
   members: true,
-  _test: { recipes: () => recipes(), useChisel, useIconOnVestige, craft, peerVariant, peerAction, LEARNED_ATTRIBUTE },
+  _test: { recipes: () => recipes(), useChisel, useIconOnVestige, craft, peerVariant, peerAction, inspectIcon, LEARNED_ATTRIBUTE },
   register(pluginApi) {
     api = pluginApi;
     api.persistAttribute(LEARNED_ATTRIBUTE, false);
-    for (const { ring } of RINGS) {
-      const ringName = { BERSERKER_RING: "Berserker ring", ARCHERS_RING: "Archers ring", WARRIOR_RING: "Warrior ring", SEERS_RING: "Seers ring" }[ring];
-      api.onItemOnItem("Chisel", ringName, useChisel, { noted: false });
-    }
-    for (const [icon, vestige] of [["Berserker icon", "Ultor vestige"], ["Archer icon", "Venator vestige"],
-      ["Warrior icon", "Bellator vestige"], ["Seers icon", "Magus vestige"]]) {
-      api.onItemOnItem(icon, vestige, useIconOnVestige, { noted: false });
-    }
-    for (const [name, text] of [
-      ["Berserker icon", "It's an icon from an old ring. With the help of a Fremennik, you might be able to combine it with something else."],
-      ["Archer icon", "It's an icon from an old ring. With the help of a Fremennik, you might be able to combine it with something else."],
-      ["Warrior icon", "It's an icon from an old ring. With the help of a Fremennik, you might be able to combine it with something else."],
-      ["Seers icon", "It's an icon from an old ring. With the help of a Fremennik, you might be able to combine it with something else."],
-      ["Ultor vestige", "It's an ancient vestige filled with power. You might be able to combine it with something else."],
-      ["Venator vestige", "It's an ancient vestige filled with power. You might be able to combine it with something else."],
-      ["Bellator vestige", "It's an ancient vestige filled with power. You might be able to combine it with something else."],
-      ["Magus vestige", "It's an ancient vestige filled with power. You might be able to combine it with something else."],
-      ["Ultor icon", "It's an ancient icon filled with power. You might be able to use it to craft a powerful ring."],
-      ["Venator icon", "It's an ancient icon filled with power. You might be able to use it to craft a powerful ring."],
-      ["Bellator icon", "It's an ancient icon filled with power. You might be able to use it to craft a powerful ring."],
-      ["Magus icon", "It's an ancient icon filled with power. You might be able to use it to craft a powerful ring."],
-    ]) {
-      api.onItemAction(name, { Inspect: ({ player, itemId }) => { player.sendMessage(text); statement(player, text, [itemId]); return true; } });
-    }
+    for (const ring of RING_NAMES) api.onItemOnItem("Chisel", ring, useChisel, { noted: false });
+    for (const [icon, vestige] of ICON_VESTIGE_PAIRS) api.onItemOnItem(icon, vestige, useIconOnVestige, { noted: false });
+    for (const name of INSPECT_TEXT.keys()) api.onItemAction(name, { Inspect: inspectIcon });
     api.onObjectInteraction("Furnace", { Smelt: craft, Use: craft });
     api.onObjectInteraction("Small furnace", { Smelt: craft });
     api.onNpcDialogueVariant(peerVariant);

@@ -99,3 +99,17 @@ test("Peer's ring-icon transcript plays while an icon is carried, and its last s
   assert.equal(player.getAttribute(Crafting._test.LEARNED_ATTRIBUTE), true);
   assert.equal(message.text, "Peer the Seer shows you how to combine ring icons with ancient vestiges.");
 });
+
+test("Inspect on an icon, vestige or upgraded icon says what it is for", () => {
+  const recipe = Crafting._test.recipes()[0];
+  for (const [id, text] of [
+    [recipe.iconId, "It's an icon from an old ring. With the help of a Fremennik, you might be able to combine it with something else."],
+    [recipe.vestigeId, "It's an ancient vestige filled with power. You might be able to combine it with something else."],
+    [recipe.upgradedId, "It's an ancient icon filled with power. You might be able to use it to craft a powerful ring."],
+  ]) {
+    const player = fakePlayer();
+    assert.equal(Crafting._test.inspectIcon({ player, itemId: id }), true);
+    assert.deepEqual(player.messages, [text]);
+  }
+  assert.equal(Crafting._test.inspectIcon({ player: fakePlayer(), itemId: ItemIdentifiers.CHISEL }), false);
+});

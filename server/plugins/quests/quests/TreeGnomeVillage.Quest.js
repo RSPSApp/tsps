@@ -67,6 +67,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const TRACKER_H_MESSAGE_ID = "eBZQ_A";
   const TRACKER_Y_MESSAGE_ID = "8H1UCb";
   const CHEST_ORB_MESSAGE_ID = "PatYnA";
+  const GUIDE_OUT_MESSAGE_ID = "GnZ1Sn";
   const BALLISTA_SUCCESS_CONDITION_ID = "1G3SE7";
   const BALLISTA_MISS_CONDITION_ID = "wwt4fB";
   const TRACKER_X_CONDITION_IDS = new Set(["FBaYjB", "cLo8NW", "RDXbKP", "TPAWlA"]);
@@ -395,7 +396,11 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     if (npcId !== KING_BOLREN_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
-    if (isInsideVillage(player)) player.moveTo(VILLAGE_ENTRANCE.clone());
+  }
+
+  function followElkoy({ player, npcId }) {
+    if (!ELKOY_NPC_IDS.has(npcId) || quest.getStage(player) < STAGE_STARTED) return;
+    player.moveTo((isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT).clone());
   }
 
   /** Montai's offer and the first-orb hand-in; tracker acceptance starts the riddle. */
@@ -452,6 +457,12 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** Transcript message actions that carry item/state changes. */
   function handleAction({ player, npcId, stepId }) {
+    if (npcId === KING_BOLREN_NPC_ID && stepId === GUIDE_OUT_MESSAGE_ID) {
+      if (quest.getStage(player) === STAGE_STARTED && isInsideVillage(player)) {
+        player.moveTo(VILLAGE_ENTRANCE.clone());
+      }
+      return;
+    }
     if (npcId === KING_BOLREN_NPC_ID && quest.getStage(player) >= STAGE_COMPLETE &&
       (stepId === POST_QUEST_AMULET_MESSAGE_ID || POST_QUEST_AMULET_RECEIVE_IDS.has(stepId))) {
       giveItem(player, GNOME_AMULET_ITEM_ID);
@@ -528,8 +539,11 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       event.handled = true;
       return;
     }
-    if ((objectId === CLOSED_CHEST_OBJECT_ID || objectId === OPEN_CHEST_OBJECT_ID)
-      && (option === "open" || option === "search")) {
+    // The shared Chests plugin opens the loc first; only Search awards the orb.
+    if (objectId === CLOSED_CHEST_OBJECT_ID && option === "open"
+      && quest.getStage(player) >= STAGE_BALLISTA_FIRED) return;
+    if ((objectId === CLOSED_CHEST_OBJECT_ID && option === "open")
+      || (objectId === OPEN_CHEST_OBJECT_ID && option === "search")) {
       openChest(player);
       event.handled = true;
       return;
@@ -688,6 +702,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.persistAttribute(TRACKER_STATE_ATTRIBUTE, 0);
   api.persistAttribute(BALLISTA_COORDINATE_ATTRIBUTE, -1);
 
+  api.onNpcInteraction("Elkoy", { Follow: followElkoy });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("door:toggle", guardStrongholdDoor);

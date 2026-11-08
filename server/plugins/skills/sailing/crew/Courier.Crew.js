@@ -235,9 +235,10 @@ function disembarked(player) {
 }
 
 /** The ledger took the crew's crates: out of the hold they came from, and the crew go. */
-function crewDelivered({ player, crate, amount, owned }) {
+function crewDelivered(request) {
+  const { player, crate, amount, owned } = request;
   const job = carrying.get(player);
-  if (owned) cargo.take(owned, 0, crate, amount);
+  if (owned) request.taken = cargo.take(owned, 0, crate, amount);
   if (job) despawn(player, job);
 }
 

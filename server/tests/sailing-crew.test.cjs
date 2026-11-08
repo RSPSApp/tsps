@@ -642,6 +642,44 @@ test("Bank-cargo moves what fits from the hold to the bank, keeping the rest in 
   }
 });
 
+test("Bank-cargo leaves what the bank refuses (a courier crate) in the hold (review #1430)", (t) => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const portTasks = require("../plugins/skills/sailing/porttasks/Common.PortTasks");
+  const crate = [...Array(40000).keys()].find((id) => portTasks.isCrate(id));
+  assert.ok(crate, "a courier crate id");
+  // The bank policy Port Tasks registers (Cargo.PortTasks.js canBankCargo): crates can't be banked.
+  t.mock.method(PluginManager, "emitCanBankItem", (_player, item) => (portTasks.isCrate(item.getId()) ? false : null));
+  const core = PluginManager.getCoreApi();
+  t.mock.method(core.Bank, "isOpen", () => false);
+  t.mock.method(core.Bank, "getTabForItem", () => 0);
+  const added = [];
+  const bank = { getAddableAmount: (item) => item.getAmount(), add: (item) => { added.push([item.getId(), item.getAmount()]); return bank; } };
+  const boat = { cargo: [{ id: crate, amount: 2 }, { id: 2, amount: 5 }] };
+  assert.equal(bankCargo.moveToBank({ getBank: () => bank }, boat), false, "not everything went");
+  assert.deepEqual(added, [[2, 5]], "only the cannonballs are banked");
+  assert.deepEqual(boat.cargo, [{ id: crate, amount: 2 }, null], "the crates stay in the hold");
+});
+
+test("the crew's delivery credits only the crates taken out of the hold (review #1430)", () => {
+  // Two crates the crew were to carry were banked meanwhile: the hold has none to take.
+  const request = { player: captain(), index: 0, crate: 4242, amount: 2, owned: { cargo: [null, null] }, taken: 2 };
+  PluginManager.emitCustomEvent("port-tasks:crew-delivered", request);
+  assert.equal(request.taken, 0);
+});
+
+test("Bank-cargo needs a recruited crewmate with Deckhandiness 2 (Wiki: Crew Management)", () => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const player = captain({ level: 99 });
+  recruited(player, ADA);
+  assert.ok(common.byId(ADA).stats[common.STAT.DECKHANDINESS] < 2, "Ada has Deckhandiness 1");
+  bankCargo.startBanking(player, { getId: () => 0 }, common.byId(ADA));
+  assert.equal(player.messages().at(-1), "None of your crew is a good enough deckhand to bank your cargo.");
+  const other = captain({ level: 99 });
+  recruited(other, ADA, JENKINS);
+  bankCargo.startBanking(other, { getId: () => 0 }, common.byId(JENKINS));
+  assert.notEqual(other.messages().at(-1), "None of your crew is a good enough deckhand to bank your cargo.", "Jenkins has 4");
+});
+
 test("crewmates run to a job and walk when they wander (rsprox)", () => {
   const player = captain({ level: 99 });
   const boat = boardSkiff(player, [JIM]);

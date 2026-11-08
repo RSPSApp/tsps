@@ -8,7 +8,8 @@
 //   box "Your crew start moving the contents of the cargo hold..." (no continue either); at 7 the
 //   cargo goes to the bank and the screen fades back in; at 10 their closing line, by whether the
 //   bank had room. The lines are the crewmate's transcript's.
-// The Wiki's Deckhandiness 2 for banking isn't enforced: its refusal was never captured.
+// Wiki (Crew Management): "At least one crewmate must have Deckhandiness level 2 or higher to use the "Bank Cargo"
+// option." The refusal was never captured, so its line is this server's.
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
 const { openBoatSelection, MODE } = require("../BoatSelection.plugin");
@@ -21,6 +22,8 @@ const DOCK_RANGE = 16;
 /** No boat here, for a crewmate whose lines weren't captured. */
 const NO_BOAT = "Your boat isn't docked here.";
 const FADE_CYCLES = 50;
+/** TSPS wording: no recording shows the Deckhandiness refusal. */
+const NO_DECKHAND = "None of your crew is a good enough deckhand to bank your cargo.";
 const MOVING_TICKS = 3;
 const MOVED_TICKS = 7;
 const DONE_TICKS = 10;
@@ -51,6 +54,12 @@ function moveToBank(player, boat) {
   let all = true;
   boat.cargo.forEach((slot, index) => {
     if (!slot || slot.amount <= 0) return;
+    // The bank's own rules apply: a courier crate (Port Tasks) or an unbankable item stays in the hold.
+    const held = new Item(slot.id, slot.amount);
+    if (held.isUnbankable?.() || pluginApi?.emitCanBankItem?.(player, held) === false) {
+      all = false;
+      return;
+    }
     const tab = Bank.getTabForItem(player, slot.id);
     const bank = player.getBank(tab);
     const moving = bank.getAddableAmount(new Item(slot.id, slot.amount));
@@ -164,6 +173,10 @@ function confirm(player, npcId, crew, boat) {
  */
 function startBanking(player, npc, crew, { checked = false } = {}) {
   const npcId = headOf(npc, crew);
+  if (!common.all().some((member) => common.isRecruited(player, member.id) && member.stats[common.STAT.DECKHANDINESS] >= 2)) {
+    player.sendMessage(NO_DECKHAND);
+    return undefined;
+  }
   const dock = dockNear(player, DOCK_RANGE);
   const boats = dock ? boatsAt(player, dock) : [];
   if (!boats.length) return noBoat(player, npcId, crew);

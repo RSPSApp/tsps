@@ -159,11 +159,23 @@ export class ItemOnGroundManager {
                 if (JSON.stringify(item_.getItem().getMeta() ?? null) !== JSON.stringify(item.getItem().getMeta() ?? null)) {
                     continue;
                 }
+                // Recurring static supply must not absorb drops or a different respawn lifecycle.
+                const recurring = item_.isStaticSpawn() && item_.respawns();
+                const incomingRecurring = item.isStaticSpawn() && item.respawns();
+                if (recurring || incomingRecurring) {
+                    if (!recurring || !incomingRecurring
+                        || item_.getRespawnTimer() !== item.getRespawnTimer()
+                        || item_.getState() !== item.getState()
+                        || item_.getgoesGlobal() !== item.getgoesGlobal()
+                        || item_.isAgingPaused() !== item.isAgingPaused()
+                        || item_.getRespawnAmount() + item.getRespawnAmount() > MAX_STACK_AMOUNT) continue;
+                }
                 let oldAmount = item_.getItem().getAmount();
                 if (oldAmount + item.getItem().getAmount() > MAX_STACK_AMOUNT) {
                     continue;
                 }
                 item_.getItem().incrementAmountBy(item.getItem().getAmount());
+                if (recurring) item_.mergeRespawnAmount(item);
                 item_.setOldAmount(oldAmount);
                 item_.setTick(0);
                 ItemOnGroundManager.perform(item_, OperationType.ALTER);

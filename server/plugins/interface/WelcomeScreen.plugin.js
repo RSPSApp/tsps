@@ -52,6 +52,12 @@ function clear({ player }) {
 
 module.exports = {
   name: "WelcomeScreen",
+  config: {
+    "WelcomeScreen:messageOfTheWeek": {
+      type: "string", label: "Message of the week", defaultText: "Welcome to <world name>!",
+      help: "Text on the scroll at the bottom of the welcome screen. Takes <col=rrggbb> and <br> tags. League worlds show their own message instead.",
+    },
+  },
   dependsOn: ["Wilderness"],
   register(pluginApi) {
     api = pluginApi;

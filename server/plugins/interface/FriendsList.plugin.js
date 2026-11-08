@@ -56,6 +56,7 @@ function keepRecruitedBotsFriendly(event) {
 
 module.exports = {
   name: "FriendsList",
+  description: "Friends list and friends chat: private messages, chat filters and friends-chat channels.",
   register(api) {
     api.onCustomEvent("friends:send-private-message", sendPrivateMessage);
     pluginApi = api;

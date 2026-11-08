@@ -6,6 +6,12 @@
  */
 module.exports = {
   name: "Gravestones",
+  config: {
+    "Gravestones:enabled": {
+      type: "boolean", label: "Gravestones", default: true,
+      help: "Player deaths in PvM leave a gravestone. Turn off for the older behaviour where lost items drop where the player died.",
+    },
+  },
   register(api) {
     require("./gravestones/Storage.Gravestones").attach(api);
     require("./gravestones/Death.Gravestones").attach(api);

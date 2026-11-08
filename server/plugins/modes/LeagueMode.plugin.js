@@ -13,6 +13,20 @@ const Common = require("./league/Common.LeagueMode");
 
 module.exports = {
   name: "LeagueMode",
+  config: {
+    "league:type": {
+      type: "number", label: "League", default: 0, integer: true, min: 0,
+      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. 0 is a normal world. Current leagues: 1 Twisted, 2 Trailblazer, 3 Shattered Relics, 4 Trailblazer Reloaded, 5 Raging Echoes, 6 Demonic Pacts. Also read by LeagueAreaUnlocks. Restart to change.",
+    },
+    "league:start": {
+      type: "date", label: "League start date", defaultText: "Not set",
+      help: "When the league began, as YYYY-MM-DD. Sets the client's league clock.",
+    },
+    "league:end": {
+      type: "date", label: "League end date", defaultText: "Not set",
+      help: "When the league ends, as YYYY-MM-DD. The welcome message then shows how many days remain.",
+    },
+  },
   members: true,
   register(api) {
     Common.init(api);

@@ -2141,6 +2141,12 @@ let ItemOnGroundManager;
 
 module.exports = {
   name: "Pets",
+  config: {
+    "Pets:skillingPetMultiplier": {
+      type: "number", label: "Skilling pet multiplier", default: 1, min: 1,
+      help: "Makes every skilling pet roll this many times likelier. 1 is the normal rate; values of 1 or less change nothing.",
+    },
+  },
   register(api) {
     World = api.getWorld();
     RegionManager = api.getRegionManager();

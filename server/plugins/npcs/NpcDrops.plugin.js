@@ -1096,6 +1096,12 @@ function placeDrops(player, drops, location, options = {}) {
 
 module.exports = {
   name: "NpcDrops",
+  config: {
+    "NpcDrops:bossRareMultiplier": {
+      type: "number", label: "Boss unique drop multiplier", default: 1, min: 1,
+      help: "Makes bosses' unique drops this many times likelier. 1 is the normal rate; values of 1 or less change nothing.",
+    },
+  },
   register(api) {
     pluginApi = api;
     itemOnGroundManager = api.getItemOnGroundManager();

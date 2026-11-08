@@ -52,8 +52,9 @@ const EXPERIMENT_TILE = { x: 2935, y: 3462, z: 0 };
 const NORA = N.NORA_T_HAGG;
 
 function setup({ combatLevel = 35 } = {}) {
+  const locs = [];
   const stubs = {
-    ObjectManager: { register() {}, deregister() {} },
+    ObjectManager: { register(object) { locs.push(object.getId()); }, deregister() {} },
     GameObject: class {
       constructor(id, location, type, rotation) {
         this.id = id;
@@ -63,6 +64,8 @@ function setup({ combatLevel = 35 } = {}) {
       }
       getId() { return this.id; }
       getLocation() { return this.location; }
+      getType() { return this.type; }
+      getFace() { return this.rotation; }
     },
     ItemDefinition: { forId: () => ({ getName: () => '', isNoted: () => false }) },
   };
@@ -325,7 +328,7 @@ function setup({ combatLevel = 35 } = {}) {
 
   return {
     quest, player, attributes, itemAmounts, configs, varbits, messages, spawned, groundItems, xp, areas,
-    boxes, animations, sounds, hits, levels, emitted, movement, custom,
+    boxes, animations, sounds, hits, levels, emitted, movement, custom, locs,
     variant, condition, hook, action, object, onObject, onNpc, itemAction, pickup, beforeDeath, processAreas,
     toggle, tick,
     setLocation(x, y, z = 0) { location = new core.Location(x, y, z); },
@@ -881,4 +884,51 @@ test('every way into the shed brings a fresh experiment, and the key is still ne
   h.itemAmounts.set(I.KEY_9, 0);
   h.setLocation(2934, 3463);
   assert.equal(h.toggle(O.DOOR_104, SHED_DOOR_TILE).handled, false);
+});
+
+test('the drawers open, hold nothing, close, and shut by themselves after 100 ticks', () => {
+  const h = setup();
+  const at = { x: 2901, y: 3471, z: 0 };
+  h.setLocation(2901, 3472);
+  h.object(O.DRAWERS_33, { location: at, type: 10, face: 3 });
+  assert.deepEqual(h.locs, [O.DRAWERS_34]);
+  h.object(O.DRAWERS_34, { location: at, type: 10, face: 3, option: 'Search' });
+  assert.equal(h.messages.at(-1), 'The drawers are empty.');
+  h.tick(99);
+  assert.deepEqual(h.locs, [O.DRAWERS_34]);
+  h.tick();
+  assert.deepEqual(h.locs, [O.DRAWERS_34, O.DRAWERS_33], 'shut 100 ticks later (ticks 271 -> 371)');
+
+  // Closed by hand: the timer does not shut it a second time.
+  h.locs.length = 0;
+  h.object(O.DRAWERS_33, { location: at, type: 10, face: 3 });
+  h.object(O.DRAWERS_34, { location: at, type: 10, face: 3, option: 'Close' });
+  h.tick(100);
+  assert.deepEqual(h.locs, [O.DRAWERS_34, O.DRAWERS_33]);
+});
+
+test('an opened cupboard shuts by itself, so the next player finds it shut', () => {
+  const h = setup();
+  h.setStage(1);
+  h.setLocation(2899, 9873);
+  h.object(O.CUPBOARD_24, { location: { x: 2898, y: 9873, z: 0 }, type: 10 });
+  h.tick();
+  assert.deepEqual(h.locs, [O.CUPBOARD_25]);
+  h.tick(100);
+  assert.deepEqual(h.locs, [O.CUPBOARD_25, O.CUPBOARD_24]);
+});
+
+test('with the shed ball gone, the last form leaves one on the crate, not under itself', () => {
+  const h = setup();
+  h.setStage(5);
+  h.give(I.KEY_9);
+  h.setBallSpawnPresent(false);
+  h.setLocation(2933, 3463);
+  h.toggle(O.DOOR_104, SHED_DOOR_TILE);
+  for (let index = 0; index < EXPERIMENT_FORMS.length; index++) {
+    h.beforeDeath(h.spawned.find((entry) => entry.id === EXPERIMENT_FORMS[index]));
+  }
+  assert.equal(h.groundItems.length, 1);
+  const { location } = h.groundItems[0];
+  assert.deepEqual([location.getX(), location.getY()], [BALL_SPAWN_TILE.x, BALL_SPAWN_TILE.y]);
 });

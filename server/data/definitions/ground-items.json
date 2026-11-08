@@ -18,7 +18,7 @@
   {"id":592,"location":{"x":3752,"y":9780,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":600,"location":{"x":2438,"y":3187,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":125,"location":{"x":3026,"y":10325,"z":0},"amt":1,"respawn":100,"description":"Wilderness"},
-  {"id":2407,"location":{"x":2935,"y":3460,"z":0},"amt":1,"respawn":0,"description":"Taverley"},
+  {"id":2407,"location":{"x":2935,"y":3460,"z":0},"amt":1,"respawn":100,"description":"Taverley"},
   {"id":1963,"location":{"x":2907,"y":3146,"z":0},"amt":1,"respawn":100,"description":"Musa Point"},
   {"id":1963,"location":{"x":3009,"y":3207,"z":0},"amt":1,"respawn":100,"description":"Port Sarim"},
   {"id":3216,"location":{"x":2487,"y":3371,"z":0},"amt":1,"respawn":30,"description":"Kandarin"},

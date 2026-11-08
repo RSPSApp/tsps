@@ -97,6 +97,10 @@ module.exports = function registerWitchsHouseQuest(api) {
   const LADDER_DOWN_LOC_ID = ObjectIdentifiers.LADDER_322;
   const LADDER_UP_LOC_ID = ObjectIdentifiers.LADDER_321;
   const BOXES_LOC_ID = 24692; // Boxes; no ObjectIdentifiers entry.
+  const DRAWERS_SHUT_LOC_ID = ObjectIdentifiers.DRAWERS_33; // grim_witch_house_drawers: Open
+  const DRAWERS_OPEN_LOC_ID = ObjectIdentifiers.DRAWERS_34; // grim_witch_house_drawers_open: Search, Close
+  /** The drawers at 2901,3471 shut themselves 100 ticks after opening (ticks 271 -> 371). */
+  const SHUT_BY_ITSELF_TICKS = 100;
   const FULL_INVENTORY_MESSAGE = "You couldn't hold all those items.";
   /** Cache Boxes (24692) placements in the witch's house basement. */
   const BASEMENT_BOXES = [
@@ -153,7 +157,9 @@ module.exports = function registerWitchsHouseQuest(api) {
   const NORA_CURSE_END = 100;
   const NORA_CURSE_ANGLE = 16;
   const NORA_CURSE_PROGRESS = 128;
-  const NORA_CURSE_HEIGHT = 124;
+  /** Projectile heights are in quarter units here (the packet sends them x4): 124 on the wire. */
+  const NORA_CURSE_PROJECTILE_HEIGHT = 31;
+  const NORA_CURSE_IMPACT_HEIGHT = 124;
   const NORA_CURSE_IMPACT_GRAPHIC = 110; // curse_impact, delay 100, height 124
   const NORA_CAST_SOUND = 127; // curse_cast_and_fire, area range 10
   const NORA_HIT_SOUND = 126; // curse_hit, delay 100
@@ -352,12 +358,55 @@ module.exports = function registerWitchsHouseQuest(api) {
     player.sendMessage("You find a pair of leather gloves in the boxes.");
   }
 
+  /** The clicked menu option, lower-case (the object-click packet sends it so). */
+  const clickedOption = (event) =>
+    String(event.option ?? event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+
+  /** Open furniture by tile, so a manual shut cancels the shut-by-itself timer. */
+  const openFurniture = new Map();
+  const furnitureKey = (at) => `${at.getX()},${at.getY()},${at.getZ()}`;
+
   function replaceObject(object, newId) {
-    if (!object?.getLocation) return;
+    if (!object?.getLocation) return null;
     const at = object.getLocation();
     ObjectManager.deregister(object, true);
-    ObjectManager.register(new GameObject(newId, new Location(at.getX(), at.getY(), at.getZ()),
-      object.getType(), object.getFace(), object.getPrivateArea?.() ?? null), true);
+    const next = new GameObject(newId, new Location(at.getX(), at.getY(), at.getZ()),
+      object.getType(), object.getFace(), object.getPrivateArea?.() ?? null);
+    ObjectManager.register(next, true);
+    return next;
+  }
+
+  /** Swaps in the open loc and shuts it again by itself, unless someone shuts it first. */
+  function openFurnitureLoc(object, openId, shutId) {
+    const opened = replaceObject(object, openId);
+    if (!opened) return;
+    const key = furnitureKey(opened.getLocation());
+    const token = {};
+    openFurniture.set(key, token);
+    later(opened, SHUT_BY_ITSELF_TICKS, () => {
+      if (openFurniture.get(key) !== token) return;
+      openFurniture.delete(key);
+      replaceObject(opened, shutId);
+    });
+  }
+
+  function shutFurnitureLoc(object, shutId) {
+    if (object?.getLocation) openFurniture.delete(furnitureKey(object.getLocation()));
+    replaceObject(object, shutId);
+  }
+
+  /** The house's drawers open on arrival and hold nothing (ticks 271-282). */
+  function handleDrawers(event) {
+    const option = clickedOption(event);
+    if (event.objectId === DRAWERS_SHUT_LOC_ID) {
+      openFurnitureLoc(event.object, DRAWERS_OPEN_LOC_ID, DRAWERS_SHUT_LOC_ID);
+      return;
+    }
+    if (option === "close") {
+      shutFurnitureLoc(event.object, DRAWERS_SHUT_LOC_ID);
+      return;
+    }
+    event.player.sendMessage("The drawers are empty.");
   }
 
   /**
@@ -386,7 +435,7 @@ module.exports = function registerWitchsHouseQuest(api) {
     player.performAnimation(new Animation(OPEN_CUPBOARD_ANIMATION));
     Sounds.sendSound(player, new Sound(CUPBOARD_OPEN_SOUND, 1, 0, 0));
     later(player, CUPBOARD_OPEN_DELAY, () => {
-      replaceObject(object, CUPBOARD_OPEN_LOC_ID);
+      openFurnitureLoc(object, CUPBOARD_OPEN_LOC_ID, CUPBOARD_SHUT_LOC_ID);
       if (!held(player, MAGNET_ITEM_ID)) takeMagnet(player);
     });
   }
@@ -401,13 +450,13 @@ module.exports = function registerWitchsHouseQuest(api) {
   }
 
   function handleCupboard(event) {
-    const option = event.option ?? event.definition?.getInteractions?.()?.[event.clickType - 1];
+    const option = clickedOption(event);
     if (event.objectId === CUPBOARD_SHUT_LOC_ID) {
       openCupboard(event);
       return;
     }
-    if (option === "Shut") {
-      replaceObject(event.object, CUPBOARD_SHUT_LOC_ID);
+    if (option === "shut") {
+      shutFurnitureLoc(event.object, CUPBOARD_SHUT_LOC_ID);
       return;
     }
     searchOpenCupboard(event);
@@ -460,15 +509,16 @@ module.exports = function registerWitchsHouseQuest(api) {
     spawnExperiment(player);
   }
 
-  function dropBall(player, location) {
+  /** On the crate, where the shed's own ball lies. */
+  function dropBall(player) {
     itemOnGroundManager?.registerLocation(
       player,
       new Item(BALL_ITEM_ID, 1),
-      new Location(location.getX(), location.getY(), location.getZ())
+      new Location(BALL_SPAWN_TILE.x, BALL_SPAWN_TILE.y, BALL_SPAWN_TILE.z)
     );
   }
 
-  /** The shed's ball is a permanent ground spawn; only drop one if that is gone. */
+  /** The shed's ball is a ground spawn (back 100 ticks after a pickup); only drop one if it is gone. */
   function ballSpawnPresent() {
     return World.getItems().some((ground) => {
       if (ground?.getItem?.().getId?.() !== BALL_ITEM_ID) return false;
@@ -520,7 +570,7 @@ module.exports = function registerWitchsHouseQuest(api) {
         quest.setStage(owner, STAGE_DEFEATED_EXPERIMENT);
       }
       owner.sendMessage(FORM_MESSAGES[index][0]);
-      if (!ballSpawnPresent()) dropBall(owner, npc.getLocation());
+      if (!ballSpawnPresent()) dropBall(owner);
       return;
     }
 
@@ -637,6 +687,11 @@ module.exports = function registerWitchsHouseQuest(api) {
     if (objectId === POTTED_PLANT_LOC_ID) {
       event.handled = true;
       searchPottedPlant(event);
+      return;
+    }
+    if (objectId === DRAWERS_SHUT_LOC_ID || objectId === DRAWERS_OPEN_LOC_ID) {
+      event.handled = true;
+      handleDrawers(event);
       return;
     }
     if (objectId === CUPBOARD_SHUT_LOC_ID || objectId === CUPBOARD_OPEN_LOC_ID) {
@@ -789,13 +844,13 @@ module.exports = function registerWitchsHouseQuest(api) {
     const cast = new Graphic(NORA_CAST_GRAPHIC);
     cast.height = NORA_CAST_GRAPHIC_HEIGHT;
     npc.performGraphic(cast);
-    Projectile.createProjectile(npc, player, NORA_CURSE_PROJECTILE, NORA_CURSE_START, NORA_CURSE_END, NORA_CURSE_HEIGHT, NORA_CURSE_HEIGHT)
+    Projectile.createProjectile(npc, player, NORA_CURSE_PROJECTILE, NORA_CURSE_START, NORA_CURSE_END,
+      NORA_CURSE_PROJECTILE_HEIGHT, NORA_CURSE_PROJECTILE_HEIGHT)
       .withAngle(NORA_CURSE_ANGLE)
       .withProgress(NORA_CURSE_PROGRESS)
       .sendProjectile();
-    const impact = new Graphic(NORA_CURSE_IMPACT_GRAPHIC, NORA_CURSE_END);
-    impact.height = NORA_CURSE_HEIGHT;
-    player.performGraphic(impact);
+    // (id, delay, height): a two-argument Graphic reads 100 as a height.
+    player.performGraphic(new Graphic(NORA_CURSE_IMPACT_GRAPHIC, NORA_CURSE_END, NORA_CURSE_IMPACT_HEIGHT));
     const at = npc.getLocation();
     const target = player.getLocation();
     Sounds.playAreaSound({ soundId: NORA_CAST_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), radius: NORA_SOUND_RADIUS, source: npc });

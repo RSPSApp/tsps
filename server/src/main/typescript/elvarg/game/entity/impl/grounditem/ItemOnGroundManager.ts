@@ -238,10 +238,12 @@ export class ItemOnGroundManager {
      * beside) plays the table reach on the removal tick; one taken from the player's own tile plays
      * nothing. Live captures: 202 adjacent takes animate (832 up to rev 238, 9401 from rev 239 on,
      * e.g. the Witch's diary in capture 20261108T030409 tick 354) and 6,859 of 6,860 own-tile takes
-     * don't. The loc on the tile is not the test.
+     * don't. The loc on the tile is not the test. The player turns to face the item first.
      */
     private static playReachAnimation(player: Player, position: Location): void {
         if (player.getLocation().getX() === position.getX() && player.getLocation().getY() === position.getY()) return;
+        // Live turns to the item's tile before reaching (ticks 353 and 890 face the diary and ball).
+        player.setPositionToFace(position);
         const sequence = CacheDefinitions.getSeqId(ItemOnGroundManager.TABLE_TAKE_SEQUENCE);
         if (sequence != null && sequence >= 0) player.performAnimation(new Animation(sequence));
     }

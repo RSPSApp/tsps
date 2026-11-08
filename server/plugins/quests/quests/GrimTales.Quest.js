@@ -903,10 +903,20 @@ module.exports = function registerGrimTalesQuest(api) {
     stepThrough(player, event.location);
   }
 
+  /**
+   * Outside the piano step the Witch's House lines answer instead, as game messages (Witch's
+   * House capture 20261108T030409 ticks 197 and 231, Grim Tales not started).
+   */
+  const PIANO_IDLE_MESSAGE = "You decide not to attract the attention of the witch by playing on the piano.";
+  const MUSIC_STAND_IDLE_MESSAGE = "You can't see anything of interest on the stand.";
+
   function searchMusicStand(event) {
     const { player } = event;
     event.handled = true;
-    if (held(player, MUSIC_SHEET_ITEM_ID)) return;
+    if (quest.getStage(player) !== STAGE_PENDANT_TASK || held(player, MUSIC_SHEET_ITEM_ID)) {
+      player.sendMessage(MUSIC_STAND_IDLE_MESSAGE);
+      return;
+    }
     player.getInventory().adds(MUSIC_SHEET_ITEM_ID, 1);
   }
 
@@ -938,7 +948,11 @@ module.exports = function registerGrimTalesQuest(api) {
   function playPiano(event) {
     const { player } = event;
     event.handled = true;
-    if (hasBit(player, BIT_PIANO_OPEN) || quest.getStage(player) !== STAGE_PENDANT_TASK) return;
+    if (quest.getStage(player) !== STAGE_PENDANT_TASK) {
+      player.sendMessage(PIANO_IDLE_MESSAGE);
+      return;
+    }
+    if (hasBit(player, BIT_PIANO_OPEN)) return;
     showPianoMenu(player);
   }
 
@@ -1175,7 +1189,8 @@ module.exports = function registerGrimTalesQuest(api) {
       else playPiano(event);
       return;
     }
-    if (objectId === MUSIC_STAND_OBJECT_ID && atTile(event.location, MUSIC_STAND_TILE)) {
+    // The cache stand is multiloc 24883 (grim_music_stand_multi): match its shown child, as the piano does.
+    if ((event.definition?.id ?? objectId) === MUSIC_STAND_OBJECT_ID && atTile(event.location, MUSIC_STAND_TILE)) {
       searchMusicStand(event);
       return;
     }

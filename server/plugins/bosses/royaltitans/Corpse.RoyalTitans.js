@@ -167,6 +167,13 @@ function announceKill(player, kills, ticks) {
   player.sendMessage(Shared.ELIGIBLE_MESSAGE);
 }
 
+/** A titan's death roll goes to its stash whole, Bran too: the pet is had at the claim, not at the death. */
+function holdPetForClaim(request) {
+  // The death roll is the titan's own; a claim's roll comes from its corpse (the titan's id, the corpse's npc), and pays.
+  const id = request.npc?.getId?.();
+  if ((id === Shared.BRANDA_ID || id === Shared.ELDRIC_ID) && sessionOfNpc(request.npc)) request.hold = true;
+}
+
 /** The engine's death roll, stashed per titan until its claim. */
 function stashGenerated(event) {
   const session = sessionOfNpc(event.npc);
@@ -387,6 +394,7 @@ function attach(pluginApi) {
   core = pluginApi.core;
   pluginApi.onNpcDeath(titanDied);
   pluginApi.onCustomEvent("npc-drops:generated", stashGenerated);
+  pluginApi.onCustomEvent("pets:hold-for-claim", holdPetForClaim);
   pluginApi.onCombatHitResolved(trackDamage);
   pluginApi.onNpcsInteraction([Shared.BRANDA_NAME, Shared.ELDRIC_NAME], {
     Loot: claimLoot, Sacrifice: claimSacrifice, "Take pages": claimPages,

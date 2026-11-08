@@ -393,7 +393,7 @@ function meetUri(player, npc, npcId, trail) {
   const casket = trail.state.completed + 1 >= trail.state.length;
   const words = (!casket && trail.tier.uriClueMessage) || Dialogue.message(steps, casket) || (casket ? "You've obtained a casket!" : "You have been given a new clue!");
   if (!advance(player, trail, Math.random, {}, false, false)) return;
-  const received = !casket && trail.tier.uriClueDisplay ? core.CacheDefinitions.getObjId(trail.tier.uriClueDisplay) : player.getInventory().getItems()[trail.slot].getId();
+  const received = casket ? data(trail.tier).casket : trail.tier.uriClueDisplay ? core.CacheDefinitions.getObjId(trail.tier.uriClueDisplay) : player.getInventory().getItems()[trail.slot].getId();
   Dialogue.play(player, npcId, what ? [...said, { player: what.player }] : said,
     () => {
       if (uris.get(player)?.npc === npc) dismissUri(player);

@@ -239,9 +239,10 @@ const FISH = Object.freeze({
   }),
   SACRED_EEL: new Fish({ id: ItemIds.SACRED_EEL, level: 87, rolls: [[0, 60]], xp: 105, caught: "a sacred eel", petBase: 99000 }),
   ANGLERFISH: new Fish({ id: ItemIds.RAW_ANGLERFISH, level: 82, rolls: [[3, 36]], xp: 120, caught: "a raw anglerfish", petBase: 78649 }),
-  // Wiki (Raw dark crab), Mod Ash: "The standard roll is 3-40", but with the elite Wilderness Diary "you roll 13-55".
+  // Wiki (Raw dark crab), Mod Ash: "The standard roll is 3-40", but with the elite Wilderness Diary "you roll 13-55",
+  // and "If that fails, you still do the standard roll" (16% to 34% at 99).
   DARK_CRAB: Object.assign(new Fish({ id: ItemIds.RAW_DARK_CRAB, level: 85, rolls: [[3, 40]], xp: 130, caught: "a raw dark crab", petBase: 149434 }),
-    { diaryRolls: { diary: "wilderness", tier: "elite", rolls: [[13, 55]] } }),
+    { diaryRolls: { diary: "wilderness", tier: "elite", rolls: [[13, 55], [3, 40]] } }),
   // Wiki (Raw karambwanji): floor(level / 5) + 1 a catch, 5 XP and one pet roll per catch.
   KARAMBWANJI: new Fish({
     id: ItemIds.RAW_KARAMBWANJI, level: 5, rolls: [[100, 250]], xp: 5, caught: "some Karambwanji", petBase: 443697,

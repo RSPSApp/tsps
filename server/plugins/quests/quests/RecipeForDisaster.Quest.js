@@ -2685,6 +2685,18 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
   }
 
+  /**
+   * The dragon token's row on the shared `black_dragon` table carries only the subquest
+   * condition, so without a place limit every black dragon rolls it — and Taverley's dragons use
+   * the same ids as the lair's. This plugin is the token's only source: it hands one out in
+   * `handleAmikCombatDrop`, gated on the Evil Chicken's Lair, so the table never rolls it.
+   * Answered the way Rag and Bone Man and Lunar Diplomacy answer for their own rows.
+   */
+  function handleAmikQuestItemDrop(event) {
+    if (event?.itemId !== ItemIdentifiers.DRAGON_TOKEN) return;
+    event.allowed = false;
+  }
+
   function equippedMonkey(player, choices) {
     return choices.includes(equipmentId(player, api.core.Equipment.WEAPON_SLOT));
   }
@@ -3503,6 +3515,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("recipe-for-disaster:rescue-status", handleRescueStatusQuery);
+  api.onCustomEvent("npc-drops:quest-item", handleAmikQuestItemDrop);
   api.onCustomEvent("npc-dialogue:choice", handlePirateChoice);
   api.onCustomEvent("npc-dialogue:choice", handleSkrachChoice);
   api.onCustomEvent("npc-dialogue:choice", handleDwarfBarChoice);

@@ -162,9 +162,13 @@ require the optional PvP statistics plugin to display.
 
 ## PvP Arena worlds
 
-Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
-available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
-in `world.local.json` (default off).
+Ranked 1v1 Duels (the Grouping tab's PvP Arena button, `duelarena/Matchmaking.DuelArena.js`) run on
+every world. Players sign up to the Official 1v1 Duels group, are invited in pairs by closest rank,
+meet in a staging area upstairs in the Emir's Arena hospital, and fight with the week's build. Rank
+starts at 2,500 and moves by Elo (K 50: 25 between equal ranks).
+
+`"pluginConfig": { "DuelArena:pvpArenaWorld": true }` in `world.local.json` (default off) makes a world
+a PvP Arena world: Challenge there always starts an unranked duel, with no choice of a Legacy Duel.
 
 Unranked duels are on every world. In the Emir's Arena, player option 1 is Challenge and 4 is
 Load-outs. On a normal world, Challenge first asks whether the duel is an Unranked Duel or a Legacy

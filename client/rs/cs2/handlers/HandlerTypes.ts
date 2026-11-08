@@ -251,8 +251,9 @@ export interface HandlerContext {
     clanSettings?: ClanSettings | null;
     clanChannel?: ClanChannel | null;
     /** Which clan the commands above read: false the player's own, true the listened guest clan. */
-    selectClanSettings?: (listened: boolean) => void;
-    selectClanChannel?: (listened: boolean) => void;
+    /** Picks the clan the activeclan* commands read: the listened one, or an affined one by type. */
+    selectClanSettings?: (listened: boolean, clanType?: number) => void;
+    selectClanChannel?: (listened: boolean, clanType?: number) => void;
     /** %varclan values, as the server sends them. */
     clanVars?: Map<number, number>;
 

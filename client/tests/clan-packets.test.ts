@@ -112,7 +112,7 @@ assert.equal(applyClanChannelDelta(undefined, delta.payload), undefined);
 // find_affined(0) is the player's clan, find_listened the guest one, and a group clan is neither.
 const handlers: HandlerMap = new Map();
 registerClanOps(handlers);
-const context: any = { own: own, guest: null, listened: false };
+const context: any = { own: own, guest: null, listened: false, type: 0, affined: new Map() };
 function run(opcode: number, stack: number[] = []): number {
     const ctx: any = {
         intStack: Int32Array.from([...stack, 0]),
@@ -121,10 +121,12 @@ function run(opcode: number, stack: number[] = []): number {
             ctx.intStack[ctx.intStackSize++] = value;
         },
         get clanSettings() {
-            return context.listened ? context.guest : context.own;
+            if (context.listened) return context.guest;
+            return context.type === 0 ? context.own : (context.affined.get(context.type) ?? null);
         },
-        selectClanSettings(listened: boolean) {
+        selectClanSettings(listened: boolean, clanType = 0) {
             context.listened = listened;
+            context.type = clanType;
         },
     };
     handlers.get(opcode)!(ctx, 0, null as any);
@@ -137,6 +139,10 @@ assert.equal(context.listened, true);
 assert.equal(run(Opcodes.ACTIVECLANSETTINGS_GETAFFINEDCOUNT), 0, "the guest clan, which is empty");
 assert.equal(run(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, [0]), 1);
 assert.equal(run(Opcodes.ACTIVECLANSETTINGS_GETAFFINEDCOUNT), 2);
+// The PvP Arena group signed up to is affined clan type 2, read by find_affined(2).
+context.affined.set(2, { ...own, name: "1v1Duels" });
+assert.equal(run(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, [2]), 1);
+assert.equal(run(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, [1]), 0, "still no group ironman clan");
 
 const profile = (clanVars?: Map<number, number>): number => {
     const ctx: any = { clanVars, pushInt: (value: number) => (ctx.pushed = value) };

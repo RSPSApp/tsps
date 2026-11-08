@@ -188,7 +188,7 @@ magic shortbow `1074`, Osmumten's fang `11222`, rosewood blowpipe `13145`, rune 
 | Noxious halberd - Virulence | self-buff, no player animation; the VFX is `11516`. |
 | Granite hammer - Hammer Blow | no dedicated sequence in the cache; keeps the mace swing. |
 | Seercull - Soulshot | uses the normal bow draw (`426`); no separate sequence exists. |
-| Magic longbow - Powershot | uses the normal bow draw; no separate sequence exists. |
+| Magic longbow - Powershot | uses the normal bow draw (`426`) with its own glow-arrow graphics (spotanim `250`, projectile `249`); no separate sequence exists. |
 | Dorgeshuun crossbow - Snipe | uses the normal crossbow fire; no separate sequence exists. |
 | Dragon crossbow - Annihilate | uses the normal crossbow fire; no separate sequence exists. |
 | Rune claws - Impale | uses the normal claws attack; no separate sequence exists. |

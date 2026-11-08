@@ -149,13 +149,18 @@ function finishLighting(player, index) {
 
 // ------------------------------------------------------------------ fix
 
+function hasHammer(player) {
+  const I = Shared.core().ItemIdentifiers;
+  return [I.HAMMER, I.IMCANDO_HAMMER, I.IMCANDO_HAMMER_OFF_HAND_].some(id => Shared.hasItem(player, id));
+}
+
 function fix(event) {
   const { player } = event;
   const index = cornerOf(event);
   if (index < 0) return false;
   if (quiet(player)) return true;
   if (Corners.corner(index).brazier !== Shared.BRAZIER.BROKEN) return true;
-  if (!player.getInventory().contains(Shared.ITEM.HAMMER)) {
+  if (!hasHammer(player)) {
     player.sendMessage("You need a hammer to fix this brazier.");
     return true;
   }
@@ -254,7 +259,9 @@ module.exports = function registerWintertodtBraziers(api) {
   for (const item of ["Bruma root", "Bruma kindling"]) {
     api.onItemOnObject(item, Shared.OBJECT.BURNING_BRAZIER, feed);
   }
-  api.onItemOnObject("Hammer", Shared.OBJECT.BRAZIER, fix);
+  for (const hammer of ["Hammer", "Imcando hammer", "Imcando hammer (off-hand)"]) {
+    api.onItemOnObject(hammer, Shared.OBJECT.BRAZIER, fix);
+  }
 };
 
 module.exports.light = light;

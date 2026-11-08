@@ -54,6 +54,7 @@ function fakeApi() {
     onCustomEvent: (name, handler) => (hooks.custom[name] ??= []).push(handler),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onObjectRoute: () => {},
+    onSpellDisabled: () => {},
   };
 }
 
@@ -191,6 +192,7 @@ before(() => {
   CachePipeline.initialize();
   RegionManager.init();
   const api = fakeApi();
+  require("../plugins/skills/herblore/Common.Herblore").init(api);
   Doors(api);
   Braziers(api);
   Supplies(api);
@@ -440,9 +442,9 @@ test('warmth regenerates 8% a minute plus 1% per warm item; food and potions res
   Round._round.ticks = 99;
   ticks(1);
   assert.equal(Warmth.warmthOf(player), 600, '80 + 2 x 10 at the 100-tick beat');
-  hooks.custom['food:eaten'][0]({ player, itemId: I.SHARK, heal: 20 });
+  hooks.custom['food:eaten'][0]({ player, itemId: I.SHARK, heal: 0, restores: 20 });
   assert.equal(Warmth.warmthOf(player), 950);
-  hooks.custom['food:eaten'][0]({ player, itemId: I.SHRIMPS, heal: 3 });
+  hooks.custom['food:eaten'][0]({ player, itemId: I.SHRIMPS, heal: 0, restores: 3 });
   assert.equal(Warmth.warmthOf(player), 950, 'under 4 healed does nothing');
   Warmth.setWarmth(player, 100);
   player.inventory.adds(Shared.ITEM.REJUVENATION_2);

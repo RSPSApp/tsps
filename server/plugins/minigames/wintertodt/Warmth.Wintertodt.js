@@ -181,8 +181,8 @@ function leave(player) {
   player.getPacketSender().sendVarbit(Shared.VARBIT.WARMTH, Shared.MAX_WARMTH);
 }
 
-function ateFood(player, itemId, heal) {
-  if (!(heal >= FOOD_MIN_HEAL)) return;
+function ateFood(player, itemId, restores) {
+  if (!(restores >= FOOD_MIN_HEAL)) return;
   const { ItemDefinition } = Shared.core();
   const name = String(ItemDefinition.forId(itemId)?.getName?.() ?? "").toLowerCase();
   if (NOT_WARMING_FOODS.has(name)) return;

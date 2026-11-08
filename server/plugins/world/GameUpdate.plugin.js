@@ -12,6 +12,9 @@ const MAX_SCHEDULED_SECONDS = 24 * 60 * 60;
 // and calls Server.shutdown once it hits zero.
 let scheduledUntilMs = 0;
 let countdownTask = null;
+// Hook and exit code supplied by GameUpdate:start; forwarded to Server.shutdown at zero.
+let pendingAfterPersist = null;
+let pendingExitCode;
 // Assigned in register(): Task only exists on api.core by then, and a module-scope
 // `class ... extends Task` would throw at require() time.
 let GameUpdateCountdownTask = null;
@@ -71,7 +74,14 @@ function pushCountdown(remainingCentis) {
     }
 }
 
-function startGameUpdate(seconds) {
+function clearPendingShutdownOptions() {
+    pendingAfterPersist = null;
+    pendingExitCode = undefined;
+}
+
+function startGameUpdate(seconds, options = {}) {
+    pendingAfterPersist = typeof options.afterPersist === "function" ? options.afterPersist : null;
+    pendingExitCode = options.exitCode;
     scheduledUntilMs = Date.now() + seconds * 1000;
     countdownTask = new GameUpdateCountdownTask();
     TaskManager.submit(countdownTask);
@@ -87,6 +97,7 @@ function startGameUpdate(seconds) {
 function cancelGameUpdate() {
     if (scheduledUntilMs <= 0) return false;
     scheduledUntilMs = 0;
+    clearPendingShutdownOptions();
     if (countdownTask) {
         countdownTask.stop();
         countdownTask = null;
@@ -134,6 +145,29 @@ function gameUpdateCommand({ player, parts }) {
     return true;
 }
 
+function onStartEvent(payload) {
+    const seconds = payload?.seconds;
+    if (!Number.isInteger(seconds) || seconds <= 0 || seconds > MAX_SCHEDULED_SECONDS) {
+        payload.error = `seconds must be a positive integer of at most ${MAX_SCHEDULED_SECONDS}`;
+        return;
+    }
+    const activeRemaining = remainingSeconds();
+    if (activeRemaining > 0) {
+        payload.error = `A game update is already scheduled (${formatCountdown(activeRemaining)} remaining).`;
+        return;
+    }
+    startGameUpdate(seconds, { afterPersist: payload.afterPersist, exitCode: payload.exitCode });
+    payload.accepted = true;
+}
+
+function onCancelEvent(payload) {
+    payload.cancelled = cancelGameUpdate();
+}
+
+function onStatusEvent(payload) {
+    payload.remainingSeconds = remainingSeconds();
+}
+
 function pushCountdownToLogin({ player }) {
     const remaining = remainingCentis();
     if (remaining <= 0 || !player) return;
@@ -142,6 +176,7 @@ function pushCountdownToLogin({ player }) {
 
 function onShutdownCleanup() {
     scheduledUntilMs = 0;
+    clearPendingShutdownOptions();
     if (countdownTask) {
         countdownTask.stop();
         countdownTask = null;
@@ -169,13 +204,18 @@ module.exports = {
                     this.stop();
                     scheduledUntilMs = 0;
                     countdownTask = null;
+                    const options = { afterPersist: pendingAfterPersist ?? undefined, exitCode: pendingExitCode };
+                    clearPendingShutdownOptions();
                     Server.getLogger().info("[GameUpdate] countdown finished; shutting down server");
-                    Server.shutdown("gameUpdate");
+                    Server.shutdown("gameUpdate", options);
                 }
             }
         };
         api.registerCommand("gameUpdate", gameUpdateCommand, PlayerRights.OWNER, "Schedule a server update");
         api.onPlayerLogin(pushCountdownToLogin);
         api.onServerShutdown(onShutdownCleanup);
+        api.onCustomEvent("GameUpdate:start", onStartEvent);
+        api.onCustomEvent("GameUpdate:cancel", onCancelEvent);
+        api.onCustomEvent("GameUpdate:status", onStatusEvent);
     },
 };

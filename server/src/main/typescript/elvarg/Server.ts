@@ -22,6 +22,13 @@ import { ServerLogger } from "./util/ServerLogger";
 import { PlayerPunishment } from "./util/PlayerPunishment";
 import { Accounts } from "./game/entity/impl/player/Accounts";
 
+export interface ShutdownOptions {
+  /** Runs after player persistence succeeds, before exit. Throwing cancels the shutdown. */
+  afterPersist?: () => void;
+  /** Process exit code for a plain exit (ignored by the nodemon restart mode). */
+  exitCode?: number;
+}
+
 export class Server {
   private static flooder: Flooder = new Flooder();
   public static PRODUCTION = false;
@@ -146,7 +153,8 @@ export class Server {
 
   private static async gracefulShutdown(
     reason: string,
-    mode: "exit" | "restart" = "exit"
+    mode: "exit" | "restart" = "exit",
+    options: ShutdownOptions = {}
   ): Promise<void> {
     if (Server.shuttingDown) {
       console.info(`[shutdown] ${reason} ignored: shutdown already in progress`);
@@ -173,6 +181,14 @@ export class Server {
     }
 
     try {
+      options.afterPersist?.();
+    } catch (err) {
+      console.error("[shutdown] afterPersist hook failed; shutdown cancelled.", err);
+      Server.shuttingDown = false;
+      return;
+    }
+
+    try {
       console.info(`[shutdown] Removed ${ObjectManager.removePluginObjects()} plugin objects.`);
     } catch (err) {
       console.error("[shutdown] Removing plugin objects failed", err);
@@ -190,7 +206,7 @@ export class Server {
       return;
     }
 
-    process.exit(0);
+    process.exit(options.exitCode ?? 0);
   }
 
   public static async main(args: string[]): Promise<void> {
@@ -284,8 +300,8 @@ export class Server {
   }
 
   /** Trigger the graceful shutdown sequence (persist players, then exit the process). */
-  public static shutdown(reason: string = "shutdown"): void {
-    void Server.gracefulShutdown(reason, "exit");
+  public static shutdown(reason: string = "shutdown", options: ShutdownOptions = {}): void {
+    void Server.gracefulShutdown(reason, "exit", options);
   }
 
   public static getFlooder() {

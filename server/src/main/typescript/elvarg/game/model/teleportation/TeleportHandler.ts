@@ -145,6 +145,10 @@ export class TeleportHandler {
         player.getSkillManager().stopSkillable();
         if (closeInterfaces) player.getPacketSender().sendInterfaceRemoval();
         player.getCombat().reset();
+        // Leaving the area clears aggression tolerance, including when the teleport lands the player
+        // back where they started (Wiki: Aggressiveness). Every way of teleporting passes through
+        // here: the spells and jewellery, the arrival task, and the admin world-map jump.
+        player.getAggressionTolerance?.()?.reset?.();
     }
 
     public static checkReqs(player: Player, targetLocation: Location, wildernessLevelLimit: number = 20, spellName?: string): boolean {

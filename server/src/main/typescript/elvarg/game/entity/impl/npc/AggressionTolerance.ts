@@ -60,6 +60,17 @@ export class AggressionTolerance {
         state.ticks = 0;
     }
 
+    /**
+     * The player has left the area. A teleport clears the timer even when it lands them back where
+     * they started, so the monsters are aggressive again on arrival (Wiki: Aggressiveness - "returning
+     * from a random event will reset the 10 minute timer even if the player is transported back to
+     * their original location"). Without this the old area stays one of the two live regions and the
+     * timer simply resumes where it left off.
+     */
+    public reset(): void {
+        this.holder.setAttribute(AggressionTolerance.ATTRIBUTE, undefined);
+    }
+
     /** Monsters that build tolerance have stopped being aggressive towards this player. */
     public finished(): boolean {
         const state = this.state();

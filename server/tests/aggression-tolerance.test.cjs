@@ -189,6 +189,37 @@ test("the hunt range defaults to three tiles and can be overridden per NPC", () 
   assert.equal(definition.getHuntRange(), 1, "a range below one would stop every hunt");
 });
 
+test("teleporting away and back clears the timer instead of resuming it (Wiki)", t => {
+  const { TeleportHandler } = require("../dist/game/model/teleportation/TeleportHandler");
+  const player = aggressionPlayer(t), here = player.getLocation().clone();
+  const tolerance = player.getAggressionTolerance();
+  ticks(tolerance, here, 1001);
+  assert.equal(tolerance.finished(), true);
+  TeleportHandler.onTeleporting(player);
+  assert.equal(tolerance.state(), null, "the regions are forgotten");
+  assert.equal(tolerance.finished(), false, "a teleport is leaving the area");
+  // Landing back on the tile they left: the ten minutes start again from zero.
+  ticks(tolerance, here, 1000);
+  assert.equal(tolerance.finished(), false, "not by resuming where the timer was");
+  ticks(tolerance, here, 1);
+  assert.equal(tolerance.finished(), true);
+});
+
+test("every way of teleporting clears it, including the admin world-map jump", t => {
+  const { TeleportHandler } = require("../dist/game/model/teleportation/TeleportHandler");
+  const player = aggressionPlayer(t), here = player.getLocation().clone();
+  const tolerance = player.getAggressionTolerance();
+  for (const call of [
+    () => TeleportHandler.onTeleporting(player),              // the spell, jewellery and arrival task
+    () => TeleportHandler.onTeleporting(player, false),        // the admin jump in NetworkBuilder
+  ]) {
+    ticks(tolerance, here, 1001);
+    assert.equal(tolerance.finished(), true);
+    call();
+    assert.equal(tolerance.finished(), false);
+  }
+});
+
 test("the state is a plain attribute, so a saved and reloaded player keeps their tolerance", () => {
   const before = holder();
   ticks(new AggressionTolerance(before), new Location(3100, 9830, 0), 1001);

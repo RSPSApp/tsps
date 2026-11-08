@@ -277,6 +277,46 @@ test("broad ammunition needs the Broader Fletching unlock", () => {
   assert.equal(p.count("BROAD_BOLTS"), 10);
 });
 
+// Wiki: Topaz_dragon_bolts and Topaz_bolts, 3.9 Fletching XP per bolt.
+test("topaz dragon bolts grant the same 3.9 XP per bolt as topaz bolts", () => {
+  const ordinary = player({ items: { STEEL_BOLTS: 10, TOPAZ_BOLT_TIPS: 10 } });
+  assert.equal(use(ordinary, "TOPAZ_BOLT_TIPS", "STEEL_BOLTS"), true);
+  runTask();
+  assert.equal(ordinary.count("TOPAZ_BOLTS"), 10);
+  assert.equal(ordinary.count("STEEL_BOLTS"), 0);
+  assert.equal(ordinary.count("TOPAZ_BOLT_TIPS"), 0);
+  assert.equal(ordinary.xp(), 39);
+
+  const underlevel = player({ level: 83, items: { DRAGON_BOLTS_2: 10, TOPAZ_BOLT_TIPS: 10 } });
+  const tasksBefore = hooks.tasks.length;
+  assert.equal(use(underlevel, "TOPAZ_BOLT_TIPS", "DRAGON_BOLTS_2"), true);
+  assert.equal(hooks.tasks.length, tasksBefore);
+  assert.equal(underlevel.count("DRAGON_BOLTS_2"), 10);
+  assert.equal(underlevel.count("TOPAZ_BOLT_TIPS"), 10);
+  assert.equal(underlevel.count("TOPAZ_DRAGON_BOLTS"), 0);
+  assert.equal(underlevel.xp(), 0);
+  assert.deepEqual(underlevel.messages, ["You need a Fletching level of at least 84 to do this."]);
+
+  const full = player({ level: 84, items: { DRAGON_BOLTS_2: 20, TOPAZ_BOLT_TIPS: 20 } });
+  assert.equal(use(full, "DRAGON_BOLTS_2", "TOPAZ_BOLT_TIPS"), true);
+  assert.deepEqual(full.menu().getItems(), [I.TOPAZ_DRAGON_BOLTS]);
+  assert.equal(full.count("TOPAZ_DRAGON_BOLTS"), 0);
+  full.menu().execute(I.TOPAZ_DRAGON_BOLTS, 28);
+  runTask();
+  assert.equal(full.count("TOPAZ_DRAGON_BOLTS"), 20);
+  assert.equal(full.count("DRAGON_BOLTS_2"), 0);
+  assert.equal(full.count("TOPAZ_BOLT_TIPS"), 0);
+  assert.equal(full.xp(), 78);
+
+  const partial = player({ level: 84, items: { DRAGON_BOLTS_2: 5, TOPAZ_BOLT_TIPS: 5 } });
+  assert.equal(use(partial, "TOPAZ_BOLT_TIPS", "DRAGON_BOLTS_2"), true);
+  runTask();
+  assert.equal(partial.count("TOPAZ_DRAGON_BOLTS"), 5);
+  assert.equal(partial.count("DRAGON_BOLTS_2"), 0);
+  assert.equal(partial.count("TOPAZ_BOLT_TIPS"), 0);
+  assert.equal(partial.xp(), 19.5);
+});
+
 test("ogre arrows need Big Chompy Bird Hunting started; brutal arrows need a hammer", () => {
   const p = player({ items: { KNIFE: 1, ACHEY_TREE_LOGS: 1 } });
   use(p, "KNIFE", "ACHEY_TREE_LOGS");

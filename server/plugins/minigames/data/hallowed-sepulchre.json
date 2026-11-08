@@ -148,7 +148,7 @@
     "bridgeConstruction": [[960, 150], [8778, 300], [8780, 450], [8782, 700]]
   },
 
-  "_requirements": "Wiki: Ranged 62 with a crossbow and a mith grapple (or a Hallowed grapple); Construction 56 with 2 planks, 5 nails, a saw and a hammer; Prayer 54 with 2 vampyre dust (1 with a Hallowed symbol); coffins Thieving 66; the grand coffin Thieving 84.",
+  "_requirements": "Wiki: Ranged 62 with a crossbow and a mith grapple (or a Hallowed grapple); Construction 56 with 2 planks, 5 nails, a saw and a hammer; Prayer 54 with 2 vampyre dust (1 with a Hallowed symbol); coffins Thieving 66; the grand coffin Thieving 84 or Agility 92 (Jagex update, 12 Aug 2026). The server retains its existing refusal below 66 Thieving; retail behavior there is unverified.",
   "_quest": "Wiki: the Sepulchre needs Sins of the Father completed. Unrecorded: the refusal's wording.",
   "quest": "sins_of_the_father",
   "requirements": { "ranged": 62, "construction": 56, "prayer": 54, "thieving": 66, "grandThieving": 84, "brazierDust": 2 },

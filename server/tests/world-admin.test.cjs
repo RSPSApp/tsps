@@ -46,6 +46,9 @@ async function start(t, env = {}, opts = {}) {
     events: [],
     gameUpdateLoaded: opts.gameUpdateLoaded ?? true,
     remaining: 0,
+    scheduled: false,
+    scheduleId: undefined,
+    shuttingDown: false,
   };
   const core = {
     WorldConfigStore: {
@@ -59,7 +62,10 @@ async function start(t, env = {}, opts = {}) {
       },
     },
     WorldConfigCatalog: { build: () => ({ plugins: [], options: [], world: [], membersWorld: true }) },
-    Server: { shutdown: (reason, options) => state.shutdowns.push({ reason, options }) },
+    Server: {
+      shutdown: (reason, options) => state.shutdowns.push({ reason, options }),
+      isShuttingDown: () => state.shuttingDown,
+    },
     World: { getPlayers: () => ({ sizeReturn: () => state.online }) },
   };
   const hooks = {};
@@ -71,14 +77,20 @@ async function start(t, env = {}, opts = {}) {
       state.events.push({ name, payload });
       if (!state.gameUpdateLoaded) return;
       if (name === "GameUpdate:start") {
-        if (state.remaining > 0) { payload.error = "already scheduled"; return; }
+        if (state.scheduled) { payload.error = "already scheduled"; return; }
         state.remaining = payload.seconds;
+        state.scheduled = true;
+        state.scheduleId = payload.id;
         payload.accepted = true;
       } else if (name === "GameUpdate:cancel") {
-        payload.cancelled = state.remaining > 0;
+        payload.cancelled = state.scheduled;
         state.remaining = 0;
+        state.scheduled = false;
+        state.scheduleId = undefined;
       } else if (name === "GameUpdate:status") {
         payload.remainingSeconds = state.remaining;
+        payload.scheduled = state.scheduled;
+        if (state.scheduled && state.scheduleId !== undefined) payload.id = state.scheduleId;
       }
     },
   };
@@ -96,7 +108,7 @@ async function start(t, env = {}, opts = {}) {
   const link = capture.logs.join("\n").match(/http:\/\/localhost:(\d+)\/\?token=([A-Za-z0-9_-]+)/);
   if (link) port = Number(link[1]);
   t.after(async () => {
-    await hooks.shutdown?.({ timestamp: Date.now() });
+    await plugin._test.stop();
     capture.restore();
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) delete process.env[key];
@@ -180,11 +192,15 @@ test("GET /?token= sets an HttpOnly SameSite=Strict cookie and redirects to /; t
   assert.equal(res.status, 302);
   assert.equal(res.headers.location, "/");
   const cookie = res.headers["set-cookie"][0];
-  assert.match(cookie, /^wa_token=/);
+  assert.ok(cookie.startsWith(`wa_token_${port}=`), cookie);
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Strict/);
   const pair = cookie.split(";")[0];
   assert.equal((await request(port, { path: "/api/catalog", headers: { Cookie: pair } })).status, 200);
+  // Another worktree's cookie (same host, other port) is not this listener's.
+  const otherPort = `wa_token_${port + 1}=${encodeURIComponent(TOKEN)}`;
+  assert.equal((await request(port, { path: "/api/catalog", headers: { Cookie: otherPort } })).status, 401);
+  assert.equal((await request(port, { path: "/api/catalog", headers: { Cookie: `wa_token=${TOKEN}` } })).status, 401);
 });
 
 test("catalog reports layers, mode, online players and countdown", async (t) => {
@@ -300,18 +316,83 @@ test("a hand edit during the countdown makes afterPersist throw (shutdown cancel
   assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 202);
   const start0 = state.events.find((e) => e.name === "GameUpdate:start");
   state.layers = { ...state.layers, localHash: "hand-edited" };
-  state.remaining = 0; // GameUpdate cleared its countdown before calling Server.shutdown
+  // The countdown fired: GameUpdate cleared its schedule and Server.shutdown is running.
+  Object.assign(state, { remaining: 0, scheduled: false, scheduleId: undefined, shuttingDown: true });
+  const during = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(during.json.pending.kind, "countdown", "still pending while the shutdown runs");
   const capture = captureLogs();
   try {
     assert.throws(() => start0.payload.afterPersist(), /changed since loaded/);
   } finally {
     capture.restore();
   }
+  start0.payload.onCancelled("world.local.json changed since loaded"); // Server.shutdown follows up
+  state.shuttingDown = false;
   assert.match(capture.logs.join("\n"), /not written/);
   assert.deepEqual(state.writes, []);
   const cat = await request(port, { path: "/api/catalog", headers: auth });
   assert.equal(cat.json.pending, null);
+  assert.match(cat.json.lastFailure.message, /^Restart cancelled: .*changed since loaded.*Nothing was written\.$/);
   assert.equal((await apply(port, { changes: {}, localHash: "hand-edited" })).status, 202);
+  const after = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(after.json.lastFailure, null, "a newly accepted apply clears the failure");
+});
+
+test("a cancelled immediate restart (saving players failed) clears pending and reports lastFailure; the page stays up", async (t) => {
+  const { port, state, hooks } = await start(t, { npm_lifecycle_event: "dev" }, { online: 0 });
+  assert.equal(hooks.shutdown, undefined, "the listener is not closed by onServerShutdown");
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 202);
+  await tick();
+  assert.equal(state.shutdowns.length, 1);
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 409, "pending while restarting");
+  const capture = captureLogs();
+  try {
+    state.shutdowns[0].options.onCancelled("saving players failed (1 player snapshot(s) failed)");
+  } finally {
+    capture.restore();
+  }
+  const cat = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(cat.json.pending, null);
+  assert.equal(cat.json.lastFailure.message, "Restart cancelled: saving players failed (1 player snapshot(s) failed). Nothing was written.");
+  assert.ok(cat.json.lastFailure.at);
+  assert.deepEqual(state.writes, []);
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 202);
+});
+
+test("countdown end gap and foreign countdowns", async (t) => {
+  const { port, state } = await start(t, { npm_lifecycle_event: "dev" }, { online: 2 });
+  // A ::gameUpdate countdown someone started in game is not the page's pending change.
+  Object.assign(state, { remaining: 30, scheduled: true, scheduleId: undefined });
+  let cat = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(cat.json.pending, null);
+  assert.equal(cat.json.countdown.scheduled, true);
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 409);
+  Object.assign(state, { remaining: 0, scheduled: false });
+
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1", seconds: 5 })).status, 202);
+  // remainingSeconds reached 0 but the countdown task has not fired yet.
+  state.remaining = 0;
+  cat = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(cat.json.pending.kind, "countdown");
+  assert.equal(cat.json.countdown.scheduled, true);
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 409);
+
+  // Cancelled in game, then a foreign countdown started: the page's change is gone.
+  Object.assign(state, { remaining: 40, scheduled: true, scheduleId: "someone-else" });
+  cat = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(cat.json.pending, null);
+});
+
+test("switching WorldAdmin itself off adds a warning to the plan", async (t) => {
+  const { port, state } = await start(t);
+  state.plan = { ...state.plan, nextLocal: { plugins: { WorldAdmin: false } } };
+  const res = await request(port, {
+    method: "POST", path: "/api/preview", headers: auth,
+    body: { changes: { plugins: { WorldAdmin: false } }, localHash: "hash-1" },
+  });
+  assert.equal(res.status, 200);
+  assert.ok(res.json.warnings.some((w) => /turns off the world config page/.test(w)));
+  assert.deepEqual(state.plan.warnings, [], "the store plan object is not mutated");
 });
 
 test("nobody online, or GameUpdate not loaded: shuts down immediately with the write as afterPersist", async (t) => {
@@ -368,8 +449,3 @@ test("GET / without page.html is a 404 text body; unknown routes 404", async (t)
   assert.equal((await request(port, { path: "/api/nope", headers: auth })).status, 404);
 });
 
-test("server shutdown closes the listener", async (t) => {
-  const { port, hooks } = await start(t);
-  await hooks.shutdown({ timestamp: Date.now() });
-  await assert.rejects(request(port, { path: "/api/catalog", headers: auth }), /ECONNREFUSED/);
-});

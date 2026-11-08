@@ -122,7 +122,8 @@ function sendPage(response) {
 
 /**
  * `access`: { token, port(), loopback }. `actions`: catalog(), preview(body), apply(body),
- * cancel(); each returns { status, body }.
+ * cancel(); each returns { status, body, afterResponse? } (afterResponse runs once the response
+ * has been sent).
  */
 function createRequestHandler(access, actions) {
   async function route(request, response) {
@@ -139,10 +140,10 @@ function createRequestHandler(access, actions) {
         send(response, 401, { error: "Unauthorized" });
         return;
       }
-      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token) });
+      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port) });
       return;
     }
-    if (!hasToken(request, access.token)) {
+    if (!hasToken(request, access.token, port)) {
       send(response, 401, { error: "Unauthorized" });
       return;
     }
@@ -168,6 +169,17 @@ function createRequestHandler(access, actions) {
       if (typeof body.localHash !== "string") throw new HttpError(400, "localHash must be a string");
     }
     const result = actions[post](body);
+    if (result.afterResponse) {
+      // 'finish' once the response is sent; 'close' too, so an aborted request still restarts.
+      let ran = false;
+      const run = () => {
+        if (ran) return;
+        ran = true;
+        result.afterResponse();
+      };
+      response.once("finish", run);
+      response.once("close", run);
+    }
     send(response, result.status, result.body);
   }
 

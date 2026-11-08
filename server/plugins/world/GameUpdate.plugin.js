@@ -12,9 +12,11 @@ const MAX_SCHEDULED_SECONDS = 24 * 60 * 60;
 // and calls Server.shutdown once it hits zero.
 let scheduledUntilMs = 0;
 let countdownTask = null;
-// Hook and exit code supplied by GameUpdate:start; forwarded to Server.shutdown at zero.
+// Hooks, exit code and caller id supplied by GameUpdate:start; forwarded to Server.shutdown at zero.
 let pendingAfterPersist = null;
+let pendingOnCancelled = null;
 let pendingExitCode;
+let pendingId;
 // Assigned in register(): Task only exists on api.core by then, and a module-scope
 // `class ... extends Task` would throw at require() time.
 let GameUpdateCountdownTask = null;
@@ -76,12 +78,16 @@ function pushCountdown(remainingCentis) {
 
 function clearPendingShutdownOptions() {
     pendingAfterPersist = null;
+    pendingOnCancelled = null;
     pendingExitCode = undefined;
+    pendingId = undefined;
 }
 
 function startGameUpdate(seconds, options = {}) {
     pendingAfterPersist = typeof options.afterPersist === "function" ? options.afterPersist : null;
+    pendingOnCancelled = typeof options.onCancelled === "function" ? options.onCancelled : null;
     pendingExitCode = options.exitCode;
+    pendingId = options.id;
     scheduledUntilMs = Date.now() + seconds * 1000;
     countdownTask = new GameUpdateCountdownTask();
     TaskManager.submit(countdownTask);
@@ -156,7 +162,12 @@ function onStartEvent(payload) {
         payload.error = `A game update is already scheduled (${formatCountdown(activeRemaining)} remaining).`;
         return;
     }
-    startGameUpdate(seconds, { afterPersist: payload.afterPersist, exitCode: payload.exitCode });
+    startGameUpdate(seconds, {
+        afterPersist: payload.afterPersist,
+        onCancelled: payload.onCancelled,
+        exitCode: payload.exitCode,
+        id: payload.id,
+    });
     payload.accepted = true;
 }
 
@@ -164,8 +175,12 @@ function onCancelEvent(payload) {
     payload.cancelled = cancelGameUpdate();
 }
 
+// `scheduled` stays true from start until the countdown task fires (also in the last tick after
+// remainingSeconds reaches 0); `id` is the one GameUpdate:start was given, if any.
 function onStatusEvent(payload) {
     payload.remainingSeconds = remainingSeconds();
+    payload.scheduled = scheduledUntilMs > 0;
+    if (payload.scheduled && pendingId !== undefined) payload.id = pendingId;
 }
 
 function pushCountdownToLogin({ player }) {
@@ -204,7 +219,11 @@ module.exports = {
                     this.stop();
                     scheduledUntilMs = 0;
                     countdownTask = null;
-                    const options = { afterPersist: pendingAfterPersist ?? undefined, exitCode: pendingExitCode };
+                    const options = {
+                        afterPersist: pendingAfterPersist ?? undefined,
+                        onCancelled: pendingOnCancelled ?? undefined,
+                        exitCode: pendingExitCode,
+                    };
                     clearPendingShutdownOptions();
                     Server.getLogger().info("[GameUpdate] countdown finished; shutting down server");
                     Server.shutdown("gameUpdate", options);

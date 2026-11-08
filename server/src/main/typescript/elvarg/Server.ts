@@ -27,6 +27,19 @@ export interface ShutdownOptions {
   afterPersist?: () => void;
   /** Process exit code for a plain exit (ignored by the nodemon restart mode). */
   exitCode?: number;
+  /**
+   * Called once, with why, when this shutdown does not go ahead: another shutdown is already
+   * in progress, player persistence failed, or afterPersist threw. The server keeps running.
+   */
+  onCancelled?: (reason: string) => void;
+}
+
+function notifyCancelled(options: ShutdownOptions, reason: string): void {
+  try {
+    options.onCancelled?.(reason);
+  } catch (err) {
+    console.error("[shutdown] onCancelled hook failed", err);
+  }
 }
 
 export class Server {
@@ -158,6 +171,7 @@ export class Server {
   ): Promise<void> {
     if (Server.shuttingDown) {
       console.info(`[shutdown] ${reason} ignored: shutdown already in progress`);
+      notifyCancelled(options, "a shutdown is already in progress");
       return;
     }
     Server.shuttingDown = true;
@@ -177,6 +191,7 @@ export class Server {
     } catch (err) {
       console.error("[shutdown] Persistence failed; shutdown cancelled. Fix the error and retry the shutdown.", err);
       Server.shuttingDown = false;
+      notifyCancelled(options, `saving players failed (${err instanceof Error ? err.message : String(err)})`);
       return;
     }
 
@@ -185,6 +200,7 @@ export class Server {
     } catch (err) {
       console.error("[shutdown] afterPersist hook failed; shutdown cancelled.", err);
       Server.shuttingDown = false;
+      notifyCancelled(options, err instanceof Error ? err.message : String(err));
       return;
     }
 
@@ -289,6 +305,11 @@ export class Server {
 
   public static getLogger() {
     return Server.logger;
+  }
+
+  /** True from the start of a graceful shutdown until it exits or cancels itself. */
+  public static isShuttingDown(): boolean {
+    return Server.shuttingDown;
   }
 
   public static isUpdating() {

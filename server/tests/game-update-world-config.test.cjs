@@ -149,3 +149,88 @@ test("Server.shutdown runs afterPersist once before exiting with exitCode; a thr
     assert.deepEqual(ctx.exits, [75, 0]);
   } finally { Server.shuttingDown = false; ctx.restore(); }
 });
+
+test("GameUpdate:status reports scheduled and the start id until the task fires; onCancelled is forwarded", () => {
+  const { emit, tasks, shutdowns } = loadPlugin();
+  assert.deepEqual(emit("GameUpdate:status", {}), { remainingSeconds: 0, scheduled: false });
+  const onCancelled = () => {};
+  emit("GameUpdate:start", { seconds: 5, id: "page-1", onCancelled, exitCode: 0 });
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 6000;
+    // The clock passed zero but the countdown task has not ticked yet.
+    const gap = emit("GameUpdate:status", {});
+    assert.equal(gap.remainingSeconds, 0);
+    assert.equal(gap.scheduled, true);
+    assert.equal(gap.id, "page-1");
+    tasks[0].execute();
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(shutdowns[0].options.onCancelled, onCancelled);
+  const after = emit("GameUpdate:status", {});
+  assert.equal(after.scheduled, false);
+  assert.equal(after.id, undefined);
+
+  // A ::gameUpdate-style start without an id echoes none; cancel drops the stored hooks.
+  emit("GameUpdate:start", { seconds: 30 });
+  assert.equal(emit("GameUpdate:status", {}).id, undefined);
+  emit("GameUpdate:cancel", {});
+  emit("GameUpdate:start", { seconds: 5, id: "page-2" });
+  emit("GameUpdate:cancel", {});
+  emit("GameUpdate:start", { seconds: 5 });
+  try {
+    Date.now = () => realNow() + 6000;
+    tasks.at(-1).execute();
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(shutdowns.at(-1).options.onCancelled, undefined);
+});
+
+async function settle() {
+  for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+}
+
+test("Server.shutdown calls onCancelled once when persistence fails", async () => {
+  const ctx = stubShutdownDependencies({ failed: 1 });
+  try {
+    const reasons = [];
+    Server.shutdown("test", { onCancelled: (r) => reasons.push(r), afterPersist: () => reasons.push("hook") });
+    await settle();
+    assert.equal(reasons.length, 1);
+    assert.match(reasons[0], /saving players failed/);
+    assert.deepEqual(ctx.exits, []);
+  } finally { Server.shuttingDown = false; ctx.restore(); }
+});
+
+test("Server.shutdown calls onCancelled once when afterPersist throws, and never on success", async () => {
+  const ctx = stubShutdownDependencies({ failed: 0 });
+  try {
+    const reasons = [];
+    Server.shutdown("test", { onCancelled: (r) => reasons.push(r), afterPersist: () => { throw new Error("changed since loaded"); } });
+    await settle();
+    assert.deepEqual(reasons, ["changed since loaded"]);
+    assert.equal(Server.shuttingDown, false);
+
+    Server.shutdown("test", { onCancelled: (r) => reasons.push(r), afterPersist: () => {}, exitCode: 75 });
+    await settle();
+    assert.deepEqual(reasons, ["changed since loaded"]);
+    assert.deepEqual(ctx.exits, [75]);
+  } finally { Server.shuttingDown = false; ctx.restore(); }
+});
+
+test("Server.shutdown calls onCancelled when another shutdown is already in progress", async () => {
+  const ctx = stubShutdownDependencies({ failed: 0 });
+  try {
+    Server.shuttingDown = true;
+    assert.equal(Server.isShuttingDown(), true);
+    const reasons = [];
+    let ran = false;
+    Server.shutdown("test", { onCancelled: (r) => reasons.push(r), afterPersist: () => { ran = true; } });
+    await settle();
+    assert.deepEqual(reasons, ["a shutdown is already in progress"]);
+    assert.equal(ran, false);
+    assert.deepEqual(ctx.exits, []);
+  } finally { Server.shuttingDown = false; ctx.restore(); }
+});

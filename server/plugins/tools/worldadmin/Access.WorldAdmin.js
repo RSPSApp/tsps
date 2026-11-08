@@ -6,7 +6,8 @@ const crypto = require("crypto");
 
 const DEFAULT_PORT = 49600;
 const LOOPBACK = "127.0.0.1";
-const COOKIE = "wa_token";
+// Per port: browsers share cookies across ports of one host, so worktrees would overwrite each other.
+const cookieName = (port) => `wa_token_${port}`;
 
 function resolvePort(raw) {
   if (raw === undefined || String(raw).trim() === "") return DEFAULT_PORT;
@@ -56,11 +57,11 @@ function cookieValue(header, name) {
   return "";
 }
 
-/** The request carries the token as a `wa_token` cookie or `Authorization: Bearer`. */
-function hasToken(request, token) {
+/** The request carries the token as a `wa_token_<port>` cookie or `Authorization: Bearer`. */
+function hasToken(request, token, port) {
   const auth = String(request.headers.authorization ?? "");
   const bearer = /^Bearer\s+(.+)$/i.exec(auth)?.[1]?.trim();
-  return tokenMatches(bearer, token) || tokenMatches(cookieValue(request.headers.cookie, COOKIE), token);
+  return tokenMatches(bearer, token) || tokenMatches(cookieValue(request.headers.cookie, cookieName(port)), token);
 }
 
 /** In loopback mode only `localhost:<port>` / `127.0.0.1:<port>` (blocks DNS rebinding). */
@@ -77,8 +78,8 @@ function originAllowed(request) {
   return origin === `http://${request.headers.host}`;
 }
 
-function sessionCookie(token) {
-  return `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/`;
+function sessionCookie(token, port) {
+  return `${cookieName(port)}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/`;
 }
 
 module.exports = {

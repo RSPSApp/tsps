@@ -72,11 +72,23 @@ test("autosaved pending rewards survive the actual JSON codec and login exactly 
   const twice = reload(t, restored); PM.emitPlayerLogin({ player: twice, username: twice.getUsername(), isNewAccount: false });
   assert.deepEqual(bag(twice), expected, "cleared obligation does not return after reload");
 });
-test("logout settlement and replacement modal preserve the same one-time transfer", t => {
-  for (const [route, close] of [["logout", p => PM.emitPlayerLogout({player:p,username:p.getUsername()})], ["replace", p => p.getPacketSender().sendInterface(12)]]) {
-    const p = actor(t); open(p); const expected = totals(p.getAttribute(Screen.PENDING_ATTRIBUTE)); close(p);
-    assert.deepEqual(bag(p), expected, route); const restored = reload(t, p); Screen.settle({ player: restored }); assert.deepEqual(bag(restored), expected, route + " reload");
-  }
+test("replacement modal preserves the same one-time transfer", t => {
+  const p = actor(t); open(p); const expected = totals(p.getAttribute(Screen.PENDING_ATTRIBUTE)); p.getPacketSender().sendInterface(12);
+  assert.deepEqual(bag(p), expected); const restored = reload(t, p); Screen.settle({ player: restored }); assert.deepEqual(bag(restored), expected, "reload");
+});
+test("logout with a full bag keeps the owed rewards saved instead of dropping them unattended", t => {
+  const p = actor(t); open(p); const expected = totals(p.getAttribute(Screen.PENDING_ATTRIBUTE));
+  for (let i = 0; i < 28; i++) p.getInventory().setItem(i, new core.Item(core.ItemIdentifiers.RAKE));
+  const drops = []; t.mock.method(core.ItemOnGroundManager, "registers", (_player, item) => drops.push(item));
+  const queue = core.World.getRemovePlayerQueue(); queue.push(p);
+  try { p.getPacketSender().sendInterfaceRemoval(); PM.emitPlayerLogout({ player: p, username: p.getUsername() }); }
+  finally { queue.splice(queue.indexOf(p), 1); }
+  assert.deepEqual(drops, [], "nothing is dropped while the owner leaves");
+  assert.deepEqual(totals(p.getAttribute(Screen.PENDING_ATTRIBUTE)), expected);
+  const restored = reload(t, p); restored.getInventory().resetItems();
+  PM.emitPlayerLogin({ player: restored, username: restored.getUsername(), isNewAccount: false });
+  assert.deepEqual(bag(restored), expected, "login delivers exactly once");
+  assert.deepEqual(restored.getAttribute(Screen.PENDING_ATTRIBUTE), []);
 });
 test("unrelated closes do not grant; repeated opening conserves both reward obligations", t => {
   const p = actor(t); open(p); const first = p.getAttribute(Screen.PENDING_ATTRIBUTE);

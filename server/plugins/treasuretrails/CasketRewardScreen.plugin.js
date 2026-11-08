@@ -19,6 +19,8 @@ function queue(player, drops) {
 
 function settle({ player }) {
   if (settling.has(player) || !(player.getAttribute(PENDING_ATTRIBUTE)?.length)) return;
+  // A departing player's overflow would land on the ground unattended; keep it saved for login.
+  if (core?.World?.getRemovePlayerQueue?.().includes(player)) return;
   settling.add(player);
   try {
     let pending = player.getAttribute(PENDING_ATTRIBUTE) ?? [];
@@ -49,8 +51,7 @@ module.exports = {
     api.onServerStartup(initialize.bind(null, api.core));
     api.persistAttribute(PENDING_ATTRIBUTE, []);
     api.onCustomEvent("interface:closed", closed);
-    api.onPlayerLogout(settle);
-    // A saved open screen need not be reconstructed to recover its owed items.
+    // A screen open at logout is saved unsettled; login delivers it while the player is present.
     api.onPlayerLogin(settle);
   },
   queue, settle, closed, initialize, PENDING_ATTRIBUTE,

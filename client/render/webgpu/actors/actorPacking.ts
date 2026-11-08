@@ -9,7 +9,7 @@ import { resolveHeightSamplePlaneForLocal } from "../../../game/scene/PlaneResol
 import type { TileFlagMapSquare } from "../../../game/scene/TileRenderFlags";
 import { computeFacingRotation } from "../../../game/utils/rotation";
 import { decodeInteractionIndex } from "../../../rs/interaction/InteractionIndex";
-import { NpcDrawPriority } from "../../../rs/config/npctype/NpcType";
+import { NpcDrawPriority, getNpcMovementSeqSet } from "../../../rs/config/npctype/NpcType";
 import type { NpcType } from "../../../rs/config/npctype/NpcType";
 import type { DynamicNpcAnimLoader, DynamicNpcFrameGeometry } from "../../npc/DynamicNpcAnimLoader";
 import type { WebGPUMapSquare } from "../WebGPUMapSquare";
@@ -99,7 +99,7 @@ export function resolveNpcMovementSequenceIds(
         const npcType = getEffectiveNpcType(client, npcTypeId | 0);
         if (!npcType) return { movementSeqId, idleSeqId, walkSeqId };
 
-        const movementSet = Object.assign(npcType.getMovementSeqSet(client.basTypeLoader), ecs.getMovementOverrides(ecsId));
+        const movementSet = Object.assign(getNpcMovementSeqSet(npcType, client.npcTypeLoader.load(npcTypeId | 0), client.basTypeLoader), ecs.getMovementOverrides(ecsId));
         idleSeqId = movementSet.idle | 0;
         walkSeqId = movementSet.walk | 0;
         const pathLength = ecs.getPathLengthLike?.(ecsId) | 0;

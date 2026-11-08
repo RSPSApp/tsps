@@ -62,8 +62,12 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
   let doorToggleHandler = null;
   const customHandlers = new Map();
   const visibleObjectIds = new Map();
+  let lastPlayer, assertClearedTile = false;
   const objectManager = suppliedObjectManager ?? {
-    register: (o) => ops.push(['register', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
+    register: (o) => {
+      if (assertClearedTile) assert.notDeepEqual(lastPlayer?.getLocation(), o.getLocation(), 'opener clears the leaf before registration');
+      ops.push(['register', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]);
+    },
     deregister: (o) => ops.push(['deregister', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
   };
   const taskManager = { submit: (task) => submitted.push(task), cancelTasks: () => {} };
@@ -104,8 +108,9 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     world.set(tileKey(id, x, y, 0), object);
   };
 
-  const steps = [], forced = [];
-  const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0, privateArea = null, z = 0, from = null) => {
+  const steps = [], forced = [], relocations = [];
+  let canStepAside = true;
+  const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0, privateArea = null, z = 0, from = null, approach = null) => {
     const object = new GameObject(id, new Location(x, y, z), type, face, privateArea);
     const location = from ? new Location(from[0], from[1], z) : object.getLocation();
     const player = {
@@ -118,11 +123,14 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
       isNeedsPlacement: () => false,
       isAllowRegionChangePacket: () => false,
       getPacketSender: () => ({}),
-      getMovementQueue: () => ({ reset: () => {}, addSteps: (to) => steps.push([to.getX(), to.getY()]) }),
+      getMovementQueue: () => ({ reset: () => {}, canWalkTo: (at) => typeof canStepAside === 'function' ? canStepAside(at) : canStepAside, addSteps: (to) => steps.push([to.getX(), to.getY()]) }),
+      moveTo: (to) => { relocations.push([to.getX(), to.getY(), to.getZ()]); location.setX(to.getX()); location.setY(to.getY()); },
       getCombat: () => ({ reset: () => {} }),
       getForceMovement: () => forced.at(-1) ?? null,
       setForceMovement: (movement) => { if (movement) forced.push(movement); },
     };
+    lastPlayer = player;
+    if (approach) for (const route of routes) route({ player, object, sourceLocation: { x: approach[0], y: approach[1], z }, definition: { getName: () => name } });
     ops.length = 0;
     handlers.get(name)[action]({ player, object, objectId: id, clickType: action === 'Open' ? 1 : 2, location: { x, y, z } });
     return ops.splice(0);
@@ -135,7 +143,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     CacheDefinitions.getCounts = originalGetCounts;
   };
 
-  return { place, click, sounds, ops, steps, forced, submitted, handlers, routes, customHandlers, internals: plugin.__internals, regionLoaded: (regionId) => regionLoaded({ regionId }), visibleObjectIds, setDoorToggleHandler: (handler) => { doorToggleHandler = handler; }, restore };
+  return { place, click, sounds, ops, steps, forced, submitted, relocations, setCanStepAside: (value) => { canStepAside = value; }, assertClearedTile: () => { assertClearedTile = true; }, handlers, routes, customHandlers, internals: plugin.__internals, regionLoaded: (regionId) => regionLoaded({ regionId }), visibleObjectIds, setDoorToggleHandler: (handler) => { doorToggleHandler = handler; }, restore };
 }
 
 test('shared wall-door reach masks cover every operation and preserve other object routing', () => {
@@ -144,6 +152,7 @@ test('shared wall-door reach masks cover every operation and preserve other obje
     assert.equal(h.routes.length, 1, 'the shared reach hook is installed on startup');
     const route = ({ name = 'Door', shape = 0, face = 0, clickType = 1, blockAccessFlags = 0, destination = null } = {}) => {
       const event = {
+        player: { getPrivateArea: () => null },
         object: new GameObject(30112, new Location(100, 100, 0), shape, face, null),
         sourceLocation: { x: 104, y: 97, z: 0 }, clickType, blockAccessFlags, destination,
         definition: { getName: () => name, getInteractions: () => ['Open', 'Close', 'Pick-lock'] },
@@ -2472,4 +2481,101 @@ test('a diagonal door opens onto the next tile along its wall (rsprox 787, 1535 
   } finally {
     h.restore();
   }
+});
+
+
+test('diagonal door opening and closing clear the next leaf tile in all four orientations (#3618)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1535, 1536].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  const openedOffsets = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+  const openSteps = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  const closeSteps = [[1, -1], [-1, -1], [-1, 1], [1, 1]];
+  h.assertClearedTile();
+  try {
+    for (let rotation = 0; rotation < 4; rotation++) {
+      const x = 3200 + rotation * 10, y = 3200;
+      const [dx, dy] = openedOffsets[rotation];
+      assert.deepEqual(h.click(1535, x, y, rotation, 'Open', 'Door', 9, null, 0, [x + dx, y + dy]), [
+        ['deregister', 1535, x, y, rotation],
+        ['register', 1536, x + dx, y + dy, (rotation + 1) & 3],
+      ]);
+      assert.deepEqual(h.relocations.at(-1), [x + dx + openSteps[rotation][0], y + dy + openSteps[rotation][1], 0]);
+      assert.deepEqual(h.click(1536, x + dx, y + dy, (rotation + 1) & 3, 'Close', 'Door', 9, null, 0, [x, y]), [
+        ['deregister', 1536, x + dx, y + dy, (rotation + 1) & 3],
+        ['register', 1535, x, y, rotation],
+      ]);
+      assert.deepEqual(h.relocations.at(-1), [x + closeSteps[rotation][0], y + closeSteps[rotation][1], 0]);
+    }
+    assert.equal(h.relocations.length, 8);
+  } finally { h.restore(); }
+});
+
+test('diagonal clearance leaves blocked doors unchanged and respects private-area and plane boundaries (#3618)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1535, 1536].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    h.setCanStepAside(false);
+    assert.deepEqual(h.click(1535, 3200, 3200, 0, 'Open', 'Door', 9, null, 0, [3200, 3201]), []);
+    assert.equal(h.relocations.length, 0);
+    assert.equal(h.sounds.length, 0);
+    assert.equal(h.submitted.length, 0);
+    assert.equal(h.internals.OPEN_OBJECT_STATES.size, 0);
+    const blockedArea = new PrivateArea();
+    h.click(1535, 3230, 3200, 0, 'Open', 'Door', 9, blockedArea, 2, [3230, 3201]);
+    assert.deepEqual(blockedArea.getObjects().map((o) => o.getId()), [1535], 'refusal does not construct a private open leaf');
+    h.setCanStepAside(true);
+    const area = new PrivateArea();
+    assert.equal(h.click(1535, 3200, 3200, 0, 'Open', 'Door', 9, area, 2, [3200, 3201]).length, 2);
+    assert.deepEqual(h.relocations, [[3199, 3201, 2]]);
+    assert.equal(h.click(1536, 3200, 3201, 1, 'Close', 'Door', 9, area, 2, [3200, 3200]).length, 2);
+    assert.deepEqual(h.relocations.at(-1), [3201, 3199, 2]);
+    const count = h.relocations.length;
+    h.click(1535, 3210, 3200, 0, 'Open', 'Door', 9, null, 0, [3210, 3199]);
+    h.click(1535, 3220, 3200, 0, 'Open', 'Door', 0, null, 0, [3219, 3200]);
+    assert.equal(h.relocations.length, count, 'nonoccupants and straight doors are unchanged');
+  } finally { h.restore(); }
+});
+
+
+test('closing a diagonal door preserves both original approach sides for every rotation (#3618)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1535, 1536].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  const normal = [[1, -1], [-1, -1], [-1, 1], [1, 1]];
+  const openedOffset = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+  try {
+    for (let rotation = 0; rotation < 4; rotation++) for (const side of [-1, 1]) {
+      const x = 3200 + rotation * 10, y = 3220 + side * 5;
+      const [dx, dy] = openedOffset[rotation];
+      const [nx, ny] = normal[rotation];
+      h.click(1535, x, y, rotation, 'Open', 'Door', 9, null, 0, [x + nx * side, y + ny * side]);
+      h.click(1536, x + dx, y + dy, (rotation + 1) & 3, 'Close', 'Door', 9, null, 0,
+        [x, y], [x + nx * side, y + ny * side]);
+      const [endX, endY] = h.relocations.at(-1);
+      assert.ok(((endX - x) * nx + (endY - y) * ny) * side > 0, `rotation ${rotation} side ${side}`);
+    }
+  } finally { h.restore(); }
+});
+
+
+test('a blocked diagonal clearance falls back to a walkable cardinal tile on the same side (#3618)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1535, 1536].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    h.click(1535, 3200, 3200, 0, 'Open', 'Door', 9, null, 0, [3201, 3199]);
+    h.setCanStepAside((at) => at.getX() === 3199 && at.getY() === 3200);
+    h.click(1536, 3200, 3201, 1, 'Close', 'Door', 9, null, 0, [3200, 3200], [3198, 3202]);
+    assert.deepEqual(h.relocations, [[3199, 3200, 0]]);
+  } finally { h.restore(); }
+});
+
+
+test('opening from inside a doorway can clear along the other same-side axis when its usual step hits a wall (#3618)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1535, 1536].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    h.setCanStepAside((at) => at.getX() === 2650 && at.getY() === 3299);
+    const ops = h.click(1535, 2650, 3297, 0, 'Open', 'Door', 9, null, 0, [2650, 3298], [2650, 3299]);
+    assert.deepEqual(h.relocations, [[2650, 3299, 0]]);
+    assert.deepEqual(ops.at(-1), ['register', 1536, 2650, 3298, 1]);
+  } finally { h.restore(); }
 });

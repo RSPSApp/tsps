@@ -314,3 +314,25 @@ test("queued and confirmed duplicate alchemy still rejects replacement of the cl
     assert.equal(inv.getAmount(itemId), 2, pending + " cannot consume either copy");
   }
 });
+
+// The ring panel's alchemy isn't a spell from the book (any book may use it), so it isn't a Spellbook Swap's one
+// spell: a Lunar player swapped to Ancient keeps the swap through it, and the next Ancient spell is still theirs.
+test("the ring panel's alchemy leaves a Spellbook Swap alone", async t => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = actor(t);
+  for (const skill of core.Skill.values()) f.p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
+  const quests = require("../plugins/quests/QuestRuntime").getRegisteredQuests();
+  // Lunar Diplomacy and Dream Mentor for the swap, Desert Treasure I for the Ancient book.
+  for (const key of ["lunar_diplomacy", "dream_mentor", "desert_treasure_i"]) { const q = quests.find((quest) => quest.key === key); q.setStage(f.p, q.completionValue); }
+  f.p.setSpellbook(core.MagicSpellbook.LUNAR);
+  const I = core.ItemIdentifiers;
+  for (const [rune, n] of [[I.ASTRAL_RUNE, 10], [I.COSMIC_RUNE, 10], [I.LAW_RUNE, 10]]) f.p.getInventory().add(new core.Item(rune, n), false);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 3);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "swapped to the Ancient book");
+  await f.open();
+  const x = target(f);
+  await cast(f, x);
+  assert.equal(used(f), 1, "the ring's alchemy was cast");
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "the swap is still on");
+  assert.ok(f.p.getAttribute("lunar:spellbook-swap"), "and its one spell is still to come");
+});

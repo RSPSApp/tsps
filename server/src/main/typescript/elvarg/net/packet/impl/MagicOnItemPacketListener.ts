@@ -120,6 +120,10 @@ export class MagicOnItemPacketListener {
     if (!player || player.getHitpoints?.() <= 0) {
       return;
     }
+    // A standard-book spell, as alchemy checks: the packet names the spell id, whatever book the player is on.
+    if (player.getSpellbook?.()?.getInterfaceId?.() !== MagicSpellbook.NORMAL.getInterfaceId()) {
+      return;
+    }
     if (!player.getClickDelay().elapsedTime(500)) {
       return;
     }
@@ -165,6 +169,7 @@ export class MagicOnItemPacketListener {
     }
 
     this.consumeRunes(player, runes);
+    Spell.endSpellbookSwap(player);
     player.getSkillManager().stopSkillable();
 
     player.setPositionToFace(position);
@@ -360,6 +365,9 @@ export class MagicOnItemPacketListener {
       || payment.validate?.() === false) return;
     if (policy.keepItem !== true) inventory.deleteAtSlot(alchemySlot, 1);
     if (!payment.free) this.consumeRunes(player, runes);
+    // Only a cast from the spellbook is the swap's one spell: the Explorer's ring panel's own alchemy, which any book
+    // may use (allowAnySpellbook), leaves a Spellbook Swap alone.
+    if (!payment.allowAnySpellbook) Spell.endSpellbookSwap(player);
     player.setAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE, now + policy.castTicks);
     // "magic:item-spell-cast" { player, spell }: an alchemy cast on an item (a league's "Cast Low
     // Level Alchemy"); combat casts report "magic:cast-committed" instead.

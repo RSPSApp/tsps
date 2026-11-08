@@ -1895,5 +1895,8 @@
   {"id":554,"location":{"x":1450,"y":10099,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Fire rune — [[Chasm of Fire]] - lowest level"},
   {"id":554,"location":{"x":1421,"y":10096,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Fire rune — [[Chasm of Fire]] - lowest level"},
   {"id":554,"location":{"x":1419,"y":10062,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Fire rune — [[Chasm of Fire]] - lowest level"},
-  {"id":554,"location":{"x":1454,"y":10063,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Fire rune — [[Chasm of Fire]] - lowest level"}
+  {"id":554,"location":{"x":1454,"y":10063,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Fire rune — [[Chasm of Fire]] - lowest level"},
+  {"id":1755,"location":{"x":1657,"y":3142,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Chisel — [[Civitas illa Fortis]] - on a crate in the [[Fortis Blacksmith]] store"},
+  {"id":2347,"location":{"x":1373,"y":2949,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Hammer — [[Aldarin]]"},
+  {"id":590,"location":{"x":1625,"y":3287,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Tinderbox — [[Salvager Overlook]] - General Store"}
 ]

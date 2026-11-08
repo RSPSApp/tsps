@@ -283,6 +283,9 @@ test("a drop becoming public cannot merge into recurring supply", t => {
 for (const [label,id,x,y,z,delay] of [
   ["Crossbow",837,3174,3663,0,500],
   ["Shears",1735,3152,3306,0,100],
+  ["Aldarin Hammer",2347,1373,2949,0,100],
+  ["Fortis Chisel",1755,1657,3142,0,100],
+  ["Overlook Tinderbox",590,1625,3287,0,100],
 ]) test("audited "+label+" definition preserves full-bag refusal and its real respawn delay", t=>{
   const f=respawnFixture(t);
   const definition=require("../data/definitions/ground-items.json").find(row=>

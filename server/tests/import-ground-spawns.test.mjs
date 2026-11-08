@@ -162,3 +162,26 @@ test("committed member Fire rune data matches the five audited source rows only"
  assert.deepEqual(members.map(d=>[d.location.x,d.location.y,d.location.z,d.amt,d.respawn]).sort(),
   memberFire.map(r=>[r.x,r.y,r.plane,r.quantity,100]).sort());
 });
+
+const commonTools=[
+ row({page:"Hammer",id:2347,x:1373,y:2949,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Aldarin]]"}),
+ row({page:"Chisel",id:1755,x:1657,y:3142,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Civitas illa Fortis]] - on a crate in the [[Fortis Blacksmith]] store"}),
+ row({page:"Tinderbox",id:590,x:1625,y:3287,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Salvager Overlook]] - General Store"}),
+];
+test("three pinned member common tools retain source state and legacy order",()=>{
+ const legacy=[{id:995,location:{x:3000,y:3000,z:0},amt:2,respawn:30}];
+ const result=importSpawns(source(commonTools),legacy);assert.equal(result.definitions.length,4);
+ assert.deepEqual(result.definitions[0],legacy[0]);
+ for(const [i,r]of commonTools.entries())assert.deepEqual(result.definitions[i+1],{id:r.id,location:{x:r.x,y:r.y,z:r.plane},amt:1,respawn:100,members:true,description:"OSRS Wiki: "+r.page+" — "+r.location});
+ assert.deepEqual(importSpawns(source(commonTools),result.definitions).definitions,result.definitions);
+});
+test("common tool audit cannot widen pages, world policy, timers or quest/scenery identities",()=>{
+ const rows=commonTools.flatMap(r=>[{...r,x:r.x+1},{...r,location:"unverified"},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99}]);
+ rows.push({...commonTools[0],x:0,location:undefined}, {...commonTools[0],x:1207,y:3108,location:"[[Tal Teklan]]"},
+ {...commonTools[1],x:2407,y:5645,location:"[[Guardians of the Rift]]"},
+ {...commonTools[2],x:2543,y:2862,plane:1,members:false,location:"[[Corsair Cove]]"},
+ {...commonTools[2],x:2431,y:3072,members:false,location:"[[Castle Wars]] - Saradominist's base"});
+ assert.equal(importSpawns(source(rows),[]).definitions.length,0);
+ assert.equal(importSpawns(source([{...commonTools[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
+ assert.throws(()=>importSpawns(source([{...commonTools[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
+});

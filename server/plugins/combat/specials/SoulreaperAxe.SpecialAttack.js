@@ -85,7 +85,7 @@ function resumeStacks({ player }) {
 }
 
 function buildSpecial(api) {
-  const { Animation, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
   const animation = new Animation(BEHEAD_ANIMATION);
   const graphic = new Graphic(BEHEAD_GRAPHIC);
   const ornamentGraphic = new Graphic(BEHEAD_GRAPHIC_ORNAMENT);
@@ -95,6 +95,8 @@ function buildSpecial(api) {
       const ornament = character.getEquipment().get(core.Equipment.WEAPON_SLOT).getId() === ItemIdentifiers.SOULREAPER_AXE_O_;
       character.performAnimation(animation);
       character.performGraphic(ornament ? ornamentGraphic : graphic);
+      // Behead costs no energy, but it is a special attack performed ("combat-special:performed" rides on drain).
+      CombatSpecial.drain(character, 0, false);
     }
   }
 

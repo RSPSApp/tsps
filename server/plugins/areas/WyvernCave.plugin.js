@@ -46,8 +46,11 @@ function createNorthCave(pluginApi) {
       if (!attacker?.isPlayer?.() || !target?.isNpc?.() || !WYVERN_NAMES.has(wyvernName(target))) return null;
       const player = attacker.getAsPlayer?.() ?? attacker;
       if (onTask(player, target)) return null;
+      // Only the player's own pending attack is refused aloud: canAttack is also a permission probe
+      // (minions, target scans, the dwarf cannon, the agent MCP) and a probe must stay silent.
       // Live (rsprox 3038): wyverns that attack a player Weve has stopped add no further lines.
-      if (!player.getCombat?.().isAutoRetaliating?.()) refuse(player);
+      const combat = player.getCombat?.();
+      if (combat?.getTarget?.() === target && !combat.isAutoRetaliating?.()) refuse(player);
       return false;
     }
   }

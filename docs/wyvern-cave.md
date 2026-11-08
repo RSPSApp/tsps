@@ -12,7 +12,9 @@ Attacking a wyvern in the northern cave without the task ends the attack on the 
 - Weve's chat head (`fossil_slayerdungeonguard`, animation `chatang3`) with `Hey! Leave them alone! My dad Steve will beat you up unless a Slayer Master has given you special permission.`;
 - the player's target is cleared; no attack, animation or hit of theirs follows.
 
-The wyverns keep attacking a player the guard stopped, and the capture shows no further message or dialogue on their later attacks. Our choice, so those attacks do not repeat the lines every tick: a fight the server starts as auto-retaliation is refused silently, and only the player's own click shows them.
+The wyverns keep attacking a player the guard stopped, and the capture shows no further message or dialogue on their later attacks. Our choice, so those attacks do not repeat the lines every tick: a fight the server starts as auto-retaliation is refused silently, and only the player's own click shows them. The same goes for permission probes (Leagues minion, target scans, dwarf cannon, agent `can_attack`): they get `false` with no message, because the lines are sent only when the player's combat target is that wyvern.
+
+The refusal comes on the click tick, since combat checks permission before pursuit and the denial is not transient, so the player stops where they clicked rather than on arrival as in the capture. Our difference, left as is.
 
 **What counts:** the four Fossil Island wyverns (Spitting, Taloned, Long-tailed, Ancient). A player on that task, or counted as on task by `slayer:on-task` (a league relic), may attack. Skeletal wyverns have their own task and cave, and the southern cave's wyverns can be attacked at any time (Wiki).
 

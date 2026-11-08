@@ -32,16 +32,17 @@ before(async () => {
   WyvernCave.register(api);
 });
 
-function fakePlayer({ onTask = false, retaliating = false } = {}) {
+function fakePlayer({ onTask = false, retaliating = false, target = null } = {}) {
   const player = {
     onTask,
+    target,
     messages: [],
     chains: [],
     isPlayer: () => true,
     isNpc: () => false,
     getAsPlayer: () => player,
     sendMessage: (text) => player.messages.push(text),
-    getCombat: () => ({ isAutoRetaliating: () => retaliating }),
+    getCombat: () => ({ isAutoRetaliating: () => retaliating, getTarget: () => player.target ?? null }),
     getDialogueManager: () => ({ startDialogues: (chain) => player.chains.push(chain) }),
   };
   return player;
@@ -65,7 +66,9 @@ test("an attack on a wyvern without a task is refused with Weve's message and li
   for (const name of ["Spitting Wyvern", "Taloned Wyvern", "Long-tailed Wyvern", "Ancient Wyvern"]) {
     player.messages.length = 0;
     player.chains.length = 0;
-    assert.equal(area.canAttack(player, fakeNpc(name)), false, name);
+    const npc = fakeNpc(name);
+    player.target = npc;
+    assert.equal(area.canAttack(player, npc), false, name);
     assert.deepEqual(player.messages, [T.WEVE_MESSAGE]);
     assert.equal(player.chains.length, 1, "one dialogue chain");
   }
@@ -73,7 +76,9 @@ test("an attack on a wyvern without a task is refused with Weve's message and li
 
 test("Weve's chat head is his, with the captured anger and line", () => {
   const player = fakePlayer();
-  area.canAttack(player, fakeNpc("Spitting Wyvern"));
+  const npc = fakeNpc("Spitting Wyvern");
+  player.target = npc;
+  area.canAttack(player, npc);
   const first = player.chains[0].getDialogues().get(0);
   assert.equal(first.getNpcId(), core.NpcIdentifiers.WEVE);
   assert.equal(first.getText(), T.WEVE_LINE);
@@ -86,8 +91,19 @@ test("a player whose Slayer task covers the wyverns, or any other target, is lef
 });
 
 test("auto-retaliation against an attacking wyvern is refused without repeating the lines", () => {
-  const player = fakePlayer({ retaliating: true });
-  assert.equal(area.canAttack(player, fakeNpc("Spitting Wyvern")), false);
+  const npc = fakeNpc("Spitting Wyvern");
+  const player = fakePlayer({ retaliating: true, target: npc });
+  assert.equal(area.canAttack(player, npc), false);
   assert.deepEqual(player.messages, []);
   assert.equal(player.chains.length, 0);
+});
+
+test("a permission probe (no target, or another target) is false and silent", () => {
+  const wyvern = fakeNpc("Spitting Wyvern");
+  for (const target of [null, fakeNpc("Ice spider"), fakeNpc("Taloned Wyvern")]) {
+    const player = fakePlayer({ target });
+    assert.equal(area.canAttack(player, wyvern), false);
+    assert.deepEqual(player.messages, []);
+    assert.equal(player.chains.length, 0);
+  }
 });

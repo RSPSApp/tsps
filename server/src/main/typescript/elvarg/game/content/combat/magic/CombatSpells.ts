@@ -764,7 +764,7 @@ export class CombatSpells {
             return 15;
         },
         startGraphic() {
-            return new Graphic(145, 6553600);
+            return new Graphic(145, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 24.5;
@@ -875,7 +875,7 @@ export class CombatSpells {
             return 25;
         },
         startGraphic() {
-            return new Graphic(87, 6553600);
+            return new Graphic(87, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 30;
@@ -1206,7 +1206,7 @@ export class CombatSpells {
             return new Graphic(169);
         },
         startGraphic() {
-            return new Graphic(167, 6553600);
+            return new Graphic(167, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 76;
@@ -1269,7 +1269,7 @@ export class CombatSpells {
             return new Graphic(172);
         },
         startGraphic: function () {
-            return new Graphic(170, 6553600);
+            return new Graphic(170, GraphicHeight.HIGH);
         },
         baseExperience: function () {
             return 83;
@@ -1558,7 +1558,7 @@ export class CombatSpells {
             return new Graphic(80, GraphicHeight.HIGH); // Live, a Stun that lands shows stunned; 107 is Weaken's impact.
         },
         startGraphic() {
-            return new Graphic(173, 6553600);
+            return new Graphic(173, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 90;
@@ -1850,7 +1850,7 @@ export class CombatSpells {
     public static ICE_BLITZ = new CombatAncientSpellExtend(
 
         () => { return new Animation(1978); },
-        () => { return new Graphic(366, 6553600); },
+        () => { return new Graphic(366, GraphicHeight.HIGH); },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => { getCombatFactory().freezeTicks(castOn, Math.floor(24 * multiplier), null, cast, "ice"); },
         () => { return 0; },
         (cast: Mobile, castOn: Mobile) => { return null; },

@@ -56,6 +56,7 @@ const agilityApi = {
   registerArea: (area) => hooks.areas.push(area),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
   onPlayerLogin: (handler) => hooks.login.push(handler),
+  onPlayerProcess() {},
   onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
   onCustomEvent: (name, handler) => { hooks.listeners[name] = handler; },
   emitCustomEvent: (name, payload) => {
@@ -723,6 +724,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     core: PluginManager.getCoreApi(),
     persistAttribute() {},
     onPlayerLogin() {},
+    onPlayerProcess() {},
     getTaskManager: () => taskManager,
     emitCustomEvent() {},
   });

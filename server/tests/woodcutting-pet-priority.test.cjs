@@ -865,3 +865,14 @@ test('Kandarin headgear: a log burnt by the infernal axe gives none and reports 
   assert.equal(r.logs,0,'the burnt log is not given');assert.ok(seen.length>=1,'the chop succeeded');
   assert.ok(seen.every(a=>a===1),'burnt chop reports one log: '+JSON.stringify(seen));
 });
+
+test('below 50 Agility a carried crystal axe keeps its charges while the dragon axe chops',async t=>{
+  const f=actor(t);const skills=f.p.getSkillManager();
+  skills.setCurrentLevel(core.Skill.WOODCUTTING,99);skills.setMaxLevel(core.Skill.WOODCUTTING,99);skills.setCurrentLevel(core.Skill.AGILITY,49);
+  const crystal=new core.Item(core.ItemIdentifiers.CRYSTAL_AXE);crystal.setMetaValue('crystal-axe',{charges:100});
+  f.p.getInventory().add(crystal,true);f.p.getInventory().add(new core.Item(core.ItemIdentifiers.DRAGON_AXE),true);
+  const xp=skills.getExperience(core.Skill.WOODCUTTING);
+  await chopOnce(t,f);
+  assert.ok(skills.getExperience(core.Skill.WOODCUTTING)>xp,'the dragon axe chopped');
+  assert.equal(f.p.getInventory().getItems().find(i=>i?.getId()===core.ItemIdentifiers.CRYSTAL_AXE).getMetaValue('crystal-axe').charges,100,'no crystal charge spent');
+});

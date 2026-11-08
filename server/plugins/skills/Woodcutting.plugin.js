@@ -1299,7 +1299,9 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       }
       // A burnt log still says it was cut (rsprox captures 1637, 3996); a felling skip gives no log.
       if (!felling.skipLog) sendSpam(player, logMessage(state.tree));
-      CrystalAxe.tryUseCharge(player);
+      // Only the charged crystal axe doing the chopping spends a charge: one carried beside the axe in use (an infernal
+      // axe ranked above it, or a dragon axe below the crystal's 50 Agility) is left alone, as Mining's pickaxe.
+      if (state.axe?.id === ItemIds.CRYSTAL_AXE) CrystalAxe.tryUseCharge(player);
       player
         .getSkillManager()
         .addExperiences(Skill.WOODCUTTING, xp);

@@ -72,6 +72,39 @@ test('legacy disabledPlugins becomes plugins entries', () => {
   assert.ok(plan.diff.some((d) => d.path === 'plugins.Prayer' && d.after === false));
 });
 
+function enabledMap(layers, catalog, local) {
+  const { PluginManager, pluginNameFromFile, resolvePluginEnabled } = require('../dist/plugins/PluginManager');
+  const { mergeWorldConfig } = require('../dist/game/definition/WorldDefinition');
+  const { switches, defaultEnabled } = PluginManager.parsePluginSwitches(mergeWorldConfig(layers.shipped, local));
+  return Object.fromEntries(catalog.plugins.map((p) => [p.name,
+    resolvePluginEnabled(switches, defaultEnabled, p.name, pluginNameFromFile(p.file), p.defaultEnabled ? undefined : false)]));
+}
+
+test('legacy migration keeps the enabled set identical (default-off stays on, masked plugins entry ignored)', () => {
+  const dir = tmp({ disabledPlugins: ['Prayer'] }, { ...SHIPPED, plugins: { Base: true, Opt: false } });
+  const pdir = pluginDir();
+  fs.writeFileSync(path.join(pdir, 'a', 'Opt.plugin.js'), plugin('Opt', 'enabled: false,'));
+  fs.writeFileSync(path.join(pdir, 'a', 'Foo.plugin.js'), plugin('Foo'));
+  fs.writeFileSync(dir + '/world.json', JSON.stringify({ ...SHIPPED, plugins: { Base: true, Foo: false } }));
+  try {
+    const layers = WorldConfigStore.read(dir);
+    const catalog = WorldConfigCatalog.build(pdir, layers);
+    const before = enabledMap(layers, catalog, layers.local);
+    assert.equal(before.Opt, true, 'legacy list turns default-off plugins on');
+    assert.equal(before.Foo, true, 'legacy list masks the plugins section');
+    const plan = WorldConfigStore.plan(layers, {}, catalog);
+    assert.equal(plan.nextLocal.disabledPlugins, undefined);
+    assert.equal(plan.nextLocal.plugins.Opt, true);
+    assert.equal(plan.nextLocal.plugins.Foo, true);
+    assert.equal(plan.nextLocal.plugins.Prayer, false);
+    assert.deepEqual(enabledMap(layers, catalog, plan.nextLocal), before);
+    assert.ok(plan.diff.some((d) => d.path === 'disabledPlugins'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(pdir, { recursive: true, force: true });
+  }
+});
+
 test('invalid values are errors', () => {
   let r = run({}, { world: { experienceMultiplier: 0 } });
   assert.ok(r.plan.errors.length > 0);

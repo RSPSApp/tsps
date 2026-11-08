@@ -77,14 +77,38 @@ export class WorldConfigStore {
         const shippedPlugins = isObject(layers.shipped.plugins) ? layers.shipped.plugins : {};
         const shippedConfig = isObject(layers.shipped.pluginConfig) ? layers.shipped.pluginConfig : {};
 
-        // Legacy disabledPlugins moves into the plugins section.
+        // Required lazily: PluginManager pulls in most of the server.
+        const { PluginManager, pluginNameFromFile, resolvePluginEnabled } = require("../../plugins/PluginManager");
+        const enabledSet = (config: JsonObject): Map<string, boolean> | undefined => {
+            try {
+                const { switches, defaultEnabled } = PluginManager.parsePluginSwitches(config);
+                return new Map(
+                    catalog.plugins.map((p) => [
+                        p.name,
+                        resolvePluginEnabled(switches, defaultEnabled, p.name, pluginNameFromFile(p.file), p.defaultEnabled ? undefined : false),
+                    ])
+                );
+            } catch {
+                return undefined;
+            }
+        };
+
+        // Legacy disabledPlugins becomes explicit plugins entries that keep the enabled set identical:
+        // the legacy list means "these off, everything else on" and ignores `plugins` entirely.
         if (Array.isArray(nextLocal.disabledPlugins)) {
+            const legacy = enabledSet(mergeWorldConfig(layers.shipped, layers.local));
             const plugins = isObject(nextLocal.plugins) ? { ...nextLocal.plugins } : {};
             for (const name of nextLocal.disabledPlugins) {
                 if (typeof name === "string" && name.trim()) plugins[name] = false;
             }
-            nextLocal.plugins = plugins;
             delete nextLocal.disabledPlugins;
+            nextLocal.plugins = plugins;
+            const migrated = enabledSet(mergeWorldConfig(layers.shipped, nextLocal));
+            if (legacy && migrated) {
+                for (const p of catalog.plugins) {
+                    if (legacy.get(p.name) !== migrated.get(p.name)) plugins[p.name] = legacy.get(p.name) as boolean;
+                }
+            }
         }
 
         for (const [key, value] of Object.entries(changes.world ?? {})) {
@@ -132,8 +156,6 @@ export class WorldConfigStore {
         } catch (err) {
             errors.push(err instanceof Error ? err.message : String(err));
         }
-        // Required lazily: PluginManager pulls in most of the server.
-        const { PluginManager, pluginNameFromFile, resolvePluginEnabled } = require("../../plugins/PluginManager");
         let switchState: { switches: Map<string, boolean>; defaultEnabled?: boolean } | undefined;
         try {
             switchState = PluginManager.parsePluginSwitches(merged);

@@ -38,6 +38,21 @@ export class CombatSpecial {
     private static readonly registry: CombatSpecial[] = [];
     private static readonly byId = new Map<string, CombatSpecial>();
     private static readonly byItemId = new Map<number, CombatSpecial>();
+    /**
+     * Weapons that use another weapon's special (custom-items.json `specialAttack`): by item id,
+     * the weapon whose special they use and, when set, their own cost in percent.
+     */
+    private static readonly borrowed = new Map<number, { from: number; drainAmount?: number }>();
+
+    /**
+     * Gives `itemId` the special of `fromItemId`, at `drainAmount` percent when set (otherwise
+     * that special's own cost for `fromItemId`). Resolved when looked up, so it does not matter
+     * whether the special is registered before or after.
+     */
+    public static borrow(itemId: number, fromItemId: number, drainAmount?: number): void {
+        if (!Number.isInteger(itemId) || !Number.isInteger(fromItemId) || itemId <= 0 || fromItemId <= 0 || itemId === fromItemId) return;
+        CombatSpecial.borrowed.set(itemId, Number.isFinite(drainAmount) ? { from: fromItemId, drainAmount } : { from: fromItemId });
+    }
 
     public static register(definition: CombatSpecialDefinition): CombatSpecial | null {
         if (!definition || typeof definition.id !== "string" || !definition.id.trim().length) {
@@ -68,7 +83,10 @@ export class CombatSpecial {
     }
 
     public static getForWeaponId(itemId: number): CombatSpecial | null {
-        return ItemAliases.lookup(CombatSpecial.byItemId, itemId) ?? null;
+        const own = ItemAliases.lookup(CombatSpecial.byItemId, itemId);
+        if (own) return own;
+        const borrowed = CombatSpecial.borrowed.get(Number(itemId));
+        return borrowed ? ItemAliases.lookup(CombatSpecial.byItemId, borrowed.from) ?? null : null;
     }
 
     constructor(definition: CombatSpecialDefinition){
@@ -364,6 +382,11 @@ export class CombatSpecial {
 
     /** Energy cost for a specific weapon variant (defaults to the base cost). */
     public getDrainAmountForWeaponId(itemId?: number): number {
+        const borrowed = itemId !== undefined ? CombatSpecial.borrowed.get(Number(itemId)) : undefined;
+        if (borrowed) {
+            if (borrowed.drainAmount !== undefined) return borrowed.drainAmount;
+            itemId = borrowed.from;
+        }
         if (itemId !== undefined) {
             const override = this.drainAmountByItemId[itemId] ?? this.drainAmountByItemId[ItemAliases.baseOf(itemId) ?? -1];
             if (typeof override === "number") {

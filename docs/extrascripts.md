@@ -86,6 +86,31 @@ CustomItemRegistry.register(
 
 The client resolves custom items via `CustomObjTypeLoader`, which wraps the base cache loader. No client-side changes needed — registered items appear in inventories, shops, and tooltips like any cache item.
 
+#### Special attacks (`custom-items.json`)
+
+A custom weapon in `server/data/definitions/custom-items.json` can use another weapon's special
+attack with a `specialAttack` entry on its row (next to `objType` and `itemDef`):
+
+```json
+{
+  "id": 50002,
+  "baseItemId": 29000,
+  "objType": { "name": "Sanguine atlatl" },
+  "itemDef": { "equipmentType": "WEAPON" },
+  "specialAttack": { "from": 29000, "energy": 50 }
+}
+```
+
+- `from` (required): the item whose special attack the weapon uses, such as 29000 for the Eclipse
+  atlatl's. The server runs that special when the weapon's bar is used.
+- `energy` (optional): the cost in percent, 1 to 100. Without it the weapon costs what the special
+  costs for `from`.
+
+The client shows the special attack bar in Combat Options for it (the cache's combat tab hides the
+bar for weapons missing from its special weapons list, enum 906). Give `energy` when `from` is not a
+cache special weapon, or the bar stays hidden. A special whose own code checks which weapon is worn
+may refuse the custom weapon; the server logs a warning at startup when `from` has no special at all.
+
 ### Custom Widgets
 
 Use `CustomWidgetRegistry` to define widget groups that don't exist in the cache:

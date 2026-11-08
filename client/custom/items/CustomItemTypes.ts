@@ -139,6 +139,12 @@ export interface CustomItemDefinition {
 
     /** Server-level properties (affects combat/equipment/trading) */
     itemDef?: CustomItemDefProps;
+
+    /**
+     * Uses another weapon's special attack: its attack on the server and the special attack bar
+     * in Combat Options. `energy` is the cost in percent; without it, `from`'s own cost.
+     */
+    specialAttack?: { from: number; energy?: number };
 }
 
 /**

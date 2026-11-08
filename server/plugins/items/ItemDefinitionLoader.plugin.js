@@ -30,7 +30,33 @@ const getEquipmentType = () =>
 const getWeaponInterfaces = () =>
   requireGameModule(path.join("game", "content", "combat", "WeaponInterfaces"))
     .WeaponInterfaces;
+const getCombatSpecial = () =>
+  requireGameModule(path.join("game", "content", "combat", "CombatSpecial")).CombatSpecial;
 const { CacheDefinitions } = requireGameModule("game/cache/CacheDefinitions");
+
+/**
+ * custom-items.json `specialAttack`: { from, energy? }. The weapon uses the special of item
+ * `from` (its attack, and the bar in Combat Options), costing `energy` percent when set, else
+ * what that special costs for `from`.
+ */
+function validateSpecialAttack(row) {
+  const special = row.specialAttack;
+  const valid = special && typeof special === "object" && !Array.isArray(special)
+    && Number.isInteger(special.from) && special.from > 0 && special.from !== row.id
+    && Object.keys(special).every((key) => key === "from" || key === "energy")
+    && (special.energy === undefined || (Number.isInteger(special.energy) && special.energy >= 1 && special.energy <= 100));
+  if (!valid) throw new Error(`[custom-items] invalid specialAttack for item ${row.id}: { "from": <item id>, "energy"?: 1-100 }`);
+}
+
+/** Custom weapons whose `specialAttack.from` has no special once every plugin has registered its own. */
+function warnMissingSpecials() {
+  const CombatSpecial = getCombatSpecial();
+  for (const row of CacheDefinitions.getCustomItems()) {
+    if (row.specialAttack && !CombatSpecial.getForWeaponId(row.id)) {
+      console.warn(`[custom-items] item ${row.id}: specialAttack.from ${row.specialAttack.from} has no special attack`);
+    }
+  }
+}
 const { encodeContentData } = requireGameModule("net/protocol/ClientProtocol");
 
 const BARROWS_BASE_ITEMS = [
@@ -309,6 +335,7 @@ function loadItemDefinitions() {
     if (props.weaponInterface !== undefined && !getWeaponInterfaces()[props.weaponInterface]) {
       throw new Error(`[custom-items] invalid weaponInterface for item ${row.id}`);
     }
+    if (row.specialAttack !== undefined) validateSpecialAttack(row);
   }
   // ponytail: one compressed packet per model/definition list; use chunked delivery if these outgrow 64 KiB.
   if (encodeContentData("server", [{ key: "customItems", rows: customRows }]).length > 0xffff) {
@@ -321,6 +348,7 @@ function loadItemDefinitions() {
     if (typeof props.equipmentType === "string") props.equipmentType = hydrateEquipmentType(props.equipmentType);
     if (typeof props.weaponInterface === "string") props.weaponInterface = hydrateWeaponInterface(props.weaponInterface);
     ItemDefinition.registerCustom(row.id, row.baseItemId ?? -1, props);
+    if (row.specialAttack) getCombatSpecial().borrow(row.id, row.specialAttack.from, row.specialAttack.energy);
   }
 
   return {
@@ -353,7 +381,7 @@ function sendCustomItems({ player }) {
 
 module.exports = {
   name: "ItemDefinitionLoader",
-  _test: { loadItemPrices, loadItemAlch, applyItemOverrides },
+  _test: { loadItemPrices, loadItemAlch, applyItemOverrides, validateSpecialAttack },
   register(api) {
     const startedAt = Date.now();
     const result = loadItemDefinitions();
@@ -371,5 +399,6 @@ module.exports = {
     api.registerContentEndpoint("custom-items", customItemsResource);
     api.registerContentEndpoint("custom-models", customModelsResource);
     api.onPlayerLogin(sendCustomItems);
+    api.onServerStartup?.(warnMissingSpecials); // Absent in tests that load items with a minimal api.
   },
 };

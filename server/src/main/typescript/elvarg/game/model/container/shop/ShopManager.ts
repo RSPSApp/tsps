@@ -680,20 +680,22 @@ export class ShopManager {
             return;
         }
 
-        // Content may hand the purchase over as another item ("shop:delivery", a league relic's noted purchases).
-        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId };
+        // Content may hand the purchase over as another item ("shop:delivery", a league relic's noted purchases), or as
+        // a bundle of several per item bought (`amount`, the PvP Arena's Blighted surge sack (x50)).
+        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId, amount: 1 };
         PluginManager.emitCustomEvent("shop:delivery", delivery);
         const deliverId = Number.isInteger(delivery.deliverId) && delivery.deliverId > 0 ? delivery.deliverId : itemId;
+        const perPurchase = Number.isInteger(delivery.amount) && delivery.amount > 0 ? delivery.amount : 1;
         const delivered = ItemDefinition.forId(deliverId);
         const inventory = player.getInventory();
         if (delivered.isStackable?.()) {
-            quantity = Math.min(quantity, inventory.getAddableAmount(new Item(deliverId, quantity)));
+            quantity = Math.min(quantity, Math.floor(inventory.getAddableAmount(new Item(deliverId, quantity * perPurchase)) / perPurchase));
             if (quantity <= 0) {
                 inventory.full();
                 return;
             }
         } else {
-            quantity = Math.min(quantity, inventory.getFreeSlots());
+            quantity = Math.min(quantity, Math.floor(inventory.getFreeSlots() / perPurchase));
             if (quantity <= 0) {
                 inventory.full();
                 return;
@@ -709,7 +711,7 @@ export class ShopManager {
             shop.definition.getCurrency(),
             removed * price
         );
-        inventory.adds(deliverId, removed);
+        inventory.adds(deliverId, removed * perPurchase);
         PluginManager.emitCustomEvent("shop:purchase", {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(),
             itemId, amount: removed, originalStock: (shop.originalAmounts.get(itemId) ?? 0) > 0,

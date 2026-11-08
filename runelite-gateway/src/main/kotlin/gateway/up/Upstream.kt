@@ -18,9 +18,12 @@ import net.rsprot.protocol.game.incoming.clan.ClanChannelKickUser
 import net.rsprot.protocol.game.incoming.friendchat.FriendChatJoinLeave
 import net.rsprot.protocol.game.incoming.friendchat.FriendChatKick
 import net.rsprot.protocol.game.incoming.friendchat.FriendChatSetRank
-import net.rsprot.protocol.game.incoming.locs.OpLoc6
-import net.rsprot.protocol.game.incoming.locs.OpLocT
+import net.rsprot.protocol.game.incoming.locs.OpLoc6V1
+import net.rsprot.protocol.game.incoming.locs.OpLoc6V2
+import net.rsprot.protocol.game.incoming.locs.OpLocTV1
+import net.rsprot.protocol.game.incoming.locs.OpLocTV2
 import net.rsprot.protocol.game.incoming.locs.OpLocV2
+import net.rsprot.protocol.game.incoming.locs.OpLocV3
 import net.rsprot.protocol.game.incoming.messaging.MessagePrivate
 import net.rsprot.protocol.game.incoming.messaging.MessagePublic
 import net.rsprot.protocol.game.incoming.misc.user.ClickWorldMap
@@ -172,19 +175,17 @@ class Upstream(
             is OpPlayer -> send(TspsClientPacket.playerOp(PlayerOps.toTsps(message.op), message.index))
             is OpNpcV2 -> if (message.op in 1..5) send(TspsClientPacket.npcOp(message.op, message.index)) else DropCounter.up(message)
             is OpNpc6 -> send(TspsClientPacket.examineNpc(message.id))
+            // Revision 242 added V3 (OPLOC*_V3, OPLOC6_V2, OPLOCT_V2) with three-byte loc ids; the live
+            // client sends those, and the V1/V2 forms decode the same fields.
             is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
-            is OpLoc6 -> send(WorldOps.examineLoc(message.id))
+            is OpLocV3 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
+            is OpLoc6V1 -> send(WorldOps.examineLoc(message.id))
+            is OpLoc6V2 -> send(WorldOps.examineLoc(message.id))
             is OpObjV2 -> if (message.op in 1..5) send(WorldOps.obj(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
             is OpObj6 -> send(WorldOps.examineObj(message.id, message.x, message.z))
             // OSRS sends item use and spells as one `T` packet; tsps has one for each.
-            is OpLocT ->
-                send(
-                    if (message.selectedCombinedId == INVENTORY) {
-                        WorldOps.itemOnLoc(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj)
-                    } else {
-                        WorldOps.spellOnLoc(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj)
-                    },
-                )
+            is OpLocTV1 -> send(locT(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj))
+            is OpLocTV2 -> send(locT(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj))
             is OpObjT ->
                 send(
                     if (message.selectedCombinedId == INVENTORY) {
@@ -212,6 +213,14 @@ class Upstream(
             else -> DropCounter.up(message)
         }
     }
+
+    /** OSRS sends item use and spells on a loc as one `T` packet; tsps has one for each. */
+    private fun locT(id: Int, x: Int, z: Int, selectedCombinedId: Int, selectedSub: Int, selectedObj: Int) =
+        if (selectedCombinedId == INVENTORY) {
+            WorldOps.itemOnLoc(id, x, z, selectedCombinedId, selectedSub, selectedObj)
+        } else {
+            WorldOps.spellOnLoc(id, x, z, selectedCombinedId, selectedSub, selectedObj)
+        }
 
     /** FRIENDS_CHAT_ACTION: one packet for the friend, ignore and friends-chat actions. */
     private fun social(action: Int, name: String, rank: Int = 0) =

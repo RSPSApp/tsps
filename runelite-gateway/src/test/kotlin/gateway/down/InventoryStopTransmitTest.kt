@@ -22,7 +22,7 @@ import net.rsprox.protocol.game.outgoing.model.inv.UpdateInvFull as DecodedFull
 import net.rsprox.protocol.game.outgoing.model.inv.UpdateInvStopTransmit as DecodedStop
 import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
-import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
+import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -31,7 +31,7 @@ class InventoryStopTransmitTest {
     private val sent = ArrayList<OutgoingGameMessage>()
     private val items = Items(ObjTypes(TestCache.cache)) { sent += it }
     private val session = Session(0, AttributeMap())
-    private val decoder = ServerPacketDecoderServiceV241(
+    private val decoder = ServerPacketDecoderServiceV242(
         HuffmanCodec.create(Unpooled.wrappedBuffer(ByteArray(256) { 8 })),
         CacheProvider { HeadlessClient.NoCache },
     )
@@ -104,7 +104,7 @@ class InventoryStopTransmitTest {
         try {
             val wire = buffer.toJagByteBuf()
             encoder.encode(NopStreamCipher, wire, message)
-            assertEquals(38, encoder.prot.opcode)
+            assertEquals(80, encoder.prot.opcode, "revision 242 update_inv_stoptransmit")
             assertEquals(2, buffer.readableBytes())
             return decoder.decode(encoder.prot.opcode, wire, session) as DecodedStop
         } finally { buffer.release() }

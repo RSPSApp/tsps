@@ -34,7 +34,6 @@ import net.rsprot.protocol.message.ZoneProt
 import net.rsprot.protocol.game.outgoing.zone.payload.LocAddChangeV2
 import net.rsprot.protocol.game.outgoing.zone.payload.LocAnim
 import net.rsprot.protocol.game.outgoing.zone.payload.LocDel
-import net.rsprot.protocol.game.outgoing.zone.payload.LocMerge
 import net.rsprot.protocol.game.outgoing.zone.payload.SoundArea
 import net.rsprot.protocol.message.OutgoingGameMessage
 import net.rsprot.protocol.internal.game.outgoing.info.CoordGrid
@@ -126,23 +125,9 @@ class World(
                     inScene(x, z) -> send(LocAnimSpecific(anim, x - sceneX, z - sceneZ, shapeRotation ushr 2, shapeRotation and 3))
                 }
             }
-            TspsServerPacket.LOC_MERGE -> {
-                val id = reader.u16()
-                val x = reader.u16()
-                val z = reader.u16()
-                val level = reader.u8()
-                val shapeRotation = reader.u8()
-                // Player-info preserves TSPS player indices, including the local player's.
-                val index = reader.u16()
-                val start = reader.u16()
-                val end = reader.u16()
-                val minX = reader.s8()
-                val minZ = reader.s8()
-                val maxX = reader.s8()
-                val maxZ = reader.s8()
-                // Both protocols use 20ms client cycles here. Reversed bounds are legal.
-                zone(x, z, level, LocMerge(index, id, x and 7, z and 7, shapeRotation ushr 2, shapeRotation and 3, start, end, minX, minZ, maxX, maxZ))
-            }
+            // Revision 242's client reads LOC_MERGE and discards its 14 bytes: merging a player into a loc
+            // no longer exists there (none in the live 242 captures), so the merge is counted and dropped.
+            TspsServerPacket.LOC_MERGE -> DropCounter.down(packet.opcode)
             TspsServerPacket.SPOT_ANIM -> {
                 val id = reader.u16()
                 if (reader.u8() != TILE_TARGET) {

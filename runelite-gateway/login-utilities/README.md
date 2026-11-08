@@ -10,7 +10,7 @@ The integration is disabled by default. Ordinary gateway password login continue
 - The RuneLite plugin stores the returned token through a standalone Windows CurrentUser DPAPI helper. Passwords are used transiently for first sign-in and are not saved by the plugin/helper.
 - A single-use native login ticket transfers the already-authenticated TSPS connection to the gateway. This avoids a second authentication consuming the newly rotated token. An unclaimed ticket expires after 45 seconds and releases its connection.
 
-The native compatibility adapter is tested with RuneLite **1.13.4**, the RSProx-injected revision **241** client, and Windows **10/11**. It resolves the injected client's semantic wrappers rather than hardcoding obfuscated field names. Unsupported layouts leave ordinary login available. Other revisions require testing and may need adapter changes.
+The native compatibility adapter is tested with RuneLite **1.13.4**, the RSProx-injected revision **241** client (not yet re-tested on 242), and Windows **10/11**. It resolves the injected client's semantic wrappers rather than hardcoding obfuscated field names. Unsupported layouts leave ordinary login available. Other revisions require testing and may need adapter changes.
 
 Token storage initially supports **Windows only**. On other operating systems the plugin leaves ordinary password login available; there is no plaintext-password/token fallback.
 

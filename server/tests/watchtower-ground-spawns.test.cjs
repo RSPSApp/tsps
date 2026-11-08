@@ -291,6 +291,20 @@ test('Watchtower bridge takes its toll before the north jump, with a free return
   }
 });
 
+test('Watchtower east-gate guards never take the bridge toll or walk the player to the gap', t => {
+  const { core, hooks, quest, player, tick } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2548, 3030, 0]);
+  quest.setStage(player, 4);
+  player.getInventory().adds(core.ItemIdentifiers.COINS, 20);
+  const variant = hooks.onNpcDialogueVariant[0];
+  const action = hooks.onCustomEvent.find(h => h.name === 'handleAction');
+  assert.equal(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_4 }), null, 'gate guard is not the bridge toll');
+  action({ player, stepId: 'rEZMuS', step: { type: 'action' } }); tick(); tick();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2548, 3030]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 20);
+  player.moveTo(new core.Location(2530, 3025, 0));
+  assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_4 }), /crossing-the-bridge$/);
+});
+
 test('Watchtower enclave consumes a distraction on entry and allows completed quests through', t => {
   const { core, hooks, quest, player } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2530, 3040, 0]);
   quest.setStage(player, 7);

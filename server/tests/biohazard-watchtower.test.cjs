@@ -152,6 +152,27 @@ test('Biohazard keeps the HQ back door locked on both sides without claiming oth
   assert.equal(event.handled, false);
 });
 
+test('Biohazard refuses the HQ trapdoor only during the quest, leaving it to Mourning\'s End Part I', () => {
+  const at = new core.Location(2542, 3327, 0);
+  const object = core.MapObjects.get(8783, at, null) ?? new core.GameObject(8783, at, 22, 0, null);
+  const open = player => {
+    const messages = [];
+    player.getPacketSender().sendMessage = text => { messages.push(String(text)); return player.getPacketSender(); };
+    const event = { player, object, objectId: 8783, location: { x: 2542, y: 3327, z: 0 }, clickType: 1, handled: false };
+    PluginManager.emitObjectInteraction(event);
+    return { event, messages };
+  };
+  const during = actor(6, 2542, 3326, 0);
+  assert.equal(open(during).event.handled, true, 'the Biohazard refusal still applies mid-quest');
+  const after = actor(6, 2542, 3326, 0);
+  quest.complete(after);
+  const mournings = QuestRuntime.getRegisteredQuests().find(({ key }) => key === 'mournings_end_part_i');
+  mournings.setStage(after, 5);
+  const { event, messages } = open(after);
+  assert.equal(event.handled, true);
+  assert.ok(messages.some(text => /full mourner disguise/.test(text)), 'Mourning\'s End Part I owns the trapdoor once Biohazard is done');
+});
+
 test('Biohazard selects the sickest mourner and inside-HQ transcripts and starts the scripted attack', () => {
   const player = actor(6, 2547, 3324, 1);
   const npcId = core.NpcIdentifiers.MOURNER_14;

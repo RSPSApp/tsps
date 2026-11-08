@@ -17,6 +17,7 @@ Native attempt stopped at stage 1 and logged out; no completion.
 
 ## Findings
 
+- **fixed** Mourners inside the headquarters, outside while wearing the medical gown, and the sickest mourner upstairs (9008) used the wrong transcripts; the sickest mourner's attack actions start the fight. The back door (2036 at 2551, 3328) stays locked from both sides with its transcript, and the trapdoor (8783 at 2542, 3327) is refused only during Biohazard, so Mourning's End Part I keeps it. Ardougne castle's main staircase (15645/15648 at 2571, 3295) arrives on walkable landings both ways. [Quick guide](https://oldschool.runescape.wiki/w/Biohazard/Quick_guide). Fixed in #3796.
 - **open** A courier who disposed of the wrong vial could not get a replacement; repair in progress.
 - **open** Premature Guidor advancement was returned to the owner.
 

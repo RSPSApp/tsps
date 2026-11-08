@@ -990,6 +990,10 @@ module.exports = function registerBiohazardQuest(api) {
     if (objectId !== HQ_TRAPDOOR_ID || !at) return false;
     const x = at.getX?.() ?? at.x, y = at.getY?.() ?? at.y, z = at.getZ?.() ?? at.z;
     if (x !== HQ_TRAPDOOR.x || y !== HQ_TRAPDOOR.y || z !== HQ_TRAPDOOR.z) return false;
+    // Only the Biohazard infiltration refuses the basement. Mourning's End Part I (which needs
+    // Biohazard done) and Song of the Elves own this trapdoor afterwards.
+    const stage = quest.getStage(player);
+    if (stage < STAGE_POISONED_STEW || quest.isComplete(player)) return false;
     event.handled = true;
     startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard",
       "infiltrating-the-mourner-hq-attempting-to-open-trapdoor-inside-mourner-headquarters");

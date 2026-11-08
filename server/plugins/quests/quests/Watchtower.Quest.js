@@ -127,6 +127,16 @@ module.exports = function registerWatchtowerQuest(api) {
   const GAP_FROM_NORTH = [2531, 3029];
   const GAP_LAND_SOUTH = [2531, 3026];
   const GAP_JUMP_ANIMATION = 741;
+  /**
+   * The toll is only taken, and the jump only made, from the bridge deck south of the gap. The
+   * east-gate guards (2549-2551,3029-3031) share the bridge guard's id, and the jump's forced
+   * walk ignores clipping, so a toll paid anywhere else would walk the player through walls.
+   */
+  const atGapTakeOff = (player) => {
+    const at = player.getLocation();
+    return at.getZ() === 0 && at.getY() <= GAP_FROM_SOUTH[1]
+      && Math.max(Math.abs(at.getX() - GAP_FROM_SOUTH[0]), Math.abs(at.getY() - GAP_FROM_SOUTH[1])) <= 1;
+  };
   const BRIDGE_GUARD_ID = NpcIdentifiers.OGRE_GUARD_4;
   /**
    * The enclave guards let a player past only while distracted by cave nightshade (wiki: "Use
@@ -734,7 +744,7 @@ module.exports = function registerWatchtowerQuest(api) {
       return "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again";
     }
     if (BRIDGE_GUARD_IDS.has(npcId)) {
-      return stage >= STAGE_GIVEN_RELIC ? "entering-gu-tanoth-crossing-the-bridge" : null;
+      return stage >= STAGE_GIVEN_RELIC && atGapTakeOff(player) ? "entering-gu-tanoth-crossing-the-bridge" : null;
     }
     if (npcId === CITY_GUARD_ID) return selectCityGuardVariant(stage);
     if (npcId === SCARED_SKAVID_ID) return selectScaredSkavidVariant(player, stage);
@@ -1158,7 +1168,7 @@ module.exports = function registerWatchtowerQuest(api) {
       return;
     }
     if (stepId === "rEZMuS") {
-      if (player.getInventory().getAmount(COINS) >= 20) {
+      if (atGapTakeOff(player) && player.getInventory().getAmount(COINS) >= 20) {
         player.getInventory().deleteNumber(COINS, 20);
         player.getSkillManager().addExperiences(Skill.AGILITY, 50);
         player.sendMessage("You daringly jump across the chasm.");

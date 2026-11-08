@@ -117,7 +117,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Pandemonium | untested |  |  |  |  |
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
-| Plague City | untested |  |  |  |  |
+| [Plague City](plague-city/README.md) | untested |  |  |  |  |
 | [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-11-07 | agent | claude-opus-5-5 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
@@ -168,7 +168,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | The Fremennik Isles | untested |  |  |  |  |
 | The Fremennik Trials | untested |  |  |  |  |
 | The Garden of Death | untested |  |  |  |  |
-| The Giant Dwarf | untested |  |  |  |  |
+| [The Giant Dwarf](giant-dwarf/README.md) | untested |  |  |  |  |
 | The Golem | untested |  |  |  |  |
 | [The Grand Tree](grand-tree/README.md) | 🔁 needs recheck | 2026-10-29 | agent | claude-haiku-5-5 | 6 |
 | [The Great Brain Robbery](great-brain-robbery/README.md) | untested |  |  |  |  |
@@ -196,7 +196,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
-| Watchtower | untested |  |  |  |  |
+| [Watchtower](watchtower/README.md) | untested |  |  |  |  |
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |
 | [What Lies Below](what-lies-below/README.md) | untested |  |  |  |  |
 | [While Guthix Sleeps](while-guthix-sleeps/README.md) | untested |  |  |  | 1 |

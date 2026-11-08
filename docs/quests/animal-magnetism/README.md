@@ -24,7 +24,7 @@ recording was found. The database has only post-quest Ava's-device messages and 
 
 ## Findings
 
-None recorded.
+- **fixed** Ava's Devices option only offered the upgrade dialogue. It now opens Ava's Devices (interface 67) with Buy-1/5/X/All for the attractor (999 coins), accumulator (75 steel arrows, 50 Ranged, 999 coins or an attractor) and assembler (Vorkath's head, 75 mithril arrows, Dragon Slayer II, 4,999 coins or an accumulator); only unnoted, uncharged items pay. [Ava](https://oldschool.runescape.wiki/w/Ava). Fixed in #3796.
 
 ## Runs
 

@@ -1393,6 +1393,11 @@ function pauseWoodcutting(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopWoodcutting(activeSessionsRef, player, false));
 }
 
+/** An accepted emote replaces chopping while keeping the new emote animation. */
+function interruptForEmote({ player }) {
+  stopWoodcutting(activeSessionsRef, player, false);
+}
+
 module.exports = {
   name: "Woodcutting",
   register(api) {
@@ -1419,6 +1424,7 @@ module.exports = {
       stopWoodcutting(activeSessions, player, false);
     });
     api.onCustomEvent("level-up:popup-opened", pauseWoodcutting);
+    api.onCustomEvent("player:emote", interruptForEmote);
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
     api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);

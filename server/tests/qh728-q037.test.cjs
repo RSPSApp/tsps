@@ -420,14 +420,18 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   h.itemOnItem(I.PESTLE_AND_MORTAR, I.GORAK_CLAWS);
   assert.equal(h.inventory.get(I.GORAK_CLAW_POWDER), 1);
   h.itemOnItem(I.GORAK_CLAW_POWDER, I.MAGIC_ESSENCE_UNF_);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_), 1);
+  // Wiki (Magic essence): Magic essence(3), 130 Herblore XP.
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_), 1);
+  assert.deepEqual(h.xp.at(-1), [h.core.Skill.HERBLORE.getIndex(), 130]);
+  h.xp.length = 0;
   assert.equal(h.quest.getStage(h.player), 73);
 
   // Use the potion on the sleeping queen multi loc, then the imported reward/complete nodes.
   h.setLocation(2354, 4455, 0);
-  h.itemOnObject(I.MAGIC_ESSENCE_4_, 16316);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_) ?? 0, 0);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_), 1);
+  h.itemOnObject(I.MAGIC_ESSENCE_3_, 16316);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_2_), 1);
   assert.equal(h.quest.getStage(h.player), 75);
   assert.equal(h.varbits.get(2326), 75);
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FAIRY_QUEEN_2));

@@ -40,6 +40,10 @@
     --info: #ffeab8;
     --info-bg: #2e3a2b;
     --off: #b8aa88;
+    --badge-warn-bg: #5c1d12;
+    --badge-warn-text: #ffd2b8;
+    --badge-ok-bg: #1f4422;
+    --badge-ok-text: #b4f5b9;
     --shadow: rgba(0, 0, 0, 0.55);
     --backdrop: rgba(0, 0, 0, 0.6);
   }
@@ -76,6 +80,10 @@
       --info: #3a2812;
       --info-bg: #d9e2c4;
       --off: #66553a;
+      --badge-warn-bg: #f1c4b0;
+      --badge-warn-text: #5e1306;
+      --badge-ok-bg: #cfe8c2;
+      --badge-ok-text: #1a4f1e;
       --shadow: rgba(60, 40, 10, 0.35);
       --backdrop: rgba(40, 25, 5, 0.45);
     }
@@ -174,6 +182,17 @@
     visibility: hidden; opacity: 0;
   }
   .info-wrap:hover .tip, .info-wrap:focus-within .tip { visibility: visible; opacity: 1; }
+  .badge {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px;
+    padding: 6px 10px; border-radius: 2px; font-weight: 700;
+    background: var(--badge-warn-bg); color: var(--badge-warn-text);
+    border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  }
+  .badge.pending { background: var(--badge-ok-bg); color: var(--badge-ok-text); }
+  .badge-icon { width: 1.1em; height: 1.1em; flex: none; }
+  .badge-text { flex: 1 1 12em; }
+  .badge button { padding: 3px 10px; }
+  .badge button.link { color: inherit; font-weight: 700; padding: 2px 0; }
   .help { color: var(--muted); font-size: 14px; margin-top: 2px; }
   .meta { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
   .tag { font-size: 12px; border-radius: 2px; padding: 0 6px; font-weight: 600; }
@@ -448,6 +467,125 @@
     return el("div", { className: "title-line" }, [label, el("span", { className: "info-wrap" }, [button, tip])]);
   }
 
+  // ---------- plugin-off badges ----------
+
+  function warnIcon() {
+    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", class: "badge-icon" });
+    svg.appendChild(svgNode("path", { d: "M8 1.5 15 14.5H1z", fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linejoin": "round" }));
+    svg.appendChild(svgNode("rect", { x: "7.2", y: "5.5", width: "1.6", height: "5", rx: "0.8", fill: "currentColor" }));
+    svg.appendChild(svgNode("circle", { cx: "8", cy: "12.3", r: "0.95", fill: "currentColor" }));
+    return svg;
+  }
+  function tickIcon() {
+    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", class: "badge-icon" });
+    svg.appendChild(svgNode("path", { d: "M2.5 8.5 6.5 12.5 13.5 4", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+    return svg;
+  }
+
+  /** The plugin's switch as it will be saved: the pending edit, else its current state. */
+  function pluginOn(plugin) {
+    return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
+  }
+
+  /** Plugins that are switched off now and must be turned on for `plugin` to load: itself (optional) and its dependencies. */
+  function switchesNeeded(plugin, includeSelf) {
+    var needed = [];
+    var seen = {};
+    (function visit(p, self) {
+      if (!p || seen[p.name]) return;
+      seen[p.name] = true;
+      if ((!self || includeSelf) && !p.enabled) needed.push(p.name);
+      (p.dependsOn || []).forEach(function (dep) { visit(state.byName[dep], false); });
+    })(plugin, true);
+    return needed;
+  }
+
+  /** Sets a plugin switch in the pending edits; the Plugins tab toggle and the badges share this. */
+  function setPluginSwitch(name, on) {
+    var plugin = state.byName[name];
+    if (!plugin) return;
+    if (on === plugin.enabled) delete state.edits.plugins[name];
+    else state.edits.plugins[name] = on;
+    updateFooter();
+    state.rows.forEach(function (r) { if (r.refreshPlugins) r.refreshPlugins(); });
+  }
+
+  function listNames(names) {
+    if (names.length <= 1) return names.join("");
+    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  /**
+   * A warning badge for an option whose plugin isn't loaded (`context` "option"), or a plugin
+   * whose dependency is off ("dependency"), with a button that turns the missing switches on.
+   */
+  function pluginOffBadge(plugin, context) {
+    var box = el("div", { className: "badge", role: "status" });
+    // The badge is rebuilt on every change; keep keyboard focus on its (new) button.
+    function focusBadge() {
+      var button = box.querySelector("button");
+      if (button) button.focus();
+    }
+    function refresh() {
+      box.textContent = "";
+      var needed = switchesNeeded(plugin, context === "option");
+      var deps = needed.filter(function (n) { return n !== plugin.name; });
+      var selfOff = needed.indexOf(plugin.name) !== -1;
+      var pending = needed.length > 0 && needed.every(function (n) { return state.edits.plugins[n] === true; });
+      box.classList.toggle("pending", pending);
+      if (pending) {
+        box.appendChild(tickIcon());
+        box.appendChild(el("span", { className: "badge-text", text: listNames(needed) + " will be turned on when you save" }));
+        box.appendChild(el("button", { type: "button", text: "Undo", "aria-label": "Undo turning on " + listNames(needed),
+          onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, false); }); focusBadge(); } }));
+        return;
+      }
+      var message;
+      if (context === "dependency") {
+        message = "Needs " + listNames(deps) + ", which " + (deps.length > 1 ? "are" : "is") + " off";
+      } else if (selfOff && deps.length === 0) {
+        message = "Plugin " + plugin.name + " is off — this setting has no effect";
+      } else if (selfOff) {
+        message = "Plugin " + plugin.name + " is off and needs " + listNames(deps) + " — this setting has no effect";
+      } else if (deps.length) {
+        message = "Plugin " + plugin.name + " needs " + listNames(deps) + ", which " + (deps.length > 1 ? "are" : "is") + " off — this setting has no effect";
+      } else {
+        message = "Plugin " + plugin.name + " isn't loaded — this setting has no effect";
+      }
+      box.appendChild(warnIcon());
+      box.appendChild(el("span", { className: "badge-text", text: message }));
+      if (needed.length && !readOnly()) {
+        var label = context === "option" && selfOff && deps.length === 0 ? "Turn on" : "Turn on " + listNames(context === "dependency" ? deps : needed);
+        box.appendChild(el("button", { type: "button", text: label, "aria-label": "Turn on " + listNames(needed),
+          onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, true); }); focusBadge(); } }));
+      }
+    }
+    refresh();
+    return { el: box, refresh: refresh };
+  }
+
+  /** Members-only content on a free world: the fix is the Members world switch. */
+  function membersBadge() {
+    var box = el("div", { className: "badge", role: "status" }, [
+      warnIcon(),
+      el("span", { className: "badge-text", text: "Members only — won't load on a free world" }),
+      el("button", { type: "button", className: "link", text: "Go to Members world", onclick: goToMembersWorld }),
+    ]);
+    return { el: box, refresh: function () {} };
+  }
+
+  function goToMembersWorld() {
+    var row = state.rows.filter(function (r) { return r.kind === "world" && r.key === "membersWorld"; })[0];
+    if (!row) return;
+    selectTab("settings");
+    if (row.el.hidden) {
+      document.getElementById("search").value = "";
+      applySearch();
+    }
+    row.el.scrollIntoView({ block: "center" });
+    row.focus();
+  }
+
   function readOnly() { return !!(state.data && state.data.layers && state.data.layers.localError); }
 
   /**
@@ -472,11 +610,9 @@
         ? el("span", { text: "world.json: " + formatValue(decl, option.shipped) }) : null,
       changedTag, editedTag,
     ]);
-    var notes = [];
     var membersOff = state.data.catalog.membersWorld === false && (decl.members || (owner && owner.members));
-    if (membersOff) notes.push("won't load on a free world");
-    else if (!option.ownerEnabled && owner) notes.push("plugin " + owner.name + " is off");
-    notes.forEach(function (note) { meta.appendChild(el("span", { className: "tag note", text: note })); });
+    var badge = membersOff ? membersBadge()
+      : (!option.ownerEnabled && owner) ? pluginOffBadge(owner, "option") : null;
 
     var control;
     var input;
@@ -565,6 +701,7 @@
       titleLine(label, option.key),
       el("div", { className: "help", id: helpId, text: decl.help || "" }),
       meta,
+      badge ? badge.el : null,
     ]);
     var controlBox = el("div", { className: "control" }, [control, errorEl, resetButton]);
     var rowEl = el("div", { className: "row" + (membersOff || (!option.ownerEnabled && owner) ? " inactive" : "") }, [text, controlBox]);
@@ -598,11 +735,14 @@
       input.disabled = readOnly();
       showError(null);
       refreshMarkers();
+      if (badge) badge.refresh();
     }
 
     row.el = rowEl;
     row.search = [labelText, option.key, decl.help, owner ? owner.name : ""].join(" ").toLowerCase();
     row.refresh = refresh;
+    row.refreshPlugins = function () { if (badge) badge.refresh(); };
+    row.focus = function () { input.focus(); };
     refresh();
     return row;
   }
@@ -619,12 +759,7 @@
     function current() {
       return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
     }
-    input.addEventListener("change", function () {
-      if (input.checked === plugin.enabled) delete state.edits.plugins[plugin.name];
-      else state.edits.plugins[plugin.name] = input.checked;
-      updateFooter();
-      refresh();
-    });
+    input.addEventListener("change", function () { setPluginSwitch(plugin.name, input.checked); });
 
     var meta = el("div", { className: "meta" }, [
       el("span", { text: "default: " + (plugin.defaultEnabled ? "on" : "off") }),
@@ -632,14 +767,15 @@
       changedTag, editedTag,
     ]);
     var membersOff = state.data.catalog.membersWorld === false && plugin.members;
-    if (membersOff) meta.appendChild(el("span", { className: "tag note", text: "won't load on a free world" }));
-    else if (plugin.enabled && !plugin.loaded) meta.appendChild(el("span", { className: "tag note", text: "not loaded: a plugin it needs is off" }));
+    var badge = membersOff ? membersBadge()
+      : (plugin.enabled && !plugin.loaded) ? pluginOffBadge(plugin, "dependency") : null;
 
     var rowEl = el("div", { className: "row" + (membersOff ? " inactive" : "") }, [
       el("div", null, [
         titleLine(el("label", { className: "label", for: controlId, text: plugin.name }), plugin.file),
         el("div", { className: "help", id: helpId, text: plugin.description || "" }),
         meta,
+        badge ? badge.el : null,
       ]),
       el("div", { className: "control" }, [el("label", { className: "switch" }, [input, stateText])]),
     ]);
@@ -651,10 +787,12 @@
       stateText.textContent = on ? "On" : "Off";
       changedTag.hidden = on === plugin.defaultEnabled;
       editedTag.hidden = !has(state.edits.plugins, plugin.name);
+      if (badge) badge.refresh();
     }
     row.el = rowEl;
     row.search = [plugin.name, plugin.file, plugin.description || "", plugin.area].join(" ").toLowerCase();
     row.refresh = refresh;
+    row.refreshPlugins = refresh;
     refresh();
     return row;
   }
@@ -683,6 +821,7 @@
 
     var byName = {};
     catalog.plugins.forEach(function (p) { byName[p.name] = p; });
+    state.byName = byName;
 
     // Settings: world values first, then options grouped by the owning plugin's area.
     var worldRows = catalog.world.map(function (o) { return optionRow("world", o, null); });

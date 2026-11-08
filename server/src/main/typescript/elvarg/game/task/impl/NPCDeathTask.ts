@@ -63,7 +63,7 @@ export class NPCDeathTask extends Task {
                     };
                     PluginManager.emitNpcDeath(event);
                     if (event.remains && event.remains.ticks > 0) this.remains = event.remains;
-                    if (ArceuusSpells.useDeathCharge(this.killer)) {
+                    if (ArceuusSpells.useDeathCharge(this.killer, this.npc)) {
                         this.killer.setSpecialPercentage(Math.min(100, this.killer.getSpecialPercentage() + 15));
                         CombatSpecial.updateBar(this.killer);
                     }

@@ -26,7 +26,8 @@ const CAPE_SLOT = 1;
 before(async () => {
   await CachePipeline.initialize();
   const core = PluginManager.getCoreApi();
-  Avarice({ core, persistAttribute() {}, onPlayerProcess() {}, ...modifierStubs() });
+  // Avarice listens for custom events since #3700.
+  Avarice({ core, persistAttribute() {}, onPlayerProcess() {}, onCustomEvent() {}, ...modifierStubs() });
   CapeOfSkulls.register({ core, onCanEquip() {}, onCustomEvent() {}, onPlayerLogin() {} });
   SkullPrevention.register({ core: { CombatFactory }, onCanAttack() {} });
 });
@@ -111,6 +112,28 @@ test("retaliating does not skull, and nothing changes outside the Wilderness", (
   const skulled = player({ at: new Location(3222, 3218, 0), timer: 100 });
   CombatFactory.handleSkull(skulled, player({ at: new Location(3222, 3219, 0) }));
   assert.equal(skulled.skullTimer, 100);
+});
+
+// #1284 review: the already-skulled branch extended the skull on every hit, before any retaliation check, so a skulled
+// player who only fought back got a fresh 30 minutes. Wiki (Skull (status)): only initiating combat resets it.
+test("a skulled player who only hits back keeps the skull's time; attacking someone new restarts it", () => {
+  const pker = player();
+  const victim = player({ timer: 600 });
+  CombatFactory.handleSkull(pker, victim);
+  victim.attacker = pker;
+  CombatFactory.handleSkull(victim, pker);
+  assert.equal(victim.skullTimer, 600, "retaliation leaves the timer");
+
+  // Hitting back before the attacker is set (a splash): the attacked-by record says it is retaliation too.
+  const caster = player();
+  const splashed = player({ timer: 600 });
+  CombatFactory.handleSkull(caster, splashed);
+  CombatFactory.handleSkull(splashed, caster);
+  assert.equal(splashed.skullTimer, 600);
+
+  // Control: the same skulled player picking a fight with a third player restarts the 30 minutes.
+  CombatFactory.handleSkull(victim, player());
+  assert.equal(victim.skullTimer, PVP_TICKS);
 });
 
 test("hitting back after a splash, or before the first hit lands, does not skull (Wiki: attacked, not damaged)", () => {

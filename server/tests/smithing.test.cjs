@@ -355,6 +355,7 @@ test("Smelt lists every bar, and smelts on the captured timing", () => {
   assert.equal(player.items.get(I.BRONZE_BAR), 2);
 });
 
+
 test("lead and cupronickel stay out of F2P furnace menus and direct starts", (t) => {
   t.mock.method(PluginManager.getCoreApi().WorldDefinition, "isMembersWorld", () => false);
   const player = furnaceWith([[I.LEAD_ORE, 2], [I.NICKEL_ORE, 1], [I.COPPER_ORE, 2]]);
@@ -660,7 +661,9 @@ test("a ring of forging makes iron certain and melts after its charges", (t) => 
   assert.equal(player.equipped.has(12), false);
   assert.match(player.messages.join("\n"), /Ring of Forging has melted/);
   assert.equal(player.attributes["smithing:ring-of-forging-charges"], 140);
-  assert.equal(player.spam.at(-1), "The ore is too impure and you fail to refine it.");
+  // Wiki (Ring of forging): "the smelting will stop once the ring crumbles" - the third ore is not tried.
+  assert.equal(player.items.get(I.IRON_ORE), 1, "the last ore is kept");
+  assert.ok(!player.spam.includes("The ore is too impure and you fail to refine it."), "no unprotected attempt");
 });
 
 test("Varrock armour smelts two bars at the Edgeville furnace", (t) => {

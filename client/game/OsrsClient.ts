@@ -7219,6 +7219,11 @@ export class OsrsClient {
             console.log("[shop] server update", state.stock?.length ?? 0, "items");
         } catch {}
 
+        // The legacy shop wire uses 516, also the native looting-bag inventory.
+        // A bag snapshot replaces this registry entry with its 28-slot container.
+        // Rebind the shop's retained container before publishing stock/transmits.
+        this.cs2Vm?.context?.inventories?.set(516, this.shopInventory);
+
         // Clear existing items and populate with shop stock
         this.shopInventory.clear();
 

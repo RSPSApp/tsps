@@ -1360,6 +1360,28 @@ function enterBuildingHouse({ player, objectId, location, sourceLocation, object
   const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
   return enterAtPortal(player, true, nearbyHouseLocation(player, objectId), diaryEntryContext);
 }
+/**
+ * Wiki, Player-owned house: deaths anywhere in an active house keep items,
+ * restore stats and leave by its portal, including player kills on PvP worlds.
+ * CombatRings' earlier hook retains its separate in-house defeat behavior.
+ */
+function safeHouseDeath(event) {
+  const { player } = event;
+  const house = houseFor(player);
+  if (event.preventDeath || !house || house.isDestroyed() || !house.getPlayers().includes(player)) return;
+  event.preventDeath = true;
+  const combat = player.getCombat();
+  combat.reset();
+  combat.setUnderAttack(null);
+  combat.getHitQueue().clear();
+  combat.clearDamageMap();
+  api.core.CombatFactory.clearHitRollCache(player);
+  World.getPlayers().forEach(other => { if (other !== player) other.getCombat().removeDamager(player); });
+  player.setFollowing(null);
+  player.resetAttributes();
+  exitHouse(player);
+}
+
 function leaveHouse({ player }) { return exitHouse(player); }
 function showAdvertisements({ player, objectId }) { viewAdvertisements(player, nearbyHouseLocation(player, objectId)); return true; }
 function visitLastHouse({ player }) {
@@ -1490,6 +1512,7 @@ function attach(api) {
   api.onCustomEvent("construction:owns-house", ownsHouse);
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onSpellDisabled(refuseHouseVengeance);
+  api.onPlayerBeforeDeath(safeHouseDeath);
   api.onPlayerLogin(loginHouse);
   api.onPlayerMapSquareChange(recordRegionVisit);
   api.onPlayerDisconnect(logoutHouse);

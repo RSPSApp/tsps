@@ -3,9 +3,10 @@
 //   aboard: damage to the boat shows as hitsplats on it, with the boat's health bar (headbar 19 on
 //   a skiff, 100 wide; 21 on a sloop, 140 wide; a raft's 17 is inferred from the sizes' pattern).
 // - Damage and repairs change the boat's HP (sailing_sidepanel_boat_hp and the slot's stored HP).
-// - At 0 HP the boat is lost to the sea: all of its cargo goes, and the player (and crew) are
+// - At 0 HP the boat is lost to the sea: the recovery-loss cargo categories go, and the player (and crew) are
 //   sent back to their return point; the boat stays sunk until a shipwright recovers it.
 const common = require("./Common.SeaCombat");
+const { dropLostOnRecovery } = require("../Cargo.Sailing");
 
 /** Each boat type's HP-bar NPC (boat_hp_npc_tiny, _small, _medium), its deck tile and health bar. */
 const HP_NPCS = Object.freeze({
@@ -71,9 +72,9 @@ function heal(player, owned, amount) {
   return before - owned.damage;
 }
 
-/** Sinking at 0 HP loses everything in the hold (Wiki: "lose all of their cargo"). */
+/** Combat capsize loses the same cargo categories as recovery (Wiki: Sailing / Boat). */
 function loseCargo(owned) {
-  owned.cargo = owned.cargo.map(() => null);
+  dropLostOnRecovery(owned);
 }
 
 /** The boat's HP-bar NPC comes aboard a tick after the player, with the crew (as Deck.Crew.js). */

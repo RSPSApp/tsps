@@ -117,11 +117,17 @@ function isDegraded(player, pouch) {
     && !player.getInventory().contains(objId(pouch.item));
 }
 
-function capacity(player, pouch) {
-  if (isDegraded(player, pouch)) return pouch.decayedCapacity;
+function intactCapacity(player, pouch) {
   if (!pouch.capacityByLevel) return pouch.capacity;
   const level = runecraftLevel(player);
   return pouch.capacityByLevel.find(([required]) => level >= required)?.[1] ?? 0;
+}
+
+function capacity(player, pouch) {
+  // Wiki (Colossal pouch): degraded, it "holds less essence, starting at 35" (at 85, where it holds 40): never more than
+  // the intact pouch would at the player's level (8 at 25 Runecraft).
+  if (isDegraded(player, pouch)) return Math.min(pouch.decayedCapacity, intactCapacity(player, pouch));
+  return intactCapacity(player, pouch);
 }
 
 // ------------------------------------------------------------------ state

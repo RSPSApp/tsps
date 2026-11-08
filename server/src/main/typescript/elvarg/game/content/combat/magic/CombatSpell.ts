@@ -11,7 +11,7 @@ import { PendingHit } from "../hit/PendingHit";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 
 const NPC_PROJECTILE_VISUAL_CONTEXT = "magic:npc-projectile-visual";
-type NpcProjectileVisual = { target: Mobile; endCycleOffset: number; queued: boolean };
+type NpcProjectileVisual = { target: Mobile; endCycleOffset: number; queued: boolean; soundQueued?: boolean };
 
 
 /**

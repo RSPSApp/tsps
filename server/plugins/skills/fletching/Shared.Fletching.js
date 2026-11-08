@@ -403,8 +403,8 @@ function makeBatch(player, recipe, via, provenance = null) {
  * ("skills:action-interval", a league relic's 2-tick pace), and a fletching knife's tick comes off
  * after that, so the two stack.
  */
-function interval(player, recipe) {
-  return SkillActions.actionInterval(api, player, core.Skill.FLETCHING, recipe.group, toolInterval(player, recipe), knifeSaving(player, recipe));
+function interval(player, recipe, delayKnifeSaving = false) {
+  return SkillActions.actionInterval(api, player, core.Skill.FLETCHING, recipe.group, toolInterval(player, recipe), delayKnifeSaving ? 0 : knifeSaving(player, recipe));
 }
 
 function toolInterval(player, recipe) {
@@ -465,7 +465,9 @@ function createTask(player, recipe, batches, via, provenance) {
       if (this.levelUpPaused) return;
       if (++this.ticks === recipe.startTick) playOpening(player, recipe);
       if (this.ticks < this.nextTick) return;
-      this.nextTick = this.ticks + interval(player, recipe);
+      // The first two arrow-shaft logs use the normal pace even with a fletching knife.
+      const delayKnifeSaving = this.remaining === batches && recipe.outputId === core.ItemIdentifiers.ARROW_SHAFT;
+      this.nextTick = this.ticks + interval(player, recipe, delayKnifeSaving);
       const actions = actionsPerCycle(player, recipe);
       for (let done = 0; done < actions; done++) {
         if (!makeBatch(player, recipe, via, provenance)) {

@@ -167,14 +167,14 @@
     "productionProdigy": {
       "league": 4, "key": "production-prodigy", "skills": ["CRAFTING", "SMITHING", "HERBLORE", "FLETCHING", "COOKING"], "levelBoost": 12, "extraChance": 0.25, "maxActions": 28,
       "batch": {
-        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
+        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
         "CRAFTING": ["leather", "jewellery", "battlestaves", "pottery", "gems", "glassblowing", "spinning"]
       }
     },
     "productionMaster": {
       "league": 5, "key": "production-master", "maxActions": 28,
       "batch": {
-        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel", "arrows", "bolts", "tipped", "darts"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
+        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips", "arrows", "bolts", "tipped", "darts"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
         "CRAFTING": ["leather", "jewellery", "battlestaves", "pottery", "gems", "amethyst", "glassblowing", "spinning"]
       },
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 }
@@ -283,7 +283,7 @@
     },
     "woodsman": {
       "league": 6, "key": "woodsman", "maxActions": 28,
-      "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "arrows", "bolts", "tipped", "darts"] },
+      "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips", "arrows", "bolts", "tipped", "darts"] },
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 },
       "trapMultiplier": 2, "lureTicks": 2, "_lureTicks": "ours, as Trickster: the trap's 5-tick look for prey every 2 ticks.",
       "burnToggle": "league_relic_woodsman_toggle_burn", "bankToggle": "league_relic_woodsman_toggle_bank",

@@ -288,7 +288,7 @@
     "enchantedJeweler": { "fragment": 35, "jewellery": ["ring", "necklace", "amulet", "bracelet"] },
     "alchemaniac": { "fragment": 36 },
     "profletchional": { "fragment": 37, "kinds": ["logs", "shields", "stringing"] },
-    "proTips": { "fragment": 38, "kinds": ["chisel"], "product": "bolt tips" },
+    "proTips": { "fragment": 38, "kinds": ["boltTips"], "product": "bolt tips" },
     "dineAndDash": { "fragment": 40, "kinds": ["cook"] },
     "mixologist": { "fragment": 43, "secondarySavePercent": [20, 50, 100] },
     "justDruid": { "fragment": 44, "kinds": ["clean"] },
@@ -300,7 +300,7 @@
       "batch": {
         "SMITHING": ["smelt", "smith", "cannonballs"],
         "CRAFTING": ["leather", "glassblowing", "gems", "pottery", "battlestaves", "spinning"],
-        "FLETCHING": ["logs", "shields", "chisel"]
+        "FLETCHING": ["logs", "shields", "chisel", "boltTips"]
       }
     },
     "unchainedTalent": {

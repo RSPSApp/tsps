@@ -193,3 +193,34 @@ test("audited member Nature rune rows preserve telegrab location text/quantity/t
  assert.match(result.definitions[0].description,/Telekinetic Grab/);assert.equal(result.report.counts["members-world-scope-deferred"],1);
  assert.deepEqual(importSpawns(source([nature]),result.definitions).definitions,result.definitions);
 });
+
+const dwarvenCoins = [{x:3003,y:9801},{x:3001,y:9798}].map(at=>row({
+ ...at,page:"Coins",id:995,plane:0,quantity:1,location:"[[Dwarven Mine]]",
+}));
+
+test("audited Dwarven Mine Coins preserve quantities and remain exact tuple/location selections",()=>{
+ const result=importSpawns(source(dwarvenCoins),[]);
+ assert.equal(result.report.counts.added,2);
+ assert.deepEqual(result.definitions.map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members===true]),
+  [[995,3003,9801,0,1,100,false],[995,3001,9798,0,1,100,false]]);
+ assert.deepEqual(importSpawns(source(dwarvenCoins),result.definitions).definitions,result.definitions);
+ const base=dwarvenCoins[0];
+ const held=[{...base,x:3002},{...base,x:3002,location:undefined},
+  {...base,plane:1},{...base,id:996},
+  {...base,page:"Coins (Shilo Village)"},{...base,location:"[[Edgeville Dungeon]]"},
+  {...base,members:true},{...base,x:3188,y:9820,location:"[[Varrock]] - west bank basement"}];
+ assert.equal(importSpawns(source(held),[]).definitions.length,0);
+ const occupied={id:554,location:{x:3003,y:9801,z:0},amt:1,respawn:100};
+ const replaced=importSpawns(source([base]),[occupied]);
+ assert.deepEqual(replaced.definitions,[occupied]);
+ assert.equal(replaced.report.counts["possible-replaced-id-review"],1);
+});
+
+test("committed Dwarven Mine Coins match both audited public rows without duplicate placements",()=>{
+ const data=JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json",import.meta.url),"utf8"));
+ for(const r of dwarvenCoins){
+  const matches=data.filter(d=>d.id===995 && d.location.x===r.x && d.location.y===r.y && d.location.z===0);
+  assert.equal(matches.length,1);assert.equal(matches[0].amt,1);assert.equal(matches[0].respawn,100);
+  assert.notEqual(matches[0].members,true);
+ }
+});

@@ -12,7 +12,6 @@ const MAX_CHARGES = 50;
 // Cache gamevals: defence_stab, defence_slash, defence_crush, defence_ranged in the bonus array.
 const CHARGE_DEFENCE_BONUSES = [5, 6, 7, 9];
 const RECHARGE_ATTRIBUTE = "dragonfire-shield:recharge";
-const ARMED_ATTRIBUTE = "dragonfire-shield:armed";
 
 // Cache gamevals.
 const SA_ATTACK_VARP = 301; // sa_attack: 2 while the blast is armed
@@ -185,8 +184,13 @@ function startRecharge(player) {
   TaskManager.submit(task);
 }
 
+// sa_attack is the one state: the weapon special sets it to 1, and equipping a weapon or dying clears it, so either
+// disarms the shield too, as on the live game.
+function isArmed(player) {
+  return player.getPacketSender().getVarp(SA_ATTACK_VARP) === 2;
+}
+
 function setArmed(player, armed) {
-  player.setAttribute(ARMED_ATTRIBUTE, armed);
   player.getPacketSender().sendConfig(SA_ATTACK_VARP, armed ? 2 : 0);
 }
 
@@ -203,7 +207,7 @@ function activate({ player, item }) {
   if (player.isSpecialActivated()) {
     player.setSpecialActivated(false);
   }
-  setArmed(player, player.getAttribute(ARMED_ATTRIBUTE) !== true);
+  setArmed(player, !isArmed(player));
   return true;
 }
 
@@ -323,7 +327,7 @@ function createBlastMethod() {
 /** The armed blast replaces the next attack; an armed weapon special goes first. */
 function resolveBlast(attacker) {
   const player = attacker.getAsPlayer();
-  if (player.getAttribute(ARMED_ATTRIBUTE) !== true || player.isSpecialActivated()) return null;
+  if (!isArmed(player) || player.isSpecialActivated()) return null;
   const shield = wornShield(player);
   if (!shield || charges(shield) <= 0 || rechargeSteps(player) > 0) {
     setArmed(player, false);

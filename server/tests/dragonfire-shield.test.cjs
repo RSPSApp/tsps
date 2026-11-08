@@ -67,6 +67,7 @@ function createPlayer(shield = null) {
     getUpdateFlag: () => ({ flag() {} }),
     getPacketSender: () => ({
       sendConfig: (id, value) => player.configs.push([id, value]),
+      getVarp: (id) => player.configs.findLast(([config]) => config === id)?.[1] ?? 0,
       sendVarbit: (id, value) => player.varbits.push([id, value]),
       sendSoundEffect(id) { player.sounds.push(id); return this; },
       sendTypedMessage: (type, text) => player.messages.push(`${type}:${text}`),

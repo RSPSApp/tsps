@@ -1,5 +1,6 @@
 "use strict";
 const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
+const { EquipmentRequirements } = require("../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 
 /**
  * Dizana's quiver: its extra ammunition slot, charges and death rules.
@@ -378,8 +379,23 @@ function swap(player) {
     return;
   }
   if (restrictedAmmo(player, worn)) return;
+  if (ammo && !canWear(player, ammo)) return;
   setWornAmmo(player, ammo);
   store(player, worn ? { id: worn.getId(), amount: worn.getAmount() } : null);
+}
+
+/**
+ * The stored ammo goes into the ammo slot only as wearing it would: its Ranged level (base, as equip checks) and the
+ * can-equip rules (a duel's no-ammo rule). Written straight in, dragon arrows went on at any level, in any duel.
+ */
+function canWear(player, ammo) {
+  const item = new (core().Item)(ammo.id, ammo.amount);
+  const unmet = EquipmentRequirements.getUnmet(player, item.getDefinition());
+  if (unmet != null) {
+    player.sendMessage(EquipmentRequirements.message(unmet, `your ${name(ammo.id)}`));
+    return false;
+  }
+  return PluginManager.emitCanEquip(player, core().Equipment.AMMUNITION_SLOT, item) !== false;
 }
 
 function remove(player) {

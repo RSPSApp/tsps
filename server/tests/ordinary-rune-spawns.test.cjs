@@ -32,3 +32,16 @@ test("audited ordinary F2P rune spawns use real cache IDs, exact tiles, quantiti
     assert.equal(found[0].respawn,respawn);
   }
 });
+
+test("audited ordinary shears and crossbow tiles retain source quantity, plane and timer", () => {
+  const expected = [
+    [837,3174,3663,0,1,500],[837,3284,3719,0,1,500],
+    [1735,3152,3306,0,1,100],[1735,3126,3356,0,1,100],[1735,2930,3285,1,1,100],
+  ];
+  for (const [id,x,y,z,amount,respawn] of expected) {
+    assert.equal(CacheDefinitions.getItem(id)?.name,id===837?"Crossbow":"Shears");
+    const found=spawns.filter(row=>row.id===id&&row.location.x===x&&row.location.y===y&&row.location.z===z);
+    assert.equal(found.length,1,"exact tool spawn "+id+"@"+x+","+y+","+z);
+    assert.equal(found[0].amt,amount);assert.equal(found[0].respawn,respawn);
+  }
+});

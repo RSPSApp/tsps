@@ -1868,5 +1868,10 @@
   {"id":561,"location":{"x":3307,"y":3859,"z":0},"amt":4,"respawn":200,"description":"OSRS Wiki: Nature rune — [[Wilderness]] - on a small island south-east of the [[Demonic Ruins]]{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"},
   {"id":555,"location":{"x":3298,"y":3316,"z":0},"amt":4,"respawn":100,"description":"OSRS Wiki: Water rune — [[Al Kharid mine]] - northern end"},
   {"id":555,"location":{"x":3028,"y":3637,"z":0},"amt":5,"respawn":100,"description":"OSRS Wiki: Water rune — [[Wilderness]] - [[Dark Warriors' Fortress]]"},
-  {"id":555,"location":{"x":2960,"y":3899,"z":0},"amt":5,"respawn":100,"description":"OSRS Wiki: Water rune — [[Wilderness]] - [[Frozen Waste Plateau]]"}
+  {"id":555,"location":{"x":2960,"y":3899,"z":0},"amt":5,"respawn":100,"description":"OSRS Wiki: Water rune — [[Wilderness]] - [[Frozen Waste Plateau]]"},
+  {"id":837,"location":{"x":3174,"y":3663,"z":0},"amt":1,"respawn":500,"description":"OSRS Wiki: Crossbow — [[Wilderness]] - [[Graveyard of Shadows]]"},
+  {"id":837,"location":{"x":3284,"y":3719,"z":0},"amt":1,"respawn":500,"description":"OSRS Wiki: Crossbow — [[Wilderness]] - south-east of the [[Bone Yard]]"},
+  {"id":1735,"location":{"x":3152,"y":3306,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Lumbridge]] - farm north-west"},
+  {"id":1735,"location":{"x":3126,"y":3356,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Draynor Manor]]"},
+  {"id":1735,"location":{"x":2930,"y":3285,"z":1},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Crafting Guild]] ({{FloorNumber|uk=1}})"}
 ]

@@ -233,7 +233,9 @@ test("the infernal harpoon cooks a third of its catch, runs on 5,000 charges and
   // A cooked catch still gives Fishing XP and the pet roll, but no fish.
   const random = Math.random;
   try {
-    Math.random = () => 0;
+    // The first roll is the 1/5,000 big shark (missed here); every later one cooks.
+    let rolls = 0;
+    Math.random = () => (rolls++ === 0 ? 0.5 : 0);
     const landing = player({ weapon: I.INFERNAL_HARPOON });
     landCatch(landing, TOOLS.SHARK_HARPOON, findTool(landing, TOOLS.SHARK_HARPOON), [FISH.SHARK]);
     assert.equal(landing.items.length, 0);
@@ -849,6 +851,32 @@ test("barehand shark plays the cache start, ready and shark-finish sequences", a
     ticks(1);
     assert.equal(amount(p, I.RAW_SHARK), 1);
     assert.deepEqual(p.animations, [6703, 6704, 6706], "the catch plays the ready loop then the finish");
+  });
+});
+
+test("a big shark, swordfish or bass sometimes lands in place of the raw fish (Wiki: Big shark, Big swordfish, Big bass)", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const { FISH } = Fishing;
+  assert.equal(FISH.SHARK.big.chance, 5000);
+  assert.equal(FISH.SWORDFISH.big.chance, 2500);
+  assert.equal(FISH.BASS.big.chance, 1000);
+  assert.equal(FISH.SHARK_BAREHAND.big.id, I.BIG_SHARK, "barehanded sharks too");
+  await withRandom(0.0001, async () => {
+    const lucky = fisher({ items: [[I.HARPOON]] });
+    start(lucky, spot(N.FISHING_SPOT_20, 51), "Harpoon");
+    ticks(4);
+    assert.equal(amount(lucky, I.BIG_SHARK), 1);
+    assert.equal(amount(lucky, I.RAW_SHARK), 0, "in place of the raw shark");
+    assert.equal(lucky.messages.at(-1), "You catch an enormous shark!");
+    assert.equal(lucky.xp, 110, "the shark's own XP");
+  });
+  await withRandom(0.02, async () => {
+    const usual = fisher({ items: [[I.HARPOON]] });
+    start(usual, spot(N.FISHING_SPOT_20, 52), "Harpoon");
+    ticks(4);
+    assert.equal(amount(usual, I.RAW_SHARK), 1);
+    assert.equal(amount(usual, I.BIG_SHARK), 0);
   });
 });
 

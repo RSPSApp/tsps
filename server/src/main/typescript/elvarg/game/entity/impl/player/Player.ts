@@ -230,6 +230,9 @@ export class Player extends Mobile {
         CombatSpecial.updateBar(this);
         this.setHasVengeance(false);
         this.getCombat().getFireImmunityTimer().stop();
+        // The antifire itself is this attribute (DragonfireProtection: tier, label, end time), which dragonfire reads
+        // first: stopping the timer alone left a super antifire's immunity running after the death.
+        this.setAttribute("combat:dragonfire:protection", null);
         this.getCombat().getPoisonImmunityTimer().stop();
         this.getCombat().getPoisonClock().resetPhase();
         this.getCombat().getTeleblockTimer().stop();

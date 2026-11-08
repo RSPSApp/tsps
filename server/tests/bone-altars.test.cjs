@@ -293,7 +293,7 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
   const boneId = CacheDefinitions.getObjId("bones");
   const altarId = CacheDefinitions.getLocId("chaosaltar");
   let index = 1770;
-  for (const mode of ["repeat", "walk", "bury"]) await t.test(mode, async (t) => {
+  for (const mode of ["repeat", "walk", "bury", "widget-bury", "widget-examine"]) await t.test(mode, async (t) => {
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const player = new Player(new PlayerSession(channel));
@@ -354,8 +354,25 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
     const before = amount();
     console.log("PRAYER_OFFERING_ADMISSION " + JSON.stringify({ mode, turns, before, gains,
       location: [player.getLocation().getX(), player.getLocation().getY()] }));
-    if (mode === "repeat") {
-      for (let i = 0; i < 4; i++) turn();
+    async function inventoryWidget(option) {
+      const widgetId = CacheDefinitions.getComponentId("inventory:items");
+      assert.ok(Number.isInteger(widgetId) && widgetId >= 0, "the cache resolves the inventory component");
+      const op = Array.from({ length: 10 }, (_, i) => i + 1).find(candidate =>
+        core.ItemActionPacketListener.resolveInventoryWidgetAction(boneId, candidate)?.option === option);
+      assert.ok(Number.isInteger(op), `the real inventory resolver supplies ${option}`);
+      const slot = player.getInventory().getSlotForItemId(boneId);
+      console.log("PRAYER_INVENTORY_WIDGET " + JSON.stringify({ mode, widgetId, op, slot, option }));
+      await connection.dispatch([{ type: "widget_action", widgetId, groupId: widgetId >>> 16,
+        childId: widgetId & 0xffff, buttonNum: op, itemId: boneId, slot }]);
+    }
+    if (mode === "repeat" || mode === "widget-examine") {
+      if (mode === "widget-examine") {
+        await inventoryWidget("Examine");
+        turn();
+        assert.deepEqual(gains, [15.75], "Examine awards no burial experience");
+        assert.equal(amount(), before, "Examine consumes no bone");
+      }
+      for (let i = 0; i < (mode === "widget-examine" ? 3 : 4); i++) turn();
       assert.deepEqual(gains, [15.75, 15.75], "automatic offering remains functional");
       assert.ok([before - 1, before].includes(amount()));
       return;
@@ -363,6 +380,8 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
     if (mode === "walk") {
       await connection.dispatch([{ type: "move", worldX: CHAOS_ALTAR.x - 2,
         worldY: CHAOS_ALTAR.y, modifierFlags: 0 }]);
+    } else if (mode === "widget-bury") {
+      await inventoryWidget("Bury");
     } else {
       const slot = player.getInventory().getSlotForItemId(boneId);
       assert.equal(CacheDefinitions.getItem(boneId).inventoryActions[0], "Bury");
@@ -370,12 +389,13 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
         itemId: boneId, slot, option: "Bury", optionIndex: 1 }]);
     }
     turn();
-    const expected = mode === "bury" ? [15.75, 4.5] : [15.75];
+    const buries = mode === "bury" || mode === "widget-bury";
+    const expected = buries ? [15.75, 4.5] : [15.75];
     assert.deepEqual(gains, expected, "the interruption itself completed before the target boundary");
-    assert.equal(amount(), before - (mode === "bury" ? 1 : 0));
+    assert.equal(amount(), before - (buries ? 1 : 0));
     for (let i = 0; i < 5; i++) turn();
     console.log("PRAYER_OFFERING_INTERRUPTED " + JSON.stringify({ mode, turns, before, after: amount(), gains }));
     assert.deepEqual(gains, expected, "an interrupted altar loop must not award another offering");
-    assert.equal(amount(), before - (mode === "bury" ? 1 : 0), "unresolved offerings preserve their bones");
+    assert.equal(amount(), before - (buries ? 1 : 0), "unresolved offerings preserve their bones");
   });
 });

@@ -1881,5 +1881,14 @@
   {"id":557,"location":{"x":1385,"y":3119,"z":0},"amt":4,"respawn":100,"members":true,"description":"OSRS Wiki: Earth rune — West of [[Ralos' Rise]]"},
   {"id":558,"location":{"x":1392,"y":3118,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
   {"id":558,"location":{"x":1399,"y":3123,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
-  {"id":558,"location":{"x":1388,"y":3110,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"}
+  {"id":558,"location":{"x":1388,"y":3110,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
+  {"id":31395,"location":{"x":3258,"y":2481,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3257,"y":2477,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3259,"y":2469,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3261,"y":2458,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3260,"y":2451,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3256,"y":2449,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3261,"y":2444,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3258,"y":2437,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"},
+  {"id":31395,"location":{"x":3262,"y":2435,"z":0},"amt":1,"respawn":50,"members":true,"description":"OSRS Wiki: Sea shell — [[The Great Conch]] - eastern coast"}
 ]

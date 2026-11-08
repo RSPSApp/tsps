@@ -1881,5 +1881,7 @@
   {"id":557,"location":{"x":1385,"y":3119,"z":0},"amt":4,"respawn":100,"members":true,"description":"OSRS Wiki: Earth rune — West of [[Ralos' Rise]]"},
   {"id":558,"location":{"x":1392,"y":3118,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
   {"id":558,"location":{"x":1399,"y":3123,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
-  {"id":558,"location":{"x":1388,"y":3110,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"}
+  {"id":558,"location":{"x":1388,"y":3110,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
+  {"id":995,"location":{"x":3003,"y":9801,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Dwarven Mine]]"},
+  {"id":995,"location":{"x":3001,"y":9798,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Dwarven Mine]]"}
 ]

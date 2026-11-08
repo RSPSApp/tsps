@@ -24,6 +24,8 @@ export interface SpecialAttackTargeting {
     readonly pattern: SpecialAttackTargetPattern;
     /** Odd number of tiles across the forward line, centred on the primary target. Unused by "surrounding". */
     readonly width: number;
+    /** "surrounding" only: tiles from the attacker to a candidate's footprint. Default 1 (the ring of neighbours). */
+    readonly radius?: number;
     /** Total target cap, including the primary target. */
     readonly maxTargets: number;
     readonly requiresMultiCombat?: boolean;

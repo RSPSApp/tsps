@@ -1908,6 +1908,9 @@
   {"id":1931,"location":{"x":1666,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Pot — [[Civitas illa Fortis]]"},
   {"id":952,"location":{"x":1641,"y":3052,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Spade — [[Outer Fortis]]"},
   {"id":952,"location":{"x":1405,"y":2938,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Spade — [[Aldarin]]"},
+  {"id":995,"location":{"x":2988,"y":9584,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Asgarnian Ice Dungeon]]"},
+  {"id":995,"location":{"x":2987,"y":9583,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Asgarnian Ice Dungeon]]"},
+  {"id":995,"location":{"x":2988,"y":9582,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Asgarnian Ice Dungeon]]"},
   {"id":233,"location":{"x":1667,"y":3068,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Pestle and mortar — [[Outer Fortis]]"},
   {"id":227,"location":{"x":1668,"y":3068,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Vial of water — [[Outer Fortis]]"}
 ]

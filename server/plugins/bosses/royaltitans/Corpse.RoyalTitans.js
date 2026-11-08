@@ -156,6 +156,8 @@ function recordKill(player, session, ticks) {
   const total = CombatAchievements.killed(player, session, own, (kills) => announceKill(player, kills, ticks));
   player.setAttribute(Shared.KILLS_ATTRIBUTE, Math.max(own, total ?? 0));
   if (total == null) player.getPacketSender().sendConfig(Shared.TOTAL_KILLS_VARP, own);
+  // The log's category isn't either titan's name, so their rolls never count it: one kill of the pair is one here.
+  api.emitCustomEvent("collection-log:count", { player, category: BOSS_NAME });
 }
 
 function announceKill(player, kills, ticks) {

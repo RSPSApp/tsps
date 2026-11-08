@@ -198,7 +198,6 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `Gravestones:enabled` | boolean | `true` | **Gravestones.** Player deaths in PvM leave a gravestone. Turn off for the older behaviour where lost items drop where the player died. |
 | `description` | string | `""` | **Description.** Short blurb shown with the world, at most 120 characters. |
 | `experienceMultiplier` | number (> 0) | `1` | **Experience rate.** Global experience rate for all skills. 1 is the normal rate; 5 gives five times the experience. |
 | `gameframe` | enum: `modern-resizable` (modern-resizable), `modern-fixed` (modern-fixed), `317-resizable` (317-resizable), `317-fixed` (317-fixed) | *Client default* | **Game frame.** Interface layout the web client uses for this world. |
@@ -214,25 +213,25 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `CrossFloor:visibility` | boolean | *Off unless CROSS_FLOOR_VISIBILITY is set* | **Cross-floor visibility.** Players see others on other floors of the same area. |
 | `commands:permissions` | json | `{}` | **Command permissions.** Lowest rank that may run each command, e.g. { "items": "NONE", "teleports": "OWNER" }. Ranks: NONE, MODERATOR, ADMINISTRATOR, OWNER, DEVELOPER. |
 
-#### accounts (`pluginConfig`)
+#### Plugin area `accounts` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `characters:maxPerAccount` | number (integer, >= 1, <= 6) | `6` | **Characters per account.** How many characters one account may hold, 1 to 6. At 1 the picker is skipped. Worlds hosted in a browser without account saving always use 1. |
 
-#### areas (`pluginConfig`)
+#### Plugin area `areas` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `TutorialIsland:allowSkip` | boolean | `true` | **Allow skipping Tutorial Island.** The Gielinor Guide offers new players to skip the island, which misses some starter items and steps. Turn off to make everyone complete it. |
 
-#### bosses (`pluginConfig`)
+#### Plugin area `bosses` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `WildernessBosses:requireDiary` | boolean | `true` | **Wilderness boss lairs need the diary.** As on the Wiki, each lair needs the medium Wilderness Diary or a Slayer task for that boss. Turn off to let anyone in. |
 
-#### bots (`pluginConfig`)
+#### Plugin area `bots` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -240,14 +239,14 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
 | `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
 
-#### commands (`pluginConfig`)
+#### Plugin area `commands` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `DisplayName:cooldownDays` | number (>= 0) | `28` | **Display name change cooldown (days).** Days a player waits between display name changes. 0 lets them change at any time. |
 | `DisplayName:holdDays` | number (>= 0) | `35` | **Old display name hold (days).** Days a name a player gave up stays held for its old owner. |
 
-#### interface (`pluginConfig`)
+#### Plugin area `interface` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -255,7 +254,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `SkillLevelUp:interruptActions` | boolean | `true` | **Level-ups interrupt actions.** Follows each player's pop-up preference. Turn off to keep skilling and fighting through level-ups: the blocking pop-ups are skipped, chat messages, sounds and graphics stay. |
 | `WelcomeScreen:messageOfTheWeek` | string | *Welcome to <world name>!* | **Message of the week.** Text on the scroll at the bottom of the welcome screen. Takes <col=rrggbb> and <br> tags. League worlds show their own message instead. |
 
-#### minigames (`pluginConfig`)
+#### Plugin area `minigames` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -267,7 +266,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `SoulWars:minPlayers` | number (integer, >= 2) | *20, as on the Wiki* | **Players needed to start.** Lowest number of players a game needs. Never under 2, since both teams need a player. |
 | `SoulWars:seedBots` | boolean | `false` | **Seed Soul Wars with bots.** Development aid: fills the lobby with bots. Leave off so production lobbies are players only. |
 
-#### modes (`pluginConfig`)
+#### Plugin area `modes` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -275,7 +274,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `league:start` | date | *Not set* | **League start date.** When the league began, as YYYY-MM-DD. Sets the client's league clock. |
 | `league:type` | enum: `0` (Not a league world), `1` (Leagues I - Twisted), `2` (Leagues II - Trailblazer), `3` (Leagues III - Shattered Relics), `4` (Leagues IV - Trailblazer Reloaded), `5` (Leagues V - Raging Echoes), `6` (Leagues VI - Demonic Pacts) | `0` | **League.** Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change. |
 
-#### npcs (`pluginConfig`)
+#### Plugin area `npcs` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -283,13 +282,13 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `Pets:skillingPetMultiplier` | number (>= 1) | `1` | **Skilling pet multiplier.** Makes every skilling pet roll this many times likelier. 1 is the normal rate; values of 1 or less change nothing. |
 | `random-events:enabled` | boolean | `true` | **Random events.** Turn off to stop random events from appearing. |
 
-#### quests (`pluginConfig`)
+#### Plugin area `quests` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `quests:equipment-requirements` | boolean | `true` | **Quest equipment requirements.** Items tied to a quest cannot be worn until it is finished. Turn off to remove the restriction. Player bots are never held to it. |
 
-#### skills (`pluginConfig`)
+#### Plugin area `skills` (`pluginConfig`)
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -297,22 +296,30 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `ShootingStars:announce` | boolean | `false` | **Announce landings.** Tells everyone online where a star landed. Useful on small worlds; OSRS has no such message. |
 | `ShootingStars:intervalMinutes` | number (> 0) | *90* | **Minutes between shooting stars.** Time between stars; a random 15 minutes either way is added on top. |
 
+#### Plugin area `world` (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Gravestones:enabled` | boolean | `true` | **Gravestones.** Player deaths in PvM leave a gravestone. Turn off for the older behaviour where lost items drop where the player died. |
+
 ### Plugin switches
 
-| Plugin key | Area | On by default | Effect |
-| --- | --- | --- | --- |
-| `Characters` | accounts | no | Lets one account hold several characters and choose between them at login. Off unless the world turns it on. |
-| `TutorialIsland` | areas | yes | The Tutorial Island onboarding for new players: guided steps, starter items and the route to Lumbridge. |
-| `CustomCharacterSummary` | interface | no | Our own Character Summary tab for the side journal. Off unless the world turns it on; needs SideJournalDefaults. |
-| `DuelStaking` | interface | yes | Adds the staking interface and item stakes to duels. The Duel Arena itself is a separate plugin. |
-| `Freeze Timer` | interface | yes | Sends the remaining freeze time and spell for the client's freeze-timer overlay. |
-| `FriendsList` | interface | yes | Friends list and friends chat: private messages, chat filters and friends-chat channels. |
-| `GrandExchange` | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
-| `IgnoreList` | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
-| `SideJournalDefaults` | interface | yes | The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands. |
-| `Vengeance Timer` | interface | yes | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown. |
-| `VoiceChat` | interface | no | Proximity voice chat: signalling between nearby players on the same plane and private area. Voice also needs client support and browser microphone permission. |
-| `WorldAdmin` | tools | yes | Local web page for editing world.json settings and plugin switches. |
+Only plugins that have a description are listed here; the world config page's Plugins tab lists all of them. The switch key is what goes in `plugins` (matched ignoring case and spaces).
+
+| Switch key | Plugin | Area | On by default | Effect |
+| --- | --- | --- | --- | --- |
+| `Characters` | Characters | accounts | no | Lets one account hold several characters and choose between them at login. Off unless the world turns it on. |
+| `TutorialIsland` | TutorialIsland | areas | yes | The Tutorial Island onboarding for new players: guided steps, starter items and the route to Lumbridge. |
+| `CustomCharacterSummary` | CustomCharacterSummary | interface | no | Our own Character Summary tab for the side journal. Off unless the world turns it on; needs SideJournalDefaults. |
+| `DuelStaking` | DuelStaking | interface | yes | Adds the staking interface and item stakes to duels. The Duel Arena itself is a separate plugin. |
+| `FreezeTimer` | Freeze Timer | interface | yes | Sends the remaining freeze time and spell for the client's freeze-timer overlay. |
+| `FriendsList` | FriendsList | interface | yes | Friends list and friends chat: private messages, chat filters and friends-chat channels. |
+| `GrandExchange` | GrandExchange | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
+| `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
+| `SideJournalDefaults` | SideJournalDefaults | interface | yes | The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands. |
+| `VengeanceTimer` | Vengeance Timer | interface | yes | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown. |
+| `VoiceChat` | VoiceChat | interface | no | Proximity voice chat: signalling between nearby players on the same plane and private area. Voice also needs client support and browser microphone permission. |
+| `WorldAdmin` | WorldAdmin | tools | yes | Local web page for editing world.json settings and plugin switches. |
 <!-- world-config:generated:end -->
 
 These switches control whether a plugin is loaded; they are distinct from `pluginConfig`, which

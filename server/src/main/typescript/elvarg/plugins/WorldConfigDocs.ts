@@ -32,14 +32,12 @@ function defaultText(decl: ConfigOptionDeclaration): string {
     return code(JSON.stringify(decl.default));
 }
 
-function compare(a: string, b: string): number {
-    return a < b ? -1 : a > b ? 1 : 0;
+function switchKey(plugin: CatalogPlugin): string {
+    return plugin.file.split("/").pop()!.replace(/\.plugin\.js$/i, "");
 }
 
-function areaOf(option: CatalogOption, owners: Map<string, string>): string {
-    if (option.owner === "core") return "core";
-    if (option.owner === "world") return "world";
-    return owners.get(option.owner) ?? "other";
+function compare(a: string, b: string): number {
+    return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function optionTable(options: CatalogOption[]): string[] {
@@ -59,33 +57,42 @@ function optionTable(options: CatalogOption[]): string[] {
  * a local world.local.json.
  */
 export function renderWorldConfigDocs(catalog: WorldConfigCatalogData): string {
-    const owners = new Map<string, string>(catalog.plugins.map((p) => [p.name, p.area]));
-    const groups = new Map<string, CatalogOption[]>();
-    for (const option of [...catalog.world, ...catalog.options]) {
-        const area = areaOf(option, owners);
-        const list = groups.get(area) ?? [];
-        list.push(option);
-        groups.set(area, list);
+    const areaByOwner = new Map<string, string>(catalog.plugins.map((p) => [p.name, p.area]));
+    // Owner kind and plugin area are separate grouping levels, so a plugin folder named
+    // "world" or "core" can never be mistaken for the top-level or core sections.
+    const sections: { heading: string; options: CatalogOption[] }[] = [
+        { heading: "World settings (top-level keys)", options: catalog.world.filter((o) => o.owner === "world") },
+        { heading: "Core (`pluginConfig`)", options: catalog.options.filter((o) => o.owner === "core") },
+    ];
+    const byArea = new Map<string, CatalogOption[]>();
+    for (const option of catalog.options) {
+        if (option.owner === "core" || option.owner === "world") continue;
+        const area = areaByOwner.get(option.owner) ?? "other";
+        byArea.set(area, [...(byArea.get(area) ?? []), option]);
+    }
+    for (const area of [...byArea.keys()].sort(compare)) {
+        sections.push({ heading: `Plugin area ${code(area)} (\`pluginConfig\`)`, options: byArea.get(area)! });
     }
     const out: string[] = ["### Options", ""];
-    const areas = [...groups.keys()].sort((a, b) => {
-        const rank = (x: string) => (x === "world" ? 0 : x === "core" ? 1 : 2);
-        return rank(a) - rank(b) || compare(a, b);
-    });
-    for (const area of areas) {
-        const heading = area === "world" ? "World settings (top-level keys)" : area === "core" ? "Core (`pluginConfig`)" : `${area} (\`pluginConfig\`)`;
-        out.push(`#### ${heading}`, "");
-        out.push(...optionTable(groups.get(area)!.sort((a, b) => compare(a.key, b.key))), "");
+    for (const section of sections) {
+        if (section.options.length === 0) continue;
+        out.push(`#### ${section.heading}`, "");
+        out.push(...optionTable([...section.options].sort((a, b) => compare(a.key, b.key))), "");
     }
 
     const described = catalog.plugins
         .filter((p): p is CatalogPlugin & { description: string } => !!p.description)
         .sort((a, b) => compare(a.area, b.area) || compare(a.name, b.name));
     out.push("### Plugin switches", "");
-    out.push("| Plugin key | Area | On by default | Effect |", "| --- | --- | --- | --- |");
+    out.push(
+        "Only plugins that have a description are listed here; the world config page's Plugins tab lists all of them. " +
+            "The switch key is what goes in `plugins` (matched ignoring case and spaces).",
+        "",
+    );
+    out.push("| Switch key | Plugin | Area | On by default | Effect |", "| --- | --- | --- | --- | --- |");
     for (const plugin of described) {
         out.push(
-            `| ${code(plugin.name)} | ${cell(plugin.area)} | ${plugin.defaultEnabled ? "yes" : "no"} | ${cell(plugin.description)}${plugin.members ? " (members only)" : ""} |`,
+            `| ${code(switchKey(plugin))} | ${cell(plugin.name)} | ${cell(plugin.area)} | ${plugin.defaultEnabled ? "yes" : "no"} | ${cell(plugin.description)}${plugin.members ? " (members only)" : ""} |`,
         );
     }
     return out.join("\n");

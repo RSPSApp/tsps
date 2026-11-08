@@ -32,3 +32,12 @@ test('table cells escape pipes and newlines', () => {
   assert.match(out, /\*\*A\\\|B\.\*\* one two \\\| three/);
   assert.match(out, /enum: `x` \(Ex\)/);
 });
+
+test('plugin options are not grouped under the top-level world settings', () => {
+  const top = doc.indexOf('#### World settings (top-level keys)');
+  const next = doc.indexOf('#### ', top + 1);
+  const section = doc.slice(top, next);
+  assert.ok(section.includes('`experienceMultiplier`'));
+  assert.ok(!section.includes('Gravestones:enabled'), 'a plugin under plugins/world must not land in the top-level section');
+  assert.ok(doc.includes('Gravestones:enabled'));
+});

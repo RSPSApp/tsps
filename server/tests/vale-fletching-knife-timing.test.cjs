@@ -42,8 +42,14 @@ async function trace(t, output, knifeLocation) {
   });
   const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
   if (knifeLocation === "worn") {
+    const actions = core.CacheDefinitions.getItem(ids.FLETCHING_KNIFE)?.inventoryActions ?? [];
+    const wieldIndex = actions.findIndex(action => action?.toLowerCase() === "wield");
+    assert.ok(wieldIndex >= 0, "the active cache offers Wield for the fletching knife");
+    assert.equal(core.ItemDefinition.forId(ids.FLETCHING_KNIFE).getEquipmentType().getSlot(), core.Equipment.SHIELD_SLOT);
+    assert.ok(player.getHitpoints() > 0, "the player can equip while alive");
+    assert.equal(player.isTeleportingReturn(), false, "the player is not teleporting");
     await send({ type: "inventory_action", widgetId: 149 << 16, slot: 4,
-      itemId: ids.FLETCHING_KNIFE, option: "Wield", optionIndex: 2 });
+      itemId: ids.FLETCHING_KNIFE, option: actions[wieldIndex], optionIndex: wieldIndex + 1 });
     assert.equal(player.getEquipment().getSlot(core.Equipment.SHIELD_SLOT), ids.FLETCHING_KNIFE,
       "the actual Wield action equipped the fletching knife in the off-hand");
   }

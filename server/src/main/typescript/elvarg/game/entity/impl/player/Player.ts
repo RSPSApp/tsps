@@ -229,10 +229,11 @@ export class Player extends Mobile {
         this.setSpecialActivated(false);
         CombatSpecial.updateBar(this);
         this.setHasVengeance(false);
-        this.getCombat().getFireImmunityTimer().stop();
-        // The antifire itself is this attribute (DragonfireProtection: tier, label, end time), which dragonfire reads
-        // first: stopping the timer alone left a super antifire's immunity running after the death.
-        this.setAttribute("combat:dragonfire:protection", null);
+        // Antifire is left running, timer and protection both: in every recorded death with one active (rsprox
+        // 227/01857, 227/00543, 227/00555, 234/03279...) its varbits count on through the death and respawn and the
+        // "about to expire" messages follow, while poison and prayers reset; the Wiki says nothing either way.
+        // Stopping only the timer left the protection on, a save wrote fireImmunityTimer 0 and enchanted bolts' fire
+        // check disagreed with dragonfire. The one reset the Wiki gives (a "no potions" duel) is the duel's own.
         this.getCombat().getPoisonImmunityTimer().stop();
         this.getCombat().getPoisonClock().resetPhase();
         this.getCombat().getTeleblockTimer().stop();

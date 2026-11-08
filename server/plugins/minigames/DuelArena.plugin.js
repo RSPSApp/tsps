@@ -652,6 +652,8 @@ function start(session) {
       player.getEquipment().switchItems(player.getInventory(), player.getEquipment().getItems()[slot].clone(), false, false);
     }
     player.resetAttributes();
+    // The Wiki's one antifire reset: a "no potions" duel starts with it gone; any other keeps it, as a death does.
+    if (hasRule(player, DuelRule.NO_POTIONS)) require("../combat/DragonfireProtection").clearDragonfireProtection(player);
     player.moveTo(spawns[session.players.indexOf(player)]);
     player.setStatus(PlayerStatus.NONE);
     player.getPacketSender().sendEntityHint(player.getDueling().getInteract());

@@ -168,25 +168,23 @@ export class Projectile {
         return this;
     }
 
-    public sendProjectile(): void {
-        let resolvedDelay = this.delay;
-        let resolvedSpeed = this.speed;
+    /** The exact relative client-cycle deadlines used by sendProjectile. */
+    public getTiming(): { startCycleOffset: number; endCycleOffset: number; legacyMagic: boolean } {
+        const legacyMagic = this.delay === 0 && this.speed === 20
+            && this.startHeight === 43 && this.endHeight === 31;
+        return {
+            startCycleOffset: legacyMagic ? 51 : this.delay,
+            endCycleOffset: legacyMagic
+                ? Projectile.LEGACY_MAGIC_END_BASE + Projectile.flightDistance(this.start, this.end, this.lockon) * 10
+                : this.speed,
+            legacyMagic,
+        };
+    }
 
-        // Most combat spells use Java ProjectileBuilder defaults:
-        // start=43, end=31, delay=51, duration=-5, span=10.
-        // Older TS spell ports still pass (delay=0, speed=20), which makes
-        // spell travel/desync look off versus Java. Normalize only this legacy
-        // magic shape and keep all custom/ranged projectiles untouched.
-        if (
-            this.delay === 0 &&
-            this.speed === 20 &&
-            this.startHeight === 43 &&
-            this.endHeight === 31
-        ) {
-            const distance = Projectile.flightDistance(this.start, this.end, this.lockon);
-            resolvedDelay = 51;
-            resolvedSpeed = Projectile.LEGACY_MAGIC_END_BASE + distance * 10;
-        }
+    public sendProjectile(): void {
+        const timing = this.getTiming();
+        const resolvedDelay = timing.startCycleOffset;
+        const resolvedSpeed = timing.endCycleOffset;
 
         let recipients = 0;
         let scannedNetworkPlayers = 0;

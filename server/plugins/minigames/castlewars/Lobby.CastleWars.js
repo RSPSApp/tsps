@@ -75,7 +75,7 @@ function castleWarsBotUsername(teamId, index) {
 
 function populateCastleWarsBots(teamId, tier, maxed = false) {
   const opposingTeam = game.opposingTeam(teamId);
-  const settings = game.settings ?? { teamSize: BOTS_PER_TEAM, opponent: "mixed" };
+  const settings = game.practice === true && game.settings ? game.settings : { teamSize: BOTS_PER_TEAM, opponent: "mixed" };
   if (settings.opponent === "none") return;
   const ownRole = settings.opponent === "scorer" ? "defender" : settings.opponent === "defender" ? "scorer" : null;
   for (let index = 0; index < settings.teamSize; index++) {
@@ -121,7 +121,7 @@ function refuseEntry(player, reason) {
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, ENTRY_REFUSED)));
 }
 
-function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod = requestedTeam ?? "guthix", maxed = false) {
+function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod = requestedTeam ?? "guthix", maxed = false, practice = false) {
   const phase = game.getPhase();
   if (phase === game.PHASE.ACTIVE || phase === game.PHASE.ENDING) {
     player.sendMessage("There's already a Castle Wars game running. Please wait.");
@@ -138,6 +138,9 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
   }
 
   const counts = game.queueCounts();
+  // Lanthus' practice settings belong to the match "Join practice" started: a join into an empty lobby starts a new
+  // match, practice only when it came from that option.
+  if (counts[data.TEAM.SARADOMIN] === 0 && counts[data.TEAM.ZAMORAK] === 0 && player.isPlayerBot() !== true) game.practice = practice === true;
   const teamId = chooseTeam(counts, requestedTeam);
   if (!teamId) {
     const team = game.getTeamData(requestedTeam).name;
@@ -145,7 +148,8 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
     player.sendMessage(`The ${team} team is full, try ${other}.`);
     return;
   }
-  if (counts[teamId] >= (game.settings?.teamSize ?? Infinity)) {
+  // A team-size cap is a practice setting; public games have none (Wiki: Castle Wars).
+  if (game.practice === true && counts[teamId] >= (game.settings?.teamSize ?? Infinity)) {
     player.sendMessage("That Castle Wars team is full.");
     return;
   }

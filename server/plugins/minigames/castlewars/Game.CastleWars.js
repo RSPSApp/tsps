@@ -804,6 +804,8 @@ function endGame() {
     return;
   }
   phase = PHASE.ENDING;
+  // The practice settings ended with their match.
+  game.practice = false;
   cancelStartCountdown();
   cancelEndCountdown();
   clearGroundItems();

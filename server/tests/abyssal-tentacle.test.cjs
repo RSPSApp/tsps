@@ -464,7 +464,8 @@ test("through the real attack path, the last charge's swing rolls with the tenta
 
   const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 1 });
   const player = createPlayer(tentacle);
-  Object.assign(player, { isNpc: () => false, isSpecialActivated: () => false, setSpecialActivated() {}, getUpdateFlag: () => ({ flag() {} }) });
+  // No special armed, as a real Player has none until one is selected (Combat reads it for bypassing specials).
+  Object.assign(player, { isNpc: () => false, isSpecialActivated: () => false, setSpecialActivated() {}, getCombatSpecial: () => undefined, getUpdateFlag: () => ({ flag() {} }) });
   const target = { getCombat: () => ({ getAttacker: () => player }) };
   const combat = new Combat(player);
   t.mock.method(CombatFactory, "canAttack", () => CanAttackResponse.CAN_ATTACK);

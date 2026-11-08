@@ -622,18 +622,18 @@ test("Bank-cargo moves what fits from the hold to the bank, keeping the rest in 
   try {
     const bank = bankOf({}, 10);
     const boat = { cargo: [{ id: 2, amount: 50 }, null, { id: 385, amount: 1 }] };
-    assert.equal(bankCargo.moveToBank({ getBank: () => bank }, boat), true);
+    assert.deepEqual(bankCargo.moveToBank({ getBank: () => bank }, boat), { fitted: true, kept: 0 });
     assert.deepEqual([...bank.held], [[2, 50], [385, 1]]);
     assert.deepEqual(boat.cargo, [null, null, null], "the hold is empty");
 
     const crowded = { cargo: [{ id: 2, amount: 5 }] };
-    assert.equal(bankCargo.moveToBank({ getBank: () => bankOf({}, 0) }, crowded), false, "no room: it stays in the hold");
+    assert.equal(bankCargo.moveToBank({ getBank: () => bankOf({}, 0) }, crowded).fitted, false, "no room: it stays in the hold");
     assert.deepEqual(crowded.cargo, [{ id: 2, amount: 5 }]);
 
     // Review: a stack one short of the maximum takes 1 of 10 fishing bait; 9 stay in the hold.
     const nearlyFull = bankOf({ 313: MAX - 1 }, 10);
     const bait = { cargo: [{ id: 313, amount: 10 }] };
-    assert.equal(bankCargo.moveToBank({ getBank: () => nearlyFull }, bait), false, "not all of it went");
+    assert.equal(bankCargo.moveToBank({ getBank: () => nearlyFull }, bait).fitted, false, "not all of it went");
     assert.equal(nearlyFull.held.get(313), MAX);
     assert.deepEqual(bait.cargo, [{ id: 313, amount: 9 }], "the rest stays in the hold");
   } finally {
@@ -655,9 +655,39 @@ test("Bank-cargo leaves what the bank refuses (a courier crate) in the hold (rev
   const added = [];
   const bank = { getAddableAmount: (item) => item.getAmount(), add: (item) => { added.push([item.getId(), item.getAmount()]); return bank; } };
   const boat = { cargo: [{ id: crate, amount: 2 }, { id: 2, amount: 5 }] };
-  assert.equal(bankCargo.moveToBank({ getBank: () => bank }, boat), false, "not everything went");
+  assert.deepEqual(bankCargo.moveToBank({ getBank: () => bank }, boat), { fitted: true, kept: 1 },
+    "what the bank accepts all went; the crates were refused");
   assert.deepEqual(added, [[2, 5]], "only the cannonballs are banked");
   assert.deepEqual(boat.cargo, [{ id: crate, amount: 2 }, null], "the crates stay in the hold");
+});
+
+test("Bank-cargo asks the crate policy quietly: no hand-cargo refusal per crate slot", (t) => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const portTasks = require("../plugins/skills/sailing/porttasks/Common.PortTasks");
+  const crate = [...Array(40000).keys()].find((id) => portTasks.isCrate(id));
+  // Port Tasks' own canBankCargo hook (Cargo.PortTasks.js), run as PluginManager runs bank hooks.
+  const { canBankCargo } = require("../plugins/skills/sailing/porttasks/Cargo.PortTasks")._test;
+  t.mock.method(PluginManager, "emitCanBankItem", (player, item, options) => {
+    const event = { player, item, allow: null, quiet: options?.quiet === true };
+    canBankCargo(event);
+    return event.allow;
+  });
+  const core = PluginManager.getCoreApi();
+  t.mock.method(core.Bank, "isOpen", () => false);
+  t.mock.method(core.Bank, "getTabForItem", () => 0);
+  const messages = [];
+  const added = [];
+  const bank = { getAddableAmount: (item) => item.getAmount(), add: (item) => { added.push([item.getId(), item.getAmount()]); return bank; } };
+  const player = { getBank: () => bank, sendMessage: (message) => messages.push(message) };
+  const boat = { cargo: [{ id: crate, amount: 1 }, { id: crate, amount: 1 }, { id: 2, amount: 5 }, { id: 995, amount: 3 }] };
+  assert.deepEqual(bankCargo.moveToBank(player, boat), { fitted: true, kept: 2 });
+  assert.deepEqual(added, [[2, 5], [995, 3]]);
+  assert.ok(!messages.some((message) => /You can't remove the cargo/.test(message)), "no hand-cargo refusal");
+  // The same hook still tells a player banking a crate by hand.
+  const event = { player, item: new core.Item(crate, 1), allow: null };
+  canBankCargo(event);
+  assert.equal(event.allow, false);
+  assert.match(messages.at(-1), /You can't remove the cargo/);
 });
 
 test("the crew's delivery credits only the crates taken out of the hold (review #1430)", () => {

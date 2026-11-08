@@ -1449,9 +1449,9 @@ export class PluginManager {
     return null;
   }
 
-  public static emitCanBankItem(player: any, item: any): boolean | null {
+  public static emitCanBankItem(player: any, item: any, { quiet = false }: { quiet?: boolean } = {}): boolean | null {
     if (PluginManager.canBankItemHooks.length === 0) return null;
-    const event: PluginCanBankItemEvent = { player, item, allow: null };
+    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet };
     for (const hook of PluginManager.canBankItemHooks) {
       PluginManager.executeHook(hook, event, "can_bank_item", "can_bank_item");
       if (event.allow !== null) return event.allow;
@@ -4434,7 +4434,7 @@ export class PluginManager {
       emitCanEat: (player, itemId) => PluginManager.emitCanEat(player, itemId),
       emitCanDrink: (player, itemId) => PluginManager.emitCanDrink(player, itemId),
       emitCanBank: (player, source) => PluginManager.emitCanBank(player, source),
-      emitCanBankItem: (player, item) => PluginManager.emitCanBankItem(player, item),
+      emitCanBankItem: (player, item, options) => PluginManager.emitCanBankItem(player, item, options),
       emitShouldKeepItemOnDeath: (player, item) =>
         PluginManager.emitShouldKeepItemOnDeath(player, item),
       emitFiremakingBlocked: (event) => PluginManager.emitFiremakingBlocked(event),

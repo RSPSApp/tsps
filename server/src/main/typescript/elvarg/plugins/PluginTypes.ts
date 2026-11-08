@@ -462,6 +462,8 @@ export interface PluginCanBankItemEvent {
   player: any;
   item: any;
   allow: boolean | null;
+  /** A policy query (e.g. the crew's Bank-cargo): refuse without telling the player why. */
+  quiet?: boolean;
 }
 
 export interface PluginCanShopEvent {
@@ -1361,7 +1363,7 @@ export interface PluginApi {
   emitCanEat(player: any, itemId: number): boolean | null;
   emitCanDrink(player: any, itemId: number): boolean | null;
   emitCanBank(player: any, source?: string): boolean | null;
-  emitCanBankItem(player: any, item: any): boolean | null;
+  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean }): boolean | null;
   emitShouldKeepItemOnDeath(player: any, item: any): boolean | null;
   emitFiremakingBlocked(event: PluginFiremakingBlockedEvent): boolean;
   emitObjectInteraction(event: PluginObjectInteractionEvent): boolean;

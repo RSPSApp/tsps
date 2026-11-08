@@ -301,3 +301,11 @@ No new animation or sound is claimed for the uncaptured platforms.
 - **Gates still to decide:** the Agility Arena ladder (a minute's wait after leaving), Cavey Davey's cave (a warning dialogue), and the refused locs that aren't ladders, stairs or caves.
 - **Climb dialogues:** ladders whose "Climb" asks up or down, with both answers.
 - **The Prifddinas agility tree ladder:** the Agility plugin sends the player to the city's coordinates on another part of the map, where the capture goes to (2269, 3393, 2).
+
+## Trahaearn mine (#3823)
+
+The cave entrance (36556, 4x4 at 3269,6047) and the Steps out (36215, 3x2 at 3301,12455) had no
+handler, so clicking Enter did nothing. `prif_mine_entrance` and `prif_mine_exit` now fade between
+them. Capture 1105 shows the Enter click, the fade (client script 948) and a rebuild into the
+mine map; it has no capture of the Steps. Both landings are inferred, not captured: the mine side
+is 3302,12454 and the surface side is 3271,6051, the tiles the agent `transports.json` uses.

@@ -33,6 +33,8 @@ before(async () => {
     { id: MAN, x: 3270, y: 3270, level: 0, wanderRadius: 3 },
     { id: MAN, x: 3280, y: 3280, level: 0, wanderRadius: 3 },
     { id: MAN, x: 3280, y: 3280, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3300, y: 3300, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3300, y: 3300, level: 0, wanderRadius: 3 },
   ];
   const patch = [
     { id: MAN, x: 3200, y: 3200, level: 0, wanderRadius: 0 },
@@ -48,6 +50,9 @@ before(async () => {
     // An editor wander patch for one stacked spawn, and a removal of one of the other pair.
     { id: MAN, x: 3270, y: 3270, level: 0, wanderRadius: 0 },
     { id: MAN, x: 3280, y: 3280, level: 0, remove: true },
+    // The editor's save for one stacked spawn moved away and back onto its own tile.
+    { id: MAN, x: 3300, y: 3300, level: 0, remove: true },
+    { id: MAN, x: 3300, y: 3300, level: 0, wanderRadius: 3 },
   ];
   DefinitionLoader.registerSource("npc_spawns", "test", {
     name: "canonical",
@@ -90,7 +95,7 @@ test("a spawn moved back onto its original tile survives the removal", () => {
 test("a removal after an addition in the same patch still drops it", () => {
   assert.equal(spawnAt(3260, 3260, 0), undefined);
   assert.ok(spawnAt(3250, 3250, 0), "an untouched canonical spawn stays");
-  assert.equal(NpcSpawnDefinition.all().length, 8);
+  assert.equal(NpcSpawnDefinition.all().length, 10);
 });
 
 function spawnsAt(x, y, level) {
@@ -103,4 +108,8 @@ function spawnsAt(x, y, level) {
 test("a patch for one of two stacked spawns replaces only that one, and a removal drops only one", () => {
   assert.deepEqual(spawnsAt(3270, 3270, 0).map((spawn) => spawn.getRadius()).sort(), [0, 3], "the other keeps its wander");
   assert.equal(spawnsAt(3280, 3280, 0).length, 1, "one of the pair is removed");
+});
+
+test("a stacked spawn moved back onto its own tile keeps its sibling", () => {
+  assert.deepEqual(spawnsAt(3300, 3300, 0).map((spawn) => spawn.getRadius()), [3, 3]);
 });

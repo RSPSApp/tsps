@@ -718,7 +718,9 @@ export class EditModePlugin {
             this.removeEdits(this.npcReplacementIndicesAt(selection));
         } else {
             this.undoGroup(() => {
-                this.removeEdits(this.npcEditIndicesAt(selection));
+                // Keep the removal markers already at this tile: each hides one of its stacked spawns, so
+                // this one is added beside them (the server drops one spawn per marker).
+                this.removeEdits(this.npcReplacementIndicesAt(selection));
                 const spawn = selection.npcSpawn ?? {
                     id: selection.locId,
                     tileX: selection.tileX,

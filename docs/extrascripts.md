@@ -88,8 +88,16 @@ The client resolves custom items via `CustomObjTypeLoader`, which wraps the base
 
 #### Special attacks (`custom-items.json`)
 
-A custom weapon in `server/data/definitions/custom-items.json` can use another weapon's special
-attack with a `specialAttack` entry on its row (next to `objType` and `itemDef`):
+A custom weapon in `server/data/definitions/custom-items.json` gets a special attack bar in Combat
+Options with a `specialAttack` entry on its row (next to `objType` and `itemDef`). Give at least one
+of its two fields:
+
+- `from` (optional): another item whose special attack the weapon uses, such as 29000 for the
+  Eclipse atlatl's.
+- `energy` (optional): the cost in percent, 1 to 100. Without it the weapon costs what its special
+  costs (for `from`).
+
+To borrow a special, name it in `from`:
 
 ```json
 {
@@ -101,15 +109,25 @@ attack with a `specialAttack` entry on its row (next to `objType` and `itemDef`)
 }
 ```
 
-- `from` (required): the item whose special attack the weapon uses, such as 29000 for the Eclipse
-  atlatl's. The server runs that special when the weapon's bar is used.
-- `energy` (optional): the cost in percent, 1 to 100. Without it the weapon costs what the special
-  costs for `from`.
+To give the weapon a special of its own, leave out `from` and register the special for the weapon's
+id in a plugin, as the files in `server/plugins/combat/specials/` do:
 
-The client shows the special attack bar in Combat Options for it (the cache's combat tab hides the
-bar for weapons missing from its special weapons list, enum 906). Give `energy` when `from` is not a
-cache special weapon, or the bar stays hidden. A special whose own code checks which weapon is worn
-may refuse the custom weapon; the server logs a warning at startup when `from` has no special at all.
+```json
+"specialAttack": { "energy": 50 }
+```
+
+```js
+api.registerCombatSpecial({ id: "sanguine_atlatl", itemIds: [50002], drainAmount: 50, ... });
+```
+
+A special registered for the weapon's own id is always the one it uses, even with `from` set. The
+`energy` in `custom-items.json` is its cost either way, so the bar and the drain agree.
+
+The client shows the bar because the entry gives the weapon a place in the cache's special weapons
+list (enum 906), which the combat tab checks. Without `energy`, `from` must be a cache special
+weapon for the bar to show. A borrowed special whose own code checks which weapon is worn, or what
+else is worn (the Eclipse atlatl's needs the Eclipse moon set), keeps those checks. The server logs a
+warning at startup for a weapon whose bar has no special behind it.
 
 ### Custom Widgets
 

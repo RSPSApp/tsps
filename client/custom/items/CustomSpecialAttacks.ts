@@ -9,14 +9,14 @@ export const SPECIAL_ATTACK_ENUM = 906;
 /**
  * Enum 906's value for a custom weapon with a `specialAttack` (custom-items.json): its own
  * `energy`, else the cost of the weapon it borrows the special from (`baseCost(from)`).
- * Undefined for anything else, which the cache's own entries answer.
+ * Undefined for anything else (and for a `from` without a cache cost), which the cache answers.
  */
 export function customSpecialAttackCost(
     itemId: number,
     baseCost: (fromItemId: number) => number | undefined,
 ): number | undefined {
     const special = CustomItemRegistry.get(itemId)?.definition.specialAttack;
-    if (!special || !Number.isInteger(special.from)) return undefined;
+    if (!special) return undefined;
     if (Number.isInteger(special.energy)) return special.energy! * 10;
-    return baseCost(special.from);
+    return Number.isInteger(special.from) ? baseCost(special.from!) : undefined;
 }

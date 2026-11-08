@@ -39,19 +39,28 @@ export class CombatSpecial {
     private static readonly byId = new Map<string, CombatSpecial>();
     private static readonly byItemId = new Map<number, CombatSpecial>();
     /**
-     * Weapons that use another weapon's special (custom-items.json `specialAttack`): by item id,
-     * the weapon whose special they use and, when set, their own cost in percent.
+     * Custom weapons' special attack settings (custom-items.json `specialAttack`), by item id:
+     * `from`, the weapon whose special they use when they register none of their own, and
+     * `drainAmount`, their cost in percent whichever special they use.
      */
-    private static readonly borrowed = new Map<number, { from: number; drainAmount?: number }>();
+    private static readonly itemSpecials = new Map<number, { from?: number; drainAmount?: number }>();
 
     /**
-     * Gives `itemId` the special of `fromItemId`, at `drainAmount` percent when set (otherwise
-     * that special's own cost for `fromItemId`). Resolved when looked up, so it does not matter
-     * whether the special is registered before or after.
+     * Sets a weapon's special attack settings. With `from`, the weapon uses that item's special
+     * unless a special is registered for the weapon itself (one registered for its own id always
+     * comes first). With `drainAmount`, that is its cost in percent; otherwise its special's own
+     * cost (for `from` when borrowed). Resolved when looked up, so registration order does not
+     * matter.
      */
-    public static borrow(itemId: number, fromItemId: number, drainAmount?: number): void {
-        if (!Number.isInteger(itemId) || !Number.isInteger(fromItemId) || itemId <= 0 || fromItemId <= 0 || itemId === fromItemId) return;
-        CombatSpecial.borrowed.set(itemId, Number.isFinite(drainAmount) ? { from: fromItemId, drainAmount } : { from: fromItemId });
+    public static setItemSpecial(itemId: number, settings: { from?: number; drainAmount?: number }): void {
+        if (!Number.isInteger(itemId) || itemId <= 0) return;
+        const from = Number.isInteger(settings.from) && (settings.from as number) > 0 && settings.from !== itemId ? settings.from : undefined;
+        const drainAmount = Number.isFinite(settings.drainAmount) ? settings.drainAmount : undefined;
+        if (from === undefined && drainAmount === undefined) return;
+        CombatSpecial.itemSpecials.set(itemId, {
+            ...(from !== undefined ? { from } : {}),
+            ...(drainAmount !== undefined ? { drainAmount } : {}),
+        });
     }
 
     public static register(definition: CombatSpecialDefinition): CombatSpecial | null {
@@ -85,8 +94,8 @@ export class CombatSpecial {
     public static getForWeaponId(itemId: number): CombatSpecial | null {
         const own = ItemAliases.lookup(CombatSpecial.byItemId, itemId);
         if (own) return own;
-        const borrowed = CombatSpecial.borrowed.get(Number(itemId));
-        return borrowed ? ItemAliases.lookup(CombatSpecial.byItemId, borrowed.from) ?? null : null;
+        const from = CombatSpecial.itemSpecials.get(Number(itemId))?.from;
+        return from !== undefined ? ItemAliases.lookup(CombatSpecial.byItemId, from) ?? null : null;
     }
 
     constructor(definition: CombatSpecialDefinition){
@@ -382,11 +391,10 @@ export class CombatSpecial {
 
     /** Energy cost for a specific weapon variant (defaults to the base cost). */
     public getDrainAmountForWeaponId(itemId?: number): number {
-        const borrowed = itemId !== undefined ? CombatSpecial.borrowed.get(Number(itemId)) : undefined;
-        if (borrowed) {
-            if (borrowed.drainAmount !== undefined) return borrowed.drainAmount;
-            itemId = borrowed.from;
-        }
+        const settings = itemId !== undefined ? CombatSpecial.itemSpecials.get(Number(itemId)) : undefined;
+        if (settings?.drainAmount !== undefined) return settings.drainAmount;
+        // A borrowed special costs what it costs for the weapon it is borrowed from.
+        if (settings?.from !== undefined && !this.identifiers.includes(Number(itemId))) itemId = settings.from;
         if (itemId !== undefined) {
             const override = this.drainAmountByItemId[itemId] ?? this.drainAmountByItemId[ItemAliases.baseOf(itemId) ?? -1];
             if (typeof override === "number") {

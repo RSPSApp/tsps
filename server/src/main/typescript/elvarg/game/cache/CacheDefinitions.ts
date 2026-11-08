@@ -36,8 +36,8 @@ export interface ServerCustomItem {
     objType: Record<string, unknown>;
     itemDef?: Record<string, unknown>;
     models?: Record<string, string>;
-    /** Another weapon's special attack: `from` its item id, `energy` its own cost in percent. */
-    specialAttack?: { from: number; energy?: number };
+    /** A special attack bar: `from`, another item whose special it uses; `energy`, its cost in percent. */
+    specialAttack?: { from?: number; energy?: number };
 }
 
 export class CacheDefinitions {

@@ -141,10 +141,11 @@ export interface CustomItemDefinition {
     itemDef?: CustomItemDefProps;
 
     /**
-     * Uses another weapon's special attack: its attack on the server and the special attack bar
-     * in Combat Options. `energy` is the cost in percent; without it, `from`'s own cost.
+     * A special attack bar in Combat Options (at least one field). `from` uses that item's special
+     * attack; without it a plugin registers the weapon's own (plugins/combat/specials). `energy` is
+     * the cost in percent; without it, `from`'s own cost.
      */
-    specialAttack?: { from: number; energy?: number };
+    specialAttack?: { from?: number; energy?: number };
 }
 
 /**

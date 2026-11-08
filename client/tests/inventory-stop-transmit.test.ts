@@ -76,3 +76,57 @@ test("plugins keep the closed bank's last contents; CS2's bank Inventory is clea
     bankInventory.setSlot(1, -1, 0);
     assert.deepEqual(shortestPathBank(), [], "a real withdrawal while open still empties it");
 });
+
+
+test("bag stop leaves the legacy shop replay intact; explicit shop close clears it", async () => {
+    const { handleShopPayload } = await import("../network/serverConnection/domain/shop");
+    const { subscribeShop } = await import("../network/serverConnection/subscriptions/ui");
+    handleShopPayload({ kind: "open", shopId: "1222", name: "Lumbridge General Store",
+        currencyItemId: 995, stock: [{ slot: 0, itemId: 1931, quantity: 5,
+            priceEach: 1, sellPrice: 0, defaultQuantity: 5 }] });
+    handleInboundUi(decodeServerPacket(Uint8Array.of(56, 2, 4)));
+    const replay: any[] = [];
+    const end = subscribeShop(value => replay.push(value));
+    try {
+        assert.equal(replay[0].stock[0]?.itemId, 1931);
+        assert.equal(replay[0].stock[0]?.quantity, 5);
+        assert.equal(replay[0].stock[0]?.priceEach, 1);
+        handleShopPayload({ kind: "close", shopId: "1222" });
+        assert.equal(replay.at(-1).open, false);
+        assert.deepEqual(replay.at(-1).stock, []);
+    } finally { end(); handleShopPayload({ kind: "close" }); }
+});
+
+test("shop updates restore the registry after bag Check/bank snapshots and stop packets", async () => {
+    (globalThis as any).self = globalThis;
+    const { readFileSync } = await import("node:fs");
+    require.extensions[".glsl"] = (module, file) => { module.exports = readFileSync(file, "utf8"); };
+    for (const extension of [".png", ".jpg", ".webp"]) require.extensions[extension] = (module, file) => { module.exports = file; };
+    const { OsrsClient } = await import("../game/OsrsClient");
+    const stock = new Inventory(300), backpack = new Inventory(28), bank = new Inventory(1410);
+    backpack.setSlot(0, 11941, 1); bank.setSlot(0, 995, 100);
+    const inventories = new Map([[516, stock], [93, backpack], [95, bank]]);
+    const client: any = Object.assign(Object.create(OsrsClient.prototype), {
+        shopInventory: stock, cs2Vm: { context: { inventories } },
+    });
+    const publish = (itemId: number, quantity: number) =>
+        client.handleShopServerUpdate({ open: true, stock: [{ slot: 0, itemId, quantity }] });
+    publish(1931, 5);
+    for (const [itemId, quantity] of [[1931, 5], [1351, 10], [1931, 4]]) {
+        const bag = new Inventory(28);
+        bag.setSlot(0, 554, 7);
+        inventories.set(516, bag); // Actual run_script snapshot behavior on a capacity change.
+        stopInventoryTransmit(inventories, 516);
+        const before = getTransmitCycles().changedInvCount;
+        publish(itemId, quantity);
+        assert.equal(inventories.get(516), stock, "CS2 must query the populated shop container");
+        assert.equal(inventories.get(516)?.getSlot(0)?.itemId, itemId);
+        assert.equal(inventories.get(516)?.getSlot(0)?.quantity, quantity);
+        assert.equal(inventories.get(516)?.capacity, 300);
+        assert.equal(getTransmitCycles().changedInvCount, before + 1);
+        assert.equal(backpack.getSlot(0)?.itemId, 11941);
+        assert.equal(bank.getSlot(0)?.quantity, 100);
+        client.handleShopServerUpdate({ open: false });
+        assert.equal(stock.getSlot(0)?.itemId, -1);
+    }
+});

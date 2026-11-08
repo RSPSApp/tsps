@@ -2268,9 +2268,9 @@ export class PluginManager {
   }
 
   /**
-   * The valid, non-clashing option declarations of the plugins about to load. A malformed
-   * `config`, an invalid declaration or a key another owner (core or an earlier plugin)
-   * already declared is logged with console.error and dropped; the plugin still loads.
+   * The valid option declarations of the plugins about to load, in discovery order. A malformed
+   * `config`, an invalid declaration or a key core declares is logged with console.error and
+   * dropped; a key two plugins declare is logged and kept for both, and the first that loads owns it.
    */
   private static checkConfigDeclarations(
     candidates: PluginLoadCandidate[]
@@ -2301,13 +2301,20 @@ export class PluginManager {
           continue;
         }
         const existing = owners.get(key);
-        if (existing !== undefined) {
+        if (existing === "core") {
           console.error(
-            `[plugins] config key ${key} is declared by both ${existing} and ${candidate.pluginName}; ${candidate.pluginName}'s declaration is ignored`
+            `[plugins] config key ${key} is declared by both core and ${candidate.pluginName}; core owns it and ${candidate.pluginName}'s declaration is ignored`
           );
           continue;
         }
-        owners.set(key, candidate.pluginName);
+        if (existing !== undefined) {
+          // Not settled here: the first of the claimants that actually loads owns the key.
+          console.error(
+            `[plugins] config key ${key} is declared by both ${existing} and ${candidate.pluginName}; ${existing} is expected to own it, and ownership goes to the first of them that loads`
+          );
+        } else {
+          owners.set(key, candidate.pluginName);
+        }
         kept[key] = decl as ConfigOptionDeclaration;
       }
       accepted.set(candidate, kept);
@@ -2324,6 +2331,9 @@ export class PluginManager {
         continue;
       }
       for (const [key, decl] of Object.entries(declarations)) {
+        if (PluginManager.pluginConfigDeclarations.has(key)) {
+          continue; // an earlier loaded claimant owns it
+        }
         PluginManager.pluginConfigDeclarations.set(key, {
           owner: candidate.pluginName,
           decl,

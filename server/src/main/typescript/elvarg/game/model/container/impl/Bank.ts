@@ -618,6 +618,11 @@ export class Bank extends ItemContainer {
 
         if (fromInventory && targetGroup === Bank.SIDE_INTERFACE_ID && targetChild === Bank.SIDE_ITEMS_CHILD) {
             const inventory = player.getInventory();
+            // Both slots inside the backpack, as SwitchItemSlotPacketListener checks: the client's target is a
+            // 16-bit slot, and a swap past capacity() left the item outside the inventory and an empty slot behind.
+            const capacity = inventory.capacity();
+            if (!Number.isInteger(drag.sourceSlot) || !Number.isInteger(drag.targetSlot)
+                || drag.sourceSlot < 0 || drag.targetSlot < 0 || drag.sourceSlot >= capacity || drag.targetSlot >= capacity) return true;
             // Legacy slot-only requests omit the ID or use a negative/16-bit sentinel.
             if (drag.sourceItemId != null && drag.sourceItemId >= 0 && drag.sourceItemId !== 0xffff
                 && inventory.getItems()[drag.sourceSlot]?.getId() !== drag.sourceItemId) return true;

@@ -825,6 +825,18 @@ test("dragging within the bank's inventory panel swaps inventory slots", () => {
   assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [B, A]);
 });
 
+test("a bank inventory drag to a slot past the backpack moves nothing (live drags only reach 0-27)", () => {
+  const player = createPlayer();
+  player.getInventory().add(new Item(A, 1), false);
+  player.getInventory().add(new Item(B, 1), false);
+  for (const target of [28, 500, 65535, -1]) {
+    assert.equal(drag(player, SIDE_ITEMS, 0, A, SIDE_ITEMS, target), true, `target ${target} handled`);
+    assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [A, B], `target ${target}: nothing moved`);
+    assert.equal(player.getInventory().getItems().length, player.getInventory().capacity(), "no slot past the backpack");
+  }
+  assert.equal(player.getInventory().getFreeSlots(), player.getInventory().capacity() - 2, "the backpack still works");
+});
+
 test("bank inventory drags reject a stale source item ID and accept the updated ID", () => {
   const player = createPlayer();
   player.getInventory().add(new Item(A, 1), false);

@@ -1549,7 +1549,10 @@ const GATE_WALK_ANIMATION = 819;
 function carryAcrossGate(player, gate, y, z) {
   const [low, high] = gate.crossBetween;
   const here = player.getLocation();
-  const row = gate.crossRows.includes(here.getY()) ? here.getY() : y;
+  // A single-row gate crosses on that row whatever the clicked leaf's own y is: once the gate is
+  // open the leaf has swung off the passage, and following its y carried the opener along the fence.
+  const row = gate.crossRows.includes(here.getY()) ? here.getY()
+    : gate.crossRows.length === 1 ? gate.crossRows[0] : y;
   // A diagonal gate's two sides are not the two halves of x: a player standing north of the leaf
   // shares its x, so the gate says which side is which.
   const eastward = gate.eastwardFrom ? gate.eastwardFrom(here) : here.getX() < (low + high) / 2;

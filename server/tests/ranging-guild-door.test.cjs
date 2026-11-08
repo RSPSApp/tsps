@@ -112,6 +112,25 @@ test("the north approach enters too, not just the west one", (t) => {
   assert.equal(f.p.getLocation().getY(), INSIDE[1]);
 });
 
+test("a second opener on the north side crosses on the passage row", (t) => {
+  // Once the gate is open the leaf has swung to 2658,3439, off the passage row. Following the
+  // clicked leaf's y carried the second opener along the fence instead of through it.
+  const first = actor(t, OUTSIDE, 40);
+  const second = actor(t, [2657, 3439, 0], 40);
+  openDoor(first);
+  const leaf = MapObjects.getObjectsAt(new core.Location(2658, 3439, 0), null).find((o) => o.getId() === 11665);
+  assert.ok(leaf, "the open leaf is on the map");
+  PM.emitObjectInteraction({
+    player: second.p, object: leaf, objectId: 11665, definition: ObjectDefinition.forId(11665), clickType: 1,
+    location: { x: 2658, y: 3439, z: 0 },
+    sourceLocation: { x: second.p.getLocation().getX(), y: second.p.getLocation().getY(), z: 0 },
+    handled: false,
+  });
+  tick(second, 4);
+  assert.equal(second.p.getLocation().getX(), INSIDE[0], "carried to the inside tile");
+  assert.equal(second.p.getLocation().getY(), INSIDE[1], "on the passage row, not the leaf's");
+});
+
 test("a low-level follower cannot cross the open gate", (t) => {
   const leader = actor(t, OUTSIDE, 40);
   const follower = actor(t, [2656, 3438, 0], 1);

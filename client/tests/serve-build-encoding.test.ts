@@ -239,6 +239,14 @@ test("production static server negotiates optional compressed representations", 
             ["br;q=0.1, gzip;q=0.9", "gzip"], ["br;q=0.9, gzip;q=0.1", "br"],
             ["gzip, br", "br"], ["*;q=1", "br"],
             ["*;q=1, br;q=0", "gzip"], ["*;q=0, gzip;q=1", "gzip"],
+            ["x-gzip", "gzip"], ["x-gzip, identity;q=0", "gzip"],
+            ["X-GZip ; Q=0.500, identity;q=0", "gzip"],
+            ["x-gzip;q=0", undefined], ["x-gzip;q=0, br;q=1, identity;q=0", "br"],
+            ["*;q=1, br;q=0, x-gzip;q=0", undefined],
+            ["*;q=1, x-gzip;q=0", "br"],
+            ["gzip;q=0, x-gzip;q=1", "gzip"],
+            ["x-gzip;q=1, gzip;q=0", undefined],
+            ["x-gzip;q=0.1, br;q=0.9", "br"],
         ];
         // Await every independent subtest: a target red must not suppress later cases.
         for (const [accepts, expected] of cases) {

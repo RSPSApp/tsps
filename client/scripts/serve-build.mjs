@@ -144,8 +144,11 @@ function respond(req, res, status, headers, body) {
 function acceptedEncodings(header) {
     const weights = new Map();
     for (const entry of header.split(",")) {
-        const match = /^[ \t]*(br|gzip|\*)[ \t]*(?:;[ \t]*q[ \t]*=[ \t]*(0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)[ \t]*)?$/i.exec(entry);
-        if (match) weights.set(match[1].toLowerCase(), match[2] === undefined ? 1 : Number(match[2]));
+        const match = /^[ \t]*(br|gzip|x-gzip|\*)[ \t]*(?:;[ \t]*q[ \t]*=[ \t]*(0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)[ \t]*)?$/i.exec(entry);
+        if (match) {
+            const coding = match[1].toLowerCase();
+            weights.set(coding === "x-gzip" ? "gzip" : coding, match[2] === undefined ? 1 : Number(match[2]));
+        }
     }
     return [["br", ".br"], ["gzip", ".gz"]]
         .map(([encoding, suffix]) => ({

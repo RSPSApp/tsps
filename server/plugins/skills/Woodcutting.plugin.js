@@ -961,6 +961,10 @@ function maybeDropBirdNest(player) {
   if (!player) {
     return false;
   }
+  // Wiki (Bird nest): "Free players won't see them while woodcutting." Members only, as the felling rations are.
+  // (A fixture with no core has no world to ask, as choppingAxeEligible allows.)
+  const worlds = pluginApi?.core?.WorldDefinition;
+  if (worlds && !worlds.isMembersWorld()) return false;
   // Content may make nests commoner ("woodcutting:nest-chance", a league fragment): `multiplier` times.
   const boost = { player, multiplier: 1 };
   pluginApi?.emitCustomEvent("woodcutting:nest-chance", boost);

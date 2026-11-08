@@ -47,6 +47,8 @@ test("audited ordinary shears and crossbow tiles retain source quantity, plane a
 });
 
 const MEMBER_RUNES=[
+ [554,2768,3500,1,100,2],[554,1450,10099,0,100,1],[554,1421,10096,0,100,1],
+ [554,1419,10062,0,100,1],[554,1454,10063,0,100,1],
  [557,1394,3116,0,100,4],[557,1385,3119,0,100,4],
  [558,1392,3118,0,100,2],[558,1399,3123,0,100,2],[558,1388,3110,0,100,2],
 ];
@@ -77,13 +79,13 @@ for(const membersWorld of[true,false])test("actual audited member definitions lo
  assert.ok(items.some(p=>p.getItem().getId()===1735&&p.getPosition().getX()===3152&&p.getPosition().getY()===3306),"existing F2P shears retained");
 });
 
-test("five audited member rune definitions use exact native IDs/tiles/amounts without adding the held Air row",()=>{
+test("ten audited member rune definitions use exact native IDs/tiles/amounts without adding the held Air row",()=>{
  for(const[id,x,y,z,timer,amount]of MEMBER_RUNES){
   const found=spawns.filter(s=>s.id===id&&s.location.x===x&&s.location.y===y&&s.location.z===z);
   assert.equal(found.length,1,"member rune "+id+"@"+x+","+y);
   assert.equal(found[0].members,true);assert.equal(found[0].amt,amount);assert.equal(found[0].respawn,timer);
-  assert.equal(CacheDefinitions.getItem(id).name,id===557?"Earth rune":"Mind rune");
+  assert.equal(CacheDefinitions.getItem(id).name,id===554?"Fire rune":id===557?"Earth rune":"Mind rune");
  }
  assert.equal(spawns.some(s=>s.id===556&&s.location.x===1399&&s.location.y===3158&&s.location.z===0),false);
- assert.equal(spawns.filter(s=>[556,557,558,554,561].includes(s.id)&&s.members===true).length,5,"no Air/Fire/Nature member scope expansion");
+ assert.equal(spawns.filter(s=>[556,557,558,554].includes(s.id)&&s.members===true).length,10,"no Air member scope expansion");
 });

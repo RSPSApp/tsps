@@ -78,6 +78,7 @@ module.exports = function registerTouristTrapQuest(api) {
   const FEMALE_SLAVE_SPOKEN_VARIANT = "overhead-dialogue-when-spoken-to";
   const MINE_GUARD_NPC_IDS = new Set([4660, 4661, 4662, 4663, 4664, 4665, 4666, 4667, 4668, 4669, 4678]);
   const MERCENARY_CAPTAIN_NPC_ID = NpcIdentifiers.MERCENARY_CAPTAIN;
+  const CAPTAIN_ATTACK_ACTION_ID = "elFnbt";
   const MERCENARY_GUARD_NPC_IDS = new Set([4656, 4657, 4658, 4659]);
   const CAPTAIN_SIAD_NPC_ID = NpcIdentifiers.CAPTAIN_SIAD;
   const AL_SHABIM_NPC_ID = NpcIdentifiers.AL_SHABIM;
@@ -517,6 +518,15 @@ module.exports = function registerTouristTrapQuest(api) {
 
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    if (stepId === CAPTAIN_ATTACK_ACTION_ID) {
+      if (npcId !== MERCENARY_CAPTAIN_NPC_ID || stageOf(player) < STAGE_STARTED
+        || !event.npc?.isRegistered?.()) return;
+      event.handled = true;
+      event.end = true;
+      player.getPacketSender().sendInterfaceRemoval();
+      event.npc.getCombat().attack(player);
+      return;
+    }
     if (stepId === GIVE_KEY_MESSAGE_ID) {
       if (!IRENA_NPC_IDS.has(npcId)) return;
       if (held(player, WROUGHT_IRON_KEY_ITEM_ID)) return;
@@ -628,13 +638,7 @@ module.exports = function registerTouristTrapQuest(api) {
     }
     if (event.npcId !== MERCENARY_CAPTAIN_NPC_ID) return;
     if (stageOf(killer) < STAGE_STARTED) return;
-    if (!held(killer, METAL_KEY_ITEM_ID)) {
-      if (!giveItem(killer, METAL_KEY_ITEM_ID)) {
-        killer.sendMessage("The mercenary captain drops a metal key, but you have no space to pick it up.");
-        return;
-      }
-      killer.sendMessage("The mercenary captain drops a metal key. You pick it up.");
-    }
+    // The Wiki-backed NpcDrops table owns the captain's ground key, even with a full bag.
     advance(killer, STAGE_METAL_KEY);
   }
 

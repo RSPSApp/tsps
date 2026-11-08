@@ -3239,3 +3239,46 @@ test('the parked owner leaving ends the control: the bot is released and the con
   if (queued) World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(owner), 1);
   assert.equal(queued, false, 'and its close does not queue the removed owner again');
 });
+
+// Follow-up (#3676): the rest of what a player's client is sent, and a WebRTC client counted as one.
+test('a controlled bot is told game messages and shown ground items; an unattended bot is not', (t) => {
+  const { ItemOnGround, State } = require('../dist/game/entity/impl/grounditem/ItemOnGround');
+  const { ItemOnGroundManager, OperationType } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
+  const { Item } = require('../dist/game/model/Item');
+  for (const watched of [true, false]) {
+    const at = new Location(3200, 3200);
+    const bot = watchedBot(t, `told-${watched}`, at, watched);
+    const frames = [];
+    t.mock.method(bot.getSession(), 'sendClientPacket', (frame) => { frames.push(frame); return true; });
+    bot.sendMessage(`Controlling ${bot.getDisplayName()}.`);
+    assert.equal(frames.length > 0, watched, `${watched ? 'controlled' : 'unattended'}: the game message`);
+    let created = 0;
+    t.mock.method(bot.getPacketSender(), 'createGroundItem', () => { created++; return bot.getPacketSender(); });
+    const coins = new ItemOnGround(State.SEEN_BY_EVERYONE, undefined, at.clone(), new Item(995, 10), true, -1, null);
+    ItemOnGroundManager.performPlayer(bot, coins, OperationType.CREATE);
+    assert.equal(created, watched ? 1 : 0, `${watched ? 'controlled' : 'unattended'}: the ground item`);
+  }
+});
+
+test('a controlled bot is sent the tick clock and poison orb each turn; an unattended bot is not', (t) => {
+  for (const watched of [true, false]) {
+    const bot = watchedBot(t, `clock-${watched}`, new Location(3200, 3200), watched);
+    let clocks = 0;
+    let orbs = 0;
+    t.mock.method(bot, 'sendMapClock', () => { clocks++; });
+    t.mock.method(bot, 'syncPoisonOrb', () => { orbs++; });
+    bot.process();
+    assert.deepEqual([clocks, orbs], watched ? [1, 1] : [0, 0], watched ? 'controlled' : 'unattended');
+  }
+});
+
+test('a WebRTC client is a real client: a bot driven over it is watched', (t) => {
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  for (const kind of ['websocket', 'tcp', 'webrtc']) {
+    assert.equal(new PlayerSession({ kind, readyState: 1, send() {} }).hasNetworkClient(), true, kind);
+  }
+  assert.equal(new PlayerSession({ kind: 'headless', readyState: 1, send() {} }).hasNetworkClient(), false, 'headless');
+  const bot = watchedBot(t, 'webrtc-driven', new Location(3200, 3200), true);
+  bot.setSession(new PlayerSession({ kind: 'webrtc', readyState: 1, send() {} }));
+  assert.equal(bot.isUnwatchedBot(), false, 'the admin on WebRTC is watching');
+});

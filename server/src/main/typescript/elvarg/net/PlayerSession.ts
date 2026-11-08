@@ -170,8 +170,9 @@ export class PlayerSession {
     this.player = player;
   }
 
+  /** A real client is on the other end: a websocket, TCP or WebRTC data channel (not a bot's or headless one). */
   public hasNetworkClient(): boolean {
-    return this.channel.kind === "websocket" || this.channel.kind === "tcp";
+    return this.channel.kind === "websocket" || this.channel.kind === "tcp" || this.channel.kind === "webrtc";
   }
 
   public getChannel(): SessionChannel {

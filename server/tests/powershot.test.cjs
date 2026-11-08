@@ -84,7 +84,7 @@ test('Powershot remains guaranteed accurate even when its damage roll is zero', 
 });
 
 for (const weapon of [Items.MAGIC_LONGBOW, Items.MAGIC_COMP_BOW]) {
-  // RSProx 4017/4031: bow draw 426, spotanim 250 (slot 1, height 96), projectile 249 from 41
+  // RSProx 1698/2967 (draw, not a recorded magic longbow wielder) and 4031 (timing): bow draw 426, spotanim 250 (slot 1, height 96), projectile 249 from 41
   // to 46 + 5 per tile at angle 15, progress 11 - not the arrow's own draw graphic and flight.
   test(`Powershot (${weapon}) plays the glow-arrow launch graphic and projectile`, t => {
     const attacker = fighter(t, 3100), target = fighter(t, 3104);

@@ -4,8 +4,8 @@ module.exports = function registerMagicLongbowSpecialAttack(api) {
   const DRAIN = 35;
   const RANGED_STRENGTH_BONUS_INDEX = 11;
 
-  // RSProx 4017 and 4031 (players wielding a magic longbow): Powershot plays the normal bow
-  // draw (426) with the glowing arrow's launch spotanim (sp_attack_glow_arrow_launch, 250) in
+  // RSProx 1698 and 2967 (draw: NPC archer / other bows, not a recorded magic longbow
+  // wielder) and 4031 (projectile timing): Powershot plays the normal bow draw (426) with the glowing arrow's launch spotanim (sp_attack_glow_arrow_launch, 250) in
   // slot 1 at height 96, and fires projectile 249 (sp_attack_glow_arrow_travel) from 41 to
   // 46 + 5 per tile, heights 163/146 quarter-units (40.75/36.5), angle 15, progress 11. The
   // shot replaces the ammunition's own draw graphic and projectile.

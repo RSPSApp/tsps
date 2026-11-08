@@ -7,6 +7,7 @@ import { PendingHit } from "../../hit/PendingHit";
 import { Mobile } from "../../../../entity/impl/Mobile";
 import { Animation } from "../../../../model/Animation";
 import { Graphic } from "../../../../model/Graphic";
+import { GraphicHeight } from "../../../../model/GraphicHeight";
 import { Projectile } from "../../../../model/Projectile";
 import { CrossFloor } from "../../../../CrossFloor";
 import { Sound } from "../../../../Sound";
@@ -123,6 +124,12 @@ export class RangedCombatMethod extends CombatMethod {
             // at least visible.
             const configured = character.getAsNpc().getCurrentDefinition().getProjectileId();
             const projectileId = configured >= 0 ? configured : RangedCombatMethod.DEFAULT_NPC_PROJECTILE;
+            // An archer draws the arrow on its bow on the shot's tick (#3610). Only npcs whose
+            // draw spotanim was captured carry one (npc-combat-defs.json `launchGraphic`).
+            const launchGraphic = character.getAsNpc().getCurrentDefinition().getLaunchGraphicId();
+            if (launchGraphic >= 0) {
+                character.performGraphic(new Graphic(launchGraphic, 0, GraphicHeight.ARCHER_DRAW));
+            }
             const end = RangedCombatMethod.npcProjectileEnd(character, target);
             Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end, 43, 31).sendProjectile();
             return;

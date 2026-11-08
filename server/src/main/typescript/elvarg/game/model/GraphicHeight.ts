@@ -6,4 +6,6 @@ export enum GraphicHeight {
      * 92 also observed on the standard teleport casting swirl (111). */
     SURGE_CAST = 92,
     SURGE_IMPACT = 124,
+    /** Captured on every archer's arrow-draw spotanim (rsprox 1579, 4101, 470-476, ...). */
+    ARCHER_DRAW = 96,
 }

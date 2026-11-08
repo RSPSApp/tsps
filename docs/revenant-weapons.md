@@ -17,7 +17,7 @@
 - Each attack spends one ether, hit or miss, in or out of the Wilderness. The chainmaces spend it as the swing starts; Craw's bow as the shot is paid.
 - Emptied, a weapon stays activated. A chainmace then swings as an ordinary mace. Craw's bow needs no arrows but cannot fire without ether: "There is not enough revenant ether left powering your bow."
 - **Passive:** charged, +50% accuracy and +50% damage against NPCs in the Wilderness. It does not apply to players. The last ether still gives the attack it paid for the passive.
-- The passive is applied after the other bonuses. The Wiki's stacking rules with a Slayer helmet or a Salve amulet (and that the two do not combine) are not modelled.
+- The passive multiplies the applicable Salve bonus. A Salve bonus and Slayer helmet bonus do not combine. For Craw's bow with an imbued Slayer helmet on task, damage adds the 50% weapon boost to the 15% task boost (33/20 total); accuracy still multiplies them. This ordering follows the [Wiki DPS calculator](https://github.com/weirdgloop/osrs-dps-calc/blob/701b2dac5264756a31b08bb3ef8e41907b3925de/src/lib/PlayerVsNPCCalc.ts). Plain/enchanted Salves affect melee; only their imbued variants also affect Ranged and Magic.
 
 ## Death
 Dying to a player in the Wilderness drops all the ether to the killer even when the weapon is protected, and the weapon comes back uncharged.

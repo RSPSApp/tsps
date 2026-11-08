@@ -15,6 +15,13 @@
  * hook, the item hand-ins/recoveries, the Rune Essence teleport and the quest
  * completion.
  */
+const RUNECRAFT_EXPERIENCE = 500;
+
+function grantRunecraftExperience(api, player, _quest, options = {}) {
+  if (options.experience === false) return;
+  player.getSkillManager().addExperiences(api.core.Skill.RUNECRAFTING, RUNECRAFT_EXPERIENCE);
+}
+
 module.exports = function registerRuneMysteriesQuest(api) {
   const { Animation, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
@@ -475,6 +482,8 @@ module.exports = function registerRuneMysteriesQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    xpRewards: [{ amount: RUNECRAFT_EXPERIENCE, label: "Runecraft" }],
+    onReward: grantRunecraftExperience.bind(null, api),
     completionJingleId: 154,
     rewardItemId: AIR_TALISMAN_ITEM_ID,
     rewardItemLabel: "An Air Talisman",

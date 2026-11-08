@@ -164,6 +164,23 @@ Sources: Wiki [Cave horror](https://oldschool.runescape.wiki/w/Cave_horror),
 - **Not built:** the Wiki says the scream also hits players standing beside the horror who are not
   already in combat with it; no capture shows it. Cave abominations are not covered.
 
+### Protective gear
+
+`slayer-gear.json` lists the monsters that punish a player who lacks their protection. An
+unprotected hit always lands (and goes through protection prayers where the Wiki says so), takes
+the monster's unprotected damage and drains the listed stats.
+
+- **Slayer helmets:** every recolour and imbued form protects like the plain helmet; the Wiki
+  calls the recolours purely cosmetic (Wiki, Slayer helmet).
+- **Sourhog** (Wiki, Sourhog): without reinforced goggles or a Slayer helmet its caustic saliva hits
+  for 20-30, drains current Attack and Defence by 90% and the player shouts "Argh! My eyes!". Protected,
+  its max hit is 6.
+- **Fever spider** (Wiki, Fever spider): without Slayer gloves it hits for 12.5% of the Hitpoints
+  level (the infobox's 1-12). Not done: the disease it also gives (Wiki, Disease: an 8 hitsplat that
+  falls by 1 every 1.5 minutes, draining a skill every 18 seconds) because player disease is not
+  modelled and the Wiki lists no messages for it. No recording shows an unprotected sourhog or
+  fever spider hit.
+
 ### Bracelet of slaughter
 
 [Wiki mechanics](https://oldschool.runescape.wiki/w/Bracelet_of_slaughter): while item

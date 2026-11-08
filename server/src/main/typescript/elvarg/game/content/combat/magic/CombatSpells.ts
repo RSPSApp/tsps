@@ -938,16 +938,13 @@ export class CombatSpells {
             return new Graphic(329);
         },
         maximumHit() {
-            return 19;
+            return 10; // Magic / 10 and the Slayer's staff (e) are added by plugins/items/SlayersStaff.plugin.js.
         },
         startGraphic() {
             return null; // None live; 327 is the Slayer salt sprinkle.
         },
         baseExperience() {
             return 30;
-        },
-        equipmentRequired(player) {
-            return [new Item(4170)];
         },
         itemsRequired(player) {
             return [new Item(558, 4), new Item(560, 1)];

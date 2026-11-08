@@ -77,6 +77,38 @@ function player() {
   p.getPacketSender = () => proxy;
   return p;
 }
+// Registered completion UNIT with player/API stand-ins; completion scroll is suppressed.
+test('Rune Mysteries completion grants 500 base Runecraft experience once', () => {
+  const q = register('RuneMysteries', 'rune_mysteries'), p = player();
+  const { QUEST_POINTS_ATTRIBUTE } = require('../plugins/quests/QuestRuntime');
+  assert.equal(q.quest.getStage(p), 0);
+  assert.equal(q.quest.isComplete(p), false);
+  assert.deepEqual(p.xp, []);
+  assert.equal(p.items.get(I.AIR_TALISMAN), undefined);
+  assert.equal(q.quest.complete(p, { scroll: false }), true);
+  // Positive controls precede the target assertion to expose a broken fixture/grant path.
+  assert.equal(q.quest.isComplete(p), true);
+  assert.equal(p.getAttribute(QUEST_POINTS_ATTRIBUTE), 1);
+  assert.equal(p.items.get(I.AIR_TALISMAN), 1);
+  assert.equal(p.messages.some(text => text.includes("Congratulations, you've completed a quest")), true);
+  const expected = [[core.Skill.RUNECRAFTING.getIndex(), 500]];
+  assert.deepEqual(p.xp, expected, 'registered completion grants 500 base Runecraft XP');
+  assert.equal(q.quest.complete(p, { scroll: false }), false);
+  assert.deepEqual(p.xp, expected, 'completion does not pay twice');
+  assert.equal(p.items.get(I.AIR_TALISMAN), 1);
+  assert.equal(p.getAttribute(QUEST_POINTS_ATTRIBUTE), 1);
+});
+
+test('Rune Mysteries completion respects experience withholding', () => {
+  const q = register('RuneMysteries', 'rune_mysteries'), p = player();
+  assert.equal(q.quest.complete(p, { experience: false, scroll: false }), true);
+  assert.equal(q.quest.experienceWithheld(p), true);
+  assert.equal(p.items.get(I.AIR_TALISMAN), 1);
+  assert.deepEqual(p.xp, []);
+  assert.equal(q.quest.complete(p, { scroll: false }), false);
+  assert.deepEqual(p.xp, []);
+});
+
 
 test('Restless Ghost dispatches the QH pre-quest, amulet-recovery and post-quest branches', () => {
   const q = register('RestlessGhost', 'the_restless_ghost'), p = player();

@@ -502,6 +502,87 @@ test("protective gear: a dust devil hits a bare face for 16 and drains", () => {
   assert.equal(Equipment.protectedFrom(helmet, Equipment.GEAR.monsters[0]), true, "a Slayer helmet covers earmuffs");
 });
 
+test("every recolour of the Slayer helmet protects like the plain one", () => {
+  const ids = core.ItemIdentifiers;
+  const banshee = Equipment.GEAR.monsters[0];
+  for (const id of [ids.RED_SLAYER_HELMET, ids.RED_SLAYER_HELMET_I_, ids.HYDRA_SLAYER_HELMET]) {
+    assert.equal(Equipment.protectedFrom(equip(createPlayer(), { 0: id }), banshee), true, `item ${id}`);
+  }
+  assert.equal(Equipment.protectedFrom(equip(createPlayer(), { 0: 4164 }), banshee), false, "a facemask is no earmuffs");
+});
+
+function gearVictim(slots, hitpoints = 99) {
+  const current = new Map([["ATTACK", 99], ["DEFENCE", 99], ["STRENGTH", 99]]);
+  const player = equip(createPlayer(), slots);
+  player.isNpc = () => false;
+  const said = [];
+  player.forceChat = (text) => said.push(text);
+  player.said = said;
+  player.current = current;
+  player.getSkillManager = () => ({
+    getMaxLevel: (skill) => (skill === Skill.HITPOINTS ? hitpoints : 99),
+    getCurrentLevel: (skill) => current.get(skill.getName?.().toUpperCase?.()) ?? 99,
+    setCurrentLevel: (skill, level) => current.set(skill.getName?.().toUpperCase?.(), level),
+  });
+  return player;
+}
+
+function landedHit(monsterName, player) {
+  const monster = npcNamed(monsterName);
+  monster.isPlayer = () => false;
+  const roll = { attacker: monster, target: player, forceAccurate: false };
+  Equipment.hitRoll(roll);
+  const damage = { value: 2, setDamage(v) { this.value = v; } };
+  Equipment.incomingDamage(player, damage, { attacker: monster });
+  Equipment.hitResolved({ attacker: monster, target: player });
+  return { roll, damage: damage.value };
+}
+
+test("a sourhog without reinforced goggles hits 20-30, drains Attack and Defence by 90% and the player shouts", () => {
+  const player = gearVictim({});
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) {
+    const { roll, damage } = landedHit("Sourhog", gearVictim({}));
+    assert.equal(roll.forceAccurate, true);
+    seen.add(damage);
+  }
+  assert.ok([...seen].every((damage) => damage >= 20 && damage <= 30) && seen.size > 1, [...seen].join());
+  landedHit("Sourhog", player);
+  assert.equal(player.current.get("ATTACK"), 10);
+  assert.equal(player.current.get("DEFENCE"), 10);
+  assert.equal(player.current.get("STRENGTH"), 99, "only Attack and Defence drain");
+  assert.equal(player.said[0], "Argh! My eyes!");
+  for (const slots of [{ 0: core.ItemIdentifiers.REINFORCED_GOGGLES }, { 0: core.ItemIdentifiers.RED_SLAYER_HELMET_I_ }]) {
+    const safe = gearVictim(slots);
+    const { roll, damage } = landedHit("Sourhog", safe);
+    assert.equal(roll.forceAccurate, false);
+    assert.equal(damage, 2);
+    assert.equal(safe.current.get("ATTACK"), 99);
+    assert.deepEqual(safe.said, []);
+  }
+});
+
+test("a sourhog drains 90% of the current level, boosted or already drained", () => {
+  const boosted = gearVictim({});
+  boosted.current.set("ATTACK", 118);
+  landedHit("Sourhog", boosted);
+  assert.equal(boosted.current.get("ATTACK"), 12, "118 - floor(118 * 0.9)");
+  const drained = gearVictim({});
+  drained.current.set("DEFENCE", 10);
+  landedHit("Sourhog", drained);
+  assert.equal(drained.current.get("DEFENCE"), 1, "10 - 9");
+});
+
+test("a fever spider without Slayer gloves hits for 12.5% of the Hitpoints level", () => {
+  const bare = gearVictim({}, 99);
+  assert.equal(landedHit("Fever spider", bare).damage, 12);
+  assert.equal(landedHit("Fever spider", gearVictim({}, 10)).damage, 1);
+  const gloved = gearVictim({ 9: core.ItemIdentifiers.SLAYER_GLOVES_2 });
+  const { roll, damage } = landedHit("Fever spider", gloved);
+  assert.equal(roll.forceAccurate, false);
+  assert.equal(damage, 2);
+});
+
 test("kurask only take damage from leaf-bladed weapons", () => {
   const kurask = npcNamed("Kurask");
   const hitWith = (weapon) => {

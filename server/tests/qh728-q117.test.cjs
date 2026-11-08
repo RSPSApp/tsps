@@ -119,6 +119,7 @@ function harness() {
   const variants = [];
   const conditions = [];
   const objectHooks = [];
+  const npcHooks = [];
   const deathHooks = [];
   const loginHooks = [];
   const transcripts = [];
@@ -131,6 +132,7 @@ function harness() {
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
     onObjectInteraction: (handler) => objectHooks.push(handler),
+    onNpcInteraction: (name, handlers) => npcHooks.push({ name, handlers }),
     onNpcDeath: (handler) => deathHooks.push(handler),
     onPlayerLogin: (handler) => loginHooks.push(handler),
     onPlayerLogout: handler => logoutHooks.push(handler),
@@ -166,7 +168,7 @@ function harness() {
     runtime.startTranscript = originalStart;
   }
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'tree_gnome_village');
-  return { api,tasks,events, variants, conditions, objectHooks, deathHooks, loginHooks, transcripts, groundItems, spawned, logoutHooks, quest };
+  return { npcHooks,api,tasks,events, variants, conditions, objectHooks, deathHooks, loginHooks, transcripts, groundItems, spawned, logoutHooks, quest };
 }
 
 function emit(h, name, event) {
@@ -242,7 +244,9 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
   assert.equal(p.configs.get(VARP), 1, 'stage 1 is transmitted on varp 111');
   assert.equal(p.varbits.get(VARBIT_ORBS), 0);
   assert.equal(p.varbits.get(VARBIT_TRACKER_H), 0);
-  assert.equal(p.getLocation().x, 2504, 'the start transcript guides the player out of the maze');
+  assert.equal(p.getLocation().x, 2541, 'acceptance leaves Bolren talking inside the village');
+  action(h, p, N.KING_BOLREN, 'GnZ1Sn');
+  assert.equal(p.getLocation().x, 2504, 'the final guide-out message moves the player');
 
   assert.equal(variant(h, p, N.COMMANDER_MONTAI).variant, 'battlefield-commander-montai');
   choose(h, p, N.COMMANDER_MONTAI, "Ok, I'll gather some wood.");
@@ -287,7 +291,8 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
 
   object(h, p, 2185, 'Climb-over');
   assert.equal(p.getLocation().y, 3254);
-  object(h, p, 2183, 'Open');
+  assert.equal(object(h, p, 2183, 'Open').handled, false, 'shared chest handler opens the closed loc');
+  object(h, p, 2182, 'Search');
   assert.deepEqual(h.transcripts.at(-1), {
     npcId: N.KHAZARD_COMMANDER, page: PAGE,
     variant: 'into-the-stronghold-upon-opening-the-chest-containing-the-orb-of-protection',
@@ -361,7 +366,7 @@ test('lost first orb is recoverable from the chest and a full bag drops it on th
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 6);
-  object(h, p, 2183, 'Open');
+  object(h, p, 2182, 'Search');
   action(h, p, N.KHAZARD_COMMANDER, 'PatYnA');
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION), 1, 'the lost orb comes back from the chest');
 
@@ -653,4 +658,131 @@ test('missing ceremony cohort or cancelled overhead cannot consume orbs or compl
   for(let i=0;i<12;i++)cancelled.tick();
   assert.equal(cancelled.h.quest.getStage(cancelled.p),8);assert.equal(cancelled.p.getInventory().getAmount(I.ORBS_OF_PROTECTION),1);
   assert.equal(cancelled.p.getInventory().getAmount(I.GNOME_AMULET),0);
+});
+
+test('guide-out action waits for its canonical message and ignores other actors/stages', () => {
+  const h = harness(), p = makePlayer();
+  emit(h, 'npc-dialogue:hook', {player:p,npcId:N.KING_BOLREN,hook:'quest:tree-gnome-village:start'});
+  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2541,3170]);
+  action(h,p,N.ELKOY,'GnZ1Sn');
+  assert.equal(p.getLocation().x,2541);
+  h.quest.setStage(p,2);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn');
+  assert.equal(p.getLocation().x,2541);
+  h.quest.setStage(p,1);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn');
+  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2504,3191]);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn');
+  assert.equal(h.quest.getStage(p),1);
+});
+
+test('cached Elkoy Follow uses the dialogue shortcut in both directions after starting', () => {
+  const h=harness(),p=makePlayer();
+  const follow=h.npcHooks.find(hook=>hook.name==='Elkoy').handlers.Follow;
+  assert.ok(CacheDefinitions.getNpc(N.ELKOY_2).actions.includes('Follow'));
+  assert.ok(!CacheDefinitions.getNpc(N.ELKOY).actions.includes('Follow'));
+  follow({player:p,npcId:ELKOY_OUTSIDE});
+  assert.equal(p.getLocation().x,2541,'no shortcut before starting');
+  h.quest.setStage(p,1);
+  follow({player:p,npcId:N.KING_BOLREN});
+  assert.equal(p.getLocation().x,2541,'unrelated NPC cannot guide');
+  follow({player:p,npcId:N.ELKOY_2});
+  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2504,3191]);
+  follow({player:p,npcId:ELKOY_OUTSIDE});
+  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2515,3159]);
+  assert.equal(h.quest.getStage(p),1);
+});
+
+test('closed chest opening falls through without an orb; only open Search starts the reward', () => {
+  const h=harness(),p=makePlayer();
+  h.quest.setStage(p,5);
+  assert.equal(object(h,p,2183,'Open').handled,false);
+  assert.equal(object(h,p,2183,'Search').handled,false,'closed loc has no Search');
+  assert.equal(object(h,p,2182,'Open').handled,false,'open loc has no Open');
+  assert.equal(h.transcripts.length,0);
+  assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION),0);
+  assert.equal(object(h,p,2182,'Search').handled,true);
+  assert.equal(h.transcripts.length,1);
+  action(h,p,N.KHAZARD_COMMANDER,'PatYnA');
+  object(h,p,2182,'Search');
+  assert.equal(h.transcripts.length,1,'a second search cannot repeat the reward');
+  assert.equal(p.messages.at(-1),'The chest is empty.');
+  assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION),1);
+});
+
+test('the closed stronghold door keeps the canonical outside lock at every quest stage', () => {
+  const h=harness(), p=makePlayer();
+  const at=new core.Location(2502,3250,0);
+  const closed=new core.GameObject(core.ObjectIdentifiers.DOOR_67,at,0,1,null);
+  for (const stage of [0,1,4,5,6,7,8,9]) {
+    h.quest.setStage(p,stage);
+    p.setLocation(2502,3250);
+    const event={player:p,object:closed,objectId:closed.getId(),handled:false};
+    emit(h,'door:toggle',event);
+    assert.equal(event.handled,true);
+    assert.equal(h.transcripts.at(-1).variant,'into-the-stronghold-opening-the-stronghold-door-from-the-outside');
+    assert.equal(h.quest.getStage(p),stage);
+  }
+  const count=h.transcripts.length;
+  for (const object of [
+    new core.GameObject(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3251,0),0,2,null),
+    new core.GameObject(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,1),0,1,null),
+    new core.GameObject(core.ObjectIdentifiers.DOOR_3,at,0,1,null),
+  ]) {
+    const event={player:p,object,objectId:object.getId(),handled:false};
+    emit(h,'door:toggle',event);
+    assert.equal(event.handled,false,'open pose, other plane and other door keep ordinary handling');
+  }
+  p.setLocation(2502,3251);
+  const inside={player:p,object:closed,objectId:closed.getId(),handled:false};
+  emit(h,'door:toggle',inside);
+  assert.equal(inside.handled,false);
+  assert.equal(h.transcripts.length,count);
+});
+
+test('stronghold door uses the existing shared swing, passage both ways and close collision', () => {
+  const {RegionManager}=require('../dist/game/collision/RegionManager');
+  const {ObjectManager}=require('../dist/game/entity/impl/object/ObjectManager');
+  const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+  if(RegionManager.regions.size===0)RegionManager.init();
+  RegionManager.loadMapFiles(2502,3250);
+  const h=harness(),p=makePlayer(),tasks=[],names=new Map();
+  h.quest.setStage(p,6);
+  require('../plugins/objects/Doors.plugin').register({
+    core:{...core,ObjectManager,MapObjects,Sounds:{sendSound(){}},TaskManager:{
+      submit(task){task.setRunning(true);tasks.push(task);},
+      cancelTasks(key){for(const task of tasks)if(task.key===key)task.stop();},
+    }},
+    onObjectInteraction:(name,handlers)=>names.set(name,handlers),
+    onRegionLoaded(){},onServerStartup(){},onObjectRoute(){},
+    onCustomEvent:h.api.onCustomEvent,emitCustomEvent:h.api.emitCustomEvent,
+  });
+  const canCross=()=>[
+    RegionManager.canMove(2502,3250,2502,3251,0,1,1,null),
+    RegionManager.canMove(2502,3251,2502,3250,0,1,1,null),
+  ];
+  const click=object=>names.get('Door').Open({player:p,object,objectId:object.getId(),
+    definition:core.ObjectDefinition.forId(object.getId()),location:{
+      x:object.getLocation().getX(),y:object.getLocation().getY(),z:0},clickType:1});
+  const closed=MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null);
+  assert.ok(closed,'active-cache physical door exists');
+  assert.equal(closed.getFace(),1);
+  assert.deepEqual(canCross(),[false,false]);
+  p.setLocation(2502,3251);
+  assert.equal(click(closed),true,'inside Open uses shared door handler');
+  const opened=MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3251,0),null);
+  assert.ok(opened,'ordinary shared swing retains the same loc ID');
+  assert.equal(opened.getFace(),2);
+  assert.deepEqual(canCross(),[true,true],'ordinary exit and return are walkable');
+  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2502,3251],'Open never teleports the player');
+  assert.equal(tasks.length,1,'uses the existing shared close lifecycle');
+  p.setLocation(2502,3250);
+  assert.equal(click(opened),true,'outside can close the already-open ordinary leaf');
+  assert.deepEqual(canCross(),[false,false]);
+  assert.equal(MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null)?.getFace(),1);
+  const count=h.transcripts.length;
+  click(closed);
+  assert.equal(h.transcripts.length,count+1,'restored closed door is locked from outside again');
+  assert.deepEqual(canCross(),[false,false]);
+  assert.equal(h.quest.getStage(p),6);
 });

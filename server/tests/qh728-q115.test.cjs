@@ -340,6 +340,37 @@ test('the gate and mine door only let a keyed, dressed player through', () => {
   assert.ok(p.moves.length > 0, 'the mine door moves the player underground');
 });
 
+test('both mine exits return to the mine front and preserve exit-stage and entry-disguise rules', () => {
+  const h = harness();
+  for (const objectId of [2690, 2691]) {
+    for (const initialStage of [7, 8, 9, 11, 12]) {
+      const p = makePlayer();
+      seedStage(h, p, initialStage);
+      p.setLocation(3279, 9427);
+      const event = object(h, 'Mine door entrance', 'Open', { player: p, objectId, handled: false });
+      assert.equal(event.handled, true);
+      assert.deepEqual(p.moves.at(-1), [3301, 3036, 0]);
+      assert.notDeepEqual(p.moves.at(-1), [3279, 3029, 0], 'exit is not the camp-gate landing');
+      assert.equal(stage(h, p), initialStage >= 8 && initialStage < 12 ? Math.max(initialStage, 9) : initialStage);
+    }
+  }
+  for (const objectId of [2675, 2676]) {
+    const p = makePlayer();
+    seedStage(h, p, 2);
+    p.setLocation(3301, 3036);
+    object(h, 'Mine door entrance', 'Open', { player: p, objectId, handled: false });
+    assert.equal(p.moves.length, 0);
+    assert.equal(stage(h, p), 2);
+    assert.ok(p.messages.includes('Only slaves may go down there.'));
+    p.equip(core.ItemIdentifiers.SLAVE_SHIRT, E.BODY_SLOT);
+    p.equip(core.ItemIdentifiers.SLAVE_ROBE, E.LEG_SLOT);
+    p.equip(core.ItemIdentifiers.SLAVE_BOOTS, E.FEET_SLOT);
+    object(h, 'Mine door entrance', 'Open', { player: p, objectId, handled: false });
+    assert.deepEqual(p.moves.at(-1), [3279, 9427, 0]);
+    assert.equal(stage(h, p), 4);
+  }
+});
+
 test('the Desert Clothes trade requires the carried set, while worn desert gear still passes the camp gate', () => {
   const h = harness();
   const p = makePlayer();
@@ -477,7 +508,7 @@ test('the mine guard conversation advances the route and the camp can be left fo
 
   object(h, 'Mine door entrance', 'Open', { player: p, objectId: 2690, handled: false });
   assert.equal(stage(h, p), 9);
-  assert.deepEqual(p.moves.at(-1), [3279, 3029, 0]);
+  assert.deepEqual(p.moves.at(-1), [3301, 3036, 0]);
 
   const gate = object(h, 'Gate', 'Open', { player: p, objectId: 2673, handled: false });
   assert.equal(gate.handled, true);

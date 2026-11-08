@@ -179,6 +179,7 @@ module.exports = function registerTouristTrapQuest(api) {
   const MINING_CAMP_EXIT_TILE = { x: 3272, y: 3029, z: 0 };
   /** The camp itself (Quest Helper's camp zone), used to tell entering from leaving. */
   const MINING_CAMP_BOUNDS = { minX: 3274, maxX: 3305, minY: 3014, maxY: 3037 };
+  const MINE_SURFACE_TILE = { x: 3301, y: 3036, z: 0 };
   /**
    * Ours, inferred from clipping: north of the inner door is the side that walks
    * to the guards and the cave. No capture or source gives the landing tile.
@@ -716,7 +717,7 @@ module.exports = function registerTouristTrapQuest(api) {
     if (objectId === 2690 || objectId === 2691) {
       player.sendMessage("You return to the surface.");
       if (stageOf(player) >= STAGE_GUARD_TALKED && stageOf(player) < STAGE_HAS_PLANS) advance(player, STAGE_LEFT_CAMP);
-      moveTo(player, MINING_CAMP_INSIDE_TILE);
+      moveTo(player, MINE_SURFACE_TILE);
       return;
     }
     if (!wearingSlaveClothes(player)) {

@@ -25,7 +25,8 @@ function fixture(t,id=22550,magic=false){
  const target=new NPC(70,new core.Location(3101,3600,0));assert.equal(target.getCurrentDefinition().hasAttribute("undead"),true);
  p.getCombat().setTarget(target);const item=new core.Item(id);p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=item;
  const sceptre=require("../plugins/items/AccursedSceptre.plugin")._test;
- item.setMetaValue(magic?sceptre.CHARGES_KEY:Rev.CHARGES_META,100);if(!magic)item.setMetaValue(Rev.DEPOSIT_META,true);
+ const weapon=id===core.ItemIdentifiers.WEBWEAVER_BOW?require("../plugins/items/WebweaverBow.plugin")._test:Rev;
+ item.setMetaValue(magic?sceptre.CHARGES_KEY:weapon.CHARGES_META,100);if(!magic)item.setMetaValue(weapon.DEPOSIT_META,true);
  if(magic)p.getCombat().setCastSpell(sceptre.sceptre.spellFor(p));
  BonusManager.update(p);
  t.after(()=>core.TaskManager.cancelTasks(p.getIndex()));
@@ -44,8 +45,8 @@ function task(f,on){
  for(const [name,val]of [["slayer_target",id],["slayer_count",on?10:0],["slayer_count_original",10]])f.p.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(name),val);
  const q={player:f.p,npc:f.target,onTask:false};PM.emitCustomEvent("slayer:on-task",q);assert.equal(q.onTask,on);
 }
-test("four real equipped weapons multiply each supported Salve boost and retain outside/non-undead controls",t=>{
- for(const [id,type]of [[22545,"MELEE"],[27660,"MELEE"],[22550,"RANGED"],[22555,"MAGIC"]]){
+test("five real equipped weapons multiply each supported Salve boost and retain outside/non-undead controls",t=>{
+ for(const [id,type]of [[22545,"MELEE"],[27660,"MELEE"],[22550,"RANGED"],[core.ItemIdentifiers.WEBWEAVER_BOW,"RANGED"],[22555,"MAGIC"]]){
   const f=fixture(t,id,type==="MAGIC"),ct=core.CombatType[type],base=sample(f,ct,false);
   for(const [amulet,num,den]of [[4081,7,6],[10588,6,5],[12017,type==="MAGIC"?115:7,type==="MAGIC"?100:6],[12018,6,5]]){
    equip(f,core.Equipment.AMULET_SLOT,amulet);
@@ -72,11 +73,28 @@ test("Craw damage adds50% to the imbued task15%; accuracy remains multiplicative
  assert.equal(sample(f,core.CombatType.RANGED,true).max,outside.max,"without a charge next cycle, only Slayer applies");
 });
 test("Salve ranged variants suppress task stacking; plain variants leave the task bonus applicable",t=>{
- const f=fixture(t);equip(f,core.Equipment.HEAD_SLOT,core.ItemIdentifiers.SLAYER_HELMET_I_);
+ for(const id of [22550,core.ItemIdentifiers.WEBWEAVER_BOW]){
+ const f=fixture(t,id);equip(f,core.Equipment.HEAD_SLOT,core.ItemIdentifiers.SLAYER_HELMET_I_);
  for(const amulet of [4081,10588,12017,12018]){
   equip(f,core.Equipment.AMULET_SLOT,amulet);task(f,false);const base=sample(f,core.CombatType.RANGED,false),off=sample(f,core.CombatType.RANGED,true);task(f,true);const on=sample(f,core.CombatType.RANGED,true);
   if(amulet===12017||amulet===12018)assert.deepEqual(on,off,"Salve wins instead of combining with Slayer");
   else assert.equal(on.max,Math.floor(base.max*33/20),"melee-only Salve does not suppress ranged Slayer");
  }
+ }
 });
 
+test("Webweaver bow damage also adds 50% to the imbued task 15%; accuracy remains multiplicative",t=>{
+ const f=fixture(t,core.ItemIdentifiers.WEBWEAVER_BOW),web=require("../plugins/items/WebweaverBow.plugin")._test;
+ equip(f,core.Equipment.HEAD_SLOT,core.ItemIdentifiers.SLAYER_HELMET_I_);
+ const base=sample(f,core.CombatType.RANGED,false),plain=sample(f,core.CombatType.RANGED,true);task(f,true);
+ assert.equal(plain.max,Math.floor(base.max*3/2),"off task the passive still multiplies");
+ const wild=sample(f,core.CombatType.RANGED,true);
+ assert.equal(wild.max,Math.floor(base.max*33/20),"Wiki DPS 701b2dac: Webweaver bow shares needRevWeaponBonus");
+ assert.equal(wild.attack,Math.floor(Math.floor(base.attack*23/20)*3/2));
+ const outside=sample(f,core.CombatType.RANGED,false);
+ assert.equal(outside.max,Math.floor(base.max*23/20),"outside Wilderness only Slayer applies");
+ f.item.setMetaValue(web.CHARGES_META,1);assert.equal(web.decrementAmmo(f.p),true);assert.equal(web.chargesOf(f.item),0);
+ assert.equal(sample(f,core.CombatType.RANGED,true).max,wild.max,"last paid Webweaver charge retains the bonus");
+ const cycle=core.World.getProcessCycle();t.mock.method(core.World,"getProcessCycle",()=>cycle+1);
+ assert.equal(sample(f,core.CombatType.RANGED,true).max,outside.max,"expired Webweaver payment leaves only Slayer");
+});

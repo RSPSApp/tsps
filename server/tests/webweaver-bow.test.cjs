@@ -26,6 +26,7 @@ before(async () => {
     registerRangedAmmoHandler: (handler) => { hooks.ammo = handler; },
     registerRangedCombatModifier: (handler) => { hooks.boost = handler; },
     onPlayerDeathItemDrop: (handler) => { hooks.death = handler; },
+    onCustomEvent() {},
     emitCustomEvent: (name, request) => events[name]?.(request),
   });
 });

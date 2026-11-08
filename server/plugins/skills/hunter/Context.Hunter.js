@@ -123,11 +123,22 @@ function outfit(player) {
     .every(id => player.getEquipment().getItems().some(item => item?.getId() === id));
 }
 
+/**
+ * Wiki (Guild hunter outfit): each worn piece raises the catch rate, headwear 0.2%, top 0.8%, legs 0.6%, boots 0.4%,
+ * and the whole set worn another 0.5% (2.5% in all).
+ */
+function outfitCatchBonus(player) {
+  const I = H.core.ItemIdentifiers;
+  const worn = (id) => player.getEquipment().getItems().some(item => item?.getId() === id);
+  const pieces = [[I.GUILD_HUNTER_HEADWEAR, 0.002], [I.GUILD_HUNTER_TOP, 0.008], [I.GUILD_HUNTER_LEGS, 0.006], [I.GUILD_HUNTER_BOOTS, 0.004]];
+  return pieces.reduce((sum, [id, bonus]) => sum + (worn(id) ? bonus : 0), 0) + (outfit(player) ? 0.005 : 0);
+}
+
 /** The catch roll, as content may raise it ("hunter:catch-chance", a league relic that never fails). */
 function chance(player, creature, bonus = 0, required = creature.level) {
   const l = level(player);
   if (l < required) return false;
-  const request = { player, npcId: creature.npc, chance: Math.min(1, probability(creature.low, creature.high, l) + bonus + (outfit(player) ? 0.025 : 0)) };
+  const request = { player, npcId: creature.npc, chance: Math.min(1, probability(creature.low, creature.high, l) + bonus + outfitCatchBonus(player)) };
   H.api.emitCustomEvent("hunter:catch-chance", request);
   return Math.random() < request.chance;
 }
@@ -232,4 +243,4 @@ function questStage(player, key) {
 }
 
 module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  footprintDistance, exchange, drop, xp, probability, outfit, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };
+  footprintDistance, exchange, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

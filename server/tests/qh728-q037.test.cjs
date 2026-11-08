@@ -287,18 +287,20 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   // Start and the five-minute wait; the agent time advance is the registered hook.
   h.choice(MARTIN, 'Ask about the quest.');
   assert.equal(h.quest.getStage(h.player), 5);
-  assert.equal(h.quest.isStarted(h.player), false, 'cache start threshold is 10');
+  assert.equal(h.quest.isStarted(h.player), false, 'the cache unstarted state is inclusive up to 10');
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin-before-5-minutes-have-passed');
   h.fire('agent:advance-time', { ms: 6 * 60 * 1000, handledBy: [] });
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin-after-5-minutes-have-passed');
   h.choice(MARTIN, 'Ask about the quest.');
   assert.equal(h.quest.getStage(h.player), 10);
-  assert.equal(h.quest.isStarted(h.player), true);
+  // Ready to accept is still unstarted: the cache's unstartedstate (10) is inclusive, and the start hook sets 20 (d1a769ed8).
+  assert.equal(h.quest.isStarted(h.player), false);
 
   // Refusing the offer keeps the ready-to-accept copy so the start hook is reachable again.
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin-after-5-minutes-have-passed');
   h.hook(MARTIN, 'quest:fairytale-ii-cure-a-queen:start');
   assert.equal(h.quest.getStage(h.player), 20);
+  assert.equal(h.quest.isStarted(h.player), true, 'accepting starts the quest');
   assert.equal(h.varbits.get(2326), 20);
 
   // Search the right potion shelf: the certificate is added and the condition is one-shot.

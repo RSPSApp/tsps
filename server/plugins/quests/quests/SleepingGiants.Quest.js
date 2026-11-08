@@ -323,7 +323,11 @@ module.exports = function registerSleepingGiantsQuest(api) {
     constructor(player) { super([new Boundary(3328, 3391, 11456, 11519, 0)]); this.owner = player; this.scene = false; }
     canAttack() { return false; }
     canTeleport() { return this.scene ? false : null; }
-    process(mobile) { if (mobile === this.owner) api.emitCustomEvent("giants-foundry:process", { player: mobile }); }
+    process(mobile) {
+      if (mobile !== this.owner) return;
+      resumeSceneWalk(mobile, this);
+      api.emitCustomEvent("giants-foundry:process", { player: mobile });
+    }
     postLeave(mobile, logout) {
       if (mobile === this.owner) {
         workshops.delete(mobile); TaskManager.cancelTasks(this); pendingRepair.delete(mobile);
@@ -363,12 +367,35 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (!workshop) return;
     queue.setBlockMovement(false);
     queue.requestWalk(new Location(x, y, 0), false);
+    workshop.target = { x, y };
     const walk = workshop.walkId = (workshop.walkId || 0) + 1;
-    later(workshop, Math.max(Math.abs(x - start.getX()), Math.abs(y - start.getY())) + 1, () => { if (workshop.scene && workshop.walkId === walk) queue.setBlockMovement(true); });
+    later(workshop, Math.max(Math.abs(x - start.getX()), Math.abs(y - start.getY())) + 1, () => {
+      if (workshop.walkId !== walk) return;
+      workshop.target = null;
+      if (workshop.scene) queue.setBlockMovement(true);
+    });
+  }
+
+  /**
+   * Packets that are not world interactions (the client's interaction_stop before every walk click)
+   * still reset the queue; the scene sends the player on to the same tile again.
+   */
+  function resumeSceneWalk(player, workshop) {
+    const target = workshop.scene && workshop.target, queue = player.getMovementQueue(), at = player.getLocation();
+    if (!target || queue.size() > 0 || (at.getX() === target.x && at.getY() === target.y)) return;
+    queue.requestWalk(new Location(target.x, target.y, 0), false);
   }
 
   function blockSceneInput(event) {
     if (workshops.get(event.player)?.scene && SCENE_BLOCKED_INPUT.has(event.packet.type)) event.handled = true;
+  }
+
+  /**
+   * Keyboard movement would take the player over from the scripted walk. Plugins register in path
+   * order, so this quest hears the packet before FreeMovement (plugins/world) does.
+   */
+  function blockSceneKeyboard({ player, packet }) {
+    if (workshops.get(player)?.scene) packet.active = false;
   }
 
   function workshopIntroduction(player) {
@@ -911,6 +938,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onCustomEvent("player:world-input", blockSceneInput);
+  api.onCustomEvent("player:movement-input", blockSceneKeyboard);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handlePlayerGone);
   api.onPlayerDeath(handlePlayerGone);

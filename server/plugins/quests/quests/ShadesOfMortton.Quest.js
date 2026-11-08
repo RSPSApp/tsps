@@ -113,6 +113,9 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     ItemIdentifiers.ASYN_REMAINS,
     ItemIdentifiers.FIYR_REMAINS,
   ];
+  const SERUM_207_LEVEL = 15;
+  const SERUM_207_XP = 50;
+  const SERUM_207_SOUND = 2608;
   const SERUM_207_ITEM_IDS = [
     ItemIdentifiers.SERUM_207_4_,
     ItemIdentifiers.SERUM_207_3_,
@@ -744,10 +747,24 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     ) {
       if (quest.getStage(player) < STAGE_READ_DIARY) return;
       event.handled = true;
-      player.getInventory().deleteNumber(ItemIdentifiers.ASHES, 1);
-      player.getInventory().deleteNumber(ItemIdentifiers.TARROMIN_POTION_UNF_, 1);
-      player.getInventory().adds(ItemIdentifiers.SERUM_207_4_, 1);
-      player.sendMessage("You make serum 207.");
+      // Wiki (Serum 207): level 15 Herblore (boostable), 50 XP, a 3-dose serum. rsprox_transcripts/227/01846.txt:
+      // ashes on the tarromin vial in slot 9 -> "You make serum 207." (spam), mort_serum3 in slot 9, the ashes' slot
+      // emptied, human_herbing_vial, synth 2608 and a Herblore XP drop.
+      if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < SERUM_207_LEVEL) {
+        player.sendMessage(`You need a Herblore level of ${SERUM_207_LEVEL} to combine those.`);
+        return;
+      }
+      const inventory = player.getInventory();
+      const vialSlot = used === ItemIdentifiers.TARROMIN_POTION_UNF_ ? event.usedItemSlot : event.usedWithItemSlot;
+      const slot = inventory.forSlot(vialSlot)?.getId?.() === ItemIdentifiers.TARROMIN_POTION_UNF_
+        ? vialSlot : inventory.getSlotForItemId(ItemIdentifiers.TARROMIN_POTION_UNF_);
+      inventory.deleteNumber(ItemIdentifiers.ASHES, 1);
+      inventory.setItem(slot, new api.core.Item(ItemIdentifiers.SERUM_207_3_, 1));
+      inventory.refreshItems();
+      player.getSkillManager().addExperiences(Skill.HERBLORE, SERUM_207_XP);
+      player.performAnimation(new api.core.Animation(api.core.CacheDefinitions.getSeqId("human_herbing_vial")));
+      player.getPacketSender().sendSound(SERUM_207_SOUND, 1, 0);
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You make serum 207.");
       if (quest.getStage(player) === STAGE_READ_DIARY) {
         quest.setStage(player, STAGE_MADE_SERUM);
       }

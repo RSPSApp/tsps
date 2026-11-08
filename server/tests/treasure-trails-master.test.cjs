@@ -774,6 +774,28 @@ test("a lost torn part is found again by solving its part again, but not while i
   assert.equal(f.state().completed, 2);
 });
 
+test("torn parts left over from one three-part step don't complete the trail's next one", () => {
+  const f = masterFixture();
+  placeParts(f, ["key_master", "biblia", "lovada"]);
+  for (const key of ["key_master", "biblia", "lovada"]) { Parts.talk(npcEvent(f, part(key))); f.finish(); }
+  const names = ["trail_master_part1", "trail_master_part2", "trail_master_part3"];
+  const slotOf = name => f.items.findIndex(item => item?.getId() === C.getObjId(name));
+  // Copies of this step's parts (a dropped part solved again, then picked back up).
+  const leftovers = names.map(name => f.items[slotOf(name)]).map(item => new core.Item(item.getId(), 1).setMetaValue(Runtime.metaKey(MASTER), { ...item.getMetaValue(Runtime.metaKey(MASTER)) }));
+  assert.ok(shownDuring(f, () => Parts.combine({ player: f.player, slot: slotOf("trail_master_part1") })).includes("You've obtained a new clue!"));
+  const state = f.state();
+  assert.equal(state.completed, 2);
+  // The trail's next step is another three-part step.
+  f.items[0] = new core.Item(I.CLUE_SCROLL_MASTER_, 1).setMetaValue(Runtime.metaKey(MASTER), { ...state, row: threePart().row,
+    parts: ["key_master", "biblia", "lovada"].map(key => part(key).row), found: [false, false, false] });
+  for (const item of leftovers) f.items[f.items.indexOf(null)] = item;
+  assert.deepEqual(shownDuring(f, () => Parts.combine({ player: f.player, slot: slotOf("trail_master_part1") })), ["I cannot combine the pieces without having all 3."]);
+  assert.equal(f.state().completed, 2, "the step isn't skipped");
+  const handed = npcEvent(f, part("key_master"));
+  Parts.talk(handed); f.finish();
+  assert.equal(handed.handled, true, "a leftover part isn't this step's: the NPC hands over the real one");
+});
+
 test("a three-part step draws three different parts this server can finish", () => {
   const f = masterFixture();
   for (let i = 0; i < 100; i++) {

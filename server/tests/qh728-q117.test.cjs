@@ -709,3 +709,80 @@ test('closed chest opening falls through without an orb; only open Search starts
   assert.equal(p.messages.at(-1),'The chest is empty.');
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION),1);
 });
+
+test('the closed stronghold door keeps the canonical outside lock at every quest stage', () => {
+  const h=harness(), p=makePlayer();
+  const at=new core.Location(2502,3250,0);
+  const closed=new core.GameObject(core.ObjectIdentifiers.DOOR_67,at,0,1,null);
+  for (const stage of [0,1,4,5,6,7,8,9]) {
+    h.quest.setStage(p,stage);
+    p.setLocation(2502,3250);
+    const event={player:p,object:closed,objectId:closed.getId(),handled:false};
+    emit(h,'door:toggle',event);
+    assert.equal(event.handled,true);
+    assert.equal(h.transcripts.at(-1).variant,'into-the-stronghold-opening-the-stronghold-door-from-the-outside');
+    assert.equal(h.quest.getStage(p),stage);
+  }
+  const count=h.transcripts.length;
+  for (const object of [
+    new core.GameObject(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3251,0),0,2,null),
+    new core.GameObject(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,1),0,1,null),
+    new core.GameObject(core.ObjectIdentifiers.DOOR_3,at,0,1,null),
+  ]) {
+    const event={player:p,object,objectId:object.getId(),handled:false};
+    emit(h,'door:toggle',event);
+    assert.equal(event.handled,false,'open pose, other plane and other door keep ordinary handling');
+  }
+  p.setLocation(2502,3251);
+  const inside={player:p,object:closed,objectId:closed.getId(),handled:false};
+  emit(h,'door:toggle',inside);
+  assert.equal(inside.handled,false);
+  assert.equal(h.transcripts.length,count);
+});
+
+test('stronghold door uses the existing shared swing, passage both ways and close collision', () => {
+  const {RegionManager}=require('../dist/game/collision/RegionManager');
+  const {ObjectManager}=require('../dist/game/entity/impl/object/ObjectManager');
+  const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+  if(RegionManager.regions.size===0)RegionManager.init();
+  RegionManager.loadMapFiles(2502,3250);
+  const h=harness(),p=makePlayer(),tasks=[],names=new Map();
+  h.quest.setStage(p,6);
+  require('../plugins/objects/Doors.plugin').register({
+    core:{...core,ObjectManager,MapObjects,Sounds:{sendSound(){}},TaskManager:{
+      submit(task){task.setRunning(true);tasks.push(task);},
+      cancelTasks(key){for(const task of tasks)if(task.key===key)task.stop();},
+    }},
+    onObjectInteraction:(name,handlers)=>names.set(name,handlers),
+    onRegionLoaded(){},onServerStartup(){},onObjectRoute(){},
+    onCustomEvent:h.api.onCustomEvent,emitCustomEvent:h.api.emitCustomEvent,
+  });
+  const canCross=()=>[
+    RegionManager.canMove(2502,3250,2502,3251,0,1,1,null),
+    RegionManager.canMove(2502,3251,2502,3250,0,1,1,null),
+  ];
+  const click=object=>names.get('Door').Open({player:p,object,objectId:object.getId(),
+    definition:core.ObjectDefinition.forId(object.getId()),location:{
+      x:object.getLocation().getX(),y:object.getLocation().getY(),z:0},clickType:1});
+  const closed=MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null);
+  assert.ok(closed,'active-cache physical door exists');
+  assert.equal(closed.getFace(),1);
+  assert.deepEqual(canCross(),[false,false]);
+  p.setLocation(2502,3251);
+  assert.equal(click(closed),true,'inside Open uses shared door handler');
+  const opened=MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3251,0),null);
+  assert.ok(opened,'ordinary shared swing retains the same loc ID');
+  assert.equal(opened.getFace(),2);
+  assert.deepEqual(canCross(),[true,true],'ordinary exit and return are walkable');
+  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2502,3251],'Open never teleports the player');
+  assert.equal(tasks.length,1,'uses the existing shared close lifecycle');
+  p.setLocation(2502,3250);
+  assert.equal(click(opened),true,'outside can close the already-open ordinary leaf');
+  assert.deepEqual(canCross(),[false,false]);
+  assert.equal(MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null)?.getFace(),1);
+  const count=h.transcripts.length;
+  click(closed);
+  assert.equal(h.transcripts.length,count+1,'restored closed door is locked from outside again');
+  assert.deepEqual(canCross(),[false,false]);
+  assert.equal(h.quest.getStage(p),6);
+});

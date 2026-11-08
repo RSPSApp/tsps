@@ -41,6 +41,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   const BALLISTA_OBJECT_ID = 2181;
   const CRUMBLED_WALL_OBJECT_ID = 2185;
+  const STRONGHOLD_DOOR_OBJECT_ID = api.core.ObjectIdentifiers.DOOR_67;
+  const STRONGHOLD_DOOR_LOCATION = new Location(2502, 3250, 0);
   const CLOSED_CHEST_OBJECT_ID = 2183;
   const OPEN_CHEST_OBJECT_ID = 2182;
   const KHAZARD_WARLORD_SPAWN_ID = 4971;
@@ -519,6 +521,16 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     startTranscript(api, player, NpcIdentifiers.KHAZARD_COMMANDER, PAGE, "into-the-stronghold-upon-opening-the-chest-containing-the-orb-of-protection");
   }
 
+  function guardStrongholdDoor(event) {
+    if (event.objectId !== STRONGHOLD_DOOR_OBJECT_ID || event.object?.getFace?.() !== 1) return;
+    const location = event.object.getLocation();
+    if (!Location.isSameTile(location, STRONGHOLD_DOOR_LOCATION)
+      || event.player.getLocation().getY() > location.getY()) return;
+    startTranscript(api, event.player, NpcIdentifiers.KHAZARD_COMMANDER, PAGE,
+      "into-the-stronghold-opening-the-stronghold-door-from-the-outside");
+    event.handled = true;
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     const option = String(event.option ?? "").toLowerCase();
@@ -693,6 +705,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.onNpcInteraction("Elkoy", { Follow: followElkoy });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("door:toggle", guardStrongholdDoor);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);

@@ -1072,8 +1072,8 @@ export class Combat {
                     : "Someone else is fighting that.");
                 break;
             case CanAttackResponse.LEVEL_DIFFERENCE_TOO_GREAT:
-                player?.sendMessage("Your level difference is too great.");
-                player?.sendMessage("You need to move deeper into the Wilderness.");
+                // One game message on live (rsprox_transcripts/229/02787.txt).
+                player?.sendMessage("Your level difference is too great!<br>You need to move deeper into the Wilderness.");
                 break;
             case CanAttackResponse.NOT_ENOUGH_SPECIAL_ENERGY:
                 if (player) {

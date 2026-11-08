@@ -1646,7 +1646,8 @@
       ],
       "icon": "sailing_skillguide_anchor",
       "description": "The Entrana dock, where a boat lets you ashore. Sailing 36 to sail there.",
-      "terms": "sailing port dock boat"
+      "terms": "sailing port dock boat",
+      "admission": "entrana:check-items"
     },
     {
       "key": "port-civitas-illa-fortis",

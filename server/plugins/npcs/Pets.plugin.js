@@ -51,6 +51,8 @@ const MAX_XP = 200000000;
 const SANGUINE_DUST_UNLOCK = {permanent: true, name: "sanguine dust",
   message: "You need to earn sanguine dust from the Theatre of Blood Challenge Mode to do that."};
 let pluginApi = null;
+/** world.json pluginConfig: how many times likelier every skilling pet roll is (1, the default, is OSRS). */
+const SKILLING_PET_MULTIPLIER_CONFIG = "Pets:skillingPetMultiplier";
 let TaskClass = null;
 let TaskManagerRef = null;
 let NPCRespawnTaskRef = null;
@@ -2087,6 +2089,7 @@ function onSkill(player, skill, { petBase, petChance, rolls = 1, runeId, npcId, 
     chance = (petBase - skills.getMaxLevel(skill) * 25) / (skills.getExperience(skill) >= MAX_XP ? 15 : 1);
   }
   if (!(Number.isFinite(chance) && chance > 0)) return false;
+  chance = Math.max(1, chance / skillingPetMultiplier());
   let hit = false;
   for (let roll = 0; roll < Math.max(1, rolls | 0) && !hit; roll++) {
     hit = Math.random() < 1 / chance;
@@ -2099,6 +2102,12 @@ function onSkill(player, skill, { petBase, petChance, rolls = 1, runeId, npcId, 
   }
   awardPet(player, pet.itemId);
   return true;
+}
+
+/** The world's skilling pet multiplier; 1 (the OSRS rate) when unset or not above 1. */
+function skillingPetMultiplier() {
+  const multiplier = Number(pluginApi?.getPluginConfig?.(SKILLING_PET_MULTIPLIER_CONFIG, 1));
+  return Number.isFinite(multiplier) && multiplier > 1 ? multiplier : 1;
 }
 
 /** A gatherer may resolve its normal pet opportunity before delivering the resource. */
@@ -2199,6 +2208,8 @@ module.exports = {
   // Exposed for tests/pets.test.cjs; nothing else reads them.
   __internals: {
     PETS,
+    onSkill,
+    skillingPetMultiplier,
     PET_BY_ID,
     PET_BY_ITEM_ID,
     petFamily,

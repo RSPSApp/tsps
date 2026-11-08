@@ -48,6 +48,7 @@ before(async () => {
     emitCustomEvent: (name, request) => {
       if (name === "combat-achievements:count") request.total = request.monster === "Zulrah" ? 12 : 0;
       if (liveTiles.has(name)) request.tile = liveTiles.get(name);
+      if (name === "entrana:check-items") Object.assign(request, { handled: true, allowed: !request.player.armed });
       events.push(name);
     },
   });
@@ -121,6 +122,20 @@ test("Corp live destination falls back when unanswered and respects an explicit 
   clickRow(p, "corporeal-beast", OP.TELEPORT);
   assert.equal(teleports.length, 1);
   assert.equal(p.messages.at(-1), "The Corporeal Beast's cave is unavailable.");
+});
+
+test("the Entrana port asks Entrana's item rule: no weapons or armour by ::teleports either", () => {
+  const p = player();
+  teleports.length = 0;
+  p.armed = true;
+  run(p);
+  clickRow(p, "port-entrana", OP.TELEPORT);
+  assert.equal(teleports.length, 0, "armed: refused");
+  assert.equal(p.messages.at(-1), "You cannot take weapons, armour or other forbidden items to Entrana.");
+  p.armed = false;
+  run(p);
+  clickRow(p, "port-entrana", OP.TELEPORT);
+  assert.equal(teleports.length, 1, "unarmed: teleported");
 });
 
 test("every destination lands on a free tile, with a known icon, type and tab", () => {

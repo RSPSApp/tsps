@@ -478,11 +478,28 @@ function editorComponents() {
 
 // ---------------------------------------------------------------- the supplies chest
 
-function openChest({ player }) {
+/** Players at a ranked fight's chest: the build they must fight with (the week's), which they can't change. */
+const lockedBuilds = new WeakMap();
+
+function lockBuild(player, build) {
+  if (build == null) lockedBuilds.delete(player);
+  else lockedBuilds.set(player, build);
+}
+
+function lockedBuild(player) {
+  return lockedBuilds.get(player) ?? null;
+}
+
+/**
+ * The supplies chest: the lobby's (battletype 0, the player's own build) or a ranked staging
+ * area's (captured: battletype 1006 and the fight's build, which can't be changed).
+ */
+function openChest({ player }, battletype = 0) {
   const sender = player.getPacketSender();
+  const locked = lockedBuild(player);
   Common.varbit(player, "pvpa_transmit_caneditbuild", 0);
-  Common.varbit(player, "pvpa_transmit_battletype", 0);
-  Common.varbit(player, "pvpa_transmit_build", preferredBuild(player));
+  Common.varbit(player, "pvpa_transmit_battletype", battletype);
+  Common.varbit(player, "pvpa_transmit_build", locked ?? preferredBuild(player));
   sendLoadouts(player);
   Common.openModal(player, SUPPLIES);
   sender.sendInterfaceFlagsRange(Common.component(`${SUPPLIES}:top`), 0, 0, Common.EVENTS.OP1);
@@ -492,7 +509,8 @@ function openChest({ player }) {
 }
 
 function chooseChestBuild({ player, slot }) {
-  if (slot >= 0 && slot <= 2) setPreferredBuild(player, slot);
+  if (lockedBuild(player) != null) player.sendMessage(Common.message("fixedBuild"));
+  else if (slot >= 0 && slot <= 2) setPreferredBuild(player, slot);
   return true;
 }
 
@@ -603,11 +621,16 @@ function attachLoadouts(api, { offersLoadouts }) {
   api.onPlayerDisconnect(forget);
 }
 
-registerEditor(SUPPLIES, { canEdit: () => true });
+// A ranked fight's chest edits only the fight's build.
+registerEditor(SUPPLIES, { canEdit: (player, build) => lockedBuild(player) == null || lockedBuild(player) === build });
 
 module.exports = {
   attachLoadouts,
   registerEditor,
+  openChest,
+  lockBuild,
+  lockedBuild,
+  SUPPLIES,
   sendColumnEvents,
   sendLoadouts,
   sendView,

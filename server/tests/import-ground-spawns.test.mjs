@@ -252,3 +252,38 @@ test("Spade selection excludes scenery and other regions, identities, quantities
  assert.equal(importSpawns(source([{...varlamoreSpades[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
  assert.throws(()=>importSpawns(source([{...varlamoreSpades[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
 });
+
+
+const iceDungeonCoins=[{x:2988,y:9584},{x:2987,y:9583},{x:2988,y:9582}].map(at=>row({
+ ...at,page:"Coins",id:995,plane:0,quantity:1,location:"[[Asgarnian Ice Dungeon]]",
+}));
+
+test("audited Ice Dungeon Coins preserve source default quantity and exact public location scope",()=>{
+ const result=importSpawns(source(iceDungeonCoins),[]);
+ assert.equal(result.report.counts.added,3);
+ assert.deepEqual(result.definitions.map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members===true]),
+  [[995,2988,9584,0,1,100,false],[995,2987,9583,0,1,100,false],[995,2988,9582,0,1,100,false]]);
+ assert.deepEqual(importSpawns(source(iceDungeonCoins),result.definitions).definitions,result.definitions);
+ const base=iceDungeonCoins[0];
+ const held=[{...base,x:2989},{...base,x:2989,location:undefined},{...base,plane:1},
+  {...base,id:996},{...base,page:"Coins (Shilo Village)"},{...base,location:"[[Dwarven Mine]]"},
+  {...base,members:true},{...base,x:3188,y:9820,location:"[[Varrock]] - west bank basement"}];
+ assert.equal(importSpawns(source(held),[]).definitions.length,0);
+ const occupied={id:554,location:{x:2988,y:9584,z:0},amt:1,respawn:100};
+ const replaced=importSpawns(source([base]),[occupied]);
+ assert.deepEqual(replaced.definitions,[occupied]);assert.equal(replaced.report.counts["possible-replaced-id-review"],1);
+});
+
+test("committed Ice Dungeon Coins match all three audited public rows without duplicates",()=>{
+ const data=JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json",import.meta.url),"utf8"));
+ for(const r of iceDungeonCoins){
+  const matches=data.filter(d=>d.id===995 && d.location.x===r.x && d.location.y===r.y && d.location.z===0);
+  assert.equal(matches.length,1);assert.equal(matches[0].amt,1);assert.equal(matches[0].respawn,100);assert.notEqual(matches[0].members,true);
+ }
+});
+
+const herbloreTable=[row({page:"Pestle and mortar",id:233,x:1667,y:3068,plane:0,quantity:1,members:true,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"}),row({page:"Vial of water",id:227,x:1668,y:3068,plane:0,quantity:1,members:true,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"})];
+test("Outer Fortis Herblore table imports only its exact ordinary pair and preserves legacy order",()=>{
+ const legacy=[{id:995,location:{x:3000,y:3000,z:0},amt:2,respawn:30}];const r=importSpawns(source(herbloreTable),legacy);assert.deepEqual(r.definitions.slice(0,1),legacy);assert.deepEqual(r.definitions.slice(1).map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members]),[[233,1667,3068,0,1,100,true],[227,1668,3068,0,1,100,true]]);assert.deepEqual(importSpawns(source(herbloreTable),r.definitions).definitions,r.definitions);
+ const held=herbloreTable.flatMap(r=>[{...r,x:r.x+1},{...r,id:r.id+1},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99},{...r,location:"unknown"},{...r,unresolved_reasons:["conditional"]}]);assert.equal(importSpawns(source(held),[]).definitions.length,0);assert.throws(()=>importSpawns(source([{...herbloreTable[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
+});

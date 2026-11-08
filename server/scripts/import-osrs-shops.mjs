@@ -126,7 +126,7 @@ const SHOP_PRICES = {
   // Ornate maul handle, 15 points.
   "Justine's stuff for the Last Shopper Standing": [[24229, 15]],
   // Wiki (PvP Arena Rewards): a Blighted surge sack (x50) for 10 points, a Scroll of Imbuing for 200. The sack's
-  // 10 points buy 50 of them (Matchmaking.DuelArena.js delivers the 50).
+  // 10 points buy 50 of them (Rank.DuelArena.js delivers the 50).
   "PvP Arena Rewards": [
     [26705, 10], // Blighted surge sack (x50)
     [26706, 200], // Scroll of Imbuing

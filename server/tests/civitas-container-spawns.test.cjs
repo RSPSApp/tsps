@@ -13,3 +13,12 @@ for(const members of[true,false])test("actual Civitas definitions load only on t
  const items=World.getItems(),old=items.splice(0);t.after(()=>items.splice(0,items.length,...old));t.mock.method(WD,"isMembersWorld",()=>members);assert.equal(new GroundItemSpawnDefinitionLoader().load(),true);
  for(const[id,x,y]of expected){const found=items.filter(g=>g.getItem().getId()===id&&g.getPosition().getX()===x&&g.getPosition().getY()===y&&g.getPosition().getZ()===0);assert.equal(found.length,members?1:0);if(members){assert.equal(found[0].getItem().getAmount(),1);assert.equal(found[0].getRespawnTimer(),100);assert.equal(found[0].isStaticSpawn(),true);}}
 });
+
+const outerFortis=[[233,1667,3068,"Pestle and mortar",true],[227,1668,3068,"Vial of water",false]];
+test("Outer Fortis Herblore table has both exact ordinary IDs with source timing/world state",()=>{
+ for(const[id,x,y,name,members]of outerFortis){assert.equal(CacheDefinitions.getItem(id).name,name);assert.equal(CacheDefinitions.getItem(id).isMembers,members);const found=rows.filter(r=>r.id===id&&r.location.x===x&&r.location.y===y&&r.location.z===0);assert.equal(found.length,1);assert.deepEqual([found[0].amt,found[0].respawn,found[0].members],[1,100,true]);}
+});
+for(const members of[true,false])test("Outer Fortis table source membership loads independently of item membership: "+members,t=>{
+ const items=World.getItems(),old=items.splice(0);t.after(()=>items.splice(0,items.length,...old));t.mock.method(WD,"isMembersWorld",()=>members);assert.equal(new GroundItemSpawnDefinitionLoader().load(),true);
+ for(const[id,x,y]of outerFortis){const found=items.filter(g=>g.getItem().getId()===id&&g.getPosition().getX()===x&&g.getPosition().getY()===y&&g.getPosition().getZ()===0);assert.equal(found.length,members?1:0);if(members){assert.equal(found[0].getItem().getAmount(),1);assert.equal(found[0].getRespawnTimer(),100);assert.equal(found[0].isStaticSpawn(),true);}}
+});

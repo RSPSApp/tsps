@@ -987,7 +987,8 @@ export abstract class Mobile extends Entity {
     }
 
     sendMessage(message: string): void {
-        if (!this.isPlayer() || this.isPlayerBot()) {
+        // A bot an administrator drives (::botcontrol) has their client, so it is told what a player is told.
+        if (!this.isPlayer() || (this.getAsPlayer()?.isUnwatchedBot?.() ?? this.isPlayerBot())) {
             return;
         }
 

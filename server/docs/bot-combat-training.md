@@ -509,3 +509,21 @@ square of `radius` around x/y doesn't fit.
 Level 40-90 NPCs near Lumbridge are almost all past the Shantay Pass or the River Salve, which
 the route planner cannot reach, so the expert band starts at 30.
 
+
+### Manually driving a bot
+
+Administrators can use `::botcontrol <bot name>` (spaces or underscores) to drive an
+active PlayerBots character through their existing client. The bot keeps its inventory,
+stats, position and rank; its brain pauses until `::botback` returns to the original
+character. Close active interfaces before taking control. A bot already being driven
+cannot be taken over by another client.
+
+The original character stays in the world and can still be attacked. Returning resumes
+the bot's existing brain. Disconnecting releases the bot and logs out the original
+character. `::botback` needs no rank because it only returns the controlling connection
+to its own character; it grants no access to another account.
+
+Use `::bh <bot username> manual` to keep a bot logged in with its AI stopped.
+Manual mode survives `::botback`; normal walking or Follow performed while driving
+the bot can continue. Assign `follow`, `pvp` or `auto` with `::bh` to resume its AI.
+The assignment lasts for this running session, rather than surviving a restart.

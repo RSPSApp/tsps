@@ -429,7 +429,7 @@ export class MovementQueue {
     }
 
     public syncDestinationFlagToRoute(): void {
-        if (!this.player || this.player.isPlayerBot?.() === true) {
+        if (!this.player || (this.player.isUnwatchedBot?.() ?? this.player.isPlayerBot?.()) === true) {
             return;
         }
         const destination = this.points.peekLast()?.position;
@@ -763,7 +763,7 @@ export class MovementQueue {
             regionChanged = true;
         if (regionChanged) {
             this.character.setLastKnownRegion(player.getLocation().clone());
-            if (player.isPlayerBot?.() !== true) {
+            if ((player.isUnwatchedBot?.() ?? player.isPlayerBot?.()) !== true) {
                 World.markActiveRegionsDirty();
             }
         }
@@ -810,7 +810,7 @@ export class MovementQueue {
 
     private syncWildernessStateForMovedPlayer() {
         const player = this.character as Player;
-        if (player.isPlayerBot?.() === true) {
+        if ((player.isUnwatchedBot?.() ?? player.isPlayerBot?.()) === true) {
             return;
         }
 

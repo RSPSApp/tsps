@@ -452,7 +452,9 @@ export class Player extends Mobile {
         timed("client_input", () => this.getSession()?.processPackets());
         // The tick count, every tick, as live sends it (varp map_clock): the client's timers
         // (buff bar cooldowns, script4678 and script5940) count against it.
-        if (!isBot) this.sendMapClock();
+        // Client-only packets: a bot an administrator drives has their client, so it gets them as a player does.
+        const unwatched = this.isUnwatchedBot();
+        if (!unwatched) this.sendMapClock();
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.
@@ -460,7 +462,7 @@ export class Player extends Mobile {
 
         // Timers
         timed("timers", () => this.getTimers().process());
-        if (!isBot) this.syncPoisonOrb();
+        if (!unwatched) this.syncPoisonOrb();
 
         const movement = this.getMovementQueue();
         const combat = this.getCombat();
@@ -841,6 +843,10 @@ export class Player extends Mobile {
             PluginManager.emitCustomEvent("audio:setting-changed", { player: this, varpId, previous, value: next });
         }
         return true;
+    }
+
+    public setSession(session: PlayerSession): void {
+        this.session = session;
     }
 
     public getSession(): PlayerSession {
@@ -1420,6 +1426,14 @@ export class Player extends Mobile {
 
     public isPlayerBot(): boolean {
         return this.playerBot;
+    }
+
+    /**
+     * A bot no client is watching: it needs no client packets and wakes no regions. A bot an administrator drives
+     * (::botcontrol) has the admin's connection, so it gets both, as a player does.
+     */
+    public isUnwatchedBot(): boolean {
+        return this.playerBot && this.getSession?.()?.hasNetworkClient?.() !== true;
     }
 
     public setPlayerBot(playerBot: boolean): void {

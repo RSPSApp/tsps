@@ -284,6 +284,8 @@ test("native earned lamp confirmation grants its sourced XP once and removes onl
   const f = actor(t),
     tier = Data.tiers()[0];
   earned(f, 2);
+  // The lamp is confirmed on Runecraft, which can only be chosen after Rune Mysteries (Wiki: Lamp).
+  f.p.setAttribute("quest.rune_mysteries.stage", 6);
   const before = skillLevel(f);
   const { slot } = lamp(f, tier);
   await lampConfirm(f);

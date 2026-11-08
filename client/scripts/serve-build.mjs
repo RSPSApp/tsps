@@ -141,6 +141,23 @@ function respond(req, res, status, headers, body) {
     res.end(req.method === "HEAD" ? undefined : body);
 }
 
+function acceptedEncodings(header) {
+    const weights = new Map();
+    for (const entry of header.split(",")) {
+        const match = /^[ \t]*(br|gzip|\*)[ \t]*(?:;[ \t]*q[ \t]*=[ \t]*(0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)[ \t]*)?$/i.exec(entry);
+        if (match) weights.set(match[1].toLowerCase(), match[2] === undefined ? 1 : Number(match[2]));
+    }
+    return [["br", ".br"], ["gzip", ".gz"]]
+        .map(([encoding, suffix]) => ({
+            encoding,
+            suffix,
+            quality: weights.get(encoding) ?? weights.get("*") ?? 0,
+        }))
+        .filter(({ quality }) => quality > 0)
+        // Stable sorting keeps the existing Brotli preference when weights tie.
+        .sort((a, b) => b.quality - a.quality);
+}
+
 function sendFile(req, res, urlPath, file, stat) {
     const ext = path.extname(file).toLowerCase();
     const headers = {
@@ -160,9 +177,8 @@ function sendFile(req, res, urlPath, file, stat) {
     const range = req.headers.range;
 
     if (!range && COMPRESSIBLE.has(ext)) {
-        const accepts = req.headers["accept-encoding"] || "";
-        for (const [encoding, suffix] of [["br", ".br"], ["gzip", ".gz"]]) {
-            const compressed = accepts.includes(encoding) ? statOrNull(file + suffix) : null;
+        for (const { encoding, suffix } of acceptedEncodings(req.headers["accept-encoding"] || "")) {
+            const compressed = statOrNull(file + suffix);
             if (compressed) {
                 target = file + suffix;
                 size = compressed.size;

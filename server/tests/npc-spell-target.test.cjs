@@ -114,8 +114,11 @@ for (const symbol of ['HANS', 'BANKER']) {
 }
 
 for (const [options, message] of [
-  // rsprox captures (regular worlds): the refusal names the first missing rune ("You do not have enough Law Runes...").
-  [{ runes: false }, 'You do not have enough Air Runes to cast this spell.'],
+  // rsprox captures (regular worlds): the refusal names the first missing rune in the cache spell's own rune order
+  // (Wind Strike's obj lists mind, then air).
+  [{ runes: false }, 'You do not have enough Mind Runes to cast this spell.'],
+  // rsprox_transcripts/226/01696.txt: Fire Surge with no runes names the wrath runes.
+  [{ name: 'Fire Surge', runes: false }, 'You do not have enough Wrath Runes to cast this spell.'],
   [{ name: 'Fire Strike', level: 1 }, 'You need a Magic level of 13 to cast this spell.'],
 ]) {
   test(`native rejected targeting preserves the specific spell requirement: ${message}`, async t => {

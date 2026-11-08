@@ -107,14 +107,49 @@ export abstract class Spell {
     /**
      * The refusal for a cast short of `shortfall` (rsprox captures, regular worlds: "You do not have enough Law Runes to
      * cast this spell.", "...Cosmic Runes...", "...bananas..."): the first item no rune source covers, a rune by its
-     * name in title case and plural, anything else in lower case and plural.
+     * name in title case and plural, anything else in lower case and plural. "First" is in `order`, the cache spell's
+     * own rune list when given (live names Fire Surge's wrath runes, rsprox 226/01696, Water Blast's death runes,
+     * 227/01710), with anything it doesn't list (the Ape Atoll banana) last.
      */
-    public static missingItemsMessage(player: Player, shortfall: Item[]): string {
-        const first = shortfall.find((item) => !PluginManager.checkSpellRuneSource(player, [item])) ?? shortfall[0];
+    public static missingItemsMessage(player: Player, shortfall: Item[], order: number[] | null = null): string {
+        const rank = (item: Item) => {
+            const at = order ? order.indexOf(item.getId()) : -1;
+            return at >= 0 ? at : Number.MAX_SAFE_INTEGER;
+        };
+        const sorted = order ? [...shortfall].sort((a, b) => rank(a) - rank(b)) : shortfall;
+        const first = sorted.find((item) => !PluginManager.checkSpellRuneSource(player, [item])) ?? sorted[0];
         const name = first ? String(first.getDefinition?.()?.getName?.() ?? "") : "";
         if (!name) return "You do not have the required items to cast this spell.";
         const plural = /rune$/i.test(name) ? name.replace(/\b\w/g, (letter) => letter.toUpperCase()) + "s" : name.toLowerCase() + "s";
         return `You do not have enough ${plural} to cast this spell.`;
+    }
+
+    private cachedRuneOrder?: number[] | null;
+
+    /**
+     * The rune ids in the order the cache's spell obj lists them (params 365/367/369/371), or null when the cache has
+     * no such spell. Found by the spell's obj id, its widget, or (for spells keyed by an old button id, Wind Strike's
+     * 1152) the one cache spell of this spell's level whose runes are all among this spell's.
+     */
+    public cacheRuneOrder(): number[] | null {
+        if (this.cachedRuneOrder !== undefined) return this.cachedRuneOrder;
+        const { CacheDefinitions } = require("../../../cache/CacheDefinitions");
+        const id = this.spellId();
+        let name: string | undefined = CacheDefinitions.getSpellName(-1, id) ?? CacheDefinitions.getSpellName(id, -1);
+        if (!name) {
+            let listed: Item[] = [];
+            try { listed = this.itemsRequired(null as any) ?? []; } catch { listed = []; }
+            const own = new Set(listed.filter(Boolean).map((item: Item) => item.getId()));
+            const same = (CacheDefinitions.getSpellNames() as string[]).filter((candidate) => {
+                const requirements = CacheDefinitions.getSpellRequirements(candidate);
+                if (!requirements?.runes?.length || requirements.level !== this.levelRequired()) return false;
+                // Every rune the cache lists is this spell's (the cache may list fewer: Smoke Rush's obj has no fire rune).
+                return requirements.runes.every((rune: { id: number }) => own.has(rune.id));
+            });
+            if (same.length === 1) name = same[0];
+        }
+        const requirements = name ? CacheDefinitions.getSpellRequirements(name) : undefined;
+        return this.cachedRuneOrder = requirements?.runes?.length ? requirements.runes.map((rune: { id: number }) => rune.id) : null;
     }
 
     /** The part of `items` the inventory cannot fully supply, aggregated per item. */
@@ -173,7 +208,7 @@ export abstract class Spell {
 
             // A rune source (rune pouch) may cover what the inventory cannot.
             if (runeShortfall.length > 0 && !PluginManager.checkSpellRuneSource(player, runeShortfall)) {
-                player.sendMessage(Spell.missingItemsMessage(player, runeShortfall));
+                player.sendMessage(Spell.missingItemsMessage(player, runeShortfall, this.cacheRuneOrder()));
                 player.getCombat().setCastSpell(null);
                 player.getCombat().reset();
                 return false;

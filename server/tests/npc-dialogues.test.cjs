@@ -693,10 +693,10 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   };
   const transcript = (name, variant) => data[name].variants[variant];
 
-  const melee = player({ [I.TRAINING_SWORD]: 1 });
-  play(melee, N.MELEE_COMBAT_TUTOR, transcript('Melee combat tutor', 'standard-dialogue'), "I'd like a training");
+  const melee = player({ [I.TRAINING_SHORTSWORD]: 1 });
+  play(melee, N.CAPTAIN_HARLAN, transcript('Melee combat tutor', 'standard-dialogue'), "I'd like a training"); // his successor (rev 242)
   assert.equal(melee.inventory.getAmount(I.TRAINING_SHIELD), 1);
-  assert.equal(melee.inventory.getAmount(I.TRAINING_SWORD), 0);
+  assert.equal(melee.inventory.getAmount(I.TRAINING_SHORTSWORD), 0);
 
   // No runes and room for both: mind and air runes, then the shared 30-minute cooldown.
   const mage = player();
@@ -707,12 +707,12 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   assert.deepEqual(mage.messages, ['Mikasi gives you 30 mind runes.', 'Mikasi gives you 30 air runes.']);
   hooks['Ranged combat tutor'].Claim({ player: mage, npcId: N.RANGED_COMBAT_TUTOR });
   play(mage, N.RANGED_COMBAT_TUTOR, transcript('Ranged combat tutor', hooks.started));
-  assert.equal(mage.inventory.getAmount(I.TRAINING_BOW), 0);
+  assert.equal(mage.inventory.getAmount(I.TRAINING_SHORTBOW), 0);
 
   const ranger = player();
   hooks['Ranged combat tutor'].Claim({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR });
   play(ranger, N.RANGED_COMBAT_TUTOR, transcript('Ranged combat tutor', hooks.started));
-  assert.equal(ranger.inventory.getAmount(I.TRAINING_BOW), 1);
+  assert.equal(ranger.inventory.getAmount(I.TRAINING_SHORTBOW), 1);
   assert.equal(ranger.inventory.getAmount(I.TRAINING_ARROWS), 25);
 
   // The ranged tutor's pickup toggle: same ammo as the worn slot goes to the slot, not the bag.

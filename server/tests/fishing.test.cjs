@@ -1623,7 +1623,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   core.RegionManager.loadMapFiles(3228, 3236);
   player.setLocation(new Location(3228, 3236, 0));
   player.needsPlacement = false;
-  const arthur = NPC.create(N.ARTHUR_THE_CLUE_HUNTER, new Location(3229, 3236, 0));
+  const arthur = NPC.create(N.ARTHUR_2, new Location(3158, 3469, 0)); // Arthur, 8665 before rev 242
   arthur.setScriptedMovement(true);
   assert.equal(World.getNpcs().add(arthur), true);
   arthur.needsPlacement = false;

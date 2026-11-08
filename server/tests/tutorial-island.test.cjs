@@ -52,6 +52,8 @@ function tutorialPlayer(progress, x = 3102, y = 3095) {
   const sent = { messages: [], varps: new Map(), varbits: new Map(), scripts: [] };
   const sender = new Proxy({}, {
     get: (_, key) => (...args) => {
+      // Unset vars read 0: Adam (311) resolves his name through a varbit transform from rev 242.
+      if (key === "getVarbit" || key === "getVarp") return 0;
       if (key === "sendMessage") sent.messages.push(args[0]);
       if (key === "sendConfig") sent.varps.set(args[0], args[1]);
       if (key === "sendVarbit") sent.varbits.set(args[0], args[1]);

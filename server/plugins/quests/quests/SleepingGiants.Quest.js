@@ -323,11 +323,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     constructor(player) { super([new Boundary(3328, 3391, 11456, 11519, 0)]); this.owner = player; this.scene = false; }
     canAttack() { return false; }
     canTeleport() { return this.scene ? false : null; }
-    process(mobile) {
-      if (mobile !== this.owner) return;
-      resumeSceneWalk(mobile, this);
-      api.emitCustomEvent("giants-foundry:process", { player: mobile });
-    }
+    process(mobile) { if (mobile === this.owner) api.emitCustomEvent("giants-foundry:process", { player: mobile }); }
     postLeave(mobile, logout) {
       if (mobile === this.owner) {
         workshops.delete(mobile); TaskManager.cancelTasks(this); pendingRepair.delete(mobile);
@@ -358,32 +354,49 @@ module.exports = function registerSleepingGiantsQuest(api) {
 
   /**
    * The cutscene walks the player tile by tile at walking speed, as the server does in
-   * rsprox recording 96 (one HighResolutionMovement step per tick). The queue is only opened for
-   * the walk; the player's own clicks that would route (walk, NPC, object, ground item) are
-   * dropped before they reach it, so they cannot reset the scripted route.
+   * rsprox recording 96 (one HighResolutionMovement step per tick). Every tick a task sends the
+   * player one tile on, before the player's movement runs, so a click's interaction_stop (which
+   * clears the queue at the start of the turn) cannot cost a step. The player's own routing
+   * clicks are dropped (blockSceneInput) and the queue is blocked again on arrival.
    */
-  function sceneWalk(player, x, y) {
-    const workshop = workshops.get(player), queue = player.getMovementQueue(), start = player.getLocation();
-    if (!workshop) return;
+  class SceneWalkTask extends Task {
+    constructor(workshop, player, target, walk) { super(1, workshop, false); this.workshop = workshop; this.player = player; this.target = target; this.walk = walk; this.ticks = 0; }
+    execute() {
+      const { workshop, player, target } = this;
+      if (workshop.walkId !== this.walk || !workshop.scene) { this.stop(); return; }
+      if (++this.ticks > 12 || !stepTowards(player, target)) { // a blocked tile must not hold the scene forever
+        this.stop();
+        if (workshop.walkId === this.walk) workshop.target = null;
+      }
+    }
+  }
+
+  /** Queues the next tile of a straight walk; false once the player is on the target. */
+  function stepTowards(player, target) {
+    const queue = player.getMovementQueue(), at = player.getLocation();
+    const dx = Math.sign(target.x - at.getX()), dy = Math.sign(target.y - at.getY());
+    if (dx === 0 && dy === 0) { queue.setBlockMovement(true); return false; }
     queue.setBlockMovement(false);
-    queue.requestWalk(new Location(x, y, 0), false);
-    workshop.target = { x, y };
+    queue.requestWalk(new Location(at.getX() + dx, at.getY() + dy, 0), false);
+    return true;
+  }
+
+  function sceneWalk(player, x, y) {
+    const workshop = workshops.get(player);
+    if (!workshop) return;
     const walk = workshop.walkId = (workshop.walkId || 0) + 1;
-    later(workshop, Math.max(Math.abs(x - start.getX()), Math.abs(y - start.getY())) + 1, () => {
-      if (workshop.walkId !== walk) return;
-      workshop.target = null;
-      if (workshop.scene) queue.setBlockMovement(true);
-    });
+    workshop.target = { x, y };
+    if (stepTowards(player, workshop.target)) TaskManager.submit(new SceneWalkTask(workshop, player, workshop.target, walk));
+    else workshop.target = null;
   }
 
   /**
-   * Packets that are not world interactions (the client's interaction_stop before every walk click)
-   * still reset the queue; the scene sends the player on to the same tile again.
+   * The client's interaction_stop (sent before a walk click) clears the queue at the start of the
+   * turn, after this tick's step was queued and before the player's movement runs: queue it again.
    */
-  function resumeSceneWalk(player, workshop) {
-    const target = workshop.scene && workshop.target, queue = player.getMovementQueue(), at = player.getLocation();
-    if (!target || queue.size() > 0 || (at.getX() === target.x && at.getY() === target.y)) return;
-    queue.requestWalk(new Location(target.x, target.y, 0), false);
+  function resumeSceneWalk({ player }) {
+    const workshop = workshops.get(player);
+    if (workshop?.scene && workshop.target) stepTowards(player, workshop.target);
   }
 
   function blockSceneInput(event) {
@@ -939,6 +952,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onCustomEvent("player:world-input", blockSceneInput);
   api.onCustomEvent("player:movement-input", blockSceneKeyboard);
+  api.onCustomEvent("player:interaction-stop", resumeSceneWalk);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handlePlayerGone);
   api.onPlayerDeath(handlePlayerGone);

@@ -145,6 +145,10 @@ function gameTicks(count) {
     core.TaskManager.process();
   }
 }
+function rangingStrings(values) {
+  const overlay = require("../plugins/skills/construction/Ids.Construction").iface("poh_ranging");
+  return values.filter(value => (value.component >>> 16) === overlay);
+}
 
 test("failed equipment does not join an existing game or block its winner", async t => {
   const owner = gamesActor(t), guest = gamesActor(t), scene = gamesHouse(owner);
@@ -179,9 +183,10 @@ test("a delayed prize answer after leaving cannot start or reserve a game", asyn
   assert.ok(core.MultiChatboxPrompt.getPending(owner.p));
   scene.house.leave(owner.p, false);
   scene.house.enter(owner.p);
+  const before = owner.strings.length;
   await chooseGamePrompt(owner, "Yes");
   gameTicks(3);
-  assert.equal(owner.strings.some(value => value.text === "1"), false);
+  assert.deepEqual(rangingStrings(owner.strings.slice(before)), [], "the stale answer sends no ranging overlay");
   shootAt(owner, scene);
   assert.equal(core.MultiChatboxPrompt.getPending(owner.p)?.title, "Offer the prize for this game?");
 });
@@ -206,7 +211,7 @@ test("building-mode rebuild invalidates pending starts and active shot tasks", a
   const before = owner.strings.length;
   assert.equal(scene.house.rebuild(owner.p, true), true);
   gameTicks(3);
-  assert.equal(owner.strings.slice(before).some(value => value.text === "Winner!" || value.text === "1"), false);
+  assert.deepEqual(rangingStrings(owner.strings.slice(before)), [], "the invalidated task sends no ranging overlay");
   assert.equal(scene.house.rebuild(owner.p, false), true);
   shootAt(owner, scene);
   assert.equal(core.MultiChatboxPrompt.getPending(owner.p)?.title, "Offer the prize for this game?");

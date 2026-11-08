@@ -58,10 +58,15 @@ const DISPLAY_SCREEN_SCRIPT = 2524;
  * The museum's ground floor (Digsite), first and second floors (timeline) and the natural
  * history basement instance. Only players inside see the Kudos HUD (vm_kudos).
  */
+// Cache241 walls23818/23826/23829 enclose the hall and north-east stair wing.
+// Normal-world rsprox960 ticks1438–1442/1606–1608 keep532 off the exterior approach.
 const MUSEUM_BOUNDS = [
-  { minX: 3240, maxX: 3270, minY: 3435, maxY: 3467, z: 0 },
-  { minX: 3240, maxX: 3270, minY: 3435, maxY: 3467, z: 1 },
-  { minX: 3240, maxX: 3270, minY: 3435, maxY: 3467, z: 2 },
+  { minX: 3253, maxX: 3267, minY: 3442, maxY: 3455, z: 0 },
+  { minX: 3265, maxX: 3267, minY: 3456, maxY: 3459, z: 0 },
+  { minX: 3253, maxX: 3267, minY: 3442, maxY: 3455, z: 1 },
+  { minX: 3265, maxX: 3267, minY: 3456, maxY: 3459, z: 1 },
+  { minX: 3253, maxX: 3267, minY: 3442, maxY: 3455, z: 2 },
+  { minX: 3265, maxX: 3267, minY: 3456, maxY: 3459, z: 2 },
   { minX: 1735, maxX: 1785, minY: 4935, maxY: 4980, z: 0 },
 ];
 

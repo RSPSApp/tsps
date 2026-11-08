@@ -156,7 +156,7 @@ function lay(player, kind, location, base = null, ground = null) {
     } else if (!exchange(player, materials(def, player), [])) return;
     const trap = { player, kind, location: location.clone(), area: player.getPrivateArea(), base, objects: [],
       state: "idle", expires: H.tick + 100, next: H.tick + 5, npc: null, bait: null, smoked: false, rewards: null };
-    if (!["rabbit","pit"].includes(kind) && player.getInventory().contains(H.core.ItemIdentifiers.ANTI_ODOUR_SALT)
+    if (!["rabbit","pit"].includes(kind) && !def.noSmoke && player.getInventory().contains(H.core.ItemIdentifiers.ANTI_ODOUR_SALT)
       && exchange(player, [[H.core.ItemIdentifiers.ANTI_ODOUR_SALT, 1]], [])) trap.smoked = true;
     H.traps.add(trap);
     if (base) H.core.ObjectManager.deregister(base, true);
@@ -299,14 +299,16 @@ function bait(event) {
   const trap = owned(player, object);
   if (!trap || trap.state !== "idle" || !nearby(player, object)) return;
   const I = H.core.ItemIdentifiers;
+  const def = H.data.traps[trap.kind];
   if ([I.LIT_TORCH, I.BRUMA_TORCH].includes(itemId)) {
+    // TSPS wording: no recording shows the refusal on a tecu salamander's trap.
+    if (def.noSmoke) { player.sendMessage("Nothing interesting happens."); return; }
     trap.smoked = true;
     player.performAnimation(new H.core.Animation(ANIM.SMALL));
     player.sendMessage("You mask your scent with smoke.");
     return;
   }
   if (itemId === I.UNLIT_TORCH) { player.sendMessage("You must light the torch first."); return; }
-  const def = H.data.traps[trap.kind];
   // Wiki preferred bait per creature: deadfall kebbits/pyre fox, box chinchompas.
   const N = H.core.NpcIdentifiers;
   const deadfallBaits = { [N.WILD_KEBBIT]: I.RAW_BEEF,
@@ -318,7 +320,7 @@ function bait(event) {
     [N.CARNIVOROUS_CHINCHOMPA]: I.SPICY_MINCED_MEAT,
     [N.BLACK_CHINCHOMPA]: I.SPICY_MINCED_MEAT };
   const baits = { ...deadfallBaits, ...boxBaits };
-  const accepted = def.bait ? itemId === def.bait
+  const accepted = def.noBait ? false : def.bait ? itemId === def.bait
     : trap.kind === "magic" ? [I.RED_BEAD, I.YELLOW_BEAD, I.BLACK_BEAD, I.WHITE_BEAD].includes(itemId)
     : Object.values(trap.kind === "deadfall" ? deadfallBaits : trap.kind === "box" ? boxBaits : {}).includes(itemId);
   if (!accepted) { player.sendMessage("That isn't suitable bait for this trap."); return; }

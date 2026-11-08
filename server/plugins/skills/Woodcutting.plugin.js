@@ -195,7 +195,8 @@ const AXES = [
   axe(ItemIds.STEEL_AXE, 6, 2, 875, { standard: true }),
   axe(ItemIds.BLACK_FELLING_AXE, 11, 3, 10067, { felling: true }),
   axe(ItemIds.BLACK_AXE, 11, 3, 873, { standard: true }),
-  axe(ItemIds.BLESSED_AXE, 21, 4, 871),
+  // No blessed axe: it "does not retain the functionality of the mithril axe used to create it" and only chops the
+  // undead trees (Wiki: Blessed axe), which Animal Magnetism handles with its own check.
   axe(ItemIds.MITHRIL_FELLING_AXE, 21, 4, 10068, { felling: true }),
   axe(ItemIds.MITHRIL_AXE, 21, 4, 871, { standard: true }),
   axe(ItemIds.ADAMANT_FELLING_AXE, 31, 5, 10069, { felling: true }),

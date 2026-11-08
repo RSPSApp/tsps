@@ -261,3 +261,65 @@ test("Smiths gloves confirmations preserve stale, restricted and full inventorie
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 1);
   assert.equal(f.inv.getAmount(I.ICE_GLOVES), 0);
 });
+
+test("Smiths gloves protect each restricted component and imbued glove", (t) => {
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  for (const key of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    for (const protectedId of [I.SMITHS_GLOVES, I.ICE_GLOVES]) {
+      const f = actor(t);
+      const smiths = new core.Item(I.SMITHS_GLOVES, 1);
+      const ice = new core.Item(I.ICE_GLOVES, 1);
+      (protectedId === I.SMITHS_GLOVES ? smiths : ice).setMetaValue(key, true);
+      f.inv.setItem(0, smiths);
+      f.inv.setItem(1, ice);
+      UseItemPacketListener.itemOnItem(f.p, 0, 1);
+      assert.equal(core.MultiChatboxPrompt.getPending(f.p), null);
+      assert.strictEqual(f.inv.getItems()[0], smiths);
+      assert.strictEqual(f.inv.getItems()[1], ice);
+      assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 0);
+    }
+    const f = actor(t);
+    const gloves = new core.Item(I.SMITHS_GLOVES_I_, 1);
+    gloves.setMetaValue(key, true);
+    f.inv.setItem(0, gloves);
+    const index = core.CacheDefinitions.getItem(I.SMITHS_GLOVES_I_).inventoryActions.indexOf("Dismantle");
+    assert.ok(index >= 0);
+    PM.emitItemAction({ player: f.p, interfaceId: core.Inventory.INTERFACE_ID, item: gloves, itemId: gloves.getId(), slot: 0,
+      clickType: index + 1, option: "Dismantle", handled: false });
+    assert.equal(core.MultiChatboxPrompt.getPending(f.p), null);
+    assert.strictEqual(f.inv.getItems()[0], gloves);
+    assert.equal(f.inv.getAmount(I.SMITHS_GLOVES) + f.inv.getAmount(I.ICE_GLOVES), 0);
+  }
+});
+
+test("Smiths gloves combine in a full inventory and dismantle with one free slot", (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  const answer = () => core.MultiChatboxPrompt.handleInterfaceActionClick({
+    player: f.p, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: 1, action: 1,
+  });
+  f.inv.setItem(0, new core.Item(I.SMITHS_GLOVES, 1));
+  f.inv.setItem(1, new core.Item(I.ICE_GLOVES, 1));
+  for (let i = 2; i < f.inv.capacity(); i++) f.inv.setItem(i, new core.Item(I.BONES, 1));
+  assert.equal(f.inv.getFreeSlots(), 0);
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.ok(core.MultiChatboxPrompt.getPending(f.p));
+  answer();
+  assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 1);
+  assert.equal(f.inv.getAmount(I.SMITHS_GLOVES) + f.inv.getAmount(I.ICE_GLOVES), 0);
+  assert.equal(f.inv.getAmount(I.BONES), f.inv.capacity() - 2);
+  assert.equal(f.inv.getFreeSlots(), 1);
+  const slot = slotOf(f, I.SMITHS_GLOVES_I_);
+  const gloves = f.inv.getItems()[slot];
+  const index = core.CacheDefinitions.getItem(gloves.getId()).inventoryActions.indexOf("Dismantle");
+  assert.ok(index >= 0);
+  PM.emitItemAction({ player: f.p, interfaceId: core.Inventory.INTERFACE_ID, item: gloves, itemId: gloves.getId(), slot,
+    clickType: index + 1, option: "Dismantle", handled: false });
+  assert.ok(core.MultiChatboxPrompt.getPending(f.p));
+  answer();
+  assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 0);
+  assert.equal(f.inv.getAmount(I.SMITHS_GLOVES), 1);
+  assert.equal(f.inv.getAmount(I.ICE_GLOVES), 1);
+  assert.equal(f.inv.getAmount(I.BONES), f.inv.capacity() - 2);
+  assert.equal(f.inv.getFreeSlots(), 0);
+});

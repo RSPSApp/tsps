@@ -65,6 +65,9 @@ const tile = (coordinates) => coordinates && new core.Location(...coordinates);
  */
 function landing(centre) {
   if (!centre) return centre;
+  // The Watchtower's tower top and Ape Atoll's landing keep their one tile (docs/teleport-tablets.md): around them the
+  // square holds tiles the player can't walk out of (outside the tower's walls; a sealed pocket on Ape Atoll).
+  if (FIXED_LANDINGS.some((name) => standardCentre(name)?.equals(centre))) return centre;
   const tiles = [];
   for (let dx = -LANDING_RADIUS; dx <= LANDING_RADIUS; dx++) {
     for (let dy = -LANDING_RADIUS; dy <= LANDING_RADIUS; dy++) {
@@ -74,6 +77,9 @@ function landing(centre) {
   }
   return tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : centre;
 }
+
+/** Standard teleports that land on their own tile, not the 5x5 square (and their tablets, Break included). */
+const FIXED_LANDINGS = ["watchtower teleport", "ape atoll teleport"];
 
 /** Where a standard spellbook teleport lands around, by spell name (not the house). */
 function standardCentre(name) {

@@ -336,3 +336,21 @@ test("the ring panel's alchemy leaves a Spellbook Swap alone", async t => {
   assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "the swap is still on");
   assert.ok(f.p.getAttribute("lunar:spellbook-swap"), "and its one spell is still to come");
 });
+
+// #1407 review: Close returned on the session check (the exact ring object held) before it was read, so a ring
+// banked (or banked and withdrawn, a new object) with the panel open left the panel mounted and no inventory.
+test("Close restores the inventory after the ring is banked, or banked and withdrawn",async t=>{
+  const panel=core.CacheDefinitions.getInterfaceId("lumbridge_alchemy"),inventory=core.CacheDefinitions.getInterfaceId("inventory");
+  for(const withdraw of [false,true]){
+    const f=actor(t);await f.open();
+    const sender=f.p.getPacketSender();assert.equal(sender.isSubInterfaceOpen(panel),true);
+    const ring=id("lumbridge_ring_elite");
+    f.p.getBank(0).open();core.Bank.deposit(f.p,ring,0,1,false);assert.equal(f.p.getInventory().getAmount(ring),0);
+    if(withdraw){const tab=core.Bank.getTabForItem(f.p,ring),bank=f.p.getBank(tab);core.Bank.withdraw(f.p,ring,bank.getSlotForItemId(ring),1,tab);
+      assert.equal(f.p.getInventory().getAmount(ring),1,"a new ring object");}
+    sender.sendInterfaceRemoval();
+    await click(f,"close");
+    assert.equal(sender.isSubInterfaceOpen(panel),false,`the panel closes (withdrawn: ${withdraw})`);
+    assert.equal(sender.isSubInterfaceOpen(inventory),true,"the inventory is back");
+  }
+});

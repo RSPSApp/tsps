@@ -96,6 +96,10 @@ test("skills the player can't train yet are skipped", () => {
   const xp = { HERBLORE: 0, RUNECRAFTING: 0, CONSTRUCTION: 0, SAILING: 0, HUNTER: 10 };
   assert.equal(lowestSkill(fakePlayer({ xp })).name, "HUNTER");
   assert.equal(lowestSkill(fakePlayer({ xp, quests: { druidic_ritual: 4 } })).name, "HERBLORE");
+  // Wiki: "Sailing requires completing the Pandemonium quest" - started (2) or part-way is not enough.
+  const sailing = { ...xp, SAILING: 0, HUNTER: 10, HERBLORE: 20, RUNECRAFTING: 20, CONSTRUCTION: 20 };
+  for (const stage of [2, 30, 49]) assert.equal(lowestSkill(fakePlayer({ xp: sailing, quests: { pandemonium: stage } })).name, "HUNTER", `stage ${stage}`);
+  assert.equal(lowestSkill(fakePlayer({ xp: sailing, quests: { pandemonium: 50 } })).name, "SAILING");
 });
 
 test("Juna lets a player in once a week, after new adventures", () => {

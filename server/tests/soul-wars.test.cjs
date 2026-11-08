@@ -1156,38 +1156,63 @@ test('the scoreboard: a game with bots alone on one side is no game for the worl
 });
 
 // Actual decoded item-on-player route, using real players in a real Soul Wars match.
-test('a bandage used on a teammate reaches the registered Soul Wars handler', async (t) => {
+test('Soul Wars supplies used on players reach registered handlers', async (t) => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { ClientConnection } = require('../dist/net/NetworkBuilder');
   const World = core.World;
   const savedCycle = World.processCycle, savedBotEnv = process.env.DISABLE_PLAYER_BOTS, actors = [], tasks = new Set();
-  process.env.DISABLE_PLAYER_BOTS = "1";
   const addBefore = new Set(World.getAddNPCQueue()), removeBefore = new Set(World.getRemoveNPCQueue());
   const submit = TaskManager.submit;
-  TaskManager.submit = function(task) { tasks.add(task); return submit.call(this, task); };
+  const savedSeedBots = config['SoulWars:seedBots'];
   let game, otherGame;
+  const hookErrors = [], originalError = console.error;
   t.after(() => {
-    try {
-      if (otherGame && !otherGame.over) otherGame.finish(null);
-      if (game && !game.over) game.finish(null);
-    } finally {
-    for (const task of tasks) task.stop();
-    TaskManager.submit = submit;
-    for (const { p, channel } of actors) {
-      TaskManager.cancelTasks(p); TaskManager.cancelTasks(p.getIndex());
-      World.getPlayers().remove(p); channel.close();
+    const failures = [];
+    const attempt = fn => { try { fn(); } catch (error) { failures.push(error); } };
+    attempt(() => { if (otherGame && !otherGame.over) otherGame.finish(null); });
+    attempt(() => { if (game && !game.over) game.finish(null); });
+    for (const task of tasks) attempt(() => task.stop());
+    for (const actor of actors) {
+      const { p, channel } = actor;
+      const index = actor.index ?? (p.isRegistered() ? p.getIndex() : null);
+      if (Number.isInteger(index) && World.getPlayers().get(index) === p) {
+        attempt(() => PluginManager.emitPlayerDisconnect({ player:p, username:p.getUsername() }));
+        attempt(() => PluginManager.emitPlayerLogout({ player:p, username:p.getUsername() }));
+      }
+      attempt(() => p.closeInterruptibleInterfaces());
+      attempt(() => p.getMovementQueue().reset());
+      attempt(() => p.getMovementQueue().walkToReset());
+      attempt(() => TaskManager.cancelTasks(p));
+      if (Number.isInteger(index)) attempt(() => TaskManager.cancelTasks(index));
+      if (Number.isInteger(index) && World.getPlayers().get(index) === p) attempt(() => World.getPlayers().remove(p));
+      attempt(() => channel.close());
+      attempt(() => assert.equal(p.isRegistered(), false, 'native actor removed'));
+      attempt(() => assert.equal(p.getMovementQueue().hasPendingWork(), false, 'movement closed'));
+      attempt(() => assert.equal(TaskManager.hasActiveTask(p), false, 'player tasks stopped'));
+      if (Number.isInteger(index)) {
+        attempt(() => assert.notEqual(World.getPlayers().get(index), p, 'world no longer holds actor'));
+        attempt(() => assert.equal(TaskManager.hasActiveTask(index), false, 'indexed tasks stopped'));
+      }
     }
     for (const [queue, before] of [[World.getAddNPCQueue(), addBefore], [World.getRemoveNPCQueue(), removeBefore]]) {
       for (let i = queue.length - 1; i >= 0; i--) if (!before.has(queue[i])) {
-        World.getNpcs().remove(queue[i]); queue.splice(i, 1);
+        attempt(() => World.getNpcs().remove(queue[i])); queue.splice(i, 1);
       }
     }
+    TaskManager.submit = submit;
     World.processCycle = savedCycle;
     if (savedBotEnv === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = savedBotEnv;
-    assert.equal([...tasks].some(task => task.isRunning()), false, 'owned tasks stopped');
-    assert.equal(actors.some(({p}) => p.isRegistered()), false, 'native actors removed');
-    }
+    if (savedSeedBots === undefined) delete config['SoulWars:seedBots']; else config['SoulWars:seedBots'] = savedSeedBots;
+    attempt(() => assert.equal([...tasks].some(task => task.isRunning()), false, 'owned tasks stopped'));
+    attempt(() => assert.deepEqual(hookErrors, [], 'plugin hooks did not throw'));
+    if (failures.length) throw new AggregateError(failures, 'Soul Wars fixture cleanup failed');
+  });
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  TaskManager.submit = function(task) { tasks.add(task); return submit.call(this, task); };
+  t.mock.method(console, 'error', (...args) => {
+    if (String(args[0]).startsWith('[plugins]')) hookErrors.push(args);
+    originalError(...args);
   });
   config['SoulWars:seedBots'] = false;
   assert.equal(process.env.DISABLE_PLAYER_BOTS, '1');
@@ -1195,14 +1220,18 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
     const channel = { kind:'test', remoteAddress:'127.0.0.1', isOpen:()=>true, send:()=>true,
       close(){}, onData(){}, onError(){}, onClose(){} };
     const session = new PlayerSession(channel), p = new Player(session);
+    const actor = {p, channel, connection: null, messages: [], index: null};
+    actors.push(actor);
     session.setPlayer(p); p.setUsername(`swbandage${i}`); p.setNeedsPlacement(false);
     p.setAttribute('bot-skip-persistence', true);
     // Exclude login/logout persistence; all combat, inventory, placement and packet routes remain native.
     t.mock.method(p, 'onAdd', () => {}); t.mock.method(p, 'onRemove', () => {});
-    const messages = []; t.mock.method(p, 'sendMessage', message => messages.push(message));
+    const messages = actor.messages; t.mock.method(p, 'sendMessage', message => messages.push(message));
     const connection = new ClientConnection(channel); connection.player = p;
-    actors.push({p, channel, connection, messages});
-    assert.equal(World.getPlayers().add(p), true, 'native player registered');
+    actor.connection = connection;
+    const added = World.getPlayers().add(p);
+    actor.index = p.getIndex();
+    assert.equal(added, true, 'native player registered');
   }
   assert.equal(Common.data.items.bandages, 25202, 'Soul Wars source binds the pinned item');
   assert.equal(core.CacheDefinitions.getItem(Common.data.items.bandages).name, 'Bandages', 'active cache resolves the named item');
@@ -1228,6 +1257,94 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   }
   assert.equal(reached, true, 'native collision and reach confirm adjacent usable arena tiles');
   healer.p.setNeedsPlacement(false); patient.p.setNeedsPlacement(false);
+  for (const a of [healer, patient]) {
+    assert.ok(a.p.getHitpoints() > 0);
+    assert.equal(a.p.isRegistered(), true);
+    assert.equal(a.p.getPrivateArea(), game.area);
+    assert.equal(game.area.contains(a.p.getLocation()), true);
+  }
+  assert.equal(game.teamOf(healer.p), game.teamOf(patient.p));
+  const bones = Common.data.items.bones;
+  assert.equal(bones, 25199);
+  assert.equal(core.CacheDefinitions.getItem(bones).name, 'Bones');
+  async function giveBones(target, slot) {
+    const before = nativeItemUses.length;
+    await healer.connection.dispatch([{type:'item_on_player', widgetId:149 << 16, targetIndex:target.getIndex(), itemId:bones, slot}]);
+    for (let i = 0; i < 4; i++) {
+      World.processCycle++; TaskManager.process(); healer.connection.processTurnPackets();
+      healer.p.getMovementQueue().process(); TaskManager.processWalkTo(healer.p.getIndex());
+    }
+    assert.equal(nativeItemUses.length, before + 1, 'bones request reaches the native dispatcher');
+    assert.equal(nativeItemUses.at(-1).itemId, bones);
+    assert.equal(nativeItemUses.at(-1).slot, slot);
+  }
+  healer.p.getInventory().setItem(0, new core.Item(bones, 1));
+  healer.p.getInventory().setItem(2, new core.Item(bones, 1));
+  patient.p.setAttribute('accept-aid', false);
+  await giveBones(patient.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 2, 'refused aid conserves both bones');
+  assert.equal(patient.p.getInventory().getAmount(bones), 0);
+  patient.p.setAttribute('accept-aid', true);
+  assert.equal(core.ItemDefinition.forId(Common.data.items.bandages).isStackable(), false);
+  for (let slot = 0; slot < patient.p.getInventory().capacity(); slot++) {
+    patient.p.getInventory().setItem(slot, new core.Item(Common.data.items.bandages, 1));
+  }
+  assert.equal(patient.p.getInventory().getFreeSlots(), 0);
+  await giveBones(patient.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 2, 'full recipient inventory conserves bones');
+  assert.equal(patient.p.getInventory().getAmount(bones), 0);
+  assert.equal(patient.p.getInventory().getAmount(Common.data.items.bandages), patient.p.getInventory().capacity());
+  patient.p.getInventory().resetItems();
+  const enemyForBones = actors.find(a => game.teamOf(a.p) !== game.teamOf(healer.p));
+  enemyForBones.p.moveTo(patient.p.getLocation().clone()); enemyForBones.p.setNeedsPlacement(false);
+  await giveBones(enemyForBones.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 2, 'enemy refusal conserves bones');
+  assert.equal(enemyForBones.p.getInventory().getAmount(bones), 0);
+  for (const key of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    const selected = new core.Item(bones, 1);
+    selected.setMetaValue(key, true);
+    healer.p.getInventory().setItem(2, selected);
+    await giveBones(patient.p, 2);
+    assert.equal(healer.p.getInventory().getItems()[2], selected, 'restricted selected item remains');
+    assert.equal(selected.getMetaValue(key), true);
+    assert.equal(patient.p.getInventory().getAmount(bones), 0);
+  }
+  healer.p.getInventory().setItem(2, new core.Item(bones, 1));
+  const adjacentBones = healer.p.getLocation().clone(), patientBonesTile = patient.p.getLocation().clone();
+  let distantBones = null;
+  for (let dx = -5; dx <= 5 && !distantBones; dx++) for (let dy = -5; dy <= 5 && !distantBones; dy++) {
+    const tile = new core.Location(patientBonesTile.getX() + dx, patientBonesTile.getY() + dy, patientBonesTile.getZ());
+    if (game.area.contains(tile) && tile.getDistance(patientBonesTile) >= 3 && !core.RegionManager.blocked(tile, game.area)) distantBones = tile;
+  }
+  assert.ok(distantBones, 'standable distant tile for deferred use');
+  for (const change of ['replace', 'aid']) {
+    healer.p.moveTo(distantBones); healer.p.setNeedsPlacement(false);
+    const original = healer.p.getInventory().getItems()[2], before = nativeItemUses.length;
+    await healer.connection.dispatch([{type:'item_on_player', widgetId:149 << 16, targetIndex:patient.p.getIndex(), itemId:bones, slot:2}]);
+    World.processCycle++; TaskManager.process(); healer.connection.processTurnPackets();
+    assert.equal(nativeItemUses.length, before, 'deferred bones use has not arrived');
+    let held = original;
+    if (change === 'replace') {
+      held = new core.Item(bones, 1);
+      healer.p.getInventory().setItem(2, held);
+    } else patient.p.setAttribute('accept-aid', false);
+    healer.p.moveTo(adjacentBones); healer.p.setNeedsPlacement(false);
+    for (let i = 0; i < 4; i++) {
+      World.processCycle++; TaskManager.process(); healer.p.getMovementQueue().process(); TaskManager.processWalkTo(healer.p.getIndex());
+    }
+    assert.equal(nativeItemUses.length, before + 1, 'deferred callback reaches the dispatcher');
+    assert.equal(nativeItemUses.at(-1).item, original);
+    assert.equal(healer.p.getInventory().getItems()[2], held, 'selected or replacement item survives');
+    assert.equal(patient.p.getInventory().getAmount(bones), 0, 'recipient receives nothing');
+    patient.p.setAttribute('accept-aid', true);
+  }
+  await giveBones(patient.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 1, 'giving bones spends the selected item');
+  assert.equal(healer.p.getInventory().getItems()[0].getId(), bones, 'unselected bone remains');
+  assert.ok(healer.p.getInventory().getItems()[2].getId() < 0, 'clicked slot is empty');
+  assert.equal(patient.p.getInventory().getAmount(bones), 1, 'teammate receives the bone');
+  healer.p.getInventory().deleteAtSlot(0, 1);
+  patient.p.getInventory().delete(bones, 1);
   healer.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 80).setCurrentLevel(core.Skill.HITPOINTS, 40, true);
   patient.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevel(core.Skill.HITPOINTS, 50, true);
   healer.p.getInventory().setItem(0, new core.Item(Common.data.items.bandages, 1));
@@ -1269,7 +1386,13 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   enemy.p.moveTo(patient.p.getLocation().clone()); enemy.p.setNeedsPlacement(false);
   enemy.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevel(core.Skill.HITPOINTS, 50, true);
   enemy.p.setRunEnergy(21);
-  game.activity.set(healer.p, 17);
+  const activityAfterTicks = (initial, start) => {
+    const { drain, from } = Common.data.activity;
+    const drainingTicks = Math.max(0, game.elapsed - Math.max(start, from - 1));
+    return Math.max(0, initial - drainingTicks * drain);
+  };
+  game.activity.set(healer.p, 100);
+  const enemyActivityStart = game.elapsed;
   const healerHpBeforeRefusals = healer.p.getHitpoints(), healerRunBeforeRefusals = healer.p.getRunEnergy();
   const beforeEnemy = nativeItemUses.length, enemyMessages = enemy.messages.length, healerBeforeEnemy = healer.messages.length;
   await use(enemy.p, 0);
@@ -1279,10 +1402,13 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   assert.equal(healer.messages.length, healerBeforeEnemy + 1);
   assert.equal(healer.messages.at(-1), "You can't bandage an opposing player.");
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'enemy use spends nothing');
-  assert.equal(enemy.p.getRunEnergy(), 21); assert.equal(game.activity.get(healer.p), 17, 'enemy refusal is not activity');
+  assert.equal(enemy.p.getRunEnergy(), 21);
+  assert.equal(game.activity.get(healer.p), activityAfterTicks(100, enemyActivityStart), 'enemy refusal does not reset activity');
   assert.equal(healer.p.getHitpoints(), healerHpBeforeRefusals); assert.equal(healer.p.getRunEnergy(), healerRunBeforeRefusals);
   patient.p.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, true);
   patient.p.setRunEnergy(100); patient.p.setPoisonDamage(0); patient.p.setVenomed(false);
+  game.activity.set(healer.p, 100);
+  const noNeedActivityStart = game.elapsed;
   const beforeNoNeed = nativeItemUses.length, beforeNoNeedMessages = patient.messages.length, healerBeforeNoNeed = healer.messages.length;
   await use(patient.p, 0);
   assert.equal(nativeItemUses.length, beforeNoNeed + 1, 'full teammate request reaches the registered path');
@@ -1290,7 +1416,7 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   assert.equal(healer.messages.length, healerBeforeNoNeed + 1);
   assert.equal(healer.messages.at(-1), `${patient.p.getDisplayName()} does not currently need bandaging.`);
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'full healthy teammate does not consume a bandage under TSPS policy');
-  assert.equal(game.activity.get(healer.p), 17, 'no-need refusal is not activity');
+  assert.equal(game.activity.get(healer.p), activityAfterTicks(100, noNeedActivityStart), 'no-need refusal does not reset activity');
   assert.equal(patient.p.getHitpoints(), 99); assert.equal(patient.p.getRunEnergy(), 100);
   assert.equal(healer.p.getHitpoints(), healerHpBeforeRefusals); assert.equal(healer.p.getRunEnergy(), healerRunBeforeRefusals);
   patient.p.setPoisonDamage(6); patient.p.setVenomed(true);

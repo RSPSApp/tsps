@@ -4450,6 +4450,15 @@ export class OsrsClient {
         this.deviceOptions.set(DEVICE_OPTION_SCREEN_BRIGHTNESS, brightness);
         saveScreenBrightness(brightness);
         if (this.renderer) this.renderer.brightness = gammaFromScreenBrightness(brightness);
+        this.screenBrightnessListener?.(brightness);
+    }
+
+    /** Receives every brightness the client applies; the GPU plugin mirrors it into its own option. */
+    screenBrightnessListener?: (value: number) => void;
+
+    /** The current Settings "Screen brightness" (0..100). */
+    getScreenBrightness(): number {
+        return this.deviceOptions.get(DEVICE_OPTION_SCREEN_BRIGHTNESS) ?? loadScreenBrightness();
     }
 
     private applyInterfaceScalingPercentDeviceOption(value: number): void {

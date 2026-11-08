@@ -28,6 +28,8 @@ function instanceClass() {
 
     getName() { return "Kraken Cove"; }
     isMulti() { return true; }
+    // OSRS update, 17 August 2017: floor items last 30 minutes in the instance.
+    groundItemDespawnDelay() { return 3000; }
     canAttack(attacker, target) {
       if (!attacker?.isPlayer?.() || !target?.isNpc?.()) return null;
       return Shared.onTask(attacker.getAsPlayer(), target) ? null : false;

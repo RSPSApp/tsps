@@ -119,6 +119,8 @@ export class ItemOnGroundManager {
         }
     }
     public static register(item: ItemOnGround) {
+        const areaDelay = item.getPrivateArea()?.groundItemDespawnDelay?.();
+        if (item.despawnDelay == null && areaDelay != null) item.setDespawnDelay(areaDelay);
         // Check for merge with existing stackables..
         if (item.getItem().getDefinition().isStackable()) {
             if (this.merge(item)) {

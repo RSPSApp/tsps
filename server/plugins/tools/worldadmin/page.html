@@ -164,13 +164,14 @@
   .label { font-weight: 700; color: var(--text); text-shadow: var(--label-shadow); }
   .title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .info-wrap { position: relative; display: inline-flex; }
-  .info {
+  /* Not ".info": that is also a banner kind (.banner.info), which this rule shrank to an icon. */
+  .info-button {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5em; height: 1.5em; padding: 0; border: none; border-radius: 50%;
     background: none; color: var(--muted); cursor: help; text-shadow: none;
   }
-  .info:hover, .info:focus-visible { color: var(--heading); filter: none; }
-  .info svg { width: 1em; height: 1em; display: block; }
+  .info-button:hover, .info-button:focus-visible { color: var(--heading); filter: none; }
+  .info-button svg { width: 1em; height: 1em; display: block; }
   .tip {
     position: absolute; left: 0; top: 100%; z-index: 4;
     width: max-content; max-width: min(320px, 70vw);
@@ -513,7 +514,7 @@
   /** Row title plus an info button whose tooltip holds the key or file (shown on hover and focus). */
   function titleLine(label, detail) {
     var tipId = nextId("tip");
-    var button = el("button", { type: "button", className: "info", title: detail,
+    var button = el("button", { type: "button", className: "info-button", title: detail,
       "aria-label": "Details: " + detail, "aria-describedby": tipId,
       onkeydown: function (event) { if (event.key === "Escape") button.blur(); } }, [infoIcon()]);
     var tip = el("span", { className: "tip", role: "tooltip", id: tipId, text: detail });
@@ -1211,10 +1212,35 @@
     updateFooter();
   });
 
+  /**
+   * The edits as the server takes them. A value that is what the world gets with no entry at all
+   * (world.json has none, and it equals the declared default, or the plugin's own default) goes
+   * as null, so the key leaves world.local.json instead of being written out.
+   */
   function changesPayload() {
+    var catalog = state.data && state.data.catalog;
+    var optionsBySection = { world: {}, pluginConfig: {} };
+    if (catalog) {
+      (catalog.world || []).forEach(function (o) { optionsBySection.world[o.key] = o; });
+      (catalog.options || []).forEach(function (o) { optionsBySection.pluginConfig[o.key] = o; });
+    }
     var changes = {};
     ["world", "plugins", "pluginConfig"].forEach(function (section) {
-      if (Object.keys(state.edits[section]).length) changes[section] = state.edits[section];
+      var keys = Object.keys(state.edits[section]);
+      if (!keys.length) return;
+      var out = {};
+      keys.forEach(function (key) {
+        var value = state.edits[section][key];
+        if (value !== null && section === "plugins") {
+          var plugin = state.byName[key];
+          if (plugin && plugin.shippedSwitch === undefined && plugin.localSwitch !== undefined && value === plugin.defaultEnabled) value = null;
+        } else if (value !== null) {
+          var option = optionsBySection[section][key];
+          if (option && option.shipped === undefined && option.decl.default !== undefined && same(value, option.decl.default)) value = null;
+        }
+        out[key] = value;
+      });
+      changes[section] = out;
     });
     return changes;
   }

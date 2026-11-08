@@ -103,3 +103,28 @@ test('requiring every real plugin leaves no timer or socket behind', () => {
   assert.deepEqual(out.bad, []);
   assert.equal(out.grew, 0);
 });
+
+test('plugins report world.json and world.local.json switches so the page can send null to remove a local entry', () => {
+  const dir = fixture({
+    'a/Listed.plugin.js': plugin('Listed'),
+    'a/LocalOnly.plugin.js': plugin('LocalOnly'),
+    'a/ByFile.plugin.js': plugin('Renamed'),
+  });
+  try {
+    const data = WorldConfigCatalog.build(dir, layers(
+      { plugins: { listed: false, ByFile: true } },
+      { plugins: { Listed: true, LocalOnly: false } }, 'switches'));
+    const byName = Object.fromEntries(data.plugins.map((p) => [p.name, p]));
+    assert.equal(byName.Listed.shippedSwitch, false, 'matched case-insensitively');
+    assert.equal(byName.Listed.localSwitch, true);
+    assert.equal(byName.LocalOnly.shippedSwitch, undefined);
+    assert.equal(byName.LocalOnly.localSwitch, false);
+    assert.equal(byName.Renamed.shippedSwitch, true, 'matched by file name');
+    assert.equal(byName.Renamed.localSwitch, undefined);
+
+    const legacy = WorldConfigCatalog.build(dir, layers({ disabledPlugins: ['Listed'] }, { plugins: { LocalOnly: false } }, 'legacy'));
+    assert.equal(legacy.plugins.find((p) => p.name === 'LocalOnly').localSwitch, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

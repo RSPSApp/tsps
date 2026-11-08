@@ -8,7 +8,7 @@ import {
 import { mergeWorldConfig } from "../game/definition/WorldDefinition";
 import { WorldConfigLayers } from "../game/definition/WorldConfigStore";
 import { PluginModule } from "./PluginTypes";
-import { PluginManager, pluginNameFromFile, resolvePluginEnabled } from "./PluginManager";
+import { PluginManager, normalizePluginName, pluginNameFromFile, resolvePluginEnabled } from "./PluginManager";
 
 export interface CatalogPlugin {
     name: string;
@@ -19,6 +19,10 @@ export interface CatalogPlugin {
     members: boolean;
     dependsOn: string[];
     defaultEnabled: boolean;
+    /** world.json's switch for it (by name or file name), if it has one. */
+    shippedSwitch?: boolean;
+    /** world.local.json's `plugins` entry under exactly this name, if any. */
+    localSwitch?: boolean;
     enabled: boolean;
     loaded: boolean;
 }
@@ -77,6 +81,13 @@ export class WorldConfigCatalog {
         }
         const { switches, defaultEnabled } = parsedSwitches;
         const membersWorld = merged.membersWorld !== false;
+        const shippedSwitches = new Map<string, boolean>();
+        for (const [key, value] of Object.entries(plainObject(layers.shipped.plugins))) {
+            if (typeof value === "boolean") shippedSwitches.set(normalizePluginName(key), value);
+        }
+        // A legacy disabledPlugins list in world.json overrides every "plugins" entry and default,
+        // so no local entry is reported there and the page never asks to remove one.
+        const localPlugins = Array.isArray(layers.shipped.disabledPlugins) ? {} : plainObject(layers.local.plugins);
 
         const found: { plugin: CatalogPlugin; module: PluginModule }[] = [];
         for (const file of PluginManager.discoverPluginFiles(pluginDirectory, PluginManager.MAX_PLUGIN_DEPTH)) {
@@ -102,6 +113,10 @@ export class WorldConfigCatalog {
                     members: module.members === true,
                     dependsOn: PluginManager.normalizePluginDependencies(name, module.dependsOn, file),
                     defaultEnabled: module.enabled !== false,
+                    shippedSwitch: shippedSwitches.get(normalizePluginName(name)) ?? shippedSwitches.get(normalizePluginName(fileName)),
+                    localSwitch: Object.prototype.hasOwnProperty.call(localPlugins, name) && typeof localPlugins[name] === "boolean"
+                        ? (localPlugins[name] as boolean)
+                        : undefined,
                     enabled: resolvePluginEnabled(switches, defaultEnabled, name, fileName, module.enabled),
                     loaded: false,
                 },

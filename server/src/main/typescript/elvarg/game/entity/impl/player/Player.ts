@@ -1152,7 +1152,9 @@ export class Player extends Mobile {
     }
 
     public setRunEnergy(runEnergyPercent: number) {
-        this.setRunEnergyUnits(runEnergyPercent * 100);
+        // A percent read back from units (getRunEnergy, a save, a stash) isn't exact in floating point: 0.29 * 100 is
+        // 28.999..., which flooring lost a unit of on every relog. A hair over keeps floor semantics for real fractions.
+        this.setRunEnergyUnits(runEnergyPercent * 100 + 1e-6);
     }
 
     /** Run energy in OSRS units (0-10,000), the precision the formulas and the client use. */

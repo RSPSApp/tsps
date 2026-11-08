@@ -778,6 +778,14 @@ test("a kill reported both by the death and by the credited-kill event counts on
   assert.ok(!completed(league).includes("defeat-callisto-50-times"));
 });
 
+test("a kill reported as \"Hueycoatl, The\" credits the tasks named \"The Hueycoatl\"", () => {
+  worldLeague = 6;
+  const league = character("hueycoatl");
+  worldLeague = 4;
+  creditedKill(league, "Hueycoatl, The"); // Kills.Hueycoatl's report
+  assert.equal(league.getAttribute("league:task-kills")["defeat-hueycoatl-50-times"], 1);
+});
+
 test("a kill reported a few ticks after its death (Araxxor's corpse) still counts once; two deaths still count twice", (t) => {
   let cycle = 50000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);

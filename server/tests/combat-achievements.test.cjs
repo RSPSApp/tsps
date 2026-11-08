@@ -184,6 +184,13 @@ test("kill counts: a named NPC's death counts and finishes the kill-count tasks 
   assert.equal(Progress.isComplete(player, kbd.tasks.find((task) => task.killCount === 25).id), false);
 });
 
+test("kill counts: a report as \"The Nightmare\" counts for the monster named \"Nightmare, The\"", () => {
+  const player = createPlayer();
+  Kills.onKill({ player, monster: "The Nightmare", count: 1 }); // Fight.Nightmare's report
+  assert.equal(Kills.killCount(player, Data.monsterNamed("Nightmare, The")), 1);
+  assert.equal(Data.monsterNamed("The Nightmare"), Data.monsterNamed("Nightmare, The"));
+});
+
 test("kill counts: a Zulrah kill counts once; its plugin reports it, and the generic death doesn't count it too", () => {
   const player = createPlayer();
   const zulrah = Data.monsterNamed("Zulrah");

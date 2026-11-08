@@ -247,13 +247,13 @@ test("Smiths gloves confirmations preserve stale, restricted and full inventorie
   answer();
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 1);
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES), 0);
-  f.inv.setItem(1, null);
+  f.inv.deleteAtSlot(1, 1);
   itemAction(0);
   assert.ok(core.MultiChatboxPrompt.getPending(f.p));
   f.inv.setItem(1, new core.Item(I.BONES, 1));
   answer();
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 1, "space is checked again after the prompt");
-  f.inv.setItem(1, null);
+  f.inv.deleteAtSlot(1, 1);
   itemAction(0);
   assert.ok(core.MultiChatboxPrompt.getPending(f.p));
   f.inv.setItem(0, new core.Item(I.SMITHS_GLOVES_I_, 1));

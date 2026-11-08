@@ -46,10 +46,10 @@
  *     the book/scroll has no transcript of its own, so the search variant's own message
  *     lines are reused and the stage advances. The fan dries the bar instantly instead of
  *     on a timer. Random crate contents are rolled with Math.random once per player.
- *   - Post-quest mind shield smithing (slashed book) is not implemented.
+ *   - Mind shield smithing is supported only for item use after completion with the slashed book alone.
  */
 module.exports = function registerElementalWorkshopIIQuest(api) {
-  const { ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
+  const { Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Elemental Workshop II";
@@ -114,6 +114,8 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   const SMALL_COG = ItemIdentifiers.SMALL_COG; // 9726
   const PRIMED_BAR = ItemIdentifiers.PRIMED_BAR; // 9727
   const PRIMED_MIND_BAR = ItemIdentifiers.PRIMED_MIND_BAR; // 9728
+  const SLASHED_BOOK = ItemIdentifiers.SLASHED_BOOK;
+  const MIND_SHIELD = ItemIdentifiers.MIND_SHIELD;
   const MIND_HELMET = ItemIdentifiers.MIND_HELMET; // 9733
   const ELEMENTAL_METAL = ItemIdentifiers.ELEMENTAL_METAL; // 2893
   const HAMMER = ItemIdentifiers.HAMMER; // 2347
@@ -894,6 +896,19 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     quest.complete(player);
   }
 
+  function makeMindShield(event) {
+    const { player, itemSlot, item } = event;
+    const inventory = player.getInventory();
+    const held = inventory.getItems()[itemSlot];
+    // The packet can be delayed by walking. Only replace the original plain, unstacked bar.
+    if (!Number.isInteger(itemSlot) || held !== item || held?.getId() !== PRIMED_MIND_BAR
+      || held.getAmount() !== 1 || held.getMeta() != null) return;
+    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 30 || !has(player, HAMMER)) return;
+    inventory.setItem(itemSlot, new Item(MIND_SHIELD, 1));
+    inventory.refreshItems();
+    player.getSkillManager().addExperiences(Skill.SMITHING, 30);
+  }
+
   function smithWorkbench(player) {
     if (has(player, ELEMENTAL_METAL) || has(player, PRIMED_MIND_BAR) || has(player, PRIMED_BAR)) return;
     play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-elemental-metal");
@@ -1100,7 +1115,11 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       }
       if (itemId === PRIMED_MIND_BAR) {
         event.handled = true;
-        makeMindHelm(player);
+        if (quest.isComplete(player) && has(player, SLASHED_BOOK) && !has(player, BEATEN_BOOK)) {
+          makeMindShield(event);
+        } else {
+          makeMindHelm(player);
+        }
         return;
       }
     }

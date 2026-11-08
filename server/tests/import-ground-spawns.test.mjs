@@ -224,3 +224,32 @@ test("committed Dwarven Mine Coins match both audited public rows without duplic
   assert.notEqual(matches[0].members,true);
  }
 });
+
+
+const iceDungeonCoins=[{x:2988,y:9584},{x:2987,y:9583},{x:2988,y:9582}].map(at=>row({
+ ...at,page:"Coins",id:995,plane:0,quantity:1,location:"[[Asgarnian Ice Dungeon]]",
+}));
+
+test("audited Ice Dungeon Coins preserve source default quantity and exact public location scope",()=>{
+ const result=importSpawns(source(iceDungeonCoins),[]);
+ assert.equal(result.report.counts.added,3);
+ assert.deepEqual(result.definitions.map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members===true]),
+  [[995,2988,9584,0,1,100,false],[995,2987,9583,0,1,100,false],[995,2988,9582,0,1,100,false]]);
+ assert.deepEqual(importSpawns(source(iceDungeonCoins),result.definitions).definitions,result.definitions);
+ const base=iceDungeonCoins[0];
+ const held=[{...base,x:2989},{...base,x:2989,location:undefined},{...base,plane:1},
+  {...base,id:996},{...base,page:"Coins (Shilo Village)"},{...base,location:"[[Dwarven Mine]]"},
+  {...base,members:true},{...base,x:3188,y:9820,location:"[[Varrock]] - west bank basement"}];
+ assert.equal(importSpawns(source(held),[]).definitions.length,0);
+ const occupied={id:554,location:{x:2988,y:9584,z:0},amt:1,respawn:100};
+ const replaced=importSpawns(source([base]),[occupied]);
+ assert.deepEqual(replaced.definitions,[occupied]);assert.equal(replaced.report.counts["possible-replaced-id-review"],1);
+});
+
+test("committed Ice Dungeon Coins match all three audited public rows without duplicates",()=>{
+ const data=JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json",import.meta.url),"utf8"));
+ for(const r of iceDungeonCoins){
+  const matches=data.filter(d=>d.id===995 && d.location.x===r.x && d.location.y===r.y && d.location.z===0);
+  assert.equal(matches.length,1);assert.equal(matches[0].amt,1);assert.equal(matches[0].respawn,100);assert.notEqual(matches[0].members,true);
+ }
+});

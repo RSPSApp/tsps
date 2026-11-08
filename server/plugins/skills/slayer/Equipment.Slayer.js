@@ -34,9 +34,14 @@ function equippedNames(player) {
     .map((item) => String(core.ItemDefinition.forId(item.getId())?.getName?.() ?? ""));
 }
 
+/** Every recolour of the Slayer helmet, imbued or not, has the plain helmet's protection (Wiki: Slayer helmet). */
+function isSlayerHelmet(name) {
+  return name.toLowerCase().includes("slayer helmet");
+}
+
 function protectedFrom(player, monster) {
   const names = equippedNames(player);
-  if (monster.protection.some((prefix) => names.some((name) => name.startsWith(prefix)))) return true;
+  if (monster.protection.some((prefix) => names.some((name) => (prefix === HELMET ? isSlayerHelmet(name) : name.startsWith(prefix))))) return true;
   return monster.protection.includes(HELMET) && helmetGiven(player);
 }
 
@@ -58,19 +63,36 @@ function hitRoll(event) {
   const monster = unprotectedRule(event.attacker, event.target);
   if (!monster) return;
   event.forceAccurate = true;
-  if (monster.hit) event.forceMaxHit = true;
+  if (monster.hit || monster.hitRange || monster.hitHitpointsPercent) event.forceMaxHit = true;
   if (monster.bypassPrayer) event.bypassProtectionPrayer = true;
 }
 
 /** A landed unprotected hit is the monster's unprotected max (run after prayers). */
 function incomingDamage(victim, hitDamage, context = {}) {
   const monster = unprotectedRule(context.attacker, victim);
-  if (monster?.hit) hitDamage.setDamage(monster.hit);
+  const damage = monster ? unprotectedHit(monster, victim) : 0;
+  if (damage) hitDamage.setDamage(damage);
+}
+
+/** The damage an unprotected player takes from this monster's hit, 0 when the rule sets none. */
+function unprotectedHit(monster, player) {
+  if (monster.hit) return monster.hit;
+  if (monster.hitRange) {
+    const [low, high] = monster.hitRange;
+    return low + Math.floor(Math.random() * (high - low + 1));
+  }
+  if (monster.hitHitpointsPercent) {
+    const level = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
+    return Math.max(1, Math.floor((level * monster.hitHitpointsPercent) / 100));
+  }
+  return 0;
 }
 
 function hitResolved({ attacker, target }) {
   const monster = unprotectedRule(attacker, target);
-  if (monster) drain(target, monster);
+  if (!monster) return;
+  drain(target, monster);
+  if (monster.forceChat) target.forceChat?.(monster.forceChat);
 }
 
 function drain(player, monster) {

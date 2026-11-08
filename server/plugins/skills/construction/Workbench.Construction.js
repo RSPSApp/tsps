@@ -101,14 +101,14 @@ function installFlatpack(event) {
   const target = house.getFurnitureTarget(event.location, event.objectId) ?? (builtAt ? { ...built, position: builtAt } : null);
   const buildable = Data.BUILDABLE_BY_KEY.get(key);
   if (!target || !House.hotspotChoices(target.hotspotKey).includes(buildable)) return player.sendMessage("You can't place that there.");
-  // An upgrade tier (a teak cape rack, a gilded wardrobe) goes on its previous tier, as building it does (Wiki: Teak cape
-  // rack's flatpack needs the oak one built); anything else needs an empty hotspot (captured: an armchair's flatpack on a
-  // built space, rsprox_transcripts/229/02605.txt tick 5416).
+  // A flatpack installs on an empty hotspot, an upgrade tier included (captured: a mahogany treasure chest and a marble
+  // magic wardrobe flatpack on their empty spaces, rsprox_transcripts/229/02812.txt ticks 1315 and 1464). An upgrade tier
+  // (a teak cape rack) may also go straight onto its previous tier, which it replaces with the stored items kept. On any
+  // other built furniture it is refused (captured: an armchair flatpack on a built workbench,
+  // rsprox_transcripts/229/02605.txt tick 5416).
   const existing = house.getFurnitureAtTarget(target)?.buildableKey;
   const previous = buildable.materials.find((material) => Data.BUILDABLE_BY_KEY.has(material.source))?.source;
-  if (previous) {
-    if (existing !== previous) return player.sendMessage("That can only be built by upgrading the previous piece of furniture.");
-  } else if (existing) {
+  if (existing && existing !== previous) {
     return player.sendMessage("This furniture cannot be upgraded. Remove the previous furniture if you wish to install a flatpack here.");
   }
   if (House.constructionLevel(player) < buildable.level) return player.sendMessage(`You need Construction level ${buildable.level} to build that.`);

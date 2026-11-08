@@ -207,7 +207,9 @@ test('Imcando hammers also qualify flatpack creation and installation',async t=>
   });
 });
 
-test('an upgrade-tier flatpack goes on its previous tier: a teak cape rack needs the oak one built (Wiki)',async t=>{
+// Captured (rsprox_transcripts/229/02812.txt ticks 1315 and 1464): an upgrade tier's flatpack installs on its empty space.
+// It may also go straight onto its previous tier, and is refused on other built furniture (229/02605.txt tick 5416).
+test('an upgrade-tier flatpack installs on an empty space or on its previous tier, not on other built furniture',async t=>{
   const W=require('../plugins/skills/construction/Workbench.Construction')._test,I=core.ItemIdentifiers;
   const f=actor(t,1395,83,83);
   f.house.save.rooms[1][4][6]={roomKey:'COSTUME_ROOM',rotation:0,furniture:{}};
@@ -220,11 +222,18 @@ test('an upgrade-tier flatpack goes on its previous tier: a teak cape rack needs
   f.inv.add(new core.Item(teak,1),false);
   const install=async()=>{await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(teak),itemId:teak,target:{kind:'loc',id:tile.id,x:tile.x,y:tile.y}}]);for(let i=0;i<10;i++)turn(f);};
   await install();
-  assert.equal(f.house.getFurnitureAtTarget(target)?.buildableKey,undefined,'an empty space takes no teak rack');
-  assert.equal(f.inv.getAmount(teak),1,'the flatpack is kept');
+  assert.equal(f.house.getFurnitureAtTarget(target)?.buildableKey,'TEAK_CAPE_RACK','an empty space takes the teak rack');
+  assert.equal(f.inv.getAmount(teak),0,'the flatpack is used');
+  f.inv.add(new core.Item(teak,1),false);
   f.house.setFurniture(target,Data.BUILDABLE_BY_KEY.get('OAK_CAPE_RACK'));House.rebuildHouse(f.p,f.house);
   const oak=Data.BUILDABLE_BY_KEY.get('OAK_CAPE_RACK').objectIds[0];
   await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(teak),itemId:teak,target:{kind:'loc',id:oak,x:tile.x,y:tile.y}}]);for(let i=0;i<10;i++)turn(f);
   assert.equal(f.house.getFurnitureAtTarget(target)?.buildableKey,'TEAK_CAPE_RACK','on the oak rack it upgrades');
   assert.equal(f.inv.getAmount(teak),0);
+  // On the teak rack itself (not its previous tier) another teak flatpack is refused, and kept.
+  f.inv.add(new core.Item(teak,1),false);
+  const teakRack=Data.BUILDABLE_BY_KEY.get('TEAK_CAPE_RACK').objectIds[0];
+  await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(teak),itemId:teak,target:{kind:'loc',id:teakRack,x:tile.x,y:tile.y}}]);for(let i=0;i<10;i++)turn(f);
+  assert.equal(f.inv.getAmount(teak),1,'refused on built furniture other than its previous tier');
+  assert.equal(f.house.getFurnitureAtTarget(target)?.buildableKey,'TEAK_CAPE_RACK');
 });

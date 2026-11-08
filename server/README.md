@@ -198,20 +198,21 @@ This prevents stale "ghost" players from remaining visible after disconnects/ref
 
 The server serves a local page for editing world settings, plugin switches and every
 declared `pluginConfig` option. It writes `data/definitions/world.local.json` only, never
-`world.json`. At startup the server prints the link:
+`world.json`. At startup the server prints the URL and where the token is, never the token
+itself (logs end up in `server.log` and journald):
 
 ```
-[world-admin] world config page: http://localhost:49600/?token=...
+[world-admin] world config page: http://localhost:49600/?token=<token from data/definitions/world-admin.token>
 ```
 
-Open it in a browser. The token is generated once and kept in the gitignored
-`data/definitions/world-admin.token`, so the printed link (and the page's cookie) stays valid
-across restarts until that file is deleted: treat the link and the file like a password, and
-delete the file to get a new token. `WORLD_ADMIN_TOKEN` in `.env` wins over the file. The link
-sets a cookie and the page then works without it. The page listens
-on `WORLD_ADMIN_PORT` (default 49600; each `scripts/wt` worktree gets 49600 + its slot),
-bound to 127.0.0.1, so on a VPS reach it through an SSH tunnel and open the printed link
-locally:
+Open `http://localhost:<port>/?token=<token from that file>` in a browser. The token is
+generated once and kept in the gitignored `data/definitions/world-admin.token`, so the link
+(and the page's cookie) stays valid across restarts until that file is deleted: treat the link
+and the file like a password, and delete the file to get a new token. `WORLD_ADMIN_TOKEN` in
+`.env` wins over the file; the log then names it instead of the file. The link sets a cookie
+and the page then works without it. The page listens on `WORLD_ADMIN_PORT` (default 49600;
+each `scripts/wt` worktree gets 49600 + its slot), bound to 127.0.0.1, so on a VPS reach it
+through an SSH tunnel and open that URL locally:
 
 ```bash
 ssh -L 49600:127.0.0.1:49600 <host>

@@ -60,6 +60,26 @@ test('a plugin switched off still appears, disabled, with its option owner disab
   }
 });
 
+test('like the loader, the catalog leaves out invalid declarations and gives a clashing key to its loaded owner', () => {
+  const dir = fixture({
+    'a/Bad.plugin.js': `module.exports = { name: 'Bad', config: { 'Bad:opt': { type: 'number', label: 'L', help: 'H', default: '5' }, 'Bad:ok': ${JSON.stringify(OPT)} }, register() {} };`,
+    'a/Junk.plugin.js': "module.exports = { name: 'Junk', config: [1], register() {} };",
+    'a/AOff.plugin.js': `module.exports = { name: 'AOff', enabled: false, config: { 'Shared:opt': ${JSON.stringify(OPT)} }, register() {} };`,
+    'a/BOn.plugin.js': `module.exports = { name: 'BOn', config: { 'Shared:opt': ${JSON.stringify(OPT)}, 'CrossFloor:combat': ${JSON.stringify(OPT)} }, register() {} };`,
+  });
+  try {
+    const data = WorldConfigCatalog.build(dir, layers({}, {}, 'clash'));
+    const keys = data.options.map((o) => `${o.owner}/${o.key}`);
+    assert.ok(!keys.includes('Bad/Bad:opt'), keys.join());
+    assert.ok(keys.includes('Bad/Bad:ok'));
+    assert.ok(!keys.some((k) => k.startsWith('Junk/')));
+    assert.deepEqual(data.options.filter((o) => o.key === 'Shared:opt').map((o) => o.owner), ['BOn']);
+    assert.deepEqual(data.options.filter((o) => o.key === 'CrossFloor:combat').map((o) => o.owner), ['core']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the catalog is cached per layers hash', () => {
   const dir = fixture({ 'a/A.plugin.js': plugin('A') });
   try {

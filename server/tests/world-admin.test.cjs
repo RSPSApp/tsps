@@ -113,8 +113,17 @@ async function start(t, env = {}, opts = {}) {
   } finally {
     process.chdir(savedCwd);
   }
-  const link = capture.logs.join("\n").match(/http:\/\/localhost:(\d+)\/\?token=([A-Za-z0-9_-]+)/);
+  // The log never carries the token: it is WORLD_ADMIN_TOKEN or sits in the token file.
+  const link = capture.logs.join("\n").match(/world config page: http:\/\/localhost:(\d+)\//);
   if (link) port = Number(link[1]);
+  let token = process.env.WORLD_ADMIN_TOKEN;
+  if (link && !token) {
+    try {
+      token = fs.readFileSync(path.join(opts.cwd ?? savedCwd, "data", "definitions", "world-admin.token"), "utf8").trim();
+    } catch {
+      token = undefined;
+    }
+  }
   t.after(async () => {
     await plugin._test.stop();
     capture.restore();
@@ -123,7 +132,7 @@ async function start(t, env = {}, opts = {}) {
       else process.env[key] = savedEnv[key];
     }
   });
-  return { plugin, state, hooks, logs: capture.logs, port, token: link?.[2] };
+  return { plugin, state, hooks, logs: capture.logs, port, token };
 }
 
 function request(port, { method = "GET", path: urlPath = "/", headers = {}, body } = {}) {
@@ -193,6 +202,9 @@ test("every request needs the token; Host and Origin are checked; no CORS header
   assert.equal((await request(port, { path: "/?token=nope" })).status, 401);
   assert.equal((await request(port, { path: "/api/catalog", headers: { ...auth, Host: "evil.example" } })).status, 403);
   assert.equal((await request(port, { path: "/api/catalog", headers: { ...auth, Host: `evil.example:${port}` } })).status, 403);
+  // IPv6 loopback (WORLD_ADMIN_BIND=::1 stays in loopback mode) is accepted; another port is not.
+  assert.equal((await request(port, { path: "/api/catalog", headers: { ...auth, Host: `[::1]:${port}` } })).status, 200);
+  assert.equal((await request(port, { path: "/api/catalog", headers: { ...auth, Host: `[::1]:${port + 1}` } })).status, 403);
 
   const evil = await request(port, {
     method: "POST", path: "/api/preview", headers: { ...auth, Origin: "http://evil.example" },
@@ -299,8 +311,9 @@ test("random token when WORLD_ADMIN_TOKEN is unset; WORLD_ADMIN_BIND alone still
   assert.match(text, /WORLD_ADMIN_BIND.*WORLD_ADMIN_TOKEN/);
   assert.match(text, /127\.0\.0\.1/);
   assert.doesNotMatch(text, /listening on 0\.0\.0\.0/);
-  // The token is printed exactly once.
-  assert.equal(text.split(token).length - 1, 1);
+  // The token is never logged; the line names the token file relative to the server dir.
+  assert.equal(text.includes(token), false);
+  assert.match(text, /world config page: http:\/\/localhost:\d+\/\?token=<token from data\/definitions\/world-admin\.token>/);
   assert.equal((await request(port, { path: "/api/catalog", headers: { Authorization: `Bearer ${token}` } })).status, 200);
 });
 
@@ -314,7 +327,8 @@ test("the generated token is kept in data/definitions/world-admin.token and reus
 
   const second = await start(t, { WORLD_ADMIN_TOKEN: "" }, { cwd: dir });
   assert.equal(second.token, first.token);
-  assert.match(second.logs.join(" "), /world config page: http:\/\/localhost:\d+\/\?token=/);
+  assert.match(second.logs.join(" "), /world config page: http:\/\/localhost:\d+\/\?token=<token from data\/definitions\/world-admin\.token>/);
+  assert.equal(second.logs.join(" ").includes(first.token), false);
   assert.equal((await request(second.port, { path: "/api/catalog", headers: { Authorization: `Bearer ${first.token}` } })).status, 200);
 });
 
@@ -322,8 +336,10 @@ test("WORLD_ADMIN_TOKEN wins over the token file, which is left alone", async (t
   const { dir, tokenFile } = tempServerDir(t);
   const fileToken = "file-token-0123456789abcdefghij";
   fs.writeFileSync(tokenFile, fileToken + "\n");
-  const { port, token } = await start(t, {}, { cwd: dir });
+  const { port, token, logs } = await start(t, {}, { cwd: dir });
   assert.equal(token, TOKEN);
+  assert.equal(logs.join("\n").includes(TOKEN), false, "WORLD_ADMIN_TOKEN is not logged");
+  assert.match(logs.join("\n"), /world config page: http:\/\/localhost:\d+\/\?token=<WORLD_ADMIN_TOKEN> \(the configured WORLD_ADMIN_TOKEN\)/);
   assert.equal(fs.readFileSync(tokenFile, "utf8"), fileToken + "\n");
   assert.equal((await request(port, { path: "/api/catalog", headers: { Authorization: `Bearer ${fileToken}` } })).status, 401);
   assert.equal((await request(port, { path: "/api/catalog", headers: auth })).status, 200);
@@ -616,6 +632,14 @@ test("WORLD_ADMIN_BIND beyond loopback needs a WORLD_ADMIN_TOKEN of 24+ token ch
   assert.deepEqual(strong.notes, []);
   // A loopback bind keeps working with any configured token.
   assert.equal(resolveAccess({ WORLD_ADMIN_BIND: "localhost", WORLD_ADMIN_TOKEN: "short" }).host, "localhost");
+  // ::1 stays in loopback mode, and its own Host header is let through.
+  const { hostAllowed } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
+  const v6 = resolveAccess({ WORLD_ADMIN_BIND: "::1", WORLD_ADMIN_TOKEN: "short" });
+  assert.equal(v6.loopback, true);
+  assert.equal(hostAllowed({ headers: { host: "[::1]:49600" } }, 49600, v6.loopback), true);
+  assert.equal(hostAllowed({ headers: { host: "[::2]:49600" } }, 49600, v6.loopback), false);
+  assert.equal(strong.tokenSource, "env");
+  assert.equal(resolveAccess({}, {}).tokenSource, "memory");
 
   const { logs } = await start(t, { WORLD_ADMIN_BIND: "0.0.0.0", WORLD_ADMIN_TOKEN: "short" });
   const text = logs.join("\n");

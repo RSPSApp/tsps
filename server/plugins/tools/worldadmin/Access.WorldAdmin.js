@@ -35,10 +35,10 @@ const isLoopbackHost = (host) => host === LOOPBACK || host === "localhost" || ho
  * file can't be read or written.
  */
 function storedToken(tokenFile, notes) {
-  if (!tokenFile) return crypto.randomBytes(24).toString("base64url");
+  if (!tokenFile) return { token: crypto.randomBytes(24).toString("base64url"), saved: false };
   try {
     const existing = fs.readFileSync(tokenFile, "utf8").trim();
-    if (TOKEN_PATTERN.test(existing)) return existing;
+    if (TOKEN_PATTERN.test(existing)) return { token: existing, saved: true };
   } catch (err) {
     if (err?.code !== "ENOENT") notes.push(`could not read ${tokenFile} (${err.message}); using a new token`);
   }
@@ -47,14 +47,16 @@ function storedToken(tokenFile, notes) {
     fs.writeFileSync(tokenFile, token + "\n", { mode: 0o600 });
     fs.chmodSync(tokenFile, 0o600);
   } catch (err) {
-    notes.push(`could not save the token to ${tokenFile} (${err.message}); it changes on every start`);
+    notes.push(`could not save the token to ${tokenFile} (${err.message}); set WORLD_ADMIN_TOKEN to use the page`);
+    return { token, saved: false };
   }
-  return token;
+  return { token, saved: true };
 }
 
 /**
  * Listener settings from the environment. `notes` are logged by the caller.
  * `tokenFile`: where the generated token is kept when WORLD_ADMIN_TOKEN is unset.
+ * `tokenSource`: "env" (WORLD_ADMIN_TOKEN), "file" (saved in tokenFile) or "memory" (not saved).
  */
 function resolveAccess(env = process.env, { tokenFile } = {}) {
   const notes = [];
@@ -73,11 +75,13 @@ function resolveAccess(env = process.env, { tokenFile } = {}) {
       host = bind;
     }
   }
+  const generated = configuredToken ? null : storedToken(tokenFile, notes);
   return {
     port: resolvePort(env.WORLD_ADMIN_PORT, env.WT_SLOT),
     host,
     loopback: isLoopbackHost(host),
-    token: configuredToken || storedToken(tokenFile, notes),
+    token: configuredToken || generated.token,
+    tokenSource: configuredToken ? "env" : generated.saved ? "file" : "memory",
     notes,
   };
 }
@@ -110,11 +114,11 @@ function hasToken(request, token, port) {
   return tokenMatches(bearer, token) || tokenMatches(cookieValue(request.headers.cookie, cookieName(port)), token);
 }
 
-/** In loopback mode only `localhost:<port>` / `127.0.0.1:<port>` (blocks DNS rebinding). */
+/** In loopback mode only `localhost:<port>` / `127.0.0.1:<port>` / `[::1]:<port>` (blocks DNS rebinding). */
 function hostAllowed(request, port, loopback) {
   if (!loopback) return true;
   const host = String(request.headers.host ?? "").toLowerCase();
-  return host === `localhost:${port}` || host === `127.0.0.1:${port}`;
+  return host === `localhost:${port}` || host === `127.0.0.1:${port}` || host === `[::1]:${port}`;
 }
 
 /** Writes accept no Origin (same-origin fetch from some browsers, curl) or the page's own. */

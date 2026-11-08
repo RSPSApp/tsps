@@ -8,7 +8,8 @@ const { createRequestHandler } = require("./worldadmin/Http.WorldAdmin");
 //   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a 24+ character token)
 // Without WORLD_ADMIN_TOKEN the generated token is kept in data/definitions/world-admin.token
 // (gitignored) so the page stays signed in across the restarts it triggers.
-// The startup log prints http://localhost:<port>/?token=<token>; opening it sets a cookie.
+// The startup log prints the page URL and where the token is (never the token itself); open
+// http://localhost:<port>/?token=<token> once and the page sets a cookie.
 // Apply writes data/definitions/world.local.json only (never world.json):
 //   manual     - written now, restart by hand;
 //   dev        - nodemon restarts after the write (exit code 0);
@@ -266,7 +267,8 @@ const actions = {
 // listener from holding the process open by itself.
 async function startWorldAdmin() {
   if (process.env.BROWSER_HOST === "1" || httpServer) return;
-  access = resolveAccess(process.env, { tokenFile: path.join(DEFINITIONS_DIRECTORY(), TOKEN_FILE_NAME) });
+  const tokenFile = path.join(DEFINITIONS_DIRECTORY(), TOKEN_FILE_NAME);
+  access = resolveAccess(process.env, { tokenFile });
   for (const note of access.notes) console.warn(`[world-admin] ${note}`);
   const server = http.createServer(createRequestHandler(
     { token: access.token, loopback: access.loopback, port: () => boundPort },
@@ -285,7 +287,18 @@ async function startWorldAdmin() {
   httpServer = server;
   boundPort = server.address().port;
   console.info(`[world-admin] listening on ${access.host}:${boundPort}`);
-  console.info(`[world-admin] world config page: http://localhost:${boundPort}/?token=${access.token}`);
+  console.info(`[world-admin] world config page: ${startupLinkMessage(boundPort, access.tokenSource, tokenFile)}`);
+}
+
+/** The startup line. It never contains the token: logs end up in server.log and journald. */
+function startupLinkMessage(port, tokenSource, tokenFile) {
+  const url = `http://localhost:${port}/`;
+  if (tokenSource === "env") return `${url}?token=<WORLD_ADMIN_TOKEN> (the configured WORLD_ADMIN_TOKEN)`;
+  if (tokenSource === "file") {
+    const shown = path.relative(process.cwd(), tokenFile).split(path.sep).join("/");
+    return `${url}?token=<token from ${shown}>`;
+  }
+  return `${url} (the token could not be saved; set WORLD_ADMIN_TOKEN to use the page)`;
 }
 
 /** Tests only: close the listener and forget the state. */

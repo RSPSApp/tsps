@@ -188,8 +188,8 @@ The server builds a catalog: every plugin file, and for each plugin its name, ar
 - The page has **its own HTTP listener, bound to `127.0.0.1`**, on its own port (`WORLD_ADMIN_PORT`,
   default 49600; `scripts/wt` slot `n` gets `49600 + n`). The game port can't be trusted for this:
   production sits behind nginx, so every internet request reaches it from loopback. A VPS host
-  reaches the page through an SSH tunnel. The `Host` header must be `localhost`/`127.0.0.1`.
-- The page is served at `/` and the server prints `http://localhost:<port>/?token=...`. The token
+  reaches the page through an SSH tunnel. The `Host` header must be `localhost`/`127.0.0.1`/`[::1]`.
+- The page is served at `/` and the server prints `http://localhost:<port>/` and where the token is (never the token). The token
   is generated once and persists in `server/data/definitions/world-admin.token`, so the link
   survives restarts; deleting the file issues a new one. Visiting with the token sets a cookie
   scoped to that port, so the bare URL works afterwards.

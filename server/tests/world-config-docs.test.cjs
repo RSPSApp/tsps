@@ -10,7 +10,9 @@ const { WorldConfigCatalog } = require('../dist/plugins/WorldConfigCatalog');
 const { renderWorldConfigDocs, WORLD_CONFIG_DOCS_START, WORLD_CONFIG_DOCS_END } = require('../dist/plugins/WorldConfigDocs');
 
 const root = path.resolve(__dirname, '..');
-const doc = fs.readFileSync(path.join(root, '..', 'docs', 'world-configuration.md'), 'utf8');
+// A Windows checkout with core.autocrlf has \r\n line ends; compare as \n on both sides.
+const lf = (text) => text.replace(/\r\n/g, '\n');
+const doc = lf(fs.readFileSync(path.join(root, '..', 'docs', 'world-configuration.md'), 'utf8'));
 
 test('the generated settings block in docs/world-configuration.md is current', () => {
   const start = doc.indexOf(WORLD_CONFIG_DOCS_START);
@@ -19,7 +21,7 @@ test('the generated settings block in docs/world-configuration.md is current', (
   const committed = doc.slice(start + WORLD_CONFIG_DOCS_START.length, end).trim();
   const { shipped } = WorldConfigStore.read(path.join(root, 'data', 'definitions'));
   const catalog = WorldConfigCatalog.build(path.join(root, 'plugins'), { shipped, local: {}, localExists: false, localHash: '' });
-  assert.equal(committed, renderWorldConfigDocs(catalog).trim(),
+  assert.equal(committed, lf(renderWorldConfigDocs(catalog)).trim(),
     'The generated settings block is stale. Run: yarn --cwd server world-config-docs');
 });
 

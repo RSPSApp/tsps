@@ -24,10 +24,12 @@ have to find them in these docs: every world value, plugin switch and plugin opt
 area with its default and a short explanation, and saving writes `world.local.json` (never
 `world.json`).
 
-- **Open it:** the server prints a link at startup (`http://localhost:<port>/?token=...`). The port
+- **Open it:** open `http://localhost:<port>/?token=<token>`, with the token from
+  `server/data/definitions/world-admin.token` (or your `WORLD_ADMIN_TOKEN`); the server log
+  shows the URL and where the token is, never the token itself. The port
   is `WORLD_ADMIN_PORT` (default `49600`; a worktree made with `scripts/wt` gets `49600` plus its
   slot). The listener is bound to `127.0.0.1`, so it is not reachable from other machines.
-- **On a VPS:** tunnel the port and open the link locally:
+- **On a VPS:** tunnel the port and open that URL locally:
   `ssh -L 49600:127.0.0.1:49600 <host>`.
 - **Saving:** the page previews the change to `world.local.json`, then runs the in-game update
   countdown for online players, writes the file and restarts the server. In dev (nodemon) the

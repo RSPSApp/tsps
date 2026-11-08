@@ -4,6 +4,7 @@ import {
     ConfigOptionDeclaration,
     CORE_CONFIG_DECLARATIONS,
     WORLD_SETTING_DECLARATIONS,
+    validateDeclaration,
 } from "../game/definition/WorldSettingDeclarations";
 import { mergeWorldConfig } from "../game/definition/WorldDefinition";
 import { WorldConfigLayers } from "../game/definition/WorldConfigStore";
@@ -145,8 +146,23 @@ export class WorldConfigCatalog {
         for (const [key, decl] of Object.entries(CORE_CONFIG_DECLARATIONS)) {
             options.push({ key, owner: "core", decl, shipped: shippedConfig[key], local: localConfig[key], ownerEnabled: true });
         }
+        // As the loader does: invalid declarations are left out, and a key belongs to the core
+        // or the first loaded plugin declaring it (then the first unloaded one).
+        const validConfig = (module: PluginModule): [string, ConfigOptionDeclaration][] => {
+            const config: unknown = module.config;
+            if (!config || typeof config !== "object" || Array.isArray(config)) return [];
+            return Object.entries(config as Record<string, ConfigOptionDeclaration>)
+                .filter(([key, decl]) => validateDeclaration(key, decl).length === 0);
+        };
+        const owners = new Map<string, string>(Object.keys(CORE_CONFIG_DECLARATIONS).map((key) => [key, "core"]));
         for (const { plugin, module } of found) {
-            for (const [key, decl] of Object.entries(module.config ?? {})) {
+            if (!plugin.loaded) continue;
+            for (const [key] of validConfig(module)) if (!owners.has(key)) owners.set(key, plugin.name);
+        }
+        for (const { plugin, module } of found) {
+            for (const [key, decl] of validConfig(module)) {
+                if (!owners.has(key)) owners.set(key, plugin.name);
+                if (owners.get(key) !== plugin.name) continue;
                 options.push({
                     key,
                     owner: plugin.name,

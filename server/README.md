@@ -194,6 +194,33 @@ The server now performs explicit cleanup when a WebSocket closes:
 
 This prevents stale "ghost" players from remaining visible after disconnects/refreshes.
 
+## World config page
+
+The server serves a local page for editing world settings, plugin switches and every
+declared `pluginConfig` option. It writes `data/definitions/world.local.json` only, never
+`world.json`. At startup the server prints the link:
+
+```
+[world-admin] world config page: http://localhost:49600/?token=...
+```
+
+Open it in a browser. The token is random on every start (set `WORLD_ADMIN_TOKEN` in `.env`
+for a fixed one); the link sets a cookie and the page then works without it. The page listens
+on `WORLD_ADMIN_PORT` (default 49600; each `scripts/wt` worktree gets 49600 + its slot),
+bound to 127.0.0.1, so on a VPS reach it through an SSH tunnel and open the printed link
+locally:
+
+```bash
+ssh -L 49600:127.0.0.1:49600 <host>
+```
+
+Saving shows a preview of the change first. Under `yarn dev` / `yarn start` the server saves
+players, writes the file and restarts (nodemon brings it back); with players online the normal
+world-update countdown runs first and can be cancelled from the page. Under a supervisor set
+`TSPS_SUPERVISED=1` (the server exits with code 75 so on-failure restart policies restart it).
+Otherwise the page only writes the file and you restart by hand. The page is not started when
+`BROWSER_HOST=1`.
+
 ## Plugins
 
 Runtime plugins are loaded from:

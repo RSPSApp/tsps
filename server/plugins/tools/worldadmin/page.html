@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>World config</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f6f4;
+    --panel: #ffffff;
+    --text: #1d1f21;
+    --muted: #5d6166;
+    --line: #dcdcd8;
+    --accent: #2f5fb3;
+    --accent-text: #ffffff;
+    --changed: #8a5a00;
+    --changed-bg: #fff2d6;
+    --edited: #1d6b3a;
+    --edited-bg: #dff3e5;
+    --error: #a3231b;
+    --error-bg: #fde7e5;
+    --warn: #7a5500;
+    --warn-bg: #fff4d9;
+    --info-bg: #e6eefb;
+    --off: #8b8f94;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17191c;
+      --panel: #202327;
+      --text: #e7e7e3;
+      --muted: #a1a5aa;
+      --line: #33373c;
+      --accent: #7aa6f0;
+      --accent-text: #0f1a2e;
+      --changed: #f0c05a;
+      --changed-bg: #3a2f14;
+      --edited: #7fd49b;
+      --edited-bg: #173322;
+      --error: #ff8f86;
+      --error-bg: #3d1a18;
+      --warn: #f0c05a;
+      --warn-bg: #3a2f14;
+      --info-bg: #1c2a40;
+      --off: #7b8086;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar {
+    max-width: 960px; margin: 0 auto; padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+  }
+  h1 { font-size: 18px; margin: 0; flex: 1 1 auto; }
+  main { max-width: 960px; margin: 0 auto; padding: 12px 16px 80px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 6px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.link { border: none; background: none; padding: 2px 4px; color: var(--accent); text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .search { flex: 1 1 220px; min-width: 0; }
+  .search input { width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .banner { border-radius: 6px; padding: 10px 12px; margin: 0 0 12px; display: flex; gap: 12px; align-items: flex-start; }
+  .banner > .text { flex: 1 1 auto; overflow-wrap: anywhere; }
+  .banner.error { background: var(--error-bg); color: var(--error); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  .banner.info { background: var(--info-bg); }
+  section.group { margin: 18px 0 0; }
+  section.group > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 6px; }
+  .rows { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .row {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 260px);
+    gap: 6px 16px; padding: 10px 12px; border-top: 1px solid var(--line);
+  }
+  .row:first-child { border-top: none; }
+  .row.inactive .label, .row.inactive .help { color: var(--off); }
+  .label { font-weight: 600; }
+  .key { font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; }
+  .help { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .meta { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .tag { font-size: 12px; border-radius: 4px; padding: 0 6px; }
+  .tag.changed { background: var(--changed-bg); color: var(--changed); }
+  .tag.edited { background: var(--edited-bg); color: var(--edited); }
+  .tag.note { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  .control { display: flex; flex-direction: column; gap: 4px; align-items: stretch; justify-content: center; }
+  .control input[type="text"], .control input[type="number"], .control input[type="date"], .control select, .control textarea {
+    width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+  }
+  .control textarea { min-height: 80px; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+  .control .invalid { border-color: var(--error); }
+  .field-error { color: var(--error); font-size: 13px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; align-self: flex-start; }
+  .switch input { width: 40px; height: 22px; appearance: none; -webkit-appearance: none; border-radius: 11px; background: var(--line); position: relative; cursor: pointer; margin: 0; }
+  .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--panel); transition: left 0.12s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { left: 21px; }
+  .switch input:disabled { opacity: 0.5; cursor: not-allowed; }
+  .footer {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-top: 1px solid var(--line);
+  }
+  .footer .bar { justify-content: flex-end; }
+  .footer .status { flex: 1 1 auto; color: var(--muted); font-size: 14px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  dialog {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text);
+    width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+  .dialog-body { padding: 16px; overflow: auto; max-height: calc(100vh - 140px); }
+  .dialog-body h2 { margin: 0 0 12px; font-size: 18px; }
+  .dialog-actions { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
+  table.diff { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.diff th, table.diff td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  table.diff td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  ul.list { margin: 6px 0 12px; padding-left: 20px; }
+  .seconds { display: inline-flex; gap: 6px; align-items: center; }
+  .seconds input { width: 90px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  [hidden] { display: none !important; }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: minmax(0, 1fr); }
+    h1 { flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>World config</h1>
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="true">Settings</button>
+      <button type="button" role="tab" id="tab-plugins" aria-controls="panel-plugins" aria-selected="false" tabindex="-1">Plugins</button>
+    </div>
+    <div class="search">
+      <input type="search" id="search" placeholder="Search settings" aria-label="Search">
+    </div>
+  </div>
+</header>
+<main>
+  <div id="flashes" aria-live="polite"></div>
+  <div id="banners" aria-live="polite"></div>
+  <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings"></div>
+  <div id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+  <p id="loading" class="empty">Loading…</p>
+</main>
+<div class="footer">
+  <div class="bar">
+    <span class="status" id="footer-status" aria-live="polite"></span>
+    <button type="button" id="discard" disabled>Discard edits</button>
+    <button type="button" class="primary" id="save" disabled>Save</button>
+  </div>
+</div>
+<dialog id="preview" aria-labelledby="preview-title">
+  <div class="dialog-body">
+    <h2 id="preview-title">Review changes to world.local.json</h2>
+    <div id="preview-content"></div>
+  </div>
+  <div class="dialog-actions">
+    <span class="seconds" id="seconds-wrap" hidden>
+      <label for="seconds">Countdown (seconds)</label>
+      <input type="number" id="seconds" min="1" max="86400" step="1" value="60">
+    </span>
+    <button type="button" id="preview-close">Back</button>
+    <button type="button" class="primary" id="apply" disabled>Apply</button>
+  </div>
+</dialog>
+<script>
+"use strict";
+(function () {
+  // Everything shown from the API goes through textContent; nothing from it is ever parsed as HTML.
+  var DEFAULT_SECONDS = 60;
+  var POLL_MS = 2000;
+  var state = {
+    data: null,          // last /api/catalog response
+    edits: { world: {}, plugins: {}, pluginConfig: {} },
+    rows: [],            // { el, kind, key, search, refresh() }
+    tab: "settings",
+    dismissedFailure: null,
+    pollTimer: null,
+    restarting: false,
+    lastPlan: null,
+  };
+
+  function el(tag, props, children) {
+    var node = document.createElement(tag);
+    if (props) {
+      for (var name in props) {
+        if (!Object.prototype.hasOwnProperty.call(props, name)) continue;
+        var value = props[name];
+        if (value === undefined || value === null || value === false) continue;
+        if (name === "text") node.textContent = value;
+        else if (name === "className") node.className = value;
+        else if (name.indexOf("on") === 0) node.addEventListener(name.slice(2), value);
+        else if (name in node && typeof value !== "string") node[name] = value;
+        else node.setAttribute(name, value === true ? "" : String(value));
+      }
+    }
+    (children || []).forEach(function (child) {
+      if (child === null || child === undefined || child === false) return;
+      node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+    });
+    return node;
+  }
+
+  function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function has(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+
+  function api(path, body) {
+    var init = { credentials: "same-origin", headers: {} };
+    if (body !== undefined) {
+      init.method = "POST";
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+    return fetch(path, init).then(function (response) {
+      return response.text().then(function (text) {
+        var json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+        return { status: response.status, ok: response.ok, body: json };
+      });
+    });
+  }
+
+  // ---------- value helpers ----------
+
+  function formatValue(decl, value) {
+    if (value === undefined) return "(not set)";
+    if (decl && decl.type === "boolean") return value === true ? "on" : value === false ? "off" : JSON.stringify(value);
+    if (decl && decl.type === "enum" && decl.values) {
+      for (var i = 0; i < decl.values.length; i++) {
+        if (decl.values[i].value === value) return decl.values[i].label;
+      }
+    }
+    if (typeof value === "string") return value === "" ? "(empty)" : value;
+    return JSON.stringify(value);
+  }
+
+  function sectionOf(row) { return row.kind === "world" ? "world" : "pluginConfig"; }
+
+  /** The value the world runs with now, before this page's edits. */
+  function savedValue(option) {
+    if (option.local !== undefined) return option.local;
+    if (option.shipped !== undefined) return option.shipped;
+    return option.decl.default;
+  }
+
+  /** What world.json (or the declaration) gives without world.local.json. */
+  function baseValue(option) {
+    return option.shipped !== undefined ? option.shipped : option.decl.default;
+  }
+
+  function currentValue(section, option) {
+    var edits = state.edits[section];
+    if (has(edits, option.key)) {
+      return edits[option.key] === null ? baseValue(option) : edits[option.key];
+    }
+    return savedValue(option);
+  }
+
+  function setEdit(section, option, value) {
+    var edits = state.edits[section];
+    if (value === null) {
+      if (option.local !== undefined) edits[option.key] = null;
+      else delete edits[option.key];
+    } else if (same(value, savedValue(option))) {
+      delete edits[option.key];
+    } else {
+      edits[option.key] = value;
+    }
+    updateFooter();
+  }
+
+  function numberProblem(decl, n) {
+    if (!Number.isFinite(n)) return "Enter a number.";
+    if (decl.integer && !Number.isInteger(n)) return "Must be a whole number.";
+    if (decl.min !== undefined) {
+      if (decl.exclusiveMin ? n <= decl.min : n < decl.min) {
+        return decl.exclusiveMin ? "Must be greater than " + decl.min + "." : "Must be at least " + decl.min + ".";
+      }
+    }
+    if (decl.max !== undefined && n > decl.max) return "Must be at most " + decl.max + ".";
+    return null;
+  }
+
+  // ---------- rows ----------
+
+  var idCounter = 0;
+  function nextId(prefix) { idCounter += 1; return prefix + "-" + idCounter; }
+
+  function readOnly() { return !!(state.data && state.data.layers && state.data.layers.localError); }
+
+  /**
+   * One option row. `owner` is the CatalogPlugin that declares it (or null for world/core).
+   * The control reports invalid input through row.invalid, which blocks Save.
+   */
+  function optionRow(kind, option, owner) {
+    var decl = option.decl;
+    var section = kind === "world" ? "world" : "pluginConfig";
+    var controlId = nextId("opt");
+    var helpId = controlId + "-help";
+    var errorEl = el("div", { className: "field-error", role: "alert", hidden: true });
+    var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from world.json / the shipped default" });
+    var editedTag = el("span", { className: "tag edited", text: "unsaved" });
+    var resetButton = el("button", { type: "button", className: "link", text: "Reset to shipped" });
+    var row = { kind: kind, key: option.key, invalid: false };
+
+    var defaultText = decl.defaultText !== undefined ? decl.defaultText : formatValue(decl, decl.default);
+    var meta = el("div", { className: "meta" }, [
+      el("span", { text: "default: " + defaultText }),
+      option.shipped !== undefined && decl.default !== undefined && !same(option.shipped, decl.default)
+        ? el("span", { text: "world.json: " + formatValue(decl, option.shipped) }) : null,
+      changedTag, editedTag,
+    ]);
+    var notes = [];
+    var membersOff = state.data.catalog.membersWorld === false && (decl.members || (owner && owner.members));
+    if (membersOff) notes.push("won't load on a free world");
+    else if (!option.ownerEnabled && owner) notes.push("plugin " + owner.name + " is off");
+    notes.forEach(function (note) { meta.appendChild(el("span", { className: "tag note", text: note })); });
+
+    var control;
+    var input;
+    function showError(message) {
+      row.invalid = !!message;
+      errorEl.textContent = message || "";
+      errorEl.hidden = !message;
+      if (input) {
+        input.classList.toggle("invalid", !!message);
+        input.setAttribute("aria-invalid", message ? "true" : "false");
+      }
+      updateFooter();
+    }
+    var describedBy = helpId;
+
+    if (decl.type === "boolean") {
+      input = el("input", { type: "checkbox", id: controlId, role: "switch", "aria-describedby": describedBy,
+        onchange: function () { setEdit(section, option, input.checked); refresh(); } });
+      control = el("label", { className: "switch" }, [input, el("span", { className: "switch-text" })]);
+    } else if (decl.type === "enum") {
+      input = el("select", { id: controlId, "aria-describedby": describedBy,
+        onchange: function () {
+          if (input.value === "") setEdit(section, option, null);
+          else setEdit(section, option, decl.values[Number(input.value)].value);
+          refresh();
+        } });
+      input.appendChild(el("option", { value: "", text: decl.defaultText !== undefined ? "Default (" + decl.defaultText + ")" : "Shipped value" }));
+      decl.values.forEach(function (v, i) { input.appendChild(el("option", { value: String(i), text: v.label })); });
+      control = input;
+    } else if (decl.type === "number") {
+      input = el("input", { type: "number", id: controlId, "aria-describedby": describedBy, inputMode: decl.integer ? "numeric" : "decimal",
+        step: decl.integer ? "1" : "any",
+        oninput: function () {
+          if (input.value.trim() === "") { showError(null); setEdit(section, option, null); refreshMarkers(); return; }
+          var n = Number(input.value);
+          var problem = input.validity.badInput ? "Enter a number." : numberProblem(decl, n);
+          showError(problem);
+          if (!problem) setEdit(section, option, n);
+          refreshMarkers();
+        } });
+      if (decl.min !== undefined) input.min = String(decl.min);
+      if (decl.max !== undefined) input.max = String(decl.max);
+      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
+      control = input;
+    } else if (decl.type === "date") {
+      input = el("input", { type: "date", id: controlId, "aria-describedby": describedBy,
+        onchange: function () {
+          if (input.value === "") { showError(null); setEdit(section, option, null); }
+          else if (!/^\d{4}-\d{2}-\d{2}$/.test(input.value)) { showError("Enter a date."); }
+          else { showError(null); setEdit(section, option, input.value); }
+          refreshMarkers();
+        } });
+      control = input;
+    } else if (decl.type === "json") {
+      input = el("textarea", { id: controlId, "aria-describedby": describedBy, spellcheck: "false",
+        onblur: function () {
+          var text = input.value.trim();
+          if (text === "") { showError(null); setEdit(section, option, null); refreshMarkers(); return; }
+          try {
+            var parsed = JSON.parse(text);
+            showError(null);
+            setEdit(section, option, parsed);
+          } catch (e) {
+            showError("Not valid JSON: " + e.message);
+          }
+          refreshMarkers();
+        } });
+      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
+      control = input;
+    } else {
+      input = el("input", { type: "text", id: controlId, "aria-describedby": describedBy,
+        oninput: function () { showError(null); setEdit(section, option, input.value); refreshMarkers(); } });
+      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
+      control = input;
+    }
+
+    resetButton.addEventListener("click", function () {
+      showError(null);
+      setEdit(section, option, null);
+      refresh();
+    });
+
+    var labelText = decl.label || option.key;
+    var label = el("label", { className: "label", for: controlId, text: labelText });
+    var text = el("div", null, [
+      label,
+      el("div", { className: "key", text: option.key }),
+      el("div", { className: "help", id: helpId, text: decl.help || "" }),
+      meta,
+    ]);
+    var controlBox = el("div", { className: "control" }, [control, errorEl, resetButton]);
+    var rowEl = el("div", { className: "row" + (membersOff || (!option.ownerEnabled && owner) ? " inactive" : "") }, [text, controlBox]);
+
+    function refreshMarkers() {
+      var value = currentValue(section, option);
+      changedTag.hidden = same(value, baseValue(option)) || value === undefined;
+      editedTag.hidden = !has(state.edits[section], option.key);
+      var edited = has(state.edits[section], option.key);
+      var resetPending = edited && state.edits[section][option.key] === null;
+      resetButton.hidden = readOnly() || resetPending || !(edited || option.local !== undefined);
+    }
+
+    /** Puts the control back to the current value (after load, reset or discard). */
+    function refresh() {
+      var value = currentValue(section, option);
+      if (decl.type === "boolean") {
+        input.checked = value === true;
+        control.lastChild.textContent = value === true ? "On" : "Off";
+      } else if (decl.type === "enum") {
+        var index = "";
+        (decl.values || []).forEach(function (v, i) { if (v.value === value || (typeof v.value === "number" && typeof value === "string" && v.value === Number(value))) index = String(i); });
+        input.value = index;
+      } else if (decl.type === "json") {
+        input.value = value === undefined ? "" : JSON.stringify(value, null, 2);
+      } else if (decl.type === "number") {
+        input.value = value === undefined ? "" : String(value);
+      } else {
+        input.value = value === undefined ? "" : String(value);
+      }
+      input.disabled = readOnly();
+      showError(null);
+      refreshMarkers();
+    }
+
+    row.el = rowEl;
+    row.search = [labelText, option.key, decl.help, owner ? owner.name : ""].join(" ").toLowerCase();
+    row.refresh = refresh;
+    refresh();
+    return row;
+  }
+
+  function pluginRow(plugin) {
+    var controlId = nextId("plugin");
+    var helpId = controlId + "-help";
+    var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from the plugin's default" });
+    var editedTag = el("span", { className: "tag edited", text: "unsaved" });
+    var input = el("input", { type: "checkbox", id: controlId, role: "switch", "aria-describedby": helpId });
+    var stateText = el("span");
+    var row = { kind: "plugin", key: plugin.name, invalid: false };
+
+    function current() {
+      return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
+    }
+    input.addEventListener("change", function () {
+      if (input.checked === plugin.enabled) delete state.edits.plugins[plugin.name];
+      else state.edits.plugins[plugin.name] = input.checked;
+      updateFooter();
+      refresh();
+    });
+
+    var meta = el("div", { className: "meta" }, [
+      el("span", { text: "default: " + (plugin.defaultEnabled ? "on" : "off") }),
+      plugin.dependsOn && plugin.dependsOn.length ? el("span", { text: "needs " + plugin.dependsOn.join(", ") }) : null,
+      changedTag, editedTag,
+    ]);
+    var membersOff = state.data.catalog.membersWorld === false && plugin.members;
+    if (membersOff) meta.appendChild(el("span", { className: "tag note", text: "won't load on a free world" }));
+    else if (plugin.enabled && !plugin.loaded) meta.appendChild(el("span", { className: "tag note", text: "not loaded: a plugin it needs is off" }));
+
+    var rowEl = el("div", { className: "row" + (membersOff ? " inactive" : "") }, [
+      el("div", null, [
+        el("label", { className: "label", for: controlId, text: plugin.name }),
+        el("div", { className: "key", text: plugin.file }),
+        el("div", { className: "help", id: helpId, text: plugin.description || "" }),
+        meta,
+      ]),
+      el("div", { className: "control" }, [el("label", { className: "switch" }, [input, stateText])]),
+    ]);
+
+    function refresh() {
+      var on = current();
+      input.checked = on;
+      input.disabled = readOnly();
+      stateText.textContent = on ? "On" : "Off";
+      changedTag.hidden = on === plugin.defaultEnabled;
+      editedTag.hidden = !has(state.edits.plugins, plugin.name);
+    }
+    row.el = rowEl;
+    row.search = [plugin.name, plugin.file, plugin.description || "", plugin.area].join(" ").toLowerCase();
+    row.refresh = refresh;
+    refresh();
+    return row;
+  }
+
+  function group(title, rows) {
+    var section = el("section", { className: "group" }, [
+      el("h2", { text: title }),
+      el("div", { className: "rows" }, rows.map(function (r) { return r.el; })),
+    ]);
+    return { el: section, rows: rows };
+  }
+
+  function areaTitle(area) {
+    if (!area) return "Other";
+    return area.charAt(0).toUpperCase() + area.slice(1);
+  }
+
+  function build() {
+    var catalog = state.data.catalog;
+    var settings = document.getElementById("panel-settings");
+    var plugins = document.getElementById("panel-plugins");
+    settings.textContent = "";
+    plugins.textContent = "";
+    state.rows = [];
+    state.groups = { settings: [], plugins: [] };
+
+    var byName = {};
+    catalog.plugins.forEach(function (p) { byName[p.name] = p; });
+
+    // Settings: world values first, then options grouped by the owning plugin's area.
+    var worldRows = catalog.world.map(function (o) { return optionRow("world", o, null); });
+    state.groups.settings.push(group("World", worldRows));
+    var areas = {};
+    catalog.options.forEach(function (o) {
+      var owner = o.owner === "core" ? null : byName[o.owner] || null;
+      var area = owner ? owner.area : "core";
+      (areas[area] = areas[area] || []).push(optionRow("option", o, owner));
+    });
+    Object.keys(areas).sort().forEach(function (area) {
+      state.groups.settings.push(group(areaTitle(area), areas[area]));
+    });
+
+    // Plugins: default-off and described plugins pinned first, then the rest by area.
+    var pinned = [];
+    var pluginAreas = {};
+    catalog.plugins.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (p) {
+      var row = pluginRow(p);
+      if (!p.defaultEnabled || p.description) pinned.push(row);
+      else (pluginAreas[p.area] = pluginAreas[p.area] || []).push(row);
+    });
+    if (pinned.length) state.groups.plugins.push(group("Common switches", pinned));
+    Object.keys(pluginAreas).sort().forEach(function (area) {
+      state.groups.plugins.push(group(areaTitle(area), pluginAreas[area]));
+    });
+
+    state.groups.settings.forEach(function (g) { settings.appendChild(g.el); state.rows = state.rows.concat(g.rows); });
+    state.groups.plugins.forEach(function (g) { plugins.appendChild(g.el); state.rows = state.rows.concat(g.rows); });
+    settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
+    plugins.appendChild(el("p", { className: "empty", id: "plugins-empty", text: "Nothing matches.", hidden: true }));
+    document.getElementById("loading").hidden = true;
+    applySearch();
+    updateFooter();
+  }
+
+  function applySearch() {
+    if (!state.groups) return;
+    var words = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    ["settings", "plugins"].forEach(function (tab) {
+      var any = false;
+      state.groups[tab].forEach(function (g) {
+        var visible = 0;
+        g.rows.forEach(function (r) {
+          var match = words.every(function (w) { return r.search.indexOf(w) !== -1; });
+          r.el.hidden = !match;
+          if (match) visible += 1;
+        });
+        g.el.hidden = visible === 0;
+        if (visible) any = true;
+      });
+      document.getElementById(tab + "-empty").hidden = any;
+    });
+  }
+
+  // ---------- tabs ----------
+
+  function selectTab(tab) {
+    state.tab = tab;
+    ["settings", "plugins"].forEach(function (name) {
+      var button = document.getElementById("tab-" + name);
+      var selected = name === tab;
+      button.setAttribute("aria-selected", selected ? "true" : "false");
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById("panel-" + name).hidden = !selected;
+    });
+    document.getElementById("search").placeholder = tab === "settings" ? "Search settings" : "Search plugins";
+  }
+  document.getElementById("tab-settings").addEventListener("click", function () { selectTab("settings"); });
+  document.getElementById("tab-plugins").addEventListener("click", function () { selectTab("plugins"); });
+  document.querySelector(".tabs").addEventListener("keydown", function (event) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    var next = state.tab === "settings" ? "plugins" : "settings";
+    selectTab(next);
+    document.getElementById("tab-" + next).focus();
+  });
+  document.getElementById("search").addEventListener("input", applySearch);
+
+  // ---------- edits, footer ----------
+
+  function editCount() {
+    return Object.keys(state.edits.world).length + Object.keys(state.edits.plugins).length + Object.keys(state.edits.pluginConfig).length;
+  }
+  function anyInvalid() { return state.rows.some(function (r) { return r.invalid; }); }
+  function busy() {
+    var d = state.data;
+    return state.restarting || !!(d && (d.pending || (d.countdown && d.countdown.scheduled)));
+  }
+
+  function updateFooter() {
+    var save = document.getElementById("save");
+    var discard = document.getElementById("discard");
+    var status = document.getElementById("footer-status");
+    var count = editCount();
+    var mode = state.data ? state.data.mode : "manual";
+    save.textContent = mode === "manual" ? "Save (takes effect next restart)" : "Save and restart";
+    var invalid = anyInvalid();
+    save.disabled = !state.data || readOnly() || busy() || count === 0 || invalid;
+    discard.disabled = count === 0 && !invalid;
+    if (!state.data) status.textContent = "";
+    else if (readOnly()) status.textContent = "Read only: world.local.json does not parse.";
+    else if (invalid) status.textContent = "Fix the highlighted values before saving.";
+    else if (busy()) status.textContent = "A restart is pending.";
+    else status.textContent = count === 0 ? "No unsaved edits." : count + (count === 1 ? " unsaved edit." : " unsaved edits.");
+  }
+
+  document.getElementById("discard").addEventListener("click", function () {
+    state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    state.rows.forEach(function (r) { r.invalid = false; r.refresh(); });
+    updateFooter();
+  });
+
+  function changesPayload() {
+    var changes = {};
+    ["world", "plugins", "pluginConfig"].forEach(function (section) {
+      if (Object.keys(state.edits[section]).length) changes[section] = state.edits[section];
+    });
+    return changes;
+  }
+
+  // ---------- banners ----------
+
+  function renderBanners() {
+    var box = document.getElementById("banners");
+    box.textContent = "";
+    var d = state.data;
+    if (!d) return;
+    if (d.layers && d.layers.localError) {
+      box.appendChild(el("div", { className: "banner error", role: "alert" }, [
+        el("div", { className: "text", text: "world.local.json does not parse, so this page is read only. Fix the file by hand, then reload: " + d.layers.localError }),
+      ]));
+    }
+    if (d.lastFailure && d.lastFailure.at !== state.dismissedFailure) {
+      var failure = d.lastFailure;
+      box.appendChild(el("div", { className: "banner error", role: "alert" }, [
+        el("div", { className: "text", text: failure.message }),
+        el("button", { type: "button", text: "Dismiss", "aria-label": "Dismiss this error",
+          onclick: function () { state.dismissedFailure = failure.at; renderBanners(); } }),
+      ]));
+    }
+    if (d.countdown && d.countdown.available === false) {
+      box.appendChild(el("div", { className: "banner warn" }, [
+        el("div", { className: "text", text: "Countdown unavailable (GameUpdate is off): Apply restarts immediately." }),
+      ]));
+    }
+    if (d.mode === "manual") {
+      box.appendChild(el("div", { className: "banner info" }, [
+        el("div", { className: "text", text: "This server can't restart itself, so saving only writes world.local.json. Restart the server by hand for it to take effect." }),
+      ]));
+    }
+    if (state.restarting) {
+      box.appendChild(el("div", { className: "banner info", role: "status" }, [
+        el("div", { className: "text", text: state.restarting }),
+      ]));
+    } else if (d.pending || (d.countdown && d.countdown.scheduled)) {
+      var remaining = d.countdown ? d.countdown.remainingSeconds : 0;
+      var ours = !!d.pending;
+      var text = ours
+        ? (d.pending.kind === "countdown"
+          ? "Restarting to apply your changes in " + remaining + " s. world.local.json is written when the countdown ends."
+          : "Restarting now to apply your changes…")
+        : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
+      box.appendChild(el("div", { className: "banner warn", role: "status" }, [
+        el("div", { className: "text", text: text }),
+        (!ours || d.pending.kind === "countdown") ? el("button", { type: "button", text: "Cancel", onclick: cancelCountdown }) : null,
+      ]));
+    }
+  }
+
+  function flash(kind, text) {
+    var box = document.getElementById("flashes");
+    var node = el("div", { className: "banner " + kind, role: kind === "error" ? "alert" : "status" }, [
+      el("div", { className: "text", text: text }),
+      el("button", { type: "button", text: "Dismiss", onclick: function () { node.remove(); } }),
+    ]);
+    box.insertBefore(node, box.firstChild);
+  }
+
+  // ---------- loading and polling ----------
+
+  function load(rebuild) {
+    return api("/api/catalog").then(function (res) {
+      if (res.status === 401) {
+        stopPolling();
+        state.restarting = false;
+        showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…). The token changes each time the server starts.");
+        return;
+      }
+      if (!res.ok || !res.body) {
+        showFatal("Could not load the catalog: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      var hadData = !!state.data;
+      var hashChanged = hadData && state.data.layers.localHash !== res.body.layers.localHash;
+      state.data = res.body;
+      if (rebuild || !hadData || hashChanged) {
+        if (hashChanged && !rebuild && editCount() > 0) flash("warn", "world.local.json changed on disk; the page reloaded it and kept your unsaved edits where they still apply.");
+        build();
+      }
+      if (state.restarting && !res.body.pending) {
+        state.restarting = false;
+        if (!res.body.lastFailure) {
+          state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+          build();
+          flash("info", "The server restarted with your changes.");
+        }
+      }
+      renderBanners();
+      updateFooter();
+      schedulePoll();
+    }, function () {
+      // Network error: expected while the server restarts.
+      if (state.restarting || busy()) {
+        state.restarting = "The server is restarting…";
+        renderBanners();
+        schedulePoll(true);
+      } else {
+        showFatal("The server did not answer. Is it running?");
+      }
+    });
+  }
+
+  function showFatal(text) {
+    document.getElementById("loading").hidden = true;
+    var box = document.getElementById("banners");
+    box.textContent = "";
+    box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: text })]));
+  }
+
+  function stopPolling() {
+    if (state.pollTimer) clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+  }
+  function schedulePoll(force) {
+    stopPolling();
+    if (!force && !busy()) return;
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, POLL_MS);
+  }
+
+  function cancelCountdown() {
+    api("/api/cancel", {}).then(function (res) {
+      if (!res.ok) flash("error", "Cancel failed: " + ((res.body && res.body.error) || "HTTP " + res.status));
+      else if (res.body && res.body.cancelled) flash("info", "Restart cancelled. world.local.json was not changed.");
+      else flash("warn", "There was no countdown to cancel.");
+      load(false);
+    }, function () { flash("error", "Cancel failed: the server did not answer."); });
+  }
+
+  // ---------- preview and apply ----------
+
+  var dialog = document.getElementById("preview");
+  var applyButton = document.getElementById("apply");
+
+  function renderPlan(plan, extraError) {
+    var box = document.getElementById("preview-content");
+    box.textContent = "";
+    if (extraError) box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: extraError })]));
+    if (plan.errors && plan.errors.length) {
+      box.appendChild(el("h3", { text: "Errors (nothing can be saved until these are fixed)" }));
+      box.appendChild(el("ul", { className: "list" }, plan.errors.map(function (e) { return el("li", { text: e }); })));
+    }
+    if (plan.warnings && plan.warnings.length) {
+      box.appendChild(el("h3", { text: "Warnings" }));
+      box.appendChild(el("ul", { className: "list" }, plan.warnings.map(function (w) { return el("li", { text: w }); })));
+    }
+    if (plan.diff && plan.diff.length) {
+      var table = el("table", { className: "diff" }, [
+        el("thead", null, [el("tr", null, [el("th", { scope: "col", text: "Key" }), el("th", { scope: "col", text: "Before" }), el("th", { scope: "col", text: "After" })])]),
+        el("tbody", null, plan.diff.map(function (d) {
+          return el("tr", null, [
+            el("td", { text: d.path }),
+            el("td", { text: d.before === undefined ? "(not set)" : JSON.stringify(d.before) }),
+            el("td", { text: d.after === undefined ? "(removed)" : JSON.stringify(d.after) }),
+          ]);
+        })),
+      ]);
+      box.appendChild(table);
+    } else {
+      box.appendChild(el("p", { text: "world.local.json would not change." }));
+    }
+    var d = state.data;
+    var players = d.onlinePlayers || 0;
+    var countdown = d.mode !== "manual" && players > 0 && d.countdown && d.countdown.available !== false;
+    document.getElementById("seconds-wrap").hidden = !countdown;
+    var note;
+    if (d.mode === "manual") note = "Apply writes world.local.json now. Restart the server by hand for it to take effect.";
+    else if (countdown) note = players + (players === 1 ? " player is" : " players are") + " online: Apply starts the world update countdown. The file is written when it ends; Cancel leaves it unchanged.";
+    else if (players > 0) note = "Countdown unavailable (GameUpdate is off): Apply restarts immediately.";
+    else note = "Nobody is online: Apply saves, writes world.local.json and restarts the server now.";
+    box.appendChild(el("p", { text: note }));
+    applyButton.textContent = d.mode === "manual" ? "Write file" : countdown ? "Start countdown" : "Restart now";
+    applyButton.disabled = !!(plan.errors && plan.errors.length) || !(plan.diff && plan.diff.length);
+  }
+
+  document.getElementById("save").addEventListener("click", function () {
+    // A JSON box validates on blur; make sure the one being typed in has been checked.
+    if (document.activeElement && document.activeElement.tagName === "TEXTAREA") document.activeElement.blur();
+    if (anyInvalid()) { updateFooter(); return; }
+    var body = { changes: changesPayload(), localHash: state.data.layers.localHash };
+    api("/api/preview", body).then(function (res) {
+      if (!res.ok || !res.body || !res.body.diff) {
+        flash("error", "Preview failed: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      state.lastPlan = res.body;
+      document.getElementById("seconds").value = String(DEFAULT_SECONDS);
+      renderPlan(res.body);
+      if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+    }, function () { flash("error", "Preview failed: the server did not answer."); });
+  });
+
+  document.getElementById("preview-close").addEventListener("click", function () { dialog.close(); });
+
+  applyButton.addEventListener("click", function () {
+    var body = { changes: changesPayload(), localHash: state.data.layers.localHash };
+    if (!document.getElementById("seconds-wrap").hidden) {
+      var seconds = Number(document.getElementById("seconds").value);
+      if (!Number.isInteger(seconds) || seconds < 1 || seconds > 86400) {
+        renderPlan(state.lastPlan, "Countdown must be a whole number of seconds from 1 to 86400.");
+        return;
+      }
+      body.seconds = seconds;
+    }
+    applyButton.disabled = true;
+    api("/api/apply", body).then(function (res) {
+      var b = res.body || {};
+      if (res.status === 200 && b.applied === "written") {
+        dialog.close();
+        state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+        flash("info", "world.local.json written. Restart the server for the change to take effect.");
+        load(true);
+      } else if (res.status === 202 && b.applied === "countdown") {
+        dialog.close();
+        load(false);
+      } else if (res.status === 202 && b.applied === "restarting") {
+        dialog.close();
+        state.restarting = "Saving players, writing world.local.json and restarting…";
+        renderBanners();
+        updateFooter();
+        schedulePoll(true);
+      } else if (res.status === 400 && b.diff) {
+        state.lastPlan = b;
+        renderPlan(b);
+      } else {
+        renderPlan(state.lastPlan, b.error || "Apply failed (HTTP " + res.status + ").");
+        if (res.status === 409) load(false);
+      }
+    }, function () {
+      renderPlan(state.lastPlan, "Apply failed: the server did not answer.");
+    });
+  });
+
+  window.addEventListener("beforeunload", function (event) {
+    if (editCount() > 0 && !state.restarting) { event.preventDefault(); event.returnValue = ""; }
+  });
+
+  load(true);
+})();
+</script>
+</body>
+</html>

@@ -81,7 +81,8 @@ module.exports = function attachCapacity(pluginApi) {
   api.persistAttribute(MAJOR_ATTRIBUTE, false);
   api.onCustomEvent("treasure-trails:can-receive", canReceive);
   api.onCustomEvent("treasure-trails:milestone-rewards", request => {
-    if (request.handled || !request.player || !Array.isArray(request.milestones) || !Array.isArray(request.drops)) return;
+    // Only the beginner casket's request: other tiers' rows belong to ClueCapacity, which knows each tier's case.
+    if (request.handled || request.tier !== "beginner" || !request.player || !Array.isArray(request.milestones) || !Array.isArray(request.drops)) return;
     request.drops.push(...milestoneRewards(request.player, request.completed, request.milestones));
     request.handled = true;
   });

@@ -94,7 +94,7 @@ function open(event) {
       const rolls = { player, tier: "beginner", rolls: between(minimum, maximum, Math.random), minimum, maximum };
       api?.emitCustomEvent?.("treasure-trails:casket-rolls", rolls);
       const casketRolls = Number.isInteger(rolls.rolls) ? Math.max(minimum, Math.min(maximum, rolls.rolls)) : null;
-      const request = {player, completed: count, milestones: TABLE.milestones, drops: roll(Math.random, uniqueEligible(player), casketRolls), handled: false, error: null};
+      const request = {player, tier: "beginner", completed: count, milestones: TABLE.milestones, drops: roll(Math.random, uniqueEligible(player), casketRolls), handled: false, error: null};
       api.emitCustomEvent("treasure-trails:milestone-rewards", request);
       if (!request.handled || request.error) throw request.error ?? new Error("Beginner milestone service unavailable");
       drops = prepareDrops(request.drops);

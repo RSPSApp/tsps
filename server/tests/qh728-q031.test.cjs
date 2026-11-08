@@ -10,6 +10,9 @@ Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
+const { GameConstants } = require('../dist/game/GameConstants');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
@@ -68,7 +71,12 @@ function harness() {
       return event;
     },
     itemOnObject(player, itemId, objectId) {
-      const event = { player, itemId, objectId, handled: false };
+      const itemSlot = player.inventory.getItems().findIndex(item => item.getId() === itemId);
+      const event = { player, itemId, objectId, itemSlot, item: player.inventory.getItems()[itemSlot], handled: false };
+      (hooks.onItemOnObject ?? []).forEach(fn => fn(event));
+      return event;
+    },
+    itemOnObjectEvent(event) {
       (hooks.onItemOnObject ?? []).forEach(fn => fn(event));
       return event;
     },
@@ -118,6 +126,8 @@ function container(size) {
       const left = items[index].getAmount() - amount;
       items[index] = left > 0 ? new core.Item(id, left) : new core.Item(-1, 0);
     },
+    setItem(slot, item) { items[slot] = item; },
+    refreshItems: noop,
     clear() { items = Array.from({ length: size }, () => new core.Item(-1, 0)); },
   };
 }
@@ -135,14 +145,14 @@ function player() {
     sendInterfaceRemoval() { manager.reset(); return packet; },
   }, { get: (target, key) => target[key] ?? (() => packet) });
   const p = {
-    attrs, varbits, configs, xp, messages, inventory,
+    attrs, varbits, configs, xp, messages, inventory, smithingLevel: 99,
     getAttribute: key => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
     getPacketSender: () => packet,
     getDialogueManager: () => manager,
     getSkillManager: () => ({
-      getCurrentLevel: () => 99,
+      getCurrentLevel: () => p.smithingLevel,
       getMaxLevel: () => 99,
       setCurrentLevel: noop,
       addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]),
@@ -387,4 +397,116 @@ test('smithing the mind helm completes on varbit 2639=11 and rewards once', () =
   assert.equal(p.varbits.get(2639), 11);
   assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 7500], [core.Skill.SMITHING.getIndex(), 7500]]);
   assert.equal(p.attrs.get('quest.points'), 1);
+});
+
+
+test('completed slashed-book-only item use crafts a shield without repeating quest rewards', () => {
+  const p = player();
+  h.quest.setStage(p, 12);
+  p.inventory.adds(I.SLASHED_BOOK, 1);
+  p.inventory.adds(I.HAMMER, 1);
+  p.inventory.adds(I.PRIMED_MIND_BAR, 1);
+  while (p.inventory.getFreeSlots()) p.inventory.adds(I.COINS, 1);
+  h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 1);
+  assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 0);
+  assert.equal(p.inventory.getFreeSlots(), 0);
+  assert.deepEqual(p.xp, [[core.Skill.SMITHING.getIndex(), 30]]);
+  assert.equal(h.quest.getStage(p), 12);
+  assert.equal(p.attrs.get('quest.points') ?? 0, 0);
+  p.inventory.deleteNumber(I.MIND_SHIELD, 1);
+  p.inventory.adds(I.PRIMED_MIND_BAR, 1);
+  h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 1);
+  assert.equal(p.xp.length, 2);
+});
+
+test('shield item use conserves the bar without level, hammer or plain metadata', () => {
+  for (const mode of ['level', 'hammer', 'metadata']) {
+    const p = player();
+    h.quest.setStage(p, 12);
+    p.inventory.adds(I.SLASHED_BOOK, 1);
+    if (mode !== 'hammer') p.inventory.adds(I.HAMMER, 1);
+    p.inventory.adds(I.PRIMED_MIND_BAR, 1);
+    if (mode === 'level') p.smithingLevel = 29;
+    if (mode === 'metadata') p.inventory.getItems().find(item => item.getId() === I.PRIMED_MIND_BAR).setMeta({ preset: true });
+    h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+    assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 1, mode);
+    assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0, mode);
+    assert.deepEqual(p.xp, [], mode);
+  }
+});
+
+
+test('shield item use rejects a stale clicked slot', () => {
+  const p = player();
+  h.quest.setStage(p, 12);
+  p.inventory.adds(I.SLASHED_BOOK, 1);
+  p.inventory.adds(I.HAMMER, 1);
+  p.inventory.adds(I.PRIMED_MIND_BAR, 1);
+  const itemSlot = p.inventory.getItems().findIndex(item => item.getId() === I.PRIMED_MIND_BAR);
+  const item = p.inventory.getItems()[itemSlot];
+  p.inventory.setItem(itemSlot, new core.Item(I.PRIMED_MIND_BAR, 1));
+  h.itemOnObjectEvent({ player: p, itemId: I.PRIMED_MIND_BAR, objectId: O.WORKBENCH_5, itemSlot, item, handled: false });
+  assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 1);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0);
+  assert.deepEqual(p.xp, []);
+});
+
+test('both books retain the existing helm path after completion', () => {
+  const p = player();
+  h.quest.setStage(p, 12);
+  for (const id of [I.SLASHED_BOOK, I.BEATEN_BOOK, I.HAMMER, I.PRIMED_MIND_BAR]) p.inventory.adds(id, 1);
+  h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  assert.equal(p.inventory.getAmount(I.MIND_HELMET), 1);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0);
+  assert.deepEqual(p.xp, []);
+});
+
+
+test('real inventory: cached items, full bag, stale removal and metadata conservation', () => {
+  assert.equal(core.ItemDefinition.forId(I.PRIMED_MIND_BAR).getName().toLowerCase(), 'primed mind bar');
+  assert.equal(core.ItemDefinition.forId(I.MIND_SHIELD).getName().toLowerCase(), 'mind shield');
+  assert.equal(core.ItemDefinition.forId(I.PRIMED_MIND_BAR).isStackable(), false);
+  assert.equal(core.ItemDefinition.forId(I.MIND_SHIELD).isStackable(), false);
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setAttribute('quest.elemental_workshop_ii.stage', 12);
+  p.getSkillManager().setCurrentLevel(core.Skill.SMITHING, 30, false);
+  const inv = p.getInventory();
+  p.inventory = inv;
+  let refreshes = 0;
+  const refresh = inv.refreshItems.bind(inv);
+  inv.refreshItems = () => { refreshes++; return refresh(); };
+  const entries = Array.from({ length: 28 }, () => new core.Item(I.ROPE, 1));
+  entries[0] = new core.Item(I.SLASHED_BOOK, 1);
+  entries[1] = new core.Item(I.HAMMER, 1);
+  entries[2] = new core.Item(I.PRIMED_MIND_BAR, 1);
+  inv.setItems(entries);
+  assert.equal(inv.getFreeSlots(), 0);
+  const selected = inv.getItems()[2];
+  const event = { player: p, itemId: I.PRIMED_MIND_BAR, objectId: O.WORKBENCH_5, itemSlot: 2, item: selected, handled: false };
+  inv.setItem(2, new core.Item(-1, 0));
+  h.itemOnObjectEvent(event);
+  assert.equal(inv.getAmount(I.MIND_SHIELD), 0, 'removed bar cannot be consumed after walking');
+  inv.setItem(2, new core.Item(I.PRIMED_MIND_BAR, 1, { preset: true }));
+  const tagged = inv.getItems()[2];
+  h.itemOnObjectEvent({ ...event, item: tagged, handled: false });
+  assert.equal(inv.getItems()[2], tagged);
+  assert.deepEqual(tagged.getMeta(), { preset: true });
+  inv.setItem(2, new core.Item(I.PRIMED_MIND_BAR, 1));
+  const plain = inv.getItems()[2];
+  const xpBefore = p.getSkillManager().getExperience(core.Skill.SMITHING);
+  const gate = PluginManager.emitCanGainExperience(p, core.Skill.SMITHING, 30);
+  assert.notEqual(gate.allow, false);
+  assert.ok(Number.isFinite(GameConstants.EXPERIENCE_MULTIPLIER) && GameConstants.EXPERIENCE_MULTIPLIER > 0);
+  h.itemOnObjectEvent({ ...event, item: plain, handled: false });
+  assert.equal(refreshes, 1, 'only the successful exchange refreshes the real inventory');
+  const expectedXp = Math.floor(30 * GameConstants.EXPERIENCE_MULTIPLIER * gate.multiplier * 10 + 1e-6) / 10;
+  assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - xpBefore, expectedXp);
+  assert.equal(inv.getItems()[2].getId(), I.MIND_SHIELD);
+  assert.equal(inv.getAmount(I.PRIMED_MIND_BAR), 0);
+  assert.equal(inv.getFreeSlots(), 0);
+  assert.equal(h.quest.getStage(p), 12);
 });

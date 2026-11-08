@@ -285,10 +285,22 @@ function rowing(player, trip) {
 
 const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, rowing };
 
-/** Sends the player on a route by name; false if they're already travelling or it's unknown. */
+/**
+ * Whether the passenger may go where the route lands: a league area still locked refuses, with its own line, through
+ * the teleport checks every travel asks (TeleportHandler.checkReqs, as BarnabyFerry and the charter ships do), so a
+ * trip never starts (nor a fare goes) only to be sent back on landing.
+ */
+function canGo(player, routeName) {
+  const route = Common.route(routeName);
+  if (!route?.to) return true;
+  return Common.core.TeleportHandler.checkReqs(player, Common.toLocation(route.to));
+}
+
+/** Sends the player on a route by name; false if they're already travelling, it's unknown or they may not go. */
 function travel(player, routeName) {
   const route = Common.route(routeName);
   if (!route || !player || Common.travelling(player)) return false;
+  if (!canGo(player, routeName)) return false;
   const trip = { ...route, routeName };
   const from = player.getLocation().clone();
   STYLES[trip.style](player, trip);
@@ -305,4 +317,4 @@ function landEveryone() {
   for (const [player, trip] of [...Common.trips]) trip.land?.(true);
 }
 
-module.exports = { travel, landNow, landEveryone, STYLES };
+module.exports = { travel, canGo, landNow, landEveryone, STYLES };

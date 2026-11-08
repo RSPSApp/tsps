@@ -227,3 +227,28 @@ test("Yes away from any port, with no trader, charges nothing", (t) => {
   yes(f);
   assert.equal(f.inv.getAmount(I.COINS), 100000);
 });
+
+// #1352 review: a charter to a place the passenger may not go (a league area still locked) took the fare, sailed,
+// and Enforcement.LeagueAreaUnlocks sent them back on landing. The league's refusal is its onCanTeleport hook
+// (TeleportHandler.checkReqs), which the sail now asks before taking the coins, as BarnabyFerry does. Stand-in: a
+// hook refusing the route's deck with the league's line.
+test("a destination the passenger may not go to is refused before the fare is taken", (t) => {
+  const f = setup(t, { ring: false });
+  const deck = f.to.deck;
+  let refusing = true;
+  PM.createApi("CharterLockedStandIn").onCanTeleport((event) => {
+    const { player, destination } = event;
+    if (!refusing || player !== f.p || destination?.getX?.() !== deck.x || destination?.getY?.() !== deck.y) return;
+    player.sendMessage("You haven't unlocked that area yet.");
+    event.allow = false;
+  });
+  t.after(() => { refusing = false; });
+  const start = f.p.getLocation().clone();
+  Charter.offerFare(f.p, f.to, f.fare());
+  click(f);
+  for (let i = 0; i < 6; i++) { nextTick(); core.TaskManager.process(); }
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "no fare taken");
+  assert.ok(f.messages.includes("You haven't unlocked that area yet."), f.messages.join(" | "));
+  assert.equal(f.p.getLocation().getX(), start.getX(), "not sailed");
+  assert.equal(f.p.getLocation().getY(), start.getY());
+});

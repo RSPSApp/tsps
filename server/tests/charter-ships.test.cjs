@@ -53,6 +53,8 @@ const api = {
     Task,
     TaskManager: { submit: (task) => tasks.push(task) },
     ShopManager: { open: () => true },
+    // The sail asks whether the deck may be gone to (a league area still locked refuses); every port here may.
+    TeleportHandler: { checkReqs: () => true },
   },
   persistAttribute: (key, value) => hooks.persisted.set(key, value),
   onPlayerLogin: () => {},

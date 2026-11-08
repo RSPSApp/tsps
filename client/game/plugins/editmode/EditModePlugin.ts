@@ -765,6 +765,11 @@ export class EditModePlugin {
             );
             this.undoGroup(() => {
                 this.removeEdits(indices);
+                // Before the tile's removal markers: the server's loader reads [override, remove] as this spawn's
+                // wander plus one stacked spawn removed, but [remove, override] as a moved-back spawn filling the
+                // removed one's slot, which would load two spawns.
+                const firstMarker = this.npcEditIndicesAt(selection).find((index) =>
+                    this.config.edits[index].kind === "npcDelete");
                 this.commitEdits([{
                     kind: "npcWander",
                     locId: selection.locId,
@@ -777,7 +782,7 @@ export class EditModePlugin {
                     ...(selection.npcSpawn?.direction === undefined
                         ? {}
                         : { direction: selection.npcSpawn.direction }),
-                }]);
+                }], true, firstMarker);
             });
         }
         this.selection = { ...selection, npcWanderRadius: wanderRadius };
@@ -1493,14 +1498,15 @@ export class EditModePlugin {
         return [...vertices.values()];
     }
 
-    private commitEdits(edits: EditModeEdit[], applyImmediately = true): void {
+    /** `index`: where the edits go in the list (and so in the saved patch); the end by default. */
+    private commitEdits(edits: EditModeEdit[], applyImmediately = true, index = this.config.edits.length): void {
         if (edits.length === 0) return;
         if (applyImmediately) {
             for (const edit of edits) {
                 this.dispatch(edit);
             }
         }
-        const next = [...this.config.edits, ...edits];
+        const next = [...this.config.edits.slice(0, index), ...edits, ...this.config.edits.slice(index)];
         this.setConfig({ edits: next });
         if (!applyImmediately && this.undoGroupBase === undefined) {
             const entry = this.undoStack.at(-1);

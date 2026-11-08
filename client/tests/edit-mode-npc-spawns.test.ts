@@ -32,6 +32,8 @@ const canvas = document.querySelector("canvas")!;
         ["override", "override", "add"], "each record overrides one canonical spawn, then adds");
     assert.deepEqual(classifyNpcSpawnPatch([man], [{ ...man, remove: true }, { ...man, remove: true }]),
         ["remove", "remove"]);
+    assert.deepEqual(classifyNpcSpawnPatch(pair, [{ ...man, wanderRadius: 0 }, { ...man, remove: true }]),
+        ["override", "remove"], "one stacked spawn's wander changed and the other removed: one spawn left");
 
     // One marker hides one of the pair; the other stays visible.
     const hidden = new HiddenNpcSpawns();
@@ -151,6 +153,21 @@ canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Delete", co
 assert.deepEqual(calls, [["hideNpcSpawn", { id: 3, tileX: 3222, tileY: 3218, plane: 0 }]]);
 assert.deepEqual(plugin.getConfig().edits.map((edit) => edit.kind), ["npcDelete", "npcDelete"],
     "both stacked spawns are removed, one marker each");
+
+// Deleting one stacked spawn, then changing the other's wander range, saves the override before the marker,
+// which the loader reads as that spawn's wander plus one removal (not a moved-back spawn filling the slot).
+plugin.clearEdits();
+selected = spawnSelection();
+plugin.applyAtPointer();
+canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Delete", code: "Delete", bubbles: true }));
+selected = { ...spawnSelection(), npcServerId: 60001 };
+plugin.applyAtPointer();
+plugin.setSelectionWanderRadius(0);
+assert.deepEqual(plugin.getConfig().edits.map((edit) => edit.kind), ["npcWander", "npcDelete"]);
+plugin.setSelectionWanderRadius(1);
+assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.wanderRadius]),
+    [["npcWander", 1], ["npcDelete", undefined]], "a second change still goes before the marker");
+plugin.clearEdits();
 
 // Delete key removes a selected object too.
 plugin.clearEdits();

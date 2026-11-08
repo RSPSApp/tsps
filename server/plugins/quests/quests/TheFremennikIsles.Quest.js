@@ -1510,8 +1510,15 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     [JESTER_BOOTS, Equipment.FEET_SLOT],
   ];
 
+  /** In any bank tab but the search tab: a banked piece is owned, so the chest doesn't give it again. */
+  function banked(player, itemId) {
+    const searchTab = api.core.Bank.BANK_SEARCH_TAB_INDEX;
+    return (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+  }
+
   function missingJesterPieces(player) {
-    return JESTER_PIECES.filter(([id, slot]) => !hasItem(player, id) && equipped(player, slot) !== id).map(([id]) => id);
+    return JESTER_PIECES.filter(([id, slot]) => !hasItem(player, id) && equipped(player, slot) !== id && !banked(player, id))
+      .map(([id]) => id);
   }
 
   function openJesterChest(event) {

@@ -2,8 +2,8 @@ import { strict as assert } from "node:assert";
 import { XpState } from "../game/plugins/xptracker/xpState";
 import { SkillId } from "../rs/skill/skills";
 
-// Proposed timeout-bearing state API: the current one-argument implementation ignores
-// now/resetAfter in JavaScript. This fixture tests the state API, not plugin wiring or config.
+// The baseline one-argument implementation ignored now/resetAfter; this fixture tests
+// the state API, not plugin wiring or config.
 function tickOverall(state: XpState, delta: number, now: number, resetAfter: number): void {
     const tick = state.tickOverall as (delta: number, now: number, resetAfter: number) => void;
     tick.call(state, delta, now, resetAfter);

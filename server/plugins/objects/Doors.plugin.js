@@ -543,6 +543,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossBetween: [2657, 2659],
       crossRows: [3438],
+      // The fence is diagonal, so the side comes from x - y, not x alone: 2658,3439 (the doorman's
+      // tile) shares the leaf's x but is outside, and x alone carried that opener back out.
+      eastwardFrom: (here) => here.getX() - here.getY() <= 2658 - 3438,
       closeTicks: 2,
       openSoundId: 62,
     }),
@@ -1547,7 +1550,9 @@ function carryAcrossGate(player, gate, y, z) {
   const [low, high] = gate.crossBetween;
   const here = player.getLocation();
   const row = gate.crossRows.includes(here.getY()) ? here.getY() : y;
-  const eastward = here.getX() < (low + high) / 2;
+  // A diagonal gate's two sides are not the two halves of x: a player standing north of the leaf
+  // shares its x, so the gate says which side is which.
+  const eastward = gate.eastwardFrom ? gate.eastwardFrom(here) : here.getX() < (low + high) / 2;
   const from = cloneLocation(eastward ? low : high, row, z);
   if (Math.abs(here.getX() - from.getX()) > 1 || Math.abs(here.getY() - from.getY()) > 1) return;
   if (!here.equals(from)) player.moveTo(from.clone());

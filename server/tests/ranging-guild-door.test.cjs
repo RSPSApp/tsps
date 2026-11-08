@@ -102,6 +102,16 @@ test("40 Ranged opens the gate and is carried across", (t) => {
   assert.equal(f.p.getLocation().getX(), INSIDE[0], "the opener is carried to the inside tile");
 });
 
+test("the north approach enters too, not just the west one", (t) => {
+  // 2658,3439 is the doorman's tile: it shares the leaf's x but is outside the diagonal fence, so
+  // an x-only crossing direction carried the opener back out.
+  const f = actor(t, [2658, 3439, 0], 40);
+  openDoor(f);
+  tick(f, 4);
+  assert.equal(f.p.getLocation().getX(), INSIDE[0], "carried to the inside tile");
+  assert.equal(f.p.getLocation().getY(), INSIDE[1]);
+});
+
 test("a low-level follower cannot cross the open gate", (t) => {
   const leader = actor(t, OUTSIDE, 40);
   const follower = actor(t, [2656, 3438, 0], 1);

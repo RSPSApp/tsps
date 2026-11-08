@@ -15,6 +15,7 @@ const CalcifiedWater = require("./mining/CalcifiedWater.Mining");
 const Saltpetre = require("./mining/Saltpetre.Mining");
 const VarrockArmour = require("./mining/VarrockArmour.Mining");
 const ProspectorOutfit = require("./mining/ProspectorOutfit.Mining");
+const AncientEssence = require("./mining/AncientEssence.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -33,7 +34,7 @@ const NO_ORE_MESSAGE = "There is currently no ore available in this rock.";
 // rsprox captures 3139 (rev 232): Mine on a mined-out rock stops the swing and plays this sound.
 const NO_ORE_SOUND = 2661;
 // The rocks without their own mined-out loc that still offer Mine (amethyst's wall).
-const EMPTY_ROCK_NAMES = ["Empty wall"];
+const EMPTY_ROCK_NAMES = ["Empty wall", "Wall"];
 const SWING_MESSAGE = "You swing your pick at the rock.";
 const NO_PICKAXE_MESSAGE = "You need a pickaxe to mine this rock. You do not have a pickaxe which you have the Mining level to use.";
 const MINING_SUCCESS_SOUND = 3600;
@@ -261,6 +262,9 @@ const ROCKS = [
 const ESSENCE_ROCKS = [
   { objectName: "Rune Essence", objectIds: [ObjectIds.RUNE_ESSENCE_3], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, respawnTicks: 0, infinite: true, silent: true },
   { objectName: "Rune essence", objectIds: [ObjectIds.RUNE_ESSENCE, ObjectIds.RUNE_ESSENCE_2], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, respawnTicks: 0, infinite: true, silent: true },
+  // Wiki Ancient essence crystals: 75 Mining, 13.5 XP, 1-4 essence by level, never mined out (the active
+  // spot moves instead, see AncientEssence.Mining), no pet. No published chart: every roll lands.
+  { objectName: "Ancient essence crystals", level: 75, xp: 13.5, oreId: ItemIdentifiers.ANCIENT_ESSENCE, gems: true, respawnTicks: 0, infinite: true, essenceByLevel: true, oreMessage: "You manage to mine some ancient essence." },
 ];
 
 const ALL_ROCKS = [...ROCKS, ...ESSENCE_ROCKS];
@@ -739,6 +743,7 @@ function outcomeAmount(outcome) {
 
 /** One ore a success, or two from a rock's `doubleFromLevel` (rubium splinters at 72, the visible level). */
 function oreAmount(player, rock) {
+  if (rock.essenceByLevel) return AncientEssence.essenceAmount(getMiningLevel(player));
   return rock.doubleFromLevel !== undefined && getMiningLevel(player) >= rock.doubleFromLevel ? 2 : 1;
 }
 
@@ -1118,6 +1123,7 @@ module.exports = {
     Saltpetre.attach(api);
     VarrockArmour.attach(api);
     ProspectorOutfit.attach(api);
+    AncientEssence.attach(api);
 
     api.log("registered", {
       rocks: ROCKS.length,

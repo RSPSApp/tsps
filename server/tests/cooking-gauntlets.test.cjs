@@ -40,10 +40,14 @@ test("cooking gauntlets lower the burn level for the foods the Wiki lists", () =
   assert.equal(Cooking._test.stopBurnLevel(player(70), lobster), 74, "plain lobster stops burning at 74");
   assert.equal(Cooking._test.stopBurnLevel(player(70, ItemIds.COOKING_GAUNTLETS), lobster), 64);
   assert.equal(Cooking._test.isSuccess(player(70, ItemIds.COOKING_GAUNTLETS), lobster), true, "70 >= 64");
-  assert.equal(
-    Cooking._test.stopBurnLevel(player(80, ItemIds.COOKING_GAUNTLETS), Cooking._test.COOKABLE_BY_RAW.get(ItemIds.RAW_SHARK)),
-    89
-  );
+  // Wiki (Cooking/Burn level): with gauntlets on a fire or range shark stops at 94 and anglerfish at 97 (89 and 93 are the
+  // Hosidius range's); without them neither ever stops burning, which this data writes as 99, as for dark crab.
+  const shark = Cooking._test.COOKABLE_BY_RAW.get(ItemIds.RAW_SHARK);
+  const anglerfish = Cooking._test.COOKABLE_BY_RAW.get(ItemIds.RAW_ANGLERFISH);
+  assert.equal(Cooking._test.stopBurnLevel(player(80, ItemIds.COOKING_GAUNTLETS), shark), 94);
+  assert.equal(Cooking._test.stopBurnLevel(player(84, ItemIds.COOKING_GAUNTLETS), anglerfish), 97);
+  assert.equal(Cooking._test.stopBurnLevel(player(80), shark), 99, "shark never stops burning without gauntlets");
+  assert.equal(Cooking._test.stopBurnLevel(player(84), anglerfish), 99, "nor anglerfish");
 });
 
 test("the gauntlets do not help with unlisted food", () => {

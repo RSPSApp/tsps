@@ -104,15 +104,17 @@ function cookAnimationFor(name) {
 
 /**
  * Wiki: cooking gauntlets only affect lobster, swordfish, kyatt, monkfish,
- * shark and anglerfish, lowering the level at which they stop burning.
+ * shark and anglerfish, lowering the level at which they stop burning (Cooking/Burn level, "Gauntlets, Default":
+ * a fire or normal range; shark 94 and anglerfish 97, which never stop burning without them; 89 and 93 are the
+ * Hosidius range's).
  */
 const GAUNTLETS_STOP_BURN = new Map([
   ["raw_lobster", 64],
   ["raw_swordfish", 80],
   ["hunting_kyatt_meat", 80],
   ["raw_monkfish", 86],
-  ["raw_shark", 89],
-  ["raw_anglerfish", 93],
+  ["raw_shark", 94],
+  ["raw_anglerfish", 97],
 ]);
 
 function gauntletsStopBurn(rawId) {

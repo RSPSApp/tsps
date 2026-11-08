@@ -31,7 +31,8 @@ function build(core) {
     red: { level: 59, ...sapling("red"), bait: I.TARROMIN_TAR, animation: 5215, ...NET },
     black: { level: 67, ...sapling("black"), bait: I.HARRALANDER_TAR, animation: 5215, ...NET },
     swamp: { level: 29, ...sapling("swamp"), bait: I.GUAM_TAR, animation: 5215, ...NET },
-    tecu: { level: 79, ...sapling("mountain"), bait: I.IRIT_TAR, animation: 5215, ...NET },
+    // Wiki (Net trap): "irit tar cannot be used as bait for tecu salamanders, nor is it possible to smoke the traps."
+    tecu: { level: 79, ...sapling("mountain"), animation: 5215, ...NET, noBait: true, noSmoke: true },
     monkey: { level: 60, idle: O.LARGE_BOULDER_2, fail: O.LARGE_BOULDER, animation: 7259, max: 1, inputs: [[I.BANANA, 1]] },
     rabbit: { level: 27, item: I.RABBIT_SNARE, idle: O.RABBIT_SNARE, fail: O.RABBIT_SNARE, animation: 5208 },
   };

@@ -436,6 +436,25 @@ test('glassblowing lists all eight items and makes one every 3 ticks from the se
   assert.equal(player.amounts.get(ItemIds.GLASSBLOWING_PIPE), 1);
 });
 
+// rsprox captures: the leather, thread and glassblowing lines are spam ("You make a green dragonhide body." 193 times,
+// "You use up one of your reels of thread." 163, "You make a beer glass."), and the orb is "You make an orb."
+// (rsprox_transcripts/227/01854.txt, 101 times). They went to the game channel, the orb as "an unpowered staff orb".
+test('leather, thread and glassblowing lines are spam, and an unpowered orb is "You make an orb."', t => {
+  membersWorld(t, true);
+  const SPAM = PluginManager.getCoreApi().ChatType.SPAM;
+  const lines = rows => rows.filter(row => row[0] === 'message');
+  const leather = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.LEATHER, 5]]);
+  useNeedle(leather.player, ItemIds.LEATHER);
+  const sewn = craft(leather.player, leather.getMenu(), ItemIds.LEATHER_GLOVES, 5, 15).flatMap(lines);
+  assert.ok(sewn.some(row => row[1] === 'You make a pair of leather gloves.'));
+  assert.ok(sewn.some(row => row[1] === 'You use up one of your reels of thread.'));
+  assert.ok(sewn.every(row => row[2] === SPAM), JSON.stringify(sewn));
+  const glass = playerWith([[ItemIds.GLASSBLOWING_PIPE, 1], [ItemIds.MOLTEN_GLASS, 1]]);
+  use(glass.player, 'blowGlass', ItemIds.MOLTEN_GLASS, ItemIds.GLASSBLOWING_PIPE);
+  const blown = make(glass.player, glass.getMenu(), ItemIds.UNPOWERED_ORB, 1, 4).flatMap(lines);
+  assert.deepEqual(blown.map(row => [row[1], row[2]]), [['You make an orb.', SPAM]]);
+});
+
 test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 2 ticks from the second', t => {
   membersWorld(t, true);
   provenanceEvents.length = 0;

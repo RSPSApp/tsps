@@ -45,8 +45,8 @@
  *    outcomes but no capture establishes the chance. The right boot supports the
  *    real Telekinetic Grab event; rejected grabs restore the ground item so it
  *    stays reclaimable. The cat branch (6GAow8) is unreachable and answers false.
- *  - The consortium loop tracks one pinned company and one task at a time, with no
- *    delivery timer or per-company score; +20 per ore delivery, +12 per bar
+ *  - The consortium loop tracks one task at a time, with no
+ *    delivery timer; +20 per ore delivery, +12 per bar
  *    delivery, -2 for cancelling, +20 once for the Purple Pewter H.A.M. headstart.
  *  - Cutscene room availability is always "a room is available"; the captured
  *    boat fade is replayed, while later statue/council scenes remain transcript
@@ -158,9 +158,10 @@ module.exports = function registerGiantDwarfQuest(api) {
   const RED_AXE_SECRETARY_NPC_ID = NpcIdentifiers.RED_AXE_SECRETARY; // 5997
   const RED_AXE_DIRECTOR_NPC_ID = NpcIdentifiers.RED_AXE_DIRECTOR_4; // 6025
 
+  const PURPLE_PEWTER_COMPANY = 1;
   const COMPANIES = [
     {
-      id: 1,
+      id: PURPLE_PEWTER_COMPANY,
       name: "Purple Pewter",
       secretaryName: "Purple Pewter Secretary",
       directorName: "Purple Pewter Director",
@@ -341,6 +342,7 @@ module.exports = function registerGiantDwarfQuest(api) {
   const DECLINED_ATTRIBUTE = "quest.giant_dwarf.declined";
   const COMPANY_ATTRIBUTE = "quest.giant_dwarf.company";
   const POINTS_ATTRIBUTE = "quest.giant_dwarf.points";
+  const COMPANY_POINTS_ATTRIBUTE = "giant-dwarf:company-points";
   const JOINED_ATTRIBUTE = "quest.giant_dwarf.joined";
   const HAM_BONUS_ATTRIBUTE = "quest.giant_dwarf.ham-bonus";
   const TASK_KIND_ATTRIBUTE = "quest.giant_dwarf.task-kind";
@@ -503,8 +505,33 @@ module.exports = function registerGiantDwarfQuest(api) {
     return numberAttribute(player, COMPANY_ATTRIBUTE);
   }
 
-  function points(player) {
+  function points(player, npcId) {
+    const company = companyForNpc(npcId);
+    const current = companyId(player);
+    if (company && company.id !== current) {
+      const scores = player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {};
+      if (Object.hasOwn(scores, company.id)) return Number(scores[company.id]) || 0;
+      // Older saves could receive the Purple Pewter bonus before choosing a company.
+      if (!current && company.id === PURPLE_PEWTER_COMPANY && flag(player, HAM_BONUS_ATTRIBUTE)) {
+        return numberAttribute(player, POINTS_ATTRIBUTE);
+      }
+      return 0;
+    }
     return numberAttribute(player, POINTS_ATTRIBUTE);
+  }
+
+  // Keep the old score as the current company's score for existing saves.
+  function switchCompany(player, company) {
+    const current = companyId(player);
+    if (!current || current === company.id) return true;
+    if (joined(player) || taskActive(player) || pendingTask(player)) return false;
+    const scores = { ...(player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {}) };
+    scores[current] = points(player);
+    player.setAttribute(COMPANY_POINTS_ATTRIBUTE, scores);
+    player.setAttribute(COMPANY_ATTRIBUTE, company.id);
+    player.setAttribute(POINTS_ATTRIBUTE, Number(scores[company.id]) || 0);
+    syncVarbits(player);
+    return true;
   }
 
   function addPoints(player, amount) {
@@ -829,21 +856,21 @@ module.exports = function registerGiantDwarfQuest(api) {
       case "waIrdt":
       case "TRnN0M":
       case "Oto6R9":
-        return points(player) < 20;
+        return points(player, event.npcId) < 20;
       case "jzxdAM":
       case "358NnA":
       case "WG1P6M":
       case "tRKFXE":
       case "OsZ4_q":
-        return points(player) >= 20;
+        return points(player, event.npcId) >= 20;
       case "j33FhT":
-        return points(player) >= 20 && points(player) < DIRECTOR_POINTS;
+        return points(player, event.npcId) >= 20 && points(player, event.npcId) < DIRECTOR_POINTS;
       case "5mNpjN":
       case "Rx8A7A":
       case "nhMUz4":
-        return stepId === "nhMUz4" ? points(player) < DIRECTOR_POINTS : points(player) >= DIRECTOR_POINTS;
+        return stepId === "nhMUz4" ? points(player, event.npcId) < DIRECTOR_POINTS : points(player, event.npcId) >= DIRECTOR_POINTS;
       case "pMsir8":
-        return points(player) >= DIRECTOR_POINTS;
+        return points(player, event.npcId) >= DIRECTOR_POINTS;
       case "OG9Fvx":
         return taskActive(player) && taskKind(player) === "ore";
       case "b2W2BJ":
@@ -854,10 +881,10 @@ module.exports = function registerGiantDwarfQuest(api) {
         return !joined(player);
       case "RBg-Mt":
       case "m5t76w":
-        return points(player) < JOIN_POINTS;
+        return points(player, event.npcId) < JOIN_POINTS;
       case "wJzWen":
       case "yyCqHp":
-        return points(player) >= JOIN_POINTS;
+        return points(player, event.npcId) >= JOIN_POINTS;
       case "idYwU6":
         return !joined(player);
       case "98Qh1k":
@@ -865,8 +892,14 @@ module.exports = function registerGiantDwarfQuest(api) {
       case "eQt6ua": {
         const wearing = event.npcId === NpcIdentifiers.PURPLE_PEWTER_SECRETARY && wearingHamRobes(player);
         if (wearing && !flag(player, HAM_BONUS_ATTRIBUTE)) {
+          if (companyId(player)) {
+            addPoints(player, HAM_HEADSTART_POINTS);
+          } else {
+            const scores = { ...(player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {}) };
+            scores[PURPLE_PEWTER_COMPANY] = points(player, event.npcId) + HAM_HEADSTART_POINTS;
+            player.setAttribute(COMPANY_POINTS_ATTRIBUTE, scores);
+          }
           player.setAttribute(HAM_BONUS_ATTRIBUTE, true);
-          addPoints(player, HAM_HEADSTART_POINTS);
         }
         return wearing;
       }
@@ -1007,7 +1040,16 @@ module.exports = function registerGiantDwarfQuest(api) {
     if (!pendingTask(player)) return;
     player.setAttribute(TASK_ACTIVE_ATTRIBUTE, true);
     const company = companyForNpc(npcId);
-    if (company && companyId(player) === 0) player.setAttribute(COMPANY_ATTRIBUTE, company.id);
+    if (company && companyId(player) === 0) {
+      const scores = { ...(player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {}) };
+      if (flag(player, HAM_BONUS_ATTRIBUTE) && !Object.hasOwn(scores, PURPLE_PEWTER_COMPANY)) {
+        scores[PURPLE_PEWTER_COMPANY] = numberAttribute(player, POINTS_ATTRIBUTE);
+        player.setAttribute(COMPANY_POINTS_ATTRIBUTE, scores);
+      }
+      const score = points(player, npcId);
+      player.setAttribute(COMPANY_ATTRIBUTE, company.id);
+      player.setAttribute(POINTS_ATTRIBUTE, score);
+    }
   }
 
   function cancelPending(player) {
@@ -1354,7 +1396,7 @@ module.exports = function registerGiantDwarfQuest(api) {
     }
     if (SECRETARY_NPC_IDS.has(npcId)) {
       const company = companyForNpc(npcId);
-      if (companyId(player) !== 0 && companyId(player) !== company.id) return;
+      if (!switchCompany(player, company)) return;
       event.handled = true;
       const variant =
         taskActive(player) && taskKind(player) === "ore" && hasTaskItems(player)
@@ -1668,6 +1710,8 @@ module.exports = function registerGiantDwarfQuest(api) {
   ]) {
     api.persistAttribute(key);
   }
+
+  api.persistAttribute(COMPANY_POINTS_ATTRIBUTE, {});
 
   quest = registerQuest(api, {
     key: "giant_dwarf",

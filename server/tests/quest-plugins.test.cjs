@@ -23456,8 +23456,8 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
   player.setUsername('giantdwarfcompany');
   quest.setStage(player, 30);
   const N = api.core.NpcIdentifiers;
-  const talk = (name, npcId) => {
-    const event = { player, npcId, clickType: 1, handled: false,
+  const talk = (name, npcId, actor = player) => {
+    const event = { player: actor, npcId, clickType: 1, handled: false,
       definition: { getName: () => name, getActions: () => ['Talk-to'] } };
     npcActions.get(name)['Talk-to'](event);
     return event;
@@ -23507,4 +23507,67 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
   saved.applyToPlayer(restored);
   assert.equal(condition(restored, first, 'jzxdAM'), true, 'the first company retains its progress after restoration');
   assert.equal(condition(restored, blue, 'jzxdAM'), true, 'the second company retains its progress after restoration');
+
+  // The Purple Pewter clothing bonus is earned before any task selects a company.
+  const bonusPlayer = new Player(new PlayerSession(channel));
+  bonusPlayer.setUsername('giantdwarfbonus');
+  quest.setStage(bonusPlayer, 30);
+  const { Item, ItemIdentifiers: I } = api.core;
+  for (const [slot, id] of [I.HAM_HOOD, I.HAM_SHIRT, I.HAM_ROBE].entries()) {
+    bonusPlayer.getEquipment().set(slot, new Item(id, 1));
+  }
+  assert.equal(talk('Purple Pewter Secretary', first, bonusPlayer).handled, true);
+  assert.equal(condition(bonusPlayer, first, 'eQt6ua'), true, 'three H.A.M. pieces qualify for the bonus');
+  assert.equal(condition(bonusPlayer, first, 'jzxdAM'), true, 'Purple Pewter receives the bonus');
+  assert.equal(condition(bonusPlayer, blue, 'jzxdAM'), false, 'the unchosen Blue Opal has no bonus');
+  bonusPlayer.getDialogueManager().reset();
+  assert.equal(talk('Blue Opal Secretary', blue, bonusPlayer).handled, true);
+  api.emitCustomEvent('npc-dialogue:line', { player: bonusPlayer, npcId: blue, text: 'We need 3 copper ore in the next [number] minutes.' });
+  api.emitCustomEvent('npc-dialogue:choice', { player: bonusPlayer, npcId: blue, option: "I'll take it." });
+  assert.equal(condition(bonusPlayer, blue, 'jzxdAM'), false, 'Blue Opal does not inherit the Purple Pewter bonus');
+  const bonusItem = Number(bonusPlayer.getAttribute('quest.giant_dwarf.task-item'));
+  const bonusAmount = Number(bonusPlayer.getAttribute('quest.giant_dwarf.task-amount'));
+  assert.ok(bonusItem > 0 && bonusAmount >= 3 && bonusAmount <= 5, 'Blue Opal task was accepted');
+  bonusPlayer.getInventory().adds(bonusItem, bonusAmount);
+  api.emitCustomEvent('npc-dialogue:line', { player: bonusPlayer, npcId: blue, text: "I've completed your task! Here is your ore!" });
+  assert.equal(bonusPlayer.getInventory().getAmount(bonusItem), 0, 'Blue Opal receives the ore');
+  bonusPlayer.getDialogueManager().reset();
+  assert.equal(talk('Purple Pewter Secretary', first, bonusPlayer).handled, true, 'return to Purple Pewter after delivery');
+  assert.equal(condition(bonusPlayer, first, 'jzxdAM'), true, 'Purple Pewter retains its bonus');
+  const bonusRestored = new Player(new PlayerSession(channel));
+  bonusRestored.setUsername('giantdwarfbonus');
+  PlayerSave.fromPlayer(bonusPlayer).applyToPlayer(bonusRestored);
+  assert.equal(condition(bonusRestored, first, 'jzxdAM'), true, 'Purple Pewter bonus survives save and restore');
+  assert.equal(condition(bonusRestored, blue, 'jzxdAM'), true, 'Blue Opal delivery survives save and restore');
+
+  // Legacy checkpoint: the old implementation could persist this bonus before company choice.
+  const legacy = new Player(new PlayerSession(channel));
+  legacy.setUsername('giantdwarflegacy');
+  quest.setStage(legacy, 30);
+  legacy.setAttribute('quest.giant_dwarf.ham-bonus', true);
+  legacy.setAttribute('quest.giant_dwarf.points', 20);
+  const legacyRestored = new Player(new PlayerSession(channel));
+  legacyRestored.setUsername('giantdwarflegacy');
+  PlayerSave.fromPlayer(legacy).applyToPlayer(legacyRestored);
+  assert.equal(condition(legacyRestored, first, 'jzxdAM'), true, 'legacy unassigned bonus belongs to Purple Pewter');
+  assert.equal(condition(legacyRestored, blue, 'jzxdAM'), false, 'legacy bonus is not Blue Opal progress');
+  assert.equal(talk('Blue Opal Secretary', blue, legacyRestored).handled, true);
+  api.emitCustomEvent('npc-dialogue:line', { player: legacyRestored, npcId: blue, text: 'We need 3 copper ore in the next [number] minutes.' });
+  api.emitCustomEvent('npc-dialogue:choice', { player: legacyRestored, npcId: blue, option: "I'll take it." });
+  assert.equal(condition(legacyRestored, blue, 'jzxdAM'), false, 'first Blue acceptance cannot inherit the legacy bonus');
+  assert.equal(condition(legacyRestored, first, 'jzxdAM'), true, 'first Blue acceptance preserves the legacy Purple bonus');
+  const legacyItem = Number(legacyRestored.getAttribute('quest.giant_dwarf.task-item'));
+  const legacyAmount = Number(legacyRestored.getAttribute('quest.giant_dwarf.task-amount'));
+  assert.ok(legacyItem > 0 && legacyAmount >= 3 && legacyAmount <= 5, 'legacy player accepted the Blue task');
+  legacyRestored.getInventory().adds(legacyItem, legacyAmount);
+  api.emitCustomEvent('npc-dialogue:line', { player: legacyRestored, npcId: blue, text: "I've completed your task! Here is your ore!" });
+  assert.equal(legacyRestored.getInventory().getAmount(legacyItem), 0, 'legacy player completed the Blue delivery');
+  legacyRestored.getDialogueManager().reset();
+  assert.equal(talk('Purple Pewter Secretary', first, legacyRestored).handled, true, 'legacy player can return to Purple Pewter');
+  const legacyAgain = new Player(new PlayerSession(channel));
+  legacyAgain.setUsername('giantdwarflegacy');
+  PlayerSave.fromPlayer(legacyRestored).applyToPlayer(legacyAgain);
+  assert.equal(condition(legacyAgain, first, 'jzxdAM'), true, 'migrated Purple bonus survives another save');
+  assert.equal(condition(legacyAgain, blue, 'jzxdAM'), true, 'Blue delivery survives another save');
+
 });

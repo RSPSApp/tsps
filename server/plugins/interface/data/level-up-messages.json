@@ -1,5 +1,5 @@
 {
- "_source": "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read with action=raw on 2026-11-08. Each level maps to the message(s) the game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from the transcript's own qualifier, because those levels show a different message per player state. Magic merges its four spellbook sections; levels the wiki marks missing are absent. Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather than splitting by world type.",
+ "_source": "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from the transcript's own qualifier, because those levels show a different message per player state. Magic merges its four spellbook sections, Sailing's beta section is commented out on the wiki and is skipped, and a level the wiki marks only with {{tmissing}} has no message. Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather than splitting by world type.",
  "Attack": {
   "5": [
    "You have unlocked: Steel weapons."
@@ -213,11 +213,17 @@
   ]
  },
  "Defence": {
+  "5": [
+   "You can now wear Steel Armour!"
+  ],
   "10": [
    "You can now wear Black Armour. Members can equip White Armour, the Slayer helm and Xerician armour."
   ],
   "20": [
    "You can now wear Mithril Armour. Members can fight Shayzien soldiers for their armour."
+  ],
+  "25": [
+   "Members can now wear frog-leather armour.'"
   ],
   "30": [
    "You can now wear Adamant Armour!"
@@ -647,7 +653,7 @@
    "Members can now cast Fenkenstrain's Castle teleport."
   ],
   "49": [
-   "You can now enchant {{color|#000080|Ruby Jewellery}} and members can now enchant {{color|#000080|Ruby tipped Crossbow Bolts}} and {{color|#000080|Red Topaz Jewellery}}!"
+   "You can now enchant Ruby Jewellery and members can now enchant Ruby tipped Crossbow Bolts and Red Topaz Jewellery!"
   ],
   "50": [
    "Members can now cast Dark Lure."
@@ -794,167 +800,7 @@
    "Congratulations! You are now a master of Magic. Why not visit the robe store in the Wizards' Guild, where you can buy something special that is only available to true masters of the Magic skill!"
   ]
  },
- "Runecrafting": {
-  "2": [
-   "You can now craft Mind Runes."
-  ],
-  "5": [
-   "You can now craft Water Runes."
-  ],
-  "6": [
-   "Members can now craft Mist Runes from Pure Rune Essence."
-  ],
-  "9": [
-   "You can now craft Earth Runes."
-  ],
-  "10": [
-   "Members can now craft Dust Runes from Pure Rune Essence."
-  ],
-  "11": [
-   "You will now receive 2 Air Runes from each Essence."
-  ],
-  "13": [
-   "Members can now craft Mud Runes from Pure Rune Essence."
-  ],
-  "14": [
-   "You can now craft Fire Runes and will now receive 2 Mind Runes from each Essence."
-  ],
-  "15": [
-   "Members can now craft Smoke Runes from Pure Rune Essence."
-  ],
-  "19": [
-   "Members can now craft Steam Runes from Pure Rune Essence and will now receive 2 Water Runes from each Essence."
-  ],
-  "20": [
-   "You can now craft Body Runes."
-  ],
-  "22": [
-   "You will now receive 3 Air Runes from each Essence."
-  ],
-  "23": [
-   "Members can now craft Lava Runes from Pure Rune Essence."
-  ],
-  "25": [
-   "Members: You can now use Medium Pouches and Colossal Pouches to carry additional Essence."
-  ],
-  "26": [
-   "You will now receive 2 Earth Runes from each Essence."
-  ],
-  "27": [
-   "Members can now craft Cosmic Runes from Pure Rune Essence and participate in the Guardians of the Rift minigame (after completion of the Temple of the Eye quest)."
-  ],
-  "28": [
-   "You will now receive 3 Mind Runes from each Essence."
-  ],
-  "33": [
-   "You will now receive 4 Air Runes from each Essence, and members can now craft Sunfire Runes."
-  ],
-  "35": [
-   "Members can now craft Chaos Runes from Pure Rune Essence and you will now receive 2 Fire Runes from each Essence."
-  ],
-  "38": [
-   "You will now receive 3 Water Runes from each Essence."
-  ],
-  "40": [
-   "Members can now craft Astral Runes from Pure Rune Essence."
-  ],
-  "42": [
-   "You will now receive 4 Mind Runes from each Essence and Members can now infuse Splitbark boots and gauntlets with Nature Runes."
-  ],
-  "44": [
-   "Members can now craft Nature Runes from Pure Rune Essence and you will now receive 5 Air Runes from each Essence."
-  ],
-  "46": [
-   "You will now receive 2 Body Runes from each Essence and Members can now infuse the Splitbark helm with Nature Runes."
-  ],
-  "48": [
-   "Members can now infuse Splitbark body and legs with Nature Runes."
-  ],
-  "50": [
-   "Members have unlocked: Soiled page (via desiccated pages), Soaked page (via desiccated pages), Burnt page (via desiccated pages) and Large pouch."
-  ],
-  "52": [
-   "You have unlocked: 3 Earth runes per essence."
-  ],
-  "54": [
-   "Members have unlocked: Law runes."
-  ],
-  "55": [
-   "Youhave unlocked: 6 Air runes per essence."
-  ],
-  "56": [
-   "You have unlocked: 5 Mind runes per essence."
-  ],
-  "57": [
-   "You have unlocked: 4 Water runes per essence."
-  ],
-  "59": [
-   "Members have unlocked: 2 Cosmic runes per essence."
-  ],
-  "60": [
-   "Members have unlocked: Avernic treads, Primordial boots, Pegasian boots and Eternal boots."
-  ],
-  "65": [
-   "Members have unlocked: Death runes."
-  ],
-  "66": [
-   "You have unlocked: 7 Air runes per essence."
-  ],
-  "70": [
-   "You have unlocked: 3 Fire runes per essence and 6 Mind runes per essence."
-  ],
-  "74": [
-   "Members have unlocked: 2 Chaos runes per essence."
-  ],
-  "75": [
-   "Members have unlocked: Giant pouch."
-  ],
-  "76": [
-   "You have unlocked: 5 Water runes per essence."
-  ],
-  "77": [
-   "You have unlocked: 8 Air runes per essence. Members have unlocked: Bloodbark boots and gauntlets and Blood runes."
-  ],
-  "78": [
-   "You have unlocked: 4 Earth runes per essence."
-  ],
-  "79": [
-   "Members have unlocked: Bloodbark helm."
-  ],
-  "81": [
-   "Members have unlocked: Bloodbark body and legs."
-  ],
-  "82": [
-   "Members have unlocked: 2 Astral runes per essence."
-  ],
-  "84": [
-   "You have unlocked: 7 Mind runes per essence."
-  ],
-  "85": [
-   "Members with 56 Crafting can now make Colossal Pouches to carry more essence."
-  ],
-  "88": [
-   "You have unlocked: 9 Air runes per essence."
-  ],
-  "90": [
-   "Members have unlocked: Aether runes and Soul runes."
-  ],
-  "91": [
-   "Members have unlocked: 2 Nature runes per essence."
-  ],
-  "92": [
-   "You have unlocked: 3 Body runes per essence."
-  ],
-  "95": [
-   "You have unlocked: 6 Water runes per essence. Members have unlocked: 2 Law runes per essence and Wrath runes."
-  ],
-  "98": [
-   "You have unlocked: 8 Mind runes per essence. Members have unlocked: 3 Sunfire runes per essence."
-  ],
-  "99": [
-   "Congratulations! You are now a master Runecrafter. Why not visit Aubury, who runs the rune shop in Varrock, where you can buy something special that is only available to true masters of the Runecraft skill!"
-  ]
- },
+ "Runecrafting": {},
  "Hitpoints": {
   "42": [
    "Members can now wield Void Knight equipment!"
@@ -1118,7 +964,7 @@
    "You have unlocked: Ruby amulet. Members have unlocked: Clothes pouch, Craft medium hunters' pouches and Craft a birdhouse trap from mahogany logs."
   ],
   "51": [
-   "Members have unlocked: {{Colour|#000080|Craft a knife from a narwhal horn.{{sic|This is a grammatical error from Jagex.}}}} and Snakeskin chaps."
+   "Members have unlocked: Craft a knife from a narwhal horn. and Snakeskin chaps."
   ],
   "52": [
    "Members have unlocked: Replace Dorgeshuun light orbs and Serpentine helms."
@@ -1145,14 +991,13 @@
    "Members have unlocked: Trident of the Swamp and Toxic Staff of the Dead."
   ],
   "60": [
-   "Members have unlocked: Craft a birdhouse trap from yew logs, Splitbark boots, Splitbark gauntlets and Green dragonhide chaps.",
    "Members have unlocked: Craft a birdhouse trap from yew logs, Splitbark boots, Splitbark gauntlets, Green dragonhide chaps and Craft a Sunstone Golem on Wyrmscraig."
   ],
   "61": [
    "Members have unlocked: Splitbark helm."
   ],
   "62": [
-   "Members have unlocked: {{Colour|#000080|Craft a crate from camphor logs.{{sic|This is a grammatical error from Jagex}}}}, Fire battlestaff, Splitbark legs, Splitbark body and Green dragonhide shields."
+   "Members have unlocked: Craft a crate from camphor logs., Fire battlestaff, Splitbark legs, Splitbark body and Green dragonhide shields."
   ],
   "63": [
    "Members have unlocked: Green dragonhide body."
@@ -1734,7 +1579,7 @@
    "Members can now try fishing for sea bass and catfish with a large net."
   ],
   "47": [
-   "Members can now access drift net fishing on fossil island{{sic}} (with 44 hunter)."
+   "Members can now access drift net fishing on fossil island (with 44 hunter)."
   ],
   "48": [
    "Members can now try fishing for leaping trout."
@@ -1749,14 +1594,6 @@
    "Members have unlocked: Lava eel."
   ],
   "55": [
-   {
-    "text": "{{Tmissing}}",
-    "when": {
-     "not": true,
-     "skill": "Strength",
-     "min": 35
-    }
-   },
    {
     "text": "Members have unlocked: Harpoonfish (barehanded) and Tuna (barehanded).",
     "when": {
@@ -2056,7 +1893,7 @@
    "Members have unlocked: Dashing kebbit and Sea turtle."
   ],
   "83": [
-   "{{Tbox|pic=Halibut detail.png|Members have unlocked: Halibut.}}"
+   "Members have unlocked: Halibut."
   ],
   "84": [
    "Members have unlocked: Anglerfish."
@@ -2222,7 +2059,7 @@
    "You have unlocked: Dugout canoe."
   ],
   "29": [
-   "{{Tbox|There is new information available from the Woodcutting Tutor in Lumbridge.|pic=22570.png}}"
+   "There is new information available from the Woodcutting Tutor in Lumbridge."
   ],
   "30": [
    "You have unlocked: Willow trees."
@@ -2335,7 +2172,7 @@
    "You have unlocked: Coal Truck log balance, Medium-level Agility Arena obstacles and Al Kharid Rooftop Course."
   ],
   "21": [
-   "You have unlocked: {{color|#000080|Grand Exchange Agility shortcut}}."
+   "You have unlocked: Grand Exchange Agility shortcut."
   ],
   "22": [
    "You have unlocked: Pipe contortion in Karamja Dungeon."
@@ -2593,13 +2430,13 @@
    "You have unlocked: Serum 207."
   ],
   "19": [
-   "You can now make guam tar{{sic|No full stop}}"
+   "You can now make guam tar"
   ],
   "20": [
    "You can now clean harralander."
   ],
   "22": [
-   "You can now make stat restore potions, compost potions and Guthix balance potion{{sic|Misspelled potions}}."
+   "You can now make stat restore potions, compost potions and Guthix balance potion."
   ],
   "24": [
    "You can now make stat restore mix."
@@ -2871,7 +2708,7 @@
    "You have unlocked: Chests in Hemenster and Rellekka."
   ],
   "49": [
-   "You have unlocked: {{Colour|#000080|Can pick locks in Port Piscarilius.{{sic}}}} and Crossbow stall."
+   "You have unlocked: Can pick locks in Port Piscarilius. and Crossbow stall."
   ],
   "50": [
    "You have unlocked: Can rob houses in Civitas illa Fortis, Can crack the wall safes in the Rogues' Den, Silver Stall and Wealthy citizen."
@@ -3098,7 +2935,7 @@
    "You have unlocked: Yew vale totems, Diamond-tipped adamantite bolts and Yew shortbows."
   ],
   "67": [
-   "You have unlocked: {{Color|#000080|Adamant darts}}."
+   "You have unlocked: Adamant darts."
   ],
   "69": [
    "You have unlocked: Runite/yew crossbows and Runite bolts."
@@ -3392,12 +3229,6 @@
   "29": [
    {
     "text": "You can now grow Goutweed, if you have completed Eadgar's Ruse.",
-    "when": {
-     "quest": "Eadgar's Ruse"
-    }
-   },
-   {
-    "text": "{{tact|end}}",
     "when": {
      "quest": "Eadgar's Ruse"
     }
@@ -4081,75 +3912,59 @@
   ]
  },
  "Sailing": {
-  "3": [
-   "You can now build a bronze cannon for your boat."
-  ],
   "5": [
-   "You can now dock your boat at Dognose Island."
+   "You can now dock your boat at Land's End and Hosidius."
   ],
   "7": [
-   "You can now recruit Jobless Jim as a crewmate."
+   "You can now accept up to two port tasks at the same time."
   ],
   "10": [
-   "You can now dock your boat at Musa Point and purchase a Kandarin small boat."
-  ],
-  "11": [
-   "You can now build a range facility on your boat."
+   "You can now dock your boat at Musa Point."
   ],
   "12": [
-   "You can now dock your boat at Rimmington, use Bronze cannons, use Bronze salvaging hooks and salvage from Small shipwrecks."
-  ],
-  "14": [
-   "You can now build a Bronze keel on your boat, use Iron cannons and start the Prying Times quest."
+   "You can now chart drink crates (after completing Prying Times)."
   ],
   "15": [
-   "You can now dock your boat at Last Light."
+   "You can now captain a skiff, own two different boats, dock your boat at Port Piscarillius, salvage from small shipwrecks and build a bronze salvaging hook."
   ],
   "16": [
-   "You can now recruit Adventurer Ada as a crewmate, use Steel cannons and Iron salvaging hooks."
+   "You have unlocked: Range."
   ],
   "17": [
    "You can now build an iron helm (with 14 Construction)."
   ],
   "18": [
-   "You can now dock your boat at Isle of Bones, use Mithril cannons and build an Oak cargo hold on your boat."
-  ],
-  "19": [
-   "You can now build an Iron tiller on your boat."
+   "You can now dock your boat at Rimmington and build an oak cargo hold (with 11 Construction)."
   ],
   "20": [
-   "You can now build an Oak hull for your boat and use Adamant cannons."
+   "You can now dock your boat at Catherby and build an oak hull (with 8 Construction.)"
   ],
   "21": [
-   "You can now dock your boat at Catherby."
+   "You can now build an iron salvaging hook (with 9 Construction)."
   ],
   "22": [
-   "You can now dock your boat at Entrana with completion of Lost City."
-  ],
-  "23": [
-   "You can now dock your boat at Cairn Island and build a Wind catcher on your boat."
+   "You can now chart sea currents (after completing Current Affairs) and build an iron keel (with 17 Construction)."
   ],
   "24": [
-   "You can now dock your boat at Witchaven and build an Oak mast with linen sails on your boat."
+   "You can now build an oak mast and linen sails (with 11 Construction)."
   ],
   "25": [
-   "You can now dock your boat at Brimhaven and from the Ruins of Unkah, and use Rune cannons and fish from Pirate shipwrecks."
+   "You can now dock your boat at Brimhaven and build flags and trims (with 20 Construction)."
   ],
   "26": [
    "You can now salvage from fisherman's shipwrecks."
   ],
   "27": [
-   "You can now recruit Spotter Virginia as a crewmate, and use Steel salvaging hooks."
+   "You can now build a steel salvaging hook (with 18 Construction)."
   ],
   "28": [
-   "You can now dock your boat at Ardougne.{{sic|supposed to be a comma}} and build a Teak hull on your boat."
+   "You have unlocked: Bronze cannon, Maximum port tasks: 3 and Ardougne."
   ],
   "29": [
-   "You can now dock your boat at Void Knight's Outpost and build a Teak cargo hold on your boat."
+   "You can now build a teak cargo hold (with 21 Construction)."
   ],
   "30": [
-   "Congratulations, you just reached the Sailing Beta's maximum level. You will not be able to level up anymore. Your Sailing level is now 30.",
-   "You have reached the highest level in the Beta! You can now take on the Tempor Tamtrum Barracuda trial, dock at Port Khazard and Corsair Cove, and use Dragon cannons."
+   "You can now dock your boat at Port Khazard and take on the Tempor Tantrum Barracuda Trial in the Storm Tempor."
   ],
   "31": [
    "You can now build a teak hull (with 23 Construction)."
@@ -4281,13 +4096,12 @@
    "You can now own four different boats and build an eternal brazier (with 72 Construction)."
   ],
   "79": [
-   "{{Tbox|You can now dock your boat at Drumstick Isle, build a gale catcher (with 70 Construction) and build a hemp trawling net (with 70 Construction).|pic=Barrelchest anchor detail.png|pic2=Hemp_trawling_net_icon.png}}"
+   "You can now dock your boat at Drumstick Isle, build a gale catcher (with 70 Construction) and build a hemp trawling net (with 70 Construction)."
   ],
   "80": [
-   "{{Tbox|You can now dock at Weiss (after completing Making Friends with My Arm), salvage from Fremennik shipwrecks, recruit Bosun Zarah from Etceteria (after completing Royal Trouble), build a rune cannon (with 76 Construction) and build an ironwood cargo hold (with 77 Construction).|pic2=Bosun_Zarah_chathead.png|pic=Fremennik_salvage.png}}"
+   "You can now dock at Weiss (after completing Making Friends with My Arm), salvage from Fremennik shipwrecks, recruit Bosun Zarah from Etceteria (after completing Royal Trouble), build a rune cannon (with 76 Construction) and build an ironwood cargo hold (with 77 Construction)."
   ],
   "81": [
-   "You can now dock your boat at Brittle Isle and build an ironwood hull (with 75 Construction).",
    "You can now dock your boat at Brittle Isle and build an ironwood hull (with 75 Construction)."
   ],
   "82": [

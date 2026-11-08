@@ -82,23 +82,28 @@ function conditionHolds(player, condition) {
   return condition.not ? level < condition.min : level >= condition.min;
 }
 
-/** "You can now wear Rune Armour!": what the wiki records for reaching this level. */
-function unlocksFor(player, skill, newLevel) {
+/**
+ * "You can now wear Rune Armour!": what the wiki records for every level crossed, so a lamp
+ * taking a skill from 1 to 10 still says what 2 through 9 unlocked.
+ */
+function unlocksFor(player, skill, fromLevel, toLevel) {
   const lines = [];
-  for (const entry of UNLOCK_MESSAGES[skill.getName()]?.[newLevel] ?? []) {
-    if (typeof entry === "string") lines.push(entry);
-    else if (conditionHolds(player, entry.when)) lines.push(entry.text);
+  for (let level = fromLevel + 1; level <= toLevel; level++) {
+    for (const entry of UNLOCK_MESSAGES[skill.getName()]?.[level] ?? []) {
+      if (typeof entry === "string") lines.push(entry);
+      else if (conditionHolds(player, entry.when)) lines.push(entry.text);
+    }
   }
   return lines;
 }
 
-function announceUnlocks(player, skill, newLevel) {
-  for (const line of unlocksFor(player, skill, newLevel)) player.sendMessage(line);
+function announceUnlocks(player, skill, oldLevel, newLevel) {
+  for (const line of unlocksFor(player, skill, oldLevel, newLevel)) player.sendMessage(line);
 }
 
-/** The box "Show level & unlocks" opens after Continue; false when the level unlocks nothing. */
-function showUnlockBox(player, skill, newLevel) {
-  const lines = unlocksFor(player, skill, newLevel);
+/** The box "Show level & unlocks" opens after Continue; false when those levels unlock nothing. */
+function showUnlockBox(player, skill, fromLevel, toLevel) {
+  const lines = unlocksFor(player, skill, fromLevel, toLevel);
   if (lines.length === 0) return false;
   const { DialogueChainBuilder, StatementDialogue, EndDialogue } = pluginApi.core;
   const chain = new DialogueChainBuilder();
@@ -129,13 +134,13 @@ function openPopup(player, layer, line1, line2) {
   }
 }
 
-function openSkillPopup(player, skill, newLevel) {
+function openSkillPopup(player, skill, oldLevel, newLevel) {
   let state = pending.get(player);
   if (!state) {
     state = { actions: new Map(), queue: [], location: player.getLocation().clone(), replacing: false };
     pending.set(player, state);
   } else {
-    state.queue.push({ skill, newLevel });
+    state.queue.push({ skill, oldLevel, newLevel });
     return;
   }
   pluginApi.emitCustomEvent(POPUP_OPENED_EVENT, {
@@ -148,12 +153,12 @@ function openSkillPopup(player, skill, newLevel) {
   if (!combat.getTarget() && !combat.getAttacker()) {
     player.performAnimation(pluginApi.core.Animation.DEFAULT_RESET_ANIMATION);
   }
-  showSkillPopup(player, skill, newLevel);
+  showSkillPopup(player, skill, oldLevel, newLevel);
 }
 
-function showSkillPopup(player, skill, newLevel) {
+function showSkillPopup(player, skill, oldLevel, newLevel) {
   const state = pending.get(player);
-  if (state) state.current = { skill, newLevel };
+  if (state) state.current = { skill, from: oldLevel, to: newLevel };
   const name = skill.getName();
   openPopup(player, SKILL_LAYERS[skill.getIndex()],
     `Congratulations, you just advanced a ${name} level.`, `Your ${name} level is now ${newLevel}.`);
@@ -194,7 +199,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   } else {
     celebrate(player, `Congratulations, you've just advanced your ${name} level. You are now level ${newLevel}.`, LEVELUP_ANIM);
   }
-  announceUnlocks(player, skill, newLevel);
+  announceUnlocks(player, skill, oldLevel, newLevel);
 
   const total = skills.getTotalLevel();
   const reached = Math.floor(total / TOTAL_LEVEL_STEP) * TOTAL_LEVEL_STEP;
@@ -212,7 +217,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   if (combatGained && player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE) === undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, previousCombat);
   }
-  openSkillPopup(player, skill, newLevel);
+  openSkillPopup(player, skill, oldLevel, newLevel);
 }
 
 /** Continue: a queued combat pop-up comes next, otherwise the pop-up closes. */
@@ -221,7 +226,7 @@ function continueLevelUp({ player }) {
   const state = pending.get(player);
   const next = state?.queue.shift();
   if (next) {
-    showSkillPopup(player, next.skill, next.newLevel);
+    showSkillPopup(player, next.skill, next.oldLevel, next.newLevel);
     return true;
   }
   const combatFrom = player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE);
@@ -233,7 +238,7 @@ function continueLevelUp({ player }) {
   // "Show level & unlocks": the box that lists them comes before the skill resumes.
   const current = state?.current;
   if (current && player.getPacketSender().getVarbit(POPUP_LISTS_UNLOCKS_VARBIT) === 1 &&
-      showUnlockBox(player, current.skill, current.newLevel)) {
+      showUnlockBox(player, current.skill, current.from, current.to)) {
     state.awaitingUnlockBox = true;
     player.getPacketSender().closeInterface(GROUP);
     return true;

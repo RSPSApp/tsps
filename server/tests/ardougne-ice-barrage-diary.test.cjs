@@ -260,3 +260,17 @@ test("a canceled queued cast does not grant progress and a lethal impact does", 
   assert.equal(lethal.target.getHitpoints(), 0);
   assert.ok(tasks(lethal.caster).has(IceBarrageDiary._test.TASK));
 });
+
+test("an Ice Barrage splashes in multicombat only: a caster or target in single-way hits the target alone (Wiki)", (t) => {
+  const { caster, target } = opposingPair(t);
+  const bystander = player(t, { location: new Location(2401, 3104, 0), team: game.data.TEAM.ZAMORAK });
+  const splashed = () => buildCastHits(caster, target, { localPlayers: [bystander] }).map((hit) => hit.getTarget());
+  const multi = new Set([caster, target, bystander]);
+  t.mock.method(AreaManager, "inMulti", (mobile) => multi.has(mobile));
+  assert.deepEqual(splashed(), [target, bystander], "all in multi: the bystander is splashed");
+  multi.delete(caster);
+  multi.delete(target);
+  assert.deepEqual(splashed(), [target], "caster and target in single-way, the bystander on a multi tile: no splash");
+  multi.add(caster);
+  assert.deepEqual(splashed(), [target], "the target alone in single-way: no splash");
+});

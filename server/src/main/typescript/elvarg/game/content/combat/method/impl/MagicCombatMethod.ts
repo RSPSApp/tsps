@@ -128,6 +128,11 @@ export class MagicCombatMethod extends CombatMethod {
             if (!hit.isAccurate() || !isAncientSpell || spellRadius <= 0) {
                 continue;
             }
+            // Wiki (Ancient Magicks): the area spells hit more than one target only in multicombat. A caster or target
+            // in single-way splashes no one, even onto multi tiles next to the target (as chinchompas and venator bow).
+            if (!CombatFactory.multiCombatBetween(character, target)) {
+                continue;
+            }
 
             let it: IterableIterator<Mobile> = null;
             if (character.isPlayer() && target.isPlayer()) {

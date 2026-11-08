@@ -143,12 +143,32 @@ type PluginHook<T> = {
   handler: (event: T) => void;
 };
 
-function normalizePluginName(name: string): string {
+export function normalizePluginName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function pluginNameFromFile(pluginPath: string): string {
+export function pluginNameFromFile(pluginPath: string): string {
   return path.basename(pluginPath).replace(/\.plugin\.js$/i, "");
+}
+
+/**
+ * Whether a plugin is switched on: world.json `plugins` by exported name, then by file name,
+ * then the legacy disabledPlugins default, then the plugin's own `enabled` (default on).
+ * Shared by the loader and the world config catalog so they cannot disagree.
+ */
+export function resolvePluginEnabled(
+  switches: Map<string, boolean>,
+  defaultEnabled: boolean | undefined,
+  exportedName: string,
+  fileName: string,
+  pluginEnabled: boolean | undefined
+): boolean {
+  return (
+    switches.get(normalizePluginName(exportedName)) ??
+    switches.get(normalizePluginName(fileName)) ??
+    defaultEnabled ??
+    pluginEnabled !== false
+  );
 }
 
 function isPluginCustomEventName(value: unknown): value is PluginCustomEventName {
@@ -243,7 +263,7 @@ function applyPluginRegionReplacement(
 
 export class PluginManager {
   private static readonly PERF_EVENT_SAMPLE_LIMIT = 128;
-  private static readonly MAX_PLUGIN_DEPTH = 2;
+  public static readonly MAX_PLUGIN_DEPTH = 2;
   private static initialized = false;
   private static loadedPlugins: string[] = [];
   private static lastPersistenceOverride: string | null = null;
@@ -729,11 +749,13 @@ export class PluginManager {
     PluginManager.loadPluginCandidatesWithDependencies(
       candidates.filter((candidate) => {
         // The exported name wins over the filename when they differ.
-        const enabled =
-          switchFor(candidate.pluginName) ??
-          switchFor(pluginNameFromFile(candidate.pluginPath)) ??
-          defaultEnabled ??
-          candidate.plugin.enabled !== false;
+        const enabled = resolvePluginEnabled(
+          switches,
+          defaultEnabled,
+          candidate.pluginName,
+          pluginNameFromFile(candidate.pluginPath),
+          candidate.plugin.enabled
+        );
         if (!enabled) {
           disabledCount++;
           return false;
@@ -2121,7 +2143,7 @@ export class PluginManager {
     return event.handled;
   }
 
-  private static discoverPluginFiles(
+  public static discoverPluginFiles(
     pluginDirectory: string,
     maxDepth: number
   ): string[] {
@@ -2156,7 +2178,14 @@ export class PluginManager {
    * as it always was: what it names is off and everything else on, defaults included.
    */
   private static loadPluginSwitches(): { switches: Map<string, boolean>; defaultEnabled?: boolean } {
-    const config = readWorldConfig() as { plugins?: unknown; disabledPlugins?: unknown };
+    return PluginManager.parsePluginSwitches(readWorldConfig());
+  }
+
+  /** Reads the plugin switches out of an already merged world config. Throws when they are malformed. */
+  public static parsePluginSwitches(
+    worldConfig: unknown
+  ): { switches: Map<string, boolean>; defaultEnabled?: boolean } {
+    const config = worldConfig as { plugins?: unknown; disabledPlugins?: unknown };
     if (config.disabledPlugins !== undefined) {
       if (
         !Array.isArray(config.disabledPlugins) ||
@@ -2352,7 +2381,7 @@ export class PluginManager {
     return candidates;
   }
 
-  private static normalizePluginDependencies(
+  public static normalizePluginDependencies(
     pluginName: string,
     dependsOn: unknown,
     pluginPath: string
@@ -2477,6 +2506,8 @@ export class PluginManager {
     const combat = "../game/content/combat";
     const model = "../game/model";
     PluginManager.pluginCoreApi = Object.freeze({
+      WorldConfigCatalog: require("./WorldConfigCatalog").WorldConfigCatalog,
+      WorldConfigStore: require("../game/definition/WorldConfigStore").WorldConfigStore,
       MeleeCombatMethod: require(`${combat}/method/impl/MeleeCombatMethod`).MeleeCombatMethod,
       RangedCombatMethod: require(`${combat}/method/impl/RangedCombatMethod`).RangedCombatMethod,
       MagicCombatMethod: require(`${combat}/method/impl/MagicCombatMethod`).MagicCombatMethod,

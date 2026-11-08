@@ -1516,6 +1516,8 @@ export interface PluginApi {
  * Typed as `any` on purpose: this is a deliberately thin, evolving surface.
  */
 export interface PluginCoreApi {
+  WorldConfigCatalog: typeof import("./WorldConfigCatalog").WorldConfigCatalog;
+  WorldConfigStore: typeof import("../game/definition/WorldConfigStore").WorldConfigStore;
   MeleeCombatMethod: any;
   RangedCombatMethod: any;
   MagicCombatMethod: any;

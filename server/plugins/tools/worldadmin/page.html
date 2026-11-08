@@ -265,6 +265,29 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+  .map-dialog { width: min(820px, calc(100vw - 24px)); }
+  .map-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .map-toolbar label { font-weight: 700; text-shadow: var(--label-shadow); }
+  .map-toolbar select { padding: 3px 6px; }
+  .map-readout { flex: 1 1 14em; font: 600 13px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text); }
+  .map-view {
+    position: relative; overflow: hidden; height: min(60vh, 480px); touch-action: none; cursor: crosshair;
+    background: var(--field); user-select: none;
+    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  }
+  .map-view.dragging { cursor: grabbing; }
+  .map-view img { position: absolute; width: 256px; height: 256px; image-rendering: pixelated; pointer-events: none; }
+  .map-marker {
+    position: absolute; pointer-events: none; transform: translate(-50%, -50%);
+    border: 2px solid #ffff00; outline: 2px solid #000; border-radius: 2px;
+  }
+  .map-marker::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; transform: translate(-50%, -50%);
+    background: #ffff00; border: 1px solid #000; border-radius: 50%;
+  }
+  .map-status { margin: 8px 0 0; font-weight: 600; }
+  .map-attribution { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .spawn-pick { align-self: flex-start; }
   [hidden] { display: none !important; }
   @media (max-width: 640px) {
     .row { grid-template-columns: minmax(0, 1fr); }
@@ -305,6 +328,33 @@
     <p id="overlay-text"></p>
   </div>
 </div>
+<dialog id="map-dialog" class="map-dialog" aria-labelledby="map-title">
+  <div class="dialog-body">
+    <h2 id="map-title">Pick the spawn point</h2>
+    <div class="map-toolbar">
+      <button type="button" id="map-zoom-out" aria-label="Zoom out">&minus;</button>
+      <button type="button" id="map-zoom-in" aria-label="Zoom in">+</button>
+      <label for="map-plane">Plane</label>
+      <select id="map-plane">
+        <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      </select>
+      <span class="map-readout" id="map-readout" aria-live="polite"></span>
+    </div>
+    <div class="map-view" id="map-view" tabindex="0" role="application"
+      aria-label="Map. Drag or use the arrow keys to move, plus and minus to zoom, click to mark a tile, Enter to use the marked point."
+      aria-describedby="map-marked">
+      <div id="map-tiles"></div>
+      <div class="map-marker" id="map-marker" hidden></div>
+    </div>
+    <p class="map-status" id="map-marked"></p>
+    <p class="map-status" id="map-error" role="alert" hidden>The map tiles couldn't be loaded (offline, or the wiki's map has moved). You can still type the spawn point into the JSON box.</p>
+    <p class="map-attribution">Map tiles: OSRS Wiki</p>
+  </div>
+  <div class="dialog-actions">
+    <button type="button" id="map-cancel">Cancel</button>
+    <button type="button" class="primary" id="map-use" disabled>Use this point</button>
+  </div>
+</dialog>
 <dialog id="preview" aria-labelledby="preview-title">
   <div class="dialog-body">
     <h2 id="preview-title">Review changes to world.local.json</h2>
@@ -465,6 +515,221 @@
       onkeydown: function (event) { if (event.key === "Escape") button.blur(); } }, [infoIcon()]);
     var tip = el("span", { className: "tip", role: "tooltip", id: tipId, text: detail });
     return el("div", { className: "title-line" }, [label, el("span", { className: "info-wrap" }, [button, tip])]);
+  }
+
+  // ---------- spawn point map picker ----------
+
+  // Tiles from the OSRS Wiki's map server (the same tiles its interactive maps use):
+  //   <base>/<zoom>/<plane>_<tx>_<ty>.png, 256 px, zoom -3..3 = 2^zoom px per game tile,
+  //   tx = floor(x * 2^zoom / 256), ty = floor(y * 2^zoom / 256), ty grows north (image top = north).
+  // The version folder changes when the wiki re-renders its map; update it here if tiles stop loading.
+  var MAP_TILE_BASE = "https://maps.runescape.wiki/osrs/versions/2026-10-20_a/tiles/rendered/0/";
+  var MAP_MIN_ZOOM = -3;
+  var MAP_MAX_ZOOM = 3;
+  var TILE_PX = 256;
+  var LUMBRIDGE = { x: 3222, y: 3218, z: 0 };
+
+  var mapDialog = document.getElementById("map-dialog");
+  var mapView = document.getElementById("map-view");
+  var mapTiles = document.getElementById("map-tiles");
+  var mapMarker = document.getElementById("map-marker");
+  var mapReadout = document.getElementById("map-readout");
+  var mapMarked = document.getElementById("map-marked");
+  var mapError = document.getElementById("map-error");
+  var mapPlane = document.getElementById("map-plane");
+  var mapUse = document.getElementById("map-use");
+  var map = null; // { zoom, plane, cx, cy, marker, onUse, loads, errors, drag }
+
+  function validPoint(v) {
+    return v && typeof v === "object" && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y));
+  }
+
+  function mapScale() { return Math.pow(2, map.zoom); }
+
+  /** World pixel of the view's top-left corner (x right, y down = south). */
+  function mapOrigin() {
+    var s = mapScale();
+    return { left: map.cx * s - mapView.clientWidth / 2, top: -map.cy * s - mapView.clientHeight / 2 };
+  }
+
+  function gameAt(offsetX, offsetY) {
+    var s = mapScale();
+    var o = mapOrigin();
+    return { x: Math.floor((o.left + offsetX) / s), y: Math.floor(-(o.top + offsetY) / s) };
+  }
+
+  function renderMap() {
+    if (!map) return;
+    var s = mapScale();
+    var o = mapOrigin();
+    var w = mapView.clientWidth;
+    var h = mapView.clientHeight;
+    mapTiles.textContent = "";
+    var txMin = Math.floor(o.left / TILE_PX);
+    var txMax = Math.floor((o.left + w) / TILE_PX);
+    var tyMin = Math.floor(-(o.top + h) / TILE_PX);
+    var tyMax = Math.floor(-o.top / TILE_PX);
+    for (var tx = txMin; tx <= txMax; tx++) {
+      for (var ty = tyMin; ty <= tyMax; ty++) {
+        if (tx < 0 || ty < 0) continue;
+        var img = document.createElement("img");
+        img.alt = "";
+        img.referrerPolicy = "no-referrer";
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.draggable = false;
+        img.style.left = (tx * TILE_PX - o.left) + "px";
+        img.style.top = (-(ty + 1) * TILE_PX - o.top) + "px";
+        img.addEventListener("load", onTileLoad);
+        img.addEventListener("error", onTileError);
+        img.src = MAP_TILE_BASE + map.zoom + "/" + map.plane + "_" + tx + "_" + ty + ".png";
+        mapTiles.appendChild(img);
+      }
+    }
+    if (map.marker) {
+      var size = Math.max(s, 10);
+      mapMarker.style.width = size + "px";
+      mapMarker.style.height = size + "px";
+      mapMarker.style.left = ((map.marker.x + 0.5) * s - o.left) + "px";
+      mapMarker.style.top = (-(map.marker.y + 0.5) * s - o.top) + "px";
+      mapMarker.style.opacity = map.marker.z === map.plane ? "1" : "0.45";
+      mapMarker.hidden = false;
+      mapMarked.textContent = "Marked: x " + map.marker.x + ", y " + map.marker.y + ", plane " + map.marker.z;
+    } else {
+      mapMarker.hidden = true;
+      mapMarked.textContent = "Click a tile to mark the spawn point.";
+    }
+    mapUse.disabled = !map.marker;
+  }
+
+  function onTileLoad() {
+    if (!map) return;
+    map.loads += 1;
+    mapError.hidden = true;
+  }
+  function onTileError(event) {
+    event.target.hidden = true; // Tiles outside the map are missing on the server too.
+    if (!map) return;
+    map.errors += 1;
+    if (map.loads === 0) mapError.hidden = false;
+  }
+
+  function zoomMap(delta, offsetX, offsetY) {
+    var next = Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, map.zoom + delta));
+    if (next === map.zoom) return;
+    if (offsetX === undefined) { offsetX = mapView.clientWidth / 2; offsetY = mapView.clientHeight / 2; }
+    // Keep the point under the cursor where it is.
+    var s = mapScale();
+    var o = mapOrigin();
+    var gx = (o.left + offsetX) / s;
+    var gy = -(o.top + offsetY) / s;
+    map.zoom = next;
+    s = mapScale();
+    map.cx = gx - (offsetX - mapView.clientWidth / 2) / s;
+    map.cy = gy + (offsetY - mapView.clientHeight / 2) / s;
+    renderMap();
+  }
+
+  function panMap(dxPx, dyPx) {
+    var s = mapScale();
+    map.cx += dxPx / s;
+    map.cy -= dyPx / s;
+    renderMap();
+  }
+
+  function showHover(offsetX, offsetY) {
+    var g = gameAt(offsetX, offsetY);
+    mapReadout.textContent = "x " + g.x + ", y " + g.y + ", plane " + map.plane;
+  }
+
+  mapView.addEventListener("pointerdown", function (event) {
+    if (!map || event.button !== 0) return;
+    mapView.setPointerCapture(event.pointerId);
+    map.drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+  });
+  mapView.addEventListener("pointermove", function (event) {
+    if (!map) return;
+    var rect = mapView.getBoundingClientRect();
+    showHover(event.clientX - rect.left, event.clientY - rect.top);
+    var drag = map.drag;
+    if (!drag || drag.id !== event.pointerId) return;
+    var dx = event.clientX - drag.x;
+    var dy = event.clientY - drag.y;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+    drag.moved = true;
+    mapView.classList.add("dragging");
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    panMap(-dx, -dy);
+  });
+  function endDrag(event, click) {
+    if (!map || !map.drag || map.drag.id !== event.pointerId) return;
+    var drag = map.drag;
+    map.drag = null;
+    mapView.classList.remove("dragging");
+    if (click && !drag.moved) {
+      var rect = mapView.getBoundingClientRect();
+      var g = gameAt(event.clientX - rect.left, event.clientY - rect.top);
+      map.marker = { x: g.x, y: g.y, z: map.plane };
+      renderMap();
+    }
+  }
+  mapView.addEventListener("pointerup", function (event) { endDrag(event, true); });
+  mapView.addEventListener("pointercancel", function (event) { endDrag(event, false); });
+  mapView.addEventListener("pointerleave", function () { if (map && !map.drag) mapReadout.textContent = ""; });
+  mapView.addEventListener("wheel", function (event) {
+    if (!map) return;
+    event.preventDefault();
+    var rect = mapView.getBoundingClientRect();
+    zoomMap(event.deltaY < 0 ? 1 : -1, event.clientX - rect.left, event.clientY - rect.top);
+  }, { passive: false });
+
+  mapDialog.addEventListener("keydown", function (event) {
+    if (!map) return;
+    var inSelect = event.target === mapPlane;
+    var step = Math.round(mapView.clientWidth / 4);
+    if (event.key === "+" || event.key === "=") { zoomMap(1); event.preventDefault(); }
+    else if (event.key === "-" || event.key === "_") { zoomMap(-1); event.preventDefault(); }
+    else if (inSelect) return;
+    else if (event.key === "ArrowLeft") { panMap(-step, 0); event.preventDefault(); }
+    else if (event.key === "ArrowRight") { panMap(step, 0); event.preventDefault(); }
+    else if (event.key === "ArrowUp") { panMap(0, -step); event.preventDefault(); }
+    else if (event.key === "ArrowDown") { panMap(0, step); event.preventDefault(); }
+    else if (event.key === "Enter" && event.target === mapView && map.marker) { useMapPoint(); event.preventDefault(); }
+  });
+
+  document.getElementById("map-zoom-in").addEventListener("click", function () { zoomMap(1); });
+  document.getElementById("map-zoom-out").addEventListener("click", function () { zoomMap(-1); });
+  mapPlane.addEventListener("change", function () { map.plane = Number(mapPlane.value); renderMap(); });
+  document.getElementById("map-cancel").addEventListener("click", function () { mapTiles.textContent = ""; mapDialog.close(); });
+  mapUse.addEventListener("click", useMapPoint);
+  // Escape (the dialog's cancel) and Cancel both close without changing anything; no tiles load while closed.
+  mapDialog.addEventListener("close", function () { map = null; mapTiles.textContent = ""; });
+
+  function useMapPoint() {
+    if (!map || !map.marker) return;
+    var point = { x: map.marker.x, y: map.marker.y, z: map.marker.z };
+    var onUse = map.onUse;
+    mapTiles.textContent = "";
+    mapDialog.close();
+    onUse(point);
+  }
+
+  /** Opens the picker at `start` ({x, y, z}); `onUse(point)` receives the chosen tile. */
+  function openMapPicker(start, onUse) {
+    var origin = validPoint(start) ? start : LUMBRIDGE;
+    var plane = Math.max(0, Math.min(3, Math.floor(Number(origin.z) || 0)));
+    map = {
+      zoom: 2, plane: plane, cx: Number(origin.x) + 0.5, cy: Number(origin.y) + 0.5,
+      marker: validPoint(start) ? { x: Math.floor(Number(start.x)), y: Math.floor(Number(start.y)), z: plane } : null,
+      onUse: onUse, loads: 0, errors: 0, drag: null,
+    };
+    mapPlane.value = String(plane);
+    mapError.hidden = true;
+    mapReadout.textContent = "";
+    if (typeof mapDialog.showModal === "function") mapDialog.showModal(); else mapDialog.setAttribute("open", "");
+    renderMap();
+    mapView.focus();
   }
 
   // ---------- plugin-off badges ----------
@@ -703,7 +968,19 @@
       meta,
       badge ? badge.el : null,
     ]);
-    var controlBox = el("div", { className: "control" }, [control, errorEl, resetButton]);
+    var pickButton = null;
+    if (kind === "world" && option.key === "spawn" && decl.type === "json") {
+      pickButton = el("button", { type: "button", className: "spawn-pick", text: "Pick on map",
+        onclick: function () {
+          openMapPicker(currentValue(section, option), function (point) {
+            input.value = JSON.stringify(point, null, 2);
+            showError(null);
+            setEdit(section, option, point);
+            refreshMarkers();
+          });
+        } });
+    }
+    var controlBox = el("div", { className: "control" }, [control, pickButton, errorEl, resetButton]);
     var rowEl = el("div", { className: "row" + (membersOff || (!option.ownerEnabled && owner) ? " inactive" : "") }, [text, controlBox]);
 
     function refreshMarkers() {
@@ -736,6 +1013,7 @@
       showError(null);
       refreshMarkers();
       if (badge) badge.refresh();
+      if (pickButton) pickButton.disabled = readOnly();
     }
 
     row.el = rowEl;

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-192 quests · ✅ passed: 28 · ⚠️ passed with issues: 17 · 🔄 in progress: 10 · ❌ failed: 1 · 🔁 needs recheck: 32 · untested: 104
+193 quests · ✅ passed: 27 · ⚠️ passed with issues: 16 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 36 · untested: 105
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -17,7 +17,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [A Ruff Situation](a-ruff-situation/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 |  |
 | [A Soul's Bane](a-souls-bane/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
-| [A Taste of Hope](taste-of-hope/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [A Taste of Hope](taste-of-hope/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Alfred Grimhand's Barcrawl | untested |  |  |  |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
 | [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash | 3 |
@@ -40,6 +40,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Crab Quest | untested |  |  |  |  |
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| Curse of the Empty Lord | untested |  |  |  |  |
 | Daddy's Home | untested |  |  |  |  |
 | [Darkness of Hallowvale](darkness-of-hallowvale/README.md) | untested |  |  |  |  |
 | [Death on the Isle](death-on-the-isle/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
@@ -55,7 +56,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Dragon Slayer II | untested |  |  |  |  |
 | Dream Mentor | untested |  |  |  |  |
 | [Druidic Ritual](druidic-ritual/README.md) | ✅ passed | 2026-10-22 | agent |  |  |
-| [Dwarf Cannon](dwarf-cannon/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 6 |
+| [Dwarf Cannon](dwarf-cannon/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 6 |
 | [Eadgar's Ruse](eadgars-ruse/README.md) | untested |  |  |  |  |
 | Eagles' Peak | untested |  |  |  |  |
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -118,7 +119,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | Plague City | untested |  |  |  |  |
 | [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
-| [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
+| [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-11-07 | agent | claude-opus-5-5 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
 | [Rag and Bone Man I](rag-and-bone-man-i/README.md) | untested |  |  |  |  |
 | [Rag and Bone Man II](rag-and-bone-man-ii/README.md) | untested |  |  |  |  |
@@ -130,7 +131,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Roving Elves](roving-elves/README.md) | untested |  |  |  |  |
 | [Royal Trouble](royal-trouble/README.md) | 🔁 needs recheck | 2026-11-05 | agent | DeepSeek V4.1 Flash |  |
 | [Rum Deal](rum-deal/README.md) | untested |  |  |  |  |
-| [Rune Mysteries](rune-mysteries/README.md) | ⚠️ passed with issues | 2026-10-30 | agent | grok-4.7 | 4 |
+| [Rune Mysteries](rune-mysteries/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 4 |
 | [Scorpion Catcher](scorpion-catcher/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 5 |
 | [Scrambled!](scrambled/README.md) | untested |  |  |  |  |
 | [Sea Slug](sea-slug/README.md) | untested |  |  |  |  |
@@ -139,16 +140,16 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Shadow of the Storm | untested |  |  |  |  |
 | [Shadows of Custodia](shadows-of-custodia/README.md) | untested |  |  |  |  |
 | [Sheep Herder](sheep-herder/README.md) | untested |  |  |  |  |
-| [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 4 |
+| [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-07 | agent | claude-opus-5-5 | 6 |
 | [Shield of Arrav](shield-of-arrav/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 7 |
 | Shilo Village | untested |  |  |  |  |
 | [Sins of the Father](sins-of-the-father/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | ✅ passed | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
-| [Sleeping Giants](sleeping-giants/README.md) | ✅ passed |  | agent |  |  |
+| [Sleeping Giants](sleeping-giants/README.md) | ⚠️ passed with issues | 2026-11-08 | agent | claude-sonnet-5-5 |  |
 | [Song of the Elves](song-of-the-elves/README.md) | untested |  |  |  |  |
 | [Spirits of the Elid](spirits-of-the-elid/README.md) | untested |  |  |  |  |
 | Swan Song | untested |  |  |  |  |
-| [Tai Bwo Wannai Trio](tai-bwo-wannai-trio/README.md) | 🔄 in progress | 2026-11-05 | agent | DeepSeek V4.1 Flash |  |
+| [Tai Bwo Wannai Trio](tai-bwo-wannai-trio/README.md) | 🔁 needs recheck | 2026-11-05 | agent | DeepSeek V4.1 Flash |  |
 | [Tale of the Righteous](tale-of-the-righteous/README.md) | untested |  |  |  |  |
 | [Tears of Guthix](tears-of-guthix/README.md) | untested |  |  |  |  |
 | Temple of Ikov | untested |  |  |  |  |

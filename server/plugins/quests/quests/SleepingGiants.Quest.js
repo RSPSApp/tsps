@@ -6,8 +6,6 @@ module.exports = function registerSleepingGiantsQuest(api) {
     PrivateArea,
     Task,
     TaskManager,
-    ForceMovement,
-    ForceMovementTask,
     GameObject,
     ObjectManager,
     Equipment,
@@ -155,6 +153,12 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const BITS_ATTRIBUTE = "quest.sleeping_giants.bits";
   const TUTORIAL_ATTRIBUTE = "quest.sleeping_giants.tutorial";
   const OBOR_CHESTS_ATTRIBUTE = "giant-lairs:obor-chests-opened";
+
+  /** Clicks that would route the player (or start an action) during the intro cutscene. */
+  const SCENE_BLOCKED_INPUT = new Set([
+    "move", "world_map_click", "npc_option", "object_option", "world_entity_option", "player_option", "ground_item_action",
+    "item_on_player", "item_on_npc", "item_on_object", "item_on_ground", "spell_on_npc", "spell_on_player", "spell_on_object", "spell_on_ground",
+  ]);
 
   const OP_1 = 1;
   const OP_2 = 2;
@@ -348,18 +352,71 @@ module.exports = function registerSleepingGiantsQuest(api) {
     return workshop;
   }
 
-  function sceneWalk(player, x, y, ticks) {
-    const start = player.getLocation().clone(), dx = x - start.getX(), dy = y - start.getY();
-    const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
-    TaskManager.submit(new ForceMovementTask(player, ticks, new ForceMovement(start, new Location(dx, dy, 0), 0, ticks * 30, direction, 819)));
+  /**
+   * The cutscene walks the player tile by tile at walking speed, as the server does in
+   * rsprox recording 96 (one HighResolutionMovement step per tick). Every tick a task sends the
+   * player one tile on, before the player's movement runs, so a click's interaction_stop (which
+   * clears the queue at the start of the turn) cannot cost a step. The player's own routing
+   * clicks are dropped (blockSceneInput) and the queue is blocked again on arrival.
+   */
+  class SceneWalkTask extends Task {
+    constructor(workshop, player, target, walk) { super(1, workshop, false); this.workshop = workshop; this.player = player; this.target = target; this.walk = walk; this.ticks = 0; }
+    execute() {
+      const { workshop, player, target } = this;
+      if (workshop.walkId !== this.walk || !workshop.scene) { this.stop(); return; }
+      if (++this.ticks > 12 || !stepTowards(player, target)) { // a blocked tile must not hold the scene forever
+        this.stop();
+        if (workshop.walkId === this.walk) workshop.target = null;
+      }
+    }
+  }
+
+  /** Queues the next tile of a straight walk; false once the player is on the target. */
+  function stepTowards(player, target) {
+    const queue = player.getMovementQueue(), at = player.getLocation();
+    const dx = Math.sign(target.x - at.getX()), dy = Math.sign(target.y - at.getY());
+    if (dx === 0 && dy === 0) { queue.setBlockMovement(true); return false; }
+    queue.setBlockMovement(false);
+    queue.requestWalk(new Location(at.getX() + dx, at.getY() + dy, 0), false);
+    return true;
+  }
+
+  function sceneWalk(player, x, y) {
+    const workshop = workshops.get(player);
+    if (!workshop) return;
+    const walk = workshop.walkId = (workshop.walkId || 0) + 1;
+    workshop.target = { x, y };
+    if (stepTowards(player, workshop.target)) TaskManager.submit(new SceneWalkTask(workshop, player, workshop.target, walk));
+    else workshop.target = null;
+  }
+
+  /**
+   * The client's interaction_stop (sent before a walk click) clears the queue at the start of the
+   * turn, after this tick's step was queued and before the player's movement runs: queue it again.
+   */
+  function resumeSceneWalk({ player }) {
+    const workshop = workshops.get(player);
+    if (workshop?.scene && workshop.target) stepTowards(player, workshop.target);
+  }
+
+  function blockSceneInput(event) {
+    if (workshops.get(event.player)?.scene && SCENE_BLOCKED_INPUT.has(event.packet.type)) event.handled = true;
+  }
+
+  /**
+   * Keyboard movement would take the player over from the scripted walk. Plugins register in path
+   * order, so this quest hears the packet before FreeMovement (plugins/world) does.
+   */
+  function blockSceneKeyboard({ player, packet }) {
+    if (workshops.get(player)?.scene) packet.active = false;
   }
 
   function workshopIntroduction(player) {
     const workshop = enterWorkshop(player); workshop.scene = true; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC_2); player.getDialogueManager().reset(); controls(player, true);
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
     player.setAttribute(INTRO_ATTRIBUTE, 10); quest.setStage(player, STAGE_STARTED);
-    later(workshop, 3, () => sceneWalk(player, 3367, 11484, 1));
-    later(workshop, 4, () => sceneWalk(player, 3367, 11489, 5));
+    later(workshop, 3, () => sceneWalk(player, 3367, 11484));
+    later(workshop, 4, () => sceneWalk(player, 3367, 11489));
     later(workshop, 1, () => camera(player, [3367, 11487, 500, 232, 232], [3367, 11479, 300, 232, 232]));
     later(workshop, 2, () => camera(player, [3367, 11492, 500, 4, 4], [3367, 11484, 280, 3, 3]));
     later(workshop, 7, () => camera(player, [3369, 11477, 700, 4, 4], [3364, 11493, 300, 4, 4]));
@@ -393,7 +450,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (text === "Woah... What is this place?" && workshops.get(player)?.scene) event.after = () => {
       const workshop = workshops.get(player); player.getDialogueManager().reset();
       camera(player, [3371, 11493, 700, 232, 232], [3368, 11486, 400, 232, 232]);
-      sceneWalk(player, 3367, 11485, 4);
+      sceneWalk(player, 3367, 11485);
       later(workshop, 2, () => startTranscript(api, player, DIALOGUE_NPC_ID, PAGE, "starting-out-talking-to-kovac", steps => {
         const yes = steps.find(step => step.type === "choice").options.find(option => option.text === "Yes.").steps;
         return yes.slice(yes.findIndex(step => step.player === "Did you build this?"));
@@ -893,6 +950,9 @@ module.exports = function registerSleepingGiantsQuest(api) {
   api.onCustomEvent("giants-foundry:step", handleFoundryStep);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onCustomEvent("player:world-input", blockSceneInput);
+  api.onCustomEvent("player:movement-input", blockSceneKeyboard);
+  api.onCustomEvent("player:interaction-stop", resumeSceneWalk);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handlePlayerGone);
   api.onPlayerDeath(handlePlayerGone);

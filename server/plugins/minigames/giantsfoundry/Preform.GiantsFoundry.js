@@ -18,6 +18,11 @@ const Tools = require("./Tools.GiantsFoundry");
 const ANIM_STORAGE = 899; // human_furnace
 const HEADER_COMPONENT = 2; // combat_interface:header
 const SOUND_PICK_UP = 1051;
+/**
+ * The preform is a giant's two-handed sword: human_weapon_giant01 ready, turn, walk and run
+ * (cache sequences 9460, 823, 9461, 820-822, 9459), where the item's own default is a one-handed pose.
+ */
+const STANCE = [9460, 823, 9461, 820, 821, 822, 9459];
 const POURED_AT = "pouredAt";
 const JIG = { EMPTY: 0, POURED: 2, COOLED: 3 };
 /** Molten metal cools about a degree a tick in the jig (rsprox: 980-998 at pickup). */
@@ -51,6 +56,17 @@ function hasFreeHands(player) {
   return !equipment.get(Equipment.WEAPON_SLOT)?.isValid?.() && !equipment.get(Equipment.SHIELD_SLOT)?.isValid?.();
 }
 
+/** Two hands on the sword: the walk and stand poses follow the preform while it is worn. */
+function holdStance(player) {
+  const { Flag } = Shared.core();
+  player.setRenderAnimations(STANCE);
+  player.getUpdateFlag().flag(Flag.APPEARANCE);
+}
+
+function releaseStance(player) {
+  if (player.getRenderAnimations() === STANCE) player.setRenderAnimations(null);
+}
+
 function refreshWeapon(player) {
   const { WeaponInterfaceManager, Flag } = Shared.core();
   player.getEquipment().refreshItems();
@@ -72,6 +88,7 @@ function equip(player) {
   const { Equipment, Item } = Shared.core();
   player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(Shared.ITEM.PREFORM, 1));
   refreshWeapon(player);
+  holdStance(player);
   player.getPacketSender().sendString("Preform", (Shared.INTERFACE.COMBAT_TAB << 16) | HEADER_COMPONENT);
   openHud(player);
 }
@@ -81,6 +98,7 @@ function unequip(player) {
   const { Equipment, Item } = Shared.core();
   if (!Shared.wornPreform(player)) return false;
   player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(-1, 0));
+  releaseStance(player);
   refreshWeapon(player);
   closeHud(player);
   return true;
@@ -208,7 +226,10 @@ function keepPreformWorn(event) {
 /** A preform worn outside the cave (an old save) goes back into storage. */
 function checkLogin({ player }) {
   if (Shared.wornPreform(player) && !Shared.inRoom(player.getLocation())) store(player);
-  else if (Shared.wornPreform(player)) openHud(player);
+  else if (Shared.wornPreform(player)) {
+    holdStance(player);
+    openHud(player);
+  }
 }
 
 module.exports = function attachPreform(api) {
@@ -220,5 +241,5 @@ module.exports = function attachPreform(api) {
 };
 
 Object.assign(module.exports, {
-  hasFreeHands, rollSeeds, equip, unequip, store, storeOnLeave, noticeStoredPreform, openHud, closeHud, MESSAGE,
+  hasFreeHands, rollSeeds, equip, unequip, STANCE, store, storeOnLeave, noticeStoredPreform, openHud, closeHud, MESSAGE,
 });

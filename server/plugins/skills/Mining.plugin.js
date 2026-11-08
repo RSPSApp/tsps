@@ -366,7 +366,7 @@ function getMiningLevel(player) {
 
 /**
  * The level the success rolls use: the visible level, capped at 99, plus invisible boosts other plugins
- * add ("mining:level-boost", the celestial ring's +4), which do count past 99 (Wiki "Skilling success
+ * add ("mining:level-boost", the celestial ring's +4, the Mining Guild's +7), which do count past 99 (Wiki "Skilling success
  * rate", Boosts over 99). Requirements still read the visible level.
  */
 function getRollMiningLevel(player) {
@@ -572,9 +572,20 @@ function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
     const { id, delay, radius } = rock.depletionSound;
     pluginApi.core.Sounds.playAreaSound({ soundId: id, delay, radius, x: at.getX(), y: at.getY(), level: at.getZ() });
   }
-  TaskManager.submit(new RockRespawnTask(rock.respawnTicks, whole, depleted));
-  for (const viewer of viewers) sendRespawnTimer(viewer, depleted, rock.respawnTicks);
+  const respawnTicks = respawnTicksFor(rockObject, rock);
+  TaskManager.submit(new RockRespawnTask(respawnTicks, whole, depleted));
+  for (const viewer of viewers) sendRespawnTimer(viewer, depleted, respawnTicks);
   return depleted;
+}
+
+/**
+ * How long a mined-out rock stays empty: the Wiki rock page's time, which content may shorten
+ * ("mining:respawn-ticks" { object, rock, ticks }, the Mining Guild's members' area).
+ */
+function respawnTicksFor(rockObject, rock) {
+  const request = { object: rockObject, rock: rock.objectName, ticks: rock.respawnTicks };
+  pluginApi.emitCustomEvent("mining:respawn-ticks", request);
+  return Number.isFinite(request.ticks) ? Math.max(1, request.ticks) : rock.respawnTicks;
 }
 
 /** Failures are message boxes in live OSRS (rsprox recordings). */

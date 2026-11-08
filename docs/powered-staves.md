@@ -114,7 +114,8 @@ From the Wiki (and Thammaron's sceptre for the ether rules):
 - 4 ticks, 7 tiles (9 on Longrange).
 - Revenant ether: the first 1,000 are a deposit that activates it, then up to 16,000 are charges, one a cast.
 - Emptied, it keeps the deposit and stays activated.
-- Uncharging returns every ether, deposit included.
+- Uncharging returns every ether, deposit included. A sceptre whose activation ether was not paid through the weapon (a spawn or load-out) refunds only its charges, so Uncharge then Dismantle cannot mint ether. Neither sceptre is sold in a shop.
+- Dying to a player in the Wilderness drops the deposit and charges to the killer, protected or not; the sceptre comes back uncharged.
 - **Swap** turns it into the (a) version, which autocasts spellbook spells and has no built-in spell.
 - Either version, charged, gives +50% magic accuracy and damage against NPCs in the Wilderness, and each attack there spends a charge.
 
@@ -127,6 +128,14 @@ Messages (rsprox 1703, 3126, 3994, 4096, 4101):
 
 No capture shows its built-in spell. It uses the powered staff cast (11430) and Thammaron's
 projectile (`spells_thammaron01_travel01`, 2340), with no impact graphic.
+
+## Thammaron's sceptre
+
+`AccursedSceptre.plugin.js` also runs the sceptre the accursed sceptre is made from (Wiki: Thammaron's sceptre):
+- Max hit `floor(Magic / 3) − 8`, 60 Magic; the built-in spell, speed, range, ether rules, Swap to the (a) version and the Wilderness passive are the accursed sceptre's.
+- No special attack.
+- **Dismantle** on an uncharged one (either version) gives 7,500 revenant ether.
+- The messages and the built-in spell's look are the accursed sceptre's; no capture shows Thammaron's sceptre itself.
 
 **Condemn** (Wiki):
 - 50% energy and a charge.

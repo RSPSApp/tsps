@@ -192,6 +192,7 @@ import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { chatHistory } from "../rs/cs2/ChatHistory";
+import { FriendLoginUpdates } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
 import { Opcodes as Cs2Opcodes } from "../rs/cs2/Opcodes";
@@ -1085,6 +1086,7 @@ export class OsrsClient {
     private groundItemMeshesPending = false;
     private unsubscribeChatMessages?: () => void;
     private unsubscribeFriendsChat?: () => void;
+    private readonly friendLoginUpdates = new FriendLoginUpdates();
     private unsubscribeClans?: () => void;
     private unsubscribeSkills?: () => void;
     private unsubscribeRunEnergy?: () => void;
@@ -3423,6 +3425,7 @@ export class OsrsClient {
         } catch {}
         try {
             this.unsubscribeFriendsChat = subscribeFriendsChat((snapshot) => {
+                this.friendLoginUpdates.update(snapshot.friends);
                 const channel = snapshot.channel;
                 this.cs2Vm.context.friendList = snapshot.friends.map((friend) => ({ ...friend }));
                 this.cs2Vm.context.ignoreList = snapshot.ignores.map((ignored) => ({ ...ignored }));
@@ -6441,6 +6444,12 @@ export class OsrsClient {
                 }
             } catch {}
 
+            if (this.isLoggedIn()) {
+                for (const message of this.friendLoginUpdates.drain()) {
+                    chatHistory.addMessage(5, message, "", "");
+                }
+            }
+
             // Widget transmit handlers and timers are processed on the client tick,
             // not on the render frame. These queue CS2 events which are then processed below.
             try {
@@ -8701,6 +8710,7 @@ export class OsrsClient {
 
         // Full reset only - clear persistent session state when going back to login screen
         if (fullReset) {
+            this.friendLoginUpdates.clear();
             // Clear chat history to prevent memory leak across sessions
             try {
                 chatHistory.clear();

@@ -89,6 +89,8 @@ function harness(t, members = true) {
       WorldDefinition: { isMembersWorld: () => members }, World: { getProcessCycle: () => Math.floor(now / 600), forEachNetworkPlayer() {} },
       NpcDefinition: { forId: id => ({ getName: () => NPC_NAMES[id] }) },
       Animation, Graphic, Task, PlayerRights,
+      // The real manager mounts the combat tab (593) for the weapon; the events only need it re-mounted.
+      WeaponInterfaceManager: { assign: player => player.getPacketSender().sendTabInterface(0, 593) },
       DialogueChainBuilder, NpcDialogue, PlayerDialogue, StatementDialogue,
       ItemStatementDialogue, EndDialogue, ActionDialogue, GameObject: FakeGameObject, ObjectManager,
       MapObjects: { get: () => null, mapObjects, getHash: (x, y, z) => `${x},${y},${z}` } },
@@ -217,7 +219,7 @@ function harness(t, members = true) {
           if (!p.blockXp) xp.set(skill, Math.min(200_000_000, (xp.get(skill) ?? 0) + amount));
         } }),
       getSpellbook: () => ({ getInterfaceId: () => 218 }),
-      getPacketSender: () => ({ closeSubInterface() {}, sendTabInterface() {}, sendInterface(id) { p.interfaceId = id; },
+      getPacketSender: () => ({ closeSubInterface() {}, sendTabInterface() { return this; }, sendGameframeTabSetup() { return this; }, sendInterface(id) { p.interfaceId = id; },
         sendInterfaceRemoval() { p.interfaceId = -1; p.chatboxGroupId = -1; }, sendString(text, uid) {
           p.trayTitle = text; (p.strings ??= new Map()).set(uid, text);
         },

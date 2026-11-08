@@ -34,6 +34,9 @@ export function handleAuthTickMessage(msg: any): boolean {
             state.sessionLoginFlags =
                 LOGIN_FLAG_TOKEN | (state.sessionLoginFlags & ~(LOGIN_FLAG_REMEMBER | LOGIN_FLAG_TOKEN));
         }
+        // A refused login (a first one, or an automatic relogin refused with e.g. ALREADY_LOGGED_IN) is back on the
+        // login screen, so its next WebRTC 4000 ends the attempt instead of reconnecting.
+        state.hasLoggedIn = msg.payload.success === true;
         if (msg.payload.success) {
             clearHintArrow();
             clearAttackTimer();

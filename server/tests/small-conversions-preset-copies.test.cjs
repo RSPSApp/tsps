@@ -106,8 +106,13 @@ test("Ava's accumulator: preset steel arrows don't pay; plain ones do", (t) => {
   const actions = core.CacheDefinitions.getNpc(I.AVAS_ACCUMULATOR && core.NpcIdentifiers.AVA).actions;
   const clickType = actions.findIndex((action) => action === "Devices") + 1;
   const npc = new NPC(core.NpcIdentifiers.AVA, f.p.getLocation().clone());
-  const devices = () => PM.emitNpcInteraction({ player: f.p, npc, npcId: core.NpcIdentifiers.AVA, clickType, handled: false,
-    definition: { getActions: () => actions, getName: () => "Ava", getId: () => core.NpcIdentifiers.AVA } });
+  // "Devices" opens Ava's Devices (interface 67); the accumulator row's Buy-1 is component 7, op 1.
+  const devices = () => {
+    PM.emitNpcInteraction({ player: f.p, npc, npcId: core.NpcIdentifiers.AVA, clickType, handled: false,
+      definition: { getActions: () => actions, getName: () => "Ava", getId: () => core.NpcIdentifiers.AVA } });
+    assert.equal(f.p.getInterfaceId(), 67);
+    PM.emitInterfaceActionClick({ player: f.p, buttonId: (67 << 16) | 7, action: 1, opId: 1, handled: false });
+  };
   devices();
   assert.equal(f.inv.getAmount(I.AVAS_ACCUMULATOR), 0);
   assert.equal(amount(f.inv, I.STEEL_ARROW, true), 75);
@@ -115,6 +120,67 @@ test("Ava's accumulator: preset steel arrows don't pay; plain ones do", (t) => {
   devices();
   assert.equal(f.inv.getAmount(I.AVAS_ACCUMULATOR), 1);
   assert.equal(amount(f.inv, I.STEEL_ARROW, true), 75, "the preset arrows are left alone");
+});
+
+test("Ava's Devices: the attractor is bought outright and Buy-5 stops when the coins run out", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism");
+  f.inv.setItem(0, new core.Item(I.COINS, 999 * 2));
+  const actions = core.CacheDefinitions.getNpc(core.NpcIdentifiers.AVA).actions;
+  const clickType = actions.findIndex((action) => action === "Devices") + 1;
+  const npc = new NPC(core.NpcIdentifiers.AVA, f.p.getLocation().clone());
+  PM.emitNpcInteraction({ player: f.p, npc, npcId: core.NpcIdentifiers.AVA, clickType, handled: false,
+    definition: { getActions: () => actions, getName: () => "Ava", getId: () => core.NpcIdentifiers.AVA } });
+  assert.equal(f.p.getInterfaceId(), 67);
+  PM.emitInterfaceActionClick({ player: f.p, buttonId: (67 << 16) | 2, action: 2, opId: 2, handled: false });
+  assert.equal(f.inv.getAmount(I.AVAS_ATTRACTOR), 2);
+  assert.equal(f.inv.getAmount(I.COINS), 0);
+});
+
+// Ava's Devices (interface 67): opens from Ava's "Devices" option; button 2 attractor, 12 assembler.
+function avaDevices(f, button, op = 1) {
+  const actions = core.CacheDefinitions.getNpc(core.NpcIdentifiers.AVA).actions;
+  const clickType = actions.findIndex((action) => action === "Devices") + 1;
+  const npc = new NPC(core.NpcIdentifiers.AVA, f.p.getLocation().clone());
+  PM.emitNpcInteraction({ player: f.p, npc, npcId: core.NpcIdentifiers.AVA, clickType, handled: false,
+    definition: { getActions: () => actions, getName: () => "Ava", getId: () => core.NpcIdentifiers.AVA } });
+  assert.equal(f.p.getInterfaceId(), 67);
+  PM.emitInterfaceActionClick({ player: f.p, buttonId: (67 << 16) | button, action: op, opId: op, handled: false });
+}
+
+test("Ava's Devices: preset coins never buy an attractor; plain coins do", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism");
+  f.inv.setItem(0, preset(new core.Item(I.COINS, 999)));
+  avaDevices(f, 2);
+  assert.equal(f.inv.getAmount(I.AVAS_ATTRACTOR), 0, "no attractor for preset coins");
+  assert.equal(amount(f.inv, I.COINS, true), 999, "the preset coins are kept");
+  f.inv.setItem(1, new core.Item(I.COINS, 999));
+  avaDevices(f, 2);
+  assert.equal(amount(f.inv, I.AVAS_ATTRACTOR, false), 1);
+  assert.equal(amount(f.inv, I.COINS, false), 0, "the plain coins paid");
+  assert.equal(amount(f.inv, I.COINS, true), 999, "the preset coins are still untouched");
+});
+
+test("Ava's Devices: a preset accumulator is never traded for a plain assembler; a plain one is", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism");
+  questStage(f, "dragon_slayer_ii");
+  f.inv.setItem(0, preset(new core.Item(I.AVAS_ACCUMULATOR, 1)));
+  f.inv.setItem(1, new core.Item(I.VORKATHS_HEAD, 1));
+  f.inv.setItem(2, new core.Item(I.MITHRIL_ARROW, 75));
+  avaDevices(f, 12);
+  assert.equal(f.inv.getAmount(I.AVAS_ASSEMBLER), 0, "no assembler from a preset trade-in");
+  assert.equal(amount(f.inv, I.AVAS_ACCUMULATOR, true), 1, "the preset accumulator is kept");
+  assert.equal(f.inv.getAmount(I.VORKATHS_HEAD), 1, "the head is kept");
+  assert.equal(f.inv.getAmount(I.MITHRIL_ARROW), 75, "the arrows are kept");
+  f.inv.setItem(3, new core.Item(I.AVAS_ACCUMULATOR, 1));
+  avaDevices(f, 12);
+  assert.equal(amount(f.inv, I.AVAS_ASSEMBLER, false), 1);
+  assert.equal(amount(f.inv, I.AVAS_ACCUMULATOR, false), 0, "the plain accumulator was traded in");
+  assert.equal(amount(f.inv, I.AVAS_ACCUMULATOR, true), 1, "the preset one is still there");
+  assert.equal(f.inv.getAmount(I.VORKATHS_HEAD), 0);
+  assert.equal(f.inv.getAmount(I.MITHRIL_ARROW), 0);
 });
 
 test("Death Plateau: preset climbing boots become preset spiked boots", (t) => {
@@ -322,4 +388,36 @@ test("Smiths gloves combine in a full inventory and dismantle with one free slot
   assert.equal(f.inv.getAmount(I.ICE_GLOVES), 1);
   assert.equal(f.inv.getAmount(I.BONES), f.inv.capacity() - 2);
   assert.equal(f.inv.getFreeSlots(), 0);
+});
+
+test("Ava's Devices Buy-X and Buy-All use the requested quantity and available payment", t => {
+  const f = actor(t); questStage(f, 'animal_magnetism');
+  f.inv.setItem(0, new core.Item(I.COINS, 999 * 6));
+  avaDevices(f, 2, 3);
+  const entered = f.p.getEnteredAmountAction();
+  assert.ok(entered);
+  entered.execute(3);
+  assert.equal(f.inv.getAmount(I.AVAS_ATTRACTOR), 3);
+  assert.equal(f.inv.getAmount(I.COINS), 999 * 3);
+  avaDevices(f, 2, 4);
+  assert.equal(f.inv.getAmount(I.AVAS_ATTRACTOR), 6);
+  assert.equal(f.inv.getAmount(I.COINS), 0);
+});
+
+test("Ava's Devices refuses unmet Ranged and quest requirements without taking payment", t => {
+  const f = actor(t); questStage(f, 'animal_magnetism');
+  f.p.getSkillManager().setMaxLevels(core.Skill.RANGED, 49, false);
+  f.inv.setItem(0, new core.Item(I.COINS, 4999));
+  f.inv.setItem(1, new core.Item(I.STEEL_ARROW, 75));
+  avaDevices(f, 7);
+  assert.equal(f.inv.getAmount(I.AVAS_ACCUMULATOR), 0);
+  assert.equal(f.inv.getAmount(I.STEEL_ARROW), 75);
+  assert.equal(f.inv.getAmount(I.COINS), 4999);
+  f.inv.setItem(2, new core.Item(I.VORKATHS_HEAD));
+  f.inv.setItem(3, new core.Item(I.MITHRIL_ARROW, 75));
+  avaDevices(f, 12);
+  assert.equal(f.inv.getAmount(I.AVAS_ASSEMBLER), 0);
+  assert.equal(f.inv.getAmount(I.VORKATHS_HEAD), 1);
+  assert.equal(f.inv.getAmount(I.MITHRIL_ARROW), 75);
+  assert.equal(f.inv.getAmount(I.COINS), 4999);
 });

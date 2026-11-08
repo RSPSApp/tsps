@@ -110,9 +110,10 @@
       0
     ]
   },
+  "_shore": "2672,3209 is open sea in the cache (overlay 442); 2658,3210 is the nearest coast tile, on the shore north of Port Khazard below the DJP fairy ring.",
   "shore": [
-    2672,
-    3209,
+    2658,
+    3210,
     0
   ],
   "port": [

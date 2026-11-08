@@ -22,8 +22,8 @@
  *
  * Source: LostCity quest_itwatchtower at 65b754f (pinned in issue #196).
  *
- * Gaps: the dark-cave fallback, the enclave cutscene and the bridge-jump
- * movement are not simulated; the "Gor cur" skavid that teaches "Ar" is absent
+ * Gaps: the dark-cave fallback and the enclave cutscene are not simulated;
+ * the bridge and battlement crossings have functional movement, with native timing unverified; the "Gor cur" skavid that teaches "Ar" is absent
  * from the transcript dump, so the mad skavid accepts the three teachable
  * words; guard gate/bridge/southern roles are best-effort from their spawn
  * coordinates; the crystal pillars' transform varbit (3127) is not sent, so the
@@ -103,8 +103,41 @@ module.exports = function registerWatchtowerQuest(api) {
   const TOBAN_ID = NpcIdentifiers.TOBAN;
   const GORAD_ID = NpcIdentifiers.GORAD;
   const ENTRANCE_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_3, NpcIdentifiers.OGRE_GUARD_5]);
-  const SOUTHERN_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_6]);
-  const MARKET_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_7]);
+  // The two OGRE_GUARD_6s (2501/2503,3011-3012) stand at the battlement and want a gift from
+  // the market (a rock cake) before letting the player climb it. The OGRE_GUARD_7s by the market
+  // (2526/2529,3018-3019) only say "What do you want, small thing? Leave us alone!".
+  const SOUTHERN_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_7]);
+  const MARKET_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_6]);
+  const BATTLEMENT_GUARD_ID = NpcIdentifiers.OGRE_GUARD_6;
+  /** The battlement (2832) blocks the west end of the rope bridge at x 2507, y 3011-3012. */
+  const BATTLEMENT_ID = ObjectIdentifiers.BATTLEMENT;
+  const BATTLEMENT = { x: 2507, minY: 3011, maxY: 3012 };
+  const CLIMB_OVER_ANIMATION = 839;
+  /** "The ogre guard attacks the player." in the battlement guard's dialogue. */
+  const BATTLEMENT_GUARD_ATTACK_ID = "WdYOsW";
+  /**
+   * The broken bridge north of the rope bridge: a bridge-flagged span at x 2530-2531 whose
+   * y 3027-3028 is missing. Gap 2830 (2530,3026) is jumped north from the bridge for the
+   * guard's 20-coin toll; Gap 2831 (2531,3029) is jumped back south for free. Cache, rev 241.
+   */
+  const GAP_NORTH_ID = ObjectIdentifiers.GAP;
+  const GAP_SOUTH_ID = ObjectIdentifiers.GAP_2;
+  const GAP_FROM_SOUTH = [2530, 3026];
+  const GAP_LAND_NORTH = [2530, 3029];
+  const GAP_FROM_NORTH = [2531, 3029];
+  const GAP_LAND_SOUTH = [2531, 3026];
+  const GAP_JUMP_ANIMATION = 741;
+  const BRIDGE_GUARD_ID = NpcIdentifiers.OGRE_GUARD_4;
+  /**
+   * The enclave guards let a player past only while distracted by cave nightshade (wiki: "Use
+   * the second cave nightshade on an enclave guard to distract them and enter the enclave
+   * again"); once the quest is complete the way is open.
+   */
+  const enclaveDistracted = new WeakSet();
+  /** "You run past the guard while he's busy." after the nightshade. */
+  const ENCLAVE_RUN_PAST_ID = "Z7N4ZW";
+  /** "The enclave guard attacks the player." in the guards' dialogues. */
+  const ENCLAVE_GUARD_ATTACK_IDS = new Set(["n72ZBl", "qS75F0"]);
   const BRIDGE_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_4]);
   // The live east-gate guards are OGRE_GUARD_4 spawns; the wiki lets a gold bar
   // be given to one of them directly, as well as clicking the gate.
@@ -1129,6 +1162,7 @@ module.exports = function registerWatchtowerQuest(api) {
         player.getInventory().deleteNumber(COINS, 20);
         player.getSkillManager().addExperiences(Skill.AGILITY, 50);
         player.sendMessage("You daringly jump across the chasm.");
+        jumpGap(player, true);
       }
       event.handled = true;
       return;
@@ -1139,8 +1173,26 @@ module.exports = function registerWatchtowerQuest(api) {
     }
   }
 
+  function enterEnclave(player) {
+    enclaveDistracted.delete(player);
+    player.moveTo(new Location(ENCLAVE_ENTRANCE_DESTINATION.x, ENCLAVE_ENTRANCE_DESTINATION.y, 0));
+  }
+
   function handleAction(event) {
     if (!event.player || !event.stepId) return;
+    if (event.stepId === ENCLAVE_RUN_PAST_ID && enclaveDistracted.has(event.player)) {
+      // The transcript's own message still shows; the player is then inside.
+      enterEnclave(event.player);
+      return;
+    }
+    if (ENCLAVE_GUARD_ATTACK_IDS.has(event.stepId)) {
+      event.npc?.getCombat?.()?.attack(event.player);
+      return;
+    }
+    if (event.stepId === BATTLEMENT_GUARD_ATTACK_ID) {
+      event.npc?.getCombat?.()?.attack(event.player);
+      return;
+    }
     if (event.kind === "message") {
       handleMessage(event);
       return;
@@ -1321,9 +1373,87 @@ module.exports = function registerWatchtowerQuest(api) {
     });
   }
 
+  /**
+   * Climbing the battlement: the guards stop the player until they have been given a rock cake
+   * (wiki: "Try to climb the battlement and you will be stopped by one of the guards").
+   */
+  function climbBattlement(event) {
+    const { player, object } = event;
+    const at = object?.getLocation?.();
+    if (!at || at.getX() !== BATTLEMENT.x || at.getY() < BATTLEMENT.minY || at.getY() > BATTLEMENT.maxY || at.getZ() !== 0) return;
+    event.handled = true;
+    if (ObstacleRunner.isBusy(player)) return;
+    const from = player.getLocation();
+    const fromWest = from.getX() < BATTLEMENT.x;
+    const allowed = !fromWest || quest.isComplete(player) || hasBit(player, BIT_MARKET_GIVEN);
+    if (!allowed) {
+      if (quest.getStage(player) < STAGE_GIVEN_RELIC) {
+        startTranscript(api, player, BATTLEMENT_GUARD_ID, PAGE, "entering-gu-tanoth-talking-to-the-southern-ogre-guard");
+        return;
+      }
+      const first = !hasBit(player, BIT_MARKET_WANTS);
+      setBit(player, BIT_MARKET_WANTS);
+      startTranscript(api, player, BATTLEMENT_GUARD_ID, PAGE, first
+        ? "entering-gu-tanoth-ogre-guard"
+        : "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again");
+      return;
+    }
+    const y = Math.min(BATTLEMENT.maxY, Math.max(BATTLEMENT.minY, from.getY()));
+    const start = [fromWest ? BATTLEMENT.x - 1 : BATTLEMENT.x + 1, y];
+    const end = [fromWest ? BATTLEMENT.x + 1 : BATTLEMENT.x - 1, y];
+    ObstacleRunner.run({ player, object }, [
+      { walk: [start], arrive: true },
+      { faceDir: fromWest ? "east" : "west" },
+      { move: end, anim: CLIMB_OVER_ANIMATION, speed: [0, 60], ticks: 1 },
+    ]);
+  }
+
+  /** Jumps the broken bridge: north over the gap from the bridge, or back south. */
+  function jumpGap(player, northward) {
+    if (ObstacleRunner.isBusy(player)) return;
+    const start = northward ? GAP_FROM_SOUTH : GAP_FROM_NORTH;
+    const end = northward ? GAP_LAND_NORTH : GAP_LAND_SOUTH;
+    ObstacleRunner.run({ player }, [
+      { walk: [start], arrive: true },
+      { faceDir: northward ? "north" : "south" },
+      { move: end, anim: GAP_JUMP_ANIMATION, speed: [15, 35] },
+    ]);
+  }
+
+  /**
+   * Jump-Over on the gap. Northward the ogre guard wants his 20 coins first (the toll action
+   * then makes the jump); the way back south is free ("I'm glad that was easier on the way back!").
+   */
+  function jumpOverGap(event) {
+    const { player, objectId } = event;
+    event.handled = true;
+    if (objectId === GAP_SOUTH_ID) {
+      startTranscript(api, player, BRIDGE_GUARD_ID, PAGE, "entering-gu-tanoth-crossing-back-across-the-bridge");
+      jumpGap(player, false);
+      return;
+    }
+    if (quest.isComplete(player)) {
+      jumpGap(player, true);
+      return;
+    }
+    if (quest.getStage(player) < STAGE_GIVEN_RELIC) {
+      player.sendMessage("Nothing interesting happens.");
+      return;
+    }
+    startTranscript(api, player, BRIDGE_GUARD_ID, PAGE, "entering-gu-tanoth-crossing-the-bridge");
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
+    if (objectId === BATTLEMENT_ID) {
+      climbBattlement(event);
+      return;
+    }
+    if (objectId === GAP_NORTH_ID || objectId === GAP_SOUTH_ID) {
+      jumpOverGap(event);
+      return;
+    }
     if (objectId === ObjectIdentifiers.ROPESWING_9 && (event.option === "Swing-on" || event.clickType === 1)) {
       crossGrewRiver(event, false);
       return;
@@ -1392,7 +1522,12 @@ module.exports = function registerWatchtowerQuest(api) {
     }
     if (objectId === ENCLAVE_ENTRANCE_ID) {
       event.handled = true;
-      player.moveTo(new Location(ENCLAVE_ENTRANCE_DESTINATION.x, ENCLAVE_ENTRANCE_DESTINATION.y, 0));
+      if (!quest.isComplete(player) && !enclaveDistracted.has(player)) {
+        startTranscript(api, player, ENCLAVE_GUARD_ID, PAGE,
+          "entering-the-enclave-attempting-to-enter-the-ogre-enclave-before-distracting-the-guards");
+        return;
+      }
+      enterEnclave(player);
       return;
     }
     if (objectId === TOBAN_CAVE_ID) {
@@ -1455,6 +1590,15 @@ module.exports = function registerWatchtowerQuest(api) {
     const { player, itemId } = event;
     const targetId = event.npcId ?? event.target?.getId?.();
     if (!player || !targetId) return;
+
+    // Wiki: "Use the rock cake on the guard to get by" - the guard's hand-in conversation.
+    if (MARKET_GUARD_IDS.has(targetId) && itemId === ROCK_CAKE && quest.getStage(player) >= STAGE_GIVEN_RELIC
+        && !hasBit(player, BIT_MARKET_GIVEN)) {
+      event.handled = true;
+      setBit(player, BIT_MARKET_WANTS);
+      startTranscript(api, player, BATTLEMENT_GUARD_ID, PAGE, "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again");
+      return;
+    }
 
     if (EAST_GATE_GUARD_IDS.has(targetId) && itemId === GOLD_BAR) {
       event.handled = true;
@@ -1548,6 +1692,7 @@ module.exports = function registerWatchtowerQuest(api) {
       }
       remove(player, CAVE_NIGHTSHADE);
       if (stage === STAGE_SKAVID_CRYSTAL) quest.setStage(player, STAGE_FED_NIGHTSHADE);
+      enclaveDistracted.add(player);
       startTranscript(
         api,
         player,

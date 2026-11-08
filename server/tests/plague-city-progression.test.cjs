@@ -75,7 +75,12 @@ test('Bravek only consumes cure and grants warrant at the actual transcript hand
 });
 test('barrel is location scoped, and Elena requires the cell unlock with its key', () => {
   const {player, inv}=fixture(27), I=core.ItemIdentifiers, O=core.ObjectIdentifiers, npc=core.NpcIdentifiers.ELENA_2;
-  assert.equal(variant({player,npcId:npc}),null); assert.equal(quest.getStage(player),27);
+  assert.match(variant({player,npcId:npc}),/basement-door.*without-the-key/);
+  assert.equal(quest.getStage(player),27);
+  const talk = {player,npcId:npc,stepId:'Gtrtgc',handled:false};
+  action(talk);assert.equal(talk.handled,true);
+  const repeat = {player,npcId:npc,stepId:'Gtrtgc',handled:false};
+  action(repeat);assert.equal(repeat.handled,false);
   const barrel=named.get('Barrel').Search;
   assert.equal(barrel({player,objectId:O.BARREL_11,location:{x:3221,y:9910,z:0}}),false);
   barrel({player,objectId:O.BARREL_11,location:{x:2534,y:3268,z:0}}); assert.equal(inv.getAmount(I.A_SMALL_KEY),1);
@@ -151,4 +156,11 @@ test('warrant entry defers to the real Doors event chain without replaying dialo
  assert.equal(transcripts.length,0,'door:open must not restart the warrant dialogue');
  assert.equal(quest.getStage(player),27);
  assert.equal(inv.getAmount(core.ItemIdentifiers.WARRANT),1);
+});
+
+test('the locked-cell plea does not take over Elena outside Plague City', () => {
+  const {player}=fixture(0);
+  assert.equal(variant({player,npcId:core.NpcIdentifiers.ELENA_2}),null);
+  player.setAttribute('quest.plague_city.stage',27);
+  assert.equal(variant({player,npcId:core.NpcIdentifiers.ELENA}),null);
 });

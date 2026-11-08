@@ -152,6 +152,36 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const AVAS_ACCUMULATOR_ITEM_ID = ItemIdentifiers.AVAS_ACCUMULATOR; // 10499
   const STEEL_ARROW_ITEM_ID = ItemIdentifiers.STEEL_ARROW; // 886
   const COINS_ITEM_ID = ItemIdentifiers.COINS; // 995
+  const AVAS_ASSEMBLER_ITEM_ID = ItemIdentifiers.AVAS_ASSEMBLER; // 22109
+  const VORKATHS_HEAD_ITEM_ID = ItemIdentifiers.VORKATHS_HEAD; // 21907
+  const MITHRIL_ARROW_ITEM_ID = ItemIdentifiers.MITHRIL_ARROW; // 888
+
+  // Ava's Devices (cache interface 67): each row is a Buy-1/5/X/All button (ops 1-4, click
+  // mask 0x1e in the cache) whose child model and the text below it are filled in by the server.
+  const DEVICES_INTERFACE = 67;
+  const DEVICES_INTERFACE_NAME = "Ava's Devices";
+  const DEVICE_OP = { ONE: 1, FIVE: 2, X: 3, ALL: 4 };
+  const DEVICE_ROWS = [
+    {
+      button: 2, model: 4, info: 6, itemId: AVAS_ATTRACTOR_ITEM_ID, name: "Ava's attractor",
+      text: "999 coins.",
+      coins: 999, arrows: null, head: false, tradeIn: null,
+    },
+    {
+      button: 7, model: 9, info: 11, itemId: AVAS_ACCUMULATOR_ITEM_ID, name: "Ava's accumulator",
+      text: "75 steel arrows, plus 999 coins<br>or an attractor. Needs 50 Ranged.",
+      coins: 999, arrows: STEEL_ARROW_ITEM_ID, head: false, tradeIn: AVAS_ATTRACTOR_ITEM_ID,
+      rangedLevel: 50, diary: true,
+    },
+    {
+      button: 12, model: 14, info: 16, itemId: AVAS_ASSEMBLER_ITEM_ID, name: "Ava's assembler",
+      text: "Vorkath's head, 75 mithril arrows,<br>plus 4,999 coins or an accumulator.",
+      coins: 4999, arrows: MITHRIL_ARROW_ITEM_ID, head: true, tradeIn: AVAS_ACCUMULATOR_ITEM_ID,
+      quest: "dragon_slayer_ii", questName: "Dragon Slayer II", diary: true,
+    },
+  ];
+  const DEVICE_BUTTONS = DEVICE_ROWS.map((row) => (DEVICES_INTERFACE << 16) | row.button);
+  const DEVICE_ARROW_COST = 75;
   const CRONE_MADE_AMULET_ITEM_ID = ItemIdentifiers.CRONE_MADE_AMULET; // 10500
   const CRONE_MADE_AMULET_ITEM_ID_2 = ItemIdentifiers.CRONE_MADE_AMULET_2; // 17110
   const ECTO_TOKEN_ITEM_ID = ItemIdentifiers.ECTO_TOKEN; // 4278
@@ -713,6 +743,13 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   /** Chicken purchases and the "Amazing! Success!" continuation. */
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    // "Devices, please." ends on the transcript's "(Ava's Devices interface opens.)".
+    if (npcId === AVA_NPC_ID && String(event.target ?? "").startsWith(DEVICES_INTERFACE_NAME)) {
+      event.handled = true;
+      event.end = true;
+      openDevices(player);
+      return;
+    }
     if (MALCOLM_NPC_IDS.has(npcId)) {
       if (stepId === ACTION_RECEIVE_ONE_CHICKEN_ID) {
         event.handled = true;
@@ -996,6 +1033,145 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   }
 
   // ==========================================================================
+  // Ava's Devices
+  // ==========================================================================
+
+  /** Only plain stacks pay: a preset (untradeable, unbankable) copy never buys a fresh device. */
+  function restrictedItem(item) {
+    return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+  }
+
+  function plainSlots(inventory, itemId) {
+    if (typeof inventory.getItems !== "function") return null; // a test stand-in has no slots (and no presets)
+    return inventory.getItems()
+      .map((item, slot) => (item?.getId() === itemId && !restrictedItem(item) ? slot : -1))
+      .filter((slot) => slot >= 0);
+  }
+
+  function plainAmount(inventory, itemId) {
+    const slots = plainSlots(inventory, itemId);
+    if (!slots) return inventory.getAmount(itemId);
+    return slots.reduce((total, slot) => total + inventory.getItems()[slot].getAmount(), 0);
+  }
+
+  function takePlain(inventory, itemId, amount) {
+    const slots = plainSlots(inventory, itemId);
+    if (!slots) {
+      inventory.deleteNumber(itemId, amount);
+      return;
+    }
+    let left = amount;
+    for (const slot of slots) {
+      if (left <= 0) break;
+      const taken = Math.min(left, inventory.getItems()[slot].getAmount());
+      inventory.deleteAtSlot(slot, taken);
+      left -= taken;
+    }
+  }
+
+  function openDevices(player) {
+    if (quest.getStage(player) < STAGE_COMPLETE) {
+      player.sendMessage("You need to complete Animal Magnetism before Ava will make you a device.");
+      return;
+    }
+    const sender = player.getPacketSender();
+    sender.sendInterface(DEVICES_INTERFACE);
+    for (const row of DEVICE_ROWS) {
+      sender.sendInterfaceModel((DEVICES_INTERFACE << 16) | row.model, row.itemId, 1);
+      sender.sendString(row.text, (DEVICES_INTERFACE << 16) | row.info);
+    }
+  }
+
+  /** Why this device can't be bought at all right now, or null. */
+  function deviceRefusal(player, row) {
+    if (row.rangedLevel && player.getSkillManager().getMaxLevel(Skill.RANGED) < row.rangedLevel) {
+      return `You need a Ranged level of at least ${row.rangedLevel} for ${row.name}.`;
+    }
+    if (row.quest && !questComplete(player, row.quest)) {
+      return `You need to complete ${row.questName} before Ava can make ${row.name}.`;
+    }
+    return null;
+  }
+
+  function canTradeIn(inventory, row) {
+    return !!row.tradeIn && plainAmount(inventory, row.tradeIn) > 0;
+  }
+
+  /** Why one more device can't be paid for, or null. */
+  function deviceShortfall(player, row) {
+    const inventory = player.getInventory();
+    if (row.head && plainAmount(inventory, VORKATHS_HEAD_ITEM_ID) < 1) {
+      return `You need Vorkath's head for ${row.name}.`;
+    }
+    if (row.arrows && plainAmount(inventory, row.arrows) < DEVICE_ARROW_COST) {
+      const arrows = row.arrows === STEEL_ARROW_ITEM_ID ? "steel" : "mithril";
+      return `You need ${DEVICE_ARROW_COST} ${arrows} arrows for ${row.name}.`;
+    }
+    // Every payment, trade-ins included, comes only from plain stacks: a preset device is never
+    // traded for a plain one, and preset coins never buy one. Consumption uses the same rule.
+    const tradeIn = canTradeIn(inventory, row);
+    if (!tradeIn && plainAmount(inventory, COINS_ITEM_ID) < row.coins) {
+      return row.tradeIn
+        ? `You need ${row.coins.toLocaleString("en-US")} coins or ${row.tradeIn === AVAS_ATTRACTOR_ITEM_ID ? "Ava's attractor" : "Ava's accumulator"} for ${row.name}.`
+        : `You need ${row.coins.toLocaleString("en-US")} coins for ${row.name}.`;
+    }
+    // A traded-in device or a used-up head frees its slot; coins alone need a free one.
+    if (!tradeIn && !row.head && inventory.getFreeSlots() < 1) {
+      return "You don't have enough inventory space.";
+    }
+    return null;
+  }
+
+  function buyDevices(player, row, wanted) {
+    if (player.getInterfaceId() !== DEVICES_INTERFACE || wanted <= 0) return;
+    const refusal = deviceRefusal(player, row);
+    if (refusal) {
+      player.sendMessage(refusal);
+      return;
+    }
+    const inventory = player.getInventory();
+    let bought = 0;
+    while (bought < wanted) {
+      const shortfall = deviceShortfall(player, row);
+      if (shortfall) {
+        if (bought === 0) player.sendMessage(shortfall);
+        break;
+      }
+      if (row.head) takePlain(inventory, VORKATHS_HEAD_ITEM_ID, 1);
+      if (row.arrows) takePlain(inventory, row.arrows, DEVICE_ARROW_COST);
+      if (canTradeIn(inventory, row)) takePlain(inventory, row.tradeIn, 1);
+      else takePlain(inventory, COINS_ITEM_ID, row.coins);
+      inventory.adds(row.itemId, 1);
+      bought++;
+    }
+    if (bought === 0) return;
+    player.sendMessage(bought === 1 ? `Ava gives you ${row.name}.` : `Ava gives you ${bought} of her devices.`);
+    if (row.diary) {
+      api.emitCustomEvent("diary:task", {
+        player,
+        diary: "lumbridge",
+        task: "purchase-an-upgraded-device-from-ava",
+      });
+    }
+  }
+
+  function handleDevicesButton(event) {
+    const { player } = event;
+    const row = DEVICE_ROWS.find((candidate) => ((DEVICES_INTERFACE << 16) | candidate.button) === event.buttonId);
+    if (!row || player.getInterfaceId() !== DEVICES_INTERFACE) return true;
+    const op = event.opId ?? event.action;
+    if (op === DEVICE_OP.X) {
+      player.setEnteredAmountAction({
+        execute: (amount) => buyDevices(player, row, Math.max(0, Math.trunc(Number(amount) || 0))),
+      });
+      player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+      return true;
+    }
+    buyDevices(player, row, op === DEVICE_OP.ONE ? 1 : op === DEVICE_OP.FIVE ? 5 : 28);
+    return true;
+  }
+
+  // ==========================================================================
   // Interactions
   // ==========================================================================
 
@@ -1004,55 +1180,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     const { player, npcId, clickType } = event;
     if (npcId === AVA_NPC_ID && event.definition?.getActions?.()[clickType - 1] === "Devices") {
       event.handled = true;
-      if (quest.getStage(player) < STAGE_COMPLETE) {
-        player.sendMessage("You need to complete Animal Magnetism before Ava will upgrade your device.");
-        return;
-      }
-      if (player.getSkillManager().getMaxLevel(Skill.RANGED) < 50) {
-        player.sendMessage("You need a Ranged level of at least 50 to use Ava's accumulator.");
-        return;
-      }
-
-      const inventory = player.getInventory();
-      const hasAttractor = inventory.getAmount(AVAS_ATTRACTOR_ITEM_ID) > 0;
-      // Only plain steel arrows pay: a preset (untradeable, unbankable) copy never buys a fresh accumulator.
-      const restricted = (item) => !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
-      const slotted = typeof inventory.getItems === "function"; // a test stand-in has no slots (and no presets)
-      const arrowSlots = slotted ? inventory.getItems().map((item, slot) => (item?.getId() === STEEL_ARROW_ITEM_ID && !restricted(item) ? slot : -1)).filter((slot) => slot >= 0) : [];
-      const plainArrows = slotted ? arrowSlots.reduce((total, slot) => total + inventory.getItems()[slot].getAmount(), 0) : inventory.getAmount(STEEL_ARROW_ITEM_ID);
-      if (plainArrows < 75) {
-        player.sendMessage("You need 75 steel arrows to upgrade your device.");
-        return;
-      }
-      if (!hasAttractor && inventory.getAmount(COINS_ITEM_ID) < 999) {
-        player.sendMessage("You need 999 coins or Ava's attractor, as well as 75 steel arrows.");
-        return;
-      }
-      if (!hasAttractor && inventory.getFreeSlots() < 1) {
-        player.sendMessage("You need at least one free inventory space to buy Ava's accumulator.");
-        return;
-      }
-
-      let arrowsLeft = 75;
-      if (!slotted) {
-        inventory.deleteNumber(STEEL_ARROW_ITEM_ID, 75);
-        arrowsLeft = 0;
-      }
-      for (const slot of arrowSlots) {
-        if (arrowsLeft <= 0) break;
-        const taken = Math.min(arrowsLeft, inventory.getItems()[slot].getAmount());
-        inventory.deleteAtSlot(slot, taken);
-        arrowsLeft -= taken;
-      }
-      if (hasAttractor) inventory.deleteNumber(AVAS_ATTRACTOR_ITEM_ID, 1);
-      else inventory.deleteNumber(COINS_ITEM_ID, 999);
-      inventory.adds(AVAS_ACCUMULATOR_ITEM_ID, 1);
-      player.sendMessage("Ava upgrades your device to an accumulator.");
-      api.emitCustomEvent("diary:task", {
-        player,
-        diary: "lumbridge",
-        task: "purchase-an-upgraded-device-from-ava",
-      });
+      openDevices(player);
       return;
     }
     if (npcId === AVA_NPC_ID && quest.getStage(player) === STAGE_NOT_STARTED && !meetsRequirements(player)) {
@@ -1419,6 +1547,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Research notes", { Translate: handleTranslateNotes });
   api.onInterfaceActionButton(NOTES_PUZZLE_BUTTONS, handleNotesPuzzleButton);
+  api.onInterfaceActionButton(DEVICE_BUTTONS, handleDevicesButton);
   api.onCustomEvent("interface:closed", handleInterfaceClosed);
   api.onCanEquip(handleCanEquip);
   api.onPlayerLogin(handleLogin);

@@ -97,6 +97,13 @@ module.exports = function registerBiohazardQuest(api) {
   const CAULDRON_OBJECT_ID = 37327;
   const MOURNER_FENCE_OBJECT_ID = 2068;
   const MOURNER_HQ_DOOR_ID = 2036;
+  const MOURNER_HQ = { minX: 2542, maxX: 2557, minY: 3321, maxY: 3327 };
+  const HQ_BACK_DOOR = { x: 2551, y: 3328, z: 0 };
+  const HQ_DOOR_MOURNER_NPC_ID = NpcIdentifiers.MOURNER_12;
+  const HQ_TRAPDOOR_ID = 8783;
+  const HQ_TRAPDOOR = { x: 2542, y: 3327, z: 0 };
+  const SICKEST_MOURNER_ATTACK_IDS = new Set(["DQWtoR", "MoUbVk", "PmbGHX"]);
+
   const MOURNER_CAGE_GATE_IDS = new Set([2058, 2060]);
   const MOURNER_CRATE_ID = 2064;
   const BEDROOM_DOOR_CLOSED_ID = 2032;
@@ -557,8 +564,25 @@ module.exports = function registerBiohazardQuest(api) {
     if (VARROCK_COURIERS.has(npcId)) {
       return varrockCourierVariant(stage, player, VARROCK_COURIERS.get(npcId));
     }
+    if (npcId === SICKEST_MOURNER_NPC_ID) {
+      if (stage < STAGE_POISONED_STEW) return null;
+      return held(player, MOURNER_KEY_ITEM_ID) || stage >= STAGE_FOUND_DISTILLATOR
+        ? "infiltrating-the-mourner-hq-talking-to-sickest-mourner-upstairs-talking-to-sickest-mourner-again-while-holding-the-key"
+        : "infiltrating-the-mourner-hq-talking-to-sickest-mourner-upstairs";
+    }
     if (MOURNER_NPC_IDS.has(npcId)) {
       if (stage < STAGE_CLIMBED_LADDER) return null;
+      const at = player.getLocation();
+      const inside = at.getZ() <= 1 && at.getX() >= MOURNER_HQ.minX && at.getX() <= MOURNER_HQ.maxX
+        && at.getY() >= MOURNER_HQ.minY && at.getY() <= MOURNER_HQ.maxY;
+      if (stage >= STAGE_POISONED_STEW && inside) {
+        return stage >= STAGE_FOUND_DISTILLATOR || held(player, DISTILLATOR_ITEM_ID)
+          ? "infiltrating-the-mourner-hq-talking-to-mourner-inside-mourner-headquarters-after-getting-distillator"
+          : "infiltrating-the-mourner-hq-talking-to-mourner-inside-mourner-headquarters";
+      }
+      if (stage === STAGE_POISONED_STEW && wearingMedicalGown(player)) {
+        return "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown";
+      }
       if (stage === STAGE_POISONED_STEW) {
         return "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-after-poisoning-the-stew";
       }
@@ -637,6 +661,10 @@ module.exports = function registerBiohazardQuest(api) {
   function handleAction(event) {
     const { player, npcId, stepId, text } = event;
     if (!player) return;
+    if (npcId === SICKEST_MOURNER_NPC_ID && SICKEST_MOURNER_ATTACK_IDS.has(stepId)) {
+      event.npc?.getCombat?.()?.attack(player);
+      return;
+    }
     if (stepId === COMPLETE_ACTION_ID && KING_LATHAS_NPC_IDS.has(npcId)) {
       if (quest.getStage(player) >= STAGE_REPORTED_TO_ELENA && !quest.isComplete(player)) {
         quest.complete(player);
@@ -875,6 +903,15 @@ module.exports = function registerBiohazardQuest(api) {
     if (objectId !== MOURNER_HQ_DOOR_ID || !location) return false;
     const z = location.getZ?.() ?? location.z;
     if (z !== 0) return false;
+    const x = location.getX?.() ?? location.x, y = location.getY?.() ?? location.y;
+    if (x === HQ_BACK_DOOR.x && y === HQ_BACK_DOOR.y) {
+      event.handled = true;
+      const fromInside = player.getLocation().getY() < HQ_BACK_DOOR.y;
+      startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", fromInside
+        ? "infiltrating-the-mourner-hq-opening-back-door-of-the-mourner-headquarters-from-the-inside"
+        : "infiltrating-the-mourner-hq-opening-back-door-of-the-mourner-headquarters");
+      return true;
+    }
     if (quest.getStage(player) < STAGE_POISONED_STEW) {
       event.handled = true;
       player.sendMessage("The mourner guards will not let you in.");
@@ -944,6 +981,18 @@ module.exports = function registerBiohazardQuest(api) {
     // Open leaf swings one quarter turn from the closed wall face; copying the
     // closed face leaves the doorway clipped on its west->east approach.
     replaceObject(object, BEDROOM_DOOR_OPEN_ID, (object.getFace() + 1) & 3);
+    return true;
+  }
+
+  function openHqTrapdoor(event) {
+    const { player, objectId, location } = event;
+    const at = location ?? event.object?.getLocation?.();
+    if (objectId !== HQ_TRAPDOOR_ID || !at) return false;
+    const x = at.getX?.() ?? at.x, y = at.getY?.() ?? at.y, z = at.getZ?.() ?? at.z;
+    if (x !== HQ_TRAPDOOR.x || y !== HQ_TRAPDOOR.y || z !== HQ_TRAPDOOR.z) return false;
+    event.handled = true;
+    startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard",
+      "infiltrating-the-mourner-hq-attempting-to-open-trapdoor-inside-mourner-headquarters");
     return true;
   }
 
@@ -1049,6 +1098,7 @@ module.exports = function registerBiohazardQuest(api) {
   api.onObjectInteraction("Gate", { Open: openCageGate });
   api.onObjectInteraction("Crate", { Search: searchMournerCrate });
   api.onObjectInteraction("Bedroom door", { Open: openBedroomDoor });
+  api.onObjectInteraction("Trapdoor", { Open: openHqTrapdoor });
   api.onItemOnObject(handleItemOnObject);
   api.onItemAction("Pigeon cage", { Open: openPigeonCage });
   api.onZoneEnter(VARROCK_SOUTH_EAST_ZONE, handleVarrockEnter);

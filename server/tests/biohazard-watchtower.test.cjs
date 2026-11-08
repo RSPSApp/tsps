@@ -136,3 +136,36 @@ test("feed use allows the normal cage action once, with plane and repeat protect
   assert.equal(amount(player, cage), 1);
   assert.equal(amount(player, empty), 1);
 });
+
+test('Biohazard keeps the HQ back door locked on both sides without claiming other doors', () => {
+  for (const y of [3327, 3329]) {
+    const player = actor(6, 2551, y, 0);
+    player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(core.ItemIdentifiers.MEDICAL_GOWN));
+    const event = { player, objectId: 2036, location: { x: 2551, y: 3328, z: 0 }, handled: false };
+    PluginManager.emitCustomEvent('door:toggle', event);
+    assert.equal(event.handled, true);
+    assert.equal(player.getLocation().getY(), y);
+  }
+  const player = actor(6, 2551, 3329, 1);
+  const event = { player, objectId: 2036, location: { x: 2551, y: 3328, z: 1 }, handled: false };
+  PluginManager.emitCustomEvent('door:toggle', event);
+  assert.equal(event.handled, false);
+});
+
+test('Biohazard selects the sickest mourner and inside-HQ transcripts and starts the scripted attack', () => {
+  const player = actor(6, 2547, 3324, 1);
+  const npcId = core.NpcIdentifiers.MOURNER_14;
+  const select = id => {
+    const result = PluginManager.emitNpcDialogueVariant({ player, npcId: id, pages: [{ page: 'Biohazard' }] });
+    return typeof result === 'string' ? result : result?.variant;
+  };
+  assert.equal(select(npcId), 'infiltrating-the-mourner-hq-talking-to-sickest-mourner-upstairs');
+  player.getInventory().adds(core.ItemIdentifiers.KEY_2, 1);
+  assert.match(select(npcId), /while-holding-the-key$/);
+  assert.match(select(core.NpcIdentifiers.MOURNER_12), /talking-to-mourner-inside-mourner-headquarters$/);
+  let attacked = null;
+  PluginManager.emitCustomEvent('npc-dialogue:action', {
+    player, npcId, stepId: 'DQWtoR', npc: { getCombat: () => ({ attack: target => { attacked = target; } }) },
+  });
+  assert.equal(attacked, player);
+});

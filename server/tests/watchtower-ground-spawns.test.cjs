@@ -236,3 +236,76 @@ test('malformed source membership fails closed with the existing invalid-row dia
     assert.match(warnings.at(-1), /invalid=7/);
   }
 });
+
+function questInteractionFixture(t, file, key, at) {
+  const { api, hooks } = captureApi('Quests/InteractionTest' + file);
+  require('../plugins/quests/quests/' + file + '.Quest')(api);
+  const core = api.core;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
+  const player = new (require('../dist/game/entity/impl/player/Player').Player)(null, new core.Location(...at));
+  player.setUsername('interactiontest'); player.setRegistered(true);
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  const tasks = [];
+  t.mock.method(core.TaskManager, 'submit', task => { task.setRunning(true); tasks.push(task); });
+  const tick = () => { for (let i = 0; i < 20; i++) for (const task of [...tasks]) if (task.isRunning()) task.execute(); };
+  t.after(() => { player.setRegistered(false); for (const task of tasks) task.stop(); });
+  return { core, hooks, quest, player, tick };
+}
+
+test('Watchtower battlement checks the cake, crosses both ways and selects the correct guard roles', t => {
+  const { core, hooks, quest, player, tick } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2506, 3011, 0]);
+  quest.setStage(player, 4); core.ObjectDefinition.init(); core.RegionManager.loadMapFiles(2507, 3011);
+  const object = core.MapObjects.get(core.ObjectIdentifiers.BATTLEMENT, new core.Location(2507, 3011, 0), null);
+  assert.ok(object);
+  const click = () => hooks.onObjectInteraction.find(h => h.name === 'handleObjectInteraction')({
+    player, object, objectId: object.getId(), clickType: 1, handled: false,
+  });
+  click(); assert.equal(player.getLocation().getX(), 2506);
+  const variant = hooks.onNpcDialogueVariant[0];
+  assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_7 }), /southern-ogre-guard/);
+  assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_6 }), /entering-gu-tanoth-ogre-guard/);
+  player.setAttribute('quest.watchtower.bits', (player.getAttribute('quest.watchtower.bits') ?? 0) | (1 << 11));
+  click(); tick(); assert.equal(player.getLocation().getX(), 2508);
+  player.setAttribute('quest.watchtower.bits', 0);
+  click(); tick(); assert.equal(player.getLocation().getX(), 2506, 'exit does not require another gift');
+});
+
+test('Watchtower bridge takes its toll before the north jump, with a free return', t => {
+  const { core, hooks, quest, player, tick } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2530, 3026, 0]);
+  quest.setStage(player, 4);
+  const objectHook = hooks.onObjectInteraction.find(h => h.name === 'handleObjectInteraction');
+  const action = hooks.onCustomEvent.find(h => h.name === 'handleAction');
+  const jump = objectId => objectHook({ player, objectId, handled: false });
+  jump(core.ObjectIdentifiers.GAP);
+  action({ player, stepId: 'rEZMuS', step: { type: 'action' } }); tick();
+  assert.equal(player.getLocation().getY(), 3026, 'no money: no crossing');
+  player.getInventory().adds(core.ItemIdentifiers.COINS, 20);
+  action({ player, stepId: 'rEZMuS', step: { type: 'action' } }); tick();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2530, 3029]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
+  jump(core.ObjectIdentifiers.GAP_2); tick();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2531, 3026]);
+  core.ObjectDefinition.init(); core.RegionManager.loadMapFiles(2530, 3026);
+  for (const [id, x, y] of [[core.ObjectIdentifiers.GAP, 2530, 3026], [core.ObjectIdentifiers.GAP_2, 2531, 3029]]) {
+    assert.ok(core.MapObjects.get(id, new core.Location(x, y, 0), null));
+  }
+});
+
+test('Watchtower enclave consumes a distraction on entry and allows completed quests through', t => {
+  const { core, hooks, quest, player } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2530, 3040, 0]);
+  quest.setStage(player, 7);
+  const objectHook = hooks.onObjectInteraction.find(h => h.name === 'handleObjectInteraction');
+  const itemHook = hooks.onItemOnNpc.find(h => h.name === 'handleItemOnNpc');
+  const action = hooks.onCustomEvent.find(h => h.name === 'handleAction');
+  const enter = () => objectHook({ player, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_5, handled: false });
+  enter(); assert.equal(player.getLocation().getY(), 3040);
+  player.getInventory().adds(core.ItemIdentifiers.CAVE_NIGHTSHADE, 1);
+  itemHook({ player, itemId: core.ItemIdentifiers.CAVE_NIGHTSHADE, npcId: core.NpcIdentifiers.ENCLAVE_GUARD, handled: false });
+  action({ player, stepId: 'Z7N4ZW' });
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2588, 9410]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.CAVE_NIGHTSHADE), 0);
+  player.moveTo(new core.Location(2530, 3040, 0));
+  enter(); assert.equal(player.getLocation().getY(), 3040, 'another entry needs another distraction');
+  quest.setStage(player, 12);
+  enter(); assert.equal(player.getLocation().getY(), 9410);
+});

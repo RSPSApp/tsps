@@ -549,6 +549,7 @@ test('Fluffs action hints reach chat once at the matching quest stage only', () 
   const record = require('../data/definitions/npc-dialogues.json')["Gertrude's Cat"];
   for (const [stage, variant, id] of [
     [2, 'finding-fluffs-pick-up-fluffs', '0lp0da'],
+    [2, 'finding-fluffs-stroke-fluffs', 'hvqx21'],
     [3, 'finding-fluffs-pick-up-fluffs-2', '019G3T'],
     [4, 'making-seasoned-sardines-pick-up-fluffs', 'nPc5q9'],
   ]) {

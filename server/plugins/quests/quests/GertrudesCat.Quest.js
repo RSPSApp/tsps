@@ -89,6 +89,7 @@ module.exports = function registerGertrudesCatQuest(api) {
   const REPLACEMENT_KITTEN_ACTION_ID = "Q44J0B";
   const FLUFFS_HINT_STAGES = {
     "0lp0da": STAGE_PAID_BOY,
+    "hvqx21": STAGE_PAID_BOY, // Stroke at stage 2; stroke at 3/4 replays the pick-up variants
     "019G3T": STAGE_GAVE_MILK,
     "nPc5q9": STAGE_GAVE_SARDINE,
   };

@@ -972,6 +972,11 @@ function answerLogXp(request) {
   }
 }
 
+/** "firemaking:xp-multiplier": Firemaking XP earned outside lighting logs (Wintertodt) asks for the outfit. */
+function answerXpMultiplier(request) {
+  request.multiplier *= firemakingXpMultiplier(request.player);
+}
+
 function handlePlayerDisconnect({ player }) {
   stopFiremaking(activeSessionsRef, player, false);
 }
@@ -1105,6 +1110,7 @@ function attach(api) {
   sessionTick = 0;
   TaskManager.submit(createFiremakingTask(activeSessionsRef));
   api.onCustomEvent("firemaking:log-xp", answerLogXp);
+  api.onCustomEvent("firemaking:xp-multiplier", answerXpMultiplier);
   api.onPlayerDisconnect(handlePlayerDisconnect);
   api.onCustomEvent("level-up:popup-opened", handlePlayerLevelUp);
   api.onItemOnItem(onItemOnItemEvent, { noted: false });

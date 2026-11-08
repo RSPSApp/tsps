@@ -73,6 +73,8 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   const NOTE2_ITEM_ID = ItemIdentifiers.NOTES_6; // 21057, outside note
   const NOTE3_ITEM_ID = ItemIdentifiers.NOTES_7; // 21058, kitchen note
   const KILLER_KNIFE_ITEM_ID = ItemIdentifiers.KILLERS_KNIFE_2; // 21059
+  const GODSWORD_PROP_ITEM_ID = ItemIdentifiers.BANDOS_GODSWORD_4; // 21060, the non-equippable table prop.
+  const GODSWORD_PROP_LOCATION = new Location(1626,4843,0);
   const BUCKET_ITEM_ID = ItemIdentifiers.BUCKET;
   const BUCKET_OF_WATER_ITEM_ID = ItemIdentifiers.BUCKET_OF_WATER;
   const KNIFE_ITEM_ID = ItemIdentifiers.KNIFE;
@@ -285,7 +287,17 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       spawnActor(area,NpcIdentifiers.HEWEY_2,NpcIdentifiers.HEWEY_2,1624,4831);
       dropKillerKnife(player);
     }
-    ensureMandy(player);return area;
+    godswordProp(area,true);ensureMandy(player);return area;
+  }
+  function godswordProp(area,visible){
+    if(!visible){if(area.godswordProp)ItemOnGroundManager.deregister(area.godswordProp);area.godswordProp=null;return;}
+    if(area.godswordProp)return;
+    area.godswordProp=ItemOnGroundManager.registerLocation(area.owner,new Item(GODSWORD_PROP_ITEM_ID,1),GODSWORD_PROP_LOCATION.clone(),area,{goesGlobal:false});
+    area.godswordProp.staticSpawn=true;
+  }
+  // Covers Take, telegrab casts and every generic ground-item transfer.
+  function protectGodswordProp(event){
+    const prop=island(event.player)?.godswordProp;if(prop&&prop===event.groundItem){event.handled=true;event.allow=false;}
   }
   const SCENES={
     sid:{variant:"arriving-to-the-manor-sid-s-demise",npc:NpcIdentifiers.SID,tile:[1615,4828],camera:[1614,4826,300],look:[1616,4831,275],delay:1},
@@ -342,7 +354,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       if(victimKey!==undefined){const victim=area.actors.get(victimKey);if(victim)api.removeNpc(victim);area.actors.delete(victimKey);}
       player.getPacketSender().sendCameraUnlock(false).sendCameraReset();
     });}
-    if(stage===STAGE_MANDY_WAITING){const actor=area.actors.get(NpcIdentifiers.MANDY);if(actor)api.removeNpc(actor);area.actors.delete(NpcIdentifiers.MANDY);ensureMandy(player);}
+    if(stage===STAGE_MANDY_WAITING){godswordProp(area,true);const actor=area.actors.get(NpcIdentifiers.MANDY);if(actor)api.removeNpc(actor);area.actors.delete(NpcIdentifiers.MANDY);ensureMandy(player);}
   }
   function wardrobe(area,where,open){ObjectManager.register(new GameObject(open?OPEN_WARDROBE_ID:CLOSED_WARDROBE_ID,new Location(where[0],where[1],0),10,where[2],area),true);}
   function mirrorScenery(area,at,visible){ObjectManager.register(new GameObject(visible?MIRROR_SCENERY_ID:EMPTY_MIRROR_SCENERY_ID,at,10,0,area),true);}
@@ -440,6 +452,18 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       const missing=3-freeSlots(player);event.text=text.replace("[3 more spaces/2 more spaces/another space]",missing===1?"another space":`${missing} more spaces`);
     }
     if(!area)return;
+    if(area.scene==="rescue"){
+      if(event.step?.speaker==="Mandy")event.speakerId=NpcIdentifiers.MANDY_3;
+      if(event.step?.speaker==="Abigale")event.speakerId=NpcIdentifiers.ABIGALE_2;
+      if(text==="You'll never escape me!")event.before=()=>{
+        const abigale=area.actors.get(NpcIdentifiers.ABIGALE_3);
+        abigale?.setNpcTransformationId(NpcIdentifiers.ABIGALE_2);
+        abigale?.setPositionToFace(player.getLocation());abigale?.performAnimation(new Animation(7330));
+      };
+      if(text==="Now it is time for you to join him!")event.before=()=>{
+        const mandy=area.actors.get(NpcIdentifiers.MANDY);if(mandy)api.removeNpc(mandy);area.actors.delete(NpcIdentifiers.MANDY);
+      };
+    }
     if(area.scene==="sid"){
       if(event.step?.speaker==="Killer")event.speakerId=NpcIdentifiers.KILLER_2;
       if(event.step?.speaker==="Sid"&&!["Woo, party on bro!","Woah, that wind totally just felt like someone breathing on my neck!"].includes(text))event.speakerId=NpcIdentifiers.SID_2;
@@ -502,17 +526,39 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     if(stepId==="8gRhnK"){killer?.performAnimation(new Animation(7328));area.actors.get(NpcIdentifiers.KILLER_2)?.performAnimation(new Animation(836));}
     if(stepId==="YSPZnz"){dropKillerKnife(player);killer?.setNpcTransformationId(NpcIdentifiers.ABIGALE_3);event.handled=true;return true;}
     if(stepId==="DWcgf8"){player.performAnimation(new Animation(7328));area.actors.get(NpcIdentifiers.ABIGALE_3)?.performAnimation(new Animation(836));event.handled=true;return true;}
-    if(stepId==="zuIzHC")spawnActor(area,NpcIdentifiers.MANDY,NpcIdentifiers.MANDY,1627,4839);
-    if(stepId==="InRnIQ")area.actors.get(NpcIdentifiers.MANDY)?.getMovementQueue().addSteps(new Location(1627,4843,0));
+    if(stepId==="zuIzHC"){
+      spawnActor(area,NpcIdentifiers.MANDY,NpcIdentifiers.MANDY,1627,4841);pauseScene(event,2);return true;
+    }
+    if(stepId==="InRnIQ"){
+      area.actors.get(NpcIdentifiers.MANDY)?.moveTo(new Location(1627,4843,0));pauseScene(event,2);return true;
+    }
     if(stepId==="93tvkK"){
-      const mandy=area.actors.get(NpcIdentifiers.MANDY);mandy?.performAnimation(new Animation(832));
-      later(area,2,()=>{mandy?.performAnimation(new Animation(828));mandy?.setNpcTransformationId(NpcIdentifiers.MANDY_3);});
+      const mandy=area.actors.get(NpcIdentifiers.MANDY);pauseScene(event,5);
+      later(area.cameraKey,1,()=>mandy?.setPositionToFace(GODSWORD_PROP_LOCATION));
+      later(area.cameraKey,2,()=>mandy?.performAnimation(new Animation(832)));
+      later(area.cameraKey,4,()=>{
+        godswordProp(area,false);mandy?.performAnimation(new Animation(828));mandy?.setNpcTransformationId(NpcIdentifiers.MANDY_3);
+        ObjectManager.register(new GameObject(ObjectIdentifiers.WARDROBE_2,new Location(1627,4844,0),10,1,area),true);player.getPacketSender().sendSoundEffect(56,1,0);
+      });return true;
     }
     if(stepId==="grfbWR"){
-      const mandy=area.actors.get(NpcIdentifiers.MANDY);mandy?.moveTo(new Location(1622,4833,0));mandy?.getMovementQueue().addSteps(new Location(1623,4832,0));
+      const mandy=spawnActor(area,NpcIdentifiers.MANDY,NpcIdentifiers.MANDY_3,1622,4833);mandy?.setPositionToFace(new Location(1622,4832,0));
+      wardrobe(area,WARDROBES[0],true);
+      ObjectManager.register(new GameObject(ObjectIdentifiers.WARDROBE,new Location(1627,4844,0),10,1,area),true);player.getPacketSender().sendSoundEffect(56,1,0);
+      pauseScene(event,2);return true;
     }
-    if(stepId==="g0BaZV"){area.actors.get(NpcIdentifiers.MANDY)?.performAnimation(new Animation(7642));area.actors.get(NpcIdentifiers.MANDY)?.performGraphic(new Graphic(1212));area.actors.get(NpcIdentifiers.ABIGALE_3)?.performAnimation(new Animation(836));}
-    if(stepId==="zBqqmI"){event.handled=true;return true;}
+    if(stepId==="g0BaZV"){
+      const mandy=area.actors.get(NpcIdentifiers.MANDY);wardrobe(area,WARDROBES[0],false);pauseScene(event,6);
+      later(area.cameraKey,2,()=>mandy?.getMovementQueue().addSteps(new Location(1623,4832,0)));
+      later(area.cameraKey,4,()=>{
+        mandy?.setPositionToFace(new Location(1623,4831,0));mandy?.performAnimation(new Animation(7642));mandy?.performGraphic(new Graphic(1212));
+        player.getPacketSender().sendSoundEffect(3869,1,0);
+      });return true;
+    }
+    if(stepId==="zBqqmI"){
+      area.actors.get(NpcIdentifiers.ABIGALE_3)?.performAnimation(new Animation(836));player.getPacketSender().sendSoundEffect(512,1,0);
+      pauseScene(event,2);return true;
+    }
     if(stepId==="JzkmeZ"){
       if(held(player,KILLER_KNIFE_ITEM_ID))player.getInventory().deleteNumber(KILLER_KNIFE_ITEM_ID,1);
       if(player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId()===KILLER_KNIFE_ITEM_ID)player.getEquipment().deleteNumber(KILLER_KNIFE_ITEM_ID,1);
@@ -1636,6 +1682,9 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   api.onCustomEvent("player:world-input", protectScene);
   api.onCustomEvent("interface:close", protectScene);
   api.onNpcInteraction("<col=00ffff>Mirror</col>",{Push:pushMirror});
+  api.onGroundItemPickup(protectGodswordProp);
+  api.onCustomEvent("ground-items:take", protectGodswordProp);
+  api.onCustomEvent("magic:can-telekinetic-grab", protectGodswordProp);
   api.onNpcInteraction("Abigale",{Fight:fightAbigale,"Talk-to":finishedShowdown});
   api.onNpcInteraction("Hewey",{"Talk-to":finishedShowdown});
   api.onCustomEvent("door:toggle", claimQuestDoor);

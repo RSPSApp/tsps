@@ -317,3 +317,34 @@ test("login restores the quiz varbits", () => {
   assert.equal(player.varbit(ids.agreed), 1);
   assert.equal(player.varbit(CacheDefinitions.getVarbitId(dragon.varbit)), 2);
 });
+
+test("pending quiz XP uses the world's rate once, keeping the native base reward", (t) => {
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const { Skill } = require("../dist/game/model/Skill");
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const originalRate = GameConstants.EXPERIENCE_MULTIPLIER;
+  try {
+    for (const rate of [1, 10]) {
+      GameConstants.EXPERIENCE_MULTIPLIER = rate;
+      const world = makeWorld();
+      const player = makePlayer({ [STATE]: { agreed: true, rewarded: true, xpPending: true } });
+      const skills = new SkillManager(player);
+      // Keep this reward check clear of unrelated level-up interfaces.
+      for (const skill of [Skill.SLAYER, Skill.HUNTER]) {
+        skills.skills.maxLevel[skill.getIndex()] = 99;
+      }
+      t.mock.method(skills, "updateSkill", () => {});
+      player.getSkillManager = () => skills;
+      for (const handler of world.login) handler({ player });
+      for (const skill of [Skill.SLAYER, Skill.HUNTER]) {
+        assert.equal(skills.getExperience(skill), 1000 * rate);
+      }
+      for (const handler of world.login) handler({ player });
+      for (const skill of [Skill.SLAYER, Skill.HUNTER]) {
+        assert.equal(skills.getExperience(skill), 1000 * rate, "relogin must not repeat the reward");
+      }
+    }
+  } finally {
+    GameConstants.EXPERIENCE_MULTIPLIER = originalRate;
+  }
+});

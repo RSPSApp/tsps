@@ -19,6 +19,7 @@ before(async () => {
   require('../plugins/combat/MultiHitWeapons.plugin').register({ ...api,
     registerCombatMethodResolver(value) { resolver = value; api.registerCombatMethodResolver(value); },
   });
+  require('../plugins/items/BarrowsEquipment.plugin').register(PluginManager.createApi('MultiHitBarrowsTest'));
   api.onCombatHitDamage(event => { if (observed?.player === event.attacker) observed.parts.push(event); });
   api.onCustomEvent('combat:hit-rolled', event => {
     if (observed?.player === event.attacker) observed.ranges.push(event.maximum);
@@ -76,6 +77,7 @@ for (const accuracy of [[false, true], [true, false], [false, false], [true, tru
     const { player, npc } = actors(t, 29084), result = roll(player, npc, accuracy, 47);
     assert.deepEqual(result.remaining, []);
     assert.deepEqual(result.parts.map(part => part.accurate), accuracy);
+    assert.equal(result.hits[0].isAccurate(), accuracy.includes(true), 'after-hit effects see any landed hit');
     assert.deepEqual(result.parts.filter(part => !part.accurate).map(part => part.damage.getDamage()), accuracy.filter(x => !x).map(() => 0));
   });
 }
@@ -101,3 +103,28 @@ test('noted, placeholder, broken and unrelated items are not ordinary twin weapo
   assert.equal(resolver.resolve(player), null, 'special method selection is preserved');
   assert.equal(resolver.resolve({ isPlayer: () => false }), null);
 });
+
+for (const accuracy of [[true, false], [false, true], [false, false], [true, true]]) {
+  test('Torag passive consumes aggregate accuracy at impact: ' + accuracy, t => {
+    const { player } = actors(t, 4747), victim = actors(t, 4151).player;
+    for (const [slot, id] of [[core.Equipment.HEAD_SLOT, 4745], [core.Equipment.BODY_SLOT, 4749], [core.Equipment.LEG_SLOT, 4751]]) {
+      player.getEquipment().setItem(slot, new core.Item(id, 1));
+    }
+    assert.equal(core.CombatFactory.fullTorags(player), true);
+    victim.setRunEnergy(100);
+    const result = roll(player, victim, accuracy, 48), hit = result.hits[0];
+    hit.getHits().forEach((part, i) => part.setDamage(accuracy[i] ? 5 : 0));
+    hit.updateTotalDamage();
+    const queue = victim.getCombat().getHitQueue(), random = Math.random;
+    t.after(() => queue.clear());
+    try {
+      Math.random = () => 0; // Force the existing Barrows proc after real accuracy and damage rolls.
+      queue.addPendingHit(hit);
+      queue.process(200);
+    } finally {
+      Math.random = random;
+    }
+    assert.equal(victim.getRunEnergy(), accuracy.includes(true) ? 80 : 100,
+      'real Barrows resolved-hit listener drains once on any successful roll, never on two misses');
+  });
+}

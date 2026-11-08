@@ -42,8 +42,11 @@ function isKalphiteOrScabarite(target) {
   if (!target?.isNpc?.()) {
     return false;
   }
-  const name = target.getAsNpc()?.getCurrentDefinition?.()?.getName?.() ?? "";
-  return /kalphite|scabarite/i.test(name);
+  // The monster data's kalphite attribute covers the scarabs too (Scarab Mage, Locust rider, Kephri, the Tombs of Amascut
+  // swarms), whose names say neither; the name is the fallback for definitions without attributes.
+  const definition = target.getAsNpc()?.getCurrentDefinition?.();
+  if (definition?.hasAttribute?.("kalphite") === true) return true;
+  return /kalphite|scabarite/i.test(definition?.getName?.() ?? "");
 }
 
 function applyKerisDamage(attacker, maxHit) {

@@ -100,6 +100,8 @@ test("captured archers fire their captured projectile and draw spotanim", () => 
     assert.equal(definition.getProjectileId(), projectile, `npc ${id} projectile`);
     assert.equal(definition.getLaunchGraphicId(), launch, `npc ${id} launch spotanim`);
     assert.equal(definition.getAttackType(), CombatType.RANGED, `npc ${id} is ranged`);
+    // The draw spotanim plays beside human_bow (426) in every capture, 5451 for the locust rider.
+    assert.equal(definition.getAttackAnim(), Number(id) === 796 ? 5451 : 426, `npc ${id} attack animation`);
   }
 });
 

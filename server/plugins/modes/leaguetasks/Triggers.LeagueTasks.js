@@ -207,8 +207,15 @@ function npcName(npc) {
 }
 
 /**
+ * How long a death and its plugin's own report of that kill are one kill. Araxxor's corpse reports 5 ticks after the
+ * death and Skotizo's report comes about 15 ticks before it, so a same-tick merge counted both. Within the window each
+ * source still adds up on its own (two deaths are two kills), so only a death paired with its own report collapses.
+ */
+const CREDIT_WINDOW_TICKS = 20;
+
+/**
  * `amount` kills of the NPC `name` from `source` ("deaths" or "events") for the character's open
- * kill tasks that accept it: each task's progress takes this tick's larger count, then any task
+ * kill tasks that accept it: each task's progress takes the window's larger count, then any task
  * that reached its count completes.
  */
 function credit(player, type, name, source, amount, tile = null) {
@@ -226,7 +233,9 @@ function credit(player, type, name, source, amount, tile = null) {
   const progress = { ...killsOf(player) };
   for (const task of open) {
     let entry = perTask.get(task.id);
-    if (!entry || entry.tick !== tick) perTask.set(task.id, (entry = { tick, deaths: 0, events: 0, credited: 0 }));
+    if (!entry || tick - entry.tick > CREDIT_WINDOW_TICKS || tick < entry.tick) {
+      perTask.set(task.id, (entry = { tick, deaths: 0, events: 0, credited: 0 }));
+    }
     entry[source] += amount;
     const due = Math.max(entry.deaths, entry.events) - entry.credited;
     if (due <= 0) continue;

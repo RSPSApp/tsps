@@ -525,7 +525,7 @@ export class CombatSpells {
         },
 
         itemsRequired(player) {
-            return [new Item(556, 1), new Item(558, 1), new Item(554, 3)];
+            return [new Item(556, 2), new Item(558, 1), new Item(554, 3)];
         },
 
         levelRequired() {
@@ -1084,7 +1084,7 @@ export class CombatSpells {
             return [new Item(2416)];
         },
         itemsRequired: (player: Player): Item[] => {
-            return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
+            return [new Item(556, 4), new Item(565, 2), new Item(554, 1)];
         },
         levelRequired: (): number => {
             return 60;
@@ -1118,7 +1118,7 @@ export class CombatSpells {
             return [new Item(2417)];
         },
         itemsRequired: (player: Player): Item[] => {
-            return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
+            return [new Item(556, 1), new Item(565, 2), new Item(554, 4)];
         },
         levelRequired: (): number => {
             return 60;
@@ -1403,7 +1403,7 @@ export class CombatSpells {
         maximumHit: () => 16,
         startGraphic: () => new Graphic(1865),
         baseExperience: () => 27,
-        itemsRequired: () => [new Item(554, 3), new Item(566)],
+        itemsRequired: () => [new Item(554, 3), new Item(562)],
         levelRequired: () => 44,
         spellId: () => 20398,
     }, true);
@@ -1567,7 +1567,7 @@ export class CombatSpells {
             return 90;
         },
         itemsRequired(player) {
-            return [new Item(557, 12), new Item(555, 12), new Item(556, 1)];
+            return [new Item(557, 12), new Item(555, 12), new Item(566, 1)];
         },
         levelRequired() {
             return 80;
@@ -1696,7 +1696,7 @@ export class CombatSpells {
         () => { return 0; },
         (cast: Mobile, castOn: Mobile) => { return Projectile.createProjectile(cast, castOn, 360, 0, 20, 43, 31); },
         () => { return new Graphic(361); },
-        () => { return 18; },
+        () => { return 16; },
         () => { return 34; },
         () => {
             return [
@@ -1716,7 +1716,7 @@ export class CombatSpells {
         () => { return 1; },
         () => { return null; },
         () => { return new Graphic(389); },
-        () => { return 13; },
+        () => { return 17; },
         () => { return 36; },
         () => { return [new Item(556, 2), new Item(554, 2), new Item(562, 4), new Item(560, 2)]; },
         () => { return 62; },

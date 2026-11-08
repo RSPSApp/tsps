@@ -301,7 +301,9 @@ test("as captured: the Banker's offer and the purchase list at the running cost"
   assert.equal(player.getInterfaceId(), 947);
 });
 
-test("as captured: coins in the bank don't pay; the player backs out", () => {
+// The rsprox recording behind docs/bank.md refused 10M banked coins, but the Wiki (Transcript:Banker) refuses only
+// when the coins are in neither the inventory nor the bank: the Wiki is followed (#1341 review).
+test("coins in the bank pay for bank slots (Wiki: Transcript:Banker)", () => {
   const p = plugin();
   const player = createPlayer();
   player.setAttribute("bank-space:blocks", 2);
@@ -311,8 +313,44 @@ test("as captured: coins in the bank don't pay; the player backs out", () => {
   assert.equal(shown(player), "50 slots please.");
   assert.equal(next(player), "Buying 50 additional bank slots will cost 5,000,000 coins. Be warned, this purchase is not reversible. Are you happy to proceed?");
   player.dialogues.advance();
+  const confirm = player.dialogues.getCurrent();
+  assert.ok(confirm instanceof OptionDialogue, "the Yes/No is offered, not the refusal");
+  player.dialogues.handleOption(1);
+  assert.equal(next(player), "Your additional bank slots have been added.");
+  assert.equal(player.getBank(0).getAmount(COINS), 5_000_000, "paid from the bank");
+  assert.equal(player.getAttribute("bank-space:blocks"), 3);
+});
+
+test("carried and banked coins pay together, the carried ones first", () => {
+  const p = plugin();
+  const player = createPlayer();
+  player.setAttribute("bank-space:blocks", 2);
+  player.inventory.add(new Item(COINS, 2_000_000), false);
+  player.getBank(0).add(new Item(COINS, 10_000_000), false);
+  openPurchase(p, player);
+  pick(p, player, 0);
+  next(player);
+  player.dialogues.advance();
+  player.dialogues.handleOption(1);
+  next(player);
+  assert.equal(player.inventory.getAmount(COINS), 0);
+  assert.equal(player.getBank(0).getAmount(COINS), 7_000_000);
+  assert.equal(player.getAttribute("bank-space:blocks"), 3);
+});
+
+test("with too few coins between the inventory and the bank the player backs out", () => {
+  const p = plugin();
+  const player = createPlayer();
+  player.setAttribute("bank-space:blocks", 2);
+  player.inventory.add(new Item(COINS, 2_000_000), false);
+  player.getBank(0).add(new Item(COINS, 2_000_000), false);
+  openPurchase(p, player);
+  pick(p, player, 0);
+  next(player);
+  player.dialogues.advance();
   assert.equal(shown(player), "Oh... I don't seem to have enough money for that. Never mind.");
   assert.equal(player.getAttribute("bank-space:blocks"), 2);
+  assert.equal(player.inventory.getAmount(COINS) + player.getBank(0).getAmount(COINS), 4_000_000);
 });
 
 test("as captured: paying from the inventory adds the block", () => {

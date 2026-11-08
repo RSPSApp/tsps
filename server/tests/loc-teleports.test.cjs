@@ -1245,3 +1245,26 @@ test("the Prifddinas gates and Dorgesh-Kaan's doors need their quests done", () 
     questsDone.delete(key);
   }
 });
+
+test("the Trahaearn mine cave entrance in Prifddinas leads in and its steps lead back out (#3823)", () => {
+  const where = (visit) => { const at = visit.player.getLocation(); return [at.getX(), at.getY(), at.getZ()]; };
+  const enter = data.locs.find((loc) => loc.name === "prif_mine_entrance");
+  const exit = data.locs.find((loc) => loc.name === "prif_mine_exit");
+  const cave = locAt(36556, 3269, 6047, 0);
+  assert.equal(CacheDefinitions.getObject(36556).actions[0], "Enter");
+  const inside = explorer([3271, 6051, 0]);
+  const request = { player: inside.player, object: cave, objectId: 36556, clickType: 1, handled: false };
+  hooks.object(request);
+  assert.equal(request.handled, true, "the cave entrance takes the click");
+  runTicks(inside, enter.tick + 3);
+  assert.deepEqual(where(inside), enter.to);
+
+  const steps = locAt(36215, 3301, 12455, 0);
+  assert.equal(CacheDefinitions.getObject(36215).actions[0], "Exit");
+  const out = explorer([3302, 12454, 0]);
+  const leave = { player: out.player, object: steps, objectId: 36215, clickType: 1, handled: false };
+  hooks.object(leave);
+  assert.equal(leave.handled, true, "the steps take the click");
+  runTicks(out, exit.tick + 3);
+  assert.deepEqual(where(out), exit.to);
+});

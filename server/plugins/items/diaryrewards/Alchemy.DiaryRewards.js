@@ -66,8 +66,13 @@ function click(event) {
   if (event.buttonId >>> 16 !== group()) return;
   event.handled = true;
   const {player, buttonId, action, slot, itemId} = event, session = SESSIONS.get(player);
+  // Close always closes, even once the ring that opened the panel has gone (banked, or banked and withdrawn as a
+  // new object): otherwise the panel stays in the inventory's place with nothing to take it down.
+  if (buttonId === uid("close")) {
+    if (action === 1) close(player);
+    return;
+  }
   if (!session || !valid(player, session)) return;
-  if (buttonId === uid("close") && action === 1) return close(player);
   if (buttonId === uid("low") || buttonId === uid("high")) {
     if (action !== 1) return;
     const high = buttonId === uid("high");

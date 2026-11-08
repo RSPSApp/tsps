@@ -144,6 +144,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const GORAK_CLAW_POWDER_ITEM_ID = ItemIdentifiers.GORAK_CLAW_POWDER; // 9018
   const STAR_FLOWER_ITEM_ID = ItemIdentifiers.STAR_FLOWER; // 9017
   const MAGIC_ESSENCE_UNF_ITEM_ID = ItemIdentifiers.MAGIC_ESSENCE_UNF_; // 9019
+  const MAGIC_ESSENCE_XP = 130;
   const ESSENCE_DOSE_ITEM_IDS = [
     ItemIdentifiers.MAGIC_ESSENCE_4_, // 9021
     ItemIdentifiers.MAGIC_ESSENCE_3_, // 9022
@@ -777,7 +778,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       }
       player.getInventory().deleteNumber(GORAK_CLAW_POWDER_ITEM_ID, 1);
       player.getInventory().deleteNumber(MAGIC_ESSENCE_UNF_ITEM_ID, 1);
-      player.getInventory().adds(ItemIdentifiers.MAGIC_ESSENCE_4_, 1);
+      // Wiki (Magic essence): the product is Magic essence(3), for 130 Herblore XP.
+      player.getInventory().adds(ItemIdentifiers.MAGIC_ESSENCE_3_, 1);
+      player.getSkillManager().addExperiences(Skill.HERBLORE, MAGIC_ESSENCE_XP);
       player.sendMessage("You add the gorak claw powder and finish the magic essence potion.");
       if (quest.getStage(player) >= STAGE_HANDED_OVER && quest.getStage(player) < STAGE_FINISHED_POTION) {
         advance(player, STAGE_FINISHED_POTION);

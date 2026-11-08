@@ -258,6 +258,24 @@ test("the Herblore cape puts a grimy herb straight into the vial", () => {
   assert.equal(use(without, "unidentified_marentill", "vial_water"), false);
 });
 
+// Wiki (Herblore cape): grimy herbs make unfinished potions only; the clean herb's finishing recipes took them too.
+test("the Herblore cape's grimy herbs never finish a potion", () => {
+  world.cape = true;
+  const venom = player([["unidentified_torstol"], ["antivenom4"]]);
+  assert.equal(use(venom, "unidentified_torstol", "antivenom4"), false, "nothing interesting happens");
+  assert.equal(venom.inv.count("antivenom+4"), 0);
+  assert.equal(venom.inv.count("unidentified_torstol"), 1);
+  assert.equal(venom.inv.count("antivenom4"), 1);
+  const combat = player([["unidentified_torstol"], ["4dose2attack"], ["4dose2defense"], ["4dose2strength"]]);
+  assert.equal(use(combat, "unidentified_torstol", "4dose2attack"), false);
+  assert.equal(combat.inv.count("4dose2combat"), 0);
+  // The grimy torstol still goes straight into a vial of water.
+  const vial = player([["unidentified_torstol"], ["vial_water"]]);
+  use(vial, "unidentified_torstol", "vial_water");
+  assert.equal(vial.inv.count("torstolvial"), 1);
+  world.cape = false;
+});
+
 test("herblore:unfinished answers Zahur with the herb's unfinished potion", () => {
   const request = { herbId: obj("toadflax"), potion: null };
   hooks.customEvents.get("herblore:unfinished")[0](request);

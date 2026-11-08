@@ -788,3 +788,297 @@ test("native manual walk cancels lighting before the roll while automatic succes
     if (!cancelled) assert.equal(p.getLocation().equals(anchor), false, "genuine automatic step must remain a successful control");
   });
 });
+
+// Otto's first Firemaking lesson. Registered NPC options, native dialogue and inventory
+// packets, real Logs tasks/events and the production save codec; no direct lesson hook.
+// Skills/items are seeded and Otto is owner-only at his source spawn. The same player
+// is placed at the existing native fire-test scene for each exercise and returned for
+// dialogue; this is a scene adapter, not natural travel or a retail distance assertion.
+// Fires are removed between exercises. The codec round-trip is not a socket login.
+test("Otto teaches bow firemaking and remembers an owned oak exercise through save and return", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const Firemaking = require("../plugins/skills/Firemaking.plugin");
+  const Json = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  const { ATTR_SKIP_PERSISTENCE } = require("../plugins/bots/runtime/PersistenceConstants.PlayerBots");
+  const I = core.ItemIdentifiers, K = core.Skill, KEY = "barbarian-training";
+  const LESSON = "I'm ready for your firemaking wisdom. Please instruct me.";
+  const RETURN = "I've set fire to logs with a bow!";
+  const MORE = "I seek more knowledge.";
+  const actors = [], ownedTasks = new Set(), createdFires = new Set(), fireSites = [], observed = [];
+  const oldCycle = core.World.processCycle, submit = core.TaskManager.submit;
+  const source = require("../data/definitions/npc-spawns.json").find(row =>
+    row.name === "Otto Godblessed" && row.id === core.NpcIdentifiers.OTTO_GODBLESSED);
+  const level = f => f.player.getAttribute(KEY)?.firemaking ?? 0;
+  const ground = f => !f.player?.getUsername() ? [] : core.World.getItems().filter(g => !g.isPendingRemoval()
+    && g.getOwner() === f.player.getUsername() && g.getPrivateArea() === f.player.getPrivateArea());
+  const collectFires = () => {
+    for (const site of fireSites) for (const object of core.ObjectManager.objectsAt(site.location)) {
+      if (!site.before.has(object) && object.getId() === core.ObjectIdentifiers.FIRE_23
+        && object.getPrivateArea() === site.area) createdFires.add(object);
+    }
+  };
+  const observer = event => observed.push({ player: event.player, itemId: event.itemId,
+    bow: event.bow, lesson: level({ player: event.player }) });
+  let observerRegistered = false, submitOverridden = false;
+  t.after(() => {
+    let failure;
+    const clean = fn => { try { fn(); } catch (error) { failure ??= error; } };
+    try {
+      for (const f of actors) {
+        if (!f.player) continue;
+        clean(() => f.player.closeInterruptibleInterfaces());
+        clean(() => PluginManager.emitPlayerDisconnect({ player: f.player, username: f.player.getUsername() }));
+        clean(() => PluginManager.emitPlayerLogout({ player: f.player, username: f.player.getUsername() }));
+        clean(() => core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(f.player));
+        clean(() => {
+          core.TaskManager.cancelTasks(f.player);
+          if (f.player.getIndex() > 0) core.TaskManager.cancelTasks(f.player.getIndex());
+        });
+        clean(() => { for (const g of ground(f)) core.ItemOnGroundManager.deregister(g); });
+        clean(() => {
+          if (!f.npc) return;
+          core.TaskManager.cancelTasks(f.npc);
+          const local = f.player.getLocalNpcs(), index = local.indexOf(f.npc);
+          if (index >= 0) local.splice(index, 1);
+          PluginManager.removeNpc(f.npc);
+        });
+        clean(() => core.World.unregisterPlayerPosition(f.player));
+        for (const location of [f.anchor, f.fireAnchor]) {
+          if (location) clean(() => core.World.unregisterPlayerPosition(f.player, location));
+        }
+        clean(() => f.player.setRegistered(false));
+      }
+      for (const task of ownedTasks) clean(() => { if (task.isRunning()) core.Task.prototype.stop.call(task); });
+      clean(collectFires);
+      for (const fire of createdFires) clean(() => core.ObjectManager.deregister(fire, true));
+      if (observerRegistered) clean(() => {
+        const hooks = PluginManager.customEventHooks.get("firemaking:success");
+        const index = hooks?.findIndex(hook => hook.handler === observer) ?? -1;
+        assert.ok(index >= 0, "the fixture observer is registered before its cleanup");
+        hooks.splice(index, 1);
+        assert.ok(!hooks.some(hook => hook.handler === observer), "the fixture observer is removed");
+      });
+      for (const f of actors) {
+        if (!f.player) continue;
+        clean(() => assert.equal(f.player.isRegistered(), false));
+        if (f.npc) {
+          clean(() => assert.equal(f.npc.isRegistered(), false));
+          clean(() => assert.ok(!core.World.getAddNPCQueue().includes(f.npc)));
+          clean(() => assert.ok(!f.player.getLocalNpcs().includes(f.npc)));
+        }
+        clean(() => assert.equal(ground(f).length, 0, "no fixture-owned ground item remains"));
+        clean(() => assert.equal(core.TaskManager.hasActiveTask(f.player), false));
+        if (f.player.getIndex() > 0) clean(() => assert.equal(core.TaskManager.hasActiveTask(f.player.getIndex()), false));
+      }
+      clean(() => assert.ok([...ownedTasks].every(task => !task.isRunning()), "fixture-owned tasks stopped"));
+      for (const fire of createdFires) clean(() => assert.ok(!core.ObjectManager.objectsAt(fire.getLocation()).includes(fire)));
+    } finally {
+      if (submitOverridden) core.TaskManager.submit = submit;
+      core.World.processCycle = oldCycle;
+      clean(() => PluginManager.emitServerShutdown({}));
+    }
+    if (failure) throw failure;
+  });
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  PluginManager.emitServerStartup({});
+  PluginManager.createApi("OttoFiremakingFixture").onCustomEvent("firemaking:success", observer);
+  observerRegistered = true;
+  core.TaskManager.submit = function(task) {
+    if (actors.some(f => f.player && (task.key === f.player || task.key === f.player.getIndex()
+      || task.key?.getOwner?.() === f.player || task.npc?.getOwner?.() === f.player))
+      || String(new Error().stack).includes("Logs.Firemaking.js")) ownedTasks.add(task);
+    return submit.call(this, task);
+  };
+  submitOverridden = true;
+  assert.ok(source, "Otto's named spawn agrees with the active NPC identifier");
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "the lesson exercise uses a members world");
+  function actor() {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel));
+    const f = { player, npc: null, connection: null, anchor: null, fireAnchor: null, messages: [] };
+    actors.push(f); // Own the player before registration, map loading or any assertion can fail.
+    player.setIndex(1799 + actors.length);
+    const username = `ottofm${player.getIndex()}`;
+    player.setUsername(username); player.setLongUsername(core.Misc.stringToLongBigInt(username));
+    const sendMessage = player.sendMessage.bind(player);
+    t.mock.method(player, "sendMessage", message => {
+      f.messages.push(String(message));
+      return sendMessage(message);
+    });
+    assert.ok(player.getLongUsername() !== 0n && player.getIndex() < core.World.MAX_PLAYERS);
+    player.setAttribute(ATTR_SKIP_PERSISTENCE, true); player.setRegistered(true);
+    const skills = player.getSkillManager();
+    for (const [skill, value] of [[K.FIREMAKING, 99], [K.HITPOINTS, 10]]) {
+      const xp = SkillManager.getExperienceForLevel(value);
+      skills.setExperiences(skill, xp, false).setMaxLevels(skill, value, false).setCurrentLevel(skill, value, false);
+      assert.equal(skills.getExperience(skill), xp); assert.equal(skills.getMaxLevel(skill), value);
+      assert.equal(skills.getCurrentLevel(skill), value);
+    }
+    core.RegionManager.loadMapFiles(source.x, source.y);
+    // This anchor qualifies Talk-to placement, not firemaking inside Otto's hut.
+    const offset = [[1,0],[-1,0],[0,1],[0,-1]].find(([dx,dy]) =>
+      core.RegionManager.canMove(source.x, source.y, source.x+dx, source.y+dy, 0, 1, 1, null)
+      && core.RegionManager.canMove(source.x+dx, source.y+dy, source.x, source.y, 0, 1, 1, null));
+    assert.ok(offset, "canonical Otto tile has a reachable adjacent dialogue tile");
+    player.setLocation(new core.Location(source.x+offset[0], source.y+offset[1], source.level ?? 0));
+    f.anchor = player.getLocation().clone();
+    // Reuse the scene exercised by the existing native manual-walk test above.
+    f.fireAnchor = new core.Location(3226, 3218, 0);
+    player.setNeedsPlacement(false);
+    const connection = new ClientConnection(channel); connection.player = player;
+    f.npc = PluginManager.spawnNpc({ id: source.id, x: source.x, y: source.y, z: source.level ?? 0,
+      wanderRadius: 0, owner: player, ownerOnly: true }, "OttoFiremakingFixture");
+    const npc = f.npc;
+    assert.ok(npc && npc.isRegistered()); assert.equal(npc.getOwner(), player);
+    npc.setNeedsPlacement(false); player.getLocalNpcs().push(npc);
+    assert.equal(npc.getCurrentDefinition(player).getName(), "Otto Godblessed");
+    f.connection = connection; return f;
+  }
+  function turn(f) {
+    f.player.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    core.TaskManager.process(); f.connection.processTurnPackets();
+    const queue = f.player.getMovementQueue(); queue.beginCycle(); queue.processEntityPursuit();
+    if (queue.hasPendingWork()) queue.process(); core.TaskManager.processWalkTo(f.player.getIndex());
+  }
+  async function menu(f) {
+    const manager = f.player.getDialogueManager();
+    for (let n = 0; n < 40; n++) {
+      const current = manager.getCurrent();
+      if (!current || current instanceof core.OptionDialogue) return current;
+      const group = f.player.getPacketSender().getChatboxGroupId();
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1 }]);
+      f.connection.processTurnPackets();
+    }
+    assert.fail("bounded Otto dialogue did not reach a native choice or close");
+  }
+  async function choose(f, shown, text) {
+    assert.equal(f.player.getDialogueManager().getCurrent(), shown, "the observed native choice still owns the selection");
+    assert.ok(shown instanceof core.OptionDialogue);
+    assert.equal(f.player.getPacketSender().isChatboxInterface(219), true);
+    const childIndex = shown.getOptions().indexOf(text) + 1;
+    assert.ok(childIndex > 0, `native Otto menu contains ${text}`);
+    await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex }]);
+    f.connection.processTurnPackets();
+  }
+  async function talk(f) {
+    f.player.closeInterruptibleInterfaces();
+    f.player.getMovementQueue().reset(); f.player.setLocation(f.anchor.clone());
+    const clickType = f.npc.getCurrentDefinition(f.player).getActions().indexOf("Talk-to") + 1;
+    assert.ok(clickType > 0, "the active Otto definition offers Talk-to");
+    await f.connection.dispatch([{ type: "npc_option", index: f.npc.getIndex(), clickType }]);
+    for (let n=0; n<4; n++) turn(f);
+    const shown = await menu(f);
+    assert.ok(shown instanceof core.OptionDialogue, "registered Otto Talk-to reaches its actual native menu");
+    return shown;
+  }
+  async function learn(f) {
+    const shown = await talk(f);
+    assert.ok(shown.getOptions().includes(LESSON), "ordinary Otto entry offers the missing Firemaking instruction");
+    await choose(f, shown, LESSON);
+    const after = await menu(f);
+    assert.ok(after?.getOptions().includes(MORE), "actual instruction finishes at the supported continuation menu");
+    assert.equal(level(f), 1);
+    f.player.closeInterruptibleInterfaces();
+  }
+  async function fire(f, logId, bow) {
+    f.player.closeInterruptibleInterfaces();
+    assert.equal(Firemaking.isFiremakingActive(f.player), false, "the previous exercise has settled before scene placement");
+    f.player.getMovementQueue().reset();
+    core.RegionManager.loadMapFiles(f.fireAnchor.getX(), f.fireAnchor.getY());
+    f.player.setLocation(f.fireAnchor.clone());
+    const inv = f.player.getInventory(), tool = bow ? I.SHORTBOW : I.TINDERBOX;
+    for (const id of [I.LOGS, I.OAK_LOGS, I.SHORTBOW, I.TINDERBOX]) inv.deleteNumber(id, inv.getAmount(id));
+    for (const id of [tool, logId]) {
+      assert.ok(id > 0); assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+      assert.equal(core.CacheDefinitions.getItem(id).placeholderTemplate, -1);
+      inv.add(new core.Item(id, 1), false);
+    }
+    const anchor = f.player.getLocation().clone();
+    assert.equal(Firemaking.isFireTileBlocked(anchor, f.player.getPrivateArea()), false,
+      "the exercise starts on a fire-clear tile without bypassing production admission");
+    fireSites.push({ location: anchor, area: f.player.getPrivateArea(),
+      before: new Set(core.ObjectManager.objectsAt(anchor)) });
+    assert.equal(core.ObjectManager.objectsAt(anchor).filter(o => o.getId() === core.ObjectIdentifiers.FIRE_23).length, 0);
+    const first = observed.length, messageStart = f.messages.length;
+    const snapshot = phase => ({
+      phase, logId, bow, cycle: core.World.getProcessCycle(),
+      position: [f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()],
+      active: Firemaking.isFiremakingActive(f.player), queue: f.player.getMovementQueue().size(),
+      stall: f.player.getCombat().getAnimationStallTicks(),
+      currentLevel: f.player.getSkillManager().getCurrentLevel(K.FIREMAKING),
+      inventoryLogs: inv.getAmount(logId), inventoryTool: inv.getAmount(tool),
+      groundLogs: ground(f).filter(g => g.getItem().getId() === logId).length,
+      messages: f.messages.slice(messageStart).slice(-8),
+      tasks: [...ownedTasks].map(task => ({ name: task.constructor.name, running: task.isRunning() })),
+    });
+    if (bow) assert.equal(Firemaking.isFiremakingBow(tool), true, "the active item definition is a supported bow");
+    assert.ok(Firemaking.LIGHTABLE_LOGS_BY_ID.has(logId), "the active registered log table contains this input");
+    await f.connection.dispatch([{ type: "inventory_use_on", itemId: tool, slot: inv.getSlotForItemId(tool),
+      target: { kind: "inventory", id: logId, slot: inv.getSlotForItemId(logId) } }]);
+    turn(f);
+    assert.equal(Firemaking.isFiremakingActive(f.player), true,
+      "native item combination admits lighting: " + JSON.stringify(snapshot("admission")));
+    for (let n=1; n<30; n++) {
+      turn(f);
+      if (observed.length > first && !Firemaking.isFiremakingActive(f.player)) break;
+    }
+    collectFires(); // Also collected unconditionally in teardown if an earlier turn/assertion fails.
+    const event = observed.slice(first).find(e => e.player === f.player);
+    assert.ok(event, "the real registered Logs task emits a successful fire event: " + JSON.stringify(snapshot("completion")));
+    assert.equal(event.itemId, logId); assert.equal(event.bow, bow);
+    const fires = core.ObjectManager.objectsAt(anchor).filter(o => o.getId() === core.ObjectIdentifiers.FIRE_23
+      && o.getPrivateArea() === f.player.getPrivateArea());
+    assert.equal(fires.length, 1, "the actual skill action creates its fire");
+    for (const o of fires) { createdFires.add(o); core.ObjectManager.deregister(o, true); }
+    // Keep production tasks alive across exercises; the guaranteed teardown owns their cleanup.
+    for (const g of ground(f)) core.ItemOnGroundManager.deregister(g);
+    return event;
+  }
+  function saveAndRestore(f, expected) {
+    const codec = new Json.JsonPlayerPersistence();
+    const old = f.player.getAttribute(KEY);
+    const record = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(f.player), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+    assert.equal(record.attributes[KEY].firemaking, expected, "production save includes earned lesson progress");
+    f.player.setAttribute(KEY, { fishingRod: 0, herblore: 0, firemaking: 0 });
+    codec.hydratePlayerSave(record).applyToPlayer(f.player);
+    f.player.setAttribute(ATTR_SKIP_PERSISTENCE, true); f.player.setNeedsPlacement(false);
+    assert.notEqual(f.player.getAttribute(KEY), old, "load reconstructs state rather than retaining the live object");
+    assert.equal(level(f), expected);
+  }
+
+  const f = actor();
+  assert.equal((await fire(f, I.LOGS, false)).lesson, 0, "ordinary tinderbox control works before the new lesson");
+  assert.equal((await fire(f, I.OAK_LOGS, true)).lesson, 0, "an untrained bow fire stays allowed but does not credit training");
+  const ordinary = await talk(f);
+  assert.ok(ordinary.getOptions().includes("What can I learn about the use of a fishing rod?"));
+  assert.ok(ordinary.getOptions().includes("How can I use my strength in the ways of agriculture?"));
+  await choose(f, ordinary, "I'd better get going."); await menu(f);
+  await learn(f); // Missing-content BEFORE stops here; later acceptance is explicitly unreached.
+  await learn(f); // Repeating instruction does not reset or grant additional progress.
+  saveAndRestore(f, 1);
+  assert.equal((await fire(f, I.LOGS, true)).lesson, 1, "a non-oak bow fire cannot complete the oak exercise");
+  assert.equal((await fire(f, I.OAK_LOGS, false)).lesson, 1, "a tinderbox oak fire cannot complete the bow exercise");
+  assert.ok(!(await talk(f)).getOptions().includes(RETURN), "return acknowledgement is unavailable before the exercise");
+  const other = actor(); await learn(other);
+  assert.equal((await fire(other, I.OAK_LOGS, true)).lesson, 2);
+  assert.equal(level(f), 1, "another taught player's real oak exercise is not this player's progress");
+  assert.equal((await fire(f, I.OAK_LOGS, true)).lesson, 2);
+  assert.equal((await fire(f, I.OAK_LOGS, true)).lesson, 2, "repeated success does not acknowledge the lesson");
+  saveAndRestore(f, 2);
+  const returning = await talk(f); await choose(f, returning, RETURN); await menu(f);
+  assert.equal(level(f), 3);
+  assert.ok(!(await talk(f)).getOptions().includes(RETURN), "acknowledgement is not offered a second time");
+  saveAndRestore(f, 3);
+  assert.equal(f.player.getAttribute(KEY).fishingRod, 0);
+  assert.equal(f.player.getAttribute(KEY).herblore, 0, "the Firemaking lesson does not require or complete either older section");
+  const cancelled = actor(), initial = await talk(cancelled);
+  await choose(cancelled, initial, LESSON); cancelled.player.closeInterruptibleInterfaces();
+  assert.equal(level(cancelled), 0, "closing the instruction before its spoken end does not mark it taught");
+});

@@ -88,10 +88,18 @@ export class GpuPlugin extends Plugin {
     /** Config events only reach a started plugin, so pick up changes made while it was off. */
     protected override async startUp(): Promise<void> {
         this.current = this.readConfig();
-        if (this.configManager.getConfiguration(GpuConfig.group, "brightness") !== undefined) {
-            this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
-        }
+        // Brightness is one setting: the Settings slider's value wins, and this option follows it.
+        this.mirrorBrightness(this.client.getScreenBrightness());
+        this.client.screenBrightnessListener = (value) => this.mirrorBrightness(value);
         this.applySkyColor();
+    }
+
+    protected override async shutDown(): Promise<void> {
+        this.client.screenBrightnessListener = undefined;
+    }
+
+    private mirrorBrightness(value: number): void {
+        this.configManager.setConfigValue(GpuConfig, "brightness", value);
     }
 
     onConfigChanged(event: ConfigChanged): void {

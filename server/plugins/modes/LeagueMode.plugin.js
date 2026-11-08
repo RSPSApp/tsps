@@ -11,8 +11,28 @@
  */
 const Common = require("./league/Common.LeagueMode");
 
+// The leagues the data file names, so the option's list follows the data.
+const LEAGUE_OPTIONS = [
+  { value: 0, label: "Not a league world" },
+  ...Object.entries(require("./data/leagues.json").leagues).map(([type, league]) => ({ value: Number(type), label: league.name })),
+];
+
 module.exports = {
   name: "LeagueMode",
+  config: {
+    "league:type": {
+      type: "enum", label: "League", default: 0, values: LEAGUE_OPTIONS,
+      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change.",
+    },
+    "league:start": {
+      type: "date", label: "League start date", defaultText: "Not set",
+      help: "When the league began, as YYYY-MM-DD. Sets the client's league clock.",
+    },
+    "league:end": {
+      type: "date", label: "League end date", defaultText: "Not set",
+      help: "When the league ends, as YYYY-MM-DD. The welcome message then shows how many days remain.",
+    },
+  },
   members: true,
   register(api) {
     Common.init(api);

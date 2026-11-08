@@ -1713,6 +1713,10 @@ export interface PluginCoreApi {
 
 export interface PluginModule {
   name: string;
+  /** One line shown beside the plugin on the world config page. */
+  description?: string;
+  /** pluginConfig options this plugin reads, keyed "<namespace>:<key>". */
+  config?: Record<string, import("../game/definition/WorldSettingDeclarations").ConfigOptionDeclaration>;
   dependsOn?: string[];
   /** Members content: not loaded when world.json sets membersWorld false. */
   members?: boolean;

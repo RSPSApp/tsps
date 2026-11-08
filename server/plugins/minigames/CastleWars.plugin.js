@@ -7,6 +7,12 @@
 
 module.exports = {
   name: "CastleWars",
+  config: {
+    "CastleWars:seedBots": {
+      type: "boolean", label: "Seed Castle Wars with bots", default: false,
+      help: "Development aid: fills the lobby with bots. Leave off so production lobbies are players only.",
+    },
+  },
   dependsOn: ["Food", "Mining", "Ladders", "Potions", "Omnishop"],
   register(api) {
     const game = require("./castlewars/Game.CastleWars")(api);

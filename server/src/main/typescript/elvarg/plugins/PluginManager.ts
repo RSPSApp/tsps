@@ -9,6 +9,12 @@ import * as path from "path";
 import { GameConstants } from "../game/GameConstants";
 import { PluginContext } from "./PluginContext";
 import { isMembersWorld, readWorldConfig } from "../game/definition/WorldDefinition";
+import {
+  CORE_CONFIG_DECLARATIONS,
+  ConfigOptionDeclaration,
+  checkConfigValue,
+  validateDeclaration,
+} from "../game/definition/WorldSettingDeclarations";
 import { PlayerRights } from "../game/model/rights/PlayerRights";
 import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacementManager";
 import { DefinitionLoader } from "../game/definition/loader/DefinitionLoader";
@@ -390,6 +396,10 @@ export class PluginManager {
   private static pluginPerfStats = new Map<string, PluginPerfStat>();
   private static pluginCoreApi: PluginCoreApi | null = null;
   private static pluginConfigCache: Record<string, unknown> | null = null;
+  private static pluginConfigDeclarations = new Map<
+    string,
+    { owner: string; decl: ConfigOptionDeclaration }
+  >();
 
   private static executeHook<T>(
     hook: PluginHook<T>,
@@ -714,8 +724,7 @@ export class PluginManager {
     }
     const membersWorld = isMembersWorld();
     let membersOnlyCount = 0;
-    PluginManager.loadPluginCandidatesWithDependencies(
-      candidates.filter((candidate) => {
+    const toLoad = candidates.filter((candidate) => {
         // The exported name wins over the filename when they differ.
         const enabled =
           switchFor(candidate.pluginName) ??
@@ -732,8 +741,14 @@ export class PluginManager {
           return false;
         }
         return true;
-      })
-    );
+      });
+    // Checked before any plugin registers, and only for plugins that will load: a bad or
+    // clashing declaration is logged and dropped, it never stops the server.
+    const acceptedDeclarations = PluginManager.checkConfigDeclarations(toLoad);
+    PluginManager.loadPluginCandidatesWithDependencies(toLoad);
+
+    PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
+    PluginManager.warnAboutInvalidConfigValues();
 
     if (PluginManager.lastPersistenceOverride) {
       console.info(PluginManager.lastPersistenceOverride);
@@ -2206,6 +2221,114 @@ export class PluginManager {
     return Object.prototype.hasOwnProperty.call(config, key)
       ? (config[key] as T)
       : (defaultValue as T);
+  }
+
+  /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
+  public static getConfigDeclarations(): Map<
+    string,
+    { owner: string; decl: ConfigOptionDeclaration }
+  > {
+    const all = new Map<string, { owner: string; decl: ConfigOptionDeclaration }>();
+    for (const [key, decl] of Object.entries(CORE_CONFIG_DECLARATIONS)) {
+      all.set(key, { owner: "core", decl });
+    }
+    for (const [key, entry] of PluginManager.pluginConfigDeclarations) {
+      all.set(key, entry);
+    }
+    return all;
+  }
+
+  /**
+   * The valid option declarations of the plugins about to load, in discovery order. A malformed
+   * `config`, an invalid declaration or a key core declares is logged with console.error and
+   * dropped; a key two plugins declare is logged and kept for both, and the first that loads owns it.
+   */
+  private static checkConfigDeclarations(
+    candidates: PluginLoadCandidate[]
+  ): Map<PluginLoadCandidate, Record<string, ConfigOptionDeclaration>> {
+    const accepted = new Map<PluginLoadCandidate, Record<string, ConfigOptionDeclaration>>();
+    const owners = new Map<string, string>();
+    for (const key of Object.keys(CORE_CONFIG_DECLARATIONS)) {
+      owners.set(key, "core");
+    }
+    for (const candidate of candidates) {
+      const config: unknown = candidate.plugin.config;
+      if (config === undefined) {
+        continue;
+      }
+      if (!config || typeof config !== "object" || Array.isArray(config)) {
+        console.error(
+          `[plugins] ${candidate.pluginName}: config must be an object of option declarations; its config is ignored`
+        );
+        continue;
+      }
+      const kept: Record<string, ConfigOptionDeclaration> = {};
+      for (const [key, decl] of Object.entries(config)) {
+        const problems = validateDeclaration(key, decl);
+        if (problems.length > 0) {
+          console.error(
+            `[plugins] ${candidate.pluginName}: invalid config declaration, ignored: ${problems.join("; ")}`
+          );
+          continue;
+        }
+        const existing = owners.get(key);
+        if (existing === "core") {
+          console.error(
+            `[plugins] config key ${key} is declared by both core and ${candidate.pluginName}; core owns it and ${candidate.pluginName}'s declaration is ignored`
+          );
+          continue;
+        }
+        if (existing !== undefined) {
+          // Not settled here: the first of the claimants that actually loads owns the key.
+          console.error(
+            `[plugins] config key ${key} is declared by both ${existing} and ${candidate.pluginName}; ${existing} is expected to own it, and ownership goes to the first of them that loads`
+          );
+        } else {
+          owners.set(key, candidate.pluginName);
+        }
+        kept[key] = decl as ConfigOptionDeclaration;
+      }
+      accepted.set(candidate, kept);
+    }
+    return accepted;
+  }
+
+  private static recordLoadedConfigDeclarations(
+    accepted: Map<PluginLoadCandidate, Record<string, ConfigOptionDeclaration>>
+  ): void {
+    PluginManager.pluginConfigDeclarations.clear();
+    for (const [candidate, declarations] of accepted) {
+      if (!PluginManager.loadedPlugins.includes(candidate.pluginName)) {
+        continue;
+      }
+      for (const [key, decl] of Object.entries(declarations)) {
+        if (PluginManager.pluginConfigDeclarations.has(key)) {
+          continue; // an earlier loaded claimant owns it
+        }
+        PluginManager.pluginConfigDeclarations.set(key, {
+          owner: candidate.pluginName,
+          decl,
+        });
+      }
+    }
+  }
+
+  /** Warns (never replaces) about configured values that do not fit their declaration. */
+  private static warnAboutInvalidConfigValues(): void {
+    const config = PluginManager.loadPluginConfig();
+    const declarations = PluginManager.getConfigDeclarations();
+    for (const [key, value] of Object.entries(config)) {
+      const entry = declarations.get(key);
+      if (!entry) {
+        continue;
+      }
+      const check = checkConfigValue(entry.decl, value);
+      if (check.ok === false) {
+        console.warn(
+          `[plugins] world.json pluginConfig "${key}" (${entry.owner}) ${check.error}; the value is used as written`
+        );
+      }
+    }
   }
 
   private static collectPluginLoadCandidates(

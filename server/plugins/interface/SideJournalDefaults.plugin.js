@@ -228,6 +228,7 @@ function nativeSummaryClicked({ player, slot }) {
 
 module.exports = {
   name: "SideJournalDefaults",
+  description: "The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands.",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("side-journal:mount", mountRequested);

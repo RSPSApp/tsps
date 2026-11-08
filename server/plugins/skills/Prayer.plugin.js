@@ -321,6 +321,12 @@ function scatterAshes({ player, itemId, slot }) {
 
 module.exports = {
   name: "Prayer",
+  config: {
+    "Prayer:sequentialBurying": {
+      type: "boolean", label: "Bury all bones with one click", default: false,
+      help: "By default Bury buries one bone per click, as in OSRS. On, one click continues through the eligible unnoted bones in the inventory.",
+    },
+  },
   register(pluginApi) {
     api = pluginApi;
     api.onItemFirstAction(buryBone);

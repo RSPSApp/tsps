@@ -19,6 +19,12 @@ const Commands = require("./wildernessbosses/Commands.WildernessBosses");
 
 module.exports = {
   name: "WildernessBosses",
+  config: {
+    "WildernessBosses:requireDiary": {
+      type: "boolean", label: "Wilderness boss lairs need the diary", default: true,
+      help: "As on the Wiki, each lair needs the medium Wilderness Diary or a Slayer task for that boss. Turn off to let anyone in.",
+    },
+  },
   members: true,
   register(api) {
     Common.attach(api);

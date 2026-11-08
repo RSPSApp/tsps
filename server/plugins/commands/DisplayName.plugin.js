@@ -120,6 +120,16 @@ function openNameChanger({ player }) {
 
 module.exports = {
   name: "DisplayName",
+  config: {
+    "DisplayName:cooldownDays": {
+      type: "number", label: "Display name change cooldown (days)", default: 28, min: 0,
+      help: "Days a player waits between display name changes. 0 lets them change at any time.",
+    },
+    "DisplayName:holdDays": {
+      type: "number", label: "Old display name hold (days)", default: 35, min: 0,
+      help: "Days a name a player gave up stays held for its old owner.",
+    },
+  },
   register(api) {
     pluginApi = api;
     api.registerCommand("displayname", displayNameCommand, undefined, "Change the name other players see");

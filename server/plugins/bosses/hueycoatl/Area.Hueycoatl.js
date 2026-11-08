@@ -44,14 +44,15 @@ const NOT_FRIENDS_MESSAGE = "You must be on their friends list to join their fig
 const FULL_MESSAGE = "That fight is full.";
 const LEAVE_TITLE = (streak) => `Leave the encounter? Your perfect streak (${streak}) will be lost.`;
 const TAALA_GATE = "Excuse me, human! Perhaps you shouldn't just go wandering through there without knowing what you're dealing with!";
-/** The peek's second line: captured for the respawn; the others are ours [EST]. */
+/** Wiki Strategies quick-peek lines; the defeated line is also captured. */
 const PEEK_LINES = Object.freeze({
+  preparing: "The Hueycoatl is preparing itself.",
   defeated: "The Hueycoatl has been subdued!",
-  body: "The Hueycoatl's body blocks the way up the mountain.",
-  head: "The Hueycoatl is fighting at the summit.",
-  tail: "The Hueycoatl has shielded itself.",
-  "final-pending": "The Hueycoatl has shielded itself.",
-  final: "The Hueycoatl's shield has fallen.",
+  body: "The Hueycoatl's body can be seen on the mountainside.",
+  head: "They have reached the summit.",
+  tail: "The Hueycoatl is defending itself with its tail.",
+  "final-pending": "The Hueycoatl is defending itself with its tail.",
+  final: "The Hueycoatl is making its final stand.",
 });
 /** Back through the chain from the arena lands by it in the camp [EST]. */
 const CHAIN_CAMP_SIDE = [1528, 3287];
@@ -265,7 +266,9 @@ function peek(event) {
   const { player } = event;
   const session = campSession(player);
   const count = session.arenaPlayers().length;
-  const line = PEEK_LINES[session.fight?.phase] ?? PEEK_LINES.body;
+  const fight = session.fight;
+  const phase = !fight || (fight.phase === "body" && !fight.started) ? "preparing" : fight.phase;
+  const line = PEEK_LINES[phase] ?? PEEK_LINES.preparing;
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.StatementDialogue(0, `There are ${count} adventurers ascending the mountain.<br>${line}`),
   ));

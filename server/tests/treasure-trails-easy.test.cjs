@@ -15,6 +15,8 @@ const { TIERS, byName } = require("../plugins/treasuretrails/trails/Tiers.Treasu
 const TABLES = require("../data/definitions/clue-caskets.json").tables;
 const EASY = byName.get("easy");
 const I = core.ItemIdentifiers;
+const Screen = require("../plugins/treasuretrails/CasketRewardScreen.plugin");
+Screen.initialize(core);
 
 function fixture() {
   const actions = new Map(), events = new Map(), attributes = new Map(), sent = [], ground = [], spawned = [];
@@ -247,6 +249,7 @@ test("the imported easy table rolls 2-4 resolvable rewards and the casket opens 
   assert.equal(Caskets.open(event), true);
   assert.notEqual(f.items[0]?.getId(), I.REWARD_CASKET_EASY_);
   assert.equal(f.attributes.get(Runtime.completedAttribute(EASY)), 1);
+  Screen.closed({ player: f.player, interfaceId: 73 });
   const granted = f.items.filter(Boolean).length + f.ground.length;
   assert.ok(granted >= 1, "rewards were given");
   assert.equal(Caskets.open(event), false, "the opened casket cannot be opened again");
@@ -266,6 +269,7 @@ test("opening an ordinary casket asks drops:chance once and applies its boost to
     Math.random = () => 0.2;
     try { assert.equal(Caskets.open(f.event()), true); } finally { Math.random = random; }
     assert.equal(f.attributes.get(Runtime.completedAttribute(EASY)), 1, "the casket opened");
+    Screen.closed({ player: f.player, interfaceId: 73 });
     return { asked, given: [...f.items.filter(Boolean), ...f.ground].map(item => item.getId()), player: f.player };
   };
   const plain = openAt(null);
@@ -329,6 +333,7 @@ test("the Large spade comes with the 500th easy casket, while scroll cases stay 
   f.items[0] = new core.Item(I.REWARD_CASKET_EASY_, 1);
   Caskets.open(f.event());
   assert.equal(f.attributes.get(Runtime.completedAttribute(EASY)), 500);
+  Screen.closed({ player: f.player, interfaceId: 73 });
   assert.ok([...f.items, ...f.ground].some(item => item?.getId() === I.LARGE_SPADE));
 });
 

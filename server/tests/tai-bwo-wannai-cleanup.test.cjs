@@ -493,7 +493,44 @@ test("My Arm's Big Adventure reads, spends and hands over favour through the cle
   assert.equal(varbit(p, 'favour_percentage'), 65, 'one owner of the varbit');
 });
 
-test('logged in inside the village, the overlay waits for the welcome screen, then comes back', (t) => {
+async function sharedWelcomePlay(t, player) {
+  const hooks = PluginManager.interfaceActionClickHooks;
+  const favourIndex = hooks.findIndex(hook => hook.handlerName === 'showAfterWelcome');
+  const musicIndex = hooks.findIndex(hook => hook.handlerName === 'onMusicWelcomeAction');
+  assert.ok(favourIndex >= 0 && musicIndex > favourIndex, 'real sorted plugin load puts Music after cleanup');
+  const laterNames = new Set(['welcomePlay', 'handleWelcomeReady', 'onMusicWelcomeAction']);
+  const later = hooks.slice(favourIndex + 1).filter(hook => laterNames.has(hook.handlerName));
+  const seen = [];
+  for (const hook of later) {
+    const original = hook.handler;
+    t.mock.method(hook, 'handler', event => { seen.push(hook.handlerName); return original(event); });
+  }
+  const flags = [], sender = player.getPacketSender(), sendFlags = sender.sendInterfaceFlagsRange;
+  t.mock.method(sender, 'sendInterfaceFlagsRange', function (...args) {
+    flags.push(args); return sendFlags.apply(this, args);
+  });
+  const event = { player, buttonId: (378 << 16) | 72, action: 1, handled: false };
+  PluginManager.emitInterfaceActionClick(event);
+  await Promise.resolve();
+  assert.deepEqual(seen, later.map(hook => hook.handlerName), 'all later shared Play hooks run');
+  assert.equal(event.handled, false, 'the shared welcome action remains non-consuming');
+  assert.ok(flags.some(([uid, from, to, value]) => uid === ((239 << 16) | 11)
+    && from === 0 && to > 0 && value === 62), 'the real late Music hook enables jukebox rows');
+  assert.ok(flags.some(([uid, from, to, value]) => uid === ((239 << 16) | 4)
+    && from === -1 && to === -1 && value === 60), 'now-playing actions also return');
+}
+
+test('shared welcome Play reaches later real listeners outside the village before cleanup starts', async t => {
+  const p = villager(t, { told: false, machete: null });
+  p.setLocation(new Location(3210, 3217, 0));
+  login(p);
+  await Promise.resolve(); // Drain login work, so only this Play can produce the observed flags.
+  await sharedWelcomePlay(t, p);
+  assert.equal(p.getAttribute(Common.ATTR.OVERLAY), false);
+  assert.equal(Favour.points(p), 0);
+});
+
+test('logged in inside the village, the overlay waits for the welcome screen, then comes back', async (t) => {
   const p = villager(t);
   Favour.gain(p, 10);
   assert.equal(varbit(p, 'tbw_overlayopen'), 1);
@@ -502,9 +539,10 @@ test('logged in inside the village, the overlay waits for the welcome screen, th
   const sender = p.getPacketSender();
   const sub = sender.sendSubInterface;
   t.mock.method(sender, 'sendSubInterface', function (uid, id) { mounts.push(id); return sub.apply(this, arguments); });
-  // The welcome screen's Play, as the button packet dispatches it: the overlay goes on its gameframe.
-  PluginManager.emitInterfaceActionClick({ player: p, buttonId: (378 << 16) | 72, action: 1, handled: false });
-  assert.deepEqual(mounts, [core.CacheDefinitions.getInterfaceId('village_community_score')]);
+  await Promise.resolve(); // Welcome/login work has completed before observing the Play chain.
+  await sharedWelcomePlay(t, p);
+  const overlay = core.CacheDefinitions.getInterfaceId('village_community_score');
+  assert.equal(mounts.filter(id => id === overlay).length, 1, 'cleanup restores its overlay once alongside other UI');
   assert.equal(varbit(p, 'tbw_overlayopen'), 1);
 });
 

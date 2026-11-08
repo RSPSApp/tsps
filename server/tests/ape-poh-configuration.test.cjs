@@ -423,3 +423,35 @@ for (const kind of ['chamber', 'nexus']) {
     else assert.ok(f.p.getAttribute('construction:nexus').slots.includes(target.id));
   });
 }
+
+// Wiki (Portal Nexus) and rsprox captures (Remove on poh_nexus_portal_1 and _3): removing the nexus, or the
+// room it stands in, means paying the runes again; Remove warns first.
+async function removeNexus(f, t) {
+  f.house.buildingMode = true;
+  const warnings = [], send = core.StatementDialogue.send;
+  t.mock.method(core.StatementDialogue, 'send', (player, text, ...rest) => { warnings.push(text); return send(player, text, ...rest); });
+  objectAction(f, 'remove');
+  assert.deepEqual(warnings, [Nexus.REMOVAL_WARNING], 'Remove warns before asking for confirmation');
+  assert.equal(core.MultiChatboxPrompt.getPending(f.p), null, 'the confirmation waits for the warning');
+  await f.conn.dispatch([{ type: 'dialogue_continue', widgetId: (229 << 16) | 4, childIndex: -1 }]);
+  f.conn.processTurnPackets();
+  await prompt(f, /really remove it/i, /^yes$/i);
+}
+
+test('nexus: Remove warns, then discards the paid destinations', async t => {
+  const f = actor(t, 'nexus', { rescued: true }); seedExisting(f, 'nexus');
+  await removeNexus(f, t);
+  assert.equal(f.house.getFurnitureAt(f.object.getLocation(), f.object.getId(), f.object.getType()), null);
+  assert.deepEqual(f.p.getAttribute('construction:nexus'), { slots: [], left: 0 });
+  assert.equal(f.p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('poh_nexus_tele_1')), 0);
+  assert.equal(f.p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('poh_nexus_left_click')), 0);
+});
+
+test('nexus: removing its room discards the paid destinations', async t => {
+  const f = actor(t, 'nexus', { rescued: true }); seedExisting(f, 'nexus');
+  f.house.buildingMode = true;
+  House.removeRoomPrompt(f.p, f.house, { plane: 1, x: 4, y: 6 });
+  await prompt(f, /remove the/i, /^yes$/i);
+  assert.equal(f.house.getRoom({ plane: 1, x: 4, y: 6 }), null);
+  assert.deepEqual(f.p.getAttribute('construction:nexus'), { slots: [], left: 0 });
+});

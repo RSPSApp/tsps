@@ -1612,19 +1612,6 @@ export class CombatFactory {
     }
 
     /**
-     * Retribution: on death, hits the killer if they're next to the dying player
-     * for up to a quarter of the dying player's base Prayer level (Wiki: Retribution).
-     */
-    static handleRetribution(killed: Player, killer: Player) {
-        killed.performGraphic(new Graphic(437));
-        if (killer.getLocation().isWithinDistance(killed.getLocation(), CombatConstants.RETRIBUTION_RADIUS)) {
-            const maxHit = Math.floor(killed.getSkillManager().getMaxLevel(Skill.PRAYER) / 4);
-            killer.getCombat().getHitQueue().addPendingDamage([
-                new HitDamage(Misc.randomInclusive(0, maxHit), HitMask.RED).markReflected().setSource(killed)]);
-        }
-    }
-
-    /**
      * @param skipReset the caller owns ending combat (post-attack renewal). The
      *   player is still told why they cannot fire - going silent here is how a
      *   fight ends with no explanation after the last arrow leaves the bow.
@@ -1729,7 +1716,7 @@ export class CombatFactory {
             rangedWeapon === RangedWeapon.WEBWEAVER_BOW ||
             rangedWeapon === RangedWeapon.CRAWS_BOW
         ) {
-            // TODO: consume a revenant ether; charge storage is not modelled yet.
+            // The bows spend their revenant ether through the plugin ammo handlers above; no ammunition here.
             return;
         }
 

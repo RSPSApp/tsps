@@ -216,7 +216,8 @@ export function handleInboundUi(msg: any): boolean {
             if (id === 93) state.lastInventorySnapshot = undefined;
             if (id === 95) state.lastBankState = undefined;
             if (id === 620) state.lastCollectionLogSnapshot = undefined;
-            if (id === 516) state.lastShopState.stock = [];
+            // 516 stops the native looting bag; the legacy shop channel owns its
+            // replay state through explicit shop open/close/slot payloads.
         }
         if (msg.payload.action !== "set_text" && (msg.payload as any).uid !== 10616865) {
             console.log("[ServerConnection] recv widget", msg.payload);

@@ -2035,7 +2035,8 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(preventAdalaDeath);
   api.onCombatHitResolved(fightHit);
-  api.registerCombatMethodResolver({ resolve: resolveStageCombat });
+  // Outranks weapon resolvers (twin weapons, macuahuitl), which load earlier from plugins/combat and plugins/items.
+  api.registerCombatMethodResolver({ resolve: resolveStageCombat, overridesWeapon: true });
   api.onPlayerBeforeDeath(handlePlayerBeforeDeath);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

@@ -456,3 +456,28 @@ test('challenge completion preserves real Inventory slots, held-clue capacity an
     if (completed === 2) assert.equal(inventory.getAmount(I.REWARD_CASKET_MEDIUM_), 1);
   }
 });
+
+
+test("Uri displays the casket after a final emote joins an existing stack", () => {
+  const f = fixture(), step = ofKind("emote")[0];
+  f.items.fill(null);
+  const inventory = new core.Inventory(f.player).setItems(f.items);
+  f.player.getInventory = () => inventory;
+  for (let slot = 0; slot < f.items.length; slot++) f.items[slot] = new core.Item(-1, 0);
+  f.place(step, 3, 0, 2);
+  const casket = Runtime.data(MEDIUM).casket;
+  inventory.setItem(13, new core.Item(casket, 1));
+  for (const requirement of step.equipment) {
+    if (requirement.emptySlot != null) continue;
+    const id = requirement.anyOf?.[0] ?? [...C.getObjNames().keys()].find(item => C.getItem(item)?.params?.get?.(Catalogue.TRAIL_ITEM_GROUP_PARAM) === requirement.group);
+    f.worn.push(new core.Item(id, 1));
+  }
+  Runtime.emote({ player: f.player, slot: step.emotes[0] });
+  Runtime.emote({ player: f.player, slot: step.emotes[1] });
+  const uri = f.spawned[0];
+  f.talk(uri.def.id, uri);
+  assert.equal(inventory.get(13).getAmount(), 2);
+  assert.equal(inventory.get(0).getId(), -1);
+  f.finish();
+  assert.equal(f.box().getItemId(), casket);
+});

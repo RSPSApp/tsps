@@ -628,11 +628,14 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.SETTAPTODROP, (ctx) => {
-        ctx.intStackSize--; // pop enabled
+        const enabled = ctx.intStack[--ctx.intStackSize] === 1;
+        const osrsClient = (ctx.widgetManager as any).osrsClient;
+        if (osrsClient?.settings) osrsClient.settings.tapToDrop = enabled;
     });
 
     handlers.set(Opcodes.GETTAPTODROP, (ctx) => {
-        ctx.pushInt(0);
+        const osrsClient = (ctx.widgetManager as any).osrsClient;
+        ctx.pushInt(osrsClient?.settings?.tapToDrop ? 1 : 0);
     });
 
     handlers.set(Opcodes.SETSHIFTCLICKDROP, (ctx) => {

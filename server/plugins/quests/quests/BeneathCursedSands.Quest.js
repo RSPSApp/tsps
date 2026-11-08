@@ -86,6 +86,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // Stage values / varbits
   // ==========================================================================
 
+  const VARBIT_TOA_ENTRANCE_OPEN = 13837; // toa_entrance_open; capture 101 tick 11030, on quest completion
   const VARBIT_INVESTIGATED_ENTRY = 13844; // bcs_investigated_entry, varp 3421 bit 12
   const VARBIT_INVESTIGATED_CITIZENS = 13845; // bcs_investigated_citizens, bit 13
   const VARBIT_FOUND_PILLAR = 13846; // bcs_found_pillar, bit 14
@@ -549,6 +550,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   function syncQuestVarbits(player) {
     const sender = player.getPacketSender();
     const stage = quest.getStage(player);
+    sender.sendVarbit(VARBIT_TOA_ENTRANCE_OPEN, stage >= STAGE_COMPLETE ? 1 : 0);
     sender.sendVarbit(VARBIT_INVESTIGATED_ENTRY, entryInspected(player) || stage >= STAGE_ENTRY_INSPECTED ? 1 : 0);
     sender.sendVarbit(VARBIT_INVESTIGATED_CITIZENS, hasFlag(player, TALKED_CITIZEN_ATTRIBUTE) ? 1 : 0);
     sender.sendVarbit(VARBIT_FOUND_PILLAR, stage >= STAGE_EMBLEM ? 1 : 0);
@@ -1745,7 +1747,8 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function climbNecropolisRubble(player) {
     if (quest.getStage(player) < STAGE_NECROPOLIS) return;
-    player.moveTo(new Location(3348, 2755, 0));
+    // Capture 101 ticks 9141/10674: the rubble crosses east-west, not south into the wall.
+    player.moveTo(new Location(player.getLocation().getX() > 3348 ? 3347 : 3349, 2759, 0));
     if (!entryInspected(player)) {
       flag(player, ENTRY_INSPECTED_ATTRIBUTE, true);
       if (quest.getStage(player) < STAGE_ENTRY_INSPECTED) setStage(player, STAGE_ENTRY_INSPECTED);
@@ -2175,6 +2178,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.AGILITY, 50000);
+    syncQuestVarbits(player);
   }
 
   // ==========================================================================

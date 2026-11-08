@@ -23,9 +23,12 @@ const zlib = require("node:zlib");
 const SERVER_DIR = path.resolve(__dirname, "..");
 const DEFAULT_OUT = path.resolve(SERVER_DIR, "..", "client", "public", "shortestpath", "collision-map.zip");
 
-// RegionManager.canMove's masks for a step out of, and into, a tile: the solid-object (0x100),
-// blocked-floor (0x200000), unknown (0x80000) and unloaded (0x1000000) bits, plus the wall bits.
-const TILE_BLOCKED = 0x100 | 0x80000 | 0x200000 | 0x1000000;
+// RegionManager.BLOCKED_MASK: the solid-object (0x100), blocking floor decoration (0x40000),
+// unknown (0x80000), blocked-floor (0x200000) and unloaded (0x1000000) bits, plus the wall bits.
+// 0x40000 is what a type-22 ground decoration sets when it is clipped (the log balances, stepping
+// stones and other walk-across scenery): without it the map says those tiles are open ground, so
+// the pathfinder walks straight over a shortcut instead of using its transport and its level gate.
+const TILE_BLOCKED = 0x100 | 0x40000 | 0x80000 | 0x200000 | 0x1000000;
 const WALL_NORTH = 0x2;
 const WALL_EAST = 0x8;
 const WALL_SOUTH = 0x20;

@@ -49,6 +49,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
 
   const REVELLER = 0;
   const BARD = 1;
+  const GOLDEN_WOOL_XP = 2.5;
   const MERCHANT = 2;
   const NAVIGATOR = 3;
   const SEER = 4;
@@ -1316,6 +1317,8 @@ module.exports = function registerFremennikTrialsQuest(api) {
     }
     take(player, GOLDEN_FLEECE, 1);
     give(player, GOLDEN_WOOL, 1);
+    // Wiki (Golden wool): "Level 1 is required, and the action grants 2.5 XP" (Crafting).
+    player.getSkillManager().addExperiences(Skill.CRAFTING, GOLDEN_WOOL_XP);
     player.sendMessage("You spin the golden fleece into golden wool.");
   }
 

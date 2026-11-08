@@ -321,8 +321,8 @@ module.exports = function registerHeroesQuest(api) {
   /** Gerrant is not indexed for this page; replay the lava-eel conversation. */
   function handleGerrant(event) {
     const { player, npcId } = event;
-    if (npcId !== GERRANT_NPC_ID) return;
-    if (quest.getStage(player) < STAGE_STARTED) return;
+    if (npcId !== GERRANT_NPC_ID) return false;
+    if (quest.getStage(player) < STAGE_STARTED) return false;
     event.handled = true;
     const variant =
       has(player, BLAMISH_SLIME) || has(player, BLAMISH_OIL) || has(player, OILY_ROD)
@@ -453,7 +453,7 @@ module.exports = function registerHeroesQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onNpcInteraction(handleGerrant);
+  api.onNpcInteraction("Gerrant", { "Talk-to": handleGerrant });
   api.onItemOnItem(handleSlimeOnPotion);
   api.onItemOnItem(handleOilOnRod);
   api.onNpcDeath(handleNpcDeath);

@@ -219,6 +219,7 @@ test("as captured: the Cradle of Life speaks, shows the boots, offers all three;
   Rewards.open({ player, definition: { getName: () => "Cradle of Life" } });
   for (let i = 0; i < 4; i++) player.next();
   assert.ok(player.log.includes("menu Select the boots you want."));
+  assert.equal(player.menu.getOptions().mode, 23, "the recorded boots menu mode (script 2046 mode 23)");
   assert.deepEqual(player.menu.getItems?.() ?? player.menu.items, [9005, 9006, 28672]);
   player.log.length = 0;
   player.menu.execute(28672, 1);

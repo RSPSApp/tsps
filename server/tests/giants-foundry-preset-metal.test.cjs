@@ -110,3 +110,20 @@ test("with preset and plain copies held, only the plain ones melt", (t) => {
   assert.equal(amount(f.inv, I.RUNE_PLATEBODY, true), 1, "the preset one is left alone");
   assert.equal(amount(f.inv, I.RUNE_PLATEBODY, false), 0);
 });
+
+test("the crucible's Fill menu reads Smelt, as recorded (script 2046 mode 13)", (t) => {
+  const f = smith(t);
+  let fill = null;
+  const real = PM.createApi("FoundryFillMode");
+  Crucible(new Proxy(real, {
+    get: (target, key) => (key === "onObjectInteraction" ? (name, options) => { if (name === "Crucible (empty)") fill = options.Fill; }
+      : key === "onItemOnObject" ? () => {} : target[key]),
+  }));
+  t.mock.method(Shared, "questComplete", () => true);
+  let menu = null;
+  t.mock.method(f.p.getPacketSender(), "sendCreationMenu", (sent) => { menu = sent; return f.p.getPacketSender(); });
+  fill({ player: f.p, objectId: Shared.OBJECT.CRUCIBLE_MULTI });
+  assert.ok(menu, "Fill opens the make-x menu");
+  assert.equal(menu.getOptions().mode, Crucible.FILL_MENU_MODE);
+  assert.equal(Crucible.FILL_MENU_MODE, 13);
+});

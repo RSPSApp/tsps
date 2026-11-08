@@ -264,6 +264,9 @@ function useOnCrucible(event) {
   Shared.api().sendMultiChatboxPrompt(player, "How many would you like to add?", ...options);
 }
 
+/** The make-x menu's verb for the crucible: "Smelt" (rsprox_transcripts/227/00096.txt, 227/00565.txt: script 2046 mode 13). */
+const FILL_MENU_MODE = 13;
+
 /** Fill: pick a bar from the make-x menu; it never overflows (the quantity is capped). */
 function fill({ player }) {
   if (!canFill(player, null)) return;
@@ -272,7 +275,7 @@ function fill({ player }) {
   const space = CAPACITY - total(player);
   const menu = new CreationMenu("What metal would you like to add?", bars, {
     execute: (itemId, amount) => fillWith(player, itemId, amount),
-  }, { maxAmount: space, lastAmount: space });
+  }, { mode: FILL_MENU_MODE, maxAmount: space, lastAmount: space });
   player.getPacketSender().sendCreationMenu(menu);
 }
 
@@ -361,4 +364,4 @@ module.exports = function attachCrucible(api) {
   api.onItemOnObject(useOnCrucible, { noted: false });
 };
 
-Object.assign(module.exports, { hasPreform, metalValue, metalScore, counts, total, clear, POURED_AT, JIG, CAPACITY, MESSAGE });
+Object.assign(module.exports, { FILL_MENU_MODE, hasPreform, metalValue, metalScore, counts, total, clear, POURED_AT, JIG, CAPACITY, MESSAGE });

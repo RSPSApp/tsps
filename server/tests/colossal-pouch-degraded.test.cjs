@@ -64,7 +64,11 @@ function actor(level) {
   p.setLocation(new core.Location(3222, 3218, 0)); p.needsPlacement = false;
   assert.equal(core.RegionManager.blocked(p.getLocation(), null), false);
   assert.equal(core.World.getPlayers().add(p), true);
+  p.getSkillManager().setExperiences(core.Skill.RUNECRAFTING, core.SkillManager.getExperienceForLevel(level), false);
   p.getSkillManager().setMaxLevels(core.Skill.RUNECRAFTING, level, false).setCurrentLevel(core.Skill.RUNECRAFTING, level, false);
+  assert.equal(p.getSkillManager().getMaxLevel(core.Skill.RUNECRAFTING), level);
+  assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.RUNECRAFTING), level);
+  assert.equal(core.SkillManager.getLevelForExperience(p.getSkillManager().getExperience(core.Skill.RUNECRAFTING)), level);
   return p;
 }
 

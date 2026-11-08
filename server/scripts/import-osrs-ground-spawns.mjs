@@ -59,6 +59,11 @@ function isAuditedMemberCommonTool(row) {
   return location !== undefined && row.members === true && row.quantity === 1 && row.infobox_respawn_ticks === 100
     && location === row.location;
 }
+// Only these ordinary Coins placements were audited; other page contexts remain deferred.
+const AUDITED_ORDINARY_EXACT = new Map([
+  ["995:3003:9801:0", "[[Dwarven Mine]]"],
+  ["995:3001:9798:0", "[[Dwarven Mine]]"],
+]);
 const OWNED_EXACT = new Map([
   ["560:2500:2967:0", "Quests.plugin.js Watchtower definition provider"],
   ["2398:2528:9415:0", "Quests.plugin.js Watchtower definition provider"],
@@ -107,7 +112,10 @@ export function importSpawns(source, existing) {
       && !(row.members === true && AUDITED_MEMBER_ORDINARY_ITEMS.get(row.page) === row.id)
       && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)) {
       entry.status = "members-world-scope-deferred";
-    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)) {
+    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)
+      && !(row.page === "Coins" && row.members === false
+        && AUDITED_ORDINARY_EXACT.has(rowKey(row))
+        && AUDITED_ORDINARY_EXACT.get(rowKey(row)) === row.location)) {
       entry.status = "ordinary-page-not-yet-audited";
     } else if (![row.id,row.x,row.y,row.plane,row.quantity,row.infobox_respawn_ticks].every(Number.isInteger)
       || row.id < 0 || row.plane < 0 || row.plane > 3 || row.quantity <= 0
@@ -159,7 +167,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member common-tool/container rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member common-tool/container rows plus two exact Dwarven Mine Coins rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

@@ -11,6 +11,7 @@ const itemX = 1001;
 const itemY = 1002;
 const inventory = new Inventory();
 const equipment = new Inventory(14);
+const bankCounts = new Map<number, number>();
 const setup = {
     id: "synthetic-setup",
     name: "Synthetic setup",
@@ -24,7 +25,7 @@ const receiver = {
     getState: () => state,
     getCurrentInventory: () => inventory.getSlots(),
     getCurrentEquipment: () => equipment.getSlots(),
-    getBankCounts: () => new Map<number, number>(),
+    getBankCounts: () => bankCounts,
     isBankOpen: () => true,
     getClient: () => ({ objTypeLoader: { load: (id: number) => ({ name: id === itemX ? "Item X" : "Item Y" }) } }),
 };
@@ -49,6 +50,17 @@ markup = render();
 assert.ok(markup.includes("Need 1 more"), "a partial equipment stack has a one-item shortfall");
 assert.ok(markup.includes("Still missing") && markup.includes("Item X × 1"), "the summary reports the same shortfall");
 assert.ok(!markup.includes(allAvailable), "a partial stack is not enough");
+
+equipment.setSlot(13, itemX, 2);
+bankCounts.set(itemX, 1);
+setup.equipment[0].quantity = 3;
+markup = render();
+assert.ok(markup.includes(allAvailable), "two equipped items and one banked item satisfy three required");
+setup.equipment[0].quantity = 4;
+markup = render();
+assert.ok(markup.includes("Still missing") && markup.includes("Item X × 1"), "two equipped items and one banked item leave one of four missing");
+assert.ok(!markup.includes(allAvailable), "three available items do not satisfy four required");
+bankCounts.clear();
 
 setup.equipment[0].quantity = 1;
 equipment.setSlot(13, -1, 0);

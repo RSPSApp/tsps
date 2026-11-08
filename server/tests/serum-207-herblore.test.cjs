@@ -66,3 +66,25 @@ test('at 14 Herblore nothing is made', async (t) => {
   assert.equal(f.inv.getAmount(I.ASHES), 1);
   assert.equal(quest.getStage(f.p), 5);
 });
+
+// #3824 review: no Make-X; it carries on until the vials or ashes run out (Wiki), the second two ticks after the first
+// into the next vial and the other ashes (rsprox 227/01846: vial slot 10, ashes slot 12).
+test('it carries on: two vials and two ashes make two serums, the second two ticks later', async (t) => {
+  const f = herbalist(t, 15);
+  const I = core.ItemIdentifiers;
+  f.inv.setItem(10, new core.Item(I.TARROMIN_POTION_UNF_, 1));
+  f.inv.setItem(12, new core.Item(I.ASHES, 1));
+  const before = f.raw();
+  await f.use();
+  assert.equal(f.inv.forSlot(9)?.getId(), I.SERUM_207_3_);
+  assert.equal(f.inv.forSlot(13)?.getId() ?? -1, -1, 'the clicked ashes went first');
+  core.TaskManager.process();
+  assert.equal(f.inv.forSlot(10)?.getId(), I.TARROMIN_POTION_UNF_, 'not yet on the next tick');
+  core.TaskManager.process();
+  assert.equal(f.inv.forSlot(10)?.getId(), I.SERUM_207_3_, 'the second, two ticks on');
+  assert.equal(f.inv.forSlot(12)?.getId() ?? -1, -1);
+  assert.equal(f.raw() - before, 100);
+  assert.equal(f.messages.filter((m) => m === 'You make serum 207.').length, 2);
+  for (let i = 0; i < 6; i++) core.TaskManager.process();
+  assert.equal(f.inv.getAmount(I.SERUM_207_3_), 2, 'and stops when the supplies are gone');
+});

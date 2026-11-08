@@ -257,8 +257,10 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
     if (id === core.ItemIdentifiers.COINS && target.coinPouch) {
       // The full-inventory check ran at the click; worn gear taken off before this resolves can fill the last slot.
       inventory.forceAdd(player, new core.Item(target.coinPouch.id, 1));
-      // Wiki (Coin pouch): a doubled pouch gives one pouch plus its coins directly.
-      const coins = (times - 1) * (Array.isArray(target.coinPouch.coins) ? target.coinPouch.coins[0] : target.coinPouch.coins);
+      // Wiki (Coin pouch): a doubled pouch gives one pouch plus its coins directly - "the normal amount", so a ranged
+      // pouch's extra coins are rolled like an opened pouch's, not its minimum.
+      let coins = 0;
+      for (let extra = 1; extra < times; extra++) coins += roll(target.coinPouch.coins, random);
       if (coins > 0) inventory.forceAdd(player, new core.Item(core.ItemIdentifiers.COINS, coins));
       given.push({ ...item, amount: 1 });
       continue;

@@ -445,10 +445,18 @@ function payout(offer) {
   return paid.length ? paid : [{ itemId: COINS, amount: 0 }];
 }
 
+/** Parts of a finished offer already taken one at a time from its two collection slots (saved with the offer). */
+function collectedParts(offer) {
+  return Array.isArray(offer?.collected) ? offer.collected : [];
+}
+
 function collection(offer) {
+  const taken = collectedParts(offer);
   return {
     capacity: 2,
-    slots: offer?.finished ? payout(offer).map(({ itemId, amount }, slot) => ({ slot, itemId, quantity: amount })) : [],
+    slots: offer?.finished
+      ? payout(offer).map(({ itemId, amount }, slot) => ({ slot, itemId, quantity: amount })).filter(({ slot }) => !taken.includes(slot))
+      : [],
   };
 }
 
@@ -833,16 +841,25 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
   return baseId;
 }
 
-function collect(player, action, slot = viewing.get(player), forceNotes = false) {
+/**
+ * Collects a finished offer: every part not yet taken, or with `part` only that collection slot
+ * (rsprox_transcripts/236/03950.txt: 465:24 sub 2 takes the item, sub 3 later the refunded coins).
+ */
+function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
+  const taken = collectedParts(offer);
+  const all = payout(offer);
+  const wanted = all.map((paid, index) => ({ paid, index }))
+    .filter(({ index }) => !taken.includes(index) && (part === null || index === part));
+  if (!wanted.length) return;
   // A bank collection must obey the same account restrictions as bank access.
   if (action === 3 && pluginApi.emitCanBank(player, "grand-exchange-collect") === false) return false;
   const inventory = player.getInventory();
   const parts = [];
   // Each part lands on a copy first, so a collection that does not fit hands over nothing.
   const results = new Map();
-  for (const paid of payout(offer)) {
+  for (const { paid } of wanted) {
     const baseId = paid.itemId === COINS || paid.itemId === PLATINUM_TOKEN ? paid.itemId : ItemDefinition.forId(paid.itemId).unNote();
     const outputId = collectionOutputId(baseId, paid.amount, action, forceNotes);
     const destination = action === 3 ? player.getBank(Bank.getTabForItem(player, baseId)) : inventory;
@@ -875,9 +892,20 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false)
       returned: Boolean(offer.sell && offer.aborted),
     });
   }
-  delete completedOffers(player)[slot];
+  const remaining = all.length - taken.length - wanted.length;
+  if (remaining > 0) offer.collected = [...taken, ...wanted.map(({ index }) => index)];
+  else delete completedOffers(player)[slot];
   saveOffers(player);
   const sender = player.getPacketSender();
+  if (remaining > 0) {
+    sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
+      { [COLLECTIONS[slot]]: collection(offer) });
+    refreshCollectionBox(player);
+    for (const { outputId, amount } of parts) {
+      sender.sendMessage(`Collected ${amount.toLocaleString("en-US")} x ${ItemDefinition.forId(outputId).getName()}.`);
+    }
+    return;
+  }
   sender.sendInterfaceScript(786, [], marketVarps(slot), undefined,
     { [COLLECTIONS[slot]]: collection() });
   if (player.getInterfaceId() === GE) home(player);
@@ -1040,7 +1068,11 @@ function handleInventoryItem(event) {
 function handleExchangeButton({ player, buttonId, slot, action }) {
   if (player.getInterfaceId() !== GE) return true;
   if (historyOpen.has(player)) return true;
-  if (buttonId === uid(24) && action >= 1 && action <= 3) { collect(player, action); return true; }
+  // Sub 2 and 3 are the offer's two collection slots; each click takes only its own.
+  if (buttonId === uid(24) && action >= 1 && action <= 3) {
+    collect(player, action, viewing.get(player), false, slot === 2 || slot === 3 ? slot - 2 : null);
+    return true;
+  }
   // Child 1 of 465:6 is Repeat Offer (script 793), not handled here.
   if (buttonId === uid(6) && slot === 0 && (action === 1 || action === 2)) { collectAll(player, action); return true; }
   if (buttonId === uid(23) && action === 1) {

@@ -549,31 +549,36 @@ export class AccuracyFormulasDpsCalc {
             return cache.effectiveRangedAttack;
         }
 
-        let player = entity.getAsPlayer();
+        cache.effectiveRangedAttack = AccuracyFormulasDpsCalc.playerEffectiveRangedAttack(entity.getAsPlayer(), true);
+        return cache.effectiveRangedAttack;
+    }
+
+    /** A player's effective Ranged attack level; `styleBonus` adds Accurate's +3 (a boat cannon has no style). */
+    private static playerEffectiveRangedAttack(player: Player, styleBonus: boolean): number {
         let rngStrength = AccuracyFormulasDpsCalc.scalePercent(
             player.getSkillManager().getCurrentLevel(Skill.RANGED),
             AccuracyFormulasDpsCalc.rangedAttackPrayerPercent(player)
         );
 
         let fightStyle = player.getFightType().getStyle();
-        if (fightStyle == FightStyle.ACCURATE)
+        if (styleBonus && fightStyle == FightStyle.ACCURATE)
             rngStrength += 3;
         rngStrength += 8;
 
-        rngStrength = applyCombatEffectiveLevelModifiers(entity, rngStrength, { combatType: CombatType.RANGED, purpose: "accuracy" });
+        rngStrength = applyCombatEffectiveLevelModifiers(player, rngStrength, { combatType: CombatType.RANGED, purpose: "accuracy" });
 
         //    if (dragonHunter(input))
         //        rngStrength =
-        cache.effectiveRangedAttack = rngStrength;
         return rngStrength;
     }
 
     /**
      * A player's ranged attack roll with an accuracy bonus given in place of the worn one (a boat
-     * cannon's, its cannonball's and the gear it counts). Prayers, style and set effects apply.
+     * cannon's, its cannonball's and the gear it counts). Prayers and set effects apply; the
+     * attack style doesn't, as a cannon has none (Wiki, Boat combat: the roll's formula has no style term).
      */
     public static rangedAttackRollWithBonus(player: Mobile, accuracyBonus: number): number {
-        const roll = AccuracyFormulasDpsCalc.effectiveRangedAttack(player) * (accuracyBonus + 64);
+        const roll = AccuracyFormulasDpsCalc.playerEffectiveRangedAttack(player.getAsPlayer(), false) * (accuracyBonus + 64);
         return Math.floor(applyRangedAttackAccuracyModifiers(player, roll));
     }
 

@@ -26,6 +26,8 @@ export class Autocasting {
         ItemIdentifiers.NIGHTMARE_STAFF, ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF,
         ItemIdentifiers.ELDRITCH_NIGHTMARE_STAFF,
         ItemIdentifiers.ZURIELS_STAFF, ItemIdentifiers.ZURIELS_STAFF_BH_,
+        // Wiki (Blue Moon spear, Autocast): it autocasts Ancient Magicks.
+        ItemIdentifiers.BLUE_MOON_SPEAR, 29849,
     ]);
 
     private static readonly AUTOCAST_SPELLS = new Map<number, CombatSpell>([
@@ -39,8 +41,10 @@ export class Autocasting {
         [15, CombatSpells.EARTH_WAVE], [16, CombatSpells.FIRE_WAVE],
         [48, CombatSpells.WIND_SURGE], [49, CombatSpells.WATER_SURGE],
         [50, CombatSpells.EARTH_SURGE], [51, CombatSpells.FIRE_SURGE],
+        // enum_1986: 19 Claws of Guthix, 20 Flames of Zamorak, 52 Saradomin Strike, 47 Iban Blast.
         [17, CombatSpells.CRUMBLE_UNDEAD], [18, CombatSpells.MAGIC_DART],
-        [19, CombatSpells.IBAN_BLAST],
+        [19, CombatSpells.CLAWS_OF_GUTHIX], [20, CombatSpells.FLAMES_OF_ZAMORAK],
+        [52, CombatSpells.SARADOMIN_STRIKE], [47, CombatSpells.IBAN_BLAST],
         [31, CombatSpells.SMOKE_RUSH], [32, CombatSpells.SHADOW_RUSH],
         [33, CombatSpells.BLOOD_RUSH], [34, CombatSpells.ICE_RUSH],
         [35, CombatSpells.SMOKE_BURST], [36, CombatSpells.SHADOW_BURST],
@@ -83,8 +87,23 @@ export class Autocasting {
         if (weaponId === ItemIdentifiers.SLAYERS_STAFF || weaponId === ItemIdentifiers.SLAYERS_STAFF_E_) {
             return this.SELECTOR_SLAYERS_STAFF;
         }
+        // The bladed staves and Iban's staff have their own lists (cache autocast_spellpos: sotd, staff_of_light,
+        // staff_of_balance, ibanstaff); live sends 11791 for the Staff of the Dead (rsprox_transcripts/228/02283.txt).
+        const list = this.OWN_SELECTOR_LISTS.get(weaponId);
+        if (list !== undefined) return list;
         return this.SELECTOR_STANDARD;
     }
+
+    private static readonly OWN_SELECTOR_LISTS = new Map<number, number>([
+        [ItemIdentifiers.STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_THE_DEAD],
+        [12902, ItemIdentifiers.STAFF_OF_THE_DEAD], [ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_THE_DEAD],
+        [ItemIdentifiers.STAFF_OF_LIGHT, ItemIdentifiers.STAFF_OF_LIGHT],
+        [ItemIdentifiers.STAFF_OF_BALANCE, ItemIdentifiers.STAFF_OF_BALANCE],
+        [ItemIdentifiers.IBANS_STAFF, ItemIdentifiers.IBANS_STAFF], [ItemIdentifiers.IBANS_STAFF_U_, ItemIdentifiers.IBANS_STAFF],
+    ]);
+
+    /** The god-spell slots, which only the matching god's staff may choose. */
+    private static readonly GOD_SLOTS = new Set([19, 20, 52]);
 
     public static autocastSpell(index: number): CombatSpell | null {
         return this.AUTOCAST_SPELLS.get(index) ?? null;
@@ -103,9 +122,12 @@ export class Autocasting {
             this.openCombatInterface(player);
             return true;
         }
-        const spell = slot === 20
-            ? this.godSpell(player.getEquipment().getWeapon().getId())
-            : this.autocastSpell(slot);
+        let spell = this.autocastSpell(slot);
+        // A god spell is offered only for its own god's staff.
+        const weaponId = player.getEquipment().getWeapon().getId();
+        if (spell && this.GOD_SLOTS.has(slot) && this.godSpell(weaponId) !== spell) spell = null;
+        // Iban Blast is only in Iban's staff's list.
+        if (spell && slot === 47 && this.OWN_SELECTOR_LISTS.get(weaponId) !== ItemIdentifiers.IBANS_STAFF) spell = null;
         if (spell) this.setAutocast(player, spell);
         this.openCombatInterface(player);
         return true;
@@ -237,8 +259,9 @@ export class Autocasting {
 
     private static godSpell(weaponId: number): CombatSpell | null {
         if (weaponId === ItemIdentifiers.SARADOMIN_STAFF || weaponId === ItemIdentifiers.STAFF_OF_LIGHT) return CombatSpells.SARADOMIN_STRIKE;
-        if (weaponId === ItemIdentifiers.GUTHIX_STAFF) return CombatSpells.CLAWS_OF_GUTHIX;
-        if (weaponId === ItemIdentifiers.ZAMORAK_STAFF) return CombatSpells.FLAMES_OF_ZAMORAK;
+        if (weaponId === ItemIdentifiers.GUTHIX_STAFF || weaponId === ItemIdentifiers.STAFF_OF_BALANCE) return CombatSpells.CLAWS_OF_GUTHIX;
+        if (weaponId === ItemIdentifiers.ZAMORAK_STAFF || weaponId === ItemIdentifiers.STAFF_OF_THE_DEAD
+            || weaponId === 12902 || weaponId === ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD) return CombatSpells.FLAMES_OF_ZAMORAK;
         return null;
     }
 }

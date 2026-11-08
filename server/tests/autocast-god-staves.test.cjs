@@ -1,0 +1,73 @@
+// Run after `yarn build`: node --test tests/autocast-god-staves.test.cjs
+// The bladed staves open their own autocast list (cache autocast_spellpos: sotd, staff_of_light, staff_of_balance) with
+// varp 664 = the staff (live sends 11791 for the Staff of the Dead, rsprox_transcripts/228/02283.txt, 234/00820.txt), and
+// enum_1986's god slots are 19 Claws of Guthix, 20 Flames of Zamorak, 52 Saradomin Strike (47 is Iban Blast). A Staff of
+// the Dead choosing slot 20 casts Flames (rsprox_transcripts/235/03344.txt). The Blue Moon spear autocasts Ancient Magicks
+// (Wiki). Real Players through the selector clicks.
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { before, test } = require("node:test");
+require("../dist/Server").Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { PluginManager } = require("../dist/plugins/PluginManager");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { Autocasting } = require("../dist/game/content/combat/magic/Autocasting");
+const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
+
+let core;
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  core = PluginManager.getCoreApi();
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+});
+
+function wielding(t, weaponId, spellbook = core.MagicSpellbook.NORMAL) {
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  p.setUsername("godstaff");
+  for (const skill of core.Skill.values()) p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
+  p.setSpellbook(spellbook);
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(weaponId, 1));
+  WeaponInterfaceManager.assign(p);
+  const varps = [];
+  const sendConfig = p.getPacketSender().sendConfig.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(), "sendConfig", (id, value) => { varps.push([id, value]); return sendConfig(id, value); });
+  return { p, list: () => varps.filter(([id]) => id === 664).at(-1)?.[1] };
+}
+
+function choose(p, slot) {
+  Autocasting.handleWidgetAction(p, 593, 23);
+  Autocasting.handleWidgetAction(p, 201, 1, slot);
+  return p.getCombat().getAutocastSpell();
+}
+
+test("each bladed staff opens its own list and autocasts its god spell from its slot", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  for (const [staff, list, slot, spell] of [
+    [I.STAFF_OF_THE_DEAD, I.STAFF_OF_THE_DEAD, 20, S.FLAMES_OF_ZAMORAK],
+    [I.TOXIC_STAFF_OF_THE_DEAD, I.STAFF_OF_THE_DEAD, 20, S.FLAMES_OF_ZAMORAK],
+    [I.STAFF_OF_LIGHT, I.STAFF_OF_LIGHT, 52, S.SARADOMIN_STRIKE],
+    [I.STAFF_OF_BALANCE, I.STAFF_OF_BALANCE, 19, S.CLAWS_OF_GUTHIX],
+  ]) {
+    const f = wielding(t, staff);
+    assert.equal(choose(f.p, slot), spell, `${staff} slot ${slot}`);
+    assert.equal(f.list(), list, `${staff} varp 664`);
+  }
+});
+
+test("another god's slot is refused, and slot 19 is Claws, not Iban Blast", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  assert.equal(choose(wielding(t, I.STAFF_OF_THE_DEAD).p, 52), null, "the SotD can't pick Saradomin Strike");
+  assert.equal(choose(wielding(t, I.STAFF_OF_LIGHT).p, 19), null);
+  assert.equal(Autocasting.autocastSpell(19), S.CLAWS_OF_GUTHIX);
+  assert.equal(Autocasting.autocastSpell(47), S.IBAN_BLAST);
+  assert.equal(choose(wielding(t, I.IBANS_STAFF).p, 47), S.IBAN_BLAST);
+});
+
+test("the Blue Moon spear autocasts Ancient Magicks", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  for (const spear of [I.BLUE_MOON_SPEAR, 29849]) {
+    const f = wielding(t, spear, core.MagicSpellbook.ANCIENT);
+    assert.equal(choose(f.p, 31), S.SMOKE_RUSH, `${spear}`);
+  }
+});

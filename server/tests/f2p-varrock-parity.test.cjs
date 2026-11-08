@@ -32,9 +32,11 @@ function harness(name) {
       const npc = { ...definition, animations: [], graphics: [], getId: () => definition.id, getIndex: () => npc.index,
         index: nextIndex++, getLocation: () => location, moveTo: to => { location = to; },
         getArea: () => area, setArea: value => { area = value; }, isNpc: () => true, isPlayer: () => false, getAsNpc: () => npc,
-        isRegistered: () => !npc.removed, setPositionToFace: noop, forceChat: text => { npc.said = text; },
+        isRegistered: () => !npc.removed, setPositionToFace: noop,
+        setMobileInteraction: target => { npc.interaction = target; }, faceTile: tile => { npc.faceTileTarget = tile; }, forceChat: text => { npc.said = text; },
         performAnimation: animation => npc.animations.push(animation.getId()), performGraphic: graphic => npc.graphics.push(graphic.id),
-        getMovementQueue: () => ({ addSteps: to => { npc.walkingTo = to; } }),
+        getMovementQueue: () => ({ addSteps: to => { npc.walkingTo = to; },
+          isMovementBlocked: () => Boolean(npc.blocked), setBlockMovement(value) { npc.blocked=value; return this; }, reset() { npc.walkingTo=null; return this; } }),
         setCombatXpMultiplier: value => { npc.multiplier = value; },
         getCombat: () => ({ attack: player => { npc.target = player; } }),
       }; npcs.push(npc); return npc;
@@ -219,6 +221,42 @@ test('Imp Catcher fast-start plays the check, timed ritual, separate stage/rewar
   h.tick(10);assert.equal(p.items.get(I.AMULET_OF_ACCURACY),1);assert.deepEqual(p.xp,[[core.Skill.MAGIC.getIndex(),875]]);assert.equal(p.attrs.get('quest.points'),undefined);
   h.tick(2);assert.equal(p.attrs.get('quest.points'),1);assert.equal(h.quest.getStage(p),2);
   h.action(p,5005,'jxPdQz');assert.equal(p.items.get(I.AMULET_OF_ACCURACY),2);assert.equal(p.xp.length,1);
+});
+
+test('Imp Catcher stages a private wizard at the table and faces it before animating for successive players', () => {
+  const h=harness('ImpCatcher');
+  const publicWizard=h.api.spawnNpc({id:5005,x:3107,y:3158,z:2});
+  publicWizard.blocked=true;
+  for(let attempt=0;attempt<3;attempt++) {
+    const p=player();p.moveTo(new core.Location(3107,3158,2));h.quest.setStage(p,1);
+    for(const id of [I.RED_BEAD,I.BLACK_BEAD,I.WHITE_BEAD,I.YELLOW_BEAD])p.items.set(id,1);
+    h.action(p,5005,'XpTtp9');
+    h.tick(1);const wizard=h.npcs.at(-1);assert.notEqual(wizard,publicWizard);
+    assert.deepEqual([wizard.getLocation().getX(),wizard.getLocation().getY(),wizard.getLocation().getZ()],[3103,3163,2]);
+    assert.equal(wizard.owner,p);assert.equal(wizard.ownerOnly,true);assert.equal(wizard.wanderRadius,0);assert.equal(wizard.blocked,true);
+    assert.equal(wizard.getArea(),p.getArea());
+    h.tick(2);assert.equal(wizard.faceTileTarget,undefined);
+    h.tick(1);assert.equal(wizard.interaction,null);
+    assert.deepEqual([wizard.faceTileTarget.getX(),wizard.faceTileTarget.getY(),wizard.faceTileTarget.getZ()],[3102,3163,2]);
+    assert.equal(wizard.animations.length,0);
+    h.tick(1);assert.equal(wizard.animations.at(-1),4285);
+    h.tick(14);assert.equal(h.quest.getStage(p),2);assert.equal(wizard.isRegistered(),false);assert.equal(p.getPrivateArea(),null);
+    assert.deepEqual([publicWizard.getLocation().getX(),publicWizard.getLocation().getY()],[3107,3158]);
+    assert.equal(publicWizard.blocked,true);assert.deepEqual(publicWizard.animations,[]);
+  }
+});
+
+test('Imp Catcher overlapping rituals own separate actors and cancel staging on logout', () => {
+  const h=harness('ImpCatcher');
+  const prepare=()=>{const p=player();p.moveTo(new core.Location(3104,3163,2));h.quest.setStage(p,1);for(const id of [I.RED_BEAD,I.BLACK_BEAD,I.WHITE_BEAD,I.YELLOW_BEAD])p.items.set(id,1);return p;};
+  const a=prepare(),b=prepare();
+  h.action(a,5005,'XpTtp9');h.action(b,5005,'XpTtp9');h.tick(1);
+  const [one,two]=h.npcs;assert.notEqual(one.getArea(),two.getArea());
+  h.hooks.onPlayerLogout.at(-1)({player:a});assert.equal(one.removed,true);assert.equal(two.removed,undefined);
+  h.tick(18);assert.equal(two.removed,true);assert.equal(h.quest.getStage(a),1);assert.equal(h.quest.getStage(b),2);
+  const c=prepare(),count=h.npcs.length;h.action(c,5005,'XpTtp9');
+  h.hooks.onPlayerLogout.at(-1)({player:c});h.hooks.onPlayerLogout.at(-1)({player:c});h.tick(19);
+  assert.equal(h.npcs.length,count);assert.equal(c.blocked,false);
 });
 
 test('Imp Catcher journal follows the wiki journal transcript at every stage', () => {

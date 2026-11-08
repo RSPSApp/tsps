@@ -150,14 +150,6 @@ export class PlayerDeathTask extends Task {
                     this.player.performAnimation(new Animation(836));
                     PluginManager.emitCustomEvent("player:dying", { player: this.player, killer: this.killer ?? null });
 
-                    // Retribution hits our killer, unless the killing blow was rebounded
-                    // damage - recoil, vengeance or another Retribution (Wiki: Retribution).
-                    const killingBlow = this.player.getCombat().getHitQueue().getLastAppliedHit();
-                    if (PrayerHandler.isActivated(this.player, PrayerHandler.RETRIBUTION) && !killingBlow?.isReflected()) {
-                        if (typeof this.killer !== 'undefined' && this.killer !== null) {
-                            CombatFactory.handleRetribution(this.player, this.killer);
-                        }
-                    }
                     break;
                 }
             }

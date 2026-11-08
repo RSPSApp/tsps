@@ -197,7 +197,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
 }
 
 function makeApi(quests = new Set()) {
-  const custom = new Map(), object = new Map(), condition = [], itemObject = [], itemNpc = [], login = [], xpreward = [];
+  const custom = new Map(), object = new Map(), condition = [], itemObject = [], itemNpc = [], login = [], xpreward = [], areas = [];
   let anyNpc = null, itemAction = null;
   const api = {
     core: PluginManager.getCoreApi(),
@@ -220,7 +220,7 @@ function makeApi(quests = new Set()) {
     onInterfaceActionButton() {},
     onNpcDialogueVariant() {},
     onPlayerLogin(handler) { login.push(handler); },
-    registerArea() {},
+    registerArea(area) { areas.push(area); },
     sendMultiChatboxPrompt(_player, _title, ...flat) {
       const options = [];
       for (let i = 0; i < flat.length; i += 2) options.push([flat[i], flat[i + 1]]);
@@ -230,7 +230,7 @@ function makeApi(quests = new Set()) {
   };
   Museum.register(api);
   NpcDialogues.register(api);
-  return { api, custom, object, condition, itemObject, itemNpc, login, xpreward, get anyNpc() { return anyNpc; }, get itemAction() { return itemAction; } };
+  return { api, custom, object, condition, itemObject, itemNpc, login, xpreward, areas, get anyNpc() { return anyNpc; }, get itemAction() { return itemAction; } };
 }
 
 function advanceToMenu(player) {
@@ -731,4 +731,52 @@ test("Museum: Curse of the Empty Lord report selects display 16's post-report te
   assert.deepEqual(player.getAttribute(STATE).minas, ["curse_of_the_empty_lord"]);
   assert.equal(getKudos(world, player), 10);
   assert.match(studyText(world, player, 24622), /recent evidence from a brave adventurer suggests that Zamorak was not a god/);
+});
+
+
+function hudPlayer(t) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const core = PluginManager.getCoreApi(), world = makeApi(), frames = [];
+  const channel = { kind:'test', remoteAddress:'127.0.0.1', isOpen:()=>true, send:()=>true,
+    close(){}, onData(){}, onError(){}, onClose(){} };
+  const p = new Player(new PlayerSession(channel), new core.Location(3245,3443));
+  p.setIndex(1750); p.setUsername('museum-hud'); p.setRegistered(true); p.setNeedsPlacement(false);
+  p.setAttribute(KUDOS,37);
+  p.getSession().sendClientPacket = frame => { frames.push(Buffer.from(frame)); return true; };
+  const previous = AreaManager.areas; AreaManager.areas = world.areas;
+  t.after(()=>{ if(p.getArea())p.getArea().leave(p,true); p.setRegistered(false); AreaManager.areas=previous; });
+  const at = (x,y,z=0) => { p.moveTo(new core.Location(x,y,z)); AreaManager.process(p); };
+  const mounted = () => p.getPacketSender().getSubInterfaceAt((161<<16)|8)?.groupId === 532;
+  return {p,at,mounted,frames};
+}
+
+test('Museum: native exterior approach has no Kudos HUD; entry mounts and exit closes the actual packet', t => {
+  const {encodeWidgetOpenSub,encodeWidgetCloseSub}=require('../dist/net/protocol/ClientProtocol');
+  const f=hudPlayer(t);
+  // Normal-world960: these approach tiles precede the first532 mount (tick1442).
+  for(const [x,y] of [[3245,3443],[3247,3445],[3249,3446],[3251,3447]]) {
+    f.at(x,y); assert.equal(f.mounted(),false,'outdoor road '+x+','+y);
+  }
+  f.at(3255,3449); assert.equal(f.mounted(),true);
+  assert.ok(f.frames.some(b=>b.equals(encodeWidgetOpenSub((161<<16)|8,532,1))));
+  assert.equal(f.p.getPacketSender().getVarbit(3637),37);
+  f.at(3249,3447); assert.equal(f.mounted(),false);
+  assert.ok(f.frames.some(b=>b.equals(encodeWidgetCloseSub((161<<16)|8))));
+  assert.equal(f.p.getAttribute(KUDOS),37,'HUD visibility never changes earned Kudos');
+});
+
+test('Museum: cache hall/stair-wing footprint covers all floors and retains the basement', t => {
+  const f=hudPlayer(t);
+  for(const z of [0,1,2]) {
+    for(const [x,y]of [[3253,3442],[3267,3455],[3265,3456],[3267,3459]]) {
+      f.at(x,y,z); assert.equal(f.mounted(),true,'interior '+[x,y,z]);
+    }
+    for(const [x,y]of [[3251,3449],[3269,3449],[3255,3440],[3255,3457],[3266,3461]]) {
+      f.at(x,y,z); assert.equal(f.mounted(),false,'outside cache walls '+[x,y,z]);
+    }
+  }
+  f.at(1750,4950); assert.equal(f.mounted(),true,'natural-history basement unchanged');
+  f.at(3210,3424); assert.equal(f.mounted(),false,'teleport away closes the HUD');
 });

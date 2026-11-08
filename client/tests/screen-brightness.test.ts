@@ -12,8 +12,8 @@ const close = (actual: number, expected: number, message: string) =>
     assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
 
 // The slider (cache script 3966) writes device option 6 as clamp(0, 100, slider * 5).
-close(gammaFromScreenBrightness(0), 0.9, "the darkest is the classic level 1");
-close(gammaFromScreenBrightness(100), 0.6, "the brightest is the classic level 4");
+close(gammaFromScreenBrightness(0), 1.0, "native continuous slider darkest endpoint");
+close(gammaFromScreenBrightness(100), 0.5, "native continuous slider brightest endpoint");
 close(gammaFromScreenBrightness(50), 0.75, "linear in between");
 assert.ok(gammaFromScreenBrightness(70) < gammaFromScreenBrightness(30), "a higher setting is a lower gamma (brighter)");
 close(gammaFromScreenBrightness(DEFAULT_SCREEN_BRIGHTNESS), 0.75, "the default is 50% brightness");
@@ -47,3 +47,10 @@ assert.equal(loadScreenBrightness(), DEFAULT_SCREEN_BRIGHTNESS, "blocked storage
 saveScreenBrightness(10);
 
 console.log("screen-brightness: ok");
+
+// Native DefaultsGroup.setBrightness and ApproximateRouteStrategy.getBrightnessPercentage.
+for (let value = 0; value <= 100; value += 5) {
+    const gamma = gammaFromScreenBrightness(value);
+    close(gamma, 0.5 + (100 - value) / 200, `native device option 6 at ${value}`);
+    assert.equal(100 - Math.round(200 * (gamma - 0.5)), value);
+}

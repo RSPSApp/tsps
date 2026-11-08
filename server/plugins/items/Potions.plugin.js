@@ -1784,6 +1784,8 @@ module.exports = {
     };
   },
   drinkRefusal,
+  drinkPermissionRefusal,
+  drinkCanUseRefusal,
   drinkTimerRefusal,
   register(api) {
     api.registerRunEnergyDrainModifier(staminaDrainModifier);

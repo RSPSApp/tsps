@@ -458,6 +458,17 @@ Ticks from the rift opening:
   combat system hasn't hit them for 20 seconds, so every GotR NPC is flagged `combat:no-regen`.
   Walkers and guardians are flagged to walk through other entities.
 
+### The Amulet of the Eye teleport
+
+Wiki ([Amulet of the Eye](https://oldschool.runescape.wiki/w/Amulet_of_the_Eye)): the amulet gives
+unlimited teleports to the Temple of the Eye, from the inventory or the worn tab, and its red,
+green and blue dyed forms are the same item. In the rev 241 cache the plain amulet has the inventory
+options Wear, Teleport and Destroy, and the plain and the three dyed amulets (26914, 26990, 26992,
+26994) carry a worn `Teleport` as cache param 451. `Amulet.GuardiansOfTheRift.js` teleports to the lobby tile with a normal teleport, so
+Tele Block and the level 20 Wilderness limit apply. No rsprox recording touches the amulet, so the
+landing tile (the lobby tile, as for the Minigame Teleport) and the teleport graphic of the dyed
+amulets are not confirmed by a capture.
+
 ### Rewards
 
 - **End of game:** see the Power-up section above for the captured lines. The points and the XP

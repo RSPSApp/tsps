@@ -35,6 +35,7 @@ function makePlayer() {
   const moves = [];
   const log = [];
   const drops = [];
+  const xp = [];
   const equipment = new Map();
   let location = new core.Location(0, 0, 0);
   const isFull = () => inventory.getFreeSlots() <= 0;
@@ -91,6 +92,9 @@ function makePlayer() {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
+    // Sheep Herder's reward pays 1,000 Hunter experience, so the fake player needs a skill
+    // manager; the calls are recorded so a test can assert the amount.
+    getSkillManager: () => ({ addExperiences: (skill, amount) => { xp.push([skill, amount]); } }),
     getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null }),
     getUsername: () => 'qh728-q103',
     getPrivateArea: () => null,
@@ -102,6 +106,7 @@ function makePlayer() {
     sendMessage: (text) => messages.push(text),
     isRegistered: () => true,
     isPlayerBot: () => false,
+    xp,
   };
 }
 
@@ -300,11 +305,13 @@ test('fresh stage 0 completes the mandatory route and replays varp 60 = 3', () =
   assert.equal(wire(), 3, 'completion sends canonical varp 60 = 3');
   assert.equal(p.attrs.get('quest.points'), 4);
   assert.equal(p.items.get(I.COINS), 3100, 'the 100-coin refund plus 3,000 reward');
+  assert.deepEqual(p.xp, [[core.Skill.HUNTER, 1000]], 'the reward pays 1,000 Hunter experience');
   assert.ok(p.messages.some((text) => text.includes('Sheep Herder')));
 
   // Repeating the terminal action must not pay twice.
   h.action(completeStep.id);
   assert.equal(p.items.get(I.COINS), 3100);
+  assert.equal(p.xp.length, 1, 'the experience is not paid twice');
 
   // Login replays the durable stage to varp 60 and does not respawn finished sheep.
   const spawnedBefore = h.spawned.length;

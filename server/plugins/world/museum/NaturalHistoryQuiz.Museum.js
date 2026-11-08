@@ -266,8 +266,8 @@ function grantPendingXp(player) {
   if (!stateOf(player).xpPending) return;
   writeState(player, { xpPending: false });
   const skills = player.getSkillManager();
-  skills.addExperience(core.Skill.SLAYER, REWARD_XP, false);
-  skills.addExperience(core.Skill.HUNTER, REWARD_XP, false);
+  skills.addExperience(core.Skill.SLAYER, REWARD_XP, true);
+  skills.addExperience(core.Skill.HUNTER, REWARD_XP, true);
 }
 
 function rewardXpTask(player) {

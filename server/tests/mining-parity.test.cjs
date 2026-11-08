@@ -140,7 +140,7 @@ function loc(name) {
   return core.CacheDefinitions.getLocId(name);
 }
 
-function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false, amulet = -1, worn = {} } = {}) {
+function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false, amulet = -1, worn = {}, at = [3285, 3367] } = {}) {
   const attributes = new Map();
   const packets = { sounds: [], configs: [], scripts: [] };
   const added = [];
@@ -183,7 +183,7 @@ function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false
     getForceMovement: () => null,
     getHitpoints: () => 10,
     isRegistered: () => true,
-    getLocation: () => new core.Location(3285, 3367, 0),
+    getLocation: () => new core.Location(at[0], at[1], 0),
     sendMessage(text) { player.messages.push(text); },
     performAnimation(animation) { player.animations.push(animation.getId()); },
     performGraphic(graphic) { player.graphics.push([graphic.id, graphic.height]); },
@@ -668,6 +668,72 @@ test("invisible boosts count past 99, a visible boost does not (Wiki Skilling su
     try {
       h.tick(2);
       assert.equal(player.added.length, expected, `level ${level} + ${boost}`);
+    } finally {
+      restoreRandom();
+      restore();
+    }
+  }
+});
+
+/** The Mining Guild plugin's handlers for the events Mining asks, wired like the plugin manager does. */
+function guildEvents() {
+  const handlers = new Map();
+  require("../plugins/areas/MiningGuild.plugin").register(new Proxy({
+    core,
+    onCustomEvent: (key, fn) => handlers.set(key, [...(handlers.get(key) ?? []), fn]),
+  }, { get: (target, key) => target[key] ?? noop }));
+  return (key, request) => { for (const fn of handlers.get(key) ?? []) fn(request); };
+}
+
+test("Mining Guild members' area (Wiki; recording 3285): iron empties for 4 ticks instead of 9, the timer says so", () => {
+  const emit = guildEvents();
+  for (const [x, y, ticks] of [[3030, 9720, 4], [3028, 9720, 4], [3032, 9737, 9]]) {
+    const h = harness({ emit });
+    const player = createPlayer({ at: [x - 1, y] });
+    const restoreRandom = scriptRandom([], 0);
+    const { rock, restore } = mineRock(h, player, "Iron rocks", loc("ironrock1"), x, y);
+    try {
+      for (let tick = 0; tick < 20 && !h.registered.length; tick++) h.tick(1);
+      assert.equal(h.registered.length, 1, "mined out");
+      assert.equal(player.packets.scripts.at(-1)[5], ticks, `timer at ${x},${y}`);
+      h.tick(ticks - 1);
+      assert.equal(h.registered.at(-1) === rock, false, "still empty a tick before");
+      h.tick(1);
+      assert.equal(h.registered.at(-1), rock, `back after ${ticks} ticks`);
+    } finally {
+      restoreRandom();
+      restore();
+    }
+  }
+});
+
+test("Mining Guild members' area (Wiki rock pages; 3285): half the respawn for its rocks, amethyst keeps 75 s", () => {
+  const emit = guildEvents();
+  const object = (x, y) => ({ getLocation: () => new core.Location(x, y, 0) });
+  const ticksFor = (rock, x, y, ticks) => { const request = { object: object(x, y), rock, ticks }; emit("mining:respawn-ticks", request); return request.ticks; };
+  // Members' area: iron 5.4 s -> 2.4 s, mithril 2 min -> 1 min (99 in 3285), adamantite 4 -> 2 min, runite 12 -> 6 min.
+  assert.deepEqual([ticksFor("Iron rocks", 3030, 9720, 9), ticksFor("Mithril rocks", 3032, 9716, 200),
+    ticksFor("Adamantite rocks", 3039, 9722, 400), ticksFor("Runite rocks", 3056, 9721, 1200)], [4, 100, 200, 600]);
+  assert.equal(ticksFor("Amethyst crystals", 3023, 9698, 125), 125, "amethyst's Wiki time is already the guild's");
+  // The free-to-play half, the corridors' far ends and the surface keep the normal time.
+  assert.deepEqual([ticksFor("Mithril rocks", 3046, 9733, 200), ticksFor("Adamantite rocks", 3034, 9732, 400),
+    ticksFor("Iron rocks", 3032, 9737, 9), ticksFor("Iron rocks", 3285, 3368, 9)], [200, 400, 9, 9]);
+});
+
+test("Mining Guild members' area (Wiki Mining Guild): an invisible +7 Mining on the success rolls, only inside it", () => {
+  const emit = guildEvents();
+  const boost = (x, y) => { const request = { player: createPlayer({ at: [x, y] }), boost: 0 }; emit("mining:level-boost", request); return request.boost; };
+  assert.deepEqual([boost(3025, 9721), boost(3019, 9731), boost(3043, 9729), boost(3001, 9711)], [7, 7, 7, 7]);
+  assert.deepEqual([boost(3034, 9737), boost(3019, 9734), boost(3043, 9730), boost(3025, 3338)], [0, 0, 0, 0]);
+  // Runite is 19/256 at 99 and 20/256 at 106: face 19 only lands with the guild's +7 on a level 99.
+  for (const [at, expected] of [[[3030, 9726], 1], [[3034, 9737], 0]]) {
+    const h = harness({ emit });
+    const player = createPlayer({ level: 99, at });
+    const restoreRandom = scriptRandom([0, face(19)]);
+    const { restore } = mineRock(h, player, "Runite rocks", loc("runiterock1"), at[0] + 1, at[1]);
+    try {
+      h.tick(2);
+      assert.equal(player.added.length, expected, `standing at ${at}`);
     } finally {
       restoreRandom();
       restore();

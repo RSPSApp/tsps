@@ -1,6 +1,6 @@
 // Run after yarn build: node --test tests/ordinary-rune-spawns.test.cjs
 // Independently listed Wiki ItemSpawnLine F2P rune tiles; raw item-infobox timers are ticks.
-// This batch excludes untyped tile timer overrides and member-world rows.
+// F2P baseline remains separate from the independently audited member rows below.
 const assert = require("node:assert/strict");
 const { before, test } = require("node:test");
 const path = require("node:path");
@@ -23,7 +23,7 @@ const EXPECTED = [
 ];
 test("audited ordinary F2P rune spawns use real cache IDs, exact tiles, quantities and timers", () => {
   const runeIds = new Set(EXPECTED.map(row => row[0]));
-  assert.equal(spawns.filter(row => runeIds.has(row.id)).length, EXPECTED.length, "this audited batch is exactly23 rune spawns");
+  assert.equal(spawns.filter(row => runeIds.has(row.id) && row.members !== true).length, EXPECTED.length, "this audited batch is exactly23 rune spawns");
   for (const [id,x,y,amount,respawn] of EXPECTED) {
     assert.match(CacheDefinitions.getItem(id)?.name ?? "", /rune$/);
     const found = spawns.filter(s => s.id === id && s.location.x === x && s.location.y === y && s.location.z === 0);
@@ -46,6 +46,12 @@ test("audited ordinary shears and crossbow tiles retain source quantity, plane a
   }
 });
 
+const MEMBER_RUNES=[
+ [554,2768,3500,1,100,2],[554,1450,10099,0,100,1],[554,1421,10096,0,100,1],
+ [554,1419,10062,0,100,1],[554,1454,10063,0,100,1],
+ [557,1394,3116,0,100,4],[557,1385,3119,0,100,4],
+ [558,1392,3118,0,100,2],[558,1399,3123,0,100,2],[558,1388,3110,0,100,2],
+];
 const MEMBER_TOOLS=[
  [837,1512,3423,0,500],[1735,1653,3571,0,100],[1735,1776,3654,0,100],
 ];
@@ -58,17 +64,28 @@ test("audited member tool rows preserve cache identity, exact quantity/timer and
   assert.equal(CacheDefinitions.getItem(id).isMembers,false,"world membership is the source row's, not the item's flag");
  }
 });
-for(const membersWorld of[true,false])test("actual member tool definitions load only in the correct world: "+membersWorld,t=>{
+for(const membersWorld of[true,false])test("actual audited member definitions load only in the correct world: "+membersWorld,t=>{
  const WorldDefinition=require("../dist/game/definition/WorldDefinition");
  const {World}=require("../dist/game/World");
  const {GroundItemSpawnDefinitionLoader}=require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
  const items=World.getItems(),previous=items.splice(0);t.after(()=>items.splice(0,items.length,...previous));
  t.mock.method(WorldDefinition,"isMembersWorld",()=>membersWorld);
  assert.equal(new GroundItemSpawnDefinitionLoader().load(),true);
- for(const[id,x,y,z,timer]of MEMBER_TOOLS){
+ for(const[id,x,y,z,timer,amount]of[...MEMBER_TOOLS.map(r=>[...r,1]),...MEMBER_RUNES]){
   const found=items.filter(p=>p.getItem().getId()===id&&p.getPosition().getX()===x&&p.getPosition().getY()===y&&p.getPosition().getZ()===z);
   assert.equal(found.length,membersWorld?1:0,"exact member source world gate "+id+"@"+x+","+y);
-  if(membersWorld){assert.equal(found[0].getRespawnTimer(),timer);assert.equal(found[0].getItem().getAmount(),1);assert.equal(found[0].isStaticSpawn(),true);}
+  if(membersWorld){assert.equal(found[0].getRespawnTimer(),timer);assert.equal(found[0].getItem().getAmount(),amount);assert.equal(found[0].isStaticSpawn(),true);}
  }
  assert.ok(items.some(p=>p.getItem().getId()===1735&&p.getPosition().getX()===3152&&p.getPosition().getY()===3306),"existing F2P shears retained");
+});
+
+test("ten audited member rune definitions use exact native IDs/tiles/amounts without adding the held Air row",()=>{
+ for(const[id,x,y,z,timer,amount]of MEMBER_RUNES){
+  const found=spawns.filter(s=>s.id===id&&s.location.x===x&&s.location.y===y&&s.location.z===z);
+  assert.equal(found.length,1,"member rune "+id+"@"+x+","+y);
+  assert.equal(found[0].members,true);assert.equal(found[0].amt,amount);assert.equal(found[0].respawn,timer);
+  assert.equal(CacheDefinitions.getItem(id).name,id===554?"Fire rune":id===557?"Earth rune":"Mind rune");
+ }
+ assert.equal(spawns.some(s=>s.id===556&&s.location.x===1399&&s.location.y===3158&&s.location.z===0),false);
+ assert.equal(spawns.filter(s=>[556,557,558,554,561].includes(s.id)&&s.members===true).length,10,"no Air/Nature member scope expansion");
 });

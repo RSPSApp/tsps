@@ -76,17 +76,17 @@ test("small fishing net scenery rows remain excluded from the audited ordinary s
  // Any future net-page scope extension must resolve that distinction rather than adding this page.
 });
 
-test("audited member tools retain source world policy and cannot widen rune or scenery scope",()=>{
+test("audited member tools retain source world policy and cannot widen unaudited rune or scenery scope",()=>{
  const member=row({page:"Crossbow",id:837,x:1512,y:3423,members:true,quantity:1,infobox_respawn_ticks:500});
  const result=importSpawns(source([member]),[]);
  assert.equal(result.definitions.length,1);assert.equal(result.definitions[0].members,true);
  assert.equal(result.definitions[0].respawn,500);
  assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
- const pages=[["Air rune",556],["Body rune",559],["Earth rune",557],
-  ["Mind rune",558],["Nature rune",561],["Water rune",555],["Small fishing net",303]];
+ const pages=[["Air rune",556],["Body rune",559],
+  ["Nature rune",561],["Water rune",555],["Small fishing net",303]];
  const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
  assert.equal(rejected.definitions.length,0);
- assert.equal(rejected.report.counts["members-world-scope-deferred"],7);
+ assert.equal(rejected.report.counts["members-world-scope-deferred"],5);
 });
 test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
@@ -99,6 +99,42 @@ test("audited member tools report conflicting world policy instead of silently g
  assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
 });
 
+test("audited member Earth/Mind runes retain quantities/world policy while the uncertain Air row stays held",()=>{
+ const earth=row({page:"Earth rune",id:557,x:1394,y:3116,quantity:4,members:true});
+ const mind=row({page:"Mind rune",id:558,x:1392,y:3118,quantity:2,members:true});
+ const air=row({page:"Air rune",id:556,x:1399,y:3158,quantity:1,members:true});
+ const result=importSpawns(source([earth,mind,air]),[]);
+ assert.deepEqual(result.definitions.map(r=>[r.id,r.amt,r.respawn,r.members]),[[557,4,100,true],[558,2,100,true]]);
+ assert.equal(result.report.counts["members-world-scope-deferred"],1);
+ assert.deepEqual(importSpawns(source([earth,mind]),result.definitions).definitions,result.definitions);
+});
+
+const easternShellTiles=[[3258,2481],[3257,2477],[3259,2469],[3261,2458],[3260,2451],
+ [3256,2449],[3261,2444],[3258,2437],[3262,2435]];
+const easternShell=(extra={})=>row({page:"Sea shell",id:31395,x:3258,y:2481,plane:0,
+ members:true,quantity:1,infobox_respawn_ticks:50,location:"[[The Great Conch]] - eastern coast",...extra});
+test("nine pinned eastern shells preserve membership, quantity, timer and legacy order",()=>{
+ const legacy=[{id:995,location:{x:3000,y:3000,z:0},amt:7,respawn:20}];
+ const rows=easternShellTiles.map(([x,y])=>easternShell({x,y}));
+ const result=importSpawns(source(rows),legacy);
+ assert.deepEqual(result.definitions.slice(0,1),legacy);
+ assert.equal(result.definitions.length,10);
+ assert.deepEqual(result.definitions.slice(1).map(d=>[d.location.x,d.location.y]),easternShellTiles);
+ for(const d of result.definitions.slice(1)){assert.equal(d.members,true);assert.equal(d.amt,1);assert.equal(d.respawn,50);}
+ assert.deepEqual(importSpawns(source(rows),result.definitions).definitions,result.definitions);
+});
+test("eastern selection cannot admit other coasts, altered identities or unverified source state",()=>{
+ const rows=[easternShell({x:3201,y:2374}),easternShell({x:3170,y:2537}),
+ easternShell({x:3300,y:2320}),easternShell({location:"[[The Summer Shore]]"}),
+ easternShell({plane:1}),easternShell({id:31394}),easternShell({members:false}),
+ easternShell({quantity:2}),easternShell({infobox_respawn_ticks:51}),
+ easternShell({unresolved_reasons:["unresolved-version"]}),easternShell({tile_respawn_raw:"50"})];
+ assert.throws(()=>importSpawns(source([rows.pop()]),[]),/Invalid source-complete row/);
+ assert.equal(importSpawns(source(rows),[]).definitions.length,0);
+ const owned=[[3161,2389],[3168,2388],[3179,2384],[3191,2383],[3190,2379],[3197,2376]];
+ const result=importSpawns(source(owned.map(([x,y])=>easternShell({x,y,location:"[[The Summer Shore]]"}))),[]);
+ assert.equal(result.definitions.length,0);assert.equal(result.report.counts["area-owned-or-instance-integration"],6);
+});
 
 const memberFire = [
  {x:2768,y:3500,plane:1,quantity:2},

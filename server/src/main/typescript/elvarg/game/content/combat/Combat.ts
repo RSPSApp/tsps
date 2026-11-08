@@ -531,7 +531,12 @@ export class Combat {
         }
 
         this.character.getMovementQueue().reset();
-        if (cycle < this.nextAttackCycle && !this.attackTiming(method, target).ignoreDelay) {
+        // A bypassing special must reach executeAttack while the old cooldown is still active.
+        // Check the selected method too: an explicit spell can override an armed special.
+        const special = this.character.isPlayer() ? this.character.getAsPlayer().getCombatSpecial() : null;
+        const bypass = special?.getCombatMethod() === method &&
+            CombatSpecial.activeTraitsFor(this.character)?.bypassAttackDelay === true;
+        if (cycle < this.nextAttackCycle && !bypass && !this.attackTiming(method, target).ignoreDelay) {
             this.trace(`cooldown next=${this.nextAttackCycle} in=${this.nextAttackCycle - cycle}`, target);
             this.renewInteraction(target, generation);
             return;
@@ -923,7 +928,10 @@ export class Combat {
         const specialTraits = this.character && this.character.isPlayer()
             ? CombatSpecial.activeTraitsFor(this.character)
             : null;
-        const bypass = bypassDelay || specialTraits?.bypassAttackDelay === true;
+        const specialMethod = this.character.isPlayer()
+            ? this.character.getAsPlayer().getCombatSpecial()?.getCombatMethod()
+            : null;
+        const bypass = bypassDelay || (specialMethod === method && specialTraits?.bypassAttackDelay === true);
         const timing = this.attackTiming(method, target);
         if (!bypass && !timing.ignoreDelay && cycle < this.nextAttackCycle) {
             if (renew) this.renewInteraction(target, generation);

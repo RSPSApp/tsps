@@ -754,11 +754,16 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const player = new Player(new PlayerSession(channel));
-    const f = { player, npc: null, connection: null, anchor: null };
+    const f = { player, npc: null, connection: null, anchor: null, messages: [] };
     actors.push(f); // Own the player before registration, map loading or any assertion can fail.
     player.setIndex(1799 + actors.length);
     const username = `ottofm${player.getIndex()}`;
     player.setUsername(username); player.setLongUsername(core.Misc.stringToLongBigInt(username));
+    const sendMessage = player.sendMessage.bind(player);
+    t.mock.method(player, "sendMessage", message => {
+      f.messages.push(String(message));
+      return sendMessage(message);
+    });
     assert.ok(player.getLongUsername() !== 0n && player.getIndex() < core.World.MAX_PLAYERS);
     player.setAttribute(ATTR_SKIP_PERSISTENCE, true); player.setRegistered(true);
     const skills = player.getSkillManager();
@@ -844,22 +849,38 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
     fireSites.push({ location: anchor, area: f.player.getPrivateArea(),
       before: new Set(core.ObjectManager.objectsAt(anchor)) });
     assert.equal(core.ObjectManager.objectsAt(anchor).filter(o => o.getId() === core.ObjectIdentifiers.FIRE_23).length, 0);
-    const first = observed.length, earlierTasks = new Set(ownedTasks);
+    const first = observed.length, messageStart = f.messages.length;
+    const snapshot = phase => ({
+      phase, logId, bow, cycle: core.World.getProcessCycle(),
+      position: [f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()],
+      active: Firemaking.isFiremakingActive(f.player), queue: f.player.getMovementQueue().size(),
+      stall: f.player.getCombat().getAnimationStallTicks(),
+      currentLevel: f.player.getSkillManager().getCurrentLevel(K.FIREMAKING),
+      inventoryLogs: inv.getAmount(logId), inventoryTool: inv.getAmount(tool),
+      groundLogs: ground(f).filter(g => g.getItem().getId() === logId).length,
+      messages: f.messages.slice(messageStart).slice(-8),
+      tasks: [...ownedTasks].map(task => ({ name: task.constructor.name, running: task.isRunning() })),
+    });
+    if (bow) assert.equal(Firemaking.isFiremakingBow(tool), true, "the active item definition is a supported bow");
+    assert.ok(Firemaking.LIGHTABLE_LOGS_BY_ID.has(logId), "the active registered log table contains this input");
     await f.connection.dispatch([{ type: "inventory_use_on", itemId: tool, slot: inv.getSlotForItemId(tool),
       target: { kind: "inventory", id: logId, slot: inv.getSlotForItemId(logId) } }]);
-    for (let n=0; n<30; n++) {
+    turn(f);
+    assert.equal(Firemaking.isFiremakingActive(f.player), true,
+      "native item combination admits lighting: " + JSON.stringify(snapshot("admission")));
+    for (let n=1; n<30; n++) {
       turn(f);
       if (observed.length > first && !Firemaking.isFiremakingActive(f.player)) break;
     }
     collectFires(); // Also collected unconditionally in teardown if an earlier turn/assertion fails.
     const event = observed.slice(first).find(e => e.player === f.player);
-    assert.ok(event, "the real registered Logs task emits a successful fire event");
+    assert.ok(event, "the real registered Logs task emits a successful fire event: " + JSON.stringify(snapshot("completion")));
     assert.equal(event.itemId, logId); assert.equal(event.bow, bow);
     const fires = core.ObjectManager.objectsAt(anchor).filter(o => o.getId() === core.ObjectIdentifiers.FIRE_23
       && o.getPrivateArea() === f.player.getPrivateArea());
     assert.equal(fires.length, 1, "the actual skill action creates its fire");
     for (const o of fires) { createdFires.add(o); core.ObjectManager.deregister(o, true); }
-    for (const task of ownedTasks) if (!earlierTasks.has(task) && task.isRunning()) core.Task.prototype.stop.call(task);
+    // Keep production tasks alive across exercises; the guaranteed teardown owns their cleanup.
     for (const g of ground(f)) core.ItemOnGroundManager.deregister(g);
     return event;
   }

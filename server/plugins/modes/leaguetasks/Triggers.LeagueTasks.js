@@ -211,8 +211,18 @@ function npcName(npc) {
  * kill tasks that accept it: each task's progress takes this tick's larger count, then any task
  * that reached its count completes.
  */
+/** "The Hueycoatl" and "Hueycoatl, The" are one name: a plugin's kill report may use either form. */
+function articleSwapped(key) {
+  const leading = /^the (.+)$/.exec(key);
+  if (leading) return `${leading[1]}, the`;
+  const trailing = /^(.+), the$/.exec(key);
+  return trailing ? `the ${trailing[1]}` : null;
+}
+
 function credit(player, type, name, source, amount, tile = null) {
-  const tasks = indexOf(type).kills.get(String(name ?? "").toLowerCase());
+  const kills = indexOf(type).kills;
+  const key = String(name ?? "").toLowerCase();
+  const tasks = kills.get(key) ?? kills.get(articleSwapped(key));
   if (!tasks || !(amount > 0)) return;
   const done = new Set(Common.completedIds(player));
   // A `credited` task (a minigame's completion: "Complete the TzHaar Fight Cave") counts only the

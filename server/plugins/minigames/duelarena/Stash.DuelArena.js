@@ -112,8 +112,8 @@ function dragonfireOf(player) {
 function stopTimers(player) {
   const combat = player.getCombat();
   combat.getTeleblockTimer().stop();
-  combat.getFireImmunityTimer().stop();
-  player.setAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE, null);
+  // The antifire's timer, state and saved tier all go (DragonfireProtection), so none outlives the pause.
+  Dragonfire.clearDragonfireProtection(player);
   combat.getPoisonClock().stop();
   player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
 }

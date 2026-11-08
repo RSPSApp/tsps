@@ -1,4 +1,10 @@
 const ATTR_DRAGONFIRE_STATE = "combat:dragonfire:protection";
+/**
+ * The protection's tier and label, saved (the state's wall-clock end isn't: the fire-immunity timer, which pauses
+ * offline, carries the time left). A relog rebuilt the state from the timer alone as a plain antifire, so a super
+ * antifire's immunity came back as only the damage cut.
+ */
+const ATTR_DRAGONFIRE_TIER = "combat:dragonfire:tier";
 
 const DragonfireProtectionTier = Object.freeze({
   NONE: 0,
@@ -43,6 +49,7 @@ let pluginApi;
 function initDragonfireProtectionCoreAccess(api) {
   core = api.core;
   pluginApi = api;
+  api.persistAttribute?.(ATTR_DRAGONFIRE_TIER, null);
 }
 
 /**
@@ -75,9 +82,10 @@ function normalizeState(player) {
   if (timer && !timer.finished?.()) {
     const secondsRemaining = Number(timer.secondsRemaining?.() ?? 0);
     if (secondsRemaining > 0) {
+      const saved = player.getAttribute?.(ATTR_DRAGONFIRE_TIER);
       const fallbackState = {
-        tier: DragonfireProtectionTier.ANTIFIRE,
-        label: "antifire potion",
+        tier: Number.isFinite(saved?.tier) ? saved.tier : DragonfireProtectionTier.ANTIFIRE,
+        label: typeof saved?.label === "string" && saved.label ? saved.label : "antifire potion",
         endsAt: nowMs + secondsRemaining * 1000,
         warned: false,
       };
@@ -106,6 +114,7 @@ function setDragonfireProtection(player, { tier, seconds, label }) {
   };
 
   player.setAttribute?.(ATTR_DRAGONFIRE_STATE, state);
+  player.setAttribute?.(ATTR_DRAGONFIRE_TIER, { tier: state.tier, label: state.label });
   player.getCombat?.().getFireImmunityTimer?.().start(seconds);
   return true;
 }
@@ -115,6 +124,7 @@ function clearDragonfireProtection(player) {
     return;
   }
   player.setAttribute?.(ATTR_DRAGONFIRE_STATE, null);
+  player.setAttribute?.(ATTR_DRAGONFIRE_TIER, null);
   player.getCombat?.().getFireImmunityTimer?.().stop?.();
 }
 

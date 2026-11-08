@@ -56,7 +56,7 @@ The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers
 - **Coffins.**
   - +2 the picklock; +5 "You successfully disarm the trap on the coffin!" and 200 Thieving XP; +6 "You push the coffin lid aside."; +8 the loot, with one "received a drop" line per item.
   - The loot is the Wiki's: marks by floor, a low/mid/high tier, and the strange old lockpick.
-  - The [Jagex update](https://secure.runescape.com/m=news/summer-sweep-up---agility--chambers-of-xeric-changes?oldschool=1) gives the Grand Hallowed Coffin requirements as 84 Thieving or 92 Agility, boostable. The server applies the Agility alternative at 66 or more current Thieving; retail behavior below 66 Thieving is unverified. Its loot is 8-10 marks, the high table, and Ring of endurance at 1/200.
+  - The [Jagex update](https://secure.runescape.com/m=news/summer-sweep-up---agility--chambers-of-xeric-changes?oldschool=1) gives the Grand Hallowed Coffin requirements as 84 Thieving or 92 Agility, boostable. Its loot is 8-10 marks, the high table, and Ring of endurance at 1/200.
 - **The floor 5 barriers.** `hallowed_final_chest_barrier` (39540) is a multiloc on the timer varbit. Both its variants are solid in the cache, so the floor lifts their collision until the timer runs out.
 
 ## Traps (recorded)

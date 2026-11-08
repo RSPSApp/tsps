@@ -90,8 +90,7 @@ function open(event) {
   }
   const required = grand ? Common.data.requirements.grandThieving : Common.data.requirements.thieving;
   const thieving = Common.level(player, "THIEVING");
-  const agilityAlternative = grand && thieving >= Common.data.requirements.thieving &&
-    Common.level(player, "AGILITY") >= GRAND_AGILITY_REQUIREMENT;
+  const agilityAlternative = grand && Common.level(player, "AGILITY") >= GRAND_AGILITY_REQUIREMENT;
   if (thieving < required && !agilityAlternative) {
     player.sendMessage(Common.message("skillLevel", { skill: "Thieving", level: required }));
     return true;

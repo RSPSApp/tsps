@@ -1,6 +1,3 @@
-// STAGED, UNEXECUTED: this notes path is NOT directly executable.
-// Intended destination: client/tests/editor-audio-suspension.test.ts.
-// The import below deliberately targets that destination, not a private overlay.
 import assert from "node:assert/strict";
 import { registerManagedAudioContext, unregisterManagedAudioContext, setAudioSuspended, resumeAudioContextIfNeeded } from "../game/audio/audioContext";
 

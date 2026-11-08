@@ -93,7 +93,26 @@
   .row:first-child { border-top: none; }
   .row.inactive .label, .row.inactive .help { color: var(--off); }
   .label { font-weight: 600; }
-  .key { font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; }
+  .title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .info-wrap { position: relative; display: inline-flex; }
+  .info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5em; height: 1.5em; padding: 0; border: none; border-radius: 50%;
+    background: none; color: var(--muted); cursor: help;
+  }
+  .info:hover, .info:focus-visible { color: var(--accent); }
+  .info svg { width: 1em; height: 1em; display: block; }
+  .tip {
+    position: absolute; left: 0; top: 100%; z-index: 4;
+    width: max-content; max-width: min(320px, 70vw);
+    padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-wrap: anywhere; user-select: text; cursor: text;
+    visibility: hidden; opacity: 0;
+  }
+  .info-wrap:hover .tip, .info-wrap:focus-within .tip { visibility: visible; opacity: 1; }
   .help { color: var(--muted); font-size: 14px; margin-top: 2px; }
   .meta { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
   .tag { font-size: 12px; border-radius: 4px; padding: 0 6px; }
@@ -304,6 +323,30 @@
   var idCounter = 0;
   function nextId(prefix) { idCounter += 1; return prefix + "-" + idCounter; }
 
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svgNode(tag, attrs) {
+    var node = document.createElementNS(SVG_NS, tag);
+    for (var name in attrs) node.setAttribute(name, attrs[name]);
+    return node;
+  }
+  function infoIcon() {
+    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false" });
+    svg.appendChild(svgNode("circle", { cx: "8", cy: "8", r: "7", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }));
+    svg.appendChild(svgNode("rect", { x: "7.25", y: "7", width: "1.5", height: "5", rx: "0.75", fill: "currentColor" }));
+    svg.appendChild(svgNode("circle", { cx: "8", cy: "4.75", r: "1", fill: "currentColor" }));
+    return svg;
+  }
+
+  /** Row title plus an info button whose tooltip holds the key or file (shown on hover and focus). */
+  function titleLine(label, detail) {
+    var tipId = nextId("tip");
+    var button = el("button", { type: "button", className: "info", title: detail,
+      "aria-label": "Details: " + detail, "aria-describedby": tipId,
+      onkeydown: function (event) { if (event.key === "Escape") button.blur(); } }, [infoIcon()]);
+    var tip = el("span", { className: "tip", role: "tooltip", id: tipId, text: detail });
+    return el("div", { className: "title-line" }, [label, el("span", { className: "info-wrap" }, [button, tip])]);
+  }
+
   function readOnly() { return !!(state.data && state.data.layers && state.data.layers.localError); }
 
   /**
@@ -418,8 +461,7 @@
     var labelText = decl.label || option.key;
     var label = el("label", { className: "label", for: controlId, text: labelText });
     var text = el("div", null, [
-      label,
-      el("div", { className: "key", text: option.key }),
+      titleLine(label, option.key),
       el("div", { className: "help", id: helpId, text: decl.help || "" }),
       meta,
     ]);
@@ -494,8 +536,7 @@
 
     var rowEl = el("div", { className: "row" + (membersOff ? " inactive" : "") }, [
       el("div", null, [
-        el("label", { className: "label", for: controlId, text: plugin.name }),
-        el("div", { className: "key", text: plugin.file }),
+        titleLine(el("label", { className: "label", for: controlId, text: plugin.name }), plugin.file),
         el("div", { className: "help", id: helpId, text: plugin.description || "" }),
         meta,
       ]),

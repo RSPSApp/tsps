@@ -104,6 +104,19 @@ export abstract class Spell {
         return cost.items;
     }
 
+    /**
+     * The refusal for a cast short of `shortfall` (rsprox captures, regular worlds: "You do not have enough Law Runes to
+     * cast this spell.", "...Cosmic Runes...", "...bananas..."): the first item no rune source covers, a rune by its
+     * name in title case and plural, anything else in lower case and plural.
+     */
+    public static missingItemsMessage(player: Player, shortfall: Item[]): string {
+        const first = shortfall.find((item) => !PluginManager.checkSpellRuneSource(player, [item])) ?? shortfall[0];
+        const name = first ? String(first.getDefinition?.()?.getName?.() ?? "") : "";
+        if (!name) return "You do not have the required items to cast this spell.";
+        const plural = /rune$/i.test(name) ? name.replace(/\b\w/g, (letter) => letter.toUpperCase()) + "s" : name.toLowerCase() + "s";
+        return `You do not have enough ${plural} to cast this spell.`;
+    }
+
     /** The part of `items` the inventory cannot fully supply, aggregated per item. */
     public static inventoryShortfall(player: Player, items: Item[]): Item[] {
         const required = new Map<number, number>();
@@ -160,7 +173,7 @@ export abstract class Spell {
 
             // A rune source (rune pouch) may cover what the inventory cannot.
             if (runeShortfall.length > 0 && !PluginManager.checkSpellRuneSource(player, runeShortfall)) {
-                player.sendMessage("You do not have the required items to cast this spell.");
+                player.sendMessage(Spell.missingItemsMessage(player, runeShortfall));
                 player.getCombat().setCastSpell(null);
                 player.getCombat().reset();
                 return false;

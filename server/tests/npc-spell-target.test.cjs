@@ -114,7 +114,8 @@ for (const symbol of ['HANS', 'BANKER']) {
 }
 
 for (const [options, message] of [
-  [{ runes: false }, 'You do not have the required items to cast this spell.'],
+  // rsprox captures (regular worlds): the refusal names the first missing rune ("You do not have enough Law Runes...").
+  [{ runes: false }, 'You do not have enough Air Runes to cast this spell.'],
   [{ name: 'Fire Strike', level: 1 }, 'You need a Magic level of 13 to cast this spell.'],
 ]) {
   test(`native rejected targeting preserves the specific spell requirement: ${message}`, async t => {

@@ -317,6 +317,30 @@ test("topaz dragon bolts grant the same 3.9 XP per bolt as topaz bolts", () => {
   assert.equal(partial.xp(), 19.5);
 });
 
+// Wiki (Ogre arrow shaft): "1.6 Fletching experience is gained per shaft made"; (Wolfbone arrowtips) 2.5 per tip, "Between
+// 2 and 6 arrowtips are carved out of each wolf bone". Both paid their 4-item table figure (6.4, 10) whatever the roll.
+test("ogre arrow shafts and wolfbone arrowtips pay per item made", () => {
+  answers.started.add("big_chompy_bird_hunting");
+  const random = Math.random;
+  try {
+    for (const [roll, made] of [[0, 2], [0.99, 6]]) {
+      Math.random = () => roll;
+      const logs = player({ items: { KNIFE: 1, ACHEY_TREE_LOGS: 1 } });
+      use(logs, "KNIFE", "ACHEY_TREE_LOGS");
+      runTask();
+      assert.equal(logs.count("OGRE_ARROW_SHAFT"), made);
+      assert.ok(Math.abs(logs.xp() - 1.6 * made) < 1e-9, `${made} shafts: ${logs.xp()}`);
+      const bones = player({ items: { CHISEL: 1, WOLF_BONES: 1 } });
+      use(bones, "CHISEL", "WOLF_BONES");
+      runTask();
+      assert.equal(bones.count("WOLFBONE_ARROWTIPS"), made);
+      assert.ok(Math.abs(bones.xp() - 2.5 * made) < 1e-9, `${made} tips: ${bones.xp()}`);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
 test("ogre arrows need Big Chompy Bird Hunting started; brutal arrows need a hammer", () => {
   const p = player({ items: { KNIFE: 1, ACHEY_TREE_LOGS: 1 } });
   use(p, "KNIFE", "ACHEY_TREE_LOGS");

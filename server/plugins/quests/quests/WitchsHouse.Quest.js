@@ -121,6 +121,8 @@ module.exports = function registerWitchsHouseQuest(api) {
 
   const MOUSE_TILE = { x: 2903, y: 3466, z: 0 };
   const EXPERIMENT_TILE = { x: 2935, y: 3462, z: 0 };
+  /** It wanders the shed (2935,3462 -> 2934,3462 -> 2934,3464, ticks 657-662) until the glare. */
+  const EXPERIMENT_WANDER_RADIUS = 2;
   const BALL_SPAWN_TILE = { x: 2935, y: 3460, z: 0 };
   /** Ladder landings (ticks 189 and 263). */
   const BASEMENT_TILE = { x: 2906, y: 9876, z: 0 };
@@ -484,7 +486,7 @@ module.exports = function registerWitchsHouseQuest(api) {
       x: EXPERIMENT_TILE.x,
       y: EXPERIMENT_TILE.y,
       z: EXPERIMENT_TILE.z,
-      wanderRadius: 0,
+      wanderRadius: EXPERIMENT_WANDER_RADIUS,
       owner: player,
       ownerOnly: true,
     });
@@ -553,6 +555,8 @@ module.exports = function registerWitchsHouseQuest(api) {
     ensureExperiment(event.player);
     event.player.sendMessage("The shapeshifter glares at you. You feel slightly weakened.");
     weaken(event.player);
+    // Until now it only wandered; the glare turns it on the player (faces 666, attacks 668).
+    experimentByPlayer.get(event.player)?.getCombat?.().attack(event.player);
   }
 
   /** Each shapeshifter form dies into the next; the fourth one stays dead. */
@@ -582,13 +586,15 @@ module.exports = function registerWitchsHouseQuest(api) {
       x: location.getX(),
       y: location.getY(),
       z: location.getZ(),
-      wanderRadius: 0,
+      wanderRadius: EXPERIMENT_WANDER_RADIUS,
       owner,
       ownerOnly: true,
     });
     if (next) {
       next.__skipDefaultRespawn = true;
       experimentByPlayer.set(owner, next);
+      // Each new form fights on at once (the spider's attack sound plays as it appears, tick 712).
+      next.getCombat?.().attack(owner);
     }
     for (const line of FORM_MESSAGES[index]) owner.sendMessage(line);
     event.preventDeath = true;

@@ -148,6 +148,9 @@ function setup({ combatLevel = 35 } = {}) {
         getLocation() { return new core.Location(spec.x, spec.y, spec.z); },
         getSpawnLocation() { return new core.Location(spec.x, spec.y, spec.z); },
         isRegistered() { return true; },
+        wanderRadius: spec.wanderRadius,
+        attacked: [],
+        getCombat() { return { attack: (target) => this.attacked.push(target) }; },
         setMaxHitpoints() { return this; },
         setHitpoints() { return this; },
       };
@@ -958,4 +961,21 @@ test('Nora takes over her own movement and recovers from a stuck step or a tile 
   area.process(witch);
   area.process(witch);
   assert.deepEqual([witch.x, witch.y], [2905, 3463], 'patrolling east again');
+});
+
+test('the shapeshifter wanders the shed until the glare, and each new form attacks at once', () => {
+  const h = setup();
+  h.setStage(5);
+  h.give(I.KEY_9);
+  h.setLocation(2933, 3463);
+  h.toggle(O.DOOR_104, SHED_DOOR_TILE);
+  const glob = h.spawned.find((npc) => npc.id === EXPERIMENT_FORMS[0]);
+  assert.equal(glob.wanderRadius, 2);
+  assert.deepEqual(glob.attacked, [], 'not aggressive on entry');
+  h.pickup(I.BALL, BALL_SPAWN_TILE);
+  assert.deepEqual(glob.attacked, [h.player], 'the glare turns it on the player');
+  h.beforeDeath(glob);
+  const spider = h.spawned.find((npc) => npc.id === EXPERIMENT_FORMS[1]);
+  assert.equal(spider.wanderRadius, 2);
+  assert.deepEqual(spider.attacked, [h.player]);
 });

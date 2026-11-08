@@ -536,12 +536,17 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
   const { PlayerSession } = require("../dist/net/PlayerSession");
   const { ClientConnection } = require("../dist/net/NetworkBuilder");
   const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
+  const originalCycle = core.World.getProcessCycle();
+  let startupAttempted = false;
+  t.after(() => {
+    try { if (startupAttempted) PluginManager.emitServerShutdown({}); }
+    finally { core.World.processCycle = originalCycle; }
+  });
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3226, 3218);
+  startupAttempted = true;
   PluginManager.emitServerStartup({});
-  const originalCycle = core.World.getProcessCycle();
-  t.after(() => { PluginManager.emitServerShutdown({}); core.World.processCycle = originalCycle; });
   assert.equal(core.WorldDefinition.isMembersWorld(), true, "native colour baseline is a members world");
   const I = core.ItemIdentifiers, O = core.ObjectIdentifiers;
   const colours = [
@@ -561,8 +566,37 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
       close() {}, onData() {}, onError() {}, onClose() {} };
     const p = new Player(new PlayerSession(channel));
-    p.setIndex(index++); const name = `colour${index}`;
-    p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name));
+    let anchor = null, baselineFires = null, ownerName = null, privateArea = null, actorIndex = null;
+    const ground = () => ownerName == null ? [] : core.World.getItems().filter(g => !g.isPendingRemoval() &&
+      g.getOwner() === ownerName && g.getPrivateArea() === privateArea);
+    const fires = () => anchor == null || baselineFires == null ? [] : core.ObjectManager.objectsAt(anchor).filter(o =>
+      o.getId() === fireId && o.getPrivateArea() === privateArea && !baselineFires.has(o));
+    t.after(() => {
+      const errors = [];
+      const clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+      if (ownerName != null) {
+        clean(() => PluginManager.emitPlayerDisconnect({ player: p, username: ownerName }));
+        clean(() => PluginManager.emitPlayerLogout({ player: p, username: ownerName }));
+      }
+      clean(() => p.setRegistered(false));
+      if (actorIndex != null) clean(() => core.TaskManager.cancelTasks(actorIndex));
+      clean(() => core.TaskManager.cancelTasks(p));
+      clean(() => core.GameConstants.PLAYER_PERSISTENCE?.cancelRequestedSave(p));
+      clean(() => core.World.unregisterPlayerPosition(p));
+      if (anchor) clean(() => core.World.unregisterPlayerPosition(p, anchor));
+      let ownedGround = [], ownedFires = [];
+      clean(() => { ownedGround = ground(); });
+      clean(() => { ownedFires = fires(); });
+      for (const g of ownedGround) clean(() => core.ItemOnGroundManager.deregister(g));
+      for (const o of ownedFires) clean(() => core.ObjectManager.deregister(o, true));
+      clean(() => assert.equal(ground().length, 0, "owned ground items removed"));
+      clean(() => assert.equal(fires().length, 0, "owned fire removed"));
+      clean(() => assert.equal(core.TaskManager.hasActiveTask(p), false));
+      if (actorIndex != null) clean(() => assert.equal(core.TaskManager.hasActiveTask(actorIndex), false));
+      if (errors.length) throw new AggregateError(errors, "colour fixture cleanup failed");
+    });
+    actorIndex = index++; p.setIndex(actorIndex); const name = `colour${index}`;
+    p.setUsername(name); ownerName = name; p.setLongUsername(core.Misc.stringToLongBigInt(name));
     p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
     p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
     p.getSkillManager().setExperience(core.Skill.FIREMAKING, 0);
@@ -572,23 +606,8 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
     assert.ok(p.getLongUsername() > 0n); assert.equal(p.getHitpoints(), 10);
     assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING), 1);
     const c = new ClientConnection(channel); c.player = p;
-    const anchor = p.getLocation().clone();
-    const ground = () => core.World.getItems().filter(g => !g.isPendingRemoval() &&
-      g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea());
-    const fires = () => core.ObjectManager.objectsAt(anchor).filter(o =>
-      o.getId() === fireId && o.getPrivateArea() === p.getPrivateArea());
-    t.after(() => {
-      PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
-      PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
-      p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
-      core.GameConstants.PLAYER_PERSISTENCE?.cancelRequestedSave(p);
-      for (const g of ground()) core.ItemOnGroundManager.deregister(g);
-      for (const o of fires()) core.ObjectManager.deregister(o, true);
-      assert.equal(ground().length, 0, "owned ground items removed");
-      assert.equal(fires().length, 0, "owned fire removed");
-      assert.equal(core.TaskManager.hasActiveTask(p), false);
-      assert.equal(core.TaskManager.hasActiveTask(p.getIndex()), false);
-    });
+    anchor = p.getLocation().clone(); privateArea = p.getPrivateArea();
+    baselineFires = new Set(core.ObjectManager.objectsAt(anchor));
     for (const id of [I.LOGS, I.OAK_LOGS, lighter, I.TINDERBOX]) p.getInventory().add(new core.Item(id, 1), false);
     const gains = [], skills = p.getSkillManager(), add = skills.addExperiences.bind(skills);
     t.mock.method(skills, "addExperiences", (skill, xp) => {
@@ -615,7 +634,7 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
       assert.equal(p.getInventory().getAmount(lighter), 1);
       assert.equal(p.getInventory().getAmount(logs), 0);
       freeWorld.mock.restore();
-      // The clicked restricted copy must not consume an earlier plain copy.
+      // Seeded metadata boundary: a clicked restricted copy must not consume an earlier plain copy.
       const restricted = new core.Item(I.LOGS, 1).setMetaValue(core.Item.UNTRADEABLE_META, true);
       const restrictedSlot = p.getInventory().getItems().findIndex(item => item.getId() < 0);
       p.getInventory().setItem(restrictedSlot, restricted);

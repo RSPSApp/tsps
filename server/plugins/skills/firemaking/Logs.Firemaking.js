@@ -13,6 +13,8 @@ const FIRE_OBJECT_TYPE = 10;
 const FIRE_OBJECT_FACE = 0;
 const LIGHTABLE_LOGS = [];
 const LIGHTABLE_LOGS_BY_ID = new Map();
+const COLOURED_LOGS = [];
+const FIRELIGHTERS = new Map();
 const PYROMANCER_OUTFIT = [];
 const CAMPFIRES_BY_FIRE = new Map();
 let CreationMenu, Graphic, DialogueChainBuilder, StatementDialogue;
@@ -307,9 +309,9 @@ function stepAwayFromFire(player) {
   }
 }
 
-function spawnFire(player, location) {
+function spawnFire(player, location, fireId = FIRE_OBJECT_ID) {
   const fire = new GameObject(
-    FIRE_OBJECT_ID,
+    fireId,
     location.clone(),
     FIRE_OBJECT_TYPE,
     FIRE_OBJECT_FACE,
@@ -345,6 +347,11 @@ function lightingLevel(log, bow = false) {
 
 function startFiremakingAttempt(player, log, source, activeSessions) {
   if (!player || !log || !source) {
+    return false;
+  }
+
+  if (log.colour && !pluginApi.core.WorldDefinition.isMembersWorld()) {
+    player.sendMessage("You need to be on a members' world to light coloured logs.");
     return false;
   }
 
@@ -505,7 +512,7 @@ function completeInventoryOrGroundFire(player, state) {
     logs += extra;
   }
 
-  spawnFire(player, state.location);
+  spawnFire(player, state.location, state.log.fireId);
   for (let burnt = 0; burnt < logs; burnt++) grantFiremakingLogXp(player, state.log, state.bow === true);
   Sounds.sendSound(player, Sound.FIRE_SUCCESSFUL);
   spam(player, "The fire catches and the logs begin to burn.");
@@ -671,7 +678,7 @@ function processFiremakingTick(activeSessions, currentTick) {
     }
 
     // Content may make the roll succeed ("firemaking:light-roll", a league relic that never fails to light).
-    const light = { player, success: Math.random() < lightingSuccessChance(getFiremakingLevel(player)) };
+    const light = { player, success: !!session.log.colour || Math.random() < lightingSuccessChance(getFiremakingLevel(player)) };
     pluginApi.emitCustomEvent("firemaking:light-roll", light);
     if (!light.success) {
       player.performAnimation(LIGHT_FIRE_ANIMATION);
@@ -715,6 +722,24 @@ function handleItemOnItem(event, activeSessions) {
   // in "Use item ->" mode and subsequent item selection appears broken.
   player.getPacketSender().sendInterfaceRemoval();
   player.getSkillManager()?.stopSkillable?.();
+
+  const lighterId = usedItemId === ItemIds.LOGS ? usedWithItemId
+    : usedWithItemId === ItemIds.LOGS ? usedItemId : -1;
+  const coloured = FIRELIGHTERS.get(lighterId);
+  if (coloured) {
+    event.handled = true;
+    if (!pluginApi.core.WorldDefinition.isMembersWorld()) {
+      player.sendMessage("You need to be on a members' world to use firelighters.");
+      return;
+    }
+    const inventory = player.getInventory();
+    if (!inventory.contains(ItemIds.LOGS) || !inventory.contains(lighterId)) return;
+    inventory.deleteNumber(ItemIds.LOGS, 1);
+    inventory.deleteNumber(lighterId, 1);
+    inventory.add(new Item(coloured.itemId, 1), true);
+    player.sendMessage(`You coat the logs with the ${coloured.colour} chemicals.`);
+    return;
+  }
 
   const helmetId = usedItemId === TINDERBOX_ID ? usedWithItemId
     : usedWithItemId === TINDERBOX_ID ? usedItemId : -1;
@@ -1018,7 +1043,7 @@ module.exports = {
     return !!(activeSessionsRef && player && activeSessionsRef.has(player));
   },
   isWoodcuttingLog(itemId) {
-    return LIGHTABLE_LOGS_BY_ID.has(itemId);
+    return LIGHTABLE_LOGS.some((log) => log.itemId === itemId);
   },
   // Exposed for tests and other plugins.
   LIGHTABLE_LOGS,
@@ -1088,6 +1113,20 @@ function attach(api) {
 
   LIGHTABLE_LOGS_BY_ID.clear();
   for (const log of LIGHTABLE_LOGS) LIGHTABLE_LOGS_BY_ID.set(log.itemId, log);
+  // Pinned rev 241 loc symbols identify the five coloured fire objects.
+  COLOURED_LOGS.splice(0, COLOURED_LOGS.length,
+    { colour: "red", itemId: ItemIds.RED_LOGS, lighterId: ItemIds.RED_FIRELIGHTER, fireId: ObjectIds.FIRE_24 },
+    { colour: "green", itemId: ItemIds.GREEN_LOGS, lighterId: ItemIds.GREEN_FIRELIGHTER, fireId: ObjectIds.FIRE_25 },
+    { colour: "blue", itemId: ItemIds.BLUE_LOGS, lighterId: ItemIds.BLUE_FIRELIGHTER, fireId: ObjectIds.FIRE_26 },
+    { colour: "white", itemId: ItemIds.WHITE_LOGS, lighterId: ItemIds.WHITE_FIRELIGHTER, fireId: ObjectIds.FIRE_16 },
+    { colour: "purple", itemId: ItemIds.PURPLE_LOGS, lighterId: ItemIds.PURPLE_FIRELIGHTER, fireId: ObjectIds.FIRE_17 },
+  );
+  FIRELIGHTERS.clear();
+  for (const log of COLOURED_LOGS) {
+    Object.assign(log, { requiredLevel: 1, xpReward: 50 });
+    LIGHTABLE_LOGS_BY_ID.set(log.itemId, log);
+    FIRELIGHTERS.set(log.lighterId, log);
+  }
   CAMPFIRES_BY_FIRE.clear();
   for (const [fire, campfire] of [
     [ObjectIds.FIRE_23, ObjectIds.FORESTERS_CAMPFIRE],
@@ -1116,7 +1155,7 @@ function attach(api) {
   api.onItemOnItem(onItemOnItemEvent, { noted: false });
   api.onItemOnGroundItem(onItemOnGroundItemEvent, { noted: false });
   api.onGroundItemClick(
-    LIGHTABLE_LOGS.map((log) => log.itemId),
+    [...LIGHTABLE_LOGS, ...COLOURED_LOGS].map((log) => log.itemId),
     LIGHT_GROUND_OPTION,
     onGroundItemLightEvent
   );

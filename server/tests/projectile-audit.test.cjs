@@ -188,6 +188,8 @@ test("Armadyl Eye keeps the captured flat 41 -> 75", () => {
     core: {
       Animation: class {},
       CombatFactory: { checkAmmo: () => true, decrementAmmo: () => {} },
+      // The specials measure the shot with CombatPosition.projectileDistance since #2356.
+      CombatPosition: { projectileDistance: (a, t) => a.getLocation().getDistance(t.getLocation()) },
       CombatSpecial: { drain: () => {} },
       ItemIdentifiers: { ARMADYL_CROSSBOW: 1 },
       PendingHit: class {},
@@ -230,6 +232,8 @@ test("Concentrated Shot fires the equipped javelin, and its burst lands with it"
     core: {
       Animation: class {},
       CombatFactory: { checkAmmo: () => true, decrementAmmo: () => {} },
+      // The specials measure the shot with CombatPosition.projectileDistance since #2356.
+      CombatPosition: { projectileDistance: (a, t) => a.getLocation().getDistance(t.getLocation()) },
       CombatSpecial: { drain: () => {} },
       Graphic: class { constructor(id, delay, height) { this.id = id; this.delay = delay; this.height = height; } },
       ItemIdentifiers: { LIGHT_BALLISTA: 19478, HEAVY_BALLISTA: 19481, LIGHT_BALLISTA_4: 19480, HEAVY_BALLISTA_OR_: 19482 },

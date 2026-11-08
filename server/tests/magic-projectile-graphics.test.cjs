@@ -40,6 +40,8 @@ function fixture(t, {distance=3, accurate=true, pvp=false, spellName="FIRE_WAVE"
   t.mock.method(target,"performGraphic",g=>{graphics.push({cycle,g});perform(g);});
   t.mock.method(core.Sounds,"sendSound",()=>{});
   t.mock.method(core.Sounds,"playAreaSoundAt",(...args)=>sounds.push({cycle,args}));
+  // The cast-time impact sound (live: sent with the cast, delayed to the projectile's end; 227/00102 tick 232).
+  t.mock.method(core.Sounds,"playAreaSound",(sound)=>sounds.push({cycle,args:[sound],delay:sound.delay}));
   const finish=spell.finishCast.bind(spell);
   t.mock.method(spell,"finishCast",(...args)=>{callbacks.push({cycle,args});return finish(...args);});
   caster.getCombat().setCastSpell(spell);
@@ -66,12 +68,14 @@ for(const distance of[1,3])for(const accurate of[true,false])test(`Fire Wave NPC
   assert.equal(g.getId(),accurate?f.spell.endGraphic().getId():core.MagicCombatMethod.SPLASH_GRAPHIC.getId());
   assert.equal(g.getDelay(),distance===1?56:76);
   assert.equal(g.getHeight(),accurate?f.spell.endGraphic().getHeight():core.MagicCombatMethod.SPLASH_GRAPHIC.getHeight());
-  assert.equal(f.target.getHitpoints(),f.beforeHP);assert.equal(f.callbacks.length,0);assert.equal(f.sounds.length,0);
+  assert.equal(f.target.getHitpoints(),f.beforeHP);assert.equal(f.callbacks.length,0);
+  assert.equal(f.sounds.length,1,"the impact sound goes out with the cast");assert.equal(f.sounds[0].delay,distance===1?56:76,"delayed to the projectile's end, as the graphic");
+  const castCycle=f.cycle();
   assert.equal(f.land(),distance===1?102:103,"unchanged NPC hit processing deadline");
   assert.equal(f.target.getHitpoints(),f.beforeHP-(accurate?2:0));
   assert.equal(f.graphics.length,1,"no second impact graphic");
   assert.equal(f.callbacks.length,1);assert.equal(f.callbacks[0].cycle,f.cycle());assert.equal(f.callbacks[0].args[4],f.context);
-  assert.equal(f.sounds.length,1);assert.equal(f.sounds[0].cycle,f.cycle());
+  assert.equal(f.sounds.length,1,"no second sound at landing");assert.equal(f.sounds[0].cycle,castCycle);
 });
 for(const mode of["pvp","fixed","custom-projectile","no-projectile","no-context","arceuus","aoe"])test(`${mode} retains impact-time graphic fallback`,t=>{
   const options={pvp:mode==="pvp",paid:mode!=="no-context",configure:({spell})=>{
@@ -130,5 +134,5 @@ for(const accurate of[true,false])test(`a higher-priority NPC graphic keeps the 
   f.land();
   assert.equal(f.target.getGraphic().getId(),accurate?f.spell.endGraphic().getId():core.MagicCombatMethod.SPLASH_GRAPHIC.getId());
   assert.equal(f.target.getGraphic().getDelay(),0,"the existing impact-time path remains available");
-  assert.equal(f.callbacks.length,1);assert.equal(f.sounds.length,1);
+  assert.equal(f.callbacks.length,1);assert.equal(f.sounds.length,1,"the sound went out with the cast, whatever graphic won the tick");
 });

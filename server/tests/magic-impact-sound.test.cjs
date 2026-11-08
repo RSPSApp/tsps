@@ -210,3 +210,37 @@ for (const [casterX, end] of [[3206, 86], [3205, 76]]) {
     assert.equal(hit.getDelay(), Math.ceil(end / 30), 'the hit lands with the projectile');
   });
 }
+
+// #2557 follow-up: with the real cast start (the projectile sent, its end cycle known), live sends the impact sound AT
+// THE CAST with delay = the projectile's end cycle (RSProx 227/00102 tick 232: sound_area 161 delay=106 for a
+// projectile ending at 106; a Leagues V world, but nothing Leagues about the timing), and nothing more at landing.
+test('a native Fire Strike on an NPC sends its impact sound with the cast, delayed to the projectile end, and none at landing', (t) => {
+  const { AccuracyFormulasDpsCalc } = require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
+  const { Spell } = require('../dist/game/content/combat/magic/Spell');
+  for (const accurate of [true, false]) {
+    const caster = actor(t, 3200);
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new Location(3203, 3200));
+    t.mock.method(World, 'getPlayers', () => [caster.player]);
+    const spell = core.CombatSpells.FIRE_STRIKE;
+    caster.player.getSkillManager().setMaxLevel(core.Skill.MAGIC, 99);
+    caster.player.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 99, false);
+    t.mock.method(npc, 'getHitpoints', () => 200);
+    caster.player.getCombat().setCastSpell(spell);
+    for (const rune of spell.itemsRequired(caster.player)) caster.player.getInventory().add(new core.Item(rune.getId(), rune.getAmount() * 10));
+    const method = new core.MagicCombatMethod();
+    const roll = t.mock.method(AccuracyFormulasDpsCalc, 'rollAccuracy', () => accurate);
+    assert.equal(spell.getSpell().canCast(caster.player, true), true, 'paid, as the combat flow does before start');
+    method.start(caster.player, npc);
+    const selected = caster.player.getCombat().getSelectedSpell();
+    const visual = selected?.getNpcProjectileVisual?.(Spell.getCastContext(caster.player, selected), npc);
+    assert.ok(visual, 'the native standard cast queues its impact visual');
+    const before = caster.sounds().length; // the cast sound start() sends
+    const hit = method.hits(caster.player, npc)[0];
+    roll.mock.restore();
+    const id = accurate ? 161 : Sound.SPELL_FAIL_SPLASH.getId();
+    const queued = encodeSound(id, { x: 3203, y: 3200, level: 0, loops: 1, delay: visual.endCycleOffset, radius: 10, attenuation: 0 });
+    assert.deepEqual(caster.sounds().slice(before), [queued], `${accurate ? 'impact' : 'splash'}: sent with the cast, delayed to the end cycle`);
+    method.handleAfterHitEffects(hit);
+    assert.deepEqual(caster.sounds().slice(before), [queued], 'nothing more when the hit lands');
+  }
+});

@@ -449,9 +449,10 @@ function applyExtendedStamina(player) {
   });
 }
 
-function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,charges=1}) {
-  // Ring of endurance doubles this by mutating the payload and spends `charges` (Wiki).
-  const request = { player, energy, durationMs, charges };
+function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,charges=1,ringDoubles=true}) {
+  // Ring of endurance doubles this by mutating the payload and spends `charges` (Wiki), unless the source says it
+  // doesn't (the Agility cape's Stamina Boost).
+  const request = { player, energy, durationMs, charges, ringDoubles };
   pluginApi.emitCustomEvent("potions:stamina-effect", request);
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);

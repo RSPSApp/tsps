@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const fs = require("fs");
 
 // Who may reach the world config page. Spec "Access": own listener on loopback, a token on every
 // request (any web page the host visits can send requests to localhost), Host pinned to
@@ -15,8 +16,36 @@ function resolvePort(raw) {
   return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : DEFAULT_PORT;
 }
 
-/** Listener settings from the environment. `notes` are logged by the caller. */
-function resolveAccess(env = process.env) {
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24,}$/;
+
+/**
+ * The generated token, kept in `tokenFile` (gitignored, mode 0o600 where supported) so the
+ * page's cookie survives the restarts it triggers. Falls back to a per-start token when the
+ * file can't be read or written.
+ */
+function storedToken(tokenFile, notes) {
+  if (!tokenFile) return crypto.randomBytes(24).toString("base64url");
+  try {
+    const existing = fs.readFileSync(tokenFile, "utf8").trim();
+    if (TOKEN_PATTERN.test(existing)) return existing;
+  } catch (err) {
+    if (err?.code !== "ENOENT") notes.push(`could not read ${tokenFile} (${err.message}); using a new token`);
+  }
+  const token = crypto.randomBytes(24).toString("base64url");
+  try {
+    fs.writeFileSync(tokenFile, token + "\n", { mode: 0o600 });
+    fs.chmodSync(tokenFile, 0o600);
+  } catch (err) {
+    notes.push(`could not save the token to ${tokenFile} (${err.message}); it changes on every start`);
+  }
+  return token;
+}
+
+/**
+ * Listener settings from the environment. `notes` are logged by the caller.
+ * `tokenFile`: where the generated token is kept when WORLD_ADMIN_TOKEN is unset.
+ */
+function resolveAccess(env = process.env, { tokenFile } = {}) {
   const notes = [];
   const configuredToken = env.WORLD_ADMIN_TOKEN ? String(env.WORLD_ADMIN_TOKEN) : "";
   let host = LOOPBACK;
@@ -31,7 +60,7 @@ function resolveAccess(env = process.env) {
     port: resolvePort(env.WORLD_ADMIN_PORT),
     host,
     loopback: host === LOOPBACK || host === "localhost" || host === "::1",
-    token: configuredToken || crypto.randomBytes(24).toString("base64url"),
+    token: configuredToken || storedToken(tokenFile, notes),
     notes,
   };
 }

@@ -204,8 +204,10 @@ declared `pluginConfig` option. It writes `data/definitions/world.local.json` on
 [world-admin] world config page: http://localhost:49600/?token=...
 ```
 
-Open it in a browser. The token is random on every start (set `WORLD_ADMIN_TOKEN` in `.env`
-for a fixed one); the link sets a cookie and the page then works without it. The page listens
+Open it in a browser. The token is generated once and kept in the gitignored
+`data/definitions/world-admin.token`, so the page stays signed in across restarts; delete the
+file for a new one, or set `WORLD_ADMIN_TOKEN` in `.env`, which wins over the file. The link
+sets a cookie and the page then works without it. The page listens
 on `WORLD_ADMIN_PORT` (default 49600; each `scripts/wt` worktree gets 49600 + its slot),
 bound to 127.0.0.1, so on a VPS reach it through an SSH tunnel and open the printed link
 locally:

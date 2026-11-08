@@ -152,6 +152,22 @@
   ul.list { margin: 6px 0 12px; padding-left: 20px; }
   .seconds { display: inline-flex; gap: 6px; align-items: center; }
   .seconds input { width: 90px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .overlay {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg); color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay-box {
+    display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px 28px; max-width: 420px;
+  }
+  .overlay-box p { margin: 0; font-size: 19px; line-height: 1.3; }
+  .spinner {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid var(--line); border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
   [hidden] { display: none !important; }
   @media (max-width: 640px) {
     .row { grid-template-columns: minmax(0, 1fr); }
@@ -186,6 +202,12 @@
     <button type="button" class="primary" id="save" disabled>Save</button>
   </div>
 </div>
+<div id="overlay" class="overlay" hidden>
+  <div class="overlay-box" role="status" aria-live="assertive">
+    <span id="overlay-spinner" class="spinner" aria-hidden="true"></span>
+    <p id="overlay-text"></p>
+  </div>
+</div>
 <dialog id="preview" aria-labelledby="preview-title">
   <div class="dialog-body">
     <h2 id="preview-title">Review changes to world.local.json</h2>
@@ -213,7 +235,8 @@
     tab: "settings",
     dismissedFailure: null,
     pollTimer: null,
-    restarting: false,
+    reconnect: null,     // { delay } while the server is down
+    applied: false,      // an Apply was accepted; its edits clear once the server is back
     lastPlan: null,
   };
 
@@ -668,7 +691,7 @@
   function anyInvalid() { return state.rows.some(function (r) { return r.invalid; }); }
   function busy() {
     var d = state.data;
-    return state.restarting || !!(d && (d.pending || (d.countdown && d.countdown.scheduled)));
+    return !!state.reconnect || !!(d && (d.pending || (d.countdown && d.countdown.scheduled)));
   }
 
   function updateFooter() {
@@ -732,11 +755,7 @@
         el("div", { className: "text", text: "This server can't restart itself, so saving only writes world.local.json. Restart the server by hand for it to take effect." }),
       ]));
     }
-    if (state.restarting) {
-      box.appendChild(el("div", { className: "banner info", role: "status" }, [
-        el("div", { className: "text", text: state.restarting }),
-      ]));
-    } else if (d.pending || (d.countdown && d.countdown.scheduled)) {
+    if (d.pending || (d.countdown && d.countdown.scheduled)) {
       var remaining = d.countdown ? d.countdown.remainingSeconds : 0;
       var ours = !!d.pending;
       var text = ours
@@ -758,20 +777,73 @@
       el("button", { type: "button", text: "Dismiss", onclick: function () { node.remove(); } }),
     ]);
     box.insertBefore(node, box.firstChild);
+    return node;
   }
 
   // ---------- loading and polling ----------
+
+  // While the server is down (a restart, or it stopped answering) the page stays put behind an
+  // overlay and polls with backoff; it never navigates or reloads, so the browser's own
+  // "can't connect" page never appears.
+  var RECONNECT_FIRST_MS = 1000;
+  var RECONNECT_MAX_MS = 5000;
+  var overlay = document.getElementById("overlay");
+  var overlayText = document.getElementById("overlay-text");
+  var overlaySpinner = document.getElementById("overlay-spinner");
+
+  function showOverlay(text, spinning) {
+    overlayText.textContent = text;
+    overlaySpinner.hidden = !spinning;
+    overlay.hidden = false;
+  }
+
+  function enterReconnect() {
+    if (dialog.open) dialog.close();
+    if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS };
+    showOverlay("Restarting the server… reconnecting", true);
+    updateFooter();
+    stopPolling();
+    var delay = state.reconnect.delay;
+    state.reconnect.delay = Math.min(delay * 2, RECONNECT_MAX_MS);
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, delay);
+  }
+
+  function finishReconnect(body) {
+    state.reconnect = null;
+    overlay.hidden = true;
+    state.data = body;
+    if (state.applied && !body.lastFailure) state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    state.applied = false;
+    build();
+    renderBanners();
+    updateFooter();
+    if (!body.lastFailure) {
+      var note = flash("info", "Restarted.");
+      setTimeout(function () { note.remove(); }, 4000);
+    }
+    schedulePoll();
+  }
 
   function load(rebuild) {
     return api("/api/catalog").then(function (res) {
       if (res.status === 401) {
         stopPolling();
-        state.restarting = false;
-        showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…). The token changes each time the server starts.");
+        if (state.reconnect) {
+          showOverlay("The server's access link changed — open the new link from the server log.", false);
+        } else {
+          showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…).");
+        }
         return;
       }
       if (!res.ok || !res.body) {
+        if (state.reconnect) { enterReconnect(); return; }
         showFatal("Could not load the catalog: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      if (state.reconnect) {
+        // Still the old process on its way down: keep waiting.
+        if (res.body.pending && !res.body.lastFailure) { enterReconnect(); return; }
+        finishReconnect(res.body);
         return;
       }
       var hadData = !!state.data;
@@ -781,26 +853,18 @@
         if (hashChanged && !rebuild && editCount() > 0) flash("warn", "world.local.json changed on disk; the page reloaded it and kept your unsaved edits where they still apply.");
         build();
       }
-      if (state.restarting && !res.body.pending) {
-        state.restarting = false;
-        if (!res.body.lastFailure) {
-          state.edits = { world: {}, plugins: {}, pluginConfig: {} };
-          build();
-          flash("info", "The server restarted with your changes.");
-        }
-      }
       renderBanners();
       updateFooter();
+      var pending = res.body.pending;
+      if (pending && (pending.kind === "now" || (pending.kind === "countdown" && res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
+        // The countdown reached zero (or there was none): the server is about to go down.
+        enterReconnect();
+        return;
+      }
       schedulePoll();
     }, function () {
-      // Network error: expected while the server restarts.
-      if (state.restarting || busy()) {
-        state.restarting = "The server is restarting…";
-        renderBanners();
-        schedulePoll(true);
-      } else {
-        showFatal("The server did not answer. Is it running?");
-      }
+      // Network error: the server is restarting or stopped answering.
+      enterReconnect();
     });
   }
 
@@ -815,9 +879,9 @@
     if (state.pollTimer) clearTimeout(state.pollTimer);
     state.pollTimer = null;
   }
-  function schedulePoll(force) {
+  function schedulePoll() {
     stopPolling();
-    if (!force && !busy()) return;
+    if (!busy()) return;
     state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, POLL_MS);
   }
 
@@ -827,7 +891,7 @@
       else if (res.body && res.body.cancelled) flash("info", "Restart cancelled. world.local.json was not changed.");
       else flash("warn", "There was no countdown to cancel.");
       load(false);
-    }, function () { flash("error", "Cancel failed: the server did not answer."); });
+    }, function () { enterReconnect(); });
   }
 
   // ---------- preview and apply ----------
@@ -890,7 +954,7 @@
       document.getElementById("seconds").value = String(DEFAULT_SECONDS);
       renderPlan(res.body);
       if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
-    }, function () { flash("error", "Preview failed: the server did not answer."); });
+    }, function () { enterReconnect(); });
   });
 
   document.getElementById("preview-close").addEventListener("click", function () { dialog.close(); });
@@ -915,13 +979,11 @@
         load(true);
       } else if (res.status === 202 && b.applied === "countdown") {
         dialog.close();
+        state.applied = true;
         load(false);
       } else if (res.status === 202 && b.applied === "restarting") {
-        dialog.close();
-        state.restarting = "Saving players, writing world.local.json and restarting…";
-        renderBanners();
-        updateFooter();
-        schedulePoll(true);
+        state.applied = true;
+        enterReconnect();
       } else if (res.status === 400 && b.diff) {
         state.lastPlan = b;
         renderPlan(b);
@@ -930,12 +992,14 @@
         if (res.status === 409) load(false);
       }
     }, function () {
-      renderPlan(state.lastPlan, "Apply failed: the server did not answer.");
+      // The server went away mid-request: wait for it rather than guess what happened.
+      state.applied = true;
+      enterReconnect();
     });
   });
 
   window.addEventListener("beforeunload", function (event) {
-    if (editCount() > 0 && !state.restarting) { event.preventDefault(); event.returnValue = ""; }
+    if (editCount() > 0 && !state.reconnect) { event.preventDefault(); event.returnValue = ""; }
   });
 
   load(true);

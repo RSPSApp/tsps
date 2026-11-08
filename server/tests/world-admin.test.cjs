@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const http = require("node:http");
+const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 
@@ -98,12 +100,17 @@ async function start(t, env = {}, opts = {}) {
   const plugin = freshPlugin();
   const capture = captureLogs();
   let port = null;
+  // The token file goes under <cwd>/data/definitions: tests that start without a token use a temp cwd.
+  const savedCwd = process.cwd();
+  if (opts.cwd) process.chdir(opts.cwd);
   try {
     plugin.register(api);
     await hooks.startup({ timestamp: Date.now() });
   } catch (err) {
     capture.restore();
     throw err;
+  } finally {
+    process.chdir(savedCwd);
   }
   const link = capture.logs.join("\n").match(/http:\/\/localhost:(\d+)\/\?token=([A-Za-z0-9_-]+)/);
   if (link) port = Number(link[1]);
@@ -148,6 +155,14 @@ const auth = { Authorization: `Bearer ${TOKEN}` };
 const apply = (port, body, headers = {}) =>
   request(port, { method: "POST", path: "/api/apply", headers: { ...auth, ...headers }, body });
 const tick = () => new Promise((r) => setImmediate(r));
+
+/** A temp server directory with data/definitions, removed after the test. */
+function tempServerDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-"));
+  fs.mkdirSync(path.join(dir, "data", "definitions"), { recursive: true });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return { dir, tokenFile: path.join(dir, "data", "definitions", "world-admin.token") };
+}
 
 test("every request needs the token; Host and Origin are checked; no CORS headers", async (t) => {
   const { port } = await start(t);
@@ -216,7 +231,8 @@ test("catalog reports layers, mode, online players and countdown", async (t) => 
 });
 
 test("random token when WORLD_ADMIN_TOKEN is unset; WORLD_ADMIN_BIND alone still binds 127.0.0.1 and says why", async (t) => {
-  const { port, token, logs } = await start(t, { WORLD_ADMIN_TOKEN: "", WORLD_ADMIN_BIND: "0.0.0.0" });
+  const { dir } = tempServerDir(t);
+  const { port, token, logs } = await start(t, { WORLD_ADMIN_TOKEN: "", WORLD_ADMIN_BIND: "0.0.0.0" }, { cwd: dir });
   assert.ok(port);
   assert.ok(token && token.length >= 24 && token !== TOKEN);
   const text = logs.join("\n");
@@ -226,6 +242,31 @@ test("random token when WORLD_ADMIN_TOKEN is unset; WORLD_ADMIN_BIND alone still
   // The token is printed exactly once.
   assert.equal(text.split(token).length - 1, 1);
   assert.equal((await request(port, { path: "/api/catalog", headers: { Authorization: `Bearer ${token}` } })).status, 200);
+});
+
+test("the generated token is kept in data/definitions/world-admin.token and reused on the next start", async (t) => {
+  const { dir, tokenFile } = tempServerDir(t);
+  const first = await start(t, { WORLD_ADMIN_TOKEN: "" }, { cwd: dir });
+  assert.ok(first.token && first.token.length >= 24);
+  assert.equal(fs.readFileSync(tokenFile, "utf8").trim(), first.token);
+  if (process.platform !== "win32") assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600);
+  await first.plugin._test.stop();
+
+  const second = await start(t, { WORLD_ADMIN_TOKEN: "" }, { cwd: dir });
+  assert.equal(second.token, first.token);
+  assert.match(second.logs.join(" "), /world config page: http:\/\/localhost:\d+\/\?token=/);
+  assert.equal((await request(second.port, { path: "/api/catalog", headers: { Authorization: `Bearer ${first.token}` } })).status, 200);
+});
+
+test("WORLD_ADMIN_TOKEN wins over the token file, which is left alone", async (t) => {
+  const { dir, tokenFile } = tempServerDir(t);
+  const fileToken = "file-token-0123456789abcdefghij";
+  fs.writeFileSync(tokenFile, fileToken + "\n");
+  const { port, token } = await start(t, {}, { cwd: dir });
+  assert.equal(token, TOKEN);
+  assert.equal(fs.readFileSync(tokenFile, "utf8"), fileToken + "\n");
+  assert.equal((await request(port, { path: "/api/catalog", headers: { Authorization: `Bearer ${fileToken}` } })).status, 401);
+  assert.equal((await request(port, { path: "/api/catalog", headers: auth })).status, 200);
 });
 
 test("BROWSER_HOST=1 never listens", async (t) => {

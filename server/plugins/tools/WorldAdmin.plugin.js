@@ -6,6 +6,8 @@ const { createRequestHandler } = require("./worldadmin/Http.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
 //   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a token)
+// Without WORLD_ADMIN_TOKEN the generated token is kept in data/definitions/world-admin.token
+// (gitignored) so the page stays signed in across the restarts it triggers.
 // The startup log prints http://localhost:<port>/?token=<token>; opening it sets a cookie.
 // Apply writes data/definitions/world.local.json only (never world.json):
 //   manual     - written now, restart by hand;
@@ -20,6 +22,7 @@ const MAX_COUNTDOWN_SECONDS = 24 * 60 * 60;
 const PLUGIN_NAME = "WorldAdmin";
 const PLUGIN_DIRECTORY = path.join(__dirname, "..");
 const DEFINITIONS_DIRECTORY = () => path.resolve("data/definitions");
+const TOKEN_FILE_NAME = "world-admin.token";
 const SELF_OFF_WARNING =
   "This turns off the world config page; you'd need to edit world.local.json by hand to turn it back on.";
 
@@ -239,7 +242,7 @@ const actions = {
 // listener from holding the process open by itself.
 async function startWorldAdmin() {
   if (process.env.BROWSER_HOST === "1" || httpServer) return;
-  access = resolveAccess(process.env);
+  access = resolveAccess(process.env, { tokenFile: path.join(DEFINITIONS_DIRECTORY(), TOKEN_FILE_NAME) });
   for (const note of access.notes) console.warn(`[world-admin] ${note}`);
   const server = http.createServer(createRequestHandler(
     { token: access.token, loopback: access.loopback, port: () => boundPort },

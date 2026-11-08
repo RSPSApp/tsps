@@ -206,3 +206,25 @@ test('Imcando hammers also qualify flatpack creation and installation',async t=>
     assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION)-xp,f.buildable.experience,'installation adds no XP');
   });
 });
+
+test('an upgrade-tier flatpack goes on its previous tier: a teak cape rack needs the oak one built (Wiki)',async t=>{
+  const W=require('../plugins/skills/construction/Workbench.Construction')._test,I=core.ItemIdentifiers;
+  const f=actor(t,1395,83,83);
+  f.house.save.rooms[1][4][6]={roomKey:'COSTUME_ROOM',rotation:0,furniture:{}};
+  House.rebuildHouse(f.p,f.house);
+  const tile=f.house.hotspotTiles({plane:1,x:4,y:6}).find(o=>Data.hotspotIn('COSTUME_ROOM',o.id)?.key==='CAPE_RACK');assert.ok(tile,'a cape rack space');
+  const target=f.house.getFurnitureTarget({x:tile.x,y:tile.y,z:tile.plane},tile.id);assert.ok(target);
+  f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION,99,false).setCurrentLevel(core.Skill.CONSTRUCTION,99,false);
+  f.p.moveTo(new core.Location(tile.x+1,tile.y,tile.plane));f.p.setNeedsPlacement(false);
+  const teak=W.FLATPACK_OF.get('TEAK_CAPE_RACK');assert.ok(Number.isInteger(teak));
+  f.inv.add(new core.Item(teak,1),false);
+  const install=async()=>{await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(teak),itemId:teak,target:{kind:'loc',id:tile.id,x:tile.x,y:tile.y}}]);for(let i=0;i<10;i++)turn(f);};
+  await install();
+  assert.equal(f.house.getFurnitureAtTarget(target)?.buildableKey,undefined,'an empty space takes no teak rack');
+  assert.equal(f.inv.getAmount(teak),1,'the flatpack is kept');
+  f.house.setFurniture(target,Data.BUILDABLE_BY_KEY.get('OAK_CAPE_RACK'));House.rebuildHouse(f.p,f.house);
+  const oak=Data.BUILDABLE_BY_KEY.get('OAK_CAPE_RACK').objectIds[0];
+  await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(teak),itemId:teak,target:{kind:'loc',id:oak,x:tile.x,y:tile.y}}]);for(let i=0;i<10;i++)turn(f);
+  assert.equal(f.house.getFurnitureAtTarget(target)?.buildableKey,'TEAK_CAPE_RACK','on the oak rack it upgrades');
+  assert.equal(f.inv.getAmount(teak),0);
+});

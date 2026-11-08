@@ -30,10 +30,14 @@ function extraFishChance(player) {
   return worn ? worn[1] : 0;
 }
 
-/** Rolls the blessing for one landed fish. */
-function rollExtraFish(player) {
-  const chance = extraFishChance(player);
-  return chance > 0 && Math.random() < chance;
+/**
+ * Rolls the extra fish for one landed fish: "flakes" for the first `flakeChance` of the roll,
+ * "blessing" for the worn tier's chance on top of it (the two stack), else null.
+ */
+function rollExtraFish(player, flakeChance = 0) {
+  const roll = Math.random();
+  if (roll < flakeChance) return "flakes";
+  return roll < flakeChance + extraFishChance(player) ? "blessing" : null;
 }
 
 module.exports = { attach, extraFishChance, rollExtraFish, EXTRA_FISH_MESSAGE };

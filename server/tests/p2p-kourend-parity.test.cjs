@@ -246,6 +246,22 @@ test('Native tanning All/5/1 charges exact fees without XP, rejects noted hides,
   p.items.set(I.GREEN_DRAGONHIDE,0);p.items.set(I.GREEN_DRAGONHIDE_2,5);h.api.emitCustomEvent('tanning:open',{player:p});tanClick(h,p,128);assert.equal(p.items.get(I.GREEN_DRAGONHIDE_2),5);
 });
 
+test("Eodan tans at 10 times the normal price, down to 2 with the Kourend & Kebos diary (rsprox 234/00787, Wiki)", () => {
+  const h = tanningHarness();
+  let tier = null;
+  h.api.onCustomEvent('diary:is-complete', (request) => {
+    const order = ['easy', 'medium', 'hard', 'elite'];
+    if (request.diary === 'kourend' && tier && order.indexOf(request.tier) <= order.indexOf(tier)) request.complete = true;
+  });
+  const soft = (p) => p.log.find((row) => row[0] === 'text' && row[1] === (324 << 16 | 116))?.[2];
+  for (const [done, price] of [[null, '10 coins'], ['easy', '8 coins'], ['medium', '6 coins'], ['hard', '4 coins'], ['elite', '2 coins']]) {
+    tier = done;
+    const p = player();
+    h.namedNpcs.get('Eodan')['Tan-hides']({ player: p, npc: null, definition: { getName: () => 'Eodan' } });
+    assert.equal(soft(p), price, `soft leather with ${done ?? 'no'} diary`);
+  }
+});
+
 test('Native tanning X validates its amount and becomes inert after close or moving away',()=>{
   const h=tanningHarness(),p=player();p.items.set(I.COWHIDE,10);p.items.set(I.COINS,100);h.api.emitCustomEvent('tanning:open',{player:p});tanClick(h,p,132);p.amountAction.execute(-1);p.amountAction.execute(NaN);assert.equal(p.items.get(I.COWHIDE),10);p.amountAction.execute(3);assert.equal(p.items.get(I.LEATHER),3);
   h.api.emitCustomEvent('tanning:open',{player:p});tanClick(h,p,132);close(h,p,324);p.amountAction.execute(7);assert.equal(p.items.get(I.COWHIDE),7);tanClick(h,p,124);assert.equal(p.items.get(I.COWHIDE),7);

@@ -210,6 +210,13 @@ function block(player) {
 }
 
 function blockNow(player, master, task) {
+  // The confirm's Yes can come after the task changed (finished, cancelled, a new one): block only the one still held.
+  const held = Tasks.current(player);
+  if (!held || held.taskId !== task.taskId) return;
+  if (BLOCK_SLOTS.some((candidate) => hasVarbit(blockVarbit(master, candidate)) && State.varbit(player, blockVarbit(master, candidate)) === task.taskId)) {
+    player.sendMessage("You have already blocked this task with this master.");
+    return;
+  }
   const slot = BLOCK_SLOTS.find((candidate) => hasVarbit(blockVarbit(master, candidate))
     && slotOpen(player, candidate) && State.varbit(player, blockVarbit(master, candidate)) === 0);
   if (!slot) {

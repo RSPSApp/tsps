@@ -123,6 +123,12 @@ module.exports = (api) => {
   }
   api.onItemOnItem(useOnBag);
   api.onItemDropPolicy(destroyPolicy);
+  // The bank incinerator asks this instead of the drop policy: a bag still holding coal can't go, nor its coal.
+  api.onCustomEvent("destroy-item:allowed", (request) => {
+    if (!family.names.includes(Storage.nameOf(request.item)) || Storage.total(request.player, family) === 0) return;
+    request.allowed = false;
+    request.message = MESSAGE.CANT_DESTROY;
+  });
 };
 
 Object.assign(module.exports, { NAMES, MESSAGE, capacity, contains });

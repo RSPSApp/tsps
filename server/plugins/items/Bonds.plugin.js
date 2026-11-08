@@ -466,6 +466,12 @@ module.exports = {
     api.onInterfaceActionButton(QUANTITY_BUTTON_IDS, selectQuantity);
     api.onInterfaceActionButton(CONVERT_BUTTON, openConvertDialog);
     api.onItemDropPolicy(protectBondDrop);
+    // The bank incinerator asks this instead of the drop policy.
+    api.onCustomEvent("destroy-item:allowed", (request) => {
+      if (!BOND_IDS.has(request.itemId)) return;
+      request.allowed = false;
+      request.message = "This object cannot be dropped or destroyed.";
+    });
     api.onShouldKeepItemOnDeath(keepBondOnDeath);
     api.onItemOnPlayer(donateBond);
     api.onTradeCompleted(convertTradedBonds);

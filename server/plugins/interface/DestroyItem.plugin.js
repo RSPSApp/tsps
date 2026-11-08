@@ -52,8 +52,22 @@ function open(player, item, slot) {
 }
 
 /** A stack dropped on the bank's incinerator; the whole stack is destroyed when confirmed. */
+/**
+ * "destroy-item:allowed" { player, item, itemId, source, allowed, message }: an item's owner may refuse its destruction
+ * where the inventory's drop policy doesn't run (the bank incinerator): a bond, a coal bag still holding coal. The
+ * refusal's message is sent here.
+ */
+function destroyAllowed(player, item, source) {
+  const request = { player, item, itemId: item.getId(), source, allowed: true, message: null };
+  pluginApi.emitCustomEvent("destroy-item:allowed", request);
+  if (request.allowed !== false) return true;
+  if (request.message) player.sendMessage(request.message);
+  return false;
+}
+
 function openBank({ player, item, tab, slot }) {
   if (!item || item.getAmount() <= 0 || !Number.isInteger(tab) || !Number.isInteger(slot)) return;
+  if (!destroyAllowed(player, item, "bank")) return;
   const pending = {
     kind: "bank",
     itemId: item.getId(),
@@ -107,6 +121,8 @@ function confirmDestroy({ player, action }) {
     // Reordering or a changed stack invalidates the prompt: never destroy whatever now occupies
     // the old slot (the item id, amount and metadata must all still match).
     if (!item || !item.equals(pending.item)) return;
+    // Asked again at the Yes: the coal bag may have been filled meanwhile.
+    if (!destroyAllowed(player, item, "bank")) return;
     const discarded = item.clone();
     bank.deleteAtSlot(pending.slot, pending.amount);
     // Bank refresh may compact a same-ID neighbour into the deleted slot.

@@ -313,21 +313,18 @@ function dominantRadius(counts) {
  * Returns `undefined` for the default 5, so new rows stay as short as the existing ones.
  */
 function chooseWanderRadius(spawns, { id, name }, { walkSeqId, attackable = false } = {}, keyOf = nameKey) {
-  if (!attackable) {
-    for (const matches of [
-      (spawn) => spawn.id === id,
-      (spawn) => keyOf(spawn.name) === keyOf(name),
-    ]) {
+  // By id, else by name: the id's own spawns decide (explicit majority, then effective majority) before any
+  // same-name id is consulted, so a few explicit rows on another id never pin this one's roaming default.
+  for (const matches of [
+    (spawn) => spawn.id === id,
+    (spawn) => keyOf(spawn.name) === keyOf(name),
+  ]) {
+    if (!attackable) {
       const explicit = dominantRadius(radiusCounts(spawns, matches, true));
       if (explicit.found && explicit.count >= 2 && explicit.count * 2 >= explicit.total) {
         return explicit.radius === DEFAULT_WANDER_RADIUS ? undefined : explicit.radius;
       }
     }
-  }
-  for (const matches of [
-    (spawn) => spawn.id === id,
-    (spawn) => keyOf(spawn.name) === keyOf(name),
-  ]) {
     const effective = dominantRadius(radiusCounts(spawns, matches, false));
     if (effective.found) return effective.radius === DEFAULT_WANDER_RADIUS ? undefined : effective.radius;
   }

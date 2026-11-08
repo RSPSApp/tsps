@@ -28,6 +28,11 @@ before(async () => {
     { id: MAN, x: 3220, y: 3220, level: 1 },
     { id: MAN, x: 3240, y: 3240, level: 0, wanderRadius: 4 },
     { id: MAN, x: 3250, y: 3250, level: 0 },
+    // Two of the same NPC stacked on one tile (npc-spawns.json has 36 such tiles).
+    { id: MAN, x: 3270, y: 3270, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3270, y: 3270, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3280, y: 3280, level: 0, wanderRadius: 3 },
+    { id: MAN, x: 3280, y: 3280, level: 0, wanderRadius: 3 },
   ];
   const patch = [
     { id: MAN, x: 3200, y: 3200, level: 0, wanderRadius: 0 },
@@ -40,6 +45,9 @@ before(async () => {
     // An addition followed by its removal is gone.
     { id: MAN, x: 3260, y: 3260, level: 0, wanderRadius: 2 },
     { id: MAN, x: 3260, y: 3260, level: 0, remove: true },
+    // An editor wander patch for one stacked spawn, and a removal of one of the other pair.
+    { id: MAN, x: 3270, y: 3270, level: 0, wanderRadius: 0 },
+    { id: MAN, x: 3280, y: 3280, level: 0, remove: true },
   ];
   DefinitionLoader.registerSource("npc_spawns", "test", {
     name: "canonical",
@@ -82,5 +90,17 @@ test("a spawn moved back onto its original tile survives the removal", () => {
 test("a removal after an addition in the same patch still drops it", () => {
   assert.equal(spawnAt(3260, 3260, 0), undefined);
   assert.ok(spawnAt(3250, 3250, 0), "an untouched canonical spawn stays");
-  assert.equal(NpcSpawnDefinition.all().length, 5);
+  assert.equal(NpcSpawnDefinition.all().length, 8);
+});
+
+function spawnsAt(x, y, level) {
+  return NpcSpawnDefinition.all().filter((spawn) => {
+    const position = spawn.getPosition();
+    return position.getX() === x && position.getY() === y && position.getZ() === level;
+  });
+}
+
+test("a patch for one of two stacked spawns replaces only that one, and a removal drops only one", () => {
+  assert.deepEqual(spawnsAt(3270, 3270, 0).map((spawn) => spawn.getRadius()).sort(), [0, 3], "the other keeps its wander");
+  assert.equal(spawnsAt(3280, 3280, 0).length, 1, "one of the pair is removed");
 });

@@ -14,6 +14,7 @@ import { BonusManager } from "../../equipment/BonusManager";
 import { EnteredSyntaxAction } from "../../EnteredSyntaxAction";
 import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
+import { ChatType } from "../../../../net/protocol/ClientProtocol";
 const getPluginManager = () =>
     require("../../../../plugins/PluginManager").PluginManager as typeof import("../../../../plugins/PluginManager").PluginManager;
 
@@ -1448,7 +1449,8 @@ export class Bank extends ItemContainer {
         if (to instanceof Inventory && this.getPlayer().isPlaceholders()
                 && item.getAmount() >= this.getItems()[slot].getAmount()
                 && Bank.placeholderBankId(item.getId()) < 0) {
-            this.getPlayer().sendMessage("That item cannot leave a placeholder.");
+            // rsprox_transcripts/227/00549.txt: a spam-filtered game message.
+            this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, "This item cannot leave a placeholder.");
         }
         this.deleteItemContainer(item, slot, to instanceof Inventory ? false : refresh, to);
 

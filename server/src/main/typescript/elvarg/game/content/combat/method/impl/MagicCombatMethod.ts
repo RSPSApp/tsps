@@ -118,6 +118,7 @@ export class MagicCombatMethod extends CombatMethod {
 
         for (let hit of hits) {
             spell.onHitCalc(hit);
+            MagicCombatMethod.queueNpcProjectileGraphic(hit);
 
             const spellRadius =
                 spell.getSpellbook() === MagicSpellbook.ANCIENT && typeof (spell as any).spellRadius === "function"
@@ -154,6 +155,18 @@ export class MagicCombatMethod extends CombatMethod {
             return hits.concat(multiCombatHits);
         }
         return hits;
+    }
+
+    private static queueNpcProjectileGraphic(hit: PendingHit): void {
+        const spell = hit.getSpell();
+        const target = hit.getTarget();
+        const visual = spell?.getNpcProjectileVisual?.(hit.getSpellContext(), target);
+        if (!visual || visual.queued) return;
+        const graphic = hit.isAccurate() ? spell.endGraphic() : MagicCombatMethod.SPLASH_GRAPHIC;
+        if (!graphic || typeof graphic.withDelay !== "function") return;
+        const delayed = graphic.withDelay(visual.endCycleOffset + graphic.getDelay());
+        target.performGraphic(delayed);
+        visual.queued = target.getGraphic() === delayed;
     }
 
     /**
@@ -290,10 +303,11 @@ export class MagicCombatMethod extends CombatMethod {
         const previousSpell = hit.getSpell();
 
         if (previousSpell) {
+            const queuedGraphic = previousSpell.getNpcProjectileVisual?.(hit.getSpellContext(), target)?.queued === true;
             if (accurate) {
                 const endGraphic = previousSpell.endGraphic();
                 // A spell with no impact graphic (a grasp shows its own at the cast) sends none.
-                if (endGraphic) target.performGraphic(endGraphic);
+                if (endGraphic && !queuedGraphic) target.performGraphic(endGraphic);
                 // Live (RSProx 102 tick 232, 3275): an area sound at the target's tile with range 10,
                 // for an NPC or a player. A private synth never reached the caster, and an area sound
                 // of range 0 (what Sounds.sendSound gives an NPC) is dropped by the client.
@@ -301,7 +315,7 @@ export class MagicCombatMethod extends CombatMethod {
                 if (impactSound) Sounds.playAreaSoundAt(target, impactSound, MagicCombatMethod.IMPACT_SOUND_RADIUS);
               } else {
                 // Send splash graphics for the spell because it wasn't accurate
-                target.performGraphic(MagicCombatMethod.SPLASH_GRAPHIC);
+                if (!queuedGraphic) target.performGraphic(MagicCombatMethod.SPLASH_GRAPHIC);
                 // Also an area sound at the target (3275: 492 `sound_area id=227 range=10`).
                 Sounds.playAreaSoundAt(target, Sound.SPELL_FAIL_SPLASH, MagicCombatMethod.IMPACT_SOUND_RADIUS);
             }

@@ -48,7 +48,7 @@ function handleDriverAgreement(stageOf, advance, driverId, coinsId, event) {
 
 module.exports = function registerTouristTrapQuest(api) {
   const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const IRENA_NPC_IDS = new Set([
     NpcIdentifiers.IRENA,
@@ -209,6 +209,9 @@ module.exports = function registerTouristTrapQuest(api) {
   const SIAD_DISTRACTED_MESSAGE_ID = "HorYZZ";
   /** Feathers attached to the prototype dart tip. */
   const FEATHERS_ATTACHED_MESSAGE_ID = "XnpHhn";
+  /** Canonical handover message shared by Talk-to and item use. */
+  const PINEAPPLE_HANDOVER_MESSAGE_ID = "A30Q5M";
+  const PINEAPPLE_HANDOVER_VARIANT = "the-quest-for-tenti-s-using-the-tenti-pineapple-on-the-guard-in-the-cave";
   /** First line of the deeper-mine guard conversation. */
   const GUARD_TALKED_MESSAGE_ID = "jZJCvV";
   /** The two skill choice menus offer the same four skills. */
@@ -420,10 +423,11 @@ module.exports = function registerTouristTrapQuest(api) {
       return "inside-the-camp-talking-to-male-slave-by-the-mine-door-entrance";
     }
     if (MINE_GUARD_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_HAS_PINEAPPLE) {
-        return held(player, TENTI_PINEAPPLE_ITEM_ID)
-          ? "getting-a-tenti-pineapple-talking-to-the-guard-by-the-cave-opening"
-          : "the-quest-for-tenti-s-talking-to-the-guard-in-the-cave-after-giving-him-the-tenti-pineapple";
+      if (stage >= STAGE_GUARD_DISTRACTED) {
+        return "the-quest-for-tenti-s-talking-to-the-guard-in-the-cave-after-giving-him-the-tenti-pineapple";
+      }
+      if (stage === STAGE_HAS_PINEAPPLE && held(player, TENTI_PINEAPPLE_ITEM_ID)) {
+        return PINEAPPLE_HANDOVER_VARIANT;
       }
       return "getting-a-tenti-pineapple-talking-to-the-guard-by-the-cave-opening";
     }
@@ -578,6 +582,13 @@ module.exports = function registerTouristTrapQuest(api) {
     if (stepId === GUARD_TALKED_MESSAGE_ID) {
       if (!MINE_GUARD_NPC_IDS.has(npcId)) return;
       if (stageOf(player) >= STAGE_SLAVE_CLOTHES) advance(player, STAGE_GUARD_TALKED);
+      return;
+    }
+    if (stepId === PINEAPPLE_HANDOVER_MESSAGE_ID) {
+      if (!MINE_GUARD_NPC_IDS.has(npcId) || stageOf(player) !== STAGE_HAS_PINEAPPLE) return;
+      if (!held(player, TENTI_PINEAPPLE_ITEM_ID)) return;
+      player.getInventory().deleteNumber(TENTI_PINEAPPLE_ITEM_ID, 1);
+      advance(player, STAGE_GUARD_DISTRACTED);
       return;
     }
     if (stepId === FEATHERS_ATTACHED_MESSAGE_ID) {
@@ -902,11 +913,12 @@ module.exports = function registerTouristTrapQuest(api) {
       advance(player, STAGE_ANA_IN_BARREL);
       return;
     }
-    if (itemId === TENTI_PINEAPPLE_ITEM_ID && MINE_GUARD_NPC_IDS.has(npcId) && stageOf(player) >= STAGE_HAS_PINEAPPLE) {
+    if (itemId === TENTI_PINEAPPLE_ITEM_ID && MINE_GUARD_NPC_IDS.has(npcId)
+      && stageOf(player) >= STAGE_HAS_PINEAPPLE && held(player, TENTI_PINEAPPLE_ITEM_ID)) {
       event.handled = true;
-      player.getInventory().deleteNumber(TENTI_PINEAPPLE_ITEM_ID, 1);
-      player.sendMessage("You show the Tenti pineapple to the guard. He is delighted and distracted.");
-      advance(player, STAGE_GUARD_DISTRACTED);
+      startTranscript(api, player, npcId, "The Tourist Trap", stageOf(player) >= STAGE_GUARD_DISTRACTED
+        ? "the-quest-for-tenti-s-using-a-second-tenti-pineapple-on-the-guard-in-the-cave"
+        : PINEAPPLE_HANDOVER_VARIANT, undefined, event.npc);
     }
   }
 

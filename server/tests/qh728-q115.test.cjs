@@ -111,6 +111,7 @@ function harness() {
   const events = {}, variants = [], conditions = [], itemOnNpc = [], itemOnObject = [], itemOnItem = [];
   const deaths = [], objectActions = new Map(), npcActions = new Map(), logins = [];
   const persistedDefaults = new Map();
+  const transcripts = [];
   const testCore = { ...core };
   const api = new Proxy({
     core: testCore,
@@ -133,9 +134,18 @@ function harness() {
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(handler => handler(event)),
   }, { get: (target, key) => target[key] ?? noop });
-  require('../plugins/quests/quests/TouristTrap.Quest')(api);
+  const startTranscript = runtime.startTranscript;
+  runtime.startTranscript = (_api, player, npcId, page, variant) => {
+    transcripts.push({ player, npcId, page, variant });
+    return true;
+  };
+  try {
+    require('../plugins/quests/quests/TouristTrap.Quest')(api);
+  } finally {
+    runtime.startTranscript = startTranscript;
+  }
   const quest = runtime.getRegisteredQuests().find(entry => entry.key === 'the_tourist_trap');
-  return { events, variants, conditions, itemOnNpc, itemOnObject, itemOnItem, deaths, objectActions, npcActions, logins, persistedDefaults, quest };
+  return { events, variants, conditions, itemOnNpc, itemOnObject, itemOnItem, deaths, objectActions, npcActions, logins, persistedDefaults, transcripts, quest };
 }
 
 function object(h, npcName, option, event) {
@@ -383,6 +393,73 @@ test('recovery: lost Bedabin key, lost pineapple and a lost metal key are reobta
   assert.equal(p.items.get(K.METAL_KEY), 1);
 });
 
+const PINEAPPLE_HANDOVER_VARIANT = 'the-quest-for-tenti-s-using-the-tenti-pineapple-on-the-guard-in-the-cave';
+
+test('Talk-to offers the carried pineapple and commits the canonical message once, even with a full bag', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 16);
+  p.items.set(K.TENTI_PINEAPPLE, 2);
+  p.setFull(true);
+  assert.equal(h.variants.at(-1)({ player: p, npcId: 4667 }), PINEAPPLE_HANDOVER_VARIANT);
+  const message = dialogueData['The Tourist Trap'].variants[PINEAPPLE_HANDOVER_VARIANT]
+    .find(step => step.id === 'A30Q5M');
+  assert.equal(message.text, 'You show the Tenti pineapple to the guard.');
+  assert.equal(stage(h, p), 16);
+  const event = { player: p, npcId: 4667, stepId: 'A30Q5M', handled: false };
+  action(h, event);
+  assert.equal(event.handled, false, 'the runner retains the canonical message');
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1);
+  assert.equal(stage(h, p), 17);
+  action(h, event);
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1, 'repeated message cannot consume a second fruit');
+  assert.equal(h.variants.at(-1)({ player: p, npcId: 4667 }),
+    'the-quest-for-tenti-s-talking-to-the-guard-in-the-cave-after-giving-him-the-tenti-pineapple');
+});
+
+test('pineapple Use starts the same handover and a second Use selects the refusal without consuming', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 16);
+  p.items.set(K.TENTI_PINEAPPLE, 2);
+  const event = { player: p, npcId: 4667, itemId: K.TENTI_PINEAPPLE, handled: false };
+  h.itemOnNpc.forEach(handler => handler(event));
+  assert.equal(event.handled, true);
+  assert.equal(h.transcripts.at(-1).variant, PINEAPPLE_HANDOVER_VARIANT);
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 2, 'no consumption before the transcript action');
+  assert.equal(stage(h, p), 16);
+  action(h, { player: p, npcId: 4667, stepId: 'A30Q5M' });
+  h.itemOnNpc.forEach(handler => handler(event));
+  assert.equal(h.transcripts.at(-1).variant,
+    'the-quest-for-tenti-s-using-a-second-tenti-pineapple-on-the-guard-in-the-cave');
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1);
+  assert.equal(stage(h, p), 17);
+});
+
+test('pineapple handover rejects wrong actors, steps, stages and missing carried fruit', () => {
+  const h = harness(), K = core.ItemIdentifiers;
+  for (const [stageValue, amount, npcId, stepId] of [
+    [15, 1, 4667, 'A30Q5M'], [17, 1, 4667, 'A30Q5M'],
+    [16, 0, 4667, 'A30Q5M'], [16, 1, 4656, 'A30Q5M'], [16, 1, 4667, 'wrong'],
+  ]) {
+    const p = makePlayer(); seedStage(h, p, stageValue); p.items.set(K.TENTI_PINEAPPLE, amount);
+    action(h, { player: p, npcId, stepId });
+    assert.equal(stage(h, p), stageValue);
+    assert.equal(p.items.get(K.TENTI_PINEAPPLE), amount);
+  }
+  for (const [stageValue, amount, npcId] of [[15, 1, 4667], [16, 0, 4667], [16, 1, 4656]]) {
+    const p = makePlayer(); seedStage(h, p, stageValue); p.items.set(K.TENTI_PINEAPPLE, amount);
+    const event = { player: p, npcId, itemId: K.TENTI_PINEAPPLE, handled: false };
+    h.itemOnNpc.forEach(handler => handler(event));
+    assert.equal(event.handled, false);
+    assert.equal(stage(h, p), stageValue);
+    assert.equal(p.items.get(K.TENTI_PINEAPPLE), amount);
+  }
+  assert.equal(h.transcripts.length, 0);
+  const p = makePlayer(); seedStage(h, p, 16);
+  assert.equal(h.variants.at(-1)({ player: p, npcId: 4667 }),
+    'getting-a-tenti-pineapple-talking-to-the-guard-by-the-cave-opening',
+    'missing or bank-only pineapple is not a completed handover');
+});
+
 test('the mine guard conversation advances the route and the camp can be left for Al Shabim', () => {
   const h = harness();
   const p = makePlayer();
@@ -464,6 +541,9 @@ test('the guard distraction, barrel route and escape reach the Shantay Pass with
   const distraction = { player: p, npcId: 4667, itemId: K.TENTI_PINEAPPLE, handled: false };
   h.itemOnNpc.forEach(handler => handler(distraction));
   assert.equal(distraction.handled, true);
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1);
+  assert.equal(stage(h, p), 16);
+  action(h, { player: p, npcId: 4667, stepId: 'A30Q5M' });
   assert.equal(p.items.get(K.TENTI_PINEAPPLE), 0);
   assert.equal(stage(h, p), 17);
 

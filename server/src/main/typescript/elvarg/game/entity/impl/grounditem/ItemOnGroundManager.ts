@@ -16,6 +16,7 @@ import { PrivateArea } from "../../../model/areas/impl/PrivateArea"
 import { Misc } from "../../../../util/Misc"
 import { PathFinder } from "../../../model/movement/path/PathFinder";
 import { CrossFloor } from "../../../CrossFloor";
+import { Animation } from "../../../model/Animation";
 
 export class ItemOnGroundManager {
     private static readonly transfers = new WeakSet<ItemOnGround>();
@@ -24,6 +25,8 @@ export class ItemOnGroundManager {
     // with a 300-tick total lifetime for revealable items.
     public static readonly PUBLIC_REVEAL_DELAY: number = 100
     public static readonly DESPAWN_DELAY: number = 300
+    /** The reach for an item taken from a neighbouring tile (see playReachAnimation). */
+    private static readonly TABLE_TAKE_SEQUENCE = "human_pickuptable_walkmerge";
     // World cycle whose ground-item pass has finished. Until then, an item that has
     // not aged this cycle (e.g. an NPC drop made by a task) still ages once more.
     private static finishedCycle = -1;
@@ -226,8 +229,23 @@ export class ItemOnGroundManager {
 
         if (this.transferToInventory(player, groundItem) <= 0) return;
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
+        this.playReachAnimation(player, position);
         player.getLastItemPickup().reset();
     }
+
+    /**
+     * An item taken from a neighbouring tile (one on a table, crate or counter the player stops
+     * beside) plays the table reach on the removal tick; one taken from the player's own tile plays
+     * nothing. Live captures: 202 adjacent takes animate (832 up to rev 238, 9401 from rev 239 on,
+     * e.g. the Witch's diary in capture 20261108T030409 tick 354) and 6,859 of 6,860 own-tile takes
+     * don't. The loc on the tile is not the test.
+     */
+    private static playReachAnimation(player: Player, position: Location): void {
+        if (player.getLocation().getX() === position.getX() && player.getLocation().getY() === position.getY()) return;
+        const sequence = CacheDefinitions.getSeqId(ItemOnGroundManager.TABLE_TAKE_SEQUENCE);
+        if (sequence != null && sequence >= 0) player.performAnimation(new Animation(sequence));
+    }
+
 
     /** Quantity this inventory can accept, using the same stack identity as addItem. */
     public static inventoryCapacity(player: Player, item: Item): number {

@@ -1228,6 +1228,36 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   }
   assert.equal(reached, true, 'native collision and reach confirm adjacent usable arena tiles');
   healer.p.setNeedsPlacement(false); patient.p.setNeedsPlacement(false);
+  const bones = Common.data.items.bones;
+  assert.equal(bones, 25199);
+  assert.equal(core.CacheDefinitions.getItem(bones).name, 'Bones');
+  async function giveBones(target, slot) {
+    await healer.connection.dispatch([{type:'item_on_player', widgetId:149 << 16, targetIndex:target.getIndex(), itemId:bones, slot}]);
+    for (let i = 0; i < 4; i++) {
+      World.processCycle++; TaskManager.process(); healer.connection.processTurnPackets();
+      healer.p.getMovementQueue().process(); TaskManager.processWalkTo(healer.p.getIndex());
+    }
+  }
+  healer.p.getInventory().setItem(0, new core.Item(bones, 1));
+  healer.p.getInventory().setItem(2, new core.Item(bones, 1));
+  patient.p.setAttribute('accept-aid', false);
+  await giveBones(patient.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 2, 'refused aid conserves both bones');
+  assert.equal(patient.p.getInventory().getAmount(bones), 0);
+  patient.p.setAttribute('accept-aid', true);
+  for (let slot = 0; slot < patient.p.getInventory().capacity(); slot++) {
+    patient.p.getInventory().setItem(slot, new core.Item(995, 1));
+  }
+  await giveBones(patient.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 2, 'full recipient inventory conserves bones');
+  assert.equal(patient.p.getInventory().getAmount(bones), 0);
+  patient.p.getInventory().resetItems();
+  await giveBones(patient.p, 2);
+  assert.equal(healer.p.getInventory().getAmount(bones), 1, 'giving bones spends the selected item');
+  assert.equal(healer.p.getInventory().getItems()[0].getId(), bones, 'unselected bone remains');
+  assert.equal(patient.p.getInventory().getAmount(bones), 1, 'teammate receives the bone');
+  healer.p.getInventory().deleteAtSlot(0, 1);
+  patient.p.getInventory().delete(bones, 1);
   healer.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 80).setCurrentLevel(core.Skill.HITPOINTS, 40, true);
   patient.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevel(core.Skill.HITPOINTS, 50, true);
   healer.p.getInventory().setItem(0, new core.Item(Common.data.items.bandages, 1));

@@ -150,6 +150,33 @@ function healTeammate(event) {
   game.active(player);
 }
 
+/** Soul Wars bones can be given to a teammate who accepts aid. */
+function giveBones(event) {
+  const { player, target, item, itemId, slot } = event;
+  const game = Match.gameOf(player);
+  if (!game || itemId !== Common.data.items.bones) return;
+  event.handled = true;
+  if (game.over || player === target || Match.gameOf(target) !== game
+      || !game.teamOf(player) || game.teamOf(player) !== game.teamOf(target)
+      || target.getAttribute("accept-aid") === false) return;
+  const world = Common.core.World;
+  if (!player.isRegistered() || !target.isRegistered()
+      || world.getPlayers().get(player.getIndex()) !== player || world.getPlayers().get(target.getIndex()) !== target
+      || player.getPrivateArea() !== game.area || target.getPrivateArea() !== game.area
+      || !game.area.contains(player.getLocation()) || !game.area.contains(target.getLocation())
+      || player.getHitpoints() <= 0 || target.getHitpoints() <= 0
+      || !player.getLocation().isWithinDistance(target.getLocation(), 1)) return;
+  const inventory = player.getInventory();
+  if (!Number.isInteger(slot) || slot < 0 || slot >= inventory.capacity()
+      || inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() <= 0) return;
+  const bone = item.clone().setAmount(1);
+  const destination = target.getInventory();
+  if (destination.getAddableAmount(bone) < 1) return;
+  inventory.deleteAtSlot(slot, 1);
+  destination.add(bone, true);
+  game.active(player);
+}
+
 /** Where a team's bones count: its base, or a graveyard (a third where it isn't held). */
 function burialWorth(game, player) {
   const team = game.teamOf(player);
@@ -201,6 +228,7 @@ function attachSupplies(api) {
   for (let dose = 1; dose <= 4; dose++) api.onItemAction(`Potion of power(${dose})`, { Drink: drink });
   api.onItemAction("Bandages", { Heal: heal });
   api.onItemOnPlayer(healTeammate);
+  api.onItemOnPlayer(giveBones);
   api.onItemAction("Bones", { Bury: bury });
 }
 

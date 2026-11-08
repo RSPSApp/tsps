@@ -4,7 +4,7 @@ The achievement diaries' reward items (Ardougne cloak, Karamja gloves, Explorer'
 
 **What's not here yet:**
 - the Explorer's ring's free alchemy (the Alchemy option and using items on the ring);
-- the passive perks: shop discounts, Kandarin headgear's extra logs, Morytania legs as a ghostspeak amulet, desert heat protection, and the like.
+- the passive perks: shop discounts, Morytania legs as a ghostspeak amulet, desert heat protection, and the like.
 
 ## Zaff's battlestaves
 
@@ -128,6 +128,19 @@ Final verification: fresh build and32/32 focused diary/alchemy/gameframe checks.
 ## Rada's blessing and fishing
 
 Worn Rada's blessing 1 to 4 give a 2/4/6/8% chance, per landed fish, of the same catch again (a stackable catch doubles, so 14 karambwanji become 28), with no extra experience or bait (no extra crystal harpoon charge either, which is inferred, not Wiki), and the message "Rada's blessing enabled you to catch an extra fish." (Wiki; no capture confirms the wording or channel). On an infernal harpoon the extra fish has its own chance to be cooked, which gives Cooking XP and uses an infernal charge. Junk from a big net is left out, which the Wiki doesn't settle. Fishing Trawler, Tempoross and drift nets don't use it. Spirit flakes in ordinary fishing are not built. See `server/plugins/skills/fishing/RadasBlessing.Fishing.js`.
+
+## Kandarin headgear and normal trees
+
+Worn in the head slot, any of Kandarin headgear 1 to 4 doubles the regular logs a normal tree gives, with
+no additional experience ([Kandarin headgear 1](https://oldschool.runescape.wiki/w/Kandarin_headgear_1),
+[Kandarin Diary](https://oldschool.runescape.wiki/w/Kandarin_Diary)). No recording in the capture index mentions it, so the Wiki is the only source.
+
+- Only regular `Logs` double: oak and the other trees give one, and a headgear that is only carried does nothing.
+- Each chop still gives the tree's XP once. Both logs go through the same storage hand-off as a single log; a basket taking only part of the pair is not covered by a test. With one free slot, one log goes to the inventory and the other to the floor.
+- It is a members' benefit: on a free world a headgear saved as worn gives no extra log.
+- The unit is `server/plugins/skills/woodcutting/KandarinHeadgear.Woodcutting.js`; `Woodcutting.plugin.js` asks it for the logs per chop.
+- Not covered: whether the logs-chopped tracker counts the second log (it counts one per chop here); no capture says.
+- Tests: `server/tests/woodcutting-pet-priority.test.cjs` (worn tiers 1 to 4, carried, oak, free world).
 
 ## Ardougne pickpocketing
 

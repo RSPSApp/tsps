@@ -14,7 +14,7 @@
  * or fewer), or with either 25 body or 75 in all (six or more). Quantities scale with the
  * share of the fight's 4,050 hitpoints dealt (solo is the full table); under 25 body damage
  * they are cut to 5% (at least 1), with the warning. Each player rolls the uniques on their own,
- * as likely as their share; the pet too; Big bones go to the MVP.
+ * as likely as their share; the pet also receives the under-25-body penalty. Big bones go to the MVP.
  */
 const Shared = require("./Shared.Hueycoatl");
 const Pillars = require("./Pillars.Hueycoatl");
@@ -124,13 +124,13 @@ function scaled(drops, scale) {
   return drops.map((drop) => ({ ...drop, amount: Math.max(1, Math.floor(drop.amount * scale)) }));
 }
 
-/** One player's loot: the main roll scaled, uniques and the pet as likely as their share. */
+/** Main quantities and pet chance use the adjusted share; ordinary uniques use the full share. */
 function lootFor(player, npc, damage, team, mvp) {
   const share = Math.min(1, total(damage) / Shared.TOTAL_HITPOINTS);
   const scale = damage.body < BODY_QUALIFY ? share * FEWER_REWARDS_SCALE : share;
   const main = scaled(roll(player, npc, isMain), scale);
   const uniques = roll(player, npc, isUnique).filter(() => Math.random() < share);
-  const tertiary = roll(player, npc, isTertiary).filter((drop) => drop.itemId !== PET || Math.random() < share);
+  const tertiary = roll(player, npc, isTertiary).filter((drop) => drop.itemId !== PET || Math.random() < scale);
   const drops = [...main, ...uniques, ...tertiary];
   if (mvp) drops.unshift({ itemId: BIG_BONES, amount: 1 });
   return { drops, main, uniques };

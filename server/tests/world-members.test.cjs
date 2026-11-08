@@ -128,3 +128,38 @@ test('isMembersArea map-square index matches a scan of every f2p zone', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+
+test('Wintertodt does not register its prison hooks on a free world', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-wintertodt-f2p-'));
+  const cwd = process.cwd();
+  const worldModule = require.resolve('../dist/game/definition/WorldDefinition');
+  const managerModule = require.resolve('../dist/plugins/PluginManager');
+  const pluginPath = require.resolve('../plugins/minigames/Wintertodt.plugin');
+  const plugin = require(pluginPath);
+  const register = plugin.register;
+  let registrations = 0;
+  try {
+    fs.mkdirSync(path.join(directory, 'data/definitions'), { recursive: true });
+    fs.writeFileSync(path.join(directory, 'data/definitions/world.json'),
+      JSON.stringify(world({ membersWorld: false, zones: [f2pZone] })));
+    fs.mkdirSync(path.join(directory, 'plugins'));
+    fs.symlinkSync(pluginPath, path.join(directory, 'plugins/Wintertodt.plugin.js'));
+    plugin.register = () => { registrations++; };
+    process.chdir(directory);
+    delete require.cache[worldModule];
+    delete require.cache[managerModule];
+    assert.equal(require(worldModule).isMembersWorld(), false);
+    require(managerModule).PluginManager.loadFromDirectory(path.join(directory, 'plugins'));
+    assert.equal(registrations, 0, 'the loader must skip Wintertodt before its members-only Herblore dependency is used');
+  } finally {
+    plugin.register = register;
+    process.chdir(cwd);
+    delete require.cache[worldModule];
+    delete require.cache[managerModule];
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

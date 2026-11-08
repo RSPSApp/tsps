@@ -402,6 +402,26 @@ test("a fletching knife takes a tick off each log after the first", () => {
   assert.equal(ticks, 2 + 2 + 2);
 });
 
+// Wiki (Fletching knife): it "cannot fletch wooden blowpipes"; (Camphor blowpipe) "It is currently impossible to use
+// only a fletching knife to fletch a blowpipe", though carrying both knives speeds it up by a tick.
+test("a fletching knife alone makes no wooden blowpipe; with a plain knife it does", () => {
+  const only = player({ items: { FLETCHING_KNIFE: 1, CAMPHOR_LOGS: 2, SQUID_BEAK: 1 } });
+  use(only, "FLETCHING_KNIFE", "CAMPHOR_LOGS");
+  assert.ok(!(only.menu()?.getItems() ?? []).includes(I.CAMPHOR_BLOWPIPE_EMPTY_), "no blowpipe on the fletching knife's menu");
+  // On its own, a single recipe would start at once with no menu: run whatever was started.
+  if (only.menu()) only.menu().execute(I.CAMPHOR_BLOWPIPE_EMPTY_, 1);
+  const started = hooks.tasks.at(-1);
+  if (started) while (started.isRunning()) started.execute();
+  assert.equal(only.count("CAMPHOR_BLOWPIPE_EMPTY_"), 0, "and none is made");
+  assert.equal(only.count("CAMPHOR_LOGS"), 2);
+  const both = player({ items: { KNIFE: 1, FLETCHING_KNIFE: 1, CAMPHOR_LOGS: 2, SQUID_BEAK: 1 } });
+  use(both, "KNIFE", "CAMPHOR_LOGS");
+  // The only camphor recipe on a plain knife, so it may start without a menu.
+  if (both.menu()) both.menu().execute(I.CAMPHOR_BLOWPIPE_EMPTY_, 1);
+  runTask();
+  assert.equal(both.count("CAMPHOR_BLOWPIPE_EMPTY_"), 1);
+});
+
 test("the Gnome Stronghold diary task counts stringing an oak shortbow there, not cutting it", () => {
   const p = player({ at: [2440, 3430], items: { KNIFE: 1, OAK_LOGS: 1, BOW_STRING: 1 } });
   use(p, "KNIFE", "OAK_LOGS");

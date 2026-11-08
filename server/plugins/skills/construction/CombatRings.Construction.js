@@ -118,6 +118,8 @@ function climbOver(event) {
   const gloves = player.getEquipment().getItems()[Equipment.HANDS_SLOT]?.getId?.();
   player.performAnimation(new Animation(CLIMB[gloves] ?? CLIMB.none));
   player.moveTo(to);
+  // Wiki (Burn): leaving a POH combat ring removes burns.
+  if (inside) api.emitCustomEvent("combat:clear-burn", { target: player });
   return true;
 }
 
@@ -139,6 +141,7 @@ function beatenInRing(event) {
   player.getCombat().reset();
   player.getSkillManager().setCurrentLevel(Skill.HITPOINTS, player.getSkillManager().getMaxLevel(Skill.HITPOINTS), true);
   player.moveTo(outsideOf(house, player.getLocation()));
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   player.sendMessage("You have been defeated. Better luck next time!");
 }
 

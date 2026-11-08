@@ -1684,6 +1684,10 @@ export interface PluginCoreApi {
   /** Public chat as a client sends it (filter, mute, broadcast): bots speak through it too. */
   ChatPacketListener: any;
   TradeState: any;
+  controlPlayer: (owner: any, target: any, released: () => void) => boolean;
+  releasePlayerControl: (player: any) => boolean;
+  /** The parked owner left the world: release the controlled player and close the owner's connection. */
+  endPlayerControl: (controlled: any) => boolean;
   dispatchClientMessages: (player: any, messages: any[]) => boolean;
   connectHeadlessClient: (username: string, password: string) => Promise<{ player?: any; error?: string }>;
   CachePipeline: typeof import("../game/cache/CachePipeline").CachePipeline;

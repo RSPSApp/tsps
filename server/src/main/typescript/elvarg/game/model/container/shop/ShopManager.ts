@@ -232,7 +232,7 @@ export class ShopManager {
 
     public static processPlayer(player: any): void {
         if (
-            player?.isPlayerBot?.() ||
+            (player?.isUnwatchedBot?.() ?? player?.isPlayerBot?.()) ||
             !this.activeShopByPlayer.has(player)
         ) {
             return;

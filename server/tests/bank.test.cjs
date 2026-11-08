@@ -12,6 +12,7 @@ const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { World } = require("../dist/game/World");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
 const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+const { ChatType } = require("../dist/net/protocol/ClientProtocol");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 
 const TRIDENT = 11907;
@@ -66,7 +67,9 @@ function createPlayer() {
         ? (id, value) => { varbits.push([id, value]); return sender; }
         : prop === "sendEnterAmountPrompt"
           ? (title) => { prompts.push(title); return sender; }
-          : () => sender,
+          : prop === "sendTypedMessage"
+            ? (type, text) => { messages.push(`${type}:${text}`); return sender; }
+            : () => sender,
   });
   let currentTab = 0;
   const messages = [];
@@ -111,7 +114,7 @@ test("unsupported placeholders warn only when a successful withdrawal empties th
   Bank.withdraw(player, MYSTIC_LAVA_STAFF, 0, 1, 0);
   assert.deepEqual(player.messages, []);
   Bank.withdraw(player, MYSTIC_LAVA_STAFF, 0, 1, 0);
-  assert.deepEqual(player.messages, ["That item cannot leave a placeholder."]);
+  assert.deepEqual(player.messages, [`${ChatType.SPAM}:This item cannot leave a placeholder.`]);
   assert.equal(player.getInventory().getAmount(MYSTIC_LAVA_STAFF), 2);
   assert.equal(player.getBank().contains(MYSTIC_LAVA_STAFF), false);
   player.getBank().add(new Item(LAVA_BATTLESTAFF, 1), false);

@@ -24,6 +24,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
 const { CombatPosition } = require("../dist/game/content/combat/CombatPosition");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
+const { FightType } = require("../dist/game/content/combat/FightType");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 
 const common = require("../plugins/skills/sailing/seacombat/Common.SeaCombat");
@@ -244,8 +245,16 @@ test("a player's cannon max hit: their ranged max hit with the cannon's and cann
   player.getSkillManager().setMaxLevel?.(Skill.RANGED, 99, false);
   const rune = common.cannonAt(59451);
   const ball = common.ballByItem(RUNE_CANNONBALL);
-  // 99 Ranged, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49.
-  assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49);
+  // 99 Ranged, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49. The Wiki's formula (Boat combat)
+  // has no attack-style term, so the captain's stance - Punch is Accurate, +3 - changes neither the max hit nor accuracy.
+  const { AccuracyFormulasDpsCalc } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+  const rolls = [];
+  for (const stance of [FightType.UNARMED_PUNCH, FightType.UNARMED_KICK, FightType.UNARMED_BLOCK]) {
+    player.setFightType(stance);
+    assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49, `stance ${stance.name ?? stance}`);
+    rolls.push(AccuracyFormulasDpsCalc.rangedAttackRollWithBonus(player, 0));
+  }
+  assert.deepEqual(rolls, [107 * 64, 107 * 64, 107 * 64], "accuracy: (99 + 8) * 64 in every stance");
 });
 
 test("a crewmate's max hit: the captain's Sailing, scaled by Privateering (Wiki)", () => {

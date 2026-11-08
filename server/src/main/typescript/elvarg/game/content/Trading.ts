@@ -51,10 +51,12 @@ export class Trading {
     private static readonly OFFER_OTHER_HEADING = (Trading.OFFER_INTERFACE << 16) | 27;
     private static readonly OFFER_STATUS = (Trading.OFFER_INTERFACE << 16) | 30;
     private static readonly OFFER_TITLE = (Trading.OFFER_INTERFACE << 16) | 31;
-    private static readonly CONFIRM_TITLE = (Trading.CONFIRM_INTERFACE << 16) | 4;
+    // rsprox_transcripts/227/00548.txt: tradeconfirm:title (334:4) carries the status line, tradeconfirm:tradeopponent
+    // (334:30) the partner's name; trademain:title (335:31) reads "Trading With: <name>".
+    private static readonly CONFIRM_OPPONENT = (Trading.CONFIRM_INTERFACE << 16) | 30;
     private static readonly CONFIRM_OWN_HEADING = (Trading.CONFIRM_INTERFACE << 16) | 23;
     private static readonly CONFIRM_OTHER_HEADING = (Trading.CONFIRM_INTERFACE << 16) | 24;
-    private static readonly CONFIRM_STATUS = (Trading.CONFIRM_INTERFACE << 16) | 30;
+    private static readonly CONFIRM_STATUS = (Trading.CONFIRM_INTERFACE << 16) | 4;
 
     // Nonstatic
     private player: Player;
@@ -561,7 +563,7 @@ export class Trading {
         const otherState = other.getTrading().getState();
         const texts: Array<[number, string]> = this.state >= TradeState.CONFIRM_SCREEN
             ? [
-                [Trading.CONFIRM_TITLE, `Trading with: ${name}`],
+                [Trading.CONFIRM_OPPONENT, `Trading with:<br>${name}`],
                 [Trading.CONFIRM_OWN_HEADING, `You are about to give:<br>${Trading.formatValue(this.container)}`],
                 [Trading.CONFIRM_OTHER_HEADING, `In return you will receive:<br>${Trading.formatValue(other.getTrading().getContainer())}`],
                 [Trading.CONFIRM_STATUS, Trading.statusText(
@@ -571,7 +573,7 @@ export class Trading {
                 )],
             ]
             : [
-                [Trading.OFFER_TITLE, `Trading with: ${name}`],
+                [Trading.OFFER_TITLE, `Trading With: ${name}`],
                 [Trading.OFFER_OWN_HEADING, `You offer:<br>${Trading.formatValue(this.container)}`],
                 [Trading.OFFER_OTHER_HEADING, `${name} offers:<br>${Trading.formatValue(other.getTrading().getContainer())}`],
                 [Trading.OFFER_FREE_SLOTS, Trading.freeSlotsText(name, other.getInventory().getFreeSlots())],

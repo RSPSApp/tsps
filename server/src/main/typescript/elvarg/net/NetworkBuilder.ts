@@ -1304,7 +1304,8 @@ export class ClientConnection {
         this.failLogin(8, "The login server is busy.");
         return;
       }
-      if (owner !== undefined && owner !== DisplayNames.key(typedName)) {
+      // A name a live player (a bot) shows for another account is taken too, though never saved.
+      if ((owner !== undefined && owner !== DisplayNames.key(typedName)) || DisplayNames.shownByAnother(typedName, typedName)) {
         this.releasePendingName();
         this.failLogin(3, "That name is not available. Please choose another.");
         return;

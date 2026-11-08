@@ -991,6 +991,12 @@ export class ClientConnection {
           if (this.player && packet.action === "close") this.player.getPacketSender().closeInterface(packet.groupId);
           continue;
         case "widget_target":
+          // A spell cast on an inventory item (High Alchemy, Plank Make) is an inventory interaction: it closes the
+          // dialogue and any amount prompt, as an inventory click does. With the dialogue left open, an item a
+          // dialogue had just checked could be alched before its action ran, and the action still paid.
+          if (this.player && (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID) {
+            this.player.closeInterruptibleInterfaces();
+          }
           if (this.player && !LunarSpells.handleItemTarget(
             this.player,
             packet.targetItemId,

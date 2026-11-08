@@ -63,7 +63,8 @@ module.exports = function attachCastleWarsSettings(registry, castleWars) {
   game = castleWars;
   game.settings = { ...DEFAULTS };
   game.hasPracticeBots = () => (game.gameArea?.getPlayers?.() ?? []).some((player) => player.getAttribute(game.BOT_KEY) === true);
-  game.getBarricadeLimit = () => game.hasPracticeBots() ? game.settings.barricades : DEFAULTS.barricades;
+  // Only a "Join practice" match uses Lanthus' limit; a public game's fill bots count as bots too.
+  game.getBarricadeLimit = () => game.practice === true && game.hasPracticeBots() ? game.settings.barricades : DEFAULTS.barricades;
   api.onNpcInteraction("Lanthus", { "Talk-to": openSettings });
   api.onCustomEvent("combat:shove-rules", castleShove);
 };

@@ -1355,3 +1355,14 @@ test('POG lost crystal chime seed is recoverable from the golden chest, respecti
   openGolden(h, held);
   assert.equal(held.items.get(I.CRYSTAL_CHIME_SEED), undefined, 'held chime prevents duplicate seed');
 });
+
+test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand out', () => {
+  const h = harness('EyesOfGlouphrie');
+  const condition = h.hooks.onNpcDialogueCondition[0];
+  const text = 'If the player does not have a crystal saw or crystal seed:';
+  const brimstail = core.NpcIdentifiers.BRIMSTAIL_2;
+  const banked = player({ getBanks: () => [{ contains: (id) => id === core.ItemIdentifiers.CRYSTAL_SAW_SEED }] });
+  assert.equal(condition({ player: banked, npcId: brimstail, text }), false, 'a banked seed is owned');
+  const none = player({ getBanks: () => [{ contains: () => false }] });
+  assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
+});

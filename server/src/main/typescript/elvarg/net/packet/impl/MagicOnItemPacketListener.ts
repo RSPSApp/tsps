@@ -120,6 +120,10 @@ export class MagicOnItemPacketListener {
     if (!player || player.getHitpoints?.() <= 0) {
       return;
     }
+    // A standard-book spell, as alchemy checks: the packet names the spell id, whatever book the player is on.
+    if (player.getSpellbook?.()?.getInterfaceId?.() !== MagicSpellbook.NORMAL.getInterfaceId()) {
+      return;
+    }
     if (!player.getClickDelay().elapsedTime(500)) {
       return;
     }

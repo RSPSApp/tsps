@@ -418,10 +418,14 @@ export class LunarSpells {
             const item = next();
             if (!item || !spell.pay(player)) return false;
             const [pie, , experience] = PIES.get(item.getId())!;
+            const rawId = item.getId();
             item.setId(pie);
             player.getInventory().refreshItems();
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
             player.getSkillManager().addExperiences(Skill.COOKING, experience);
+            PluginManager.emitCustomEvent("cooking:success", {
+                player, skill: Skill.COOKING, rawId, itemId: pie, amount: 1, location: player.getLocation().clone(),
+            });
             return next() !== undefined;
         };
         if (bake()) this.repeat(player, BAKE_TICKS, bake);

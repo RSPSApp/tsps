@@ -25,6 +25,9 @@ const SESSIONS = new WeakMap();
 const ASSEMBLE_ANIMATION = 10097;
 /** Captured: the drink animation (rsprox 4242, line 48334). */
 const DRINK_ANIMATION = 11645;
+/** Captured: the barrel's own drink sound, once per click (rsprox 4242), after 30 client ticks. */
+const DRINK_SOUND_ID = 9491;
+const DRINK_SOUND_DELAY = 30;
 const ASSEMBLED_NAME = "Chugging barrel";
 const DISASSEMBLED_NAME = "Chugging barrel (disassembled)";
 /** Drinks registered as potions for ordinary consumption but not accepted by the barrel. */
@@ -141,6 +144,15 @@ function dismantle({ player, item, slot }) {
   });
 }
 
+/** The swig, its sound and the shared potion and food delays, once per click, when a first potion drinks. */
+function startDrinking(player) {
+  const timers = player.getTimers();
+  timers.extendOrRegister(core.TimerKey.POTION, 3);
+  timers.extendOrRegister(core.TimerKey.FOOD, 3);
+  player.performAnimation(new core.Animation(DRINK_ANIMATION));
+  core.Sounds.sendSound(player, new core.Sound(DRINK_SOUND_ID, 1, DRINK_SOUND_DELAY, 0));
+}
+
 function drink({ player }) {
   if (!nearBank(player)) {
     player.sendMessage(MESSAGE.NEAR_BANK);
@@ -148,7 +160,7 @@ function drink({ player }) {
   }
   const stored = contents(player);
   const potions = Object.entries(stored).sort((a, b) => a[1].slot - b[1].slot).slice(0, POTION_TYPES);
-  if (potions.length === 0) {
+  if (!potions.some(([, store]) => Potions.doseOf(store.itemId))) {
     player.sendMessage(MESSAGE.NO_POTIONS);
     return;
   }
@@ -157,24 +169,29 @@ function drink({ player }) {
     if (timerRefusal.message) player.sendMessage(timerRefusal.message);
     return;
   }
-  const drinks = potions.map(([key, store]) => ({ key, store, dose: Potions.doseOf(store.itemId) }))
-    .filter(({ dose }) => dose);
-  for (const { store, dose } of drinks) {
-    const refusal = Potions.drinkRefusal(player, dose.entry);
-    if (refusal) {
-      player.sendMessage(refusal);
-      return;
+  let started = false;
+  const refused = new Set();
+  for (const [key, store] of potions) {
+    const dose = Potions.doseOf(store.itemId);
+    if (!dose) continue;
+    // Captured (4242): a refused potion (a divine potion at low Hitpoints) says why and keeps its dose;
+    // the rest still drink, in the barrel's order, each against the state the one before left.
+    // A player-wide veto (the canDrink hooks, say) is told once; a potion's own refusal is told per potion.
+    const permission = Potions.drinkPermissionRefusal(player, dose.entry);
+    if (permission) {
+      if (!refused.has(permission)) player.sendMessage(permission);
+      refused.add(permission);
+      continue;
     }
-  }
-  if (drinks.length === 0) {
-    player.sendMessage(MESSAGE.NO_POTIONS);
-    return;
-  }
-  const timers = player.getTimers();
-  timers.extendOrRegister(core.TimerKey.POTION, 3);
-  timers.extendOrRegister(core.TimerKey.FOOD, 3);
-  player.performAnimation(new core.Animation(DRINK_ANIMATION));
-  for (const { key, store, dose } of drinks) {
+    const canUse = Potions.drinkCanUseRefusal(player, dose.entry);
+    if (canUse) {
+      player.sendMessage(canUse);
+      continue;
+    }
+    if (!started) {
+      started = true;
+      startDrinking(player);
+    }
     dose.potion.effect(player);
     player.sendMessage(MESSAGE.DRINK(store.name));
     api.emitCustomEvent("potions:drunk", {

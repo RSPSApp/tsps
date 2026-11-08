@@ -135,3 +135,15 @@ test("NPC movement uses the visible morph's sequences in WebGL and WebGPU", asyn
     assert.equal(webgl(host, ecs, 1).movementSeqId, 819, "ordinary NPC remains unchanged");
     assert.equal(webgpu(client, ecs, 1).movementSeqId, 819, "ordinary NPC remains unchanged");
 });
+
+test("a morph with no idle or walk animates from the parent the server spawned", async () => {
+    const { resolveNpcMovementSequenceIds: webgl } = await import("../render/render/anim/npc");
+    const { resolveNpcMovementSequenceIds: webgpu } = await import("../render/webgpu/actors/actorPacking");
+    const bare = { getMovementSeqSet: () => ({ idle: -1, walk: -1 }) };
+    const parent = { transforms: [7284], transform: () => bare, getMovementSeqSet: () => ({ idle: 808, walk: 819 }) };
+    const client = { npcTypeLoader: { load: () => parent }, varManager: {}, basTypeLoader: {} } as any;
+    const host = { osrsClient: client, getEffectiveNpcType: () => bare } as any;
+    const ecs = { getNpcTypeId: () => 3500, getMovementOverrides: () => ({}), getPathLengthLike: () => 1, getCurrentStepRot: () => undefined } as any;
+    assert.equal(webgl(host, ecs, 1).movementSeqId, 819, "Gertrude walks with the parent's sequence");
+    assert.equal(webgpu(client, ecs, 1).movementSeqId, 819, "Gertrude walks with the parent's sequence");
+});

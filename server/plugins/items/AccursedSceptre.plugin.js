@@ -12,6 +12,10 @@
  * version, charged, gives 50% more magic accuracy and damage against NPCs in the Wilderness, at a
  * charge an attack. Its special, Condemn, is plugins/combat/specials/AccursedSceptre.SpecialAttack.js.
  *
+ * Thammaron's sceptre, the weapon it is made from, runs the same ether rules and the same built-in
+ * spell with a max hit of floor(Magic / 3) - 8 and 60 Magic, and has no special (Wiki: Thammaron's
+ * sceptre). Dismantling an uncharged one gives 7,500 revenant ether.
+ *
  * rsprox (captures 1703, 3126, 3994, 4096, 4101): ether on the sceptre asks "How many ether would
  * you like to add? (0 - N)" (with the busy varbit); "You use 1,000 ether to activate the weapon."
  * and "You add a further N revenant ether to your weapon, giving it a total of N charges." for an
@@ -23,17 +27,26 @@
  * splits an unactivated one back into Thammaron's sceptre and the Skull of Vet'ion.
  */
 
-const { definePoweredStaff } = require("./PoweredStaff");
+const { definePoweredStaff, restricted } = require("./PoweredStaff");
 
 const CHARGES_KEY = "accursed-sceptre-charges";
+// Set only when addEther takes the activation ether: a sceptre from a spawn, load-out or older save has
+// no paid reserve to refund or drop (the revenant weapons and the Webweaver bow track theirs the same way).
+const DEPOSIT_META = "accursed-sceptre-deposit";
+// Set when a sceptre with no paid deposit is emptied: its ether was never paid in, so Dismantle refuses it.
+const UNPAID_META = "accursed-sceptre-unpaid";
 const MAX_CHARGES = 16000;
 const ACTIVATION_ETHER = 1000;
 const ATTACK_SPEED = 4;
 const ATTACK_RANGE = 7;
-const LEVEL_REQUIRED = 70;
+// The built-in spell's own level: the lower of the two sceptres' 60 and 70 (the weapons gate their own wielding).
+const LEVEL_REQUIRED = 60;
 const MAX_HIT_OFFSET = -6;
+const THAMMARON_MAX_HIT_OFFSET = -8;
+const DISMANTLE_ETHER = 7500;
 const WILDERNESS_MULTIPLIER = 1.5;
 const BUSY_VARBIT = 12393; // cache gameval busy
+const depositOf = (item) => (item?.getMetaValue?.(DEPOSIT_META) === true ? ACTIVATION_ETHER : 0);
 
 const CAST_ANIMATION = 11430; // human_castwave_staff_walkmerge
 const PROJECTILE_GRAPHIC = 2340; // spells_thammaron01_travel01
@@ -61,8 +74,14 @@ function variantOf(id) {
 
 // ------------------------------------------------------------------ combat
 
+function isThammarons(id) {
+  const I = ids();
+  return [I.THAMMARONS_SCEPTRE, I.THAMMARONS_SCEPTRE_U_, I.THAMMARONS_SCEPTRE_A_, I.THAMMARONS_SCEPTRE_AU_].includes(Number(id));
+}
+
 function maxHit(player) {
-  return Math.max(0, Math.floor(player.getSkillManager().getCurrentLevel(core.Skill.MAGIC) / 3) + MAX_HIT_OFFSET);
+  const offset = isThammarons(sceptre.weaponOf(player)?.getId?.()) ? THAMMARON_MAX_HIT_OFFSET : MAX_HIT_OFFSET;
+  return Math.max(0, Math.floor(player.getSkillManager().getCurrentLevel(core.Skill.MAGIC) / 3) + offset);
 }
 
 function look({ Animation, Projectile }) {
@@ -198,6 +217,7 @@ function addEther(player, item, amount) {
   inventory.deleteNumber(ids().REVENANT_ETHER, deposit + added);
   if (!activated) {
     item.setId(staff.chargedByUncharged.get(item.getId()));
+    item.setMetaValue(DEPOSIT_META, true);
     player.sendMessage(`You use ${format(ACTIVATION_ETHER)} ether to activate the weapon.`);
   }
   staff.setCharges(item, current + added);
@@ -228,17 +248,19 @@ function uncharge({ player, item }) {
   if (!isActivated(item)) return false;
   const inventory = player.getInventory();
   const etherId = ids().REVENANT_ETHER;
-  const returned = staff.chargesOf(item) + ACTIVATION_ETHER;
+  const returned = staff.chargesOf(item) + depositOf(item);
   const refund = new core.Item(etherId, returned);
-  if (inventory.getAddableAmount(refund) < returned) {
+  if (returned > 0 && inventory.getAddableAmount(refund) < returned) {
     player.sendMessage("You don't have enough inventory space to uncharge your sceptre.");
     return true;
   }
-  inventory.addItem(refund);
+  if (returned > 0) inventory.addItem(refund);
   staff.setCharges(item, 0);
+  if (!(depositOf(item) > 0)) item.setMetaValue(UNPAID_META, true);
+  item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   inventory.refreshItems();
-  player.sendMessage(`You uncharge your sceptre, regaining ${format(returned)} revenant ether.`);
+  player.sendMessage(returned > 0 ? `You uncharge your sceptre, regaining ${format(returned)} revenant ether.` : "You uncharge your sceptre.");
   return true;
 }
 
@@ -248,6 +270,8 @@ function swap({ player, item }) {
   const pairs = new Map([
     [I.ACCURSED_SCEPTRE, I.ACCURSED_SCEPTRE_A_], [I.ACCURSED_SCEPTRE_A_, I.ACCURSED_SCEPTRE],
     [I.ACCURSED_SCEPTRE_U_, I.ACCURSED_SCEPTRE_AU_], [I.ACCURSED_SCEPTRE_AU_, I.ACCURSED_SCEPTRE_U_],
+    [I.THAMMARONS_SCEPTRE, I.THAMMARONS_SCEPTRE_A_], [I.THAMMARONS_SCEPTRE_A_, I.THAMMARONS_SCEPTRE],
+    [I.THAMMARONS_SCEPTRE_U_, I.THAMMARONS_SCEPTRE_AU_], [I.THAMMARONS_SCEPTRE_AU_, I.THAMMARONS_SCEPTRE_U_],
   ]);
   const next = pairs.get(item?.getId?.());
   if (next === undefined) return false;
@@ -283,10 +307,48 @@ function dismantle({ player, item }) {
   return true;
 }
 
+/** Wiki: dismantling an uncharged Thammaron's sceptre yields 7,500 revenant ether. */
+function dismantleThammarons({ player, item }) {
+  const inventory = player.getInventory();
+  if (!isThammarons(item?.getId?.()) || !inventory.getItems().includes(item)) return false;
+  if (item.getMetaValue(UNPAID_META) === true) {
+    player.sendMessage("Your sceptre was never activated with ether, so it cannot be dismantled.");
+    return true;
+  }
+  const slot = inventory.getItems().indexOf(item);
+  inventory.deleteAtSlot(slot, 1, false);
+  const ether = new core.Item(ids().REVENANT_ETHER, DISMANTLE_ETHER);
+  if (inventory.getAddableAmount(ether) < DISMANTLE_ETHER) {
+    inventory.setItem(slot, item);
+    player.sendMessage("You don't have enough inventory space to dismantle your sceptre.");
+    return true;
+  }
+  inventory.addItem(ether);
+  inventory.refreshItems();
+  player.sendMessage(`You dismantle your sceptre, gaining ${format(DISMANTLE_ETHER)} revenant ether.`);
+  return true;
+}
+
+/** Wiki: dying in the Wilderness drops all the ether, even when the sceptre is protected. */
+function deathItemDrop(event) {
+  const { player, killer, item, location } = event;
+  const staff = variantOf(item?.getId?.());
+  if (!event.shouldDropItems || !killer || killer === player || !staff || !isActivated(item) || restricted(item)
+      || !core.Wilderness.isInLocation(location)) return;
+  const lost = depositOf(item) + staff.chargesOf(item);
+  if (lost > 0) core.ItemOnGroundManager.registerLocation(killer, new core.Item(ids().REVENANT_ETHER, lost), location);
+  staff.setCharges(item, 0);
+  if (!(depositOf(item) > 0)) item.setMetaValue(UNPAID_META, true);
+  item.setMetaValue(DEPOSIT_META, undefined);
+  item.setId(staff.unchargedByCharged.get(item.getId()));
+  // Core already returns kept items; report the ether drop without dropping the sceptre as well.
+  if (event.kept) event.handled = true;
+}
+
 function defineSceptres() {
   const I = ids();
-  sceptre = definePoweredStaff(api, config([[I.ACCURSED_SCEPTRE, I.ACCURSED_SCEPTRE_U_]], "accursed_sceptre"));
-  autocasting = definePoweredStaff(api, config([[I.ACCURSED_SCEPTRE_A_, I.ACCURSED_SCEPTRE_AU_]], "accursed_sceptre"));
+  sceptre = definePoweredStaff(api, config([[I.ACCURSED_SCEPTRE, I.ACCURSED_SCEPTRE_U_], [I.THAMMARONS_SCEPTRE, I.THAMMARONS_SCEPTRE_U_]], "accursed_sceptre"));
+  autocasting = definePoweredStaff(api, config([[I.ACCURSED_SCEPTRE_A_, I.ACCURSED_SCEPTRE_AU_], [I.THAMMARONS_SCEPTRE_A_, I.THAMMARONS_SCEPTRE_AU_]], "accursed_sceptre"));
 }
 
 module.exports = {
@@ -296,7 +358,7 @@ module.exports = {
     CHARGES_KEY, MAX_CHARGES, ACTIVATION_ETHER,
     get sceptre() { return sceptre; },
     get autocasting() { return autocasting; },
-    maxHit, chargeSceptre, addEther, chargeWithEther, checkCharges, uncharge, swap, boostMaxHit, boostAccuracy, spellCast, dismantle,
+    DEPOSIT_META, UNPAID_META, deathItemDrop, maxHit, dismantleThammarons, DISMANTLE_ETHER, chargeSceptre, addEther, chargeWithEther, checkCharges, uncharge, swap, boostMaxHit, boostAccuracy, spellCast, dismantle,
     resolveSceptre,
   },
   register(pluginApi) {
@@ -309,12 +371,15 @@ module.exports = {
     pluginApi.onCustomEvent("combat:magic-max-hit", boostMaxHit);
     pluginApi.onCustomEvent("combat:magic-attack-roll-modify", boostAccuracy);
     pluginApi.onCustomEvent("magic:cast-committed", spellCast);
-    for (const name of ["Accursed sceptre", "Accursed sceptre (a)"]) {
+    for (const name of ["Accursed sceptre", "Accursed sceptre (a)", "Thammaron's sceptre", "Thammaron's sceptre (a)"]) {
       pluginApi.onItemAction(name, { Check: checkCharges, Swap: swap, Uncharge: uncharge });
     }
     for (const name of ["Accursed sceptre (u)", "Accursed sceptre (au)"]) {
       pluginApi.onItemAction(name, { Swap: swap, Dismantle: dismantle });
     }
+    pluginApi.onItemAction("Thammaron's sceptre (u)", { Swap: swap, Dismantle: dismantleThammarons });
+    pluginApi.onItemAction("Thammaron's sceptre (au)", { Swap: swap, Dismantle: dismantleThammarons });
     pluginApi.onItemOnItem(chargeWithEther, { noted: false });
+    pluginApi.onPlayerDeathItemDrop(deathItemDrop);
   },
 };

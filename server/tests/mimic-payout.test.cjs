@@ -9,6 +9,8 @@ const core = PluginManager.getCoreApi();
 const Shared = require("../plugins/bosses/mimic/Shared.Mimic");
 const State = require("../plugins/bosses/mimic/State.Mimic");
 const Reward = require("../plugins/bosses/mimic/Reward.Mimic");
+const Screen = require("../plugins/treasuretrails/CasketRewardScreen.plugin");
+Screen.initialize(core);
 
 test("every imported normal and Mimic reward resolves against the installed cache, including note variants", () => {
   const normal = require("../data/definitions/clue-caskets.json").tables;
@@ -35,7 +37,7 @@ function fixture(tier, clueRolls, spent = 0, service = true) {
   };
   const player = {getInventory: () => inventory, getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value), sendMessage: text => messages.push(text),
-    isRegistered: () => true, getHitpoints: () => 10, getArea: () => null};
+    isRegistered: () => true, getHitpoints: () => 10, getArea: () => null, setInterfaceId() {}};
   const api = {core, persistAttribute() {}, onItemAction() {},
     onCustomEvent(name, handler) { if (!events.has(name)) events.set(name, []); events.get(name).push(handler); },
     emitCustomEvent(name, request) { for (const handler of events.get(name) ?? []) handler(request); },
@@ -49,6 +51,7 @@ function fixture(tier, clueRolls, spent = 0, service = true) {
   State.defeat(player, item, record.id);
   return {player, item, items, api, messages, obtained, attributes, events,
     open: () => Reward.openMimic({player, item, slot: 0}),
+    close: () => Screen.closed({player,interfaceId:73}),
     amount: id => obtained.filter(item => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0)};
 }
 
@@ -61,6 +64,11 @@ for (const [tier, clueRolls, normalId, amounts] of [
     const original = Math.random;
     try { Math.random = () => 0.1; f.open(); } finally { Math.random = original; }
     assert.equal(f.items[0], null);
+    assert.equal(f.obtained.length, 0, "won Mimic displays before bag credit");
+    const pending = f.player.getAttribute(Screen.PENDING_ATTRIBUTE);
+    assert.ok(pending.length > 0);
+    f.close(); const delivered = f.obtained.length; f.close();
+    assert.equal(f.obtained.length, delivered, "second close cannot duplicate");
     assert.equal(f.amount(normalId), Math.max(0, clueRolls - spent));
     assert.equal(f.amount(560), amounts[spent]);
     assert.equal(f.amount(8782), 1);
@@ -99,6 +107,7 @@ test("a reward-service callback cannot open the same casket twice", () => {
   };
   const random = Math.random;
   try { Math.random = () => 0.1; f.open(); } finally { Math.random = random; }
+  assert.equal(f.obtained.length, 0); f.close();
   assert.equal(f.amount(1079), 4);
   assert.equal(f.amount(560), 600);
   assert.equal(f.amount(8782), 1);
@@ -171,7 +180,7 @@ test("opening into a nearly capped real Coins stack preserves every coin as inve
   try {
     core.ItemOnGroundManager.registers = (_player, item) => ground.push(item.clone());
     Math.random = () => 0.8; // Four real normal-pool Coins outcomes, 28,000 each.
-    f.open();
+    f.open(); f.close();
   } finally { core.ItemOnGroundManager.registers = register; Math.random = random; }
   assert.equal(inventory.contains(23184), false);
   assert.equal(inventory.getAmount(995), MAX_STACK_AMOUNT);

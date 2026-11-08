@@ -29,9 +29,22 @@ const AUDITED_ORDINARY_ITEMS = new Map([
   ["Fire rune", 554], ["Mind rune", 558], ["Nature rune", 561], ["Water rune", 555],
   ["Crossbow", 837], ["Shears", 1735],
 ]);
-// Their three explicit member rows were separately checked as ordinary spawns.
-// The seven rune pages above retain their original F2P-only scope.
-const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([["Crossbow", 837], ["Shears", 1735]]);
+// These pinned member rows were separately checked as ordinary spawns.
+// Air remains held: its raw member row says it may be unobtainable.
+const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([
+  ["Crossbow", 837], ["Shears", 1735], ["Earth rune", 557], ["Mind rune", 558], ["Fire rune", 554],
+]);
+// Only this location-pinned selection was audited; the other Sea shell rows stay held.
+const EASTERN_CONCH_SHELL_TILES = new Set([
+  "3258:2481", "3257:2477", "3259:2469", "3261:2458", "3260:2451",
+  "3256:2449", "3261:2444", "3258:2437", "3262:2435",
+]);
+function isAuditedEasternConchShell(row) {
+  return row.page === "Sea shell" && row.id === 31395 && row.members === true
+    && row.location === "[[The Great Conch]] - eastern coast" && row.plane === 0
+    && row.quantity === 1 && row.infobox_respawn_ticks === 50
+    && EASTERN_CONCH_SHELL_TILES.has(`${row.x}:${row.y}`);
+}
 // Exact ordinary rows audited separately from these pages' scenery/quest spawns.
 const AUDITED_MEMBER_COMMON_TOOL_ROWS = new Map([
   ["Hammer:2347:1373:2949:0", "[[Aldarin]]"],
@@ -89,9 +102,9 @@ export function importSpawns(source, existing) {
       entry.status = "unresolved-source";
     } else if (row.members !== false
       && !(row.members === true && AUDITED_MEMBER_ORDINARY_ITEMS.get(row.page) === row.id)
-      && !isAuditedMemberCommonTool(row)) {
+      && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)) {
       entry.status = "members-world-scope-deferred";
-    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedMemberCommonTool(row)) {
+    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)) {
       entry.status = "ordinary-page-not-yet-audited";
     } else if (![row.id,row.x,row.y,row.plane,row.quantity,row.infobox_respawn_ticks].every(Number.isInteger)
       || row.id < 0 || row.plane < 0 || row.plane > 3 || row.quantity <= 0
@@ -143,7 +156,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool, explicit member Crossbow/Shears and three exact member common-tool rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune and nine exact eastern Great Conch Sea shell rows and three exact member common-tool rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

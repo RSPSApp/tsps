@@ -259,6 +259,14 @@ function recordLimit(player, itemId, amount, now = Date.now()) {
   else limits[key] = { start: now, amount };
 }
 
+/** An aborted buy bought nothing (offers fill whole), so its quantity no longer counts against the limit (Wiki). */
+function releaseLimit(player, offer, now = Date.now()) {
+  const entry = limitEntry(player, offer.itemId, now);
+  // Only the window the offer was counted in; a later window never held it. Older saves have no placedAt.
+  if (!entry || !(Number(offer.placedAt) >= entry.start)) return;
+  entry.amount = Math.max(0, entry.amount - offer.quantity);
+}
+
 let quotedPrices;
 
 /**
@@ -766,7 +774,7 @@ function confirm(player, offer) {
   inventory.setItems(result.getItems()).refreshItems();
   for (const [tab, bank] of fromBank?.banks ?? []) player.getBank(tab).setItems(bank.getItems());
   const delay = fillDelayMs(offer);
-  const finished = { ...offer, total, finished: false, completesAt: delay === null ? null : Date.now() + delay };
+  const finished = { ...offer, total, finished: false, placedAt: Date.now(), completesAt: delay === null ? null : Date.now() + delay };
   completedOffers(player)[offer.slot] = finished;
   if (!offer.sell) recordLimit(player, offer.itemId, amount);
   saveOffers(player);
@@ -861,6 +869,7 @@ function abort(player, slot = viewing.get(player)) {
   }
   offer.finished = true;
   offer.aborted = true;
+  if (!offer.sell) releaseLimit(player, offer);
   saveOffers(player);
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
@@ -1114,6 +1123,7 @@ module.exports = {
     fillDelayMs,
     remainingLimit,
     recordLimit,
+    releaseLimit,
     LIMITS_ATTRIBUTE,
     HISTORY_ATTRIBUTE,
     HISTORY_LIMIT,

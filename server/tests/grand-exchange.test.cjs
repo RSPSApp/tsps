@@ -482,6 +482,29 @@ test('buying enforces and consumes the remaining four-hour allowance', t => {
   assert.equal(remainingLimit(p, LIMITED), 0);
 });
 
+test('aborting a buy that bought nothing gives its quantity back to the buy limit (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.99);
+  const { p, inventory, place, click } = exchange(t);
+  recordLimit(p, LIMITED, 100);
+  inventory.add(new Item(995, 1_000), false);
+  assert.equal(place(false, LIMITED, 50, 1).finished, false, 'the bid has not filled yet');
+  assert.equal(remainingLimit(p, LIMITED), 0);
+  click(23);
+  click(24);
+  assert.equal(inventory.getAmount(995), 1_000, 'every coin back');
+  assert.equal(remainingLimit(p, LIMITED), 50, 'the earlier 100 still count, the aborted 50 do not');
+  assert.equal(place(false, LIMITED, 50, 1).quantity, 50, 'the item can be bid on again');
+});
+
+test('an abort never frees a later buy-limit window that did not count the offer', t => {
+  const { p } = exchange(t);
+  const start = Date.now();
+  recordLimit(p, LIMITED, 30, start);
+  const old = { itemId: LIMITED, quantity: 50, placedAt: start - 1 };
+  plugin._test.releaseLimit(p, old, start);
+  assert.equal(remainingLimit(p, LIMITED, start), 120);
+});
+
 test('unfillable offers survive saving and relogging, and abort refunds their input', t => {
   t.mock.method(Math, 'random', () => 0.99);
   for (const sell of [false, true]) {

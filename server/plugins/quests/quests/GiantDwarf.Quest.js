@@ -1052,10 +1052,17 @@ module.exports = function registerGiantDwarfQuest(api) {
     }
   }
 
-  function cancelPending(player) {
+  function cancelPending(player, npcId) {
     if (!pendingTask(player)) return;
+    const company = companyForNpc(npcId);
+    if (company && company.id !== companyId(player)) {
+      const scores = { ...(player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {}) };
+      scores[company.id] = Math.max(0, points(player, npcId) - CANCEL_POINTS);
+      player.setAttribute(COMPANY_POINTS_ATTRIBUTE, scores);
+    } else {
+      addPoints(player, -CANCEL_POINTS);
+    }
     clearTask(player);
-    addPoints(player, -CANCEL_POINTS);
   }
 
   function joinCompanyForNpc(player, npcId) {
@@ -1342,12 +1349,12 @@ module.exports = function registerGiantDwarfQuest(api) {
     }
     if (SECRETARY_NPC_IDS.has(npcId)) {
       if (option === "I'll take it.") promoteTask(player, npcId);
-      else if (option === "No thanks.") cancelPending(player);
+      else if (option === "No thanks.") cancelPending(player, npcId);
       return;
     }
     if (DIRECTOR_NPC_IDS.has(npcId)) {
       if (option === "I'll take it.") promoteTask(player, npcId);
-      else if (option === "No thanks.") cancelPending(player);
+      else if (option === "No thanks.") cancelPending(player, npcId);
       else if (option === "I'd like to officially join your company." && points(player) >= JOIN_POINTS) {
         joinCompanyForNpc(player, npcId);
       }

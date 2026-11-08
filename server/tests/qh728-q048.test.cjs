@@ -42,10 +42,12 @@ runtime.startTranscript = (api, player, npcId, page, variant) => {
   return true;
 };
 
-function setup() {
-  const tasks = [], spawned = [];
+function setup(options = {}) {
+  const tasks = [], spawned = [], areas = [], sounds = [], persisted = new Map();
   const core = {
     ...PluginManager.getCoreApi(),
+    ...(options.random ? { Misc: { randomInclusive: options.random } } : {}),
+    Sounds: { playAreaSound(sound) { sounds.push(sound); } },
     CountdownTask: class { constructor(player, ticks, run) { Object.assign(this, { player, ticks, run }); } },
     TaskManager: { submit(task) { tasks.push(task); }, cancelTasks() {} },
     MultiChatboxPrompt: { getPending: () => null },
@@ -54,7 +56,8 @@ function setup() {
   const events = new Map();
   const api = new Proxy({
     core,
-    persistAttribute() {},
+    persistAttribute(key, value) { persisted.set(key, value); },
+    registerArea(area) { areas.push(area); },
     onNpcDialogueVariant(fn) { hooks.variants.push(fn); },
     onNpcDialogueCondition(fn) { hooks.conditions.push(fn); },
     onNpcInteraction(handler, actions) { hooks.npcs.push({ handler, actions }); },
@@ -71,7 +74,8 @@ function setup() {
   require('../plugins/quests/quests/GertrudesCat.Quest')(api);
   const quest = runtime.getRegisteredQuests().find((entry) => entry.key === 'gertrudes_cat');
 
-  const attrs = new Map(), configs = new Map(), varbits = new Map(), xp = [], messages = [];
+  const attrs = options.attrs ?? new Map();
+  const configs = new Map(), varbits = new Map(), xp = [], messages = [];
   let items = Array.from({ length: 28 }, () => new core.Item(-1, 0));
   let jingles = 0;
   const inventory = {
@@ -110,7 +114,7 @@ function setup() {
 
   const fire = (name, payload = {}) => api.emitCustomEvent(name, { player, ...payload });
   return {
-    core, quest, player, attrs, configs, varbits, inventory, messages, hooks, tasks, spawned,
+    core, quest, player, attrs, configs, varbits, inventory, messages, hooks, tasks, spawned, areas, sounds, persisted,
     fire,
     xp, jingles: () => jingles,
     variant(npcId) {
@@ -195,7 +199,7 @@ test('stage 0 start hook, varp bootstrap and stage-selected dialogue', () => {
   assert.equal(h.inventory.getAmount(I.COINS), 50, 'repeating the action never charges twice');
 });
 
-test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitten, completion', () => {
+test('mandatory route: pay, milk, seasoned sardine, one random Lumber Yard crate, kitten, completion', () => {
   const h = setup();
   const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers, O = h.core.ObjectIdentifiers;
   h.inventory.adds(I.COINS, 100);
@@ -229,11 +233,16 @@ test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitt
   assert.equal(crateSpawns.length, 6, 'the cache-backed Lumber Yard crate NPC spawns are present');
   assert.equal(h.core.NpcDefinition.forId(N.CRATE).getName(), 'Crate');
   assert.ok(h.core.NpcDefinition.forId(N.CRATE).getActions().includes('Search'));
-  for (const { x, y, level } of crateSpawns) {
-    h.npc(N.CRATE, x, y, level);
-    assert.equal(h.inventory.getAmount(I.FLUFFS_KITTEN), 1, `NPC crate at ${x},${y} finds the kitten`);
-    h.inventory.deleteNumber(I.FLUFFS_KITTEN, 1);
+  const successfulCrates = [];
+  for (const spawn of crateSpawns) {
+    h.npc(N.CRATE, spawn.x, spawn.y, spawn.level);
+    if (h.inventory.getAmount(I.FLUFFS_KITTEN)) {
+      successfulCrates.push(spawn);
+      h.inventory.deleteNumber(I.FLUFFS_KITTEN, 1);
+    }
   }
+  assert.equal(successfulCrates.length, 1, 'only the selected crate contains the kitten');
+  const selectedCrate = successfulCrates[0];
 
   for (const [objectId, x, y] of [
     [O.CRATE_59, 3302, 3502],
@@ -249,7 +258,7 @@ test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitt
   assert.equal(h.inventory.getAmount(I.FLUFFS_KITTEN), 0, 'crates give no kitten before the sardine stage');
   h.quest.setStage(h.player, 4);
 
-  h.npc(N.CRATE, crateSpawns[0].x, crateSpawns[0].y);
+  h.npc(N.CRATE, selectedCrate.x, selectedCrate.y);
   transcripts.length = 0;
   h.itemOnNpc(I.FLUFFS_KITTEN, N.GERTRUDES_CAT_2);
   assert.deepEqual(transcripts.at(-1), { npcId: N.GERTRUDES_CAT_2, page: "Gertrude's Cat",
@@ -402,11 +411,12 @@ test('production quest order routes both Gertrude forms between her quests and p
   const crateSpawns = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/definitions/npc-spawns.json'), 'utf8'))
     .filter((spawn) => spawn.id === N.CRATE && spawn.level === 0 && spawn.x >= 3298 && spawn.x <= 3315 && spawn.y >= 3499 && spawn.y <= 3515);
   assert.equal(crateSpawns.length, 6);
-  const spawn = crateSpawns[0];
-  const crate = { getId: () => N.CRATE, getLocation: () => new core.Location(spawn.x, spawn.y, spawn.level) };
-  const npcEvent = { player, npc: crate, npcId: N.CRATE, definition: crateDefinition, clickType: crateDefinition.getActions().indexOf('Search') + 1, handled: false };
-  assert.equal(PluginManager.emitNpcInteraction(npcEvent), true, 'the real registered NPC Search handler claims the cache-backed crate');
-  assert.equal(inventory.getAmount(core.ItemIdentifiers.FLUFFS_KITTEN), 1);
+  for (const spawn of crateSpawns) {
+    const crate = { getId: () => N.CRATE, getLocation: () => new core.Location(spawn.x, spawn.y, spawn.level) };
+    const npcEvent = { player, npc: crate, npcId: N.CRATE, definition: crateDefinition, clickType: crateDefinition.getActions().indexOf('Search') + 1, handled: false };
+    assert.equal(PluginManager.emitNpcInteraction(npcEvent), true, 'the real registered NPC Search handler claims each cache-backed crate');
+  }
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.FLUFFS_KITTEN), 1, 'the real dispatch finds only one kitten');
   const elsewhere = { getId: () => N.CRATE, getLocation: () => new core.Location(3200, 3400, 0) };
   const outsideEvent = { player, npc: elsewhere, npcId: N.CRATE, definition: crateDefinition, clickType: crateDefinition.getActions().indexOf('Search') + 1, handled: false };
   assert.equal(PluginManager.emitNpcInteraction(outsideEvent), false, 'the Lumber Yard hook yields for unrelated Crate NPCs');
@@ -567,4 +577,59 @@ test('Fluffs action hints reach chat once at the matching quest stage only', () 
     h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
     assert.deepEqual(h.messages, [], 'completed or mismatched stages stay silent');
   }
+});
+
+
+test('private crate choice is stable through wrong searches, full bags, recovery and a reloaded save', () => {
+  const key = 'gertrudes-cat:kitten-crate';
+  const tiles = [[3298,3514], [3303,3506], [3305,3500], [3307,3507], [3310,3499], [3315,3515]];
+  for (let selected = 0; selected < tiles.length; selected++) {
+    const h = setup({ random: () => selected });
+    const { CRATE } = h.core.NpcIdentifiers;
+    const kitten = h.core.ItemIdentifiers.FLUFFS_KITTEN;
+    h.quest.setStage(h.player, 4);
+    assert.equal(h.persisted.get(key), null, 'the selected tile uses ordinary saved attributes');
+    for (let i = 0; i < 28; i++) h.inventory.adds(h.core.ItemIdentifiers.BUCKET, 1);
+    h.npc(CRATE, ...tiles[(selected + 1) % tiles.length]);
+    assert.equal(h.inventory.getAmount(kitten), 0);
+    h.npc(CRATE, ...tiles[selected]);
+    assert.equal(h.inventory.getAmount(kitten), 0, 'full bag cannot consume the kitten');
+    assert.equal(h.attrs.get(key), tiles[selected].join(','));
+    h.inventory.clear();
+    const reloaded = setup({ attrs: new Map(h.attrs), random: () => (selected + 1) % tiles.length });
+    reloaded.login();
+    for (let i = 0; i < tiles.length; i++) {
+      reloaded.npc(CRATE, ...tiles[i]);
+      assert.equal(reloaded.inventory.getAmount(kitten), Number(i === selected), 'reloading does not reroll');
+      if (i === selected) {
+        reloaded.npc(CRATE, ...tiles[i]);
+        assert.equal(reloaded.inventory.getAmount(kitten), 1, 'repeat search cannot duplicate the carried kitten');
+        reloaded.inventory.deleteNumber(kitten, 1);
+      }
+    }
+    reloaded.npc(CRATE, ...tiles[selected]);
+    assert.equal(reloaded.inventory.getAmount(kitten), 1, 'lost kitten can be found in the same crate');
+    reloaded.quest.setStage(reloaded.player, 0);
+    assert.equal(reloaded.attrs.get(key), null, 'quest reset clears its old random selection');
+  }
+});
+
+test('stationary crate mews and colocated sound run independently of private kitten selection', () => {
+  const h = setup({ random: (min) => min });
+  const N = h.core.NpcIdentifiers;
+  const chats = [];
+  const npc = { isNpc: () => true, getId: () => N.CRATE,
+    getLocation: () => new h.core.Location(3303, 3506, 0), forceChat: (text) => chats.push(text) };
+  const area = h.areas[0];
+  for (let tick = 0; tick < 24; tick++) area.process(npc);
+  assert.equal(chats.length, 0);
+  area.process(npc);
+  assert.deepEqual(chats, ['Mew!']);
+  assert.deepEqual(h.sounds, [{ soundId: 339, x: 3303, y: 3506, level: 0, radius: 10, source: npc }]);
+  h.quest.setStage(h.player, 6);
+  for (let tick = 0; tick < 25; tick++) area.process(npc);
+  assert.equal(chats.length, 2, 'mews continue after completion as in the captures');
+  assert.equal(h.attrs.get('gertrudes-cat:kitten-crate'), undefined, 'public cues never choose or expose a player target');
+  for (let tick = 0; tick < 50; tick++) area.process({ ...npc, getLocation: () => new h.core.Location(3200,3400,0) });
+  assert.equal(chats.length, 2, 'other Crate NPCs remain silent');
 });

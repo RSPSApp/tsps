@@ -2442,6 +2442,36 @@
       ]
     },
     {
+      "name": "Rocks (Karuulm Slayer Dungeon, east of the entrance)",
+      "object": 34544,
+      "at": [1321,10205,0],
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "note": "rsprox 3013, 3014 (rev 239): no requirement; the player faces the rocks, then an exact move two tiles across (cycle 0 to 60, climb-over 839) in 2 ticks, and the message and the animation reset come 2 ticks after the move starts. The other two stepover rocks are the same loc, so they use the same crossing.",
+      "unverified": "the return trip and the two other stepover rocks (1302,10205 and 1311,10215) were not captured; they mirror this one across their own footprint.",
+      "between": {"ends":[{"object":[-1,0,0]},{"object":[1,0,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
+      "name": "Rocks (Karuulm Slayer Dungeon, west)",
+      "object": 34544,
+      "at": [1302,10205,0],
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "note": "same loc and crossing as the rocks east of the entrance (rsprox 3013, 3014).",
+      "unverified": "not captured; the reachable side is east (1303,10205), the far side west (1301,10205) by the collision map.",
+      "between": {"ends":[{"object":[-1,0,0]},{"object":[1,0,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
+      "name": "Rocks (Karuulm Slayer Dungeon, north)",
+      "object": 34544,
+      "at": [1311,10215,0],
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "note": "same loc and crossing as the rocks east of the entrance (rsprox 3013, 3014), turned to cross north.",
+      "unverified": "not captured; the reachable side is south (1311,10214), the far side north (1311,10216) by the collision map.",
+      "between": {"ends":[{"object":[0,-1,0]},{"object":[0,1,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
       "name": "Tunnel (Stronghold Slayer Cave)",
       "object": [30174,30175],
       "level": 72,

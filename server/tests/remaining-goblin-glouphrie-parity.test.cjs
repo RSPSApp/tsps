@@ -1355,3 +1355,25 @@ test('POG lost crystal chime seed is recoverable from the golden chest, respecti
   openGolden(h, held);
   assert.equal(held.items.get(I.CRYSTAL_CHIME_SEED), undefined, 'held chime prevents duplicate seed');
 });
+
+test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand out', () => {
+  const h = harness('EyesOfGlouphrie');
+  const condition = h.hooks.onNpcDialogueCondition[0];
+  const text = 'If the player does not have a crystal saw or crystal seed:';
+  const brimstail = core.NpcIdentifiers.BRIMSTAIL_2;
+  // A real Player's bank: a banked seed, and the zero-amount placeholder withdrawing it leaves behind.
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const bankOf = (amount) => {
+    const real = new Player(null);
+    real.getBank(0).add(new core.Item(core.ItemIdentifiers.CRYSTAL_SAW_SEED, amount), false);
+    return real.getBanks();
+  };
+  const banked = player({ getBanks: () => bankOf(1) });
+  assert.equal(condition({ player: banked, npcId: brimstail, text }), false, 'a banked seed is owned');
+  const placeholder = bankOf(0);
+  assert.equal(placeholder[0].contains(core.ItemIdentifiers.CRYSTAL_SAW_SEED), true, 'control: the placeholder is in the bank');
+  assert.equal(condition({ player: player({ getBanks: () => placeholder }), npcId: brimstail, text }), true,
+    'a placeholder is not a seed: Brimstail offers one');
+  const none = player({ getBanks: () => new Player(null).getBanks() }); // an empty real bank
+  assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
+});

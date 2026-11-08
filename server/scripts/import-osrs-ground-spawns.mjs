@@ -47,6 +47,8 @@ function isAuditedEasternConchShell(row) {
 }
 // Exact ordinary rows audited separately from these pages' scenery/quest spawns.
 const AUDITED_MEMBER_COMMON_TOOL_ROWS = new Map([
+  ["Pestle and mortar:233:1667:3068:0", "[[Outer Fortis]]"],
+  ["Vial of water:227:1668:3068:0", "[[Outer Fortis]]"],
   ["Bucket:1925:1667:3124:0", "[[Civitas illa Fortis]]"],
   ["Bucket:1925:1644:3093:0", "[[Civitas illa Fortis]]"],
   ["Pot:1931:1666:3124:0", "[[Civitas illa Fortis]]"],

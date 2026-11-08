@@ -145367,7 +145367,7 @@
                           "player": "Ok, I'll see what I can do."
                         },
                         {
-                          "npc": "Thanks mister!"
+                          "npc": "Thanks, mister!"
                         }
                       ],
                       "hook": "quest:witch-s-house:start",
@@ -1268087,7 +1268087,7 @@
                         {
                           "type": "line",
                           "speaker": "Boy",
-                          "text": "Thanks mister!"
+                          "text": "Thanks, mister!"
                         }
                       ],
                       "hook": "quest:witch-s-house:start",
@@ -1268176,18 +1268176,13 @@
       ],
       "the-witch-s-house-attempting-to-open-the-garden-door-without-unlocking-it": [
         {
-          "type": "message",
-          "text": "This door is locked.",
-          "id": "EWTf9d"
-        },
-        {
-          "player": "Strange... I can't see any kind of lock or handle to open this door..."
+          "player": "It's locked. That's strange - I can't see any kind of lock or handle to open it..."
         }
       ],
       "the-witch-s-house-attempting-to-open-the-gate-without-correct-gloves": [
         {
           "type": "message",
-          "text": "As your bare hands touch the gate you feel a shock.",
+          "text": "As your hands touch the gate you feel a shock.",
           "id": "kGCF5e"
         }
       ],
@@ -1268297,7 +1268292,7 @@
       "the-ball-killing-the-first-form": [
         {
           "type": "message",
-          "text": "the shapeshifters' body begins to deform!",
+          "text": "The shapeshifters' body begins to deform!",
           "id": "EAUyRf"
         },
         {

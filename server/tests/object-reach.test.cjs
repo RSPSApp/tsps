@@ -447,7 +447,11 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   const groundItem = new ItemOnGround(State.SEEN_BY_PLAYER, 'ObjectReachTest',
     new Location(100, 100, 0), floorItem, true, -1, null);
   const received = [];
+  const animations = [];
+  const faced = [];
   const player = {
+    performAnimation: (animation) => animations.push(animation.getId()),
+    setPositionToFace: (tile) => faced.push([tile.getX(), tile.getY()]),
     getUsername: () => 'ObjectReachTest',
     getLocation: () => location,
     getSize: () => 1,
@@ -481,6 +485,9 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   ItemOnGroundManager.pickup(player, groundItem);
   assert.equal(inventoryAdds, 1);
   assert.equal(removed, 1);
+  // Taken from the neighbouring tile: the table reach (human_pickuptable_walkmerge, live rev 239+).
+  assert.deepEqual(animations, [9401]);
+  assert.deepEqual(faced, [[100, 100]], 'the player turns to the item first');
 
   // A wall between the player and item makes that same adjacent-looking tile
   // unreachable; move-near pathing must not turn it into a pickup.
@@ -497,6 +504,13 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   ItemOnGroundManager.pickup(player, groundItem);
   assert.equal(inventoryAdds, 1, 'a distant item is not within pickup reach');
   assert.equal(resets, 3, 'all rejected attempts clear their stale movement action');
+
+  // Taken from the player's own tile: no animation (6,859 of 6,860 live own-tile takes).
+  location = new Location(100, 100, 0);
+  ItemOnGroundManager.pickup(player, groundItem);
+  assert.equal(inventoryAdds, 2);
+  assert.deepEqual(animations, [9401], 'an own-tile take plays nothing');
+  assert.equal(faced.length, 1, 'and does not turn');
 });
 
 test('ladder click waits for arrival before animating and changes plane one tick later', (t) => {

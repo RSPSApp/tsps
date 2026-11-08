@@ -95,6 +95,33 @@ function extractCacheFileName(url: string): string {
     }
 }
 
+// Retained full-download parts have a completion manifest and a contiguous prefix.
+// Length headers describe the producer's writes; they do not verify body integrity.
+async function hasCompleteRetainedParts(cache: Cache, manifestRequest: Request): Promise<boolean> {
+    const response = await cache.match(manifestRequest);
+    if (!response) return false;
+    const manifest = await response.json();
+    const total = manifest?.total;
+    if (!Number.isSafeInteger(total) || total <= 0) return false;
+
+    const partUrl = new URL(manifestRequest.url);
+    partUrl.pathname = partUrl.pathname.slice(0, -"manifest".length);
+    partUrl.search = "";
+    let length = 0;
+    for (let index = 0; length <= total; index++) {
+        if (!Number.isSafeInteger(index)) return false;
+        partUrl.searchParams.set("p", String(index));
+        const part = await cache.match(partUrl.toString());
+        if (!part) return length === total;
+        const partLength = Number(part.headers.get("Content-Length"));
+        if (part.headers.get("Cache-Part") !== String(index) ||
+            !Number.isSafeInteger(partLength) || partLength <= 0) return false;
+        length += partLength;
+        if (!Number.isSafeInteger(length)) return false;
+    }
+    return false;
+}
+
 export async function isCacheManifestComplete(entry: CacheManifestEntry): Promise<boolean> {
     if (typeof (globalThis as any).caches === "undefined") {
         return true;
@@ -108,6 +135,15 @@ export async function isCacheManifestComplete(entry: CacheManifestEntry): Promis
             // Streaming stores dat2 as ranges; its manifest replaces the full-file entry.
             if (new URL(req.url).pathname.endsWith("/main_file_cache.dat2/range/manifest")) {
                 existing.add("main_file_cache.dat2");
+            }
+        }
+        if (!existing.has("main_file_cache.dat2") && entry.files.includes("main_file_cache.dat2")) {
+            for (const req of requests) {
+                if (new URL(req.url).pathname.endsWith("/main_file_cache.dat2/part/manifest") &&
+                    await hasCompleteRetainedParts(cache, req)) {
+                    existing.add("main_file_cache.dat2");
+                    break;
+                }
             }
         }
         for (const expected of entry.files) {

@@ -802,10 +802,8 @@ module.exports = function registerWitchsHouseQuest(api) {
     }
     const queue = npc.getMovementQueue();
     if (queue.isStepBlocked?.()) queue.reset();
-    const y = npc.getLocation().getY();
-    if (y !== NORA_ROW) {
-      queue.reset();
-      queue.walkStep(0, Math.sign(NORA_ROW - y));
+    if (npc.getLocation().getY() !== NORA_ROW) {
+      stepBackToRow(npc, queue);
       return;
     }
     if (queue.size() > 0) return;
@@ -813,6 +811,24 @@ module.exports = function registerWitchsHouseQuest(api) {
     if (x >= NORA_EAST_X) noraPatrol.direction = -1;
     else if (x <= NORA_WEST_X) noraPatrol.direction = 1;
     queue.walkStep(noraPatrol.direction, 0);
+  }
+
+  /**
+   * Off her row, she heads for its nearest patrol tile one walkable step at a time: straight at it,
+   * else along one axis. (2903,3463) beside her west end is the statue, so from 2903,3462 the way
+   * back is east first, then north.
+   */
+  function stepBackToRow(npc, queue) {
+    queue.reset();
+    const at = npc.getLocation();
+    const dx = Math.sign(Math.max(NORA_WEST_X, Math.min(NORA_EAST_X, at.getX())) - at.getX());
+    const dy = Math.sign(NORA_ROW - at.getY());
+    for (const [x, y] of [[dx, dy], [dx, 0], [0, dy], [-1, 0], [1, 0]]) {
+      if ((x !== 0 || y !== 0) && queue.canWalk(x, y)) {
+        queue.walkStep(x, y);
+        return;
+      }
+    }
   }
 
   /** Only a player on the quest's way through the garden; the back door opens at this stage. */

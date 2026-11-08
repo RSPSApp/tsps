@@ -780,6 +780,7 @@ function nora(x) {
     getLocation: () => new core.Location(npc.x, npc.y, 0),
     getMovementQueue: () => ({
       size: () => npc.queued,
+      canWalk: () => true,
       isStepBlocked: () => npc.blocked,
       walkStep(dx, dy) { npc.x += dx; npc.y += dy; },
       reset() { npc.queued = 0; npc.blocked = false; },
@@ -957,10 +958,10 @@ test('Nora takes over her own movement and recovers from a stuck step or a tile 
   witch.blocked = true;
   area.process(witch);
   assert.equal(witch.scripted, true, 'the wander and walk-home logic is off');
-  assert.deepEqual([witch.x, witch.y], [2903, 3463], 'back onto her row');
+  assert.deepEqual([witch.x, witch.y], [2904, 3463], 'back onto her row at its west end');
   area.process(witch);
   area.process(witch);
-  assert.deepEqual([witch.x, witch.y], [2905, 3463], 'patrolling east again');
+  assert.deepEqual([witch.x, witch.y], [2906, 3463], 'patrolling east again');
 });
 
 test('the shapeshifter wanders the shed until the glare, and each new form attacks at once', () => {
@@ -978,4 +979,25 @@ test('the shapeshifter wanders the shed until the glare, and each new form attac
   const spider = h.spawned.find((npc) => npc.id === EXPERIMENT_FORMS[1]);
   assert.equal(spider.wanderRadius, 2);
   assert.deepEqual(spider.attacked, [h.player]);
+});
+
+test('a real Nora stuck at 2903,3462 walks back round the statue and patrols on', () => {
+  // The live map and a real NPC movement queue: (2903,3463) is the Statue of Zamorak, so a step
+  // straight north never lands.
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2903, 3463);
+  const { NPC } = require('../dist/game/entity/impl/npc/NPC');
+  const witch = new NPC(NORA, new core.Location(2903, 3462, 0));
+  const h = setup();
+  const area = garden(h);
+  area.getPlayers = () => [];
+  const path = [];
+  for (let cycle = 0; cycle < 6; cycle++) {
+    area.process(witch);
+    witch.getMovementQueue().process();
+    path.push([witch.getLocation().getX(), witch.getLocation().getY()]);
+  }
+  assert.deepEqual(path.slice(0, 2), [[2904, 3462], [2904, 3463]], 'east past the statue, then onto her row');
+  assert.deepEqual(path.at(-1), [2908, 3463], 'then a tile a cycle along the patrol');
+  assert.equal(witch.isScriptedMovement(), true);
 });

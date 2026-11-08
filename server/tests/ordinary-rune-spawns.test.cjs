@@ -45,3 +45,30 @@ test("audited ordinary shears and crossbow tiles retain source quantity, plane a
     assert.equal(found[0].amt,amount);assert.equal(found[0].respawn,respawn);
   }
 });
+
+const MEMBER_TOOLS=[
+ [837,1512,3423,0,500],[1735,1653,3571,0,100],[1735,1776,3654,0,100],
+];
+test("audited member tool rows preserve cache identity, exact quantity/timer and source membership",()=>{
+ for(const[id,x,y,z,timer]of MEMBER_TOOLS){
+  const found=spawns.filter(s=>s.id===id&&s.location.x===x&&s.location.y===y&&s.location.z===z);
+  assert.equal(found.length,1,"member tool "+id+"@"+x+","+y+","+z);
+  assert.equal(found[0].members,true);assert.equal(found[0].amt,1);assert.equal(found[0].respawn,timer);
+  assert.equal(CacheDefinitions.getItem(id).name,id===837?"Crossbow":"Shears");
+  assert.equal(CacheDefinitions.getItem(id).isMembers,false,"world membership is the source row's, not the item's flag");
+ }
+});
+for(const membersWorld of[true,false])test("actual member tool definitions load only in the correct world: "+membersWorld,t=>{
+ const WorldDefinition=require("../dist/game/definition/WorldDefinition");
+ const {World}=require("../dist/game/World");
+ const {GroundItemSpawnDefinitionLoader}=require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+ const items=World.getItems(),previous=items.splice(0);t.after(()=>items.splice(0,items.length,...previous));
+ t.mock.method(WorldDefinition,"isMembersWorld",()=>membersWorld);
+ assert.equal(new GroundItemSpawnDefinitionLoader().load(),true);
+ for(const[id,x,y,z,timer]of MEMBER_TOOLS){
+  const found=items.filter(p=>p.getItem().getId()===id&&p.getPosition().getX()===x&&p.getPosition().getY()===y&&p.getPosition().getZ()===z);
+  assert.equal(found.length,membersWorld?1:0,"exact member source world gate "+id+"@"+x+","+y);
+  if(membersWorld){assert.equal(found[0].getRespawnTimer(),timer);assert.equal(found[0].getItem().getAmount(),1);assert.equal(found[0].isStaticSpawn(),true);}
+ }
+ assert.ok(items.some(p=>p.getItem().getId()===1735&&p.getPosition().getX()===3152&&p.getPosition().getY()===3306),"existing F2P shears retained");
+});

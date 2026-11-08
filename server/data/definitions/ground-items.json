@@ -1873,5 +1873,8 @@
   {"id":837,"location":{"x":3284,"y":3719,"z":0},"amt":1,"respawn":500,"description":"OSRS Wiki: Crossbow — [[Wilderness]] - south-east of the [[Bone Yard]]"},
   {"id":1735,"location":{"x":3152,"y":3306,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Lumbridge]] - farm north-west"},
   {"id":1735,"location":{"x":3126,"y":3356,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Draynor Manor]]"},
-  {"id":1735,"location":{"x":2930,"y":3285,"z":1},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Crafting Guild]] ({{FloorNumber|uk=1}})"}
+  {"id":1735,"location":{"x":2930,"y":3285,"z":1},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Crafting Guild]] ({{FloorNumber|uk=1}})"},
+  {"id":837,"location":{"x":1512,"y":3423,"z":0},"amt":1,"respawn":500,"members":true,"description":"OSRS Wiki: Crossbow — [[Land's End]] - [[Hugor]]'s house"},
+  {"id":1735,"location":{"x":1653,"y":3571,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - [[Watson's house]]"},
+  {"id":1735,"location":{"x":1776,"y":3654,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - east of flax field"}
 ]

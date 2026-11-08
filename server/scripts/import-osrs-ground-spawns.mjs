@@ -7,7 +7,8 @@
  * Infobox Item documents respawn in ticks. For these audited ordinary rows with
  * no tile override, apply the item's explicit infobox value as the spawn's timer.
  * This is an import policy, not automatic inheritance supplied by the Wiki map template.
- * Members rows await a world-aware import; untyped overrides never become guessed ticks.
+ * Only separately audited member pages use the existing row-membership loader gate;
+ * untyped overrides never become guessed ticks.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -28,6 +29,9 @@ const AUDITED_ORDINARY_ITEMS = new Map([
   ["Fire rune", 554], ["Mind rune", 558], ["Nature rune", 561], ["Water rune", 555],
   ["Crossbow", 837], ["Shears", 1735],
 ]);
+// Their three explicit member rows were separately checked as ordinary spawns.
+// The seven rune pages above retain their original F2P-only scope.
+const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([["Crossbow", 837], ["Shears", 1735]]);
 const OWNED_EXACT = new Map([
   ["560:2500:2967:0", "Quests.plugin.js Watchtower definition provider"],
   ["2398:2528:9415:0", "Quests.plugin.js Watchtower definition provider"],
@@ -72,7 +76,8 @@ export function importSpawns(source, existing) {
       entry.owner = owner;
     } else if (entry.reasons.length) {
       entry.status = "unresolved-source";
-    } else if (row.members !== false) {
+    } else if (row.members !== false
+      && !(row.members === true && AUDITED_MEMBER_ORDINARY_ITEMS.get(row.page) === row.id)) {
       entry.status = "members-world-scope-deferred";
     } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id) {
       entry.status = "ordinary-page-not-yet-audited";
@@ -87,16 +92,17 @@ export function importSpawns(source, existing) {
     report.push(entry);
   }
   for (const [key, entries] of eligible) {
-    const states = new Set(entries.map(({ source:r }) => [r.quantity,r.infobox_respawn_ticks].join(":")));
+    const states = new Set(entries.map(({ source:r }) => [r.quantity,r.infobox_respawn_ticks,r.members].join(":")));
     if (states.size !== 1) {
-      for (const entry of entries) entry.status = "conflicting-source-quantity-or-timer";
+      for (const entry of entries) entry.status = "conflicting-source-quantity-timer-or-membership";
       continue;
     }
     const row = entries[0].source;
     const present = exact.get(key);
     if (present?.length) {
       for (const entry of entries) {
-        entry.status = present.every(d => (d.amt ?? 1) === row.quantity && d.respawn === row.infobox_respawn_ticks)
+        entry.status = present.every(d => (d.amt ?? 1) === row.quantity && d.respawn === row.infobox_respawn_ticks
+          && (d.members === true) === row.members)
           ? "existing-exact" : "existing-exact-state-discrepancy";
         entry.existingCount = present.length;
       }
@@ -114,7 +120,7 @@ export function importSpawns(source, existing) {
     const nearby = existing.filter(d => d.location?.z === row.plane
       && Math.abs(d.location.x-row.x) <= 2 && Math.abs(d.location.y-row.y) <= 2);
     const definition = { id:row.id, location:{x:row.x,y:row.y,z:row.plane},
-      amt:row.quantity, respawn:row.infobox_respawn_ticks, description:"OSRS Wiki: "+row.page+" — "+row.location };
+      amt:row.quantity, respawn:row.infobox_respawn_ticks, ...(row.members === true ? {members:true} : {}), description:"OSRS Wiki: "+row.page+" — "+row.location };
     definitions.push(definition);
     exact.set(key, [definition]);
     entries.forEach((entry,index) => {
@@ -125,7 +131,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool subset only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears subset only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

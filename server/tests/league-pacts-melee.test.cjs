@@ -553,6 +553,18 @@ test("Thorns pays the current melee style's XP; Attack off a melee weapon or aut
   gained = xp(double);
   thornsHit(double, character("pact-thorns-xp-pker"));
   close(gained, {}, "nor on a player's attack");
+
+  // The XP counts only the damage the NPC can still take (a 1 HP giant: 1 of Thorns' 3).
+  style(player, core.FightStyle.ACCURATE);
+  shield(player, ITEMS.runeKiteshield);
+  gained = xp(player);
+  thornsHit(player, giant(1, 1));
+  close(gained, { [name(ATTACK)]: 4, [name(HITPOINTS)]: 4 / 3 }, "1 HP left: XP for 1 damage");
+  // 2 HP, double Thorns (3 + 1) over two hitsplats: 2 damage in all, 8 Attack XP.
+  style(double, core.FightStyle.ACCURATE);
+  gained = xp(double);
+  hooks.onCombatHitResolved({ attacker: giant(1, 2), target: double, hit: landed(core.CombatType.MELEE, [splat(0), splat(0)]) });
+  close(gained, { [name(ATTACK)]: 8, [name(HITPOINTS)]: 8 / 3 }, "2 HP over two splats: XP for 2 damage");
 });
 
 test("a shield reflects an NPC's whole hit on 0.1% per Defence level", () => {

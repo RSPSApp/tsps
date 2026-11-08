@@ -384,13 +384,20 @@ function thorns(player, attacker, hit) {
   const damage = thornsDamage(player);
   const second = value(player, "thornsDouble") ? Math.floor(damage * THORNS_SECOND_FRACTION) : 0;
   const splats = Math.max(1, hit.getHits?.()?.length ?? 1);
+  // The XP budget: the hitpoints the NPC has left after damage already queued, shared by every splat.
+  let remaining = attacker.getHitpoints() - (attacker.getCombat().getHitQueue().getQueuedDamage?.() ?? 0);
+  const paid = (amount) => {
+    const counted = Math.max(0, Math.min(amount, remaining));
+    remaining -= counted;
+    return counted;
+  };
   for (let i = 0; i < splats; i++) {
-    if (attacker.getHitpoints() <= 0) return;
+    if (attacker.getHitpoints() <= 0 || remaining <= 0) return;
     thornsHits.add(reflect(player, attacker, damage));
-    thornsExperience(player, attacker, damage);
+    thornsExperience(player, attacker, paid(damage));
     if (second > 0) {
       thornsHits.add(reflect(player, attacker, second));
-      thornsExperience(player, attacker, second);
+      thornsExperience(player, attacker, paid(second));
     }
     distanceHeal(player, attacker);
   }

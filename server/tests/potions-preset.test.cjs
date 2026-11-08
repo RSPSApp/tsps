@@ -971,6 +971,69 @@ test("ordinary beer replaces its own slot when the inventory is full", async t =
   assert.equal(f.inv.getAmount(I.BEER_GLASS_4), 0);
 });
 
+test("ordinary cider restores health and boosts Farming while returning its glass", async t => {
+  const f = ordinaryAleActor(t);
+  const skills = f.p.getSkillManager();
+  skills.setMaxLevels(core.Skill.FARMING, 99, false).setCurrentLevels(core.Skill.FARMING, 99, false);
+  assert.equal(I.CIDER, 5763);
+  placeOrdinaryAle(f, I.CIDER, "Cider");
+  assert.equal(skills.getMaxLevel(core.Skill.FARMING), 99);
+  assert.equal(skills.getCurrentLevel(core.Skill.FARMING), 99);
+  assert.equal(skills.getCurrentLevel(core.Skill.ATTACK), 99);
+  assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 99);
+  fill(f);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0].getId(), I.BEER_GLASS);
+  assert.equal(f.inv.getItems()[0].getAmount(), 1);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.inv.getFreeSlots(), 0);
+  assert.equal(f.p.getHitpoints(), 91);
+  assert.equal(skills.getCurrentLevel(core.Skill.FARMING), 100);
+  assert.equal(skills.getCurrentLevel(core.Skill.ATTACK), 96);
+  assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 96);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+  assert.deepEqual(f.messages.slice(-2), ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]);
+});
+
+test("cider remains intact during a potion cooldown", async t => {
+  const f = ordinaryAleActor(t);
+  const held = placeOrdinaryAle(f, I.CIDER, "Cider");
+  f.p.getTimers().extendOrRegister(core.TimerKey.POTION, 3);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0], held);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS), 0);
+  assert.equal(f.p.getHitpoints(), 90);
+});
+
+test("cider cooldown is per player and prevents a second drink", async t => {
+  const first = ordinaryAleActor(t), second = ordinaryAleActor(t);
+  placeOrdinaryAle(first, I.CIDER, "Cider");
+  put(first, item(I.CIDER), 1);
+  placeOrdinaryAle(second, I.CIDER, "Cider");
+  await browserOp(first, 0, "Drink");
+  await browserOp(first, 1, "Drink");
+  assert.equal(first.inv.getItems()[1].getId(), I.CIDER);
+  assert.equal(first.p.getHitpoints(), 91);
+  await browserOp(second, 0, "Drink");
+  assert.equal(second.inv.getItems()[0].getId(), I.BEER_GLASS);
+  assert.equal(second.p.getHitpoints(), 91);
+  advancePotionTimer(first);
+  await browserOp(first, 1, "Drink");
+  assert.equal(first.inv.getItems()[1].getId(), I.BEER_GLASS);
+  assert.equal(first.p.getHitpoints(), 92);
+});
+
+test("house cider still leaves the house glass", async t => {
+  const f = ordinaryAleActor(t);
+  assert.equal(I.CIDER_3, 7752);
+  assert.equal(core.CacheDefinitions.getItem(I.CIDER_3).inventoryActions[0], "Drink");
+  put(f, item(I.CIDER_3), 0);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0].getId(), I.BEER_GLASS_4);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS), 0);
+  assert.equal(f.p.getHitpoints(), 91);
+});
+
 test("an active potion cooldown keeps ordinary mead intact", async t => {
   const f = ordinaryAleActor(t);
   const held = placeOrdinaryAle(f, I.MOONLIGHT_MEAD, "Moonlight mead");

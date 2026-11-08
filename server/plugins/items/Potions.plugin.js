@@ -655,6 +655,16 @@ registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_G
     lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06);
   } });
 
+// https://oldschool.runescape.wiki/w/Cider and /w/Brewing
+registerPotion({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER_GLASS,
+  drink: { messages: () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  requiresFoodPermission: true, shareable: false, effect: player => {
+    heal(player, 1);
+    boostSkill(player, Skill.FARMING, 1, 0);
+    lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.02);
+    lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.02);
+  } });
+
 // POH refreshments use the same consumption, cooldown and stat-boost rules as potions, with the
 // cup's own drinking animation and messages (rsprox captures: human_drink_from_teacup_*, "You drink
 // the cup of (milky) tea.", "You feel refreshed and ready for more building.").

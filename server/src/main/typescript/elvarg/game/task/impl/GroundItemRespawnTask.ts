@@ -15,7 +15,11 @@ export class GroundItemRespawnTask extends Task {
     
     execute() {
         // Register the new entity..
-        ItemOnGroundManager.register(this.item.clone());
+        const restored = this.item.clone();
+        if (restored.isStaticSpawn() && restored.respawns()) {
+            restored.getItem().setAmount(restored.getRespawnAmount());
+        }
+        ItemOnGroundManager.register(restored);
     
         // Stop the task
         this.stop();

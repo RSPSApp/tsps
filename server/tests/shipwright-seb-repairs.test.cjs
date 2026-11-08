@@ -92,6 +92,9 @@ function destroyFixture(t, npcId) {
   p.setLocation(approach);
   const npc = core.NPC.create(npcId, new core.Location(spawn.x, spawn.y, spawn.level));
   core.World.getNpcs().add(npc); npc.setRegistered(true);
+  // A shipwright destroys boats only after Pandemonium (the standard dialogue): fixtures are post-quest unless a test
+  // sets an earlier stage itself.
+  require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'pandemonium').setStage(p, 50);
   const connection = new ClientConnection(channel); connection.player = p;
   t.after(() => {
     p.closeInterruptibleInterfaces(); PM.emitPlayerLogout({ player: p, username: p.getUsername() });
@@ -139,6 +142,22 @@ async function openDestroy(f) {
   }
   assert.equal(f.p.getInterfaceId(), 934, 'an owner reaches native Destroy Boat selection, not the no-boats refusal');
   assert.equal(f.p.getPacketSender().getVarbit(18553), 9, 'active cache table149 row7317 is Destroy mode9');
+}
+/** Before Pandemonium is complete a shipwright won't destroy a boat: the selection never opens. */
+async function refusedDestroy(f) {
+  await f.talk();
+  const menu = await destroyChoice(f);
+  const option = menu.options.indexOf("I'd like to destroy a boat.");
+  if (option >= 0) await destroySelect(f, option + 1);
+  // As openDestroy: continue whatever the shipwright says, where the selection would open.
+  for (let attempt = 0; attempt < 12 && f.p.getInterfaceId() !== 934; attempt++) {
+    const group = f.p.getPacketSender().getChatboxGroupId();
+    if (f.p.getDialogueManager().getCurrent()) {
+      await f.native({ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 });
+    }
+    ticks(1);
+  }
+  assert.notEqual(f.p.getInterfaceId(), 934, 'no Destroy Boat selection before Pandemonium is complete');
 }
 async function chooseDestroyedBoat(f, boat) {
   await f.native({ type: 'dialogue_continue', widgetId: (934 << 16) | 5, childIndex: boat.slot + 1 });
@@ -456,8 +475,8 @@ test('native destruction preserves required quest cargo until it is returned to 
   // Arrival fixture after the normal sailing leg; this probe does not claim an end-to-end voyage.
   assert.equal(core.Sailing.disembark(p,'the_pandemonium'),null);ticks(2);
   assert.equal(quest.getStage(p),42);p.setLocation(jimApproach);p.setNeedsPlacement(false);
-  await openDestroy(f);await chooseDestroyedBoat(f,owned);await destroyChoice(f);await destroySelect(f,1);
-  assert.deepEqual(p.getSailing().boats, [owned], 'required cargo prevents destruction');
+  await refusedDestroy(f);
+  assert.deepEqual(p.getSailing().boats, [owned], 'mid-quest the raft and its required cargo stay');
   assert.equal(cargo.countIn(owned, task.crate), 1);
   assert.deepEqual(ports.slots(p)[0], { id: 599, taken: 1, delivered: 0 });
   assert.doesNotMatch(p.getDialogueManager().getCurrent()?.getText?.() ?? '', /broken up into\s+scrap/);
@@ -494,6 +513,7 @@ test('native destruction preserves required quest cargo until it is returned to 
   assert.equal(quest.getStage(p), 42, 'return is no delivery or quest progress');
   assert.ok(ledger.collectable(p, 'port_sarim').some(([index]) => index === 0));
   p.closeInterruptibleInterfaces(); p.setLocation(jimApproach); p.setNeedsPlacement(false);
-  await openDestroy(f); await chooseDestroyedBoat(f, owned); await destroyChoice(f); await destroySelect(f, 1);
-  assert.equal(p.getSailing().boats.length, 0, 'empty boat remains destructible');
+  // Mid-quest (stage 42) the quest's raft can't be destroyed even empty: the selection never opens and the boat stays.
+  await refusedDestroy(f);
+  assert.equal(p.getSailing().boats.length, 1, 'the quest raft stays');
 });

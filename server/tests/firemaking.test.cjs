@@ -774,10 +774,13 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
       assert.equal(skills.getCurrentLevel(skill), value);
     }
     core.RegionManager.loadMapFiles(source.x, source.y);
-    const offset = [[1,0],[-1,0],[0,1],[0,-1]].find(([dx,dy]) =>
+    // Walkable scenery can still refuse a fire. Use the existing production
+    // predicate rather than assuming the first reachable Otto-adjacent tile is clear.
+    const offset = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].find(([dx,dy]) =>
       core.RegionManager.canMove(source.x, source.y, source.x+dx, source.y+dy, 0, 1, 1, null)
-      && core.RegionManager.canMove(source.x+dx, source.y+dy, source.x, source.y, 0, 1, 1, null));
-    assert.ok(offset, "canonical Otto tile has a reachable adjacent tile");
+      && core.RegionManager.canMove(source.x+dx, source.y+dy, source.x, source.y, 0, 1, 1, null)
+      && !Firemaking.isFireTileBlocked(new core.Location(source.x+dx, source.y+dy, source.level ?? 0), null));
+    assert.ok(offset, "canonical Otto tile has a reachable adjacent fire-clear tile");
     player.setLocation(new core.Location(source.x+offset[0], source.y+offset[1], source.level ?? 0));
     player.setNeedsPlacement(false);
     const connection = new ClientConnection(channel); connection.player = player;
@@ -846,6 +849,8 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
       inv.add(new core.Item(id, 1), false);
     }
     const anchor = f.player.getLocation().clone();
+    assert.equal(Firemaking.isFireTileBlocked(anchor, f.player.getPrivateArea()), false,
+      "the exercise starts on a fire-clear tile without bypassing production admission");
     fireSites.push({ location: anchor, area: f.player.getPrivateArea(),
       before: new Set(core.ObjectManager.objectsAt(anchor)) });
     assert.equal(core.ObjectManager.objectsAt(anchor).filter(o => o.getId() === core.ObjectIdentifiers.FIRE_23).length, 0);

@@ -34,10 +34,9 @@ test("unsigned bulk reads work with a zero-offset view", () => {
 for (const kind of ["signed", "unsigned"] as const) {
     test(`unsigned bulk reads respect a ${kind} input subview`, () => {
         const backing = new Uint8Array([10, 20, 226, 40, 50]);
-        const view = kind === "signed"
-            ? new Int8Array(backing.buffer, 1, 3)
-            : backing.subarray(1, 4);
-        const buffer = new ByteBuffer(view);
+        const buffer = kind === "signed"
+            ? new ByteBuffer(new Int8Array(backing.buffer, 1, 3))
+            : new ByteBuffer(backing.subarray(1, 4));
         buffer.offset = 1;
 
         const bytes = buffer.readUnsignedBytes(2);

@@ -354,3 +354,22 @@ test('the rank floor: only what was taken comes back', (t) => {
   panel(b, 'right'); // b withdraws: a is let go and repaid what the invitation took
   assert.equal(Rank.rank(a), 10);
 });
+
+test('the rank floor: a draw and a win after the swap return only what was taken', (t) => {
+  const [a] = upstairs(t, 10, 10);
+  assert.equal(Rank.rank(a), 0);
+  tick(299);
+  assert.ok(Battle.fightFor(a));
+  for (const handler of hooks.shutdowns) handler();
+  assert.equal(Rank.rank(a), 10, 'the draw repays the 10 the floor took, not the 25 stake');
+});
+
+test('the rank floor: a win from rank 10 pays back what was taken plus the gain', (t) => {
+  const [a, b] = upstairs(t, 10, 10);
+  ready(a);
+  ready(b);
+  assert.ok(Battle.fightFor(a));
+  tick(21);
+  for (const handler of hooks.beforeDeath) handler({ player: b, preventDeath: false });
+  assert.equal(Rank.rank(a), 10 + 25, 'the 10 taken back and the 25 gained');
+});

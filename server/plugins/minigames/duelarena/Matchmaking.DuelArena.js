@@ -233,7 +233,8 @@ class Match {
       this.stakes.set(player, stake);
       this.gains.set(player, Rank.gainAgainst(ranks.get(player), ranks.get(other)));
       const before = Rank.rank(player);
-      Rank.addRank(player, data().upfront - stake);
+      // Only what the floor really took comes back, then the stake goes (the floor may take less of it too).
+      Rank.addRank(player, (this.taken.get(player) ?? 0) - stake);
       this.taken.set(player, (this.taken.get(player) ?? 0) - (Rank.rank(player) - before));
       Common.varbit(player, "pvpa_owed_join_refund", 0);
       Common.varbit(player, "pvpa_upfront_paid", 0);
@@ -280,7 +281,7 @@ class Match {
 
   won(winner, loser) {
     const gain = this.gains.get(winner) ?? 0;
-    Rank.addRank(winner, (this.stakes.get(winner) ?? 0) + gain);
+    Rank.addRank(winner, (this.taken.get(winner) ?? 0) + gain);
     const points = Rank.winPoints(winner);
     Rank.addPoints(winner, points);
     winner.sendMessage(Common.message("rankedWon", { rank: gain, points }));
@@ -302,10 +303,11 @@ class Match {
 
   refundAll() {
     for (const player of this.players) {
-      const stake = this.stakes.get(player);
-      if (stake) Rank.addRank(player, stake);
+      const taken = this.taken.get(player);
+      if (taken) Rank.addRank(player, taken);
     }
     this.stakes.clear();
+    this.taken.clear();
   }
 
   /** The invitation ran out (or the timer, someone missing): no-shows keep paying, the rest are let go. */

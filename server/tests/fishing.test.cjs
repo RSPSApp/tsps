@@ -852,6 +852,50 @@ test("barehand shark plays the cache start, ready and shark-finish sequences", a
   });
 });
 
+test("barehand tuna and swordfish: the Harpoon option without a harpoon (Wiki: Barbarian Training; rsprox 237/01149)", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Skill } = core;
+  const levelled = (fishing, strength) => {
+    const p = fisher();
+    p.strengthXp = 0;
+    p.getSkillManager = () => ({
+      getCurrentLevel: (skill) => (skill === Skill.STRENGTH ? strength : fishing),
+      getMaxLevel: () => 99,
+      addExperiences: (skill, xp) => { if (skill === Skill.FISHING) p.xp += xp; if (skill === Skill.STRENGTH) p.strengthXp += xp; },
+    });
+    return p;
+  };
+  await withRandom(0.02, async () => {
+    const tuna = levelled(60, 40);
+    start(tuna, spot(N.FISHING_SPOT_10, 41), "Harpoon");
+    assert.equal(tuna.messages[0], "You start to lure the fish.", "the captured barehand start line");
+    assert.deepEqual(tuna.animations, [6703]);
+    ticks(4);
+    assert.equal(amount(tuna, I.RAW_TUNA), 1, "below 70 Fishing only tuna");
+    assert.equal(tuna.xp, 80);
+    assert.equal(tuna.strengthXp, 8);
+    assert.equal(tuna.animations.at(-1), 6711, "the captured brut_player_hand_fishing_end_tuna_2");
+
+    const sword = levelled(70, 50);
+    start(sword, spot(N.FISHING_SPOT_10, 42), "Harpoon");
+    ticks(4);
+    assert.equal(amount(sword, I.RAW_SWORDFISH), 1, "swordfish first in the cascade");
+    assert.equal(sword.strengthXp, 10);
+    assert.equal(sword.animations.at(-1), 6707);
+
+    const weak = levelled(70, 49);
+    start(weak, spot(N.FISHING_SPOT_10, 43), "Harpoon");
+    ticks(4);
+    assert.equal(amount(weak, I.RAW_SWORDFISH), 0, "swordfish needs 50 Strength");
+    assert.equal(amount(weak, I.RAW_TUNA), 1);
+  });
+  const low = levelled(54, 99);
+  start(low, spot(N.FISHING_SPOT_10, 44), "Harpoon");
+  assert.equal(amount(low, I.RAW_TUNA), 0);
+  const cage = core.NpcDefinition.forId(N.FISHING_SPOT_10);
+  assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, cage.getActions().indexOf("Harpoon") + 1, low), Fishing.TOOLS.BAREHAND_HARPOON);
+});
+
 test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with room", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;

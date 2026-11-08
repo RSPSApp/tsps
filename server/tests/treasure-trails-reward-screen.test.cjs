@@ -124,3 +124,76 @@ test("a real won-Mimic checkpoint uses the shared screen close and saved obligat
   p.getPacketSender().sendInterfaceRemoval();assert.deepEqual(bag(p),owed);
   const restored=reload(t,p);Screen.settle({player:restored});assert.deepEqual(bag(restored),owed);
 });
+
+const CASKET_TIERS = ['easy', 'medium', 'hard', 'elite', 'master'];
+function completionFixture(t, name, { amount = 1, final = true, full = true, auxiliary = false } = {}) {
+  const p = actor(t), tier = byName.get(name), data = Runtime.data(tier), inv = p.getInventory();
+  const step = auxiliary ? data.steps.find(step => step.challenge?.itemId) : data.rollable[0];
+  assert.ok(step, name + ': source step exists');
+  const state = { version: 1, token: `stack-${p.getUsername()}`, revision: 0,
+    length: tier.length[0], completed: final ? tier.length[0] - 1 : 0, row: step.row };
+  const clue = new core.Item(step.itemId, 1).setMetaValue(Runtime.metaKey(tier), state);
+  inv.setItem(7, clue);
+  if (amount) inv.setItem(13, new core.Item(data.casket, amount));
+  if (auxiliary) inv.setItem(14, new core.Item(step.challenge.itemId, 1).setMetaValue(Runtime.metaKey(tier), state));
+  if (full) for (let slot = 0; slot < inv.capacity(); slot++) if (inv.get(slot).getId() < 0) inv.setItem(slot, new core.Item(4151, 1));
+  return { p, inv, tier, clue, casket: data.casket, trail: Runtime.stateOf(p, 7) };
+}
+const inventoryState = inv => inv.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+
+test('casket completion uses the real stack-aware inventory in a full bag for all five tiers', t => {
+  for (const name of CASKET_TIERS) {
+    const { p, inv, clue, casket, trail } = completionFixture(t, name);
+    assert.equal(core.ItemDefinition.forId(casket).isStackable(), true, name + ': production-loaded cache definition');
+    assert.equal(inv.getFreeSlots(), 0);
+    const fillers = inv.getAmount(4151);
+    assert.equal(Runtime.advance(p, trail, Math.random, {}, false), true);
+    const stacks = inv.getValidItems().filter(item => item.getId() === casket);
+    assert.equal(stacks.length, 1, name + ': completion joins the existing stack');
+    assert.equal(stacks[0].getAmount(), 2);
+    assert.equal(inv.get(7).getId(), -1, 'the exact clue slot is released');
+    assert.equal(inv.getAmount(4151), fillers, 'unrelated full-bag items are preserved');
+    assert.equal(inv.getFreeSlots(), 1);
+    assert.equal(Runtime.advance(p, trail, Math.random, {}, false), false, 'stale completion cannot credit twice');
+    assert.equal(stacks[0].getAmount(), 2);
+    assert.equal(Number(p.getAttribute(Runtime.completedAttribute(trail.tier))) || 0, 0,
+      'completion counters/reward rolls still belong to casket opening');
+  }
+});
+
+test('casket completion refuses overflow without changing clue, trail or auxiliary state, then retries', t => {
+  const MAX = 2147483647;
+  for (const name of CASKET_TIERS) {
+    const f = completionFixture(t, name, { amount: MAX });
+    const before = inventoryState(f.inv);
+    assert.equal(Runtime.advance(f.p, f.trail, Math.random, {}, false), false, name);
+    assert.strictEqual(f.inv.get(7), f.clue, 'the exact clue object remains');
+    assert.deepEqual(inventoryState(f.inv), before, 'no item or metadata is lost at the stack limit');
+    assert.equal(Runtime.stillHeld(f.p, f.trail).state.token, f.trail.state.token);
+    f.inv.get(13).setAmount(MAX - 1);
+    assert.equal(Runtime.advance(f.p, f.trail, Math.random, {}, false), true, 'same final step remains retryable');
+    assert.equal(f.inv.get(13).getAmount(), MAX);
+    assert.equal(f.inv.getValidItems().filter(item => item.getId() === f.casket).length, 1);
+  }
+  const f = completionFixture(t, 'hard', { amount: MAX, auxiliary: true });
+  const auxiliary = f.inv.get(14), before = inventoryState(f.inv);
+  assert.equal(Runtime.advance(f.p, f.trail, Math.random, {}, false), false);
+  assert.strictEqual(f.inv.get(14), auxiliary, 'refusal happens before challenge-scroll cleanup');
+  assert.deepEqual(inventoryState(f.inv), before);
+});
+
+test('first casket placement and nonfinal clue progression keep their existing exact slot behavior', t => {
+  for (const name of CASKET_TIERS) {
+    const first = completionFixture(t, name, { amount: 0 });
+    assert.equal(Runtime.advance(first.p, first.trail, Math.random, {}, false), true);
+    assert.equal(first.inv.get(7).getId(), first.casket);
+    assert.equal(first.inv.get(7).getAmount(), 1);
+    const next = completionFixture(t, name, { final: false });
+    assert.equal(Runtime.advance(next.p, next.trail, () => 0, {}, false), true);
+    const continued = Runtime.stateOf(next.p, 7);
+    assert.equal(continued.state.token, next.trail.state.token);
+    assert.equal(continued.state.completed, 1);
+    assert.equal(continued.state.revision, 1);
+    assert.equal(next.inv.get(13).getAmount(), 1, 'nonfinal steps do not add a casket');
+  }
+});

@@ -205,12 +205,13 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
-  /** A crystal saw or seed held, worn, or in any bank tab but the search tab. */
+  /** A crystal saw or seed held, worn, or in any bank tab but the search tab (not a placeholder). */
   function ownsSawOrSeed(player) {
     const searchTab = api.core.Bank.BANK_SEARCH_TAB_INDEX;
     return [CRYSTAL_SAW_ITEM_ID, CRYSTAL_SAW_SEED_ITEM_ID].some((id) => held(player, id)
       || (player.getEquipment?.().contains?.(id) ?? false)
-      || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(id)));
+      // A real banked amount: a placeholder (amount 0) left by withdrawing it is not a seed.
+      || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.getAmount?.(id) > 0));
   }
   const isBrimstail = (npcId) => BRIMSTAIL_NPC_IDS.has(npcId);
   const isHazelmere = (npcId) => HAZELMERE_NPC_IDS.has(npcId);

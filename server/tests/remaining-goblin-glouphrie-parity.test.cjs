@@ -1361,8 +1361,19 @@ test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand 
   const condition = h.hooks.onNpcDialogueCondition[0];
   const text = 'If the player does not have a crystal saw or crystal seed:';
   const brimstail = core.NpcIdentifiers.BRIMSTAIL_2;
-  const banked = player({ getBanks: () => [{ contains: (id) => id === core.ItemIdentifiers.CRYSTAL_SAW_SEED }] });
+  // A real Player's bank: a banked seed, and the zero-amount placeholder withdrawing it leaves behind.
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const bankOf = (amount) => {
+    const real = new Player(null);
+    real.getBank(0).add(new core.Item(core.ItemIdentifiers.CRYSTAL_SAW_SEED, amount), false);
+    return real.getBanks();
+  };
+  const banked = player({ getBanks: () => bankOf(1) });
   assert.equal(condition({ player: banked, npcId: brimstail, text }), false, 'a banked seed is owned');
-  const none = player({ getBanks: () => [{ contains: () => false }] });
+  const placeholder = bankOf(0);
+  assert.equal(placeholder[0].contains(core.ItemIdentifiers.CRYSTAL_SAW_SEED), true, 'control: the placeholder is in the bank');
+  assert.equal(condition({ player: player({ getBanks: () => placeholder }), npcId: brimstail, text }), true,
+    'a placeholder is not a seed: Brimstail offers one');
+  const none = player({ getBanks: () => new Player(null).getBanks() }); // an empty real bank
   assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
 });

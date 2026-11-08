@@ -545,6 +545,34 @@ test('uncharged ghast attacks rot food or damage without making the ghast attack
   }
 });
 
+test('worn Morytania legs 4 block the food-rotting attack (Wiki)', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  player.localNpcs = [{ getId: () => N.GHAST, getLocation: () => new core.Location(3441, 3345, 0) }];
+  let legs = I.MORYTANIA_LEGS_4;
+  player.getEquipment = () => ({ get: (slot) => (slot === core.Equipment.LEG_SLOT ? { getId: () => legs } : null) });
+  const random = Math.random;
+  try {
+    h.clock.tick = 0;
+    h.area.process(player);
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 20;
+    Math.random = () => 0.9; // not ignored, not a miss
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1, 'the food stays fresh');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 0);
+    assert.equal(player.damage.length, 0, 'and the blocked attack does not hit instead');
+
+    legs = I.MORYTANIA_LEGS_3;
+    h.clock.tick = 200;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1, 'lower tiers do not block it');
+  } finally {
+    Math.random = random;
+  }
+});
+
 test('one invisible ghast keeps one visible copy through repeat attacks, death and logout', () => {
   const player = makePlayer();
   const h = harness({ player });

@@ -762,6 +762,8 @@ function feedbackPlayer(core) {
     getUpdateFlag: () => ({ flag() {} }),
     getAttribute: k => attrs.get(k), setAttribute: (k, v) => attrs.set(k, v),
     getSkillManager: () => p.skills, getCombat: () => ({ getTarget: () => p.target ?? null, getAttacker: () => null }),
+    statements: [],
+    getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); } }; },
   };
   p.skills = new SkillManager(p);
   return p;
@@ -932,8 +934,99 @@ test("as captured: every 25 total levels, and level 99, have their own message",
   const maxed = levelledPlayer(core);
   maxed.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
   hooks.onPlayerLevelUp({ player: maxed, skill: Skill.ATTACK, oldLevel: 98, newLevel: 99 });
-  assert.deepEqual(maxed.messages, ["Congratulations, you've reached the highest possible Attack level of 99."]);
+  assert.equal(maxed.messages[0], "Congratulations, you've reached the highest possible Attack level of 99.");
+  assert.match(maxed.messages[1], /^Congratulations! You are now a master of Attack\./, "the master line follows");
   assert.deepEqual(maxed.graphics, [1388]);
+});
+
+test("a level-up says what it unlocked, and only the variant the player's own stats pick", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  let quests = new Set();
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    emitCustomEvent(name, request) {
+      if (name === "quest:is-complete") request.complete = quests.has(request.name);
+    },
+  });
+  /** A levelled player whose base levels and finished quests the unlock conditions read. */
+  function at(levels = {}, done = []) {
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+    p.skills.getMaxLevel = (skill) => levels[skill.getName()] ?? 1;
+    quests = new Set(done);
+    return p;
+  }
+
+  // A level the wiki gives one sentence for.
+  const defence = at();
+  hooks.onPlayerLevelUp({ player: defence, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.deepEqual(defence.messages, [
+    "Congratulations, you've just advanced your Defence level. You are now level 40.",
+    "You can now wear Rune Armour!",
+  ]);
+  // And a level with nothing to unlock adds nothing.
+  const quiet = at();
+  hooks.onPlayerLevelUp({ player: quiet, skill: Skill.DEFENCE, oldLevel: 40, newLevel: 41 });
+  assert.equal(quiet.messages.length, 1);
+
+  // One level, two sentences: the player's Defence level picks which is sent.
+  const noDefence = at();
+  hooks.onPlayerLevelUp({ player: noDefence, skill: Skill.MAGIC, oldLevel: 19, newLevel: 20 });
+  assert.equal(noDefence.messages.at(-1), "You can now cast Bind!");
+  const hasDefence = at({ Defence: 10 });
+  hooks.onPlayerLevelUp({ player: hasDefence, skill: Skill.MAGIC, oldLevel: 19, newLevel: 20 });
+  assert.equal(hasDefence.messages.at(-1), "You can now cast Bind and members can now wear Xerician armour.");
+
+  // A quest-gated sentence waits for the quest the transcript names.
+  const knighted = at({}, ["The Knight's Sword"]);
+  hooks.onPlayerLevelUp({ player: knighted, skill: Skill.RANGED, oldLevel: 15, newLevel: 16 });
+  assert.equal(knighted.messages.at(-1), "Members can now wield blurite crossbows and blurite crossbow bolts.");
+  const unknighted = at();
+  hooks.onPlayerLevelUp({ player: unknighted, skill: Skill.RANGED, oldLevel: 15, newLevel: 16 });
+  assert.equal(unknighted.messages.length, 1, "an unfinished quest says nothing");
+
+  // A level whose sentence depends on three other stats picks one, not none and not all.
+  const warrior = at({ Strength: 70, Magic: 70, Ranged: 70 });
+  hooks.onPlayerLevelUp({ player: warrior, skill: Skill.ATTACK, oldLevel: 69, newLevel: 70 });
+  assert.match(warrior.messages.at(-1), /^Members can now wield Black Salamanders/);
+  assert.equal(warrior.messages.length, 2);
+  const brute = at({ Strength: 70 });
+  hooks.onPlayerLevelUp({ player: brute, skill: Skill.ATTACK, oldLevel: 69, newLevel: 70 });
+  assert.match(brute.messages.at(-1), /^Members can now wield the Saradomin Sword/);
+});
+
+test("Show level & unlocks: continuing opens a box with them, and the skill resumes when it closes", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const boxText = (player) => [...(player.statements.at(-1)?.dialogues.values() ?? [])].map(d => d.text).join("\n");
+  const setup = (popupList) => {
+    const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(4371, popupList ? 1 : 0);
+    return [hooks, p];
+  };
+
+  // "Show level & unlocks": Continue opens the box rather than closing the level-up.
+  const [hooks, p] = setup(true);
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+  assert.match(boxText(p), /You can now wear Rune Armour!/);
+  assert.equal(p.statements.length, 1, "one box, listing the level's unlock");
+  // Dismissing it finishes the level-up; a further Continue has nothing to close.
+  for (const handler of hooks.customEvents.get("interface:closed")) handler({ player: p, interfaceId: 229 });
+  assert.equal(hooks.onInterfaceActionButton({ player: p }), false);
+
+  // "Show level only" keeps the old path: no box.
+  const [only, q] = setup(false);
+  only.onPlayerLevelUp({ player: q, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.equal(only.onInterfaceActionButton({ player: q }), true);
+  assert.equal(q.statements.length, 0);
+
+  // A level that unlocks nothing opens no box even when the setting lists unlocks.
+  const [none, r] = setup(true);
+  none.onPlayerLevelUp({ player: r, skill: Skill.DEFENCE, oldLevel: 40, newLevel: 41 });
+  assert.equal(none.onInterfaceActionButton({ player: r }), true);
+  assert.equal(r.statements.length, 0);
 });
 
 test("as captured: a combat level gained waits behind the skill's pop-up", () => {

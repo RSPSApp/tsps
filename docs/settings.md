@@ -86,8 +86,10 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 
 ## Not done yet
 
-- **"Show level & unlocks"** behaves as "Show level only". On live, continuing opens an `objectbox` or `objectbox_double` listing what the level unlocks, with item models (for example `Members can now wield <col=000080>Osmumten's Fang<col=000000>!`). The text is server-side and isn't in the cache.
-- **Level-up chatbox list and guide list**: the settings are stored, but no capture shows what they send.
+- **"Show level & unlocks"**: continuing opens a message box with the level's unlocks (`StatementDialogue`, 229) and the skill resumes when it is dismissed. The text is server-side and comes from the Wiki's level-up transcripts (`plugins/interface/data/level-up-messages.json`). Live's `objectbox`/`objectbox_double` also shows item models (for example `Members can now wield <col=000080>Osmumten's Fang<col=000000>!`); the transcripts give image filenames rather than item ids, so the box is text-only for now.
+- **Level-up chatbox list**: the same lines go to the chatbox on the level-up tick. Varbit 20158 is stored but does not gate them: no capture shows what it sends, so this is our reading of the setting, not a recording.
+- **Level-up guide list**: still not done; nothing lists unlocks in the skill guide.
+- **Jingle ids** (below): the unlock lines now say which levels unlock something, which is the data a `midi_jingle` rule needs.
 - **Jingles.** Live plays `midi_jingle` per skill, two per skill (Attack 29/30, Defence 37/38, Magic 51/52, combat 299 …). Which one plays depends on the level: Magic's second plays at levels that unlock a spell, while Hitpoints and Strength switch to it at 50. The rule per skill still needs working out.
 - **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
 - **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.

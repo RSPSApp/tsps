@@ -3,8 +3,12 @@ import type { SidebarPersistedState, SidebarPersistence } from "./types";
 export function createBrowserSidebarPersistence(
     storageKey: string,
 ): SidebarPersistence | undefined {
-    if (typeof window === "undefined") return undefined;
-    if (typeof window.localStorage === "undefined") return undefined;
+    try {
+        if (typeof window === "undefined") return undefined;
+        if (typeof window.localStorage === "undefined") return undefined;
+    } catch {
+        return undefined;
+    }
 
     return {
         load: (): SidebarPersistedState | undefined => {

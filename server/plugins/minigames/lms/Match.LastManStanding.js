@@ -260,6 +260,17 @@ class Game {
     Stash.save(player);
     Loadouts.equip(player, this.build);
     player.getCombat?.().reset?.();
+    // Prayers left on from the lobby are checked as if switched on now (Wiki: Smite, Redemption, Retribution and the
+    // rest can't be used in a game; Piety and the like not on a build without their Defence).
+    const { PrayerHandler, PrayerData } = Common.core;
+    const active = player.getPrayerActive?.() ?? [];
+    for (let prayerId = 0; prayerId < active.length; prayerId++) {
+      const prayer = PrayerData.prayerData?.get?.(prayerId);
+      if (!active[prayerId] || !prayer) continue;
+      const banned = { player, prayer, disabled: false };
+      prayerDisabled(banned);
+      if (banned.disabled || !PrayerHandler.canUse(player, prayer, false)) PrayerHandler.deactivatePrayer(player, prayerId, false);
+    }
     const sender = player.getPacketSender();
     Common.varbit(player, "br_ingame", 1);
     Common.varbit(player, "br_active_map_player", this.map.id);

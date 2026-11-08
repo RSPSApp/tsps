@@ -60,6 +60,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const [kind, setKind] = useState("loc");
     const [text, setText] = useState("");
     const [hits, setHits] = useState<Array<{ kind: string; id: number; name: string | null; custom?: boolean }>>([]);
+    const searchGeneration = useRef(0);
     const [definition, setDefinition] = useState<CacheDefinition | null>(null);
     const [history, setHistory] = useState<Array<{ kind: string; id: number }>>([]);
     const [tab, setTab] = useState<Tab>("values");
@@ -98,13 +99,13 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     }, [contentBase]);
     const authoring = useMemo(() => authoringBase(contentBase), [contentBase]);
 
-    const load = useCallback(async (path: string) => {
+    const load = useCallback(async (path: string, isCurrent: () => boolean = () => true) => {
         try {
             const body = await fetchContent(path);
             if (body?.error) throw new Error(body.error);
             return body;
         } catch (failure) {
-            setError(String((failure as Error).message ?? failure));
+            if (isCurrent()) setError(String((failure as Error).message ?? failure));
             return null;
         }
     }, []);
@@ -209,9 +210,11 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const runSearch = useCallback(async (needle = text, within = kind) => {
         if (!needle.trim()) return;
         if (!contentBase) { setError("Waiting for the client to connect before searching"); return; }
+        const generation = ++searchGeneration.current;
+        const isCurrent = () => generation === searchGeneration.current;
         setError(null);
-        const body = await load(`/api/cache-search?${new URLSearchParams({ text: needle, kind: within, limit: "20" })}`);
-        if (body?.hits) setHits(body.hits);
+        const body = await load(`/api/cache-search?${new URLSearchParams({ text: needle, kind: within, limit: "20" })}`, isCurrent);
+        if (isCurrent() && body?.hits) setHits(body.hits);
     }, [contentBase, kind, load, text]);
 
     const loadUsedBy = useCallback(async () => {

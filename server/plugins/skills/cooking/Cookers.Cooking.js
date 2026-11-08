@@ -104,15 +104,17 @@ function cookAnimationFor(name) {
 
 /**
  * Wiki: cooking gauntlets only affect lobster, swordfish, kyatt, monkfish,
- * shark and anglerfish, lowering the level at which they stop burning.
+ * shark and anglerfish, lowering the level at which they stop burning (Cooking/Burn level, "Gauntlets, Default":
+ * a fire or normal range; shark 94 and anglerfish 97, which never stop burning without them; 89 and 93 are the
+ * Hosidius range's).
  */
 const GAUNTLETS_STOP_BURN = new Map([
   ["raw_lobster", 64],
   ["raw_swordfish", 80],
   ["hunting_kyatt_meat", 80],
-  ["raw_monkfish", 86],
-  ["raw_shark", 89],
-  ["raw_anglerfish", 93],
+  ["raw_monkfish", 88],
+  ["raw_shark", 94],
+  ["raw_anglerfish", 97],
 ]);
 
 function gauntletsStopBurn(rawId) {
@@ -122,16 +124,34 @@ function gauntletsStopBurn(rawId) {
   return undefined;
 }
 
+/**
+ * Wiki: a few foods stop burning sooner on a range than on a fire (Swordfish: "80 on ranges and level 86 on fires";
+ * Raw monkfish: 90 on a range, 92 on a fire, and with cooking gauntlets 86 on a range, 88 on a fire).
+ */
+const GAUNTLETS_RANGE_STOP_BURN = new Map([["raw_monkfish", 86]]);
+
+function onRange(objectId) {
+  if (objectId === undefined) return false;
+  const name = Common.core.CacheDefinitions.getObject(objectId)?.name;
+  return !!name && !FIRE_OBJECT_NAMES.has(name);
+}
+
 function stopBurnLevel(player, cookable, objectId) {
   const { Equipment, ItemIds, ObjectIdentifiers } = Common.core;
   if (objectId !== undefined && objectId === ObjectIdentifiers.COOKING_RANGE && cookable.lumbridgeStopBurn !== undefined) {
     return cookable.lumbridgeStopBurn;
   }
+  const range = onRange(objectId);
   const hands = player.getEquipment?.()?.getItems?.()[Equipment.HANDS_SLOT]?.getId?.();
   if (hands !== ItemIds.COOKING_GAUNTLETS) {
-    return cookable.stopBurn;
+    return range && cookable.rangeStopBurn !== undefined ? cookable.rangeStopBurn : cookable.stopBurn;
   }
-  return gauntletsStopBurn(cookable.raw) ?? cookable.stopBurn;
+  if (range) {
+    for (const [name, level] of GAUNTLETS_RANGE_STOP_BURN) {
+      if (Common.core.CacheDefinitions.getObjId(name) === cookable.raw) return level;
+    }
+  }
+  return gauntletsStopBurn(cookable.raw) ?? (range && cookable.rangeStopBurn !== undefined ? cookable.rangeStopBurn : cookable.stopBurn);
 }
 
 function isSuccess(player, cookable, objectId) {
@@ -219,8 +239,16 @@ function canCook(player, object, cookable) {
  * KARAMBWAN_RECLICK_TICKS later instead of restarting the first-food delay. Clicks are handled
  * after the tick's tasks, so the cooking task has already run this tick.
  */
-function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity) {
+function validSelectedInput(player, cookable, selected) {
+  const item = selected?.item;
+  return Number.isInteger(selected?.slot) && player.getInventory().getItems()[selected.slot] === item
+    && item?.getId() === cookable.raw && item.getAmount() === 1
+    && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable();
+}
+
+function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity, selected = null) {
   if (!canCook(player, object, cookable)) return false;
+  if (selected && !validSelectedInput(player, cookable, selected)) return false;
   if (!player.getInventory().contains(cookable.raw)) {
     return false;
   }
@@ -231,7 +259,7 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
   stopCooking(player, false);
   ensureCookTask();
   sessions.set(player, {
-    cookable,
+    cookable, selected,
     animation: cookAnimationFor(object.getDefinition().getName()),
     objectId: object.getId(),
     location: object.getLocation().clone(),
@@ -266,14 +294,14 @@ function carriedCookables(player, onFire) {
  * item, several are "What would you like to cook?" showing what they cook into. The most it
  * offers is the most carried of one food. One raw item on its own cooks without a menu.
  */
-function offerCook(player, object, cookables, singleClick = false) {
+function offerCook(player, object, cookables, singleClick = false, selected = null) {
   const inventory = player.getInventory();
   if (cookables.length === 1) {
     const [cookable] = cookables;
     if (!canCook(player, object, cookable)) return;
     const carried = inventory.getAmount(cookable.raw);
     if (carried <= 1) {
-      if (startCooking(player, object, cookable, activeSessions, 1) && singleClick && cookable.firstCookTicks === undefined) {
+      if (startCooking(player, object, cookable, activeSessions, 1, selected) && singleClick && cookable.firstCookTicks === undefined) {
         // Wiki Cooking#2-tick_cooking: left-clicking a range with one raw item cooks without delay.
         cookStep(player, activeSessions.get(player), cookingTask.cycle);
         stopCooking(player, false);
@@ -281,7 +309,7 @@ function offerCook(player, object, cookables, singleClick = false) {
       return;
     }
     openCookMenu(player, ONE_TYPE_TITLE, [cookable.raw], carried, (id, amount) => {
-      startCooking(player, object, cookable, activeSessions, amount);
+      startCooking(player, object, cookable, activeSessions, amount, selected);
     });
     return;
   }
@@ -352,9 +380,11 @@ function cookStep(player, session, cycle) {
   Sounds.sendSound(player, Sound.COOKING_COOK);
   player.performAnimation(session.animation);
 
-  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once).
-  const actions = Common.actionsPerCycle(player, "cook");
+  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once), but
+  // never past the amount chosen: the first is already counted above, each further one is counted here.
+  const actions = Math.min(Common.actionsPerCycle(player, "cook"), session.remaining + 1);
   for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
+    if (done > 0) session.remaining--;
     if (cookOne(player, session) === false) { stopCooking(player); break; }
   }
 }
@@ -370,9 +400,10 @@ function cookOne(player, session) {
     Common.spam(player, successMessage(cookable));
     return;
   }
-  const rawSlot = cookable.gnomeTutorial ? inventory.getItems().findIndex((item) =>
+  if (session.selected && !validSelectedInput(player, session.cookable, session.selected)) return false;
+  const rawSlot = cookable.gnomeTutorial ? (session.selected?.slot ?? inventory.getItems().findIndex((item) =>
     item?.getId() === session.cookable.raw && item.getAmount() === 1
-      && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable()) : -1;
+      && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable())) : -1;
   if (cookable.gnomeTutorial && rawSlot < 0) { player.sendMessage("Preset items cannot be used for this."); return false; }
   const rawItem = cookable.gnomeTutorial ? inventory.getItems()[rawSlot]
     : inventory.getItems().find((item) => item?.getId() === session.cookable.raw);
@@ -398,6 +429,7 @@ function cookOne(player, session) {
       || rawItem.getAmount() !== 1 || rawItem.isPresetItem() || rawItem.isUntradeable() || rawItem.isUnbankable()
       || (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1)) return false;
     inventory.deleteAtSlot(rawSlot, 1);
+    session.selected = null;
   }
   if (!burnRequest.burn) {
     const output = new Item(cookable.cooked, 1);
@@ -469,7 +501,9 @@ function handleCook(event) {
   }
 
   event.handled = true;
-  offerCook(event.player, event.object, [cookable]);
+  const selected = cookable.gnomeTutorial ? { item: event.item, slot: event.itemSlot } : null;
+  if (selected && !validSelectedInput(event.player, cookable, selected)) return;
+  offerCook(event.player, event.object, [cookable], false, selected);
 }
 
 /** Anything else used on a cooker, when no other content takes it (rsprox captures 269, 1718). */

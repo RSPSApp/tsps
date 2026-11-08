@@ -1,9 +1,17 @@
 // Run after `yarn build`: node --test tests/player-save.test.cjs
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const path = require("node:path");
+const { before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+
+// The cache the server always has loaded: FriendsChatManager.onLogin sends the friends_panel varbit (6516), whose
+// definition comes from it.
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+});
 
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");

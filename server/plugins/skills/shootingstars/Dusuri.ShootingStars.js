@@ -58,12 +58,18 @@ function canSell(request) {
   if (request.shopName === SHOP_NAME) request.sellable = true;
 }
 
+/** Her shop buys its stock back for stardust, though its currency isn't coins (reward shops buy nothing back). */
+function buysBack(request) {
+  if (request.shopName === SHOP_NAME) request.buys = true;
+}
+
 module.exports = function attachDusuri(api) {
   api.onNpcDialogueVariant(onDialogueVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", onDialogueAction);
   api.onCustomEvent("shop:sell-price", sellPrice);
   api.onCustomEvent("shop:can-sell", canSell);
+  api.onCustomEvent("shop:buys-back", buysBack);
 };
 
-Object.assign(module.exports, { onDialogueVariant, answerCondition, onDialogueAction, sellPrice, canSell, isDusuri, GAINS_TRADE_STEPS });
+Object.assign(module.exports, { onDialogueVariant, answerCondition, onDialogueAction, sellPrice, canSell, buysBack, isDusuri, GAINS_TRADE_STEPS });

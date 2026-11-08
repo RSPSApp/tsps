@@ -79,6 +79,8 @@ export const state = {
     isReconnecting: false,
     loginConnectRetryTimer: null as ReturnType<typeof setTimeout> | null,
     loginConnectAttemptId: 0,
+    /** True from a successful login until logout or a failed reconnect; sendLogin stores credentials before it. */
+    hasLoggedIn: false,
     sessionUsername: null as string | null,
     sessionPassword: null as string | null,
     sessionRevision: 0,

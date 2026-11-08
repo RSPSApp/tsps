@@ -11,6 +11,7 @@ const { Projectile } = require('../dist/game/model/Projectile');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Location } = require('../dist/game/model/Location');
 const { Sounds } = require('../dist/game/Sounds');
+const { MagicSpellbook } = require('../dist/game/model/MagicSpellbook');
 const { World } = require('../dist/game/World');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 
@@ -39,9 +40,10 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     const messages = [];
     const experiences = [];
     let currentLocation = new Location(3200, 3200, 0);
+    let spellbook = MagicSpellbook.NORMAL;
     const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined : () => sender) });
     const player = {
-        getHitpoints: () => 10, isRegistered: () => true, getLocation: () => currentLocation,
+        getHitpoints: () => 10, isRegistered: () => true, getLocation: () => currentLocation, getSpellbook: () => spellbook,
         getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
         getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences: (_skill, xp) => experiences.push(xp) }),
         getInventory: () => ({ addItem: (item) => added.push(item), full() {} }),
@@ -86,6 +88,15 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     run();
     assert.equal(added.length, 2, 'opt-in telegrab can take a visible item from a lower floor');
     assert.equal(experiences.length, 3);
+
+    // A standard-book spell: a grab packet from another book casts nothing (as alchemy).
+    spellbook = MagicSpellbook.ANCIENT;
+    onGround = true;
+    const queued = tasks.length;
+    listener.castGroundItem(player, 995, 3205, 3200, 1168);
+    assert.equal(tasks.length, queued, 'no projectile on the Ancient book');
+    assert.equal(added.length, 2);
+    assert.equal(experiences.length, 3);
 });
 
 test('Telekinetic Grab takes the stack from its captured floor when another floor matches', (t) => {
@@ -125,6 +136,7 @@ test('Telekinetic Grab takes the stack from its captured floor when another floo
     const player = {
         isRegistered: () => true,
         getHitpoints: () => 10,
+        getSpellbook: () => MagicSpellbook.NORMAL,
         getLocation: () => new Location(3200, 3200, 2),
         getPrivateArea: () => null,
         getUsername: () => 'tester',

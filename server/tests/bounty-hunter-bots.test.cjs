@@ -133,6 +133,8 @@ test('the capped roster fills one per tick across combat bands and restores bots
       ItemIdentifiers: { COINS: 995 },
       SkullType: { WHITE_SKULL: 'white' },
       CombatFactory: { PVP_SKULL_SECONDS: 1800, skull: (bot) => { bot.skulled = true; } },
+      // The real loot-owner rule; no Ironman here, so the killer.
+      PlayerDeathTask: core.PlayerDeathTask,
     },
     onCustomEvent: (name, fn) => hooks.set(name, fn),
     onPlayerLogout: (fn) => hooks.set('logout', fn),

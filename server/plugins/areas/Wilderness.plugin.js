@@ -110,9 +110,9 @@ const combatLevels = new WeakMap();
 // nearby candidate, so denial messages are throttled per player rather than per check.
 const DENY_MESSAGE_INTERVAL_TICKS = 2;
 const denyMessageBlockedUntil = new WeakMap();
+// One game message on live, its two lines split by <br> (rsprox_transcripts/229/02787.txt ticks 805, 807).
 const LEVEL_DIFFERENCE_MESSAGES = [
-  "Your level difference is too great.",
-  "You need to move deeper into the Wilderness.",
+  "Your level difference is too great!<br>You need to move deeper into the Wilderness.",
 ];
 
 function combatLevelOf(player) {

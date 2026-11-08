@@ -3,7 +3,9 @@
 `server/plugins/npcs/Tanning.plugin.js` drives the native tanner interface (group 324,
 `tanner`) for every tanner: Ellis (Al Kharid), the Crafting Guild's Tanner, Sbott (Canifis),
 Eodan, and Mary after Getting Ahead (through the `tanning:open` event). Rows, products and
-prices are in `server/plugins/npcs/data/tanning.json`.
+prices are in `server/plugins/npcs/data/tanning.json`. Eodan charges 10 times the normal price,
+falling to 8, 6, 4 and 2 times with each Kourend & Kebos Diary tier
+([Eodan](https://oldschool.runescape.wiki/w/Eodan)).
 
 ## Free-to-play
 
@@ -31,4 +33,4 @@ inventory, so prices come from the Wiki:
 - Coin shortfalls (partial tans, the "not enough coins" text) have no main-game capture.
 - Whether a free world refuses members hides at Ellis is not documented; dragonhides and snake
   hides are tanned as on a members world.
-- Eodan's Kourend & Kebos Diary discounts, the Leatherworker and Chouani are not implemented.
+- The Leatherworker and Chouani are not implemented.

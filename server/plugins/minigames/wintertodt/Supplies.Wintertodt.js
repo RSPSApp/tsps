@@ -22,6 +22,7 @@
  * shattering when dropped.
  */
 
+const Herblore = require("../../skills/herblore/Common.Herblore");
 const Shared = require("./Shared.Wintertodt");
 const Round = require("./Round.Wintertodt");
 const Warmth = require("./Warmth.Wintertodt");
@@ -216,7 +217,7 @@ const crateActions = {
 
 // ------------------------------------------------------------------ potions
 
-function mixOne(player) {
+function mixOne(player, awardExperience = true) {
   const unf = slotOf(player, Shared.ITEM.REJUVENATION_UNF);
   const herb = slotOf(player, Shared.ITEM.BRUMA_HERB);
   if (unf < 0 || herb < 0) return false;
@@ -224,7 +225,7 @@ function mixOne(player) {
   player.getInventory().setItem(herb, newItem(-1, 0));
   player.getInventory().refreshItems();
   Shared.spam(player, "You combine the bruma herb into the unfinished potion.");
-  Shared.addXp(player, "HERBLORE", XP.POTION * Shared.level(player, "HERBLORE"));
+  if (awardExperience) Shared.addXp(player, "HERBLORE", XP.POTION * Shared.level(player, "HERBLORE"));
   return true;
 }
 
@@ -234,6 +235,7 @@ function mix(event) {
     player.sendMessage("You can only do that within the influence of the Bruma tree.");
     return true;
   }
+  if (!Herblore.canUseHerblore(player)) return true;
   if (!mixOne(player)) return true;
   Shared.startAction(player, "mix", (ticks) => ticks < MIX_SECOND_TICK
     || (ticks - MIX_SECOND_TICK) % MIX_TICKS !== 0 || mixOne(player));
@@ -251,7 +253,7 @@ function brewma(event) {
   if (event.itemId !== Shared.ITEM.BRUMA_HERB && event.itemId !== Shared.ITEM.REJUVENATION_UNF) return;
   event.handled = true;
   let made = 0;
-  while (mixOne(event.player)) made++;
+  while (mixOne(event.player, false)) made++;
   if (made === 0) event.player.sendMessage("You need both a bruma herb and an unfinished potion.");
 }
 
@@ -295,8 +297,8 @@ function useDose(player) {
 }
 
 /** Wiki: food healing 4 or more restores 35% warmth in the prison. */
-function ateFood({ player, itemId, heal }) {
-  if (Round.inPrison(player)) Warmth.ateFood(player, itemId, heal);
+function ateFood({ player, itemId, restores }) {
+  if (Round.inPrison(player)) Warmth.ateFood(player, itemId, restores);
 }
 
 // ------------------------------------------------------------------ torch
@@ -346,6 +348,7 @@ module.exports = function registerWintertodtSupplies(api) {
   api.onItemOnNpc(brewma);
   api.onItemDropPolicy(shatter);
   api.onCustomEvent("food:eaten", ateFood);
+  api.onCustomEvent("food:delayed-heal", ateFood);
 };
 
 module.exports.useDose = useDose;

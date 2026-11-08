@@ -275,6 +275,33 @@ test("voucher redemption uses Wiki quantities, preserves partial use and cannot 
     voucherNpc(f, "Aubury");
     assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.AIR_RUNE), 200);
 });
+// #1356 review: redeem took every Talk-to on a voucher NPC, even with nothing left to claim there, so Aubury and the
+// Apothecary only said "No voucher rewards can be claimed here..." until all nine rewards were claimed.
+test("Talk-to a voucher NPC whose rewards are claimed is the NPC's own conversation; the first pays", (t) => {
+    const f = actor(t);
+    login(f.p);
+    state(f.p).state.paths.push(0);
+    const voucher = core.CacheDefinitions.getObjId("adventurepath_combat_voucher");
+    f.p.getInventory().add(new core.Item(voucher), false);
+    const npc = core.NPC.create(core.CacheDefinitions.getNpcId("aubury"), f.p.getLocation().clone());
+    const talk = () => {
+        const event = { player: f.p, npc, npcId: npc.getId(), clickType: 1, action: "Talk-to", handled: false };
+        PluginManager.emitNpcInteraction(event);
+        return event;
+    };
+    talk();
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.AIR_RUNE), 200, "the first Talk-to pays Aubury's runes");
+    f.p.getDialogueManager().reset?.();
+    f.p.getPacketSender().sendInterfaceRemoval();
+    f.messages.length = 0;
+    const second = talk();
+    assert.equal(second.handled, true, "the NPC's own Talk-to takes it");
+    assert.ok(!f.messages.some((m) => /No voucher rewards can be claimed here/.test(m)), f.messages.join(" | "));
+    assert.ok(f.p.getDialogueManager().isActive(), "Aubury's conversation is open");
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.AIR_RUNE), 200, "nothing paid twice");
+    assert.equal(f.p.getInventory().getAmount(voucher), 1, "the voucher stays for the other NPCs");
+});
+
 test("the last voucher redemption can use the freed last inventory slot", (t) => {
     const f = actor(t);
     login(f.p);

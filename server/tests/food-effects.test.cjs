@@ -410,6 +410,18 @@ test("yellowfin heals 19 and restores 20% run energy (Wiki: Yellowfin)", () => {
   assert.deepEqual(player.messages.slice(0, 1), ["You eat the yellowfin."]);
 });
 
+test("white tree fruit heals 3 and restores 5-10% run energy (Wiki: White tree fruit)", (t) => {
+  for (const [roll, energy] of [[0, 55], [0.999, 60]]) {
+    t.mock.method(Math, "random", () => roll);
+    const player = createPlayer({ hp: 40 });
+    player.give(0, id("WHITE_TREE_FRUIT"));
+    player.eat(0);
+    assert.equal(player.hp, 43);
+    assert.equal(player.energy, energy, `roll ${roll}: from 50%`);
+    t.mock.restoreAll();
+  }
+});
+
 test("strange fruit restores energy and cures poison, without healing", () => {
   const player = createPlayer({ hp: 40 });
   player.give(0, id("STRANGE_FRUIT"));

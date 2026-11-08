@@ -249,6 +249,7 @@ function pray({ player }) {
   player.performAnimation(Common.animation(PRAY_ANIMATION));
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   skills.setCurrentLevel(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER), true);
+  player.setPrayerPointDrain(0);
   player.sendMessage("You recharge your Prayer points.");
   if (Common.wearsZarosian(player)) {
     player.heal(skills.getMaxLevel(Skill.HITPOINTS));

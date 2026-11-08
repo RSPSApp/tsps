@@ -111,6 +111,7 @@ function harness() {
   const events = {}, variants = [], conditions = [], itemOnNpc = [], itemOnObject = [], itemOnItem = [];
   const deaths = [], objectActions = new Map(), npcActions = new Map(), logins = [];
   const persistedDefaults = new Map();
+  const transcripts = [];
   const testCore = { ...core };
   const api = new Proxy({
     core: testCore,
@@ -133,9 +134,18 @@ function harness() {
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(handler => handler(event)),
   }, { get: (target, key) => target[key] ?? noop });
-  require('../plugins/quests/quests/TouristTrap.Quest')(api);
+  const startTranscript = runtime.startTranscript;
+  runtime.startTranscript = (_api, player, npcId, page, variant) => {
+    transcripts.push({ player, npcId, page, variant });
+    return true;
+  };
+  try {
+    require('../plugins/quests/quests/TouristTrap.Quest')(api);
+  } finally {
+    runtime.startTranscript = startTranscript;
+  }
   const quest = runtime.getRegisteredQuests().find(entry => entry.key === 'the_tourist_trap');
-  return { events, variants, conditions, itemOnNpc, itemOnObject, itemOnItem, deaths, objectActions, npcActions, logins, persistedDefaults, quest };
+  return { events, variants, conditions, itemOnNpc, itemOnObject, itemOnItem, deaths, objectActions, npcActions, logins, persistedDefaults, transcripts, quest };
 }
 
 function object(h, npcName, option, event) {
@@ -204,6 +214,26 @@ function runRegisteredTranscript(h, player, npcId) {
   }
 }
 
+function killCaptain(h, player, dropsFirst = false) {
+  const NpcDrops = require('../plugins/npcs/NpcDrops.plugin');
+  const ground = [];
+  const definition = {getName:()=> 'Mercenary Captain'};
+  const npc = {getId:()=>core.NpcIdentifiers.MERCENARY_CAPTAIN,
+    getLocation:()=>player.getLocation(),getDefinition:()=>definition,getCurrentDefinition:()=>definition};
+  NpcDrops.register(new Proxy({
+    core:{},
+    getItemOnGroundManager:()=>({registerLocation:(_player,item)=>ground.push({id:item.getId(),amount:item.getAmount()})}),
+    emitCustomEvent:(name,event)=>(h.events[name]??[]).forEach(handler=>handler(event)),
+  },{get:(target,key)=>target[key]??noop}));
+  NpcDrops.__internals.loadDrops();
+  player.isPlayer=()=>true;
+  const drop = () => NpcDrops.__internals.dropFor(player,npc,core.NpcIdentifiers.MERCENARY_CAPTAIN,player.getLocation());
+  if (dropsFirst) drop();
+  h.deaths.forEach(handler=>handler({npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,killer:player,npc}));
+  if (!dropsFirst) drop();
+  return ground;
+}
+
 test('fresh stage 0 starts, the captain drops the metal key, and the slave trade swaps the desert outfit', () => {
   const h = harness();
   const p = makePlayer();
@@ -213,9 +243,9 @@ test('fresh stage 0 starts, the captain drops the metal key, and the slave trade
   hook(h, { player: p, npcId: core.NpcIdentifiers.IRENA, hook: 'quest:the-tourist-trap:start' });
   assert.equal(stage(h, p), 1);
 
-  p.isPlayer = () => true;
-  h.deaths.forEach(handler => handler({ npcId: core.NpcIdentifiers.MERCENARY_CAPTAIN, killer: p }));
-  assert.equal(p.items.get(K.METAL_KEY), 1, 'the captain drops the camp key');
+  const ground = killCaptain(h,p);
+  assert.equal(p.items.get(K.METAL_KEY)??0, 1, 'the captain automatically awards one inventory key');
+  assert.deepEqual(ground.filter(item=>item.id===K.METAL_KEY),[], 'the shared table does not duplicate the key');
   assert.equal(stage(h, p), 2);
 
   // Fixture: the player has entered the camp and brought the required outfit.
@@ -310,6 +340,37 @@ test('the gate and mine door only let a keyed, dressed player through', () => {
   assert.ok(p.moves.length > 0, 'the mine door moves the player underground');
 });
 
+test('both mine exits return to the mine front and preserve exit-stage and entry-disguise rules', () => {
+  const h = harness();
+  for (const objectId of [2690, 2691]) {
+    for (const initialStage of [7, 8, 9, 11, 12]) {
+      const p = makePlayer();
+      seedStage(h, p, initialStage);
+      p.setLocation(3279, 9427);
+      const event = object(h, 'Mine door entrance', 'Open', { player: p, objectId, handled: false });
+      assert.equal(event.handled, true);
+      assert.deepEqual(p.moves.at(-1), [3301, 3036, 0]);
+      assert.notDeepEqual(p.moves.at(-1), [3279, 3029, 0], 'exit is not the camp-gate landing');
+      assert.equal(stage(h, p), initialStage >= 8 && initialStage < 12 ? Math.max(initialStage, 9) : initialStage);
+    }
+  }
+  for (const objectId of [2675, 2676]) {
+    const p = makePlayer();
+    seedStage(h, p, 2);
+    p.setLocation(3301, 3036);
+    object(h, 'Mine door entrance', 'Open', { player: p, objectId, handled: false });
+    assert.equal(p.moves.length, 0);
+    assert.equal(stage(h, p), 2);
+    assert.ok(p.messages.includes('Only slaves may go down there.'));
+    p.equip(core.ItemIdentifiers.SLAVE_SHIRT, E.BODY_SLOT);
+    p.equip(core.ItemIdentifiers.SLAVE_ROBE, E.LEG_SLOT);
+    p.equip(core.ItemIdentifiers.SLAVE_BOOTS, E.FEET_SLOT);
+    object(h, 'Mine door entrance', 'Open', { player: p, objectId, handled: false });
+    assert.deepEqual(p.moves.at(-1), [3279, 9427, 0]);
+    assert.equal(stage(h, p), 4);
+  }
+});
+
 test('the Desert Clothes trade requires the carried set, while worn desert gear still passes the camp gate', () => {
   const h = harness();
   const p = makePlayer();
@@ -363,6 +424,73 @@ test('recovery: lost Bedabin key, lost pineapple and a lost metal key are reobta
   assert.equal(p.items.get(K.METAL_KEY), 1);
 });
 
+const PINEAPPLE_HANDOVER_VARIANT = 'the-quest-for-tenti-s-using-the-tenti-pineapple-on-the-guard-in-the-cave';
+
+test('Talk-to offers the carried pineapple and commits the canonical message once, even with a full bag', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 16);
+  p.items.set(K.TENTI_PINEAPPLE, 2);
+  p.setFull(true);
+  assert.equal(h.variants.at(-1)({ player: p, npcId: 4667 }), PINEAPPLE_HANDOVER_VARIANT);
+  const message = dialogueData['The Tourist Trap'].variants[PINEAPPLE_HANDOVER_VARIANT]
+    .find(step => step.id === 'A30Q5M');
+  assert.equal(message.text, 'You show the Tenti pineapple to the guard.');
+  assert.equal(stage(h, p), 16);
+  const event = { player: p, npcId: 4667, stepId: 'A30Q5M', handled: false };
+  action(h, event);
+  assert.equal(event.handled, false, 'the runner retains the canonical message');
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1);
+  assert.equal(stage(h, p), 17);
+  action(h, event);
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1, 'repeated message cannot consume a second fruit');
+  assert.equal(h.variants.at(-1)({ player: p, npcId: 4667 }),
+    'the-quest-for-tenti-s-talking-to-the-guard-in-the-cave-after-giving-him-the-tenti-pineapple');
+});
+
+test('pineapple Use starts the same handover and a second Use selects the refusal without consuming', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 16);
+  p.items.set(K.TENTI_PINEAPPLE, 2);
+  const event = { player: p, npcId: 4667, itemId: K.TENTI_PINEAPPLE, handled: false };
+  h.itemOnNpc.forEach(handler => handler(event));
+  assert.equal(event.handled, true);
+  assert.equal(h.transcripts.at(-1).variant, PINEAPPLE_HANDOVER_VARIANT);
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 2, 'no consumption before the transcript action');
+  assert.equal(stage(h, p), 16);
+  action(h, { player: p, npcId: 4667, stepId: 'A30Q5M' });
+  h.itemOnNpc.forEach(handler => handler(event));
+  assert.equal(h.transcripts.at(-1).variant,
+    'the-quest-for-tenti-s-using-a-second-tenti-pineapple-on-the-guard-in-the-cave');
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1);
+  assert.equal(stage(h, p), 17);
+});
+
+test('pineapple handover rejects wrong actors, steps, stages and missing carried fruit', () => {
+  const h = harness(), K = core.ItemIdentifiers;
+  for (const [stageValue, amount, npcId, stepId] of [
+    [15, 1, 4667, 'A30Q5M'], [17, 1, 4667, 'A30Q5M'],
+    [16, 0, 4667, 'A30Q5M'], [16, 1, 4656, 'A30Q5M'], [16, 1, 4667, 'wrong'],
+  ]) {
+    const p = makePlayer(); seedStage(h, p, stageValue); p.items.set(K.TENTI_PINEAPPLE, amount);
+    action(h, { player: p, npcId, stepId });
+    assert.equal(stage(h, p), stageValue);
+    assert.equal(p.items.get(K.TENTI_PINEAPPLE), amount);
+  }
+  for (const [stageValue, amount, npcId] of [[15, 1, 4667], [16, 0, 4667], [16, 1, 4656]]) {
+    const p = makePlayer(); seedStage(h, p, stageValue); p.items.set(K.TENTI_PINEAPPLE, amount);
+    const event = { player: p, npcId, itemId: K.TENTI_PINEAPPLE, handled: false };
+    h.itemOnNpc.forEach(handler => handler(event));
+    assert.equal(event.handled, false);
+    assert.equal(stage(h, p), stageValue);
+    assert.equal(p.items.get(K.TENTI_PINEAPPLE), amount);
+  }
+  assert.equal(h.transcripts.length, 0);
+  const p = makePlayer(); seedStage(h, p, 16);
+  assert.equal(h.variants.at(-1)({ player: p, npcId: 4667 }),
+    'getting-a-tenti-pineapple-talking-to-the-guard-by-the-cave-opening',
+    'missing or bank-only pineapple is not a completed handover');
+});
+
 test('the mine guard conversation advances the route and the camp can be left for Al Shabim', () => {
   const h = harness();
   const p = makePlayer();
@@ -380,7 +508,7 @@ test('the mine guard conversation advances the route and the camp can be left fo
 
   object(h, 'Mine door entrance', 'Open', { player: p, objectId: 2690, handled: false });
   assert.equal(stage(h, p), 9);
-  assert.deepEqual(p.moves.at(-1), [3279, 3029, 0]);
+  assert.deepEqual(p.moves.at(-1), [3301, 3036, 0]);
 
   const gate = object(h, 'Gate', 'Open', { player: p, objectId: 2673, handled: false });
   assert.equal(gate.handled, true);
@@ -434,6 +562,106 @@ test('Al Shabim, Siad, the chest, the anvil and the feathers build the prototype
   assert.equal(stage(h, p), 16);
 });
 
+const CART_ANA_RETRIEVED_ATTRIBUTE = 'the-tourist-trap:cart-ana-retrieved';
+const CART_ANA_VARIANT = 'the-deeper-mine-searching-the-full-barrel-by-the-mining-cart-after-sending-ana';
+function searchCartBarrel(h, p, id = 2681, x = 3303, y = 9418) {
+  return object(h, 'Barrel', 'Search', { player: p, objectId: id,
+    object: { getLocation: () => new core.Location(x, y, 0) }, handled: false });
+}
+function pickUpCartAna(h, p, npcId = core.NpcIdentifiers.ANA) {
+  return action(h, { player: p, npcId, stepId: '8u_7h_', handled: false });
+}
+
+test('exact cart barrel Search plays canonical retrieval and credits Ana once for a legacy stage23 save', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 23);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), undefined, 'old saves have no flag');
+  assert.equal(h.persistedDefaults.get(CART_ANA_RETRIEVED_ATTRIBUTE), false);
+  p.items.set(K.BARREL, 1);
+  searchCartBarrel(h, p);
+  assert.equal(h.transcripts.at(-1).variant, CART_ANA_VARIANT);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0, 'Search waits for the canonical pickup');
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  assert.equal(p.items.get(K.BARREL), 1, 'retrieval consumes no other inventory');
+  assert.equal(stage(h, p), 23);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), true);
+  const count = h.transcripts.length;
+  searchCartBarrel(h, p); pickUpCartAna(h, p);
+  assert.equal(h.transcripts.length, count);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  p.items.delete(K.ANA_IN_A_BARREL); // Supplied loss/loaded-history checkpoint, not a jail replay.
+  h.logins.forEach(handler => handler({ player: p }));
+  searchCartBarrel(h, p); pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0, 'persisted credit survives login and absent carried item');
+});
+
+test('cart retrieval full bag and failed add remain retryable without consumption or stage change', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 23); p.items.set(K.COINS, 100); p.setFull(true);
+  searchCartBarrel(h, p);
+  assert.equal(h.conditions.at(-1)({ player: p, npcId: core.NpcIdentifiers.ANA, text: 'If the player has no inventory space:' }), true);
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0);
+  assert.notEqual(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), true);
+  p.setFull(false); p.setFailAdds(true); pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0);
+  assert.notEqual(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), true);
+  p.setFailAdds(false); pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  assert.equal(p.items.get(K.COINS), 100);
+  assert.equal(stage(h, p), 23);
+});
+
+test('retrieval rejects wrong barrels, stages, actors and already-carried Ana', () => {
+  const K = core.ItemIdentifiers;
+  for (const [stageValue, id, x, y] of [[22,2681,3303,9418],[24,2681,3303,9418],
+    [23,2680,3303,9418],[23,2681,3303,9415]]) {
+    const h = harness(), p = makePlayer(); seedStage(h,p,stageValue);
+    searchCartBarrel(h,p,id,x,y);
+    assert.equal(h.transcripts.length,0);
+    assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0,0);
+  }
+  for (const [stageValue, npcId] of [[22,core.NpcIdentifiers.ANA],[24,core.NpcIdentifiers.ANA],[23,4667]]) {
+    const h=harness(),p=makePlayer();seedStage(h,p,stageValue);pickUpCartAna(h,p,npcId);
+    assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0,0);
+  }
+  const h=harness(),p=makePlayer();seedStage(h,p,23);p.items.set(K.ANA_IN_A_BARREL,1);
+  searchCartBarrel(h,p);pickUpCartAna(h,p);
+  assert.equal(h.transcripts.length,0);assert.equal(p.items.get(K.ANA_IN_A_BARREL),1);
+});
+
+test('actual bucket consumption seals credit and only consuming Ana on a genuine new cart journey resets it', () => {
+  const h=harness(),p=makePlayer(),K=core.ItemIdentifiers;seedStage(h,p,23);
+  p.items.set(K.ANA_IN_A_BARREL,1);
+  object(h,'Winch bucket','Use',{player:p,objectId:18951,handled:false});
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),0);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+  searchCartBarrel(h,p);pickUpCartAna(h,p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),0);
+  seedStage(h,p,21);
+  const placement={player:p,objectId:2684,itemId:K.ANA_IN_A_BARREL,handled:false};
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(stage(h,p),21,'no carried item cannot start a journey');
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+  p.items.set(K.ANA_IN_A_BARREL,1);
+  const inventory=p.getInventory(),deleteNumber=inventory.deleteNumber;
+  inventory.deleteNumber=()=>inventory;
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(stage(h,p),21,'failed deletion cannot reset credit');
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+  inventory.deleteNumber=deleteNumber;
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),0);assert.equal(stage(h,p),22);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),false);
+  object(h,'Mine Cart','Search',{player:p,objectId:2684,handled:false});
+  searchCartBarrel(h,p);pickUpCartAna(h,p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),1);assert.equal(stage(h,p),23);
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),1,'stage23 cannot reset through another placement');
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+});
+
 test('the guard distraction, barrel route and escape reach the Shantay Pass with Ana', () => {
   const h = harness();
   const p = makePlayer();
@@ -444,6 +672,9 @@ test('the guard distraction, barrel route and escape reach the Shantay Pass with
   const distraction = { player: p, npcId: 4667, itemId: K.TENTI_PINEAPPLE, handled: false };
   h.itemOnNpc.forEach(handler => handler(distraction));
   assert.equal(distraction.handled, true);
+  assert.equal(p.items.get(K.TENTI_PINEAPPLE), 1);
+  assert.equal(stage(h, p), 16);
+  action(h, { player: p, npcId: 4667, stepId: 'A30Q5M' });
   assert.equal(p.items.get(K.TENTI_PINEAPPLE), 0);
   assert.equal(stage(h, p), 17);
 
@@ -472,6 +703,9 @@ test('the guard distraction, barrel route and escape reach the Shantay Pass with
 
   object(h, 'Mine Cart', 'Search', { player: p, objectId: 2684, handled: false });
   assert.equal(stage(h, p), 23);
+  searchCartBarrel(h, p);
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
   object(h, 'Winch bucket', 'Use', { player: p, objectId: 18951, handled: false });
   assert.equal(stage(h, p), 23);
   object(h, 'Winch', 'Operate', { player: p, objectId: 18888, handled: false });
@@ -571,16 +805,51 @@ test('stage migration keeps a previously versioned save when the namespaced key 
   assert.equal(h.persistedDefaults.get(STAGE_VERSION_ATTRIBUTE), 0);
 });
 
-test('a full bag refuses the captain key without advancing', () => {
-  const h = harness();
-  const p = makePlayer();
-  seedStage(h, p, 1);
-  p.setFull(true);
-  p.isPlayer = () => true;
-  h.deaths.forEach(handler => handler({ npcId: core.NpcIdentifiers.MERCENARY_CAPTAIN, killer: p }));
-  assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY) ?? 0, 0);
-  assert.equal(stage(h, p), 1);
-  assert.ok(p.messages.some(text => text.includes('no space')));
+test('the captain drops one ground key even with a full bag, without an inventory grant', () => {
+  const h=harness(),p=makePlayer();
+  seedStage(h,p,1);p.setFull(true);
+  const ground=killCaptain(h,p);
+  assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,0);
+  assert.deepEqual(ground.filter(item=>item.id===core.ItemIdentifiers.METAL_KEY),
+    [{id:core.ItemIdentifiers.METAL_KEY,amount:1}]);
+  assert.equal(stage(h,p),2);
+  assert.ok(!p.messages.some(text=>text.includes('no space')||text.includes('pick it up')));
+});
+
+test('barrelling Ana hides the underground cache form at the normal item/stage transition', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  const visibleAna = () => CacheDefinitions.resolveNpc(6230, {
+    getVarbit: id => varbit(p, id), getVarp: () => 0,
+  });
+  assert.equal(CacheDefinitions.getNpc(6230).transformVarbit, 2805);
+  assert.deepEqual(CacheDefinitions.getNpc(6230).transforms, [4629, -1]);
+  seedStage(h, p, 20);
+  h.logins.forEach(handler => handler({ player: p }));
+  assert.equal(visibleAna()?.id, 4629, 'Ana is visible before she is put in the barrel');
+  p.items.set(K.BARREL, 1);
+  const event = { player: p, npcId: 6230, itemId: K.BARREL, handled: false };
+  h.itemOnNpc.forEach(handler => handler(event));
+  assert.equal(event.handled, true);
+  assert.equal(p.items.get(K.BARREL), 0);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  assert.equal(stage(h, p), 21);
+  assert.equal(varbit(p, 2805), 1);
+  assert.equal(visibleAna(), undefined, 'the existing null cache transform hides her immediately');
+});
+
+test('Ana stays hidden through cart, lift, escape and relogin without changing items or quest stages', () => {
+  const h = harness(), K = core.ItemIdentifiers;
+  for (const stageValue of [20, 21, 22, 23, 24, 25, 26, 27, 30]) {
+    const p = makePlayer(); seedStage(h, p, stageValue);
+    p.items.set(K.ANA_IN_A_BARREL, 1);
+    h.logins.forEach(handler => handler({ player: p }));
+    assert.equal(varbit(p, 2805), stageValue >= 21 ? 1 : 0, `stage ${stageValue}`);
+    assert.equal(CacheDefinitions.resolveNpc(6230, {
+      getVarbit: id => varbit(p, id), getVarp: () => 0,
+    })?.id, stageValue >= 21 ? undefined : 4629);
+    assert.equal(stage(h, p), stageValue);
+    assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1, 'visibility synchronization never consumes Ana');
+  }
 });
 
 test('the cache transforms the quest NPCs and locs by the varbits the plugin sets', () => {
@@ -643,6 +912,9 @@ test('the placed winch barrel and camp cart carry Ana out of the camp', () => {
 
   object(h, 'Mine Cart', 'Search', { player: p, objectId: 2684, handled: false });
   assert.equal(stage(h, p), 23);
+  searchCartBarrel(h, p);
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
   object(h, 'Winch bucket', 'Use', { player: p, objectId: 18951, handled: false });
   assert.equal(stage(h, p), 23);
   object(h, 'Winch', 'Operate', { player: p, objectId: 18888, handled: false });
@@ -872,5 +1144,76 @@ test('Tourist Trap registered before Tribal Totem releases the real mansion ches
       core.ObjectManager.register(new core.GameObject(2709, anchor, closed.getType(), closed.getFace(), null), true);
     }
     Object.assign(PluginManager, saved);
+  }
+});
+
+test('the canonical captain challenge closes dialogue before initiating ordinary NPC combat', () => {
+  const h=harness(),p=makePlayer(),order=[];
+  seedStage(h,p,1);
+  p.getPacketSender=()=>({sendInterfaceRemoval:()=>order.push('close')});
+  const npc={isRegistered:()=>true,getCombat:()=>({attack:target=>{
+    assert.equal(target,p);order.push('attack');
+  }})};
+  const event=action(h,{player:p,npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'elFnbt'});
+  assert.equal(event.handled,true);assert.equal(event.end,true);
+  assert.deepEqual(order,['close','attack']);
+  assert.equal(stage(h,p),1);
+  assert.ok(JSON.stringify(dialogueData['The Tourist Trap'].variants[
+    'getting-into-the-camp-talking-to-the-mercenary-captain']).includes('"id":"elFnbt"'));
+});
+
+test('captain combat kickoff ignores other actions, actors, missing NPCs and an unstarted quest', () => {
+  const h=harness(),p=makePlayer();
+  const npc={isRegistered:()=>true,getCombat:()=>({attack:()=>assert.fail('must not attack')})};
+  seedStage(h,p,1);
+  for(const event of [
+    {npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'another-action'},
+    {npcId:core.NpcIdentifiers.IRENA,npc,stepId:'elFnbt'},
+    {npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,stepId:'elFnbt'},
+    {npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc:{isRegistered:()=>false},stepId:'elFnbt'},
+  ])assert.notEqual(action(h,{player:p,...event}).handled,true);
+  seedStage(h,p,0);
+  assert.notEqual(action(h,{player:p,npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'elFnbt'}).handled,true);
+  assert.equal(stage(h,p),0);
+});
+
+
+test('captain key auto-collection and ground fallback work in either death callback order', () => {
+  for (const dropsFirst of [false, true]) {
+    for (const mode of ['room', 'full', 'failed-add']) {
+      const h=harness(),p=makePlayer();
+      seedStage(h,p,1);
+      if(mode==='full')p.setFull(true);
+      if(mode==='failed-add')p.setFailAdds(true);
+      const ground=killCaptain(h,p,dropsFirst).filter(item=>item.id===core.ItemIdentifiers.METAL_KEY);
+      assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,mode==='room'?1:0,`${mode}, dropsFirst=${dropsFirst}`);
+      assert.deepEqual(ground,mode==='room'?[]:[{id:core.ItemIdentifiers.METAL_KEY,amount:1}]);
+      assert.equal(stage(h,p),2);
+    }
+  }
+});
+
+test('already held captain keys are not duplicated by repeat kills or quest stage changes', () => {
+  for(const dropsFirst of [false,true]) {
+    const h=harness(),p=makePlayer();
+    seedStage(h,p,1);p.items.set(core.ItemIdentifiers.METAL_KEY,1);
+    for(const currentStage of [1,2,10,30]) {
+      seedStage(h,p,currentStage);
+      const ground=killCaptain(h,p,dropsFirst);
+      assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY),1);
+      assert.deepEqual(ground.filter(item=>item.id===core.ItemIdentifiers.METAL_KEY),[]);
+      assert.equal(stage(h,p),Math.max(2,currentStage));
+    }
+  }
+});
+
+test('captain key auto-collection ignores other actors and an unstarted quest', () => {
+  const h=harness(),p=makePlayer();
+  for(const [npcId,currentStage] of [[core.NpcIdentifiers.IRENA,1],[core.NpcIdentifiers.MERCENARY_CAPTAIN,0]]) {
+    seedStage(h,p,currentStage);
+    const context={handledItemIds:new Set()};
+    for(const fn of h.events['npc-drops:context']??[])fn({player:p,npcId,context});
+    assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,0);
+    assert.equal(context.handledItemIds.has(core.ItemIdentifiers.METAL_KEY),false);
   }
 });

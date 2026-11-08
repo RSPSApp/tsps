@@ -15,6 +15,17 @@ export interface SpellCastContext {
 }
 
 export abstract class Spell {
+    /**
+     * Spellbook Swap (Wiki): one spell from the other book, then back to Lunar. Every cast that pays (or is spared) its
+     * runes ends it: combat and utility spells here, alchemy and Telekinetic Grab in MagicOnItemPacketListener.
+     */
+    public static endSpellbookSwap(player: any): void {
+        if (player?.getAttribute?.("lunar:spellbook-swap")) {
+            player.setAttribute("lunar:spellbook-swap", null);
+            MagicSpellbook.changeSpellbook(player, MagicSpellbook.LUNAR, true);
+        }
+    }
+
     private static readonly castContexts = new WeakMap<Mobile, SpellCastContext>();
     private static readonly calculationContexts = new WeakMap<Mobile, SpellCastContext>();
     public static getCastContext(caster: Mobile, spell: Spell | null): SpellCastContext | null {
@@ -190,12 +201,9 @@ export abstract class Spell {
             if (runeShortfall.length > 0) {
                 PluginManager.consumeSpellRuneSource(player, runeShortfall);
             }
-
-            if (player.getAttribute?.("lunar:spellbook-swap")) {
-                player.setAttribute("lunar:spellbook-swap", null);
-                MagicSpellbook.changeSpellbook(player, MagicSpellbook.LUNAR, true);
-            }
         }
+        // A cast whose runes a weapon saved is still the swap's one spell.
+        Spell.endSpellbookSwap(player);
 
         if (this.usesSharedCastDelay()) {
             player.setAttribute(Spell.NEXT_CAST_AT, now + Spell.CAST_DELAY_TICKS);

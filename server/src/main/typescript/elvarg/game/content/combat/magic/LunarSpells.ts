@@ -74,7 +74,7 @@ const WATER_CONTAINERS = new Map<number, number>([
 /** Unstrung -> strung (Wiki: String Jewellery); 4 Crafting XP each. */
 const UNSTRUNG = new Map<number, number>([
     [1673, 1692], [1675, 1694], [1677, 1696], [1679, 1698], [1681, 1700], [1683, 1702],
-    [21099, 21108], [21102, 21111], [21105, 21114], [4082, 4081], [4021, 4022], [1714, 1716], [1720, 1722],
+    [21099, 21108], [21102, 21111], [21105, 21114], [4082, 4081], [4022, 4021], [1714, 1716], [1720, 1722],
 ]);
 const STRING_CRAFTING_XP = 4;
 /** Log -> [plank, coins]: 70% of the sawmill's price (Wiki: Plank Make). */
@@ -418,10 +418,14 @@ export class LunarSpells {
             const item = next();
             if (!item || !spell.pay(player)) return false;
             const [pie, , experience] = PIES.get(item.getId())!;
+            const rawId = item.getId();
             item.setId(pie);
             player.getInventory().refreshItems();
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
             player.getSkillManager().addExperiences(Skill.COOKING, experience);
+            PluginManager.emitCustomEvent("cooking:success", {
+                player, skill: Skill.COOKING, rawId, itemId: pie, amount: 1, location: player.getLocation().clone(),
+            });
             return next() !== undefined;
         };
         if (bake()) this.repeat(player, BAKE_TICKS, bake);

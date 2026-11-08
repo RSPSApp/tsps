@@ -183,6 +183,7 @@ export function sendLogout(): void {
  */
 export function suppressReconnection(): void {
     // Clear session credentials - user logged out intentionally
+    state.hasLoggedIn = false;
     state.sessionUsername = null;
     state.sessionPassword = null;
     state.sessionLoginFlags = 0;

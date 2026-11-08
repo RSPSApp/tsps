@@ -227,8 +227,13 @@ export interface Cs2Context {
     clanChannel?: ClanChannel | null;
     listenedClanSettings?: ClanSettings | null;
     listenedClanChannel?: ClanChannel | null;
+    /** Every affined clan by type: 0 the player's own, 2 the PvP Arena group signed up to. */
+    affinedClanSettings?: Map<number, ClanSettings>;
+    affinedClanChannels?: Map<number, ClanChannel>;
     activeClanSettingsIsListened?: boolean;
     activeClanChannelIsListened?: boolean;
+    activeClanSettingsType?: number;
+    activeClanChannelType?: number;
     clanVars?: Map<number, number>;
 
     // Stats/skills (indices 0-22 for OSRS skills)
@@ -929,23 +934,25 @@ export class Cs2Vm {
             },
             sendFriendsChatAction: (action) => vm.context.sendFriendsChatAction?.(action),
             get clanSettings() {
-                return vm.context.activeClanSettingsIsListened
-                    ? vm.context.listenedClanSettings
-                    : vm.context.clanSettings;
+                if (vm.context.activeClanSettingsIsListened) return vm.context.listenedClanSettings;
+                const type = vm.context.activeClanSettingsType ?? 0;
+                return type === 0 ? vm.context.clanSettings : (vm.context.affinedClanSettings?.get(type) ?? null);
             },
             get clanChannel() {
-                return vm.context.activeClanChannelIsListened
-                    ? vm.context.listenedClanChannel
-                    : vm.context.clanChannel;
+                if (vm.context.activeClanChannelIsListened) return vm.context.listenedClanChannel;
+                const type = vm.context.activeClanChannelType ?? 0;
+                return type === 0 ? vm.context.clanChannel : (vm.context.affinedClanChannels?.get(type) ?? null);
             },
             get clanVars() {
                 return vm.context.clanVars;
             },
-            selectClanSettings: (listened) => {
+            selectClanSettings: (listened, clanType = 0) => {
                 vm.context.activeClanSettingsIsListened = listened;
+                vm.context.activeClanSettingsType = clanType;
             },
-            selectClanChannel: (listened) => {
+            selectClanChannel: (listened, clanType = 0) => {
                 vm.context.activeClanChannelIsListened = listened;
+                vm.context.activeClanChannelType = clanType;
             },
 
             // Event context (for magic argument substitution)

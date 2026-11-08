@@ -56,13 +56,13 @@ function meetsAll(row: QuestRow): boolean {
 
 /** GuidePanel.updateQuests: whether a quest shows with the search box empty. */
 export function isQuestShown(row: QuestRow, config: Config, updated: boolean): boolean {
-    if (!updated || config.showCompletedQuests()) return true;
+    if (!updated) return true;
     const state = row.info.questState;
     if (state === QuestState.NOT_STARTED || state === QuestState.IN_PROGRESS) {
         return !config.filterMetRequirements() || meetsAll(row);
     }
-    // Finished, or not a quest RuneLite knows: hidden.
-    return false;
+    // Finished, or not a quest RuneLite knows: shown only when requested.
+    return config.showCompletedQuests();
 }
 
 /**

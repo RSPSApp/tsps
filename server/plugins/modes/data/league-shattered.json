@@ -288,7 +288,7 @@
     "enchantedJeweler": { "fragment": 35, "jewellery": ["ring", "necklace", "amulet", "bracelet"] },
     "alchemaniac": { "fragment": 36 },
     "profletchional": { "fragment": 37, "kinds": ["logs", "shields", "stringing"] },
-    "proTips": { "fragment": 38, "kinds": ["chisel"], "product": "bolt tips" },
+    "proTips": { "fragment": 38, "kinds": ["boltTips"], "product": "bolt tips" },
     "dineAndDash": { "fragment": 40, "kinds": ["cook"] },
     "mixologist": { "fragment": 43, "secondarySavePercent": [20, 50, 100] },
     "justDruid": { "fragment": 44, "kinds": ["clean"] },
@@ -300,7 +300,7 @@
       "batch": {
         "SMITHING": ["smelt", "smith", "cannonballs"],
         "CRAFTING": ["leather", "glassblowing", "gems", "pottery", "battlestaves", "spinning"],
-        "FLETCHING": ["logs", "shields", "chisel"]
+        "FLETCHING": ["logs", "shields", "chisel", "boltTips"]
       }
     },
     "unchainedTalent": {
@@ -342,7 +342,7 @@
     }
   },
 
-  "_sageEffects": "The three sets that give an item (Wiki /Fragments and each set's page), used by plugins/modes/league/FragmentSage.LeagueMode.js. The item is the set struct's param 1471 (the Arcane grimoire, the Crystal of memories, which this cache names Crystal of Echoes, and the Portable waystone). The Wiki says the Sage gives it; here it is handed over when the set becomes active and the character holds none (in the inventory, worn, banked, in its grave or at Death's Office), into the inventory, else the bank, else the floor (ours). Like the Arcane grimoire (Leagues polish), holding the item is the token: it keeps working when the set comes off (the Wiki doesn't say). The Crystal of memories' Teleport-back returns to where the character's last teleport began, unless that was in an instance or `noRecall` (the Wiki's exclusions this server has: Fossil Island's underwater area, Entrana, the rune essence mine, Pyramid Plunder and the Agility Pyramid's upper floors; the boxes are ours). Every teleport counts, the crystal's own too (so a second Teleport-back returns to where the first was used), and home teleports, fairy rings, spirit trees and Wilderness obelisks, which move the player themselves, send the same `teleport:landed`, up to Wilderness level 20 (ours). The Portable waystone teleports to any of the league's twelve waystones (Wiki: Waystone (Shattered Relics League)), not past Wilderness level 20 (Wiki), with the quest a place needs; the Wiki names only the towns, so every tile is this server's (city teleport landings where one exists).",
+  "_sageEffects": "The three sets that give an item (Wiki /Fragments and each set's page), used by plugins/modes/league/FragmentSage.LeagueMode.js. The item is the set struct's param 1471 (the Arcane grimoire, the Crystal of memories, which this cache names Crystal of Echoes, and the Portable waystone). The Wiki says the Sage gives it; here it is handed over when the set becomes active and the character holds none (in the inventory, worn, banked, in its grave or at Death's Office), into the inventory, else the bank, else the floor (ours). Like the Arcane grimoire (Leagues polish), holding the item is the token: it keeps working when the set comes off (the Wiki doesn't say). The Crystal of memories' Teleport-back returns to where the character's last teleport began, unless that was in an instance or `noRecall` (the Wiki's exclusions this server has: Fossil Island's underwater area, Entrana, the rune essence mine, Pyramid Plunder, the Agility Pyramid's upper floors, Mogre Camp and Crash Island's dungeon; the boxes are ours). Every teleport counts, the crystal's own too (so a second Teleport-back returns to where the first was used), and home teleports, fairy rings, spirit trees and Wilderness obelisks, which move the player themselves, send the same `teleport:landed`, up to Wilderness level 20 (ours). The Portable waystone teleports to any of the league's twelve waystones (Wiki: Waystone (Shattered Relics League)), not past Wilderness level 20 (Wiki), with the quest a place needs; the Wiki names only the towns, so every tile is this server's (city teleport landings where one exists).",
   "sageEffects": {
     "sets": [7, 11, 13],
     "crystal": { "wildernessLevel": 20 },
@@ -352,7 +352,9 @@
       { "name": "Rune essence mine", "minX": 2880, "maxX": 2943, "minY": 4800, "maxY": 4863 },
       { "name": "Pyramid Plunder", "minX": 1918, "maxX": 1985, "minY": 4416, "maxY": 4482 },
       { "name": "Agility Pyramid", "minX": 3354, "maxX": 3378, "minY": 2826, "maxY": 2856, "minZ": 1 },
-      { "name": "Agility Pyramid's top floor", "minX": 3034, "maxX": 3058, "minY": 4686, "maxY": 4709, "z": 2 }
+      { "name": "Agility Pyramid's top floor", "minX": 3034, "maxX": 3058, "minY": 4686, "maxY": 4709, "z": 2 },
+      { "name": "Mogre Camp", "minX": 2938, "maxX": 3002, "minY": 9470, "maxY": 9540, "z": 1 },
+      { "name": "Crash Island Dungeon", "minX": 3019, "maxX": 3028, "minY": 5484, "maxY": 5492, "z": 0 }
     ],
     "waystone": {
       "wildernessLevel": 20,

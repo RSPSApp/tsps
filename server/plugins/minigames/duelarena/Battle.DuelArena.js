@@ -99,10 +99,21 @@ function areaClass() {
   return AreaClass;
 }
 
+/**
+ * What kind of fight it is: its label ("Unranked Duel participation"), the counters it keeps, and
+ * what else it does at the result (ranked: the rank and points), a draw, and each player's leaving.
+ */
+const UNRANKED = {
+  label: "Unranked",
+  participation: Common.PARTICIPATION_ATTRIBUTE,
+  wins: Common.WINS_ATTRIBUTE,
+};
+
 class Fight {
-  constructor(players, build) {
+  constructor(players, build, mode = UNRANKED) {
     this.players = players;
     this.build = build;
+    this.mode = mode;
     this.area = new (areaClass())(this);
     this.sides = new Map(players.map((player, index) => [player, index]));
     this.elapsed = 0;
@@ -135,8 +146,8 @@ class Fight {
     player.getMovementQueue().reset();
     Common.core.PrayerHandler.deactivatePrayers(player);
     Stash.save(player, this.exits.get(player));
-    const count = Common.add(player, Common.PARTICIPATION_ATTRIBUTE, 1);
-    player.sendMessage(Common.message("participation", { count }));
+    const count = Common.add(player, this.mode.participation, 1);
+    player.sendMessage(Common.message("participation", { label: this.mode.label, count }));
     Loadouts.equip(player, this.build);
     Common.varbit(player, "pvp_area_client", 1);
     Common.varbit(player, "pvpa_battlearea_longbattle", 1);
@@ -207,22 +218,30 @@ class Fight {
     this.over = true;
     this.winner = winner;
     for (const player of this.inArena()) player.sendMessage(Common.message("won", { name: winner.getDisplayName() }));
-    const wins = Common.add(winner, Common.WINS_ATTRIBUTE, 1);
-    const count = Common.number(winner, Common.PARTICIPATION_ATTRIBUTE);
-    winner.sendMessage(Common.message("wins", { wins, count }));
+    const loser = this.opponentOf(winner);
+    this.mode.won?.(this, winner, loser);
+    const wins = Common.add(winner, this.mode.wins, 1);
+    const count = Common.number(winner, this.mode.participation);
+    winner.sendMessage(Common.message("wins", { label: this.mode.label, wins, count }));
     if (byDeath) winner.sendMessage(Common.message("over"));
     const sender = winner.getPacketSender();
     sender.sendSong(Common.data.music.silence);
     sender.sendJingle(Common.data.jingles.win);
     clearCombat(winner);
-    const loser = this.opponentOf(winner);
     if (loser) clearCombat(loser);
+  }
+
+  /** Over with nobody winning (the time limit, a shutdown). */
+  draw() {
+    if (this.over) return;
+    this.over = true;
+    this.mode.drawn?.(this);
   }
 
   /** The time ran out: nobody wins, both leave. */
   timeUp() {
     if (this.over) return;
-    this.over = true;
+    this.draw();
     for (const player of this.inArena()) {
       player.sendMessage(Common.message("over"));
       this.exit(player);
@@ -301,6 +320,7 @@ class Fight {
     Stash.restore(player);
     if (logout) player.setLocation(Common.location(this.exits.get(player)));
     else Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
+    this.mode.left?.(this, player, logout);
     if (this.inArena().length === 0) {
       fights.delete(this);
       Common.later(2, () => {
@@ -328,9 +348,9 @@ function clearCombat(player) {
 }
 
 /** A fight for two players, or null when either still has a character put aside. */
-function start(players, build) {
+function start(players, build, mode = UNRANKED) {
   if (players.some((player) => Stash.stashed(player) || fightOf.has(player))) return null;
-  const fight = new Fight(players, build);
+  const fight = new Fight(players, build, mode);
   fight.begin();
   return fight;
 }
@@ -400,7 +420,7 @@ function usePortal({ player }) {
 /** The world stopping: every fight ends with no winner, and everyone's own character comes back. */
 function shutdown() {
   for (const fight of [...fights]) {
-    fight.over = true;
+    fight.draw();
     for (const player of fight.inArena()) fight.exit(player);
   }
 }

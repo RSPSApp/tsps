@@ -631,6 +631,29 @@ async function send(connection, packet) {
 const create = (c, name) => send(c.connection, { type: 'character_create', name });
 const remove = (c, name, confirmName = name) => send(c.connection, { type: 'character_delete', name, confirmName });
 
+// A live bot's generated name is never saved, so only the online players show it: a new character can't take it.
+test("a new character can't take the name a live bot shows", async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => (key === 'characters:maxPerAccount' ? 3 : fallback));
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  // A real bot Player online, showing its generated name for its own login name (as display-name.test.cjs seats one;
+  // a real list add would run the whole login, which this file stubs).
+  const bot = new Player(new BotPlayerSession());
+  bot.setUsername('PvpBot1');
+  bot.setPlayerBot(true);
+  bot.setDisplayName('Gilded Owl');
+  const online = t.mock.method(World, 'getPlayers', () => [bot]);
+  await create(c, 'Gilded Owl');
+  assert.deepEqual(lastResult(c.channel), { ok: false, code: 1, message: 'That name is not available.' });
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima'], 'no character was made');
+  online.mock.restore();
+  await create(c, 'Gilded Owl');
+  assert.equal(lastResult(c.channel).ok, true, 'control: with the bot gone, the name is free');
+});
+
 test('creating a character: precondition, name rules, cap, success', async (t) => {
   t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => (key === 'characters:maxPerAccount' ? 3 : fallback));
   const early = new net.ClientConnection(stubChannel());

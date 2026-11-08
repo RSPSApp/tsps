@@ -184,6 +184,22 @@ test("kill counts: a named NPC's death counts and finishes the kill-count tasks 
   assert.equal(Progress.isComplete(player, kbd.tasks.find((task) => task.killCount === 25).id), false);
 });
 
+test("kill counts: a report as \"The Nightmare\" counts for the monster named \"Nightmare, The\"", () => {
+  const player = createPlayer();
+  Kills.onKill({ player, monster: "The Nightmare", count: 1 }); // Fight.Nightmare's report
+  assert.equal(Kills.killCount(player, Data.monsterNamed("Nightmare, The")), 1);
+  assert.equal(Data.monsterNamed("The Nightmare"), Data.monsterNamed("Nightmare, The"));
+});
+
+test("kill counts: a Zulrah kill counts once; its plugin reports it, and the generic death doesn't count it too", () => {
+  const player = createPlayer();
+  const zulrah = Data.monsterNamed("Zulrah");
+  const npc = { getCurrentDefinition: () => ({ getName: () => "Zulrah" }) };
+  Kills.onNpcDeath({ killer: player, npc });
+  Kills.onKill({ player, monster: "Zulrah", count: 1 }); // Shrine.Zulrah's report, the same kill
+  assert.equal(Kills.killCount(player, zulrah), 1);
+});
+
 test("kill counts: saves keyed by the old cache's monster keys read by name, and save by name", () => {
   const player = createPlayer();
   // osrs-241_2026-09-30 keys: 32 King Black Dragon, 71 Zulrah (both moved up one with the Fractured Archive).

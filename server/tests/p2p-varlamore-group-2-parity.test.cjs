@@ -524,7 +524,8 @@ test('MAG a wrong recipe fails the taste test and Emelio reopens the portion men
   talkMag(h, p, 'Lucas', N.LUCAS); p.manager.advance(); assert.equal(p.text, 'Eww! This is awful.'); assert.equal(h.quest.getStage(p), 8);
   h.continueUntil(p, () => !p.manager.getCurrent());
   talkMag(h, p, 'Emelio', N.EMELIO); h.continueUntil(p, () => p.text.startsWith('Tatamo!'));
-  assert.match(p.text.replace(/\s*<br>\s*/g, ' '), /one portion of meat/); continueToMenu(h, p); assert.equal(p.prompt.options[0], 'Adjust meat (currently at one portion).');
+  // Wrapped lines keep their spacing: compare the words, not the line breaks.
+  assert.match(p.text.replace(/\s*<br>\s*/g, ' ').replace(/\s+/g, ' '), /one portion of meat/); continueToMenu(h, p); assert.equal(p.prompt.options[0], 'Adjust meat (currently at one portion).');
 });
 
 test('MAG marketing and the Colosseum: kebabs (12/14), Lelia eats one (16/18), the advert, the minotaur fight (20) and the reward at 26', () => {
@@ -1338,6 +1339,7 @@ test('DOTI backstage bookshelf is a player-scoped stage spawn, not a global obje
 test('DOTI Attack uses the staged combat method and preserves actors through their scripted moves', () => {
   const { h, p } = doti(); h.quest.setStage(p, 40); h.action(p, 13834, 'lPk2UZ');
   const method = h.combatResolvers[0].resolve(p); assert.ok(method);
+  assert.equal(h.combatResolvers[0].overridesWeapon, true, 'stage Attack outranks weapon resolvers loaded earlier');
   for (let i = 0; i < 4; i++) {
     const npc = h.npcs.find(npc => npc.id === 13838 && !npc.removed); assert.ok(npc);
     method.start(p, npc); assert.deepEqual(method.hits(), []); finish(h, p);

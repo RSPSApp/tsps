@@ -50,6 +50,10 @@ module.exports = function registerRondacheSpecialAttack(api) {
           || !player.getCombat().resolveCanReachForCurrentCycle(this, target)) return;
       const damage = slam(player, target);
       Effects.setCharges(player, 0);
+      // No special energy, but a special attack performed ("combat-special:performed" rides on drain), and the
+      // rondache's: a weapon-named deed (Use the Special Attack of a Dragon Axe) must not count it.
+      const shield = player.getEquipment().get(api.core.Equipment.SHIELD_SLOT)?.getId?.();
+      CombatSpecial.drain(player, 0, false, shield);
       player.performAnimation(new Animation(CacheDefinitions.getSeqId("tfa_human_rondache_special")));
       player.performGraphic(new Graphic(CacheDefinitions.getSpotanimId("vfx_tfa_rondache_special")));
       // Accuracy is rolled above, so the hit skips its own roll but still meets protection prayers, hooks and XP.

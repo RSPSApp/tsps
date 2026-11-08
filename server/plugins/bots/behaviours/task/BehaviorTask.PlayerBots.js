@@ -1116,7 +1116,7 @@ class BotBehaviorTask extends Task {
     try {
       const state = entry?.state;
       const player = entry?.player;
-      if (!player || !state) {
+      if (!player || !state || entry.manuallyControlled || entry.behaviorPaused) {
         return;
       }
       if (this.recoverBlockedWildernessBot(entry, entryNow)) {

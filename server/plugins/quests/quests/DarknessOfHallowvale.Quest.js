@@ -2597,11 +2597,23 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return Number.isInteger(chapters) && chapters > 0 ? Math.min(chapters, TOME_ITEM_IDS.length) : 0;
   }
 
-  /** A chapter for 2,000 XP: the (3) becomes the (2), the (2) the (1), and the (1) crumbles. */
+  /**
+   * A chapter for 2,000 XP: the (3) becomes the (2), the (2) the (1), and the (1) crumbles. The three chapters are the
+   * account's, not each copy's (Wiki: the tome "cannot be banked", so one exists): any copy reads the account's next
+   * chapter, and once three are read a copy only crumbles. Veliaf's replacement was paying its own three chapters again.
+   */
+  function crumble(player, slot) {
+    player.getInventory().deleteAtSlot(slot, 1);
+    player.sendMessage("The book crumbles into a dust cloud of knowledge.");
+  }
+
   function readTome(event) {
     const { player, item, slot } = event;
-    const index = TOME_ITEM_IDS.indexOf(event.itemId);
-    if (index < 0) return false;
+    if (TOME_ITEM_IDS.indexOf(event.itemId) < 0) return false;
+    if (tomeChaptersRead(player) >= TOME_ITEM_IDS.length) {
+      if (player.getInventory().get(slot) === item) crumble(player, slot);
+      return true;
+    }
     api.emitCustomEvent("xpreward:open", {
       player,
       minLevel: TOME_MIN_LEVEL,
@@ -2610,15 +2622,19 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         const inventory = player.getInventory();
         // The tome the chapter was opened from, still in its slot.
         if (inventory.get(slot) !== item) return null;
+        const read = tomeChaptersRead(player);
+        if (read >= TOME_ITEM_IDS.length) {
+          crumble(player, slot);
+          return null;
+        }
         const skills = player.getSkillManager();
         const before = skills.getExperience(skill);
         skills.addExperience(skill, TOME_CHAPTER_XP, false);
         if (skills.getExperience(skill) === before) return null;
-        player.setAttribute(TOME_CHAPTERS_ATTRIBUTE, Math.max(tomeChaptersRead(player), index + 1));
-        const next = TOME_ITEM_IDS[index + 1];
+        player.setAttribute(TOME_CHAPTERS_ATTRIBUTE, read + 1);
+        const next = TOME_ITEM_IDS[read + 1];
         if (next === undefined) {
-          inventory.deleteAtSlot(slot, 1);
-          player.sendMessage("The book crumbles into a dust cloud of knowledge.");
+          crumble(player, slot);
         } else {
           inventory.setItem(slot, new api.core.Item(next, 1));
           inventory.refreshItems();

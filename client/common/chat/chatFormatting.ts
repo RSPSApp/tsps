@@ -75,18 +75,20 @@ export function parseOutgoingPublicChat(raw: string): PublicChatFormatting {
     let text = raw;
     let colorId = 0;
     let pattern: Uint8Array | undefined;
+    let colourPrefixConsumed = false;
 
     let lower = text.toLowerCase();
     for (const [prefix, id] of COLOUR_PREFIXES) {
         if (lower.startsWith(prefix)) {
             colorId = id;
+            colourPrefixConsumed = true;
             text = text.substring(prefix.length);
             lower = text.toLowerCase();
             break;
         }
     }
 
-    if (lower.startsWith("pattern")) {
+    if (!colourPrefixConsumed && lower.startsWith("pattern")) {
         const bytes = parsePatternBytes(lower);
         if (bytes) {
             pattern = bytes;

@@ -15,7 +15,13 @@ function openReward(api, { player, item, itemId, slot }, multiplier) {
   if (!player.isRegistered() || player.getInventory().get(slot) !== item) return true;
   const request = { item, itemId, slot, multiplier };
   pending.set(player, request);
-  api.emitCustomEvent("xpreward:open", { player, onConfirm: (skill, name) => grant(api, player, request, skill, name) });
+  // Wiki (Lamp): "The Construction option cannot be selected unless the player owns a house."
+  const house = { player, owns: true };
+  api.emitCustomEvent("construction:owns-house", house);
+  const skills = house.owns === false
+    ? api.core.Skill.values().filter((skill) => skill !== api.core.Skill.CONSTRUCTION)
+    : undefined;
+  api.emitCustomEvent("xpreward:open", { player, skills, onConfirm: (skill, name) => grant(api, player, request, skill, name) });
   return true;
 }
 

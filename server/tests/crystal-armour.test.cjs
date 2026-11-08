@@ -386,6 +386,8 @@ test("ranged hit modifiers now reach the ranged max-hit formula", () => {
     getFightType: () => ({ getStyle: () => FightStyle.ACCURATE }),
     getBonusManager: () => ({ getOtherBonus: () => [0, 0, 0, 0] }),
     getEquipment: () => ({ getItems: () => new Array(14).fill(null).map(() => ({ getId: () => 0 })) }),
+    // The weapon interface, as a real Player has (WeaponProfiles reads it for the max-hit formula): none, unarmed.
+    getWeapon: () => require("../dist/game/content/combat/WeaponInterfaces").WeaponInterfaces.UNARMED,
     isSpecialActivated: () => false,
     getCombatSpecial: () => null,
     getPrayerActive: () => new Array(30).fill(false),

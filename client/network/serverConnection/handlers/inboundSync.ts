@@ -1,3 +1,4 @@
+import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
 import { ClientState } from "../../../game/ClientState";
 import {
     VARP_AREA_SOUNDS_VOLUME,
@@ -322,6 +323,8 @@ export function handleInboundSync(msg: any): boolean {
         return true;
     }
     if (msg.type === "handshake") {
+        // Every bootstrap starts a fresh sync stream, even when a player index is reused.
+        state.playerSyncContext = new PlayerSyncContext();
         state.lastHandshake = msg.payload as any;
         for (const cb of state.handshakeListeners) cb(msg.payload as any);
         try {

@@ -231,7 +231,7 @@ export class PendingHit {
         this.protectionBypassed = true;
     }
 
-    /** The attack kind whose protection prayer is checked at impact. */
+    /** The attack kind whose protection prayer is checked when the hit is queued. */
     public getProtectionType(): CombatType {
         return this.protectionType;
     }
@@ -411,6 +411,7 @@ export class PendingHit {
         let firstAccurate: boolean | undefined;
         let firstBounds: SpecialDamageBounds | undefined;
         const priorHits: HitDamage[] = [];
+        let anyAccurate = false;
         for (let i = 0; i < hits.length; i++) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer };
             const blockedByFirstMiss = i > 0 && this.requireFirstAccurate && firstAccurate !== true;
@@ -452,7 +453,10 @@ export class PendingHit {
             this.totalDamage += damage.getDamage();
             hits[i] = damage;
             priorHits.push(damage);
+            anyAccurate ||= this.accurate;
         }
+        // After-hit consumers observe the attack, rather than only its final accuracy roll.
+        this.accurate = anyAccurate;
         return hits;
     }
 

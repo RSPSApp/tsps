@@ -12,7 +12,8 @@ const AREAS = {
   lumbridge: { minX: 3200, maxX: 3263, minY: 3200, maxY: 3263, z: 0 },
   draynor: { minX: 3072, maxX: 3135, minY: 3200, maxY: 3263, z: 0 },
   alKharidFishing: { minX: 3250, maxX: 3288, minY: 3128, maxY: 3160, z: 0 },
-  alKharidMine: { minX: 3284, maxX: 3312, minY: 3300, maxY: 3330, z: 0 },
+  // Down to the mine's southern iron rocks (cache 11364 at 3302,3285 and 3303,3284).
+  alKharidMine: { minX: 3284, maxX: 3312, minY: 3275, maxY: 3330, z: 0 },
   fireAltar: { minX: 3295, maxX: 3320, minY: 3240, maxY: 3268, z: 0 },
   alKharidPalace: { minX: 3275, maxX: 3312, minY: 3158, maxY: 3195, z: 0 },
   lumbridgeKitchen: { minX: 3204, maxX: 3222, minY: 3208, maxY: 3225, z: 0 },
@@ -208,7 +209,8 @@ function caughtImpling({ player, npcId, puro } = {}) {
 }
 
 function fairyRingTravelled({ player, code, destination } = {}) {
-  if (String(code).toUpperCase() === "DIS" && inside(destination, { minX: 3100, maxX: 3120, minY: 3158, maxY: 3180, z: 0 })) {
+  // DIS lands at the Wizards' Tower ring, 3108,3149 in the cache, south of the tower itself.
+  if (String(code).toUpperCase() === "DIS" && inside(destination, { minX: 3100, maxX: 3120, minY: 3140, maxY: 3180, z: 0 })) {
     complete(player, TASKS.wizardTower);
   }
 }

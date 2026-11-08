@@ -34,9 +34,18 @@ function partIds() {
   return Runtime.TORN_PARTS.map(name => core.CacheDefinitions.getObjId(name));
 }
 
-/** Whether the player still has a trail's torn part, carried or banked (its token links it). */
+/**
+ * Whether a torn part belongs to the trail's current step: its token names the trail, its revision the step (give()
+ * stamps both). A part left over from an earlier three-part step of the same trail is not this step's.
+ */
+function ofStep(item, trail) {
+  const meta = item?.getMetaValue(Runtime.metaKey(trail.tier));
+  return meta?.token === trail.state.token && meta?.revision === trail.state.revision;
+}
+
+/** Whether the player still has a trail's torn part, carried or banked (its token and revision link it). */
 function owns(player, trail, index) {
-  const ours = item => item?.getId() === partIds()[index] && item.getMetaValue(Runtime.metaKey(trail.tier))?.token === trail.state.token;
+  const ours = item => item?.getId() === partIds()[index] && ofStep(item, trail);
   return player.getInventory().getItems().some(ours) || player.getBanks().some(bank => bank?.getItems().some(ours));
 }
 
@@ -71,8 +80,7 @@ function openPart(player, matches) {
 
 /** The torn parts of a trail the player carries, by part number (its token and revision link them). */
 function heldParts(player, trail) {
-  return partIds().map(id => player.getInventory().getItems().findIndex(item => item && item.getId() === id &&
-    item.getMetaValue(Runtime.metaKey(trail.tier))?.token === trail.state.token));
+  return partIds().map(id => player.getInventory().getItems().findIndex(item => item && item.getId() === id && ofStep(item, trail)));
 }
 
 function wornIds(player) {

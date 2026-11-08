@@ -73,6 +73,17 @@ test("a new spawn inherits a stationary NPC's explicit radius over the implicit 
     { id: 0, name: 'Tool Leprechaun' }, { walkSeqId: 12042, attackable: false }), undefined);
 });
 
+test("an id's own default rows decide before a same-name id's explicit ones (by id, else by name)", () => {
+  // Gull 281 roams on the default 5; a couple of explicit 0 rows on another Gull id must not pin it (#1775).
+  const rows = [
+    ...Array.from({ length: 4 }, (_, i) => ({ id: 281, name: 'Gull', x: i, y: 0, level: 0 })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: 1338, name: 'Gull', x: i, y: 1, level: 0, wanderRadius: 0 })),
+  ];
+  assert.equal(matching.chooseWanderRadius(rows, { id: 281, name: 'Gull' }, { walkSeqId: 6812, attackable: false }), undefined);
+  // An id with no rows of its own still takes the name's explicit radius.
+  assert.equal(matching.chooseWanderRadius(rows, { id: 1339, name: 'Gull' }, { walkSeqId: 6812, attackable: false }), 0);
+});
+
 test('an attackable NPC keeps the effective majority, not a stray explicit radius', () => {
   const rows = [
     ...Array.from({ length: 6 }, (_, i) => ({ id: 2854, name: 'Rat', x: i, y: 0, level: 0 })),

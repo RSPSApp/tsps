@@ -43,7 +43,7 @@ function openSettings({ player, requestedTeam = null, portalGod = requestedTeam 
     "Join practice", () => {
       if (!editable(player)) return;
       const maxed = settings.botTier === "maxed";
-      game.joinFromLobby(player, requestedTeam, settings.opponent === "none" ? null : maxed ? "veteran" : settings.botTier, portalGod, maxed);
+      game.joinFromLobby(player, requestedTeam, settings.opponent === "none" ? null : maxed ? "veteran" : settings.botTier, portalGod, maxed, true);
     },
     `Teams: ${settings.teamSize} vs ${settings.teamSize}`, () => choose(context, "Players per team", [["1 vs 1", 1], ["3 vs 3", 3], ["5 vs 5", 5], ["10 vs 10", 10], ["30 vs 30", 30]], "teamSize"),
     `Bots: ${settings.opponent}`, () => choose(context, "Practice opponent", [["None", "none"], ["Mixed team", "mixed"], ["Scorer (magic defence)", "scorer"], ["Defender (magic)", "defender"]], "opponent"),
@@ -63,7 +63,8 @@ module.exports = function attachCastleWarsSettings(registry, castleWars) {
   game = castleWars;
   game.settings = { ...DEFAULTS };
   game.hasPracticeBots = () => (game.gameArea?.getPlayers?.() ?? []).some((player) => player.getAttribute(game.BOT_KEY) === true);
-  game.getBarricadeLimit = () => game.hasPracticeBots() ? game.settings.barricades : DEFAULTS.barricades;
+  // Only a "Join practice" match uses Lanthus' limit; a public game's fill bots count as bots too.
+  game.getBarricadeLimit = () => game.practice === true && game.hasPracticeBots() ? game.settings.barricades : DEFAULTS.barricades;
   api.onNpcInteraction("Lanthus", { "Talk-to": openSettings });
   api.onCustomEvent("combat:shove-rules", castleShove);
 };

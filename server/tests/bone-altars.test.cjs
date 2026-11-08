@@ -95,6 +95,29 @@ test("the altar spares half, then the Zealot's robes roll 1.25% a piece", () => 
   assert.equal(zealotPieces(wearing("shades_prayer_helm", "logs")), 1);
 });
 
+test("the Chaos altar keeps the experience's tenths, as the Wiki lists them", () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const { Skill } = require("../dist/game/model/Skill");
+  const altar = DATA.altars[0];
+  const blessing = BoneAltars._test.dataBlessing(altar);
+  const multiplier = GameConstants.EXPERIENCE_MULTIPLIER;
+  GameConstants.EXPERIENCE_MULTIPLIER = 1;
+  try {
+    // Wiki: bones 15.7, bat bones 18.5, monkey bones 17.5 at the Chaos altar (350%).
+    for (const [bury, expected] of [[4.5, 15.7], [5.3, 18.5], [5, 17.5]]) {
+      const p = new Player(null);
+      p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+      const skills = p.getSkillManager();
+      skills.addExperiences(Skill.PRAYER, blessing({ xp: bury }).experience);
+      // The stored total keeps its tenths (getExperience shows the whole part, as the client does).
+      assert.equal(skills.skills.experience[Skill.PRAYER.getIndex()], expected, `${bury} buried`);
+    }
+  } finally {
+    GameConstants.EXPERIENCE_MULTIPLIER = multiplier;
+  }
+});
+
 test("the offering graphic plays on the altar tile nearest the player", () => {
   const object = {
     getLocation: () => new Location(CHAOS_ALTAR.x, CHAOS_ALTAR.y, 0),

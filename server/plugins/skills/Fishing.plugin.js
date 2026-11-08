@@ -13,6 +13,7 @@ const Guild = require("./fishing/Guild.Fishing");
 const AnglerOutfit = require("./fishing/AnglerOutfit.Fishing");
 const MinnowPlatform = require("./fishing/MinnowPlatform.Fishing");
 const RadasBlessing = require("./fishing/RadasBlessing.Fishing");
+const SpiritFlakes = require("./fishing/SpiritFlakes.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
 const ClueBottles = require("./fishing/ClueBottles.Fishing");
 const { pauseForLevelUp } = require("./SkillActions");
@@ -47,6 +48,8 @@ const CAST_NET = "You cast out your net...";
 const CAST_LINE = "You cast out your line...";
 const CAST_AND_ATTEMPT = "You cast out your line...<br>You attempt to catch a fish.";
 const START_HARPOON = "You start harpooning fish.";
+/** Barehanded fishing's start line: rsprox_transcripts/231/00381.txt (sharks) and 237/01149.txt (tuna). */
+const START_BAREHAND = "You start to lure the fish.";
 
 // Missing bait is a message box (rsprox captures 75, 1149, 1710, 1718, 1757, 1858, 3275).
 const NO_FISHING_BAIT = "You don't have any fishing bait.";
@@ -64,8 +67,11 @@ class Fish {
    * amount: how many of the fish one catch lands (minnows come 10-14 at a time).
    * message: the catch message, when it isn't "You catch <caught>." (given the amount landed).
    * junk: not a fish (a big net's boots), so no pet roll and no "fishing:success".
+   * catchAnimation: this fish's own finishing animation, in place of the tool's (barehanded fishing).
+   * big: [item id, 1 in n, name]: the trophy fish that lands in place of this one (Wiki: Big bass).
    */
-  constructor({ id, level, rolls, xp, caught, petBase = null, requires = [], extraXp = [], amount = () => 1, message = null, junk = false }) {
+  constructor({ id, level, rolls, xp, caught, petBase = null, requires = [], extraXp = [], amount = () => 1, message = null, junk = false,
+    catchAnimation = null, big = null }) {
     this.id = id;
     this.level = level;
     this.rolls = rolls;
@@ -79,7 +85,19 @@ class Fish {
     this.amount = amount;
     this.message = message ?? (() => `You catch ${caught}.`);
     this.junk = junk;
+    this.catchAnimation = catchAnimation;
+    this.big = big && Object.assign(Object.create(Fish.prototype), this, {
+      id: big[0], chance: big[1], caught: `an enormous ${big[2]}`, message: () => `You catch an enormous ${big[2]}!`, big: null,
+    });
   }
+}
+
+/**
+ * Wiki (Big bass, Big swordfish, Big shark): "a 1/1,000 [1/2,500, 1/5,000] chance to receive a big bass in place of a
+ * raw bass", with the raw fish's XP and the line "You catch an enormous bass!". No recording lands one.
+ */
+function bigOrFish(fish, random = Math.random) {
+  return fish.big && random() < 1 / fish.big.chance ? fish.big : fish;
 }
 
 class FishingTool {
@@ -205,14 +223,28 @@ const FISH = Object.freeze({
   SALMON: new Fish({ id: ItemIds.RAW_SALMON, level: 30, rolls: [[16, 96]], xp: 70, caught: "a raw salmon", petBase: 923616, message: () => "You catch a raw salmon" }),
   TUNA: new Fish({ id: ItemIds.RAW_TUNA, level: 35, rolls: [[8, 64]], xp: 80, caught: "a raw tuna", petBase: 257770 }),
   LOBSTER: new Fish({ id: ItemIds.RAW_LOBSTER, level: 40, rolls: [[6, 95]], xp: 90, caught: "a lobster", petBase: 116129 }),
-  SWORDFISH: new Fish({ id: ItemIds.RAW_SWORDFISH, level: 50, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770 }),
+  SWORDFISH: new Fish({ id: ItemIds.RAW_SWORDFISH, level: 50, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770,
+    big: [ItemIds.BIG_SWORDFISH, 2500, "swordfish"] }),
   SHARK: new Fish({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243, message: () => "You catch a shark!",
+    big: [ItemIds.BIG_SHARK, 5000, "shark"],
   }),
   // Wiki (Barbarian Training#Barehanded fishing): barehand shark gives 11 Strength XP too.
   SHARK_BAREHAND: new Fish({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243,
-    message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]],
+    message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]], big: [ItemIds.BIG_SHARK, 5000, "shark"],
+  }),
+  // Wiki (Barbarian Training#Barehanded fishing): tuna at 55 Fishing and 35 Strength (80 XP, 8 Strength XP), swordfish
+  // at 70 and 50 (100, 10), on the harpoon charts. rsprox_transcripts/237/01149.txt: "You catch a raw tuna." with
+  // brut_player_hand_fishing_end_tuna_2 (6711). No capture lands a swordfish: _1 (6707), as the shark's captured _1.
+  TUNA_BAREHAND: new Fish({
+    id: ItemIds.RAW_TUNA, level: 55, rolls: [[8, 64]], xp: 80, caught: "a raw tuna", petBase: 257770,
+    requires: [[Skill.STRENGTH, 35]], extraXp: [[Skill.STRENGTH, 8]], catchAnimation: 6711,
+  }),
+  SWORDFISH_BAREHAND: new Fish({
+    id: ItemIds.RAW_SWORDFISH, level: 70, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770,
+    requires: [[Skill.STRENGTH, 50]], extraXp: [[Skill.STRENGTH, 10]], catchAnimation: 6707,
+    big: [ItemIds.BIG_SWORDFISH, 2500, "swordfish"],
   }),
 
   // Big net: charts from the Wiki (Fishing spot (big net, harpoon)); lines from rsprox captures
@@ -224,7 +256,8 @@ const FISH = Object.freeze({
   CASKET: new Fish({ id: ItemIds.CASKET, level: 16, rolls: [[1, 2]], xp: 10, caught: "a casket", junk: true }),
   MACKEREL: new Fish({ id: ItemIds.RAW_MACKEREL, level: 16, rolls: [[5, 65], [10, 10]], xp: 20, caught: "a raw mackerel", petBase: 1147827 }),
   COD: new Fish({ id: ItemIds.RAW_COD, level: 23, rolls: [[4, 55]], xp: 45, caught: "a raw cod", petBase: 1147827 }),
-  BASS: new Fish({ id: ItemIds.RAW_BASS, level: 46, rolls: [[3, 40]], xp: 100, caught: "a raw bass", petBase: 1147827 }),
+  BASS: new Fish({ id: ItemIds.RAW_BASS, level: 46, rolls: [[3, 40]], xp: 100, caught: "a raw bass", petBase: 1147827,
+    big: [ItemIds.BIG_BASS, 1000, "bass"] }),
   MONKFISH: new Fish({ id: ItemIds.RAW_MONKFISH, level: 62, rolls: [[48, 90]], xp: 120, caught: "a raw monkfish", petBase: 138583 }),
 
   FROG_SPAWN: new Fish({ id: ItemIds.FROG_SPAWN, level: 33, rolls: [[16, 96]], xp: 75, caught: "some frog spawn" }),
@@ -238,7 +271,10 @@ const FISH = Object.freeze({
   }),
   SACRED_EEL: new Fish({ id: ItemIds.SACRED_EEL, level: 87, rolls: [[0, 60]], xp: 105, caught: "a sacred eel", petBase: 99000 }),
   ANGLERFISH: new Fish({ id: ItemIds.RAW_ANGLERFISH, level: 82, rolls: [[3, 36]], xp: 120, caught: "a raw anglerfish", petBase: 78649 }),
-  DARK_CRAB: new Fish({ id: ItemIds.RAW_DARK_CRAB, level: 85, rolls: [[3, 40]], xp: 130, caught: "a raw dark crab", petBase: 149434 }),
+  // Wiki (Raw dark crab), Mod Ash: "The standard roll is 3-40", but with the elite Wilderness Diary "you roll 13-55",
+  // and "If that fails, you still do the standard roll" (16% to 34% at 99).
+  DARK_CRAB: Object.assign(new Fish({ id: ItemIds.RAW_DARK_CRAB, level: 85, rolls: [[3, 40]], xp: 130, caught: "a raw dark crab", petBase: 149434 }),
+    { diaryRolls: { diary: "wilderness", tier: "elite", rolls: [[13, 55], [3, 40]] } }),
   // Wiki (Raw karambwanji): floor(level / 5) + 1 a catch, 5 XP and one pet roll per catch.
   KARAMBWANJI: new Fish({
     id: ItemIds.RAW_KARAMBWANJI, level: 5, rolls: [[100, 250]], xp: 5, caught: "some Karambwanji", petBase: 443697,
@@ -316,7 +352,14 @@ const TOOLS = Object.freeze({
     id: ItemIds.HARPOON, level: 96, animation: 6703, loopAnimation: 6704, catchAnimation: 6706, fish: [FISH.SHARK_BAREHAND],
     variants: [{ ids: [], level: 96, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 76]],
     interval: NET_CAGE_HARPOON_INTERVAL_TICKS, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, barehand: true,
-    startMessage: START_HARPOON, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
+    startMessage: START_BAREHAND, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
+  }),
+  // The tuna and swordfish spots' Harpoon without a harpoon (Wiki: Barbarian Training#Barehanded fishing).
+  BAREHAND_HARPOON: new FishingTool({
+    id: ItemIds.HARPOON, level: 55, animation: 6703, loopAnimation: 6704, fish: [FISH.SWORDFISH_BAREHAND, FISH.TUNA_BAREHAND],
+    variants: [{ ids: [], level: 55, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 35]],
+    interval: NET_CAGE_HARPOON_INTERVAL_TICKS, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, barehand: true,
+    startMessage: START_BAREHAND, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch tuna with your bare hands.`,
   }),
   LOBSTER_POT: new FishingTool({
     id: ItemIds.LOBSTER_POT, level: 40, animation: ANIM.CAGE, fish: [FISH.LOBSTER], interval: NET_CAGE_HARPOON_INTERVAL_TICKS,
@@ -475,7 +518,7 @@ const SPOT_TOOLS_BY_NPC = new Map([
 // sourced base remain unsupported here; this is not a claim that they cannot yield bottles.
 const CLUE_BOTTLE_FISH = new Set([
   FISH.SHRIMP, FISH.ANCHOVY, FISH.SARDINE, FISH.HERRING, FISH.TROUT, FISH.SALMON,
-  FISH.PIKE, FISH.TUNA, FISH.LOBSTER, FISH.SWORDFISH, FISH.SHARK, FISH.SHARK_BAREHAND,
+  FISH.PIKE, FISH.TUNA, FISH.LOBSTER, FISH.SWORDFISH, FISH.SHARK, FISH.SHARK_BAREHAND, FISH.TUNA_BAREHAND, FISH.SWORDFISH_BAREHAND,
   FISH.MACKEREL, FISH.COD, FISH.BASS, FISH.MONKFISH, FISH.CAVE_EEL, FISH.INFERNAL_EEL,
   FISH.SACRED_EEL, FISH.ANGLERFISH, FISH.DARK_CRAB, FISH.KARAMBWANJI, FISH.KARAMBWAN,
   FISH.MINNOW, FISH.LEAPING_TROUT, FISH.LEAPING_SALMON, FISH.LEAPING_STURGEON,
@@ -506,6 +549,7 @@ function getSpotTool(npcId, definition, clickType, player = null) {
   const tool = option ? tools?.[option] : undefined;
   // No harpoon carried or wielded: the harpoon option falls back to Barbarian barehanding.
   if (tool === TOOLS.SHARK_HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_SHARK;
+  if (tool === TOOLS.HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_HARPOON;
   return tool;
 }
 
@@ -683,6 +727,15 @@ function rollTable(table, random = Math.random) {
   return [caught, ...table.tertiary.filter(([, chance]) => random() < chance).map(([fish]) => fish)];
 }
 
+/** A fish's charts for this player: a diary's better roll once the diary is done. */
+function rollsFor(player, fish) {
+  const better = fish.diaryRolls;
+  if (!better) return fish;
+  const request = { player, diary: better.diary, tier: better.tier, complete: false };
+  pluginApi?.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true ? { ...fish, rolls: better.rolls } : fish;
+}
+
 /** One attempt: what it lands, highest fish first. Empty on a miss. */
 function rollCatch(player, tool, random = Math.random, bonus = 100) {
   const level = catchLevel(player);
@@ -692,8 +745,9 @@ function rollCatch(player, tool, random = Math.random, bonus = 100) {
     if (getFishingLevel(player) < fish.level || !meetsLevels(player, fish.requires)) {
       continue;
     }
-    for (let roll = 0; roll < fish.rolls.length; roll++) {
-      if (random() < catchChance(level, fish, bonus, roll)) {
+    const charted = rollsFor(player, fish);
+    for (let roll = 0; roll < charted.rolls.length; roll++) {
+      if (random() < catchChance(level, charted, bonus, roll)) {
         caught.push(fish);
         if (!tool.multi) {
           return caught;
@@ -738,22 +792,26 @@ function inventoryBlocks(player, tool) {
 }
 
 /**
- * Rada's blessing: a chance to double a catch, with no experience or bait. The Wiki
- * (Rada's blessing 4) shows "Rada's blessing enabled you to catch an extra fish." for it. An
- * infernal harpoon gives the extra its own chance to be cooked (Wiki: Infernal harpoon), which
- * gives Cooking XP and uses an infernal charge. That the extra uses no crystal harpoon charge is
- * inferred, not Wiki.
- * Junk is left out: the Wiki says "fish" and doesn't settle it.
+ * Rada's blessing and spirit flakes: a chance to double a catch, with no experience or bait. They
+ * stack (Wiki: Fishing enhancers), so one roll covers both: the flakes' 50% first, then the
+ * blessing's chance on top. The Wiki (Rada's blessing 4) shows "Rada's blessing enabled you to catch
+ * an extra fish." for the blessing; the flakes have no message. An infernal harpoon gives the extra
+ * its own chance to be cooked (Wiki: Infernal harpoon), which gives Cooking XP and uses an infernal
+ * charge. That the extra uses no crystal harpoon charge is inferred, not Wiki.
+ * Wiki (Spirit flakes): non-fish catches and tertiary items are eligible for the flakes' double
+ * catch, so big net junk doubles; Rada's blessing text is silent on junk, so it stays fish-only.
  */
-function landExtra(player, variant, fish, amount) {
-  if (fish.junk || !RadasBlessing.rollExtraFish(player)) return;
+function landExtra(player, variant, fish, amount, flaked) {
+  const source = RadasBlessing.rollExtraFish(player, flaked ? SpiritFlakes.EXTRA_FISH_CHANCE : 0);
+  if (!source || (source === "blessing" && fish.junk)) return;
+  const message = source === "blessing" ? RadasBlessing.EXTRA_FISH_MESSAGE : null;
   if (variant.infernal && InfernalHarpoon.tryCookFish(player, fish.id)) {
-    spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
+    if (message) spam(player, message);
     return;
   }
   if (!hasRoom(player, fish)) return;
   giveCatch(player, fish.id, amount);
-  spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
+  if (message) spam(player, message);
 }
 
 function landCatch(player, tool, variant, caught, spotId = null) {
@@ -761,10 +819,11 @@ function landCatch(player, tool, variant, caught, spotId = null) {
   // Each fish needs a free slot, its own stack or room in an open fish barrel. Holy Lake shrimps
   // are lost to a full inventory that still takes karambwanji (Wiki: Fishing spot (karambwanji)).
   const landed = [];
-  for (const fish of caught) {
+  for (const kind of caught) {
+    const fish = bigOrFish(kind);
     if (!hasRoom(player, fish)) break;
     const amount = fish.amount(player);
-    landed.push({ fish, amount });
+    landed.push({ fish, kind, amount, flaked: tool !== TOOLS.PARK_NET && SpiritFlakes.consumeFlake(player) });
     if (!variant.infernal || !InfernalHarpoon.tryCookFish(player, fish.id)) {
       giveCatch(player, fish.id, amount, fish.experience * xpMultiplier);
       spam(player, fish.message(amount));
@@ -777,15 +836,15 @@ function landCatch(player, tool, variant, caught, spotId = null) {
       player.getSkillManager().addExperiences(skill, xp);
     }
   }
-  // Rada's blessing rolls once for each fish, after the whole catch has its slots.
-  for (const { fish, amount } of landed) {
-    landExtra(player, variant, fish, amount);
+  // Rada's blessing and the flakes roll once for each fish, after the whole catch has its slots.
+  for (const { fish, amount, flaked } of landed) {
+    landExtra(player, variant, fish, amount, flaked);
   }
   // One bottle roll set per natural catch batch; Rada's extra is not another action.
   // The tutorial pond is outside the supported scope; no retail exclusion is inferred.
   // The park uses its own base even though its successful catches are labelled junk.
   if (spotId !== NpcIds.FISHING_SPOT_43) {
-    const clueFish = landed.find(({ fish }) => CLUE_BOTTLE_FISH.has(fish))?.fish;
+    const clueFish = landed.find(({ kind }) => CLUE_BOTTLE_FISH.has(kind))?.kind;
     const clueBase = landed.length && tool === TOOLS.PARK_NET ? PARK_CLUE_BASE : clueFish?.petBase;
     if (clueBase > 0) ClueBottles.rollClueBottles(player, clueBase);
   }
@@ -941,8 +1000,9 @@ class FishingTask extends Task {
         if (session.tool.missMessage) spam(player, session.tool.missMessage);
         continue;
       }
-      if (session.tool.catchAnimationId !== null) {
-        player.performAnimation(new Animation(session.tool.catchAnimationId));
+      const catchAnimation = caught[0].catchAnimation ?? session.tool.catchAnimationId;
+      if (catchAnimation !== null) {
+        player.performAnimation(new Animation(catchAnimation));
       }
       if (session.tool.spot?.takesCatch(player, npc)) {
         continue;
@@ -983,6 +1043,7 @@ module.exports = {
     TaskManager.submit(new FishingTask(activeSessions));
     InfernalHarpoon.attach(api);
     RadasBlessing.attach(api);
+    SpiritFlakes.attach(api);
     CrystalHarpoon.attach(api);
     Guild.attach(api);
     AnglerOutfit.attach(api);

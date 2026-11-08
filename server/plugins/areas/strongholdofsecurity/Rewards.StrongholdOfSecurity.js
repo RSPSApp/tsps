@@ -93,6 +93,9 @@ function claimBoots(player, floor, itemId) {
   ));
 }
 
+/** The boots menu's verb, as recorded: script 2046 mode 23 (rsprox_transcripts/227/01723.txt, 234/03275.txt). */
+const BOOTS_MENU_MODE = 23;
+
 function searchCradle(player, floor) {
   const [fancy, fighting, fancier] = Data.DATA.boots.map((entry) => entry.item);
   Sounds.sendSound(player, CRADLE_SOUND);
@@ -106,6 +109,7 @@ function searchCradle(player, floor) {
         "Select the boots you want.",
         [fancy, fighting, fancier],
         { execute: (itemId) => claimBoots(player, floor, itemId) },
+        { mode: BOOTS_MENU_MODE },
       ));
     } }),
   ));
@@ -119,4 +123,4 @@ function open(event) {
   return floor.reward.coins === undefined ? searchCradle(event.player, floor) : openChest(event.player, floor);
 }
 
-module.exports = { open, openChest, searchCradle, claimBoots, restoreAll };
+module.exports = { open, openChest, searchCradle, claimBoots, restoreAll, BOOTS_MENU_MODE };

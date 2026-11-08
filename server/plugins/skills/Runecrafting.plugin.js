@@ -36,6 +36,8 @@ let OURANIA_ALTAR;
 let OURANIA_RUNES;
 let OURANIA_ESSENCE;
 let ABYSS_INNER_RING;
+/** Where the Mage of Zamorak lands a player: the outer ring (Wiki: Abyss; rsprox_transcripts/226/01636.txt). */
+let ABYSS_OUTER_RING_LANDING;
 
 const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
@@ -149,6 +151,7 @@ function initialize(api) {
   CRAFT_RUNES_ANIMATION = new Animation(791);
   RUNE_ESSENCE_MINE = new Location(2913, 4832, 0);
   ABYSS_INNER_RING = new Location(3040, 4839, 0);
+  ABYSS_OUTER_RING_LANDING = new Location(3063, 4824, 0);
   // rc_zmi_dungeon_cracked_center_altar.
   OURANIA_ALTAR = ObjectIdentifiers.ALTAR_31;
   OURANIA_RUNES = OURANIA_DATA.runes.map((rune) => ({ ...rune, runeId: ItemIdentifiers[rune.rune] }));
@@ -497,7 +500,14 @@ function handleCraftRunes(event) {
   }
 
   const { essence } = runeData;
-  const essenceIds = bindable(player, essence);
+  let essenceIds = bindable(player, essence);
+  // Wiki (Daeyalt essence): every altar that binds pure essence binds daeyalt essence too, for 50%
+  // more experience; with both held the daeyalt binds first and the pure essence takes a second
+  // click. Kourend's dark essence altars never take it.
+  if (essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)
+    && player.getInventory().contains(ItemIdentifiers.DAEYALT_ESSENCE)) {
+    essenceIds = [ItemIdentifiers.DAEYALT_ESSENCE];
+  }
   if (!essenceIds.some((essenceId) => player.getInventory().contains(essenceId))) {
     // The true Blood Altar's and Kourend's refusals are message boxes (rsprox captures 1636, 1673).
     if (essence.mesbox) {
@@ -541,7 +551,8 @@ function handleCraftRunes(event) {
     inventory.deleteNumber(essenceId, count);
     inventory.addItem(output);
     craftedEssence += count;
-    craftedXp += count * (runeData.essenceXp?.[essenceId] ?? runeData.xp);
+    craftedXp += count * (runeData.essenceXp?.[essenceId]
+      ?? (essenceId === ItemIdentifiers.DAEYALT_ESSENCE ? runeData.xp * DAEYALT_XP_SCALE : runeData.xp));
     craftedEssenceIds.push(essenceId);
   }
 
@@ -879,19 +890,42 @@ function afterTicks(ticks, action) {
   })());
 }
 
+/** Abyssal bracelet (5) to (1), most charges first. */
+const ABYSSAL_BRACELETS = [11095, 11097, 11099, 11101, 11103];
+
+/**
+ * Wiki (Abyssal bracelet): worn, it prevents the Abyss's skull, using 1 charge an entry, and crumbles after the last.
+ * Already skulled, it only keeps the skull's timer from resetting, and uses no charge.
+ */
+function abyssalBraceletProtects(player) {
+  const { Equipment, Item } = pluginApi.core;
+  const worn = player.getEquipment().getItems()[Equipment.HANDS_SLOT];
+  const index = ABYSSAL_BRACELETS.indexOf(worn?.getId?.());
+  if (index < 0) return false;
+  if (player.isSkulled?.()) return true;
+  const next = ABYSSAL_BRACELETS[index + 1];
+  player.getEquipment().setItem(Equipment.HANDS_SLOT, next === undefined ? new Item(-1, 0) : new Item(next, 1));
+  player.getEquipment().refreshItems?.();
+  if (next === undefined) player.sendMessage("Your abyssal bracelet crumbles to dust.");
+  return true;
+}
+
 function teleportToAbyss(player) {
   if (!hasCompletedEnterTheAbyss(player)) {
     player.sendMessage(ABYSS_LOCKED_MESSAGE);
     return;
   }
-  if (!TeleportHandler.checkReqs(player, ABYSS_INNER_RING)) {
+  if (!TeleportHandler.checkReqs(player, ABYSS_OUTER_RING_LANDING)) {
     return;
   }
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
-  // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
-  pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
+  // The Mage of Zamorak skulls the player for 10 minutes (Wiki), unless a worn abyssal bracelet prevents it.
+  if (!abyssalBraceletProtects(player)) {
+    pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
+  }
   // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
-  requestTeleport(player, ABYSS_INNER_RING, () => {
+  // The outer ring: its obstacles (the inner ring's way in) and its monsters come first.
+  requestTeleport(player, ABYSS_OUTER_RING_LANDING.clone(), () => {
     pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
   });
 }

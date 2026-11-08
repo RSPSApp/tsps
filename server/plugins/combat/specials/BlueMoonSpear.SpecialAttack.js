@@ -1,4 +1,6 @@
-// TODO: ported from xrsps-typescript; untested.
+// Break Shackles (https://oldschool.runescape.wiki/w/Blue_moon_spear): 50% special energy, full Blue Moon
+// armour. The swing removes every binding effect on the target (the Wiki does not tie it to the hit). Each tick of binding it
+// removes adds 1.5% accuracy and 1.5% damage; the damage bonus stops at 112.5%, the accuracy bonus has no cap.
 module.exports = function registerBlueMoonSpearSpecialAttack(api) {
   const { Animation, CombatSpecial, Equipment, Graphic, ItemIdentifiers, MeleeCombatMethod, TimerKey } = api.core;
 
@@ -6,6 +8,10 @@ module.exports = function registerBlueMoonSpearSpecialAttack(api) {
   const SPECIAL_ANIMATION = new Animation(11055);
   const SPECIAL_VFX = new Graphic(2791);
   const CRUSH_BONUS_INDEX = 2;
+  const BONUS_PER_TICK = 0.015;
+  const MAX_DAMAGE_BONUS = 1.125;
+  /** Ticks of binding each wielder's current swing removed: the freeze is already gone when the hit rolls. */
+  const removed = new WeakMap();
 
   const BLUE_MOON_HELM_IDS = [
     ItemIdentifiers.BLUE_MOON_HELM,
@@ -33,12 +39,26 @@ module.exports = function registerBlueMoonSpearSpecialAttack(api) {
       && BLUE_MOON_LEGS_IDS.includes(items[Equipment.LEG_SLOT].getId());
   }
 
+  function traitsFor(player) {
+    const ticks = removed.get(player) ?? 0;
+    return {
+      hitCount: 1,
+      meleeAttackBonusIndex: CRUSH_BONUS_INDEX,
+      accuracyMultiplier: 1 + ticks * BONUS_PER_TICK,
+      damageMultiplier: 1 + Math.min(ticks * BONUS_PER_TICK, MAX_DAMAGE_BONUS),
+    };
+  }
+
   class BlueMoonSpearCombatMethod extends MeleeCombatMethod {
     canAttack(character, target) {
       return character.isPlayer() && hasFullBlueMoonArmour(character.getAsPlayer());
     }
 
     start(character, target) {
+      // Only a binding the target really has counts; the swing clears it, hit or miss.
+      const timers = target.getTimers();
+      removed.set(character, timers.left(TimerKey.FREEZE));
+      timers.cancel(TimerKey.FREEZE);
       CombatSpecial.drain(character, DRAIN);
       super.start(character, target);
       character.performAnimation(SPECIAL_ANIMATION);
@@ -46,13 +66,7 @@ module.exports = function registerBlueMoonSpearSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
-      if (!hit.isAccurate() || Math.floor(hit.getTotalDamage()) <= 0) {
-        return;
-      }
-      // TODO: upstream scales accuracy/damage by the target's remaining bind
-      // ticks and only consumes a legitimate active freeze; our freeze clock is
-      // not exposed to plugins, so only the freeze clear and base crush roll are ported.
-      hit.getTarget().getTimers().cancel(TimerKey.FREEZE);
+      removed.delete(hit.getAttacker());
     }
   }
 
@@ -62,9 +76,7 @@ module.exports = function registerBlueMoonSpearSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
-    // TODO: upstream computes accuracyMultiplier/damageMultiplier from the
-    // target's remaining bind ticks; those cannot be expressed as static traits.
-    traits: { hitCount: 1, meleeAttackBonusIndex: CRUSH_BONUS_INDEX },
+    traitsFor,
     combatMethod: new BlueMoonSpearCombatMethod(),
   });
 };

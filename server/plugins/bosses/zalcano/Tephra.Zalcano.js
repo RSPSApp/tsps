@@ -164,6 +164,19 @@ function tickRock(prison, player, action, random) {
     inventory.adds(Common.ids.items.tephra, 1);
     addXp(player, "MINING", tephra.miningXp);
   }
+  // Tephra is level 1 in the Wiki's Mining enhancers table. Ask once per
+  // successful action: charged celestial jewellery spends a charge even if its
+  // bonus fails or the base yield filled the last slot.
+  const extra = { player, oreId: Common.ids.items.tephra, rockLevel: 1, bonuses: [] };
+  Common.api.emitCustomEvent("mining:extra-ore", extra);
+  for (const bonus of extra.bonuses) {
+    if (inventory.getFreeSlots() <= 0) break;
+    const before = inventory.getAmount(Common.ids.items.tephra);
+    inventory.adds(Common.ids.items.tephra, 1);
+    if (inventory.getAmount(Common.ids.items.tephra) <= before) break;
+    addXp(player, "MINING", tephra.miningXp);
+    if (bonus.message) Common.spam(player, bonus.message);
+  }
   Common.spam(player, Common.message("mined"));
   // Recorded: the full-pack box comes the tick after the ore that filled it.
   if (inventory.getFreeSlots() <= 0) action.next = prison.tickCount + 1;

@@ -128,6 +128,12 @@ function fragments() {
 function hasFragment(player) {
   return fragments().some(id => player.getInventory().contains(id));
 }
+/** Held, or in any bank tab but the search tab: a banked fragment is owned, so Ketla doesn't give another. */
+function ownsFragment(player) {
+  const searchTab = Common.core.Bank.BANK_SEARCH_TAB_INDEX;
+  return hasFragment(player) || (player.getBanks?.() ?? [])
+    .some((bank, tab) => tab !== searchTab && fragments().some(id => bank?.contains?.(id)));
+}
 function disturb({ player, npc }) {
   if (npc?.getId() !== Common.data.npcs.figure && npc?.getContentId?.(player) !== Common.data.npcs.figure)
     return false;
@@ -183,7 +189,7 @@ function fragmentAction(event) {
 }
 function ketlaVariant({ player, npcId }) {
   const { NpcIdentifiers } = Common.core;
-  if (![NpcIdentifiers.KETLA, NpcIdentifiers.KETLA_2].includes(npcId) || !complete(player) || hasFragment(player))
+  if (![NpcIdentifiers.KETLA, NpcIdentifiers.KETLA_2].includes(npcId) || !complete(player) || ownsFragment(player))
     return null;
   return { page: 'Transcript:Desert Treasure II - The Fallen Empire', variant: RECLAIM_VARIANT };
 }
@@ -191,7 +197,7 @@ function reclaim(event) {
   const { player, npcId, stepId } = event, { NpcIdentifiers } = Common.core;
   if (stepId !== RECLAIM_STEP || ![NpcIdentifiers.KETLA, NpcIdentifiers.KETLA_2].includes(npcId) || !complete(player))
     return;
-  if (hasFragment(player)) {
+  if (ownsFragment(player)) {
     event.handled = true;
     return;
   }
@@ -270,4 +276,4 @@ function attach(api) {
   api.onCustomEvent('combat-achievements:kill-count', counts);
   api.onCustomEvent('combat-achievements:personal-best', best);
 }
-module.exports = { attach, Session, sessionOf, disturb, leave, fragmentAction, fragments, respawn, grave, suppressSpawn, travel: Travel.travel };
+module.exports = { attach, Session, sessionOf, disturb, leave, fragmentAction, fragments, respawn, grave, suppressSpawn, reclaim, travel: Travel.travel };

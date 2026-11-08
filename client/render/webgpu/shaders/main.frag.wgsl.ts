@@ -291,14 +291,10 @@ fn shadeWater(
         : "clamp(baseColor, vec3<f32>(0.0), vec3<f32>(1.0))"};
 }
 
-// brightness.glsl: the Settings "Screen brightness" on a lit surface (texel x vertex colour).
-// u_brightness is OSRS's gamma exponent (lower is brighter); flat colours already carry it
-// (hslToRgb), textures get the same change relative to the gamma the scene was tuned at.
-const TUNED_BRIGHTNESS: f32 = 0.8;
-
+// brightness.glsl: textures are uploaded at gamma 1.0; apply native gamma once,
+// then ordinary vertex lighting. White untextured samples preserve the HSL palette.
 fn applyBrightness(texel: vec3<f32>, lit: vec3<f32>) -> vec3<f32> {
-    let regamma = pow(max(texel, vec3<f32>(1.0 / 255.0)), vec3<f32>(scene.u_brightness - TUNED_BRIGHTNESS));
-    return texel * regamma * lit * TUNED_BRIGHTNESS;
+    return pow(max(texel, vec3<f32>(0.0)), vec3<f32>(scene.u_brightness)) * lit;
 }
 
 fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {

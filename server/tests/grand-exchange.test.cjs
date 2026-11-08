@@ -482,6 +482,42 @@ test('buying enforces and consumes the remaining four-hour allowance', t => {
   assert.equal(remainingLimit(p, LIMITED), 0);
 });
 
+test('aborting a buy that bought nothing gives its quantity back to the buy limit (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.99);
+  const { p, inventory, place, click } = exchange(t);
+  recordLimit(p, LIMITED, 100);
+  inventory.add(new Item(995, 1_000), false);
+  assert.equal(place(false, LIMITED, 50, 1).finished, false, 'the bid has not filled yet');
+  assert.equal(remainingLimit(p, LIMITED), 0);
+  click(23);
+  click(24);
+  assert.equal(inventory.getAmount(995), 1_000, 'every coin back');
+  assert.equal(remainingLimit(p, LIMITED), 50, 'the earlier 100 still count, the aborted 50 do not');
+  assert.equal(place(false, LIMITED, 50, 1).quantity, 50, 'the item can be bid on again');
+});
+
+test('aborting the first buy of a window gives back the full limit even when the clock ticks between reads', t => {
+  t.mock.method(Math, 'random', () => 0.99);
+  let clock = Date.now();
+  t.mock.method(Date, 'now', () => clock++);
+  const { p, inventory, place, click } = exchange(t);
+  inventory.add(new Item(995, 1_000), false);
+  assert.equal(place(false, LIMITED, 150, 1).finished, false, 'the bid has not filled yet');
+  assert.equal(remainingLimit(p, LIMITED), 0);
+  click(23);
+  click(24);
+  assert.equal(remainingLimit(p, LIMITED), 150, 'the offer was counted in the window it opened');
+});
+
+test('an abort never frees a later buy-limit window that did not count the offer', t => {
+  const { p } = exchange(t);
+  const start = Date.now();
+  recordLimit(p, LIMITED, 30, start);
+  const old = { itemId: LIMITED, quantity: 50, placedAt: start - 1 };
+  plugin._test.releaseLimit(p, old, start);
+  assert.equal(remainingLimit(p, LIMITED, start), 120);
+});
+
 test('unfillable offers survive saving and relogging, and abort refunds their input', t => {
   t.mock.method(Math, 'random', () => 0.99);
   for (const sell of [false, true]) {
@@ -676,6 +712,41 @@ test('a completed sale collects its total less the tax', t => {
   timers[0].callback();
   click(24);
   assert.equal(inventory.getAmount(995), 9_800);
+});
+
+test('a buy bid over the market trades at the market price and refunds the difference (Wiki, capture)', t => {
+  // rsprox_transcripts/236/03950.txt: a 65,000,000 bid completes for 61,947,693 with 3,052,307 coins to collect.
+  t.mock.method(Math, 'random', () => 0.01);
+  const { p, inventory, place, click, timers } = exchange(t);
+  inventory.add(new Item(995, 1_500), false);
+  const offer = place(false, PRICED, 10, 150);
+  assert.equal(offer.total, 1_500);
+  assert.equal(inventory.getAmount(995), 0);
+  timers[0].callback();
+  assert.equal(offer.traded, 1_000, 'ten at the 100 guide');
+  assert.deepEqual(payout(offer), [{ itemId: PRICED, amount: 10 }, { itemId: 995, amount: 500 }]);
+  assert.equal(tradeHistory(p)[0].total, 1_000);
+  click(24);
+  assert.equal(inventory.getAmount(995), 500);
+});
+
+test('a sell asking under the market receives the market price, taxed on it (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.01);
+  const { p, inventory, place, click, timers } = exchange(t);
+  inventory.add(new Item(PRICED, 10), false);
+  const offer = place(true, PRICED, 10, 50);
+  timers[0].callback();
+  assert.equal(offer.traded, 900, 'ten at the 90 sell guide');
+  assert.equal(tax(offer), 10, '2% of 90, rounded down, per item');
+  assert.equal(tradeHistory(p)[0].total, 900);
+  click(24);
+  assert.equal(inventory.getAmount(995), 890);
+});
+
+test('a bid under the market or an ask over it still trades at its own price', () => {
+  const { fillUnitPrice } = plugin._test;
+  assert.equal(fillUnitPrice({ itemId: PRICED, sell: false, price: 80 }), 80);
+  assert.equal(fillUnitPrice({ itemId: PRICED, sell: true, price: 120 }), 120);
 });
 
 test('a saved sale without a price is taxed at its historical unit price', t => {

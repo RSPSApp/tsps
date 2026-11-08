@@ -206,6 +206,26 @@ test("a Sanfew dose restores 4 + 30% (prayer 32% with the bonus)", () => {
   assert.equal(player.levels.get(Skill.PRAYER), 1 + 4 + 31);
 });
 
+test("two divine potions keep their own five minutes: the second doesn't drop the first's boost (Wiki)", (t) => {
+  const player = createPlayer({ current: 99 });
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  applyDivine(player, (p) => p.levels.set(Skill.ATTACK, 118), [Skill.ATTACK], { damage: 0 });
+  now += 60_000;
+  applyDivine(player, (p) => p.levels.set(Skill.RANGED, 112), [Skill.RANGED], { damage: 0 });
+  const skills = () => (player.getAttribute("potions:divine:state")?.targets ?? []).map((entry) => entry.skillIndex).sort();
+  assert.deepEqual(skills(), [Skill.ATTACK.getIndex(), Skill.RANGED.getIndex()].sort(), "both stay pinned");
+  now += 4 * 60_000 + 1; // the first potion's five minutes are over, the second has a minute left
+  processDivine(player);
+  assert.equal(player.levels.get(Skill.ATTACK), 99, "the first potion's boost ends on its own time");
+  assert.equal(player.levels.get(Skill.RANGED), 112, "the second's is still held");
+  assert.deepEqual(skills(), [Skill.RANGED.getIndex()]);
+  now += 60_000;
+  processDivine(player);
+  assert.equal(player.levels.get(Skill.RANGED), 99);
+  assert.equal(player.getAttribute("potions:divine:state"), null);
+});
+
 test("a divine potion's timer pauses while logged out and the state survives a save", () => {
   const player = createPlayer({ current: 99 });
   applyDivine(player, (p) => p.levels.set(Skill.ATTACK, 118), [Skill.ATTACK]);

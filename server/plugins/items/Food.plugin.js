@@ -202,7 +202,11 @@ function applyStats(player, effect) {
     restoreSkillToBaseWithFormula(player, skill(name), typeof amount === "number" ? amount : amount.flat ?? 0,
       typeof amount === "number" ? 0 : amount.percent ?? 0);
   }
-  if (effect.runEnergy) restoreRunEnergy(player, effect.runEnergy);
+  // A number, or { min, max } percent rolled per bite (White tree fruit: 5-10%).
+  const energy = effect.runEnergy?.min !== undefined
+    ? effect.runEnergy.min + Math.floor(Math.random() * (effect.runEnergy.max - effect.runEnergy.min + 1))
+    : effect.runEnergy;
+  if (energy) restoreRunEnergy(player, energy);
   if (effect.stamina) pluginApi.emitCustomEvent("potions:apply-stamina", { player, energy: 20 });
   if (effect.cureVenom) curePoisonAndVenom(player);
   else if (effect.curePoison) curePoison(player);
@@ -248,14 +252,17 @@ function rollOutcome(outcomes, random) {
 }
 
 /** The second heal of a hunter meat, 7 ticks on; eating another one first replaces it. */
-function scheduleSecondHeal(player, then) {
+function scheduleSecondHeal(player, then, itemId) {
   const token = {};
   pendingSecondHeals.set(player, token);
   core.TaskManager.submit(new core.CountdownTask(player, then.ticks, () => {
     if (pendingSecondHeals.get(player) !== token || player.getHitpoints() <= 0) return;
     pendingSecondHeals.delete(player);
-    healBy(player, then.heal);
+    const hitpointsBefore = player.getHitpoints();
+    const heal = healBy(player, then.heal);
     applyStats(player, then);
+    // This is a completed delayed effect, not another bite (diaries/counters count food:eaten).
+    pluginApi.emitCustomEvent("food:delayed-heal", { player, itemId, hitpointsBefore, heal, restores: then.heal });
   }));
 }
 
@@ -312,13 +319,14 @@ function startTimers(player, food, bite) {
 }
 
 /** Heals and applies the food's effects; returns the messages to show after the eat message. */
-function applyFood(player, food, random = Math.random) {
+function applyFood(player, food, random = Math.random, foodEvent = {}) {
   const skills = player.getSkillManager();
   const maxHp = skills.getMaxLevel(core.Skill.HITPOINTS);
   const after = [];
   if (food.outcomes) {
     const outcome = rollOutcome(food.outcomes, random);
-    healBy(player, healAmount(outcome.heal, maxHp, random, baseLevels(player)));
+    foodEvent.restores = healAmount(outcome.heal, maxHp, random, baseLevels(player));
+    healBy(player, foodEvent.restores);
     applyStats(player, outcome);
     const drained = outcome.drainRandom ? drainRandomSkill(player, outcome.drainRandom, random) : undefined;
     if (outcome.message) after.push(outcome.message);
@@ -330,6 +338,7 @@ function applyFood(player, food, random = Math.random) {
   let healed;
   if (food.special === "anglerfish") {
     const amount = getAnglerfishHeal(maxHp);
+    foodEvent.restores = amount;
     healed = healBy(player, amount, canOverheal(player) ? amount : 0);
   } else {
     const allowance = canOverheal(player) ? overhealAllowance(food.overheal, maxHp) : 0;
@@ -342,7 +351,7 @@ function applyFood(player, food, random = Math.random) {
   }
   if (food.poisonDose) startPoisonDose(player, food.poisonDose);
   if (food.venomDamage) player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(food.venomDamage, core.HitMask.GREEN)]);
-  if (food.then) scheduleSecondHeal(player, food.then);
+  if (food.then) scheduleSecondHeal(player, food.then, foodEvent.itemId);
   const healMessage = food.healMessage === undefined ? HEAL_MESSAGE : food.healMessage;
   if (healed > 0 && healMessage) after.push(healMessage);
   if (food.afterMessage) after.push(food.afterMessage);
@@ -383,15 +392,17 @@ function eat(event) {
   inventory.refreshItems();
 
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
-  const after = applyFood(player, food);
+  const foodEvent = { player, itemId, hitpointsBefore, meta };
+  const after = applyFood(player, food, Math.random, foodEvent);
   player.sendMessage(message);
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;
   // `heal` is what it healed (nothing at full health); `restores` what the food restores.
   const maxHp = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
-  const restores = food.outcomes ? heal : healAmount(food.heal?.max ?? food.heal, maxHp, () => 0, baseLevels(player));
-  pluginApi.emitCustomEvent("food:eaten", { player, itemId, hitpointsBefore, heal, restores, meta });
+  foodEvent.heal = heal;
+  foodEvent.restores ??= healAmount(food.heal?.max ?? food.heal, maxHp, () => 0, baseLevels(player));
+  pluginApi.emitCustomEvent("food:eaten", foodEvent);
 }
 
 module.exports = {

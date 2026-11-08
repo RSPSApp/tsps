@@ -221,6 +221,24 @@ test("nobody takes another account's login name, display name or held name, onli
   assert.equal(DisplayNames.refusal('Alice', 'Free Name', now), null);
 });
 
+test("a name a live bot shows can't be taken by ::displayname or a new account, though it is never saved", (t) => {
+  const now = Date.now();
+  // A bot online, and one still in the add queue, each showing a generated name for its own login name.
+  const bot = player('PvpBot1'); bot.displayName = 'Gilded Owl';
+  const queued = player('PvpBot2'); queued.displayName = 'Quiet Fern';
+  t.mock.method(World, 'getPlayers', () => [bot]);
+  t.mock.method(World, 'getAddPlayerQueue', () => [queued]);
+  const taken = 'That name is not available.';
+  assert.equal(DisplayNames.refusal('Alice', 'Gilded Owl', now), taken, 'the online bot shows it');
+  assert.equal(DisplayNames.refusal('Alice', 'quiet_fern', now), taken, 'the queued bot shows it');
+  assert.equal(DisplayNames.refusal('PvpBot1', 'Gilded Owl', now), null, 'the bot itself keeps it');
+  assert.equal(DisplayNames.shownByAnother('Gilded Owl', 'NewAccount'), true, 'a new account is refused the same way');
+  const alice = player('Alice');
+  run(alice, 'displayname Gilded Owl');
+  assert.equal(alice.last(), taken, '::displayname refuses it');
+  assert.equal(prompts.length, 0, 'no confirmation is offered');
+});
+
 test('an account may go back to its login name or take back a held name', () => {
   const now = Date.now();
   DisplayNames.set('Bob', 'Zed', now, HOLD);

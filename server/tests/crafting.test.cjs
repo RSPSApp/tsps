@@ -70,6 +70,8 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     deleteAtSlot: (slot, amount) => { const item = inventory.getItems()[slot]; if (item) inventory.deleteNumber(item.getId(), amount); },
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
+    // A slot per unit, as these pottery items are unstackable.
+    getFreeSlots: () => Math.max(0, 28 - [...amounts.values()].reduce((n, amount) => n + amount, 0)),
     getItems: () => {
       const { Item, ItemDefinition } = PluginManager.getCoreApi();
       return [...amounts].filter(([, amount]) => amount > 0).flatMap(([id, amount]) =>
@@ -691,6 +693,15 @@ test('cups produce four for one clay for the shaping XP of one action', t => {
   assert.deepEqual(madeOn(fired, 'You remove the item from the oven.'), [6, 13]);
   assert.deepEqual(xpOn(fired, 6), [8.5]);
   assert.equal(player.amounts.get(ItemIds.EMPTY_CUP), 2);
+});
+
+test('a set of cups needs room for all four: a full inventory keeps its clay', t => {
+  membersWorld(t, true);
+  const { player, getMenu } = playerWith([[ItemIds.SOFT_CLAY, 2], [ItemIds.BRONZE_BAR, 26]]);
+  openPottery(player);
+  craft(player, getMenu(), ItemIds.UNFIRED_CUP, 1, 3);
+  assert.equal(player.amounts.get(ItemIds.UNFIRED_CUP) ?? 0, 0, "no cups to drop");
+  assert.equal(player.amounts.get(ItemIds.SOFT_CLAY), 2, "the clay is kept");
 });
 
 test('pottery shaping enforces levels and the quest pot-lid unlock; firing needs neither', t => {

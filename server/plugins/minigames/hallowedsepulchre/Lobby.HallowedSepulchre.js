@@ -144,6 +144,8 @@ function activateObelisk({ player }) {
     Common.graphic(player, "obelisk", 92);
     player.getPacketSender().sendSound(Common.data.sounds.obelisk, 1, 0);
     player.setRunEnergy?.(100);
+    // The tick only sends energy while it is below full, so the full orb is sent here.
+    player.getPacketSender().sendRunEnergy?.();
     player.sendMessage(Common.message("obeliskLoyal"));
   });
   return true;

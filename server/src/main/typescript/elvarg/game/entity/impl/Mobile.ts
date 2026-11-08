@@ -771,6 +771,9 @@ export abstract class Mobile extends Entity {
             if (this.isPlayer() && source.isPlayer()) this.getCombat().addDamage(source, hit.getHealthLost());
         }
         this.setHitpoints(outcome);
+        if (hit.getHealthLost() > 0) {
+            getPluginManager().emitCustomEvent("combat:damage-applied", { target: this, hit });
+        }
         return hit;
     }
     /**
@@ -984,7 +987,8 @@ export abstract class Mobile extends Entity {
     }
 
     sendMessage(message: string): void {
-        if (!this.isPlayer() || this.isPlayerBot()) {
+        // A bot an administrator drives (::botcontrol) has their client, so it is told what a player is told.
+        if (!this.isPlayer() || (this.getAsPlayer()?.isUnwatchedBot?.() ?? this.isPlayerBot())) {
             return;
         }
 

@@ -5,6 +5,7 @@ const State = require("../plugins/bosses/mimic/State.Mimic");
 const Lair = require("../plugins/bosses/mimic/Lair.Mimic");
 const Challenge = require("../plugins/bosses/mimic/Challenge.Mimic");
 const Reward = require("../plugins/bosses/mimic/Reward.Mimic");
+const Screen = require("../plugins/treasuretrails/CasketRewardScreen.plugin");
 const { Item } = require("../dist/game/model/Item");
 const { Location } = require("../dist/game/model/Location");
 
@@ -34,7 +35,7 @@ function fixture() {
     emitCustomEvent(name, event) { for (const handler of events.get(name) ?? []) handler(event); },
     spawnNpc: definition => ({ hp: 100, getId: () => definition.id, isRegistered: () => true, getHitpoints() { return this.hp; },
       getPrivateArea() { return this.area; }, getArea() { return this.area; }, setNpcTransformationId() {}, setFlag() {}, getCombat: () => ({attack() {}}) }) };
-  Shared.bind(api); Lair.attach(api); Reward.attach(api);
+  Shared.bind(api); Lair.attach(api); Reward.attach(api); Screen.initialize(core);
   require("../plugins/treasuretrails/RewardCaskets.plugin").register(api);
   State.initialize(items[0], "master", 7);
   State.initialize(items[1], "elite", 6);
@@ -103,6 +104,8 @@ test("opening a victorious second Mimic consumes its slot and leaves the first c
   try { Math.random = () => 0.1; Reward.openMimic({player: f.player, slot: 1, item: f.second}); }
   finally { Math.random = original; }
   assert.equal(f.items[0], f.first);
+  assert.equal(f.items[1], null, "consumed, with rewards still on the screen");
+  Screen.closed({player:f.player,interfaceId:73});
   assert.equal(f.items[1].getId(), 1079);
   assert.equal(f.items[1].getAmount(), 1);
   assert.equal(State.forOpen(f.player, f.first).defeated, false);

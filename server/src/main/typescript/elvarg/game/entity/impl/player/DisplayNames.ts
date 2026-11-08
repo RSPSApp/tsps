@@ -132,7 +132,24 @@ export class DisplayNames {
         if (owner && owner !== account) return "That name is not available.";
         if (owner === account) return null;
         if (this.loginNameInUse(key)) return "That name is not available.";
+        if (this.shownByAnother(key, account)) return "That name is not available.";
         return null;
+    }
+
+    /**
+     * Whether a player online or logging in now shows this name for another account. Bots show generated names that are
+     * never saved here, so without this a player could take a live bot's name and two would show the same one.
+     */
+    public static shownByAnother(name: string, account: string): boolean {
+        const { World } = require("../../../World") as typeof import("../../../World");
+        const key = this.key(name);
+        const self = this.key(account);
+        for (const player of [...World.getPlayers(), ...World.getAddPlayerQueue()]) {
+            if (!player) continue;
+            const shown = player.getDisplayName?.();
+            if (shown && this.key(shown) === key && this.key(player.getUsername()) !== self) return true;
+        }
+        return false;
     }
 
     /**

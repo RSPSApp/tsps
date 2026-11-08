@@ -81,12 +81,14 @@ module.exports = function attachCapacity(pluginApi) {
   api.persistAttribute(MAJOR_ATTRIBUTE, false);
   api.onCustomEvent("treasure-trails:can-receive", canReceive);
   api.onCustomEvent("treasure-trails:milestone-rewards", request => {
-    if (request.handled || !request.player || !Array.isArray(request.milestones) || !Array.isArray(request.drops)) return;
+    // Only the beginner casket's request: other tiers' rows belong to ClueCapacity, which knows each tier's case.
+    if (request.handled || request.tier !== "beginner" || !request.player || !Array.isArray(request.milestones) || !Array.isArray(request.drops)) return;
     request.drops.push(...milestoneRewards(request.player, request.completed, request.milestones));
     request.handled = true;
   });
   api.onCustomEvent("npc-drops:roll", filterDrops);
-  api.onItemAction("Scroll box (beginner)", { Open: openBox });
+  // "Scroll box (beginner)" Open belongs to ClueCapacity alone: it registers after this plugin, and a handler here
+  // took the click first and skipped its refusal while a beginner clue is held (bank, grave or retrieval included).
   api.onItemAction("Minor beginner scroll case", { Open: openCase });
   api.onItemAction("Major beginner scroll case", { Open: openCase });
   api.onPlayerLogin(sync);

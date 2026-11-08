@@ -3676,11 +3676,15 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       title: "Choose the stat you wish to be advanced!",
       onConfirm: (skill, name) => {
         if (player.getInventory().get(slot) !== item) return null;
+        // A chapter is only spent when its XP lands (an XP lock or an area's gate keeps the tome as it was).
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, 15000, false);
+        if (skills.getExperience(skill) === before) return null;
         const used = (Number(player.getAttribute(TOME_USES_ATTRIBUTE)) || 0) + 1;
         player.setAttribute(TOME_USES_ATTRIBUTE, used);
         if (used >= TOME_MAX_CHAPTERS) player.getInventory().deleteAtSlot(slot, 1);
         sendTomeVarbits(player);
-        player.getSkillManager().addExperience(skill, 15000, false);
         return `You have been awarded 15,000 ${name} XP!`;
       },
     });

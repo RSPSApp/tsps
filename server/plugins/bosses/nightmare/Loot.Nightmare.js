@@ -33,6 +33,18 @@ function credit(fight, player, kind, amount) {
   fight.contribution.set(player, entry);
 }
 
+/** The boss whose loot is being placed, and who is owed it, while reward() emits each roll. */
+const rewarding = new WeakMap();
+
+/**
+ * Wiki (Ironman Mode): "Iron accounts receive group-boss rewards when fighting with others", The Nightmare among them,
+ * so an Ironman's own roll of a team kill is kept, not wiped as a shared kill.
+ */
+function ironmanKeeps(request) {
+  if (!rewarding.get(request?.npc)?.has(request.player)) return;
+  request.keep.push(...request.drops.map((drop) => drop.itemId));
+}
+
 function reward(fight, players) {
   const contribution = fight.contribution ?? new Map();
   const eligible = players.filter((player) => {
@@ -78,7 +90,12 @@ function reward(fight, players) {
       });
     }
     // The kill is counted by the fight's own count(); this roll only logs the loot.
-    Common.api.emitCustomEvent("npc-drops:roll", { player, npc: fight.boss, npcId, drops, damagers: eligible, countKill: false });
+    if (fight.boss) rewarding.set(fight.boss, new Set(eligible));
+    try {
+      Common.api.emitCustomEvent("npc-drops:roll", { player, npc: fight.boss, npcId, drops, damagers: eligible, countKill: false });
+    } finally {
+      if (fight.boss) rewarding.delete(fight.boss);
+    }
     for (const drop of drops) {
       if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
@@ -93,4 +110,4 @@ function reward(fight, players) {
   fight.contribution = new Map();
 }
 
-module.exports = { reward, credit };
+module.exports = { reward, credit, ironmanKeeps };

@@ -147,7 +147,7 @@ function damagePlayerBoat(player, damage, { ship, target, creature } = {}) {
     player, ship, creature, target: target ?? coreApi().Sailing.instanceAboard(player), damage, hitpoints,
   });
   if (hitpoints <= 0 && coreApi().Sailing.instanceAboard(player)) {
-    // Sunk in a fight, the hold goes with it (Wiki: Boat combat); a trial's hazards only send the
+    // Combat capsize applies the cargo-loss policy (Wiki: Boat); a trial's hazards only send the
     // player back, as before.
     if (ship || creature) BoatHp.loseCargo(owned);
     coreApi().Sailing.escape(player);

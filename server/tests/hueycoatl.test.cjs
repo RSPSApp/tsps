@@ -429,3 +429,104 @@ test("private Hueycoatl fees follow the current Hard Combat Achievement threshol
   } finally { hard.threshold = oldThreshold; oldThreshold = null; }
   assert.deepEqual(errors, [], "native plugin, task and World paths report no errors");
 });
+
+test("the registered chain Peek sends Wiki phase text and distinguishes an unstarted body set", t => {
+  let peek;
+  const api = new Proxy({ core, onObjectInteraction: (name, handlers) => { if (name === "Chain") peek = handlers.Peek; } },
+    { get: (target, key) => target[key] ?? (() => {}) });
+  Area.attach(api);
+  assert.equal(typeof peek, "function");
+  const player = new (require("../dist/game/entity/impl/player/Player").Player)(null);
+  player.setUsername("hueypeek3558");
+  const session = { fight: null, arenaPlayers: () => [] };
+  const space = Object.create(Area._test.InstanceArea.prototype);
+  space.session = session;
+  t.mock.method(player, "getPrivateArea", () => space);
+  const sent = [];
+  const sender = new Proxy({}, { get: (_, key) => (...args) => { if (key === "sendString") sent.push(args); return sender; } });
+  t.mock.method(player, "getPacketSender", () => sender);
+  const cases = [
+    [null, 0, "The Hueycoatl is preparing itself."],
+    [{ phase: "body", started: false }, 0, "The Hueycoatl is preparing itself."],
+    [{ phase: "body", started: true }, 2, "The Hueycoatl's body can be seen on the mountainside."],
+    [{ phase: "head", started: true }, 2, "They have reached the summit."],
+    [{ phase: "tail", started: true }, 2, "The Hueycoatl is defending itself with its tail."],
+    [{ phase: "final-pending", started: true }, 2, "The Hueycoatl is defending itself with its tail."],
+    [{ phase: "final", started: true }, 2, "The Hueycoatl is making its final stand."],
+    [{ phase: "defeated", started: true }, 2, "The Hueycoatl has been subdued!"],
+  ];
+  for (const [fight, count, words] of cases) {
+    session.fight = fight;
+    session.arenaPlayers = () => Array(count).fill(player);
+    const before = fight && { ...fight };
+    assert.equal(peek({ player, objectId: Shared.LOC.CHAIN }), true);
+    const text = sent.filter(([, uid]) => uid === ((229 << 16) | 3)).at(-1)?.[0];
+    assert.equal(text, "There are " + count + " adventurers ascending the mountain.<br>" + words);
+    assert.deepEqual(session.fight, before, "Peek never mutates encounter progression");
+    player.getDialogueManager().reset();
+  }
+  const calls = sent.length;
+  assert.equal(peek({ player, objectId: Shared.LOC.CHAIN + 1 }), false);
+  assert.equal(sent.length, calls);
+});
+
+test("under-25 body damage reduces only the pet contribution chance by 95 percent, with an exact 25 boundary", t => {
+  const PET = 30152, unique = { itemId: 30085, amount: 1 }, main = { itemId: 557, amount: 2000 }, other = { itemId: 12073, amount: 1 };
+  const api = new Proxy({ core, emitCustomEvent: (name, request) => {
+    assert.equal(name, "npc-drops:roll-table");
+    if (request.entryFilter({ section: "Unique" })) request.drops.push({ ...unique });
+    else if (request.entryFilter({ section: "Tertiary" })) request.drops.push({ itemId: PET, amount: 1 }, { ...other });
+    else request.drops.push({ ...main });
+  } }, { get: (target, key) => target[key] ?? (() => {}) });
+  Kills.attach(api);
+  let random = 0.1;
+  t.mock.method(Math, "random", () => random);
+  const low = { body: 24, head: 2001, tail: 0 }, full = { body: 25, head: 2000, tail: 0 };
+  assert.equal(Kills._test.qualifies(low, 6), true);
+  const under = Kills._test.lootFor({}, {}, low, 6, false);
+  assert.equal(under.drops.some(drop => drop.itemId === PET), false);
+  assert.deepEqual(under.main, [{ itemId: 557, amount: 50 }]);
+  assert.deepEqual(under.uniques, [unique], "ordinary unique share is unchanged");
+  assert.ok(under.drops.some(drop => drop.itemId === other.itemId), "nonpet tertiary is unchanged");
+  const normal = Kills._test.lootFor({}, {}, full, 6, false);
+  assert.ok(normal.drops.some(drop => drop.itemId === PET));
+  assert.deepEqual(normal.main, [{ itemId: 557, amount: 1000 }]);
+  random = 0.024;
+  assert.ok(Kills._test.lootFor({}, {}, low, 6, false).drops.some(drop => drop.itemId === PET));
+  random = 0.025;
+  assert.equal(Kills._test.lootFor({}, {}, low, 6, false).drops.some(drop => drop.itemId === PET), false,
+    "half contribution times 0.05 is exactly 0.025, with the existing exclusive roll boundary");
+});
+
+test("an Ironman in a team keeps their own Hueycoatl share (Wiki: group-boss rewards), the real Ironman rule applied", t => {
+  const IronCommon = require("../plugins/modes/ironman/Common.Ironman");
+  const events = new Map();
+  const placed = [];
+  const api = new Proxy({ core,
+    getItemOnGroundManager: () => ({ registerLocation(player, item) { placed.push([player, item.getId()]); } }),
+    onCustomEvent(name, fn) { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
+    emitCustomEvent(name, request) {
+      if (name === "npc-drops:roll-table") { if (request.entryFilter({ section: "Main" })) request.drops.push({ itemId: 557, amount: 2000 }); return; }
+      for (const fn of events.get(name) ?? []) fn(request);
+    } }, { get: (target, key) => target[key] ?? (() => {}) });
+  IronCommon.init(api);
+  require("../plugins/modes/ironman/Loot.Ironman")(api);
+  Kills.attach(api);
+  t.mock.method(Math, "random", () => 0.5);
+  const fighter = (name) => {
+    const attributes = new Map();
+    return { name, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+      sendMessage() {}, getDisplayName: () => name, getUsername: () => name, getEquipment: () => ({ getItems: () => [] }) };
+  };
+  const [iron, other] = [fighter("Iron"), fighter("Main")];
+  iron.setAttribute(IronCommon.MODE_ATTRIBUTE, "ironman");
+  const head = {};
+  const fight = { head, spawnedAt: 0, joinedAt: new Map(), damage: new Map([[iron, { body: 200, head: 400, tail: 0 }], [other, { body: 200, head: 400, tail: 0 }]]) };
+  const session = { fight, arenaPlayers: () => [iron, other], tile: () => ({}), graphic() {} };
+  Kills.killed(session);
+  assert.ok(placed.some(([who]) => who === iron), "the Ironman's share is placed");
+  assert.ok(placed.some(([who]) => who === other));
+  const shared = { player: iron, npc: {}, npcId: 1, drops: [{ itemId: 995, amount: 1 }], damagers: [iron, other] };
+  api.emitCustomEvent("npc-drops:roll", shared);
+  assert.deepEqual(shared.drops, [], "another monster's shared kill is still lost");
+});

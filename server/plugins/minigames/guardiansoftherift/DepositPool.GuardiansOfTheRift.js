@@ -24,16 +24,23 @@ function depositRunes({ player, objectId }) {
   if (!Shared.isLoc(objectId, "gotr_depositchest")) return false;
   const { Bank } = Shared.core();
   const inventory = player.getInventory();
-  let deposited = false;
-  inventory.getItems().forEach((item, slot) => {
-    if (!item || item.getId() <= 0 || !isRune(item)) return;
-    Bank.deposit(player, item.getId(), slot, item.getAmount(), true);
-    deposited = true;
-  });
-  if (!deposited) {
+  const runes = inventory.getItems().filter((item) => item && item.getId() > 0 && isRune(item));
+  if (runes.length === 0) {
     player.sendMessage("You have no runes to deposit into the pool.");
     return true;
   }
+  // The pool banks the runes, so it asks the bank's own vetoes first (an Ultimate Ironman can't bank: Wiki), as the
+  // deposit box, leprechaun and imp box do; the veto says why.
+  if (Shared.api().emitCanBank?.(player, "guardians-of-the-rift-pool") === false) return true;
+  let deposited = false;
+  inventory.getItems().forEach((item, slot) => {
+    if (!item || item.getId() <= 0 || !isRune(item)) return;
+    const before = item.getAmount();
+    Bank.deposit(player, item.getId(), slot, before, true);
+    if ((inventory.getItems()[slot]?.getId() === item.getId() ? inventory.getItems()[slot].getAmount() : 0) < before) deposited = true;
+  });
+  // Nothing moved (a full bank): the bank has said why, and the pool claims nothing.
+  if (!deposited) return true;
   Shared.animate(player, "human_leverdown_walkmerge");
   player.sendMessage("You deposit all of your runes into the pool.");
   return true;
@@ -57,6 +64,7 @@ function refuseGameItems(event) {
 }
 
 module.exports = {
+  _test: { depositRunes },
   attach(api) {
     api.onObjectInteraction("Deposit Pool", { "Deposit-runes": depositRunes, "Deposit-items": depositItems });
     api.onCanBankItem(refuseGameItems);

@@ -20,6 +20,7 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
 | `Equipment.Slayer.js` | Protective gear; kurask and turoth weaknesses |
 | `CaveHorror.Slayer.js` | Cave horrors' scream and magical melee |
 | `SlaughterBracelet.Slayer.js` | Bracelet of slaughter effects, shared charges, Check and Break |
+| `ExpeditiousBracelet.Slayer.js` | Expeditious bracelet: double kill credit, shared charges, Check and Break |
 | `Finishers.Slayer.js` | Rock hammer, bag of salt, ice cooler, fungicide spray |
 | `Superiors.Slayer.js` | Superior monsters |
 | `Keys.Slayer.js` | Brimstone and Larran's keys from Konar's and Krystilia's task kills |
@@ -164,6 +165,23 @@ Sources: Wiki [Cave horror](https://oldschool.runescape.wiki/w/Cave_horror),
 - **Not built:** the Wiki says the scream also hits players standing beside the horror who are not
   already in combat with it; no capture shows it. Cave abominations are not covered.
 
+### Protective gear
+
+`slayer-gear.json` lists the monsters that punish a player who lacks their protection. An
+unprotected hit always lands (and goes through protection prayers where the Wiki says so), takes
+the monster's unprotected damage and drains the listed stats.
+
+- **Slayer helmets:** every recolour and imbued form protects like the plain helmet; the Wiki
+  calls the recolours purely cosmetic (Wiki, Slayer helmet).
+- **Sourhog** (Wiki, Sourhog): without reinforced goggles or a Slayer helmet its caustic saliva hits
+  for 20-30, drains current Attack and Defence by 90% and the player shouts "Argh! My eyes!". Protected,
+  its max hit is 6.
+- **Fever spider** (Wiki, Fever spider): without Slayer gloves it hits for 12.5% of the Hitpoints
+  level (the infobox's 1-12). Not done: the disease it also gives (Wiki, Disease: an 8 hitsplat that
+  falls by 1 every 1.5 minutes, draining a skill every 18 seconds) because player disease is not
+  modelled and the Wiki lists no messages for it. No recording shows an unprotected sourhog or
+  fever spider hit.
+
 ### Bracelet of slaughter
 
 [Wiki mechanics](https://oldschool.runescape.wiki/w/Bracelet_of_slaughter): while item
@@ -184,7 +202,7 @@ and the [Elite rewards list](https://oldschool.runescape.wiki/w/Combat_Achieveme
 (“10% chance to fully recharge instead of breaking”); the Wiki says rewards are claimed from
 Ghommal once the points are reached. Inventory Break consumes that exact
 bracelet and resets the pool; Check works in inventory and while worn. Notes and bank
-placeholders cannot use either action. This does not implement the expeditious bracelet.
+placeholders cannot use either action.
 
 Evidence:
 
@@ -215,6 +233,33 @@ passed all 78 tests. Omitting the bracelet kill-count integration made four new 
 fail. The worktree client returned HTTP 200 on port 3149 and the game server listened on
 43749. Live MCP checks were not completed: the OS rejected the assigned port 49849 with
 `EADDRINUSE`, including an independent bind probe. No worktree port was overridden.
+
+### Expeditious bracelet
+
+[Wiki mechanics](https://oldschool.runescape.wiki/w/Expeditious_bracelet): while item
+`EXPEDITIOUS_BRACELET` is in the hands slot at the Slayer XP drop, a task kill has a 25% chance
+to count as two kills toward the task; no extra Slayer XP is given. A doubled kill that needs
+only one more ends the task (the count stops at 0), and a doubled final kill is allowed. The Wiki lists
+no excluded monsters.
+
+Charges follow the bracelet of slaughter's model: the persisted attribute
+`slayer:expeditious-charges` starts at 30 and is shared by every expeditious bracelet; only
+activations spend one. The last activation resets the pool to 30 and removes the worn bracelet,
+except for a 10% regeneration roll once the Elite Combat Achievements rewards are claimed (Wiki:
+the message is “Your expeditious bracelet helps you progress your slayer task faster. It then
+regenerates itself to full charge!”). Inventory Break consumes that exact bracelet and resets
+the pool; Check works in inventory and while worn. Notes and placeholders (items 21178, 21179)
+can use neither action.
+
+Evidence and limits: the Wiki page above is the only source. The local rsprox index knows the
+item in many recordings but has no recorded activation, Check or Break, so the wording of the
+charges-left suffix, the crumble text, Check and Break is copied from the slaughter bracelet's
+captured wording (recording-backed above) and is unverified for this bracelet.
+
+Regression coverage extends `server/tests/slayer.test.cjs` (25% boundary, no extra XP, a
+doubled kill finishing the task, shared charges, save/load key, Break, crumble and the 10%
+regeneration boundary, note rejection); `tests/leviathan-rewards.test.cjs` initialises the unit
+its task-kill path now calls.
 
 ### Completing
 

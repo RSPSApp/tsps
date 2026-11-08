@@ -77,8 +77,13 @@ function suspendManagedAudioContexts(): void {
         const state = ctx.state as string;
         // suspend() on an iOS "interrupted" context transitions it to "suspended",
         // which keeps our bookkeeping consistent with what WebKit reports.
-        if (state === "running" || state === "interrupted") {
-            autoSuspendedAudioContexts.add(ctx);
+        if (state === "running" || state === "interrupted" || state === "suspended") {
+            // A browser-blocked context also needs explicit suspension to prevent source
+            // nodes from starting it. Restore only prior activity or helper resume intent,
+            // without taking ownership of an existing manual suspension.
+            if (state !== "suspended" || pendingResumes.has(ctx)) {
+                autoSuspendedAudioContexts.add(ctx);
+            }
             ctx.suspend().catch(() => {});
         }
     }

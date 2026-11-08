@@ -15,6 +15,7 @@ const CrystalAxe = require("./woodcutting/CrystalAxe.Woodcutting");
 const EntTrunk = require("./woodcutting/EntTrunk.Woodcutting");
 const ThickVines = require("./woodcutting/ThickVines.Woodcutting");
 const Shrine = require("./woodcutting/Shrine.Woodcutting");
+const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
@@ -84,17 +85,18 @@ function inventoryBlocks(player, logId) {
   return !request.room;
 }
 
-/** Storage takes the log first; retain an unstored yield until the pet opportunity resolves. */
-function prepareLog(player, logId, xp = 0) {
-  const request = { player, itemId: logId, amount: 1, stored: 0, skill: Skill.WOODCUTTING, xp };
+/** Storage takes the logs first; retain an unstored yield until the pet opportunity resolves. */
+function prepareLog(player, logId, xp = 0, amount = 1) {
+  const request = { player, itemId: logId, amount, stored: 0, skill: Skill.WOODCUTTING, xp };
   pluginApi.emitCustomEvent("storage:gather", request);
-  return request.stored === 0 ? new Item(logId, 1) : null;
+  return request.stored < amount ? new Item(logId, amount - request.stored) : null;
 }
 
 function deliverLog(player, log) {
   if (!log) return;
-  if (player.getInventory().getAddableAmount(log) >= log.getAmount()) player.getInventory().add(log, true);
-  else ItemOnGroundManager.registers(player, log);
+  const fits = Math.min(player.getInventory().getAddableAmount(log), log.getAmount());
+  if (fits > 0) player.getInventory().add(new Item(log.getId(), fits), true);
+  if (fits < log.getAmount()) ItemOnGroundManager.registers(player, new Item(log.getId(), log.getAmount() - fits));
 }
 
 const BIRD_NESTS = Object.freeze({
@@ -193,7 +195,8 @@ const AXES = [
   axe(ItemIds.STEEL_AXE, 6, 2, 875, { standard: true }),
   axe(ItemIds.BLACK_FELLING_AXE, 11, 3, 10067, { felling: true }),
   axe(ItemIds.BLACK_AXE, 11, 3, 873, { standard: true }),
-  axe(ItemIds.BLESSED_AXE, 21, 4, 871),
+  // No blessed axe: it "does not retain the functionality of the mithril axe used to create it" and only chops the
+  // undead trees (Wiki: Blessed axe), which Animal Magnetism handles with its own check.
   axe(ItemIds.MITHRIL_FELLING_AXE, 21, 4, 10068, { felling: true }),
   axe(ItemIds.MITHRIL_AXE, 21, 4, 871, { standard: true }),
   axe(ItemIds.ADAMANT_FELLING_AXE, 31, 5, 10069, { felling: true }),
@@ -959,6 +962,10 @@ function maybeDropBirdNest(player) {
   if (!player) {
     return false;
   }
+  // Wiki (Bird nest): "Free players won't see them while woodcutting." Members only, as the felling rations are.
+  // (A fixture with no core has no world to ask, as choppingAxeEligible allows.)
+  const worlds = pluginApi?.core?.WorldDefinition;
+  if (worlds && !worlds.isMembersWorld()) return false;
   // Content may make nests commoner ("woodcutting:nest-chance", a league fragment): `multiplier` times.
   const boost = { player, multiplier: 1 };
   pluginApi?.emitCustomEvent("woodcutting:nest-chance", boost);
@@ -1285,14 +1292,21 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       rollForesterRationEnergy(player, state.axe);
       const baseXp = treeBaseXp(player, state.tree, state.location) * lumberjackXpMultiplier(player);
       const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
+      const logAmount = KandarinHeadgear.logsPerChop(player, state.tree.logId);
       let pendingLog = null;
-      if (!felling.skipLog && !InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId)) {
-        pendingLog = prepareLog(player, state.tree.logId, xp);
-        countLog(player);
+      let burnt = false;
+      if (!felling.skipLog) {
+        burnt = InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId);
+        if (!burnt) {
+          pendingLog = prepareLog(player, state.tree.logId, xp, logAmount);
+          countLog(player);
+        }
       }
       // A burnt log still says it was cut (rsprox captures 1637, 3996); a felling skip gives no log.
       if (!felling.skipLog) sendSpam(player, logMessage(state.tree));
-      CrystalAxe.tryUseCharge(player);
+      // Only the charged crystal axe doing the chopping spends a charge: one carried beside the axe in use (an infernal
+      // axe ranked above it, or a dragon axe below the crystal's 50 Agility) is left alone, as Mining's pickaxe.
+      if (state.axe?.id === ItemIds.CRYSTAL_AXE) CrystalAxe.tryUseCharge(player);
       player
         .getSkillManager()
         .addExperiences(Skill.WOODCUTTING, xp);
@@ -1309,7 +1323,8 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         logId: state.tree.logId,
         location: state.location,
         // Resource-count consumers distinguish a felling omission from the successful action.
-        logAmount: felling.skipLog ? 0 : 1,
+        // A burnt log still reports one (as before the headgear), never the doubled amount.
+        logAmount: felling.skipLog ? 0 : burnt ? 1 : logAmount,
         axeId: state.axe?.id ?? null,
       });
       ClueNests.rollClueNests(player, state.tree);
@@ -1383,6 +1398,11 @@ function pauseWoodcutting(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopWoodcutting(activeSessionsRef, player, false));
 }
 
+/** An accepted emote replaces chopping while keeping the new emote animation. */
+function interruptForEmote({ player }) {
+  stopWoodcutting(activeSessionsRef, player, false);
+}
+
 module.exports = {
   name: "Woodcutting",
   register(api) {
@@ -1402,12 +1422,14 @@ module.exports = {
     CrystalAxe.attach(api);
     EntTrunk.attach(api, { findBestUsableAxe, calculateCutChance, lumberjackXpMultiplier, maybeDropBirdNest });
     ThickVines.attach(api, { axesBestFirst: AXES_BEST_FIRST, lumberjackXpMultiplier });
+    KandarinHeadgear.attach(api);
     Shrine.attach(api);
 
     api.onPlayerDisconnect(({ player }) => {
       stopWoodcutting(activeSessions, player, false);
     });
     api.onCustomEvent("level-up:popup-opened", pauseWoodcutting);
+    api.onCustomEvent("player:emote", interruptForEmote);
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
     api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);

@@ -47,6 +47,15 @@ const core = {
   ItemStatementDialogue: class {},
   NpcDialogue: class {},
   CacheDefinitions: { getVarbitId: (name) => name, getVarpId: (name) => name },
+  // The real contract: the killer, unless "player-death:loot-owner" says otherwise (Loot.Ironman for an Ironman killer).
+  PlayerDeathTask: {
+    lootOwner(player, killer) {
+      if (!killer || killer === player) return player;
+      const query = { player, killer, owner: killer };
+      api.emitCustomEvent("player-death:loot-owner", query);
+      return query.owner ?? player;
+    },
+  },
 };
 
 const handlers = new Map();
@@ -240,6 +249,14 @@ test("the coffer: minimum deposits by combat level, a 2m cap, and death costs to
   emit("bounty-hunter:died", { player: victim, killer: null, skulled: true });
   assert.equal(Coffer.balance(victim), 40_000);
   assert.equal(killer.getInventory().getAmount(I.COINS), 60_000);
+
+  // An Ironman killer takes no other player's loot: the coins stay in the victim's coffer.
+  const ironKiller = player();
+  const answer = (query) => { if (query.killer === ironKiller) query.owner = query.player; };
+  api.onCustomEvent("player-death:loot-owner", answer);
+  emit("bounty-hunter:died", { player: victim, killer: ironKiller, skulled: true });
+  assert.equal(Coffer.balance(victim), 40_000, "the victim keeps it");
+  assert.equal(ironKiller.getInventory().getAmount(I.COINS), 0, "the Ironman gets nothing");
 });
 
 test("Corrupted Warriors swap (bh) armour both ways; the Emblem Trader answers skull conditions", () => {

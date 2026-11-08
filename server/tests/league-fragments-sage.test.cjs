@@ -211,8 +211,11 @@ test("Last Recall's crystal: back to where the last teleport began, not from an 
   click(player, CRYSTAL, "Check-memories");
   assert.match(player.messages.at(-1), /remembers/);
   emit("teleport:landed", { player, from: new core.Location(3360, 2840, 2), fromInstance: false });
+  // Wiki (Last Recall): Mogre Camp and Crash Island's dungeon are excluded too (the dive's gear, the snake pit's quest).
+  emit("teleport:landed", { player, from: new core.Location(2970, 9500, 1), fromInstance: false });
+  emit("teleport:landed", { player, from: new core.Location(3023, 5488, 0), fromInstance: false });
   click(player, CRYSTAL, "Teleport-back");
-  assert.deepEqual([...went], [[3165, 3485, 0]], "the Grand Exchange, not the instance, the essence mine nor the Agility Pyramid");
+  assert.deepEqual([...went], [[3165, 3485, 0]], "the Grand Exchange, not the instance, the essence mine, the Agility Pyramid, Mogre Camp nor Crash Island");
   // The crystal's own teleport is a teleport too: it lands having begun in Lumbridge.
   emit("teleport:landed", { player, from: new core.Location(3222, 3218, 0), fromInstance: false });
   click(player, CRYSTAL, "Teleport-back");

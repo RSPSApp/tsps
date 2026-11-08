@@ -41,6 +41,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   const BALLISTA_OBJECT_ID = 2181;
   const CRUMBLED_WALL_OBJECT_ID = 2185;
+  const STRONGHOLD_DOOR_OBJECT_ID = api.core.ObjectIdentifiers.DOOR_67;
+  const STRONGHOLD_DOOR_LOCATION = new Location(2502, 3250, 0);
   const CLOSED_CHEST_OBJECT_ID = 2183;
   const OPEN_CHEST_OBJECT_ID = 2182;
   const KHAZARD_WARLORD_SPAWN_ID = 4971;
@@ -65,6 +67,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const TRACKER_H_MESSAGE_ID = "eBZQ_A";
   const TRACKER_Y_MESSAGE_ID = "8H1UCb";
   const CHEST_ORB_MESSAGE_ID = "PatYnA";
+  const GUIDE_OUT_MESSAGE_ID = "GnZ1Sn";
   const BALLISTA_SUCCESS_CONDITION_ID = "1G3SE7";
   const BALLISTA_MISS_CONDITION_ID = "wwt4fB";
   const TRACKER_X_CONDITION_IDS = new Set(["FBaYjB", "cLo8NW", "RDXbKP", "TPAWlA"]);
@@ -393,7 +396,11 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     if (npcId !== KING_BOLREN_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
-    if (isInsideVillage(player)) player.moveTo(VILLAGE_ENTRANCE.clone());
+  }
+
+  function followElkoy({ player, npcId }) {
+    if (!ELKOY_NPC_IDS.has(npcId) || quest.getStage(player) < STAGE_STARTED) return;
+    player.moveTo((isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT).clone());
   }
 
   /** Montai's offer and the first-orb hand-in; tracker acceptance starts the riddle. */
@@ -450,6 +457,12 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** Transcript message actions that carry item/state changes. */
   function handleAction({ player, npcId, stepId }) {
+    if (npcId === KING_BOLREN_NPC_ID && stepId === GUIDE_OUT_MESSAGE_ID) {
+      if (quest.getStage(player) === STAGE_STARTED && isInsideVillage(player)) {
+        player.moveTo(VILLAGE_ENTRANCE.clone());
+      }
+      return;
+    }
     if (npcId === KING_BOLREN_NPC_ID && quest.getStage(player) >= STAGE_COMPLETE &&
       (stepId === POST_QUEST_AMULET_MESSAGE_ID || POST_QUEST_AMULET_RECEIVE_IDS.has(stepId))) {
       giveItem(player, GNOME_AMULET_ITEM_ID);
@@ -508,6 +521,16 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     startTranscript(api, player, NpcIdentifiers.KHAZARD_COMMANDER, PAGE, "into-the-stronghold-upon-opening-the-chest-containing-the-orb-of-protection");
   }
 
+  function guardStrongholdDoor(event) {
+    if (event.objectId !== STRONGHOLD_DOOR_OBJECT_ID || event.object?.getFace?.() !== 1) return;
+    const location = event.object.getLocation();
+    if (!Location.isSameTile(location, STRONGHOLD_DOOR_LOCATION)
+      || event.player.getLocation().getY() > location.getY()) return;
+    startTranscript(api, event.player, NpcIdentifiers.KHAZARD_COMMANDER, PAGE,
+      "into-the-stronghold-opening-the-stronghold-door-from-the-outside");
+    event.handled = true;
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     const option = String(event.option ?? "").toLowerCase();
@@ -516,8 +539,11 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       event.handled = true;
       return;
     }
-    if ((objectId === CLOSED_CHEST_OBJECT_ID || objectId === OPEN_CHEST_OBJECT_ID)
-      && (option === "open" || option === "search")) {
+    // The shared Chests plugin opens the loc first; only Search awards the orb.
+    if (objectId === CLOSED_CHEST_OBJECT_ID && option === "open"
+      && quest.getStage(player) >= STAGE_BALLISTA_FIRED) return;
+    if ((objectId === CLOSED_CHEST_OBJECT_ID && option === "open")
+      || (objectId === OPEN_CHEST_OBJECT_ID && option === "search")) {
       openChest(player);
       event.handled = true;
       return;
@@ -676,8 +702,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.persistAttribute(TRACKER_STATE_ATTRIBUTE, 0);
   api.persistAttribute(BALLISTA_COORDINATE_ATTRIBUTE, -1);
 
+  api.onNpcInteraction("Elkoy", { Follow: followElkoy });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("door:toggle", guardStrongholdDoor);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);

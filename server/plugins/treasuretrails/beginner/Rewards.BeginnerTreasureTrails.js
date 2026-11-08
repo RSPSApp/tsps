@@ -1,5 +1,7 @@
 "use strict";
 
+const RewardScreen = require("../CasketRewardScreen.plugin");
+
 // This is an imported exporter artifact, not a hand-maintained reward approximation.
 const TABLE = require("../../../data/definitions/reward-caskets.json").beginner;
 const Runtime = require("./Runtime.BeginnerTreasureTrails");
@@ -56,11 +58,12 @@ function prepareDrops(drops) {
   });
 }
 
-function give(player, drops) {
+function give(player, drops, defer = false) {
+  if (defer) RewardScreen.queue(player, drops);
   const credited = new Map();
   for (const drop of drops) {
     const {creditId: id, stackable} = drop;
-    for (let i = 0; i < (stackable ? 1 : drop.amount); i++) player.getInventory().forceAdd(player, new core.Item(id, stackable ? drop.amount : 1));
+    for (let i = 0; !defer && i < (stackable ? 1 : drop.amount); i++) player.getInventory().forceAdd(player, new core.Item(id, stackable ? drop.amount : 1));
     credited.set(id, (credited.get(id) || 0) + drop.amount);
     api.emitCustomEvent("collection-log:obtain", { player, itemId: drop.itemId, amount: drop.amount });
   }
@@ -91,7 +94,7 @@ function open(event) {
       const rolls = { player, tier: "beginner", rolls: between(minimum, maximum, Math.random), minimum, maximum };
       api?.emitCustomEvent?.("treasure-trails:casket-rolls", rolls);
       const casketRolls = Number.isInteger(rolls.rolls) ? Math.max(minimum, Math.min(maximum, rolls.rolls)) : null;
-      const request = {player, completed: count, milestones: TABLE.milestones, drops: roll(Math.random, uniqueEligible(player), casketRolls), handled: false, error: null};
+      const request = {player, tier: "beginner", completed: count, milestones: TABLE.milestones, drops: roll(Math.random, uniqueEligible(player), casketRolls), handled: false, error: null};
       api.emitCustomEvent("treasure-trails:milestone-rewards", request);
       if (!request.handled || request.error) throw request.error ?? new Error("Beginner milestone service unavailable");
       drops = prepareDrops(request.drops);
@@ -104,7 +107,7 @@ function open(event) {
     if (inventory.getItems()[slot] !== item || item.getId() !== Runtime.data().casket || item.getAmount() < 1) return true;
     inventory.deleteAtSlot(slot, 1);
     player.setAttribute(Runtime.COMPLETED_ATTRIBUTE, count);
-    const slots = give(player, drops);
+    const slots = give(player, drops, true);
     Runtime.restore({ player });
     const sender = player.getPacketSender();
     const group = Runtime.data().rewardInterface;

@@ -2,6 +2,7 @@
 const { dockNear } = require('../SailingContent.Sailing');
 const { MODE, openBoatSelection } = require('../BoatSelection.plugin');
 const { sendBoatVarbits } = require('../BoatVarbits.Sailing');
+const { pandemoniumDone } = require('../crew/Common.Crew');
 const TARGET = 'Destroy Boat';
 const CONFIRM = 'shipwright-destroy-confirm';
 const DECLINE = 'shipwright-destroy-decline';
@@ -74,6 +75,9 @@ function onAction(event) {
   if (event.action === 'open_interface' && event.target === TARGET) {
     event.handled = true;
     event.end = true;
+    // The shipwrights offer "I'd like to destroy a boat." only in their standard dialogue, after Pandemonium (Wiki
+    // transcripts): mid-quest the raft, granted once (Pandemonium grantRaft), must not be scrapped.
+    if (!pandemoniumDone(event.player)) return;
     const quote = { player: event.player, npc: event.npc, npcId: event.npcId, rawNpcId: event.npc?.getId(), name,
       session: ++nextSession, offered: new Map(event.player.getSailing().boats.map(boat => [boat.slot, boat])) };
     requests.set(event.player, quote);

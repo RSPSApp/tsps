@@ -1,0 +1,4391 @@
+{
+ "_source": "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from the transcript's own qualifier, because those levels show a different message per player state. Magic merges its four spellbook sections, Sailing's beta section is commented out on the wiki and is skipped, and a level the wiki marks only with {{tmissing}} has no message. Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather than splitting by world type.",
+ "Attack": {
+  "5": [
+   "You have unlocked: Steel weapons."
+  ],
+  "10": [
+   "You have unlocked: Black weapons. Members have unlocked: White weapons."
+  ],
+  "20": [
+   "You have unlocked: Mithril weapons."
+  ],
+  "30": [
+   "You have unlocked: Bryophyta's staff and Adamant weapons. Members have unlocked: Swamp lizard and Battlestaves."
+  ],
+  "40": [
+   "You can now wield Rune Weaponry and Barronite maces. Members can wield Brine Sabres and Ivandis Flails!"
+  ],
+  "42": [
+   "Members can now wield Void Knight equipment!"
+  ],
+  "50": [
+   "Members have unlocked: Orange salamander, Purging staff, Upgraded Ancient Sceptre, Ancient spectre, Ancient staff, Bone mace, Keris dagger, Blisterwood and more."
+  ],
+  "55": [
+   "Members have unlocked: Earthbound tecpatl, Glacial temotli and Sulphur blades."
+  ],
+  "60": [
+   "Members have unlocked: Red salamander, TokTz-Mej-Tal, Colossal Blade, Viggora's Chainmace, Obsidian melee weapons, Burning claws, Arkan blade, Dragon weapons and more."
+  ],
+  "65": [
+   "Members have unlocked: Keris partisan, Belle's Folly, Zombie axe, Sarachnis cudgel and 3rd Age weapons."
+  ],
+  "70": [
+   {
+    "text": "Members can now wield the Saradomin Sword, the Abyssal Whip & Dagger, the Zamorak Spear, the Ursine Chainmace, Crystal Equipment and Barrows weaponry!",
+    "when": {
+     "all": [
+      {
+       "not": true,
+       "skill": "Strength",
+       "min": 70
+      },
+      {
+       "any": [
+        {
+         "not": true,
+         "skill": "Magic",
+         "min": 70
+        },
+        {
+         "not": true,
+         "skill": "Ranged",
+         "min": 70
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "text": "Members can now wield Black Salamanders, the Saradomin Sword, the Abyssal Whip & Dagger, the Zamorak Spear, the Ursine Chainmace, Crystal Equipment and Barrows weaponry!",
+    "when": {
+     "all": [
+      {
+       "not": true,
+       "skill": "Strength",
+       "min": 70
+      },
+      {
+       "skill": "Magic",
+       "min": 70
+      },
+      {
+       "skill": "Ranged",
+       "min": 70
+      }
+     ]
+    }
+   },
+   {
+    "text": "Members can now wield the Saradomin Sword, the Abyssal Whip, Dagger & Bludgeon, the Zamorak Spear, the Ursine Chainmace, Crystal Equipment and Barrows weaponry!",
+    "when": {
+     "all": [
+      {
+       "skill": "Strength",
+       "min": 70
+      },
+      {
+       "any": [
+        {
+         "not": true,
+         "skill": "Magic",
+         "min": 70
+        },
+        {
+         "not": true,
+         "skill": "Ranged",
+         "min": 70
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "text": "Members can now wield Black Salamanders, the Saradomin Sword, the Abyssal Whip, Dagger & Bludgeon, the Zamorak Spear, the Ursine Chainmace, Crystal Equipment and Barrows weaponry!",
+    "when": {
+     "all": [
+      {
+       "skill": "Strength",
+       "min": 70
+      },
+      {
+       "skill": "Magic",
+       "min": 70
+      },
+      {
+       "skill": "Ranged",
+       "min": 70
+      }
+     ]
+    }
+   }
+  ],
+  "75": [
+   "Members have unlocked: Staff of the Dead, Voidwaker, Vesta's blighted longsword, Dinh's bulwark, Blessed Saradomin sword, Abyssal tentacle, Godswords, Arclight and more."
+  ],
+  "77": [
+   "Members have unlocked: Emberlight."
+  ],
+  "78": [
+   "Members have unlocked: Dragon hunter lance."
+  ],
+  "80": [
+   "Members have unlocked: Soulreaper axe, Tecu salamander, Ferocious Gloves, Variants of Keris partisan, Noxious Halberd, Blade of Saeldor, Inquisitor's mace, Ghrazi rapier and more."
+  ],
+  "82": [
+   "Members have unlocked: Osmumten's Fang."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Attack. Why not visit Ajjat at the Warriors' Guild? He has something special that is only available to true masters of the Attack skill!"
+  ]
+ },
+ "Strength": {
+  "5": [
+   "You have unlocked: Steel warhammers. Members have unlocked: White halberd and Black halberd."
+  ],
+  "10": [
+   "You have unlocked: Black warhammer. Members have unlocked: Mithril halberd and White warhammer."
+  ],
+  "15": [
+   "Members have unlocked: Adamant halberd and Leaping trout."
+  ],
+  "19": [
+   "Members have unlocked: Cross the River Lum to Al Kharid."
+  ],
+  "20": [
+   "You have unlocked: Mithril warhammer. Members have unlocked: Rune halberd."
+  ],
+  "21": [
+   "Members have unlocked: Karamja crossing south of volcano."
+  ],
+  "22": [
+   "Members have unlocked: Escape from the Water Obelisk island."
+  ],
+  "30": [
+   "You can now wield Adamant Warhammers."
+  ],
+  "40": [
+   "You can now wield Rune Warhammers."
+  ],
+  "42": [
+   "Members can now wield Void Knight equipment!"
+  ],
+  "50": [
+   "Members have unlocked: Zombie helmet, Granite armour, Granite longsword, Granite maul, Eclipse Atlatl and Swordfish (barehanded)."
+  ],
+  "60": [
+   "Members can now wield Dragon Warhammers and the Ancient Sceptre, and access the God Wars Dungeon via the Strength shortcut."
+  ],
+  "70": [
+   {
+    "text": "Members can access the Bandos area in the God Wars Dungeon and wear Inquisitor's Armour.",
+    "when": {
+     "not": true,
+     "skill": "Attack",
+     "min": 70
+    }
+   },
+   {
+    "text": "Members can wield the Abyssal bludgeon, access the Bandos area in the God Wars Dungeon and wear Inquisitor's Armour.",
+    "when": {
+     "skill": "Attack",
+     "min": 70
+    }
+   }
+  ],
+  "75": [
+   "Members have unlocked: Bloodrager set, Primordial boots, Dual Macuahuitl and Elder maul."
+  ],
+  "76": [
+   "Members have unlocked: Shark (barehanded)."
+  ],
+  "80": [
+   "Members have unlocked: Soulreaper axe and Avernic treads."
+  ],
+  "90": [
+   "Members have unlocked: Scythe of Vitur."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Strength. Why not visit the shot put room at the Warriors' Guild? The custodian has something special that is only available to true masters of the Strength skill!"
+  ]
+ },
+ "Defence": {
+  "5": [
+   "You can now wear Steel Armour!"
+  ],
+  "10": [
+   "You can now wear Black Armour. Members can equip White Armour, the Slayer helm and Xerician armour."
+  ],
+  "20": [
+   "You can now wear Mithril Armour. Members can fight Shayzien soldiers for their armour."
+  ],
+  "25": [
+   "Members can now wear frog-leather armour."
+  ],
+  "30": [
+   "You can now wear Adamant Armour!"
+  ],
+  "35": [
+   "Members can now wear Samurai Armour!"
+  ],
+  "40": [
+   "You can now wear Rune Armour!"
+  ],
+  "42": [
+   "Members can now wield Void Knight equipment!"
+  ],
+  "50": [
+   "Members have unlocked: Bloodrager set, Zombie helmet, Granite armour, Exlipse set, Mixed hide top, cape, and boots, Frostmoon robes and Swampbark armour."
+  ],
+  "55": [
+   "Members have unlocked: Helm of Neitiznot."
+  ],
+  "60": [
+   "Members have unlocked: Bloodbark armour, Odium & Malediction wards, Toktz-Ket-Xil, Obsidian armour & Dragon armour."
+  ],
+  "65": [
+   "Members can now wear Bandos armour, 3rd age fighter armour and the Bladed Moon!"
+  ],
+  "70": [
+   "You can now equip Elf Crystal, Armadyl armour, the Avernic defender, Barrows armour, Boots of Brimstone and the Neitiznot Faceguard!"
+  ],
+  "75": [
+   "Members have unlocked: Virtus robes, Eternal boots, Dragonfire shield, Echo boots, Guardian boots, Serpentine helm, Justiciar armour, Dinh's bulwark and more."
+  ],
+  "78": [
+   "Members have unlocked: Oathplate armour."
+  ],
+  "80": [
+   "Members have unlocked: Elidinis' Ward, Avernic treads, Fortified Masori armour, Torva armour and Ferocious Gloves."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Defence. Why not visit Harlan in Lumbridge? He has something special that is only available to true masters of the Defence skill!"
+  ]
+ },
+ "Ranged": {
+  "5": [
+   "You can now wield oak bows and members can wield steel throwing weapons."
+  ],
+  "10": [
+   "Members can now wield black throwing weapons."
+  ],
+  "16": [
+   {
+    "text": "Members can now wield blurite crossbows and blurite crossbow bolts.",
+    "when": {
+     "quest": "The Knight's Sword"
+    }
+   }
+  ],
+  "20": [
+   "You can now wield willow bows and wear studded armour and coifs, and members can wield mithril throwing weapons."
+  ],
+  "25": [
+   "Members can now wear frog-leather armour."
+  ],
+  "26": [
+   "Members can now wield iron crossbows and iron crossbow bolts."
+  ],
+  "28": [
+   "Members can now wield bone crossbows."
+  ],
+  "29": [
+   "There is new information available from the Ranged Combat Tutor in Lumbridge."
+  ],
+  "30": [
+   "You can now wield maple bows. Members can use adamant throwing weapons, the ogre composite bow and snakeskin armour."
+  ],
+  "31": [
+   "Members can now wield steel crossbows and steel crossbow bolts."
+  ],
+  "36": [
+   "Members can now wield mithril crossbows and mithril and silver crossbow bolts."
+  ],
+  "37": [
+   "Members can cross the River Lum to Al Kharid and back by using a mithril grapple."
+  ],
+  "39": [
+   "Members can get off the water obelisk island near Catherby by using a mithril grapple."
+  ],
+  "40": [
+   "You can now wear green dragonhide armour. Members can wield yew bows, rune throwing weapons and can wear ranger boots and the Robin Hood hat."
+  ],
+  "42": [
+   "Members can now wield Void Knight equipment!"
+  ],
+  "44": [
+   "There is new information available from the Ranged Combat Tutor in Lumbridge."
+  ],
+  "45": [
+   "Members can now wield chinchompas."
+  ],
+  "46": [
+   "Members can now wield adamant crossbows and adamant crossbow bolts."
+  ],
+  "50": [
+   "Members have unlocked: Blue dragonhide vambraces, Ava's accumulator, Hunters' crossbow, Amethyst darts, Seerculls, Bone shortbow, Magic bows, Orange salamander and more."
+  ],
+  "55": [
+   "Members can now wield red chinchompas."
+  ],
+  "60": [
+   "Members have unlocked: Red dragonhide vambraces, Penance skirt, TokTz-Xil-Ul, Dragon knives, Dragon darts, Craw's bow, Dark bows, Red salamander and more."
+  ],
+  "61": [
+   "Members have unlocked: Runite crossbow and Dragon thrownaxes."
+  ],
+  "62": [
+   "Members have unlocked: Hallowed Sepulchre - Grapple swing."
+  ],
+  "64": [
+   "Members have unlocked: Dragon crossbow."
+  ],
+  "65": [
+   "Members have unlocked: Light ballista, 3rd Age range armour, Rosewood blowpipe, Black chinchompas and 3rd Age bow."
+  ],
+  "66": [
+   "Members have unlocked: Sunlight hunter's crossbow."
+  ],
+  "70": [
+   "Members have unlocked: Ava's Assembler, Karil's crossbow, Armadyl crossbow, Dragon hunter crossbow, Webweaver bow, Black salamander, Boots of Brimstone, Crystal bows and more."
+  ],
+  "75": [
+   "Members have unlocked: Heavy ballista, Twisted buckler, Pegasian boots, Eclipse set, Dizana's Quiver, Tonalztics of Ralos, Toxic blowpipe and Eclipse Atlatl."
+  ],
+  "77": [
+   "Members have unlocked: Scorching bows."
+  ],
+  "80": [
+   {
+    "text": "Members can now wield Zaryte crossbows and Venator bows, and wear Masori armour.",
+    "when": {
+     "not": true,
+     "skill": "Agility",
+     "min": 70
+    }
+   },
+   {
+    "text": "Members can now wield Zaryte crossbows, Venator bows and the Bow of Faerdhinen, and wear Masori armour.",
+    "when": {
+     "skill": "Agility",
+     "min": 70
+    }
+   }
+  ],
+  "85": [
+   "Members have unlocked: Twisted bow."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Ranged. Why not visit Aaron at the Ranging Guild? He has something special only available to true masters of the Ranged skill!"
+  ]
+ },
+ "Prayer": {
+  "4": [
+   "You can now use the Prayer Burst of Strength!"
+  ],
+  "7": [
+   "You can now use the Prayer Clarity of Thought!"
+  ],
+  "8": [
+   "You can now use the Prayer Sharp Eye!"
+  ],
+  "9": [
+   "You can now use the Prayer Mystic Will!"
+  ],
+  "10": [
+   "You can now use the Prayer Rock Skin and Members can now wear Initiate armour!"
+  ],
+  "12": [
+   "There is more information available from the Prayer Tutor in Lumbridge Chapel!"
+  ],
+  "13": [
+   "You have unlocked: Superhuman Strength."
+  ],
+  "16": [
+   "You have unlocked: Improved Reflexes."
+  ],
+  "19": [
+   "You have unlocked: Rapid Restore."
+  ],
+  "20": [
+   "Members have unlocked: Vestment robe legs, Vestment robe top and Proselyte armour."
+  ],
+  "22": [
+   "You have unlocked: Rapid Heal. Members have unlocked: Void Knight mace and Void Knight equipment."
+  ],
+  "25": [
+   "You can now use the Prayer Protect Item!"
+  ],
+  "26": [
+   "You can now use the Prayer Hawk Eye!"
+  ],
+  "27": [
+   "You can now use the Prayer Mystic Lore!"
+  ],
+  "28": [
+   "You can now use the Prayer Steel Skin!"
+  ],
+  "31": [
+   "You can now use the Prayer Ultimate Strength and you can enter the Monastery"
+  ],
+  "34": [
+   "You can now use the Prayer Incredible Reflexes!"
+  ],
+  "37": [
+   "You can now use the Prayer Protect From Magic!"
+  ],
+  "40": [
+   "You can now use the Prayer Protect From Missiles! Members can now wear Vestment mitres & cloaks and use the Ectoplasmator!"
+  ],
+  "43": [
+   "You can now use the Prayer Protect From Melee! There is more information available from the Prayer Tutor in Lumbridge Chapel!"
+  ],
+  "44": [
+   "You have unlocked: Eagle Eye."
+  ],
+  "45": [
+   "You can now use the prayer Mystic Might!"
+  ],
+  "46": [
+   "You can now use the prayer Retribution!"
+  ],
+  "49": [
+   "You can now use the prayer Redemption!"
+  ],
+  "50": [
+   "Members can now bless holy & unholy symbols and unlock Bologa's grape blessings, and wield the Antler Guard!"
+  ],
+  "52": [
+   "You can now use the Prayer Smite!"
+  ],
+  "54": [
+   "Members can now sacrifice Vampyre dust to bypass barriers within The Hallowed Sepulchre."
+  ],
+  "55": [
+   "Members can now wield the Spirit shield, and can unlock and use the Prayer Preserve!"
+  ],
+  "60": [
+   "Members can now use the Prayer Chivalry, and can wield Blessed spirit shields and wear Vestment stoles, croziers, Devout boots and Sunfire Fanatic armour!"
+  ],
+  "65": [
+   "Members have unlocked: 3rd Age Druidic staff and 3rd Age Druidic robes."
+  ],
+  "70": [
+   "Members have unlocked: Use superior dragon bones, Bonecrusher necklace, Dragonbone necklace, Soul cape, Arcane & Spectral spirit shields and Piety."
+  ],
+  "74": [
+   "Members have unlocked: Rigour."
+  ],
+  "75": [
+   "Members have unlocked: Elysian spirit shield."
+  ],
+  "77": [
+   "Members have unlocked: Augury."
+  ],
+  "80": [
+   "Members have unlocked: Elidinis' Ward."
+  ],
+  "85": [
+   "Members can now combine the Holy elixir and Spirit shield!"
+  ],
+  "90": [
+   {
+    "text": "Members have unlocked: Fortified Elidinis' Ward.",
+    "when": {
+     "not": true,
+     "skill": "Smithing",
+     "min": 90
+    }
+   },
+   {
+    "text": "Members can now combine Sigils with the Blessed spirit shield, as well as craft Elidinis' ward!",
+    "when": {
+     "skill": "Smithing",
+     "min": 90
+    }
+   }
+  ],
+  "99": [
+   "Congratulations! You are now a master of Prayer. Why not visit Brother Jered, upstairs at the Monastery? He has something special that is only available to true masters of the Prayer skill!"
+  ]
+ },
+ "Magic": {
+  "3": [
+   "You can now cast Confuse!"
+  ],
+  "4": [
+   "Members can now enchant Opal tipped Crossbow Bolts!"
+  ],
+  "5": [
+   "You can now cast Water Strike!"
+  ],
+  "7": [
+   "You can now enchant Sapphire Jewellery and members can now enchant Sapphire tipped Crossbow Bolts and Opal Jewellery!"
+  ],
+  "9": [
+   "You can now cast Earth Strike!"
+  ],
+  "11": [
+   "You can now cast Weaken!"
+  ],
+  "13": [
+   "You can now cast Fire Strike!"
+  ],
+  "14": [
+   "Members can now enchant Jade tipped Crossbow Bolts!"
+  ],
+  "15": [
+   "You can now cast Bones To Bananas!"
+  ],
+  "17": [
+   "You can now cast Wind Bolt!"
+  ],
+  "18": [
+   "There is new information available from the Magic Tutor in Lumbridge!"
+  ],
+  "19": [
+   "You can now cast Curse!"
+  ],
+  "20": [
+   {
+    "text": "You can now cast Bind and members can now wear Xerician armour.",
+    "when": {
+     "skill": "Defence",
+     "min": 10
+    }
+   },
+   {
+    "text": "You can now cast Bind!",
+    "when": {
+     "not": true,
+     "skill": "Defence",
+     "min": 10
+    }
+   }
+  ],
+  "21": [
+   "You can now cast Low Level Alchemy!"
+  ],
+  "23": [
+   "You can now cast Water Bolt!",
+   "Members can now cast Battlefront teleport."
+  ],
+  "24": [
+   "Members can now enchant Pearl tipped Crossbow Bolts!"
+  ],
+  "25": [
+   "You can now Teleport to Varrock!"
+  ],
+  "27": [
+   "You can now enchant Emerald Jewellery and members can now enchant Emerald tipped Crossbow Bolts and Jade Jewellery!"
+  ],
+  "29": [
+   "You can now cast Earth Bolt and members can now enchant Red Topaz tipped Crossbow Bolts!"
+  ],
+  "30": [
+   {
+    "text": "You can now equip Bryophyta's Staff!",
+    "when": {
+     "skill": "Attack",
+     "min": 30
+    }
+   }
+  ],
+  "31": [
+   "You can now Teleport to Lumbridge!"
+  ],
+  "33": [
+   "You can now cast Telekinetic Grab!"
+  ],
+  "34": [
+   "Members can now cast Respawn teleport."
+  ],
+  "35": [
+   "You can now cast Fire Bolt!",
+   "Members can now cast Ghostly Grasp."
+  ],
+  "37": [
+   "You can now Teleport to Falador!"
+  ],
+  "38": [
+   "Members can now cast Lesser Resurrection spells."
+  ],
+  "39": [
+   "You can now cast Crumble Undead!"
+  ],
+  "40": [
+   "Members can now cast Teleport to House and can now wear Mystic, Enchanted & Elder chaos druid robes, and Skeletal armour!"
+  ],
+  "41": [
+   "You can now cast Wind Blast!",
+   "Members can now cast Adept Reanimation."
+  ],
+  "42": [
+   {
+    "text": "Members can now wield Void Knight equipment, and new information is available from the Magic Tutor in Lumbridge!",
+    "when": {
+     "skill": "Defence",
+     "min": 42
+    }
+   },
+   {
+    "text": "There is new information available from the Magic Tutor in Lumbridge!",
+    "when": {
+     "not": true,
+     "skill": "Defence",
+     "min": 42
+    }
+   }
+  ],
+  "43": [
+   "You can now cast Superheat Item!"
+  ],
+  "44": [
+   "Members can now cast Inferior Demonbane."
+  ],
+  "45": [
+   "Members can now Teleport to Camelot!"
+  ],
+  "47": [
+   "You can now cast Water Blast!",
+   "Members can now cast Shadow Veil."
+  ],
+  "48": [
+   "Members can now Teleport to Kourend Castle!",
+   "Members can now cast Fenkenstrain's Castle teleport."
+  ],
+  "49": [
+   "You can now enchant Ruby Jewellery and members can now enchant Ruby tipped Crossbow Bolts and Red Topaz Jewellery!"
+  ],
+  "50": [
+   "You have unlocked: Snare. Members have unlocked: Apprentice wand, Swampbark armour, Infinity robes, Dark Lure, Smoke Rush, Magic Dart, Iban Blast and more.",
+   "Members can now cast Dark Lure."
+  ],
+  "51": [
+   "Members have unlocked: Ardougne Teleport."
+  ],
+  "52": [
+   "Members have unlocked: Shadow Rush.",
+   "Members can now cast Shadow Rush!"
+  ],
+  "53": [
+   "You have unlocked: Earth Blast."
+  ],
+  "54": [
+   "Members have unlocked: Paddewwa Teleport and Civitas illa Fortis Teleport.",
+   "Members can now Teleport to Paddewwa!"
+  ],
+  "55": [
+   "You have unlocked: High Level Alchemy. Members have unlocked: Teacher wand."
+  ],
+  "56": [
+   "Members have unlocked: Skeletal Grasp, Blood Rush, Summon Boat and Charge Water Orb.",
+   "Members can now cast Skeletal Grasp.",
+   "Members can now cast Blood Rush!"
+  ],
+  "57": [
+   "You have unlocked: Leevl 4 Enchant. Members have unlocked: Diamond-tipped crossbow bolts, Resurrect Superior Zombie, Resurrect Superior Skeleton and Resurrect Superior Ghost.",
+   "Members can now cast Superior Resurrection spells."
+  ],
+  "58": [
+   "Members have unlocked: Ice Rush and Watchtower Teleport.",
+   "Members can now cast Ice Rush!"
+  ],
+  "59": [
+   "You have unlocked: Fire Blast. Members have unlocked: Mark of Darkness.",
+   "Members can now cast Mark of Darknesss."
+  ],
+  "60": [
+   "Members have unlocked: Bloodbark armour, God capes, Senntisten Teleport, Saradomin Strike, Flames of Zamorak, Claws of Guthix, Bones to Peaches, Charge Earth Orb and more.",
+   "Members can now Teleport to Senntisten and equip Thammaron's Sceptre!"
+  ],
+  "61": [
+   "Members have unlocked: West Ardougne Teleport and Trollheim Teleport.",
+   "Members can now cast West Ardougne teleport."
+  ],
+  "62": [
+   "Members have unlocked: Warped sceptre, Superior Demonbane, Smoke Burst and Wind Wave.",
+   "Members can now cast Superior Demonbane.",
+   "Members can now cast Smoke Burst!"
+  ],
+  "63": [
+   "Members have unlocked: Charge Fire Orb."
+  ],
+  "64": [
+   "Members have unlocked: Lesser Corruption, Shadow Burst and Ape Atoll Teleport.",
+   "Members can now cast Lesser Corruption.",
+   "Members can now cast Shadow Burst!"
+  ],
+  "65": [
+   "Members have unlocked: Dragon Hunter wand, 3rd Age wand, 3rd Age robes, Lunar armour, Harmony Island Teleport, Geomancy, Bake Pie, Water Wave and more.",
+   "Members can now cast Harmony Island teleport.",
+   "Members can now cast Bake Pie and Geomancy!"
+  ],
+  "66": [
+   "Members have unlocked: Make Ancient Wyvern shield, Vile Vigour, Monster Examine, Cure Plant, Kharyrll Teleport, Vulnerability and Charge Air Orb.",
+   "Members can now cast Vile Vigour.",
+   "Members can now cast Cure Plant and Monster Examine!"
+  ],
+  "67": [
+   "Members have unlocked: Astral Contact and Teleport to Boat.",
+   "Members can now cast Astral Contact!"
+  ],
+  "68": [
+   "Members have unlocked: Dragonstone-tipped crossbow bolts, Cure Other, Blood Burst and Level 5 Enchant.",
+   "Members can now cast Blood Burst!",
+   "Members can now cast Cure Other and Humidify!"
+  ],
+  "69": [
+   "Members have unlocked: Moonclan Teleport.",
+   "Members can now Teleport to Moonclan Island!"
+  ],
+  "70": [
+   "Members have unlocked: Boots of Brimstone, Ahrim's robes, Dagon'hai robes, Occult necklace, Degrime, Tele Group Moonclan, Ice Burst, Earth Wave and more.",
+   "Members can now cast Degrime, wear Dagon'hai robes and wield the Ancient Sceptre and Accursed Sceptre!",
+   "Members can now cast Ice Burst!",
+   "Members can now Group Teleport to Moonclan Island, wear Dagon'hai robes and wield the Ancient Sceptre and Accursed Sceptre!"
+  ],
+  "71": [
+   "Members have unlocked: Cemetery Teleport, Ourania Teleport, Hunter Kit and Cure Me.",
+   "Members can now cast Cemetery teleport.",
+   "Members can now cast Cure Me, Hunter Kit and Teleport to Ourania!"
+  ],
+  "72": [
+   "Members have unlocked: Expert Reanimation, Waterbirth Teleport, Lassar Teleport and Nightmare Staff (without orb).",
+   "Members can now cast Adept Reanimation and equip the Nightmare Staff (without orb).",
+   "Members can now Teleport to Lassar and equip the Nightmare Staff (without orb)!",
+   "Members can now Teleport to Waterbirth and equip the Nightmare Staff (without orb)!"
+  ],
+  "73": [
+   "Members have unlocked: Ward of Arceuus, Tele Group Waterbirth and Enfeeble.",
+   "Members can now cast Ward of Arceuus.",
+   "Members can now Group Teleport to Waterbirth!"
+  ],
+  "74": [
+   "Members have unlocked: Cure Group, Smoke Blitz and Teleother Lumbridge.",
+   "Members can now cast Smoke Blitz!",
+   "Members can now cast Cure Group!"
+  ],
+  "75": [
+   "Members have unlocked: Upgraded Ancient Sceptre, Staff of the Dead, Ancestral robes, Frostmoon robes, Eternal boots, Barbarian Teleport, Stat Spy, Fire Wave and more.",
+   "Members can now cast Barbarian Outpost Teleport and Stat Spy, and wield the Staff of the Dead, Staff of Light, Staff of Balance, Trident of the Seas, Slayer's Staff (e) and Eternal boots!"
+  ],
+  "76": [
+   "Members have unlocked: Resurrect Greater Zombie, Resurrect Greater Skeleton, Resurrect Greater Ghost, Spin Flax, Tele Group Barbarian and Shadow Blitz.",
+   "Members can now cast Greater Resurrection spells.",
+   "Members can now cast Shadow Blitz!",
+   "Members can now Group Teleport to the Barbarian Outpost and cast Spin Flax!"
+  ],
+  "77": [
+   "Members have unlocked: Purging staff and Superglass Make.",
+   "Members can now cast Superglass Make!"
+  ],
+  "78": [
+   "Members have unlocked: Trident of the Swamp, Virtus robes, Resurrect Crops, Khazard Teleport, Tan Leather and Dareeyak Teleport.",
+   "Members can now Resurrect crops, wield the Trident of the Swamp and wear Virtus robes.",
+   "Members can now Teleport to Dareeyak, wield the Trident of the Swamp and wear Virtus robes!",
+   "Members can now Teleport to Port Khazard, cast Tan Leather, wield the Trident of the Swamp and wear Virtus robes!"
+  ],
+  "79": [
+   "Members have unlocked: Undead Grasp, Dream, Tele Group Khazard and Entangle.",
+   "Members can now cast Undead Grasp.",
+   "Members can now Group Teleport to Port Khazard and Dream!"
+  ],
+  "80": [
+   "Members have unlocked: Soulflame Horn, Kodai Wand, Avernic treads, Death Charge, String Jewellery, Blood Blitz, Charge, Stun and more.",
+   "Members can now cast Death Charge and wield the Kodai Wand.",
+   "Members can now cast Blood Blitz and wield the Kodai Wand!",
+   "Members can now cast String Jewellery, wield the Kodai Wand and Elidinis' Ward!"
+  ],
+  "81": [
+   "Members have unlocked: Stat Restore Pot Share and Wind Surge.",
+   "Members can now cast Stat Restore Potion Share!"
+  ],
+  "82": [
+   "Members have unlocked: Sanguinesti staff, Dark Demonbane, Magic Imbue, Ice Blitz, Teleother Falador and Nightmare Staff (with orb).",
+   "Members can now cast Dark Demonbane and wield the Sanguinesti Staff and Nightmare Staff (with orb).",
+   "Members can now cast Ice Blitz and wield the Sanguinesti Staff and Nightmare Staff (with orb)!",
+   "Members can now cast Magic Imbue and wield the Sanguinesti Staff and Nightmare Staff (with orb)!"
+  ],
+  "83": [
+   "Members have unlocked: Eye of Ayak, Barrows Teleport and Fertile Soil.",
+   "Members can now cast Barrows teleport.",
+   "Members can now cast Fertile Soil!"
+  ],
+  "84": [
+   "Members can now cast Demonic Offering.",
+   "Members can now Teleport to Carrallangar!",
+   "Members can now cast Boost Potion Share!"
+  ],
+  "85": [
+   "Members can now cast Water Surge, Teleport Block, Teleport to Target and equip the Tumeken's Shadow!",
+   "Members can now cast Greater Corruption and equip the Tumeken's Shadow.",
+   "Members can now Teleport to the Fishing Guild, cast Teleport to Target and equip the Tumeken's Shadow."
+  ],
+  "86": [
+   "Members can now cast Smoke Barrage!",
+   "Members can now Group Teleport to the Fishing Guild and Plank Make!"
+  ],
+  "87": [
+   "Members can now enchant Onyx Jewellery and Onyx tipped Crossbow Bolts!",
+   "Members can now Teleport to Catherby!"
+  ],
+  "88": [
+   "Members can now cast Shadow Barrage!",
+   "Members can now Group Teleport to Catherby!"
+  ],
+  "89": [
+   "Members can now Teleport to the Ice Plateau and cast Recharge Dragonstone!"
+  ],
+  "90": [
+   "Members can now cast Earth Surge and Teleother Camelot!",
+   "Members can now cast Master reanimation and Ape Atoll teleport.",
+   "Members can now Teleport to Annakarl!",
+   "Members can now Group Teleport to the Ice Plateau!"
+  ],
+  "91": [
+   "Members can now cast Energy Transfer!"
+  ],
+  "92": [
+   "Members can now cast Sinister Offering.",
+   "Members can now cast Blood Barrage!",
+   "Members can now cast Heal Other!"
+  ],
+  "93": [
+   "Members can now enchant Zenyte Jewellery!",
+   "Members can now cast Vengeance Other!"
+  ],
+  "94": [
+   "Members can now cast Ice Barrage!",
+   "Members can now cast Vengeance!"
+  ],
+  "95": [
+   "Members can now cast Fire Surge!",
+   "Members can now cast Heal Group!"
+  ],
+  "96": [
+   "Members have unlocked: Spellbook Swap and Ghorrock Teleport.",
+   "Members can now Teleport to Ghorrock!",
+   "Members can now cast Spellbook Swap!"
+  ],
+  "99": [
+   "Congratulations! You are now a master of Magic. Why not visit the robe store in the Wizards' Guild, where you can buy something special that is only available to true masters of the Magic skill!"
+  ]
+ },
+ "Runecrafting": {
+  "2": [
+   "You can now craft Mind Runes."
+  ],
+  "5": [
+   "You can now craft Water Runes."
+  ],
+  "6": [
+   "Members can now craft Mist Runes from Pure Rune Essence."
+  ],
+  "9": [
+   "You can now craft Earth Runes."
+  ],
+  "10": [
+   "Members can now craft Dust Runes from Pure Rune Essence."
+  ],
+  "11": [
+   "You will now receive 2 Air Runes from each Essence."
+  ],
+  "13": [
+   "Members can now craft Mud Runes from Pure Rune Essence."
+  ],
+  "14": [
+   "You can now craft Fire Runes and will now receive 2 Mind Runes from each Essence."
+  ],
+  "15": [
+   "Members can now craft Smoke Runes from Pure Rune Essence."
+  ],
+  "19": [
+   "Members can now craft Steam Runes from Pure Rune Essence and will now receive 2 Water Runes from each Essence."
+  ],
+  "20": [
+   "You can now craft Body Runes."
+  ],
+  "22": [
+   "You will now receive 3 Air Runes from each Essence."
+  ],
+  "23": [
+   "Members can now craft Lava Runes from Pure Rune Essence."
+  ],
+  "25": [
+   "Members: You can now use Medium Pouches and Colossal Pouches to carry additional Essence."
+  ],
+  "26": [
+   "You will now receive 2 Earth Runes from each Essence."
+  ],
+  "27": [
+   "Members can now craft Cosmic Runes from Pure Rune Essence and participate in the Guardians of the Rift minigame (after completion of the Temple of the Eye quest)."
+  ],
+  "28": [
+   "You will now receive 3 Mind Runes from each Essence."
+  ],
+  "33": [
+   "You will now receive 4 Air Runes from each Essence, and members can now craft Sunfire Runes."
+  ],
+  "35": [
+   "Members can now craft Chaos Runes from Pure Rune Essence and you will now receive 2 Fire Runes from each Essence."
+  ],
+  "38": [
+   "You will now receive 3 Water Runes from each Essence."
+  ],
+  "40": [
+   "Members can now craft Astral Runes from Pure Rune Essence."
+  ],
+  "42": [
+   "You will now receive 4 Mind Runes from each Essence and Members can now infuse Splitbark boots and gauntlets with Nature Runes."
+  ],
+  "44": [
+   "Members can now craft Nature Runes from Pure Rune Essence and you will now receive 5 Air Runes from each Essence."
+  ],
+  "46": [
+   "You will now receive 2 Body Runes from each Essence and Members can now infuse the Splitbark helm with Nature Runes."
+  ],
+  "48": [
+   "Members can now infuse Splitbark body and legs with Nature Runes."
+  ],
+  "50": [
+   "Members have unlocked: Soiled page (via desiccated pages), Soaked page (via desiccated pages), Burnt page (via desiccated pages) and Large pouch."
+  ],
+  "52": [
+   "You have unlocked: 3 Earth runes per essence."
+  ],
+  "54": [
+   "Members have unlocked: Law runes."
+  ],
+  "55": [
+   "Youhave unlocked: 6 Air runes per essence."
+  ],
+  "56": [
+   "You have unlocked: 5 Mind runes per essence."
+  ],
+  "57": [
+   "You have unlocked: 4 Water runes per essence."
+  ],
+  "59": [
+   "Members have unlocked: 2 Cosmic runes per essence."
+  ],
+  "60": [
+   "Members have unlocked: Avernic treads, Primordial boots, Pegasian boots and Eternal boots."
+  ],
+  "65": [
+   "Members have unlocked: Death runes."
+  ],
+  "66": [
+   "You have unlocked: 7 Air runes per essence."
+  ],
+  "70": [
+   "You have unlocked: 3 Fire runes per essence and 6 Mind runes per essence."
+  ],
+  "74": [
+   "Members have unlocked: 2 Chaos runes per essence."
+  ],
+  "75": [
+   "Members have unlocked: Giant pouch."
+  ],
+  "76": [
+   "You have unlocked: 5 Water runes per essence."
+  ],
+  "77": [
+   "You have unlocked: 8 Air runes per essence. Members have unlocked: Bloodbark boots and gauntlets and Blood runes."
+  ],
+  "78": [
+   "You have unlocked: 4 Earth runes per essence."
+  ],
+  "79": [
+   "Members have unlocked: Bloodbark helm."
+  ],
+  "81": [
+   "Members have unlocked: Bloodbark body and legs."
+  ],
+  "82": [
+   "Members have unlocked: 2 Astral runes per essence."
+  ],
+  "84": [
+   "You have unlocked: 7 Mind runes per essence."
+  ],
+  "85": [
+   "Members with 56 Crafting can now make Colossal Pouches to carry more essence."
+  ],
+  "88": [
+   "You have unlocked: 9 Air runes per essence."
+  ],
+  "90": [
+   "Members have unlocked: Aether runes and Soul runes."
+  ],
+  "91": [
+   "Members have unlocked: 2 Nature runes per essence."
+  ],
+  "92": [
+   "You have unlocked: 3 Body runes per essence."
+  ],
+  "95": [
+   "You have unlocked: 6 Water runes per essence. Members have unlocked: 2 Law runes per essence and Wrath runes."
+  ],
+  "98": [
+   "You have unlocked: 8 Mind runes per essence. Members have unlocked: 3 Sunfire runes per essence."
+  ],
+  "99": [
+   "Congratulations! You are now a master Runecrafter. Why not visit Aubury, who runs the rune shop in Varrock, where you can buy something special that is only available to true masters of the Runecraft skill!"
+  ]
+ },
+ "Hitpoints": {
+  "42": [
+   "Members can now wield Void Knight equipment!"
+  ],
+  "50": [
+   "Members can now wield the Nightmare Staff!"
+  ],
+  "75": [
+   "Member have unlocked: Enchanted zenyte jewellery."
+  ],
+  "90": [
+   "Members have unlocked: Confliction gauntlets and Amulet of Rancour."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Hitpoints. Why not visit Tafani at the Emir's Arena hospital? She has something special that is only available to true masters of the Hitpoints skill!"
+  ]
+ },
+ "Crafting": {
+  "2": [
+   "Members have unlocked: Pheasant clothing."
+  ],
+  "3": [
+   "Members have unlocked: Polished buttons and Cup."
+  ],
+  "4": [
+   "Members have unlocked: Candle lantern."
+  ],
+  "5": [
+   "You have unlocked: Gold ring. Members have unlocked: Craft a birdhouse trap from normal logs."
+  ],
+  "6": [
+   "You have unlocked: Gold necklace."
+  ],
+  "7": [
+   "You have unlocked: Pie dish and Leather boots. Members have unlocked: Gold bracelet."
+  ],
+  "8": [
+   "You have unlocked: Gold amulet and Bowl."
+  ],
+  "9": [
+   "You have unlocked: Leather cowl."
+  ],
+  "10": [
+   "Members have unlocked: Extract sinew from monkey tails, Spin sinew in crossbow strings and Spin flax into bow strings."
+  ],
+  "11": [
+   "You have unlocked: Leather vambraces."
+  ],
+  "12": [
+   "Members have unlocked: Craft a gem pouch, Oil lamp, Spin flax into linen yarn and Bolt of linen."
+  ],
+  "13": [
+   "Members have unlocked: Jade ring and Cut jade."
+  ],
+  "14": [
+   "You have unlocked: Leather body. Members have unlocked: Xerician hat."
+  ],
+  "15": [
+   "Members have unlocked: Craft a birdhouse trap from oak logs, Crab shell armour and Snail helmet."
+  ],
+  "16": [
+   "You have unlocked: Holy symbol. Members have unlocked: Opal necklace, Red topaz ring and Cut red topaz."
+  ],
+  "17": [
+   "Members have unlocked: Unholy symbol and Xerician robe."
+  ],
+  "18": [
+   "You have unlocked: Leather chaps. Members have unlocked: Silver sickle."
+  ],
+  "19": [
+   "Members have unlocked: Plant pot and Spin magic tree roots into magic strings."
+  ],
+  "20": [
+   "You have unlocked: Sapphire ring and Cut sapphire."
+  ],
+  "21": [
+   "Members have unlocked: Silver crossbow bolts and Vegetable sack."
+  ],
+  "22": [
+   "You have unlocked: Sapphire necklace. Members have unlocked: Opal bracelet and Xerician top."
+  ],
+  "23": [
+   "You have unlocked: Tiara. Members have unlocked: Sapphire bracelet."
+  ],
+  "24": [
+   "You have unlocked: Sapphire amulet."
+  ],
+  "25": [
+   "Members have unlocked: Craft a birdhouse trap from willow logs, Jade necklace and Pot lid."
+  ],
+  "26": [
+   "Members have unlocked: Oil lantern and Drift net."
+  ],
+  "27": [
+   "You have unlocked: Emerald ring and Cut emerald. Members have unlocked: Opal amulet."
+  ],
+  "28": [
+   "You have unlocked: Hard leather body."
+  ],
+  "29": [
+   "You can now craft emerald necklaces. Members can craft jade bracelets."
+  ],
+  "30": [
+   "There is new information available from the Crafting Tutor in Lumbridge Castle and you can craft emerald bracelets and repair broken cranes in Port Piscarilius."
+  ],
+  "31": [
+   "You can now craft emerald amulets."
+  ],
+  "32": [
+   "Members can now craft spiked vambraces and red topaz necklaces."
+  ],
+  "33": [
+   "Members can now craft vials."
+  ],
+  "34": [
+   "You can now cut rubies and craft ruby rings. Members can craft jade amulets."
+  ],
+  "35": [
+   "Members can now craft Broodoo shields, teak birdhouses, bone staves and small hunter's pouches."
+  ],
+  "36": [
+   "Members can now weave baskets."
+  ],
+  "37": [
+   "Members can now craft rabbit-foot necklaces."
+  ],
+  "38": [
+   "Members can now craft leather coifs, mine dense essence and craft red topaz bracelets."
+  ],
+  "40": [
+   "You can now enter the Crafting Guild and make ruby necklaces."
+  ],
+  "41": [
+   "Members can now craft studded leather body armour and hard leather shields."
+  ],
+  "42": [
+   "Members can now craft fishbowls, ruby bracelets and gold tiaras."
+  ],
+  "43": [
+   "You can now cut diamonds and craft diamond rings. Members can now craft yak-hide leg armour."
+  ],
+  "44": [
+   "Members can now craft studded leather chaps."
+  ],
+  "45": [
+   "Members can now craft snakeskin boots, red topaz amulets and maple birdhouses."
+  ],
+  "46": [
+   "Members can now craft orbs and yak-hide body armour."
+  ],
+  "47": [
+   "Members can now craft snakeskin vambraces."
+  ],
+  "48": [
+   "Members can now craft snakeskin bandanas."
+  ],
+  "49": [
+   "Members can now craft bullseye lantern lenses."
+  ],
+  "50": [
+   "You have unlocked: Ruby amulet. Members have unlocked: Clothes pouch, Craft medium hunters' pouches and Craft a birdhouse trap from mahogany logs."
+  ],
+  "51": [
+   "Members have unlocked: Craft a knife from a narwhal horn. and Snakeskin chaps."
+  ],
+  "52": [
+   "Members have unlocked: Replace Dorgeshuun light orbs and Serpentine helms."
+  ],
+  "53": [
+   "Members have unlocked: Snakeskin body."
+  ],
+  "54": [
+   "Members have unlocked: Water battlestaff."
+  ],
+  "55": [
+   "Members have unlocked: Dragonstone ring, Cut dragonstone and Slayer helm."
+  ],
+  "56": [
+   "You have unlocked: Diamond necklaces. Members have unlocked: Craft a colossal pouch from essence pouches and Snakeskin shield."
+  ],
+  "57": [
+   "Members have unlocked: Green dragonhide vambraces."
+  ],
+  "58": [
+   "Members have unlocked: Earth battlestaff and Diamond bracelet."
+  ],
+  "59": [
+   "Members have unlocked: Trident of the Swamp and Toxic Staff of the Dead."
+  ],
+  "60": [
+   "Members have unlocked: Craft a birdhouse trap from yew logs, Splitbark boots, Splitbark gauntlets, Green dragonhide chaps and Craft a Sunstone Golem on Wyrmscraig."
+  ],
+  "61": [
+   "Members have unlocked: Splitbark helm."
+  ],
+  "62": [
+   "Members have unlocked: Craft a crate from camphor logs., Fire battlestaff, Splitbark legs, Splitbark body and Green dragonhide shields."
+  ],
+  "63": [
+   "Members have unlocked: Green dragonhide body."
+  ],
+  "65": [
+   "Members have unlocked: Craft large hunters' pouches."
+  ],
+  "66": [
+   "Membershave unlocked: Air battlestaff and Blue dragonhide vambraces."
+  ],
+  "67": [
+   "Members have unlocked: Onyx ring and Cut onyx."
+  ],
+  "68": [
+   "Members have unlocked: Mixed hide cape and Blue dragonhide chaps."
+  ],
+  "69": [
+   "Members have unlocked: Blue dragonhide shield and Mixed hide boots."
+  ],
+  "70": [
+   "You have unlocked: Diamond amulet. Members have unlocked: Crystal helm and Celestial signet."
+  ],
+  "71": [
+   "Members have unlocked: Mixed hide legs and Blue dragonhide body."
+  ],
+  "72": [
+   "Members have unlocked: Crystal legs, Noxious Halberds, Dragonstone necklace and Mixed hide body."
+  ],
+  "73": [
+   "Members have unlocked: Spin cotton ball into cotton yarn, Red dragonhide vambraces and Bolt of cotton."
+  ],
+  "74": [
+   "Members have unlocked: Crystal body, Purging staff and Dragonstone bracelet."
+  ],
+  "75": [
+   "Members have unlocked: Craft a divine rune pouch from a Thread of Elidinis, Craft a birdhouse trap from magic logs, Slayer ring and Red dragonhide chaps."
+  ],
+  "76": [
+   "Members have unlocked: Crystal harpoon, Crystal felling axe, Crystal axe, Crystal pickaxe, Hueycoatl hide coif, Hueycoatl hide vambraces and Red dragonhide shield."
+  ],
+  "77": [
+   "Members have unlocked: Hueycoatl hide chaps and Red dragonhide body."
+  ],
+  "78": [
+   "Members have unlocked: Crystal shield, Crystal halberd, Crystal bow and Hueycoatl hide body."
+  ],
+  "79": [
+   "Members have unlocked: Black dragonhide vambraces."
+  ],
+  "80": [
+   "Members have unlocked: Eternal teleport crystal, Enhanced crystal key, Ultor, Venator, Bellator, Magus rings, Icon Removal and Dragonstone amulet."
+  ],
+  "82": [
+   "Members have unlocked: Bow of Faerdhinen (c), Bow of Faerdhinen, Blade of Saeldor (c), Blade of Saeldor, Onyx necklace and Black dragonhide chaps."
+  ],
+  "83": [
+   "Members have unlocked: Amethyst bolt tips, Confliction gauntlets and Black dragonhide shield."
+  ],
+  "84": [
+   "Members have unlocked: Onyx bracelet and Black dragonhide body."
+  ],
+  "85": [
+   "Members have unlocked: Accursed Sceptre and Amethyst arrowtips."
+  ],
+  "86": [
+   "Members have unlocked: Amulet of Rancour."
+  ],
+  "87": [
+   "Members have unlocked: Amethyst javelin tips and Dorgeshuun light orb."
+  ],
+  "88": [
+   "Members can now craft Hueycoatl Bodies."
+  ],
+  "89": [
+   "Members have unlocked: Amethyst dart tips, Zenyte ring and Cut zenyte."
+  ],
+  "90": [
+   "Members have unlocked: Craft a birdhouse trap from redwood logs, Onyx amulet and Break down Armadylean armour and fortify Masori armour."
+  ],
+  "92": [
+   "Members have unlocked: Zenyte necklace."
+  ],
+  "95": [
+   "Members have unlocked: Zenyte bracelet."
+  ],
+  "98": [
+   "Members have unlocked: Zenyte amulet."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Crafting. Why not visit the Master Craftsman at the Crafting Guild? He has something special that is only available to true masters of the Crafting skill!"
+  ]
+ },
+ "Mining": {
+  "6": [
+   "You have unlocked: Steel pickaxe."
+  ],
+  "10": [
+   "You have unlocked: Size-1 stars and Blurite ore. Members have unlocked: Limestone."
+  ],
+  "11": [
+   "You have unlocked: Black pickaxe."
+  ],
+  "14": [
+   "You have unlocked: Barronite."
+  ],
+  "15": [
+   "You have unlocked: Iron ore."
+  ],
+  "20": [
+   "You have unlocked: Size-2 stars and Silver ore. Members have unlocked: Mining gloves."
+  ],
+  "21": [
+   "You have unlocked: Mithril pickaxe."
+  ],
+  "22": [
+   "Members have unlocked: Volcanic ash."
+  ],
+  "25": [
+   "Members have unlocked: Lead ore."
+  ],
+  "30": [
+   "You have unlocked: Size-3 stars and Coal. Members have unlocked: Motherlode Mine, Motherlode Mine paydirt and Pure Essence."
+  ],
+  "31": [
+   "You have unlocked: Adamant pickaxe."
+  ],
+  "35": [
+   "Members have unlocked: Sandstone."
+  ],
+  "38": [
+   "Members have unlocked: Dense essence."
+  ],
+  "39": [
+   "There is new information available from the Mining Tutor south of Lumbridge."
+  ],
+  "40": [
+   "You have unlocked: Size-4 stars and Gold. Members have unlocked: Gem rocks."
+  ],
+  "41": [
+   "You have unlocked: Gilded pickaxe and Rune pickaxe. Members have unlocked: Calcified rocks."
+  ],
+  "42": [
+   "Members have unlocked: Volcanic sulphur."
+  ],
+  "43": [
+   "Members have unlocked: Lovakengj Blast Mine."
+  ],
+  "45": [
+   "Members have unlocked: Granite."
+  ],
+  "48": [
+   "Members have unlocked: Rubium splinters."
+  ],
+  "50": [
+   "You have unlocked: Size-5 stars. Members have unlocked: Volcano Mine."
+  ],
+  "55": [
+   "You have unlocked: Mithril ore. Members have unlocked: Superior mining gloves."
+  ],
+  "57": [
+   "Members have unlocked: Motherlord Mine upper area."
+  ],
+  "60": [
+   "You have unlocked: Size-6 stars and Mining Guild. Members have unlocked: Daeyalt essence."
+  ],
+  "61": [
+   "Members have unlocked: Infernal pickaxe, 3rd Age pickaxe and Dragon pickaxe."
+  ],
+  "64": [
+   "Members have unlocked: Tainted essence chunk."
+  ],
+  "65": [
+   "Members have unlocked: Lovakite ore."
+  ],
+  "68": [
+   "Members have unlocked: Rubium geode."
+  ],
+  "70": [
+   "You have unlocked: Size-7 stars and Adamantite ore. Members have unlocked: Expert mining gloves and Soft clay."
+  ],
+  "71": [
+   "Members have unlocked: Crystal pickaxe."
+  ],
+  "72": [
+   "Members can now mine Te Salt, Efh Salt, Urt Salt, and Basalt."
+  ],
+  "74": [
+   "Members have unlocked: Nickel ore."
+  ],
+  "75": [
+   "Members have unlocked: Ancient essence."
+  ],
+  "78": [
+   "Members have unlocked: Infernal shale."
+  ],
+  "80": [
+   "You have unlocked: Size-8 stars."
+  ],
+  "85": [
+   "You have unlocked: Runite ore."
+  ],
+  "90": [
+   "You have unlocked: Size-9 stars."
+  ],
+  "92": [
+   "Members have unlocked: Amethyst."
+  ],
+  "99": [
+   "Congratulations! You are now a master Miner. Why not visit Gadrin at the entrance to the Mining Guild? He has something special that is only available to true masters of the Mining skill!"
+  ]
+ },
+ "Smithing": {
+  "2": [
+   "You have unlocked: Bronze maces."
+  ],
+  "3": [
+   "You have unlocked: Bronze medium helms. Members have unlocked: Bronze crossbow bolts."
+  ],
+  "4": [
+   "You have unlocked: Bronze swords. Members have unlocked: Bronze nails, Bronze wire and Bronze dart tips."
+  ],
+  "5": [
+   "You have unlocked: Bronze scimitars. Members have unlocked: Bronze cannonballs, Bronze arrowheads, Bronze hastae and Bronze spears."
+  ],
+  "6": [
+   "You have unlocked: Bronze longswords. Members have unlocked: Convert steel felling axes, Bronze javelin tips and Bronze crossbow limbs."
+  ],
+  "7": [
+   "You have unlocked: Bronze full helms. Members have unlocked: Bronze throwing knives."
+  ],
+  "8": [
+   "You have unlocked: Bronze square shields. Members have unlocked: Blurite crossbow bolts."
+  ],
+  "9": [
+   "You have unlocked: Bronze warhammers."
+  ],
+  "10": [
+   "You have unlocked: Bronze battle axes. Members have unlocked: Bronze keel parts."
+  ],
+  "11": [
+   "You have unlocked: Bronze chainbodies. Members have unlocked: Convert black felling axes."
+  ],
+  "12": [
+   "You have unlocked: Bronze kiteshields."
+  ],
+  "13": [
+   "Members have unlocked: Blurite crossbow limbs, Bronze claws and Blurite."
+  ],
+  "14": [
+   "You have unlocked: Crushed barronite deposits and Bronze two-handed swords."
+  ],
+  "15": [
+   "You have unlocked: Iron daggers and Iron."
+  ],
+  "16": [
+   "You have unlocked: Iron axes, Bronze plateskirts and Bronze platelegs."
+  ],
+  "17": [
+   "You have unlocked: Iron maces. Members have unlocked: Iron spits."
+  ],
+  "18": [
+   "You have unlocked: Iron medium helms and Bronze platebodies. Members have unlocked: Iron crossbow bolts."
+  ],
+  "19": [
+   "You have unlocked: Iron swords. Members have unlocked: Iron nails and Iron dart tips."
+  ],
+  "20": [
+   "You have unlocked: Iron scimitars and Silver. Members have unlocked: Iron cannonballs, Iron arrowheads, Iron hastae and Iron spears."
+  ],
+  "21": [
+   "You have unlocked: Iron longswords. Members have unlocked: Convert mithril felling axes and Iron javelin tips."
+  ],
+  "22": [
+   "You have unlocked: Iron full helms. Members have unlocked: Iron keel parts and Iron throwing knives."
+  ],
+  "23": [
+   "You have unlocked: Iron square shields. Members have unlocked: Iron crossbow limbs."
+  ],
+  "24": [
+   "You have unlocked: Iron warhammers."
+  ],
+  "25": [
+   "You have unlocked: Iron battleaxes. Members have unlocked: Lead."
+  ],
+  "26": [
+   "You have unlocked: Iron Chainbodies. Members have unlocked: Oil lantern frames."
+  ],
+  "27": [
+   "You have unlocked: Iron kiteshields."
+  ],
+  "28": [
+   "Members have unlocked: Iron claws."
+  ],
+  "29": [
+   "You have unlocked: Iron two-handed swords."
+  ],
+  "30": [
+   "You have unlocked: Steel daggers and Steel."
+  ],
+  "31": [
+   "You have unlocked: Steel axes, Iron plateskirts, Iron platelegs. Members have unlocked: Convert adamant felling axes."
+  ],
+  "32": [
+   "You have unlocked: Steel maces."
+  ],
+  "33": [
+   "You have unlocked: Steel medium helms and Iron platebodies. Members have unlocked: Steel crossbow bolts."
+  ],
+  "34": [
+   "You have unlocked: Steel nails and Steel swords. Members have unlocked: Chain and Steel dart tips."
+  ],
+  "35": [
+   "You have unlocked: Steel scimitars. Members have unlocked: Secateurs Attachment, Bone mace, Steel cannonballs, Steel arrowheads, Steel hastae and Steel spears."
+  ],
+  "36": [
+   "You have unlocked: Steel longswords. Members have unlocked: Steel studs, Steel javelin tips and Steel crossbow limbs."
+  ],
+  "37": [
+   "You have unlocked: Steel full helms. Members have unlocked: Steel throwing knives."
+  ],
+  "38": [
+   "You have unlocked: Steel square shields. Members have unlocked: Steel keel parts."
+  ],
+  "39": [
+   "You have unlocked: Steel warhammers."
+  ],
+  "40": [
+   "You have unlocked: Steel battleaxes and Gold."
+  ],
+  "41": [
+   "You have unlocked: Steel chainbodies. Members have unlocked: Convert rune felling axes."
+  ],
+  "42": [
+   "You have unlocked: Steel kiteshields."
+  ],
+  "43": [
+   "Members can now make Steel Claws."
+  ],
+  "44": [
+   "You can now make Steel Two Handed Swords."
+  ],
+  "45": [
+   "Members can now smelt Lovakite Ore and make Shayzien gloves (1)."
+  ],
+  "46": [
+   "You can now make Steel Plate Legs and Steel plate skirts."
+  ],
+  "47": [
+   "Members can now make Shayzien boots (1)."
+  ],
+  "48": [
+   "You can now make Steel Plate Bodies."
+  ],
+  "49": [
+   "Members can now make Bullseye Lantern frames and Shayzien helms (1)."
+  ],
+  "50": [
+   "You can now smelt Mithril Ore and make Mithril Daggers."
+  ],
+  "51": [
+   "You can now make Mithril Axes and members can make Shayzien greaves (1)."
+  ],
+  "52": [
+   "You can now make Mithril Maces."
+  ],
+  "53": [
+   "You have unlocked: Mithril medium helms. Members have unlocked: Shayzien platebody (1) and Mithril crossbow bolts."
+  ],
+  "54": [
+   "You have unlocked: Mithril swords. Members have unlocked: Mithril nails and Mithril dart tips."
+  ],
+  "55": [
+   "You have unlocked: Mithril scimitars. Members have unlocked: Shayzien gloves (2), Mithril cannonballs, Mithril arrowheads, Mithril hastae and Mithril spears."
+  ],
+  "56": [
+   "You have unlocked: Mithril longswords. Members have unlocked: Mithril keel parts, Mithril javelin tips and Mithril crossbow limbs."
+  ],
+  "57": [
+   "You have unlocked: Mithril full helms. Members have unlocked: Shayzien boots (2) and Mithril throwing knives."
+  ],
+  "58": [
+   "You have unlocked: Mithril square shields."
+  ],
+  "59": [
+   "You have unlocked: Mithril warhammers. Members have unlocked: Shayzien helms (2) and Mithril crossbow grapple tips."
+  ],
+  "60": [
+   "You have unlocked: Mithril battleaxes. Members have unlocked: Aquanite hoppers and Dragon square shield."
+  ],
+  "61": [
+   "You have unlocked: Mithril chainbodies. Members have unlocked: Convert 3rd Age felling axes, Convert dragon felling axes and Shayzien greaves (2)."
+  ],
+  "62": [
+   "You have unlocked: Mithril kiteshields."
+  ],
+  "63": [
+   {
+    "text": "Members have unlocked: Shayzien platebody (2) and Mithril claws.",
+    "when": {
+     "quest": "Death Plateau",
+     "not": true
+    }
+   },
+   {
+    "text": "Members can now make Mithril Claws and Shayzien platebodies (2).",
+    "when": {
+     "quest": "Death Plateau"
+    }
+   }
+  ],
+  "64": [
+   "You have unlocked: Mithril two-handed swords."
+  ],
+  "65": [
+   "Members have unlocked: Shayzien gloves (3)."
+  ],
+  "66": [
+   "You have unlocked: Mithril plateskirts and Mithril platelegs. Members have unlocked Ancient Wyvern shield."
+  ],
+  "67": [
+   "Members have unlocked: Shayzien boots (3)."
+  ],
+  "68": [
+   "You have unlocked: Mithril platebodies."
+  ],
+  "69": [
+   "Members have unlocked: Shayzien helm (3)."
+  ],
+  "70": [
+   "You have unlocked: Adamant daggers and Adamant. Members have unlocked: Confliction gauntlets, Zombie axes and helmets, Crystal helm and Celestial signet."
+  ],
+  "71": [
+   "You have unlocked: Adamant axes. Members have unlocked: Reshape crystal felling axes and Shayzien greaves (3)."
+  ],
+  "72": [
+   "You have unlocked: Adamant maces. Members have unlocked: Crystal legs and Noxious Halberd."
+  ],
+  "73": [
+   "You have unlocked: Adamant medium helms. Members have unlocked: Shayzien platebody (3) and Adamant crossbow bolts."
+  ],
+  "74": [
+   "You have unlocked: Adamant swords. Members have unlocked: Emberlight, Adamant keel parts, Adamant nails, Adamant dart tips, Cupronickel and Crystal body."
+  ],
+  "75": [
+   "You have unlocked: Adamant scimitars. Members have unlocked: Dragon kite shield, Shayzien gloves (4), Adamant cannonballs, Adamant arrowheads, Adamant hastae and Adamant spears."
+  ],
+  "76": [
+   "You have unlocked: Adamant longswords. Members have unlocked: Adamant javelin tips, Adamant crossbow limbs, Crystal harppon, Crystal felling axe, Crystal axe and Crystal pickaxe."
+  ],
+  "77": [
+   "You have unlocked: Adamant full helms. Members have unlocked: Shayzien boots (4) and Adamant throwing knives."
+  ],
+  "78": [
+   "You have unlocked: Adamant square shields. Members have unlocked: Crystal shield, Crystal halberd and Crystal bow."
+  ],
+  "79": [
+   "You have unlocked: Adamant warhammers. Members have unlocked: Shayzien helms (4)."
+  ],
+  "80": [
+   "You have unlocked: Adamant battleaxes. Members have unlocked: Eternal teleport crystal and Enhanced crystal key."
+  ],
+  "81": [
+   "You have unlocked: Adamant chainbodies. Members have unlocked: Shayzien greaves (4)."
+  ],
+  "82": [
+   "You have unlocked: Adamant kiteshields. Members have unlocked: Bow of Faerdhinen (c), Bow of Faerdhinen, Blade of Saeldor (c) and Blade of Saeldor."
+  ],
+  "83": [
+   "Members have unlocked: Oathplate, Shayzien platebody (4) and Adamant claws."
+  ],
+  "84": [
+   "You have unlocked: Adamant two-handed swords."
+  ],
+  "85": [
+   "You have unlocked: Rune daggers and Runite. Members have unlocked: Shayzien gloves (5)."
+  ],
+  "86": [
+   "You have unlocked: Rune axes, Adamant plateskirts and Adamant platelegs. Members have unlocked: Rune keel parts."
+  ],
+  "87": [
+   "You have unlocked: Rune maces. Members have unlocked: Shayzien boots (5)."
+  ],
+  "88": [
+   "You have unlocked: Rune medium helms and Adamant platebodies. Members have unlocked: Rune crossbow bolts."
+  ],
+  "89": [
+   "You have unlocked: Rune swords. Members have unlocked: Shayzien helm (5), Rune nails and Rune dart tips."
+  ],
+  "90": [
+   "You have unlocked: Rune scimitars. Members have unlocked: Dragon platebody, Rune cannonballs, Rune arrowheads, Rune hastae and Rune spears."
+  ],
+  "91": [
+   "You have unlocked: Rune longswords. Members have unlocked: Shayzien greaves (5), Rune javelin tips and Rune crossbow limbs."
+  ],
+  "92": [
+   "You have unlocked: Rune full helms. Members have unlocked: Dragon nails and Rune throwing knives."
+  ],
+  "93": [
+   "You have unlocked: Rune square shields. Members have unlocked: Shayzien platebody (5)."
+  ],
+  "94": [
+   "You have unlocked: Rune warhammers. Members have unlocked: Dragon keel parts."
+  ],
+  "95": [
+   "You have unlocked: Rune battleaxes."
+  ],
+  "96": [
+   "You have unlocked: Rune chainbodies."
+  ],
+  "97": [
+   "You have unlocked: Rune kiteshields."
+  ],
+  "98": [
+   "Members have unlocked: Rune claws."
+  ],
+  "99": [
+   "Congratulations! You are now a master Smith. Why not visit Thurgo, who lives near Mudskipper Point? He has something special that is only available to true masters of the Smithing skill!"
+  ]
+ },
+ "Fishing": {
+  "5": [
+   "You have unlocked: Sardine. Members have unlocked: Karambwanji."
+  ],
+  "7": [
+   "You can now try fishing for guppies."
+  ],
+  "10": [
+   "You can now try fishing for herring."
+  ],
+  "15": [
+   "You have unlocked: Anchovies. Members have unlocked: Suphi fish."
+  ],
+  "16": [
+   "Members can now try fishing for mackerel, oysters and caskets with a large net."
+  ],
+  "20": [
+   "You can now try fly fishing for trout and cavefish. Members can try fishing for Bream with a big net in Neypotzli."
+  ],
+  "23": [
+   "Members can now try fishing for cod with a large net."
+  ],
+  "25": [
+   "You can now try fishing for pike."
+  ],
+  "28": [
+   "Members can now try fishing for slimy eels."
+  ],
+  "29": [
+   "New information is available from the Fishing Tutor south of Lumbridge."
+  ],
+  "30": [
+   "You can now try fly fishing for salmon. Members can catch Leckish fish."
+  ],
+  "33": [
+   "You can now try fishing for tetra. Members can now try to net giant frogspawn."
+  ],
+  "34": [
+   "Members can now wear the Angler outfit."
+  ],
+  "35": [
+   "You can now try harpooning tuna. Members can now fight the Tempoross."
+  ],
+  "38": [
+   "Members can now try fishing for cave eels and rainbow fish."
+  ],
+  "39": [
+   "New information is available from the Fishing Tutor south of Lumbridge."
+  ],
+  "40": [
+   "You can now try to catch lobsters."
+  ],
+  "43": [
+   "Members can now catch bluegill on Molch Island (with 35 hunter)."
+  ],
+  "45": [
+   "Members can now catch Brawk fish."
+  ],
+  "46": [
+   "Members can now try fishing for sea bass and catfish with a large net."
+  ],
+  "47": [
+   "Members can now access drift net fishing on fossil island (with 44 hunter)."
+  ],
+  "48": [
+   "Members can now try fishing for leaping trout."
+  ],
+  "50": [
+   "You have unlocked: Swordfish."
+  ],
+  "52": [
+   "Members have unlocked: Swordtip squid."
+  ],
+  "53": [
+   "Members have unlocked: Lava eel."
+  ],
+  "55": [
+   {
+    "text": "Members have unlocked: Harpoonfish (barehanded) and Tuna (barehanded).",
+    "when": {
+     "skill": "Strength",
+     "min": 35
+    }
+   }
+  ],
+  "56": [
+   "Members have unlocked: Common tench."
+  ],
+  "58": [
+   "Members have unlocked: Leaping salmon."
+  ],
+  "60": [
+   "Members have unlocked: Mycil fish."
+  ],
+  "61": [
+   "Members have unlocked: Dragon harpoon."
+  ],
+  "62": [
+   "Members have unlocked: Monkfish."
+  ],
+  "65": [
+   "Members have unlocked: Karambwan."
+  ],
+  "68": [
+   "Members are now qualified to enter the Fishing Guild."
+  ],
+  "69": [
+   "Members have unlocked: Giant krill shoal, Shimmering shoal, Jumbo squid, Giant krill shoal and Shimmering shoal."
+  ],
+  "70": [
+   "Members have unlocked: Swordfish (barehanded and Leaping sturgeon."
+  ],
+  "71": [
+   "Members have unlocked: Crystal harpoon."
+  ],
+  "73": [
+   "Members have unlocked: Haddock shoal, Mottled eel and Haddock shoal."
+  ],
+  "75": [
+   "Members have unlocked: Roqed fish and Infernal harpoon."
+  ],
+  "76": [
+   "Members have unlocked: Glistening shoal, Sharks and Glistening shoal."
+  ],
+  "79": [
+   "Members have unlocked: Sea turtle, Yellowfin shoal and Yellowfin shoal."
+  ],
+  "80": [
+   "Members have unlocked: Infernal eel."
+  ],
+  "81": [
+   "Members have unlocked: Manta ray."
+  ],
+  "82": [
+   "You have unlocked: Minnows. Members have unlocked: Anglerfish."
+  ],
+  "83": [
+   "Members have unlocked: Halibut shoal and Halibut shoal."
+  ],
+  "85": [
+   "Members have unlocked: Dark crab."
+  ],
+  "86": [
+   "Members have unlocked: Vibrant shoal and Vibrant shoal."
+  ],
+  "87": [
+   "Members have unlocked: Bluefin shoal, Sacred eel and Bluefin shoal."
+  ],
+  "90": [
+   "Members have unlocked: Kyren fish."
+  ],
+  "91": [
+   "Members have unlocked: Marlin shoal, Greater siren and Marlin shoal."
+  ],
+  "96": [
+   "Members have unlocked: Shark (barehanded)."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Fishing. Why not visit the Master Fisherman at the Fishing Guild? There you can buy something special that is only available to true masters of the Fishing skill!"
+  ]
+ },
+ "Cooking": {
+  "5": [
+   "You can now cook herring."
+  ],
+  "6": [
+   "Members have unlocked: Fruit Blast."
+  ],
+  "7": [
+   "You can now prepare guppies. Members can now cook baked potatoes."
+  ],
+  "8": [
+   "Members have unlocked: Pineapple Punch."
+  ],
+  "9": [
+   "Members can now make spicy sauce."
+  ],
+  "10": [
+   "You have unlocked: Redberry pie. Members have unlocked: Toad crunchies and Mackerel."
+  ],
+  "11": [
+   "Members have unlocked: Chilli con carne (topping) and Roasted bird meat."
+  ],
+  "12": [
+   "Members have unlocked: Spicy crunchies and Thin snails."
+  ],
+  "13": [
+   "You have unlocked: T-bone Steak. Members have unlocked: Scrambled egg (topping ingredient)."
+  ],
+  "14": [
+   "Members have unlocked: Worm crunchies and Cider."
+  ],
+  "15": [
+   "You have unlocked: Trout. Members have unlocked: Chambers of Xeric - Prael bat and Chambers of Xeric - Suphi fish."
+  ],
+  "16": [
+   "Members have unlocked: Chocolate chip crunchies, Roasted rabbit and Spider."
+  ],
+  "17": [
+   "Members have unlocked: Lean snail."
+  ],
+  "18": [
+   "Members have unlocked: Wizard Blizzard and Cod."
+  ],
+  "19": [
+   "Members have unlocked: Dwarven Stout."
+  ],
+  "20": [
+   "You have unlocked: Ritua offering - Cavefish, Meat pie and Pike. Members have unlocked: Short Green Guy (SGG) and Nettle tea."
+  ],
+  "21": [
+   "Members have unlocked: Cream, Red crab, Giant crab meat and Roasted beast meat."
+  ],
+  "22": [
+   "Members have unlocked: Fat snail."
+  ],
+  "23": [
+   "Members have unlocked: Scrambled egg and tomato (topping) and Wild kebbit."
+  ],
+  "24": [
+   "Members have unlocked: Asgarnian Ale."
+  ],
+  "25": [
+   "You have unlocked: Stew and Salmon. Members have unlocked: Fruit batta."
+  ],
+  "26": [
+   "Members have unlocked: Toad batta."
+  ],
+  "27": [
+   "Members have unlocked: Worm batta."
+  ],
+  "28": [
+   "Members have unlocked: Vegetable batta, Sweetcorn and Slimy eel."
+  ],
+  "29": [
+   "Members can now cook mud pie, brew Greenman's Ale and make cheese and tomato battas."
+  ],
+  "30": [
+   "You can now cook apple pies and tuna. Members can now cook worm holes, leckish fish, giral bats, mossy lizards, bream and spit roast chompy bird."
+  ],
+  "31": [
+   "Members can now cook fishcakes and larupia."
+  ],
+  "32": [
+   "You are now qualified to enter the prestigious Chefs' Guild. Members may also create Drunk Dragons, and cook Barb-tailed kebbits."
+  ],
+  "33": [
+   "You can now prepare tetra. Members may now create Chocolate Saturdays."
+  ],
+  "34": [
+   "Members can now cook garden pie and brew Wizard's Mind Bomb."
+  ],
+  "35": [
+   "You can now cook pizzas and make wine. Members can now cook rainbow fish, vegetable balls and craft forester's rations."
+  ],
+  "36": [
+   "Members have unlocked: Damiana tea."
+  ],
+  "37": [
+   "Members may now create Blurberry Specials."
+  ],
+  "38": [
+   "Members have unlocked: Butter and Cave eel."
+  ],
+  "39": [
+   "Members can now brew Dragon Bitter and make baked potatoes with butter."
+  ],
+  "40": [
+   "You can now cook cakes and lobsters. Members may create tangled toad legs."
+  ],
+  "41": [
+   "Members can now cook jubbly birds, baked potatoes with chilli con carne and graahk."
+  ],
+  "42": [
+   "Members have unlocked: Chocolate bomb and Fried onion (topping ingredient)."
+  ],
+  "43": [
+   "Members have unlocked: Bass."
+  ],
+  "44": [
+   "Members can now brew Moonlight Mead."
+  ],
+  "45": [
+   "You can now cook meat pizzas and swordfish. Members can cook Brawk fish and Phluxia bats."
+  ],
+  "46": [
+   "Members can now cook fried mushroom and prepare catfish."
+  ],
+  "47": [
+   "Members can now make baked potatoes with butter and cheese and cook fish pie."
+  ],
+  "48": [
+   "Members can now churn cheese."
+  ],
+  "49": [
+   "Members can now brew Axeman's Folly."
+  ],
+  "50": [
+   "You have unlocked: Chocolate cake."
+  ],
+  "51": [
+   "Members have unlocked: Baked potatoes with egg and tomato and Kyatt."
+  ],
+  "52": [
+   "Members have unlocked: Botanical pie."
+  ],
+  "53": [
+   "Members have unlocked: Lava eel."
+  ],
+  "54": [
+   "Members have unlocked: Chef's Delight."
+  ],
+  "55": [
+   "You have unlocked: Anchovy pizza."
+  ],
+  "56": [
+   "Members have unlocked: Swordtip squid."
+  ],
+  "57": [
+   "Members have unlocked: Fried mushroom and onion (topping)."
+  ],
+  "58": [
+   "Members have unlocked: Pitta bread."
+  ],
+  "59": [
+   "Members have unlocked: Slayer's Respite and Pyre fox."
+  ],
+  "60": [
+   "Members have unlocked: Chambers of Xeric - Kryket bats, Chambers of Xeric - Mycil fish, Curry and Mushroom pie."
+  ],
+  "62": [
+   "Members have unlocked: Monkfish."
+  ],
+  "64": [
+   "Members have unlocked: Baked potato with mushroom and onion."
+  ],
+  "65": [
+   "Members have unlocked: Wine of Zamorak and Pineapple pizza."
+  ],
+  "67": [
+   "Members have unlocked: Tuna and sweetcorn (topping)."
+  ],
+  "68": [
+   "Members have unlocked: Baked potatoes with tuna and sweetcorn and Sunlight antelope."
+  ],
+  "69": [
+   "Members have unlocked: Giant krill."
+  ],
+  "70": [
+   "Members have unlocked: Admiral pie."
+  ],
+  "71": [
+   "Members have unlocked: Jumbo squid."
+  ],
+  "72": [
+   "Members have unlocked: Dissect sacred eels."
+  ],
+  "73": [
+   "Members have unlocked: Dragonfruit pie and Haddock."
+  ],
+  "75": [
+   "Members have unlocked: Chambers of Xeric - Murng bat and Chambers of Xeric - Roqed fish."
+  ],
+  "77": [
+   "Members have unlocked: Rainbow crab."
+  ],
+  "79": [
+   "Members have unlocked: Yellowfin."
+  ],
+  "80": [
+   "Members have unlocked: Shark."
+  ],
+  "82": [
+   "Members have unlocked: Dashing kebbit and Sea turtle."
+  ],
+  "83": [
+   "Members have unlocked: Halibut."
+  ],
+  "84": [
+   "Members have unlocked: Anglerfish."
+  ],
+  "85": [
+   "Members have unlocked: Wild pie."
+  ],
+  "87": [
+   "Members have unlocked: Bluefin."
+  ],
+  "90": [
+   "Members have unlocked: Chambers of Xeric - Psykk bat, Chambers of Xeric - Kyren fish and Dark crab."
+  ],
+  "91": [
+   "Members have unlocked: Marlin and Manta ray."
+  ],
+  "92": [
+   "Members have unlocked: Moonlight antelope."
+  ],
+  "95": [
+   "Members have unlocked: Summer pie."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Cooking. Why not visit the head chef at the Cooking Guild? He has something special that is only available to true masters of the Cooking skill!"
+  ]
+ },
+ "Firemaking": {
+  "4": [
+   "Members have unlocked: Candle lanterns."
+  ],
+  "5": [
+   "Members have unlocked: Pyre logs."
+  ],
+  "11": [
+   "Members have unlocked: Achey pyre ships and Normal pyre ships."
+  ],
+  "12": [
+   "Members have unlocked: Oil lamps."
+  ],
+  "15": [
+   "You have unlocked: Oak logs. Members have unlocked: Abyssal Lantern (with oak logs)."
+  ],
+  "20": [
+   "Members have unlocked: Iron spits and Oak pyre logs."
+  ],
+  "21": [
+   "Members have unlocked: Achey logs (barbarian technique) and Normal logs (barbarian technique)."
+  ],
+  "25": [
+   "Members have unlocked: Oak pyre ships."
+  ],
+  "26": [
+   "Members have unlocked: Oil lanterns."
+  ],
+  "30": [
+   "You have unlocked: Willow logs. Members have unlocked: Abyssal Lantern (with willow logs)."
+  ],
+  "33": [
+   "Members have unlocked: Harpie bug lanterns."
+  ],
+  "35": [
+   "Members have unlocked: Oak logs (barbarian technique), Willow pyre logs and Teak logs."
+  ],
+  "40": [
+   "Members have unlocked: Willow pyre ships, Jatoba logs and Teak pyre logs."
+  ],
+  "42": [
+   "Members have unlocked: Arctic Pine logs."
+  ],
+  "45": [
+   "You have unlocked: Maple logs. Members have unlocked: Abyssal Lantern (with maple logs) and Teak pyre ships."
+  ],
+  "47": [
+   "Members have unlocked: Arctic Pine pyre logs."
+  ],
+  "49": [
+   "Members have unlocked: Emerald lanterns, Sapphire lanterns and Bullseye lanterns."
+  ],
+  "50": [
+   "Members have unlocked: Wintertodt, Bruma torches, Willow logs (barbarian technqiue), Maple pyre logs and Mahogany logs."
+  ],
+  "52": [
+   "Members have unlocked: Replace Dorgeshuun light orbs and Artic Pine pyre ships."
+  ],
+  "55": [
+   "Members have unlocked: Maple pyre ships, Teak logs (barbarian technique), and Mahogany pyre logs."
+  ],
+  "60": [
+   "You have unlocked: Yew logs. Members have unlocked: Abyssal Lantern (with yew logs), Mahogany pyre ships and Jatoba logs (barbarian technique)."
+  ],
+  "62": [
+   "You have unlocked: Abyssal Lantern (with blisterwood logs), Arctic Pine logs (barbarian technique) and Blisterwood logs."
+  ],
+  "65": [
+   "Members have unlocked: Cave goblin mining helmets, Maple logs (barbarian technique) and Yew pyre logs."
+  ],
+  "66": [
+   "Members have unlocked: Fire of Unseasonal Warmth, Fire of Dehumidification, Fire of Nourishment, Fire of Eternal Light and Camphor logs."
+  ],
+  "70": [
+   "Members have unlocked: Mahogany logs (barbarian technique) and Yew pyre ships."
+  ],
+  "71": [
+   "Members have unlocked: Camphor pyre logs."
+  ],
+  "75": [
+   "Members have unlocked: Abyssal Lantern (with magic logs) and Magic logs."
+  ],
+  "76": [
+   "Members have unlocked: Camphor pyre ships."
+  ],
+  "80": [
+   "Members have unlocked: Yew logs (barbarian technique), Ironwood logs and Magic pyre logs."
+  ],
+  "85": [
+   "Members have unlocked: Infernal axe, Magic pyre ships and Ironwood pyre logs."
+  ],
+  "86": [
+   "Members have unlocked: Camphor logs (barbarian technique)."
+  ],
+  "90": [
+   "Members have unlocked: Abyssal Lantern (with redwood logs), Ironwood pyre ships and Redwood logs."
+  ],
+  "92": [
+   "Members have unlocked: Rosewood logs."
+  ],
+  "95": [
+   "Members have unlocked: Redwood pyre ships, Magic logs (barbarian technique) and Redwood pyre logs."
+  ],
+  "97": [
+   "Members have unlocked: Rosewood pyre ships and Rosewood pyre logs."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Firemaking. Why not visit Ignatius, south of Seers' Village? He has something special that is only available to true masters of the Firmaking skill!"
+  ]
+ },
+ "Woodcutting": {
+  "6": [
+   "You can now chop with a Steel Axe and members can now chop with a Steel Felling Axe."
+  ],
+  "10": [
+   "Members can now cut down Light Jungle."
+  ],
+  "11": [
+   "You have unlocked: Black axe. Members have unlocked: Black felling axe."
+  ],
+  "12": [
+   "You have unlocked: Log canoe."
+  ],
+  "15": [
+   "You have unlocked: Oak trees."
+  ],
+  "19": [
+   "There is new information available from the Woodcutting Tutor in Lumbridge."
+  ],
+  "20": [
+   "Members have unlocked: Medium jungle."
+  ],
+  "21": [
+   "You have unlocked: Mithril axe. Members have unlocked: Mithril felling axe."
+  ],
+  "27": [
+   "You have unlocked: Dugout canoe."
+  ],
+  "29": [
+   "There is new information available from the Woodcutting Tutor in Lumbridge."
+  ],
+  "30": [
+   "You have unlocked: Willow trees."
+  ],
+  "31": [
+   "You have unlocked: Adamant axe. Members have unlocked: Adamant felling axe."
+  ],
+  "35": [
+   "Members have unlocked: Secateurs Attachment, Forester's ration, Teak trees and Dense jungle."
+  ],
+  "40": [
+   "Members have unlocked: Jatoba trees."
+  ],
+  "41": [
+   "You have unlocked: Gilded axe and Rune axe. Members have unlocked: Rune felling axe."
+  ],
+  "42": [
+   "You have unlocked: Stable dugout canoe. Members have unlocked: Juniper trees."
+  ],
+  "44": [
+   "Members have unlocked: Lumberjack and Forestry outfit."
+  ],
+  "45": [
+   "You have unlocked: Maple trees. Members have unlocked: Hollow trees."
+  ],
+  "50": [
+   "Members have unlocked: Clothes Pouch and Mahogany trees."
+  ],
+  "54": [
+   "Members have unlocked: Arctic Pine trees."
+  ],
+  "56": [
+   "Members have unlocked: Split arctic pine logs and Fremennik round shields."
+  ],
+  "57": [
+   "You have unlocked: Waka canoe."
+  ],
+  "60": [
+   "You have unlocked: Yew trees."
+  ],
+  "61": [
+   "Members have unlocked: 3rd Age felling axe, 3rd Age axe, Dragon felling axe, Dragon axe and Infernal axe."
+  ],
+  "62": [
+   "Members have unlocked: Blisterwood tree."
+  ],
+  "65": [
+   "Members have unlocked: Sulliuscep mushroom trees."
+  ],
+  "66": [
+   "Members have unlocked: Camphor trees."
+  ],
+  "68": [
+   "Members have unlocked: Nature Offerings."
+  ],
+  "71": [
+   "Members have unlocked: Crystal felling axe and Crystal axe."
+  ],
+  "75": [
+   "Members have unlocked: Sturdy Harness and Magic trees."
+  ],
+  "80": [
+   "Members have unlocked: Infected tree roots and Ironwood trees."
+  ],
+  "90": [
+   "Members have unlocked: Redwood trees."
+  ],
+  "92": [
+   "Members have unlocked: Rosewood trees."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Woodcutting. Why not visit Wilfred, near Lumbridge, who has something special that is only available to true masters of the Woodcutting skill!"
+  ]
+ },
+ "Agility": {
+  "5": [
+   "You have unlocked: Falador low wall climb."
+  ],
+  "8": [
+   "You have unlocked: Cross the River Lum to Al Kharid."
+  ],
+  "10": [
+   "You have unlocked: Corsair Cove shortcut and Rope-swing to Moss Giant Island."
+  ],
+  "11": [
+   "You have unlocked: Scale Falador wall."
+  ],
+  "12": [
+   "You have unlocked: Stepping stones in Karamja Dungeon."
+  ],
+  "13": [
+   "You have unlocked: Jump fence south of Varrock."
+  ],
+  "14": [
+   "You have unlocked: Scale Goblin village wall."
+  ],
+  "15": [
+   "You have unlocked: Leaping trout, Corsair Cove Dungeon shortcut and Monkey bars under Edgeville."
+  ],
+  "16": [
+   "You have unlocked: Yanille Agility shortcut."
+  ],
+  "17": [
+   "You have unlocked: Kourend Catacombs Agility shortcut."
+  ],
+  "18": [
+   "You have unlocked: Slayer Tower Banshee shortcut."
+  ],
+  "20": [
+   "You have unlocked: Coal Truck log balance, Medium-level Agility Arena obstacles and Al Kharid Rooftop Course."
+  ],
+  "21": [
+   "You have unlocked: Grand Exchange Agility shortcut."
+  ],
+  "22": [
+   "You have unlocked: Pipe contortion in Karamja Dungeon."
+  ],
+  "23": [
+   "You have unlocked: Scale the Observatory cliff."
+  ],
+  "24": [
+   "You have unlocked: Nemus Retreat wall climbs."
+  ],
+  "25": [
+   "You have unlocked: Burgh de Rott fence, Eagles' Peak Agility shortcut and Werewolf Skullball game."
+  ],
+  "26": [
+   "You have unlocked: Falador Agility shortcut."
+  ],
+  "28": [
+   "You have unlocked: Kourend Catacombs pillar jump shortcut."
+  ],
+  "29": [
+   "You have unlocked: Mount Karuulm lower cliffside climb."
+  ],
+  "30": [
+   "You have unlocked: Salmon leaping, Corsair Cove Resource Area shortcut, Stepping stones in south-eastern Karamja, Penguin Agility Course, Varrock Rooftop Course and Agility Pyramid."
+  ],
+  "31": [
+   "You have unlocked: Draynor Manor stones to Champions' Guild."
+  ],
+  "32": [
+   "You have unlocked: Shilo Village river crossing and Scale the Catherby cliff."
+  ],
+  "33": [
+   "You have unlocked: Nemus Retreat underground tunnel and Ardougne log balance shortcut."
+  ],
+  "34": [
+   "You have unlocked: Kourend Catacombs contortion shortcut and Pipe squeeze in Karamja Dungeon."
+  ],
+  "35": [
+   "You have unlocked: Varrock Palace Garden trellis shortcut and Barbarian Outpost Agility Course."
+  ],
+  "36": [
+   "You have unlocked: Nemus Retreat stepping stones and Escape from the Water Obelisk island."
+  ],
+  "37": [
+   "You have unlocked: Gnome Stronghold shortcut."
+  ],
+  "38": [
+   "You have unlocked: Al Kharid Mining pit cliffside scramble."
+  ],
+  "39": [
+   "You have unlocked: Scale Yanille wall."
+  ],
+  "40": [
+   "You have unlocked: Tlati Rainforest log balance, Hosidius lake isle jump, High-level Agility Arena obstacles and Canifis Rooftop Course."
+  ],
+  "41": [
+   "You have unlocked: Auburnvale rock scramble and Trollheim easy cliffside scramble."
+  ],
+  "42": [
+   "You have unlocked: Trollheim medium cliffside scramble, Draynor narrow tunnel and Dwarven Mine narrow crevice."
+  ],
+  "43": [
+   "You have unlocked: Fremennik Slayer Dungeon spiked blades jump and Tlati Rainforest cliffside scramble."
+  ],
+  "44": [
+   "You have unlocked: Trollheim advanced cliffside scramble."
+  ],
+  "45": [
+   "You have unlocked: Leaping sturgeon, Proudspire lower scramble, Autumn Valley log balances, Hosidius river jump, Elf area log balance and Shayzien Advanced Course."
+  ],
+  "46": [
+   "You have unlocked: Tonali Cavern shortcuts, Deep Wilderness - narrow tunnel and Cosmic Temple - medium narrow walkway."
+  ],
+  "47": [
+   "You have unlocked: Ralos' Rise rock climb and Trollheim hard cliffside scramble."
+  ],
+  "48": [
+   "You have unlocked: Log balance to Fremennik Province and Ape Atoll Agility Course."
+  ],
+  "49": [
+   "You have unlocked: Arceuus essence mine boulder leap and Contortion in Yanille Dungeon small room."
+  ],
+  "50": [
+   "You have unlocked: Crystal armour, Crystal bows, Crystal halberd, Crystal weaponry, Summer Shore rock scramble, Stepping stone into Morytania near the Nature Grotto,, Colossal Wyrm Basic Course, Falador",
+   "Rooftop Course and more."
+  ],
+  "51": [
+   "You have unlocked: Pipe from Edgeville dungeon to Varrock Sewers."
+  ],
+  "52": [
+   "You have unlocked: Hallowed Sepulchre (Floor 1), Great Conch eastern plateau rock scramble (south-west side), Anglers' Retreat stepping stone, Arceuus essence mine eastern scramble and Wilderness Course."
+  ],
+  "53": [
+   "You have unlocked: Karamja crossing south of volcano."
+  ],
+  "54": [
+   "You have unlocked: Western Aldarin cliff scramble and Motherlode Mine dark tunnel."
+  ],
+  "55": [
+   "You have unlocked: Cape Conch rock scramble and Stepping stone by Miscellania docks."
+  ],
+  "56": [
+   "You have unlocked: Brimhaven Dungeon eastern stepping stones and Rock climb in the Temple of the Eye."
+  ],
+  "57": [
+   "You have unlocked: Great Conch eastern plateau rock scramble (north-east side), Rellekka east fence shortcut and Monkey bars under Yanille."
+  ],
+  "58": [
+   "You have unlocked: Port Phasmatys ectopool shortcut."
+  ],
+  "59": [
+   "You have unlocked: Cave to the Stalker Den and Elven overpass easy cliffside scramble."
+  ],
+  "60": [
+   "You have unlocked: Asgarnian Ice Dungeon frozen throne tunnel, Stepping stone in the Tombs of Amascut, Pillars in the Wintertodt's Prison, Estuary crossing on Mos Le'Harmless, Wilderness from the God Wars",
+   "Dungeon area climb, Access the God Wars Dungeon area via the Agility route, Seers' Village Rooftop Course and Werewolf Agility Course."
+  ],
+  "61": [
+   "You have unlocked: Vampyrium Rock Climbs, Laguna Aurorae stepping stones, Great Conch stepping stone, Fremenik Slayer Dungeon narrow crevice and Slayer Tower medium spiked chain climb."
+  ],
+  "62": [
+   "You have unlocked: Hallowed Sepulchre (Floor 2), Stepping stones in the Necropolis, Mount Karuulm upper cliffside climb, Colossal Wyrm Advanced Course, Arceuus Library top level railing jump and Stepping",
+   "stone in the south of Wyrmscraig."
+  ],
+  "63": [
+   "You have unlocked: Forthos Dungeon spiked blades jump, Darkmeyer wall climb and Taverley dungeon lesser demon fence shortcut."
+  ],
+  "64": [
+   "You have unlocked: Stalker Den stepping stone, Rope to the Fossil Island volcano and Trollheim Wilderness route."
+  ],
+  "65": [
+   "You have unlocked: Revenant Cave jump (easy) and Temple on the Salve to Morytania shortcut."
+  ],
+  "66": [
+   "You have unlocked: Taverley wall shortcut, Lumbridge Swamp to the Desert and Cosmic Temple advanced narrow walkway."
+  ],
+  "67": [
+   "You have unlocked: Heroes' Guild tunnel and Yanille Dungeon's rubble climb."
+  ],
+  "68": [
+   "You have unlocked: Ice Mountain western scramble, Elven overpass medium cliffside scramble and The Catherby cliff climb."
+  ],
+  "69": [
+   "You have unlocked: Mausoleum bridge jump and Arceuus essence mine northern scramble.."
+  ],
+  "70": [
+   "You have unlocked: Bow of Faerdhinen, Ring of Endurance, Al Kharid Palace southern window, Fossil island hardwood shortcut, Taverley Dungeon shortcuts to blue dragons, Enter the Saradomin area of the God",
+   "Wars Dungeon, Pollnivneach Rooftop Course, Caves south of Dorgesh-Kaan and more."
+  ],
+  "71": [
+   "You have unlocked: Proudspire upper scramble, Pollniveach stepping stone, Gu'Tanoth wall climb and Slayer Tower advanced spiked chain climb."
+  ],
+  "72": [
+   "You have unlocked: Hallowed Sepulchre (Floor 3), Barrows wall-jump Chaos temple Stepping Stone, Basic Asgarnian Ice Dungeon wyvern tunnel and Stronghold Slayer Cave narrow tunnel."
+  ],
+  "73": [
+   "You have unlocked: Chasm of Fire platforms, Arceuus essence mine western descent and Troll Stronghold wall-climb."
+  ],
+  "74": [
+   "You have unlocked: Meiyerditch Laboratory tunnels, Fossil Island zipline and Lava Dragon Isle jump."
+  ],
+  "75": [
+   "You have unlocked: Mokkaiotl pit jump, Revenant Cave jump (medium) and Prifddinas Agility Course."
+  ],
+  "76": [
+   "You have unlocked: Darkfrost cliff scramble and Island crossing near Zul-Andra."
+  ],
+  "77": [
+   "You have unlocked: Wilderness Slayer Dungeon Crevices."
+  ],
+  "78": [
+   "You have unlocked: Iorwerth Dungeon northern shortcut."
+  ],
+  "79": [
+   "You have unlocked: Kharazi Jungle vine climb and Shilo Village rock climb."
+  ],
+  "80": [
+   "You have unlocked: Taverley Dungeon spiked blades jump and Rellekka Rooftop Course."
+  ],
+  "81": [
+   "You have unlocked: Slayer Tower ivy climb and Waterbirth Dungeon crevice."
+  ],
+  "82": [
+   "You can now enter Floor 4 of the Hallowed Sepulchre and use the Lava Maze stepping stone shortcut, and the Adept Asgarnian Ice Dungeon wyvern tunnel."
+  ],
+  "83": [
+   "You have unlocked: Grimstone uneven stone ledges climb and Chasm of Fire Chain."
+  ],
+  "84": [
+   "You have unlocked: Deepfin Point dungeon crevice, Crandor rock-climb and Iorwerth Dungeon southern shortcut."
+  ],
+  "85": [
+   "You can now use the Elven Overpass advanced cliffside scramble and the Waterbirth Island cliffside scale."
+  ],
+  "86": [
+   "You can now use the Kalphite Lair crevice and the Darkmeyer wall jump."
+  ],
+  "87": [
+   "You have unlocked: Brimhaven Dungeon vine to baby green dragons."
+  ],
+  "88": [
+   "You have unlocked: Karuulm Dungeon pipe."
+  ],
+  "89": [
+   "You have unlocked: Revenant Cave jump (hard)."
+  ],
+  "90": [
+   "You have unlocked: Ardougne Rooftop Course."
+  ],
+  "91": [
+   "You have unlocked: Viyeldi Caves cliff climb."
+  ],
+  "92": [
+   "You have unlocked: Hallowed Sepulchre (Floor 5)."
+  ],
+  "93": [
+   "You have unlocked: Meiyerditch Laboratories advanced shortcut."
+  ],
+  "96": [
+   "You have unlocked: Viyeldi caves crevice."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Agility. Why not visit the Cap'n Izzy No-beard at the Brimhaven Agility Arena? He has something special that is only available to true masters of the Agility skill!"
+  ]
+ },
+ "Herblore": {
+  "3": [
+   "You can now make attack potions. You can now clean guam leaf, snake weed and rogues purse."
+  ],
+  "4": [
+   "You have unlocked: Attack mix."
+  ],
+  "5": [
+   "You have unlocked: Marrentill and Anti-poison potion."
+  ],
+  "6": [
+   "You have unlocked: Antipoison mix."
+  ],
+  "8": [
+   "You have unlocked: Relicym's balm."
+  ],
+  "9": [
+   "You have unlocked: Relicym's mix."
+  ],
+  "11": [
+   "You have unlocked: Tarromin."
+  ],
+  "12": [
+   "You have unlocked: Strength potion."
+  ],
+  "14": [
+   "You have unlocked: Strength mix."
+  ],
+  "15": [
+   "You have unlocked: Serum 207."
+  ],
+  "19": [
+   "You can now make guam tar"
+  ],
+  "20": [
+   "You can now clean harralander."
+  ],
+  "22": [
+   "You can now make stat restore potions, compost potions and Guthix balance potion."
+  ],
+  "24": [
+   "You can now make stat restore mix."
+  ],
+  "25": [
+   "You can now clean ranarr weed."
+  ],
+  "26": [
+   "You can now make energy potions."
+  ],
+  "29": [
+   "You can now make energy mix."
+  ],
+  "30": [
+   "You can now make defence potions. You can now clean toadflax."
+  ],
+  "31": [
+   "You can now make marrentill tar and track the herbiboar on Fossil Island (with 80 Hunter)."
+  ],
+  "33": [
+   "You can now make defence mix."
+  ],
+  "34": [
+   "You can now make agility potions."
+  ],
+  "36": [
+   "You can now make combat potions."
+  ],
+  "37": [
+   "You can now make agility mix."
+  ],
+  "38": [
+   "You can now make prayer restore potions and moonlight potions."
+  ],
+  "39": [
+   "You can now make tarromin tar."
+  ],
+  "40": [
+   "You can now make combat mix. You can also clean irit leaf."
+  ],
+  "42": [
+   "You can now make prayer restore mix."
+  ],
+  "44": [
+   "You can now make harralander tar."
+  ],
+  "45": [
+   "You can now make super attack potions."
+  ],
+  "47": [
+   "You can now make super attack mix and use Golpar."
+  ],
+  "48": [
+   "You can now make super antipoison potions. You can now clean avantoe."
+  ],
+  "50": [
+   "You have unlocked: Fishing potion."
+  ],
+  "51": [
+   "You have unlocked: Anti-poison supermix."
+  ],
+  "52": [
+   "You have unlocked: Prayer enhance (-), Xeric's Aid (-), Revitalisation (-) and Super energy potion."
+  ],
+  "53": [
+   "You have unlocked: Fishing mix and Hunter potion."
+  ],
+  "54": [
+   "You have unlocked: Kwuarm and Goading potion."
+  ],
+  "55": [
+   "You have unlocked: Irit tar and Super strength potion."
+  ],
+  "56": [
+   "You can now make super energy mix."
+  ],
+  "57": [
+   "You have unlocked: Magic essence potion."
+  ],
+  "58": [
+   "You have unlocked: Herb Sack, Hunting mix, Huasca and Prayer regeneration potion."
+  ],
+  "59": [
+   "You have unlocked: Twisted, Kodai, Elder, Super strength mix and Snapdragon."
+  ],
+  "60": [
+   "You have unlocked: Liplack liquor, Alco-augmentator, Mammoth-might mix, Overload (-), Antipoison (-) and Weapon poison."
+  ],
+  "61": [
+   "You have unlocked: Magic essence mix."
+  ],
+  "62": [
+   "You have unlocked: Super fishing potion."
+  ],
+  "63": [
+   "You can now make super restore potions."
+  ],
+  "65": [
+   "You have unlocked: Prayer enhance, Xeric's Aid, Revitalisation, Cadatine and Sanfew serum."
+  ],
+  "66": [
+   "You have unlocked: Marley's moonlight, Extreme energy potion and Super defence potion."
+  ],
+  "67": [
+   "You have unlocked: Super restore mix, Lantadyme and Super hunter potion."
+  ],
+  "68": [
+   "You have unlocked: Antidote+."
+  ],
+  "69": [
+   "You have unlocked: Azure aura mix and Anti-firebreath potion."
+  ],
+  "70": [
+   "You have unlocked: Twisted (+), Kodai (+), Elder (+), Dwarf weed, Divine super defence potion, Divine super strength potion and Divine super attack potion."
+  ],
+  "71": [
+   "You have unlocked: Super defence mix."
+  ],
+  "72": [
+   "You can now make ranging potions."
+  ],
+  "73": [
+   "You have unlocked: Weapon poison(+)."
+  ],
+  "74": [
+   "You have unlocked: Antidote+ mix and Divine ranging potion."
+  ],
+  "75": [
+   "You have unlocked: Megalite liquid, Overload, Antipoison, Antifire mix and Torstol."
+  ],
+  "76": [
+   "You can now make magic potions."
+  ],
+  "77": [
+   "You have unlocked: Stamina potion."
+  ],
+  "78": [
+   "You have unlocked: Anti-leech lotion, Prayer enhance (+), Xeric's Aid (+), Revitalisation (+), Divine magic potion and Zamorak brew."
+  ],
+  "79": [
+   "You have unlocked: Antidote++."
+  ],
+  "80": [
+   "You have unlocked: Ranging mix, Battlemage potion and Bastion potion."
+  ],
+  "81": [
+   "You have unlocked: Secondary Pouch, Mixalot, Surge potion and Saradomin brew."
+  ],
+  "82": [
+   "You have unlocked: Weapon poison(++)."
+  ],
+  "83": [
+   "You have unlocked: Magic mix."
+  ],
+  "84": [
+   "You have unlocked: Extended antifire potion."
+  ],
+  "85": [
+   "You have unlocked: Zamorak mix, Extended stamina potion and Ancient brew."
+  ],
+  "86": [
+   "You have unlocked: Stamina mix, Divine battlemage potion and Divine bastion potion."
+  ],
+  "87": [
+   "You have unlocked: Anti-venom."
+  ],
+  "88": [
+   "You have unlocked: Menaphite remedy."
+  ],
+  "89": [
+   "You have unlocked: Armadyl brew."
+  ],
+  "90": [
+   "You have unlocked: Overload (+), Antipoison (+) and Super combat potion."
+  ],
+  "91": [
+   "You have unlocked: Extended antifire mix and Forgotten brew."
+  ],
+  "92": [
+   "You have unlocked: Ancient mix and Super antifire potions."
+  ],
+  "94": [
+   "You have unlocked: Extended anti-venom+ and Anti-venom+."
+  ],
+  "97": [
+   "You have unlocked: Divine super combat potion."
+  ],
+  "98": [
+   "You have unlocked: Super antifire mix and Extended super antifire."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Herblore. Why not visit Kaqemeex, near Taverley? He has something special that is only available to true masters of the Herblore skill!"
+  ]
+ },
+ "Thieving": {
+  "2": [
+   "You have unlocked: Vegetable stall."
+  ],
+  "5": [
+   "You have unlocked: Monkey food stall, Crafting stall, Tea stall and Cake stall."
+  ],
+  "10": [
+   "You have unlocked: Farmer."
+  ],
+  "13": [
+   "You have unlocked: Chests in Ardougne, Rellekka and the Wilderness."
+  ],
+  "15": [
+   "You have unlocked: Can steal cowbells from dairy cows and H.A.M. follower."
+  ],
+  "20": [
+   "You have unlocked: Silk stall."
+  ],
+  "21": [
+   "You have unlocked: Pyramid Plunder minigame - Room 1."
+  ],
+  "22": [
+   "You have unlocked: Wine stall."
+  ],
+  "25": [
+   "You have unlocked: Sorceress's Garden minigame - Spring, Fruit stall and Warrior."
+  ],
+  "27": [
+   "You have unlocked: Seed stall."
+  ],
+  "28": [
+   "You have unlocked: Chest at the Isle of Souls and Chests upstairs in Ardougne and Relleka."
+  ],
+  "30": [
+   "You have unlocked: Villager."
+  ],
+  "31": [
+   "You have unlocked: Pyramid Plunder minigame - Room 2."
+  ],
+  "32": [
+   "You have unlocked: Rogue."
+  ],
+  "33": [
+   "You have unlocked: Rusty Pirate Chests."
+  ],
+  "35": [
+   "You have unlocked: Fur stall."
+  ],
+  "36": [
+   "You have unlocked: Chests in Aldarin Villas and Cave golbin."
+  ],
+  "38": [
+   "You have unlocked: Master farmer."
+  ],
+  "40": [
+   "You have unlocked: Guards."
+  ],
+  "41": [
+   "You have unlocked: Pyramid Plunder - Room 3."
+  ],
+  "42": [
+   "You have unlocked: Fish stall."
+  ],
+  "43": [
+   "You have unlocked: Chest upstairs in Ardougne."
+  ],
+  "44": [
+   "You have unlocked: Can steal wire from the Dorgeshuun wire machine."
+  ],
+  "45": [
+   "You have unlocked: Sorceress's Garden minigame - Autumn, Bearded Pollnivnean bandit and Fremennik."
+  ],
+  "47": [
+   "You have unlocked: Chests in Hemenster and Rellekka."
+  ],
+  "49": [
+   "You have unlocked: Can pick locks in Port Piscarilius. and Crossbow stall."
+  ],
+  "50": [
+   "You have unlocked: Can rob houses in Civitas illa Fortis, Can crack the wall safes in the Rogues' Den, Silver Stall and Wealthy citizen."
+  ],
+  "51": [
+   "You have unlocked: Pyramid Plunder - Room 4."
+  ],
+  "52": [
+   "You have unlocked: Dorgesh-Kaan average chests."
+  ],
+  "53": [
+   "You have unlocked: Desert Bandit."
+  ],
+  "54": [
+   "You have unlocked: Tarnished Pirate Chests."
+  ],
+  "55": [
+   "You have unlocked: Pollnivnian bandit and Knight."
+  ],
+  "57": [
+   "You have unlocked: Can pick-lock the door to the Grubby Chest in the Forthos Dungeon.."
+  ],
+  "59": [
+   "You have unlocked: Chest in the Chaos Druid Tower north of Ardougne."
+  ],
+  "60": [
+   "You have unlocked: Pirate."
+  ],
+  "61": [
+   "You have unlocked: Pyramid Plunder - Room 5."
+  ],
+  "64": [
+   "You have unlocked: Lizardman Temple chest beneath Molch."
+  ],
+  "65": [
+   "You have unlocked: Sorceress's Garden minigame - Summer, Spice Stall, Scimitar Stall, Magic Stall, Menaphite thugs and Watchmen."
+  ],
+  "66": [
+   "You can now steal from coffins within The Hallowed Sepulchre."
+  ],
+  "70": [
+   "You have unlocked: Paladin."
+  ],
+  "71": [
+   "You have unlocked: Pyramid Plunder - Room 6."
+  ],
+  "72": [
+   "You have unlocked: Ardougne Castle chest."
+  ],
+  "75": [
+   "You have unlocked: Gem Stall and Gnome."
+  ],
+  "76": [
+   "You have unlocked: Reinforced Pirate Chests."
+  ],
+  "78": [
+   "You have unlocked: Dorgesh-Kaan rich chests."
+  ],
+  "80": [
+   "You have unlocked: Hero."
+  ],
+  "81": [
+   "You have unlocked: Pyramid Plunder - Room 7."
+  ],
+  "82": [
+   "You have unlocked: Ore Stall and Vyre."
+  ],
+  "84": [
+   "You have unlocked: Wilderness Rogues' Castle chest."
+  ],
+  "85": [
+   "You have unlocked: Elf."
+  ],
+  "87": [
+   "You have unlocked: Cannonball stall."
+  ],
+  "90": [
+   "You have unlocked: TzHaar."
+  ],
+  "91": [
+   "You have unlocked: Pyramid Plunder - Room 8."
+  ],
+  "99": [
+   "Congratulations! You are now a master thief. Why not visit Martin Thwait who runs a shop at the Rogues' Den, where you can buy something special that is only available to true masters of the Thieving skill!"
+  ]
+ },
+ "Fletching": {
+  "3": [
+   "You have unlocked: Bronze javelins."
+  ],
+  "5": [
+   "You have unlocked: Shortbows."
+  ],
+  "7": [
+   "You have unlocked: Bronze 'brutal' arrows."
+  ],
+  "9": [
+   "You have unlocked: Bronze/wooden crossbows and Bronze bolts."
+  ],
+  "10": [
+   "You have unlocked: Bronze darts and Longbows."
+  ],
+  "11": [
+   "You have unlocked: Opal-tipped bronze bolts."
+  ],
+  "15": [
+   "You have unlocked: Iron arrows and 30 Arrow shafts (Oak logs)."
+  ],
+  "17": [
+   "You have unlocked: Iron javelins."
+  ],
+  "18": [
+   "You have unlocked: Iron 'brutal' arrows."
+  ],
+  "20": [
+   "You have unlocked: Oak vale totems and Oak shortbows."
+  ],
+  "22": [
+   "You have unlocked: Iron darts."
+  ],
+  "24": [
+   "You have unlocked: Blurite/oak crossbows and Blurite bolts."
+  ],
+  "25": [
+   "You have unlocked: Oak longbows."
+  ],
+  "26": [
+   "You have unlocked: Jade-tipped blurite bolts."
+  ],
+  "27": [
+   "You have unlocked: Oak shield."
+  ],
+  "30": [
+   "You have unlocked: Ogre composite bows, Steel arrows and 45 Arrow shafts (Willow logs)."
+  ],
+  "32": [
+   "You have unlocked: Steel javelins and Kebbit-tipped hunting bolts."
+  ],
+  "33": [
+   "You have unlocked: Steel 'brutal' arrows."
+  ],
+  "35": [
+   "You have unlocked: Willow vale totems, Willow shortbows and Bone shortbow."
+  ],
+  "37": [
+   "You have unlocked: Steel darts."
+  ],
+  "38": [
+   "You have unlocked: Black 'brutal' arrows."
+  ],
+  "39": [
+   "You have unlocked: Iron/willow crossbows and Iron bolts."
+  ],
+  "40": [
+   "You have unlocked: Battlestaves and Willow longbows."
+  ],
+  "41": [
+   "You have unlocked: Pearl-tipped iron bolts."
+  ],
+  "42": [
+   "You have unlocked: Willow shield and Long kebbit-tipped hunting bolts."
+  ],
+  "43": [
+   "You have unlocked: Silver bolts."
+  ],
+  "45": [
+   "You have unlocked: Mithril arrows and 60 Arrows shafts (Maple logs)."
+  ],
+  "46": [
+   "You have unlocked: Steel/teak crossbows and Steel bolts."
+  ],
+  "47": [
+   "You have unlocked: Mithril javelins and Light ballistae."
+  ],
+  "48": [
+   "You have unlocked: Red topaz-tipped steel bolts."
+  ],
+  "49": [
+   "You have unlocked: Mithril 'brutal' arrows."
+  ],
+  "50": [
+   "You have unlocked: Maple vale totems and Maple shortbows."
+  ],
+  "51": [
+   "You have unlocked: Barbed-tipped bolts."
+  ],
+  "52": [
+   "You have unlocked: Mithril darts and Broad arrows."
+  ],
+  "53": [
+   "You have unlocked: Greenman statue."
+  ],
+  "54": [
+   "You have unlocked: Mithril/maple crossbows and Mithril bolts."
+  ],
+  "55": [
+   "You have unlocked: Broad bolts and Maple longbows."
+  ],
+  "56": [
+   "You have unlocked: Sapphire-tipped mithril bolts."
+  ],
+  "57": [
+   "You have unlocked: Maple shield."
+  ],
+  "58": [
+   "You have unlocked: Camphor blowpipe and Emerald-tipped mithril bolts."
+  ],
+  "59": [
+   "You have unlocked: Mithril grapple-tipped bolts."
+  ],
+  "60": [
+   "You have unlocked: Hunter's spears, Adamant arrows and 75 Arrow shafts (Yew logs)."
+  ],
+  "61": [
+   "You have unlocked: Adamantite/mahogany crossbows and Adamantite bolts."
+  ],
+  "62": [
+   "You have unlocked: Adamant javelins, Sunlight bolts and Adamant 'brutal' arrows."
+  ],
+  "63": [
+   "You have unlocked: Ruby-tipped adamantite bolts."
+  ],
+  "65": [
+   "You have unlocked: Yew vale totems, Diamond-tipped adamantite bolts and Yew shortbows."
+  ],
+  "67": [
+   "You have unlocked: Adamant darts."
+  ],
+  "69": [
+   "You have unlocked: Runite/yew crossbows and Runite bolts."
+  ],
+  "70": [
+   "You have unlocked: Yew longbows."
+  ],
+  "71": [
+   "You have unlocked: Dragonstone-tipped runite bolts."
+  ],
+  "72": [
+   "You have unlocked: Yew shields, Heavy ballistae, Ironwood blowpipe and Moonlight bolts."
+  ],
+  "73": [
+   "You have unlocked: Onyx-tipped runite bolts."
+  ],
+  "74": [
+   "You have unlocked: Sunlight hunters' crossbow, Atlatl darts and Scorching bows."
+  ],
+  "75": [
+   "You have unlocked: Rune arrows and 90 Arrow shafts (Magic logs)."
+  ],
+  "76": [
+   "You have unlocked: Amethyst broad bolts."
+  ],
+  "77": [
+   "You have unlocked: Rune javelins and Rune 'brutal' arrows."
+  ],
+  "78": [
+   "You have unlocked: Dragon/magic crossbows and Toxic blowpipe."
+  ],
+  "79": [
+   "You have unlocked: Greenman carvings."
+  ],
+  "80": [
+   "You have unlocked: Magic vale totems and Magic shortbows."
+  ],
+  "81": [
+   "You have unlocked: Rune darts."
+  ],
+  "82": [
+   "You have unlocked: Amethyst arrows."
+  ],
+  "84": [
+   "You have unlocked: Amethyst javelins, Rosewood blowpipe and Dragon bolts."
+  ],
+  "85": [
+   "You have unlocked: Webweaver bow and Magic longbows."
+  ],
+  "87": [
+   "You have unlocked: Magic shield."
+  ],
+  "90": [
+   "You have unlocked: Redwood hiking staff, Redwood vale totems, Amethyst darts, Dragon arrows and 105 Arrow shafts (Redwood logs)."
+  ],
+  "92": [
+   "You have unlocked: Redwood shield and Dragon javelins."
+  ],
+  "95": [
+   "You have unlocked: Dragon darts."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Fletching. Why not visit Hickton, who runs the ranging shop in Catherby? There you can buy something special that is only available to true masters of the Fletching skill!"
+  ]
+ },
+ "Slayer": {
+  "5": [
+   "You have unlocked: Crawling hands."
+  ],
+  "7": [
+   "You have unlocked: Cave bugs."
+  ],
+  "10": [
+   "You have unlocked: Facemask and Cave crawlers."
+  ],
+  "15": [
+   "You can now kill Banshees!"
+  ],
+  "17": [
+   "You can now kill Cave Slimes!"
+  ],
+  "20": [
+   "You can now kill Rockslugs!"
+  ],
+  "22": [
+   "You can now kill Desert Lizards!"
+  ],
+  "25": [
+   "You can now kill Cockatrice!"
+  ],
+  "30": [
+   "You can now kill Pyrefiends!"
+  ],
+  "32": [
+   "You can now kill Mogres!"
+  ],
+  "33": [
+   "You can now kill Harpie Bug Swarms!"
+  ],
+  "35": [
+   "You can now kill Wall Beasts!"
+  ],
+  "37": [
+   "You can now kill Killerwatts!"
+  ],
+  "39": [
+   "You have unlocked: Slayer bell and Molanisks."
+  ],
+  "40": [
+   "You have unlocked: Terror dogs, Sea snakes and Basilisks."
+  ],
+  "42": [
+   "You can now kill Fever Spiders!"
+  ],
+  "44": [
+   "You can now kill Sulphur Lizards!"
+  ],
+  "45": [
+   "You can now kill Infernal Mages!"
+  ],
+  "47": [
+   "You can now kill brine rats!"
+  ],
+  "50": [
+   "You can now kill Bloodvelds!"
+  ],
+  "52": [
+   "You can now kill Jellies!"
+  ],
+  "55": [
+   "You can now equip broad ammunition, leaf-bladed weapons and Slayer's Staffs, and kill Turoth!"
+  ],
+  "56": [
+   "You can now kill warped creatures!"
+  ],
+  "57": [
+   "You can now kill Mutated Zygomites!"
+  ],
+  "58": [
+   "You have unlocked: Cave Horrors."
+  ],
+  "60": [
+   "You can now kill Aberrant Spectres and Basilisk Knights!"
+  ],
+  "62": [
+   "You have unlocked: Wyrms & Strykewyrms."
+  ],
+  "63": [
+   "You have unlocked: Spiritual rangers."
+  ],
+  "65": [
+   "You have unlocked: Amethyst broad bolts and Dust devils."
+  ],
+  "66": [
+   "You have unlocked: Fossil Island wyverns."
+  ],
+  "67": [
+   "You have unlocked: Mature custodian stalkers."
+  ],
+  "68": [
+   "You have unlocked: Spiritual warriors."
+  ],
+  "70": [
+   "You have unlocked: Kurask."
+  ],
+  "72": [
+   "You have unlocked: Skeletal wyverns."
+  ],
+  "75": [
+   "You have unlocked: Gargoyles."
+  ],
+  "76": [
+   "Members have unlocked: Elder custodian stalkers."
+  ],
+  "77": [
+   "You have unlocked: Brutal black dragons."
+  ],
+  "78": [
+   "You have unlocked: Aquanites."
+  ],
+  "80": [
+   "You have unlocked: Nechryael."
+  ],
+  "82": [
+   "You chave unlocked: Ancient wyverns."
+  ],
+  "83": [
+   "You have unlocked: Spiritual mages."
+  ],
+  "84": [
+   "You have unlocked: Drakes."
+  ],
+  "85": [
+   "You have unlocked: Abyssal demons & Sires."
+  ],
+  "87": [
+   "You have unlocked: Cave kraken."
+  ],
+  "90": [
+   "You have unlocked: Dark beast."
+  ],
+  "91": [
+   "You have unlocked: Cerberus."
+  ],
+  "92": [
+   "You have unlocked: Araxytes."
+  ],
+  "93": [
+   "You can now kill Smoke Devils!"
+  ],
+  "95": [
+   "You have unlocked: Hydras."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Slayer! Why not visit the Slayer Master in Shilo Village to get something special that is only available to true masters of the Slayer skill!"
+  ]
+ },
+ "Farming": {
+  "2": [
+   "You have unlocked: Marigolds."
+  ],
+  "3": [
+   "You have unlocked: Barley."
+  ],
+  "4": [
+   "You have unlocked: Hammerstone hops."
+  ],
+  "5": [
+   "You have unlocked: Onions."
+  ],
+  "7": [
+   "You have unlocked: Cabbages."
+  ],
+  "8": [
+   "You have unlocked: Asgarnian hops."
+  ],
+  "9": [
+   "You have unlocked: Guam leaf."
+  ],
+  "10": [
+   "You have unlocked: Redberry bushes."
+  ],
+  "11": [
+   "You have unlocked: Rosemary."
+  ],
+  "12": [
+   "You have unlocked: Tomatoes."
+  ],
+  "13": [
+   "You have unlocked: Jute plants."
+  ],
+  "14": [
+   "You have unlocked: Marrentill."
+  ],
+  "15": [
+   "You have unlocked: Oak trees."
+  ],
+  "16": [
+   "You can now grow Yanillian Hops."
+  ],
+  "19": [
+   "You can now grow Tarromin."
+  ],
+  "20": [
+   "You can now grow Sweetcorn."
+  ],
+  "21": [
+   "You can now grow Krandorian Hops."
+  ],
+  "22": [
+   "You can now grow Cadavaberry bushes."
+  ],
+  "23": [
+   "You can now make Scarecrows, get double oak roots and grow Giant Seaweed."
+  ],
+  "24": [
+   "You can now grow Nasturtiums."
+  ],
+  "25": [
+   "You can now grow Woad plants."
+  ],
+  "26": [
+   "You can now grow Limpwurt plants and Harralander."
+  ],
+  "27": [
+   "You can now grow Apple Trees and Golpar."
+  ],
+  "28": [
+   "You can now grow Wildblood Hops."
+  ],
+  "29": [
+   {
+    "text": "You can now grow Goutweed, if you have completed Eadgar's Ruse.",
+    "when": {
+     "quest": "Eadgar's Ruse"
+    }
+   }
+  ],
+  "30": [
+   "You can now grow Willow Trees."
+  ],
+  "31": [
+   "You can now grow Strawberries and get triple oak roots."
+  ],
+  "32": [
+   "You can now grow Ranarr Weed."
+  ],
+  "33": [
+   "You can now grow Banana Trees."
+  ],
+  "34": [
+   "You can now grow Golovanova fruit in Hosidius."
+  ],
+  "35": [
+   "You can now grow Teak trees and craft Leprechaun Charms."
+  ],
+  "36": [
+   "You can now grow Dwellberry bushes and Grapes."
+  ],
+  "38": [
+   "You can now grow Toadflax and get double willow roots."
+  ],
+  "39": [
+   "You can now grow Orange Trees and Buchu leaf and get quadruple oak roots."
+  ],
+  "42": [
+   "You can now grow Curry Trees."
+  ],
+  "44": [
+   "You can now grow Irit Leaf."
+  ],
+  "45": [
+   "You can now grow Maple Trees, and access the Farming Guild - Low tier."
+  ],
+  "46": [
+   "You can now get triple willow roots."
+  ],
+  "47": [
+   "You can now grow Watermelons."
+  ],
+  "48": [
+   "You can now grow Jangerberry bushes."
+  ],
+  "50": [
+   "You can now grow Avantoe and craft Nature offerings."
+  ],
+  "51": [
+   "You have unlocked: Pineapple plants."
+  ],
+  "52": [
+   "You have unlocked: Pillar coral."
+  ],
+  "53": [
+   "You have unlocked: 2x maple roots and Bittercap mushrooms."
+  ],
+  "54": [
+   "You have unlocked: Bologano fruit and 4x willow roots."
+  ],
+  "55": [
+   "You can now grow Mahogany trees, Cacti and Noxifer."
+  ],
+  "56": [
+   "You have unlocked: Kwuarm."
+  ],
+  "57": [
+   "You have unlocked: Papaya trees."
+  ],
+  "58": [
+   "You have unlocked: White lily."
+  ],
+  "59": [
+   "You have unlocked: White berry bushes."
+  ],
+  "60": [
+   "You have unlocked: Yew trees."
+  ],
+  "61": [
+   "You have unlocked: 3x maple roots and Snape grass."
+  ],
+  "62": [
+   "You have unlocked: Snapdragon."
+  ],
+  "63": [
+   "You have unlocked: Belladonna."
+  ],
+  "64": [
+   "You have unlocked: Potato Cacti."
+  ],
+  "65": [
+   "You can now access the Farming Guild - Mid tier and grow Hespori."
+  ],
+  "66": [
+   "You have unlocked: Camphor trees."
+  ],
+  "67": [
+   "You have unlocked: Cadantine."
+  ],
+  "68": [
+   "You have unlocked: 2x yew roots and Palm trees."
+  ],
+  "69": [
+   "You have unlocked: 4x maple roots."
+  ],
+  "70": [
+   "You have unlocked: Poison ivy bushes."
+  ],
+  "71": [
+   "You have unlocked: Cotton bolls."
+  ],
+  "72": [
+   "You have unlocked: Calquat trees."
+  ],
+  "73": [
+   "You have unlocked: Lantadyme."
+  ],
+  "74": [
+   "You have unlocked: Logavano fruit and Crystal trees."
+  ],
+  "75": [
+   "You have unlocked: Magic trees."
+  ],
+  "76": [
+   "You can now grow Anima plants and get triple yew roots."
+  ],
+  "77": [
+   "You have unlocked: Umbral coral."
+  ],
+  "79": [
+   "You have unlocked: Dwarf weed."
+  ],
+  "81": [
+   "You have unlocked: Dragonfruit trees."
+  ],
+  "83": [
+   "You have unlocked: 2x magic roots and Spirit trees: 1 planted at a time."
+  ],
+  "84": [
+   "You have unlocked: 4x yew roots."
+  ],
+  "85": [
+   "You have unlocked: Farming Guild - High tier, Celastrus trees and Torstol."
+  ],
+  "88": [
+   "You have unlocked: Spirit trees: 2 planted at a time."
+  ],
+  "90": [
+   "You have unlocked: Redwood trees."
+  ],
+  "91": [
+   "You have unlocked: 3x magic roots."
+  ],
+  "92": [
+   "You have unlocked: Rosewood trees."
+  ],
+  "93": [
+   "You have unlocked: Spirit trees: 3 planted at a time."
+  ],
+  "96": [
+   "You have unlocked: Spirit trees: 4 planted at a time."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Farming. Why not visit Martin the Master Gardener in Draynor Village? He has something special that is only available to true masters of the Farming skill!"
+  ]
+ },
+ "Construction": {
+  "2": [
+   "You have unlocked: Torn curtains and Brown rug."
+  ],
+  "3": [
+   "You have unlocked: Clay fireplace."
+  ],
+  "4": [
+   "You have unlocked: Wooden bookcase."
+  ],
+  "5": [
+   "You can now build: Cat blanket, Tree, Decorative rock, Firepit and Kitchen."
+  ],
+  "6": [
+   "You have unlocked: Range, Mid-level plants and Wooden shelves 1"
+  ],
+  "7": [
+   "You have unlocked: Beer barrel and Pump and drain."
+  ],
+  "8": [
+   "You have unlocked: Oak hull & hull parts and Wooden chair."
+  ],
+  "9": [
+   "You have unlocked: Iron salvaging hook and Wooden larder."
+  ],
+  "10": [
+   "You have unlocked: Crab traps, Nice tree, Pond, Wooden dining bench, Wooden dining table and Dining room."
+  ],
+  "11": [
+   "You have unlocked: Oak cargo hold, Oak mast and linen sails and Firepit with hook."
+  ],
+  "12": [
+   "You have unlocked: STASH units (beginner), High-level plants, Wooden shelves 2, Cider barrel and Wooden kitchen table."
+  ],
+  "13": [
+   "You have unlocked: Rug."
+  ],
+  "14": [
+   "You have unlocked: Iron helm and Rocking chair."
+  ],
+  "15": [
+   "You have unlocked: Maximum dimensions: 4x4, Oak tree, Imp statue, Tool store 1, Repair bench and Workshop."
+  ],
+  "16": [
+   "You have unlocked: Oak wall decoration, Crafting table 1 and Pluming stand."
+  ],
+  "17": [
+   "You have unlocked: Iron keel, Water pump, Wooden workbench and Firepit with pot."
+  ],
+  "18": [
+   "You have unlocked: Steel salvaging hook, Curtains and Asgarnian Ale barrel."
+  ],
+  "19": [
+   "You have unlocked: Oak repair kit, Cooking pot, Cat basket and Oak chair."
+  ],
+  "20": [
+   "You have unlocked: Trims, Flags, Rick, Mahogany Homes (novice), Shoe box, Wooden bed and Bedroom."
+  ],
+  "21": [
+   "You have unlocked: Teak cargo hold, Bronze cannon and Wooden shaving stand."
+  ],
+  "22": [
+   "You have unlocked: Oak dining bench and Oak dining table."
+  ],
+  "23": [
+   "You have unlocked: Teak hull & hull parts and Wooden shelves 3."
+  ],
+  "24": [
+   "You have unlocked: Pottery wheel, Spinning wheel and Small oven."
+  ],
+  "25": [
+   "You have unlocked: Keg, Maid, Oak clock, Tool store 2, Crafting table 2 and Hall (skill trophies)."
+  ],
+  "26": [
+   "You have unlocked: Teak mast and canvas sails, Maximum rooms: 25, Rope bell pull, Greenman's Ale barrel and Oak armchair."
+  ],
+  "27": [
+   "You have unlocked: Recolour sails, STASH units (easy), Oak staircase, Trophy pedestal, Oak chest of drawers, Pump and tub and League hall."
+  ],
+  "28": [
+   "You have unlocked: Iron cannon, Suit of Armour, Trailblazer rug, Rug (League hall) and Deadman rug."
+  ],
+  "29": [
+   "You have unlocked: Anchor, Oak shaving stand, Oak bookcase and Large oven."
+  ],
+  "30": [
+   "You have unlocked: Cook, Chambers of Xeric - Small storage unit, Repair Piscarilius fishing cranes, Willow tree, Hoop-and-stick game, Banner stand, Oak bed, Games room and more."
+  ],
+  "31": [
+   "You have unlocked: Loom, Carved oak dining bench and Carved oak dining table."
+  ],
+  "32": [
+   "You have unlocked: Steel keel, Maximum rooms: 26, Boxing ring, Trailblazer globe, League statue, Oak kitchen table, Oak workbench and Combat room."
+  ],
+  "33": [
+   "You have unlocked: Cushioned cat basket, Oak larder and Stone fireplace."
+  ],
+  "34": [
+   "You have unlocked: Salvaging station, Oak prize chest, Boxing glove rack, Oak outfit stand, Oak shelves 1, Large oak bed, Steel range and Crafting table 3."
+  ],
+  "35": [
+   "You have unlocked: Fire of Nourishment, Fire of Eternal Light, Small portrait, Tool store 3, Teak armchair, Whetstone and Hall (quest trophies)."
+  ],
+  "36": [
+   "You have unlocked: Teak wall decoration, Oak mounted fish display, Oak trophy case and Dragon Bitter barrel."
+  ],
+  "37": [
+   "You have unlocked: Pottery oven, Oak pet feeder, Teak bell pull, Grassland pet habitat, Lesser magical balance, Oak dresser, Oak pet house (3 pets), Menagerie and more."
+  ],
+  "38": [
+   "You have unlocked: Maximum rooms: 27, Pet list (for one-off pets), Small map, Teak mounted head display, Teak dining bench and Teak dining table."
+  ],
+  "39": [
+   "You have unlocked: Steel cannon, Oak pet scratching post, Clay attack stone, Jester game and Oak wardrobe (bedroom)."
+  ],
+  "40": [
+   "You have unlocked: Butler, Tip jar, S.T.A.S.H chart, Opulent curtains, Oak lectern, Mahogany bookcase, Teak bed and Study."
+  ],
+  "41": [
+   "You have unlocked: Mahogany cargo hold, Mahogany hull & hull parts, Fencing ring, Rune display cases, Globe and Shield easel."
+  ],
+  "42": [
+   "You have unlocked: STASH units (medium), Crystal ball, Mounted sword, Oak wardrobe (costume room), Crafting table 4, Fancy range and Costume room."
+  ],
+  "43": [
+   "You have unlocked: Anvil, Alchemical chart and Teak larder."
+  ],
+  "44": [
+   "You have unlocked: Maximum rooms: 28, Teak prize chest, Weapons rack, Small landscape, Oak telescope, Tool store 4, Oak fancy dress box, Carved teak dining bench and more."
+  ],
+  "45": [
+   "You have unlocked: Icon of Gnome Child, Steel torches (chapel), Oak altar, Maple tree, Oak shelves 2, Large teak bed, Carved teak dining table, Chapel and more."
+  ],
+  "46": [
+   "You have unlocked: Teak dresser, Oak armour case and Steel framed workbench."
+  ],
+  "47": [
+   "You have unlocked: Mounted Mythical Cape, Mounted Cape of Legends, Mounted Amulet of Glory, Mounted Anti-Dragon Shield, Oak demon lectern, Oak eagle lectern, Gold Sink, Sink and more."
+  ],
+  "48": [
+   "You have unlocked: Symbol of Zamorak, Symbol of Guthix, Symbol of Saradomin, Combat dummy, Leagues accomplishment scroll, Teak pet house (5 pets), Oak treasure chest, Chef's Delight barrel and more."
+  ],
+  "49": [
+   "You have unlocked: Teleport focus, Teak pet scratching post, Shuttered chapel window, Small chapel statue, Chapel windchimes, Wooden torches (chapel) and Treasure hunt fairy house."
+  ],
+  "50": [
+   "You have unlocked: Teleport focus, Teak portal frame, Teak altar, Ornamental globe, Oak toy box, Mahogany armchair, Use the Advertisement noticeboard, Portal chamber and more."
+  ],
+  "51": [
+   "You have unlocked: Combat ring, Teak chest of drawers and Carved oak wardrobe (costume room)."
+  ],
+  "52": [
+   "You have unlocked: Adamant salvaging hook, Teak kitchen table, Mahogany dining bench and Mahogany dining table."
+  ],
+  "53": [
+   "You have unlocked: Camphor cargo hold, Steel candlesticks, Combat dummy (Undead and Slayer) and Mahogany four-poster bed."
+  ],
+  "54": [
+   "You have unlocked: Elemental sphere, Mahogany prize chest, Extra weapons rack, Dartboard and Oak cape rack."
+  ],
+  "55": [
+   "You have unlocked: STASH units (hard), Boundary stones, Large portrait, Teak clock, Tool store 5, Armour stand and Formal garden."
+  ],
+  "56": [
+   "You have unlocked: Furnance, Hallowed Sepulchre - Repair bridge, Cloth-covered teak altar, Thorny hedge, Teak mounted fish display, Gilded mahogany wall decoration, Fancy teak dresser, Teak shelves 1 and",
+   "more."
+  ],
+  "57": [
+   "You have unlocked: Gold candlesticks, Desert pet habitat, Medium balance, Teak demon lectern and Teak eagle lectern."
+  ],
+  "58": [
+   "You have unlocked: Chapel bells, Ornate combat dummy (Undead and Slayer), Mahogany mounted head display, Medium map and Servant's money bag."
+  ],
+  "59": [
+   "You have unlocked: Icon of Zamorak, Icon of Guthix, Icon of Saradomin, Wooden fence, Hangman game, Limestone attack stone, Lunar globe, Mahogany pet house (7 pets) and more."
+  ],
+  "60": [
+   "You have unlocked: Cloth-covered mahogany altar, Yew tree, Nice hedge, Spice Rack, Teak wardrobe (costume room), Gilded mahogany four-poster bed, Oak throne, Throne room and more."
+  ],
+  "61": [
+   "You have unlocked: Adamant cannon, Advanced chum station, Linen trawling net, Oak incense burners, Throne room floor decoration and Gilded mahogany dining bench."
+  ],
+  "62": [
+   "You have unlocked: Fathom stone, Adamant keel, Maximum rooms: 31, Teak fancy dress box and Workbench with vice."
+  ],
+  "63": [
+   "You have unlocked: Stone wall, Simple pet arena, Astronomical chart, Teak wardrobe (bedroom), Teak cape rack and Marble fireplace."
+  ],
+  "64": [
+   "You have unlocked: Limestone altar, Small box hedge, Mounted giant blue krill, Ornate trophy pedestal, Teak telescope, Mahogany dresser and Teak armour case."
+  ],
+  "65": [
+   "You have unlocked: Zen theme, Restoration pool, Gazebo, Large landscape, Opulent rug (League hall), Opulent rug, Superior garden, Oubliette and more."
+  ],
+  "66": [
+   "You have unlocked: Teak garden bench, Rosemary, Sunflower, Round wall-mounted shield, Ornate banner stand, Mounted Harpoonfish, Teak treasure chest, Banner easel and more."
+  ],
+  "67": [
+   "You have unlocked: Crystal extractor, Limestone spiral staircase, Polar pet habitat, Iron railings, Mahogany demon lectern, Mahogany eagle lectern, Teak shelves 2 and Teak throne."
+  ],
+  "68": [
+   "You have unlocked: Oak lever, Oak oubliette ladder, Steel cage, Topiary hedge, Mounted golden haddock, Ornate league statue, Celestial globe, Teak toy box and more."
+  ],
+  "69": [
+   "You can now build: Marble incense burners, Decorative chapel window, Chapel organ, Medium chapel statue, Carved teak wardrobe (costume room)"
+  ],
+  "70": [
+   "You have unlocked: Mahogany Homes (expert), Marble altar, Skeleton guard, Oak and steel cage, Revitalisation pool, Dungeon entrance, Consecrated pet house (9 pets), Dungeon and more."
+  ],
+  "71": [
+   "You can now build: Icon of Bob the Cat, Tentacle pool, Small fountain, Picket fence, Daffodils, Marigolds and Ranging pedestals."
+  ],
+  "72": [
+   "You have unlocked: Spike trap, Fancy hedge, Mounted Xeric's Talisman, Decorative dungeon bloodstain, Dungeon candles, Mahogany cape rack, Gilded mahogany and marble table, Portal nexus and more."
+  ],
+  "73": [
+   "You have unlocked: Cotton trawling net, Advanced pet arena and Raging Echoes rug."
+  ],
+  "74": [
+   "You have unlocked: Maximum rooms 33, Guard dog, Oak dungeon door, Large trapdoor, Mounted orangefin, Mahogany outfit stand, Gilded Mahogany dresser, Mahogany throne and more."
+  ],
+  "75": [
+   "You can now build: Redwood fence, Garden fence, Large fountain, Spirit tree, Otherworldly theme, Magic tree, Mahogany wardrobe (bedroom), Treasure room and more."
+  ],
+  "76": [
+   "You have unlocked: Rune cannon, Man trap, Bluebells, Roses, Tall fancy hedge, Square wall-mounted shield and Mahogany mounted fish display."
+  ],
+  "77": [
+   "You have unlocked: STASH units (elite), Oubliette flame pit, Gnome bench, Volcanic pet habitat, Greater magical balance, Marble lectern, Armillary sphere, Workbench with lathe and more."
+  ],
+  "78": [
+   "You have unlocked: Teak lever, Teak oubliette ladder, Hobgoblin guard, Mounted huge halibut, Large map, Gilded mounted head display, Mahogany trophy case, Mahogany wardrobe (costume room) and more."
+  ],
+  "79": [
+   "You have unlocked: Oak dungeon treasure chest, Marble wall and Marble attack stone."
+  ],
+  "80": [
+   "You have unlocked: Mounted coins, Mounted emblem, Quest list, Mahogany fancy dress box, Dark altar, Lunar altar, Ancient altar, Achievement Gallery and more."
+  ],
+  "81": [
+   "You have unlocked: Rune helm, Posh fountain, Balance beam, Archery target, Desecrated pet house (12 pets), Gilded mahogany cape rack, Basic jewellery box and Gilded mahogany throne."
+  ],
+  "82": [
+   "You have unlocked: Marble staircase, Baby red dragon, Lesser magic cage, Mounted purplefin, Mounted Alchemical Hydra head, Mounted Vorkath head, Mounted Digsite Pendant, Mahogany armour case and",
+   "more."
+  ],
+  "83": [
+   "You have unlocked: Fathom pearl, Rocnar, Teak dungeon treasure chest, Obsidian fence, Glorious pet arena, Mahogany adventure log, Decorative dungeon pipe and Infernal chart."
+  ],
+  "84": [
+   "You have unlocked: Dragon cannon, Rosewood cargo hold, Rosewood hull & hull parts, Marble trap, Steel-plated oak door, Mahogany telescope and Dungeon torches."
+  ],
+  "85": [
+   "You have unlocked: Rosewood mast and cotton sails, Bone cage, Tok-Xil, Volcanic theme, Fancy rejuvenation pool, Fairy ring and Gilded mahogany clock."
+  ],
+  "86": [
+   "You have unlocked: Dragon helm, Maximum rooms: 35, Huge spider, Wall-mounted kiteshield, Small orrery, Mahogany toy box and Fancy jewellery box."
+  ],
+  "87": [
+   "You have unlocked: Dragon keel, Mahogany dungeon treasure chest, Boss lair display, Gilded mahogany wardrobe (bedroom) and Gilded mahogany wardrobe (costume room)."
+  ],
+  "88": [
+   "You have unlocked: STASH units (master), Mahogany lever, Mahogany oubliette ladder, Teleport trap, Marble garden bench (decorative only), Gilded adventure log and Skeleton throne."
+  ],
+  "89": [
+   "You have unlocked: Stained-glass chapel window Large chapel statue and Greater magic cage."
+  ],
+  "90": [
+   "You have unlocked: Chambers of Xeric - Large storage unit, Dagannoth, Troll guard, Ornate rejuvenation pool, Marble cape rack, Occult Altar (upgrade from Dark), Occult Altar (upgrade from Lunar) and Occult Altar",
+   "(upgrade from Ancient)."
+  ],
+  "91": [
+   "You have unlocked: Magic dungeon treasure chest and Ornate jewellery box."
+  ],
+  "92": [
+   "You have unlocked: Rosewood repair kit, Maximum rooms: 36, Crystalline portal nexus and Natural pet house (many pets)."
+  ],
+  "93": [
+   "You have unlocked: Marble adventure log."
+  ],
+  "94": [
+   "You have unlocked: Hellhound, Marble dungeon door, Dungeon skull torches and Hanging dungeon skeleton."
+  ],
+  "95": [
+   "You have unlocked: Steel dragon, Spirit tree & fairy ring, Large orrery and Crystal throne."
+  ],
+  "96": [
+   "You have unlocked: Maximum rooms: 37 and Marble wardrobe (costume room)."
+  ],
+  "97": [
+   "You have unlocked: Marble spiral."
+  ],
+  "98": [
+   "You have unlocked: Obsidian garden bench (decoration only)."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Construction. Why not visit an Estate Agent? They have something special that is only available to true masters of the Construction skill!"
+  ]
+ },
+ "Hunter": {
+  "3": [
+   "You can now track common kebbits."
+  ],
+  "5": [
+   "You can now trap golden warblers and place birdhouse traps on Fossil Island."
+  ],
+  "7": [
+   "You can now track feldip weasels."
+  ],
+  "9": [
+   "You can now trap copper longtails."
+  ],
+  "11": [
+   "You can now trap cerulean twitches."
+  ],
+  "13": [
+   "You can now track desert devils."
+  ],
+  "14": [
+   "You can now place oak birdhouse traps on Fossil Island."
+  ],
+  "15": [
+   "You can now catch ruby harvest butterflies, dig for sandworms and catch Prael bats."
+  ],
+  "17": [
+   "You can now catch baby implings."
+  ],
+  "19": [
+   "You can now trap tropical wagtails."
+  ],
+  "20": [
+   "You can now have up to 2 traps placed at a time."
+  ],
+  "22": [
+   "You can now catch young implings."
+  ],
+  "23": [
+   "You can now trap wild kebbits."
+  ],
+  "24": [
+   "You can now place willow birdhouse traps on Fossil Island."
+  ],
+  "25": [
+   "You can now catch sapphire glacialis butterflies."
+  ],
+  "27": [
+   "You can now trap ferrets and catch rabbits."
+  ],
+  "28": [
+   "You can now catch gourmet implings."
+  ],
+  "29": [
+   "You can now trap swamp lizards."
+  ],
+  "30": [
+   "You can now catch Giral bats."
+  ],
+  "31": [
+   "You can now trap spined larupias."
+  ],
+  "32": [
+   "You can now catch young implings."
+  ],
+  "33": [
+   "You can now trap barb-tailed kebbits."
+  ],
+  "34": [
+   "You can now place teak birdhouse traps on Fossil Island."
+  ],
+  "35": [
+   "You can now catch snowy knight butterflies and bluegill on Molch Island (with 43 fishing)."
+  ],
+  "36": [
+   "You can now catch earth implings."
+  ],
+  "37": [
+   "You can now trap prickly kebbits."
+  ],
+  "38": [
+   "You can now catch gourmet implings."
+  ],
+  "39": [
+   "You can now trap embertailed jerboa and smoke your traps to remove the human scent from them."
+  ],
+  "40": [
+   "You can now have up to 3 traps placed at a time."
+  ],
+  "41": [
+   "You can now trap horned graahks."
+  ],
+  "42": [
+   "You can now catch essence implings."
+  ],
+  "43": [
+   "You can now catch spotted kebbits."
+  ],
+  "44": [
+   "Members can now access drift net fishing (with 47 Fishing) and place maple birdhouse traps on Fossil Island."
+  ],
+  "45": [
+   "You can now catch black warlock butterflies and Phluxia bats."
+  ],
+  "46": [
+   "You can now catch earth implings."
+  ],
+  "47": [
+   "You can now trap orange salamanders."
+  ],
+  "49": [
+   "You can now track razor-backed kebbits and place mahogany birdhouse traps on Fossil Island."
+  ],
+  "50": [
+   "You have unlocked: Sunlight hunters' crossbow, Horn of Plenty and Eclectic implings."
+  ],
+  "51": [
+   "You have unlocked: Sabre-toothed kebbits and Common tench."
+  ],
+  "52": [
+   "You have unlocked: Kyatt fur clothing and Essence implings (barehanded)."
+  ],
+  "53": [
+   "You have unlocked: Chinchompas."
+  ],
+  "54": [
+   "You have unlocked: Gloves of Silence."
+  ],
+  "55": [
+   "You have unlocked: Sabre-toothed kyatts and Black warlock butterflies (barehanded)."
+  ],
+  "57": [
+   "You have unlocked: Adept Hunters' Rumours, Dark kebbits and Pyre foxes."
+  ],
+  "58": [
+   "You have unlocked: Nature implings."
+  ],
+  "59": [
+   "You have unlocked: Yew Birdhouse Trap and Red salamanders."
+  ],
+  "60": [
+   "You can now have up to 4 traps placed at a time and catch Kryket bats."
+  ],
+  "63": [
+   "You have unlocked: Red chinchompas."
+  ],
+  "65": [
+   "You have unlocked: Magpie implings and Sunlight moths."
+  ],
+  "66": [
+   "You have unlocked: Spottier capes."
+  ],
+  "67": [
+   "You have unlocked: Black salamanders."
+  ],
+  "68": [
+   "You have unlocked: Nature implings (barehanded) and Mottled eel."
+  ],
+  "69": [
+   "You have unlocked: Dashing kebbits."
+  ],
+  "71": [
+   "You have unlocked: Imps and Imp traps."
+  ],
+  "72": [
+   "You have unlocked: Expert Hunters' Rumours and Sunlight antelope."
+  ],
+  "73": [
+   "You have unlocked: Black chinchompas."
+  ],
+  "74": [
+   "You have unlocked: Magic Birdhouse Trap and Ninja implings."
+  ],
+  "75": [
+   "You have unlocked: Chambers of Xerics - Murng bat, Magpie implings (barehanded), Moonlight moths and Sunlight moths (barehanded)."
+  ],
+  "77": [
+   "You have unlocked: Rainbow crabs."
+  ],
+  "79": [
+   "You have unlocked: Tecu salamanders."
+  ],
+  "80": [
+   "You have unlocked: Lay up to 5 traps at a time, Crystal implings and Herbiboar."
+  ],
+  "83": [
+   "You have unlocked: Dragon implings."
+  ],
+  "84": [
+   "You have unlocked: Ninja implings (barehanded)."
+  ],
+  "85": [
+   "You have unlocked: Moonlight moths (barehanded)."
+  ],
+  "87": [
+   "You have unlocked: Greater siren."
+  ],
+  "89": [
+   "You have unlocked: Redwood Birdhouse Trap and Lucky implings."
+  ],
+  "90": [
+   "You have unlocked: Chambers of Xeric - Psykk bat and Crystal implings (barehanded)."
+  ],
+  "91": [
+   "You have unlocked: Master Hunters' Rumours and Moonlight antelope."
+  ],
+  "93": [
+   "You have unlocked: Dragon implings (barehanded)."
+  ],
+  "99": [
+   "Congratulations! You are now a master Hunter. Why not visit the Hunting Expert, south of the Feldip Hills? She has something special that is only available to true masters of the Hunter skill!"
+  ]
+ },
+ "Sailing": {
+  "5": [
+   "You can now dock your boat at Land's End and Hosidius."
+  ],
+  "7": [
+   "You can now accept up to two port tasks at the same time."
+  ],
+  "10": [
+   "You can now dock your boat at Musa Point."
+  ],
+  "12": [
+   "You can now chart drink crates (after completing Prying Times)."
+  ],
+  "15": [
+   "You can now captain a skiff, own two different boats, dock your boat at Port Piscarillius, salvage from small shipwrecks and build a bronze salvaging hook."
+  ],
+  "16": [
+   "You have unlocked: Range."
+  ],
+  "17": [
+   "You can now build an iron helm (with 14 Construction)."
+  ],
+  "18": [
+   "You can now dock your boat at Rimmington and build an oak cargo hold (with 11 Construction)."
+  ],
+  "20": [
+   "You can now dock your boat at Catherby and build an oak hull (with 8 Construction.)"
+  ],
+  "21": [
+   "You can now build an iron salvaging hook (with 9 Construction)."
+  ],
+  "22": [
+   "You can now chart sea currents (after completing Current Affairs) and build an iron keel (with 17 Construction)."
+  ],
+  "24": [
+   "You can now build an oak mast and linen sails (with 11 Construction)."
+  ],
+  "25": [
+   "You can now dock your boat at Brimhaven and build flags and trims (with 20 Construction)."
+  ],
+  "26": [
+   "You can now salvage from fisherman's shipwrecks."
+  ],
+  "27": [
+   "You can now build a steel salvaging hook (with 18 Construction)."
+  ],
+  "28": [
+   "You have unlocked: Bronze cannon, Maximum port tasks: 3 and Ardougne."
+  ],
+  "29": [
+   "You can now build a teak cargo hold (with 21 Construction)."
+  ],
+  "30": [
+   "You can now dock your boat at Port Khazard and take on the Tempor Tantrum Barracuda Trial in the Storm Tempor."
+  ],
+  "31": [
+   "You can now build a teak hull (with 23 Construction)."
+  ],
+  "33": [
+   "You can now build a Keg (with 25 Construction)."
+  ],
+  "34": [
+   "You can now dock your boat at Witchaven."
+  ],
+  "35": [
+   "You can now salvage from Barracuda shipwrecks and build an iron cannon (with 28 Construction)."
+  ],
+  "36": [
+   "You can now dock your boat at Entrana and build a teak mast and canvas sail (with 26 Construction)."
+  ],
+  "37": [
+   "You can now build an anchor (with 26 Construction)."
+  ],
+  "38": [
+   "You can now dock your boat at Civitas illa Fortis (after completing Children of the Sun), chart sea depths (after completing Recipe for Disaster - Freeing Pirate Pete) and build a steel helm (with 30 Construction)."
+  ],
+  "39": [
+   "You can now build a steel keel (with 32 Construction)."
+  ],
+  "40": [
+   "You can now dock your boat at Corsair Cove (after completing The corsair Curse) and Dognose Island, assign one crewmate to duties on your boat, recruit Jobless Jim from Port Sarim and build an innoculation station (with 37 Construction)."
+  ],
+  "42": [
+   "You can now dock your boat at Cairn Isle and Chinchompa Island and build a salvaging station (with 34 Construction)."
+  ],
+  "44": [
+   "You can now dock your boat at the Sunset Coast (after completing Children of the Sun) and build a mithril salvaging hook (with 30 Construction)."
+  ],
+  "45": [
+   "You can now dock your boat at both the Summer Shore and the Little Pearl (after completing Troubled Tortugans)."
+  ],
+  "46": [
+   "You can now dock your boat at Aldarin (after completing Children of the Sun) and Vatrachos Island and build a mahogany cargo hold (with 41 Construction)."
+  ],
+  "47": [
+   "You can now dock your boat at the Onyx Crest and build a steel cannon (with 39 Construction)."
+  ],
+  "48": [
+   "You have unlocked: Mahogany hull, Ruins of Unkah and Ruins of Unkah."
+  ],
+  "49": [
+   "You have unlocked: Shimmering Atoll."
+  ],
+  "50": [
+   "You can now captain a sloop, own three different boats, dock at the Void Knights' Outpost and Port Roberts and recruit Captain Siad from the Desert Mining Camp (after completing The Tourist Trap)."
+  ],
+  "51": [
+   "You can now dock your boat at Anglers' Retreat."
+  ],
+  "52": [
+   "You can now build a mahogany mast and canvas sails (with 45 Construction)."
+  ],
+  "53": [
+   "You can now salvage from large shipwrecks and build a wind catcher (with 47 Construction)."
+  ],
+  "54": [
+   "You have unlocked: Mithril keel and Minotaur's Rest."
+  ],
+  "55": [
+   "You have unlocked: Adventurer Ada - The Pandemonium, Maximum crewmates: 2, Teleport focus, Mithril helm, The Jubbly Jive - Backwater and Isle of Souls."
+  ],
+  "56": [
+   "You have unlocked: Chum station, Rope trawling net, Maximum port tasks: 4 and Isle of Bones."
+  ],
+  "57": [
+   "You have unlocked: Mithril cannon and Weather pattern charting."
+  ],
+  "58": [
+   "You have unlocked: Laguna Aurorae."
+  ],
+  "59": [
+   "You have unlocked: Adamant salvaging hook."
+  ],
+  "60": [
+   "You have unlocked: Cabin Boy Jenkins - Crandor, Camphor cargo hold and Charred Island."
+  ],
+  "61": [
+   "You have unlocked: Tear of the Soul."
+  ],
+  "62": [
+   "You have unlocked: Tasks from Rellekka and Rellekka."
+  ],
+  "63": [
+   "You have unlocked: Bosun's workbench and Wintumber Island."
+  ],
+  "64": [
+   "You have unlocked: Pirate shipwrecks and The Crown Jewel."
+  ],
+  "65": [
+   "You have unlocked: Oarswoman Olga - Burgh de Rott, Linen trawling net, Tasks from Etceteria and Etceteria."
+  ],
+  "66": [
+   "You have unlocked: Adamant keel, Tasks from Port Tyras, Lledrith Island and Port Tyras."
+  ],
+  "67": [
+   "You can now dock your boat at Deepfin Point and build a camphor hull (with 59 Construction)."
+  ],
+  "68": [
+   "You have unlocked: Advanced chum station, Camphor mast and canvas sails, Neitiznot and Jatizso."
+  ],
+  "69": [
+   "You can now dock your boat at Rainbow's End and build an adamant cannon (with 61 Construction)."
+  ],
+  "70": [
+   "You have unlocked: Jittery Jim - Port Khazard, Maximum crewmates: 3, Fathom stone, Tasks from Prifddinas and Prifddinas."
+  ],
+  "72": [
+   "You can now dock your boat at Sunbleak Island, take on the Gwenith Glide Barracuda Trial in Port Gwenith (after completing Regicide) and build an adamant helm (with 59 Construction)."
+  ],
+  "73": [
+   "You can now dock your boat at Ynysdail, salvage from mercenary shipwrecks and build a Crystal extractor (with 67 Construction)."
+  ],
+  "74": [
+   "You can now dock your boat at Waterbirth Island (after completing The Fremennik Trials) and build a rune salvaging hook (with 66 Construction)."
+  ],
+  "75": [
+   "You can now dock your boat at Piscatoris (after completing Swan Song) and build a greater teleport focus (with 69 Construction)."
+  ],
+  "76": [
+   "You can now dock your boat at Lunar Isle (after completing Lunar Diplomacy) and Buccaneers' Haven."
+  ],
+  "78": [
+   "You can now own four different boats and build an eternal brazier (with 72 Construction)."
+  ],
+  "79": [
+   "You can now dock your boat at Drumstick Isle, build a gale catcher (with 70 Construction) and build a hemp trawling net (with 70 Construction)."
+  ],
+  "80": [
+   "You can now dock at Weiss (after completing Making Friends with My Arm), salvage from Fremennik shipwrecks, recruit Bosun Zarah from Etceteria (after completing Royal Trouble), build a rune cannon (with 76 Construction) and build an ironwood cargo hold (with 77 Construction)."
+  ],
+  "81": [
+   "You can now dock your boat at Brittle Isle and build an ironwood hull (with 75 Construction)."
+  ],
+  "82": [
+   "You have unlocked: Chum spreader."
+  ],
+  "83": [
+   "You can now build an ironwood mast and cotton sails (with 77 Construction)."
+  ],
+  "84": [
+   "You have unlocked: Cotton trawling net and Maximum port task: 5."
+  ],
+  "85": [
+   "You have unlocked: Jolly Jim - Brimhaven, Maximum crewmates: 4 and Rune keel."
+  ],
+  "86": [
+   "You can now build a dragon salvaging hook (with 78 Construction)."
+  ],
+  "87": [
+   "You can now dock your boat at Grimstone, salvage from merchant shipwrecks and build a rune helm (with 81 Construction)."
+  ],
+  "89": [
+   "You can now build a rosewood cargo hold (with 84 Construction)."
+  ],
+  "90": [
+   "You have unlocked Spotter Virginia - Ruins of Unkah."
+  ],
+  "91": [
+   "You can now own five different boats and build a fathom pearl (with 83 Construction)."
+  ],
+  "92": [
+   "You can now build a dragon cannon (with 84 Construction)."
+  ],
+  "93": [
+   "You can now build a rosewood hull (with 84 Construction)."
+  ],
+  "94": [
+   "You can now build a rosewood mast and cotton sails (with 85 Construction)."
+  ],
+  "95": [
+   "You can now assign five crewmates to duties on your boat and recruit Sailor Jakob from Catherby."
+  ],
+  "96": [
+   "You can now build a dragon helm (with 86 Construction)."
+  ],
+  "97": [
+   "You can now build a dragon keel (with 87 Construction)."
+  ],
+  "99": [
+   "Congratulations! You are now a master of Sailing. Why not visit Brass Hand Harry on the Pandemonium? He has something special that is only available to true masters of the Sailing skill!"
+  ]
+ }
+}

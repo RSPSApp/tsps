@@ -109,3 +109,23 @@ test("Veliaf replaces a lost tome at the charge it had, and gives none once all 
   assert.equal(held(f), null, "no new tome after all three chapters");
   assert.equal(xp(f, core.Skill.FISHING), before);
 });
+
+test("the three chapters are the account's: a second (3) tome continues them, it doesn't pay three more", async (t) => {
+  const f = actor(t);
+  f.inv.add(new core.Item(9656, 1), true);
+  f.p.getBank(0).add(new core.Item(9656, 1), false); // a replacement from Veliaf, banked
+  const before = xp(f, core.Skill.FISHING);
+  await read(f, core.Skill.FISHING);
+  await read(f, core.Skill.FISHING);
+  assert.equal(held(f), 9658, "two chapters read");
+  f.inv.deleteAtSlot(slotOf(f, 9658), 1);
+  f.p.getBank(0).delete(new core.Item(9656, 1));
+  f.inv.add(new core.Item(9656, 1), true);
+  await read(f, core.Skill.FISHING);
+  assert.equal(xp(f, core.Skill.FISHING) - before, 6000, "the third chapter, from the other copy");
+  assert.equal(held(f), null, "and the copy crumbles with the account's last chapter");
+  f.inv.add(new core.Item(9656, 1), true);
+  await send(f, { type: "inventory_action", slot: slotOf(f, 9656), itemId: 9656, widgetId: 3214, option: "Read" });
+  assert.equal(xp(f, core.Skill.FISHING) - before, 6000, "no fourth chapter");
+  assert.equal(held(f), null, "a further copy just crumbles");
+});

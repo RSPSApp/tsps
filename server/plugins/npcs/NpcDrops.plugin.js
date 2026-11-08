@@ -577,7 +577,8 @@ function hits(entry, multiplier = 1) {
   if (!Number.isInteger(outOf) || outOf <= 0) {
     return false;
   }
-  const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
+  // Fractional weights are allowed (npc-drops-custom.json, #1749): a 2.5/400 row is 2.5, not 1.
+  const weight = Number.isFinite(entry.weight) && entry.weight > 0 ? entry.weight : 1;
   return Math.random() * outOf < Math.min(outOf, weight * multiplier);
 }
 
@@ -612,7 +613,8 @@ function isUniqueItem(entry) {
 /** Rarity alone does not make supplies, equipment or a shared drop table a boss unique. */
 function isUniqueEntry(entry) {
   const outOf = Number(entry.out_of);
-  const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
+  // Fractional weights are allowed (npc-drops-custom.json, #1749): a 2.5/400 row is 2.5, not 1.
+  const weight = Number.isFinite(entry.weight) && entry.weight > 0 ? entry.weight : 1;
   const chance = outOf > 0 ? weight / outOf : 0;
   if (!(chance > 0 && chance < SPECIAL_MAX_CHANCE)) return false;
   // An ordered access may contain a pool of uniques; never boost a pool with ordinary supplies.

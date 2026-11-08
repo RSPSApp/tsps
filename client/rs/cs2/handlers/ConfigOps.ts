@@ -14,6 +14,7 @@ import {
 import { isNpcSearch, isNpcSearchResult, setNpcSearchResults } from "../spawnSearch";
 import { createTypedArrayFromCode } from "../Cs2ArrayObject";
 import { Opcodes } from "../Opcodes";
+import { SPECIAL_ATTACK_ENUM, customSpecialAttackCost } from "../../../custom/items/CustomSpecialAttacks";
 import { PostProcessedObjTypeLoader } from "../../config/objtype/ObjTypeLoader";
 import type { HandlerContext, HandlerMap, ItemNameIndexEntry } from "./HandlerTypes";
 import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_OPTION, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_317_FIXED_LABEL } from "../../../common/ui/gameframeLayout";
@@ -437,6 +438,18 @@ export function registerConfigOps(handlers: HandlerMap): void {
 
         const enumType = loadEnum(ctx, enumId);
         const baseCount = enumType?.outputCount ?? 0;
+
+        // A custom weapon with a special attack gets a special-weapons entry, so its bar shows.
+        if (enumId === SPECIAL_ATTACK_ENUM && !wantsString) {
+            const cost = customSpecialAttackCost(key, (from) => {
+                const idx = enumType?.keys?.indexOf(from) ?? -1;
+                return idx >= 0 ? enumType?.intValues?.[idx] : undefined;
+            });
+            if (cost !== undefined) {
+                ctx.pushInt(cost);
+                return;
+            }
+        }
 
         // Check for custom content enum override
         // - Tasks are prepended (inserted at beginning)

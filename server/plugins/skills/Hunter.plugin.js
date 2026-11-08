@@ -80,7 +80,7 @@ module.exports = {
     for (const name of ["Ferret", "Swamp lizard", "Orange salamander", "Red salamander", "Black salamander", "Tecu salamander", "Immature tecu salamander"])
       api.onItemAction(name, { Release: Runtime.release });
     for (const name of ["Imp-in-a-box(2)", "Imp-in-a-box(1)"])
-      api.onItemAction(name, { "Bank-all": MagicBoxes.explain, Bank: MagicBoxes.explain, "Talk-to": MagicBoxes.explain, Release: MagicBoxes.release });
+      api.onItemAction(name, { "Bank-all": MagicBoxes.explain, Bank: MagicBoxes.open, "Talk-to": MagicBoxes.explain, Release: MagicBoxes.release });
     api.onObjectInteraction("Hole", { "Build-trap": Crabs.build });
     api.onObjectInteraction("Crab trap (empty)", { Bait: Crabs.bait });
     for (const name of ["Crab trap (baited)", "Crab trap (full)"]) api.onObjectInteraction(name, { Empty: Crabs.empty });
@@ -105,6 +105,7 @@ module.exports = {
       api.onItemAction(name, { Open: Rumours.open });
     for (const name of ["Basic quetzal whistle", "Enhanced quetzal whistle", "Perfected quetzal whistle", "Perfected quetzal whistle(i)"])
       api.onItemAction(name, { Rumour: Rumours.check });
+    api.onInterfaceActionButton(MagicBoxes.FORM_INVENTORY_UID, MagicBoxes.formClick);
     api.onItemOnObject(Runtime.objectUse, { noted: false });
     api.onItemOnObject("Drift net", "<col=ffff00>Annette</col>", Annette.use, { noted: true });
     api.onItemOnItem(Runtime.itemUse, { noted: false });

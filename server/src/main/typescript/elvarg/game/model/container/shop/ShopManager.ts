@@ -232,7 +232,7 @@ export class ShopManager {
 
     public static processPlayer(player: any): void {
         if (
-            player?.isPlayerBot?.() ||
+            (player?.isUnwatchedBot?.() ?? player?.isPlayerBot?.()) ||
             !this.activeShopByPlayer.has(player)
         ) {
             return;
@@ -680,20 +680,22 @@ export class ShopManager {
             return;
         }
 
-        // Content may hand the purchase over as another item ("shop:delivery", a league relic's noted purchases).
-        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId };
+        // Content may hand the purchase over as another item ("shop:delivery", a league relic's noted purchases), or as
+        // a bundle of several per item bought (`amount`, the PvP Arena's Blighted surge sack (x50)).
+        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId, amount: 1 };
         PluginManager.emitCustomEvent("shop:delivery", delivery);
         const deliverId = Number.isInteger(delivery.deliverId) && delivery.deliverId > 0 ? delivery.deliverId : itemId;
+        const perPurchase = Number.isInteger(delivery.amount) && delivery.amount > 0 ? delivery.amount : 1;
         const delivered = ItemDefinition.forId(deliverId);
         const inventory = player.getInventory();
         if (delivered.isStackable?.()) {
-            quantity = Math.min(quantity, inventory.getAddableAmount(new Item(deliverId, quantity)));
+            quantity = Math.min(quantity, Math.floor(inventory.getAddableAmount(new Item(deliverId, quantity * perPurchase)) / perPurchase));
             if (quantity <= 0) {
                 inventory.full();
                 return;
             }
         } else {
-            quantity = Math.min(quantity, inventory.getFreeSlots());
+            quantity = Math.min(quantity, Math.floor(inventory.getFreeSlots() / perPurchase));
             if (quantity <= 0) {
                 inventory.full();
                 return;
@@ -709,7 +711,7 @@ export class ShopManager {
             shop.definition.getCurrency(),
             removed * price
         );
-        inventory.adds(deliverId, removed);
+        inventory.adds(deliverId, removed * perPurchase);
         PluginManager.emitCustomEvent("shop:purchase", {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(),
             itemId, amount: removed, originalStock: (shop.originalAmounts.get(itemId) ?? 0) > 0,
@@ -932,8 +934,28 @@ export class ShopManager {
         return removed;
     }
 
-    /** A shop buys what it lists, including items it lists at 0 (Gerrant's raw fish). */
+    /**
+     * Shops that sell for a currency other than coins and still buy items for it: the TzHaar shops (tokkul) and
+     * Tai Bwo Wannai's cooperative (trading sticks). Reward shops (minigame points, tickets, marks) buy nothing back,
+     * unless their plugin says the shop does ("shop:buys-back" { shopId, shopName, currency, itemId, buys }, Dusuri's
+     * stardust buyback).
+     */
+    private static readonly BUYBACK_CURRENCIES = new Set(["COINS", "TOKKUL", "TRADING STICKS", "BLOOD_MONEY"]);
+
+    /**
+     * A shop buys what it lists, including items it lists at 0 (Gerrant's raw fish). A reward shop doesn't: it paid
+     * 85% of an item's coin value in its own currency, so coal sold to Petrified Pete minted Volcanic Mine points,
+     * and arrows sold at the Ranging Guild turned coins into archery tickets.
+     */
     private static buysItem(shop: RuntimeShop, itemId: number): boolean {
+        if (!this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())) {
+            const request = {
+                shopId: shop.definition.getId(), shopName: shop.definition.getName(),
+                currency: shop.definition.getCurrency(), itemId, buys: false,
+            };
+            PluginManager.emitCustomEvent("shop:buys-back", request);
+            if (request.buys !== true) return false;
+        }
         return this.isGeneralStore(shop) || shop.originalAmounts.has(itemId);
     }
 

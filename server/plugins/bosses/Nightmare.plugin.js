@@ -31,6 +31,7 @@ module.exports = {
     Retrieval.attachRetrieval(api);
     Scoreboard.attachScoreboard(api);
     require("./nightmare/CombatAchievements.Nightmare")(api);
+    api.onCustomEvent("ironman:shared-kill-keeps", require("./nightmare/Loot.Nightmare").ironmanKeeps);
     require("./nightmare/Commands.Nightmare")(api);
   },
 };

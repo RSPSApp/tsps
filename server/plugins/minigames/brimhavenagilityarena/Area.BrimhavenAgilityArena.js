@@ -30,6 +30,8 @@ const SAW_PAIRS = [
 ];
 const SAW_MESSAGE = "You were hit by the saw blade!";
 const SPINNING_BLADE_ANIM = 1107;
+/** Cache sequence 1111 activates the spikes; loc 3582 defaults to idle sequence 1112. */
+const FLOOR_SPIKE_ANIM = 1111;
 let sawPairs = [];
 
 function setSawRaised(pair, raised) {
@@ -101,6 +103,14 @@ function tickBlades() {
 
 function animateSpinningBlade({ object }) {
   object.performAnimation(new (Shared.core().Animation)(SPINNING_BLADE_ANIM));
+}
+
+function animateFloorSpikes({ player, core, pos }) {
+  const area = player.getPrivateArea?.() ?? null;
+  const object = core.MapObjects.get(Shared.OBJECTS.FLOOR_SPIKES, new core.Location(pos.x, pos.y, pos.z), area);
+  if (object?.getType() === 10 && object.getPrivateArea() === area) {
+    object.performAnimation(new core.Animation(FLOOR_SPIKE_ANIM));
+  }
 }
 
 function createArea() {
@@ -225,8 +235,14 @@ function trapSteps(player, span, outcome, dir) {
       { sound: BLADES_AFTER_SOUND, delay: 30 },
       { wait: 2 },
     );
+  } else if (span.kind === "FLOOR_SPIKES") {
+    // rsprox 1735 (Leagues): jump 664 -> entry spike 1111 at 665; landing/XP stay at jump+2.
+    steps.push(
+      { move: [...past, z], anim: TRAP_JUMP.ANIM, delay: TRAP_JUMP.DELAY, speed: TRAP_JUMP.SPEED, ticks: 0 },
+      { wait: 1 }, { run: animateFloorSpikes }, { wait: 1 }, { tele: [...past, z] },
+    );
   } else {
-    // Spikes and pads: XP two ticks after the jump (rsprox 1735 350 -> 352).
+    // Pads: XP two ticks after the jump (rsprox 1735 350 -> 352).
     steps.push({ move: [...past, z], anim: TRAP_JUMP.ANIM, delay: TRAP_JUMP.DELAY, speed: TRAP_JUMP.SPEED, ticks: 2 });
   }
   return steps;

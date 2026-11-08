@@ -372,7 +372,11 @@ test('the rogue outfit: the full set doubles loot; a doubled coin pouch adds its
     assert.equal(who.inv.getAmount(I.AIR_RUNE), 16);
     giveLoot(who, rogue, [{ id: I.COINS, amount: 30 }], () => 0.999);
     assert.equal(who.inv.getAmount(rogue.coinPouch.id), 1);
-    assert.equal(who.inv.getAmount(I.COINS), 25, "one pouch, plus the pouch's coins");
+    // Wiki (Coin pouch): the other half is the pouch's normal amount, rolled over its 25-40 range like an opened pouch.
+    assert.equal(who.inv.getAmount(I.COINS), 40, "one pouch, plus a pouch's coins (the top of the range at roll 0.999)");
+    const low = player({ worn: rogueSet });
+    giveLoot(low, rogue, [{ id: I.COINS, amount: 30 }], () => 0);
+    assert.equal(low.inv.getAmount(I.COINS), 25, "the bottom of the range at roll 0");
     const noSet = player();
     giveLoot(noSet, rogue, [{ id: I.AIR_RUNE, amount: 8 }], () => 0);
     assert.equal(noSet.inv.getAmount(I.AIR_RUNE), 8);

@@ -106,6 +106,26 @@ test("a Demonic Pacts character: the deeds' tasks are the league's own", (t) => 
   assert.equal(query.league, 6);
 });
 
+test("special: a Shield Slam with a Dragon axe wielded is a special performed, not the Dragon axe's", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const Effects = require("../plugins/combat/effects/Rondache.EquipmentEffects");
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(item("Dragon axe"), 1));
+  player.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(core.ItemIdentifiers.RONDACHE, 1));
+  Effects.setCharges(player, 20);
+  const target = new core.NPC(3106, new core.Location(player.getLocation().getX() + 1, player.getLocation().getY(), 0));
+  target.setRegistered(true);
+  t.after(() => target.setRegistered(false));
+  t.mock.method(player.getCombat(), "getTarget", () => target);
+  t.mock.method(player.getCombat(), "resolveCanReachForCurrentCycle", () => true);
+  t.mock.method(core.CombatFactory, "canAttack", () => core.CanAttackResponse.CAN_ATTACK);
+  t.mock.method(core.CombatFactory, "addPendingHit", () => {});
+  core.CombatSpecial.getForWeaponId(core.ItemIdentifiers.RONDACHE).getCombatMethod().start(player, target);
+  assert.equal(Effects.charges(player), 0, "the slam happened");
+  assert.equal(done(f, "perform-a-special-attack"), true, "Perform a Special Attack");
+  assert.equal(done(f, "use-the-special-attack-of-a-dragon-axe"), false, "not the Dragon axe's special");
+});
+
 test("produce: a potion mixed is the potion, whatever its doses (Make an Attack Potion)", async (t) => {
   const f = pactsCharacter(t);
   const inventory = f.player.getInventory();

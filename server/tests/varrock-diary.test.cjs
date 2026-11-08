@@ -152,6 +152,16 @@ test("the yew task needs a Varrock chop, the church top, and resets on another t
   reset.setLocation(new core.Location(3255, 3480, 3));
   dispatch("firemaking:success", { player: reset, itemId: core.ItemIdentifiers.YEW_LOGS });
   assert.equal(completed(reset, TASK.yewBurn), false, "another diary task resets the chop (Wiki)");
+
+  // A task already done, repeated, completes or updates nothing, so the chop stands.
+  const repeat = fixture(t, { at: [3266, 3493, 0] }).player;
+  dispatch("diary:task", { player: repeat, diary: "varrock", task: TASK.iron });
+  assert.equal(completed(repeat, TASK.iron), true);
+  dispatch("woodcutting:attempt", { player: repeat, object: definition("Yew tree"), success: true });
+  dispatch("diary:task", { player: repeat, diary: "varrock", task: TASK.iron });
+  repeat.setLocation(new core.Location(3255, 3480, 3));
+  dispatch("firemaking:success", { player: repeat, itemId: core.ItemIdentifiers.YEW_LOGS });
+  assert.equal(completed(repeat, TASK.yewBurn), true, "repeating a finished task leaves the yew chop");
 });
 
 test("Varrock and Paddewwa teleports credit on the real spell arrival only", (t) => {

@@ -261,16 +261,21 @@ test("a canceled queued cast does not grant progress and a lethal impact does", 
   assert.ok(tasks(lethal.caster).has(IceBarrageDiary._test.TASK));
 });
 
-test("an Ice Barrage splashes in multicombat only: a caster or target in single-way hits the target alone (Wiki)", (t) => {
+test("an Ice Barrage splashes when the target stands in multicombat, whatever the caster's tile (Wiki)", (t) => {
   const { caster, target } = opposingPair(t);
   const bystander = player(t, { location: new Location(2401, 3104, 0), team: game.data.TEAM.ZAMORAK });
   const splashed = () => buildCastHits(caster, target, { localPlayers: [bystander] }).map((hit) => hit.getTarget());
   const multi = new Set([caster, target, bystander]);
   t.mock.method(AreaManager, "inMulti", (mobile) => multi.has(mobile));
   assert.deepEqual(splashed(), [target, bystander], "all in multi: the bystander is splashed");
+  // Wiki (Multicombat area): the target's zone decides, so a caster on a single-way tile splashes opponents in multi.
   multi.delete(caster);
+  assert.deepEqual(splashed(), [target, bystander], "a single-way caster, the target and bystander in multi: splashed");
   multi.delete(target);
-  assert.deepEqual(splashed(), [target], "caster and target in single-way, the bystander on a multi tile: no splash");
+  assert.deepEqual(splashed(), [target], "the target in single-way, the bystander on a multi tile: no splash");
   multi.add(caster);
-  assert.deepEqual(splashed(), [target], "the target alone in single-way: no splash");
+  assert.deepEqual(splashed(), [target], "a multi caster, the target alone in single-way: no splash");
+  multi.add(target);
+  multi.delete(bystander);
+  assert.deepEqual(splashed(), [target], "the bystander itself in single-way is never splashed");
 });

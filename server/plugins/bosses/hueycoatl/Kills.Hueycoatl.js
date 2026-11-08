@@ -180,6 +180,18 @@ function recordKill(player, ticks) {
   if (request.total == null) announceKill(player, own, ticks);
 }
 
+/** The head whose loot is being handed out, and who qualified for it, while killed() emits each share. */
+const rewarding = new WeakMap();
+
+/**
+ * Wiki (Ironman Mode): "Iron accounts receive group-boss rewards when fighting with others", The Hueycoatl among them,
+ * so an Ironman's own share of a team kill is kept, not wiped as a shared kill.
+ */
+function ironmanKeeps(request) {
+  if (!rewarding.get(request?.npc)?.has(request.player)) return;
+  request.keep.push(...request.drops.map((drop) => drop.itemId));
+}
+
 /** The head is beaten: kill counts, durations and each player's loot. */
 function killed(session) {
   const { fight } = session;
@@ -201,7 +213,12 @@ function killed(session) {
     if (!qualifies(damage, team.length)) continue;
     const { drops, main, uniques } = lootFor(player, fight.head, damage, team.length, player === mvp);
     // Collection log, Ironman and saves hear each share as the player's own roll.
-    api.emitCustomEvent("npc-drops:roll", { player, npc: fight.head, npcId: Shared.NPC.HEAD, drops, damagers: fighters });
+    if (fight.head) rewarding.set(fight.head, new Set([player]));
+    try {
+      api.emitCustomEvent("npc-drops:roll", { player, npc: fight.head, npcId: Shared.NPC.HEAD, drops, damagers: fighters });
+    } finally {
+      if (fight.head) rewarding.delete(fight.head);
+    }
     placeDrops(player, session, drops, location);
     session.graphic(lootTile, Shared.GFX.LOOT_BEAM, 0, [player]);
     for (const drop of main) player.sendMessage(`<col=${DROP_COLOUR}>The Hueycoatl dropped: ${describe(drop)}</col>`);
@@ -232,9 +249,10 @@ function attach(pluginApi) {
   pluginApi.onCombatHitResolved(hitResolved);
   pluginApi.onCustomEvent("combat-achievements:personal-best", personalBest);
   pluginApi.onCustomEvent("combat-achievements:kill-count", killCounts);
+  pluginApi.onCustomEvent("ironman:shared-kill-keeps", ironmanKeeps);
 }
 
 module.exports = {
   attach, killed, world,
-  _test: { qualifies, lootFor, scaled, crushHighest, isMain, isUnique, isTertiary },
+  _test: { ironmanKeeps, qualifies, lootFor, scaled, crushHighest, isMain, isUnique, isTertiary },
 };

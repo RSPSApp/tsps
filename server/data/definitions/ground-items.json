@@ -1876,5 +1876,10 @@
   {"id":1735,"location":{"x":2930,"y":3285,"z":1},"amt":1,"respawn":100,"description":"OSRS Wiki: Shears — [[Crafting Guild]] ({{FloorNumber|uk=1}})"},
   {"id":837,"location":{"x":1512,"y":3423,"z":0},"amt":1,"respawn":500,"members":true,"description":"OSRS Wiki: Crossbow — [[Land's End]] - [[Hugor]]'s house"},
   {"id":1735,"location":{"x":1653,"y":3571,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - [[Watson's house]]"},
-  {"id":1735,"location":{"x":1776,"y":3654,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - east of flax field"}
+  {"id":1735,"location":{"x":1776,"y":3654,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Shears — [[Hosidius]] - east of flax field"},
+  {"id":557,"location":{"x":1394,"y":3116,"z":0},"amt":4,"respawn":100,"members":true,"description":"OSRS Wiki: Earth rune — West of [[Ralos' Rise]]"},
+  {"id":557,"location":{"x":1385,"y":3119,"z":0},"amt":4,"respawn":100,"members":true,"description":"OSRS Wiki: Earth rune — West of [[Ralos' Rise]]"},
+  {"id":558,"location":{"x":1392,"y":3118,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
+  {"id":558,"location":{"x":1399,"y":3123,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"},
+  {"id":558,"location":{"x":1388,"y":3110,"z":0},"amt":2,"respawn":100,"members":true,"description":"OSRS Wiki: Mind rune — [[Moss giant]]s west of [[Ralos' Rise]]"}
 ]

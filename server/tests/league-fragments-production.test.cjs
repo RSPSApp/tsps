@@ -195,12 +195,19 @@ test("The Alchemist: cooking, cleaning and mixing all at once with three pieces;
   assert.equal(actions(character("alchemistmain", { profile: "main" }), "COOKING", "cook"), 1);
 });
 
+/** A fletching recipe's own group in plugins/skills/data/fletching.json (gem bolt tips are "boltTips" since d0710deec). */
+function fletchingGroup(output) {
+  const recipe = require("../plugins/skills/data/fletching.json").recipes.find((entry) => entry.output === output);
+  assert.ok(recipe, `a fletching recipe makes ${output}`);
+  return recipe.group;
+}
+
 test("The Craftsman: the Wiki's activities all at once, through Smithing's own session loop", () => {
   const player = shattered("craftsman");
   equip(player, F.rumpleBowString, F.dragonOnABit, F.imcandosApprentice);
   for (const [skill, kind] of [["SMITHING", "smelt"], ["SMITHING", "smith"], ["SMITHING", "cannonballs"], ["CRAFTING", "leather"],
     ["CRAFTING", "glassblowing"], ["CRAFTING", "gems"], ["CRAFTING", "pottery"], ["CRAFTING", "battlestaves"], ["CRAFTING", "spinning"],
-    ["FLETCHING", "logs"], ["FLETCHING", "chisel"]]) {
+    ["FLETCHING", "logs"], ["FLETCHING", "chisel"], ["FLETCHING", fletchingGroup("SAPPHIRE_BOLT_TIPS")]]) {
     assert.equal(actions(player, skill, kind), 28, `${skill} ${kind}`);
   }
   for (const [skill, kind] of [["CRAFTING", "jewellery"], ["CRAFTING", "weaving"], ["FLETCHING", "arrows"], ["COOKING", "cook"]]) {
@@ -329,10 +336,11 @@ test("Profletchional and Pro Tips: more XP for logs and stringing; more bolt tip
   }
 
   const tips = cases(F.proTips);
-  produce(tips.owner, "FLETCHING", "chisel", I.SAPPHIRE_BOLT_TIPS, 12, 4);
+  const boltTips = fletchingGroup("SAPPHIRE_BOLT_TIPS");
+  produce(tips.owner, "FLETCHING", boltTips, I.SAPPHIRE_BOLT_TIPS, 12, 4);
   assert.equal(tips.owner.getInventory().getAmount(I.SAPPHIRE_BOLT_TIPS), 3, "30% of 12, rounded down");
   for (const player of tips.others) {
-    produce(player, "FLETCHING", "chisel", I.SAPPHIRE_BOLT_TIPS, 12, 4);
+    produce(player, "FLETCHING", boltTips, I.SAPPHIRE_BOLT_TIPS, 12, 4);
     assert.equal(player.getInventory().getAmount(I.SAPPHIRE_BOLT_TIPS), 0, player.getUsername());
   }
 });

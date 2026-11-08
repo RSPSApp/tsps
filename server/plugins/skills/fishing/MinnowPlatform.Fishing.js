@@ -215,8 +215,9 @@ const NO_SHARK_ROOM_TEXT = "I can't trade you any sharks while you don't have an
 
 function canReceiveSharks(inventory, output, minnowsUsed, heldMinnows) {
   if (inventory.getAddableAmount(output) >= output.getAmount()) return true;
-  // Consuming the entire minnow balance can free a slot, but add() still merges
-  // into an existing matching stack even when another slot is free.
+  // Consuming the entire minnow balance frees a slot. This conservative check
+  // does not predict a slot freed from one of several differently tagged stacks.
+  // add() still merges into a matching shark stack even when another slot is free.
   if (inventory.getFreeSlots() !== 0 || minnowsUsed !== heldMinnows) return false;
   const meta = JSON.stringify(output.getMeta() ?? null);
   return !inventory.getItems().some((item) => item.getId() === output.getId()

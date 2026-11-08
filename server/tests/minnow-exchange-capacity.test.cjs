@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
+const priorBots = process.env.DISABLE_PLAYER_BOTS;
 process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -12,6 +13,9 @@ const { MAX_STACK_AMOUNT } = require('../dist/game/model/container/StackType');
 const QuestRuntime = require('../plugins/quests/QuestRuntime');
 const Platform = require('../plugins/skills/fishing/MinnowPlatform.Fishing');
 let core, shark, npc, definition, clickType, quest;
+const errors = [];
+const originalError = console.error;
+console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError.apply(console, args); };
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -27,11 +31,23 @@ before(async () => {
   assert.equal(definition.getName(), 'Kylie Minnow');
   clickType = definition.getActions().indexOf('Trade') + 1;
   assert.ok(clickType > 0, 'cache exposes Trade after admission');
+  // This constructed post-admission NPC exercises registered dispatch; it is
+  // not in the world and does not establish spawn transformation or travel.
   npc = NPC.create(N.KYLIE_MINNOW_2, new Location(2599, 3425, 0));
   quest = QuestRuntime.getRegisteredQuests().find(q => q.name === 'Fishing Contest');
   assert.ok(quest, 'Fishing Contest is registered');
 });
-after(() => PM.emitServerShutdown({}));
+after(() => {
+  const failures = [];
+  try { PM.emitServerShutdown({}); } catch (error) { failures.push(error); }
+  finally {
+    console.error = originalError;
+    if (priorBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+    else process.env.DISABLE_PLAYER_BOTS = priorBots;
+  }
+  if (errors.length) failures.push(new Error(`Plugin errors: ${errors.join('\n')}`));
+  if (failures.length) throw new AggregateError(failures, 'fixture shutdown failed');
+});
 
 function fisher(t) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -40,7 +56,24 @@ function fisher(t) {
   player.setIndex(2450);
   player.setUsername('minnowcapacity');
   player.setRegistered(true);
+  player.setAttribute('bot-skip-persistence', true);
+  t.after(() => {
+    const failures = [];
+    const clean = fn => { try { fn(); } catch (error) { failures.push(error); } };
+    clean(() => player.closeInterruptibleInterfaces());
+    clean(() => player.setEnteredAmountAction(null));
+    clean(() => player.getDialogueManager().reset());
+    clean(() => PM.emitPlayerLogout({ player, username: player.getUsername() }));
+    clean(() => core.TaskManager.cancelTasks(player));
+    clean(() => core.TaskManager.cancelTasks(player.getIndex()));
+    clean(() => player.setRegistered(false));
+    if (failures.length) throw new AggregateError(failures, 'player cleanup failed');
+  });
   player.setLocation(new core.Location(2600, 3425, 0));
+  player.setNeedsPlacement(false);
+  assert.ok(player.getHitpoints() > 0);
+  assert.equal(player.isTeleportingReturn(), false);
+  assert.equal(player.isNeedsPlacement(), false);
   player.getSkillManager().setMaxLevel(core.Skill.FISHING, 82);
   player.getSkillManager().setCurrentLevel(core.Skill.FISHING, 82, true);
   quest.setStage(player, 5);
@@ -55,7 +88,6 @@ function fisher(t) {
   assert.equal(Platform.kylieCondition({ player, npcId: core.NpcIdentifiers.KYLIE_MINNOW,
     text: 'If the player meets all the requirements:' }), true);
   assert.equal(Platform.hasAccess(player), true);
-  t.after(() => { player.closeInterruptibleInterfaces(); player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
   return player;
 }
 function trade(player) {

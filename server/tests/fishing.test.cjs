@@ -529,6 +529,7 @@ test("minnow fishing: Wiki catch rates, rotating spots, flying fish and Kylie's 
       }),
       getInventory: () => ({
         contains: (id) => items.some((item) => item.getId() === id),
+        // This stub covers the ordinary exchange below, not capacity limits.
         getAddableAmount: (item) => item.getAmount(),
         getAmount: (id) => items.filter((item) => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
         getFreeSlots: () => free,

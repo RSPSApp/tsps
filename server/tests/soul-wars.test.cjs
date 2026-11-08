@@ -1162,36 +1162,38 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
   const { ClientConnection } = require('../dist/net/NetworkBuilder');
   const World = core.World;
   const savedCycle = World.processCycle, savedBotEnv = process.env.DISABLE_PLAYER_BOTS, actors = [], tasks = new Set();
-  process.env.DISABLE_PLAYER_BOTS = "1";
   const addBefore = new Set(World.getAddNPCQueue()), removeBefore = new Set(World.getRemoveNPCQueue());
   const submit = TaskManager.submit;
-  TaskManager.submit = function(task) { tasks.add(task); return submit.call(this, task); };
+  const savedSeedBots = config['SoulWars:seedBots'];
   let game, otherGame;
   const hookErrors = [], originalError = console.error;
-  t.mock.method(console, 'error', (...args) => {
-    if (String(args[0]).startsWith('[plugins]')) hookErrors.push(args);
-    originalError(...args);
-  });
   t.after(() => {
     const failures = [];
     const attempt = fn => { try { fn(); } catch (error) { failures.push(error); } };
     attempt(() => { if (otherGame && !otherGame.over) otherGame.finish(null); });
     attempt(() => { if (game && !game.over) game.finish(null); });
     for (const task of tasks) attempt(() => task.stop());
-    for (const { p, channel, index } of actors) {
-      attempt(() => PluginManager.emitPlayerDisconnect({ player:p, username:p.getUsername() }));
-      attempt(() => PluginManager.emitPlayerLogout({ player:p, username:p.getUsername() }));
+    for (const actor of actors) {
+      const { p, channel } = actor;
+      const index = actor.index ?? (p.isRegistered() ? p.getIndex() : null);
+      if (Number.isInteger(index) && World.getPlayers().get(index) === p) {
+        attempt(() => PluginManager.emitPlayerDisconnect({ player:p, username:p.getUsername() }));
+        attempt(() => PluginManager.emitPlayerLogout({ player:p, username:p.getUsername() }));
+      }
       attempt(() => p.closeInterruptibleInterfaces());
       attempt(() => p.getMovementQueue().reset());
       attempt(() => p.getMovementQueue().walkToReset());
       attempt(() => TaskManager.cancelTasks(p));
-      attempt(() => TaskManager.cancelTasks(index));
-      attempt(() => World.getPlayers().remove(p));
+      if (Number.isInteger(index)) attempt(() => TaskManager.cancelTasks(index));
+      if (Number.isInteger(index) && World.getPlayers().get(index) === p) attempt(() => World.getPlayers().remove(p));
       attempt(() => channel.close());
       attempt(() => assert.equal(p.isRegistered(), false, 'native actor removed'));
       attempt(() => assert.equal(p.getMovementQueue().hasPendingWork(), false, 'movement closed'));
       attempt(() => assert.equal(TaskManager.hasActiveTask(p), false, 'player tasks stopped'));
-      attempt(() => assert.equal(TaskManager.hasActiveTask(index), false, 'indexed tasks stopped'));
+      if (Number.isInteger(index)) {
+        attempt(() => assert.notEqual(World.getPlayers().get(index), p, 'world no longer holds actor'));
+        attempt(() => assert.equal(TaskManager.hasActiveTask(index), false, 'indexed tasks stopped'));
+      }
     }
     for (const [queue, before] of [[World.getAddNPCQueue(), addBefore], [World.getRemoveNPCQueue(), removeBefore]]) {
       for (let i = queue.length - 1; i >= 0; i--) if (!before.has(queue[i])) {
@@ -1201,9 +1203,16 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
     TaskManager.submit = submit;
     World.processCycle = savedCycle;
     if (savedBotEnv === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = savedBotEnv;
+    if (savedSeedBots === undefined) delete config['SoulWars:seedBots']; else config['SoulWars:seedBots'] = savedSeedBots;
     attempt(() => assert.equal([...tasks].some(task => task.isRunning()), false, 'owned tasks stopped'));
     attempt(() => assert.deepEqual(hookErrors, [], 'plugin hooks did not throw'));
     if (failures.length) throw new AggregateError(failures, 'Soul Wars fixture cleanup failed');
+  });
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  TaskManager.submit = function(task) { tasks.add(task); return submit.call(this, task); };
+  t.mock.method(console, 'error', (...args) => {
+    if (String(args[0]).startsWith('[plugins]')) hookErrors.push(args);
+    originalError(...args);
   });
   config['SoulWars:seedBots'] = false;
   assert.equal(process.env.DISABLE_PLAYER_BOTS, '1');
@@ -1211,15 +1220,18 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
     const channel = { kind:'test', remoteAddress:'127.0.0.1', isOpen:()=>true, send:()=>true,
       close(){}, onData(){}, onError(){}, onClose(){} };
     const session = new PlayerSession(channel), p = new Player(session);
+    const actor = {p, channel, connection: null, messages: [], index: null};
+    actors.push(actor);
     session.setPlayer(p); p.setUsername(`swbandage${i}`); p.setNeedsPlacement(false);
     p.setAttribute('bot-skip-persistence', true);
     // Exclude login/logout persistence; all combat, inventory, placement and packet routes remain native.
     t.mock.method(p, 'onAdd', () => {}); t.mock.method(p, 'onRemove', () => {});
-    const messages = []; t.mock.method(p, 'sendMessage', message => messages.push(message));
+    const messages = actor.messages; t.mock.method(p, 'sendMessage', message => messages.push(message));
     const connection = new ClientConnection(channel); connection.player = p;
-    actors.push({p, channel, connection, messages, index: null});
-    assert.equal(World.getPlayers().add(p), true, 'native player registered');
-    actors.at(-1).index = p.getIndex();
+    actor.connection = connection;
+    const added = World.getPlayers().add(p);
+    actor.index = p.getIndex();
+    assert.equal(added, true, 'native player registered');
   }
   assert.equal(Common.data.items.bandages, 25202, 'Soul Wars source binds the pinned item');
   assert.equal(core.CacheDefinitions.getItem(Common.data.items.bandages).name, 'Bandages', 'active cache resolves the named item');
@@ -1273,7 +1285,7 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
   assert.equal(healer.p.getInventory().getAmount(bones), 2, 'refused aid conserves both bones');
   assert.equal(patient.p.getInventory().getAmount(bones), 0);
   patient.p.setAttribute('accept-aid', true);
-  assert.equal(core.CacheDefinitions.getItem(Common.data.items.bandages).stackable, false);
+  assert.equal(core.ItemDefinition.forId(Common.data.items.bandages).isStackable(), false);
   for (let slot = 0; slot < patient.p.getInventory().capacity(); slot++) {
     patient.p.getInventory().setItem(slot, new core.Item(Common.data.items.bandages, 1));
   }
@@ -1288,12 +1300,16 @@ test('Soul Wars supplies used on players reach registered handlers', async (t) =
   await giveBones(enemyForBones.p, 2);
   assert.equal(healer.p.getInventory().getAmount(bones), 2, 'enemy refusal conserves bones');
   assert.equal(enemyForBones.p.getInventory().getAmount(bones), 0);
-  const selected = healer.p.getInventory().getItems()[2];
-  selected.setMetaValue(core.Item.UNTRADEABLE_META, true);
-  await giveBones(patient.p, 2);
-  assert.equal(healer.p.getInventory().getItems()[2], selected, 'restricted selected item remains');
-  assert.equal(patient.p.getInventory().getAmount(bones), 0);
-  selected.setMetaValue(core.Item.UNTRADEABLE_META, false);
+  for (const key of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    const selected = new core.Item(bones, 1);
+    selected.setMetaValue(key, true);
+    healer.p.getInventory().setItem(2, selected);
+    await giveBones(patient.p, 2);
+    assert.equal(healer.p.getInventory().getItems()[2], selected, 'restricted selected item remains');
+    assert.equal(selected.getMetaValue(key), true);
+    assert.equal(patient.p.getInventory().getAmount(bones), 0);
+  }
+  healer.p.getInventory().setItem(2, new core.Item(bones, 1));
   const adjacentBones = healer.p.getLocation().clone(), patientBonesTile = patient.p.getLocation().clone();
   let distantBones = null;
   for (let dx = -5; dx <= 5 && !distantBones; dx++) for (let dy = -5; dy <= 5 && !distantBones; dy++) {

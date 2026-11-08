@@ -55,3 +55,10 @@ Record supplied placement/gear separately from acquisition or progression proof.
 - Keep exact command/tree/exit/log evidence, totals and skips. An empty compiler
   log can be valid; retain successful completion and emitted-output hashes.
   Rerun only changed relevant inputs or missing proof. Docs edits need strict VitePress build.
+
+## Before shipping
+
+- `dependsOn` must not list a members-only plugin (KeyChests, TheatreOfBlood …): free-to-play
+  worlds filter those out first, and your plugin silently disappears with them.
+- A client feature must not fetch `/api/world`; it is development-only. Serve what you need
+  through the public content API.

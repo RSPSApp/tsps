@@ -166,7 +166,11 @@ export class CombatSpecial {
     /** `isCost` false spends an amount directly (Unleash), without cost modifiers. */
     public static drain(character: Mobile, amount: number, isCost = true) {
         const special: CombatSpecial | null = character.isPlayer?.() ? ((character as any).getAsPlayer?.()?.getCombatSpecial?.() ?? null) : null;
-        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, amount, "drain").cost : amount);
+        const weaponId = character.isPlayer?.() ? character.getAsPlayer().getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() : undefined;
+        const settings = weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
+        // Implementations pass their native cost; price custom weapons before applying the usual modifiers.
+        const base = isCost && settings ? settings.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount : amount;
+        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : amount);
 
         CombatSpecial.ensureRestoreTask(character);
 

@@ -78,3 +78,68 @@ test("the stored custom item keeps specialAttack, for the loader and the client"
   assert.deepEqual(rows.get(59101).specialAttack, { energy: 50 });
   assert.equal(rows.get(59102).specialAttack, undefined);
 });
+
+test("real specials spend the custom cost, retaining modifiers, inherited variants and direct drains", async t => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  await core.CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  const api = { core, registerCombatSpecial: CombatSpecial.register, emitCustomEvent() {} };
+  require("../plugins/combat/specials/DragonDagger.SpecialAttack")(api);
+  require("../plugins/combat/specials/DragonAxe.SpecialAttack")(api);
+  require("../plugins/combat/specials/EclipseAtlatl.SpecialAttack")(api);
+  t.mock.method(CombatSpecial, "updateBar", () => {});
+  t.mock.method(core.Sounds, "sendSound", () => {});
+  t.mock.method(core.Sounds, "playAreaSound", () => {});
+  const phases = [];
+  let halfCost = false;
+  let equipmentDiscount = 0;
+  require("../dist/game/content/combat/EquipmentEffects").registerSpecialEnergyCostModifier((_entity, cost) => cost - equipmentDiscount);
+  t.after(() => { equipmentDiscount = 0; });
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "combat-special:cost") { phases.push([event.phase, event.cost]); if (halfCost) event.cost /= 2; }
+  });
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null);
+  t.mock.method(player, "getSession", () => ({ sendClientPacket: () => true }));
+  player.setRecoveringSpecialAttack(true);
+  const wield = (id) => {
+    player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(id));
+    player.setCombatSpecial(CombatSpecial.getForWeaponId(id));
+    player.setSpecialPercentage(100);
+    return player.getCombatSpecial();
+  };
+  for (const [id, from, energy] of [[59200, core.ItemIdentifiers.DRAGON_DAGGER, 40], [59201, core.ItemIdentifiers.DRAGON_AXE, 35], [59202, core.ItemIdentifiers.ECLIPSE_ATLATL, 30]]) {
+    CombatSpecial.setItemSpecial(id, { from, drainAmount: energy });
+    const special = wield(id);
+    assert.equal(CombatSpecial.energyCost(player, special), energy);
+    special.getCombatMethod().start(player, player);
+    assert.equal(player.getSpecialPercentage(), 100 - energy, `the actual special spends ${energy}%`);
+  }
+  const dagger = wield(59200);
+  halfCost = true;
+  assert.equal(CombatSpecial.energyCost(player, dagger), 20);
+  dagger.getCombatMethod().start(player, player);
+  assert.equal(player.getSpecialPercentage(), 80, "content modifiers apply to the configured cost once");
+  assert.ok(phases.some(([phase, cost]) => phase === "drain" && cost === 40));
+  equipmentDiscount = 10;
+  wield(59200);
+  assert.equal(CombatSpecial.energyCost(player, dagger), 15);
+  dagger.getCombatMethod().start(player, player);
+  assert.equal(player.getSpecialPercentage(), 85, "equipment and content modifiers compose once on the custom cost");
+  CombatSpecial.drain(player, 7, false);
+  assert.equal(player.getSpecialPercentage(), 78, "non-cost drains bypass both custom cost and modifiers");
+  halfCost = false;
+  equipmentDiscount = 0;
+  const native = wield(core.ItemIdentifiers.DRAGON_DAGGER);
+  native.getCombatMethod().start(player, player);
+  assert.equal(player.getSpecialPercentage(), 75, "native costs stay unchanged");
+  CombatSpecial.setItemSpecial(59203, { drainAmount: 45 });
+  const own = special("custom-item-drain-own", [59203], 25);
+  wield(59203);
+  CombatSpecial.drain(player, own.getDrainAmount());
+  assert.equal(player.getSpecialPercentage(), 55, "own registered specials also use their configured cost");
+  CombatSpecial.setItemSpecial(59204, { from: SOURCE_VARIANT });
+  wield(59204);
+  CombatSpecial.drain(player, borrowed.getDrainAmount());
+  assert.equal(player.getSpecialPercentage(), 75, "a copied variant inherits its variant cost without an override");
+});

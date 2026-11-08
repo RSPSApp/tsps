@@ -7,6 +7,7 @@ import { WeaponInterfaces } from "./WeaponInterfaces";
 import { WeaponInterfaceManager } from "./WeaponInterfaceManager";
 import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
 import { DamageFormulas } from "./formula/DamageFormulas";
+import { withHitVictim } from "./EquipmentEffects";
 import { HitDamage } from "./hit/HitDamage";
 import { HitMask } from "./hit/HitMask";
 import { PendingHit } from "./hit/PendingHit";
@@ -221,15 +222,17 @@ export class CombatFactory {
         const prayerType = resolveSpecialAttackType(specialTraits?.damageType) ?? type;
         let maxHit = 0;
         let minimumFloor = 0;
-        if (type == CombatType.MELEE) {
-            maxHit = DamageFormulas.sourceMaxHit(entity, CombatType.MELEE);
-        } else if (type == CombatType.RANGED) {
-            maxHit = PluginManager.modifyRangedMaxHit(entity, victim, DamageFormulas.sourceMaxHit(entity, CombatType.RANGED));
-        } else if (type == CombatType.MAGIC) {
-            const bounds = DamageFormulas.sourceHitBounds(entity, CombatType.MAGIC, victim);
-            maxHit = bounds.maximum;
-            minimumFloor = bounds.minimum;
-        }
+        withHitVictim(entity, victim, () => {
+            if (type == CombatType.MELEE) {
+                maxHit = DamageFormulas.sourceMaxHit(entity, CombatType.MELEE);
+            } else if (type == CombatType.RANGED) {
+                maxHit = PluginManager.modifyRangedMaxHit(entity, victim, DamageFormulas.sourceMaxHit(entity, CombatType.RANGED));
+            } else if (type == CombatType.MAGIC) {
+                const bounds = DamageFormulas.sourceHitBounds(entity, CombatType.MAGIC, victim);
+                maxHit = bounds.maximum;
+                minimumFloor = bounds.minimum;
+            }
+        });
         const rolls = type == CombatType.MELEE || type == CombatType.RANGED || type == CombatType.MAGIC;
         const range = rolls
             ? CombatFactory.specialDamageRange(entity, maxHit, boundsOverride, applySpecialTraits, minimumFloor)

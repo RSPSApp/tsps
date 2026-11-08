@@ -139,3 +139,22 @@ test("tier 3 vampyres take damage from the vampyrebane table only, silver includ
     assert.equal(effect.rangedDamage(createPlayer(33716, "vampyre", name), 100), 125, name);
   }
 });
+
+test("an area hit checks its own victim, whichever target is the attacker's primary", () => {
+  const { withHitVictim } = require("../dist/game/content/combat/EquipmentEffects");
+  const effect = modifiers();
+  const goblin = target("goblin");
+  const vyrewatch = target("vampyre", "Vyrewatch");
+  for (const [primary, secondary, secondaryDamage, secondaryAccuracy] of [
+    [goblin, vyrewatch, 0, 100],
+    [vyrewatch, goblin, 100, 100],
+  ]) {
+    const player = createPlayer(RUNE_SCIMITAR, "vampyre", "Vyrewatch", { ring: EFARITAYS_AID });
+    player.getCombat = () => ({ getTarget: () => primary });
+    const sweep = (victim, fn) => withHitVictim(player, victim, () => fn(player, 100));
+    assert.equal(sweep(secondary, effect.meleeDamage), secondaryDamage);
+    assert.equal(sweep(secondary, effect.meleeAccuracy), secondaryAccuracy);
+    // Outside a hit the combat target decides, as before.
+    assert.equal(effect.meleeDamage(player, 100), primary === vyrewatch ? 0 : 100);
+  }
+});

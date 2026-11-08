@@ -60,6 +60,28 @@ const incomingDamageModifiers: IncomingDamageModifier[] = [];
 const prayerDrainModifiers: PrayerDrainModifier[] = [];
 const prayerDrainRateModifiers: PrayerDrainRateModifier[] = [];
 
+let hitVictimScope: { attacker: Mobile; victim: Mobile } | null = null;
+
+/**
+ * Runs `build` with `victim` as the target of `attacker`'s hit, so target-sensitive modifiers see the
+ * real victim of an area hit (Dinh's bulwark sweep) and not the attacker's primary combat target.
+ */
+export function withHitVictim<T>(attacker: Mobile, victim: Mobile | null | undefined, build: () => T): T {
+  if (!victim) return build();
+  const previous = hitVictimScope;
+  hitVictimScope = { attacker, victim };
+  try {
+    return build();
+  } finally {
+    hitVictimScope = previous;
+  }
+}
+
+/** The victim of the hit being computed for `attacker`, or null outside a hit (use the combat target then). */
+export function hitVictimOf(attacker: Mobile): Mobile | null {
+  return hitVictimScope?.attacker === attacker ? hitVictimScope.victim : null;
+}
+
 const applyModifiers = (modifiers: HitModifier[], entity: Mobile, baseHit: number): number =>
   modifiers.reduce((damage, modifier) => {
     const next = modifier(entity, damage);

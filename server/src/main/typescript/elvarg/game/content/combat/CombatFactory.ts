@@ -1351,10 +1351,12 @@ export class CombatFactory {
         // The target may now hit back without a skull, whatever this attack's damage and before it lands.
         CombatFactory.recordAttackedBy(target, attacker);
 
-        // Wiki (Skull (status)): attacking a player while skulled restarts the 30 minutes, so
-        // the skull "cannot disappear during PvP combat". The skull keeps its colour.
+        // Wiki (Skull (status)): attacking a player while skulled restarts the 30 minutes. The skull keeps its
+        // colour. Only initiating does: an attacked player may retaliate without it, skulled or not (a skull can't
+        // run out mid-fight anyway, Player.processSkullTimer holds it).
         if (attacker.isSkulled()) {
-            CombatFactory.extendSkull(attacker, CombatFactory.PVP_SKULL_SECONDS);
+            const retaliating = CombatFactory.wasAttackedBy(attacker, target) || attacker.getCombat().getAttacker() == target;
+            if (!retaliating) CombatFactory.extendSkull(attacker, CombatFactory.PVP_SKULL_SECONDS);
             return;
         }
 

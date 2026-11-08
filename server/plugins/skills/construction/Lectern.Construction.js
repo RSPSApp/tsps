@@ -245,7 +245,9 @@ class TabletTask extends Task {
     }
     const missing = missingRune(player, lectern, tablet);
     if (missing) {
-      player.sendMessage(lectern.world ? missingRuneMessage(missing.getId()) : "You do not have enough runes to make that tablet.");
+      // rsprox_transcripts/229/02801.txt: a house lectern's confirm without nature runes says "You do not have enough
+      // Nature Runes to cast this spell.", as the world lecterns do.
+      player.sendMessage(missingRuneMessage(missing.getId()));
       return false;
     }
     return true;

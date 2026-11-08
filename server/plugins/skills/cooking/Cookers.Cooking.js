@@ -112,7 +112,7 @@ const GAUNTLETS_STOP_BURN = new Map([
   ["raw_lobster", 64],
   ["raw_swordfish", 80],
   ["hunting_kyatt_meat", 80],
-  ["raw_monkfish", 86],
+  ["raw_monkfish", 88],
   ["raw_shark", 94],
   ["raw_anglerfish", 97],
 ]);
@@ -124,16 +124,34 @@ function gauntletsStopBurn(rawId) {
   return undefined;
 }
 
+/**
+ * Wiki: a few foods stop burning sooner on a range than on a fire (Swordfish: "80 on ranges and level 86 on fires";
+ * Raw monkfish: 90 on a range, 92 on a fire, and with cooking gauntlets 86 on a range, 88 on a fire).
+ */
+const GAUNTLETS_RANGE_STOP_BURN = new Map([["raw_monkfish", 86]]);
+
+function onRange(objectId) {
+  if (objectId === undefined) return false;
+  const name = Common.core.CacheDefinitions.getObject(objectId)?.name;
+  return !!name && !FIRE_OBJECT_NAMES.has(name);
+}
+
 function stopBurnLevel(player, cookable, objectId) {
   const { Equipment, ItemIds, ObjectIdentifiers } = Common.core;
   if (objectId !== undefined && objectId === ObjectIdentifiers.COOKING_RANGE && cookable.lumbridgeStopBurn !== undefined) {
     return cookable.lumbridgeStopBurn;
   }
+  const range = onRange(objectId);
   const hands = player.getEquipment?.()?.getItems?.()[Equipment.HANDS_SLOT]?.getId?.();
   if (hands !== ItemIds.COOKING_GAUNTLETS) {
-    return cookable.stopBurn;
+    return range && cookable.rangeStopBurn !== undefined ? cookable.rangeStopBurn : cookable.stopBurn;
   }
-  return gauntletsStopBurn(cookable.raw) ?? cookable.stopBurn;
+  if (range) {
+    for (const [name, level] of GAUNTLETS_RANGE_STOP_BURN) {
+      if (Common.core.CacheDefinitions.getObjId(name) === cookable.raw) return level;
+    }
+  }
+  return gauntletsStopBurn(cookable.raw) ?? (range && cookable.rangeStopBurn !== undefined ? cookable.rangeStopBurn : cookable.stopBurn);
 }
 
 function isSuccess(player, cookable, objectId) {
@@ -362,9 +380,11 @@ function cookStep(player, session, cycle) {
   Sounds.sendSound(player, Sound.COOKING_COOK);
   player.performAnimation(session.animation);
 
-  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once).
-  const actions = Common.actionsPerCycle(player, "cook");
+  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once), but
+  // never past the amount chosen: the first is already counted above, each further one is counted here.
+  const actions = Math.min(Common.actionsPerCycle(player, "cook"), session.remaining + 1);
   for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
+    if (done > 0) session.remaining--;
     if (cookOne(player, session) === false) { stopCooking(player); break; }
   }
 }

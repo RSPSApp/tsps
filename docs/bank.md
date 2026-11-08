@@ -39,7 +39,7 @@ An rsprox capture (rev 241) of a members account on a Jagex Account, with 2 bloc
 | Banker, "I'd like to buy more bank slots." | `I can sell you up to 350 additional bank slots in sets of 50. How many are you interested in buying?`, then `menu_new` (947) opens in the main modal: scripts 2524 [-1, -1] and 9142 (`How many do you wish to purchase?`, the options joined by `\|`, 0, -1, 0, 0), events PAUSEBUTTON on 947:9 slots 0-512, and the chatbox closes |
 | The list | `50 slots (5,000,000 coins)\|100 slots (15,000,000 coins)\|...\|350 slots (885,000,000 coins)\|\|Do I have any other options for extra bank space?\|(Cancel)`; a pick resumes 947:9 with its index |
 | Picking 50 | `50 slots please.` then `Buying 50 additional bank slots will cost 5,000,000 coins. Be warned, this purchase is not reversible. Are you happy to proceed?` |
-| 10M coins in the bank, none carried | `Oh... I don't seem to have enough money for that. Never mind.`: no Yes/No. Bank coins don't pay, although the Wiki transcript says they do |
+| 10M coins in the bank, none carried | `Oh... I don't seem to have enough money for that. Never mind.`: no Yes/No. The recording's bank coins didn't pay, but the Wiki transcript (Transcript:Banker) says they do and the server follows the Wiki: the inventory's coins pay first, then the bank's, and the refusal comes only when neither holds enough |
 | 5M coins carried | Chat menu `Buy 50 bank slots for 5,000,000 coins?` with `Yes.\|No.`; `Yes, I'm happy with that.`; on continuing, the coins leave the inventory, `bank_extra_blocks_purchased` (varbit 13119) goes 2 -> 3, sound 2114 plays and the Banker says `Your additional bank slots have been added.` |
 
 A second capture (3 blocks bought, a PIN just set and pending):

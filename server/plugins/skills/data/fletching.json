@@ -172,7 +172,7 @@
     { "group": "tipped", "output": "OPAL_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 16, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["OPAL_BOLT_TIPS", 10]] },
     { "group": "tipped", "output": "JADE_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 24, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["JADE_BOLT_TIPS", 10]] },
     { "group": "tipped", "output": "PEARL_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 32, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["PEARL_BOLT_TIPS", 10]] },
-    { "group": "tipped", "output": "TOPAZ_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 40, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["TOPAZ_BOLT_TIPS", 10]] },
+    { "group": "tipped", "output": "TOPAZ_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 39, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["TOPAZ_BOLT_TIPS", 10]] },
     { "group": "tipped", "output": "SAPPHIRE_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 47, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["SAPPHIRE_BOLT_TIPS", 10]] },
     { "group": "tipped", "output": "EMERALD_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 55, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["EMERALD_BOLT_TIPS", 10]] },
     { "group": "tipped", "output": "RUBY_DRAGON_BOLTS", "amount": 10, "level": 84, "xp": 63, "animation": "human_fletching_add_bolt_tips_dragon", "materials": [["DRAGON_BOLTS_2", 10], ["RUBY_BOLT_TIPS", 10]] },

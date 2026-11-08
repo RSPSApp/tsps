@@ -307,8 +307,13 @@ function decay(player, pouch, state, stored) {
   const inventory = player.getInventory();
   inventory.delete(objId(pouch.item), 1);
   inventory.adds(objId(pouch.degraded), 1);
-  inventory.refreshItems();
+  const excess = Math.max(0, state.amount - pouch.decayedCapacity);
   state.amount = Math.min(state.amount, pouch.decayedCapacity);
+  // Wiki: return the excess only when all of it fits; stored excess is otherwise lost.
+  if (excess > 0 && inventory.getFreeSlots() >= excess) {
+    inventory.adds(objId(essenceOfType(state.type).item), excess);
+  }
+  inventory.refreshItems();
   player.sendMessage("Your pouch has decayed through use.");
 }
 
@@ -333,6 +338,48 @@ function repairPouches(request) {
   }
   if (repaired > 0) inventory.refreshItems();
   request.repaired = repaired;
+}
+
+// ------------------------------------------------------------------ the Dark Mage's repairs
+
+/**
+ * The Dark Mage in the Abyss repairs decayed pouches for free. Talk-to: rsprox_transcripts/227/01840.txt and
+ * 227/01850.txt update the inventory on his "Fine. A simple transfiguration spell..." line. Repairs plays his
+ * transcript's right-click variant: the repair happens on its action step (ulwHnr), and the condition picks it.
+ */
+const DARK_MAGE_REPAIR_LINE = /^Fine\. A simple transfiguration spell/;
+const DARK_MAGE_REPAIR_VARIANT = "standard-dialogue-when-using-the-right-click-repair-option";
+const DARK_MAGE = { HAS_DECAYED: "LQdAzp", NONE_DECAYED: "zxR0BW", REPAIR: "ulwHnr" };
+
+function isDarkMage(npcId) {
+  return npcId === core.NpcIdentifiers.DARK_MAGE;
+}
+
+function hasDecayed(player) {
+  const inventory = player.getInventory();
+  return POUCHES.some((pouch) => pouch.degraded && inventory.contains(objId(pouch.degraded)));
+}
+
+function darkMageRepairs({ player, npcId, npc }) {
+  if (!isDarkMage(npcId)) return false;
+  const request = { player, npcId, npc, variant: DARK_MAGE_REPAIR_VARIANT, handled: false };
+  pluginApi.emitCustomEvent("npc-dialogue:start", request);
+  return request.handled === true;
+}
+
+function darkMageCondition({ player, npcId, stepId }) {
+  if (!isDarkMage(npcId)) return null;
+  if (stepId === DARK_MAGE.HAS_DECAYED) return hasDecayed(player);
+  if (stepId === DARK_MAGE.NONE_DECAYED) return !hasDecayed(player);
+  return null;
+}
+
+function darkMageAction({ player, npcId, stepId }) {
+  if (isDarkMage(npcId) && stepId === DARK_MAGE.REPAIR) repairPouches({ player, repaired: 0 });
+}
+
+function darkMageLine({ player, npcId, text }) {
+  if (isDarkMage(npcId) && DARK_MAGE_REPAIR_LINE.test(text ?? "")) repairPouches({ player, repaired: 0 });
 }
 
 /** "runecrafting:remove-guardian-essence": guardian essence can't leave the minigame. */
@@ -396,6 +443,10 @@ function attach(api) {
   api.onItemOnItem("Abyssal needle", "Large pouch", stitch);
   api.onItemOnItem("Abyssal needle", "Giant pouch", stitch);
   api.onCustomEvent("runecrafting:repair-pouches", repairPouches);
+  api.onNpcInteraction("Dark Mage", { Repairs: darkMageRepairs });
+  api.onNpcDialogueCondition(darkMageCondition);
+  api.onCustomEvent("npc-dialogue:action", darkMageAction);
+  api.onCustomEvent("npc-dialogue:line", darkMageLine);
 }
 
 module.exports = { attach, words, POUCHES_ATTRIBUTE, _test: { states, capacity, pouchFor } };

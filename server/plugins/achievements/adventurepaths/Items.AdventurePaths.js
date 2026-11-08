@@ -162,7 +162,7 @@ function syncVoucher(player) {
         s.vouchers.reduce((n, id) => n | (1 << id), 0),
     );
 }
-function redeem(event) {
+function redeem(event, talk = false) {
     const player = event.player,
         npc = event.target ?? event.npc;
     if (
@@ -185,9 +185,14 @@ function redeem(event) {
     if (!voucher || voucher.getId() !== voucherId || voucher.getMeta()) return;
     const originalSlot = event.slot ?? inventory.getItems().indexOf(voucher);
     if (inventory.forSlot(originalSlot) !== voucher) return;
+    const members = Common.core.WorldDefinition.isMembersWorld();
+    // Nothing left to claim from this NPC on this world: a Talk-to is the NPC's own conversation again.
+    const unclaimed = [entry.free, members ? entry.members : null]
+        .filter(Boolean)
+        .filter((offer) => !s.vouchers.includes(offer.key));
+    if (talk && unclaimed.length === 0) return;
     event.handled = true;
-    const members = Common.core.WorldDefinition.isMembersWorld(),
-        required = Data.vouchers()
+    const required = Data.vouchers()
             .flatMap((row) => [row.free, members ? row.members : null])
             .filter(Boolean)
             .map((o) => o.key);
@@ -213,7 +218,7 @@ function redeem(event) {
 }
 function talkRedeem(event) {
     if (event.definition?.getActions()?.[(event.clickType ?? 1) - 1]?.toLowerCase() === "talk-to")
-        redeem(event);
+        redeem(event, true);
 }
 function recoverable(player) {
     const s = Common.state(player);

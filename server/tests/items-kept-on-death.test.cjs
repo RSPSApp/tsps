@@ -108,14 +108,16 @@ test('the kept items are the most valuable by Grand Exchange price, not store va
 });
 
 test('an item with no Grand Exchange price is ranked by its high alchemy value (Wiki: Items Kept on Death)', () => {
-  // Dragon defender: high alch 40,804, store value 68,007. A dragon scimitar trades for more than the
+  // Dragon defender: store value 68,007, so an alchemy value of 40,804, though it cannot be alchemised
+  // (Wiki: Not alchemisable; item-alch.json gives it none). A dragon scimitar trades for more than the
   // alch value but less than the store value, so only the alch value lets the scimitar win.
   const defender = new Item(I.DRAGON_DEFENDER, 1);
   const scimitar = new Item(I.DRAGON_SCIMITAR, 1);
   assert.equal(defender.getDefinition().hasGrandExchangeValue(), false);
-  assert.equal(PlayerDeathTask.keepValue(defender), defender.getDefinition().getHighAlchValue());
+  assert.equal(defender.getDefinition().getHighAlchValue(), 0, 'it cannot be alchemised');
+  assert.equal(PlayerDeathTask.keepValue(defender), 40804);
   const scimitarPrice = PlayerDeathTask.keepValue(scimitar);
-  assert.ok(scimitarPrice > defender.getDefinition().getHighAlchValue() && scimitarPrice < defender.getDefinition().getValue(),
+  assert.ok(scimitarPrice > 40804 && scimitarPrice < defender.getDefinition().getValue(),
     `dragon scimitar price ${scimitarPrice} sits between the defender's alch and store values`);
   const player = fakePlayer({ items: [defender, scimitar], skulled: true, protectItem: true });
   assert.deepEqual(names(PlayerDeathTask.getItemsToKeep(player)), ['Dragon scimitar']);

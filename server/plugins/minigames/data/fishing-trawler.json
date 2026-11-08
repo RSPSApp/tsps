@@ -291,7 +291,6 @@
     "swim": "You climb onto the barrel and drift back to shore.",
     "tooLittle": "You didn't help enough to earn a share of the catch.",
     "lowLevel": "You need a Fishing level of 15 to receive a share of the catch.",
-    "nothingInNet": "There is nothing in the net for you.",
     "collected": "You collect your catch from the net. It is sent to your bank.",
     "bankFull": "Your bank is too full to hold all of your catch. The rest stays in the net.",
     "rewardWaiting": "<col=ef1020>You have a catch waiting in the trawler net. It will be thrown back if you sail again.</col>",

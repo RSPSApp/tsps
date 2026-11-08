@@ -157,10 +157,13 @@ function depositCargo({ player, location }) {
   // The crew hand theirs in first (rsprox: delivered 0 -> 3, then the player's crate).
   const crew = common.crewCargo(player)[index];
   if (crew?.crate === crate && crew.amount > 0) {
-    held[index] = { ...held[index], delivered: held[index].delivered + crew.amount };
+    // Credit only the crates the crew actually take out of the hold (one banked meanwhile is not delivered).
+    const handIn = { player, index, ...crew, taken: crew.amount };
     common.setCrewCargo(player, index, null);
-    common.core().PluginManager.emitCustomEvent("port-tasks:crew-delivered", { player, index, ...crew });
-    player.sendMessage(CREW_DROP_OFF);
+    common.core().PluginManager.emitCustomEvent("port-tasks:crew-delivered", handIn);
+    const taken = Math.max(0, Math.min(crew.amount, Math.trunc(Number(handIn.taken) || 0)));
+    held[index] = { ...held[index], delivered: held[index].delivered + taken };
+    if (taken > 0) player.sendMessage(CREW_DROP_OFF);
   }
   held[index] = { ...held[index], delivered: held[index].delivered + 1 };
   common.putDown(player);

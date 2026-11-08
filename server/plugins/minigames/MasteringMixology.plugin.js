@@ -23,6 +23,7 @@ module.exports = {
     require("./mixology/Digweed.Mixology")(api);
     require("./mixology/LabNotes.Mixology")(api);
     require("./mixology/RewardShop.Mixology")(api);
+    require("./mixology/Goggles.Mixology")(api);
     require("./mixology/Commands.Mixology")(api);
   },
 };

@@ -69,14 +69,19 @@ function makeOne(player, recipe) {
   return mix.stop !== true;
 }
 
+/** The vials an unfinished potion starts from (herblore.json): water, blood and coconut milk. */
+const UNFINISHED_VIALS = ["vial_water", "vial_blood", "vial_coconut_milk"];
+
 /**
- * Wiki (Herblore cape): wearing it, a grimy herb goes straight into the vial if the player could
- * clean it; these are the clean herb's recipes taking the grimy herb instead.
+ * Wiki (Herblore cape): "while the cape is equipped, grimy herbs can be used to create unfinished potions", if the
+ * player could clean them; these are the clean herb's unfinished-potion recipes taking the grimy herb instead. A grimy
+ * herb never finishes a potion (a grimy torstol on an anti-venom, or with the three super potions).
  */
 function capeRecipes(player, firstId, secondId) {
   for (const [grimyId, otherId] of [[firstId, secondId], [secondId, firstId]]) {
     const herb = Common.herbFor(grimyId);
     if (!herb || Common.level(player) < herb.level || !Common.wearsHerbloreCape(player)) continue;
+    if (!UNFINISHED_VIALS.some((name) => Common.gameval("obj", name) === otherId)) continue;
     return Common.recipesWith(herb.cleanId, otherId).map((recipe) => ({
       ...recipe,
       cleaned: herb,

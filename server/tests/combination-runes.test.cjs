@@ -323,3 +323,18 @@ test('a free world refuses combination runes and spends nothing', async (t) => {
   assert.equal(count(f, I.EARTH_RUNE), 4);
   assert.ok(f.all().includes("To use this item please login to a members' world."), f.all().join(' | '));
 });
+
+test('daeyalt essence binds first at 1.5 times the XP; the pure essence waits for a second use (Wiki: Daeyalt essence)', async (t) => {
+  const f = actor(t); chance(t, [0.1]);
+  give(f, I.DAEYALT_ESSENCE, 2); give(f, I.PURE_ESSENCE, 3); give(f, I.WATER_RUNE, 5); give(f, I.WATER_TALISMAN, 2);
+  const before = xpOf(f);
+  await use(f, AIR, I.WATER_RUNE);
+  assert.equal(count(f, I.MIST_RUNE), 2);
+  assert.equal(count(f, I.DAEYALT_ESSENCE), 0);
+  assert.equal(count(f, I.PURE_ESSENCE), 3, 'the pure essence is left for the next use');
+  assert.ok(Math.abs(xpOf(f) - before - 2 * 12) < 0.01, 'mist on the air altar: 12 XP a daeyalt essence');
+  await use(f, AIR, I.WATER_RUNE);
+  assert.equal(count(f, I.MIST_RUNE), 5);
+  assert.equal(count(f, I.PURE_ESSENCE), 0);
+  assert.ok(Math.abs(xpOf(f) - before - 2 * 12 - 3 * 8) < 0.01);
+});

@@ -34,4 +34,5 @@ checkout.
 ## Working through issues
 
 To fix GitHub issues unattended (claim, fix, verify in game, PR, next), follow
-[docs/bug-loop.md](docs/bug-loop.md). Its helpers are in `scripts/agents/`.
+[the repo-owned bugfix skill](.agents/skills/tsps-bugfix-loop/SKILL.md).
+Its helpers are in `scripts/agents/`; [docs/bug-loop.md](docs/bug-loop.md) is the docs entry point.

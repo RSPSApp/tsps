@@ -246,7 +246,10 @@ function hotspotOption(event) {
 function hasTools(player) {
   const inventory = player.getInventory();
   const offhand = player.getEquipment().getItems()[Equipment.SHIELD_SLOT]?.getId?.();
-  return inventory.contains(Items.HAMMER) && [Items.SAW, Items.CRYSTAL_SAW, Items.AMYS_SAW].some(id => inventory.contains(id) || offhand === id);
+  // Wiki (Imcando hammer): it "can be used as a hammer, both while equipped and unequipped, in any way that a normal
+  // hammer can be used"; Mahogany Homes: "Amy's saw or the Imcando hammer can be worn in the off-hand". House.hasHammer
+  // takes a hammer or either Imcando hammer, carried or wielded, as building at home does.
+  return House.hasHammer(player) && [Items.SAW, Items.CRYSTAL_SAW, Items.AMYS_SAW].some(id => inventory.contains(id) || offhand === id);
 }
 
 /** Planks come from the inventory, then the plank sack (as building at home does). */

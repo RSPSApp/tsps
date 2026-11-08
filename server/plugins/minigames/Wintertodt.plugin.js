@@ -6,6 +6,7 @@
  */
 module.exports = {
   name: "Wintertodt",
+  members: true,
   register(api) {
     require("./wintertodt/Doors.Wintertodt")(api);
     require("./wintertodt/Braziers.Wintertodt")(api);

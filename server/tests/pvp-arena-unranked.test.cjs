@@ -489,3 +489,23 @@ test("a load-out item the build's levels can't wear isn't worn: no 70 Defence ar
   assert.notEqual(a.getEquipment().getItems()[core.Equipment.BODY_SLOT]?.getId?.(), pick.id, 'the body is not worn');
   Stash.restore(a);
 });
+
+// A skill the build doesn't set is the player's own; it doesn't stop a load-out item (Bow of Faerdhinen, 70 Agility).
+test("a load-out item needing a skill the build doesn't set is worn whatever the player's own level: Bow of Faerdhinen at 1 Agility", (t) => {
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const a = realPlayer(t, 'Alpha');
+  const agility = core.Skill.AGILITY;
+  a.getSkillManager().setMaxLevels(agility, 1, false).setCurrentLevel(agility, 1, false);
+  Stash.save(a);
+  const bow = core.ItemIdentifiers.BOW_OF_FAERDHINEN;
+  assert.ok((core.ItemDefinition.forId(bow).getRequirements?.() ?? [])[agility.getIndex()] >= 70, 'control: the bow needs 70 Agility');
+  const entry = [...core.CacheDefinitions.getEnumValues(4390)].find(([, id]) => id === bow);
+  assert.ok(entry, 'the bow is in the load-out list');
+  const value = Loadouts.loadout(a, 0); // Max/Med
+  value.worn.rhand = entry[0];
+  a.setAttribute('pvp-arena:loadouts', { a: value });
+  Loadouts.equip(a, 0);
+  assert.equal(a.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]?.getId?.(), bow, 'the bow is worn');
+  Stash.restore(a);
+  assert.equal(a.getSkillManager().getMaxLevel(agility), 1, 'their own Agility back');
+});

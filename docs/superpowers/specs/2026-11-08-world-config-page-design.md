@@ -1,6 +1,6 @@
 # World config page: design
 
-Date: 2026-11-08. Status: draft for review.
+Date: 2026-11-08. Status: draft for review; built as an early v0.1, a basic framework meant to be built on by others.
 
 ## Why
 
@@ -130,18 +130,19 @@ The server builds a catalog: every plugin file, and for each plugin its name, ar
 - Area = the plugin's first folder under `server/plugins/` (`skills`, `modes`, `minigames`, ...),
   so grouping needs no new field.
 
-### The page
+### The page (as built)
 
-- **Settings first:** the default view lists world values and all declared options, grouped by area,
-  with search. Plugin switches are a second tab: grouped by area, searchable, with default-off
-  plugins and documented switches pinned at the top.
-- Each row: control, label, help, "default: X", and a marker when it differs from the shipped
-  value. Booleans are toggles, enums are dropdowns, numbers are number inputs with their limits.
-- A free world (`membersWorld: false`) shows members-only plugins and options as greyed "won't load
-  on a free world".
-- Save → preview of the resulting `world.local.json` diff → confirm.
-- Served by the server itself as a self-contained page, so it works with `start:prod` and needs no
-  client build. It is served by its **own listener, not the game port** (see Access).
+- **Settings first:** world values and all declared options grouped by area, with search. Plugin
+  switches are a second tab, grouped by area, with default-off and documented plugins pinned first.
+- Each row: control, label, help, "default: X", and a marker when it differs from the shipped value.
+  Options whose plugin is switched off (or won't load, for example a members plugin on a free
+  world) carry a "plugin off" badge and are greyed.
+- Save shows a preview of the `world.local.json` change, then the countdown. While the server
+  restarts the page shows a reconnect overlay and reloads when the world is back.
+- The spawn point is picked on a map drawn from OSRS Wiki map tiles. This is the only external
+  request the page makes: the user's browser fetches the tiles, only while the map is open (the
+  user's choice; the server itself makes no outside request).
+- Served by the server as one self-contained page, on its own listener (see Access).
 
 ### Saving
 
@@ -182,23 +183,19 @@ The server builds a catalog: every plugin file, and for each plugin its name, ar
 - Shutdown cancels itself when saving players fails. The page then shows that failure, the file is
   not written, and the server keeps running.
 
-### Access (my call)
+### Access (as built)
 
-- The page has **its own HTTP listener, bound to `127.0.0.1`**, on its own port. The game port can't
-  be trusted for this: production sits behind nginx, so every internet request reaches it from
-  loopback (`BinaryChannel.ts` already trusts `X-Real-IP` only from loopback), and nginx rewrites
-  `Host`. A separate loopback-bound socket can't be reached from outside however the proxy is set up.
-  A VPS host reaches the page through an SSH tunnel. The port comes from `.env` (e.g.
-  `WORLD_ADMIN_PORT`), and `scripts/wt` gives each worktree its own, as it does for the other ports.
-  The `Host` header must be `localhost`/`127.0.0.1` (blocks DNS rebinding).
-- Every admin request needs a secret token, even locally, because any web page the host visits can
-  send requests to localhost. At startup the server prints a ready-to-open
-  `http://localhost:<port>/admin?token=...` link (random per start), like a notebook server.
-- Setting an admin password in `.env` (e.g. `WORLD_ADMIN_TOKEN`) uses that instead of the random
-  token. Only with it set may the host also set `WORLD_ADMIN_BIND` to open the listener to other
-  machines.
-- The admin listener sends no CORS headers, and write routes reject cross-origin requests.
-- The page is not started in browser-host mode (`BROWSER_HOST=1`).
+- The page has **its own HTTP listener, bound to `127.0.0.1`**, on its own port (`WORLD_ADMIN_PORT`,
+  default 49600; `scripts/wt` slot `n` gets `49600 + n`). The game port can't be trusted for this:
+  production sits behind nginx, so every internet request reaches it from loopback. A VPS host
+  reaches the page through an SSH tunnel. The `Host` header must be `localhost`/`127.0.0.1`.
+- The page is served at `/` and the server prints `http://localhost:<port>/?token=...`. The token
+  is generated once and persists in `server/data/definitions/world-admin.token`, so the link
+  survives restarts; deleting the file issues a new one. Visiting with the token sets a cookie
+  scoped to that port, so the bare URL works afterwards.
+- `WORLD_ADMIN_TOKEN` replaces the generated token. Only with it set may `WORLD_ADMIN_BIND` open the
+  listener to other machines.
+- No CORS headers; write routes reject cross-origin requests. Not started when `BROWSER_HOST=1`.
 
 ### Docs
 

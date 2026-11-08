@@ -4,6 +4,43 @@ World settings live in `server/data/definitions/world.json`. A deployment can ov
 `server/data/definitions/world.local.json`; ordinary top-level values in the local file
 replace the shipped values, while `plugins` entries merge by key.
 
+## World config page
+
+**Early version (v0.1).** This is a basic framework that does the basics: list the settings, edit
+them, save through the update countdown, and restart. Expect rough edges, glitches and missing
+pieces. It is meant to be built on by others, for example:
+
+- more plugins describing their options and a one-line `description`;
+- more control types;
+- applying changes live, without a restart.
+
+To make a plugin's options appear on the page, declare them in a `config` object on the plugin
+module, keyed by the full `pluginConfig` key, and add a `description` (see
+`server/plugins/skills/Prayer.plugin.js` for an example). The completeness test fails when a
+plugin reads a `pluginConfig` key it does not declare.
+
+Most of the settings below can be changed from a page the server serves itself, so you do not
+have to find them in these docs: every world value, plugin switch and plugin option is listed by
+area with its default and a short explanation, and saving writes `world.local.json` (never
+`world.json`).
+
+- **Open it:** the server prints a link at startup (`http://localhost:<port>/?token=...`). The port
+  is `WORLD_ADMIN_PORT` (default `49600`; a worktree made with `scripts/wt` gets `49600` plus its
+  slot). The listener is bound to `127.0.0.1`, so it is not reachable from other machines.
+- **On a VPS:** tunnel the port and open the link locally:
+  `ssh -L 49600:127.0.0.1:49600 <host>`.
+- **Saving:** the page previews the change to `world.local.json`, then runs the in-game update
+  countdown for online players, writes the file and restarts the server. In dev (nodemon) the
+  server restarts by itself. Under a supervisor (systemd, pm2, docker) set `TSPS_SUPERVISED=1`
+  and the server exits with code `75` so the supervisor restarts it. Otherwise the page offers
+  save-only; restart the server by hand for it to take effect.
+- **The link:** the token is kept in `server/data/definitions/world-admin.token` and stays valid
+  across restarts. Delete that file to get a new one.
+- **Remote access:** set `WORLD_ADMIN_TOKEN` to choose your own token instead; only then does
+  `WORLD_ADMIN_BIND` open the listener to other machines.
+- **Spawn map:** the spawn point picker shows OSRS Wiki map tiles, which your browser fetches
+  only while the map is open. Nothing else on the page makes an external request.
+
 ## Experience multiplier
 
 `experienceMultiplier` sets the global experience rate for all skills. `1` is the normal rate;
@@ -148,19 +185,135 @@ default.
 }
 ```
 
-### Available switches
+### Settings reference
 
-| Plugin key | Effect |
-| --- | --- |
-| `TutorialIsland` | Enables the Tutorial Island onboarding, including its guided steps, starter items, and route to Lumbridge. The tutorial's skip offer is separately controlled by `pluginConfig`: set `"TutorialIsland:allowSkip": false` to disable skipping. |
-| `VoiceChat` | Enables proximity voice-chat signalling between nearby players on the same plane and in the same private area. Voice audio also requires client voice-chat support and browser media permissions. |
-| `DuelStaking` | Adds the staking interface and item stakes to duels. The Duel Arena itself is a separate plugin; this switch only enables staking. |
-| `FreezeTimer` | Sends the remaining freeze duration and spell information used by the client's freeze-timer overlay. |
-| `FriendsList` | Enables friends-list and friends-chat handling, including private messages, chat filters, and friends-chat channels. |
-| `GrandExchange` | Enables Grand Exchange offers, offer collection, and the item-price resource used by the exchange. |
-| `SideJournalDefaults` | Owns the journal tabs and custom Character Summary. Summary buttons follow the commands enabled for each player, and visible navigation buttons are centered with equal spacing. |
-| `IgnoreList` | No active feature is currently attached to this plugin. The client protocol does not yet send ignore-list add/remove actions, so enabling this switch alone does not make those controls work. |
-| `VengeanceTimer` | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's active cooldown. |
+Generated from the plugins' own declarations and the shipped `world.json`; do not edit by hand.
+After changing a plugin's `description` or `config`, run `yarn --cwd server world-config-docs`
+(a test fails while this block is stale).
+
+<!-- world-config:generated:start -->
+### Options
+
+#### World settings (top-level keys)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Gravestones:enabled` | boolean | `true` | **Gravestones.** Player deaths in PvM leave a gravestone. Turn off for the older behaviour where lost items drop where the player died. |
+| `description` | string | `""` | **Description.** Short blurb shown with the world, at most 120 characters. |
+| `experienceMultiplier` | number (> 0) | `1` | **Experience rate.** Global experience rate for all skills. 1 is the normal rate; 5 gives five times the experience. |
+| `gameframe` | enum: `modern-resizable` (modern-resizable), `modern-fixed` (modern-fixed), `317-resizable` (317-resizable), `317-fixed` (317-fixed) | *Client default* | **Game frame.** Interface layout the web client uses for this world. |
+| `membersWorld` | boolean | `true` | **Members world.** When off, members-only content is not loaded and the spawn must sit inside a zone tagged "f2p". |
+| `name` | string | `"Old School RuneScape"` | **World name.** Shown on the world list. Plain text, 1 to 64 characters. |
+| `spawn` | json | *Required: set in world.json* | **Spawn point.** Where new and stranded players appear, as { "x": 3222, "y": 3218, "z": 0 }. |
+
+#### Core (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `CrossFloor:combat` | boolean | *Off unless CROSS_FLOOR_COMBAT is set* | **Cross-floor combat.** Ranged and magic attacks work between floors. Needs cross-floor visibility. |
+| `CrossFloor:visibility` | boolean | *Off unless CROSS_FLOOR_VISIBILITY is set* | **Cross-floor visibility.** Players see others on other floors of the same area. |
+| `commands:permissions` | json | `{}` | **Command permissions.** Lowest rank that may run each command, e.g. { "items": "NONE", "teleports": "OWNER" }. Ranks: NONE, MODERATOR, ADMINISTRATOR, OWNER, DEVELOPER. |
+
+#### accounts (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `characters:maxPerAccount` | number (integer, >= 1, <= 6) | `6` | **Characters per account.** How many characters one account may hold, 1 to 6. At 1 the picker is skipped. Worlds hosted in a browser without account saving always use 1. |
+
+#### areas (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `TutorialIsland:allowSkip` | boolean | `true` | **Allow skipping Tutorial Island.** The Gielinor Guide offers new players to skip the island, which misses some starter items and steps. Turn off to make everyone complete it. |
+
+#### bosses (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `WildernessBosses:requireDiary` | boolean | `true` | **Wilderness boss lairs need the diary.** As on the Wiki, each lair needs the medium Wilderness Diary or a Slayer task for that boss. Turn off to let anyone in. |
+
+#### bots (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `PlayerBots:activeRegionBotsByRegion` | json | *Shipped value in bot-sites.json* | **Wilderness bots per map square.** Target number of bots in individual 64x64 map squares, keyed plane:regionX:regionY with whole-number counts. Replaces pvp.activeRegionBotsByRegion in bot-sites.json. |
+| `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
+| `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
+
+#### commands (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `DisplayName:cooldownDays` | number (>= 0) | `28` | **Display name change cooldown (days).** Days a player waits between display name changes. 0 lets them change at any time. |
+| `DisplayName:holdDays` | number (>= 0) | `35` | **Old display name hold (days).** Days a name a player gave up stays held for its old owner. |
+
+#### interface (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `GrandExchange:maxTradeDelay` | number (integer, >= 5000, <= 2147483647) | `3600000` | **Longest offer wait (ms).** Upper limit, in milliseconds, on how long an offer takes to complete. Applies to newly placed offers. |
+| `SkillLevelUp:interruptActions` | boolean | `true` | **Level-ups interrupt actions.** Follows each player's pop-up preference. Turn off to keep skilling and fighting through level-ups: the blocking pop-ups are skipped, chat messages, sounds and graphics stay. |
+| `WelcomeScreen:messageOfTheWeek` | string | *Welcome to <world name>!* | **Message of the week.** Text on the scroll at the bottom of the welcome screen. Takes <col=rrggbb> and <br> tags. League worlds show their own message instead. |
+
+#### minigames (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `CastleWars:seedBots` | boolean | `false` | **Seed Castle Wars with bots.** Development aid: fills the lobby with bots. Leave off so production lobbies are players only. |
+| `DuelArena:pvpArenaWorld` | boolean | `false` | **PvP Arena world.** Makes this a PvP Arena world: Challenge in the Emir's Arena always starts an unranked duel, with no Legacy Duel choice. |
+| `LastManStanding:highStakes` | boolean | `false` | **High Stakes mode.** Opens the High Stakes mode, which costs 500,000 from the coffer to start. Closed when off. |
+| `LastManStanding:minPlayers` | number (integer, >= 1) | *The mode's own minimum (24 for the competitive modes)* | **Players needed to start.** Lowest number of players a game needs. Cannot go above the mode's own minimum. |
+| `LastManStanding:seedBots` | boolean | `true` | **Seed Last Man Standing with bots.** Fills lobbies with bots that fight on the PvP brain. Turn off for players only. |
+| `SoulWars:minPlayers` | number (integer, >= 2) | *20, as on the Wiki* | **Players needed to start.** Lowest number of players a game needs. Never under 2, since both teams need a player. |
+| `SoulWars:seedBots` | boolean | `false` | **Seed Soul Wars with bots.** Development aid: fills the lobby with bots. Leave off so production lobbies are players only. |
+
+#### modes (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `league:end` | date | *Not set* | **League end date.** When the league ends, as YYYY-MM-DD. The welcome message then shows how many days remain. |
+| `league:start` | date | *Not set* | **League start date.** When the league began, as YYYY-MM-DD. Sets the client's league clock. |
+| `league:type` | enum: `0` (Not a league world), `1` (Leagues I - Twisted), `2` (Leagues II - Trailblazer), `3` (Leagues III - Shattered Relics), `4` (Leagues IV - Trailblazer Reloaded), `5` (Leagues V - Raging Echoes), `6` (Leagues VI - Demonic Pacts) | `0` | **League.** Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change. |
+
+#### npcs (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `NpcDrops:bossRareMultiplier` | number (>= 1) | `1` | **Boss unique drop multiplier.** Makes bosses' unique drops this many times likelier. 1 is the normal rate; values of 1 or less change nothing. |
+| `Pets:skillingPetMultiplier` | number (>= 1) | `1` | **Skilling pet multiplier.** Makes every skilling pet roll this many times likelier. 1 is the normal rate; values of 1 or less change nothing. |
+| `random-events:enabled` | boolean | `true` | **Random events.** Turn off to stop random events from appearing. |
+
+#### quests (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `quests:equipment-requirements` | boolean | `true` | **Quest equipment requirements.** Items tied to a quest cannot be worn until it is finished. Turn off to remove the restriction. Player bots are never held to it. |
+
+#### skills (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Prayer:sequentialBurying` | boolean | `false` | **Bury all bones with one click.** By default Bury buries one bone per click, as in OSRS. On, one click continues through the eligible unnoted bones in the inventory. |
+| `ShootingStars:announce` | boolean | `false` | **Announce landings.** Tells everyone online where a star landed. Useful on small worlds; OSRS has no such message. |
+| `ShootingStars:intervalMinutes` | number (> 0) | *90* | **Minutes between shooting stars.** Time between stars; a random 15 minutes either way is added on top. |
+
+### Plugin switches
+
+| Plugin key | Area | On by default | Effect |
+| --- | --- | --- | --- |
+| `Characters` | accounts | no | Lets one account hold several characters and choose between them at login. Off unless the world turns it on. |
+| `TutorialIsland` | areas | yes | The Tutorial Island onboarding for new players: guided steps, starter items and the route to Lumbridge. |
+| `CustomCharacterSummary` | interface | no | Our own Character Summary tab for the side journal. Off unless the world turns it on; needs SideJournalDefaults. |
+| `DuelStaking` | interface | yes | Adds the staking interface and item stakes to duels. The Duel Arena itself is a separate plugin. |
+| `Freeze Timer` | interface | yes | Sends the remaining freeze time and spell for the client's freeze-timer overlay. |
+| `FriendsList` | interface | yes | Friends list and friends chat: private messages, chat filters and friends-chat channels. |
+| `GrandExchange` | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
+| `IgnoreList` | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
+| `SideJournalDefaults` | interface | yes | The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands. |
+| `Vengeance Timer` | interface | yes | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown. |
+| `VoiceChat` | interface | no | Proximity voice chat: signalling between nearby players on the same plane and private area. Voice also needs client support and browser microphone permission. |
+| `WorldAdmin` | tools | yes | Local web page for editing world.json settings and plugin switches. |
+<!-- world-config:generated:end -->
 
 These switches control whether a plugin is loaded; they are distinct from `pluginConfig`, which
 sets plugin-specific options such as `TutorialIsland:allowSkip`.

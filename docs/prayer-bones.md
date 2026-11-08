@@ -39,6 +39,8 @@ or layered over it from the gitignored `world.local.json`:
 { "pluginConfig": { "Prayer:sequentialBurying": true } }
 ```
 
+This option is also on the [world config page](world-configuration.md#world-config-page).
+
 With it on, **Bury** starts with the clicked bone, then continues through eligible unnoted bones in
 inventory slot order, including mixed types. Each bone resolves after two game ticks; consumption
 and experience happen together. Nonbones, members-only bones on a free world, and bones above the

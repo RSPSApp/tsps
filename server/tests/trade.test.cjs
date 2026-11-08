@@ -228,7 +228,7 @@ test("the offer screen shows who you trade with, both offers' values and accepta
   const { alice, bob } = startTrade();
   const text = (component) => alice.texts.get((335 << 16) | component);
 
-  assert.equal(text(31), "Trading with: bob");
+  assert.equal(text(31), "Trading With: bob", "rsprox_transcripts/227/00548.txt trademain:title");
   assert.equal(text(24), "You offer:<br>(Value: <col=ffffff>450</col> coins)");
   assert.equal(text(27), "bob offers:<br>(Value: <col=ffffff>200</col> coins)");
   assert.equal(text(9), "bob has 27 free inventory slots.");
@@ -236,6 +236,16 @@ test("the offer screen shows who you trade with, both offers' values and accepta
   bob.getTrading().acceptTrade();
   assert.equal(text(30), "Other player has accepted.");
   assert.equal(bob.texts.get((335 << 16) | 30), "Waiting for other player...");
+});
+
+test("the confirm screen puts its status in the title and the partner below, as live", () => {
+  // rsprox_transcripts/227/00548.txt: tradeconfirm:title (334:4) and tradeconfirm:tradeopponent (334:30).
+  const { alice, bob } = startTrade();
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  const text = (component) => alice.texts.get((334 << 16) | component);
+  assert.equal(text(4), "Are you sure you want to make this trade?");
+  assert.equal(text(30), "Trading with:<br>bob");
 });
 
 const TRIDENT = 11907;

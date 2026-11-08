@@ -240,7 +240,7 @@ export class XpTrackerPlugin extends Plugin {
         for (const skill of SKILL_IDS) {
             if (!this.pauseState.isPaused(skill)) this.xpState.tick(skill, delta, now, resetAfter);
         }
-        if (!this.pauseState.isOverallPaused()) this.xpState.tickOverall(delta);
+        if (!this.pauseState.isOverallPaused()) this.xpState.tickOverall(delta, now, resetAfter);
         this.emit();
     }
 

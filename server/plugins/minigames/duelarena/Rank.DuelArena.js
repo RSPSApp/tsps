@@ -41,6 +41,26 @@ function addPoints(player, amount) {
   return next;
 }
 
+/**
+ * The PvP Arena Rewards shop (shops.json "PVP ARENA POINTS") spends these Reward Points; the generic point currency
+ * kept its own, never-earned balance, so nothing could be bought. Through addPoints, so the cap and the points varbit
+ * hold for purchases too.
+ */
+const REWARD_POINTS_CURRENCY = {
+  name: "PvP Arena Points",
+  amount: points,
+  add: (player, value) => addPoints(player, Math.max(0, Math.floor(value))),
+  remove: (player, value) => addPoints(player, -Math.min(points(player), Math.max(0, Math.floor(value)))),
+};
+
+/** Wiki (PvP Arena Rewards): "Blighted surge sack (x50)" for 10 points, so one purchase hands over 50. */
+const SURGE_SACK_BUNDLE = 50;
+function rewardShopDelivery(event) {
+  if (event?.currency === "PVP ARENA POINTS" && event.itemId === Common.core.ItemIdentifiers.BLIGHTED_SURGE_SACK) {
+    event.amount = SURGE_SACK_BUNDLE;
+  }
+}
+
 /** Elo's expected score of `a` against `b`. */
 function expected(a, b) {
   return 1 / (1 + 10 ** ((b - a) / 400));
@@ -111,6 +131,8 @@ function attachRank(api) {
   api.persistAttribute(Common.RANK_ATTRIBUTE, data().startRank);
   api.persistAttribute(Common.REWARD_POINTS_ATTRIBUTE, 0);
   api.persistAttribute(Common.WIN_STREAK_ATTRIBUTE, 0);
+  api.registerShopCurrency?.("PVP ARENA POINTS", REWARD_POINTS_CURRENCY);
+  api.onCustomEvent("shop:delivery", rewardShopDelivery);
   api.onPlayerLogin(login);
   // By gameval id, not name: "Arena recruitment board" also has a View (767) that isn't modelled.
   api.onObjectThirdClick([Common.locId("pvpa_recruitment_board"), Common.locId("pvpa_recruitment_board02")].filter((id) => id != null), showRank);

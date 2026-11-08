@@ -1288,7 +1288,8 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
   registerGourd(antipoison, GOURD_FIRST_DOSE.antipoison[tier], (player) => applyPoisonImmunity(player, GOURD_ANTIPOISON_SECONDS[tier]));
   registerGourd(`Overload${suffix} (Chambers of Xeric)`, GOURD_FIRST_DOSE.overload[tier],
     (player) => applyOverload(player, strength.overload[0], strength.overload[1]),
-    (player) => getCurrentLevel(player, Skill.HITPOINTS) >= 50);
+    // Wiki (Overload (Chambers of Xeric)): more than 50 Hitpoints, as Overload (+) and the refusal text say.
+    (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
 
 /** Wiki: the stamina effect only slows the drain; MovementQueue applies the 30% modifier. */

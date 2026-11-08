@@ -1180,7 +1180,7 @@ test("lead rocks (Wiki): 25 Mining, 40.5 XP, mined out as their own leadrock1_em
   assert.equal(player.messages.at(-1), "There is currently no ore available in this rock.");
 });
 
-test("nickel rocks (Wiki) give 2-16 ores before going, and no mining enhancer's extra ore", () => {
+test("nickel rocks (Wiki) give 2-16 ores before going, and ask the enhancers (Varrock armour 4 applies)", () => {
   let extraAsked = false;
   const h = harness({ emit: (key) => { if (key === "mining:extra-ore") extraAsked = true; } });
   const player = createPlayer();
@@ -1195,7 +1195,8 @@ test("nickel rocks (Wiki) give 2-16 ores before going, and no mining enhancer's 
     h.tick(3);
     assert.deepEqual(player.added, [[core.ItemIdentifiers.NICKEL_ORE, 1], [core.ItemIdentifiers.NICKEL_ORE, 1]]);
     assert.equal(h.registered.at(-1).getId(), loc("nickelrock1_empty"));
-    assert.equal(extraAsked, false);
+    // Wiki (Mining enhancers): Varrock armour 4 adds nickel; the cape and ring stop below its level.
+    assert.equal(extraAsked, true);
   } finally {
     restoreRandom();
     restore();

@@ -1,7 +1,6 @@
 // Run after `yarn build`: node --test tests/windmill-league-task.test.cjs
-// League tasks (docs/leagues.md, Tasks): the catalog the client is sent, the task list's captured
-// flow and filters, the award triggers (kills, levels, quests), the completion bits, the command,
-// and that a main character sees none of it.
+// Windmill flour collection credits the League task through the registered interaction and task
+// handlers, with controls for refusals, cornflour, repeat collection and main-game characters.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test, before } = require("node:test");

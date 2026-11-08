@@ -1,5 +1,6 @@
 import { Player } from "../../../entity/impl/player/Player";
 import { Skill } from "../../../model/Skill";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 const CLEANING_XP = new Map<number, number>([
     [199, 2], [201, 4], [203, 5], [205, 6], [207, 7], [209, 10],
@@ -13,15 +14,26 @@ const CLEAN_HERB = new Map<number, number>([
 ]);
 
 export class ArceuusUtilities {
+    private static eligibleCleanId(player: Player, grimyId: number): number | undefined {
+        const cleanId = CLEAN_HERB.get(grimyId);
+        if (cleanId == null) return undefined;
+        const herb: { grimyId: number; clean: number | null; level: number | null } = { grimyId, clean: null, level: null };
+        PluginManager.emitCustomEvent("herblore:clean", herb);
+        const boost = { player, skill: Skill.HERBLORE, boost: 0 };
+        PluginManager.emitCustomEvent("skills:level-boost", boost);
+        const level = player.getSkillManager().getCurrentLevel(Skill.HERBLORE) + Math.max(0, boost.boost | 0);
+        return herb.level != null && level >= herb.level ? cleanId : undefined;
+    }
+
     public static hasGrimyHerbs(player: Player): boolean {
-        return player.getInventory().getValidItems().some((item) => CLEAN_HERB.has(item.getId()));
+        return player.getInventory().getValidItems().some((item) => this.eligibleCleanId(player, item.getId()) != null);
     }
 
     public static degrime(player: Player): void {
         let experience = 0;
         for (const item of player.getInventory().getValidItems()) {
             const grimyId = item.getId();
-            const cleanId = CLEAN_HERB.get(grimyId);
+            const cleanId = this.eligibleCleanId(player, grimyId);
             if (cleanId != null) {
                 item.setId(cleanId);
                 experience += (CLEANING_XP.get(grimyId) ?? 0) / 2;

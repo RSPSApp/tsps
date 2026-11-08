@@ -23414,3 +23414,173 @@ test('Alrena gives the Song of the Elves tabard only for the silk and purple dye
   step('bGd6H8');
   assert.equal(tabard(), 1, 'one hand-over makes one tabard');
 });
+
+test('Giant Dwarf permits a second company after a completed delivery', (t) => {
+  const { api, handlers } = mockApi();
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const originalKeys = new Set(PlayerSave.persistentAttributeKeys);
+  const originalDefaults = new Map(PlayerSave.attributeDefaults);
+  t.after(() => {
+    PlayerSave.persistentAttributeKeys.clear();
+    for (const key of originalKeys) PlayerSave.persistentAttributeKeys.add(key);
+    PlayerSave.attributeDefaults.clear();
+    for (const [key, value] of originalDefaults) PlayerSave.attributeDefaults.set(key, value);
+  });
+  api.persistAttribute = (key, value) => PlayerSave.persistAttribute(key, value);
+  const npcActions = new Map();
+  api.onNpcsInteraction = (names, actions) => {
+    for (const name of names) npcActions.set(name, actions);
+  };
+  const runtimePath = require.resolve('../plugins/quests/QuestRuntime');
+  const questPath = require.resolve('../plugins/quests/quests/GiantDwarf.Quest');
+  const previousRuntime = require.cache[runtimePath], previousQuest = require.cache[questPath];
+  let runtime, started;
+  try {
+    delete require.cache[runtimePath];
+    delete require.cache[questPath];
+    runtime = require(runtimePath);
+    const originalStartTranscript = runtime.startTranscript;
+    runtime.startTranscript = (...args) => { started = { page: args[3], variant: args[4] }; return originalStartTranscript(...args); };
+    require(questPath)(api);
+    runtime.startTranscript = originalStartTranscript;
+  } finally {
+    if (previousRuntime) require.cache[runtimePath] = previousRuntime; else delete require.cache[runtimePath];
+    if (previousQuest) require.cache[questPath] = previousQuest; else delete require.cache[questPath];
+  }
+  const quest = runtime.getRegisteredQuests().findLast(q => q.key === 'giant_dwarf');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername('giantdwarfcompany');
+  quest.setStage(player, 30);
+  const N = api.core.NpcIdentifiers;
+  const talk = (name, npcId, actor = player) => {
+    const event = { player: actor, npcId, clickType: 1, handled: false,
+      definition: { getName: () => name, getActions: () => ['Talk-to'] } };
+    npcActions.get(name)['Talk-to'](event);
+    return event;
+  };
+  const first = N.PURPLE_PEWTER_SECRETARY;
+  assert.equal(talk('Purple Pewter Secretary', first).handled, true, 'first secretary is available');
+  // Checkpoint the transcript offer and acceptance, as the existing parity test does.
+  api.emitCustomEvent('npc-dialogue:line', { player, npcId: first, text: 'We need 3 copper ore in the next [number] minutes.' });
+  api.emitCustomEvent('npc-dialogue:choice', { player, npcId: first, option: "I'll take it." });
+  const item = Number(player.getAttribute('quest.giant_dwarf.task-item'));
+  const amount = Number(player.getAttribute('quest.giant_dwarf.task-amount'));
+  assert.ok(item > 0 && amount >= 3 && amount <= 5, 'an ore task was accepted');
+  player.getInventory().adds(item, amount);
+  assert.equal(player.getInventory().getAmount(item), amount);
+  api.emitCustomEvent('npc-dialogue:line', { player, npcId: first, text: "I've completed your task! Here is your ore!" });
+  assert.equal(player.getInventory().getAmount(item), 0, 'the first delivery consumes the ore');
+  player.getDialogueManager().reset();
+  const blue = N.BLUE_OPAL_SECRETARY;
+  started = undefined;
+  assert.equal(talk('Blue Opal Secretary', blue).handled, true,
+    'a completed delivery does not prevent talking to a different company');
+  assert.deepEqual(started, { page: 'The Giant Dwarf', variant: 'the-head-of-a-dwarf-talking-to-a-company-secretary' }, 'the second secretary selects the task conversation');
+  assert.ok(player.getDialogueManager().getCurrent(), 'the second secretary actually starts dialogue');
+  const condition = (actor, npcId, stepId) => handlers.condition.map(fn => fn({ player: actor, npcId, stepId })).find(v => typeof v === 'boolean');
+  assert.equal(condition(player, first, 'jzxdAM'), true, 'the first company recognises its completed delivery');
+  assert.equal(condition(player, blue, 'Mzu06u'), true, 'the second company starts with few tasks');
+  assert.equal(condition(player, blue, 'jzxdAM'), false, 'the first company score is not shared');
+  const savedBeforeBlue = PlayerSave.fromPlayer(player);
+  const restoredBeforeBlue = new Player(new PlayerSession(channel));
+  restoredBeforeBlue.setUsername('giantdwarfcompany');
+  savedBeforeBlue.applyToPlayer(restoredBeforeBlue);
+  assert.equal(condition(restoredBeforeBlue, first, 'jzxdAM'), true, 'the first company score survives restoration');
+  assert.equal(condition(restoredBeforeBlue, blue, 'jzxdAM'), false, 'the other company remains at zero after restoration');
+  api.emitCustomEvent('npc-dialogue:line', { player, npcId: blue, text: 'We need 3 copper ore in the next [number] minutes.' });
+  api.emitCustomEvent('npc-dialogue:choice', { player, npcId: blue, option: "I'll take it." });
+  const blueItem = Number(player.getAttribute('quest.giant_dwarf.task-item'));
+  const blueAmount = Number(player.getAttribute('quest.giant_dwarf.task-amount'));
+  assert.ok(blueItem > 0 && blueAmount >= 3 && blueAmount <= 5, 'the second company accepts a task');
+  player.getInventory().adds(blueItem, blueAmount);
+  assert.equal(player.getInventory().getAmount(blueItem), blueAmount);
+  api.emitCustomEvent('npc-dialogue:line', { player, npcId: blue, text: "I've completed your task! Here is your ore!" });
+  assert.equal(player.getInventory().getAmount(blueItem), 0, 'the second company receives its ore');
+  assert.equal(condition(player, blue, 'jzxdAM'), true, 'the second company recognises a completed task');
+  const saved = PlayerSave.fromPlayer(player);
+  const restored = new Player(new PlayerSession(channel));
+  restored.setUsername('giantdwarfcompany');
+  saved.applyToPlayer(restored);
+  assert.equal(condition(restored, first, 'jzxdAM'), true, 'the first company retains its progress after restoration');
+  assert.equal(condition(restored, blue, 'jzxdAM'), true, 'the second company retains its progress after restoration');
+
+  // The Purple Pewter clothing bonus is earned before any task selects a company.
+  const bonusPlayer = new Player(new PlayerSession(channel));
+  bonusPlayer.setUsername('giantdwarfbonus');
+  quest.setStage(bonusPlayer, 30);
+  const { Item, ItemIdentifiers: I } = api.core;
+  for (const [slot, id] of [I.HAM_HOOD, I.HAM_SHIRT, I.HAM_ROBE].entries()) {
+    bonusPlayer.getEquipment().set(slot, new Item(id, 1));
+  }
+  assert.equal(talk('Purple Pewter Secretary', first, bonusPlayer).handled, true);
+  assert.equal(condition(bonusPlayer, first, 'eQt6ua'), true, 'three H.A.M. pieces qualify for the bonus');
+  assert.equal(condition(bonusPlayer, first, 'jzxdAM'), true, 'Purple Pewter receives the bonus');
+  assert.equal(condition(bonusPlayer, blue, 'jzxdAM'), false, 'the unchosen Blue Opal has no bonus');
+  const decliningPlayer = new Player(new PlayerSession(channel));
+  decliningPlayer.setUsername('giantdwarfbonus');
+  PlayerSave.fromPlayer(bonusPlayer).applyToPlayer(decliningPlayer);
+  api.emitCustomEvent('npc-dialogue:line', { player: decliningPlayer, npcId: first, text: 'We need 3 copper ore in the next [number] minutes.' });
+  assert.ok(Number(decliningPlayer.getAttribute('quest.giant_dwarf.task-item')) > 0, 'Purple offer is pending');
+  api.emitCustomEvent('npc-dialogue:choice', { player: decliningPlayer, npcId: first, option: 'No thanks.' });
+  assert.equal(decliningPlayer.getAttribute('giant-dwarf:company-points')[1], 18, 'refusing the first offer debits Purple');
+  assert.equal(condition(decliningPlayer, first, 'jzxdAM'), false, 'the penalty drops Purple below the 20-point branch');
+  const declinedRestored = new Player(new PlayerSession(channel));
+  declinedRestored.setUsername('giantdwarfbonus');
+  PlayerSave.fromPlayer(decliningPlayer).applyToPlayer(declinedRestored);
+  assert.equal(declinedRestored.getAttribute('giant-dwarf:company-points')[1], 18, 'the refusal penalty survives restoration');
+  assert.equal(condition(declinedRestored, first, 'jzxdAM'), false);
+  bonusPlayer.getDialogueManager().reset();
+  assert.equal(talk('Blue Opal Secretary', blue, bonusPlayer).handled, true);
+  api.emitCustomEvent('npc-dialogue:line', { player: bonusPlayer, npcId: blue, text: 'We need 3 copper ore in the next [number] minutes.' });
+  api.emitCustomEvent('npc-dialogue:choice', { player: bonusPlayer, npcId: blue, option: "I'll take it." });
+  assert.equal(condition(bonusPlayer, blue, 'jzxdAM'), false, 'Blue Opal does not inherit the Purple Pewter bonus');
+  const bonusItem = Number(bonusPlayer.getAttribute('quest.giant_dwarf.task-item'));
+  const bonusAmount = Number(bonusPlayer.getAttribute('quest.giant_dwarf.task-amount'));
+  assert.ok(bonusItem > 0 && bonusAmount >= 3 && bonusAmount <= 5, 'Blue Opal task was accepted');
+  bonusPlayer.getInventory().adds(bonusItem, bonusAmount);
+  api.emitCustomEvent('npc-dialogue:line', { player: bonusPlayer, npcId: blue, text: "I've completed your task! Here is your ore!" });
+  assert.equal(bonusPlayer.getInventory().getAmount(bonusItem), 0, 'Blue Opal receives the ore');
+  bonusPlayer.getDialogueManager().reset();
+  assert.equal(talk('Purple Pewter Secretary', first, bonusPlayer).handled, true, 'return to Purple Pewter after delivery');
+  assert.equal(condition(bonusPlayer, first, 'jzxdAM'), true, 'Purple Pewter retains its bonus');
+  const bonusRestored = new Player(new PlayerSession(channel));
+  bonusRestored.setUsername('giantdwarfbonus');
+  PlayerSave.fromPlayer(bonusPlayer).applyToPlayer(bonusRestored);
+  assert.equal(condition(bonusRestored, first, 'jzxdAM'), true, 'Purple Pewter bonus survives save and restore');
+  assert.equal(condition(bonusRestored, blue, 'jzxdAM'), true, 'Blue Opal delivery survives save and restore');
+
+  // Legacy checkpoint: the old implementation could persist this bonus before company choice.
+  const legacy = new Player(new PlayerSession(channel));
+  legacy.setUsername('giantdwarflegacy');
+  quest.setStage(legacy, 30);
+  legacy.setAttribute('quest.giant_dwarf.ham-bonus', true);
+  legacy.setAttribute('quest.giant_dwarf.points', 20);
+  const legacyRestored = new Player(new PlayerSession(channel));
+  legacyRestored.setUsername('giantdwarflegacy');
+  PlayerSave.fromPlayer(legacy).applyToPlayer(legacyRestored);
+  assert.equal(condition(legacyRestored, first, 'jzxdAM'), true, 'legacy unassigned bonus belongs to Purple Pewter');
+  assert.equal(condition(legacyRestored, blue, 'jzxdAM'), false, 'legacy bonus is not Blue Opal progress');
+  assert.equal(talk('Blue Opal Secretary', blue, legacyRestored).handled, true);
+  api.emitCustomEvent('npc-dialogue:line', { player: legacyRestored, npcId: blue, text: 'We need 3 copper ore in the next [number] minutes.' });
+  api.emitCustomEvent('npc-dialogue:choice', { player: legacyRestored, npcId: blue, option: "I'll take it." });
+  assert.equal(condition(legacyRestored, blue, 'jzxdAM'), false, 'first Blue acceptance cannot inherit the legacy bonus');
+  assert.equal(condition(legacyRestored, first, 'jzxdAM'), true, 'first Blue acceptance preserves the legacy Purple bonus');
+  const legacyItem = Number(legacyRestored.getAttribute('quest.giant_dwarf.task-item'));
+  const legacyAmount = Number(legacyRestored.getAttribute('quest.giant_dwarf.task-amount'));
+  assert.ok(legacyItem > 0 && legacyAmount >= 3 && legacyAmount <= 5, 'legacy player accepted the Blue task');
+  legacyRestored.getInventory().adds(legacyItem, legacyAmount);
+  api.emitCustomEvent('npc-dialogue:line', { player: legacyRestored, npcId: blue, text: "I've completed your task! Here is your ore!" });
+  assert.equal(legacyRestored.getInventory().getAmount(legacyItem), 0, 'legacy player completed the Blue delivery');
+  legacyRestored.getDialogueManager().reset();
+  assert.equal(talk('Purple Pewter Secretary', first, legacyRestored).handled, true, 'legacy player can return to Purple Pewter');
+  const legacyAgain = new Player(new PlayerSession(channel));
+  legacyAgain.setUsername('giantdwarflegacy');
+  PlayerSave.fromPlayer(legacyRestored).applyToPlayer(legacyAgain);
+  assert.equal(condition(legacyAgain, first, 'jzxdAM'), true, 'migrated Purple bonus survives another save');
+  assert.equal(condition(legacyAgain, blue, 'jzxdAM'), true, 'Blue delivery survives another save');
+
+});

@@ -187,7 +187,7 @@ function spawnEncounter(session) {
   session.eldric = spawnTitan(session, Shared.ELDRIC_ID, Shared.ELDRIC_SPAWN, Shared.ELDRIC_FACE, Shared.ELDRIC_ANIMATIONS.spawn);
   Object.assign(session, {
     spawnedAt: core.World.getProcessCycle(), over: false, teleported: false, claimedBy: null, claims: null,
-    stash: null, brandaDown: false, eldricDown: false, respawnAt: 0, corpses: [],
+    brandaDown: false, eldricDown: false, respawnAt: 0, corpses: [],
   });
   for (const player of session.players) {
     CombatAchievements.spawned(player, session);

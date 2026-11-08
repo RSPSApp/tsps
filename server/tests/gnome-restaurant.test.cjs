@@ -585,6 +585,34 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     assert.ok(index > 0, `active cache exposes ${option} on ${itemId}`);
     assert.equal(ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, itemId, itemSlot, index), true);
   }
+  // Seeded credits and item exercise the receiver and PM, not network decoding or earning.
+  const tokenDefinition = core.CacheDefinitions.getItem(TOKEN);
+  assert.equal(tokenDefinition.name, "Reward token");
+  assert.equal(tokenDefinition.inventoryActions[0], "Check");
+  assert.equal(tokenDefinition.inventoryActions[2], "Activate");
+  assert.equal(tokenDefinition.inventoryActions[4], "Destroy");
+  assert.ok(Number.isInteger(core.ItemIdentifiers.REWARD_TOKEN));
+  assert.notEqual(core.ItemIdentifiers.REWARD_TOKEN, TOKEN);
+  const otherTokenDefinition = core.CacheDefinitions.getItem(core.ItemIdentifiers.REWARD_TOKEN);
+  assert.equal(otherTokenDefinition.name, "Reward token");
+  assert.equal(otherTokenDefinition.inventoryActions[0], "Look-at");
+  const tokenHolder = actor("gnometoken", 99);
+  assert.ok(tokenHolder.getHitpoints() > 0);
+  assert.equal(tokenHolder.isTeleportingReturn(), false);
+  // The same actor and receiver must first reach an existing registered action.
+  tokenHolder.getInventory().adds(BOX, 1);
+  const beforeControl = messages.get(tokenHolder).length;
+  action(tokenHolder, BOX, "Check");
+  assert.ok(messages.get(tokenHolder).slice(beforeControl).includes("You have no delivery to check."));
+  tokenHolder.setAttribute("gnome-restaurant:credits", 25);
+  tokenHolder.getInventory().adds(TOKEN, 1);
+  action(tokenHolder, TOKEN, "Check");
+  const tokenDialogue = tokenHolder.getDialogueManager().getCurrent();
+  assert.ok(tokenDialogue instanceof core.StatementDialogue);
+  assert.equal(tokenDialogue.getText(), "You can use this token to order gnome food to deliver. You can currently order 2 items.");
+  assert.equal(tokenHolder.getInventory().getAmount(TOKEN), 1);
+  assert.equal(tokenHolder.getAttribute("gnome-restaurant:credits"), 25);
+  await drive(tokenHolder, junior);
   async function widget(p, widgetId, child, row) {
     await clients.get(p).dispatch([{ type: "widget_action", widgetId, groupId: 49, childId: child, slot: row, buttonNum: 1 }]);
     clients.get(p).processTurnPackets();

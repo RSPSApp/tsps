@@ -18,7 +18,7 @@
   {"id":592,"location":{"x":3752,"y":9780,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":600,"location":{"x":2438,"y":3187,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":125,"location":{"x":3026,"y":10325,"z":0},"amt":1,"respawn":100,"description":"Wilderness"},
-  {"id":2407,"location":{"x":2935,"y":3460,"z":0},"amt":1,"respawn":0,"description":"Taverley"},
+  {"id":2407,"location":{"x":2935,"y":3460,"z":0},"amt":1,"respawn":100,"description":"Taverley"},
   {"id":1963,"location":{"x":2907,"y":3146,"z":0},"amt":1,"respawn":100,"description":"Musa Point"},
   {"id":1963,"location":{"x":3009,"y":3207,"z":0},"amt":1,"respawn":100,"description":"Port Sarim"},
   {"id":3216,"location":{"x":2487,"y":3371,"z":0},"amt":1,"respawn":30,"description":"Kandarin"},
@@ -1903,6 +1903,9 @@
   {"id":561,"location":{"x":2672,"y":3738,"z":0},"amt":2,"respawn":200,"members":true,"description":"OSRS Wiki: Nature rune — [[Rellekka]] - on a small island near the [[rock crab]]s{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"},
   {"id":995,"location":{"x":3003,"y":9801,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Dwarven Mine]]"},
   {"id":995,"location":{"x":3001,"y":9798,"z":0},"amt":1,"respawn":100,"description":"OSRS Wiki: Coins — [[Dwarven Mine]]"},
+  {"id":1925,"location":{"x":1667,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Bucket — [[Civitas illa Fortis]]"},
+  {"id":1925,"location":{"x":1644,"y":3093,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Bucket — [[Civitas illa Fortis]]"},
+  {"id":1931,"location":{"x":1666,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Pot — [[Civitas illa Fortis]]"},
   {"id":952,"location":{"x":1641,"y":3052,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Spade — [[Outer Fortis]]"},
   {"id":952,"location":{"x":1405,"y":2938,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Spade — [[Aldarin]]"}
 ]

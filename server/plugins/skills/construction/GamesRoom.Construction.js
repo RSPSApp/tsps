@@ -13,6 +13,7 @@ const TreasureHunt = require("./TreasureHunt.Construction");
 /** Instance.rebuild: building mode packs every game away. */
 function resetGames(house) {
   if (!house.buildingMode) return;
+  RangingGames.resetGames(house);
   Hangman.resetHangman(house);
   ElementalBalance.resetBalance(house);
   AttackStone.resetStone(house);

@@ -778,6 +778,32 @@ test("a kill reported both by the death and by the credited-kill event counts on
   assert.ok(!completed(league).includes("defeat-callisto-50-times"));
 });
 
+test("a kill reported as \"Hueycoatl, The\" credits the tasks named \"The Hueycoatl\"", () => {
+  worldLeague = 6;
+  const league = character("hueycoatl");
+  worldLeague = 4;
+  creditedKill(league, "Hueycoatl, The"); // Kills.Hueycoatl's report
+  assert.equal(league.getAttribute("league:task-kills")["defeat-hueycoatl-50-times"], 1);
+});
+
+test("a kill reported a few ticks after its death (Araxxor's corpse) still counts once; two deaths still count twice", (t) => {
+  let cycle = 50000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
+  const league = character("latereport");
+  for (let i = 0; i < 10; i++) {
+    killReal(league, core.NpcIdentifiers.ARTIO);
+    cycle += 5; // the plugin's report lands later than the death
+    creditedKill(league, "Callisto");
+    cycle += 30;
+  }
+  assert.equal(league.getAttribute("league:task-kills")["defeat-callisto-50-times"], 10, "10 kills, not 20");
+  const quick = character("quickkills");
+  killReal(quick, core.NpcIdentifiers.ARTIO);
+  cycle += 2;
+  killReal(quick, core.NpcIdentifiers.ARTIO);
+  assert.equal(quick.getAttribute("league:task-kills")["defeat-callisto-50-times"], 2, "two deaths close together are two kills");
+});
+
 test("the Nightmare's real ending, which kills no NPC, credits her kill tasks for each rewarded player", () => {
   const NightmareCommon = require("../plugins/bosses/nightmare/Common.Nightmare");
   NightmareCommon.init(api);

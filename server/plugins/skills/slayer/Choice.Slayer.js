@@ -150,8 +150,17 @@ function close({ player }) {
   player?.getPacketSender().sendInterfaceRemoval();
 }
 
+/**
+ * A pick answers only while Mortimer's choice is open (Wiki: you pick in person): the rolled choices stay in varbits, so a
+ * button packet with the interface closed claimed one, modifier and all, anywhere. As Rewards' whileOpen.
+ */
+function pickWhileOpen(event) {
+  if (event?.player?.getInterfaceId?.() !== component("content") >>> 16) return true;
+  return pick(event);
+}
+
 function attach(pluginApi) {
-  pluginApi.onInterfaceActionButton(component("content"), pick);
+  pluginApi.onInterfaceActionButton(component("content"), pickWhileOpen);
   pluginApi.onInterfaceActionButton(component("close_button"), close);
 }
 

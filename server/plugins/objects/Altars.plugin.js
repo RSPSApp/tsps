@@ -68,6 +68,8 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   skillManager.setCurrentLevels(Skill.PRAYER, maxPrayer);
   skillManager.updateSkill(Skill.PRAYER);
+  // Wiki: Prayer (5 April 2023) - praying at an altar resets the timer on Prayer point draining effects.
+  player.setPrayerPointDrain(0);
   player.sendMessage("You recharge your Prayer points.");
   return true;
 }

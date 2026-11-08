@@ -67,6 +67,9 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // inactivepoordoor: Melzar's front door opens onto it (Dragon Slayer I capture 20261106T101002 tick
   // 2070), which the cache doesn't pair by name; ObjectIdentifiers has no property for it.
   MELZAR_DOOR_OPEN: 1539,
+  // grim_inactiveposhdoor: Witch's House front and back doors open onto it (capture 20261108T030409
+  // ticks 154, 389); ObjectIdentifiers has no property for it.
+  WITCH_HOUSE_DOOR_OPEN: 24719,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -530,6 +533,57 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 46,
+    }),
+    // Witch's House, Taverley (revision 242 capture 20261108T030409): the front door (ticks 154-156),
+    // back door (389-391) and shed door (652-654) each swap for INVISWALL on their own tile and an
+    // inactive leaf on the tile across, with sound 62; the player walks one tile and the door is back
+    // two ticks later. The basement shock gate (215-217) opens both leaves the same way with sound 71.
+    // WitchsHouse.Quest's key, stage and gloves checks run before this (door:toggle).
+    Object.freeze({
+      closed: [[O.DOOR_102, 2900, 3473, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2900, 3473, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.WITCH_HOUSE_DOOR_OPEN, 2901, 3473, 0, 3],
+      ],
+      crossX: 2901,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    Object.freeze({
+      closed: [[O.DOOR_103, 2901, 3465, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2901, 3465, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.WITCH_HOUSE_DOOR_OPEN, 2900, 3466, 0, 2],
+      ],
+      crossY: 3466,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    Object.freeze({
+      closed: [[O.DOOR_104, 2934, 3463, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2934, 3463, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2933, 3463, 0, 1],
+      ],
+      crossX: 2934,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    Object.freeze({
+      closed: [[O.GATE_67, 2902, 9873, 0, 2], [O.GATE_66, 2902, 9874, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2902, 9873, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 2903, 9873, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2902, 9874, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 2903, 9874, 0, 1],
+      ],
+      crossX: 2903,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
     }),
     // The Ranging Guild's entrance (11665, diagonal, Open only, no open leaf in the cache).
     // RangingGuild.plugin's 40 Ranged check runs before this (door:toggle). The leaf swings to the

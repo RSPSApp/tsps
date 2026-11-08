@@ -90,6 +90,9 @@ function deathCost(player, skulled) {
 
 function died({ player, killer, skulled }) {
   if (!killer) return;
+  // An Ironman killer takes no other player's loot (PlayerDeathTask.lootOwner, as every other PvP payout asks): the
+  // coins stay in the victim's coffer. This paid the killer directly, so an Ironman got another player's coins.
+  if (core.PlayerDeathTask.lootOwner(player, killer) !== killer) return;
   const cost = deathCost(player, skulled);
   if (cost <= 0) return;
   player.setAttribute(COFFER_ATTRIBUTE, balance(player) - cost);

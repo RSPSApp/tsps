@@ -416,6 +416,36 @@ test("rewards: unlocks spend points and set their bit; cancel and block", () => 
   assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0);
 });
 
+test("rewards: a task already blocked with the master isn't blocked (and paid for) again", () => {
+  const player = createPlayer({ points: 500 });
+  player.getPacketSender().sendConfig(101, 100); // two block slots
+  setVarbit(player, "slayer_master_in_focus", 3);
+  setVarbit(player, "slayer_blocked_vannaka_1", taskId("Bloodveld"));
+  giveTask(player, 3, "Bloodveld", 10); // another master's assignment of a task blocked here
+  Rewards.block(player);
+  assert.equal(varbit(player, "slayer_points"), 500, "nothing spent");
+  assert.equal(varbit(player, "slayer_blocked_vannaka_2"), 0, "no second slot taken");
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "the task is kept");
+  assert.match(player.messages.at(-1), /already blocked/);
+  setVarbit(player, "slayer_blocked_vannaka_1", 0);
+});
+
+test("rewards: a block confirmed after the task changed blocks nothing", () => {
+  const player = createPlayer({ points: 500 });
+  player.setEnteredAmountAction = (action) => { player.amountAction = action; };
+  player.getPacketSender().sendConfig(101, 50);
+  setVarbit(player, "slayer_master_in_focus", 3);
+  giveTask(player, 5, "Drakes", 10); // Vannaka doesn't give Drakes: the Yes/No popup
+  Rewards.block(player);
+  assert.ok(player.amountAction, "the confirm is waiting");
+  Tasks.clear(player);
+  giveTask(player, 3, "Bloodveld", 10);
+  player.amountAction.execute(1);
+  assert.equal(varbit(player, "slayer_points"), 500, "nothing spent");
+  assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0, "the old task isn't blocked");
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "the new task stays");
+});
+
 test("rewards: the Buy tab sells enum 840's items for enum 842's prices", () => {
   const player = createPlayer({ points: 100 });
   const items = CacheDefinitions.getEnumValues(840);
@@ -784,6 +814,28 @@ test("::slayerpoints sets the points; ::clearunlocks locks everything again", ()
   assert.equal(varbit(player, "slayer_points"), 500, "points stay");
 });
 
+test("Stop the Wyvern and the longer revenant tasks stop applying once toggled off on the Rewards screen", () => {
+  const player = createPlayer();
+  const entryOf = (name) => [...Data.get().masters.values()].flatMap((m) => m.tasks.map((entry) => [m, entry])).find(([, entry]) => entry.task.displayName === name);
+  const [wyvernMaster, wyverns] = entryOf("Fossil Island Wyverns");
+  const [, revenants] = entryOf("Revenants");
+  const unbought = Tasks.eligible(player, wyvernMaster, wyverns, new Set());
+  assert.equal(unbought, true, "the fixture can be given fossil wyverns");
+  const baseRevenants = Tasks.rollAmount(player, revenants, 0, () => 0);
+  Rewards.setUnlockBit(player, 43, true);
+  Rewards.setUnlockBit(player, 53, true);
+  assert.equal(Tasks.eligible(player, wyvernMaster, wyverns, new Set()), false, "Stop the Wyvern blocks them");
+  assert.equal(Tasks.rollAmount(player, revenants, 0, () => 0), revenants.task.extension.min, "the longer revenant range");
+  setVarbit(player, "slayer_toggleoff_fossilwyvernblock", 1);
+  setVarbit(player, "slayer_toggleoff_longerrevenants", 1);
+  assert.equal(Tasks.eligible(player, wyvernMaster, wyverns, new Set()), unbought, "toggled off: as if never bought");
+  assert.equal(Tasks.rollAmount(player, revenants, 0, () => 0), baseRevenants, "toggled off: the normal revenant range");
+  Rewards.setUnlockBit(player, 43, false);
+  Rewards.setUnlockBit(player, 53, false);
+  setVarbit(player, "slayer_toggleoff_fossilwyvernblock", 0);
+  setVarbit(player, "slayer_toggleoff_longerrevenants", 0);
+});
+
 test("::superior spawns the current task's superior", () => {
   const player = createPlayer();
   player.getLocation = () => ({ getX: () => 3200, getY: () => 3200, getZ: () => 0 });
@@ -947,6 +999,21 @@ test("picking a task sets it with its modifier, as live does", () => {
   assert.equal(Tasks.current(shorter).count, Tasks.current(shorter).original - 20);
 });
 
+test("a Mortimer choice is picked only while his choice interface is open", () => {
+  const buttons = new Map();
+  Choice.attach({ onInterfaceActionButton: (id, fn) => buttons.set(id, fn) });
+  const [content, button] = [...buttons][0]; // the choice content, registered first
+  const player = createPlayer();
+  Choice.roll(player, master(MORTIMER));
+  player.getInterfaceId = () => -1;
+  button({ player, action: 0 });
+  assert.equal(Tasks.current(player), null, "closed: no task claimed");
+  assert.ok(varbit(player, "slayer_choose_rolled_master"), "the roll waits");
+  player.getInterfaceId = () => content >>> 16;
+  button({ player, action: 0 });
+  assert.equal(Tasks.current(player)?.masterId, MORTIMER, "open: picked");
+});
+
 test("completing a Mortimer task: his own streak and the points modifier (captured lines)", () => {
   const player = createPlayer({ points: 190 });
   giveTask(player, MORTIMER, "Cave Crawlers", 1);
@@ -1008,11 +1075,11 @@ test("superiors roll the unique tables, more often with Mortimer's modifier", ()
 });
 
 
-function braceletPlayer() {
+function braceletPlayer(braceletId = core.ItemIdentifiers.BRACELET_OF_SLAUGHTER) {
   const player = createPlayer();
   const items = Array.from({ length: 14 }, () => new core.Item(-1));
-  const bag = [new core.Item(core.ItemIdentifiers.BRACELET_OF_SLAUGHTER)];
-  items[core.Equipment.HANDS_SLOT] = new core.Item(core.ItemIdentifiers.BRACELET_OF_SLAUGHTER);
+  const bag = [new core.Item(braceletId)];
+  items[core.Equipment.HANDS_SLOT] = new core.Item(braceletId);
   const equipment = {
     get: slot => items[slot], getItems: () => items,
     set: (slot, item) => { items[slot] = item; return equipment; },
@@ -1334,6 +1401,96 @@ test("the Morytania Diary's Slayer XP also lifts Dusk's 1,350 on the Slayer Towe
     kill(player, npc(Common.ids.npcs.duskPhase4, { getX: () => 1697, getY: () => 4570, getZ: () => 0 }));
     assert.equal(varp(player, "slayer_count"), 4, "Dusk counted");
     assert.deepEqual(player.xp.map(([, amount]) => amount), [1350 * multiplier], `${tier} diary on the roof`);
+  }
+});
+
+
+const EXPEDITIOUS = () => core.ItemIdentifiers.EXPEDITIOUS_BRACELET;
+
+test("an expeditious bracelet credits two kills on a 25% roll, with no extra Slayer XP", t => {
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 10);
+  const mock = t.mock.method(Math, "random", () => 0.2499);
+  const target = npcNamed("Bloodveld");
+  kill(player, target);
+  assert.equal(varp(player, "slayer_count"), 8);
+  assert.equal(player.xp.length, 1);
+  assert.equal(player.xp[0][1], target.getDefinition().getHitpoints());
+  assert.match(player.typedMessages.at(-1)[1], /^Your expeditious bracelet helps you progress your slayer task faster\. It has 29 charges left\.$/);
+  mock.mock.mockImplementation(() => 0.25);
+  kill(player, target);
+  assert.equal(varp(player, "slayer_count"), 7, "a miss counts one kill and spends no charge");
+  assert.equal(require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer").charges(player), 29);
+});
+
+test("without the bracelet worn, or with a noted one, the count falls by one", t => {
+  t.mock.method(Math, "random", () => 0);
+  const bare = braceletPlayer(EXPEDITIOUS());
+  bare.getEquipment().set(core.Equipment.HANDS_SLOT, new core.Item(-1));
+  giveTask(bare, 3, "Bloodveld", 10);
+  kill(bare, npcNamed("Bloodveld"));
+  assert.equal(varp(bare, "slayer_count"), 9);
+  const noted = braceletPlayer(core.ItemIdentifiers.EXPEDITIOUS_BRACELET_2);
+  giveTask(noted, 3, "Bloodveld", 10);
+  kill(noted, npcNamed("Bloodveld"));
+  assert.equal(varp(noted, "slayer_count"), 9, "a note is not the worn bracelet");
+});
+
+test("a doubled kill on the last kill but one completes the task", t => {
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 2);
+  t.mock.method(Math, "random", () => 0);
+  kill(player, npcNamed("Bloodveld"));
+  assert.equal(varp(player, "slayer_count"), 0);
+  assert.equal(varp(player, "slayer_target"), 0, "task cleared");
+  assert.ok(player.messages.some(message => /completed your task/i.test(message)));
+});
+
+test("a doubled final kill does not take the count below zero", t => {
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 1);
+  t.mock.method(Math, "random", () => 0);
+  kill(player, npcNamed("Bloodveld"));
+  assert.equal(varp(player, "slayer_count"), 0);
+  assert.equal(varp(player, "slayer_target"), 0);
+});
+
+test("expeditious charges are shared, saved, checked and reset by Break", t => {
+  const Bracelet = require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer");
+  assert.equal(persistedAttributes.get(Bracelet.CHARGES_ATTRIBUTE), 30);
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 10);
+  t.mock.method(Math, "random", () => 0);
+  kill(player, npcNamed("Bloodveld"));
+  assert.equal(braceletAction(player, true, 2), true);
+  assert.match(player.messages.at(-1), /Your expeditious bracelet has 29 charges left\./);
+  assert.equal(braceletAction(player, false, 4), true);
+  assert.equal(player.getInventory().get(0).getId(), -1);
+  assert.equal(Bracelet.charges(player), 30);
+  assert.match(player.messages.at(-1), /^You break the expeditious bracelet\./);
+});
+
+test("the last expeditious charge crumbles the bracelet, or regenerates it on a claimed Elite 10% roll", t => {
+  const Bracelet = require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer");
+  Bracelet.init({ core, emitCustomEvent: (name, payload) => { for (const fn of handlers.events.get(name) ?? []) fn(payload); } });
+  const previous = handlers.events.get("combat-achievements:tier");
+  let claimed = true;
+  handlers.events.set("combat-achievements:tier", [request => { request.claimed = claimed; }]);
+  t.after(() => previous ? handlers.events.set("combat-achievements:tier", previous) : handlers.events.delete("combat-achievements:tier"));
+  for (const [roll, isClaimed] of [[0.099999, true], [0.1, true], [0, false]]) {
+    claimed = isClaimed;
+    const player = braceletPlayer(EXPEDITIOUS());
+    giveTask(player, 3, "Bloodveld", 10);
+    player.setAttribute(Bracelet.CHARGES_ATTRIBUTE, 1);
+    let n = 0;
+    const mock = t.mock.method(Math, "random", () => n++ === 0 ? 0 : roll);
+    kill(player, npcNamed("Bloodveld"));
+    mock.mock.restore();
+    assert.equal(varp(player, "slayer_count"), 8);
+    assert.equal(Bracelet.charges(player), 30);
+    const regenerates = isClaimed && roll < 0.1;
+    assert.equal(player.getEquipment().get(core.Equipment.HANDS_SLOT).getId(), regenerates ? core.ItemIdentifiers.EXPEDITIOUS_BRACELET : -1);
+    assert.match(player.typedMessages.at(-1)[1], regenerates ? /regenerates/ : /crumbles/);
   }
 });
 

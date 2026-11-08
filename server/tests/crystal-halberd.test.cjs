@@ -148,6 +148,18 @@ test("crystal shards recharge an inactive halberd, 100 charges each", () => {
   assert.equal(CrystalHalberd.charges(halberd), 300);
 });
 
+test("another item used on the halberd spends no shards", () => {
+  const halberd = item(ItemIds.CRYSTAL_HALBERD_INACTIVE_);
+  const shard = item(ItemIds.CRYSTAL_SHARD, 3);
+  const coins = item(995, 10);
+  const player = createPlayer(null, [shard, coins]);
+  const event = { player, usedItem: coins, usedWithItem: halberd, usedItemId: 995, usedWithItemId: halberd.getId(), handled: false };
+  CrystalHalberd._test.addShardCharges(event);
+  assert.equal(event.handled, false, "not the halberd's to answer");
+  assert.equal(shard.getAmount(), 3, "the shards are kept");
+  assert.equal(halberd.getId(), ItemIds.CRYSTAL_HALBERD_INACTIVE_);
+});
+
 test("the Check action reports the remaining charges", () => {
   const halberd = item(ItemIds.CRYSTAL_HALBERD);
   const player = createPlayer(halberd);

@@ -4,6 +4,7 @@
     "2353": {"label": "Sailing sea creature", "skip": false, "why": "Sea encounters for Sailing (sharks, rays, krakens, seabirds) in open water; reachable only by boat."}
   },
   "ids": {
+    "2592": {"label": "Spawned by a plugin", "skip": true, "why": "Mogres come only from a fishing explosive thrown at an Ominous Fishing Spot (Mogre.plugin.js, docs/mogre.md); there are no standing ones."},
     "6609": {"label": "Wilderness boss", "skip": true, "why": "Callisto spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6610": {"label": "Wilderness boss", "skip": true, "why": "Venenatis spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6611": {"label": "Wilderness boss", "skip": true, "why": "Vet'ion spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},

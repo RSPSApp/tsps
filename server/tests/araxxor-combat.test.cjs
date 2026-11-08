@@ -490,3 +490,45 @@ test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not ext
     Math.random = originalRandom;
   }
 });
+
+test("the collection log gets what the corpse hands over: the harvest's loot, and from a Destroy only its clue", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  const events = [];
+  const core = {
+    Animation: class {},
+    Item: class {},
+    ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => false }) },
+    World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
+    Task: class { stop() {} },
+    TaskManager: { submit: (task) => task.execute() },
+  };
+  Corpse.attach({
+    core, persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    emitCustomEvent(name, payload) { events.push([name, payload]); },
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+  });
+  const WHIP = 4151;
+  const corpseWith = () => {
+    const npc = { getId: () => Shared.CORPSE_ID, isRegistered: () => true, getLocation: () => ({}), performAnimation() {} };
+    const session = { corpse: npc, stash: [] };
+    npc.getAttribute = () => session;
+    // The death roll, as NpcDrops hands it over: stashed, and emptied so nothing is logged at the death.
+    const death = { npc, npcId: Shared.BOSS_ID, drops: [{ itemId: WHIP, amount: 1 }, { itemId: Shared.ELITE_CLUE_ITEM_ID, amount: 1 }] };
+    Corpse.stashGenerated(death);
+    assert.deepEqual(death.drops, [], "the death roll logs nothing");
+    return npc;
+  };
+  const logged = () => events.filter(([name]) => name === "collection-log:obtain").map(([, request]) => request.itemId);
+  const player = { performAnimation() {} };
+  Corpse.harvest({ player, npc: corpseWith() });
+  assert.deepEqual(logged(), [WHIP, Shared.ELITE_CLUE_ITEM_ID], "harvested: all of it");
+  events.length = 0;
+  const originalRandom = Math.random;
+  Math.random = () => 0.99; // no Nid
+  try {
+    Corpse.destroyConfirmed({ player, npc: corpseWith() });
+  } finally {
+    Math.random = originalRandom;
+  }
+  assert.deepEqual(logged(), [Shared.ELITE_CLUE_ITEM_ID], "destroyed: only the clue it keeps");
+});

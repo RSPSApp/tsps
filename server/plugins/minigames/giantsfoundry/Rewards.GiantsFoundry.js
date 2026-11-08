@@ -132,7 +132,63 @@ function useOnKovac(event) {
   else Shared.kovacSays(player, MESSAGE.KEEP);
 }
 
+// Keep the clicked instances through the confirmation, rather than consuming another copy.
+function restricted(item) {
+  const { Item } = Shared.core();
+  return item?.isPresetItem?.() === true || item?.getMetaValue?.(Item.PRESET_META) === true
+    || item?.getMetaValue?.(Item.UNTRADEABLE_META) === true || item?.getMetaValue?.(Item.UNBANKABLE_META) === true;
+}
+
+function present(inventory, slot, item, id) {
+  return inventory.getItems()[slot] === item && item.getId() === id && item.getAmount() === 1 && !restricted(item);
+}
+
+function combineGloves({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlot }) {
+  const { Item, ItemIdentifiers: I, ItemStatementDialogue, DialogueChainBuilder } = Shared.core();
+  if (restricted(usedItem) || restricted(usedWithItem)) {
+    player.sendMessage("Preset items cannot be used for this.");
+    return;
+  }
+  const usedId = usedItem.getId();
+  const targetId = usedWithItem.getId();
+  Shared.api().sendMultiChatboxPrompt(player, "Combine Smiths gloves with your Ice gloves?",
+    "Yes.", () => {
+      const inventory = player.getInventory();
+      if (!present(inventory, usedItemSlot, usedItem, usedId)
+        || !present(inventory, usedWithItemSlot, usedWithItem, targetId)) return;
+      inventory.deleteAtSlot(usedItemSlot, 1);
+      inventory.deleteAtSlot(usedWithItemSlot, 1);
+      inventory.addItem(new Item(I.SMITHS_GLOVES_I_, 1));
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+        new ItemStatementDialogue(0, I.SMITHS_GLOVES_I_, "You stuff the Ice gloves into the Smiths gloves to make Smith gloves (i).")));
+    },
+    "No.", () => {});
+}
+
+function dismantleGloves({ player, item, slot }) {
+  if (restricted(item)) {
+    player.sendMessage("Preset items cannot be used for this.");
+    return;
+  }
+  const { Item, ItemIdentifiers: I } = Shared.core();
+  Shared.api().sendMultiChatboxPrompt(player, "Dismantle your Smithing gloves (i)?",
+    "Yes.", () => {
+      const inventory = player.getInventory();
+      if (!present(inventory, slot, item, I.SMITHS_GLOVES_I_)) return;
+      if (inventory.getFreeSlots() < 1) {
+        player.sendMessage("You don't have enough inventory space to do that.");
+        return;
+      }
+      inventory.deleteAtSlot(slot, 1);
+      inventory.addItem(new Item(I.SMITHS_GLOVES, 1));
+      inventory.addItem(new Item(I.ICE_GLOVES, 1));
+    },
+    "No.", () => {});
+}
+
 module.exports = function attachRewards(api) {
+  api.onItemOnItem("Smiths gloves", "Ice gloves", combineGloves, { noted: false });
+  api.onItemAction("Smiths gloves (i)", { Dismantle: dismantleGloves });
   api.onItemAction("Ore pack", { Open: openOrePack });
   api.onItemAction("Kovac's grog", { Drink: drinkGrog });
   api.onItemOnNpc(useOnKovac, { noted: false });

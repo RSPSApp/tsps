@@ -46,7 +46,8 @@ function caster(extra = {}) {
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
     getAttribute(key) { return this.attributes.get(key) ?? null; },
     setAttribute(key, value) { this.attributes.set(key, value); },
-    getLocation: () => ({ isWithinDistance: () => true }),
+    // A real tile, as a Player has: Vengeance Other plays its sound around the caster's (Sounds.playAreaSoundAt).
+    getLocation: () => Object.assign(new (require("../dist/game/model/Location").Location)(3200, 3200, 0), { isWithinDistance: () => true }),
     getCombat: () => ({ getPoisonImmunityTimer: () => ({ start() {} }) }),
     getPacketSender: () => ({ sendEffectTimer: () => ({ sendMessage() {} }) }),
     setPoisonDamage() {},

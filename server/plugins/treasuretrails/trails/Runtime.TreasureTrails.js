@@ -292,18 +292,36 @@ function nextItem(trail, random = Math.random, player = null) {
 function advance(player, snapshot, random = Math.random, said = {}, show = true, removeUri = true) {
   const trail = stillHeld(player, snapshot);
   if (!trail) return false;
+  const inventory = player.getInventory();
+  const finalReward = trail.state.completed + 1 >= trail.state.length ? nextItem(trail, random, player) : null;
+  const mergeCasket = finalReward && inventory.getItems().some(item => item && item.getId() === finalReward.item.getId() && item.getAmount() > 0);
+  if (mergeCasket) {
+    // Reserve this clue's slot while checking and crediting through the shared stack-aware API.
+    // No refresh/callback can observe the temporary vacancy; refusal restores the exact clue.
+    const clue = inventory.getItems()[trail.slot];
+    let credited = false;
+    inventory.setItem(trail.slot, new core.Item(-1, 0));
+    try {
+      if (inventory.getAddableAmount(finalReward.item) >= finalReward.item.getAmount()) {
+        inventory.add(finalReward.item, false);
+        credited = true;
+      }
+    } finally {
+      if (!credited) inventory.setItem(trail.slot, clue);
+    }
+    if (!credited) { inventory.full(finalReward.item.getId()); return false; }
+  }
   if (removeUri) dismissUri(player);
   dismissEncounter(player);
-  const inventory = player.getInventory();
   for (const kind of ["challenge", "puzzle", "light", "skill"]) {
     const slot = auxiliarySlot(player, trail, kind);
     if (slot >= 0) inventory.setItem(slot, new core.Item(-1, 0));
   }
-  const { casket, item: received } = nextItem(trail, random, player);
+  const { casket, item: received } = finalReward ?? nextItem(trail, random, player);
   // Live captures: "You've found a new clue!" and "You've obtained a casket!", in a message box.
   const words = casket ? said.casket ?? "You've obtained a casket!" : said.clue ?? "You've found a new clue!";
   // The exact slot matters when scrolls of several tiers are carried.
-  inventory.setItem(trail.slot, received);
+  if (!mergeCasket) inventory.setItem(trail.slot, received);
   inventory.refreshItems();
   if (show) Dialogue.itemBox(player, received.getId(), words);
   return true;

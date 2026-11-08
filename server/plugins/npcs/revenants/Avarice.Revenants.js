@@ -34,12 +34,17 @@ function grant(player) {
   player.sendMessage("<col=ef1020>You are empowered by the Forinthry surge.");
 }
 
+/** Whether the amulet's bonus applies: worn, in the caves, against a revenant. */
+function applies(player) {
+  const target = player?.getCombat?.()?.getTarget?.();
+  const id = target?.isNpc?.() ? target.getAsNpc().getId() : -1;
+  return Boolean(player) && wearsAvarice(player) && inCaves(player.getLocation()) && (REVENANT_IDS.includes(id) || id === MALEDICTUS);
+}
+
 /** Accuracy and damage x1.2 with the amulet against a revenant in the caves, x1.15 more with surge. */
 function boost(entity, value) {
   const player = asPlayer(entity);
-  const target = player?.getCombat?.()?.getTarget?.();
-  const id = target?.isNpc?.() ? target.getAsNpc().getId() : -1;
-  if (!wearsAvarice(player) || !inCaves(player.getLocation()) || (!REVENANT_IDS.includes(id) && id !== MALEDICTUS)) {
+  if (!applies(player)) {
     return value;
   }
   let boosted = Math.floor((value * 6) / 5);
@@ -63,6 +68,9 @@ module.exports = function attachAvarice(api) {
     api[`register${style}HitModifier`](boost);
   }
   api.onPlayerProcess(keepSkulled);
+  // Wiki (Amulet of avarice): "The effects of the amulet do not stack with the Slayer helmet (i)": like a salve, it
+  // stands in for the helmet's on-task bonus against revenants.
+  api.onCustomEvent("slayer-helmet:superseded", (query) => { if (applies(query.player)) query.superseded = true; });
 };
 
-Object.assign(module.exports, { grant, boost, keepSkulled, wearsAvarice, surgeActive, SURGE_ATTRIBUTE });
+Object.assign(module.exports, { applies, grant, boost, keepSkulled, wearsAvarice, surgeActive, SURGE_ATTRIBUTE });

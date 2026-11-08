@@ -1,7 +1,7 @@
 /**
  * Diary rewards that note an NPC's drops, marked on "npc-drops:roll" the way
  * NotedDrops.FremennikDiary.js does (OSRS Wiki, each diary page and the NPC's own):
- * - Desert, easy: the goats' horns (Goat; Desert Diary).
+ * - Desert, easy: the goats and billy goats' horns (Goat, Billy Goat; Desert Diary).
  * - Falador, hard: the Giant Mole's skin and claw (Giant Mole; Falador Diary).
  * - Karamja, elite: red dragonhide from the red dragons, and the bars of the bronze, iron and
  *   steel dragons, in the Brimhaven Dungeon (Karamja Diary).
@@ -11,7 +11,7 @@
  * the Wilderness bones (and the lava dragon bones) off or on; those toggles are not here (no
  * capture of their lines, and the dialogue is generated), so the rewards are always on.
  */
-const BRIMHAVEN_DUNGEON = { minX: 2600, maxX: 2700, minY: 9400, maxY: 9500 };
+const BRIMHAVEN_DUNGEON = { minX: 2600, maxX: 2760, minY: 9400, maxY: 9600 };
 const KING_BLACK_DRAGON = "King Black Dragon";
 
 let api;
@@ -22,7 +22,7 @@ let rules = null;
 function buildRules() {
   const I = api.core.ItemIdentifiers;
   return [
-    { diary: "desert", tier: "easy", npcs: ["Goat"], items: [I.GOAT_HORN] },
+    { diary: "desert", tier: "easy", npcs: ["Goat", "Billy Goat"], items: [I.GOAT_HORN] },
     { diary: "falador", tier: "hard", npcs: ["Giant Mole"], items: [I.MOLE_SKIN, I.MOLE_CLAW] },
     { diary: "karamja", tier: "elite", npcs: ["Red dragon"], items: [I.RED_DRAGONHIDE], area: BRIMHAVEN_DUNGEON },
     {

@@ -41,11 +41,12 @@ function noted(p, n, itemIds) {
 
 const GOAT = npc("Goat", 3300, 3000);
 const MOLE = npc("Giant Mole", 1760, 5180);
-const BRIMHAVEN = { x: 2650, y: 9440 };
+const BRIMHAVEN = { x: 2711, y: 9516 }; // a real red dragon spawn; the iron dragon one is 2714,9449
 
 test("easy Desert Diary notes the goat horn", () => {
   assert.deepEqual(noted(player("desert:easy"), GOAT, [Item.GOAT_HORN, Item.BIG_BONES]), [true, false]);
   assert.deepEqual(noted(player("desert:medium", "desert:hard"), GOAT, [Item.GOAT_HORN]), [false]);
+  assert.deepEqual(noted(player("desert:easy"), npc("Billy Goat", 3300, 3000), [Item.GOAT_HORN, Item.BIG_BONES]), [true, false]);
   assert.deepEqual(noted(player("desert:easy"), npc("Cow", 3300, 3000), [Item.GOAT_HORN]), [false]);
 });
 
@@ -60,6 +61,8 @@ test("elite Karamja Diary notes red dragonhide and metal dragon bars in the Brim
   for (const [name, bar] of [["Bronze dragon", Item.BRONZE_BAR], ["Iron dragon", Item.IRON_BAR], ["Steel dragon", Item.STEEL_BAR]]) {
     assert.deepEqual(noted(elite, npc(name, BRIMHAVEN.x, BRIMHAVEN.y), [bar, Item.DRAGON_BONES]), [true, false], name);
   }
+  assert.deepEqual(noted(elite, npc("Iron dragon", 2714, 9449), [Item.IRON_BAR]), [true]);
+  assert.deepEqual(noted(elite, npc("Red dragon", 2724, 9550), [Item.RED_DRAGONHIDE]), [true]);
   assert.deepEqual(noted(player("karamja:hard"), npc("Red dragon", BRIMHAVEN.x, BRIMHAVEN.y), [Item.RED_DRAGONHIDE]), [false]);
   // The same dragons elsewhere (Lithkren, the Catacombs) drop as they always did.
   assert.deepEqual(noted(elite, npc("Red dragon", 1560, 5070), [Item.RED_DRAGONHIDE]), [false]);

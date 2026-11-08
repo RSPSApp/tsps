@@ -48,6 +48,8 @@ const CAST_NET = "You cast out your net...";
 const CAST_LINE = "You cast out your line...";
 const CAST_AND_ATTEMPT = "You cast out your line...<br>You attempt to catch a fish.";
 const START_HARPOON = "You start harpooning fish.";
+/** Barehanded fishing's start line: rsprox_transcripts/231/00381.txt (sharks) and 237/01149.txt (tuna). */
+const START_BAREHAND = "You start to lure the fish.";
 
 // Missing bait is a message box (rsprox captures 75, 1149, 1710, 1718, 1757, 1858, 3275).
 const NO_FISHING_BAIT = "You don't have any fishing bait.";
@@ -65,8 +67,10 @@ class Fish {
    * amount: how many of the fish one catch lands (minnows come 10-14 at a time).
    * message: the catch message, when it isn't "You catch <caught>." (given the amount landed).
    * junk: not a fish (a big net's boots), so no pet roll and no "fishing:success".
+   * catchAnimation: this fish's own finishing animation, in place of the tool's (barehanded fishing).
    */
-  constructor({ id, level, rolls, xp, caught, petBase = null, requires = [], extraXp = [], amount = () => 1, message = null, junk = false }) {
+  constructor({ id, level, rolls, xp, caught, petBase = null, requires = [], extraXp = [], amount = () => 1, message = null, junk = false,
+    catchAnimation = null }) {
     this.id = id;
     this.level = level;
     this.rolls = rolls;
@@ -80,6 +84,7 @@ class Fish {
     this.amount = amount;
     this.message = message ?? (() => `You catch ${caught}.`);
     this.junk = junk;
+    this.catchAnimation = catchAnimation;
   }
 }
 
@@ -215,6 +220,17 @@ const FISH = Object.freeze({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243,
     message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]],
   }),
+  // Wiki (Barbarian Training#Barehanded fishing): tuna at 55 Fishing and 35 Strength (80 XP, 8 Strength XP), swordfish
+  // at 70 and 50 (100, 10), on the harpoon charts. rsprox_transcripts/237/01149.txt: "You catch a raw tuna." with
+  // brut_player_hand_fishing_end_tuna_2 (6711). No capture lands a swordfish: _1 (6707), as the shark's captured _1.
+  TUNA_BAREHAND: new Fish({
+    id: ItemIds.RAW_TUNA, level: 55, rolls: [[8, 64]], xp: 80, caught: "a raw tuna", petBase: 257770,
+    requires: [[Skill.STRENGTH, 35]], extraXp: [[Skill.STRENGTH, 8]], catchAnimation: 6711,
+  }),
+  SWORDFISH_BAREHAND: new Fish({
+    id: ItemIds.RAW_SWORDFISH, level: 70, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770,
+    requires: [[Skill.STRENGTH, 50]], extraXp: [[Skill.STRENGTH, 10]], catchAnimation: 6707,
+  }),
 
   // Big net: charts from the Wiki (Fishing spot (big net, harpoon)); lines from rsprox captures
   // 1102 and 1718, whose XP drops give 1 for boots, gloves and seaweed and 10 for oysters and caskets.
@@ -320,7 +336,14 @@ const TOOLS = Object.freeze({
     id: ItemIds.HARPOON, level: 96, animation: 6703, loopAnimation: 6704, catchAnimation: 6706, fish: [FISH.SHARK_BAREHAND],
     variants: [{ ids: [], level: 96, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 76]],
     interval: NET_CAGE_HARPOON_INTERVAL_TICKS, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, barehand: true,
-    startMessage: START_HARPOON, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
+    startMessage: START_BAREHAND, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
+  }),
+  // The tuna and swordfish spots' Harpoon without a harpoon (Wiki: Barbarian Training#Barehanded fishing).
+  BAREHAND_HARPOON: new FishingTool({
+    id: ItemIds.HARPOON, level: 55, animation: 6703, loopAnimation: 6704, fish: [FISH.SWORDFISH_BAREHAND, FISH.TUNA_BAREHAND],
+    variants: [{ ids: [], level: 55, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 35]],
+    interval: NET_CAGE_HARPOON_INTERVAL_TICKS, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, barehand: true,
+    startMessage: START_BAREHAND, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch tuna with your bare hands.`,
   }),
   LOBSTER_POT: new FishingTool({
     id: ItemIds.LOBSTER_POT, level: 40, animation: ANIM.CAGE, fish: [FISH.LOBSTER], interval: NET_CAGE_HARPOON_INTERVAL_TICKS,
@@ -479,7 +502,7 @@ const SPOT_TOOLS_BY_NPC = new Map([
 // sourced base remain unsupported here; this is not a claim that they cannot yield bottles.
 const CLUE_BOTTLE_FISH = new Set([
   FISH.SHRIMP, FISH.ANCHOVY, FISH.SARDINE, FISH.HERRING, FISH.TROUT, FISH.SALMON,
-  FISH.PIKE, FISH.TUNA, FISH.LOBSTER, FISH.SWORDFISH, FISH.SHARK, FISH.SHARK_BAREHAND,
+  FISH.PIKE, FISH.TUNA, FISH.LOBSTER, FISH.SWORDFISH, FISH.SHARK, FISH.SHARK_BAREHAND, FISH.TUNA_BAREHAND, FISH.SWORDFISH_BAREHAND,
   FISH.MACKEREL, FISH.COD, FISH.BASS, FISH.MONKFISH, FISH.CAVE_EEL, FISH.INFERNAL_EEL,
   FISH.SACRED_EEL, FISH.ANGLERFISH, FISH.DARK_CRAB, FISH.KARAMBWANJI, FISH.KARAMBWAN,
   FISH.MINNOW, FISH.LEAPING_TROUT, FISH.LEAPING_SALMON, FISH.LEAPING_STURGEON,
@@ -510,6 +533,7 @@ function getSpotTool(npcId, definition, clickType, player = null) {
   const tool = option ? tools?.[option] : undefined;
   // No harpoon carried or wielded: the harpoon option falls back to Barbarian barehanding.
   if (tool === TOOLS.SHARK_HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_SHARK;
+  if (tool === TOOLS.HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_HARPOON;
   return tool;
 }
 
@@ -959,8 +983,9 @@ class FishingTask extends Task {
         if (session.tool.missMessage) spam(player, session.tool.missMessage);
         continue;
       }
-      if (session.tool.catchAnimationId !== null) {
-        player.performAnimation(new Animation(session.tool.catchAnimationId));
+      const catchAnimation = caught[0].catchAnimation ?? session.tool.catchAnimationId;
+      if (catchAnimation !== null) {
+        player.performAnimation(new Animation(catchAnimation));
       }
       if (session.tool.spot?.takesCatch(player, npc)) {
         continue;

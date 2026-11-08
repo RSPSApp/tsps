@@ -297,7 +297,7 @@ export class DamageFormulas {
         return DamageFormulas.getMagicMaxhit(entity, spellOverride);
     }
 
-    private static effectiveRangedStrength(player: Player, visibleLevelMultiplier?: number, damageSkill = Skill.RANGED): number {
+    private static effectiveRangedStrength(player: Player, visibleLevelMultiplier?: number, damageSkill = Skill.RANGED, styleBonusApplies = true): number {
         const prayerAdjusted = DamageFormulas.scalePercent(
             DamageFormulas.applyVisibleLevelMultiplier(
                 player.getSkillManager().getCurrentLevel(damageSkill),
@@ -308,7 +308,7 @@ export class DamageFormulas {
 
         let styleBonus = 0;
         let fightStyle = player.getFightType().getStyle();
-        if (fightStyle == FightStyle.ACCURATE)
+        if (styleBonusApplies && fightStyle == FightStyle.ACCURATE)
             styleBonus = 3;
 
         let effectiveLevel = DamageFormulas.applyEffectiveLevelBonus(prayerAdjusted, styleBonus);
@@ -322,12 +322,13 @@ export class DamageFormulas {
 
     /**
      * A ranged max hit with a strength bonus given in place of the worn one: a boat cannon adds
-     * its own and its cannonball's to the gear it counts (Wiki: Boat combat). Prayers, the fight
-     * style and set effects apply as usual; specials don't.
+     * its own and its cannonball's to the gear it counts (Wiki: Boat combat). Prayers and set
+     * effects apply as usual; the attack style doesn't (the cannon has none, and the Wiki's
+     * formula has no style term), nor do specials.
      */
     public static rangedMaxHitWithStrength(player: Player, strengthBonus: number): number {
         const maxHit = DamageFormulas.scaleRatio(
-            DamageFormulas.effectiveRangedStrength(player) * (strengthBonus + 64) + 320,
+            DamageFormulas.effectiveRangedStrength(player, undefined, Skill.RANGED, false) * (strengthBonus + 64) + 320,
             1,
             640
         );

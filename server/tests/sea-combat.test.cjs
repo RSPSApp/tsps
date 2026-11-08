@@ -243,12 +243,18 @@ test("a player's cannon max hit: their ranged max hit with the cannon's and cann
   player.getPacketSender = () => sender;
   player.getSkillManager().setCurrentLevel(Skill.RANGED, 99, false);
   player.getSkillManager().setMaxLevel?.(Skill.RANGED, 99, false);
-  // Fresh accounts default to Punch (Accurate, +3) since b8210f5d9; this case is the style with no level bonus.
-  player.setFightType(FightType.UNARMED_KICK);
   const rune = common.cannonAt(59451);
   const ball = common.ballByItem(RUNE_CANNONBALL);
-  // 99 Ranged, no style bonus, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49.
-  assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49);
+  // 99 Ranged, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49. The Wiki's formula (Boat combat)
+  // has no attack-style term, so the captain's stance - Punch is Accurate, +3 - changes neither the max hit nor accuracy.
+  const { AccuracyFormulasDpsCalc } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+  const rolls = [];
+  for (const stance of [FightType.UNARMED_PUNCH, FightType.UNARMED_KICK, FightType.UNARMED_BLOCK]) {
+    player.setFightType(stance);
+    assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49, `stance ${stance.name ?? stance}`);
+    rolls.push(AccuracyFormulasDpsCalc.rangedAttackRollWithBonus(player, 0));
+  }
+  assert.deepEqual(rolls, [107 * 64, 107 * 64, 107 * 64], "accuracy: (99 + 8) * 64 in every stance");
 });
 
 test("a crewmate's max hit: the captain's Sailing, scaled by Privateering (Wiki)", () => {

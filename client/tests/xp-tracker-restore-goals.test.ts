@@ -45,7 +45,7 @@ function inspect(node: ts.Node): void {
             `unexpected receiver dependency: ${node.parent.name.text}`);
     }
     if (ts.isIdentifier(node) && !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) {
-        assert.ok(new Set(["account", "save", "skill", "xp", "state", "overall", "total", "SKILL_IDS", "undefined"]).has(node.text),
+        assert.ok(new Set(["account", "save", "shouldRestore", "skill", "xp", "state", "overall", "total", "SKILL_IDS", "undefined"]).has(node.text),
             `unexpected identifier: ${node.text}`);
     }
     ts.forEachChild(node, inspect);

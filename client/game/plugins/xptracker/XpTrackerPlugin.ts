@@ -172,8 +172,8 @@ export class XpTrackerPlugin extends Plugin {
             this.resetState();
         }
 
-        const save = !this.xpState.isOverallInitialized() && this.config.saveState();
-        if (save) {
+        const shouldRestore = !this.xpState.isOverallInitialized() && this.config.saveState();
+        if (shouldRestore) {
             const save = this.loadSave();
             if (save) this.xpState.restore(save);
         }
@@ -191,7 +191,7 @@ export class XpTrackerPlugin extends Plugin {
             }
             state.startXp += xp - state.currentXp;
         }
-        if (save) {
+        if (shouldRestore) {
             for (const skill of this.xpState.order) {
                 const xp = this.experience.get(skill);
                 const state = this.xpState.get(skill);

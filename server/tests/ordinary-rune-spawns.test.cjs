@@ -87,5 +87,5 @@ test("ten audited member rune definitions use exact native IDs/tiles/amounts wit
   assert.equal(CacheDefinitions.getItem(id).name,id===554?"Fire rune":id===557?"Earth rune":"Mind rune");
  }
  assert.equal(spawns.some(s=>s.id===556&&s.location.x===1399&&s.location.y===3158&&s.location.z===0),false);
- assert.equal(spawns.filter(s=>[556,557,558,554,561].includes(s.id)&&s.members===true).length,10,"no Air/Nature member scope expansion");
+ assert.equal(spawns.filter(s=>[556,557,558,554].includes(s.id)&&s.members===true).length,10,"no Air member scope expansion");
 });

@@ -83,10 +83,10 @@ test("audited member tools retain source world policy and cannot widen unaudited
  assert.equal(result.definitions[0].respawn,500);
  assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
  const pages=[["Air rune",556],["Body rune",559],
-  ["Nature rune",561],["Water rune",555],["Small fishing net",303]];
+  ["Water rune",555],["Small fishing net",303]];
  const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
  assert.equal(rejected.definitions.length,0);
- assert.equal(rejected.report.counts["members-world-scope-deferred"],5);
+ assert.equal(rejected.report.counts["members-world-scope-deferred"],4);
 });
 test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
@@ -184,4 +184,12 @@ test("common tool audit cannot widen pages, world policy, timers or quest/scener
  assert.equal(importSpawns(source(rows),[]).definitions.length,0);
  assert.equal(importSpawns(source([{...commonTools[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
  assert.throws(()=>importSpawns(source([{...commonTools[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
+});
+
+test("audited member Nature rune rows preserve telegrab location text/quantity/timer while Air stays held",()=>{
+ const nature=row({page:"Nature rune",id:561,x:2671,y:3737,quantity:2,infobox_respawn_ticks:200,members:true,location:"Rellekka island (requires Telekinetic Grab)"});
+ const result=importSpawns(source([nature,row({page:"Air rune",id:556,members:true})]),[]);
+ assert.equal(result.definitions.length,1);assert.deepEqual([result.definitions[0].id,result.definitions[0].amt,result.definitions[0].respawn,result.definitions[0].members],[561,2,200,true]);
+ assert.match(result.definitions[0].description,/Telekinetic Grab/);assert.equal(result.report.counts["members-world-scope-deferred"],1);
+ assert.deepEqual(importSpawns(source([nature]),result.definitions).definitions,result.definitions);
 });

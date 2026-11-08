@@ -32,7 +32,7 @@ const AUDITED_ORDINARY_ITEMS = new Map([
 // These pinned member rows were separately checked as ordinary spawns.
 // Air remains held: its raw member row says it may be unobtainable.
 const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([
-  ["Crossbow", 837], ["Shears", 1735], ["Earth rune", 557], ["Mind rune", 558], ["Fire rune", 554],
+  ["Crossbow", 837], ["Shears", 1735], ["Earth rune", 557], ["Mind rune", 558], ["Fire rune", 554], ["Nature rune", 561],
 ]);
 // Only this location-pinned selection was audited; the other Sea shell rows stay held.
 const EASTERN_CONCH_SHELL_TILES = new Set([
@@ -156,7 +156,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune and nine exact eastern Great Conch Sea shell rows and three exact member common-tool rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and three exact member common-tool rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

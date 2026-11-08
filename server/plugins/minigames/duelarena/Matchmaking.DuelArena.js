@@ -194,6 +194,22 @@ function fightEnded({ players, winner, loser }) {
   grant(loser, LOSS_POINTS, "lost");
 }
 
+function rewardPoints(player) {
+  const value = Number(player?.getAttribute?.(REWARD_POINTS_ATTRIBUTE));
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/**
+ * The PvP Arena Rewards shop (shops.json "PVP ARENA POINTS") spends the Reward Points the fights grant; the generic
+ * point currency kept its own, never-earned balance, so nothing could be bought.
+ */
+const REWARD_POINTS_CURRENCY = {
+  name: "PvP Arena Points",
+  amount: rewardPoints,
+  add: (player, value) => player.setAttribute(REWARD_POINTS_ATTRIBUTE, Math.min(REWARD_POINTS_CAP, rewardPoints(player) + Math.max(0, Math.floor(value)))),
+  remove: (player, value) => player.setAttribute(REWARD_POINTS_ATTRIBUTE, Math.max(0, rewardPoints(player) - Math.floor(value))),
+};
+
 function grant(player, points, result) {
   const total = Math.min(REWARD_POINTS_CAP, (Number(player.getAttribute(REWARD_POINTS_ATTRIBUTE)) || 0) + points);
   player.setAttribute(REWARD_POINTS_ATTRIBUTE, total);
@@ -226,6 +242,7 @@ function attach(api, hooks) {
   sideoptionsId = core.CacheDefinitions.getInterfaceId(SIDEOPTIONS);
   sideoptionsCloseUid = core.CacheDefinitions.getComponentId(SIDEOPTIONS_CLOSE);
   api.persistAttribute(REWARD_POINTS_ATTRIBUTE, 0);
+  api.registerShopCurrency?.("PVP ARENA POINTS", REWARD_POINTS_CURRENCY);
   api.onInterfaceActionClick(openPvpArena);
   api.onInterfaceActionClick(sidePanelButton);
   api.onPlayerProcess(expireInvitation);

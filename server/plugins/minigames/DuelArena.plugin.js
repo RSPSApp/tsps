@@ -840,6 +840,8 @@ function excludePvpStats(event) {
 
 module.exports = {
   name: "DuelArena",
+  // After Shopkeepers, so the PvP Arena Rewards shop's currency is the Reward Points (Matchmaking).
+  dependsOn: ["Shopkeepers"],
   enableStaking,
   register(api) {
     pluginApi = api;

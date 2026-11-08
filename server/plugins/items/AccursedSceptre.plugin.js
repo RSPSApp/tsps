@@ -316,10 +316,12 @@ function dismantleThammarons({ player, item }) {
     return true;
   }
   const slot = inventory.getItems().indexOf(item);
+  // A copy to put back: the delete empties the slot's own Item (id -1), so restoring `item` restored nothing.
+  const kept = item.clone();
   inventory.deleteAtSlot(slot, 1, false);
   const ether = new core.Item(ids().REVENANT_ETHER, DISMANTLE_ETHER);
   if (inventory.getAddableAmount(ether) < DISMANTLE_ETHER) {
-    inventory.setItem(slot, item);
+    inventory.setItem(slot, kept);
     player.sendMessage("You don't have enough inventory space to dismantle your sceptre.");
     return true;
   }

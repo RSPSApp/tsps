@@ -126,6 +126,16 @@ for (const kind of WEAPONS) {
     assert.equal(p.getInventory().getAmount(kind.charged), 1);
   });
 
+  test(`${kind.name}: a refused Dismantle keeps the weapon`, () => {
+    // The ether stack can't take 7,500 more: the weapon was deleted and the emptied slot "restored".
+    const p = player();
+    const item = weapon(p, kind, null);
+    p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 2147483647 - 1000));
+    assert.equal(actions[`${kind.name} (u)`].Dismantle({ player: p, item }), true);
+    assert.equal(p.messages.at(-1), `You don't have enough inventory space to dismantle your ${kind.label}.`);
+    assert.equal(p.getInventory().getAmount(kind.uncharged), 1, "the weapon is still there");
+  });
+
   test(`${kind.name}: Wilderness PvP death loses the activation ether and charges, protected or not`, () => {
     for (const kept of [true, false]) {
       ground.length = 0;

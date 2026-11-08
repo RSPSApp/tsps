@@ -799,6 +799,10 @@ function preventDuringDuel(event) {
 function canEat(event) {
   if (event.player.getDueling().inDuel() && hasRule(event.player, DuelRule.NO_FOOD)) event.allow = false;
 }
+/** The phoenix necklace asks without eating anything: a No Food duel stops it too. */
+function necklaceEligible(event) {
+  if (event.player.getDueling().inDuel() && hasRule(event.player, DuelRule.NO_FOOD)) event.blocked = true;
+}
 function canDrink(event) {
   if (event.player.getDueling().inDuel() && hasRule(event.player, DuelRule.NO_POTIONS)) event.allow = false;
 }
@@ -857,6 +861,7 @@ module.exports = {
     api.onCanBank(preventDuringDuel);
     api.onCanShop(preventDuringDuel);
     api.onCanEat(canEat);
+    api.onCustomEvent("phoenix-necklace:eligible", necklaceEligible);
     api.onCanDrink(canDrink);
     api.onCanEquip(canEquip);
     api.onCanUnequip(canUnequip);

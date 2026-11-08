@@ -238,6 +238,21 @@ test("only exact Civitas surface bucket/pot rows qualify; scenery, phase-owned p
  assert.deepEqual(importSpawns(source([base,other,pot]),result.definitions).definitions,result.definitions);
 });
 
+const varlamoreSpades=[row({page:"Spade",id:952,x:1641,y:3052,plane:0,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"}),
+ row({page:"Spade",id:952,x:1405,y:2938,plane:0,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Aldarin]]"})];
+test("two pinned Varlamore spades preserve source state and legacy order",()=>{
+ const legacy=[{id:952,location:{x:3120,y:3359,z:0},amt:1,respawn:100}];const result=importSpawns(source(varlamoreSpades),legacy);assert.equal(result.definitions.length,3);assert.deepEqual(result.definitions[0],legacy[0]);
+ for(const[i,r]of varlamoreSpades.entries()){const d=result.definitions[i+1];assert.equal(d.id,952);assert.deepEqual(d.location,{x:r.x,y:r.y,z:0});assert.equal(d.amt,1);assert.equal(d.respawn,100);assert.equal(d.members,true);}
+ assert.deepEqual(importSpawns(source(varlamoreSpades),result.definitions).definitions,result.definitions);
+});
+test("Spade selection excludes scenery and other regions, identities, quantities and world variants",()=>{
+ const rows=varlamoreSpades.flatMap(r=>[{...r,x:r.x+1},{...r,location:"unverified"},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99},{...r,id:953}]);
+ for(const[x,y,location]of [[1728,3102,"[[Civitas illa Fortis]]"],[3355,2758,"[[Necropolis]]"],[3338,2751,"[[Necropolis]]"],[3334,2719,"[[Necropolis]]"],[3333,2702,"[[Necropolis]]"],[2592,2291,"[[Wyrmscraig]]"]])rows.push({...varlamoreSpades[0],x,y,location});
+ assert.equal(importSpawns(source(rows),[]).definitions.length,0);
+ assert.equal(importSpawns(source([{...varlamoreSpades[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
+ assert.throws(()=>importSpawns(source([{...varlamoreSpades[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
+});
+
 
 const iceDungeonCoins=[{x:2988,y:9584},{x:2987,y:9583},{x:2988,y:9582}].map(at=>row({
  ...at,page:"Coins",id:995,plane:0,quantity:1,location:"[[Asgarnian Ice Dungeon]]",

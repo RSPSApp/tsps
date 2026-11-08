@@ -508,6 +508,8 @@ export class CombatFactory {
             return;
         }
         const base = Math.min(...delays);
+        const queue = target.getCombat().getHitQueue();
+        const generation = queue.getIncomingGeneration();
         for (let i = 0; i < hits.length; i++) {
             const extra = Math.max(0, delays[i] - base);
             if (extra <= 0) {
@@ -519,8 +521,10 @@ export class CombatFactory {
                     super(extra);
                 }
                 execute(): void {
-                    if (target.isRegistered() && target.getHitpoints() > 0) {
-                        target.getCombat().getHitQueue().addPendingDamage([hits[i]]);
+                    // Dropped when the queue's incoming hits were cleared meanwhile (phoenix necklace).
+                    if (target.isRegistered() && target.getHitpoints() > 0
+                        && queue.getIncomingGeneration() === generation) {
+                        queue.addPendingDamage([hits[i]]);
                     }
                     this.stop();
                 }

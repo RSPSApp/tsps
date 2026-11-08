@@ -50,6 +50,8 @@ const AUDITED_MEMBER_COMMON_TOOL_ROWS = new Map([
   ["Bucket:1925:1667:3124:0", "[[Civitas illa Fortis]]"],
   ["Bucket:1925:1644:3093:0", "[[Civitas illa Fortis]]"],
   ["Pot:1931:1666:3124:0", "[[Civitas illa Fortis]]"],
+  ["Spade:952:1641:3052:0", "[[Outer Fortis]]"],
+  ["Spade:952:1405:2938:0", "[[Aldarin]]"],
   ["Hammer:2347:1373:2949:0", "[[Aldarin]]"],
   ["Chisel:1755:1657:3142:0", "[[Civitas illa Fortis]] - on a crate in the [[Fortis Blacksmith]] store"],
   ["Tinderbox:590:1625:3287:0", "[[Salvager Overlook]] - General Store"],

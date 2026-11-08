@@ -80,3 +80,17 @@ for (const [spell, key, line, runes] of [
     assert.equal(f.teleports.length, 1, f.messages.join(" | "));
   });
 }
+
+// Wiki (Arceuus Library Teleport): 9.5 base experience; the spell gave 9 (its tablet, lectern.json, already 9.5).
+test("Arceuus Library Teleport gives 9.5 Magic XP", (t) => {
+  const f = caster(t, true);
+  f.p.getInventory().resetItems();
+  for (const [id, n] of [[557, 2], [563, 1]]) f.p.getInventory().add(new core.Item(id, n), false);
+  f.p.setAttribute("magic:teleport-next-cast", 0);
+  const raw = () => f.p.getSkillManager().skills.experience[core.Skill.MAGIC.getIndex()];
+  const before = raw();
+  f.teleports.length = 0;
+  ArceuusSpells.handleSpell(f.p, "Arceuus Library Teleport");
+  assert.equal(f.teleports.length, 1, f.messages.join(" | "));
+  assert.ok(Math.abs(raw() - before - 9.5) < 1e-9, `${raw() - before}`);
+});

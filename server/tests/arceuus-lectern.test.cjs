@@ -195,7 +195,7 @@ function studyHouse(f, clickType = 1) {
   return PluginManager.emitObjectInteraction({ player: f.player, object, objectId, clickType, location: { x: 100, y: 100, z: 0 }, handled: false });
 }
 
-test("a house lectern still takes soft clay, draws the normal border and says the house's rune message", () => {
+test("a house lectern still takes soft clay, draws the normal border and names the missing rune", () => {
   const f = fixture({ arceuus: false });
   inHouse(f, "MAHOGANY_DEMON_LECTERN");
   const enumId = require("../plugins/skills/construction/data/lectern.json").lecterns.MAHOGANY_DEMON_LECTERN;
@@ -214,7 +214,8 @@ test("a house lectern still takes soft clay, draws the normal border and says th
   assert.equal(f.player.getInventory().getAmount(I.VARROCK_TELEPORT), 1);
   assert.equal(f.player.getInventory().getAmount(I.SOFT_CLAY), 1);
   assert.equal(f.player.getInventory().getAmount(I.DARK_ESSENCE_BLOCK), 1, "the house never takes dark essence");
-  assert.equal(f.messages().at(-1), "You do not have enough runes to make that tablet.");
+  // rsprox_transcripts/229/02801.txt (a house lectern): "You do not have enough Nature Runes to cast this spell."
+  assert.equal(f.messages().at(-1), "You do not have enough Air Runes to cast this spell.");
   assert.deepEqual(made, [I.VARROCK_TELEPORT]);
   assert.equal(f.player.getAttribute("construction:lectern-tablet"), varrock + 1);
   assert.equal(f.player.getAttribute("construction:arceuus-lectern-tablet") ?? 0, 0);

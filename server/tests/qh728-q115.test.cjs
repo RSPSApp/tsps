@@ -562,6 +562,106 @@ test('Al Shabim, Siad, the chest, the anvil and the feathers build the prototype
   assert.equal(stage(h, p), 16);
 });
 
+const CART_ANA_RETRIEVED_ATTRIBUTE = 'the-tourist-trap:cart-ana-retrieved';
+const CART_ANA_VARIANT = 'the-deeper-mine-searching-the-full-barrel-by-the-mining-cart-after-sending-ana';
+function searchCartBarrel(h, p, id = 2681, x = 3303, y = 9418) {
+  return object(h, 'Barrel', 'Search', { player: p, objectId: id,
+    object: { getLocation: () => new core.Location(x, y, 0) }, handled: false });
+}
+function pickUpCartAna(h, p, npcId = core.NpcIdentifiers.ANA) {
+  return action(h, { player: p, npcId, stepId: '8u_7h_', handled: false });
+}
+
+test('exact cart barrel Search plays canonical retrieval and credits Ana once for a legacy stage23 save', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 23);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), undefined, 'old saves have no flag');
+  assert.equal(h.persistedDefaults.get(CART_ANA_RETRIEVED_ATTRIBUTE), false);
+  p.items.set(K.BARREL, 1);
+  searchCartBarrel(h, p);
+  assert.equal(h.transcripts.at(-1).variant, CART_ANA_VARIANT);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0, 'Search waits for the canonical pickup');
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  assert.equal(p.items.get(K.BARREL), 1, 'retrieval consumes no other inventory');
+  assert.equal(stage(h, p), 23);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), true);
+  const count = h.transcripts.length;
+  searchCartBarrel(h, p); pickUpCartAna(h, p);
+  assert.equal(h.transcripts.length, count);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  p.items.delete(K.ANA_IN_A_BARREL); // Supplied loss/loaded-history checkpoint, not a jail replay.
+  h.logins.forEach(handler => handler({ player: p }));
+  searchCartBarrel(h, p); pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0, 'persisted credit survives login and absent carried item');
+});
+
+test('cart retrieval full bag and failed add remain retryable without consumption or stage change', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  seedStage(h, p, 23); p.items.set(K.COINS, 100); p.setFull(true);
+  searchCartBarrel(h, p);
+  assert.equal(h.conditions.at(-1)({ player: p, npcId: core.NpcIdentifiers.ANA, text: 'If the player has no inventory space:' }), true);
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0);
+  assert.notEqual(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), true);
+  p.setFull(false); p.setFailAdds(true); pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0, 0);
+  assert.notEqual(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE), true);
+  p.setFailAdds(false); pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  assert.equal(p.items.get(K.COINS), 100);
+  assert.equal(stage(h, p), 23);
+});
+
+test('retrieval rejects wrong barrels, stages, actors and already-carried Ana', () => {
+  const K = core.ItemIdentifiers;
+  for (const [stageValue, id, x, y] of [[22,2681,3303,9418],[24,2681,3303,9418],
+    [23,2680,3303,9418],[23,2681,3303,9415]]) {
+    const h = harness(), p = makePlayer(); seedStage(h,p,stageValue);
+    searchCartBarrel(h,p,id,x,y);
+    assert.equal(h.transcripts.length,0);
+    assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0,0);
+  }
+  for (const [stageValue, npcId] of [[22,core.NpcIdentifiers.ANA],[24,core.NpcIdentifiers.ANA],[23,4667]]) {
+    const h=harness(),p=makePlayer();seedStage(h,p,stageValue);pickUpCartAna(h,p,npcId);
+    assert.equal(p.items.get(K.ANA_IN_A_BARREL) ?? 0,0);
+  }
+  const h=harness(),p=makePlayer();seedStage(h,p,23);p.items.set(K.ANA_IN_A_BARREL,1);
+  searchCartBarrel(h,p);pickUpCartAna(h,p);
+  assert.equal(h.transcripts.length,0);assert.equal(p.items.get(K.ANA_IN_A_BARREL),1);
+});
+
+test('actual bucket consumption seals credit and only consuming Ana on a genuine new cart journey resets it', () => {
+  const h=harness(),p=makePlayer(),K=core.ItemIdentifiers;seedStage(h,p,23);
+  p.items.set(K.ANA_IN_A_BARREL,1);
+  object(h,'Winch bucket','Use',{player:p,objectId:18951,handled:false});
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),0);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+  searchCartBarrel(h,p);pickUpCartAna(h,p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),0);
+  seedStage(h,p,21);
+  const placement={player:p,objectId:2684,itemId:K.ANA_IN_A_BARREL,handled:false};
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(stage(h,p),21,'no carried item cannot start a journey');
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+  p.items.set(K.ANA_IN_A_BARREL,1);
+  const inventory=p.getInventory(),deleteNumber=inventory.deleteNumber;
+  inventory.deleteNumber=()=>inventory;
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(stage(h,p),21,'failed deletion cannot reset credit');
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+  inventory.deleteNumber=deleteNumber;
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),0);assert.equal(stage(h,p),22);
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),false);
+  object(h,'Mine Cart','Search',{player:p,objectId:2684,handled:false});
+  searchCartBarrel(h,p);pickUpCartAna(h,p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),1);assert.equal(stage(h,p),23);
+  h.itemOnObject.forEach(handler=>handler(placement));
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL),1,'stage23 cannot reset through another placement');
+  assert.equal(p.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE),true);
+});
+
 test('the guard distraction, barrel route and escape reach the Shantay Pass with Ana', () => {
   const h = harness();
   const p = makePlayer();
@@ -603,6 +703,9 @@ test('the guard distraction, barrel route and escape reach the Shantay Pass with
 
   object(h, 'Mine Cart', 'Search', { player: p, objectId: 2684, handled: false });
   assert.equal(stage(h, p), 23);
+  searchCartBarrel(h, p);
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
   object(h, 'Winch bucket', 'Use', { player: p, objectId: 18951, handled: false });
   assert.equal(stage(h, p), 23);
   object(h, 'Winch', 'Operate', { player: p, objectId: 18888, handled: false });
@@ -809,6 +912,9 @@ test('the placed winch barrel and camp cart carry Ana out of the camp', () => {
 
   object(h, 'Mine Cart', 'Search', { player: p, objectId: 2684, handled: false });
   assert.equal(stage(h, p), 23);
+  searchCartBarrel(h, p);
+  pickUpCartAna(h, p);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
   object(h, 'Winch bucket', 'Use', { player: p, objectId: 18951, handled: false });
   assert.equal(stage(h, p), 23);
   object(h, 'Winch', 'Operate', { player: p, objectId: 18888, handled: false });

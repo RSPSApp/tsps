@@ -120,7 +120,11 @@ export class Bank extends ItemContainer {
     }
     public static readonly ITEMS_CHILD = 12;
     public static readonly SIDE_ITEMS_CHILD = 3;
-    /** bankside:wornops, the worn items shown in place of the inventory; op 1 banks the item. */
+    /**
+     * bankside:wornops, the "Show worn items" view of the backpack (inv 93): the cache's bankside_build draws it from
+     * the inventory and bankside_worn_drawitem gives each item its own Wear/Wield as op 1, Deposit as op 9 and
+     * Examine as op 10, so gear can be put on without closing the bank (Wiki: Bank).
+     */
     public static readonly SIDE_WORN_CHILD = 4;
     /** Its slots as live enables them (rsprox, rev 241): ops 1, 9 and 10, DEPTH1 and DRAGTARGET. */
     public static readonly SIDE_WORN_FLAGS = (1 << 1) | (1 << 9) | (1 << 10) | (1 << 17) | (1 << 20);
@@ -893,11 +897,18 @@ export class Bank extends ItemContainer {
             return true;
         }
 
-        // The worn items view: the slot is the item's place in the list, so the item names it.
-        if (packet.groupId === Bank.SIDE_INTERFACE_ID && packet.childId === Bank.SIDE_WORN_CHILD
-            && packet.buttonNum === 1 && packet.itemId != null) {
-            const itemId = packet.itemId;
-            Bank.depositItems(player, player.getEquipment(), false, (item) => item.getId() === itemId);
+        // The worn items view lists the backpack: its slot is the inventory slot.
+        if (packet.groupId === Bank.SIDE_INTERFACE_ID && packet.childId === Bank.SIDE_WORN_CHILD && packet.slot != null) {
+            const item = player.getInventory().getItems()[packet.slot];
+            if (!item || item.getId() < 0 || (packet.itemId != null && packet.itemId !== item.getId())) return true;
+            if (packet.buttonNum === 1) {
+                Bank.equipFromSide(player, item.getId(), packet.slot);
+            } else if (packet.buttonNum === 9) {
+                Bank.deposits(player, item.getId(), packet.slot, item.getAmount());
+            } else if (packet.buttonNum === 10) {
+                const definition = ItemDefinition.forId(item.getId());
+                player.sendMessage(definition.getExamine() || definition.getName());
+            }
             return true;
         }
 
@@ -1140,7 +1151,7 @@ export class Bank extends ItemContainer {
         return false;
     }
     /** Banks [from]'s items, or only those [only] picks (one worn item). */
-    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, only?: (item: Item) => boolean) {
+    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean) {
         if (!ignoreReqs) {
             if (!Bank.isOpen(player)) {
                 return;
@@ -1148,7 +1159,6 @@ export class Bank extends ItemContainer {
         }
         let movedAny = false;
         for (let item of from.getValidItems()) {
-            if (only && !only(item)) continue;
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }

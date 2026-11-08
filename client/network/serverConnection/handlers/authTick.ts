@@ -35,6 +35,7 @@ export function handleAuthTickMessage(msg: any): boolean {
                 LOGIN_FLAG_TOKEN | (state.sessionLoginFlags & ~(LOGIN_FLAG_REMEMBER | LOGIN_FLAG_TOKEN));
         }
         if (msg.payload.success) {
+            state.hasLoggedIn = true;
             clearHintArrow();
             clearAttackTimer();
             loadItemPrices();

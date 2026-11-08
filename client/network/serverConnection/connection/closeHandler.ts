@@ -40,8 +40,9 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             // Only reconnect if we have stored session credentials (were previously logged in)
             const hasSession = state.sessionUsername !== null && state.sessionPassword !== null;
             // A world that drops a logged-in player mid-login can refuse the next attempt once
-            // (session-error, relay restart), so 4000 only ends a first login.
-            const terminalConnectFailure = evt.code === 4000 && !hasSession;
+            // (session-error, relay restart), so 4000 only ends a first login. sendLogin stores the
+            // credentials before connecting, so they can't tell a first login from a logged-in one.
+            const terminalConnectFailure = evt.code === 4000 && !state.hasLoggedIn;
             const shouldReconnect =
                 hasSession &&
                 !suppress &&
@@ -89,6 +90,7 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             if (!shouldReconnect && (state.isReconnecting || terminalConnectFailure)) {
                 // Reconnection attempts exhausted - notify failure
                 state.isReconnecting = false;
+                state.hasLoggedIn = false;
                 // eslint-disable-next-line no-console
                 console.log("[ws] reconnection failed after max attempts");
                 for (const cb of state.reconnectFailedListeners) {

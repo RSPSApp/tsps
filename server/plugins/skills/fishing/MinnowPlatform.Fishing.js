@@ -213,6 +213,16 @@ function leavePlatform({ player }) {
 
 const NO_SHARK_ROOM_TEXT = "I can't trade you any sharks while you don't have any space for them!";
 
+function canReceiveSharks(inventory, output, minnowsUsed, heldMinnows) {
+  if (inventory.getAddableAmount(output) >= output.getAmount()) return true;
+  // Consuming the entire minnow balance can free a slot, but add() still merges
+  // into an existing matching stack even when another slot is free.
+  if (inventory.getFreeSlots() !== 0 || minnowsUsed !== heldMinnows) return false;
+  const meta = JSON.stringify(output.getMeta() ?? null);
+  return !inventory.getItems().some((item) => item.getId() === output.getId()
+    && item.getAmount() > 0 && JSON.stringify(item.getMeta() ?? null) === meta);
+}
+
 function exchangeMinnows(player) {
   const { ItemIdentifiers: I, NpcIdentifiers: N, ItemDefinition, Item } = core;
   const affordable = Math.floor(minnows(player) / MINNOWS_PER_SHARK);
@@ -220,7 +230,8 @@ function exchangeMinnows(player) {
     return sayAsKylie(player, N.KYLIE_MINNOW_2, variant("after-gaining-access-trade-option-without-at-least-40-minnows"));
   }
   const notedShark = ItemDefinition.forId(I.RAW_SHARK).getNoteId();
-  if (player.getInventory().getFreeSlots() === 0 && !player.getInventory().contains(notedShark)) {
+  const inventory = player.getInventory();
+  if (!canReceiveSharks(inventory, new Item(notedShark, 1), affordable * MINNOWS_PER_SHARK, minnows(player))) {
     return sayAsKylie(player, N.KYLIE_MINNOW_2, [{ npc: NO_SHARK_ROOM_TEXT }]);
   }
   player.getPacketSender().sendInterfaceRemoval();
@@ -228,13 +239,16 @@ function exchangeMinnows(player) {
     execute: (amount) => {
       const sharks = Math.min(Math.floor(Number(amount)), Math.floor(minnows(player) / MINNOWS_PER_SHARK));
       if (!(sharks > 0)) return;
-      // Room was asked before the prompt; gear taken off while it is open can fill the last slot.
-      if (player.getInventory().getFreeSlots() === 0 && !player.getInventory().contains(notedShark)) {
+      const output = new Item(notedShark, sharks);
+      const cost = sharks * MINNOWS_PER_SHARK;
+      // Recheck the actual output before charging: the inventory may have changed
+      // while the prompt was open, or a matching stack may lack sufficient room.
+      if (!canReceiveSharks(inventory, output, cost, minnows(player))) {
         player.sendMessage(NO_SHARK_ROOM_TEXT);
         return;
       }
-      player.getInventory().deleteNumber(I.MINNOW, sharks * MINNOWS_PER_SHARK);
-      player.getInventory().addItem(new Item(notedShark, sharks));
+      inventory.deleteNumber(I.MINNOW, cost);
+      inventory.addItem(output);
     },
   });
   player.getPacketSender().sendEnterAmountPrompt("How many sharks would you like?");

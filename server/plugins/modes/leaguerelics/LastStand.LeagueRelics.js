@@ -117,6 +117,11 @@ function refuseFood(event) {
   event.player.sendMessage(Common.message("lastStandNoFood"));
 }
 
+/** The phoenix necklace asks without eating: no healing while standing. */
+function necklaceEligible(event) {
+  if (standing(event.player)) event.blocked = true;
+}
+
 /**
  * A logout mid-stand stops its drain task, and the save keeps current levels: the boosts are settled to where the
  * drain ends (base + 15) first, so nobody logs back in at 255.
@@ -146,6 +151,7 @@ module.exports = function attach(pluginApi) {
   api.onPlayerBeforeDeath(beforeDeath);
   api.onPlayerDealtDamage(dealtDamage);
   api.onCanEat(refuseFood);
+  api.onCustomEvent("phoenix-necklace:eligible", necklaceEligible);
   api.onPlayerDeath(death);
   api.onPlayerLogout(settleOnLogout);
 };

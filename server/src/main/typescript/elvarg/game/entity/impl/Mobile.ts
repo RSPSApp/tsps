@@ -771,6 +771,9 @@ export abstract class Mobile extends Entity {
             if (this.isPlayer() && source.isPlayer()) this.getCombat().addDamage(source, hit.getHealthLost());
         }
         this.setHitpoints(outcome);
+        if (hit.getHealthLost() > 0) {
+            getPluginManager().emitCustomEvent("combat:damage-applied", { target: this, hit });
+        }
         return hit;
     }
     /**

@@ -14,7 +14,7 @@ export const lerp = (start: number, end: number, progress: number) => {
 /**
  * Interpolates along the shortest displacement around a circular range.
  * The result is unwrapped: slerp(10, 2, 0.5, 10) returns 11, equivalent to 1 modulo 10.
- * Progress at or beyond either endpoint returns the original start or end value.
+ * Progress <= 0 returns the original start; progress >= 1 returns the original end.
  */
 export const slerp = (start: number, end: number, progress: number, range: number) => {
     if (progress <= 0) {

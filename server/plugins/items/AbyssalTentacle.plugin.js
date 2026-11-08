@@ -167,7 +167,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "AbyssalTentacle",
-  description: "Abyssal tentacle: 25% chance to poison on hit, 10,000 charges used per attack, plus Check, Dissolve and whip-plus-tentacle combining.",
+  description: "Abyssal tentacle: 25% chance to poison on hit, 10,000 charges, one used per attack, plus Check, Dissolve and whip-plus-tentacle combining.",
   members: true,
   register(api) {
     api.onServerStartup(attach.bind(null, api));

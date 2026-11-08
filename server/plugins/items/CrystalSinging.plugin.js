@@ -159,6 +159,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "CrystalSinging",
+  description: "Crystal singing at the Prifddinas singing bowl: turns crystal seeds and shards into crystal tools, weapons and teleport crystals for Smithing and Crafting XP.",
   members: true,
   register(pluginApi) {
     attach(pluginApi);

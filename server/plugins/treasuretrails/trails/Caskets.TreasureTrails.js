@@ -132,7 +132,7 @@ function mimicCasket(player, tier, rolls, opened, random = Math.random) {
 
 /** The completion's milestone rewards on their own, for a casket that became the Mimic. */
 function milestoneDrops(player, tier, count) {
-  const request = { player, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: [], handled: false, error: null };
+  const request = { player, tier: tier.name, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: [], handled: false, error: null };
   api.emitCustomEvent("treasure-trails:milestone-rewards", request);
   if (!request.handled || request.error) throw request.error ?? new Error("Treasure Trails milestone service unavailable");
   const drops = [...request.drops, ...itemMilestones(player, tier, count)];
@@ -178,7 +178,7 @@ function open(event) {
       mimic = mimicCasket(player, tier, rolls, count);
       if (mimic) drops = milestoneDrops(player, tier, count);
       else {
-        const request = { player, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: roll(tier, { entrana: onEntrana(player), rolls, player }), handled: false, error: null };
+        const request = { player, tier: tier.name, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: roll(tier, { entrana: onEntrana(player), rolls, player }), handled: false, error: null };
         api.emitCustomEvent("treasure-trails:milestone-rewards", request);
         if (!request.handled || request.error) throw request.error ?? new Error("Treasure Trails milestone service unavailable");
         drops = prepareDrops(clueRewards(player, [...request.drops, ...itemMilestones(player, tier, count)]), tier);

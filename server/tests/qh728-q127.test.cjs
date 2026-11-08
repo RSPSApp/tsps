@@ -769,8 +769,18 @@ function nora(x) {
     isNpc: () => true,
     getId: () => NORA,
     getAsNpc: () => npc,
-    getLocation: () => new core.Location(npc.x, 3463, 0),
-    getMovementQueue: () => ({ size: () => 0, walkStep(dx) { npc.x += dx; }, reset() {} }),
+    y: 3463,
+    scripted: false,
+    queued: 0,
+    blocked: false,
+    setScriptedMovement(value) { npc.scripted = value; },
+    getLocation: () => new core.Location(npc.x, npc.y, 0),
+    getMovementQueue: () => ({
+      size: () => npc.queued,
+      isStepBlocked: () => npc.blocked,
+      walkStep(dx, dy) { npc.x += dx; npc.y += dy; },
+      reset() { npc.queued = 0; npc.blocked = false; },
+    }),
     setPositionToFace() {},
     forceChat: (text) => said.push(text),
     performGraphic() {},
@@ -931,4 +941,21 @@ test('with the shed ball gone, the last form leaves one on the crate, not under 
   assert.equal(h.groundItems.length, 1);
   const { location } = h.groundItems[0];
   assert.deepEqual([location.getX(), location.getY()], [BALL_SPAWN_TILE.x, BALL_SPAWN_TILE.y]);
+});
+
+test('Nora takes over her own movement and recovers from a stuck step or a tile off her row', () => {
+  const h = setup();
+  const area = garden(h);
+  area.getPlayers = () => [];
+  // Live state after a restart: spawned inside the area (no enter), wandered to 2903,3462 and stuck.
+  const witch = nora(2903);
+  witch.y = 3462;
+  witch.queued = 1;
+  witch.blocked = true;
+  area.process(witch);
+  assert.equal(witch.scripted, true, 'the wander and walk-home logic is off');
+  assert.deepEqual([witch.x, witch.y], [2903, 3463], 'back onto her row');
+  area.process(witch);
+  area.process(witch);
+  assert.deepEqual([witch.x, witch.y], [2905, 3463], 'patrolling east again');
 });

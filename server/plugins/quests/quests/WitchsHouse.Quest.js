@@ -783,12 +783,25 @@ module.exports = function registerWitchsHouseQuest(api) {
   const noraPatrol = { direction: 1, wait: 0 };
   const caughtPlayers = new WeakSet();
 
+  /**
+   * Her own patrol, every tick: the area may never see her enter (she spawns inside it), so the
+   * wander and walk-home logic is switched off here, and a step that cannot be taken, or a tile off
+   * her row, is dropped and walked back from rather than left to stall the patrol for good.
+   */
   function walkNora(npc) {
+    npc.setScriptedMovement(true);
     if (noraPatrol.wait > 0) {
       noraPatrol.wait--;
       return;
     }
     const queue = npc.getMovementQueue();
+    if (queue.isStepBlocked?.()) queue.reset();
+    const y = npc.getLocation().getY();
+    if (y !== NORA_ROW) {
+      queue.reset();
+      queue.walkStep(0, Math.sign(NORA_ROW - y));
+      return;
+    }
     if (queue.size() > 0) return;
     const x = npc.getLocation().getX();
     if (x >= NORA_EAST_X) noraPatrol.direction = -1;
@@ -879,12 +892,6 @@ module.exports = function registerWitchsHouseQuest(api) {
       return "WitchsGarden";
     }
 
-    postEnter(mobile) {
-      if (!mobile.isNpc?.() || mobile.getId() !== NORA_NPC_ID) return;
-      const npc = mobile.getAsNpc();
-      npc.setScriptedMovement(true);
-      npc.getMovementCoordinator?.().setRadius(0);
-    }
 
     process(mobile) {
       if (!mobile.isNpc?.() || mobile.getId() !== NORA_NPC_ID) return;

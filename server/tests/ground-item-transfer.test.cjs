@@ -284,6 +284,8 @@ for (const [label,id,x,y,z,delay] of [
   ["Crossbow",837,3174,3663,0,500],
   ["Shears",1735,3152,3306,0,100],
   ["Aldarin Hammer",2347,1373,2949,0,100],
+  ["Outer Fortis Pestle",233,1667,3068,0,100],
+  ["Outer Fortis Vial of water",227,1668,3068,0,100],
   ["Fortis Chisel",1755,1657,3142,0,100],
   ["Overlook Tinderbox",590,1625,3287,0,100],
   ["Outer Fortis Spade",952,1641,3052,0,100],

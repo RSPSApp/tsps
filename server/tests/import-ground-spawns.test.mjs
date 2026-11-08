@@ -252,3 +252,9 @@ test("Spade selection excludes scenery and other regions, identities, quantities
  assert.equal(importSpawns(source([{...varlamoreSpades[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
  assert.throws(()=>importSpawns(source([{...varlamoreSpades[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
 });
+
+const herbloreTable=[row({page:"Pestle and mortar",id:233,x:1667,y:3068,plane:0,quantity:1,members:true,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"}),row({page:"Vial of water",id:227,x:1668,y:3068,plane:0,quantity:1,members:true,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"})];
+test("Outer Fortis Herblore table imports only its exact ordinary pair and preserves legacy order",()=>{
+ const legacy=[{id:995,location:{x:3000,y:3000,z:0},amt:2,respawn:30}];const r=importSpawns(source(herbloreTable),legacy);assert.deepEqual(r.definitions.slice(0,1),legacy);assert.deepEqual(r.definitions.slice(1).map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members]),[[233,1667,3068,0,1,100,true],[227,1668,3068,0,1,100,true]]);assert.deepEqual(importSpawns(source(herbloreTable),r.definitions).definitions,r.definitions);
+ const held=herbloreTable.flatMap(r=>[{...r,x:r.x+1},{...r,id:r.id+1},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99},{...r,location:"unknown"},{...r,unresolved_reasons:["conditional"]}]);assert.equal(importSpawns(source(held),[]).definitions.length,0);assert.throws(()=>importSpawns(source([{...herbloreTable[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
+});

@@ -57,6 +57,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const { PluginManager } = require("../dist/plugins/PluginManager");
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
+  require("../plugins/skills/farming/Core.Farming").init({ core });
   const C = require("../plugins/skills/hunter/Context.Hunter"), { H } = C;
   const Traps = require("../plugins/skills/hunter/Traps.Hunter");
   const Houses = require("../plugins/skills/hunter/Birdhouses.Hunter");
@@ -163,8 +164,8 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(Traps.limit(p, "box"), 5);
     assert.equal(Traps.limit({ ...p, getWildernessLevel: () => 10 }, "box"), 6);
     assert.equal(Traps.limit(p, "deadfall"), 2);
-    p.levels.set(Skill.HUNTER, 19); assert.equal(Traps.limit(p, "bird"), 1);
-    p.levels.set(Skill.HUNTER, 20); assert.equal(Traps.limit(p, "bird"), 2, "temporary boosts unlock the next trap");
+    p.levels.set(Skill.HUNTER, 19); assert.equal(Traps.limit(p, "bird"), 2);
+    p.levels.set(Skill.HUNTER, 20); assert.equal(Traps.limit(p, "bird"), 2, "level 20 keeps the two-trap minimum");
     p.levels.delete(Skill.HUNTER);
     let npcLocation = trap.location.clone(), visible = true, blocked = false;
     const npc = {
@@ -401,6 +402,46 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(iq.experience.get(Skill.HUNTER),27,"Gielinor XP");
     advance(102);
 
+    // Falconry (Wiki Falconry, Dashing kebbit): a full inventory still retrieves the falcon and the XP,
+    // discarding what doesn't fit; the dashing kebbit also drops a raw dashing kebbit; a bonecrusher
+    // takes the bones; an unretrieved falcon leaves its prey with a message and no XP.
+    const falconTile=new core.Location(2370,3590,0),generated=[],baseEmit=api.emitCustomEvent;
+    let crushBones=false;
+    api.emitCustomEvent=(name,event)=>{
+      if(name!=="npc-drops:generated")return baseEmit(name,event);
+      generated.push(event);
+      if(crushBones)event.drops=event.drops.filter(drop=>drop.itemId!==I.BONES);
+    };
+    const hunter=()=>{const f=player();f.moveTo(falconTile);f.levels.set(Skill.HUNTER,70);f.equipment.set(core.Equipment.WEAPON_SLOT,I.FALCONERS_GLOVE_2);return f;};
+    const send=f=>{
+      const kebbit=prey(N.DASHING_KEBBIT,falconTile);
+      Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(2);Math.random=()=>0.5;
+      return spawned.at(-1);
+    };
+    const full=hunter();full.setSize(0);
+    const falcon=send(full);
+    assert.equal(falcon.getId(),N.GYR_FALCON_3,"the falcon catches the kebbit even with a full inventory");
+    Catching.retrieve({player:full,npc:falcon});advance(1);
+    assert.equal(full.experience.get(Skill.HUNTER),156,"a full inventory still retrieves the falcon for the XP");
+    assert.equal(falcon.isRegistered(),false);
+    assert.equal(full.counts.size,0,"what doesn't fit is discarded, not dropped");
+    assert.equal(full.equipment.get(core.Equipment.WEAPON_SLOT),I.FALCONERS_GLOVE_2,"the falcon is back on the glove");
+    const roomy=hunter();
+    Catching.retrieve({player:roomy,npc:send(roomy)});advance(1);
+    assert.deepEqual([...roomy.counts].sort(),[[I.BONES,1],[I.DASHING_KEBBIT_FUR,1],[I.RAW_DASHING_KEBBIT,1]].sort(),"bones, fur and a raw dashing kebbit");
+    assert.equal(generated.at(-1).npcId,N.DASHING_KEBBIT);
+    crushBones=true;
+    const crusher=hunter();
+    Catching.retrieve({player:crusher,npc:send(crusher)});advance(1);
+    assert.equal(crusher.counts.has(I.BONES),false,"a bonecrusher takes the bones");
+    assert.equal(crusher.counts.get(I.DASHING_KEBBIT_FUR),1);
+    crushBones=false;
+    const slow=hunter();send(slow);advance(100);
+    assert.equal(slow.messages.at(-1),"Your falcon has left its prey. You see it heading back toward the falconer.");
+    assert.equal(slow.experience.has(Skill.HUNTER),false,"lost prey gives no XP");
+    assert.equal(slow.equipment.get(core.Equipment.WEAPON_SLOT),I.FALCONERS_GLOVE_2);
+    api.emitCustomEvent=baseEmit;
+
     const crabId=[...Crabs.bases].find(([id])=>Crabs.species(new core.GameObject(id,q.getLocation(),10,0,null)).level===21)[0];
     const crabObject=new core.GameObject(crabId,q.getLocation().clone(),10,0,null);
     for(const[id,n]of[[I.PLANK,1],[I.BUCKET,1],[I.STEEL_NAILS,2],[I.HAMMER,1],[I.SAW,1]])q.counts.set(id,n);
@@ -613,6 +654,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     Runtime.npcRoute(route); assert.equal(route.range, 9);
     const MagicBoxes = require("../plugins/skills/hunter/MagicBoxes.Hunter");
     p.counts.clear(); p.counts.set(I.IMP_IN_A_BOX_2_, 1); p.counts.set(I.COINS, 500);
+    const realTeleBlock = H.core.TeleBlock; H.core.TeleBlock = { isBlocked: () => false };
     let transferred = 0;
     H.core.Bank = { ...core.Bank, deposit(player, id, slot, amount) { player.getInventory().deleteNumber(id, amount); transferred += amount; } };
     const bankEvent = { player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.COINS };
@@ -621,6 +663,36 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     p.counts.set(I.COINS, 100); H.core.Bank.deposit = () => {};
     MagicBoxes.use({ ...bankEvent, usedItemId: I.IMP_IN_A_BOX_1_ });
     assert.equal(p.counts.get(I.IMP_IN_A_BOX_1_), 1, "failed banking does not spend a charge");
+    // Refusals the Wiki lists for the imp, and the "Bank" form (rsprox recording 2256).
+    const impMessages = [], realSendMessage = p.sendMessage, realWilderness = p.getWildernessLevel;
+    p.sendMessage = message => impMessages.push(message);
+    H.core.Bank.deposit = (player, id, slot, amount) => { player.getInventory().deleteNumber(id, amount); transferred += amount; };
+    try {
+      p.counts.clear(); p.counts.set(I.IMP_IN_A_BOX_2_, 1); p.counts.set(I.COINS, 100); transferred = 0;
+      H.core.TeleBlock = { isBlocked: () => true };
+      MagicBoxes.use({ player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.COINS });
+      assert.equal(transferred, 0, "Tele Block stops the imp"); assert.equal(p.counts.get(I.IMP_IN_A_BOX_2_), 1);
+      H.core.TeleBlock = { isBlocked: () => false };
+      MagicBoxes.use({ player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.IMP_IN_A_BOX_2_ });
+      assert.ok(impMessages.includes("The imp refuses to bank that."));
+      const opened = [], flags = [];
+      const sender = p.getPacketSender();
+      const impSender = { ...sender, sendInterface: id => { opened.push(id); p.getInterfaceId = () => id; }, sendInterfaceFlagsRange: (uid, a, b, f) => flags.push([uid, a, b, f]),
+        clearItemOnInterface() {}, sendItemContainer() {}, closeInterface: id => opened.push(-id) };
+      p.getPacketSender = () => impSender;
+      MagicBoxes.open({ player: p });
+      assert.deepEqual(opened, [478]); assert.deepEqual(flags, [[478 << 16 | 3, 0, 27, 0x402]]);
+      const slot = p.getInventory().getItems().findIndex(item => item?.getId() === I.COINS);
+      MagicBoxes.formClick({ player: p, opId: 1, slot });
+      assert.equal(transferred, 100, "Deposit on the form banks the stack"); assert.equal(p.counts.get(I.IMP_IN_A_BOX_1_), 1);
+      p.counts.set(I.COINS, 5);
+      MagicBoxes.formClick({ player: p, opId: 1, slot: p.getInventory().getItems().findIndex(item => item?.getId() === I.COINS) });
+      assert.equal(p.counts.get(I.MAGIC_BOX), 1, "the second item releases the imp"); assert.ok(opened.includes(-478), "the form closes");
+      H.core.TeleBlock = { isBlocked: () => true }; p.getPacketSender = () => impSender; opened.length = 0;
+      MagicBoxes.open({ player: p });
+      assert.deepEqual(opened, [], "no form while teleblocked");
+      p.getPacketSender = () => sender;
+    } finally { p.sendMessage = realSendMessage; H.core.TeleBlock = realTeleBlock; p.getWildernessLevel = realWilderness; }
     const pluginApi = PluginManager.createApi("hunter-route-check");
     pluginApi.onNpcRoute(event => { event.range = Infinity; });
     const checkedRoute = { player: p, npc, range: 1 };

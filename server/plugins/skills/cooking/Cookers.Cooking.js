@@ -219,8 +219,16 @@ function canCook(player, object, cookable) {
  * KARAMBWAN_RECLICK_TICKS later instead of restarting the first-food delay. Clicks are handled
  * after the tick's tasks, so the cooking task has already run this tick.
  */
-function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity) {
+function validSelectedInput(player, cookable, selected) {
+  const item = selected?.item;
+  return Number.isInteger(selected?.slot) && player.getInventory().getItems()[selected.slot] === item
+    && item?.getId() === cookable.raw && item.getAmount() === 1
+    && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable();
+}
+
+function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity, selected = null) {
   if (!canCook(player, object, cookable)) return false;
+  if (selected && !validSelectedInput(player, cookable, selected)) return false;
   if (!player.getInventory().contains(cookable.raw)) {
     return false;
   }
@@ -231,7 +239,7 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
   stopCooking(player, false);
   ensureCookTask();
   sessions.set(player, {
-    cookable,
+    cookable, selected,
     animation: cookAnimationFor(object.getDefinition().getName()),
     objectId: object.getId(),
     location: object.getLocation().clone(),
@@ -266,14 +274,14 @@ function carriedCookables(player, onFire) {
  * item, several are "What would you like to cook?" showing what they cook into. The most it
  * offers is the most carried of one food. One raw item on its own cooks without a menu.
  */
-function offerCook(player, object, cookables, singleClick = false) {
+function offerCook(player, object, cookables, singleClick = false, selected = null) {
   const inventory = player.getInventory();
   if (cookables.length === 1) {
     const [cookable] = cookables;
     if (!canCook(player, object, cookable)) return;
     const carried = inventory.getAmount(cookable.raw);
     if (carried <= 1) {
-      if (startCooking(player, object, cookable, activeSessions, 1) && singleClick && cookable.firstCookTicks === undefined) {
+      if (startCooking(player, object, cookable, activeSessions, 1, selected) && singleClick && cookable.firstCookTicks === undefined) {
         // Wiki Cooking#2-tick_cooking: left-clicking a range with one raw item cooks without delay.
         cookStep(player, activeSessions.get(player), cookingTask.cycle);
         stopCooking(player, false);
@@ -281,7 +289,7 @@ function offerCook(player, object, cookables, singleClick = false) {
       return;
     }
     openCookMenu(player, ONE_TYPE_TITLE, [cookable.raw], carried, (id, amount) => {
-      startCooking(player, object, cookable, activeSessions, amount);
+      startCooking(player, object, cookable, activeSessions, amount, selected);
     });
     return;
   }
@@ -370,9 +378,10 @@ function cookOne(player, session) {
     Common.spam(player, successMessage(cookable));
     return;
   }
-  const rawSlot = cookable.gnomeTutorial ? inventory.getItems().findIndex((item) =>
+  if (session.selected && !validSelectedInput(player, session.cookable, session.selected)) return false;
+  const rawSlot = cookable.gnomeTutorial ? (session.selected?.slot ?? inventory.getItems().findIndex((item) =>
     item?.getId() === session.cookable.raw && item.getAmount() === 1
-      && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable()) : -1;
+      && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable())) : -1;
   if (cookable.gnomeTutorial && rawSlot < 0) { player.sendMessage("Preset items cannot be used for this."); return false; }
   const rawItem = cookable.gnomeTutorial ? inventory.getItems()[rawSlot]
     : inventory.getItems().find((item) => item?.getId() === session.cookable.raw);
@@ -398,6 +407,7 @@ function cookOne(player, session) {
       || rawItem.getAmount() !== 1 || rawItem.isPresetItem() || rawItem.isUntradeable() || rawItem.isUnbankable()
       || (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1)) return false;
     inventory.deleteAtSlot(rawSlot, 1);
+    session.selected = null;
   }
   if (!burnRequest.burn) {
     const output = new Item(cookable.cooked, 1);
@@ -469,7 +479,9 @@ function handleCook(event) {
   }
 
   event.handled = true;
-  offerCook(event.player, event.object, [cookable]);
+  const selected = cookable.gnomeTutorial ? { item: event.item, slot: event.itemSlot } : null;
+  if (selected && !validSelectedInput(event.player, cookable, selected)) return;
+  offerCook(event.player, event.object, [cookable], false, selected);
 }
 
 /** Anything else used on a cooker, when no other content takes it (rsprox captures 269, 1718). */

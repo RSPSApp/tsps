@@ -132,3 +132,196 @@ test("invisible walking requests cannot invoke handled pickup hooks", t => {
     assert.equal(f.inventory.getAmount(23182), 0);
   } finally { items.splice(0, items.length, ...previous); }
 });
+
+const {GroundItemRespawnTask} = require("../dist/game/task/impl/GroundItemRespawnTask");
+const {TaskManager} = require("../dist/game/task/TaskManager");
+function respawnFixture(t) {
+  const f = fixture(), items = World.getItems(), previous = items.splice(0), tasks = [];
+  t.after(() => items.splice(0, items.length, ...previous));
+  t.mock.method(TaskManager, "submit", task => { task.setRunning(true); tasks.push(task); });
+  return {...f, items, tasks};
+}
+function spawn(f, id, amount, {timer = 4, staticSpawn = true, state = State.SEEN_BY_EVERYONE,
+  goesGlobal = false, meta = null, paused = false, owner = undefined} = {}) {
+  const pile = new ItemOnGround(state, owner, f.player.getLocation().clone(), new Item(id, amount, meta),
+    goesGlobal, timer, null, staticSpawn);
+  pile.setAgingPaused(paused);
+  ItemOnGroundManager.register(pile);
+  return pile;
+}
+function finishRespawn(f, amount) {
+  ItemOnGroundManager.process();
+  const task = f.tasks.shift();
+  assert.ok(task instanceof GroundItemRespawnTask, "real manager schedules the real respawn task");
+  for (let tick = 1; tick < task.getDelay(); tick++) {
+    task.tick();
+    assert.equal(f.items.length, 0, "the source remains absent before its configured delay");
+  }
+  task.tick();
+  assert.equal(f.items.length, 1);
+  assert.equal(f.items[0].getItem().getAmount(), amount);
+  return f.items[0];
+}
+
+test("static batch restores its original quantity after real partial then final pickups, across cycles", t => {
+  const f = respawnFixture(t), pile = spawn(f, 385, 3, {meta: {origin: "static-fixture"}});
+  pile.setEnabledOps(4);
+  for (let slot = 0; slot < 27; slot++) f.inventory.setItem(slot, new Item(4151));
+  ItemOnGroundManager.pickup(f.player, pile);
+  assert.equal(f.inventory.getAmount(385), 1);
+  assert.equal(pile.getItem().getAmount(), 2);
+  assert.equal(pile.isPendingRemoval(), false);
+  ItemOnGroundManager.process();
+  assert.equal(f.tasks.length, 0, "partial pickup does not start a second supply");
+  f.inventory.resetItems();
+  ItemOnGroundManager.pickup(f.player, pile);
+  assert.equal(f.inventory.getAmount(385), 2);
+  assert.equal(pile.isPendingRemoval(), true);
+  const restored = finishRespawn(f, 3);
+  assert.equal(restored.getRespawnTimer(), 4);
+  assert.equal(restored.isStaticSpawn(), true);
+  assert.deepEqual(restored.getItem().getMeta(), {origin: "static-fixture"});
+  assert.equal(restored.getEnabledOps(), 4);
+  f.inventory.resetItems();
+  ItemOnGroundManager.pickup(f.player, restored);
+  assert.equal(f.inventory.getAmount(385), 3);
+  finishRespawn(f, 3);
+});
+
+test("full-bag refusal and ordinary clone preserve current quantity without spawning supply", t => {
+  const f = respawnFixture(t), pile = spawn(f, 385, 3);
+  for (let slot = 0; slot < 28; slot++) f.inventory.setItem(slot, new Item(4151));
+  ItemOnGroundManager.pickup(f.player, pile);
+  assert.equal(pile.getItem().getAmount(), 3);
+  assert.equal(pile.isPendingRemoval(), false);
+  ItemOnGroundManager.process();assert.equal(f.tasks.length, 0);
+  f.inventory.setItem(0, new Item(-1, 0));
+  ItemOnGroundManager.pickup(f.player, pile);
+  assert.equal(pile.getItem().getAmount(), 2);
+  assert.equal(pile.clone().getItem().getAmount(), 2, "clone is a snapshot, not a respawn");
+  const fixtureOnly = new ItemOnGround(State.SEEN_BY_EVERYONE, null, f.player.getLocation(), new Item(385, 3), false, -1, null, true);
+  fixtureOnly.getItem().setAmount(1);
+  assert.equal(fixtureOnly.clone().getItem().getAmount(), 1, "visibility-only static items never reset quantity");
+});
+
+test("compatible static piles aggregate original templates and retain first timing, metadata and operations", t => {
+  const f = respawnFixture(t), first = spawn(f, 995, 3);
+  f.inventory.setItem(0, new Item(995, MAX_STACK_AMOUNT - 2));
+  ItemOnGroundManager.pickup(f.player, first);
+  assert.equal(first.getItem().getAmount(), 1);
+  const incoming = spawn(f, 995, 5);
+  assert.equal(f.items.length, 1);
+  assert.equal(first.getItem().getAmount(), 6);
+  assert.equal(f.items[0], first);
+  assert.equal(first.getRespawnTimer(), 4);
+  f.inventory.resetItems();
+  ItemOnGroundManager.pickup(f.player, first);
+  assert.equal(f.inventory.getAmount(995), 6);
+  finishRespawn(f, 8);
+});
+
+test("recurring static sources never absorb dropped supply or incompatible lifecycle piles, in either order", t => {
+  const f = respawnFixture(t);
+  for (const options of [
+    {staticSpawn: false, timer: -1}, {staticSpawn: true, timer: -1},
+    {timer: 5}, {state: State.SEEN_BY_PLAYER}, {goesGlobal: true}, {paused: true},
+  ]) for (const reversed of [false, true]) {
+    f.items.splice(0);
+    const a = () => spawn(f, 995, 3, {owner: f.player.getUsername()}),
+      b = () => spawn(f, 995, 5, {...options, owner: f.player.getUsername()});
+    const [first, second] = reversed ? [b(), a()] : [a(), b()];
+    assert.equal(f.items.length, 2, JSON.stringify({options, reversed}));
+    assert.equal(first.getItem().getAmount() + second.getItem().getAmount(), 8);
+    const recurring = reversed ? second : first;
+    assert.equal(ItemOnGroundManager.getOperableGroundItem(f.player, 995, f.player.getLocation(), 3, recurring.getId()), recurring,
+      "browser stack ID resolves the recurring pile independently");
+    assert.equal(ItemOnGroundManager.getOperableGroundItem(f.player, 995, f.player.getLocation(), 3),
+      f.items.find(p => ItemOnGroundManager.canOperate(f.player, p, 3)),
+      "native fallback retains first-operable resolution");
+  }
+  f.items.splice(0);f.inventory.resetItems();
+  const source = spawn(f, 995, 3), dropped = spawn(f, 995, 5, {staticSpawn: false, timer: -1});
+  ItemOnGroundManager.pickup(f.player, source);
+  ItemOnGroundManager.process();
+  assert.deepEqual(f.items, [dropped], "unrelated dropped supply remains on the floor");
+  const task = f.tasks.shift();task.execute();
+  const restored = f.items.find(p => p.isStaticSpawn());
+  assert.equal(restored.getItem().getAmount(), 3, "only the source quantity recurs");
+  assert.equal(dropped.getItem().getAmount(), 5);
+});
+
+test("static template cap is checked independently of depleted floor quantity; ordinary merges stay unchanged", t => {
+  const f = respawnFixture(t), source = spawn(f, 995, 3);
+  f.inventory.setItem(0, new Item(995, MAX_STACK_AMOUNT - 2));
+  ItemOnGroundManager.pickup(f.player, source);
+  assert.equal(source.getItem().getAmount(), 1);
+  spawn(f, 995, MAX_STACK_AMOUNT - 1);
+  assert.equal(f.items.length, 2, "a legal current sum cannot overflow a future respawn template");
+  f.items.splice(0);
+  const a = spawn(f, 995, 3, {staticSpawn: false, timer: -1});
+  spawn(f, 995, 5, {staticSpawn: false, timer: -1});
+  assert.equal(f.items.length, 1);assert.equal(a.getItem().getAmount(), 8);
+  assert.equal(a.clone().getItem().getAmount(), 8);
+});
+
+
+test("a drop becoming public cannot merge into recurring supply", t => {
+  const f = respawnFixture(t), owner = f.player.getUsername();
+  const source = spawn(f, 995, 3, {owner});
+  const drop = spawn(f, 995, 5, {staticSpawn: false, timer: -1, owner,
+    state: State.SEEN_BY_PLAYER, goesGlobal: true});
+  assert.equal(f.items.length, 2);
+  drop.setTick(ItemOnGroundManager.PUBLIC_REVEAL_DELAY - 1);
+  drop.process();
+  assert.equal(drop.getState(), State.SEEN_BY_EVERYONE);
+  assert.equal(drop.isPendingRemoval(), false);
+  assert.equal(f.items.length, 2);
+  assert.equal(source.getItem().getAmount(), 3);
+  assert.equal(drop.getItem().getAmount(), 5);
+});
+
+for (const [label,id,x,y,z,delay] of [
+  ["Crossbow",837,3174,3663,0,500],
+  ["Shears",1735,3152,3306,0,100],
+  ["Aldarin Hammer",2347,1373,2949,0,100],
+  ["Fortis Chisel",1755,1657,3142,0,100],
+  ["Overlook Tinderbox",590,1625,3287,0,100],
+]) test("audited "+label+" definition preserves full-bag refusal and its real respawn delay", t=>{
+  const f=respawnFixture(t);
+  const definition=require("../data/definitions/ground-items.json").find(row=>
+    row.id===id&&row.location.x===x&&row.location.y===y&&row.location.z===z);
+  assert.ok(definition,"audited source definition is present");
+  f.player.getLocation=()=>new Location(x,y,z);
+  const {GroundItemSpawnDefinitionLoader}=require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+  const pile=new GroundItemSpawnDefinitionLoader().toItemOnGround(definition);
+  assert.ok(pile);assert.equal(pile.getRespawnTimer(),delay);assert.equal(pile.isStaticSpawn(),true);
+  ItemOnGroundManager.register(pile);
+  for(let slot=0;slot<28;slot++)f.inventory.setItem(slot,new Item(385));
+  ItemOnGroundManager.pickup(f.player,pile);
+  assert.equal(pile.isPendingRemoval(),false);assert.equal(pile.getItem().getAmount(),1);
+  assert.equal(f.inventory.getAmount(id),0);ItemOnGroundManager.process();assert.equal(f.tasks.length,0);
+  f.inventory.setItem(0,new Item(-1,0));ItemOnGroundManager.pickup(f.player,pile);
+  assert.equal(f.inventory.getAmount(id),1);assert.equal(pile.isPendingRemoval(),true);
+  const restored=finishRespawn(f,1);
+  assert.equal(restored.getRespawnTimer(),delay,"uses full source delay, never a shortened fixture");
+  assert.deepEqual([restored.getPosition().getX(),restored.getPosition().getY(),restored.getPosition().getZ()],[x,y,z]);
+});
+
+for(const[id,x,y,amount]of[[557,1394,3116,4],[558,1392,3118,2]])test("audited member rune "+id+" conserves a capped-stack partial pickup and restores its source quantity",t=>{
+ const f=respawnFixture(t),definition=require("../data/definitions/ground-items.json").find(r=>r.id===id&&r.location.x===x&&r.location.y===y&&r.location.z===0);
+ assert.ok(definition,"audited member rune source row");assert.equal(definition.members,true);
+ f.player.getLocation=()=>new Location(x,y,0);
+ const {GroundItemSpawnDefinitionLoader}=require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+ const pile=new GroundItemSpawnDefinitionLoader().toItemOnGround(definition);
+ assert.equal(pile.getRespawnTimer(),100);assert.equal(pile.getItem().getAmount(),amount);
+ ItemOnGroundManager.register(pile);
+ f.inventory.setItem(0,new Item(id,MAX_STACK_AMOUNT-1));
+ for(let slot=1;slot<28;slot++)f.inventory.setItem(slot,new Item(385));
+ ItemOnGroundManager.pickup(f.player,pile);
+ assert.equal(f.inventory.getAmount(id),MAX_STACK_AMOUNT);assert.equal(pile.getItem().getAmount(),amount-1);
+ assert.equal(pile.isPendingRemoval(),false);ItemOnGroundManager.process();assert.equal(f.tasks.length,0);
+ f.inventory.resetItems();ItemOnGroundManager.pickup(f.player,pile);
+ assert.equal(f.inventory.getAmount(id),amount-1);assert.equal(pile.isPendingRemoval(),true);
+ const restored=finishRespawn(f,amount);assert.equal(restored.getRespawnTimer(),100);
+ assert.deepEqual([restored.getPosition().getX(),restored.getPosition().getY(),restored.getPosition().getZ()],[x,y,0]);
+});

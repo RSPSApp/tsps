@@ -20,6 +20,8 @@ export class ItemOnGround {
     goesGlobal: boolean;
     pendingRemoval: boolean;
     respawnTimer: number = -1;
+    /** Original recurring-static supply, independent of partial pickups. */
+    private respawnAmount: number;
     /** World cycle in which this item last aged in {@link process}. */
     agedCycle: number = -1;
     oldAmount: number;
@@ -41,6 +43,7 @@ export class ItemOnGround {
         this.tick = 0;
         this.pendingRemoval = false;
         this.respawnTimer = respawnTimer;
+        this.respawnAmount = item?.getAmount?.() ?? 0;
         this.oldAmount = item?.getAmount?.() ?? 0;
         this.privateArea = privateArea;
         this.staticSpawn = staticSpawn;
@@ -189,6 +192,14 @@ export class ItemOnGround {
         return this.respawnTimer;
     }
 
+    public getRespawnAmount(): number {
+        return this.respawnAmount;
+    }
+
+    public mergeRespawnAmount(other: ItemOnGround): void {
+        this.respawnAmount += other.respawnAmount;
+    }
+
     public respawns(): boolean {
         return this.respawnTimer > 0;
     }
@@ -234,6 +245,7 @@ export class ItemOnGround {
     }
     public clone(): ItemOnGround {
         const copy = new ItemOnGround(this.state, this.owner, this.getPosition(), this.item.clone(), this.goesGlobal, this.respawnTimer, this.privateArea, this.staticSpawn);
+        copy.respawnAmount = this.respawnAmount;
         copy.despawnDelay = this.despawnDelay;
         copy.enabledOps = this.enabledOps;
         return copy;

@@ -80,7 +80,7 @@ function stripSearch(url: string): string {
 
 function responseFromRecord(record: StoredResponseRecord): Response {
     const headers = new Headers(record.headers);
-    const body = record.body.slice(0);
+    const body = record.status === 204 || record.status === 205 || record.status === 304 ? null : record.body.slice(0);
     const response = new Response(body, {
         status: record.status,
         statusText: record.statusText,

@@ -121,6 +121,14 @@ give each destination's name, runes, Magic level and alternate). The player's sl
   captured: new destinations cost 1,000x the spell's runes from the inventory on Done and need
   its Magic level, removing refunds nothing, and a nexus holds 4, 8 or 41 (Wiki).
 - Older saves' destination lists on the nexus become the player's slots.
+- **Remove** (building mode) first opens a message box, "Warning: If you remove this nexus you
+  will have to pay for your upgrades and teleports to be used again." (rsprox recording 2904 on
+  the crystalline nexus; Leagues recording 4308 shows the same text on the marble one), then the
+  usual "Really remove it?". The recordings end at the warning, so that order is the generic
+  remove flow's, not captured. Confirming Remove, or removing the room the nexus stands in,
+  clears the player's slots and left-click destination, so the runes are paid again when a nexus
+  is rebuilt (Wiki, Portal Nexus). Upgrading a tier keeps them (Wiki). Room removal has no
+  capture of a warning, so none is shown.
 
 ### Floors
 

@@ -1,5 +1,7 @@
 "use strict";
 
+const RewardScreen = require("../CasketRewardScreen.plugin");
+
 // Opens easy-to-master reward caskets from the exporter's clue-caskets.json tables.
 const Rolls = require("../Rolls.RewardCaskets");
 const Runtime = require("./Runtime.TreasureTrails");
@@ -87,11 +89,12 @@ function prepareDrops(drops, tier) {
   });
 }
 
-function give(player, drops) {
+function give(player, drops, defer = false) {
+  if (defer) RewardScreen.queue(player, drops);
   const credited = new Map();
   for (const drop of drops) {
     const { creditId: id, stackable } = drop;
-    for (let i = 0; i < (stackable ? 1 : drop.amount); i++) player.getInventory().forceAdd(player, new core.Item(id, stackable ? drop.amount : 1));
+    for (let i = 0; !defer && i < (stackable ? 1 : drop.amount); i++) player.getInventory().forceAdd(player, new core.Item(id, stackable ? drop.amount : 1));
     credited.set(id, (credited.get(id) || 0) + drop.amount);
     api.emitCustomEvent("collection-log:obtain", { player, itemId: drop.itemId, amount: drop.amount });
   }
@@ -202,7 +205,7 @@ function open(event) {
     player.setAttribute(Runtime.completedAttribute(tier), count);
     player.sendMessage(COMPLETED);
     player.sendMessage(completedCount(count, tier));
-    const slots = give(player, drops);
+    const slots = give(player, drops, true);
     awardPets(player, pets);
     Runtime.restore({ player });
     const sender = player.getPacketSender();

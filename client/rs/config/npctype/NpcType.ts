@@ -649,3 +649,22 @@ export class NpcType extends Type {
         return loader.load(transformId);
     }
 }
+
+type NpcMovementSeqSet = ReturnType<NpcType["getMovementSeqSet"]>;
+
+/**
+ * The movement sequences an NPC plays. A transformed NPC uses its visible form's own, but some
+ * forms carry none (Gertrude's 7284 has no idle or walk), and live OSRS then animates them from the
+ * parent the server spawned, so a form with neither idle nor walk falls back to the parent's set.
+ */
+export function getNpcMovementSeqSet(
+    visible: NpcType,
+    parent: NpcType | undefined,
+    basTypeLoader: BasTypeLoader,
+): NpcMovementSeqSet {
+    const own = visible.getMovementSeqSet(basTypeLoader);
+    if (!parent || parent === visible || own.idle >= 0 || own.walk >= 0) {
+        return own;
+    }
+    return parent.getMovementSeqSet(basTypeLoader);
+}

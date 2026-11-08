@@ -180,3 +180,59 @@ test('Watchtower rope crossing consumes one rope, returns without one, and resto
   assert.equal(player.getAttribute('agility.obstacle'), null);
   player.setRegistered(false);
 });
+
+const WorldDefinition = require('../dist/game/definition/WorldDefinition');
+const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+const { DefinitionLoader } = require('../dist/game/definition/loader/DefinitionLoader');
+let membershipProviderRows = [];
+DefinitionLoader.registerSource('ground_items', 'MembershipBoundaryTest', {
+  name: 'membership-boundary-fixture', load: () => membershipProviderRows,
+});
+const membershipRow = (x, extra = {}) => ({
+  id: 556, location: { x, y: 3217, z: 0 }, amt: 3, respawn: 100, ...extra,
+});
+function isolatedMembershipLoader(t, coreRows, providerRows) {
+  const items = World.getItems(), previous = items.splice(0);
+  membershipProviderRows = providerRows;
+  t.after(() => { membershipProviderRows = []; items.splice(0, items.length, ...previous); });
+  const loader = new GroundItemSpawnDefinitionLoader();
+  t.mock.method(loader, 'readCoreDefinitions', () => coreRows);
+  return { loader, items };
+}
+
+for (const membersWorld of [true, false]) test(
+  'ground loader uses row membership on ' + (membersWorld ? 'member' : 'free-to-play') + ' worlds, for core and contributed rows', t => {
+    assert.equal(CacheDefinitions.getItem(556).isMembers, false, 'air rune itself is a free-to-play item');
+    const coreRows = [membershipRow(6101), membershipRow(6102, { members: false }), membershipRow(6103, { members: true })];
+    const providerRows = [membershipRow(6111), membershipRow(6112, { members: false }), membershipRow(6113, { members: true })];
+    const { loader, items } = isolatedMembershipLoader(t, coreRows, providerRows);
+    t.mock.method(WorldDefinition, 'isMembersWorld', () => membersWorld);
+    assert.equal(loader.load(), true);
+    const actual = items.filter(p => p.getPosition().getX() >= 6100 && p.getPosition().getX() < 6120);
+    assert.deepEqual(actual.map(p => p.getPosition().getX()).sort(),
+      membersWorld ? [6101, 6102, 6103, 6111, 6112, 6113] : [6101, 6102, 6111, 6112]);
+    for (const pile of actual) {
+      assert.equal(pile.getItem().getAmount(), 3);
+      assert.equal(pile.getRespawnTimer(), 100);
+      assert.equal(pile.isStaticSpawn(), true);
+      assert.equal(pile.getState(), State.SEEN_BY_EVERYONE);
+    }
+  }
+);
+
+test('malformed source membership fails closed with the existing invalid-row diagnostic in either world', t => {
+  const values = [null, 'true', 'false', 0, 1, [], {}];
+  const rows = values.map((members, index) => membershipRow(6200 + index, { members }));
+  const { loader, items } = isolatedMembershipLoader(t, rows.slice(0, 4), rows.slice(4));
+  const warnings = [];
+  t.mock.method(console, 'warn', text => warnings.push(text));
+  let membersWorld = true;
+  t.mock.method(WorldDefinition, 'isMembersWorld', () => membersWorld);
+  for (const mode of [true, false]) {
+    membersWorld = mode;
+    items.splice(0);
+    assert.equal(loader.load(), true, 'malformed rows are skipped under the existing loader policy');
+    assert.equal(items.filter(p => p.getPosition().getX() >= 6200 && p.getPosition().getX() < 6210).length, 0);
+    assert.match(warnings.at(-1), /invalid=7/);
+  }
+});

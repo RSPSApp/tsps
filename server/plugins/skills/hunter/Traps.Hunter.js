@@ -37,7 +37,8 @@ function owned(player, object) {
 function limit(player, kind) {
   if (kind === "rabbit") return Math.min(5, Math.max(2, 1 + Math.floor(level(player) / 20)));
   if (H.data.traps[kind].max) return H.data.traps[kind].max;
-  return Math.min(5, 1 + Math.floor(level(player) / 20))
+  // The 19 August 2026 Hunter update permits two traps from level 1.
+  return Math.min(5, Math.max(2, 1 + Math.floor(level(player) / 20)))
     + (player.getWildernessLevel() > 0 ? 1 : 0);
 }
 

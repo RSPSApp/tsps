@@ -37,6 +37,7 @@ function caster(slots) {
     items, experience, messages: [],
     getIndex: () => 1,
     getPrivateArea: () => null,
+    getLocation: () => new (require('../dist/game/model/Location').Location)(3200, 3200, 0),
     getPacketSender: () => ({ sendSoundEffect() {} }),
     isRegistered: () => true,
     performAnimation() {}, performGraphic() {},

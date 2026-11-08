@@ -77,6 +77,8 @@ Plugins can follow the round with the custom events `wintertodt:round-start` and
 | Repairing a brazier | 25 |
 | Healing a pyromancer | 75 |
 
+**Pyromancer outfit.** Lighting a brazier and feeding it raise the Firemaking XP by the outfit's bonus (hood 0.4%, garb 0.8%, robe 0.6%, boots 0.2%, 2.5% for the full set), asked of the Firemaking plugin through `firemaking:xp-multiplier`. The Wiki's Pyromancer outfit page lists no Wintertodt exclusion, only shade remains and Dorgesh-Kaan lamps. The reward XP at the end of a round is left unboosted: nothing fetched shows it boosted, and no capture has the outfit worn.
+
 Reaching 500 points mid-round: "You have helped enough to earn a supply crate." The wording predates the reward cart but is still live (capture).
 
 At the end of a round, each player inside the prison gets the following.

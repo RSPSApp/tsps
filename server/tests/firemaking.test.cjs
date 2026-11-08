@@ -40,6 +40,8 @@ test("firemaking logs, success chance, pyromancer bonus and campfire timers foll
   const expected = [
     [I.KINDLING_2, 1, 48],
     [I.LOGS, 1, 40],
+    [I.RED_LOGS, 1, 50], [I.GREEN_LOGS, 1, 50], [I.BLUE_LOGS, 1, 50],
+    [I.WHITE_LOGS, 1, 50], [I.PURPLE_LOGS, 1, 50],
     [I.ACHEY_TREE_LOGS, 1, 40],
     [I.OAK_LOGS, 15, 60],
     [I.WILLOW_LOGS, 30, 90],
@@ -525,6 +527,147 @@ test("bow firemaking stays members-only while ordinary firemaking works on free 
   assert.match(h.messages.at(-1), /members' world/);
   h.light();
   assert.equal(h.xp(), 40);
+});
+
+// Real inventory combination and lighting for every firelighter colour.
+test("native firelighters coat ordinary logs and light the matching fire on the first attempt", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
+  const originalCycle = core.World.getProcessCycle();
+  let startupAttempted = false;
+  t.after(() => {
+    try { if (startupAttempted) PluginManager.emitServerShutdown({}); }
+    finally { core.World.processCycle = originalCycle; }
+  });
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3226, 3218);
+  startupAttempted = true;
+  PluginManager.emitServerStartup({});
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "native colour baseline is a members world");
+  const I = core.ItemIdentifiers, O = core.ObjectIdentifiers;
+  const colours = [
+    ["red", I.RED_FIRELIGHTER, I.RED_LOGS, O.FIRE_24, "red_fire"],
+    ["green", I.GREEN_FIRELIGHTER, I.GREEN_LOGS, O.FIRE_25, "green_fire"],
+    ["blue", I.BLUE_FIRELIGHTER, I.BLUE_LOGS, O.FIRE_26, "blue_fire"],
+    ["white", I.WHITE_FIRELIGHTER, I.WHITE_LOGS, O.FIRE_16, "trail_white_fire"],
+    ["purple", I.PURPLE_FIRELIGHTER, I.PURPLE_LOGS, O.FIRE_17, "trail_purple_fire"],
+  ];
+  const locNames = new Gamevals().namesOf(GamevalKind.LOC);
+  let index = 1900;
+  for (const [colour, lighter, logs, fireId, fireName] of colours) await t.test(colour, async t => {
+    assert.equal(core.CacheDefinitions.getItem(lighter).name, `${colour[0].toUpperCase()}${colour.slice(1)} firelighter`);
+    assert.equal(core.CacheDefinitions.getItem(logs).name, `${colour[0].toUpperCase()}${colour.slice(1)} logs`);
+    assert.equal(core.CacheDefinitions.getItem(I.LOGS).name, "Logs");
+    assert.equal(locNames.get(fireId), fireName, "active cache fire colour");
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    let anchor = null, baselineFires = null, ownerName = null, privateArea = null, actorIndex = null;
+    const ground = () => ownerName == null ? [] : core.World.getItems().filter(g => !g.isPendingRemoval() &&
+      g.getOwner() === ownerName && g.getPrivateArea() === privateArea);
+    const fires = () => anchor == null || baselineFires == null ? [] : core.ObjectManager.objectsAt(anchor).filter(o =>
+      o.getId() === fireId && o.getPrivateArea() === privateArea && !baselineFires.has(o));
+    t.after(() => {
+      const errors = [];
+      const clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+      if (ownerName != null) {
+        clean(() => PluginManager.emitPlayerDisconnect({ player: p, username: ownerName }));
+        clean(() => PluginManager.emitPlayerLogout({ player: p, username: ownerName }));
+      }
+      clean(() => p.setRegistered(false));
+      if (actorIndex != null) clean(() => core.TaskManager.cancelTasks(actorIndex));
+      clean(() => core.TaskManager.cancelTasks(p));
+      clean(() => core.GameConstants.PLAYER_PERSISTENCE?.cancelRequestedSave(p));
+      clean(() => core.World.unregisterPlayerPosition(p));
+      if (anchor) clean(() => core.World.unregisterPlayerPosition(p, anchor));
+      let ownedGround = [], ownedFires = [];
+      clean(() => { ownedGround = ground(); });
+      clean(() => { ownedFires = fires(); });
+      for (const g of ownedGround) clean(() => core.ItemOnGroundManager.deregister(g));
+      for (const o of ownedFires) clean(() => core.ObjectManager.deregister(o, true));
+      clean(() => assert.equal(ground().length, 0, "owned ground items removed"));
+      clean(() => assert.equal(fires().length, 0, "owned fire removed"));
+      clean(() => assert.equal(core.TaskManager.hasActiveTask(p), false));
+      if (actorIndex != null) clean(() => assert.equal(core.TaskManager.hasActiveTask(actorIndex), false));
+      if (errors.length) throw new AggregateError(errors, "colour fixture cleanup failed");
+    });
+    actorIndex = index++; p.setIndex(actorIndex); const name = `colour${index}`;
+    p.setUsername(name); ownerName = name; p.setLongUsername(core.Misc.stringToLongBigInt(name));
+    p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
+    p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+    p.getSkillManager().setExperience(core.Skill.FIREMAKING, 0);
+    p.getSkillManager().setMaxLevel(core.Skill.FIREMAKING, 1);
+    p.getSkillManager().setCurrentLevel(core.Skill.FIREMAKING, 1, false);
+    p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 10); p.setHitpoints(10);
+    assert.ok(p.getLongUsername() > 0n); assert.equal(p.getHitpoints(), 10);
+    assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING), 1);
+    const c = new ClientConnection(channel); c.player = p;
+    anchor = p.getLocation().clone(); privateArea = p.getPrivateArea();
+    baselineFires = new Set(core.ObjectManager.objectsAt(anchor));
+    for (const id of [I.LOGS, I.OAK_LOGS, lighter, I.TINDERBOX]) p.getInventory().add(new core.Item(id, 1), false);
+    const gains = [], skills = p.getSkillManager(), add = skills.addExperiences.bind(skills);
+    t.mock.method(skills, "addExperiences", (skill, xp) => {
+      if (skill === core.Skill.FIREMAKING) gains.push(xp);
+      return add(skill, xp);
+    });
+    const use = async (a, b) => c.dispatch([{ type: "inventory_use_on", itemId: a,
+      slot: p.getInventory().getSlotForItemId(a), target: { kind: "inventory", id: b,
+        slot: p.getInventory().getSlotForItemId(b) } }]);
+    const turn = () => {
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); c.processTurnPackets();
+      const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    assert.equal(p.getInventory().getAmount(I.LOGS), 1);
+    assert.equal(p.getInventory().getAmount(lighter), 1);
+    assert.equal(p.getInventory().getAmount(logs), 0);
+    assert.equal(fires().length, 0);
+    if (colour === "red") {
+      const freeWorld = t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
+      await use(lighter, I.LOGS); turn();
+      assert.equal(p.getInventory().getAmount(I.LOGS), 1);
+      assert.equal(p.getInventory().getAmount(lighter), 1);
+      assert.equal(p.getInventory().getAmount(logs), 0);
+      freeWorld.mock.restore();
+      // Seeded metadata boundary: a clicked restricted copy must not consume an earlier plain copy.
+      const restricted = new core.Item(I.LOGS, 1).setMetaValue(core.Item.UNTRADEABLE_META, true);
+      const restrictedSlot = p.getInventory().getItems().findIndex(item => item.getId() < 0);
+      p.getInventory().setItem(restrictedSlot, restricted);
+      await c.dispatch([{ type: "inventory_use_on", itemId: lighter,
+        slot: p.getInventory().getSlotForItemId(lighter), target: { kind: "inventory", id: I.LOGS, slot: restrictedSlot } }]);
+      turn();
+      assert.equal(p.getInventory().getAmount(I.LOGS), 2);
+      assert.equal(p.getInventory().getItems()[restrictedSlot], restricted);
+      assert.equal(p.getInventory().getAmount(lighter), 1);
+      assert.equal(p.getInventory().getAmount(logs), 0);
+      p.getInventory().deleteAtSlot(restrictedSlot, 1);
+    }
+    await use(lighter, I.OAK_LOGS); turn();
+    assert.equal(p.getInventory().getAmount(I.OAK_LOGS), 1);
+    assert.equal(p.getInventory().getAmount(lighter), 1);
+    assert.equal(p.getInventory().getAmount(logs), 0);
+    await (colour === "green" ? use(I.LOGS, lighter) : use(lighter, I.LOGS)); turn();
+    assert.equal(p.getInventory().getAmount(I.LOGS), 0);
+    assert.equal(p.getInventory().getAmount(lighter), 0);
+    assert.equal(p.getInventory().getAmount(logs), 1);
+    assert.deepEqual(gains, []);
+    await use(I.TINDERBOX, logs); turn();
+    assert.equal(p.getInventory().getAmount(logs), 0);
+    assert.equal(ground().filter(g => g.getItem().getId() === logs).length, 1);
+    // A normal level-1 roll would fail at this value; coloured logs must catch first time.
+    const originalRandom = Math.random;
+    t.mock.method(Math, "random", () => new Error().stack.includes("rollLightingSuccess") ? 0.99 : originalRandom());
+    for (let n = 0; n < 5; n++) turn();
+    assert.equal(ground().filter(g => g.getItem().getId() === logs).length, 0);
+    assert.equal(fires().length, 1);
+    assert.equal(p.getInventory().getAmount(I.TINDERBOX), 1);
+    assert.deepEqual(gains, [50]);
+  });
 });
 
 // Exercise a native manual walk and the automatic step after a successful roll.

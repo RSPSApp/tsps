@@ -592,7 +592,8 @@ export class Trading {
 
     private static formatValue(items: ItemContainer): string {
         const value = items.getValidItems()
-            .reduce((total, item) => total + item.getDefinition().getValue() * item.getAmount(), 0);
+            // Wiki (Trading): the value shown uses the Grand Exchange price; the store value only where there is none.
+            .reduce((total, item) => total + item.getDefinition().getGrandExchangeValue() * item.getAmount(), 0);
         return `(Value: <col=ffffff>${Misc.format(value)}</col> coins)`;
     }
 

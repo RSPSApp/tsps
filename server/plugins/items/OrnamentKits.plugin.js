@@ -202,6 +202,7 @@ function revertItem(event) {
 
 module.exports = {
   name: "OrnamentKits",
+  description: "Lets ornament kits and colour recolours be applied to their base items and reverted, with refunds where the Wiki says the kit is returned.",
   _test: { loadKits: () => loadKits(), findEntry, applyKit, revertItem },
   register(api) {
     core = api.core;

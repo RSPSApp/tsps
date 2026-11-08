@@ -119,6 +119,7 @@ function removeFacility(player, { visit, boat, hotspot }) {
 
 module.exports = {
   name: "SailingShipyardFacilities",
+  description: "Lets players build, modify and remove facilities such as a range on a boat's hotspots while aboard it in the shipyard, at the cost of materials.",
   members: true,
   register(api) {
     pluginApi = api;

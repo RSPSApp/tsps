@@ -13,6 +13,7 @@ function buyFromCrate({ player }) {
 
 module.exports = {
   name: "RottenTomatoCrate",
+  description: "Opens Pelters' Veg Stall, the rotten tomato shop, from the crates by the pillories in Varrock, Seers' Village, Yanille and Hosidius.",
   members: true,
   register(api) {
     core = api.core;

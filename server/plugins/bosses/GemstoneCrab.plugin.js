@@ -476,6 +476,7 @@ function forceBurrow({ player }) {
 
 module.exports = {
   name: "GemstoneCrab",
+  description: "The Gemstone Crab world boss in the Tlati Rainforest: a ten-minute timer that burrows between three mines and leaves a shell to mine for gems.",
   members: true,
   _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, locate, SPOTS },
   register(api) {

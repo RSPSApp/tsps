@@ -8,6 +8,7 @@ const Capes = require("./skillcapes/Common.SkillCapes");
 
 module.exports = {
   name: "SkillCapes",
+  description: "Handles skillcapes and the max cape: buying from the skill masters, trimming, Boost, teleports, worn options and their perks.",
   members: true,
   register(api) {
     Capes.init(api);

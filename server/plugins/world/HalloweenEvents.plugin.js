@@ -48,6 +48,7 @@ function logout(api, event) {
 
 module.exports = {
   name: "HalloweenEvents",
+  description: "The 2025 Halloween Spook-a-thon Decoration Contest, with its dialogue and spooky chair items, running only in its calendar window.",
   register(api) {
     api.persistAttribute(Progress.PROGRESS_ATTRIBUTE, Progress.initial());
     api.onCustomEvent("events:active", calendar.bind(null, api));

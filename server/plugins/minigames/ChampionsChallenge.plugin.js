@@ -15,6 +15,7 @@ const Rewards = require("./championschallenge/Rewards.ChampionsChallenge");
 
 module.exports = {
   name: "ChampionsChallenge",
+  description: "Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions.",
   members: true,
   register(api) {
     Common.init(api);

@@ -21,6 +21,7 @@ const Commands = require("./nex/Commands.Nex");
 
 module.exports = {
   name: "Nex",
+  description: "Nex and the Ancient Prison: public and private fights, five phases, loot and reclaim chests, the Ancient Forge, Torva repair and Combat Achievements.",
   members: true,
   register(api) {
     Common.init(api);

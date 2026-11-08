@@ -16,6 +16,7 @@ const { getWorldDefinition } = require("../../src/main/typescript/elvarg/game/de
  */
 module.exports = {
   name: "EditModeApi",
+  description: "Serves the local map editor read-only world data (zones, object and NPC spawns) over the content API, in development builds only.",
   register(api) {
     if (Server.PRODUCTION) return;
     api.registerContentEndpoint("world", (_query, segments) => {

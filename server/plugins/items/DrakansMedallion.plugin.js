@@ -88,6 +88,7 @@ function useSlepeyTablet(event) {
 
 module.exports = {
   name: "DrakansMedallion",
+  description: "Drakan's medallion: teleports to Ver Sinhaza, Darkmeyer, Slepe and Castle Drakan from the inventory or worn option, capped at Wilderness level 20.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

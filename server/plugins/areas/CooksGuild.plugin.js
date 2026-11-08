@@ -102,6 +102,7 @@ function openDoor(event) {
 
 module.exports = {
   name: "CooksGuild",
+  description: "Guards the Cooks' Guild door in Varrock: 32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals.",
   _test: { refusal, openDoor },
   register(pluginApi) {
     api = pluginApi;

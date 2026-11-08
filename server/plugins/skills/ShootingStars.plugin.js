@@ -10,6 +10,7 @@ const Common = require("./shootingstars/Common.ShootingStars");
 
 module.exports = {
   name: "ShootingStars",
+  description: "Crashed stars land around the world on a timer; players mine them layer by layer for stardust and trade it with Dusuri, with an optional landing announcement.",
   config: {
     "ShootingStars:intervalMinutes": {
       type: "number", label: "Minutes between shooting stars", defaultText: "90", exclusiveMin: true, min: 0,

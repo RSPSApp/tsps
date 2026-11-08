@@ -594,6 +594,7 @@ function ringOptions() {
 
 module.exports = {
   name: "FairyRings",
+  description: "Fairy rings: the three-dial interface for all 64 codes, travel log with favourites, last-destination, quest-gated rings and the Zanaris exit rings.",
   members: true,
   _test: {
     loadRings,

@@ -19,6 +19,7 @@ const Rewards = require("./nightmarezone/Rewards.NightmareZone");
 
 module.exports = {
   name: "Nightmare Zone",
+  description: "Adds the Nightmare Zone: Dominic's dream menus and coffer, the dream arena and bosses, absorption and overload potions, and power-ups.",
   members: true,
   register(api) {
     Common.init(api);

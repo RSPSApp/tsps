@@ -789,6 +789,7 @@ function handleBootstrap({ player }) {
 
 module.exports = {
   name: "Museum",
+  description: "Varrock Museum Kudos: the Dig Site cleaning activity, display cases and Historian Minas's quest timeline reports for the Bone Voyage requirement.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

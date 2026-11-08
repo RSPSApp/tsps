@@ -42,6 +42,7 @@ function moveBoulder(event) {
 
 module.exports = {
   name: "WildernessGodWarsBoulder",
+  description: "Lets players with 60 Strength move the boulder blocking the Wilderness God Wars Dungeon corridor, gaining 5.5 Strength XP going in.",
   members: true,
   register(api) {
     core = api.core;

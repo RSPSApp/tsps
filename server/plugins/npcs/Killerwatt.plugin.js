@@ -33,6 +33,7 @@ function scaleKillerwattHit({ attacker, target, combatType, damage, accurate }) 
 
 module.exports = {
   name: "Killerwatt",
+  description: "Makes Killerwatts hit hard unless the player wears insulated boots, rerolling their hits to max 6 with the boots on and 15 without.",
   members: true,
   register(api) {
     core = api.core;

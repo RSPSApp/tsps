@@ -39,6 +39,7 @@ const Instance = require("./kraken/Instance.Kraken");
 
 module.exports = {
   name: "Kraken",
+  description: "The Kraken and cave krakens in Kraken Cove: disturb the whirlpool to surface them, four tentacles beside the boss, and Magic-only damage.",
   members: true,
   register(api) {
     Shared.bind(api);

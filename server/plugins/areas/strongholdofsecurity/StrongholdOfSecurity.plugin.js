@@ -11,6 +11,7 @@ const Travel = require("./Travel.StrongholdOfSecurity");
 
 module.exports = {
   name: "StrongholdOfSecurity",
+  description: "Stronghold of Security: its doors and security questions, ladders, portals, reward rooms and the skull sceptre.",
   register(api) {
     Doors.bind(api);
     Travel.bind(api);

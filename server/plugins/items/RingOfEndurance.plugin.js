@@ -140,6 +140,7 @@ function uncharge({ player, item }) {
 
 module.exports = {
   name: "RingOfEndurance",
+  description: "Charges the ring of endurance with stamina potions, doubles a worn ring's stamina doses and cuts run-energy drain at 500 or more charges.",
   members: true,
   _test: { charges, wornRing, useCharge, doubleStamina, chargeRing, uncharge, passiveApplies, drainModifier, MAX_CHARGES },
   register(api) {

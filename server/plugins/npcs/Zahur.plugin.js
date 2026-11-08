@@ -161,6 +161,7 @@ function makeUnfinished(event) {
 
 module.exports = {
   name: "Zahur",
+  description: "Zahur in Nardah makes unfinished potions from clean herbs and vials of water for 200 coins each, after the hard Desert Diary or with a Herblore cape.",
   members: true,
   _test: { makeUnfinished, unlocked, herbsCarried, cleanHerbs, cleanAll },
   register(pluginApi) {

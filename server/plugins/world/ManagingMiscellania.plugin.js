@@ -17,6 +17,7 @@ const Session = require("./managingmiscellania/Session.ManagingMiscellania");
 
 module.exports = {
   name: "ManagingMiscellania",
+  description: "Managing Miscellania: pay the kingdom's coffers and Advisor Ghrim collects daily coal, logs, herbs, flax, fish, hardwood and seeds, scaled by approval.",
   members: true,
   register(api) {
     Interface(api);

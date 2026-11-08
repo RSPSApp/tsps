@@ -173,6 +173,7 @@ function openDepositBox({ player }) {
 
 module.exports = {
   name: "BankDepositBooth",
+  description: "Opens the bank deposit box from the Deposit option and handles its deposit buttons and items used on it.",
   register(api) {
     pluginApi = api;
     api.onObjectInteraction("Bank deposit box", { Deposit: openDepositBox });

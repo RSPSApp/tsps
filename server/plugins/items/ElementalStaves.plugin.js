@@ -34,6 +34,7 @@ function reportSuppliedRunes(request) {
 
 module.exports = {
   name: "ElementalStaves",
+  description: "Elemental staves, battlestaves and the Kodai wand and twinflame staff supply their element's runes to spells automatically.",
   register(api) {
     api.onSpellRuneBypass(bypassSuppliedRune);
     api.onCustomEvent("elemental-staves:runes", reportSuppliedRunes);

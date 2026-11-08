@@ -117,6 +117,7 @@ function lastBoat({ player, itemId }) {
 
 module.exports = {
   name: "SailingSummonBoat",
+  description: "Summon boat tablets: breaking one near a dock brings a chosen boat with a teleport focus to you, losing its port task cargo, salvage and fish.",
   members: true,
   register(api) {
     core = api.core;

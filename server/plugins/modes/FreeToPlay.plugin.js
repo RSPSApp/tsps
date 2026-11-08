@@ -110,6 +110,7 @@ function evictFromMembersArea({ player }) {
 
 module.exports = {
   name: "FreeToPlay",
+  description: "Enforces a free-to-play world: members content and areas are blocked through hooks, with free land taken from the world's f2p zones.",
   ITEM_MESSAGE,
   register(api) {
     // Members worlds need none of these hooks.

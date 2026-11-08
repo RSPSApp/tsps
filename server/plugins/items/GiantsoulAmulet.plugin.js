@@ -181,6 +181,7 @@ function itemAction(event) {
 
 module.exports = {
   name: "GiantsoulAmulet",
+  description: "Charges the giantsoul amulet with big bones and law runes and teleports to Bryophyta's, Obor's or the Royal Titans' lairs, one charge each.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

@@ -118,6 +118,7 @@ function replaceGrouping({ player, group, onMount }) {
 
 module.exports = {
   name: "SideChannels",
+  description: "Tab bar of the social tab, switching between chat channel, Your Clan and grouping, and remembering the chosen tab between logins.",
   register(api) {
     api.persistAttribute(TAB_ATTRIBUTE, CHAT_CHANNEL_TAB);
     api.onInterfaceActionClick(selectTab);

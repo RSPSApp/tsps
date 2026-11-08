@@ -28,6 +28,7 @@ function dig(event) {
 
 module.exports = {
   name: "Spade",
+  description: "Plays the digging animation and sound for the Dig option on spades, while leaving the click open for treasure trails and quest digs.",
   register(api) {
     core = api.core;
     for (const name of SPADES) api.onItemAction(name, { Dig: dig });

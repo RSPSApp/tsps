@@ -133,6 +133,7 @@ function questsForWorld({ WorldDefinition }) {
 
 module.exports = {
   name: "Quests",
+  description: "Registers every implemented quest from the quests folder, members and free-to-play, plus their shared widgets and ground items.",
   config: {
     "quests:equipment-requirements": {
       type: "boolean", label: "Quest equipment requirements", default: true,

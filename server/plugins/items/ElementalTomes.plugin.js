@@ -5,6 +5,7 @@ const Bank = require('./elementaltomes/Bank.ElementalTomes');
 const State = require('./elementaltomes/State.ElementalTomes');
 module.exports = {
   name: 'Elemental Tomes',
+  description: 'Tomes of fire and water: charged with burnt or soaked pages, boosting spell damage and saving runes, with page-storing and bank options.',
   members: true,
   register(api) {
     Common.initialize(api);

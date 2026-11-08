@@ -4,6 +4,7 @@
  */
 module.exports = {
   name: "SpecialAttacks",
+  description: "Weapon special attacks, one handler per weapon from the dragon dagger to the Osmumten's fang, each with its own combat method and drain.",
   register(api) {
     require("./specials/AbyssalBludgeon.SpecialAttack")(api);
     require("./specials/AbyssalDagger.SpecialAttack")(api);

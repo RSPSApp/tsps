@@ -60,6 +60,7 @@ function onCombatHitResolved(event) {
 
 module.exports = {
   name: "DesertFinishAchievementDiaries",
+  description: "Credits two Desert diary tasks: refilling waterskins in the desert with Humidify, and casting Ice Barrage on a foe in the desert.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

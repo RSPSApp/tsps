@@ -237,6 +237,7 @@ function init(api) {
 
 module.exports = {
   name: "WerewolfAgility",
+  description: "Werewolf Agility surroundings: the Ring of Charos trapdoor and guard, the stick-throwing Agility Boss and the trainers' dialogue.",
   members: true,
   register(api) {
     init(api);

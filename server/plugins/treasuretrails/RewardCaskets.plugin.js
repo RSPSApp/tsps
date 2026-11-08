@@ -21,6 +21,7 @@ function init(pluginApi) {
 
 module.exports = {
   name: "RewardCaskets",
+  description: "Rolls the reward items for a treasure trail casket by tier when the trails plugin asks, applying the player's unique-roll multiplier.",
   members: true,
   register(api) {
     init(api);

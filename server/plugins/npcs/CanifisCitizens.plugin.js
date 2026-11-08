@@ -33,6 +33,7 @@ function attacked({ attacker, target }) {
 
 module.exports = {
   name: "CanifisCitizens",
+  description: "Turns Canifis citizens into werewolves when a player attacks them without a Wolfbane, keeping their remaining health.",
   members: true,
   register(api) {
     core = api.core;

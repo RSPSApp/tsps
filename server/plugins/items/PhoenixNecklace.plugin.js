@@ -80,6 +80,7 @@ function onWillTrigger(request) {
 
 module.exports = {
   name: "PhoenixNecklace",
+  description: "Makes a worn Phoenix necklace heal 30% of Hitpoints and break when a hit leaves the wearer at 20% or less, except where food is banned.",
   members: true,
   _test: { onDamageApplied, onWillTrigger, isLowEnough },
   register(api) {

@@ -10,6 +10,7 @@ const Eyries = require("./eagletransport/Eyries.EagleTransport");
 
 module.exports = {
   name: "EagleTransport",
+  description: "Eagle transport after Eagles' Peak: flights between the Eagles' Peak eyrie and the desert, jungle and polar eyries, and the routes in on foot.",
   members: true,
   register(api) {
     Common.init(api);

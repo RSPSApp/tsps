@@ -84,6 +84,7 @@ function exactMove({ player, parts }) {
 
 module.exports = {
   name: "ExactMoveCommand",
+  description: "Developer ::exactmove command that makes a spawned NPC glide across tiles, to test exact moves.",
   register(api) {
     pluginApi = api;
     api.registerCommand("exactmove", exactMove, api.core.PlayerRights.DEVELOPER, "Test NPC exact movement");

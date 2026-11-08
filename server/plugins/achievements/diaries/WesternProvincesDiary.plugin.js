@@ -291,6 +291,7 @@ function bossKilled({ player, monster }) {
 
 module.exports = {
   name: "WesternProvincesDiary",
+  description: "Credits Western Provinces diary tasks such as the copper longtail, novice Pest Control, Rantz's chompy hat, spined larupia and the Grand Tree shortcut.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

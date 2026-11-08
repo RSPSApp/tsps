@@ -489,6 +489,7 @@ function drag(event) {
 
 module.exports = {
   name: "ChuggingBarrel",
+  description: "Chugging barrel: assemble and dismantle it, store five potions at 100 doses each, and drink one dose of every potion in one click.",
   members: true,
   dependsOn: ["Potions", "LeagueMode"],
   register(pluginApi) {

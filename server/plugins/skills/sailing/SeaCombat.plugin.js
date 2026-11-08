@@ -6,6 +6,7 @@ const common = require("./seacombat/Common.SeaCombat");
 
 module.exports = {
   name: "SailingSeaCombat",
+  description: "Sailing boat combat: manning cannons, sea creatures attacking the boat, boat HP and repairs, corpse harvesting and ranged or magic from the deck.",
   members: true,
   register(api) {
     common.init(api);

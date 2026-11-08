@@ -265,6 +265,7 @@ function performEmote({ player, slot, action }) {
 
 module.exports = {
     name: "Emotes",
+    description: "Emotes tab: plays the emote animations, locks emotes until earned, and restores unlocked emotes at login.",
     _test: { questCapeReady, resolveSkillcapeEmote, resolveEmote },
     register(pluginApi) {
         api = pluginApi;

@@ -5,6 +5,7 @@
  */
 module.exports = {
   name: "CraftingSpells",
+  description: "Spells that make crafting materials: Lunar Spin Flax, Tan Leather and Superglass Make, and Charge Orb on the obelisks.",
   members: true,
   register(api) {
     require("./craftingspells/Lunar.CraftingSpells")(api);

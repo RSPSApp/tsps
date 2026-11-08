@@ -3,7 +3,7 @@ const Site = require('./leviathan/Site.Leviathan');
 const Fight = require('./leviathan/Fight.Leviathan');
 const Rewards = require('./leviathan/Rewards.Leviathan');
 module.exports = {
-  name: 'Leviathan', members: true,
+  name: 'Leviathan', description: 'The Leviathan: its site, the fight and the rewards.', members: true,
   register(api) {
     Common.init(api);
     Site.attach(api);

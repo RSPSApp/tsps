@@ -14,6 +14,7 @@ const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/ri
 
 module.exports = {
   name: "Inferno",
+  description: "Adds the Inferno: entry through the cave, the wave run, Zuk and the supports, saved progress, and a developer ::infernowave command.",
   members: true,
   register(api) {
     const { ObjectIdentifiers: Objects } = api.core;

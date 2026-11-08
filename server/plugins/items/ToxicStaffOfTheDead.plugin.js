@@ -162,6 +162,7 @@ function uncharge({ player, item }) {
 
 module.exports = {
   name: "ToxicStaffOfTheDead",
+  description: "Charges the Toxic staff of the dead with Zulrah's scales, drains scales in combat and gives its hits a chance to envenom the target.",
   members: true,
   _test: { charges, isWieldingCharged, consumeCharges, processCombatUpkeep, onHitResolved, chargeStaff, uncharge, fillCharges, MAX_CHARGES },
   register(api) {

@@ -484,6 +484,7 @@ function playerDefeated({ killer, victim }) {
 
 module.exports = {
   name: "KillStreaks",
+  description: "PvP kill streaks with rewards and glow effects, plus commands to view them.",
   dependsOn: ["Wilderness"],
   register(api) {
     initialize(api);

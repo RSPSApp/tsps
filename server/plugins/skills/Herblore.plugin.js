@@ -6,6 +6,7 @@
  */
 module.exports = {
   name: "Herblore",
+  description: "Herblore: cleaning grimy herbs, mixing potions, grinding secondaries with a pestle and mortar, and Guthix balance.",
   members: true,
   register(api) {
     require("./herblore/Events.Herblore")(api);

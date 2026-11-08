@@ -142,6 +142,7 @@ function register(pluginApi) {
 
 module.exports = {
   name: "ArdougneEliteRuneCrossbowDiary",
+  description: "Credits the Ardougne elite diary task for making a rune crossbow from scratch within Yanille.",
   members: true,
   dependsOn: ["AchievementDiaries", "Fletching", "Smithing", "Crafting", "ArdougneEliteTaskProgress"],
   register,

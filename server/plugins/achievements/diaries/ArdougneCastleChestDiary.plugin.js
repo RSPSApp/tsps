@@ -110,6 +110,7 @@ function handleChest(event) {
 
 module.exports = {
   name: "ArdougneCastleChestDiary",
+  description: "Credits the Ardougne diary task for stealing from a chest in Ardougne Castle.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

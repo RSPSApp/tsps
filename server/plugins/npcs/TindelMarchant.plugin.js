@@ -310,6 +310,7 @@ const handledEvents = new WeakSet();
 
 module.exports = {
   name: "TindelMarchant",
+  description: "Tindel Marchant in Port Khazard identifies rusted swords and scimitars for a fee, giving a random sword or scimitar and Ardougne Diary credit.",
   members: true,
   register(api) {
     api.onItemOnNpc(handleItemOnNpc.bind(null, api));

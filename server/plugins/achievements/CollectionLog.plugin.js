@@ -150,6 +150,7 @@ function clogCommand({ player, parts }) {
 
 module.exports = {
   name: "CollectionLog",
+  description: "Collection log: records items obtained from drops and other sources, with the log and overview interfaces, new-item popups and a ::clog command.",
   register(api) {
     Data(api);
     Progress(api);

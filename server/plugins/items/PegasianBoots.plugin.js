@@ -136,6 +136,7 @@ function useCrystalOnBoots(event) {
 
 module.exports = {
   name: "PegasianBoots",
+  description: "Lets players infuse a Cerberus crystal onto boots to make Pegasian, Primordial or Eternal boots, at 60 Magic and Runecraft for 200 experience each.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

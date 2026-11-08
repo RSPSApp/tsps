@@ -162,6 +162,7 @@ function logout({ player }) { states.delete(player); }
 
 module.exports = {
   name: "Free movement",
+  description: "Continuous free movement: moves players by client input at walk and run speed with server-checked timing, and sends fine positions to observers.",
   register(api) {
     api.onCustomEvent("player:movement-input", input.bind(null, api.core));
     api.onCustomEvent("player:world-input", worldInput.bind(null, api.core));

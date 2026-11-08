@@ -22,6 +22,7 @@ function isAtAleckShop(player) {
 
 module.exports = {
   name: "ArdougneAleckHunterEmporiumDiary",
+  description: "Credits the Ardougne diary task for viewing Aleck's Hunter Emporium in Yanille.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

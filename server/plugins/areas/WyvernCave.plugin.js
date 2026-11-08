@@ -64,6 +64,7 @@ function registerNorthCave(pluginApi) {
 
 module.exports = {
   name: "WyvernCave",
+  description: "Stops anyone without a Fossil Island wyvern Slayer task from attacking the wyverns in the northern Wyvern Cave, with Weve warning them off.",
   members: true,
   register(pluginApi) {
     registerNorthCave(pluginApi);

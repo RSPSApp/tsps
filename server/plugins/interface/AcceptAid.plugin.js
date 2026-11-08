@@ -53,6 +53,7 @@ function acceptAidButton(api) {
 
 module.exports = {
   name: "AcceptAid",
+  description: "The Accept Aid setting that controls whether Lunar spells, cures and shared boosts can affect the player, refused for Ironmen.",
   ACCEPT_AID_ATTRIBUTE,
   register(api) {
     pluginApi = api;

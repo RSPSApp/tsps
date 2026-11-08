@@ -13,6 +13,7 @@ const Stations = require("./themess/Stations.TheMess");
 
 module.exports = {
   name: "TheMess",
+  description: "Adds The Mess in Hosidius: cooking meat pies, stews and pineapple pizzas for the Shayzien soldiers and serving them at the buffet tables.",
   members: true,
   register(api) {
     Shared.init(api);

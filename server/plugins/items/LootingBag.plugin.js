@@ -540,6 +540,7 @@ function answerContents(event) {
 
 module.exports = {
   name: "LootingBag",
+  description: "Adds the looting bag: items go in only in the Wilderness, come out at a bank, and are lost on death, with Deposit, Check and settings.",
   members: true,
   dependsOn: ["Wilderness", "Food", "Potions", "LootKeys"],
   register(pluginApi) {

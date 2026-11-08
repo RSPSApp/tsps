@@ -9,6 +9,7 @@ const Prison = require("./zalcano/Prison.Zalcano");
 
 module.exports = {
   name: "Zalcano",
+  description: "Zalcano under Prifddinas: the platforms and barrier, the shared fight, mining, refining, imbuing and throwing tephra, and contribution rewards.",
   members: true,
   register(api) {
     Common.init(api);

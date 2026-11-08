@@ -155,6 +155,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "CrystalHalberd",
+  description: "Crystal halberd: starts with 2,500 charges, loses one per hit, takes crystal shards up to 20,000 and goes inactive at zero.",
   members: true,
   attach,
   register(api) {

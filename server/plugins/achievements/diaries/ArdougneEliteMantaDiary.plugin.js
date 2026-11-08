@@ -59,6 +59,7 @@ function register(apiRegistry) {
 
 module.exports = {
   name: "ArdougneEliteMantaDiary",
+  description: "Credits the Ardougne elite diary task for catching a manta ray in the Fishing Trawler and cooking it.",
   members: true,
   dependsOn: ["AchievementDiaries", "FishingTrawler", "Cooking", "ArdougneEliteTaskProgress"],
   register,

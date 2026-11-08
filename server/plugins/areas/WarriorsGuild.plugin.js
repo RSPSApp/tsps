@@ -11,6 +11,7 @@ const Guild = require("./warriors-guild/Common.WarriorsGuild");
 
 module.exports = {
   name: "WarriorsGuild",
+  description: "Warriors' Guild in Burthorpe: Ghommal's door, the token-earning rooms, token payouts and cyclopes dropping defenders.",
   members: true,
   register(api) {
     Guild.init(api);

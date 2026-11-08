@@ -132,6 +132,7 @@ function hunt(npc, hostile) {
 
 module.exports = {
   name: "NpcRivalries",
+  description: "Makes opposing NPC factions, such as Shayzien soldiers against lizardmen and the God Wars armies, hunt and fight each other.",
   members: true,
   register(pluginApi) {
     pluginApi.onServerStartup(() => start(pluginApi));

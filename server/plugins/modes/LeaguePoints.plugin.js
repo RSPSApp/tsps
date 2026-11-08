@@ -110,6 +110,7 @@ function login({ player }) {
 
 module.exports = {
   name: "LeaguePoints",
+  description: "Tracks League Points as the total of a league character's completed tasks, and announces awards and changes to the other league plugins.",
   members: true,
   dependsOn: ["LeagueMode"],
   register(pluginApi) {

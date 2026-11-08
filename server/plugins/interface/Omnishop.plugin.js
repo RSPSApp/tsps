@@ -498,6 +498,7 @@ function attach(api) {
 
 module.exports = {
   name: "Omnishop",
+  description: "Opens Jagex's shared reward shop interface from the cache's shop data, tracks currency balances and handles buying and selling for other plugins' shops.",
   register(api) {
     attach(api);
     api.onCustomEvent("omnishop:open", open);

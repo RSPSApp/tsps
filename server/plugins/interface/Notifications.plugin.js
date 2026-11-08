@@ -77,6 +77,7 @@ function bind(api) {
 
 module.exports = {
   name: "Notifications",
+  description: "Shows the pop-up banner at the top of the screen for collection log and Combat Achievements, queuing them one at a time.",
   NOTIFICATIONS_UID,
   register(api) {
     bind(api);

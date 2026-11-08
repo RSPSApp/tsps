@@ -10,6 +10,7 @@ const Kills = require("./shellbane/Kills.ShellbaneGryphon");
 
 module.exports = {
   name: "ShellbaneGryphon",
+  description: "The Shellbane gryphon: its private cave under the Great Conch, its attacks, knockback, spit and whirlwind specials, and the kill.",
   members: true,
   register(api) {
     Common.init(api);

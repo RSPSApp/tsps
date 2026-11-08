@@ -151,6 +151,7 @@ function onShutdownCleanup() {
 
 module.exports = {
     name: "GameUpdate",
+    description: "Adds the owner-only ::gameUpdate command to schedule a server shutdown, pushing a live countdown to every player until it restarts.",
     register(api) {
         ({ Task, TaskManager, World, PlayerRights, Server } = api.core);
         GameUpdateCountdownTask = class extends Task {

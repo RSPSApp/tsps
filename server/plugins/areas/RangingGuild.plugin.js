@@ -68,6 +68,7 @@ function guardDoor(request) {
 
 module.exports = {
   name: "RangingGuild",
+  description: "Lets players through the Ranging Guild door only with 40 Ranged, the doorman turning others away.",
   members: true,
   _test: { guardDoor, inside, insideGuild, rangedLevel, REQUIRED_LEVEL, REFUSAL_VARIANT, DOOR, GUILD },
   register(pluginApi) {

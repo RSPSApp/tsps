@@ -201,6 +201,7 @@ function wakeSuit(api, event) {
 
 module.exports = {
   name: 'TaverleyDungeon',
+  description: 'Taverley Dungeon\'s key doors, Velrak\'s dusty key and the suits of armour that come alive at the Cauldron of Thunder prison door.',
   members: true,
   register(api) {
     api.onCustomEvent('door:toggle', checkDoorKey.bind(null, api.core));

@@ -141,6 +141,7 @@ function useOnMerchant(event) {
 
 module.exports = {
   name: "NoteExchange",
+  description: "Banknote exchange merchants such as Phials: use a banknote on them to swap it for the real items for a fee per note.",
   _test: { exchangeable, accepts },
   register(api) {
     core = api.core;

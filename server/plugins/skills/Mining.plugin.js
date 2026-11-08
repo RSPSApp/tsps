@@ -1077,6 +1077,7 @@ function pauseMining(event) {
 
 module.exports = {
   name: "Mining",
+  description: "Mining: rocks and ores with pickaxes, respawn timers and depleted rocks, plus events other content uses for pickaxe and ore checks.",
   PICKAXES,
   PICKAXES_DESC,
   ROCKS,

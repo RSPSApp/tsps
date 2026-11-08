@@ -77,6 +77,7 @@ function questCommand({ player, parts }) {
 
 module.exports = {
   name: "QuestCommand",
+  description: "Adds the admin ::quest command to show, set, complete or reset a player's quest stage, for testing quest-gated content.",
   register(api) {
     api.registerCommand("quest", questCommand, PlayerRights.ADMINISTRATOR, "Show or set a quest's progress: ::quest <name> [complete|reset|<stage>]");
   },

@@ -274,6 +274,7 @@ function crossGate(player, gate, { fromClick = false } = {}) {
 
 module.exports = {
   name: "AlKharidGate",
+  description: "Al Kharid toll gate: Border Guard dialogue and a 10 coin toll before Prince Ali Rescue, free passage after it.",
   // Exported for tests/wooden-gate.test.cjs; nothing else reads them.
   interceptGate,
   answerCondition,

@@ -109,6 +109,7 @@ function onLowWarmth(request) {
 
 module.exports = {
   name: "RingOfLife",
+  description: "Teleports the wearer to their respawn point and breaks the ring when a hit leaves 10% Hitpoints or less, with the Defence cape doing the same.",
   members: true,
   _test: { onIncomingDamage, onLowWarmth, toggleRespawn, ARDOUGNE_ATTRIBUTE, ARDOUGNE_MARKET },
   register(api) {

@@ -105,6 +105,7 @@ function maxGear({ player, parts }) {
 
 module.exports = {
   name: "MaxGear",
+  description: "Developer ::maxgear command that banks worn gear and equips best-in-slot melee, ranged or magic sets for boss testing.",
   register(api) {
     pluginApi = api;
     api.registerCommand("maxgear", maxGear, api.core.PlayerRights.DEVELOPER, "Wear best-in-slot gear (worn items go to the bank)");

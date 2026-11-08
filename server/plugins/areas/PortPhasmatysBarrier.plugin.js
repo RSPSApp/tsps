@@ -249,6 +249,7 @@ function bind(registry) {
 
 module.exports = {
   name: "PortPhasmatysBarrier",
+  description: "Port Phasmatys energy barriers and Ghost guards: a 2 ecto-token toll before Ghosts Ahoy, free passage after.",
   members: true,
   register(registry) {
     bind(registry);

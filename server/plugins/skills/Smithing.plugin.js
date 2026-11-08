@@ -38,6 +38,7 @@ function startBotSmelting(player, recipe, amount) {
 
 module.exports = {
   name: "Smithing",
+  description: "Smelting at furnaces and smithing at anvils, plus cannonballs, godswords, dragon and visage shields, barbarian spears, Varrock armour and Superheat Item.",
   SMELTING_RECIPES: Data.SMELTING_RECIPES,
   FURNACE_OBJECT_IDS: Smelting.FURNACE_OBJECT_IDS,
   SMITHING_BAR_TYPE_BY_ITEM_ID: Data.BAR_TYPE_BY_BAR,

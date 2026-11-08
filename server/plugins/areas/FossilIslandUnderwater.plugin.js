@@ -257,6 +257,7 @@ function logout({ player }) {
 
 module.exports = {
   name: "FossilIslandUnderwater",
+  description: "Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus.",
   members: true,
   _test: { oxygen, underwaterTick, followWater, breathingGear, boatMenu, dive, climbRope },
   register(api) {

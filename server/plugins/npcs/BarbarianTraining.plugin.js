@@ -305,6 +305,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "BarbarianTraining",
+  description: "Adds Barbarian Training's rod fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches and the barbarian mixes.",
   members: true,
   // TreasureTrails first: its before-hook answers clue steps that send the player to Otto (the
   // medium anagram and hard cipher), which this Talk-to must not take over.

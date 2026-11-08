@@ -12,6 +12,7 @@ const Common = require("./troublebrewing/Common.TroubleBrewing");
 
 module.exports = {
   name: "TroubleBrewing",
+  description: "Adds Trouble Brewing on Mos Le'Harmless: the lobby, team rounds of brewing in the arena, scoring and the pieces-of-eight rewards.",
   members: true,
   register(api) {
     Common.init(api);

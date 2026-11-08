@@ -307,6 +307,7 @@ function installCombatMethod() {
 
 module.exports = {
   name: "Elvarg",
+  description: "Elvarg for Dragon Slayer: her lair, melee and dragonfire breath checked against antifire protection, and her kill state.",
   register(api) {
     pluginApi = api;
     api.persistAttribute(INSIDE_LAIR_ATTRIBUTE, false);

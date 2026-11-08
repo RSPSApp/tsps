@@ -7,6 +7,7 @@
 
 module.exports = {
   name: "CastleWars",
+  description: "Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game.",
   config: {
     "CastleWars:seedBots": {
       type: "boolean", label: "Seed Castle Wars with bots", default: false,

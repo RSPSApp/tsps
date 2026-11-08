@@ -261,6 +261,7 @@ function spellEffectSucceeded({ player, spellName } = {}) {
 
 module.exports = {
   name: "LumbridgeDraynorDiary",
+  description: "Credits Lumbridge and Draynor diary tasks, such as water runes, anchovies, the River Lum grapple, Chaeldar's tasks and Puro-Puro implings.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

@@ -10,6 +10,7 @@ const Kills = require("./cerberus/Kills.Cerberus");
 
 module.exports = {
   name: "Cerberus",
+  description: "Cerberus in her lair: the winches, arenas and exits, the triple attack with souls and lava, and the kill.",
   members: true,
   register(api) {
     Common.init(api);

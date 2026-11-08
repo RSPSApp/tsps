@@ -215,6 +215,7 @@ function bottomFloorOption(event) {
 
 module.exports = {
   name: "Ladders",
+  description: "Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation.",
   register(api) {
     pluginApi = api;
     TaskManager = api.getTaskManager();

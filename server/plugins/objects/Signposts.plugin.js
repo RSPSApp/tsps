@@ -97,6 +97,7 @@ function bindCore(api) {
 
 module.exports = {
   name: "Signposts",
+  description: "Reading the guide signposts near Lumbridge, Draynor and Falador, opening the compass interface and moving the camera as the client expects.",
   register(api) {
     bindCore(api);
     api.onObjectRoute(readFromAfar);

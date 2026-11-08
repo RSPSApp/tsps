@@ -27,6 +27,7 @@ function teleport({ player }) {
 
 module.exports = {
   name: "MythicalCape",
+  description: "Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges.",
   members: true,
   register(api) {
     core = api.core;

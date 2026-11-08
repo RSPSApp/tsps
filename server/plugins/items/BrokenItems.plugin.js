@@ -9,6 +9,7 @@ const Common = require("./brokenitems/Common.BrokenItems");
 
 module.exports = {
   name: "BrokenItems",
+  description: "Untradeable items that break on a PvP death, and Perdu, who repairs, locks and unlocks them.",
   register(api) {
     Common.init(api);
     require("./brokenitems/Death.BrokenItems")(api);

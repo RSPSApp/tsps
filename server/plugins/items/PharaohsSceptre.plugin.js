@@ -10,6 +10,7 @@ const Recharge = require("./pharaohssceptre/Recharge.PharaohsSceptre");
 
 module.exports = {
   name: "PharaohsSceptre",
+  description: "Adds the Pharaoh's sceptre: teleports to the great pyramids, charges, Desert Diary capacity and recharging at the guardian mummy.",
   members: true,
   register(api) {
     Common.init(api);

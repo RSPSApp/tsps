@@ -1048,6 +1048,7 @@ function useDenseOnDarkAltar(event) {
 
 module.exports = {
   name: "Runecrafting",
+  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals.",
   register(api) {
     initialize(api);
     api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);

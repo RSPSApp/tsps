@@ -311,6 +311,7 @@ function handleJewelleryAction(event) {
 
 module.exports = {
   name: "Jewellery",
+  description: "Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages.",
   members: true,
   register(api) {
     pluginApi = api;

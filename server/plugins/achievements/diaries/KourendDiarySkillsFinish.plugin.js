@@ -66,6 +66,7 @@ function fletched({ player, itemId }) {
 
 module.exports = {
   name: "KourendDiarySkillsFinish",
+  description: "Credits Kourend diary tasks for digging saltpetre, mining volcanic sulphur, an Ape Atoll teleport tablet and a battlestaff made in the Farming Guild.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

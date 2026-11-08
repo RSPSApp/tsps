@@ -8,6 +8,7 @@ const Lairs = require("./giantlairs/Common.GiantLairs");
 
 module.exports = {
   name: "GiantLairs",
+  description: "Obor and Bryophyta: their key-locked lairs, fights, chests and giant bones.",
   register(api) {
     Lairs.init(api);
     require("./giantlairs/Lair.GiantLairs")(api);

@@ -822,6 +822,7 @@ function excludePvpStats(event) {
 
 module.exports = {
   name: "DuelArena",
+  description: "Adds the Emir's Arena duel challenges and load-outs, including the rules and staking interfaces for unranked and legacy duels.",
   config: {
     "DuelArena:pvpArenaWorld": {
       type: "boolean", label: "PvP Arena world", default: false,

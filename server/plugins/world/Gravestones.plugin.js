@@ -6,6 +6,7 @@
  */
 module.exports = {
   name: "Gravestones",
+  description: "A PvM death leaves a gravestone only you can see for 15 minutes, then items go to Death's Office. Can be turned off for the older drop behaviour.",
   config: {
     "Gravestones:enabled": {
       type: "boolean", label: "Gravestones", default: true,

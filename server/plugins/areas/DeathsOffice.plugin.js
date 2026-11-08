@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "DeathsOffice",
+  description: "Death's Office: the Death's Domain entrances, a private office per visit, Death's item retrieval for collapsed graves and Death's Coffer.",
   register(api) {
     require("./deathsoffice/Instance.DeathsOffice").attach(api);
     require("./deathsoffice/Entrances.DeathsOffice").attach(api);

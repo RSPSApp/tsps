@@ -275,6 +275,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "FishingCrane",
+  description: "Repair broken fishing cranes in Port Piscarilius with a hammer, planks and nails (30 Crafting and Construction); one success also repairs for helpers nearby.",
   members: true,
   register(pluginApi) {
     attach(pluginApi);

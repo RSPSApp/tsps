@@ -60,6 +60,7 @@ function applyCurse(event) {
 
 module.exports = {
   name: 'Standard Curses',
+  description: 'Standard-spellbook Confuse, Weaken and Curse, Vulnerability, Enfeeble and Stun stat drains.',
   register(api) {
     initialize(api);
     api.onSpellDisabled(disabled);

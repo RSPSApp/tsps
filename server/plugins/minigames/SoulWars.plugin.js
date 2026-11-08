@@ -29,6 +29,7 @@ const Scoreboard = require("./soulwars/Scoreboard.SoulWars");
 
 module.exports = {
   name: "Soul Wars",
+  description: "Adds Soul Wars: the lobby and queue, the instanced arena, team avatars, graveyards, souls and fragments, and the obelisk.",
   config: {
     "SoulWars:seedBots": {
       type: "boolean", label: "Seed Soul Wars with bots", default: false,

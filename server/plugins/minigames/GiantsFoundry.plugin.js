@@ -8,6 +8,7 @@
  */
 module.exports = {
   name: "GiantsFoundry",
+  description: "Adds Giants' Foundry: Kovac's sword-smithing minigame in the cave under the Giants' Plateau.",
   members: true,
   register(api) {
     require("./giantsfoundry/Shared.GiantsFoundry").bind(api);

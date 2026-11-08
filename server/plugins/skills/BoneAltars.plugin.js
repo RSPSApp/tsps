@@ -216,6 +216,7 @@ function offerOnAltar(request) {
 
 module.exports = {
   name: "BoneAltars",
+  description: "Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last.",
   members: true,
   _test: { altarAt, spared, zealotPieces, graphicTile, dataBlessing },
   register(pluginApi) {

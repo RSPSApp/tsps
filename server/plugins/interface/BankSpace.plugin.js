@@ -270,6 +270,7 @@ function init(pluginApi) {
 
 module.exports = {
   name: "BankSpace",
+  description: "Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins.",
   register(pluginApi) {
     init(pluginApi);
     pluginApi.onCustomEvent("bank:capacity", capacity);

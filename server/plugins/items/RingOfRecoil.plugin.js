@@ -71,6 +71,7 @@ function recoilTarget(check) {
 
 module.exports = {
   name: "RingOfRecoil",
+  description: "Adds the ring of recoil's Check and Break options and exempts the Wiki's list of immune monsters from the reflected damage.",
   members: true,
   register(api) {
     core = api.core;

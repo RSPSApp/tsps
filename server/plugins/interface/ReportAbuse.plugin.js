@@ -133,6 +133,7 @@ function receiveReport(event) {
 
 module.exports = {
   name: "ReportAbuse",
+  description: "Report option on players and the chatbox Report button open the report form; submitted reports are written to a JSON-lines file.",
   RULES,
   register(api) {
     pluginApi = api;

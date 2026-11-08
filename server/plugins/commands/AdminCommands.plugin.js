@@ -967,6 +967,7 @@ let PlayerPunishment;
 
 module.exports = {
   name: "AdminCommands",
+  description: "Staff commands: teleporting, items and spawns, levels, kicks, mutes and bans, reloading data, and logging and debug tools.",
   register(api) {
     World = api.getWorld();
     SkillManager = api.getSkillManager();

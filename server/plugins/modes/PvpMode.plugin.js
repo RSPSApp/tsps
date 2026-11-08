@@ -53,6 +53,7 @@ function bypassPrayerUnlocks(event) {
 
 module.exports = {
   name: "PvpMode",
+  description: "Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets presets use prayers without the unlock quests.",
   register(api) {
     TaskManager = api.getTaskManager();
     Presets.register(api);

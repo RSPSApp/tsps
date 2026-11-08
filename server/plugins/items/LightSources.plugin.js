@@ -96,6 +96,7 @@ function extinguishTorch({ player, item }) {
 
 module.exports = {
   name: "LightSources",
+  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches and mining helmets be put out again.",
   members: true,
   register(api) {
     core = api.core;

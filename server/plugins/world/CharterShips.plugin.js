@@ -599,6 +599,7 @@ function start(api) {
 
 module.exports = {
   name: "CharterShips",
+  description: "Charter ship crew: pay a fare to sail between ports on the map, or trade with them, with Ring of Charos discounts and Sailing ports.",
   members: true,
   _test: {
     destinations, portAt, portOf, available, fareBetween, fareFor, choose, sail, offerFare, openMap,

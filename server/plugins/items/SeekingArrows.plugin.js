@@ -12,6 +12,7 @@ function seekingMinimum(event) {
 
 module.exports = {
   name: "SeekingArrows",
+  description: "Makes successful bow hits with seeking dragon arrows deal at least three damage.",
   members: true,
   register(api) {
     core = api.core;

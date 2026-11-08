@@ -75,6 +75,7 @@ function skullOnLogin({ player }) {
 
 module.exports = {
   name: "CapeOfSkulls",
+  description: "Cape of skulls: warns before you wear it, then skulls the player for 20 minutes, again on re-equip or login.",
   members: true,
   _test: { skullOnWear, skullOnLogin, warnBeforeWear },
   register(api) {

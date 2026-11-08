@@ -79,6 +79,7 @@ function logout({ player }) { opened.delete(player); }
 
 module.exports = {
   name: 'Tanning',
+  description: 'Opens the tanning interface from Ellis, Tanner, Sbott and Eodan, with per-tanner price overrides.',
   register(pluginApi) {
     api = pluginApi;
     api.onCustomEvent('tanning:open', openTanning);

@@ -113,6 +113,7 @@ function enchant(event) {
 
 module.exports = {
   name: "SlayersStaff",
+  description: "Adds Magic Dart for 55 Slayer with staves such as the Slayer's staff, plus the Slayer's staff (e)'s charges and Slayer's enchantment.",
   members: true,
   _test: { refuseDart, dartMaximum, spendCharge, enchant, chargesOf, setCharges, castsDart, CHARGES_META_KEY },
   register(pluginApi) {

@@ -219,6 +219,7 @@ function advanceTime(event) {
 
 module.exports = {
   name: "DesertHeat",
+  description: "Kharidian Desert heat: a timer that hurts players outside the towns unless a waterskin, Desert amulet 4, circlet of water or choc-ice helps.",
   members: true,
   PROTECT_EVENT,
   _test: { inHeat, heatInterval, drinkWaterskin, heatTick, timers, nearHeat },

@@ -57,6 +57,7 @@ function canBank(api,event){
 
 module.exports={
   name:'ChristmasDinner',
+  description: 'The Christmas 2025 Dinner event: scene, NPC dialogue, serving platters, escort and completion cutscene and rewards, running only in its calendar window.',
   register(api){
     api.registerArea(Music.createArea(api));
     api.persistAttribute(Progress.PROGRESS_ATTRIBUTE,Progress.initial());

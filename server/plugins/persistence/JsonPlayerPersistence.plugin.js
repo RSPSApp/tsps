@@ -642,6 +642,7 @@ let SkillManager;
 
 module.exports = {
   name: "JsonPlayerPersistence",
+  description: "Saves each character as a JSON file under data/saves/characters. Skipped when the server runs inside a browser host.",
   register(api) {
     SkillManager = api.getSkillManager();
     if (isBrowserHost()) {

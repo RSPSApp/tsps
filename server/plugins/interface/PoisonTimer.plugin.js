@@ -40,6 +40,7 @@ function onLogout({ player }) {
 
 module.exports = {
   name: "Poison Timer",
+  description: "Sends the poison and venom state to the client so the poison timer shows the seconds until the next damage hit.",
   register(api) {
     api.onPlayerLogin(onLogin);
     api.onPlayerProcess(onProcess);

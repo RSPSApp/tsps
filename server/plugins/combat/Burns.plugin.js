@@ -134,6 +134,7 @@ function initializeBurnTracker(api) {
 
 module.exports = {
   name: "Burns",
+  description: "Player-inflicted burns on monsters: a 4-tick damage hitsplat that stacks up to five times, with boss immunities.",
   members: true,
   register(api) {
     initializeBurnTracker(api);

@@ -118,6 +118,7 @@ function registerPotion() {
 
 module.exports = {
   name: "GoadingPotion",
+  description: "Drinking a goading potion starts a six-minute timer during which nearby monsters within four tiles turn on the player, with the worn-off warnings.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

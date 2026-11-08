@@ -54,6 +54,7 @@ function crossDitch(api, { player, object, location, sourceLocation }) {
 
 module.exports = {
   name: "WildernessDitch",
+  description: "Crossing the Wilderness Ditch with the jump animation and sound, landing three tiles on, in and out of the Wilderness.",
   resolveJump,
   register: (api) => {
     api.onObjectInteraction("Wilderness Ditch", { Cross: crossDitch.bind(null, api) });

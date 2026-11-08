@@ -146,6 +146,7 @@ function toggleSetting({ player, action }) {
 
 module.exports = {
   name: "ItemsKeptOnDeath",
+  description: "Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles.",
   register(api) {
     core = api.core;
     pluginApi = api;

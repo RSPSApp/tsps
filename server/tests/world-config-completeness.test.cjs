@@ -279,3 +279,13 @@ test('default-off plugins and the switches-table plugins have a description', ()
   const missing = needing.filter(({ mod }) => typeof mod.description !== 'string' || !mod.description.trim()).map(({ file }) => file);
   assert.deepEqual(missing, []);
 });
+
+test('every plugin module has a one-line description', () => {
+  assert.ok(modules.length >= 500, `only ${modules.length} plugin modules loaded`);
+  const problems = [];
+  for (const { file, mod } of modules) {
+    if (typeof mod.description !== 'string' || !mod.description.trim()) problems.push(`${file}: no description`);
+    else if (/[\r\n]/.test(mod.description)) problems.push(`${file}: description spans more than one line`);
+  }
+  assert.deepEqual(problems, []);
+});

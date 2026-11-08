@@ -4,6 +4,7 @@
  */
 module.exports = {
   name: "Farming",
+  description: "Farming: patches, crop growth, tools and storage, Tithe Farm, the Farming Guild and Hespori.",
   members: true,
   register(api) {
     require("./farming/Core.Farming").init(api);

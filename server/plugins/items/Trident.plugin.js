@@ -393,6 +393,7 @@ function fillCharges(event) {
 
 module.exports = {
   name: "Trident",
+  description: "Adds the tridents of the seas and the swamp, with charging, uncharging, powered-staff casting and the swamp trident's chance to venom.",
   members: true,
   _test: {
     get RECIPES() { return RECIPES; },

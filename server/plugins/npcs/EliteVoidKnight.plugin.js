@@ -152,6 +152,7 @@ function definePieces() {
 
 module.exports = {
   name: "EliteVoidKnight",
+  description: "Lets the Elite Void Knight upgrade a Void knight top or robe to the elite version for 200 Commendation points, after the Hard Western diary.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

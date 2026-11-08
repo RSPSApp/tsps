@@ -15,6 +15,7 @@ const CombatAchievements = require("./tormenteddemons/CombatAchievements.Torment
 
 module.exports = {
   name: "TormentedDemons",
+  description: "Tormented Demons in the Ancient Guthixian Temple: three styles, shield and defenceless phases, fire bombs, 1-3 demon rooms, kill count and Combat Achievements.",
   members: true,
   register(api) {
     Shared.attachApi(api);

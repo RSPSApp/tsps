@@ -187,6 +187,7 @@ function createGuildArea(api) {
 
 module.exports = {
   name: "ArdougneMagicGuildDiary",
+  description: "Credits the Ardougne diary task for entering the Magic Guild.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

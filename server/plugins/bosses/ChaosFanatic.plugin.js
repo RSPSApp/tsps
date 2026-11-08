@@ -227,6 +227,7 @@ function combatClass(api) {
 
 module.exports = {
   name: "ChaosFanatic",
+  description: "The Chaos Fanatic's attack mix of explosions, a disarming projectile and standard magic.",
   members: true,
   register(api) {
     api.registerNpcCombatMethodProvider(

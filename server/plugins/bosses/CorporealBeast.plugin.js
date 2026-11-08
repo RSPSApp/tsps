@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "CorporealBeast",
+  description: "The Corporeal Beast's lair under the Wilderness, the Beast, its dark energy core and the spirit shields made from its drops.",
   register(api) {
     require("./corporealbeast/Lair.CorporealBeast")(api);
     require("./corporealbeast/Beast.CorporealBeast")(api);

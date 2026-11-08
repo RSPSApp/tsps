@@ -346,6 +346,7 @@ function createCavesArea() {
 
 module.exports = {
   name: "RevenantCaves",
+  description: "Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside.",
   members: true,
   _test: {
     enter, exit, creviceWarning, teleportOption, configOption, readScroll, onDeath, payFee, inCaves, createCavesArea,

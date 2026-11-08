@@ -59,6 +59,7 @@ function sellWoad(core, event) {
 
 module.exports = {
   name: "Wyson",
+  description: "Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two.",
   register(api) {
     api.onNpcDialogueCondition(dialogueCondition.bind(null, api.core));
     api.onCustomEvent("npc-dialogue:action", sellWoad.bind(null, api.core));

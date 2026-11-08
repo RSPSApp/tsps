@@ -95,6 +95,7 @@ function boardFromDialogue(event) {
 
 module.exports = {
   name: "BarnabyFerry",
+  description: "Captain Barnaby's ferry from the Ardougne, Brimhaven and Rimmington docks, with his dialogue and a fade between ports.",
   members: true,
   _test: { fareFor, sail, sailToOption, selectDockVariant, answerFareCondition, boardFromDialogue, PORTS },
   register(pluginApi) {

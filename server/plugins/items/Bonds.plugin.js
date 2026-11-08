@@ -453,6 +453,7 @@ function openConvertDialog(event) {
 
 module.exports = {
   name: "Bonds",
+  description: "Old school bonds: tradeable and untradeable forms, bond pouch interface, redeeming for membership days, converting and gifting bonds.",
   register(api) {
     pluginApi = api;
     api.persistAttribute(MEMBERSHIP_ATTRIBUTE);

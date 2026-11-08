@@ -139,6 +139,7 @@ function revealBuriedMole(core, { npc }) {
 
 module.exports = {
   name: "GiantMole",
+  description: "The Giant Mole in the Falador Mole Hole: melee only, burrowing to fixed resurface spots between 5% and 50% hitpoints.",
   members: true,
   register(api) {
     api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api.core));

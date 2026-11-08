@@ -153,6 +153,7 @@ function start(pluginApi) {
 
 module.exports = {
   name: "Sawmill",
+  description: "Sawmill operators: Buy-plank turns logs and coins into planks, with the amount menu and the Wiki's refusal messages.",
   members: true,
   register(pluginApi) {
     pluginApi.onServerStartup(() => start(pluginApi));

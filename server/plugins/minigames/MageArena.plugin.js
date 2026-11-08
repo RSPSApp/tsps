@@ -15,6 +15,7 @@ const Statues = require("./magearena/Statues.MageArena");
 
 module.exports = {
   name: "MageArena",
+  description: "Adds the Mage Arena: battle mages, levers and pools, the god statues' capes and the 100-cast charging for each god spell.",
   members: true,
   register(api) {
     BattleMages(api);

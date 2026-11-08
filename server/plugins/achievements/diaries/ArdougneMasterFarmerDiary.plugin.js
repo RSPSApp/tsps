@@ -24,6 +24,7 @@ function pickpocketed({ player, kind, succeeded, npc }) {
 let api;
 module.exports = {
   name: "ArdougneMasterFarmerDiary",
+  description: "Credits the Ardougne diary task for pickpocketing the Master Farmer north of Ardougne.",
   members: true,
   dependsOn: ["AchievementDiaries", "Thieving"],
   register(registry) {

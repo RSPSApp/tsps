@@ -246,6 +246,7 @@ function setup(api) {
 
 module.exports = {
   name: "CreatureCreation",
+  description: "Adds the solo Creature Creation activity in the Tower of Life dungeon, started from the symbol of life.",
   members: true,
   _test: {
     ALTARS, ingredientIds, atAltar, inDungeon, notedIngredientIds, ingredientSlot, isPrimed,

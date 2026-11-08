@@ -247,6 +247,7 @@ function clickFavouriteButton({ player }) {
 
 module.exports = {
   name: "TeleportInterface",
+  description: "Adds the ::teleports command, a searchable teleport list with tabs, favourites, recent teleports and a Wilderness warning.",
   register(api) {
     pluginApi = api;
     core = api.core;

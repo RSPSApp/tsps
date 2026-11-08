@@ -283,6 +283,7 @@ function onDeath({ player }) {
 
 module.exports = {
   name: "Mogre",
+  description: "Lets players throw fishing explosives at Ominous Fishing Spots at Mudskipper Point to lure out a Mogre that attacks them.",
   members: true,
   register(api) {
     api.onServerStartup(initialize.bind(null, api));

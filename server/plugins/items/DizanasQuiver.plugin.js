@@ -653,6 +653,7 @@ function login({ player }) {
 
 module.exports = {
   name: "DizanasQuiver",
+  description: "Dizana's quiver: an extra ammunition slot with Fill, charges, Open, Empty and Uncharge, plus its death rules and the Shrine of Ralos blessing.",
   members: true,
   register(api) {
     pluginApi = api;

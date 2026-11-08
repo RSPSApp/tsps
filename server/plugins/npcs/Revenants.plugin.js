@@ -8,6 +8,7 @@ const Revenants = require("./revenants/Common.Revenants");
 
 module.exports = {
   name: "Revenants",
+  description: "Revenant combat, the shared revenant drop table, bracelet of ethereum, amulet of avarice and Revenant maledictus.",
   members: true,
   register(api) {
     Revenants.init(api);

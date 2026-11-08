@@ -60,6 +60,7 @@ function sendBoatPositions() {
 
 module.exports = {
   name: "WorldMapPosition",
+  description: "Keeps the world map's player marker up to date while the map is open, on land or aboard a boat.",
   register(api) {
     api.onPlayerProcess(updateWorldMapPosition);
     BoatManager.onAfterTick(sendBoatPositions);

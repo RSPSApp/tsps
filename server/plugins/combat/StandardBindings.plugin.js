@@ -50,6 +50,7 @@ function impact(event) {
 
 module.exports = {
   name:'Standard Bindings',
+  description: 'Standard-spellbook Bind, Snare and Entangle rules, including Swampbark armour.',
   register(api) {
     initialize(api);
     api.onSpellDisabled(disabled);

@@ -522,6 +522,7 @@ function handleChestInterfaceAction(player, event) {
 
 module.exports = {
   name: "LootKeys",
+  description: "Adds Wilderness loot keys dropped by player kills, which hold the victim's loot until opened at the loot chest, with the settings and unlock interface.",
   // Potions is read-only classification data; depending on its lifecycle would
   // defer this named Talk-to handler behind the generic NpcDialogues fallback.
   dependsOn: ["Wilderness", "Food"],

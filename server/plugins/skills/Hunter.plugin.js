@@ -25,6 +25,7 @@ const LAY_GROUND_OPTION = 4;
 
 module.exports = {
   name: "Hunter",
+  description: "Hunter: traps, birdhouses, crabs, drift nets, implings, rumours, tracking, aerial fishing and herbiboar.",
   members: true,
   register(api) {
     api.onServerStartup(Runtime.start.bind(null, api));

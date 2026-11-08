@@ -44,6 +44,7 @@ function canWearRing(event) {
 
 module.exports = {
   name: "AncientRings",
+  description: "Stops the Ultor, Bellator, Magus and Venator rings being worn until the player has killed the matching Desert Treasure II boss.",
   members: true,
   _test: { canWearRing, requirements },
   register(api) {

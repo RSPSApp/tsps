@@ -76,6 +76,7 @@ function barehandShark({ player, skill, itemId, barehand }) {
 
 module.exports = {
   name: "MorytaniaActivitiesDiary",
+  description: "Credits Morytania diary tasks for snelm crafting, Trouble Brewing, the Swamp Boaty, Guthix balance mixing and barehand shark fishing.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

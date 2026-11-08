@@ -19,6 +19,7 @@ const LEAGUE_OPTIONS = [
 
 module.exports = {
   name: "LeagueMode",
+  description: "Runs a world as a league: gives each account a league character, the Leagues tab, rank and statistics panels, XP rate and the reward shop.",
   config: {
     "league:type": {
       type: "enum", label: "League", default: 0, values: LEAGUE_OPTIONS,

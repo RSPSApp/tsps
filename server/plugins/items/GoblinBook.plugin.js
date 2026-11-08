@@ -7,6 +7,7 @@ function readGoblinBook({ player }) {
 
 module.exports = {
   name: "GoblinBook",
+  description: "Lets players read the Goblin book, which opens its pages in the book viewer.",
   members: true,
   register(api) {
     api.onItemAction("Goblin book", { Read: readGoblinBook });

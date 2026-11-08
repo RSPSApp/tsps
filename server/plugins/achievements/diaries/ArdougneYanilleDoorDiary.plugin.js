@@ -95,6 +95,7 @@ function freeOpenFromDungeon(event) {
 
 module.exports = {
   name: "ArdougneYanilleDoorDiary",
+  description: "Credits the Ardougne diary task for picklocking the door to the basement of Yanille's Agility Dungeon.",
   members: true,
   dependsOn: ["AchievementDiaries", "Doors"],
   register(registry) {

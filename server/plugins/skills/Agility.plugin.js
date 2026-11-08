@@ -771,6 +771,7 @@ buildIndex();
 
 module.exports = {
   name: "Agility",
+  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap-counter toggle.",
   members: true,
   register(api) {
     pluginApi = api;

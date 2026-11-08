@@ -46,6 +46,7 @@ function answerDoorCondition({ npcId, player, text }) {
 
 module.exports = {
   name: "ChampionsGuild",
+  description: "Lets players into the Champions' Guild in Varrock only with 32 Quest Points, with the Guildmaster's refusal and greeting.",
   _test: { guardDoor, answerDoorCondition },
   register(pluginApi) {
     api = pluginApi;

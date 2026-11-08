@@ -8,6 +8,7 @@
  */
 module.exports = {
   name: "MasteringMixology",
+  description: "Adds Mastering Mixology, the Herblore minigame in the Alchemical Society's lab under Aldarin.",
   members: true,
   register(api) {
     require("./mixology/Shared.Mixology").bind(api);

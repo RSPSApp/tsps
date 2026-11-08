@@ -7,6 +7,7 @@ const Shared = require("./crafting/Shared.Crafting");
 
 module.exports = {
   name: "Crafting",
+  description: "Crafting: leather, gems, jewellery, glassblowing, pottery, spinning, weaving, battlestaves, snelms and light orbs.",
   register(api) {
     Shared.attach(api);
     require("./crafting/Leather.Crafting")(api);

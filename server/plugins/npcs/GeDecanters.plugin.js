@@ -287,6 +287,7 @@ function combine({ player }) {
 
 module.exports = {
   name: "GeDecanters",
+  description: "Adds the Grand Exchange decanting service, which swaps potion doses between vials in a player's inventory for a fee.",
   members: true,
   DATA,
   _test: { potionGroups, jewelleryGroups, decant, combine, plan },

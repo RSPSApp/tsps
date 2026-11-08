@@ -19,6 +19,7 @@ const Entrance = require("./thermonuclear/Entrance.ThermonuclearSmokeDevil");
 
 module.exports = {
   name: "ThermonuclearSmokeDevil",
+  description: "The Thermonuclear smoke devil boss room by Castle Wars: crevice entrance, 93 Slayer requirement, facemask rule and its single ranged-magic attack.",
   members: true,
   register(api) {
     Common.init(api);

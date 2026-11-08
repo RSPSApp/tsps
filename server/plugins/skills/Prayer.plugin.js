@@ -321,6 +321,7 @@ function scatterAshes({ player, itemId, slot }) {
 
 module.exports = {
   name: "Prayer",
+  description: "Burying bones and scattering demonic ashes for Prayer XP, with events other plugins use to bury, offer or restore prayer.",
   config: {
     "Prayer:sequentialBurying": {
       type: "boolean", label: "Bury all bones with one click", default: false,

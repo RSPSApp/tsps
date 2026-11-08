@@ -158,6 +158,7 @@ let core;
 module.exports = {
   _test: { skullAtLeast },
   name: "PlayerCommands",
+  description: "Everyday player commands: ::home, ::players, ::claim, ::yell, ::title, ::skull, ::changepassword, ::lockxp and ::timeplayed.",
   register(api) {
     core = api.core;
     World = api.getWorld();

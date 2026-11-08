@@ -311,6 +311,7 @@ function flowSpecial() {
 
 module.exports = {
   name: "ZoryasTome",
+  description: "Adds Zorya's tome from the Fractured Archive: a powered tome charged with astral and nature runes, plus its Zorya's flow special attack.",
   members: true,
   register(api) {
     core = api.core;

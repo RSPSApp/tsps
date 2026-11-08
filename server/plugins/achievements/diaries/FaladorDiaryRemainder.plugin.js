@@ -108,6 +108,7 @@ function bind(registry) {
 
 module.exports = {
   name: "FaladorDiaryRemainder",
+  description: "Credits the last Falador diary tasks: Sir Renitee's family crest, the scarecrow, the north wall grapple, Rogues' Den wall safe and magic roots.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

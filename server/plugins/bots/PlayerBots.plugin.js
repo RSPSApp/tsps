@@ -209,6 +209,7 @@ function registerDuelBotAcceptance(api) {
 
 module.exports = {
   name: "PlayerBots",
+  description: "Populates the world with player bots: PvP-loadout fighters and optional AI chat bots, with admin commands to manage them.",
   config: {
     "PlayerBots:ai": {
       type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",

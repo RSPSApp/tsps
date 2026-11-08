@@ -55,6 +55,7 @@ function regionLoaded(api, event) {
 }
 module.exports = {
   name: "BirthdayAnniversaryEvents",
+  description: "The 25th Anniversary '25 Years, 25 Mementos' event and the 13th birthday event, running in their calendar windows or forced with ::forceevent.",
   register(api) {
     api.persistAttribute(Progress.PROGRESS_ATTRIBUTE, null);
     api.persistAttribute(Progress.COMPLETE_ATTRIBUTE, false);

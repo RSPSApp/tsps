@@ -15,6 +15,7 @@ function isArdougneLanding(player) {
 
 module.exports = {
   name: "ArdougneTeleportDiary",
+  description: "Credits the Ardougne diary task for casting the Ardougne Teleport spell.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

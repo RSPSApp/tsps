@@ -21,6 +21,7 @@ function crafted({ player, source, altarId, runeId, rolls } = {}) {
 
 module.exports = {
   name: "ArdougneDeathRunesDiary",
+  description: "Credits the Ardougne diary task for crafting death runes from essence.",
   members: true,
   dependsOn: ["AchievementDiaries", "Runecrafting"],
   register(pluginApi) {

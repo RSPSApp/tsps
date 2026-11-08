@@ -11,6 +11,7 @@ const Scoreboard = require("./tzhaarketrak/Scoreboard.TzHaarKetRak");
 
 module.exports = {
   name: "TzHaarKetRak",
+  description: "Adds TzHaar-Ket-Rak's Challenges: fights against one to six JalTok-Jads, their rewards and a scoreboard.",
   members: true,
   register(api) {
     Common.init(api);

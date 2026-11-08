@@ -124,6 +124,7 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
 
 module.exports = {
   name: "Chinchompas",
+  description: "Chinchompa weapons: fuse-based accuracy by distance, area explosion hitting nearby targets in multicombat, and one chinchompa used per throw.",
   _test: { consumeChinchompa },
   members: true,
   register(api) {

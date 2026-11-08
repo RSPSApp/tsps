@@ -16,6 +16,7 @@ const Session = require("./stealingartefacts/Session.StealingArtefacts");
 
 module.exports = {
   name: "StealingArtefacts",
+  description: "Adds Stealing Artefacts at Port Piscarilius: Captain Khaled's tasks, the six houses' drawers, patrolling guards and the hand-in.",
   members: true,
   register(api) {
     Drawers(api);

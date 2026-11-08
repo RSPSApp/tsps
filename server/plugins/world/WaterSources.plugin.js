@@ -96,6 +96,7 @@ function fillFromWaterSource(event) {
 
 module.exports = {
   name: "WaterSources",
+  description: "Using an empty jug, vial, bucket, bowl, cup, fishbowl or waterskin on a fountain, sink, well, pump or tap fills them one per tick.",
   register(pluginApi) {
     api = pluginApi;
     core = api.core;

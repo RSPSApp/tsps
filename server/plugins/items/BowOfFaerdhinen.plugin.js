@@ -37,6 +37,7 @@ function decrementAmmo(player) {
 
 module.exports = {
   name: "BowOfFaerdhinen",
+  description: "Bow of Faerdhinen: uses one charge per shot, hit or miss, and has its inactive form, built on the shared crystal-weapon charge code.",
   members: true,
   register(api) {
     attach(api);

@@ -170,11 +170,11 @@ function giveBones(event) {
   if (!Number.isInteger(slot) || slot < 0 || slot >= inventory.capacity()
       || inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() <= 0) return;
   const bone = item.clone().setAmount(1);
+  if (item.isPresetItem() || item.isUntradeable() || item.isUnbankable()) return;
   const destination = target.getInventory();
   if (destination.getAddableAmount(bone) < 1) return;
   inventory.deleteAtSlot(slot, 1);
   destination.add(bone, true);
-  game.active(player);
 }
 
 /** Where a team's bones count: its base, or a graveyard (a third where it isn't held). */

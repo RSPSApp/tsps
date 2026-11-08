@@ -29,9 +29,9 @@ const AUDITED_ORDINARY_ITEMS = new Map([
   ["Fire rune", 554], ["Mind rune", 558], ["Nature rune", 561], ["Water rune", 555],
   ["Crossbow", 837], ["Shears", 1735],
 ]);
-// Their three explicit member rows were separately checked as ordinary spawns.
-// The seven rune pages above retain their original F2P-only scope.
-const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([["Crossbow", 837], ["Shears", 1735]]);
+// Their explicit member rows were separately checked as ordinary spawns.
+// Other rune pages retain their original F2P-only scope.
+const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([["Crossbow", 837], ["Shears", 1735], ["Fire rune", 554]]);
 const OWNED_EXACT = new Map([
   ["560:2500:2967:0", "Quests.plugin.js Watchtower definition provider"],
   ["2398:2528:9415:0", "Quests.plugin.js Watchtower definition provider"],
@@ -131,7 +131,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears subset only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Fire rune subset only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

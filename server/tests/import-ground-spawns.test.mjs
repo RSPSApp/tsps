@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { importSpawns } from "../scripts/import-osrs-ground-spawns.mjs";
 const row = (extra={}) => ({page:"Fire rune",id:554,x:3304,y:3311,plane:0,members:false,
   quantity:3,infobox_respawn_ticks:100,tile_respawn_raw:null,location:"[[Al Kharid mine]]",
@@ -36,7 +37,7 @@ test("nearby legacy item is a visible warning, never two-tile dedup",()=>{
 });
 test("untyped overrides, missing or variable data and member rows remain visible",()=>{
  const rows=[row({tile_respawn_raw:"50",unresolved_reasons:["untyped-tile-respawn"]}),
-   row({quantity:null,unresolved_reasons:["unresolved-quantity"]}),row({members:true})];
+   row({quantity:null,unresolved_reasons:["unresolved-quantity"]}),row({page:"Air rune",id:556,members:true})];
  const result=importSpawns(source(rows),[]);assert.equal(result.definitions.length,0);
  assert.equal(result.report.rows.length,3);assert.equal(result.report.counts["unresolved-source"],2);
  assert.equal(result.report.counts["members-world-scope-deferred"],1);
@@ -81,11 +82,11 @@ test("audited member tools retain source world policy and cannot widen rune or s
  assert.equal(result.definitions.length,1);assert.equal(result.definitions[0].members,true);
  assert.equal(result.definitions[0].respawn,500);
  assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
- const pages=[["Air rune",556],["Body rune",559],["Earth rune",557],["Fire rune",554],
+ const pages=[["Air rune",556],["Body rune",559],["Earth rune",557],
   ["Mind rune",558],["Nature rune",561],["Water rune",555],["Small fishing net",303]];
  const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
  assert.equal(rejected.definitions.length,0);
- assert.equal(rejected.report.counts["members-world-scope-deferred"],8);
+ assert.equal(rejected.report.counts["members-world-scope-deferred"],7);
 });
 test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
@@ -96,4 +97,32 @@ test("audited member tools report conflicting world policy instead of silently g
  const result=importSpawns(source([member]),[old]);
  assert.deepEqual(result.definitions,[old]);
  assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+});
+
+
+const memberFire = [
+ {x:2768,y:3500,plane:1,quantity:2},
+ {x:1450,y:10099,plane:0,quantity:1},
+ {x:1421,y:10096,plane:0,quantity:1},
+ {x:1419,y:10062,plane:0,quantity:1},
+ {x:1454,y:10063,plane:0,quantity:1},
+].map(r=>row({...r,members:true}));
+
+test("audited member Fire rune rows retain exact quantities, floor, timer and world policy",()=>{
+ const result=importSpawns(source(memberFire),[]);
+ assert.equal(result.report.counts.added,5);
+ assert.deepEqual(result.definitions.map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members]),
+  memberFire.map(r=>[554,r.x,r.y,r.plane,r.quantity,100,true]));
+ assert.deepEqual(importSpawns(source(memberFire),result.definitions).definitions,result.definitions);
+ const conflicting=importSpawns(source([memberFire[0],{...memberFire[0],members:false}]),[]);
+ assert.equal(conflicting.definitions.length,0);
+ assert.equal(conflicting.report.counts["conflicting-source-quantity-timer-or-membership"],2);
+});
+
+test("committed member Fire rune data matches the five audited source rows only",()=>{
+ const data=JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json",import.meta.url),"utf8"));
+ const members=data.filter(d=>d.id===554 && d.members===true);
+ assert.equal(members.length,5);
+ assert.deepEqual(members.map(d=>[d.location.x,d.location.y,d.location.z,d.amt,d.respawn]).sort(),
+  memberFire.map(r=>[r.x,r.y,r.plane,r.quantity,100]).sort());
 });

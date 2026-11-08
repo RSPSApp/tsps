@@ -562,6 +562,17 @@ test("a sourhog without reinforced goggles hits 20-30, drains Attack and Defence
   }
 });
 
+test("a sourhog drains 90% of the current level, boosted or already drained", () => {
+  const boosted = gearVictim({});
+  boosted.current.set("ATTACK", 118);
+  landedHit("Sourhog", boosted);
+  assert.equal(boosted.current.get("ATTACK"), 12, "118 - floor(118 * 0.9)");
+  const drained = gearVictim({});
+  drained.current.set("DEFENCE", 10);
+  landedHit("Sourhog", drained);
+  assert.equal(drained.current.get("DEFENCE"), 1, "10 - 9");
+});
+
 test("a fever spider without Slayer gloves hits for 12.5% of the Hitpoints level", () => {
   const bare = gearVictim({}, 99);
   assert.equal(landedHit("Fever spider", bare).damage, 12);

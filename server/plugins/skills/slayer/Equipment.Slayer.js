@@ -106,7 +106,8 @@ function drain(player, monster) {
   }
   for (const name of monster.drain ?? []) {
     const skill = core.Skill[name];
-    const amount = Math.max(1, Math.floor(skills.getMaxLevel(skill) * (monster.drainPercent ?? 10) / 100));
+    const basis = monster.drainOfCurrent ? skills.getCurrentLevel(skill) : skills.getMaxLevel(skill);
+    const amount = Math.max(1, Math.floor(basis * (monster.drainPercent ?? 10) / 100));
     set(name, skills.getCurrentLevel(skill) - amount);
   }
 }

@@ -338,7 +338,7 @@ test("Yanni Salika pays into the slot a sold antique frees when the inventory is
   const f = actor(t, [2835, 2985]);
   const npc = yanni(f);
   f.inv.adds(I.BONE_KEY, 1);
-  while (f.inv.getFreeSlots() > 0) f.inv.adds(I.BRONZE_SWORD, 1);
+  while (f.inv.getFreeSlots() > 0) f.inv.adds(I.BRONZE_SHORTSWORD, 1);
   await show(f, npc, I.BONE_KEY);
   assert.equal(coins(f), 100);
   assert.equal(f.inv.getAmount(I.BONE_KEY), 0);

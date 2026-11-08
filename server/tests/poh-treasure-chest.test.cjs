@@ -54,7 +54,7 @@ const open = (player) => Dungeon.openChest({ player, location: new core.Location
 test("a full inventory takes nothing from the treasure chest, and the treasure stays", (t) => {
   const player = guest(t);
   const house = houseWithTreasure(t, player, 100000);
-  for (let slot = 0; slot < 28; slot++) player.getInventory().setItem(slot, new core.Item(I.BRONZE_SWORD, 1));
+  for (let slot = 0; slot < 28; slot++) player.getInventory().setItem(slot, new core.Item(I.BRONZE_SHORTSWORD, 1));
   assert.equal(open(player), true);
   assert.equal(house.save.treasure.coins, 100000, "the treasure is still in the chest");
   assert.equal(player.getInventory().getAmount(I.COINS), 0);

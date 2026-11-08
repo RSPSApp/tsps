@@ -86,7 +86,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   ]);
 
   const STEEL_LONGSWORD_ITEM_ID = ItemIdentifiers.STEEL_LONGSWORD;
-  const STEEL_SWORD_ITEM_ID = ItemIdentifiers.STEEL_SWORD;
+  const STEEL_SWORD_ITEM_ID = ItemIdentifiers.STEEL_SHORTSWORD;
   const STEEL_DAGGER_ITEM_ID = ItemIdentifiers.STEEL_DAGGER;
   const STEEL_MACE_ITEM_ID = ItemIdentifiers.STEEL_MACE;
   const STEEL_WARHAMMER_ITEM_ID = ItemIdentifiers.STEEL_WARHAMMER;

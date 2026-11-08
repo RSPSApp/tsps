@@ -1,6 +1,6 @@
 # Updating the cache revision
 
-How the OSRS cache was moved from revision 237 to 241, written as a playbook for the next update.
+How the OSRS cache was moved from revision 237 to 241 and then 242, written as a playbook for the next update.
 The first half is the procedure and its tools; the second half records what 241 changed, what
 broke, and how each problem was found, because the same kinds of change come back.
 
@@ -182,6 +182,45 @@ Reinstall it on the VPS whenever that script changes.
 | Display names moved into NPC transforms (Morgan 3479, Dr Harlow 3480: name `null`, a varbit picks the named variant) | none: hooks resolve the variant | — |
 | 431 object and 23 item names gone or reused | compile errors | identifiers regenerated; plugins renamed (e.g. "Scythe of Vitur") |
 | Eight items renamed outright: 9487–9490 "Wizard blizzard" → "Cocktail glass", 9735/9738 "Desert goat horn" → "Goat horn", 23595/23596 "Berserker ring" → "Berserker ring (i)" | Their `item-gameplay.json` entries were skipped (23595 lost its bonuses) | names updated; 23595 takes the imbued +8 its cache params give |
+
+## What revision 242 changed
+
+`osrs-241_2026-10-20` → `osrs-242_2026-11-03` (Mudfoot's Big Adventure, The Writing's on the Wall,
+the Lumbridge tutors replaced). The user's live 242 RSProx captures (2026-11-03 on) settled the
+NPC questions; transcribe them with an RSProx build that has `protocol/osrs-242`.
+
+### Cache formats and scripts
+
+| Change | Symptom | Fix |
+|---|---|---|
+| Loc opcodes 97/98: multiloc with 24-bit signed ids (98 adds the default). Every transforming loc (4,750) moved off 77/92 | Our decoders read 97/98 as the old payload-less flags: 120 locs fail, the rest misread silently | `LocType` (client and server), `ByteBuffer.readSignedMedium`; all but one of 4,725 transforms equal 241's (loc 5003 points at new ids) |
+| Client script commands 5100–5108 `displaynames_*` | — | `UnsupportedOps`; `CommandSignatures` regenerated |
+| Gameval kinds 16–19 (sfx, midi, jingle, ambientsound) | — | none (we don't read them) |
+| No loc id above 63,333 yet | — | the protocol's three-byte loc ids (below) are headroom; our own packets stay u16 |
+
+### Names, tables and interfaces
+
+| Change | Symptom | Fix |
+|---|---|---|
+| Every "X sword" is "X shortsword" (bronze to dragon, white, wooden, training, (cr)); Training bow → Training shortbow | Constants gone; `item-gameplay.json` entries skipped by name (swords lose their stats); constants named in JSON data (`quest-equipment.json`, `bot-combat-gear.json`, `phantom-muspah.json`) | references renamed; the 23 gameplay names fixed |
+| Quest table (0): column 17 `questpoints` → `questpoints_override` (same values); `starter_order` inserted at 37 | The quest list's maximum QP reads 0 (by name) | `QuestRuntime` reads either name |
+| Daddy's Home became a quest (type 0, 1 QP); new quests Mudfoot's Big Adventure and The Writing's on the Wall | — | Daddy's Home awards 1 QP (credited once to earlier completions); the two new quests are not implemented, so the quest cape (all cache quests) cannot be bought |
+| `bond_main` (861) components +1/+2 | "View Your Bonds" unhandled | `Bonds.plugin.js` 861:7 → 8 |
+| `didyouknow` (90) lost two columns | — | unused |
+| Lumbridge tutors, Hatius (5523), Arthur the Clue Hunter (8665) and Floatsam (16475–7) have no name: new NPCs replace them (same models). Ranged, Magic, Cooking, Prayer and Banker tutors have none; Arthur moved to (3158, 3469); Mikasi took Hatius's Lumbridge diary role; Adam (311) shows only to iron accounts (`ironman` varbit 1777) | Spawns of blank NPCs; the tutors', diary's, Arthur's and Crab Quest's id checks miss | spawns moved to the successors, `plugins/npcs/data/retired-npcs.json` gives a successor its predecessor's transcript until the transcripts are regenerated, plugins key on the new ids |
+
+A JavaScript plugin that names a removed constant gets `undefined` rather than a compile error:
+after regenerating identifiers, list the removed names and search `.js`, `.cjs` and `.json` for
+them as well (step 3).
+
+### RuneLite gateway
+
+rsprot `osrs-242` renamed `OpLoc6`/`OpLocT` to V1/V2 classes and added `OpLocV3`; the live client
+sends `OPLOC*_V3`, `OPLOC6_V2` and `OPLOCT_V2`. rsprot has no 242 layout for `LOC_MERGE`, and the
+242 client discards its bytes, so the gateway drops it. Client opcodes and field orders all
+moved: the headless test client takes its opcodes from rsprot's `GameClientProt` and its layouts
+from RSProx's 242 decoders. The jav_config's revision comes from the active cache; live 242 also
+sends params 30 and 31 (display names), which we don't.
 
 ## Weekly builds within a revision
 

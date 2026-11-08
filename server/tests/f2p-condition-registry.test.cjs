@@ -101,7 +101,7 @@ test('Learning the Ropes keeps zero/one/two-slot and equipment conditions in its
   p.attrs.set(Tutorial.PROGRESS_ATTRIBUTE, Tutorial.STEP.COMBAT_TALK);
   const combatId = Tutorial.IDS.COMBAT_INSTRUCTOR[0], miningId = Tutorial.IDS.MINING_INSTRUCTOR[0];
   for (const [id, npc, slots, sword, expected] of [['iR4sw7',combatId,1,false,true],['iR4sw7',combatId,2,false,false],['eVetF4',combatId,1,true,true],['t-xzeX',combatId,1,true,false],['nSFRLj',miningId,0,false,true],['nSFRLj',miningId,1,false,false],['hwm9-N',miningId,1,false,true]]) {
-    p.slots = slots; p.items.clear(); if (sword) p.items.set(I.BRONZE_SWORD, 1);
+    p.slots = slots; p.items.clear(); if (sword) p.items.set(I.BRONZE_SHORTSWORD, 1);
     const request = event(p, npc, 'Learning the Ropes', id);
     assert.deepEqual(resolve(request), { quest: 'TutorialIsland', answer: expected }, id + '/' + slots + '/' + sword);
     for (const hook of hooks.filter(hook => ['DwarfCannon','NatureSpirit','PlagueCity','TouristTrap','WaterfallQuest'].includes(hook.quest))) assert.equal(hook.fn(request), null, hook.quest + ' must defer tutorial conditions');

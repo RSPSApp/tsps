@@ -30,7 +30,7 @@ function onProcess({ player }) {
   const current = T.progress(player);
   if (current >= STEP.OPEN_EQUIPMENT && current <= STEP.EQUIP_DAGGER && T.worn(player, Items.BRONZE_DAGGER)) {
     T.setProgress(player, STEP.DAGGER_EQUIPPED);
-  } else if (current === STEP.EQUIP_SWORD_SHIELD && T.worn(player, Items.BRONZE_SWORD) && T.worn(player, Items.WOODEN_SHIELD)) {
+  } else if (current === STEP.EQUIP_SWORD_SHIELD && T.worn(player, Items.BRONZE_SHORTSWORD) && T.worn(player, Items.WOODEN_SHIELD)) {
     T.setProgress(player, STEP.OPEN_COMBAT);
   }
 }

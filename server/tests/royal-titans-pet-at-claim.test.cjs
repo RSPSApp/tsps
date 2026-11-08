@@ -114,3 +114,28 @@ test("the death's Bran isn't shared: each claimant rolls their own", (t) => {
   loot(d, second.branda);
   assert.deepEqual(obtained, [c.getUsername(), d.getUsername()], "the second claimant rolls their own");
 });
+
+test("each claimant's loot is their own roll: the top damager's death roll is copied to nobody", (t) => {
+  const claimed = new Map();
+  PM.createApi("TitanClaimWatch").onCustomEvent("npc-drops:roll", ({ player, drops, claim }) => {
+    if (claim === true) claimed.set(player.getUsername(), drops.map((drop) => [drop.itemId, drop.amount]));
+  });
+  const random = t.mock.method(Math, "random", () => 0);
+  const run = (deathRandom) => {
+    const a = player(t), b = player(t);
+    const session = encounter(t, [a, b]);
+    for (const titan of [session.branda, session.eldric]) {
+      titan.setAttribute(Shared.DAMAGE_DEALT_ATTRIBUTE, { [a.getUsername()]: 600, [b.getUsername()]: 600 });
+    }
+    random.mock.mockImplementation(() => deathRandom);
+    die(session, session.branda, a);
+    die(session, session.eldric, a);
+    random.mock.mockImplementation(() => 0.5);
+    loot(a, session.branda);
+    loot(b, session.branda);
+    return [claimed.get(a.getUsername()), claimed.get(b.getUsername())];
+  };
+  const lucky = run(0), unlucky = run(0.99);
+  assert.ok(lucky[0]?.length > 0, "the claim has loot");
+  assert.deepEqual(lucky, unlucky, "what each claimant gets doesn't depend on the death roll");
+});

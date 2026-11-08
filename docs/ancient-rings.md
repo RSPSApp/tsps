@@ -16,6 +16,10 @@ Full Desert Treasure II completion is not required.
 The kill is read from the Combat Achievements kill count (`combat-achievements:count`), so any
 kill this server credits to the boss counts. Player bots are not gated.
 
+Every cache variant is gated: the untradeable 25485-25488, the tradeable rings players buy
+(28307 Ultor, 28310 Venator, 28313 Magus, 28316 Bellator and their other variants) and the
+equippable untradeable Magus/Ultor 33180-33183.
+
 ## Sources
 
 - OSRS Wiki, fetched for this change: [Ultor ring](https://oldschool.runescape.wiki/w/Ultor_ring),

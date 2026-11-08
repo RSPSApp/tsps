@@ -15,12 +15,16 @@ let monsterByRing = null;
 function requirements() {
   if (monsterByRing) return monsterByRing;
   const { ItemIdentifiers: I } = pluginApi.core;
-  monsterByRing = new Map([
-    [I.ULTOR_RING, "Vardorvis"],
-    [I.BELLATOR_RING, "Whisperer, The"],
-    [I.MAGUS_RING, "Duke Sucellus"],
-    [I.VENATOR_RING, "Leviathan, The"],
-  ]);
+  const byBoss = [
+    ["Vardorvis", ["ULTOR_RING", "ULTOR_RING_2", "ULTOR_RING_3", "ULTOR_RING_4", "ULTOR_RING_5", "ULTOR_RING_6"]],
+    ["Whisperer, The", ["BELLATOR_RING", "BELLATOR_RING_2", "BELLATOR_RING_3", "BELLATOR_RING_4"]],
+    ["Duke Sucellus", ["MAGUS_RING", "MAGUS_RING_2", "MAGUS_RING_3", "MAGUS_RING_4", "MAGUS_RING_5", "MAGUS_RING_6"]],
+    ["Leviathan, The", ["VENATOR_RING", "VENATOR_RING_2", "VENATOR_RING_3", "VENATOR_RING_4"]],
+  ];
+  monsterByRing = new Map();
+  for (const [monster, names] of byBoss) {
+    for (const name of names) if (I[name] !== undefined) monsterByRing.set(I[name], monster);
+  }
   return monsterByRing;
 }
 

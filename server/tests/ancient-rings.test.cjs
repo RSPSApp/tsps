@@ -11,11 +11,19 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const AncientRings = require("../plugins/items/AncientRings.plugin");
 
 const MESSAGE = "The ring slips off your finger. The power within it seems unfamiliar.";
+// Cache variants: 2548x untradeable, 28307/28310/28313/28316 tradeable (the rings players buy),
+// 33180/33182 equippable untradeable Magus/Ultor.
 const RINGS = [
   [ItemIdentifiers.ULTOR_RING, "Vardorvis"],
   [ItemIdentifiers.BELLATOR_RING, "Whisperer, The"],
   [ItemIdentifiers.MAGUS_RING, "Duke Sucellus"],
   [ItemIdentifiers.VENATOR_RING, "Leviathan, The"],
+  [28307, "Vardorvis"],
+  [28316, "Whisperer, The"],
+  [28313, "Duke Sucellus"],
+  [28310, "Leviathan, The"],
+  [33182, "Vardorvis"],
+  [33180, "Duke Sucellus"],
 ];
 let kills;
 
@@ -61,6 +69,13 @@ test("one kill of the matching boss lets the ring be worn silently", () => {
     assert.equal(event.allow, null, monster);
     assert.deepEqual(messages, []);
   }
+});
+
+test("the tradeable ids carry the cache numbers players actually hold", () => {
+  assert.deepEqual(
+    [ItemIdentifiers.ULTOR_RING_2, ItemIdentifiers.VENATOR_RING_2, ItemIdentifiers.MAGUS_RING_2, ItemIdentifiers.BELLATOR_RING_2],
+    [28307, 28310, 28313, 28316],
+  );
 });
 
 test("other items and player bots are not gated", () => {

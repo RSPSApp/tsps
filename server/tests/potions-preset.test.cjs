@@ -974,11 +974,14 @@ test("ordinary beer replaces its own slot when the inventory is full", async t =
 test("ordinary cider restores health and boosts Farming while returning its glass", async t => {
   const f = ordinaryAleActor(t);
   const skills = f.p.getSkillManager();
+  const farmingXp = core.SkillManager.getExperienceForLevel(99);
+  skills.setExperience(core.Skill.FARMING, farmingXp);
   skills.setMaxLevels(core.Skill.FARMING, 99, false).setCurrentLevels(core.Skill.FARMING, 99, false);
   assert.equal(I.CIDER, 5763);
   placeOrdinaryAle(f, I.CIDER, "Cider");
   assert.equal(skills.getMaxLevel(core.Skill.FARMING), 99);
   assert.equal(skills.getCurrentLevel(core.Skill.FARMING), 99);
+  assert.equal(skills.getExperience(core.Skill.FARMING), farmingXp);
   assert.equal(skills.getCurrentLevel(core.Skill.ATTACK), 99);
   assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 99);
   fill(f);
@@ -989,6 +992,7 @@ test("ordinary cider restores health and boosts Farming while returning its glas
   assert.equal(f.inv.getFreeSlots(), 0);
   assert.equal(f.p.getHitpoints(), 91);
   assert.equal(skills.getCurrentLevel(core.Skill.FARMING), 100);
+  assert.equal(skills.getExperience(core.Skill.FARMING), farmingXp);
   assert.equal(skills.getCurrentLevel(core.Skill.ATTACK), 96);
   assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 96);
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);

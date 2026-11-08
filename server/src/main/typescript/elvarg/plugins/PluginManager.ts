@@ -713,8 +713,6 @@ export class PluginManager {
     const candidates = PluginManager.collectPluginLoadCandidates(
       enabledPluginFiles
     );
-    // Fail fast on bad or clashing option declarations, before any plugin registers.
-    PluginManager.checkConfigDeclarations(candidates);
     const knownNames = new Set([
       ...pluginFiles.map((pluginPath) => normalizePluginName(pluginNameFromFile(pluginPath))),
       ...candidates.map((candidate) => normalizePluginName(candidate.pluginName)),
@@ -726,8 +724,7 @@ export class PluginManager {
     }
     const membersWorld = isMembersWorld();
     let membersOnlyCount = 0;
-    PluginManager.loadPluginCandidatesWithDependencies(
-      candidates.filter((candidate) => {
+    const toLoad = candidates.filter((candidate) => {
         // The exported name wins over the filename when they differ.
         const enabled =
           switchFor(candidate.pluginName) ??
@@ -744,10 +741,13 @@ export class PluginManager {
           return false;
         }
         return true;
-      })
-    );
+      });
+    // Checked before any plugin registers, and only for plugins that will load: a bad or
+    // clashing declaration is logged and dropped, it never stops the server.
+    const acceptedDeclarations = PluginManager.checkConfigDeclarations(toLoad);
+    PluginManager.loadPluginCandidatesWithDependencies(toLoad);
 
-    PluginManager.recordLoadedConfigDeclarations(candidates);
+    PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
     PluginManager.warnAboutInvalidConfigValues();
 
     if (PluginManager.lastPersistenceOverride) {
@@ -2238,47 +2238,63 @@ export class PluginManager {
     return all;
   }
 
-  /** Throws when a plugin's `config` is malformed or reuses a key another owner declared. */
-  private static checkConfigDeclarations(candidates: PluginLoadCandidate[]): void {
+  /**
+   * The valid, non-clashing option declarations of the plugins about to load. A malformed
+   * `config`, an invalid declaration or a key another owner (core or an earlier plugin)
+   * already declared is logged with console.error and dropped; the plugin still loads.
+   */
+  private static checkConfigDeclarations(
+    candidates: PluginLoadCandidate[]
+  ): Map<PluginLoadCandidate, Record<string, ConfigOptionDeclaration>> {
+    const accepted = new Map<PluginLoadCandidate, Record<string, ConfigOptionDeclaration>>();
     const owners = new Map<string, string>();
     for (const key of Object.keys(CORE_CONFIG_DECLARATIONS)) {
       owners.set(key, "core");
     }
     for (const candidate of candidates) {
-      const config = candidate.plugin.config;
+      const config: unknown = candidate.plugin.config;
       if (config === undefined) {
         continue;
       }
       if (!config || typeof config !== "object" || Array.isArray(config)) {
-        throw new Error(
-          `[plugins] ${candidate.pluginName}: config must be an object of option declarations`
+        console.error(
+          `[plugins] ${candidate.pluginName}: config must be an object of option declarations; its config is ignored`
         );
+        continue;
       }
+      const kept: Record<string, ConfigOptionDeclaration> = {};
       for (const [key, decl] of Object.entries(config)) {
         const problems = validateDeclaration(key, decl);
         if (problems.length > 0) {
-          throw new Error(
-            `[plugins] ${candidate.pluginName}: invalid config declaration: ${problems.join("; ")}`
+          console.error(
+            `[plugins] ${candidate.pluginName}: invalid config declaration, ignored: ${problems.join("; ")}`
           );
+          continue;
         }
         const existing = owners.get(key);
         if (existing !== undefined) {
-          throw new Error(
-            `[plugins] config key ${key} is declared by both ${existing} and ${candidate.pluginName}`
+          console.error(
+            `[plugins] config key ${key} is declared by both ${existing} and ${candidate.pluginName}; ${candidate.pluginName}'s declaration is ignored`
           );
+          continue;
         }
         owners.set(key, candidate.pluginName);
+        kept[key] = decl as ConfigOptionDeclaration;
       }
+      accepted.set(candidate, kept);
     }
+    return accepted;
   }
 
-  private static recordLoadedConfigDeclarations(candidates: PluginLoadCandidate[]): void {
+  private static recordLoadedConfigDeclarations(
+    accepted: Map<PluginLoadCandidate, Record<string, ConfigOptionDeclaration>>
+  ): void {
     PluginManager.pluginConfigDeclarations.clear();
-    for (const candidate of candidates) {
+    for (const [candidate, declarations] of accepted) {
       if (!PluginManager.loadedPlugins.includes(candidate.pluginName)) {
         continue;
       }
-      for (const [key, decl] of Object.entries(candidate.plugin.config ?? {})) {
+      for (const [key, decl] of Object.entries(declarations)) {
         PluginManager.pluginConfigDeclarations.set(key, {
           owner: candidate.pluginName,
           decl,

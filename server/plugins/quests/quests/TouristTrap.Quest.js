@@ -126,6 +126,7 @@ module.exports = function registerTouristTrapQuest(api) {
   const SEARCHED_BOOKCASE_ATTRIBUTE = "the-tourist-trap:searched-bookcase";
   const DISTRACTED_SIAD_ATTRIBUTE = "the-tourist-trap:distracted-siad";
   const XP_CHOICES_ATTRIBUTE = "the-tourist-trap:xp-choices";
+  const CART_ANA_RETRIEVED_ATTRIBUTE = "the-tourist-trap:cart-ana-retrieved";
   /** The escaping slave has been caught and turned back into a male slave. */
   const ESCAPING_SLAVE_ATTRIBUTE = "the-tourist-trap:escaping-slave-turned-back";
 
@@ -159,6 +160,11 @@ module.exports = function registerTouristTrapQuest(api) {
   const CHEST_OBJECT_ID = 2677;
   const ANVIL_OBJECT_ID = 2672;
   const MINE_BARREL_OBJECT_IDS = new Set([2680, 2681]);
+  // Configured QuestHelper target; the transcript heading calls this a full barrel.
+  const CART_ANA_BARREL_OBJECT_ID = 2681;
+  const CART_ANA_BARREL_LOCATION = { x: 3303, y: 9418, z: 0 };
+  const CART_ANA_PICKUP_MESSAGE_ID = "8u_7h_";
+  const CART_ANA_SEARCH_VARIANT = "the-deeper-mine-searching-the-full-barrel-by-the-mining-cart-after-sending-ana";
   /**
    * The barrel the winch hauls up, west of the camp winch. The map places the
    * transform parent 18963; the cache turns it into the searchable barrel 18962
@@ -592,6 +598,16 @@ module.exports = function registerTouristTrapQuest(api) {
       advance(player, STAGE_GUARD_DISTRACTED);
       return;
     }
+    if (stepId === CART_ANA_PICKUP_MESSAGE_ID) {
+      if (npcId !== NpcIdentifiers.ANA || stageOf(player) !== STAGE_ANA_SENT_UP
+        || held(player, ANA_IN_A_BARREL_ITEM_ID) || player.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE)
+        || !giveItem(player, ANA_IN_A_BARREL_ITEM_ID)) {
+        event.handled = true;
+        return;
+      }
+      player.setAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, true);
+      return;
+    }
     if (stepId === FEATHERS_ATTACHED_MESSAGE_ID) {
       if (!player.getInventory().contains(PROTOTYPE_DART_TIP_ITEM_ID)) return;
       player.getInventory().deleteNumber(PROTOTYPE_DART_TIP_ITEM_ID, 1);
@@ -814,6 +830,19 @@ module.exports = function registerTouristTrapQuest(api) {
 
   function searchBarrel(event) {
     const { player, objectId } = event;
+    if (objectId === CART_ANA_BARREL_OBJECT_ID
+      && Location.isSameTile(event.object?.getLocation?.(), CART_ANA_BARREL_LOCATION)
+      && stageOf(player) === STAGE_ANA_SENT_UP) {
+      event.handled = true;
+      if (held(player, ANA_IN_A_BARREL_ITEM_ID) || player.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE)) {
+        player.sendMessage("The barrel is empty.");
+        return;
+      }
+      // Old stage23 saves cannot distinguish blocked retrieval from prior loading.
+      // Permit one recovery; successful credit and bucket consumption persist it.
+      startTranscript(api, player, NpcIdentifiers.ANA, "The Tourist Trap", CART_ANA_SEARCH_VARIANT);
+      return;
+    }
     if (ANA_BARREL_OBJECT_IDS.has(objectId)) {
       event.handled = true;
       if (stageOf(player) < STAGE_ANA_SURFACE || stageOf(player) >= STAGE_ANA_ON_CAMP_CART) {
@@ -865,7 +894,13 @@ module.exports = function registerTouristTrapQuest(api) {
     if (objectId !== WINCH_BUCKET_OBJECT_ID) return false;
     if (stageOf(player) < STAGE_ANA_SENT_UP) return;
     event.handled = true;
-    if (held(player, ANA_IN_A_BARREL_ITEM_ID)) player.getInventory().deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+    if (held(player, ANA_IN_A_BARREL_ITEM_ID)) {
+      const inventory = player.getInventory();
+      const before = inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID);
+      inventory.deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+      if (inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID) !== before - 1) return;
+      player.setAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, true);
+    }
     player.sendMessage("You place Ana in the winch bucket and send her to the surface.");
     advance(player, STAGE_ANA_SENT_UP);
   }
@@ -936,7 +971,12 @@ module.exports = function registerTouristTrapQuest(api) {
     if (itemId === ANA_IN_A_BARREL_ITEM_ID && MINE_CART_OBJECT_IDS.has(objectId)
       && stageOf(player) >= STAGE_EAST_MINE && stageOf(player) < STAGE_ANA_ON_CART) {
       event.handled = true;
-      player.getInventory().deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+      const inventory = player.getInventory();
+      const before = inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID);
+      if (before < 1) return;
+      inventory.deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+      if (inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID) !== before - 1) return;
+      player.setAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, false);
       player.sendMessage("You place Ana in the barrel into the mine cart.");
       advance(player, STAGE_ANA_ON_CART);
       moveTo(player, WEST_MINE_CART_TILE);
@@ -1005,6 +1045,7 @@ module.exports = function registerTouristTrapQuest(api) {
   api.persistAttribute(SEARCHED_BOOKCASE_ATTRIBUTE, false);
   api.persistAttribute(DISTRACTED_SIAD_ATTRIBUTE, false);
   api.persistAttribute(XP_CHOICES_ATTRIBUTE, 0);
+  api.persistAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, false);
   api.persistAttribute(ESCAPING_SLAVE_ATTRIBUTE, false);
 
   api.onNpcDialogueVariant(selectVariant);

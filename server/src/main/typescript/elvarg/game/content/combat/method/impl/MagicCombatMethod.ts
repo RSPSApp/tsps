@@ -164,8 +164,9 @@ export class MagicCombatMethod extends CombatMethod {
         if (!visual || visual.queued) return;
         const graphic = hit.isAccurate() ? spell.endGraphic() : MagicCombatMethod.SPLASH_GRAPHIC;
         if (!graphic || typeof graphic.withDelay !== "function") return;
-        target.performGraphic(graphic.withDelay(visual.endCycleOffset + graphic.getDelay()));
-        visual.queued = true;
+        const delayed = graphic.withDelay(visual.endCycleOffset + graphic.getDelay());
+        target.performGraphic(delayed);
+        visual.queued = target.getGraphic() === delayed;
     }
 
     /**

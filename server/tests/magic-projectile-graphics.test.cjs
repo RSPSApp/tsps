@@ -122,3 +122,13 @@ test("an overlapping legacy shot whose encoded end precedes launch keeps the exi
   assert.deepEqual([f.projectiles[0][3],f.projectiles[0][8]],[46,51]);
   f.land();assert.equal(f.graphics.length,1);assert.equal(f.graphics[0].g.getDelay(),0);
 });
+
+for(const accurate of[true,false])test(`a higher-priority NPC graphic keeps the ${accurate?"impact":"splash"} fallback when the cast-time visual is rejected`,t=>{
+  const f=fixture(t,{accurate,configure:({target})=>target.performGraphic(new core.Graphic(369,core.GraphicHeight.LOW,core.Priority.HIGH))});
+  assert.equal(f.target.getGraphic().getId(),369,"the higher-priority graphic still owns the cast tick");
+  assert.equal(f.spell.getNpcProjectileVisual(f.context,f.target).queued,false,"a rejected graphic must not suppress the later visual");
+  f.land();
+  assert.equal(f.target.getGraphic().getId(),accurate?f.spell.endGraphic().getId():core.MagicCombatMethod.SPLASH_GRAPHIC.getId());
+  assert.equal(f.target.getGraphic().getDelay(),0,"the existing impact-time path remains available");
+  assert.equal(f.callbacks.length,1);assert.equal(f.sounds.length,1);
+});

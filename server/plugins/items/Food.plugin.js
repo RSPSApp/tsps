@@ -202,7 +202,11 @@ function applyStats(player, effect) {
     restoreSkillToBaseWithFormula(player, skill(name), typeof amount === "number" ? amount : amount.flat ?? 0,
       typeof amount === "number" ? 0 : amount.percent ?? 0);
   }
-  if (effect.runEnergy) restoreRunEnergy(player, effect.runEnergy);
+  // A number, or { min, max } percent rolled per bite (White tree fruit: 5-10%).
+  const energy = effect.runEnergy?.min !== undefined
+    ? effect.runEnergy.min + Math.floor(Math.random() * (effect.runEnergy.max - effect.runEnergy.min + 1))
+    : effect.runEnergy;
+  if (energy) restoreRunEnergy(player, energy);
   if (effect.stamina) pluginApi.emitCustomEvent("potions:apply-stamina", { player, energy: 20 });
   if (effect.cureVenom) curePoisonAndVenom(player);
   else if (effect.curePoison) curePoison(player);

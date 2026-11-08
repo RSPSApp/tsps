@@ -329,3 +329,28 @@ test('joining from the side panel: the screen fades out, then the player moves, 
   tick(1);
   assert.deepEqual(steps.at(-1), ['clear'], 'then shown where they are');
 });
+
+test('a shutdown while upstairs moves both out before the save', (t) => {
+  const [a, b] = upstairs(t);
+  for (const handler of hooks.shutdowns) handler();
+  for (const p of [a, b]) {
+    assert.ok(p.getLocation().getX() < 4000, 'saved outside the staging copy, no tick needed');
+    assert.equal(Rank.rank(p), 2500);
+  }
+});
+
+test('a logout in the fade tick after a cancel is saved outside the staging copy', (t) => {
+  const [a, b] = upstairs(t);
+  loc(1, 'pvpa_stagingarea_exit', a);
+  choose('Abandon the fight');
+  assert.ok(b.getLocation().getX() > 4000, 'still upstairs, the fade not yet run');
+  b.getArea().leave(b, true);
+  assert.ok(b.getLocation().getX() < 4000, 'saved on the real map');
+});
+
+test('the rank floor: only what was taken comes back', (t) => {
+  const [a, b] = invited(t, 10, 2500);
+  assert.equal(Rank.rank(a), 0);
+  panel(b, 'right'); // b withdraws: a is let go and repaid what the invitation took
+  assert.equal(Rank.rank(a), 10);
+});

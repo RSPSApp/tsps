@@ -116,6 +116,11 @@ function stagingClass() {
     postLeave(mobile, logout) {
       const player = Common.asPlayer(mobile);
       if (player) this.match.leftStaging(player, logout);
+      // A logout in a fade tick must never save on the staging copy.
+      if (player && logout) {
+        const [x, y, z] = data().staging.out;
+        player.setLocation(new Common.core.Location(x, y, z));
+      }
       super.postLeave(mobile, logout);
     }
   };
@@ -132,6 +137,7 @@ class Match {
     this.arrived = new Set();
     this.ready = new Set();
     this.stakes = new Map();
+    this.taken = new Map();
     this.gains = new Map();
     this.swapped = false;
     this.timeLeft = null;
@@ -149,7 +155,10 @@ class Match {
     for (const player of this.players) {
       matchOf.set(player, this);
       signedUp.delete(player);
+      const before = Rank.rank(player);
       Rank.addRank(player, -data().upfront);
+      // The rank floor can take less than the 15: only that comes back.
+      this.taken.set(player, before - Rank.rank(player));
       Common.varbit(player, "pvpa_upfront_paid", 1);
       Common.varbit(player, "pvpa_invitation_fightworld", data().world);
       Group.invited(player);
@@ -217,13 +226,15 @@ class Match {
   swap() {
     if (this.swapped) return;
     this.swapped = true;
-    const ranks = new Map(this.players.map((p) => [p, Rank.rank(p) + data().upfront]));
+    const ranks = new Map(this.players.map((p) => [p, Rank.rank(p) + (this.taken.get(p) ?? data().upfront)]));
     for (const player of this.players) {
       const other = this.opponentOf(player);
       const stake = Rank.stakeAgainst(ranks.get(player), ranks.get(other));
       this.stakes.set(player, stake);
       this.gains.set(player, Rank.gainAgainst(ranks.get(player), ranks.get(other)));
+      const before = Rank.rank(player);
       Rank.addRank(player, data().upfront - stake);
+      this.taken.set(player, (this.taken.get(player) ?? 0) - (Rank.rank(player) - before));
       Common.varbit(player, "pvpa_owed_join_refund", 0);
       Common.varbit(player, "pvpa_upfront_paid", 0);
     }
@@ -316,8 +327,8 @@ class Match {
 
   /** Called off for someone who did nothing wrong: what they paid back, and out of the hospital. */
   cancelFor(player, reason) {
-    if (this.swapped) Rank.addRank(player, this.stakes.get(player) ?? 0);
-    else Rank.addRank(player, data().upfront);
+    Rank.addRank(player, this.taken.get(player) ?? 0);
+    this.taken.delete(player);
     this.stakes.delete(player);
     Group.leave(player);
     Common.varbit(player, "pvpa_owed_join_refund", 0);
@@ -578,7 +589,12 @@ function shutdown() {
   for (const match of new Set(matchOf.values())) {
     if (match.state !== "invited") continue;
     // The world stopping is nobody's fault: whatever was paid comes back.
-    for (const player of match.players) match.cancelFor(player, "opponentLate");
+    for (const player of match.players) {
+      const upstairs = match.arrived.has(player);
+      match.cancelFor(player, "opponentLate");
+      // The save runs before the next tick: move them out now, not in the fade.
+      if (upstairs) match.sendOut(player);
+    }
     match.end();
   }
 }

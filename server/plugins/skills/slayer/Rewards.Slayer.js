@@ -48,11 +48,7 @@ const QUEST_POINTS_VARP = 101;
 const LUMBRIDGE_ELITE_VARBIT = 4538;
 
 /** Unlocks whose confirm, once bought, turns a toggle instead of locking them (script 414). */
-const TOGGLES = new Map([
-  [35, "slayer_toggleoff_superiormobs"],
-  [43, "slayer_toggleoff_fossilwyvernblock"],
-  [53, "slayer_toggleoff_longerrevenants"],
-]);
+const TOGGLES = Tasks.TOGGLES;
 
 /** Buy tab enums: items, amounts per purchase, prices. */
 const BUY_ITEMS_ENUM = 840;

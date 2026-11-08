@@ -784,6 +784,28 @@ test("::slayerpoints sets the points; ::clearunlocks locks everything again", ()
   assert.equal(varbit(player, "slayer_points"), 500, "points stay");
 });
 
+test("Stop the Wyvern and the longer revenant tasks stop applying once toggled off on the Rewards screen", () => {
+  const player = createPlayer();
+  const entryOf = (name) => [...Data.get().masters.values()].flatMap((m) => m.tasks.map((entry) => [m, entry])).find(([, entry]) => entry.task.displayName === name);
+  const [wyvernMaster, wyverns] = entryOf("Fossil Island Wyverns");
+  const [, revenants] = entryOf("Revenants");
+  const unbought = Tasks.eligible(player, wyvernMaster, wyverns, new Set());
+  assert.equal(unbought, true, "the fixture can be given fossil wyverns");
+  const baseRevenants = Tasks.rollAmount(player, revenants, 0, () => 0);
+  Rewards.setUnlockBit(player, 43, true);
+  Rewards.setUnlockBit(player, 53, true);
+  assert.equal(Tasks.eligible(player, wyvernMaster, wyverns, new Set()), false, "Stop the Wyvern blocks them");
+  assert.equal(Tasks.rollAmount(player, revenants, 0, () => 0), revenants.task.extension.min, "the longer revenant range");
+  setVarbit(player, "slayer_toggleoff_fossilwyvernblock", 1);
+  setVarbit(player, "slayer_toggleoff_longerrevenants", 1);
+  assert.equal(Tasks.eligible(player, wyvernMaster, wyverns, new Set()), unbought, "toggled off: as if never bought");
+  assert.equal(Tasks.rollAmount(player, revenants, 0, () => 0), baseRevenants, "toggled off: the normal revenant range");
+  Rewards.setUnlockBit(player, 43, false);
+  Rewards.setUnlockBit(player, 53, false);
+  setVarbit(player, "slayer_toggleoff_fossilwyvernblock", 0);
+  setVarbit(player, "slayer_toggleoff_longerrevenants", 0);
+});
+
 test("::superior spawns the current task's superior", () => {
   const player = createPlayer();
   player.getLocation = () => ({ getX: () => 3200, getY: () => 3200, getZ: () => 0 });

@@ -123,6 +123,24 @@ function hasUnlock(player, unlockRow) {
   return unlock ? hasUnlockBit(player, unlock.bit) : false;
 }
 
+/**
+ * Bought unlocks the Rewards screen can switch off again (script 414), by unlock bit, with the varbit that holds
+ * "off": Bigger and Badder's superiors, Stop the Wyvern's fossil wyvern block, and the longer revenant tasks.
+ */
+const TOGGLES = new Map([
+  [35, "slayer_toggleoff_superiormobs"],
+  [43, "slayer_toggleoff_fossilwyvernblock"],
+  [53, "slayer_toggleoff_longerrevenants"],
+]);
+
+/** Bought and not switched off: the unlock's effect applies to assignment. */
+function unlockActive(player, unlockRow) {
+  const unlock = Data.get().unlocks.get(unlockRow);
+  if (!unlock || !hasUnlockBit(player, unlock.bit)) return false;
+  const toggle = TOGGLES.get(unlock.bit);
+  return !toggle || State.varbit(player, toggle) !== 1;
+}
+
 /** Unlock bits 0-31, 32-63, 64-95 are slayer_rewards_unlocks, ...1, ...2. */
 function hasUnlockBit(player, bit) {
   const varp = ["slayer_rewards_unlocks", "slayer_rewards_unlocks1", "slayer_rewards_unlocks2"][bit >> 5];
@@ -163,7 +181,7 @@ function hasSlayerCape(player, inventory) {
 function eligible(player, master, entry, blocked) {
   const task = entry.task;
   if (entry.unlockRow != null && !hasUnlock(player, entry.unlockRow)) return false;
-  if (task.blockedByUnlockRow != null && hasUnlock(player, task.blockedByUnlockRow)) return false;
+  if (task.blockedByUnlockRow != null && unlockActive(player, task.blockedByUnlockRow)) return false;
   if (blocked.has(task.id)) return false;
   if (task.id === Data.BOSS_TASK_ID) return bossChoices(player).length > 0;
   if (player.getSkillManager().getMaxLevel(core.Skill.SLAYER) < Data.taskLevel(task.id)) return false;
@@ -246,7 +264,7 @@ function rollBoss(player, random = Math.random) {
 function rollAmount(player, entry, bossId, random) {
   if (bossId) return between(BOSS_AMOUNT.min, BOSS_AMOUNT.max, random);
   const extension = entry.task.extension;
-  const extended = extension && hasUnlock(player, extension.unlockRow);
+  const extended = extension && unlockActive(player, extension.unlockRow);
   if (extended && !extension.additive) return between(extension.min, extension.max, random);
   return between(entry.min, entry.max, random) + (extended ? between(extension.min, extension.max, random) : 0);
 }
@@ -566,6 +584,8 @@ function attach(pluginApi) {
 }
 
 module.exports = {
+  TOGGLES,
+  unlockActive,
   init,
   attach,
   current,
@@ -577,6 +597,7 @@ module.exports = {
   eligible,
   blockedTaskIds,
   weightedPick,
+  rollAmount,
   rollBoss,
   stillHunting,
   clear,

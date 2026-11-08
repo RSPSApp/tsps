@@ -619,13 +619,18 @@ export class SceneRaycaster {
                         const { modelType, rawRotation, modelRotation } =
                             this.decodeLocModelTypeRotation(packedTypeRot);
 
+                        // The scene places a loc by the footprint of the id the map holds, as
+                        // SceneBuilder.addLoc does; a multiloc's current form (locType) only
+                        // swaps the model and the menu. The Giants' Foundry mould jig is a 3x3
+                        // parent with 1x1 forms, so sizing it by its form picked a tile away.
+                        const placedType = this.osrsClient.locTypeLoader?.load(locId) ?? locType;
                         let sizeX = Math.max(
                             1,
-                            typeof locType.sizeX === "number" ? locType.sizeX : 1,
+                            typeof placedType.sizeX === "number" ? placedType.sizeX : 1,
                         );
                         let sizeY = Math.max(
                             1,
-                            typeof locType.sizeY === "number" ? locType.sizeY : 1,
+                            typeof placedType.sizeY === "number" ? placedType.sizeY : 1,
                         );
                         if (rawRotation === 1 || rawRotation === 3) {
                             const tmp = sizeX;

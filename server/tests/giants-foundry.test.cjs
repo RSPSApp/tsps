@@ -101,3 +101,12 @@ test('hand-in XP follows the Wiki formula', () => {
   assert.equal(Kovac.duration(3130000), '52m 10s');
   assert.equal(Kovac.duration(3723000), '1h 2m 3s');
 });
+
+test('the worn preform is held in the giant two-handed stance', () => {
+  const names = require('../data/definitions/sequence-names.json');
+  assert.deepEqual(
+    [Preform.STANCE[0], Preform.STANCE[2], Preform.STANCE[6]].map((id) => names[id]),
+    ['HUMAN_WEAPON_GIANT01_READY', 'HUMAN_WEAPON_GIANT01_WALK', 'HUMAN_WEAPON_GIANT01_RUN'],
+  );
+  assert.equal(Preform.STANCE.length, 7);
+});

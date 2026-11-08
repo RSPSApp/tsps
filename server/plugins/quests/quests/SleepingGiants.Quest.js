@@ -6,8 +6,6 @@ module.exports = function registerSleepingGiantsQuest(api) {
     PrivateArea,
     Task,
     TaskManager,
-    ForceMovement,
-    ForceMovementTask,
     GameObject,
     ObjectManager,
     Equipment,
@@ -348,18 +346,33 @@ module.exports = function registerSleepingGiantsQuest(api) {
     return workshop;
   }
 
-  function sceneWalk(player, x, y, ticks) {
-    const start = player.getLocation().clone(), dx = x - start.getX(), dy = y - start.getY();
-    const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
-    TaskManager.submit(new ForceMovementTask(player, ticks, new ForceMovement(start, new Location(dx, dy, 0), 0, ticks * 30, direction, 819)));
+  /**
+   * The cutscene walks the player tile by tile at walking speed, as the server does in
+   * rsprox recording 96 (one HighResolutionMovement step per tick). Input stays blocked: the
+   * queue is only opened for the walk, and the scene swallows the player's own clicks.
+   */
+  function sceneWalk(player, x, y) {
+    const workshop = workshops.get(player), queue = player.getMovementQueue(), start = player.getLocation();
+    if (!workshop) return;
+    queue.setBlockMovement(false);
+    workshop.walking = true;
+    queue.requestWalk(new Location(x, y, 0), false);
+    workshop.walking = false;
+    const walk = workshop.walkId = (workshop.walkId || 0) + 1;
+    later(workshop, Math.max(Math.abs(x - start.getX()), Math.abs(y - start.getY())) + 1, () => { if (workshop.scene && workshop.walkId === walk) queue.setBlockMovement(true); });
+  }
+
+  function blockSceneWalk(event) {
+    const workshop = workshops.get(event.player);
+    if (workshop?.scene && !workshop.walking) event.handled = true;
   }
 
   function workshopIntroduction(player) {
     const workshop = enterWorkshop(player); workshop.scene = true; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC_2); player.getDialogueManager().reset(); controls(player, true);
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
     player.setAttribute(INTRO_ATTRIBUTE, 10); quest.setStage(player, STAGE_STARTED);
-    later(workshop, 3, () => sceneWalk(player, 3367, 11484, 1));
-    later(workshop, 4, () => sceneWalk(player, 3367, 11489, 5));
+    later(workshop, 3, () => sceneWalk(player, 3367, 11484));
+    later(workshop, 4, () => sceneWalk(player, 3367, 11489));
     later(workshop, 1, () => camera(player, [3367, 11487, 500, 232, 232], [3367, 11479, 300, 232, 232]));
     later(workshop, 2, () => camera(player, [3367, 11492, 500, 4, 4], [3367, 11484, 280, 3, 3]));
     later(workshop, 7, () => camera(player, [3369, 11477, 700, 4, 4], [3364, 11493, 300, 4, 4]));
@@ -393,7 +406,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (text === "Woah... What is this place?" && workshops.get(player)?.scene) event.after = () => {
       const workshop = workshops.get(player); player.getDialogueManager().reset();
       camera(player, [3371, 11493, 700, 232, 232], [3368, 11486, 400, 232, 232]);
-      sceneWalk(player, 3367, 11485, 4);
+      sceneWalk(player, 3367, 11485);
       later(workshop, 2, () => startTranscript(api, player, DIALOGUE_NPC_ID, PAGE, "starting-out-talking-to-kovac", steps => {
         const yes = steps.find(step => step.type === "choice").options.find(option => option.text === "Yes.").steps;
         return yes.slice(yes.findIndex(step => step.player === "Did you build this?"));
@@ -893,6 +906,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   api.onCustomEvent("giants-foundry:step", handleFoundryStep);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onWalkRoute(blockSceneWalk);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handlePlayerGone);
   api.onPlayerDeath(handlePlayerGone);

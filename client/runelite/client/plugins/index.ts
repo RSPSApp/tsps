@@ -60,6 +60,7 @@ import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin
 import { LowEndDevicePlugin } from "../../../game/plugins/lowenddevice/LowEndDevicePlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
+import { CustomXpDropsPlugin } from "../../../game/plugins/customxpdrops/CustomXpDropsPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
 import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestPathPlugin";
 import { AgilityTrackerPlugin } from "../../../game/plugins/agilitytracker/AgilityTrackerPlugin";
@@ -134,6 +135,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     QuestHelperPlugin,
     XpTrackerPlugin,
     XpGlobesPlugin,
+    CustomXpDropsPlugin,
     AgilityTrackerPlugin,
     GatheringTrackerPlugin,
     SlayerTrackerPlugin,

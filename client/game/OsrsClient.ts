@@ -878,6 +878,11 @@ export class OsrsClient {
     sceneGeometry?: SceneGeometry;
     /** The minimap as last drawn, for plugins marking it. */
     minimapGeometry?: MinimapGeometry;
+    /**
+     * The rate this player's Hitpoints XP is paid at (the world's times a league's), sent by the
+     * server's Hitpoints XP Rate plugin. A Hitpoints gain divided by it is the OSRS-rate gain.
+     */
+    hitpointsXpRate = 1;
     playerEcs: PlayerEcs = new PlayerEcs();
     private continuousMovement?: ContinuousMovement;
     playerAnimController!: PlayerAnimController;

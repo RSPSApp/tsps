@@ -293,6 +293,13 @@ export function handleInboundUi(msg: any): boolean {
             if (g.__osrsClient) g.__osrsClient.worldMapPlayers = datasets[0].rows;
             return true;
         }
+        if (datasets?.length === 1 && datasets[0].key === "hitpointsXpRate") {
+            // The rate this player's Hitpoints XP is paid at (world x league), for predicted hits.
+            const rate = Number(datasets[0].rows?.[0]);
+            const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
+            if (g.__osrsClient && Number.isFinite(rate) && rate > 0) g.__osrsClient.hitpointsXpRate = rate;
+            return true;
+        }
         try {
             const { loadFromPayload } = require("../../../common/gamemode/GamemodeContentStore");
             const itemRevision = CustomItemRegistry.revision;

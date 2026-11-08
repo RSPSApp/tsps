@@ -540,7 +540,9 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3226, 3218);
   PluginManager.emitServerStartup({});
-  t.after(() => PluginManager.emitServerShutdown({}));
+  const originalCycle = core.World.getProcessCycle();
+  t.after(() => { PluginManager.emitServerShutdown({}); core.World.processCycle = originalCycle; });
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "native colour baseline is a members world");
   const I = core.ItemIdentifiers, O = core.ObjectIdentifiers;
   const colours = [
     ["red", I.RED_FIRELIGHTER, I.RED_LOGS, O.FIRE_24, "red_fire"],
@@ -559,9 +561,16 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
       close() {}, onData() {}, onError() {}, onClose() {} };
     const p = new Player(new PlayerSession(channel));
-    p.setIndex(index++); p.setUsername(`colour${index}`); p.setRegistered(true);
+    p.setIndex(index++); const name = `colour${index}`;
+    p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name));
+    p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
     p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+    p.getSkillManager().setExperience(core.Skill.FIREMAKING, 0);
+    p.getSkillManager().setMaxLevel(core.Skill.FIREMAKING, 1);
     p.getSkillManager().setCurrentLevel(core.Skill.FIREMAKING, 1, false);
+    p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 10); p.setHitpoints(10);
+    assert.ok(p.getLongUsername() > 0n); assert.equal(p.getHitpoints(), 10);
+    assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING), 1);
     const c = new ClientConnection(channel); c.player = p;
     const anchor = p.getLocation().clone();
     const ground = () => core.World.getItems().filter(g => !g.isPendingRemoval() &&
@@ -572,8 +581,13 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
       PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
       PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
       p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      core.GameConstants.PLAYER_PERSISTENCE?.cancelRequestedSave(p);
       for (const g of ground()) core.ItemOnGroundManager.deregister(g);
       for (const o of fires()) core.ObjectManager.deregister(o, true);
+      assert.equal(ground().length, 0, "owned ground items removed");
+      assert.equal(fires().length, 0, "owned fire removed");
+      assert.equal(core.TaskManager.hasActiveTask(p), false);
+      assert.equal(core.TaskManager.hasActiveTask(p.getIndex()), false);
     });
     for (const id of [I.LOGS, I.OAK_LOGS, lighter, I.TINDERBOX]) p.getInventory().add(new core.Item(id, 1), false);
     const gains = [], skills = p.getSkillManager(), add = skills.addExperiences.bind(skills);
@@ -594,11 +608,31 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
     assert.equal(p.getInventory().getAmount(lighter), 1);
     assert.equal(p.getInventory().getAmount(logs), 0);
     assert.equal(fires().length, 0);
+    if (colour === "red") {
+      const freeWorld = t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
+      await use(lighter, I.LOGS); turn();
+      assert.equal(p.getInventory().getAmount(I.LOGS), 1);
+      assert.equal(p.getInventory().getAmount(lighter), 1);
+      assert.equal(p.getInventory().getAmount(logs), 0);
+      freeWorld.mock.restore();
+      // The clicked restricted copy must not consume an earlier plain copy.
+      const restricted = new core.Item(I.LOGS, 1).setMetaValue(core.Item.UNTRADEABLE_META, true);
+      const restrictedSlot = p.getInventory().getItems().findIndex(item => item.getId() < 0);
+      p.getInventory().setItem(restrictedSlot, restricted);
+      await c.dispatch([{ type: "inventory_use_on", itemId: lighter,
+        slot: p.getInventory().getSlotForItemId(lighter), target: { kind: "inventory", id: I.LOGS, slot: restrictedSlot } }]);
+      turn();
+      assert.equal(p.getInventory().getAmount(I.LOGS), 2);
+      assert.equal(p.getInventory().getItems()[restrictedSlot], restricted);
+      assert.equal(p.getInventory().getAmount(lighter), 1);
+      assert.equal(p.getInventory().getAmount(logs), 0);
+      p.getInventory().deleteAtSlot(restrictedSlot, 1);
+    }
     await use(lighter, I.OAK_LOGS); turn();
     assert.equal(p.getInventory().getAmount(I.OAK_LOGS), 1);
     assert.equal(p.getInventory().getAmount(lighter), 1);
     assert.equal(p.getInventory().getAmount(logs), 0);
-    await use(lighter, I.LOGS); turn();
+    await (colour === "green" ? use(I.LOGS, lighter) : use(lighter, I.LOGS)); turn();
     assert.equal(p.getInventory().getAmount(I.LOGS), 0);
     assert.equal(p.getInventory().getAmount(lighter), 0);
     assert.equal(p.getInventory().getAmount(logs), 1);
@@ -607,7 +641,8 @@ test("native firelighters coat ordinary logs and light the matching fire on the 
     assert.equal(p.getInventory().getAmount(logs), 0);
     assert.equal(ground().filter(g => g.getItem().getId() === logs).length, 1);
     // A normal level-1 roll would fail at this value; coloured logs must catch first time.
-    t.mock.method(Math, "random", () => 0.99);
+    const originalRandom = Math.random;
+    t.mock.method(Math, "random", () => new Error().stack.includes("rollLightingSuccess") ? 0.99 : originalRandom());
     for (let n = 0; n < 5; n++) turn();
     assert.equal(ground().filter(g => g.getItem().getId() === logs).length, 0);
     assert.equal(fires().length, 1);

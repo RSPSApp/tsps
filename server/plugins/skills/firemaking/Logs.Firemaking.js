@@ -596,6 +596,10 @@ function tendFire(player, session, activeSessions) {
   }
 }
 
+function rollLightingSuccess(level) {
+  return Math.random() < lightingSuccessChance(level);
+}
+
 function processFiremakingTick(activeSessions, currentTick) {
   for (const [player, session] of activeSessions) {
     if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
@@ -678,7 +682,7 @@ function processFiremakingTick(activeSessions, currentTick) {
     }
 
     // Content may make the roll succeed ("firemaking:light-roll", a league relic that never fails to light).
-    const light = { player, success: !!session.log.colour || Math.random() < lightingSuccessChance(getFiremakingLevel(player)) };
+    const light = { player, success: !!session.log.colour || rollLightingSuccess(getFiremakingLevel(player)) };
     pluginApi.emitCustomEvent("firemaking:light-roll", light);
     if (!light.success) {
       player.performAnimation(LIGHT_FIRE_ANIMATION);
@@ -733,9 +737,11 @@ function handleItemOnItem(event, activeSessions) {
       return;
     }
     const inventory = player.getInventory();
-    if (!inventory.contains(ItemIds.LOGS) || !inventory.contains(lighterId)) return;
-    inventory.deleteNumber(ItemIds.LOGS, 1);
-    inventory.deleteNumber(lighterId, 1);
+    const inputs = [[event.usedItemSlot, event.usedItem], [event.usedWithItemSlot, event.usedWithItem]];
+    if (inputs.some(([slot, item]) => !item || inventory.getItems()[slot] !== item || item.getAmount() < 1 ||
+      item.isPresetItem() || item.getMetaValue(Item.UNTRADEABLE_META) === true ||
+      item.getMetaValue(Item.UNBANKABLE_META) === true)) return;
+    for (const [slot] of inputs) inventory.deleteAtSlot(slot, 1, false);
     inventory.add(new Item(coloured.itemId, 1), true);
     player.sendMessage(`You coat the logs with the ${coloured.colour} chemicals.`);
     return;

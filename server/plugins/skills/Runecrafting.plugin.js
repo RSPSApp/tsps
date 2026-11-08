@@ -879,6 +879,26 @@ function afterTicks(ticks, action) {
   })());
 }
 
+/** Abyssal bracelet (5) to (1), most charges first. */
+const ABYSSAL_BRACELETS = [11095, 11097, 11099, 11101, 11103];
+
+/**
+ * Wiki (Abyssal bracelet): worn, it prevents the Abyss's skull, using 1 charge an entry, and crumbles after the last.
+ * Already skulled, it only keeps the skull's timer from resetting, and uses no charge.
+ */
+function abyssalBraceletProtects(player) {
+  const { Equipment, Item } = pluginApi.core;
+  const worn = player.getEquipment().getItems()[Equipment.HANDS_SLOT];
+  const index = ABYSSAL_BRACELETS.indexOf(worn?.getId?.());
+  if (index < 0) return false;
+  if (player.isSkulled?.()) return true;
+  const next = ABYSSAL_BRACELETS[index + 1];
+  player.getEquipment().setItem(Equipment.HANDS_SLOT, next === undefined ? new Item(-1, 0) : new Item(next, 1));
+  player.getEquipment().refreshItems?.();
+  if (next === undefined) player.sendMessage("Your abyssal bracelet crumbles to dust.");
+  return true;
+}
+
 function teleportToAbyss(player) {
   if (!hasCompletedEnterTheAbyss(player)) {
     player.sendMessage(ABYSS_LOCKED_MESSAGE);
@@ -888,8 +908,10 @@ function teleportToAbyss(player) {
     return;
   }
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
-  // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
-  pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
+  // The Mage of Zamorak skulls the player for 10 minutes (Wiki), unless a worn abyssal bracelet prevents it.
+  if (!abyssalBraceletProtects(player)) {
+    pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
+  }
   // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
   requestTeleport(player, ABYSS_INNER_RING, () => {
     pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });

@@ -380,8 +380,8 @@ test('practice sizes count the human and select the requested opposing bot role'
     World.getAddPlayerQueue().splice(0);
     game.settings = { teamSize: size, opponent: 'scorer' };
     const player = fakePlayer();
-    enterPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
-    prompt.options[2].pick();
+    // The settings are Lanthus' practice: "Join practice" joins with the practice flag.
+    game.joinFromLobby(player, TEAM.SARADOMIN, 'veteran', TEAM.SARADOMIN, false, true);
     const bots = World.getAddPlayerQueue();
     assert.equal(bots.filter((bot) => game.getTeamId(bot) === TEAM.SARADOMIN).length, size - 1);
     const opponents = bots.filter((bot) => game.getTeamId(bot) === TEAM.ZAMORAK);
@@ -390,6 +390,34 @@ test('practice sizes count the human and select the requested opposing bot role'
     assert.ok(bots.filter((bot) => game.getTeamId(bot) === TEAM.SARADOMIN).every((bot) => bot.getAttribute(game.BOT_ROLE_KEY) === 'defender'));
     assert.ok(bots.every((bot) => bot.getAttribute(game.BOT_TIER_KEY) === 'veteran'));
   }
+});
+
+test("a practice match's settings stay with it: the next public game has no team cap and the normal bot fill", (t) => {
+  // A 1 vs 1 practice with no opposing bots left in Lanthus' settings.
+  game.settings = { teamSize: 1, opponent: 'none', barricades: 10, botTier: 'veteran' };
+  World.getAddPlayerQueue().splice(0);
+  game.joinFromLobby(fakePlayer(), TEAM.SARADOMIN, null, TEAM.SARADOMIN, false, true);
+  assert.equal(game.practice, true);
+
+  // The practice player has gone; a public game starts in the empty lobby, and the bot prompt fills both teams.
+  const counts = t.mock.method(game, 'queueCounts', () => ({ [TEAM.SARADOMIN]: 0, [TEAM.ZAMORAK]: 0 }));
+  World.getAddPlayerQueue().splice(0);
+  const first = fakePlayer();
+  enterPortal(first, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  prompt.options[2].pick();
+  assert.equal(game.practice, false, 'a join that is not "Join practice" starts a public match');
+  counts.mock.restore();
+  const bots = World.getAddPlayerQueue();
+  assert.equal(bots.filter((bot) => game.getTeamId(bot) === TEAM.ZAMORAK).length, 30, 'not 1 vs 1, and not none');
+  assert.equal(bots.filter((bot) => game.getTeamId(bot) === TEAM.SARADOMIN).length, 29);
+
+  // And a third human joins a team that already has people: no practice cap of 1.
+  t.mock.method(game, 'queueCounts', () => ({ [TEAM.SARADOMIN]: 2, [TEAM.ZAMORAK]: 2 }));
+  const third = fakePlayer();
+  enterPortal(third, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  assert.ok(!third.messages?.includes?.('That Castle Wars team is full.'), 'no cap outside practice');
+  assert.equal(game.getTeamId(third), TEAM.SARADOMIN);
+  game.settings = { ...Settings._test.DEFAULTS };
 });
 
 test('practice menus join from every portal through the real prompt dispatcher without losing settings or team choice', (t) => {

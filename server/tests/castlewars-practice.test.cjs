@@ -75,6 +75,10 @@ test('Lanthus settings retain team sizes and barricade caps without the removed 
   assert.deepEqual(prompt.pairs.filter((_, i) => i % 2 === 0), ['Barricades per team: 10', 'Bot combat: Maxed (126)', 'Bracelet charges', 'Back']);
   pick('Barricades per team:');
   pick('20');
+  // The limit belongs to a "Join practice" match.
+  const practice = game.practice;
+  t.after(() => { game.practice = practice; });
+  game.practice = true;
   assert.equal(game.getBarricadeLimit(), 20);
   pick('Back');
   const stale = prompt.pairs[9];
@@ -376,6 +380,18 @@ test('human games ignore custom barricade limits, and Lanthus offers no bots', (
   Settings.openSettings({ player: p });
   pick('Bots:'); pick('None'); pick('Join practice');
   assert.equal(joined[2], null, 'no-bot selection skips the tier prompt and seeds no bots');
+});
+
+test('a public game with fill bots keeps the default barricade limit; only a practice match uses its own', (t) => {
+  const bot = { getAttribute: (key) => key === game.BOT_KEY };
+  t.mock.method(game.gameArea, 'getPlayers', () => [bot]);
+  const practice = game.practice;
+  t.after(() => { game.practice = practice; game.settings.barricades = 10; });
+  game.settings.barricades = 20;
+  game.practice = false;
+  assert.equal(game.getBarricadeLimit(), 10, 'lobby fill bots do not make a public game a practice match');
+  game.practice = true;
+  assert.equal(game.getBarricadeLimit(), 20);
 });
 
 test('practice tools do not interact diagonally through a barricade corner', (t) => {

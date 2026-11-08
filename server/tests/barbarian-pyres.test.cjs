@@ -159,3 +159,24 @@ test("logout releases an unfinished site and old lighting tasks cannot replace a
   f.disconnect(next);
   assert.equal(f.objects.at(-1).getId(), T.PYRE_SITE);
 });
+
+// Wiki (Template:Table/Pyre ships): achey tree (11, 10/40), camphor (76, 61.2/245), ironwood (90, 80/320) and rosewood
+// (97, 105/420) logs build pyre ships too; the table stopped at redwood.
+test("achey, camphor, ironwood and rosewood logs build pyre ships at the Wiki's levels and Crafting XP", () => {
+  for (const [logs, level, craftXp] of [[2862, 11, 10], [32904, 76, 61.2], [32907, 90, 80], [32910, 97, 105]]) {
+    fixture();
+    const p = player({ inventory: { 1351: 1, [logs]: 1 }, levels: { CRAFTING: level, FIREMAKING: level } });
+    const xp = [];
+    const skills = p.getSkillManager();
+    p.getSkillManager = () => ({ ...skills, addExperiences: (skill, amount) => xp.push([skill, amount]) });
+    T.itemOnSite({ player: p, object: objectAt(T.PYRE_SITE, 2503, 3498), objectId: T.PYRE_SITE, itemId: logs });
+    assert.equal(p.messages.at(-1), "You place the logs on the pyre.", String(logs));
+    assert.equal(p.getInventory().getAmount(logs), 0);
+    assert.deepEqual(xp, [["CRAFTING", craftXp]]);
+
+    fixture();
+    const low = player({ inventory: { 1351: 1, [logs]: 1 }, levels: { CRAFTING: level - 1 } });
+    T.itemOnSite({ player: low, object: objectAt(T.PYRE_SITE, 2503, 3498), objectId: T.PYRE_SITE, itemId: logs });
+    assert.equal(low.messages.at(-1), `You need a Crafting level of at least ${level} to build that pyre.`);
+  }
+});

@@ -30,6 +30,9 @@ const WALK_OVER_MAX_TICKS = 2;
 const DOOR_NAMES = new Set([
   "Door", "Doors", "Large door", "Large doors", "Castle door", "Cell Door", "Cell door",
   "Glass door", "Magic door", "Magic guild door", "Metal door", "Mind Door", "Mithril door", "Tent door", "Wall",
+  // The Ranging Guild's entrance (11665, diagonal, Open only). Its 40 Ranged gate is
+  // areas/RangingGuild.plugin.js; this only swings the leaf.
+  "Guild door",
   "Gate", "Metal gate", "Doorway", "Tree Door", "Storeroom Door", "Ardougne Wall Door",
   "Vitur door", "Myrmel door", "Shadum door", "Jovkai door", "Chained door", "Trapdoor",
   "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
@@ -81,6 +84,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
   SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
     O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
+    // The Ranging Guild's entrance (11665) is Open only; 11666 is a ladder, so there is no
+    // open leaf to pair with and the leaf swings in place.
+    O.GUILD_DOOR,
     O.DOOR_287, O.DOOR_358, O.GATE_52, O.WALL_9, O.DOOR_115, O.LARGE_DOOR_23,
     // The Blood Moon Rises crank-wheel house exit (61824) has no cache Close partner.
     O.DOOR_831,
@@ -111,9 +117,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Holy Grail: Merlin's workshop door in Camelot (24, merlinworkshop) and the Draynor Manor
     // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
     // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
-    O.DOOR_3, O.DOOR_4,
-    // Khazard stronghold: Open-only ordinary door models, no distinct open loc.
-    O.DOOR_67]);
+    O.DOOR_3, O.DOOR_4]);
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
   // the way to the Blast Furnace, shares DOOR_180's model but offers no option). Witch's House's
@@ -526,6 +530,21 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 46,
+    }),
+    // The Ranging Guild's entrance (11665, diagonal, Open only, no open leaf in the cache).
+    // RangingGuild.plugin's 40 Ranged check runs before this (door:toggle). The leaf swings to the
+    // tile north and an inviswall keeps the doorway blocked, so nobody can walk or follow through
+    // it: the opener is carried the two tiles across, from 2657 to 2659 or back.
+    Object.freeze({
+      closed: [[O.GUILD_DOOR, 2658, 3438, 0, 0, 9]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2658, 3438, 0, 0, 9],
+        [O.GUILD_DOOR, 2658, 3439, 0, 1, 9],
+      ],
+      crossBetween: [2657, 2659],
+      crossRows: [3438],
+      closeTicks: 2,
+      openSoundId: 62,
     }),
     Object.freeze({
       closed: [[O.WALL_9, 2836, 9600, 0, 3]],

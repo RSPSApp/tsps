@@ -220,3 +220,59 @@ test("Uncharge refunds one of each rune per charge", (t) => {
   assert.equal(item.getId(), I.RING_OF_SHADOWS_UNCHARGED_);
   for (const id of [I.SOUL_RUNE, I.BLOOD_RUNE, I.DEATH_RUNE, I.LAW_RUNE]) assert.equal(amountOf(player, id), 300);
 });
+
+function fillInventory(player, freeSlots) {
+  while (player.getInventory().getFreeSlots() > freeSlots) give(player, real(I.BONES, 1));
+}
+
+function trackDrops(t) {
+  const drops = [];
+  t.mock.method(core.ItemOnGroundManager, "registerLocation", (_player, item) => drops.push([item.getId(), item.getAmount()]));
+  return drops;
+}
+
+test("Uncharge works with a single free slot: the first rune fits, the rest drop in order", (t) => {
+  const { player, messages } = actor(t);
+  const drops = trackDrops(t);
+  const [item] = give(player, ring(500));
+  fillInventory(player, 1);
+  inventoryOption(player, item, "Uncharge");
+  assert.equal(item.getId(), I.RING_OF_SHADOWS_UNCHARGED_);
+  assert.equal(amountOf(player, I.SOUL_RUNE), 500, "soul takes the slot");
+  assert.deepEqual(drops, [[I.BLOOD_RUNE, 500], [I.DEATH_RUNE, 500], [I.LAW_RUNE, 500]]);
+  assert.match(messages.at(-1), /dropped on the floor/);
+});
+
+test("Uncharge with no free slot and runes missing is refused and keeps the charges", (t) => {
+  const { player, messages } = actor(t);
+  const drops = trackDrops(t);
+  const [item] = give(player, ring(50), real(I.SOUL_RUNE, 1));
+  fillInventory(player, 0);
+  inventoryOption(player, item, "Uncharge");
+  assert.equal(Ring._test.charges(item), 50);
+  assert.deepEqual(drops, []);
+  assert.equal(messages.at(-1), "You don't have enough inventory space to uncharge the ring.");
+});
+
+test("Uncharge with all four runes held and a full pack still refunds into the stacks", (t) => {
+  const { player } = actor(t);
+  const drops = trackDrops(t);
+  const [item] = give(player, ring(100));
+  giveRunes(player, 5);
+  fillInventory(player, 0);
+  inventoryOption(player, item, "Uncharge");
+  for (const id of [I.SOUL_RUNE, I.BLOOD_RUNE, I.DEATH_RUNE, I.LAW_RUNE]) assert.equal(amountOf(player, id), 105);
+  assert.deepEqual(drops, []);
+});
+
+test("Uncharge never destroys runes: what a stack cannot take is dropped", (t) => {
+  const { player } = actor(t);
+  const drops = trackDrops(t);
+  const cap = 2147483647;
+  const [item] = give(player, ring(1000), real(I.SOUL_RUNE, cap - 647));
+  Ring._test.uncharge({ player, item });
+  assert.equal(amountOf(player, I.SOUL_RUNE), cap);
+  assert.deepEqual(drops, [[I.SOUL_RUNE, 353]]);
+  assert.equal(amountOf(player, I.BLOOD_RUNE), 1000);
+  assert.equal(item.getId(), I.RING_OF_SHADOWS_UNCHARGED_);
+});

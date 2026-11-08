@@ -216,23 +216,37 @@ function useRune({ player, usedItem, usedItemId, usedWithItem, usedWithItemId })
   return true;
 }
 
-function hasRoomForRunes(player, count) {
+/** Wiki: Uncharge needs one empty slot, or all four runes already in the pack. */
+function canUncharge(player) {
   const inventory = player.getInventory();
-  const missing = RUNES.filter((rune) => !inventory.contains(core.ItemIdentifiers[rune])).length;
-  return count <= 0 || inventory.getFreeSlots() >= missing;
+  return inventory.getFreeSlots() >= 1 || RUNES.every((rune) => inventory.contains(core.ItemIdentifiers[rune]));
 }
 
-/** Wiki: uncharging refunds the runes, one of each per charge. */
+/**
+ * Wiki: uncharging refunds one of each rune per charge, in the order soul, blood, death, law. What
+ * the pack cannot take (no slot left, or a stack at its cap) is dropped at the player's feet.
+ */
 function uncharge({ player, item }) {
   const count = charges(item);
   if (count <= 0) return;
-  if (!hasRoomForRunes(player, count)) {
+  if (!canUncharge(player)) {
     player.sendMessage("You don't have enough inventory space to uncharge the ring.");
     return;
   }
   setCharges(player, item, 0);
-  for (const rune of RUNES) player.getInventory().adds(core.ItemIdentifiers[rune], count);
+  const { Item, ItemOnGroundManager } = core;
+  let dropped = false;
+  for (const rune of RUNES) {
+    const id = core.ItemIdentifiers[rune];
+    const fits = Math.min(count, player.getInventory().getAddableAmount(new Item(id, count)));
+    if (fits > 0) player.getInventory().adds(id, fits);
+    if (fits < count) {
+      ItemOnGroundManager.registerLocation(player, new Item(id, count - fits), player.getLocation());
+      dropped = true;
+    }
+  }
   player.sendMessage(`You uncharge your ring of shadows and get back ${plural(count, "charge")} worth of runes.`);
+  if (dropped) player.sendMessage("Some of the runes did not fit in your inventory and were dropped on the floor.");
 }
 
 function attach(pluginApi) {

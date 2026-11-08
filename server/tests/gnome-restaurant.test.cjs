@@ -787,6 +787,39 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
   assert.equal(dragonInventory.getAmount(obj("drunk_dragon")), 2, "the retained shaker supports a second complete drink");
   assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 320);
 
+  // Observe the real decoded object route; the replacement adapter models a
+  // queued input disappearing after admission and before the cooking task runs.
+  const guard = actor("dragonbind", 32), guardInventory = guard.getInventory();
+  const tagged = new core.Item(9576, 1); tagged.setMeta({ preset: true });
+  guardInventory.setItem(0, tagged); guardInventory.setItem(1, new core.Item(9576, 1));
+  assert.equal(tagged.isPresetItem(), true);
+  const emitObject = PluginManager.emitItemOnObject;
+  let observed = 0, replaceAfterAdmission = false, admitted = false;
+  try {
+    PluginManager.emitItemOnObject = function (event) {
+      if (event.player !== guard || event.itemId !== 9576) return emitObject.call(this, event);
+      observed++;
+      const result = emitObject.call(this, event);
+      if (replaceAfterAdmission) {
+        admitted = require("../plugins/skills/Cooking.plugin").isCookingActive(guard);
+        guardInventory.setItem(event.itemSlot, new core.Item(9576, 1));
+      }
+      return result;
+    };
+    await heat(guard);
+    assert.equal(observed, 1, "tagged clicked item reached the registered object route");
+    assert.equal(guardInventory.getAmount(9576), 2, "a separate plain item does not authorize the tagged selection");
+    assert.equal(guardInventory.getAmount(obj("drunk_dragon")), 0);
+    guardInventory.setItem(0, new core.Item(9576, 1));
+    guardInventory.setItem(1, new core.Item(-1, 0));
+    replaceAfterAdmission = true;
+    await heat(guard);
+    assert.equal(observed, 2);
+    assert.equal(admitted, true, "the plain selected item entered a real cooking task before replacement");
+    assert.equal(guardInventory.getAmount(9576), 1, "the replacement is not consumed by the earlier task");
+    assert.equal(guardInventory.getAmount(obj("drunk_dragon")), 0);
+  } finally { PluginManager.emitItemOnObject = emitObject; }
+
   const ordinary = actor("gnomebread", 99);
   await assertUnrelatedWidgetDoesNotResolveCuisine(ordinary);
   assert.equal(core.RegionManager.blocked(ordinary.getLocation(), null), false);

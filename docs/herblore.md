@@ -39,6 +39,7 @@ Recording 4213; the level message is from recordings 1757 and 1835.
 - **Animation and sound:** `human_herbing_vial` (363) and synth 2608 with every step.
   `Sound.POTION_MIX` (2611), which the old plugin used, is not it.
 - **Below the level:** "You need a Herblore level of 38 to combine those." (captured).
+- **Prescription goggles:** worn, a 10% chance per potion to keep its secondaries, through the `herblore:mix` event (see docs/mastering-mixology.md).
 - **Herblore cape:** a grimy herb goes straight into a vial of water. Recording 3140 shows both
   messages, "You clean the Grimy marrentill." then "You put the Marrentill into the vial of
   water.", with the cleaning XP and no animation or sound.

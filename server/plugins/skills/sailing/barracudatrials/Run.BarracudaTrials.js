@@ -108,6 +108,8 @@ function placeBoat(player, run) {
   // The catcher's motes go at the start (rsprox 907 11701).
   require("../WindCatcher.Helm").empty(player);
   common.core().BoatManager.teleport(boat, run.trial.start);
+  // Moored at the start: the way it had under full sail is lost, or it drifts before the timer starts.
+  boat.velocity = 0;
   common.clearSpeed(boat);
 }
 
@@ -311,6 +313,7 @@ function complete(player, run, ticks) {
     out.sendVarbit(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.MOORED);
     out.sendVarbit(VARBIT.SIDEPANEL_SAIL_BUTTON_TOGGLED, 0);
     common.core().BoatManager.teleport(boat, { fineX: trial.start.fineX, fineY: trial.start.fineY });
+    boat.velocity = 0;
   }
   for (const sound of SOUND_COMPLETE) out.sendSoundEffect(sound, 1, 0);
   out.sendSong(SONG_TRIALS);

@@ -209,6 +209,25 @@ test("starting: the rank, supplies, messages and the boat at the start, then the
   }
 });
 
+test("a trial started from full sail stays put at the start until the sails go up (review #1438)", (t) => {
+  // Open water around the start, so a boat with way on it can move (this harness loads no map).
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  t.mock.method(RegionManager, "isWater", () => true);
+  t.mock.method(RegionManager, "getClipping", () => 0);
+  const player = captain();
+  const boat = atTheHelm(player);
+  try {
+    helm.setSailMode(player, boat, "full");
+    boat.velocity = 128; // a tile a tick, as under full sail
+    run.start(player, TEMPOR(), 1);
+    tick(6);
+    assert.equal(player.varps.get(varp("sailing_bt_time_start")) ?? 0, 0, "the timer has not started");
+    assert.deepEqual([boat.fineX / 128, boat.fineY / 128], [3035.5, 2920.5], "moored at the start, no drift");
+  } finally {
+    leave(player);
+  }
+});
+
 test("sailing past a crate collects it: varbit, 15 XP (rsprox)", () => {
   const player = captain();
   const boat = atTheHelm(player);

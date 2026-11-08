@@ -939,7 +939,12 @@ export class ClientConnection {
               // which never take the item off, even when nothing handles them.
               if (!itemActionHandled && actionPacket.buttonNum === 1) {
                 // As equipping refuses: no gear comes off mid-teleport (the left-click and Wield routes' rule).
-                if (!this.player.isTeleportingReturn()) EquipPacketListener.unequip(this.player, equipmentSlot);
+                // Nor while trading: live shows the trade side panel in the sidemodal over the side tabs
+                // (rsprox_transcripts/227/00548.txt), and gear taken off could fill the slots an offer freed,
+                // so a decline then dropped the offered items.
+                if (!this.player.isTeleportingReturn() && this.player.getStatus() !== PlayerStatus.TRADING) {
+                  EquipPacketListener.unequip(this.player, equipmentSlot);
+                }
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }

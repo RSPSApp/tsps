@@ -8,6 +8,10 @@ import { Graphic } from "../../../model/Graphic";
 import { Sound } from "../../../Sound";
 import { Projectile } from "../../../model/Projectile";
 import { PendingHit } from "../hit/PendingHit";
+import { MagicSpellbook } from "../../../model/MagicSpellbook";
+
+const NPC_PROJECTILE_VISUAL_CONTEXT = "magic:npc-projectile-visual";
+type NpcProjectileVisual = { target: Mobile; endCycleOffset: number; queued: boolean };
 
 
 /**
@@ -77,8 +81,26 @@ export abstract class CombatSpell extends Spell {
     const projectile = this.castProjectile(cast, castOn);
 
     if (projectile) {
+      const timing = typeof projectile.getTiming === "function" ? projectile.getTiming() : null;
       projectile.sendProjectile();
+      const context = Spell.getCastContext(cast, this);
+      // Native standard NPC casts queue their impact graphic at the cast, for the projectile's end cycle.
+      // Other projectile profiles and independently timed/no-projectile spells keep their existing path.
+      if (context && cast.isPlayer() && castOn.isNpc() && timing?.legacyMagic
+          && timing.endCycleOffset > timing.startCycleOffset
+          && this.getSpellbook() === MagicSpellbook.NORMAL && this.hitDelay() == null) {
+        const radius = typeof (this as any).spellRadius === "function" ? (this as any).spellRadius() : 0;
+        if (radius === 0) context.data.set(NPC_PROJECTILE_VISUAL_CONTEXT, {
+          target: castOn, endCycleOffset: timing.endCycleOffset, queued: false,
+        } satisfies NpcProjectileVisual);
+      }
     }
+  }
+
+  public getNpcProjectileVisual(context: SpellCastContext | null, target: Mobile): NpcProjectileVisual | null {
+    if (context?.spell !== this) return null;
+    const visual = context.data.get(NPC_PROJECTILE_VISUAL_CONTEXT) as NpcProjectileVisual | undefined;
+    return visual?.target === target ? visual : null;
   }
 
 

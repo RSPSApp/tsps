@@ -791,8 +791,10 @@ test("native manual walk cancels lighting before the roll while automatic succes
 
 // Otto's first Firemaking lesson. Registered NPC options, native dialogue and inventory
 // packets, real Logs tasks/events and the production save codec; no direct lesson hook.
-// Skills/items are seeded, Otto is owner-only at his source spawn, and fires are removed
-// between exercises. The codec round-trip is not a socket login or natural acquisition.
+// Skills/items are seeded and Otto is owner-only at his source spawn. The same player
+// is placed at the existing native fire-test scene for each exercise and returned for
+// dialogue; this is a scene adapter, not natural travel or a retail distance assertion.
+// Fires are removed between exercises. The codec round-trip is not a socket login.
 test("Otto teaches bow firemaking and remembers an owned oak exercise through save and return", async t => {
   process.env.DISABLE_PLAYER_BOTS = "1";
   const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -846,6 +848,9 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
           PluginManager.removeNpc(f.npc);
         });
         clean(() => core.World.unregisterPlayerPosition(f.player));
+        for (const location of [f.anchor, f.fireAnchor]) {
+          if (location) clean(() => core.World.unregisterPlayerPosition(f.player, location));
+        }
         clean(() => f.player.setRegistered(false));
       }
       for (const task of ownedTasks) clean(() => { if (task.isRunning()) core.Task.prototype.stop.call(task); });
@@ -897,7 +902,7 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const player = new Player(new PlayerSession(channel));
-    const f = { player, npc: null, connection: null, anchor: null, messages: [] };
+    const f = { player, npc: null, connection: null, anchor: null, fireAnchor: null, messages: [] };
     actors.push(f); // Own the player before registration, map loading or any assertion can fail.
     player.setIndex(1799 + actors.length);
     const username = `ottofm${player.getIndex()}`;
@@ -917,14 +922,15 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
       assert.equal(skills.getCurrentLevel(skill), value);
     }
     core.RegionManager.loadMapFiles(source.x, source.y);
-    // Walkable scenery can still refuse a fire. Use the existing production
-    // predicate rather than assuming the first reachable Otto-adjacent tile is clear.
-    const offset = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].find(([dx,dy]) =>
+    // This anchor qualifies Talk-to placement, not firemaking inside Otto's hut.
+    const offset = [[1,0],[-1,0],[0,1],[0,-1]].find(([dx,dy]) =>
       core.RegionManager.canMove(source.x, source.y, source.x+dx, source.y+dy, 0, 1, 1, null)
-      && core.RegionManager.canMove(source.x+dx, source.y+dy, source.x, source.y, 0, 1, 1, null)
-      && !Firemaking.isFireTileBlocked(new core.Location(source.x+dx, source.y+dy, source.level ?? 0), null));
-    assert.ok(offset, "canonical Otto tile has a reachable adjacent fire-clear tile");
+      && core.RegionManager.canMove(source.x+dx, source.y+dy, source.x, source.y, 0, 1, 1, null));
+    assert.ok(offset, "canonical Otto tile has a reachable adjacent dialogue tile");
     player.setLocation(new core.Location(source.x+offset[0], source.y+offset[1], source.level ?? 0));
+    f.anchor = player.getLocation().clone();
+    // Reuse the scene exercised by the existing native manual-walk test above.
+    f.fireAnchor = new core.Location(3226, 3218, 0);
     player.setNeedsPlacement(false);
     const connection = new ClientConnection(channel); connection.player = player;
     f.npc = PluginManager.spawnNpc({ id: source.id, x: source.x, y: source.y, z: source.level ?? 0,
@@ -933,7 +939,7 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
     assert.ok(npc && npc.isRegistered()); assert.equal(npc.getOwner(), player);
     npc.setNeedsPlacement(false); player.getLocalNpcs().push(npc);
     assert.equal(npc.getCurrentDefinition(player).getName(), "Otto Godblessed");
-    f.connection = connection; f.anchor = player.getLocation().clone(); return f;
+    f.connection = connection; return f;
   }
   function turn(f) {
     f.player.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
@@ -983,7 +989,10 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
   }
   async function fire(f, logId, bow) {
     f.player.closeInterruptibleInterfaces();
-    f.player.getMovementQueue().reset(); f.player.setLocation(f.anchor.clone());
+    assert.equal(Firemaking.isFiremakingActive(f.player), false, "the previous exercise has settled before scene placement");
+    f.player.getMovementQueue().reset();
+    core.RegionManager.loadMapFiles(f.fireAnchor.getX(), f.fireAnchor.getY());
+    f.player.setLocation(f.fireAnchor.clone());
     const inv = f.player.getInventory(), tool = bow ? I.SHORTBOW : I.TINDERBOX;
     for (const id of [I.LOGS, I.OAK_LOGS, I.SHORTBOW, I.TINDERBOX]) inv.deleteNumber(id, inv.getAmount(id));
     for (const id of [tool, logId]) {

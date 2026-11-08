@@ -64,7 +64,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const MAGIC_TAB = 82;
   const PANDEMONIUM_LANDING = new Location(3069, 2987, 0); // Pandemonium.Quest.js landing tile.
   const FARE = 30;
-  /** The customs officer's half fare for worn Karamja gloves (Pay-fare transcript). */
+  /** The half fare for worn Karamja gloves, both ways (the customs officer's Pay-fare transcript; Wiki, Seaman Lorris). */
   const GLOVES_FARE = 15;
   const GARDENER_SHOUT = "First moles, now this! Take this, vandal!";
 
@@ -507,11 +507,13 @@ module.exports = function registerPiratesTreasureQuest(api) {
 
   function sailToKaramja(player) {
     if (sailing.has(player)) return;
-    if (!payFare(player, FARE)) {
+    // Wiki (Seaman Lorris, Karamja Diary): 15 coins to Musa Point while wearing any Karamja gloves.
+    const fare = wearsKaramjaGloves(player) ? GLOVES_FARE : FARE;
+    if (!payFare(player, fare)) {
       player.sendMessage("You don't have enough coins to pay for passage.");
       return;
     }
-    voyage(player, MUSA_POINT_LANDING, TO_KARAMJA_ROUTE, "The ship arrives at Karamja.", FARE);
+    voyage(player, MUSA_POINT_LANDING, TO_KARAMJA_ROUTE, "The ship arrives at Karamja.", fare);
   }
 
   function sailToPortSarim(player, fare = FARE) {

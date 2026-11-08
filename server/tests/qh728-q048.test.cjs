@@ -543,3 +543,27 @@ test('the returned kitten goes even when the scene is cut short', () => {
   expiry.execute();
   assert.equal(kitten.removed, true);
 });
+
+test('Fluffs action hints reach chat once at the matching quest stage only', () => {
+  const h = setup(), N = h.core.NpcIdentifiers;
+  const record = require('../data/definitions/npc-dialogues.json')["Gertrude's Cat"];
+  for (const [stage, variant, id] of [
+    [2, 'finding-fluffs-pick-up-fluffs', '0lp0da'],
+    [3, 'finding-fluffs-pick-up-fluffs-2', '019G3T'],
+    [4, 'making-seasoned-sardines-pick-up-fluffs', 'nPc5q9'],
+  ]) {
+    const step = record.variants[variant].find(step => step.id === id);
+    assert.equal(step.type, 'action');
+    h.quest.setStage(h.player, stage);
+    h.messages.length = 0;
+    h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
+    assert.deepEqual(h.messages, [step.text], 'the canonical hint is displayed exactly once');
+    assert.equal(h.quest.getStage(h.player), stage, 'the hint does not grant quest progress');
+    h.messages.length = 0;
+    h.fire('npc-dialogue:action', { npcId: N.SHILOP, stepId: id, text: step.text, step });
+    assert.deepEqual(h.messages, [], 'another NPC cannot display Fluffs hints');
+    h.quest.setStage(h.player, 6);
+    h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
+    assert.deepEqual(h.messages, [], 'completed or mismatched stages stay silent');
+  }
+});

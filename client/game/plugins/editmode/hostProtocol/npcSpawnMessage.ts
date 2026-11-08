@@ -51,6 +51,79 @@ export type NpcSpawnRecord = {
     remove?: boolean;
 };
 
+/**
+ * How the server's loader reads each record of a saved patch over the canonical spawns
+ * (NpcSpawnDefinitionLoader: spawns sharing a tile pair one for one). A remove drops one spawn with its key and
+ * frees a slot that the patch's next record with the key fills ("add"); otherwise a record replaces one canonical
+ * spawn still standing ("override"), or is a new spawn when none is left ("add").
+ */
+export function classifyNpcSpawnPatch(
+    canonical: readonly { id: number; tileX: number; tileY: number; plane: number }[],
+    records: readonly NpcSpawnRecord[],
+): Array<"remove" | "override" | "add"> {
+    const canonicalLeft = new Map<string, number>();
+    for (const spawn of canonical) {
+        const key = npcSpawnKey(spawn);
+        canonicalLeft.set(key, (canonicalLeft.get(key) ?? 0) + 1);
+    }
+    const added = new Map<string, number>();
+    const freed = new Map<string, number>();
+    return records.map((record) => {
+        const key = npcSpawnKey(record);
+        const left = canonicalLeft.get(key) ?? 0;
+        if (record.remove) {
+            // The oldest surviving spawn goes first: a canonical one, then an earlier addition.
+            if (left > 0) canonicalLeft.set(key, left - 1);
+            else if ((added.get(key) ?? 0) > 0) added.set(key, (added.get(key) ?? 0) - 1);
+            else return "remove";
+            freed.set(key, (freed.get(key) ?? 0) + 1);
+            return "remove";
+        }
+        const credit = freed.get(key) ?? 0;
+        if (credit === 0 && left > 0) {
+            canonicalLeft.set(key, left - 1);
+            return "override";
+        }
+        if (credit > 0) freed.set(key, credit - 1);
+        added.set(key, (added.get(key) ?? 0) + 1);
+        return "add";
+    });
+}
+
+/**
+ * Spawns the editor hides, counted per key: each removal marker hides one spawn of a stacked tile, as the
+ * server's loader drops one per remove record, so the other spawns there stay visible and selectable.
+ */
+export class HiddenNpcSpawns {
+    private readonly counts = new Map<string, number>();
+
+    hide(key: string): void {
+        this.counts.set(key, this.count(key) + 1);
+    }
+
+    show(key: string): void {
+        const count = this.count(key) - 1;
+        if (count > 0) this.counts.set(key, count);
+        else this.counts.delete(key);
+    }
+
+    count(key: string): number {
+        return this.counts.get(key) ?? 0;
+    }
+
+    /** The spawns left once each key's hidden count is skipped (the first ones with that key). */
+    visible<T extends { id: number; tileX: number; tileY: number; plane: number }>(spawns: readonly T[]): T[] {
+        const skipped = new Map<string, number>();
+        return spawns.filter((spawn) => {
+            const key = npcSpawnKey(spawn);
+            const done = skipped.get(key) ?? 0;
+            if (done >= this.count(key)) return true;
+            skipped.set(key, done + 1);
+            return false;
+        });
+    }
+}
+
 export function parseNpcSpawnRecords(contents: string): NpcSpawnRecord[] {
     if (typeof contents !== "string" || contents.length > 20_000_000) throw new Error("Invalid npc-spawns.json");
     const parsed = JSON.parse(contents);

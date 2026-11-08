@@ -65,33 +65,42 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
         let vetoed = 0;
 
         // Merge sources in priority order, applying their records in file order.
-        // A later source can replace a spawn at the same tile (wander/facing),
-        // and a remove marker drops the spawns recorded before it. An addition
-        // after that marker survives, which is how a spawn moved onto its own
-        // original tile still loads.
+        // Several spawns can share a tile (36 tiles stack the same NPC), so records pair one for one:
+        // a later source's record replaces one earlier record with its key (the oldest left from an
+        // earlier source), and a remove marker drops one, the oldest surviving. The slot a remove frees is
+        // a one-shot credit for that source: its next record with the key fills it instead of replacing a
+        // survivor, which is how a spawn moved back onto its own stacked tile ([remove A, A]) keeps its sibling.
         const merged: Array<{ raw: RawNpcSpawnDefinition; source: string } | undefined> = [];
         const indicesByKey = new Map<string, number[]>();
         for (const source of loaded.sources) {
             totalCandidates += source.definitions.length;
+            const freedSlots = new Map<string, number>();
             for (const raw of source.definitions) {
                 const key = raw && typeof raw === "object"
                     ? NpcSpawnDefinitionLoader.spawnKey(raw)
                     : undefined;
                 if (raw && typeof raw === "object" && raw.remove === true) {
                     if (key === undefined) continue;
-                    for (const index of indicesByKey.get(key) ?? []) merged[index] = undefined;
-                    indicesByKey.delete(key);
+                    const survivors = indicesByKey.get(key) ?? [];
+                    const dropped = survivors.shift();
+                    if (dropped !== undefined) {
+                        merged[dropped] = undefined;
+                        freedSlots.set(key, (freedSlots.get(key) ?? 0) + 1);
+                    }
                     continue;
                 }
                 if (key !== undefined) {
-                    const survivors: number[] = [];
-                    for (const index of indicesByKey.get(key) ?? []) {
-                        const entry = merged[index];
-                        if (!entry) continue;
-                        // A later source replaces the earlier records; duplicates
-                        // inside one source are all kept.
-                        if (entry.source !== source.name) merged[index] = undefined;
-                        else survivors.push(index);
+                    const survivors = indicesByKey.get(key) ?? [];
+                    const freed = freedSlots.get(key) ?? 0;
+                    // Duplicates inside one source are all kept; a later source replaces one earlier record,
+                    // unless this source's own remove already freed a slot for it.
+                    const replaced = freed > 0
+                        ? -1
+                        : survivors.findIndex((index) => merged[index]?.source !== source.name);
+                    if (freed > 0) freedSlots.set(key, freed - 1);
+                    if (replaced >= 0) {
+                        merged[survivors[replaced]] = undefined;
+                        survivors.splice(replaced, 1);
                     }
                     survivors.push(merged.length);
                     indicesByKey.set(key, survivors);

@@ -497,7 +497,14 @@ function handleCraftRunes(event) {
   }
 
   const { essence } = runeData;
-  const essenceIds = bindable(player, essence);
+  let essenceIds = bindable(player, essence);
+  // Wiki (Daeyalt essence): every altar that binds pure essence binds daeyalt essence too, for 50%
+  // more experience; with both held the daeyalt binds first and the pure essence takes a second
+  // click. Kourend's dark essence altars never take it.
+  if (essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)
+    && player.getInventory().contains(ItemIdentifiers.DAEYALT_ESSENCE)) {
+    essenceIds = [ItemIdentifiers.DAEYALT_ESSENCE];
+  }
   if (!essenceIds.some((essenceId) => player.getInventory().contains(essenceId))) {
     // The true Blood Altar's and Kourend's refusals are message boxes (rsprox captures 1636, 1673).
     if (essence.mesbox) {
@@ -541,7 +548,8 @@ function handleCraftRunes(event) {
     inventory.deleteNumber(essenceId, count);
     inventory.addItem(output);
     craftedEssence += count;
-    craftedXp += count * (runeData.essenceXp?.[essenceId] ?? runeData.xp);
+    craftedXp += count * (runeData.essenceXp?.[essenceId]
+      ?? (essenceId === ItemIdentifiers.DAEYALT_ESSENCE ? runeData.xp * DAEYALT_XP_SCALE : runeData.xp));
     craftedEssenceIds.push(essenceId);
   }
 

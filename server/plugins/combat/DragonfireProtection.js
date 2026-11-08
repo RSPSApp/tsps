@@ -231,6 +231,7 @@ function sendDragonfireMessages(player, messages) {
 module.exports = {
   initDragonfireProtectionCoreAccess,
   ATTR_DRAGONFIRE_STATE,
+  ATTR_DRAGONFIRE_TIER,
   DragonfireProtectionTier,
   DRAGONFIRE_BREATH_EVENT,
   emitDragonfireBreath,

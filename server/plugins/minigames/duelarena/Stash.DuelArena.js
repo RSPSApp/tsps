@@ -212,6 +212,8 @@ function snapshot({ player, save: playerSave }) {
   attributes[Dragonfire.ATTR_DRAGONFIRE_STATE] = dragonfire
     ? { tier: dragonfire.tier, label: dragonfire.label, endsAt: Date.now() + dragonfire.seconds * 1000, warned: false }
     : null;
+  // The saved tier too: it's what a relog rebuilds the antifire from, and the live one is the arena's.
+  attributes[Dragonfire.ATTR_DRAGONFIRE_TIER] = dragonfire ? { tier: dragonfire.tier, label: dragonfire.label } : null;
   playerSave.attributes = attributes;
 }
 

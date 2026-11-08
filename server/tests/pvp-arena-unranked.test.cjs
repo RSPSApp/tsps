@@ -383,6 +383,36 @@ test("the arena's antifire and anti-venom never leave it, even through a mid-fig
   for (const handler of hooks.shutdowns) handler();
 });
 
+// A relog rebuilds the antifire from the saved fire timer and the saved tier: a mid-fight save must write the player's
+// own of both, not the arena's tier beside their own timer.
+for (const [own, arena] of [['SUPER_ANTIFIRE', 'ANTIFIRE'], ['ANTIFIRE', 'SUPER_ANTIFIRE']]) {
+  test(`a mid-fight save keeps their own ${own.toLowerCase()} across a relog, not the arena's ${arena.toLowerCase()}`, (t) => {
+    const Dragonfire = require('../plugins/combat/DragonfireProtection');
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const Tier = Dragonfire.DragonfireProtectionTier;
+    // The server persists the tier when DragonfireProtection attaches; this file's api stub drops persistAttribute.
+    PlayerSave.persistAttribute(Dragonfire.ATTR_DRAGONFIRE_TIER, null);
+    const [a, b] = toLoadouts(t, 1);
+    t.after(() => { for (const handler of hooks.shutdowns) handler(); }); // ends the fight even if an assert fails
+    Dragonfire.setDragonfireProtection(a, { tier: Tier[own], seconds: 300, label: 'their own' });
+    click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+    click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+    assert.ok(Battle.fightFor(a));
+    Dragonfire.setDragonfireProtection(a, { tier: Tier[arena], seconds: 360, label: "the arena's" });
+    const save = PlayerSave.fromPlayer(a);
+    Stash.snapshot({ player: a, save });
+    assert.deepEqual(save.attributes[Dragonfire.ATTR_DRAGONFIRE_TIER], { tier: Tier[own], label: 'their own' }, 'their own tier saved');
+    const relogged = new Player(null);
+    relogged.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+    relogged.setUsername('relogged');
+    // The relog: the stashed state isn't loaded (it's rebuilt), so only the saved timer and tier remain.
+    delete save.attributes[Dragonfire.ATTR_DRAGONFIRE_STATE];
+    save.applyToPlayer(relogged);
+    assert.equal(Dragonfire.getDragonfireProtectionTier(relogged), Tier[own], `still their own ${own.toLowerCase()} after the relog`);
+  });
+}
+
 test('a fight never starts on top of a character already put aside', (t) => {
   const [a, b] = toLoadouts(t, 1);
   a.getInventory().add(new core.Item(995, 5));

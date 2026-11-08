@@ -254,6 +254,14 @@ function takePyramidTop({ player, core, api }) {
     .add(new core.ItemStatementDialogue(0, ItemIds.PYRAMID_TOP, "You find a golden pyramid!")));
 }
 
+/**
+ * The top stays taken until the doorway, across a relog: on live the varbit is the server's and only clears there
+ * (rsprox_transcripts/227/01757.txt), so the attribute is saved (Agility.plugin) and the varbit sent again at login.
+ */
+function syncPyramidTop({ player }) {
+  if (player.getAttribute(PYRAMID_TOP_ATTRIBUTE) === true) player.getPacketSender().sendVarbit(PYRAMID_TOP_VARBIT, 1);
+}
+
 /** Out through the doorway: the top can be taken again, and the player is back on the ground. */
 function leavePyramid(player) {
   player.setAttribute(PYRAMID_TOP_ATTRIBUTE, false);
@@ -428,3 +436,4 @@ module.exports = {
     })),
   ],
 };
+Object.assign(module.exports, { PYRAMID_TOP_ATTRIBUTE, syncPyramidTop, takePyramidTop, leavePyramid });

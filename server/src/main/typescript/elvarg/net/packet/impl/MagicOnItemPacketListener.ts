@@ -165,6 +165,7 @@ export class MagicOnItemPacketListener {
     }
 
     this.consumeRunes(player, runes);
+    Spell.endSpellbookSwap(player);
     player.getSkillManager().stopSkillable();
 
     player.setPositionToFace(position);
@@ -360,6 +361,7 @@ export class MagicOnItemPacketListener {
       || payment.validate?.() === false) return;
     if (policy.keepItem !== true) inventory.deleteAtSlot(alchemySlot, 1);
     if (!payment.free) this.consumeRunes(player, runes);
+    Spell.endSpellbookSwap(player);
     player.setAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE, now + policy.castTicks);
     // "magic:item-spell-cast" { player, spell }: an alchemy cast on an item (a league's "Cast Low
     // Level Alchemy"); combat casts report "magic:cast-committed" instead.

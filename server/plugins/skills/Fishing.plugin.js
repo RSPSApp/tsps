@@ -239,7 +239,9 @@ const FISH = Object.freeze({
   }),
   SACRED_EEL: new Fish({ id: ItemIds.SACRED_EEL, level: 87, rolls: [[0, 60]], xp: 105, caught: "a sacred eel", petBase: 99000 }),
   ANGLERFISH: new Fish({ id: ItemIds.RAW_ANGLERFISH, level: 82, rolls: [[3, 36]], xp: 120, caught: "a raw anglerfish", petBase: 78649 }),
-  DARK_CRAB: new Fish({ id: ItemIds.RAW_DARK_CRAB, level: 85, rolls: [[3, 40]], xp: 130, caught: "a raw dark crab", petBase: 149434 }),
+  // Wiki (Raw dark crab), Mod Ash: "The standard roll is 3-40", but with the elite Wilderness Diary "you roll 13-55".
+  DARK_CRAB: Object.assign(new Fish({ id: ItemIds.RAW_DARK_CRAB, level: 85, rolls: [[3, 40]], xp: 130, caught: "a raw dark crab", petBase: 149434 }),
+    { diaryRolls: { diary: "wilderness", tier: "elite", rolls: [[13, 55]] } }),
   // Wiki (Raw karambwanji): floor(level / 5) + 1 a catch, 5 XP and one pet roll per catch.
   KARAMBWANJI: new Fish({
     id: ItemIds.RAW_KARAMBWANJI, level: 5, rolls: [[100, 250]], xp: 5, caught: "some Karambwanji", petBase: 443697,
@@ -684,6 +686,15 @@ function rollTable(table, random = Math.random) {
   return [caught, ...table.tertiary.filter(([, chance]) => random() < chance).map(([fish]) => fish)];
 }
 
+/** A fish's charts for this player: a diary's better roll once the diary is done. */
+function rollsFor(player, fish) {
+  const better = fish.diaryRolls;
+  if (!better) return fish;
+  const request = { player, diary: better.diary, tier: better.tier, complete: false };
+  pluginApi?.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true ? { ...fish, rolls: better.rolls } : fish;
+}
+
 /** One attempt: what it lands, highest fish first. Empty on a miss. */
 function rollCatch(player, tool, random = Math.random, bonus = 100) {
   const level = catchLevel(player);
@@ -693,8 +704,9 @@ function rollCatch(player, tool, random = Math.random, bonus = 100) {
     if (getFishingLevel(player) < fish.level || !meetsLevels(player, fish.requires)) {
       continue;
     }
-    for (let roll = 0; roll < fish.rolls.length; roll++) {
-      if (random() < catchChance(level, fish, bonus, roll)) {
+    const charted = rollsFor(player, fish);
+    for (let roll = 0; roll < charted.rolls.length; roll++) {
+      if (random() < catchChance(level, charted, bonus, roll)) {
         caught.push(fish);
         if (!tool.multi) {
           return caught;

@@ -1008,11 +1008,11 @@ test("superiors roll the unique tables, more often with Mortimer's modifier", ()
 });
 
 
-function braceletPlayer() {
+function braceletPlayer(braceletId = core.ItemIdentifiers.BRACELET_OF_SLAUGHTER) {
   const player = createPlayer();
   const items = Array.from({ length: 14 }, () => new core.Item(-1));
-  const bag = [new core.Item(core.ItemIdentifiers.BRACELET_OF_SLAUGHTER)];
-  items[core.Equipment.HANDS_SLOT] = new core.Item(core.ItemIdentifiers.BRACELET_OF_SLAUGHTER);
+  const bag = [new core.Item(braceletId)];
+  items[core.Equipment.HANDS_SLOT] = new core.Item(braceletId);
   const equipment = {
     get: slot => items[slot], getItems: () => items,
     set: (slot, item) => { items[slot] = item; return equipment; },
@@ -1334,6 +1334,96 @@ test("the Morytania Diary's Slayer XP also lifts Dusk's 1,350 on the Slayer Towe
     kill(player, npc(Common.ids.npcs.duskPhase4, { getX: () => 1697, getY: () => 4570, getZ: () => 0 }));
     assert.equal(varp(player, "slayer_count"), 4, "Dusk counted");
     assert.deepEqual(player.xp.map(([, amount]) => amount), [1350 * multiplier], `${tier} diary on the roof`);
+  }
+});
+
+
+const EXPEDITIOUS = () => core.ItemIdentifiers.EXPEDITIOUS_BRACELET;
+
+test("an expeditious bracelet credits two kills on a 25% roll, with no extra Slayer XP", t => {
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 10);
+  const mock = t.mock.method(Math, "random", () => 0.2499);
+  const target = npcNamed("Bloodveld");
+  kill(player, target);
+  assert.equal(varp(player, "slayer_count"), 8);
+  assert.equal(player.xp.length, 1);
+  assert.equal(player.xp[0][1], target.getDefinition().getHitpoints());
+  assert.match(player.typedMessages.at(-1)[1], /^Your expeditious bracelet helps you progress your slayer task faster\. It has 29 charges left\.$/);
+  mock.mock.mockImplementation(() => 0.25);
+  kill(player, target);
+  assert.equal(varp(player, "slayer_count"), 7, "a miss counts one kill and spends no charge");
+  assert.equal(require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer").charges(player), 29);
+});
+
+test("without the bracelet worn, or with a noted one, the count falls by one", t => {
+  t.mock.method(Math, "random", () => 0);
+  const bare = braceletPlayer(EXPEDITIOUS());
+  bare.getEquipment().set(core.Equipment.HANDS_SLOT, new core.Item(-1));
+  giveTask(bare, 3, "Bloodveld", 10);
+  kill(bare, npcNamed("Bloodveld"));
+  assert.equal(varp(bare, "slayer_count"), 9);
+  const noted = braceletPlayer(core.ItemIdentifiers.EXPEDITIOUS_BRACELET_2);
+  giveTask(noted, 3, "Bloodveld", 10);
+  kill(noted, npcNamed("Bloodveld"));
+  assert.equal(varp(noted, "slayer_count"), 9, "a note is not the worn bracelet");
+});
+
+test("a doubled kill on the last kill but one completes the task", t => {
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 2);
+  t.mock.method(Math, "random", () => 0);
+  kill(player, npcNamed("Bloodveld"));
+  assert.equal(varp(player, "slayer_count"), 0);
+  assert.equal(varp(player, "slayer_target"), 0, "task cleared");
+  assert.ok(player.messages.some(message => /completed your task/i.test(message)));
+});
+
+test("a doubled final kill does not take the count below zero", t => {
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 1);
+  t.mock.method(Math, "random", () => 0);
+  kill(player, npcNamed("Bloodveld"));
+  assert.equal(varp(player, "slayer_count"), 0);
+  assert.equal(varp(player, "slayer_target"), 0);
+});
+
+test("expeditious charges are shared, saved, checked and reset by Break", t => {
+  const Bracelet = require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer");
+  assert.equal(persistedAttributes.get(Bracelet.CHARGES_ATTRIBUTE), 30);
+  const player = braceletPlayer(EXPEDITIOUS());
+  giveTask(player, 3, "Bloodveld", 10);
+  t.mock.method(Math, "random", () => 0);
+  kill(player, npcNamed("Bloodveld"));
+  assert.equal(braceletAction(player, true, 2), true);
+  assert.match(player.messages.at(-1), /Your expeditious bracelet has 29 charges left\./);
+  assert.equal(braceletAction(player, false, 4), true);
+  assert.equal(player.getInventory().get(0).getId(), -1);
+  assert.equal(Bracelet.charges(player), 30);
+  assert.match(player.messages.at(-1), /^You break the expeditious bracelet\./);
+});
+
+test("the last expeditious charge crumbles the bracelet, or regenerates it on a claimed Elite 10% roll", t => {
+  const Bracelet = require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer");
+  Bracelet.init({ core, emitCustomEvent: (name, payload) => { for (const fn of handlers.events.get(name) ?? []) fn(payload); } });
+  const previous = handlers.events.get("combat-achievements:tier");
+  let claimed = true;
+  handlers.events.set("combat-achievements:tier", [request => { request.claimed = claimed; }]);
+  t.after(() => previous ? handlers.events.set("combat-achievements:tier", previous) : handlers.events.delete("combat-achievements:tier"));
+  for (const [roll, isClaimed] of [[0.099999, true], [0.1, true], [0, false]]) {
+    claimed = isClaimed;
+    const player = braceletPlayer(EXPEDITIOUS());
+    giveTask(player, 3, "Bloodveld", 10);
+    player.setAttribute(Bracelet.CHARGES_ATTRIBUTE, 1);
+    let n = 0;
+    const mock = t.mock.method(Math, "random", () => n++ === 0 ? 0 : roll);
+    kill(player, npcNamed("Bloodveld"));
+    mock.mock.restore();
+    assert.equal(varp(player, "slayer_count"), 8);
+    assert.equal(Bracelet.charges(player), 30);
+    const regenerates = isClaimed && roll < 0.1;
+    assert.equal(player.getEquipment().get(core.Equipment.HANDS_SLOT).getId(), regenerates ? core.ItemIdentifiers.EXPEDITIOUS_BRACELET : -1);
+    assert.match(player.typedMessages.at(-1)[1], regenerates ? /regenerates/ : /crumbles/);
   }
 });
 

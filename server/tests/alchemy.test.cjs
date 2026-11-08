@@ -23,7 +23,6 @@ const FIRE_RUNE = 554;
 const RUNE_PLATELEGS = 1079;
 const RUNE_PLATEBODY = 1127;
 const IBANS_STAFF_BROKEN = 1410;
-const DRAGON_DEFENDER = 12954;
 
 function fakeItem(id, { tradeable = true, high = 38400, low = 25600, presetUntradeable = false } = {}) {
   return {
@@ -211,15 +210,16 @@ test('server-flagged untradeables (PvP preset items) and coins are still refused
 // in place of the clicked one.
 test('the clicked item is the one alched, not a preset copy in an earlier slot', (t) => {
   const { listener } = harness(t);
-  const preset = fakeItem(DRAGON_DEFENDER, { tradeable: false, high: 40804, presetUntradeable: true });
-  const plain = fakeItem(DRAGON_DEFENDER, { tradeable: false, high: 40804 });
+  // An alchemisable untradeable: the Dragon defender is "Not alchemisable" (Wiki), so no longer stands in here.
+  const preset = fakeItem(IBANS_STAFF_BROKEN, { tradeable: false, high: 12, low: 8, presetUntradeable: true });
+  const plain = fakeItem(IBANS_STAFF_BROKEN, { tradeable: false, high: 12, low: 8 });
   const player = fakePlayer([preset, plain]);
-  listener.castOnItem(player, HIGH_ALCHEMY, DRAGON_DEFENDER, 1);
+  listener.castOnItem(player, HIGH_ALCHEMY, IBANS_STAFF_BROKEN, 1);
   const [, options] = player.log.dialogues[0];
   options.execute(1);
-  assert.equal(coins(player), 40804);
-  assert.equal(player.slots[0], preset, 'the preset defender stays');
-  assert.equal(player.slots[1], null, 'the clicked defender is the one alched');
+  assert.equal(coins(player), 12);
+  assert.equal(player.slots[0], preset, 'the preset staff stays');
+  assert.equal(player.slots[1], null, 'the clicked staff is the one alched');
 });
 
 // Pest Control's ban on alchemy rides onSpellDisabled, which the alchemy cast never asked.

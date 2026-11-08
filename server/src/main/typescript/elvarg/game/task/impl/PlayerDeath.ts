@@ -340,11 +340,16 @@ export class PlayerDeathTask extends Task {
     /**
      * What an item is worth when a death picks the kept ones: its Grand Exchange guide price, or its
      * high alchemy value when it has none (Wiki: Items Kept on Death; rsprox recording 430). Never
-     * the store value: a 35m pair of ranger boots has a store value of 200.
+     * the store value as such: a 35m pair of ranger boots has a store value of 200. An item that
+     * cannot be alchemised (a fire cape, a dragon defender) still ranks by the alchemy value its
+     * store value gives (60%), as it did before item-alch.json cleared those: the Wiki names no
+     * other value for it.
      */
     public static keepValue(item: Item): number {
         const definition = item.getDefinition();
-        return definition.hasGrandExchangeValue() ? definition.getGrandExchangeValue() : definition.getHighAlchValue();
+        if (definition.hasGrandExchangeValue()) return definition.getGrandExchangeValue();
+        const alch = definition.getHighAlchValue();
+        return alch > 0 ? alch : Math.floor(Math.max(0, definition.getValue()) * 0.6);
     }
 
     /**

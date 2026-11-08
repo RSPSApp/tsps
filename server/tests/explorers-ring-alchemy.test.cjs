@@ -167,7 +167,8 @@ test("native All Settings inventory-alchemy warning toggle persists and restores
 });
 test("real untradeable confirmation accepts, cancels and rejects same-id replacement",async t=>{
   for(const mode of ["accept","cancel","replace"]){
-    const f=actor(t);await f.open();const itemId=core.ItemIdentifiers.FIRE_CAPE;
+    // An alchemisable untradeable (Iban's staff (broken), rsprox 3215): the Fire cape is "Not alchemisable" (Wiki).
+    const f=actor(t);await f.open();const itemId=1410;
     f.p.getInventory().add(new core.Item(itemId),false);
     const slot=f.p.getInventory().getItems().findIndex(i=>i.getId()===itemId);
     await cast(f,{slot,itemId});assert.equal(used(f),0);

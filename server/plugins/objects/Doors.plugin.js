@@ -360,6 +360,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
+    // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
+    // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
+    Object.freeze({
+      closed: [[O.DOOR_46, 2515, 9575, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2515, 9575, 0, 1], [O.DOOR_46, 2515, 9576, 0, 2]],
+      crossY: 9576,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Guidor's gate, south-east Varrock (rsprox 1663, 3218, 3220): on Open the leaves swing to the
     // south edges of the two tiles west, the player steps through, and the gate shuts two ticks
     // later. Live also puts a solid inviswall where the closed leaves stood; it is left out, as
@@ -537,6 +547,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // colour door and the exit doors (ticks 2109-2688), crossed both ways with the leaf always on the
   // same side. The quest's key rules run before this (door:toggle) and open them through door:open.
   PASS_THROUGH_FAMILIES = new Map([
+    // Same guide 7:15.37-7:16.50: the Baxtorian doors close behind the walking player.
+    [O.DOOR_48, { open: NAMELESS_DOOR_LEAF_IDS.DOOR_48_OPEN }],
     [O.DOOR_91, { open: NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN }],
     [O.RED_DOOR, {}], [O.ORANGE_DOOR, {}], [O.YELLOW_DOOR, {}], [O.BLUE_DOOR, {}],
     [O.MAGENTA_DOOR, {}], [O.GREEN_DOOR, {}], [O.EXIT_DOOR, {}],

@@ -225,7 +225,7 @@ test('start, raft, Hudon, bookcase, Golrie key and pebble use only normal intera
   q.call('onObjectInteraction', objectEvent(p, ID.golrieCrate, 2548, 9565));
   assert.equal(p.count(ID.golrieKey), 1);
   q.call('onObjectInteraction', objectEvent(p, ID.golrieGate, 2515, 9575));
-  assert.ok(p.getLocation().getY() > 9575, 'key opens the gate and crosses inside');
+  assert.equal(p.attributes.get('waterfall-quest:golrie-gate'), 1, 'key unlocks the shared physical door');
 
   q.emit('npc-dialogue:action', { player: p, npcId: NPC.golrie, stepId: '2-d8NO', kind: 'message', handled: false });
   assert.equal(p.count(ID.pebble), 1);
@@ -316,7 +316,7 @@ test('waterfall entry needs a worn amulet; the dungeon key, pillars, statue and 
   assert.equal(p.count(ID.baxKey), 1);
   q.call('onObjectInteraction', objectEvent(p, ID.baxDoor, 2566, 9901));
   assert.equal(p.count(ID.baxKey), 1, 'the dungeon key stays in the inventory');
-  assert.equal(p.attributes.get('waterfall-quest:baxtorian-door'), 1);
+  assert.equal(p.attributes.get('waterfall-quest:baxtorian-door'), undefined, 'opening never saves a key bypass');
   assert.equal(q.quest.getStage(p), STAGE.door);
 
   // One pillar's worth first: the statue must flush the player, keeping the amulet.
@@ -488,7 +488,7 @@ test('the key still gates the Baxtorian door when Doors handles it first', () =>
   q.emit('door:toggle', unlocked);
   assert.equal(unlocked.handled, false, 'the keyed door is left for Doors to swing');
   assert.equal(q.quest.getStage(p), STAGE.door);
-  assert.equal(p.attributes.get('waterfall-quest:baxtorian-door'), 1);
+  assert.equal(p.attributes.get('waterfall-quest:baxtorian-door'), undefined, 'opening never saves a key bypass');
   assert.equal(p.count(ID.baxKey), 1, 'the dungeon key is kept');
 });
 
@@ -540,7 +540,7 @@ test('the inside waterfall door returns to the ledge', () => {
   assert.ok(p.getLocation().equals(new core.Location(2511, 3463, 0)));
 });
 
-test('the Waterfall dungeon doors swap to their cache open locs', () => {
+test('the inside ledge door swaps to its cache open loc', () => {
   const doors = require('../plugins/objects/Doors.plugin.js');
   const names = {};
   const registered = [], deregistered = [];
@@ -558,7 +558,7 @@ test('the Waterfall dungeon doors swap to their cache open locs', () => {
     onObjectInteraction: (name, actions) => { if (name === 'Door') Object.assign(names, actions); },
     onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {},
   });
-  for (const [closedId, openId, face] of [[2000, 2001, 3], [2002, 2003, 1]]) {
+  for (const [closedId, openId, face] of [[2000, 2001, 3]]) {
     registered.length = 0; deregistered.length = 0;
     const object = new core.GameObject(closedId, new core.Location(closedId === 2000 ? 2575 : 2566, closedId === 2000 ? 9861 : 9901, 0), 0, face, null);
     const event = {
@@ -570,13 +570,7 @@ test('the Waterfall dungeon doors swap to their cache open locs', () => {
     assert.deepEqual(deregistered, [closedId], `door ${closedId} is removed`);
     assert.ok(registered.includes(openId), `door ${closedId} becomes open loc ${openId}`);
   }
-  // Do not leave the 2002 open-door state for the real-map door test below.
-  names.Close({
-    player: { getPrivateArea: () => null },
-    object: new core.GameObject(2003, new core.Location(2566, 9902, 0), 0, 2, null),
-    objectId: 2003, definition: { id: 2003 },
-    location: new core.Location(2566, 9902, 0), clickType: 1, handled: false,
-  });
+
 });
 
 test('north Waterfall large doors match the captured west swing and keep the threshold routable', () => {
@@ -645,7 +639,7 @@ test('normal defaults reach and open both Baxtorian 2002 doors through the real 
   const doorCore = {
     ...core, ObjectManager, MapObjects,
     Sounds: { sendSound() {} },
-    TaskManager: { submit() {}, cancelTasks() {} },
+    TaskManager: q.api.core.TaskManager,
   };
   require('../plugins/objects/Doors.plugin.js').register({
     core: doorCore,
@@ -691,23 +685,23 @@ test('normal defaults reach and open both Baxtorian 2002 doors through the real 
   assertDefaultRoute(2566, 9901, 2566, 9903);
 
   assert.equal(route(2572, 9896, 2568, 9892).success, true, 'default route reaches the north side of the first 2002');
-  p.moveTo(new core.Location(2568, 9892, 0));
-  open(ID.baxDoor, 2568, 9893);
-  assert.equal(q.quest.getStage(p), STAGE.door);
-  assert.ok(MapObjects.get(2003, new core.Location(2568, 9894, 0), null), 'physical 2003 at 2568,9894');
-  assert.equal(MapObjects.get(2002, new core.Location(2568, 9893, 0), null), null);
-  assert.equal(route(2568, 9892, 2568, 9895).success, true, 'open 2003 passes south');
-  assert.equal(route(2568, 9895, 2568, 9892).success, true, 'open 2003 passes north');
-
-  assert.equal(route(2568, 9895, 2566, 9900).success, true, 'default route reaches the north side of the second 2002');
-  p.moveTo(new core.Location(2566, 9900, 0));
-  open(ID.baxDoor, 2566, 9901);
-  assert.equal(q.quest.getStage(p), STAGE.door);
-  assert.ok(MapObjects.get(2003, new core.Location(2566, 9902, 0), null), 'physical 2003 at 2566,9902');
-  assert.equal(MapObjects.get(2002, new core.Location(2566, 9901, 0), null), null);
-  assert.equal(route(2566, 9900, 2566, 9903).success, true, 'open 2003 passes south into the pillar room');
-  assert.equal(route(2566, 9903, 2566, 9900).success, true, 'pillar room returns north through open 2003');
-  assert.equal(p.hasFlag('movement:ignore-clipping'), false, 'no scoped clip flag is involved');
+  for (const [x, y] of [[2568, 9893], [2566, 9901]]) {
+    p.moveTo(new core.Location(x, y, 0));
+    open(ID.baxDoor, x, y);
+    assert.equal(q.quest.getStage(p), STAGE.door);
+    assert.ok(MapObjects.get(2003, new core.Location(x, y + 1, 0), null), 'physical open leaf');
+    assert.ok(MapObjects.get(38848, new core.Location(x, y, 0), null), 'blocker guards the open doorway');
+    assert.equal(route(x, y, x, y + 2).success, false, 'another account cannot follow through the open gap');
+    assert.equal(p.getLocation().getY(), y + 1, 'the opener queued ordinary steps across');
+    q.tick(2);
+    assert.ok(MapObjects.get(2002, new core.Location(x, y, 0), null), 'closed door restored');
+    assert.equal(MapObjects.get(2003, new core.Location(x, y + 1, 0), null), null);
+    assert.equal(p.hasFlag('movement:ignore-clipping'), false, 'scoped walk-over ends');
+    // The same key is still required when leaving.
+    open(ID.baxDoor, x, y);
+    q.tick(2);
+    assert.equal(p.getLocation().getY(), y);
+  }
 });
 
 test('rope crossing uses owner objects, leaves the base rock, and keeps two players isolated', () => {
@@ -1061,5 +1055,63 @@ test('fullbag reward overflow keeps every actual Waterfall item once', () => {
     ]);
   } finally {
     ItemOnGroundManager.registerLocation = originalRegister;
+  }
+});
+
+test("key 293 opens Golrie's real cell door for ordinary walking, without teleporting", (t) => {
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager');
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  RegionManager.init();
+  RegionManager.loadMapFiles(2515, 9575);
+  const q = register(), p = player();
+  q.quest.setStage(p, STAGE.book);
+  p.give(ID.golrieKey);
+  p.moveTo(new core.Location(2515, 9575, 0));
+  t.mock.method(p, "moveTo", () => assert.fail("door traversal must queue walking"));
+  require('../plugins/objects/Doors.plugin.js').register({
+    core: { ...core, ObjectManager, MapObjects, Sounds: { sendSound() {} },
+      TaskManager: q.api.core.TaskManager },
+    onObjectInteraction() {}, onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {},
+    onCustomEvent: q.api.onCustomEvent, emitCustomEvent: q.emit,
+  });
+  const route = () => new RsmodRouteFinding().findRoute({
+    level: 0, srcX: 2515, srcY: 9574, srcSize: 1, destX: 2515, destY: 9577,
+    destWidth: 1, destLength: 1, locAngle: 0, locShape: -1, moveNear: false,
+    blockAccessFlags: 0, maxWaypoints: 25, privateArea: null,
+  });
+  assert.equal(route().success, false);
+  const object = MapObjects.get(ID.golrieGate, new core.Location(2515, 9575, 0), null);
+  assert.ok(object);
+  q.call('onItemOnObject', { ...itemOnObject(p, ID.golrieGate, ID.golrieKey, 2515, 9575), object });
+  assert.equal(p.getLocation().getY(), 9576, 'ordinary queue steps cross the doorway');
+  assert.ok(MapObjects.get(1991, new core.Location(2515, 9576, 0), null), 'panel has swung aside');
+  assert.ok(MapObjects.get(38848, new core.Location(2515, 9575, 0), null), 'other players remain blocked');
+  assert.equal(route().success, false);
+  q.tick(2);
+  assert.equal(MapObjects.get(1991, new core.Location(2515, 9575, 0), null)?.getFace(), 1);
+  assert.equal(MapObjects.get(1991, new core.Location(2515, 9576, 0), null), null);
+  assert.equal(p.hasFlag('movement:ignore-clipping'), false);
+  assert.equal(p.count(ID.golrieKey), 1);
+});
+
+test('every player needs key 298 on each dungeon opening, independent of quest or old unlock flag', () => {
+  const q = register();
+  for (const stage of [0, STAGE.dungeon, STAGE.door, STAGE.complete]) {
+    const p = player();
+    q.quest.setStage(p, stage);
+    p.attributes.set('waterfall-quest:baxtorian-door', 1);
+    const request = { player: p, objectId: ID.baxDoor, location: { x: 2568, y: 9893 }, handled: false };
+    q.emit('door:toggle', request);
+    assert.equal(request.handled, true, 'keyless stage ' + stage + ' stays locked');
+    p.give(ID.baxKey);
+    request.handled = false;
+    q.emit('door:toggle', request);
+    assert.equal(request.handled, false);
+    assert.equal(q.quest.getStage(p), stage === STAGE.dungeon ? STAGE.door : stage);
+    p.items.delete(ID.baxKey);
+    q.emit('door:toggle', request);
+    assert.equal(request.handled, true, 'dropping the key locks it again');
   }
 });

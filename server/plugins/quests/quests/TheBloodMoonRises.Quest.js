@@ -7066,10 +7066,14 @@ module.exports = function registerTheBloodMoonRises(api) {
       title: "Choose the stat you wish to be advanced!",
       onConfirm: (skill, name) => {
         if (player.getInventory().get(slot) !== item) return null;
+        // A chapter is only spent when its XP lands (an XP lock or an area's gate keeps the tome as it was).
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, 30000, false);
+        if (skills.getExperience(skill) === before) return null;
         const used = (Number(player.getAttribute(ATTRIBUTE)) || 0) + 1;
         player.setAttribute(ATTRIBUTE, used);
         if (used >= 6) player.getInventory().deleteAtSlot(slot, 1);
-        player.getSkillManager().addExperience(skill, 30000, false);
         return `You have been awarded 30,000 ${name} XP!`;
       },
     });

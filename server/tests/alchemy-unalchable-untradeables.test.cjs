@@ -77,3 +77,25 @@ test("Iban's staff (broken) still alchs for 12 after the untradeable warning (rs
   assert.equal(f.inv.getAmount(1410), 0, `the staff is alched: ${f.messages}`);
   assert.equal(f.inv.getAmount(core.ItemIdentifiers.COINS), 12);
 });
+
+// #57 review: item-alch.json is keyed by the unnoted ids, and the loader gave the note nothing, so a noted copy kept
+// the cache's value (noted Bow of Faerdhinen (inactive) 25863 alched for 3,000,000 while 25862 was refused).
+test('a noted copy of an unalchable item cannot be alchemised either', async (t) => {
+  const unnoted = core.ItemDefinition.forId(25862), noted = core.ItemDefinition.forId(25863);
+  assert.equal(noted.isNoted(), true);
+  assert.equal(noted.getNoteId(), 25862);
+  assert.equal(unnoted.getHighAlchValue(), 0);
+  assert.equal(noted.getHighAlchValue(), 0, 'the note carries the same (no) value');
+  const f = caster(t, 25863);
+  await cast(f, 25863);
+  assert.equal(f.inv.getAmount(25863), 1, `the noted bow stays: ${f.messages}`);
+  assert.equal(f.inv.getAmount(core.ItemIdentifiers.COINS), 0);
+});
+
+test("a noted alchemisable item still alchs as its unnoted copy does", () => {
+  const whip = core.ItemDefinition.forId(core.ItemIdentifiers.ABYSSAL_WHIP);
+  const note = core.ItemDefinition.forId(whip.getNoteId());
+  assert.equal(note.isNoted(), true);
+  assert.equal(note.getHighAlchValue(), whip.getHighAlchValue());
+  assert.ok(note.getHighAlchValue() > 0);
+});

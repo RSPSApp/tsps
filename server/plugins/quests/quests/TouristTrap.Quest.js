@@ -91,7 +91,7 @@ module.exports = function registerTouristTrapQuest(api) {
    * itself uses (CacheDefinitions.resolveNpc / ObjectDefinition.forPlayer).
    */
   const VARBIT_MINE_SLAVE = 2803;        // 0 male slave, 1 escaping slave
-  const VARBIT_ANA_ON_LIFT = 2805;       // Ana rides the mine cart of the lift
+  const VARBIT_ANA_STATE = 2805;         // 0 underground Ana, 1 hidden after barrelling
   const VARBIT_IRENA_STATE = 2807;       // 0 sad Irena, 1 happy Irena
   const VARBIT_ANA_WINCH_BARREL = 2808;  // Ana in the barrel west of the winch
   const VARBIT_CART_ANA = 2809;          // 0 empty cart, 1 Ana on it, 2 cart gone
@@ -263,7 +263,7 @@ module.exports = function registerTouristTrapQuest(api) {
     const escaping = stage >= STAGE_SLAVE_CLOTHES && !player.getAttribute(ESCAPING_SLAVE_ATTRIBUTE);
     const anaInBarrel = held(player, ANA_IN_A_BARREL_ITEM_ID);
     setVarbit(sender, VARBIT_MINE_SLAVE, escaping ? 1 : 0);
-    setVarbit(sender, VARBIT_ANA_ON_LIFT, stage >= STAGE_ANA_ON_CART && stage < STAGE_ANA_ON_CAMP_CART ? 1 : 0);
+    setVarbit(sender, VARBIT_ANA_STATE, stage >= STAGE_ANA_IN_BARREL ? 1 : 0);
     setVarbit(sender, VARBIT_IRENA_STATE, stage >= STAGE_RETURNED ? 1 : 0);
     setVarbit(sender, VARBIT_ANA_WINCH_BARREL,
       stage >= STAGE_ANA_SURFACE && stage < STAGE_ANA_ON_CAMP_CART && !anaInBarrel ? 1 : 0);

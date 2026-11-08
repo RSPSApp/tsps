@@ -63,6 +63,7 @@ function grab({ player, objectId }) {
 // --- The spells
 
 let spells = null;
+const LEARN_AT_ARENA = "You can only learn this spell from the Mage Training Arena.";
 
 /** The two bones spells as Spells, so their runes, staves and level checks are the engine's. */
 function defineSpells() {
@@ -92,8 +93,17 @@ function fruitFor(player) {
 /** "spell:cast" (emitSpellCast): the bones spells in the room work on the animals' bones. */
 function castBonesSpell(event) {
   const { player, spellName } = event;
-  if (!inGraveyard(player.getLocation())) return;
   spells ??= defineSpells();
+  if (!inGraveyard(player.getLocation())) {
+    // Wiki (Bones to Peaches): bought from the Arena's Rewards Guardian before it can be cast anywhere. Outside the
+    // room the spellbook's own handler would cast it; refuse it there too (live's wording for a spell the Arena
+    // teaches, rsprox_transcripts/237/01105.txt tick 15940, a Leagues VI world).
+    if (spells[spellName]?.data.unlock && player.getAttribute(PEACHES_UNLOCKED_ATTRIBUTE) !== true) {
+      event.handled = true;
+      player.sendMessage(LEARN_AT_ARENA);
+    }
+    return;
+  }
   const spell = spells[spellName];
   if (!spell) return;
   event.handled = true;

@@ -104,7 +104,8 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     sendMessage: (m) => p.messages.push(m),
     performAnimation: (a) => p.anims.push(a.getId()),
     performGraphic: (g) => p.graphics.push(g.getId()),
-    setRunEnergy() {},
+    energy: 30, energySent: [],
+    setRunEnergy(value) { p.energy = value; },
     hits: [], decrements: [], blocked: false,
     getMovementQueue: () => ({ reset() {}, setBlockMovement(v) { p.blocked = v; } }),
     getCombat: () => ({ reset() {} }),
@@ -130,6 +131,7 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
         sendObjectAnimation: (object, anim) => { (p.locAnims ??= []).push([object.getId(), anim.getId()]); return sender; },
         sendGraphic: (graphic, location) => { (p.tileGraphics ??= []).push([graphic.id, location]); return sender; },
         sendInterfaceRemoval: () => sender,
+        sendRunEnergy: () => { p.energySent.push(p.energy); return sender; },
       };
       return sender;
     },
@@ -309,6 +311,18 @@ test('the floor stairs: the completion, time and PB lines, the XP, and floor 2 w
   assert.equal(run.floorNumber, 2);
   assert.equal(run.remaining, remaining + 200);
   assert.ok(p.messages.includes('You venture further down into the Hallowed Sepulchre.'));
+  run.finish();
+});
+
+test('the obelisk: Activate restores full energy and sends it to the orb', () => {
+  const p = fakePlayer();
+  const run = startRun(p, 0);
+  run.pause();
+  click(p, 38451, 1, locOf(run, 38451, [2277, 5982, 1]));
+  ticks(3);
+  assert.equal(p.energy, 100);
+  assert.deepEqual(p.energySent, [100], 'the full orb is sent; the tick only sends below full');
+  assert.match(p.messages.at(-1), /fully restores your energy/);
   run.finish();
 });
 

@@ -16,6 +16,8 @@ export interface ConfigOptionDeclaration {
     min?: number;
     max?: number;
     integer?: boolean;
+    /** number only: min itself is not allowed. */
+    exclusiveMin?: boolean;
     /** Members-only option: hidden on free-to-play worlds. */
     members?: boolean;
 }
@@ -51,7 +53,7 @@ export function validateDeclaration(key: string, decl: unknown): string[] {
     } else if (d.values !== undefined) {
         problems.push(`${key}: values is only for enum`);
     }
-    for (const field of ["min", "max", "integer"]) {
+    for (const field of ["min", "max", "integer", "exclusiveMin"]) {
         if (d.type !== "number" && d[field] !== undefined) problems.push(`${key}: ${field} is only for number`);
     }
     for (const field of ["min", "max"]) {
@@ -74,7 +76,9 @@ export function checkConfigValue(decl: ConfigOptionDeclaration, value: unknown):
                 : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
             if (!Number.isFinite(n)) return { ok: false, error: "must be a number" };
             if (decl.integer && !Number.isInteger(n)) return { ok: false, error: "must be a whole number" };
-            if (decl.min !== undefined && n < decl.min) return { ok: false, error: `must be at least ${decl.min}` };
+            if (decl.min !== undefined && (decl.exclusiveMin ? n <= decl.min : n < decl.min)) {
+                return { ok: false, error: decl.exclusiveMin ? `must be greater than ${decl.min}` : `must be at least ${decl.min}` };
+            }
             if (decl.max !== undefined && n > decl.max) return { ok: false, error: `must be at most ${decl.max}` };
             return { ok: true, value: n };
         }
@@ -111,7 +115,7 @@ export const WORLD_SETTING_DECLARATIONS: Record<string, ConfigOptionDeclaration>
         help: "Short blurb shown with the world, at most 120 characters.",
     },
     experienceMultiplier: {
-        type: "number", label: "Experience rate", default: 1, min: 0,
+        type: "number", label: "Experience rate", default: 1, min: 0, exclusiveMin: true,
         help: "Global experience rate for all skills. 1 is the normal rate; 5 gives five times the experience.",
     },
     spawn: {

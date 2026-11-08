@@ -41,3 +41,10 @@ test('world settings declare every scalar top-level key parseWorldDefinition rea
     assert.deepEqual(validateDeclaration('x:' + key, decl), [], key);
   }
 });
+
+test('experienceMultiplier excludes zero, as parseWorldDefinition does', () => {
+  const decl = WORLD_SETTING_DECLARATIONS.experienceMultiplier;
+  assert.equal(checkConfigValue(decl, 0).ok, false);
+  assert.equal(checkConfigValue(decl, 0.5).ok, true);
+  assert.ok(validateDeclaration('X:y', { type: 'boolean', label: 'L', help: 'H', default: true, exclusiveMin: true }).join().includes('exclusiveMin'));
+});

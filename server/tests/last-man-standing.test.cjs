@@ -656,3 +656,26 @@ test("Lisa's mode menu answered after a game has taken the player does nothing, 
   assert.equal(p.getLocation(), at, 'not moved to the waiting room');
   assert.equal(Lobby.waiting(p, casual), false);
 });
+
+test("a prayer the game bans, left on from the lobby, goes off as the game starts (Wiki: Smite can't be used in a game)", (t) => {
+  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
+  const hooks = new Map();
+  Match.attachMatch(new Proxy({}, { get: (_, key) => (key === 'onCustomEvent' ? (name, fn) => hooks.set(name, fn) : () => {}) }));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => hooks.get(name)?.(payload));
+  t.mock.method(Common, 'later', () => {});
+  t.mock.method(Common, 'every', () => {});
+  t.mock.method(require('../plugins/minigames/lms/Lobby.LastManStanding'), 'openOverlay', () => {});
+  const p = realPlayer(t);
+  for (const skill of ['ATTACK', 'STRENGTH', 'DEFENCE', 'PRAYER', 'HITPOINTS']) {
+    p.getSkillManager().setMaxLevel(core.Skill[skill], 99);
+    p.getSkillManager().setCurrentLevel(core.Skill[skill], 99, false);
+  }
+  PrayerHandler.activatePrayerPrayerId(p, PrayerHandler.SMITE);
+  PrayerHandler.activatePrayerPrayerId(p, PrayerHandler.STEEL_SKIN);
+  assert.equal(p.getPrayerActive()[PrayerHandler.SMITE], true, 'on in the lobby');
+  const game = new Match.Game([p]);
+  game.build = 0;
+  game.enter(p, game.area.at([...game.zone.centre, 0]));
+  assert.ok(!p.getPrayerActive()[PrayerHandler.SMITE], 'Smite is off in the game');
+  assert.equal(p.getPrayerActive()[PrayerHandler.STEEL_SKIN], true, 'an allowed prayer stays on');
+});

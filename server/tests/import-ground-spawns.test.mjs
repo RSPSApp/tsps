@@ -64,3 +64,13 @@ test("CLI rejects changed source bytes before writing any data", async()=>{
   assert.equal(fs.existsSync(output),false);
  } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test("small fishing net scenery rows remain excluded from the audited ordinary scope",()=>{
+ const rows=[row({page:"Small fishing net",id:303,x:3244,y:3159}),
+   row({page:"Small fishing net",id:303,x:3245,y:3156})];
+ const result=importSpawns(source(rows),[]);
+ assert.equal(result.definitions.length,0);
+ assert.equal(result.report.counts["ordinary-page-not-yet-audited"],2);
+ // Raw source headings call these Scenery object spawns; the export does not carry headings.
+ // Any future net-page scope extension must resolve that distinction rather than adding this page.
+});

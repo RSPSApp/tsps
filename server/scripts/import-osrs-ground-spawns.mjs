@@ -26,6 +26,7 @@ const repoRoot = path.resolve(here, "../..");
 const AUDITED_ORDINARY_ITEMS = new Map([
   ["Air rune", 556], ["Body rune", 559], ["Earth rune", 557],
   ["Fire rune", 554], ["Mind rune", 558], ["Nature rune", 561], ["Water rune", 555],
+  ["Crossbow", 837], ["Shears", 1735],
 ]);
 const OWNED_EXACT = new Map([
   ["560:2500:2967:0", "Quests.plugin.js Watchtower definition provider"],
@@ -124,7 +125,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune subset only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool subset only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

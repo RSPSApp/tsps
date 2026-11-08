@@ -279,3 +279,27 @@ test("a drop becoming public cannot merge into recurring supply", t => {
   assert.equal(source.getItem().getAmount(), 3);
   assert.equal(drop.getItem().getAmount(), 5);
 });
+
+for (const [label,id,x,y,z,delay] of [
+  ["Crossbow",837,3174,3663,0,500],
+  ["Shears",1735,3152,3306,0,100],
+]) test("audited "+label+" definition preserves full-bag refusal and its real respawn delay", t=>{
+  const f=respawnFixture(t);
+  const definition=require("../data/definitions/ground-items.json").find(row=>
+    row.id===id&&row.location.x===x&&row.location.y===y&&row.location.z===z);
+  assert.ok(definition,"audited source definition is present");
+  f.player.getLocation=()=>new Location(x,y,z);
+  const {GroundItemSpawnDefinitionLoader}=require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+  const pile=new GroundItemSpawnDefinitionLoader().toItemOnGround(definition);
+  assert.ok(pile);assert.equal(pile.getRespawnTimer(),delay);assert.equal(pile.isStaticSpawn(),true);
+  ItemOnGroundManager.register(pile);
+  for(let slot=0;slot<28;slot++)f.inventory.setItem(slot,new Item(385));
+  ItemOnGroundManager.pickup(f.player,pile);
+  assert.equal(pile.isPendingRemoval(),false);assert.equal(pile.getItem().getAmount(),1);
+  assert.equal(f.inventory.getAmount(id),0);ItemOnGroundManager.process();assert.equal(f.tasks.length,0);
+  f.inventory.setItem(0,new Item(-1,0));ItemOnGroundManager.pickup(f.player,pile);
+  assert.equal(f.inventory.getAmount(id),1);assert.equal(pile.isPendingRemoval(),true);
+  const restored=finishRespawn(f,1);
+  assert.equal(restored.getRespawnTimer(),delay,"uses full source delay, never a shortened fixture");
+  assert.deepEqual([restored.getPosition().getX(),restored.getPosition().getY(),restored.getPosition().getZ()],[x,y,z]);
+});

@@ -383,7 +383,10 @@ test('a full bank keeps the rest of the catch in the net', () => {
 
 test('real capped stacks retain the catch and only delivered fish earn XP', t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
-  const p = new Player(null), xp = [];
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel)), xp = [];
+  p.setUsername('trawlercatch');
   t.mock.method(p, 'sendMessage', () => {});
   t.mock.method(p.getSkillManager(), 'addExperiences', (_skill, amount) => xp.push(amount));
   const fish = Shared.ids().fish.find(fish => fish.id === 317), bank = p.getBank(0);
@@ -404,6 +407,7 @@ test('real capped stacks retain the catch and only delivered fish earn XP', t =>
   assert.equal(xp.reduce((sum, amount) => sum + amount, 0), 3 * fish.xp);
   Rewards.inspectNet({ player: p });
   assert.equal(xp.length, 2, 'collected XP cannot be earned twice');
+  assert.ok(p.getDialogueManager().getCurrent() instanceof core.PlayerDialogue);
 });
 
 test('the catch is banked while the bank has space, however full its tab', t => {

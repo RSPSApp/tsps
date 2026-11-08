@@ -380,9 +380,11 @@ function cookStep(player, session, cycle) {
   Sounds.sendSound(player, Sound.COOKING_COOK);
   player.performAnimation(session.animation);
 
-  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once).
-  const actions = Common.actionsPerCycle(player, "cook");
+  // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once), but
+  // never past the amount chosen: the first is already counted above, each further one is counted here.
+  const actions = Math.min(Common.actionsPerCycle(player, "cook"), session.remaining + 1);
   for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
+    if (done > 0) session.remaining--;
     if (cookOne(player, session) === false) { stopCooking(player); break; }
   }
 }

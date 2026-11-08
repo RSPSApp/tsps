@@ -160,7 +160,7 @@ test("each topic's lines come from the Barbarian Training transcript, its player
 test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish completes it", () => {
   const who = player();
   let shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
   shown = pick(who, shown, T.TOPIC.rod);
   assert.ok(shown.said.includes("Certainly. Take the rod from under my bed and fish in the lake. When you have caught a few fish, I am sure you will be ready to talk more with me."));
   assert.deepEqual(stages(who), { fishingRod: 1, herblore: 0 });
@@ -185,10 +185,10 @@ test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish c
   assert.deepEqual(who.sent.messages, [T.LEARNED]);
 
   shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
   pick(who, shown, T.TOPIC.rodDone);
   assert.equal(stages(who).fishingRod, 3);
-  assert.deepEqual(talk(who).options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
 });
 
 test("a full inventory leaves the rod under the bed", () => {
@@ -222,13 +222,13 @@ test("Herblore: Otto asks for an attack mix, takes it, and every mix is learned"
   assert.equal(who.inv.count("brutal_2doserangerspotion"), 0);
 
   let shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.herbloreDone, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.herbloreDone, T.TOPIC.farming, T.TOPIC.leave]);
   shown = pick(who, shown, T.TOPIC.herbloreDone);
   assert.ok(shown.said.includes("I will take that off your hands now. I will say no more than that I am eternally grateful."));
   assert.equal(who.inv.count("brutal_2dose1attack"), 0);
   assert.equal(stages(who).herblore, 3);
   assert.equal(who.sent.varbits.get(T.VARBITS.herblore), 3);
-  assert.deepEqual(talk(who).options, [T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.farming, T.TOPIC.leave]);
 
   // Learned: the ranging mix at 80 Herblore (Wiki), 54 XP, and "herblore:made" for Sherlock.
   who.level = 79;
@@ -249,7 +249,7 @@ test("the attack mix hand-in needs the mix carried", () => {
   T.setStage(who, "fishingRod", 3);
   T.setStage(who, "herblore", 2);
   const shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
   assert.ok(pick(who, shown, T.TOPIC.herblore).said.includes("Do you have my potion?"));
   assert.equal(stages(who).herblore, 2);
 });
@@ -282,7 +282,7 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
   who.inv.getItems()[0].setMetaValue(core.Item.UNTRADEABLE_META, true);
   T.setStage(who, "fishingRod", 3);
   T.setStage(who, "herblore", 2);
-  assert.deepEqual(talk(who).options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
   who.inv.addItem(new core.Item(obj("brutal_2dose1attack"), 1));
   pick(who, talk(who), T.TOPIC.herbloreDone);
   assert.equal(stages(who).herblore, 3);

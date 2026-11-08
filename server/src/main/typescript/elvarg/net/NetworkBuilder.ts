@@ -1247,6 +1247,8 @@ export class ClientConnection {
             this.player.setFollowing(null);
             this.player.setMobileInteraction(null);
             this.player.setPositionToFace(null);
+            // After the reset, so scripted movement can resume before this turn's movement runs.
+            PluginManager.emitCustomEvent("player:interaction-stop", { player: this.player });
           }
           continue;
         case "face":

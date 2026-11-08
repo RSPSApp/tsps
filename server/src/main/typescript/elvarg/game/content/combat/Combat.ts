@@ -531,7 +531,12 @@ export class Combat {
         }
 
         this.character.getMovementQueue().reset();
-        if (cycle < this.nextAttackCycle && !this.attackTiming(method, target).ignoreDelay) {
+        // A bypassing special must reach executeAttack while the old cooldown is still active.
+        // Check the selected method too: an explicit spell can override an armed special.
+        const special = this.character.isPlayer() ? this.character.getAsPlayer().getCombatSpecial() : null;
+        const bypass = special?.getCombatMethod() === method &&
+            CombatSpecial.activeTraitsFor(this.character)?.bypassAttackDelay === true;
+        if (cycle < this.nextAttackCycle && !bypass && !this.attackTiming(method, target).ignoreDelay) {
             this.trace(`cooldown next=${this.nextAttackCycle} in=${this.nextAttackCycle - cycle}`, target);
             this.renewInteraction(target, generation);
             return;
@@ -923,7 +928,10 @@ export class Combat {
         const specialTraits = this.character && this.character.isPlayer()
             ? CombatSpecial.activeTraitsFor(this.character)
             : null;
-        const bypass = bypassDelay || specialTraits?.bypassAttackDelay === true;
+        const specialMethod = this.character.isPlayer()
+            ? this.character.getAsPlayer().getCombatSpecial()?.getCombatMethod()
+            : null;
+        const bypass = bypassDelay || (specialMethod === method && specialTraits?.bypassAttackDelay === true);
         const timing = this.attackTiming(method, target);
         if (!bypass && !timing.ignoreDelay && cycle < this.nextAttackCycle) {
             if (renew) this.renewInteraction(target, generation);
@@ -949,11 +957,18 @@ export class Combat {
         } else if (!bypass && timing.minimumDelay > 0) {
             this.nextAttackCycle = Math.max(this.nextAttackCycle, cycle + (timing.minimumDelay | 0));
             this.sendAttackTimer();
-        } else if (specialTraits?.bypassAttackDelay === true && specialTraits.attackSpeedTicks != null) {
-            // A bypassing special (Quick Smash) armed before the target was clicked: keep any
-            // cooldown already running and leave at least its own delay after it.
-            this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
-                specialTraits.attackSpeedTicks));
+        } else if (specialMethod === method && specialTraits?.bypassAttackDelay === true) {
+            if (specialTraits.attackSpeedTicks != null) {
+                // Quick Smash keeps a cooldown already running and leaves its own minimum delay.
+                this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                    specialTraits.attackSpeedTicks));
+            } else {
+                // Momentum Throw bypasses the old deadline but starts a full weapon cooldown.
+                const speed = PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                    method.attackSpeed(this.character));
+                this.nextAttackCycle = cycle + Math.max(1, speed | 0);
+                this.sendAttackTimer();
+            }
         }
         this.lastAttackTarget = target;
 

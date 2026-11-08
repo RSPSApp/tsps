@@ -5,7 +5,7 @@
  *
  * - The loop and tooth halves used on each other make a crystal key (rsprox captures: sound
  *   2127 and "You join the two halves of the key together.").
- * - Sing-crystal at a Prifddinas singing bowl offers the enhanced crystal key: a crystal key
+ * - The Prifddinas singing bowl (CrystalSinging.plugin.js owns its menu, with this recipe) offers the enhanced crystal key: a crystal key
  *   and 10 crystal shards, 80 Smithing and Crafting (boostable), 500 XP in each (Wiki). The
  *   menu, the messages, the animation and sound 8 are the captured singing bowl's.
  */
@@ -78,7 +78,6 @@ function sing(player, amount) {
 
 function attach(api) {
   api.onItemOnItem("Loop half of key", "Tooth half of key", joinHalves);
-  api.onObjectInteraction("Singing bowl", { "Sing-crystal": singCrystal });
 }
 
 module.exports = { init, attach, joinHalves, singCrystal, sing };

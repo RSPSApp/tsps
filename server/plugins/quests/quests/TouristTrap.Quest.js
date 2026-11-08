@@ -624,6 +624,18 @@ module.exports = function registerTouristTrapQuest(api) {
     return true;
   }
 
+  // Own the automatic reward so its shared drop-table row cannot also leave a ground key.
+  function handleDropContext({ player, npcId, context }) {
+    if (npcId !== MERCENARY_CAPTAIN_NPC_ID || !player || stageOf(player) < STAGE_STARTED
+      || !context?.handledItemIds) return;
+    if (held(player, METAL_KEY_ITEM_ID)) {
+      context.handledItemIds.add(METAL_KEY_ITEM_ID);
+    } else if (giveItem(player, METAL_KEY_ITEM_ID)) {
+      context.handledItemIds.add(METAL_KEY_ITEM_ID);
+      player.sendMessage("The mercenary captain drops a metal key. You pick it up.");
+    }
+  }
+
   function handleNpcDeath(event) {
     const killer = event?.killer?.isPlayer?.() ? event.killer : null;
     if (!killer) return;
@@ -638,7 +650,6 @@ module.exports = function registerTouristTrapQuest(api) {
     }
     if (event.npcId !== MERCENARY_CAPTAIN_NPC_ID) return;
     if (stageOf(killer) < STAGE_STARTED) return;
-    // The Wiki-backed NpcDrops table owns the captain's ground key, even with a full bag.
     advance(killer, STAGE_METAL_KEY);
   }
 
@@ -990,6 +1001,7 @@ module.exports = function registerTouristTrapQuest(api) {
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleDriverAgreement.bind(null, stageOf, advance, MINE_CART_DRIVER_NPC_ID, COINS_ITEM_ID));
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:context", handleDropContext);
   api.onObjectInteraction("Gate", { Open: openCampGate });
   api.onObjectInteraction("Mine door entrance", { Open: openMineDoor });
   api.onObjectInteraction("Mine cave", { "Walk through": enterDeepMine });

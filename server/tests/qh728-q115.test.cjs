@@ -204,7 +204,7 @@ function runRegisteredTranscript(h, player, npcId) {
   }
 }
 
-function killCaptain(h, player) {
+function killCaptain(h, player, dropsFirst = false) {
   const NpcDrops = require('../plugins/npcs/NpcDrops.plugin');
   const ground = [];
   const definition = {getName:()=> 'Mercenary Captain'};
@@ -217,8 +217,10 @@ function killCaptain(h, player) {
   },{get:(target,key)=>target[key]??noop}));
   NpcDrops.__internals.loadDrops();
   player.isPlayer=()=>true;
+  const drop = () => NpcDrops.__internals.dropFor(player,npc,core.NpcIdentifiers.MERCENARY_CAPTAIN,player.getLocation());
+  if (dropsFirst) drop();
   h.deaths.forEach(handler=>handler({npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,killer:player,npc}));
-  NpcDrops.__internals.dropFor(player,npc,core.NpcIdentifiers.MERCENARY_CAPTAIN,player.getLocation());
+  if (!dropsFirst) drop();
   return ground;
 }
 
@@ -232,8 +234,8 @@ test('fresh stage 0 starts, the captain drops the metal key, and the slave trade
   assert.equal(stage(h, p), 1);
 
   const ground = killCaptain(h,p);
-  assert.equal(p.items.get(K.METAL_KEY)??0, 0, 'the quest does not inject an inventory key');
-  assert.deepEqual(ground.filter(item=>item.id===K.METAL_KEY),[{id:K.METAL_KEY,amount:1}]);
+  assert.equal(p.items.get(K.METAL_KEY)??0, 1, 'the captain automatically awards one inventory key');
+  assert.deepEqual(ground.filter(item=>item.id===K.METAL_KEY),[], 'the shared table does not duplicate the key');
   assert.equal(stage(h, p), 2);
 
   // Fixture: the player has entered the camp and brought the required outfit.
@@ -920,4 +922,45 @@ test('captain combat kickoff ignores other actions, actors, missing NPCs and an 
   seedStage(h,p,0);
   assert.notEqual(action(h,{player:p,npcId:core.NpcIdentifiers.MERCENARY_CAPTAIN,npc,stepId:'elFnbt'}).handled,true);
   assert.equal(stage(h,p),0);
+});
+
+
+test('captain key auto-collection and ground fallback work in either death callback order', () => {
+  for (const dropsFirst of [false, true]) {
+    for (const mode of ['room', 'full', 'failed-add']) {
+      const h=harness(),p=makePlayer();
+      seedStage(h,p,1);
+      if(mode==='full')p.setFull(true);
+      if(mode==='failed-add')p.setFailAdds(true);
+      const ground=killCaptain(h,p,dropsFirst).filter(item=>item.id===core.ItemIdentifiers.METAL_KEY);
+      assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,mode==='room'?1:0,`${mode}, dropsFirst=${dropsFirst}`);
+      assert.deepEqual(ground,mode==='room'?[]:[{id:core.ItemIdentifiers.METAL_KEY,amount:1}]);
+      assert.equal(stage(h,p),2);
+    }
+  }
+});
+
+test('already held captain keys are not duplicated by repeat kills or quest stage changes', () => {
+  for(const dropsFirst of [false,true]) {
+    const h=harness(),p=makePlayer();
+    seedStage(h,p,1);p.items.set(core.ItemIdentifiers.METAL_KEY,1);
+    for(const currentStage of [1,2,10,30]) {
+      seedStage(h,p,currentStage);
+      const ground=killCaptain(h,p,dropsFirst);
+      assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY),1);
+      assert.deepEqual(ground.filter(item=>item.id===core.ItemIdentifiers.METAL_KEY),[]);
+      assert.equal(stage(h,p),Math.max(2,currentStage));
+    }
+  }
+});
+
+test('captain key auto-collection ignores other actors and an unstarted quest', () => {
+  const h=harness(),p=makePlayer();
+  for(const [npcId,currentStage] of [[core.NpcIdentifiers.IRENA,1],[core.NpcIdentifiers.MERCENARY_CAPTAIN,0]]) {
+    seedStage(h,p,currentStage);
+    const context={handledItemIds:new Set()};
+    for(const fn of h.events['npc-drops:context']??[])fn({player:p,npcId,context});
+    assert.equal(p.items.get(core.ItemIdentifiers.METAL_KEY)??0,0);
+    assert.equal(context.handledItemIds.has(core.ItemIdentifiers.METAL_KEY),false);
+  }
 });

@@ -161,7 +161,7 @@ function player() {
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
   const p = { setEnteredAmountAction: action => { if (action !== null) assert.equal(typeof action.execute, 'function'); p.amountAction = action; }, attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
-    getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => p.amulet ? { getId: () => p.amulet } : null, getItems: () => p.equipment ?? [] }),
+    getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0, contains: id => (p.bank?.get(id) ?? 0) > 0 }], getEquipment: () => ({ get: () => p.amulet ? { getId: () => p.amulet } : null, getItems: () => p.equipment ?? [] }),
     setInterfaceId: id => { p.interfaceId = id; }, getInterfaceId: () => p.interfaceId ?? -1,
     getSession: () => ({ sendClientPacket: frame => { log.push(['frame',Buffer.from(frame)]); return true; } }), getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(),amount]), getCombatLevel: () => p.combat ?? 3, getCurrentLevel: () => p.magic ?? 99, getMaxLevel: () => p.level ?? 99 }),
@@ -1261,6 +1261,21 @@ function doti() {
   };
   return { h, p, npc, object };
 }
+
+test('DOTI post-quest hand-outs replace a lost needle or mask, but give no second one while one is owned', () => {
+  const { h, p } = doti();
+  const NEEDLE = 29920, RAM_MASK = 29929;
+  h.action(p, 13837, 'ajYdc-');
+  h.action(p, 13837, 'ajYdc-');
+  assert.equal(p.items.get(NEEDLE), 1, 'one needle, however often asked');
+  p.items.delete(NEEDLE);
+  p.bank = new Map([[NEEDLE, 1]]);
+  h.action(p, 13837, 'ajYdc-');
+  assert.equal(p.items.get(NEEDLE) ?? 0, 0, 'a banked needle is owned');
+  h.action(p, 13833, 'pn24Ai');
+  h.action(p, 13833, 'pn24Ai');
+  assert.equal(p.items.get(RAM_MASK), 1, 'one ram mask');
+});
 
 test('DOTI starts at 2, gives the uniform instructions at 4, enters the window at 6 and rejects a full bag', () => {
   const { h, p, npc, object } = doti();

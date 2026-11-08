@@ -390,6 +390,22 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     player.getInventory().adds(itemId, amount);
   }
 
+  /** Held, worn, or in any bank tab but the search tab. */
+  function owns(player, itemId) {
+    const searchTab = api.core.Bank.BANK_SEARCH_TAB_INDEX;
+    return player.getInventory().contains(itemId)
+      || (player.getEquipment?.().contains?.(itemId) ?? false)
+      || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+  }
+
+  /**
+   * The Head Butler's and Costumer's post-quest hand-outs replace a lost mask, tray or needle: only one not already
+   * owned. Each talk gave another, so they could be had (and alched) without end.
+   */
+  function replaceLost(player, itemId) {
+    if (!owns(player, itemId)) addItem(player, itemId);
+  }
+
   function removeItems(player, itemId, amount = 1) {
     const have = player.getInventory().getAmount(itemId);
     if (have > 0) player.getInventory().deleteNumber(itemId, Math.min(have, amount));
@@ -1391,25 +1407,25 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
         event.handled = true;
         return;
       case "pn24Ai":
-        addItem(player, ItemIdentifiers.RAM_MASK);
+        replaceLost(player, ItemIdentifiers.RAM_MASK);
         return;
       case "Jci-4K":
-        addItem(player, ItemIdentifiers.WOLF_MASK_4);
+        replaceLost(player, ItemIdentifiers.WOLF_MASK_4);
         return;
       case "0IpxbG":
-        addItem(player, ItemIdentifiers.BIRD_MASK);
+        replaceLost(player, ItemIdentifiers.BIRD_MASK);
         return;
       case "yy6sHr":
-        addItem(player, ItemIdentifiers.JAGUAR_MASK);
+        replaceLost(player, ItemIdentifiers.JAGUAR_MASK);
         return;
       case "hklzpZ":
-        addItem(player, ItemIdentifiers.SNAKE_MASK);
+        replaceLost(player, ItemIdentifiers.SNAKE_MASK);
         return;
       case "82ODj5":
-        addItem(player, TRAY);
+        replaceLost(player, TRAY);
         return;
       case "ajYdc-":
-        addItem(player, COSTUME_NEEDLE);
+        replaceLost(player, COSTUME_NEEDLE);
         return;
       case "9kVMFj":
         event.handled = true;

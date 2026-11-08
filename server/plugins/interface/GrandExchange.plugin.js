@@ -196,6 +196,29 @@ function offerPrice(offer) {
   return Number.isInteger(offer?.price) && offer.price > 0 ? Math.min(MAX, offer.price) : guidePrice(offer);
 }
 
+/**
+ * The unit price an offer trades at (Wiki: Grand Exchange): a buy pays the market price when its bid is higher and
+ * gets the difference back, and a sell receives the market price when that is higher than its ask.
+ */
+function fillUnitPrice(offer) {
+  const own = offerPrice(offer);
+  const market = guidePrice(offer);
+  return offer.sell ? Math.max(own, market) : Math.min(own, market);
+}
+
+/** The coins a finished trade moved; saves from before fill prices have only the offer's own total. */
+function tradedTotal(offer) {
+  return Number.isSafeInteger(offer?.traded) ? offer.traded : Number(offer?.total) || 0;
+}
+
+/** Coins as stacks: a full stack and over is paid as platinum tokens plus the remaining coins. */
+function coinStacks(total) {
+  if (total <= 0) return [];
+  if (total <= MAX) return [{ itemId: COINS, amount: total }];
+  const tokens = Math.min(MAX, Math.floor(total / COINS_PER_TOKEN));
+  return [{ itemId: PLATINUM_TOKEN, amount: tokens }, { itemId: COINS, amount: total - tokens * COINS_PER_TOKEN }];
+}
+
 /** Scripts 773/779 price controls: -1, +1, -5%, guide, +5% (custom entry is handled separately). */
 function changePrice(offer, slot) {
   const current = offerPrice(offer);
@@ -302,7 +325,7 @@ function recordHistory(player, offer) {
   if (!offer || offer.historyRecorded || !offer.finished || offer.aborted) return false;
   const itemId = Number(offer.itemId);
   const quantity = Number(offer.quantity);
-  const total = Number(offer.total);
+  const total = tradedTotal(offer);
   if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(quantity) || quantity <= 0 ||
       !Number.isSafeInteger(total) || total < 0) return false;
 
@@ -329,6 +352,7 @@ function scheduleCompletion(player, offer) {
     if (offer.finished) return;
     offer.finished = true;
     offer.completedAt = Date.now();
+    offer.traded = Math.min(offer.sell ? MAX_TRADE : offer.total, offer.quantity * fillUnitPrice(offer));
     recordHistory(player, offer);
     saveOffers(player);
     refreshCollectionBox(player);
@@ -361,7 +385,7 @@ function marketVarps(slot, offer) {
     [base + 1]: offer?.quantity ?? 0,
     // An aborted offer traded nothing (the client draws its bar red).
     [base + 2]: offer?.finished && !offer.aborted ? offer.quantity : 0,
-    [base + 3]: offer?.finished && !offer.aborted ? Math.min(MAX, offer.total) : 0,
+    [base + 3]: offer?.finished && !offer.aborted ? Math.min(MAX, tradedTotal(offer)) : 0,
     [base + 4]: offer?.sell ? 1 : 0,
     [base + 5]: offer ? (offer.finished ? FINISHED : 2) : 0,
     [OFFER_ITEMS[slot] + 1]: 0,
@@ -389,11 +413,13 @@ function tax(offer) {
   if (!offer?.sell || offer.aborted || taxExempt(offer.itemId)) return 0;
   const quantity = Math.max(0, Number(offer.quantity) || 0);
   if (!quantity) return 0;
-  // Saved offers from before adjustable prices have no price. Use the unit price they
-  // actually sold at rather than today's guide, which may have moved since the sale.
-  const unitPrice = Number.isInteger(offer.price) && offer.price > 0
-    ? Math.min(MAX, offer.price)
-    : Math.floor((Number(offer.total) || 0) / quantity);
+  // The fee is on the price the item sold for (FEE_INFORMATION). Saved offers from before fill prices, or
+  // before adjustable prices, use their own price, or the unit price they sold at, not today's guide.
+  const unitPrice = Number.isSafeInteger(offer.traded)
+    ? Math.min(MAX, Math.floor(offer.traded / quantity))
+    : Number.isInteger(offer.price) && offer.price > 0
+      ? Math.min(MAX, offer.price)
+      : Math.floor((Number(offer.total) || 0) / quantity);
   const perItem = Math.min(TAX_CAP, Math.floor(unitPrice / TAX_DIVISOR));
   return perItem * quantity;
 }
@@ -404,12 +430,11 @@ function tax(offer) {
  * stack are paid as platinum tokens plus the remaining coins.
  */
 function payout(offer) {
-  const coins = offer.sell !== Boolean(offer.aborted);
-  if (!coins) return [{ itemId: offer.itemId, amount: offer.quantity }];
-  const total = Math.max(0, offer.total - tax(offer));
-  if (total <= MAX) return [{ itemId: COINS, amount: total }];
-  const tokens = Math.min(MAX, Math.floor(total / COINS_PER_TOKEN));
-  return [{ itemId: PLATINUM_TOKEN, amount: tokens }, { itemId: COINS, amount: total - tokens * COINS_PER_TOKEN }];
+  if (offer.aborted) return offer.sell ? [{ itemId: offer.itemId, amount: offer.quantity }] : coinStacks(offer.total);
+  // A bought item comes with the coins bid over the price it traded at.
+  if (!offer.sell) return [{ itemId: offer.itemId, amount: offer.quantity }, ...coinStacks(offer.total - tradedTotal(offer))];
+  const paid = coinStacks(Math.max(0, tradedTotal(offer) - tax(offer)));
+  return paid.length ? paid : [{ itemId: COINS, amount: 0 }];
 }
 
 function collection(offer) {
@@ -1114,6 +1139,7 @@ module.exports = {
     fillDelayMs,
     remainingLimit,
     recordLimit,
+    fillUnitPrice,
     LIMITS_ATTRIBUTE,
     HISTORY_ATTRIBUTE,
     HISTORY_LIMIT,

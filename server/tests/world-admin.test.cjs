@@ -54,6 +54,7 @@ async function start(t, env = {}, opts = {}) {
   };
   const core = {
     WorldConfigStore: {
+      worldSettingKeys: () => ["name", "experienceMultiplier"],
       read: () => state.layers,
       plan: () => state.plan,
       write: (dir, nextLocal, expectedHash) => {
@@ -148,6 +149,24 @@ function request(port, { method = "GET", path: urlPath = "/", headers = {}, body
     req.on("error", reject);
     if (data !== undefined) req.write(data);
     req.end();
+  });
+}
+
+/** POST /api/apply declaring a body over the cap but sending only a few bytes; resolves on the response. */
+function oversizedPost(port) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: "127.0.0.1", port, method: "POST", path: "/api/apply", agent: false,
+      headers: {
+        Host: `localhost:${port}`, Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json", "Content-Length": 1024 * 1024 + 1,
+      },
+    }, (res) => {
+      res.resume();
+      res.on("end", () => { req.destroy(); resolve({ status: res.statusCode, headers: res.headers }); });
+    });
+    req.on("error", reject);
+    req.write("{}");
   });
 }
 
@@ -509,8 +528,16 @@ test("input hardening: non-object bodies, prototype keys and oversized bodies ar
   assert.equal((await post({ changes: { plugins: [] }, localHash: "hash-1" })).status, 400);
   assert.equal((await post({ changes: { pluginConfig: "x" }, localHash: "hash-1" })).status, 400);
   assert.equal((await post({ changes: {}, localHash: "hash-1", seconds: -5 })).status, 400);
-  const big = JSON.stringify({ changes: { world: { name: "x".repeat(1024 * 1024 + 10) } }, localHash: "hash-1" });
-  assert.equal((await post(big)).status, 413);
+  // A declared Content-Length above the 1 MB cap with a small body: the server answers 413 from
+  // the header alone. Sending the full 1 MB raced the early 413 + Connection: close (EPIPE).
+  assert.equal((await oversizedPost(port)).status, 413);
+  assert.equal((await post({ changes: { world: { zones: [] } }, localHash: "hash-1" })).status, 400, "zones is not a world setting");
+  assert.equal((await post({ changes: { world: { plugins: {} } }, localHash: "hash-1" })).status, 400);
+  const preview = await request(port, {
+    method: "POST", path: "/api/preview", headers: auth, body: { changes: { world: { someUnknown: 1 } }, localHash: "hash-1" },
+  });
+  assert.equal(preview.status, 400);
+  assert.match(preview.json.error, /changes\.world\.someUnknown is not a world setting/);
   await tick();
   assert.deepEqual(state.writes, []);
   assert.deepEqual(state.shutdowns, []);
@@ -531,3 +558,67 @@ test("GET / without page.html is a 404 text body; unknown routes 404", async (t)
   assert.equal((await request(port, { path: "/api/nope", headers: auth })).status, 404);
 });
 
+
+test("a hand edit during the countdown is caught by beforeShutdown: cancelled before shutdown starts, lastFailure set", async (t) => {
+  const { port, state } = await start(t, { npm_lifecycle_event: "dev" }, { online: 1 });
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 202);
+  const start0 = state.events.find((e) => e.name === "GameUpdate:start");
+  assert.equal(typeof start0.payload.beforeShutdown, "function");
+  // Unchanged file: the check passes.
+  start0.payload.beforeShutdown();
+
+  state.layers = { ...state.layers, localHash: "hand-edited" };
+  Object.assign(state, { remaining: 0, scheduled: false, scheduleId: undefined, shuttingDown: true });
+  const capture = captureLogs();
+  try {
+    assert.throws(() => start0.payload.beforeShutdown(), /changed since loaded/);
+    start0.payload.onCancelled("world.local.json changed since loaded; reload the page and try again");
+  } finally {
+    capture.restore();
+  }
+  state.shuttingDown = false;
+  assert.match(capture.logs.join("\n"), /not written, restart cancelled/);
+  assert.deepEqual(state.writes, []);
+  const cat = await request(port, { path: "/api/catalog", headers: auth });
+  assert.equal(cat.json.pending, null);
+  assert.match(cat.json.lastFailure.message, /^Restart cancelled: world\.local\.json changed since loaded.*Nothing was written\.$/);
+
+  // A file that stopped parsing is refused the same way.
+  assert.equal((await apply(port, { changes: {}, localHash: "hand-edited" })).status, 202);
+  const start1 = state.events.filter((e) => e.name === "GameUpdate:start").at(-1);
+  state.layers = { ...state.layers, localError: "Unexpected token" };
+  const capture2 = captureLogs();
+  try {
+    assert.throws(() => start1.payload.beforeShutdown(), /does not parse/);
+  } finally {
+    capture2.restore();
+  }
+});
+
+test("an immediate restart carries beforeShutdown too", async (t) => {
+  const { port, state } = await start(t, { npm_lifecycle_event: "dev" }, { online: 0 });
+  assert.equal((await apply(port, { changes: {}, localHash: "hash-1" })).status, 202);
+  await tick();
+  assert.equal(typeof state.shutdowns[0].options.beforeShutdown, "function");
+});
+
+test("WORLD_ADMIN_BIND beyond loopback needs a WORLD_ADMIN_TOKEN of 24+ token characters", async (t) => {
+  const { resolveAccess } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
+  const weak = resolveAccess({ WORLD_ADMIN_BIND: "0.0.0.0", WORLD_ADMIN_TOKEN: "short" });
+  assert.equal(weak.host, "127.0.0.1");
+  assert.equal(weak.loopback, true);
+  assert.match(weak.notes.join("\n"), /WORLD_ADMIN_BIND ignored: WORLD_ADMIN_TOKEN must be at least 24 characters/);
+  const badChars = resolveAccess({ WORLD_ADMIN_BIND: "0.0.0.0", WORLD_ADMIN_TOKEN: "has spaces in it but is long enough" });
+  assert.equal(badChars.host, "127.0.0.1");
+  const strong = resolveAccess({ WORLD_ADMIN_BIND: "0.0.0.0", WORLD_ADMIN_TOKEN: TOKEN });
+  assert.equal(strong.host, "0.0.0.0");
+  assert.equal(strong.loopback, false);
+  assert.deepEqual(strong.notes, []);
+  // A loopback bind keeps working with any configured token.
+  assert.equal(resolveAccess({ WORLD_ADMIN_BIND: "localhost", WORLD_ADMIN_TOKEN: "short" }).host, "localhost");
+
+  const { logs } = await start(t, { WORLD_ADMIN_BIND: "0.0.0.0", WORLD_ADMIN_TOKEN: "short" });
+  const text = logs.join("\n");
+  assert.match(text, /WORLD_ADMIN_BIND ignored/);
+  assert.match(text, /listening on 127\.0\.0\.1:/);
+});

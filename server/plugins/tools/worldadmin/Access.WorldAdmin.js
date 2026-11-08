@@ -27,6 +27,8 @@ function resolvePort(raw, slot) {
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24,}$/;
 
+const isLoopbackHost = (host) => host === LOOPBACK || host === "localhost" || host === "::1";
+
 /**
  * The generated token, kept in `tokenFile` (gitignored, mode 0o600 where supported) so the
  * page's cookie survives the restarts it triggers. Falls back to a per-start token when the
@@ -59,16 +61,22 @@ function resolveAccess(env = process.env, { tokenFile } = {}) {
   const configuredToken = env.WORLD_ADMIN_TOKEN ? String(env.WORLD_ADMIN_TOKEN) : "";
   let host = LOOPBACK;
   if (env.WORLD_ADMIN_BIND) {
-    if (configuredToken) {
-      host = String(env.WORLD_ADMIN_BIND);
-    } else {
+    const bind = String(env.WORLD_ADMIN_BIND);
+    if (!configuredToken) {
       notes.push(`WORLD_ADMIN_BIND ignored: it needs WORLD_ADMIN_TOKEN set; listening on ${LOOPBACK} only`);
+    } else if (!isLoopbackHost(bind) && !TOKEN_PATTERN.test(configuredToken)) {
+      notes.push(
+        `WORLD_ADMIN_BIND ignored: WORLD_ADMIN_TOKEN must be at least 24 characters of A-Z, a-z, 0-9, _ or - ` +
+          `to listen beyond this machine; listening on ${LOOPBACK} only`
+      );
+    } else {
+      host = bind;
     }
   }
   return {
     port: resolvePort(env.WORLD_ADMIN_PORT, env.WT_SLOT),
     host,
-    loopback: host === LOOPBACK || host === "localhost" || host === "::1",
+    loopback: isLoopbackHost(host),
     token: configuredToken || storedToken(tokenFile, notes),
     notes,
   };

@@ -148,3 +148,13 @@ test('write is hash guarded, atomic, and creates the file', () => {
     assert.equal(fs.readFileSync(path.join(dir, 'world.json'), 'utf8'), before);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('changes.world only takes declared world settings; others are errors and left alone', () => {
+  const { plan } = run({ someUnknown: 1 }, { world: { name: 'N', zones: [], plugins: { Base: false }, someUnknown: 2 } });
+  assert.deepEqual(plan.nextLocal, { someUnknown: 1, name: 'N' });
+  assert.deepEqual(plan.errors.sort(), [
+    'world.plugins is not a world setting', 'world.someUnknown is not a world setting', 'world.zones is not a world setting',
+  ]);
+  const { WORLD_SETTING_DECLARATIONS } = require('../dist/game/definition/WorldSettingDeclarations');
+  assert.deepEqual(WorldConfigStore.worldSettingKeys(), Object.keys(WORLD_SETTING_DECLARATIONS));
+});

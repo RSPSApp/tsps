@@ -5,7 +5,7 @@ const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
 const { createRequestHandler } = require("./worldadmin/Http.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
-//   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a token)
+//   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a 24+ character token)
 // Without WORLD_ADMIN_TOKEN the generated token is kept in data/definitions/world-admin.token
 // (gitignored) so the page stays signed in across the restarts it triggers.
 // The startup log prints http://localhost:<port>/?token=<token>; opening it sets a cookie.
@@ -137,6 +137,28 @@ function recordFailure(id, reason) {
   lastFailure = { at: new Date().toISOString(), message: `Restart cancelled: ${reason}. Nothing was written.` };
 }
 
+/**
+ * The beforeShutdown hook: refuses a restart whose write is already doomed (world.local.json
+ * edited by hand or broken since Apply), before any plugin is shut down. afterPersist checks
+ * again, for an edit made while players are being saved.
+ */
+function checkBeforeShutdown(id, expectedHash) {
+  return function checkWorldConfigUnchanged() {
+    let reason = null;
+    try {
+      const layers = readLayers();
+      if (layers.localError) reason = `world.local.json does not parse (${layers.localError}); fix it by hand first`;
+      else if (layers.localHash !== expectedHash) reason = "world.local.json changed since loaded; reload the page and try again";
+    } catch (err) {
+      reason = err instanceof Error ? err.message : String(err);
+    }
+    if (reason === null) return;
+    console.error(`[world-admin] world.local.json not written, restart cancelled: ${reason}`);
+    recordFailure(id, reason);
+    throw new Error(reason);
+  };
+}
+
 /** The afterPersist hook: writes what Apply accepted, refusing if the file changed since. */
 function deferredWrite(id, nextLocal, expectedHash) {
   return function writeWorldConfig() {
@@ -205,6 +227,7 @@ function applyAction({ changes, localHash, seconds = DEFAULT_COUNTDOWN_SECONDS }
 
   const id = crypto.randomUUID();
   const shutdownOptions = {
+    beforeShutdown: checkBeforeShutdown(id, layers.localHash),
     afterPersist: deferredWrite(id, plan.nextLocal, layers.localHash),
     onCancelled: restartCancelled(id),
     exitCode: mode === "supervised" ? SUPERVISED_EXIT_CODE : DEV_EXIT_CODE,
@@ -248,6 +271,7 @@ async function startWorldAdmin() {
   const server = http.createServer(createRequestHandler(
     { token: access.token, loopback: access.loopback, port: () => boundPort },
     actions,
+    pluginApi.core.WorldConfigStore.worldSettingKeys(),
   ));
   const listening = await new Promise((resolve) => {
     server.on("error", (error) => {

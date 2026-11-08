@@ -385,6 +385,7 @@
     pollTimer: null,
     reconnect: null,     // { delay } while the server is down
     applied: false,      // an Apply was accepted; its edits clear once the server is back
+    appliedHash: null,   // world.local.json's localHash the Apply was made against
     lastPlan: null,
   };
 
@@ -1324,22 +1325,25 @@
 
   /**
    * Back in touch with the server. The edits are cleared only when the apply went through:
-   * nothing is pending any more and either our Apply was accepted, or (when the Apply request
-   * itself was lost) world.local.json changed since.
+   * nothing is pending any more and world.local.json changed since the Apply. Another restart
+   * during the countdown (nodemon on a file edit, SIGTERM) comes back with nothing pending and
+   * no failure either, but the file unchanged: the edits stay.
    */
   function finishReconnect(body) {
     state.reconnect = null;
     overlay.hidden = true;
     var settled = !body.pending;
-    var applied = settled && !body.lastFailure && (state.applied === true ||
-      (state.applied === "unknown" && body.layers.localHash !== state.appliedHash));
+    var awaited = settled && !body.lastFailure && (state.applied === true || state.applied === "unknown");
+    var applied = awaited && body.layers.localHash !== state.appliedHash;
     if (applied) state.edits = { world: {}, plugins: {}, pluginConfig: {} };
-    if (settled || body.lastFailure) state.applied = false;
+    if (settled || body.lastFailure) { state.applied = false; state.appliedHash = null; }
     state.data = body;
     build();
     renderBanners();
     updateFooter();
-    if (!body.lastFailure) {
+    if (awaited && !applied) {
+      flash("warn", "The server restarted before your change was written; nothing was saved.");
+    } else if (!body.lastFailure) {
       var note = flash("info", applied ? "Restarted with your changes." : "Reconnected.");
       setTimeout(function () { note.remove(); }, 4000);
     }
@@ -1512,9 +1516,11 @@
       } else if (res.status === 202 && b.applied === "countdown") {
         dialog.close();
         state.applied = true;
+        state.appliedHash = body.localHash;
         load(false);
       } else if (res.status === 202 && b.applied === "restarting") {
         state.applied = true;
+        state.appliedHash = body.localHash;
         enterReconnect();
       } else if (res.status === 400 && b.diff) {
         state.lastPlan = b;
@@ -1526,7 +1532,7 @@
     }, function () {
       // The server went away mid-request: wait for it, and judge by world.local.json afterwards.
       state.applied = "unknown";
-      state.appliedHash = state.data.layers.localHash;
+      state.appliedHash = body.localHash;
       enterReconnect();
     });
   });

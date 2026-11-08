@@ -16,6 +16,7 @@ function loadPlugin() {
   const tasks = [];
   const pushes = [];
   const shutdowns = [];
+  const hooks = {};
   const players = [{
     sendMessage() {},
     getPacketSender: () => ({ sendSystemUpdate: (v) => pushes.push(v) }),
@@ -36,13 +37,13 @@ function loadPlugin() {
   };
   plugin.register({
     core,
-    registerCommand() {},
+    registerCommand: (name, handler) => { hooks.command = handler; },
     onPlayerLogin() {},
-    onServerShutdown() {},
+    onServerShutdown: (handler) => { hooks.shutdown = handler; },
     onCustomEvent: (name, handler) => events.set(name, handler),
   });
   const emit = (name, payload) => { events.get(name)(payload); return payload; };
-  return { emit, tasks, pushes, shutdowns };
+  return { emit, tasks, pushes, shutdowns, hooks, players };
 }
 
 test("GameUpdate:start shuts down with the stored hook only once the countdown reaches zero", () => {
@@ -96,11 +97,12 @@ function stubShutdownDependencies({ failed }) {
   const restore = [];
   const stub = (obj, key, value) => { const old = obj[key]; obj[key] = value; restore.push(() => { obj[key] = old; }); };
   stub(World, "getPlayers", () => ({ sizeReturn: () => 0 }));
-  stub(World, "savePlayers", () => ({ failed }));
+  const steps = [];
+  stub(World, "savePlayers", () => { steps.push("savePlayers"); return { failed }; });
   stub(Accounts, "flush", () => {});
   stub(PlayerPunishment, "flush", async () => {});
   stub(GameConstants, "PLAYER_PERSISTENCE", { flush: async () => {} });
-  stub(PluginManager, "emitServerShutdown", () => {});
+  stub(PluginManager, "emitServerShutdown", () => { steps.push("emitServerShutdown"); });
   stub(PluginManager, "removeUnownedPluginNpcs", () => 0);
   stub(ObjectManager, "removePluginObjects", () => 0);
   const exits = [];
@@ -110,7 +112,7 @@ function stubShutdownDependencies({ failed }) {
   console.error = () => {};
   console.info = () => {};
   restore.push(() => { console.error = origError; console.info = origInfo; });
-  return { exits, saved, restore: () => restore.reverse().forEach((r) => r()) };
+  return { exits, saved, steps, restore: () => restore.reverse().forEach((r) => r()) };
 }
 
 test("Server.shutdown with a persistence failure never calls afterPersist and keeps running", async () => {
@@ -233,4 +235,89 @@ test("Server.shutdown calls onCancelled when another shutdown is already in prog
     assert.equal(ran, false);
     assert.deepEqual(ctx.exits, []);
   } finally { Server.shuttingDown = false; ctx.restore(); }
+});
+
+test("Server.shutdown: a throwing beforeShutdown cancels before plugins are told or players saved", async () => {
+  const ctx = stubShutdownDependencies({ failed: 0 });
+  try {
+    const reasons = [];
+    let persisted = false;
+    Server.shutdown("test", {
+      beforeShutdown: () => { throw new Error("world.local.json changed since loaded"); },
+      afterPersist: () => { persisted = true; },
+      onCancelled: (r) => reasons.push(r),
+      exitCode: 75,
+    });
+    await settle();
+    assert.deepEqual(reasons, ["world.local.json changed since loaded"]);
+    assert.deepEqual(ctx.steps, [], "no emitServerShutdown, no player save");
+    assert.equal(persisted, false);
+    assert.deepEqual(ctx.exits, []);
+    assert.equal(Server.shuttingDown, false, "the server keeps running");
+
+    Server.shutdown("test", { beforeShutdown: () => ctx.steps.push("beforeShutdown"), exitCode: 0 });
+    await settle();
+    assert.deepEqual(ctx.steps.slice(0, 2), ["beforeShutdown", "emitServerShutdown"]);
+    assert.deepEqual(ctx.exits, [0]);
+  } finally { Server.shuttingDown = false; ctx.restore(); }
+});
+
+test("GameUpdate forwards beforeShutdown to Server.shutdown at zero", () => {
+  const { emit, tasks, shutdowns } = loadPlugin();
+  const beforeShutdown = () => {};
+  emit("GameUpdate:start", { seconds: 5, beforeShutdown });
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 6000;
+    tasks[0].execute();
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(shutdowns[0].options.beforeShutdown, beforeShutdown);
+});
+
+test("another shutdown during the countdown calls the stored onCancelled once; our own countdown never does", () => {
+  const { emit, tasks, hooks } = loadPlugin();
+  const reasons = [];
+  emit("GameUpdate:start", { seconds: 60, id: "page-1", onCancelled: (r) => reasons.push(r) });
+  hooks.shutdown({ timestamp: Date.now() });
+  assert.deepEqual(reasons, ["another shutdown started"]);
+  assert.equal(emit("GameUpdate:status", {}).scheduled, false);
+  hooks.shutdown({ timestamp: Date.now() });
+  assert.deepEqual(reasons, ["another shutdown started"], "not called twice");
+
+  emit("GameUpdate:start", { seconds: 5, onCancelled: (r) => reasons.push(r) });
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 6000;
+    tasks.at(-1).execute();
+  } finally {
+    Date.now = realNow;
+  }
+  // Server.shutdown emits the shutdown event for the countdown's own shutdown.
+  hooks.shutdown({ timestamp: Date.now() });
+  assert.deepEqual(reasons, ["another shutdown started"]);
+});
+
+test("in the countdown's last tick (remainingSeconds 0, task not fired) a new start or ::gameUpdate is refused", () => {
+  const { emit, tasks, shutdowns, hooks } = loadPlugin();
+  emit("GameUpdate:start", { seconds: 5, id: "page-1" });
+  const messages = [];
+  const player = { sendMessage: (m) => messages.push(m), getPacketSender: () => ({ sendSystemUpdate() {} }) };
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 6000;
+    assert.equal(emit("GameUpdate:status", {}).remainingSeconds, 0);
+    const second = emit("GameUpdate:start", { seconds: 30, id: "page-2" });
+    assert.match(second.error, /already scheduled/);
+    assert.equal(second.accepted, undefined);
+    hooks.command({ player, parts: ["gameUpdate", "30"] });
+    assert.match(messages.at(-1), /already scheduled/);
+    assert.equal(tasks.length, 1, "no second countdown task");
+    assert.equal(emit("GameUpdate:status", {}).id, "page-1");
+    tasks[0].execute();
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(shutdowns.length, 1);
 });

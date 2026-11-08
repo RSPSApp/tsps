@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { mergeWorldConfig, parseWorldDefinition } from "./WorldDefinition";
-import { checkConfigValue } from "./WorldSettingDeclarations";
+import { checkConfigValue, WORLD_SETTING_DECLARATIONS } from "./WorldSettingDeclarations";
 import type { WorldConfigCatalogData } from "../../plugins/WorldConfigCatalog";
 
 type JsonObject = Record<string, unknown>;
@@ -46,6 +46,11 @@ function isObject(value: unknown): value is JsonObject {
 }
 
 export class WorldConfigStore {
+    /** The keys `changes.world` may carry: the declared top-level world settings. */
+    public static worldSettingKeys(): string[] {
+        return Object.keys(WORLD_SETTING_DECLARATIONS);
+    }
+
     /** Reads both layers from `dir` (default: data/definitions under the working directory). Never throws for a bad local file. */
     public static read(dir: string = path.resolve("data/definitions")): WorldConfigLayers {
         const shippedParsed = JSON.parse(fs.readFileSync(path.join(dir, "world.json"), "utf8"));
@@ -111,7 +116,14 @@ export class WorldConfigStore {
             }
         }
 
+        const errors: string[] = [];
+        const warnings: string[] = [];
         for (const [key, value] of Object.entries(changes.world ?? {})) {
+            // Zones, plugins and pluginConfig are not "world" settings; only declared scalars are.
+            if (!Object.prototype.hasOwnProperty.call(WORLD_SETTING_DECLARATIONS, key)) {
+                errors.push(`world.${key} is not a world setting`);
+                continue;
+            }
             if (value === null || deepEqual(value, layers.shipped[key])) delete nextLocal[key];
             else nextLocal[key] = value;
         }
@@ -148,8 +160,6 @@ export class WorldConfigStore {
             }
         }
 
-        const errors: string[] = [];
-        const warnings: string[] = [];
         const merged = mergeWorldConfig(layers.shipped, nextLocal);
         try {
             parseWorldDefinition(merged);

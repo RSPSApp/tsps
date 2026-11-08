@@ -217,6 +217,10 @@ locally:
 ssh -L 49600:127.0.0.1:49600 <host>
 ```
 
+`WORLD_ADMIN_BIND` (for example `0.0.0.0`) opens the listener to other machines only when
+`WORLD_ADMIN_TOKEN` is set to at least 24 characters of `A-Z a-z 0-9 _ -`; otherwise the server
+logs why and stays on 127.0.0.1.
+
 Saving shows a preview of the change first. Under nodemon (`yarn dev`, `yarn start`,
 `dev:stress`, or nodemon run by hand in `server/`, which reads `nodemon.json` and its
 `TSPS_RESTARTER=nodemon`) the server saves players, writes the file and restarts (nodemon brings

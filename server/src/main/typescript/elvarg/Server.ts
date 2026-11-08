@@ -23,13 +23,19 @@ import { PlayerPunishment } from "./util/PlayerPunishment";
 import { Accounts } from "./game/entity/impl/player/Accounts";
 
 export interface ShutdownOptions {
+  /**
+   * Runs first, before plugins are told the server is shutting down. Throwing cancels the
+   * shutdown with nothing stopped, so a check that can fail belongs here rather than in afterPersist.
+   */
+  beforeShutdown?: () => void;
   /** Runs after player persistence succeeds, before exit. Throwing cancels the shutdown. */
   afterPersist?: () => void;
   /** Process exit code for a plain exit (ignored by the nodemon restart mode). */
   exitCode?: number;
   /**
    * Called once, with why, when this shutdown does not go ahead: another shutdown is already
-   * in progress, player persistence failed, or afterPersist threw. The server keeps running.
+   * in progress, beforeShutdown threw, player persistence failed, or afterPersist threw. The
+   * server keeps running.
    */
   onCancelled?: (reason: string) => void;
 }
@@ -175,6 +181,15 @@ export class Server {
       return;
     }
     Server.shuttingDown = true;
+
+    try {
+      options.beforeShutdown?.();
+    } catch (err) {
+      console.error("[shutdown] beforeShutdown hook failed; shutdown cancelled before anything stopped.", err);
+      Server.shuttingDown = false;
+      notifyCancelled(options, err instanceof Error ? err.message : String(err));
+      return;
+    }
 
     try {
       const onlinePlayers = World.getPlayers().sizeReturn();

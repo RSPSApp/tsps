@@ -12,7 +12,8 @@ const MAX_SCHEDULED_SECONDS = 24 * 60 * 60;
 // and calls Server.shutdown once it hits zero.
 let scheduledUntilMs = 0;
 let countdownTask = null;
-// Hooks, exit code and caller id supplied by GameUpdate:start; forwarded to Server.shutdown at zero.
+// Hooks (beforeShutdown, afterPersist, onCancelled), exit code and caller id supplied by GameUpdate:start; forwarded to Server.shutdown at zero.
+let pendingBeforeShutdown = null;
 let pendingAfterPersist = null;
 let pendingOnCancelled = null;
 let pendingExitCode;
@@ -77,6 +78,7 @@ function pushCountdown(remainingCentis) {
 }
 
 function clearPendingShutdownOptions() {
+    pendingBeforeShutdown = null;
     pendingAfterPersist = null;
     pendingOnCancelled = null;
     pendingExitCode = undefined;
@@ -84,6 +86,7 @@ function clearPendingShutdownOptions() {
 }
 
 function startGameUpdate(seconds, options = {}) {
+    pendingBeforeShutdown = typeof options.beforeShutdown === "function" ? options.beforeShutdown : null;
     pendingAfterPersist = typeof options.afterPersist === "function" ? options.afterPersist : null;
     pendingOnCancelled = typeof options.onCancelled === "function" ? options.onCancelled : null;
     pendingExitCode = options.exitCode;
@@ -140,8 +143,10 @@ function gameUpdateCommand({ player, parts }) {
         player.sendMessage("Usage: ::gameUpdate <seconds|30s|20m|1h> | cancel | status");
         return true;
     }
-    const activeRemaining = remainingSeconds();
-    if (activeRemaining > 0) {
+    // scheduledUntilMs, not remainingSeconds(): in the countdown's last tick remainingSeconds is
+    // already 0 while the task has yet to fire.
+    if (scheduledUntilMs > 0) {
+        const activeRemaining = remainingSeconds();
         player.sendMessage(
             `A game update is already scheduled (${formatCountdown(activeRemaining)} remaining). Use ::gameUpdate cancel to stop it.`
         );
@@ -157,12 +162,13 @@ function onStartEvent(payload) {
         payload.error = `seconds must be a positive integer of at most ${MAX_SCHEDULED_SECONDS}`;
         return;
     }
-    const activeRemaining = remainingSeconds();
-    if (activeRemaining > 0) {
+    if (scheduledUntilMs > 0) {
+        const activeRemaining = remainingSeconds();
         payload.error = `A game update is already scheduled (${formatCountdown(activeRemaining)} remaining).`;
         return;
     }
     startGameUpdate(seconds, {
+        beforeShutdown: payload.beforeShutdown,
         afterPersist: payload.afterPersist,
         onCancelled: payload.onCancelled,
         exitCode: payload.exitCode,
@@ -189,9 +195,20 @@ function pushCountdownToLogin({ player }) {
     player.getPacketSender().sendSystemUpdate(remaining);
 }
 
+// Another shutdown (SIGTERM, nodemon, a second Server.shutdown) during our countdown: the
+// countdown's caller is told its shutdown will not run. Our own countdown clears the hooks
+// before it calls Server.shutdown, so it never lands here with them set.
 function onShutdownCleanup() {
+    const onCancelled = pendingOnCancelled;
     scheduledUntilMs = 0;
     clearPendingShutdownOptions();
+    if (onCancelled) {
+        try {
+            onCancelled("another shutdown started");
+        } catch (err) {
+            Server.getLogger().warn?.(`[GameUpdate] onCancelled hook failed: ${err?.message ?? err}`);
+        }
+    }
     if (countdownTask) {
         countdownTask.stop();
         countdownTask = null;
@@ -220,6 +237,7 @@ module.exports = {
                     scheduledUntilMs = 0;
                     countdownTask = null;
                     const options = {
+                        beforeShutdown: pendingBeforeShutdown ?? undefined,
                         afterPersist: pendingAfterPersist ?? undefined,
                         onCancelled: pendingOnCancelled ?? undefined,
                         exitCode: pendingExitCode,

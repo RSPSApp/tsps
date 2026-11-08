@@ -37,7 +37,8 @@ area with its default and a short explanation, and saving writes `world.local.js
 - **The link:** the token is kept in `server/data/definitions/world-admin.token` and stays valid
   across restarts. Delete that file to get a new one.
 - **Remote access:** set `WORLD_ADMIN_TOKEN` to choose your own token instead; only then does
-  `WORLD_ADMIN_BIND` open the listener to other machines.
+  `WORLD_ADMIN_BIND` open the listener to other machines, and only when the token is at least 24
+  characters of `A-Z a-z 0-9 _ -`. Otherwise the server logs why and stays on `127.0.0.1`.
 - **Spawn map:** the spawn point picker shows OSRS Wiki map tiles, which your browser fetches
   only while the map is open. Nothing else on the page makes an external request.
 

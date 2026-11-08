@@ -42,13 +42,19 @@ function rejectForbiddenKeys(value, where) {
   }
 }
 
-/** `changes` as WorldConfigStore.plan expects it: plain objects all the way, no prototype keys. */
-function checkChanges(changes) {
+/**
+ * `changes` as WorldConfigStore.plan expects it: plain objects all the way, no prototype keys,
+ * and `changes.world` only the declared world settings (`worldSettingKeys`).
+ */
+function checkChanges(changes, worldSettingKeys) {
   if (!isPlainObject(changes)) throw new HttpError(400, "changes must be an object");
   rejectForbiddenKeys(changes, "changes");
   for (const [section, map] of Object.entries(changes)) {
     if (!CHANGE_SECTIONS.has(section)) throw new HttpError(400, `changes.${section} is not a known section`);
     if (!isPlainObject(map)) throw new HttpError(400, `changes.${section} must be an object`);
+  }
+  for (const key of Object.keys(changes.world ?? {})) {
+    if (!worldSettingKeys.has(key)) throw new HttpError(400, `changes.world.${key} is not a world setting`);
   }
   return changes;
 }
@@ -123,9 +129,10 @@ function sendPage(response) {
 /**
  * `access`: { token, port(), loopback }. `actions`: catalog(), preview(body), apply(body),
  * cancel(); each returns { status, body, afterResponse? } (afterResponse runs once the response
- * has been sent).
+ * has been sent). `worldSettingKeys`: the keys `changes.world` may carry.
  */
-function createRequestHandler(access, actions) {
+function createRequestHandler(access, actions, worldSettingKeys) {
+  const allowedWorldKeys = new Set(worldSettingKeys);
   async function route(request, response) {
     const port = access.port();
     if (!hostAllowed(request, port, access.loopback)) {
@@ -165,7 +172,7 @@ function createRequestHandler(access, actions) {
     if (!originAllowed(request)) throw new HttpError(403, "Cross-origin request refused");
     const body = await readJson(request);
     if (post !== "cancel") {
-      checkChanges(body.changes);
+      checkChanges(body.changes, allowedWorldKeys);
       if (typeof body.localHash !== "string") throw new HttpError(400, "localHash must be a string");
     }
     const result = actions[post](body);

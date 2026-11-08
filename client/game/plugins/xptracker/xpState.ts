@@ -283,8 +283,12 @@ export class XpState {
         }
     }
 
-    tickOverall(delta: number): void {
+    tickOverall(delta: number, now: number, resetAfterMinutes: number): void {
         this.overall.tick(delta);
+        if (resetAfterMinutes > 0 && this.overall.lastChangeMillis !== 0 &&
+            now - this.overall.lastChangeMillis >= resetAfterMinutes * 60_000) {
+            this.overall.resetPerHour(now);
+        }
     }
 
     /** Null until the total is tracking; only skills with gains are kept, in panel order. */

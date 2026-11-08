@@ -598,7 +598,7 @@ export class World {
             }
             if (World.STRESS_BOT_UPDATES && candidate.isPlayerBot?.() === true) {
                 // counted as an observer so LOD strides and bucket sizing match real load
-            } else if (candidate.isPlayerBot?.() === true || !World.isPlayerSessionConnected(candidate)) {
+            } else if ((candidate.isPlayerBot?.() === true && !candidate.getSession().hasNetworkClient()) || !World.isPlayerSessionConnected(candidate)) {
                 return;
             }
             const location = candidate.getLocation?.();
@@ -911,7 +911,7 @@ export class World {
         }
         // Bots have no real client session and do not need to receive world update packets.
         // Keeping them out of update-recipient loops avoids O(players^2) visibility work.
-        if (player.isPlayerBot?.() === true) {
+        if (player.isPlayerBot?.() === true && !player.getSession().hasNetworkClient()) {
             return false;
         }
         if (!World.isPlayerSessionConnected(player)) {
@@ -924,7 +924,7 @@ export class World {
         player: Player,
         cycle: number
     ): boolean {
-        if (!player || player.isPlayerBot?.() !== true) {
+        if (!player || player.isPlayerBot?.() !== true || player.getSession().hasNetworkClient()) {
             return true;
         }
 
@@ -1037,7 +1037,7 @@ export class World {
     }
 
     private static isRealNetworkPlayer(player: Player | null | undefined): boolean {
-        if (!player || player.isPlayerBot?.() === true) {
+        if (!player || (player.isPlayerBot?.() === true && !player.getSession().hasNetworkClient())) {
             return false;
         }
         return World.isPlayerSessionConnected(player);

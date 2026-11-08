@@ -2985,3 +2985,160 @@ test('all F2P KO weapons share P2P hold/stow and primary/ordinary weapons stay e
     assert.equal(SUPPORTED_SPEC_WEAPONS.includes(id), false, 'KO lifecycle does not enable special attacks');
   }
 });
+
+test('manual control preserves both characters and restores the bot on return or disconnect', (t) => {
+  const { ClientConnection, controlPlayer, releasePlayerControl } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { World } = require('../dist/game/World');
+  const owner = nativeFollowCombatPlayer(t, 'controller', new Location(3200, 3200));
+  owner.setPlayerBot(false);
+  const bot = nativeFollowCombatPlayer(t, 'controlled', new Location(3100, 3500));
+  const botSession = new BotPlayerSession();
+  bot.setSession(botSession);
+  const channel = new HeadlessBinaryChannel();
+  const connection = new ClientConnection(channel);
+  const bootstraps = [];
+  t.mock.method(connection, 'sendPlayerBootstrap', () => bootstraps.push(connection.player));
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+  connection.bindControlledPlayer(owner);
+  owner.setNeedsPlacement(false);
+  let releases = 0;
+  assert.equal(controlPlayer(owner, bot, () => releases++), true);
+  assert.equal(connection.player, bot);
+  assert.equal(bot.isPlayerBot(), true, 'taking control must not change bot identity or rank');
+  assert.equal(owner.getLocation().getX(), 3200);
+  assert.equal(bot.getLocation().getY(), 3500);
+  assert.equal(controlPlayer(owner, bot, () => {}), false, 'the parked owner cannot nest control');
+  assert.equal(releasePlayerControl(owner), false, 'only the controlling connection can return');
+  assert.equal(releasePlayerControl(bot), true);
+  assert.equal(connection.player, owner);
+  assert.equal(bot.getSession(), botSession);
+  assert.equal(releases, 1);
+  assert.equal(releasePlayerControl(bot), false);
+  owner.setNeedsPlacement(false);
+  bot.setNeedsPlacement(false);
+  assert.equal(controlPlayer(owner, bot, () => releases++), true);
+  connection.cleanup('test-disconnect');
+  assert.equal(bot.getSession(), botSession);
+  assert.equal(connection.player, owner);
+  assert.equal(releases, 2);
+  assert.equal(World.getRemovePlayerQueue().includes(owner), true);
+  assert.equal(World.getRemovePlayerQueue().includes(bot), false);
+  World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(owner), 1);
+  assert.deepEqual(bootstraps, [owner, bot, owner, bot, owner]);
+});
+
+test('manually controlled bots skip recovery, re-gearing and brain decisions', () => {
+  const { BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const entry = { player: fakePlayer(), state: { mode: 'pvp' }, manuallyControlled: true,
+    brain: { tick() { assert.fail('manual control must pause the brain'); } } };
+  const task = new BotBehaviorTask([entry], 1, { api: {
+    getWorld: () => ({}), getRegionManager: () => ({}), getCombatFactory: () => ({}),
+    getAreaManager: () => ({}), getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+  } });
+  task.recoverBlockedWildernessBot = () => assert.fail('manual control must skip recovery');
+  task.processEntry(entry, 0, 1000);
+  entry.manuallyControlled = false;
+  entry.behaviorPaused = true;
+  task.processEntry(entry, 0, 2000);
+});
+
+test('a bot with a real client receives world updates while an unattended bot does not', (t) => {
+  const { World } = require('../dist/game/World');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const bot = nativeFollowCombatPlayer(t, 'viewed-bot', new Location(3100, 3500));
+  bot.setSession(new BotPlayerSession());
+  assert.equal(World.shouldRunNetworkUpdates(bot), false);
+  bot.setSession(new PlayerSession({ kind: 'websocket', readyState: 1 }));
+  assert.equal(World.shouldRunNetworkUpdates(bot), true);
+  assert.equal(World.shouldProcessBotPlayerThisTick(bot, 1), true);
+  bot.setSession(new BotPlayerSession());
+  assert.equal(World.shouldRunNetworkUpdates(bot), false);
+});
+
+test('a controlled bot accepts walking and Follow packets on its next turn', async (t) => {
+  const { ClientConnection, controlPlayer, dispatchClientMessages } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { World } = require('../dist/game/World');
+  const owner = nativeFollowCombatPlayer(t, 'walk-owner', new Location(3089, 3524));
+  owner.setPlayerBot(false);
+  const bot = nativeFollowCombatPlayer(t, 'walk-bot', new Location(3089, 3524));
+  bot.setSession(new BotPlayerSession());
+  const connection = new ClientConnection(new HeadlessBinaryChannel());
+  t.mock.method(connection, 'sendPlayerBootstrap', () => {});
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+  connection.bindControlledPlayer(owner);
+  owner.setNeedsPlacement(false);
+  assert.equal(controlPlayer(owner, bot, () => {}), true);
+  bot.setNeedsPlacement(false);
+  assert.equal(dispatchClientMessages(bot, [{ type: 'move', worldX: 3086, worldY: 3524, modifierFlags: 0 }]), true);
+  await new Promise(setImmediate);
+  bot.process();
+  assert.ok(bot.getLocation().getX() < 3089, 'the walk packet must move the controlled bot');
+  t.mock.method(World.getPlayers(), 'get', () => owner);
+  assert.equal(dispatchClientMessages(bot, [{ type: 'player_option', index: 26, option: 3 }]), true);
+  await new Promise(setImmediate);
+  bot.process();
+  assert.equal(bot.getFollowing(), owner, 'Follow must attach to the parked main character');
+  connection.releasePlayerControl();
+});
+
+test('bh manual stops AI and movement without logging out; another bh assignment resumes it', (t) => {
+  const { registerBotCommands } = require('../plugins/bots/runtime/RegisterBotCommands.PlayerBots');
+  const { configureBrainActivities } = require('../plugins/bots/brain/BrainActivities.PlayerBots');
+  const { resetMovementState } = require('../plugins/bots/behaviours/state/State.PlayerBots');
+  const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
+  const owner = nativeFollowCombatPlayer(t, 'manual-owner', new Location(3089, 3524));
+  const bot = nativeFollowCombatPlayer(t, 'manual-bot', new Location(3085, 3524));
+  let resets = 0;
+  const state = { mode: 'pvp', autonomy: {}, home: { x: 3085, y: 3524, z: 0 } };
+  const entry = { player: bot, state, brain: { reset() { resets++; } } };
+  const runtime = {
+    entriesByUsername: new Map([[bot.getUsername(), entry]]),
+    botStatesByName: new Map([[bot.getUsername(), state]]),
+    resolveControlledPlayer: () => bot,
+    hasControllerForUsername: () => true,
+  };
+  const roam = { id: 'roam', mode: 'roaming', actions: [] };
+  const pvp = { id: 'pvp', mode: 'pvp', actions: [] };
+  const brainRegistry = { activities: [roam, pvp], byId: new Map([['roam', roam], ['pvp', pvp]]) };
+  configureBrainActivities({ runtime, registry: brainRegistry, world: {}, resetMovementState });
+  const commands = new Map();
+  let releaseControl;
+  runtime.playerBotUsernames = new Set([bot.getUsername()]);
+  registerBotCommands({
+    api: { core: { PlayerRights,
+      controlPlayer(_owner, _bot, released) { releaseControl = released; return true; },
+      releasePlayerControl() { releaseControl(); return true; },
+    }, registerCommand: (name, handler) => commands.set(name, handler),
+      onPlayerProcess() {}, onPlayerLogout() {}, onPlayerDisconnect() {} },
+    runtime, brainRegistry, resetMovementState, botApi: { log() {} },
+    taskManager: { submit() {} }, flashHintArrowTaskFactory() {},
+  });
+  const assign = (mode) => commands.get('bh')({ player: owner, parts: ['bh', bot.getUsername(), mode] });
+  bot.setFollowing(owner);
+  assign('manual');
+  assert.equal(resets, 1, 'the old activity releases its resources');
+  assert.equal(entry.behaviorPaused, true);
+  assert.equal(entry.brain, null);
+  assert.equal(bot.getFollowing(), null);
+  assert.equal(bot.getMovementQueue().hasPendingWork(), false);
+  assert.equal(bot.isRegistered(), true, 'manual keeps the same character logged in');
+  commands.get('botcontrol')({ player: owner, parts: ['botcontrol', bot.getUsername()] });
+  bot.setFollowing(owner);
+  commands.get('botback')({ player: bot });
+  assert.equal(entry.manuallyControlled, false);
+  assert.equal(entry.behaviorPaused, true, 'returning to the main must not restart paused AI');
+  assert.equal(bot.getFollowing(), owner, 'manual Follow survives returning to the main');
+  assign('auto');
+  assert.equal(entry.behaviorPaused, false);
+  assert.ok(entry.brain);
+  assign('manual');
+  assign('pvp');
+  assert.equal(entry.behaviorPaused, false);
+  assert.ok(entry.brain.isRunningActivity('pvp'));
+  entry.brain.reset();
+});

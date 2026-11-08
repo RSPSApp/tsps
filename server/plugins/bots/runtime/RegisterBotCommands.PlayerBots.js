@@ -10,7 +10,10 @@ const {
   startRecruit,
 } = require("../brain/BrainActivities.PlayerBots");
 
+const { registerBotControlCommands } = require("./Control.PlayerBots");
+
 function registerBotCommands(options) {
+  registerBotControlCommands(options);
   const {
     api,
     botApi,
@@ -239,14 +242,14 @@ function registerBotCommands(options) {
     const usernameArg = parts[1];
     const behaviorArg = parts[2]?.toLowerCase();
     if (!usernameArg || !behaviorArg) {
-      player.sendMessage(`Usage: ::bh <username> <${supportedBehaviorList}>`);
+      player.sendMessage(`Usage: ::bh <username> <${supportedBehaviorList}|manual>`);
       return true;
     }
 
     const wantsAuto = behaviorArg === "auto";
     const activity = findBrainActivity(behaviorArg);
-    if (!activity && !wantsAuto) {
-      player.sendMessage(`Unknown behaviour. Supported: ${supportedBehaviorList}`);
+    if (!activity && !wantsAuto && behaviorArg !== "manual") {
+      player.sendMessage(`Unknown behaviour. Supported: ${supportedBehaviorList}|manual`);
       return true;
     }
 
@@ -268,11 +271,22 @@ function registerBotCommands(options) {
       return true;
     }
 
+    const entry = runtime.entriesByUsername.get(targetUsername);
+    if (behaviorArg === "manual") {
+      entry.behaviorPaused = true;
+      entry.brain?.reset();
+      entry.brain = null;
+      resetMovementState(target);
+      player.sendMessage(`bh: ${targetUsername} -> manual`);
+      return true;
+    }
+
     if (wantsAuto) {
       if (!assignAutoBehavior(target, state)) {
         player.sendMessage(`bh: failed to switch ${targetUsername} to auto`);
         return true;
       }
+      entry.behaviorPaused = false;
       taskManager.submit(flashHintArrowTaskFactory(player, target));
 
       player.sendMessage(`bh: ${targetUsername} -> auto`);
@@ -301,6 +315,7 @@ function registerBotCommands(options) {
         return true;
       }
     }
+    entry.behaviorPaused = false;
     taskManager.submit(flashHintArrowTaskFactory(player, target));
 
     const assigned = activity ? activity.mode : "auto";
@@ -353,7 +368,7 @@ function registerBotCommands(options) {
     const top = brain?.frames?.at(-1);
     const loc = bot.getLocation();
     const request = peekMovementRequest(bot);
-    player.sendMessage(`${username} @${loc.getX()},${loc.getY()} mode=${runtime.botStatesByName.get(username)?.mode ?? "-"} ` +
+    player.sendMessage(`${username} @${loc.getX()},${loc.getY()} mode=${entry?.behaviorPaused ? "manual" : runtime.botStatesByName.get(username)?.mode ?? "-"} ` +
       `frames=${frames || "none"} switchIn=${brain?.switchAt ? Math.round((brain.switchAt - nowMs) / 1000) : "-"}s`);
     const detail = top && brain ? top.action()?.describe?.(brain.context(top, nowMs)) : null;
     if (detail) player.sendMessage(detail);

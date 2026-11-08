@@ -843,6 +843,10 @@ export class Player extends Mobile {
         return true;
     }
 
+    public setSession(session: PlayerSession): void {
+        this.session = session;
+    }
+
     public getSession(): PlayerSession {
         return this.session;
     }

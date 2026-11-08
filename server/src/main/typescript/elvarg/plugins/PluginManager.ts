@@ -2549,6 +2549,8 @@ export class PluginManager {
       MultiChatboxPrompt: require("../game/model/menu/MultiChatboxPrompt").MultiChatboxPrompt,
       ChatPacketListener: require("../net/packet/impl/ChatPacketListener").ChatPacketListener,
       TradeState: require("../game/content/Trading").TradeState,
+      controlPlayer: require("../net/NetworkBuilder").controlPlayer,
+      releasePlayerControl: require("../net/NetworkBuilder").releasePlayerControl,
       dispatchClientMessages: require("../net/NetworkBuilder").dispatchClientMessages,
       connectHeadlessClient: require("../net/NetworkBuilder").connectHeadlessClient,
       CachePipeline: require("../game/cache/CachePipeline").CachePipeline,

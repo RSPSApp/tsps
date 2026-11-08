@@ -43,6 +43,8 @@ const SPELL_NAMES = {
   "barbarian outpost": "barbarian", "port khazard": "khazard", "ape atoll dungeon": "ape atoll dungeon",
 };
 const STATE_ATTRIBUTE = "construction:nexus";
+/** rsprox captures (Remove on the nexus), shown before the usual confirmation (docs/construction.md). */
+const REMOVAL_WARNING = "<col=800000>Warning:<col=000000> If you remove this nexus you will have to pay for your<br><col=000000>upgrades and teleports to be used again.";
 const LEFT_CLICK_DELAY_TICKS = 2;
 const PAUSEBUTTON = 1, OP1 = 1 << 1, OP10 = 1 << 10, DEPTH5 = 5 << 17, DRAG_TARGET = 1 << 20;
 
@@ -284,8 +286,25 @@ function drag(request) {
   sendConfig(player, session);
 }
 
+/** Removing the nexus warns that its paid destinations are lost (Wiki: Portal Nexus). */
+function warnOfRemoval(removal) {
+  if (TIERS[removal.furniture?.buildableKey]) removal.warning = REMOVAL_WARNING;
+}
+
+/** Runes are paid again when a nexus is rebuilt after it or its room was removed (Wiki: Portal Nexus). */
+function forgetDestinations({ player, furniture, room }) {
+  const nexus = furniture ? TIERS[furniture.buildableKey]
+    : Object.values(room?.furnitureByLocation ?? {}).some(entry => TIERS[entry.buildableKey]);
+  if (!nexus || !player.getAttribute(STATE_ATTRIBUTE)) return;
+  player.setAttribute(STATE_ATTRIBUTE, { slots: [], left: 0 });
+  sendState(player, [], 0, SLOT_VARBITS, LEFT);
+}
+
 function attachNexus(api) {
   api.persistAttribute(STATE_ATTRIBUTE, null);
+  api.onCustomEvent("construction:furniture-removing", warnOfRemoval);
+  api.onCustomEvent("construction:furniture-removed", forgetDestinations);
+  api.onCustomEvent("construction:room-removed", forgetDestinations);
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("player:widget-action", drag);
   api.onCustomEvent("interface:close", ({ player }) => open.delete(player));
@@ -303,4 +322,4 @@ function nexusOption(event, action) {
   return false;
 }
 
-Object.assign(module.exports, { attachNexus, nexusOption, STATE_ATTRIBUTE, destinations });
+Object.assign(module.exports, { attachNexus, nexusOption, STATE_ATTRIBUTE, REMOVAL_WARNING, destinations });

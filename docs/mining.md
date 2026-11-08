@@ -284,10 +284,31 @@ and `+uncut_sapphire`, with no mining sound or experience and the mining animati
 Leagues world) has `You just found a Sapphire!` while mining coal rocks, and the Leagues recordings have
 `You just found an Emerald!`, `a Ruby!` and `a Diamond!` too.
 
+## Mining Guild members' area
+
+The part of the Mining Guild behind the two inner doors ([Wiki](https://oldschool.runescape.wiki/w/Mining_Guild)) is
+the members' area. Its rules are `plugins/areas/MiningGuild.plugin.js`; Mining asks them through two events.
+
+- **Invisible +7 Mining** (Wiki Mining Guild). The success rolls count it on top of the visible level capped at 99,
+  with the celestial ring's +4 and any visible boost ("mining:level-boost"); requirements still read the visible
+  level. It applies to the player's own tile, in the main cave and the two corridors behind the doors at 3019,9732
+  and 3043,9729.
+- **Rocks empty for half as long** ("mining:respawn-ticks", by the rock's own tile). The Wiki rock pages give iron
+  5.4 s -> 2.4 s (9 -> 4 ticks), adamantite 4 -> 2 minutes and runite 12 -> 6 minutes; rsprox recording 3285
+  (an event world) shows the guild's respawn timers: iron 4 ticks at 3028,9720 and 3030,9720, mithril 99 at
+  3032,9716 against 199 at the free-to-play 3046,9733 and 3053,9737, adamantite 199 at 3039,9722 and 3030,9725.
+  Every ore rock in the area takes the floor of half its Wiki time; the free-to-play half keeps the normal time.
+- **Amethyst** keeps 75 seconds: its Wiki page gives that as the one time, and the crystals exist only in the guild.
+
+The area is the tiles reachable from the cave with the inner doors shut, in the active cache: x 2999-3058 and y
+9696-9728, x 3017-3021 and y 9729-9732, and x 3042-3044 at y 9729.
+
 ## Not done
 
-- The Mining Guild halves the respawn of iron, adamantite and runite (Wiki rock pages) and gives an invisible +7
-  Mining (Wiki Mining Guild), which needs the guild's members area.
+- Runite rocks in the Wilderness also take 6 minutes instead of 12 (Wiki Runite rocks); only the Mining Guild's
+  members' area shortens a respawn so far.
+- The live respawn timers read one tick less than the Wiki times for the long rocks (mithril 199, recording 3285);
+  ours send the Wiki's tick count.
 - The skilling timer is Mining's own: other skills' actions (herb tar, food) don't delay it, so tick
   manipulation is not modelled.
 - The first roll after the swing: main-game captures with dragon and infernal pickaxes have it the tick after the

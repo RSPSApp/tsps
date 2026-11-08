@@ -92,10 +92,11 @@ function build(core) {
     puroRespawn: key === "EARTH" || key === "ESSENCE" ? 50 : 7,
     npcs: Object.entries(N).filter(([name]) => new RegExp(`^${key}_IMPLING(?:_\\d+)?$`).test(name)).map(([, id]) => id) }));
   const falconry = [
-    [N.SPOTTED_KEBBIT, 43, 104, I.SPOTTED_KEBBIT_FUR, N.GYR_FALCON],
-    [N.DARK_KEBBIT, 57, 132, I.DARK_KEBBIT_FUR, N.GYR_FALCON_2],
-    [N.DASHING_KEBBIT, 69, 156, I.DASHING_KEBBIT_FUR, N.GYR_FALCON_3],
-  ].map(([npc, level, xp, fur, falcon]) => ({ npc, level, xp, fur, falcon, low: npc === N.SPOTTED_KEBBIT ? 26 : 0, high: npc === N.SPOTTED_KEBBIT ? 310 : npc === N.DARK_KEBBIT ? 253 : 205 }));
+    [N.SPOTTED_KEBBIT, 43, 104, I.SPOTTED_KEBBIT_FUR, N.GYR_FALCON, null],
+    [N.DARK_KEBBIT, 57, 132, I.DARK_KEBBIT_FUR, N.GYR_FALCON_2, null],
+    // Wiki (Dashing kebbit): bones, fur and a raw dashing kebbit, always.
+    [N.DASHING_KEBBIT, 69, 156, I.DASHING_KEBBIT_FUR, N.GYR_FALCON_3, I.RAW_DASHING_KEBBIT],
+  ].map(([npc, level, xp, fur, falcon, meat]) => ({ npc, level, xp, fur, falcon, meat, low: npc === N.SPOTTED_KEBBIT ? 26 : 0, high: npc === N.SPOTTED_KEBBIT ? 310 : npc === N.DARK_KEBBIT ? 253 : 205 }));
   const birdhouses = [
     [I.BIRD_HOUSE, I.LOGS, 5, 5, 15, 112], [I.OAK_BIRD_HOUSE, I.OAK_LOGS, 15, 14, 20, 168],
     [I.WILLOW_BIRD_HOUSE, I.WILLOW_LOGS, 25, 24, 25, 224], [I.TEAK_BIRD_HOUSE, I.TEAK_LOGS, 35, 34, 30, 280],
@@ -119,7 +120,7 @@ function build(core) {
   for (const value of [...creatures.map(c => [c.npc, c.caught, ...c.loot.map(l => l[0])]),
     ...Object.values(traps).map(def => stages.filter(key => key in def).map(key => def[key])),
     ...butterflies.map(c => [c.npc, c.jar, core.CacheDefinitions.getSpotanimId(c.release)]), ...implings.map(c => [c.jar, ...c.npcs]),
-    ...falconry.map(c => [c.npc, c.fur, c.falcon]), ...birdhouses.map(c => [c.item, c.logs]), ...aerialFish.map(c => [c.item])].flat()) {
+    ...falconry.map(c => [c.npc, c.fur, c.falcon, ...(c.meat === null ? [] : [c.meat])]), ...birdhouses.map(c => [c.item, c.logs]), ...aerialFish.map(c => [c.item])].flat()) {
     if (!Number.isInteger(value)) throw new Error("Hunter data references an unavailable cache identifier");
   }
   return data;

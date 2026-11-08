@@ -2551,6 +2551,7 @@ export class PluginManager {
       TradeState: require("../game/content/Trading").TradeState,
       controlPlayer: require("../net/NetworkBuilder").controlPlayer,
       releasePlayerControl: require("../net/NetworkBuilder").releasePlayerControl,
+      endPlayerControl: require("../net/NetworkBuilder").endPlayerControl,
       dispatchClientMessages: require("../net/NetworkBuilder").dispatchClientMessages,
       connectHeadlessClient: require("../net/NetworkBuilder").connectHeadlessClient,
       CachePipeline: require("../game/cache/CachePipeline").CachePipeline,

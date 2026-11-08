@@ -122,6 +122,11 @@ export function releasePlayerControl(player: Player): boolean {
   return CONNECTIONS.get(player)?.releasePlayerControl() ?? false;
 }
 
+/** The parked owner of a controlled player left the world: the controlled player is released, the connection closed. */
+export function endPlayerControl(player: Player): boolean {
+  return CONNECTIONS.get(player)?.endPlayerControl() ?? false;
+}
+
 /** Logs a player in through the normal login path with no client attached. Closing their session logs them out. */
 export async function connectHeadlessClient(username: string, password: string): Promise<{ player?: Player; error?: string }> {
   const connection = new ClientConnection(new HeadlessBinaryChannel());
@@ -439,6 +444,29 @@ export class ClientConnection {
     } finally {
       control.released();
     }
+    return true;
+  }
+
+  /**
+   * The parked owner was removed (kicked, banned, its own logout): the controlled player gets its own session back and
+   * this connection, the owner's, closes. It isn't re-attached to the removed owner, whose later close would queue and
+   * save it again, possibly over a fresh login of the same account, and which a ban would leave open.
+   */
+  public endPlayerControl(): boolean {
+    const control = this.control;
+    if (!control) return false;
+    this.control = undefined;
+    try {
+      control.target.getSession().flushPackets();
+      control.target.setSession(control.targetSession);
+      if (control.targetConnection) CONNECTIONS.set(control.target, control.targetConnection);
+      else CONNECTIONS.delete(control.target);
+    } finally {
+      control.released();
+    }
+    this.player = undefined;
+    this.cleanup("control-owner-removed");
+    this.channel.close(1000, "logged out");
     return true;
   }
 

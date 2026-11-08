@@ -3142,3 +3142,100 @@ test('bh manual stops AI and movement without logging out; another bh assignment
   assert.ok(entry.brain.isRunningActivity('pvp'));
   entry.brain.reset();
 });
+
+// Review fixes (#3676): a bot an administrator drives has a real client, so it gets what a player gets.
+function watchedBot(t, name, location, watched) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const bot = new Player(null, location);
+  bot.setUsername(name);
+  bot.setPlayerBot(true);
+  bot.setRegistered(true);
+  bot.setNeedsPlacement(false);
+  bot.setSession(watched ? new PlayerSession({ kind: 'websocket', readyState: 1, send() {} }) : new BotPlayerSession());
+  t.after(() => bot.setRegistered(false));
+  return bot;
+}
+
+test('a controlled bot is sent the interfaces it opens; an unattended bot is not', (t) => {
+  for (const watched of [true, false]) {
+    const bot = watchedBot(t, `iface-${watched}`, new Location(3200, 3200), watched);
+    const frames = [];
+    t.mock.method(bot.getSession(), 'sendClientPacket', (frame) => { frames.push(frame); return true; });
+    bot.getPacketSender().sendInterface(12);
+    assert.equal(bot.getInterfaceId(), 12);
+    assert.equal(frames.length > 0, watched, watched ? 'the driving admin sees the interface' : 'no client, no packets');
+  }
+});
+
+test('moving a controlled bot to a new map square wakes the regions around it; an unattended bot does not', (t) => {
+  const { World } = require('../dist/game/World');
+  for (const watched of [true, false]) {
+    const bot = watchedBot(t, `region-${watched}`, new Location(3200, 3200), watched);
+    let refreshes = 0;
+    const mock = t.mock.method(World, 'refreshActiveRegions', () => { refreshes++; });
+    World.onPlayerMoved(bot, new Location(3200, 3200), new Location(2960, 3380));
+    mock.mock.restore();
+    assert.equal(refreshes, watched ? 1 : 0, watched ? 'the admin\'s regions load' : 'bots alone wake nothing');
+  }
+});
+
+test('an AI bot held by an administrator (::botcontrol or ::bh manual) neither acts nor is logged out', () => {
+  const { tickMinds, logOutAiBot } = require('../plugins/bots/ai/RegisterAiBots.PlayerBots');
+  for (const hold of ['manuallyControlled', 'behaviorPaused', null]) {
+    let ticks = 0;
+    let logouts = 0;
+    const bot = { requestLogout() { logouts++; }, getForcedLogoutTimer: () => ({ start() {} }) };
+    const entry = { player: bot };
+    if (hold) entry[hold] = true;
+    const runtime = { entriesByUsername: new Map([['ai bot', entry]]) };
+    tickMinds(new Map([['ai bot', { name: 'ai bot', bot, tick() { ticks++; } }]]), runtime, 1000);
+    logOutAiBot(runtime, bot);
+    assert.equal(ticks, hold ? 0 : 1, `${hold ?? 'free'}: the model's tick`);
+    assert.equal(logouts, hold ? 0 : 1, `${hold ?? 'free'}: Presence's logout`);
+  }
+});
+
+test('the parked owner leaving ends the control: the bot is released and the connection closes, never re-attached', (t) => {
+  const { ClientConnection, controlPlayer, releasePlayerControl, endPlayerControl } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { World } = require('../dist/game/World');
+  const { registerBotControlCommands } = require('../plugins/bots/runtime/Control.PlayerBots');
+  const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
+  const owner = nativeFollowCombatPlayer(t, 'kicked-owner', new Location(3200, 3200));
+  owner.setPlayerBot(false);
+  const bot = nativeFollowCombatPlayer(t, 'kept-bot', new Location(3100, 3500));
+  const botSession = new BotPlayerSession();
+  bot.setSession(botSession);
+  const channel = new HeadlessBinaryChannel();
+  let closed = 0;
+  t.mock.method(channel, 'close', () => { closed++; });
+  const connection = new ClientConnection(channel);
+  t.mock.method(connection, 'sendPlayerBootstrap', () => {});
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+  connection.bindControlledPlayer(owner);
+  owner.setNeedsPlacement(false);
+  const commands = new Map();
+  const logoutHooks = [];
+  const entry = { player: bot, manuallyControlled: false };
+  registerBotControlCommands({
+    api: { core: { PlayerRights, controlPlayer, releasePlayerControl, endPlayerControl },
+      registerCommand: (name, handler) => commands.set(name, handler),
+      onPlayerLogout: (hook) => logoutHooks.push(hook), onPlayerDisconnect() {} },
+    runtime: { entriesByUsername: new Map([[bot.getUsername(), entry]]), playerBotUsernames: new Set([bot.getUsername()]) },
+    resetMovementState() {},
+  });
+  commands.get('botcontrol')({ player: owner, parts: ['botcontrol', bot.getUsername()] });
+  assert.equal(connection.player, bot, 'the admin drives the bot');
+  // The owner is kicked or banned: its removal runs the logout hooks.
+  for (const hook of logoutHooks) hook({ player: owner });
+  assert.equal(bot.getSession(), botSession, 'the bot has its own session back');
+  assert.equal(entry.manuallyControlled, false, 'and is no longer held');
+  assert.notEqual(connection.player, owner, 'the open socket is not re-attached to the removed owner');
+  assert.equal(closed, 1, 'the connection is closed');
+  const queued = World.getRemovePlayerQueue().includes(owner);
+  if (queued) World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(owner), 1);
+  assert.equal(queued, false, 'and its close does not queue the removed owner again');
+});

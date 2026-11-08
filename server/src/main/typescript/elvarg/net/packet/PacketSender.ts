@@ -387,7 +387,7 @@ export class PacketSender {
 
   sendInterface(id: number): this {
     this.player.setInterfaceId(id);
-    if (this.player.isPlayerBot()) {
+    if ((this.player.isUnwatchedBot?.() ?? this.player.isPlayerBot?.())) {
       return this;
     }
 

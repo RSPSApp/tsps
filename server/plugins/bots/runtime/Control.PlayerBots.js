@@ -37,9 +37,14 @@ function returnToMain({ player }) {
   return true;
 }
 
+/**
+ * A controlled bot leaving gives the admin their own character back. The parked owner leaving (kicked, banned) ends the
+ * control: the bot is released and the admin's connection closes, never re-attached to the removed owner.
+ */
 function releaseRemovedPlayer({ player }) {
-  for (const [bot, owner] of controls) {
-    if (player === bot || player === owner) services.api.core.releasePlayerControl(bot);
+  for (const [bot, owner] of [...controls]) {
+    if (player === owner) services.api.core.endPlayerControl(bot);
+    else if (player === bot) services.api.core.releasePlayerControl(bot);
   }
 }
 

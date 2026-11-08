@@ -1424,6 +1424,14 @@ export class Player extends Mobile {
         return this.playerBot;
     }
 
+    /**
+     * A bot no client is watching: it needs no client packets and wakes no regions. A bot an administrator drives
+     * (::botcontrol) has the admin's connection, so it gets both, as a player does.
+     */
+    public isUnwatchedBot(): boolean {
+        return this.playerBot && this.getSession?.()?.hasNetworkClient?.() !== true;
+    }
+
     public setPlayerBot(playerBot: boolean): void {
         this.playerBot = playerBot;
     }

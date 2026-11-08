@@ -315,7 +315,8 @@ export class World {
             || (previousLocation.getY() >> 6) !== (nextLocation.getY() >> 6)
             || previousLocation.getZ() !== nextLocation.getZ()) {
             NpcSpawnDefinitionLoader.activateNear(nextLocation, player.getNpcViewDistance?.());
-            if (player.isPlayerBot?.() !== true) {
+            // A bot an administrator drives wakes the regions around it, as a player does.
+            if ((player.isUnwatchedBot?.() ?? player.isPlayerBot?.()) !== true) {
                 World.refreshActiveRegions();
                 World.activeNpcsForUpdate = World.collectActiveNpcsForUpdate();
             }
@@ -1205,7 +1206,7 @@ export class World {
                 NpcSpawnDefinitionLoader.activateNear(player.getLocation(), player.getNpcViewDistance());
                 World.players.add(player, player.isPlayerBot?.() === true);
                 if (
-                    player.isPlayerBot?.() !== true &&
+                    (player.isUnwatchedBot?.() ?? player.isPlayerBot?.()) !== true &&
                     World.isPlayerSessionConnected(player)
                 ) {
                     activeRegionsChanged = true;

@@ -9,6 +9,12 @@ import * as path from "path";
 import { GameConstants } from "../game/GameConstants";
 import { PluginContext } from "./PluginContext";
 import { isMembersWorld, readWorldConfig } from "../game/definition/WorldDefinition";
+import {
+  CORE_CONFIG_DECLARATIONS,
+  ConfigOptionDeclaration,
+  checkConfigValue,
+  validateDeclaration,
+} from "../game/definition/WorldSettingDeclarations";
 import { PlayerRights } from "../game/model/rights/PlayerRights";
 import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacementManager";
 import { DefinitionLoader } from "../game/definition/loader/DefinitionLoader";
@@ -390,6 +396,10 @@ export class PluginManager {
   private static pluginPerfStats = new Map<string, PluginPerfStat>();
   private static pluginCoreApi: PluginCoreApi | null = null;
   private static pluginConfigCache: Record<string, unknown> | null = null;
+  private static pluginConfigDeclarations = new Map<
+    string,
+    { owner: string; decl: ConfigOptionDeclaration }
+  >();
 
   private static executeHook<T>(
     hook: PluginHook<T>,
@@ -703,6 +713,8 @@ export class PluginManager {
     const candidates = PluginManager.collectPluginLoadCandidates(
       enabledPluginFiles
     );
+    // Fail fast on bad or clashing option declarations, before any plugin registers.
+    PluginManager.checkConfigDeclarations(candidates);
     const knownNames = new Set([
       ...pluginFiles.map((pluginPath) => normalizePluginName(pluginNameFromFile(pluginPath))),
       ...candidates.map((candidate) => normalizePluginName(candidate.pluginName)),
@@ -734,6 +746,9 @@ export class PluginManager {
         return true;
       })
     );
+
+    PluginManager.recordLoadedConfigDeclarations(candidates);
+    PluginManager.warnAboutInvalidConfigValues();
 
     if (PluginManager.lastPersistenceOverride) {
       console.info(PluginManager.lastPersistenceOverride);
@@ -2206,6 +2221,88 @@ export class PluginManager {
     return Object.prototype.hasOwnProperty.call(config, key)
       ? (config[key] as T)
       : (defaultValue as T);
+  }
+
+  /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
+  public static getConfigDeclarations(): Map<
+    string,
+    { owner: string; decl: ConfigOptionDeclaration }
+  > {
+    const all = new Map<string, { owner: string; decl: ConfigOptionDeclaration }>();
+    for (const [key, decl] of Object.entries(CORE_CONFIG_DECLARATIONS)) {
+      all.set(key, { owner: "core", decl });
+    }
+    for (const [key, entry] of PluginManager.pluginConfigDeclarations) {
+      all.set(key, entry);
+    }
+    return all;
+  }
+
+  /** Throws when a plugin's `config` is malformed or reuses a key another owner declared. */
+  private static checkConfigDeclarations(candidates: PluginLoadCandidate[]): void {
+    const owners = new Map<string, string>();
+    for (const key of Object.keys(CORE_CONFIG_DECLARATIONS)) {
+      owners.set(key, "core");
+    }
+    for (const candidate of candidates) {
+      const config = candidate.plugin.config;
+      if (config === undefined) {
+        continue;
+      }
+      if (!config || typeof config !== "object" || Array.isArray(config)) {
+        throw new Error(
+          `[plugins] ${candidate.pluginName}: config must be an object of option declarations`
+        );
+      }
+      for (const [key, decl] of Object.entries(config)) {
+        const problems = validateDeclaration(key, decl);
+        if (problems.length > 0) {
+          throw new Error(
+            `[plugins] ${candidate.pluginName}: invalid config declaration: ${problems.join("; ")}`
+          );
+        }
+        const existing = owners.get(key);
+        if (existing !== undefined) {
+          throw new Error(
+            `[plugins] config key ${key} is declared by both ${existing} and ${candidate.pluginName}`
+          );
+        }
+        owners.set(key, candidate.pluginName);
+      }
+    }
+  }
+
+  private static recordLoadedConfigDeclarations(candidates: PluginLoadCandidate[]): void {
+    PluginManager.pluginConfigDeclarations.clear();
+    for (const candidate of candidates) {
+      if (!PluginManager.loadedPlugins.includes(candidate.pluginName)) {
+        continue;
+      }
+      for (const [key, decl] of Object.entries(candidate.plugin.config ?? {})) {
+        PluginManager.pluginConfigDeclarations.set(key, {
+          owner: candidate.pluginName,
+          decl,
+        });
+      }
+    }
+  }
+
+  /** Warns (never replaces) about configured values that do not fit their declaration. */
+  private static warnAboutInvalidConfigValues(): void {
+    const config = PluginManager.loadPluginConfig();
+    const declarations = PluginManager.getConfigDeclarations();
+    for (const [key, value] of Object.entries(config)) {
+      const entry = declarations.get(key);
+      if (!entry) {
+        continue;
+      }
+      const check = checkConfigValue(entry.decl, value);
+      if (check.ok === false) {
+        console.warn(
+          `[plugins] world.json pluginConfig "${key}" (${entry.owner}) ${check.error}; the value is used as written`
+        );
+      }
+    }
   }
 
   private static collectPluginLoadCandidates(

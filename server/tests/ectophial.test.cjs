@@ -47,7 +47,10 @@ function player(ids = [core.ItemIdentifiers.ECTOPHIAL]) {
     moveTo: (at) => { p.location = at; },
     getInventory: () => inventory,
     getMovementQueue: () => movement,
-    getHitpoints: () => 99,
+    hitpoints: 99,
+    dying: false,
+    getHitpoints: () => p.hitpoints,
+    isDyingReturn: () => p.dying,
     performAnimation: (a) => p.animations.push(a),
     performGraphic: (g) => p.graphics.push(g),
     setPositionToFace: (at) => { p.facing = at; },
@@ -209,6 +212,20 @@ test("stopping the teleport on removal clears refill protection and movement loc
   ticks(1);
   assert.equal(p.blocked, false);
   assert.deepEqual(impact(p), [12, 7]);
+});
+
+test("a player killed during the pour isn't carried to Port Phasmatys: the death stays where it happened", () => {
+  for (const kill of [(p) => { p.hitpoints = 0; }, (p) => { p.dying = true; }]) {
+    const p = player();
+    const start = p.location;
+    hooks.empty({ player: p, slot: 0 });
+    ticks(1);
+    kill(p);
+    ticks(5);
+    assert.equal(p.location, start, "not moved");
+    assert.equal(p.blocked, false, "movement lock released");
+    assert.equal(tasks.at(-1).isRunning(), false, "the teleport stopped");
+  }
 });
 
 test("manual filling still swaps an empty phial on the next tick without granting teleport protection", () => {

@@ -654,6 +654,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     Runtime.npcRoute(route); assert.equal(route.range, 9);
     const MagicBoxes = require("../plugins/skills/hunter/MagicBoxes.Hunter");
     p.counts.clear(); p.counts.set(I.IMP_IN_A_BOX_2_, 1); p.counts.set(I.COINS, 500);
+    const realTeleBlock = H.core.TeleBlock; H.core.TeleBlock = { isBlocked: () => false };
     let transferred = 0;
     H.core.Bank = { ...core.Bank, deposit(player, id, slot, amount) { player.getInventory().deleteNumber(id, amount); transferred += amount; } };
     const bankEvent = { player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.COINS };
@@ -662,6 +663,36 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     p.counts.set(I.COINS, 100); H.core.Bank.deposit = () => {};
     MagicBoxes.use({ ...bankEvent, usedItemId: I.IMP_IN_A_BOX_1_ });
     assert.equal(p.counts.get(I.IMP_IN_A_BOX_1_), 1, "failed banking does not spend a charge");
+    // Refusals the Wiki lists for the imp, and the "Bank" form (rsprox recording 2256).
+    const impMessages = [], realSendMessage = p.sendMessage, realWilderness = p.getWildernessLevel;
+    p.sendMessage = message => impMessages.push(message);
+    H.core.Bank.deposit = (player, id, slot, amount) => { player.getInventory().deleteNumber(id, amount); transferred += amount; };
+    try {
+      p.counts.clear(); p.counts.set(I.IMP_IN_A_BOX_2_, 1); p.counts.set(I.COINS, 100); transferred = 0;
+      H.core.TeleBlock = { isBlocked: () => true };
+      MagicBoxes.use({ player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.COINS });
+      assert.equal(transferred, 0, "Tele Block stops the imp"); assert.equal(p.counts.get(I.IMP_IN_A_BOX_2_), 1);
+      H.core.TeleBlock = { isBlocked: () => false };
+      MagicBoxes.use({ player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.IMP_IN_A_BOX_2_ });
+      assert.ok(impMessages.includes("The imp refuses to bank that."));
+      const opened = [], flags = [];
+      const sender = p.getPacketSender();
+      const impSender = { ...sender, sendInterface: id => { opened.push(id); p.getInterfaceId = () => id; }, sendInterfaceFlagsRange: (uid, a, b, f) => flags.push([uid, a, b, f]),
+        clearItemOnInterface() {}, sendItemContainer() {}, closeInterface: id => opened.push(-id) };
+      p.getPacketSender = () => impSender;
+      MagicBoxes.open({ player: p });
+      assert.deepEqual(opened, [478]); assert.deepEqual(flags, [[478 << 16 | 3, 0, 27, 0x402]]);
+      const slot = p.getInventory().getItems().findIndex(item => item?.getId() === I.COINS);
+      MagicBoxes.formClick({ player: p, opId: 1, slot });
+      assert.equal(transferred, 100, "Deposit on the form banks the stack"); assert.equal(p.counts.get(I.IMP_IN_A_BOX_1_), 1);
+      p.counts.set(I.COINS, 5);
+      MagicBoxes.formClick({ player: p, opId: 1, slot: p.getInventory().getItems().findIndex(item => item?.getId() === I.COINS) });
+      assert.equal(p.counts.get(I.MAGIC_BOX), 1, "the second item releases the imp"); assert.ok(opened.includes(-478), "the form closes");
+      H.core.TeleBlock = { isBlocked: () => true }; p.getPacketSender = () => impSender; opened.length = 0;
+      MagicBoxes.open({ player: p });
+      assert.deepEqual(opened, [], "no form while teleblocked");
+      p.getPacketSender = () => sender;
+    } finally { p.sendMessage = realSendMessage; H.core.TeleBlock = realTeleBlock; p.getWildernessLevel = realWilderness; }
     const pluginApi = PluginManager.createApi("hunter-route-check");
     pluginApi.onNpcRoute(event => { event.range = Infinity; });
     const checkedRoute = { player: p, npc, range: 1 };

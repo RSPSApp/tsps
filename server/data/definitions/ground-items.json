@@ -1900,5 +1900,8 @@
   {"id":2347,"location":{"x":1373,"y":2949,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Hammer — [[Aldarin]]"},
   {"id":590,"location":{"x":1625,"y":3287,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Tinderbox — [[Salvager Overlook]] - General Store"},
   {"id":561,"location":{"x":2671,"y":3737,"z":0},"amt":2,"respawn":200,"members":true,"description":"OSRS Wiki: Nature rune — [[Rellekka]] - on a small island near the [[rock crab]]s{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"},
-  {"id":561,"location":{"x":2672,"y":3738,"z":0},"amt":2,"respawn":200,"members":true,"description":"OSRS Wiki: Nature rune — [[Rellekka]] - on a small island near the [[rock crab]]s{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"}
+  {"id":561,"location":{"x":2672,"y":3738,"z":0},"amt":2,"respawn":200,"members":true,"description":"OSRS Wiki: Nature rune — [[Rellekka]] - on a small island near the [[rock crab]]s{{Refn|name=telegrab|This spawn requires [[telekinetic grab]] to obtain.}}"},
+  {"id":1925,"location":{"x":1667,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Bucket — [[Civitas illa Fortis]]"},
+  {"id":1925,"location":{"x":1644,"y":3093,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Bucket — [[Civitas illa Fortis]]"},
+  {"id":1931,"location":{"x":1666,"y":3124,"z":0},"amt":1,"respawn":100,"members":true,"description":"OSRS Wiki: Pot — [[Civitas illa Fortis]]"}
 ]

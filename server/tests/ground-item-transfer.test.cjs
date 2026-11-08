@@ -347,3 +347,13 @@ test("island Nature Telegrab landing preserves capped/full bags and original res
  f.inventory.resetItems();f.listener.landGroundItemGrab(f.player,561,pile.getPosition());assert.equal(f.inventory.getAmount(561),1);
  assert.equal(finishRespawn(f,2).getRespawnTimer(),200);
 });
+
+for(const[id,x,y]of[[1925,1667,3124],[1925,1644,3093],[1931,1666,3124]])test("Civitas container "+id+"@"+x+","+y+" preserves full-bag refusal and100tick respawn",t=>{
+ const f=respawnFixture(t),r=require("../data/definitions/ground-items.json").find(r=>r.id===id&&r.location.x===x&&r.location.y===y&&r.location.z===0);assert.ok(r);
+ f.player.getLocation=()=>new Location(x,y,0);
+ const {GroundItemSpawnDefinitionLoader}=require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+ const pile=new GroundItemSpawnDefinitionLoader().toItemOnGround(r);ItemOnGroundManager.register(pile);
+ for(let s=0;s<28;s++)f.inventory.setItem(s,new Item(385));ItemOnGroundManager.pickup(f.player,pile);assert.equal(pile.isPendingRemoval(),false);assert.equal(f.inventory.getAmount(id),0);assert.equal(pile.getItem().getAmount(),1);
+ f.inventory.setItem(0,new Item(-1,0));ItemOnGroundManager.pickup(f.player,pile);assert.equal(f.inventory.getAmount(id),1);assert.equal(pile.isPendingRemoval(),true);
+ assert.equal(finishRespawn(f,1).getRespawnTimer(),100);
+});

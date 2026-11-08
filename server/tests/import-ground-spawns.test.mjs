@@ -193,3 +193,16 @@ test("audited member Nature rune rows preserve telegrab location text/quantity/t
  assert.match(result.definitions[0].description,/Telekinetic Grab/);assert.equal(result.report.counts["members-world-scope-deferred"],1);
  assert.deepEqual(importSpawns(source([nature]),result.definitions).definitions,result.definitions);
 });
+
+test("only exact Civitas surface bucket/pot rows qualify; scenery, phase-owned pot and unaudited F2P bucket stay held",()=>{
+ const base=row({page:"Bucket",id:1925,x:1667,y:3124,quantity:1,members:true,location:"[[Civitas illa Fortis]]"});
+ const other={...base,x:1644,y:3093},pot={...base,page:"Pot",id:1931,x:1666};
+ const rejected=[{...base,x:1621,y:9566,location:"[[Civitas illa Fortis]] - tunnel"},
+  {...base,x:3359,y:4777,members:false,location:"[[Clan Wars]] - Free for all"},
+  {...pot,x:3086,y:3408,location:"Tassie quest pot"},
+  {...base,page:"Spade",id:952,x:1728,y:3102}];
+ const result=importSpawns(source([base,other,pot,...rejected]),[]);
+ assert.deepEqual(result.definitions.map(r=>[r.id,r.location.x,r.location.y,r.amt,r.respawn,r.members]),[[1925,1667,3124,1,100,true],[1925,1644,3093,1,100,true],[1931,1666,3124,1,100,true]]);
+ assert.equal(result.report.rows.filter(r=>r.status==="added").length,3);
+ assert.deepEqual(importSpawns(source([base,other,pot]),result.definitions).definitions,result.definitions);
+});

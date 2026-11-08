@@ -47,6 +47,9 @@ function isAuditedEasternConchShell(row) {
 }
 // Exact ordinary rows audited separately from these pages' scenery/quest spawns.
 const AUDITED_MEMBER_COMMON_TOOL_ROWS = new Map([
+  ["Bucket:1925:1667:3124:0", "[[Civitas illa Fortis]]"],
+  ["Bucket:1925:1644:3093:0", "[[Civitas illa Fortis]]"],
+  ["Pot:1931:1666:3124:0", "[[Civitas illa Fortis]]"],
   ["Hammer:2347:1373:2949:0", "[[Aldarin]]"],
   ["Chisel:1755:1657:3142:0", "[[Civitas illa Fortis]] - on a crate in the [[Fortis Blacksmith]] store"],
   ["Tinderbox:590:1625:3287:0", "[[Salvager Overlook]] - General Store"],
@@ -156,7 +159,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and three exact member common-tool rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member common-tool/container rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
     counts, rows:report } };
 }
 

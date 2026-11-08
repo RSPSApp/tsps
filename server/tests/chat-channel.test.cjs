@@ -376,3 +376,45 @@ test('players who only ignore the renamed player are told of every rename, each 
   assert.match(lastSnapshot(watcher, sent), /Yew\0Zed\0/);
   assert.equal(snapshots(stranger), before.stranger);
 }));
+
+// Cache241 friends_panel drives toplevel_redraw907; use the real sender so
+// the shared chat_filter_assist bits, rather than just the packet shape, are checked.
+test('social list toggles synchronize the cache icon state without changing other chat bits', async () => {
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+  const { PacketSender } = require('../dist/net/packet/PacketSender');
+  await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+  const p = player('Panel');
+  p.getFrameUpdater = () => ({ clearGroup() {} });
+  const sender = new PacketSender(p);
+  p.getPacketSender = () => sender;
+  const unrelated = 0x80020100 | 0;
+  const definition = CacheDefinitions.getVarbit(6516);
+  assert.equal(definition.baseVar, 1055);
+  assert.equal(definition.startBit, 30);
+  assert.equal(definition.endBit, 30);
+  sender.sendConfig(1055, unrelated);
+  const mounts = [];
+  const mount = sender.sendSubInterface.bind(sender);
+  sender.sendSubInterface = (...args) => { mounts.push(args); return mount(...args); };
+  for (let repeat = 0; repeat < 3; repeat++) {
+    assert.equal(Manager.handleWidgetAction(p, 429, 1, '', 1), true);
+    assert.equal(sender.getVarbit(6516), 1);
+    assert.equal(sender.getVarp(1055), unrelated | (1 << 30));
+    assert.deepEqual(mounts.at(-1), [(161 << 16) | 85, 432, 1]);
+    assert.equal(Manager.handleWidgetAction(p, 432, 1, '', 1), true);
+    assert.equal(sender.getVarbit(6516), 0);
+    assert.equal(sender.getVarp(1055), unrelated);
+    assert.deepEqual(mounts.at(-1), [(161 << 16) | 85, 429, 1]);
+  }
+  const before = mounts.length;
+  assert.equal(Manager.handleWidgetAction(p, 429, 2, '', 1), false);
+  assert.equal(Manager.handleWidgetAction(p, 432, 1, 'Not a list toggle', 1), false);
+  assert.equal(sender.getVarp(1055), unrelated);
+  assert.equal(mounts.length, before);
+  sender.sendVarbit(6516, 1);
+  Manager.onLogin(p);
+  assert.equal(sender.getVarbit(6516), 0, 'bootstrap always mounts Friends429 on login');
+  assert.equal(sender.getVarp(1055), unrelated);
+  assert.equal(mounts.length, before, 'login does not add a competing panel mount');
+});

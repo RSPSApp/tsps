@@ -154,6 +154,12 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const TUTORIAL_ATTRIBUTE = "quest.sleeping_giants.tutorial";
   const OBOR_CHESTS_ATTRIBUTE = "giant-lairs:obor-chests-opened";
 
+  /** Clicks that would route the player (or start an action) during the intro cutscene. */
+  const SCENE_BLOCKED_INPUT = new Set([
+    "move", "world_map_click", "npc_option", "object_option", "world_entity_option", "player_option", "ground_item_action",
+    "item_on_player", "item_on_npc", "item_on_object", "item_on_ground", "spell_on_npc", "spell_on_player", "spell_on_object", "spell_on_ground",
+  ]);
+
   const OP_1 = 1;
   const OP_2 = 2;
 
@@ -348,23 +354,21 @@ module.exports = function registerSleepingGiantsQuest(api) {
 
   /**
    * The cutscene walks the player tile by tile at walking speed, as the server does in
-   * rsprox recording 96 (one HighResolutionMovement step per tick). Input stays blocked: the
-   * queue is only opened for the walk, and the scene swallows the player's own clicks.
+   * rsprox recording 96 (one HighResolutionMovement step per tick). The queue is only opened for
+   * the walk; the player's own clicks that would route (walk, NPC, object, ground item) are
+   * dropped before they reach it, so they cannot reset the scripted route.
    */
   function sceneWalk(player, x, y) {
     const workshop = workshops.get(player), queue = player.getMovementQueue(), start = player.getLocation();
     if (!workshop) return;
     queue.setBlockMovement(false);
-    workshop.walking = true;
     queue.requestWalk(new Location(x, y, 0), false);
-    workshop.walking = false;
     const walk = workshop.walkId = (workshop.walkId || 0) + 1;
     later(workshop, Math.max(Math.abs(x - start.getX()), Math.abs(y - start.getY())) + 1, () => { if (workshop.scene && workshop.walkId === walk) queue.setBlockMovement(true); });
   }
 
-  function blockSceneWalk(event) {
-    const workshop = workshops.get(event.player);
-    if (workshop?.scene && !workshop.walking) event.handled = true;
+  function blockSceneInput(event) {
+    if (workshops.get(event.player)?.scene && SCENE_BLOCKED_INPUT.has(event.packet.type)) event.handled = true;
   }
 
   function workshopIntroduction(player) {
@@ -906,7 +910,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   api.onCustomEvent("giants-foundry:step", handleFoundryStep);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
-  api.onWalkRoute(blockSceneWalk);
+  api.onCustomEvent("player:world-input", blockSceneInput);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handlePlayerGone);
   api.onPlayerDeath(handlePlayerGone);

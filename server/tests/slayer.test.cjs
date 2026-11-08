@@ -969,6 +969,21 @@ test("picking a task sets it with its modifier, as live does", () => {
   assert.equal(Tasks.current(shorter).count, Tasks.current(shorter).original - 20);
 });
 
+test("a Mortimer choice is picked only while his choice interface is open", () => {
+  const buttons = new Map();
+  Choice.attach({ onInterfaceActionButton: (id, fn) => buttons.set(id, fn) });
+  const [content, button] = [...buttons][0]; // the choice content, registered first
+  const player = createPlayer();
+  Choice.roll(player, master(MORTIMER));
+  player.getInterfaceId = () => -1;
+  button({ player, action: 0 });
+  assert.equal(Tasks.current(player), null, "closed: no task claimed");
+  assert.ok(varbit(player, "slayer_choose_rolled_master"), "the roll waits");
+  player.getInterfaceId = () => content >>> 16;
+  button({ player, action: 0 });
+  assert.equal(Tasks.current(player)?.masterId, MORTIMER, "open: picked");
+});
+
 test("completing a Mortimer task: his own streak and the points modifier (captured lines)", () => {
   const player = createPlayer({ points: 190 });
   giveTask(player, MORTIMER, "Cave Crawlers", 1);

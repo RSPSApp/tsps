@@ -176,15 +176,17 @@ class LoginSession {
         return;
       }
       // Taken: another account's character, save, online or pending login, a name another account
-      // deleted (kept reserved), or another account's current or held display name (the shared
-      // namespace). A name this account deleted comes back to it.
+      // deleted (kept reserved), another account's current or held display name (the shared
+      // namespace), or a name a live player (a bot) shows for another account, though never saved.
+      // A name this account deleted comes back to it.
       const nameKey = DisplayNames.key(name);
       if (Accounts.isDeleted(nameKey) && !Accounts.deletedBy(nameKey, pending.account)) {
         this.send(encodeCharacterResult(false, 1, "That name belonged to a deleted character and can't be used again."));
         return;
       }
       const owner = DisplayNames.ownerOf(nameKey);
-      if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey, pending.account)) {
+      if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey, pending.account) ||
+          DisplayNames.shownByAnother(nameKey, pending.account)) {
         this.send(encodeCharacterResult(false, 1, "That name is not available."));
         return;
       }

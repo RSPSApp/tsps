@@ -3,7 +3,11 @@
  */
 
 export function canUseLocalStorage(): boolean {
-    return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+    try {
+        return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+    } catch {
+        return false;
+    }
 }
 
 export function readLocalStorageItem(key: string): string | undefined {

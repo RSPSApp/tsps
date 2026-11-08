@@ -25,7 +25,7 @@ function fixture(t, {complete = true, members = true} = {}) {
     getBank: tab => ({getItems: () => banks[tab]})};
   const inventory = new Inventory(player); player.getInventory = () => inventory;
   const api = {core: {...core, WorldDefinition: {isMembersWorld: () => members}},
-    persistAttribute() {}, onItemAction() {}, onPlayerLogin() {}, onCanAttack() {},
+    persistAttribute() {}, onItemAction() {}, onPlayerLogin() {}, onCanAttack() {}, onNpcDialogueCondition() {}, onPlayerLogout() {},
     onCustomEvent(name, fn) { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
     emitCustomEvent(name, event) { for (const fn of events.get(name) ?? []) fn(event); }};
   api.onCustomEvent("quest:is-complete", event => { if (event.key === "x_marks_the_spot") event.complete = complete; });

@@ -116,6 +116,15 @@ From the Wiki ([Dagannoth bones](https://oldschool.runescape.wiki/w/Dagannoth_bo
 - **Hard:** the adamantite bars of God Wars Dungeon aviansie drop noted. Wilderness aviansie always drop them noted, diary or not.
 - **Not done:** Thorodin's option to switch the bones' noting off. His dialogue is generated and the Wiki gives no wording.
 
+## Other noted drops
+
+From the Wiki ([Desert Diary](https://oldschool.runescape.wiki/w/Desert_Diary), [Goat](https://oldschool.runescape.wiki/w/Goat), [Falador Diary](https://oldschool.runescape.wiki/w/Falador_Diary), [Giant Mole](https://oldschool.runescape.wiki/w/Giant_Mole), [Karamja Diary](https://oldschool.runescape.wiki/w/Karamja_Diary), [Wilderness Diary](https://oldschool.runescape.wiki/w/Wilderness_Diary), [Dragon bones](https://oldschool.runescape.wiki/w/Dragon_bones)); no capture covers them. `server/plugins/achievements/diaries/NotedDrops.AchievementDiaries.js` marks the rolled drops on `npc-drops:roll`, one rule per reward:
+- **Desert, easy:** a goat's horn drops noted.
+- **Falador, hard:** the Giant Mole's mole skin and mole claw drop noted.
+- **Karamja, elite:** red dragonhide from red dragons, and the bronze, iron and steel bars of the metal dragons, drop noted in the Brimhaven Dungeon only.
+- **Wilderness, elite:** dragon bones dropped in the Wilderness are noted, except the King Black Dragon's.
+- **Not done:** Pirate Jackie the Fruit's switch for the bars, and the Lesser Fanatic's option for the Wilderness bones (the Wiki's drop notes also tie the lava dragon bones to it). Their dialogue is generated and the Wiki gives no wording, so the rewards are always on and the lava dragon bones are not noted.
+
 ## Achievement diary cape
 
 Once every diary tier is complete, Twiggy O'Korn's Talk-to conversation offers the cape and hood for 99,000 coins. The dialogue checks two free inventory slots before confirmation, and the server checks eligibility, coins and space again before transferring them. Twiggy offers another set or a hood through the existing owned-cape conversation. The cape is trimmed when the existing quest-cape requirement reports every quest complete.

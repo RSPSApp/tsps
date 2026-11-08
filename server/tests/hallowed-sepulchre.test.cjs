@@ -104,7 +104,8 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     sendMessage: (m) => p.messages.push(m),
     performAnimation: (a) => p.anims.push(a.getId()),
     performGraphic: (g) => p.graphics.push(g.getId()),
-    setRunEnergy() {},
+    energy: 30, energySent: [],
+    setRunEnergy(value) { p.energy = value; },
     hits: [], decrements: [], blocked: false,
     getMovementQueue: () => ({ reset() {}, setBlockMovement(v) { p.blocked = v; } }),
     getCombat: () => ({ reset() {} }),
@@ -130,6 +131,7 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
         sendObjectAnimation: (object, anim) => { (p.locAnims ??= []).push([object.getId(), anim.getId()]); return sender; },
         sendGraphic: (graphic, location) => { (p.tileGraphics ??= []).push([graphic.id, location]); return sender; },
         sendInterfaceRemoval: () => sender,
+        sendRunEnergy: () => { p.energySent.push(p.energy); return sender; },
       };
       return sender;
     },
@@ -309,6 +311,18 @@ test('the floor stairs: the completion, time and PB lines, the XP, and floor 2 w
   assert.equal(run.floorNumber, 2);
   assert.equal(run.remaining, remaining + 200);
   assert.ok(p.messages.includes('You venture further down into the Hallowed Sepulchre.'));
+  run.finish();
+});
+
+test('the obelisk: Activate restores full energy and sends it to the orb', () => {
+  const p = fakePlayer();
+  const run = startRun(p, 0);
+  run.pause();
+  click(p, 38451, 1, locOf(run, 38451, [2277, 5982, 1]));
+  ticks(3);
+  assert.equal(p.energy, 100);
+  assert.deepEqual(p.energySent, [100], 'the full orb is sent; the tick only sends below full');
+  assert.match(p.messages.at(-1), /fully restores your energy/);
   run.finish();
 });
 
@@ -887,4 +901,125 @@ test('native environmental recovery is faster with the equipped Hallowed ring', 
   assert.ok(!ring.animations.includes(Common.seq('human_death')), 'ring recovery does not run the ordinary death animation');
   assert.equal(ring.fadeOpens.length, 0, 'no delayed normal recovery fade opens');
   assert.deepEqual(errors, [], 'real run and trap callbacks do not report hidden errors');
+  // Each case seeds its floor; it does not exercise the stairs or packet routing.
+  const coffinAdmissionCases = [
+  ['thieving requirement', 87, 87, 84, 84, true],
+  ['below both requirements', 87, 87, 83, 83, false],
+  ['already looted', 92, 92, 84, 84, false, 'looted'],
+  ['agility requirement', 92, 92, 66, 66, true],
+  ['agility requirement below ordinary thieving level', 92, 92, 65, 65, true],
+  ['ordinary coffin below thieving requirement', 92, 92, 65, 65, false, 'normal'],
+  ['boosted agility', 90, 92, 83, 83, true],
+  ['drained agility', 92, 91, 83, 83, false],
+  ['boosted thieving', 87, 87, 83, 84, true],
+  ['drained thieving', 87, 87, 84, 83, false],
+  ['expired run', 92, 92, 84, 84, false, 'expired'],
+  ['transitioning run', 92, 92, 84, 84, false, 'transitioning'],
+  ['busy run', 92, 92, 84, 84, false, 'busy'],
+  ['held run', 92, 92, 84, 84, false, 'held'],
+  ['ordinary coffin', 87, 87, 66, 66, true, 'normal'],
+];
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find((q) => q.key === Common.data.quest);
+  assert.ok(quest);
+  function coffinTrial(name, agilityBase, agilityCurrent, thievingBase, thievingCurrent, accepted, state) {
+    const id = state === 'normal' ? Number(Object.keys(Common.data.coffins)[0]) : Common.data.finalChest;
+    const player = new Player(new PlayerSession(channel())); actors.push(player);
+    player.setUsername(name); player.setLongUsername(core.Misc.stringToLongBigInt(name));
+    player.setAttribute('bot-skip-persistence', true);
+    player.setLocation(Common.toLocation(Common.data.lobby.exitTile));
+    assert.equal(World.getPlayers().add(player), true); player.needsPlacement = false;
+    quest.setStage(player, quest.completionValue);
+    assert.equal(quest.isComplete(player), true);
+    const query = { player, key: Common.data.quest, complete: null };
+    Common.api.emitCustomEvent('quest:is-complete', query);
+    assert.equal(query.complete, true);
+    player.setAttribute(Common.data.attributes.tutorial, true);
+    assert.equal(player.getAttribute(Common.data.attributes.tutorial), true);
+    const skills = player.getSkillManager();
+    for (const [skill, base, current] of [[Skill.AGILITY, agilityBase, agilityCurrent], [Skill.THIEVING, thievingBase, thievingCurrent]]) {
+      skills.setExperience(skill, SkillManager.getExperienceForLevel(base));
+      skills.setMaxLevel(skill, base); skills.setCurrentLevel(skill, current, true);
+      assert.equal(skills.getMaxLevel(skill), base); assert.equal(skills.getCurrentLevel(skill), current);
+    }
+    const run = Run.start(player, 0); ownedRuns.push(run);
+    for (let i = 0; i < 24 && !(run.running && run.area); i++) World.process();
+    assert.ok(run.running && run.area);
+    ownedAreas.push(run.area);
+    // Seed a handler checkpoint, not a traversal through the stairs.
+    observeOwned();
+    const floor = Common.data.floors.find((entry) => entry.floor === (state === 'normal' ? 1 : 5));
+    // Capture a partially constructed instance before its first template copy.
+    const prototype = core.TemplatedInstanceArea.prototype, copySquare = prototype.copySquare;
+    prototype.copySquare = function (...args) {
+      if (!ownedAreas.includes(this)) ownedAreas.push(this);
+      return copySquare.apply(this, args);
+    };
+    try { run.move(floor, floor.variants[0]); }
+    finally { prototype.copySquare = copySquare; }
+    if (!ownedAreas.includes(run.area)) ownedAreas.push(run.area);
+    const area = run.area;
+    assert.equal(player.getArea(), area); assert.equal(run.floorNumber, state === 'normal' ? 1 : 5);
+    assert.ok(player.isRegistered() && run.running && !run.expired && run.remaining > 1);
+    assert.equal(run.transitioning, false); assert.ok(run.ticks >= run.busyUntil);
+    assert.equal(require('../plugins/minigames/hallowedsepulchre/Traps.HallowedSepulchre').holding(run), false);
+    const objects = [];
+    for (let z = 0; z < 4; z++) for (let x = 0; x < 12; x++) for (let y = 0; y < 12; y++) {
+      objects.push(...area.getChunkObjects(z, x, y).filter((object) => object.getId() === id));
+    }
+    assert.ok(objects.length > 0, 'active instance contains the cache object');
+    const object = objects[0];
+    assert.ok(area.getTemplateObjects(object.getLocation()).includes(object));
+    const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+    Common.varbit(player, 'hallowed_final_chest_looted', 0);
+    const definition = ObjectDefinition.forPlayer(object.getId(), player);
+    assert.ok(definition, 'active cache resolves the player-visible object');
+    const option = definition.getInteractions()?.[0]?.toLowerCase();
+    assert.equal(option, 'search-for-traps', 'active cache player-visible coffin option');
+    player.moveTo(object.getLocation());
+    const slot = id === Common.data.finalChest ? 'grand' : Common.data.coffins[String(id)];
+    if (state === 'looted') run.looted.add(slot);
+    else assert.equal(run.looted.has(slot), false);
+    if (state === 'expired') run.expired = true;
+    if (state === 'transitioning') run.transitioning = true;
+    if (state === 'busy') run.busyUntil = run.ticks + 10;
+    if (state === 'held') run.traps = { recovering: true, bolts: [], swords: [] };
+    const prior = run.busyUntil, taskCount = tasks.size;
+    assert.equal(skills.getCurrentLevel(Skill.AGILITY), agilityCurrent);
+    assert.equal(skills.getCurrentLevel(Skill.THIEVING), thievingCurrent);
+    assert.equal(PluginManager.emitObjectInteraction({ player, object, definition, objectId: id, clickType: 1, option }), true);
+    assert.equal(run.busyUntil, accepted ? run.ticks + 8 : prior, name);
+    if (!accepted) assert.equal(tasks.size, taskCount, 'refusal schedules no action');
+    if (state === 'held') run.traps = null;
+    observeOwned();
+    run.moving = true;
+    try {
+      if (area.hasMember(player)) area.leave(player, false);
+      player.moveTo(Common.toLocation(Common.data.lobby.exitTile));
+    } finally { run.moving = false; }
+    run.finish();
+  }
+  for (const spec of coffinAdmissionCases) {
+    await t.test(spec[0], () => {
+      try { coffinTrial('hscoffin', ...spec.slice(1)); }
+      finally {
+        for (const player of actors) {
+          const run = Run.runOf(player);
+          if (run && !ownedRuns.includes(run)) ownedRuns.push(run);
+          if (run?.area && !ownedAreas.includes(run.area)) ownedAreas.push(run.area);
+        }
+        observeOwned();
+        for (const run of ownedRuns) closeRun(run);
+        for (const area of ownedAreas) {
+          if (area.isDestroyed()) continue;
+          for (const npc of area.spawned) ownedNpcs.add(npc);
+          for (const npc of area.getNpcs()) ownedNpcs.add(npc);
+          for (const player of actors) if (player.getArea() === area && area.hasMember(player)) area.leave(player, false);
+          if (!area.isDestroyed()) area.destroy();
+        }
+        for (const player of actors) if (player.isRegistered()) World.getPlayers().removes(player);
+      }
+    });
+  }
+
 });
+

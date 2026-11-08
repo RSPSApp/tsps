@@ -57,6 +57,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const { PluginManager } = require("../dist/plugins/PluginManager");
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
+  require("../plugins/skills/farming/Core.Farming").init({ core });
   const C = require("../plugins/skills/hunter/Context.Hunter"), { H } = C;
   const Traps = require("../plugins/skills/hunter/Traps.Hunter");
   const Houses = require("../plugins/skills/hunter/Birdhouses.Hunter");
@@ -163,8 +164,8 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(Traps.limit(p, "box"), 5);
     assert.equal(Traps.limit({ ...p, getWildernessLevel: () => 10 }, "box"), 6);
     assert.equal(Traps.limit(p, "deadfall"), 2);
-    p.levels.set(Skill.HUNTER, 19); assert.equal(Traps.limit(p, "bird"), 1);
-    p.levels.set(Skill.HUNTER, 20); assert.equal(Traps.limit(p, "bird"), 2, "temporary boosts unlock the next trap");
+    p.levels.set(Skill.HUNTER, 19); assert.equal(Traps.limit(p, "bird"), 2);
+    p.levels.set(Skill.HUNTER, 20); assert.equal(Traps.limit(p, "bird"), 2, "level 20 keeps the two-trap minimum");
     p.levels.delete(Skill.HUNTER);
     let npcLocation = trap.location.clone(), visible = true, blocked = false;
     const npc = {
@@ -401,6 +402,46 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(iq.experience.get(Skill.HUNTER),27,"Gielinor XP");
     advance(102);
 
+    // Falconry (Wiki Falconry, Dashing kebbit): a full inventory still retrieves the falcon and the XP,
+    // discarding what doesn't fit; the dashing kebbit also drops a raw dashing kebbit; a bonecrusher
+    // takes the bones; an unretrieved falcon leaves its prey with a message and no XP.
+    const falconTile=new core.Location(2370,3590,0),generated=[],baseEmit=api.emitCustomEvent;
+    let crushBones=false;
+    api.emitCustomEvent=(name,event)=>{
+      if(name!=="npc-drops:generated")return baseEmit(name,event);
+      generated.push(event);
+      if(crushBones)event.drops=event.drops.filter(drop=>drop.itemId!==I.BONES);
+    };
+    const hunter=()=>{const f=player();f.moveTo(falconTile);f.levels.set(Skill.HUNTER,70);f.equipment.set(core.Equipment.WEAPON_SLOT,I.FALCONERS_GLOVE_2);return f;};
+    const send=f=>{
+      const kebbit=prey(N.DASHING_KEBBIT,falconTile);
+      Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(2);Math.random=()=>0.5;
+      return spawned.at(-1);
+    };
+    const full=hunter();full.setSize(0);
+    const falcon=send(full);
+    assert.equal(falcon.getId(),N.GYR_FALCON_3,"the falcon catches the kebbit even with a full inventory");
+    Catching.retrieve({player:full,npc:falcon});advance(1);
+    assert.equal(full.experience.get(Skill.HUNTER),156,"a full inventory still retrieves the falcon for the XP");
+    assert.equal(falcon.isRegistered(),false);
+    assert.equal(full.counts.size,0,"what doesn't fit is discarded, not dropped");
+    assert.equal(full.equipment.get(core.Equipment.WEAPON_SLOT),I.FALCONERS_GLOVE_2,"the falcon is back on the glove");
+    const roomy=hunter();
+    Catching.retrieve({player:roomy,npc:send(roomy)});advance(1);
+    assert.deepEqual([...roomy.counts].sort(),[[I.BONES,1],[I.DASHING_KEBBIT_FUR,1],[I.RAW_DASHING_KEBBIT,1]].sort(),"bones, fur and a raw dashing kebbit");
+    assert.equal(generated.at(-1).npcId,N.DASHING_KEBBIT);
+    crushBones=true;
+    const crusher=hunter();
+    Catching.retrieve({player:crusher,npc:send(crusher)});advance(1);
+    assert.equal(crusher.counts.has(I.BONES),false,"a bonecrusher takes the bones");
+    assert.equal(crusher.counts.get(I.DASHING_KEBBIT_FUR),1);
+    crushBones=false;
+    const slow=hunter();send(slow);advance(100);
+    assert.equal(slow.messages.at(-1),"Your falcon has left its prey. You see it heading back toward the falconer.");
+    assert.equal(slow.experience.has(Skill.HUNTER),false,"lost prey gives no XP");
+    assert.equal(slow.equipment.get(core.Equipment.WEAPON_SLOT),I.FALCONERS_GLOVE_2);
+    api.emitCustomEvent=baseEmit;
+
     const crabId=[...Crabs.bases].find(([id])=>Crabs.species(new core.GameObject(id,q.getLocation(),10,0,null)).level===21)[0];
     const crabObject=new core.GameObject(crabId,q.getLocation().clone(),10,0,null);
     for(const[id,n]of[[I.PLANK,1],[I.BUCKET,1],[I.STEEL_NAILS,2],[I.HAMMER,1],[I.SAW,1]])q.counts.set(id,n);
@@ -613,6 +654,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     Runtime.npcRoute(route); assert.equal(route.range, 9);
     const MagicBoxes = require("../plugins/skills/hunter/MagicBoxes.Hunter");
     p.counts.clear(); p.counts.set(I.IMP_IN_A_BOX_2_, 1); p.counts.set(I.COINS, 500);
+    const realTeleBlock = H.core.TeleBlock; H.core.TeleBlock = { isBlocked: () => false };
     let transferred = 0;
     H.core.Bank = { ...core.Bank, deposit(player, id, slot, amount) { player.getInventory().deleteNumber(id, amount); transferred += amount; } };
     const bankEvent = { player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.COINS };
@@ -621,6 +663,36 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     p.counts.set(I.COINS, 100); H.core.Bank.deposit = () => {};
     MagicBoxes.use({ ...bankEvent, usedItemId: I.IMP_IN_A_BOX_1_ });
     assert.equal(p.counts.get(I.IMP_IN_A_BOX_1_), 1, "failed banking does not spend a charge");
+    // Refusals the Wiki lists for the imp, and the "Bank" form (rsprox recording 2256).
+    const impMessages = [], realSendMessage = p.sendMessage, realWilderness = p.getWildernessLevel;
+    p.sendMessage = message => impMessages.push(message);
+    H.core.Bank.deposit = (player, id, slot, amount) => { player.getInventory().deleteNumber(id, amount); transferred += amount; };
+    try {
+      p.counts.clear(); p.counts.set(I.IMP_IN_A_BOX_2_, 1); p.counts.set(I.COINS, 100); transferred = 0;
+      H.core.TeleBlock = { isBlocked: () => true };
+      MagicBoxes.use({ player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.COINS });
+      assert.equal(transferred, 0, "Tele Block stops the imp"); assert.equal(p.counts.get(I.IMP_IN_A_BOX_2_), 1);
+      H.core.TeleBlock = { isBlocked: () => false };
+      MagicBoxes.use({ player: p, usedItemId: I.IMP_IN_A_BOX_2_, usedWithItemId: I.IMP_IN_A_BOX_2_ });
+      assert.ok(impMessages.includes("The imp refuses to bank that."));
+      const opened = [], flags = [];
+      const sender = p.getPacketSender();
+      const impSender = { ...sender, sendInterface: id => { opened.push(id); p.getInterfaceId = () => id; }, sendInterfaceFlagsRange: (uid, a, b, f) => flags.push([uid, a, b, f]),
+        clearItemOnInterface() {}, sendItemContainer() {}, closeInterface: id => opened.push(-id) };
+      p.getPacketSender = () => impSender;
+      MagicBoxes.open({ player: p });
+      assert.deepEqual(opened, [478]); assert.deepEqual(flags, [[478 << 16 | 3, 0, 27, 0x402]]);
+      const slot = p.getInventory().getItems().findIndex(item => item?.getId() === I.COINS);
+      MagicBoxes.formClick({ player: p, opId: 1, slot });
+      assert.equal(transferred, 100, "Deposit on the form banks the stack"); assert.equal(p.counts.get(I.IMP_IN_A_BOX_1_), 1);
+      p.counts.set(I.COINS, 5);
+      MagicBoxes.formClick({ player: p, opId: 1, slot: p.getInventory().getItems().findIndex(item => item?.getId() === I.COINS) });
+      assert.equal(p.counts.get(I.MAGIC_BOX), 1, "the second item releases the imp"); assert.ok(opened.includes(-478), "the form closes");
+      H.core.TeleBlock = { isBlocked: () => true }; p.getPacketSender = () => impSender; opened.length = 0;
+      MagicBoxes.open({ player: p });
+      assert.deepEqual(opened, [], "no form while teleblocked");
+      p.getPacketSender = () => sender;
+    } finally { p.sendMessage = realSendMessage; H.core.TeleBlock = realTeleBlock; p.getWildernessLevel = realWilderness; }
     const pluginApi = PluginManager.createApi("hunter-route-check");
     pluginApi.onNpcRoute(event => { event.range = Infinity; });
     const checkedRoute = { player: p, npc, range: 1 };
@@ -690,6 +762,8 @@ function feedbackPlayer(core) {
     getUpdateFlag: () => ({ flag() {} }),
     getAttribute: k => attrs.get(k), setAttribute: (k, v) => attrs.set(k, v),
     getSkillManager: () => p.skills, getCombat: () => ({ getTarget: () => p.target ?? null, getAttacker: () => null }),
+    statements: [],
+    getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); } }; },
   };
   p.skills = new SkillManager(p);
   return p;
@@ -860,8 +934,136 @@ test("as captured: every 25 total levels, and level 99, have their own message",
   const maxed = levelledPlayer(core);
   maxed.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
   hooks.onPlayerLevelUp({ player: maxed, skill: Skill.ATTACK, oldLevel: 98, newLevel: 99 });
-  assert.deepEqual(maxed.messages, ["Congratulations, you've reached the highest possible Attack level of 99."]);
+  assert.equal(maxed.messages[0], "Congratulations, you've reached the highest possible Attack level of 99.");
+  assert.match(maxed.messages[1], /^Congratulations! You are now a master of Attack\./, "the master line follows");
   assert.deepEqual(maxed.graphics, [1388]);
+});
+
+test("a level-up says what it unlocked, and only the variant the player's own stats pick", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  let quests = new Set();
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    emitCustomEvent(name, request) {
+      if (name === "quest:is-complete") request.complete = quests.has(request.name);
+    },
+  });
+  /** A levelled player whose base levels and finished quests the unlock conditions read. */
+  function at(levels = {}, done = []) {
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+    p.skills.getMaxLevel = (skill) => levels[skill.getName()] ?? 1;
+    quests = new Set(done);
+    return p;
+  }
+
+  // A level the wiki gives one sentence for.
+  const defence = at();
+  hooks.onPlayerLevelUp({ player: defence, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.deepEqual(defence.messages, [
+    "Congratulations, you've just advanced your Defence level. You are now level 40.",
+    "You can now wear Rune Armour!",
+  ]);
+  // And a level with nothing to unlock adds nothing.
+  const quiet = at();
+  hooks.onPlayerLevelUp({ player: quiet, skill: Skill.DEFENCE, oldLevel: 40, newLevel: 41 });
+  assert.equal(quiet.messages.length, 1);
+
+  // One level, two sentences: the player's Defence level picks which is sent.
+  const noDefence = at();
+  hooks.onPlayerLevelUp({ player: noDefence, skill: Skill.MAGIC, oldLevel: 19, newLevel: 20 });
+  assert.equal(noDefence.messages.at(-1), "You can now cast Bind!");
+  const hasDefence = at({ Defence: 10 });
+  hooks.onPlayerLevelUp({ player: hasDefence, skill: Skill.MAGIC, oldLevel: 19, newLevel: 20 });
+  assert.equal(hasDefence.messages.at(-1), "You can now cast Bind and members can now wear Xerician armour.");
+
+  // A quest-gated sentence waits for the quest the transcript names.
+  const knighted = at({}, ["The Knight's Sword"]);
+  hooks.onPlayerLevelUp({ player: knighted, skill: Skill.RANGED, oldLevel: 15, newLevel: 16 });
+  assert.equal(knighted.messages.at(-1), "Members can now wield blurite crossbows and blurite crossbow bolts.");
+  const unknighted = at();
+  hooks.onPlayerLevelUp({ player: unknighted, skill: Skill.RANGED, oldLevel: 15, newLevel: 16 });
+  assert.equal(unknighted.messages.length, 1, "an unfinished quest says nothing");
+
+  // A level whose sentence depends on three other stats picks one, not none and not all.
+  const warrior = at({ Strength: 70, Magic: 70, Ranged: 70 });
+  hooks.onPlayerLevelUp({ player: warrior, skill: Skill.ATTACK, oldLevel: 69, newLevel: 70 });
+  assert.match(warrior.messages.at(-1), /^Members can now wield Black Salamanders/);
+  assert.equal(warrior.messages.length, 2);
+  const brute = at({ Strength: 70 });
+  hooks.onPlayerLevelUp({ player: brute, skill: Skill.ATTACK, oldLevel: 69, newLevel: 70 });
+  assert.match(brute.messages.at(-1), /^Members can now wield the Saradomin Sword/);
+
+  // A lamp that skips levels still says what each level it passed unlocked.
+  const lamp = at();
+  hooks.onPlayerLevelUp({ player: lamp, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 42 });
+  // 39 -> 42 also crosses the 100 total-level mark, which has its own line.
+  assert.deepEqual(lamp.messages.filter((line) => line.startsWith("You can now wear") || line.startsWith("Members can now wield Void")), [
+    "You can now wear Rune Armour!",
+    "Members can now wield Void Knight equipment!",
+  ]);
+});
+
+test("every level-up message is player-facing text with no wiki markup left", () => {
+  // The file is generated by scripts/dump-level-up-messages.cjs; these are the failures that
+  // shipped once already: templates ({sic}, {tact}, a nested Tbox), colour spans, and links.
+  const messages = require("../plugins/interface/data/level-up-messages.json");
+  const offenders = [];
+  let total = 0;
+  for (const [skill, levels] of Object.entries(messages)) {
+    if (skill === "_source") continue;
+    for (const [level, entries] of Object.entries(levels)) {
+      for (const entry of entries) {
+        total++;
+        const text = typeof entry === "string" ? entry : entry.text;
+        if (typeof entry !== "string" && !entry.when) offenders.push(`${skill} ${level}: conditional entry with no condition`);
+        if (!text || !text.trim()) offenders.push(`${skill} ${level}: empty message`);
+        else if (/\{\{|\}\}|\[\[|\]\]|'''?/.test(text)) offenders.push(`${skill} ${level}: ${text}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, []);
+  assert.ok(total > 1200, `expected the whole wiki, got ${total} messages`);
+  // Every skill must have lines: `Transcript:Runecrafting` is a redirect stub, and reading it
+  // emptied Runecrafting silently.
+  const skills = Object.keys(messages).filter((key) => key !== "_source");
+  assert.equal(skills.length, 24, "all 24 skills");
+  assert.deepEqual(skills.filter((skill) => Object.keys(messages[skill]).length === 0), []);
+  assert.ok(Object.keys(messages.Runecrafting).length > 40, "Runecrafting reads Transcript:Runecraft");
+});
+
+test("Show level & unlocks: continuing opens a box with them, and the skill resumes when it closes", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const boxText = (player) => [...(player.statements.at(-1)?.dialogues.values() ?? [])].map(d => d.text).join("\n");
+  const setup = (popupList) => {
+    const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(4371, popupList ? 1 : 0);
+    return [hooks, p];
+  };
+
+  // "Show level & unlocks": Continue opens the box rather than closing the level-up.
+  const [hooks, p] = setup(true);
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+  assert.match(boxText(p), /You can now wear Rune Armour!/);
+  assert.equal(p.statements.length, 1, "one box, listing the level's unlock");
+  // Dismissing it finishes the level-up; a further Continue has nothing to close.
+  for (const handler of hooks.customEvents.get("interface:closed")) handler({ player: p, interfaceId: 229 });
+  assert.equal(hooks.onInterfaceActionButton({ player: p }), false);
+
+  // "Show level only" keeps the old path: no box.
+  const [only, q] = setup(false);
+  only.onPlayerLevelUp({ player: q, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.equal(only.onInterfaceActionButton({ player: q }), true);
+  assert.equal(q.statements.length, 0);
+
+  // A level that unlocks nothing opens no box even when the setting lists unlocks.
+  const [none, r] = setup(true);
+  none.onPlayerLevelUp({ player: r, skill: Skill.DEFENCE, oldLevel: 40, newLevel: 41 });
+  assert.equal(none.onInterfaceActionButton({ player: r }), true);
+  assert.equal(r.statements.length, 0);
 });
 
 test("as captured: a combat level gained waits behind the skill's pop-up", () => {

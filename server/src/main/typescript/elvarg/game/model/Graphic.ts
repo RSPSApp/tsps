@@ -49,6 +49,15 @@ export class Graphic {
         this.priority = Priority.LOW;
     }
 
+    /** A delayed copy retains the graphic's height and priority without numeric overload ambiguity. */
+    public withDelay(delay: number): Graphic {
+        const copy = new Graphic(this.id);
+        copy.delay = delay;
+        copy.height = this.height;
+        copy.priority = this.priority;
+        return copy;
+    }
+
     public getId(): number {
         return this.id;
     }

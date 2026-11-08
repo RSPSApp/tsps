@@ -24,6 +24,8 @@
  * chest does; load-outs carry no supply limits (none are captured).
  */
 const Common = require("./Common.DuelArena");
+const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
+const { SkillManager } = require("../../../src/main/typescript/elvarg/game/content/skill/SkillManager");
 
 const BUILD_LETTERS = ["a", "b", "c"];
 const INVENTORY_SIZE = 28;
@@ -173,6 +175,28 @@ function giveLevels(player, build) {
 }
 
 /**
+ * Who a build's load-out is checked against: the build's own levels for the skills it sets (its seven combat skills)
+ * and its combat level from them. A skill the build doesn't set (Agility, Slayer) counts as met: the Arena hands its
+ * load-outs over whatever the player's own levels are, so a Bow of Faerdhinen (70 Agility) isn't refused at 1.
+ */
+function buildWearer(build) {
+  const { Skill } = Common.core;
+  const levels = new Array(Skill.values().length).fill(1);
+  const set = new Map();
+  for (const [name, level] of Object.entries(Common.data.builds[build].levels)) {
+    levels[Skill[name].getIndex()] = level;
+    set.set(Skill[name].getIndex(), level);
+  }
+  const combatLevel = SkillManager.calculateCombatLevel(levels);
+  return {
+    getSkillManager: () => ({
+      getMaxLevel: (skill) => set.get(skill.getIndex()) ?? Number.MAX_SAFE_INTEGER,
+      getCombatLevel: () => combatLevel,
+    }),
+  };
+}
+
+/**
  * A load-out item, ready to fight with: charged items (a toxic staff's scales) come full, from
  * whichever plugin keeps that item's charges ("item:fill-charges").
  */
@@ -189,8 +213,18 @@ function equip(player, build) {
   giveLevels(player, build);
   const items = itemsOf(value);
   const equipment = player.getEquipment();
+  const wearer = buildWearer(build);
   for (let slot = 0; slot < WORN_SIZE; slot++) {
-    if (items[slot]) equipment.setItem(slot, supplied(player, items[slot].id, items[slot].amount));
+    if (!items[slot]) continue;
+    const item = supplied(player, items[slot].id, items[slot].amount);
+    // Worn only at the build's own levels, as the PvP presets check: writing the slot directly let a 1 Defence pure
+    // fight in 70 Defence armour. Checked against the build, not the player, whose own Agility or Slayer don't count.
+    const unmet = EquipmentRequirements.getUnmet(wearer, item.getDefinition());
+    if (unmet != null) {
+      player.sendMessage(EquipmentRequirements.message(unmet, `your ${item.getDefinition().getName()}`));
+      continue;
+    }
+    equipment.setItem(slot, item);
   }
   equipment.refreshItems();
   const inventory = player.getInventory();
@@ -444,11 +478,28 @@ function editorComponents() {
 
 // ---------------------------------------------------------------- the supplies chest
 
-function openChest({ player }) {
+/** Players at a ranked fight's chest: the build they must fight with (the week's), which they can't change. */
+const lockedBuilds = new WeakMap();
+
+function lockBuild(player, build) {
+  if (build == null) lockedBuilds.delete(player);
+  else lockedBuilds.set(player, build);
+}
+
+function lockedBuild(player) {
+  return lockedBuilds.get(player) ?? null;
+}
+
+/**
+ * The supplies chest: the lobby's (battletype 0, the player's own build) or a ranked staging
+ * area's (captured: battletype 1006 and the fight's build, which can't be changed).
+ */
+function openChest({ player }, battletype = 0) {
   const sender = player.getPacketSender();
+  const locked = lockedBuild(player);
   Common.varbit(player, "pvpa_transmit_caneditbuild", 0);
-  Common.varbit(player, "pvpa_transmit_battletype", 0);
-  Common.varbit(player, "pvpa_transmit_build", preferredBuild(player));
+  Common.varbit(player, "pvpa_transmit_battletype", battletype);
+  Common.varbit(player, "pvpa_transmit_build", locked ?? preferredBuild(player));
   sendLoadouts(player);
   Common.openModal(player, SUPPLIES);
   sender.sendInterfaceFlagsRange(Common.component(`${SUPPLIES}:top`), 0, 0, Common.EVENTS.OP1);
@@ -458,7 +509,8 @@ function openChest({ player }) {
 }
 
 function chooseChestBuild({ player, slot }) {
-  if (slot >= 0 && slot <= 2) setPreferredBuild(player, slot);
+  if (lockedBuild(player) != null) player.sendMessage(Common.message("fixedBuild"));
+  else if (slot >= 0 && slot <= 2) setPreferredBuild(player, slot);
   return true;
 }
 
@@ -569,11 +621,16 @@ function attachLoadouts(api, { offersLoadouts }) {
   api.onPlayerDisconnect(forget);
 }
 
-registerEditor(SUPPLIES, { canEdit: () => true });
+// A ranked fight's chest edits only the fight's build.
+registerEditor(SUPPLIES, { canEdit: (player, build) => lockedBuild(player) == null || lockedBuild(player) === build });
 
 module.exports = {
   attachLoadouts,
   registerEditor,
+  openChest,
+  lockBuild,
+  lockedBuild,
+  SUPPLIES,
   sendColumnEvents,
   sendLoadouts,
   sendView,

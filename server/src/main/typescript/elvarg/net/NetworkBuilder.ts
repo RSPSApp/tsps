@@ -17,6 +17,7 @@ import { Misc } from "../util/Misc";
 import { PlayerPunishment } from "../util/PlayerPunishment";
 import { BinaryChannel, HeadlessBinaryChannel, MAX_GAME_MESSAGE_BYTES, WebSocketBinaryChannel } from "./BinaryChannel";
 import { BrowserHostHttpBridge, BROWSER_HOST_BRIDGE_HTML } from "./BrowserHostHttpBridge";
+import { BotPlayerSession } from "./BotPlayerSession";
 import { PlayerSession } from "./PlayerSession";
 import { CachePipeline } from "../game/cache/CachePipeline";
 import { ContentApi } from "./http/ContentApi";
@@ -110,6 +111,20 @@ export function dispatchClientMessages(player: Player, messages: ClientMessages)
   if (!connection) return false;
   connection.inject(messages);
   return true;
+}
+
+/** Temporarily routes one client's input/output to an existing headless character. */
+export function controlPlayer(owner: Player, target: Player, released: () => void): boolean {
+  return CONNECTIONS.get(owner)?.controlPlayer(target, released) ?? false;
+}
+
+export function releasePlayerControl(player: Player): boolean {
+  return CONNECTIONS.get(player)?.releasePlayerControl() ?? false;
+}
+
+/** The parked owner of a controlled player left the world: the controlled player is released, the connection closed. */
+export function endPlayerControl(player: Player): boolean {
+  return CONNECTIONS.get(player)?.endPlayerControl() ?? false;
 }
 
 /** Logs a player in through the normal login path with no client attached. Closing their session logs them out. */
@@ -392,6 +407,84 @@ export class ClientConnection {
   /** The pendingNames keys this connection holds: its account and the character it will enter. */
   private reservedNames: string[] = [];
   private player?: Player;
+  private control?: { owner: Player; target: Player; targetSession: PlayerSession; targetConnection?: ClientConnection; released: () => void };
+
+  public controlPlayer(target: Player, released: () => void): boolean {
+    const owner = this.player;
+    if (this.closed || this.control || !owner || owner === target || !owner.isRegistered() || !target.isRegistered() ||
+        !(target.getSession() instanceof BotPlayerSession || target.getSession().getChannel() instanceof HeadlessBinaryChannel) ||
+        World.getRemovePlayerQueue().includes(target) || World.getRemovePlayerQueue().includes(owner) ||
+        owner.busy() || target.busy()) return false;
+    this.control = { owner, target, targetSession: target.getSession(), targetConnection: CONNECTIONS.get(target), released };
+    owner.getTrading().closeTrade();
+    owner.getSession().flushPackets();
+    owner.getMovementQueue().reset();
+    owner.setFollowing(null);
+    owner.setSession(new PlayerSession({ readyState: 3 }));
+    CONNECTIONS.delete(owner);
+    try {
+      this.bindControlledPlayer(target);
+    } catch (error) {
+      this.releasePlayerControl();
+      throw error;
+    }
+    return true;
+  }
+
+  public releasePlayerControl(): boolean {
+    const control = this.control;
+    if (!control) return false;
+    this.control = undefined;
+    control.target.getSession().flushPackets();
+    control.target.setSession(control.targetSession);
+    if (control.targetConnection) CONNECTIONS.set(control.target, control.targetConnection);
+    else CONNECTIONS.delete(control.target);
+    try {
+      this.bindControlledPlayer(control.owner);
+    } finally {
+      control.released();
+    }
+    return true;
+  }
+
+  /**
+   * The parked owner was removed (kicked, banned, its own logout): the controlled player gets its own session back and
+   * this connection, the owner's, closes. It isn't re-attached to the removed owner, whose later close would queue and
+   * save it again, possibly over a fresh login of the same account, and which a ban would leave open.
+   */
+  public endPlayerControl(): boolean {
+    const control = this.control;
+    if (!control) return false;
+    this.control = undefined;
+    try {
+      control.target.getSession().flushPackets();
+      control.target.setSession(control.targetSession);
+      if (control.targetConnection) CONNECTIONS.set(control.target, control.targetConnection);
+      else CONNECTIONS.delete(control.target);
+    } finally {
+      control.released();
+    }
+    this.player = undefined;
+    this.cleanup("control-owner-removed");
+    this.channel.close(1000, "logged out");
+    return true;
+  }
+
+  private bindControlledPlayer(player: Player): void {
+    this.turnPackets = [];
+    this.stalledInput = null;
+    this.player = player;
+    const session = new PlayerSession(this.channel);
+    session.setPlayer(player);
+    session.setTurnPacketProcessor(() => this.processTurnPackets());
+    player.setSession(session);
+    CONNECTIONS.set(player, this);
+    player.setNeedsPlacement(true);
+    World.refreshActiveRegions();
+    this.sendPlayerBootstrap();
+    player.getPacketSender().replayVarps();
+  }
+
   private pluginMessageWindow = 0;
   private pluginMessageCount = 0;
   private closed = false;
@@ -516,8 +609,9 @@ export class ClientConnection {
     // buffered before a disconnect, for example). A closed connection must not act
     // on them or build a player for a socket that is already gone.
     if (this.closed && !turn) return;
+    const dispatchedPlayer = this.player;
     for (const packet of packets) {
-      if (this.closed && !turn) return;
+      if ((dispatchedPlayer && this.player !== dispatchedPlayer) || (this.closed && !turn)) return;
       if (!turn && this.player && !IMMEDIATE_PACKETS.has(packet.type)) {
         if (this.turnPackets.length >= NetworkConstants.PACKET_QUEUE_LIMIT) {
           console.warn("[network] client turn packet limit exceeded", { queued: this.turnPackets.length });
@@ -845,7 +939,12 @@ export class ClientConnection {
               // which never take the item off, even when nothing handles them.
               if (!itemActionHandled && actionPacket.buttonNum === 1) {
                 // As equipping refuses: no gear comes off mid-teleport (the left-click and Wield routes' rule).
-                if (!this.player.isTeleportingReturn()) EquipPacketListener.unequip(this.player, equipmentSlot);
+                // Nor while trading: live shows the trade side panel in the sidemodal over the side tabs
+                // (rsprox_transcripts/227/00548.txt), and gear taken off could fill the slots an offer freed,
+                // so a decline then dropped the offered items.
+                if (!this.player.isTeleportingReturn() && this.player.getStatus() !== PlayerStatus.TRADING) {
+                  EquipPacketListener.unequip(this.player, equipmentSlot);
+                }
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }
@@ -990,13 +1089,22 @@ export class ClientConnection {
         case "widget":
           if (this.player && packet.action === "close") this.player.getPacketSender().closeInterface(packet.groupId);
           continue;
-        case "widget_target":
-          if (this.player && !LunarSpells.handleItemTarget(
+        case "widget_target": {
+          // A spell cast on an inventory item (High Alchemy, Plank Make) is an inventory interaction: it closes the
+          // dialogue and any amount prompt, as an inventory click does. With the dialogue left open, an item a
+          // dialogue had just checked could be alched before its action ran, and the action still paid.
+          // The spell-on-item routes below act on the inventory's slot, whatever the target names, so they only run
+          // for a target in the inventory: another group (a bank or dialogue widget) can't alch past an open dialogue.
+          const onInventory = (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID;
+          if (this.player && onInventory) {
+            this.player.closeInterruptibleInterfaces();
+          }
+          if (this.player && !(onInventory && (LunarSpells.handleItemTarget(
             this.player,
             packet.targetItemId,
             packet.targetSlot,
             CacheDefinitions.getSpellName(packet.sourceWidgetId, packet.sourceItemId),
-          ) && !PluginManager.emitSpellOnItem({
+          ) || PluginManager.emitSpellOnItem({
             player: this.player,
             spellName: CacheDefinitions.getSpellName(packet.sourceWidgetId, packet.sourceItemId),
             spellWidget: packet.sourceWidgetId,
@@ -1004,7 +1112,7 @@ export class ClientConnection {
             itemId: packet.targetItemId,
             slot: packet.targetSlot,
             handled: false,
-          }) && !MAGIC_ITEMS.castOnItem(
+          }) || MAGIC_ITEMS.castOnItem(
             this.player,
             this.resolveClientCombatSpellId(
               packet.sourceWidgetId,
@@ -1013,7 +1121,7 @@ export class ClientConnection {
             ),
             packet.targetItemId,
             packet.targetSlot
-          )) {
+          )))) {
             InterfaceActionClickOpcode.handle(this.player, packet.targetWidgetId, packet.sourceSlot, {
               targetWidgetId: packet.targetWidgetId,
               targetSlot: packet.targetSlot,
@@ -1024,6 +1132,7 @@ export class ClientConnection {
             });
           }
           continue;
+        }
         case "widget_drag":
           if (this.player) {
             const widgetDrag = { player: this.player, packet, handled: false };
@@ -1138,6 +1247,8 @@ export class ClientConnection {
             this.player.setFollowing(null);
             this.player.setMobileInteraction(null);
             this.player.setPositionToFace(null);
+            // After the reset, so scripted movement can resume before this turn's movement runs.
+            PluginManager.emitCustomEvent("player:interaction-stop", { player: this.player });
           }
           continue;
         case "face":
@@ -1175,6 +1286,7 @@ export class ClientConnection {
           this.enterWorld(packet.clientType, packet.capabilities);
           continue;
         case "logout":
+          this.releasePlayerControl();
           // Answered on the next tick (World.answerLogoutRequest), which closes the socket.
           if (this.player) World.queueLogoutRequest(this.player);
           continue;
@@ -1294,7 +1406,8 @@ export class ClientConnection {
         this.failLogin(8, "The login server is busy.");
         return;
       }
-      if (owner !== undefined && owner !== DisplayNames.key(typedName)) {
+      // A name a live player (a bot) shows for another account is taken too, though never saved.
+      if ((owner !== undefined && owner !== DisplayNames.key(typedName)) || DisplayNames.shownByAnother(typedName, typedName)) {
         this.releasePendingName();
         this.failLogin(3, "That name is not available. Please choose another.");
         return;
@@ -1480,6 +1593,11 @@ export class ClientConnection {
       isNewAccount: pending.save == null,
       profile: pending.profile,
     });
+    this.sendPlayerBootstrap();
+  }
+
+  private sendPlayerBootstrap(): void {
+    const player = this.player!;
     this.send(
       encodeHandshake(
         player.getIndex(),
@@ -1758,6 +1876,7 @@ export class ClientConnection {
 
   private cleanup(source: string): void {
     if (this.closed) return;
+    this.releasePlayerControl();
     this.closed = true;
     this.stalledInput = null;
     if (this.idleCheck) clearInterval(this.idleCheck);

@@ -190,7 +190,9 @@ function endOnDeath({ player }) {
   const { World } = Common.core;
   const manager = Common.api.getItemOnGroundManager();
   for (const ground of [...World.getItems()]) {
-    if (ground.getPrivateArea() !== session.area) continue;
+    // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
+    // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
+    if (ground.isPendingRemoval?.() || ground.getPrivateArea() !== session.area) continue;
     manager.deregister(ground);
     manager.registerLocation(player, ground.getItem(), exitLocation(), null);
   }

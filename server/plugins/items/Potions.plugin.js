@@ -449,9 +449,10 @@ function applyExtendedStamina(player) {
   });
 }
 
-function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,charges=1}) {
-  // Ring of endurance doubles this by mutating the payload and spends `charges` (Wiki).
-  const request = { player, energy, durationMs, charges };
+function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,charges=1,ringDoubles=true}) {
+  // Ring of endurance doubles this by mutating the payload and spends `charges` (Wiki), unless the source says it
+  // doesn't (the Agility cape's Stamina Boost).
+  const request = { player, energy, durationMs, charges, ringDoubles };
   pluginApi.emitCustomEvent("potions:stamina-effect", request);
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
@@ -464,15 +465,25 @@ function applyDivine(player, baseEffect, affectedSkills, { damage = 10 } = {}) {
   baseEffect(player);
   if (damage > 0) damageButKeepAlive(player, damage);
 
-  const targets = affectedSkills
+  // Each divine potion keeps its own five minutes (Wiki: each lasts "for 5 minutes"): a second one (divine ranging after
+  // divine super combat) adds its skills with their own end, rather than dropping the first one's pinned boosts.
+  const now = Date.now();
+  const endsAt = now + DIVINE_DURATION_MS;
+  const fresh = affectedSkills
     .filter(Boolean)
     .map((skill) => ({
       skillIndex: skill.getIndex(),
       target: getCurrentLevel(player, skill),
+      endsAt,
     }));
-
+  const previous = player.getAttribute(ATTR_DIVINE_STATE);
+  const kept = (previous && Array.isArray(previous.targets) ? previous.targets : [])
+    .filter((entry) => Number.isInteger(entry?.skillIndex) && !fresh.some((next) => next.skillIndex === entry.skillIndex))
+    .map((entry) => ({ ...entry, endsAt: Number.isFinite(entry.endsAt) ? entry.endsAt : previous.endsAt }))
+    .filter((entry) => entry.endsAt > now);
+  const targets = [...kept, ...fresh];
   player.setAttribute(ATTR_DIVINE_STATE, {
-    endsAt: Date.now() + DIVINE_DURATION_MS,
+    endsAt: Math.max(...targets.map((entry) => entry.endsAt)),
     targets,
   });
 }
@@ -643,6 +654,16 @@ registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_G
     heal(player, 1);
     boostSkill(player, Skill.STRENGTH, 1, 0.02);
     lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06);
+  } });
+
+// https://oldschool.runescape.wiki/w/Cider and /w/Brewing
+registerPotion({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER_GLASS,
+  drink: { messages: () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  requiresFoodPermission: true, shareable: false, effect: player => {
+    heal(player, 1);
+    boostSkill(player, Skill.FARMING, 1, 0);
+    lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.02);
+    lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.02);
   } });
 
 // POH refreshments use the same consumption, cooldown and stat-boost rules as potions, with the
@@ -1288,7 +1309,8 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
   registerGourd(antipoison, GOURD_FIRST_DOSE.antipoison[tier], (player) => applyPoisonImmunity(player, GOURD_ANTIPOISON_SECONDS[tier]));
   registerGourd(`Overload${suffix} (Chambers of Xeric)`, GOURD_FIRST_DOSE.overload[tier],
     (player) => applyOverload(player, strength.overload[0], strength.overload[1]),
-    (player) => getCurrentLevel(player, Skill.HITPOINTS) >= 50);
+    // Wiki (Overload (Chambers of Xeric)): more than 50 Hitpoints, as Overload (+) and the refusal text say.
+    (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
 
 /** Wiki: the stamina effect only slows the drain; MovementQueue applies the 30% modifier. */
@@ -1342,16 +1364,22 @@ function processDivine(player) {
     return;
   }
 
-  if (Date.now() >= state.endsAt) {
-    player.setAttribute(ATTR_DIVINE_STATE, null);
-    for (const entry of state.targets) {
+  // Each skill ends at its own potion's time (an older save holds one endsAt for all of them).
+  const now = Date.now();
+  const endOf = (entry) => (Number.isFinite(entry?.endsAt) ? entry.endsAt : state.endsAt);
+  const expired = state.targets.filter((entry) => now >= endOf(entry));
+  if (expired.length > 0) {
+    for (const entry of expired) {
       const skill = Skill.values()[entry?.skillIndex];
       if (skill) {
         setCurrentLevel(player, skill, getMaxLevel(player, skill));
       }
     }
+    state.targets = state.targets.filter((entry) => now < endOf(entry));
+    if (state.targets.length === 0) player.setAttribute(ATTR_DIVINE_STATE, null);
+    else player.setAttribute(ATTR_DIVINE_STATE, { ...state, endsAt: Math.max(...state.targets.map(endOf)) });
     player.sendMessage("Your divine potion effect has worn off.");
-    return;
+    if (state.targets.length === 0) return;
   }
 
   for (const entry of state.targets) {
@@ -1668,6 +1696,10 @@ function resumeTimedEffects({ player }) {
     for (const field of ["endsAt", "nextBoostAt", "nextDamageAt", "nextRestoreAt", "nextAt"]) {
       if (Number.isFinite(state[field])) state[field] += offline;
     }
+    // A divine state's skills each carry their own end.
+    for (const entry of Array.isArray(state.targets) ? state.targets : []) {
+      if (Number.isFinite(entry?.endsAt)) entry.endsAt += offline;
+    }
     player.setAttribute(key, state);
   }
 }
@@ -1784,6 +1816,8 @@ module.exports = {
     };
   },
   drinkRefusal,
+  drinkPermissionRefusal,
+  drinkCanUseRefusal,
   drinkTimerRefusal,
   register(api) {
     api.registerRunEnergyDrainModifier(staminaDrainModifier);

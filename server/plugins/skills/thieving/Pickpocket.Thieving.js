@@ -73,6 +73,8 @@ const POUCH_COINS = new Map(TARGETS.filter((t) => t.coinPouch).map((t) => [t.coi
  */
 const caughtAt = new WeakMap();
 const CAUGHT_HOLD_TICKS = 3;
+/** The hits a failed attempt dealt: dying to one doesn't set Retribution off (Wiki: Retribution). */
+const stunHits = new WeakSet();
 
 let core;
 let pluginApi;
@@ -255,8 +257,10 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
     if (id === core.ItemIdentifiers.COINS && target.coinPouch) {
       // The full-inventory check ran at the click; worn gear taken off before this resolves can fill the last slot.
       inventory.forceAdd(player, new core.Item(target.coinPouch.id, 1));
-      // Wiki (Coin pouch): a doubled pouch gives one pouch plus its coins directly.
-      const coins = (times - 1) * (Array.isArray(target.coinPouch.coins) ? target.coinPouch.coins[0] : target.coinPouch.coins);
+      // Wiki (Coin pouch): a doubled pouch gives one pouch plus its coins directly - "the normal amount", so a ranged
+      // pouch's extra coins are rolled like an opened pouch's, not its minimum.
+      let coins = 0;
+      for (let extra = 1; extra < times; extra++) coins += roll(target.coinPouch.coins, random);
       if (coins > 0) inventory.forceAdd(player, new core.Item(core.ItemIdentifiers.COINS, coins));
       given.push({ ...item, amount: 1 });
       continue;
@@ -357,7 +361,11 @@ function caughtTask(player, npc, target) { return new (class extends core.Task {
     }
     if (this.stunned) {
       player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You've been stunned!");
-      if (!target.painless) player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(roll(target.stunDamage), core.HitMask.RED)]);
+      if (!target.painless) {
+        const hit = new core.HitDamage(roll(target.stunDamage), core.HitMask.RED);
+        stunHits.add(hit);
+        player.getCombat().getHitQueue().addPendingDamage([hit]);
+      }
       this.stop();
       return;
     }
@@ -485,9 +493,15 @@ function pouchCoins(pouchId, random = Math.random) {
   return coins === undefined ? 0 : roll(coins, random);
 }
 
+/** "retribution:trigger": a death from a failed pickpocket doesn't set Retribution off. */
+function stunDeathSkipsRetribution(check) {
+  if (stunHits.has(check.hit)) check.allow = false;
+}
+
 function register(api) {
   core = api.core;
   pluginApi = api;
+  api.onCustomEvent("retribution:trigger", stunDeathSkipsRetribution);
   // The gloves' wear and the necklace's charges outlast a relog (Wiki: both wear out on use, not per session).
   api.persistAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
   api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
@@ -501,5 +515,5 @@ module.exports = {
   POUCH_COINS,
   TARGETS,
   targetFor,
-  _test: { pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, rateOf },
+  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, rateOf },
 };

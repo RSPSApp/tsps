@@ -95,3 +95,12 @@ test("cache masks and location packs distinguish inventory, bank and active foll
   open(f);const args=f.scripts.find(s=>s[0]===6126).slice(1);assert.equal(args.length,15);
   for(const [index,location]of [[22,2],[29,1],[15,3]]){assert.ok(args[Math.floor(index/31)]&(1<<(index%31)));assert.ok(args[3+Math.floor(index/31)]&(1<<(index%31)));assert.equal((args[6+Math.floor(index/8)]>>>((index%8)*4))&15,location);}
 });
+test("a pet lying in its owner's grave or with Death isn't reclaimed as a second one",async t=>{
+  for(const place of ["grave","office"]){
+    const f=actor(t);let answer=true;
+    PM.createApi("PetInGrave"+place).onCustomEvent("gravestones:state",s=>{if(!answer||s.player!==f.p)return;if(place==="grave")s.grave={items:[{id:13247,amount:1}]};else s.office=[{id:13247,amount:1}];});
+    t.after(()=>{answer=false;});
+    open(f);await click(f,11,row(22));await click(f,37);
+    assert.equal(f.p.getInventory().getAmount(13247),0,place+": not handed over while it waits to be collected");
+  }
+});

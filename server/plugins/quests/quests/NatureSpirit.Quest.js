@@ -420,6 +420,14 @@ module.exports = function registerNatureSpiritQuest(api) {
     return (definition.inventoryActions ?? []).some((action) => String(action).toLowerCase() === "eat");
   }
 
+  function hasFood(player) {
+    return (player.getInventory().getItems?.() ?? []).some((item) => item && isFoodItem(item.getId()));
+  }
+
+  function wearsMorytaniaLegs4(player) {
+    return player.getEquipment?.()?.get?.(Equipment.LEG_SLOT)?.getId?.() === ItemIdentifiers.MORYTANIA_LEGS_4;
+  }
+
   /** The first edible item in the pack becomes rotten food; false with nothing to rot. */
   function rotFood(player) {
     const inventory = player.getInventory();
@@ -460,6 +468,8 @@ module.exports = function registerNatureSpiritQuest(api) {
       visibleGhastFor(player, ghast)?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
       return;
     }
+    // Wiki (Morytania legs 4): worn, they completely block the attack that turns food rotten.
+    if (wearsMorytaniaLegs4(player) && hasFood(player)) return;
     if (!rotFood(player)) {
       player.getCombat().getHitQueue().addPendingDamage([
         new HitDamage(1 + Math.floor(Math.random() * 3), HitMask.RED),
@@ -1197,6 +1207,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.performAnimation(new Animation(645));
     skills.setCurrentLevels(Skill.PRAYER, maximum);
     skills.updateSkill(Skill.PRAYER);
+    player.setPrayerPointDrain(0);
     player.getPacketSender().sendSoundEffect(api.core.Sound.PRAYER_RECHARGE.getId(), 1, 0, 0);
     player.sendMessage("You recharge your Prayer points.");
     return true;

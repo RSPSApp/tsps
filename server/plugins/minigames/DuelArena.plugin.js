@@ -370,9 +370,7 @@ function end(session, loser) {
   for (const player of session.players) sessions.delete(player);
   // A duel that reached the arena and has a loser: its record (the Emir's Arena scoreboards hear it).
   const winner = fought && loser ? session.players.find(player => player !== loser) : null;
-  // A matchmade fight is no Legacy Duel: its own event, so the Legacy record stays Legacy.
-  if (session.ranked) pluginApi.emitCustomEvent("pvp-arena:fight-ended", { players: session.players, winner, loser });
-  else if (winner) pluginApi.emitCustomEvent("duelarena:duel-won", { winner, loser });
+  if (winner) pluginApi.emitCustomEvent("duelarena:duel-won", { winner, loser });
   for (const player of session.players) {
     if (fought && player.getHitpoints() <= 0) pendingSafeDeaths.add(player);
     resetState(player);
@@ -652,6 +650,8 @@ function start(session) {
       player.getEquipment().switchItems(player.getInventory(), player.getEquipment().getItems()[slot].clone(), false, false);
     }
     player.resetAttributes();
+    // The Wiki's one antifire reset: a "no potions" duel starts with it gone; any other keeps it, as a death does.
+    if (hasRule(player, DuelRule.NO_POTIONS)) require("../combat/DragonfireProtection").clearDragonfireProtection(player);
     player.moveTo(spawns[session.players.indexOf(player)]);
     player.setStatus(PlayerStatus.NONE);
     player.getPacketSender().sendEntityHint(player.getDueling().getInteract());
@@ -659,22 +659,6 @@ function start(session) {
   }
   session.task = new DuelCountdown(session);
   TaskManager.submit(session.task);
-}
-/** A fight the PvP Arena matchmaking arranged: no options or stakes, straight to the countdown. */
-function startArranged(players) {
-  // Staging movement requests placement, so busy() would also reject legitimate arrivals.
-  if (players.some(p => sessions.has(p) || p.getHitpoints() <= 0 || p.isDying
-    || p.isTeleportingReturn() || p.getStatus() !== PlayerStatus.NONE || inCombat(p))
-    || !arenaSpawns()) return false;
-  const session = { players, mask: 0, accepted: new Set(), offers: new Map(players.map(p => [p, new Map()])), stage: "confirm", ranked: true };
-  for (const p of players) {
-    sessions.set(p, session);
-    p.getMovementQueue().reset();
-    resetCombat(p);
-    p.getDueling().setInteract(players.find(other => other !== p));
-  }
-  start(session);
-  return true;
 }
 function accept(player, session, botEvent = "duelarena:accept") {
   if (!session.players.every(inZone) || !nearby(...session.players) || session.players.some(p => p.getHitpoints() <= 0 || inCombat(p))) return end(session);
@@ -797,6 +781,10 @@ function preventDuringDuel(event) {
 function canEat(event) {
   if (event.player.getDueling().inDuel() && hasRule(event.player, DuelRule.NO_FOOD)) event.allow = false;
 }
+/** The phoenix necklace asks without eating anything: a No Food duel stops it too. */
+function necklaceEligible(event) {
+  if (event.player.getDueling().inDuel() && hasRule(event.player, DuelRule.NO_FOOD)) event.blocked = true;
+}
 function canDrink(event) {
   if (event.player.getDueling().inDuel() && hasRule(event.player, DuelRule.NO_POTIONS)) event.allow = false;
 }
@@ -834,6 +822,8 @@ function excludePvpStats(event) {
 
 module.exports = {
   name: "DuelArena",
+  // After Shopkeepers, so the PvP Arena Rewards shop's currency is the Reward Points (Matchmaking).
+  dependsOn: ["Shopkeepers"],
   enableStaking,
   register(api) {
     pluginApi = api;
@@ -855,13 +845,14 @@ module.exports = {
     api.onCanBank(preventDuringDuel);
     api.onCanShop(preventDuringDuel);
     api.onCanEat(canEat);
+    api.onCustomEvent("phoenix-necklace:eligible", necklaceEligible);
     api.onCanDrink(canDrink);
     api.onCanEquip(canEquip);
     api.onCanUnequip(canUnequip);
     api.onServerShutdown(shutdown);
     Scoreboard.attach(api);
     Hospital.attach(api);
-    Matchmaking.attach(api, { startArranged });
+    Matchmaking.attach(api, { inArena: inZone });
     Stash.attachStash(api);
     Loadouts.attachLoadouts(api, { offersLoadouts: offersChallenge });
     Battle.attachBattle(api, { leftFight: refreshMenu });

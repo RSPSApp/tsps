@@ -15,10 +15,10 @@ const { FightType } = require("../dist/game/content/combat/FightType");
 
 const core = PluginManager.getCoreApi();
 
-function register(plugin) {
+function register(plugin, pluginCore = core) {
   const hooks = { resolvers: [], events: new Map(), actions: new Map(), itemOnItem: [], specials: [] };
   plugin.register({
-    core,
+    core: pluginCore,
     registerCombatMethodResolver: (resolver) => hooks.resolvers.push(resolver),
     registerCombatSpecial: (special) => hooks.specials.push(special),
     onCustomEvent: (name, handler) => hooks.events.set(name, [...(hooks.events.get(name) ?? []), handler]),
@@ -26,6 +26,7 @@ function register(plugin) {
     onItemAction: (name, actions) => hooks.actions.set(name, actions),
     onItemOnItem: (handler) => hooks.itemOnItem.push(handler),
     onPlayerLogin() {},
+    onPlayerDeathItemDrop: (handler) => { hooks.death = handler; },
   });
   return hooks;
 }
@@ -277,6 +278,7 @@ test("Accursed sceptre: a 1,000 ether deposit, then up to 16,000 charges (Wiki, 
   assert.equal(method.canAttack(worn, NPC), false);
   assert.equal(worn.state.messages.at(-1), "There is not enough revenant ether left powering your sceptre.");
 
+  assert.equal(sceptre.getMetaValue(Accursed._test.DEPOSIT_META), true, "activating it records the paid deposit");
   sceptre.setMetaValue(CHARGES_KEY, 200);
   Accursed._test.uncharge({ player: p, item: sceptre });
   assert.equal(sceptre.getId(), I.ACCURSED_SCEPTRE_U_);
@@ -305,6 +307,114 @@ test("Accursed sceptre (a) autocasts instead, and either gives +50% against Wild
   p.state.target = wilderness;
   Accursed._test.spellCast({ player: p });
   assert.equal(swapped.getMetaValue(CHARGES_KEY), 9, "a spellbook cast there spends a charge");
+});
+
+test("Thammaron's sceptre: the same ether rules and built-in spell, max hit floor(Magic / 3) - 8, no Condemn (Wiki)", () => {
+  const { CHARGES_KEY, ACTIVATION_ETHER } = Accursed._test;
+  const sceptre = new Item(I.THAMMARONS_SCEPTRE_U_, 1);
+  const p = player({ items: { [I.REVENANT_ETHER]: 1500 } });
+  p.inventoryItems.push(sceptre);
+  Accursed._test.chargeWithEther({ player: p, usedItem: new Item(I.REVENANT_ETHER, 1500), usedWithItem: sceptre, usedItemId: I.REVENANT_ETHER, usedWithItemId: sceptre.getId() });
+  p.state.amountAction.execute(500);
+  assert.equal(sceptre.getId(), I.THAMMARONS_SCEPTRE);
+  assert.equal(sceptre.getMetaValue(CHARGES_KEY), 500);
+
+  const worn = player({ weapon: sceptre });
+  const method = accursed.resolvers[0].resolve(worn);
+  assert.ok(method, "the charged sceptre casts its built-in spell");
+  assert.equal(method.attackSpeed(worn), 4);
+  assert.equal(method.attackDistance(worn), 7);
+  assert.equal(method.canAttack(worn, NPC), true);
+  assert.equal(worn.state.castSpell.maximumHit(), 25, "floor(99 / 3) - 8");
+  assert.equal(sceptre.getMetaValue(CHARGES_KEY), 499, "a cast spends a charge");
+
+  sceptre.setMetaValue(CHARGES_KEY, 200);
+  Accursed._test.uncharge({ player: p, item: sceptre });
+  assert.equal(sceptre.getId(), I.THAMMARONS_SCEPTRE_U_);
+  assert.equal(p.amounts.get(I.REVENANT_ETHER), 200 + ACTIVATION_ETHER);
+});
+
+test("Thammaron's sceptre (a) autocasts, and Dismantle on an uncharged one gives 7,500 ether (Wiki)", () => {
+  const { CHARGES_KEY, DISMANTLE_ETHER } = Accursed._test;
+  const swapped = staffItem(I.THAMMARONS_SCEPTRE, CHARGES_KEY, 10);
+  const p = player({ weapon: swapped });
+  p.inventoryItems.push(swapped);
+  Accursed._test.swap({ player: p, item: swapped });
+  assert.equal(swapped.getId(), I.THAMMARONS_SCEPTRE_A_);
+  assert.equal(accursed.resolvers[0].resolve(p), null);
+  const wilderness = { isPlayer: () => false, isNpc: () => true, getLocation: () => new Location(3100, 3600, 0) };
+  const boosted = { attacker: p, target: wilderness, maxHit: 30, attackRoll: 1000 };
+  Accursed._test.boostMaxHit(boosted);
+  Accursed._test.boostAccuracy(boosted);
+  assert.deepEqual([boosted.maxHit, boosted.attackRoll], [45, 1500]);
+
+  const bare = new Item(I.THAMMARONS_SCEPTRE_U_, 1);
+  const q = player();
+  q.inventoryItems.push(bare);
+  assert.equal(accursed.actions.get("Thammaron's sceptre (u)").Dismantle({ player: q, item: bare }), true);
+  assert.equal(q.amounts.get(I.REVENANT_ETHER), 7500);
+  assert.equal(7500, DISMANTLE_ETHER);
+});
+
+test("a sceptre with no paid deposit refunds nothing for it, so Uncharge then Dismantle mints no ether", () => {
+  const { CHARGES_KEY, DEPOSIT_META } = Accursed._test;
+  for (const [charged, uncharged] of [[I.THAMMARONS_SCEPTRE, I.THAMMARONS_SCEPTRE_U_], [I.ACCURSED_SCEPTRE, I.ACCURSED_SCEPTRE_U_]]) {
+    const bought = new Item(charged, 1);
+    const p = player();
+    p.inventoryItems.push(bought);
+    Accursed._test.uncharge({ player: p, item: bought });
+    assert.equal(bought.getId(), uncharged);
+    assert.equal(p.amounts.get(I.REVENANT_ETHER) ?? 0, 0, "no deposit was paid, none is refunded");
+    assert.equal(bought.getMetaValue(DEPOSIT_META), undefined);
+  }
+  const held = new Item(I.THAMMARONS_SCEPTRE, 1);
+  held.setMetaValue(CHARGES_KEY, 40);
+  const q = player();
+  q.inventoryItems.push(held);
+  Accursed._test.uncharge({ player: q, item: held });
+  assert.equal(q.amounts.get(I.REVENANT_ETHER), 40, "only its charges come back");
+});
+
+test("an unpaid Thammaron's sceptre refuses Dismantle after Uncharge", () => {
+  const bought = new Item(I.THAMMARONS_SCEPTRE, 1);
+  const p = player();
+  p.inventoryItems.push(bought);
+  Accursed._test.uncharge({ player: p, item: bought });
+  assert.equal(Accursed._test.dismantleThammarons({ player: p, item: bought }), true);
+  assert.equal(p.amounts.get(I.REVENANT_ETHER) ?? 0, 0, "no ether from dismantling");
+  assert.equal(bought.getId(), I.THAMMARONS_SCEPTRE_U_, "the sceptre is kept");
+});
+
+test("custom shops do not sell the revenant weapons that dismantle into ether", () => {
+  const shops = require("../data/definitions/custom-shops.json");
+  const sold = new Set(shops.flatMap((shop) => (shop.originalStock ?? []).map((entry) => entry.id)));
+  for (const id of [I.CRAWS_BOW, I.THAMMARONS_SCEPTRE, I.ACCURSED_SCEPTRE, I.VIGGORAS_CHAINMACE, I.URSINE_CHAINMACE]) {
+    assert.equal(sold.has(id), false, `item ${id} is not for sale`);
+  }
+});
+
+test("a Wilderness PvP death drops a sceptre's deposit and charges to the killer, protected or not", () => {
+  const { CHARGES_KEY, DEPOSIT_META } = Accursed._test;
+  const dropped = [];
+  const stubbed = register(Accursed, { ...core, ItemOnGroundManager: { registerLocation: (owner, item) => dropped.push(item) } });
+  try {
+    for (const kept of [true, false]) {
+      dropped.length = 0;
+      const sceptre = staffItem(I.THAMMARONS_SCEPTRE, CHARGES_KEY, 7);
+      sceptre.setMetaValue(DEPOSIT_META, true);
+      const victim = player();
+      const event = { player: victim, killer: player(), item: sceptre, kept, shouldDropItems: true, location: new Location(3090, 3600, 0) };
+      stubbed.death(event);
+      assert.equal(sceptre.getId(), I.THAMMARONS_SCEPTRE_U_);
+      assert.equal(dropped[0].getAmount(), 1007);
+      assert.equal(event.handled, kept ? true : undefined);
+    }
+    const safe = staffItem(I.THAMMARONS_SCEPTRE, CHARGES_KEY, 7);
+    stubbed.death({ player: player(), killer: player(), item: safe, kept: false, shouldDropItems: true, location: new Location(3200, 3200, 0) });
+    assert.equal(safe.getId(), I.THAMMARONS_SCEPTRE, "outside the Wilderness nothing is lost");
+  } finally {
+    register(Accursed);
+  }
 });
 
 test("Soul Rend lowers Magic Defence by the damage, never below 0, keeping other overrides (Wiki)", () => {

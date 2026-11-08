@@ -173,6 +173,21 @@ test("darts: one set per click while Make-X is off, a menu of up to 10 sets whil
   assert.equal(p.count("RUNE_DART"), 30);
 });
 
+test("fewer than a set fletches as many as are held (live: 7 unfinished bolts, \"You fletch 7 bolts.\")", () => {
+  const p = player({ items: { RUNITE_BOLTS_UNF_: 7, FEATHER: 30 } });
+  assert.equal(use(p, "FEATHER", "RUNITE_BOLTS_UNF_"), true);
+  assert.equal(p.count("RUNITE_BOLTS"), 7);
+  assert.equal(p.count("RUNITE_BOLTS_UNF_"), 0);
+  assert.equal(p.count("FEATHER"), 23, "seven feathers, not ten");
+  assert.equal(p.xp(), 70, "the set's 100 XP for ten, pro rata");
+  assert.ok(p.spam.includes("You fletch 7 bolts."), p.spam.join(" | "));
+  const darts = player({ items: { RUNE_DART_TIP: 17, FEATHER: 17 } });
+  use(darts, "RUNE_DART_TIP", "FEATHER");
+  use(darts, "RUNE_DART_TIP", "FEATHER");
+  assert.equal(darts.count("RUNE_DART"), 17, "a full set, then the last seven");
+  assert.equal(darts.count("RUNE_DART_TIP"), 0);
+});
+
 // Wiki: Gryphon_feather, Stymphike_feather and Feather, retrieved 2026-10-27.
 for (const feather of ["GRYPHON_FEATHER", "STYMPHIKE_FEATHER"]) {
   for (const [material, output, amount, feathers, xp] of [

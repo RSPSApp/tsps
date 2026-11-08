@@ -99,6 +99,22 @@ test("a boss's rare main roll is that many times likelier and common loot keeps 
   assert.deepEqual(dropsAt(mainTable(true), 0.5, 1000), [10, 11]);
 });
 
+test("a fractional-weight unique (npc-drops-custom.json) keeps its weight when boosted", () => {
+  // 2.5/400 at x2 is 5/400: a roll of 4/400 hits it. Read as weight 1 it was 2/400 - below its x1 rate.
+  const fractional = (boss) => ({
+    boss,
+    main_max_roll: 400,
+    entries: [
+      { item_id: 20, name: "Unique", weight: 2.5, out_of: 400, section: "Uniques" },
+      { item_id: 21, name: "Common", weight: 397.5, out_of: 400, section: "Weapons and armour" },
+    ],
+  });
+  const separate = (boss) => ({ boss, entries: [{ item_id: 22, separate_roll: true, weight: 2.5, out_of: 400, section: "Uniques" }] });
+  assert.ok(dropsAt(fractional(true), 4 / 400, 2).includes(20), "main row");
+  assert.ok(dropsAt(separate(true), 4 / 400, 2).includes(22), "separate roll");
+  assert.ok(!dropsAt(separate(true), 4 / 400, 1).includes(22), "x1 stays 2.5/400");
+});
+
 test("unique separate and pre-roll rows are boosted even when more common than 1/100", () => {
   const unique = {
     boss: true,

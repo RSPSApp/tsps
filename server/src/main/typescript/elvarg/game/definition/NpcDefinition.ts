@@ -43,6 +43,7 @@ export class NpcDefinition {
     private attackType: CombatType = CombatType.MELEE;
     /** Projectile graphic for ranged/magic attacks; -1 falls back to the generic one. */
     private projectileId: number = -1;
+    private launchGraphicId: number = -1;
     private fightsBack: boolean = true;
     private respawn: number = 25;
     private maxHit: number = 1;
@@ -300,6 +301,11 @@ export class NpcDefinition {
 
     public getProjectileId(): number {
         return this.projectileId;
+    }
+
+    /** The spotanim played on the npc with its ranged shot (npc-combat-defs.json `launchGraphic`), -1 for none. */
+    public getLaunchGraphicId(): number {
+        return this.launchGraphicId;
     }
 
     public getSlayerLevel(): number {

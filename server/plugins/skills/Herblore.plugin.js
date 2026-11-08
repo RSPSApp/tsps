@@ -12,6 +12,7 @@ module.exports = {
     require("./herblore/Cleaning.Herblore")(api);
     require("./herblore/Mixing.Herblore")(api);
     require("./herblore/Grinding.Herblore")(api);
+    require("./herblore/Coconut.Herblore")(api);
     require("./herblore/GuthixBalance.Herblore")(api);
   },
 };

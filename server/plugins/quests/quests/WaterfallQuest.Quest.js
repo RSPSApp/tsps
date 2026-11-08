@@ -198,7 +198,6 @@ module.exports = function registerWaterfallQuest(api) {
   }];
 
   const PILLARS_ATTRIBUTE = "waterfall-quest:pillars";
-  const BAXTORIAN_DOOR_ATTRIBUTE = "waterfall-quest:baxtorian-door";
   const GOLRIE_GATE_ATTRIBUTE = "waterfall-quest:golrie-gate";
   const TOMBSTONE_OPEN_ATTRIBUTE = "waterfall-quest:tombstone-open";
   const ROPE_ON_TREE_ATTRIBUTE = "waterfall-quest:rope-on-tree";
@@ -871,26 +870,26 @@ module.exports = function registerWaterfallQuest(api) {
     showItemMessage(player, GOLRIE_KEY_ITEM_ID, "You find a key in the crate.");
   }
 
-  function insideGolrieCell(player) {
-    const location = player.getLocation();
-    return location.getX() >= 2502 && location.getX() <= 2523
-      && location.getY() >= 9576 && location.getY() <= 9593;
-  }
-
-  function openGolrieGate({ player }) {
-    const unlocked = flag(player, GOLRIE_GATE_ATTRIBUTE) || hasItem(player, GOLRIE_KEY_ITEM_ID);
-    const inside = insideGolrieCell(player);
-    if (!unlocked) {
+  function unlockGolrieGate(player) {
+    if (!flag(player, GOLRIE_GATE_ATTRIBUTE) && !hasItem(player, GOLRIE_KEY_ITEM_ID)) {
       api.emitCustomEvent("npc-dialogue:start", {
         player,
         npcId: GOLRIE_NPC_ID,
         variant: "obtaining-the-pebble-opening-door-to-golrie-from-the-outside",
       });
-      return;
+      return false;
     }
-    if (hasItem(player, GOLRIE_KEY_ITEM_ID)) setFlag(player, GOLRIE_GATE_ATTRIBUTE);
-    player.sendMessage(hasItem(player, GOLRIE_KEY_ITEM_ID) ? "You use the key to unlock the gate." : "You open the gate and walk through.");
-    player.moveTo(inside ? new Location(2515, 9572, 0) : new Location(2515, 9577, 0));
+    if (!flag(player, GOLRIE_GATE_ATTRIBUTE)) {
+      setFlag(player, GOLRIE_GATE_ATTRIBUTE);
+      player.sendMessage("You use the key to unlock the gate.");
+    }
+    return true;
+  }
+
+  function openGolrieGate({ player, object }) {
+    if (unlockGolrieGate(player) && object) {
+      api.emitCustomEvent("door:open", { player, object, handled: false });
+    }
   }
 
   function usePebbleOnTombstone(event) {
@@ -1015,7 +1014,11 @@ module.exports = function registerWaterfallQuest(api) {
    * The raised-room copies and the inside ledge door are not swings: Open
    * sends the player back to the connected room.
    */
-  function handleBaxtorianDoorToggle(request) {
+  function handleQuestDoorToggle(request) {
+    if (request.objectId === GOLRIE_GATE_ID) {
+      request.handled = !unlockGolrieGate(request.player);
+      return;
+    }
     if (isDungeonExitDoor(request.objectId, request.location)) {
       request.handled = true;
       request.player.moveTo(WATERFALL_LEDGE);
@@ -1027,32 +1030,17 @@ module.exports = function registerWaterfallQuest(api) {
       request.player.moveTo(CHALICE_ROOM_EXIT);
       return;
     }
-    const { player } = request;
-    if (stageOf(player) < STAGE_ENTERED_DUNGEON) return;
-    const unlocked = flag(player, BAXTORIAN_DOOR_ATTRIBUTE);
-    if (!unlocked && !hasItem(player, BAXTORIAN_KEY_ITEM_ID)) {
-      player.sendMessage("The door is locked.");
-      request.handled = true;
-      return;
-    }
-    if (!unlocked) {
-      setFlag(player, BAXTORIAN_DOOR_ATTRIBUTE);
-      player.sendMessage("You use the key to unlock the door.");
-    }
-    if (stageOf(player) < STAGE_OPENED_BAXTORIAN_DOOR) quest.setStage(player, STAGE_OPENED_BAXTORIAN_DOOR);
+    request.handled = openBaxtorianDoor(request);
   }
 
   function openBaxtorianDoor({ player }) {
-    if (flag(player, BAXTORIAN_DOOR_ATTRIBUTE)) {
-      if (stageOf(player) < STAGE_OPENED_BAXTORIAN_DOOR) quest.setStage(player, STAGE_OPENED_BAXTORIAN_DOOR);
-      return false;
-    }
     if (!hasItem(player, BAXTORIAN_KEY_ITEM_ID)) {
       player.sendMessage("The door is locked.");
       return true;
     }
-    setFlag(player, BAXTORIAN_DOOR_ATTRIBUTE);
-    if (stageOf(player) < STAGE_OPENED_BAXTORIAN_DOOR) quest.setStage(player, STAGE_OPENED_BAXTORIAN_DOOR);
+    if (stageOf(player) >= STAGE_ENTERED_DUNGEON && stageOf(player) < STAGE_OPENED_BAXTORIAN_DOOR) {
+      quest.setStage(player, STAGE_OPENED_BAXTORIAN_DOOR);
+    }
     player.sendMessage("You use the key to unlock the door.");
     return false;
   }
@@ -1237,9 +1225,22 @@ module.exports = function registerWaterfallQuest(api) {
     event.handled = true;
   }
 
+  function useKeyOnDoor(event) {
+    const key = event.objectId === GOLRIE_GATE_ID ? GOLRIE_KEY_ITEM_ID
+      : event.objectId === BAXTORIAN_DOOR_ID ? BAXTORIAN_KEY_ITEM_ID : null;
+    if (key == null || event.itemId !== key) return false;
+    const request = { ...event, handled: false };
+    handleQuestDoorToggle(request);
+    if (!request.handled && event.object) {
+      api.emitCustomEvent("door:open", { player: event.player, object: event.object, handled: false });
+    }
+    return true;
+  }
+
   function handleItemOnObject(event) {
     cancelCrossing(event.player);
-    const handled = usePebbleOnTombstone(event)
+    const handled = useKeyOnDoor(event)
+      || usePebbleOnTombstone(event)
       || useRopeOnRock(event)
       || useRopeOnTree(event)
       || useRuneOnPillar(event)
@@ -1250,7 +1251,6 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   api.persistAttribute(PILLARS_ATTRIBUTE, 0);
-  api.persistAttribute(BAXTORIAN_DOOR_ATTRIBUTE, 0);
   api.persistAttribute(GOLRIE_GATE_ATTRIBUTE, 0);
   api.persistAttribute(TOMBSTONE_OPEN_ATTRIBUTE, 0);
   api.persistAttribute(VERSION_ATTRIBUTE, 0);
@@ -1280,7 +1280,7 @@ module.exports = function registerWaterfallQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
-  api.onCustomEvent("door:toggle", handleBaxtorianDoorToggle);
+  api.onCustomEvent("door:toggle", handleQuestDoorToggle);
   api.onNpcRoute(widenHudonTalkRange);
   api.onPlayerLogout(handleLogout);
   api.onPlayerDeath(({ player }) => clearCrossingRope(player));

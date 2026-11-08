@@ -1,6 +1,6 @@
 "use strict";
 
-const { DialogueChainBuilder, StatementDialogue } = require("./Core.Construction");
+const { ActionDialogue, DialogueChainBuilder, StatementDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 
 // The cache's generic option menu (interface "menu", script 217: title, "a|b|c", show numbers).
@@ -33,6 +33,13 @@ function refuse(player, problem) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, problem.messageBox)));
 }
 
+/** A message box whose "Click here to continue" carries on with `then` (rsprox captures: mesbox). */
+function warn(player, text, then) {
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new StatementDialogue(0, text))
+    .add(new ActionDialogue(1, { execute: then })));
+}
+
 function chooseOption(event) {
   if (event.groupId !== MENU_INTERFACE || event.childId !== 3) return;
   const pending = pendingMenus.get(event.player);
@@ -55,4 +62,4 @@ function attachMenus(api) {
   api.onPlayerLogout(closeMenu);
 }
 
-Object.assign(module.exports, { openMenu, messageBox, refuse, attachMenus });
+Object.assign(module.exports, { openMenu, messageBox, refuse, warn, attachMenus });

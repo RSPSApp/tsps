@@ -111,7 +111,7 @@ function harness(questModule, completedQuests = new Set()) {
       sendMessage: (message) => messages.push(message),
       isRegistered: () => registered,
       setRegistered: (value) => { registered = value; },
-      getSkillManager: () => ({ getMaxLevel: () => 99, addExperiences: (skill, amount) => xp.push([skill?.getName?.() ?? skill, amount]) }),
+      getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: (skill, amount) => xp.push([skill?.getName?.() ?? skill, amount]) }),
     };
     return p;
   }

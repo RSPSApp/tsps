@@ -12,6 +12,21 @@ Then, run
  
 ```yarn dev```
 
+## Contributing bug fixes
+
+After setup, open the repository in your coding agent and use the
+[repo-owned bugfix skill](../.agents/skills/tsps-bugfix-loop/SKILL.md). Sample prompt:
+
+```text
+Read .agents/skills/tsps-bugfix-loop/SKILL.md and follow it.
+Pick a quick, unclaimed bug, fix and verify it in your own worktree,
+and open a PR ready for review. Stop after that issue.
+```
+
+Use your own tools and GitHub account; without push access, return a verified patch.
+For continuous work, replace the last sentence with “Keep fixing quick, unclaimed
+bugs until I ask you to stop.”
+
 ## Player persistence
 
 Player saves are stored in `data/saves/players.sqlite`. On startup, JSON character

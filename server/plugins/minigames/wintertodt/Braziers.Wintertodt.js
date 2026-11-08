@@ -9,6 +9,9 @@
  *   brazier changes gets the full reward.
  * - Fix: a hammer, 25 points and 4x Construction level XP for players who own a house.
  * - Feed: a root is 10 points and 3x Firemaking XP, kindling 25 and 3.8x.
+ * The pyromancer outfit raises the Firemaking XP of lighting and feeding ("firemaking:xp-multiplier"):
+ * the Wiki's Pyromancer outfit page lists no exclusion for Wintertodt, only for shade remains and
+ * Dorgesh-Kaan lamps.
  * Captures (recordings 3254, 3262): lighting with a bruma torch is anim 7174 on the click and
  * lights 3 ticks later with synth 2596 ("You light the brazier."). Fixing is anim 3676 and synth
  * 930 a tick after the click, fixed on tick 3 ("You fix the brazier."). Feeding is anim 832 with
@@ -124,6 +127,13 @@ function light(event) {
   return true;
 }
 
+/** Firemaking XP at `perLevel` times the player's level, with the pyromancer outfit's bonus. */
+function firemakingXp(player, perLevel) {
+  const request = { player, multiplier: 1 };
+  Shared.api().emitCustomEvent("firemaking:xp-multiplier", request);
+  return perLevel * Shared.level(player, "FIREMAKING") * request.multiplier;
+}
+
 function finishLighting(player, index) {
   const c = Corners.corner(index);
   if (!Round.isActive() || c.brazier === Shared.BRAZIER.BROKEN || !c.pyromancerHealthy) return;
@@ -134,10 +144,15 @@ function finishLighting(player, index) {
   Shared.sound(player, Shared.SOUND.FIRE);
   player.sendMessage("You light the brazier.");
   Round.addPoints(player, POINTS.LIGHT);
-  Shared.addXp(player, "FIREMAKING", XP.LIGHT * Shared.level(player, "FIREMAKING"));
+  Shared.addXp(player, "FIREMAKING", firemakingXp(player, XP.LIGHT));
 }
 
 // ------------------------------------------------------------------ fix
+
+function hasHammer(player) {
+  const I = Shared.core().ItemIdentifiers;
+  return [I.HAMMER, I.IMCANDO_HAMMER, I.IMCANDO_HAMMER_OFF_HAND_].some(id => Shared.hasItem(player, id));
+}
 
 function fix(event) {
   const { player } = event;
@@ -145,7 +160,7 @@ function fix(event) {
   if (index < 0) return false;
   if (quiet(player)) return true;
   if (Corners.corner(index).brazier !== Shared.BRAZIER.BROKEN) return true;
-  if (!player.getInventory().contains(Shared.ITEM.HAMMER)) {
+  if (!hasHammer(player)) {
     player.sendMessage("You need a hammer to fix this brazier.");
     return true;
   }
@@ -203,7 +218,7 @@ function feedOne(player) {
   player.getInventory().refreshItems();
   Shared.sound(player, Shared.SOUND.FIRE);
   Round.addPoints(player, kindling ? POINTS.KINDLING : POINTS.ROOT);
-  Shared.addXp(player, "FIREMAKING", (kindling ? XP.KINDLING : XP.ROOT) * Shared.level(player, "FIREMAKING"));
+  Shared.addXp(player, "FIREMAKING", firemakingXp(player, kindling ? XP.KINDLING : XP.ROOT));
   if (fuelOf(player) < 0) {
     player.sendMessage("You have run out of bruma roots.");
     return false;
@@ -244,7 +259,9 @@ module.exports = function registerWintertodtBraziers(api) {
   for (const item of ["Bruma root", "Bruma kindling"]) {
     api.onItemOnObject(item, Shared.OBJECT.BURNING_BRAZIER, feed);
   }
-  api.onItemOnObject("Hammer", Shared.OBJECT.BRAZIER, fix);
+  for (const hammer of ["Hammer", "Imcando hammer", "Imcando hammer (off-hand)"]) {
+    api.onItemOnObject(hammer, Shared.OBJECT.BRAZIER, fix);
+  }
 };
 
 module.exports.light = light;

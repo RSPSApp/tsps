@@ -313,6 +313,10 @@ export class PacketSender {
     return this;
   }
 
+  public replayVarps(): void {
+    for (const [id, value] of this.varps) this.player.getSession().sendClientPacket(encodeVarp(id, value));
+  }
+
   getVarp(id: number): number {
     return this.varps.get(id) ?? 0;
   }
@@ -383,7 +387,7 @@ export class PacketSender {
 
   sendInterface(id: number): this {
     this.player.setInterfaceId(id);
-    if (this.player.isPlayerBot()) {
+    if ((this.player.isUnwatchedBot?.() ?? this.player.isPlayerBot?.())) {
       return this;
     }
 

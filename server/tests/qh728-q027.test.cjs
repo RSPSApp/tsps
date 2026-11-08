@@ -226,7 +226,12 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     }
     assert.equal(inventory.getAmount(I.RAILING), 0, 'six repairs consume six railings');
     assert.equal(quest.getStage(player), 2);
-    assert.equal(player.configs.get(0), 2);
+    // The railings are done but unreported, so the canonical varp stays at 1: the
+    // remains multiloc only renders at 3, and Quest Helper reads 2 as "go to the
+    // tower", which skips its own report step and sends the player to an empty tower.
+    assert.equal(player.configs.get(0), 1, 'unreported railings keep the canonical varp at 1');
+    assert.equal(object(player, 0, 'Take', { x: 2567, y: 3444, z: 2 }), true);
+    assert.equal(inventory.getAmount(I.DWARF_REMAINS), 0, 'the remains cannot be taken before the report');
 
     assert.deepEqual(variant(player, N.CAPTAIN_LAWGOF), {
       page: 'Dwarf Cannon', variant: 'fixing-the-railings-talking-to-captain-lawgof-after-fixing-the-railings',

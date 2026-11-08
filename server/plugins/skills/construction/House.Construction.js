@@ -549,6 +549,7 @@ function removeRoomPrompt(player, house, target, onNo = () => {}, onRemoved = ()
     if (currentProblem) return Menu.refuse(player, currentProblem);
     house.removeRoom(target);
     rebuildHouse(player, house);
+    api.emitCustomEvent("construction:room-removed", { player, house, room });
     player.sendMessage("Room deleted!");
     onRemoved();
   }, "No", onNo);
@@ -1122,14 +1123,21 @@ function tryRemoveFurniture(event) {
     return true;
   }
   // rsprox captures ("Remove" on poh_chair1, rev 229): "Really remove it?", and the Yes is silent.
-  api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
+  const confirm = () => api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player)) return;
     const currentProblem = house.canRemoveFurniture(event.location, event.objectId, type);
     if (currentProblem) return Menu.refuse(player, currentProblem);
-    if (!house.removeFurniture(event.location, event.objectId, type)) return;
+    const furniture = house.removeFurniture(event.location, event.objectId, type);
+    if (!furniture) return;
     player.performAnimation(new Animation(REMOVE_ANIMATION));
     rebuildHouse(player, house);
+    api.emitCustomEvent("construction:furniture-removed", { player, house, furniture });
   }, "No", () => {});
+  // A piece whose removal costs the player something warns first (rsprox captures: the portal nexus).
+  const removal = { player, house, furniture: house.getFurnitureAt(event.location, event.objectId, type), warning: null };
+  api.emitCustomEvent("construction:furniture-removing", removal);
+  if (removal.warning) Menu.warn(player, removal.warning, confirm);
+  else confirm();
   return true;
 }
 
@@ -1352,6 +1360,28 @@ function enterBuildingHouse({ player, objectId, location, sourceLocation, object
   const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
   return enterAtPortal(player, true, nearbyHouseLocation(player, objectId), diaryEntryContext);
 }
+/**
+ * Wiki, Player-owned house: deaths anywhere in an active house keep items,
+ * restore stats and leave by its portal, including player kills on PvP worlds.
+ * CombatRings' earlier hook retains its separate in-house defeat behavior.
+ */
+function safeHouseDeath(event) {
+  const { player } = event;
+  const house = houseFor(player);
+  if (event.preventDeath || !house || house.isDestroyed() || !house.getPlayers().includes(player)) return;
+  event.preventDeath = true;
+  const combat = player.getCombat();
+  combat.reset();
+  combat.setUnderAttack(null);
+  combat.getHitQueue().clear();
+  combat.clearDamageMap();
+  api.core.CombatFactory.clearHitRollCache(player);
+  World.getPlayers().forEach(other => { if (other !== player) other.getCombat().removeDamager(player); });
+  player.setFollowing(null);
+  player.resetAttributes();
+  exitHouse(player);
+}
+
 function leaveHouse({ player }) { return exitHouse(player); }
 function showAdvertisements({ player, objectId }) { viewAdvertisements(player, nearbyHouseLocation(player, objectId)); return true; }
 function visitLastHouse({ player }) {
@@ -1482,10 +1512,11 @@ function attach(api) {
   api.onCustomEvent("construction:owns-house", ownsHouse);
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onSpellDisabled(refuseHouseVengeance);
+  api.onPlayerBeforeDeath(safeHouseDeath);
   api.onPlayerLogin(loginHouse);
   api.onPlayerMapSquareChange(recordRegionVisit);
   api.onPlayerDisconnect(logoutHouse);
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

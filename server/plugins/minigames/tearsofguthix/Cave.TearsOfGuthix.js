@@ -108,7 +108,8 @@ const SKILL_MESSAGES = {
 const SKILL_UNLOCKS = {
   RUNECRAFTING: { quest: "rune_mysteries", stage: 6 },
   HERBLORE: { quest: "druidic_ritual", stage: 4 },
-  SAILING: { quest: "pandemonium", stage: 1 },
+  // Wiki (Tears of Guthix): "Sailing requires completing the Pandemonium quest" (its stage 50).
+  SAILING: { quest: "pandemonium", stage: 50 },
 };
 
 let api;

@@ -341,3 +341,16 @@ test("a registered Neitiznot stump checks current Woodcutting before making a sh
     assert.equal(completionCounts.get(p), 1, "repeat crafting emits no second completion");
   }
 });
+
+test("a banked costume is owned: the jester chest gives no second set", (t) => {
+  const f = actor(t, 4);
+  const open = jesterChest(f);
+  open();
+  for (const id of jesterIds()) {
+    f.inv.delete(id, 1);
+    f.p.getBank(0).add(new core.Item(id, 1), false);
+  }
+  open();
+  assert.deepEqual(jesterCounts(f), [0, 0, 0, 0], "nothing from the chest");
+  assert.equal(f.messages.at(-1), "You have already taken the jester costume.");
+});

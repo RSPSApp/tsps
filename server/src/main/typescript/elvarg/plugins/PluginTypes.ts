@@ -462,6 +462,8 @@ export interface PluginCanBankItemEvent {
   player: any;
   item: any;
   allow: boolean | null;
+  /** A policy query (e.g. the crew's Bank-cargo): refuse without telling the player why. */
+  quiet?: boolean;
 }
 
 export interface PluginCanShopEvent {
@@ -1361,7 +1363,7 @@ export interface PluginApi {
   emitCanEat(player: any, itemId: number): boolean | null;
   emitCanDrink(player: any, itemId: number): boolean | null;
   emitCanBank(player: any, source?: string): boolean | null;
-  emitCanBankItem(player: any, item: any): boolean | null;
+  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean }): boolean | null;
   emitShouldKeepItemOnDeath(player: any, item: any): boolean | null;
   emitFiremakingBlocked(event: PluginFiremakingBlockedEvent): boolean;
   emitObjectInteraction(event: PluginObjectInteractionEvent): boolean;
@@ -1684,6 +1686,10 @@ export interface PluginCoreApi {
   /** Public chat as a client sends it (filter, mute, broadcast): bots speak through it too. */
   ChatPacketListener: any;
   TradeState: any;
+  controlPlayer: (owner: any, target: any, released: () => void) => boolean;
+  releasePlayerControl: (player: any) => boolean;
+  /** The parked owner left the world: release the controlled player and close the owner's connection. */
+  endPlayerControl: (controlled: any) => boolean;
   dispatchClientMessages: (player: any, messages: any[]) => boolean;
   connectHeadlessClient: (username: string, password: string) => Promise<{ player?: any; error?: string }>;
   CachePipeline: typeof import("../game/cache/CachePipeline").CachePipeline;

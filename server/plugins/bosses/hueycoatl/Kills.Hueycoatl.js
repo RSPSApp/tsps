@@ -14,7 +14,7 @@
  * or fewer), or with either 25 body or 75 in all (six or more). Quantities scale with the
  * share of the fight's 4,050 hitpoints dealt (solo is the full table); under 25 body damage
  * they are cut to 5% (at least 1), with the warning. Each player rolls the uniques on their own,
- * as likely as their share; the pet too; Big bones go to the MVP.
+ * as likely as their share; the pet also receives the under-25-body penalty. Big bones go to the MVP.
  */
 const Shared = require("./Shared.Hueycoatl");
 const Pillars = require("./Pillars.Hueycoatl");
@@ -124,13 +124,13 @@ function scaled(drops, scale) {
   return drops.map((drop) => ({ ...drop, amount: Math.max(1, Math.floor(drop.amount * scale)) }));
 }
 
-/** One player's loot: the main roll scaled, uniques and the pet as likely as their share. */
+/** Main quantities and pet chance use the adjusted share; ordinary uniques use the full share. */
 function lootFor(player, npc, damage, team, mvp) {
   const share = Math.min(1, total(damage) / Shared.TOTAL_HITPOINTS);
   const scale = damage.body < BODY_QUALIFY ? share * FEWER_REWARDS_SCALE : share;
   const main = scaled(roll(player, npc, isMain), scale);
   const uniques = roll(player, npc, isUnique).filter(() => Math.random() < share);
-  const tertiary = roll(player, npc, isTertiary).filter((drop) => drop.itemId !== PET || Math.random() < share);
+  const tertiary = roll(player, npc, isTertiary).filter((drop) => drop.itemId !== PET || Math.random() < scale);
   const drops = [...main, ...uniques, ...tertiary];
   if (mvp) drops.unshift({ itemId: BIG_BONES, amount: 1 });
   return { drops, main, uniques };
@@ -180,6 +180,18 @@ function recordKill(player, ticks) {
   if (request.total == null) announceKill(player, own, ticks);
 }
 
+/** The head whose loot is being handed out, and who qualified for it, while killed() emits each share. */
+const rewarding = new WeakMap();
+
+/**
+ * Wiki (Ironman Mode): "Iron accounts receive group-boss rewards when fighting with others", The Hueycoatl among them,
+ * so an Ironman's own share of a team kill is kept, not wiped as a shared kill.
+ */
+function ironmanKeeps(request) {
+  if (!rewarding.get(request?.npc)?.has(request.player)) return;
+  request.keep.push(...request.drops.map((drop) => drop.itemId));
+}
+
 /** The head is beaten: kill counts, durations and each player's loot. */
 function killed(session) {
   const { fight } = session;
@@ -201,7 +213,12 @@ function killed(session) {
     if (!qualifies(damage, team.length)) continue;
     const { drops, main, uniques } = lootFor(player, fight.head, damage, team.length, player === mvp);
     // Collection log, Ironman and saves hear each share as the player's own roll.
-    api.emitCustomEvent("npc-drops:roll", { player, npc: fight.head, npcId: Shared.NPC.HEAD, drops, damagers: fighters });
+    if (fight.head) rewarding.set(fight.head, new Set([player]));
+    try {
+      api.emitCustomEvent("npc-drops:roll", { player, npc: fight.head, npcId: Shared.NPC.HEAD, drops, damagers: fighters });
+    } finally {
+      if (fight.head) rewarding.delete(fight.head);
+    }
     placeDrops(player, session, drops, location);
     session.graphic(lootTile, Shared.GFX.LOOT_BEAM, 0, [player]);
     for (const drop of main) player.sendMessage(`<col=${DROP_COLOUR}>The Hueycoatl dropped: ${describe(drop)}</col>`);
@@ -232,9 +249,10 @@ function attach(pluginApi) {
   pluginApi.onCombatHitResolved(hitResolved);
   pluginApi.onCustomEvent("combat-achievements:personal-best", personalBest);
   pluginApi.onCustomEvent("combat-achievements:kill-count", killCounts);
+  pluginApi.onCustomEvent("ironman:shared-kill-keeps", ironmanKeeps);
 }
 
 module.exports = {
   attach, killed, world,
-  _test: { qualifies, lootFor, scaled, crushHighest, isMain, isUnique, isTertiary },
+  _test: { ironmanKeeps, qualifies, lootFor, scaled, crushHighest, isMain, isUnique, isTertiary },
 };

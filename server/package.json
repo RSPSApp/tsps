@@ -54,6 +54,7 @@
     "dump:loc": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-loc.ts",
     "dump:spotanim": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-spotanim.ts",
     "dump:widget": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-widget.ts",
+    "dump:level-up-messages": "node ./scripts/dump-level-up-messages.cjs",
     "dump:ca-bosses": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-ca-bosses.ts",
     "dump:item-combat-styles": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-item-combat-styles.ts",
     "dump:smithing": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-smithing-layout.ts",

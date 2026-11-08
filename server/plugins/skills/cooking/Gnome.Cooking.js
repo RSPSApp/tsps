@@ -1,12 +1,15 @@
 "use strict";
 
-// The eight tutorial products use the ordinary cuisine menu independently of
-// tutorial progress. Other cuisine choices remain outside this unit's scope.
+// Cuisine preparation is available independently of tutorial progress.
+// Only the recipes listed below are supported by this unit.
 const Common = require("./Common.Cooking");
 const MENU = "aluft_cooking";
 const MENU_TYPE = "aluft_cooking_type";
 const CHOSEN = "gnome_chosen_cuisine";
 const OP1 = 1 << 1;
+const MIXED_DRAGON_SHAKER = 9574;
+const MIXED_DRAGON_POURED = 9575;
+const MIXED_DRAGON_GARNISHED = 9576;
 let cachedUi;
 const sessions = new WeakMap();
 const cuts = new WeakMap();
@@ -16,6 +19,7 @@ const COCKTAILS = [
   { selector: 1, level: 8, mixed: 9569, product: "pineapple_punch", mix: [["pineapple", 2], ["lemon", 1], ["orange", 1]], finish: [["lime_chunks", 1], ["pineapple_chunks", 1], ["orange_slices", 1]], finishXp: 40 },
   { selector: 2, level: 18, mixed: 9566, product: "wizard_blizzard", mix: [["vodka", 2], ["gin", 1], ["lime", 1], ["lemon", 1], ["orange", 1]], finish: [["pineapple_chunks", 1], ["lime_slices", 1]], finishXp: 80 },
   { selector: 3, level: 20, mixed: 9567, product: "sgg", mix: [["vodka", 1], ["lime", 3]], finish: [["lime_slices", 1], ["equa_leaves", 1]], finishXp: 90 },
+  { selector: 4, level: 32, mixed: MIXED_DRAGON_SHAKER, poured: MIXED_DRAGON_POURED, product: "drunk_dragon", mix: [["vodka", 1], ["gin", 1], ["dwellberries", 1]] },
 ];
 const BATTA = [null,
   { selector: 8, level: 26, result: 9482, ingredients: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], spice: true },
@@ -24,7 +28,7 @@ const CRUNCHY = [
   { selector: 16, level: 10, result: 9581, ingredients: [["toads_legs", 2]], spice: true },
   null, null, { selector: 19, level: 16, result: 9577, ingredients: [["chocolate_bar", 2]], spice: true },
 ];
-const MENUS = [COCKTAILS.concat([null, null, null]), BATTA, CRUNCHY];
+const MENUS = [COCKTAILS.concat([null, null]), BATTA, CRUNCHY];
 // The per-product Creation tables list Cooking 1 for these final garnish
 // operations; the higher recipe levels apply to the earlier preparation.
 const FINISH = [
@@ -153,10 +157,20 @@ function pour(event) {
   const { player, item, itemId, slot } = event;
   const recipe = COCKTAILS.find((entry) => entry.mixed === itemId);
   if (!recipe || !alive(player) || !plain(item) || player.getInventory().getItems()[slot] !== item || Common.level(player) < recipe.level) return;
-  const transaction = plan(player, [[itemId, 1], ["cocktail_glass_empty", 1], ...recipe.finish],
-    [["cocktail_shaker", 1], [recipe.product, 1]], [{ id: itemId, slot, item }]);
+  const product = recipe.poured ?? recipe.product;
+  const transaction = plan(player, [[itemId, 1], ["cocktail_glass_empty", 1], ...(recipe.finish ?? [])],
+    [["cocktail_shaker", 1], [product, 1]], [{ id: itemId, slot, item }]);
   if (!transaction) return;
-  apply(player, transaction, recipe.product, recipe.finishXp, "make");
+  apply(player, transaction, product, recipe.finishXp ?? 0, "make");
+}
+
+function garnishDragon(event) {
+  const { player, item, itemId, slot } = event;
+  if (itemId !== MIXED_DRAGON_POURED || !alive(player) || !plain(item)
+      || player.getInventory().getItems()[slot] !== item || Common.level(player) < 32) return;
+  const transaction = plan(player, [[itemId, 1], ["pineapple_chunks", 1], ["pot_of_cream", 1]],
+    [[MIXED_DRAGON_GARNISHED, 1]], [{ id: itemId, slot, item }]);
+  if (transaction) apply(player, transaction, MIXED_DRAGON_GARNISHED, 0, "make");
 }
 
 function emptyBurnt(event) {
@@ -239,6 +253,7 @@ function attach(api) {
   api.onItemAction("Mixed punch", { Pour: pour });
   api.onItemAction("Mixed blizzard", { Pour: pour });
   api.onItemAction("Mixed sgg", { Pour: pour });
+  api.onItemAction("Mixed dragon", { Pour: pour, "Add-ingreds": garnishDragon });
   api.onItemAction("Burnt crunchies", { "Empty Tray": emptyBurnt });
   api.onItemAction("Burnt batta", { "Empty Tin": emptyBurnt });
   api.onItemOnItem(useItems, { noted: false });

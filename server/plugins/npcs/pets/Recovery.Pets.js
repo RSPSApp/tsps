@@ -36,6 +36,11 @@ function locationOf(player, family) {
     api.emitCustomEvent("pets:held-elsewhere", request);
     if (request.held) return 4;
   }
+  // A pet lying in its owner's grave or kept by Death is still theirs to collect: reclaiming it as well would be a second.
+  const storage = {player, grave: null, office: []};
+  api.emitCustomEvent("gravestones:state", storage);
+  const stored = [...(storage.grave?.items ?? []), ...(storage.office ?? [])];
+  if (variants.some(p => stored.some(entry => entry && entry.id === p.itemId && entry.amount > 0))) return 4;
   return 0;
 }
 function rows(player) {

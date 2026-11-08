@@ -120,6 +120,26 @@ retain their prior behavior: their bottle rules are unverified here, not asserte
 ineligible. Exact drop feedback has not been captured. Spirit-flake extra fish are not
 implemented for ordinary Fishing, so this change does not claim a native ordinary-flakes proc.
 
+## Extra fish: Rada's blessing and spirit flakes
+
+Wiki ([Spirit flakes](https://oldschool.runescape.wiki/w/Spirit_flakes),
+[Fishing enhancers](https://oldschool.runescape.wiki/w/Fishing_enhancers)): carried spirit flakes
+give a 50% chance of an extra fish for no extra experience, a flake is lost for every fish caught
+whether the catch is single or double, they stack with Rada's blessing (2-8%), and they cannot
+activate with only one empty inventory slot left. Tempoross, Fishing Trawler, drift nets, Chambers
+of Xeric and Leechfin are excluded; those do not run through this loop.
+
+- One roll per landed fish: the first 50% of the roll is the flakes, the blessing's chance sits on
+  top of it, so a flaked fish with Rada's blessing 4 has a 58% chance of one extra fish (the Wiki
+  says the effects stack; adding them is our reading). The extra is never a third fish.
+- A flake is used for each landed fish, also when the roll fails or there is no room for the
+  extra. Big net junk (seaweed, boots, gloves, oysters, caskets) also uses a flake and can double (Wiki: non-fish catches are eligible); Rada's blessing stays fish-only. Park finds are left out.
+- Only flakes in the inventory count. The Wiki does not say a tackle box feeds them, so those are
+  not used.
+- The flakes have no message; the blessing keeps "Rada's blessing enabled you to catch an extra
+  fish." No recording shows the flake consumption outside Leagues Tempoross, so the numbers are
+  the Wiki's.
+
 ## Not covered
 
 - Which quest step unlocks karambwan fishing (Lubufu's apprenticeship in Tai Bwo Wannai Trio) is

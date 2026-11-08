@@ -45,7 +45,6 @@ TumekensShadow.register(api);
 
 function actor(location, { player = false, equipment = [] } = {}) {
   const attributes = new Map([
-    ['dragonfire-shield:armed', true],
     ['dragonfire-shield:recharge', 0],
   ]);
   const entity = {
@@ -63,7 +62,7 @@ function actor(location, { player = false, equipment = [] } = {}) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getUpdateFlag: () => ({ flag() {} }),
-    getPacketSender: () => ({ sendConfig() {}, sendVarbit() {} }),
+    getPacketSender: () => ({ sendConfig() {}, sendVarbit() {}, getVarp: (id) => (id === 301 ? 2 : 0) }),
     isSpecialActivated: () => false,
     getCombat: () => ({ setCastSpell(spell) { entity.castSpell = spell; } }),
   };

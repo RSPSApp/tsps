@@ -10,6 +10,7 @@ const { FightType } = require('../dist/game/content/combat/FightType');
 const { BonusManager } = require('../dist/game/model/equipment/BonusManager');
 
 let cycle = 1;
+const { Location } = require('../dist/game/model/Location');
 
 /** A 99 Magic, 99 Defence player with no gear and no prayers. */
 function caster(fightType, { autocasting = false } = {}) {
@@ -118,7 +119,13 @@ function arceuusPlayer({ magic = 99, prayer = 50, energy = 40, weapon = -1 } = {
         }),
         getRunEnergy: () => player.energy,
         setRunEnergy: (value) => { player.energy = value; },
-        getPacketSender: () => ({ sendRunEnergy() {} }),
+        getPacketSender: () => ({
+            sendRunEnergy() {},
+            sendVarbit: (id, value) => player.varbits.push([id, value]),
+            sendSoundEffect: (id) => player.sounds.push(id),
+        }),
+        getLocation: () => player.location,
+        varbits: [], sounds: [], location: new Location(3200, 3200, 0),
     };
     return player;
 }
@@ -218,8 +225,11 @@ test('Mark of Darkness: 3 ticks per base Magic level (x5 with a purging staff), 
 test('Vile Vigour spends only the prayer that fills run energy; Death Charge restores once per cast (Wiki)', () => {
     const { ArceuusSpells } = require('../dist/game/content/combat/magic/ArceuusSpells');
     const { Spell } = require('../dist/game/content/combat/magic/Spell');
+    const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
     const canCast = Spell.prototype.canCast;
+    const getVarbitId = CacheDefinitions.getVarbitId;
     Spell.prototype.canCast = () => true;
+    CacheDefinitions.getVarbitId = () => null;
     try {
         const player = arceuusPlayer({ prayer: 50, energy: 80 });
         ArceuusSpells.handleSpell(player, 'Vile Vigour');
@@ -240,6 +250,54 @@ test('Vile Vigour spends only the prayer that fills run energy; Death Charge res
         assert.equal(killer.graphics.at(-1), 1855);
     } finally {
         Spell.prototype.canCast = canCast;
+        CacheDefinitions.getVarbitId = getVarbitId;
+    }
+});
+
+test('Death Charge: cast and fade varbits, messages and sounds, pending vs cooldown refusal, 16-tile kill range (recordings 4102, 3340; Wiki)', () => {
+    const { ArceuusSpells } = require('../dist/game/content/combat/magic/ArceuusSpells');
+    const { Spell } = require('../dist/game/content/combat/magic/Spell');
+    const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+    const { TaskManager } = require('../dist/game/task/TaskManager');
+    const canCast = Spell.prototype.canCast;
+    const getVarbitId = CacheDefinitions.getVarbitId;
+    Spell.prototype.canCast = () => true;
+    for (let i = 0; i < 200; i++) TaskManager.process(); // earlier tests' timers
+    const COOLDOWN = 1, ACTIVE = 2;
+    CacheDefinitions.getVarbitId = (name) => ({ arceuus_death_charge_cooldown: COOLDOWN, arceuus_death_charge_active: ACTIVE })[name] ?? null;
+    const CAST = '<col=a53fff>Upon the death of your next foe, some of your special attack energy will be restored.</col>';
+    try {
+        const player = arceuusPlayer();
+        ArceuusSpells.handleSpell(player, 'Death Charge');
+        assert.deepEqual(player.varbits, [[COOLDOWN, 1], [ACTIVE, 1]], 'both varbits on at the cast');
+        assert.equal(player.messages.at(-1), CAST);
+        assert.deepEqual(player.sounds, [5034]);
+        player.setAttribute('arceuus:death-charge-cooldown', World.getProcessCycle() + 100); // as the cast's rune check sets it
+        ArceuusSpells.handleSpell(player, 'Death Charge');
+        assert.equal(player.messages.at(-1), 'You already have a Death Charge pending on you.');
+
+        const far = { getLocation: () => new Location(3217, 3200, 0) };
+        const near = { getLocation: () => new Location(3216, 3216, 0) };
+        assert.equal(ArceuusSpells.useDeathCharge(player, far), false, 'kills beyond 16 tiles do not use the charge');
+        assert.equal(ArceuusSpells.useDeathCharge(player, near), true);
+        assert.deepEqual(player.varbits.at(-1), [ACTIVE, 0]);
+        assert.equal(player.messages.at(-1), '<col=a53fff>Some of your special attack energy has been restored.</col>');
+        ArceuusSpells.handleSpell(player, 'Death Charge');
+        assert.equal(player.messages.at(-1), 'You can only cast Death Charge every 60 seconds.', 'spent charge: only the cooldown is left');
+
+        // A cast no kill uses: 100 ticks on the cooldown ends and the charge fades.
+        const idle = arceuusPlayer();
+        ArceuusSpells.handleSpell(idle, 'Death Charge');
+        for (let i = 0; i < 99; i++) TaskManager.process();
+        assert.equal(idle.varbits.length, 2, 'nothing yet at tick 99');
+        TaskManager.process();
+        assert.deepEqual(idle.varbits.slice(2), [[COOLDOWN, 0], [ACTIVE, 0]]);
+        assert.equal(idle.messages.at(-1), '<col=a53fff>Your Death Charge has faded away.</col>');
+        assert.equal(idle.sounds.at(-1), 5056);
+        assert.equal(ArceuusSpells.useDeathCharge(idle), false);
+    } finally {
+        Spell.prototype.canCast = canCast;
+        CacheDefinitions.getVarbitId = getVarbitId;
     }
 });
 

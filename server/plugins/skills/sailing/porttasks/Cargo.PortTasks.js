@@ -117,7 +117,7 @@ function canUnequip(event) {
 function canBankCargo(event) {
   if (!common.isCrate(event.item.getId())) return;
   event.allow = false;
-  event.player.sendMessage(CANNOT_REMOVE);
+  if (!event.quiet) event.player.sendMessage(CANNOT_REMOVE);
 }
 
 /** Required task cargo must remain recoverable through the hold and source ledger. */
@@ -149,3 +149,4 @@ function attach(api) {
 }
 
 module.exports = attach;
+module.exports._test = { canBankCargo };

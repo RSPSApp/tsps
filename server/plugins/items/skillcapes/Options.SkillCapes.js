@@ -68,7 +68,8 @@ function staminaBoost(player) {
     return;
   }
   Capes.useDaily(player, STAMINA_KEY);
-  api.emitCustomEvent("potions:apply-stamina", { player, energy: FULL_RUN_ENERGY, durationMs: STAMINA_DURATION_MS });
+  // Wiki (Ring of endurance): the cape's boost "is not doubled and uses no charges".
+  api.emitCustomEvent("potions:apply-stamina", { player, energy: FULL_RUN_ENERGY, durationMs: STAMINA_DURATION_MS, ringDoubles: false });
   player.sendMessage("You feel reinvigorated.");
 }
 

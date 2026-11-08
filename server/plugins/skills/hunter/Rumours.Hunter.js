@@ -116,9 +116,11 @@ function sackRewards(player,tier) {
     if(s.enhanced&&['expert','master'].includes(tier)&&!s.perfected&&C.roll(1,50)===1)rewards.push([I.PERFECTED_QUETZAL_WHISTLE_BLUEPRINT,1]);
     if(!owns(player,I.HUNTSMANS_KIT)&&C.roll(1,50)===1)rewards.push([I.HUNTSMANS_KIT,1]);
     if(C.roll(1,50)===1)rewards.push([[I.GUILD_HUNTER_HEADWEAR,I.GUILD_HUNTER_TOP,I.GUILD_HUNTER_LEGS,I.GUILD_HUNTER_BOOTS][s.outfit%4],1]);
-    if(s.completed>=100&&!s.enhanced&&!s.tornEnhanced)rewards.push([I.TORN_ENHANCED_QUETZAL_WHISTLE_BLUEPRINT,1]);
-    if(s.completed>=250&&!s.perfected&&!s.tornPerfected)rewards.push([I.TORN_PERFECTED_QUETZAL_WHISTLE_BLUEPRINT,1]);
   }
+  // Wiki (Hunters' Rumours): the torn enhanced blueprint at 100 rumours comes "from any hunters' loot sack", the torn
+  // perfected one at 250 "from any expert or master hunters' loot sack".
+  if(s.completed>=100&&!s.enhanced&&!s.tornEnhanced)rewards.push([I.TORN_ENHANCED_QUETZAL_WHISTLE_BLUEPRINT,1]);
+  if(['expert','master'].includes(tier)&&s.completed>=250&&!s.perfected&&!s.tornPerfected)rewards.push([I.TORN_PERFECTED_QUETZAL_WHISTLE_BLUEPRINT,1]);
   return rewards;
 }
 function open({player,itemId}) {

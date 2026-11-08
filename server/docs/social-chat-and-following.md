@@ -22,7 +22,7 @@ Text, message types and timing come from rsprox recordings (rev 227-238), covere
 
 The tab is the cache's tab bar `side_channels` (707) with its content in 707:7, as live mounts it (4186). A click on 707:2-5 sets varbit 13071 and mounts 7, 701 (Your Clan), 702 (Guest Clan) or 76 (Grouping) (2528; rev 227's buttons sit one component later, 75). The choice is saved. `SideChannels.plugin.js` does this; a plugin that needs the first tab, like the Chambers of Xeric party (500), uses `side-channels:replace-chat-channel`. That the first tab keeps showing the party when clicked is an assumption.
 
-The Clan system isn't implemented. Login sends varbits 933 and 12164 = 1, so both clan tabs say "No current clan" (script 4288), and typing `//` gets the client script's own refusal. In Grouping, the activity list works in the client, while its Teleport button and PvP Arena have no server side: no capture shows what they send.
+The Clan system isn't implemented. Login sends varbits 933 and 12164 = 1, so both clan tabs say "No current clan" (script 4288), and typing `//` gets the client script's own refusal. In Grouping, the activity list works in the client, while its Teleport button has no server side: no capture shows what it sends. The PvP Arena button opens the PvP Arena side panel (`duelarena/Matchmaking.DuelArena.js`).
 
 ## Public chat and autochat
 

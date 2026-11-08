@@ -460,8 +460,10 @@ function barXp(player, bar) {
   const Items = core.ItemIdentifiers;
   if (bar.barId !== Items.GOLD_BAR) return bar.xp;
   const gauntlets = [Items.GOLDSMITH_GAUNTLETS].includes(equipped(player, core.Equipment.HANDS_SLOT));
-  const cape = [Items.SMITHING_CAPE, Items.SMITHING_CAPE_T_].includes(equipped(player, core.Equipment.CAPE_SLOT));
-  return gauntlets || cape ? bar.xp + GOLDSMITH_GAUNTLETS_BONUS_XP : bar.xp;
+  // The Smithing cape's perk, which the max cape has too (Wiki: Smithing cape), as at an ordinary furnace.
+  const cape = { player, skill: "SMITHING", result: false };
+  pluginApi.emitCustomEvent("skillcape:has-perk", cape);
+  return gauntlets || cape.result === true ? bar.xp + GOLDSMITH_GAUNTLETS_BONUS_XP : bar.xp;
 }
 
 /** Turns the pot's ore into bars, up to 28 of each in the dispenser, and pours them. */

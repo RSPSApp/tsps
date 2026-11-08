@@ -32,8 +32,25 @@ function priceOf(context, index) {
   return context.prices?.[index] ?? data.hides[index].price;
 }
 
+/**
+ * Eodan (Forthos Dungeon) tans at 10 times the normal price, 8, 6, 4 and 2 times with the Kourend & Kebos diary's easy,
+ * medium, hard and elite tiers (Elise's rewards, rsprox_transcripts/234/00787.txt; Wiki: Eodan).
+ */
+const EODAN_MULTIPLIERS = [["elite", 2], ["hard", 4], ["medium", 6], ["easy", 8]];
+
+function eodanPrices(player) {
+  let multiplier = 10;
+  for (const [tier, value] of EODAN_MULTIPLIERS) {
+    const request = { player, diary: "kourend", tier, complete: false };
+    api?.emitCustomEvent?.("diary:is-complete", request);
+    if (request.complete) { multiplier = value; break; }
+  }
+  return data.hides.map((hide) => hide.price * multiplier);
+}
+
 function tradeWithTanner(event) {
-  const prices = data.prices?.[event.definition?.getName?.()];
+  const name = event.definition?.getName?.() ?? event.npc?.getDefinition?.()?.getName?.();
+  const prices = name === "Eodan" ? eodanPrices(event.player) : data.prices?.[name];
   openTanning({ player: event.player, npc: event.npc, prices });
 }
 

@@ -163,3 +163,17 @@ test("shared secondary permissions enforce policy, multicombat, immunity and due
   t.mock.method(CombatFactory, "validTarget", () => false);
   assert.equal(allowed(), false, "invalid, dead, or separate-instance targets");
 });
+
+test("a surrounding special's radius widens the ring to an 11x11 square for radius 5", (t) => {
+  const attacker = player(10, 10);
+  const primary = npc(11, 10);
+  const edge = npc(15, 5);
+  const beyond = npc(16, 10);
+  const big = npc(16, 12, { size: 3 }); // x 16..18: its near edge is 6 tiles out
+  const nearBig = npc(15, 12, { size: 3 }); // x 15..17: reaches the 5-tile square
+  const targeting = { pattern: "surrounding", radius: 5, width: 1, maxTargets: 10 };
+  const found = resolve(t, { npcs: [primary, edge, beyond, big, nearBig], attacker, primary, targeting });
+  assert.deepEqual(found, [edge, nearBig]);
+  const ring = resolve(t, { npcs: [primary, edge, beyond], attacker, primary, targeting: { ...targeting, radius: undefined } });
+  assert.deepEqual(ring, [], "no radius is the old one-tile ring");
+});

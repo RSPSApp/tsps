@@ -168,7 +168,19 @@ const taskNamed = (name) => load().byName.get(String(name).toLowerCase()) ?? nul
 const tiers = () => load().tiers;
 const monsters = () => load().monsters;
 /** A monster by its cache name ("Zulrah", "DK: Rex", "Nightmare, The"), case-insensitive. */
-const monsterNamed = (name) => load().monstersByName.get(String(name).toLowerCase()) ?? null;
+/** "The Nightmare" and "Nightmare, The" are one name: a plugin's kill report may use either form. */
+function articleSwapped(key) {
+  const leading = /^the (.+)$/.exec(key);
+  if (leading) return `${leading[1]}, the`;
+  const trailing = /^(.+), the$/.exec(key);
+  return trailing ? `the ${trailing[1]}` : null;
+}
+
+function monsterNamed(name) {
+  const byName = load().monstersByName;
+  const key = String(name).toLowerCase();
+  return byName.get(key) ?? byName.get(articleSwapped(key)) ?? null;
+}
 const monsterForNpc = (npcName) => load().monstersByNpcName.get(String(npcName).toLowerCase()) ?? null;
 const bossList = () => load().bossList;
 const totalPoints = () => load().tiers.at(-1).threshold;

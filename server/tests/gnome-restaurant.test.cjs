@@ -585,6 +585,34 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     assert.ok(index > 0, `active cache exposes ${option} on ${itemId}`);
     assert.equal(ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, itemId, itemSlot, index), true);
   }
+  // Seeded credits and item exercise the receiver and PM, not network decoding or earning.
+  const tokenDefinition = core.CacheDefinitions.getItem(TOKEN);
+  assert.equal(tokenDefinition.name, "Reward token");
+  assert.equal(tokenDefinition.inventoryActions[0], "Check");
+  assert.equal(tokenDefinition.inventoryActions[2], "Activate");
+  assert.equal(tokenDefinition.inventoryActions[4], "Destroy");
+  assert.ok(Number.isInteger(core.ItemIdentifiers.REWARD_TOKEN));
+  assert.notEqual(core.ItemIdentifiers.REWARD_TOKEN, TOKEN);
+  const otherTokenDefinition = core.CacheDefinitions.getItem(core.ItemIdentifiers.REWARD_TOKEN);
+  assert.equal(otherTokenDefinition.name, "Reward token");
+  assert.equal(otherTokenDefinition.inventoryActions[0], "Look-at");
+  const tokenHolder = actor("gnometoken", 99);
+  assert.ok(tokenHolder.getHitpoints() > 0);
+  assert.equal(tokenHolder.isTeleportingReturn(), false);
+  // The same actor and receiver must first reach an existing registered action.
+  tokenHolder.getInventory().adds(BOX, 1);
+  const beforeControl = messages.get(tokenHolder).length;
+  action(tokenHolder, BOX, "Check");
+  assert.ok(messages.get(tokenHolder).slice(beforeControl).includes("You have no delivery to check."));
+  tokenHolder.setAttribute("gnome-restaurant:credits", 25);
+  tokenHolder.getInventory().adds(TOKEN, 1);
+  action(tokenHolder, TOKEN, "Check");
+  const tokenDialogue = tokenHolder.getDialogueManager().getCurrent();
+  assert.ok(tokenDialogue instanceof core.StatementDialogue);
+  assert.equal(tokenDialogue.getText(), "You can use this token to order gnome food to deliver. You can currently order 2 items.");
+  assert.equal(tokenHolder.getInventory().getAmount(TOKEN), 1);
+  assert.equal(tokenHolder.getAttribute("gnome-restaurant:credits"), 25);
+  await drive(tokenHolder, junior);
   async function widget(p, widgetId, child, row) {
     await clients.get(p).dispatch([{ type: "widget_action", widgetId, groupId: 49, childId: child, slot: row, buttonNum: 1 }]);
     clients.get(p).processTurnPackets();
@@ -707,6 +735,119 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
       await drive(p, junior);
     }
   }
+  // Drunk dragon: raw supplies are seeded; production uses the registered menu,
+  // cache item actions and a placed, cache-backed range through decoded packets.
+  const dragon = actor("gnomedragon", 32), dragonOther = actor("gnomedrag2", 31);
+  const dragonInventory = dragon.getInventory(), dragonSkill = dragon.getSkillManager();
+  for (const name of ["cocktail_shaker", "vodka", "gin", "dwellberries", "cocktail_glass_empty", "pineapple_chunks", "pot_of_cream"]) {
+    dragonInventory.add(new core.Item(obj(name), 1), false);
+  }
+  const sendAction = async (p, value, option) => {
+    const itemId = typeof value === "number" ? value : obj(value);
+    await clients.get(p).dispatch([{ type: "inventory_action", widgetId: core.Inventory.INTERFACE_ID,
+      itemId, slot: slot(p, itemId), option }]);
+    clients.get(p).processTurnPackets();
+  };
+  const dragonXp = dragonSkill.getExperience(Skill.COOKING);
+  await sendAction(dragon, "cocktail_shaker", "Mix-cocktail");
+  const cuisineClick = core.CacheDefinitions.getComponentId("aluft_cooking:cuisine_clickzone");
+  const cuisineCreate = core.CacheDefinitions.getComponentId("aluft_cooking:confirmation");
+  await widget(dragon, cuisineClick, 4, 4);
+  await widget(dragon, cuisineClick, 4, 5);
+  await widget(dragon, cuisineCreate, 9, undefined);
+  assert.equal(dragonInventory.getAmount(9574), 0, "unsupported row clears the prior selection");
+  assert.equal(dragonInventory.getAmount(obj("cocktail_shaker")), 1);
+  await widget(dragon, cuisineClick, 4, 4);
+  dragonInventory.deleteNumber(obj("cocktail_shaker"), 1);
+  dragonInventory.add(new core.Item(obj("cocktail_shaker"), 1), false);
+  await widget(dragon, cuisineCreate, 9, undefined);
+  assert.equal(dragonInventory.getAmount(9574), 0, "replacing the selected shaker invalidates its menu");
+  await sendAction(dragon, "cocktail_shaker", "Mix-cocktail");
+  await widget(dragon, cuisineClick, 4, 4);
+  await widget(dragon, cuisineCreate, 9, undefined);
+  assert.equal(dragonInventory.getAmount(9574), 1, "row 4 mixes the actual shaker form");
+  assert.equal(dragonInventory.getAmount(obj("cocktail_shaker")), 0);
+  for (const name of ["vodka", "gin", "dwellberries"]) assert.equal(dragonInventory.getAmount(obj(name)), 0);
+  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 30);
+  dragonInventory.deleteNumber(obj("cocktail_glass_empty"), 1);
+  await sendAction(dragon, 9574, "Pour");
+  assert.equal(dragonInventory.getAmount(9574), 1, "pouring without a glass preserves the mixed shaker");
+  dragonInventory.add(new core.Item(obj("cocktail_glass_empty"), 1), false);
+  await sendAction(dragon, 9574, "Pour");
+  assert.equal(dragonInventory.getAmount(9575), 1);
+  assert.equal(dragonInventory.getAmount(obj("cocktail_shaker")), 1);
+  assert.equal(dragonInventory.getAmount(obj("cocktail_glass_empty")), 0);
+  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 30);
+  const cream = obj("pot_of_cream");
+  dragonInventory.deleteNumber(cream, 1);
+  await sendAction(dragon, 9575, "Add-ingreds");
+  assert.equal(dragonInventory.getAmount(9575), 1, "missing garnish leaves the poured drink intact");
+  assert.equal(dragonInventory.getAmount(obj("pineapple_chunks")), 1);
+  dragonInventory.add(new core.Item(cream, 1), false);
+  await sendAction(dragon, 9575, "Add-ingreds");
+  assert.equal(dragonInventory.getAmount(9576), 1);
+  assert.equal(dragonInventory.getAmount(obj("pineapple_chunks")), 0);
+  assert.equal(dragonInventory.getAmount(cream), 0);
+  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 30);
+  dragonOther.getInventory().add(new core.Item(9576, 1), false);
+  const heat = async (p) => {
+    await clients.get(p).dispatch([{ type: "item_on_object", widgetId: core.Inventory.INTERFACE_ID,
+      objectId: rangeId, itemId: 9576, slot: slot(p, 9576), x: rangeLocation.getX(), y: rangeLocation.getY() }]);
+    for (let tick = 0; tick < 12; tick++) { clients.get(p).processTurnPackets(); World.process(); }
+  };
+  await heat(dragonOther);
+  assert.equal(dragonOther.getInventory().getAmount(9576), 1, "level 31 cannot heat it");
+  assert.equal(dragonInventory.getAmount(9576), 1, "another player's attempt cannot consume it");
+  await heat(dragon);
+  assert.equal(dragonInventory.getAmount(9576), 0);
+  assert.equal(dragonInventory.getAmount(obj("drunk_dragon")), 1);
+  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 160);
+  assert.equal(dragonOther.getInventory().getAmount(9576), 1);
+  for (const name of ["vodka", "gin", "dwellberries", "cocktail_glass_empty", "pineapple_chunks", "pot_of_cream"]) {
+    dragonInventory.add(new core.Item(obj(name), 1), false);
+  }
+  await sendAction(dragon, "cocktail_shaker", "Mix-cocktail");
+  await widget(dragon, cuisineClick, 4, 4);
+  await widget(dragon, cuisineCreate, 9, undefined);
+  await sendAction(dragon, 9574, "Pour");
+  await sendAction(dragon, 9575, "Add-ingreds");
+  await heat(dragon);
+  assert.equal(dragonInventory.getAmount(obj("drunk_dragon")), 2, "the retained shaker supports a second complete drink");
+  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 320);
+
+  // Observe the real decoded object route; the replacement adapter models a
+  // queued input disappearing after admission and before the cooking task runs.
+  const guard = actor("dragonbind", 32), guardInventory = guard.getInventory();
+  const tagged = new core.Item(9576, 1); tagged.setMeta({ preset: true });
+  guardInventory.setItem(0, tagged); guardInventory.setItem(1, new core.Item(9576, 1));
+  assert.equal(tagged.isPresetItem(), true);
+  const emitObject = PluginManager.emitItemOnObject;
+  let observed = 0, replaceAfterAdmission = false, admitted = false;
+  try {
+    PluginManager.emitItemOnObject = function (event) {
+      if (event.player !== guard || event.itemId !== 9576) return emitObject.call(this, event);
+      observed++;
+      const result = emitObject.call(this, event);
+      if (replaceAfterAdmission) {
+        admitted = require("../plugins/skills/Cooking.plugin").isCookingActive(guard);
+        guardInventory.setItem(event.itemSlot, new core.Item(9576, 1));
+      }
+      return result;
+    };
+    await heat(guard);
+    assert.equal(observed, 1, "tagged clicked item reached the registered object route");
+    assert.equal(guardInventory.getAmount(9576), 2, "a separate plain item does not authorize the tagged selection");
+    assert.equal(guardInventory.getAmount(obj("drunk_dragon")), 0);
+    guardInventory.setItem(0, new core.Item(9576, 1));
+    guardInventory.setItem(1, new core.Item(-1, 0));
+    replaceAfterAdmission = true;
+    await heat(guard);
+    assert.equal(observed, 2);
+    assert.equal(admitted, true, "the plain selected item entered a real cooking task before replacement");
+    assert.equal(guardInventory.getAmount(9576), 1, "the replacement is not consumed by the earlier task");
+    assert.equal(guardInventory.getAmount(obj("drunk_dragon")), 0);
+  } finally { PluginManager.emitItemOnObject = emitObject; }
+
   const ordinary = actor("gnomebread", 99);
   await assertUnrelatedWidgetDoesNotResolveCuisine(ordinary);
   assert.equal(core.RegionManager.blocked(ordinary.getLocation(), null), false);

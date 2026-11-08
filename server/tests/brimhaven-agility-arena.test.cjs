@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/brimhaven-agility-arena.test.cjs
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const { before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -24,6 +24,12 @@ const {
 
 init({ core: PluginManager.getCoreApi(), emitCustomEvent() {} });
 ObstacleRunner.init({ core: PluginManager.getCoreApi(), getTaskManager: () => TaskManager });
+
+// Successful floor traps resolve their physical entry loc before animating it.
+before(async () => {
+  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  PluginManager.getCoreApi().RegionManager.init();
+});
 
 /** The 2024 ticket (29480); ItemIds.AGILITY_ARENA_TICKET (2996) is the discontinued one. */
 const TICKET = ItemIds.AGILITY_ARENA_TICKET_3;

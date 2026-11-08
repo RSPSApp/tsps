@@ -404,7 +404,12 @@ test('WALKTHROUGH: Fight Arena runs fresh stage 0 to the cache completion thresh
     assert.equal(inventory.getAmount(I().KHAZARD_CELL_KEYS), 1, 'the second key message does not duplicate keys');
 
     assert.equal(useKeysOnDoor(player, core.ObjectIdentifiers.PRISON_GATE_4), true);
-    assert.equal(quest.getStage(player), 6, 'keys on Sammy\'s door start the ogre fight');
+    assert.equal(quest.getStage(player), 5, "keys on Sammy's door play the wiki dialogue first, not an instant teleport");
+    const sammyScene = transcriptStepIds('getting-the-keys-talking-to-sammy-servil-after-getting-the-keys');
+    assert.ok(sammyScene.has('0Xedz5') && sammyScene.has('jXf_Wp'), 'the transcript carries the arena-follow and ogre-attack steps');
+    dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
+    dialogueAction(player, N().SAMMY_SERVIL, 'jXf_Wp');
+    assert.equal(quest.getStage(player), 6, "the transcript's ogre action starts the ogre fight");
     assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_OGRE), 'the ogre is spawned');
     assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2603, 3156]);
 
@@ -427,6 +432,7 @@ test('WALKTHROUGH: Fight Arena runs fresh stage 0 to the cache completion thresh
 
     kill(player, N().KHAZARD_SCORPION);
     assert.equal(quest.getStage(player), 10);
+    for (let tick = 0; tick < 4; tick++) core.TaskManager.process(); // Khazard's "Bring on Bouncer!" scene delay
     assert.ok(spawned.some((npc) => npc.def.id === N().BOUNCER), 'Bouncer is spawned after the scorpion');
 
     kill(player, N().BOUNCER);

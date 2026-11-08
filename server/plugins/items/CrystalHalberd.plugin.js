@@ -109,6 +109,11 @@ function addShardCharges(event) {
   if (!halberd) {
     return;
   }
+  // Only crystal shards charge it: any other item used on the halberd spent the shards carried.
+  const other = halberd === event.usedItem ? event.usedWithItem : event.usedItem;
+  if (other?.getId?.() !== core.ItemIdentifiers.CRYSTAL_SHARD) {
+    return;
+  }
   const shardCount = player.getInventory().getAmount(core.ItemIdentifiers.CRYSTAL_SHARD);
   if (shardCount <= 0) {
     return;

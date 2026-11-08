@@ -149,6 +149,9 @@ function harness() {
     forceAdd(_player, item) { addItem(item.getId(), item.getAmount()); },
     deleteNumber(id, amount = 1) { removeItem(id, amount); return true; },
     deleteAtSlot(slot, amount = 1) { const id = slots[slot]; if (id !== undefined) removeItem(id, amount); return true; },
+    // Cleaning swaps the herb in its own slot (Inventory.setItem, as the Herblore plugin does).
+    setItem(slot, item) { const id = slots[slot]; if (id !== undefined) removeItem(id, 1); addItem(item.getId(), item.getAmount()); return inventory; },
+    refreshItems() { return inventory; },
     isFull: () => full,
     getFreeSlots: () => (full ? 0 : 28),
     getItems: () => slots.map((id) => ({ getId: () => id, getAmount: () => amounts.get(id) ?? 0 })),

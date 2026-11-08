@@ -4,16 +4,16 @@
  *
  * Cache script 3966 writes it as `clamp(0, 100, slider * 5)` and 3961 reads it back as `/ 5`, so
  * it is 0..100 in steps of 5. The renderer's brightness is OSRS's gamma exponent (colours are
- * `pow(rgb, gamma)`; the four classic levels were 0.9 darkest to 0.6 brightest), so the slider
- * maps 0..100 linearly onto that range. Kept in localStorage, like the interface scaling.
+ * `pow(rgb, gamma)`; the native continuous slider runs from 1.0 darkest to 0.5 brightest), so the slider
+ * maps 0..100 as 0.5 + (100 - value) / 200 (native DefaultsGroup.setBrightness). Kept in localStorage, like the interface scaling.
  */
 export const DEVICE_OPTION_SCREEN_BRIGHTNESS = 6;
 export const SCREEN_BRIGHTNESS_MAX = 100;
 /** Start the Settings slider at its midpoint (gamma 0.75). */
 export const DEFAULT_SCREEN_BRIGHTNESS = 50;
 
-const DARKEST_GAMMA = 0.9;
-const BRIGHTEST_GAMMA = 0.6;
+const DARKEST_GAMMA = 1.0;
+const BRIGHTEST_GAMMA = 0.5;
 const STORAGE_KEY = "osrs.screenBrightness";
 
 export function normalizeScreenBrightness(value: number): number {

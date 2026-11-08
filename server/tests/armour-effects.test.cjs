@@ -126,7 +126,10 @@ test("graceful pieces give 3-4% each and the full set another 10%", () => {
   assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(names, false) - 0.30) < 1e-9);
   const noCape = { ...names, 1: "Spottier cape" };
   assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(noCape, false) - 0.17) < 1e-9);
-  assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(noCape, true) - 0.27) < 1e-9, "agility cape substitutes for the set");
+  // Wiki (Agility cape): it is a graceful cape - its own 3%, and the set's sixth piece.
+  assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(noCape, true) - 0.30) < 1e-9, "five pieces and the agility cape are the full set");
+  assert.equal(Graceful._test.gracefulRestoreBonusFromSlots({ 1: "Agility cape" }, true), 0.03, "the agility cape alone restores 3%");
+  assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(names, true) - 0.30) < 1e-9, "a worn graceful cape is not counted twice");
   assert.equal(Graceful._test.gracefulRestoreBonusFromSlots({ 1: "Graceful cape (Arceuus)" }, false), 0.03);
   assert.equal(Graceful._test.gracefulRestoreBonusFromSlots({ 1: "Spottier cape", 0: "Rune full helm" }, false), 0);
 });

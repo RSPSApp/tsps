@@ -54,6 +54,7 @@ function fakeApi() {
     onCustomEvent: (name, handler) => (hooks.custom[name] ??= []).push(handler),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onObjectRoute: () => {},
+    onSpellDisabled: () => {},
   };
 }
 
@@ -191,6 +192,7 @@ before(() => {
   CachePipeline.initialize();
   RegionManager.init();
   const api = fakeApi();
+  require("../plugins/skills/herblore/Common.Herblore").init(api);
   Doors(api);
   Braziers(api);
   Supplies(api);
@@ -440,9 +442,9 @@ test('warmth regenerates 8% a minute plus 1% per warm item; food and potions res
   Round._round.ticks = 99;
   ticks(1);
   assert.equal(Warmth.warmthOf(player), 600, '80 + 2 x 10 at the 100-tick beat');
-  hooks.custom['food:eaten'][0]({ player, itemId: I.SHARK, heal: 20 });
+  hooks.custom['food:eaten'][0]({ player, itemId: I.SHARK, heal: 0, restores: 20 });
   assert.equal(Warmth.warmthOf(player), 950);
-  hooks.custom['food:eaten'][0]({ player, itemId: I.SHRIMPS, heal: 3 });
+  hooks.custom['food:eaten'][0]({ player, itemId: I.SHRIMPS, heal: 0, restores: 3 });
   assert.equal(Warmth.warmthOf(player), 950, 'under 4 healed does nothing');
   Warmth.setWarmth(player, 100);
   player.inventory.adds(Shared.ITEM.REJUVENATION_2);
@@ -478,6 +480,38 @@ test('lighting needs a tinderbox or torch and a healthy pyromancer; it pays 25 p
   Corners.setBrazier(SW, Shared.BRAZIER.UNLIT);
   hooks.objects.Brazier.Light({ player: torch, object: swBrazier });
   assert.equal(torch.animations.at(-1), Shared.ANIM.LIGHT_TORCH, 'capture: 7174 with the bruma torch');
+});
+
+test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, and no other skill', () => {
+  // The Firemaking plugin answers "firemaking:xp-multiplier" with the outfit's bonus.
+  const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+  const api = fakeApi();
+  require('../plugins/skills/Firemaking.plugin').register({
+    ...api,
+    getTaskManager: () => ({ submit() {} }),
+    getObjectManager: () => ({ register() {}, deregister() {} }),
+    getItemOnGroundManager: () => ({ registerLocation() {}, getGroundItem() {}, deregister() {} }),
+    getWorld: () => ({ getObjects: () => [] }),
+    onPlayerDisconnect() {}, onItemOnItem() {}, onItemOnGroundItem() {}, onGroundItemClick() {}, log() {},
+  });
+  startRound();
+  Corners.setBrazier(SW, Shared.BRAZIER.UNLIT);
+  const dressed = fighter('Pyromancer');
+  const Item = Shared.core().Item;
+  dressed.inventory.adds(Shared.ITEM.TINDERBOX);
+  dressed.inventory.adds(Shared.ITEM.BRUMA_KINDLING, 1);
+  dressed.equipment.setItem(Equipment.HEAD_SLOT, new Item(I.PYROMANCER_HOOD, 1));
+  hooks.objects.Brazier.Light({ player: dressed, object: swBrazier });
+  ticks(3);
+  assert.equal(dressed.xp, 6 * 99 * 1.004, 'the hood alone: 0.4% on the 6x lighting XP');
+  dressed.equipment.setItem(Equipment.BODY_SLOT, new Item(I.PYROMANCER_GARB, 1));
+  dressed.equipment.setItem(Equipment.LEG_SLOT, new Item(I.PYROMANCER_ROBE, 1));
+  dressed.equipment.setItem(Equipment.FEET_SLOT, new Item(I.PYROMANCER_BOOTS, 1));
+  dressed.xp = 0;
+  hooks.objects['Burning brazier'].Feed({ player: dressed, object: swBrazier });
+  ticks(3);
+  assert.equal(dressed.xp, 99 * 3.8 * 1.025, 'the full set: 2.5% on feeding kindling');
+  assert.equal(dressed.xpBySkill.Construction ?? 0, 0);
 });
 
 test('feeding burns kindling first, then roots, one every 3 ticks, until they run out', () => {

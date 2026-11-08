@@ -7,7 +7,6 @@
  * These opcodes operate on the "active" clan which is set by FIND_LISTENED or FIND_AFFINED:
  * ctx.clanSettings and ctx.clanChannel read whichever of them was selected last.
  */
-import { OWN_CLAN_TYPE } from "../../../common/social/Clans";
 import { sendClanChannelAction } from "../../../network/ServerConnection";
 import { Opcodes } from "../Opcodes";
 import type { ClanChannel, ClanSettings, HandlerMap } from "./HandlerTypes";
@@ -58,13 +57,13 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Select the settings of a clan the player belongs to
-    // Pops: clanType (0 = own clan, 1 = group, which tsps doesn't have)
+    // Pops: clanType (0 own clan, 1 group ironman, which tsps doesn't have, 2 PvP Arena group)
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, (ctx) => {
         const clanType = ctx.intStack[--ctx.intStackSize];
-        ctx.selectClanSettings?.(false);
+        ctx.selectClanSettings?.(false, clanType);
         const settings = getSettings(ctx);
-        ctx.pushInt(clanType === OWN_CLAN_TYPE && settings ? 1 : 0);
+        ctx.pushInt(settings ? 1 : 0);
     });
 
     // Get clan name
@@ -276,13 +275,13 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Select the channel of a clan the player belongs to
-    // Pops: clanType (0 = own clan, 1 = group, which tsps doesn't have)
+    // Pops: clanType (0 own clan, 1 group ironman, which tsps doesn't have, 2 PvP Arena group)
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANCHANNEL_FIND_AFFINED, (ctx) => {
         const clanType = ctx.intStack[--ctx.intStackSize];
-        ctx.selectClanChannel?.(false);
+        ctx.selectClanChannel?.(false, clanType);
         const channel = getChannel(ctx);
-        ctx.pushInt(clanType === OWN_CLAN_TYPE && channel ? 1 : 0);
+        ctx.pushInt(channel ? 1 : 0);
     });
 
     // Get clan channel name

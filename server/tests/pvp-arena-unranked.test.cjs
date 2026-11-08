@@ -383,6 +383,36 @@ test("the arena's antifire and anti-venom never leave it, even through a mid-fig
   for (const handler of hooks.shutdowns) handler();
 });
 
+// A relog rebuilds the antifire from the saved fire timer and the saved tier: a mid-fight save must write the player's
+// own of both, not the arena's tier beside their own timer.
+for (const [own, arena] of [['SUPER_ANTIFIRE', 'ANTIFIRE'], ['ANTIFIRE', 'SUPER_ANTIFIRE']]) {
+  test(`a mid-fight save keeps their own ${own.toLowerCase()} across a relog, not the arena's ${arena.toLowerCase()}`, (t) => {
+    const Dragonfire = require('../plugins/combat/DragonfireProtection');
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const Tier = Dragonfire.DragonfireProtectionTier;
+    // The server persists the tier when DragonfireProtection attaches; this file's api stub drops persistAttribute.
+    PlayerSave.persistAttribute(Dragonfire.ATTR_DRAGONFIRE_TIER, null);
+    const [a, b] = toLoadouts(t, 1);
+    t.after(() => { for (const handler of hooks.shutdowns) handler(); }); // ends the fight even if an assert fails
+    Dragonfire.setDragonfireProtection(a, { tier: Tier[own], seconds: 300, label: 'their own' });
+    click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+    click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+    assert.ok(Battle.fightFor(a));
+    Dragonfire.setDragonfireProtection(a, { tier: Tier[arena], seconds: 360, label: "the arena's" });
+    const save = PlayerSave.fromPlayer(a);
+    Stash.snapshot({ player: a, save });
+    assert.deepEqual(save.attributes[Dragonfire.ATTR_DRAGONFIRE_TIER], { tier: Tier[own], label: 'their own' }, 'their own tier saved');
+    const relogged = new Player(null);
+    relogged.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+    relogged.setUsername('relogged');
+    // The relog: the stashed state isn't loaded (it's rebuilt), so only the saved timer and tier remain.
+    delete save.attributes[Dragonfire.ATTR_DRAGONFIRE_STATE];
+    save.applyToPlayer(relogged);
+    assert.equal(Dragonfire.getDragonfireProtectionTier(relogged), Tier[own], `still their own ${own.toLowerCase()} after the relog`);
+  });
+}
+
 test('a fight never starts on top of a character already put aside', (t) => {
   const [a, b] = toLoadouts(t, 1);
   a.getInventory().add(new core.Item(995, 5));
@@ -464,4 +494,48 @@ test('a player who died with the screen open is not taken into a fight', (t) => 
   assert.equal(Battle.fightFor(a), null);
   assert.equal(Battle.fightFor(b), null);
   a.isDying = false;
+});
+
+test("a load-out item the build's levels can't wear isn't worn: no 70 Defence armour on a 1 Def Pure", (t) => {
+  const { EquipmentRequirements } = require('../dist/game/model/equipment/EquipmentRequirements');
+  // The items' wear requirements, as the server loads them.
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const a = realPlayer(t, 'Alpha');
+  Stash.save(a);
+  // An enum 4390 body that needs more than 1 Defence, put in the 1 Def Pure's (build 2) body slot.
+  const values = core.CacheDefinitions.getEnumValues(4390);
+  let pick = null;
+  for (const [index, id] of values) {
+    const definition = core.ItemDefinition.forId(id);
+    if (definition.getEquipmentType?.()?.getSlot?.() !== core.Equipment.BODY_SLOT) continue;
+    const pure = { getSkillManager: () => ({ getMaxLevel: (skill) => (skill === core.Skill.DEFENCE ? 1 : 99), getCombatLevel: () => 90 }), getCombat: () => ({}) };
+    if (EquipmentRequirements.getUnmet(pure, definition) != null) { pick = { index, id }; break; }
+  }
+  assert.ok(pick, 'a body needing Defence is in the list');
+  const value = Loadouts.loadout(a, 2);
+  value.worn.torso = pick.index;
+  a.setAttribute('pvp-arena:loadouts', { c: value });
+  Loadouts.equip(a, 2);
+  assert.notEqual(a.getEquipment().getItems()[core.Equipment.BODY_SLOT]?.getId?.(), pick.id, 'the body is not worn');
+  Stash.restore(a);
+});
+
+// A skill the build doesn't set is the player's own; it doesn't stop a load-out item (Bow of Faerdhinen, 70 Agility).
+test("a load-out item needing a skill the build doesn't set is worn whatever the player's own level: Bow of Faerdhinen at 1 Agility", (t) => {
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const a = realPlayer(t, 'Alpha');
+  const agility = core.Skill.AGILITY;
+  a.getSkillManager().setMaxLevels(agility, 1, false).setCurrentLevel(agility, 1, false);
+  Stash.save(a);
+  const bow = core.ItemIdentifiers.BOW_OF_FAERDHINEN;
+  assert.ok((core.ItemDefinition.forId(bow).getRequirements?.() ?? [])[agility.getIndex()] >= 70, 'control: the bow needs 70 Agility');
+  const entry = [...core.CacheDefinitions.getEnumValues(4390)].find(([, id]) => id === bow);
+  assert.ok(entry, 'the bow is in the load-out list');
+  const value = Loadouts.loadout(a, 0); // Max/Med
+  value.worn.rhand = entry[0];
+  a.setAttribute('pvp-arena:loadouts', { a: value });
+  Loadouts.equip(a, 0);
+  assert.equal(a.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]?.getId?.(), bow, 'the bow is worn');
+  Stash.restore(a);
+  assert.equal(a.getSkillManager().getMaxLevel(agility), 1, 'their own Agility back');
 });

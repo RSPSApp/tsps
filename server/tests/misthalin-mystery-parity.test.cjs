@@ -17,11 +17,14 @@ const noop = () => {};
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, '..')); new NpcDefinitionLoader().load(); });
 
 function harness(name) {
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], ground = [], objects = [], npcActions = new Map();
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], ground = [], removedGround = [], objects = [], npcActions = new Map();
   const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
-  }, ObjectManager: { register: object => objects.push(object), deregister: noop }, ItemOnGroundManager: { registerLocation: (...args) => ground.push(args) } },
+  }, ObjectManager: { register: object => objects.push(object), deregister: noop }, ItemOnGroundManager: { registerLocation: (...args) => {
+      ground.push(args);return { getItem:()=>args[1],getPosition:()=>args[2],getPrivateArea:()=>args[3]??args[0].getPrivateArea() };
+    },deregister:item=>removedGround.push(item) } },
+    getTaskManager: () => api.core.TaskManager,
     persistAttribute: noop,
     onNpcInteraction: (name, actions) => npcActions.set(name, actions),
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
@@ -53,7 +56,7 @@ function harness(name) {
     for (const fn of hooks.onNpcDialogueCondition ?? []) { const answer = fn(event); if (answer !== null && answer !== undefined) return answer; }
     return null;
   };
-  const h = { api, hooks, events, tasks, npcs, removed, ground, objects, npcActions, quest: runtime.getRegisteredQuests().at(-1),
+  const h = { api, hooks, events, tasks, npcs, removed, ground, removedGround, objects, npcActions, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     line(p, npcId, text) { const event = { player: p, npcId, text }; h.emit('npc-dialogue:line', event); return event; },
     action(p, npcId, stepId) { const event = { player: p, npcId, stepId }; h.emit('npc-dialogue:action', event); return event; },
@@ -76,6 +79,7 @@ function player() {
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
   const p = { attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
+    getHitpoints: () => 10, getForceMovement: () => null, setSkillAnimation: noop,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
     getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => p.weapon ? { getId: () => p.weapon } : null, deleteNumber: () => { p.weapon = null; } }),
     getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),
@@ -85,6 +89,7 @@ function player() {
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getForceMovement: () => p.forceMovement, setForceMovement: value => { p.forceMovement = value; },
     performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -196,6 +201,36 @@ test('the native gemstone panel waits for six switches and gives the key only on
   object(h,p,core.ObjectIdentifiers.FIREPLACE_24);for(const child of [19,3,11,23,7,15])press(child);assert.equal(h.quest.getStage(p),105);assert.equal(p.items.get(I.SAPPHIRE_KEY_2),undefined);
   object(h,p,core.ObjectIdentifiers.FIREPLACE_24);h.continueUntil(p,()=>!p.manager.getCurrent());assert.equal(p.items.get(I.SAPPHIRE_KEY_2),1);
 });
+test('gemstone indicators retain each chosen gem in input order and clear on a new attempt',()=>{
+  const h=harness('MisthalinMystery'),p=player();h.quest.setStage(p,100);
+  const models=()=>p.log.filter(row=>row[0]==='sendInterfaceRawModel');
+  const defaults=Array.from({length:6},(_,i)=>['sendInterfaceRawModel',(555<<16)|(35+i),32348]);
+  object(h,p,core.ObjectIdentifiers.FIREPLACE_24);assert.deepEqual(models(),defaults);
+  const press=child=>h.hooks.onInterfaceActionButton.at(-1)({player:p,buttonId:(555<<16)|child});
+  for(const child of [3,15,7,19,11])press(child);
+  assert.deepEqual(models().slice(6),[32333,2586,32342,32345,32349].map((id,i)=>['sendInterfaceRawModel',(555<<16)|(35+i),id]));
+  assert.equal(p.varbits.get(4050),5);assert.equal(h.quest.getStage(p),100);
+  press(23);assert.deepEqual(models().slice(-7),[['sendInterfaceRawModel',(555<<16)|40,32334],...defaults]);
+  object(h,p,core.ObjectIdentifiers.FIREPLACE_24);assert.deepEqual(models().slice(-6),defaults);
+  press(19);press(19);assert.deepEqual(models().slice(-2),[35,36].map(child=>['sendInterfaceRawModel',(555<<16)|child,32345]));
+});
+
+test('taking the table knife plays the native pickup before its grant without duplicate or refused pickups',()=>{
+  const h=harness('MisthalinMystery'),p=player();
+  object(h,p,core.ObjectIdentifiers.TABLE_258);object(h,p,core.ObjectIdentifiers.TABLE_258);
+  assert.equal(p.items.get(I.KNIFE),undefined);h.tick(1);
+  assert.deepEqual(p.animations,[832]);assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===2581));
+  assert.equal(p.items.get(I.KNIFE),undefined);h.tick(1);
+  assert.equal(p.items.get(I.KNIFE),1);assert.equal(p.blocked,false);assert.deepEqual(p.animations,[832]);
+  object(h,p,core.ObjectIdentifiers.TABLE_258);h.tick(2);
+  assert.equal(p.items.get(I.KNIFE),1);assert.deepEqual(p.animations,[832]);
+  const full=player();full.full=true;object(h,full,core.ObjectIdentifiers.TABLE_258);h.tick(2);
+  assert.equal(full.items.get(I.KNIFE),undefined);assert.deepEqual(full.animations,[]);
+  const leaving=player();object(h,leaving,core.ObjectIdentifiers.TABLE_258);h.tick(1);
+  h.hooks.onPlayerLogout[0]({player:leaving});h.tick(2);
+  assert.equal(leaving.items.get(I.KNIFE),undefined);assert.equal(leaving.blocked,false);
+});
+
 test('riddle notes open the captured parchment rather than chat spam',()=>{
   const h=harness('MisthalinMystery'),p=player();h.quest.setStage(p,35);h.hooks.onItemAction[0]({player:p,itemId:I.NOTES_5,option:'Read'});
   assert.equal(h.quest.getStage(p),40);assert.ok(p.log.some(row=>row[0]==='sendInterface'&&row[1]===70));assert.ok(p.log.some(row=>row[0]==='text'&&row[1]===((70<<16)|3)&&row[2].includes('work of art')));assert.equal(p.messages.length,0);
@@ -283,8 +318,8 @@ test('mirror pushing, shadow warnings and three correctly faced reflections unlo
   area.warning=[1619,4828,0];const original=Math.random;Math.random=()=>0.99;
   try{h.tick(54);}finally{Math.random=original;}
   assert.equal(area.reflections,3);assert.equal(h.quest.getStage(p),115);assert.equal(area.fighting,false);assert.equal(area.scene,'reveal');h.tick(2);const reaction=h.npcs.find(n=>n.id===7639);assert.equal(reaction.hitpoints,10);assert.equal(reaction.hits.length,3);assert.equal(mirror.transform,7640);
-  assert.equal(h.ground.length,0,'the weapon only drops after the killers reveal themselves');
-  h.continueUntil(p,()=>h.quest.getStage(p)===120,150);assert.equal(h.ground.length,1);assert.equal(h.ground[0][1].getId(),I.KILLERS_KNIFE_2);
+  assert.equal(h.ground.filter(args=>args[1].getId()===I.KILLERS_KNIFE_2).length,0,'the weapon only drops after the killers reveal themselves');
+  h.continueUntil(p,()=>h.quest.getStage(p)===120,150);assert.equal(h.ground.filter(args=>args[1].getId()===I.KILLERS_KNIFE_2).length,1);
   assert.deepEqual(p.log.filter(row=>row[0]==='sendCameraMoveTo').at(-1),['sendCameraMoveTo',1622,4828,300,{rate:5,rate2:5,heightRelative:false}]);
   assert.deepEqual(p.log.filter(row=>row[0]==='sendCameraLookAt').slice(-2),[
     ['sendCameraLookAt',1627,4831,275,{rate:5,rate2:5,heightRelative:false}],['sendCameraLookAt',1624,4831,275,{rate:5,rate2:5,heightRelative:false}],
@@ -300,6 +335,52 @@ test('Abigale requires the equipped dropped knife, then Mandy rescues the player
   assert.deepEqual(p.log.filter(row=>row[0]==='sendCameraLookAt').at(-1),['sendCameraLookAt',1626,4833,150,{rate:232,rate2:232,heightRelative:false}]);
   h.talk(p,N.MANDY_2);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.attrs.get('quest.points'),1);assert.deepEqual(p.xp,[[core.Skill.CRAFTING.getIndex(),600]]);for(const id of [I.UNCUT_RUBY,I.UNCUT_EMERALD,I.UNCUT_SAPPHIRE])assert.equal(p.items.get(id),1);
 });
+test('the godsword table prop is private, persistent, cannot be taken, and is restored after the rescue',()=>{
+  const h=harness('MisthalinMystery'),p=player(),area=island(h,p,125),prop=area.godswordProp;
+  assert.equal(prop.getItem().getId(),I.BANDOS_GODSWORD_4);assert.notEqual(I.BANDOS_GODSWORD_4,I.BANDOS_GODSWORD);
+  assert.ok(prop.getPosition().equals(new core.Location(1626,4843,0)));assert.equal(prop.getPrivateArea(),area);assert.equal(prop.staticSpawn,true);
+  assert.deepEqual(h.ground.find(args=>args[1].getId()===I.BANDOS_GODSWORD_4)[4],{goesGlobal:false});
+  h.hooks.onPlayerLogin[0]({player:p});assert.equal(area.godswordProp,prop);
+  const own={player:p,groundItem:prop};h.hooks.onGroundItemPickup[0](own);assert.equal(own.handled,true);
+  for(const key of ['ground-items:take','magic:can-telekinetic-grab']){const request={player:p,groundItem:prop,allow:true};h.emit(key,request);assert.equal(request.allow,false,key);}
+  const other=player(),otherArea=island(h,other,125);assert.notEqual(otherArea.godswordProp,prop);
+  const foreign={player:other,groundItem:prop};h.hooks.onGroundItemPickup[0](foreign);assert.equal(foreign.handled,undefined);
+  const foreignTake={player:other,groundItem:prop,allow:true};h.emit('ground-items:take',foreignTake);assert.equal(foreignTake.allow,true);
+  object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);
+  h.continueUntil(p,()=>p.text==="Hewey is dead because of you!");
+  p.manager.advance();h.tick(3);assert.equal(area.godswordProp,prop);h.tick(1);
+  assert.equal(area.godswordProp,null);assert.ok(h.removedGround.includes(prop));
+  h.continueUntil(p,()=>h.quest.getStage(p)===130,140);
+  assert.notEqual(area.godswordProp,prop);assert.equal(area.godswordProp.getItem().getId(),I.BANDOS_GODSWORD_4);
+  assert.equal(p.items.get(I.BANDOS_GODSWORD_4),undefined);assert.equal(p.items.get(I.BANDOS_GODSWORD),undefined);
+});
+
+test('the rescue reverses Abigale death, waits for Mandy approach, and drops Abigale only after Continue',()=>{
+  const h=harness('MisthalinMystery'),p=player(),area=island(h,p,125),abigale=area.actors.get(N.ABIGALE_3);
+  object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);
+  h.continueUntil(p,()=>p.text==="You'll never escape me!");assert.equal(abigale.transform,N.ABIGALE_2);assert.deepEqual(abigale.animations,[7330]);
+  p.manager.advance();assert.ok(area.actors.get(N.MANDY).getLocation().equals(new core.Location(1627,4841,0)));
+  h.continueUntil(p,()=>p.text==="You're not killing anyone else!");
+  const mandy=area.actors.get(N.MANDY);assert.ok(mandy.getLocation().equals(new core.Location(1622,4833,0)));
+  assert.equal(mandy.id,N.MANDY_3);assert.equal(mandy.animations.includes(7642),false);
+  p.manager.advance();h.tick(1);assert.equal(mandy.animations.includes(7642),false);
+  h.tick(1);assert.ok(mandy.getLocation().equals(new core.Location(1623,4832,0)));
+  h.tick(1);assert.equal(mandy.animations.includes(7642),false);h.tick(1);
+  assert.ok(mandy.animations.includes(7642));assert.ok(mandy.graphics.includes(1212));assert.deepEqual(abigale.animations,[7330]);
+  h.tick(2);assert.equal(p.text,"No....this can't be it....");assert.deepEqual(abigale.animations,[7330]);
+  p.manager.advance();assert.deepEqual(abigale.animations,[7330,836]);h.tick(2);assert.equal(p.text,"Wow, that was close!");
+});
+
+test('leaving during the godsword pickup cancels its delayed scene effects and reentry restores the prop',()=>{
+  const h=harness('MisthalinMystery'),p=player(),area=island(h,p,125);
+  object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);h.continueUntil(p,()=>p.text==="Hewey is dead because of you!");
+  p.manager.advance();h.tick(2);const mandy=area.actors.get(N.MANDY),prop=area.godswordProp;
+  h.hooks.onPlayerLogout[0]({player:p});h.tick(8);
+  assert.equal(mandy.transform,undefined);assert.equal(h.removedGround.includes(prop),false);
+  h.hooks.onPlayerLogin[0]({player:p});const next=p.getArea();assert.notEqual(next,area);assert.notEqual(next.godswordProp,prop);
+  assert.equal(h.quest.getStage(p),125);assert.equal(p.items.get(I.BANDOS_GODSWORD_4),undefined);
+});
+
 test('all four Lacey answers continue through her murder and the next note',()=>{
   for(const answer of ['Count Draynor','Count Check','Lord Drakan','Say nothing']){
     const h=harness('MisthalinMystery'),p=player(),area=island(h,p,65);p.moveTo(new core.Location(1631,4849,0));area.process(p);continueToMenu(h,p);h.choose(p,answer);h.continueUntil(p,()=>h.quest.getStage(p)===70,100);assert.equal(area.scene,null,answer);
@@ -310,6 +391,42 @@ test('the mirror cannot move below its captured south boundary or score on a wro
   h.tick(21);
   const mirror=area.actors.get(7436);p.moveTo(new core.Location(1622,4829,0));h.npcActions.get('<col=00ffff>Mirror</col>').Push({player:p,npc:mirror});h.tick(2);assert.equal(mirror.getLocation().getY(),4828);assert.ok(p.messages.includes("The mirror can't go any further in that direction."));
   area.warning=[1619,4828,0];h.tick(16);assert.equal(area.reflections,0);assert.equal(h.quest.getStage(p),111);assert.ok(p.log.some(row=>row[0]==='sendProjectile'));
+});
+test('mirror pushes place both actors with captured exactmove and reset next tick in all directions',()=>{
+  for(const [dx,dy,direction] of [[0,1,0],[1,0,1],[0,-1,2],[-1,0,3]]){
+    const h=harness('MisthalinMystery'),p=player(),area=island(h,p,110);
+    object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);h.continueUntil(p,()=>h.quest.getStage(p)===111);
+    const mirror=area.actors.get(7436),at=new core.Location(1623,4829,0),from=new core.Location(1623-dx,4829-dy,0);
+    mirror.moveTo(at);p.moveTo(from);
+    const push=()=>h.npcActions.get('<col=00ffff>Mirror</col>').Push({player:p,npc:mirror});
+    push();const movement=p.getForceMovement();
+    assert.ok(movement instanceof core.ForceMovement);
+    assert.ok(movement.getStart().equals(from));
+    assert.deepEqual([movement.getEnd().getX(),movement.getEnd().getY(),movement.getSpeed(),movement.getReverseSpeed(),movement.getDirection(),movement.getAnimation()],[dx,dy,0,29,direction,3065]);
+    assert.ok(p.getLocation().equals(at));assert.ok(mirror.getLocation().equals(new core.Location(1623+dx,4829+dy,0)));
+    const { Player }=require('../dist/game/entity/impl/player/Player'),{ PlayerSession }=require('../dist/net/PlayerSession');
+    const wirePlayer=new Player(null);wirePlayer.setIndex(nextIndex++);wirePlayer.setUsername('MirrorWire');wirePlayer.getSession=()=>({sendClientPacket:()=>true});
+    wirePlayer.moveTo(p.getLocation().clone());wirePlayer.setForceMovement(movement);wirePlayer.performAnimation(new core.Animation(3065));
+    const session=new PlayerSession(null);session.setPlayer(wirePlayer);
+    const view=session.createPlayerView(wirePlayer);
+    assert.deepEqual(view.forcedMovement,{startDeltaX:0-dx,startDeltaY:0-dy,endDeltaX:0,endDeltaY:0,startCycleOffset:0,endCycleOffset:29,direction:[1024,1536,0,512][direction]});
+    assert.equal(view.resetPath,true);assert.equal(view.animation.id,3065);
+    assert.equal(p.animations.at(-1),3065);push();assert.equal(p.getForceMovement(),movement,'duplicate push is ignored');
+    h.tick(1);assert.equal(p.getForceMovement(),null);assert.equal(p.animations.at(-1),core.Animation.DEFAULT_RESET_ANIMATION.getId());assert.equal(area.pushing,false);
+    h.hooks.onPlayerLogout[0]({player:p});
+  }
+});
+test('mirror exactmove is released on logout and area destruction without clearing another movement',()=>{
+  for(const cancel of ['logout','destroy','replacement']){
+    const h=harness('MisthalinMystery'),p=player(),area=island(h,p,110);
+    object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);h.continueUntil(p,()=>h.quest.getStage(p)===111);
+    const mirror=area.actors.get(7436);p.moveTo(new core.Location(1622,4827,0));
+    h.npcActions.get('<col=00ffff>Mirror</col>').Push({player:p,npc:mirror});
+    const replacement={};
+    if(cancel==='replacement')p.setForceMovement(replacement);
+    if(cancel==='destroy')area.destroy();else h.hooks.onPlayerLogout[0]({player:p});
+    h.tick(2);assert.equal(p.getForceMovement(),cancel==='replacement'?replacement:null);assert.equal(area.pushing,false);
+  }
 });
 test('mirror pushes retain their direction and encoded knife routes use captured heights and wardrobe endpoints', (t) => {
   const wardrobes = [[1622,4834,1],[1627,4831,2],[1624,4825,3],[1619,4828,0]];
@@ -394,4 +511,61 @@ test('Mandy needs three slots and awards ruby, emerald, sapphire once with the c
 test('leaving the explosives room at the door tile triggers the captured four-tick explosion',()=>{
   const h=harness('MisthalinMystery'),p=player(),area=island(h,p,60);p.moveTo(new core.Location(1641,4828,0));area.process(p);h.tick(5);assert.equal(h.quest.getStage(p),60);
   p.moveTo(new core.Location(1640,4828,0));area.process(p);h.tick(3);assert.equal(h.quest.getStage(p),60);assert.equal(p.blocked,true);h.tick(1);assert.equal(h.quest.getStage(p),65);assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===1487));h.tick(1);assert.equal(p.blocked,false);
+});
+
+test('native door models open on the walk tick, restore after two ticks, and stay private on both sides',()=>{
+  const obstacle=require('../plugins/skills/agility/ObstacleRunner.Agility'),run=obstacle.run;
+  const rows=[[30110,1636,4824,1,11446,1636,4825,0],[30111,1637,4824,1,11447,1637,4825,2],[30116,1640,4828,2,34650,1641,4828,3],[30117,1633,4837,0,34651,1632,4837,1]];
+  try{
+    for(const row of rows)for(const side of [0,1]){
+      const [id,x,y,face,openId,ox,oy,oface]=row,h=harness('MisthalinMystery'),p=player(),area=island(h,p,130),removed=[];
+      h.api.core.ObjectManager.deregister=(object)=>removed.push(object);
+      const [dx,dy]=[[-1,0],[0,1],[1,0],[0,-1]][face];
+      p.moveTo(new core.Location(x+dx*side,y+dy*side,0));
+      let steps,finish;
+      obstacle.run=(event,value,options)=>{steps=value;finish=options.onFinish;};
+      const event={player:p,objectId:id,definition:{id},object:new core.GameObject(id,new core.Location(x,y,0),0,face)};
+      h.hooks.onObjectInteraction[0](event);
+      assert.equal(h.objects.length,0);
+      assert.deepEqual(steps[0],{wait:1});
+      assert.deepEqual(steps.at(-1),{walk:[[x+dx*(1-side),y+dy*(1-side)]]});
+      steps[1].run();
+      const opens=h.objects.filter(o=>o.getId()===openId);
+      assert.equal(opens.length,1);
+      assert.deepEqual([opens[0].getLocation().x,opens[0].getLocation().y,opens[0].getFace()],[ox,oy,oface]);
+      assert.ok(h.objects.every(o=>o.getPrivateArea()===area));
+      assert.equal(p.log.filter(row=>row[0]==='sendSoundEffect'&&row[1]===56).length,1);
+      const count=id===30110||id===30111?2:1;
+      assert.equal(h.objects.filter(o=>o.getId()===38848).length,count);
+      h.tick(1);assert.equal(removed.length,0);
+      h.tick(1);assert.equal(removed.length,count);
+      assert.equal(h.objects.filter(o=>o.getId()===id).length,1);
+      finish(false);assert.equal(removed.length,count,'late cancellation cannot restore twice');
+    }
+  }finally{obstacle.run=run;}
+});
+test('door cancellation restores once, logout cancels restoration, and other quest door callers keep their walk',()=>{
+  const obstacle=require('../plugins/skills/agility/ObstacleRunner.Agility'),run=obstacle.run;
+  try{
+    for(const cancel of [true,false]){
+      const h=harness('MisthalinMystery'),p=player(),area=island(h,p,130),removed=[];
+      h.api.core.ObjectManager.deregister=o=>removed.push(o);
+      let steps,finish;obstacle.run=(event,value,options)=>{steps=value;finish=options.onFinish;};
+      p.moveTo(new core.Location(1640,4828,0));
+      h.hooks.onObjectInteraction[0]({player:p,objectId:30116,definition:{id:30116},object:new core.GameObject(30116,new core.Location(1640,4828,0),0,2)});
+      steps[1].run();assert.equal(h.objects.length,2);
+      if(cancel){
+        finish(false);assert.equal(removed.length,1);h.tick(1);
+        steps[1].run();assert.equal(h.objects.length,5);
+        h.tick(1);assert.equal(removed.length,1,'the cancelled timer cannot close a newer crossing');
+        h.tick(1);assert.equal(removed.length,2);
+      }
+      else {h.hooks.onPlayerLogout[0]({player:p});assert.equal(area.isDestroyed(),true);h.tick(3);assert.equal(h.objects.length,2);}
+    }
+    for(const id of [30112,30118,30119]){
+      const h=harness('MisthalinMystery'),p=player();island(h,p,130);p.moveTo(new core.Location(1635,4838,0));
+      let steps;obstacle.run=(event,value)=>{steps=value;};
+      object(h,p,id,1635,4838);assert.ok(steps.at(-1).walk);steps[1].run();assert.equal(h.objects.length,0);
+    }
+  }finally{obstacle.run=run;}
 });

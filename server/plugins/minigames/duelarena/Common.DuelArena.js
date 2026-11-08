@@ -15,6 +15,12 @@ const LOADOUTS_ATTRIBUTE = "pvp-arena:loadouts";
 const BUILD_ATTRIBUTE = "pvp-arena:build";
 const PARTICIPATION_ATTRIBUTE = "pvp-arena:unranked-participation";
 const WINS_ATTRIBUTE = "pvp-arena:unranked-wins";
+const RANKED_PARTICIPATION_ATTRIBUTE = "pvp-arena:ranked-participation";
+const RANKED_WINS_ATTRIBUTE = "pvp-arena:ranked-wins";
+const RANK_ATTRIBUTE = "pvp-arena:rank";
+/** The old matchmaker's key, kept so points already earned stay. */
+const REWARD_POINTS_ATTRIBUTE = "pvp-arena:reward-points";
+const WIN_STREAK_ATTRIBUTE = "pvp-arena:win-streak";
 
 /** Cache script toplevel_mainmodal_open (2524), which the captures run before each main modal. */
 const TOPLEVEL_MAINMODAL_OPEN_SCRIPT = 2524;
@@ -136,6 +142,11 @@ module.exports = {
   BUILD_ATTRIBUTE,
   PARTICIPATION_ATTRIBUTE,
   WINS_ATTRIBUTE,
+  RANKED_PARTICIPATION_ATTRIBUTE,
+  RANKED_WINS_ATTRIBUTE,
+  RANK_ATTRIBUTE,
+  REWARD_POINTS_ATTRIBUTE,
+  WIN_STREAK_ATTRIBUTE,
   MAGIC_TAB,
   CHAT,
   EVENTS,

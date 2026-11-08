@@ -178,11 +178,18 @@ function hideTabs(player) {
 
 function restoreTabs(player) {
   const sender = player.getPacketSender();
-  sender.sendTabInterface(0, 593);
+  // The combat tab with its weapon's styles and flags.
+  api.core.WeaponInterfaceManager.assign(player);
   sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
   // Tab 5 re-mounts prayer with its click flags; a plain mount on its slot would drop them.
   sender.sendTabInterface(5, PRAYER_GROUP);
-  for (const [slot, group] of HIDDEN_TABS) if (group !== PRAYER_GROUP) sender.sendTabInterface(slot, group);
+  // A re-mount drops the flags the login gave the tab, so each gets its setup again (live re-sends
+  // `if_setevents 149:0 0-27` for the inventory, rsprox_transcripts/227/01846.txt), as Castle Wars' waiting room does.
+  for (const [slot, group] of HIDDEN_TABS) {
+    if (group === PRAYER_GROUP) continue;
+    sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
+    api.emitCustomEvent("gameframe:tab-mounted", { player, group });
+  }
   player.getInventory().refreshItems?.();
   player.getEquipment().refreshItems?.();
 }

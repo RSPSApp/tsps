@@ -36,6 +36,8 @@ export interface ServerCustomItem {
     objType: Record<string, unknown>;
     itemDef?: Record<string, unknown>;
     models?: Record<string, string>;
+    /** A special attack bar: `from`, another item whose special it uses; `energy`, its cost in percent. */
+    specialAttack?: { from?: number; energy?: number };
 }
 
 export class CacheDefinitions {
@@ -600,6 +602,10 @@ export class CacheDefinitions {
                 itemDef: raw.itemDef && typeof raw.itemDef === "object" ? raw.itemDef as Record<string, unknown> : undefined,
                 models: raw.models && typeof raw.models === "object" ? raw.models as Record<string, string> : undefined,
             };
+            // Validated by the item loader; kept so the server and the client (sent this row) see it.
+            if (raw.specialAttack && typeof raw.specialAttack === "object") {
+                item.specialAttack = raw.specialAttack as ServerCustomItem["specialAttack"];
+            }
             for (const rawModelId of Object.keys(item.models ?? {})) {
                 const modelId = Number(rawModelId);
                 if (!Number.isInteger(modelId) || modelId < 1000000 || modelId > 0x7fffffff || modelIds.has(modelId)) {

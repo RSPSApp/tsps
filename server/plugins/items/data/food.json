@@ -242,7 +242,7 @@
     {"name": "Veg ball", "heal": 12, "combo": true},
     {"name": "Vegetable batta", "heal": 11, "combo": true},
     {"name": "Watermelon slice", "heal": {"flat": 1, "percent": 5}},
-    {"name": "White tree fruit", "heal": 3},
+    {"name": "White tree fruit", "heal": 3, "runEnergy": {"min": 5, "max": 10}},
     {"name": "Wild pie", "bites": ["Wild pie", "Half a wild pie"], "heal": 11, "eatDelay": [1, 1], "leaves": "Pie dish", "messages": ["You eat half the Wild pie.", "You eat the remaining Wild pie."], "boost": {"slayer": 5, "ranged": 4}},
     {"name": "Worm batta", "heal": 11, "combo": true},
     {"name": "Worm crunchies", "heal": 8, "combo": true},

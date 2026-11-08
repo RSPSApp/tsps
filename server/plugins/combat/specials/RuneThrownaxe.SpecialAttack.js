@@ -71,8 +71,8 @@ function buildRuneThrownaxeSpecialAttack(api) {
         .withAngle(0).withProgress(11).sendProjectile();
       Sounds.sendSound(character, CHAINHIT_SOUND);
       const player = character.getAsPlayer();
-      const distance = CombatPosition.projectileDistance(character, target);
-      const delay = RangedCombatMethod.playerHitDelays(character, target, distance)[0] + (target.isNpc() ? 1 : 0);
+      // The ammo goes when the hit lands: hits() is edge-based (landingDelays), so a large NPC isn't paid a tick late.
+      const delay = RangedCombatMethod.landingDelays(character, target)[0] + (target.isNpc() ? 1 : 0);
       CombatFactory.decrementAmmo(player, target.getLocation(), 1, delay);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);

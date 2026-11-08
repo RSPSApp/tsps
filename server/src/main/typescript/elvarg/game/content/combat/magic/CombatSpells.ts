@@ -303,6 +303,23 @@ export class CombatAncientSpellExtend extends CombatSpell {
 
 
 
+/**
+ * The staves that cast each god spell (Wiki: Saradomin Strike, Claws of Guthix, Flames of Zamorak): the god staff and
+ * the bladed staff of the same god, and for Flames the charged revenant sceptres too.
+ */
+const SARADOMIN_STRIKE_STAVES = new Set([ItemIdentifiers.SARADOMIN_STAFF, ItemIdentifiers.STAFF_OF_LIGHT]);
+const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.STAFF_OF_BALANCE]);
+const FLAMES_OF_ZAMORAK_STAVES = new Set([
+    ItemIdentifiers.ZAMORAK_STAFF, ItemIdentifiers.STAFF_OF_THE_DEAD, 12902, ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD,
+    ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_,
+]);
+
+/** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
+function godStaffRequired(player: Player, staves: Set<number>): Item[] {
+    const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId() ?? -1;
+    return [new Item(staves.has(weaponId) ? weaponId : staves.values().next().value as number)];
+}
+
 export class CombatSpells {
     public static readonly CHARGE_UNTIL = "charge:until";
     public static readonly CHARGE_NEXT_CAST = "charge:next-cast";
@@ -525,7 +542,7 @@ export class CombatSpells {
         },
 
         itemsRequired(player) {
-            return [new Item(556, 1), new Item(558, 1), new Item(554, 3)];
+            return [new Item(556, 2), new Item(558, 1), new Item(554, 3)];
         },
 
         levelRequired() {
@@ -764,7 +781,7 @@ export class CombatSpells {
             return 15;
         },
         startGraphic() {
-            return new Graphic(145, 6553600);
+            return new Graphic(145, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 24.5;
@@ -875,7 +892,7 @@ export class CombatSpells {
             return 25;
         },
         startGraphic() {
-            return new Graphic(87, 6553600);
+            return new Graphic(87, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 30;
@@ -938,16 +955,13 @@ export class CombatSpells {
             return new Graphic(329);
         },
         maximumHit() {
-            return 19;
+            return 10; // Magic / 10 and the Slayer's staff (e) are added by plugins/items/SlayersStaff.plugin.js.
         },
         startGraphic() {
             return null; // None live; 327 is the Slayer salt sprinkle.
         },
         baseExperience() {
             return 30;
-        },
-        equipmentRequired(player) {
-            return [new Item(4170)];
         },
         itemsRequired(player) {
             return [new Item(558, 4), new Item(560, 1)];
@@ -1046,9 +1060,7 @@ export class CombatSpells {
         baseExperience: () => {
             return 35;
         },
-        equipmentRequired: (player: Player) => {
-            return [new Item(2415)];
-        },
+        equipmentRequired: (player: Player) => godStaffRequired(player, SARADOMIN_STRIKE_STAVES),
         itemsRequired: (player: Player) => {
             return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
         },
@@ -1080,11 +1092,9 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
-        equipmentRequired: (player: Player): Item[] => {
-            return [new Item(2416)];
-        },
+        equipmentRequired: (player: Player): Item[] => godStaffRequired(player, CLAWS_OF_GUTHIX_STAVES),
         itemsRequired: (player: Player): Item[] => {
-            return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
+            return [new Item(556, 4), new Item(565, 2), new Item(554, 1)];
         },
         levelRequired: (): number => {
             return 60;
@@ -1114,11 +1124,9 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
-        equipmentRequired: (player: Player): Item[] => {
-            return [new Item(2417)];
-        },
+        equipmentRequired: (player: Player): Item[] => godStaffRequired(player, FLAMES_OF_ZAMORAK_STAVES),
         itemsRequired: (player: Player): Item[] => {
-            return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
+            return [new Item(556, 1), new Item(565, 2), new Item(554, 4)];
         },
         levelRequired: (): number => {
             return 60;
@@ -1209,7 +1217,7 @@ export class CombatSpells {
             return new Graphic(169);
         },
         startGraphic() {
-            return new Graphic(167, 6553600);
+            return new Graphic(167, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 76;
@@ -1272,7 +1280,7 @@ export class CombatSpells {
             return new Graphic(172);
         },
         startGraphic: function () {
-            return new Graphic(170, 6553600);
+            return new Graphic(170, GraphicHeight.HIGH);
         },
         baseExperience: function () {
             return 83;
@@ -1403,7 +1411,7 @@ export class CombatSpells {
         maximumHit: () => 16,
         startGraphic: () => new Graphic(1865),
         baseExperience: () => 27,
-        itemsRequired: () => [new Item(554, 3), new Item(566)],
+        itemsRequired: () => [new Item(554, 3), new Item(562)],
         levelRequired: () => 44,
         spellId: () => 20398,
     }, true);
@@ -1561,13 +1569,13 @@ export class CombatSpells {
             return new Graphic(80, GraphicHeight.HIGH); // Live, a Stun that lands shows stunned; 107 is Weaken's impact.
         },
         startGraphic() {
-            return new Graphic(173, 6553600);
+            return new Graphic(173, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 90;
         },
         itemsRequired(player) {
-            return [new Item(557, 12), new Item(555, 12), new Item(556, 1)];
+            return [new Item(557, 12), new Item(555, 12), new Item(566, 1)];
         },
         levelRequired() {
             return 80;
@@ -1696,7 +1704,7 @@ export class CombatSpells {
         () => { return 0; },
         (cast: Mobile, castOn: Mobile) => { return Projectile.createProjectile(cast, castOn, 360, 0, 20, 43, 31); },
         () => { return new Graphic(361); },
-        () => { return 18; },
+        () => { return 16; },
         () => { return 34; },
         () => {
             return [
@@ -1716,7 +1724,7 @@ export class CombatSpells {
         () => { return 1; },
         () => { return null; },
         () => { return new Graphic(389); },
-        () => { return 13; },
+        () => { return 17; },
         () => { return 36; },
         () => { return [new Item(556, 2), new Item(554, 2), new Item(562, 4), new Item(560, 2)]; },
         () => { return 62; },
@@ -1853,7 +1861,7 @@ export class CombatSpells {
     public static ICE_BLITZ = new CombatAncientSpellExtend(
 
         () => { return new Animation(1978); },
-        () => { return new Graphic(366, 6553600); },
+        () => { return new Graphic(366, GraphicHeight.HIGH); },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => { getCombatFactory().freezeTicks(castOn, Math.floor(24 * multiplier), null, cast, "ice"); },
         () => { return 0; },
         (cast: Mobile, castOn: Mobile) => { return null; },

@@ -314,3 +314,43 @@ test("queued and confirmed duplicate alchemy still rejects replacement of the cl
     assert.equal(inv.getAmount(itemId), 2, pending + " cannot consume either copy");
   }
 });
+
+// The ring panel's alchemy isn't a spell from the book (any book may use it), so it isn't a Spellbook Swap's one
+// spell: a Lunar player swapped to Ancient keeps the swap through it, and the next Ancient spell is still theirs.
+test("the ring panel's alchemy leaves a Spellbook Swap alone", async t => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = actor(t);
+  for (const skill of core.Skill.values()) f.p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
+  const quests = require("../plugins/quests/QuestRuntime").getRegisteredQuests();
+  // Lunar Diplomacy and Dream Mentor for the swap, Desert Treasure I for the Ancient book.
+  for (const key of ["lunar_diplomacy", "dream_mentor", "desert_treasure_i"]) { const q = quests.find((quest) => quest.key === key); q.setStage(f.p, q.completionValue); }
+  f.p.setSpellbook(core.MagicSpellbook.LUNAR);
+  const I = core.ItemIdentifiers;
+  for (const [rune, n] of [[I.ASTRAL_RUNE, 10], [I.COSMIC_RUNE, 10], [I.LAW_RUNE, 10]]) f.p.getInventory().add(new core.Item(rune, n), false);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 3);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "swapped to the Ancient book");
+  await f.open();
+  const x = target(f);
+  await cast(f, x);
+  assert.equal(used(f), 1, "the ring's alchemy was cast");
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "the swap is still on");
+  assert.ok(f.p.getAttribute("lunar:spellbook-swap"), "and its one spell is still to come");
+});
+
+// #1407 review: Close returned on the session check (the exact ring object held) before it was read, so a ring
+// banked (or banked and withdrawn, a new object) with the panel open left the panel mounted and no inventory.
+test("Close restores the inventory after the ring is banked, or banked and withdrawn",async t=>{
+  const panel=core.CacheDefinitions.getInterfaceId("lumbridge_alchemy"),inventory=core.CacheDefinitions.getInterfaceId("inventory");
+  for(const withdraw of [false,true]){
+    const f=actor(t);await f.open();
+    const sender=f.p.getPacketSender();assert.equal(sender.isSubInterfaceOpen(panel),true);
+    const ring=id("lumbridge_ring_elite");
+    f.p.getBank(0).open();core.Bank.deposit(f.p,ring,0,1,false);assert.equal(f.p.getInventory().getAmount(ring),0);
+    if(withdraw){const tab=core.Bank.getTabForItem(f.p,ring),bank=f.p.getBank(tab);core.Bank.withdraw(f.p,ring,bank.getSlotForItemId(ring),1,tab);
+      assert.equal(f.p.getInventory().getAmount(ring),1,"a new ring object");}
+    sender.sendInterfaceRemoval();
+    await click(f,"close");
+    assert.equal(sender.isSubInterfaceOpen(panel),false,`the panel closes (withdrawn: ${withdraw})`);
+    assert.equal(sender.isSubInterfaceOpen(inventory),true,"the inventory is back");
+  }
+});

@@ -241,6 +241,9 @@ function pickSpawnTile(npc, target) {
 
 function startSpawn(npc, target) {
   npc.setAttribute(Shared.ATTR_PHASE, Shared.PHASE_SPAWN);
+  // Immune while the spawn is up (Wiki) to what skips her hit hook too: thralls, recoil and vengeance queue their
+  // damage straight to her, so her hitpoints hold (as the Grotesque Guardians' do).
+  npc.setHitpointsLocked?.(true);
   npc.performAnimation(new core.Animation(BREATH_ANIMATION));
   const fight = getFight(npc);
   fight.fighter = target;
@@ -364,9 +367,11 @@ function endSpawn(npc, fight) {
   if ((npc.getAttribute?.(Shared.ATTR_PHASE) ?? null) === Shared.PHASE_SPAWN) {
     npc.setAttribute(Shared.ATTR_PHASE, Shared.PHASE_ACTIVE);
   }
+  npc.setHitpointsLocked?.(false);
 }
 
 function endFight(npc) {
+  npc.setHitpointsLocked?.(false);
   const fight = fights.get(npc);
   if (!fight) return;
   for (const object of fight.pools.values()) {

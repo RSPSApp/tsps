@@ -80,7 +80,10 @@ function empty({ player, slot }) {
     constructor() { super(1, player, false); }
     execute() {
       tick++;
-      if (!player.isRegistered()) {
+      // A death during the pour stays where it happened: landing first would drop the items at Port Phasmatys, out
+      // of the killer's reach (fairy rings, spirit trees and home teleport stop on death too).
+      const dying = tick <= TELEPORT_TICK && (player.getHitpoints?.() <= 0 || player.isDyingReturn?.() === true);
+      if (!player.isRegistered() || dying) {
         this.stop();
         return;
       }

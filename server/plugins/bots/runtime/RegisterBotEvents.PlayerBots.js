@@ -172,7 +172,7 @@ function handleClanRecruitAssist({ runtime, behaviorMode, player, target, nowMs,
   for (const [botUsername, entry] of runtime.entriesByUsername ?? []) {
     const bot = entry?.player;
     const state = entry?.state;
-    if (!bot || !state) {
+    if (!bot || !state || entry.manuallyControlled || entry.behaviorPaused) {
       continue;
     }
     if (bot.getAttribute?.(ATTR_RECRUIT_OWNER_USERNAME) !== player.getUsername?.()) {
@@ -226,7 +226,7 @@ function recallClanRecruitsOnOwnerDefeat({ runtime, behaviorMode, owner, nowMs }
   for (const [, entry] of runtime.entriesByUsername ?? []) {
     const bot = entry?.player;
     const state = entry?.state;
-    if (!bot || !state) {
+    if (!bot || !state || entry.manuallyControlled || entry.behaviorPaused) {
       continue;
     }
     if (bot.getAttribute?.(ATTR_RECRUIT_OWNER_USERNAME) !== owner.getUsername?.()) {
@@ -311,7 +311,8 @@ function registerBotEvents(options) {
       return;
     }
     const state = runtime.botStatesByName.get(followedUsername);
-    if (!state) {
+    const entry = runtime.entriesByUsername.get(followedUsername);
+    if (!state || entry?.manuallyControlled || entry?.behaviorPaused) {
       return;
     }
     handlePlayerAttackReaction({

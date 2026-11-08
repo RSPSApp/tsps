@@ -40,6 +40,9 @@ const GAMES = {
 /** house -> Map(furniture -> { players: Map(player -> { shots, score }), done }) */
 const busyUntil = new WeakMap();
 const games = new WeakMap();
+const pendingStarts = new WeakMap();
+const generations = new WeakMap();
+const furnitureGenerations = new WeakMap();
 
 function gamesIn(house) {
   let map = games.get(house);
@@ -94,8 +97,22 @@ function shoot(event) {
   }
   const start = () => fire(player, house, furniture, kind, event.location);
   if (!game) {
-    gamesIn(house).set(furniture, { players: new Map(), done: false });
-    Prizes.offer(player, house, kind.game, start);
+    if (kind.requires && !kind.requires(player)) return true;
+    const token = {};
+    const generation = generations.get(house);
+    const furnitureGeneration = furnitureGenerations.get(furniture);
+    pendingStarts.set(player, token);
+    const valid = () => pendingStarts.get(player) === token && generations.get(house) === generation
+      && furnitureGenerations.get(furniture) === furnitureGeneration
+      && House.houseFor(player) === house && !house.buildingMode
+      && house.getFurnitureAt(event.location, event.objectId, event.object?.getType() ?? 10) === furniture
+      && !gamesIn(house).has(furniture) && (!kind.requires || kind.requires(player));
+    Prizes.offer(player, house, kind.game, () => {
+      pendingStarts.delete(player);
+      furnitureGenerations.set(furniture, {});
+      gamesIn(house).set(furniture, { players: new Map(), done: false });
+      start();
+    }, valid);
     return true;
   }
   start();
@@ -106,12 +123,12 @@ function fire(player, house, furniture, kind, target) {
   const game = gamesIn(house).get(furniture);
   if (!game || game.done || House.houseFor(player) !== house) return;
   let entry = game.players.get(player);
+  if (kind.requires && !kind.requires(player)) return;
   if (!entry) {
     if (game.players.size >= MAX_PLAYERS) return player.sendMessage("There are already four players in this game.");
     game.players.set(player, entry = { shots: 0, score: 0 });
   }
   if (entry.shots >= SHOTS) return player.sendMessage("You've had your ten shots. You should wait for the other players to finish.");
-  if (kind.requires && !kind.requires(player)) return;
   if (kind.game === "archery") player.getEquipment().deleteAtSlot(Equipment.AMMUNITION_SLOT, 1);
   const to = new Location(target.x, target.y, target.z);
   player.setPositionToFace(to);
@@ -123,6 +140,8 @@ function fire(player, house, furniture, kind, target) {
   TaskManager.submit(new class extends Task {
     constructor() { super(1, `construction:ranging:${player.getIndex()}`, false); }
     execute() {
+      if (games.get(house)?.get(furniture) !== game || game.players.get(player) !== entry
+        || House.houseFor(player) !== house || house.buildingMode) return this.stop();
       tick++;
       if (tick === 1) {
         if (kind.throwAnimations[1]) player.performAnimation(new Animation(kind.throwAnimations[1]));
@@ -177,6 +196,7 @@ function sendOverlay(game) {
 
 /** House.leftHouse: the overlay goes, and the game carries on without them. */
 function leftGames(player, house) {
+  pendingStarts.delete(player);
   busyUntil.delete(player);
   for (const [furniture, game] of gamesIn(house)) {
     if (!game.players.delete(player)) continue;
@@ -186,9 +206,24 @@ function leftGames(player, house) {
     if (game.players.size) sendOverlay(game);
     else {
       gamesIn(house).delete(furniture);
+      if (!game.done) Prizes.withdraw(house, kind.game);
       delete furniture.displayObjectId; // the hoop or dart isn't left on it
     }
   }
+}
+
+/** Building mode invalidates pending starts and packs away active games. */
+function resetGames(house) {
+  generations.set(house, {});
+  for (const [furniture, game] of games.get(house) ?? []) {
+    for (const player of game.players.keys()) {
+      busyUntil.delete(player);
+      player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
+    }
+    Prizes.withdraw(house, GAMES[furniture.buildableKey].game);
+    delete furniture.displayObjectId;
+  }
+  games.delete(house);
 }
 
 function attachRangingGames(api) {
@@ -198,4 +233,4 @@ function attachRangingGames(api) {
   api.onObjectInteraction("Archery target", { "Shoot-at": shoot });
 }
 
-Object.assign(module.exports, { attachRangingGames, leftGames });
+Object.assign(module.exports, { attachRangingGames, leftGames, resetGames });

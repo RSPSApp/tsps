@@ -48,6 +48,8 @@ type CombatAnimation = {
     anims?: { spawn?: number | null; attack?: number; block?: number; death?: number };
     sounds?: { death?: number };
     projectile?: number;
+    /** The spotanim the npc plays on its own tick when it fires a ranged shot (an arrow drawn on a bow). */
+    launchGraphic?: number;
     /** Ticks from the death animation to the death itself; 2 when absent. */
     deathTicks?: number;
     /** Ticks from removal to respawn; 25 when absent, 0 to disable. */
@@ -299,9 +301,11 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             animations[String(id)] = { anims: { attack, block, death } };
         }
         const projectiles: Record<string, number> = {};
+        const launchGraphics: Record<string, number> = {};
         for (const [id, entry] of Object.entries((animationFile.npcs ?? {}) as Record<string, CombatAnimation>)) {
             if (entry?.anims) animations[id] = entry;
             if (Number.isInteger(entry?.projectile)) projectiles[id] = entry.projectile as number;
+            if (Number.isInteger(entry?.launchGraphic)) launchGraphics[id] = entry.launchGraphic as number;
         }
         // Only hand-made entries stop the guess below; captures leave a role open when they do not settle it.
         const configuredAnimationIds = new Set(Object.keys(animations));
@@ -394,6 +398,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             ...Object.keys(animationFile.npcs ?? {}),
             ...Object.keys(animations), ...Object.keys(observedAnimations),
             ...Object.keys(projectiles),
+            ...Object.keys(launchGraphics),
         ]);
         let applied = 0;
         let mismatched = 0;
@@ -450,6 +455,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
 
             if (Number.isInteger(projectiles[key])) {
                 definition.projectileId = projectiles[key];
+            }
+            if (Number.isInteger(launchGraphics[key])) {
+                definition.launchGraphicId = launchGraphics[key];
             }
 
             const respawn = animationFile.npcs?.[key]?.respawn;

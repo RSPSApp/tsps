@@ -203,9 +203,9 @@ const ROCKS = [
   // (0.39453125 at level 1, 0.58984375 at 42, 0.86328125 at 99). A breathing filter must be worn.
   // No depleted loc of its own is published, so the shared fallback ("rocks1") is used.
   { objectName: "Volcanic sulphur", objectIds: [28496, 28497, 28498], level: 42, xp: 35, oreId: ItemIdentifiers.VOLCANIC_SULPHUR, petBase: 710000, chance: [100, 220], gems: true, respawnTicks: 42, requiresBreathingFilter: true, oreMessage: "You manage to mine some volcanic sulphur." },
-  // Wiki Nickel rocks: 2-16 ores before the rock goes, 2 min respawn; only Varrock armour 4 adds ore,
-  // so no "mining:extra-ore". No published chart: mithril's is an estimate.
-  { objectName: "Nickel rocks", level: 74, xp: 80.5, oreId: ItemIdentifiers.NICKEL_ORE, petBase: 247200, chance: [4, 50], gems: true, respawnTicks: 200, yield: { min: 2, max: 16 }, noExtraOre: true },
+  // Wiki Nickel rocks: 2-16 ores before the rock goes, 2 min respawn; only Varrock armour 4 adds ore
+  // (the cape and celestial ring stop below level 74). No published chart: mithril's is an estimate.
+  { objectName: "Nickel rocks", level: 74, xp: 80.5, oreId: ItemIdentifiers.NICKEL_ORE, petBase: 247200, chance: [4, 50], gems: true, respawnTicks: 200, yield: { min: 2, max: 16 } },
   // Wiki Rubium rocks: stackable splinters, two a success from 72; at least two before the rock goes,
   // then a 1/6 chance on each. 35.4 s respawn. The chart is an estimate from the Wiki's splinter rates.
   { objectName: "Rubium rocks", level: 48, xp: 30, oreId: ItemIdentifiers.RUBIUM_SPLINTERS, chance: [107, 230], gems: true, respawnTicks: 59, yield: { min: 2, chance: 1 / 6 }, doubleFromLevel: 72, oreMessage: "You manage to mine some rubium splinters." },
@@ -366,7 +366,7 @@ function getMiningLevel(player) {
 
 /**
  * The level the success rolls use: the visible level, capped at 99, plus invisible boosts other plugins
- * add ("mining:level-boost", the celestial ring's +4), which do count past 99 (Wiki "Skilling success
+ * add ("mining:level-boost", the celestial ring's +4, the Mining Guild's +7), which do count past 99 (Wiki "Skilling success
  * rate", Boosts over 99). Requirements still read the visible level.
  */
 function getRollMiningLevel(player) {
@@ -572,9 +572,20 @@ function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
     const { id, delay, radius } = rock.depletionSound;
     pluginApi.core.Sounds.playAreaSound({ soundId: id, delay, radius, x: at.getX(), y: at.getY(), level: at.getZ() });
   }
-  TaskManager.submit(new RockRespawnTask(rock.respawnTicks, whole, depleted));
-  for (const viewer of viewers) sendRespawnTimer(viewer, depleted, rock.respawnTicks);
+  const respawnTicks = respawnTicksFor(rockObject, rock);
+  TaskManager.submit(new RockRespawnTask(respawnTicks, whole, depleted));
+  for (const viewer of viewers) sendRespawnTimer(viewer, depleted, respawnTicks);
   return depleted;
+}
+
+/**
+ * How long a mined-out rock stays empty: the Wiki rock page's time, which content may shorten
+ * ("mining:respawn-ticks" { object, rock, ticks }, the Mining Guild's members' area).
+ */
+function respawnTicksFor(rockObject, rock) {
+  const request = { object: rockObject, rock: rock.objectName, ticks: rock.respawnTicks };
+  pluginApi.emitCustomEvent("mining:respawn-ticks", request);
+  return Number.isFinite(request.ticks) ? Math.max(1, request.ticks) : rock.respawnTicks;
 }
 
 /** Failures are message boxes in live OSRS (rsprox recordings). */

@@ -216,18 +216,18 @@ test("no weapon type attacks with a combat-tab icon id", () => {
 });
 
 test("the audited weapon families animate with their own family", () => {
-  // The spear's animations: the Keris partisan is a spear (docs/audits/weapons.md).
+  // The Keris partisan's live animations: Stab, Lunge and Block 381, Pound 419.
   assert.deepEqual(styles.weaponInterfaces.PARTISAN.fightTypes.map((key) => styles.fightTypes[key].animation),
-    [2080, 2080, 2082, 2080], "barrows_war_spear_stab/_crush");
+    [381, 381, 419, 381], "human_spear_lunge / human_spear_pound (rsprox_transcripts/227/01757.txt, 227/01788.txt, 227/01864.txt)");
   // The banners' own animations, human_banner_spike 1428 and human_banner_block 1429.
   assert.deepEqual(styles.weaponInterfaces.BANNER.fightTypes.map((key) => styles.fightTypes[key].animation),
     [1428, 1428, 1428, 1429]);
   // The abyssal bludgeon's abyssal_bludgeon_crush, not the godsword's smash.
   assert.deepEqual(styles.weaponInterfaces.ABYSSAL_BLUDGEON.fightTypes.map((key) => styles.fightTypes[key].animation),
     [3298, 3298, 3298]);
-  // The claws' dclaws_human_attack, not the axe's chop.
+  // Claws play 393 on every normal attack (rsprox_transcripts/237/04008.txt, 235/03327.txt, 227/01839.txt, 227/01845.txt).
   assert.deepEqual(styles.weaponInterfaces.CLAWS.fightTypes.map((key) => styles.fightTypes[key].animation),
-    [7527, 7527, 7527, 7527]);
+    [393, 393, 393, 393]);
   // The plain scythe (the Scythe of Vitur carries its own 8056): human_scythe_sweep.
   assert.deepEqual(styles.weaponInterfaces.SCYTHE.fightTypes.map((key) => styles.fightTypes[key].animation),
     [440, 440, 440, 440]);

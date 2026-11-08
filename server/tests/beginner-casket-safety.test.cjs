@@ -7,6 +7,8 @@ const core = require("../dist/plugins/PluginManager").PluginManager.getCoreApi()
 const {Inventory} = require("../dist/game/model/container/impl/Inventory");
 const Rewards = require("../plugins/treasuretrails/beginner/Rewards.BeginnerTreasureTrails");
 const Runtime = require("../plugins/treasuretrails/beginner/Runtime.BeginnerTreasureTrails");
+const Screen = require("../plugins/treasuretrails/CasketRewardScreen.plugin");
+Screen.initialize(core);
 
 function fixture(completed = 0) {
   const attributes = new Map([[Runtime.COMPLETED_ATTRIBUTE, completed]]), events = new Map(), messages = [], packets = [];
@@ -70,8 +72,9 @@ test("an absent or failing milestone service preserves the casket and progress",
     f.events.set("treasure-trails:milestone-rewards", failure ? [() => { throw new Error("Fixture service failure"); }] : []);
     assert.doesNotThrow(() => f.open()); f.preserved();
     f.events.set("treasure-trails:milestone-rewards", handlers);
-    f.open(); assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE), 50);
-    assert.equal(f.inventory.getAmount(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE), 1);
+    f.open(); Screen.closed({player:f.player,interfaceId:73}); assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE), 50);
+    Screen.closed({player:f.player,interfaceId:73});
+  assert.equal(f.inventory.getAmount(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE), 1);
   }
 });
 
@@ -80,6 +83,8 @@ test("valid noted rewards credit the cache note while collection logging records
   f.api.onCustomEvent("treasure-trails:milestone-rewards", request => request.drops.push({itemId: coalId, amount: 5, noted: true}));
   f.api.onCustomEvent("collection-log:obtain", request => logged.push(request));
   f.open();
+  assert.equal(f.inventory.getAmount(noteId), 0, "display does not credit notes");
+  Screen.closed({player:f.player,interfaceId:73});
   assert.equal(f.inventory.getAmount(noteId), 5); assert.equal(f.inventory.getAmount(coalId), 0);
   assert.ok(logged.some(row => row.itemId === coalId && row.amount === 5));
   assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE), 1);
@@ -102,6 +107,7 @@ test("reentrant preparation opens one casket once and credits its real milestone
   f.api.onCustomEvent("treasure-trails:milestone-rewards", () => { callbacks++; Rewards.open(f.event); });
   f.open();
   assert.equal(callbacks, 1); assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE), 50);
+  Screen.closed({player:f.player,interfaceId:73});
   assert.equal(f.inventory.getAmount(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE), 1);
   assert.equal(f.inventory.getAmount(core.ItemIdentifiers.REWARD_CASKET_BEGINNER_), 0);
 });
@@ -119,7 +125,8 @@ test("opening enforces unique eligibility while young accounts retain ordinary r
     assert.doesNotThrow(() => f.open());
     assert.equal(f.event.error, undefined);
     assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE), 50);
-    assert.equal(f.inventory.getAmount(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE), 1);
+    Screen.closed({player:f.player,interfaceId:73});
+  assert.equal(f.inventory.getAmount(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE), 1);
     const expected = Rewards.TABLE.entries.find(row => eligible || !row.unique);
     assert.equal(f.inventory.getAmount(expected.item_id), expected.quantity[0]);
     const unique = Rewards.TABLE.entries.find(row => row.unique);

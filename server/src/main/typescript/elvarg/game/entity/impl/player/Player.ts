@@ -229,7 +229,11 @@ export class Player extends Mobile {
         this.setSpecialActivated(false);
         CombatSpecial.updateBar(this);
         this.setHasVengeance(false);
-        this.getCombat().getFireImmunityTimer().stop();
+        // Antifire is left running, timer and protection both: in every recorded death with one active (rsprox
+        // 227/01857, 227/00543, 227/00555, 234/03279...) its varbits count on through the death and respawn and the
+        // "about to expire" messages follow, while poison and prayers reset; the Wiki says nothing either way.
+        // Stopping only the timer left the protection on, a save wrote fireImmunityTimer 0 and enchanted bolts' fire
+        // check disagreed with dragonfire. The one reset the Wiki gives (a "no potions" duel) is the duel's own.
         this.getCombat().getPoisonImmunityTimer().stop();
         this.getCombat().getPoisonClock().resetPhase();
         this.getCombat().getTeleblockTimer().stop();
@@ -448,7 +452,9 @@ export class Player extends Mobile {
         timed("client_input", () => this.getSession()?.processPackets());
         // The tick count, every tick, as live sends it (varp map_clock): the client's timers
         // (buff bar cooldowns, script4678 and script5940) count against it.
-        if (!isBot) this.sendMapClock();
+        // Client-only packets: a bot an administrator drives has their client, so it gets them as a player does.
+        const unwatched = this.isUnwatchedBot();
+        if (!unwatched) this.sendMapClock();
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.
@@ -456,7 +462,7 @@ export class Player extends Mobile {
 
         // Timers
         timed("timers", () => this.getTimers().process());
-        if (!isBot) this.syncPoisonOrb();
+        if (!unwatched) this.syncPoisonOrb();
 
         const movement = this.getMovementQueue();
         const combat = this.getCombat();
@@ -839,6 +845,10 @@ export class Player extends Mobile {
         return true;
     }
 
+    public setSession(session: PlayerSession): void {
+        this.session = session;
+    }
+
     public getSession(): PlayerSession {
         return this.session;
     }
@@ -1148,7 +1158,9 @@ export class Player extends Mobile {
     }
 
     public setRunEnergy(runEnergyPercent: number) {
-        this.setRunEnergyUnits(runEnergyPercent * 100);
+        // A percent read back from units (getRunEnergy, a save, a stash) isn't exact in floating point: 0.29 * 100 is
+        // 28.999..., which flooring lost a unit of on every relog. A hair over keeps floor semantics for real fractions.
+        this.setRunEnergyUnits(runEnergyPercent * 100 + 1e-6);
     }
 
     /** Run energy in OSRS units (0-10,000), the precision the formulas and the client use. */
@@ -1414,6 +1426,14 @@ export class Player extends Mobile {
 
     public isPlayerBot(): boolean {
         return this.playerBot;
+    }
+
+    /**
+     * A bot no client is watching: it needs no client packets and wakes no regions. A bot an administrator drives
+     * (::botcontrol) has the admin's connection, so it gets both, as a player does.
+     */
+    public isUnwatchedBot(): boolean {
+        return this.playerBot && this.getSession?.()?.hasNetworkClient?.() !== true;
     }
 
     public setPlayerBot(playerBot: boolean): void {

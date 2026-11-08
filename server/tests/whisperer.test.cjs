@@ -1646,3 +1646,28 @@ test('melee recovery retains launched volley impacts and removes future shots; e
     for(let tick=0;tick<5;tick++)g.fight.process();
     assert.equal(g.fight.events.length,0);
 });
+
+test('Ketla reclaims a lost blackstone fragment, but not while one is banked', () => {
+    Common.init({ core, emitCustomEvent(name, request) { if (name === 'quest:is-complete') request.complete = true; }, removeNpc() { } });
+    try {
+        const reclaimAt = (player) => {
+            const event = { player, npcId: core.NpcIdentifiers.KETLA, stepId: '5mQjA2', handled: false };
+            Site.reclaim(event);
+            return event;
+        };
+        const someone = () => {
+            const p = new Player(null);
+            p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+            return p;
+        };
+        const banked = someone();
+        banked.getBank(0).add(new core.Item(Common.data.items.fragment, 1), false);
+        assert.equal(reclaimAt(banked).handled, true, 'Ketla has nothing to give');
+        assert.equal(banked.getInventory().contains(Common.data.items.fragment), false);
+        const lost = someone();
+        reclaimAt(lost);
+        assert.equal(lost.getInventory().contains(Common.data.items.fragment), true, 'a lost one comes back');
+    } finally {
+        Common.init({ core, emitCustomEvent() { }, removeNpc() { } });
+    }
+});

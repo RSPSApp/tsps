@@ -134,7 +134,19 @@ function stashGenerated(event) {
   const session = sessionOf(event?.npc);
   if (event?.npcId !== Shared.BOSS_ID || !session) return;
   event.handled = true;
-  session.stash = event.drops ?? [];
+  session.stash = [...(event.drops ?? [])];
+  // Nothing is received at the death (the collection log reads the roll a microtask later): the stash is logged as it
+  // is harvested, and a Destroy logs only what it keeps, or the log filled with loot that was thrown away.
+  if (Array.isArray(event.drops)) event.drops.length = 0;
+}
+
+/** What a corpse hands over, into the collection log. */
+function logReceived(player, drops) {
+  for (const drop of drops) {
+    if (Number.isInteger(drop?.itemId) && drop.amount > 0) {
+      api.emitCustomEvent("collection-log:obtain", { player, itemId: drop.itemId, amount: drop.amount });
+    }
+  }
 }
 
 function validCorpse(npc, session) {
@@ -194,6 +206,7 @@ function harvest({ player, npc }) {
   later(HARVEST_LOOT_TICKS, npc, () => {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, stash);
+    logReceived(player, stash);
     if (pet.length > 0) {
       // The death roll already counted the kill; Nid is only extra loot.
       api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: pet, countKill: false });
@@ -217,6 +230,7 @@ function destroyConfirmed({ player, npc }) {
   later(1, npc, () => {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, clues);
+    logReceived(player, clues);
     if (nid.length > 0) {
       // The death roll already counted the kill; Nid is only extra loot.
       api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: nid, countKill: false });

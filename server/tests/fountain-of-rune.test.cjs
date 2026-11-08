@@ -138,7 +138,7 @@ async function lowAlchemy(f) {
   assert.ok(spell, "Low Level Alchemy is in the cache");
   await f.c.dispatch([{
     type: "widget_target", sourceWidgetId: spell.widgetId, sourceItemId: spell.itemId,
-    targetItemId: f.inv.getItems()[0].getId(), targetSlot: 0, targetWidgetId: 0,
+    targetItemId: f.inv.getItems()[0].getId(), targetSlot: 0, targetWidgetId: 149 << 16, // the inventory
   }]);
   f.c.processTurnPackets();
   for (let i = 0; i < 6; i++) core.TaskManager.process();

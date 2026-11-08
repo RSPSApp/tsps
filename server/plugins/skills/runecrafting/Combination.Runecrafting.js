@@ -20,7 +20,7 @@
  * capture has them. Preset items (Item.isPresetItem) are not counted or spent, so a loadout's copies never become
  * real runes; the stacks are taken slot by slot.
  *
- * Not done: Daeyalt essence (the Wiki's recipes pay 1.5 times, mist 12), guardian essence and Twisted extract
+ * Not done: guardian essence and Twisted extract
  * recipes; the Binding necklace's Check and Destroy options (the Wiki: Check gives the uses left, Destroy restores
  * the next to 16); runic extracts; the Aether rune.
  */
@@ -29,6 +29,7 @@ const NECKLACE_ATTRIBUTE = "runecrafting:binding-necklace";
 const NECKLACE_USES = 16;
 const IMBUE_ATTRIBUTE = "lunar:magic-imbue-until";
 const SUCCESS_CHANCE = 0.5;
+const DAEYALT_XP_SCALE = 1.5;
 
 let api, core, craftGraphic, craftAnimation;
 
@@ -117,7 +118,10 @@ function combine(event) {
     player.sendMessage(`You need a Runecrafting level of at least ${rune.level} to craft this.`);
     return;
   }
-  const essenceSlots = takeable(inventory, I.PURE_ESSENCE);
+  // Wiki (Daeyalt essence): daeyalt binds first, at 1.5 times the XP; pure essence takes a second use.
+  const daeyaltSlots = takeable(inventory, I.DAEYALT_ESSENCE);
+  const essenceId = daeyaltSlots.length > 0 ? I.DAEYALT_ESSENCE : I.PURE_ESSENCE;
+  const essenceSlots = daeyaltSlots.length > 0 ? daeyaltSlots : takeable(inventory, I.PURE_ESSENCE);
   const essence = total(essenceSlots);
   if (essence <= 0) {
     player.sendMessage("You do not have any pure essence to bind.");
@@ -159,13 +163,13 @@ function combine(event) {
   if (bound === amount) player.sendMessage(`You succeed in binding the temple's power into ${rune.name} runes.`);
   else if (bound > 0) player.sendMessage(`You partially succeed to bind the temple's power into ${rune.name} runes.`);
   else player.sendMessage(`You fail to bind the temple's power into ${rune.name} runes.`);
-  if (bound > 0) player.getSkillManager().addExperiences(core.Skill.RUNECRAFTING, bound * rune.xp);
+  if (bound > 0) player.getSkillManager().addExperiences(core.Skill.RUNECRAFTING, bound * rune.xp * (essenceId === I.DAEYALT_ESSENCE ? DAEYALT_XP_SCALE : 1));
   if (necklace) useNecklace(player);
   // Nothing here says the Rift guardian or a league relic apply to combination runes: amountPerEssence 0 keeps the
   // relic's extra runes off, and no guardian colour matches. The diary hooks read runeAmount.
   if (bound > 0) api.emitCustomEvent("runecrafting:success", {
     player, skill: core.Skill.RUNECRAFTING, rolls: amount, amountPerEssence: 0, runeId: rune.made, runeAmount: bound,
-    objectId: event.objectId, altarId: event.objectId, essenceIds: [I.PURE_ESSENCE], combination: true,
+    objectId: event.objectId, altarId: event.objectId, essenceIds: [essenceId], combination: true,
   });
 }
 

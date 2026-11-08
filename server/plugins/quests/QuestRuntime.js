@@ -92,6 +92,12 @@ const BOOK_GROUP = 392;
 const BOOK_CLOSE = (BOOK_GROUP << 16) | 7;
 const BOOK_PREVIOUS = (BOOK_GROUP << 16) | 75;
 const BOOK_NEXT = (BOOK_GROUP << 16) | 77;
+/** pagepos: the left page of the open spread, 0, 2, 4 ... */
+const BOOK_PAGE_VARP = 334;
+/** human_readbook_turnright/left with readbook_spotanim_turnright/left at height 92 (ticks 359, 368). */
+const BOOK_TURN_RIGHT = { animation: 3140, graphic: 548 };
+const BOOK_TURN_LEFT = { animation: 3141, graphic: 549 };
+const BOOK_TURN_GRAPHIC_HEIGHT = 92;
 // indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
 const INDEXED_BOOK_GROUP = 680;
 const INDEXED_BOOK = {
@@ -529,7 +535,6 @@ function registerQuestWidgets(api) {
  */
 function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
-  player.getPacketSender().sendInterface(BOOK_GROUP);
   openBooks.set(player, { title, pages, page: 0, onClose });
   showBookPage(player);
 }
@@ -554,9 +559,14 @@ function showBookPage(player) {
       packet.sendInterfaceDisplayState((BOOK_GROUP << 16) | model, true);
     }
   }
-  packet.sendInterfaceDisplayState(BOOK_PREVIOUS, page === 0);
   packet.sendInterfaceDisplayState(BOOK_NEXT, page === pages.length - 1);
+  packet.sendInterfaceDisplayState(BOOK_PREVIOUS, page === 0);
   packet.sendInterfaceScript(2524, [-1, -1]);
+  // Live (Witches' Diary capture 20261108T030409 ticks 357-368) re-opens the book after every
+  // spread, its content first, and tracks the left page in varp pagepos; without it the client
+  // never sends the previous-page click.
+  packet.sendConfig(BOOK_PAGE_VARP, page * 2);
+  packet.sendInterface(BOOK_GROUP);
 }
 
 /**
@@ -626,9 +636,17 @@ function turnBookPage(event) {
     closeBook(player);
     return;
   }
-  const page = book.page + (buttonId === BOOK_NEXT ? 1 : -1);
+  const forward = buttonId === BOOK_NEXT;
+  const page = book.page + (forward ? 1 : -1);
   if (page < 0 || page >= book.pages.length) return;
   book.page = page;
+  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
+  if (coreApi) {
+    player.performAnimation?.(new coreApi.Animation(turn.animation));
+    const graphic = new coreApi.Graphic(turn.graphic);
+    graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
+    player.performGraphic?.(graphic);
+  }
   showBookPage(player);
 }
 

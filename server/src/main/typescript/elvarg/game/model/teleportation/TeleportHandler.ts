@@ -130,9 +130,9 @@ export class TeleportHandler {
         player.setTeleporting(true);
         const options = teleportType.getOptions();
         const sound = options.sound ?? Sound.TELEPORT;
-        const at = options.areaSoundRange ? player.getLocation?.() : null;
-        if (at) {
-            Sounds.playAreaSound({ soundId: sound.getId(), x: at.getX(), y: at.getY(), level: at.getZ(), loops: sound.getLoopType(), delay: sound.getDelay(), radius: options.areaSoundRange! });
+        if (options.areaSoundRange) {
+            // From the player, so only those who can see them (their private area too) hear it.
+            Sounds.playAreaSoundAt(player, sound, options.areaSoundRange);
         } else {
             Sounds.sendSound(player, sound);
         }

@@ -89,7 +89,8 @@ function useCharge(player, item, cost = 1) {
 /** Doubles a dose and spends the charges it costs: one, or two for an extended stamina dose (Wiki). */
 function doubleStamina(request) {
   const ring = wornRing(request?.player);
-  if (!ring) {
+  // Wiki (Ring of endurance): the Agility cape's Stamina Boost "is not doubled and uses no charges".
+  if (!ring || request.ringDoubles === false) {
     return;
   }
   request.energy *= 2;

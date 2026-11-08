@@ -10,8 +10,17 @@ const LOOPBACK = "127.0.0.1";
 // Per port: browsers share cookies across ports of one host, so worktrees would overwrite each other.
 const cookieName = (port) => `wa_token_${port}`;
 
-function resolvePort(raw) {
-  if (raw === undefined || String(raw).trim() === "") return DEFAULT_PORT;
+/**
+ * WORLD_ADMIN_PORT, else 49600 + WT_SLOT (a scripts/wt worktree whose .env predates
+ * WORLD_ADMIN_PORT), else 49600.
+ */
+function resolvePort(raw, slot) {
+  if (raw === undefined || String(raw).trim() === "") {
+    const n = Number(slot);
+    return slot !== undefined && String(slot).trim() !== "" && Number.isInteger(n) && n >= 1 && n <= 99
+      ? DEFAULT_PORT + n
+      : DEFAULT_PORT;
+  }
   const port = Number(raw);
   return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : DEFAULT_PORT;
 }
@@ -57,7 +66,7 @@ function resolveAccess(env = process.env, { tokenFile } = {}) {
     }
   }
   return {
-    port: resolvePort(env.WORLD_ADMIN_PORT),
+    port: resolvePort(env.WORLD_ADMIN_PORT, env.WT_SLOT),
     host,
     loopback: host === LOOPBACK || host === "localhost" || host === "::1",
     token: configuredToken || storedToken(tokenFile, notes),

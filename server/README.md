@@ -205,8 +205,9 @@ declared `pluginConfig` option. It writes `data/definitions/world.local.json` on
 ```
 
 Open it in a browser. The token is generated once and kept in the gitignored
-`data/definitions/world-admin.token`, so the page stays signed in across restarts; delete the
-file for a new one, or set `WORLD_ADMIN_TOKEN` in `.env`, which wins over the file. The link
+`data/definitions/world-admin.token`, so the printed link (and the page's cookie) stays valid
+across restarts until that file is deleted: treat the link and the file like a password, and
+delete the file to get a new token. `WORLD_ADMIN_TOKEN` in `.env` wins over the file. The link
 sets a cookie and the page then works without it. The page listens
 on `WORLD_ADMIN_PORT` (default 49600; each `scripts/wt` worktree gets 49600 + its slot),
 bound to 127.0.0.1, so on a VPS reach it through an SSH tunnel and open the printed link
@@ -216,8 +217,10 @@ locally:
 ssh -L 49600:127.0.0.1:49600 <host>
 ```
 
-Saving shows a preview of the change first. Under `yarn dev` / `yarn start` the server saves
-players, writes the file and restarts (nodemon brings it back); with players online the normal
+Saving shows a preview of the change first. Under nodemon (`yarn dev`, `yarn start`,
+`dev:stress`, or nodemon run by hand in `server/`, which reads `nodemon.json` and its
+`TSPS_RESTARTER=nodemon`) the server saves players, writes the file and restarts (nodemon brings
+it back); with players online the normal
 world-update countdown runs first and can be cancelled from the page. Under a supervisor set
 `TSPS_SUPERVISED=1` (the server exits with code 75 so on-failure restart policies restart it).
 Otherwise the page only writes the file and you restart by hand. The page is not started when

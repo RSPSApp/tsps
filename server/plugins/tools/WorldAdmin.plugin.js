@@ -36,13 +36,14 @@ let pendingApply = null;
 let lastFailure = null;
 
 /**
- * How the server comes back after Apply. `yarn dev` / `yarn start` run the server's "dev"
- * script, and npm/yarn export npm_lifecycle_event=dev to it; run-with-env.mjs and nodemon both
- * pass the environment through to the server process. nodemon itself sets no marker of its own.
+ * How the server comes back after Apply. Under nodemon (`yarn dev`, `yarn start`, `dev:stress`,
+ * or nodemon started by hand or from an IDE in server/) nodemon.json sets TSPS_RESTARTER=nodemon
+ * in the server's environment. npm_lifecycle_event=dev (exported by npm/yarn for the "dev"
+ * script) is kept as a fallback for a nodemon run with another config.
  */
 function restartMode() {
   if (process.env.TSPS_SUPERVISED === "1") return "supervised";
-  if (process.env.npm_lifecycle_event === "dev") return "dev";
+  if (process.env.TSPS_RESTARTER === "nodemon" || process.env.npm_lifecycle_event === "dev") return "dev";
   return "manual";
 }
 

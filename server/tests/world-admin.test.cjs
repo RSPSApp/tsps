@@ -8,7 +8,7 @@ const { test } = require("node:test");
 const PLUGIN = path.join(__dirname, "../plugins/tools/WorldAdmin.plugin.js");
 const ENV_KEYS = [
   "WORLD_ADMIN_PORT", "WORLD_ADMIN_TOKEN", "WORLD_ADMIN_BIND", "BROWSER_HOST",
-  "TSPS_SUPERVISED", "npm_lifecycle_event",
+  "TSPS_SUPERVISED", "npm_lifecycle_event", "TSPS_RESTARTER", "WT_SLOT",
 ];
 const TOKEN = "test-token-abcdefghijklmnop";
 
@@ -228,6 +228,47 @@ test("catalog reports layers, mode, online players and countdown", async (t) => 
   assert.equal(res.json.countdown.remainingSeconds, 0);
   assert.deepEqual(res.json.catalog.plugins, []);
   assert.equal(state.layers.local.shouldNotLeak, undefined);
+});
+
+test("restart mode: nodemon.json's TSPS_RESTARTER=nodemon means dev, with or without npm_lifecycle_event", async (t) => {
+  const nodemonConfig = JSON.parse(fs.readFileSync(path.join(__dirname, "../nodemon.json"), "utf8"));
+  assert.equal(nodemonConfig.env?.TSPS_RESTARTER, "nodemon");
+
+  const viaNodemon = await start(t, { TSPS_RESTARTER: "nodemon" });
+  assert.equal((await request(viaNodemon.port, { path: "/api/catalog", headers: auth })).json.mode, "dev");
+  await viaNodemon.plugin._test.stop();
+
+  const plain = await start(t, {});
+  assert.equal((await request(plain.port, { path: "/api/catalog", headers: auth })).json.mode, "manual");
+  await plain.plugin._test.stop();
+
+  const supervised = await start(t, { TSPS_RESTARTER: "nodemon", TSPS_SUPERVISED: "1" });
+  assert.equal((await request(supervised.port, { path: "/api/catalog", headers: auth })).json.mode, "supervised");
+});
+
+test("port: WORLD_ADMIN_PORT, else 49600 + WT_SLOT for worktrees slotted before the port existed, else 49600", () => {
+  const { resolveAccess } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
+  const env = { WORLD_ADMIN_TOKEN: TOKEN };
+  assert.equal(resolveAccess({ ...env }).port, 49600);
+  assert.equal(resolveAccess({ ...env, WT_SLOT: "3" }).port, 49603);
+  assert.equal(resolveAccess({ ...env, WT_SLOT: "3", WORLD_ADMIN_PORT: "49650" }).port, 49650);
+  assert.equal(resolveAccess({ ...env, WT_SLOT: "0" }).port, 49600);
+  assert.equal(resolveAccess({ ...env, WT_SLOT: "abc" }).port, 49600);
+  assert.equal(resolveAccess({ ...env, WT_SLOT: "" }).port, 49600);
+});
+
+test("an empty or garbage token file is replaced by a fresh valid token", (t) => {
+  const { resolveAccess } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
+  const { tokenFile } = tempServerDir(t);
+  for (const contents of ["", "garbage!! not a token\n", "short\n"]) {
+    fs.writeFileSync(tokenFile, contents);
+    const access = resolveAccess({}, { tokenFile });
+    assert.match(access.token, /^[A-Za-z0-9_-]{24,}$/);
+    assert.equal(fs.readFileSync(tokenFile, "utf8"), access.token + "\n");
+    assert.deepEqual(access.notes, []);
+    // And it is reused from then on.
+    assert.equal(resolveAccess({}, { tokenFile }).token, access.token);
+  }
 });
 
 test("random token when WORLD_ADMIN_TOKEN is unset; WORLD_ADMIN_BIND alone still binds 127.0.0.1 and says why", async (t) => {

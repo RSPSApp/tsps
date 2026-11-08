@@ -311,6 +311,7 @@
 <main>
   <div id="flashes" aria-live="polite"></div>
   <div id="banners" aria-live="polite"></div>
+  <div id="countdown-banner"></div>
   <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings"></div>
   <div id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
   <p id="loading" class="empty">Loading…</p>
@@ -747,11 +748,6 @@
     return svg;
   }
 
-  /** The plugin's switch as it will be saved: the pending edit, else its current state. */
-  function pluginOn(plugin) {
-    return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
-  }
-
   /** Plugins that are switched off now and must be turned on for `plugin` to load: itself (optional) and its dependencies. */
   function switchesNeeded(plugin, includeSelf) {
     var needed = [];
@@ -1013,7 +1009,7 @@
       showError(null);
       refreshMarkers();
       if (badge) badge.refresh();
-      if (pickButton) pickButton.disabled = readOnly();
+      if (pickButton) pickButton.disabled = readOnly() || busy();
     }
 
     row.el = rowEl;
@@ -1199,6 +1195,7 @@
     var invalid = anyInvalid();
     save.disabled = !state.data || readOnly() || busy() || count === 0 || invalid;
     discard.disabled = count === 0 && !invalid;
+    document.querySelectorAll(".spawn-pick").forEach(function (button) { button.disabled = !state.data || readOnly() || busy(); });
     if (!state.data) status.textContent = "";
     else if (readOnly()) status.textContent = "Read only: world.local.json does not parse.";
     else if (invalid) status.textContent = "Fix the highlighted values before saving.";
@@ -1223,46 +1220,67 @@
   // ---------- banners ----------
 
   function renderBanners() {
+    renderStaticBanners();
+    renderCountdownBanner();
+  }
+
+  /** Error/info banners; rebuilt only when what they say changes, so focus and screen readers aren't disturbed by polling. */
+  function renderStaticBanners() {
+    var d = state.data;
+    var items = [];
+    if (d && d.layers && d.layers.localError) {
+      items.push({ kind: "error", text: "world.local.json does not parse, so this page is read only. Fix the file by hand, then reload: " + d.layers.localError });
+    }
+    if (d && d.lastFailure && d.lastFailure.at !== state.dismissedFailure) {
+      items.push({ kind: "error", text: d.lastFailure.message, dismiss: d.lastFailure.at });
+    }
+    if (d && d.countdown && d.countdown.available === false) {
+      items.push({ kind: "warn", text: "Countdown unavailable (GameUpdate is off): Apply restarts immediately." });
+    }
+    if (d && d.mode === "manual") {
+      items.push({ kind: "info", text: "This server can't restart itself, so saving only writes world.local.json. Restart the server by hand for it to take effect." });
+    }
+    var signature = JSON.stringify(items);
+    if (signature === state.bannerSignature) return;
+    state.bannerSignature = signature;
     var box = document.getElementById("banners");
     box.textContent = "";
+    items.forEach(function (item) {
+      box.appendChild(el("div", { className: "banner " + item.kind, role: item.kind === "error" ? "alert" : null }, [
+        el("div", { className: "text", text: item.text }),
+        item.dismiss ? el("button", { type: "button", text: "Dismiss", "aria-label": "Dismiss this error",
+          onclick: function () { state.dismissedFailure = item.dismiss; renderStaticBanners(); } }) : null,
+      ]));
+    });
+  }
+
+  /** The running countdown: built once per kind, then only its text changes (role=timer is not announced on every tick). */
+  function renderCountdownBanner() {
+    var box = document.getElementById("countdown-banner");
     var d = state.data;
-    if (!d) return;
-    if (d.layers && d.layers.localError) {
-      box.appendChild(el("div", { className: "banner error", role: "alert" }, [
-        el("div", { className: "text", text: "world.local.json does not parse, so this page is read only. Fix the file by hand, then reload: " + d.layers.localError }),
+    if (!d || !(d.pending || (d.countdown && d.countdown.scheduled))) {
+      box.textContent = "";
+      state.countdownKey = null;
+      return;
+    }
+    var remaining = d.countdown ? d.countdown.remainingSeconds : 0;
+    var ours = !!d.pending;
+    var cancellable = !ours || d.pending.kind === "countdown";
+    var key = (ours ? d.pending.kind : "foreign") + "|" + cancellable;
+    if (state.countdownKey !== key) {
+      state.countdownKey = key;
+      box.textContent = "";
+      state.countdownText = el("div", { className: "text" });
+      box.appendChild(el("div", { className: "banner warn", role: "timer" }, [
+        state.countdownText,
+        cancellable ? el("button", { type: "button", text: "Cancel", "aria-label": "Cancel the restart", onclick: cancelCountdown }) : null,
       ]));
     }
-    if (d.lastFailure && d.lastFailure.at !== state.dismissedFailure) {
-      var failure = d.lastFailure;
-      box.appendChild(el("div", { className: "banner error", role: "alert" }, [
-        el("div", { className: "text", text: failure.message }),
-        el("button", { type: "button", text: "Dismiss", "aria-label": "Dismiss this error",
-          onclick: function () { state.dismissedFailure = failure.at; renderBanners(); } }),
-      ]));
-    }
-    if (d.countdown && d.countdown.available === false) {
-      box.appendChild(el("div", { className: "banner warn" }, [
-        el("div", { className: "text", text: "Countdown unavailable (GameUpdate is off): Apply restarts immediately." }),
-      ]));
-    }
-    if (d.mode === "manual") {
-      box.appendChild(el("div", { className: "banner info" }, [
-        el("div", { className: "text", text: "This server can't restart itself, so saving only writes world.local.json. Restart the server by hand for it to take effect." }),
-      ]));
-    }
-    if (d.pending || (d.countdown && d.countdown.scheduled)) {
-      var remaining = d.countdown ? d.countdown.remainingSeconds : 0;
-      var ours = !!d.pending;
-      var text = ours
-        ? (d.pending.kind === "countdown"
-          ? "Restarting to apply your changes in " + remaining + " s. world.local.json is written when the countdown ends."
-          : "Restarting now to apply your changes…")
-        : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
-      box.appendChild(el("div", { className: "banner warn", role: "status" }, [
-        el("div", { className: "text", text: text }),
-        (!ours || d.pending.kind === "countdown") ? el("button", { type: "button", text: "Cancel", onclick: cancelCountdown }) : null,
-      ]));
-    }
+    state.countdownText.textContent = ours
+      ? (d.pending.kind === "countdown"
+        ? "Restarting to apply your changes in " + remaining + " s. world.local.json is written when the countdown ends."
+        : "Restarting now to apply your changes…")
+      : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
   }
 
   function flash(kind, text) {
@@ -1294,6 +1312,7 @@
 
   function enterReconnect() {
     if (dialog.open) dialog.close();
+    if (mapDialog.open) { mapTiles.textContent = ""; mapDialog.close(); }
     if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS };
     showOverlay("Restarting the server… reconnecting", true);
     updateFooter();
@@ -1303,17 +1322,25 @@
     state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, delay);
   }
 
+  /**
+   * Back in touch with the server. The edits are cleared only when the apply went through:
+   * nothing is pending any more and either our Apply was accepted, or (when the Apply request
+   * itself was lost) world.local.json changed since.
+   */
   function finishReconnect(body) {
     state.reconnect = null;
     overlay.hidden = true;
+    var settled = !body.pending;
+    var applied = settled && !body.lastFailure && (state.applied === true ||
+      (state.applied === "unknown" && body.layers.localHash !== state.appliedHash));
+    if (applied) state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    if (settled || body.lastFailure) state.applied = false;
     state.data = body;
-    if (state.applied && !body.lastFailure) state.edits = { world: {}, plugins: {}, pluginConfig: {} };
-    state.applied = false;
     build();
     renderBanners();
     updateFooter();
     if (!body.lastFailure) {
-      var note = flash("info", "Restarted.");
+      var note = flash("info", applied ? "Restarted with your changes." : "Reconnected.");
       setTimeout(function () { note.remove(); }, 4000);
     }
     schedulePoll();
@@ -1336,14 +1363,21 @@
         return;
       }
       if (state.reconnect) {
-        // Still the old process on its way down: keep waiting.
-        if (res.body.pending && !res.body.lastFailure) { enterReconnect(); return; }
+        // Still the old process on its way down: keep waiting. A countdown that is still running
+        // (a network blip) returns to the page, where its Cancel is.
+        var down = res.body.pending;
+        if (down && !res.body.lastFailure && (down.kind === "now" || (res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
+          enterReconnect();
+          return;
+        }
         finishReconnect(res.body);
         return;
       }
       var hadData = !!state.data;
       var hashChanged = hadData && state.data.layers.localHash !== res.body.layers.localHash;
       state.data = res.body;
+      // Nothing pending while the server is up: an accepted Apply was cancelled.
+      if (!res.body.pending) state.applied = false;
       if (rebuild || !hadData || hashChanged) {
         if (hashChanged && !rebuild && editCount() > 0) flash("warn", "world.local.json changed on disk; the page reloaded it and kept your unsaved edits where they still apply.");
         build();
@@ -1368,6 +1402,9 @@
     var box = document.getElementById("banners");
     box.textContent = "";
     box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: text })]));
+    state.bannerSignature = null;
+    document.getElementById("countdown-banner").textContent = "";
+    state.countdownKey = null;
   }
 
   function stopPolling() {
@@ -1487,8 +1524,9 @@
         if (res.status === 409) load(false);
       }
     }, function () {
-      // The server went away mid-request: wait for it rather than guess what happened.
-      state.applied = true;
+      // The server went away mid-request: wait for it, and judge by world.local.json afterwards.
+      state.applied = "unknown";
+      state.appliedHash = state.data.layers.localHash;
       enterReconnect();
     });
   });

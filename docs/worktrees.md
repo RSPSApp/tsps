@@ -24,8 +24,10 @@ Each worktree gets a slot from 1 to 99, written into a marked block in its root 
   login screen. Each port is its own browser origin, so each tab remembers its own login.
 - **The gateway** ([runelite-gateway/README.md](https://github.com/RSPSApp/tsps/blob/main/runelite-gateway/README.md)) listens on `GATEWAY_PORT` for the
   official client through RSProx. 43900 + N stays clear of RSProx's own 43600 + N.
-- **The world config page** listens on `WORLD_ADMIN_PORT`, on 127.0.0.1 only. The server
-  prints its link (with a one-time token) at startup; see
+- **The world config page** listens on `WORLD_ADMIN_PORT`, on 127.0.0.1 only. A worktree
+  slotted before that port existed has no `WORLD_ADMIN_PORT` line; the server then uses
+  49600 + `WT_SLOT`, and `scripts/wt slot` adds the line. The server prints the page's link at
+  startup; see
   [server/README.md](../server/README.md#world-config-page).
 - **Voice** signalling uses the authenticated game connection, so it needs no separate port.
 - **`BROWSER=none`** stops `yarn start` opening a tab per worktree.

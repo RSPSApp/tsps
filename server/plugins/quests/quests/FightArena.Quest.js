@@ -31,6 +31,8 @@ module.exports = function registerFightArenaQuest(api) {
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
+    CountdownTask,
+    TaskManager,
   } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
 
@@ -132,6 +134,11 @@ module.exports = function registerFightArenaQuest(api) {
 
   const PAGE = "Fight Arena";
   const START_HOOK = "quest:fight-arena:start";
+  // "Talking to Sammy Servil after getting the keys": steps 0-3 are the chat before the
+  // cutscene; the cell is unlocked from step 4 ("Alright, the coast is clear.").
+  const SAMMY_FREED_VARIANT = "getting-the-keys-talking-to-sammy-servil-after-getting-the-keys";
+  const SAMMY_FREED_FIRST_STEP = 4;
+  const KHAZARD_SCENE_DELAY_TICKS = 3;
 
   // Cell / arena / jail tiles from the reference coords. The arena's east-side
   // beast pens are sealed in the cache map, so the player only stands on the
@@ -746,9 +753,10 @@ module.exports = function registerFightArenaQuest(api) {
         return;
       }
       if (stage === STAGE_GIVEN_KHALI_BREW) {
-        player.sendMessage("You unlock Sammy's cell and Sammy steps out.");
-        player.sendMessage("Sammy runs off towards the arena.");
-        startOgreFight(player);
+        // The wiki plays this as a cutscene with chatbox dialogue; the ogre fight
+        // starts from the transcript's own action steps.
+        startTranscript(api, player, NpcIdentifiers.SAMMY_SERVIL, PAGE, SAMMY_FREED_VARIANT,
+          (steps) => steps.slice(SAMMY_FREED_FIRST_STEP));
         return;
       }
       if (stage < STAGE_DEFEATED_BOUNCER) {
@@ -768,6 +776,14 @@ module.exports = function registerFightArenaQuest(api) {
   // Arena fights
   // ==========================================================================
 
+  /** After the kill animation, plays General Khazard's wiki scene as chatbox dialogue. */
+  function playKhazardScene(player, variant, onStart) {
+    TaskManager.submit(new CountdownTask(player, KHAZARD_SCENE_DELAY_TICKS, () => {
+      if (onStart) onStart();
+      startTranscript(api, player, NpcIdentifiers.GENERAL_KHAZARD, PAGE, variant);
+    }));
+  }
+
   function handleNpcDeath(event) {
     const player = event.killer ?? event.player;
     if (!player) return;
@@ -776,26 +792,26 @@ module.exports = function registerFightArenaQuest(api) {
     if (KHAZARD_OGRE_IDS.has(npcId) && stage >= STAGE_ENTERED_OGRE_FIGHT && stage < STAGE_DEFEATED_OGRE) {
       fightBeastByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_OGRE);
-      player.sendMessage("You have defeated the Khazard Ogre.");
+      playKhazardScene(player, "the-battles-upon-killing-the-khazard-ogre");
       return;
     }
     if (KHAZARD_SCORPION_IDS.has(npcId) && stage >= STAGE_SENT_JAIL && stage < STAGE_DEFEATED_SCORPION) {
       fightBeastByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_SCORPION);
-      player.sendMessage("You have defeated the Khazard Scorpion. General Khazard releases Bouncer!");
-      spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE);
+      playKhazardScene(player, "the-battles-upon-killing-the-scorpion",
+        () => spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE));
       return;
     }
     if (BOUNCER_IDS.has(npcId) && stage >= STAGE_DEFEATED_SCORPION && stage < STAGE_DEFEATED_BOUNCER) {
       fightBeastByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_BOUNCER);
-      player.sendMessage("You have defeated Bouncer. General Khazard is furious!");
+      playKhazardScene(player, "the-battles-upon-killing-bouncer");
       return;
     }
     if (GENERAL_KHAZARD_NPC_IDS.has(npcId) && stage >= STAGE_FREED_SERVILS && stage < STAGE_DEFEATED_KHAZARD) {
       generalByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_KHAZARD);
-      player.sendMessage("General Khazard yields. The Servils are free to leave.");
+      playKhazardScene(player, "the-battles-upon-defeating-general-khazard");
     }
   }
 

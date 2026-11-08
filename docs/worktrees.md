@@ -28,7 +28,7 @@ Each worktree gets a slot from 1 to 99, written into a marked block in its root 
   slotted before that port existed has no `WORLD_ADMIN_PORT` line; the server then uses
   49600 + `WT_SLOT`, and `scripts/wt slot` adds the line. The server prints the page's link at
   startup; see
-  [server/README.md](../server/README.md#world-config-page).
+  [server/README.md](https://github.com/RSPSApp/tsps/blob/main/server/README.md#world-config-page).
 - **Voice** signalling uses the authenticated game connection, so it needs no separate port.
 - **`BROWSER=none`** stops `yarn start` opening a tab per worktree.
 - **The agent MCP** is registered as `tsps` for that worktree only (`claude mcp add -s local`),

@@ -15,6 +15,8 @@ const { NPC } = require('../dist/game/entity/impl/npc/NPC');
 const core = PluginManager.getCoreApi();
 
 let Common, Fight, Tephra, Rewards, Prison, tasks, events, questDone;
+let activeMiningEnhancers = [];
+let rewardEntries = null;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -34,13 +36,14 @@ before(async () => {
     },
     emitCustomEvent(name, event) {
       events.push([name, event]);
+      if (name === 'mining:extra-ore') for (const handler of activeMiningEnhancers) handler(event);
       if (name === 'quest:is-complete') event.complete = questDone;
       if (name === 'mining:best-pickaxe') event.pickaxe = { id: 1275, requiredLevel: 41, attemptIntervalTicks: 3 };
       // As Mining answers it (Wiki, Pickaxe: dragon "3 ticks by default, 1/6 chance to be 2 ticks").
       if (name === 'mining:roll-interval') event.ticks ??= event.pickaxe.attemptIntervalTicks - (event.pickaxe.fastRollChance && Math.random() < event.pickaxe.fastRollChance ? 1 : 0);
       if (name === 'skills:action-interval' && zalcanoPace) event.ticks = zalcanoPace;
       if (name === 'npc-drops:roll-table') {
-        const entries = [
+        const entries = rewardEntries ?? [
           { item_id: 2353, quantity: [16, 699], weight: 3 },
           { item_id: 23962, quantity: [1, 3] },
         ];
@@ -750,4 +753,138 @@ test("a rock's next swing follows Mining's roll interval and content's pace, not
   prisonState.tickCount = 12;
   Tephra.tickActions(prisonState, [player], () => 0.99);
   assert.equal(Tephra.actions.get(player)?.next, 13, "content's pace (a league relic) answers after Mining");
+});
+
+
+function enhancedTephraMiner(t, { signet = false, charges = 3, slots = 28, armour = false, glowing = false, proc = true } = {}) {
+  const [x, y] = Common.data.prison.rocks[0];
+  const player = new Player(null, loc(x - 1, y));
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  player.isRegistered = () => true;
+  player.performAnimation = () => {};
+  const xp = [];
+  player.getSkillManager().addExperiences = (skill, amount) => xp.push([skill, amount]);
+  player.getSkillManager().getCurrentLevel = () => 99;
+  const I = core.ItemIdentifiers;
+  const Ring = require('../plugins/skills/shootingstars/CelestialRing.ShootingStars');
+  const ring = new core.Item(signet ? I.CELESTIAL_SIGNET : I.CELESTIAL_RING, 1);
+  ring.setMetaValue(Ring.CHARGES_META_KEY, charges);
+  player.getEquipment().setItem(core.Equipment.RING_SLOT, ring);
+  if (armour) player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(I.VARROCK_ARMOUR_1, 1));
+  for (let i = 0; i < 28 - slots; i++) player.getInventory().adds(I.SHARK, 1);
+  const handlers = [];
+  const api = new Proxy({
+    core,
+    onCustomEvent: (name, handler) => { if (name === 'mining:extra-ore') handlers.push(handler); },
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  require('../plugins/skills/shootingstars/Common.ShootingStars').bind(api);
+  Ring(api);
+  require('../plugins/skills/mining/VarrockArmour.Mining').attach(api);
+  activeMiningEnhancers = handlers;
+  t.after(() => { activeMiningEnhancers = []; Tephra.actions.delete(player); });
+  t.mock.method(Math, 'random', () => proc ? 0 : 0.99);
+  const prison = { tickCount: 0, fight: { glowing: glowing ? 0 : 1, phase: 'armoured' } };
+  Tephra.mineRock(prison, { player, objectId: glowing ? Common.ids.locs.rockGlowing : Common.ids.locs.rock });
+  const attempt = (success = true) => {
+    const rolls = glowing ? [success ? 0 : 0.99, 0, 0.99] : [success ? 0 : 0.99, 0.99];
+    Tephra.tickActions(prison, [player], () => rolls.shift() ?? 0.99);
+  };
+  return { player, ring, Ring, xp, prison, attempt };
+}
+
+for (const signet of [false, true]) {
+  test('tephra calls the registered celestial ' + (signet ? 'signet' : 'ring') + ' hook once per successful action', (t) => {
+    const f = enhancedTephraMiner(t, { signet, glowing: true });
+    f.attempt();
+    assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 3, 'two glowing base tephra plus one ring bonus');
+    assert.equal(f.Ring.charges(f.ring), 2, 'one charge, not one per glowing base ore');
+    assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2, 35.2, 35.2]);
+    const request = events.findLast(([name]) => name === 'mining:extra-ore')[1];
+    assert.equal(request.rockLevel, 1);
+    assert.equal(request.oreId, Common.ids.items.tephra);
+  });
+}
+
+test('tephra spends a charge on missed bonus or no bonus room, but gives no excess item or XP', (t) => {
+  const f = enhancedTephraMiner(t, { slots: 1, proc: false });
+  f.attempt();
+  assert.equal(f.Ring.charges(f.ring), 2);
+  assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 1);
+  assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2]);
+});
+
+test('a successful enhancer roll without room spends its last charge without extra tephra or XP', (t) => {
+  const f = enhancedTephraMiner(t, { slots: 1, charges: 1 });
+  f.attempt();
+  assert.equal(f.ring.getId(), core.ItemIdentifiers.CELESTIAL_RING_UNCHARGED_);
+  assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 1);
+  assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2]);
+});
+
+test('failed tephra rolls and initially full inventories spend no charges', (t) => {
+  const f = enhancedTephraMiner(t);
+  f.attempt(false);
+  assert.equal(f.Ring.charges(f.ring), 3);
+  assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 0);
+  assert.equal(f.xp.length, 0);
+  for (let i = 0; i < 28; i++) f.player.getInventory().adds(core.ItemIdentifiers.SHARK, 1);
+  f.prison.tickCount = 4;
+  f.attempt();
+  assert.equal(f.Ring.charges(f.ring), 3);
+  assert.equal(f.xp.length, 0);
+});
+
+test('Varrock armour 1 and a charged ring stack through the same tephra hook', (t) => {
+  const f = enhancedTephraMiner(t, { armour: true });
+  f.attempt();
+  assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 3);
+  assert.equal(f.Ring.charges(f.ring), 2);
+  assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2, 35.2, 35.2]);
+});
+
+
+test('Zalcano imported death-rune range preserves contribution cap and existing MVP scaling', () => {
+  const dump = require('../data/definitions/npc-drops.json');
+  const row = dump.tables.zalcano.entries.find(entry => entry.item_id === core.ItemIdentifiers.DEATH_RUNE);
+  assert.deepEqual(row.quantity, [201, 1046]);
+  assert.equal(row.weight, 1);
+  assert.equal(row.out_of, 36);
+  assert.equal(dump.tables.zalcano.main_max_roll, 36);
+  rewardEntries = [row];
+  try {
+    assert.equal(Rewards.mainRoll(fakePlayer(), 0, false).find(drop => drop.itemId === row.item_id).amount, 201);
+    assert.equal(Rewards.mainRoll(fakePlayer(), Number.MAX_SAFE_INTEGER, false).find(drop => drop.itemId === row.item_id).amount, 1046);
+    assert.equal(Rewards.mainRoll(fakePlayer(), Number.MAX_SAFE_INTEGER, true).find(drop => drop.itemId === row.item_id).amount, 1151);
+  } finally { rewardEntries = null; }
+});
+
+
+test('uncharged celestial jewellery does not add tephra or spend a charge', (t) => {
+  const f = enhancedTephraMiner(t);
+  f.ring.setId(core.ItemIdentifiers.CELESTIAL_RING_UNCHARGED_);
+  f.attempt();
+  assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 1);
+  assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2]);
+});
+
+test('Varrock armour 1 gives tephra without a celestial ring', (t) => {
+  const f = enhancedTephraMiner(t, { armour: true });
+  f.player.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(-1, 0));
+  f.attempt();
+  assert.equal(f.player.getInventory().getAmount(Common.ids.items.tephra), 2);
+  assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2, 35.2]);
+});
+
+test('refused bonus inventory credit gives no bonus XP even after the enhancer consumes a charge', (t) => {
+  const f = enhancedTephraMiner(t);
+  const inventory = f.player.getInventory();
+  const adds = inventory.adds.bind(inventory);
+  let credits = 0;
+  inventory.adds = (id, amount) => ++credits === 1 ? adds(id, amount) : inventory;
+  f.attempt();
+  assert.equal(f.Ring.charges(f.ring), 2);
+  assert.equal(inventory.getAmount(Common.ids.items.tephra), 1);
+  assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2]);
 });

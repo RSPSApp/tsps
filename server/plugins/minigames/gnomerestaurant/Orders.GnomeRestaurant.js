@@ -258,6 +258,17 @@ function checkBox({ player }) {
   player.sendMessage(`You have ${waitText(session.deadline - Date.now())} left to deliver it.`);
 }
 
+/** The restaurant token shares its name with unrelated minigame tokens. */
+function checkRewardToken({ player, itemId }) {
+  if (itemId !== TOKEN_ID) return false;
+  const { DialogueChainBuilder, StatementDialogue, EndDialogue } = core;
+  const count = Math.floor(creditsOf(player) / CREDITS_PER_TOKEN);
+  const builder = new DialogueChainBuilder();
+  builder.add(new StatementDialogue(0, `You can use this token to order gnome food to deliver. You can currently order ${count} items.`));
+  builder.add(new EndDialogue(1));
+  player.getDialogueManager().startDialogues(builder);
+}
+
 // --- Time limit
 
 function expire(player, session) {
@@ -334,6 +345,7 @@ function attach(pluginApi) {
   api.persistAttribute(LOCKOUTS_ATTRIBUTE);
   api.onNpcInteraction(GIANNE_NAME, { "Talk-to": talkTo, "Get job (easy)": getEasyJob, "Get job (hard)": getHardJob });
   api.onItemAction(BOX_NAME, { Check: checkBox });
+  api.onItemAction("Reward token", { Check: checkRewardToken });
   api.onPlayerLogout(abandon);
   api.onPlayerDisconnect(abandon);
   api.onPlayerDeath(abandon);

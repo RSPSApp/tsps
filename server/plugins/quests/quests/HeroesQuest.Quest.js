@@ -331,16 +331,26 @@ module.exports = function registerHeroesQuest(api) {
     startTranscript(api, player, npcId, PAGE, variant);
   }
 
+  const BLAMISH_OIL_LEVEL = 25;
+  const BLAMISH_OIL_XP = 80;
+
   /** Blamish slime + unfinished harralander potion -> blamish oil. */
   function handleSlimeOnPotion(event) {
     const ids = [event.usedItemId, event.usedWithItemId];
     if (!ids.includes(BLAMISH_SLIME) || !ids.includes(HARRALANDER_UNF)) return;
     const { player } = event;
+    event.handled = true;
+    // Wiki (Blamish oil): "requires level 25 Herblore to be made and gives 80 Herblore experience". The refusal is
+    // the Herblore plugin's own combine line (no recording shows it).
+    if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < BLAMISH_OIL_LEVEL) {
+      player.sendMessage(`You need a Herblore level of ${BLAMISH_OIL_LEVEL} to combine those.`);
+      return;
+    }
     take(player, BLAMISH_SLIME);
     take(player, HARRALANDER_UNF);
     give(player, BLAMISH_OIL);
+    player.getSkillManager().addExperiences(Skill.HERBLORE, BLAMISH_OIL_XP);
     player.sendMessage("You mix the slime into your potion.");
-    event.handled = true;
   }
 
   /** Blamish oil + fishing rod -> oily fishing rod. */

@@ -416,6 +416,36 @@ test("rewards: unlocks spend points and set their bit; cancel and block", () => 
   assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0);
 });
 
+test("rewards: a task already blocked with the master isn't blocked (and paid for) again", () => {
+  const player = createPlayer({ points: 500 });
+  player.getPacketSender().sendConfig(101, 100); // two block slots
+  setVarbit(player, "slayer_master_in_focus", 3);
+  setVarbit(player, "slayer_blocked_vannaka_1", taskId("Bloodveld"));
+  giveTask(player, 3, "Bloodveld", 10); // another master's assignment of a task blocked here
+  Rewards.block(player);
+  assert.equal(varbit(player, "slayer_points"), 500, "nothing spent");
+  assert.equal(varbit(player, "slayer_blocked_vannaka_2"), 0, "no second slot taken");
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "the task is kept");
+  assert.match(player.messages.at(-1), /already blocked/);
+  setVarbit(player, "slayer_blocked_vannaka_1", 0);
+});
+
+test("rewards: a block confirmed after the task changed blocks nothing", () => {
+  const player = createPlayer({ points: 500 });
+  player.setEnteredAmountAction = (action) => { player.amountAction = action; };
+  player.getPacketSender().sendConfig(101, 50);
+  setVarbit(player, "slayer_master_in_focus", 3);
+  giveTask(player, 5, "Drakes", 10); // Vannaka doesn't give Drakes: the Yes/No popup
+  Rewards.block(player);
+  assert.ok(player.amountAction, "the confirm is waiting");
+  Tasks.clear(player);
+  giveTask(player, 3, "Bloodveld", 10);
+  player.amountAction.execute(1);
+  assert.equal(varbit(player, "slayer_points"), 500, "nothing spent");
+  assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0, "the old task isn't blocked");
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "the new task stays");
+});
+
 test("rewards: the Buy tab sells enum 840's items for enum 842's prices", () => {
   const player = createPlayer({ points: 100 });
   const items = CacheDefinitions.getEnumValues(840);

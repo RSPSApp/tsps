@@ -92,7 +92,8 @@ test("Virulence cures poison, plays the captured animation and graphic, and cost
 test("the next accurate hit rolls at least the cured poison damage, once", () => {
   const player = fakePlayer({ poison: 54 }); // severity 54 would hit for 11
   activate(player);
-  assert.equal(rollHit(player, 3), 11);
+  const hit = rollHit(player, 3);
+  assert.ok(hit >= 11 && hit <= 30, `rolled ${hit}`);
   assert.equal(rollHit(player, 3), 3, "the bonus is spent by that hit");
 });
 
@@ -108,7 +109,21 @@ test("envenomed damage is the stored value, and venom is cured too", () => {
   activate(player);
   assert.equal(player.isVenomed(), false);
   assert.equal(player.poison, 0);
-  assert.equal(rollHit(player, 2), 16);
+  const hit = rollHit(player, 2);
+  assert.ok(hit >= 16 && hit <= 30, `rolled ${hit}`);
+});
+
+test("rolls below the floor are re-rolled uniformly over [floor, max], not clamped to the floor", () => {
+  const counts = new Map();
+  for (let i = 0; i < 3000; i++) {
+    const player = fakePlayer({ poison: 16, venomed: true });
+    activate(player);
+    const hit = rollHit(player, 0);
+    assert.ok(hit >= 16 && hit <= 30, `rolled ${hit}`);
+    counts.set(hit, (counts.get(hit) ?? 0) + 1);
+  }
+  assert.equal(counts.size, 15, "every value 16..30 occurs");
+  assert.ok(counts.get(16) < 600, `16 occurred ${counts.get(16)} of 3000 (clamping would give ~1600)`);
 });
 
 test("the floor never exceeds the hit's maximum", () => {

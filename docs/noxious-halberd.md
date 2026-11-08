@@ -30,8 +30,10 @@ RSProx recording 1449 (revision 224, the only capture of the special):
   persisted, so a logout loses it, and `equipment:changed` clears it when the halberd is no
   longer wielded (swapping away and back does not restore it).
 - `combat:hit-rolled` fires only for accurate hits, so a miss keeps the bonus. The next accurate
-  melee roll with the halberd becomes at least the stored value, never above that roll's
-  maximum, and spends it.
+  melee roll with the halberd that is below the stored value is re-rolled uniformly between the
+  stored value (capped at that roll's maximum) and the maximum, so the hit is uniform on
+  [floor, max] rather than piling onto the floor; a roll already at or above it is kept. The
+  bonus is spent either way.
 
 ## Not done
 

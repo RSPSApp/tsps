@@ -8,7 +8,7 @@ const NOT_AFFLICTED_MESSAGE = "You can only use this special attack whilst you a
 const DRAIN = 50;
 
 module.exports = function registerNoxiousHalberdSpecialAttack(api) {
-  const { Animation, CacheDefinitions, CombatPoisonEffect, CombatSpecial, CombatType, Equipment, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
+  const { Animation, CacheDefinitions, CombatPoisonEffect, CombatSpecial, CombatType, Equipment, Graphic, ItemIdentifiers, MeleeCombatMethod, Misc } = api.core;
 
   const HALBERD_IDS = [
     ItemIdentifiers.NOXIOUS_HALBERD,
@@ -58,7 +58,9 @@ module.exports = function registerNoxiousHalberdSpecialAttack(api) {
     const minimum = player.getAttribute(MINIMUM_HIT_ATTRIBUTE);
     if (!(minimum > 0) || !wieldsHalberd(player)) return;
     player.setAttribute(MINIMUM_HIT_ATTRIBUTE, null);
-    event.damage = Math.max(event.damage, Math.min(minimum, event.maximum));
+    // Raise the minimum of the roll: re-roll only the results below the floor, so the hit stays uniform on [floor, max].
+    const floor = Math.min(minimum, event.maximum);
+    if (event.damage < floor) event.damage = Misc.randomInclusive(floor, event.maximum);
   }
 
   function onEquipmentChanged({ player }) {

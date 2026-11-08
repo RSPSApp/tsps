@@ -123,9 +123,11 @@ export class Autocasting {
             return true;
         }
         let spell = this.autocastSpell(slot);
-        // A god spell is offered only for its own god's staff.
+        // A god spell is in the bladed staves' own lists only, each with its own god's spell; the plain god staves'
+        // standard list has no god slots (Wiki: the Zamorak staff cannot autocast Flames of Zamorak).
         const weaponId = player.getEquipment().getWeapon().getId();
-        if (spell && this.GOD_SLOTS.has(slot) && this.godSpell(weaponId) !== spell) spell = null;
+        if (spell && this.GOD_SLOTS.has(slot)
+            && (!this.OWN_SELECTOR_LISTS.has(weaponId) || this.godSpell(weaponId) !== spell)) spell = null;
         // Iban Blast is only in Iban's staff's list.
         if (spell && slot === 47 && this.OWN_SELECTOR_LISTS.get(weaponId) !== ItemIdentifiers.IBANS_STAFF) spell = null;
         if (spell) this.setAutocast(player, spell);

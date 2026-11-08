@@ -71,3 +71,31 @@ test("the Blue Moon spear autocasts Ancient Magicks", (t) => {
     assert.equal(choose(f.p, 31), S.SMOKE_RUSH, `${spear}`);
   }
 });
+
+test("a bladed staff's autocast god spell can be cast with it (Wiki), and a plain god staff can't autocast one", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  const runes = (p) => { for (const id of [554, 556, 565]) p.getInventory().add(new core.Item(id, 100), false); };
+  for (const [staff, slot, spell] of [
+    [I.STAFF_OF_THE_DEAD, 20, S.FLAMES_OF_ZAMORAK],
+    [I.TOXIC_STAFF_OF_THE_DEAD, 20, S.FLAMES_OF_ZAMORAK],
+    [12902, 20, S.FLAMES_OF_ZAMORAK],
+    [I.STAFF_OF_LIGHT, 52, S.SARADOMIN_STRIKE],
+    [I.STAFF_OF_BALANCE, 19, S.CLAWS_OF_GUTHIX],
+  ]) {
+    const { p } = wielding(t, staff);
+    runes(p);
+    assert.equal(choose(p, slot), spell, `${staff} slot ${slot}`);
+    assert.equal(p.getCombat().getAutocastSpell().canCast(p, false), true, `${staff} casts its god spell`);
+  }
+  for (const sceptre of [I.THAMMARONS_SCEPTRE_A_, I.ACCURSED_SCEPTRE_A_, I.ZAMORAK_STAFF]) {
+    const { p } = wielding(t, sceptre);
+    runes(p);
+    assert.equal(S.FLAMES_OF_ZAMORAK.canCast(p, false), true, `${sceptre} casts Flames of Zamorak`);
+  }
+  const { p: wrong } = wielding(t, I.STAFF_OF_LIGHT);
+  runes(wrong);
+  assert.equal(S.FLAMES_OF_ZAMORAK.canCast(wrong, false), false, "the Staff of Light can't cast Flames");
+  for (const [staff, slot] of [[I.ZAMORAK_STAFF, 20], [I.SARADOMIN_STAFF, 52], [I.GUTHIX_STAFF, 19]]) {
+    assert.equal(choose(wielding(t, staff).p, slot), null, `the plain ${staff} has no god slot`);
+  }
+});

@@ -685,6 +685,25 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   const settle = { player: ending, handled: false };
   respawn(settle);
   assert.equal(settle.handled, true, 'and the player stays in the lobby');
+
+  // The same, through the real death task's tick 0: no bones in the lobby for a death begun in the game.
+  const bonesBefore = bones.mock.callCount();
+  const { player: midDeath } = victim(false);
+  let midArea = island.gameArea;
+  midDeath.getArea = () => midArea;
+  beforeDeath({ player: midDeath });
+  midArea = island.lobbyArea;
+  // The outside cases above pinned the drop policy; this death goes through the plugin's own again.
+  t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', (player) => {
+    const event = { player, shouldDrop: null };
+    deathPolicy(event);
+    return event.shouldDrop;
+  });
+  const midTask = new PlayerDeathTask(midDeath);
+  midTask.ticks = 0;
+  midTask.execute();
+  assert.equal(midTask.loseItems, false);
+  assert.equal(bones.mock.callCount(), bonesBefore, 'a death begun in the game leaves no bones in the lobby');
   const after = { player: ending, shouldDrop: null };
   deathPolicy(after);
   assert.equal(after.shouldDrop, null, 'a later lobby death follows the world rules');

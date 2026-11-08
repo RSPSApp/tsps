@@ -246,7 +246,8 @@ export class ArceuusSpells {
         ["resurrect greater zombie", new ArceuusSelfSpell({ id: 25514, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: ZOMBIE.cast, effect: (p) => ArceuusThralls.summon(p, 10886, 6, 3, 1, ZOMBIE) })],
     ]);
     private static readonly TELEPORTS = new Map<string, ArceuusTeleportSpell>([
-        ["arceuus library teleport", teleport(6, 9, [rune(557, 2), rune(563)], 1632, 3838)],
+        // Wiki (Arceuus Library Teleport): 9.5 base experience (as its tablet, lectern.json).
+        ["arceuus library teleport", teleport(6, 9.5, [rune(557, 2), rune(563)], 1632, 3838)],
         ["draynor manor teleport", teleport(17, 16, [rune(557), rune(555), rune(563)], 3108, 3352)],
         ["battlefront teleport", teleport(23, 19, [rune(557), rune(554), rune(563)], 1348, 3739)],
         ["mind altar teleport", teleport(28, 22, [rune(558), rune(563, 2)], 2980, 3510)],

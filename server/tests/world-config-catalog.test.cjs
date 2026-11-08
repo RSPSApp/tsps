@@ -80,6 +80,20 @@ test('like the loader, the catalog leaves out invalid declarations and gives a c
   }
 });
 
+test('a clashing key goes to the first claimant that loads when the earlier one fails its dependsOn', () => {
+  const shared = `config: { 'Shared:k': ${JSON.stringify(OPT)} }`;
+  const dir = fixture({
+    'a/Alpha.plugin.js': `module.exports = { name: 'Alpha', dependsOn: ['Nope'], ${shared}, register() {} };`,
+    'a/Beta.plugin.js': `module.exports = { name: 'Beta', ${shared}, register() {} };`,
+  });
+  try {
+    const data = WorldConfigCatalog.build(dir, layers({}, {}, 'dep-clash'));
+    assert.deepEqual(data.options.filter((o) => o.key === 'Shared:k').map((o) => [o.owner, o.ownerEnabled]), [['Beta', true]]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the catalog is cached per layers hash', () => {
   const dir = fixture({ 'a/A.plugin.js': plugin('A') });
   try {

@@ -713,6 +713,42 @@ test('the captain drops one ground key even with a full bag, without an inventor
   assert.ok(!p.messages.some(text=>text.includes('no space')||text.includes('pick it up')));
 });
 
+test('barrelling Ana hides the underground cache form at the normal item/stage transition', () => {
+  const h = harness(), p = makePlayer(), K = core.ItemIdentifiers;
+  const visibleAna = () => CacheDefinitions.resolveNpc(6230, {
+    getVarbit: id => varbit(p, id), getVarp: () => 0,
+  });
+  assert.equal(CacheDefinitions.getNpc(6230).transformVarbit, 2805);
+  assert.deepEqual(CacheDefinitions.getNpc(6230).transforms, [4629, -1]);
+  seedStage(h, p, 20);
+  h.logins.forEach(handler => handler({ player: p }));
+  assert.equal(visibleAna()?.id, 4629, 'Ana is visible before she is put in the barrel');
+  p.items.set(K.BARREL, 1);
+  const event = { player: p, npcId: 6230, itemId: K.BARREL, handled: false };
+  h.itemOnNpc.forEach(handler => handler(event));
+  assert.equal(event.handled, true);
+  assert.equal(p.items.get(K.BARREL), 0);
+  assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);
+  assert.equal(stage(h, p), 21);
+  assert.equal(varbit(p, 2805), 1);
+  assert.equal(visibleAna(), undefined, 'the existing null cache transform hides her immediately');
+});
+
+test('Ana stays hidden through cart, lift, escape and relogin without changing items or quest stages', () => {
+  const h = harness(), K = core.ItemIdentifiers;
+  for (const stageValue of [20, 21, 22, 23, 24, 25, 26, 27, 30]) {
+    const p = makePlayer(); seedStage(h, p, stageValue);
+    p.items.set(K.ANA_IN_A_BARREL, 1);
+    h.logins.forEach(handler => handler({ player: p }));
+    assert.equal(varbit(p, 2805), stageValue >= 21 ? 1 : 0, `stage ${stageValue}`);
+    assert.equal(CacheDefinitions.resolveNpc(6230, {
+      getVarbit: id => varbit(p, id), getVarp: () => 0,
+    })?.id, stageValue >= 21 ? undefined : 4629);
+    assert.equal(stage(h, p), stageValue);
+    assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1, 'visibility synchronization never consumes Ana');
+  }
+});
+
 test('the cache transforms the quest NPCs and locs by the varbits the plugin sets', () => {
   // The cache keeps the tourist trap's characters as transform parents; the
   // real model, name and options only appear with the matching varbit.

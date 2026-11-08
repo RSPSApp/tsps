@@ -741,6 +741,7 @@ test("a mermaid's dive: the gear, the riddle, a wrong then right answer, the cha
 
 test("Chartin' Charles pays the owed ocean bonuses at once (rsprox 948)", () => {
   const player = captain();
+  player.getInventory().add(new (require("../dist/game/model/Item").Item)(31985, 1), false); // the captain's log
   const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Sunset Ocean");
   for (const spot of common.oceanSpots(ocean)) common.complete(player, spot);
   assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "jBl-4T" }), true);
@@ -756,6 +757,21 @@ test("Chartin' Charles pays the owed ocean bonuses at once (rsprox 948)", () => 
   assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "dx41Cr" }), true, "nothing owed now");
   tutor.pay(player);
   assert.deepEqual(player.xp, [2000]);
+});
+
+test("Chartin' Charles pays no bonus without the captain's log in the inventory (Wiki)", () => {
+  // Wiki (Chartin' Charles, Training): "You must have the captain's log in your inventory to receive the bonus XP."
+  const player = captain();
+  const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Sunset Ocean");
+  for (const spot of common.oceanSpots(ocean)) common.complete(player, spot);
+  player.xp.length = 0;
+  assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "dx41Cr" }), true, "his nothing-owed answer");
+  assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "jBl-4T" }), false);
+  tutor.pay(player);
+  assert.deepEqual(player.xp, [], "no XP");
+  player.getInventory().add(new (require("../dist/game/model/Item").Item)(31985, 1), false);
+  tutor.pay(player);
+  assert.deepEqual(player.xp, [2000], "the ocean is still owed, and paid once the log is carried");
 });
 
 test("a full inventory leaves the crab statue uncharted until its fragment fits (review #1472)", () => {

@@ -51,6 +51,7 @@ import { GPU_TEXTURE_USAGE, SCENE_DEPTH_FORMAT, SCENE_GROUP, WORLD_TEXTURES_GROU
 import { getControlledPlayerEcsIndex, updateFollowCamera } from "./camera";
 import { resolveWebGPULodDistance, resolveWebGPURenderDistance, updateWebGPUMapStreaming } from "./frameConfig";
 import { FxaaPass } from "./fxaa";
+import { ShaderFxPass } from "./shaderFxPass";
 import { SceneMsaaTargets } from "./msaaTargets";
 import { WEBGPU_MSAA_SAMPLES } from "./multisample";
 import { EditorOverlays } from "./overlays/EditorOverlays";
@@ -124,6 +125,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     /** The GPU plugin's anti-aliasing: multisampled world-pass targets, or FXAA on the base path. */
     private msaaTargets?: SceneMsaaTargets;
     private fxaa?: FxaaPass;
+    /** The Shader Effects plugin's pass on the base path (117 HD runs its own in the HDR chain). */
+    private shaderFxPass?: ShaderFxPass;
     /** The last world drawn, presented while the player's square builds (SceneFrameHold). */
     private heldScene?: WebGPUHeldScene;
     private readonly sceneFrameHold = new SceneFrameHold();
@@ -1049,7 +1052,15 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 : undefined;
         // Without the extension's target, FXAA has the world drawn into its own and presents it.
         const fxaa = !hdrTarget && gpu?.fxaa ? (this.fxaa ??= new FxaaPass(this.device, this.format)) : undefined;
-        const sceneTarget = hdrTarget ?? fxaa?.ensure(width, height) ?? canvasView;
+        // The Shader Effects plugin without HD: the world draws into its own display-colour target,
+        // and the effects run from there into FXAA's target or the canvas. Idle, nothing changes.
+        const shaderFxRuntime = !hdrTarget && drawScene ? this.osrsClient.clientPlugins.shaderFx() : undefined;
+        const shaderFx = shaderFxRuntime
+            ? (this.shaderFxPass ??= new ShaderFxPass(this.device, this.format, true))
+            : undefined;
+        const shaderFxActive = shaderFx?.prepare(shaderFxRuntime) === true;
+        const sceneTarget = hdrTarget
+            ?? (shaderFxActive ? shaderFx!.ensureSource(width, height) : fxaa?.ensure(width, height) ?? canvasView);
         // MSAA draws into multisampled targets that resolve into sceneTarget as the pass ends.
         let msaa: SceneMsaaTargets | undefined;
         if (sampleCount > 1) {
@@ -1131,6 +1142,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
         // The extension's post passes read and depth-test against the single-sampled depth.
         if (msaa && hdrTarget) msaa.resolveDepth(encoder, this.depthView);
+        if (shaderFxActive) {
+            shaderFx!.encodeTo(encoder, shaderFx!.ensureSource(width, height), fxaa?.ensure(width, height) ?? canvasView, width, height);
+        }
         fxaa?.encode(encoder, canvasView);
 
         if (hdrTarget) {
@@ -1426,6 +1440,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.msaaTargets = undefined;
         this.fxaa?.dispose();
         this.fxaa = undefined;
+        this.shaderFxPass?.dispose();
+        this.shaderFxPass = undefined;
         this.heldScene?.destroy();
         this.heldScene = undefined;
     }

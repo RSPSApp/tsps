@@ -172,6 +172,7 @@ import { ProjectileRenderer } from "../../projectiles/ProjectileRenderer";
 import {
     FRAME_FXAA_PROGRAM,
     FRAME_PROGRAM,
+    FRAME_SHADERFX_PROGRAM,
     createMainProgram,
     createNpcProgram,
     createPlayerProgram,
@@ -313,6 +314,18 @@ export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Progra
             host.frameFxaaProgram = undefined;
             host.frameFxaaDrawCall = undefined;
             host.fxaaEnabled = false;
+        }
+
+        // The Shader Effects plugin's present program, likewise apart so a link failure only
+        // costs the effects.
+        try {
+            const [frameShaderFxProgram] = await host.app.createPrograms(FRAME_SHADERFX_PROGRAM);
+            host.frameShaderFxProgram = frameShaderFxProgram;
+            host.frameShaderFxDrawCall = host.app.createDrawCall(frameShaderFxProgram, host.quadArray);
+        } catch (e) {
+            console.warn("[WebGLOsrsRenderer] Shader Effects unavailable; continuing without them", e);
+            host.frameShaderFxProgram = undefined;
+            host.frameShaderFxDrawCall = undefined;
         }
 
         if (host.hoverLineProgram && host.sceneUniformBuffer) {

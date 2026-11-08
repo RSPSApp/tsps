@@ -32,6 +32,7 @@ import { sendLogin } from "../network/ServerConnection";
 import { baseNpcTypeId } from "../custom/npcs/NpcModelOverrideRegistry";
 import { flushPackets } from "../network/packet";
 import { createTextureArray } from "../picogl/PicoTexture";
+import { createShaderFxUniforms } from "./render/shaderFx";
 import { RS_TO_RADIANS } from "../rs/MathConstants";
 import { CollisionFlag } from "../common/CollisionFlag";
 import {
@@ -378,6 +379,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     playerProgramOpaque?: Program; // multi-draw variant (no alpha discard)
     frameProgram?: Program;
     frameFxaaProgram?: Program;
+    /** The Shader Effects plugin's present-time program (render/render/shaderFx.ts). */
+    frameShaderFxProgram?: Program;
     // Hover devoverlay program
     hoverLineProgram?: Program;
 
@@ -500,6 +503,13 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
 
     frameDrawCall?: DrawCall;
     frameFxaaDrawCall?: DrawCall;
+    frameShaderFxDrawCall?: DrawCall;
+    readonly shaderFxUniforms = createShaderFxUniforms();
+    /** The effects' output when FXAA reads it next; made on demand at the canvas size. */
+    shaderFxFramebuffer?: Framebuffer;
+    shaderFxColorTarget?: Texture;
+    shaderFxWidth = 0;
+    shaderFxHeight = 0;
     // UI overlays
     public overlayManager?: OverlayManager;
     public gfxManager?: GfxManager;

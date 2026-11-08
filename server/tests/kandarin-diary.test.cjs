@@ -212,9 +212,18 @@ test("five Seers' flax picks and entering the Ranging Guild", async () => {
   const register = api.registerArea;
   api.registerArea = (area) => { guildArea = area; register?.(area); };
   RangingArea(api);
-  const entrant = actor(2660, 3425);
-  guildArea.postEnter(entrant);
-  assert.equal(done(entrant, "enter-the-ranging-guild"), true);
+  // The archery rectangle runs past the guild's diagonal fence: arriving in its corner (a combat bracelet's landing,
+  // 2655,3443) is not entering the guild; the guild door is (RangingGuild.plugin's door:toggle, 40 Ranged).
+  const landed = actor(2655, 3443);
+  guildArea.postEnter?.(landed);
+  assert.equal(done(landed, "enter-the-ranging-guild"), false, "outside the fence: not in the guild");
+  const RangingGuild = require("../plugins/areas/RangingGuild.plugin");
+  RangingGuild.register(api);
+  const entrant = actor(2657, 3438);
+  const coreApi = PluginManager.getCoreApi();
+  entrant.getSkillManager().setCurrentLevel(coreApi.Skill.RANGED, 40, false);
+  RangingGuild._test.guardDoor({ player: entrant, objectId: coreApi.ObjectIdentifiers.GUILD_DOOR, handled: false });
+  assert.equal(done(entrant, "enter-the-ranging-guild"), true, "through the door: entered");
 });
 
 test("coal mined beside the coal trucks counts; any other coal does not", async () => {

@@ -30,7 +30,7 @@ const npc = (x) => ({
   performAnimation() {},
   performGraphic() {},
   getCombat: () => ({ getSelectedSpell: () => null, getAmmunition: () => null, getRangedWeapon: () => null }),
-  getAsNpc: () => ({ getCurrentDefinition: () => ({ getProjectileId: () => -1 }) }),
+  getAsNpc: () => ({ getCurrentDefinition: () => ({ getProjectileId: () => -1, getLaunchGraphicId: () => -1 }) }),
 });
 
 /** The [delay, end] each player in view is sent for what `fire` launches. */

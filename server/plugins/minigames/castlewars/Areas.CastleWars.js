@@ -348,7 +348,8 @@ function keepItemsOnDeath(event) {
 }
 
 function preventBonesOnDeath(event) {
-  if (game.castleWarsAreas.has(event.player?.getArea?.())) {
+  // The bones roll at tick 0, before the respawn hook forgets a death begun in the game (ended mid-death).
+  if (game.castleWarsAreas.has(event.player?.getArea?.()) || dyingInCastleWars.has(event.player)) {
     event.allow = false;
   }
 }

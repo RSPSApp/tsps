@@ -21,6 +21,7 @@ Crystal armour keeps `CrystalArmour.plugin.js`, the celestial signet `CelestialR
 | Blade of Saeldor | enhanced crystal weapon seed | 100 | 82 | 5,000 | capture 1159, Wiki |
 | Bow of Faerdhinen | enhanced crystal weapon seed | 100 | 82 | 5,000 | capture 1159, Wiki |
 | Crystal bow | crystal weapon seed | 40 | 78 | 2,000 | captures 819, 1134, Wiki |
+| Crystal halberd | crystal weapon seed (and the Hard Western Provinces Diary) | 40 | 78 | 2,000 | cache recipe book, Wiki |
 | Crystal shield | crystal weapon seed | 40 | 78 | 2,000 | capture 1162, Wiki |
 | Crystal axe / pickaxe / harpoon | crystal tool seed + the dragon tool | 120 | 76 | 6,000 | Wiki |
 | Crystal felling axe | crystal tool seed + dragon felling axe | 120 | 76 | 6,000 | Wiki |
@@ -29,10 +30,13 @@ Crystal armour keeps `CrystalArmour.plugin.js`, the celestial signet `CelestialR
 The weapon and tool recipes also need Song of the Elves (Wiki). A seed or the crystal key used on the bowl
 opens the menu of what it goes into.
 
+## Recipes book
+
+Loc 37344 "Crystal Singing Recipes" (Read) opens interface 181 `prif_recipes`. The cache builds the whole list
+itself in its onLoad script (cs2 2924: names, material text, item icons), so the server only opens the group.
+
 ## Not covered (unverified or not built)
 
-- The Crystal Singing Recipes book (loc 37344, Read) and its interface: no capture reads it and the Wiki has only a screenshot.
-- Crystal halberd: the Wiki wants the Hard Western Provinces Diary as well; no capture, and no diary check is wired here.
 - Corrupting the Blade of Saeldor and Bow of Faerdhinen (capture 1159 shows "you sing a dark song which corrupts the
   crystals" and a 1,900-shard price for a charged bow, 2,000 less its stored shards; the recipe book lists 1,000
   for both while the weapon pages say 1,000 and 2,000).

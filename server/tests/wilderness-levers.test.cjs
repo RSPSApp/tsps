@@ -214,6 +214,21 @@ test("a pull cut short by death still puts the lever back up", () => {
   assert.deepEqual(locsAt(3090, 3956, 4), [loc("magearena_lever_to_cellar")]);
 });
 
+test("a second player's pull while the lever is down does nothing", () => {
+  const h = harness();
+  const first = player();
+  const second = player();
+  use(h, first, "magearena_lever_to_cellar", "Pull", 3090, 3956);
+  runTicks(h, first, 2);
+  assert.deepEqual(locsAt(3090, 3956, 4), [loc("magearena_lever_down")]);
+  const tasks = h.tasks.length;
+  use(h, second, "magearena_lever_to_cellar", "Pull", 3090, 3956);
+  assert.equal(h.tasks.length, tasks, "no pull starts on the down lever");
+  runTicks(h, first, 8);
+  assert.deepEqual(second.log, []);
+  assert.deepEqual(locsAt(3090, 3956, 4), [loc("magearena_lever_to_cellar")]);
+});
+
 test("a pull cut short by death clears busy", () => {
   const h = harness();
   const who = player();

@@ -170,6 +170,9 @@ function landed(player, destination) {
 }
 
 function pull(player, object, lever, destination) {
+  // Someone else's pull has it down (a walk to it or a warning answered meanwhile): the down loc
+  // has no options, so nothing happens.
+  if (!core.MapObjects.exists(object)) return;
   const to = new core.Location(destination.to[0], destination.to[1], 0);
   if (!core.TeleportHandler.checkReqs(player, to, Infinity)) return;
   ObstacleRunner.run({ player, object }, pullSteps(lever, destination, () => landed(player, destination)), {

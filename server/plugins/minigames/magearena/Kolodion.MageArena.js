@@ -57,6 +57,8 @@ const CAST_COUNT = /^If player has cast (.+?) (less than|at least) (\d+) times:$
 let api;
 /** Player -> the follower whose remains this Talk-to hands in, or whose cape is being imbued. */
 const pending = new WeakMap();
+/** Player -> the cape item they used on Kolodion. */
+const usedCape = new WeakMap();
 
 function isKolodion(event) {
   return event?.definition?.getName?.() === NAME;
@@ -165,9 +167,10 @@ function giveSymbol(action) {
 }
 
 /**
- * "Kolodion takes the <remains>.": into his keeping, shown as its item box. The third moves the
- * miniquest on and, as live, Kolodion goes straight on to the god cape instead of the hand-in's
- * "we aren't finished yet".
+ * "Kolodion takes the <remains>.": into his keeping, shown as its item box. As live, any other
+ * carried remains is handed in next in the same conversation, and the third moves the miniquest
+ * on and goes straight to the god cape; only the last of the conversation says "we aren't
+ * finished yet".
  */
 function handInRemains(action, follower) {
   const { player, npc, npcId } = action;
@@ -179,9 +182,12 @@ function handInRemains(action, follower) {
   }
   const last = MageArenaII.components(player) === MageArenaII.ALL_COMPONENTS;
   if (last) MageArenaII.setStage(player, STAGE.ALL_REMAINS);
-  const next = last
-    ? { variant: { page: PAGE, variant: VARIANT.allRemains } }
-    : { variant: { page: PAGE, variant: follower.handInVariant }, select: handInTail };
+  // Live, the next carried remains follows straight on in the same conversation (235/03344).
+  const another = last ? null : remainsToHandIn(player);
+  if (another) pending.set(player, another);
+  const next = last ? { variant: { page: PAGE, variant: VARIANT.allRemains } }
+    : another ? { variant: { page: PAGE, variant: another.handInVariant } }
+      : { variant: { page: PAGE, variant: follower.handInVariant }, select: handInTail };
   const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
   const box = new DialogueChainBuilder();
   box.add(new ItemStatementDialogue(0, follower.remainsId, String(action.text)));
@@ -204,7 +210,9 @@ function imbue(action, follower) {
   pending.delete(player);
   action.handled = true;
   const inventory = player.getInventory();
-  const cape = follower.capeIds.find((id) => inventory.contains(id));
+  const used = usedCape.get(player);
+  usedCape.delete(player);
+  const cape = inventory.contains(used) ? used : follower.capeIds.find((id) => inventory.contains(id));
   if (cape === undefined || !canImbue(player, follower)) {
     action.end = true;
     return;
@@ -262,6 +270,7 @@ function useCapeOnKolodion(event) {
   // Post-miniquest remains in the pack are handed over first, as he keeps them (Wiki).
   if (MageArenaII.stageOf(player) === STAGE.COMPLETE && MageArenaII.carries(player, follower)) takeRemains(player, follower);
   pending.set(player, follower);
+  usedCape.set(player, itemId);
   const request = {
     player, npc: event.target, npcId: event.npcId, variant: { page: PAGE, variant: follower.capeVariant },
     select: (steps) => capeSteps(player, follower, steps), handled: false,

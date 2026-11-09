@@ -10,8 +10,9 @@
  *   no menu.
  * - "The enchanted symbol is <temperature>[, and warmer than last time | , but colder than last
  *   time | , and the same temperature as last time]." then "The power of the enchanted symbol
- *   hurts you in the process.". The temperatures are the strange device's bands, shared with the
- *   beginner clue device.
+ *   hurts you in the process.". The temperatures are the strange device's (Wiki Strange_device:
+ *   ice cold 500+ tiles, very cold 200-499, cold 150-199, warm 100-149, hot 70-99, very hot 30-69,
+ *   incredibly hot 4-29, visibly shaking 0-3); the run's readings use the same words.
  * - The follower locations rotate on `ma2_timer_remaining` (6062): 250 at the first use, down one
  *   every 10 ticks, and (Wiki) only while the player is in the Wilderness. Once it runs out, the
  *   next use only says "It appears the creatures have moved locations, ..." (a box and the chat
@@ -26,7 +27,6 @@
  */
 const MageArenaII = require("./MageArenaII.MageArena");
 const Followers = require("./Followers.MageArena");
-const { temperature } = require("../../treasuretrails/beginner/Runtime.BeginnerTreasureTrails");
 
 const TIMER_VARBIT = 6062;
 const TIMER_START = 250;
@@ -52,6 +52,13 @@ const MESSAGES = Object.freeze({
   nothing: "The symbol has no more creatures to locate.",
 });
 const CANCEL = "Cancel";
+/** [below this many tiles, the temperature], hottest first; ice cold beyond. */
+const BANDS = Object.freeze([[4, "visibly shaking"], [30, "incredibly hot"], [70, "very hot"], [100, "hot"],
+  [150, "warm"], [200, "cold"], [500, "very cold"]]);
+
+function temperature(distance) {
+  return BANDS.find(([below]) => distance < below)?.[1] ?? "ice cold";
+}
 
 let api;
 /** Player -> { follower key -> last distance read }, for "warmer/colder than last time". */
@@ -223,6 +230,6 @@ module.exports = function registerSymbol(pluginApi) {
 Object.assign(module.exports, {
   _test: {
     SPAWN_POINTS, TIMER_START, TIMER_ATTRIBUTE, LOCATIONS_ATTRIBUTE, MESSAGES, MAX_DAMAGE,
-    inWilderness, trackable, rotate, pointOf, readingFor, locate, activate, timerOf, startTimer, destroyPrompt,
+    inWilderness, trackable, temperature, rotate, pointOf, readingFor, locate, activate, timerOf, startTimer, destroyPrompt,
   },
 });

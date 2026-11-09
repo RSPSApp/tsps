@@ -236,6 +236,80 @@ test("remains can't be banked and are always lost on death; the symbol can be", 
   assert.notEqual(PluginManager.emitCanBankItem(player, new core.Item(Items.ENCHANTED_SYMBOL, 1)), false);
 });
 
+function summoned(player, key) {
+  placeFollower(player, key, 2);
+  activate(player);
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  return [...followers.active].find(([, state]) => state.player === player && state.follower.key === key);
+}
+
+test("a follower's god spell hits up to its Wiki max; melee only beside it", () => {
+  const player = makePlayer({ components: 6 });
+  player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+  const [npc, state] = summoned(player, "saradomin");
+  const Method = followers.createCombatMethod();
+  let landed = 0;
+  for (let i = 0; i < 80; i++) {
+    const method = new Method();
+    method.start(npc, player);
+    if (!method.attack) continue; // a special: no ordinary hit
+    if (followers.edgeDistance(npc, player) > 0) assert.equal(method.attack.style, "MAGIC", "no melee from range");
+    const [hit] = method.hits(npc, player);
+    assert.ok(hit.getTotalDamage() <= (method.attack.style === "MAGIC" ? 26 : 43));
+    if (hit.isAccurate()) landed++;
+  }
+  assert.ok(landed > 0, "some casts land");
+  assert.equal(method_speed(Method, npc), 6);
+  state.bound = true;
+  assert.equal(method_speed(Method, npc), 3, "the bound sword swings every 3 ticks");
+});
+
+function method_speed(Method, npc) {
+  return new Method().attackSpeed(npc);
+}
+
+test("bound or not, the Justiciar never melees from range", (t) => {
+  const player = makePlayer({ components: 6 });
+  const [npc, state] = summoned(player, "saradomin");
+  const at = npc.getLocation();
+  player.setLocation(new core.Location(at.getX() + 8, at.getY(), 0));
+  state.bound = true;
+  t.mock.method(core.Misc, "randomInclusive", (min) => min);
+  assert.equal(followers.meleeOrMagic(npc, player, state).style, "MAGIC");
+});
+
+test("a shock wave on a freeze-immune player binds nothing", () => {
+  const player = makePlayer({ components: 6 });
+  const [npc, state] = summoned(player, "saradomin");
+  player.getTimers().registers(core.TimerKey.FREEZE_IMMUNITY, 20);
+  followers.shockWave(npc, player, state);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(state.bound, false);
+});
+
+test("a follower's Tele Block lasts 2 minutes, lifts with it, and leaves anyone else's", () => {
+  const player = makePlayer({ components: 6 });
+  let [npc, state] = summoned(player, "saradomin");
+  followers.teleBlock(npc, player, state);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(core.TeleBlock.isBlocked(player), true);
+  assert.ok(player.messages.some((m) => /cast on you by Justiciar Zachariah\. It will expire in 2 minutes\./.test(m)));
+  followers.dismiss(npc, state);
+  assert.equal(core.TeleBlock.isBlocked(player), false, "its block fades with it");
+
+  [npc, state] = summoned(player, "saradomin");
+  followers.teleBlock(npc, player, state);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  state.teleBlockUntil = 0; // its own block has run out
+  core.TeleBlock.remove(player);
+  core.TeleBlock.apply(player, "a PKer");
+  followers.dismiss(npc, state);
+  assert.equal(core.TeleBlock.isBlocked(player), true, "someone else's block stays");
+});
+
 test("Derwen's and Porazdir's spells drain 1 + 5% of Defence and Magic", () => {
   const player = makePlayer();
   player.getSkillManager().setMaxLevel(core.Skill.DEFENCE, 99, false).setCurrentLevel(core.Skill.DEFENCE, 99, false);

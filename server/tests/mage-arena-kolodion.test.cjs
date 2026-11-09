@@ -163,27 +163,32 @@ test("a lost symbol is replaced; a banked one isn't", () => {
   assert.equal(banked.getInventory().contains(Items.ENCHANTED_SYMBOL), false);
 });
 
-test("remains are handed in one per talk; the third moves on to the god cape", () => {
+test("a lone remains is handed in with the hand-in's own ending", () => {
   const player = makePlayer({ stage: MageArenaII.STAGE.HUNTING, inventory: [Items.ENCHANTED_SYMBOL, Items.JUSTICIARS_HAND, Items.JUSTICIARS_HAND] });
-  const first = talk(player, ["Thanks, bye."]);
-  assert.ok(said(first, /^I've got the remains of the Saradominist justiciar\.$/));
-  assert.ok(said(first, /but we aren't finished yet/));
+  const lines = talk(player, ["Thanks, bye."]);
+  assert.ok(said(lines, /^I've got the remains of the Saradominist justiciar\.$/));
+  assert.ok(said(lines, /^Kolodion takes the Justiciar's remains\.$/), "its item box");
+  assert.ok(said(lines, /but we aren't finished yet/));
   assert.equal(player.getInventory().contains(Items.JUSTICIARS_HAND), false, "duplicates are all taken (Wiki)");
   assert.ok(player.messages.includes("You hand Kolodion the remains of the Saradominist justiciar."));
   assert.equal(MageArenaII.components(player), 1);
-
-  player.getInventory().adds(Items.ENTS_ROOTS, 1);
-  talk(player, ["Thanks, bye."]);
-  assert.equal(MageArenaII.components(player), 3);
   assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.HUNTING);
+});
 
-  player.getInventory().adds(Items.DEMONS_HEART, 1);
-  const third = talk(player, []);
-  assert.ok(said(third, /^I've got the remains of the Zamorakian Demon\.$/));
-  assert.ok(said(third, /now you just need to hand me the god cape you wish to have imbued/));
-  assert.equal(said(third, /but we aren't finished yet/), false);
+test("all carried remains go in one conversation, straight on to the god cape (235/03344)", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.HUNTING, inventory: [Items.ENCHANTED_SYMBOL, Items.JUSTICIARS_HAND, Items.ENTS_ROOTS, Items.DEMONS_HEART] });
+  const lines = talk(player, []);
+  const handed = lines.filter((line) => /^I've got the remains of /.test(line));
+  assert.deepEqual(handed, [
+    "I've got the remains of the Saradominist justiciar.",
+    "I've got the remains of the Guthixian Ent.",
+    "I've got the remains of the Zamorakian Demon.",
+  ]);
+  assert.equal(said(lines, /but we aren't finished yet/), false);
+  assert.ok(said(lines, /now you just need to hand me the god cape you wish to have imbued/));
   assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.ALL_REMAINS);
   assert.equal(MageArenaII.components(player), MageArenaII.ALL_COMPONENTS);
+  assert.equal(player.messages.filter((m) => /^You hand Kolodion the remains of /.test(m)).length, 3);
 });
 
 test("a god cape before all three remains is nothing to Kolodion", () => {
@@ -191,7 +196,7 @@ test("a god cape before all three remains is nothing to Kolodion", () => {
   assert.equal(useOnKolodion(player, Items.ZAMORAK_CAPE).handled, false);
 });
 
-test("the first imbue takes the three remains and completes the miniquest", () => {
+test("the first imbue takes the three remains and quietly completes the miniquest", () => {
   const player = makePlayer({ stage: MageArenaII.STAGE.ALL_REMAINS, components: 7, inventory: [Items.ZAMORAK_CAPE] });
   const { handled, lines } = useOnKolodion(player, Items.ZAMORAK_CAPE, ["Yes."]);
   assert.equal(handled, true);
@@ -200,7 +205,7 @@ test("the first imbue takes the three remains and completes the miniquest", () =
   assert.equal(player.getInventory().getAmount(Items.IMBUED_ZAMORAK_CAPE), 1);
   assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.COMPLETE);
   assert.equal(MageArenaII.components(player), 0);
-  assert.ok(player.messages.some((message) => /completed a quest: .*Mage Arena II/.test(message)));
+  assert.equal(player.messages.some((message) => /completed a quest/.test(message)), false, "no announcement, as live");
 });
 
 test('choosing "No." keeps the cape', () => {

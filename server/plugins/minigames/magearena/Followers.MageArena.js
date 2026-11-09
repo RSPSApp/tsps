@@ -78,7 +78,7 @@ const COMBAT = Object.freeze({
 
 let api;
 let core;
-/** npc -> { player, follower, combat, spawnedAt, bound, teleBlocked, healers, pointKey } */
+/** npc -> { player, follower, combat, spawnedAt, bound, teleBlockUntil, healers } */
 const active = new Map();
 
 function later(ticks, action) {
@@ -185,7 +185,7 @@ function summon(player, follower, pointIndex) {
   });
   if (!npc) return null;
   const combat = COMBAT[follower.key];
-  const state = { player, follower, combat, spawnedAt: now(), bound: false, teleBlocked: false, healers: new Set() };
+  const state = { player, follower, combat, spawnedAt: now(), bound: false, teleBlockUntil: 0, healers: new Set() };
   active.set(npc, state);
   sound(npc, SPAWN_SOUND);
   if (follower.spawningId != null) npc.setNpcTransformationId(follower.spawningId);
@@ -203,8 +203,14 @@ function summon(player, follower, pointIndex) {
 function watch(npc) {
   const state = stateOf(npc);
   if (!state) return false;
+  if (!npc.isRegistered()) {
+    // Taken out of the world by something else: forget it, or it blocks summoning it again.
+    active.delete(npc);
+    release(state);
+    return false;
+  }
   // A dying follower is the death task's (followerDied).
-  if (!npc.isRegistered() || npc.getHitpoints() <= 0) return false;
+  if (npc.getHitpoints() <= 0) return false;
   const { player } = state;
   const gone = !player.isRegistered() || player.getHitpoints() <= 0 ||
     !core.Wilderness.isInLocation(player.getLocation()) ||
@@ -221,8 +227,9 @@ function release(state) {
     if (healer.isRegistered()) api.removeNpc(healer);
   }
   state.healers.clear();
-  if (state.teleBlocked && core.TeleBlock.isBlocked(state.player)) core.TeleBlock.remove(state.player);
-  state.teleBlocked = false;
+  // Only its own block, still running: a later one (a PKer's) stays.
+  if (now() < state.teleBlockUntil && core.TeleBlock.isBlocked(state.player)) core.TeleBlock.remove(state.player);
+  state.teleBlockUntil = 0;
 }
 
 function dismiss(npc, state) {
@@ -261,8 +268,9 @@ function teleBlock(npc, target, state) {
   later(SPECIAL_LAND_TICKS, () => {
     if (!stateOf(npc) || !target.isRegistered() || core.TeleBlock.isBlocked(target)) return;
     const protectedFromMagic = core.PrayerHandler.isActivated(target, core.PrayerHandler.PROTECT_FROM_MAGIC);
-    core.TeleBlock.apply(target, npc.getDefinition().getName(), protectedFromMagic ? TELE_BLOCK_PROTECTED_SECONDS : TELE_BLOCK_SECONDS);
-    state.teleBlocked = true;
+    const seconds = protectedFromMagic ? TELE_BLOCK_PROTECTED_SECONDS : TELE_BLOCK_SECONDS;
+    core.TeleBlock.apply(target, npc.getDefinition().getName(), seconds);
+    state.teleBlockUntil = now() + core.Misc.getTicks(seconds);
   });
 }
 
@@ -293,7 +301,7 @@ function healer(npc, target, state) {
     if (!ball) return;
     state.healers.add(ball);
     every(HEAL_INTERVAL_TICKS, () => {
-      if (!ball.isRegistered() || ball.getHitpoints() <= 0 || !stateOf(npc) || !npc.isRegistered()) {
+      if (!ball.isRegistered() || ball.getHitpoints() <= 0 || !stateOf(npc) || !npc.isRegistered() || npc.getHitpoints() <= 0) {
         state.healers.delete(ball);
         return false;
       }
@@ -314,6 +322,8 @@ function shockWave(npc, target, state) {
     const at = npc.getLocation();
     target.moveTo(new core.Location(at.getX() + 1, at.getY() - 1, at.getZ()));
     core.CombatFactory.freezeTicks(target, SHOCK_WAVE_BIND_TICKS, null, npc);
+    // A freeze can be refused (still immune after the last one): no bind, no fast sword.
+    if (!target.getTimers().has(core.TimerKey.FREEZE)) return;
     state.bound = true;
     later(SHOCK_WAVE_BIND_TICKS, () => { state.bound = false; });
   });
@@ -330,7 +340,8 @@ function magicAttack(npc, target, state) {
 }
 
 function meleeOrMagic(npc, target, state) {
-  if (state.bound || (edgeDistance(npc, target) <= 0 && core.Misc.randomInclusive(0, 1) === 0)) {
+  const adjacent = edgeDistance(npc, target) <= 0;
+  if (adjacent && (state.bound || core.Misc.randomInclusive(0, 1) === 0)) {
     npc.performAnimation(new core.Animation(npc.getAttackAnim()));
     return { style: "MELEE", maxHit: state.combat.meleeMaxHit };
   }
@@ -480,6 +491,6 @@ Object.assign(module.exports, {
   summon,
   _test: {
     COMBAT, LIFETIME_TICKS, active, stateOf, summon, watch, dismiss, followerDied, edgeDistance, chooseAttack, createCombatMethod,
-    godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
+    godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain, shockWave, teleBlock, meleeOrMagic,
   },
 });

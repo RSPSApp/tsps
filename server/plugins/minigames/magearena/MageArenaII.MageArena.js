@@ -89,8 +89,9 @@ function setStage(player, stage) {
   quest?.setStage(player, stage);
 }
 
+/** Completed as live (235/03344): the stage and miniquest count move, with no jingle, line or scroll. */
 function complete(player) {
-  return quest?.complete(player) === true;
+  return quest?.complete(player, { scroll: false, announce: false }) === true;
 }
 
 function components(player) {

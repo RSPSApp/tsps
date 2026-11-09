@@ -510,6 +510,41 @@ test("Zahur Make unfinished: a stack used up frees its slot, and a near-cap stac
   assert.equal(amount(f, I.COINS), COST * 5, "and aren't paid for");
 });
 
+// Wiki (Zahur): "vials of water or vials of blood" (5 July 2018: "accept, and create potions using, Vials of blood").
+test("Zahur Make unfinished: vials of blood make Cadantine blood potions, beside vials of water", async (t) => {
+  const obj = (name) => core.CacheDefinitions.getObjId(name);
+  const f = actor(t);
+  f.inv.setItem(0, plain(noted(obj("cadantine")), 3));
+  f.inv.setItem(1, plain(noted(I.VIAL_OF_WATER), 1));
+  f.inv.setItem(2, plain(noted(obj("vial_blood")), 2));
+  f.inv.setItem(3, plain(I.COINS, COST * 3));
+  await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.equal(amount(f, noted(obj("cadantinevial"))), 1, "one with the vial of water");
+  assert.equal(amount(f, noted(obj("cadantine_bloodvial"))), 2, "two with the vials of blood");
+  assert.equal(amount(f, noted(obj("cadantine"))), 0);
+  assert.equal(amount(f, I.COINS), 0, "200 coins each");
+
+  const blood = actor(t);
+  blood.inv.setItem(0, plain(noted(obj("cadantine")), 2));
+  blood.inv.setItem(1, plain(noted(obj("vial_blood")), 2));
+  blood.inv.setItem(2, plain(I.COINS, COST * 2));
+  await npcOption(t, blood, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.equal(amount(blood, noted(obj("cadantine_bloodvial"))), 2, "blood alone is a base");
+
+  // A herb with no blood recipe and only vials of blood: the no-base refusal, as with no vials at all.
+  const guam = actor(t);
+  const said = [];
+  const sender = guam.p.getPacketSender(), sendString = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, ...rest) => { said.push(String(text)); return sendString(text, ...rest); });
+  guam.inv.setItem(0, plain(noted(I.GUAM_LEAF), 5));
+  guam.inv.setItem(1, plain(noted(obj("vial_blood")), 5));
+  guam.inv.setItem(2, plain(I.COINS, 1000));
+  await npcOption(t, guam, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.ok(said.some((text) => text.includes("You need to bring along a base for me to make unfinished potions with.")), said.join(" / "));
+  assert.equal(amount(guam, noted(I.GUAM_LEAF)), 5);
+  assert.equal(amount(guam, I.COINS), 1000);
+});
+
 // ------------------------------------------------------------------ Mawnis
 
 async function buyHelm(t, f, coins, { free = null, questDone = true, reachesAccept = true } = {}) {

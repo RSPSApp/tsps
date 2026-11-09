@@ -55,6 +55,10 @@ collection's own options and the band's practice animations are not done.
 - **open** The band's practice rhythm (`horror_crab_attack`/`defend` every few ticks) is not
   played, and a recruit is not shown at its hiding place while it talks.
 - **open** Talking to a band crab at stage 50 does nothing; live plays the main crab's lines.
+- **fixed** Five Wiki Flotsam spawns stood on the real beach; live has none there (the floatsam is
+  the dream's). They are removed and marked plugin-spawned in `npc-spawn-sync.json`.
+- **fixed** The screen stayed black after the ceremony, and a logout in its first two ticks left it
+  playing for the offline player.
 - **fixed** The quest ran on the real beach with world-wide palms and a second bottle; it is now
   the captured instance.
 - **fixed** Five shells had swapped tiles; the bad shells, the western bush, two avium trees and
@@ -63,6 +67,14 @@ collection's own options and the band's practice animations are not done.
   stage 50.
 
 ## Runs
+
+### 2026-11-09 · agent · claude-opus-5-5 (cache 242 check)
+
+- **Start:** fresh account set to stage 30 with `::quest`, the big net given, placed by the bottle.
+- **Result:** no Flotsam on the real beach; the bottle blacks out into the dream; the dream's
+  `crab_flotsam_multi` 16820 shows as Flotsam 16819 with Net; one cast gives the bowstring, barrel
+  and plank, 15852 = 3, stage 37.
+- **Not checked:** the rest of the quest on 242 (the 241 run below covers it).
 
 ### 2026-11-09 · agent · claude-opus-5-5
 

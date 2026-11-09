@@ -25,6 +25,8 @@ module.exports = function createCrabCeremony(api) {
   const FADE_SCRIPT = 948;
   const MINIMAP_STATE_VARBIT = 6719;
   const CUTSCENE_STATUS_VARBIT = 542;
+  const FADE_IN_ARGS = [0, 0, 0, 255, 50];
+  const FADE_CLOSE_TICKS = 3;
   /** The tick live rebuilds the region on (two after the first fade). */
   const ENTER_TICK = 2;
   /** The tick after the last event: live rebuilds the real beach then. */
@@ -86,11 +88,19 @@ module.exports = function createCrabCeremony(api) {
     later(ceremony, END_TICK, () => finish(player, ceremony, false));
   }
 
-  /** Runs `callback` at `tick`, unless the ceremony ended. */
+  /** Runs `callback` at `tick`, unless the ceremony ended; a player gone offline ends it. */
   function later(ceremony, tick, callback) {
     TaskManager.submit(new CountdownTask(ceremony, Math.max(1, tick), () => {
-      if (ceremonies.get(ceremony.player) === ceremony) callback();
+      if (ceremonies.get(ceremony.player) !== ceremony) return;
+      if (ceremony.player.isRegistered?.() === false) return finish(ceremony.player, ceremony, true);
+      callback();
     }));
+  }
+
+  /** Ends a running ceremony now (a logout before or during it). */
+  function end(player, logout) {
+    const ceremony = ceremonies.get(player);
+    if (ceremony) finish(player, ceremony, logout);
   }
 
   function tile(ceremony, [x, y], z = 0) {
@@ -106,7 +116,7 @@ module.exports = function createCrabCeremony(api) {
       const mount = sender.mountSubInterface(FADE_UID, FADE_INTERFACE, 1, {
         postScripts: [{ scriptId: FADE_SCRIPT, args: event.fade }],
       });
-      if (event.fade[1] === 0) TaskManager.submit(new CountdownTask(ceremony, 3, () => sender.closeSubInterfaceMount(mount)));
+      if (event.fade[1] === 0) TaskManager.submit(new CountdownTask(ceremony, FADE_CLOSE_TICKS, () => sender.closeSubInterfaceMount(mount)));
     }
     if (event.minimap !== undefined) sender.sendVarbit(MINIMAP_STATE_VARBIT, event.minimap);
     if (event.cutscene !== undefined) {
@@ -235,6 +245,14 @@ module.exports = function createCrabCeremony(api) {
     player.getMovementQueue().setBlockMovement(false);
     player.setUntargetable(false);
     const sender = player.getPacketSender();
+    if (!logout) {
+      // The timeline's last fade is to black (tick 362): fade back in on the beach and close the
+      // overlay three ticks later, as its own fade-ins do.
+      const mount = sender.mountSubInterface(FADE_UID, FADE_INTERFACE, 1, {
+        postScripts: [{ scriptId: FADE_SCRIPT, args: FADE_IN_ARGS }],
+      });
+      TaskManager.submit(new CountdownTask(player, FADE_CLOSE_TICKS, () => sender.closeSubInterfaceMount(mount)));
+    }
     sender.sendVarbit(CUTSCENE_STATUS_VARBIT, 0).sendVarbit(MINIMAP_STATE_VARBIT, 0);
     sender.sendHideNpcOps(false);
     sender.sendHideObjOps(false);
@@ -244,5 +262,5 @@ module.exports = function createCrabCeremony(api) {
     ceremony.done?.(player, logout);
   }
 
-  return { active, play };
+  return { active, end, play };
 };

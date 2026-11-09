@@ -1174,6 +1174,8 @@ module.exports = function registerCrabQuestQuest(api) {
    * 3/6/6 ticks with the net animation each time; the last one empties it (capture 6159-6177).
    */
   function netFloatsam(player, npc) {
+    // The floatsam is the dream's own; nothing on the real beach changes the quest.
+    if (!Dream.active(player)) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_INSTRUMENT || stage >= STAGE_RECRUITING || hasItem(player, INSTRUMENT_ITEM_ID)) {
       playSteps(player, MAIN_CRAB_NPC_ID, variantSteps("drinking-from-bottle-interacting-with-the-floatsam"));
@@ -1658,6 +1660,9 @@ module.exports = function registerCrabQuestQuest(api) {
   }
 
   function handleLogout({ player }) {
+    // Before the rebuild tick the player is still in the dream, so the ceremony's area cannot
+    // end it: stop it here, or it would build and play for an offline player.
+    Ceremony.end(player, true);
     netting.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);

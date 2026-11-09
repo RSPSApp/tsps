@@ -4,6 +4,9 @@
     "2353": {"label": "Sailing sea creature", "skip": false, "why": "Sea encounters for Sailing (sharks, rays, krakens, seabirds) in open water; reachable only by boat."}
   },
   "ids": {
+    "16817": {"label": "Spawned by a plugin", "skip": true, "why": "Crab Quest's flotsam exists only in the quest's dream instance (Dream.CrabQuest.js); the live capture (RSProx 20261103T014803-ee79c12) shows none on the real Dognose Island beach. The Wiki maps the instance's spots."},
+    "16818": {"label": "Spawned by a plugin", "skip": true, "why": "Crab Quest's flotsam exists only in the quest's dream instance (Dream.CrabQuest.js); the live capture (RSProx 20261103T014803-ee79c12) shows none on the real Dognose Island beach. The Wiki maps the instance's spots."},
+    "16819": {"label": "Spawned by a plugin", "skip": true, "why": "Crab Quest's flotsam exists only in the quest's dream instance (Dream.CrabQuest.js); the live capture (RSProx 20261103T014803-ee79c12) shows none on the real Dognose Island beach. The Wiki maps the instance's spots."},
     "2592": {"label": "Spawned by a plugin", "skip": true, "why": "Mogres come only from a fishing explosive thrown at an Ominous Fishing Spot (Mogre.plugin.js, docs/mogre.md); there are no standing ones."},
     "6609": {"label": "Wilderness boss", "skip": true, "why": "Callisto spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6610": {"label": "Wilderness boss", "skip": true, "why": "Venenatis spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},

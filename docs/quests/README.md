@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 26 · ⚠️ passed with issues: 17 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 37 · untested: 104
+193 quests · ✅ passed: 26 · ⚠️ passed with issues: 17 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 104
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -16,7 +16,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [A Porcine of Interest](a-porcine-of-interest/README.md) | ⚠️ passed with issues | 2026-11-09 | agent | claude-sonnet-5-5 | 1 |
 | [A Ruff Situation](a-ruff-situation/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 |  |
 | [A Soul's Bane](a-souls-bane/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
-| [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Taste of Hope](taste-of-hope/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Alfred Grimhand's Barcrawl | untested |  |  |  |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |

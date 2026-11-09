@@ -8,7 +8,7 @@ const SIT_SLOT = 54;
 const SIT_LOOP = 10061; // emote_sit_loop, interface 216 child 54 (cache enum 1001 -> 5248)
 
 function setup() {
-  const hooks = { custom: new Map(), objects: [], login: [], npcs: [], ground: [] };
+  const hooks = { custom: new Map(), objects: [], login: [], logout: [], npcs: [], ground: [] };
   const attrs = new Map();
   const inventory = new Map();
   const messages = [];
@@ -20,6 +20,7 @@ function setup() {
   const xp = [];
   const varbits = [];
   const cameras = [];
+  const mounts = [];
   const varValues = new Map();
   const groundItems = [];
   let area = null;
@@ -47,7 +48,7 @@ function setup() {
     onItemOnItem() {},
     onGroundItemPickup(fn) { hooks.ground.push(fn); },
     onPlayerLogin(fn) { hooks.login.push(fn); },
-    onPlayerLogout() {},
+    onPlayerLogout(fn) { hooks.logout.push(fn); },
     onNpcDialogueVariant() {},
     spawnNpc(definition) {
       const npc = {
@@ -66,6 +67,10 @@ function setup() {
         setPositionToFace() {},
         performAnimation() {},
         moveTo() {},
+        forceChat() {},
+        performGraphic() {},
+        setMovementSteps() {},
+        getMovementQueue: () => ({ reset() { return this; }, addFirstStep() { return true; } }),
       };
       spawned.push(npc);
       return npc;
@@ -79,6 +84,8 @@ function setup() {
     sendCameraLookAt(x, y, height) { cameras.push(['look', x, y, height]); return sender; },
     sendCameraSkybox(model) { cameras.push(['skybox', model]); return sender; },
     sendCameraReset() { cameras.push(['reset']); return sender; },
+    mountSubInterface(uid, id, type, options) { const mount = { uid, id, args: options?.postScripts?.[0]?.args, closed: false }; mounts.push(mount); return mount; },
+    closeSubInterfaceMount(mount) { if (mount) mount.closed = true; return sender; },
     sendConfig(id, value) { varValues.set(id, value); return sender; },
     getVarbit(id) { return varValues.get(id) ?? 0; },
     getVarp(id) { return varValues.get(id) ?? 0; },
@@ -110,13 +117,13 @@ function setup() {
     getArea: () => area,
     setArea: (value) => { area = value; },
     getPrivateArea: () => area instanceof core.PrivateArea ? area : null,
-    getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),
+    getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; }, addFirstStep() { return true; } }),
     setUntargetable() {},
     performGraphic(graphic) { player.graphics = [...(player.graphics ?? []), graphic.getId?.() ?? graphic.id]; },
     performAnimation(animation) { player.animations = [...(player.animations ?? []), animation.getId?.() ?? animation.id]; },
     setPositionToFace() {},
     forceChat() {},
-    isRegistered: () => true,
+    isRegistered: () => player.online !== false,
     getEquipment: () => ({ getItems: () => [] }),
     getUsername: () => 'crab-coax-test',
     getIndex: () => 1,
@@ -145,7 +152,7 @@ function setup() {
     player.moveTo({ x, y, z: 0 });
     emit('player:emote', { slot, sequence: SIT_LOOP });
   };
-  return { cameras, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
+  return { cameras, mounts, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
 }
 
 module.exports = { setup, SIT_SLOT, SIT_LOOP };

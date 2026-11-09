@@ -207,3 +207,48 @@ test('a shell hand-in is an item box with that shell', () => {
   h.emit('npc-dialogue:action', event);
   assert.deepEqual(event.box, { items: [34575] });
 });
+
+/** At stage 60 in the dream, the ceremony variant's hand-over step starts the cutscene. */
+function ceremony(h) {
+  const offset = dream(h, 60);
+  h.emit('npc-dialogue:action', { npcId: 16474, stepId: 'dTDVEF', kind: 'message' });
+  return offset;
+}
+
+test('review #4037: the screen fades back in on the beach once the ceremony ends', () => {
+  const h = setup();
+  ceremony(h);
+  h.tick(372);
+  assert.equal(h.area, null, 'back on the real beach');
+  const at = h.player.getLocation();
+  assert.deepEqual([at.getX(), at.getY()], [3056, 2639]);
+  const last = h.mounts.at(-1);
+  assert.deepEqual(last.args, [0, 0, 0, 255, 50], 'the last fade is a fade-in');
+  h.tick(3);
+  assert.equal(last.closed, true, 'and its overlay closes three ticks later');
+});
+
+test('review #4037: logging out before the ceremony rebuild stops it for good', () => {
+  const h = setup();
+  const { quest } = { quest: null, ...ceremony(h) };
+  h.player.online = false;
+  for (const fn of h.hooks.logout) fn({ player: h.player });
+  const before = h.spawned.length;
+  h.tick(400);
+  assert.equal(h.spawned.length, before, 'no ceremony actors spawn for the offline player');
+  assert.notEqual(h.area?.getName?.(), 'Crab Quest ceremony');
+  assert.ok(!h.messages.some((text) => text.includes('completed a quest')), 'the closing steps never play');
+});
+
+test('review #4037: a flotsam outside the dream changes nothing', () => {
+  const h = setup();
+  const quest = h.loadQuest();
+  quest.setStage(h.player, 30);
+  h.inventory.set(305, 1);
+  const definition = { getActions: () => ['Net'] };
+  h.hooks.npcs[0]({ player: h.player, npcId: 16817, clickType: 1, definition });
+  h.tick(20);
+  assert.equal(quest.getStage(h.player), 30);
+  assert.deepEqual(h.messages, []);
+  assert.equal(h.inventory.get(34586) ?? 0, 0);
+});

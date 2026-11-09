@@ -114,3 +114,43 @@ Tested on the Zamorak godsword special (`zamorak-godsword-special/`):
   and the same model.
 - Converting every frame back from the bones gives exactly the original numbers.
 - Edits, added frames and removed frames export as expected.
+
+## Adding animations and graphics to the game
+
+`server/data/definitions/custom-animations.json` lists the custom animations and graphics the game
+loads, each pointing at a folder here, as the add-ons export them:
+
+```json
+{
+  "animations": [
+    { "id": 50000, "name": "zgs_special_keep_weapon", "path": "zamorak-godsword-special/player-anim" },
+    { "id": 50001, "name": "zgs_special_trail_spotanim", "path": "zamorak-godsword-special/graphic/anim" }
+  ],
+  "graphics": [
+    { "id": 50000, "name": "zgs_special_trail", "path": "zamorak-godsword-special/graphic",
+      "model": 1900000, "animation": "zgs_special_trail_spotanim" }
+  ]
+}
+```
+
+- `id`: the animation or graphic id the game uses. Ids must be free in the cache (start at 50000)
+  and at most 65534. Animations and graphics are numbered separately.
+- `name`: lower_case, not a name the cache already uses. Server plugins can look ids up by name:
+  `CacheDefinitions.getSeqId("zgs_special_keep_weapon")`, `CacheDefinitions.getCustomSpotanimId("zgs_special_trail")`.
+- `path`: the folder under `server/data/models`. An animation folder holds `seq.dat` and
+  `frames/`; a graphic folder holds `spotanim.dat` and `model.dat`.
+- A graphic's `model` is the id its `model.dat` gets: a custom model id, 1,000,000 or more, not
+  used by a custom item (they use 1,5xx,xxx; graphics use 1,900,000 and up). Its `animation` is a
+  custom animation's name or id, or any cache animation's id or name. List the graphic's own
+  animation (its `anim/` folder) under `animations`.
+
+At startup the server checks every folder, gives each animation's frames a frame group of their
+own (30000, 30001, ... in list order), points each graphic at its model and animation, and sends
+them all to players when they log in. A broken folder stops the server with a message saying what
+is wrong.
+
+Animations use the cache's skeletons (frame maps). The add-ons never change them, and the server
+refuses a `framemap-<id>.dat` that differs from the cache's.
+
+Use them like any other id: `new Animation(50000)`, `new Graphic(50000)`, or in game
+`::anim 50000` and `::gfx 50000`. After changing the list or a folder, restart the server.

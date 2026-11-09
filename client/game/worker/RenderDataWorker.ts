@@ -366,6 +366,11 @@ const worker = {
                 state.worldMapTiles?.invalidate();
                 state.npcPoses?.invalidate();
             }
+            if (state && payload.datasets.some(dataset => dataset.key === "customAnimations")) {
+                state.seqTypeLoader.clearCache();
+                state.seqFrameLoader.clearCache();
+                state.npcPoses?.invalidate();
+            }
         });
     },
     initCache(cache: LoadedCache, npcInstances: NpcInstance[], archives: readonly ArchivedDefinitionBundle[] = []) {

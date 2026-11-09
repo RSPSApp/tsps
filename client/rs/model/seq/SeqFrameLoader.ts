@@ -1,3 +1,4 @@
+import { CustomAnimationRegistry } from "../../../custom/animations/CustomAnimationRegistry";
 import { Archive } from "../../cache/Archive";
 import { CacheIndex } from "../../cache/CacheIndex";
 import { CacheInfo } from "../../cache/CacheInfo";
@@ -69,6 +70,21 @@ export class Dat2SeqFrameLoader implements SeqFrameLoader {
         const frameId = id & 0xffff;
 
         let frameMap = this.frameMaps.get(frameMapId);
+        const custom = frameMap ? undefined : CustomAnimationRegistry.frameGroup(frameMapId);
+        if (custom) {
+            // A custom animation's frames: its own group, on the cache's frame maps.
+            const frames: SeqFrame[] = [];
+            try {
+                for (const [file, data] of custom) {
+                    frames[file] = Dat2SeqFrame.load(this.cacheInfo, this.baseLoader, data);
+                }
+            } catch (e) {
+                if (!isGroupMissingError(e)) throw e;
+                return undefined;
+            }
+            frameMap = new SeqFrameMap(frames);
+            this.frameMaps.set(frameMapId, frameMap);
+        }
         if (!frameMap) {
             let archive: Archive;
             try {

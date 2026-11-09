@@ -302,10 +302,16 @@ export function handleInboundUi(msg: any): boolean {
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             const mv = g?.__osrsClient;
             if (msg.payload?.datasets?.some((dataset: any) =>
-                dataset.key === "customItems" || dataset.key === "customModels" ||
+                dataset.key === "customItems" || dataset.key === "customModels" || dataset.key === "customAnimations" ||
                 (dataset.key === "definitionArchives" || dataset.key === "customDefinitions"))) {
                 mv?.objTypeLoader?.clearCache();
                 mv?.objModelLoader?.clearCache();
+                if (datasets?.some((dataset: any) => dataset.key === "customAnimations")) {
+                    mv?.seqTypeLoader?.clearCache();
+                    mv?.seqFrameLoader?.clearCache();
+                    mv?.spotAnimTypeLoader?.clearCache();
+                    mv?.renderer?.invalidateDefinitionCaches();
+                }
                 if (datasets?.some((dataset: any) => (dataset.key === "definitionArchives" || dataset.key === "customDefinitions"))) {
                     mv?.npcTypeLoader?.clearCache();
                     mv?.locTypeLoader?.clearCache();

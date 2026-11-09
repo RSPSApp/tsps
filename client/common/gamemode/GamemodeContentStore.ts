@@ -273,6 +273,18 @@ export function loadFromPayload(payload: {
                     console.log("[GamemodeContentStore] failed to register custom items", err);
                 }
                 break;
+            case "customAnimations": {
+                const { CustomAnimationRegistry } = require("../../custom/animations/CustomAnimationRegistry");
+                if (dataset.rows.length === 0) CustomAnimationRegistry.clear();
+                for (const row of dataset.rows as any[]) {
+                    try {
+                        CustomAnimationRegistry.register(row);
+                    } catch (err) {
+                        console.log("[GamemodeContentStore] bad custom animation", row?.kind, row?.id, err);
+                    }
+                }
+                break;
+            }
             case "customModels": {
                 const { CustomModelRegistry } = require("../../custom/items/CustomModelRegistry");
                 if (dataset.rows.length === 0) CustomModelRegistry.clear();

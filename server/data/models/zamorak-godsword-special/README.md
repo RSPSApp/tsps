@@ -26,3 +26,8 @@ In Blender (with the three add-ons installed, see `../README.md`):
 The body kits keep their default colours (the game recolours them with the player's chosen
 colours). Blender doesn't apply the graphic's lighting (ambient 30), so the trail looks redder
 than the game's orange.
+
+In game, these are custom animation 50000 (`zgs_special_keep_weapon`, the player's swing),
+custom animation 50001 (`zgs_special_trail_spotanim`) and custom graphic 50000
+(`zgs_special_trail`, the trail, model 1900000), listed in
+`server/data/definitions/custom-animations.json`. Try them with `::anim 50000` and `::gfx 50000`.

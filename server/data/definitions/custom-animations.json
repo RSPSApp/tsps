@@ -1,0 +1,15 @@
+{
+  "animations": [
+    { "id": 50000, "name": "zgs_special_keep_weapon", "path": "zamorak-godsword-special/player-anim" },
+    { "id": 50001, "name": "zgs_special_trail_spotanim", "path": "zamorak-godsword-special/graphic/anim" }
+  ],
+  "graphics": [
+    {
+      "id": 50000,
+      "name": "zgs_special_trail",
+      "path": "zamorak-godsword-special/graphic",
+      "model": 1900000,
+      "animation": "zgs_special_trail_spotanim"
+    }
+  ]
+}

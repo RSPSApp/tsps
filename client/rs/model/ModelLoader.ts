@@ -1,5 +1,6 @@
 import { Archive } from "../cache/Archive";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
+import { CustomAnimationRegistry } from "../../custom/animations/CustomAnimationRegistry";
 import { CacheIndex } from "../cache/CacheIndex";
 import { isGroupMissingError } from "../cache/js5/GroupMissingError";
 import { ByteBuffer } from "../io/ByteBuffer";
@@ -29,7 +30,7 @@ export class IndexModelLoader implements ModelLoader {
 
     getModel(id: number): ModelData | undefined {
         try {
-            const custom = CustomModelRegistry.get(id);
+            const custom = CustomModelRegistry.get(id) ?? CustomAnimationRegistry.model(id);
             if (custom) return ModelData.decode(custom);
             const file = this.modelIndex.getFile(id, 0);
             return file && ModelData.decode(file.data);

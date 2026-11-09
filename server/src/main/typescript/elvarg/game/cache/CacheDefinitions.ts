@@ -23,7 +23,7 @@ import { DbRowType } from "./codec/rs/config/dbrow/DbRowType";
 import { Gamevals, GamevalKind } from "./Gamevals";
 import { ByteBuffer } from "./codec/rs/io/ByteBuffer";
 import { Type } from "./codec/rs/config/Type";
-import { ArchivedTypeLoader } from "./codec/rs/config/ArchivedTypeLoader";
+import { ArchivedTypeLoader, decodeArchivedType } from "./codec/rs/config/ArchivedTypeLoader";
 import { ArchiveTypeLoader } from "./codec/rs/config/TypeLoader";
 import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
@@ -38,6 +38,13 @@ export interface ServerCustomItem {
     models?: Record<string, string>;
     /** A special attack bar: `from`, another item whose special it uses; `energy`, its cost in percent. */
     specialAttack?: { from?: number; energy?: number };
+}
+
+/** A custom animation or graphic definition: base64 bytes in this cache's encoding. */
+export interface CustomDefinitionBytes {
+    id: number;
+    name: string;
+    data: string;
 }
 
 export class CacheDefinitions {
@@ -72,6 +79,9 @@ export class CacheDefinitions {
     private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
+    /** Animations and graphics added on top of the cache (`custom-animations.json`), by id. */
+    private static customSequences = new Map<number, { name: string; value: SeqType }>();
+    private static customSpotanims = new Map<number, { name: string; value: SpotAnimType }>();
     private static dbArchive?: Archive;
     private static dbRowIdsByTable?: Map<number, number[]>;
     private static readonly dbRows = new Map<number, DbRowType>();
@@ -305,12 +315,22 @@ export class CacheDefinitions {
 
     /** An animation's id by its gameval name (`human_pickupfloor`), or null. */
     static getSeqId(name: string): number | null {
-        return this.idByName(GamevalKind.SEQ).get(name) ?? null;
+        return this.idByName(GamevalKind.SEQ).get(name) ?? this.customIdByName(this.customSequences, name);
     }
 
     /** An animation's gameval name (`human_pickupfloor`), or null when the cache has none for it. */
     static getSeqName(id: number): string | null {
-        return this.getGamevals().namesOf(GamevalKind.SEQ).get(id) ?? null;
+        return this.customSequences.get(id)?.name ?? this.getGamevals().namesOf(GamevalKind.SEQ).get(id) ?? null;
+    }
+
+    /** A custom graphic's id by its name in `custom-animations.json`, or null. */
+    static getCustomSpotanimId(name: string): number | null {
+        return this.customIdByName(this.customSpotanims, name);
+    }
+
+    private static customIdByName(map: ReadonlyMap<number, { name: string }>, name: string): number | null {
+        for (const [id, row] of map) if (row.name === name) return id;
+        return null;
     }
 
     /** Every named animation: id -> gameval name. */
@@ -495,7 +515,7 @@ export class CacheDefinitions {
     }
 
     static getSeq(id: number): SeqType {
-        return this.getState().sequences.load(id);
+        return this.customSequences.get(id)?.value ?? this.getState().sequences.load(id);
     }
 
     static getSeqCount(): number {
@@ -525,9 +545,9 @@ export class CacheDefinitions {
             case "varbit":
                 return state.varbits.archive.getFile(id) !== undefined;
             case "seq":
-                return state.archives.ids("seq").includes(id) || state.archiveContext.currentDefinition("seq", id).data !== undefined;
+                return this.customSequences.has(id) || this.isCacheSeq(id);
             case "spotanim":
-                return state.spotAnims.archive.getFile(id) !== undefined;
+                return this.customSpotanims.has(id) || this.isCacheSpotanim(id);
             case "dbro":
                 return this.getDbRow(id) !== undefined;
             default:
@@ -538,7 +558,56 @@ export class CacheDefinitions {
     }
 
     static getSpotanim(id: number): SpotAnimType {
-        return this.getState().spotAnims.load(id);
+        return this.customSpotanims.get(id)?.value ?? this.getState().spotAnims.load(id);
+    }
+
+    private static isCacheSeq(id: number): boolean {
+        const state = this.getState();
+        return state.archives.ids("seq").includes(id) || state.archiveContext.currentDefinition("seq", id).data !== undefined;
+    }
+
+    private static isCacheSpotanim(id: number): boolean {
+        return this.getState().spotAnims.archive.getFile(id) !== undefined;
+    }
+
+    /**
+     * Registers custom animations and graphics, replacing any previous set. Each is decoded here,
+     * so a broken definition fails at startup; ids must be free in the cache and fit a packet (u16).
+     */
+    static registerCustomAnimations(sequences: readonly CustomDefinitionBytes[], spotanims: readonly CustomDefinitionBytes[]): void {
+        const info = this.getState().info;
+        const decode = <T extends Type>(
+            kind: string,
+            rows: readonly CustomDefinitionBytes[],
+            constructor: new (id: number, cacheInfo: CacheInfo) => T,
+            inCache: (id: number) => boolean,
+            names: GamevalKind,
+        ): Map<number, { name: string; value: T }> => {
+            const out = new Map<number, { name: string; value: T }>();
+            for (const row of rows) {
+                if (!Number.isInteger(row.id) || row.id < 0 || row.id > 0xfffe) throw new Error(`Custom ${kind} id ${row.id} must be 0..65534`);
+                if (out.has(row.id)) throw new Error(`Custom ${kind} ${row.id} is listed twice`);
+                if (inCache(row.id)) throw new Error(`Custom ${kind} ${row.id} is already a cache ${kind}`);
+                if (typeof row.name !== "string" || !row.name) throw new Error(`Custom ${kind} ${row.id} needs a name`);
+                if (this.idByName(names).has(row.name)) throw new Error(`Custom ${kind} name ${row.name} is already a cache ${kind}'s name`);
+                out.set(row.id, { name: row.name, value: decodeArchivedType(constructor, row.id, { cacheInfo: info, dataBase64: row.data }) });
+            }
+            return out;
+        };
+        const sequenceMap = decode("animation", sequences, SeqType, (id) => this.isCacheSeq(id), GamevalKind.SEQ);
+        const spotanimMap = decode("graphic", spotanims, SpotAnimType, (id) => this.isCacheSpotanim(id), GamevalKind.SPOTANIM);
+        this.customSequences = sequenceMap;
+        this.customSpotanims = spotanimMap;
+    }
+
+    /** A frame map (an animation's skeleton: index 1, file 0 of its group) as bytes, or undefined. */
+    static getFrameMapData(id: number): Uint8Array | undefined {
+        try {
+            const file = CacheIndexDat2.fromStore(IndexType.DAT2.skeletons, CachePipeline.getStore()).getFile(id, 0);
+            return file ? Uint8Array.from(file.data, (byte) => byte & 0xff) : undefined;
+        } catch {
+            return undefined;
+        }
     }
 
     static resolveNpc(id: number, vars: Pick<VarManager, "getVarp" | "getVarbit">): NpcType | undefined {

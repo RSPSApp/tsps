@@ -447,6 +447,41 @@ test("maledictus loot: the top damager's artefact and dragon rolls, blighted sup
   assert.ok(obtains.some((event) => event.player === helper && event.itemId === 24598), "the others' supplies are credited");
 });
 
+test("maledictus blood: heals half of what lands, so Protect from Magic read later heals nothing (#4067)", () => {
+  const { HitDamage, HitMask } = core;
+  for (const [prayed, healed] of [[false, 10], [true, 0]]) {
+    const tasks = [];
+    let hp = 500;
+    const boss = { getHitpoints: () => hp, heal(amount) { hp += amount; } };
+    const target = caver("blood");
+    target.getPacketSender = () => ({ sendGlobalGraphic() {} });
+    const queued = [];
+    class FakeHit {
+      constructor() { this.parts = [new HitDamage(21, HitMask.RED)]; }
+      getHits() { return this.parts; }
+      getTotalDamage() { return this.parts.reduce((sum, part) => sum + part.getDamage(), 0); }
+    }
+    const fakeCore = {
+      ...core,
+      World: { ...core.World, getProcessCycle: () => 0, getPlayers: () => [target] },
+      TaskManager: { submit: (task) => tasks.push(task) },
+      PendingHit: FakeHit,
+      CombatFactory: { addPendingHit: (hit) => queued.push(hit) },
+      Sounds: { playAreaSound() {} },
+    };
+    const m = Maledictus.createMaledictus({}, fakeCore, { inCaves: Data.inCaves, surge: { grant() {} } });
+    m.tileSpell(boss, [target], "blood");
+    assert.equal(tasks.length, 1);
+    tasks[0].execute();
+    assert.equal(hp, 500, "nothing healed when the hit is queued");
+    // The victim's turn: the prayer is read, then the hit lands.
+    const [part] = queued[0].getHits();
+    if (prayed) part.setDamage(0);
+    part.notifyApplied(part.getDamage());
+    assert.equal(hp, 500 + healed, prayed ? "blocked: no heal" : "half of 21, rounded down");
+  }
+});
+
 test("maledictus spawn tiles are walkable, in the caves", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   RegionManager.init();

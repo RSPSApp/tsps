@@ -107,9 +107,11 @@ function giveReward(player, reward) {
   }
   inventory.adds(reward.id, reward.amount);
   inventory.refreshItems();
-  player.sendMessage(reward.amount > 1
-    ? `You found some loot: ${reward.amount} x ${itemName(reward.id)}`
-    : `You found some loot: ${itemName(reward.id)}`);
+  // rsprox (227/00552, 227/01858, 234/03275): spam, "You found some loot: 60 x Spirit flakes" / "...: Casket"; soaked
+  // pages a game message, red: "You found some loot: <col=ef1020>9 x Soaked page</col>".
+  const text = reward.amount > 1 ? `${reward.amount.toLocaleString("en-US")} x ${itemName(reward.id)}` : itemName(reward.id);
+  if (reward.id === Shared.core().ItemIdentifiers.SOAKED_PAGE) player.sendMessage(`You found some loot: <col=ef1020>${text}</col>`);
+  else player.getPacketSender().sendTypedMessage(Shared.core().ChatType.SPAM, `You found some loot: ${text}`);
   Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: reward.id, amount: reward.amount });
   return true;
 }
@@ -229,4 +231,4 @@ function attachRewards(api) {
   api.onItemAction("Casket", { Open: openCasket });
 }
 
-module.exports = { attachRewards, roll, rollCasket };
+module.exports = { attachRewards, roll, rollCasket, giveReward };

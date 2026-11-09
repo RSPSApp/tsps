@@ -878,6 +878,7 @@ test('TP Mezan prays against a style used four times, falls without dying and an
   tpTalk(h, p, N.KNIGHT_OF_VARLAMORE_21); continueToMenu(h, p); h.choose(p, "I'm ready. Let's do this.");
   h.continueUntil(p, () => p.text === 'Kuani!'); p.manager.advance(); h.tick(2);
   const mezan = h.npcs.find(npc => npc.id === 12916 && !npc.removed); assert.ok(mezan);
+  assertCopy(p, [222, 381]); assert.equal(p.getArea().getMusicTrack(p), 775, "vmq1_cs3_01 plays in Mezan's spar (tick 1984)");
   const prayers = []; Object.assign(mezan, { getPrayerActive: () => prayers, setPrayerActive: (id, on) => { prayers[id] = on; }, getHeadIcon: () => mezan.icon ?? -1, setHeadIcon: icon => { mezan.icon = icon; } });
   const hit = (type) => { const parts = [{ damage: 5, setDamage(v) { this.damage = v; } }]; return { getCombatType: () => type, getHits: () => parts, updateTotalDamage: noop, parts }; };
   for (let i = 0; i < 4; i++) h.hooks.onPlayerDealtDamage.forEach(fn => fn({ player: p, target: mezan, hit: hit(core.CombatType.MELEE) }));
@@ -1700,7 +1701,7 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
     unlocked.length = 0;
     flush(); assert.deepEqual(songs.splice(0), [810]); assert.deepEqual(unlocked, [810], 'and unlocks it (tick 2290)');
     Scenes.end(p, false); p.moveTo(new core.Location(1683, 3156, 0));
-    flush(); assert.deepEqual(songs.splice(0), palace, 'the palace music comes back (tick 2348)');
+    flush(); assert.deepEqual(songs.splice(0), palace, 'the palace music comes back (tick 2352)');
     assert.throws(() => Scenes.open(p, 'nowhere', [[1665, 1700, 3145, 3170, 0]], {}, { instance: { sourceChunk: [204, 388] } }),
       /without an exit/, 'an instance scene needs an exit to save a logout at');
   } finally {

@@ -32,7 +32,7 @@ were checked: the capture's (below The Heart of Darkness's requirements) nativel
 - **Scene music**: each instance plays its own track as it loads and the area's music returns as it
   ends: Mezan's spar 775 (tick 1984), the judgement "A Matter of Intrigue" 810 with 774 as a
   secondary (2290, where it unlocks; not at the crypt gate), the battle and aftermath 774 with 810
-  (2539, 2764); back in the palace, Civitas illa Fortis 787 (2348).
+  (2539, 2764); back in the palace, Civitas illa Fortis 787 (2352, after the rebuild at 2350).
 - **The ending** depends on The Heart of Darkness's requirements. Below them (this account had
   44 Slayer): "I'm not sure... yet. No doubt mother will quickly learn...", "In that case, I'll
   make sure to keep checking in.", "Thank you, iknami. Timoiva for now, and may the sun light

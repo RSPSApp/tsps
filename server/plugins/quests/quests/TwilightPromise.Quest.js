@@ -143,7 +143,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
    * Each scene's own track as its instance loads (rev 242 capture): Mezan's spar vmq1_cs3_01 775
    * (tick 1984), the judgement "A Matter of Intrigue" 810 (2290, where it unlocks; the crypt gate
    * plays nothing of its own), the battle and aftermath vmq1_cs2_01 774 (2539, 2764). The area's own
-   * music comes back as each ends (787 at tick 2348). Ours: the captured secondary tracks (774 under
+   * music comes back as each ends (787 at tick 2352). Ours: the captured secondary tracks (774 under
    * 810, 810 under 774) aren't sent, as the server has no midi_song_withsecondary.
    */
   const SCENE_MUSIC = { mezan: 775, verdict: 810, battle: 774, aftermath: 774 };

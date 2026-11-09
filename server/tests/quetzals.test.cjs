@@ -810,3 +810,15 @@ test("every site's Renu stands on its landing site, facing the way the site does
     assert.equal(spawn.direction ?? 1, facing[loc.getFace()], `${varbit} faces as its landing site`);
   }
 });
+
+test("starting Twilight's Promise ends a first trip still waiting on Regulus's welcome (3 -> 4), and nothing else", () => {
+  const handlers = hooks.events.get("quetzal:first-trip-welcomed") ?? [];
+  assert.equal(handlers.length, 1, "Primio listens for the quest start");
+  for (const [before, after] of [[0, 0], [2, 2], [3, 4], [4, 4]]) {
+    const player = createPlayer({ varbits: { vmq2_first_travel: before, vmq2: 2 } });
+    handlers.forEach((handler) => handler({ player }));
+    const sender = player.getPacketSender();
+    assert.equal(sender.getVarbit(varbitId("vmq2_first_travel")), after, `first trip ${before}`);
+    assert.equal(sender.getVarbit(varbitId("vmq2")), 2, "the shared varp keeps the quest stage");
+  }
+});

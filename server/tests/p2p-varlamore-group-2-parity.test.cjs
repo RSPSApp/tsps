@@ -767,7 +767,7 @@ test('TP: Furia hands over the crest in its item box (14), showing the crest box
   p.manager.reset(); p.prompt = null;
   tpTalk(h, p, N.KNIGHT_OF_VARLAMORE_9);
   h.continueUntil(p, () => p.text === 'You show the crest to the knights.'); assert.equal(lastBox(p)[2], I.VARLAMORE_CREST);
-  h.continueUntil(p, () => p.text.startsWith('Well this doesn')); assert.equal(p.varbits.get(9829), 1);
+  h.continueUntil(p, () => p.text.startsWith('Well, this doesn')); assert.equal(p.varbits.get(9829), 1);
 });
 
 test('TP bazaar: the man in blue gives up the amulet a tick after the attempt (2); handing it in makes 3 and 16', () => {
@@ -996,9 +996,37 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   assert.equal(p.text, "Of course, my Prince. We'll go at once."); p.manager.advance();
   assert.equal(h.quest.getStage(p), 48); assert.equal(p.varbits.get(11123), 1);
   h.tick(6); assert.equal(p.text, 'Well... this has been a bit of a mess.');
-  h.continueUntil(p, () => p.text.startsWith("However, let's not worry")); assert.equal(h.quest.getStage(p), 50);
+  // Nothing answers The Heart of Darkness's requirements here: the capture's ending (below them).
+  h.continueUntil(p, () => p.text.startsWith('Thank you, iknami. Timoiva for now')); assert.equal(h.quest.getStage(p), 48);
+  p.manager.advance(); assert.equal(h.quest.getStage(p), 50);
   assert.ok(p.messages.includes("Congratulations, you've completed a quest: <col=081190>Twilight's Promise</col>"));
   assert.deepEqual(p.xp, [[core.Skill.THIEVING.getIndex(), 3000]]);
+});
+
+test('TP ending: below The Heart of Darkness requirements Itzla says "Timoiva for now"; meeting them, he offers it', () => {
+  const AFTER_GUARD = 'the-twilight-emissaries-talking-to-prince-itzla-arkan-after-the-guard-leaves';
+  for (const met of [false, true]) {
+    const { h, p } = tp(); h.quest.setStage(p, 48);
+    const asked = [];
+    (h.events['quest:the-heart-of-darkness:requirements'] ??= []).push(request => { asked.push(request.player); request.met = met; });
+    runtime.startTranscript(h.api, p, N.PRINCE_ITZLA_ARKAN_3, h.quest.name, AFTER_GUARD);
+    assert.equal(p.text, 'Well... this has been a bit of a mess.');
+    h.continueUntil(p, () => p.text === 'What do we do now?'); p.manager.advance();
+    assert.ok(asked.includes(p), 'the ending asks The Heart of Darkness for its requirements');
+    if (!met) {
+      assert.match(p.text, /^I'm not sure\.\.\. yet\. No doubt mother will quickly\s+learn/, p.text);
+      h.continueUntil(p, () => p.text.startsWith('Thank you, iknami. Timoiva for now')); assert.equal(h.quest.getStage(p), 48);
+      p.manager.advance(); assert.equal(h.quest.getStage(p), 50);
+      finish(h, p); assert.equal(p.prompt, null, 'no Heart of Darkness offer below its requirements');
+    } else {
+      assert.match(p.text, /^Word has been sent to\s+mother/, p.text);
+      h.continueUntil(p, () => p.text.startsWith("However, let's not worry")); assert.equal(h.quest.getStage(p), 48);
+      // The line runs onto a second page; the quest completes once the player is past all of it.
+      continueToMenu(h, p); assert.equal(h.quest.getStage(p), 50);
+      assert.equal(p.prompt.title, 'Start The Heart of Darkness quest?');
+    }
+    assert.equal(p.messages.filter(text => text.startsWith("Congratulations, you've completed a quest")).length, 1);
+  }
 });
 
 test('TP battle: the scripted spar keeps real NPC.process() from regenerating the cultist', () => {

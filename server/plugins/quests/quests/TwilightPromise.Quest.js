@@ -287,10 +287,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
     CRYPT: "Yes you are. He is speaking with Servius, down in the crypt. Not a place you'd normally find the Teokan of Ralos, but the Prince desired the privacy only Ranul can offer.",
     MET_PRINCE: "You're quite right, of course. But anyway, shall we get down to business?",
     TWINS: "Then it sounds like we're all set. Timoiva, and may the sun light your way!",
-    BAZAAR_ASKED: "Well this doesn't sound totally orthodox, but fair enough. I'll be back soon.",
+    BAZAAR_ASKED: "Well, this doesn't sound totally orthodox, but fair enough. I'll be back soon.",
     COTHON_ASKED: "Good to know. I'll get to it and let you know what I find.",
     COTHON_DONE: "Perfect! That's my work here done then. I'll return to the palace shortly. Timoiva!",
-    PUB_ASKED: "Well there's nothing like a little dunk to sober you up a bit. Azali, come with me.",
+    PUB_ASKED: "Well, there's nothing like a little dunk to sober you up a bit. Azali, come with me.",
     AZALI_COMES: "Ohh... We're going somewhere new? How exciting!",
     PUB_DONE: "This day is the worst. Fine, I'll head over there soon.",
     MEZAN_ASKED: "Oh, and bring two attack styles in with you. I want some variety, and it will help me test my faith in Ralos.",
@@ -303,7 +303,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
     LIBRARY: "Right, I'll go and see if she can help me.",
     BATTLE: "I guess I'd better...",
     CALL_OUT: "[player name]! I need you outside, now! We have a little bit of an issue!",
-    COMPLETE: "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.",
+    // The two endings' last lines; the quest completes as the player continues past either (the
+    // capture's tick 2794, the continue after "Timoiva for now"). The first is the Wiki's ending,
+    // for a player who meets The Heart of Darkness's requirements.
+    COMPLETE: new Set([
+      "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.",
+      "Thank you, iknami. Timoiva for now, and may the sun light your way.",
+    ]),
   };
 
   // Transcript steps the plugin plays itself.
@@ -327,7 +333,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     OPEN_MAP: "0GSFPb",
     AFTERMATH: "Nmr-Yg",
     GUARD_LEAVES: "rp2e-K",
-    COMPLETE: "NyygQH",
+    COMPLETE: new Set(["eBNzWh", "cTofpK"]), // the two endings' "Quest complete!" actions
     FEED_TAIL: "BN2pDG",
   };
 
@@ -381,6 +387,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
     if (current < STAGE_RECRUIT || current >= STAGE_HQ) return 0;
     if (recruit(player, PUB) >= 2) return 3;
     return following(player) ? 2 : 1;
+  }
+
+  /** The Heart of Darkness's other requirements; this quest, the last one, is finishing as it's asked. */
+  function meetsHeartOfDarknessRequirements(player) {
+    const request = { player, met: null };
+    api.emitCustomEvent("quest:the-heart-of-darkness:requirements", request);
+    return request.met === true;
   }
 
   function isQuestComplete(player, key) {
@@ -561,6 +574,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
         return !isQuestComplete(player, GARDEN_OF_DEATH_KEY);
       case "kmDUvy":
         return isQuestComplete(player, GARDEN_OF_DEATH_KEY);
+      // The ending: whether The Heart of Darkness could start once this quest is done.
+      case "Yuos3g":
+        return !meetsHeartOfDarknessRequirements(player);
+      case "Qrc8Tz":
+        return meetsHeartOfDarknessRequirements(player);
       default:
         return null;
     }
@@ -579,6 +597,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     player.setAttribute(RECRUITS_ATTRIBUTE, 0);
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
     quest.setStage(player, STAGE_STARTED);
+    // Starting the quest also ends the first trip's welcome (vmq2_first_travel 3 -> 4, capture tick 1117).
+    api.emitCustomEvent("quetzal:first-trip-welcomed", { player });
     player.sendMessage("You've started a new quest: <col=081190>Twilight's Promise</col>");
   }
 
@@ -633,7 +653,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
     at(LINES.LIBRARY, STAGE_TEOMAT, STAGE_TEOMAT, () => advance(player, STAGE_LIBRARY));
     at(LINES.BATTLE, STAGE_LIBRARY, STAGE_LIBRARY, () => advance(player, STAGE_BATTLE));
     if (text === LINES.CALL_OUT) event.after = () => stage(player) === STAGE_BATTLE && beginBattle(player);
-    at(LINES.COMPLETE, STAGE_GUARD_LEFT, STAGE_GUARD_LEFT, () => quest.complete(player));
+    if (LINES.COMPLETE.has(text)) {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        if (stage(player) === STAGE_GUARD_LEFT) quest.complete(player);
+      };
+    }
   }
 
   const MESSAGE_BOXES = {
@@ -704,11 +730,12 @@ module.exports = function registerTwilightPromiseQuest(api) {
         event.end = true;
         api.emitCustomEvent("quetzal:open", { player });
         return;
-      case STEP.COMPLETE:
-        event.handled = true;
-        return;
       default:
         break;
+    }
+    if (STEP.COMPLETE.has(stepId)) {
+      event.handled = true;
+      return;
     }
     if (STEP.FEED.has(stepId)) {
       if (!held(player, FEED_ITEM_ID)) player.getInventory().adds(FEED_ITEM_ID, 1);

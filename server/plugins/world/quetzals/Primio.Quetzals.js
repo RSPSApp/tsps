@@ -5,7 +5,8 @@
  * The first trip goes through Regulus's transcript: Travel opens its first-trip menu
  * (vmq2_first_travel 2, the shorter retry menu once it has been seen), its "Kectpl" action flies,
  * and landing records varlamore_visited, sets vmq2_first_travel 3 and resumes the transcript after
- * Kectpl with Regulus in Fortis. Its last welcome line sets vmq2_first_travel 4.
+ * Kectpl with Regulus in Fortis. Its last welcome line sets vmq2_first_travel 4, and so does starting
+ * Twilight's Promise after landing without hearing it (3 -> 4 as the quest starts, rev 242 capture tick 1117).
  */
 const Common = require("./Common.Quetzals");
 const Renu = require("./Renu.Quetzals");
@@ -94,11 +95,17 @@ function finishWelcome(event) {
   event.after = () => Common.setVarbits(event.player, { [FIRST_TRIP_STATE]: 4 });
 }
 
+/** Twilight's Promise has started: a first trip still waiting on its welcome (3) is done (4). */
+function finishWelcomeOnQuestStart({ player }) {
+  if (Common.varbit(player, FIRST_TRIP_STATE) === 3) Common.setVarbits(player, { [FIRST_TRIP_STATE]: 4 });
+}
+
 function attach(api) {
   api.onNpcInteraction("Primio", { Travel: travel });
   api.onNpcInteraction("Regulus Cento", { Travel: travel });
   api.onCustomEvent("npc-dialogue:action", acceptFirstTrip);
   api.onCustomEvent("npc-dialogue:line", finishWelcome);
+  api.onCustomEvent("quetzal:first-trip-welcomed", finishWelcomeOnQuestStart);
 }
 
-module.exports = { attach, travel, acceptFirstTrip, finishWelcome, firstTripArrivalTail };
+module.exports = { attach, travel, acceptFirstTrip, finishWelcome, finishWelcomeOnQuestStart, firstTripArrivalTail };

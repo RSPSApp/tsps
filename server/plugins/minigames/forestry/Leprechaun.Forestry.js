@@ -44,7 +44,7 @@ function smoke(location) {
 
 function start(site) {
   const lep = L();
-  const tiles = Common.freeTiles(site.location, 3, site.size);
+  const tiles = Common.freeTiles(site, site.location, 3, site.size);
   if (tiles.length < 1) return null;
   const event = { site, elapsed: 0, rainbows: [], made: 0, met: new Set(), over: false };
   event.npc = Common.spawnNpc(lep.npc, tiles[0]);
@@ -81,7 +81,7 @@ function rainbow(event) {
   const lep = L();
   const [near, far] = lep.rainbowRange;
   const here = event.npc.getLocation();
-  const at = Common.freeTiles(here, far).find((tile) => Common.distance(tile, here) >= near);
+  const at = Common.freeTiles(event.site, here, far).find((tile) => Common.distance(tile, here) >= near);
   if (!at) return;
   event.made++;
   const object = Common.placeLoc(lep.locs.rainbow, at, Common.randomInt(0, 3));

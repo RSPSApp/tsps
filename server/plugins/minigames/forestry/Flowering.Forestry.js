@@ -36,7 +36,7 @@ const pollen = new Map();
 
 function start(site) {
   const flowering = F();
-  const tiles = Common.freeTiles(site.location, flowering.range, site.size);
+  const tiles = Common.freeTiles(site, site.location, flowering.range, site.size);
   if (tiles.length < flowering.bushes.length) return null;
   const event = { site, bushes: [], bees: [], elapsed: 0, pair: null, fruited: 0, bark: new Map(), over: false };
   flowering.bushes.forEach((_, colour) => event.bushes.push(newBush(colour, tiles[colour])));
@@ -105,7 +105,7 @@ function replace(event, bush) {
 function regrow(event, colour, was) {
   if (event.over) return;
   const taken = (tile) => tile.equals(was) || event.bushes.some((b) => b.npc.getLocation().equals(tile));
-  const at = Common.freeTiles(event.site.location, F().range, event.site.size).find((tile) => !taken(tile)) ?? was;
+  const at = Common.freeTiles(event.site, event.site.location, F().range, event.site.size).find((tile) => !taken(tile)) ?? was;
   event.bushes.push(newBush(colour, at));
 }
 

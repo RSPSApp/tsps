@@ -93,7 +93,7 @@ function playerFixture(t, { at = [2939, 3421], registered = true, privateArea = 
     getAttribute: (key) => player.attributes[key],
     setAttribute: (key, value) => { player.attributes[key] = value; },
     sendMessage() {},
-    getSkillManager: () => ({ getMaxLevel: () => 99, addExperience() {} }),
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperience() {} }),
     getInventory: () => ({
       getItems: () => carriedLogs > 0 ? [new core.Item(1515, carriedLogs)] : [],
       getAmount: (id) => id === 1515 ? carriedLogs : 0,

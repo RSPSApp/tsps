@@ -57,8 +57,9 @@ function fill(text, values) {
   return text.replace(/\[(\w+)\]/g, (whole, key) => (values[key] !== undefined ? String(values[key]) : whole));
 }
 
+/** Wiki (Balloon transport system): each route's Firemaking level is boostable. */
 function firemaking(player) {
-  return player.getSkillManager().getMaxLevel(Common.core.Skill.FIREMAKING);
+  return player.getSkillManager().getCurrentLevel(Common.core.Skill.FIREMAKING);
 }
 
 /** Carried and worn weight in kg, one log of the fare aside. */

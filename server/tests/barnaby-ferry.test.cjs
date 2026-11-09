@@ -37,9 +37,10 @@ BarnabyFerry.register({
   onCustomEvent() {},
 });
 
-function createPlayer({ coins = 100, gloves = 0 } = {}) {
+function createPlayer({ coins = 100, gloves = 0, ring = 0 } = {}) {
   const equipment = new Array(14).fill(null).map(() => ({ getId: () => 0 }));
   if (gloves) equipment[Equipment.HANDS_SLOT] = { getId: () => gloves };
+  if (ring) equipment[Equipment.RING_SLOT] = { getId: () => ring };
   let balance = coins;
   const messages = [];
   return {
@@ -103,6 +104,29 @@ test("the Talk-to transcript checks the fare and sails on its boarding message",
   assert.equal(event.handled, true);
   assert.equal(player.balance, 70);
   assert.deepEqual(voyages, ["barnaby-ardougne"]);
+});
+
+// Wiki (Captain Barnaby): "Going through his dialogue with a Ring of Charos(a) equipped will make the trip there and
+// back free." The transcript's "If wearing the Ring of Charos(a):" guards "[Charm] Or I could pay you nothing at all...".
+test("with a Ring of charos(a) worn, the charm option sails free; its boarding steps charge without the ring", () => {
+  voyages.length = 0;
+  const CHAROS_A = 6465;
+  const condition = (player) => BarnabyFerry._test.answerFareCondition({
+    player, definition: brimhavenCaptain, text: "If wearing the Ring of Charos(a):",
+  });
+  assert.equal(condition(createPlayer({ ring: CHAROS_A })), true);
+  assert.equal(condition(createPlayer({ ring: 4202 })), false, "the uncharged ring does nothing");
+
+  const charmed = createPlayer({ ring: CHAROS_A, coins: 0 });
+  const event = { player: charmed, definition: brimhavenCaptain, stepId: "fep9oV", text: "You board the ship and sail to Ardougne." };
+  BarnabyFerry._test.boardFromDialogue(event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(voyages, ["barnaby-ardougne"], "sails with no coins");
+  assert.deepEqual(charmed.messages, [], "and nothing paid");
+
+  const plain = createPlayer();
+  BarnabyFerry._test.boardFromDialogue({ player: plain, definition: brimhavenCaptain, stepId: "fep9oV", text: "You board the ship and sail to Ardougne." });
+  assert.equal(plain.balance, 70, "without the ring the fare is taken");
 });
 
 test("refused requirements or an unavailable voyage never charge the fare", () => {

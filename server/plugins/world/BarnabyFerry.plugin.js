@@ -4,7 +4,8 @@
  * Each captain's destination options (revision 241 replaced Pay-fare with
  * "Ardougne", "Brimhaven" and "Rimmington") and his Talk-to dialogue sail
  * between the three docks for 30 coins, halved to 15 while any Karamja gloves
- * are worn. The Wiki's free ring of charos(a) route is not offered here.
+ * are worn. With a Ring of charos(a) worn, Talk-to's "[Charm] Or I could pay you nothing at all..." sails free
+ * (Wiki: "Going through his dialogue with a Ring of Charos(a) equipped will make the trip there and back free.").
  */
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
@@ -24,6 +25,10 @@ const PORTS = [
 // The transcript's "You board the ship and sail to <port>." message steps.
 const BOARD_MESSAGE = /^You board the ship and sail to (.+)\.$/;
 const NO_FARE_CONDITION = "If the player does not have 30 coins:";
+const CHAROS_CONDITION = "If wearing the Ring of Charos(a):";
+// The boarding messages under each dock's "[Charm]" option (npc-dialogues.json, Captain Barnaby): free.
+const CHARM_BOARD_STEPS = new Set(["uzKhEQ", "GcZwOU", "t19V4d", "cmk7DM", "5gJXnE", "fep9oV"]);
+const CHAROS_RINGS = new Set([ItemIdentifiers.RING_OF_CHAROS_A_, ItemIdentifiers.RING_OF_CHAROS_A__2].filter(Number.isInteger));
 
 const KARAMJA_GLOVES = new Set([
   ItemIdentifiers.KARAMJA_GLOVES,
@@ -43,6 +48,10 @@ function fareFor(player) {
   return KARAMJA_GLOVES.has(Number(gloves ?? -1)) ? GLOVES_FARE : BASE_FARE;
 }
 
+function wearsCharos(player) {
+  return CHAROS_RINGS.has(Number(player.getEquipment?.()?.get?.(Equipment.RING_SLOT)?.getId?.() ?? -1));
+}
+
 function sail(player, port, fare) {
   const inventory = player.getInventory();
   if (inventory.getAmount(ItemIdentifiers.COINS) < fare) {
@@ -55,6 +64,7 @@ function sail(player, port, fare) {
   const voyage = { player, route: port.route, handled: false };
   api.emitCustomEvent("ferries:travel", voyage);
   if (!voyage.handled) return;
+  if (fare <= 0) return;
   inventory.deleteNumber(ItemIdentifiers.COINS, fare);
   inventory.refreshItems();
   player.sendMessage(`You pay ${fare} coins and board the ship.`);
@@ -82,6 +92,7 @@ function selectDockVariant(event) {
 }
 
 function answerFareCondition(event) {
+  if (isBarnaby(event) && event.text === CHAROS_CONDITION) return wearsCharos(event.player);
   if (!isBarnaby(event) || event.text !== NO_FARE_CONDITION) return null;
   return event.player.getInventory().getAmount(ItemIdentifiers.COINS) < fareFor(event.player);
 }
@@ -90,7 +101,8 @@ function boardFromDialogue(event) {
   const port = isBarnaby(event) ? portNamed(BOARD_MESSAGE.exec(String(event.text ?? ""))?.[1]) : null;
   if (!port) return;
   event.handled = true;
-  sail(event.player, port, fareFor(event.player));
+  const charmed = CHARM_BOARD_STEPS.has(event.stepId) && wearsCharos(event.player);
+  sail(event.player, port, charmed ? 0 : fareFor(event.player));
 }
 
 module.exports = {

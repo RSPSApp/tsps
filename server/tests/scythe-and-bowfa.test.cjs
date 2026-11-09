@@ -10,6 +10,7 @@ const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const { RangedWeapon } = require('../dist/game/content/combat/ranged/RangedData');
 const { BOW_OF_FAERDHINEN_IDS } = require('../dist/game/content/combat/ranged/CrystalBow');
 const Scythe = require('../plugins/items/ScytheOfVitur.plugin');
+const { hitVictimOf } = require('../dist/game/content/combat/EquipmentEffects');
 
 const NAMES = new Map();
 let nextId = 90000;
@@ -36,6 +37,12 @@ const npcOfSize = (size) => ({ getHitpoints: () => 1000, isNpc: () => true, getA
 // One registration against a fake core; each swing resets what it records.
 let rerolled = [];
 let maxHit = 0;
+/**
+ * Per-victim max hits (vampyre tiers, salve): the formula sees the hit's victim through the hit scope,
+ * and falls back to the primary target outside one, as GearChecks.targetNpc does.
+ */
+let maxHitByVictim = new Map();
+let primaryTarget = null;
 let resolver;
 let multi = false;
 let worldNpcs = [];
@@ -75,7 +82,7 @@ Scythe.register({
             applyStyleDamage: (hit, max) => { rerolled.push(max); hit.damage = max; },
             canAttackSecondaryTarget: () => true,
         },
-        DamageFormulas: { calculateMaxMeleeHit: () => maxHit },
+        DamageFormulas: { calculateMaxMeleeHit: (attacker) => maxHitByVictim.get(hitVictimOf(attacker) ?? primaryTarget) ?? maxHit },
         World: { getNpcs: () => worldNpcs, getPlayers: () => [] },
     },
     getAreaManager: () => ({ inMulti: () => multi }),
@@ -132,6 +139,37 @@ test('the cleave reads multicombat from the area manager: a swing with located t
     assert.equal(method.hits(attacker, target).length, 2);
     multi = false;
     worldNpcs = [];
+});
+
+test('a cleave takes its max hit from its own victim, not the primary target', () => {
+    const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+    const located = (x, y) => ({ ...npcOfSize(1), getLocation: () => at(x, y), getAsNpc: () => ({ getSize: () => 1 }) });
+    const goblin = located(10, 11);
+    const vyrewatch = located(11, 11);
+    const attacker = { ...player({ [Equipment.WEAPON_SLOT]: SCYTHE }), getLocation: () => at(10, 10) };
+    const method = resolver.resolve(attacker);
+    multi = true;
+    try {
+        // A tier 3 vampyre takes 0 from a scythe (Wiki: Vampyre); the goblin takes the full 40.
+        maxHitByVictim = new Map([[goblin, 40], [vyrewatch, 0]]);
+        worldNpcs = [goblin, vyrewatch];
+        primaryTarget = goblin;
+        rerolled = [];
+        method.hits(attacker, goblin);
+        assert.deepEqual(rerolled, [0], 'Vyrewatch cleave under a Goblin primary');
+        rerolled = [];
+        const reverse = located(11, 11);
+        maxHitByVictim = new Map([[vyrewatch, 0], [reverse, 40]]);
+        worldNpcs = [vyrewatch, reverse];
+        primaryTarget = vyrewatch;
+        method.hits(attacker, vyrewatch);
+        assert.deepEqual(rerolled, [20], 'Goblin cleave under a Vyrewatch primary: half its own 40');
+    } finally {
+        multi = false;
+        worldNpcs = [];
+        maxHitByVictim = new Map();
+        primaryTarget = null;
+    }
 });
 
 test('every bow of Faerdhinen fires its own arrows, not the ammo slot', () => {

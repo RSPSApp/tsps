@@ -1,8 +1,34 @@
 /**
- * Vampyrebane weapons against NPCs tagged with the Wiki's `vampyre` attribute.
- * Source: OSRS Wiki, Vampyre (attribute), and the linked weapon pages.
+ * Vampyrebane weapons and the vampyre damage tiers, against NPCs tagged with the Wiki's `vampyre` attribute.
+ * Source: OSRS Wiki, Vampyre, Vampyrebane weapons, Silver weaponry and Efaritay's aid.
+ * - Tier 1 (feral vampyres, vampyre juveniles): every weapon deals full damage; Silverlight and Darklight add 10%.
+ * - Tier 2 (vampyre juvinates): only silver weapons, silver bolts and the tier 3 weapons deal damage; anything
+ *   else deals nothing, or half with Efaritay's aid.
+ * - Tier 3 (Vyrewatch, Vyrewatch Sentinels, venators, ancient feral vyres): only the vampyrebane table below deals damage.
+ * - Efaritay's aid: +10% damage to every weapon on tier 1, +15% accuracy to silver weapons on tier 1 and 2, and +15%
+ *   accuracy and +10% damage to the weapons that can hurt the tier on tiers 2 and 3.
+ * Spells are left alone: the Wiki says nothing about them.
  */
-const { asPlayer, weaponName, targetHasAttribute, scale } = require("./GearChecks.EquipmentEffects");
+const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
+const { asPlayer, weaponName, wornName, targetNpc, scale, addPercent } = require("./GearChecks.EquipmentEffects");
+
+const EFARITAYS_AID = "efaritay's aid";
+const SILVER_BOLTS = "silver bolts";
+const TIER_ONE_NPCS = new Set(["feral vampyre", "vampyre juvenile"]);
+const TIER_TWO_NPCS = new Set(["vampyre juvinate"]);
+const TIER_THREE_NPCS = new Set(["vyrewatch", "vyrewatch sentinel", "ancient feral vyre", "venator", "blood-starved venator"]);
+/** Weapons that deal full damage to juvinates but cannot hurt tier 3 (Wiki, Silver weaponry). */
+const SILVER_WEAPONS = new Set([
+  "blessed axe", "silver sickle", "silver sickle (b)", "emerald sickle (b)",
+  "enchanted emerald sickle (b)", "ruby sickle (b)", "enchanted ruby sickle (b)", "diamond sickle (b)",
+  "enchanted diamond sickle (b)", "blisterwood sickle (e)", "silverlight", "silverlight (dyed)", "darklight",
+  "arclight", "emberlight", "wolfbane",
+]);
+/** In the vampyrebane table for its bonus, but the Wiki lists it among the tier 2 weapons only. */
+const TIER_TWO_ONLY = new Set(["blisterwood sickle (e)"]);
+/** The rod is named "Rod of Ivandis (10)" to "(1)" in the cache, so it is matched by prefix. */
+const SILVER_WEAPON_PREFIXES = ["rod of ivandis"];
+const TIER_ONE_SILVER_BONUS = new Set(["silverlight", "silverlight (dyed)", "darklight"]);
 
 const MELEE = new Map([
   ["ivandis flail", { damage: 20, accuracy: 0 }],
@@ -14,20 +40,57 @@ const MELEE = new Map([
 ]);
 const RANGED = new Map([["blisterwood stake", { damage: 25, accuracy: 25 }]]);
 
-function bonusFor(entity, table) {
-  const player = asPlayer(entity);
-  if (!player || !targetHasAttribute(entity, "vampyre")) return null;
-  return table.get(weaponName(player)) ?? null;
+/** 0 for anything that is not a vampyre, else the Wiki tier 1-3 of the NPC the entity is fighting. */
+function vampyreTier(entity) {
+  const definition = targetNpc(entity)?.getCurrentDefinition?.();
+  if (definition?.hasAttribute?.("vampyre") !== true) return 0;
+  const name = String(definition.getName?.() ?? "").toLowerCase();
+  if (TIER_THREE_NPCS.has(name)) return 3;
+  if (TIER_TWO_NPCS.has(name)) return 2;
+  return 1;
+}
+
+function wearsEfaritaysAid(player) {
+  return wornName(player, Equipment.RING_SLOT) === EFARITAYS_AID;
+}
+
+/** Silver in hand for a tier 2 vampyre: a silver weapon, or silver bolts fired from a crossbow. */
+function isSilver(player, table) {
+  const weapon = weaponName(player);
+  return SILVER_WEAPONS.has(weapon) || SILVER_WEAPON_PREFIXES.some((prefix) => weapon.startsWith(prefix)) || (table === RANGED && wornName(player, Equipment.AMMUNITION_SLOT).startsWith(SILVER_BOLTS));
+}
+
+/** Whether the attack is made with a weapon the tier lets through. */
+function canHurt(player, tier, table) {
+  const weapon = weaponName(player);
+  if (table.has(weapon)) return tier === 2 || !TIER_TWO_ONLY.has(weapon);
+  return tier === 2 && isSilver(player, table);
 }
 
 function damage(entity, value, table) {
-  const bonus = bonusFor(entity, table);
-  return bonus ? scale(value, 100 + bonus.damage, 100) : value;
+  const player = asPlayer(entity);
+  const tier = player ? vampyreTier(entity) : 0;
+  if (tier === 0) return value;
+  const bonus = table.get(weaponName(player));
+  const efaritay = wearsEfaritaysAid(player);
+  let result = bonus ? scale(value, 100 + bonus.damage, 100) : value;
+  if (tier === 1) {
+    if (TIER_ONE_SILVER_BONUS.has(weaponName(player))) result = addPercent(result, 10);
+    return efaritay ? addPercent(result, 10) : result;
+  }
+  if (!canHurt(player, tier, table)) return tier === 2 && efaritay ? Math.floor(result / 2) : 0;
+  return efaritay ? addPercent(result, 10) : result;
 }
 
 function accuracy(entity, value, table) {
-  const bonus = bonusFor(entity, table);
-  return bonus ? scale(value, 100 + bonus.accuracy, 100) : value;
+  const player = asPlayer(entity);
+  const tier = player ? vampyreTier(entity) : 0;
+  if (tier === 0) return value;
+  const bonus = table.get(weaponName(player));
+  let result = bonus ? scale(value, 100 + bonus.accuracy, 100) : value;
+  const silver = tier < 3 && isSilver(player, table);
+  if (wearsEfaritaysAid(player) && (tier === 3 ? bonus : silver || (tier === 2 && bonus))) result = addPercent(result, 15);
+  return result;
 }
 
 function meleeDamage(entity, value) { return damage(entity, value, MELEE); }

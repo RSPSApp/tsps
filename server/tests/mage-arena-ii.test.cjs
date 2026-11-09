@@ -209,6 +209,24 @@ test("remains drop for an owner without them, announced as untradeable", () => {
   assert.equal(again.length, 0, "no second hand while one is carried");
 });
 
+test("its real death drops the remains for the killer, gated while one is carried", () => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 2);
+  activate(player);
+  const [npc] = [...followers.active].find(([, state]) => state.player === player);
+  const at = npc.getLocation();
+  const death = () => PluginManager.emitNpcDeath({ killer: player, damagers: [player], npc, npcId: npc.getRealId(),
+    location: { x: at.getX(), y: at.getY(), z: at.getZ() }, remains: null });
+  death();
+  assert.ok(player.messages.includes("<col=ef1020>Untradeable drop: Justiciar's hand</col>"), "the drop rolled with the follower still known");
+  player.messages.length = 0;
+  player.getInventory().adds(Items.JUSTICIARS_HAND, 1);
+  death();
+  assert.equal(player.messages.some((m) => /Untradeable drop/.test(m)), false, "no second hand while one is carried");
+  core.TaskManager.process();
+  assert.equal(followers.stateOf(npc), null, "forgotten a tick later");
+});
+
 test("remains can't be banked and are always lost on death; the symbol can be", () => {
   const player = makePlayer();
   for (const id of [Items.JUSTICIARS_HAND, Items.ENTS_ROOTS, Items.DEMONS_HEART]) {

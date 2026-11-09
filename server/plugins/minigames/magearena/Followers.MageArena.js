@@ -203,6 +203,7 @@ function summon(player, follower, pointIndex) {
 function watch(npc) {
   const state = stateOf(npc);
   if (!state) return false;
+  // A dying follower is the death task's (followerDied).
   if (!npc.isRegistered() || npc.getHitpoints() <= 0) return false;
   const { player } = state;
   const gone = !player.isRegistered() || player.getHitpoints() <= 0 ||
@@ -214,13 +215,19 @@ function watch(npc) {
   return false;
 }
 
-function dismiss(npc, state) {
-  active.delete(npc);
+/** Its energy balls go, and its Tele Block lifts (Wiki: "fades when the follower dies"). */
+function release(state) {
   for (const healer of state.healers) {
     if (healer.isRegistered()) api.removeNpc(healer);
   }
   state.healers.clear();
   if (state.teleBlocked && core.TeleBlock.isBlocked(state.player)) core.TeleBlock.remove(state.player);
+  state.teleBlocked = false;
+}
+
+function dismiss(npc, state) {
+  active.delete(npc);
+  release(state);
   if (npc.isRegistered()) api.removeNpc(npc);
 }
 
@@ -415,9 +422,16 @@ function remainsDrop({ player, npc, drops }) {
   player.sendMessage(untradeableDrop(core.ItemDefinition.forId(follower.remainsId).getName()));
 }
 
+/**
+ * Its death: the drop handlers run on this same event, possibly after this unit, and need the
+ * follower's state to gate its remains, so it's forgotten a tick later. The death
+ * task takes the npc out of the world.
+ */
 function followerDied({ npc }) {
   const state = stateOf(npc);
-  if (state) dismiss(npc, state);
+  if (!state) return;
+  release(state);
+  later(1, () => active.delete(npc));
 }
 
 function ownerLeft({ player }) {
@@ -465,7 +479,7 @@ module.exports = function registerFollowers(pluginApi) {
 Object.assign(module.exports, {
   summon,
   _test: {
-    COMBAT, LIFETIME_TICKS, active, stateOf, summon, watch, dismiss, edgeDistance, chooseAttack, createCombatMethod,
+    COMBAT, LIFETIME_TICKS, active, stateOf, summon, watch, dismiss, followerDied, edgeDistance, chooseAttack, createCombatMethod,
     godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
   },
 });

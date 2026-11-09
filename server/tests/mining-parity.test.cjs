@@ -445,6 +445,13 @@ test("every pickaxe variant can mine, and its wall swings are cache sequences (3
   }
 });
 
+test("the inactive crystal pickaxe needs 71 Mining, as the cache's param_23 says, and mines like a dragon pickaxe", () => {
+  assert.equal(Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 70 })), null);
+  const found = Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 71 }));
+  assert.equal(found?.id, ItemIds.CRYSTAL_PICKAXE_INACTIVE_);
+  assert.equal(found.fastRollChance, 1 / 6);
+});
+
 const itemName = (id) => core.CacheDefinitions.getItem(id).name;
 
 /** Math.random from a list (then `rest`), for one roll at a time: the gem pre-roll comes first. */

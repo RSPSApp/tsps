@@ -104,7 +104,9 @@ const PICKAXES = [
   { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED_, key: "infernal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(4482) },
   { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED__2, key: "trailblazer", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11831) },
   { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED__4, key: "trailblazer_reloaded", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11832) },
-  { id: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, key: "crystal", requiredLevel: 61, requiredAgility: 50, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8347) },
+  // The cache's param_23 is 71, as for the charged one (Wiki: "It requires 71 Mining ... to create and use"); it
+  // ranks with the dragon pickaxe it mines like.
+  { id: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, key: "crystal", requiredLevel: 71, rank: 61, requiredAgility: 50, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8347) },
   // The league's Echo pickaxe (Wiki): a crystal pickaxe with no requirement that always rolls every 2 ticks; `rank` places it above the crystal one.
   { id: ItemIds.ECHO_PICKAXE, key: "crystal", requiredLevel: 1, rank: 72, attemptIntervalTicks: 2, animation: new Animation(8347) },
 ];

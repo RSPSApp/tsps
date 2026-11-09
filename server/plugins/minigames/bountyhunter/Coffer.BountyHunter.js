@@ -51,6 +51,18 @@ function coins(player) {
   return player.getInventory().getAmount(core.ItemIdentifiers.COINS);
 }
 
+/** The bank tab holding the player's coins, or -1 (read as BankSpace does). */
+function bankCoinsTab(player) {
+  const tab = core.Bank.getTabForItem(player, core.ItemIdentifiers.COINS);
+  return Number.isInteger(tab) && tab >= 0 && player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) > 0 ? tab : -1;
+}
+
+/** The coins a deposit can use: the inventory's, then the bank's. */
+function availableCoins(player) {
+  const tab = bankCoinsTab(player);
+  return coins(player) + (tab >= 0 ? player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) : 0);
+}
+
 function openCoffer({ player }) {
   pluginApi.sendMultiChatboxPrompt(player, `Current coffer: ${balance(player).toLocaleString()}`,
     "Deposit coins.", () => askAmount(player, "Deposit how many coins?", deposit),
@@ -64,9 +76,16 @@ function askAmount(player, title, then) {
 }
 
 function deposit(player, amount) {
-  const count = Math.min(amount, coins(player), MAX_COFFER - balance(player));
+  if (amount > availableCoins(player)) {
+    player.sendMessage("You don't have enough coins.");
+    return;
+  }
+  const count = Math.min(amount, MAX_COFFER - balance(player));
   if (!(count > 0)) return;
-  player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, count);
+  // The inventory's coins first, then the bank's.
+  const fromInventory = Math.min(count, coins(player));
+  if (fromInventory > 0) player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, fromInventory);
+  if (count > fromInventory) player.getBank(bankCoinsTab(player)).deleteNumber(core.ItemIdentifiers.COINS, count - fromInventory);
   player.setAttribute(COFFER_ATTRIBUTE, balance(player) + count);
 }
 

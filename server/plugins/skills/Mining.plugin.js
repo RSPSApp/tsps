@@ -1071,6 +1071,11 @@ function npcRockTarget({ npc, stands }) {
   };
 }
 
+/** A cleared interaction ends the private mining action, without resetting the shared roll timer. */
+function interruptMining({ player }) {
+  stopMining(activeSessions, player);
+}
+
 function endMiningSession({ player }) {
   stopMining(activeSessions, player, false);
   ROLL_READY_TICKS.delete(player);
@@ -1101,6 +1106,7 @@ module.exports = {
     TaskManager.submit(new MiningTask(activeSessions));
 
     api.onPlayerDisconnect(endMiningSession);
+    api.onCustomEvent("player:interaction-cleared", interruptMining);
     api.onCustomEvent("level-up:popup-opened", pauseMining);
     api.onCustomEvent("mining:best-pickaxe", answerBestPickaxe);
     api.onCustomEvent("mining:pickaxe", answerPickaxe);

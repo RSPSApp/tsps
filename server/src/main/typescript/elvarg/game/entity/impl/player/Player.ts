@@ -788,6 +788,7 @@ export class Player extends Mobile {
             if (this.getInteractingMobile() === following) this.setMobileInteraction(null);
             if (this.getPositionToFace()?.equals(following.getLocation())) this.setPositionToFace(null);
         }
+        PluginManager.emitCustomEvent("player:interaction-cleared", { player: this });
     }
 
     isStaff(): boolean {

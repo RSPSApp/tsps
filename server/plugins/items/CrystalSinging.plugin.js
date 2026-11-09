@@ -27,15 +27,22 @@ const SHARD_NAME = "CRYSTAL_SHARD";
 /** The Prifddinas bowls (capture 819; both are this loc). The Gauntlet's has its own, the others have no capture of their menu. */
 const BOWL_LOC = "prif_singing_bowl";
 
+/** The Crystal Singing Recipes book (loc 37344, Read). Interface 'prif_recipes' (181) lays out and fills every entry itself (onLoad cs2 2924). */
+const RECIPES_BOOK = "Crystal Singing Recipes";
+const RECIPES_INTERFACE = 181;
+/** Locs 35978 and 36075 share the name and belong to the Gauntlet (Prep.Gauntlet.js), so the hook is keyed by name but only takes this one. */
+const RECIPES_LOC = 37344;
+
 /**
  * item names are ItemIdentifiers keys. `quest` recipes also need Song of the Elves (Wiki: crystal
- * equipment pages). `source`: capture ids where one shows the whole song, else the Wiki page.
+ * equipment pages), `diary` ones the Hard Western Provinces Diary. `source`: capture ids where one shows the whole song, else the Wiki page.
  */
 const RECIPES = [
   { product: "ETERNAL_TELEPORT_CRYSTAL", needs: [["ENHANCED_CRYSTAL_TELEPORT_SEED", 1]], shards: 100, level: 80, xp: 5000, source: "capture 312; Wiki Eternal_teleport_crystal" },
   { product: "BLADE_OF_SAELDOR", needs: [["ENHANCED_CRYSTAL_WEAPON_SEED", 1]], shards: 100, level: 82, xp: 5000, quest: true, source: "capture 1159; Wiki Blade_of_Saeldor" },
   { product: "BOW_OF_FAERDHINEN", needs: [["ENHANCED_CRYSTAL_WEAPON_SEED", 1]], shards: 100, level: 82, xp: 5000, quest: true, source: "capture 1159; Wiki Bow_of_Faerdhinen" },
   { product: "CRYSTAL_BOW_3", needs: [["CRYSTAL_WEAPON_SEED", 1]], shards: 40, level: 78, xp: 2000, quest: true, source: "captures 819, 1134; Wiki Crystal_bow" },
+  { product: "CRYSTAL_HALBERD_3", needs: [["CRYSTAL_WEAPON_SEED", 1]], shards: 40, level: 78, xp: 2000, quest: true, diary: true, source: "cache prif_recipes (cs2 2924); Wiki Crystal_halberd, Crystal_singing" },
   { product: "CRYSTAL_SHIELD_3", needs: [["CRYSTAL_WEAPON_SEED", 1]], shards: 40, level: 78, xp: 2000, quest: true, source: "capture 1162; Wiki Crystal_shield" },
   { product: "CRYSTAL_AXE", needs: [["CRYSTAL_TOOL_SEED", 1], ["DRAGON_AXE", 1]], shards: 120, level: 76, xp: 6000, quest: true, source: "Wiki Crystal_axe" },
   { product: "CRYSTAL_PICKAXE", needs: [["CRYSTAL_TOOL_SEED", 1], ["DRAGON_PICKAXE", 1]], shards: 120, level: 76, xp: 6000, quest: true, source: "Wiki Crystal_pickaxe" },
@@ -62,6 +69,13 @@ function resolve() {
   return recipes;
 }
 
+/** The Hard Western Provinces Diary, which the crystal halberd recipe needs (Wiki: Crystal_halberd). */
+function westernHardDiaryComplete(player) {
+  const request = { player, diary: "western", tier: "hard", complete: null };
+  api.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
+}
+
 function songOfTheElvesComplete(player) {
   const request = { player, key: SONG_OF_THE_ELVES, complete: false };
   api.emitCustomEvent("quest:is-complete", request);
@@ -76,6 +90,7 @@ function statement(player, text) {
 /** How many of the recipe the player's inventory makes (0 when a requirement beyond materials is missing). */
 function maxMade(player, recipe) {
   if (recipe.quest && !songOfTheElvesComplete(player)) return 0;
+  if (recipe.diary && !westernHardDiaryComplete(player)) return 0;
   const inventory = player.getInventory();
   return Math.min(...recipe.needs.map(({ itemId, amount }) => Math.floor(inventory.getAmount(itemId) / amount)));
 }
@@ -129,6 +144,11 @@ function sing(player, productId, amount) {
   return true;
 }
 
+function readRecipes({ player, objectId }) {
+  if (objectId !== RECIPES_LOC) return false;
+  player.getPacketSender().sendInterface(RECIPES_INTERFACE);
+}
+
 function isBowl(objectId) {
   return objectId === core.CacheDefinitions.getLocId(BOWL_LOC);
 }
@@ -164,7 +184,8 @@ module.exports = {
   register(pluginApi) {
     attach(pluginApi);
     api.onObjectInteraction("Singing bowl", { "Sing-crystal": singCrystal });
+    api.onObjectInteraction(RECIPES_BOOK, { Read: readRecipes });
     for (const name of inputNames()) api.onItemOnObject(name, "Singing bowl", useOnBowl, { noted: false });
   },
-  _test: { RECIPES, resolve, open, sing, singCrystal, useOnBowl, maxMade, meetsLevel, inputNames, attach, NO_MATERIALS, SONG },
+  _test: { RECIPES, resolve, open, sing, singCrystal, useOnBowl, readRecipes, maxMade, meetsLevel, inputNames, attach, NO_MATERIALS, SONG },
 };

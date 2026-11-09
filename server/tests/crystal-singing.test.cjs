@@ -19,10 +19,14 @@ const tasks = [];
 const objects = new Map();
 const itemOnObject = [];
 let songComplete = true;
+let diaryComplete = true;
 const api = {
   core: { ...core, TaskManager: { submit: (task) => tasks.push(task) } },
   persistAttribute() {},
-  emitCustomEvent: (name, payload) => { if (name === "quest:is-complete") payload.complete = songComplete; },
+  emitCustomEvent: (name, payload) => {
+    if (name === "quest:is-complete") payload.complete = songComplete;
+    if (name === "diary:is-complete") payload.complete = diaryComplete;
+  },
   onObjectInteraction: (name, options) => objects.set(name, { ...objects.get(name), ...options }),
   onItemOnObject: (item, object, handler) => itemOnObject.push([item, object, handler]),
   onItemOnItem() {},
@@ -41,7 +45,7 @@ function createPlayer({ smithing = 99, crafting = 99, items = [] } = {}) {
     performAnimation() { player.animations++; },
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => ({ sendSound: (id) => player.sounds.push(id), sendCreationMenu: (menu) => { player.menu = menu; } }),
+    getPacketSender: () => ({ sendSound: (id) => player.sounds.push(id), sendInterface: (id) => { player.interfaceId = id; }, sendCreationMenu: (menu) => { player.menu = menu; } }),
     getDialogueManager: () => ({ startDialogues: () => { player.statements++; } }),
     getSkillManager: () => ({
       getCurrentLevel: (skill) => (skill === Skill.SMITHING ? smithing : skill === Skill.CRAFTING ? crafting : 99),
@@ -64,6 +68,7 @@ const EXPECTED = [
   ["BLADE_OF_SAELDOR", [[I.ENHANCED_CRYSTAL_WEAPON_SEED, 1]], 100, 82, 5000],
   ["BOW_OF_FAERDHINEN", [[I.ENHANCED_CRYSTAL_WEAPON_SEED, 1]], 100, 82, 5000],
   ["CRYSTAL_BOW_3", [[I.CRYSTAL_WEAPON_SEED, 1]], 40, 78, 2000],
+  ["CRYSTAL_HALBERD_3", [[I.CRYSTAL_WEAPON_SEED, 1]], 40, 78, 2000],
   ["CRYSTAL_SHIELD_3", [[I.CRYSTAL_WEAPON_SEED, 1]], 40, 78, 2000],
   ["CRYSTAL_AXE", [[I.CRYSTAL_TOOL_SEED, 1], [I.DRAGON_AXE, 1]], 120, 76, 6000],
   ["CRYSTAL_PICKAXE", [[I.CRYSTAL_TOOL_SEED, 1], [I.DRAGON_PICKAXE, 1]], 120, 76, 6000],
@@ -132,7 +137,7 @@ test("no materials gives the captured statement; low levels name the lowest leve
 
   const mid = createPlayer({ smithing: 78, crafting: 78, items });
   Singing._test.singCrystal({ player: mid, objectId: BOWL });
-  assert.deepEqual(mid.menu.getItems(), [I.CRYSTAL_BOW_3, I.CRYSTAL_SHIELD_3], "82-level recipes are not offered at 78");
+  assert.deepEqual(mid.menu.getItems(), [I.CRYSTAL_BOW_3, I.CRYSTAL_HALBERD_3, I.CRYSTAL_SHIELD_3], "82-level recipes are not offered at 78");
 });
 
 test("Sing-crystal lists every recipe the materials make, the key included", () => {
@@ -144,7 +149,7 @@ test("Sing-crystal lists every recipe the materials make, the key included", () 
 test("an item used on the bowl lists only what it goes into", () => {
   const player = createPlayer({ items: [[I.ENHANCED_CRYSTAL_TELEPORT_SEED, 1], [I.CRYSTAL_WEAPON_SEED, 1], [SHARD, 300]] });
   Singing._test.useOnBowl({ player, itemId: I.CRYSTAL_WEAPON_SEED, objectId: BOWL });
-  assert.deepEqual(player.menu.getItems(), [I.CRYSTAL_BOW_3, I.CRYSTAL_SHIELD_3]);
+  assert.deepEqual(player.menu.getItems(), [I.CRYSTAL_BOW_3, I.CRYSTAL_HALBERD_3, I.CRYSTAL_SHIELD_3]);
   const key = createPlayer({ items: [[CacheDefinitions.getObjId("crystal_key"), 1], [SHARD, 10]] });
   Singing._test.useOnBowl({ player: key, itemId: CacheDefinitions.getObjId("crystal_key"), objectId: BOWL });
   assert.deepEqual(key.menu.getItems(), [CacheDefinitions.getObjId("prif_crystal_key")]);
@@ -168,4 +173,25 @@ test("other bowls are left alone, and every input is hooked by item name", () =>
     assert.ok(names.includes(core.ItemDefinition.forId(id).getName()), String(id));
   }
   assert.ok(objects.get("Singing bowl")["Sing-crystal"], "Sing-crystal is hooked once, by CrystalSinging");
+});
+
+test("the halberd needs the Hard Western Provinces Diary", () => {
+  const player = createPlayer({ items: [[I.CRYSTAL_WEAPON_SEED, 1], [SHARD, 40]] });
+  diaryComplete = false;
+  Singing._test.singCrystal({ player, objectId: BOWL });
+  assert.ok(!player.menu.getItems().includes(I.CRYSTAL_HALBERD_3));
+  diaryComplete = true;
+  Singing._test.singCrystal({ player, objectId: BOWL });
+  assert.ok(player.menu.getItems().includes(I.CRYSTAL_HALBERD_3));
+});
+
+test("Read on the Crystal Singing Recipes book opens interface prif_recipes (181)", () => {
+  assert.equal(CacheDefinitions.getLocId("crystal_singing_recipes") ?? 37344, 37344);
+  assert.equal(typeof objects.get("Crystal Singing Recipes").Read, "function");
+  const player = createPlayer();
+  assert.equal(objects.get("Crystal Singing Recipes").Read({ player, objectId: 37344 }), undefined);
+  assert.equal(player.interfaceId, 181);
+  const gauntlet = createPlayer();
+  assert.equal(objects.get("Crystal Singing Recipes").Read({ player: gauntlet, objectId: 35978 }), false, "the Gauntlet's books are left to its plugin");
+  assert.equal(gauntlet.interfaceId, undefined);
 });

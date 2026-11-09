@@ -106,10 +106,34 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   // The frozen Lumbridge dining room (the Culinaromancer's dimension) and its guests' seats,
   // the cache's own npc-spawns for them; Aris has no cache spawn, so she stands by the table.
   const DINING_DIMENSION = { minX: 1855, maxX: 1870, minY: 5338, maxY: 5358, z: 0 };
-  const DINING_DOORS_LUMBRIDGE = new Set([12349, 12350]);
-  const DINING_DOORS_DIMENSION = new Set([1521, 1524]);
+  // Lumbridge's two ways into the dining room: the large doors from the hall and the door from
+  // the kitchen (hundred_lumbridge_door*). The dimension has the same pair: castledoubledoorl/r
+  // and elfdoor. Each leads to the matching doorway on the other side.
+  const DINING_LARGE_DOORS = new Set([ObjectIdentifiers.LARGE_DOOR_41, ObjectIdentifiers.LARGE_DOOR_42]);
+  const DINING_KITCHEN_DOOR = ObjectIdentifiers.DOOR_302;
+  const DIMENSION_LARGE_DOORS = new Set([ObjectIdentifiers.LARGE_DOOR_15, ObjectIdentifiers.LARGE_DOOR_17]);
+  const DIMENSION_KITCHEN_DOOR = ObjectIdentifiers.DOOR_30;
+  /** Where the feast's walk-in from the large doors ends. */
   const DINING_ENTRY = { x: 1867, y: 5348, z: 0 };
+  // Live lands a large-door entrant on 1866,5323 in the cache's frozen copy of the room (the
+  // Shortest Path transport in plugins/agent/data/transports.json): just inside the barrier.
+  // This room is that copy 24 tiles north, so the same tile is 1866,5347.
+  const COUNCIL_ENTRY = { x: 1866, y: 5347, z: 0 };
+  const COUNCIL_KITCHEN_ENTRY = { x: 1861, y: 5341, z: 0 };
   const DINING_EXIT = { x: 3214, y: 3221, z: 0 };
+  const KITCHEN_EXIT = { x: 3207, y: 3217, z: 0 };
+  // The cache's frozen copy of the dining room (y 5314-5334) carries Aris's time bubble: the
+  // white walls round the room (100_bubble*), a barrier in each doorway (hundred_portal_door1-3)
+  // and the rings on the Culinaromancer's seat (100_rings_froze). The council room shows them
+  // for its owner, read from that copy, 24 tiles further north.
+  const FROZEN_ROOM_SOURCE = { minX: 1860, maxX: 1867, minY: 5316, maxY: 5331, z: 0 };
+  const FROZEN_ROOM_OFFSET_Y = 24;
+  const FROZEN_ROOM_LOCS = ["100_bubble3", "100_bubbleb3", "hundred_portal_door1", "hundred_portal_door2",
+    "hundred_portal_door3", "100_rings_froze"];
+  const DINING_BARRIERS = new Set([ObjectIdentifiers.BARRIER_3, ObjectIdentifiers.BARRIER_4, ObjectIdentifiers.BARRIER_5]);
+  const DINING_KITCHEN_BARRIER = ObjectIdentifiers.BARRIER_3;
+  const FROZEN_ROOM_BY_PLAYER = new WeakMap();
+  let frozenRoomLayout = null;
   const CULINAROMANCER_CHEST_CELLAR = 12308;
   const CULINAROMANCER_CHEST_SIDE = { x: 3218, y: 9623, z: 0 };
   const COUNCIL_SPAWNS = [
@@ -136,6 +160,38 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const FEAST_HEAD = [1863, 5341, 0];
   const FEAST_DOOR = [1868, 5347, 0];
   const FEAST_DOOR_OBJECT = ObjectIdentifiers.LARGE_DOOR_15; // castledoubledoorl, 1521
+  // The feast's camera, one shot per stage direction of the Wiki transcript ("Camera pans to
+  // Mountain Dwarf.", "Camera switches to Wartface and Bentnoze." ...) and on each later actor
+  // as they act. No live recording covers this cutscene, so the framing is ours: the camera sits
+  // across the table from whoever speaks, at the heights the captured quest cutscenes use
+  // (move 450-900, look 80-260). A "switch" cuts at the captured cut rates; a "pan" glides at
+  // a captured quest-cutscene glide (cam_moveto rate=10, rate2=20) that lands within a line.
+  const FEAST_PAN = { rate: 10, rate2: 20 };
+  const FEAST_OPENING_SHOT = { move: [1863, 5353, 800], look: [1863, 5341, 150] };
+  const FEAST_HORACIO_SHOT = { move: [1863, 5346, 560], look: [1863, 5341, 180] };
+  const FEAST_SPY_SHOT = { move: [1861, 5349, 500], look: [1865, 5351, 180] };
+  const FEAST_WIDE_SHOT = { move: [1863, 5354, 900], look: [1863, 5346, 100] };
+  const FEAST_SHOTS = new Map([
+    ["XaiZ99", { ...FEAST_HORACIO_SHOT, pan: true }],
+    ["3Yulm_", FEAST_SPY_SHOT], ["9XHwuQ", FEAST_SPY_SHOT],
+    ["8J08ap", { move: [1866, 5344, 450], look: [1862, 5345, 110], pan: true }],
+    ["6oXtXi", { move: [1866, 5346, 480], look: [1862, 5347, 170], pan: true }],
+    ["C8WkoA", { move: [1866, 5349, 470], look: [1862, 5350, 110] }],
+    ["QkbX04", { move: [1864, 5347, 600], look: [1864, 5353, 260] }],
+    ["uD2WTl", { move: [1861, 5348, 480], look: [1865, 5349, 170] }],
+    ["yFRs14", { move: [1861, 5346, 480], look: [1865, 5347, 170], pan: true }],
+    ["-ph0H8", { move: [1861, 5344, 480], look: [1865, 5345, 180], pan: true }],
+    ["SPJBD9", { move: [1861, 5343, 450], look: [1865, 5343, 80] }],
+    ["2dDdeS", FEAST_HORACIO_SHOT],
+    ["lDT9yg", { move: [1863, 5346, 560], look: [1862, 5341, 180] }],
+    ["j-YkVf", { move: [1861, 5349, 500], look: [1866, 5351, 150] }],
+    ["smgzvU", { move: [1863, 5345, 600], look: [1868, 5348, 180] }],
+    ["YKM4VY", { move: [1863, 5347, 600], look: [1863, 5341, 200] }],
+    ["8R1_CN", { ...FEAST_WIDE_SHOT, pan: true }],
+    ["44MzE_", { move: [1862, 5345, 600], look: [1867, 5349, 180] }],
+    ["keglCJ", { move: [1862, 5344, 650], look: [1865, 5349, 150], pan: true }],
+    ["UOCpz9", FEAST_WIDE_SHOT],
+  ]);
   const { createQuestScenes } = require("../QuestScenes");
   const Feast = createQuestScenes(api, { onEnd: feastEnded });
   function ensureCouncilTalkActions() {
@@ -488,10 +544,44 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       location.getX() >= SHADOW_UZER_DAVE_AREA.minX && location.getX() <= SHADOW_UZER_DAVE_AREA.maxX &&
       location.getY() >= SHADOW_UZER_DAVE_AREA.minY && location.getY() <= SHADOW_UZER_DAVE_AREA.maxY;
   }
+  function frozenRoomFromCache() {
+    if (frozenRoomLayout) return frozenRoomLayout;
+    const { CacheDefinitions, Location, MapObjects } = api.core;
+    const ids = new Set(FROZEN_ROOM_LOCS.map((name) => CacheDefinitions.getLocId(name)));
+    const { minX, maxX, minY, maxY, z } = FROZEN_ROOM_SOURCE;
+    const layout = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (const object of MapObjects.getObjectsAt(new Location(x, y, z), null)) {
+          if (!ids.has(object.getId())) continue;
+          layout.push({ id: object.getId(), x, y: y + FROZEN_ROOM_OFFSET_Y, z, type: object.getType(), face: object.getFace() });
+        }
+      }
+    }
+    return frozenRoomLayout = layout;
+  }
+  function showFrozenRoom(player) {
+    if (FROZEN_ROOM_BY_PLAYER.has(player)) return;
+    const { GameObject, Location, ObjectManager } = api.core;
+    FROZEN_ROOM_BY_PLAYER.set(player, frozenRoomFromCache().map(({ id, x, y, z, type, face }) => {
+      const object = new GameObject(id, new Location(x, y, z), type, face, null).setOwner(player);
+      ObjectManager.register(object, true);
+      return object;
+    }));
+  }
+  function hideFrozenRoom(player) {
+    for (const object of FROZEN_ROOM_BY_PLAYER.get(player) ?? []) api.core.ObjectManager.deregister(object, true);
+    FROZEN_ROOM_BY_PLAYER.delete(player);
+  }
   function spawnCouncil(player) {
     if (stage(player) < STAGE_OPENING_COMPLETE || quest.isComplete(player)
-      || player.getAttribute(FEAST_PENDING_ATTRIBUTE) || Feast.get(player)) return;
+      || player.getAttribute(FEAST_PENDING_ATTRIBUTE) || Feast.get(player)) {
+      hideFrozenRoom(player);
+      return;
+    }
     ensureCouncilTalkActions();
+    if (inZone(player, DINING_DIMENSION)) showFrozenRoom(player);
+    else hideFrozenRoom(player);
     const spawns = [...COUNCIL_SPAWNS, { id: NpcIdentifiers.CULINAROMANCER_2, x: FEAST_HEAD[0], y: FEAST_HEAD[1] }].filter(({ id }) => {
       const rescue = RESCUES.find((entry) => entry.ids.includes(id));
       return !rescue || !hasFlag(player, rescue.flag);
@@ -3035,6 +3125,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (Feast.get(player)) return;
     for (const npc of COUNCIL_BY_PLAYER.get(player) ?? []) api.removeNpc(npc);
     COUNCIL_BY_PLAYER.delete(player);
+    hideFrozenRoom(player);
     const scene = Feast.open(player, "recipe-for-disaster-feast", [[1855, 1870, 5338, 5358, 0]], {
       process(mobile) {
         if (mobile === player && (!canContinueFeast(scene)
@@ -3064,6 +3155,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     Feast.later(scene, 2, () => {
       if (Feast.get(player) !== scene) return;
       if (!canContinueFeast(scene) || player.getDialogueManager().getCurrent() !== scene.holdDialogue) return Feast.end(player, false);
+      // The camera leaves the hidden player (the room is loaded by now) as the screen fades in.
+      feastShot(player, FEAST_OPENING_SHOT);
       Feast.fade(player, false);
       scene.started = true;
       playFeast(scene);
@@ -3123,7 +3216,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.setAttribute(FEAST_SEEN_ATTRIBUTE, true);
       player.setAttribute(FEAST_PENDING_ATTRIBUTE, false);
       Feast.end(player, false);
-      moveTo(player, DINING_ENTRY.x, DINING_ENTRY.y, DINING_ENTRY.z);
+      moveTo(player, COUNCIL_ENTRY.x, COUNCIL_ENTRY.y, COUNCIL_ENTRY.z);
       syncRescueQuestVarbits(player);
       spawnCouncil(player);
     });
@@ -3140,8 +3233,12 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (event.step.presentation === "overhead") event.actors = [npc];
   }
 
+  function feastShot(player, { move, look, pan }) {
+    Feast.camera(player, move, look, pan ? FEAST_PAN : Feast.CAMERA_RATES);
+  }
+
   // Full canonical story, with model-specific game-authored assets. Dialogue
-  // Continue drives reading pace; uncaptured cinematic camera paths are omitted.
+  // Continue drives reading pace; FEAST_SHOTS frames each stage direction.
   function handleFeastAction(event) {
     const scene = Feast.get(event.player);
     if (!scene || !event.pages?.some(({ page, variants }) => page === PAGE && variants?.includes(FEAST_VARIANT))) return;
@@ -3149,6 +3246,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     const { Location, ForceMovement, ForceMovementTask, TaskManager, CacheDefinitions } = api.core;
     const { stepId } = event;
     event.handled = true;
+    const shot = FEAST_SHOTS.get(stepId);
+    if (shot) feastShot(event.player, shot);
     if (stepId === "51KbmY") {
       actor("Awowogei").getMovementQueue().reset().addSteps(new Location(1864, 5342, 0));
     } else if (stepId === "uAnh15") {
@@ -3206,7 +3305,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         { postScripts: [{ scriptId: 948, args: [0xffffff, 0, 0xffffff, 255, 50] }] });
       Feast.later(scene, 2, () => { if (Feast.get(event.player) === scene && !scene.finishing) Feast.closeFade(event.player); });
     } else if (stepId === "Fx3emi") finishFeast(scene);
-    // Camera-only stage directions are consumed without inventing a cinematic path.
   }
 
   // Recover unmarked opening-only saves; recorded rescue progress keeps its access.
@@ -3214,14 +3312,34 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (event.handled) return;
     const { player, objectId } = event;
     if (Feast.get(player)) return;
-    const inside = DINING_DOORS_DIMENSION.has(objectId) && inZone(player, DINING_DIMENSION);
-    if (!inside && !(DINING_DOORS_LUMBRIDGE.has(objectId) && stage(player) >= STAGE_OPENING_COMPLETE)) return;
+    const kitchen = objectId === DINING_KITCHEN_DOOR || objectId === DIMENSION_KITCHEN_DOOR;
+    const inside = (DIMENSION_LARGE_DOORS.has(objectId) || objectId === DIMENSION_KITCHEN_DOOR)
+      && inZone(player, DINING_DIMENSION);
+    // The kitchen door leads into the dimension only from the kitchen; from the real dining room
+    // it is still the way into the kitchen.
+    const fromKitchen = (player.getLocation()?.getY() ?? 0) <= KITCHEN_EXIT.y;
+    // After the quest the kitchen door is an ordinary door again; only the large doors keep the way in.
+    const lumbridgeDoor = DINING_LARGE_DOORS.has(objectId)
+      || (objectId === DINING_KITCHEN_DOOR && fromKitchen && !quest.isComplete(player));
+    if (!inside && !(lumbridgeDoor && stage(player) >= STAGE_OPENING_COMPLETE)) return;
     if (recoverOpeningFeast(player)) syncRescueQuestVarbits(player);
     event.handled = true;
-    if (!inside && player.getAttribute(FEAST_PENDING_ATTRIBUTE)) return startFeast(player);
-    const to = inside ? DINING_EXIT : DINING_ENTRY;
+    if (inside) return leaveDiningDimension(player, kitchen);
+    if (player.getAttribute(FEAST_PENDING_ATTRIBUTE)) return startFeast(player);
+    const to = kitchen ? COUNCIL_KITCHEN_ENTRY : COUNCIL_ENTRY;
     moveTo(player, to.x, to.y, to.z);
-    if (!inside) spawnCouncil(player);
+    spawnCouncil(player);
+  }
+  function leaveDiningDimension(player, kitchen) {
+    hideFrozenRoom(player);
+    const to = kitchen ? KITCHEN_EXIT : DINING_EXIT;
+    moveTo(player, to.x, to.y, to.z);
+  }
+  /** The doorway barriers lead out the same way as the doors behind them. */
+  function passDiningBarrier({ player, objectId }) {
+    if (!DINING_BARRIERS.has(objectId) || !inZone(player, DINING_DIMENSION) || Feast.get(player)) return false;
+    leaveDiningDimension(player, objectId === DINING_KITCHEN_BARRIER);
+    return true;
   }
   // The chest sits against the cellar's east wall, so no tile on its cache access side can be
   // stood on; it is operated from the floor beside it.
@@ -3436,6 +3554,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       Feast.end(player, true);
       Feast.cancel(player);
       clearSkrachSpitRoast(player);
+      hideFrozenRoom(player);
     }
   }
 
@@ -3604,6 +3723,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onObjectRoute(routeRedBananaTree);
   api.onObjectRoute(routeCulinaromancerChest);
   api.onCustomEvent("door:toggle", handleDiningDoors);
+  api.onObjectInteraction("Barrier", { "Pass-through": passDiningBarrier });
   api.onObjectInteraction(handleCulinaromancerChest);
   api.onCustomEvent("shop:buy-price", priceCulinaromancerChest);
   api.onCustomEvent("shop:sell-price", buybackCulinaromancerChest);

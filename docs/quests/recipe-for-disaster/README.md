@@ -17,6 +17,7 @@ Only the Mountain Dwarf rescue was played naturally with its reward; the goblin 
 
 ## Findings
 
+- **fixed** The opening feast and the dining dimension ([#3839](https://github.com/RSPSApp/tsps/issues/3839)): the Lumbridge kitchen door (`hundred_lumbridge_door`) now enters the same dimension as the large doors and the dimension's kitchen door (`elfdoor`) leads back to the kitchen; the feast camera frames each Wiki stage direction instead of staying on the hidden player; the frozen room shows the cache's time-bubble walls, doorway barriers (Pass-through leads out) and the rings on the Culinaromancer. No recording covers this cutscene, so the camera framing is ours.
 - **open** Parked for a rescue-wire source correction; later loaded hash differs from the reviewed one.
 
 ## Runs

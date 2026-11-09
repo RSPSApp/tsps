@@ -45,16 +45,16 @@ export class HitQueue {
             return;
         }
 
+        // NPC attacks queued before this turn read the protection prayer now, after this tick's
+        // clicks (CombatFactory.addPendingHit), whenever they land; held or not.
+        for (const { hit } of this.pendingHits) CombatFactory.applyProtectionPrayer(hit);
+
         // Wiki: Animation stall. A full stall queues hits up on the player and delivers them only
         // once the action completes. The hold is read here, at impact, rather than when the hit was
         // queued: a shot already in the air when the swing starts must still wait for it, and
         // content that stops the animation early has to release the hits it was holding on that
         // tick rather than on the deadline the stall once had. Only players stall, so an NPC's hits
         // keep landing on the dot - and an NPC's Combat has nothing to ask.
-        // NPC attacks queued before this turn read the protection prayer now, after this tick's
-        // clicks (CombatFactory.addPendingHit), whenever they land; held or not.
-        for (const { hit } of this.pendingHits) CombatFactory.applyProtectionPrayer(hit);
-
         const hold = this.character.isPlayer()
             ? this.character.getCombat().getIncomingHitCycle()
             : -1;

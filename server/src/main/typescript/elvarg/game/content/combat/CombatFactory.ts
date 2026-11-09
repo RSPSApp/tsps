@@ -308,8 +308,10 @@ export class CombatFactory {
     /**
      * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
      * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
-     * hit, and before its XP); a hit queued when it lands (Scurrius' bolts, the Leviathan's bite) is read then. The
-     * impact pass only covers hits that skipped the queue (a manipulateHit replacement).
+     * hit, and before its XP), except an NPC's hit on a player whose turn this tick is still to come: HitQueue.process
+     * reads that one in the victim's turn, after their clicks. A hit queued when it lands (Scurrius' bolts, the
+     * Leviathan's bite) is read then. The impact pass only covers hits that skipped the queue (a manipulateHit
+     * replacement).
      */
     public static applyProtectionPrayer(hit: PendingHit): void {
         if (typeof hit.hasAppliedImpactProtection === "function" && hit.hasAppliedImpactProtection()) return;
@@ -924,7 +926,8 @@ export class CombatFactory {
         // The protection prayer is read on the attack's tick, before the XP is paid on what the hit deals.
         // An NPC's attack on a player who has yet to take this tick's turn (NPCs go first) is read in that
         // turn, after their clicks: live, a prayer switched on the tick the attack starts blocks it
-        // (rsprox captures: Scurrius' swipes, 22 of 22 such flicks blocked). HitQueue.process reads it.
+        // (rsprox captures: Scurrius' swipes, 23 of 23 such flicks blocked, recordings 3275 and 75).
+        // HitQueue.process reads it.
         if (!CombatFactory.readsProtectionInVictimTurn(qHit)) CombatFactory.applyProtectionPrayer(qHit);
         qHit.capDamageToBudget();
 

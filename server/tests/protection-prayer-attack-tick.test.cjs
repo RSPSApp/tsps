@@ -2,7 +2,7 @@
 // Wiki (Prayer flicking): a protection prayer must be on "the tick your enemy attacks". It was read when the hit landed,
 // so a delay-3 ranged hit was blocked by a prayer switched on after launch and went through one switched off after.
 // NPCs go before players each tick, so an NPC's attack reads the prayer in the victim's own turn on that tick, after
-// their clicks (rsprox captures: a prayer switched on the tick Scurrius swipes blocks it, #4061).
+// their clicks (rsprox captures: a prayer switched on the tick Scurrius swipes blocks it, 23 of 23, #4061).
 // The XP of a protected hit is paid on what it deals. Real Players, the real queue and the real impact pass.
 const assert = require("node:assert/strict");
 const path = require("node:path");

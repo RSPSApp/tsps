@@ -155,13 +155,44 @@ for (const [rantzLabel, rantzPage, rantzNeedle, rantzItem] of RANTZ_OPTIONS) {
   }
 }
 
-test("an ingredient he asked for and the player lacks is refused with the transcript's line", () => {
+// The transcript's refusal is two messages: the flat refusal, then the reminder that names what
+// each of them asked for — Rantz, then Fycie, then Bugs, with the recorded seasoning in place of
+// the data's "[potato/onion]" placeholders.
+for (const [label, rantz, bugs, fycie, reminder] of [
+  ["potato/cabbage/tomato", "wants potato", "cabbage", "tomato",
+    "Remember what the Ogre family wanted? Rantz wanted potato. Fycie wanted tomato. Bugs wanted cabbage."],
+  ["onion/equa/doogle", "wants onion", "equa leaves", "doogle leaves",
+    "Remember what the Ogre family wanted? Rantz wanted onion. Fycie wanted doogle leaves. Bugs wanted equa leaves."],
+]) {
+  test(`a missing ${label} ingredient is refused with both of the transcript's lines`, () => {
+    const player = makePlayer();
+    quest.setStage(player, STAGE_TOLD_TO_COOK);
+    say(player, RANTZ, RANTZ_AGAIN, rantz);
+    say(player, BUGS, BUGS_PAGE, bugs);
+    say(player, FYCIE, FYCIE_PAGE, fycie);
+    // Nothing of the trio is carried, so the cook refuses and names all three.
+    const messages = [];
+    player.sendMessage = (message) => messages.push(String(message));
+    player.getInventory().add(new Item(ItemIdentifiers.RAW_CHOMPY, 1));
+
+    const event = cook(player);
+    assert.equal(event.handled, true);
+    assert.equal(player.getInventory().getAmount(ItemIdentifiers.SEASONED_CHOMPY), 0, "nothing is cooked");
+    assert.equal(player.getInventory().getAmount(ItemIdentifiers.RAW_CHOMPY), 1, "the chompy is kept");
+    assert.deepEqual(messages, [
+      line("talking-to-rantz-with-a-raw-chompy-attempting-to-cook-the-chompy-without-the-requested-ingredients", "don't have all the ingredients"),
+      reminder,
+    ], "the refusal and the reminder, in the transcript's order");
+    player.setRegistered(false);
+  });
+}
+
+test("an onion where he asked for a potato is refused and the reminder names the potato", () => {
   const player = makePlayer();
   quest.setStage(player, STAGE_TOLD_TO_COOK);
   say(player, RANTZ, RANTZ_AGAIN, "wants potato");
   say(player, BUGS, BUGS_PAGE, "cabbage");
   say(player, FYCIE, FYCIE_PAGE, "tomato");
-  // Onion instead of the potato he asked for: the earlier recording must not satisfy the cook.
   const messages = [];
   player.sendMessage = (message) => messages.push(String(message));
   for (const id of [ItemIdentifiers.RAW_CHOMPY, ItemIdentifiers.ONION, ItemIdentifiers.CABBAGE, ItemIdentifiers.TOMATO]) {
@@ -170,8 +201,6 @@ test("an ingredient he asked for and the player lacks is refused with the transc
   const event = cook(player);
   assert.equal(event.handled, true);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.SEASONED_CHOMPY), 0, "nothing is cooked");
-  assert.equal(player.getInventory().getAmount(ItemIdentifiers.RAW_CHOMPY), 1, "the chompy is kept");
-  assert.deepEqual(messages, [line("talking-to-rantz-with-a-raw-chompy-attempting-to-cook-the-chompy-without-the-requested-ingredients", "don't have all the ingredients")],
-    "the refusal is the transcript's line");
+  assert.ok(messages.at(-1).includes("Rantz wanted potato."), "the earlier onion does not stand in for the potato");
   player.setRegistered(false);
 });

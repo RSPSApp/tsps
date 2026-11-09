@@ -456,6 +456,30 @@ async function unfinished(t, f, { herbs, vials, coins, free = null, held = 0 }) 
   await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
 }
 
+// rsprox_transcripts/232/03159.txt (a normal world): Zahur's own refusals as dialogue, by what is missing (no herbs
+// 16028, no vials 12090, no coins 15340), and no line at all when she makes them (15767).
+test("Zahur Make unfinished: her recorded refusals, and nothing said when she makes them", async (t) => {
+  const cases = [
+    [[[noted(I.VIAL_OF_WATER), 5], [I.COINS, COST * 5]], "You don't have anything for me to combine."],
+    [[[noted(I.GUAM_LEAF), 5], [I.COINS, COST * 5]], "You need to bring along a base for me to make unfinished potions with."],
+    [[[noted(I.GUAM_LEAF), 5], [noted(I.VIAL_OF_WATER), 5]], `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`],
+  ];
+  for (const [items, line] of cases) {
+    const f = actor(t);
+    const said = [];
+    const sender = f.p.getPacketSender(), sendString = sender.sendString.bind(sender);
+    t.mock.method(sender, "sendString", (text, ...rest) => { said.push(String(text)); return sendString(text, ...rest); });
+    items.forEach(([id, n], slot) => f.inv.setItem(slot, plain(id, n)));
+    await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+    assert.ok(said.some((text) => text.includes(line)), `${line} | ${said.join(" / ")}`);
+    assert.deepEqual(f.messages, [], "dialogue, not a chat line");
+  }
+  const made = actor(t);
+  await unfinished(t, made, { herbs: 4, vials: 4, coins: COST * 4 });
+  assert.equal(amount(made, unfNote()), 4);
+  assert.deepEqual(made.messages, [], "no line when they are made");
+});
+
 test("Zahur Make unfinished: with no room, nothing is taken", async (t) => {
   const control = actor(t);
   await unfinished(t, control, { herbs: 100, vials: 100, coins: COST * 10 + 100, free: 1 });

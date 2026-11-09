@@ -30,7 +30,8 @@
  *
  * Worm Tongue's Wares is the cache's omnishop row `wyrm_agility_rewards_shop` (rsprox 237/01106
  * opens it): amylase packs 100 termites, teleport scrolls 40, the graceful crafting kit 650 and a
- * calcified acorn 900, as the Wiki lists. The kit (wyrm_agility_graceful_dummyitem) also costs
+ * calcified acorn 900, as the Wiki lists; Talk-to's "Would you like to trade?" opens it too. The
+ * kit (stock obj 30044, wyrm_agility_graceful_dummyitem in the symbol dump) also costs
  * one of each plain graceful piece: buying it swaps the six for their Varlamore versions instead
  * of handing over a kit (Wiki: "Requires full graceful set").
  */
@@ -98,6 +99,8 @@ const MESSAGE = {
 };
 
 const SHOP = "wyrm_agility_rewards_shop";
+/** The Wiki shop name Worm Tongue's "Would you like to trade?" opens (npc-dialogues.json's open_shop). */
+const SHOP_NAME = "Worm Tongue's Wares";
 const GRACEFUL_KIT_STOCK = "wyrm_agility_rewards_shop_stock_3";
 /** The info panel's text for each stock row, as rsprox 237/01106 sends it. */
 const DESCRIPTIONS = Object.freeze({
@@ -195,6 +198,29 @@ function openShop({ player }) {
   return request.handled;
 }
 
+/** One tick on, after the dialogue has closed its chatbox (as the Brimhaven Agility Arena's store does). */
+function afterTick(action) {
+  const { Task, TaskManager } = core;
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(1);
+    }
+    execute() {
+      this.stop();
+      action();
+    }
+  })());
+}
+
+/** "Would you like to trade?" ends in an open_shop for the Wiki's shop name: the omnishop. */
+function openFromDialogue(request) {
+  if (request.action !== "open_shop" || request.target !== SHOP_NAME) return;
+  request.handled = true;
+  request.end = true;
+  const { player } = request;
+  afterTick(() => openShop({ player }));
+}
+
 function describe(request) {
   if (request.shop !== SHOP) return;
   request.description = DESCRIPTIONS[request.stock] ?? request.description;
@@ -204,8 +230,14 @@ function describe(request) {
 function purchase(request) {
   if (request.shop !== SHOP || request.stock !== GRACEFUL_KIT_STOCK) return;
   request.handled = true;
-  const inventory = request.player.getInventory();
-  for (const [, varlamore] of GRACEFUL_MAKEOVER) inventory.adds(core.ItemIdentifiers[varlamore], 1);
+  const { player } = request;
+  const inventory = player.getInventory();
+  for (const [, varlamore] of GRACEFUL_MAKEOVER) {
+    const itemId = core.ItemIdentifiers[varlamore];
+    inventory.adds(itemId, 1);
+    // Handled purchases skip the omnishop's own collection log line; the pieces are in the Colossal Wyrm Agility log.
+    api.emitCustomEvent("collection-log:obtain", { player, itemId, amount: 1 });
+  }
   inventory.refreshItems();
 }
 
@@ -225,6 +257,7 @@ module.exports = {
     pluginApi.onCustomEvent("agility:lap", spawnTermites);
     pluginApi.onCustomEvent("agility:obstacle", scoopTermites);
     pluginApi.onNpcInteraction("Worm Tongue", { Shop: openShop });
+    pluginApi.onCustomEvent("npc-dialogue:action", openFromDialogue);
     pluginApi.onCustomEvent("omnishop:describe", describe);
     pluginApi.onCustomEvent("omnishop:purchase", purchase);
   },

@@ -36,6 +36,8 @@ before(() => {
     getItemOnGroundManager: () => ({ registerLocation: (player, item) => hooks.floor.push(item) }),
   };
   api.onCustomEvent("agility:course-item", (request) => hooks.courseItems.push({ ...request }));
+  hooks.logged = [];
+  api.onCustomEvent("collection-log:obtain", (request) => hooks.logged.push(request.itemId));
   require("../plugins/interface/Omnishop.plugin").register(api);
   Wyrm.register(api);
   hooks.api = api;
@@ -190,4 +192,24 @@ test("the graceful crafting kit swaps a full plain graceful set for the Varlamor
   for (const id of plain) assert.equal(inventory.getAmount(id), 0, `plain ${id} taken`);
   for (const id of varlamore) assert.equal(inventory.getAmount(id), 1, `Varlamore ${id} given`);
   assert.equal(inventory.getAmount(GRACEFUL_CRAFTING_KIT), 0, "no kit is handed over");
+  for (const id of varlamore) assert.ok(hooks.logged.includes(id), `Varlamore ${id} reaches the collection log`);
+});
+
+test("Talk-to's \"Would you like to trade?\" opens the omnishop a tick later", () => {
+  const player = createPlayer();
+  const submitted = [];
+  const submit = core.TaskManager.submit;
+  core.TaskManager.submit = (task) => submitted.push(task);
+  try {
+    const request = { player, action: "open_shop", target: "Worm Tongue's Wares", handled: false, end: false };
+    hooks.api.emitCustomEvent("npc-dialogue:action", request);
+    assert.ok(request.handled && request.end, "the dialogue stops there");
+    assert.equal(player.getInterfaceId(), -1, "not before the chatbox closes");
+    assert.equal(submitted.length, 1);
+    submitted[0].execute();
+  } finally {
+    core.TaskManager.submit = submit;
+  }
+  assert.equal(player.getInterfaceId(), 819, "omnishop_main");
+  assert.equal(player.getAttribute("omnishop:shop"), core.CacheDefinitions.getDbRowId(Wyrm.SHOP));
 });

@@ -214,9 +214,10 @@ course's `marks` block:
   lap on average; the spawn chance (about 35%) is worked out from that. Where one obstacle here
   plays two live ones (the first tightrope and its edges, the basic rope and its jumps, the
   advanced tightrope and its rope), termites on the first marker are scooped as it ends.
-- **Worm Tongue's Wares** is the cache's omnishop `wyrm_agility_rewards_shop` (Shop option, 1106):
-  100/40/650/900 termites. The graceful crafting kit also takes one of each plain graceful piece
-  from the inventory and gives the Varlamore set for them.
+- **Worm Tongue's Wares** is the cache's omnishop `wyrm_agility_rewards_shop` (Shop option, 1106;
+  Talk-to's "Would you like to trade?" too): 100/40/650/900 termites. The graceful crafting kit
+  also takes one of each plain graceful piece from the inventory and gives the Varlamore set for
+  them, logged in the collection log.
 - **Worm Tongue** (1106): the start ladder before a talk with him gives his "You there! Over here!
   Let's have a little chat before you head up there!" (varbit 11354 records the talk). Not done.
 - **Not given yet:** the lap loot tracker; the giant squirrel rate is unknown on the Wiki since

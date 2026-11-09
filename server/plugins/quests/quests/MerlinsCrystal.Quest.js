@@ -27,6 +27,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     ObjectIdentifiers,
     Equipment,
     Location,
+    ObjectManager,
     CountdownTask,
     TaskManager,
   } = api.core;
@@ -75,6 +76,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
 
   const RITUAL_TILE = new Location(2780, 3515, 0);
   const RITUAL_TILE_RADIUS = 1;
+  const GIANT_CRYSTAL_TILE = { x: 2767, y: 3493, z: 2 };
   const TOWER_MERLIN_TILE = { x: 2766, y: 3493, z: 2 };
   const KEEP_CRATE_ARRIVAL = new Location(2779, 3400, 0);
   const MORGAN_TILE = { x: 2771, y: 3403, z: 2 };
@@ -396,7 +398,20 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     spawnTracked(player, "beggar", NpcIdentifiers.BEGGAR, BEGGAR_TILE);
   }
 
+  /** Once Merlin is freed the crystal is gone for that player (the smash flow in
+   *  OSRS footage); it is back after the quest, as the wiki notes. */
+  function ensureCrystal(player) {
+    if (!player || player.isPlayerBot?.() === true) return;
+    const crystalTile = new Location(GIANT_CRYSTAL_TILE.x, GIANT_CRYSTAL_TILE.y, GIANT_CRYSTAL_TILE.z);
+    if (quest.isStarted(player) && quest.getStage(player) === STAGE_MERLIN_FREED) {
+      ObjectManager.hideMapObjectFor(player, GIANT_CRYSTAL_OBJECT_ID, crystalTile);
+    } else {
+      ObjectManager.showMapObjectFor(player, GIANT_CRYSTAL_OBJECT_ID, crystalTile);
+    }
+  }
+
   function ensureQuestNpcs(player) {
+    ensureCrystal(player);
     ensureTowerMerlin(player);
     ensureBeggar(player);
   }
@@ -488,10 +503,12 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (stepId === CRYSTAL_SHATTERED_ACTION_ID) {
       advanceTo(player, STAGE_MERLIN_FREED);
       removeTracked(player, "merlin");
+      ensureCrystal(player);
       return;
     }
     if (stepId === COMPLETE_ACTION_ID && ARTHUR_IDS.has(npcId)) {
       if (!quest.isComplete(player)) quest.complete(player);
+      ensureCrystal(player);
       return;
     }
     if (BEGGAR_BREAD_STEP_IDS.has(stepId)) {

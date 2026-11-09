@@ -18263,6 +18263,54 @@ test('Death Plateau keeps Eohric and Harold dialogue in order', () => {
 });
 
 
+test('Death Plateau reads the held combination in the handwritten scroll', () => {
+  const { api, handlers, player, items, messages } = questScene('DeathPlateau');
+  const itemId = api.core.ItemIdentifiers.COMBINATION;
+  const sent = [];
+  const sender = {
+    sendInterface: id => sent.push(id),
+    sendString: (text, component) => sent.push([component, text]),
+  };
+  player.getPacketSender = () => sender;
+  const read = handlers.namedItemActions.get('Combination').Read;
+  assert.equal(read({ player, itemId }), false);
+  assert.deepEqual(sent, []);
+  items.set(itemId, 1);
+  assert.equal(read({ player, itemId }), true);
+  assert.deepEqual(sent, [
+    222,
+    [(222 << 16) | 5, 'Red is North of Blue. Yellow is South of Purple.'],
+    [(222 << 16) | 6, 'Green is North of Purple. Blue is West of'],
+    [(222 << 16) | 7, 'Yellow. Purple is East of Red.'],
+  ]);
+  assert.equal(items.get(itemId), 1);
+  assert.deepEqual(messages, []);
+});
+
+test("Death Plateau walks the castle and inn stairs without climbing", (t) => {
+  const { api, handlers, player, tile } = questScene('DeathPlateau');
+  const { ObjectIdentifiers: O } = api.core;
+  const [walkStairs] = handlers.custom.get('ladders:climb');
+  const climb = t.mock.method(api, 'emitCustomEvent');
+  for (const [objectId, from, to] of [
+    [O.STAIRS_23, [2897, 3566, 0], [2897, 3569, 1]],
+    [O.STAIRS_22, [2897, 3567, 1], [2897, 3565, 0]],
+    [O.STAIRCASE_79, [2914, 3539, 0], [2914, 3542, 1]],
+    [O.STAIRCASE_82, [2914, 3540, 1], [2914, 3538, 0]],
+  ]) {
+    const object = { getLocation: () => tile(...from) };
+    const request = { player, objectId, object, handled: false };
+    walkStairs(request);
+    assert.equal(request.handled, true);
+    const [event, options] = climb.mock.calls.at(-1).arguments;
+    assert.equal(event, to[2] > from[2] ? 'ladders:climbUp' : 'ladders:climbDown');
+    assert.deepEqual(options, { player, object, destination: tile(...to), animate: false });
+  }
+  const other = { player, objectId: O.STAIRCASE_79, object: { getLocation: () => tile(3200, 3200) }, handled: false };
+  walkStairs(other);
+  assert.equal(other.handled, false);
+});
+
 test("Death Plateau doors require Eohric's hint and the solved puzzle", () => {
   const { api, handlers, quest, player, messages } = questScene('DeathPlateau');
   const door = api.core.ObjectIdentifiers.DOOR_115;

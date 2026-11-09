@@ -54,6 +54,7 @@ import {
   encodeCameraMoveArc,
   encodeCameraRotateToCoordinate,
   encodeCameraTranslate,
+  encodeCameraSkybox,
   CameraMovementOptions,
   CameraEasing,
   encodeWidgetSetColour, encodeAttackTimer,
@@ -1121,6 +1122,12 @@ export class PacketSender {
 
   sendCameraUnlock(unlock: boolean): this {
     this.player.getSession().sendClientPacket(encodeCameraUnlock(unlock));
+    return this;
+  }
+
+  /** Shows a cache model as the sky (cam_skybox); -1 clears it. cam_reset leaves it in place. */
+  sendCameraSkybox(model: number): this {
+    this.player.getSession().sendClientPacket(encodeCameraSkybox(model));
     return this;
   }
 

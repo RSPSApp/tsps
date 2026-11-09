@@ -13,6 +13,7 @@ import net.rsprot.crypto.cipher.NopStreamCipher
 import net.rsprot.protocol.game.outgoing.codec.specific.ObjEnabledOpsSpecificEncoder
 import net.rsprot.protocol.game.outgoing.camera.CamMoveToCyclesV3
 import net.rsprot.protocol.game.outgoing.camera.CamRotateToCoordinateV3
+import net.rsprot.protocol.game.outgoing.camera.CamSkybox
 import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
 import net.rsprot.protocol.game.outgoing.misc.client.HideObjOps
@@ -130,6 +131,13 @@ class WorldTest {
         assertEquals(CameraEaseFunction.EASE_OUT_CUBIC, camera.easing)
         world.handle(packet(TspsServerPacket.HINT_ARROW, TspsWriter().u8(1).u16(NPC_INDEX).u16(0).u8(0).u8(0)))
         assertEquals(NPC_INDEX, ((sent.last() as HintArrow).type as HintArrow.NpcHintArrow).index)
+    }
+
+    @Test
+    fun `cam_skybox carries the model and its explicit clear`() {
+        world.handle(packet(TspsServerPacket.CAMERA_CONTROL, TspsWriter().u8(14).i32(61359)))
+        world.handle(packet(TspsServerPacket.CAMERA_CONTROL, TspsWriter().u8(14).i32(-1)))
+        assertEquals(listOf(61359, -1), sent.map { (it as CamSkybox).model })
     }
 
     @Test

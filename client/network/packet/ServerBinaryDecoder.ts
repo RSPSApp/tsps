@@ -1864,6 +1864,10 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             if (mode === 7) {
                 return { type: "camera", payload: { mode: "translate", dx: reader.readInt(), dy: reader.readInt() } };
             }
+            if (mode === 14) {
+                // cam_skybox: a cache model drawn as the sky; -1 clears it.
+                return { type: "camera", payload: { mode: "skybox", model: reader.readInt() } };
+            }
             return null;
         }
 

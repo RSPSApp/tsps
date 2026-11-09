@@ -56,6 +56,7 @@ import { ModelData } from "../rs/model/ModelData";
 import { Scene } from "../rs/scene/Scene";
 import { getUiScale } from "../ui/UiScale";
 import { ClickCrossOverlay } from "../ui/devoverlay/ClickCrossOverlay";
+import { SkyboxRenderer } from "./SkyboxRenderer";
 import { GroundItemOverlay } from "../ui/devoverlay/GroundItemOverlay";
 import { HealthBarOverlay } from "../ui/devoverlay/HealthBarOverlay";
 import { HitsplatOverlay } from "../ui/devoverlay/HitsplatOverlay";
@@ -527,6 +528,18 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public hitsplatOverlay?: HitsplatOverlay;
     public healthBarOverlay?: HealthBarOverlay;
     public clickCrossOverlay?: ClickCrossOverlay;
+    private skyboxRenderer?: SkyboxRenderer;
+
+    /** Draws the cam_skybox model, if any, into the freshly cleared scene framebuffer. */
+    public drawSkybox(camera: { viewProjMatrix: unknown; getPosX(): number; getPosY(): number; getPosZ(): number }): void {
+        if (this.skyboxModel < 0) return;
+        this.skyboxRenderer ??= new SkyboxRenderer(this.app, () => ({
+            modelLoader: this.osrsClient.modelLoader,
+            textureLoader: this.osrsClient.textureLoader,
+        }));
+        this.skyboxRenderer.setModel(this.skyboxModel);
+        this.skyboxRenderer.draw(camera.viewProjMatrix as Float32Array, camera.getPosX(), camera.getPosY(), camera.getPosZ());
+    }
     public tileTextOverlay?: TileTextOverlay;
     public tileMarkerOverlay?: TileMarkerOverlay;
     public groundItemOverlay?: GroundItemOverlay;

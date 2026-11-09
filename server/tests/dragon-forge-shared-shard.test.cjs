@@ -126,6 +126,8 @@ function actor(t, kind, { level = 90, completed = true, hammer = true, missing =
   });
   core.ObjectManager.register(object, true);
   assert.equal(core.MapObjects.getPrivateArea(p, forgeId, location), object);
+  const boxes = [];
+  t.mock.method(p.getDialogueManager(), "startDialogues", (chain) => { boxes.push(chain); });
   const hooks = PM.itemOnObjectHooks.filter(h => h.pluginName === "Smithing" && h.handlerName === "useItemOnObject");
   assert.equal(hooks.length, 1);
   const hook = hooks[0], original = hook.handler, seen = [];
@@ -134,7 +136,7 @@ function actor(t, kind, { level = 90, completed = true, hammer = true, missing =
     if (event.player === p && event.object === object) seen.push({ itemId: event.itemId, handled: event.handled });
     return result;
   });
-  return { p, c, inv, parts, output, object, seen, beforeXp: skills.getExperience(core.Skill.SMITHING), xp: kind === "plate" ? 2000 : 1000 };
+  return { p, c, inv, parts, output, object, seen, boxes, beforeXp: skills.getExperience(core.Skill.SMITHING), xp: kind === "plate" ? 2000 : 1000 };
 }
 
 async function use(f, itemId) {
@@ -180,4 +182,72 @@ test("a shared shard chooses the complete platebody recipe without kiteshield pa
   assert.equal(f.inv.getAmount(I.DRAGON_METAL_SLICE), 0);
   await use(f, I.DRAGON_METAL_SHARD);
   made(f);
+});
+
+const boxText = (f) => f.boxes.flatMap((chain) => [...chain.getDialogues().values()].map((dialogue) => dialogue.getText?.() ?? "")).join(" / ");
+
+test("a shared shard refuses a preset platebody part, then accepts its plain replacement", async t => {
+  const f = actor(t, "plate");
+  const slot = f.inv.getSlotForItemId(f.parts[0]);
+  const item = f.inv.getItems()[slot];
+  item.setMetaValue(core.Item.UNTRADEABLE_META, true);
+  item.setMetaValue(core.Item.UNBANKABLE_META, true);
+  item.setMetaValue(core.Item.PRESET_META, true);
+  await use(f, I.DRAGON_METAL_SHARD);
+  assert.match(boxText(f), /Preset items cannot be used for this\./);
+  for (const id of f.parts) assert.equal(f.inv.getAmount(id), 1);
+  assert.equal(f.inv.getAmount(I.HAMMER), 1);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING), f.beforeXp);
+  f.inv.setItem(slot, new core.Item(f.parts[0], 1));
+  f.seen.length = 0;
+  await use(f, I.DRAGON_METAL_SHARD);
+  made(f);
+});
+
+test("a shared shard names missing platebody parts, then forges when supplied", async t => {
+  const f = actor(t, "plate", { missing: I.DRAGON_METAL_LUMP });
+  await use(f, I.DRAGON_METAL_SHARD);
+  assert.match(boxText(f), /You need a dragon metal shard, a dragon metal lump and a dragon chainbody\./);
+  assert.equal(f.inv.getAmount(f.parts[0]), 1);
+  assert.equal(f.inv.getAmount(I.DRAGON_METAL_SHARD), 1);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING), f.beforeXp);
+  f.inv.add(new core.Item(I.DRAGON_METAL_LUMP, 1), false);
+  f.seen.length = 0;
+  await use(f, I.DRAGON_METAL_SHARD);
+  made(f);
+});
+
+test("an incomplete shared-shard tie keeps the first recipe's missing message", async t => {
+  const f = actor(t, "kite", { missing: I.DRAGON_METAL_SLICE });
+  f.inv.delete(f.parts[0], 1);
+  await use(f, I.DRAGON_METAL_SHARD);
+  assert.match(boxText(f), /You need a dragon metal shard, a dragon metal slice and a dragon sq shield\./);
+  assert.equal(f.inv.getAmount(I.DRAGON_METAL_SHARD), 1);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING), f.beforeXp);
+});
+
+test("a complete plain recipe takes precedence over a preset alternative", async t => {
+  const f = actor(t, "kite");
+  const chain = new core.Item(core.CacheDefinitions.getObjId("dragon_chainbody"), 1);
+  chain.setMetaValue(core.Item.UNTRADEABLE_META, true);
+  chain.setMetaValue(core.Item.UNBANKABLE_META, true);
+  chain.setMetaValue(core.Item.PRESET_META, true);
+  f.inv.add(chain, false);
+  f.inv.add(new core.Item(I.DRAGON_METAL_LUMP, 1), false);
+  await use(f, I.DRAGON_METAL_SHARD);
+  made(f);
+  assert.equal(f.inv.getAmount(chain.getId()), 1);
+  assert.equal(f.inv.getAmount(I.DRAGON_METAL_LUMP), 1);
+});
+
+test("two complete recipes retain kiteshield-first ordering", async t => {
+  const f = actor(t, "kite");
+  const chain = core.CacheDefinitions.getObjId("dragon_chainbody");
+  f.inv.add(new core.Item(chain, 1), false);
+  f.inv.add(new core.Item(I.DRAGON_METAL_LUMP, 1), false);
+  await use(f, I.DRAGON_METAL_SHARD);
+  made(f);
+  assert.equal(f.inv.getAmount(chain), 1);
+  assert.equal(f.inv.getAmount(I.DRAGON_METAL_LUMP), 1);
+  assert.equal(f.inv.getAmount(I.DRAGON_PLATEBODY), 0);
 });

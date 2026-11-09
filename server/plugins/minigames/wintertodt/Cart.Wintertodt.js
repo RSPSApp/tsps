@@ -61,8 +61,14 @@ function takeOne(player) {
   player.getInventory().refreshItems();
   Shared.api()?.emitCustomEvent("collection-log:obtain", { player, itemId: reward.id, amount: reward.amount });
   Round.setRewardsOwed(player, Round.rewardsOwed(player) - 1);
-  Shared.spam(player, `You found some loot: ${reward.amount} x ${itemName(reward.id)}`);
+  Shared.spam(player, `You found some loot: ${lootText(reward)}`);
   return true;
+}
+
+/** rsprox_transcripts/233/03264.txt: "Grimy torstol" for one, "4,886 x Coins" (thousands separated) for more. */
+function lootText(reward) {
+  const name = itemName(reward.id);
+  return reward.amount > 1 ? `${reward.amount.toLocaleString("en-US")} x ${name}` : name;
 }
 
 function searched(player) {
@@ -127,5 +133,6 @@ module.exports = function registerWintertodtCart(api) {
 };
 
 module.exports.search = search;
+module.exports.lootText = lootText;
 module.exports.bigSearch = bigSearch;
 module.exports.check = check;

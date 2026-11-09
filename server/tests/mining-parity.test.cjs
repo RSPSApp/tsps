@@ -19,6 +19,7 @@ const { ItemIds } = require("../dist/util/IdEnums");
 
 const core = PluginManager.getCoreApi();
 const MINING_PLUGIN = require.resolve("../plugins/skills/Mining.plugin");
+const CALCIFIED_WATER = require.resolve("../plugins/skills/mining/CalcifiedWater.Mining");
 let Mining = require(MINING_PLUGIN);
 
 const MINING_SUCCESS_SOUND = 3600;
@@ -215,6 +216,9 @@ function harness({ emit = noop } = {}) {
   }, { get: (target, key) => target[key] ?? noop });
   // The plugin keeps its tick counter at module level; each harness is a fresh server.
   delete require.cache[MINING_PLUGIN];
+  // Cam Torum's oozing water keeps its cycle at module level: fresh too, or ticks from earlier tests could start
+  // its water during a later one.
+  delete require.cache[CALCIFIED_WATER];
   Mining = require(MINING_PLUGIN);
   Mining.register(api);
   return {
@@ -483,6 +487,59 @@ test("the inactive crystal pickaxe needs 71 Mining, as the cache's param_23 says
   const found = Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 71 }));
   assert.equal(found?.id, ItemIds.CRYSTAL_PICKAXE_INACTIVE_);
   assert.equal(found.fastRollChance, 1 / 6);
+});
+
+// rsprox_transcripts/231/03063.txt:16924-17021 (normal world): oploc1 on lotr_mine_wall_coal_mid, the wall swing,
+// "You manage to mine some coal." (spam), lotr_mine_wall_depleted_mid with coal's timer, then on the depleted vein
+// "There is no ore currently available in this vein." (spam).
+test("Abandoned Mine ore veins: mined as their ore, wall swing, the matching depleted vein, and its own empty line", () => {
+  const h = harness();
+  const player = createPlayer();
+  // Checked first: mineRock mocks MapObjects.get, and a throw before its restore would break later tests.
+  assert.ok(h.interactions.get("Coal ore vein")?.Mine, "Coal ore vein can be mined");
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Coal ore vein", loc("lotr_mine_wall_coal_mid"));
+  try {
+    for (let tick = 0; tick < 12 && !h.registered.length; tick++) h.tick(1);
+    assert.equal(player.animations.at(0), core.CacheDefinitions.getSeqId("human_mining_rune_pickaxe_wall"), "the wall swing");
+    assert.deepEqual(player.added, [[ItemIds.COAL, 1]]);
+    assert.ok(player.spam.includes("You manage to mine some coal."), player.spam.join(" | "));
+    assert.equal(h.registered.at(-1).getId(), loc("lotr_mine_wall_depleted_mid"));
+    assert.equal(player.packets.scripts.at(-1)[5], 50, "coal's 30 s timer");
+  } finally {
+    restoreRandom();
+    restore();
+  }
+  for (const vein of ["Tin ore vein", "Copper ore vein", "Clay ore vein", "Iron ore vein", "Mithril ore vein", "Adamant ore vein"]) {
+    assert.ok(h.interactions.get(vein)?.Mine, `${vein} can be mined`);
+  }
+  // Every vein loc in the cache, each position going to its own depleted vein (the map places tin_l, tin_r,
+  // tin_single, copper_l and copper_r too).
+  for (const ore of ["tin", "copper", "clay", "coal", "iron", "mithril", "adamant"]) {
+    const vein = Mining.ORE_VEINS.find((rock) => Object.keys(rock.depletedRocks)[0].startsWith(`lotr_mine_wall_${ore}_`));
+    assert.ok(vein, ore);
+    for (const pos of ["l", "r", "mid", "single"]) {
+      assert.notEqual(loc(`lotr_mine_wall_${ore}_${pos}`), null, `${ore}_${pos} is a cache loc`);
+      assert.equal(vein.depletedRocks[`lotr_mine_wall_${ore}_${pos}`], `lotr_mine_wall_depleted_${pos}`, `${ore}_${pos}`);
+    }
+  }
+  // The review's repro: tin on lotr_mine_wall_tin_l goes to lotr_mine_wall_depleted_l, not rocks1.
+  const tinHarness = harness();
+  const tinMiner = createPlayer();
+  const restoreTinRandom = scriptRandom([], 0);
+  const tin = mineRock(tinHarness, tinMiner, "Tin ore vein", loc("lotr_mine_wall_tin_l"));
+  try {
+    for (let tick = 0; tick < 12 && !tinHarness.registered.length; tick++) tinHarness.tick(1);
+    assert.deepEqual(tinMiner.added, [[ItemIds.TIN_ORE, 1]]);
+    assert.equal(tinHarness.registered.at(-1)?.getId(), loc("lotr_mine_wall_depleted_l"));
+  } finally {
+    restoreTinRandom();
+    tin.restore();
+  }
+  const depleted = createPlayer();
+  const empty = new GameObject(loc("lotr_mine_wall_depleted_mid"), new core.Location(3285, 3368, 0), 0, 0, null);
+  h.interactions.get("Depleted vein").Mine({ player: depleted, object: empty, definition: { getName: () => "Depleted vein" } });
+  assert.deepEqual(depleted.spam, ["There is no ore currently available in this vein."]);
 });
 
 const itemName = (id) => core.CacheDefinitions.getItem(id).name;

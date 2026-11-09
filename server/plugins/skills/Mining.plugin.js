@@ -273,7 +273,37 @@ const ESSENCE_ROCKS = [
   { objectName: "Ancient essence crystals", level: 75, xp: 13.5, oreId: ItemIdentifiers.ANCIENT_ESSENCE, gems: true, respawnTicks: 0, infinite: true, essenceByLevel: true, oreMessage: "You manage to mine some ancient essence." },
 ];
 
-const ALL_ROCKS = [...ROCKS, ...ESSENCE_ROCKS];
+/**
+ * The Abandoned Mine's ore veins (lotr_mine_wall_<ore>_<l|r|mid|single>, "Coal ore vein" and the rest): wall rocks
+ * mined as their ore's rocks are, going to the matching lotr_mine_wall_depleted_<pos>. Recorded:
+ * rsprox_transcripts/231/03063.txt:16924-17021 (a normal world): the wall swing, "You manage to mine some coal.",
+ * lotr_mine_wall_depleted_mid with coal's timer, and the depleted vein's "There is no ore currently available in this
+ * vein." (spam).
+ */
+// Every ore has all four positions in the cache (lotr_mine_wall_<ore>_l/_r/_mid/_single).
+const VEIN_POSITIONS = ["l", "r", "mid", "single"];
+const ORE_VEINS = [
+  ["Tin ore vein", "Tin rocks", "tin"],
+  ["Copper ore vein", "Copper rocks", "copper"],
+  ["Clay ore vein", "Clay rocks", "clay"],
+  ["Coal ore vein", "Coal rocks", "coal"],
+  ["Iron ore vein", "Iron rocks", "iron"],
+  ["Mithril ore vein", "Mithril rocks", "mithril"],
+  ["Adamant ore vein", "Adamantite rocks", "adamant", "You manage to mine some adamantite."],
+].map(([objectName, base, ore, oreMessage]) => {
+  const positions = VEIN_POSITIONS;
+  const rock = ROCKS.find((candidate) => candidate.objectName === base);
+  const { objectIds, ...stats } = rock;
+  return {
+    ...stats, objectName, swing: "wall",
+    ...(oreMessage ? { oreMessage } : {}),
+    depletedRocks: Object.fromEntries(positions.map((pos) => [`lotr_mine_wall_${ore}_${pos}`, `lotr_mine_wall_depleted_${pos}`])),
+  };
+});
+const DEPLETED_VEIN = "Depleted vein";
+const NO_ORE_IN_VEIN = "There is no ore currently available in this vein.";
+
+const ALL_ROCKS = [...ROCKS, ...ORE_VEINS, ...ESSENCE_ROCKS];
 
 const ROCK_BY_NAME = new Map(ALL_ROCKS.map((rock) => [rock.objectName, rock]));
 let activeSessions;
@@ -1050,6 +1080,14 @@ function sendOresMined({ player }) {
 /** A depleted rock ("rocks1"/"rocks2", a Sailing or calcified rock's "_empty" loc, amethyst's empty wall) still offers Mine; it only says it is empty. */
 function mineDepletedRock(event) {
   const { CacheDefinitions } = pluginApi.core;
+  if (CacheDefinitions.getObject(event.object.getId())?.name === DEPLETED_VEIN) {
+    stopMining(activeSessions, event.player, false);
+    event.player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    event.player.getPacketSender().sendSoundEffect(NO_ORE_SOUND, 1, 0, 1);
+    spam(event.player, NO_ORE_IN_VEIN);
+    event.handled = true;
+    return true;
+  }
   const gameval = CacheDefinitions.getLocNames().get(event.object.getId()) ?? "";
   const depleted = [`${DEPLETED_ROCK_NAME}1`, `${DEPLETED_ROCK_NAME}2`].includes(gameval) || EMPTY_ROCK_PATTERN.test(gameval)
     || EMPTY_ROCK_NAMES.includes(CacheDefinitions.getObject(event.object.getId())?.name);
@@ -1122,6 +1160,7 @@ module.exports = {
   PICKAXES_DESC,
   ROCKS,
   ESSENCE_ROCKS,
+  ORE_VEINS,
   findBestPickaxe,
   wearsBreathingFilter,
   rollOutcome,
@@ -1149,6 +1188,7 @@ module.exports = {
     api.onCustomEvent("mining:ores-mined", answerOresMined);
     api.onObjectInteraction("Rocks", { Mine: mineDepletedRock });
     for (const name of EMPTY_ROCK_NAMES) api.onObjectInteraction(name, { Mine: mineDepletedRock });
+    api.onObjectInteraction(DEPLETED_VEIN, { Mine: mineDepletedRock });
 
     for (const rock of ALL_ROCKS) {
       api.onObjectInteraction(rock.objectName, { Mine: handleMine });

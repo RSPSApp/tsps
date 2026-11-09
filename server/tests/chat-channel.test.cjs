@@ -105,6 +105,45 @@ test('refusals use the live text, as chat-channel notifications', () => {
   assert.ok(!ignored.lines.some((line) => line.startsWith('plain:')), 'never a plain game message');
 });
 
+test('refusing to ignore a friend leaves them in the owner’s channel', () => {
+  const owner = player('Owner');
+  const member = player('Member');
+  Manager.setOwnChannelName(owner, 'Blur');
+  Manager.handleAction(owner, { action: 'add_friend', name: 'Member' });
+  Manager.join(owner, 'Owner', false);
+  Manager.join(member, 'Owner', false);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+
+  Manager.handleAction(owner, { action: 'add_ignore', name: 'Member' });
+  assert.match(owner.texts(), /remove Member from your friend list first/);
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), false);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+
+  Manager.handleAction(owner, { action: 'remove_friend', name: 'Member' });
+  Manager.handleAction(owner, { action: 'add_ignore', name: 'Member' });
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), true);
+  assert.equal(Manager.channelOf(member), null);
+  assert.equal(Manager.join(member, 'Owner', true), false);
+  Manager.handleAction(owner, { action: 'remove_ignore', name: 'Member' });
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), false);
+  assert.equal(Manager.join(member, 'Owner', true), true);
+});
+
+test('a full ignore list does not remove the requested member from the channel', () => {
+  const owner = player('Owner');
+  const member = player('Member');
+  Manager.setOwnChannelName(owner, 'Blur');
+  Manager.join(owner, 'Owner', false);
+  Manager.join(member, 'Owner', false);
+  for (let i = 0; i < 100; i++) owner.getRelations().addIgnore(Misc.stringToLongBigInt(`user${i}`));
+  assert.equal(owner.getRelations().getIgnoreList().length, 100);
+
+  Manager.handleAction(owner, { action: 'add_ignore', name: 'Member' });
+  assert.match(owner.texts(), /ignore list is full/i);
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), false);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+});
+
 test('kick and leave use the live text, and the ban holds', () => {
   const owner = player('Owner');
   const member = player('Member');

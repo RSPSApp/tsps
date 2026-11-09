@@ -529,7 +529,8 @@ function agilityTickets({ player, minigame, points }) {
 }
 
 /** `agility-ticket-streak { tickets, count }`: a clean run of Brimhaven tags reaches the count,
- * `brimhaven-agility-arena:streak` { player, tickets } (reset by any trap hit). */
+ * `brimhaven-agility-arena:streak` { player, tickets } (reset by a missed pillar: the cycle ended with no
+ * tag, or the player left the arena). */
 function agilityTicketStreak({ player, tickets }) {
   if (!player) return;
   const type = Common.leagueOf(player);
@@ -540,13 +541,17 @@ function agilityTicketStreak({ player, tickets }) {
 }
 
 /** `coin-pouch { coins, count }`: a coin pouch opened for at least that many coins at once,
- * `coin-pouch:opened` { player, coins, all } (Open-all's whole stack, or a single Open). */
-function coinPouch({ player, coins }) {
+ * `coin-pouch:opened` { player, coins, all, pouches } (Open-all's whole stack, or a single Open). */
+function coinPouch({ player, coins, pouches }) {
   if (!player) return;
   const type = Common.leagueOf(player);
   if (type === null) return;
   const amount = Number(coins) || 0;
-  const tasks = (indexOf(type).events.get("coin-pouch") ?? []).filter((task) => amount >= Number(task.trigger.coins));
+  const opened = Number(pouches) || 0;
+  // A task with `coins` needs that many paid at once; one with `pouches` ("Open 28 ... at once"), that
+  // many opened. Either missing is no floor. Only a completed open emits the event, so a refusal is no deed.
+  const tasks = (indexOf(type).events.get("coin-pouch") ?? []).filter((task) => (!(Number(task.trigger.coins) > 0) || amount >= Number(task.trigger.coins))
+    && (!(Number(task.trigger.pouches) > 0) || opened >= Number(task.trigger.pouches)));
   countTasks(player, type, tasks);
 }
 
@@ -648,8 +653,11 @@ const EVENT_KINDS = new Map([
   ["shortcut", (trigger, event) => trigger.shortcuts.includes(event.shortcut)],
   ["npc-op", (trigger, event) => trigger.option === String(event.option ?? "").toLowerCase() && trigger.npcs.some((npc) => key(npc) === key(npcName(event.npcId)))],
   // An object's option something answered. The task names the object by cache id and/or name; an
-  // `option` it gives must be the one clicked ("open", "fill"); a task naming neither is every one.
-  ["object-op", (trigger, event) => (trigger.option === undefined || trigger.option === String(event.option ?? "").toLowerCase())
+  // `option` it gives must be the one clicked ("open", "fill"); a task naming neither is every one. A
+  // task with an `event` is credited only by that content's success event (a chest that really gave its
+  // loot, an oven that really fired), never by the click pipeline's `object:operated`.
+  ["object-op", (trigger, event) => (trigger.event ?? "object:operated") === (event.source ?? "object:operated")
+    && (trigger.option === undefined || trigger.option === String(event.option ?? "").toLowerCase())
     && (!trigger.objectIds || trigger.objectIds.includes(Number(event.objectId)))
     && (!trigger.objects || trigger.objects.some((object) => key(object) === key(objectName(event.objectId))))],
   // An item's own inventory action something answered (Open on a mystery box), by the item's cache
@@ -801,6 +809,10 @@ module.exports = function attach(api) {
   api.onCustomEvent("npc:operated", onEvent("npc-op"));
   api.onCustomEvent("object:operated", onEvent("object-op"));
   api.onCustomEvent("item:operated", onEvent("item-op"));
+  // A loc's own success events: a chest that gave its loot, an oven that fired (see the `object-op` accepts).
+  // They carry their own `source` so a task waiting on the click pipeline is not credited by them, and vice versa.
+  api.onCustomEvent("chest:opened", (event) => onEvent("object-op")({ ...event, source: "chest:opened", option: "open" }));
+  api.onCustomEvent("pottery:fired", (event) => onEvent("object-op")({ ...event, source: "pottery:fired", option: "fire" }));
   api.onCustomEvent("agility:obstacle", onEvent("shortcut"));
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");

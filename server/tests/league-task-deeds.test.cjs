@@ -712,12 +712,33 @@ test("kill-each with noLeave: every king without leaving; a step outside wipes i
   killWith(f, "Dagannoth Rex");
   killWith(f, "Dagannoth Prime");
   assert.deepEqual(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], { "Dagannoth Rex": 1, "Dagannoth Prime": 1 });
+  // Leaving the lair: the crossed map square is the leaving edge (no per-tick hook).
   f.player.moveTo(new core.Location(2900, 4300, 0));
-  PM.emitPlayerProcess({ player: f.player });
+  PM.emitPlayerMapSquareChange({ player: f.player, previous: new core.Location(2910, 4440, 0), location: new core.Location(2900, 4300, 0) });
   assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], undefined, "a step outside the lairs wipes the counts");
   assert.ok(!done(f, "defeat-the-dagannoth-kings-without-leaving"));
   killWith(f, "Dagannoth Supreme");
   assert.ok(!done(f, "defeat-the-dagannoth-kings-without-leaving"), "a kill outside its lairs is no kill");
+
+  // A teleport-like map square change is another leaving edge (a move to another 64x64 square).
+  f.player.moveTo(new core.Location(2910, 4440, 0));
+  f.player.needsPlacement = false;
+  killWith(f, "Dagannoth Rex");
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"]?.["Dagannoth Rex"], 1);
+  f.player.moveTo(new core.Location(2900, 4300, 0));
+  PM.emitPlayerMapSquareChange({ player: f.player, previous: new core.Location(2910, 4440, 0), location: new core.Location(2900, 4300, 0) });
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], undefined, "an out-of-lair square change wipes the counts");
+
+  // A stale session's counts (logged out inside) are swept at login.
+  f.player.moveTo(new core.Location(2910, 4440, 0));
+  f.player.needsPlacement = false;
+  killWith(f, "Dagannoth Rex");
+  assert.ok(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"]);
+  f.player.moveTo(new core.Location(1908, 4367, 0));
+  PM.emitCustomEvent("league:login", { player: f.player, league: 6 });
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], undefined, "login sweeps counts held outside the place");
+
+  // Inside again, the three kings in a sitting complete it.
   f.player.moveTo(new core.Location(2910, 4440, 0));
   f.player.needsPlacement = false;
   killWith(f, "Dagannoth Rex");
@@ -730,6 +751,28 @@ test("ca-complete: the task is a Combat Achievement, from its completion (Defeat
   const f = pactsCharacter(t);
   PM.emitCustomEvent("combat-achievements:completed", { player: f.player, silent: false, task: { id: 1, name: "Vardorvis Sleeper", tier: "Elite" } });
   assert.ok(done(f, "defeat-awakened-vardorvis"), f.messages.join(" | "));
+});
+
+test("ca-complete backfills at login from the achievement's own state (a CA cannot be done twice)", (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  // A character who completed the achievement before this league task existed: the CA state is saved
+  // but the league task is not. It is completed through the achievements plugin itself, so the league
+  // task is never named (no `combat-achievements:completed` for it), then the save is reloaded.
+  const first = pactsCharacter(t);
+  const ca = require("../plugins/achievements/combatachievements/Progress.CombatAchievements");
+  ca.complete(first.player, "Vardorvis Sleeper", { silent: true });
+  assert.equal(ca.isComplete(first.player, require("../plugins/achievements/combatachievements/Data.CombatAchievements").taskNamed("Vardorvis Sleeper").id), true);
+  // The deploy's save predates the league task, so its league task map does not hold this one.
+  first.player.setAttribute("league:tasks", {}, true);
+  assert.ok(!done(first, "defeat-awakened-vardorvis"), "the league task is not in the save");
+  const saved = PlayerSave.fromPlayer(first.player);
+
+  const reloaded = pactsCharacter(t);
+  saved.applyToPlayer(reloaded.player);
+  reloaded.player.setAttribute("league:tasks", {}, true);
+  assert.ok(!done(reloaded, "defeat-awakened-vardorvis"), "not done before the login sweep");
+  PM.emitCustomEvent("league:login", { player: reloaded.player, league: 6 });
+  assert.ok(done(reloaded, "defeat-awakened-vardorvis"), `the login sweep backfills it: ${reloaded.messages.join(" | ")}`);
 });
 
 test("deed: the Penance Queen's own kill event (Defeat the Penance Queen)", (t) => {
@@ -1438,12 +1481,18 @@ async function objectOption(t, f, objectId, option, count = 6) {
   return object;
 }
 
-test("object-op: a loc's own option something answered, by id and/or name, one option only (Open a Bronze Chest; a Muddy Chest)", async (t) => {
+test("object-op: a chest credits only a real open, from its own success event (Open a Bronze Chest)", async (t) => {
   core.RegionManager.loadMapFiles(3511, 9724);
   const f = pactsCharacter(t, [3510, 9723, 0]);
-  // Shades of Mort'ton: a bronze chest opens to a bronze key (its own name at its option).
-  const key = require("../plugins/minigames/shadesofmortton/Common.ShadesOfMortton");
+  // Shades of Mort'ton: a bronze chest needs its own key; the wrong key (here none) is a refusal.
   const bronzeKey = 3450; // shadekey_bronze_bloodred
+  await objectOption(t, f, 4111, "Open", 4);
+  assert.match(f.messages.join(" | "), /key/i, "the real chest complains of the key");
+  assert.ok(!done(f, "open-a-bronze-chest"), `a wrong key is no open: ${f.messages.join(" | ")}`);
+  // The click pipeline's own event is not the chest's success, either.
+  PM.emitCustomEvent("object:operated", { player: f.player, objectId: 4111, option: "open" });
+  assert.ok(!done(f, "open-a-bronze-chest"), "an object:operated click is not a chest:opened success");
+
   f.player.getInventory().add(new core.Item(bronzeKey), true);
   await objectOption(t, f, 4111, "Open", 4);
   assert.equal(f.player.getInventory().getAmount(bronzeKey), 0, `the real chest takes the key: ${f.messages}`);
@@ -1462,34 +1511,52 @@ test("object-op: an id the task names with its option and count (Open 1 Muddy Ch
   // The Wilderness tile the wilderness-chests test uses, no spawns within 30 tiles; one real open.
   core.RegionManager.loadMapFiles(2990, 3800);
   const f = pactsCharacter(t, [2989, 3800, 0], [21, 11]); // Varlamore and the Wilderness
+  // Without a key the chest is a refusal: the lock line, no loot, no deed.
+  await objectOption(t, f, 170, "Open", 6);
+  assert.ok(!done(f, "open-1-muddy-chest"), `a locked chest is no open: ${f.messages.join(" | ")}`);
+  // Nor does a click credit it: the deed is the chest's own Loot.
+  PM.emitCustomEvent("object:operated", { player: f.player, objectId: 170, option: "open" });
+  assert.ok(!done(f, "open-1-muddy-chest"), "a click on the closed loc is not an open");
+
+  // One real open with a key credits it; the chest swaps to its open variant, so the remaining nine
+  // opens are the same success event (as the content emits it once per real open).
   f.player.getInventory().add(new core.Item(core.ItemIdentifiers.MUDDY_KEY, 1), true);
   await objectOption(t, f, 170, "Open", 8);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.MUDDY_KEY), 0, `the real chest takes the key: ${f.messages}`);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.MUDDY_KEY), 0, `the key opens it: ${f.messages}`);
   assert.ok(done(f, "open-1-muddy-chest"), f.messages.join(" | "));
   assert.ok(!done(f, "open-10-muddy-chests"), "one open is not ten");
-  // The count progresses on the same event, as the pipeline emits it (the other nine opens).
-  for (let i = 0; i < 9; i++) PM.emitCustomEvent("object:operated", { player: f.player, objectId: 170, option: "open", location: { x: 2990, y: 3800, z: 0 } });
+  for (let i = 0; i < 9; i++) PM.emitCustomEvent("chest:opened", { player: f.player, objectId: 170 });
   assert.ok(done(f, "open-10-muddy-chests"), "ten opens reach the ten-chest task");
   // A wrong id or a wrong option is no Muddy chest.
   const other = pactsCharacter(t);
-  PM.emitCustomEvent("object:operated", { player: other.player, objectId: 171, option: "open", location: { x: 2990, y: 3800, z: 0 } });
+  PM.emitCustomEvent("chest:opened", { player: other.player, objectId: 171 });
   PM.emitCustomEvent("object:operated", { player: other.player, objectId: 170, option: "search", location: { x: 2990, y: 3800, z: 0 } });
   assert.ok(!done(other, "open-1-muddy-chest"), "another loc or another option opens nothing");
 });
 
-test("item-op: an inventory action's own option and the stack it covered (Open 28 Coin Pouches at once)", async (t) => {
-  const f = pactsCharacter(t);
+test("coin-pouch: only a completed Open-all credits, with the pouches it really opened (Open 28 Coin Pouches at once)", async (t) => {
   const pouch = item("Coin pouch");
+  const coins = core.ItemIdentifiers.COINS;
+  const f = pactsCharacter(t);
   f.player.getInventory().add(new core.Item(pouch, 28), true);
   await inventoryOption(f, "Coin pouch", "Open-all", 1, 4);
   assert.equal(f.player.getInventory().getAmount(pouch), 0, `the real Open-all empties the stack: ${f.messages}`);
+  assert.ok(f.player.getInventory().getAmount(coins) > 0);
   assert.ok(done(f, "open-28-coin-pouches-at-once"), f.messages.join(" | "));
 
-  // A single Open covers one: 27 pouches opened one at a time is not 28 at once.
+  // 27 at once is not 28.
   const few = pactsCharacter(t);
   few.player.getInventory().add(new core.Item(pouch, 27), true);
   await inventoryOption(few, "Coin pouch", "Open-all", 1, 4);
   assert.ok(!done(few, "open-28-coin-pouches-at-once"), "27 at once is not 28");
+
+  // A refused Open-all emits nothing (the pouch plugin's own test proves it refuses and keeps the stack),
+  // so the event only ever carries real opens: 27 opened really is 27, never 28.
+  const apart = pactsCharacter(t);
+  PM.emitCustomEvent("coin-pouch:opened", { player: apart.player, coins: 9000, all: true, pouches: 27 });
+  assert.ok(!done(apart, "open-28-coin-pouches-at-once"), "27 pouches is not 28");
+  PM.emitCustomEvent("coin-pouch:opened", { player: apart.player, coins: 9000, all: true, pouches: 28 });
+  assert.ok(done(apart, "open-28-coin-pouches-at-once"), "28 pouches completes it");
 });
 
 test("item-op: the mystery box and the frozen cache, by name and option (Open the Mystery Box; Open a Frozen Cache)", async (t) => {

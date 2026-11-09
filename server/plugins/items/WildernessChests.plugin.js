@@ -201,6 +201,9 @@ function openMuddyChest(event, random = Math.random) {
   inventory.deleteNumber(ids().MUDDY_KEY, 1);
   give(player, loot);
   credit(player, MUDDY_TASK);
+  // "chest:opened" { player, objectId }: the chest really gave its loot, for a league's "Open 1/10 Muddy
+  // Chests" (a locked click or a full pack returns above without it, so an attempt is no deed).
+  api.emitCustomEvent("chest:opened", { player, objectId: MUDDY_CHEST });
   return true;
 }
 

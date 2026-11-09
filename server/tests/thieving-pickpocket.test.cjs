@@ -364,10 +364,45 @@ test("content's pouch limit lifts the 28-pouch block, and its chance bonus scale
 test('opening coin pouches pays their coins', () => {
     const who = player({ inventory: { [I.COIN_POUCH]: 3 } });
     log.length = 0;
-    CoinPouch._test.open(who, I.COIN_POUCH, 3, true);
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 3, true);
+    assert.equal(opened, true, "a completed open says so");
     assert.equal(who.inv.getAmount(I.COIN_POUCH), 0);
     assert.equal(who.inv.getAmount(I.COINS), 9);
     assert.deepEqual(log.slice(-2), ['spam: You open all of the pouches and receive a total of 9 coins.', 'sound 2115']);
+});
+
+test('one pouch opened on its own says it opened, so the item action is handled', () => {
+    // The right-click Open answers the click only when the pouch really opened: a successful single
+    // open must say so, or the item action is left unhandled and the client plays nothing.
+    const who = player({ inventory: { [I.COIN_POUCH]: 3 } });
+    log.length = 0;
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 1);
+    assert.equal(opened, true, "a completed single open says so");
+    assert.equal(who.inv.getAmount(I.COIN_POUCH), 2);
+    assert.equal(who.inv.getAmount(I.COINS), 3);
+    assert.deepEqual(log, ['add Coins x3', 'You open the pouch and find 3 coins.']);
+});
+
+test('a refused open (no room for the coins) opens nothing and says so', () => {
+    // A full pack, twenty-eight pouches still in the stack, and no coin stack: opening one cannot free
+    // the slot, so the coins would vanish and the open is refused (it emits nothing).
+    const who = player({ inventory: { [I.COIN_POUCH]: 28 }, full: true });
+    log.length = 0;
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 1);
+    assert.equal(opened, false, "a refusal is no open");
+    assert.equal(who.inv.getAmount(I.COIN_POUCH), 28, "the stack stays");
+    assert.equal(who.inv.getAmount(I.COINS), 0);
+    assert.ok(log.includes("You don't have enough inventory space."), log.join(' | '));
+    assert.ok(!log.some((line) => line.startsWith('spam:')), "nothing is said to have opened");
+});
+
+test('an Open-all on a full pack opens (its own slot is the one the coins go in)', () => {
+    const who = player({ inventory: { [I.COIN_POUCH]: 28 }, full: true });
+    log.length = 0;
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 28, true);
+    assert.equal(opened, true);
+    assert.equal(who.inv.getAmount(I.COIN_POUCH), 0);
+    assert.equal(who.inv.getAmount(I.COINS), 84);
 });
 
 test('the rogue outfit: the full set doubles loot; a doubled coin pouch adds its coins', () => {

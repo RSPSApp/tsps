@@ -530,16 +530,21 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("take-a-shortcut-across-the-shilo-village-river"), { kind: "shortcut", shortcuts: ["Stepping stone (Shilo Village)"], count: 1 });
   // An object's or item's own option (object-op / item-op): the loc ids and/or names and the option
   // lower-cased, an item action's amount the stack one Open-all covered.
-  assert.deepEqual(trigger("open-a-bronze-chest"), { kind: "object-op", objects: ["Bronze Chest"], option: "open", count: 1 });
+  // A chest or the Civitas oven is credited by the content's own success event (`event`), never the click,
+  // so a locked chest or an empty oven is no deed.
+  assert.deepEqual(trigger("open-a-bronze-chest"), { kind: "object-op", objects: ["Bronze Chest"], option: "open", event: "chest:opened", count: 1 });
   assert.deepEqual(trigger("open-a-black-chest").objects, ["Black Chest"]);
+  assert.deepEqual(trigger("open-a-black-chest").event, "chest:opened");
   assert.deepEqual(trigger("open-a-gold-chest").objects, ["Gold Chest"]);
-  assert.deepEqual(trigger("open-1-muddy-chest"), { kind: "object-op", objectIds: [170], option: "open", count: 1 });
-  assert.deepEqual(trigger("open-10-muddy-chests"), { kind: "object-op", objectIds: [170], option: "open", count: 10 });
+  assert.deepEqual(trigger("open-a-gold-chest").event, "chest:opened");
+  assert.deepEqual(trigger("open-1-muddy-chest"), { kind: "object-op", objectIds: [170], option: "open", event: "chest:opened", count: 1 });
+  assert.deepEqual(trigger("open-10-muddy-chests"), { kind: "object-op", objectIds: [170], option: "open", event: "chest:opened", count: 10 });
   assert.deepEqual(trigger("fill-a-crate-with-bananas"), { kind: "object-op", objectIds: [2072], option: "fill", count: 1 });
   assert.deepEqual(trigger("use-the-mine-cart-transportation-system"), { kind: "object-op", objects: ["Minecart", "Train cart"], count: 1 });
   assert.deepEqual(trigger("use-the-abyss").objects, ["Air rift", "Mind rift", "Water rift", "Earth rift", "Fire rift", "Body rift", "Cosmic rift", "Chaos rift", "Nature rift", "Law rift", "Death rift", "Blood rift"]);
-  assert.deepEqual(trigger("use-the-pottery-oven-in-civitas"), { kind: "object-op", objectIds: [58655], option: "fire", count: 1 });
-  assert.deepEqual(trigger("open-28-coin-pouches-at-once"), { kind: "item-op", items: ["Coin pouch"], option: "open-all", amount: 28, count: 1 });
+  assert.deepEqual(trigger("use-the-pottery-oven-in-civitas"), { kind: "object-op", objectIds: [58655], option: "fire", event: "pottery:fired", count: 1 });
+  // The successful open's own event, with the pouches actually opened (a refused Open-all emits nothing).
+  assert.deepEqual(trigger("open-28-coin-pouches-at-once"), { kind: "coin-pouch", pouches: 28, count: 1 });
   assert.deepEqual(trigger("open-the-mystery-box"), { kind: "item-op", items: ["Mystery box"], option: "open", count: 1 });
   assert.deepEqual(trigger("open-a-frozen-cache"), { kind: "item-op", items: ["Frozen cache"], option: "open", count: 1 });
   assert.deepEqual(trigger("use-the-bank-at-the-mage-arena"), { kind: "bank", place: "mage-arena-bank", count: 1 });

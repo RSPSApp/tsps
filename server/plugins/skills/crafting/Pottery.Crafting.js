@@ -90,7 +90,7 @@ function firingChance(level) {
   return Math.min(1, (1 + Math.floor(180 * (99 - clamped) / 98 + 800 * (clamped - 1) / 98 + 0.5)) / 256);
 }
 
-function makePottery(player, recipe, firing) {
+function makePottery(player, recipe, firing, station = null) {
   const { Item } = Shared.getCore();
   const inventory = player.getInventory();
   const input = firing ? recipe.unfiredId : Shared.getCore().ItemIds.SOFT_CLAY;
@@ -109,6 +109,9 @@ function makePottery(player, recipe, firing) {
   inventory.addItem(new Item(firing ? recipe.firedId : recipe.unfiredId, firing ? 1 : recipe.shaped ?? 1));
   Shared.addCraftingXp(player, firing ? recipe.firingXp : recipe.shapingXp);
   Shared.produced(player, firing ? recipe.firedId : recipe.unfiredId, firing ? 1 : recipe.shaped ?? 1, firing ? recipe.firingXp : recipe.shapingXp, "pottery");
+  // "pottery:fired" { player, objectId, itemId }: an oven really fired a piece (a cracked one returns above,
+  // and a refused menu never starts), so a league's "Use the pottery oven in Civitas" is a success, not a click.
+  if (firing) Shared.getApi().emitCustomEvent("pottery:fired", { player, objectId: station?.getId?.() ?? null, itemId: recipe.firedId });
   const message = firing ? recipe.removeMessage : recipe.shapeMessage;
   if (message) spam(player, message);
   return true;
@@ -152,7 +155,7 @@ function startPottery(player, station, recipe, amount, firing) {
       // Content may make several pieces in the one cycle ("skills:actions-per-cycle").
       const actions = Shared.actionsPerCycle(player, "pottery");
       for (let done = 0; done < actions; done++) {
-        if (!makePottery(player, recipe, firing) || --this.remaining <= 0 || !has()) {
+        if (!makePottery(player, recipe, firing, station) || --this.remaining <= 0 || !has()) {
           this.stop();
           return;
         }

@@ -214,7 +214,9 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:portal` | Construction's portal nexus (`Nexus.Construction`), as its own teleport is used | `{ player, destination }`: `destination` the teleport's spell name ("Weiss teleport") |
 | `collection-log:obtain` | the reward plugins that fill the Collection Log (Tempoross, the Colosseum's loot, ...), beside `collection-log:slot-filled` | `{ player, itemId, amount }`: an item a reward just handed over |
 | `npc-drops:roll` (extended) | NpcDrops, at each kill's table roll | `{ player, npc, npcId, drops, damagers }`: the drops the roll really granted (empty when nothing dropped), never a potential entry |
-| `coin-pouch:opened` | `CoinPouch.Thieving.js`, as a coin pouch is opened | `{ player, coins, all }`: the coins a pouch (or an `open-all`) paid, and whether it was the whole stack |
+| `coin-pouch:opened` | `CoinPouch.Thieving.js`, as a coin pouch is opened (a refused `open-all` emits nothing) | `{ player, coins, all, pouches }`: the coins a pouch (or an `open-all`) paid, whether it was the whole stack, and how many pouches it opened |
+| `chest:opened` | `WildernessChests.plugin.js` (muddy chest) and `Catacombs.ShadesOfMortton.js` (Bronze/Black/Gold chests), as a chest really gave its loot | `{ player, objectId }`: a locked chest, a wrong key or no room for the loot returns first and emits nothing |
+| `pottery:fired` | `Pottery.Crafting.js`, as an oven fires a piece | `{ player, objectId, itemId }`: the oven clicked (null if fired from elsewhere) and the fired piece; a cracked piece and a refused menu emit nothing |
 | `fishing:junk` | `Fishing.plugin.js`, on a junk catch | `{ player, itemId, amount }`: a casket or an old boot |
 | `mining:gem` | `Mining.plugin.js`, on a gem pre-roll | `{ player, itemId }`: the gem found (a gem rock's own find is a plain `mining:success`) |
 | `mining:geode` | `ClueGeodes.Mining.js`, as a clue geode is found | `{ player, itemId }`: the geode (after any clue-box rewrite) |
@@ -1792,20 +1794,21 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Tirannwn", "Talk to the Mysterious Old Man in Falador", "Pet Renu"; every cache NPC of the name
   with that option is one of the linked NPC page's ids (`<dir>/npcs/<page>.wikitext`), so the name
   is that NPC,
-  `object-op { objects?, objectIds?, option?, place?, area?, count }` from the object interaction
-  pipeline's new `object:operated` (a loc's menu option something answered, not a click nothing did;
-  `objectIds` cache ids and/or `objects` the loc's names, the option lower-cased): "Open a Bronze /
-  Black / Gold Chest" (the Shades of Mort'ton chests, by name and option), "Open a Muddy Chest" (its
-  cache id, "open", one per open; "Open 10 Muddy Chests" the same trigger with a count), "Fill a Crate
+  `object-op { objects?, objectIds?, option?, event?, place?, area?, count }` from the object interaction
+  pipeline's `object:operated` (a loc's menu option something answered, not a click nothing did;
+  `objectIds` cache ids and/or `objects` the loc's names, the option lower-cased): "Fill a Crate
   with Bananas" (the crate's `fill`, so a `Search` is none), "Use the Mine cart transportation
-  system" (the Lovakengj and Keldagrim mine carts), "Use the Abyss" (the twelve rifts' `Exit-through`),
-  "Use the Pottery Oven in Civitas illa Fortis" (the oven id and `fire`, both cache spellings of its
-  name); the option must be the one the task names, so a wrong option or another id is no deed,
-  `item-op { items?, itemIds?, option?, amount?, count }` from `PluginManager.emitItemAction`'s new
+  system" (the Lovakengj and Keldagrim mine carts), "Use the Abyss" (the twelve rifts' `Exit-through`).
+  An `event` names the content's own success event instead ("chest:opened", "pottery:fired"), so only
+  a real deed counts: "Open a Bronze / Black / Gold Chest" (the Shades of Mort'ton chests, by name and
+  `open`), "Open a Muddy Chest" (its cache id, "open", one per open; "Open 10 Muddy Chests" the same
+  trigger with a count) and "Use the Pottery Oven in Civitas illa Fortis" (the oven id and `fire`,
+  the cache's spellings of its name) credit nothing for a locked chest, a wrong key, an empty pack or
+  an empty oven. The option must be the one the task names, so a wrong option or another id is no deed,
+  `item-op { items?, itemIds?, option?, amount?, count }` from `PluginManager.emitItemAction`'s
   `item:operated` (an inventory item's own action something answered, by cache id and/or name, the
-  option lower-cased): "Open 28 Coin Pouches at once" (the `open-all`, its `amount`, the stack it
-  covered, at least the task's), "Open the Mystery Box", "Open a Frozen Cache"; a single `open` of one
-  pouch is not the `open-all` of twenty-eight,
+  option lower-cased): "Open the Mystery Box", "Open a Frozen Cache"; a single `open` of one pouch is
+  not the `open-all` of twenty-eight (that task is a `coin-pouch`, below),
   `shortcut { shortcuts, count }` from the Agility plugin's `agility:obstacle`, now with the
   shortcut's own name (`agility-shortcuts.json`'s; a course obstacle has none): "Use the Stepping stone
   (Shilo Village) in Shilo Village", "Cross a Pillar (Revenant Caves) in the Revenant Caves" (any of
@@ -1913,8 +1916,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   them, its item being unique to its source (e.g. the Big Harpoonfish). `obtain-all` gathers every
   one of its items over time, kept in `league:task-obtained` (task id -> the units seen) so the same
   item twice is no new one and the progress survives a logout ("Obtain every Revenant weapon"). A
-  single-source task reaching an amount is its own kind: `coin-pouch { coins }` the coins a pouch
-  (or an `open-all`) paid ("Obtain 800 Coins From Coin Pouches At Once"), `archery-target { points }`
+  single-source task reaching an amount is its own kind: `coin-pouch { coins?, pouches? }` a completed
+  open's coins or pouches ("Obtain 800 Coins From Coin Pouches At Once", "Open 28 Coin Pouches at
+  once"), `archery-target { points }`
   a finished Target round's score, `miscellania { approval }` a collection made at least that
   approval ("Collect Miscellania Resources at Full Approval"), `colosseum-glory { glory }` a run's
   running Glory ("Obtain 40,000/58,000 Glory"), `motherlode-nuggets { count }` golden nuggets from
@@ -1969,9 +1973,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   mace"); `kill-any-one { npcs, count }` is one of a group reaching the count on its own (the God
   Wars generals). A `kill-each` may carry `noLeave`, keeping its one-sitting kills only while the
   player stays inside its place ("the Dagannoth Kings without leaving"; reset when the player
-  leaves). A task that is itself a Combat Achievement is `ca-complete { task }` off the
-  achievements plugin's `combat-achievements:completed` ("Defeat Awakened Vardorvis" is "Vardorvis
-  Sleeper", "Defeat Vorkath 5 Times Without Special Damage" is "Dodging the Dragon").
+  leaves, read off a zone exit from the place, a crossed map square and login rather than a per-tick
+  hook). A task that is itself a Combat Achievement is `ca-complete { task }` off the
+  achievements plugin's `combat-achievements:completed`, backfilled at login from the plugin's
+  `combat-achievements:has-task` ("Defeat Awakened Vardorvis" is "Vardorvis Sleeper", "Defeat Vorkath
+  5 Times Without Special Damage" is "Dodging the Dragon").
 - **Experience** (`Triggers.LeagueTasks.js`): `experience { skills, amount, count }`, at least
   `amount` XP in `count` of the skills, on `onExperienceGained` and at login. "Obtain N Million
   <Skill> XP"; "... XP in a combat skill" takes the description's list (Prayer is in the 100

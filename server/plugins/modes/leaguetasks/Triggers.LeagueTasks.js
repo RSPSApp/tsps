@@ -172,11 +172,18 @@ function checkDiaries(player) {
 /** A monster's name as either side spells it ("Nightmare, The", "the Giant Mole"), compared plainly. */
 const monsterKey = (name) => plainName(String(name ?? "").replace(/^(.*), the$/i, "the $1"));
 
-/** Combat Achievements: a tier reached, a count of tasks (or speed tasks), every task of one monster or of N. */
+/**
+ * Combat Achievements: a tier reached, a count of tasks (or speed tasks), every task of one monster or of N,
+ * and a named task done (`ca-complete`). All read the achievements plugin's own state, so a character who
+ * qualified before their league task existed is backfilled at login (a CA cannot be done twice).
+ */
 function checkAchievements(player) {
   const type = Common.leagueOf(player);
   if (type === null) return;
-  const tasks = indexOf(type).achievements;
+  const entry = indexOf(type);
+  // "ca-complete": the named Combat Achievement is already done (the plugin's authoritative progress).
+  checkAchievementTasks(player, type, entry.caTasks);
+  const tasks = entry.achievements;
   if (!tasks.length) return;
   const done = new Set(Common.completedIds(player));
   const summary = { player, completed: 0, speed: 0, monsters: [] };
@@ -198,6 +205,24 @@ function checkAchievements(player) {
       reached = finished.has(monsterKey(trigger.monster));
     }
     if (reached) Complete.complete(player, task.id, type);
+  }
+}
+
+/**
+ * `ca-complete { task }`: the named achievement is done. Asked of the achievements plugin whatever else
+ * happened, so it backfills every such league task at login. `completedIds` keeps it idempotent.
+ */
+function checkAchievementTasks(player, type, caTasks) {
+  if (!caTasks.size) return;
+  const done = new Set(Common.completedIds(player));
+  for (const tasks of caTasks.values()) {
+    const open = tasks.filter((task) => !done.has(task.id));
+    if (!open.length) continue;
+    // The achievements plugin matches the name to its own tasks and reports whether this player has it.
+    const query = { player, task: open[0].trigger.task, done: false };
+    Common.api.emitCustomEvent("combat-achievements:has-task", query);
+    if (query.done !== true) continue;
+    for (const task of open) Complete.complete(player, task.id, type);
   }
 }
 
@@ -487,7 +512,8 @@ function inArea(task, type, tile) {
 /**
  * `kill-each { npcs: { name: count } }`: that many deaths of each NPC, counted per NPC in the task's
  * kills entry ({ name: kills }), in its area or place. A `noLeave` one keeps its counts only while
- * the player stays inside it: each tick outside its place wipes them, so the kills must be one sitting.
+ * the player stays inside it: leaving it wipes them, so the kills must be one sitting. Leaving is read
+ * off the edges (a zone exit for the place, a map square crossed, and login), never a per-tick hook.
  */
 function creditEach(player, type, name, tile) {
   const tasks = indexOf(type).killEach.get(String(name ?? "").toLowerCase());
@@ -507,21 +533,51 @@ function creditEach(player, type, name, tile) {
   for (const task of reached) Complete.complete(player, task.id, type);
 }
 
-function checkKillEachLeft({ player } = {}) {
+/**
+ * A `noLeave` task's counts need the player inside its place. Wipe those of a task whose place the
+ * player has left (and any stale from a previous session, at login). A place the player is still inside
+ * keeps its counts; several boxes are one place (`Common.inPlace`).
+ */
+function checkKillEachLeft(player) {
   if (!player) return;
   const type = Common.leagueOf(player);
   if (type === null) return;
   const tasks = indexOf(type).killEachNoLeave;
   if (!tasks.length) return;
   const at = tileOf(player);
+  const progress = killsOf(player);
   const done = new Set(Common.completedIds(player));
-  const progress = { ...killsOf(player) };
+  const kept = { ...progress };
   let changed = false;
   for (const task of tasks) {
-    if (done.has(task.id) || progress[task.id] === undefined) continue;
-    if (!inArea(task, type, at)) { delete progress[task.id]; changed = true; }
+    if (done.has(task.id) || kept[task.id] === undefined) continue;
+    if (at && task.trigger.place !== undefined && Common.inPlace(task.trigger.place, at.x, at.y)) continue;
+    if (inArea(task, type, at)) continue;
+    delete kept[task.id];
+    changed = true;
   }
-  if (changed) player.setAttribute(Common.KILLS_ATTRIBUTE, progress);
+  if (changed) player.setAttribute(Common.KILLS_ATTRIBUTE, kept);
+}
+
+/** `kill-each` noLeave: a zone exit from the place, a crossed map square and login are the only edges. */
+function onPlaceExit({ player } = {}) {
+  checkKillEachLeft(player);
+}
+
+/** A 64x64 map square crossed (walking or a teleport) can be the leaving edge; login covers the rest. */
+function onMapSquareChange({ player } = {}) {
+  checkKillEachLeft(player);
+}
+
+/** The places some league's `kill-each` noLeave task names, each box a zone watched for its exit. */
+function watchNoLeavePlaces(api) {
+  const named = new Set();
+  for (const type of Common.types()) {
+    for (const task of Common.catalog(type).tasks) if (task.trigger?.kind === "kill-each" && task.trigger.noLeave && task.trigger.place !== undefined) named.add(task.trigger.place);
+  }
+  for (const place of named) {
+    for (const [minX, minY, maxX, maxY] of Common.places[place]?.rects ?? []) api.onZoneExit({ minX, maxX, minY, maxY }, onPlaceExit);
+  }
 }
 
 function npcDeath(event) {
@@ -569,12 +625,16 @@ function login({ player, league }) {
   checkDiaries(player);
   checkAchievements(player);
   checkQuests(player, league);
+  checkKillEachLeft(player);
 }
 
 module.exports = function attach(api) {
   api.persistAttribute(Common.KILLS_ATTRIBUTE, {});
   api.onNpcDeath(npcDeath);
-  api.onPlayerProcess(checkKillEachLeft);
+  // A `noLeave` task resets on leaving its place: zone exits (walking out, a teleport) and crossed map
+  // squares, plus the login sweep, instead of a hook that runs for every player every tick.
+  watchNoLeavePlaces(api);
+  api.onPlayerMapSquareChange(onMapSquareChange);
   api.onCustomEvent("combat-achievements:kill", creditedKill);
   api.onCombatHitResolved(combatHitResolved);
   api.onPlayerLevelUp(levelUp);

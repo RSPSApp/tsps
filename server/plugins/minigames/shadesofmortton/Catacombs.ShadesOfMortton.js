@@ -200,6 +200,9 @@ function chest({ player, object }) {
   raiseZealot(player, object);
   const treasure = coins > 0 ? Common.message("treasure", { coins }) : Common.message("noTreasureCoins");
   talk(player, [[treasure, loot?.id ?? COINS], [Common.message("swampPaste", { paste }), Common.objId(SWAMP_PASTE)]]);
+  // "chest:opened" { player, objectId }: the catacombs chest really gave its key's loot, for a league's
+  // "Open a Bronze/Black/Gold Chest". The wrong-key and no-room refusals return above without it.
+  Common.api.emitCustomEvent("chest:opened", { player, objectId: object.getId() });
   return true;
 }
 

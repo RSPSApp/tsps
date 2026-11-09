@@ -1392,11 +1392,15 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     // "Open a Bronze/Black/Gold Chest from Shades of Mort'ton (minigame)": the catacombs' chests.
     const shades = /^Open an? (Bronze|Black|Gold) Chest from Shades of Mort['?]ton(?: \(minigame\))?\.?$/i.exec(description);
     if (shades && new RegExp("^Open a " + shades[1] + " Chest$", "i").test(name)) {
-      return { trigger: { kind: "object-op", objects: [shades[1] + " Chest"], option: "open", count: 1 } };
+      // Credited by the catacombs chest's own success event, not the click ("chest:opened"), so a wrong
+      // key or no room for the loot is no deed.
+      return { trigger: { kind: "object-op", objects: [shades[1] + " Chest"], option: "open", event: "chest:opened", count: 1 } };
     }
     // "Open 1 Muddy Chest", "Open 10 Muddy Chests": the Lava Maze's muddy chest (object 170).
     if ((match = /^Open (\d+) Muddy Chests?\.?$/i.exec(description)) && /^Open \d+ Muddy Chests?$/i.test(name)) {
-      return { trigger: { kind: "object-op", objectIds: [170], option: "open", count: Number(match[1]) } };
+      // Credited by the muddy chest's own success event ("chest:opened"), not the click, so a locked
+      // click or a full pack is no deed.
+      return { trigger: { kind: "object-op", objectIds: [170], option: "open", event: "chest:opened", count: Number(match[1]) } };
     }
     // "Fill a crate with Bananas for Luthas at Musa Point": the plantation crate (object 2072).
     if (/^Fill a crate with Bananas for Luthas at Musa Point\.?$/i.test(description)) {
@@ -1412,11 +1416,15 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     }
     // "Use the pottery oven in Civitas illa Fortis to make something out of soft clay": its own oven.
     if (/^Use the pottery oven in Civitas illa Fortis to make something out of soft clay\.?$/i.test(description)) {
-      return { trigger: { kind: "object-op", objectIds: [58655], option: "fire", count: 1 } };
+      // Credited by the oven's own success event ("pottery:fired"), not the click, so an empty oven or
+      // a cracked piece is no deed.
+      return { trigger: { kind: "object-op", objectIds: [58655], option: "fire", event: "pottery:fired", count: 1 } };
     }
     // "Open 28 Coin Pouches at once": one Open-all covering that many ("Open-all" is the option).
     if ((match = /^Open (\d+) Coin Pouches at once\.?$/i.exec(description)) && /^Open \d+ Coin Pouches At Once$/i.test(name)) {
-      return { trigger: { kind: "item-op", items: ["Coin pouch"], option: "open-all", amount: Number(match[1]), count: 1 } };
+      // The successful open's own event ("coin-pouch:opened", with `pouches`), so a refused Open-all
+      // cannot complete it.
+      return { trigger: { kind: "coin-pouch", pouches: Number(match[1]), count: 1 } };
     }
     // "Open the Mystery Box": the box's own Open.
     if (/^A boat is a boat, but the mystery box could be anything, even a boat!?\.?$/i.test(description)) {

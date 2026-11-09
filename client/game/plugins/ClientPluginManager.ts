@@ -25,6 +25,7 @@ import type { LoginStretch } from "../login/renderer/types";
 import type { WebGLOsrsRendererHost } from "../../render/render/hostInterface";
 import type { OverheadTextEntry } from "../../ui/devoverlay/Overlay";
 import type { GpuSettings } from "./gpu/GpuPlugin";
+import type { ShaderFxRuntime } from "./shaderfx/ShaderFxState";
 import type { InteractHighlightPluginConfig } from "./interacthighlight/InteractHighlightConfig";
 import type { FixedStretch } from "./stretchedmode/StretchedModePlugin";
 import { DISABLED_TILE_MARKERS_CONFIG, type TileMarkersPluginConfig } from "./tilemarkers/types";
@@ -342,6 +343,8 @@ export interface ClientPlugin {
     ): SimpleMenuEntry[];
     /** Graphics settings overriding the renderer's own (first answer wins). */
     gpuSettings?(): GpuSettings | undefined;
+    /** Screen shader effects for the WebGPU post chain (first answer wins). */
+    shaderFx?(): ShaderFxRuntime | undefined;
     /** Whether HD lighting is on, which widens draw distance and fog. */
     hdEnabled?(): boolean;
     /** How scenery animations are baked when a map square loads (first answer wins). */
@@ -622,6 +625,14 @@ export class ClientPluginManager {
         for (const plugin of this.implementing("gpuSettings")) {
             const settings = plugin.gpuSettings!();
             if (settings) return settings;
+        }
+        return undefined;
+    }
+
+    shaderFx(): ShaderFxRuntime | undefined {
+        for (const plugin of this.implementing("shaderFx")) {
+            const runtime = plugin.shaderFx!();
+            if (runtime) return runtime;
         }
         return undefined;
     }

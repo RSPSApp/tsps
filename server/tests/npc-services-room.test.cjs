@@ -264,7 +264,7 @@ test("Ectofuntus earned tokens stay owned or pending at stack capacity", async t
     if (scenario.stock) {
       // An explicitly declared normal capped-XP state for the preowned stock.
       // This does not claim that its historical worships were executed here.
-      assert.equal(scenario.stock % 5, 0); assert.equal(core.SkillManager.MAX_EXPERIENCE, 1000000000);
+      assert.equal(scenario.stock % 5, 0); assert.equal(core.SkillManager.MAX_EXPERIENCE, 200000000);
       const s = p.getSkillManager();
       s.setExperiences(core.Skill.PRAYER, core.SkillManager.MAX_EXPERIENCE, false);
       s.setMaxLevels(core.Skill.PRAYER, 99, false); s.setCurrentLevel(core.Skill.PRAYER, 99, true);

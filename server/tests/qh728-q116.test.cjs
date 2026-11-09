@@ -88,7 +88,9 @@ function setup(options = {}) {
     hooks.push({ pluginName: TEST_PLUGIN, handler });
     PluginManager.customEventHooks.set(name, hooks);
   };
+  const customInterfaces = new Map();
   const api = new Proxy({
+    registerCustomInterface(definition) { customInterfaces.set(definition.groupId, definition); },
     core: questCore,
     persistAttribute(key, defaultValue) { persistedAttributes.set(key, defaultValue); },
     onNpcDialogueVariant(handler) {
@@ -248,7 +250,7 @@ function setup(options = {}) {
   return {
     quest, player, attributes, items, equipment, varbits, messages, xp, rawModels, positions, emitted, transcriptCalls, custom, itemOnNpc, conditions,
     persistedAttributes,
-    interfaceButtons, subInterfaces, subInterfaceSends, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
+    interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
     getInterfaceId: () => interfaceId,
     mindBarOpen: () => subInterfaces.has(MIND_BAR_GROUP),
     modelFor: (uid) => rawModels.filter(([target]) => target === uid).at(-1)?.[1],
@@ -947,6 +949,9 @@ test('the pipe shows the cache layout, greens only the piece in hand and refuses
 
   assert.equal(h.rawModels.findLast(([uid]) => uid === ((511 << 16) | 9))?.[2], 511,
     'the client opens the interface before the layout arrives');
+  const preview = h.customInterfaces.get(30016);
+  assert.deepEqual(h.subInterfaces.get(30016), { targetUid: (161 << 16) | 74, type: 3 });
+  assert.deepEqual(preview.widgets.slice(-5).map((widget) => widget.modelId), [22538, 22526, 22546, 22554, 22530]);
   assert.equal(h.modelFor((511 << 16) | 10), 22526, 'a piece that is not in hand is grey');
   assert.deepEqual(h.positionFor((511 << 16) | 9), [410, 153], 'the pieces start where the cache puts them');
 

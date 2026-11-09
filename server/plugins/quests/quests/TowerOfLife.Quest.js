@@ -65,6 +65,8 @@
  *    is four bits: 8 is neutral, 0 fully magical and 15 fully logical, so the mind is fixed
  *    once eight answers push it to either end.
  */
+const { createWidgetGroup, TYPE_MODEL } = require("../../interface/widgetGroup");
+
 module.exports = function registerTowerOfLifeQuest(api) {
   const {
     Equipment,
@@ -322,6 +324,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
   // Cache puzzle interfaces (Quest Helper PuzzleSolver widget groups).
   const PRESSURE_PUZZLE_GROUP = 510;
   const PIPE_PUZZLE_GROUP = 511;
+  const PIPE_PREVIEW_GROUP = 30016;
+  const SIDE_MODAL_UID = (161 << 16) | 74;
   const CAGE_PUZZLE_GROUP = 509;
   const MIND_BAR_GROUP = 508; // TOL_HOMONCULUS_OVERLAY
   /** Gameframe HUD overlay target used by the client's overlay interfaces. */
@@ -591,13 +595,36 @@ module.exports = function registerTowerOfLifeQuest(api) {
   const PIPE_SNAP = PIPE_STEP / 2;
   const PIPE_LAYOUT_VERSION = 2;
   const PIPE_PIECES = [
-    { child: 9, startX: 410, startY: 153, startRotation: 1, targetX: 159, targetY: 69, activeVarbit: 3343, green: [22547, 22549], grey: [22538, 22544] },
-    { child: 10, startX: 356, startY: 30, startRotation: 0, targetX: 83, targetY: 80, activeVarbit: 3341, green: [22531, 22533], grey: [22526, 22528] },
-    { child: 11, startX: 323, startY: 230, startRotation: 0, targetX: 256, targetY: 60, activeVarbit: 3344, green: [22555, 22557], grey: [22546, 22552] },
-    { child: 12, startX: 449, startY: 62, startRotation: 0, targetX: 237, targetY: 155, activeVarbit: 3345, green: [22562, 22564], grey: [22554, 22560] },
-    { child: 13, startX: 327, startY: 171, startRotation: 0, targetX: 126, targetY: 64, activeVarbit: 3342, green: [22539, 22540], grey: [22530, 22536] },
+    { child: 9, width: 65, height: 161, startX: 410, startY: 153, startRotation: 1, targetX: 159, targetY: 69, activeVarbit: 3343, green: [22547, 22549], grey: [22538, 22544] },
+    { child: 10, width: 35, height: 89, startX: 356, startY: 30, startRotation: 0, targetX: 83, targetY: 80, activeVarbit: 3341, green: [22531, 22533], grey: [22526, 22528] },
+    { child: 11, width: 44, height: 95, startX: 323, startY: 230, startRotation: 0, targetX: 256, targetY: 60, activeVarbit: 3344, green: [22555, 22557], grey: [22546, 22552] },
+    { child: 12, width: 58, height: 63, startX: 449, startY: 62, startRotation: 0, targetX: 237, targetY: 155, activeVarbit: 3345, green: [22562, 22564], grey: [22554, 22560] },
+    { child: 13, width: 53, height: 60, zoom: 1042, startX: 327, startY: 171, startRotation: 0, targetX: 126, targetY: 64, activeVarbit: 3342, green: [22539, 22540], grey: [22530, 22536] },
   ];
   const PIPE_PIECE_BY_CHILD = new Map(PIPE_PIECES.map((piece, index) => [piece.child, index]));
+
+  function pipePreview() {
+    const { widgets, add } = createWidgetGroup(PIPE_PREVIEW_GROUP);
+    const root = add(0, -1, { rawWidth: 190, rawHeight: 261 });
+    // The solved board in the guide is scaled to the side modal's width.
+    const scale = 0.59;
+    const layout = [
+      // Board and five connectors from the cache's pipe interface.
+      [22337, 173, 156, 32, 32],
+      [22351, 84, 35, 32, 32], [22352, 146, 35, 32, 32],
+      [22351, 206, 35, 32, 32], [22352, 267, 35, 32, 32],
+      [22353, 171, 230, 32, 32],
+      // Solved models at the same positions used by the playable puzzle.
+      ...PIPE_PIECES.map(({ grey, targetX, targetY, width, height, zoom }) =>
+        [grey[0], targetX, targetY, width, height, zoom]),
+    ];
+    layout.forEach(([modelId, x, y, width, height, zoom = 1050], i) => add(i + 1, root, {
+      type: TYPE_MODEL, modelType: 1, modelId, modelZoom: Math.round(zoom / scale),
+      rawX: Math.round((x - 38) * scale) + 3, rawY: Math.round(y * scale) + 18,
+      rawWidth: Math.round(width * scale), rawHeight: Math.round(height * scale),
+    }));
+    return { groupId: PIPE_PREVIEW_GROUP, widgets };
+  }
 
   function freshPipePuzzle() {
     return {
@@ -665,7 +692,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
 
   function openPipePuzzle(player) {
     const state = pipePuzzle(player, true);
-    player.getPacketSender().sendInterface(PIPE_PUZZLE_GROUP);
+    player.getPacketSender().sendInterface(PIPE_PUZZLE_GROUP)
+      .sendSubInterface(SIDE_MODAL_UID, PIPE_PREVIEW_GROUP, 3);
     sendPipePuzzle(player, state);
     openPuzzle.set(player, "pipe");
   }
@@ -1604,6 +1632,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onObjectInteraction("Plant", { Search: handlePlantSearch });
   api.onCustomEvent("door:toggle", handleTowerDoorToggle);
   api.onObjectInteraction("Trapdoor", { Open: handleTrapdoorOpen, Close: handleTrapdoorClose });
+  api.registerCustomInterface(pipePreview());
   api.onInterfaceActionButton(PUZZLE_BUTTONS, handlePuzzleButton);
   api.onCustomEvent("interface:closed", handlePuzzleClosed);
   api.onCustomEvent("ladders:climb", handleClimbClaim);

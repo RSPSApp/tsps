@@ -764,6 +764,7 @@ test('logging out in the Nexus with an inventory escape crystal ejects instead o
   leader.getInventory().setItem(1, new Item(I.COINS, 100));
   State.registerRaidItems(I.NECTAR_4_);
   leader.getInventory().setItem(2, new Item(I.NECTAR_4_, 1));
+  let nextParty;
   try {
     // Without a crystal, the member can rejoin the surviving leader.
     raid.area.leave(member, true);
@@ -786,11 +787,12 @@ test('logging out in the Nexus with an inventory escape crystal ejects instead o
     assert.equal(leader.getInventory().getAmount(I.COINS), 100);
     assert.equal(raid.players.includes(member), true);
     assert.equal(leader.getInventory().contains(I.NECTAR_4_), false);
-    const nextParty = Parties.createParty(leader);
+    nextParty = Parties.createParty(leader);
     assert.equal(Parties.currentParty(leader), nextParty);
-    nextParty.disband();
   } finally {
+    nextParty?.disband();
     raid.dispose();
+    party.disband();
   }
 });
 
@@ -839,12 +841,17 @@ test('active encounter logout distinguishes a crystal eject from a death and rej
       assert.equal(memberState.points, crystal ? 5000 : 4000);
       assert.equal(leaves, crystal ? 1 : 0);
       assert.equal(raid.players.includes(leader), true);
+      if (crystal) {
+        assert.equal(member.getInventory().contains(Shared.escapeCrystalId()), false);
+        assert.equal(party.players.includes(member), false);
+      }
       login({ player: member });
       assert.equal(State.raidOf(member), crystal ? null : raid);
       if (!crystal) assert.equal(raid.member(member).ghost, true);
       assert.equal(leaves, crystal ? 1 : 0);
     } finally {
       raid.dispose();
+      party.disband();
     }
   }
   const solo = makePlayer('toasolocrystal', 115);
@@ -856,12 +863,17 @@ test('active encounter logout distinguishes a crystal eject from a death and rej
   raid.member(solo).roomKey = room.key;
   raid.area.enter(solo);
   solo.getInventory().setItem(0, new Item(Shared.escapeCrystalId(), 1));
-  raid.area.leave(solo, true);
-  assert.equal(raid.over, true);
-  assert.equal(party.raid, null);
-  login({ player: solo });
-  assert.equal(State.raidOf(solo), null);
-  assert.equal(solo.getInventory().contains(Shared.escapeCrystalId()), false);
-  assert.equal(solo.getLocation().getX(), Shared.LOBBY_RETURN.x);
-  assert.equal(solo.getLocation().getY(), Shared.LOBBY_RETURN.y);
+  try {
+    raid.area.leave(solo, true);
+    assert.equal(raid.over, true);
+    assert.equal(party.raid, null);
+    login({ player: solo });
+    assert.equal(State.raidOf(solo), null);
+    assert.equal(solo.getInventory().contains(Shared.escapeCrystalId()), false);
+    assert.equal(solo.getLocation().getX(), Shared.LOBBY_RETURN.x);
+    assert.equal(solo.getLocation().getY(), Shared.LOBBY_RETURN.y);
+  } finally {
+    raid.dispose();
+    party.disband();
+  }
 });

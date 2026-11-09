@@ -141,6 +141,23 @@ function take(boat, fromSlot, itemId, amount) {
   return taken;
 }
 
+/**
+ * Makes the hold's cargo fit in `capacity` slots, moving any at or past it into free slots
+ * below. False, changing nothing, when there's more cargo than that.
+ */
+function fitInto(boat, capacity) {
+  const occupied = boat.cargo.filter(Boolean).length;
+  if (occupied > capacity) return false;
+  for (let slot = capacity; slot < boat.cargo.length; slot++) {
+    if (!boat.cargo[slot]) continue;
+    let free = 0;
+    while (boat.cargo[free]) free++;
+    boat.cargo[free] = boat.cargo[slot];
+    boat.cargo[slot] = null;
+  }
+  return true;
+}
+
 /** Sends the tool unlock varbits if the player has turned them on with `::sailingtools`. */
 function sendToolUnlocks(player) {
   if (!player.getAttribute?.(TOOLS_UNLOCKED_ATTRIBUTE)) return;
@@ -173,5 +190,6 @@ module.exports = {
   repairKitUses,
   store,
   take,
+  fitInto,
   dropLostOnRecovery,
 };

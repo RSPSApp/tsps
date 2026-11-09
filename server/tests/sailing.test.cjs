@@ -3031,3 +3031,104 @@ test("a boat's range is an ordinary Range on the deck, so cooking finds it and k
     h.done();
   }
 });
+
+/** Aboard a skiff in the shipyard with a hotspot's Modify and the customisation's Build to hand. */
+function shipyardModify() {
+  const h = shipyardHarness();
+  const built = registerPlugin("ShipyardFacilities.plugin");
+  h.player.performAnimation = () => {};
+  // Every material to hand; what a build uses up is noted.
+  const used = [];
+  h.player.getInventory = () => ({ getAmount: () => 1000, delete: (item, count) => used.push([item, count]) });
+  const boat = h.boat();
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  h.shipyard.objects.Gangplank.Board({ player: h.player, location: { x: 2087, y: 2723, z: 0 } });
+  const tileOf = (hotspot) => ({ x: shown.deckBaseX + hotspot.x, y: shown.deckBaseY + hotspot.y, z: 0 });
+  const modify = (hotspot) => {
+    const event = { player: h.player, location: tileOf(hotspot), clickType: 5, handled: false,
+      definition: { getInteractions: () => [null, null, null, null, "Modify"] } };
+    built.objectHandlers.forEach((handler) => handler(event));
+    return built.prompt;
+  };
+  const remove = (hotspot) => {
+    modify(hotspot).pairs[1](h.player);
+    built.prompt.pairs[1](h.player);
+  };
+  const replace = (hotspot, row) => {
+    modify(hotspot).pairs[3](h.player);
+    h.levels.set(h.Skill.SAILING, 99);
+    h.levels.set(h.Skill.CONSTRUCTION, 99);
+    const zigzag = (row << 1) ^ (row >> 31);
+    const bytes = [];
+    let v = zigzag >>> 0;
+    while (v > 0x7f) { bytes.push((v & 0x7f) | 0x80); v >>>= 7; }
+    bytes.push(v, 0);
+    const event = { player: h.player, groupId: 939, childId: 17, scriptTrigger: true, argsData: Buffer.from(bytes), handled: false };
+    for (const handler of [...h.shipyard.interfaceClicks, ...built.interfaceClicks]) handler(event);
+  };
+  const hotspotWith = (name) => facilities.hotspotsOf("skiff").find((candidate) => candidate.allowed
+    .some((row) => facilities.facilityRequirements(row).name === name));
+  const rowNamed = (hotspot, name) => hotspot.allowed.find((row) => facilities.facilityRequirements(row).name === name);
+  return { ...h, boat, used, remove, replace, hotspotWith, rowNamed };
+}
+
+test("a smaller hold or none can't hide cargo: replacing or removing it asks for the hold to be emptied first", () => {
+  const h = shipyardModify();
+  const hotspot = h.hotspotWith("Cargo hold");
+  const teak = h.rowNamed(hotspot, "Teak cargo hold");
+  const basic = h.rowNamed(hotspot, "Cargo hold");
+  facilities.setFacility(h.boat, hotspot.id, teak);
+  assert.equal(cargo.store(h.boat, 31964, 50), 50, "a teak hold takes 50 repair kits");
+
+  h.replace(hotspot, basic);
+  assert.equal(h.player.messages.at(-1), "You'll need to empty your cargo hold first.");
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), teak, "the teak hold stays");
+  assert.deepEqual(h.used, [], "nothing used up");
+  h.remove(hotspot);
+  assert.equal(h.player.messages.at(-1), "You'll need to empty your cargo hold first.");
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), teak, "and isn't removed");
+  assert.equal(cargo.countIn(h.boat, 31964), 50);
+
+  // 30 kits left, 20 of them in slots past a basic hold's 30: they move into its free slots.
+  for (let slot = 0; slot < 20; slot++) h.boat.cargo[slot] = null;
+  h.replace(hotspot, basic);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), basic);
+  assert.equal(cargo.capacityOf(h.boat), 30);
+  assert.equal(h.boat.cargo.slice(0, 30).filter(Boolean).length, 30, "all 30 kits in the basic hold's slots");
+  assert.equal(h.boat.cargo.slice(30).filter(Boolean).length, 0);
+
+  h.remove(hotspot);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), basic, "a hold with cargo isn't removed");
+  h.boat.cargo = [];
+  h.remove(hotspot);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), undefined, "an empty one is");
+});
+
+test("a removed or replaced anchor takes its dropped state with it, and a boat without one isn't held", () => {
+  const h = shipyardModify();
+  const hotspot = h.hotspotWith("Anchor");
+  facilities.setFacility(h.boat, hotspot.id, h.rowNamed(hotspot, "Anchor"));
+  h.boat.anchorDown = true;
+  h.remove(hotspot);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), undefined);
+  assert.equal(h.boat.anchorDown, undefined, "the dropped anchor went with it");
+
+  const extractorSpot = facilities.hotspotsOf("sloop").find((candidate) => candidate.allowed
+    .some((row) => facilities.facilityRequirements(row).name === "Crystal extractor"));
+  const sloop = { type: "sloop", slot: 1, facilities: [], cargo: [], crystalExtractorOn: true, crystalMote: true };
+  facilities.setFacility(sloop, extractorSpot.id, extractorSpot.allowed.find((row) => facilities.facilityRequirements(row).name === "Crystal extractor"));
+  facilities.setFacility(sloop, extractorSpot.id, undefined);
+  assert.deepEqual([sloop.crystalExtractorOn, sloop.crystalMote], [undefined, undefined], "and an extractor's");
+
+  // A save from before: the anchor's gone but anchorDown stayed. Boarding lets the boat move.
+  const anchor = registerPlugin("Anchor.plugin");
+  const sea = facilityAtSea("skiff", "Range", (owned) => { owned.anchorDown = true; });
+  try {
+    sea.boat.speedLimits.set("anchor", 0);
+    anchor.events["sailing:boarded"]({ player: sea.player, boat: sea.boat, owned: sea.owned });
+    assert.equal(sea.boat.speedLimits.has("anchor"), false, "not held without an anchor");
+    assert.equal(sea.owned.anchorDown, undefined);
+  } finally {
+    sea.done();
+  }
+});

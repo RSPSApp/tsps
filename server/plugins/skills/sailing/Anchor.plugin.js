@@ -126,9 +126,12 @@ function remindToWeigh({ player, boat, mode }) {
   });
 }
 
-/** Aboard a boat left at anchor: it stays where it is. */
+/** Aboard a boat left at anchor: it stays where it is, as long as it still has an anchor. */
 function onBoarded({ boat, owned }) {
-  if (boat?.speedLimits) holdBoat(boat, owned?.anchorDown === true);
+  if (!boat?.speedLimits) return;
+  const hasAnchor = BoatManager.getSpec(boat)?.locs.some((loc) => loc.shape === 10 && anchorKind(loc.id)) === true;
+  if (owned?.anchorDown && !hasAnchor) delete owned.anchorDown;
+  holdBoat(boat, owned?.anchorDown === true && hasAnchor);
 }
 
 module.exports = {

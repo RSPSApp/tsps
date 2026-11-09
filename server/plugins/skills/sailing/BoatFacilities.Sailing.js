@@ -69,12 +69,23 @@ function facilityAt(boat, hotspot) {
   return position > 0 ? hotspotsOf(boat.type)[hotspot]?.allowed[position - 1] : undefined;
 }
 
-/** Builds (a facility row) or clears (undefined) a hotspot. */
+/**
+ * Builds (a facility row) or clears (undefined) a hotspot. A removed or replaced anchor or
+ * crystal extractor takes its state with it: the new one is raised, or switched off and empty.
+ */
 function setFacility(boat, hotspot, facilityRow) {
+  const before = facilityAt(boat, hotspot);
   const facilities = facilitiesOf(boat);
   const allowed = hotspotsOf(boat.type)[hotspot]?.allowed ?? [];
   facilities[hotspot] = facilityRow === undefined ? 0 : allowed.indexOf(facilityRow) + 1;
   boat.facilities = facilities;
+  if (before === undefined || before === facilityRow) return;
+  const loc = CacheDefinitions.getDbRow(before)?.column(FACILITY.loc)?.[0];
+  if (ANCHOR_LOWERED[loc] !== undefined) delete boat.anchorDown;
+  if (EXTRACTOR_SWITCHED_ON[loc] !== undefined) {
+    delete boat.crystalExtractorOn;
+    delete boat.crystalMote;
+  }
 }
 
 /** Whether a hotspot allows a facility row. */

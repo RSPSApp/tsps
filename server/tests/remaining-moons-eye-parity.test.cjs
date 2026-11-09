@@ -1449,15 +1449,22 @@ test('shipped NpcDialogues resolves both Wizard Persten intro paths and decline/
   assert.equal(declined.items.get(I.EYE_AMULET), 1);
 });
 
-test('Perilous Moons tunnel gates use the captured destinations and leave the non-tunnel gate alone', () => {
+test('Perilous Moons tunnel gates use the expected destinations and leave the non-tunnel gate alone', () => {
   const h = harness('PerilousMoons'), p = player();
   h.quest.setStage(p, 18);
+  const tunnelMessage = 'You follow a long and winding tunnel before emerging on the other side.';
   h.object(p, O.ENTRANCE_17, { x: 1527, y: 9670, z: 0 }, 1, ['Pass-through']);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1513, 9596, 0]);
-  assert.ok(p.messages.includes('You follow a long and winding tunnel before emerging on the other side.'));
+  assert.ok(p.messages.includes(tunnelMessage));
   h.tick(5);
   h.object(p, O.ENTRANCE_17, { x: 1512, y: 9560, z: 0 }, 1, ['Pass-through']);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1355, 9538, 0]);
+  const messageCount = p.messages.filter(message => message === tunnelMessage).length;
+  h.tick(5);
+  h.object(p, O.ENTRANCE_15, { x: 1356, y: 9536, z: 0 }, 1, ['Pass-through']);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1512, 9563, 0]);
+  assert.equal(p.messages.filter(message => message === tunnelMessage).length, messageCount + 1);
+  h.tick(5);
   p.moveTo(new core.Location(1510, 9582, 0));
   h.object(p, O.ENTRANCE_17, { x: 1493, y: 9579, z: 0 }, 1, ['Pass-through']);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1510, 9582], 'walk-through gate is not a tunnel');
@@ -1498,16 +1505,17 @@ test('Temple shared stage guards use 60..130 and real cache pages for Sedridor/T
 });
 
 
-test('cache map placements prove the two Perilous tunnels are real Pass-through gates with walkable landings', () => {
+test('cache placements prove Perilous tunnel gates are real Pass-through objects with walkable landings', () => {
   const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
   const { RegionManager } = require('../dist/game/collision/RegionManager');
   RegionManager.init();
-  for (const [x, y, z, lx, ly, lz] of [
-    [1527, 9670, 0, 1513, 9596, 0],
-    [1512, 9560, 0, 1355, 9538, 0],
+  for (const [id, x, y, z, lx, ly, lz] of [
+    [core.ObjectIdentifiers.ENTRANCE_15, 1356, 9536, 0, 1512, 9563, 0],
+    [core.ObjectIdentifiers.ENTRANCE_17, 1527, 9670, 0, 1513, 9596, 0],
+    [core.ObjectIdentifiers.ENTRANCE_17, 1512, 9560, 0, 1355, 9538, 0],
   ]) {
-    const object = MapObjects.get(core.ObjectIdentifiers.ENTRANCE_17, new core.Location(x, y, z), null);
-    assert.ok(object, `cache placement 51377@${x},${y},${z}`);
+    const object = MapObjects.get(id, new core.Location(x, y, z), null);
+    assert.ok(object, `cache placement ${id}@${x},${y},${z}`);
     assert.equal(object.getDefinition().getInteractions()[0], 'Pass-through');
     assert.ok(object.getFace() >= 0);
     assert.equal(RegionManager.blocked(new core.Location(lx, ly, lz), null), false, `landing ${lx},${ly},${lz}`);

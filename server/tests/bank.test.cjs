@@ -1096,7 +1096,8 @@ function bankerHarness() {
     core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, World },
     onNpcInteraction: (name, handlers) => npc.set(name, handlers),
     onObjectInteraction: (name, handlers) => object.set(name, handlers),
-    onItemOnNpc: (handler) => { useNpc = handler; },
+    // The currency handler (unnoted items); banknotes have their own native test (banker-unnote.test.cjs).
+    onItemOnNpc: (handler, filter) => { if (filter?.noted !== true) useNpc = handler; },
     onItemOnObject: (...args) => useObjects.push(args),
     onButtonClick() {}, onInterfaceActionClick() {},
     onCustomEvent: (name, handler) => custom.set(name, handler),

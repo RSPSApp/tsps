@@ -30,6 +30,8 @@ const BOWL_LOC = "prif_singing_bowl";
 /** The Crystal Singing Recipes book (loc 37344, Read). Interface 'prif_recipes' (181) lays out and fills every entry itself (onLoad cs2 2924). */
 const RECIPES_BOOK = "Crystal Singing Recipes";
 const RECIPES_INTERFACE = 181;
+/** Locs 35978 and 36075 share the name and belong to the Gauntlet (Prep.Gauntlet.js), so the hook is keyed by name but only takes this one. */
+const RECIPES_LOC = 37344;
 
 /**
  * item names are ItemIdentifiers keys. `quest` recipes also need Song of the Elves (Wiki: crystal
@@ -142,7 +144,8 @@ function sing(player, productId, amount) {
   return true;
 }
 
-function readRecipes({ player }) {
+function readRecipes({ player, objectId }) {
+  if (objectId !== RECIPES_LOC) return false;
   player.getPacketSender().sendInterface(RECIPES_INTERFACE);
 }
 

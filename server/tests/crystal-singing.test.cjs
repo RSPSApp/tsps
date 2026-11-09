@@ -189,6 +189,9 @@ test("Read on the Crystal Singing Recipes book opens interface prif_recipes (181
   assert.equal(CacheDefinitions.getLocId("crystal_singing_recipes") ?? 37344, 37344);
   assert.equal(typeof objects.get("Crystal Singing Recipes").Read, "function");
   const player = createPlayer();
-  objects.get("Crystal Singing Recipes").Read({ player });
+  assert.equal(objects.get("Crystal Singing Recipes").Read({ player, objectId: 37344 }), undefined);
   assert.equal(player.interfaceId, 181);
+  const gauntlet = createPlayer();
+  assert.equal(objects.get("Crystal Singing Recipes").Read({ player: gauntlet, objectId: 35978 }), false, "the Gauntlet's books are left to its plugin");
+  assert.equal(gauntlet.interfaceId, undefined);
 });

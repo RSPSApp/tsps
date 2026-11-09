@@ -990,7 +990,7 @@ module.exports = function registerContactQuest(api) {
     }
     const manager = player.getSkillManager();
     const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_XP, false);
+    manager.addExperience(skill, LAMP_XP, true);
     if (manager.getExperience(skill) === before) {
       lampSessions.delete(player);
       player.getPacketSender().sendInterfaceRemoval();

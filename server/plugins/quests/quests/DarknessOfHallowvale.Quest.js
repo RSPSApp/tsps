@@ -2629,7 +2629,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         }
         const skills = player.getSkillManager();
         const before = skills.getExperience(skill);
-        skills.addExperience(skill, TOME_CHAPTER_XP, false);
+        skills.addExperience(skill, TOME_CHAPTER_XP, true);
         if (skills.getExperience(skill) === before) return null;
         player.setAttribute(TOME_CHAPTERS_ATTRIBUTE, read + 1);
         const next = TOME_ITEM_IDS[read + 1];

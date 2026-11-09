@@ -146,7 +146,7 @@ function readTome(event) {
     if (inventory.getItems()[slot]?.getId?.() === itemId) inventory.setItem(slot, new Common.core.Item(-1, 0));
     else inventory.deleteNumber(itemId, 1);
     inventory.refreshItems();
-    player.getSkillManager().addExperience(Common.core.Skill[skill], Common.randomInt(...tomes.xp[tier]), false);
+    player.getSkillManager().addExperience(Common.core.Skill[skill], Common.randomInt(...tomes.xp[tier]), true);
     const name = skill.charAt(0) + skill.slice(1).toLowerCase();
     Common.itemStatement(player, itemId, `After reading the magical tome, you gain some experience in ${name}. The book magically disappears.`);
     return true;

@@ -119,3 +119,14 @@ for (const [name, itemId, option, perLevel] of [
     assert.equal(f.inv.getAmount(id), 0);
   });
 }
+
+test("a gain added without naming the rates still takes them; only an explicit false skips them", (t) => {
+  withRates(t, 5, 4);
+  const f = actor(t), skills = f.p.getSkillManager();
+  let before = xp(f, core.Skill.MINING);
+  skills.addExperience(core.Skill.MINING, 100);
+  assert.equal(xp(f, core.Skill.MINING) - before, 2000, "omitted: x5 world, x4 account");
+  before = xp(f, core.Skill.MINING);
+  skills.addExperience(core.Skill.MINING, 100, false);
+  assert.equal(xp(f, core.Skill.MINING) - before, 100, "a league relic's bonus passes false");
+});

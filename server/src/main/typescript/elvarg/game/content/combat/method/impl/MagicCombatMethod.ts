@@ -249,7 +249,7 @@ export class MagicCombatMethod extends CombatMethod {
         }
 
         if (spell != null) {
-            const castSound = spell.castSound?.() ?? MagicCombatMethod.resolveCastSound(spell.spellId());
+            const castSound = MagicCombatMethod.castSoundFor(spell);
             if (castSound != null) {
                 Sounds.sendSound(character, castSound);
             }
@@ -349,6 +349,11 @@ export class MagicCombatMethod extends CombatMethod {
     }
 
     /** A spell's own impact sound, else the table by its spell id (null: none captured). */
+    /** The caster's private sound as `spell` is cast (its own, else the spell id's). */
+    public static castSoundFor(spell: { castSound?(): Sound | null; spellId(): number }): Sound | null {
+        return spell.castSound?.() ?? MagicCombatMethod.resolveCastSound(spell.spellId());
+    }
+
     public static impactSoundFor(spell: { impactSound(): Sound | null; spellId(): number }): Sound | null {
         return spell.impactSound() ?? MagicCombatMethod.resolveImpactSound(spell.spellId());
     }

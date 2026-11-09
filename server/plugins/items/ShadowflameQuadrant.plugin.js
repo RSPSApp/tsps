@@ -7,7 +7,8 @@
  *   dealing 40% of the first one's damage. Live (Leagues VI, rsprox_transcripts/237/01161.txt
  *   ticks 15139-15154): the cast sends the spell's projectile twice on the same tick, the second
  *   landing 30 client cycles (a tick) later, and its hitsplat is floor(40%) of the first's a tick
- *   after it (3 -> 1, 12 -> 4, 27 -> 10, 32 -> 12). A cast whose first hit splashed showed no
+ *   after it (3 -> 1, 12 -> 4, 27 -> 10, 32 -> 12). The cast sound and the impact area sound come
+ *   twice too, and the one impact graphic is at the second projectile's end. A cast whose first hit splashed showed no
  *   second hitsplat, so the second spell lands only behind a hit; it rolls no accuracy or damage
  *   of its own (40% of what the first one dealt as it landed) and pays no XP. As a landed spell of
  *   its element it still counts for the Demonic Pacts that act on one (our reading).
@@ -54,8 +55,33 @@ function launchSecondSpell({ player, target, hit }) {
   if (secondHits.has(hit) || hit.getCombatType?.() !== core.CombatType.MAGIC || !hit.getHandleAfterHitEffects()) return;
   const spell = hit.getSpell();
   if (!isStandardElemental(spell) || !wieldsQuadrant(player)) return;
-  spell.castProjectile(player, target)?.withEndDelay(SECOND_PROJECTILE_DELAY_CYCLES).sendProjectile();
+  const projectile = spell.castProjectile(player, target)?.withEndDelay(SECOND_PROJECTILE_DELAY_CYCLES);
+  if (projectile) {
+    projectile.sendProjectile();
+    sendSecondImpact(target, spell, hit.isAccurate(), projectile.getTiming().endCycleOffset);
+  }
+  core.Sounds.sendSound(player, core.MagicCombatMethod.castSoundFor(spell));
   launched.add(hit);
+}
+
+/**
+ * The second spell's impact, queued at the cast for its projectile's end cycle as the first
+ * spell's is (MagicCombatMethod.queueNpcProjectileGraphic): an area sound of its own, and the
+ * impact graphic, which takes the place of the first one's (live: one fireblast_impact at the
+ * second projectile's end, and sound_area 156 at both ends).
+ */
+function sendSecondImpact(target, spell, accurate, endCycle) {
+  const { MagicCombatMethod, Sound, Sounds } = core;
+  const sound = accurate ? MagicCombatMethod.impactSoundFor(spell) : Sound.SPELL_FAIL_SPLASH;
+  const at = target.getLocation();
+  if (sound && at) {
+    Sounds.playAreaSound({
+      soundId: sound.getId(), source: target, x: at.getX(), y: at.getY(), level: at.getZ(),
+      loops: sound.getLoopType(), delay: endCycle + sound.getDelay(), radius: MagicCombatMethod.IMPACT_SOUND_RADIUS,
+    });
+  }
+  const graphic = accurate ? spell.endGraphic() : MagicCombatMethod.SPLASH_GRAPHIC;
+  if (graphic && typeof graphic.withDelay === "function") target.performGraphic(graphic.withDelay(endCycle + graphic.getDelay()));
 }
 
 /**

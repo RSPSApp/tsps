@@ -142,8 +142,14 @@ test("an autocast standard elemental spell fires a second spell: two projectiles
   player.getCombat().attack(target);
   const xp = () => player.getSkillManager().getExperience(core.Skill.MAGIC);
   const before = xp();
+  const synths = [], areas = [];
+  const sendSound = t.mock.method(core.Sounds, "sendSound", (entity, sound) => { if (entity === player && sound) synths.push(sound.getId()); });
+  const playAreaSound = t.mock.method(core.Sounds, "playAreaSound", (options) => { if (options.source === target) areas.push(options); });
   const landed = fight(player, target, 1);
+  sendSound.mock.restore();
+  playAreaSound.mock.restore();
   const castXp = xp() - before;
+  const impactGraphic = target.getGraphic();
   landed.push(...fight(player, target, 4).map((each) => ({ ...each, tick: each.tick + 1 })));
   assert.equal(landed.length, 2, JSON.stringify(landed));
   assert.ok(castXp > 0, "the cast pays its XP");
@@ -159,6 +165,18 @@ test("an autocast standard elemental spell fires a second spell: two projectiles
   assert.equal(blast[0].startCycleOffset, blast[1].startCycleOffset, "both launched together");
   assert.equal(blast[0].id, blast[1].id);
   assert.equal(blast[1].endCycleOffset - blast[0].endCycleOffset, 30, "the second lands 30 cycles later");
+  // Live (237/01161.txt tick 15139): synth_sound 155 twice, sound_area 156 at delays 66 and 96, and
+  // one fireblast_impact spotanim at delay 96, the second projectile's end.
+  const castSound = core.MagicCombatMethod.castSoundFor(core.CombatSpells.FIRE_BLAST);
+  assert.ok(castSound);
+  assert.deepEqual(synths.filter((id) => id === castSound.getId()).length, 2, "the cast sound twice");
+  const impact = core.MagicCombatMethod.impactSoundFor(core.CombatSpells.FIRE_BLAST);
+  const impacts = areas.filter((options) => options.soundId === impact.getId());
+  assert.deepEqual(impacts.map((options) => options.delay), [blast[0].endCycleOffset, blast[1].endCycleOffset].map((end) => end + impact.getDelay()),
+    "an impact area sound at each projectile's end");
+  const endGraphic = core.CombatSpells.FIRE_BLAST.endGraphic();
+  assert.equal(impactGraphic.getId(), endGraphic.getId());
+  assert.equal(impactGraphic.getDelay(), blast[1].endCycleOffset + endGraphic.getDelay(), "one impact graphic, at the second projectile's end");
   assert.equal(runes(player, I.DEATH_RUNE), 98, "two casts, one death rune each: the second spell costs nothing, the quadrant pays the fire and air");
 });
 

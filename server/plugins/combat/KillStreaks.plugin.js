@@ -2,6 +2,7 @@ const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const Presets = require("../modes/pvp/Presets.PvpMode");
 
 const GLOW_PRESET_ATTRIBUTE = "visual:glow-preset";
 const GLOW_INTENSITY_ATTRIBUTE = "visual:glow-intensity";
@@ -386,8 +387,16 @@ function applyKillstreakProgressAndAnnouncements(killer) {
   return progress;
 }
 
+/**
+ * Blood money is this server's PvP-world currency: the PK shops only price in it while the PvpMode plugin
+ * (Presets) is on. On OSRS it only exists in Deadman Mode (Wiki, Blood money), so a regular world pays none.
+ */
+function bloodMoneyEnabled() {
+  return Presets.isEnabled() === true;
+}
+
 function awardKillstreakScaledReward(killer, victim, streak, options = {}) {
-  if (!isEligibleKillstreakPlayer(killer)) {
+  if (!bloodMoneyEnabled() || !isEligibleKillstreakPlayer(killer)) {
     return;
   }
   const baseReward = Math.max(0, Math.floor(Number(options?.baseReward ?? 0)));
@@ -442,7 +451,9 @@ function handlePlayerKill(killer, victim) {
     killer
       .getPacketSender?.()
       .sendMessage?.(
-        "Repeated kills on the same target do not give blood money or killstreak progress."
+        bloodMoneyEnabled()
+          ? "Repeated kills on the same target do not give blood money or killstreak progress."
+          : "Repeated kills on the same target do not give killstreak progress."
       );
     updatePvpInterface(killer);
     return;

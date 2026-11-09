@@ -2661,6 +2661,19 @@
       "note": "rsprox captures 1098, 1100, 1105, 1108 (Leagues worlds only)"
     },
     {
+      "name": "Crumbled wall (Tree Gnome Village)",
+      "object": 2185,
+      "level": 1,
+      "between": {
+        "ends": [[2509,3252,0],[2509,3254,0]],
+        "cross": [
+          {"sound":2453,"delay":10},
+          {"move":"to","anim":"CRUMBLED_WALL","speed":[0,70],"ticks":3}
+        ]
+      },
+      "unverified": "the sound, timing and ends (no Tree Gnome Village capture); the animation is human_walk_crumbledwall, as the Nemus Retreat broken walls (rsprox 1098, 1100, 1105, 1108)"
+    },
+    {
       "name": "Rocks (Catherby)",
       "object": 17042,
       "at": [2869,3429,0],

@@ -370,6 +370,7 @@ class FriendsChatManager {
             return;
         }
         const relations = player.getRelations();
+        const wasIgnored = relations.hasIgnore(target.encoded);
         if (action.action === "add_friend")
             relations.addFriend(target.encoded);
         else if (action.action === "remove_friend")
@@ -389,7 +390,7 @@ class FriendsChatManager {
         const ownerKey = accountName(player.getUsername())?.key;
         if (ownerKey) {
             this.refreshOwnedChannel(player);
-            if (action.action === "add_ignore") {
+            if (action.action === "add_ignore" && !wasIgnored && relations.hasIgnore(target.encoded)) {
                 const channel = this.channels.get(ownerKey);
                 const member = channel && Array.from(channel.members.values()).find((candidate) => candidate.getLongUsername() === target.encoded);
                 if (member) {

@@ -1776,7 +1776,8 @@ function drop(player, itemId, reward, { silent = false } = {}) {
       currentPetId: currentPet?.getId?.() ?? null,
       currentPetRegistered: currentPet?.isRegistered?.() ?? null,
     });
-    player.sendMessage("You already have a pet following you.");
+    // rsprox_transcripts/232/03153.txt:10326 (Drop on a pet with one out; 229/00265:24055, the menagerie, the same).
+    player.sendMessage("You already have a follower.");
   }
 
   return true;
@@ -2226,6 +2227,7 @@ module.exports = {
     morph,
     interact,
     pickup,
+    drop,
     handlePetClick,
     awardPet,
     getOwnedPetItems,

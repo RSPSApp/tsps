@@ -237,6 +237,8 @@ test("each phase picks only its captured attacks, and rats stop after twelve wav
   const seen = (state) => new Set(Array.from({ length: 400 }, () => pickAction(state)));
   assert.deepEqual([...seen({ phase: "combat", ratWaves: 0 })].sort(), ["melee", "stomp"]);
   assert.deepEqual([...seen({ phase: "between", ratWaves: 0 })], ["melee"]);
+  // Out of reach between rounds (rats in his way) he stomps instead of waiting for a swipe (#4061).
+  assert.deepEqual([...new Set(Array.from({ length: 100 }, () => pickAction({ phase: "between", ratWaves: 0 }, 0, false)))], ["stomp"]);
   assert.deepEqual([...seen({ phase: "feeding", ratWaves: 0 })].sort(), ["magic", "ranged", "stomp", "summon"]);
   assert.deepEqual([...seen({ phase: "enraged", ratWaves: 0 })].sort(), ["magic", "ranged", "stomp", "summon"]);
   assert.ok(!seen({ phase: "enraged", ratWaves: RAT_WAVE_LIMIT }).has("summon"));
@@ -699,4 +701,76 @@ test("his bolts and fur balls are rolled as they land, after the player's prayer
     }
     assert.ok(unprotected > 0, `${action}: prayer turned off on the landing tick`);
   }
+});
+
+test("between rounds, out of reach, he stomps from range and still goes back to eat (#4061)", () => {
+  const { startFeeding, feedingTurn } = Fight._test;
+  const npc = core.NPC.create(Common.SOLO_ID, Common.location(Common.FEEDING_SPOTS[1].stand));
+  npc.isRegistered = () => true;
+  npc.setHitpoints(300);
+  const state = Fight.stateOf(npc);
+  startFeeding(npc, state, Common.FEEDING_SPOTS[1]);
+  while (state.phase === "feeding") feedingTurn(npc, state);
+  assert.equal(state.phase, "between");
+  const Method = Fight._test.defineCombatMethod();
+  const method = new Method();
+  // A player he can't reach: walled off by his rats, five tiles away.
+  const target = createPlayer({ x: 3296, y: 9867 });
+  npc.getCombat().getTarget = () => target;
+  assert.equal(method.attackDistance(npc), 20, "he attacks from range instead of waiting to reach them");
+  assert.equal(method.type(), core.CombatType.RANGED);
+  const turns = state.swingsLeft;
+  for (let i = 0; i < turns; i++) {
+    method.start(npc, target);
+    assert.equal(method.action, "stomp");
+  }
+  npc.setHitpoints(300);
+  runTicks(2);
+  assert.equal(state.phase, "walking", "the stomps count toward his turns between rounds");
+  state.walking = null;
+  npc.setScriptedMovement(false);
+});
+
+test("a wave's rats each get a tile of their own, with room for their 2x2 bodies (#4061)", () => {
+  const { ratTile } = Fight._test;
+  const npc = core.NPC.create(Common.SOLO_ID, Common.location(Common.CENTRE_TILE));
+  for (let wave = 0; wave < 200; wave++) {
+    const taken = new Set();
+    const tiles = Array.from({ length: 6 }, () => ratTile(npc, taken));
+    assert.equal(new Set(tiles.map((tile) => `${tile.getX()},${tile.getY()}`)).size, 6, `wave ${wave}`);
+    for (const tile of tiles) {
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+        const at = tile.transform(dx, dy);
+        assert.ok(Common.within(Common.FLOOR, at) && !RegionManager.blocked(at, null), `wave ${wave}: ${at.getX()},${at.getY()}`);
+      }
+    }
+  }
+});
+
+test("the rats bite 0-1 through Protect from Melee, and their full roll without (#4061)", () => {
+  const { ratHitRoll, ratHitLands, RAT_PROTECTED_MAX_HIT } = Fight._test;
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PrayerHandler, CombatType } = core;
+  const rat = core.NPC.create(Common.RAT_ID, new Location(3296, 9866, 0));
+  const player = new Player(null);
+  const roll = { attacker: rat, target: player, combatType: CombatType.MELEE, forceAccurate: false, bypassProtectionPrayer: false };
+  ratHitRoll(roll);
+  assert.equal(roll.bypassProtectionPrayer, true, "the prayer doesn't block the bite");
+  const other = { ...roll, attacker: core.NPC.create(Common.SOLO_ID, new Location(3298, 9866, 0)), bypassProtectionPrayer: false };
+  ratHitRoll(other);
+  assert.equal(other.bypassProtectionPrayer, false, "Scurrius' own melee is still blocked");
+  const melee = new (class extends core.CombatMethod { type() { return CombatType.MELEE; } hits() { return []; } })();
+  const bite = (damage) => new core.PendingHit(rat, player, melee, { delay: 0, damage, rollAccuracy: false });
+  const prayers = player.getPrayerActive();
+  prayers.fill(false);
+  prayers[PrayerHandler.PROTECT_FROM_MELEE] = true;
+  for (const damage of [0, 1, 4]) {
+    const event = { player, hit: bite(damage) };
+    ratHitLands(event);
+    assert.equal(event.hit.getTotalDamage(), Math.min(damage, RAT_PROTECTED_MAX_HIT), `${damage} through the prayer`);
+  }
+  prayers[PrayerHandler.PROTECT_FROM_MELEE] = false;
+  const event = { player, hit: bite(4) };
+  ratHitLands(event);
+  assert.equal(event.hit.getTotalDamage(), 4, "no prayer: the full roll");
 });

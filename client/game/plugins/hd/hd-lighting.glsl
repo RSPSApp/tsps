@@ -62,11 +62,19 @@ float hdMistAmount(vec3 position) {
 }
 
 float hdShadow(vec3 position, vec3 normal) {
-    vec4 projected = u_hdShadowMatrix * vec4(position, 1.0);
+    vec2 texel = 1.0 / vec2(textureSize(u_hdShadowMap, 0));
+    // Bias in the shadow map's own units (see hd-lighting.wgsl.ts): a texel's width in tiles
+    // and depth per tile, from the ortho's x and z scales.
+    mat4 m = u_hdShadowMatrix;
+    float texelWorld = 2.0 * texel.x / length(vec3(m[0].x, m[1].x, m[2].x));
+    float depthPerTile = 0.5 * length(vec3(m[0].z, m[1].z, m[2].z));
+    float ndl = clamp(dot(normal, u_hdLightDirection), 0.0, 1.0);
+    float sinAngle = sqrt(1.0 - ndl * ndl);
+    vec4 projected = m * vec4(position + normal * (texelWorld * 1.5 * sinAngle), 1.0);
     vec3 p = projected.xyz / projected.w * 0.5 + 0.5;
     if (u_hdShadowStrength == 0.0 || any(lessThan(p, vec3(0.0))) || any(greaterThan(p, vec3(1.0)))) return 1.0;
-    float bias = max(0.0006 * (1.0 - max(dot(normal, u_hdLightDirection), 0.0)), 0.00018);
-    vec2 texel = 1.0 / vec2(textureSize(u_hdShadowMap, 0));
+    float slope = min(sinAngle / max(ndl, 0.05), 10.0);
+    float bias = (0.03 + texelWorld * 2.0 * slope) * depthPerTile;
     float shadow = 0.0;
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {

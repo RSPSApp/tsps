@@ -79,6 +79,8 @@ function setFacility(boat, hotspot, facilityRow) {
   const allowed = hotspotsOf(boat.type)[hotspot]?.allowed ?? [];
   facilities[hotspot] = facilityRow === undefined ? 0 : allowed.indexOf(facilityRow) + 1;
   boat.facilities = facilities;
+  // What the old facility held (a keg's drink) goes with it.
+  if (boat.hotspotData?.[hotspot]) boat.hotspotData[hotspot] = 0;
   if (before === undefined || before === facilityRow) return;
   const loc = CacheDefinitions.getDbRow(before)?.column(FACILITY.loc)?.[0];
   if (ANCHOR_LOWERED[loc] !== undefined) delete boat.anchorDown;
@@ -173,6 +175,9 @@ function switchedLoc(boat, id, atSea) {
   return id;
 }
 
+/** The empty keg's loc: a filled keg is the loc its drink (the hotspot's extra data) counts on from it. */
+const KEG_EMPTY = 59691;
+
 /**
  * The deck locs for a boat's hotspots: each facility's loc, blocking its tile when the loc is
  * solid in the cache (a range or cargo hold, not a hook). With `placeholders`, as in the
@@ -188,6 +193,7 @@ function hotspotLocs(boat, placeholders = false) {
       : placeholderIds[hotspot.id];
     if (typeof id !== "number") return [];
     id = switchedLoc(boat, id, !placeholders);
+    if (id === KEG_EMPTY) id += boat.hotspotData?.[hotspot.id] ?? 0;
     const blocks = (CacheDefinitions.getObject(id)?.clipType ?? 0) !== 0;
     const opFlags = facility === undefined ? undefined : placeholders ? FACILITY_OPS.SHIPYARD : FACILITY_OPS.AT_SEA;
     return [{ id, x: hotspot.x, y: hotspot.y, level: hotspot.level, shape: LOC_SHAPE, rotation: rotationOf(hotspot, facility), blocks, hotspot: hotspot.id, opFlags }];
@@ -222,6 +228,7 @@ function cargoCapacityOf(boat) {
 module.exports = {
   cargoCapacityOf,
   CATCHER_SWITCHED_ON,
+  KEG_EMPTY,
   ANCHOR_LOWERED,
   EXTRACTOR_SWITCHED_ON,
   FACILITY_OPS,

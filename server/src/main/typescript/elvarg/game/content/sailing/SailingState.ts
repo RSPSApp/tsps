@@ -59,6 +59,8 @@ export interface OwnedBoat {
     crystalExtractorOn?: boolean;
     crystalMote?: boolean;
     facilities: number[];
+    /** Per hotspot, what its facility holds (the hotspot's `extra_data` varbit): a keg's drink. 0 = nothing. */
+    hotspotData?: number[];
     location: BoatLocation;
     /** The cargo hold, by slot; `null` is an empty slot. */
     cargo: (CargoSlot | null)[];
@@ -123,6 +125,12 @@ function normalizeCargo(raw: unknown): (CargoSlot | null)[] {
         : null);
 }
 
+function normalizeHotspotData(raw: unknown): { hotspotData?: number[] } {
+    if (!Array.isArray(raw)) return {};
+    const data = raw.map((value) => Number.isInteger(value) && value > 0 ? value : 0);
+    return data.some((value) => value > 0) ? { hotspotData: data } : {};
+}
+
 /** Reads a saved sailing state, dropping anything malformed. Missing state is empty. */
 export function normalizeSailingState(raw: any): SailingState {
     if (!raw || typeof raw !== "object") return emptySailingState();
@@ -143,6 +151,7 @@ export function normalizeSailingState(raw: any): SailingState {
             ...(boat.crystalExtractorOn === true && { crystalExtractorOn: true }),
             ...(boat.crystalMote === true && { crystalMote: true }),
             facilities: Array.isArray(boat.facilities) ? boat.facilities.filter(Number.isInteger) : [],
+            ...(normalizeHotspotData(boat.hotspotData)),
             location: normalizeLocation(boat.location),
             cargo: normalizeCargo(boat.cargo),
             parts: normalizeParts(boat.parts),

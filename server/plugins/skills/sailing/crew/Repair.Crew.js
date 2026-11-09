@@ -45,7 +45,7 @@ function work(player, boat, owned, member, outOfKits) {
       }
       cargo.take(owned, 0, kit.kit, 1);
       member.npc.performAnimation(new Animation(ANIM_REPAIR));
-      BoatHp.heal(player, owned, kit.heals + Math.max(0, (member.crew.stats[common.STAT.DECKHANDINESS] ?? 1) - 1));
+      BoatHp.heal(player, owned, kit.heals + Math.max(0, (common.statOf(owned, member.crew, common.STAT.DECKHANDINESS) || 1) - 1));
       player.getPacketSender().sendVarbit(VARBIT_REPAIR_KITS, cargo.repairKitUses(owned));
       common.core().PluginManager.emitCustomEvent("sailing:cargo-changed", { player, boat: owned });
       if (!lines.say(member.npc, member.crew, "repaired")) member.npc.forceChat(REPAIRED_LINE);

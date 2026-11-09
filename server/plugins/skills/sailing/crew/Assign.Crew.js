@@ -184,7 +184,7 @@ function orderLine(member, job) {
 function order(player, boat, owned, member, job) {
   if (common.core().Sailing.instanceAboard(player) !== boat || !common.crewAboard(boat).includes(member)) return;
   const [stat, level] = job.requirement ?? [];
-  if (stat && member.crew.stats[stat] < level) {
+  if (stat && common.statOf(owned, member.crew, stat) < level) {
     player.sendMessage(`Your crewmate requires ${level} ${STAT_NAMES[stat]} to use that facility.`);
     return;
   }

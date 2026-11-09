@@ -76,7 +76,8 @@ function crewTrimmed({ player, npc, xp }) {
   const found = common.memberFor(npc);
   if (!found) return;
   const { crew } = found.member;
-  const share = TRIM_XP_SHARE[crew.stats[common.STAT.HELMSMANSHIP]] ?? 0;
+  const owned = common.core().Sailing.activeBoat(player);
+  const share = TRIM_XP_SHARE[common.statOf(owned, crew, common.STAT.HELMSMANSHIP)] ?? 0;
   if (xp > 0 && share > 0) {
     player.getSkillManager().addExperiences(common.core().Skill.SAILING, xp * share);
     player.getPacketSender().sendTypedMessage(common.core().ChatType.SPAM, WATCHING);

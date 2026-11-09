@@ -27,8 +27,10 @@
  * page, plus the cache (object/NPC transforms, varbits, placements) for ids.
  *
  * Gaps / approximations:
- *  - The optional tour stops (the tutors, Fred, Millie, Father Urhney, the
- *    candle seller, Gee/Donie, the border guard) are not implemented; only the
+ *  - Most optional tour stops (the tutors, Fred, the candle seller and the
+ *    border guard) are not implemented. Millie, Father Urhney and Gee/Donie
+ *    have stateless dialogue; repeat and interruption behavior is unverified.
+ *    The existing tour also handles the
  *    five stops the transcript gates on (Duke, a common man/woman, Father
  *    Aereck, goblins, the shopkeeper) plus Cook, Hans, Bob, the Guide, Mistag
  *    and Kazgar.
@@ -698,6 +700,26 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
 
   function talkLumbridgeGuide(event) {
     return tourStop(event, "a-tour-of-lumbridge-lumbridge-guide", 0);
+  }
+
+  // The Wiki records these conversations, but does not establish whether they
+  // repeat or when an optional visit is recorded. No tour progress is awarded.
+  function talkOptionalTourStop(event) {
+    const { player, npc, npcId } = event;
+    if (quest.getStage(player) !== STAGE_TOURING) return false;
+    const zanik = zanikByPlayer.get(player);
+    if (!zanik?.isRegistered() || zanik.getFollowing() !== player) return false;
+    const variants = {
+      [NpcIdentifiers.MILLIE_MILLER]: "a-tour-of-lumbridge-millie-miller",
+      [NpcIdentifiers.FATHER_URHNEY]: "a-tour-of-lumbridge-father-urhney",
+      [NpcIdentifiers.GEE]: "a-tour-of-lumbridge-gee-or-donie",
+      [NpcIdentifiers.DONIE]: "a-tour-of-lumbridge-gee-or-donie",
+    };
+    const variant = variants[npcId];
+    if (!variant) return false;
+    const request = { player, npc, npcId, variant: { page: PAGE, variant }, exact: true, handled: false };
+    api.emitCustomEvent("npc-dialogue:start", request);
+    return request.handled === true;
   }
 
   function talkZanik(event) {
@@ -1578,6 +1600,10 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onNpcInteraction("Duke Horacio", { "Talk-to": talkDuke });
   api.onNpcInteraction("Cook", { "Talk-to": talkCook });
   api.onNpcInteraction("Hans", { "Talk-to": talkHans });
+  api.onNpcInteraction("Millie Miller", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Father Urhney", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Gee", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Donie", { "Talk-to": talkOptionalTourStop });
   api.onNpcInteraction("Bob", { "Talk-to": talkBob });
   api.onNpcInteraction("Father Aereck", { "Talk-to": talkFatherAereck });
   api.onNpcInteraction("Lumbridge Guide", { "Talk-to": talkLumbridgeGuide });

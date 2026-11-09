@@ -21,6 +21,7 @@ import type { WorldResources } from "../WorldResources";
 import {
     ACTOR_DEPTH_FRAGMENT_ENTRY,
     ACTOR_FRAGMENT_ENTRY,
+    ACTOR_MASK_FRAGMENT_ENTRY,
     actorVertexEntry,
     createActorShaderModule,
     type ActorKind,
@@ -77,6 +78,8 @@ interface ActorDrawItem {
     geometry: GpuGeometry;
     entry: number;
     priorityPass?: boolean;
+    /** A player's ECS index, for the Shader Effects silhouette. */
+    playerPid?: number;
 }
 
 interface MapActorState {
@@ -141,6 +144,12 @@ export class WebGPUActors {
         { extended: GPURenderPipeline; depth?: GPURenderPipeline }
     >();
     private posePipelines = new Set<GPURenderPipeline>();
+    /** Base player pipeline -> the same vertex stage writing a coverage mask (Shader Effects aura). */
+    private readonly maskPipelines = new Map<GPURenderPipeline, GPURenderPipeline>();
+    private maskPipelineLayout?: GPUPipelineLayout;
+    /** The base actor shader modules ([opaque, alpha]); they already hold the mask fragment entry. */
+    private readonly baseModules: (GPUShaderModule | undefined)[] = [undefined, undefined];
+    private maskPipelinesPending = false;
     private priorityPasses?: {
         base: [GPURenderPipeline, GPURenderPipeline];
         extended?: [GPURenderPipeline, GPURenderPipeline];
@@ -291,6 +300,7 @@ export class WebGPUActors {
                 ext: mode === "base" ? undefined : extension!.shaders,
                 depth,
             });
+            if (mode === "base" && !priorityPass) this.baseModules[alpha ? 1 : 0] = module;
             const out = new Map<ActorKind, GPURenderPipeline>();
             for (const { kind, stride, cullMode } of KINDS) {
                 if (priorityPass && kind !== "npc") continue;
@@ -361,6 +371,10 @@ export class WebGPUActors {
                 }
             }
         }
+
+        // The prayer aura's silhouette pipelines are built on first use (createMaskPipelines), so a
+        // player who never uses the aura pays nothing for them.
+        this.maskPipelineLayout = pipelineLayout;
 
         const createPriorityPasses = (mode: "base" | "extended"): [GPURenderPipeline, GPURenderPipeline] => [
             createPipelines(false, mode, "color").get("npc")!,
@@ -518,6 +532,90 @@ export class WebGPUActors {
     drawDepth(pass: GPURenderPassEncoder): void {
         this.draw(pass, false, true);
         this.draw(pass, true, true);
+    }
+
+    /**
+     * Draws one player's posed geometry as a coverage mask with the scene's camera, for the
+     * Shader Effects prayer aura. Returns whether anything was drawn.
+     */
+    drawPlayerMask(pass: GPURenderPassEncoder, playerPid: number): boolean {
+        const world = this.world;
+        if (!world || !this.actorData || this.maskPipelines.size === 0) return false;
+        pass.setBindGroup(0, world.sceneBindGroup);
+        pass.setBindGroup(1, world.worldTextureBindGroup);
+        pass.setBindGroup(3, this.actorData.bindGroup);
+        let drew = false;
+        for (const state of this.frameMaps) {
+            if (!state.playerByPid.has(playerPid)) continue;
+            const bindGroup = state.uniforms.bindGroupFor();
+            if (!bindGroup) continue;
+            pass.setBindGroup(2, bindGroup);
+            for (const items of [state.opaque, state.alpha]) {
+                for (const item of items) {
+                    if (item.playerPid !== playerPid) continue;
+                    const pipeline = this.maskPipelines.get(item.pipeline);
+                    if (!pipeline) continue;
+                    pass.setPipeline(pipeline);
+                    pass.setVertexBuffer(0, item.geometry.vertices);
+                    pass.setVertexBuffer(1, item.geometry.labels ?? item.geometry.vertices);
+                    pass.setIndexBuffer(item.geometry.indices, "uint32");
+                    pass.drawIndexed(item.geometry.indexCount, 1, 0, 0, item.entry);
+                    drew = true;
+                }
+            }
+        }
+        return drew;
+    }
+
+    /**
+     * Whether the player silhouette can be drawn yet. The first call starts building the mask
+     * pipelines (the player pipelines' twins: the same vertex stage as the scene draw, writing
+     * coverage into a single-sampled r8 target) off the frame, so showing the aura for the first time
+     * does not hitch; until they are ready the aura uses its generic figure.
+     */
+    playerMaskReady(): boolean {
+        if (this.maskPipelines.size > 0) return true;
+        const device = this.renderer.device;
+        const playerPipelines = this.pipelines.get("player");
+        if (this.maskPipelinesPending || !device || !playerPipelines || !this.maskPipelineLayout) return false;
+        this.maskPipelinesPending = true;
+        const layout = this.maskPipelineLayout;
+        const builds = [false, true].map((alpha) => {
+            const maskModule = this.baseModules[alpha ? 1 : 0];
+            if (!maskModule) return Promise.resolve(undefined);
+            return device.createRenderPipelineAsync({
+                label: `webgpu actor player mask${alpha ? " alpha" : ""}`,
+                layout,
+                vertex: {
+                    module: maskModule,
+                    entryPoint: actorVertexEntry("player"),
+                    buffers: [
+                        {
+                            arrayStride: ACTOR_VERTEX_STRIDE,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: "uint32x4" },
+                                { shaderLocation: 3, offset: 16, format: "uint32" },
+                            ],
+                        },
+                        { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "uint32" }] },
+                    ],
+                },
+                fragment: { module: maskModule, entryPoint: ACTOR_MASK_FRAGMENT_ENTRY, targets: [{ format: "r8unorm" }] },
+                primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+            });
+        });
+        void Promise.all(builds)
+            .then(([opaque, alpha]) => {
+                // Dropped if the actors were torn down while the pipelines compiled.
+                if (!this.maskPipelineLayout || !opaque || !alpha) return;
+                this.maskPipelines.set(playerPipelines[0], opaque);
+                this.maskPipelines.set(playerPipelines[1], alpha);
+            })
+            .catch((error) => console.warn("[webgpu] player mask pipelines unavailable", error))
+            .finally(() => {
+                this.maskPipelinesPending = false;
+            });
+        return false;
     }
 
     private draw(pass: GPURenderPassEncoder, alpha: boolean, depth: boolean): void {
@@ -726,6 +824,9 @@ export class WebGPUActors {
         this.frameMaps.length = 0;
         this.gfx?.projectiles.clear();
         this.gfx = undefined;
+        this.maskPipelines.clear();
+        this.maskPipelineLayout = undefined;
+        this.baseModules.fill(undefined);
         this.playerPose?.clear();
         this.playerPose = undefined;
         this.geometry?.destroy();
@@ -971,6 +1072,7 @@ export class WebGPUActors {
                     pipeline,
                     geometry,
                     entry: entry ??= this.actorEntry(state, map, timeLoaded, modelYOffset, dataIndex, 0, 0, 0, poseRow),
+                    playerPid: pid,
                 });
             }
         }

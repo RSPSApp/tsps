@@ -34,6 +34,10 @@ export class ShaderFxPass {
     private view?: GPUTextureView;
     private sourceBindGroup?: GPUBindGroup;
     private sourceView?: GPUTextureView;
+    private sourceMaskView?: GPUTextureView;
+    /** Stands in for the player mask when there is none: all zero. */
+    private readonly emptyMask: GPUTexture;
+    private readonly emptyMaskView: GPUTextureView;
     private sourceTexture?: GPUTexture;
     private sourceTextureView?: GPUTextureView;
     private width = 0;
@@ -56,8 +60,16 @@ export class ShaderFxPass {
             entries: [
                 { binding: 0, visibility: FRAGMENT_STAGE, texture: { sampleType: "float", viewDimension: "2d" } },
                 { binding: 1, visibility: FRAGMENT_STAGE, sampler: { type: "filtering" } },
+                { binding: 2, visibility: FRAGMENT_STAGE, texture: { sampleType: "float", viewDimension: "2d" } },
             ],
         });
+        this.emptyMask = device.createTexture({
+            label: "shaderfx empty player mask",
+            size: [1, 1],
+            format: "r8unorm",
+            usage: GPU_TEXTURE_USAGE.TEXTURE_BINDING,
+        });
+        this.emptyMaskView = this.emptyMask.createView();
         this.pipeline = device.createRenderPipeline({
             label: "shaderfx",
             layout: device.createPipelineLayout({
@@ -127,25 +139,33 @@ export class ShaderFxPass {
         return runtime.fill(this.uniforms);
     }
 
-    /** Draws the prepared effects from `sourceView` into `targetView`. */
+    /**
+     * Draws the prepared effects from `sourceView` into `targetView`. `maskView`, the frame-sized
+     * coverage of the player's own model, lets the prayer aura follow it; without it the aura
+     * falls back to a generic figure.
+     */
     encodeTo(
         encoder: GPUCommandEncoder,
         sourceView: GPUTextureView,
         targetView: GPUTextureView,
         width: number,
         height: number,
+        maskView?: GPUTextureView,
     ): void {
         if (this.disposed || width < 1 || height < 1) return;
-        if (this.sourceView !== sourceView || !this.sourceBindGroup) {
+        const mask = maskView ?? this.emptyMaskView;
+        if (this.sourceView !== sourceView || this.sourceMaskView !== mask || !this.sourceBindGroup) {
             this.sourceBindGroup = this.device.createBindGroup({
                 label: "shaderfx source bind group",
                 layout: this.textureLayout,
                 entries: [
                     { binding: 0, resource: sourceView },
                     { binding: 1, resource: this.sampler },
+                    { binding: 2, resource: mask },
                 ],
             });
             this.sourceView = sourceView;
+            this.sourceMaskView = mask;
         }
         const data = this.uniforms;
         data[FxSlot.SCREEN] = width;
@@ -154,6 +174,7 @@ export class ShaderFxPass {
         data[FxSlot.SCREEN + 3] = 1 / height;
         data[FxSlot.TIME + 1] = width / height;
         data[FxSlot.GRADE + 2] = this.displayReferred ? 1 : 0;
+        data[FxSlot.GRADE + 3] = maskView ? 1 : 0;
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data);
 
         const pass = encoder.beginRenderPass({
@@ -173,9 +194,14 @@ export class ShaderFxPass {
      * 117 HD's use: the view the tonemap should read. The effects' output when any are active,
      * else `sceneView`, with nothing recorded.
      */
-    encode(encoder: GPUCommandEncoder, sceneView: GPUTextureView, runtime: ShaderFxRuntime | undefined): GPUTextureView {
+    encode(
+        encoder: GPUCommandEncoder,
+        sceneView: GPUTextureView,
+        runtime: ShaderFxRuntime | undefined,
+        maskView?: GPUTextureView,
+    ): GPUTextureView {
         if (!this.view || !this.prepare(runtime)) return sceneView;
-        this.encodeTo(encoder, sceneView, this.view, this.width, this.height);
+        this.encodeTo(encoder, sceneView, this.view, this.width, this.height, maskView);
         return this.view;
     }
 
@@ -190,6 +216,8 @@ export class ShaderFxPass {
         this.sourceTexture?.destroy();
         this.sourceTexture = undefined;
         this.sourceTextureView = undefined;
+        this.sourceMaskView = undefined;
+        this.emptyMask.destroy();
         this.uniformBuffer.destroy();
         (this.sampler as GPUSampler & { destroy?(): void }).destroy?.();
     }

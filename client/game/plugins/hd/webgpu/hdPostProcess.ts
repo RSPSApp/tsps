@@ -94,7 +94,10 @@ export class HdPostProcess {
             strength,
         );
         // The Shader Effects plugin's screen shaders; hands the DOF/scene view straight back when off or idle.
-        const sceneView = this.shaderFx?.encode(encoder, dofView, fxRuntime) ?? dofView;
+        // The player's silhouette for the prayer aura is only drawn while an aura is showing.
+        const playerMask = this.shaderFx && fxRuntime?.wantsPlayerMask?.() === true
+            ? renderer.encodePlayerMask(encoder, width, height) : undefined;
+        const sceneView = this.shaderFx?.encode(encoder, dofView, fxRuntime, playerMask) ?? dofView;
         const fxaa = options.antiAliasing ? (this.fxaa ??= new FxaaPass(this.device, this.canvasFormat)) : undefined;
         this.tonemap.encode(encoder, fxaa?.ensure(width, height) ?? frame.canvasView,
             sceneView, bloomView, aoView, width, height, options.hdr);

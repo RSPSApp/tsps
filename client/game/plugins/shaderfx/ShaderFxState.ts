@@ -1,7 +1,7 @@
 import { COLOR_GRADE_INDEX, ColorGrade } from "./ShaderFxConfig";
 
-/** Floats in the shader's uniform block: ten vec4s (see Fx in hd-shaderfx.wgsl). */
-export const SHADER_FX_UNIFORM_FLOATS = 40;
+/** Floats in the shader's uniform block: fourteen vec4s (see Fx in shaderfx.wgsl). */
+export const SHADER_FX_UNIFORM_FLOATS = 56;
 
 /** Offsets of each vec4 in the block. The pass fills SCREEN; the state fills the rest. */
 export const FxSlot = {
@@ -15,12 +15,22 @@ export const FxSlot = {
     LOOK_A: 28,
     LOOK_B: 32,
     GRADE: 36,
+    /** Ice freeze, entangle thorns, teleport warp, ink outlines. */
+    STATUS: 40,
+    /** Prayer aura colour rgb, strength. */
+    AURA: 44,
+    /** Loot flash colour rgb (already scaled by its strength), sweep progress (<0 off). */
+    LOOT: 48,
+    /** Player on screen (u, v from the top left, radius as a share of the height). */
+    FOCUS: 52,
 } as const;
 
 /** What the WebGPU post chain asks the plugin each frame. */
 export interface ShaderFxRuntime {
     /** Fills the uniform block (all but the screen size); false when nothing would change. */
     fill(out: Float32Array): boolean;
+    /** Whether the frame wants the player's model drawn as a mask (the prayer aura follows it). */
+    wantsPlayerMask?(): boolean;
 }
 
 /** The toggles as the state reads them. */
@@ -54,6 +64,14 @@ export interface ShaderFxSettings {
     tiltShift: boolean;
     pixelate: boolean;
     posterize: boolean;
+    inkOutlines: boolean;
+    prayerAura: boolean;
+    freezeEffect: boolean;
+    thornsEffect: boolean;
+    teleportWarp: boolean;
+    lootFlash: boolean;
+    /** The drop value (price times quantity) that starts the loot flash. */
+    lootFlashValue: number;
 }
 
 /** How long each impulse lasts, in milliseconds. */
@@ -66,7 +84,19 @@ export const FxDuration = {
     CAST: 900,
     RANGED: 650,
     LEVEL_UP: 1400,
+    FREEZE: 3200,
+    THORNS: 3200,
+    /** The teleport wind-up builds over this long, and gives up if no landing comes within the timeout. */
+    TELEPORT_WINDUP: 1500,
+    TELEPORT_TIMEOUT: 3600,
+    /** The picture settles back over this long after the landing. */
+    TELEPORT_LAND: 1100,
+    LOOT: 1500,
 } as const;
+
+/** How quickly a freeze or thorns effect comes in, in milliseconds, and the share of it held at full. */
+const STATUS_RAMP_MS = 160;
+const STATUS_HOLD = 0.35;
 
 /** The strength of the ambient looks, before the intensity scales them. */
 const GRAIN = 1;
@@ -78,6 +108,8 @@ const TILT_SHIFT = 1;
 const PIXEL_SIZE = 3;
 const POSTERIZE_LEVELS = 6;
 
+const INK = 1;
+
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value);
 
 /** 1 at the start, falling to 0 at `duration`, easing out. */
@@ -85,6 +117,62 @@ export function fade(elapsedMs: number, duration: number): number {
     if (!(elapsedMs >= 0) || elapsedMs >= duration) return 0;
     const left = 1 - elapsedMs / duration;
     return left * left;
+}
+
+/**
+ * Rises over `ramp` milliseconds, holds full strength for the first `hold` share of the
+ * duration, then drains away to 0 at `duration`.
+ */
+export function rampFade(elapsedMs: number, duration: number, ramp: number, hold = 0): number {
+    if (!(elapsedMs >= 0) || elapsedMs >= duration) return 0;
+    const drain = Math.min(1, (1 - elapsedMs / duration) / Math.max(0.01, 1 - hold));
+    return Math.min(1, elapsedMs / ramp) * drain;
+}
+
+/** Where the local player is on screen, for the prayer haze. */
+export interface PlayerScreen {
+    /** Horizontal position, 0 at the left edge to 1 at the right. */
+    u: number;
+    /** Vertical position, 0 at the top edge to 1 at the bottom. */
+    v: number;
+    /** Half the player's height on screen, as a share of the canvas height. */
+    radius: number;
+}
+
+/**
+ * How far the teleport bends the picture at `now`, 0 to 1. It builds while the teleport plays,
+ * holds until the landing, then settles back.
+ */
+export function teleportWarp(now: number, startAt: number, landAt: number): number {
+    if (startAt > landAt) {
+        const age = now - startAt;
+        if (!(age >= 0) || age >= FxDuration.TELEPORT_TIMEOUT) return 0;
+        const p = clamp01(age / FxDuration.TELEPORT_WINDUP);
+        return p * p;
+    }
+    const age = now - landAt;
+    if (!(age >= 0) || age >= FxDuration.TELEPORT_LAND) return 0;
+    const left = 1 - age / FxDuration.TELEPORT_LAND;
+    return left * left;
+}
+
+/** Where the prayer haze sits when the player's spot is unknown: the middle of the screen. */
+const SCREEN_CENTRE: PlayerScreen = { u: 0.5, v: 0.5, radius: 0.12 };
+
+/** The aura colour for each prayer that has one, as [varbit, r, g, b]. */
+export const PRAYER_AURA_COLORS: ReadonlyArray<readonly [number, number, number, number]> = [
+    [4118, 1.0, 0.3, 0.22], // Protect from Melee
+    [4117, 0.3, 1.0, 0.4], // Protect from Missiles
+    [4116, 0.3, 0.6, 1.0], // Protect from Magic
+    [4129, 1.0, 0.8, 0.25], // Piety
+    [5464, 0.7, 0.3, 1.0], // Rigour
+    [5465, 0.3, 0.95, 0.95], // Augury
+];
+
+/** The loot flash colour: gold from the threshold, purple from ten times it. */
+export function lootColor(value: number, threshold: number): [number, number, number] | undefined {
+    if (!(value >= Math.max(1, threshold))) return undefined;
+    return value >= threshold * 10 ? [0.8, 0.35, 1] : [1, 0.8, 0.28];
 }
 
 /** A colour for a graphic id: a stable hue per id, so each spell glows its own colour. */
@@ -123,6 +211,14 @@ export class ShaderFxState {
     private castColor: [number, number, number] = [0.42, 0.36, 1];
     private rangedAt = -1e9;
     private levelUpAt = -1e9;
+    private freezeAt = -1e9;
+    private thornsAt = -1e9;
+    private teleportStartAt = -1e9;
+    private teleportLandAt = -1e9;
+    private playerScreen: PlayerScreen | undefined;
+    private lootAt = -1e9;
+    private lootRgb: [number, number, number] = [1, 0.8, 0.28];
+    private auraRgb: [number, number, number] | undefined;
     /** Whether anything in the frame being filled would change the picture. */
     private active = false;
     /** Notes a strength for fill(): kept as a field so no closure is made per frame. */
@@ -176,6 +272,55 @@ export class ShaderFxState {
         this.levelUpAt = now;
     }
 
+    /** An Ice spell's graphic landed on the local player. */
+    frozen(now: number): void {
+        this.freezeAt = now;
+    }
+
+    /** Bind, Snare or Entangle rooted the local player. */
+    entangled(now: number): void {
+        this.thornsAt = now;
+    }
+
+    /** A teleport graphic started on the local player: the wind-up builds until the landing. */
+    teleportStarted(now: number): void {
+        if (this.teleportStartAt > this.teleportLandAt && now - this.teleportStartAt < FxDuration.TELEPORT_TIMEOUT) return;
+        this.teleportStartAt = now;
+    }
+
+    /** Whether a teleport graphic has started a wind-up that no landing has ended yet. */
+    teleportWinding(now: number): boolean {
+        return this.teleportStartAt > this.teleportLandAt && now - this.teleportStartAt < FxDuration.TELEPORT_TIMEOUT;
+    }
+
+    /** The local player jumped a long way in one tick: the landing. */
+    teleported(now: number): void {
+        this.teleportLandAt = now;
+    }
+
+    /** A valuable drop arrived; `value` is its price times quantity. */
+    lootDropped(value: number, threshold: number, now: number): void {
+        const color = lootColor(value, threshold);
+        if (!color) return;
+        this.lootAt = now;
+        this.lootRgb = color;
+    }
+
+    /** Whether a prayer aura is showing, so the plugin only looks up the player's screen spot when needed. */
+    hasPrayerAura(): boolean {
+        return this.auraRgb !== undefined;
+    }
+
+    /** Where the local player is on screen; undefined puts the haze in the middle. */
+    setPlayerScreen(screen: PlayerScreen | undefined): void {
+        this.playerScreen = screen;
+    }
+
+    /** The prayer aura colour, or undefined when no prayer with an aura is on. */
+    setPrayerAura(rgb: [number, number, number] | undefined): void {
+        this.auraRgb = rgb;
+    }
+
     setHealth(current: number, max: number): void {
         this.healthFraction = max > 0 ? clamp01(current / max) : 1;
     }
@@ -188,6 +333,9 @@ export class ShaderFxState {
     reset(): void {
         this.damageAt = this.bigHitAt = this.punchAt = this.specAt = -1e9;
         this.castAt = this.rangedAt = this.levelUpAt = -1e9;
+        this.freezeAt = this.thornsAt = this.teleportStartAt = this.teleportLandAt = this.lootAt = -1e9;
+        this.playerScreen = undefined;
+        this.auraRgb = undefined;
         this.healthFraction = 1;
         this.poisoned = false;
     }
@@ -264,6 +412,39 @@ export class ShaderFxState {
         out[FxSlot.GRADE] = grade;
         out[FxSlot.GRADE + 1] = grade > 0 ? Math.min(1, k) : 0;
         if (grade > 0) this.active = true;
+
+        // Status: ice freeze, thorns, teleport warp, ink outlines
+        out[FxSlot.STATUS] = this.mark(
+            settings.freezeEffect ? rampFade(now - this.freezeAt, FxDuration.FREEZE, STATUS_RAMP_MS, STATUS_HOLD) * k : 0,
+        );
+        out[FxSlot.STATUS + 1] = this.mark(
+            settings.thornsEffect ? rampFade(now - this.thornsAt, FxDuration.THORNS, STATUS_RAMP_MS, STATUS_HOLD) * k : 0,
+        );
+        out[FxSlot.STATUS + 2] = this.mark(
+            settings.teleportWarp ? teleportWarp(now, this.teleportStartAt, this.teleportLandAt) * k : 0,
+        );
+        out[FxSlot.STATUS + 3] = this.mark(settings.inkOutlines ? INK * Math.min(1, k) : 0);
+
+        // Prayer aura, with the colour in rgb and the strength in alpha; the focus slot says where
+        const focus = this.playerScreen ?? SCREEN_CENTRE;
+        out[FxSlot.FOCUS] = focus.u;
+        out[FxSlot.FOCUS + 1] = focus.v;
+        out[FxSlot.FOCUS + 2] = focus.radius;
+        if (settings.prayerAura && this.auraRgb) {
+            out.set(this.auraRgb, FxSlot.AURA);
+            out[FxSlot.AURA + 3] = this.mark(k);
+        }
+
+        // Loot flash: the sweep's progress (-1 none), with the colour scaled by the intensity
+        const lootAge = now - this.lootAt;
+        out[FxSlot.LOOT + 3] = -1;
+        if (settings.lootFlash && lootAge >= 0 && lootAge < FxDuration.LOOT) {
+            this.active = true;
+            out[FxSlot.LOOT] = this.lootRgb[0] * k;
+            out[FxSlot.LOOT + 1] = this.lootRgb[1] * k;
+            out[FxSlot.LOOT + 2] = this.lootRgb[2] * k;
+            out[FxSlot.LOOT + 3] = lootAge / FxDuration.LOOT;
+        }
 
         return this.active;
     }

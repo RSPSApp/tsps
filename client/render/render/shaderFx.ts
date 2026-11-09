@@ -3,7 +3,7 @@ import { FxSlot, SHADER_FX_UNIFORM_FLOATS } from "../../game/plugins/shaderfx/Sh
 import { FRAME_SHADERFX_PROGRAM } from "../shaders/Shaders";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 
-/** The Shader Effects plugin's vec4 uniforms (u_fx0 to u_fx9 in frame-shaderfx.frag.glsl). */
+/** The Shader Effects plugin's vec4 uniforms (u_fx0 to u_fx13 in frame-shaderfx.frag.glsl). */
 const UNIFORM_VEC4S = SHADER_FX_UNIFORM_FLOATS / 4;
 const UNIFORM_NAMES: readonly string[] = Array.from({ length: UNIFORM_VEC4S }, (_, i) => `u_fx${i}`);
 

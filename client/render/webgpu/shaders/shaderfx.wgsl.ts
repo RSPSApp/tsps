@@ -21,12 +21,17 @@ struct Fx {
     dmg: vec4<f32>,       // damage colour rgb, shockwave strength
     lookA: vec4<f32>,     // grain, scanlines, vignette, lens fringe
     lookB: vec4<f32>,     // sharpen, tilt shift, pixel size (0 off), posterize levels (0 off)
-    grade: vec4<f32>,     // grade index, grade strength, 1 when the input is display colour (0 for linear HDR), 0
+    grade: vec4<f32>,     // grade index, grade strength, 1 when the input is display colour (0 for linear HDR), 1 when the player mask is bound
+    status: vec4<f32>,    // ice freeze, entangle thorns, teleport warp, ink outlines
+    aura: vec4<f32>,      // prayer aura rgb, strength
+    loot: vec4<f32>,      // loot flash rgb (scaled by its strength), sweep progress (<0 off)
+    focus: vec4<f32>,     // player on screen (u, v from the top, half height as a share of the height), 0
 };
 
 @group(0) @binding(0) var<uniform> fx: Fx;
 @group(1) @binding(0) var t_scene: texture_2d<f32>;
 @group(1) @binding(1) var s_scene: sampler;
+@group(1) @binding(2) var t_mask: texture_2d<f32>;   // the player's own model as coverage, frame sized (see fx.grade.w)
 
 @vertex
 fn vs_fullscreen(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
@@ -56,8 +61,72 @@ fn sceneAt(uv: vec2<f32>) -> vec3<f32> {
     return c;
 }
 
+fn vnoise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let a = hash12(i);
+    let b = hash12(i + vec2<f32>(1.0, 0.0));
+    let c = hash12(i + vec2<f32>(0.0, 1.0));
+    let d = hash12(i + vec2<f32>(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// Three octaves of value noise, for the prayer smoke.
+fn fbm(p: vec2<f32>) -> f32 {
+    return 0.55 * vnoise(p) + 0.3 * vnoise(p * 2.03 + vec2<f32>(7.1, 3.7)) + 0.15 * vnoise(p * 4.1 + vec2<f32>(13.7, 9.2));
+}
+
+fn sdCapsule(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+}
+
+// A rough signed distance to a standing figure, for the prayer aura: feet at y = -1 and the top of
+// the head at y = 1, x to the right, all in half heights. Negative inside.
+fn figure(q: vec2<f32>) -> f32 {
+    let p = vec2<f32>(abs(q.x), q.y);
+    var d = length(q - vec2<f32>(0.0, 0.8)) - 0.17;                      // head
+    d = min(d, sdCapsule(p, vec2<f32>(0.0, 0.62), vec2<f32>(0.0, 0.0), 0.25));     // torso
+    d = min(d, sdCapsule(p, vec2<f32>(0.11, -0.05), vec2<f32>(0.13, -0.92), 0.1));  // legs
+    d = min(d, sdCapsule(p, vec2<f32>(0.31, 0.55), vec2<f32>(0.35, -0.12), 0.07));  // arms
+    return d;
+}
+
 fn saturate3(c: vec3<f32>, amount: f32) -> vec3<f32> {
     return mix(vec3<f32>(luma(c)), c, amount);
+}
+
+// The player mask at a pixel position; 0 off the frame.
+fn maskAt(p: vec2<f32>) -> f32 {
+    let size = vec2<f32>(textureDimensions(t_mask));
+    if (p.x < 0.0 || p.y < 0.0 || p.x >= size.x || p.y >= size.y) {
+        return 0.0;
+    }
+    return textureLoad(t_mask, vec2<i32>(p), 0).r;
+}
+
+fn toLinear(c: vec3<f32>) -> vec3<f32> {
+    return pow(max(c, vec3<f32>(0.0)), vec3<f32>(2.2));
+}
+
+// A heat ramp for the thermal grade: d is display brightness, 0 to 1.
+fn thermal(d: f32) -> vec3<f32> {
+    var c = mix(vec3<f32>(0.0, 0.0, 0.18), vec3<f32>(0.5, 0.0, 0.6), smoothstep(0.0, 0.3, d));
+    c = mix(c, vec3<f32>(0.95, 0.2, 0.1), smoothstep(0.25, 0.55, d));
+    c = mix(c, vec3<f32>(1.0, 0.75, 0.1), smoothstep(0.5, 0.8, d));
+    return mix(c, vec3<f32>(1.0, 1.0, 0.85), smoothstep(0.78, 1.0, d));
+}
+
+// The four Game Boy greens, darkest to lightest.
+fn gameBoy(d: f32) -> vec3<f32> {
+    let i = i32(floor(clamp(d, 0.0, 0.999) * 4.0));
+    if (i == 0) { return vec3<f32>(0.059, 0.220, 0.059); }
+    if (i == 1) { return vec3<f32>(0.188, 0.384, 0.188); }
+    if (i == 2) { return vec3<f32>(0.545, 0.675, 0.059); }
+    return vec3<f32>(0.608, 0.737, 0.059);
 }
 
 // The whole-picture colour grades. g is the scene's brightness, used to split shadows and lights.
@@ -91,6 +160,33 @@ fn grade(c: vec3<f32>, index: i32) -> vec3<f32> {
             let t = mix(vec3<f32>(1.25, 0.65, 1.15), vec3<f32>(0.70, 1.15, 1.25), smoothstep(0.05, 0.8, g));
             return saturate3(c, 1.2) * t;
         }
+        case 9: { // cyberpunk: blue-violet shadows, hot pink lights, extra punch
+            let t = mix(vec3<f32>(0.65, 0.75, 1.40), vec3<f32>(1.40, 0.80, 0.95), smoothstep(0.08, 0.7, g));
+            return (saturate3(c, 1.3) * t - 0.16) * 1.15 + 0.16;
+        }
+        case 10: { // golden hour: low amber light with warm lifted shadows
+            return saturate3(c, 1.1) * vec3<f32>(1.22, 1.02, 0.72) + vec3<f32>(0.03, 0.012, 0.0);
+        }
+        case 11: { // bleach bypass: silvery, low colour, hard contrast
+            return (mix(vec3<f32>(luma(c)), c, 0.45) - 0.18) * 1.35 + 0.18;
+        }
+        case 12: { // night vision: bright phosphor green
+            let l = clamp(luma(c) * 1.8, 0.0, 1.5);
+            return vec3<f32>(0.004, 0.02, 0.006) + vec3<f32>(0.08, 1.0, 0.16) * pow(l, 0.8);
+        }
+        case 13: { // thermal camera: brightness as heat
+            return toLinear(thermal(pow(clamp(luma(c), 0.0, 1.0), 0.45)));
+        }
+        case 14: { // blood moon: red monochrome
+            return mix(vec3<f32>(luma(c)) * vec3<f32>(1.45, 0.22, 0.16), c * vec3<f32>(1.2, 0.5, 0.45), 0.1);
+        }
+        case 15: { // Game Boy: four greens
+            return toLinear(gameBoy(pow(clamp(luma(c), 0.0, 1.0), 0.45)));
+        }
+        case 16: { // faded film: lifted blacks, low colour, teal shadows and warm lights
+            let t = mix(vec3<f32>(0.92, 1.0, 1.06), vec3<f32>(1.08, 1.0, 0.92), smoothstep(0.1, 0.7, g));
+            return saturate3(c, 0.7) * 0.88 * t + vec3<f32>(0.04, 0.045, 0.05);
+        }
         default: {
             return c;
         }
@@ -113,7 +209,17 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let d0 = uv - centre;
     let r = length(vec2<f32>(d0.x * aspect, d0.y)); // 0 in the middle, about 0.9 in a corner
 
-    // Warps: poison wobble, hit shake, punch zoom, shockwave ring, glitch tears.
+    // Warps: teleport swirl, poison wobble, hit shake, punch zoom, shockwave ring, glitch tears.
+    if (fx.status.z > 0.0) {
+        // A swirl strongest in the middle that unwinds as it fades, with a pull in on the centre.
+        let tp = fx.status.z;
+        let angle = tp * 1.4 * exp(-r * r * 2.5);
+        let sn = sin(angle);
+        let cs = cos(angle);
+        let p = vec2<f32>(d0.x * aspect, d0.y);
+        let q = vec2<f32>(p.x * cs - p.y * sn, p.x * sn + p.y * cs);
+        uv = centre + vec2<f32>(q.x / aspect, q.y) * (1.0 - tp * 0.1);
+    }
     if (fx.events.y > 0.0) {
         uv = uv + fx.events.y * 0.0035 * vec2<f32>(sin(uv.y * 38.0 + t * 3.1), cos(uv.x * 33.0 + t * 2.3));
     }
@@ -145,7 +251,7 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let d = uv - centre;
 
     // Base sample with the colour split: the hit's, plus the lens fringe growing to the edges.
-    let split = fx.taken.y * 0.03 + fx.lookA.w * 0.016 * r;
+    let split = fx.taken.y * 0.03 + fx.lookA.w * 0.016 * r + fx.status.z * 0.05;
     let ca = d * split;
     var col = vec3<f32>(sceneAt(uv + ca).r, sceneAt(uv).g, sceneAt(uv - ca).b);
 
@@ -190,6 +296,49 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
         col = col + (col - blur) * fx.lookB.x * 0.8;
     }
 
+    // Ink outlines: dark lines where the brightness jumps, and shading cut into flat bands.
+    if (fx.status.w > 0.0) {
+        let px = fx.screen.zw * 1.15;
+        let lx = pow(luma(sceneAt(uv + vec2<f32>(px.x, 0.0))), 0.45) - pow(luma(sceneAt(uv - vec2<f32>(px.x, 0.0))), 0.45);
+        let ly = pow(luma(sceneAt(uv + vec2<f32>(0.0, px.y))), 0.45) - pow(luma(sceneAt(uv - vec2<f32>(0.0, px.y))), 0.45);
+        let edge = smoothstep(0.025, 0.1, sqrt(lx * lx + ly * ly));
+        let shade = max(luma(col), 0.0001);
+        let banded = floor(pow(shade, 0.45) * 5.0 + 0.5) / 5.0;
+        col = mix(col, col * (pow(max(banded, 0.02), 2.2) / shade), 0.55 * fx.status.w);
+        col = col * (1.0 - edge * 0.96 * fx.status.w);
+    }
+
+    // Ice freeze: the colour chills and frost grows in from the edges in jagged crystals.
+    if (fx.status.x > 0.0) {
+        let f = min(fx.status.x, 1.2);
+        let ang = atan2(d0.y, d0.x * aspect);
+        let shard = abs(sin(ang * 23.0 + sin(ang * 7.0) * 1.5));
+        let facet = 0.5 + 0.5 * sin(uv.x * 61.0 + sin(uv.y * 47.0) * 2.0);
+        let twinkle = step(0.992, hash12(floor(frag.xy / 4.0)));
+        let reach = 1.02 - f * 0.46;
+        let frost = smoothstep(reach, reach + 0.05, r + shard * 0.1 + facet * 0.03);
+        let chill = mix(col, saturate3(col, 0.5) * vec3<f32>(0.78, 0.96, 1.22), f * 0.6);
+        let ice = vec3<f32>(0.62, 0.84, 1.0) * (0.82 + 0.18 * facet) + vec3<f32>(twinkle * 0.5);
+        col = mix(chill, ice, frost * 0.85 * min(f, 1.0));
+    }
+
+    // Entangle thorns: dark vines with spikes close in from the edges, and the colour goes mossy.
+    if (fx.status.y > 0.0) {
+        let th = fx.status.y;
+        // Distance to the nearest screen edge in heights, and the spot along that edge.
+        let ex = min(uv.x, 1.0 - uv.x) * aspect;
+        let ey = min(uv.y, 1.0 - uv.y);
+        let e = min(ex, ey);
+        let along = select(uv.y, uv.x * aspect, ey < ex);
+        let spike = abs(sin(along * 34.0 + sin(along * 9.0) * 1.6));
+        let depth = min(th, 1.2) * 0.07 + spike * 0.06 * min(th, 1.0);
+        let mask = 1.0 - smoothstep(depth, depth + 0.01, e);
+        let thorn = vec3<f32>(0.012, 0.04, 0.008) + vec3<f32>(0.05, 0.03, 0.0) * (1.0 - spike);
+        col = mix(col, col * vec3<f32>(0.86, 0.98, 0.78), min(th, 1.0) * 0.25);
+        col = col * (1.0 - min(th, 1.0) * 0.4 * (1.0 - smoothstep(0.0, depth * 2.6, e)));
+        col = mix(col, thorn, mask * min(1.0, th * 1.6));
+    }
+
     // Poison: a green cast, thicker at the edges.
     if (fx.events.y > 0.0) {
         let edge = smoothstep(0.2, 0.9, r);
@@ -230,6 +379,81 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
         let x = (r - p * 1.1) / 0.07;
         let ring = exp(-x * x);
         col = col + vec3<f32>(1.0, 0.86, 0.35) * fx.dealt.w * (ring * 1.6 * (1.0 - p) + 0.18 * exp(-r * r * 3.0));
+    }
+
+    // Prayer aura: a glow close around the player with wisps rising off it, in the prayer colour. It
+    // follows the player's own model when the mask is bound, else a generic figure.
+    if (fx.aura.w > 0.0) {
+        let rad = max(fx.focus.z, 0.03);
+        let q = vec2<f32>((uv.x - fx.focus.x) * aspect, fx.focus.y - uv.y) / rad; // x right, y up, feet at -1 and head at +1
+        let wisps = fbm(vec2<f32>(q.x * 2.6, q.y * 2.0 - t * 1.5));               // climbs with time
+        var glow = 0.0;
+        var rim = 0.0;
+        if (fx.grade.w > 0.5) {
+            // Coverage of the mask in rings around this pixel. The taps are taken from lower down, so
+            // the glow trails upwards where the wisps are strong.
+            let radPx = rad * fx.screen.y;
+            if (abs(q.x) < 3.2 && abs(q.y) < 4.0) {
+                let shift = (wisps - 0.35) * 0.9 * radPx * (0.4 + 0.6 * smoothstep(-0.5, 1.0, q.y));
+                var acc = 0.0;
+                var wsum = 0.0;
+                var ring0 = 0.0;
+                for (var ring = 0; ring < 4; ring = ring + 1) {
+                    let f = f32(ring);
+                    let r = radPx * (0.04 + 0.05 * f + 0.0067 * f * f);
+                    let w = 1.0 - 0.22 * f;
+                    var c = 0.0;
+                    for (var k = 0; k < 8; k = k + 1) {
+                        let a = (f32(k) + 0.5 * f32(ring & 1)) * 0.7853982;
+                        c = c + maskAt(frag.xy + vec2<f32>(cos(a), sin(a)) * r + vec2<f32>(0.0, shift));
+                    }
+                    c = c * 0.125;
+                    if (ring == 0) {
+                        ring0 = c;
+                    }
+                    acc = acc + w * c;
+                    wsum = wsum + w;
+                }
+                let inside = maskAt(frag.xy + vec2<f32>(0.0, shift * 0.3));
+                glow = (acc / wsum) * (1.0 - inside * 0.8) * 2.4;
+                rim = ring0 * (1.0 - inside) * 1.0;
+            }
+        } else {
+            let d = figure(q) + (0.5 - wisps) * 0.28 * (0.5 + 0.5 * smoothstep(-0.5, 1.0, q.y));
+            glow = exp(-max(d, 0.0) * 5.5) * mix(0.25, 1.0, smoothstep(-0.12, 0.05, d));
+            rim = exp(-abs(d) * 20.0) * 0.7;
+        }
+        let pulse = 0.9 + 0.1 * sin(t * 2.4);
+        let tint = mix(fx.aura.rgb, vec3<f32>(1.0), 0.12);
+        col = col + tint * fx.aura.w * (glow * 1.1 + rim) * pulse;
+    }
+
+    // Loot flash: a wide soft sweep of light with a thin hot core, and round glints with small star
+    // flares that twinkle in its wake. All smooth falloffs, no hard edges.
+    if (fx.loot.w >= 0.0) {
+        let p = fx.loot.w;
+        let along = uv.x + uv.y * 0.45;
+        let head = -0.35 + p * 2.2;
+        let x = (along - head) / 0.16;
+        let body = exp(-x * x);
+        let core = exp(-x * x * 9.0);
+        let bloom = exp(-x * x * 0.25) * 0.12;
+        let behind = head - along;
+        let trail = smoothstep(-0.05, 0.12, behind) * (1.0 - smoothstep(0.3, 0.85, behind));
+        // Glints on a loose grid, each with its own spot, phase and say in whether it shows.
+        let g = vec2<f32>(uv.x * aspect, uv.y) * 16.0;
+        let cell = floor(g);
+        let h1 = hash12(cell);
+        let h2 = hash12(cell + vec2<f32>(17.0, 3.0));
+        let h3 = hash12(cell + vec2<f32>(5.0, 29.0));
+        let dv = g - (cell + vec2<f32>(0.3 + 0.4 * h1, 0.3 + 0.4 * h2));
+        let shows = smoothstep(0.45, 0.6, hash12(cell + vec2<f32>(7.0, 41.0)));
+        let life = pow(0.5 + 0.5 * sin(t * 5.0 + h3 * 6.2831853), 3.0);
+        let point = exp(-dot(dv, dv) * 90.0);
+        let flare = exp(-abs(dv.x) * 8.0) * exp(-dv.y * dv.y * 1200.0) + exp(-abs(dv.y) * 8.0) * exp(-dv.x * dv.x * 1200.0);
+        let glint = (point * 0.9 + flare * 0.8) * life * shows * trail;
+        let hot = vec3<f32>(1.0, 0.97, 0.9);
+        col = col + fx.loot.rgb * (body * 0.55 * (1.0 - p * 0.4) + bloom + glint * 1.6) + hot * fx.loot.rgb * core * 0.7;
     }
 
     // Always-on: vignette, grade, scanlines, grain, posterize.

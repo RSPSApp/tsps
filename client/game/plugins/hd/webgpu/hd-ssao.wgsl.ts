@@ -57,13 +57,18 @@ fn fs_ssao(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     if (depth >= 0.9999) {
         return vec4<f32>(1.0);
     }
+    // An orthographic projection's inverse keeps w = 1 (no z in its last row): every pixel looks
+    // straight down -Z, and a view-space radius is the same size on screen at any depth.
+    let ortho = abs(u_ssao.u_invProj[2][3]) < 1e-6;
+    let toEye = select(-normalize(P), vec3<f32>(0.0, 0.0, 1.0), ortho);
     var normal = normalize(cross(dPdx, dPdy));
-    if (dot(normal, -normalize(P)) < 0.0) {
+    if (dot(normal, toEye) < 0.0) {
         normal = -normal;
     }
 
+    let depthScale = select(max(-P.z, 0.1), 1.0, ortho);
     let radiusPx = clamp(
-        u_ssao.u_focal.x * u_ssao.u_params.x / max(-P.z, 0.1) * 0.5 * u_ssao.u_scene.y,
+        u_ssao.u_focal.x * u_ssao.u_params.x / depthScale * 0.5 * u_ssao.u_scene.y,
         1.0,
         128.0,
     );

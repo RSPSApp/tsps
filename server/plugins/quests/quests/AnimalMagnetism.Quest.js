@@ -165,19 +165,23 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const DEVICE_OP = { ONE: 1, FIVE: 2, X: 3, ALL: 4 };
   const DEVICE_ROWS = [
     {
-      button: 2, model: 4, info: 6, itemId: AVAS_ATTRACTOR_ITEM_ID, name: "Ava's attractor",
+      button: 2, info: 6, itemId: AVAS_ATTRACTOR_ITEM_ID, name: "Ava's attractor",
       coins: 999, arrows: null, head: false, tradeIn: null,
+      // Not in the capture (it only refuses the other two); written in their pattern.
+      refusal: "You need <col=ef1020>999 coins</col>.",
     },
     {
-      button: 7, model: 9, info: 11, itemId: AVAS_ACCUMULATOR_ITEM_ID, name: "Ava's accumulator",
+      button: 7, info: 11, itemId: AVAS_ACCUMULATOR_ITEM_ID, name: "Ava's accumulator",
       coins: 999, arrows: STEEL_ARROW_ITEM_ID, head: false, tradeIn: AVAS_ATTRACTOR_ITEM_ID,
       arrowsName: "steel arrows", tradeInName: "Attractor",
+      refusal: "You need either <col=ef1020>999 coins or an Attractor</col>, and also <col=ef1020>75 steel arrows</col>.",
       rangedLevel: 50, diary: true,
     },
     {
-      button: 12, model: 14, info: 16, itemId: AVAS_ASSEMBLER_ITEM_ID, name: "Ava's assembler",
+      button: 12, info: 16, itemId: AVAS_ASSEMBLER_ITEM_ID, name: "Ava's assembler",
       coins: 4999, arrows: MITHRIL_ARROW_ITEM_ID, head: true, tradeIn: AVAS_ACCUMULATOR_ITEM_ID,
       arrowsName: "mithril arrows", tradeInName: "Accumulator",
+      refusal: "You need either <col=ef1020>4999 coins or an Accumulator, Vorkath's head and also 75 mithril arrows</col>.",
       quest: "dragon_slayer_ii", questName: "Dragon Slayer II", diary: true,
     },
   ];
@@ -1077,9 +1081,8 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     }
     const sender = player.getPacketSender();
     sender.sendInterface(DEVICES_INTERFACE);
-    for (const row of DEVICE_ROWS) {
-      sender.sendInterfaceModel((DEVICES_INTERFACE << 16) | row.model, row.itemId, 1);
-    }
+    // The device models are the cache's own (no model packets in the capture); only the cost
+    // text is sent.
     refreshDeviceCosts(player);
   }
 
@@ -1128,21 +1131,14 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   /** Why one more device can't be paid for, or null. */
   function deviceShortfall(player, row) {
     const inventory = player.getInventory();
-    if (row.head && plainAmount(inventory, VORKATHS_HEAD_ITEM_ID) < 1) {
-      return `You need Vorkath's head for ${row.name}.`;
-    }
-    if (row.arrows && plainAmount(inventory, row.arrows) < DEVICE_ARROW_COST) {
-      const arrows = row.arrows === STEEL_ARROW_ITEM_ID ? "steel" : "mithril";
-      return `You need ${DEVICE_ARROW_COST} ${arrows} arrows for ${row.name}.`;
-    }
     // Every payment, trade-ins included, comes only from plain stacks: a preset device is never
     // traded for a plain one, and preset coins never buy one. Consumption uses the same rule.
+    // Any missing part gives the row's one fixed refusal line, whatever else is held.
     const tradeIn = canTradeIn(inventory, row);
-    if (!tradeIn && plainAmount(inventory, COINS_ITEM_ID) < row.coins) {
-      return row.tradeIn
-        ? `You need ${row.coins.toLocaleString("en-US")} coins or ${row.tradeIn === AVAS_ATTRACTOR_ITEM_ID ? "Ava's attractor" : "Ava's accumulator"} for ${row.name}.`
-        : `You need ${row.coins.toLocaleString("en-US")} coins for ${row.name}.`;
-    }
+    const missing = (row.head && plainAmount(inventory, VORKATHS_HEAD_ITEM_ID) < 1)
+      || (row.arrows && plainAmount(inventory, row.arrows) < DEVICE_ARROW_COST)
+      || (!tradeIn && plainAmount(inventory, COINS_ITEM_ID) < row.coins);
+    if (missing) return row.refusal;
     // A traded-in device or a used-up head frees its slot; coins alone need a free one.
     if (!tradeIn && !row.head && inventory.getFreeSlots() < 1) {
       return "You don't have enough inventory space.";
@@ -1173,8 +1169,8 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       bought++;
     }
     if (bought === 0) return;
-    refreshDeviceCosts(player);
-    player.sendMessage(bought === 1 ? `Ava gives you ${row.name}.` : `Ava gives you ${bought} of her devices.`);
+    // The capture shows no message for a purchase: the diary task (when it completes) and then
+    // the refreshed cost text, in that order.
     if (row.diary) {
       api.emitCustomEvent("diary:task", {
         player,
@@ -1182,6 +1178,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
         task: "purchase-an-upgraded-device-from-ava",
       });
     }
+    refreshDeviceCosts(player);
   }
 
   function handleDevicesButton(event) {

@@ -197,6 +197,26 @@ test("Ava's Devices: the cost text strikes through what the player can't pay, li
   assert.equal(texts.get(16), "<str>4999 coins</str> OR an <str>Accumulator</str>,<br>AND <str>75 mithril arrows</str>,<br>AND <str>the head of Vorkath</str>");
 });
 
+test("Ava's Devices: recorded refusal lines, and a purchase sends no message", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism");
+  questStage(f, "dragon_slayer_ii");
+  levels(f, core.Skill.RANGED);
+  f.inv.setItem(0, new core.Item(I.COINS, 5000));
+  avaDevices(f, 7);
+  assert.equal(f.messages.at(-1),
+    "You need either <col=ef1020>999 coins or an Attractor</col>, and also <col=ef1020>75 steel arrows</col>.");
+  f.inv.setItem(1, new core.Item(I.VORKATHS_HEAD, 1));
+  avaDevices(f, 12);
+  assert.equal(f.messages.at(-1),
+    "You need either <col=ef1020>4999 coins or an Accumulator, Vorkath's head and also 75 mithril arrows</col>.",
+    "the same line whichever parts are missing");
+  const before = f.messages.length;
+  avaDevices(f, 2);
+  assert.equal(f.inv.getAmount(I.AVAS_ATTRACTOR), 1);
+  assert.equal(f.messages.length, before, "no purchase message");
+});
+
 test("Death Plateau: preset climbing boots become preset spiked boots", (t) => {
   const f = actor(t);
   f.inv.setItem(0, preset(new core.Item(I.CLIMBING_BOOTS, 1)));

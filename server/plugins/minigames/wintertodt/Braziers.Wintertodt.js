@@ -144,7 +144,9 @@ function finishLighting(player, index) {
   Shared.sound(player, Shared.SOUND.FIRE);
   player.sendMessage("You light the brazier.");
   Round.addPoints(player, POINTS.LIGHT);
-  Shared.addXp(player, "FIREMAKING", firemakingXp(player, XP.LIGHT));
+  // No outfit bonus on lighting: rsprox_transcripts/233/03254.txt (tick 450, the full pyromancer outfit worn, 99
+  // Firemaking) and 03262 (tick 144) give exactly 6 x 99 = 594; the kindling fed in the same outfit gets it (386).
+  Shared.addXp(player, "FIREMAKING", XP.LIGHT * Shared.level(player, "FIREMAKING"));
 }
 
 // ------------------------------------------------------------------ fix

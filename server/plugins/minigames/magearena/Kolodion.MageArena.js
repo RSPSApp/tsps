@@ -25,8 +25,8 @@ const MAGE_ARENA_II_MAGIC = 75;
 const HALF_TRAINED = 51;
 const ALMOST_TRAINED = 90;
 
-const { GODS, CASTS_REQUIRED, chargeOf } = Spells._test;
-const { CAPE_RECEIVED_ATTRIBUTE } = Statues._test;
+const { GODS, CASTS_REQUIRED, chargeOf } = Spells;
+const { CAPE_RECEIVED_ATTRIBUTE } = Statues;
 
 /** Each god spell's four cast-count conditions, in transcript order, by step id. */
 const TIERS = Object.freeze([

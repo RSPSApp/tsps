@@ -341,15 +341,23 @@ function followerDied({ npc }) {
   later(1, () => active.delete(npc));
 }
 
-/** Its owner logged out or died, or the locations moved: their followers go. */
+/**
+ * Its owner logged out or died, or the locations moved: their followers go. One already dying is
+ * left to its death (followerDied), so its remains still drop.
+ */
 function dismissFor(player) {
   for (const [npc, state] of [...active]) {
-    if (state.player === player) dismiss(npc, state);
+    if (state.player === player && npc.getHitpoints() > 0) dismiss(npc, state);
   }
 }
 
 function ownerLeft({ player }) {
   dismissFor(player);
+}
+
+/** Every player death (onPlayerDeath can be claimed first, as Death's office does a first grave). */
+function ownerDefeated({ victim }) {
+  if (victim?.isPlayer?.()) dismissFor(victim);
 }
 
 function isRemains(item) {
@@ -382,7 +390,7 @@ module.exports = function registerFollowers(pluginApi) {
   api.onNpcDeath(followerDied);
   api.onPlayerLogout(ownerLeft);
   api.onPlayerDisconnect(ownerLeft);
-  api.onPlayerDeath(ownerLeft);
+  api.onPlayerDefeated(ownerDefeated);
   api.onCanBankItem(refuseBank);
   api.onShouldKeepItemOnDeath(loseOnDeath);
   api.onCustomEvent("destroy-item:prompt", remainsDestroyPrompt);

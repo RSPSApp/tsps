@@ -219,7 +219,10 @@ test("a follower goes when its owner dies, and when the locations move", () => {
   placeFollower(player, "zamorak", 1);
   activate(player);
   const [first] = ownFollower(player, "zamorak");
-  PluginManager.emitPlayerDeath({ player, killer: null, itemsLost: true, handled: false });
+  // Even when a death handler ahead of this one claims the death (Death's office, a first grave).
+  const claimed = { player, killer: null, itemsLost: true, handled: true };
+  PluginManager.emitPlayerDeath(claimed);
+  PluginManager.emitPlayerDefeated(first, player);
   assert.equal(first.isRegistered(), false, "Wiki: if you're killed, you'll have to kill the follower again");
   placeFollower(player, "zamorak", 1);
   activate(player);
@@ -275,7 +278,8 @@ test("a follower only casts its god spell, up to its Wiki max, every 6 ticks", (
   assert.equal(new Method().attackSpeed(npc), 6);
 });
 
-test("Derwen's 2nd attack and every 6th after summon an energy ball between him and the player", () => {
+test("Derwen's 2nd attack and every 6th after summon an energy ball between him and the player", (t) => {
+  t.mock.method(core.Misc, "randomInclusive", (min, max) => Math.min(max, Math.max(min, 3))); // one ball tile
   const player = makePlayer({ components: 5 });
   placeFollower(player, "guthix", 6);
   activate(player);
@@ -286,7 +290,12 @@ test("Derwen's 2nd attack and every 6th after summon an energy ball between him 
   }
   assert.deepEqual(summons, [2, 8, 14], "as live: t5836 and t5872 of a fight from t5830");
   assert.deepEqual([followers.landingTicks(106), followers.landingTicks(86)], [3, 2], "as recorded");
-  for (let i = 0; i < 6; i++) core.TaskManager.process();
+  // Every summon above aimed at the same tile: the ball lands landingTicks(end) later.
+  const centre = core.Projectile.centreOf(npc);
+  const end = 46 + 10 * centre.getDistance(followers.ballTile(npc, player));
+  for (let i = 1; i < followers.landingTicks(end); i++) core.TaskManager.process();
+  assert.equal(state.healers.size, 0, "no ball before it lands");
+  core.TaskManager.process();
   assert.ok(state.healers.size >= 1, "a ball appears as the projectile lands");
   const [ball] = state.healers;
   const from = player.getLocation();

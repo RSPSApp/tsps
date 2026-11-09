@@ -124,7 +124,9 @@ function attachVisage(player, shield) {
 function forgeAtDragonForge(event) {
   const { player, itemId } = event;
   const candidates = forgeRecipes().filter((candidate) => candidate.parts.includes(itemId));
-  const recipe = candidates.find((candidate) => carries(player, candidate.parts)) ?? candidates[0];
+  const heldParts = (candidate) => candidate.parts.filter((id) => player.getInventory().contains(id)).length;
+  const recipe = candidates.find((candidate) => carries(player, candidate.parts))
+    ?? candidates.reduce((best, candidate) => !best || heldParts(candidate) > heldParts(best) ? candidate : best, null);
   if (!recipe) return false;
   event.handled = true;
   if (!Core.questComplete(player, "dragon_slayer_ii")) {

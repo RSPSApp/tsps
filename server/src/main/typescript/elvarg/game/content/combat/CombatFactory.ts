@@ -1856,7 +1856,10 @@ export class CombatFactory {
 
             // If we are at 0 ammo remove the item from the equipment completely.
             if (worn.getAmount() == 0) {
-                player.sendMessage("You have run out of ammunition!");
+                // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
+                // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
+                // keep theirs: no recording shows the last one go.
+                if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
                 player.getEquipment().set(slot, new Item(-1));
 
                 if (slot == Equipment.WEAPON_SLOT) {

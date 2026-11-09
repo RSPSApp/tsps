@@ -527,8 +527,8 @@ function decrementAmmo(player, pos, amount, delayTicks = 0) {
     if (!ammo || ammo.id !== ammoId || player.getAttribute(ATTRIBUTE) !== stack) return;
     if (dropped > 0 && pos) ItemOnGroundManager.registerLocation(player, new Item(ammoId, dropped), pos);
     const left = ammo.amount - used - dropped;
+    // Emptied without a line, as worn ammo is (rsprox 227/00096:101682); the next attempt says so.
     store(player, { id: ammoId, amount: left }, true);
-    if (left <= 0) player.sendMessage("You have run out of ammunition!");
   };
   if (delayTicks > 0) {
     TaskManager.submit(new (class extends Task {

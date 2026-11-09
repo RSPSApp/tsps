@@ -127,7 +127,12 @@ function actor(t, kind, { level = 90, completed = true, hammer = true, missing =
   core.ObjectManager.register(object, true);
   assert.equal(core.MapObjects.getPrivateArea(p, forgeId, location), object);
   const boxes = [];
-  t.mock.method(p.getDialogueManager(), "startDialogues", (chain) => { boxes.push(chain); });
+  const dialogue = p.getDialogueManager();
+  const startDialogues = dialogue.startDialogues;
+  t.mock.method(dialogue, "startDialogues", function(chain, ...args) {
+    boxes.push(chain);
+    return startDialogues.call(this, chain, ...args);
+  });
   const hooks = PM.itemOnObjectHooks.filter(h => h.pluginName === "Smithing" && h.handlerName === "useItemOnObject");
   assert.equal(hooks.length, 1);
   const hook = hooks[0], original = hook.handler, seen = [];

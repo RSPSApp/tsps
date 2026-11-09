@@ -215,7 +215,7 @@ function harness(t, members = true) {
       getSkillManager: () => ({ getMaxLevel: skill => levels.get(skill) ?? 1,
         getExperience: skill => xp.get(skill) ?? 0, getTotalLevel: () => p.totalLevel ?? 1,
         addExperience(skill, amount, multipliers) {
-          assert.equal(multipliers, false);
+          assert.equal(multipliers, true, 'reward XP takes the world and account rates (#3672)');
           if (!p.blockXp) xp.set(skill, Math.min(200_000_000, (xp.get(skill) ?? 0) + amount));
         } }),
       getSpellbook: () => ({ getInterfaceId: () => 218 }),

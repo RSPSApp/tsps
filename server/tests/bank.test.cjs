@@ -245,8 +245,18 @@ test("depositing items keeps each one's metadata", () => {
 
   Bank.deposit(player, TRIDENT, 1, 2, true);
 
-  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 1200 }], [1, { charges: 5 }]]);
+  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 5 }], [1, { charges: 1200 }]]);
   assert.equal(player.getInventory().getValidItems().length, 0);
+});
+
+test("depositing one of several identical unstackable items takes the top-left slot, not the clicked one", () => {
+  const player = createPlayer();
+  for (const charges of [1, 2, 3]) player.getInventory().add(new Item(TRIDENT, 1, { charges }), false);
+
+  Bank.deposit(player, TRIDENT, 2, 1, true);
+
+  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 1 }]]);
+  assert.deepEqual(player.getInventory().getItems().slice(0, 3).map((item) => item.getId()), [-1, TRIDENT, TRIDENT]);
 });
 
 test("inventory bank options count matching unnoted items across slots", () => {
@@ -276,7 +286,7 @@ test("inventory bank options count matching unnoted items across slots", () => {
     assert.equal(player.getBank().getAmount(TRIDENT), expected);
     assert.equal(player.getInventory().getAmount(TRIDENT), 4 - expected);
     assert.equal(player.getInventory().getAmount(LAVA_BATTLESTAFF), 1);
-    assert.deepEqual(player.getBank().getValidItems()[0].getMeta(), { charges: 1200 });
+    assert.deepEqual(player.getBank().getValidItems()[0].getMeta(), { charges: 5 }, "deposits start at the top-left matching slot, not the clicked one");
   }
 });
 

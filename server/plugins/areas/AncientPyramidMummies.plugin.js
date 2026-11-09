@@ -21,9 +21,10 @@ function spellElement(spell) {
   return FIRE_SPELLS.has(spell) ? "fire" : WATER_SPELLS.has(spell) ? "water" : null;
 }
 
-function hitResolved({ attacker, target, hit }) {
-  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || hit?.getCombatType?.() !== magicType) return;
-  const change = mummyTransition(target.getId(), spellElement(hit.getSpell?.()), hit.getTotalDamage?.() ?? 0, hit.isAccurate?.());
+function hitDamage({ attacker, target, hit, damage, accurate, combatType }) {
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || combatType !== magicType) return;
+  const spell = hit?.getSpellContext?.()?.spell ?? hit?.getSpell?.();
+  const change = mummyTransition(target.getId(), spellElement(spell), damage?.getDamage?.() ?? 0, accurate);
   if (!change) return;
   target.setNpcTransformationId(change.id);
   if (change.lit) api.emitCustomEvent("league:complete-task", { player: attacker.getAsPlayer(), id: "set-a-mummy-ablaze" });
@@ -41,7 +42,7 @@ function attach(pluginApi) {
     if (/^WATER_(STRIKE|BOLT|BLAST|WAVE|SURGE)$/.test(name)) WATER_SPELLS.add(spell);
   }
   magicType = CombatType.MAGIC;
-  api.onCombatHitResolved(hitResolved);
+  api.onCombatHitDamage(hitDamage);
 }
 
 module.exports = {
@@ -49,5 +50,4 @@ module.exports = {
   description: "Ancient Pyramid mummy fire and water spell transformations.",
   members: true,
   register: attach,
-  _test: { mummyTransition },
 };

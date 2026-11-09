@@ -12,7 +12,7 @@ const api = {
     CombatType: { MAGIC: 2 },
     CombatSpells: { FIRE_STRIKE: {}, WATER_STRIKE: {}, ICE_BARRAGE: {} },
   },
-  onCombatHitResolved(handler) { handlers.push(handler); },
+  onCombatHitDamage(handler) { handlers.push(handler); },
   persistAttribute() {},
   onCustomEvent(name, handler) { (custom[name] ??= []).push(handler); },
   emitCustomEvent(name, event) {
@@ -38,15 +38,17 @@ const attacker = { isPlayer: () => true, getAsPlayer: () => player };
 function target(id) {
   return { isNpc: () => true, id, getId() { return this.id; }, setNpcTransformationId(next) { this.id = next; } };
 }
-function hit(spell, damage = 1, accurate = true) {
-  return { getCombatType: () => 2, getSpell: () => spell, getTotalDamage: () => damage, isAccurate: () => accurate };
+function dispatchHitDamage(target, spell, damage = 1, accurate = true) {
+  // The PendingHit constructor emits before MagicCombatMethod calls setSpell; the cast context is already attached.
+  const hit = { getSpell: () => null, getSpellContext: () => ({ spell }) };
+  for (const handler of handlers) handler({ attacker, target, hit, combatType: 2, damage: { getDamage: () => damage }, accurate });
 }
 
 for (const [base, lit] of [[720, 725], [721, 726], [722, 727], [723, 728]]) {
   const mummy = target(base);
-  hitResolved({ attacker, target: mummy, hit: hit(api.core.CombatSpells.FIRE_STRIKE) });
+  dispatchHitDamage(mummy, api.core.CombatSpells.FIRE_STRIKE);
   assert.equal(mummy.id, lit);
-  hitResolved({ attacker, target: mummy, hit: hit(api.core.CombatSpells.WATER_STRIKE) });
+  dispatchHitDamage(mummy, api.core.CombatSpells.WATER_STRIKE);
   assert.equal(mummy.id, base);
 }
 assert.deepEqual(player.attributes["league:tasks"], { "set-a-mummy-ablaze": 10 });
@@ -55,7 +57,7 @@ assert.ok(player.sent.some(([kind]) => kind === "config"), "the actual task cons
 assert.ok(events.some(([name, event]) => name === "league:task-completed" && event.player === player && event.league === 6 && event.id === "set-a-mummy-ablaze" && event.pactTask));
 
 const splash = target(720);
-hitResolved({ attacker, target: splash, hit: hit(api.core.CombatSpells.FIRE_STRIKE, 0) });
+dispatchHitDamage(splash, api.core.CombatSpells.FIRE_STRIKE, 0);
 assert.equal(splash.id, 720);
-hitResolved({ attacker, target: splash, hit: hit(api.core.CombatSpells.ICE_BARRAGE) });
+dispatchHitDamage(splash, api.core.CombatSpells.ICE_BARRAGE);
 assert.equal(splash.id, 720);

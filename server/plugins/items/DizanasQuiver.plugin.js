@@ -503,9 +503,7 @@ function checkAmmo(player, amountRequired, silent) {
     pluginApi.emitCustomEvent("ranged:ammo-permission", permission);
     return permission.allowed;
   }
-  // An emptied quiver: "There is no ammo left in your quiver." (rsprox 229/02760:7555, 227/00096:101707).
-  if (!silent) player.sendMessage(stored(player).amount > 0
-    ? "You don't have the required amount of ammunition to fire that." : "There is no ammo left in your quiver.");
+  if (!silent) player.sendMessage("You don't have the required amount of ammunition to fire that.");
   return false;
 }
 

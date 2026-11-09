@@ -922,7 +922,10 @@ export class CombatFactory {
         }
 
         // The protection prayer is read on the attack's tick, before the XP is paid on what the hit deals.
-        CombatFactory.applyProtectionPrayer(qHit);
+        // An NPC's attack on a player who has yet to take this tick's turn (NPCs go first) is read in that
+        // turn, after their clicks: live, a prayer switched on the tick the attack starts blocks it
+        // (rsprox captures: Scurrius' swipes, 22 of 22 such flicks blocked). HitQueue.process reads it.
+        if (!CombatFactory.readsProtectionInVictimTurn(qHit)) CombatFactory.applyProtectionPrayer(qHit);
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
@@ -941,6 +944,14 @@ export class CombatFactory {
             qHit,
             World.getProcessCycle() + qHit.getDelay() + CombatFactory.hitProcessingDelay(qHit),
         );
+    }
+
+    /** An NPC's hit on a player whose turn this tick is still to come: the prayer is read in that turn. */
+    private static readsProtectionInVictimTurn(hit: PendingHit): boolean {
+        const attacker = hit.getAttacker();
+        const target = hit.getTarget();
+        if (!attacker?.isNpc?.() || !target?.isPlayer?.()) return false;
+        return !target.getCombat().getHitQueue().hasProcessed(World.getProcessCycle());
     }
 
     /**

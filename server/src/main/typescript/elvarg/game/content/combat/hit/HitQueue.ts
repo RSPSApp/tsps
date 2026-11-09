@@ -51,6 +51,10 @@ export class HitQueue {
         // content that stops the animation early has to release the hits it was holding on that
         // tick rather than on the deadline the stall once had. Only players stall, so an NPC's hits
         // keep landing on the dot - and an NPC's Combat has nothing to ask.
+        // NPC attacks queued before this turn read the protection prayer now, after this tick's
+        // clicks (CombatFactory.addPendingHit), whenever they land; held or not.
+        for (const { hit } of this.pendingHits) CombatFactory.applyProtectionPrayer(hit);
+
         const hold = this.character.isPlayer()
             ? this.character.getCombat().getIncomingHitCycle()
             : -1;
@@ -106,6 +110,11 @@ export class HitQueue {
     private static incomingFromOther(damage: HitDamage, owner: Mobile): boolean {
         const source = damage.getSource();
         return source != null && source !== owner;
+    }
+
+    /** Whether the owner's queue has already been drained this cycle (its turn has passed). */
+    hasProcessed(cycle: number): boolean {
+        return this.lastProcessedCycle === cycle;
     }
 
     /** Takes a hit off the owner's hitpoints, then runs effects that react to the result. */

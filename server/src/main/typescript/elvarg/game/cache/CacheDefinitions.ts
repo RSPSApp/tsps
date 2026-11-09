@@ -796,6 +796,12 @@ export class CacheDefinitions {
         return this.spellsByName!.get(name.trim().toLowerCase());
     }
 
+    /** Every spell name the cache's spell objs carry (lower case). */
+    static getSpellNames(): string[] {
+        this.ensureSpellMetadata();
+        return [...this.spellsByName!.keys()];
+    }
+
     /** The Magic level and runes the cache's spell obj lists for the spell with this name. */
     static getSpellRequirements(name: string): { level: number; runes: { id: number; amount: number }[] } | undefined {
         const spell = this.getSpellByName(name);

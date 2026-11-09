@@ -255,7 +255,8 @@ test('native Standard Monster Inspect pays once, displays its stats and closes t
     { label: 'world-click selection', raw: '4b00e7c600da0000c67fff80' },
     { label: 'drained target reports current Defence', raw: '4b00e7c600da00ffff7fff80', defence: 0 },
     { label: 'level refusal', level: 41, message: 'You need a Magic level of 42 to cast this spell.' },
-    { label: 'rune refusal', runes: false, message: 'You do not have the required items to cast this spell.' },
+    // rsprox captures: the refusal names the first missing rune (Monster Inspect: 2 body, 2 mind).
+    { label: 'rune refusal', runes: false, message: 'You do not have enough Body Runes to cast this spell.' },
     { label: 'wrong book', book: MagicSpellbook.LUNAR },
   ];
   for (const entry of cases) await t.test(entry.label, async t => {

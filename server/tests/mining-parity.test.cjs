@@ -19,6 +19,7 @@ const { ItemIds } = require("../dist/util/IdEnums");
 
 const core = PluginManager.getCoreApi();
 const MINING_PLUGIN = require.resolve("../plugins/skills/Mining.plugin");
+const CALCIFIED_WATER = require.resolve("../plugins/skills/mining/CalcifiedWater.Mining");
 let Mining = require(MINING_PLUGIN);
 
 const MINING_SUCCESS_SOUND = 3600;
@@ -209,6 +210,9 @@ function harness({ emit = noop } = {}) {
   }, { get: (target, key) => target[key] ?? noop });
   // The plugin keeps its tick counter at module level; each harness is a fresh server.
   delete require.cache[MINING_PLUGIN];
+  // Cam Torum's oozing water keeps its cycle at module level: fresh too, or ticks from earlier tests could start
+  // its water during a later one.
+  delete require.cache[CALCIFIED_WATER];
   Mining = require(MINING_PLUGIN);
   Mining.register(api);
   return {

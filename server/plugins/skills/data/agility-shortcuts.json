@@ -2904,6 +2904,17 @@
       "note": "rsprox captures 1105 (Leagues worlds only)"
     },
     {
+      "name": "Log balance (Nemus Retreat)",
+      "object": 56990,
+      "at": [[1401,3284,0],[1401,3290,0]],
+      "level": 45,
+      "xp": 19.5,
+      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "render": "BALANCE_WALK",
+      "between": {"ends":[[1401,3283,0],[1401,3291,0]],"cross":[{"walk":["to"]}]},
+      "note": "https://oldschool.runescape.wiki/w/Log_balance_(Auburn_Valley): the identical second shortcut south-east of Nemus Retreat (ids 56990-56993; 56992 and 56993 are the log between the ends)."
+    },
+    {
       "name": "Log balance (Auburn Valley)",
       "object": 56991,
       "at": [[1453,3330,0],[1453,3335,0]],

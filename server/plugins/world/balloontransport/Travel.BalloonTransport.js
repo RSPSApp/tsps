@@ -166,7 +166,7 @@ function travel(player, from, to, npcId = null) {
   }
   const arrived = opening ? () => {
     Common.openRoute(player, to);
-    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, unlockXp, false);
+    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, unlockXp, true);
     player.sendMessage(fill(messages.unlocked, { place: to.label }));
   } : null;
   // The logs' source may be asked for: the trip is checked again once it's chosen, and the

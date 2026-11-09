@@ -1312,7 +1312,7 @@ module.exports = function registerKingsRansomQuest(api) {
           // Spent only when the XP lands: an XP lock or an area's gate keeps the lamp.
           const skills = player.getSkillManager();
           const before = skills.getExperience(skill);
-          skills.addExperience(skill, LAMP_XP, false);
+          skills.addExperience(skill, LAMP_XP, true);
           if (skills.getExperience(skill) === before) return null;
           inventory.deleteAtSlot(slot, 1);
           return `You rub the lamp and feel your ${name} skill advance.`;

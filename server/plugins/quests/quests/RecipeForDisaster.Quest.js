@@ -1432,7 +1432,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
           return `You need level 50 ${name ?? skill.getName()} to use this lamp.`;
         }
         const before = player.getSkillManager().getExperience(skill);
-        player.getSkillManager().addExperience(skill, 20_000, false);
+        player.getSkillManager().addExperience(skill, 20_000, true);
         if (player.getSkillManager().getExperience(skill) === before) return null;
         player.getInventory().deleteAtSlot(slot, 1);
         return `You have been awarded 20,000 ${name ?? skill.getName()} XP!`;

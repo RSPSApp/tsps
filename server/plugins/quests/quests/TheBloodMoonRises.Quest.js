@@ -7069,7 +7069,7 @@ module.exports = function registerTheBloodMoonRises(api) {
         // A chapter is only spent when its XP lands (an XP lock or an area's gate keeps the tome as it was).
         const skills = player.getSkillManager();
         const before = skills.getExperience(skill);
-        skills.addExperience(skill, 30000, false);
+        skills.addExperience(skill, 30000, true);
         if (skills.getExperience(skill) === before) return null;
         const used = (Number(player.getAttribute(ATTRIBUTE)) || 0) + 1;
         player.setAttribute(ATTRIBUTE, used);

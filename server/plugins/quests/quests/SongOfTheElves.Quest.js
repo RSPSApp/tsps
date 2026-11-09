@@ -4124,7 +4124,7 @@ module.exports = function registerSongOfTheElves(api) {
     ],
     buildJournal,
     onReward(player) {
-      for (const [skill] of REWARD_SKILLS) player.getSkillManager().addExperience(skill, 40000, false);
+      for (const [skill] of REWARD_SKILLS) player.getSkillManager().addExperience(skill, 40000, true);
     },
   });
   api.onNpcDialogueVariant(selectVariant);

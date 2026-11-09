@@ -122,7 +122,12 @@ export class SkillManager {
         return this.addExperience(skill, experience, true);
     }
 
-    addExperience(skill: Skill, experience: number, multipliers: boolean): SkillManager {
+    /**
+     * `multipliers` applies the world's rate and the player's own (a league character's): every
+     * gain takes them, reward XP included (lamps, tomes, quest rewards; #3672). Only content whose
+     * amount must not be multiplied (a league relic's bonus) passes false.
+     */
+    addExperience(skill: Skill, experience: number, multipliers: boolean = true): SkillManager {
         if (!skill || typeof skill.getIndex !== "function") {
             return this;
         }

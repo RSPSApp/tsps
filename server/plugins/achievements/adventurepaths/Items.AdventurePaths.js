@@ -148,7 +148,7 @@ function lamp(player, request, skill) {
     pending.delete(player);
     const manager = player.getSkillManager(),
         before = manager.getExperience(skill);
-    manager.addExperience(skill, 150, false);
+    manager.addExperience(skill, 150, true);
     if (manager.getExperience(skill) === before) return null;
     player.getInventory().deleteAtSlot(request.slot, 1);
     s.lampUsed = true;

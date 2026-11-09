@@ -475,7 +475,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
     if (inventory.get(slot) !== item) return null;
     const manager = player.getSkillManager();
     const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_XP, false);
+    manager.addExperience(skill, LAMP_XP, true);
     if (manager.getExperience(skill) === before) return null;
     inventory.deleteAtSlot(slot, 1);
     player.setAttribute(LAMP_USED_ATTRIBUTE, 1);

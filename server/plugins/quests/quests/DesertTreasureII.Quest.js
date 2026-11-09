@@ -5493,7 +5493,7 @@ module.exports = function registerDesertTreasureII(api) {
           const manager = p.getSkillManager();
           if (manager.getMaxLevel(skill) < 60) return null;
           const before = manager.getExperience(skill);
-          manager.addExperience(skill, 100000, false);
+          manager.addExperience(skill, 100000, true);
           if (manager.getExperience(skill) === before) return null;
           inventory.deleteAtSlot(slot, 1);
           // dt2_reward_lamp is set by the first lamp used (rsprox 1703).

@@ -322,7 +322,7 @@ module.exports = function registerANightAtTheTheatre(api) {
     api.emitCustomEvent("xpreward:open", { player, minLevel: 50, skills: combatSkills, onConfirm(skill, name) {
       if (!held(player, LAMP) || value(player, LAMPS_ATTRIBUTE) >= 4 || !combatSkills.includes(skill)) return null;
       const manager = player.getSkillManager(), before = manager.getExperience(skill);
-      manager.addExperience(skill, 20000, false);
+      manager.addExperience(skill, 20000, true);
       if (manager.getExperience(skill) === before) return null;
       player.getInventory().deleteNumber(LAMP, 1); player.setAttribute(LAMPS_ATTRIBUTE, value(player, LAMPS_ATTRIBUTE) + 1);
       return `You have been awarded 20,000 ${name} XP!`;

@@ -377,7 +377,10 @@ Ticks from the rift opening:
     sound 942 x2.
   - +2: "You carve out a place for the cell and carefully place it inside the guardian." (spam),
     `gotr_chisel_guardian`, sound 2586 x2.
-  - +4: the guardian rises (`rift_guardian_spawn`). The pile is removed for 6 ticks.
+  - +4: the guardian rises (`rift_guardian_spawn`). The pile is removed for 6 ticks. 4 ticks after
+    it rises, the guardian takes its first step, which carries sequence -1 (delay 95). That ends
+    the spawn sequence, which loops at forced priority 10: while it plays, the client holds the
+    guardian's steps and drops its attack and block sequences (issue 3837).
   - +5: the cell is used up, "The powers of the weak cell extend into the essence. A Guardian
     comes to life.", sound 956, 80 Crafting XP and the cell's Runecraft XP. The pile's energy is
     6/15/27/45 (Wiki: 2x+1 of the strengthening value), of the pile's kind only.

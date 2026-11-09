@@ -741,6 +741,7 @@
         "item": "UNPOWERED_ORB",
         "label": "Unpowered staff orb",
         "name": "unpowered staff orb",
+        "made": "an orb",
         "level": 46,
         "xp": 52.5,
         "members": true

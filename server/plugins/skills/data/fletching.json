@@ -1,7 +1,8 @@
 {
-  "//": "Every Fletching recipe (docs/fletching.md). Items are ItemIdentifiers names, animations seq gamevals, sounds Sound constants. Levels, XP (per action), ticks and amounts from each product's OSRS Wiki recipe; menus, messages, animations and sounds from rsprox captures where they exist. materials: [item, amount], '@feathers' takes any feather. tool: the tool used on materials[0] (the menu opens from that pair); otherwise materials[0] is used on materials[1]. held: tools that only need to be carried. ticks: one action every n ticks, the first firstTick (default 1) ticks after the choice; ticks 0 makes it at once with no menu. startTick: the tick the opening animation plays (default 0, the choice's own tick; null: none, the first action animates); startSound plays the sound with it. Menu titles and messages fill {amount} with the recipe's amount. Messages are spam lines. knifeBonus: a carried or worn fletching knife takes a tick off every action after the first. instantVarbit: one set per click while that setting varbit is 0, otherwise a Make-X menu of up to maxSets sets.",
+  "//": "Every Fletching recipe (docs/fletching.md). Items are ItemIdentifiers names, animations seq gamevals, sounds Sound constants. Levels, XP (per action), ticks and amounts from each product's OSRS Wiki recipe; menus, messages, animations and sounds from rsprox captures where they exist. materials: [item, amount], '@feathers' takes any feather. tool: the tool used on materials[0] (the menu opens from that pair); otherwise materials[0] is used on materials[1]. held: tools that only need to be carried. ticks: one action every n ticks, the first firstTick (default 1) ticks after the choice; ticks 0 makes it at once with no menu. startTick: the tick the opening animation plays (default 0, the choice's own tick; null: none, the first action animates); startSound plays the sound with it. Menu titles and messages fill {amount} with the recipe's amount. Messages are spam lines. knifeBonus: a carried or worn fletching knife takes a tick off every action after the first. plainKnife: the wooden blowpipes need a plain knife (Wiki: Fletching knife 'cannot fletch wooden blowpipes'), the fletching knife only speeds them up. instantVarbit: one set per click while that setting varbit is 0, otherwise a Make-X menu of up to maxSets sets.",
   "tools": {
     "knife": ["KNIFE", "FLETCHING_KNIFE"],
+    "plainKnife": ["KNIFE"],
     "chisel": ["CHISEL", "JEWELLERS_CHISEL"],
     "hammer": ["HAMMER"]
   },
@@ -85,15 +86,15 @@
     { "group": "shields", "output": "REDWOOD_SHIELD", "level": 92, "xp": 216, "materials": [["REDWOOD_LOGS", 2]] },
     { "group": "logs", "output": "REDWOOD_HIKING_STAFF", "level": 90, "xp": 10.5, "firstTick": 1, "materials": [["REDWOOD_LOGS", 1]] },
 
-    { "group": "logs", "output": "OGRE_ARROW_SHAFT", "amount": 2, "amountMax": 6, "level": 5, "xp": 6.4, "firstTick": 1, "quest": ["big_chompy_bird_hunting", "started"], "materials": [["ACHEY_TREE_LOGS", 1]] },
+    { "group": "logs", "output": "OGRE_ARROW_SHAFT", "amount": 2, "amountMax": 6, "level": 5, "xp": 6.4, "xpEach": 1.6, "firstTick": 1, "quest": ["big_chompy_bird_hunting", "started"], "materials": [["ACHEY_TREE_LOGS", 1]] },
     { "group": "logs", "output": "UNSTRUNG_COMP_BOW", "level": 30, "xp": 45, "firstTick": 1, "quest": ["zogre_flesh_eaters", "complete"], "materials": [["ACHEY_TREE_LOGS", 1], ["WOLF_BONES", 1]] },
     { "group": "logs", "output": "BATTLESTAFF", "level": 40, "xp": 80, "ticks": 4, "firstTick": 1, "materials": [["CELASTRUS_BARK", 1]] },
     { "group": "logs", "output": "ATLATL_DART_SHAFT", "amount": 100, "level": 74, "xp": 30, "firstTick": 1, "materials": [["ENT_BRANCH", 1]] },
     { "group": "logs", "output": "GREENMAN_STATUE", "level": 53, "xp": 55, "ticks": 4, "firstTick": 1, "materials": [["ENT_BRANCH", 5], ["GREENMAN_MASK", 1], ["MAPLE_LOGS", 1]] },
     { "group": "logs", "output": "GREENMAN_CARVING", "level": 79, "xp": 70, "ticks": 4, "firstTick": 1, "materials": [["ENT_BRANCH", 5], ["GREENMAN_MASK", 1], ["YEW_LOGS", 1]] },
-    { "group": "logs", "output": "CAMPHOR_BLOWPIPE_EMPTY_", "level": 58, "xp": 140, "firstTick": 1, "materials": [["CAMPHOR_LOGS", 2], ["SQUID_BEAK", 1]] },
-    { "group": "logs", "output": "IRONWOOD_BLOWPIPE_EMPTY_", "level": 72, "xp": 170, "firstTick": 1, "materials": [["IRONWOOD_LOGS", 2], ["SQUID_BEAK", 1]] },
-    { "group": "logs", "output": "ROSEWOOD_BLOWPIPE_EMPTY_", "level": 84, "xp": 200, "firstTick": 1, "materials": [["ROSEWOOD_LOGS", 2], ["SQUID_BEAK", 1]] },
+    { "group": "logs", "tool": "plainKnife", "output": "CAMPHOR_BLOWPIPE_EMPTY_", "level": 58, "xp": 140, "firstTick": 1, "materials": [["CAMPHOR_LOGS", 2], ["SQUID_BEAK", 1]] },
+    { "group": "logs", "tool": "plainKnife", "output": "IRONWOOD_BLOWPIPE_EMPTY_", "level": 72, "xp": 170, "firstTick": 1, "materials": [["IRONWOOD_LOGS", 2], ["SQUID_BEAK", 1]] },
+    { "group": "logs", "tool": "plainKnife", "output": "ROSEWOOD_BLOWPIPE_EMPTY_", "level": 84, "xp": 200, "firstTick": 1, "materials": [["ROSEWOOD_LOGS", 2], ["SQUID_BEAK", 1]] },
 
     { "group": "stringing", "output": "SHORTBOW", "level": 5, "xp": 5, "animation": "stringing_shortbow", "materials": [["SHORTBOW_U_", 1], ["BOW_STRING", 1]] },
     { "group": "stringing", "output": "LONGBOW", "level": 10, "xp": 10, "animation": "stringing_longbow", "materials": [["LONGBOW_U_", 1], ["BOW_STRING", 1]] },
@@ -200,7 +201,7 @@
     { "group": "boltTips", "output": "DIAMOND_BOLT_TIPS", "amount": 12, "level": 65, "xp": 7, "animation": "human_diamondcutting", "materials": [["DIAMOND", 1]] },
     { "group": "boltTips", "output": "DRAGONSTONE_BOLT_TIPS", "amount": 12, "level": 71, "xp": 8.2, "animation": "human_dragonstonecutting", "materials": [["DRAGONSTONE", 1]] },
     { "group": "boltTips", "output": "ONYX_BOLT_TIPS", "amount": 24, "level": 73, "xp": 9.4, "animation": "human_onyxcutting", "materials": [["ONYX", 1]] },
-    { "group": "chisel", "output": "WOLFBONE_ARROWTIPS", "amount": 2, "amountMax": 6, "level": 5, "xp": 10, "ticks": 2, "animation": "human_fletching", "quest": ["big_chompy_bird_hunting", "started"], "materials": [["WOLF_BONES", 1]] },
+    { "group": "chisel", "output": "WOLFBONE_ARROWTIPS", "amount": 2, "amountMax": 6, "level": 5, "xp": 10, "xpEach": 2.5, "ticks": 2, "animation": "human_fletching", "quest": ["big_chompy_bird_hunting", "started"], "materials": [["WOLF_BONES", 1]] },
     { "group": "chisel", "output": "KEBBIT_BOLTS", "amount": 12, "level": 32, "xp": 5.8, "ticks": 3, "animation": "human_fletching_huntingbolts_chisel", "materials": [["KEBBIT_SPIKE", 1]] },
     { "group": "chisel", "output": "LONG_KEBBIT_BOLTS", "amount": 12, "level": 42, "xp": 7.9, "ticks": 2, "animation": "human_fletching_huntingbolts_chisel", "materials": [["LONG_KEBBIT_SPIKE", 1]] },
     { "group": "chisel", "output": "SUNLIGHT_ANTLER_BOLTS", "amount": 12, "level": 62, "xp": 10, "ticks": 3, "animation": "human_fletching_huntingbolts_chisel", "materials": [["SUNLIGHT_ANTELOPE_ANTLER", 1]] },

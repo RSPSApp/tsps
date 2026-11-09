@@ -8,6 +8,10 @@ const { DATA, itemId, runes } = require("./Data.CraftingSpells");
 
 const ORBS = DATA.chargeOrbs;
 const CHARGING_ATTRIBUTE = "crafting-spells:charging";
+/** The process cycle of the player's last charged orb (not saved). */
+const LAST_CHARGE_ATTRIBUTE = "crafting-spells:last-charge";
+/** Wiki (Charge Air Orb): "base casting speed" 3 ticks (6 autocast, the loop's `intervalTicks`). */
+const CAST_TICKS = 3;
 
 let core = null;
 let pluginApi = null;
@@ -57,6 +61,7 @@ function chargeOnce(player, spell) {
   player.getInventory().deleteNumber(unpoweredOrb(), 1);
   player.getInventory().addItem(new core.Item(spell.orbId, 1));
   player.getSkillManager().addExperiences(core.Skill.MAGIC, spell.baseExperience());
+  player.setAttribute(LAST_CHARGE_ATTRIBUTE, core.World.getProcessCycle());
   pluginApi.emitCustomEvent("crafting:made", { player, itemId: spell.orbId });
   return true;
 }
@@ -94,6 +99,10 @@ function chargeOrb(event) {
   if (event.object?.getDefinition?.()?.getName?.() !== spell.data.obelisk) return;
   event.handled = true;
   const { player } = event;
+  // A cast within the spell's 3 ticks of the last charge does nothing (the loop already running carries on), so
+  // clicking every tick can't charge an orb a tick.
+  const last = player.getAttribute(LAST_CHARGE_ATTRIBUTE);
+  if (Number.isInteger(last) && core.World.getProcessCycle() - last < CAST_TICKS) return;
   if (!player.getInventory().contains(unpoweredOrb())) {
     // ponytail: not captured; the live text may differ.
     player.sendMessage("You need an unpowered orb to cast this spell.");

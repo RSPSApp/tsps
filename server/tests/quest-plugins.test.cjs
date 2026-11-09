@@ -11966,7 +11966,8 @@ test('Lantern lenses and unpowered orbs are glassblown without consuming the pip
  try{
   require('../plugins/skills/Crafting.plugin').register(api);
   const inventory={contains:id=>(items.get(id)||0)>0,getAmount:id=>items.get(id)||0,deleteNumber:(id,n)=>items.set(id,items.get(id)-n),addItem:i=>items.set(i.getId(),(items.get(i.getId())||0)+i.getAmount())};
-  const sender={sendCreationMenu:m=>{menu=m;return sender;},sendSoundEffect:()=>sender};
+  // The craft lines are spam lines (rsprox captures), sent through sendTypedMessage.
+  const sender={sendCreationMenu:m=>{menu=m;return sender;},sendSoundEffect:()=>sender,sendTypedMessage:(type,m)=>{messages.push(m);return sender;}};
   const player={getInventory:()=>inventory,getSkillManager:()=>({getCurrentLevel:()=>level,addExperiences:(s,n)=>xp+=n}),sendMessage:m=>messages.push(m),
    getPacketSender:()=>sender,performAnimation(){},getAttribute:()=>null,setAttribute(){},isRegistered:()=>true,getHitpoints:()=>99,
    getMovementQueue:()=>({size:()=>0}),getForceMovement:()=>null,getInterfaceId:()=>-1,isPlayerBot:()=>false,

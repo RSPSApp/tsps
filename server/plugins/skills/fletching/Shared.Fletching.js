@@ -117,6 +117,9 @@ function resolveRecipe(entry) {
     amountMax: recipe.amountMax ?? recipe.amount ?? 1,
     level: recipe.level,
     xp: recipe.xp,
+    // Random-yield recipes pay per item made (Wiki: Ogre arrow shaft "1.6 ... per shaft made", Wolfbone arrowtips 2.5
+    // each); `xp` is the Wiki table's figure for a 4-item yield.
+    xpEach: recipe.xpEach ?? null,
     ticks,
     firstTick: recipe.firstTick ?? 1,
     startTick: recipe.startTick === undefined ? 0 : recipe.startTick,
@@ -407,7 +410,8 @@ function makeBatch(player, wholeRecipe, via, provenance = null) {
   player.performAnimation(animationOf(recipe));
   if (recipe.sound) core.Sounds.sendSound(player, recipe.sound);
   if (recipe.message) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, formatMessage(recipe.message, amount));
-  if (recipe.xp > 0) player.getSkillManager().addExperiences(core.Skill.FLETCHING, recipe.xp);
+  const xp = recipe.xpEach != null ? recipe.xpEach * amount : recipe.xp;
+  if (xp > 0) player.getSkillManager().addExperiences(core.Skill.FLETCHING, xp);
   const action = {
     inputItemIds: [...new Set(inputs.map((input) => input.itemId))],
     inputs,
@@ -417,7 +421,7 @@ function makeBatch(player, wholeRecipe, via, provenance = null) {
     ...(provenance?.startLocation ? { startLocation: provenance.startLocation } : {}),
   };
   api.emitCustomEvent("fletching:made", { player, itemId: recipe.outputId, amount, ...action });
-  api.emitCustomEvent("skills:produced", { player, skill: core.Skill.FLETCHING, itemId: recipe.outputId, amount, xp: recipe.xp, kind: recipe.group, ...action });
+  api.emitCustomEvent("skills:produced", { player, skill: core.Skill.FLETCHING, itemId: recipe.outputId, amount, xp, kind: recipe.group, ...action });
   return true;
 }
 

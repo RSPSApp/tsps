@@ -371,8 +371,11 @@ test('fresh stage 0 completes the mandatory route through registered handlers an
     plugin.objectOption(player, TRAPDOOR, 'Trapdoor', 'Climb-down');
     assert.deepEqual(
       { x: player.getLocation().getX(), y: player.getLocation().getY(), z: player.getLocation().getZ() },
-      { x: 2491, y: 9861, z: 0 }
+      { x: 2492, y: 9863, z: 0 }
     );
+    core.RegionManager.init();
+    core.RegionManager.loadMapFiles(2492, 9863);
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false, 'trapdoor lands on walkable cave floor');
     const demon = plugin.spawned.at(-1);
     assert.ok(demon, 'the black demon spawns under the trapdoor');
     plugin.npcDeath(player, N.BLACK_DEMON_2, demon);

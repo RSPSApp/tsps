@@ -1033,7 +1033,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
-  api.onCustomEvent("quest:the-heart-of-darkness:requirements", answerRequirements);
+  api.onCustomEvent("heart-of-darkness:requirements", answerRequirements);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:line", handleInitiationEnd);

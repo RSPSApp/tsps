@@ -706,6 +706,24 @@ function tp() {
   (h.events['quest:is-started'] ??= []).push(event => { if (event.key === 'the_heart_of_darkness') event.started = false; });
   return { h, p };
 }
+/** A scene position as the source tile it stands for: the quest's scenes play in a copy of the map. */
+function src(p, location) {
+  const area = p.getArea?.();
+  const at = area?.toSource && area.contains(location) ? area.toSource(location) : location;
+  return [at.getX(), at.getY()];
+}
+/** The scene's copy, checked against the capture's rebuild_region: 13 x 13 chunks from `sourceChunk`, every plane. */
+function assertCopy(p, [chunkX, chunkY]) {
+  const area = p.getArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea, 'the scene plays in an instance');
+  assert.ok(area.getBaseX() >= 8192, 'outside the real map');
+  assert.equal(area.widthChunks, 13); assert.equal(area.heightChunks, 13);
+  for (const z of [0, 3]) {
+    assert.deepEqual(area.getChunk(z, 0, 0), { sourceChunkX: chunkX, sourceChunkY: chunkY, sourcePlane: z, rotation: 0 });
+    assert.deepEqual(area.getChunk(z, 12, 12), { sourceChunkX: chunkX + 12, sourceChunkY: chunkY + 12, sourcePlane: z, rotation: 0 });
+  }
+  return area;
+}
 const mockNpc = (id, x, y) => ({ getId: () => id, getLocation: () => new core.Location(x, y, 0), isRegistered: () => true, performAnimation: noop, forceChat: noop });
 function tpTalk(h, p, npcId, npc = null) {
   const variant = (h.hooks.onNpcDialogueVariant ?? []).map(fn => fn({ player: p, npcId, npc })).find(Boolean);
@@ -808,13 +826,15 @@ test('TP pub: Azali follows (9834=2) and the fountain scene sobers her (pub 2, 9
   assert.ok(azali.removed); h.tick(2);
   const actors = h.npcs.filter(npc => !npc.removed).map(npc => npc.id);
   assert.ok(actors.includes(12913) && actors.includes(12930));
-  h.tick(1); assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 1760 && row[2] === 3060 && row[3] === 650));
+  assertCopy(p, [213, 377]); assert.deepEqual(src(p, p.getLocation()), [1756, 3070]);
+  h.tick(1); assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[3] === 650
+    && src(p, new core.Location(row[1], row[2], 0)).join() === '1760,3060'));
   const bather = h.npcs.find(npc => npc.id === 12913);
   h.tick(4);
-  assert.deepEqual([bather.getLocation().getX(), bather.getLocation().getY()], [1756, 3068],
+  assert.deepEqual(src(p, bather.getLocation()), [1756, 3068],
     'Azali walks the last two tiles instead of teleporting into the fountain');
   h.tick(3);
-  assert.deepEqual([bather.getLocation().getX(), bather.getLocation().getY()], [1757, 3068], 'the walk reaches the fountain tile before the splash');
+  assert.deepEqual(src(p, bather.getLocation()), [1757, 3068], 'the walk reaches the fountain tile before the splash');
   assert.equal(bather.hasFlag('movement:ignore-clipping'), true, "the walk carries the scene's scoped clipping bypass");
   h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12930).animations.includes(10942));
   assert.equal(bather.hasFlag('movement:ignore-clipping'), false, 'the bypass ends with the walk, before the splash removes her');
@@ -888,14 +908,15 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   const live = () => h.npcs.filter(npc => !npc.removed).map(npc => npc.id);
   for (const id of [12903, 12905, 12907, 12909, 12911, 12915, 12891, 12893]) assert.ok(live().includes(id), `actor ${id}`);
   const ennius = h.npcs.find(npc => npc.id === 12893);
-  h.tick(2); assert.deepEqual([ennius.getLocation().x, ennius.getLocation().y], [1682, 3156]);
+  assertCopy(p, [204, 388]); assert.deepEqual(src(p, p.getLocation()), [1684, 3157]);
+  h.tick(2); assert.deepEqual(src(p, ennius.getLocation()), [1682, 3156]);
   for (const x of [1681, 1680, 1679]) {
     h.tick(1);
-    assert.deepEqual([ennius.getLocation().x, ennius.getLocation().y], [x, 3156], 'captured approach walks one tile each tick');
+    assert.deepEqual(src(p, ennius.getLocation()), [x, 3156], 'captured approach walks one tile each tick');
   }
   h.tick(1); assert.equal(p.text, ''); h.tick(1); assert.equal(p.text, 'Velam, step forward.');
   p.manager.advance(); h.tick(3); assert.match(p.text, /found to be a traitor/);
-  assert.deepEqual([ennius.getLocation().x, ennius.getLocation().y], [1679, 3158], 'Ennius stands beside Velam before the execution');
+  assert.deepEqual(src(p, ennius.getLocation()), [1679, 3158], 'Ennius stands beside Velam before the execution');
   h.continueUntil(p, () => p.text === "For you, this is the only thing that's right."); p.manager.advance();
   h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12909).animations.includes(836));
   h.tick(6); assert.equal(p.text, 'The rest of you are dismissed.');
@@ -948,7 +969,8 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
     assert.ok(cultist.getLocation().getDistance(cultist.__tpPartner.getLocation()) <= 1, `cultist ${cultist.getId()} closes to melee range`);
     assert.ok(cultist.__tpPartner.animations.length > 0, `ally paired with cultist ${cultist.getId()} fights`);
   }
-  assert.deepEqual([cultists[6].faceTo.getX(), cultists[6].faceTo.getY()], [1444, 3176], 'the cultist turns to the guard it fights');
+  assertCopy(p, [174, 391]);
+  assert.deepEqual(src(p, cultists[6].faceTo), [1444, 3176], 'the cultist turns to the guard it fights');
   assert.ok(guards.some(npc => (npc.damage ?? 0) > 0), 'the cultists take hitpoints off the guards');
   assert.ok(cultists.some(npc => (npc.damage ?? 0) > 0), 'the guards take hitpoints off the cultists');
   // A scripted exchange is combat: over forty production-style NPC ticks the pairs never
@@ -984,6 +1006,7 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   assert.equal(new Set(defeats).size, 8);
   h.tick(3); assert.equal(h.quest.getStage(p), 46); assert.equal(p.varbits.get(11123), 2);
   h.tick(8); assert.equal(p.text, 'What happened?!');
+  assertCopy(p, [174, 390]); assert.deepEqual(src(p, p.getLocation()), [1447, 3173]);
   const unrelated = { player: p, npcId: N.PRINCE_ITZLA_ARKAN_3, step: { speaker: 'Guard' },
     pages: [{ page: 'Another quest' }], speakerId: 397, text: 'Unrelated guard speech' };
   h.emit('npc-dialogue:line', unrelated);
@@ -996,6 +1019,7 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   assert.equal(p.text, "Of course, my Prince. We'll go at once."); p.manager.advance();
   assert.equal(h.quest.getStage(p), 48); assert.equal(p.varbits.get(11123), 1);
   h.tick(6); assert.equal(p.text, 'Well... this has been a bit of a mess.');
+  assert.equal(p.getArea(), null); assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1453, 3173], 'back on the real Teomat');
   // Nothing answers The Heart of Darkness's requirements here: the capture's ending (below them).
   h.continueUntil(p, () => p.text.startsWith('Thank you, iknami. Timoiva for now')); assert.equal(h.quest.getStage(p), 48);
   p.manager.advance(); assert.equal(h.quest.getStage(p), 50);
@@ -1008,7 +1032,7 @@ test('TP ending: below The Heart of Darkness requirements Itzla says "Timoiva fo
   for (const met of [false, true]) {
     const { h, p } = tp(); h.quest.setStage(p, 48);
     const asked = [];
-    (h.events['quest:the-heart-of-darkness:requirements'] ??= []).push(request => { asked.push(request.player); request.met = met; });
+    (h.events['heart-of-darkness:requirements'] ??= []).push(request => { asked.push(request.player); request.met = met; });
     runtime.startTranscript(h.api, p, N.PRINCE_ITZLA_ARKAN_3, h.quest.name, AFTER_GUARD);
     assert.equal(p.text, 'Well... this has been a bit of a mess.');
     h.continueUntil(p, () => p.text === 'What do we do now?'); p.manager.advance();
@@ -1585,4 +1609,55 @@ test('COTS door scene spawns the waiting bandits inside the house', () => {
   assert.deepEqual(spawned.map(npc => npc.getId()).sort(), [N.GUARD_186, N.BANDIT_16, N.BANDIT_17, N.BANDIT_18, N.BANDIT_19].sort());
   assert.deepEqual(spawned.map(npc => [npc.getLocation().getX(), npc.getLocation().getY()]).sort(),
     [[3260, 3400], [3261, 3398], [3261, 3402], [3263, 3399], [3263, 3401]].sort());
+});
+
+test('QuestScenes instances: the copy, translated tiles, and walking out, logout, death and a server stop all land on the real map', () => {
+  const { createQuestScenes } = require('../plugins/quests/QuestScenes');
+  const { h, p } = tp();
+  const ended = [];
+  const Scenes = createQuestScenes(h.api, { onEnd: (_player, scene, logout) => ended.push([scene.name, logout]), recoveryAttribute: 'test:scene-exit' });
+  const login = h.hooks.onPlayerLogin.at(-1), grave = h.events['gravestones:grave-location'].at(-1);
+  const BOUNDS = [[1745, 1770, 3058, 3080, 0]], EXIT = [1756, 3070, 0];
+  const open = () => Scenes.open(p, 'dunk', BOUNDS, {}, { instance: { sourceChunk: [213, 377] }, at: [1756, 3070, 0], exit: EXIT });
+  p.moveTo(new core.Location(1750, 3070, 0));
+
+  const scene = open();
+  const area = assertCopy(p, [213, 377]);
+  assert.deepEqual(src(p, p.getLocation()), [1756, 3070]);
+  assert.deepEqual(p.attrs.get('test:scene-exit'), EXIT, 'the exit is saved while the copy plays');
+  const fountain = Scenes.actor(scene, 12930, [1757, 3068], [1787, 3069]);
+  assert.ok(area.contains(fountain.getLocation())); assert.deepEqual(src(p, fountain.getLocation()), [1757, 3068]);
+  assert.deepEqual(Scenes.toSource(fountain).getX(), 1757, 'an actor reads back as its source tile');
+  const loc = Scenes.loc(scene, { id: 29733, x: 1757, y: 3068 });
+  assert.deepEqual(src(p, loc.getLocation()), [1757, 3068]);
+  Scenes.camera(p, [1760, 3060, 650], [1757, 3072, 350]);
+  const move = p.log.filter(row => row[0] === 'sendCameraMoveTo').at(-1);
+  assert.deepEqual([...src(p, new core.Location(move[1], move[2], 0)), move[3]], [1760, 3060, 650]);
+  Scenes.face(p, fountain.getLocation()); // a mobile's own position is used as it is
+  const request = { player: p, location: p.getLocation(), tile: null };
+  grave(request); assert.deepEqual(request.tile, { x: 1756, y: 3070, z: 0 }, 'a death leaves its grave at the exit');
+
+  // Walking off the playable box ends it on the matching real tile, a tick later.
+  p.moveTo(area.sourceTile(1744, 3070, 0)); area.process(p);
+  assert.ok(Scenes.get(p)); h.tick(1);
+  assert.equal(Scenes.get(p), null); assert.equal(p.getArea(), null);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1744, 3070]);
+  assert.ok(area.isDestroyed()); assert.ok(fountain.removed); assert.equal(p.attrs.get('test:scene-exit'), null);
+  assert.deepEqual(ended.at(-1), ['dunk', false]);
+
+  // A logout is saved at the exit, wherever in the copy the player stood.
+  open(); const second = p.getArea(); p.moveTo(second.sourceTile(1762, 3076, 0));
+  Scenes.end(p, true);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1756, 3070]); assert.ok(second.isDestroyed());
+  assert.deepEqual(ended.at(-1), ['dunk', true]);
+
+  // A server stop mid-scene: the save holds a copy's tile and the exit, and login brings them back.
+  const stopped = player(); stopped.attrs.set('test:scene-exit', EXIT); stopped.moveTo(new core.Location(9000, 9000, 0));
+  login({ player: stopped });
+  assert.deepEqual([stopped.getLocation().getX(), stopped.getLocation().getY()], [1756, 3070]);
+  assert.equal(stopped.attrs.get('test:scene-exit'), null);
+
+  // Scenes without an instance are the private areas they were.
+  const plain = Scenes.open(p, 'plain', BOUNDS);
+  assert.ok(!(plain.area instanceof core.TemplatedInstanceArea)); Scenes.end(p, false);
 });

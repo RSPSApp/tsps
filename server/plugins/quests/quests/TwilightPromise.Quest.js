@@ -188,12 +188,24 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const MEZAN_PRAYER_STREAK = 4;
   const MEZAN_PRAYER_LINES = ["Ralos will defend me!", "Ralos' light protects me!", "Shield me, Ralos!"];
 
-  // Scenes, at the capture's tiles (the live game plays them in instances).
+  // Scenes, at the capture's tiles: their playable boxes, in source coordinates.
   const PALACE_BOUNDS = [[1665, 1700, 3145, 3170, 0]];
   const FOUNTAIN_BOUNDS = [[1745, 1770, 3058, 3080, 0]];
   const ARENA_BOUNDS = [[1806, 1842, 3088, 3128, 0]];
   const TEOMAT_BOUNDS = [[1425, 1465, 3140, 3205, 0]];
   const COLOSSEUM_LOBBY_TILE = [1803, 9521, 0];
+  // Live plays each scene in an instance (rev 242 capture rebuild_region): 13 x 13 chunks of every
+  // plane, unturned, from these source chunks (ticks 1855, 1984, 2290, 2539 and 2764). The aftermath
+  // copies the Teomat again, a chunk further south.
+  const SCENE_SOURCE_CHUNKS = {
+    fountain: [213, 377], mezan: [222, 381], verdict: [204, 388], battle: [174, 391], aftermath: [174, 390],
+  };
+  // Where a logout, a death or a server stop inside each scene comes back to.
+  const SCENE_EXITS = {
+    fountain: [1756, 3070, 0], mezan: COLOSSEUM_LOBBY_TILE, verdict: [1683, 3156, 0], battle: [1441, 3179, 0],
+    aftermath: [1453, 3173, 0],
+  };
+  const SCENE_EXIT_ATTRIBUTE = "twilights-promise:scene-exit";
   const BATTLE_CULTISTS = [
     { id: 12921, tile: [1434, 3167], face: [1440, 3172], partner: 1 },
     { id: 12923, tile: [1438, 3172], face: [1440, 3172], partner: 1 },
@@ -352,7 +364,14 @@ module.exports = function registerTwilightPromiseQuest(api) {
   let quest;
   const followers = new Map();
   const mezanStreaks = new WeakMap();
-  const Scenes = createQuestScenes(api, { onEnd: sceneEnded });
+  const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
+
+  /** One of the quest's scenes, in its captured instance, with the player placed at `at`. */
+  function openScene(player, name, bounds, rules, at) {
+    return Scenes.open(player, name, bounds, rules, {
+      instance: { sourceChunk: SCENE_SOURCE_CHUNKS[name] }, at, exit: SCENE_EXITS[name],
+    });
+  }
 
   // ==========================================================================
   // State
@@ -392,7 +411,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   /** The Heart of Darkness's other requirements; this quest, the last one, is finishing as it's asked. */
   function meetsHeartOfDarknessRequirements(player) {
     const request = { player, met: null };
-    api.emitCustomEvent("quest:the-heart-of-darkness:requirements", request);
+    api.emitCustomEvent("heart-of-darkness:requirements", request);
     return request.met === true;
   }
 
@@ -503,8 +522,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return V.TWINS_REGULUS;
   }
 
+  /** The Teomat's actors are judged where they stand in the real world, inside a scene's copy too. */
   function atTeomat(npc) {
-    return (npc?.getLocation?.()?.getX?.() ?? 9999) < 1600;
+    const at = npc?.getLocation?.() ? Scenes.toSource(npc) : null;
+    return (at?.getX?.() ?? 9999) < 1600;
   }
 
   function selectMetzliVariant(player, npc) {
@@ -1026,9 +1047,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
     Scenes.later(player, 2, () => {
-      const scene = Scenes.open(player, "fountain", FOUNTAIN_BOUNDS);
+      const scene = openScene(player, "fountain", FOUNTAIN_BOUNDS, {}, [1756, 3070, 0]);
       Scenes.controls(player, true, true);
-      player.moveTo(new Location(1756, 3070, 0));
       Scenes.face(player, [1757, 3069]);
       syncSideVarbits(player);
       const azali = Scenes.actor(scene, AZALI_ACTOR_ID, [1753, 3068], [1755, 3068]);
@@ -1038,14 +1058,14 @@ module.exports = function registerTwilightPromiseQuest(api) {
       Scenes.later(scene, 1, () => Scenes.camera(player, [1760, 3060, 650], [1757, 3072, 350]));
       Scenes.later(scene, 3, () => {
         Scenes.fade(player, false);
-        azali?.getMovementQueue().addSteps(new Location(1755, 3068, 0));
+        Scenes.walk(azali, [1755, 3068, 0]);
       });
       Scenes.later(scene, 5, () => {
         // The last two tiles walk into the fountain's own tile. The cache clips it and the
         // fountain actor stands on it, so the walk takes the scripted clipping exemption;
         // the earlier approach stays ordinary. The flag goes before the splash.
         azali?.setFlag?.(IGNORE_CLIPPING_FLAG);
-        azali?.getMovementQueue().addSteps(new Location(1757, 3068, 0));
+        Scenes.walk(azali, [1757, 3068, 0]);
       });
       Scenes.later(scene, 9, () => {
         azali?.removeFlag?.(IGNORE_CLIPPING_FLAG);
@@ -1082,8 +1102,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.controls(player, true);
     Scenes.later(player, 2, () => {
       player.getDialogueManager().reset();
-      const scene = Scenes.open(player, "mezan", ARENA_BOUNDS, { canAttack: canAttackInArena });
-      player.moveTo(new Location(1824, 3102, 0));
+      const scene = openScene(player, "mezan", ARENA_BOUNDS, { canAttack: canAttackInArena }, [1824, 3102, 0]);
       Scenes.face(player, [1824, 3103]);
       scene.mezan = Scenes.actor(scene, MEZAN_FIGHTER_ID, [1824, 3108], [1824, 3102]);
       Scenes.loc(scene, { id: 50872, x: 1823, y: 3091, face: 1 });
@@ -1199,9 +1218,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
     Scenes.later(player, 2, () => {
-      const scene = Scenes.open(player, "verdict", PALACE_BOUNDS);
+      const scene = openScene(player, "verdict", PALACE_BOUNDS, {}, [1684, 3157, 0]);
       Scenes.controls(player, true, true);
-      player.moveTo(new Location(1684, 3157, 0));
       Scenes.face(player, [1680, 3159]);
       scene.knights = KNIGHT_ACTORS.map((id, index) =>
         Scenes.actor(scene, id, [1677, 3156 + index], [1679, 3156 + index]));
@@ -1212,7 +1230,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       Scenes.later(scene, 2, () => Scenes.fade(player, false));
       Scenes.later(scene, 3, () => {
         scene.ennius?.setPositionToFace(null);
-        scene.ennius?.getMovementQueue().addSteps(new Location(1679, 3156, 0));
+        Scenes.walk(scene.ennius, [1679, 3156, 0]);
       });
       Scenes.later(scene, 6, () => scene.ennius && Scenes.face(scene.ennius, [1676, 3158]));
       Scenes.later(scene, 7, () => play(player, ENNIUS_NPC_ID, V.TWINS_LETTER, after("yqVhSV")));
@@ -1233,8 +1251,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.hold(player);
     if (stepId === STEP.VELAM_STEPS) {
       scene.ennius?.setPositionToFace(null);
-      scene.ennius?.getMovementQueue().addSteps(new Location(1679, 3158, 0));
-      scene.velam?.getMovementQueue().addSteps(new Location(1679, 3159, 0));
+      Scenes.walk(scene.ennius, [1679, 3158, 0]);
+      Scenes.walk(scene.velam, [1679, 3159, 0]);
       Scenes.later(scene, 2, () => scene.velam && Scenes.face(scene.velam, [1679, 3149]));
       Scenes.later(scene, 3, () => play(player, ENNIUS_NPC_ID, V.TWINS_LETTER, after(STEP.VELAM_STEPS)));
       return;
@@ -1253,7 +1271,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     if (stepId === STEP.KNIGHTS_LEAVE) {
       // As captured: up the line to its first knight's tile, east, then out to the south.
       for (const knight of scene.knights.filter((npc) => npc && npc !== scene.velam)) {
-        for (const [x, y] of [[1677, 3156], [1680, 3156], [1681, 3150]]) knight.getMovementQueue().addSteps(new Location(x, y, 0));
+        for (const [x, y] of [[1677, 3156], [1680, 3156], [1681, 3150]]) Scenes.walk(knight, [x, y, 0]);
       }
       Scenes.later(scene, 3, () => {
         advance(player, STAGE_VERDICT_DONE);
@@ -1414,9 +1432,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.controls(player, true);
     Scenes.later(player, 2, () => {
       player.getDialogueManager().reset();
-      const scene = Scenes.open(player, "battle", TEOMAT_BOUNDS, { multi: true, canAttack: canAttackInBattle });
+      const scene = openScene(player, "battle", TEOMAT_BOUNDS, { multi: true, canAttack: canAttackInBattle }, [1441, 3179, 0]);
       scene.kills = 0;
-      player.moveTo(new Location(1441, 3179, 0));
       Scenes.face(player, [1441, 3178]);
       scene.guards = BATTLE_GUARDS.map(({ id, tile, face }) => Scenes.actor(scene, id, tile, face));
       scene.itzla = Scenes.actor(scene, ITZLA_FIGHTER_ID, [1444, 3174], [1444, 3172]);
@@ -1464,7 +1481,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     const partner = cultist?.__tpPartner;
     if (!cultist?.isRegistered?.() || !partner?.isRegistered?.()) return;
     const at = partner.getLocation(), from = cultist.getLocation();
-    Scenes.face(cultist, [at.getX(), at.getY()]);
+    Scenes.face(cultist, at);
     const tile = meleeTile(cultist, partner);
     if (from.getX() !== tile.getX() || from.getY() !== tile.getY()) cultist.getMovementQueue().addSteps(tile);
   }
@@ -1472,8 +1489,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   /** One exchange: the attacker swings, the defender blocks, and the blow takes real hitpoints. */
   function sparHit(attacker, defender, swing, block) {
     const at = attacker.getLocation(), to = defender.getLocation();
-    Scenes.face(attacker, [to.getX(), to.getY()]);
-    Scenes.face(defender, [at.getX(), at.getY()]);
+    Scenes.face(attacker, to);
+    Scenes.face(defender, at);
     attacker.performAnimation(new Animation(swing));
     defender.performAnimation(new Animation(block));
     // These are scripted blows, so neither fighter has a combat target. Refresh the combat
@@ -1538,9 +1555,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
     Scenes.later(current ?? player, 2, () => {
-      const scene = Scenes.open(player, "aftermath", TEOMAT_BOUNDS);
+      const scene = openScene(player, "aftermath", TEOMAT_BOUNDS, {}, [1447, 3173, 0]);
       Scenes.controls(player, true, true);
-      player.moveTo(new Location(1447, 3173, 0));
       Scenes.face(player, [1448, 3173]);
       Scenes.actor(scene, SERVIUS_INJURED_ID, [1453, 3171], [1453, 3175]);
       scene.guard = Scenes.actor(scene, GUARD_ACTOR_ID, [1455, 3172], [1453, 3172]);
@@ -1560,10 +1576,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       player.sendMessage("You leave the battle.");
     }
     if (scene.name === "mezan") player.__tpMezanReady = false;
-    if (logout) {
-      const back = { fountain: [1756, 3070, 0], mezan: COLOSSEUM_LOBBY_TILE, verdict: [1683, 3156, 0], battle: [1441, 3179, 0], aftermath: [1453, 3173, 0] }[scene.name];
-      if (back) player.moveTo(new Location(...back));
-    }
+    // A logout inside is saved at the scene's exit (SCENE_EXITS) by QuestScenes.
   }
 
   // ==========================================================================

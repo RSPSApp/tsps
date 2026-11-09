@@ -191,6 +191,11 @@ function tickMiner(player, mining, now) {
   }
   if (--mining.nextRollIn > 0) return;
   mining.nextRollIn = rollTicks(player, pickaxe);
+  // The gem pre-roll first (Wiki, Motherlode Mine: "The veins also have a chance to give uncut gems for no
+  // experience"): a hit is that attempt's whole result, with no pay-dirt and no change to the vein.
+  const gem = { player, gem: false };
+  api?.emitCustomEvent?.("mining:gem-roll", gem);
+  if (gem.gem) return;
   if (Math.random() < Mine.successChance(PAY_DIRT_CHANCE.low, PAY_DIRT_CHANCE.high, Mine.miningLevel(player))) {
     awardPayDirt(player, vein, now);
   }

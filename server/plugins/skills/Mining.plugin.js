@@ -754,6 +754,19 @@ function giveGem(player, { itemId }) {
   deliverOre(player, prepareOre(player, itemId, 1, 0));
 }
 
+/**
+ * "mining:gem-roll" `{ player, gem }`: the gem pre-roll for content mining its own rocks (the Motherlode Mine's ore
+ * veins; Wiki, Ore vein: "The mining gem drop table has a 1/256 chance to roll on every mining attempt", 1/64.2 with a
+ * charged glory, and "in either case can not receive an ore"). On a hit, the gem (or nothing) is given and `gem` is set.
+ */
+function answerGemRoll(request) {
+  if (!request?.player) return;
+  const gem = rollGemTable(request.player);
+  if (!gem) return;
+  giveGem(request.player, gem);
+  request.gem = true;
+}
+
 function outcomeAmount(outcome) {
   return outcome.min + Math.floor(Math.random() * (outcome.max - outcome.min + 1));
 }
@@ -1128,6 +1141,7 @@ module.exports = {
     api.onCustomEvent("mining:best-pickaxe", answerBestPickaxe);
     api.onCustomEvent("mining:pickaxe", answerPickaxe);
     api.onCustomEvent("mining:roll-interval", answerRollInterval);
+    api.onCustomEvent("mining:gem-roll", answerGemRoll);
     api.persistAttribute(ORE_MINED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendOresMined);
     api.onCustomEvent("mining:count-ore", countKeptOre);

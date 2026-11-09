@@ -460,6 +460,24 @@ test("every pickaxe variant can mine, and its wall swings are cache sequences (3
   }
 });
 
+// Wiki (Ore vein): "The mining gem drop table has a 1/256 chance to roll on every mining attempt"; on a hit the
+// player "can not receive an ore". "mining:gem-roll" is how the Motherlode Mine's veins ask for it.
+test("mining:gem-roll: the gem pre-roll for content's own rocks, a find line and the gem on a hit", () => {
+  const h = harness();
+  const player = createPlayer();
+  // Face 255 hits; 0.6 lands on the sapphire row (the table's 70/128 "nothing" comes first).
+  let restoreRandom = scriptRandom([face(255), 0.6]);
+  const hit = { player, gem: false };
+  try { h.events["mining:gem-roll"](hit); } finally { restoreRandom(); }
+  assert.equal(hit.gem, true);
+  assert.deepEqual(player.added.map(([id]) => id), [ItemIds.UNCUT_SAPPHIRE]);
+  assert.equal(player.messages.at(-1), "You just found a Sapphire!");
+  restoreRandom = scriptRandom([face(100)]);
+  const miss = { player, gem: false };
+  try { h.events["mining:gem-roll"](miss); } finally { restoreRandom(); }
+  assert.equal(miss.gem, false, "1/256: most rolls miss");
+});
+
 test("the inactive crystal pickaxe needs 71 Mining, as the cache's param_23 says, and mines like a dragon pickaxe", () => {
   assert.equal(Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 70 })), null);
   const found = Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 71 }));

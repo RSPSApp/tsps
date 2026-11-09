@@ -26,7 +26,7 @@ const events = new Set();
 
 function start(site) {
   const ritual = R();
-  const tiles = Common.freeTiles(site.location, ritual.range, site.size);
+  const tiles = Common.freeTiles(site, site.location, ritual.range, site.size);
   if (tiles.length < 1) return null;
   const event = { site, step: 0, elapsed: 0, circles: [], odd: null, steps: new Map(), scored: 0, over: false };
   event.dryad = Common.spawnNpc(ritual.npc, tiles[0], ritual.graphics.spawn);
@@ -53,7 +53,7 @@ function pickCircles() {
 
 function placeCircles(event) {
   const ritual = R();
-  const tiles = Common.freeTiles(event.dryad.getLocation(), ritual.range).filter((t) => !t.equals(event.dryad.getLocation()));
+  const tiles = Common.freeTiles(event.site, event.dryad.getLocation(), ritual.range).filter((t) => !t.equals(event.dryad.getLocation()));
   if (tiles.length < 5) return false;
   const { odd, others } = pickCircles();
   const all = [odd, ...others].sort(() => Math.random() - 0.5);

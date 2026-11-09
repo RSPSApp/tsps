@@ -53,8 +53,8 @@ Like OSRS, it is free-to-play, with half experience on free-to-play worlds, wher
   - The plugin answers the transcript's conditions: whether the player has mined a star, whether they carry stardust, and whether it's a members world.
 - **Her shop**, Dusuri's Star Shop, sells for stardust: Celestial ring (uncharged) 2,000, Star fragment 3,000, Bag full of gems 300, Soft clay pack 150. The stock is 50/50/100/1,000, as captured.
   - **Value message:** the live game's is "Celestial ring (uncharged): currently costs 2,000 stardust.". The shared shop code still prints "… currently costs 2,000 x stardust.".
-  - **Buy-back price:** [80% of the purchase price](https://oldschool.runescape.wiki/w/Dusuri%27s_Star_Shop#Stock): 1,600 / 2,400 / 240 / 120 stardust. The `shop:sell-price` custom event lets Dusuri supply this rate to the shared shop's displayed refund, Value message and sale payment.
-  - The `shop:can-sell` policy lets her accept her stocked untradeable rewards. Per-item metadata locks still prevent a sale, and other shops keep their existing sale policy.
+  - **Buy-back price:** [80% of the purchase price](https://oldschool.runescape.wiki/w/Dusuri%27s_Star_Shop#Stock): 1,600 / 2,400 / 240 / 120 stardust. The rate comes from her shop's generated data (the Wiki's "Buys at" 80%), which the shared shop applies to the displayed refund, Value message and sale payment, as for the other reward-currency shops.
+  - The shared shop accepts her stocked untradeable rewards, as any shop buying its stock back for its own currency does. Per-item metadata locks still prevent a sale, and other shops keep their existing sale policy.
 
 ## Celestial ring
 

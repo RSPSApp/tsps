@@ -4,7 +4,7 @@
     { "skill": "ATTACK", "cape": "skillcape_attack", "trimmed": "skillcape_attack_trimmed", "hood": "skillcape_attack_hood",
       "masters": { "Ajjat": { "with99": "with-99-attack" } } },
     { "skill": "DEFENCE", "cape": "skillcape_defence", "trimmed": "skillcape_defence_trimmed", "hood": "skillcape_defence_hood",
-      "masters": { "Melee combat tutor": { "with99": "with-99-defence" } } },
+      "masters": { "Captain Harlan": { "with99": "with-99-defence" } } },
     { "skill": "STRENGTH", "cape": "skillcape_strength", "trimmed": "skillcape_strength_trimmed", "hood": "skillcape_strength_hood",
       "masters": {
         "Sloane": { "with99": "dialogue-with-99-strength", "without99": "dialogue-without-99-strength" },
@@ -20,7 +20,7 @@
     { "skill": "COOKING", "cape": "skillcape_cooking", "trimmed": "skillcape_cooking_trimmed", "hood": "skillcape_cooking_hood",
       "masters": { "Head chef": { "with99": "standard-dialogue-with-99-cooking" } } },
     { "skill": "WOODCUTTING", "cape": "skillcape_woodcutting", "trimmed": "skillcape_woodcutting_trimmed", "hood": "skillcape_woodcutting_hood",
-      "masters": { "Woodsman tutor": { "with99": "99-woodcutting" } } },
+      "masters": { "Wilfred": { "with99": "99-woodcutting" } } },
     { "skill": "FLETCHING", "cape": "skillcape_fletching", "trimmed": "skillcape_fletching_trimmed", "hood": "skillcape_fletching_hood",
       "masters": { "Hickton": { "shop": "Hickton's Archery Emporium." } } },
     { "skill": "FISHING", "cape": "skillcape_fishing", "trimmed": "skillcape_fishing_trimmed", "hood": "skillcape_fishing_hood",

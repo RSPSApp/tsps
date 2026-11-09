@@ -44,6 +44,8 @@ export class MagicCombatMethod extends CombatMethod {
         13011: 6589, 13023: 6589,
         // Capture: Undead Grasp.
         21832: 5030,
+        // OSRS Wiki List of sound IDs, Surge casts.
+        21876: 4028, 21877: 4030, 21878: 4025, 21879: 4032,
     };
     /** Live plays a spell's impact and its splash as an area sound this far round the target's tile. */
     public static readonly IMPACT_SOUND_RADIUS = 10;
@@ -60,6 +62,8 @@ export class MagicCombatMethod extends CombatMethod {
         13011: 177, 13023: 175,
         // Capture: Undead Grasp (an area sound at the target).
         21832: 5055,
+        // OSRS Wiki List of sound IDs, Surge impacts.
+        21876: 4027, 21877: 4029, 21878: 4026, 21879: 4031,
     };
 
     public type(): CombatType {
@@ -119,7 +123,7 @@ export class MagicCombatMethod extends CombatMethod {
 
         for (let hit of hits) {
             spell.onHitCalc(hit);
-            MagicCombatMethod.queueNpcProjectileGraphic(hit);
+            MagicCombatMethod.queueProjectileGraphic(hit);
 
             const spellRadius =
                 spell.getSpellbook() === MagicSpellbook.ANCIENT && typeof (spell as any).spellRadius === "function"
@@ -166,10 +170,10 @@ export class MagicCombatMethod extends CombatMethod {
         return hits;
     }
 
-    private static queueNpcProjectileGraphic(hit: PendingHit): void {
+    private static queueProjectileGraphic(hit: PendingHit): void {
         const spell = hit.getSpell();
         const target = hit.getTarget();
-        const visual = spell?.getNpcProjectileVisual?.(hit.getSpellContext(), target);
+        const visual = spell?.getProjectileVisual?.(hit.getSpellContext(), target);
         if (!visual || visual.queued) return;
         // Live sends the impact (or splash) area sound at the cast, delayed to the projectile's end cycle
         // (RSProx 227/00102 tick 232: sound_area 161 delay=106 for a projectile ending at 106), beside the graphic.
@@ -249,7 +253,7 @@ export class MagicCombatMethod extends CombatMethod {
         }
 
         if (spell != null) {
-            const castSound = spell.castSound?.() ?? MagicCombatMethod.resolveCastSound(spell.spellId());
+            const castSound = MagicCombatMethod.castSoundFor(spell);
             if (castSound != null) {
                 Sounds.sendSound(character, castSound);
             }
@@ -326,7 +330,7 @@ export class MagicCombatMethod extends CombatMethod {
         const previousSpell = hit.getSpell();
 
         if (previousSpell) {
-            const visual = previousSpell.getNpcProjectileVisual?.(hit.getSpellContext(), target);
+            const visual = previousSpell.getProjectileVisual?.(hit.getSpellContext(), target);
             const queuedGraphic = visual?.queued === true;
             const queuedSound = visual?.soundQueued === true;
             if (accurate) {
@@ -349,6 +353,11 @@ export class MagicCombatMethod extends CombatMethod {
     }
 
     /** A spell's own impact sound, else the table by its spell id (null: none captured). */
+    /** The caster's private sound as `spell` is cast (its own, else the spell id's). */
+    public static castSoundFor(spell: { castSound?(): Sound | null; spellId(): number }): Sound | null {
+        return spell.castSound?.() ?? MagicCombatMethod.resolveCastSound(spell.spellId());
+    }
+
     public static impactSoundFor(spell: { impactSound(): Sound | null; spellId(): number }): Sound | null {
         return spell.impactSound() ?? MagicCombatMethod.resolveImpactSound(spell.spellId());
     }

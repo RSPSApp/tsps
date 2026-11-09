@@ -15,12 +15,16 @@ const { PrivateArea } = require('../dist/game/model/areas/impl/PrivateArea');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 const { PickupItemPacketListener } = require('../dist/net/packet/impl/PickupItemPacketListener');
 const { SecondGroundItemOptionPacketListener } = require('../dist/net/packet/impl/SecondGroundItemOptionPacketListener');
+const { DropItemPacketListener } = require('../dist/net/packet/impl/DropItemPacketListener');
 const { GameConstants } = require('../dist/game/GameConstants');
 
 let core;
 let nextIndex = 9000;
 let experienceMultiplier;
+let previousBotSetting;
 before(async () => {
+  previousBotSetting = process.env.DISABLE_PLAYER_BOTS;
+  process.env.DISABLE_PLAYER_BOTS = "1";
   experienceMultiplier = GameConstants.EXPERIENCE_MULTIPLIER;
   GameConstants.EXPERIENCE_MULTIPLIER = 1;
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -33,6 +37,8 @@ before(async () => {
 after(() => {
   GameConstants.EXPERIENCE_MULTIPLIER = experienceMultiplier;
   PluginManager.emitServerShutdown({});
+  if (previousBotSetting === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+  else process.env.DISABLE_PLAYER_BOTS = previousBotSetting;
 });
 
 function actor(t, privateArea = false) {
@@ -300,4 +306,91 @@ test('named browser Giant bones Take reaches the pickup guard without removing t
 
   assert.ok(messages.some(message => /backpack/i.test(message)));
   assert.equal(core.World.getItems().includes(ground), true);
+});
+
+// A ground Lay uses the same quest gate as Lay from inventory. The actor and item are
+// supplied in a private area; the drop, cache, packet decoder, listener and Hunter task are real.
+async function groundBoxFixture(t, questStage) {
+  const { H } = require('../plugins/skills/hunter/Context.Hunter');
+  const errors = [];
+  const originalError = console.error.bind(console);
+  t.mock.method(console, 'error', (...args) => { errors.push(args); originalError(...args); });
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername(`hunterbox${nextIndex++}`);
+  player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
+  player.setAttribute('bot-skip-persistence', true);
+  player.setLocation(new core.Location(3222, 3218, 0));
+  const area = new PrivateArea();
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  let admitted = false;
+  t.after(() => {
+    if (admitted && player.isRegistered()) core.World.getPlayers().remove(player);
+    core.TaskManager.cancelTasks(player);
+    for (const item of core.World.getItems().filter(item => item.getPrivateArea() === area && !item.isPendingRemoval())) ItemOnGroundManager.deregister(item);
+    assert.equal([...H.traps].some(trap => trap.player === player), false, 'logout removes owned traps');
+    assert.equal(H.actions.has(player), false, 'logout cancels Hunter actions');
+    assert.equal(area.getObjects().length, 0, 'no private trap objects remain');
+    assert.equal(core.World.getItems().some(item => item.getPrivateArea() === area && !item.isPendingRemoval()), false);
+    assert.deepEqual(errors, [], 'engine errors during setup, ticks or cleanup');
+  });
+  assert.notEqual(player.getLongUsername(), 0n);
+  assert.equal(core.World.getPlayers().add(player), true);
+  admitted = true;
+  assert.equal(core.World.getPlayers().get(player.getIndex()), player);
+  assert.ok(player.getIndex() > 0 && player.getIndex() <= 2048);
+  player.needsPlacement = false;
+  player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+  player.setArea(area);
+  const f = { player, area, connection };
+  const id = Items.BOX_TRAP;
+  f.player.getSkillManager().setCurrentLevel(core.Skill.HUNTER, 27, false);
+  f.player.setAttribute('quest.eagles_peak.stage', questStage);
+  assertGroundAction(id, 'Lay', 3);
+  assert.equal(f.player.busy(), false);
+  assert.equal(f.player.getLastItemPickup().elapsedTime(300), true);
+  assert.equal(core.RegionManager.blocked(f.player.getLocation(), f.area), false, 'placement tile must be open');
+  assert.equal(core.MapObjects.getType(f.player.getLocation(), 10, f.area), null);
+  assert.equal(core.MapObjects.getType(f.player.getLocation(), 22, f.area), null);
+  f.player.getInventory().setItem(0, new Item(id));
+  DropItemPacketListener.drop(f.player, id, core.Inventory.INTERFACE_ID, 0);
+  assert.equal(f.player.getInventory().getAmount(id), 0, "drop consumes the supplied inventory box");
+  const ground = ItemOnGroundManager.getGroundItem(f.player.getUsername(), id, f.player.getLocation(), f.area);
+  assert.ok(ground, "ordinary drop must create the owned ground box");
+  assert.equal(ItemOnGroundManager.canOperate(f.player, ground, 4), true);
+  const events = [];
+  const original = PluginManager.emitGroundItemInteraction.bind(PluginManager);
+  t.mock.method(PluginManager, 'emitGroundItemInteraction', event => { const result = original(event); events.push(event); return result; });
+  const messages = [];
+  t.mock.method(f.player, 'sendMessage', message => messages.push(message));
+  const beforeTick = H.tick;
+  const decoded = decodeClientPackets(nativeOp4(id));
+  assert.deepEqual([decoded[0].itemId, decoded[0].x, decoded[0].y, decoded[0].optionIndex], [id, 3222, 3218, 4]);
+  await f.connection.dispatch(decoded, true);
+  assert.equal(events.length, 1, 'native op4 must reach the registered ground interaction');
+  assert.equal(events[0].handled, true);
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  assert.ok(H.tick >= beforeTick + 2, 'the Hunter task must progress beyond box lay delay');
+  assert.deepEqual(errors, [], 'engine errors during the Hunter task');
+  return { ...f, ground, H, messages, id };
+}
+
+test('ground box Lay refuses before Eagles Peak lesson and preserves the item', async t => {
+  const f = await groundBoxFixture(t, 0);
+  assert.equal([...f.H.traps].filter(trap => trap.player === f.player).length, 0, 'locked player must not place a box');
+  assert.equal(f.ground.isPendingRemoval(), false, 'refusal preserves the clicked box');
+  assert.ok(f.messages.some(message => /Nickolaus/.test(message)), 'quest refusal reaches the player');
+  await f.connection.dispatch(decodeClientPackets(nativeOp3(f.id)), true);
+  assert.equal(f.ground.isPendingRemoval(), true, 'same actor can take the preserved box');
+  assert.equal(f.player.getInventory().getAmount(f.id), 1);
+});
+
+test('ground box Lay succeeds after the Eagles Peak lesson', async t => {
+  const f = await groundBoxFixture(t, 6);
+  const traps = [...f.H.traps].filter(trap => trap.player === f.player);
+  assert.equal(traps.length, 1);
+  assert.equal(traps[0].kind, 'box');
+  assert.equal(traps[0].state, 'idle');
+  assert.equal(f.ground.isPendingRemoval(), true);
 });

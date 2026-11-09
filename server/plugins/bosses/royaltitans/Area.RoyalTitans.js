@@ -18,6 +18,10 @@ const Hud = require("./Hud.RoyalTitans");
 const CombatAchievements = require("./CombatAchievements.RoyalTitans");
 
 const SCOREBOARD_INTERFACE = 909;
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const SCOREBOARD_COMPONENT = Object.freeze({
   title: 6, pkc: 9, pd: 11, pbt: 13, gkc: 15, gd: 17, gbt: 19,
 });
@@ -440,6 +444,7 @@ const number = (value) => Math.max(0, value).toLocaleString("en-US");
 function readScoreboard({ player }) {
   const uid = (component) => (SCOREBOARD_INTERFACE << 16) | component;
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(SCOREBOARD_INTERFACE);
   sender.sendString("Royal Titans Statistics", uid(SCOREBOARD_COMPONENT.title));
   sender.sendString(number(player.getAttribute(Shared.KILLS_ATTRIBUTE)), uid(SCOREBOARD_COMPONENT.pkc));

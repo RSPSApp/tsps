@@ -318,6 +318,15 @@ function stepOntoRing(player, ring) {
  * the flowers and is free a tick after that. `fromClick`: called while handling an interface
  * click (between ticks), so the task's first run is on this tick rather than the next.
  */
+/**
+ * Wiki (Fairy ring): a code "that has no corresponding fairy ring or is a fairy ring the player is already located
+ * in" teleports nowhere, the player "exclaiming 'Wow, fairy magic sure is useful, I hardly moved at all!'". Recorded
+ * (rsprox_transcripts/227/00075.txt:76640-76680, 227/00555.txt:57192): the teleport onto the ring's arrival tile with
+ * the appear animation, then on the next tick that line as the player's chathead (chatneu1, 588).
+ */
+const HARDLY_MOVED = "Wow, fairy magic sure is useful, I hardly moved at all!";
+const HARDLY_MOVED_EXPRESSION = 588;
+
 function fairyTeleport(player, ring, from, fromClick) {
   const sender = player.getPacketSender();
   const onRing = !from || from.equals(player.getLocation());
@@ -359,7 +368,11 @@ function fairyTeleport(player, ring, from, fromClick) {
       }
       if (tick === delay) vanish();
       if (tick === delay + 3) {
-        if (!sameRing) {
+        if (sameRing) {
+          if (!sameTile(locationSnapshot(player), ring.destination)) player.moveTo(ring.destination);
+          pending.landed = true;
+          if (!ring.invalid) rememberUse(player, ring);
+        } else {
           const teleportFrom = locationSnapshot(player);
           const fromInstance = privateArea != null;
           player.moveTo(ring.destination);
@@ -391,6 +404,10 @@ function fairyTeleport(player, ring, from, fromClick) {
         player.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
         cancelPendingTeleport(player, pending);
         this.stop();
+        if (sameRing) {
+          player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+            .add(new core.PlayerDialogue(0, HARDLY_MOVED, HARDLY_MOVED_EXPRESSION)));
+        }
       }
     }
   })());
@@ -421,7 +438,19 @@ function confirmDial(player) {
   const ring = resolveRing(player, rings.get(codeFromDials(player)), configuredRing.get(player));
   if (!ring?.destination) {
     pluginApi.emitCustomEvent("fairy-rings:invalid", { player, code: codeFromDials(player) });
-    player.sendMessage("The fairy ring combination is not a valid destination.");
+    // The ring being used, as its own destination: the same "hardly moved" outcome (Wiki).
+    const from = configuredRing.get(player);
+    const here = from && [...rings.values()].find((candidate) => candidate.destination?.getDistance(from) <= 1);
+    if (!here) {
+      player.sendMessage("The fairy ring combination is not a valid destination.");
+      return;
+    }
+    closeDials(player, true);
+    if (!core.TeleportHandler.checkReqs(player, here.destination, 20)) {
+      player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+      return;
+    }
+    fairyTeleport(player, { ...here, invalid: true }, from, true);
     return;
   }
   const locked = codeQuestRefusal(player, ring.code);

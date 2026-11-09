@@ -268,7 +268,7 @@ module.exports = function registerHisFaithfulServantsQuest(api) {
       "Yes.", () => {
         if (lampUsed(player) || !has(player, DUSTY_LAMP) || inventory(player).get(slot) !== item) return;
         const before = player.getSkillManager().getExperience(Skill.PRAYER);
-        player.getSkillManager().addExperience(Skill.PRAYER, PRAYER_XP, false);
+        player.getSkillManager().addExperience(Skill.PRAYER, PRAYER_XP, true);
         if (player.getSkillManager().getExperience(Skill.PRAYER) === before) return;
         if (!inventory(player).deleteAtSlot(slot, 1)) return;
         player.setAttribute(LAMP_USED, 1);

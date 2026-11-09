@@ -40,8 +40,11 @@ minnows, karambwan vessels). Tests: `server/tests/fishing.test.cjs`.
   Messages (rsprox): "You cast out your net...", "You catch # Karambwanji."
 - **Karambwan (vessel, 65 Fishing):** chart 5/160, 50 XP. A baited vessel holds one raw
   karambwanji, and every attempt uses it, caught or not; the vessel then reloads from the
-  inventory, and an empty vessel loads itself on the click. Fishing stops when no karambwanji
-  are left. The spots never move, so a session runs until the inventory is full.
+  inventory, and an empty vessel loads itself on the click. The [27 October 2016 update](https://oldschool.runescape.wiki/w/Update:Deadman_Changes_%26_QOL)
+  says an emptied vessel automatically refills while bait remains; the loop applies this even
+  if another vessel is already baited. The exact retail slot order has not been captured.
+  Fishing stops when no karambwanji are left. The spots never move, so a session runs until
+  the inventory is full.
 - **Messages (rsprox):** "You lower the Karambwan vessel." on the click, "You catch a Karambwan!",
   "A Karambwan deftly snatches the Karambwanji from your vessel!" on a miss, and the message box
   "You need a Karambwan vessel to fish here." without a vessel.
@@ -117,8 +120,8 @@ The initial source scope covers the ordinary catches whose existing heron bases 
 explicitly listed in Fishing, plus Fortis park. Tutorial Island's separate pond, frog
 spawn, slimy eels, lava eels and an ordinary big-net batch containing only non-fish items
 retain their prior behavior: their bottle rules are unverified here, not asserted to be
-ineligible. Exact drop feedback has not been captured. Spirit-flake extra fish are not
-implemented for ordinary Fishing, so this change does not claim a native ordinary-flakes proc.
+ineligible. Exact drop feedback has not been captured. Spirit-flake extra fish are covered
+separately below; their interaction with clue bottle rolls has not been captured.
 
 ## Extra fish: Rada's blessing and spirit flakes
 

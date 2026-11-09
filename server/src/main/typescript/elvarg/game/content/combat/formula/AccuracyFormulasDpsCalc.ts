@@ -6,7 +6,7 @@ import { Misc } from "../../../../util/Misc";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { BonusManager } from "../../../model/equipment/BonusManager";
 import { Skill } from "../../../model/Skill";
-import { applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
+import { withHitVictim, hitVictimOf, applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
 import type { Player } from '../../../entity/impl/player/Player';
 import { World } from "../../../World";
 import { PluginManager } from "../../../../plugins/PluginManager";
@@ -18,6 +18,8 @@ type RollCacheEntry = {
     cycle: number;
     defenceLevel: number;
     npcLevels?: string;
+    /** The victim the attacker's rolls were built against; target-sensitive modifiers change them. */
+    victim?: Mobile | null;
     effectiveAttackLevel?: number;
     effectiveDefenseLevel?: number;
     effectiveRangedAttack?: number;
@@ -62,11 +64,12 @@ export class AccuracyFormulasDpsCalc {
             : entity.getAsPlayer().getSkillManager().getCurrentLevel(Skill.DEFENCE);
         const npcLevels = entity.isNpc() ? [Skill.ATTACK, Skill.RANGED, Skill.MAGIC]
             .map((skill) => entity.getAsNpc().getCurrentLevel(skill)).join(",") : undefined;
+        const victim = hitVictimOf(entity);
         const cached = this.rollCache.get(entity);
-        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel && cached.npcLevels === npcLevels) {
+        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel && cached.npcLevels === npcLevels && cached.victim === victim) {
             return cached;
         }
-        const next: RollCacheEntry = { cycle, defenceLevel, npcLevels, defenseMeleeRolls: new Map<number, number>() };
+        const next: RollCacheEntry = { cycle, defenceLevel, npcLevels, victim, defenseMeleeRolls: new Map<number, number>() };
         this.rollCache.set(entity, next);
         return next;
     }
@@ -240,17 +243,22 @@ export class AccuracyFormulasDpsCalc {
         const attackStyle = resolveSpecialAttackType(traits?.rollAttackType) ?? style;
         const defenceStyle = resolveSpecialAttackType(traits?.defenceRollAttackType) ?? defenceType ?? attackStyle;
 
-        let attRoll: number;
-        if (attackStyle === CombatType.MELEE) {
-            attRoll = AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
-        } else if (attackStyle === CombatType.RANGED) {
-            attRoll = AccuracyFormulasDpsCalc.attackRangedRoll(entity);
-            attRoll = PluginManager.modifyRangedAttackRoll(entity, enemy, attRoll);
-        } else if (attackStyle === CombatType.MAGIC) {
-            attRoll = AccuracyFormulasDpsCalc.attackMagicRoll(entity, enemy);
-        } else {
+        const attackRoll = (): number | null => {
+            if (attackStyle === CombatType.MELEE) {
+                return AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
+            } else if (attackStyle === CombatType.RANGED) {
+                return PluginManager.modifyRangedAttackRoll(entity, enemy, AccuracyFormulasDpsCalc.attackRangedRoll(entity));
+            } else if (attackStyle === CombatType.MAGIC) {
+                return AccuracyFormulasDpsCalc.attackMagicRoll(entity, enemy);
+            }
+            return null;
+        };
+        // Target-sensitive gear checks the hit's own victim, not the attacker's primary target.
+        const rolledAttack = withHitVictim(entity, enemy, attackRoll);
+        if (rolledAttack === null) {
             return null;
         }
+        let attRoll: number = rolledAttack;
 
         let defRoll: number;
         if (defenceStyle === CombatType.MELEE) {

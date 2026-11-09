@@ -768,7 +768,15 @@ export abstract class Mobile extends Entity {
                 if (sourceLive && (attacker == null || attacker === source)) combat.setUnderAttack(source);
                 else if (attacker == null) combat.getLastAttack().reset();
             }
-            if (this.isPlayer() && source.isPlayer()) this.getCombat().addDamage(source, hit.getHealthLost());
+            // A reflection credits its source against another player (PvP kill credit). Against
+            // an NPC it credits nobody unless the hit says it counts — a monster killed by a
+            // ring of recoil alone drops nothing (Wiki: Ring of recoil), while a League's Thorns
+            // damage does count as the wearer's damage. Without that, a thorns kill left the
+            // NPC with no damage-map entry and went to nobody: no kill, no Slayer count or XP,
+            // no loot. `addDamage` ignores a non-player source, so an NPC's reflection credits
+            // nothing either way.
+            if (source.isPlayer() && (this.isPlayer() || hit.creditsItsSource()))
+                this.getCombat().addDamage(source, hit.getHealthLost());
         }
         this.setHitpoints(outcome);
         if (hit.getHealthLost() > 0) {

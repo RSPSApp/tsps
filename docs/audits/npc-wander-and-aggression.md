@@ -398,6 +398,40 @@ Data note: 10 spawned ids offer `Attack` but are absent from `monsters-complete.
 carries the dump flag; the exception is `Vampyre Snail` (16344, combat 346), which is not in
 the current dump. That is a dump gap, not an aggression-range bug.
 
+### Follow-up: issue #3890 (2026-11-09)
+
+The 3-tile default stays (the Wiki gives no global number, and #1764 is about over-aggro). Monsters
+that hunt from further out now carry their own `huntRange` in `npc-combat-defs.json`, which
+`NpcDefinitionLoader` applies with `setHuntRange()`:
+
+| Monster | Ids | huntRange |
+| --- | --- | --- |
+| Ice wolf (level 132) | 710-715 | 6 |
+| Skeleton (Lucien's camp) | 13476-13479 | 6 |
+| Jungle horror | 1042-1046 | 5 |
+| Cave horror | 1047-1050 | 5 |
+| Elite Dark Warrior | 13465, 13466 | 5 |
+
+Method: for each monster, the first tick it faces the local player in a recording (revs 223-239),
+with the Chebyshev distance from its south-west tile to the player. NPCs are processed before
+players, so the distance uses both positions at the start of that tick (`coord=`), not after the
+tick's movement: a player running away otherwise adds a tile. Samples where the player had clicked
+that NPC, or where it had taken a hit or shown a health bar on or before that tick, were dropped,
+which rules out cannon and multi-target retaliation. Measured this way each of the five has a hard
+ceiling, reached in several recordings and never exceeded, and that ceiling is the value. Most of
+their engagements start beyond 3 tiles.
+
+Left at 3:
+
+- Ranged and magic monsters that engage from further out (the level-88 Waterbirth dagannoths,
+  Wallasalki) already hunt as far as they can attack, so they need no entry.
+- The level-90 Waterbirth dagannoths and the Stronghold greater demons never engage beyond 3; the
+  Barrows brothers and crypt skeletons never beyond 2.
+- Other greater demons (4 of 17 engagements beyond 3) and level-122 hellhounds (4 of 36) are
+  mostly at 3 or less, with no consistent ceiling.
+- The Catacombs dagannoths (7259, 7260) have one recorded engagement, at 2 tiles. Cave horror
+  (Alpha) 1051 and ice wolf 647 have none.
+
 ## Appendix: mixed zero/positive ids
 
 These ids contain both an explicit 0 and a positive radius. `radii` is `radius: spawns`.

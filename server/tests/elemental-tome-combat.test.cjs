@@ -8,7 +8,7 @@ const {NpcDefinition}=require('../dist/game/definition/NpcDefinition');
 const {AccuracyFormulasDpsCalc:Accuracy}=require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
 const Common=require('../plugins/items/elementaltomes/Common.ElementalTomes');
 const core=PluginManager.getCoreApi();
-const TEST='elemental-tome-test:enabled',bounds=new WeakMap();
+const TEST='elemental-tome-test:enabled',bounds=new WeakMap();let lastCost=null;
 before(async()=>{
  await CachePipeline.initialize(process.cwd());
  require('../plugins/combat/ElementalSpells.plugin').register(PluginManager.createApi('ElementalScalingTest'));
@@ -18,6 +18,7 @@ before(async()=>{
  const api=PluginManager.createApi('TomeProbe');
  api.onCombatHitRoll(event=>{if(event.attacker.getAttribute?.(TEST))event.forceAccurate=true;});
  api.onCustomEvent('combat:magic-hit-bounds',event=>{if(event.attacker.getAttribute?.(TEST))bounds.set(event.attacker,{minimum:event.minHit,maximum:event.maxHit});});
+ api.onCustomEvent('magic:spell-cost',event=>{lastCost=event;});
  api.onCustomEvent('magic:rune-saving',event=>{if(event.player.getAttribute('elemental-tome-test:save-runes'))event.saved=true;});
 });
 function player(t){const p=new Player(null);t.mock.method(p,'getSession',()=>({sendClientPacket:()=>true}));t.mock.method(p,'sendMessage',()=>{});
@@ -40,6 +41,14 @@ function fixture(t,{element='earth',spellName=element.toUpperCase()+'_WAVE',char
   commit(){return spell.canCast(p,true);},
   hit(){return new core.MagicCombatMethod().hits(p,target)[0];}};
 }
+test('magic:spell-cost names the runes a tome or staff supplies as covered, apart from the ones the cast pays',t=>{
+ const f=fixture(t,{element:'fire'});f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=new core.Item(core.ItemIdentifiers.MYSTIC_AIR_STAFF);
+ const paid=f.spell.itemsToConsume(f.p).map(item=>item.getId());const covered=lastCost.covered.map(item=>item.getId()).sort((a,b)=>a-b);
+ assert.deepEqual(covered,[core.ItemIdentifiers.FIRE_RUNE,core.ItemIdentifiers.AIR_RUNE].sort((a,b)=>a-b),'the tome fire and the staff air');
+ assert.equal(paid.some(id=>covered.includes(id)),false);
+ assert.deepEqual(lastCost.items.map(item=>item.getId()),paid);
+});
+
 test('all fifteen matching standard elemental spells multiply the geared weakness maximum last without consuming previews',t=>{
  for(const element of ['fire','water','earth'])for(const [family,maximum] of [['STRIKE',17],['BOLT',27],['BLAST',36],['WAVE',46],['SURGE',55]]){
   const f=fixture(t,{element,spellName:element.toUpperCase()+'_'+family});

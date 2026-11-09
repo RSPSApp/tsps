@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/house-teleport-no-house.test.cjs
 // Teleport to House with no house went to Rimmington and spent its runes. It is now refused first with the house
-// tablet's line, spending nothing; with a house it still casts. Real engine: every plugin loaded, a real Player, the
-// spell cast by a native widget_action packet.
+// tablet's line, spending nothing; with a house it still casts. Its "Outside" option (op2) took the player inside
+// (issue 3870); it now lands at the house portal in the house's town, whatever the house's teleport setting.
+// Real engine: every plugin loaded, a real Player, the spell cast by a native widget_action packet.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -43,11 +44,11 @@ function actor(t, owned) {
   return { p, conn, messages };
 }
 
-async function cast(f) {
+async function cast(f, buttonNum = 1) {
   const spell = core.CacheDefinitions.getSpellByName("Teleport to House");
   assert.ok(spell);
   const w = spell.widgetId;
-  await f.conn.dispatch([{ type: "widget_action", widgetId: w, groupId: w >>> 16, childId: w & 65535, slot: -1, buttonNum: 1 }]);
+  await f.conn.dispatch([{ type: "widget_action", widgetId: w, groupId: w >>> 16, childId: w & 65535, slot: -1, buttonNum }]);
   f.conn.processTurnPackets();
   for (let i = 0; i < 8; i++) core.TaskManager.process();
 }
@@ -65,4 +66,34 @@ test("Teleport to House with a house still casts", async (t) => {
   await cast(f);
   assert.equal(f.messages.includes("You do not own a house. Speak to an Estate agent to buy one."), false);
   assert.equal(f.p.getInventory().getAmount(563), 0, "the law rune is spent");
+});
+
+const Instance = () => require("../plugins/skills/construction/Instance.Construction");
+const at = (p) => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
+
+test("Outside lands at the house portal in the house's town, even with teleport inside on", async (t) => {
+  for (const [location, portal] of [[1, [2954, 3224, 0]], [2, [2894, 3465, 0]]]) {
+    const f = actor(t, true);
+    const saved = f.p.getAttribute("construction:house");
+    saved.location = location;
+    saved.teleportOutside = false;
+    await cast(f, 2);
+    assert.equal(f.p.getInventory().getAmount(563), 0, "the law rune is spent");
+    assert.equal(Instance().PlayerHouseInstance.isAllocationLocation(f.p.getLocation()), false, "not taken inside");
+    assert.deepEqual(at(f.p), portal, `outside house location ${location}'s portal`);
+  }
+});
+
+test("Cast still follows the house's teleport setting", async (t) => {
+  const inside = actor(t, true);
+  inside.p.getAttribute("construction:house").teleportOutside = false;
+  await cast(inside, 1);
+  assert.equal(Instance().PlayerHouseInstance.isAllocationLocation(inside.p.getLocation()), true, "taken inside");
+
+  const outside = actor(t, true);
+  const saved = outside.p.getAttribute("construction:house");
+  saved.location = 2;
+  saved.teleportOutside = true;
+  await cast(outside, 1);
+  assert.deepEqual(at(outside.p), [2894, 3465, 0], "outside the Taverley portal");
 });

@@ -7,7 +7,7 @@
  *
  * - Ghasts are hidden: they rot the player's food or hit the follower until a filled druid
  *   pouch is used on them, which shows them and makes them attackable (Wiki).
- * - Juvinates only take damage from silver weapons or a wearer of Efaritay's aid (Wiki).
+ * - Juvinates only take damage from silver weapons (the vampyre tiers in Vampyrebane.EquipmentEffects.js).
  * - A swamp snake leaves its body to skin with a knife, or bones if the follower hurt it (Wiki).
  *
  * The follower stands its ground, hits back at whatever hits it and eats from the backpack when
@@ -272,22 +272,6 @@ function hitResolved({ attacker, target }) {
   if (trek && attacker === trek.npc && target?.__trekMonster) target.__trekHurtByFollower = true;
 }
 
-/** Juvinates are hurt by silver only, or by anyone wearing Efaritay's aid. */
-function silverOnly({ npc, hit }) {
-  if (!npc?.__templeTrek || !Common.data.events.vampyres.npcs.includes(npc.getId())) return;
-  const attacker = hit?.getAttacker?.();
-  if (!attacker?.isPlayer?.()) return;
-  const { Equipment } = Common.core;
-  const equipment = attacker.getEquipment();
-  const silver = Common.data.items.silverWeapons;
-  const weapon = equipment.getItems()[Equipment.WEAPON_SLOT]?.getId?.();
-  const ammo = equipment.getItems()[Equipment.AMMUNITION_SLOT]?.getId?.();
-  const ring = equipment.getItems()[Equipment.RING_SLOT]?.getId?.();
-  if (ring === Common.data.items.vampyre_ring || silver.weapons.includes(weapon) || silver.ammo.includes(ammo)) return;
-  for (const damage of hit.getHits?.() ?? []) damage.setDamage(0);
-  hit.updateTotalDamage?.();
-}
-
 /** A filled druid pouch shows a hidden ghast, which then turns on the player. */
 function pouchOnGhast(event) {
   const { player, target } = event;
@@ -359,7 +343,6 @@ function attachCombat(api) {
   }
   Trek.onTick(feed);
   api.onNpcBeforeDeath(beforeDeath);
-  api.onNpcHitModify(silverOnly);
   api.onCombatHitResolved(hitResolved);
   api.onItemOnNpc(pouchOnGhast);
   api.onCustomEvent("npc-drops:generated", snakeRemains);

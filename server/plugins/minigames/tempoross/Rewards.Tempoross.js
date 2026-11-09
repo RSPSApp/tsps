@@ -79,7 +79,7 @@ function roll(player) {
     if (unique.duplicate && owned(player, id) > 0) {
       return { id: ids()[unique.duplicate[0]], amount: unique.duplicate[1] };
     }
-    return { id, amount: 1, pet: unique.pet === true };
+    return { id, amount: 1, pet: unique.pet === true, unique: true };
   }
   const [numerator, denominator] = R.soakedPages.chance;
   if (Math.random() * denominator < numerator) {
@@ -107,9 +107,12 @@ function giveReward(player, reward) {
   }
   inventory.adds(reward.id, reward.amount);
   inventory.refreshItems();
-  player.sendMessage(reward.amount > 1
-    ? `You found some loot: ${reward.amount} x ${itemName(reward.id)}`
-    : `You found some loot: ${itemName(reward.id)}`);
+  // rsprox (227/00552, 227/01858, 234/03275): spam, "You found some loot: 60 x Spirit flakes" / "...: Casket"; soaked
+  // pages and uniques a game message, red: "...: <col=ef1020>9 x Soaked page</col>", "...: <col=ef1020>Tackle box</col>"
+  // (227/01858.txt:126143; the other uniques are not recorded and follow it).
+  const text = reward.amount > 1 ? `${reward.amount.toLocaleString("en-US")} x ${itemName(reward.id)}` : itemName(reward.id);
+  if (reward.unique || reward.id === Shared.core().ItemIdentifiers.SOAKED_PAGE) player.sendMessage(`You found some loot: <col=ef1020>${text}</col>`);
+  else player.getPacketSender().sendTypedMessage(Shared.core().ChatType.SPAM, `You found some loot: ${text}`);
   Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: reward.id, amount: reward.amount });
   return true;
 }
@@ -229,4 +232,4 @@ function attachRewards(api) {
   api.onItemAction("Casket", { Open: openCasket });
 }
 
-module.exports = { attachRewards, roll, rollCasket };
+module.exports = { attachRewards, roll, rollCasket, giveReward };

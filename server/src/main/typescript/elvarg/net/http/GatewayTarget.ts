@@ -1,3 +1,7 @@
+import * as fs from "fs";
+import * as path from "path";
+import { CachePipeline, parseCacheTarget } from "../../game/cache/CachePipeline";
+
 /**
  * What RSProx needs to point the official client at this server's gateway (runelite-gateway/README.md):
  * a jav_config and the binary world list it names. Served next to the game socket so a
@@ -14,7 +18,6 @@ export class GatewayTarget {
     private static readonly DEFAULT_HOST = "127.0.0.1";
     /** A bare host name or address: no scheme, port, path or spaces. */
     private static readonly HOST_PATTERN = /^[A-Za-z0-9.-]+$/;
-    private static readonly REVISION = 241;
     private static readonly WORLD_ID = 1;
     private static readonly WORLD_FLAG_MEMBERS = 0x1;
 
@@ -49,7 +52,17 @@ export class GatewayTarget {
         return null;
     }
 
-    /** Revision 241's jav_config keys, with the codebase and world list pointed here. */
+    /** The revision of the cache this server runs: the active one, or `target.txt`'s before it loads. */
+    private static revision(): number {
+        if (CachePipeline.isInitialized()) return CachePipeline.getActive().revision;
+        return parseCacheTarget(fs.readFileSync(path.join(process.cwd(), "target.txt"), "utf8").trim()).revision;
+    }
+
+    /**
+     * The official client's jav_config keys (as of revision 241), with the codebase and world list pointed
+     * here and param 25 naming the active cache's revision. Live 242 adds params 30 and 31 (display-name
+     * changes); they are not sent.
+     */
     private static javConfig(websocketPort: number): string {
         const host = GatewayTarget.host();
         const worldList = `http://${host}:${websocketPort}${GatewayTarget.WORLD_LIST_PATH}`;
@@ -91,7 +104,7 @@ export class GatewayTarget {
             "param=20=",
             "param=21=0",
             "param=22=",
-            `param=25=${GatewayTarget.REVISION}`,
+            `param=25=${GatewayTarget.revision()}`,
             "param=28=",
             "param=29=1",
             "",

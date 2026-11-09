@@ -126,7 +126,7 @@ function grantLamp(player, request, skill, name) {
   const experience = skill === core.Skill.PRAYER ? PRAYER_LAMP_XP : LAMP_XP;
   const manager = player.getSkillManager();
   const before = manager.getExperience(skill);
-  manager.addExperience(skill, experience, false);
+  manager.addExperience(skill, experience, true);
   if (manager.getExperience(skill) === before) {
     player.sendMessage("You cannot gain experience in that skill right now.");
     return;

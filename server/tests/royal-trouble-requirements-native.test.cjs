@@ -82,7 +82,10 @@ test("Royal Trouble enforces later skill requirements without trapping players",
   const low = actor("royallow", 39, 39, 40, 40);
   at(low, 2505, 10280, 0); const lowXp = low.getSkillManager().getExperience(Skill.AGILITY);
   const lowBefore = snapshot(low);
+  const lowMessages = [], originalSendMessage = low.sendMessage;
+  low.sendMessage = function (message) { lowMessages.push(message); return originalSendMessage.call(this, message); };
   click(low, 15186, 2505, 10281, 0);
+  assert.deepEqual(lowMessages.splice(0), ["You need an Agility level of 40 to go further into the dungeon."]);
   assert.deepEqual(pos(low), [2505, 10280, 0], "inward crevice refuses current Agility 39");
   assert.deepEqual(snapshot(low), lowBefore); assert.equal(low.getSkillManager().getExperience(Skill.AGILITY), lowXp);
   assert.equal(high.getSkillManager().getExperience(Skill.AGILITY) - highXp, core.GameConstants.EXPERIENCE_MULTIPLIER);
@@ -95,6 +98,7 @@ test("Royal Trouble enforces later skill requirements without trapping players",
   const drained = actor("royaldrain", 40, 39, 40, 40);
   at(drained, 2505, 10280, 0); click(drained, 15186, 2505, 10281, 0); assert.deepEqual(pos(drained), [2505, 10280, 0]);
   at(low, 2505, 10283, 0); click(low, 15187, 2505, 10282, 0); assert.deepEqual(pos(low), [2505, 10280, 0], "low level can leave");
+  assert.deepEqual(lowMessages.splice(0), [], "leaving does not send an Agility refusal");
   assert.equal(low.getSkillManager().getExperience(Skill.AGILITY), lowXp);
   // Direct registered-handler seam with cache definitions and seeded quest state; not natural map walking.
   low.getInventory().add(new Item(core.ItemIdentifiers.PULLEY_BEAM, 1), true);
@@ -104,13 +108,14 @@ test("Royal Trouble enforces later skill requirements without trapping players",
     [15196, 15197, [2617, 10270, 0], [2617, 10275, 0], [2617, 10270, 0]],
   ]) {
     at(low, ...from); const before = snapshot(low), xp = low.getSkillManager().getExperience(Skill.AGILITY);
-    click(low, inside, ...from); assert.deepEqual(snapshot(low), before); assert.equal(low.getSkillManager().getExperience(Skill.AGILITY), xp);
+    click(low, inside, ...from); assert.deepEqual(lowMessages.splice(0), ["You need an Agility level of 40 to go further into the dungeon."]); assert.deepEqual(snapshot(low), before); assert.equal(low.getSkillManager().getExperience(Skill.AGILITY), xp);
     assert.equal(low.getInventory().getAmount(core.ItemIdentifiers.PULLEY_BEAM), 1, "a refused tunnel must not consume carried beams");
     at(high, ...from); xpReady(high); const prior = high.getSkillManager().getExperience(Skill.AGILITY);
     click(high, inside, ...from); assert.deepEqual(pos(high), to);
     assert.equal(high.getSkillManager().getExperience(Skill.AGILITY) - prior, core.GameConstants.EXPERIENCE_MULTIPLIER);
     at(low, ...to); const outward = snapshot(low); click(low, outside, ...to);
     assert.deepEqual(pos(low), exit); assert.deepEqual({ ...snapshot(low), pos: outward.pos }, outward);
+    assert.deepEqual(lowMessages.splice(0), [], "outward passage does not send an Agility refusal");
   }
   const firstScene = actor("royalscene", 39, 39, 40, 40);
   firstScene.setAttribute("royal-trouble:kids-cutscene", false); at(firstScene, 2585, 10263, 0);

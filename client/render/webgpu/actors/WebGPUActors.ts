@@ -319,7 +319,12 @@ export class WebGPUActors {
                                   },
                               ],
                           },
-                    primitive: { topology: "triangle-list", cullMode, frontFace: "ccw" },
+                    primitive: {
+                        topology: "triangle-list",
+                        // Cull opaque projectile backfaces while keeping translucent glow shells two-sided.
+                        cullMode: kind === "projectile" && !alpha ? "back" : cullMode,
+                        frontFace: "ccw",
+                    },
                     depthStencil: {
                         format: depth ? extension!.depthFormat ?? SCENE_DEPTH_FORMAT : SCENE_DEPTH_FORMAT,
                         depthWriteEnabled: true,

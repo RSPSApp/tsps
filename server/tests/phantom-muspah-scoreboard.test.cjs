@@ -66,9 +66,17 @@ function realPlayer(t) {
   p.setRegistered(true);
   t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   const sender = p.getPacketSender();
-  p.sent = { interfaces: [], texts: new Map(), messages: [] };
-  const original = { sendInterface: sender.sendInterface, sendString: sender.sendString };
-  t.mock.method(sender, 'sendInterface', function (id) { p.sent.interfaces.push(id); return original.sendInterface.apply(this, arguments); });
+  p.sent = { interfaces: [], texts: new Map(), messages: [], order: [] };
+  const original = { sendInterface: sender.sendInterface, sendString: sender.sendString, sendInterfaceScript: sender.sendInterfaceScript };
+  t.mock.method(sender, 'sendInterface', function (id) {
+    p.sent.interfaces.push(id);
+    p.sent.order.push(['interface', id]);
+    return original.sendInterface.apply(this, arguments);
+  });
+  t.mock.method(sender, 'sendInterfaceScript', function (id, args) {
+    p.sent.order.push(['script', id, args]);
+    return original.sendInterfaceScript.apply(this, arguments);
+  });
   t.mock.method(sender, 'sendString', function (text, uid) { p.sent.texts.set(uid, text); return original.sendString.apply(this, arguments); });
   t.mock.method(p, 'sendMessage', (text) => p.sent.messages.push(text));
   return p;
@@ -99,6 +107,16 @@ test('a new reader sees zeros and "-" under the cache title', (t) => {
   for (const component of [9, 11, 15, 17]) assert.equal(text(p, component), '0');
   assert.equal(text(p, 13), '-');
   assert.equal(text(p, 19), '-');
+});
+
+// Issue 3814: the board's background sits at a fixed spot in a layer as big as the main modal, so a
+// main modal left stretched by an earlier modal (the bank runs toplevel_mainmodal_background -1, -2)
+// drew it at the top. Live runs toplevel_mainmodal_open (2524) -1, -1 before every board
+// (rsprox_transcripts/224/01453.txt for Araxxor's, the same layout).
+test('reading resets the main modal to its standard size before the board opens, as live does', (t) => {
+  const p = realPlayer(t);
+  assert.equal(click(p, 'Read', BOARD), true);
+  assert.deepEqual(p.sent.order, [['script', 2524, [-1, -1]], ['interface', INTERFACE]]);
 });
 
 test('kills through the Muspah death hook fill the personal and world rows, the faster time winning', (t) => {

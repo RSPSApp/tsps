@@ -20,7 +20,8 @@
  *   max hit (onCombatHitRoll forceMaxHit).
  * - 11 talent_ranged_regen_echo_chance: when ammo is Regenerated (`league:pact-regenerated`
  *   { player, kind: "ammo", target?, special? }), the pact's % chance to fire an echo at the
- *   payload's target, else the player's combat target.
+ *   payload's target, else the player's combat target: one roll per event, however many copies
+ *   (extra above 100%) it gave back.
  * - `league:pact-ranged-echo` { player, target, source, chance? }: one echo; source "melee"
  *   (talent_2h_melee_echos) rolls the player's melee accuracy and max hit against the target's
  *   ranged defence, and takes the bow and thrown echo pacts as if those were wielded.

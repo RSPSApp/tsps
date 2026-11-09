@@ -465,7 +465,7 @@ test('Crab publishes native sub-varbits for shells, floatsam and recruits withou
   h.varbits.length = 0;
   h.hooks.npcs.at(-1)({
     player: h.player,
-    npcId: 16475,
+    npcId: 16817, // Flotsam (16475 Floatsam before rev 242)
     clickType: 1,
     definition: { getActions: () => ['Net'] },
   });

@@ -10,8 +10,8 @@ import { Projectile } from "../../../model/Projectile";
 import { PendingHit } from "../hit/PendingHit";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 
-const NPC_PROJECTILE_VISUAL_CONTEXT = "magic:npc-projectile-visual";
-type NpcProjectileVisual = { target: Mobile; endCycleOffset: number; queued: boolean; soundQueued?: boolean };
+const PROJECTILE_VISUAL_CONTEXT = "magic:projectile-visual";
+type ProjectileVisual = { target: Mobile; endCycleOffset: number; queued: boolean; soundQueued?: boolean };
 
 
 /**
@@ -84,22 +84,22 @@ export abstract class CombatSpell extends Spell {
       const timing = typeof projectile.getTiming === "function" ? projectile.getTiming() : null;
       projectile.sendProjectile();
       const context = Spell.getCastContext(cast, this);
-      // Native standard NPC casts queue their impact graphic at the cast, for the projectile's end cycle.
+      // Queue a standard cast's impact graphic for the end of its projectile on either target kind.
       // Other projectile profiles and independently timed/no-projectile spells keep their existing path.
-      if (context && cast.isPlayer() && castOn.isNpc() && timing?.legacyMagic
+      if (context && cast.isPlayer() && timing?.legacyMagic
           && timing.endCycleOffset > timing.startCycleOffset
           && this.getSpellbook() === MagicSpellbook.NORMAL && this.hitDelay() == null) {
         const radius = typeof (this as any).spellRadius === "function" ? (this as any).spellRadius() : 0;
-        if (radius === 0) context.data.set(NPC_PROJECTILE_VISUAL_CONTEXT, {
+        if (radius === 0) context.data.set(PROJECTILE_VISUAL_CONTEXT, {
           target: castOn, endCycleOffset: timing.endCycleOffset, queued: false,
-        } satisfies NpcProjectileVisual);
+        } satisfies ProjectileVisual);
       }
     }
   }
 
-  public getNpcProjectileVisual(context: SpellCastContext | null, target: Mobile): NpcProjectileVisual | null {
+  public getProjectileVisual(context: SpellCastContext | null, target: Mobile): ProjectileVisual | null {
     if (context?.spell !== this) return null;
-    const visual = context.data.get(NPC_PROJECTILE_VISUAL_CONTEXT) as NpcProjectileVisual | undefined;
+    const visual = context.data.get(PROJECTILE_VISUAL_CONTEXT) as ProjectileVisual | undefined;
     return visual?.target === target ? visual : null;
   }
 

@@ -34,7 +34,7 @@ const BOND_CONVERT_INTERFACE = 862;
 const BOND_MANAGEMENT_INTERFACE = 863;
 const uid = (group, child) => (group << 16) | child;
 const BOND_POUCH_BUTTON = uid(ACCOUNT_INTERFACE, 37); // action "Bond Pouch"
-const VIEW_BONDS_BUTTON = uid(BOND_MAIN_INTERFACE, 7); // script 1146: "View Your Bonds"
+const VIEW_BONDS_BUTTON = uid(BOND_MAIN_INTERFACE, 8); // bond_main:bond_pouch_body (7 before rev 242), script 1146: "View Your Bonds"
 const BACK_BUTTON = uid(BOND_MANAGEMENT_INTERFACE, 2); // script 1929: "Buy or Redeem Bonds"
 const CONVERT_BUTTON = uid(BOND_MANAGEMENT_INTERFACE, 23); // script 1929: "Convert"
 const CONVERT_DIALOG_TARGET = uid(BOND_MANAGEMENT_INTERFACE, 24);

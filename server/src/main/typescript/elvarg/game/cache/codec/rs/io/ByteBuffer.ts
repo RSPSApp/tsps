@@ -65,6 +65,11 @@ export class ByteBuffer {
         return this.readMedium() & 0xffffff;
     }
 
+    /** A signed 24-bit value (g3s): 0xFFFFFF reads as -1. */
+    readSignedMedium(): number {
+        return (this.readMedium() << 8) >> 8;
+    }
+
     readInt(): number {
         return (
             (this.readUnsignedByte() << 24) |

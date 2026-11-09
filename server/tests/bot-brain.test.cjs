@@ -3282,3 +3282,101 @@ test('a WebRTC client is a real client: a bot driven over it is watched', (t) =>
   bot.setSession(new PlayerSession({ kind: 'webrtc', readyState: 1, send() {} }));
   assert.equal(bot.isUnwatchedBot(), false, 'the admin on WebRTC is watching');
 });
+
+// #3885: a fight away from every player only runs the brain every 20 cycles. Its eating ran
+// with it, so F2P bots (whose one-more-hit wait needs two looks at the HP) died with full food.
+test('a bot fighting away from players eats every cycle while its activity stays downsampled', (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const { PvpController } = require('../plugins/bots/brain/pvp/PvpController.PlayerBots');
+  const { createInitialState } = require('../plugins/bots/behaviours/state/State.PlayerBots');
+  const Food = require('../plugins/items/Food.plugin');
+  const core = PluginManager.getCoreApi();
+  Food.register(PluginManager.createApi('Food'));
+  const bot = (name, y) => {
+    const player = new Player(null, new core.Location(3093, y, 0));
+    player.setUsername(name);
+    player.setPlayerBot(true);
+    player.setSession(new BotPlayerSession());
+    player.setRegistered(true);
+    player.sendMessage = () => {};
+    t.after(() => player.setRegistered(false));
+    return player;
+  };
+  const player = bot('far-f2p', 3700);
+  const opponent = bot('far-foe', 3701);
+  player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 88, false).setMaxLevels(core.Skill.HITPOINTS, 88, false);
+  player.getInventory().adds(core.ItemIdentifiers.SWORDFISH, 20);
+  player.getCombat().attack(opponent);
+  opponent.getCombat().attack(player);
+
+  const behaviorMode = { PVP: 'pvp', ROAMING: 'roaming' };
+  const state = createInitialState({ x: 3093, y: 3700, z: 0 }, behaviorMode);
+  state.mode = 'pvp';
+  Object.assign(state.pvp, { loadoutId: 'f2p_rune_pure', profileId: 'standard' });
+  const states = new Map([['far-f2p', state]]);
+  const api = PluginManager.createApi('PlayerBots#3885');
+  api.log = () => {};
+  const controller = new PvpController(states, api, { behaviorMode });
+  let activityTicks = 0;
+  const registry = { byId: new Map(), acquire: () => true, release() {}, pickNext: () => null, isBlocked: () => false };
+  const brain = new BotBrain({
+    player, state, registry,
+    world: { supportTick: (context) => controller.tickSupport(context) },
+    activity: { id: 'pvp', repeat: true, actions: [{ id: 'fight', update: () => { activityTicks++; return 'running'; } }] },
+  });
+  const entry = { player, state, brain };
+  const task = new BotBehaviorTask([entry], 1, {
+    timingDesyncMs: 0, behaviorMode,
+    lodConfig: { enabled: true, farStride: 4, mediumStride: 2, nearStride: 1 },
+    api: {
+      getWorld: () => ({ getPlayers: () => [], isPlayerSessionConnected: () => false }),
+      getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+      getCombatFactory: () => ({}), getAreaManager: () => ({}),
+      getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+    },
+  });
+
+  // A 15 every four cycles: 88 HP lasts 24 cycles unfed, about one downsampled brain tick.
+  let lowest = 88;
+  for (let cycle = 0; cycle < 60; cycle++) {
+    if (cycle % 4 === 0) {
+      // A landed hit also marks who is attacking (CombatFactory), which is what keeps the bot engaged.
+      player.setHitpoints(Math.max(0, player.getHitpoints() - 15));
+      player.getCombat().setUnderAttack(opponent);
+    }
+    lowest = Math.min(lowest, player.getHitpoints());
+    if (player.getHitpoints() <= 0) break;
+    task.processEntry(entry, 0, 1000 + cycle * 600);
+    player.getTimers().process();
+  }
+  assert.ok(lowest > 0, `the bot keeps itself alive (lowest ${lowest} HP)`);
+  assert.ok(player.getInventory().getAmount(core.ItemIdentifiers.SWORDFISH) < 20, "it ate its real food");
+  assert.ok(activityTicks < 10, `its activity is still downsampled (${activityTicks} of 60 cycles)`);
+});
+
+test('rare cosmetic swaps replace armour with stat-identical variants in the same slot', () => {
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const { Item } = require('../dist/game/model/Item');
+  const { PVP_LOADOUT_DEFINITIONS } = require('../plugins/bots/behaviours/pvp/PvpLoadoutRegistry.PlayerBots');
+  const { applyCosmeticSwaps } = loadoutTesting;
+  const rolls = (...values) => () => values.shift() ?? 0;
+  const body = new Item(ItemIdentifiers.RUNE_PLATEBODY, 1);
+  const legs = new Item(ItemIdentifiers.RUNE_PLATELEGS, 1);
+  // Roll under the chance, then 1 slot, then pick the body, then its first variant (gilded).
+  const [swapped, kept] = applyCosmeticSwaps([body, legs], () => true, rolls(0, 0, 0, 0));
+  assert.equal(swapped.getId(), ItemIdentifiers.GILDED_PLATEBODY);
+  assert.equal(kept, legs);
+  assert.deepEqual(applyCosmeticSwaps([body, legs], () => true, rolls(0.99)), [body, legs]);
+  for (const [base, variants] of Object.entries(PVP_LOADOUT_DEFINITIONS.cosmetics.swaps)) {
+    const def = new Item(ItemIdentifiers[base], 1).getDefinition();
+    for (const key of variants) {
+      const variant = new Item(ItemIdentifiers[key], 1).getDefinition();
+      assert.equal(variant.getEquipmentType().getSlot(), def.getEquipmentType().getSlot(), key);
+      assert.deepEqual(variant.getBonuses(), def.getBonuses(), `${key} matches ${base}`);
+      assert.equal(variant.getRequirements?.()?.toString(), def.getRequirements?.()?.toString(), key);
+    }
+  }
+});

@@ -22,6 +22,7 @@
       "name": "Barbarian Outpost pipe",
       "object": 20210,
       "level": 35,
+      "xp": 10,
       "script": "barbarianOutpostPipe",
       "params": {"northOfY":3560,"north":[2552,3561,0],"south":[2552,3558,0]}
     },
@@ -2660,6 +2661,19 @@
       "note": "rsprox captures 1098, 1100, 1105, 1108 (Leagues worlds only)"
     },
     {
+      "name": "Crumbled wall (Tree Gnome Village)",
+      "object": 2185,
+      "level": 1,
+      "between": {
+        "ends": [[2509,3252,0],[2509,3254,0]],
+        "cross": [
+          {"sound":2453,"delay":10},
+          {"move":"to","anim":"CRUMBLED_WALL","speed":[0,70],"ticks":3}
+        ]
+      },
+      "unverified": "the sound, timing and ends (no Tree Gnome Village capture); the animation is human_walk_crumbledwall, as the Nemus Retreat broken walls (rsprox 1098, 1100, 1105, 1108)"
+    },
+    {
       "name": "Rocks (Catherby)",
       "object": 17042,
       "at": [2869,3429,0],
@@ -2854,6 +2868,30 @@
       "note": "The Wiki's Agility shortcuts list: Tonali Cavern's stepping stone, level 46, no XP (it was named and levelled as Nemus Retreat's here)."
     },
     {
+      "name": "Log balance (Tonali Cavern)",
+      "object": 56718,
+      "at": [[1302,9398,0],[1305,9398,0]],
+      "level": 46,
+      "render": "BALANCE_WALK",
+      "between": {
+        "ends": [[1301,9398,0],[1306,9398,0]],
+        "via": [[1302,9398,0],[1303,9398,0],[1304,9398,0],[1305,9398,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "rsprox_transcripts/234/03285.txt (#3828): both ways between 1301,9398 and 1306,9398 in the balance walk, a tile a tick with sound 2470 on each. https://oldschool.runescape.wiki/w/Log_balance_(Tonali_Cavern): level 46, no XP."
+    },
+    {
       "name": "Log balance (Tlati Rainforest)",
       "object": 57593,
       "at": [[1283,3139,0],[1283,3146,0]],
@@ -2877,6 +2915,17 @@
         ]
       },
       "note": "rsprox captures 1105 (Leagues worlds only)"
+    },
+    {
+      "name": "Log balance (Nemus Retreat)",
+      "object": 56990,
+      "at": [[1401,3284,0],[1401,3290,0]],
+      "level": 45,
+      "xp": 19.5,
+      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "render": "BALANCE_WALK",
+      "between": {"ends":[[1401,3283,0],[1401,3291,0]],"cross":[{"walk":["to"]}]},
+      "note": "https://oldschool.runescape.wiki/w/Log_balance_(Auburn_Valley): the identical second shortcut south-east of Nemus Retreat (ids 56990-56993; 56992 and 56993 are the log between the ends)."
     },
     {
       "name": "Log balance (Auburn Valley)",

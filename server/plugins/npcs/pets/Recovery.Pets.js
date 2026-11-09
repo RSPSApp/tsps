@@ -126,7 +126,10 @@ function confirm(player, context) {
   }
   context.selected = null;
   player.getInventory().add(item, true);
-  player.sendMessage(`Probita returns your ${services.getPetDisplayName(services.getPetForItemId(live.itemId))}.`);
+  // rsprox_transcripts/229/02785.txt:21374 (Beaver, also Giant squirrel and Phoenix): "You reclaim your Beaver. One
+  // reclaim token has been spent."; the token sentence went with the tokens (Wiki, Probita: "10 Sep 2025: Pet reclaims
+  // are now free.").
+  player.sendMessage(`You reclaim your ${services.getPetDisplayName(services.getPetForItemId(live.itemId))}.`);
   services.syncCollectionLog(player);
   api.emitCustomEvent("persistence:save", {player, reason: "pet-retrieval"});
   sync(player, context);

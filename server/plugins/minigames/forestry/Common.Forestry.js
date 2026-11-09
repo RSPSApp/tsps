@@ -187,14 +187,74 @@ function animate(entity, seq, delay = 0) {
   entity.performAnimation(new core.Animation(seq, delay));
 }
 
-/** Free tiles within `range` of `location` (outside a `size` footprint there), shuffled. */
-function freeTiles(location, range, size = 1) {
+/**
+ * How far from the tree a walk to an event's tile is followed. Event tiles are at most 12 tiles
+ * out (a rainbow 9 from a leprechaun 3 from the tree); the rest leaves room for a path round a
+ * pond or fence.
+ */
+const REACH_RADIUS = 24;
+/** One route finder for the reach checks (its search buffers are reused). */
+let routes = null;
+const STEPS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+
+/**
+ * The tiles ("x,y") a player can walk to from the tree an event came from: a flood over the
+ * game's own step clipping (RegionManager.canMove) from the tiles the tree is chopped from,
+ * kept to the tree's plane and REACH_RADIUS. Water, a rock out in a river or a fenced-off yard
+ * walkable() lets through are not in it (#3872). When a chopper stands beside the tree, the
+ * flood starts from where they stand, so a pocket on the tree's far side isn't counted.
+ */
+function reachableTiles(site) {
+  const { Location, RegionManager } = core;
+  const [x0, y0, z] = [site.location.getX(), site.location.getY(), site.location.getZ()];
+  const size = Math.max(1, site.size ?? 1);
+  routes ??= new core.RsmodRouteFinding();
+  const inBounds = (x, y) => x >= x0 - REACH_RADIUS && x < x0 + size + REACH_RADIUS && y >= y0 - REACH_RADIUS && y < y0 + size + REACH_RADIUS;
+  // Where the tree can be chopped from: the walkable tiles beside it with no wall between.
+  const beside = [];
+  for (let x = x0 - 1; x <= x0 + size; x++) {
+    for (let y = y0 - 1; y <= y0 + size; y++) {
+      if (x >= x0 && x < x0 + size && y >= y0 && y < y0 + size) continue;
+      if (RegionManager.blocked(new Location(x, y, z), null)) continue;
+      const besideTree = routes.reachedAbsolute({
+        level: z, srcX: x, srcY: y, srcSize: 1, destX: x0, destY: y0, destWidth: size, destLength: size,
+        locAngle: site.tree?.getFace?.() ?? 0, locShape: 10, privateArea: null,
+      });
+      if (besideTree) beside.push([x, y]);
+    }
+  }
+  const standing = beside.filter(([x, y]) => [...(site.participants ?? [])].some((player) => {
+    const at = player.getLocation?.();
+    return at && at.getZ() === z && at.getX() === x && at.getY() === y;
+  }));
+  const queue = standing.length ? standing : beside;
+  const seen = new Set(queue.map(([x, y]) => `${x},${y}`));
+  for (let head = 0; head < queue.length; head++) {
+    const [x, y] = queue[head];
+    for (const [dx, dy] of STEPS) {
+      const [nx, ny] = [x + dx, y + dy];
+      const key = `${nx},${ny}`;
+      if (seen.has(key) || !inBounds(nx, ny) || !RegionManager.canMove(x, y, nx, ny, z, 1, 1, null)) continue;
+      seen.add(key);
+      queue.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+/**
+ * Free tiles within `range` of `location` (outside a `size` footprint there) that a player can
+ * walk to from `site`'s tree, shuffled.
+ */
+function freeTiles(site, location, range, size = 1) {
   const [x0, y0, z] = [location.getX(), location.getY(), location.getZ()];
+  if (z !== site.location.getZ()) return [];
+  const reach = reachableTiles(site);
   const tiles = [];
   for (let x = x0 - range; x < x0 + size + range; x++) {
     for (let y = y0 - range; y < y0 + size + range; y++) {
       const inside = x >= x0 && x < x0 + size && y >= y0 && y < y0 + size;
-      if (!inside && walkable(x, y, z)) tiles.push(new core.Location(x, y, z));
+      if (!inside && reach.has(`${x},${y}`) && walkable(x, y, z)) tiles.push(new core.Location(x, y, z));
     }
   }
   for (let i = tiles.length - 1; i > 0; i--) {
@@ -268,6 +328,7 @@ module.exports = {
   removeNpc,
   animate,
   freeTiles,
+  reachableTiles,
   chat,
   menu,
   ORDINALS,

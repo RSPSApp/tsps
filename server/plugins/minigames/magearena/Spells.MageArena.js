@@ -108,6 +108,10 @@ module.exports = function registerSpells(pluginApi) {
 };
 
 Object.assign(module.exports, {
+  // Kolodion's progress lines read the same counters.
+  GODS,
+  CASTS_REQUIRED,
+  chargeOf,
   _test: {
     ARENA,
     CASTS_REQUIRED,

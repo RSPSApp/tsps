@@ -20,6 +20,7 @@ const spawned = [];
 const removed = [];
 const prompts = [];
 let questStarted = true;
+const petRolls = [];
 
 /** Lets the last action's ticks pass, so the next click is taken. */
 function next() {
@@ -49,6 +50,7 @@ before(async () => {
     core,
     emitCustomEvent(name, payload) {
       if (name === "quest:is-started") payload.started = questStarted;
+      if (name === "pets:skilling-roll") petRolls.push(payload);
       if (name === "npc-dialogue:start") {
         payload.handled = true;
         startedVariants.push(payload.variant);
@@ -361,6 +363,9 @@ test("the chest always gives its artefact; a scarab swarm takes the XP instead",
   T.Containers.searchChest({ player: q, ...objectAt(1, ids().chest) }, () => 0.9);
   flush(1);
   assert.equal(q.xp.THIEVING, 0, "the swarm takes the XP");
+  // Wiki (Rocky): room 1's chest is base 41,355, "rolled upon opening ... even if a scarab swarm appears".
+  assert.deepEqual(petRolls.filter((r) => r.player === p || r.player === q).map((r) => [r.player === p ? "p" : "q", r.skill?.getName?.() ?? r.skill, r.petBase]),
+    [["p", "Thieving", 41355], ["q", "Thieving", 41355]]);
   assert.equal(artefactCount(q), 1);
   assert.deepEqual(q.hits, [4], "the trap deals 1-4, not a fixed 3");
   assert.equal(spawned[0].definition.id, ids().npc.scarabs);

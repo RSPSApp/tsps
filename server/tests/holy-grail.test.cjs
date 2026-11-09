@@ -404,7 +404,7 @@ test('a Titan killed without Excalibur regenerates and keeps the bridge', () => 
   const p = h.player;
   h.quest.setStage(p, 4);
   p.setLocation(2792, 4722);
-  h.wield(I.BRONZE_SWORD);
+  h.wield(I.BRONZE_SHORTSWORD);
   const t = h.titan();
   t.hit();
   const death = t.die();

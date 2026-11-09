@@ -114,6 +114,11 @@ let World;
 let RegionManager;
 let TaskManager;
 let pluginApi;
+
+/** A spam-channel line (filtered chat), as these are recorded. */
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, text);
+}
 let tunnelMap;
 
 function randomInt(min, max) {
@@ -360,6 +365,8 @@ function searchCrypt(player, index) {
   } else if (state.brother || run.killed.includes(index)) {
     player.sendMessage("The sarcophagus appears to be empty.");
   } else {
+    // rsprox_transcripts/226/01694.txt:165522 (then the brother's "You dare disturb my rest!" at :165530).
+    spam(player, "You don't find anything.");
     spawnNpc(player, brother.npcId, brother.spawn, true);
   }
 }
@@ -604,7 +611,9 @@ function searchChest(player, clickType) {
   syncTunnels(player, run);
   pluginApi.emitCustomEvent("barrows:chest-looted", { player });
   showRewards(player, rewards);
-  sender.sendMessage(`You've looted ${run.chests} Barrows chests. The tunnels begin to collapse!`);
+  // rsprox_transcripts/226/01694.txt:170767-170768: the diary's rune line (spam), then the count.
+  if (diary.complete === true) spam(player, "You receive more runes for completing the hard tier of the Morytania achievement diary.");
+  sender.sendMessage(`Your Barrows chest count is: <col=ff0000>${run.chests}</col>.`);
   combatAchievementsAtChest(player, run);
 }
 
@@ -729,7 +738,8 @@ function processPlayer({ player }) {
     if (player.getLocation().equals(dig.from) && player.getHitpoints() > 0) {
       cleanupNpcs(player, true);
       player.moveTo(dig.to.clone());
-      player.sendMessage("You've found a crypt!");
+      // rsprox_transcripts/226/01694.txt:165471 (and every crypt after): spam.
+      spam(player, "You've broken into a crypt!");
     }
   }
   const phase = phaseOf(player);
@@ -828,5 +838,5 @@ module.exports = {
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
-  _test: { searchChest, chestCount, phaseOf, syncMinimap, processPlayer, dig },
+  _test: { searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig },
 };

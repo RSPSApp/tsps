@@ -29,6 +29,8 @@ const QUEST_LIST_ENTRY_FLAGS = 0x3e; // Native OP1–5 (RSProx4267); Pin journal
 // Quest journal overlay (xrsps client/common/ui constants).
 const JOURNAL_GROUP = 119;
 const JOURNAL_TITLE_CHILD = 5;
+// The text layer the line widgets hang under (InterfaceID.Questjournal.TEXTLAYER, 119:6).
+const JOURNAL_TEXTLAYER_CHILD = 6;
 const JOURNAL_CLOSE_CHILD = 8;
 const JOURNAL_SWITCH_CHILD = 9;
 const JOURNAL_FIRST_LINE_CHILD = 11;
@@ -152,7 +154,9 @@ function sendQuestHeaderStats(player) {
   }).length;
   // Earned QP remains the saved gameplay value. Native maximum/counts describe the cache list.
   packet.sendConfig(QUEST_POINTS_VARP, Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0);
-  packet.sendVarbit(QUEST_POINTS_TOTAL_VARBIT, all.reduce((sum, row) => sum + Number(row.questpoints?.[0] ?? 0), 0));
+  // Rev 242 renamed the column `questpoints` to `questpoints_override` (same values).
+  const questPoints = row => Number((row.questpoints_override ?? row.questpoints)?.[0] ?? 0);
+  packet.sendVarbit(QUEST_POINTS_TOTAL_VARBIT, all.reduce((sum, row) => sum + questPoints(row), 0));
   packet.sendVarbit(QUESTS_COMPLETED_VARBIT, completed(0));
   packet.sendVarbit(QUESTS_TOTAL_VARBIT, main.length);
   packet.sendVarbit(MINIQUESTS_COMPLETED_VARBIT, completed(1));
@@ -277,6 +281,30 @@ function journalText(line) {
   const text = String(line ?? "");
   if (!text || text.startsWith("<str>") || text.includes("<col=ff0000>")) return text;
   return JOURNAL_TEXT_COLOUR + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
+}
+
+/**
+ * The journal widgets a quest's guide reads, for a snapshot with no client attached. Live sends
+ * these when the journal opens (openJournal); a headless evaluation never opens it, so a guide
+ * whose conditions are WidgetTextRequirements (Clock Tower's sync, its cog steps) would see
+ * nothing and report the route unsupported.
+ */
+function journalWidgets(quest, player) {
+  // A quest with no journal of its own has nothing for a guide to read; leave the snapshot alone.
+  if (typeof quest.buildJournal !== "function") return [];
+  // The lines are the text layer's static children, as live mounts them: guides read placed-cog
+  // and other progress lines with WidgetTextRequirement(TEXTLAYER, checkChildren = true), which
+  // walks getStaticChildren() and never looks at a line widget on its own.
+  return [
+    { id: (JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, text: `<col=7f0000>${quest.name}</col>` },
+    {
+      id: (JOURNAL_GROUP << 16) | JOURNAL_TEXTLAYER_CHILD,
+      staticChildren: journalLines(quest, player).map((line, index) => ({
+        id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index),
+        text: journalText(line),
+      })),
+    },
+  ];
 }
 
 /**
@@ -898,6 +926,7 @@ function giveReward(player, itemId, amount = 1) {
 module.exports = {
   openBook,
   openIndexedBook,
+  journalWidgets,
   QUEST_POINTS_VARP,
   QUEST_POINTS_ATTRIBUTE,
   EXPERIENCE_WITHHELD_ATTRIBUTE,

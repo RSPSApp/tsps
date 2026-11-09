@@ -181,13 +181,13 @@ module.exports = function registerRecruitmentDriveQuest(api) {
 
   const KUAM_VICTORY_CONDITION_IDS = ["DBOLHO", "crzBa_", "d7FuHu"];
   const LEYE_WEAPON_ITEM_IDS = [
-    ItemIdentifiers.STEEL_SWORD, // 1281
+    ItemIdentifiers.STEEL_SHORTSWORD, // 1281
     ItemIdentifiers.STEEL_CLAWS, // 3097
     ItemIdentifiers.STEEL_BATTLEAXE, // 1365
     ItemIdentifiers.STEEL_WARHAMMER, // 1339
   ];
   const BLADED_WEAPON_ITEM_IDS = new Set([
-    ItemIdentifiers.STEEL_SWORD,
+    ItemIdentifiers.STEEL_SHORTSWORD,
     ItemIdentifiers.STEEL_CLAWS,
     ItemIdentifiers.STEEL_BATTLEAXE,
   ]);

@@ -167,6 +167,15 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const setIngredient = (player, key, itemId) => {
     if (itemId) player.setAttribute(key, itemId);
   };
+  /** How each seasoning is named in the transcript's "Remember what the Ogre family wanted?" line. */
+  const INGREDIENT_NAMES = new Map([
+    [ItemIdentifiers.POTATO, "potato"],
+    [ItemIdentifiers.ONION, "onion"],
+    [ItemIdentifiers.TOMATO, "tomato"],
+    [ItemIdentifiers.DOOGLE_LEAVES, "doogle leaves"],
+    [ItemIdentifiers.CABBAGE, "cabbage"],
+    [ItemIdentifiers.EQUA_LEAVES, "equa leaves"],
+  ]);
   const actionFor = (event) => String(event.option ?? event.definition?.getActions?.()?.[event.clickType - 1] ?? "").toLowerCase();
 
   let quest;
@@ -365,7 +374,14 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       return;
     }
     if (!wanted.every((id) => has(player, id))) {
-      player.sendMessage("You don't have all the ingredients Rantz's family asked for.");
+      // Both lines of the transcript's refusal (npc-dialogues, "…without-the-requested-ingredients").
+      // The second is a template there — "[potato/onion]" and friends are the Wiki's either/or
+      // notation for the random pairs — so it is filled from what the family actually asked for,
+      // in the transcript's order: Rantz, then Fycie, then Bugs.
+      player.sendMessage("You don't have all the ingredients yet to cook the chompy bird for the ogre family.");
+      const [rantz, bugs, fycie] = wanted.map((id) => INGREDIENT_NAMES.get(id));
+      player.sendMessage(`Remember what the Ogre family wanted? Rantz wanted ${rantz}. ` +
+        `Fycie wanted ${fycie}. Bugs wanted ${bugs}.`);
       return;
     }
     player.getInventory().deleteNumber(RAW_CHOMPY, 1);
@@ -705,7 +721,11 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   function handleDialogueLine({ player, npcId, text }) {
     const stage = quest.getStage(player);
     const value = String(text ?? "").toLowerCase();
-    if (RANTZ_NPC_IDS.has(npcId) && stage === STAGE_KILLED_CHOMPY) {
+    // Rantz names his ingredient twice: in the cooking request when the raw chompy is shown
+    // (stage 50), and again in the "again before cooking" page (stage 55+), where the pair is
+    // rolled fresh. Record whichever he said last, or the player is told "Potato" and the cook
+    // still demands the "Onion" recorded earlier, which is the one combination that works (#3807).
+    if (RANTZ_NPC_IDS.has(npcId) && stage >= STAGE_KILLED_CHOMPY && stage < STAGE_CHOMPY_COOKED) {
       if (value.includes("wants onion")) setIngredient(player, RANTZ_INGREDIENT_ATTRIBUTE, ItemIdentifiers.ONION);
       else if (value.includes("wants potato")) setIngredient(player, RANTZ_INGREDIENT_ATTRIBUTE, ItemIdentifiers.POTATO);
       // Advance only once Rantz has named his ingredient, so closing the dialogue

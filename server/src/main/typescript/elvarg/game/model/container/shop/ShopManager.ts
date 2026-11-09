@@ -616,9 +616,10 @@ export class ShopManager {
         }
         const unit = this.currencyUnit(shop.definition.getCurrency());
         if (unit) {
+            const named = unit === "coins" && price === 1 ? "coin" : unit;
             player.sendMessage(
                 `${definition.getName()}: ${fromShop ? "currently costs" : "shop will buy for"} ` +
-                `${Misc.insertCommasToNumber(String(price))} ${unit}.`
+                `${Misc.insertCommasToNumber(String(price))} ${named}.`
             );
             return;
         }
@@ -932,9 +933,9 @@ export class ShopManager {
 
     /**
      * Shops that sell for a currency other than coins and still buy items for it: the TzHaar shops (tokkul) and
-     * Tai Bwo Wannai's cooperative (trading sticks). Reward shops (minigame points, tickets, marks) buy nothing back,
-     * unless their plugin says the shop does ("shop:buys-back" { shopId, shopName, currency, itemId, buys }, Dusuri's
-     * stardust buyback).
+     * Tai Bwo Wannai's cooperative (trading sticks). Other reward shops (minigame points, tickets) buy nothing back,
+     * unless the Wiki gives the shop a buy percentage (`specialistBuyback`) or their plugin says the shop does
+     * ("shop:buys-back" { shopId, shopName, currency, itemId, buys }).
      */
     private static readonly BUYBACK_CURRENCIES = new Set(["COINS", "TOKKUL", "TRADING STICKS", "BLOOD_MONEY"]);
 
@@ -947,12 +948,24 @@ export class ShopManager {
         if (!this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())) {
             const request = {
                 shopId: shop.definition.getId(), shopName: shop.definition.getName(),
-                currency: shop.definition.getCurrency(), itemId, buys: false,
+                currency: shop.definition.getCurrency(), itemId, buys: this.specialistBuyback(shop) > 0,
             };
             PluginManager.emitCustomEvent("shop:buys-back", request);
             if (request.buys !== true) return false;
         }
         return this.isGeneralStore(shop) || shop.originalAmounts.has(itemId);
+    }
+
+    /**
+     * The Wiki's "Buys at" (per mille) for a shop paying in its own reward currency, 0 where it has none. Wiki
+     * StoreTableHead: Grace's Graceful Clothing, Prospector Percy's Nugget Shop, the Mining Guild Mineral Exchange
+     * and Dusuri's Star Shop buy their stock back at 80% (a graceful hood bought for 35 marks sells for 28); Petrified
+     * Pete's Ore Shop buys at 0%. The TzHaar and Tai Bwo Wannai shops keep the standard refund.
+     */
+    private static specialistBuyback(shop: RuntimeShop): number {
+        if (this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())) return 0;
+        const multiplier = shop.definition.getSalesPolicy().sellMultiplier;
+        return Number.isSafeInteger(multiplier) && Number(multiplier) > 0 ? Number(multiplier) : 0;
     }
 
     /**
@@ -988,9 +1001,13 @@ export class ShopManager {
     /** `player` (when known) and `currency` let content refuse a sale for one player (a league relic's shops that buy nothing for gold). */
     private static canSell(shop: RuntimeShop, item: Item, player: any = null): boolean {
         if (!item || item.isUntradeable()) return false;
+        // Wiki (Amylase pack): untradeable stock "can only be sold back to Grace's Graceful Clothing". A shop that
+        // buys its stock back for its own currency takes the items it lists, though no other shop would.
+        const ownStock = this.specialistBuyback(shop) > 0
+            && shop.originalAmounts.has(ItemDefinition.forId(item.getId()).unNote());
         const request = {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(), currency: shop.definition.getCurrency(),
-            itemId: item.getId(), sellable: item.isSellable(),
+            itemId: item.getId(), sellable: ownStock || item.isSellable(),
         };
         PluginManager.emitCustomEvent("shop:can-sell", request);
         return request.sellable === true;
@@ -1026,7 +1043,10 @@ export class ShopManager {
 
     private static sellPrice(shop: RuntimeShop, definition: ItemDefinition, player: any = null, additionalStock = 0): number {
         const buyPrice = this.itemPrice(shop, definition);
-        let price = buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice;
+        const buyback = this.specialistBuyback(shop);
+        let price = buyback > 0
+            ? Math.floor(buyPrice * buyback / 1000)
+            : buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice;
         const policy = shop.definition.getSalesPolicy();
         if (this.stockPriced(shop)) {
             const overstock = Math.max(0, (shop.stock.get(definition.getId()) ?? 0)
@@ -1052,8 +1072,12 @@ export class ShopManager {
             : Number(definition.getValue?.() ?? 0);
     }
 
+    /**
+     * Coins have a unit too (rsprox: "Blood rune: currently costs 400 coins.", "Empty plant pot: currently costs 1
+     * coin.", "Raw chicken: shop will buy for 0 coins.", "You don't have enough coins.").
+     */
     private static currencyUnit(currency: ShopCurrency): string | null {
-        return this.currencyHandlers.get(currency)?.unit ?? null;
+        return this.currencyHandlers.get(currency)?.unit ?? (currency === "COINS" ? "coins" : null);
     }
 
     private static currencyAmount(player: any, currency: ShopCurrency): number {

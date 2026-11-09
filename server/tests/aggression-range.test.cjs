@@ -164,6 +164,40 @@ test("a player inside the aggression range is hunted", (t) => {
   assert.equal(s.npc.getCombat().getTarget(), s.player);
 });
 
+// Per-monster hunt ranges from npc-combat-defs.json `huntRange` (#3890): the first unprovoked
+// engagement in the rsprox recordings, with the default 3 kept for everything else.
+test("hunt ranges load per NPC from npc-combat-defs.json, defaulting to 3", () => {
+  const range = (id) => core.NpcDefinition.forId(id).getHuntRange();
+  assert.equal(range(core.NpcIdentifiers.JUNGLE_HORROR_3), 5);
+  assert.equal(range(core.NpcIdentifiers.CAVE_HORROR), 5);
+  assert.equal(range(core.NpcIdentifiers.ICE_WOLF_4), 6);
+  assert.equal(range(core.NpcIdentifiers.ELITE_DARK_WARRIOR), 5);
+  assert.equal(range(core.NpcIdentifiers.SKELETON_56), 6);
+  assert.equal(range(MUGGER), 3, "an NPC without an entry keeps the default");
+  assert.equal(range(core.NpcIdentifiers.DAGANNOTH_16), 3, "one recorded sample is not enough to set one");
+});
+
+test("a jungle horror hunts a player five tiles away but not six", (t) => {
+  const x = FIELD.x, y = FIELD.y;
+  const horror = scene(t, {
+    npcId: core.NpcIdentifiers.JUNGLE_HORROR_3,
+    spawn: new core.Location(x, y, 0),
+    playerAt: new core.Location(x, y - 6, 0),
+  });
+  NpcAggression.runAggression(horror.player, [horror.npc]);
+  assert.equal(horror.npc.getCombat().getTarget(), null, "six tiles is beyond its hunt range");
+  horror.player.setLocation(new core.Location(x + 3, y - 5, 0));
+  NpcAggression.runAggression(horror.player, [horror.npc]);
+  assert.equal(horror.npc.getCombat().getTarget(), horror.player, "five tiles (Chebyshev) is inside it");
+
+  const mugger = scene(t, { spawn: new core.Location(x + 20, y, 0), playerAt: new core.Location(x + 20, y - 4, 0) });
+  NpcAggression.runAggression(mugger.player, [mugger.npc]);
+  assert.equal(mugger.npc.getCombat().getTarget(), null, "a default NPC does not hunt at four tiles");
+  mugger.player.setLocation(new core.Location(x + 20, y - 3, 0));
+  NpcAggression.runAggression(mugger.player, [mugger.npc]);
+  assert.equal(mugger.npc.getCombat().getTarget(), mugger.player, "but does at three");
+});
+
 test("a hunter loses interest outside the aggression range and walks home", (t) => {
   const s = scene(t);
   s.npc.getCombat().attack(s.player);

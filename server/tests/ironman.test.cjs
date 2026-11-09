@@ -347,12 +347,12 @@ test("StaffCrowns: a staff crown wins, else the account's icon, else none", () =
 });
 
 test("no presets for an Ironman (they hand out items); normal accounts keep them", () => {
-  const iron = { player: account("iron", "ironman"), allow: true, message: null };
-  custom["presets:can-use"](iron);
-  assert.deepEqual([iron.allow, iron.message], [false, "As an Ironman, you cannot use presets."]);
-  const main = { player: account("main"), allow: true, message: null };
-  custom["presets:can-use"](main);
-  assert.equal(main.allow, true);
+  const iron = { player: account("iron", "ironman"), barred: false, message: null };
+  custom["presets:account-barred"](iron);
+  assert.deepEqual([iron.barred, iron.message], [true, "As an Ironman, you cannot use presets."]);
+  const main = { player: account("main"), barred: false, message: null };
+  custom["presets:account-barred"](main);
+  assert.equal(main.barred, false);
 });
 
 for (const source of ["pickup", "telegrab"]) {

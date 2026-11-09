@@ -48,7 +48,7 @@ test("a withdrawal onto a stack near the cap takes only what fits; the rest stay
 
 test("a full inventory without coins takes nothing", (t) => {
   const { p, save } = owner(t, 1000);
-  for (let slot = 0; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(I.BRONZE_SWORD, 1));
+  for (let slot = 0; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(I.BRONZE_SHORTSWORD, 1));
   assert.equal(Servants.changeServantMoney(p, -1000), false);
   assert.equal(save.servantMoney, 1000);
 });

@@ -461,6 +461,25 @@ export class LocType extends Type {
             if (this.cacheInfo.game === "oldschool") {
                 const thickness = buffer.readUnsignedByte();
             }
+        } else if (this.cacheInfo.game === "oldschool" && (opcode === 97 || opcode === 98)) {
+            // Rev 242: multiloc with 24-bit signed loc ids (77/92 with g3s ids; 98 adds the default).
+            this.transformVarbit = buffer.readUnsignedShort();
+            if (this.transformVarbit === 65535) {
+                this.transformVarbit = -1;
+            }
+
+            this.transformVarp = buffer.readUnsignedShort();
+            if (this.transformVarp === 65535) {
+                this.transformVarp = -1;
+            }
+
+            const fallback = opcode === 98 ? buffer.readSignedMedium() : -1;
+            const count = buffer.readUnsignedByte();
+            this.transforms = new Array(count + 2);
+            for (let i = 0; i <= count; i++) {
+                this.transforms[i] = buffer.readSignedMedium();
+            }
+            this.transforms[count + 1] = fallback;
         } else if (opcode === 97) {
             const adjustMapSceneRotation = true;
         } else if (opcode === 98) {

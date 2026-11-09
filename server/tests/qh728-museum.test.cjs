@@ -135,7 +135,11 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
   const skills = {
     getMaxLevel: (skill) => levels.get(skillKey(skill)) ?? 99,
     getExperience: (skill) => experience.get(skillKey(skill)) ?? 0,
-    addExperience(skill, amount) { experience.set(skillKey(skill), skills.getExperience(skill) + amount); },
+    addExperience(skill, amount, multipliers) {
+      // Lamp XP takes the world's and the account's rates, as any gain does (#3672).
+      assert.equal(multipliers, true);
+      experience.set(skillKey(skill), skills.getExperience(skill) + amount);
+    },
   };
   let menu = null;
   const player = {

@@ -4,12 +4,14 @@
  * Each captain's destination options (revision 241 replaced Pay-fare with
  * "Ardougne", "Brimhaven" and "Rimmington") and his Talk-to dialogue sail
  * between the three docks for 30 coins, halved to 15 while any Karamja gloves
- * are worn. The Wiki's free ring of charos(a) route is not offered here.
+ * are worn. With a Ring of charos(a) worn, Talk-to's "[Charm] Or I could pay you nothing at all..." sails free
+ * (Wiki: "Going through his dialogue with a Ring of Charos(a) equipped will make the trip there and back free.").
  */
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 // shortcut: shared ferry fade timings; replace with Barnaby's exact sequence when a capture is available.
 const FERRY_ROUTES = require("./data/ferries.json").routes;
+const DIALOGUES = require("../../data/definitions/npc-dialogues.json");
 
 const BASE_FARE = 30;
 const GLOVES_FARE = 15;
@@ -24,6 +26,10 @@ const PORTS = [
 // The transcript's "You board the ship and sail to <port>." message steps.
 const BOARD_MESSAGE = /^You board the ship and sail to (.+)\.$/;
 const NO_FARE_CONDITION = "If the player does not have 30 coins:";
+const CHAROS_CONDITION = "If wearing the Ring of Charos(a):";
+// The boarding messages under each dock's "[Charm]" option (npc-dialogues.json, Captain Barnaby): free.
+const CHARM_BOARD_STEPS = new Set(["uzKhEQ", "GcZwOU", "t19V4d", "cmk7DM", "5gJXnE", "fep9oV"]);
+const CHAROS_RINGS = new Set([ItemIdentifiers.RING_OF_CHAROS_A_, ItemIdentifiers.RING_OF_CHAROS_A__2].filter(Number.isInteger));
 
 const KARAMJA_GLOVES = new Set([
   ItemIdentifiers.KARAMJA_GLOVES,
@@ -43,6 +49,10 @@ function fareFor(player) {
   return KARAMJA_GLOVES.has(Number(gloves ?? -1)) ? GLOVES_FARE : BASE_FARE;
 }
 
+function wearsCharos(player) {
+  return CHAROS_RINGS.has(Number(player.getEquipment?.()?.get?.(Equipment.RING_SLOT)?.getId?.() ?? -1));
+}
+
 function sail(player, port, fare) {
   const inventory = player.getInventory();
   if (inventory.getAmount(ItemIdentifiers.COINS) < fare) {
@@ -55,6 +65,7 @@ function sail(player, port, fare) {
   const voyage = { player, route: port.route, handled: false };
   api.emitCustomEvent("ferries:travel", voyage);
   if (!voyage.handled) return;
+  if (fare <= 0) return;
   inventory.deleteNumber(ItemIdentifiers.COINS, fare);
   inventory.refreshItems();
   player.sendMessage(`You pay ${fare} coins and board the ship.`);
@@ -82,27 +93,53 @@ function selectDockVariant(event) {
 }
 
 function answerFareCondition(event) {
+  if (isBarnaby(event) && event.text === CHAROS_CONDITION) return wearsCharos(event.player);
   if (!isBarnaby(event) || event.text !== NO_FARE_CONDITION) return null;
   return event.player.getInventory().getAmount(ItemIdentifiers.COINS) < fareFor(event.player);
+}
+
+/**
+ * The transcript puts the "[Charm]" option in a menu of its own after the paid menu, behind "If wearing the Ring of
+ * Charos(a):", and the paid menu's options all end, so it is never reached. Offer it in the paid menu, guarded by that
+ * condition (answered from the worn ring when the menu is drawn): the dock variant's own option node, with its steps.
+ */
+function charmOption(variantName) {
+  const record = DIALOGUES?.["Captain Barnaby"]?.variants?.[variantName] ?? [];
+  for (const step of record) {
+    const option = (step.options ?? []).find((candidate) => String(candidate.text ?? "").startsWith("[Charm]"));
+    if (option) return option;
+  }
+  return null;
+}
+
+function offerCharm(notice) {
+  if (!isBarnaby(notice) || !Array.isArray(notice.options)) return;
+  if (!notice.options.some((option) => option.text === "I'm good thanks.")) return;
+  if (notice.options.some((option) => String(option.text ?? "").startsWith("[Charm]"))) return;
+  const variant = selectDockVariant(notice);
+  const charm = variant ? charmOption(variant) : null;
+  if (charm) notice.options = [...notice.options, { ...charm, condition: CHAROS_CONDITION }];
 }
 
 function boardFromDialogue(event) {
   const port = isBarnaby(event) ? portNamed(BOARD_MESSAGE.exec(String(event.text ?? ""))?.[1]) : null;
   if (!port) return;
   event.handled = true;
-  sail(event.player, port, fareFor(event.player));
+  const charmed = CHARM_BOARD_STEPS.has(event.stepId) && wearsCharos(event.player);
+  sail(event.player, port, charmed ? 0 : fareFor(event.player));
 }
 
 module.exports = {
   name: "BarnabyFerry",
   description: "Captain Barnaby's ferry from the Ardougne, Brimhaven and Rimmington docks, with his dialogue and a fade between ports.",
   members: true,
-  _test: { fareFor, sail, sailToOption, selectDockVariant, answerFareCondition, boardFromDialogue, PORTS },
+  _test: { fareFor, sail, sailToOption, selectDockVariant, answerFareCondition, boardFromDialogue, offerCharm, PORTS },
   register(pluginApi) {
     api = pluginApi;
     api.onNpcInteraction("Captain Barnaby", { Ardougne: sailToOption, Brimhaven: sailToOption, Rimmington: sailToOption });
     api.onNpcDialogueVariant(selectDockVariant);
     api.onNpcDialogueCondition(answerFareCondition);
     api.onCustomEvent("npc-dialogue:action", boardFromDialogue);
+    api.onCustomEvent("npc-dialogue:menu", offerCharm);
   },
 };

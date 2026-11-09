@@ -13,6 +13,7 @@ const { attachBandos } = require("./godwars/Bandos.GodWars");
 const { attachArmadyl } = require("./godwars/Armadyl.GodWars");
 const { attachSaradomin } = require("./godwars/Saradomin.GodWars");
 const { attachZamorak } = require("./godwars/Zamorak.GodWars");
+const { attachKeys } = require("./godwars/Keys.GodWars");
 
 module.exports = {
   name: "GodWars",
@@ -27,5 +28,6 @@ module.exports = {
     attachArmadyl(api);
     attachSaradomin(api);
     attachZamorak(api);
+    attachKeys(api);
   },
 };

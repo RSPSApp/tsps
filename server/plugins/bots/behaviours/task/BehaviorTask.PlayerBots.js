@@ -1147,6 +1147,12 @@ class BotBehaviorTask extends Task {
         this._profileWindow.heavyGateMs += this.elapsedMs(heavyGateStartNs);
       }
       if (!shouldProcessHeavy) {
+        // Only the decisions are downsampled. A fight away from players otherwise ran the
+        // brain every 20 cycles, so its food (and the F2P one-more-hit wait, which needs two
+        // looks at the HP) came round about twice a kill and bots died with full inventories.
+        if (this.hasCombatLinks(player)) {
+          entry.brain.tickSupport(entryNow);
+        }
         return;
       }
       const brainStartNs = sampleEntry && this._profileWindow ? process.hrtime.bigint() : 0n;

@@ -7,6 +7,7 @@ import { WeaponInterfaces } from "./WeaponInterfaces";
 import { WeaponInterfaceManager } from "./WeaponInterfaceManager";
 import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
 import { DamageFormulas } from "./formula/DamageFormulas";
+import { withHitVictim } from "./EquipmentEffects";
 import { HitDamage } from "./hit/HitDamage";
 import { HitMask } from "./hit/HitMask";
 import { PendingHit } from "./hit/PendingHit";
@@ -221,15 +222,17 @@ export class CombatFactory {
         const prayerType = resolveSpecialAttackType(specialTraits?.damageType) ?? type;
         let maxHit = 0;
         let minimumFloor = 0;
-        if (type == CombatType.MELEE) {
-            maxHit = DamageFormulas.sourceMaxHit(entity, CombatType.MELEE);
-        } else if (type == CombatType.RANGED) {
-            maxHit = PluginManager.modifyRangedMaxHit(entity, victim, DamageFormulas.sourceMaxHit(entity, CombatType.RANGED));
-        } else if (type == CombatType.MAGIC) {
-            const bounds = DamageFormulas.sourceHitBounds(entity, CombatType.MAGIC, victim);
-            maxHit = bounds.maximum;
-            minimumFloor = bounds.minimum;
-        }
+        withHitVictim(entity, victim, () => {
+            if (type == CombatType.MELEE) {
+                maxHit = DamageFormulas.sourceMaxHit(entity, CombatType.MELEE);
+            } else if (type == CombatType.RANGED) {
+                maxHit = PluginManager.modifyRangedMaxHit(entity, victim, DamageFormulas.sourceMaxHit(entity, CombatType.RANGED));
+            } else if (type == CombatType.MAGIC) {
+                const bounds = DamageFormulas.sourceHitBounds(entity, CombatType.MAGIC, victim);
+                maxHit = bounds.maximum;
+                minimumFloor = bounds.minimum;
+            }
+        });
         const rolls = type == CombatType.MELEE || type == CombatType.RANGED || type == CombatType.MAGIC;
         const range = rolls
             ? CombatFactory.specialDamageRange(entity, maxHit, boundsOverride, applySpecialTraits, minimumFloor)
@@ -1663,8 +1666,10 @@ export class CombatFactory {
             return true;
         }
 
+        // rsprox_transcripts/229/02760.txt:7555 (and 227/00096:101707): a bow with nothing in the ammo slot.
+        const NO_AMMO = "There is no ammo left in your quiver.";
         if (ammoData == null) {
-            return reject("You don't have any ammunition to fire.");
+            return reject(NO_AMMO);
         }
 
         if (CombatFactory.usesWeaponSlotAmmo(rangedWeapon)) {
@@ -1676,7 +1681,11 @@ export class CombatFactory {
         }
 
         let ammoSlotItem = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT];
-        if (ammoSlotItem.getId() == -1 || ammoSlotItem.getAmount() < amountRequired) {
+        if (ammoSlotItem.getId() == -1 || ammoSlotItem.getAmount() <= 0) {
+            return reject(NO_AMMO);
+        }
+        // Some, but fewer than the weapon fires at once (a dark bow's two): no recording, our wording.
+        if (ammoSlotItem.getAmount() < amountRequired) {
             return reject("You don't have the required amount of ammunition to fire that.");
         }
 
@@ -1692,12 +1701,10 @@ export class CombatFactory {
             }
         }
 
+        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
         if (!properReq) {
-            let ammoName = ammoSlotItem.getDefinition().getName(),
-                weaponName = player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName(),
-                add = !ammoName.endsWith("s") && !ammoName.endsWith("(e)") ? "s" : "";
-            return reject("You can not use " + ammoName + "" + add + " with "
-                + Misc.anOrA(weaponName) + " " + weaponName + ".");
+            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
+            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
         }
 
         return true;
@@ -1761,9 +1768,11 @@ export class CombatFactory {
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
-                const consume = { player, itemId: currentWeaponId, skip: false };
+                // `extra`: shots given back on top (Demonic Pacts' Regenerate above 100%), within the bow's current stage.
+                const consume = { player, itemId: currentWeaponId, skip: false, extra: 0 };
                 PluginManager.emitCustomEvent("combat:consume-charge", consume);
                 if (consume.skip) {
+                    shotsInStage = Math.max(0, shotsInStage - Math.max(0, consume.extra | 0));
                     continue;
                 }
                 shotsInStage += 1;
@@ -1802,9 +1811,11 @@ export class CombatFactory {
         // the rest is recovered by a plugin (Ava's devices).
         // Content may keep some shots out of the roll altogether (a league relic): `saved` of
         // `amount` are neither broken nor dropped. The device's recovery applies to the rest.
-        const saving = { player, itemId: ammoItem.getId(), amount, saved: 0 };
+        // `extra`: shots the content gives back on top (Demonic Pacts' Regenerate above 100%), added to the same stack.
+        const saving = { player, itemId: ammoItem.getId(), amount, saved: 0, extra: 0 };
         PluginManager.emitCustomEvent("ranged:ammo-saving", saving);
         const rolled = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+        const extra = Math.max(0, saving.extra | 0);
         const recovery = CombatFactory.ammoRecovery(player);
         const dropChance = 80 - recovery;
         let lost = 0;
@@ -1833,6 +1844,12 @@ export class CombatFactory {
                 // still paid from the same ammo. A different stack swapped in is left alone.
                 const inventory = player.getInventory();
                 const at = inventory.getItems().findIndex(sameAmmo);
+                if (extra > 0) {
+                    // The stack is gone from the slot: what comes back goes to the pack (the floor if it is full).
+                    const back = new Item(ammoId, extra, firedMeta);
+                    if (inventory.getAddableAmount(back) >= extra) inventory.add(back, true);
+                    else ItemOnGroundManager.registers(player, back);
+                }
                 if (at < 0 || consumed <= 0) {
                     return;
                 }
@@ -1853,10 +1870,16 @@ export class CombatFactory {
             if (consumed > 0) {
                 worn.decrementAmountBy(consumed);
             }
+            if (extra > 0) {
+                worn.incrementAmountBy(extra);
+            }
 
             // If we are at 0 ammo remove the item from the equipment completely.
             if (worn.getAmount() == 0) {
-                player.sendMessage("You have run out of ammunition!");
+                // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
+                // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
+                // keep theirs: no recording shows the last one go.
+                if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
                 player.getEquipment().set(slot, new Item(-1));
 
                 if (slot == Equipment.WEAPON_SLOT) {

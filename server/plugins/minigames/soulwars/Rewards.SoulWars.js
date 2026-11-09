@@ -140,7 +140,7 @@ function buyXp({ player, slot }) {
   const [skill] = rewards().xpRows[row];
   Common.addVarp(player, "zeal_tokens", -cost);
   const xp = per * cost;
-  player.getSkillManager().addExperience(Common.core.Skill[skill], xp, false);
+  player.getSkillManager().addExperience(Common.core.Skill[skill], xp, true);
   const name = skill.charAt(0) + skill.slice(1).toLowerCase();
   player.sendMessage(message("xp", { xp: xp.toLocaleString("en-GB"), skill: name }));
   synth(player, "bought");

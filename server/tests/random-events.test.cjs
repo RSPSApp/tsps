@@ -215,7 +215,7 @@ function harness(t, members = true) {
       getSkillManager: () => ({ getMaxLevel: skill => levels.get(skill) ?? 1,
         getExperience: skill => xp.get(skill) ?? 0, getTotalLevel: () => p.totalLevel ?? 1,
         addExperience(skill, amount, multipliers) {
-          assert.equal(multipliers, false);
+          assert.equal(multipliers, true, 'reward XP takes the world and account rates (#3672)');
           if (!p.blockXp) xp.set(skill, Math.min(200_000_000, (xp.get(skill) ?? 0) + amount));
         } }),
       getSpellbook: () => ({ getInterfaceId: () => 218 }),
@@ -552,7 +552,8 @@ test('Grand Exchange footprint samples use the active cache plaza and paving, ex
   });
   assert.equal(terrain.tileAt(3164, 3487, 0).underlay, 55);
   assert.equal(terrain.tileAt(3145, 3489, 0).overlay.id, 173);
-  for (const [x, y] of [[3144, 3489], [3145, 3506]]) {
+  // Rev 242 paved new paths north-west of the plaza, (3145, 3506) among them; (3146, 3504) is still grass.
+  for (const [x, y] of [[3144, 3489], [3146, 3504]]) {
     const tile = terrain.tileAt(x, y, 0);
     assert.equal(tile.overlay, null);
     assert.notEqual(tile.underlay, 55, 'the grass corners are outside the plaza');

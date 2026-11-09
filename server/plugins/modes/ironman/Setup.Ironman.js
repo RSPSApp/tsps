@@ -12,8 +12,11 @@
  */
 const Ironman = require("./Common.Ironman");
 
-/** Adam, the Ironman tutor in Lumbridge. */
+/** Adam, the Ironman tutor in Lumbridge: the spawned parent, and from rev 242 the variant only Iron
+ * accounts see (`ironman` varbit 1777 = 1-6); interactions carry the variant. */
 const ADAM = 311;
+const ADAM_VARIANT = 16814;
+const isAdam = (npcId) => npcId === ADAM || npcId === ADAM_VARIANT;
 const ARMOUR_OPTION = 3;
 
 let core;
@@ -129,13 +132,13 @@ function giveArmour({ player }) {
   if (!player) return false;
   const line = handOutArmour(player);
   const { DialogueChainBuilder, NpcDialogue } = core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, ADAM, line)));
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, ADAM_VARIANT, line)));
   return true;
 }
 
 /** Adam's talk: the Wiki transcript for an Ironman, or for everyone else. */
 function adamVariant({ player, npcId }) {
-  if (npcId !== ADAM) return null;
+  if (!isAdam(npcId)) return null;
   return Ironman.isIron(player)
     ? "standard-dialogue-dialogue-with-iron-man-woman-status"
     : "standard-dialogue-dialogue-without-iron-man-woman-status";
@@ -143,7 +146,7 @@ function adamVariant({ player, npcId }) {
 
 /** "Have you any armour for me, please?": the transcript says the line; hand the armour over with it. */
 function onDialogueChoice(event) {
-  if (event?.npcId !== ADAM || !String(event.option ?? "").startsWith("Have you any armour")) return;
+  if (!isAdam(event?.npcId) || !String(event.option ?? "").startsWith("Have you any armour")) return;
   if (Ironman.isIron(event.player)) {
     const line = handOutArmour(event.player);
     if (line !== Ironman.message("armour")) event.player.sendMessage(line);
@@ -152,7 +155,7 @@ function onDialogueChoice(event) {
 
 /** Adam's transcript opens the setup too; off the island it only allows downgrades. */
 function onDialogueAction(event) {
-  if (event?.npcId !== ADAM || event.kind !== undefined) return;
+  if (!isAdam(event?.npcId) || event.kind !== undefined) return;
   if (event.step?.action !== "open_interface" || event.step?.target !== "Ironman") return;
   // End the talk first: closing it closes every interface, the setup included.
   event.handled = true;
@@ -186,7 +189,7 @@ module.exports = function attach(api) {
   api.onPlayerDisconnect(abandonSetup);
   api.onCustomEvent("ironman:mode", answerMode);
   api.onCustomEvent("npc-dialogue:action", onDialogueAction);
-  api.onNpcClick([ADAM], ARMOUR_OPTION, giveArmour);
+  api.onNpcClick([ADAM, ADAM_VARIANT], ARMOUR_OPTION, giveArmour);
   api.onNpcDialogueVariant(adamVariant);
   api.onCustomEvent("npc-dialogue:choice", onDialogueChoice);
 };

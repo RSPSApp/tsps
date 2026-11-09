@@ -29,7 +29,7 @@ const events = new Set();
 
 function start(site) {
   const entlings = E();
-  const tiles = Common.freeTiles(site.location, entlings.range, site.size);
+  const tiles = Common.freeTiles(site, site.location, entlings.range, site.size);
   if (tiles.length < entlings.count) return null;
   const event = { site, entlings: [], elapsed: 0, haircuts: new Map(), over: false };
   for (let i = 0; i < entlings.count; i++) {

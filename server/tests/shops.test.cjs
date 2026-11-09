@@ -302,6 +302,33 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
 });
 
 
+// rsprox: "Blood rune: currently costs 400 coins.", "Empty plant pot: currently costs 1 coin.", "Steel axe: shop will
+// buy for 80 coins.", "You don't have enough coins." (186 recordings).
+test("coins use the same wording: N coins, 1 coin, and too few", () => {
+  const POT = 5350;
+  DEFINITIONS[POT] = { name: "Empty plant pot", value: 1 };
+  ShopDefinition.replace([
+    new ShopDefinition(903, "Coin shop", "COINS", [
+      { id: STEEL_AXE, amount: 5, restockTicks: null, price: null },
+      { id: POT, amount: 5, restockTicks: null, price: null },
+    ], 100, 100, 100, "test"),
+  ]);
+  ShopManager.initialize();
+  const player = createPlayer();
+  player.getInventory().add(new Item(STEEL_AXE, 1), false);
+  ShopManager.open(player, 903);
+  ShopManager.handleItemContainerAction(player, { kind: "value", containerId: ShopManager.ITEMS_INTERFACE_ID, slot: 0, itemId: STEEL_AXE, amount: 0 });
+  ShopManager.handleItemContainerAction(player, { kind: "value", containerId: ShopManager.ITEMS_INTERFACE_ID, slot: 1, itemId: POT, amount: 0 });
+  ShopManager.handleItemContainerAction(player, { kind: "value", containerId: ShopManager.INVENTORY_INTERFACE_ID, slot: 0, itemId: STEEL_AXE, amount: 0 });
+  buy(player, 0, STEEL_AXE);
+  assert.deepEqual(player.messages, [
+    "Steel axe: currently costs 200 coins.",
+    "Empty plant pot: currently costs 1 coin.",
+    "Steel axe: shop will buy for 170 coins.",
+    "You don't have enough coins.",
+  ]);
+});
+
 // A shop that buys nothing: "You cannot sell to this shop." on Value and Sell (rsprox 234/03299 Mairin's Market,
 // 227/01840 Temple Supplies). One that buys some things: "You can't sell this item to this shop." (cache script9714).
 test("sell refusals: a shop that buys nothing, and an item a buying shop doesn't take", () => {

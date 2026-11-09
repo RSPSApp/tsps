@@ -119,8 +119,8 @@ class M4InterfacesTest {
                 }.lastOrNull() ?: 0
                 return (value ushr type.lsb) and type.mask
             }
-            assertEquals(343, bit(1782), "native cache maximum QP")
-            assertEquals(184, bit(11877), "native main quest total")
+            assertEquals(346, bit(1782), "native cache maximum QP (rev 242, as live sends)")
+            assertEquals(187, bit(11877), "native main quest total (rev 242, as live sends)")
             assertEquals(0, bit(6347), "fresh native main completion count")
             assertEquals(0, bit(13987), "fresh native subquest completion count")
             assertEquals(0, bit(14162), "fresh native miniquest completion count")
@@ -128,7 +128,7 @@ class M4InterfacesTest {
                 .filterIsInstance<net.rsprox.protocol.game.outgoing.model.interfaces.IfSetEventsV2>()
                 .last { it.interfaceId == 399 && it.componentId == 7 }
             assertEquals(0, events.start)
-            assertEquals(217, events.end)
+            assertEquals(219, events.end, "rev 242 live: 0..219")
             assertEquals(31, events.events2, "live OP1–5; dormant Pin OP6 stays disabled")
             game.button(399, 7, op = 5, sub = 201)
             val wiki = game.until(TICKS)

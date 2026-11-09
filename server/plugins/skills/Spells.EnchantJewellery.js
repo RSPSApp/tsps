@@ -32,6 +32,8 @@ const repeats = new WeakMap();
 function resolveRecipe(player, spell, itemId) {
   const recipe = { player, spellName: spell.data.name, itemId, resultId: spell.results.get(itemId) };
   pluginApi.emitCustomEvent("magic:enchant-item-recipe", recipe);
+  // Check world restrictions after quest hooks have had their say on the recipe.
+  pluginApi.emitCustomEvent("magic:enchant-item-policy", recipe);
   return recipe;
 }
 

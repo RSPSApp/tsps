@@ -111,9 +111,9 @@
   "bundle": {
     "id": "christmas-2025",
     "targetCache": {
-      "name": "osrs-241_2026-10-20",
+      "name": "osrs-242_2026-11-03",
       "game": "oldschool",
-      "revision": 241
+      "revision": 242
     },
     "sourceCache": {
       "name": "osrs-235_2025-12-17",
@@ -130,7 +130,7 @@
         "symbol": "xmas25_queue_npc_1",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///CDy9PL48vzzAPME8wjzDPMQ8xQA=",
         "crc": 2411202293,
-        "id": 16772
+        "id": 16876
       },
       {
         "kind": "npc",
@@ -138,7 +138,7 @@
         "symbol": "xmas25_queue_npc_2",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///Bzy+PL88wDzBPMI8wzzEPMUA",
         "crc": 3846263467,
-        "id": 16773
+        "id": 16877
       },
       {
         "kind": "npc",
@@ -146,7 +146,7 @@
         "symbol": "xmas25_queue_npc_3",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///Bjy/PMA8wTzCPMM8xDzFAA==",
         "crc": 2306182982,
-        "id": 16774
+        "id": 16878
       },
       {
         "kind": "npc",
@@ -154,7 +154,7 @@
         "symbol": "xmas25_queue_npc_4",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///BTzAPME8wjzDPMQ8xQA=",
         "crc": 1444900182,
-        "id": 16775
+        "id": 16879
       },
       {
         "kind": "npc",
@@ -162,7 +162,7 @@
         "symbol": "xmas25_queue_npc_5",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///BDzBPMI8wzzEPMUA",
         "crc": 3933770217,
-        "id": 16776
+        "id": 16880
       },
       {
         "kind": "npc",
@@ -170,7 +170,7 @@
         "symbol": "xmas25_queue_npc_6",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///AzzCPMM8xDzFAA==",
         "crc": 3625392768,
-        "id": 16777
+        "id": 16881
       },
       {
         "kind": "npc",
@@ -178,7 +178,7 @@
         "symbol": "xmas25_queue_npc_7",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///AjzDPMQ8xQA=",
         "crc": 574099962,
-        "id": 16778
+        "id": 16882
       },
       {
         "kind": "npc",
@@ -186,7 +186,7 @@
         "symbol": "xmas25_queue_npc_8",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///ATzEPMUA",
         "crc": 4207287578,
-        "id": 16779
+        "id": 16883
       },
       {
         "kind": "npc",
@@ -194,7 +194,7 @@
         "symbol": "xmas25_queue_npc_9",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMo///ADzFAA==",
         "crc": 3346190458,
-        "id": 16780
+        "id": 16884
       },
       {
         "kind": "npc",
@@ -202,7 +202,7 @@
         "symbol": "xmas25_table_npc_1",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMpP//Azy8PL08vjy/AA==",
         "crc": 4240712271,
-        "id": 16781
+        "id": 16885
       },
       {
         "kind": "npc",
@@ -210,7 +210,7 @@
         "symbol": "xmas25_table_npc_2",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMpf//Azy8PL08vjy/AA==",
         "crc": 559086538,
-        "id": 16782
+        "id": 16886
       },
       {
         "kind": "npc",
@@ -218,7 +218,7 @@
         "symbol": "xmas25_table_npc_3",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMpv//Azy8PL08vjy/AA==",
         "crc": 2627245828,
-        "id": 16783
+        "id": 16887
       },
       {
         "kind": "npc",
@@ -226,7 +226,7 @@
         "symbol": "xmas25_table_npc_4",
         "dataBase64": "YxIDmhEDMwM0AzUDNg0DKF8AAWpMp///Azy8PL08vjy/AA==",
         "crc": 1091456641,
-        "id": 16784
+        "id": 16888
       },
       {
         "kind": "npc",
@@ -234,7 +234,7 @@
         "symbol": "xmas25_stool_empty",
         "dataBase64": "ZAplCl8AAGNdAjxjb2w9MDBmZmZmPlN0b29sAAEBpBD5AQAACQgAAAAKAA==",
         "crc": 2010848944,
-        "id": 16785
+        "id": 16889
       },
       {
         "kind": "npc",
@@ -242,7 +242,7 @@
         "symbol": "xmas25_sir_prysin",
         "dataBase64": "EQMzAzQDNQM2DQMoHlRhbGstdG8AXwAAYwJTaXIgUHJ5c2luAAEGRHJEeURrRHBEdkRtPAFEfAA=",
         "crc": 1036265456,
-        "id": 16786
+        "id": 16890
       },
       {
         "kind": "npc",
@@ -250,7 +250,7 @@
         "symbol": "xmas25_aggie",
         "dataBase64": "DAFfAAARAzMDNAM1AzYNAygeVGFsay10bwAoBmKWKQwajkIUl54pDCIlKQwfECkMEcYMwgJBZ2dpZQABCAF5QEtIegHfDwgBYThVAWk8AkA/AGYA",
         "crc": 2791674899,
-        "id": 16787
+        "id": 16891
       },
       {
         "kind": "npc",
@@ -258,7 +258,7 @@
         "symbol": "xmas25_jobless_jim",
         "dataBase64": "EQMzAzQDNQM2DQMoHlRhbGstdG8AXwAAKAEajhUYAkpvYmxlc3MgSmltAAEG5szm2Ob9J+rm4uaePALmUABRAA==",
         "crc": 3550600691,
-        "id": 16788
+        "id": 16892
       },
       {
         "kind": "npc",
@@ -266,7 +266,7 @@
         "symbol": "xmas25_hans",
         "dataBase64": "XwAADAERAzMDNAM1AzYNAygeVGFsay10bwBjKAYfjgMYIiUHnqhAEcYjkAMY1H0UtWKWABwCSGFucwABCQDZAPZvY2gGALBufQC5AUAAvTwCADcARQA=",
         "crc": 281193068,
-        "id": 16789
+        "id": 16893
       },
       {
         "kind": "npc",
@@ -274,7 +274,7 @@
         "symbol": "xmas25_karim",
         "dataBase64": "XwAADAERAzMDNAM1AzYNAygeVGFsay10bwBjKAZilhYUIiXNnBqOKQyoQBInEcYSJ9R9EqECS2FyaW0AAQcA6259APkBMWgIALAAtTwCAEMAUQA=",
         "crc": 2789117152,
-        "id": 16790
+        "id": 16894
       },
       {
         "kind": "npc",
@@ -282,7 +282,7 @@
         "symbol": "xmas25_oziach",
         "dataBase64": "XwAADAERAzMDNAM1AzYNAygeVGFsay10bwBjKAQAPYmpACmNJRqOG45iluSaAk96aWFjaAABCQDrAPcBOGc2AKQAsQCwbn0AtTwCAEMATwA=",
         "crc": 468677408,
-        "id": 16791
+        "id": 16895
       },
       {
         "kind": "npc",
@@ -290,7 +290,7 @@
         "symbol": "xmas25_rommik",
         "dataBase64": "XwAADAERAzMDNAM1AzYNAygeVGFsay10bwBjKARilimjIiUWFKhAEifUfRKhAlJvbW1pawABCADZbn0A/QExaAgAsAC1AhE8AgA3AFUA",
         "crc": 3243254352,
-        "id": 16792
+        "id": 16896
       },
       {
         "kind": "npc",
@@ -298,7 +298,7 @@
         "symbol": "xmas25_doris",
         "dataBase64": "DAERAzMDNAM1AzYNAygeVGFsay10bwBfAABjKAIiJZ03qEARxgJEb3JpcwABCAGYNCEB0SKOAWE0IjQbAbU8AjHFM/oA",
         "crc": 4081875273,
-        "id": 16793
+        "id": 16897
       },
       {
         "kind": "npc",
@@ -306,7 +306,7 @@
         "symbol": "xmas25_herquin",
         "dataBase64": "XwAAEQMzAzQDNQM2DQMoHlRhbGstdG8AYwJIZXJxdWluAAEKAOst5CWULfAt+Sw+J+ouXQC1Lfo8AwBDJOkuXAA=",
         "crc": 3721162529,
-        "id": 16794
+        "id": 16898
       },
       {
         "kind": "npc",
@@ -314,7 +314,7 @@
         "symbol": "xmas25_puffin",
         "dataBase64": "DhbwDRbxXwAAYxIDmgJQdWZmaW4AAQJZCOn4AA==",
         "crc": 1009753777,
-        "id": 16795
+        "id": 16899
       },
       {
         "kind": "npc",
@@ -322,7 +322,7 @@
         "symbol": "xmas25_cutscene_chef_with_plate",
         "dataBase64": "XwAAZBQONYENNYAoBgBrILEiJSCxq5ggyAB7INwAWiISIpwgsQJDb29rAAEJAOYUXznHOwIq5CfqMc4AtennPAIAPxRXAA==",
         "crc": 337672754,
-        "id": 16796
+        "id": 16900
       },
       {
         "kind": "npc",
@@ -330,7 +330,7 @@
         "symbol": "xmas25_cutscene_chef_no_plate",
         "dataBase64": "XwAAZBQRAzMDNAM1AzYNAygoBgBrILEiJSCxq5ggyAB7INwAWiISIpwgsQJDb29rAAEIAOYUXznHOwIq5CfqMc4AtTwCAD8UVwA=",
         "crc": 2882730742,
-        "id": 16797
+        "id": 16901
       },
       {
         "kind": "npc",
@@ -338,7 +338,7 @@
         "symbol": "xmas25_cutscene_bartender",
         "dataBase64": "XwAADAFhAIJiAHwRAzMDNAM1AzYNAygSA5ooBhqOE5AiJZQxIpyUMWKWQQwOFCoQI5CUKQJCYXJ0ZW5kZXIAAQoA6wD6b2NlDSrkJ+ovagC1OwIBRzwCAEMAUgA=",
         "crc": 1092672623,
-        "id": 16798
+        "id": 16902
       },
       {
         "kind": "npc",
@@ -346,7 +346,7 @@
         "symbol": "xmas25_cutscene_woman1",
         "dataBase64": "DAFfAAARAzMDNAM1AzYNAyhKAAFLAAFMAAFNAAcSA5ooBgBn6LkAWOjCAE7osQA36MoiJYi9Go4hXgJXb21hbgABBwGGJJENlCnSRIwBZgG1PAEAcfkEAAAABf///+sAAAAG////6wAAAAf////rAAAACP///+sA",
         "crc": 3171640574,
-        "id": 16799
+        "id": 16903
       },
       {
         "kind": "npc",
@@ -354,7 +354,7 @@
         "symbol": "xmas25_cutscene_jonny",
         "dataBase64": "DAFfAABhAIJiAHwRAzMDNAM1AzYNAyhKAAFLAAFMAAFNAAhjEgOaKARilg+OIiUpDKhAEcYhlJivAkpvbm55IHRoZSBCZWFyZAABCGQ6TtwBK0G/AJ8AsUsyZDE8AmQjZCb5AQAAABoAAAACAA==",
         "crc": 733182437,
-        "id": 16800
+        "id": 16904
       },
       {
         "kind": "npc",
@@ -362,7 +362,7 @@
         "symbol": "xmas25_cutscene_dr_harlow",
         "dataBase64": "XwAADAERC98DNAM1AzYNC+AeVGFsay10bwBfAAASA5ooBRqOFGciJQBvqEARxmKWAI4dFhHGAkRyIEhhcmxvdwABCgDZAPUrtgEuDHYAnwCxK7pufQC1PAMANwBOK7QA",
         "crc": 790028977,
-        "id": 16801
+        "id": 16905
       },
       {
         "kind": "npc",
@@ -370,7 +370,7 @@
         "symbol": "xmas25_cutscene_barbarian",
         "dataBase64": "DAERAzMDNAM1AzYNAyhfAAASA5ooASFcFhACQmFyYmFyaWFuAAEGL24uCS37LgEuBi4DPAEvZwA=",
         "crc": 2700865144,
-        "id": 16802
+        "id": 16906
       },
       {
         "kind": "npc",
@@ -378,7 +378,7 @@
         "symbol": "xmas25_cutscene_freddie",
         "dataBase64": "DAENAyhfAAASA5ooBSIlABIajsKrEcYRxmKWABISEgAIAk1vZF9GcmVkZGllAAEHL2kA9m+HaAgn6m66ALUA",
         "crc": 523219615,
-        "id": 16803
+        "id": 16907
       },
       {
         "kind": "loc",
@@ -386,7 +386,7 @@
         "symbol": "xmas22_pub01_rugmiddle01",
         "dataBase64": "EwARKAMDngMeAAAKoSXCA44BATDwFgA=",
         "crc": 1873965746,
-        "id": 63307
+        "id": 63334
       },
       {
         "kind": "loc",
@@ -394,7 +394,7 @@
         "symbol": "xmas22_pub01_rugcorner01",
         "dataBase64": "EwARKAMDngMeAAAc4SXCA44BATDvFgA=",
         "crc": 1302710028,
-        "id": 63308
+        "id": 63335
       },
       {
         "kind": "loc",
@@ -402,7 +402,7 @@
         "symbol": "xmas22_pub01_rugside01",
         "dataBase64": "EwARKAMDngMeAAAc4SXCA44BATDxFgA=",
         "crc": 1528646006,
-        "id": 63309
+        "id": 63336
       },
       {
         "kind": "loc",
@@ -410,7 +410,7 @@
         "symbol": "xmas25_table01_empty01",
         "dataBase64": "EwEdCicPGAoEPQCbKAQVnB2jFhgdnhYUHhoaEh6WBQHpyAJUYWJsZQAA",
         "crc": 2432922200,
-        "id": 63310
+        "id": 63337
       },
       {
         "kind": "loc",
@@ -418,7 +418,7 @@
         "symbol": "xmas25_table01_empty01_op1",
         "dataBase64": "EwEdCicPGAoEPQCbHlNlcnZlACgEFZwdoxYYHZ4WFB4aGhIelgUB6cgCVGFibGUAAA==",
         "crc": 3872191343,
-        "id": 63311
+        "id": 63338
       },
       {
         "kind": "loc",
@@ -426,7 +426,7 @@
         "symbol": "xmas25_table01_drink01",
         "dataBase64": "EwEdCicPGAoEPQCbHlNlcnZlACgEFZwdoxYYHZ4WFB4aGhIelgUB6ccCVGFibGUAAA==",
         "crc": 963984574,
-        "id": 63312
+        "id": 63339
       },
       {
         "kind": "loc",
@@ -434,7 +434,7 @@
         "symbol": "xmas25_table01_food01",
         "dataBase64": "EwEdCicPGAoEPQCbKAQVnB2jFhgdnhYUHhoaEh6WBQHpyQJUYWJsZQAA",
         "crc": 2256037403,
-        "id": 63313
+        "id": 63340
       },
       {
         "kind": "loc",
@@ -442,7 +442,7 @@
         "symbol": "xmas25_table01_vegetable01",
         "dataBase64": "EwEOAz0Amh0UEigEGTMdoxkrHZ4ZJx4aGaMelgUCYfPIwwJUYWJsZQAA",
         "crc": 1069288662,
-        "id": 63314
+        "id": 63341
       },
       {
         "kind": "loc",
@@ -450,7 +450,7 @@
         "symbol": "xmas25_table_1",
         "dataBase64": "GAoEEwFNTKv//wPsoOyh7KLsowA=",
         "crc": 3476830405,
-        "id": 63315
+        "id": 63342
       },
       {
         "kind": "loc",
@@ -458,7 +458,7 @@
         "symbol": "xmas25_table_2",
         "dataBase64": "GAoEEwFNTKz//wPsoOyh7KLsowA=",
         "crc": 2991537821,
-        "id": 63316
+        "id": 63343
       },
       {
         "kind": "loc",
@@ -466,7 +466,7 @@
         "symbol": "xmas25_table_3",
         "dataBase64": "GAoEEwFNTK3//wPsoOyh7KLsowA=",
         "crc": 1876551448,
-        "id": 63317
+        "id": 63344
       },
       {
         "kind": "loc",
@@ -474,7 +474,7 @@
         "symbol": "xmas25_table_4",
         "dataBase64": "GAoEEwFNTK7//wPsoOyh7KLsowA=",
         "crc": 3524496342,
-        "id": 63318
+        "id": 63345
       },
       {
         "kind": "loc",
@@ -482,7 +482,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_middle",
         "dataBase64": "EwEWEigEFZwdoxYYHhoWFB6WGhIfEgUE6c1WnWJCYi0CQmFyAAA=",
         "crc": 2963835835,
-        "id": 63319
+        "id": 63346
       },
       {
         "kind": "loc",
@@ -490,7 +490,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_middle_interact",
         "dataBase64": "EwEWHkdldCBEcmluayBGcm9tABIoBBWcHaMWGB4aFhQelhoSHxIFBOnNVp1iQmItAkJhcgAA",
         "crc": 2568602950,
-        "id": 63320
+        "id": 63347
       },
       {
         "kind": "loc",
@@ -498,7 +498,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_middle2",
         "dataBase64": "EwEWEigGqHOoq0OzRKcVnB2jFhgeGhYUHpYaEh8SBQTpzVaeVp1iNQJCYXIAAA==",
         "crc": 3781538516,
-        "id": 63321
+        "id": 63348
       },
       {
         "kind": "loc",
@@ -506,7 +506,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_middle2_interact",
         "dataBase64": "EwEWHkdldCBEcmluayBGcm9tABIoBqhzqKtDs0SnFZwdoxYYHhoWFB6WGhIfEgUE6c1WnladYjUCQmFyAAA=",
         "crc": 2356687054,
-        "id": 63322
+        "id": 63349
       },
       {
         "kind": "loc",
@@ -514,7 +514,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_left",
         "dataBase64": "EwEWEigEFZwdoxYYHhoWFB6WGhIfEgUE6cxWnladYi0CQmFyAAA=",
         "crc": 1585092757,
-        "id": 63323
+        "id": 63350
       },
       {
         "kind": "loc",
@@ -522,7 +522,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_left_interact",
         "dataBase64": "EwEWHkdldCBEcmluayBGcm9tABIoBBWcHaMWGB4aFhQelhoSHxIFBOnMVp5WnWItAkJhcgAA",
         "crc": 2009847400,
-        "id": 63324
+        "id": 63351
       },
       {
         "kind": "loc",
@@ -530,7 +530,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_right",
         "dataBase64": "EwEWPhIoBBWcHaMWGB4aFhQelhoSHxIFBOnMVp5iLmI8AkJhcgAA",
         "crc": 1032537558,
-        "id": 63325
+        "id": 63352
       },
       {
         "kind": "loc",
@@ -538,7 +538,7 @@
         "symbol": "xmas25_blue_inn_drinks_bar_right_interact",
         "dataBase64": "EwEWPh5HZXQgRHJpbmsgRnJvbQASKAQVnB2jFhgeGhYUHpYaEh8SBQTpzFaeYi5iPAJCYXIAAA==",
         "crc": 1072910105,
-        "id": 63326
+        "id": 63353
       },
       {
         "kind": "loc",
@@ -546,7 +546,7 @@
         "symbol": "xmas25_blue_inn_bar_middle",
         "dataBase64": "EwEWEigEFZwdoxYYHhoWFB6WGhIfEgUE6ctiQGJBVpwCQmFyAAA=",
         "crc": 2107759095,
-        "id": 63327
+        "id": 63354
       },
       {
         "kind": "loc",
@@ -554,7 +554,7 @@
         "symbol": "xmas25_blue_inn_bar_middle_interact",
         "dataBase64": "EwEWHkdldCBEcmluayBGcm9tABIoBBWcHaMWGB4aFhQelhoSHxIFBOnLYkBiQVacAkJhcgAA",
         "crc": 1410373386,
-        "id": 63328
+        "id": 63355
       },
       {
         "kind": "loc",
@@ -562,7 +562,7 @@
         "symbol": "xmas25_blue_inn_bar_middle2",
         "dataBase64": "EwEWEigEFZwdoxYYHhoWFB6WGhIfEgUE6ctiQGI8Vp8CQmFyAAA=",
         "crc": 1302718440,
-        "id": 63329
+        "id": 63356
       },
       {
         "kind": "loc",
@@ -570,7 +570,7 @@
         "symbol": "xmas25_blue_inn_bar_middle2_interact",
         "dataBase64": "EwEWHkdldCBEcmluayBGcm9tABIoBBWcHaMWGB4aFhQelhoSHxIFBOnLYkBiPFafAkJhcgAA",
         "crc": 1679075605,
-        "id": 63330
+        "id": 63357
       },
       {
         "kind": "loc",
@@ -578,7 +578,7 @@
         "symbol": "xmas25_blue_inn_bar_middle3",
         "dataBase64": "EwEWEigEFZwdoxYYHhoWFB6WGhIfEgUE6ctiLWJBVp8CQmFyAAA=",
         "crc": 3607697493,
-        "id": 63331
+        "id": 63358
       },
       {
         "kind": "loc",
@@ -586,7 +586,7 @@
         "symbol": "xmas25_blue_inn_bar_middle3_interact",
         "dataBase64": "EwEWHkdldCBEcmluayBGcm9tABIoBBWcHaMWGB4aFhQelhoSHxIFBOnLYi1iQVafAkJhcgAA",
         "crc": 4273493672,
-        "id": 63332
+        "id": 63359
       },
       {
         "kind": "loc",
@@ -594,7 +594,7 @@
         "symbol": "xmas25_blue_inn_bar_left",
         "dataBase64": "EwEWEigEFZwdoxYYHhoWFB6WGhIfEgUE6cpiLmJCYj8CQmFyAAA=",
         "crc": 3973846525,
-        "id": 63333
+        "id": 63360
       },
       {
         "kind": "loc",
@@ -602,7 +602,7 @@
         "symbol": "xmas25_blue_inn_bar_right",
         "dataBase64": "EwEWPhIoBBWcHaMWGB4aFhQelhoSHxIFA+nKYkJiPAJCYXIAAA==",
         "crc": 1910390897,
-        "id": 63334
+        "id": 63361
       },
       {
         "kind": "loc",
@@ -610,7 +610,7 @@
         "symbol": "xmas25_bar_drinks_middle",
         "dataBase64": "EwFNTK///wHsqeyqAA==",
         "crc": 1764597895,
-        "id": 63335
+        "id": 63362
       },
       {
         "kind": "loc",
@@ -618,7 +618,7 @@
         "symbol": "xmas25_bar_drinks_middle2",
         "dataBase64": "EwFNTK///wHsq+ysAA==",
         "crc": 2508115850,
-        "id": 63336
+        "id": 63363
       },
       {
         "kind": "loc",
@@ -626,7 +626,7 @@
         "symbol": "xmas25_bar_drinks_left",
         "dataBase64": "EwFNTK///wHsreyuAA==",
         "crc": 2183394004,
-        "id": 63337
+        "id": 63364
       },
       {
         "kind": "loc",
@@ -634,7 +634,7 @@
         "symbol": "xmas25_bar_drinks_right",
         "dataBase64": "EwFNTK///wHsr+ywAA==",
         "crc": 4234872192,
-        "id": 63338
+        "id": 63365
       },
       {
         "kind": "loc",
@@ -642,7 +642,7 @@
         "symbol": "xmas25_bar_middle",
         "dataBase64": "EwFNTK///wHsseyyAA==",
         "crc": 2124105646,
-        "id": 63339
+        "id": 63366
       },
       {
         "kind": "loc",
@@ -650,7 +650,7 @@
         "symbol": "xmas25_bar_middle2",
         "dataBase64": "EwFNTK///wHss+y0AA==",
         "crc": 2194155683,
-        "id": 63340
+        "id": 63367
       },
       {
         "kind": "loc",
@@ -658,7 +658,7 @@
         "symbol": "xmas25_bar_middle3",
         "dataBase64": "EwFNTK///wHstey2AA==",
         "crc": 2509575677,
-        "id": 63341
+        "id": 63368
       },
       {
         "kind": "loc",
@@ -666,7 +666,7 @@
         "symbol": "xmas25_crate01_carrot01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQK/vwtmAkNyYXRlAAA=",
         "crc": 3987373246,
-        "id": 63342
+        "id": 63369
       },
       {
         "kind": "loc",
@@ -674,7 +674,7 @@
         "symbol": "xmas25_crate01_tomato01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQK/v+nYAkNyYXRlAAA=",
         "crc": 1578875645,
-        "id": 63343
+        "id": 63370
       },
       {
         "kind": "loc",
@@ -682,7 +682,7 @@
         "symbol": "xmas25_crate01_vegetable01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQK/v+nZAkNyYXRlAAA=",
         "crc": 1231072958,
-        "id": 63344
+        "id": 63371
       },
       {
         "kind": "loc",
@@ -690,7 +690,7 @@
         "symbol": "xmas25_crate01_broccoli01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQJRcOnUAkNyYXRlAAA=",
         "crc": 735723945,
-        "id": 63345
+        "id": 63372
       },
       {
         "kind": "loc",
@@ -698,7 +698,7 @@
         "symbol": "xmas25_crate01_fruit01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQJRcOnWAkNyYXRlAAA=",
         "crc": 86796591,
-        "id": 63346
+        "id": 63373
       },
       {
         "kind": "loc",
@@ -706,7 +706,7 @@
         "symbol": "xmas25_crate01_fish01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQJRcOnVAkNyYXRlAAA=",
         "crc": 1017206250,
-        "id": 63347
+        "id": 63374
       },
       {
         "kind": "loc",
@@ -714,7 +714,7 @@
         "symbol": "xmas25_crate01_meat01",
         "dataBase64": "HRQeU2VhcmNoACgGGSsdoxknHZ4Zox4aGZ4elhoaHxIalh+OBQJRcOnXAkNyYXRlAAA=",
         "crc": 307723628,
-        "id": 63348
+        "id": 63375
       },
       {
         "kind": "loc",
@@ -722,7 +722,7 @@
         "symbol": "xmas25_snowball_pile",
         "dataBase64": "HRQnCkAOAg8CQQEAQwEAQgEAHlRha2UtZnJvbQAgaGlkZGVuABUbPQI4QBIoAphtmG2YdZjrBQG3LgJTbm93YmFsbCBwaWxlAAA=",
         "crc": 2819201067,
-        "id": 63349
+        "id": 63376
       },
       {
         "kind": "obj",
@@ -730,7 +730,7 @@
         "symbol": "template_for_placeholder",
         "dataBase64": "AQJUSwAABAu4BQIAXgEVAA==",
         "crc": 38701168,
-        "id": 34732
+        "id": 34766
       },
       {
         "kind": "obj",

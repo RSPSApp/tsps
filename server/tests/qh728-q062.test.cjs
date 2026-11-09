@@ -169,7 +169,7 @@ const O = core.ObjectIdentifiers;
 
 const WEAPONS = [
   [I.STEEL_LONGSWORD, 1],
-  [I.STEEL_SWORD, 2],
+  [I.STEEL_SHORTSWORD, 2],
   [I.STEEL_DAGGER, 1],
   [I.STEEL_MACE, 1],
   [I.STEEL_WARHAMMER, 1],

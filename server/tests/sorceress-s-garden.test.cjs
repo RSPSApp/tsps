@@ -21,9 +21,11 @@ const PESTLE = 233;
 const BEER_GLASS = 1919;
 
 let questComplete = true;
+const petRolls = [];
 plugin._test.setApi({
   emitCustomEvent(name, request) {
     if (name === "quest:is-complete") request.complete = questComplete;
+    if (name === "pets:skilling-roll") petRolls.push(request);
   },
   // The Apprentice's cast is delayed; here it lands at once.
   getTaskManager: () => ({ submit: (task) => task.execute() }),
@@ -47,6 +49,8 @@ function player({ level = 99, items = {}, name = "tester" } = {}) {
       contains: (id) => (inventory.get(id) ?? 0) > 0,
       delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
       adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
+      add: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
+      getAddableAmount: (item) => item.getAmount(),
       refreshItems: () => {},
     }),
     getSkillManager: () => ({
@@ -139,6 +143,8 @@ test("a safe pick grants exactly one sq'irk, its Farming XP and sends the player
   assert.equal(xpOf(p, core.Skill.FARMING), 30);
   assert.equal(xpOf(p, core.Skill.THIEVING), 0);
   assert.deepEqual(p.moves.map((at) => [at.getX(), at.getY()]), [[2911, 5470]]);
+  // Wiki (Rocky): Sq'irk tree 10,339, rolled on picking a fruit.
+  assert.deepEqual(petRolls.filter((r) => r.player === p).map((r) => [r.skill, r.petBase]), [[core.Skill.THIEVING, 10339]]);
 
   const low = player({ level: 24 });
   plugin._test.pickFruit({ player: low, objectId: SPRING_TREE });

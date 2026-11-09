@@ -177,7 +177,7 @@ test("each melee special costs the wiki energy and carries its roll traits", () 
 test("ornament and (cr) variants share their base weapon's special", () => {
   const shared = {
     dragon_claws: [ItemIdentifiers.DRAGON_CLAWS, ItemIdentifiers.DRAGON_CLAWS_OR_, ItemIdentifiers.DRAGON_CLAWS_CR_],
-    dragon_sword: [ItemIdentifiers.DRAGON_SWORD, ItemIdentifiers.DRAGON_SWORD_CR_],
+    dragon_sword: [ItemIdentifiers.DRAGON_SHORTSWORD, ItemIdentifiers.DRAGON_SHORTSWORD_CR_],
     dragon_longsword: [ItemIdentifiers.DRAGON_LONGSWORD, ItemIdentifiers.DRAGON_LONGSWORD_CR_],
     dragon_halberd: [ItemIdentifiers.DRAGON_HALBERD, ItemIdentifiers.DRAGON_HALBERD_CR_],
     shove: [
@@ -291,11 +291,11 @@ test("Dragon Hasta Unleash scales accuracy 5% and damage 2.5% per 5% of energy s
 
 test("the ancient mace and dragon sword specials pierce NPC melee prayers; the hasta's doesn't", () => {
   assert.equal(hitRoll(wielding(ItemIdentifiers.ANCIENT_MACE)), true, "Favour");
-  assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SWORD)), true, "Wild Stab");
-  assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SWORD_CR_)), true, "Wild Stab (cr)");
+  assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SHORTSWORD)), true, "Wild Stab");
+  assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SHORTSWORD_CR_)), true, "Wild Stab (cr)");
   assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_HASTA)), false, "Unleash only ignores player prayers");
   assert.equal(hitRoll(wielding(ItemIdentifiers.ANCIENT_MACE, false)), false, "a normal mace hit");
-  assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SWORD, false)), false, "a normal sword hit");
+  assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SHORTSWORD, false)), false, "a normal sword hit");
   assert.equal(hitRoll(wielding(ItemIdentifiers.ANCIENT_MACE), CombatType.RANGED), false, "melee only");
   assert.equal(hitRoll(fakeTarget()), false, "an NPC attacker");
 });

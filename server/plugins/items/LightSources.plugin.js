@@ -43,6 +43,40 @@ function build(I) {
   ]);
 }
 
+function candleRecipe(I, id) {
+  if (id === I.CANDLE) return { result: I.CANDLE_LANTERN, level: 1 };
+  if (id === I.BLACK_CANDLE) return { result: I.CANDLE_LANTERN_4, level: 1 };
+  if (id === I.LIT_CANDLE) return { result: I.CANDLE_LANTERN_3, level: 4 };
+  if (id === I.LIT_BLACK_CANDLE) return { result: I.CANDLE_LANTERN_6, level: 4 };
+}
+
+/** A candle can be placed in an empty lantern; lit candles need 4 Firemaking. */
+function assembleCandleLantern(event) {
+  const I = core.ItemIdentifiers;
+  const lanternFirst = event.usedItemId === I.EMPTY_CANDLE_LANTERN;
+  if (!lanternFirst && event.usedWithItemId !== I.EMPTY_CANDLE_LANTERN) return;
+  const candleId = lanternFirst ? event.usedWithItemId : event.usedItemId;
+  const recipe = candleRecipe(I, candleId);
+  if (!recipe) return;
+  event.handled = true;
+  const { player } = event;
+  const inventory = player.getInventory();
+  const lantern = lanternFirst ? event.usedItem : event.usedWithItem;
+  const candle = lanternFirst ? event.usedWithItem : event.usedItem;
+  const lanternSlot = lanternFirst ? event.usedItemSlot : event.usedWithItemSlot;
+  const candleSlot = lanternFirst ? event.usedWithItemSlot : event.usedItemSlot;
+  if (lanternSlot === candleSlot || inventory.getItems()[lanternSlot] !== lantern ||
+      inventory.getItems()[candleSlot] !== candle || lantern?.getId() !== I.EMPTY_CANDLE_LANTERN ||
+      candle?.getId() !== candleId || lantern.getAmount() !== 1 || candle.getAmount() !== 1) return;
+  if (player.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING) < recipe.level) {
+    player.sendMessage(`You need ${recipe.level} Firemaking to do this.`);
+    return;
+  }
+  inventory.deleteAtSlot(candleSlot, 1, false);
+  lantern.setId(recipe.result);
+  inventory.refreshItems();
+}
+
 /** Lights `item` from `source`, or refuses on the level. Shared by both ways of lighting. */
 function applyLight(player, item, source) {
   if (player.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING) < source.level) {
@@ -102,6 +136,7 @@ module.exports = {
     core = api.core;
     lights = build(core.ItemIdentifiers);
     api.onItemOnItem(light, { noted: false });
+    api.onItemOnItem(assembleCandleLantern, { noted: false });
     api.onItemOnObject(lightOnObject, { noted: false });
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
     api.onItemAction("Lit torch", { Extinguish: extinguishTorch });

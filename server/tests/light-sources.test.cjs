@@ -454,3 +454,44 @@ test('the existing lit oil lamp Extinguish action is unchanged', async t => {
   assert.equal(idAt(f, 0), I.OIL_LAMP);
   assert.equal(f.inv.getItems()[0], selected);
 });
+
+// Wiki Candle lantern, revision 15184430: unlit white/black candles make the
+// matching unlit lantern; lit candles make the lit variant at Firemaking 4.
+for (const [label, candle, result, level] of [
+  ['white', I.CANDLE, I.CANDLE_LANTERN, 1],
+  ['black', I.BLACK_CANDLE, I.CANDLE_LANTERN_4, 1],
+  ['lit white', I.LIT_CANDLE, I.CANDLE_LANTERN_3, 4],
+  ['lit black', I.LIT_BLACK_CANDLE, I.CANDLE_LANTERN_6, 4],
+]) {
+  test(`assemble ${label} candle lantern in either direction`, async t => {
+    for (const candleFirst of [true, false]) {
+      const f = actor(t, level);
+      const lantern = item(I.EMPTY_CANDLE_LANTERN);
+      f.inv.setItem(0, lantern); f.inv.setItem(1, item(candle)); f.inv.setItem(2, item(candle));
+      await useOn(f, candleFirst ? 1 : 0, candleFirst ? 0 : 1);
+      assert.deepEqual(carried(f), [result, candle]);
+      assert.equal(f.inv.getItems()[0], lantern);
+    }
+  });
+  if (level === 4) test(`${label} candle requires current Firemaking 4`, async t => {
+    const f = actor(t, 3);
+    f.inv.setItem(0, item(I.EMPTY_CANDLE_LANTERN)); f.inv.setItem(1, item(candle));
+    await useOn(f, 1, 0);
+    assert.deepEqual(carried(f), [I.EMPTY_CANDLE_LANTERN, candle]);
+    assert.ok(f.messages.length > 0);
+  });
+}
+
+test('active cache identifies the ordinary candles and lantern variants', () => {
+  for (const [id, name, lit] of [
+    [I.CANDLE, 'Candle', false], [I.BLACK_CANDLE, 'Black candle', false],
+    [I.LIT_CANDLE, 'Lit candle', true], [I.LIT_BLACK_CANDLE, 'Lit black candle', true],
+    [I.CANDLE_LANTERN, 'Candle lantern', false], [I.CANDLE_LANTERN_4, 'Candle lantern', false],
+    [I.CANDLE_LANTERN_3, 'Candle lantern', true], [I.CANDLE_LANTERN_6, 'Candle lantern', true],
+  ]) {
+    const def = core.CacheDefinitions.getItem(id);
+    assert.equal(def.name, name);
+    assert.equal(def.inventoryActions.includes('Extinguish'), lit, `${id} lit state`);
+  }
+  assert.equal(core.CacheDefinitions.getItem(I.EMPTY_CANDLE_LANTERN).name, 'Empty candle lantern');
+});

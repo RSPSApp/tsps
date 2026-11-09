@@ -536,8 +536,12 @@ export class SceneRaycaster {
 
             const groundY = this.sampleHeightAt(worldTileX + 0.5, worldTileY + 0.5, level | 0);
             const surfaceMap = this.getPreferredMapForWorldTile(worldTileX, worldTileY);
+            // On a boat's deck the item rests on the deck plane, where it is drawn.
+            const surfaceLevel = surfaceMap && surfaceMap.interactionPlane >= 0
+                ? surfaceMap.interactionPlane
+                : level;
             const itemY = groundY - (surfaceMap?.getObjSurfaceHeight?.(
-                level | 0,
+                surfaceLevel | 0,
                 worldTileX - (surfaceMap.getRenderBaseTileX?.() ?? surfaceMap.mapX * Scene.MAP_SQUARE_SIZE),
                 worldTileY - (surfaceMap.getRenderBaseTileY?.() ?? surfaceMap.mapY * Scene.MAP_SQUARE_SIZE),
             ) ?? 0) / 128;

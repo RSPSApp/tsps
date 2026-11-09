@@ -122,7 +122,9 @@ export function buildGroundItemGeometry(
         const model = objModelLoader.getModel(stack.itemId | 0, stack.quantity | 0);
         if (!model) continue;
 
-        const basePlane = stack.tile.level | 0;
+        // A boat's deck square stands everything on its deck plane, whatever level the tile has.
+        const deckPlane = map.interactionPlane ?? -1;
+        const basePlane = deckPlane >= 0 ? deckPlane : stack.tile.level | 0;
         // Resolve bridge-aware plane for height sampling (same as NPCs/projectiles)
         const heightSamplePlane = resolveHeightSamplePlaneForLocal(map, basePlane, localX, localY);
         const sceneX = localX * 128 + 64;

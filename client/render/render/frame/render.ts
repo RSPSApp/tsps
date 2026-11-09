@@ -1744,7 +1744,14 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
                     // Single source of truth: all interaction/height queries
                     // on this overlay map use the deck plane.
-                    overlayMap.interactionPlane = basePlane;
+                    if (overlayMap.interactionPlane !== basePlane) {
+                        overlayMap.interactionPlane = basePlane;
+                        // Its ground items were built with the square, before the deck plane
+                        // was known: lay them on the deck.
+                        if (host.rebuildGroundItemsForMap(overlayMap, host.groundItemStacks.get(overlayMapId))) {
+                            host.groundItemStackHashes.delete(overlayMapId);
+                        }
+                    }
 
                     if (overlay.deckHeight !== undefined && overlay.deckHeight !== 0) continue;
                     if (basePlane === 0) {

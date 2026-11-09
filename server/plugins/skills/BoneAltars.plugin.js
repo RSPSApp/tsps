@@ -164,6 +164,11 @@ function stopOffering({ player }) {
   offerings.delete(player);
 }
 
+/** Both widget and inventory packet routes check item permissions before dispatching Bury. */
+function interruptOfferingForInventoryAction(event) {
+  if (event.action === "action" && event.option?.toLowerCase() !== "examine") stopOffering(event);
+}
+
 function pauseOffering(event) {
   pauseForLevelUp(event, offerings, (player) => stopOffering({ player }));
 }
@@ -225,5 +230,6 @@ module.exports = {
     api.onItemOnObject(useBoneOnAltar, { noted: false });
     api.onCustomEvent("level-up:popup-opened", pauseOffering);
     api.onCustomEvent("bone-altars:offer", offerOnAltar);
+    api.onCanUseItem(interruptOfferingForInventoryAction);
   },
 };

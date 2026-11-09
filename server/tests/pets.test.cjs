@@ -319,6 +319,13 @@ test("a normal logout and login rebuilds exactly one follower from the item", ()
   assert.equal(player.getAttribute("pets:last"), SNAKELING_ITEM);
 });
 
+test("dropping a pet while another follows: 'You already have a follower.' (232/03153:10326)", () => {
+  const player = createPlayer();
+  player.setAttribute("pets:current", createPetNpc(player, 2130));
+  assert.equal(Pets.__internals.drop(player, HELLPUPPY), true);
+  assert.equal(player.messages.at(-1), "You already have a follower.");
+});
+
 test("pickup keeps the follower when the backpack is full", () => {
   const player = createPlayer();
   const npc = createPetNpc(player, 2130);

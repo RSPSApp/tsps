@@ -629,7 +629,10 @@ async function fishingLoop() {
   const task = tasks.find((submitted) => submitted.constructor.name === "FishingTask");
 
   function fisher({ level = 99, items = [] } = {}) {
-    const slots = items.map(([id, amount = 1]) => new Item(id, amount));
+    const slots = Array.from({ length: 28 }, (_, index) => {
+      const entry = items[index];
+      return entry ? new Item(entry[0], entry[1] ?? 1) : null;
+    });
     const stackable = (id) => core.ItemDefinition.forId(id).isStackable();
     const p = {
       slots, messages: [], statements: [], animations: [], xp: 0, at: new Location(2900, 3119, 0),
@@ -649,23 +652,27 @@ async function fishingLoop() {
         addExperiences: (skill, amount) => { if (skill === Skill.FISHING) p.xp += amount; },
       }),
       getInventory: () => ({
-        contains: (id) => slots.some((item) => item.getId() === id && item.getAmount() > 0),
-        getAmount: (id) => slots.filter((item) => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
-        getFreeSlots: () => 28 - slots.length,
-        isFull: () => slots.length >= 28,
+        contains: (id) => slots.some((item) => item?.getId() === id && item.getAmount() > 0),
+        getAmount: (id) => slots.filter((item) => item?.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
+        getFreeSlots: () => slots.filter((item) => !item).length,
+        isFull: () => slots.every(Boolean),
         full() {},
         refreshItems() {},
-        getSlotForItemId: (id) => slots.findIndex((item) => item.getId() === id),
+        getSlotForItemId: (id) => slots.findIndex((item) => item?.getId() === id),
         setItem: (slot, item) => { slots[slot] = item; },
         addItem: (item) => {
-          const stack = stackable(item.getId()) && slots.find((held) => held.getId() === item.getId());
+          const stack = stackable(item.getId()) && slots.find((held) => held?.getId() === item.getId());
           if (stack) stack.setAmount(stack.getAmount() + item.getAmount());
-          else if (slots.length < 28) slots.push(item);
+          else {
+            const free = slots.findIndex((held) => !held);
+            if (free >= 0) slots[free] = item;
+          }
         },
         deleteNumber: (id, amount) => {
-          const index = slots.findIndex((held) => held.getId() === id);
+          const index = slots.findIndex((held) => held?.getId() === id);
+          if (index < 0) return;
           const left = slots[index].getAmount() - amount;
-          if (left > 0 && stackable(id)) slots[index].setAmount(left); else slots.splice(index, 1);
+          if (left > 0 && stackable(id)) slots[index].setAmount(left); else slots[index] = null;
         },
       }),
     };
@@ -782,6 +789,54 @@ test("a one-step walk stops fishing even after the route has drained", async () 
       assert.equal(amount(lobster, I.RAW_LOBSTER), walked ? 0 : 1, walked ? "the walk ends the session" : "control: the catch lands");
       if (walked) assert.equal(lobster.animations.at(-1), 65535, "the walk resets the fishing animation");
     }
+  });
+});
+
+test("a used karambwan vessel refills even when another vessel is baited", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const p = fisher({ level: 70, items: [[I.KARAMBWAN_VESSEL_3], [I.KARAMBWAN_VESSEL_3], [I.RAW_KARAMBWANJI, 3]] });
+  await withRandom(0.99, async (setRandom) => {
+    start(p, spot(N.FISHING_SPOT_60, 71), "Fish");
+    ticks(4);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 2, "the used vessel refills on a miss");
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL), 0);
+    assert.equal(amount(p, I.RAW_KARAMBWANJI), 2);
+    setRandom(0);
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 1, "the session continues to a catch");
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 2, "the used vessel refills on a catch");
+    assert.equal(amount(p, I.RAW_KARAMBWANJI), 1);
+  });
+});
+
+test("karambwan vessels keep their slots as the last bait is used and fishing stops", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Item } = core;
+  const p = fisher({ level: 70, items: [[I.RAW_KARAMBWANJI, 1], [I.LOGS], [I.KARAMBWAN_VESSEL_3], [I.KARAMBWAN_VESSEL_3]] });
+  const vessel = spot(N.FISHING_SPOT_60, 72);
+  await withRandom(0.99, async (setRandom) => {
+    start(p, vessel, "Fish");
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWANJI), 0);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 2, "the last loose bait refills the used vessel");
+    assert.equal(p.slots[1]?.getId(), I.LOGS, "deleting bait does not shift or replace another item");
+    setRandom(0);
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 1);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 1);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL), 1);
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 2);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 0);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL), 2);
+    ticks(8);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 2, "fishing stops once both vessels are empty");
+    p.getInventory().addItem(new Item(I.RAW_KARAMBWANJI, 2));
+    start(p, vessel, "Fish");
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 3, "fishing can restart with new bait");
+    assert.equal(p.slots[1]?.getId(), I.LOGS);
   });
 });
 

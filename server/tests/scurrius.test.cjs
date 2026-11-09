@@ -703,8 +703,11 @@ test("his bolts and fur balls are rolled as they land, after the player's prayer
   }
 });
 
-test("between rounds, out of reach, he stomps from range and still goes back to eat (#4061)", () => {
+/** Scurrius off a round at the east pile, between rounds, with `target` as his target and the world clock in `clock`. */
+function betweenRounds(t, target) {
   const { startFeeding, feedingTurn } = Fight._test;
+  const clock = { now: 5000 };
+  t.mock.method(core.World, "getProcessCycle", () => clock.now);
   const npc = core.NPC.create(Common.SOLO_ID, Common.location(Common.FEEDING_SPOTS[1].stand));
   npc.isRegistered = () => true;
   npc.setHitpoints(300);
@@ -712,12 +715,35 @@ test("between rounds, out of reach, he stomps from range and still goes back to 
   startFeeding(npc, state, Common.FEEDING_SPOTS[1]);
   while (state.phase === "feeding") feedingTurn(npc, state);
   assert.equal(state.phase, "between");
-  const Method = Fight._test.defineCombatMethod();
-  const method = new Method();
-  // A player he can't reach: walled off by his rats, five tiles away.
-  const target = createPlayer({ x: 3296, y: 9867 });
   npc.getCombat().getTarget = () => target;
-  assert.equal(method.attackDistance(npc), 20, "he attacks from range instead of waiting to reach them");
+  const Method = Fight._test.defineCombatMethod();
+  return { npc, state, method: new Method(), clock };
+}
+
+test("between rounds he walks in to swipe a player he can reach, as captured (#4068 review)", (t) => {
+  // Two tiles west of him on open floor: live, he walks in and swipes (recordings 2160, 2183).
+  const target = createPlayer({ x: 3302, y: 9867 });
+  const { npc, state, method, clock } = betweenRounds(t, target);
+  for (let tick = 0; tick < Fight._test.STUCK_TICKS; tick++) {
+    assert.equal(method.attackDistance(npc), 1, `tick ${tick}`);
+    assert.equal(method.type(), core.CombatType.MELEE);
+    clock.now++;
+    // He takes a step towards them each tick, so he is never stuck.
+    npc.setLocation(npc.getLocation().transform(tick % 2 === 0 ? -1 : 0, 0));
+  }
+  assert.equal(method.attackDistance(npc), 1, "still walking in");
+  state.walking = null;
+});
+
+test("between rounds, stuck out of reach, he stomps from range and still goes back to eat (#4061)", (t) => {
+  // A player he can't reach: walled off by his rats, five tiles away, and he takes no step.
+  const target = createPlayer({ x: 3296, y: 9867 });
+  const { npc, state, method, clock } = betweenRounds(t, target);
+  assert.equal(method.attackDistance(npc), 1, "first he tries to walk in");
+  clock.now += Fight._test.STUCK_TICKS - 1;
+  assert.equal(method.attackDistance(npc), 1, "not stuck yet");
+  clock.now++;
+  assert.equal(method.attackDistance(npc), 20, "an attack cycle without a step: he attacks from range");
   assert.equal(method.type(), core.CombatType.RANGED);
   const turns = state.swingsLeft;
   for (let i = 0; i < turns; i++) {

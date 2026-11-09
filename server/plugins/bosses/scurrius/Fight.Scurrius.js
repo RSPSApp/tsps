@@ -138,6 +138,12 @@ const FEEDING = Object.freeze([["magic", 4], ["ranged", 4], ["stomp", 2], ["summ
 const ENRAGED = Object.freeze([["magic", 2], ["ranged", 2], ["stomp", 3], ["summon", 1]]);
 
 const WALK_REPATH_LIMIT = 10;
+/**
+ * Between rounds he walks in to swipe (captured: 26 of 26 turns, including step-offs that ended 2-4
+ * tiles from the player). Only when he has gone an attack cycle without a step while out of reach
+ * (his rats walling him off) does he stomp from range instead.
+ */
+const STUCK_TICKS = ATTACK_SPEED;
 
 let api = null;
 let core = null;
@@ -194,12 +200,36 @@ function pickAction(state, now = core.World.getProcessCycle(), beside = true) {
       && !ratsAlive(state));
   if (state.phase === "feeding") return weighted(FEEDING, canSummon);
   if (state.phase === "enraged") return weighted(ENRAGED, canSummon);
-  // Out of reach (rats in his way) he stomps, as in phase one, so he never waits on a swipe he can't make.
+  // Out of reach here means stuck (attackDistance only lets him attack from range then): he stomps, as
+  // in phase one, so he never waits on a swipe he can't make.
   if (state.phase === "between") return beside ? "melee" : "stomp";
   return beside ? weighted(PHASE_ONE) : "stomp";
 }
 
-/** The phases he walks in on his target in: phase one and between eating rounds. */
+/**
+ * Between rounds: whether he is out of reach of `target` and has not taken a step for STUCK_TICKS,
+ * so walking in has stopped working. Any step or reaching them starts the count again.
+ */
+function stuckBetween(npc, state, target) {
+  if (!target || besideTarget(npc, target)) {
+    state.stall = null;
+    return false;
+  }
+  const now = core.World.getProcessCycle();
+  const at = npc.getLocation();
+  if (!state.stall || !state.stall.at.equals(at)) {
+    state.stall = { at: at.clone(), since: now };
+    return false;
+  }
+  return now - state.stall.since >= STUCK_TICKS;
+}
+
+/** Whether he attacks `target` from range in a phase he otherwise walks in on them: phase one out of reach, or stuck between rounds. */
+function fromRange(npc, state, target) {
+  if (state.phase === "combat") return !besideTarget(npc, target);
+  if (state.phase === "between") return stuckBetween(npc, state, target);
+  return false;
+}
 const closesIn = (phase) => phase === "combat" || phase === "between";
 
 /** Whether `target` stands within a tile of his footprint (or under him). */
@@ -443,6 +473,7 @@ function finishFeeding(npc, state, stomped = false) {
   if (state.phase !== "feeding") return;
   state.phase = "between";
   state.swingsLeft = between(MELEE_BETWEEN_ROUNDS);
+  state.stall = null;
   const delay = stomped ? STEP_OFF_AFTER_STOMP_TICKS : STEP_OFF_TICKS;
   // No swing before he has walked off.
   npc.getCombat().setAttackDelay(delay + 1);
@@ -630,7 +661,7 @@ function defineCombatMethod() {
     /** In phase one and between rounds, melee beside his target; out of reach, the stomp works from range. */
     type() {
       const npc = this.npc;
-      if (npc && closesIn(stateOf(npc).phase)) return besideTarget(npc, targetOf(npc)) ? CombatType.MELEE : CombatType.RANGED;
+      if (npc && closesIn(stateOf(npc).phase)) return fromRange(npc, stateOf(npc), targetOf(npc)) ? CombatType.RANGED : CombatType.MELEE;
       return this.stance;
     }
 
@@ -642,7 +673,7 @@ function defineCombatMethod() {
     attackDistance(character) {
       this.npc = character;
       const phase = stateOf(character).phase;
-      if (closesIn(phase)) return besideTarget(character, targetOf(character)) ? 1 : RANGED_DISTANCE;
+      if (closesIn(phase)) return fromRange(character, stateOf(character), targetOf(character)) ? RANGED_DISTANCE : 1;
       return phase === "feeding" || phase === "enraged" ? RANGED_DISTANCE : 1;
     }
 
@@ -783,6 +814,6 @@ module.exports = {
     SOLO_MAX_HITS, PUBLIC_MAX_HITS, PHASE_ONE, FEEDING, ENRAGED, RAT_WAVE_LIMIT, ROCKFALL_TILES,
     RAT_CALL_COOLDOWN_TICKS, FEED_HEALS, MELEE_BETWEEN_ROUNDS, PROJECTILE, pickAction, rockfallTiles, stomp, summonRats,
     FEED_HEAL_AMOUNTS, DISTANT_HIT_DELAY, startFeeding, feedingTurn, finishFeeding, stepOff, ratsAlive, facingFor, heal, goEat, enrage, handTile, oneShotRat, removeRatAttackDelay,
-    defineCombatMethod, distantHitLands, maxHitsFor, ratHitRoll, ratHitLands, ratTile, RAT_PROTECTED_MAX_HIT,
+    defineCombatMethod, distantHitLands, maxHitsFor, STUCK_TICKS, ratHitRoll, ratHitLands, ratTile, RAT_PROTECTED_MAX_HIT,
   },
 };

@@ -1117,7 +1117,7 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
           for (const o of f.fires?.() ?? []) core.ObjectManager.deregister(o, true);
         }
       });
-      function account() {
+      function account(role) {
         const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
           send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
         const p = new Player(new PlayerSession(channel));
@@ -1126,9 +1126,10 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
         p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
         // Find a real open, walkable tile distinct from every prior route's fire tile.
-        let anchor = null;
+        let anchor = null, attempts = 0;
         for (let y = 3200; y < 3264 && !anchor; y++) {
           for (let x = 3200; x < 3264; x++) {
+            attempts++;
             if (usedTiles.some(tile => Math.max(Math.abs(tile.getX() - x), Math.abs(tile.getY() - y)) < 3)) continue;
             const candidate = new core.Location(x, y, 0);
             if (Firemaking.isFireTileBlocked(candidate, null)) continue;
@@ -1138,6 +1139,7 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
             anchor = candidate.clone(); usedTiles.push(anchor); break;
           }
         }
+        t.diagnostic(`tile selection route=${route} role=${role} attempts=${attempts} selected=${anchor ? `${anchor.getX()},${anchor.getY()},${anchor.getZ()}` : "none"}`);
         assert.ok(anchor, "setup: a distinct open fire tile with an exit exists");
         p.needsPlacement = false;
         const skills = p.getSkillManager();
@@ -1166,7 +1168,7 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         Object.assign(f, { c, anchor, gains, messages, ground, fires }); return f;
       }
       // Each actor owns a fresh tile: tracked fires can outlive fixture deregistration.
-      const actor = account(), other = account();
+      const actor = account("actor"), other = account("other");
       assert.notEqual(actor.p.getLongUsername(), other.p.getLongUsername());
       let turns = 0;
       const turn = () => {

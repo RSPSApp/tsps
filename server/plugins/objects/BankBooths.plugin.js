@@ -193,7 +193,18 @@ function confirmExchange(api, event, slot) {
 }
 
 function useCurrencyOnBanker(api, event) {
-  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() === "Banker") confirmExchange(api, event, event.slot);
+  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() !== "Banker") return;
+  const { COINS, PLATINUM_TOKEN } = api.core.ItemIdentifiers;
+  if (event.itemId === COINS || event.itemId === PLATINUM_TOKEN) {
+    confirmExchange(api, event, event.slot);
+    return;
+  }
+  // rsprox_transcripts/226/01645.txt (tick 4882, a Mort myre pear): any other unnoted item gets the banker's line.
+  event.handled = true;
+  const { DialogueChainBuilder, NpcDialogue } = api.core;
+  const npcId = event.npcId ?? event.target?.getId?.();
+  event.player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new NpcDialogue(0, npcId, "Hand me a banknote, and I'll try to convert it to an item.", "Banker")));
 }
 
 /** How many of the notes in `slot` the inventory can take unnoted: the free slots, and the note's own once it empties. */

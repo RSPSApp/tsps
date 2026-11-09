@@ -1069,6 +1069,7 @@ function bankerHarness() {
   const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
   const { DialogueChainBuilder } = require('../dist/game/model/dialogues/builders/DialogueChainBuilder');
   const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  const { NpcDialogue } = require('../dist/game/model/dialogues/entries/impl/NpcDialogue');
   const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
   const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
   const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
@@ -1093,7 +1094,7 @@ function bankerHarness() {
   let useNpc;
   const useObjects = [];
   const api = {
-    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, World },
+    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, NpcDialogue, World },
     onNpcInteraction: (name, handlers) => npc.set(name, handlers),
     onObjectInteraction: (name, handlers) => object.set(name, handlers),
     // The currency handler (unnoted items); banknotes have their own native test (banker-unnote.test.cjs).
@@ -1267,11 +1268,19 @@ test('exchange cancellation, closure, duplicate and replaced confirmation cannot
   }
 });
 
+test('any other unnoted item on a Banker: "Hand me a banknote..." (rsprox 226/01645)', () => {
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(TRIDENT, 1), false);
+  assert.equal(h.use(TRIDENT, 'Banker').handled, true);
+  assert.equal(h.manager.getCurrent()?.getText?.(), "Hand me a banknote, and I'll try to convert it to an item.");
+  assert.equal(h.player.inventory.getAmount(TRIDENT), 1);
+});
+
 test('currency exchange ignores unrelated NPCs, objects, items and stale item slots', () => {
   const h = bankerHarness();
   h.player.inventory.add(new Item(995, 2000), false);
   h.player.inventory.add(new Item(TRIDENT, 1), false);
-  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Banker'], [995, 'Banker', 1]]) {
+  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Bank booth'], [995, 'Banker', 1]]) {
     assert.equal(h.use(...args).handled, false);
     assert.equal(h.manager.isActive(), false);
   }

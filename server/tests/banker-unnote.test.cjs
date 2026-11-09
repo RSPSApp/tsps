@@ -112,3 +112,14 @@ test("no room: the banker says so and asks nothing", async (t) => {
   assert.ok(f.lines.includes("You don't have any inventory space."), f.lines.join(" / "));
   assert.equal(f.inv.getAmount(note(I.ANGLERFISH)), 9);
 });
+
+test("an unnoted item that isn't currency: the banker's line, nothing taken (tick 4882, a Mort myre pear)", async (t) => {
+  const f = actor(t);
+  for (let i = 0; i < f.inv.capacity(); i++) f.inv.setItem(i, new core.Item(-1, 0));
+  f.inv.setItem(0, new core.Item(I.RAKE, 1));
+  f.inv.refreshItems();
+  await use(f, 0);
+  assert.equal(pending(f), null);
+  assert.ok(f.lines.includes("Hand me a banknote, and I'll try to convert it to an item."), f.lines.join(" / "));
+  assert.equal(f.inv.getAmount(I.RAKE), 1);
+});

@@ -134,9 +134,10 @@ function damageFor(player, kind) {
 }
 
 /** Takes warmth for one of the Wintertodt's attacks; at 0 the cold kills. */
-function hurt(player, kind, message) {
+function hurt(player, kind, message, { spam = false } = {}) {
   const damage = damageFor(player, kind);
-  if (message) player.sendMessage(message);
+  if (message && spam) Shared.spam(player, message);
+  else if (message) player.sendMessage(message);
   const warmth = setWarmth(player, warmthOf(player) - damage * 10);
   player.showHitsplat?.(damage, Shared.COLD_SPLAT, { current: warmth, max: Shared.MAX_WARMTH, bar: Shared.WARMTH_BAR });
   if (warmth > 0 && warmth < RING_OF_LIFE_WARMTH) saveFromCold(player);

@@ -67,7 +67,8 @@ function standardChance(energy) {
 
 function standardAttack(player) {
   player.__wintertodtColdAt = player.__wintertodtTick;
-  Warmth.hurt(player, "standard", COLD_MESSAGE);
+  // rsprox_transcripts/233/03254 and 03262 (53 times): spam. Shrapnel stays a game message, as recorded.
+  Warmth.hurt(player, "standard", COLD_MESSAGE, { spam: true });
   const action = Shared.actionOf(player);
   if (action === "fletch" || action?.startsWith("feed")) Shared.stopAction(player);
 }

@@ -232,7 +232,8 @@ function feed(event) {
   const index = cornerOf(event);
   if (index < 0) return false;
   if (!Round.isActive()) {
-    player.sendMessage("There's no use for bruma roots at this time.");
+    // rsprox_transcripts/233/03262: spam.
+    Shared.spam(player, "There's no use for bruma roots at this time.");
     return true;
   }
   if (Corners.corner(index).brazier !== Shared.BRAZIER.LIT) return true;

@@ -175,7 +175,8 @@ function reward(player, points) {
   const experience = Shared.firemakingLevel(player) * 100;
   player.getSkillManager().addExperiences(Skill.FIREMAKING, experience);
   const gained = Math.floor(experience * (GameConstants.EXPERIENCE_MULTIPLIER ?? 1));
-  player.sendMessage(`You have gained ${gained.toLocaleString("en-US")} Firemaking XP.`);
+  // rsprox_transcripts/233/03254.txt:15102: "You have gained 9900 Firemaking XP." (no separator).
+  player.sendMessage(`You have gained ${gained} Firemaking XP.`);
 
   const kills = killsOf(player) + 1;
   player.setAttribute(ATTR_KILLS, kills);

@@ -277,7 +277,8 @@ test('a round ends at 0 energy: 500+ points earn XP, a kill and rewards; fewer e
   assert.equal(Round.isActive(), false);
   assert.equal(winner.xp, 9900);
   const gained = 9900 * (PluginManager.getCoreApi().GameConstants.EXPERIENCE_MULTIPLIER ?? 1);
-  assert.equal(winner.messages[1], `You have gained ${gained.toLocaleString('en-US')} Firemaking XP.`);
+  // 233/03254:15102: "You have gained 9900 Firemaking XP." (no separator).
+  assert.equal(winner.messages[1], `You have gained ${gained} Firemaking XP.`);
   assert.equal(winner.messages[2], 'Your subdued Wintertodt count is: <col=ff0000>1</col>.');
   const owed = Round.rewardsOwed(winner);
   assert.ok(owed === 2 || owed === 3);
@@ -514,6 +515,14 @@ test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, an
   assert.equal(dressed.xpBySkill.Construction ?? 0, 0);
 });
 
+// rsprox_transcripts/233/03262: between rounds, "There's no use for bruma roots at this time." on the spam channel.
+test("feeding a brazier between rounds: the bruma roots line, as spam", () => {
+  const player = fighter('Early');
+  hooks.objects['Burning brazier'].Feed({ player, object: swBrazier });
+  assert.deepEqual(player.spam, ["There's no use for bruma roots at this time."]);
+  assert.ok(!player.messages.includes("There's no use for bruma roots at this time."));
+});
+
 test('feeding burns kindling first, then roots, one every 3 ticks, until they run out', () => {
   startRound();
   Corners.setBrazier(SW, Shared.BRAZIER.LIT);
@@ -683,11 +692,12 @@ test("the Wintertodt's attacks follow its energy: standard ones fade, brazier on
   const ctx = { ticks: 5, energy: 3500, players: Round.playersInPrison, isActive: Round.isActive, broadcast: Round.broadcast };
   Attacks.useRandom(() => 0.5);
   attacksTick(ctx);
-  assert.equal(player.messages.at(-1), Attacks.COLD_MESSAGE, 'a roll under full energy hits');
+  // Spam, as recorded 53 times (233/03254, 03262).
+  assert.equal(player.spam.at(-1), Attacks.COLD_MESSAGE, 'a roll under full energy hits');
   attacksTick({ ...ctx, ticks: 10 });
-  assert.equal(player.messages.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, '10-tick cooldown');
+  assert.equal(player.spam.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, '10-tick cooldown');
   attacksTick({ ...ctx, ticks: 15, energy: 100 });
-  assert.equal(player.messages.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, 'rare near the end');
+  assert.equal(player.spam.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, 'rare near the end');
   assert.equal(Attacks.standardChance(3500), 1);
   assert.ok(Math.abs(Attacks.standardChance(2100) - 0.216) < 0.001, '60% energy: 0.6 cubed');
   Attacks.useRandom(Math.random);

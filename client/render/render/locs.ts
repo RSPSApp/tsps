@@ -548,6 +548,15 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
         try {
             const key = `${tile.x},${tile.y},${level},${shape}`;
             const existing = host.addedLocs.get(key);
+            const cacheIds = cacheLocIdsAtTile(host, tile, level);
+            // An arriving loc supersedes an earlier removal of that same id on the tile — unless
+            // the id is cache scenery: then that entry hides the map copy the added loc stands in
+            // for (a closing door's leaf). onLocDel records such an entry for every added loc it
+            // deletes, so a fire re-lit where the previous one burned inherited its predecessor's
+            // suppression and never appeared (#3603).
+            if (!cacheIds.has(locId | 0)) {
+                host.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${locId | 0}`);
+            }
             const rebuild = () => {
                 const mapX = Math.floor(tile.x / 64);
                 const mapY = Math.floor(tile.y / 64);
@@ -594,7 +603,6 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
             // re-lit where the last one burned still sits in the index, and sweeping it in
             // recorded "this fire is removed" for the fire that was arriving — the tile then drew
             // neither the logs nor the fire (#3603).
-            const cacheIds = cacheLocIdsAtTile(host, tile, level);
             const derived = host.instanceActive
                 ? []
                 : addChangeSlotIds(host, tile, level, shape, rotation).filter((id) =>

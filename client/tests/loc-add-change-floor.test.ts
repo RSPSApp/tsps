@@ -241,10 +241,15 @@ for (const backend of ["WebGL", "WebGPU"]) {
         type Placement = { id: number; x: number; y: number; level: number; shape: number; rotation: number };
         let built: Placement[] = [];
         const at = (level: number, lx: number, ly: number) => built.filter(loc => loc.level === level && loc.x === lx + mapX * 64 && loc.y === ly + mapY * 64);
+        // The square reports the *cache* locs on a tile (WebGLMapSquare reads its decoded map
+        // data), not the built scene: the door's closed leaf is always in the map, whether or not
+        // the scene currently draws it.
+        const cacheAt = (level: number, lx: number, ly: number) =>
+            level === 0 && lx + mapX * 64 === x && ly + mapY * 64 === y ? [id] : [];
         const square = {
             getRenderBaseWorldX: () => mapX * 64, getRenderBaseWorldY: () => mapY * 64,
-            getLocIdsAtLocal: (level: number, lx: number, ly: number) => at(level, lx, ly).map(loc => loc.id),
-            getLocTypeRotsAtLocal: (level: number, lx: number, ly: number) => at(level, lx, ly).map(loc => (loc.rotation << 6) | loc.shape),
+            getLocIdsAtLocal: (level: number, lx: number, ly: number) => cacheAt(level, lx, ly),
+            getLocTypeRotsAtLocal: (level: number, lx: number, ly: number) => cacheAt(level, lx, ly).map(() => (rotation << 6) | shape),
         };
         const renderer: any = {
             addedLocs: new Map(), locOverrides: new Map(), locSpawns: new Map(), instanceActive: false,
@@ -351,4 +356,34 @@ console.log("loc add/change floor checks passed");
         [],
         "the fire replaced nothing",
     );
+}
+
+// Issue #3603, the reported cycle: fire expires (loc_del), and a fire is lit again on the same
+// tile. onLocDel records "26185 -> removed" so a stale cache copy stays hidden; the next add of
+// 26185 has to take that back, or the new fire is suppressed by its predecessor's removal.
+{
+    const square = stubSquare([], []);
+    const host: any = {
+        addedLocs: new Map(),
+        locOverrides: new Map(),
+        locSpawns: new Map(),
+        instanceActive: false,
+        getLocIdsAtTileAllLevels: () => [],
+        mapManager: {
+            getMapForWorldTile: () => square,
+            getMap: () => square,
+            loadingMapIds: new Set<number>(),
+        },
+        osrsClient: { locTypeLoader: { load: () => ({ seqId: -1, name: "fire" }) } },
+        scheduleLocGeometryUpdate: () => {},
+    };
+    onLocAddChange(host, FIRE, TILE, 0, 10, 0);
+    onLocDel(host, TILE, 0, 10, 0);
+    assert.equal(
+        host.locOverrides.get(tileKey(FIRE))?.newId,
+        LOC_OVERRIDE_REMOVED,
+        "expiry hides the fire's own copy",
+    );
+    onLocAddChange(host, FIRE, TILE, 0, 10, 0);
+    assert.equal(host.locOverrides.has(tileKey(FIRE)), false, "the relit fire is not its own victim");
 }

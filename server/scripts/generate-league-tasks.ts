@@ -397,6 +397,12 @@ function wornVariants(base: string, items: Map<string, string>): string[] {
   return forms;
 }
 
+/** The cache item of a name when it is worn (its first entry with an equip slot), or null ("eaten"). */
+function wornItemOf(name: string, items: Map<string, string>): string | null {
+  const cached = items.get(name.toLowerCase());
+  return cached && itemIdsNamed(cached).some((id) => Number((CacheDefinitions.getItem(id) as { wearPos?: number } | undefined)?.wearPos) >= 0) ? cached : null;
+}
+
 /**
  * The cache's item sets (enum 1034: set item -> an enum of its pieces, as the Grand Exchange's set
  * exchange reads them), keyed by a plain name: "ahrim's" (Ahrim's armour set), "rockshell",
@@ -478,7 +484,7 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
  * matching (`deed { event, items?, where?, count }`): the event, the item the event's `itemId` must be
  * (its cache name, from the match) and the values its other fields must have (`where`).
  */
-const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (match: RegExpExecArray) => string[]; where?: Record<string, string | number | boolean> }> = [
+const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (match: RegExpExecArray) => string[]; where?: Record<string, string | number | boolean | Array<string | number | boolean>> }> = [
   // Worship.Ectofuntus: a worship made (the slime and bonemeal put in).
   { name: /^Worship the Ectofuntus$/i, description: /^Worship the Ectofuntus\.?$/i, event: "ectofuntus:worshipped" },
   // Pouches.Runecrafting: essence put into that pouch.
@@ -505,6 +511,22 @@ const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (
   { name: /^Open a Looting Bag$/i, description: /^Open a Looting Bag\.?$/i, event: "looting-bag:opened" },
   // PrayerUnlocks: either scroll read, its prayer learnt.
   { name: /^Activate an Arcane or Dexterous Prayer Scroll$/i, description: /^Activate an Arcane prayer scroll or Dexterous prayer scroll(?: Prayer scroll)?\.?$/i, event: "prayer:scroll-read", items: () => ["Arcane prayer scroll", "Dexterous prayer scroll"] },
+  // BarbarianAssault: the Queen defeated (the match's own barbarian-assault:queen-kill, one per player).
+  { name: /^Defeat the Penance Queen$/i, description: /^Defeat the Penance Queen in Barbarian Assault\.?$/i, event: "barbarian-assault:queen-kill" },
+  // Stash.TreasureTrails: a STASH unit of that tier built and filled (its tier's own name).
+  { name: /^Fill a Medium STASH Unit$/i, description: /^Build a STASH unit and fill it with the relevant items\.?$/i, event: "stash:filled", where: { tier: "medium" } },
+  { name: /^Fill a Hard STASH Unit$/i, description: /^Build a STASH unit and fill it with the relevant items\.?$/i, event: "stash:filled", where: { tier: "hard" } },
+  // WaterSources: water filled from a water pump (both cache spellings of the loc).
+  { name: /^Fill something up from a water pump$/i, description: /^Fill Water up from a Water pump(?: \(Varlamore\))?\.?$/i, event: "water-source:filled", where: { name: ["water pump", "waterpump"] } },
+  // Nexus.Construction: the portal nexus's own teleport to Weiss.
+  { name: /^Use Your Portal Nexus to Teleport to Weiss$/i, description: /^Use a Portal Nexus in your Player Owned House to teleport to Weiss\.?$/i, event: "construction:portal", where: { destination: "weiss teleport" } },
+  // TaiBwoWannaiCleanup: the gout tuber dug out of the rare plant (its own event).
+  { name: /^Find a Gout Tuber$/i, description: /^Find a Gout Tuber in Tai Bwo Wannai\.?$/i, event: "tai-bwo-wannai-cleanup:gout-tuber" },
+  // MerlinsCrystal: the beehive's bees stinging a player who took wax unprotected (its own event).
+  { name: /^Get Stung By Bees$/i, description: /^Get stung by bees at the Beehives?\.?$/i, event: "bees:stung" },
+  // Pennant: a crystal seed traded for a crystal acorn (his own event; the acorn is also a crystal
+  // impling's and the Elven Crystal Chest's, so the source must be his exchange).
+  { name: /^Receive a Crystal Acorn from Pennant$/i, description: /^Trade in a Crystal weapon seed, Crystal armour seed, or Crystal tool seed to Pennant for a Crystal acorn\.?$/i, event: "pennant:crystal-acorn", items: () => ["Crystal acorn"] },
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
@@ -709,6 +731,29 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "harmony-island", names: ["Harmony Island"], page: "Harmony_Island", flood: { cap: 3000, bbox: true } },
   { key: "mos-le-harmless", names: ["Mos Le'Harmless"], page: "Mos_Le'Harmless", flood: { cap: 15000, bbox: true } },
   { key: "ferox-enclave", names: ["Ferox Enclave"], page: "Ferox_Enclave", server: { polygon: require(path.resolve(__dirname, "../plugins/areas/ferox/Bounds.FeroxEnclave")).BOUNDARY, from: "the FeroxEnclave plugin's outline" } },
+  // The Kualti Headquarters Barracks underground (Varlamore): the guards inside, round the page's pin.
+  { key: "kualti-headquarters-barracks", names: ["Kualti Headquarters Barracks"], page: "Kualti_Headquarters_Barracks", flood: { from: [1641, 9570, 0], cap: 600 } },
+  // The Kastori basement (Varlamore): the imp room, round the Imp page's own basement pins.
+  { key: "kastori-basement", names: ["Kastori basement"], page: "Imp", flood: { from: [1381, 9451, 0], cap: 300 } },
+  // The Dagannoth Kings' two lairs in the Waterbirth Island Dungeon (the plugin's own boxes).
+  { key: "waterbirth-island-dungeon", names: ["Waterbirth Island Dungeon"], page: "Waterbirth_Island_Dungeon", server: { rects: [[2894, 4430, 2932, 4470], [2894, 4366, 2932, 4406]], from: "the DagannothKings plugin's lairs" }, spawns: ["Dagannoth Rex#2267", "Dagannoth Prime#2266", "Dagannoth Supreme#2265"] },
+  // The Karuulm Slayer Dungeon (Kourend): the server's Slayer area; its page has no map point, so the
+  // regular Hydra's spawns stand for its bounds.
+  { key: "karuulm-slayer-dungeon", names: ["Karuulm Slayer Dungeon"], page: "Karuulm_Slayer_Dungeon", slayerArea: "Karuulm Slayer Dungeon", spawns: ["Hydra#8609"] },
+  // The cache's walls around the Wiki's point: Tirannwn's Lletya (its fruit tree patch inside), the
+  // city Prifddinas (the crystal tree patch, the house portal and the altar inside), and Kandarin's
+  // Catherby (its farming patches and bank).
+  { key: "lletya", names: ["Lletya"], page: "Lletya", flood: { cap: 20000 } },
+  { key: "prifddinas", names: ["Prifddinas"], page: "Prifddinas", server: { rects: [[3207, 6024, 3320, 6138]], from: "the city's own walls (the crystal patch, the house portal and the altar inside)" } },
+  { key: "catherby", names: ["Catherby"], page: "Catherby", server: { rects: [[2800, 3400, 2880, 3470]], from: "the Catherby farming area" } },
+  // Marcellus's hardwood patch: the Wiki's own square (mtype=square|r=5), its mahogany tree inside.
+  { key: "marcellus", names: ["Marcellus's Patch", "Marcellus's patch", "Marcellus"], page: "Marcellus", wikiPolygon: true },
+  // The Mage Arena bank cave (deep Wilderness, reached by the lever): the page's pin is the surface
+  // building; the room itself is the cave, where Gundai the banker stands among the crates.
+  { key: "mage-arena-bank", names: ["Mage Arena bank", "Mage Arena"], page: "Mage_Arena_bank", server: { rects: [[2526, 4705, 2546, 4730]], from: "the Mage Arena bank cave's room" }, spawns: ["Gundai#1600"] },
+  // The Citharede Abbey (the Giants' Plateau, east of Al Kharid): the abbey and its cabbage field
+  // round the page's own pin (it has no polygon).
+  { key: "citharede-abbey", names: ["Citharede Abbey"], page: "Citharede_Abbey", server: { rects: [[3402, 3171, 3423, 3188]], from: "the abbey and its cabbage field" } },
 ];
 
 /** The places' saved Wiki pages (`--from <dir>/places`, `--save`), read before the triggers are derived. */
@@ -1047,6 +1092,133 @@ function teleportOf(name: string, description: string, items: Map<string, string
   return null;
 }
 
+/** The cache ids of the mace weapons a "with a mace as the final hit" task counts (wear slot 3). */
+function maceIds(): number[] {
+  return [...Array(CacheDefinitions.getCounts().items).keys()]
+    .filter((id) => /\bmace\b/i.test(CacheDefinitions.getItem(id)?.name ?? "") && Number((CacheDefinitions.getItem(id) as { wearPos?: number } | undefined)?.wearPos) === 3)
+    .map(Number);
+}
+
+/** The cache ids of the weapons a task names by name ("a mithril spear", "the Keris Partisan"), wearing ones only. */
+function weaponIdsNamed(text: string, items: Map<string, string>): number[] {
+  const item = itemNamed(text, items);
+  return item ? itemIdsNamed(item).filter((id) => Number((CacheDefinitions.getItem(id) as { wearPos?: number } | undefined)?.wearPos) >= 0) : [];
+}
+
+/** The spells of an element a task names ("an earth spell": the five earth Strike..Surge spells). */
+const ELEMENT_SPELLS: Record<string, string[]> = {
+  earth: ["earth strike", "earth bolt", "earth blast", "earth wave", "earth surge"],
+  water: ["water strike", "water bolt", "water blast", "water wave", "water surge"],
+  fire: ["fire strike", "fire bolt", "fire blast", "fire wave", "fire surge"],
+  wind: ["wind strike", "wind bolt", "wind blast", "wind wave", "wind surge"],
+};
+
+/** The cache ids of the berets a "while wearing a beret" task counts (the four colours and the mask). */
+function beretIds(): number[] {
+  return [...Array(CacheDefinitions.getCounts().items).keys()]
+    .filter((id) => /beret/i.test(CacheDefinitions.getItem(id)?.name ?? "") && Number((CacheDefinitions.getItem(id) as { wearPos?: number } | undefined)?.wearPos) === 0)
+    .map(Number);
+}
+
+/**
+ * The NPCs a task names by a race or a group the cache has no one entry for (the Wiki's "Snail" and
+ * "Elf" pages) or by a qualifier the cache folds in ("a Tortoise with riders" is the Tortoise, its
+ * rider variant a drop version of the same name): the cache names each. The keys are lower-cased.
+ */
+const RACE_NPCS: Record<string, string[]> = {
+  snail: ["Myre Blamish Snail", "Blood Blamish Snail", "Ochre Blamish Snail", "Bruise Blamish Snail", "Bark Blamish Snail"],
+  elf: ["Elf Warrior", "Elf Archer", "Iorwerth Warrior", "Iorwerth Archer"],
+  elves: ["Elf Warrior", "Elf Archer", "Iorwerth Warrior", "Iorwerth Archer"],
+  kalphite: ["Kalphite Worker", "Kalphite Soldier", "Kalphite Guardian"],
+  "tortoise with riders": ["Tortoise"],
+};
+
+function raceOf(subject: string): string[] | null {
+  const key = plainName(subject);
+  return RACE_NPCS[key] ?? singulars(key).map((form) => RACE_NPCS[form]).find(Boolean) ?? null;
+}
+
+/**
+ * Combat Achievement tasks a combat task is exactly, completed from the CA system's own task name
+ * (combat-achievements:completed): "Defeat Awakened Vardorvis" is its "Vardorvis Sleeper".
+ */
+const CA_COMPLETIONS: Array<[RegExp, string]> = [
+  [/^Defeat Awakened Vardorvis$/i, "Vardorvis Sleeper"],
+  [/^Defeat Vorkath 5 Times Without Special Damage$/i, "Dodging the Dragon"],
+];
+
+/**
+ * A kill whose condition is written out ("with an earth spell", "with a mithril spear as the final
+ * hit", "in one hit (50 damage)"): the monster and the condition as the runtime reads them, or null.
+ * The task's own wording decides; a name no cache NPC has is tried against the races above.
+ */
+function combatTrigger(name: string, description: string, names: Names): Trigger | null {
+  const { npcs } = names;
+  const text = description.replace(/\.$/, "");
+  const area = leagueAreaOf(description.replace(/\.$/, "")).area;
+  const oneNamed = (word: string): string | null => npcNamed(word, names.npcs) ?? raceOf(word)?.[0] ?? null;
+  const allNamed = (word: string): string[] | null => {
+    const one = npcNamed(word, names.npcs);
+    return one ? [one] : raceOf(word);
+  };
+  const withArea = (trigger: Trigger): Trigger => (area !== null && trigger.area === undefined ? { ...trigger, area } : trigger);
+  let match: RegExpExecArray | null;
+
+  // "Defeat 5 creatures with a mace as the final hit": any NPC, one of the maces' blows.
+  if ((match = /^Defeat (\d+) creatures? with a mace as the final hit$/i.exec(text))) {
+    const ids = maceIds();
+    return { kind: "kill-any-with", items: ids, count: Number(match[1]) };
+  }
+  // "Defeat an imp with an earth spell": that element's spells, from the description's element.
+  if ((match = /^Defeat an? (.+?) with an? (earth|water|fire|wind) spell$/i.exec(text))) {
+    const list = allNamed(match[1]);
+    const spells = ELEMENT_SPELLS[match[2].toLowerCase()];
+    if (list && spells) return withArea({ kind: "kill", npcs: list, spells, count: 1 });
+  }
+  // "Defeat 3 chickens in 6 seconds" / "Defeat 8 penguins within 5 seconds": so many kills in a window
+  // (a game tick is 0.6 s).
+  if ((match = /^Defeat (\d+) (.+?) (?:in|within) (\d+) seconds$/i.exec(text))) {
+    const list = allNamed(match[2]);
+    if (list?.length === 1) return withArea({ kind: "kill", npcs: list, window: { count: Number(match[1]), ticks: Math.round(Number(match[3]) / 0.6) } });
+  }
+  // "Defeat a Scorpion with a mithril spear as the final hit" / "Defeat a Kalphite with the Keris
+  // Partisan": the named weapon's blows.
+  if ((match = /^Defeat an? (.+?) with (?:a |the )?([A-Za-z' -]+?)(?: as the final hit)?$/i.exec(text))) {
+    const list = allNamed(match[1]);
+    const weapons = weaponIdsNamed(match[2], names.items);
+    if (list && weapons.length) return withArea({ kind: "kill", npcs: list, weapons, count: 1 });
+  }
+  // "Defeat an Oryx in the Avium Savannah with melee": that combat style's blows.
+  if ((match = /^Defeat an? (.+?) (?:in (?:the )?[A-Z][A-Za-z' ]+ )?with (melee|magic|ranged)$/i.exec(text))) {
+    const list = allNamed(match[1]);
+    if (list) return withArea({ kind: "kill", npcs: list, style: match[2].toLowerCase(), count: 1 });
+  }
+  // "Defeat a Rock Crab in one hit (50 damage)": one blow of at least its hitpoints.
+  if ((match = /^Defeat an? (.+?) in one hit \(\d+ damage\)$/i.exec(text))) {
+    const list = allNamed(match[1]);
+    if (list) return withArea({ kind: "kill", npcs: list, oneHit: true, count: 1 });
+  }
+  // "Defeat a fully grown jaguar without taking any damage from it": the target never hurt a player.
+  if ((match = /^Defeat an? fully grown (.+?) without taking any damage from it$/i.exec(text))) {
+    const list = allNamed(match[1]);
+    if (list) return withArea({ kind: "kill", npcs: list, noDamage: true, count: 1 });
+  }
+  // "Defeat a Jubster ... while wearing a beret": that equipment worn at the death.
+  if ((match = /^Defeat an? (.+?) (?:(?:underneath|beneath|under) (?:the )?[A-Z][A-Za-z' ]+ )?while (?:dressed like it|wearing an? ([A-Za-z' -]+))$/i.exec(text))) {
+    const list = allNamed(match[1]);
+    const worn = match[2] ? (wornNamed(match[2], names.items) ? itemIdsNamed(wornNamed(match[2], names.items)!) : []) : beretIds();
+    const ids = worn.length ? worn : beretIds();
+    if (list && ids.length) return withArea({ kind: "kill", npcs: list, worn: ids, count: 1 });
+  }
+  // "Defeat 5 Spinners in Pest Control": Spinners are the minigame's own, and only ever live in its
+  // arena (Asgarnia's map square), so the kills are counted there.
+  if ((match = /^Defeat (\d+) ([A-Za-z' ]+) in Pest Control$/i.exec(text))) {
+    const list = allNamed(match[2]);
+    if (list) return { kind: "kill", npcs: list, count: Number(match[1]), area: AREA_IDS.get("asgarnia") ?? undefined };
+  }
+  return null;
+}
+
 function deriveTrigger(fullName: string, rawDescription: string, names: Names, wikiDescription = ""): { trigger?: Trigger; unmapped?: string } {
   const { npcs, quests, items, homes } = names;
   // "Successfully Cut a Red Topaz" is cutting one.
@@ -1100,6 +1272,71 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     return { trigger: { kind: "tempoross", count: match[1] ? Number(match[1]) : 1 } };
   }
   // A key chest opened ("Open 15 of either Larran's Small Chest or Larran's Big Chest").
+  // ---- Obtain: the items a source obtains, told apart by source so a deed is credited only from
+  // the right one (see Actions.LeagueTasks' `obtain`, `obtain-all` and the per-source kinds).
+  // A haircut ("Go and get a haircut"): the makeover applied to the hair.
+  if (/^Get a haircut$/i.test(name)) return { trigger: { kind: "haircut", count: 1 } };
+  // A single item from one source; `itemNamed` resolves its cache name.
+  {
+    const single: Array<[RegExp, string, string | undefined]> = [
+      [/^Obtain an? casket from fishing\.?$/i, "Casket", "fishing"],
+      [/^Obtain an old boot from a fishing spot\.?$/i, "Old boot", "fishing"],
+      [/^Obtain a Kebab from any random event\.?$/i, "Kebab", "random-event"],
+      [/^Obtain the Big Harpoonfish from Tempoross\.?$/i, "Big harpoonfish", undefined],
+      [/^Obtain the Plank Sack from Mahogany Homes\.?$/i, "Plank sack", undefined],
+      [/^Obtain the Fish Barrel from Tempoross\.?$/i, "Fish barrel", undefined],
+      [/^Obtain the Huntsman's Kit\.?$/i, "Huntsman's kit", undefined],
+      [/^Receive a Dragonstone Amulet from a Crystal Impling\.?$/i, "Dragonstone amulet", "crystal-impling"],
+      [/^Loot a dragonstone from the chest in Rogue's Castle\.?$/i, "Dragonstone", "rogues-chest"],
+      [/^Obtain a crystal tool seed as a drop from Zalcano\.?$/i, "Crystal tool seed", "drop"],
+      [/^Obtain a Zalcano shard as a drop from Zalcano in Prifddinas\.?$/i, "Zalcano shard", "drop"],
+      [/^Obtain a Frozen Cache from another Frozen Cache\.?$/i, "Frozen cache", "cache-open"],
+      // "Defeat someone and obtain their Lyre" (the Fremennik lyre the Rellekkan raiders drop): the
+      // item granted by the kill's own drop roll (the Fremennik NPCs' "Other" section), never a
+      // potential one; a fixed Lyre from elsewhere is another source and no deed.
+      [/^(?:Defeat|Kill) someone and obtain their Lyre\.?$/i, "Lyre", "drop"],
+    ];
+    const found = single.find(([pattern]) => pattern.test(description));
+    if (found) {
+      const item = itemNamed(found[1], items);
+      if (!item) return {};
+      const trigger: Trigger = { kind: "obtain", items: [item], count: 1 };
+      if (found[2]) trigger.source = found[2];
+      return { trigger };
+    }
+  }
+  // A gem or a clue geode from mining a rock: every kind, from the gem pre-roll or a gem rock, or
+  // the geode the mining rolls (named as the cache has them).
+  if (/^Obtain any kind of gem whilst Mining a rock\.?$/i.test(description)) {
+    const gems = ["Uncut sapphire", "Uncut emerald", "Uncut ruby", "Uncut diamond", "Uncut opal", "Uncut jade", "Uncut red topaz"].map((each) => itemNamed(each, items)).filter((each): each is string => !!each);
+    return gems.length ? { trigger: { kind: "obtain", items: gems, source: "mining", count: 1 } } : {};
+  }
+  if (/^Obtain any kind of clue geode whilst Mining a rock\.?$/i.test(description)) {
+    const geodes = ["Clue geode (beginner)", "Clue geode (easy)", "Clue geode (medium)", "Clue geode (hard)", "Clue geode (elite)"].map((each) => itemNamed(each, items)).filter((each): each is string => !!each);
+    return geodes.length ? { trigger: { kind: "obtain", items: geodes, source: "geode", count: 1 } } : {};
+  }
+  // A high-level tree seed from a bird's nest: any of the four (the nest-search event).
+  if (/^Obtain either a Magic seed, Dragonfruit tree seed, Redwood tree seed or Spirit seed from a Bird nest \(seeds\)\.?$/i.test(description)) {
+    const seeds = ["Magic seed", "Dragonfruit tree seed", "Redwood tree seed", "Spirit seed"].map((each) => itemNamed(each, items)).filter((each): each is string => !!each);
+    return seeds.length === 4 ? { trigger: { kind: "nest-seed", items: seeds, count: 1 } } : {};
+  }
+  // Every one of a set of items over time ("Obtain every Revenant weapon").
+  if (/^Obtain Craws Bow, Viggora's Chainmace and Thammaron's Sceptre as drops from Revenants\.?$/i.test(description)) {
+    const weapons = ["Craw's bow (u)", "Viggora's chainmace (u)", "Thammaron's sceptre (u)"].map((each) => itemNamed(each, items)).filter((each): each is string => !!each);
+    return weapons.length === 3 ? { trigger: { kind: "obtain-all", items: weapons, count: 1 } } : {};
+  }
+  // A single source event reaching an amount: a coin pouch's coins, a Target round's score, a
+  // Miscellania collection's approval, a Colosseum run's Glory, golden nuggets from the sack, and
+  // the Agility Arena's tickets (a clean run counts the streak, plain tickets the total).
+  if ((match = /^Open a stack of Coin Pouches and obtain at least (\d+) Coins\.?$/i.exec(description))) return { trigger: { kind: "coin-pouch", coins: Number(match[1]), count: 1 } };
+  if ((match = /^Achieve (\d+) points in the Target \(Ranging Guild\) in the Ranging Guild\.?$/i.exec(description))) return { trigger: { kind: "archery-target", points: Number(match[1]), count: 1 } };
+  if ((match = /^Collect some resources on Miscellania with an approval rating of (\d+)%\.?$/i.exec(description))) return { trigger: { kind: "miscellania", approval: Number(match[1]), count: 1 } };
+  if ((match = /^Obtain ([\d,]+) Glory in the Fortis Colosseum\.?$/i.exec(description))) return { trigger: { kind: "colosseum-glory", glory: Number(match[1].replace(/,/g, "")), count: 1 } };
+  if ((match = /^Obtain (\d+) Golden Nuggets from the Motherlode Mine beneath Falador\.?$/i.exec(description))) return { trigger: { kind: "motherlode-nuggets", count: Number(match[1]) } };
+  if (/^Receive 30 Agility Arena Tickets without missing any pillars\.?$/i.test(description)) return { trigger: { kind: "agility-ticket-streak", tickets: 30, count: 1 } };
+  if (/^Receive an Agility Arena Ticket from the Brimhaven Agility Arena\.?$/i.test(description)) return { trigger: { kind: "agility-tickets", count: 1 } };
+  // A boss pet ("Obtain any Boss Pet"): a pet with no skill (never a skilling one).
+  if (/^Obtain any Boss Pet\.?$/i.test(description)) return { trigger: { kind: "pet", skilling: false, count: 1 } };
   const keyChest = KEY_CHESTS.find(([pattern]) => pattern.test(description.replace(/\.$/, "")));
   if (keyChest) {
     const times = /^Open (\d+) of /i.exec(description);
@@ -1148,6 +1385,56 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     const shortcuts = SHORTCUT_NAMES.filter((each) => each === linked || each.startsWith(`${family}, `));
     return shortcuts.length ? { trigger: { kind: "shortcut", shortcuts: [...new Set(shortcuts)], count: 1 } } : {};
   }
+  // An object's or item's own menu option something answered (object:operated / item:operated): the
+  // deed itself. Only interactions a plugin (or the engine's own Bank option) handled reach the
+  // runtime, so a mere click on a locked chest is no deed.
+  {
+    // "Open a Bronze/Black/Gold Chest from Shades of Mort'ton (minigame)": the catacombs' chests.
+    const shades = /^Open an? (Bronze|Black|Gold) Chest from Shades of Mort['?]ton(?: \(minigame\))?\.?$/i.exec(description);
+    if (shades && new RegExp("^Open a " + shades[1] + " Chest$", "i").test(name)) {
+      // Credited by the catacombs chest's own success event, not the click ("chest:opened"), so a wrong
+      // key or no room for the loot is no deed.
+      return { trigger: { kind: "object-op", objects: [shades[1] + " Chest"], option: "open", event: "chest:opened", count: 1 } };
+    }
+    // "Open 1 Muddy Chest", "Open 10 Muddy Chests": the Lava Maze's muddy chest (object 170).
+    if ((match = /^Open (\d+) Muddy Chests?\.?$/i.exec(description)) && /^Open \d+ Muddy Chests?$/i.test(name)) {
+      // Credited by the muddy chest's own success event ("chest:opened"), not the click, so a locked
+      // click or a full pack is no deed.
+      return { trigger: { kind: "object-op", objectIds: [170], option: "open", event: "chest:opened", count: Number(match[1]) } };
+    }
+    // "Fill a crate with Bananas for Luthas at Musa Point": the plantation crate (object 2072).
+    if (/^Fill a crate with Bananas for Luthas at Musa Point\.?$/i.test(description)) {
+      return { trigger: { kind: "object-op", objectIds: [2072], option: "fill", count: 1 } };
+    }
+    // "Use the Lovakengj Minecart Network": the Lovakengj carts' Travel and the Keldagrim carts' Ride.
+    if (/^Use the Lovakengj Minecart Network\.?$/i.test(description)) {
+      return { trigger: { kind: "object-op", objects: ["Minecart", "Train cart"], count: 1 } };
+    }
+    // "Use the Abyss to access a Runic altar": the twelve rifts' Exit-through.
+    if (/^Use the Abyss to access a Runic altar\.?$/i.test(description)) {
+      return { trigger: { kind: "object-op", objects: ["Air rift", "Mind rift", "Water rift", "Earth rift", "Fire rift", "Body rift", "Cosmic rift", "Chaos rift", "Nature rift", "Law rift", "Death rift", "Blood rift"], count: 1 } };
+    }
+    // "Use the pottery oven in Civitas illa Fortis to make something out of soft clay": its own oven.
+    if (/^Use the pottery oven in Civitas illa Fortis to make something out of soft clay\.?$/i.test(description)) {
+      // Credited by the oven's own success event ("pottery:fired"), not the click, so an empty oven or
+      // a cracked piece is no deed.
+      return { trigger: { kind: "object-op", objectIds: [58655], option: "fire", event: "pottery:fired", count: 1 } };
+    }
+    // "Open 28 Coin Pouches at once": one Open-all covering that many ("Open-all" is the option).
+    if ((match = /^Open (\d+) Coin Pouches at once\.?$/i.exec(description)) && /^Open \d+ Coin Pouches At Once$/i.test(name)) {
+      // The successful open's own event ("coin-pouch:opened", with `pouches`), so a refused Open-all
+      // cannot complete it.
+      return { trigger: { kind: "coin-pouch", pouches: Number(match[1]), count: 1 } };
+    }
+    // "Open the Mystery Box": the box's own Open.
+    if (/^A boat is a boat, but the mystery box could be anything, even a boat!?\.?$/i.test(description)) {
+      return { trigger: { kind: "item-op", items: ["Mystery box"], option: "open", count: 1 } };
+    }
+    // "Open a Frozen Cache": the Phantom Muspah's cache item's Open.
+    if (/^Open a Frozen [Cc]ache\.?$/i.test(description)) {
+      return { trigger: { kind: "item-op", items: ["Frozen cache"], option: "open", count: 1 } };
+    }
+  }
   // "Talk to any Port master", "Talk to a Gladiator (Fortis Colosseum)", "Talk to Ilfeen in Tirannwn",
   // "Pet Renu": that option done on an NPC of the name (npc:operated, once something answered it), in
   // the league area or place that follows. Every cache NPC of the name with that option must be one
@@ -1171,6 +1458,13 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     if (said.area !== null) trigger.area = said.area;
     if (said.place) trigger.place = said.place;
     return { trigger };
+  }
+  // "Use the Bank at the Mage Arena" ("Use the Mage Arena bank at the Mage Arena"): the Mage Arena
+  // bank cave's own bank chest, opened (bank:opened) inside the cave.
+  if ((match = /^Use the Bank at (?:the )?(.+)$/i.exec(name))) {
+    const place = placeNamed(match[1]);
+    const said = /^Use the (.+?) bank at (?:the )?(.+?)\.?$/i.exec(description);
+    if (place && said && placeNamed(said[2]) === place) return { trigger: { kind: "bank", place, count: 1 } };
   }
   // "Use the Bank in Nardah", "Bank at Mount Quidamortem" ("Open your Bank using the Bank at Mount
   // Quidamortem"): the bank opened (bank:opened) inside that town's bank (its own page's bounds), or
@@ -1248,13 +1542,19 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     const place = placeNamed(match[1]);
     return place && said && placeNamed(said[1]) === place ? { trigger: { kind: "enter", place } } : {};
   }
+  // A task that is exactly a Combat Achievement, awarded from the achievement's own completion
+  // (combat-achievements:completed): "Defeat Awakened Vardorvis" is "Vardorvis Sleeper".
+  {
+    const achievement = CA_COMPLETIONS.find(([pattern]) => pattern.test(name));
+    if (achievement) return { trigger: { kind: "ca-complete", task: achievement[1] } };
+  }
   if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:[Aa] |[Aa]n |[Tt]he |[Ss]ome )?(.+?)(?: (\d+) [Tt]imes?)?$/.exec(name))) {
     const [, first, second] = match;
     const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
     // A league area as the place ("in Varlamore", "on Karamja", "within Morytania", "in the
     // Fremennik Province", "in Varlamore underground"): a kill there, the areas' own map deciding.
     const fromName = leagueAreaOf(named);
-    const subject = fromName.text;
+    let subject = fromName.text;
     // The description may give the area the name leaves out ("Defeat Hueycoatl 1 Time": "Defeat the Hueycoatl in Varlamore").
     const fromDescription = leagueAreaOf(description.replace(/ \d+ times$/i, ""));
     const area = fromName.area ?? fromDescription.area;
@@ -1280,20 +1580,38 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       if (castes.length === 4) return { trigger: { kind: "kill", npcs: castes, count } };
     }
     // "Reach a combined kill count of 500 across all God Wars Dungeon bosses": the five generals,
-    // one total. "Defeat any one of the God Wars Dungeon bosses 100/250 times" is one boss that
-    // many times. A shared total would count a mix, and kill-each would demand all five, so those
-    // two stay unmapped.
+    // one total. "Defeat any one of the God Wars Dungeon bosses 100/250 times" is one boss that many
+    // times, not the group's total (kill-any-one); "kill" would count a mix.
     if (/^Any God Wars Dungeon Boss$/i.test(subject)) {
-      if (count !== 500) return { unmapped: name };
       const bosses = ["Kree'arra", "General Graardor", "Commander Zilyana", "K'ril Tsutsaroth", "Nex"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
-      if (bosses.length === 5) return { trigger: { kind: "kill", npcs: bosses, count } };
+      if (bosses.length === 5) {
+        if (count === 500) return { trigger: { kind: "kill", npcs: bosses, count } };
+        if (count === 100 || count === 250) return { trigger: { kind: "kill-any-one", npcs: bosses, count } };
+      }
     }
+    // The Dagannoth Kings: "Defeat Each Dagannoth King 50/150/300 times" is each of the three that many
+    // times (kill-each); "without leaving their area" is one of each without leaving (`noLeave`).
+    if (/^Each Dagannoth King$/i.test(subject)) {
+      const kings = ["Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
+      if (kings.length === 3) return { trigger: { kind: "kill-each", npcs: Object.fromEntries(kings.map((npc) => [npc, count])) } };
+    }
+    if (/^Dagannoth Kings Without Leaving$/i.test(subject)) {
+      const kings = ["Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
+      if (kings.length === 3) return { trigger: { kind: "kill-each", npcs: Object.fromEntries(kings.map((npc) => [npc, 1])), noLeave: true, place: "waterbirth-island-dungeon" } };
+    }
+    // A kill whose condition is written out ("with an earth spell", "in one hit", "with melee"):
+    // read off the killing blow (docs/leagues.md, Tasks).
+    const combat = combatTrigger(name, description, names);
+    if (combat) return { trigger: combat };
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
     const condition = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count)\b/i;
     const place = /\b(in|on|at|inside|near|from|outside|under|beneath)\b (?:the |an? )?[A-Z]/;
     if (condition.test(description) || place.test(description.replace(subject, "")) || place.test(subject)) return { unmapped: name };
+    // The place stripped, the description may name the monster the name words differently ("Defeat an
+    // Imp in a basement" is "Defeat an Imp in the Kastori basement").
+    if (spot.place && !npcNamed(subject, npcs)) subject = description.replace(/^(?:Defeat|Kill|Slay) (?:an? |the |some |\d+ )?/i, "").trim();
     // A Combat Achievements monster that is no NPC of its name is the NPCs its plugin counts for it
     // ("Grotesque Guardians": Dusk, whose death ends the fight).
     const counted = caMonsters().has(bossName) ? CA_MONSTER_NPCS[caMonsters().get(bossName)!] : undefined;
@@ -1307,9 +1625,11 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     // "Defeat The Nightmare or Phosani's Nightmare 50 times combined". Every one must be a cache NPC.
     const accepted = alternativesOf(description).map((part) => npcNamed(part, npcs));
     if (accepted.some((npc) => npc === null)) return { unmapped: name };
-    const names = [...new Set([primary, ...accepted].filter((npc): npc is string => npc !== null))];
-    if (!names.length) return { unmapped: name };
-    const trigger: Trigger = area === null ? { kind: "kill", npcs: names, count } : { kind: "kill", npcs: names, count, area };
+    // A race the cache has no single NPC for ("Defeat a Snail", "Defeat an Elf in Tirannwn").
+    const targets = [...new Set([primary, ...accepted].filter((npc): npc is string => npc !== null))];
+    const npcList = targets.length ? targets : raceOf(subject) ?? [];
+    if (!npcList.length) return { unmapped: name };
+    const trigger: Trigger = area === null ? { kind: "kill", npcs: npcList, count } : { kind: "kill", npcs: npcList, count, area };
     if (spot.place) trigger.place = spot.place;
     return { trigger };
   }
@@ -1401,21 +1721,32 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     const tier = match[2][0].toUpperCase() + match[2].slice(1).toLowerCase();
     return { trigger: { kind: "collection-log", category: `${tier} Treasure Trails`, count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
   }
-  // "Check the health of any fruit tree you've grown", "... of 5 Crystal Trees": a health check of a
-  // grown crop of that kind (the farming plugin's crop types). A cactus is only grown in the
-  // special patches and a redwood in the Farming Guild, so those places say nothing; any other
-  // place ("in Lletya", "in Marcellus's Patch") is left out.
-  if ((match = /^Check the health of (?:any |an? )?(\d+ )?(.+?)(?: you've grown| after growing one)?(?: in (?:Special patches|the Farming Guild))?\.?$/i.exec(description))) {
-    const kind = match[2].replace(/ \(Farming\)/i, "").replace(/ you've grown$/i, "").toLowerCase();
+  // "Check the health of any fruit tree you've grown", "... of 5 Crystal Trees", "Check the health of
+  // a Papaya Tree you've grown in Lletya": a health check of a grown crop of that kind (the farming
+  // plugin's crop types) or of that crop, in the place that follows. A cactus is only grown in the
+  // special patches and a redwood in the Farming Guild, so those places say nothing more.
+  if (/^Check the health of /i.test(description)) {
+    const spot = placeOf(description.replace(/\.$/, ""));
+    const said = spot.text.replace(/^Check the health of /i, "");
+    const count = Number(/^(\d+) /.exec(said)?.[1] ?? 1);
+    const kind = said
+      .replace(/^(?:any |an? |\d+ )/i, "").replace(/\.$/, "")
+      .replace(/\s+in (?:Special patches|the Farming Guild)$/i, "")
+      .replace(/\s+you've grown$/i, "").replace(/\s+after growing one$/i, "")
+      .replace(/\s*\(Farming\)/i, "").toLowerCase().trim();
     const types: Record<string, string> = {
       "fruit tree": "FRUIT_TREE", "tree patch": "TREE", "calquat tree": "CALQUAT", "crystal trees": "CRYSTAL_TREE",
       "crystal tree": "CRYSTAL_TREE", "redwood tree": "REDWOOD",
     };
-    const count = match[1] ? Number(match[1]) : 1;
     // A cactus is the crop itself: a potato cactus, of the same kind of patch, is not one.
-    if (kind === "cactus") return { trigger: { kind: "check-health", crops: ["CACTUS"], count } };
-    if (/\bin\b/i.test(kind) || !types[kind]) return {};
-    return { trigger: { kind: "check-health", types: [types[kind]], count } };
+    const crops: Record<string, string> = { "cactus": "CACTUS", "papaya tree": "PAPAYA", "dragonfruit tree": "DRAGONFRUIT", "mahogany tree": "MAHOGANY" };
+    const trigger: Trigger | null = crops[kind] ? { kind: "check-health", crops: [crops[kind]], count } : types[kind] ? { kind: "check-health", types: [types[kind]], count } : null;
+    if (trigger) {
+      // A redwood is only grown in the Farming Guild, so that place says nothing more.
+      if (spot.place && spot.place !== "farming-guild") trigger.place = spot.place;
+      return { trigger };
+    }
+    return {};
   }
   // "Complete 1 Slayer task", "Complete 200 Slayer Tasks": Slayer tasks done (from any master).
   if ((match = /^Complete (\d+) Slayer tasks?\.?$/i.exec(description))) return { trigger: { kind: "slayer-tasks", count: Number(match[1]) } };
@@ -1433,8 +1764,8 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     const prayer = PRAYER_NAMES.get(match[1].toLowerCase());
     return prayer ? { trigger: { kind: "prayer", prayers: [prayer], count: 1 } } : {};
   }
-  // "Obtain any Skilling Pet": a new pet of a skill's. (A boss pet is not told apart from the other
-  // pets that have no skill, so "Obtain any Boss Pet" is left out.)
+  // "Obtain any Skilling Pet": a new pet of a skill's. "Obtain any Boss Pet" is the other rule
+  // below: a pet with no skill of its own (the boss pets, and the boss pets that are main drops).
   if (/^Obtain any Skilling Pet\.?$/i.test(description)) return { trigger: { kind: "pet", skilling: true, count: 1 } };
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
@@ -1482,15 +1813,25 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
         return { trigger: { kind: "equip-all", items: slots } };
       }
       if (listed && listed.length > 1) return { trigger: { kind: "equip-any-set", sets: listed } };
-      // Graceful and the prospector kit: the page's plain {{plinkp}} names, the six and the four.
-      // A recolour is the same cache name, so it is this set; the cache cannot tell a recoloured
-      // one apart, and that task stays unmapped.
-      const outfits: Record<string, string[]> = {
-        "graceful gear": ["Graceful hood", "Graceful cape", "Graceful top", "Graceful legs", "Graceful gloves", "Graceful boots"],
-        "prospector gear": ["Prospector helmet", "Prospector jacket", "Prospector legs", "Prospector boots"],
+      // The outfits whose Wiki page tabulates the pieces with {{plinkt}} and gives no one set table:
+      // the pieces named here (Graceful and the prospector kit among them), each resolved to its cache
+      // item, a slot taking either of two (the farmer's jacket or shirt). A graceful recolour shares
+      // the cache's name, so it is this set too (the cache cannot tell a recoloured one apart).
+      const outfits: Record<string, Array<string | string[]>> = {
+        graceful: ["Graceful hood", "Graceful cape", "Graceful top", "Graceful legs", "Graceful gloves", "Graceful boots"],
+        prospector: ["Prospector helmet", "Prospector jacket", "Prospector legs", "Prospector boots"],
+        "guild hunter": ["Guild hunter headwear", "Guild hunter top", "Guild hunter legs", "Guild hunter boots"],
+        smiths: ["Smiths tunic", "Smiths trousers", "Smiths gloves", "Smiths boots"],
+        farmers: ["Farmer's strawhat", ["Farmer's jacket", "Farmer's shirt"], "Farmer's boro trousers", "Farmer's boots"],
+        carpenters: ["Carpenter's helmet", "Carpenter's shirt", "Carpenter's trousers", "Carpenter's boots"],
+        "raiment of the eye": ["Hat of the Eye", "Robe top of the Eye", "Robe bottoms of the Eye", "Boots of the Eye"],
+        villager: ["Villager hat", "Tribal top", "Villager armband", "Villager robe", "Villager sandals"],
+        "vyre noble": ["Vyre noble top", "Vyre noble legs", "Vyre noble shoes"],
       };
-      const outfit = outfits[set[1].toLowerCase()] ?? outfits[titled.toLowerCase()];
-      if (outfit?.every((piece) => items.has(piece.toLowerCase()))) return { trigger: { kind: "equip-all", items: outfit.map((piece) => items.get(piece.toLowerCase())!) } };
+      const outfitKey = (text: string) => text.toLowerCase().replace(/'/g, "").replace(/ (?:outfit|clothing|gear|set)$/, "");
+      const outfit = outfits[outfitKey(set[1])] ?? outfits[outfitKey(titled)];
+      const pieces = outfit?.map((unit) => (Array.isArray(unit) ? unit.map((piece) => items.get(piece.toLowerCase())).filter((piece): piece is string => !!piece) : items.get(unit.toLowerCase()) ?? null));
+      if (pieces?.every((unit) => (Array.isArray(unit) ? unit.length : unit))) return { trigger: { kind: "equip-all", items: pieces as Array<string | string[]> } };
     } else if ((set = /^(?:every |all |any |a )?piece of (?:the )?(?:any )?(.+?)(?: set)?$/i.exec(said))) {
       const everyPiece = /^(?:every |all )piece of /i.test(said);
       if (/^barrows armour$/i.test(set[1])) {
@@ -1503,12 +1844,14 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       if (sets) return { trigger: { kind: "equip", items: [...new Set(sets.flat())] } };
       // "Equip any piece of Zenyte Jewelry": the four enchanted pieces (the Zenyte page's Magic
       // table; the task's link redirects there) and each piece's cache forms. "Equip every piece"
-      // cannot be worn at once: the amulet and the necklace share the neck slot, so that task
-      // stays unmapped.
+      // cannot be worn at once (the amulet and the necklace share the neck slot), so it is the four
+      // pieces gathered over time.
       if (/^zenyte jewelry$/i.test(set[1])) {
-        if (everyPiece) return {};
         const slots = ["Amulet of torture", "Necklace of anguish", "Tormented bracelet", "Ring of suffering"].map((piece) => wornVariants(piece, items)).filter((slot) => slot.length);
-        if (slots.length === 4) return { trigger: { kind: "equip", items: [...new Set(slots.flat())] } };
+        if (slots.length === 4) {
+          if (everyPiece) return { trigger: { kind: "equip-each", items: slots.map((slot) => (slot.length === 1 ? slot[0] : slot)) } };
+          return { trigger: { kind: "equip", items: [...new Set(slots.flat())] } };
+        }
       }
       // "any piece of Moon equipment from the Blood, Frost, or Eclipse moon set": the linked set
       // page has one table per moon, and a piece of any of them counts (the same pieces as
@@ -1542,6 +1885,12 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
   // "Pick up 10 White berries in Tirannwn", "Pick up Snape grass from Lunar Isle", "Telegrab a Bloody
   // bracer in Slepe": that ground item taken (ItemOnGroundManager's ground-items:taken, by hand or by
   // Telekinetic Grab), in the league area or place that follows.
+  // "Pick up a Cabbage in the Citharede Abbey": the abbey's own cabbage field is scenery, not a
+  // ground item, so it is the crop picked (Pickable's `world:picked`) inside the place, not a
+  // `ground-items:taken`.
+  if (/^Pick up a Cabbage in the Citharede Abbey\.?$/i.test(description)) {
+    return { trigger: { kind: "pick", plants: ["Cabbage"], place: "citharede-abbey", count: 1 } };
+  }
   if ((match = /^(Pick up|Telegrab) (.+)$/i.exec(name))) {
     const { area, text: unplaced } = leagueAreaOf(clean(description));
     const spot = placeOf(unplaced);
@@ -1680,10 +2029,127 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     const forms = wornVariants("Damaged book", items);
     if (forms.length) return { trigger: { kind: "equip", items: forms } };
   }
+  // "Equip a Full God Dragonhide/Rune/Vestment Set": the pieces the Wiki aligns to one god, one whole
+  // set of one god worn at once (each god's coif, body, chaps and bracers; full helm, platebody,
+  // legs or skirt and kiteshield; or robe top, legs, mitre, cloak, stole and crozier, as the cache
+  // names them). The gods are the six the cache gives those sets for.
+  if (/^Equip /i.test(name) && /all pieces aligned to the same god/i.test(description)) {
+    const gods = ["Saradomin", "Zamorak", "Guthix", "Armadyl", "Bandos", "Ancient"];
+    const wornPieces = (pieces: string[]) => pieces.map((piece) => wornItemOf(piece, items)).filter((piece): piece is string => !!piece);
+    const eitherOf = (pieces: string[]): string | string[] | null => {
+      const worn = wornPieces(pieces);
+      return worn.length === 1 ? worn[0] : worn.length > 1 ? worn : null;
+    };
+    const sets = gods.map((god) => {
+      if (/dragonhide/i.test(name)) return wornPieces([`${god} coif`, `${god} d'hide body`, `${god} chaps`, `${god} bracers`]);
+      if (/\brune\b/i.test(name)) return [wornItemOf(`${god} full helm`, items), wornItemOf(`${god} platebody`, items), eitherOf([`${god} platelegs`, `${god} plateskirt`]), wornItemOf(`${god} kiteshield`, items)].filter((piece): piece is string | string[] => !!piece);
+      if (/vestment/i.test(name)) return wornPieces(["robe top", "robe legs", "mitre", "cloak", "stole", "crozier"].map((part) => `${god} ${part}`));
+      return [];
+    });
+    const size = sets[0]?.length ?? 0;
+    if (size > 1 && sets.every((set) => set.length === size)) return { trigger: { kind: "equip-any-set", sets } };
+  }
+  // "Equip an Ornament Kit Item": any item the cache gives an ornamented "(or)" form of (the kits
+  // themselves name no worn "(or)" item).
+  if (/^Equip an Ornament Kit Item$/i.test(name)) {
+    const worn = [...new Set([...items.values()].filter((item) => /\(or\)$/i.test(item) && wornItemOf(item, items)))];
+    if (worn.length) return { trigger: { kind: "equip", items: worn } };
+  }
+  // "Equip any spear (kp)": the cache's karambwan-poisoned spears ("Bronze spear(kp)", ...).
+  if (/^Equip any spear \(kp\)$/i.test(name)) {
+    const worn = [...new Set([...items.values()].filter((item) => /spear\(kp\)$/.test(item)))];
+    if (worn.length) return { trigger: { kind: "equip", items: worn } };
+  }
+  // "Equip an Eternal Slayer Ring": the cache's "Slayer ring (eternal)" (the description's "Craft and
+  // equip an Eternal slayer ring" is the deed the name restates).
+  if (/^Equip an Eternal Slayer Ring$/i.test(name)) {
+    const ring = wornItemOf("Slayer ring (eternal)", items);
+    if (ring) return { trigger: { kind: "equip", items: [ring] } };
+  }
+  // "Equip a Marksman / Ogre Forester / Ogre Expert / Dragon Archer Chompy Hat": the cache names every
+  // rank's hat "Chompy bird hat" and its examine carries the rank ("...: Marksman (125 kills)"), so
+  // the task's rank picks its id (Marksman 2983, Ogre Forester 2986, Ogre Expert 2990, Dragon Archer 2993).
+  if ((match = /^Equip an? (.+?) Chompy Hat$/i.exec(name))) {
+    const rank = match[1].replace(/[.*+?^${}()|[\]\\]/g, function (char) { return "\\" + char; });
+    const hat = [...Array(CacheDefinitions.getCounts().items).keys()].find((id) => {
+      const item = CacheDefinitions.getItem(id) as { name?: string; examine?: string } | undefined;
+      return item?.name === "Chompy bird hat" && new RegExp(`: ${rank} \\(`).test(item.examine ?? "");
+    });
+    if (hat !== undefined) return { trigger: { kind: "equip", items: [hat] } };
+  }
+  // "Equip N unique Echo Item(s)": that many different ones of the echo items over time (they share
+  // slots - the three Virtus and the Ahrim's pieces, the weapons - so they are collected). The names
+  // are the cache's own "echo ..." items and Demonic Pacts' ten echo uniques. One echo item's charge
+  // states ("Echo ahrim's hood 100", ... "0", "(uncharged)") are one item, so they are one unit.
+  if ((match = /^Equip (one|two|three|four|\d+) unique Echo Items?$/i.exec(name))) {
+    const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4 };
+    const count = words[match[1].toLowerCase()] ?? Number(match[1]);
+    const uniques = ["Infernal tecpatl", "Fang of the hound", "Shadowflame quadrant", "Devil's element", "Nature's recurve", "V's helm", "King's barrage", "Lithic sceptre", "Drygore blowpipe", "Crystal blessing"];
+    const base = (item: string) => item.replace(/ \d+$/, "").replace(/ \(uncharged\)$/i, "").toLowerCase();
+    const grouped = new Map<string, string[]>();
+    for (const item of new Set([...items.values()].filter((item) => /^echo /i.test(item) && wornItemOf(item, items)))) grouped.set(base(item), (grouped.get(base(item)) ?? []).concat(item));
+    const worn: Array<string | string[]> = [...grouped.values()].map((forms) => (forms.length === 1 ? forms[0] : forms));
+    for (const unique of uniques) { const item = wornItemOf(unique, items); if (item) worn.push(item); }
+    if (worn.length >= count) return { trigger: { kind: "equip-count", items: worn, count } };
+  }
+  // "Equip a stack of at least N Black Chinchompas": the one worn stack that large (the chinchompa is
+  // worn whole, so `count` is the stack the worn one needs).
+  if ((match = /^Equip (\d+) Black Chinchompas$/i.exec(name))) {
+    const chinchompa = wornItemOf("Black chinchompa", items);
+    if (chinchompa) return { trigger: { kind: "equip", items: [chinchompa], count: Number(match[1]) } };
+  }
+  // "Equip a Monkey Backpack": the base monkey (Monkey Madness II, the cache's one worn "Monkey",
+  // id 19556); the transformed backpacks are tasks of their own.
+  if (/^Equip a Monkey Backpack$/i.test(name)) {
+    const worn = itemIdsNamed("Monkey").filter((id) => Number((CacheDefinitions.getItem(id) as { wearPos?: number } | undefined)?.wearPos) >= 0);
+    if (worn.length) return { trigger: { kind: "equip", items: worn } };
+  }
+  // "Equip a Gilded or Trimmed Wizard Item": the gilded armour page's Armour section (its gilded
+  // pieces) or a trimmed/gold-trimmed wizard piece (the wizard robes page's (t) and (g) lists).
+  if (/^Equip a Gilded or Trimmed Wizard Item$/i.test(name)) {
+    const gilded = (names.sections?.get("gilded equipment#armour") ?? []).filter((piece) => /^Gilded /i.test(piece));
+    const wizard = ["Black wizard hat (t)", "Black wizard robe (t)", "Black skirt (t)", "Blue wizard hat (t)", "Blue wizard robe (t)", "Blue skirt (t)", "Black wizard hat (g)", "Black wizard robe (g)", "Black skirt (g)", "Blue wizard hat (g)", "Blue wizard robe (g)", "Blue skirt (g)"].map((piece) => wornItemOf(piece, items)).filter((piece): piece is string => !!piece);
+    const worn = [...new Set([...gilded, ...wizard])];
+    if (worn.length) return { trigger: { kind: "equip", items: worn } };
+  }
+  // "Equip Every Godsword": the five godswords worn at some point (they share the weapon slot, so
+  // they are collected over time); each one's cache forms count (an ornament of one is that godsword).
+  if (/^Equip Every Godsword$/i.test(name)) {
+    const swords = ["Armadyl godsword", "Bandos godsword", "Saradomin godsword", "Zamorak godsword", "Ancient godsword"].map((base) => wornVariants(base, items));
+    if (swords.every((forms) => forms.length)) return { trigger: { kind: "equip-each", items: swords.map((forms) => (forms.length === 1 ? forms[0] : forms)) } };
+  }
+  // "Equip every completed God Book": the six books worn at some point (they share the shield slot).
+  if (/^Equip Every Completed God Book$/i.test(name)) {
+    const books = ["Holy book", "Unholy book", "Book of Balance", "Book of War", "Book of Law", "Book of Darkness"].map((base) => wornVariants(base, items));
+    if (books.every((forms) => forms.length)) return { trigger: { kind: "equip-each", items: books.map((forms) => (forms.length === 1 ? forms[0] : forms)) } };
+  }
+  // "Equip all of the Cerberus Boots": the three boots worn at some point (they share the boot slot),
+  // or the Avernic treads (max) alone.
+  if (/^Equip all of the Cerberus Boots$/i.test(name)) {
+    const boots = ["Primordial boots", "Pegasian boots", "Eternal boots"].map((base) => wornVariants(base, items));
+    if (boots.every((forms) => forms.length)) {
+      const trigger: Trigger = { kind: "equip-each", items: boots.map((forms) => (forms.length === 1 ? forms[0] : forms)) };
+      const max = wornVariants("Avernic treads (max)", items);
+      if (max.length) trigger.any = max.length === 1 ? max[0] : max;
+      return { trigger };
+    }
+  }
+  // "Equip a full set of Yakhide Armour": the cache names both pieces "Yak-hide armour" (the worn ids
+  // 10822 body and 10824 legs), so it is that name's worn ids, both worn at once.
+  if (/^Equip a full set of Yakhide Armour$/i.test(name)) {
+    const worn = itemIdsNamed("Yak-hide armour").filter((id) => Number((CacheDefinitions.getItem(id) as { wearPos?: number } | undefined)?.wearPos) >= 0);
+    if (worn.length > 1) return { trigger: { kind: "equip-all", items: worn } };
+  }
   // "Restore 75 or more Prayer Points at any altar": one prayer there restoring at least that
   // (altars:prayed's restored). A place, or an exact amount, is not this.
   if ((match = /^Restore (\d+) or more Prayer Points at any altar\.?$/i.exec(clean(description)))) {
     return { trigger: { kind: "prayer-restore", amount: Number(match[1]), count: 1 } };
+  }
+  // "Use a prayer altar to restore 90 prayer points in Prifddinas": that much restored at an altar
+  // inside the place (the altar's own tile is inside it).
+  if ((match = /^Use a prayer altar to restore (\d+) prayer points? in (.+?)\.?$/i.exec(clean(description)))) {
+    const place = placeNamed(match[2]);
+    return place ? { trigger: { kind: "prayer-restore", amount: Number(match[1]), place, count: 1 } } : {};
   }
   // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
   // no single item or NPC stands for it.
@@ -1952,9 +2418,14 @@ function setListsOf(wikitext: string): string[][] {
   return pictured.length ? [pictured] : [];
 }
 
-/** The {{Infotable Bonuses}} pieces in a stretch of wikitext, a "#Unpoisoned" suffix dropped. */
+/**
+ * The pieces a stretch of wikitext tabulates: its {{Infotable Bonuses}} args (a "#Unpoisoned" suffix
+ * dropped), else its {{plinkt}}/{{plinkp}} links ("Ornamental armour"'s Other section of amulets).
+ */
 function tablePieces(wikitext: string): string[] {
-  return [...new Set([...wikitext.matchAll(/\{\{Infotable Bonuses\|([^{}]*)\}\}/g)].flatMap((match) => match[1].split("|").map((arg) => arg.trim()).filter((arg) => arg && !arg.includes("=")).map((arg) => arg.replace(/#.*$/, ""))))];
+  const tables = [...wikitext.matchAll(/\{\{Infotable Bonuses\|([^{}]*)\}\}/g)].flatMap((match) => match[1].split("|").map((arg) => arg.trim()).filter((arg) => arg && !arg.includes("=")).map((arg) => arg.replace(/#.*$/, "")));
+  if (tables.length) return [...new Set(tables)];
+  return [...new Set([...wikitext.matchAll(/\{\{plink[pt]\|([^|}]+)/gi)].map((match) => match[1].trim().replace(/#.*$/, "")))];
 }
 
 /** A heading's body, through the next heading of the same level or higher. */

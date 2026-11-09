@@ -25,6 +25,9 @@ function give(api, player, rewards, { alwaysPrivate = false } = {}) {
     const definition = item.getDefinition();
     const amount = `${HIGHLIGHT}${item.getAmount()}</col> x ${HIGHLIGHT}${definition.getName()}</col>`;
     api.emitCustomEvent("collection-log:obtain", { player, itemId: item.getId(), amount: item.getAmount() });
+    // "random-events:reward" { player, itemId, amount }: the reward a random event just handed over,
+    // for a league's "Obtain a Kebab from a random event".
+    api.emitCustomEvent("random-events:reward", { player, itemId: item.getId(), amount: item.getAmount() });
     if (fits(inventory, item)) {
       inventory.addItem(item);
       player.sendMessage(`Your reward is: ${amount}.`);

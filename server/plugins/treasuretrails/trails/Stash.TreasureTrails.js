@@ -106,6 +106,8 @@ function deposit(player, unit) {
   inventory.refreshItems();
   player.setAttribute(STORED_ATTRIBUTE, { ...stored(player), [unit.step.stash.locId]: taken.map(entry => entry.id) });
   player.sendMessage("You store the items in the STASH unit.");
+  // A STASH filled, by its tier ("fill a Medium STASH unit"): content that credits the deed.
+  api.emitCustomEvent("stash:filled", { player, tier: unit.tier.name });
 }
 
 function withdraw(player, unit, items) {

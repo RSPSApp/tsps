@@ -53,6 +53,9 @@ function giveGeode(player, geodeId) {
   const inventory = player.getInventory();
   inventory.forceAdd(player, new core.Item(geodeId, 1));
   player.sendMessage("You find a clue geode!");
+  // "mining:geode" { player, itemId }: the geode found here (after any box rewrite), for a
+  // league's "Obtain a Clue Geode While Mining".
+  pluginApi?.emitCustomEvent?.("mining:geode", { player, itemId: geodeId });
 }
 
 function rollClueGeodes({ player, skill, petBase }, random = Math.random) {

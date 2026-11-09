@@ -201,6 +201,9 @@ function openMuddyChest(event, random = Math.random) {
   inventory.deleteNumber(ids().MUDDY_KEY, 1);
   give(player, loot);
   credit(player, MUDDY_TASK);
+  // "chest:opened" { player, objectId }: the chest really gave its loot, for a league's "Open 1/10 Muddy
+  // Chests" (a locked click or a full pack returns above without it, so an attempt is no deed).
+  api.emitCustomEvent("chest:opened", { player, objectId: MUDDY_CHEST });
   return true;
 }
 
@@ -296,6 +299,9 @@ function searchRoguesChest(event, random = Math.random) {
     if (!tierComplete(player, "medium") || player.getInventory().getFreeSlots() < ROGUES_FREE_SLOTS) return;
     const { loot, text } = roguesLoot(player, tierComplete(player, "hard") || tierComplete(player, "elite"), random);
     give(player, loot);
+    // "rogues-chest:loot" { player, drops }: the loot the chest just handed over, for a league's
+    // "Loot a dragonstone from the chest in Rogue's Castle" (the dragonstone, noted).
+    api.emitCustomEvent("rogues-chest:loot", { player, drops: loot.map((item) => ({ itemId: item.getId(), amount: item.getAmount() })) });
     player.sendMessage(`You find some ${text} inside.`);
     player.performAnimation(new core.Animation(ANIM.OPEN_CHEST));
     player.getSkillManager().addExperiences(core.Skill.THIEVING, ROGUES_THIEVING_XP);

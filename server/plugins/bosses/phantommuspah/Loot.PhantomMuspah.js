@@ -141,6 +141,9 @@ function openCache({ player, itemId }) {
     if (noteId >= 0) rewardId = noteId;
   }
   if (reward.itemId === ItemIdentifiers.FROZEN_CACHE) player.sendMessage(Common.data.frozenCache.anotherCache);
+  // "phantom-muspah:frozen-cache" { player, itemId }: the opened cache gave another cache,
+  // for a league's "Obtain a Frozen Cache from a Cache".
+  Common.api.emitCustomEvent("phantom-muspah:frozen-cache", { player, itemId: reward.itemId });
   inventory.adds(rewardId, reward.amount);
   inventory.refreshItems();
   return true;

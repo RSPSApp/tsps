@@ -43,7 +43,7 @@ function item(name) {
 }
 
 /** A new Demonic Pacts character, logged in through the real hooks, its tutorial done. */
-function pactsCharacter(t, at = [1666, 3136, 0]) {
+function pactsCharacter(t, at = [1666, 3136, 0], areas = null) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const player = new Player(new PlayerSession(channel));
   player.setIndex(next++);
@@ -59,6 +59,9 @@ function pactsCharacter(t, at = [1666, 3136, 0]) {
   // an empty pack (the automatic quests' rewards) and nothing open.
   for (let i = 0; i < 3; i++) core.TaskManager.process();
   player.setAttribute("league:tutorial-stage", 14); // Leagues VI's tutorial over
+  // A league character is bounced out of any area it has not unlocked, so a deed in
+  // another area needs it unlocked before the final placing (docs/leagues.md, Areas).
+  if (areas) player.setAttribute("league:areas", areas);
   player.moveTo(new core.Location(...at));
   player.needsPlacement = false;
   player.getInventory().resetItems();
@@ -581,6 +584,228 @@ test("kill-each: one death of each NPC, in the task's area (Defeat a Moss, Fire 
   assert.ok(done(f, "defeat-a-moss-fire-and-hill-giant-in-kourend"));
 });
 
+/** A real NPC of the cache's name beside the player, killed with one blow of `opts` (the last hit
+ * `onCombatHitResolved` records). `hurt` makes it have damaged the player first (a `noDamage` kill must not). */
+function killWith(f, name, opts = {}) {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
+  const id = core.CacheDefinitions.getNpcId(name) ?? [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name);
+  assert.ok(id !== undefined && id !== null, `no NPC ${name}`);
+  const at = f.player.getLocation();
+  const npc = new NPC(id, new core.Location(at.getX() + 1, at.getY(), at.getZ()));
+  const style = opts.style ?? core.CombatType.MELEE;
+  const damage = opts.damage ?? 1;
+  if (opts.hurt) PM.emitCombatHitResolved({ attacker: npc, target: f.player, hit: { getSpell: () => null, getCombatType: () => style, getTotalDamage: () => 1 } });
+  PM.emitCombatHitResolved({ attacker: f.player, target: npc, hit: { getSpell: () => opts.spell ?? null, getCombatType: () => style, getTotalDamage: () => damage } });
+  npc.getCombat().addDamage(f.player, damage);
+  const task = new NPCDeathTask(npc);
+  task.execute();
+  task.execute();
+}
+
+test("conditional kill: the killing blow's weapon must be the one named (Defeat a Scorpion with a Mithril Spear)", (t) => {
+  const f = pactsCharacter(t);
+  killWith(f, "Scorpion");
+  assert.ok(!done(f, "defeat-a-scorpion-with-a-mithril-spear"), "an unarmed blow is not the spear");
+  f.player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(item("Rune scimitar")));
+  killWith(f, "Scorpion");
+  assert.ok(!done(f, "defeat-a-scorpion-with-a-mithril-spear"), "another weapon is not the spear");
+  f.player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(item("Mithril spear")));
+  killWith(f, "Scorpion");
+  assert.ok(done(f, "defeat-a-scorpion-with-a-mithril-spear"), f.messages.join(" | "));
+});
+
+test("conditional kill: the killing blow's spell must be of the element named (Defeat an Imp with an earth spell)", (t) => {
+  const f = pactsCharacter(t);
+  killWith(f, "Imp", { spell: core.CombatSpells.WIND_BLAST });
+  assert.ok(!done(f, "defeat-an-imp-with-an-earth-spell"), "a wind spell is not an earth one");
+  killWith(f, "Imp", { spell: core.CombatSpells.EARTH_BLAST });
+  assert.ok(done(f, "defeat-an-imp-with-an-earth-spell"), f.messages.join(" | "));
+});
+
+test("conditional kill: the killing blow's style must be the one named (Defeat a Oryx with melee)", (t) => {
+  const f = pactsCharacter(t);
+  killWith(f, "Oryx", { style: core.CombatType.RANGED });
+  assert.ok(!done(f, "defeat-a-oryx-with-melee"), "a ranged blow is not melee");
+  killWith(f, "Oryx", { style: core.CombatType.MELEE });
+  assert.ok(done(f, "defeat-a-oryx-with-melee"), f.messages.join(" | "));
+});
+
+test("conditional kill: one blow of at least the target's hitpoints (Defeat a Rock Crab in one hit)", (t) => {
+  const f = pactsCharacter(t);
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === "Rock Crab");
+  const hp = new NPC(id, new core.Location(0, 0, 0)).getMaxHitpoints();
+  killWith(f, "Rock Crab", { damage: hp - 1 });
+  assert.ok(!done(f, "defeat-a-rock-crab-in-one-hit"), "one short of its hitpoints is no one-hit kill");
+  killWith(f, "Rock Crab", { damage: hp });
+  assert.ok(done(f, "defeat-a-rock-crab-in-one-hit"), f.messages.join(" | "));
+});
+
+test("conditional kill: the target must not have damaged a player (Defeat a Jaguar without taking any damage from it)", (t) => {
+  const f = pactsCharacter(t);
+  killWith(f, "Jaguar", { hurt: true });
+  assert.ok(!done(f, "defeat-a-jaguar-without-taking-any-damage-from-it"), "it hurt a player");
+  killWith(f, "Jaguar");
+  assert.ok(done(f, "defeat-a-jaguar-without-taking-any-damage-from-it"), f.messages.join(" | "));
+});
+
+test("conditional kill: the equipment worn at the death (Defeat a Jubster while dressed like it)", (t) => {
+  const f = pactsCharacter(t);
+  killWith(f, "Jubster");
+  assert.ok(!done(f, "defeat-a-jubster-while-dressed-like-it"), "no beret, no kill");
+  f.player.getEquipment().set(core.Equipment.HEAD_SLOT ?? 0, new core.Item(item("Black beret")));
+  killWith(f, "Jubster");
+  assert.ok(done(f, "defeat-a-jubster-while-dressed-like-it"), f.messages.join(" | "));
+});
+
+test("conditional kill: solo, no other player's damage (the condition the solo boss tasks need)", (t) => {
+  // No catalog task uses it yet (Defeat Nex Solo and Defeat the Royal Titans solo need an
+  // encounter-level signal), so the decision itself is driven: nobody else's damage passes.
+  const { blowSatisfies } = require("../plugins/modes/leaguetasks/Triggers.LeagueTasks")._test;
+  const task = { trigger: { kind: "kill", npcs: ["Nex"], solo: true, count: 1 } };
+  const player = { isRegistered: () => true };
+  const partner = { isRegistered: () => true };
+  const gone = { isRegistered: () => false };
+  const blow = { weapon: -1, spell: null, style: "melee", damage: 5, worn: new Set(), hitpoints: 10 };
+  assert.ok(blowSatisfies(task, blow, { npc: {}, damagers: [player] }, player), "alone it passes");
+  assert.ok(!blowSatisfies(task, blow, { npc: {}, damagers: [player, partner] }, player), "a second damager fails it");
+  assert.ok(blowSatisfies(task, blow, { npc: {}, damagers: [player, gone] }, player), "an unregistered damager is no partner");
+  const open = { trigger: { kind: "kill", npcs: ["Nex"], count: 1 } };
+  assert.ok(blowSatisfies(open, blow, { npc: {}, damagers: [player, partner] }, player), "without solo another damager is fine");
+});
+
+test("conditional kill: so many kills within a window of ticks (Defeat 3 chickens in 6 seconds)", (t) => {
+  const f = pactsCharacter(t);
+  killWith(f, "Chicken");
+  killWith(f, "Chicken");
+  assert.ok(!done(f, "defeat-3-chickens-in-6-seconds"), "two is short of three");
+  killWith(f, "Chicken");
+  assert.ok(done(f, "defeat-3-chickens-in-6-seconds"), f.messages.join(" | "));
+});
+
+test("kill-any-with: any NPC killed with one of the items as the final blow (Defeat 5 creatures with a mace)", (t) => {
+  const f = pactsCharacter(t);
+  f.player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(item("Rune scimitar")));
+  for (let i = 0; i < 6; i++) killWith(f, "Chicken");
+  assert.ok(!done(f, "defeat-5-creatures-with-a-mace"), "a scimitar is no mace");
+  f.player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(item("Iron mace")));
+  for (let i = 0; i < 4; i++) killWith(f, "Chicken");
+  assert.ok(!done(f, "defeat-5-creatures-with-a-mace"), "four of five");
+  killWith(f, "Goblin");
+  assert.ok(done(f, "defeat-5-creatures-with-a-mace"), f.messages.join(" | "));
+});
+
+test("kill-any-one: one of a group reaching the count, a mix counting nothing (Defeat Any God Wars Dungeon Boss 100 Times)", (t) => {
+  const f = pactsCharacter(t);
+  for (let i = 0; i < 50; i++) { killWith(f, "Kree'arra"); killWith(f, "General Graardor"); }
+  assert.ok(!done(f, "defeat-any-god-wars-dungeon-boss-100-times"), "fifty and fifty is no one boss at one hundred");
+  for (let i = 0; i < 50; i++) killWith(f, "Kree'arra");
+  assert.ok(done(f, "defeat-any-god-wars-dungeon-boss-100-times"), f.messages.join(" | "));
+  assert.ok(!done(f, "defeat-any-god-wars-dungeon-boss-250-times"), "a hundred is short of two hundred and fifty");
+});
+
+test("kill-each with noLeave: every king without leaving; a step outside wipes it (Defeat the Dagannoth Kings Without Leaving)", (t) => {
+  const f = pactsCharacter(t);
+  f.player.moveTo(new core.Location(2910, 4440, 0));
+  f.player.needsPlacement = false;
+  killWith(f, "Dagannoth Rex");
+  killWith(f, "Dagannoth Prime");
+  assert.deepEqual(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], { "Dagannoth Rex": 1, "Dagannoth Prime": 1 });
+  // Leaving the lair: the crossed map square is the leaving edge (no per-tick hook).
+  f.player.moveTo(new core.Location(2900, 4300, 0));
+  PM.emitPlayerMapSquareChange({ player: f.player, previous: new core.Location(2910, 4440, 0), location: new core.Location(2900, 4300, 0) });
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], undefined, "a step outside the lairs wipes the counts");
+  assert.ok(!done(f, "defeat-the-dagannoth-kings-without-leaving"));
+  killWith(f, "Dagannoth Supreme");
+  assert.ok(!done(f, "defeat-the-dagannoth-kings-without-leaving"), "a kill outside its lairs is no kill");
+
+  // A teleport-like map square change is another leaving edge (a move to another 64x64 square).
+  f.player.moveTo(new core.Location(2910, 4440, 0));
+  f.player.needsPlacement = false;
+  killWith(f, "Dagannoth Rex");
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"]?.["Dagannoth Rex"], 1);
+  f.player.moveTo(new core.Location(2900, 4300, 0));
+  PM.emitPlayerMapSquareChange({ player: f.player, previous: new core.Location(2910, 4440, 0), location: new core.Location(2900, 4300, 0) });
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], undefined, "an out-of-lair square change wipes the counts");
+
+  // A stale session's counts (logged out inside) are swept at login.
+  f.player.moveTo(new core.Location(2910, 4440, 0));
+  f.player.needsPlacement = false;
+  killWith(f, "Dagannoth Rex");
+  assert.ok(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"]);
+  f.player.moveTo(new core.Location(1908, 4367, 0));
+  PM.emitCustomEvent("league:login", { player: f.player, league: 6 });
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-dagannoth-kings-without-leaving"], undefined, "login sweeps counts held outside the place");
+
+  // Inside again, the three kings in a sitting complete it.
+  f.player.moveTo(new core.Location(2910, 4440, 0));
+  f.player.needsPlacement = false;
+  killWith(f, "Dagannoth Rex");
+  killWith(f, "Dagannoth Prime");
+  killWith(f, "Dagannoth Supreme");
+  assert.ok(done(f, "defeat-the-dagannoth-kings-without-leaving"), f.messages.join(" | "));
+});
+
+test("ca-complete: the task is a Combat Achievement, from its completion (Defeat Awakened Vardorvis)", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("combat-achievements:completed", { player: f.player, silent: false, task: { id: 1, name: "Vardorvis Sleeper", tier: "Elite" } });
+  assert.ok(done(f, "defeat-awakened-vardorvis"), f.messages.join(" | "));
+});
+
+test("ca-complete backfills at login from the achievement's own state (a CA cannot be done twice)", (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  // A character who completed the achievement before this league task existed: the CA state is saved
+  // but the league task is not. It is completed through the achievements plugin itself, so the league
+  // task is never named (no `combat-achievements:completed` for it), then the save is reloaded.
+  const first = pactsCharacter(t);
+  const ca = require("../plugins/achievements/combatachievements/Progress.CombatAchievements");
+  ca.complete(first.player, "Vardorvis Sleeper", { silent: true });
+  assert.equal(ca.isComplete(first.player, require("../plugins/achievements/combatachievements/Data.CombatAchievements").taskNamed("Vardorvis Sleeper").id), true);
+  // The deploy's save predates the league task, so its league task map does not hold this one.
+  first.player.setAttribute("league:tasks", {}, true);
+  assert.ok(!done(first, "defeat-awakened-vardorvis"), "the league task is not in the save");
+  const saved = PlayerSave.fromPlayer(first.player);
+
+  const reloaded = pactsCharacter(t);
+  saved.applyToPlayer(reloaded.player);
+  reloaded.player.setAttribute("league:tasks", {}, true);
+  assert.ok(!done(reloaded, "defeat-awakened-vardorvis"), "not done before the login sweep");
+  PM.emitCustomEvent("league:login", { player: reloaded.player, league: 6 });
+  assert.ok(done(reloaded, "defeat-awakened-vardorvis"), `the login sweep backfills it: ${reloaded.messages.join(" | ")}`);
+});
+
+test("deed: the Penance Queen's own kill event (Defeat the Penance Queen)", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("barbarian-assault:queen-kill", { player: f.player, awardPoints: false });
+  assert.ok(done(f, "defeat-the-penance-queen"), f.messages.join(" | "));
+});
+
+test("conditional/area kills: the monster and the place (Snail, Elf, Tortoise, Spinner, Hydra, Guard, Imp)", (t) => {
+  const at = (x, y) => { const f = pactsCharacter(t); f.player.setAttribute("league:areas", [21, 5, 7, 4, 20, 3]); f.player.moveTo(new core.Location(x, y, 0)); f.player.needsPlacement = false; return f; };
+  const snail = at(3500, 3500); // Morytania
+  killWith(snail, "Blood Blamish Snail");
+  assert.ok(done(snail, "defeat-a-snail"), "a blamish snail in Morytania");
+  const elf = at(2351, 3164); // Tirannwn
+  killWith(elf, "Elf Warrior");
+  assert.ok(done(elf, "defeat-an-elf-in-tirannwn"));
+  const tortoise = at(2700, 3400); // Kandarin
+  killWith(tortoise, "Tortoise");
+  assert.ok(done(tortoise, "defeat-a-tortoise-with-riders-in-kandarin"));
+  const spinners = at(2660, 2600); // Pest Control's arena, Asgarnia
+  for (let i = 0; i < 5; i++) killWith(spinners, "Spinner");
+  assert.ok(done(spinners, "defeat-5-spinners"), spinners.messages.join(" | "));
+  const hydra = at(1290, 10240); // the Karuulm Slayer Dungeon
+  killWith(hydra, "Hydra");
+  assert.ok(done(hydra, "defeat-a-hydra"));
+  const guard = at(1640, 9570); // the Kualti Headquarters Barracks
+  killWith(guard, "Guard");
+  assert.ok(done(guard, "defeat-a-guard-in-varlamore-underground"));
+  const imp = at(1380, 9451); // the Kastori basement
+  killWith(imp, "Imp");
+  assert.ok(done(imp, "defeat-an-imp-in-a-basement"));
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);
@@ -687,12 +912,12 @@ test("steal: a theft from the stall named (Steal From a Gem Stall)", async (t) =
 });
 
 /** A plant picked from a field through the real Pickable plugin (never depleting). */
-async function pickPlant(t, f, objectId, option = "Pick") {
-  core.RegionManager.loadMapFiles(1666, 3136);
-  const plant = new core.GameObject(objectId, new core.Location(1667, 3136, 0), 10, 0, null);
+async function pickPlant(t, f, objectId, option = "Pick", at = [1667, 3136]) {
+  core.RegionManager.loadMapFiles(at[0], at[1]);
+  const plant = new core.GameObject(objectId, new core.Location(at[0], at[1], 0), 10, 0, null);
   core.ObjectManager.register(plant, true);
   try {
-    await send(f, { type: "object_option", id: objectId, x: 1667, y: 3136, action: option }, 4);
+    await send(f, { type: "object_option", id: objectId, x: at[0], y: at[1], action: option }, 4);
   } finally {
     core.ObjectManager.deregister(plant, true);
   }
@@ -1123,3 +1348,572 @@ for (const row of [
     assert.deepEqual(actions,[{logId:ids.YEW_LOGS,logAmount:row.logs}],"one real chop reports its actual felling yield");
   });
 }
+
+// The equip kinds that gather over time (`equip-each`, `equip-count`) and the ID- and stack-based
+// `equip` forms the generator derives (docs/leagues.md, Tasks).
+async function wearAll(f, names, option = "Wear") {
+  for (const name of names) {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+    await inventoryOption(f, name, option, 2, 2);
+  }
+}
+
+test("equip-each: the godswords gathered one at a time (Equip Every Godsword)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.ATTACK, 99);
+  skills.setCurrentLevel(core.Skill.ATTACK, 99);
+  const swords = ["Armadyl godsword", "Bandos godsword", "Saradomin godsword", "Zamorak godsword"];
+  for (let i = 0; i < swords.length; i++) {
+    await wearAll(f, [swords[i]], "Wield");
+    assert.ok(!done(f, "equip-every-godsword"), `not yet the fifth: ${i + 1} worn`);
+  }
+  const stored = f.player.getAttribute("league:task-worn")["equip-every-godsword"];
+  assert.equal(Object.keys(stored).length, 4, "each share the weapon slot, so they are collected");
+  await wearAll(f, ["Ancient godsword"], "Wield");
+  assert.ok(done(f, "equip-every-godsword"), f.messages.join(" | "));
+  assert.equal(f.player.getAttribute("league:task-worn")["equip-every-godsword"], undefined, "kept nothing once done");
+});
+
+test("equip-each survives a logout and reload (Equip Every Completed God Book)", async (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const books = ["Holy book", "Unholy book", "Book of Balance", "Book of War", "Book of Law"];
+  const first = pactsCharacter(t);
+  await wearAll(first, books.slice(0, 3), "Wield");
+  assert.ok(!done(first, "equip-every-completed-god-book"));
+  assert.equal(Object.keys(first.player.getAttribute("league:task-worn")["equip-every-completed-god-book"]).length, 3);
+  const saved = PlayerSave.fromPlayer(first.player);
+  const reloaded = pactsCharacter(t);
+  saved.applyToPlayer(reloaded.player);
+  PM.emitCustomEvent("league:login", { player: reloaded.player, league: 6 });
+  assert.equal(Object.keys(reloaded.player.getAttribute("league:task-worn")["equip-every-completed-god-book"] ?? {}).length, 3, "the three worn survive the save");
+  await wearAll(reloaded, ["Book of Darkness"], "Wield");
+  assert.ok(!done(reloaded, "equip-every-completed-god-book"), "four of six is not all");
+  await wearAll(reloaded, ["Book of War", "Book of Law"], "Wield");
+  assert.ok(done(reloaded, "equip-every-completed-god-book"), reloaded.messages.join(" | "));
+});
+
+test("equip-each with any: the Avernic treads alone (Equip all of the Cerberus Boots)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.RANGED, core.Skill.MAGIC]) { skills.setMaxLevel(skill, 99); skills.setCurrentLevel(skill, 99); }
+  await wearAll(f, ["Avernic treads (max)"]);
+  assert.ok(done(f, "equip-all-of-the-cerberus-boots"), f.messages.join(" | "));
+});
+
+test("equip-each over time: the Zenyte pieces, the amulet and necklace sharing a slot (Equip All Zenyte Jewelry)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.HITPOINTS, core.Skill.DEFENCE]) { skills.setMaxLevel(skill, 99); skills.setCurrentLevel(skill, 99); }
+  await wearAll(f, ["Amulet of torture", "Necklace of anguish", "Tormented bracelet"]);
+  assert.ok(!done(f, "equip-all-zenyte-jewelry"), "not yet the ring, and the amulet and necklace trade places");
+  await wearAll(f, ["Ring of suffering"]);
+  assert.ok(done(f, "equip-all-zenyte-jewelry"), f.messages.join(" | "));
+});
+
+test("equip-count: distinct echo items, the same one twice is no new one (Equip 2 unique Echo Items)", async (t) => {
+  const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.ATTACK, 99);
+  skills.setCurrentLevel(core.Skill.ATTACK, 99);
+  await wearAll(f, ["Echo axe"], "Wield");
+  assert.ok(done(f, "equip-one-unique-echo-item"), f.messages.join(" | "));
+  assert.ok(!done(f, "equip-2-unique-echo-items"), "one is not two");
+  assert.equal(EquipPacketListener.unequip(f.player, core.Equipment.WEAPON_SLOT), true);
+  await wearAll(f, ["Echo axe"], "Wield");
+  assert.ok(!done(f, "equip-2-unique-echo-items"), "the same axe worn twice is still one unique item");
+  await wearAll(f, ["Echo pickaxe"], "Wield");
+  assert.ok(done(f, "equip-2-unique-echo-items"), f.messages.join(" | "));
+  assert.ok(!done(f, "equip-3-unique-echo-items"));
+});
+
+test("equip with a count: a stack of Black Chinchompas (Equip 100 Black Chinchompas)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.RANGED, 99);
+  skills.setCurrentLevel(core.Skill.RANGED, 99);
+  f.player.getInventory().add(new core.Item(item("Black chinchompa"), 100), true);
+  await inventoryOption(f, "Black chinchompa", "Wield", 2, 2);
+  const worn = f.player.getEquipment().getItems().find((each) => each?.getId() === item("Black chinchompa"));
+  assert.equal(worn?.getAmount(), 100, `the whole stack is worn: ${f.messages}`);
+  assert.ok(done(f, "equip-100-black-chinchompas"));
+  assert.ok(!done(f, "equip-250-black-chinchompas"), "one hundred is short of two hundred and fifty");
+});
+
+test("equip by cache id: a Chompy bird hat of one rank (Equip a Marksman Chompy Hat)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.RANGED, core.Skill.FLETCHING]) { skills.setMaxLevel(skill, 99); skills.setCurrentLevel(skill, 99); }
+  // Every rank shares the name \"Chompy bird hat\", so the trigger is the id whose examine names the rank
+  // (item(\"Chompy bird hat\") is the first such id, 2978, not this rank's).
+  f.player.getInventory().add(new core.Item(2983), true);
+  await send(f, { type: "inventory_action", slot: f.player.getInventory().getSlotForItemId(2983), itemId: 2983, widgetId: 149 << 16, option: "Wear", optionIndex: 2 }, 2);
+  assert.ok(f.player.getEquipment().getItems().some((each) => each?.getId() === 2983), f.messages.join(" | "));
+  assert.ok(done(f, "equip-a-marksman-chompy-hat"));
+  assert.ok(!done(f, "equip-an-ogre-forester-chompy-hat"), "a different rank is a different hat");
+});
+
+test("equip-any-set: one god's whole dragonhide set, not a mixed one (Equip a Full God Dragonhide Set)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.DEFENCE, core.Skill.RANGED]) { skills.setMaxLevel(skill, 99); skills.setCurrentLevel(skill, 99); }
+  await wearAll(f, ["Saradomin d\'hide body", "Zamorak chaps"]);
+  assert.ok(!done(f, "equip-a-full-god-dragonhide-set"), "two gods is no one set");
+  await wearAll(f, ["Saradomin coif", "Saradomin chaps"]);
+  assert.ok(!done(f, "equip-a-full-god-dragonhide-set"), "the bracers are still missing");
+  await wearAll(f, ["Saradomin bracers"]);
+  assert.ok(done(f, "equip-a-full-god-dragonhide-set"), f.messages.join(" | "));
+});
+
+
+/** A loc of a name beside the player, its option's click as a real object_option packet. */
+async function objectOption(t, f, objectId, option, count = 6) {
+  const at = f.player.getLocation();
+  const definition = core.ObjectDefinition.forId(objectId);
+  const actions = [...(definition.getInteractions() ?? [])];
+  const index = actions.findIndex((action) => String(action).toLowerCase() === option.toLowerCase());
+  assert.ok(index >= 0, `${option} in ${JSON.stringify(actions)} for ${objectId}`);
+  const object = new core.GameObject(objectId, new core.Location(at.getX() + 1, at.getY(), at.getZ()), 10, 0, null);
+  core.ObjectManager.register(object, true);
+  t.after(() => { try { core.ObjectManager.deregister(object, true); } catch { /* swapped out */ } });
+  await send(f, { type: "object_option", id: objectId, x: at.getX() + 1, y: at.getY(), clickType: index + 1 }, count);
+  return object;
+}
+
+test("object-op: a chest credits only a real open, from its own success event (Open a Bronze Chest)", async (t) => {
+  core.RegionManager.loadMapFiles(3511, 9724);
+  const f = pactsCharacter(t, [3510, 9723, 0]);
+  // Shades of Mort'ton: a bronze chest needs its own key; the wrong key (here none) is a refusal.
+  const bronzeKey = 3450; // shadekey_bronze_bloodred
+  await objectOption(t, f, 4111, "Open", 4);
+  assert.match(f.messages.join(" | "), /key/i, "the real chest complains of the key");
+  assert.ok(!done(f, "open-a-bronze-chest"), `a wrong key is no open: ${f.messages.join(" | ")}`);
+  // The click pipeline's own event is not the chest's success, either.
+  PM.emitCustomEvent("object:operated", { player: f.player, objectId: 4111, option: "open" });
+  assert.ok(!done(f, "open-a-bronze-chest"), "an object:operated click is not a chest:opened success");
+
+  f.player.getInventory().add(new core.Item(bronzeKey), true);
+  await objectOption(t, f, 4111, "Open", 4);
+  assert.equal(f.player.getInventory().getAmount(bronzeKey), 0, `the real chest takes the key: ${f.messages}`);
+  assert.ok(done(f, "open-a-bronze-chest"), f.messages.join(" | "));
+  assert.ok(!done(f, "open-a-black-chest") && !done(f, "open-a-gold-chest"), "another metal's chest is another task");
+
+  // The option must be the one the task names: a "Search" on a Crate is no Fill of bananas.
+  const crate = 2072;
+  const pirate = pactsCharacter(t, [3009, 3207, 0]);
+  core.RegionManager.loadMapFiles(3009, 3207);
+  await objectOption(t, pirate, crate, "Search", 3);
+  assert.ok(!done(pirate, "fill-a-crate-with-bananas"), "Search is not Fill");
+});
+
+test("object-op: an id the task names with its option and count (Open 1 Muddy Chest, Open 10 Muddy Chests)", async (t) => {
+  // The Wilderness tile the wilderness-chests test uses, no spawns within 30 tiles; one real open.
+  core.RegionManager.loadMapFiles(2990, 3800);
+  const f = pactsCharacter(t, [2989, 3800, 0], [21, 11]); // Varlamore and the Wilderness
+  // Without a key the chest is a refusal: the lock line, no loot, no deed.
+  await objectOption(t, f, 170, "Open", 6);
+  assert.ok(!done(f, "open-1-muddy-chest"), `a locked chest is no open: ${f.messages.join(" | ")}`);
+  // Nor does a click credit it: the deed is the chest's own Loot.
+  PM.emitCustomEvent("object:operated", { player: f.player, objectId: 170, option: "open" });
+  assert.ok(!done(f, "open-1-muddy-chest"), "a click on the closed loc is not an open");
+
+  // One real open with a key credits it; the chest swaps to its open variant, so the remaining nine
+  // opens are the same success event (as the content emits it once per real open).
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.MUDDY_KEY, 1), true);
+  await objectOption(t, f, 170, "Open", 8);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.MUDDY_KEY), 0, `the key opens it: ${f.messages}`);
+  assert.ok(done(f, "open-1-muddy-chest"), f.messages.join(" | "));
+  assert.ok(!done(f, "open-10-muddy-chests"), "one open is not ten");
+  for (let i = 0; i < 9; i++) PM.emitCustomEvent("chest:opened", { player: f.player, objectId: 170 });
+  assert.ok(done(f, "open-10-muddy-chests"), "ten opens reach the ten-chest task");
+  // A wrong id or a wrong option is no Muddy chest.
+  const other = pactsCharacter(t);
+  PM.emitCustomEvent("chest:opened", { player: other.player, objectId: 171 });
+  PM.emitCustomEvent("object:operated", { player: other.player, objectId: 170, option: "search", location: { x: 2990, y: 3800, z: 0 } });
+  assert.ok(!done(other, "open-1-muddy-chest"), "another loc or another option opens nothing");
+});
+
+test("coin-pouch: only a completed Open-all credits, with the pouches it really opened (Open 28 Coin Pouches at once)", async (t) => {
+  const pouch = item("Coin pouch");
+  const coins = core.ItemIdentifiers.COINS;
+  const f = pactsCharacter(t);
+  f.player.getInventory().add(new core.Item(pouch, 28), true);
+  await inventoryOption(f, "Coin pouch", "Open-all", 1, 4);
+  assert.equal(f.player.getInventory().getAmount(pouch), 0, `the real Open-all empties the stack: ${f.messages}`);
+  assert.ok(f.player.getInventory().getAmount(coins) > 0);
+  assert.ok(done(f, "open-28-coin-pouches-at-once"), f.messages.join(" | "));
+
+  // 27 at once is not 28.
+  const few = pactsCharacter(t);
+  few.player.getInventory().add(new core.Item(pouch, 27), true);
+  await inventoryOption(few, "Coin pouch", "Open-all", 1, 4);
+  assert.ok(!done(few, "open-28-coin-pouches-at-once"), "27 at once is not 28");
+
+  // A refused Open-all emits nothing (the pouch plugin's own test proves it refuses and keeps the stack),
+  // so the event only ever carries real opens: 27 opened really is 27, never 28.
+  const apart = pactsCharacter(t);
+  PM.emitCustomEvent("coin-pouch:opened", { player: apart.player, coins: 9000, all: true, pouches: 27 });
+  assert.ok(!done(apart, "open-28-coin-pouches-at-once"), "27 pouches is not 28");
+  PM.emitCustomEvent("coin-pouch:opened", { player: apart.player, coins: 9000, all: true, pouches: 28 });
+  assert.ok(done(apart, "open-28-coin-pouches-at-once"), "28 pouches completes it");
+});
+
+test("item-op: the mystery box and the frozen cache, by name and option (Open the Mystery Box; Open a Frozen Cache)", async (t) => {
+  const f = pactsCharacter(t);
+  f.player.getInventory().add(new core.Item(item("Mystery box")), true);
+  await inventoryOption(f, "Mystery box", "Open", 1, 3);
+  assert.ok(done(f, "open-the-mystery-box"), f.messages.join(" | "));
+
+  const cache = pactsCharacter(t);
+  cache.player.getInventory().add(new core.Item(item("Frozen cache")), true);
+  await inventoryOption(cache, "Frozen cache", "Open", 1, 3);
+  assert.ok(done(cache, "open-a-frozen-cache"), cache.messages.join(" | "));
+  assert.ok(!done(cache, "open-the-mystery-box"), "a cache is no mystery box");
+});
+
+test("bank: the Mage Arena bank cave's chest, inside the cave only (Use the Bank at the Mage Arena)", async (t) => {
+  core.RegionManager.loadMapFiles(2534, 4711);
+  const f = pactsCharacter(t, [2534, 4712, 0], [21, 11]); // Varlamore and the Wilderness
+  await objectOption(t, f, 26707, "Use", 3);
+  assert.ok(done(f, "use-the-bank-at-the-mage-arena"), f.messages.join(" | "));
+
+  // A bank opened elsewhere is no Mage Arena bank (the place bounds are the cave alone).
+  const outside = pactsCharacter(t, [3200, 3200, 0]);
+  PM.emitCustomEvent("bank:opened", { player: outside.player });
+  assert.ok(!done(outside, "use-the-bank-at-the-mage-arena"), "a bank outside the cave is no Mage Arena bank");
+});
+
+test("prayer-restore with a place: the altar's restoration inside it (Use a prayer altar to restore 90 in Prifddinas)", async (t) => {
+  core.RegionManager.loadMapFiles(3246, 6116);
+  const f = pactsCharacter(t, [3247, 6116, 0], [21, 7]); // Varlamore and Tirannwn
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99);
+  skills.setCurrentLevel(core.Skill.PRAYER, 5);
+  await objectOption(t, f, 8749, "Pray-at", 3);
+  assert.ok(skills.getCurrentLevel(core.Skill.PRAYER) > 5, `the real altar restores Prayer: ${f.messages}`);
+  assert.ok(done(f, "use-a-prayer-altar-to-restore-90-prayer-in-prifddinas"), f.messages.join(" | "));
+
+  // The same restoration elsewhere is no Prifddinas prayer (the place bounds say so).
+  const outside = pactsCharacter(t, [3200, 3200, 0]);
+  const away = outside.player.getSkillManager();
+  away.setMaxLevel(core.Skill.PRAYER, 99);
+  away.setCurrentLevel(core.Skill.PRAYER, 5);
+  away.setCurrentLevels(core.Skill.PRAYER, 5);
+  PM.emitCustomEvent("altars:prayed", { player: outside.player, restored: 94, location: { x: 3200, y: 3200, z: 0 } });
+  assert.ok(!done(outside, "use-a-prayer-altar-to-restore-90-prayer-in-prifddinas"), "an altar outside Prifddinas is no task");
+});
+
+test("deed: the water pump, the STASH unit and the portal nexus, from the content's own events", async (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("water-source:filled", { player: f.player, name: "water pump" });
+  assert.ok(done(f, "fill-something-up-from-a-water-pump"), "a water pump fills it");
+  const other = pactsCharacter(t);
+  PM.emitCustomEvent("water-source:filled", { player: other.player, name: "sink" });
+  assert.ok(!done(other, "fill-something-up-from-a-water-pump"), "a sink is no pump");
+
+  const stash = pactsCharacter(t);
+  PM.emitCustomEvent("stash:filled", { player: stash.player, tier: "easy" });
+  assert.ok(!done(stash, "fill-a-medium-stash-unit") && !done(stash, "fill-a-hard-stash-unit"), "an easy unit is neither");
+  PM.emitCustomEvent("stash:filled", { player: stash.player, tier: "medium" });
+  assert.ok(done(stash, "fill-a-medium-stash-unit") && !done(stash, "fill-a-hard-stash-unit"), "a medium unit is the medium task");
+
+  const nexus = pactsCharacter(t);
+  PM.emitCustomEvent("construction:portal", { player: nexus.player, destination: "Varrock teleport" });
+  assert.ok(!done(nexus, "use-your-portal-nexus-to-teleport-to-weiss"), "another destination is no Weiss");
+  PM.emitCustomEvent("construction:portal", { player: nexus.player, destination: "weiss teleport" });
+  assert.ok(done(nexus, "use-your-portal-nexus-to-teleport-to-weiss"), "the Weiss teleport is the task");
+});
+
+test("check-health with a place: the crop's patch inside it (Check a grown Papaya Tree in Lletya)", (t) => {
+  const Data = require("../plugins/skills/farming/Data.Farming");
+  const Patches = require("../plugins/skills/farming/Patches.Farming");
+  const patch = Data.CACHE.patches.find((each) => each.type === "FRUIT_TREE" && each.x === 2346 && each.y === 3161);
+  const f = pactsCharacter(t, [patch.x, patch.y, patch.z], [21, 7]); // Varlamore and Tirannwn
+  // The Lletya fruit patch wants Mourning's End Part I started (the real gate).
+  const Mourning = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((each) => each.key === "mournings_end_part_i");
+  assert.ok(Mourning, "the quest registers");
+  Mourning.setStage(f.player, 1);
+  const state = Patches.stateFor(f.player, patch);
+  Object.assign(state, { crop: "PAPAYA", stage: 6, status: "grown", checked: false, lives: 6, weeds: 0, nextAt: Number.MAX_SAFE_INTEGER });
+  t.mock.method(core.MapObjects, "get", () => null);
+  t.mock.method(core.ObjectDefinition, "forPlayer", () => ({ getInteractions: () => ["Check-health"] }));
+  PM.emitObjectInteraction({ player: f.player, object: { getId: () => patch.id, getLocation: () => new core.Location(patch.x, patch.y, patch.z), getDefinition: () => core.ObjectDefinition.forId(patch.id), getType: () => 10, getFace: () => 0, getPrivateArea: () => null }, objectId: patch.id, clickType: 1,
+    location: { x: patch.x, y: patch.y, z: patch.z }, sourceLocation: { x: patch.x, y: patch.y, z: patch.z }, handled: false });
+  assert.ok(state.checked, `the real Farming checks it: ${f.messages}`);
+  assert.ok(done(f, "check-a-grown-papaya-tree-in-lletya"), f.messages.join(" | "));
+  assert.ok(!done(f, "check-a-grown-crystal-tree"), "a papaya is no crystal tree");
+});
+
+test("equip-all by cache id: the two Yakhide pieces share a name (Equip a full set of Yakhide Armour)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.DEFENCE, 99);
+  skills.setCurrentLevel(core.Skill.DEFENCE, 99);
+  f.player.getEquipment().set(4, new core.Item(10822));
+  assert.ok(!done(f, "equip-a-full-set-of-yakhide-armour"), "only the body");
+  f.player.getEquipment().set(7, new core.Item(10824));
+  PM.emitCustomEvent("equipment:changed", { player: f.player });
+  assert.ok(done(f, "equip-a-full-set-of-yakhide-armour"), f.messages.join(" | "));
+});
+
+test("obtain: a source says an item was obtained, by amount and only from the right source", (t) => {
+  // A casket from fishing is the fishing event; the same casket from a clue is no fishing casket.
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("fishing:junk", { player: f.player, itemId: item("Casket"), amount: 1 });
+  assert.ok(done(f, "obtain-a-casket-from-fishing"), "the fishing casket counts");
+  PM.emitCustomEvent("fishing:junk", { player: f.player, itemId: item("Old boot"), amount: 1 });
+  assert.ok(done(f, "obtain-an-old-boot-from-a-fishing-spot"), "the old boot counts");
+  // A logged obtain of the same casket elsewhere is another source, and no fishing deed.
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Casket"), amount: 1 });
+  assert.ok(!done(g, "obtain-a-casket-from-fishing"), "a casket from the log is not a fishing casket");
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Old boot"), amount: 1 });
+  assert.ok(!done(g, "obtain-an-old-boot-from-a-fishing-spot"), "nor an old boot");
+});
+
+test("obtain: a mining gem counts, a gem from a drop does not (Obtain a Gem While Mining)", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("mining:gem", { player: f.player, itemId: item("Uncut sapphire") });
+  assert.ok(done(f, "obtain-a-gem-while-mining"), "a mining gem counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Uncut sapphire"), amount: 1 });
+  assert.ok(!done(g, "obtain-a-gem-while-mining"), "a gem from a drop is no mining gem");
+  PM.emitCustomEvent("npc-drops:roll", { player: g.player, drops: [{ itemId: item("Uncut ruby"), amount: 1 }] });
+  assert.ok(!done(g, "obtain-a-gem-while-mining"), "nor is a ruby off a monster");
+  // A clue geode is its own source (the geode the mining rolls), not a plain gem.
+  const h = pactsCharacter(t);
+  PM.emitCustomEvent("mining:geode", { player: h.player, itemId: item("Clue geode (easy)") });
+  assert.ok(done(h, "obtain-a-clue-geode-while-mining"), "the mining geode counts");
+  PM.emitCustomEvent("mining:gem", { player: h.player, itemId: item("Uncut diamond") });
+  assert.ok(done(h, "obtain-a-gem-while-mining"), "and a gem too");
+});
+
+test("obtain: a Kebab from a random event, not from a shop or the log", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("random-events:reward", { player: f.player, itemId: item("Kebab"), amount: 1 });
+  assert.ok(done(f, "obtain-a-kebab-from-a-random-event"), "the random event\u2019s kebab counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("shop:purchase", { player: g.player, shopName: "Kebab seller", itemId: item("Kebab"), amount: 1, originalStock: true });
+  assert.ok(!done(g, "obtain-a-kebab-from-a-random-event"), "a bought kebab is no random event");
+});
+
+test("obtain: the crystal impling\u2019s dragonstone amulet, not another impling\u2019s", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("hunter:impling-loot", { player: f.player, impling: "CRYSTAL", rewards: [[item("Dragonstone amulet"), 1]] });
+  assert.ok(done(f, "receive-a-dragonstone-amulet-from-an-impling"), "the crystal impling\u2019s amulet counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("hunter:impling-loot", { player: g.player, impling: "DRAGON", rewards: [[item("Dragonstone amulet"), 1]] });
+  assert.ok(!done(g, "receive-a-dragonstone-amulet-from-an-impling"), "a dragon impling is no crystal impling");
+});
+
+test("obtain: the Rogue\u2019s Castle chest\u2019s dragonstone, a noted one counted too", (t) => {
+  const f = pactsCharacter(t, [1666, 3136, 0], [21, 11]); // Varlamore and the Wilderness
+  PM.emitCustomEvent("rogues-chest:loot", { player: f.player, drops: [{ itemId: item("Dragonstone"), amount: 2 }] });
+  assert.ok(done(f, "loot-a-dragonstone-from-the-rogues-castle"), "the chest\u2019s dragonstone counts");
+  // A dragonstone off a revenant (a plain drop) is not this chest.
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("npc-drops:roll", { player: g.player, drops: [{ itemId: item("Dragonstone"), amount: 1 }] });
+  assert.ok(!done(g, "loot-a-dragonstone-from-the-rogues-castle"), "a revenant\u2019s dragonstone is no chest");
+});
+
+test("obtain: a Zalcano shard and tool seed from the real drop roll, never a miss", (t) => {
+  const f = pactsCharacter(t);
+  // A roll that granted nothing is no drop (the crystal tool seed is a rare extra).
+  PM.emitCustomEvent("npc-drops:roll", { player: f.player, drops: [] });
+  assert.ok(!done(f, "obtain-a-crystal-tool-seed"), "an empty roll grants nothing");
+  PM.emitCustomEvent("npc-drops:roll", { player: f.player, drops: [{ itemId: item("Zalcano shard"), amount: 1 }] });
+  assert.ok(done(f, "obtain-a-zalcano-shard") && !done(f, "obtain-a-crystal-tool-seed"), "the shard is the shard, not the seed");
+  PM.emitCustomEvent("npc-drops:roll", { player: f.player, drops: [{ itemId: item("Crystal tool seed"), amount: 1 }] });
+  assert.ok(done(f, "obtain-a-crystal-tool-seed"), "the tool seed is the seed");
+});
+
+test("obtain: the Big Harpoonfish and Fish Barrel from Tempoross\u2019s reward", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item("Big harpoonfish"), amount: 1 });
+  assert.ok(done(f, "obtain-the-big-harpoonfish"), "the harpoonfish counts");
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item("Fish barrel"), amount: 1 });
+  assert.ok(done(f, "obtain-the-fish-barrel"), "the fish barrel counts");
+});
+
+test("obtain: the Plank Sack and Huntsman\u2019s Kit from their reward paths", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item("Plank sack"), amount: 1 });
+  assert.ok(done(f, "obtain-the-plank-sack"), "the plank sack counts");
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item("Huntsman's kit"), amount: 1 });
+  assert.ok(done(f, "obtain-the-huntsman-s-kit"), "the huntsman\u2019s kit counts");
+});
+
+test("obtain: a bird\u2019s nest seed\u2019s search, only the high-level seeds", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("woodcutting:nest-search", { player: f.player, itemId: item("Yew seed") });
+  assert.ok(!done(f, "obtain-a-high-level-tree-seed-from-a-birds-nest"), "a yew seed is not high level");
+  PM.emitCustomEvent("woodcutting:nest-search", { player: f.player, itemId: item("Magic seed") });
+  assert.ok(done(f, "obtain-a-high-level-tree-seed-from-a-birds-nest"), "a magic seed is");
+  for (const seed of ["Dragonfruit tree seed", "Redwood tree seed", "Spirit seed"]) {
+    const g = pactsCharacter(t);
+    PM.emitCustomEvent("woodcutting:nest-search", { player: g.player, itemId: item(seed) });
+    assert.ok(done(g, "obtain-a-high-level-tree-seed-from-a-birds-nest"), `${seed} counts`);
+  }
+});
+
+test("obtain: a Frozen Cache from opening a cache, not from a drop", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("phantom-muspah:frozen-cache", { player: f.player, itemId: item("Frozen cache") });
+  assert.ok(done(f, "obtain-a-frozen-cache-from-a-cache"), "the opened cache\u2019s cache counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("npc-drops:roll", { player: g.player, drops: [{ itemId: item("Frozen cache"), amount: 1 }] });
+  assert.ok(!done(g, "obtain-a-frozen-cache-from-a-cache"), "a cache off the boss is no cache\u2019s cache");
+});
+
+test("obtain-all: every one of the Revenant weapons, gathered over time and persisted", (t) => {
+  const f = pactsCharacter(t);
+  const weapons = ["Craw's bow (u)", "Viggora's chainmace (u)", "Thammaron's sceptre (u)"];
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item(weapons[0]), amount: 1 });
+  assert.ok(!done(f, "obtain-every-revenant-weapon"), "one is not every one");
+  // The same weapon twice is still one.
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item(weapons[0]), amount: 1 });
+  assert.ok(!done(f, "obtain-every-revenant-weapon"), "a duplicate is no new weapon");
+  const held = f.player.getAttribute("league:task-obtained");
+  assert.ok(held && held["obtain-every-revenant-weapon"], `the store is kept: ${JSON.stringify(held)}`);
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item(weapons[1]), amount: 1 });
+  assert.ok(!done(f, "obtain-every-revenant-weapon"), "two are not every one");
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: item(weapons[2]), amount: 1 });
+  assert.ok(done(f, "obtain-every-revenant-weapon"), "all three is the task");
+});
+
+test("obtain: a boss pet is any pet without a skill, a skilling pet is the skilling one", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("pets:obtained", { player: f.player, itemId: item("Pet kree'arra"), skill: "Farming" });
+  assert.ok(!done(f, "obtain-a-boss-pet"), "a skilling pet is no boss pet");
+  PM.emitCustomEvent("pets:obtained", { player: f.player, itemId: item("Pet snakeling"), skill: null });
+  assert.ok(done(f, "obtain-a-boss-pet"), "a pet with no skill is a boss pet");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("pets:obtained", { player: g.player, itemId: item("Pet snakeling"), skill: null });
+  assert.ok(!done(g, "obtain-a-skilling-pet"), "a boss pet is no skilling pet");
+  PM.emitCustomEvent("pets:obtained", { player: g.player, itemId: item("Beaver"), skill: "Woodcutting" });
+  assert.ok(done(g, "obtain-a-skilling-pet"), "a skilling pet is the skilling one");
+});
+
+test("haircut: the hair makeover counts, a beard or body change does not", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("makeover:applied", { player: f.player, type: 1 }); // TYPE_FACIAL_HAIR
+  assert.ok(!done(f, "get-a-haircut"), "a beard is no haircut");
+  PM.emitCustomEvent("makeover:applied", { player: f.player, type: 0 }); // TYPE_HAIR
+  assert.ok(done(f, "get-a-haircut"), "the hair is the haircut");
+});
+
+test("coin-pouch: 800 coins at once, not two pouches times 400", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("coin-pouch:opened", { player: f.player, coins: 400, all: false });
+  assert.ok(!done(f, "obtain-800-coins-from-coin-pouches-at-once"), "400 is short of 800");
+  PM.emitCustomEvent("coin-pouch:opened", { player: f.player, coins: 812, all: true });
+  assert.ok(done(f, "obtain-800-coins-from-coin-pouches-at-once"), "one Open-all of 812 reaches it");
+  // Only one source ever satisfies it, so a second short pouch after the first must not add up.
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("coin-pouch:opened", { player: g.player, coins: 400, all: false });
+  PM.emitCustomEvent("coin-pouch:opened", { player: g.player, coins: 400, all: false });
+  assert.ok(!done(g, "obtain-800-coins-from-coin-pouches-at-once"), "400 twice is no 800 at once");
+});
+
+test("archery-target: a round\u2019s score reaches the tier", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("archery-competition:score", { player: f.player, score: 240, tickets: 24 });
+  assert.ok(!done(f, "get-250-target-points"), "240 is short of 250");
+  PM.emitCustomEvent("archery-competition:score", { player: f.player, score: 250, tickets: 25 });
+  assert.ok(done(f, "get-250-target-points") && !done(f, "get-750-target-points"), "250 is the 250 task, not the 750");
+  PM.emitCustomEvent("archery-competition:score", { player: f.player, score: 1000, tickets: 100 });
+  assert.ok(done(f, "get-750-target-points") && done(f, "get-1000-target-points"), "1000 reaches the top two");
+});
+
+test("miscellania: a full-approval collection counts, a partial one does not", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("miscellania:collected", { player: f.player, approval: 99 });
+  assert.ok(!done(f, "collect-miscellania-resources-at-full-approval"), "99% is not full");
+  PM.emitCustomEvent("miscellania:collected", { player: f.player, approval: 100 });
+  assert.ok(done(f, "collect-miscellania-resources-at-full-approval"), "100% is full");
+});
+
+test("colosseum-glory: a run\u2019s Glory reaches 40,000 and then 58,000", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("colosseum:glory", { player: f.player, glory: 39999 });
+  assert.ok(!done(f, "obtain-40-000-glory"), "39,999 is short");
+  PM.emitCustomEvent("colosseum:glory", { player: f.player, glory: 40000 });
+  assert.ok(done(f, "obtain-40-000-glory") && !done(f, "obtain-58-000-glory"), "40,000 is the first tier");
+  PM.emitCustomEvent("colosseum:glory", { player: f.player, glory: 58000 });
+  assert.ok(done(f, "obtain-58-000-glory"), "58,000 is the second");
+});
+
+test("motherlode-nuggets: 20 nuggets sum from the sack", (t) => {
+  const f = pactsCharacter(t, [1666, 3136, 0], [21, 2]); // Varlamore and Asgarnia (the Motherlode Mine)
+  PM.emitCustomEvent("motherlode:nuggets", { player: f.player, amount: 19 });
+  assert.ok(!done(f, "obtain-20-golden-nuggets"), "19 is short");
+  PM.emitCustomEvent("motherlode:nuggets", { player: f.player, amount: 1 });
+  assert.ok(done(f, "obtain-20-golden-nuggets"), "20 reaches it");
+});
+
+test("agility-tickets: a tag counts, and a clean run of tags is the streak task", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("minigame:points", { player: f.player, minigame: "brimhaven-agility-arena", points: 1 });
+  assert.ok(done(f, "receive-an-agility-arena-ticket"), "a tag is a ticket");
+  // Only the streak variant counts the streak, reset by any trap hit.
+  const g = pactsCharacter(t);
+  for (let i = 1; i <= 29; i++) PM.emitCustomEvent("brimhaven-agility-arena:streak", { player: g.player, tickets: i });
+  assert.ok(!done(g, "receive-30-agility-arena-tickets-with-no-mistakes"), "29 tags are short of 30");
+  PM.emitCustomEvent("brimhaven-agility-arena:streak", { player: g.player, tickets: 1 }); // a trap hit reset it
+  PM.emitCustomEvent("brimhaven-agility-arena:streak", { player: g.player, tickets: 30 });
+  assert.ok(done(g, "receive-30-agility-arena-tickets-with-no-mistakes"), "30 in a row is the task");
+});
+
+test("pick: the abbey's own cabbage field counts, elsewhere no (Pick up a Cabbage in the Citharede Abbey)", async (t) => {
+  const f = pactsCharacter(t, [3413, 3178, 0], [6]); // the Desert (the abbey's league region)
+  t.mock.method(Math, "random", () => 0.99); // the plant never depletes
+  await pickPlant(t, f, core.ObjectIdentifiers.CABBAGE, "Pick", [3413, 3179]);
+  assert.equal(f.player.getInventory().getAmount(item("Cabbage")), 1, `the real Pickable picks: ${f.messages}`);
+  assert.ok(done(f, "pick-up-a-cabbage-in-the-citharede-abbey"), "the abbey's cabbage counts");
+  // The same cabbage picked far from the abbey is another place and no deed. The default
+  // character stands in open Varlamore, so the pick really happens and only the place differs.
+  const g = pactsCharacter(t);
+  await pickPlant(t, g, core.ObjectIdentifiers.CABBAGE, "Pick", [1667, 3136]);
+  assert.equal(g.player.getInventory().getAmount(item("Cabbage")), 1, `the real Pickable picks: ${g.messages}`);
+  assert.ok(!done(g, "pick-up-a-cabbage-in-the-citharede-abbey"), "a cabbage outside the abbey is no deed");
+});
+
+test("obtain: the Lyre off a Fremennik raider's roll (Loot a Lyre), not a placed one", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("npc-drops:roll", { player: f.player, drops: [{ itemId: item("Lyre"), amount: 1 }] });
+  assert.ok(done(f, "loot-a-lyre"), "the granted Lyre drop counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Lyre"), amount: 1 });
+  assert.ok(!done(g, "loot-a-lyre"), "a logged Lyre from elsewhere is no kill's loot");
+});
+
+test("deed: the gout tuber dug up in Tai Bwo Wannai, never handed over another way", (t) => {
+  const f = pactsCharacter(t, [2800, 3100, 0], [2]); // Karamja
+  PM.emitCustomEvent("tai-bwo-wannai-cleanup:gout-tuber", { player: f.player });
+  assert.ok(done(f, "find-a-gout-tuber"), "the dug tuber counts");
+  const g = pactsCharacter(t, [2800, 3100, 0], [2]);
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Gout tuber"), amount: 1 });
+  assert.ok(!done(g, "find-a-gout-tuber"), "a logged gout tuber is no dug one");
+});
+
+test("deed: the crystal acorn Pennant trades (Receive a Crystal Acorn from Pennant), not an impling's", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("pennant:crystal-acorn", { player: f.player, itemId: item("Crystal acorn") });
+  assert.ok(done(f, "receive-a-crystal-acorn-from-pennant"), "Pennant's acorn counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Crystal acorn"), amount: 1 });
+  assert.ok(!done(g, "receive-a-crystal-acorn-from-pennant"), "an impling's acorn is no Pennant acorn");
+  const h = pactsCharacter(t);
+  PM.emitCustomEvent("pennant:crystal-acorn", { player: h.player, itemId: item("Crystal weapon seed") });
+  assert.ok(!done(h, "receive-a-crystal-acorn-from-pennant"), "the seed is not the acorn (the item must match)");
+});
+
+test("deed: the beehive stings the player (Get Stung By Bees)", (t) => {
+  const f = pactsCharacter(t);
+  PM.emitCustomEvent("bees:stung", { player: f.player });
+  assert.ok(done(f, "get-stung-by-bees"), "the sting counts");
+  const g = pactsCharacter(t);
+  PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Bucket of wax"), amount: 1 });
+  assert.ok(!done(g, "get-stung-by-bees"), "taking wax is no sting");
+});

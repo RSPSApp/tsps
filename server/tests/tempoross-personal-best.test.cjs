@@ -20,12 +20,13 @@ before(async () => {
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
 });
 
-function finish(t, player, points) {
+function finish(t, player, points, ticks = 200, line = "Points: ") {
   player.getPacketSender().sendVarbit(Shared.VARBIT.POINTS, points);
   const messages = [];
   t.mock.method(player, "sendMessage", (m) => messages.push(m));
-  Fight.prototype.reward.call({}, player, 200);
-  return messages.find((m) => m.startsWith("Points: "));
+  Fight.prototype.reward.call({}, player, ticks);
+  t.mock.restoreAll();
+  return messages.find((m) => m.startsWith(line));
 }
 
 test("a new best says '(new personal best)'; otherwise the best follows", (t) => {
@@ -33,4 +34,14 @@ test("a new best says '(new personal best)'; otherwise the best follows", (t) =>
   player.setUsername("tempoross-pb");
   assert.equal(finish(t, player, 3190), "Points: <col=ef1020>3,190</col> (new personal best).");
   assert.equal(finish(t, player, 3000), "Points: <col=ef1020>3,000</col>. Personal best: 3,190.");
+});
+
+// rsprox 227/01858.txt:65783 (and :75409, :89101, :94941; 234/03275.txt:133950): "Subdued in <col=ef1020>2:00.60</col>
+// (new personal best)."; otherwise "Subdued in X. Personal best: Y.".
+test("the time line: a first or faster time is a new personal best; a slower one shows the best", (t) => {
+  const player = new Player(new BotPlayerSession());
+  player.setUsername("tempoross-time");
+  assert.equal(finish(t, player, 100, 201, "Subdued in"), "Subdued in <col=ef1020>2:00.60</col> (new personal best).", "the first");
+  assert.equal(finish(t, player, 100, 174, "Subdued in"), "Subdued in <col=ef1020>1:44.40</col> (new personal best).", "faster");
+  assert.equal(finish(t, player, 100, 207, "Subdued in"), "Subdued in <col=ef1020>2:04.20</col>. Personal best: 1:44.40.", "slower");
 });

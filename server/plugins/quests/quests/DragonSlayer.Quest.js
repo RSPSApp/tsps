@@ -223,6 +223,11 @@ module.exports = function registerDragonSlayerQuest(api) {
   const ELVARG_INTRO_FOOTSTEPS = 7;
   const SCENE_OVERLAY_UID = (161 << 16) | 1;
   const SCENE_INTERFACE = { journey: 299, route: 544, clouds: 543, elvarg: 545, fly: 546, fade: 174 };
+  /**
+   * toplevel_mainmodal_open's background around the main modal (rev242 capture ticks 3141 and 3153):
+   * ship_journey's own brown (its frame rectangle, 0x2a1e06) fills the screen, and none behind the route map.
+   */
+  const MAIN_MODAL_OPEN = 2524, SHIP_JOURNEY_BACKGROUND = [0x2a1e06, 0], NO_MODAL_BACKGROUND = [-1, -1];
   /** Walk animation of Doors.plugin's GATE_WALK_ANIMATION. */
   const DOOR_WALK_ANIMATION = 819;
   const MELZAR_DOOR_LOCKED_SOUND = 2402;
@@ -400,9 +405,10 @@ module.exports = function registerDragonSlayerQuest(api) {
     player.getPacketSender().sendVarbit(6719, 2).sendVarbit(542, 1).sendVarbit(4606, 1);
     later(scene, 2, () => {
       for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
-      player.getPacketSender().sendInterface(SCENE_INTERFACE.journey).sendClientScript(1131, 3).sendSong(147).sendJingle(172, 0);
+      player.getPacketSender().sendSong(147).sendJingle(172, 0).sendInterfaceScript(MAIN_MODAL_OPEN, SHIP_JOURNEY_BACKGROUND)
+        .sendInterface(SCENE_INTERFACE.journey).sendClientScript(1131, 3);
     });
-    later(scene, 14, () => player.getPacketSender().sendInterface(SCENE_INTERFACE.route));
+    later(scene, 14, () => player.getPacketSender().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND).sendInterface(SCENE_INTERFACE.route));
     later(scene, 20, () => {
       // rev242 capture tick 3158: the player stands south of Ned the whole voyage, facing east at first.
       player.moveTo(scene.sourceTile(2066, 5516)); scene.enter(player);
@@ -1603,13 +1609,17 @@ module.exports = function registerDragonSlayerQuest(api) {
       return;
     }
 
-    if (npcId === WORMBRAIN_NPC_ID) {
-      if (stage >= STAGE_OZIACH && askedAbout(killer, INSTRUCTION.wormbrain) && !ownsMapPiece(killer, ITEM.mapWormbrain)) {
-        dropItem(killer, ITEM.mapWormbrain, event.location);
-        killer.sendMessage("Wormbrain drops a map piece on the floor.");
-      }
-      return;
-    }
+    // His table's guaranteed map piece is the drop (withholdWormbrainMap keeps it for those owed one).
+    if (npcId === WORMBRAIN_NPC_ID && owedWormbrainMap(killer)) killer.sendMessage("Wormbrain drops a map piece on the floor.");
+  }
+
+  const owedWormbrainMap = (player) =>
+    quest.getStage(player) >= STAGE_OZIACH && askedAbout(player, INSTRUCTION.wormbrain) && !ownsMapPiece(player, ITEM.mapWormbrain);
+
+  /** Wormbrain's table always lists his map piece (npc-drops.json); it stays off the floor for anyone not owed one. */
+  function withholdWormbrainMap({ player, npcId, context }) {
+    if (npcId !== WORMBRAIN_NPC_ID || !context) return;
+    if (!player || !owedWormbrainMap(player)) context.handledItemIds.add(ITEM.mapWormbrain);
   }
 
   /**
@@ -1737,4 +1747,5 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onObjectFirstClick(LOC.crandorWall, handleCrandorWallClick);
   api.onObjectFirstClick(LOC.crandorShortcut, handleCrandorShortcutClick);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:context", withholdWormbrainMap);
 };

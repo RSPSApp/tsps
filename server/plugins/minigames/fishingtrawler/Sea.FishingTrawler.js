@@ -17,9 +17,22 @@ const Shared = require("./Shared.FishingTrawler");
 const Rewards = require("./Rewards.FishingTrawler");
 const { Voyage, clearHud } = require("./Voyage.FishingTrawler");
 
+/**
+ * toplevel_mainmodal_open (rev241 capture): ship_journey opens on its own brown (0x2a1e06) filling the
+ * screen, and trawler_start with no background; we also clear it in port, as our other modals don't.
+ */
+const MAIN_MODAL_OPEN = 2524;
+const SHIP_JOURNEY_BACKGROUND = [0x2a1e06, 0];
+const NO_MODAL_BACKGROUND = [-1, -1];
+
 const sea = { voyage: null, task: null, boatArea: null, wreckArea: null, overListeners: [] };
 
 const atSea = () => Boolean(sea.voyage);
+
+function openJourney(player) {
+  player.getPacketSender().sendInterfaceScript(MAIN_MODAL_OPEN, SHIP_JOURNEY_BACKGROUND)
+    .sendInterface(Shared.ids().interfaces.journey);
+}
 
 function onOver(listener) {
   sea.overListeners.push(listener);
@@ -31,7 +44,7 @@ function launch(players, random = Math.random) {
   sea.voyage = voyage;
   for (const player of players) {
     player.setAttribute(Shared.AT_SEA_ATTRIBUTE, true);
-    player.getPacketSender().sendInterface(Shared.ids().interfaces.journey);
+    openJourney(player);
   }
   Shared.later(Shared.DATA.timing.sailTicks, () => arrive(voyage));
   return voyage;
@@ -45,7 +58,7 @@ function arrive(voyage) {
     const sender = player.getPacketSender();
     sender.sendInterfaceRemoval();
     player.moveTo(Shared.loc(Shared.DATA.boat.arrive));
-    sender.sendInterface(ids.interfaces.start);
+    sender.sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND).sendInterface(ids.interfaces.start);
     sender.sendSubInterface(Shared.OVERLAY_HUD_UID, ids.interfaces.overlay, 1);
     Shared.setVarbit(player, ids.varbits.status, Shared.DATA.values.status.atSea);
     voyage.sync(player);
@@ -90,7 +103,7 @@ function endFor(voyage, crew) {
     for (const player of crew) {
       for (const line of voyage.summaryFor(player)) player.sendMessage(line);
       player.sendMessage(Shared.message("toShore"));
-      player.getPacketSender().sendInterface(Shared.ids().interfaces.journey);
+      openJourney(player);
     }
     Shared.later(Shared.DATA.timing.sailTicks, () => dock(voyage, crew));
   } else if (voyage.result === "sunk") {
@@ -106,7 +119,7 @@ function endFor(voyage, crew) {
 function dock(voyage, crew) {
   for (const player of crew) {
     if (player.isRegistered?.() === false) continue;
-    player.getPacketSender().sendInterfaceRemoval();
+    player.getPacketSender().sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
     player.setAttribute(Shared.AT_SEA_ATTRIBUTE, false);
     player.moveTo(Shared.loc(Shared.DATA.port));
     try {

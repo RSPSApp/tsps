@@ -194,11 +194,13 @@ function craft(event) {
   if (!hasTool(player, I.HAMMER) || !hasTool(player, I.CHISEL)) { player.sendMessage("You need a hammer and a chisel."); return; }
   const inputs = [[tier.logs, 1], [I.CLOCKWORK, 1]], outputs = [[tier.item, 1]];
   if (!exchange(player, inputs, outputs, false)) { player.sendMessage("You need logs and a clockwork, and room for the birdhouse."); return; }
-  begin(player, 2, makeAnimation(player), () => {
+  // rsprox_transcripts/227/00545.txt, 00549.txt, 00550.txt: birdhouse_make and synth 2605 on the click's tick, the
+  // birdhouse and its Crafting XP the next, and no chat line (as makeAndPlace does on a space).
+  if (!begin(player, 2, makeAnimation(player), () => {
     if (!requireLevel(player, tier.crafting, H.core.Skill.CRAFTING) || !hasTool(player, I.HAMMER) || !hasTool(player, I.CHISEL) || !exchange(player, inputs, outputs)) return;
     player.getSkillManager().addExperiences(H.core.Skill.CRAFTING, tier.craftXp);
-    player.sendMessage("You craft a birdhouse.");
-  });
+  })) return;
+  player.getPacketSender().sendSound(MAKE_SOUND, 1, 0);
 }
 
 function loot(player, state) {

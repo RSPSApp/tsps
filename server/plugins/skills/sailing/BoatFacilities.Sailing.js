@@ -11,7 +11,9 @@ const FACILITIES_TABLE = 176;
 /** Table 166's `hotspot` column (31 before rev 241 added sail_pattern_option at 27). */
 const TYPE_HOTSPOTS = 32;
 const HOTSPOT_FACILITIES = 2;
-const FACILITY = { name: 0, loc: 6, sailing: 12, construction: 13, materials: 17, category: 22, overSide: 23 };
+const FACILITY = { name: 0, loc: 6, sailing: 12, construction: 13, materials: 17, stats: 20, category: 22, overSide: 23 };
+/** A facility's stats row (table 164): its `cargo_capacity` column. */
+const STAT_CARGO_CAPACITY = 28;
 const HOTSPOT_TUPLE = 4;
 const LOC_SHAPE = 10;
 
@@ -143,6 +145,22 @@ const FACILITY_OPS = Object.freeze({ AT_SEA: 0b1111, SHIPYARD: 0b10000 });
 
 /** The wind and gale catchers' switched-off locs and their switched-on ones (cache, rsprox 907). */
 const CATCHER_SWITCHED_ON = { 59684: 59683, 59685: 59686 };
+/** The anchors' raised locs (as built) and their lowered ones: 2x5 and 3x8 (cache). */
+const ANCHOR_LOWERED = { 59687: 59688, 59689: 59690 };
+/** The crystal extractor as built (switched off) and switched on (cache). */
+const EXTRACTOR_SWITCHED_ON = { 59703: 59702 };
+
+/**
+ * A built facility's loc as the boat left it: a wind or gale catcher switched on (in the shipyard
+ * too), and at sea an extractor switched on or an anchor down (their other locs have no Modify).
+ */
+function switchedLoc(boat, id, atSea) {
+  if (boat.windCatcherOn && CATCHER_SWITCHED_ON[id] !== undefined) return CATCHER_SWITCHED_ON[id];
+  if (!atSea) return id;
+  if (boat.anchorDown && ANCHOR_LOWERED[id] !== undefined) return ANCHOR_LOWERED[id];
+  if (boat.crystalExtractorOn && EXTRACTOR_SWITCHED_ON[id] !== undefined) return EXTRACTOR_SWITCHED_ON[id];
+  return id;
+}
 
 /**
  * The deck locs for a boat's hotspots: each facility's loc, blocking its tile when the loc is
@@ -157,9 +175,8 @@ function hotspotLocs(boat, placeholders = false) {
     let id = facility !== undefined
       ? CacheDefinitions.getDbRow(facility)?.column(FACILITY.loc)?.[0]
       : placeholderIds[hotspot.id];
-    // A wind or gale catcher left switched on is built that way.
-    if (boat.windCatcherOn && CATCHER_SWITCHED_ON[id] !== undefined) id = CATCHER_SWITCHED_ON[id];
     if (typeof id !== "number") return [];
+    id = switchedLoc(boat, id, !placeholders);
     const blocks = (CacheDefinitions.getObject(id)?.clipType ?? 0) !== 0;
     const opFlags = facility === undefined ? undefined : placeholders ? FACILITY_OPS.SHIPYARD : FACILITY_OPS.AT_SEA;
     return [{ id, x: hotspot.x, y: hotspot.y, level: hotspot.level, shape: LOC_SHAPE, rotation: rotationOf(hotspot, facility), blocks, hotspot: hotspot.id, opFlags }];
@@ -176,8 +193,26 @@ function teleportFocusOf(boat) {
   return built.includes(facilityNamed("Teleport focus")) ? 1 : 0;
 }
 
+/**
+ * How many slots the boat's cargo hold has: its built hold's stats row (each tier per boat size,
+ * a basic raft hold 20 up to a rosewood sloop hold 240). 0 without a hold.
+ */
+function cargoCapacityOf(boat) {
+  const hotspots = hotspotsOf(boat.type);
+  for (const hotspot of hotspots) {
+    const row = CacheDefinitions.getDbRow(facilityAt(boat, hotspot.id) ?? -1);
+    const stats = row?.column(FACILITY.stats)?.[0];
+    const capacity = stats === undefined ? undefined : CacheDefinitions.getDbRow(stats)?.column(STAT_CARGO_CAPACITY)?.[0];
+    if (typeof capacity === "number" && /cargo hold$/i.test(row.string(FACILITY.name))) return capacity;
+  }
+  return 0;
+}
+
 module.exports = {
+  cargoCapacityOf,
   CATCHER_SWITCHED_ON,
+  ANCHOR_LOWERED,
+  EXTRACTOR_SWITCHED_ON,
   FACILITY_OPS,
   teleportFocusOf,
   TYPE_HOTSPOTS,

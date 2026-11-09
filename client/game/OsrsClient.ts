@@ -6170,6 +6170,7 @@ export class OsrsClient {
                     this.loginState.serverSignalUrl = server.signalUrl;
                     this.loginState.serverWorldId = server.worldId;
                     this.loginState.serverIceServers = server.iceServers ?? [];
+                    this.loginState.serverWorldFlags = 0;
                     this.loginState.serverListOpen = false;
                     this.loginState.hoveredServerIndex = -1;
                     setServerUrl(

@@ -1571,9 +1571,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
     [`${ENTRANCE_3X3_OBJECT_ID}:1404:9703:0`, { kind: "boss-entrance", boss: "blue", landing: BLUE_ROOM_LANDING }],
     [`${ENTRANCE_2X2_OBJECT_ID}:1388:9589:0`, { kind: "boss-entrance", boss: "blood", landing: BLOOD_ROOM_LANDING }],
     [`${ENTRANCE_2X2_OBJECT_ID}:1509:9673:0`, { kind: "boss-entrance", boss: "eclipse", landing: ECLIPSE_ROOM_LANDING }],
-    // Captured tunnel gates (oploc1 51377 Pass-through; capture 1693 teleports).
+    // The 51377 tunnel gates are from capture 1693.
     [`${ENTRANCE_3X3_OBJECT_ID}:1527:9670:0`, { kind: "tunnel", landing: { x: 1513, y: 9596, z: 0 } }],
     [`${ENTRANCE_3X3_OBJECT_ID}:1512:9560:0`, { kind: "tunnel", landing: { x: 1355, y: 9538, z: 0 } }],
+    // Inferred return landing from the reciprocal shrine-to-prison tunnel in capture 1693 tick 2430.
+    [`${ENTRANCE_2X2_OBJECT_ID}:1356:9536:0`, { kind: "tunnel", landing: { x: 1512, y: 9563, z: 0 } }],
   ]);
 
   // ==========================================================================

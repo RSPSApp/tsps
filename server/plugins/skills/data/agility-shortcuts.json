@@ -2855,6 +2855,30 @@
       "note": "The Wiki's Agility shortcuts list: Tonali Cavern's stepping stone, level 46, no XP (it was named and levelled as Nemus Retreat's here)."
     },
     {
+      "name": "Log balance (Tonali Cavern)",
+      "object": 56718,
+      "at": [[1302,9398,0],[1305,9398,0]],
+      "level": 46,
+      "render": "BALANCE_WALK",
+      "between": {
+        "ends": [[1301,9398,0],[1306,9398,0]],
+        "via": [[1302,9398,0],[1303,9398,0],[1304,9398,0],[1305,9398,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "rsprox_transcripts/234/03285.txt (#3828): both ways between 1301,9398 and 1306,9398 in the balance walk, a tile a tick with sound 2470 on each. https://oldschool.runescape.wiki/w/Log_balance_(Tonali_Cavern): level 46, no XP."
+    },
+    {
       "name": "Log balance (Tlati Rainforest)",
       "object": 57593,
       "at": [[1283,3139,0],[1283,3146,0]],

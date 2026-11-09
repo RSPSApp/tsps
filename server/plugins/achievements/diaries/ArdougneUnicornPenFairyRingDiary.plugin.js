@@ -28,6 +28,7 @@ function arrivedAtUnicornPen({ player, from, fromInstance, to, source, code }) {
 
 module.exports = {
   name: "ArdougneUnicornPenFairyRingDiary",
+  description: "Credits the Ardougne diary task for entering the unicorn pen in Ardougne Zoo using a fairy ring.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

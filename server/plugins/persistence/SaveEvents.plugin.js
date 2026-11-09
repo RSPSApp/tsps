@@ -41,6 +41,7 @@ function lootGenerated(event) {
 
 module.exports = {
   name: "SaveEvents",
+  description: "Requests an immediate player save after important events: quest completions, reward-shop purchases, valuable discards and valuable drops.",
   register(pluginApi) {
     bind(pluginApi);
     pluginApi.onCustomEvent("persistence:save", request);

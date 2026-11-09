@@ -9,6 +9,7 @@ const Room = require("./partyroom/Room.PartyRoom");
 
 module.exports = {
   name: "PartyRoom",
+  description: "Adds the Falador Party Room: the party chest, its offer interface and the balloon drops.",
   register(api) {
     Room.attach(api);
   },

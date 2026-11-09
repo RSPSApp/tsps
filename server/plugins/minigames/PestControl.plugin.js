@@ -1171,6 +1171,7 @@ function leaveMatch({ player, npc }) {
 
 module.exports = {
   name: "PestControl",
+  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points and the Squire's shop.",
   members: true,
   register(api) {
     AreaManager = api.getAreaManager();

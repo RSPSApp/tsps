@@ -14,6 +14,7 @@ const { attachRewards } = require("./fishingtrawler/Rewards.FishingTrawler");
 
 module.exports = {
   name: "FishingTrawler",
+  description: "Adds Fishing Trawler: the boat from Port Khazard, leaks, net and Kraken at sea, the wreck and the catch in the dock's net.",
   members: true,
   register(api) {
     attachSea(api);

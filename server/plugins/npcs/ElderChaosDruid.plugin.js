@@ -140,6 +140,7 @@ function attach(api) {
 
 module.exports = {
   name: "ElderChaosDruid",
+  description: "Adds the Wilderness Elder Chaos druid, a magic attacker casting Wind Wave and Tele Block with captured animations and projectiles.",
   members: true,
   register: attach,
   _test: { blockWanted, methodClass },

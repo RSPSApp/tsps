@@ -214,6 +214,7 @@ function openLoot(container, { player, item, itemId, slot }) {
 
 module.exports = {
   name: "OpenableItems",
+  description: "Gives the Open option on item packs, caskets, oysters, gem bags, sacks and similar items that hand over fixed or random contents.",
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

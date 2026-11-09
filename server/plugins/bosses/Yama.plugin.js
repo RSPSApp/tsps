@@ -17,6 +17,7 @@ const Dossier = require("./yama/Dossier.Yama");
 
 module.exports = {
   name: "Yama",
+  description: "Yama at the bottom of the Chasm of Fire: the Voice of Yama, a solo instance, the three-phase fight with the Judge of Yama, and the loot.",
   members: true,
   register(api) {
     Common.init(api);

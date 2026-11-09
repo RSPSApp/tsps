@@ -24,6 +24,7 @@ function attach(api) {
 }
 module.exports = {
   name: "ClanWars",
+  description: "Adds a bounded Clan Wars: a legacy chat-channel, melee-only Last Team Standing played through the challenge and exit portals.",
   register(api) {
     attach(api);
     api.onObjectInteraction("Challenge portal", { Enter: Match.enter, Join: Match.enter, "Disable-XP": toggleXp });

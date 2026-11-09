@@ -165,6 +165,7 @@ function protect(request) {
 
 module.exports = {
   name: "CircletOfWater",
+  description: "Circlet of water: charged with water runes up to 500,000 charges, uncharge, and stands in for drinks against desert heat.",
   members: true,
   _test: { MAX_CHARGES, CHARGE_META_KEY, charges },
   register(api) {

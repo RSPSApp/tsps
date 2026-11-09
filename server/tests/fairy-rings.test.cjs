@@ -24,6 +24,7 @@ let core;
 let canAttackHook;
 
 const undoneQuests = new Set();
+const eliteLumbridge = new Set();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -34,7 +35,10 @@ before(async () => {
     core, persistAttribute() {}, onObjectInteraction() {}, onInterfaceActionClick() {},
     onCustomEvent() {},
     // Quests are done unless a test says otherwise (the codes' own quest locks).
-    emitCustomEvent(name, event) { if (name === "quest:is-complete") event.complete = !undoneQuests.has(event.key); },
+    emitCustomEvent(name, event) {
+      if (name === "quest:is-complete") event.complete = !undoneQuests.has(event.key);
+      if (name === "diary:is-complete") event.complete = event.diary === "lumbridge" && event.tier === "elite" && eliteLumbridge.has(event.player);
+    },
     onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
   });
 });
@@ -99,6 +103,7 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
     setWalkingDirection: (direction) => log(`walk ${direction === Direction.SOUTH ? "SOUTH" : "other"}`),
     moveTo: (to) => { teleportSerial++; location = to; log(`teleport ${to.getX()},${to.getY()}`); },
     isRegistered: () => true,
+    getDialogueManager: () => ({ startDialogues: (chain) => { for (const d of chain.getDialogues().values()) log(`say ${d.getText()} ${d.expression}`); } }),
   };
   return {
     p, ticks, varbits,
@@ -144,6 +149,14 @@ test("a fairy ring needs fairy magic wielded, not carried", () => {
   const carried = player({ weapon: -1, inventory: [DRAMEN_STAFF] });
   T.openDial({ player: carried.p });
   assert.deepEqual(carried.ticks.flat(), ["The fairy ring only works for those who wield fairy magic."]);
+});
+
+test("the elite Lumbridge & Draynor Diary needs no staff (Wiki, Fairy ring)", () => {
+  const diary = player({ weapon: -1 });
+  eliteLumbridge.add(diary.p);
+  T.openDial({ player: diary.p });
+  assert.ok(!diary.ticks.flat().includes("The fairy ring only works for those who wield fairy magic."), diary.ticks.flat().join(" / "));
+  assert.ok(diary.p.getInterfaceId() > 0, "the dials open");
 });
 
 test("Configure: the travel log with the codes used, the backdrop, both interfaces, busy a tick later", () => {
@@ -360,6 +373,37 @@ test("Last-destination goes at once; to the ring you stand on, it only plays the
   here.nextTick();
   const sent = runTicks(here, 5).flat();
   assert.ok(!sent.some((e) => e.startsWith("teleport")) && sent.includes("anim 3266"));
+  assert.ok(sent.includes("say Wow, fairy magic sure is useful, I hardly moved at all! 588"), sent.join(" | "));
+});
+
+// rsprox_transcripts/227/00075.txt:76640-76680: one tile off the arrival tile, the ring's own code teleports onto it
+// with the appear animation, and the next tick the player says "Wow, fairy magic sure is useful, I hardly moved at all!".
+test("the ring you stand at: onto its arrival tile, then 'I hardly moved at all!' (as captured)", () => {
+  const ring = [...T.rings().values()].find((candidate) => candidate.code === "AJR");
+  const d = ring.destination;
+  const f = player({ at: new Location(d.getX(), d.getY() + 1, d.getZ()) });
+  f.p.setAttribute(T.LAST_CODE_ATTRIBUTE, "AJR");
+  T.lastDestination({ player: f.p });
+  f.nextTick();
+  const ticks = runTicks(f, 5);
+  assert.deepEqual(ticks[3], [`teleport ${d.getX()},${d.getY()}`, "anim 3266"]);
+  assert.deepEqual(ticks[4], ["varbit 12393=0", "anim 65535", "say Wow, fairy magic sure is useful, I hardly moved at all! 588"]);
+});
+
+test("an invalid code: the same outcome at the ring being used (Wiki, Fairy ring)", () => {
+  const atRing = [...T.rings().values()].find((candidate) => candidate.destination?.getDistance(new Location(RING.x, RING.y, 0)) <= 1);
+  assert.ok(atRing, "the test ring has a code");
+  const invalid = ["A", "B", "C", "D"].flatMap((a) => ["I", "J", "K", "L"].flatMap((b) => ["P", "Q", "R", "S"].map((c) => a + b + c)))
+    .find((code) => !T.rings().get(code)?.destination);
+  assert.ok(invalid, "some combination has no ring");
+  const f = player({ at: new Location(RING.x, RING.y, 0) });
+  T.openDial({ player: f.p, location: RING });
+  T.setDials(f.p, invalid);
+  click(f.p, 398, 26);
+  const sent = runTicks(f, 6).flat();
+  assert.ok(!sent.includes("The fairy ring combination is not a valid destination."), sent.join(" | "));
+  assert.ok(sent.includes("say Wow, fairy magic sure is useful, I hardly moved at all! 588"), sent.join(" | "));
+  assert.ok(!(f.p.getAttribute(T.USED_CODES_ATTRIBUTE) ?? "").includes(invalid), "not in the travel log");
 });
 
 test("the rings' Zanaris, Configure and Last-destination options, as the cache names them, have handlers", () => {

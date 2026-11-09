@@ -20,6 +20,7 @@ const Commands = require("./hueycoatl/Commands.Hueycoatl");
 
 module.exports = {
   name: "Hueycoatl",
+  description: "The Hueycoatl in the Darkfrost, Varlamore: a public or private fight with five body segments, Rain Fire, pillars, the half-health shield and a final phase.",
   members: true,
   register(api) {
     Shared.init(api);

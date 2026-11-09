@@ -59,6 +59,7 @@ function sellFur(core, event) {
 
 module.exports = {
   name: "Baraek",
+  description: "Makes Baraek in Varrock sell fur for 20 coins, or 18 as the fallback, taking the coins and giving the fur from his dialogue.",
   register(api) {
     api.onNpcDialogueCondition(dialogueCondition.bind(null, api.core));
     api.onCustomEvent("npc-dialogue:action", sellFur.bind(null, api.core));

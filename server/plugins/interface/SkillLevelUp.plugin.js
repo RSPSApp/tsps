@@ -280,6 +280,13 @@ function itemAction(event) {
 
 module.exports = {
   name: "SkillLevelUp",
+  description: "Level-up feedback: chat message, unlock messages, graphic, sound and the level-up pop-up, which pauses skilling until you press Continue.",
+  config: {
+    "SkillLevelUp:interruptActions": {
+      type: "boolean", label: "Level-ups interrupt actions", default: true,
+      help: "Follows each player's pop-up preference. Turn off to keep skilling and fighting through level-ups: the blocking pop-ups are skipped, chat messages, sounds and graphics stay.",
+    },
+  },
   register(api) {
     pluginApi = api;
     api.onPlayerLogin(trackCombatLevel);

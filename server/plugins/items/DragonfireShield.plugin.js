@@ -419,6 +419,7 @@ function attach(api) {
 
 module.exports = {
   name: "DragonfireShield",
+  description: "Dragonfire shield, ward and ancient wyvern shield: charges, Inspect, Check, Empty, absorbing dragonfire, the blast special and bonus defence.",
   members: true,
   register(api) {
     attach(api);

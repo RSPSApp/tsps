@@ -28,6 +28,7 @@ function applyChatIcons({ player }) {
 
 module.exports = {
   name: "StaffCrowns",
+  description: "Shows the right chat icon before a player's name: a moderator or admin crown from their rights, else the Ironman icon.",
   register(api) {
     core = api.core;
     pluginApi = api;

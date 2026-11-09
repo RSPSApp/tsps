@@ -30,6 +30,7 @@ function onEquipmentChanged(api, event) {
 
 module.exports = {
   name: "ArdougneSalveDiary",
+  description: "Credits the Ardougne diary task for imbuing a salve amulet at the Nightmare Zone or equipping an imbued one.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

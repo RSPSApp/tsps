@@ -53,8 +53,8 @@ function speak(player, npcId, text, then = null) {
 function giveXp(player, xp) {
   const { Skill } = Common.core;
   const skills = player.getSkillManager();
-  skills.addExperience(Skill.HITPOINTS, xp, false);
-  skills.addExperience(Skill.SLAYER, xp, false);
+  skills.addExperience(Skill.HITPOINTS, xp, true);
+  skills.addExperience(Skill.SLAYER, xp, true);
 }
 
 /** The champions_scroll reward interface, as captured. */

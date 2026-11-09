@@ -39,6 +39,7 @@ function saveRunes(event) {
 
 module.exports = {
   name: "SpellRuneSaving",
+  description: "Gives the Staff of the dead family a 1 in 7 chance, and the Kodai wand a 15% chance, to save a spell's runes.",
   members: true,
   register(api) {
     core = api.core;

@@ -174,6 +174,7 @@ function killed({ killer, npc }) {
 
 module.exports = {
   name: "KourendKebosDiary",
+  description: "Credits Kourend and Kebos diary tasks whose gameplay already exists, only on the successful action's own event and target.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

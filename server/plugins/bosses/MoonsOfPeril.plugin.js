@@ -11,6 +11,7 @@ const Arena = require("./moonsofperil/Arena.MoonsOfPeril");
 
 module.exports = {
   name: "MoonsOfPeril",
+  description: "The Moons of Peril: the Blood, Blue and Eclipse Moons under Cam Torum, Neypotzli's camps and fishing, the Lunar Chest and Eyatlalli's offerings.",
   members: true,
   register(api) {
     Common.init(api);

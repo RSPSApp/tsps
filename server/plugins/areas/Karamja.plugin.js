@@ -56,6 +56,7 @@ function claimClimbingRope(request) {
 
 module.exports = {
   name: "Karamja",
+  description: "Karamja volcano access: the rocks, cave entrance and climbing rope between the surface and the TzHaar city.",
   register(api) {
     core = api.core;
     pluginApi = api;

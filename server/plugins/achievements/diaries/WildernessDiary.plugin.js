@@ -86,6 +86,7 @@ function dialogueLine(request) {
 
 module.exports = {
   name: "WildernessDiary",
+  description: "Credits Wilderness diary tasks such as God Wars Dungeon bloodvelds, yew from Ent trunks, the Emblem Trader and god spells hitting players.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

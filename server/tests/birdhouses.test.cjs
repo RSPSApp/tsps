@@ -81,3 +81,22 @@ test("walking off before the rebuild gives the held clockwork back", () => {
   assert.equal(f.inventory.getAmount(I.OAK_LOGS), 1);
   assert.deepEqual(f.dropped.filter(([id]) => id === I.CLOCKWORK), [[I.CLOCKWORK, 1]]);
 });
+
+// rsprox_transcripts/227/00545.txt, 00549.txt, 00550.txt: a tool on logs plays birdhouse_make and synth 2605 on the
+// click's tick, and the birdhouse and its Crafting XP come the next tick with no chat line. The inventory craft sent
+// "You craft a birdhouse." and no sound.
+test("making a birdhouse in the inventory plays the make sound and says nothing", () => {
+  const f = fixture();
+  const sounds = [];
+  const sender = new Proxy({}, {get: (_, key) => key === "sendSound" ? (id) => { sounds.push(id); return sender; } : () => sender});
+  f.player.getPacketSender = () => sender;
+  f.inventory.setItem(0, new core.Item(I.LOGS));
+  f.inventory.setItem(1, new core.Item(I.HAMMER));
+  f.inventory.setItem(2, new core.Item(I.CHISEL));
+  f.inventory.setItem(3, new core.Item(I.CLOCKWORK));
+  Birdhouses.craft({player: f.player, usedItemId: I.CHISEL, usedWithItemId: I.LOGS, handled: false});
+  assert.deepEqual(sounds, [2605], "the make sound on the click");
+  for (let i = 0; i < 3; i++) { C.H.tick++; C.processActions(); }
+  assert.equal(f.inventory.getAmount(I.BIRD_HOUSE), 1);
+  assert.deepEqual(f.messages, [], "no chat line");
+});

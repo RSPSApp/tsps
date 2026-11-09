@@ -104,6 +104,11 @@ export abstract class PrivateArea extends Area {
         return false;
     }
 
+    /** Optional default lifetime for floor items in this instance, in game ticks. */
+    public groundItemDespawnDelay(): number | null {
+        return null;
+    }
+
     /** Whether this area's scene is copied from cache template chunks instead of the normal map. */
     public usesTemplateMap(): boolean {
         return false;

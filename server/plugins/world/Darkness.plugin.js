@@ -168,6 +168,7 @@ function createDarkArea(api) {
 
 module.exports = {
   name: "Darkness",
+  description: "Makes Lumbridge Swamp Caves dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack.",
   hasLightSource,
   darknessTickMessage,
   takesDarknessDamage,

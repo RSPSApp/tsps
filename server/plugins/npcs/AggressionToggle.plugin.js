@@ -25,6 +25,7 @@ function keepAggressive(event) {
 
 module.exports = {
   name: "AggressionToggle",
+  description: "Adds the ::aggro command, an administrator cheat that keeps monsters aggressive after the ten-minute tolerance, usable by all if commands allow.",
   register(api) {
     api.persistAttribute(IGNORE_TOLERANCE_ATTRIBUTE, false);
     api.registerCommand("aggro", toggleTolerance, api.core.PlayerRights.ADMINISTRATOR,

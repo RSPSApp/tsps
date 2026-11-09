@@ -791,6 +791,7 @@ function chestCount(request) {
 
 module.exports = {
   name: "Barrows",
+  description: "Adds the Barrows minigame: the six brothers' crypts and puzzle door, the prayer drain, the reward chest and the Barrows minimap.",
   members: true,
   register(api) {
     World = api.getWorld();

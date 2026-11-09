@@ -142,6 +142,7 @@ function pourIntoSkin(event) {
 
 module.exports = {
   name: "Waterskins",
+  description: "Lets players fill waterskins from a Kharidian cactus or by pouring in a bucket, bowl, jug or vial of water, for desert heat.",
   members: true,
   _test: { cutChance, emptiestSkinSlot, FULL_CACTUS_TO_DRY },
   register(pluginApi) {

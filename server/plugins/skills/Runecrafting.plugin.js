@@ -65,6 +65,14 @@ const OURANIA_DIARY_MESSAGE = "Your medium level knowledge of the local area all
 const OURANIA_NO_ESSENCE = "You do not have any pure or daeyalt essences to bind.";
 const RIFT_GUARDIAN_BASE = 1795758;
 const BLOOD_RIFT_GUARDIAN_BASE = 804984;
+
+/**
+ * Wiki (Rift guardian): 804,984 for "Blood runes (Arceuus)" (the dark essence altar, ObjectIdentifiers.BLOOD_ALTAR),
+ * 1,795,758 for every other altar, the true Blood Altar (Altar 83, pure essence) among them.
+ */
+function riftGuardianBase(altarId) {
+  return altarId === ObjectIdentifiers.BLOOD_ALTAR ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE;
+}
 /** The Ourania Altar's rift guardian base, whatever rune is made (Wiki: Rift guardian). */
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
@@ -567,7 +575,7 @@ function handleCraftRunes(event) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
-      petBase: runeData.runeId === ItemIdentifiers.BLOOD_RUNE ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE,
+      petBase: riftGuardianBase(event.objectId),
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
@@ -596,7 +604,7 @@ function answerAltarRune(request) {
   const level = request.player.getSkillManager().getCurrentLevel(Skill.RUNECRAFTING);
   request.rune = {
     runeId: runeData.runeId, level: runeData.level, xp: runeData.xp, amount: runeMultiplier(level, runeData),
-    petBase: runeData.runeId === ItemIdentifiers.BLOOD_RUNE ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE,
+    petBase: riftGuardianBase(request.objectId),
   };
 }
 
@@ -1082,6 +1090,7 @@ function useDenseOnDarkAltar(event) {
 
 module.exports = {
   name: "Runecrafting",
+  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals.",
   register(api) {
     initialize(api);
     api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);

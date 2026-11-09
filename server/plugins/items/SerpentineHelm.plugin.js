@@ -183,6 +183,7 @@ function attach(api) {
 
 module.exports = {
   name: "SerpentineHelm",
+  description: "Charges the serpentine helm with Zulrah's scales for poison and venom immunity and a chance to envenom targets, spending scales in combat.",
   members: true,
   _test: { charges, wornHelm, processUpkeep, venomChance, onHitResolved, chargeHelm, uncharge, MAX_CHARGES },
   register(api) {

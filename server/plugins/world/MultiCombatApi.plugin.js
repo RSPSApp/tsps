@@ -12,6 +12,7 @@ function multiCombatBounds(_query, segments) {
 
 module.exports = {
   name: "MultiCombatApi",
+  description: "Serves the bounds of multi-combat zones to the client over the content API, without exposing the full development world data.",
   register(api) {
     worldDefinition = api.core.WorldDefinition;
     api.registerContentEndpoint("multi-combat", multiCombatBounds);

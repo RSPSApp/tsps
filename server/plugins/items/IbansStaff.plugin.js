@@ -126,6 +126,7 @@ function initialize(coreApi) {
 
 module.exports = {
   name: "IbansStaff",
+  description: "Charges Iban's staff (120, or 2,500 for the upgraded staff), spends charges on Iban Blast, and lets the Dark Mage recharge it for coins.",
   members: true,
   _test: { chargesOf, setCharges, rechargeCondition, rechargePayment, CHARGES_META_KEY },
   register(api) {

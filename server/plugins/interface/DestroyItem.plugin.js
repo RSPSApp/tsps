@@ -165,6 +165,7 @@ function confirmDestroy({ player, action }) {
 
 module.exports = {
   name: "DestroyItem",
+  description: "The destroy-item confirmation and its 1/Y and 2/N keys, with the destroy sound and a warning for the item.",
   register(api) {
     pluginApi = api;
     api.onItemDropPolicy(dropItem);

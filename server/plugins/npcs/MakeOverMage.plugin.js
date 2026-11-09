@@ -206,6 +206,7 @@ function openFromMakeover({ player }) {
 
 module.exports = {
   name: "MakeOverMage",
+  description: "Makeover Mage and the ::makeover command: change body kits and colours, pick pronouns, and unlock Halloween skins; new accounts see it at creation.",
   _test: { canOpenMakeover, clickDesign, unlockHalloweenSkins },
   register(api) {
     core = api.core;

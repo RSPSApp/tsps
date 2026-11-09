@@ -55,7 +55,9 @@ function hits(character, target, method, special) {
     building = previous;
   }
   // Synchronous hooks may construct other hits before this constructor returns.
-  if (current && current.target === target && current.method === method) {
+  // The swing's own hit only: a later one built in the same swing (a Demonic Pacts Blindbag
+  // attack with a carried macuahuitl) must not take its place in the Bloodrager roll.
+  if (current && current.hit === null && current.target === target && current.method === method) {
     current.events = context.events.filter(event => event.hit === hit);
     current.hit = hit;
   }

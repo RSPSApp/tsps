@@ -72,6 +72,7 @@ function sync(player, force = false) {
 
 module.exports = {
   name: "Buff Timers",
+  description: "Sends the antifire, Tele Block and stamina countdowns to the client's infobox timers.",
   _test: { getState, sync },
   register(api) {
     api.onPlayerLogin(({ player }) => sync(player, true));

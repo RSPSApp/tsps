@@ -750,6 +750,7 @@ function talkTo(event) {
 
 module.exports = {
   name: "RogueTrader",
+  description: "Ali Morrisane's Rogue Trader errands after The Feud (runes, blackjacks, clothes) that unlock his stock and cheaper magic carpets.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

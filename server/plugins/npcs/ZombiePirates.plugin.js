@@ -39,6 +39,7 @@ function chooseTable(request) {
 
 module.exports = {
   name: "ZombiePirates",
+  description: "Picks the Medium Wilderness Diary drop table for Chaos Temple zombie pirates once the player has completed that diary.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

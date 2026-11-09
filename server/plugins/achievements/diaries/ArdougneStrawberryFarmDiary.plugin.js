@@ -19,6 +19,7 @@ function harvested({ player, crop, patch }) {
 let api;
 module.exports = {
   name: "ArdougneStrawberryFarmDiary",
+  description: "Credits the Ardougne diary task for harvesting strawberries from the Ardougne farm.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

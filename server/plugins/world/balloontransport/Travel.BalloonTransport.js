@@ -57,8 +57,9 @@ function fill(text, values) {
   return text.replace(/\[(\w+)\]/g, (whole, key) => (values[key] !== undefined ? String(values[key]) : whole));
 }
 
+/** Wiki (Balloon transport system): each route's Firemaking level is boostable. */
 function firemaking(player) {
-  return player.getSkillManager().getMaxLevel(Common.core.Skill.FIREMAKING);
+  return player.getSkillManager().getCurrentLevel(Common.core.Skill.FIREMAKING);
 }
 
 /** Carried and worn weight in kg, one log of the fare aside. */
@@ -165,7 +166,7 @@ function travel(player, from, to, npcId = null) {
   }
   const arrived = opening ? () => {
     Common.openRoute(player, to);
-    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, unlockXp, false);
+    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, unlockXp, true);
     player.sendMessage(fill(messages.unlocked, { place: to.label }));
   } : null;
   // The logs' source may be asked for: the trip is checked again once it's chosen, and the

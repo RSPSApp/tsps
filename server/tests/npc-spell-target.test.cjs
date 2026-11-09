@@ -114,7 +114,13 @@ for (const symbol of ['HANS', 'BANKER']) {
 }
 
 for (const [options, message] of [
-  [{ runes: false }, 'You do not have the required items to cast this spell.'],
+  // rsprox captures (regular worlds): the refusal names the first missing rune in the cache spell's own rune order
+  // (Wind Strike's obj lists mind, then air).
+  [{ runes: false }, 'You do not have enough Mind Runes to cast this spell.'],
+  // rsprox_transcripts/226/01696.txt: Fire Surge with no runes names the wrath runes.
+  [{ name: 'Fire Surge', runes: false }, 'You do not have enough Wrath Runes to cast this spell.'],
+  // Fire Bolt's cache obj lists chaos first (it ties with Ghostly Grasp at level 35 on the rune set alone).
+  [{ name: 'Fire Bolt', runes: false }, 'You do not have enough Chaos Runes to cast this spell.'],
   [{ name: 'Fire Strike', level: 1 }, 'You need a Magic level of 13 to cast this spell.'],
 ]) {
   test(`native rejected targeting preserves the specific spell requirement: ${message}`, async t => {

@@ -48,6 +48,7 @@ function searchChest(event) {
 
 module.exports = {
   name: "Chests",
+  description: "Generic household chests: Open and Shut swap between the closed and open locs, and searching an open one finds nothing.",
   dependsOn: ["Quests", "Clans", "RandomEvents", "GiantLairs"],
   register(api) {
     core = api.core;

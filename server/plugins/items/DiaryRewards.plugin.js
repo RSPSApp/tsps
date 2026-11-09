@@ -8,6 +8,7 @@ const Rewards = require("./diaryrewards/Common.DiaryRewards");
 
 module.exports = {
   name: "DiaryRewards",
+  description: "Achievement diary reward items: their daily teleports, Falador shield prayer restore, Explorer's ring energy and the other diary rewards.",
   members: true,
   register(api) {
     Rewards.init(api);

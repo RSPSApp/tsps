@@ -293,6 +293,7 @@ function initializeIds() {
 
 module.exports = {
   name: "Obligator",
+  description: "Adds the Obligator chain mace's multi-roll Thrust with reach behind the target and single-target Smash, plus charging with shards and runes.",
   members: true,
   register(api) {
     core = api.core;

@@ -321,3 +321,30 @@ test("Bones to Bananas awards one cast of Magic XP regardless of plain bone coun
       complete=true;
     });
   });
+
+// Wiki (Bones to Bananas/Peaches): normal, burnt, bat, bleached, jogre, wolf, monkey, Alan's and big bones all turn
+// into fruit; only normal bones (526) did. rsprox_transcripts/229/02804.txt: with none, "You aren't holding any bones!".
+test("Bones to Bananas turns every kind of bone the Wiki lists into bananas", async (t) => {
+  const { player, connection } = createPlayer(t);
+  const bones = [526, 528, 530, 532, 2859, 3125, 3183, 25422, 30973];
+  for (const [id, amount] of [[561, 1], [555, 2], [557, 2]]) player.getInventory().add(new core.Item(id, amount), false);
+  for (const id of bones) player.getInventory().add(new core.Item(id, 1), false);
+  const spell = core.CacheDefinitions.getSpellByName("Bones to Bananas");
+  await sendWidgetAction(connection, { type: "widget_action", widgetId: spell.widgetId, groupId: spell.widgetId >>> 16,
+    childId: spell.widgetId & 0xffff, slot: -1, buttonNum: 1, itemId: spell.itemId });
+  for (const id of bones) assert.equal(player.getInventory().getAmount(id), 0, `${core.ItemDefinition.forId(id).getName()} (${id}) is gone`);
+  assert.equal(player.getInventory().getAmount(1963), bones.length);
+});
+
+test("with no bones the cast says so, as recorded, and takes nothing", async (t) => {
+  const { player, connection } = createPlayer(t);
+  for (const [id, amount] of [[561, 1], [555, 2], [557, 2], [536, 1]]) player.getInventory().add(new core.Item(id, amount), false);
+  const messages = [];
+  t.mock.method(player.getPacketSender(), "sendMessage", (m) => { messages.push(m); return player.getPacketSender(); });
+  const spell = core.CacheDefinitions.getSpellByName("Bones to Bananas");
+  await sendWidgetAction(connection, { type: "widget_action", widgetId: spell.widgetId, groupId: spell.widgetId >>> 16,
+    childId: spell.widgetId & 0xffff, slot: -1, buttonNum: 1, itemId: spell.itemId });
+  assert.ok(messages.includes("You aren't holding any bones!"), messages.join(" | "));
+  assert.equal(player.getInventory().getAmount(536), 1, "dragon bones are not fruit bones");
+  assert.equal(player.getInventory().getAmount(561), 1, "no runes taken");
+});

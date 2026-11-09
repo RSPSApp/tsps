@@ -108,6 +108,7 @@ class IndexedDbPlayerPersistence extends JsonPlayerPersistence {
 
 module.exports = {
   name: "IndexedDbPlayerPersistence",
+  description: "Stores player saves and hashed passwords in the browser's IndexedDB when the server runs inside a browser host. Does nothing elsewhere.",
   dependsOn: ["JsonPlayerPersistence"],
   register(api) {
     if (!isBrowserHost()) {

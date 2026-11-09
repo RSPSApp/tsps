@@ -319,6 +319,7 @@ function interact(event) {
 
 module.exports = {
   name: "WildernessChests",
+  description: "Adds the Wilderness diary chests: the Muddy chest in the Lava Maze (muddy key) and the Rogues' chest in Rogues' Castle, with their loot.",
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

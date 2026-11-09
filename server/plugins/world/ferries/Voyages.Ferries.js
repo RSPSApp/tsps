@@ -27,7 +27,10 @@ const FADE_OVERLAY = 174;
 const FADE_SCRIPT = 948;
 const FADE_CYCLES = 50;
 const SHIP_AT_SEA_CHUNK = { sourceChunkX: 3064 >> 3, sourceChunkY: 3208 >> 3, sourcePlane: 1, rotation: 0 };
-const SHIP_JOURNEY = { interface: 299, script: 1131, jingle: 172 };
+/** Live opens ship_journey on its own brown (0x2a1e06) filling the screen (rev241/242 captures, toplevel_mainmodal_open). */
+const SHIP_JOURNEY = { interface: 299, script: 1131, jingle: 172, open: [0x2a1e06, 0] };
+/** No background: live sends it before the next modal; we clear it on landing, as our other modals don't. */
+const NO_MODAL_BACKGROUND = [-1, -1];
 const LONGSHIP = { interface: "misc_shipjourney", model: "misc_shipjourney:misc_shipmodel", open: [4404769, 0], jingle: 171 };
 const GALLEON = { interface: "quest_lunar_galleon", model: "quest_lunar_galleon:lunar_galleon", open: [2631714, 0], jingle: 171 };
 const ROWING = { interface: "seaslug_boat_travel", open: [3750175, 42], jingle: 172, travel: 2, arrive: 8, closeOverlay: 10 };
@@ -145,7 +148,7 @@ function boardShip(player, trip, modal, onLand) {
     hold(player, false);
     if (logout) return;
     reopenShipTabs(player);
-    sender(player).sendInterfaceRemoval();
+    sender(player).sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
     onLand?.();
   };
   const ship = new Ship(player, land);
@@ -166,7 +169,8 @@ function shipJourney(player, trip) {
   message(player, trip.board);
   boardShip(player, trip, () => {
     seaSounds(player, SHIP_JOURNEY.jingle);
-    sender(player).sendInterface(SHIP_JOURNEY.interface).sendClientScript(SHIP_JOURNEY.script, trip.route);
+    sender(player).sendInterfaceScript(MAIN_MODAL_OPEN, SHIP_JOURNEY.open)
+      .sendInterface(SHIP_JOURNEY.interface).sendClientScript(SHIP_JOURNEY.script, trip.route);
   }, () => messageBox(player, trip.arrive));
 }
 
@@ -198,7 +202,7 @@ function galleon(player, trip) {
     player.moveTo(Common.toLocation(trip.to));
     Common.arrived(player, trip.routeName);
     hold(player, false);
-    out.sendInterfaceRemoval();
+    out.sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
   };
   Common.begin(player, { land });
   Common.later(player, trip.ticks, land);
@@ -274,7 +278,7 @@ function rowing(player, trip) {
       out.sendInterfaceDisplayState(CacheDefinitions.getComponentId(trip.layer), false);
     },
     [ROWING.arrive]: () => {
-      out.sendInterfaceRemoval();
+      out.sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
       finish();
       fade(player, false);
       messageBox(player, trip.arrive);
@@ -285,10 +289,22 @@ function rowing(player, trip) {
 
 const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, rowing };
 
-/** Sends the player on a route by name; false if they're already travelling or it's unknown. */
+/**
+ * Whether the passenger may go where the route lands: a league area still locked refuses, with its own line, through
+ * the content checks teleports ask (TeleportHandler.destinationAllowed, as the charter ships do; not checkReqs, which
+ * would end a running teleblock), so a trip never starts (nor a fare goes) only to be sent back on landing.
+ */
+function canGo(player, routeName) {
+  const route = Common.route(routeName);
+  if (!route?.to) return true;
+  return Common.core.TeleportHandler.destinationAllowed(player, Common.toLocation(route.to));
+}
+
+/** Sends the player on a route by name; false if they're already travelling, it's unknown or they may not go. */
 function travel(player, routeName) {
   const route = Common.route(routeName);
   if (!route || !player || Common.travelling(player)) return false;
+  if (!canGo(player, routeName)) return false;
   const trip = { ...route, routeName };
   const from = player.getLocation().clone();
   STYLES[trip.style](player, trip);
@@ -305,4 +321,4 @@ function landEveryone() {
   for (const [player, trip] of [...Common.trips]) trip.land?.(true);
 }
 
-module.exports = { travel, landNow, landEveryone, STYLES };
+module.exports = { travel, canGo, landNow, landEveryone, STYLES };

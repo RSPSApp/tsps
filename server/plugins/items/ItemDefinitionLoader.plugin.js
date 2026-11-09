@@ -176,6 +176,16 @@ function loadItemAlch() {
     if (definition === ItemDefinition.DEFAULT) continue;
     definition.highAlch = Number.isSafeInteger(values?.highalch) ? values.highalch : 0;
     definition.lowAlch = Number.isSafeInteger(values?.lowalch) ? values.lowalch : 0;
+    // The export is keyed by the unnoted ids: the note alchs for the same (as loadItemPrices prices it), so a
+    // noted copy of an unalchable item is refused too rather than keeping the cache's value.
+    const noteId = definition.getNoteId();
+    if (!definition.isNoted() && noteId >= 0) {
+      const note = ItemDefinition.forId(noteId);
+      if (note.isNoted() && note.getNoteId() === id) {
+        note.highAlch = definition.highAlch;
+        note.lowAlch = definition.lowAlch;
+      }
+    }
     loaded += 1;
   }
   return { filePath, loaded };
@@ -389,6 +399,7 @@ function sendCustomItems({ player }) {
 
 module.exports = {
   name: "ItemDefinitionLoader",
+  description: "Loads custom item definitions and models from the custom-items and custom-models content files and sends the custom items to players at login.",
   _test: { loadItemPrices, loadItemAlch, applyItemOverrides, validateSpecialAttack },
   register(api) {
     const startedAt = Date.now();

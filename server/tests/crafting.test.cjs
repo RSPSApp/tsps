@@ -37,6 +37,7 @@ before(async () => {
     sendMultiChatboxPrompt: player => player.log.push(["legacy-choice-menu"]),
     emitCustomEvent: (name, event) => {
       if (name === "quest:get-stage") event.stage = event.player.questStage ?? 0;
+      else if (name === "diary:is-complete" && event.player.diaries) event.complete = event.player.diaries.includes(`${event.diary}:${event.tier}`);
       else {
         if (name === "crafting:spun") provenanceEvents.push(event);
         api.emitCustomEvent(name, event);
@@ -436,7 +437,28 @@ test('glassblowing lists all eight items and makes one every 3 ticks from the se
   assert.equal(player.amounts.get(ItemIds.GLASSBLOWING_PIPE), 1);
 });
 
-test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 2 ticks from the second', t => {
+// rsprox captures: the leather, thread and glassblowing lines are spam ("You make a green dragonhide body." 193 times,
+// "You use up one of your reels of thread." 163, "You make a beer glass."), and the orb is "You make an orb."
+// (rsprox_transcripts/227/01854.txt, 101 times). They went to the game channel, the orb as "an unpowered staff orb".
+test('leather, thread and glassblowing lines are spam, and an unpowered orb is "You make an orb."', t => {
+  membersWorld(t, true);
+  const SPAM = PluginManager.getCoreApi().ChatType.SPAM;
+  const lines = rows => rows.filter(row => row[0] === 'message');
+  const leather = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.LEATHER, 5]]);
+  useNeedle(leather.player, ItemIds.LEATHER);
+  const sewn = craft(leather.player, leather.getMenu(), ItemIds.LEATHER_GLOVES, 5, 15).flatMap(lines);
+  assert.ok(sewn.some(row => row[1] === 'You make a pair of leather gloves.'));
+  assert.ok(sewn.some(row => row[1] === 'You use up one of your reels of thread.'));
+  assert.ok(sewn.every(row => row[2] === SPAM), JSON.stringify(sewn));
+  const glass = playerWith([[ItemIds.GLASSBLOWING_PIPE, 1], [ItemIds.MOLTEN_GLASS, 1]]);
+  use(glass.player, 'blowGlass', ItemIds.MOLTEN_GLASS, ItemIds.GLASSBLOWING_PIPE);
+  const blown = make(glass.player, glass.getMenu(), ItemIds.UNPOWERED_ORB, 1, 4).flatMap(lines);
+  assert.deepEqual(blown.map(row => [row[1], row[2]]), [['You make an orb.', SPAM]]);
+});
+
+// Wiki (Bow string, Rope, Golden wool): a spin takes 3 ticks. rsprox_transcripts/232/03178.txt (Lumbridge castle's
+// wheel, a normal world): the wheel turns at the choice, two ticks on, then every 3.
+test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 3 ticks from the second', t => {
   membersWorld(t, true);
   provenanceEvents.length = 0;
   const { player, getMenu } = playerWith([[ItemIds.FLAX, 2]], { level: 12 });
@@ -449,13 +471,31 @@ test('the wheel offers what the carried materials spin into, starts on the choic
   assert.ok(byTick[0].some(row => row[0] === 'loc-animation' && row[1] === 466));
   assert.equal(byTick[1].some(row => row[0] === 'animation'), false);
   assert.ok(byTick[2].some(row => row[0] === 'animation' && row[1] === 13139));
-  assert.deepEqual(byTick.flatMap((rows, tick) => rows.some(row => row[0] === 'xp') ? [tick] : []), [2, 4]);
+  assert.deepEqual(byTick.flatMap((rows, tick) => rows.some(row => row[0] === 'xp') ? [tick] : []), [2, 5]);
   assert.deepEqual(xpOn(byTick, 2), [16]);
   assert.equal(player.amounts.get(ItemIds.LINEN_YARN), 2);
   assert.equal(player.amounts.get(ItemIds.FLAX), 0);
   assert.equal(provenanceEvents.length, 2);
   assert.equal(Object.hasOwn(provenanceEvents[0], 'stationObjectId'), false);
   assert.equal(Object.hasOwn(provenanceEvents[0], 'location'), false);
+});
+
+// Wiki (Kandarin Diary, medium): flax is spun 33% faster at the Seers' Village wheel (rsprox 235/03467: every 2
+// ticks there, the diary done). Wool there, or flax there without the diary, stays at 3.
+test('flax at the Seers wheel with the Kandarin medium diary spins every 2 ticks; otherwise every 3', t => {
+  membersWorld(t, true);
+  const seers = { getId: () => 25824, getLocation: () => new (PluginManager.getCoreApi().Location)(2710, 3471, 1) };
+  const spunOn = (items, diaries, choice) => {
+    const { player, getMenu } = playerWith(items, { level: 12 });
+    player.diaries = diaries;
+    player.getLocation = () => new (PluginManager.getCoreApi().Location)(2711, 3471, 1);
+    namedObjects['Spinning wheel'].Spin({ player, object: seers, handled: false });
+    const byTick = make(player, getMenu(), choice, 2, 7);
+    return byTick.flatMap((rows, tick) => rows.some(row => row[0] === 'xp') ? [tick] : []);
+  };
+  assert.deepEqual(spunOn([[ItemIds.FLAX, 2]], ['kandarin:medium'], ItemIds.BOW_STRING), [2, 4], 'the diary rate');
+  assert.deepEqual(spunOn([[ItemIds.FLAX, 2]], [], ItemIds.BOW_STRING), [2, 5], 'no diary');
+  assert.deepEqual(spunOn([[ItemIds.WOOL, 2]], ['kandarin:medium'], ItemIds.BALL_OF_WOOL), [2, 5], 'wool is not flax');
 });
 
 test('free-to-play wheels only spin wool, and wool used on the wheel opens the menu', t => {
@@ -1188,4 +1228,147 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
       assert.equal(skill.getExperience(craft),0); assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1);
     });
   });
+});
+
+
+// These cases use real registered item consumers and native queued client input. Only the
+// actor/inventory seed, in-memory channel and explicit world-phase scheduler are fixtures.
+test("native ordinary crafting stops for inventory Bury and permits the same actor's next craft", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+  const Shared = require("../plugins/skills/crafting/Shared.Crafting");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  assert.equal(core.WorldDefinition.isMembersWorld, productionMembersWorld);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  assert.equal(CREATION_MENU_GROUP_ID, 270);
+  let index = 1920;
+  for (const route of ["leather", "glass"]) {
+    for (const input of ["stationary", "inventory Bury", "widget Bury", "widget Examine", "permission veto", "equipment dispatch"]) {
+      await t.test(`${route}: ${input}`, async t => {
+        const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+          send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+        const p = new Player(new PlayerSession(channel));
+        p.setIndex(index++);
+        t.after(() => {
+          Shared.stopCrafting(p);
+          if (p.isRegistered()) {
+            PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+            PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+          }
+          p.setRegistered(false); core.World.unregisterPlayerPosition(p);
+          core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+        });
+        p.setUsername("craft" + index);
+        p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+        assert.ok(p.getLongUsername() > 0n);
+        p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
+        p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+        const c = new ClientConnection(channel); c.player = p;
+        const inv = p.getInventory(), skills = p.getSkillManager(), craft = core.Skill.CRAFTING;
+        // High Crafting avoids a level-up popup changing the task's interface state.
+        skills.setCurrentLevel(craft, 99, false).setMaxLevels(craft, 99, false)
+          .setExperience(craft, core.SkillManager.getExperienceForLevel(99));
+        const tool = route === "leather" ? I.NEEDLE : I.GLASSBLOWING_PIPE;
+        const material = route === "leather" ? I.LEATHER : I.MOLTEN_GLASS;
+        const product = route === "leather" ? I.LEATHER_BOOTS : I.BEER_GLASS;
+        const xp = route === "leather" ? 16.25 : 17.5;
+        for (const [id, amount] of [[tool, 1], [material, 2], [I.BONES, 1],
+          ...(route === "leather" ? [[I.THREAD, 1]] : [])]) inv.add(new core.Item(id, amount), false);
+        assert.equal(core.ItemDefinition.forId(material).isStackable(), false);
+        assert.ok(core.CacheDefinitions.getItem(I.BONES).inventoryActions.includes("Bury"));
+        const initialXp = skills.getExperience(craft), gains = [];
+        const add = skills.addExperiences.bind(skills);
+        t.mock.method(skills, "addExperiences", (skill, amount) => {
+          if (skill === craft) gains.push(amount);
+          return add(skill, amount);
+        });
+        const total = id => inv.getAmount(id) + p.getEquipment().getAmount(id) + core.World.getItems()
+          .filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername() &&
+            g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id)
+          .reduce((n, g) => n + g.getItem().getAmount(), 0);
+        let turns = 0;
+        const turn = () => {
+          assert.ok(++turns <= 28);
+          p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+          core.TaskManager.process(); c.processTurnPackets();
+          const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+          if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+        };
+        const begin = async () => {
+          await c.dispatch([{ type: "inventory_use_on", itemId: tool, slot: inv.getSlotForItemId(tool),
+            target: { kind: "inventory", itemId: material, slot: inv.getSlotForItemId(material) } }]);
+          turn();
+          const menu = p.getCreationMenu(); assert.ok(menu, "ordinary tool-on-material opens make menu");
+          const child = menu.getItems().indexOf(product); assert.ok(child >= 0);
+          await c.dispatch([{ type: "dialogue_continue", widgetId: (CREATION_MENU_GROUP_ID << 16) |
+            (CREATION_MENU_FIRST_ITEM_COMPONENT + child), childIndex: 1 }]);
+          turn();
+          assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(), true,
+            "real menu selection admits a pending crafting task");
+        };
+        await begin();
+        assert.equal(total(material), 2); assert.equal(total(product), 0); assert.deepEqual(gains, []);
+        const interrupted = input.endsWith("Bury");
+        if (input === "permission veto" || input === "equipment dispatch") {
+          const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+          if (input === "permission veto") {
+            // The real dispatcher must honor a refusal before clearing an interaction.
+            const veto = t.mock.method(PluginManager, "emitCanUseItem", () => false);
+            const slot = inv.getSlotForItemId(I.BONES);
+            assert.equal(ItemActionPacketListener.handleAction(p, 3214, I.BONES, slot, 1, "Bury"), true);
+            veto.mock.restore();
+          } else {
+            // Seed equipment solely to exercise the equipment-container branch.
+            const slot = core.Equipment.HEAD_SLOT, item = I.BRONZE_FULL_HELM;
+            p.getEquipment().setItem(slot, new core.Item(item, 1));
+            ItemActionPacketListener.handleAction(p, core.Equipment.INVENTORY_INTERFACE_ID, item, slot, 1, "Check");
+          }
+          assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(), true);
+          assert.equal(total(I.BONES), 1); assert.equal(total(material), 2); assert.deepEqual(gains, []);
+        } else if (input !== "stationary") {
+          const slot = inv.getSlotForItemId(I.BONES);
+          const packet = input === "inventory Bury" ? { type: "inventory_action", widgetId: 3214,
+            slot, itemId: I.BONES, option: "Bury" } : { type: "widget_action", widgetId: 149 << 16,
+            groupId: 149, childId: 0, buttonNum: input === "widget Examine" ? 10 :
+              [2, 3, 4, 6, 7][core.CacheDefinitions.getItem(I.BONES).inventoryActions.indexOf("Bury")],
+            slot, itemId: I.BONES };
+          await c.dispatch([packet]); turn();
+          assert.equal(total(material), 2, "the interrupting input resolves before the craft commit");
+          assert.equal(total(product), 0); assert.deepEqual(gains, []);
+          assert.equal(total(I.BONES), interrupted ? 0 : 1, "registered Bury actually consumes the bone");
+        }
+        for (let i = 0; i < 5; i++) turn();
+        const state = { route, input, turns, material: total(material), product: total(product), gains,
+          threadUses: p.getAttribute(THREAD_USES_ATTRIBUTE) ?? 0,
+          taskActive: p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning() ?? false };
+        console.log("CRAFTING_INVENTORY_INTERRUPT_OBSERVATION " + JSON.stringify(state));
+        assert.equal(total(material), interrupted ? 2 : 1, JSON.stringify(state));
+        assert.equal(total(product), interrupted ? 0 : 1, JSON.stringify(state));
+        assert.deepEqual(gains, interrupted ? [] : [xp]);
+        if (interrupted) assert.equal(skills.getExperience(craft), initialXp);
+        else assert.ok(skills.getExperience(craft) > initialXp);
+        assert.equal(total(tool), 1);
+        if (route === "leather") {
+          assert.equal(total(I.THREAD), 1);
+          assert.equal(p.getAttribute(THREAD_USES_ATTRIBUTE) ?? 0, interrupted ? 0 : 1);
+        }
+        assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE), null);
+        // The same actor must be able to start and finish the next ordinary action.
+        await begin();
+        for (let i = 0; i < 5; i++) turn();
+        assert.equal(total(material), interrupted ? 1 : 0);
+        assert.equal(total(product), interrupted ? 1 : 2);
+        assert.deepEqual(gains, interrupted ? [xp] : [xp, xp]);
+        assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE), null);
+      });
+    }
+  }
 });

@@ -35,6 +35,7 @@ function fillAge(api, request) {
 
 module.exports = {
   name: "Hans",
+  description: "Lets Hans in Lumbridge tell players how long they have played, completing the Lumbridge diary task for it.",
   register(api) {
     api.onNpcInteraction("Hans", { Age: showAge.bind(null, api) });
     api.onCustomEvent("npc-dialogue:line", fillAge.bind(null, api));

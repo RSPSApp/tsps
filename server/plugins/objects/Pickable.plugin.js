@@ -133,6 +133,7 @@ function pick(event) {
 
 module.exports = {
   name: "Pickable",
+  description: "Picking wheat, potatoes, onions, cabbages, sweetcorn, flax and nettles from the fields, with respawn timers and nettle stings.",
   register(api) {
     TaskManager = api.getTaskManager();
     pluginApi = api;

@@ -10,6 +10,7 @@ const Storage = require("./storage/Common.StorageItems");
 
 module.exports = {
   name: "StorageItems",
+  description: "Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack and tackle box, filled by gathering skills.",
   members: true,
   register(api) {
     Storage.init(api);

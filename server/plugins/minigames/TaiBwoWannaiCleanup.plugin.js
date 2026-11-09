@@ -11,6 +11,7 @@ const Common = require("./taibwowannaicleanup/Common.TaiBwoWannaiCleanup");
 
 module.exports = {
   name: "TaiBwoWannaiCleanup",
+  description: "Adds Tai Bwo Wannai Cleanup: hacking the jungle, mending the fence, trading sticks and their shop, machetes, parcels and the Hardwood Grove.",
   members: true,
   register(api) {
     Common.init(api);

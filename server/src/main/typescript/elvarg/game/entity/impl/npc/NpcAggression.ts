@@ -25,6 +25,8 @@ export class NpcAggression {
 
     private static runAggression(player: Player, npcs: NPC[]) {
         const area = player.getArea();
+        // Set once a single-combat hunter has taken the player this tick.
+        let singleCombatEngaged = false;
         for (let npc of npcs) {
             if (npc == null) {
                 continue;
@@ -87,8 +89,21 @@ export class NpcAggression {
 
             if (huntDistance <= huntRange) {
                 if (CombatFactory.canAttack(npc, method, player) == CanAttackResponse.CAN_ATTACK) {
+                    // In multi-combat every hunter in range engages on the same tick, as live
+                    // OSRS does. In single-combat only the first one takes the player this
+                    // tick: setting its target does not mark the player as under attack until
+                    // a hit lands, so canAttack cannot tell the others the player is taken.
+                    // Always-multi NPCs (summoned minions) still join, whatever the list order.
+                    const multi = CombatFactory.multiCombatBetween(npc, player);
+                    if (!multi && singleCombatEngaged) {
+                        continue;
+                    }
                     npc.getCombat().attack(player);
-                    break;
+                    // Any ordinary NPC that engages counts, even under multi rules: a hunter on
+                    // a single tile next to the multi area must not join it this tick.
+                    if (!npc.isMultiCombat()) {
+                        singleCombatEngaged = true;
+                    }
                 }
             }
         }

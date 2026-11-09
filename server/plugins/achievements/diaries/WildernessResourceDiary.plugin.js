@@ -150,6 +150,7 @@ function taskProgressed({ player, diary, task }) {
 
 module.exports = {
   name: "WildernessResourceDiary",
+  description: "Credits Wilderness diary tasks done in the Resource Area: golden helmet, adamant scimitar, dark crabs and magic logs.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

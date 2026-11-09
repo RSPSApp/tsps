@@ -1069,6 +1069,8 @@ function bankerHarness() {
   const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
   const { DialogueChainBuilder } = require('../dist/game/model/dialogues/builders/DialogueChainBuilder');
   const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  const { NpcDialogue } = require('../dist/game/model/dialogues/entries/impl/NpcDialogue');
+  const { DoubleItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/DoubleItemStatementDialogue');
   const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
   const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
   const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
@@ -1093,10 +1095,11 @@ function bankerHarness() {
   let useNpc;
   const useObjects = [];
   const api = {
-    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, World },
+    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, NpcDialogue, DoubleItemStatementDialogue, World },
     onNpcInteraction: (name, handlers) => npc.set(name, handlers),
     onObjectInteraction: (name, handlers) => object.set(name, handlers),
-    onItemOnNpc: (handler) => { useNpc = handler; },
+    // The currency handler (unnoted items); banknotes have their own native test (banker-unnote.test.cjs).
+    onItemOnNpc: (handler, filter) => { if (filter?.noted !== true) useNpc = handler; },
     onItemOnObject: (...args) => useObjects.push(args),
     onButtonClick() {}, onInterfaceActionClick() {},
     onCustomEvent: (name, handler) => custom.set(name, handler),
@@ -1211,8 +1214,21 @@ for (const route of ['Banker', 'Bank booth', 'Bank chest', 'Bank Chest']) {
     h.manager.handleOption(1);
     assert.equal(h.player.inventory.getAmount(995), 501);
     assert.equal(h.player.inventory.getAmount(13204), 2);
+    // rsprox 226/01645: then a mesbox with the coins and token models.
+    assert.equal(h.manager.getCurrent()?.getText?.(), 'The bank exchanges your coins for platinum tokens.');
   });
 }
+
+test('platinum tokens used on a Banker: the reverse mesbox (rsprox 226/01645)', () => {
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(13204, 2), false);
+  h.use(13204, 'Banker');
+  assert.equal(h.manager.getCurrent().getTitle(), 'Exchange your platinum tokens for coins?');
+  h.manager.handleOption(1);
+  assert.equal(h.player.inventory.getAmount(995), 2000);
+  assert.equal(h.manager.getCurrent()?.getText?.(), 'The bank exchanges your platinum tokens for coins.');
+  assert.deepEqual(h.manager.getCurrent().getItemIds(), [1003, 3991]);
+});
 
 for (const [coins, tokens, used, wantCoins, wantTokens] of [
   [1000, 0, 995, 0, 1],
@@ -1266,11 +1282,20 @@ test('exchange cancellation, closure, duplicate and replaced confirmation cannot
   }
 });
 
+test('any other unnoted item on a Banker: "Hand me a banknote..." (rsprox 226/01645)', () => {
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(TRIDENT, 1), false);
+  assert.equal(h.use(TRIDENT, 'Banker').handled, true);
+  assert.equal(h.manager.getCurrent()?.getText?.(), "Hand me a banknote, and I'll try to convert it to an item.");
+  assert.equal(h.manager.getCurrent().expression, 611, 'chatsad2, as recorded');
+  assert.equal(h.player.inventory.getAmount(TRIDENT), 1);
+});
+
 test('currency exchange ignores unrelated NPCs, objects, items and stale item slots', () => {
   const h = bankerHarness();
   h.player.inventory.add(new Item(995, 2000), false);
   h.player.inventory.add(new Item(TRIDENT, 1), false);
-  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Banker'], [995, 'Banker', 1]]) {
+  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Bank booth'], [995, 'Banker', 1]]) {
     assert.equal(h.use(...args).handled, false);
     assert.equal(h.manager.isActive(), false);
   }

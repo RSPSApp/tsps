@@ -61,6 +61,11 @@ export function readWorldConfig(): JsonObject {
     const localFile = path.resolve("data/definitions/world.local.json");
     if (!fs.existsSync(localFile)) return shipped;
     const local = object(JSON.parse(fs.readFileSync(localFile, "utf8")), "world.local.json");
+    return mergeWorldConfig(shipped, local);
+}
+
+/** The layering rule of readWorldConfig, for callers that already hold both layers. */
+export function mergeWorldConfig(shipped: JsonObject, local: JsonObject): JsonObject {
     const merged: JsonObject = { ...shipped, ...local };
     for (const key of ["pluginConfig", "plugins"]) {
         const shippedValue = shipped[key];

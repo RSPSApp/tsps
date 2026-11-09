@@ -1164,7 +1164,7 @@ module.exports = function registerDreamMentorQuest(api) {
         // XP can be refused (an XP lock, a minigame, max XP): the lamp is kept, as A Kingdom Divided's lamps do.
         const skills = player.getSkillManager();
         const before = skills.getExperience(skill);
-        skills.addExperience(skill, DREAMY_LAMP_XP, false);
+        skills.addExperience(skill, DREAMY_LAMP_XP, true);
         if (skills.getExperience(skill) === before) {
           player.sendMessage("You cannot gain experience in that skill right now.");
           return null;

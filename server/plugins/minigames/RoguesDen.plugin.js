@@ -8,6 +8,7 @@ const Common = require("./roguesden/Common.RoguesDen");
 
 module.exports = {
   name: "RoguesDen",
+  description: "Adds Rogues' Den in Burthorpe: its traps and agility obstacles, the wall and lobby safes and the equipment crate rewards.",
   members: true,
   register(api) {
     Common.init(api);

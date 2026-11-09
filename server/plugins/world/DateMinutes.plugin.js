@@ -20,6 +20,7 @@ function sendDateMinutes({ player }) {
 
 module.exports = {
   name: "DateMinutes",
+  description: "Sends the client the current minute since 1970 on login and each new minute, so home and minigame teleport cooldown timers can display.",
   register(api) {
     api.onPlayerLogin(sendDateMinutes);
     api.onPlayerProcess(sendDateMinutes);

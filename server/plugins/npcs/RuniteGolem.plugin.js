@@ -68,6 +68,7 @@ function rockMined({ player, npc }) {
 
 module.exports = {
   name: "RuniteGolem",
+  description: "Runite Golems in the Resource Area: a killed golem leaves a runite rock mineable for a minute, then respawns after five minutes.",
   members: true,
   dependsOn: ["Mining"],
   register(pluginApi) {

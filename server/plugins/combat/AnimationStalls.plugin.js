@@ -36,6 +36,7 @@ function applyStallDefinition(event) {
 
 module.exports = {
   name: "AnimationStalls",
+  description: "Holds a place for fully stalling animations, where movement and hits freeze, that the cache cannot express. It has no entries yet.",
   register(api) {
     core = api.core;
     api.onAnimationStall(applyStallDefinition);

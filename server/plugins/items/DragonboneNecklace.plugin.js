@@ -19,6 +19,7 @@ function boneRestore(event) {
 
 module.exports = {
   name: "DragonboneNecklace",
+  description: "Dragonbone necklace: while worn, burying or crushing bones restores Prayer points.",
   members: true,
   register(api) {
     core = api.core;

@@ -17,6 +17,7 @@ function checkedHealth({ player, crop, type, patch }) {
 let api;
 module.exports = {
   name: "ArdougnePalmHealthDiary",
+  description: "Credits the Ardougne diary task for checking the health of a palm tree near Tree Gnome Village.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

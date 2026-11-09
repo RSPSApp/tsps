@@ -686,10 +686,11 @@ function handleHouseOptions(event) {
   return true;
 }
 
-function houseTeleportArrival({ player, name }) {
+/** Cast follows the house's teleport setting; the spell's "Outside" option (`option`) always stays outside. */
+function houseTeleportArrival({ player, name, option }) {
   if (name !== "teleport to house") return;
   const saved = houseStateFor(player);
-  if (saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
+  if (option === "outside" || saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
   else enterHouse(player, saved.defaultBuildingMode);
 }
 

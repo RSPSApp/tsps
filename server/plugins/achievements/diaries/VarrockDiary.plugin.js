@@ -291,6 +291,7 @@ function resetLunarBatch({ player }) {
 
 module.exports = {
   name: "VarrockDiary",
+  description: "Credits Varrock diary tasks such as Thessalia's store, the newspaper, the pottery bowl, the spirit tree and the balloon, from other plugins' successes.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

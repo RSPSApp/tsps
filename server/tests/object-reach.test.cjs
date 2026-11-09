@@ -121,13 +121,14 @@ test('wall approach masks reject door flanks in both reach checks and route sear
 });
 
 
-test('straight wall decorations 4/5 use the wall-deco edge checks, not the open side', async () => {
+test('straight wall decorations 4/5 are operated from their own tile, as live', async () => {
   const { RegionManager } = require('../dist/game/collision/RegionManager');
   await ensureCache();
   ObjectDefinition.init();
   RegionManager.init();
   RegionManager.loadMapFiles(1632, 4833, true);
   assert.equal(RegionManager.getClipping(1631, 4833, 0, null), 0, 'library side is open');
+  assert.equal(RegionManager.getClipping(1632, 4833, 0, null) & 0x100, 0, 'the painting tile is walkable');
   assert.equal(RegionManager.getClipping(1633, 4833, 0, null) & 0x80, 0x80, 'corridor side has the wall');
 
   const player = { getPacketSender: () => ({ getVarbit: id => id === 3468 ? 40 : 0, getVarp: () => 0 }) };
@@ -140,25 +141,46 @@ test('straight wall decorations 4/5 use the wall-deco edge checks, not the open 
     getSize: () => size,
     getPrivateArea: () => null,
   });
-  // 29650 is shape 4, face 2 at 1632,4833. The library/west side is the only
-  // open side; the corridor/east side is behind the wall and stays unreachable.
+  // 29650 is shape 4, face 2 at 1632,4833: reached on its own tile only, never from the
+  // library tile beside it or through the wall from the corridor.
   for (const shape of [4, 5]) {
-    assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, shape, 0), true,
-      `shape ${shape} library side`);
+    assert.equal(PathFinder.reachedObject(stand(1632, 4833), 1632, 4833, 1, 1, 2, shape, 0), true,
+      `shape ${shape} own tile`);
+    assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, shape, 0), false,
+      `shape ${shape} library tile beside it`);
     assert.equal(PathFinder.reachedObject(stand(1633, 4833), 1632, 4833, 1, 1, 2, shape, 0), false,
       `shape ${shape} corridor side stays blocked`);
-    // Non-overlapping size-2 footprints: the east edge (1631) is adjacent to the
-    // painting, so this exercises reachWallDecoN rather than the overlap shortcut.
-    assert.equal(PathFinder.reachedObject(stand(1630, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), true,
-      `shape ${shape} non-overlapping size-2 library footprint`);
-    assert.equal(PathFinder.reachedObject(stand(1633, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), false,
-      `shape ${shape} non-overlapping size-2 corridor footprint stays blocked`);
+    // A size-2 footprint covering the tile reaches it; one beside it does not.
+    assert.equal(PathFinder.reachedObject(stand(1631, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), true,
+      `shape ${shape} size-2 footprint over the tile`);
+    assert.equal(PathFinder.reachedObject(stand(1630, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), false,
+      `shape ${shape} size-2 footprint beside it`);
   }
   // Diagonal wall-deco forms and the other shape families keep their existing rules.
   assert.equal(PathFinder.reachedObject(stand(1633, 4833), 1632, 4833, 1, 1, 2, 6, 0), false);
   assert.equal(PathFinder.reachedObject(stand(1632, 4832), 1632, 4833, 1, 1, 2, 7, 0), true);
   assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, 8, 0), true);
   assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, 10, 0), true);
+
+  // The route walks onto the tile: the painting from the library, and the Wilderness levers
+  // from where live players clicked them, ending on the lever's tile as in
+  // rsprox_transcripts/224/01444.txt (Edgeville 3090,3475 from 3093,3479; Keep 3153,3923 from
+  // 3158,3943) and 233/00454.txt (bank 3090,3956 from 3092,3957; cellar 2539,4712 from 2536,4712).
+  const route = new RsmodRouteFinding((x, y, z) => RegionManager.getClipping(x, y, z, null));
+  for (const [from, to, shape, angle] of [
+    [[1630, 4833], [1632, 4833], 4, 2],
+    [[3093, 3479], [3090, 3475], 4, 0],
+    [[3158, 3943], [3153, 3923], 5, 0],
+    [[3092, 3957], [3090, 3956], 4, 0],
+    [[2536, 4712], [2539, 4712], 4, 3],
+    [[2562, 3311], [2561, 3311], 4, 0], // Ardougne, no recording: from the Keep lever's landing tile
+  ]) {
+    RegionManager.loadMapFiles(to[0], to[1], true);
+    const path = route.findRoute({ level: 0, srcX: from[0], srcY: from[1], destX: to[0], destY: to[1],
+      srcSize: 1, locShape: shape, locAngle: angle, blockAccessFlags: 0, privateArea: null });
+    assert.equal(path.alternative, false, `${to}: a real route`);
+    assert.deepEqual([path.endX, path.endY], to, `${from} -> ${to} ends on the lever's own tile`);
+  }
 });
 
 test('clipped type-10 crate 16560 uses its real wall sides without unmasked through-wall reach', async () => {

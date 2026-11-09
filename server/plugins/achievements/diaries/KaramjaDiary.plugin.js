@@ -192,6 +192,7 @@ function taiBwoFavour({ player, percentage }) {
 
 module.exports = {
   name: "KaramjaDiary",
+  description: "Credits Karamja diary tasks from the gameplay that performs them, such as Musa Point, Brimhaven Dungeon, the TzHaar caves and slayer tasks.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

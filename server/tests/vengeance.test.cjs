@@ -193,7 +193,8 @@ test("sacks preserve spell requirements and cannot supply another Lunar spell", 
   const player = sackCaster();
   LunarSpells.handleSelf(player, "Magic Imbue");
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.BLIGHTED_VENGEANCE_SACK), 2);
-  assert.ok(player.messages.some(message => message.includes("required items")));
+  // The refusal names the first missing rune (rsprox captures: "You do not have enough Law Runes to cast this spell.").
+  assert.ok(player.messages.some(message => /^You do not have enough .+ Runes to cast this spell\.$/.test(message)), player.messages.join(" | "));
 });
 
 test("sacks can be used in Ferox, Mage Arena bank, supported PvP minigames and PvP worlds", (t) => {

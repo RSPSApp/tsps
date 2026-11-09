@@ -195,6 +195,7 @@ function capeRenameBoat(request) {
 
 module.exports = {
   name: "SailingBoatTeleport",
+  description: "Teleport to boat tablets and the Sailing cape teleport, taking the player to a moored boat's dock without boarding it.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

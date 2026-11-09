@@ -477,6 +477,7 @@ function initializeIds() {
 
 module.exports = {
   name: "ScytheOfVitur",
+  description: "Adds the Scythe of Vitur's multi-hit sweeps on large targets, charging at the Theatre of Blood vyre well, and reverting to uncharged.",
   members: true,
   register(api) {
     core = api.core;

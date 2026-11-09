@@ -35,10 +35,12 @@
  *   talent_unique_blindbag_chance (+2% per unique heavy melee weapon in the inventory, up to 10%)
  *   and 68 talent_unique_blindbag_damage (+N% Blindbag max hit per unique one, up to 10%): Blindbag
  *   puts a random heavy melee weapon from the inventory (not the Dramen staff: Wiki, 6 May 2026) in
- *   the weapon slot (bonuses recounted),
- *   rolls an ordinary melee hit with it and puts the weapon back; the hit may Blindbag again (a
- *   guard stops a chain at MAX_BLINDBAG_CHAIN). A "melee weapon" is a weapon-slot item with a melee
- *   attack or strength bonus above its ranged attack bonus. No animation or graphic: none recorded.
+ *   the weapon slot (the carried item itself, charges and all; bonuses recounted), attacks with it
+ *   through the method it has wielded (CombatFactory.getMethod: a multi-hit weapon's two hitsplats,
+ *   the scythe's) and puts the weapon back. The chance is rolled once per attack ("each melee
+ *   attack"), not per hitsplat, so a two-hit weapon rolls once; the Blindbag attack may Blindbag
+ *   again, once for the attack (a guard stops a chain at MAX_BLINDBAG_CHAIN). A "melee weapon" is a
+ *   weapon-slot item with a melee attack or strength bonus above its ranged attack bonus. No animation or graphic: none recorded.
  * - 71 talent_2h_melee_echos: a landed two-handed melee hit (not a special, not on a player) has a
  *   5% chance to emit `league:pact-ranged-echo` { player, target, source: "melee" } (Ranged unit).
  * - 66 talent_hit_restore_spec_energy: each melee hitsplat that deals damage restores N% energy.
@@ -294,6 +296,32 @@ function queueDerived(player, target, parent, kind, extra = {}) {
   }
 }
 
+/**
+ * The melee method a wielded weapon attacks with: the combat-method resolvers' (multi-hit
+ * weapons, the scythe, the dual macuahuitl), else the core's plain melee one.
+ */
+function wieldedMeleeMethod(player) {
+  const method = core.CombatFactory.getMethod(player);
+  return isMelee(method?.type?.()) ? method : core.CombatFactory.MELEE_COMBAT;
+}
+
+/**
+ * A Blindbag attack's hits, built by the swapped-in weapon's own method, so a multi-hit
+ * weapon hits as many times as it does wielded. The plain method keeps the parent's delay.
+ */
+function blindbagHits(player, target, parent, uniques) {
+  const method = wieldedMeleeMethod(player);
+  if (method === core.CombatFactory.MELEE_COMBAT) return [queueDerived(player, target, parent, "blindbag", { uniques })];
+  building = { player, kind: "blindbag", uniques };
+  try {
+    const hits = method.hits(player, target) ?? [];
+    for (const hit of hits) derived.set(hit, "blindbag");
+    return hits;
+  } finally {
+    building = null;
+  }
+}
+
 /** 44, 68, 72: an attack with a random heavy melee weapon from the inventory, as though wielded. */
 function blindbag(player, target, parent) {
   const carried = heavyWeaponsCarried(player);
@@ -308,17 +336,29 @@ function blindbag(player, target, parent) {
   const slot = core.Equipment.WEAPON_SLOT;
   const held = equipment.getItems()[slot];
   const chosen = carried[Math.floor(Math.random() * carried.length)];
-  let hit;
-  equipment.setItem(slot, new core.Item(chosen, 1));
+  // The carried item itself, charges and all: a charged scythe or Obligator attacks charged and
+  // spends its own charges, as though equipped.
+  const item = player.getInventory().getItems().find((each) => each?.getId?.() === chosen);
+  if (!item) return;
+  let hits;
+  equipment.setItem(slot, item);
   core.BonusManager.update(player);
   try {
-    hit = queueDerived(player, target, parent, "blindbag", { uniques: carried.length });
+    hits = blindbagHits(player, target, parent, carried.length);
   } finally {
     equipment.setItem(slot, held);
     core.BonusManager.update(player);
+    // A weapon that ran out of charges turned into its uncharged form in the weapon slot, and the
+    // client was sent that slot: show both containers as they are now.
+    if (item.getId() !== chosen) {
+      player.getEquipment().refreshItems();
+      player.getInventory().refreshItems();
+    }
   }
-  chains.set(hit, depth);
-  core.CombatFactory.addPendingHit(hit);
+  if (hits.length === 0) return;
+  // One attack, one roll of its own: the first of its hits carries the chain (a scythe's three too).
+  chains.set(hits[0], depth);
+  for (const hit of hits) core.CombatFactory.addPendingHit(hit);
 }
 
 /** A melee hit queued: once per attack, 26's heal, 43's extra hit and 44's Blindbag. */
@@ -331,6 +371,8 @@ function dealt({ player, target, hit }) {
   if (!isMelee(hit?.getCombatType?.()) || !target || isRangedEcho(hit)) return;
   const kind = derived.get(hit);
   if (kind === "double") return;
+  // A Blindbag attack's later hits (a scythe's, one per target) are the same attack: once per attack.
+  if (kind === "blindbag" && !chains.has(hit)) return;
   if (player.isSpecialActivated() && !kind) {
     specials.add(hit);
     return;
@@ -372,8 +414,16 @@ function thornsExperience(player, attacker, damage) {
   skills.addExperience(Skill.HITPOINTS, (damage * rate) / 3, true);
 }
 
-function reflect(player, attacker, damage) {
-  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setSource(player);
+/**
+ * A reflected hit. Thorns counts as the wearer's damage — that is what let it stop a "magic
+ * damage only" Combat Achievement (Jagex, Further Leagues VI Changes) — while the pact's shield
+ * reflect only bounces the damage back, as recoil and vengeance do, and a monster killed by
+ * recoil alone drops nothing (Wiki: Ring of recoil). So only Thorns' caller asks for the credit.
+ */
+function reflect(player, attacker, damage, credits = false) {
+  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected();
+  if (credits) hit.markCreditsSource();
+  hit.setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
   return hit;
 }
@@ -393,10 +443,10 @@ function thorns(player, attacker, hit) {
   };
   for (let i = 0; i < splats; i++) {
     if (attacker.getHitpoints() <= 0 || remaining <= 0) return;
-    thornsHits.add(reflect(player, attacker, damage));
+    thornsHits.add(reflect(player, attacker, damage, true));
     thornsExperience(player, attacker, paid(damage));
     if (second > 0) {
-      thornsHits.add(reflect(player, attacker, second));
+      thornsHits.add(reflect(player, attacker, second, true));
       thornsExperience(player, attacker, paid(second));
     }
     distanceHeal(player, attacker);

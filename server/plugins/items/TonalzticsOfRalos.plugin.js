@@ -314,6 +314,7 @@ function scaleAttackRoll() {
 
 module.exports = {
   name: "TonalzticsOfRalos",
+  description: "Adds Tonalztics of Ralos, a thrown weapon charged with Sunfire splinters, one charge per throw, with Check, Charge and Uncharge.",
   members: true,
   register(api) {
     api.onItemAction("Tonalztics of Ralos", {

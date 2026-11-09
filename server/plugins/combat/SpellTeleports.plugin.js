@@ -13,6 +13,8 @@ const ALTERNATES_ATTRIBUTE = "spell-teleports:alternates";
 // The spell's own options (client script 2615 names op1/op3 "Cast").
 const SPELL_ALTERNATE_OP = 2;
 const SPELL_CONFIGURE_OP = 10;
+// Teleport to House's op2 (interface magic_spellbook:teleport_to_your_house): "Outside", whatever the house's setting.
+const HOUSE_OUTSIDE_OP = 2;
 const ALTERNATES = new Map(Object.entries(TABLETS.alternates).map(([name, data], index) => [name, { ...data, name, bit: 1 << index }]));
 // The Wilderness teleports' op10 (client script magic_spellbook_modifyops): "Disable warning" while
 // the spell's varbit is 1, "Enable warning" while it is 0. It toggles the varbit and never casts.
@@ -369,9 +371,25 @@ function mayCastApeAtoll(player, name) {
   return false;
 }
 
+/**
+ * Teleport to House's "Outside" lands at the house portal in the house's town (Construction says where), and tells
+ * Construction on arrival not to take the player in. Cast is left to the usual cast: it follows the house's setting.
+ */
+function castHouseOutside(event, name) {
+  const request = { player: event.player, option: "outside", destination: null, onArrival: null };
+  pluginApi.emitCustomEvent("construction:house-tablet", request);
+  if (!request.destination || core.SpellTeleports.handleSelf(event.player, name, request.destination, "outside")) {
+    event.handled = true;
+  }
+}
+
 /** A standard spellbook teleport, on a tile of its landing square; anything else is left to the usual cast. */
 function castStandard(event, name) {
   if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
+  if (name === HOUSE_TABLET && event.opId === HOUSE_OUTSIDE_OP && event.player.getSpellbook() === core.MagicSpellbook.NORMAL) {
+    castHouseOutside(event, name);
+    return;
+  }
   const centre = standardCentre(name);
   if (centre && core.SpellTeleports.handleSelf(event.player, name, landing(centre))) event.handled = true;
 }
@@ -387,6 +405,7 @@ function castSpell(event) {
 
 module.exports = {
   name: "SpellTeleports",
+  description: "Teleport tablets and spell teleports, including house tablets and redirected scrolls, from the teleport-tablets data file.",
   register(api) {
     core = api.core;
     pluginApi = api;

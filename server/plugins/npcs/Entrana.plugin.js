@@ -110,6 +110,7 @@ function resetSession({ player }) {
 
 module.exports = {
   name: "Entrana",
+  description: "Enforces Entrana's item restrictions on ferry and balloon travel: the monks search for armour, weapons, jars and supplies, with the Wiki's exceptions.",
   members: true,
   register(api) {
     api.onNpcDialogueVariant(selectVariant);

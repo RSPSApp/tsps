@@ -164,6 +164,7 @@ function attachState(state) {
 
 module.exports = {
   name: "AvernicTreads",
+  description: "Avernic treads: add primordial, pegasian and eternal boots for demon tears, gaining Magic and Runecraft XP, and dismantle them back.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

@@ -10,6 +10,7 @@ const SULPHUR_NAGUA = 13033;
 
 module.exports = {
   name: "SulphurNagua",
+  description: "Sulphur Nagua melee: each attack lands as two hitsplats on the same tick that share one damage roll.",
   members: true,
   register(api) {
     const { MeleeCombatMethod, PendingHit } = api.core;

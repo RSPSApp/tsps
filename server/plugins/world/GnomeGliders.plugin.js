@@ -221,6 +221,7 @@ const PILOT_ACTIONS = {
 
 module.exports = {
   name: "GnomeGliders",
+  description: "Gnome glider pilots: the glider map, flights between destinations with the fade and last-destination option, needing The Grand Tree.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

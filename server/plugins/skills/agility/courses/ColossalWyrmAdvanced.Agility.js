@@ -6,7 +6,7 @@ const { Loc, WyrmAnim, FIRST_PAUSE, SECOND_PAUSE, tightrope, hurdles, ledge, zip
  * Colossal Wyrm Agility Course, advanced (Wiki): 62 Agility, never failed. A lap starts on the
  * basic course's ladder and first tightrope (`sharesWith`), climbs the advanced ladder and ends on
  * the shared zipline. XP: the course page's table since the 2026 rework. Termites and blessed bone
- * shards are not given yet.
+ * shards: plugins/areas/ColossalWyrmAgility.plugin.js.
  */
 module.exports = {
   key: "wyrm-advanced",

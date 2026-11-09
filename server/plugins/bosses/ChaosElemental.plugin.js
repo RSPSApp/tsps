@@ -255,6 +255,7 @@ function shuffleInPlace(values) {
 
 module.exports = {
   name: "ChaosElemental",
+  description: "The Chaos Elemental's special attacks: discord, disarm and teleport.",
   members: true,
   register(api) {
     const { NpcIdentifiers } = api.core;

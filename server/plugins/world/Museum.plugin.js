@@ -679,7 +679,8 @@ function grantLampExperience(player, request, skill, name = skill.getName()) {
     return null;
   }
   const before = manager.getExperience(skill);
-  manager.addExperience(skill, request.lamp.xp, false);
+  // The world's and the account's rates apply, as they do to the genie lamp; the message keeps the base.
+  manager.addExperience(skill, request.lamp.xp, true);
   if (manager.getExperience(skill) === before) {
     player.sendMessage("You cannot gain experience in that skill right now.");
     return null;
@@ -789,6 +790,7 @@ function handleBootstrap({ player }) {
 
 module.exports = {
   name: "Museum",
+  description: "Varrock Museum Kudos: the Dig Site cleaning activity, display cases and Historian Minas's quest timeline reports for the Bone Voyage requirement.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

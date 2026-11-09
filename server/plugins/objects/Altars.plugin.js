@@ -246,6 +246,7 @@ function arceuusSpellbook({ player }) {
 
 module.exports = {
   name: "Altars",
+  description: "Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars.",
   register: (pluginApi) => {
     api = pluginApi;
     core = pluginApi.core;

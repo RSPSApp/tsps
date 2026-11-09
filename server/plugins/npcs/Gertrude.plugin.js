@@ -149,6 +149,7 @@ function onDialogueAction(api, event) {
 
 module.exports = {
   name: "Gertrude",
+  description: "Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos.",
   members: true,
   dependsOn: ["Quests", "Pets"],
   register(api) {

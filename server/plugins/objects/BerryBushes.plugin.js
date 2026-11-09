@@ -142,6 +142,7 @@ function pickFromBush(event) {
 
 module.exports = {
   name: "BerryBushes",
+  description: "Wild redberry and cadava bushes near Varrock: Pick-from takes a berry, and bushes regrow one berry at a time.",
   register(api) {
     core = api.core;
     TaskManager = api.getTaskManager();

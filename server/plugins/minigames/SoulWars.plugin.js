@@ -29,6 +29,17 @@ const Scoreboard = require("./soulwars/Scoreboard.SoulWars");
 
 module.exports = {
   name: "Soul Wars",
+  description: "Adds Soul Wars: the lobby and queue, the instanced arena, team avatars, graveyards, souls and fragments, and the obelisk.",
+  config: {
+    "SoulWars:seedBots": {
+      type: "boolean", label: "Seed Soul Wars with bots", default: false,
+      help: "Development aid: fills the lobby with bots. Leave off so production lobbies are players only.",
+    },
+    "SoulWars:minPlayers": {
+      type: "number", label: "Players needed to start", defaultText: "20, as on the Wiki", integer: true, min: 2,
+      help: "Lowest number of players a game needs. Never under 2, since both teams need a player.",
+    },
+  },
   members: true,
   register(api) {
     Common.init(api);

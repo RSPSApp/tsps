@@ -372,6 +372,34 @@ test("Thormac's post-quest battlestaff service opens the cache interface and enc
   assert.equal(h.items.get(I.MYSTIC_AIR_STAFF), 1);
 });
 
+test('the steam and lava buttons take the ornamented battlestaves (Wiki: Thormac; cache script 330 draws them)', () => {
+  const h = harness();
+  h.quest.setStage(h.player, 4);
+  h.enchantAction();
+  h.emit('interface:closed', { player: h.player, interfaceId: 231 });
+  h.tick();
+  for (const [childId, ornamented, mystic] of [
+    [10, I.STEAM_BATTLESTAFF_3, I.MYSTIC_STEAM_STAFF_3],
+    [8, I.LAVA_BATTLESTAFF_3, I.MYSTIC_LAVA_STAFF_3],
+  ]) {
+    h.items.set(I.COINS, 40000);
+    h.items.set(ornamented, 1);
+    const click = h.interfaceClick({ groupId: 332, childId });
+    assert.equal(click.handled, true);
+    assert.equal(h.items.get(ornamented) ?? 0, 0, `button ${childId}: the ornamented battlestaff is enchanted`);
+    assert.equal(h.items.get(mystic), 1, `button ${childId}: the ornamented mystic staff is handed over`);
+    assert.equal(h.items.get(I.COINS) ?? 0, 0, 'the usual 40,000 coins');
+  }
+  // Holding both, the button's own (plain) staff goes first.
+  h.items.set(I.COINS, 40000);
+  h.items.set(I.STEAM_BATTLESTAFF, 1);
+  h.items.set(I.STEAM_BATTLESTAFF_3, 1);
+  h.interfaceClick({ groupId: 332, childId: 10 });
+  assert.equal(h.items.get(I.STEAM_BATTLESTAFF) ?? 0, 0);
+  assert.equal(h.items.get(I.STEAM_BATTLESTAFF_3), 1);
+  assert.equal(h.items.get(I.MYSTIC_STEAM_STAFF), 1);
+});
+
 test('the battlestaff service refuses without the staff or the coins and stays closed before the quest', () => {
   const h = harness();
   h.quest.setStage(h.player, 4);

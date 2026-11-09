@@ -309,6 +309,7 @@ function persistFossilStorage() {
 
 module.exports = {
   name: "FossilStorage",
+  description: "Fossil Island Museum Camp's fossil storage crates and the cleaning bench that cleans unidentified fossils.",
   members: true,
   DATA,
   STORED_ATTRIBUTE,

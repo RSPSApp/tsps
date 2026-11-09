@@ -30,6 +30,7 @@ function sendPlayerDots({ player }) {
 
 module.exports = {
   name: "World Map Players",
+  description: "Gives admins a live dot on the world map for every online player, with bots marked differently, refreshed every few ticks.",
   register(api) {
     core = api.core;
     api.onPlayerProcess(sendPlayerDots);

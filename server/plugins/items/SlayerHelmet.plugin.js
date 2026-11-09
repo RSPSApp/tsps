@@ -235,6 +235,7 @@ function disassemble(event) {
 
 module.exports = {
   name: "SlayerHelmet",
+  description: "Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, and imbuing with a scroll.",
   members: true,
   register(api) {
     pluginApi = api;

@@ -24,19 +24,11 @@ const sessions = new Map();
 
 let cycle = 0;
 
+/** Free tiles around the tree, ones a player can walk to from it, without a root yet. */
 function rootTiles(event) {
-  const { range } = R();
   const { site } = event;
-  const [x0, y0, z] = [site.location.getX(), site.location.getY(), site.location.getZ()];
   const taken = [...event.roots].map((root) => root.object.getLocation());
-  const tiles = [];
-  for (let x = x0 - range; x < x0 + site.size + range; x++) {
-    for (let y = y0 - range; y < y0 + site.size + range; y++) {
-      const tile = new Common.core.Location(x, y, z);
-      if (Common.walkable(x, y, z) && !taken.some((at) => at.equals(tile))) tiles.push(tile);
-    }
-  }
-  return tiles;
+  return Common.freeTiles(site, site.location, R().range, site.size).filter((tile) => !taken.some((at) => at.equals(tile)));
 }
 
 function start(site) {

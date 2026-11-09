@@ -66,7 +66,8 @@ function useThread(player, needleId) {
   }
   player.setAttribute(THREAD_USES_ATTRIBUTE, 0);
   inventory.deleteNumber(I.THREAD, 1);
-  player.sendMessage("You use up one of your reels of thread.");
+  // rsprox captures: the craft and thread lines are spam (163 thread lines, e.g. rsprox_transcripts/227/01857.txt).
+  Shared.spam(player, "You use up one of your reels of thread.");
 }
 
 function craftLeatherItem(player, materialId, recipe, needleId) {
@@ -75,7 +76,7 @@ function craftLeatherItem(player, materialId, recipe, needleId) {
   inventory.deleteNumber(materialId, recipe.leather);
   inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
-  player.sendMessage(`You make ${recipe.made}.`);
+  Shared.spam(player, `You make ${recipe.made}.`);
   useThread(player, needleId);
   Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: recipe.itemId });
   Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", [[materialId, recipe.leather]]);

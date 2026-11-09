@@ -379,6 +379,7 @@ function splitTzKek(player, session, npc) {
 
 module.exports = {
   name: "TzhaarFightCaves",
+  description: "Adds the TzHaar Fight Cave: 63 waves ending with TzTok-Jad, healers, wave resume on logout and the cave's entry and exit.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

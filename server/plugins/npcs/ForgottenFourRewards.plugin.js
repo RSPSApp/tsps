@@ -25,7 +25,7 @@ function commit(event) {
     event.player.setAttribute(STATE_ATTRIBUTE, { ...all, [event.tableId]: { ...event.state } });
     event.committed = true;
 }
-module.exports = { name: 'ForgottenFourRewards', members: true, STATE_ATTRIBUTE, register(api) {
+module.exports = { name: 'ForgottenFourRewards', description: 'Saves each player\'s Forgotten Four reward state, using combat-achievement kill counts, for the ordered boss drop tables.', members: true, STATE_ATTRIBUTE, register(api) {
         api.persistAttribute(STATE_ATTRIBUTE, {});
         api.onCustomEvent('npc-drops:reward-state', snapshot.bind(null, api));
         api.onCustomEvent('npc-drops:reward-state-commit', commit);

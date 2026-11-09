@@ -173,6 +173,16 @@ export class TeleportHandler {
             return false;
         }
 
+        return TeleportHandler.destinationAllowed(player, targetLocation, wildernessLevelLimit, spellName);
+    }
+
+    /**
+     * Whether content lets the player go to `targetLocation` ("teleport:can-start", the area's canTeleport, the plugins'
+     * onCanTeleport: a league area still locked, a minigame's own rules), with no side effects and none of checkReqs'
+     * own checks (busy, Wilderness level, teleblock, blocked movement). For travel that isn't a teleport, such as a
+     * charter ship or a ferry, which must not end a teleblock.
+     */
+    public static destinationAllowed(player: Player, targetLocation: Location, wildernessLevelLimit: number = 20, spellName?: string): boolean {
         // Content can refuse a teleport without changing the area's existing override policy.
         const restriction = { player, destination: targetLocation, wildernessLevelLimit, spellName, allow: null as boolean | null };
         PluginManager.emitCustomEvent("teleport:can-start", restriction);

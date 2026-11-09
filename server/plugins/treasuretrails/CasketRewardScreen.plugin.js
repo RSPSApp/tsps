@@ -47,6 +47,7 @@ function closed(event) {
 
 module.exports = {
   name: "CasketRewardScreen",
+  description: "Shows the reward screen when opening elite and master clue caskets, then delivers the items to the inventory or ground when it closes, even across logout.",
   register(api) {
     api.onServerStartup(initialize.bind(null, api.core));
     api.persistAttribute(PENDING_ATTRIBUTE, []);

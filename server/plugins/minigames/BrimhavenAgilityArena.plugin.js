@@ -17,6 +17,7 @@ const Store = require("./brimhavenagilityarena/Store.BrimhavenAgilityArena");
 
 module.exports = {
   name: "BrimhavenAgilityArena",
+  description: "Adds the Brimhaven Agility Arena: pay Cap'n Izzy, cross the obstacles and tag the marked pillar for arena tickets and vouchers.",
   members: true,
   _test: {
     init: Shared.init,

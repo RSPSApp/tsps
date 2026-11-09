@@ -6,6 +6,7 @@
  */
 module.exports = {
   name: "TheatreOfBlood",
+  description: "Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre and the retrieval chest.",
   members: true,
   register(api) {
     require("./tob/Entry.TheatreOfBlood")(api);

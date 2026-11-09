@@ -26,6 +26,7 @@ function addWornWeights(request) {
 
 module.exports = {
   name: "WornWeights",
+  description: "Makes boots of lightness and penance gloves weigh their lighter worn weight in the equipment panel and for run-energy drain.",
   register(api) {
     core = api.core;
     api.onCustomEvent("equipment:weights", addWornWeights);

@@ -38,6 +38,7 @@ function charged({ player, until }) {
 
 module.exports = {
   name: "ChargeFade",
+  description: "Tells the player 'Your magical charge fades away' when the Charge spell expires after 700 ticks.",
   members: true,
   register(api) {
     core = api.core;

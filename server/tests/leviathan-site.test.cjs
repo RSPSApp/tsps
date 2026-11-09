@@ -17,7 +17,7 @@ test('recorded world statistics survive reload, retain faster records and exclud
     if (String(file).endsWith('leviathan-scoreboard.json')) stored = text;
     else originalWrite(file, text, ...args);
   });
-  h.p.getPacketSender = () => ({ sendInterface() {}, sendString: (text, uid) => strings.set(uid & 65535, text) });
+  h.p.getPacketSender = () => ({ sendInterfaceScript() {}, sendInterface() {}, sendString: (text, uid) => strings.set(uid & 65535, text) });
   h.api.persistAttribute = (...args) => persisted.push(args);
   delete require.cache[moduleId];
   const Records = require(moduleId);

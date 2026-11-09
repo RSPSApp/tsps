@@ -1787,6 +1787,7 @@ function answerDoseFamily(request) {
 
 module.exports = {
   name: "Potions",
+  description: "Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers.",
   isPotionItem(itemId) {
     return POTION_BY_ITEM_ID.has(itemId);
   },

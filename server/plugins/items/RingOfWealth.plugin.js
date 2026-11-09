@@ -251,6 +251,7 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
 
 module.exports = {
   name: "RingOfWealth",
+  description: "Handles the ring of wealth: charge counts, imbuing for 50,000 coins, teleport destinations, drop-collection settings and the ring's crumbling.",
   members: true,
   ACTIONS,
   register(api) {

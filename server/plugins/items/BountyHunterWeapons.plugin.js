@@ -18,6 +18,7 @@ function restrictWeapon(api, event) {
 
 module.exports = {
   name: "BountyHunterWeapons",
+  description: "Restricts imbued Bounty Hunter weapons, like the dark bow (BH) and abyssal daggers (BH), to permitted PvP minigames and combat rings.",
   members: true,
   register(pluginApi) {
     pluginApi.onCanAttack(restrictWeapon.bind(null, pluginApi));

@@ -152,3 +152,16 @@ test("repeat charging makes every orb and credits the one task once", (t) => {
   assert.equal(credited(player, EARTH_TASK), true);
   assert.equal(DiaryProgress.doneTasks(player, DIARY).size, 1, "one task, however many orbs");
 });
+
+// Wiki (Charge Air Orb): a 3-tick cast. Each click restarted the loop and charged an orb at once, so casting every
+// tick charged an orb every tick.
+test("casting on three ticks in a row charges one orb, and the next cast three ticks after the first charges another", (t) => {
+  const player = caster(t, EARTH_OBELISK, { orbs: 3, runes: [[COSMIC, 9], [EARTH_RUNE, 90]] });
+  let cycle = 5000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
+  for (let i = 0; i < 3; i++) { cast(player, "Charge Earth Orb", EARTH_OBELISK); cycle++; }
+  assert.equal(held(player, EARTH_ORB), 1, "one orb in three ticks");
+  assert.equal(held(player, UNPOWERED_ORB), 2);
+  cast(player, "Charge Earth Orb", EARTH_OBELISK);
+  assert.equal(held(player, EARTH_ORB), 2, "the cast after three ticks charges");
+});

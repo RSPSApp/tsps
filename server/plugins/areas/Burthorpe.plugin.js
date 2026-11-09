@@ -125,6 +125,7 @@ function startTraining() {
 
 module.exports = {
   name: "Burthorpe",
+  description: "Animates the soldiers drilling, sparring and eating in Burthorpe's square, as captured.",
   members: true,
   _test: { pickDrillMove, train, drill },
   register(pluginApi) {

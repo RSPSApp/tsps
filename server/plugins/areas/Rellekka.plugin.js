@@ -20,6 +20,7 @@ function enterTunnel(event) {
 
 module.exports = {
   name: "Rellekka",
+  description: "Rellekka's tunnel entrance to Keldagrim's entrance cave.",
   members: true,
   _test: { enterTunnel },
   register(api) {

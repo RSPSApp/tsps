@@ -178,6 +178,7 @@ function bind(registry) {
 
 module.exports = {
   name: "SirVyvin",
+  description: "Sir Vyvin and White Knight ranks: counts kills towards the rank score and opens each rank's White Knight Armoury.",
   members: true,
   register(registry) {
     bind(registry);

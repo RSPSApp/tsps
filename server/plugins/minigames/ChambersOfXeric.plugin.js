@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "ChambersOfXeric",
+  description: "Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms.",
   members: true,
   register(api) {
     require("./cox/Lobby.ChambersOfXeric")(api);

@@ -1617,6 +1617,7 @@ let RegionManager;
 
 module.exports = {
   name: "ProceduralRegionStream",
+  description: "Developer ::procregion command that generates and streams a procedural town of buildings and streets into a map region for the staff member.",
   register(api) {
     RegionManager = api.getRegionManager();
     initRegionBuildingAnalysisCoreAccess(api);

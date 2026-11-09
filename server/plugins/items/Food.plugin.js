@@ -407,6 +407,7 @@ function eat(event) {
 
 module.exports = {
   name: "Food",
+  description: "Eating: heals, boosts, drains and cures from data/food.json, with eat delays, multi-bite foods, combo foods and the food-eaten counter.",
   ATTACK_DELAY,
   COMBO_ATTACK_DELAY,
   isFoodItem,

@@ -86,6 +86,7 @@ function ifColour({ player, parts }) {
 
 module.exports = {
   name: "HeadbarColourCommands",
+  description: "Developer commands ::headbar and ::ifcolour, to try NPC headbars and recolour interface components.",
   register(api) {
     pluginApi = api;
     api.registerCommand("headbar", headbar, api.core.PlayerRights.DEVELOPER, "Test NPC health-bar animations");

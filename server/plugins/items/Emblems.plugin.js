@@ -40,6 +40,7 @@ let ItemOnGroundManager;
 
 module.exports = {
   name: "Emblems",
+  description: "Mysterious emblems: they downgrade a tier when you die to a player and are dropped on the ground instead of kept.",
   register(api) {
     ItemOnGroundManager = api.getItemOnGroundManager();
     api.onShouldKeepItemOnDeath((event) => {

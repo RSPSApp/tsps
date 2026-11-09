@@ -65,6 +65,7 @@ function useParts({ player, usedItem, usedWithItem }) {
 
 module.exports = {
   name: "BrimstoneRing",
+  description: "Brimstone ring: combine the Hydra's eye, fang and heart, with a confirmation and a Proceed or Cancel prompt.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

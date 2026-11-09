@@ -230,6 +230,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "IntelligenceGathering",
+  description: "Intelligence Gathering: the information board, Captain Ginea's hand-in and the timed gang meetings with a boss and gangsters.",
   members: true,
   register(pluginApi) {
     attach(pluginApi);

@@ -51,6 +51,7 @@ function hit({ player, object, objectId }) {
 
 module.exports = {
   name: "AttackDummies",
+  description: "Lets players Attack training dummies: plays the hit and defend animations and gives Attack XP up to level 7, with a message on ranged attacks.",
   register(api) {
     core = api.core;
     pluginApi = api;

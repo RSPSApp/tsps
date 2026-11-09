@@ -122,4 +122,4 @@ function register(api) {
   }));
 }
 
-module.exports = { name: "CacheEditorCatalog", register };
+module.exports = { name: "CacheEditorCatalog", description: "Serves read-only cache data to the cache editor page and applies its saved overlay rows at startup so authored changes are live on the next boot.", register };

@@ -15,6 +15,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { NpcAggression } = require("../dist/game/entity/impl/npc/NpcAggression");
 const { CoordinateState } = require("../dist/game/entity/impl/npc/NPCMovementCoordinator");
+const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 const GodWarsCommon = require("../plugins/bosses/godwars/Common.GodWars");
 const GodWarsCombat = require("../plugins/bosses/godwars/Combat.GodWars");
 const ScurriusCommon = require("../plugins/bosses/scurrius/Common.Scurrius");
@@ -490,4 +491,73 @@ test("player retaliation uses viewer morph attackability, including a change bef
   attackable = false;
   s.tick();
   assert.equal(s.player.getCombat().getTarget(), null, "a hidden/nonattackable morph cancels the queued retaliation");
+});
+
+/** A second hunter beside the scene's, set up the same way. */
+function secondHunter(t, npcId, at) {
+  const npc = core.NPC.create(npcId, at.clone());
+  npc.setSpawnPosition(at.clone());
+  npc.isRegistered = () => true;
+  npc.setNeedsPlacement(false);
+  npc.setHitpoints(500);
+  npc.isAggressiveTo = () => true;
+  t.after(() => core.World.unregisterNpcPosition(npc));
+  return npc;
+}
+
+// Catacombs of Kourend dagannoth pen, multi-combat (the area in #3667). Live OSRS recordings show
+// several monsters picking up one player in the same tick in multi areas, e.g. three dagannoths
+// on one tick in the deeper dagannoth dungeon (rsprox_transcripts/227/00086.txt, tick 21706).
+const DAGANNOTH_PEN = { x: 1665, y: 9998 };
+
+test("in multi-combat, every hunter in range engages the player on the same tick", (t) => {
+  const at = (dx, dy) => new core.Location(DAGANNOTH_PEN.x + dx, DAGANNOTH_PEN.y + dy, 0);
+  const s = scene(t, { npcId: core.NpcIdentifiers.DAGANNOTH_17, spawn: at(2, 0), playerAt: at(0, 0) });
+  const second = secondHunter(t, core.NpcIdentifiers.DAGANNOTH_16, at(-2, 0));
+  const third = secondHunter(t, core.NpcIdentifiers.DAGANNOTH_17, at(0, 2));
+  assert.ok(AreaManager.inMulti(s.player), "the pen is multi-combat");
+
+  NpcAggression.runAggression(s.player, [s.npc, second, third]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(second.getCombat().getTarget(), s.player, "the second hunter does not wait a tick");
+  assert.equal(third.getCombat().getTarget(), s.player, "nor does the third");
+});
+
+test("in single-combat, only one hunter engages the player", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const second = secondHunter(t, MUGGER, at(2, 0));
+  assert.equal(AreaManager.inMulti(s.player), false, "the field is single-combat");
+
+  NpcAggression.runAggression(s.player, [s.npc, second]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(second.getCombat().getTarget(), null, "the second hunter leaves the player to the first");
+});
+
+test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const minion = secondHunter(t, MUGGER, at(2, 0));
+  minion.isMultiCombat = () => true;
+  const third = secondHunter(t, MUGGER, at(-2, 0));
+
+  NpcAggression.runAggression(s.player, [s.npc, minion, third]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(minion.getCombat().getTarget(), s.player, "the always-multi hunter is not cut off by list order");
+  assert.equal(third.getCombat().getTarget(), null, "a second single-combat hunter still waits");
+});
+
+test("a hunter on a single tile does not join one that engaged under multi rules", (t) => {
+  // Review of #3861: a mugger on a multi tile engages, and one on the single tile beside the
+  // multi boundary must still leave the player to it.
+  const multiAt = new core.Location(3305, 3160, 0), singleAt = new core.Location(3309, 3158, 0);
+  const s = scene(t, { spawn: multiAt, playerAt: new core.Location(3306, 3158, 0) });
+  const single = secondHunter(t, MUGGER, singleAt);
+  assert.ok(AreaManager.inMulti(s.player), "the player stands in multi");
+  assert.ok(AreaManager.inMulti(s.npc), "the first hunter stands in multi");
+  assert.equal(AreaManager.inMulti(single), false, "the second hunter stands in single");
+
+  NpcAggression.runAggression(s.player, [s.npc, single]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(single.getCombat().getTarget(), null, "the single-tile hunter waits");
 });

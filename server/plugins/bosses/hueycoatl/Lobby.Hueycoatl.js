@@ -21,6 +21,10 @@ const RECOMMENDATION = "To face the Hueycoatl, it's recommended";
 const RECOMMENDED_COMBAT = 85;
 const PERILOUS_MOONS = "perilous_moons";
 const SCOREBOARD_INTERFACE = 884;
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const SCOREBOARD = Object.freeze({ title: 6, pkc: 9, pd: 11, pbt: 13, gkc: 15, gd: 17, gbt: 19 });
 const SCOREBOARD_TITLE = "The Hueycoatl - Statistics";
 
@@ -76,6 +80,7 @@ const best = (ticks) => (ticks > 0 ? Shared.formatTicks(ticks) : "-");
 function readScoreboard({ player }) {
   const uid = (component) => (SCOREBOARD_INTERFACE << 16) | component;
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(SCOREBOARD_INTERFACE);
   sender.sendString(SCOREBOARD_TITLE, uid(SCOREBOARD.title));
   sender.sendString(number(Shared.counter(player, Shared.KILLS_ATTRIBUTE)), uid(SCOREBOARD.pkc));

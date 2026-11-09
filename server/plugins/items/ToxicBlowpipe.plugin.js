@@ -719,6 +719,7 @@ function fillCharges(event) {
 
 module.exports = {
   name: "ToxicBlowpipe",
+  description: "Adds the toxic blowpipe: loading Zulrah's scales and darts, dart-based ranged strength, checking, unloading and uncharging.",
   members: true,
   register(api) {
     core = api.core;

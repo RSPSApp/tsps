@@ -340,6 +340,7 @@ function bind(registry) {
 
 module.exports = {
   name: "FaladorDiary",
+  description: "Credits Falador diary tasks from other plugins' successful actions, such as the haircut, mind tiara, Entrana boat and Doric's blurite limbs.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

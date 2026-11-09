@@ -160,6 +160,7 @@ class MetallicDragonCombatMethod extends DragonCombatMethod {
 
 module.exports = {
   name: "Dragons",
+  description: "Gives standard, brutal and metallic dragons their melee and dragonfire attacks, with long range for brutal and metallic ones.",
   register(api) {
     initDragonfireProtectionCoreAccess(api);
     api.registerNpcCombatMethodProvider(

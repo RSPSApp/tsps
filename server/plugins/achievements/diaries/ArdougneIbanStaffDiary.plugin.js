@@ -153,6 +153,7 @@ function onEquipmentChanged(registry, event) {
 
 module.exports = {
   name: "ArdougneIbanStaffDiary",
+  description: "Credits the Ardougne diary task for equipping Iban's upgraded staff or upgrading an Iban's staff.",
   members: true,
   dependsOn: ["AchievementDiaries", "Quests"],
   register(registry) {

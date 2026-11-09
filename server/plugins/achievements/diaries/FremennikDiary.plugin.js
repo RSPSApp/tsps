@@ -345,6 +345,7 @@ function onDiaryTask(request) {
 
 module.exports = {
   name: "FremennikDiary",
+  description: "Credits Fremennik diary tasks from the actions the Wiki names, including the Rellekka tiara and Dagannoth Kings sequences.",
   members: true,
   dependsOn: ["AchievementDiaries", "Quests"],
   register(pluginApi) {

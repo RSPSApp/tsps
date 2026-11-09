@@ -72,6 +72,7 @@ function bind(api) {
 
 module.exports = {
   name: "Autosave",
+  description: "Saves every online player every few minutes, spreading the saves over ticks so a mass login does not stall the server.",
   _test: { saveDuePlayers, schedule, forget, offsetOf, intervalOf, dueAt, INTERVAL_TICKS, MIN_INTERVAL_TICKS, MAX_SAVES_PER_TICK, get tick() { return tick; } },
   register(api) {
     bind(api);

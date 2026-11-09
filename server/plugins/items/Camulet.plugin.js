@@ -123,6 +123,7 @@ function onItemAction(event) {
 
 module.exports = {
   name: "Camulet",
+  description: "Camulet: teleports to Enakhra's Temple or the quarry entrance using charges, recharged with ugthanki dung.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

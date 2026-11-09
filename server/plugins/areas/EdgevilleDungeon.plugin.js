@@ -8,6 +8,7 @@ const Dungeon = require("./edgevilledungeon/Common.EdgevilleDungeon");
 
 module.exports = {
   name: "EdgevilleDungeon",
+  description: "Edgeville Dungeon's brass key door and its achievement diary tasks.",
   register(api) {
     Dungeon.init(api);
     require("./edgevilledungeon/BrassKeyDoor.EdgevilleDungeon")(api);

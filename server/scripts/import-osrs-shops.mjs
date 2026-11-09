@@ -59,6 +59,8 @@ const REPLACED_BY_PLUGIN = {
   // The Friendly Forester's shop is the Forestry plugin's Omnishop, not a shops.json row.
   "Forestry Shop": "the Friendly Forester's Omnishop (Forestry)",
   "Useful Supplies": "The Blood Moon Rises Castle Drakan chest (omnishop row 16873)",
+  // Priced in termites by the cache's omnishop rows; the graceful kit also takes a graceful set.
+  "Worm Tongue's Wares": "Worm Tongue's Omnishop (omnishop row wyrm_agility_rewards_shop, ColossalWyrmAgility)",
 };
 
 // Karamja gloves variants share their default store's NPC and option; bound

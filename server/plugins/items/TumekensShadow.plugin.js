@@ -231,6 +231,7 @@ function unchargeShadow({ player, item }) {
 
 module.exports = {
   name: "TumekensShadow",
+  description: "Adds Tumeken's shadow as a built-in-spell powered staff that triples magic bonuses, quadruples them in the Tombs of Amascut, and cannot be used on players.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

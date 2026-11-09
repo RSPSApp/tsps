@@ -49,6 +49,7 @@ function oreYield(request) {
 
 module.exports = {
   name: "BraceletOfClay",
+  description: "Bracelet of clay: softens mined clay and gives two soft clay per success at the soft clay rocks, crumbling after 28 uses.",
   members: true,
   register(api) {
     core = api.core;

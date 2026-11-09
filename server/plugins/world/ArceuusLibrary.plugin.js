@@ -267,6 +267,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "ArceuusLibrary",
+  description: "Arceuus Library: customers Sam, Professor Gracklebone and Villia request books, shelves are searched for the rotating layout, and the book is handed in.",
   members: true,
   register(pluginApi) {
     attach(pluginApi);

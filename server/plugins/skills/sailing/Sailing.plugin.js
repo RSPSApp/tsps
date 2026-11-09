@@ -236,6 +236,7 @@ function describeBoatsOnLogin({ player }) {
 
 module.exports = {
   name: "Sailing",
+  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving.",
   members: true,
   register(api) {
     attachCore(api);

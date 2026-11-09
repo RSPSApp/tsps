@@ -439,6 +439,7 @@ function attachUnits(api) {
 
 module.exports = {
   name: "Clans",
+  description: "Clans: the Clan Hub, the player's own clan, // clan chat and the Your Clan tab.",
   register(api) {
     attachUnits(api);
     api.onCustomEvent("player:bootstrap-complete", login);

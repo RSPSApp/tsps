@@ -19,6 +19,7 @@ const CombatAchievements = require("./royaltitans/CombatAchievements.RoyalTitans
 
 module.exports = {
   name: "RoyalTitans",
+  description: "Branda and Eldric in the Asgarnian Ice Dungeon: a 1-2 player instance with stomps, elemental rows, Elemental Blast and per-player corpse claims.",
   members: true,
   register(api) {
     Shared.init(api);

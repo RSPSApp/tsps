@@ -259,6 +259,7 @@ function attach(registry) {
 
 module.exports = {
   name: "BarbarianPyres",
+  description: "Barbarian funeral pyres by Otto's Grotto: carve a pyre ship, load bones, light it, with the elite clue and ferocious barbarian spirit.",
   members: true,
   register: attach,
   _test: { PYRE_SITE, PYRE_BOAT, PYRE_BOAT_BONES, PYRE_LIT, PYRE_LOGS, construct, itemOnSite, itemOnPyre, pyres, isAxe, isBow },

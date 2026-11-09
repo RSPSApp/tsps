@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "TearsOfGuthix",
+  description: "Adds the weekly Tears of Guthix minigame: Juna's entry check, the timed cave with its bowl and the tear streams.",
   members: true,
   register(api) {
     require("./tearsofguthix/Cave.TearsOfGuthix")(api);

@@ -376,6 +376,7 @@ function returnFromShipyard({ player }) {
 
 module.exports = {
   name: "SailingShipyard",
+  description: "Shipwright's Customise-boat takes you to the shipyard to swap a boat's hull, keel, sails or helm for another tier, paying materials for Construction XP.",
   members: true,
   readOptionRow,
   customiseBoat,

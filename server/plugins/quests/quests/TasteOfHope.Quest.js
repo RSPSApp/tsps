@@ -1800,7 +1800,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
       onConfirm: (skill, name) => {
         const skills = player.getSkillManager();
         const before = skills.getExperience(skill);
-        skills.addExperience(skill, 2500, false);
+        skills.addExperience(skill, 2500, true);
         if (skills.getExperience(skill) === before) return null;
         const chapters = attributeNumber(player, TOME_ATTRIBUTE) + 1;
         player.setAttribute(TOME_ATTRIBUTE, chapters);

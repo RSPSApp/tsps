@@ -36,6 +36,7 @@ function initialize(api) {
 
 module.exports = {
   name: "SailingStaticShips",
+  description: "Lets players board ships that a quest or plugin spawns as scenery, such as the Barracuda Trials boats, which carry their own NPCs and objects.",
   members: true,
   register(api) {
     initialize(api);

@@ -1666,8 +1666,10 @@ export class CombatFactory {
             return true;
         }
 
+        // rsprox_transcripts/229/02760.txt:7555 (and 227/00096:101707): a bow with nothing in the ammo slot.
+        const NO_AMMO = "There is no ammo left in your quiver.";
         if (ammoData == null) {
-            return reject("You don't have any ammunition to fire.");
+            return reject(NO_AMMO);
         }
 
         if (CombatFactory.usesWeaponSlotAmmo(rangedWeapon)) {
@@ -1679,7 +1681,11 @@ export class CombatFactory {
         }
 
         let ammoSlotItem = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT];
-        if (ammoSlotItem.getId() == -1 || ammoSlotItem.getAmount() < amountRequired) {
+        if (ammoSlotItem.getId() == -1 || ammoSlotItem.getAmount() <= 0) {
+            return reject(NO_AMMO);
+        }
+        // Some, but fewer than the weapon fires at once (a dark bow's two): no recording, our wording.
+        if (ammoSlotItem.getAmount() < amountRequired) {
             return reject("You don't have the required amount of ammunition to fire that.");
         }
 
@@ -1695,12 +1701,10 @@ export class CombatFactory {
             }
         }
 
+        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
         if (!properReq) {
-            let ammoName = ammoSlotItem.getDefinition().getName(),
-                weaponName = player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName(),
-                add = !ammoName.endsWith("s") && !ammoName.endsWith("(e)") ? "s" : "";
-            return reject("You can not use " + ammoName + "" + add + " with "
-                + Misc.anOrA(weaponName) + " " + weaponName + ".");
+            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
+            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
         }
 
         return true;
@@ -1859,7 +1863,10 @@ export class CombatFactory {
 
             // If we are at 0 ammo remove the item from the equipment completely.
             if (worn.getAmount() == 0) {
-                player.sendMessage("You have run out of ammunition!");
+                // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
+                // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
+                // keep theirs: no recording shows the last one go.
+                if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
                 player.getEquipment().set(slot, new Item(-1));
 
                 if (slot == Equipment.WEAPON_SLOT) {

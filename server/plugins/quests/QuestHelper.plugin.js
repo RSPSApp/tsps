@@ -31,4 +31,4 @@ function register(api){
  api.onCustomEvent('network:plugin-message',receive);
  api.onPlayerLogout(logout);api.onPlayerDisconnect(logout);api.onServerShutdown(shutdown);
 }
-module.exports={name:'OfflineQuestHelper',register,getRuntime};
+module.exports={name:'OfflineQuestHelper',description:'Runs the offline Quest Helper, answering the client\'s quest-helper plugin messages from the player\'s varps and the cache.',register,getRuntime};

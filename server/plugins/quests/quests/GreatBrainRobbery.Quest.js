@@ -1245,7 +1245,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     if (inventory.get(slot) !== item) return null;
     const skills = player.getSkillManager();
     const before = skills.getExperience(skill);
-    skills.addExperience(skill, 5000, false);
+    skills.addExperience(skill, 5000, true);
     if (skills.getExperience(skill) === before) return null;
     inventory.deleteAtSlot(slot, 1);
     return `<col=0000ff>Your wish has been granted!</col> You have been awarded 5,000 ${name ?? skill.getName()} experience!`;

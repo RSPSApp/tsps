@@ -137,7 +137,7 @@ export class MagicOnItemPacketListener {
       new Item(ItemIdentifiers.LAW_RUNE, 1), new Item(ItemIdentifiers.AIR_RUNE, 1)
     ]);
     if (!this.hasRunes(player, runes)) {
-      player.sendMessage("You do not have the required items to cast this spell.");
+      player.sendMessage(Spell.missingItemsMessage(player, Spell.inventoryShortfall(player, runes)));
       return;
     }
 

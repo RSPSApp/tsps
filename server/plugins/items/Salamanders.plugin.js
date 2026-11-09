@@ -193,6 +193,7 @@ function runAway(event) {
 
 module.exports = {
   name: "Salamanders",
+  description: "Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature.",
   members: true,
   _test: { runAway, blazeBaseMaxHit, resolveSalamander, decrementAmmo, blazeSpell, BLAZE_MAGIC_BONUS_BY_ITEM },
   register(api) {

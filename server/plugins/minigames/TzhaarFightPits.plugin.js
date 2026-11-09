@@ -329,6 +329,7 @@ function allowBountyHunterWeapons(event) {
 
 module.exports = {
   name: "TzhaarFightPits",
+  description: "Adds the TzHaar Fight Pits: a waiting room, player-versus-player rounds against a champion, spawning monsters, gas and an XP toggle.",
   members: true,
   _test: {
     enterArena, leaveArena, ATTACK_OPTION_SLOT, endGame, dropChampionSkull,

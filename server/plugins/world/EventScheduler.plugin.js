@@ -267,6 +267,7 @@ function forceEvent(api, { player, parts }) {
 
 module.exports = {
   name: "EventScheduler",
+  description: "Opens and closes seasonal event windows from the events calendar, handles event reward claims, and adds the owner-only ::forceevent command.",
   register(api) {
     api.onServerStartup(start.bind(null, api));
     api.onServerShutdown(stop.bind(null, api));

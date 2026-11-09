@@ -68,7 +68,7 @@ function fakePlayer({ at = [2938, 3421], items = {} } = {}) {
     setAttribute: (k, v) => { player.attributes[k] = v; },
     sendMessage: (m) => player.messages.push(m),
     setEnteredAmountAction: (action) => { player.amount = action; },
-    getSkillManager: () => ({ getMaxLevel: () => 99, addExperience() {} }),
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperience() {} }),
     getInventory: () => ({
       getAmount: (item) => inventory.get(item) ?? 0,
       delete: (item, n) => inventory.set(item, (inventory.get(item) ?? 0) - n),

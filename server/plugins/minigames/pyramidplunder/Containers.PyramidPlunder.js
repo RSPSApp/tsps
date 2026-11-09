@@ -191,12 +191,22 @@ function searchChest(event, random = Math.random) {
   return true;
 }
 
+/**
+ * Rocky from a room's Grand Gold Chest (Wiki, Rocky): bases 41,355 / 29,540 / 25,847 / 20,678 / 20,678 / 20,678 /
+ * 10,339 / 6,893 for rooms 1-8, "rolled upon opening the Grand Gold Chest in the room, even if a scarab swarm appears".
+ * Recorded: rsprox_transcripts/227/01857.txt (ntk_golden_chest_multi, then the pet's lines).
+ */
+const ROCKY_CHEST_BASES = [41355, 29540, 25847, 20678, 20678, 20678, 10339, 6893];
+
 function openChest(player, run, random) {
   const v = Common.ids().varbit;
   animate(player, Common.ids().anim.chest);
   Common.sound(player, Common.ids().sound.chest);
   Common.send(player, v.chest, 1);
   Mural.chestPillaged(player, run.room);
+  const petBase = ROCKY_CHEST_BASES[run.room - 1];
+  const api = Common.getApi();
+  if (petBase && api) api.emitCustomEvent("pets:skilling-roll", { player, skill: api.core.Skill.THIEVING, petBase, handled: false });
   const room = Common.roomData(run.room);
   const swarm = !Common.roll(Common.chanceOf("chestNoSwarm", Common.thievingLevel(player), run.room), random);
   if (swarm) {

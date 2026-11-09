@@ -15,6 +15,7 @@ const Area = require("./impetuousimpulses/Area.ImpetuousImpulses");
 
 module.exports = {
   name: "ImpetuousImpulses",
+  description: "Adds Puro-Puro: the Zanaris crop circle entry, the exit portal, Elnock's equipment and jar exchanges, the magical wheat and roaming spawns.",
   members: true,
   _test: {
     init(api) {

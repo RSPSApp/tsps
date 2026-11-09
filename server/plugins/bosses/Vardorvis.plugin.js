@@ -15,6 +15,7 @@ const Scoreboard = require("./vardorvis/Scoreboard.Vardorvis");
 
 module.exports = {
   name: "Vardorvis",
+  description: "Vardorvis at the Stranglewood ritual site: a private instance, tendril barrier, slashes, axes, head gaze, spikes, strangle and the kill.",
   members: true,
   register(api) {
     Common.init(api);

@@ -598,9 +598,7 @@ export class ShopManager {
             return;
         }
         if (!fromShop && !this.buysItem(shop, itemId)) {
-            player.sendMessage(
-                "You cannot sell this item to this shop."
-            );
+            player.sendMessage(this.sellRefusal(shop));
             return;
         }
         const definition = ItemDefinition.forId(itemId);
@@ -618,9 +616,10 @@ export class ShopManager {
         }
         const unit = this.currencyUnit(shop.definition.getCurrency());
         if (unit) {
+            const named = unit === "coins" && price === 1 ? "coin" : unit;
             player.sendMessage(
                 `${definition.getName()}: ${fromShop ? "currently costs" : "shop will buy for"} ` +
-                `${Misc.insertCommasToNumber(String(price))} ${unit}.`
+                `${Misc.insertCommasToNumber(String(price))} ${named}.`
             );
             return;
         }
@@ -739,9 +738,7 @@ export class ShopManager {
             return;
         }
         if (!this.buysItem(shop, stockId)) {
-            player.sendMessage(
-                "You cannot sell this item to this shop."
-            );
+            player.sendMessage(this.sellRefusal(shop));
             return;
         }
         const definition = ItemDefinition.forId(stockId);
@@ -959,6 +956,17 @@ export class ShopManager {
         return this.isGeneralStore(shop) || shop.originalAmounts.has(itemId);
     }
 
+    /**
+     * Why a sale is refused: a shop that buys nothing, "You cannot sell to this shop." (rsprox 227/01840 Temple
+     * Supplies, 234/03299 Mairin's Market, both on Value and Sell); one that buys only some items, "You can't sell this
+     * item to this shop." (cache script9714's wording; no recording).
+     */
+    private static sellRefusal(shop: RuntimeShop): string {
+        const buysAnything = this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())
+            || [...shop.originalAmounts.keys()].some((stocked) => this.buysItem(shop, stocked));
+        return buysAnything ? "You can't sell this item to this shop." : "You cannot sell to this shop.";
+    }
+
     private static isBloodMoneyShopItem(itemId: number): boolean {
         return this.BLOOD_MONEY_SHOP_IDS.some((shopId) =>
             ShopDefinition.forId(shopId)?.getCurrency() === "BLOOD_MONEY" &&
@@ -1045,8 +1053,12 @@ export class ShopManager {
             : Number(definition.getValue?.() ?? 0);
     }
 
+    /**
+     * Coins have a unit too (rsprox: "Blood rune: currently costs 400 coins.", "Empty plant pot: currently costs 1
+     * coin.", "Raw chicken: shop will buy for 0 coins.", "You don't have enough coins.").
+     */
     private static currencyUnit(currency: ShopCurrency): string | null {
-        return this.currencyHandlers.get(currency)?.unit ?? null;
+        return this.currencyHandlers.get(currency)?.unit ?? (currency === "COINS" ? "coins" : null);
     }
 
     private static currencyAmount(player: any, currency: ShopCurrency): number {

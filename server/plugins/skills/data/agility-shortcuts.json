@@ -22,6 +22,7 @@
       "name": "Barbarian Outpost pipe",
       "object": 20210,
       "level": 35,
+      "xp": 10,
       "script": "barbarianOutpostPipe",
       "params": {"northOfY":3560,"north":[2552,3561,0],"south":[2552,3558,0]}
     },

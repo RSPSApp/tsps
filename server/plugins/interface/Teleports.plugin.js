@@ -394,6 +394,7 @@ function handleTeleportButton(player, buttonId) {
 
 module.exports = {
   name: "Teleports",
+  description: "Handles the home, training, PvP and boss teleport buttons and their dialogue menus, including boss instance destinations.",
   register(api) {
     const allTeleportButtonIds = [
       ...HOME_TELEPORT_BUTTON_IDS,

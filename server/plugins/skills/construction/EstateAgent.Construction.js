@@ -201,16 +201,43 @@ function changeHouse(event, kind, index) {
     if (returnedBlueprint && inventory.getFreeSlots() + freedSlots < 1) {
       say(event, "Make room for me to return your Twisted blueprints before changing styles."); return;
     }
-    if (!pay(event, choice.cost, noCoins)) return;
-    House.releaseHouse(player, false);
-    if (blueprint) inventory.delete(blueprint, 1);
-    if (returnedBlueprint) inventory.adds(Items.TWISTED_BLUEPRINTS, 1);
-    if ((style.blueprint && index !== TWISTED_STYLE) || style.holiday) saved.unlockedStyles = [...new Set([...(saved.unlockedStyles ?? []), index])];
-    saved.style = index;
-    if (index === TWISTED_STYLE) lines.push({ npc: "Absolutely, let me borrow your blueprints and I'll make it happen! You will get them back if you redecorate your house to a different theme." });
-    if (returnedBlueprint) lines.push({ statement: "The Estate agent returns your blueprints." });
-    lines.push({ npc: "Your house has been redecorated." });
+    if (blueprint) {
+      // rsprox_transcripts/229/02546.txt (Twisted) and 236/03950.txt (Wilderness): the agent's line, then "Hand in your
+      // blueprints for the <style>?" Yes/No; only Yes takes the blueprints and changes the style. No keeps both.
+      const line = index === TWISTED_STYLE
+        ? "Absolutely, let me borrow your blueprints and I'll make it happen! You will get them back if you redecorate your house to a different theme."
+        : "Absolutely, let me take your blueprints and I'll make it happen!";
+      say(event, line, () => api.sendMultiChatboxPrompt(player, `Hand in your blueprints for the ${style.name}?`,
+        "Yes", () => restyle(event, index, blueprint, returnedBlueprint), "No", () => {}));
+      return;
+    }
+    restyle(event, index, blueprint, returnedBlueprint);
+    return;
   }
+  finishChange(event, kind, choice, lines);
+}
+
+/** Pays for and applies a house style, then the agent's lines (rsprox captures: "Your house has been redecorated."). */
+function restyle(event, index, blueprint, returnedBlueprint) {
+  if (!stillAtAgent(event)) return;
+  const player = event.player, saved = House.houseStateFor(player), inventory = player.getInventory();
+  const style = Estate.HOUSE_STYLES[index];
+  if (blueprint && !inventory.contains(blueprint)) { say(event, "Bring me the blueprints for that style first."); return; }
+  if (!pay(event, style.cost, `Hmph. Come back when you have ${style.cost.toLocaleString("en-US")} coins.`)) return;
+  House.releaseHouse(player, false);
+  if (blueprint) inventory.delete(blueprint, 1);
+  if (returnedBlueprint) inventory.adds(Items.TWISTED_BLUEPRINTS, 1);
+  if ((style.blueprint && index !== TWISTED_STYLE) || style.holiday) saved.unlockedStyles = [...new Set([...(saved.unlockedStyles ?? []), index])];
+  saved.style = index;
+  const lines = [];
+  if (returnedBlueprint) lines.push({ statement: "The Estate agent returns your blueprints." });
+  lines.push({ npc: "Your house has been redecorated." });
+  finishChange(event, "style", style, lines);
+}
+
+/** Saves the house, credits the redecoration and plays the agent's closing lines. */
+function finishChange(event, kind, choice, lines) {
+  const player = event.player;
   saveHouse(player);
   if (kind === "style" && choice.name === "Fancy stone" && event.npc?.getLocation) {
     const agent = event.npc.getLocation();

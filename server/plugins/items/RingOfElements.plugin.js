@@ -347,6 +347,7 @@ function initializeFrom(coreApi, pluginApi) {
 
 module.exports = {
   name: "RingOfElements",
+  description: "Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option.",
   members: true,
   _test: {
     destinations: () => teleports, MAX_CHARGES, getCharges, setCharges, syncRing, chargeAttempt, addCharges, teleport,

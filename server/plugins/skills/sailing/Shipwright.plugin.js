@@ -170,6 +170,7 @@ function shipwrightDialogue(event) {
 
 module.exports = {
   name: "SailingShipwright",
+  description: "Shipwright NPCs' Buy-boat (the Boat Emporium) and Recover-boat, paying from the bank so a Port Wizard brings a boat to the port.",
   members: true,
   recoverSlot,
   register(api) {

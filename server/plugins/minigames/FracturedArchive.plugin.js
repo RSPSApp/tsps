@@ -8,6 +8,7 @@
  */
 module.exports = {
   name: "FracturedArchive",
+  description: "Adds the Fractured Archive raid: the lobby, parties and Ascension rocks, then its rooms from the Archive Guardian to Xarth, Ocellus and the vault.",
   members: true,
   register(api) {
     require("./tfa/Entry.FracturedArchive")(api);

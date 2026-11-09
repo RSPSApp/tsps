@@ -120,6 +120,7 @@ function sail({ player, definition, kind, text }) {
 
 module.exports = {
   name: "LadyOfTheWaves",
+  description: "Captain Shanks on the Lady of the Waves sells a ship ticket after Shilo Village and sails you to Port Khazard or Port Sarim.",
   members: true,
   _test: { DESTINATIONS, selectVariant, answerCondition, fillNumber, buyTicket, sail, priceFor, SHIP_TICKET },
   register(pluginApi) {

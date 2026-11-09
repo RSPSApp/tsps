@@ -45,6 +45,7 @@ function supplySack(core, event) {
 
 module.exports = {
   name: "BlightedSpellSacks",
+  description: "Blighted spell sacks (ice, entangle, teleblock, surge, vengeance): each supplies a spell's entire rune cost where blighted items are allowed.",
   members: true,
   register(api) {
     api.onCustomEvent("magic:spell-cost", supplySack.bind(null, api.core));

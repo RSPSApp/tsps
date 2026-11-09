@@ -212,6 +212,7 @@ const AXES = [
   axe(ItemIds.INFERNAL_AXE_UNCHARGED__2, 61, 7, 8778, { requiredFiremaking: 85 }),
   axe(ItemIds.INFERNAL_AXE_UNCHARGED__4, 61, 7, 8778, { requiredFiremaking: 85 }),
   axe(ItemIds.CRYSTAL_AXE_INACTIVE_, 71, 7, 8324, { requiredAgility: 50 }),
+  axe(ItemIds.CRYSTAL_FELLING_AXE_INACTIVE_, 71, 7, 10072, { requiredAgility: 50, felling: true }),
   axe(ItemIds.CRYSTAL_FELLING_AXE, 71, 7, 10072, { requiredAgility: 50, felling: true }),
   axe(ItemIds.CRYSTAL_AXE, 71, 7, 8324, { requiredAgility: 50 }),
   axe(ItemIds.INFERNAL_AXE, 61, 7, 2117, { requiredFiremaking: 85, speed: 0.3 }),
@@ -743,8 +744,29 @@ function calculateCutChance(level, tree, axe) {
   return Math.min(1, Math.max(0, successes / 256));
 }
 
-function rollLog(player, tree, axe) {
-  const level = getWoodcuttingLevel(player) + Guild.invisibleBoost(player);
+/** Most players a tree's group bonus counts (Wiki: Forestry, "up to a maximum of +10 with ten players"). */
+const GROUP_BONUS_MAX = 10;
+
+/**
+ * Wiki (Forestry; Temporary skill boost): "Each player will receive a +1 boost to Woodcutting for each player at the
+ * tree, up to a maximum of +10" ("Between +1 and +10", "for each person chopping a tree", the chopper included).
+ * Not on a normal tree, in the Woodcutting Guild or on a farmed tree. Trees chopped on another plugin's request
+ * (farming patches, Trouble Brewing, Lost City's dramen tree) are left out: none is an ordinary world tree.
+ */
+function groupBonus(player, state, sessions = activeSessionsRef) {
+  if (!state || state.requested || state.tree?.name === "normal tree" || Guild.isInGuild(player)) return 0;
+  let chopping = 0;
+  for (const [other, session] of sessions ?? []) {
+    if (session.requested || session.objectId !== state.objectId || session.privateArea !== state.privateArea) continue;
+    if (!session.location?.equals?.(state.location)) continue;
+    if (other.isRegistered?.() === false) continue;
+    chopping++;
+  }
+  return Math.min(GROUP_BONUS_MAX, chopping);
+}
+
+function rollLog(player, tree, axe, state = null) {
+  const level = getWoodcuttingLevel(player) + Guild.invisibleBoost(player) + groupBonus(player, state);
   return Math.random() < calculateCutChance(level, tree, axe);
 }
 
@@ -1280,7 +1302,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     // Content may chop faster ("skills:action-interval", a league relic's 2-tick pace).
     state.nextActionTick = currentTick + actionInterval(pluginApi, player, Skill.WOODCUTTING, "chop", WOODCUTTING_ACTION_INTERVAL_TICKS);
     // Content may turn a miss into a hit ("woodcutting:attempt", a league relic's second chance).
-    const attempt = { player, object: activeTree, logId: state.tree.logId, success: rollLog(player, state.tree, state.axe) };
+    const attempt = { player, object: activeTree, logId: state.tree.logId, success: rollLog(player, state.tree, state.axe, state) };
     pluginApi.emitCustomEvent("woodcutting:attempt", attempt);
     if (!attempt.success) {
       continue;
@@ -1306,7 +1328,9 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       if (!felling.skipLog) sendSpam(player, logMessage(state.tree));
       // Only the charged crystal axe doing the chopping spends a charge: one carried beside the axe in use (an infernal
       // axe ranked above it, or a dragon axe below the crystal's 50 Agility) is left alone, as Mining's pickaxe.
-      if (state.axe?.id === ItemIds.CRYSTAL_AXE) CrystalAxe.tryUseCharge(player);
+      if (state.axe?.id === ItemIds.CRYSTAL_AXE || state.axe?.id === ItemIds.CRYSTAL_FELLING_AXE) {
+        CrystalAxe.tryUseCharge(player, Math.random, state.axe.id);
+      }
       player
         .getSkillManager()
         .addExperiences(Skill.WOODCUTTING, xp);
@@ -1384,6 +1408,9 @@ function requestedChop(event) {
   let tree = [...FARMED_TREES, ...TREES].find(tree => tree.logId === event.logId);
   if (tree && event.removeOnly) tree = { ...tree, logId: -1, xpReward: 0, multi: false };
   if (tree) event.handled = startWoodcutting(event.player, event.object, tree, activeSessionsRef);
+  // Another plugin's tree (a farming patch, Trouble Brewing, the dramen tree) takes no Forestry group bonus.
+  const session = event.handled ? activeSessionsRef.get(event.player) : null;
+  if (session) session.requested = true;
 }
 
 function requestedAxe(event) {
@@ -1405,6 +1432,7 @@ function interruptForEmote({ player }) {
 
 module.exports = {
   name: "Woodcutting",
+  description: "Woodcutting: chopping trees with the Forestry despawn timer, stump respawns, the logs-chopped tracker, and bird's nest and ring drops.",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("woodcutting:chop", requestedChop);
@@ -1466,5 +1494,5 @@ module.exports = {
   calculateCutChance,
   /** Stops the player's chopping (a Forestry event spawning beside them). */
   stopWoodcutting: (player) => activeSessionsRef && stopWoodcutting(activeSessionsRef, player),
-  _test: { maybeDropBirdNest, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
+  _test: { maybeDropBirdNest, groupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
 };

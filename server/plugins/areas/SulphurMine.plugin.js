@@ -71,6 +71,7 @@ function sulphurMineArea() {
 
 module.exports = {
   name: "SulphurMine",
+  description: "Lovakengj sulphur mine's poison gas clouds, which hurt nearby players, less so with a breathing filter.",
   members: true,
   _test: { MINE, BANK_CHEST_SAFE, inside, wearsBreathingFilter, cloudsBeside, damage, sulphurMineArea },
   register(api) {

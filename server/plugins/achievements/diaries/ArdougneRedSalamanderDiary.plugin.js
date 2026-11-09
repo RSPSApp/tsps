@@ -12,6 +12,7 @@ function caught({ player, method, npcId } = {}) {
 
 module.exports = {
   name: "ArdougneRedSalamanderDiary",
+  description: "Credits the Ardougne diary task for catching a red salamander.",
   members: true,
   dependsOn: ["AchievementDiaries", "Hunter"],
   register(pluginApi) {

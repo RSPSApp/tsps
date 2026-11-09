@@ -189,6 +189,8 @@ function entryBlocked(player, season) {
   return true;
 }
 
+const ROCKY_SQIRK_BASE = 10339;
+
 function pickFruit(event) {
   const season = seasonForTree(event.objectId);
   if (!season) return false;
@@ -197,8 +199,14 @@ function pickFruit(event) {
     player.sendMessage(PICK_LEVEL_MESSAGE(season));
     return;
   }
+  // Rocky (Wiki, Rocky: Sq'irk tree 10,339, "rolled upon picking a fruit from any of the sq'irk trees"), before the
+  // fruit as other skilling pets are (a winning pet takes the last backpack slot).
+  api.emitCustomEvent("pets:skilling-roll", { player, skill: core.Skill.THIEVING, petBase: ROCKY_SQIRK_BASE, handled: false });
   const inventory = player.getInventory();
-  inventory.adds(season.fruitId, 1);
+  const fruit = new core.Item(season.fruitId, 1);
+  // A pet that took the last slot leaves the fruit no room: it goes to the owner's floor, as Mining's ore does.
+  if (inventory.getAddableAmount(fruit) > 0) inventory.add(fruit, false);
+  else core.ItemOnGroundManager.registers(player, fruit);
   inventory.refreshItems();
   player.getSkillManager().addExperiences(core.Skill.FARMING, season.farmingXp);
   player.sendMessage(`You pick a ${season.name} sq'irk.`);

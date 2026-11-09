@@ -5,6 +5,13 @@ const Lamp = require("./random-events/GenieLamp.RandomEvents");
 
 module.exports = {
   name: "RandomEvents",
+  description: "Random events: Genie, Drill Demon, Mime, Maze, Pillory and others, plus the Lamp and Book of Knowledge; owner-only ::randevt tests them.",
+  config: {
+    "random-events:enabled": {
+      type: "boolean", label: "Random events", default: true,
+      help: "Turn off to stop random events from appearing.",
+    },
+  },
   register(api) {
     api.registerCommand("randevt", Events.spawnCommand, api.core.PlayerRights.OWNER, "Test a random event ([id] = zero-based event index; omit for random)");
     api.onServerStartup(Events.initialize.bind(null, api));

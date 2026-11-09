@@ -119,6 +119,7 @@ function streamServerPerfToPlayer(player, limitTicks = 60) {
 
 module.exports = {
   name: "PluginPerfCommand",
+  description: "A command that reports and logs how much time each plugin takes per tick.",
   register(api) {
     const { PlayerRights } = api.core;
     pluginApi = api;

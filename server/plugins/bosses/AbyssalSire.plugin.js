@@ -15,6 +15,7 @@ const CombatAchievements = require("./abyssalsire/CombatAchievements.AbyssalSire
 
 module.exports = {
   name: "AbyssalSire",
+  description: "The Abyssal Sire in the Abyssal Nexus: its chambers, lungs, tentacles and miasma fight, the kill, the Font of Consumption and the Overseer.",
   members: true,
   register(api) {
     Common.init(api);

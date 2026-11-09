@@ -120,6 +120,7 @@ function stopMcpServer() {
 
 module.exports = {
   name: "AgentMcp",
+  description: "Runs an MCP server that lets a tool such as Claude Code drive an online player for testing. Active only when AGENT_MCP=1 is set.",
   buildMcpServer,
   register(api) {
     pluginApi = api;

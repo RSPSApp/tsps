@@ -27,6 +27,7 @@ function tickTeleBlock({ player }) {
 
 module.exports = {
   name: "TeleBlock",
+  description: "Tele Block follow-up: warns 30 seconds before it expires and keeps it on in the Ferox Enclave.",
   _test: { tickTeleBlock },
   register(api) {
     core = api.core;

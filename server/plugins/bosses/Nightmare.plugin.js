@@ -18,6 +18,7 @@ const Scoreboard = require("./nightmare/Scoreboard.Nightmare");
 
 module.exports = {
   name: "Nightmare",
+  description: "The Nightmare and Phosani's Nightmare in the Sisterhood Sanctuary: dreams, phases, totems, sleepwalkers, loot and Shura's and Senga's item keeping.",
   members: true,
   register(api) {
     Common.init(api);

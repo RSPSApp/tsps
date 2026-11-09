@@ -32,6 +32,7 @@ function onAttackStarted({ attacker, method }) {
 
 module.exports = {
   name: "BladeOfSaeldor",
+  description: "Blade of Saeldor: uses one charge per swing and handles the inactive form, built on the shared crystal-weapon charge code.",
   members: true,
   register(api) {
     attach(api);

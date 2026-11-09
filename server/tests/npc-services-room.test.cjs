@@ -264,7 +264,7 @@ test("Ectofuntus earned tokens stay owned or pending at stack capacity", async t
     if (scenario.stock) {
       // An explicitly declared normal capped-XP state for the preowned stock.
       // This does not claim that its historical worships were executed here.
-      assert.equal(scenario.stock % 5, 0); assert.equal(core.SkillManager.MAX_EXPERIENCE, 1000000000);
+      assert.equal(scenario.stock % 5, 0); assert.equal(core.SkillManager.MAX_EXPERIENCE, 200000000);
       const s = p.getSkillManager();
       s.setExperiences(core.Skill.PRAYER, core.SkillManager.MAX_EXPERIENCE, false);
       s.setMaxLevels(core.Skill.PRAYER, 99, false); s.setCurrentLevel(core.Skill.PRAYER, 99, true);
@@ -456,6 +456,30 @@ async function unfinished(t, f, { herbs, vials, coins, free = null, held = 0 }) 
   await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
 }
 
+// rsprox_transcripts/232/03159.txt (a normal world): Zahur's own refusals as dialogue, by what is missing (no herbs
+// 16028, no vials 12090, no coins 15340), and no line at all when she makes them (15767).
+test("Zahur Make unfinished: her recorded refusals, and nothing said when she makes them", async (t) => {
+  const cases = [
+    [[[noted(I.VIAL_OF_WATER), 5], [I.COINS, COST * 5]], "You don't have anything for me to combine."],
+    [[[noted(I.GUAM_LEAF), 5], [I.COINS, COST * 5]], "You need to bring along a base for me to make unfinished potions with."],
+    [[[noted(I.GUAM_LEAF), 5], [noted(I.VIAL_OF_WATER), 5]], `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`],
+  ];
+  for (const [items, line] of cases) {
+    const f = actor(t);
+    const said = [];
+    const sender = f.p.getPacketSender(), sendString = sender.sendString.bind(sender);
+    t.mock.method(sender, "sendString", (text, ...rest) => { said.push(String(text)); return sendString(text, ...rest); });
+    items.forEach(([id, n], slot) => f.inv.setItem(slot, plain(id, n)));
+    await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+    assert.ok(said.some((text) => text.includes(line)), `${line} | ${said.join(" / ")}`);
+    assert.deepEqual(f.messages, [], "dialogue, not a chat line");
+  }
+  const made = actor(t);
+  await unfinished(t, made, { herbs: 4, vials: 4, coins: COST * 4 });
+  assert.equal(amount(made, unfNote()), 4);
+  assert.deepEqual(made.messages, [], "no line when they are made");
+});
+
 test("Zahur Make unfinished: with no room, nothing is taken", async (t) => {
   const control = actor(t);
   await unfinished(t, control, { herbs: 100, vials: 100, coins: COST * 10 + 100, free: 1 });
@@ -484,6 +508,41 @@ test("Zahur Make unfinished: a stack used up frees its slot, and a near-cap stac
   assert.equal(amount(f, noted(I.GUAM_LEAF)), 5, "the rest stay");
   assert.equal(amount(f, noted(I.VIAL_OF_WATER)), 5);
   assert.equal(amount(f, I.COINS), COST * 5, "and aren't paid for");
+});
+
+// Wiki (Zahur): "vials of water or vials of blood" (5 July 2018: "accept, and create potions using, Vials of blood").
+test("Zahur Make unfinished: vials of blood make Cadantine blood potions, beside vials of water", async (t) => {
+  const obj = (name) => core.CacheDefinitions.getObjId(name);
+  const f = actor(t);
+  f.inv.setItem(0, plain(noted(obj("cadantine")), 3));
+  f.inv.setItem(1, plain(noted(I.VIAL_OF_WATER), 1));
+  f.inv.setItem(2, plain(noted(obj("vial_blood")), 2));
+  f.inv.setItem(3, plain(I.COINS, COST * 3));
+  await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.equal(amount(f, noted(obj("cadantinevial"))), 1, "one with the vial of water");
+  assert.equal(amount(f, noted(obj("cadantine_bloodvial"))), 2, "two with the vials of blood");
+  assert.equal(amount(f, noted(obj("cadantine"))), 0);
+  assert.equal(amount(f, I.COINS), 0, "200 coins each");
+
+  const blood = actor(t);
+  blood.inv.setItem(0, plain(noted(obj("cadantine")), 2));
+  blood.inv.setItem(1, plain(noted(obj("vial_blood")), 2));
+  blood.inv.setItem(2, plain(I.COINS, COST * 2));
+  await npcOption(t, blood, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.equal(amount(blood, noted(obj("cadantine_bloodvial"))), 2, "blood alone is a base");
+
+  // A herb with no blood recipe and only vials of blood: the no-base refusal, as with no vials at all.
+  const guam = actor(t);
+  const said = [];
+  const sender = guam.p.getPacketSender(), sendString = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, ...rest) => { said.push(String(text)); return sendString(text, ...rest); });
+  guam.inv.setItem(0, plain(noted(I.GUAM_LEAF), 5));
+  guam.inv.setItem(1, plain(noted(obj("vial_blood")), 5));
+  guam.inv.setItem(2, plain(I.COINS, 1000));
+  await npcOption(t, guam, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.ok(said.some((text) => text.includes("You need to bring along a base for me to make unfinished potions with.")), said.join(" / "));
+  assert.equal(amount(guam, noted(I.GUAM_LEAF)), 5);
+  assert.equal(amount(guam, I.COINS), 1000);
 });
 
 // ------------------------------------------------------------------ Mawnis

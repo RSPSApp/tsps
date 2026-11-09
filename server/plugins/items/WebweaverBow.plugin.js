@@ -164,6 +164,7 @@ function deathItemDrop(event) {
 
 module.exports = {
   name: "WebweaverBow",
+  description: "Adds the webweaver bow: activation and charging with revenant ether, and its damage bonus including an imbued Slayer helmet on task.",
   members: true,
   _test: { CHARGES_META, DEPOSIT_META, ACTIVATION_ETHER, MAX_CHARGES, chargesOf, addEther, chargeWithEther, uncharge, checkAmmo, decrementAmmo, boost, damageBoost, addToSlayerBonus, deathItemDrop },
   register(pluginApi) {

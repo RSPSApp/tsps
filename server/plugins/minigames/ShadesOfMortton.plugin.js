@@ -15,6 +15,7 @@ const Pyres = require("./shadesofmortton/Pyres.ShadesOfMortton");
 
 module.exports = {
   name: "Shades of Mort'ton",
+  description: "Adds the Shades of Mort'ton minigame: shades and their remains, the catacombs, tomb doors and chests, and funeral pyres.",
   members: true,
   register(api) {
     Common.init(api);

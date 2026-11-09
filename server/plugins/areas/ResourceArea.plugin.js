@@ -183,6 +183,7 @@ function login({ player }) {
 
 module.exports = {
   name: "ResourceArea",
+  description: "Wilderness Resource Area gate: Mandrith's 6,000 coin entry fee, the gate swinging open and free exit from inside.",
   members: true,
   register(registry) {
     api = registry;

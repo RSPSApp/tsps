@@ -151,6 +151,7 @@ function menuClosed({ player, interfaceId }) {
 
 module.exports = {
   name: "MagicMushtrees",
+  description: "Fossil Island's Magic Mushtrees: the four-tree travel menu, with each tree unlocked per player once used.",
   members: true,
   _test: { mushtreeAt, useMushtree, chooseMushtree, discovered, DISCOVERED_ATTRIBUTE, get mushtrees() { return mushtrees; } },
   register(api) {

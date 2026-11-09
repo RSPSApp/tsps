@@ -49,7 +49,7 @@ const loc = (x, y) => new core.Location(x, y, 0);
 const xy = (location) => [location.getX(), location.getY()];
 const station = (key) => Common.data.stations.find((entry) => entry.key === key);
 
-function fakePlayer({ at = [2808, 3354], firemaking = 99, items = {}, worn = {} } = {}) {
+function fakePlayer({ at = [2808, 3354], firemaking = 99, boosted = firemaking, items = {}, worn = {} } = {}) {
   let tile = loc(...at);
   const inventory = new Map(Object.entries(items).map(([k, v]) => [Common.ids.objs[k] ?? Number(k), v]));
   const equipment = Array.from({ length: 14 }, () => new core.Item(-1, 0));
@@ -67,6 +67,7 @@ function fakePlayer({ at = [2808, 3354], firemaking = 99, items = {}, worn = {} 
     sendMessage: (m) => player.messages.push(m),
     getSkillManager: () => ({
       getMaxLevel: () => firemaking,
+      getCurrentLevel: () => boosted,
       addExperience: (skill, amount) => { player.xp += amount; },
     }),
     getInventory: () => ({
@@ -249,6 +250,15 @@ test("a trip needs its log and its Firemaking level; the same station refuses", 
   Common.openRoute(low, station('craft'));
   Travel.travel(low, station('taverley'), station('craft'));
   assert.equal(lastLine(low), 'You need a Firemaking level of 30 to fly there.');
+  // Wiki: boostable. 29 boosted to 30 flies; 30 drained to 29 doesn't.
+  const up = fakePlayer({ at: [2938, 3421], firemaking: 29, boosted: 30, items: { oak: 1 } });
+  Common.openRoute(up, station('craft'));
+  Travel.travel(up, station('taverley'), station('craft'));
+  assert.equal(Travel.flying(up), true, 'a boost to 30 is enough');
+  const down = fakePlayer({ at: [2938, 3421], firemaking: 30, boosted: 29, items: { oak: 1 } });
+  Common.openRoute(down, station('craft'));
+  Travel.travel(down, station('taverley'), station('craft'));
+  assert.equal(lastLine(down), 'You need a Firemaking level of 30 to fly there.');
   assert.equal(Travel.travel(player, station('taverley'), station('taverley')), false);
 });
 

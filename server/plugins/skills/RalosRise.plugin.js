@@ -8,6 +8,7 @@ const Common = require("./ralosrise/Common.RalosRise");
 
 module.exports = {
   name: "RalosRise",
+  description: "Prayer training at Ralos' Rise: blessing bones and wine at the altar, breaking blessed bones into shards and the libation bowl.",
   members: true,
   register(api) {
     Common.init(api);

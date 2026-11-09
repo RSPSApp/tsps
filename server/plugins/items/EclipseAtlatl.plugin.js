@@ -85,6 +85,7 @@ function registerAtlatlProfile(api) {
 
 module.exports = {
   name: "EclipseAtlatl",
+  description: "Eclipse atlatl: a short-range thrown weapon using atlatl darts, with its own attack speed and combat method and the Eclipse Moon set bonus.",
   members: true,
   register(api) {
     registerAtlatlProfile(api);

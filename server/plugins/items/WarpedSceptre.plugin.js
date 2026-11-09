@@ -288,6 +288,7 @@ function fillCharges(event) {
 
 module.exports = {
   name: "WarpedSceptre",
+  description: "Adds the warped sceptre as a chargeable powered weapon fed with chaos and earth runes, including its cast animation and Magic level check.",
   members: true,
   _test: {
     charges,

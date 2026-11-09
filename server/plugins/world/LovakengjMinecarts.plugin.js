@@ -9,6 +9,7 @@ const Travel = require("./lovakengjminecarts/Travel.LovakengjMinecarts");
 
 module.exports = {
   name: "LovakengjMinecarts",
+  description: "Lovakengj minecart network: twelve stations across Great Kourend and the Kebos Lowlands, 20 coins a ride until The Forsaken Tower makes them free.",
   members: true,
   register(api) {
     Common.init(api);

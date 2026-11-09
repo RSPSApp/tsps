@@ -89,6 +89,24 @@ export class HitDamage {
         return this;
     }
 
+    /**
+     * Whether this reflected damage counts as its source's for the kill. A reflection is not
+     * normally anyone's damage — a monster killed by ring of recoil alone drops nothing (Wiki:
+     * Ring of recoil) — but a League's Thorns damage does count as the wearer's, which is why it
+     * could stop a "specific type of damage only" Combat Achievement and needed a fix (Jagex,
+     * Further Leagues VI Changes).
+     */
+    private creditsSource = false;
+
+    public markCreditsSource(): HitDamage {
+        this.creditsSource = true;
+        return this;
+    }
+
+    public creditsItsSource(): boolean {
+        return this.creditsSource;
+    }
+
     /** Damage rebounded by recoil, vengeance or retribution; a death from it doesn't trigger Retribution. */
     private reflected = false;
 

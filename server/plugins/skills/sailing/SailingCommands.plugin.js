@@ -209,6 +209,7 @@ function heading({ player, parts }) {
 
 module.exports = {
   name: "SailingCommands",
+  description: "Developer commands for testing sailing: ::raft, ::skiff and ::sloop to moor boats, ::maxboat, ::boatinfo, ::sailmode and ::heading.",
   members: true,
   _test: { loadoutFacilities, LOADOUTS },
   register(api) {

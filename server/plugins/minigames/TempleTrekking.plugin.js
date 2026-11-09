@@ -10,6 +10,7 @@ const Trek = require("./templetrekking/Trek.TempleTrekking");
 
 module.exports = {
   name: "TempleTrekking",
+  description: "Adds Temple Trekking and the Burgh de Rott Ramble: escorting a follower between Burgh de Rott and Paterdomus, with events on the way and a reward token.",
   members: true,
   register(api) {
     Common.init(api);

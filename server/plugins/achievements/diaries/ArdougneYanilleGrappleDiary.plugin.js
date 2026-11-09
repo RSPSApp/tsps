@@ -18,6 +18,7 @@ function qualifies({ player, objectId, location, method, start }) {
 
 module.exports = {
   name: "ArdougneYanilleGrappleDiary",
+  description: "Credits the Ardougne diary task for grappling over Yanille's south wall.",
   members: true,
   dependsOn: ["AchievementDiaries", "Agility"],
   register(api) {

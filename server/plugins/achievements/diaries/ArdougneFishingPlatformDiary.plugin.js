@@ -40,6 +40,7 @@ function qualifies(event, api) {
 
 module.exports = {
   name: "ArdougneFishingPlatformDiary",
+  description: "Credits the Ardougne diary task for catching any fish on the Fishing Platform.",
   members: true,
   dependsOn: ["AchievementDiaries", "Quests", "Fishing"],
   register(api) {

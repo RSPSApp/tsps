@@ -21,7 +21,7 @@ async function main(): Promise<void> {
     const events = new EventBus();
     const config = new ConfigManager(events);
     const manager = new PluginManager(events, config);
-    manager.getInjector().provide(CLIENT_TOKEN, { applyScreenBrightness: () => {}, renderer: {} });
+    manager.getInjector().provide(CLIENT_TOKEN, { applyScreenBrightness: () => {}, getScreenBrightness: () => 50, renderer: {} });
     manager.loadCorePlugins([GpuPlugin, LowEndDevicePlugin]);
     await manager.setPluginEnabled(GpuPlugin, true);
     config.setConfigValue(GpuConfig, "drawDistance", 70);
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
             const events = new EventBus();
             const config = new ConfigManager(events);
             const manager = new PluginManager(events, config);
-            manager.getInjector().provide(CLIENT_TOKEN, { applyScreenBrightness: () => {}, renderer: {} });
+            manager.getInjector().provide(CLIENT_TOKEN, { applyScreenBrightness: () => {}, getScreenBrightness: () => 50, renderer: {} });
             manager.loadCorePlugins([GpuPlugin, LowEndDevicePlugin]);
             assert.equal(manager.isEnabled(LowEndDevicePlugin), true, "mobile Low-end Device is on by default");
             await manager.setPluginEnabled(GpuPlugin, true);

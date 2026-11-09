@@ -133,6 +133,13 @@ function questsForWorld({ WorldDefinition }) {
 
 module.exports = {
   name: "Quests",
+  description: "Registers every implemented quest from the quests folder, members and free-to-play, plus their shared widgets and ground items.",
+  config: {
+    "quests:equipment-requirements": {
+      type: "boolean", label: "Quest equipment requirements", default: true,
+      help: "Items tied to a quest cannot be worn until it is finished. Turn off to remove the restriction. Player bots are never held to it.",
+    },
+  },
   QUESTS,
   register(api) {
     registerWatchtowerGroundItems(api);

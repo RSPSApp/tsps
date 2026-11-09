@@ -277,6 +277,7 @@ function logout({ player }) {
 
 module.exports = {
   name: "AgilityDispenser",
+  description: "The Wilderness Agility Course dispenser: lap tickets, the 150,000 coin fee and reward streak, and tag, pay and redeem for loot or XP.",
   members: true,
   DATA,
   ATTRIBUTES,

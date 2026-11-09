@@ -48,6 +48,7 @@ function purchase(api, event) {
 
 module.exports = {
   name: "Apothecary",
+  description: "Gives the Varrock Apothecary's strength-potion service: 5 coins, a limpwurt root and red spiders' eggs per potion, feeding the Varrock diary.",
   register(api) {
     api.onCustomEvent("shop:buy-price", buyPrice);
     api.onCustomEvent("shop:buy-limit", buyLimit.bind(null, api));

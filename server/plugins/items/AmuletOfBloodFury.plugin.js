@@ -214,6 +214,7 @@ function fillCharges(event) {
 
 module.exports = {
   name: "AmuletOfBloodFury",
+  description: "Amulet of blood fury: made from a Blood shard and amulet of fury, 30,000 charges, heals from damage dealt, with Check and Revert.",
   members: true,
   register(api) {
     api.onServerStartup(initialize.bind(null, api.core));

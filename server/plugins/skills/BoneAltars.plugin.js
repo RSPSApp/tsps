@@ -164,6 +164,11 @@ function stopOffering({ player }) {
   offerings.delete(player);
 }
 
+/** Both widget and inventory packet routes check item permissions before dispatching Bury. */
+function interruptOfferingForInventoryAction(event) {
+  if (event.action === "action" && event.option?.toLowerCase() !== "examine") stopOffering(event);
+}
+
 function pauseOffering(event) {
   pauseForLevelUp(event, offerings, (player) => stopOffering({ player }));
 }
@@ -216,6 +221,7 @@ function offerOnAltar(request) {
 
 module.exports = {
   name: "BoneAltars",
+  description: "Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last.",
   members: true,
   _test: { altarAt, spared, zealotPieces, graphicTile, dataBlessing },
   register(pluginApi) {
@@ -224,5 +230,6 @@ module.exports = {
     api.onItemOnObject(useBoneOnAltar, { noted: false });
     api.onCustomEvent("level-up:popup-opened", pauseOffering);
     api.onCustomEvent("bone-altars:offer", offerOnAltar);
+    api.onCanUseItem(interruptOfferingForInventoryAction);
   },
 };

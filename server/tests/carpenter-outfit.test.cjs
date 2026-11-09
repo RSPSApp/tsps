@@ -90,3 +90,24 @@ test("the outfit multiplier event answers for plugins outside Construction (the 
   PM.emitCustomEvent("construction:outfit-multiplier", request);
   assert.ok(Math.abs(request.multiplier - 1.025) < 1e-9);
 });
+
+// Wiki (Imcando hammer): used as a hammer "both while equipped and unequipped"; Mahogany Homes: it "can be worn in
+// the off-hand". Mahogany Homes' tool check wanted a plain hammer in the inventory.
+test("a Mahogany Homes hotspot takes an Imcando hammer, worn or carried, as the hammer", (t) => {
+  const home = Mahogany.HOMES[0];
+  const hotspot = home.hotspots[0];
+  for (const where of ["worn", "carried"]) {
+    const p = makePlayer(t, []);
+    p.getInventory().add(new core.Item(core.ItemIdentifiers.SAW, 1), true);
+    const hammer = where === "worn" ? core.ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_ : core.ItemIdentifiers.IMCANDO_HAMMER;
+    if (where === "worn") p.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(hammer, 1));
+    else p.getInventory().add(new core.Item(hammer, 1), true);
+    p.setAttribute("construction:contract", { home: home.key, tier: 0, states: { [hotspot.index]: 3 } });
+    const messages = [];
+    t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+    const object = new core.GameObject(hotspot.loc, new core.Location(3200, 3200, 0), 10, 0, null);
+    PM.emitObjectInteraction({ player: p, object, objectId: hotspot.loc, clickType: 2, handled: false });
+    assert.ok(!messages.includes("You need a hammer and a saw to do that."), `${where}: ${messages.join(" | ")}`);
+    assert.equal(p.getAttribute("construction:contract").states[hotspot.index], 4, `${where}: the old furniture is removed`);
+  }
+});

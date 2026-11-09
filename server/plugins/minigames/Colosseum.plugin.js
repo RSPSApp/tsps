@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "Colosseum",
+  description: "Adds the Fortis Colosseum: the lobby, waves with Minimus's modifiers, Sol Heredit and the rewards chest.",
   members: true,
   register(api) {
     require("./colosseum/Lobby.Colosseum")(api);

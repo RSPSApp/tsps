@@ -29,6 +29,15 @@ const SPELLBOOKS_PER_DAY = 5;
 const STAMINA_DURATION_MS = 60_000;
 const FULL_RUN_ENERGY = 100;
 const RED = "<col=ef1020>";
+/** The search lines' colours (rsprox_transcripts/232/03140.txt): the item in 800000, then back to black. */
+const FOUND = "<col=800000>";
+const PLAIN = "<col=000000>";
+/** After the first, second and third grapple search of the day (rsprox_transcripts/232/03140.txt). */
+const GRAPPLE_LEFT = [
+  "You may search the cape twice more today.",
+  "You may search the cape one more time today.",
+  "You search the cape for the final time today.",
+];
 const SPELLBOOK_VARBIT = "sb_swap_check";
 const GRAPPLE_VARBIT = "free_grapple";
 const ROL_TOGGLE_VARBIT = "rol_toggle";
@@ -64,7 +73,8 @@ function syncVarbits({ player }) {
 
 function staminaBoost(player) {
   if (Capes.dailyUses(player, STAMINA_KEY) >= STAMINA_PER_DAY) {
-    player.sendMessage("You have already used your cape's stamina boost today.");
+    // rsprox captures (2 recordings).
+    player.sendMessage("You have used your stamina boost for today. Try again tomorrow.");
     return;
   }
   Capes.useDaily(player, STAMINA_KEY);
@@ -83,25 +93,38 @@ function searchPestle(player) {
   }
   player.performAnimation(new Animation(Capes.seqId("searchcape_pestle")));
   player.getInventory().adds(ItemIdentifiers.PESTLE_AND_MORTAR, 1);
-  player.sendMessage(`You search the cape and find a ${RED}Pestle and mortar</col>.`);
+  player.sendMessage(`You search the cape and find a ${FOUND}Pestle and mortar${PLAIN}.`);
 }
 
 function searchGrapple(player) {
   const { ItemIdentifiers, Animation } = Capes.core;
   const used = Capes.dailyUses(player, GRAPPLE_KEY);
   if (used >= GRAPPLES_PER_DAY) {
+    // ponytail: no recording reaches a fourth search; the live text may differ.
     player.sendMessage("You have already searched your cape three times today.");
     return;
   }
+  // rsprox_transcripts/232/03140.txt: the free-space check comes first (66034: grapple held and a full bag gives the
+  // spaces line); still holding the grapple from a search then refuses the next one (66219); after dropping it and the
+  // crossbow the search works again (66491-66494).
   if (player.getInventory().getFreeSlots() < 2) {
-    player.sendMessage("You need two free inventory spaces to search your cape.");
+    player.sendMessage("You need at least two inventory spaces to search your cape.");
+    return;
+  }
+  const grapple = ItemIdentifiers.MITH_GRAPPLE_2;
+  if (player.getInventory().contains(grapple) || player.getEquipment().contains(grapple)) {
+    player.sendMessage("You already have a mithril grapple with you.");
     return;
   }
   player.performAnimation(new Animation(Capes.seqId("searchcape_grapple")));
-  player.getInventory().adds(ItemIdentifiers.MITH_GRAPPLE, 1);
+  // rsprox_transcripts/229/02597.txt, 230/00347.txt, 232/03140.txt: the bronze crossbow, then the mith grapple with its
+  // rope (9419, xbows_grapple_tip_bolt_mithril_rope), the found line and how many searches are left today.
   player.getInventory().adds(ItemIdentifiers.BRONZE_CROSSBOW, 1);
-  varbit(player, GRAPPLE_VARBIT, Capes.useDaily(player, GRAPPLE_KEY));
-  player.sendMessage(`You search the cape and find a ${RED}Mithril grapple</col> and a ${RED}Bronze crossbow</col>.`);
+  player.getInventory().adds(ItemIdentifiers.MITH_GRAPPLE_2, 1);
+  const searched = Capes.useDaily(player, GRAPPLE_KEY);
+  varbit(player, GRAPPLE_VARBIT, searched);
+  player.sendMessage(`You search the cape and find a ${FOUND}Bronze crossbow${PLAIN} and ${FOUND}Mithril grapple${PLAIN}.`);
+  player.sendMessage(GRAPPLE_LEFT[Math.min(searched, GRAPPLES_PER_DAY) - 1] ?? GRAPPLE_LEFT[GRAPPLE_LEFT.length - 1]);
 }
 
 /** The max cape's Search: "What would you like to search for?" */

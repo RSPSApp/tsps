@@ -24,6 +24,7 @@ let World;
 
 module.exports = {
   name: "TrainingSkeleton",
+  description: "Respawns the Edgeville training skeleton at its post as soon as it dies, rather than after the normal delay.",
   register(api) {
     World = api.getWorld();
     api.onNpcDeath(({ npc }) => {

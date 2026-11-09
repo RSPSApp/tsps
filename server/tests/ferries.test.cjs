@@ -77,7 +77,7 @@ const api = {
     ChatType: { SPAM: "spam" },
     TaskManager: { submit: (task) => tasks.push(task), cancelTasks: (key) => tasks.forEach((task) => task.key === key && task.stop()) },
     StatementDialogue: { send: (player, text) => player.sent.boxes.push(text) },
-    TeleportHandler: { checkReqs: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
+    TeleportHandler: { checkReqs: () => true, destinationAllowed: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
     TeleportType: { NORMAL: "NORMAL" },
   },
   onNpcInteraction: (handler) => hooks.npc.push(handler),
@@ -206,18 +206,21 @@ test("Take-boat to Entrana: the captured search line, ship_journey route 1, the 
   click(player, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
   assert.deepEqual(player.sent.messages, ["After a quick search, the monk smiles at you and allows you to board."]);
   assert.deepEqual(player.sent.interfaces, [299]);
-  assert.deepEqual(player.sent.scripts, [[1131, 1]]);
+  // toplevel_mainmodal_open first: ship_journey's brown fills the screen (rev241/242 captures).
+  const journey = [[2524, 0x2a1e06, 0], [1131, 1]];
+  assert.deepEqual(player.sent.scripts, journey);
   assert.deepEqual(player.sent.songs, [147]);
   assert.deepEqual(player.sent.jingles, [172]);
   assert.ok(player.area, "at sea on the ship instance");
   assert.ok(player.blocked);
   assert.equal(click(player, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" }).handled, true);
-  assert.deepEqual(player.sent.scripts, [[1131, 1]], "a second click while sailing does nothing");
+  assert.deepEqual(player.sent.scripts, journey, "a second click while sailing does nothing");
   tick(13);
   assert.deepEqual(at(player), [3064, 3208, 1]);
   tick(1);
   assert.deepEqual(at(player), [2834, 3331, 1]);
   assert.deepEqual(player.sent.boxes, ["The ship arrives at Entrana."]);
+  assert.deepEqual(player.sent.scripts, [...journey, [2524, -1, -1]], "landing clears the background for the next modal");
   assert.equal(player.blocked, false);
   assert.equal(player.area, null);
 });
@@ -253,7 +256,7 @@ test("the transcript's travel steps sail; Jarvald's paid trip takes 1,000 coins 
   const event = step("XkS9kZ");
   assert.equal(event.handled, true);
   assert.equal(event.end, true, "the transcript stops; the voyage says the ship arrives");
-  assert.deepEqual(player.sent.scripts, [[1131, 10]]);
+  assert.deepEqual(player.sent.scripts, [[2524, 0x2a1e06, 0], [1131, 10]]);
   tick(11);
   assert.deepEqual(at(player), [2663, 2676, 1]);
 

@@ -42,6 +42,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "Trollheim",
+  description: "Holds Trollheim's thrower trolls in place while they throw rocks at players passing below their ledge.",
   members: true,
   register(pluginApi) {
     attach(pluginApi);

@@ -822,6 +822,13 @@ function excludePvpStats(event) {
 
 module.exports = {
   name: "DuelArena",
+  description: "Adds the Emir's Arena duel challenges and load-outs, including the rules and staking interfaces for unranked and legacy duels.",
+  config: {
+    "DuelArena:pvpArenaWorld": {
+      type: "boolean", label: "PvP Arena world", default: false,
+      help: "Makes this a PvP Arena world: Challenge in the Emir's Arena always starts an unranked duel, with no Legacy Duel choice.",
+    },
+  },
   // After Shopkeepers, so the PvP Arena Rewards shop's currency is the Reward Points (Matchmaking).
   dependsOn: ["Shopkeepers"],
   enableStaking,

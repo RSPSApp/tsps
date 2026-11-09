@@ -11,6 +11,7 @@ const Tutorial = require("./gnomerestaurant/Tutorial.GnomeRestaurant");
 
 module.exports = {
   name: "GnomeRestaurant",
+  description: "Adds the Gnome Restaurant delivery minigame: Gianne jnr.'s orders, the Aluft Aloft box, the time limit, tips and credits.",
   members: true,
   register(api) {
     Tutorial(api);

@@ -120,6 +120,7 @@ function addGracefulEffects(request) {
 
 module.exports = {
   name: "GracefulOutfit",
+  description: "Gives each graceful piece its run-energy restoration bonus, plus the full-set bonus, and counts an Agility or max cape as the graceful cape.",
   members: true,
   _test: { gracefulRestoreBonusFromSlots, energyRestoreBonus, addGracefulEffects, addGracefulWeights },
   register(api) {

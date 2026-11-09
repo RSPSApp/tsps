@@ -45,6 +45,7 @@ function forget({ player }) {
 
 module.exports = {
   name: "Vengeance Timer",
+  description: "Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown.",
   register(api) {
     api.onPlayerLogin(syncLogin);
     api.onPlayerProcess(syncProcess);

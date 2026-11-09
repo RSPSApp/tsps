@@ -38,6 +38,7 @@ function send(api, { player }) {
 
 module.exports = {
   name: "DefinitionArchives",
+  description: "Installs bundled item, NPC and object definition changes at runtime and sends them to every client on login and when they change.",
   register(api) {
     api.onCustomEvent("definition-archives:install", install.bind(null, api));
     api.onPlayerLogin(send.bind(null, api));

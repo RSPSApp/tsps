@@ -77,3 +77,22 @@ test("two throws in flight after the last chinchompa is unwielded: the second le
   assert.equal(slot.getAmount(), 0, "the empty weapon slot isn't charged for the second throw");
   assert.ok(p.getInventory().getItems().every((item) => item.getAmount() >= 0), "no negative stack anywhere");
 });
+
+test("throws given back on top of a kept throw (ranged:ammo-saving extra) join the stack, wherever it is now", (t) => {
+  const keep = (extra) => (event) => { event.saved = event.amount; event.extra = extra; };
+  const p = thrower(t);
+  const emit = PM.emitCustomEvent;
+  let saver = keep(2);
+  t.mock.method(PM, "emitCustomEvent", (name, event) => (name === "ranged:ammo-saving" && event.player === p ? saver(event) : emit.call(PM, name, event)));
+  consume(p, null, 1, 2);
+  land();
+  assert.equal(p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getAmount(), 102, "kept, and two more");
+
+  saver = keep(1);
+  consume(p, null, 1, 2);
+  const worn = p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
+  p.getInventory().setItem(0, worn); // unwielded mid-flight
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+  land();
+  assert.equal(p.getInventory().getAmount(I.RED_CHINCHOMPA_2), 103, "the stack in the pack gets it");
+});

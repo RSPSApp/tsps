@@ -561,3 +561,35 @@ test("blowpipe confirmation never redirects to another same-id pipe after invent
     }
   }
 });
+
+test("scales given back on top of a kept shot (ranged:ammo-saving extra) go back in the blowpipe, up to 16,383", () => {
+  let handler = null;
+  let extra = 0;
+  const api = new Proxy({}, {
+    get: (_, name) => {
+      if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+      if (name === "registerRangedAmmoHandler") return (entry) => { handler = entry; };
+      if (name === "emitCustomEvent") return (event, payload) => {
+        if (event === "ranged:ammo-saving") { payload.saved = payload.amount; payload.extra = extra; }
+      };
+      if (name === "getBonusManager" || name === "getCombatFactory") return () => ({});
+      return () => {};
+    },
+  });
+  ToxicBlowpipe.register(api);
+  const { BlowpipeState } = ToxicBlowpipe._test;
+  const pipe = new Item(TOXIC_BLOWPIPE_ID, 1);
+  BlowpipeState.write(pipe, { scales: 100, dartId: DRAGON_DART, dartAmount: 50 });
+  const core = require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+  const player = {
+    getEquipment: () => ({ get: (slot) => (slot === Equipment.WEAPON_SLOT ? pipe : null) }),
+    getCombat: () => ({ getRangedWeapon: () => core.RangedWeapon.TOXIC_BLOWPIPE, reset() {} }),
+    sendMessage() {},
+  };
+  extra = 2;
+  assert.equal(handler.decrementAmmo(player, null, 1), true);
+  assert.equal(BlowpipeState.read(pipe).scales, 102, "the shot's scale kept, and two more");
+  BlowpipeState.write(pipe, { scales: 16382, dartId: DRAGON_DART, dartAmount: 50 });
+  handler.decrementAmmo(player, null, 1);
+  assert.equal(BlowpipeState.read(pipe).scales, 16383);
+});

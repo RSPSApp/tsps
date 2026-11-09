@@ -8,6 +8,9 @@
  *
  * Regenerate (General.LeaguePacts.js owns the roll) arrives as `league:pact-regenerated`
  * { player, kind, itemId, amount, combat }; heals go out as `league:pact-heal` { player, amount }.
+ * A rune's `amount` is every rune of that id the proc regenerated: the saved ones, the extra
+ * copies above 100% and those a staff supplied, so the rune pacts below count them all (the pact
+ * texts count per rune; ours).
  *
  * - talent_airrune_regen_prayer_restore (`league:pact-regenerated`, rune, combat): a N% roll per proc
  *   restores 1 Prayer per air rune regenerated, up to the base level (one roll a proc: our reading).

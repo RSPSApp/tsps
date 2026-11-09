@@ -74,8 +74,10 @@ class PendingHit {
         return this.target;
     }
 }
+/** A test's stand-in for another plugin answering the bow's events. */
+let onEmit = null;
 VenatorBow.register({
-    emitCustomEvent: () => {},
+    emitCustomEvent: (name, payload) => onEmit?.(name, payload),
     core: {
         Equipment,
         ItemIdentifiers,
@@ -208,6 +210,17 @@ test('no ricochet in single combat, but the attack still spends a charge', () =>
         assert.equal(VenatorBow._test.charges(weapon), 999);
     } finally {
         multi = true;
+    }
+});
+
+test('a kept charge with extra charges given back (combat:consume-charge extra) adds them', () => {
+    onEmit = (name, payload) => { if (name === 'combat:consume-charge') { payload.skip = true; payload.extra = 2; } };
+    try {
+        const weapon = bow(1000);
+        shoot(weapon, npc(3203, 3200), []);
+        assert.equal(VenatorBow._test.charges(weapon), 1002);
+    } finally {
+        onEmit = null;
     }
 });
 

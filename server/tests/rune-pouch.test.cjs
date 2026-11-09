@@ -519,6 +519,25 @@ test("spells take only the shortfall from the pouch", () => {
   assert.equal(CombatSpells.WIND_STRIKE.canCast(noPouch, false), false, "the runes need the pouch carried");
 });
 
+test("runes a spell gives back go to the pouch slot holding that rune while it has room, never an empty one", () => {
+  const refund = (player, runeId, amount) => {
+    const event = { player, runeId, amount, stored: 0 };
+    PluginManager.emitCustomEvent("magic:rune-refund", event);
+    return event.stored;
+  };
+  const player = createPlayer([new Item(Items.RUNE_POUCH, 1)]);
+  pouchWith(player, [[Items.EARTH_RUNE, 14928], [Items.DEATH_RUNE, 16000]]);
+  assert.equal(refund(player, Items.EARTH_RUNE, 10), 10, "the pouch's earth slot takes it");
+  assert.equal(refund(player, Items.EARTH_RUNE, 2000), 16000 - 14938, "up to 16,000; the rest is the caller's");
+  assert.equal(refund(player, Items.DEATH_RUNE, 2), 0, "a full slot takes none");
+  assert.equal(refund(player, Items.ASTRAL_RUNE, 4), 0, "an empty slot is never filled");
+  assert.deepEqual(varbitSlots(player), [[Items.EARTH_RUNE, 16000], [Items.DEATH_RUNE, 16000]]);
+
+  const noPouch = createPlayer([]);
+  pouchWith(noPouch, [[Items.EARTH_RUNE, 10]]);
+  assert.equal(refund(noPouch, Items.EARTH_RUNE, 10), 0, "only a carried pouch");
+});
+
 test("login sends saved player pouch slots without opening bank tabs", () => {
   const player = createPlayer();
   player.setAttribute(Pouch.RUNES_ATTRIBUTE, [[Items.AIR_RUNE, 500], [Items.LAW_RUNE, 3]]);

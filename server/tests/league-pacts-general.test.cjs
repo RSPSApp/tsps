@@ -242,7 +242,23 @@ test("Regenerate above 100%: the runes are always kept and the rest is a chance 
   randoms([0]);
   castSpell(pacts, vengeance(), false);
   delete custom["magic:rune-refund"];
-  assert.deepEqual(inventoryOf(pacts, ASTRAL_RUNE, DEATH_RUNE, EARTH_RUNE), [8, 4, 10], "the earth went to the pouch");
+  assert.deepEqual(inventoryOf(pacts, ASTRAL_RUNE, DEATH_RUNE, EARTH_RUNE), [8, 4, 0], "the kept and the extra earth went to the pouch");
+  regenerated.length = 0;
+
+  // A single copy: the kept runes the inventory paid move to the pouch slot, as far as it has room.
+  const room = { [DEATH_RUNE]: 1 };
+  custom["magic:rune-refund"] = [(refund) => {
+    const taken = Math.min(refund.amount, room[refund.runeId] ?? 0);
+    room[refund.runeId] = (room[refund.runeId] ?? 0) - taken;
+    refund.stored += taken;
+  }];
+  pacts.getInventory().resetItems();
+  pacts.getInventory().add(new core.Item(DEATH_RUNE, 2), false);
+  randoms([0.45]);
+  castSpell(pacts, [new core.Item(DEATH_RUNE, 2)], false);
+  delete custom["magic:rune-refund"];
+  assert.deepEqual(inventoryOf(pacts, DEATH_RUNE), [1], "one fits in the pouch, one stays");
+  assert.deepEqual(rows(regenerated, "itemId", "amount", "extra"), [[DEATH_RUNE, 2, 0]]);
   regenerated.length = 0;
 
   // Only runes are made again: a blighted sack is only kept.

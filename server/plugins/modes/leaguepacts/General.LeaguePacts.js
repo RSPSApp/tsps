@@ -207,6 +207,22 @@ function giveRune(player, runeId, amount) {
   }
 }
 
+/**
+ * The kept runes the inventory paid: as much as the rune pouch slot already holding that rune takes
+ * moves there from the inventory.
+ */
+function moveKeptToPouch(player, runeId, spent) {
+  const inventory = player.getInventory();
+  const held = Math.min(spent, inventory.getAmount(runeId));
+  if (!(held > 0)) return;
+  const refund = { player, runeId, amount: held, stored: 0 };
+  api.emitCustomEvent("magic:rune-refund", refund);
+  const moved = Math.min(held, Math.max(0, refund.stored | 0));
+  if (moved <= 0) return;
+  inventory.deletes(new core.Item(runeId, moved));
+  inventory.refreshItems();
+}
+
 function castCommitted({ player, spell, runesSaved }) {
   const saved = regenerating.get(player);
   if (!saved) return;
@@ -221,6 +237,7 @@ function castCommitted({ player, spell, runesSaved }) {
     // The first copy of what was spent is the save; only runes are made again past it.
     const extra = isRune(itemId) ? (n - 1) * (spent.get(itemId) ?? 0) : 0;
     const made = n * (covered.get(itemId) ?? 0);
+    if (isRune(itemId) && spent.get(itemId) > 0) moveKeptToPouch(player, itemId, spent.get(itemId));
     if (extra + made > 0) giveRune(player, itemId, extra + made);
     const amount = (spent.get(itemId) ?? 0) + extra + made;
     emitRegenerated({ player, kind: "rune", itemId, amount, extra, covered: made, combat: saved.combat, spell, spellId, spellName, first });

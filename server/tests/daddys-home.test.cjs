@@ -307,7 +307,7 @@ test('native Yarlo advances from all-removed furniture only after the briefing f
   assert.deepEqual(fixture.player.getAttribute('daddys-home:furniture'), [2, 2, 2, 2, 2, 2, 2]);
 });
 
-test('Marlo starts the miniquest on the Wiki dialogue route', () => {
+test('Marlo starts the quest on the Wiki dialogue route', () => {
   const player = createPlayer();
   const event = talkTo(player, api.core.NpcIdentifiers.MARLO);
   assert.equal(event.handled, true);
@@ -319,7 +319,7 @@ test('Marlo starts the miniquest on the Wiki dialogue route', () => {
   runOption(player, 3); // Tell me where he lives...
   runAction(player);
   assert.equal(quest.getStage(player), 1);
-  assert.match(player.messages.at(-1), /started a new miniquest/);
+  assert.match(player.messages.at(-1), /started a new quest/);
 });
 
 test('removing all seven furnishings sets the stage and the transform bits', () => {
@@ -550,6 +550,26 @@ test('login resends every furniture bit from the saved state', () => {
     [10563, 10564, 10565, 10566, 10567, 10568, 10569].map((id) => player.varbits.get(id)),
     [2, 3, 2, 3, 2, 2, 3],
   );
+});
+
+test('rev 242 quest point: credited once to an earlier completion, never on top of a new one', () => {
+  const login = (player) => { for (const handler of handlers.login) handler({ player }); };
+  const veteran = createPlayer();
+  quest.setStage(veteran, quest.completionValue);
+  veteran.setAttribute('quest.points', 40);
+  login(veteran);
+  login(veteran);
+  assert.equal(veteran.getAttribute('quest.points'), 41, 'the miniquest completion gains its point once');
+
+  const newcomer = createPlayer();
+  newcomer.setAttribute('quest.points', 40);
+  login(newcomer);
+  quest.setStage(newcomer, 0);
+  assert.equal(quest.questPoints, 1);
+  newcomer.setAttribute('quest.points', 41); // what complete() awards
+  quest.setStage(newcomer, quest.completionValue);
+  login(newcomer);
+  assert.equal(newcomer.getAttribute('quest.points'), 41, 'a completion after the first login is not credited again');
 });
 
 test('a player who already owns a house is paid 1,000 coins', () => {

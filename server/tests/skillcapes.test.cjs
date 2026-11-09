@@ -230,6 +230,25 @@ test("masters sell the cape and hood for 99,000, trimmed with a second 99", () =
   assert.equal(ask(poor, "If the player does not have at least 99,000 coins:"), true);
 });
 
+test("every skillcape master is named after an NPC in the active cache", () => {
+  // Masters are found by cache name: rev 242 renamed the Melee combat and Woodsman tutors
+  // (Captain Harlan, Wilfred), which left the Defence and Woodcutting capes unsold.
+  const names = new Set();
+  for (let id = 0; id < core.CacheDefinitions.getCounts().npcs; id++) names.add(core.CacheDefinitions.getNpc(id)?.name);
+  const missing = [...Sellers._test.MASTERS.keys()].filter((name) => !names.has(name));
+  assert.deepEqual(missing, []);
+});
+
+test("Captain Harlan sells the Defence cape to a player with 99 Defence", () => {
+  const { sellerVariant, sellerAction } = Sellers._test;
+  const definition = { getName: () => "Captain Harlan" };
+  const buyer = player({ ninetyNines: ["DEFENCE"], coins: 99000 });
+  assert.equal(sellerVariant({ player: buyer, definition }), "with-99-defence");
+  sellerAction({ player: buyer, definition, text: "a Defence cape and hood" });
+  assert.equal(buyer.getInventory().contains(obj("skillcape_defence")), true);
+  assert.equal(sellerVariant({ player: player({ ninetyNines: ["WOODCUTTING"] }), definition: { getName: () => "Wilfred" } }), "99-woodcutting");
+});
+
 test("shop masters get a copy of their shop with the cape, and the hood needs a second slot", () => {
   const { shopCopies, limitCapePurchase, SHOP_MASTERS, SHOP_CAPES } = Sellers._test;
   const copies = shopCopies();

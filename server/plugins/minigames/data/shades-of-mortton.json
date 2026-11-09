@@ -104,7 +104,7 @@
           [1245, 1, 1, 11, "Adamant spear"],
           [1259, 1, 1, 11, "Adamant spear(p)"],
           [4580, 1, 1, 6, "Black spear"],
-          [1289, 1, 1, 3, "Rune sword"],
+          [1289, 1, 1, 3, "Rune shortsword"],
           [1391, 1, 1, 9, "Battlestaff"],
           [1125, 1, 1, 4, "Black platebody"],
           [1085, 1, 1, 4, "Mithril plateskirt"],
@@ -122,7 +122,7 @@
         "items": [
           [1245, 1, 1, 7, "Adamant spear"],
           [1259, 1, 1, 6, "Adamant spear(p)"],
-          [1289, 1, 1, 3, "Rune sword"],
+          [1289, 1, 1, 3, "Rune shortsword"],
           [1391, 3, 3, 11, "Battlestaff"],
           [1303, 1, 1, 5, "Rune longsword"],
           [1215, 1, 1, 2, "Dragon dagger"],

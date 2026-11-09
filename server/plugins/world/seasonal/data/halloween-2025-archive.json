@@ -116,9 +116,9 @@
   "bundle": {
     "id": "halloween-2025",
     "targetCache": {
-      "name": "osrs-241_2026-10-20",
+      "name": "osrs-242_2026-11-03",
       "game": "oldschool",
-      "revision": 241
+      "revision": 242
     },
     "sourceCache": {
       "name": "osrs-235_2025-10-29",
@@ -135,7 +135,7 @@
         "symbol": "hw25_chair_npc_event",
         "dataBase64": "XwABHlBpY2stdXAADgyUXSgCExYfhhcUIowCU3Bvb2t5IGNoYWlyAAEBLM4A",
         "crc": 2645765161,
-        "id": 16772
+        "id": 16876
       },
       {
         "kind": "npc",
@@ -143,7 +143,7 @@
         "symbol": "hw25_chair_seth",
         "dataBase64": "XwAADgyUXSgCExYfhhcUIowCU3Bvb2t5IGNoYWlyAAEBLM4A",
         "crc": 3139936343,
-        "id": 16773
+        "id": 16877
       },
       {
         "kind": "npc",
@@ -151,7 +151,7 @@
         "symbol": "hw25_chair_npc_cs",
         "dataBase64": "XwAADgyUYygCExYfhhcUIowCU3Bvb2t5IGNoYWlyAAEBLM4A",
         "crc": 2603069536,
-        "id": 16774
+        "id": 16878
       },
       {
         "kind": "npc",
@@ -159,7 +159,7 @@
         "symbol": "hw25_straydog_wander",
         "dataBase64": "ZAplCg4SpQ0mbF8AABIB1SJQZXQAIVNob28tYXdheQACU3RyYXkgZG9nAAEB4FcA",
         "crc": 3159464484,
-        "id": 16775
+        "id": 16879
       },
       {
         "kind": "npc",
@@ -167,7 +167,7 @@
         "symbol": "hw25_straydog_nomove",
         "dataBase64": "ZAplCg4SpQ0mbF8AABIDmiJQZXQAIVNob28tYXdheQASAdUCU3RyYXkgZG9nAAEB4FcA",
         "crc": 2907060018,
-        "id": 16776
+        "id": 16880
       },
       {
         "kind": "npc",
@@ -175,7 +175,7 @@
         "symbol": "hw25_deadth_cs",
         "dataBase64": "DAFfAAARAzMDNAM1AzYNA09jKAYnFBRvYpYAACIlAAARxhTpA4wAABuhH5QCRGVhdGgAAQYT7G9jZ/sAswEAAfs8AXE5AA==",
         "crc": 2801271305,
-        "id": 16777
+        "id": 16881
       },
       {
         "kind": "npc",
@@ -183,7 +183,7 @@
         "symbol": "hw25_seth_groats_cs",
         "dataBase64": "XwAADAERAzMDNAM1AzYNAyhiAIJhAIxjKANiliEzIiUhM6hAEcYCU2V0aCBHcm9hdHMAAQoAnwEHASsAuQDmAPgAsBLrAe8BSTwDAD8VngBQAA==",
         "crc": 2599949398,
-        "id": 16778
+        "id": 16882
       },
       {
         "kind": "npc",
@@ -191,7 +191,7 @@
         "symbol": "hw25_fred_the_farmer_cs",
         "dataBase64": "XwAAEQS1BLYEtwS4DQMtYygEYpadLahAEcYiJRHGEhIvlAJGcmVkIHRoZSBGYXJtZXIAAQi18wDZAPa1+LX2tfe1+TZ7PAIANxWeAA==",
         "crc": 1644595475,
-        "id": 16779
+        "id": 16883
       },
       {
         "kind": "obj",
@@ -495,7 +495,7 @@
     {
       "symbol": "hw25_scarecrow",
       "id": 57725,
-      "crc": 2099049806
+      "crc": 480597795
     },
     {
       "symbol": "hw25_scarecrow_vis",
@@ -505,7 +505,7 @@
     {
       "symbol": "hw25_spooky_painting",
       "id": 57727,
-      "crc": 4280373258
+      "crc": 1488133034
     },
     {
       "symbol": "hw25_spooky_painting_vis",
@@ -515,7 +515,7 @@
     {
       "symbol": "hw25_spooky_lamp",
       "id": 57729,
-      "crc": 3225352676
+      "crc": 2944093074
     },
     {
       "symbol": "hw25_spooky_lamp_vis",

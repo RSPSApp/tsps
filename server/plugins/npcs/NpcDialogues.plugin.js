@@ -22,6 +22,9 @@
 const fs = require("fs");
 const path = require("path");
 const { isDeepStrictEqual } = require("node:util");
+/** successor id -> the retired id whose transcript it plays until it has its own (data/retired-npcs.json). */
+const PREDECESSOR = new Map(Object.entries(require("./data/retired-npcs.json").successors)
+  .map(([retired, successor]) => [successor.id, Number(retired)]));
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
@@ -1201,8 +1204,10 @@ module.exports = {
     const resolveTranscript = (event) => {
       const { data, aliases, index, speakerIdByName } = load();
       const npcId = event.npcId;
-      // A transform the index doesn't know (Dr Harlow 16277) falls back to the spawned parent (3480).
-      const entries = [npcId, event.npc?.getId?.()].map((id) => index[String(id)]).find(Array.isArray) ?? [];
+      // A transform the index doesn't know (Dr Harlow 16277) falls back to the spawned parent (3480),
+      // and a successor of a retired NPC (Captain Harlan 16821) to the NPC it replaced (3216).
+      const entries = [npcId, event.npc?.getId?.(), PREDECESSOR.get(npcId)]
+        .map((id) => index[String(id)]).find(Array.isArray) ?? [];
       const pages = entries
         .map((entry) => ({ page: String(entry.page ?? "").replace(/^Transcript:/, ""), variants: Array.isArray(entry.variants) ? entry.variants : [] }))
         .filter((entry) => Object.hasOwn(data, entry.page));

@@ -1453,7 +1453,7 @@ test('Fremennik Trials: Peer accepts the Wiki water, disks, mural, sealed vase a
   h.object(O.DOOR_119);
   assert.equal(h.player.syntaxAction, undefined, 'inventory must be banked');
   h.inventory.clear();
-  h.setWeapon(I.BRONZE_SWORD);
+  h.setWeapon(I.BRONZE_SHORTSWORD);
   h.object(O.DOOR_119);
   assert.equal(h.player.syntaxAction, undefined, 'equipment must be banked');
   h.setWeapon(-1);
@@ -1573,7 +1573,7 @@ test('Fremennik Trials: Peer offers and performs his bank spell when talked to a
   const HAS = 'If the player has items in their inventory and/or wearing any armour:';
   const EMPTY = 'If the player does not have any items in their inventory or in their worn slots:';
   assert.deepEqual([answer(HAS), answer(EMPTY)], [false, true], 'nothing carried: no bank offer');
-  h.setWeapon(I.BRONZE_SWORD);
+  h.setWeapon(I.BRONZE_SHORTSWORD);
   assert.deepEqual([answer(HAS), answer(EMPTY)], [true, false], 'worn items count');
   h.setWeapon(-1);
   h.inventory.set(I.COINS, 5);

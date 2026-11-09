@@ -199,7 +199,7 @@ test('native Account Bond Pouch buttons already reach the pouch and its stored b
     { groupId: group, childId: child, opId: 1, slot: -1 });
   assert.equal(press(109, 37), true);
   assert.equal(player.getInterfaceId(), 861);
-  assert.equal(press(861, 7), true);
+  assert.equal(press(861, 8), true);
   assert.equal(player.getInterfaceId(), 863);
   assert.ok(player.sent.some(([kind, id, size, items]) => kind === 'inventory' &&
     items.some(item => item?.id === TRADEABLE_BOND && item.amount === 3)));
@@ -444,7 +444,7 @@ test("the pouch deposits and withdraws, shows its counts and stops at 100 bonds"
 
   handlers.buttons.get(uid(109, 37))({ player });
   assert.deepEqual(player.sent.find(([kind]) => kind === "interface"), ["interface", 861]);
-  handlers.buttons.get(uid(861, 7))({ player });
+  handlers.buttons.get(uid(861, 8))({ player });
   assert.deepEqual(player.sent.filter(([kind]) => kind === "interface").at(-1), ["interface", 863]);
 
   for (let i = 0; i < 6; i++) player.getInventory().add(TRADEABLE_BOND, 1);
@@ -513,7 +513,7 @@ test("a stale Move-X amount does nothing after Back leaves the bond pouch", () =
   const press = (group, child) => handlers.buttons.get(uid(group, child))({ player, buttonId: uid(group, child) });
 
   press(109, 37); // Account tab: Bond Pouch
-  press(861, 7); // View Your Bonds
+  press(861, 8); // View Your Bonds
   press(863, 19); // X
   press(863, 12); // Move to Pouch
   const stale = player.amountAction;

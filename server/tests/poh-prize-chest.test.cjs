@@ -54,7 +54,7 @@ test("a full inventory whose coins carry other metadata takes nothing", (t) => {
   const tagged = new core.Item(I.COINS, 10);
   tagged.setMeta({ preset: true });
   p.getInventory().setItem(0, tagged);
-  for (let slot = 1; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(I.BRONZE_SWORD, 1));
+  for (let slot = 1; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(I.BRONZE_SHORTSWORD, 1));
   open(p);
   assert.equal(house.save.prize, 5000);
   assert.equal(p.getInventory().getAmount(I.COINS), 10);

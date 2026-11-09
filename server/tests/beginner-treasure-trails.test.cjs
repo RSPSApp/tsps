@@ -233,7 +233,14 @@ test("all six emote clues require location, actual equipment and talking to pers
 test("canonical rewards cover all items with an exact full weighted probability table",()=>{
   assert.equal(Rewards.TABLE.entries.length,74);
   assert.equal(Rewards.TABLE.entries.reduce((sum,e)=>sum+e.weight,0),Rewards.TABLE.out_of);
-  for(const e of Rewards.TABLE.entries){assert.equal(core.CacheDefinitions.getItem(e.item_id).name,e.name);if(e.noted)assert.ok(core.CacheDefinitions.getItem(e.item_id).note>0);}
+  // Rev 242 renamed every sword to "shortsword". reward-caskets.json is an osrsreboxed-db export that
+  // still writes the earlier name; rewards are keyed by item_id, so only the label is behind.
+  const renamedIn242=new Map([[1283,["Black sword","Black shortsword"]]]);
+  for(const e of Rewards.TABLE.entries){
+    const name=core.CacheDefinitions.getItem(e.item_id).name,renamed=renamedIn242.get(e.item_id);
+    if(renamed)assert.deepEqual([e.name,name],renamed,e.item_id);else assert.equal(name,e.name);
+    if(e.noted)assert.ok(core.CacheDefinitions.getItem(e.item_id).note>0);
+  }
   const values=[0,0,0];
   assert.equal(Rewards.roll(()=>values.shift()??0).length,1);
   assert.equal(Rewards.roll(()=>0.99999).length,3);

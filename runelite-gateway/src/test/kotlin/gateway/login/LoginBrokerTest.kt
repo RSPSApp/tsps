@@ -117,7 +117,7 @@ class LoginBrokerTest {
     fun `password login issues a one-use name and address bound native ticket`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 241, port).use { broker ->
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
                 val reply = request(port)
                 assertEquals("OK", reply[0])
                 assertEquals(4, reply.size)
@@ -145,7 +145,7 @@ class LoginBrokerTest {
     fun `remembered login uses token flag without a second backend login`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 241, port).use { broker ->
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
                 val reply = request(port, "token", "b".repeat(43))
                 assertEquals("OK", reply[0])
                 assertEquals(2, backend.flags.poll(5, TimeUnit.SECONDS))
@@ -160,7 +160,7 @@ class LoginBrokerTest {
     fun `bad credentials and browser origin cannot mint a ticket`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 241, port).use {
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
                 assertEquals(listOf("ERROR", "3"), request(port, secret = "wrong"))
                 assertEquals(1, backend.flags.poll(5, TimeUnit.SECONDS))
                 assertEquals(listOf("ERROR", "8"), request(port, origin = true))
@@ -174,7 +174,7 @@ class LoginBrokerTest {
         Backend().use { backend ->
             val port = freePort()
             var now = 1_000L
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 241, port, { now }).use { broker ->
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, { now }).use { broker ->
                 val reply = request(port)
                 assertEquals("OK", reply[0])
                 val ticket = String(Base64.getDecoder().decode(reply[3]))
@@ -188,7 +188,7 @@ class LoginBrokerTest {
     fun `an explicitly trusted loopback forwarder can redeem but another public address cannot`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 241, port, allowLoopbackProxy = true)
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, allowLoopbackProxy = true)
                 .use { broker ->
                     val reply = request(port)
                     assertEquals("OK", reply[0])
@@ -205,7 +205,7 @@ class LoginBrokerTest {
     fun `equivalent numeric IPv4 mapped addresses keep ticket binding`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 241, port).use { broker ->
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
                 val reply = request(port)
                 assertEquals("OK", reply[0])
                 val ticket = String(Base64.getDecoder().decode(reply[3]))

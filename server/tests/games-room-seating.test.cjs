@@ -21,7 +21,7 @@ function seq(name){return core.CacheDefinitions.getSeqId(`human_sittingdown_${na
 test('seating uses active cache chair animation, preserves custom movement and faces opponent',()=>{
   const m=match(),p=m.players[0],prior=[808,823,819,820,821,822,824];
   p.setRenderAnimations(prior);
-  const weapon=new core.Item(core.ItemIdentifiers.BRONZE_SWORD,1);
+  const weapon=new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD,1);
   p.getEquipment().setItem(core.Equipment.WEAPON_SLOT,weapon);
   Seating.seat(m);
   const seated=p.getRenderAnimations();

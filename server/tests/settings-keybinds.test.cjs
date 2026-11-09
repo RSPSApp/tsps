@@ -328,19 +328,21 @@ test('quest colour picker saves RGB+1, accepts black, rejects invalid amounts an
   sender.sendSubInterface = () => sender;
   sender.closeSubInterface = () => sender;
   const row = buttons.get((134 << 16) | 20);
-  row({ player, slot: 51 });
+  // Rows come from the cache's Interfaces list by setting id: rev 242 inserted and reordered rows there.
+  const colour = interfacesRowOf(224), reset = interfacesRowOf(228);
+  row({ player, slot: colour });
   assert.ok(amount, 'native colour modal arms its resume-count handler');
   assert.equal(amount.acceptsZero, true);
   amount.execute(0);
   assert.equal(sender.getVarp(3410), 1, 'black is a real colour');
-  row({ player, slot: 51 });
+  row({ player, slot: colour });
   amount.execute(0x1000000);
   assert.equal(sender.getVarp(3410), 1, 'out of range colour ignored');
-  row({ player, slot: 51 });
+  row({ player, slot: colour });
   assert.equal(amount.acceptsNegative, true);
   amount.execute(-1);
   assert.equal(sender.getVarp(3410), 0, 'native Default colour restores cache default');
-  row({ player, slot: 55 });
+  row({ player, slot: reset });
   assert.equal(sender.getVarp(3410), 0, 'zero selects cache default');
 });
 
@@ -350,11 +352,15 @@ test('all native quest preferences are mapped, constrained and restored includin
   player.setAttribute('settings-view', 6);
   const click = buttons.get((134 << 16) | 20);
   const option = buttons.get((134 << 16) | 29);
-  for (const [slot, id] of [[42,13776],[43,13775],[44,13777],[45,13773],[46,13774],[47,13890],[49,13889],[50,13781]]) {
+  // [setting, varbit]: each row is found by its setting id (rev 242 moved them in the Interfaces list).
+  for (const [setting, id] of [[217,13776],[220,13773],[221,13774],[240,13890],[239,13889],[223,13781]]) {
+    const slot = interfacesRowOf(setting);
     assert.equal(click({ player, slot }), true);
     assert.equal(player.getPacketSender().getVarbit(id), 1);
   }
-  for (const [slot, id, count] of [[39,13772,12],[40,13778,3],[41,13779,3],[48,13780,2]]) {
+  // Rev 242: "Show quests in progress" (218) and "Show completed quests" (219) are 3-option dropdowns.
+  for (const [setting, id, count] of [[214,13772,12],[215,13778,3],[216,13779,3],[222,13780,2],[218,13775,3],[219,13777,3]]) {
+    const slot = interfacesRowOf(setting);
     click({ player, slot });
     for (let index=0;index<count;index++) {
       click({ player, slot });
@@ -367,11 +373,25 @@ test('all native quest preferences are mapped, constrained and restored includin
   const saved = structuredClone(player.getAttribute('settings:values'));
   const restored = recordingPlayer();
   restored.setAttribute('settings:values', saved);
+  restored.setAttribute('settings:quest-list-show-242', true); // these are rev 242 choices, saved with the flag
   for (const login of logins.slice(1)) login({player:restored});
   for (const [key,value] of Object.entries(saved)) {
     const [kind,id]=key.split(':');
     assert.equal(kind==='varp' ? restored.getPacketSender().getVarp(+id) : restored.getPacketSender().getVarbit(+id), value);
   }
+});
+
+test('rev 242 quest-list show dropdowns: a saved rev 241 hide toggle is cleared once at login', () => {
+  const { logins } = registered();
+  const player = recordingPlayer();
+  player.setAttribute('settings:values', { 'varbit:13775': 1, 'varbit:13777': 1, 'varbit:13773': 1 });
+  for (const login of logins.slice(1)) login({ player });
+  assert.deepEqual(player.getAttribute('settings:values'), { 'varbit:13773': 1 }, 'other quest-list settings are kept');
+  assert.equal(player.getPacketSender().getVarbit(13777), 0);
+  assert.equal(player.getPacketSender().getVarbit(13773), 1);
+  player.setAttribute('settings:values', { ...player.getAttribute('settings:values'), 'varbit:13777': 2 });
+  for (const login of logins.slice(1)) login({ player });
+  assert.equal(player.getAttribute('settings:values')['varbit:13777'], 2, 'a 242 choice survives later logins');
 });
 
 test('closing or replacing a quest colour picker invalidates only its owned amount callback', () => {
@@ -383,13 +403,14 @@ test('closing or replacing a quest colour picker invalidates only its owned amou
   const sender=player.getPacketSender();
   sender.sendSubInterface=()=>sender;sender.closeSubInterface=()=>sender;
   const click=buttons.get((134<<16)|20);
-  click({player,slot:51});const stale=amount;
+  const colour=interfacesRowOf(224),next=interfacesRowOf(225);
+  click({player,slot:colour});const stale=amount;
   events.get('interface:closed')({player,interfaceId:134});
   assert.equal(amount,null,'closing clears the owned prompt');
   stale.execute(123);
   assert.equal(sender.getVarp(3410),0,'late reply cannot write a closed picker');
-  click({player,slot:51});const old=amount;
-  click({player,slot:52});old.execute(123);
+  click({player,slot:colour});const old=amount;
+  click({player,slot:next});old.execute(123);
   assert.equal(sender.getVarp(3410),0,'replaced picker cannot mutate its colour');
   const unrelated={execute(){}};amount=unrelated;
   events.get('interface:closed')({player,interfaceId:288});
@@ -404,13 +425,23 @@ const CHAT_TIMESTAMPS = 119;
 const CHAT_TIMESTAMPS_VARBIT = 12384;
 const CHAT_TIMESTAMPS_SCRIPT = 4586;
 
-function chatRowOf(settingId) {
-  const category = CacheDefinitions.getStructParams(Number(CacheDefinitions.getEnumValues(422).get(CHAT)));
+/** A setting's row in a settings category's list (enum 422 -> struct param 745 -> struct param 1077). */
+function rowOf(categoryId, settingId, label) {
+  const category = CacheDefinitions.getStructParams(Number(CacheDefinitions.getEnumValues(422).get(categoryId)));
   const rows = [...CacheDefinitions.getEnumValues(Number(category.get(745)))].sort(([a], [b]) => a - b)
     .map(([, struct]) => CacheDefinitions.getStructParams(Number(struct)).get(1077));
   const row = rows.indexOf(settingId);
-  assert.ok(row >= 0, `setting ${settingId} is in the Chat category`);
+  assert.ok(row >= 0, `setting ${settingId} is in the ${label} category`);
   return row;
+}
+
+function chatRowOf(settingId) {
+  return rowOf(CHAT, settingId, 'Chat');
+}
+
+/** The Interfaces category (6), where the quest preferences and colours are. */
+function interfacesRowOf(settingId) {
+  return rowOf(6, settingId, 'Interfaces');
 }
 
 test('Chat timestamps: choosing an option sets varbit 12384 to it and runs the row\'s clientscript', () => {

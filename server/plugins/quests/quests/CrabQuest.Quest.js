@@ -16,7 +16,7 @@
  * 62470, magic tree 62473, trees 62475, plant 62477, bush 62478) are not placed
  * in this cache's maps or npc-spawns.json, so the crab is an owner-only spawn and
  * the scenery is registered at runtime (the A Ruff Situation pattern). The five
- * Floatsam NPCs (16475-16477) are world spawns and are used as-is.
+ * Flotsam NPCs (16817-16819; Floatsam 16475-16477 before rev 242) are world spawns and are used as-is.
  *
  * Source: OSRS Wiki "Crab Quest" page, quick guide and transcript; cache ids and
  * the varbit confirmed with scripts/lookup-gameval.ts and CacheDefinitions.
@@ -152,9 +152,10 @@ module.exports = function registerCrabQuestQuest(api) {
   // the capture's op=1 plays emote_sit_loop 10061.
   const SIT_EMOTE_SLOT = 54;
   const FLOATSAM_NPC_IDS = new Set([
-    NpcIdentifiers.FLOATSAM, // 16475, "Net"
-    NpcIdentifiers.FLOATSAM_2, // 16476
-    NpcIdentifiers.FLOATSAM_3, // 16477
+    // Rev 242 renamed Floatsam (16475-16477) to Flotsam under new ids.
+    NpcIdentifiers.FLOTSAM, // 16817, "Net"
+    NpcIdentifiers.FLOTSAM_2, // 16818
+    NpcIdentifiers.FLOTSAM_3, // 16819
   ]);
 
   // Items from the 2026 quest, absent from the generated ItemIdentifiers.

@@ -252,13 +252,13 @@ test('actual equipment rules reject manual removal and weapon/shield replacement
   const p = player(t); const task = carry(p);
   assert.equal(core.EquipPacketListener.unequip(p, core.Equipment.WEAPON_SLOT), false);
   assert.equal(common.heldCrate(p), task.crate);
-  assert.equal(PM.emitCanEquip(p, core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.BRONZE_SWORD, 1)), false);
+  assert.equal(PM.emitCanEquip(p, core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD, 1)), false);
   assert.equal(PM.emitCanEquip(p, core.Equipment.SHIELD_SLOT, new core.Item(core.ItemIdentifiers.WOODEN_SHIELD, 1)), false);
-  p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_SWORD, 1));
-  const slot = p.getInventory().getSlotForItemId(core.ItemIdentifiers.BRONZE_SWORD);
-  core.EquipPacketListener.equip(p, core.ItemIdentifiers.BRONZE_SWORD, slot, core.Inventory.INTERFACE_ID);
+  p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD, 1));
+  const slot = p.getInventory().getSlotForItemId(core.ItemIdentifiers.BRONZE_SHORTSWORD);
+  core.EquipPacketListener.equip(p, core.ItemIdentifiers.BRONZE_SHORTSWORD, slot, core.Inventory.INTERFACE_ID);
   assert.equal(common.heldCrate(p), task.crate);
-  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BRONZE_SWORD), 1);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BRONZE_SHORTSWORD), 1);
 });
 
 test('native equipment Remove preserves cargo and sends its recorded removal refusal', async (t) => {
@@ -331,7 +331,7 @@ test('actual dangerous death clears physical cargo indicators and owner after eq
 
 test('death cleanup preserves unrelated equipment installed after the shared item-loss transition', (t) => {
   const p = player(t); carry(p, 2);
-  const sword = new core.Item(core.ItemIdentifiers.BRONZE_SWORD, 1);
+  const sword = new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD, 1);
   PM.createApi('CargoDeathTransitionTest').onPlayerDefeated(({ victim }) => {
     if (victim === p) victim.getEquipment().setItem(core.Equipment.WEAPON_SLOT, sword);
   });

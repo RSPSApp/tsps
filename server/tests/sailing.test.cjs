@@ -2188,7 +2188,8 @@ test("Sort-salvage sorts every salvage in the inventory, one each 3 ticks", () =
   assert.match(h.player.messages.at(-1), /^spam: You sort through the small salvage and find: \d+ x .+\.$/);
   withRandom(0.5, () => { for (let tick = 0; tick < 3; tick++) TaskManager.process(); });
   assert.equal(h.player.getInventory().getAmount(32847), 0);
-  assert.match(h.player.messages.at(-1), /^spam: You sort through/, "live sends no line after the last salvage");
+  assert.match(h.player.messages.at(-2), /^spam: You sort through/);
+  assert.equal(h.player.messages.at(-1), "You have no more salvage to sort.", "on the tick the last salvage is sorted");
   assert.deepEqual(h.xp, [["Sailing", 5.5], ["Sailing", 5.5]]);
 
   // With no salvage: a message box (rsprox captures, rev 235).

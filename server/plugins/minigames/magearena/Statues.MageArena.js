@@ -132,6 +132,8 @@ module.exports = function registerStatues(pluginApi) {
 };
 
 Object.assign(module.exports, {
+  // Mage Arena I's stand-in, which Kolodion also reads.
+  CAPE_RECEIVED_ATTRIBUTE,
   _test: {
     STATUES,
     CAPE_RECEIVED_ATTRIBUTE,

@@ -118,10 +118,12 @@ let hp = 100;
 let spec = 1000;
 let poison = 0;
 let level = 50;
+let weaponType = 0;
 const client = {
     getBoostedSkillLevel: (skill: SkillId) => (skill === SkillId.Hitpoints ? hp : 1),
     getRealSkillLevel: (skill: SkillId) => (skill === SkillId.Hitpoints ? 100 : skill === SkillId.Attack ? level : 1),
     getVarpValue: (id: number) => (id === SA_ENERGY ? spec : id === 102 ? poison : 0),
+    getVarbitValue: (id: number) => (id === 357 ? weaponType : 0),
 } as unknown as Client;
 const plugin = new ShaderFxPlugin({ client, localPlayerId: () => 7, now: () => now });
 assert.equal(plugin.shaderFx(), undefined, "no handle while the plugin is off");
@@ -161,6 +163,40 @@ poison = 0;
 hp = 100;
 plugin.onGameTick();
 assert.equal(runtime.fill(out), false, "back to normal");
+// A negative varp 102 is an antipoison's immunity timer: not poisoned.
+poison = -5;
+plugin.onGameTick();
+assert.equal(runtime.fill(out), false, "antipoison immunity is not poison");
+poison = 0;
+
+// Ranged shot vs spell: both send a projectile and a graphic on the player a few ms apart.
+const launch = { source: { actor: { kind: "player", serverId: 7 } } } as never;
+const fire = (order: "projectileFirst" | "graphicFirst", weapon: number) => {
+    now += 10_000;
+    weaponType = weapon;
+    plugin.state.reset();
+    const projectile = () => (plugin as any).onProjectile(launch);
+    const graphic = () => (plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 19 });
+    if (order === "projectileFirst") { projectile(); now += 4; graphic(); } else { graphic(); now += 4; projectile(); }
+    const o = new Float32Array(40);
+    runtime.fill(o);
+    return { ranged: o[FxSlot.EVENTS + 2], spell: o[FxSlot.CAST + 3] };
+};
+for (const order of ["projectileFirst", "graphicFirst"] as const) {
+    const bow = fire(order, 3);
+    assert.ok(bow.ranged > 0 && bow.spell === 0, `a bow's shot is ranged focus, not a spell (${order})`);
+    const staff = fire(order, 18);
+    assert.ok(staff.spell > 0 && staff.ranged === 0, `a staff's cast is a spell glow, not ranged focus (${order})`);
+}
+weaponType = 18;
+now += 10_000;
+plugin.state.reset();
+(plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 111 });
+{
+    const o = new Float32Array(40);
+    runtime.fill(o);
+    assert.ok(o[FxSlot.CAST + 3] > 0, "a self-cast (no projectile) glows");
+}
 
 plugin.setEnabledState(false);
 assert.equal(plugin.shaderFx(), undefined);

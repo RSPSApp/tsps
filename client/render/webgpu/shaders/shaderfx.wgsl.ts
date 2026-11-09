@@ -123,6 +123,10 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     if (fx.dealt.x > 0.0) {
         uv = centre + (uv - centre) * (1.0 - fx.dealt.x * 0.055);
     }
+    if (fx.events.z > 0.0) {
+        // Ranged release: a quick push in on the target.
+        uv = centre + (uv - centre) * (1.0 - fx.events.z * 0.045);
+    }
     if (fx.taken.w >= 0.0) {
         let p = fx.taken.w;
         let x = (r - p * 1.05) / 0.09;
@@ -146,13 +150,23 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     var col = vec3<f32>(sceneAt(uv + ca).r, sceneAt(uv).g, sceneAt(uv - ca).b);
 
     // Radial blur towards the middle: ranged speed lines and the hit punch.
-    let blurAmt = fx.events.z * 0.07 * smoothstep(0.1, 0.8, r) + fx.dealt.x * 0.05;
+    let blurAmt = fx.events.z * 0.16 * smoothstep(0.08, 0.7, r) + fx.dealt.x * 0.05;
     if (blurAmt > 0.001) {
         var acc = col;
         for (var i = 1; i <= 6; i = i + 1) {
             acc = acc + sceneAt(uv - d * blurAmt * f32(i) / 6.0);
         }
         col = acc / 7.0;
+    }
+
+    // Ranged focus: bright speed streaks radiate from the middle, and the edges close in.
+    if (fx.events.z > 0.0) {
+        let ang = atan2(d0.y, d0.x * aspect);
+        let id = floor((ang + 3.14159265) / 6.2831853 * 110.0);
+        let h = hash12(vec2<f32>(id, floor(t * 16.0)));
+        let streak = step(0.7, h) * smoothstep(0.16, 0.7, r);
+        col = col + vec3<f32>(1.0, 0.96, 0.85) * streak * fx.events.z * 0.5;
+        col = col * (1.0 - fx.events.z * 0.4 * smoothstep(0.3, 0.95, r));
     }
 
     // Tilt shift: blur grows away from a sharp band across the middle.

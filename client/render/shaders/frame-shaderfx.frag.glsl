@@ -93,6 +93,10 @@ void main() {
     if (u_fx3.x > 0.0) {
         uv = centre + (uv - centre) * (1.0 - u_fx3.x * 0.055);
     }
+    if (u_fx4.z > 0.0) {
+        // Ranged release: a quick push in on the target.
+        uv = centre + (uv - centre) * (1.0 - u_fx4.z * 0.045);
+    }
     if (u_fx2.w >= 0.0) {
         float p = u_fx2.w;
         float x = (r - p * 1.05) / 0.09;
@@ -116,13 +120,23 @@ void main() {
     vec3 col = vec3(sceneAt(uv + ca).r, sceneAt(uv).g, sceneAt(uv - ca).b);
 
     // Radial blur towards the middle: ranged speed lines and the hit punch.
-    float blurAmt = u_fx4.z * 0.07 * smoothstep(0.1, 0.8, r) + u_fx3.x * 0.05;
+    float blurAmt = u_fx4.z * 0.16 * smoothstep(0.08, 0.7, r) + u_fx3.x * 0.05;
     if (blurAmt > 0.001) {
         vec3 acc = col;
         for (int i = 1; i <= 6; i++) {
             acc += sceneAt(uv - d * blurAmt * float(i) / 6.0);
         }
         col = acc / 7.0;
+    }
+
+    // Ranged focus: bright speed streaks radiate from the middle, and the edges close in.
+    if (u_fx4.z > 0.0) {
+        float ang = atan(d0.y, d0.x * aspect);
+        float id = floor((ang + 3.14159265) / 6.2831853 * 110.0);
+        float h = hash12(vec2(id, floor(t * 16.0)));
+        float streak = step(0.7, h) * smoothstep(0.16, 0.7, r);
+        col += vec3(1.0, 0.96, 0.85) * streak * u_fx4.z * 0.5;
+        col *= 1.0 - u_fx4.z * 0.4 * smoothstep(0.3, 0.95, r);
     }
 
     // Tilt shift: blur grows away from a sharp band across the middle.

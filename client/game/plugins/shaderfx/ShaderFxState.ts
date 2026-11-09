@@ -64,7 +64,7 @@ export const FxDuration = {
     PUNCH: 240,
     SPEC: 520,
     CAST: 900,
-    RANGED: 380,
+    RANGED: 650,
     LEVEL_UP: 1400,
 } as const;
 
@@ -154,6 +154,11 @@ export class ShaderFxState {
     cast(graphicId: number, now: number, settings: Pick<ShaderFxSettings, "castHueFromGraphic" | "castColor">): void {
         this.castAt = now;
         this.castColor = settings.castHueFromGraphic ? graphicColor(graphicId) : unpackRgb(settings.castColor);
+    }
+
+    /** Drops a spell glow that turned out to be a ranged weapon's draw-back. */
+    cancelCast(): void {
+        this.castAt = -1e9;
     }
 
     rangedFired(now: number): void {

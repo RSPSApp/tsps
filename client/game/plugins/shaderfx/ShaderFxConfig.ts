@@ -163,7 +163,7 @@ export const ShaderFxConfig = ConfigGroup(
         }),
         rangedFocus: ConfigItem({
             name: "Ranged focus",
-            description: "Speed lines streak in from the edges when you fire a ranged attack.",
+            description: "A push in with speed streaks and a closing vignette when you fire a ranged attack.",
             position: 33,
             section: "magic",
             default: true,

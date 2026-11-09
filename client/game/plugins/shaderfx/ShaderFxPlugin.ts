@@ -15,10 +15,20 @@ import { ClientImpl } from "../../../runelite/impl/ClientImpl";
 import { ShaderFxConfig } from "./ShaderFxConfig";
 import { type ShaderFxRuntime, type ShaderFxSettings, ShaderFxState } from "./ShaderFxState";
 
-/** The varp that holds poison and venom: positive while poisoned, over a million when venom. */
+/** The varp that holds poison and venom: positive while poisoned (over a million for venom), negative while an antipoison protects. */
 const POISON_VARP = 102;
-/** A projectile this soon after a graphic on the player is a spell, not a ranged shot. */
-const SPELL_PROJECTILE_WINDOW_MS = 700;
+/**
+ * The varbit holding the equipped weapon's category (the combat tab's weapon type): 3 bow,
+ * 5 crossbow, 6 salamander, 7 chinchompa, 8 gun, 19 thrown.
+ */
+const WEAPON_TYPE_VARBIT = 357;
+const RANGED_WEAPON_TYPES: ReadonlySet<number> = new Set([3, 5, 6, 7, 8, 19]);
+/**
+ * A ranged shot and a spell both send a projectile and a graphic on the player a few
+ * milliseconds apart, in either order. With a ranged weapon the graphic is the draw-back, so it
+ * is not a spell; anything else is a cast.
+ */
+const PROJECTILE_GRAPHIC_WINDOW_MS = 300;
 
 /** What the plugin reads from the game; tests replace it. */
 export interface ShaderFxDeps {
@@ -50,7 +60,7 @@ export class ShaderFxPlugin extends Plugin {
     private readonly state = new ShaderFxState();
     private settings: ShaderFxSettings;
     private unsubscribers: Array<() => void> = [];
-    private lastCastAt = -1e9;
+    private lastProjectileAt = -1e9;
     private lastSpec = -1;
     private levelTotal = -1;
 
@@ -123,7 +133,8 @@ export class ShaderFxPlugin extends Plugin {
         const client = this.deps.client;
         const now = this.deps.now();
         this.state.setHealth(client.getBoostedSkillLevel(SkillId.Hitpoints), client.getRealSkillLevel(SkillId.Hitpoints));
-        this.state.setPoisoned(client.getVarpValue(POISON_VARP) !== 0 && client.getVarpValue(POISON_VARP) !== -1);
+        // Positive while poisoned; negative is the antipoison's immunity timer, not poison.
+        this.state.setPoisoned(client.getVarpValue(POISON_VARP) > 0);
 
         const spec = client.getVarpValue(SA_ENERGY);
         if (this.lastSpec >= 0 && spec < this.lastSpec) this.state.specUsed(now);
@@ -140,7 +151,8 @@ export class ShaderFxPlugin extends Plugin {
         const local = this.deps.localPlayerId();
         if (event.type !== "player" || local < 0 || event.serverId !== local) return;
         const now = this.deps.now();
-        this.lastCastAt = now;
+        // A ranged weapon's draw-back plays right with its projectile: not a spell.
+        if (this.rangedWeapon() && now - this.lastProjectileAt < PROJECTILE_GRAPHIC_WINDOW_MS) return;
         this.state.cast(event.graphic, now, this.settings);
     }
 
@@ -150,8 +162,15 @@ export class ShaderFxPlugin extends Plugin {
         const local = this.deps.localPlayerId();
         if (!actor || actor.kind !== "player" || local < 0 || actor.serverId !== local) return;
         const now = this.deps.now();
-        if (now - this.lastCastAt < SPELL_PROJECTILE_WINDOW_MS) return;
+        this.lastProjectileAt = now;
+        // Only a ranged weapon's shot is ranged focus; a spell's projectile is a cast.
+        if (!this.rangedWeapon()) return;
+        this.state.cancelCast();
         this.state.rangedFired(now);
+    }
+
+    private rangedWeapon(): boolean {
+        return RANGED_WEAPON_TYPES.has(this.deps.client.getVarbitValue(WEAPON_TYPE_VARBIT));
     }
 
     private resetBaselines(): void {

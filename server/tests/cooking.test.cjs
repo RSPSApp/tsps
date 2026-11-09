@@ -115,6 +115,20 @@ test("one raw food opens the how-many menu on the raw item; several open the wha
   assert.equal(many.sent.menu.getOptions().maxAmount, 5);
 });
 
+test("Cook on the Rogues' Den fire offers food that can cook on a fire", () => {
+  const id = core.ObjectIdentifiers.FIRE_44;
+  const definition = core.CacheDefinitions.getObject(id);
+  assert.equal(definition.actions[0], "Cook");
+  const fire = { ...cooker(definition.name), getId: () => id };
+
+  const p = player(50, [[ItemIds.BREAD_DOUGH, 2], [ItemIds.RAW_TROUT, 3]]);
+  assert.equal(typeof hooks.object.Fire?.Cook, "function");
+  hooks.object.Fire.Cook({ player: p, object: fire });
+  assert.equal(p.sent.menu.getTitle(), "How many would you like to cook?");
+  assert.deepEqual(p.sent.menu.getItems(), [ItemIds.RAW_TROUT]);
+  assert.equal(p.sent.menu.getOptions().maxAmount, 3);
+});
+
 test("the what menu shows the karambwan the player will get: poison until Tinsay's training", () => {
   const untaught = player(50, [[ItemIds.RAW_KARAMBWAN, 2], [ItemIds.RAW_TROUT, 2]]);
   hooks.object.Range.Cook({ player: untaught, object: cooker("Range") });

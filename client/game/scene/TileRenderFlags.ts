@@ -14,6 +14,8 @@ export interface TileFlagMapSquare extends MapSquare {
     /** How high a ground item stands on the tile's loc, in model units; 0 on open ground. */
     getObjSurfaceHeight?: (level: number, tileX: number, tileY: number) => number;
     isBridgeSurface?: (level: number, tileX: number, tileY: number) => boolean;
+    /** A boat deck's plane, which everything on the deck stands on; -1 elsewhere. */
+    interactionPlane?: number;
 }
 
 export function getTileRenderFlagLocal(

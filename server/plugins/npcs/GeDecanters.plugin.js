@@ -5,6 +5,7 @@
 //   into a vial are his to decant.
 // - Murky Matt (runes) > Decant pools the charges on teleport jewellery the same way, up to each
 //   piece's normal capacity; an emptied piece comes back uncharged, or is gone.
+// - Zahur (Nardah) > Decant opens the same interface and speaks the result himself (rsprox 230/00333).
 // Noted and unnoted are pooled apart and come back as they went in (recorded). Neither charges for the
 // service; Bob sells any vial he has to supply (Wiki).
 const DATA = require("./data/ge-decanters.json");
@@ -203,7 +204,11 @@ function potionGroups(player, target) {
   return result;
 }
 
-function openDecant({ player }) {
+/** Who opened the decant interface: Bob Barter, or Zahur (who speaks his own result). */
+const decanters = new WeakMap();
+
+function openDecant({ player, npcId }) {
+  decanters.set(player, npcId === core().CacheDefinitions.getNpcId(DATA.zahur.npc) ? DATA.zahur : DATA.bob);
   player.getPacketSender().sendChatboxInterface(DATA.decantInterface);
   return true;
 }
@@ -211,10 +216,11 @@ function openDecant({ player }) {
 function decant(player, target) {
   player.getPacketSender().sendSoundEffect(DATA.decantSound, 1, 0, 1);
   const { changed, short, poor } = apply(player, potionGroups(player, target));
-  if (short) return talk(player, DATA.bob, DATA.messages.short, "sad");
-  if (poor && !changed) return talk(player, DATA.bob, DATA.messages.poor, "sad");
-  if (!changed) return talk(player, DATA.bob, DATA.messages.nothingToDecant, "sad");
-  talk(player, DATA.bob, DATA.messages.decanted, "happy");
+  const who = decanters.get(player) ?? DATA.bob;
+  if (short) return talk(player, who, DATA.messages.short, "sad");
+  if (poor && !changed) return talk(player, who, DATA.messages.poor, "sad");
+  if (!changed) return talk(player, who, DATA.messages.nothingToDecant, "sad");
+  talk(player, who, DATA.messages.decanted, "happy");
 }
 
 /** A dose button, only while the decant interface is the chatbox's (closing or walking off ends it). */
@@ -294,6 +300,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     api.onNpcInteraction(DATA.bob.name, { Decant: openDecant });
+    api.onNpcInteraction(DATA.zahur.name, { Decant: openDecant });
     api.onNpcInteraction(DATA.matt.name, { Decant: combine });
     api.onInterfaceActionClick(decantButton);
   },

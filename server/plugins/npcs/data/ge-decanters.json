@@ -2,6 +2,8 @@
   "_source": "rsprox 226/01637, 226/01671 (Bob Barter), 226/01671, 232/03238, 238/04168 (Murky Matt) and 230/00333 (Zahur, the same decant interface); the Wiki (Bob Barter (herbs), Murky Matt (runes), Decanting).",
   "bob": { "name": "Bob Barter (herbs)", "npc": "ge_expert_herbs" },
   "matt": { "name": "Murky Matt (runes)", "npc": "ge_expert_runes" },
+  "_zahur": "Zahur's Decant opens the same interface and speaks his lines (rsprox 230/00333: opnpc3 on elid_herbalist, then decant 582).",
+  "zahur": { "name": "Zahur", "npc": "elid_herbalist" },
   "decantInterface": 582,
   "_buttons": "decant_1 .. decant_4 (582:3-6), recorded for Zahur; Bob's own clicks were all decant_4 (582:6).",
   "buttons": { "3": 1, "4": 2, "5": 3, "6": 4 },

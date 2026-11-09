@@ -3,7 +3,8 @@
 // plugins/skills/sailing/data/sailing-cargo.json (OSRS Wiki, Cargo hold); behaviour from live captures
 // (docs/sailing-osrs-reference.md).
 const { ItemDefinition } = require("../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
-const { content, boatType } = require("./SailingContent.Sailing");
+const { content } = require("./SailingContent.Sailing");
+const { cargoCapacityOf } = require("./BoatFacilities.Sailing");
 
 const REPAIR_KIT = 31964;
 /**
@@ -70,8 +71,9 @@ function isStackable(itemId) {
   return ItemDefinition.forId(itemId)?.isStackable?.() === true;
 }
 
+/** The hold's slots: its tier's for the boat's size (BoatFacilities.cargoCapacityOf). */
 function capacityOf(boat) {
-  return boatType(boat.type)?.cargoCapacity ?? 0;
+  return cargoCapacityOf(boat);
 }
 
 function inventoryIdOf(boat) {
@@ -139,6 +141,23 @@ function take(boat, fromSlot, itemId, amount) {
   return taken;
 }
 
+/**
+ * Makes the hold's cargo fit in `capacity` slots, moving any at or past it into free slots
+ * below. False, changing nothing, when there's more cargo than that.
+ */
+function fitInto(boat, capacity) {
+  const occupied = boat.cargo.filter(Boolean).length;
+  if (occupied > capacity) return false;
+  for (let slot = capacity; slot < boat.cargo.length; slot++) {
+    if (!boat.cargo[slot]) continue;
+    let free = 0;
+    while (boat.cargo[free]) free++;
+    boat.cargo[free] = boat.cargo[slot];
+    boat.cargo[slot] = null;
+  }
+  return true;
+}
+
 /** Sends the tool unlock varbits if the player has turned them on with `::sailingtools`. */
 function sendToolUnlocks(player) {
   if (!player.getAttribute?.(TOOLS_UNLOCKED_ATTRIBUTE)) return;
@@ -171,5 +190,6 @@ module.exports = {
   repairKitUses,
   store,
   take,
+  fitInto,
   dropLostOnRecovery,
 };

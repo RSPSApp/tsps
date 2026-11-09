@@ -910,7 +910,15 @@ test("the sail buttons follow their labels for each move mode", () => {
 function registerPlugin(file) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
-    core: { BoatManager },
+    core: {
+      BoatManager,
+      Sailing,
+      BoatMoveMode,
+      Animation: require("../dist/game/model/Animation").Animation,
+      Item,
+      Location,
+      Skill: require("../dist/game/model/Skill").Skill,
+    },
     onObjectInteraction: (name, actions) => {
       if (typeof name === "function") hooks.objectHandlers.push(name);
       else hooks.objects[name] = actions;
@@ -2773,4 +2781,408 @@ test("a player on a boat deck keeps the sea under the boat active, as well as th
   index.update([player], () => true, 1, Date.now(), () => new Location(3035, 2920, 0));
   assert.equal(index.isLocationActive(10244, 9605, 1), true, "the deck");
   assert.equal(index.isLocationActive(3035, 2920, 0), true, "the sea under the boat (storm clouds walk)");
+});
+
+// --- Facilities at sea: the anchor, the crystal extractor and the cargo hold's tiers.
+
+/**
+ * A player aboard their own boat of `type` with `facilityName` built on the first hotspot that
+ * allows it, logging what the server sends them.
+ */
+function facilityAtSea(type, facilityName, setup = () => {}) {
+  clearTasks();
+  registerPlugin("Sailing.plugin"); // the built-spec resolver
+  const player = sailor();
+  const log = { anims: [], sounds: [], xp: [], locAnims: [], varbits: new Map(), faces: [] };
+  const attributes = new Map();
+  const sender = new Proxy({}, {
+    get: (_t, key) => (...args) => {
+      if (key === "sendSoundEffect") log.sounds.push(args[0]);
+      if (key === "sendObjectAnimation") log.locAnims.push([args[0].getId(), args[1].getId()]);
+      if (key === "sendVarbit") log.varbits.set(args[0], args[1]);
+      if (key === "getVarbit") return log.varbits.get(args[0]) ?? 0;
+      return sender;
+    },
+  });
+  Object.assign(player, {
+    performAnimation: (anim) => log.anims.push(anim.getId()),
+    setPositionToFace: (location) => { log.faces.push([location.getX(), location.getY()]); return player; },
+    getLocalPlayers: () => [],
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getPacketSender: () => sender,
+    getSkillManager: () => ({ addExperiences: (skill, amount) => log.xp.push([skill.getName(), amount]) }),
+  });
+  Sailing.giveBoat(player, type, DOCK.id);
+  const owned = player.getSailing().boats.at(-1);
+  const named = (row) => facilities.facilityRequirements(row).name === facilityName;
+  const hotspot = facilities.hotspotsOf(type).find((candidate) => candidate.allowed.some(named));
+  facilities.setFacility(owned, hotspot.id, hotspot.allowed.find(named));
+  setup(owned);
+  Sailing.board(player, DOCK.id);
+  const boat = Sailing.instanceAboard(player);
+  const locAt = () => BoatManager.getSpec(boat).locs.find((loc) => loc.x === hotspot.x && loc.y === hotspot.y && loc.shape === 10);
+  const click = (plugin, clickType = 1) => {
+    const loc = locAt();
+    const event = { player, objectId: loc.id, clickType, handled: false,
+      location: { x: boat.deckBaseX + loc.x, y: boat.deckBaseY + loc.y, z: 0 } };
+    // As PluginManager runs a named hook: the loc's name, then its option for the click.
+    const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+    const definition = CacheDefinitions.getObject(loc.id);
+    const action = plugin.objects[definition.name]?.[definition.actions[clickType - 1]];
+    if (action && action(event) !== false) event.handled = true;
+    return event.handled;
+  };
+  const tick = (count = 1) => { for (let i = 0; i < count; i++) TaskManager.process(); };
+  const done = () => {
+    Sailing.disembark(player, DOCK.id);
+    clearTasks();
+  };
+  return { player, owned, boat, log, locAt, click, tick, done };
+}
+
+test("Drop stops the boat and holds it until Raise; the anchor's loc follows 4 and 3 ticks later (rsprox)", () => {
+  const anchor = registerPlugin("Anchor.plugin");
+  const h = facilityAtSea("skiff", "Anchor");
+  try {
+    assert.equal(h.locAt().id, 59687, "built raised, with Drop");
+    h.boat.moveMode = BoatMoveMode.Full;
+    h.boat.velocity = 192;
+    assert.equal(h.click(anchor), true);
+    assert.equal(h.player.messages.at(-1), "You drop the anchor, bringing the boat to a stop.");
+    assert.deepEqual(h.log.anims, [13310]);
+    assert.deepEqual(h.log.locAnims.at(-1), [59687, 13311]);
+    assert.equal(h.owned.anchorDown, true);
+    assert.equal(h.boat.velocity, 0);
+    h.tick(3);
+    assert.equal(h.locAt().id, 59687);
+    h.tick();
+    assert.equal(h.locAt().id, 59688, "lowered, with Raise");
+
+    // Full sail and backing up go nowhere while it's down.
+    const x = h.boat.fineX;
+    const y = h.boat.fineY;
+    for (const mode of [BoatMoveMode.Full, BoatMoveMode.Reverse]) {
+      h.boat.moveMode = mode;
+      for (let i = 0; i < 5; i++) tickBoat(h.boat, openSea);
+      assert.deepEqual([h.boat.fineX, h.boat.fineY], [x, y], `moveMode ${mode}`);
+    }
+
+    // Setting sail anchored: the reminder 10 ticks later, once a login.
+    const reminder = "Trying to move the boat? Don't forget to weigh anchor!";
+    h.boat.moveMode = BoatMoveMode.Full;
+    anchor.events["sailing:sail-mode-changed"]({ player: h.player, boat: h.boat, mode: "full" });
+    h.tick(9);
+    assert.notEqual(h.player.messages.at(-1), reminder);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), reminder);
+    assert.equal(h.log.varbits.get(19119), 1, "sailing_boat_anchor_reminder");
+    anchor.events["sailing:sail-mode-changed"]({ player: h.player, boat: h.boat, mode: "full" });
+    h.tick(10);
+    assert.equal(h.player.messages.filter((line) => line === reminder).length, 1);
+
+    h.click(anchor);
+    assert.equal(h.player.messages.at(-1), "You raise the anchor, allowing the boat to move.");
+    assert.equal(h.log.anims.at(-1), 13318);
+    assert.deepEqual(h.log.locAnims.at(-1), [59688, 13312]);
+    assert.equal(h.owned.anchorDown, false);
+    assert.equal(h.boat.speedLimits.has("anchor"), false);
+    h.tick(2);
+    assert.equal(h.locAt().id, 59688);
+    h.tick();
+    assert.equal(h.locAt().id, 59687);
+    tickBoat(h.boat, openSea);
+    assert.notDeepEqual([h.boat.fineX, h.boat.fineY], [x, y], "it sails again");
+  } finally {
+    h.done();
+  }
+});
+
+test("an anchor clicked again before its loc changes is already in use; Drop and Raise turn the player to it (rsprox)", () => {
+  const anchor = registerPlugin("Anchor.plugin");
+  const h = facilityAtSea("skiff", "Anchor");
+  try {
+    const tile = [h.boat.deckBaseX + h.locAt().x, h.boat.deckBaseY + h.locAt().y];
+    h.click(anchor);
+    assert.deepEqual(h.log.faces.at(-1), tile, "Drop turns the player to the anchor");
+    h.tick();
+    assert.equal(h.locAt().id, 59687, "still raised, with Drop");
+    assert.equal(h.click(anchor), true);
+    assert.notEqual(h.player.messages.at(-1), "That anchor is already in use!");
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "That anchor is already in use!", "a tick later");
+    assert.equal(h.owned.anchorDown, true, "still down");
+    assert.equal(h.boat.speedLimits.get("anchor"), 0, "and holding the boat");
+    assert.equal(h.player.messages.filter((line) => line.startsWith("You raise")).length, 0);
+    h.tick(2);
+    assert.equal(h.locAt().id, 59688);
+
+    h.log.faces.length = 0;
+    h.click(anchor);
+    assert.equal(h.owned.anchorDown, false);
+    assert.deepEqual(h.log.faces.at(-1), tile, "Raise turns the player to the anchor");
+    h.click(anchor);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "That anchor is already in use!");
+    assert.equal(h.owned.anchorDown, false, "the second click didn't drop it again");
+    assert.equal(h.boat.speedLimits.has("anchor"), false);
+    h.tick(2);
+    assert.equal(h.locAt().id, 59687);
+    h.click(anchor);
+    assert.equal(h.player.messages.at(-1), "You drop the anchor, bringing the boat to a stop.", "usable again once it's up");
+  } finally {
+    h.done();
+  }
+});
+
+test("a boat left at anchor comes back lowered and held; the sloop's anchor pulls with the large animations", () => {
+  const anchor = registerPlugin("Anchor.plugin");
+  const h = facilityAtSea("sloop", "Anchor", (owned) => { owned.anchorDown = true; });
+  try {
+    assert.equal(h.locAt().id, 59690, "the 3x8 anchor, lowered");
+    anchor.events["sailing:boarded"]({ player: h.player, boat: h.boat, owned: h.owned });
+    assert.equal(h.boat.speedLimits.get("anchor"), 0);
+    h.click(anchor);
+    assert.deepEqual([h.log.anims.at(-1), h.log.locAnims.at(-1)], [13317, [59690, 13316]]);
+    const saved = normalizeSailingState({ boats: [{ slot: 0, type: "sloop", anchorDown: true, crystalExtractorOn: true, crystalMote: true }] }).boats[0];
+    assert.deepEqual([saved.anchorDown, saved.crystalExtractorOn, saved.crystalMote], [true, true, true], "saved with the boat");
+  } finally {
+    h.done();
+  }
+});
+
+test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (rsprox, Wiki)", () => {
+  const extractor = registerPlugin("CrystalExtractor.plugin");
+  const h = facilityAtSea("sloop", "Crystal extractor");
+  try {
+    assert.equal(h.locAt().id, 59703, "built switched off, with Activate");
+    assert.equal(h.click(extractor), true);
+    h.tick();
+    assert.deepEqual(h.log.anims, [13176], "the activate animation a tick after the click");
+    h.tick();
+    assert.equal(h.owned.crystalExtractorOn, undefined);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "The crystal extractor is now enabled.");
+    assert.ok(h.log.sounds.includes(10899));
+    assert.equal(h.locAt().id, 59702, "switched on, with Harvest and Deactivate");
+    assert.deepEqual(h.log.locAnims.at(-1), [59702, 13175]);
+
+    // Harvesting too soon.
+    h.click(extractor);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "There are no motes in the crystal extractor.");
+    assert.deepEqual(h.log.anims, [13176], "no collect animation without a mote");
+
+    h.tick(103);
+    assert.equal(h.owned.crystalMote, undefined);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "<col=00e6e6>Your crystal extractor has harvested a crystal mote!");
+    assert.equal(h.owned.crystalMote, true);
+    assert.deepEqual(h.log.locAnims.at(-1), [59702, 13177]);
+    h.tick(200);
+    assert.equal(h.player.messages.filter((line) => line.includes("harvested a crystal mote")).length, 1, "it holds one");
+
+    withRandom(0, () => {
+      h.click(extractor);
+      assert.notEqual(h.log.anims.at(-1), 13178, "not on the click's tick");
+      const faced = h.log.faces.length;
+      h.tick();
+      assert.equal(h.log.anims.at(-1), 13178, "the collect animation a tick later");
+      assert.equal(h.log.faces.length, faced + 1, "turning to the extractor with it");
+      h.tick(2);
+      assert.deepEqual(h.log.xp, []);
+      h.tick();
+    });
+    assert.deepEqual(h.log.xp, [["Sailing", 250]]);
+    assert.ok(h.log.sounds.includes(1298));
+    assert.equal(h.owned.crystalMote, false);
+    assert.equal(h.player.getInventory().getAmount(23962), 0, "no crystal shard before Song of the Elves");
+    h.tick(105);
+    assert.equal(h.owned.crystalMote, true, "the next mote, 105 ticks after the harvest");
+
+    h.click(extractor, 2);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "The crystal extractor is now disabled.");
+    assert.equal(h.locAt().id, 59703);
+    assert.equal(h.owned.crystalExtractorOn, false);
+  } finally {
+    h.done();
+  }
+});
+
+test("a harvested crystal mote charges a wind catcher that's on, and Song of the Elves adds a shard 1 in 6", () => {
+  const extractor = registerPlugin("CrystalExtractor.plugin");
+  const catcherName = (row) => facilities.facilityRequirements(row).name === "Wind catcher";
+  const h = facilityAtSea("sloop", "Crystal extractor", (owned) => {
+    owned.crystalExtractorOn = true;
+    owned.crystalMote = true;
+    owned.windCatcherOn = true;
+    const hotspot = facilities.hotspotsOf("sloop").find((candidate) => candidate.allowed.some(catcherName)
+      && facilities.facilityAt(owned, candidate.id) === undefined);
+    facilities.setFacility(owned, hotspot.id, hotspot.allowed.find(catcherName));
+  });
+  try {
+    const emit = extractor.emitted.push.bind(extractor.emitted);
+    extractor.emitted.push = (entry) => {
+      if (entry[0] === "quest:is-complete" && entry[1].key === "song_of_the_elves") entry[1].complete = true;
+      return emit(entry);
+    };
+    assert.equal(h.locAt().id, 59702, "left switched on");
+    withRandom(0.1, () => { h.click(extractor); h.tick(4); });
+    assert.equal(h.owned.windMotes, 1);
+    assert.ok(h.log.sounds.includes(10895));
+    assert.equal(h.player.getInventory().getAmount(23962), 1, "a crystal shard");
+    h.owned.crystalMote = true;
+    withRandom(0.2, () => { h.click(extractor); h.tick(4); });
+    assert.equal(h.owned.windMotes, 2);
+    assert.equal(h.player.getInventory().getAmount(23962), 1, "1 in 6: none at 0.2");
+  } finally {
+    h.done();
+  }
+});
+
+test("a cargo hold's capacity is its tier's for the boat's size (cache, as live shows it)", () => {
+  // Live: the raft's basic hold 20; the skiff's basic, oak and teak 30, 45, 60; the sloop's
+  // mahogany, camphor, ironwood and rosewood 120, 160, 210, 240.
+  const shown = {
+    raft: { "Cargo hold": 20 },
+    skiff: { "Cargo hold": 30, "Oak cargo hold": 45, "Teak cargo hold": 60 },
+    sloop: { "Cargo hold": 40, "Mahogany cargo hold": 120, "Camphor cargo hold": 160, "Ironwood cargo hold": 210, "Rosewood cargo hold": 240 },
+  };
+  const holdOn = (type) => facilities.hotspotsOf(type).find((candidate) => candidate.allowed
+    .some((row) => facilities.facilityRequirements(row).name === "Cargo hold"));
+  const rowNamed = (hotspot, name) => hotspot.allowed.find((row) => facilities.facilityRequirements(row).name === name);
+  for (const [type, holds] of Object.entries(shown)) {
+    const hotspot = holdOn(type);
+    for (const [name, capacity] of Object.entries(holds)) {
+      const boat = { type, slot: 0, facilities: [], cargo: [] };
+      facilities.setFacility(boat, hotspot.id, rowNamed(hotspot, name));
+      assert.equal(cargo.capacityOf(boat), capacity, `${type} ${name}`);
+    }
+  }
+  const sloop = { type: "sloop", slot: 0, facilities: [], cargo: [] };
+  assert.equal(cargo.capacityOf(sloop), 40, "a new sloop's basic hold");
+  facilities.setFacility(sloop, holdOn("sloop").id, rowNamed(holdOn("sloop"), "Rosewood cargo hold"));
+  assert.equal(cargo.store(sloop, 31964, 100), 100, "a rosewood hold takes 100 repair kits, a slot each");
+  facilities.setFacility(sloop, holdOn("sloop").id, undefined);
+  assert.equal(cargo.capacityOf(sloop), 0, "no hold, no space");
+});
+
+test("a boat's range is an ordinary Range on the deck, so cooking finds it and keeps finding it", () => {
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const { COOKABLE_OBJECT_NAMES } = require("../plugins/skills/cooking/Cookers.Cooking");
+  const h = facilityAtSea("skiff", "Range");
+  try {
+    const range = BoatManager.getDeck(h.boat).getObjects().find((object) => object.getId() === 59682);
+    assert.ok(range, "the range is a deck object");
+    const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+    assert.equal(CacheDefinitions.getObject(59682).name, "Range");
+    assert.equal(CacheDefinitions.getObject(59682).actions[0], "Cook");
+    assert.ok(COOKABLE_OBJECT_NAMES.has("Range"), "Cookers.Cooking cooks on any loc named Range");
+    assert.equal(MapObjects.get(59682, range.getLocation(), range.getPrivateArea()), range,
+      "each cooking step looks the range up again, on the deck");
+  } finally {
+    h.done();
+  }
+});
+
+/** Aboard a skiff in the shipyard with a hotspot's Modify and the customisation's Build to hand. */
+function shipyardModify() {
+  const h = shipyardHarness();
+  const built = registerPlugin("ShipyardFacilities.plugin");
+  h.player.performAnimation = () => {};
+  // Every material to hand; what a build uses up is noted.
+  const used = [];
+  h.player.getInventory = () => ({ getAmount: () => 1000, delete: (item, count) => used.push([item, count]) });
+  const boat = h.boat();
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  h.shipyard.objects.Gangplank.Board({ player: h.player, location: { x: 2087, y: 2723, z: 0 } });
+  const tileOf = (hotspot) => ({ x: shown.deckBaseX + hotspot.x, y: shown.deckBaseY + hotspot.y, z: 0 });
+  const modify = (hotspot) => {
+    const event = { player: h.player, location: tileOf(hotspot), clickType: 5, handled: false,
+      definition: { getInteractions: () => [null, null, null, null, "Modify"] } };
+    built.objectHandlers.forEach((handler) => handler(event));
+    return built.prompt;
+  };
+  const remove = (hotspot) => {
+    modify(hotspot).pairs[1](h.player);
+    built.prompt.pairs[1](h.player);
+  };
+  const replace = (hotspot, row) => {
+    modify(hotspot).pairs[3](h.player);
+    h.levels.set(h.Skill.SAILING, 99);
+    h.levels.set(h.Skill.CONSTRUCTION, 99);
+    const zigzag = (row << 1) ^ (row >> 31);
+    const bytes = [];
+    let v = zigzag >>> 0;
+    while (v > 0x7f) { bytes.push((v & 0x7f) | 0x80); v >>>= 7; }
+    bytes.push(v, 0);
+    const event = { player: h.player, groupId: 939, childId: 17, scriptTrigger: true, argsData: Buffer.from(bytes), handled: false };
+    for (const handler of [...h.shipyard.interfaceClicks, ...built.interfaceClicks]) handler(event);
+  };
+  const hotspotWith = (name) => facilities.hotspotsOf("skiff").find((candidate) => candidate.allowed
+    .some((row) => facilities.facilityRequirements(row).name === name));
+  const rowNamed = (hotspot, name) => hotspot.allowed.find((row) => facilities.facilityRequirements(row).name === name);
+  return { ...h, boat, used, remove, replace, hotspotWith, rowNamed };
+}
+
+test("a smaller hold or none can't hide cargo: replacing or removing it asks for the hold to be emptied first", () => {
+  const h = shipyardModify();
+  const hotspot = h.hotspotWith("Cargo hold");
+  const teak = h.rowNamed(hotspot, "Teak cargo hold");
+  const basic = h.rowNamed(hotspot, "Cargo hold");
+  facilities.setFacility(h.boat, hotspot.id, teak);
+  assert.equal(cargo.store(h.boat, 31964, 50), 50, "a teak hold takes 50 repair kits");
+
+  h.replace(hotspot, basic);
+  assert.equal(h.player.messages.at(-1), "You'll need to empty your cargo hold first.");
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), teak, "the teak hold stays");
+  assert.deepEqual(h.used, [], "nothing used up");
+  h.remove(hotspot);
+  assert.equal(h.player.messages.at(-1), "You'll need to empty your cargo hold first.");
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), teak, "and isn't removed");
+  assert.equal(cargo.countIn(h.boat, 31964), 50);
+
+  // 30 kits left, 20 of them in slots past a basic hold's 30: they move into its free slots.
+  for (let slot = 0; slot < 20; slot++) h.boat.cargo[slot] = null;
+  h.replace(hotspot, basic);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), basic);
+  assert.equal(cargo.capacityOf(h.boat), 30);
+  assert.equal(h.boat.cargo.slice(0, 30).filter(Boolean).length, 30, "all 30 kits in the basic hold's slots");
+  assert.equal(h.boat.cargo.slice(30).filter(Boolean).length, 0);
+
+  h.remove(hotspot);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), basic, "a hold with cargo isn't removed");
+  h.boat.cargo = [];
+  h.remove(hotspot);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), undefined, "an empty one is");
+});
+
+test("a removed or replaced anchor takes its dropped state with it, and a boat without one isn't held", () => {
+  const h = shipyardModify();
+  const hotspot = h.hotspotWith("Anchor");
+  facilities.setFacility(h.boat, hotspot.id, h.rowNamed(hotspot, "Anchor"));
+  h.boat.anchorDown = true;
+  h.remove(hotspot);
+  assert.equal(facilities.facilityAt(h.boat, hotspot.id), undefined);
+  assert.equal(h.boat.anchorDown, undefined, "the dropped anchor went with it");
+
+  const extractorSpot = facilities.hotspotsOf("sloop").find((candidate) => candidate.allowed
+    .some((row) => facilities.facilityRequirements(row).name === "Crystal extractor"));
+  const sloop = { type: "sloop", slot: 1, facilities: [], cargo: [], crystalExtractorOn: true, crystalMote: true };
+  facilities.setFacility(sloop, extractorSpot.id, extractorSpot.allowed.find((row) => facilities.facilityRequirements(row).name === "Crystal extractor"));
+  facilities.setFacility(sloop, extractorSpot.id, undefined);
+  assert.deepEqual([sloop.crystalExtractorOn, sloop.crystalMote], [undefined, undefined], "and an extractor's");
+
+  // A save from before: the anchor's gone but anchorDown stayed. Boarding lets the boat move.
+  const anchor = registerPlugin("Anchor.plugin");
+  const sea = facilityAtSea("skiff", "Range", (owned) => { owned.anchorDown = true; });
+  try {
+    sea.boat.speedLimits.set("anchor", 0);
+    anchor.events["sailing:boarded"]({ player: sea.player, boat: sea.boat, owned: sea.owned });
+    assert.equal(sea.boat.speedLimits.has("anchor"), false, "not held without an anchor");
+    assert.equal(sea.owned.anchorDown, undefined);
+  } finally {
+    sea.done();
+  }
 });

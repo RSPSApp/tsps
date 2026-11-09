@@ -53,6 +53,11 @@ export interface OwnedBoat {
     windCatcherOn?: boolean;
     windMotes?: number;
     windMotesOwed?: number;
+    /** A built anchor that is down: the boat can't move until it's raised. */
+    anchorDown?: boolean;
+    /** A built crystal extractor: switched on, and whether a crystal mote waits to be harvested. */
+    crystalExtractorOn?: boolean;
+    crystalMote?: boolean;
     facilities: number[];
     location: BoatLocation;
     /** The cargo hold, by slot; `null` is an empty slot. */
@@ -134,6 +139,9 @@ export function normalizeSailingState(raw: any): SailingState {
             ...(boat.windCatcherOn === true && { windCatcherOn: true }),
             ...(finite(boat.windMotes) && boat.windMotes > 0 && { windMotes: boat.windMotes }),
             ...(finite(boat.windMotesOwed) && boat.windMotesOwed > 0 && { windMotesOwed: boat.windMotesOwed }),
+            ...(boat.anchorDown === true && { anchorDown: true }),
+            ...(boat.crystalExtractorOn === true && { crystalExtractorOn: true }),
+            ...(boat.crystalMote === true && { crystalMote: true }),
             facilities: Array.isArray(boat.facilities) ? boat.facilities.filter(Number.isInteger) : [],
             location: normalizeLocation(boat.location),
             cargo: normalizeCargo(boat.cargo),

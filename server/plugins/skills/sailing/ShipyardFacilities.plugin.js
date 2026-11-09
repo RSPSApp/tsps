@@ -11,6 +11,7 @@ const { setVarbit, playSound } = require("./SailingContent.Sailing");
 const { HOTSPOT_VARBITS } = require("./Sidepanel.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const facilities = require("./BoatFacilities.Sailing");
+const { fitInto } = require("./Cargo.Sailing");
 const {
   aboardVisit,
   ownedBoat,
@@ -26,7 +27,22 @@ const SEQ_REMOVE = 3685; // human_throw_away
 const SOUND_BUILD = 938;
 const SOUND_REMOVE = 10753;
 
+const EMPTY_HOLD_FIRST = "You'll need to empty your cargo hold first.";
+
 let pluginApi;
+
+/**
+ * Whether the hold's cargo still fits once a hotspot holds `facility` (undefined: removed). A
+ * smaller hold takes its cargo into its own slots; with more cargo than that, the player is
+ * told to empty it first. Ours: the message.
+ */
+function cargoFitsAfter(player, boat, hotspot, facility) {
+  const after = { type: boat.type, facilities: facilities.facilitiesOf(boat) };
+  facilities.setFacility(after, hotspot, facility);
+  if (fitInto(boat, facilities.cargoCapacityOf(after))) return true;
+  player.sendMessage(EMPTY_HOLD_FIRST);
+  return false;
+}
 
 /** The hotspot a clicked deck loc stands on, for a player aboard the boat in the shipyard. */
 function clickedHotspot(player, location) {
@@ -79,6 +95,7 @@ function buildFacility(event) {
     player.sendMessage(refused);
     return;
   }
+  if (!cargoFitsAfter(player, boat, hotspot, facility)) return;
   // A catcher's captured wind mote is needed, not used up (Wiki).
   for (const [item, count] of requirements.materials) {
     if (item !== CAPTURED_WIND_MOTE) player.getInventory().delete(item, count);
@@ -111,6 +128,7 @@ function confirmRemoval(player, clicked) {
 
 function removeFacility(player, { visit, boat, hotspot }) {
   if (aboardVisit(player) !== visit) return;
+  if (!cargoFitsAfter(player, boat, hotspot, undefined)) return;
   facilities.setFacility(boat, hotspot, undefined);
   player.performAnimation(new Animation(SEQ_REMOVE));
   playSound(player, SOUND_REMOVE);

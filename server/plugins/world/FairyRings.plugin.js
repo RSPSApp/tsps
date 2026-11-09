@@ -138,9 +138,16 @@ function codeList(player, attribute) {
   return String(player.getAttribute(attribute) ?? "").split(",").filter((code) => rings.has(code));
 }
 
+/** Wiki (Fairy ring): "If the elite Lumbridge & Draynor Diary is completed, no staff of either kind is needed." */
+function eliteLumbridgeDiary(player) {
+  const request = { player, diary: "lumbridge", tier: "elite", complete: false };
+  pluginApi.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
+}
+
 function wieldsFairyMagic(player) {
   const weapon = player.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId?.() ?? -1;
-  return weapon === core.ItemIdentifiers.DRAMEN_STAFF || weapon === core.ItemIdentifiers.LUNAR_STAFF;
+  return weapon === core.ItemIdentifiers.DRAMEN_STAFF || weapon === core.ItemIdentifiers.LUNAR_STAFF || eliteLumbridgeDiary(player);
 }
 
 function questAllows(player) {

@@ -35,14 +35,11 @@ export class TeleBlock {
         return parts.join(", ");
     }
 
-    /**
-     * Starts (or restarts) the block and tells the victim. Callers decide whether an active block may be recast.
-     * `duration` replaces the spell's own (a monster's block that lasts less).
-     */
-    public static apply(victim: Player, casterName: string, duration?: number): number {
-        const seconds = duration ?? (victim.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC]
+    /** Starts (or restarts) the block and tells the victim. Callers decide whether an active block may be recast. */
+    public static apply(victim: Player, casterName: string): number {
+        const seconds = victim.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC]
             ? TeleBlock.PROTECTED_DURATION_SECONDS
-            : TeleBlock.DURATION_SECONDS);
+            : TeleBlock.DURATION_SECONDS;
         victim.getCombat().getTeleblockTimer().start(seconds);
         victim.setAttribute(TeleBlock.WARNED_ATTRIBUTE, false);
         victim.getPacketSender().sendEffectTimer(seconds, EffectTimer.TELE_BLOCK);

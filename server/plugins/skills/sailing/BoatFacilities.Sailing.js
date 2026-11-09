@@ -73,6 +73,8 @@ function setFacility(boat, hotspot, facilityRow) {
   const allowed = hotspotsOf(boat.type)[hotspot]?.allowed ?? [];
   facilities[hotspot] = facilityRow === undefined ? 0 : allowed.indexOf(facilityRow) + 1;
   boat.facilities = facilities;
+  // What the old facility held (a keg's drink) goes with it.
+  if (boat.hotspotData?.[hotspot]) boat.hotspotData[hotspot] = 0;
 }
 
 /** Whether a hotspot allows a facility row. */
@@ -144,6 +146,9 @@ const FACILITY_OPS = Object.freeze({ AT_SEA: 0b1111, SHIPYARD: 0b10000 });
 /** The wind and gale catchers' switched-off locs and their switched-on ones (cache, rsprox 907). */
 const CATCHER_SWITCHED_ON = { 59684: 59683, 59685: 59686 };
 
+/** The empty keg's loc: a filled keg is the loc its drink (the hotspot's extra data) counts on from it. */
+const KEG_EMPTY = 59691;
+
 /**
  * The deck locs for a boat's hotspots: each facility's loc, blocking its tile when the loc is
  * solid in the cache (a range or cargo hold, not a hook). With `placeholders`, as in the
@@ -159,6 +164,7 @@ function hotspotLocs(boat, placeholders = false) {
       : placeholderIds[hotspot.id];
     // A wind or gale catcher left switched on is built that way.
     if (boat.windCatcherOn && CATCHER_SWITCHED_ON[id] !== undefined) id = CATCHER_SWITCHED_ON[id];
+    if (id === KEG_EMPTY) id += boat.hotspotData?.[hotspot.id] ?? 0;
     if (typeof id !== "number") return [];
     const blocks = (CacheDefinitions.getObject(id)?.clipType ?? 0) !== 0;
     const opFlags = facility === undefined ? undefined : placeholders ? FACILITY_OPS.SHIPYARD : FACILITY_OPS.AT_SEA;
@@ -178,6 +184,7 @@ function teleportFocusOf(boat) {
 
 module.exports = {
   CATCHER_SWITCHED_ON,
+  KEG_EMPTY,
   FACILITY_OPS,
   teleportFocusOf,
   TYPE_HOTSPOTS,

@@ -110,7 +110,7 @@ function work(player, boat, owned, member, hotspot) {
       }
       common.core().PluginManager.emitCustomEvent("sailing:cargo-changed", { player, boat: owned });
       lines.say(npc, crew, "salvaged");
-      const share = SALVAGE_XP_SHARE[crew.stats[common.STAT.DECKHANDINESS]] ?? 0;
+      const share = SALVAGE_XP_SHARE[common.statOf(owned, crew, common.STAT.DECKHANDINESS)] ?? 0;
       if (share > 0) {
         player.getSkillManager().addExperiences(Skill.SAILING, type.xp * share);
         spam(player, "You gain some experience by watching your crew work.");

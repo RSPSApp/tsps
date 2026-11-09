@@ -94,6 +94,11 @@ function byNpc(npcId) {
   return undefined;
 }
 
+/** A crewmate's stat on a boat (its saved record): their own, raised by a keg of whirlpool surprise. */
+function statOf(owned, crew, stat) {
+  return require("../Kegs.plugin").crewStat(owned, crew.stats[stat], stat);
+}
+
 /** "Jobless Jim (H2 P1 D3)" as the assignment menu titles them. */
 function statLine(crew) {
   return Object.keys(STAT_LETTERS).map((stat) => `${STAT_LETTERS[stat]}${crew.stats[stat]}`).join(" ");
@@ -302,6 +307,7 @@ module.exports = {
   byId,
   byNpc,
   statLine,
+  statOf,
   state,
   update,
   isRecruited,

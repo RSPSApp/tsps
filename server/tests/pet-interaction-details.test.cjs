@@ -83,6 +83,7 @@ for (const key of ['LIL_ZIK', 'GIANT_SQUIRREL', 'PET_KRAKEN']) test(`native Prob
   const index = [...core.CacheDefinitions.getEnumValues(985)].find(([, item]) => item === id)[0];
   for (const [child, slot] of [[11, 6 + 5 * index], [37, 0], [37, 0]]) await send(f, { type: 'widget_action', widgetId: (148 << 16) | child, groupId: 148, childId: child, slot, buttonNum: 1 });
   assert.equal(f.p.getInventory().getAmount(id), 1);
-  assert.equal(f.messages.filter(m => m.startsWith('Probita returns your ')).length, 1);
-  assert.ok(f.messages.includes(`Probita returns your ${core.ItemDefinition.forId(id).getName()}.`), JSON.stringify(f.messages));
+  // rsprox 229/02785:21374: "You reclaim your Beaver." (its token sentence is gone with the tokens, Wiki 10 Sep 2025).
+  assert.equal(f.messages.filter(m => m.startsWith('You reclaim your ')).length, 1);
+  assert.ok(f.messages.includes(`You reclaim your ${core.ItemDefinition.forId(id).getName()}.`), JSON.stringify(f.messages));
 });

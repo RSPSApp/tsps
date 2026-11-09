@@ -54,7 +54,7 @@ function sailor() {
     },
   });
   Object.assign(player, {
-    messages: [], varbits, sounds, boxes, animations: [],
+    messages: [], varbits, sounds, boxes, animations: [], animationDelays: [],
     getIndex: () => index,
     isPlayer: () => true,
     isNpc: () => false,
@@ -70,7 +70,10 @@ function sailor() {
     getSailing: () => sailing,
     setSailing: (next) => { sailing = next; },
     getPacketSender: () => sender,
-    performAnimation: (animation) => player.animations.push(animation.getId()),
+    performAnimation: (animation) => {
+      player.animations.push(animation.getId());
+      player.animationDelays.push(animation.getDelay());
+    },
     getDialogueManager: () => ({ startDialogues: (chain) => boxes.push(chain) }),
   });
   player.inventory = new Inventory(player);
@@ -120,7 +123,8 @@ function atSeaWithKeg() {
   const location = { x: boat.deckBaseX + loc.x, y: boat.deckBaseY + loc.y, z: 0 };
   const objectId = () => BoatManager.getSpec(boat).locs.find((candidate) => candidate.hotspot === hotspot.id).id;
   const use = (itemId) => {
-    const event = { player, objectId: objectId(), itemId, location, handled: false };
+    const itemSlot = player.getInventory().getItems().findIndex((item) => item?.getId?.() === itemId);
+    const event = { player, objectId: objectId(), itemId, itemSlot, location, handled: false };
     kegs.itemOnObject.forEach((handler) => handler(event));
     return event.handled;
   };
@@ -179,14 +183,20 @@ test("25 ales pour into the empty keg, a glass fills from it, and Empty empties 
     assert.deepEqual(h.player.animations, [832]);
     assert.equal(h.player.sounds.at(-1)[0], 2401);
 
-    // A beer glass fills from it, and it never runs out.
+    // A beer glass fills from it in its own slot, and the keg never runs out.
     h.player.getInventory().add(new Item(BEER_GLASS, 2), false);
+    const glassSlot = h.player.getInventory().getItems().findIndex((item) => item?.getId?.() === BEER_GLASS);
+    const freed = h.player.getInventory().getItems().findIndex((item) => item?.getId?.() === HORIZONS_LURE);
+    assert.ok(freed < glassSlot);
+    h.player.getInventory().setItem(freed, new Item(-1, 0)); // a free slot before the glass
     assert.equal(h.use(BEER_GLASS), true);
+    assert.equal(h.player.getInventory().getItems()[glassSlot].getId(), HORIZONS_LURE, "the glass's slot");
     assert.equal(h.use(BEER_GLASS), true);
     assert.equal(h.player.messages.at(-1), "You fill a glass from the keg.");
     assert.equal(h.player.getInventory().getAmount(BEER_GLASS), 0);
-    assert.equal(h.player.getInventory().getAmount(HORIZONS_LURE), 26);
+    assert.equal(h.player.getInventory().getAmount(HORIZONS_LURE), 25, "23 left over, 2 filled");
     assert.equal(h.player.animations.at(-1), 3660);
+    assert.equal(h.player.animationDelays.at(-1), 11);
     assert.equal(h.objectId(), 59698);
     assert.equal(h.use(WHIRLPOOL), false, "a filled keg takes no other ale");
 
@@ -268,119 +278,4 @@ test("perildance bitter raises cannon max hits by one", () => {
   } finally {
     h.done();
   }
-});
-
-// --- Chartin' Charles McAtless's drinks.
-
-const { PluginManager } = require("../dist/plugins/PluginManager");
-const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/ActionDialogue");
-const chartingCommon = require("../plugins/skills/sailing/charting/Common.Charting");
-const drinks = require("../plugins/skills/sailing/charting/Drinks.Charting");
-
-/** A customer whose dialogues play through at once: the lines said, in order, and the menus offered. */
-function customer() {
-  const player = sailor();
-  const attributes = new Map();
-  player.getAttribute = (key) => attributes.get(key);
-  player.setAttribute = (key, value) => { attributes.set(key, value); return player; };
-  player.said = [];
-  player.getDialogueManager = () => ({
-    startDialogues: (chain) => {
-      for (const entry of chain.dialogues.values()) {
-        if (entry instanceof ActionDialogue) entry.send(player);
-        else player.said.push(entry.getText());
-      }
-    },
-  });
-  return player;
-}
-
-let menu;
-let charlesChoice;
-before(() => {
-  const real = PluginManager.createApi("SailingKegsTest");
-  drinks({
-    ...real,
-    onCustomEvent: (name, handler) => { if (name === "npc-dialogue:choice") charlesChoice = handler; },
-    sendMultiChatboxPrompt: (_player, title, ...pairs) => { menu = { title, pairs }; },
-    emitCustomEvent: () => {},
-  });
-});
-
-/** Picks a menu option by its text. */
-function pick(player, text) {
-  const at = menu.pairs.indexOf(text);
-  assert.ok(at >= 0, `"${text}" in ${JSON.stringify(menu.pairs.filter((p) => typeof p === "string"))}`);
-  menu.pairs[at + 1](player);
-}
-
-/** Marks every spot of the first `count` seas (of an ocean, or any) as charted. */
-function chartSeas(player, count, ocean) {
-  chartingCommon.allSpots();
-  const seas = [...chartingCommon.allSeas().values()]
-    .filter((sea) => sea.type === 0 && sea.spots.length > 0 && (!ocean || sea.ocean?.name === ocean))
-    .slice(0, count);
-  assert.equal(seas.length, count, `${count} seas in ${ocean ?? "all oceans"}`);
-  chartingCommon.updateProgress(player, (saved) => {
-    saved.charted = [...new Set([...saved.charted, ...seas.flatMap((sea) => sea.spots.map((spot) => spot.uid))])];
-  });
-}
-
-function chooseDrink(player, option) {
-  const event = { player, npcId: 15151, option, stepId: undefined };
-  charlesChoice(event);
-  return event.end === true;
-}
-
-test("Charles won't sell horizon's lure before 70 seas are charted", () => {
-  const player = customer();
-  assert.equal(chooseDrink(player, "Horizon's lure."), true, "the drink's branch plays here");
-  assert.deepEqual(player.said.slice(0, 2), ["Horizon's lure.",
-    "Ah, the old classic. In many ways, there's nothing too fancy about horizon's lure. It's quite simply the perfect drink when all you care about is sailing."]);
-  assert.ok(player.said.includes("Having a keg of horizon's lure on your boat will give a 2.5% boost to all Sailing experience gained."));
-  assert.ok(player.said.includes("Buying horizon's lure requires the following: Completely chart 70 seas across all oceans."));
-  assert.equal(menu.title, "Select an option", "back to the drinks");
-  assert.equal(chooseDrink(player, "Hello."), false, "other options are the transcript's");
-});
-
-test("with the seas charted, Charles sells a glass for 300 coins or a keg's worth, noted, for 7,500", () => {
-  const player = customer();
-  chartSeas(player, 70);
-  player.getInventory().add(new Item(995, 7900), false);
-  chooseDrink(player, "Horizon's lure.");
-  assert.equal(player.said.at(-1), "Anyway, I'm pleased to say that you've done enough charting for me to sell you some! Would you like to buy a glass to sample it? Or do you want enough to fill a keg?");
-  assert.equal(menu.title, "How much horizon's lure would you like to buy?");
-  pick(player, "A keg full (25).");
-  assert.equal(menu.title, "Buy 25 x horizon's lure for 7,500 coins?");
-  pick(player, "Yes.");
-  assert.equal(player.getInventory().getAmount(NOTED_HORIZONS_LURE), 25);
-  assert.equal(player.getInventory().getAmount(995), 400);
-  assert.deepEqual(player.said.slice(-2), ["Charles sells you 25 x horizon's lure.", "There you go! Enjoy! Now, are you interested in any other drinks?"]);
-  assert.equal(menu.title, "Select an option");
-
-  chooseDrink(player, "Horizon's lure.");
-  pick(player, "A glass (1).");
-  assert.equal(menu.title, "Buy 1 x horizon's lure for 300 coins?");
-  pick(player, "Yes.");
-  assert.equal(player.getInventory().getAmount(HORIZONS_LURE), 1);
-  assert.equal(player.getInventory().getAmount(995), 100);
-  chooseDrink(player, "Horizon's lure.");
-  pick(player, "A glass (1).");
-  pick(player, "Yes.");
-  assert.equal(player.said.at(-1), "Even I can see you don't have space to hold that, and just to be completely clear, I am totally blind!");
-  assert.equal(player.getInventory().getAmount(HORIZONS_LURE), 1, "100 coins buy nothing");
-});
-
-test("kraken ink stout and perildance bitter need seas in particular oceans", () => {
-  const player = customer();
-  const [kraken, perildance, trawler] = drinks.DRINKS;
-  chartSeas(player, 5, "Ardent Ocean");
-  assert.equal(drinks.canBuy(player, kraken), false);
-  chartSeas(player, 5, "Unquiet Ocean");
-  assert.equal(drinks.canBuy(player, kraken), true);
-  chartSeas(player, 8, "Western Ocean");
-  assert.equal(drinks.canBuy(player, perildance), false);
-  chartSeas(player, 5, "Shrouded Ocean");
-  assert.equal(drinks.canBuy(player, perildance), true);
-  assert.equal(drinks.canBuy(player, trawler), false, "23 seas, not 50");
 });

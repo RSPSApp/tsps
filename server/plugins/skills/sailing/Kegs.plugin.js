@@ -6,7 +6,7 @@
  * - Check: the empty keg's "Unfortunately this keg is empty..." with a beer glass, or the filled
  *   keg's "This keg is filled with <ale>. A keg of <ale> <effect>" with the ale.
  * - A beer glass on a filled keg: "You fill a glass from the keg.", poh_barrel_use1, synth 2609 and
- *   the glass becomes the ale. The keg never runs out.
+ *   the glass becomes the ale in its own slot. The keg never runs out.
  * - Empty: "Are you sure you wish to empty the keg?<br>All of its contents will be lost.", and on
  *   "Yes, empty the keg." the keg is empty again; nothing is returned.
  * While its owner is aboard, a filled keg's effect applies: horizon's lure +2.5% Sailing XP,
@@ -48,6 +48,7 @@ const KEG_SIZE = 25;
 const BEER_GLASS = 1919;
 const SEQ_POUR = 832; // human_pickuptable
 const SEQ_FILL_GLASS = 3660; // poh_barrel_use1
+const SEQ_FILL_GLASS_DELAY = 11;
 const SOUND_POUR = 2401;
 const SOUND_POUR_DELAY = 5;
 const SOUND_FILL_GLASS = 2609;
@@ -152,12 +153,19 @@ function fill(player, keg, ale, usedId) {
   itemBox(player, ale.glass, POURED);
 }
 
-function fillGlass(player, ale) {
+/** The beer glass becomes the ale in its own slot. */
+function fillGlass(player, ale, slot) {
   const inventory = player.getInventory();
-  inventory.delete(BEER_GLASS, 1);
-  inventory.add(new Item(ale.glass, 1));
+  const held = inventory.getItems?.()[slot];
+  if (held?.getId?.() === BEER_GLASS && held.getAmount() === 1) {
+    inventory.setItem(slot, new Item(ale.glass, 1));
+    inventory.refreshItems();
+  } else {
+    inventory.delete(BEER_GLASS, 1);
+    inventory.add(new Item(ale.glass, 1));
+  }
   player.sendMessage(FILLED_GLASS);
-  player.performAnimation(new Animation(SEQ_FILL_GLASS));
+  player.performAnimation(new Animation(SEQ_FILL_GLASS, SEQ_FILL_GLASS_DELAY));
   playSound(player, SOUND_FILL_GLASS);
 }
 
@@ -176,7 +184,7 @@ function useOnKeg(event) {
   }
   if (event.itemId !== BEER_GLASS) return false;
   event.handled = true;
-  fillGlass(event.player, inKeg);
+  fillGlass(event.player, inKeg, event.itemSlot);
   return true;
 }
 

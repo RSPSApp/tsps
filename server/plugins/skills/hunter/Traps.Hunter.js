@@ -77,14 +77,14 @@ function canLay(player, kind, location, base, ground) {
     || H.core.RegionManager.blocked(location, player.getPrivateArea())) {
     player.sendMessage("You can't set up a trap here."); return false;
   }
-  // The trap the player laid (or clicked) must still be on the floor; another one on the same tile doesn't count.
-  if (ground) return !ground.isPendingRemoval?.();
   if (kind === "monkey" && (!hasTool(player, H.core.ItemIdentifiers.KRUK_MONKEY_GREEGREE) || !questComplete(player, "monkey_madness_ii"))) {
     player.sendMessage("You need Monkey Madness II and a Kruk monkey greegree to hunt here."); return false;
   }
   if (kind === "box" && !boxTrapsUnlocked(player)) {
     player.sendMessage("You need to learn how to use box traps from Nickolaus during Eagles' Peak."); return false;
   }
+  // The trap the player laid (or clicked) must still be on the floor; another one on the same tile doesn't count.
+  if (ground) return !ground.isPendingRemoval?.();
   if (!exchange(player, materials(def, player), [], false)) { player.sendMessage(def.refusal ?? "You don't have the materials to set this trap."); return false; }
   return true;
 }

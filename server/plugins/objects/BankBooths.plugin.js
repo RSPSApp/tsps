@@ -196,6 +196,46 @@ function useCurrencyOnBanker(api, event) {
   if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() === "Banker") confirmExchange(api, event, event.slot);
 }
 
+/** How many of the notes in `slot` the inventory can take unnoted: the free slots, and the note's own once it empties. */
+function unnoteCount(inventory, slot) {
+  const held = inventory.forSlot(slot)?.getAmount() ?? 0;
+  const free = inventory.getFreeSlots();
+  return held <= free + 1 ? held : free;
+}
+
+/**
+ * A banknote used on a banker (rsprox_transcripts/226/01645.txt): "Un-note the banknotes?" Yes/No, then as many as
+ * the inventory can take come back unnoted with "The bank exchanges your banknotes for items." ("your banknote for
+ * an item." for one). With no room, the banker says "You don't have any inventory space." and asks nothing.
+ */
+function unnoteOnBanker(api, event) {
+  const { player, itemId } = event;
+  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() !== "Banker") return;
+  const { ItemDefinition, CacheDefinitions, DialogueChainBuilder, NpcDialogue, ItemStatementDialogue } = api.core;
+  const definition = ItemDefinition.forId(itemId);
+  const slot = event.slot;
+  const inventory = player.getInventory();
+  if (!definition?.isNoted?.() || !Number.isInteger(slot) || inventory.forSlot(slot)?.getId() !== itemId) return;
+  event.handled = true;
+  const unnoted = definition.unNote();
+  const npcId = event.npcId ?? event.target?.getId?.() ?? CacheDefinitions.getNpcId("banker1_new");
+  if (unnoteCount(inventory, slot) <= 0) {
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new NpcDialogue(0, npcId, "You don't have any inventory space.", "Banker")));
+    return;
+  }
+  api.sendMultiChatboxPrompt(player, "Un-note the banknotes?", "Yes", () => {
+    if (inventory.forSlot(slot)?.getId() !== itemId) return;
+    const count = unnoteCount(inventory, slot);
+    if (count <= 0) return;
+    inventory.deleteNumber(itemId, count);
+    inventory.adds(unnoted, count);
+    inventory.refreshItems();
+    const text = count === 1 ? "The bank exchanges your banknote for an item." : "The bank exchanges your banknotes for items.";
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, unnoted, text)));
+  }, "No", () => {});
+}
+
 function useCurrencyOnBankObject(api, event) {
   if (BANK_OBJECT_NAMES.has(event.object?.getDefinition?.()?.getName?.())) confirmExchange(api, event, event.itemSlot);
 }
@@ -212,6 +252,7 @@ module.exports = {
     api.onNpcInteraction("Banker", { "Talk-to": talkToBanker.bind(null, api), Bank: openBankFromInteraction.bind(null, api) });
     api.onCustomEvent("npc-dialogue:action", bankerDialogueAction.bind(null, api));
     api.onItemOnNpc(useCurrencyOnBanker.bind(null, api), { noted: false });
+    api.onItemOnNpc(unnoteOnBanker.bind(null, api), { noted: true });
     api.onItemOnObject(useCurrencyOnBankObject.bind(null, api), { noted: false });
     api.onButtonClick(bankButton.bind(null, api));
     api.onInterfaceActionClick(bankInterfaceAction.bind(null, api));

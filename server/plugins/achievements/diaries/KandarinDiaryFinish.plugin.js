@@ -477,6 +477,7 @@ function registerCourthouse(registry) {
 
 module.exports = {
   name: "KandarinDiaryFinish",
+  description: "Credits the remaining Kandarin diary tasks, such as the Catherby candle and pet fish, the Hemenster chest, granite body and pyre ship.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

@@ -87,6 +87,7 @@ function bookHandedIn({ player, npcId } = {}) {
 
 module.exports = {
   name: "KourendDiaryActivitiesFinish",
+  description: "Credits five Kourend diary tasks: an Arceuus Library book, a Piscarilius crane, Ginea and Khaled deliveries, and a bluegill at Molch Island.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

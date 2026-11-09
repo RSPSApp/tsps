@@ -113,6 +113,7 @@ function onInterfaceClick(event) {
 
 module.exports = {
   name: "SkillGuide",
+  description: "Opens the skill guide when you pick View guide on a Skills tab stat, and opens a quest's journal from the Quest XP tab.",
   register(pluginApi) {
     api = pluginApi;
     pluginApi.onInterfaceActionClick(onInterfaceClick);

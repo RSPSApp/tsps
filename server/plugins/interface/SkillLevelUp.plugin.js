@@ -280,6 +280,7 @@ function itemAction(event) {
 
 module.exports = {
   name: "SkillLevelUp",
+  description: "Level-up feedback: chat message, unlock messages, graphic, sound and the level-up pop-up, which pauses skilling until you press Continue.",
   config: {
     "SkillLevelUp:interruptActions": {
       type: "boolean", label: "Level-ups interrupt actions", default: true,

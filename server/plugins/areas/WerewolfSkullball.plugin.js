@@ -287,6 +287,7 @@ function onLogout({ player }) {
 
 module.exports = {
   name: "WerewolfSkullball",
+  description: "Werewolf Skullball minigame: kick a skullball through ten goals for Agility XP, with the Skullball Boss and a timed scoreboard.",
   members: true,
   register(registry) {
     init(registry);

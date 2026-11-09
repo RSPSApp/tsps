@@ -90,6 +90,7 @@ function crossTreeDoor(event) {
 
 module.exports = {
   name: "GrandTree",
+  description: "Opens and shuts the Grand Tree's front doors and walks the player through, as captured.",
   members: true,
   _test: { crossTreeDoor, crossingPath, openLeaves },
   register(pluginApi) {

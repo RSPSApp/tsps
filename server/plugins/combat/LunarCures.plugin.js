@@ -103,6 +103,7 @@ function castOther(core, event) {
 
 module.exports = {
   name: 'LunarCures',
+  description: 'The Lunar spells Cure Me, Cure Other and Cure Group, which remove poison and weaken venom.',
   members: true,
   register(api) {
     api.onSpellCast(castSelf.bind(null, api.core));

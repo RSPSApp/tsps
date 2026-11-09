@@ -19,6 +19,7 @@ const Commands = require("./wildernessbosses/Commands.WildernessBosses");
 
 module.exports = {
   name: "WildernessBosses",
+  description: "The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves and Scorpia.",
   config: {
     "WildernessBosses:requireDiary": {
       type: "boolean", label: "Wilderness boss lairs need the diary", default: true,

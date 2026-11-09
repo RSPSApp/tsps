@@ -48,6 +48,7 @@ function handleChoice(event) {
 
 module.exports = {
   name: "Tyss",
+  description: "Tyss at the Dark Altar toggles the Arceuus spellbook from his Spellbook option and two dialogue choices.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

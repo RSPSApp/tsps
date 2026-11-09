@@ -133,6 +133,7 @@ let pluginApi;
 
 module.exports = {
   name: "XpReward",
+  description: "The 'Choose the stat you wish to be advanced' interface used by experience lamps, with level and unlock checks before granting the XP.",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("xpreward:open", open);

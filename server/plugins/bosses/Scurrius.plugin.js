@@ -12,6 +12,7 @@ const Aldo = require("./scurrius/Aldo.Scurrius");
 
 module.exports = {
   name: "Scurrius",
+  description: "Scurrius in the Varrock Sewers: the public and private lair, the fight, food piles, kill count, loot and Historian Aldo's lamps.",
   members: true,
   register(api) {
     Common.init(api);

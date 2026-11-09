@@ -69,6 +69,7 @@ function xericsTalisman({ player, destination }) {
 
 module.exports = {
   name: "KourendDiaryTravelFinish",
+  description: "Credits Kourend diary travel tasks: the Land's End boat, Tyss's spellbook switch, the Farming Guild, Kharedst's memoirs and Xeric's talisman.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

@@ -187,6 +187,7 @@ function bind(api) {
 
 module.exports = {
   name: "BossHud",
+  description: "The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide.",
   register(api) {
     bind(api);
     api.onCustomEvent("boss-hud:show", showHud);

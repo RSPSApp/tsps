@@ -138,6 +138,7 @@ function dogActions(core) {
 
 module.exports = {
   name: "StrayDogs",
+  description: "Talk-to and petting for stray dogs and Varlamore's Molossus, Xolo and Chiribaya, with Wiki transcripts and captured animations.",
   register(api) {
     const actions = dogActions(api.core);
     api.onNpcInteraction("Stray dog", actions);

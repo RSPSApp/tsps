@@ -40,6 +40,7 @@ function bless(event) {
 
 module.exports = {
   name: "SpiritShields",
+  description: "Lets a holy elixir turn a spirit shield into a blessed spirit shield at 85 Prayer.",
   members: true,
   _test: { bless },
   register(api) {

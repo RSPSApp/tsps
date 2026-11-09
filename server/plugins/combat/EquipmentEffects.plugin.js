@@ -19,6 +19,7 @@ const registerRegenBraceletEffects = require("./effects/RegenBracelet.EquipmentE
 
 module.exports = {
   name: "EquipmentEffects",
+  description: "Worn-gear combat effects: Dharok's, obsidian, Inquisitor's, Justiciar, the Salve amulet, dragon hunter and demonbane gear, and similar sets.",
   register(api) {
     registerDharoksArmourEffects(api);
     registerObsidianEffects(api);

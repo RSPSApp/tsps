@@ -12,6 +12,7 @@ const Entrance = require("./sarachnis/Entrance.Sarachnis");
 
 module.exports = {
   name: "Sarachnis",
+  description: "Sarachnis in Forthos Dungeon: the multi-combat lair, boss HUD, webs, rented private instances, and the fight with spawns at 66% and 33%.",
   members: true,
   register(api) {
     Common.init(api);

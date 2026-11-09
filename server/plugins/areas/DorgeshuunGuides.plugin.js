@@ -70,6 +70,7 @@ const GUIDE_OPTIONS = Object.freeze(Object.fromEntries(Object.entries(ROUTES).ma
 
 module.exports = {
   name: "DorgeshuunGuides",
+  description: "Kazgar and Mistag's quick travel through the Dorgeshuun tunnels, with the screen fade.",
   members: true,
   ROUTES,
   register(pluginApi) {

@@ -403,6 +403,7 @@ function combineShards({ player }) {
 
 module.exports = {
   name: "VenatorBow",
+  description: "Adds the venator bow and its echo version: charging with ancient essence and shots that ricochet to extra targets in multicombat.",
   members: true,
   register(api) {
     core = api.core;

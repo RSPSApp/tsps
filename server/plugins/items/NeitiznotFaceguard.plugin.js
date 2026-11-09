@@ -187,6 +187,7 @@ function dismantle({ player, item }) {
 
 module.exports = {
   name: "NeitiznotFaceguard",
+  description: "Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

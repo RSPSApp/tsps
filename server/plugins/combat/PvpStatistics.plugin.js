@@ -88,6 +88,7 @@ function initialize(api) {
 
 module.exports = {
   name: "PvpStatistics",
+  description: "Tracks PvP kills, deaths, kill streaks and Elo rating, separating player and bot opponents.",
   register(api) {
     initialize(api);
     api.persistAttribute(PLAYER_KILLS_ATTRIBUTE, 0);

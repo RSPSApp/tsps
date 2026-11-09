@@ -131,6 +131,7 @@ function fancyRejuvenation(event) { return drinkFromPool(event, 3); }
 
 module.exports = {
   name: "RejuvenationPool",
+  description: "The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools, which restore stats when drunk from.",
   register(api) {
     TaskManager = api.getTaskManager();
     pluginApi = api;

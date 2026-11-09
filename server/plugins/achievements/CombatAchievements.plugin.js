@@ -118,6 +118,7 @@ function caCommand({ player, parts }) {
 
 module.exports = {
   name: "CombatAchievements",
+  description: "Combat Achievements: 655 tasks in six tiers with points, Ghommal's tier rewards, the five interfaces and boss kill counts.",
   register(api) {
     Data(api);
     Progress(api);

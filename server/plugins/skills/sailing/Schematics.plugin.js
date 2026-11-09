@@ -4,6 +4,7 @@ const acquisition = require("./schematics/Acquisition.Schematics");
 
 module.exports = {
   name: "SailingSchematics",
+  description: "Sailing schematics: unlocking boat parts and facilities, and where players acquire them.",
   members: true,
   register(api) {
     common.attach(api);

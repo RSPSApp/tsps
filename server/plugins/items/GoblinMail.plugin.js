@@ -26,6 +26,7 @@ function repairHumanGoblinMail(core, { player }) {
 
 module.exports = {
   name: "GoblinMail",
+  description: "Stops goblin mail being worn unless the player is in the Land of the Goblins goblin form, and unequips it if they stop being one.",
   register(api) {
     api.onCanEquip(canWearGoblinMail);
     api.onCustomEvent("player:bootstrap-complete", repairHumanGoblinMail.bind(null, api.core));

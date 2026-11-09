@@ -80,6 +80,7 @@ function useDoor(request) {
 
 module.exports = {
   name: "MiningGuild",
+  description: "Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level and halves rock respawn times.",
   register(api) {
     core = api.core;
     ObstacleRunner.init(api);

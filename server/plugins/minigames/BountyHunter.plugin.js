@@ -7,6 +7,7 @@
 
 module.exports = {
   name: "BountyHunter",
+  description: "Adds Bounty Hunter in Daimon's Crater, with the shared crater state split into units for each part of the minigame.",
   members: true,
   // Points re-registers the "BOUNTY HUNTER POINTS" shop currency on varp bh_2023_points;
   // the bots are the PlayerBots runtime's PvP bots.

@@ -431,6 +431,7 @@ function init(api) {
 
 module.exports = {
   name: "MagicCarpets",
+  description: "Rug Merchants fly riders by magic carpet between Shantay Pass, Pollnivneach and other desert stations, with fares, discounts and captured flight paths.",
   members: true,
   register(api) {
     init(api);

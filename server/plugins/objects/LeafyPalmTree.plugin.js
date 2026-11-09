@@ -37,6 +37,7 @@ function shake(event) {
 
 module.exports = {
   name: "LeafyPalmTree",
+  description: "Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree.",
   members: true,
   _test: { shake, treeKey, used, COOLDOWN_MS, PALM_LEAF },
   register(pluginApi) {

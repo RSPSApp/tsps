@@ -380,6 +380,7 @@ function buildSelectableTracks(tracks) {
 
 module.exports = {
   name: "Music",
+  description: "The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock.",
   register(api) {
     core = api.core;
     pluginApi = api;

@@ -90,6 +90,7 @@ function createArea() {
 
 module.exports = {
   name: "CamdozaalGolems",
+  description: "Lets players Awaken golem rubble in the Ruins of Camdozaal, turning it into a Chaos Golem to fight with its drop table.",
   members: true,
   register(api) {
     pluginApi = api;

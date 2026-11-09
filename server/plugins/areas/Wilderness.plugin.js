@@ -691,6 +691,7 @@ function slashWeb(api, event, usedItem) {
 
 module.exports = {
   name: "Wilderness",
+  description: "The Wilderness: PvP attack rules, the overlay, teleport limits and web slashing.",
   _test: { canAttack, webCutChance, webTool, webSlashAnimation, slashWeb, websBeingSlashed },
   register(api) {
     require("./wilderness/Statistics.Wilderness")(api, isInWilderness);

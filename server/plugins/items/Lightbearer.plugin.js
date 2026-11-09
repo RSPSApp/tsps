@@ -42,6 +42,7 @@ function rememberOnLogin({ player }) {
 
 module.exports = {
   name: "Lightbearer",
+  description: "Makes a worn Lightbearer ring restore special attack energy every 25 ticks instead of every 50.",
   members: true,
   _test: { restoreDelay, restartTimerOnSwap },
   register(api) {

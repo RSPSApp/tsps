@@ -451,6 +451,7 @@ function handleItemOnNpc(event) {
 
 module.exports = {
   name: "Tutors",
+  description: "Lumbridge combat and skill tutors: hands out training weapons, runes, tools and other starter gear, with a shared 30-minute claim for ranged and magic.",
   register(api) {
     init(api);
     api.persistAttribute(CLAIM_ATTRIBUTE);

@@ -72,6 +72,7 @@ function inspect({ player }) {
 
 module.exports = {
   name: "AvernicDefender",
+  description: "Avernic defender: combine the hilt with a dragon defender, dismantle it back, and inspect the hilt, with confirmations and preset-item protection.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

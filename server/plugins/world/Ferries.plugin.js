@@ -20,6 +20,7 @@ const Routes = require("./ferries/Routes.Ferries");
 
 module.exports = {
   name: "Ferries",
+  description: "NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat and others.",
   members: true,
   _test: { Common, Voyages, Routes },
   register(api) {

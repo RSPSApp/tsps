@@ -22,6 +22,7 @@ function onQuestCompleted(api, {player, key}) {
 
 module.exports = {
   name: 'DesertTreasureScoreboards',
+  description: 'Unlocks the Desert Treasure II post-quest scoreboards for players who completed the quest, setting the shared scoreboard varbit on login and completion.',
   members: true,
   register(api) {
     api.onPlayerLogin(onLogin.bind(null, api));

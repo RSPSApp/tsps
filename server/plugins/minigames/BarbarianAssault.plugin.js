@@ -224,6 +224,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "BarbarianAssault",
+  description: "Runs Barbarian Assault: Commander Connad, the Outpost ladder, role assignment and the nine waves plus the final Queen wave in private arenas.",
   members: true,
   // Our role-aware Honour Points handler must replace Shopkeepers' generic one.
   dependsOn: ["Shopkeepers"],

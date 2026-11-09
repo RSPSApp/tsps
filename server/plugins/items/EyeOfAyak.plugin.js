@@ -322,6 +322,7 @@ function equipmentChanged({ player }) {
 
 module.exports = {
   name: "EyeOfAyak",
+  description: "Eye of Ayak: powered staff charged with demon tears or runes, with Check, Uncharge and Dismantle, casting every 3 ticks.",
   members: true,
   _test: {
     CHARGES_KEY, MATERIAL_KEY, MAX_CHARGES, CHARGES_VARBIT,

@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "DemonicGorillas",
+  description: "Adds the Crash Site Cavern's demonic and tortured gorillas: style changes after misses, protection prayers, boulders and anti-safespot rules.",
   members: true,
   register(api) {
     require("./demonicgorillas/Combat.DemonicGorillas")(api);

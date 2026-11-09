@@ -81,6 +81,7 @@ function itemOnForge(event) {
 
 module.exports = {
   name: "VolcanicForge",
+  description: "Lets players combine the three Odium or Malediction ward shards at the Volcanic Forge in the Wilderness.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

@@ -104,6 +104,7 @@ function healthChecked({ player, crop, type, patch }) {
 
 module.exports = {
   name: "KaramjaDiaryFinish",
+  description: "Credits Karamja diary tasks the first pass missed, such as the Musa Point ferry, Crandor, Vigroy and Hajedy's cart and palm leaves.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

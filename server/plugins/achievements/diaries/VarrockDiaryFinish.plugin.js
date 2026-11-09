@@ -66,6 +66,7 @@ function whiteTreeFruitPicked(registry, event) {
 
 module.exports = {
   name: "VarrockDiaryFinish",
+  description: "Credits five Varrock diary tasks: the Apothecary's strength potion, Gertrude's kitten colour, a white tree fruit, the spottier cape and Palace yew roots.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

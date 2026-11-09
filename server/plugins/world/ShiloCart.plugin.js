@@ -159,6 +159,7 @@ function payFareNpc(event) {
 
 module.exports = {
   name: "ShiloCart",
+  description: "Shilo Village carts: board with Hajedy or Vigroy, or Pay-fare, between Brimhaven and Shilo Village, free after the elite Karamja Diary.",
   members: true,
   _test: { DRIVERS, CARTS, fareFor, selectVariant, answerCondition, fillLine, ride, payFare, boardCart, payFareCart, payFareNpc, dialogueAction },
   register(pluginApi) {

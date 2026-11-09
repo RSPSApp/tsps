@@ -128,6 +128,7 @@ function travel({ player, npc, npcId }) {
 
 module.exports = {
   name: "Keldagrim",
+  description: "Keldagrim access: the cave exit to Rellekka, the cave-to-city passage, the house stairs and the ferrymen across the river.",
   members: true,
   _test: { init, goThrough, travel },
   register(api) {

@@ -167,6 +167,7 @@ function payClaim(api, player, now) {
 
 module.exports = {
   name: "ArdougneBertSandDiary",
+  description: "Credits the Ardougne diary task for claiming buckets of sand from Bert in Yanille.",
   members: true,
   dependsOn: ["AchievementDiaries", "Quests"],
   register,

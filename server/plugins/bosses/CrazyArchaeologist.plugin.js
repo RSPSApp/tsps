@@ -270,6 +270,7 @@ function attachCombat(api) {
 
 module.exports = {
   name: "CrazyArchaeologist",
+  description: "The Crazy archaeologist's ranged and exploding-book attacks, with his shouted quotes and death lines.",
   members: true,
   register(api) {
     attachCombat(api);

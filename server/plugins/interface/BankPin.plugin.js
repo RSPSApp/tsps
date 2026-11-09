@@ -11,6 +11,7 @@ const Guard = require("./bankpin/Guard.BankPin");
 
 module.exports = {
   name: "BankPin",
+  description: "The Bank PIN: the Banker settings, the keypad, the bank lock, and the guard on other PIN-protected actions.",
   register(api) {
     Common.init(api);
     Keypad.attach(api);

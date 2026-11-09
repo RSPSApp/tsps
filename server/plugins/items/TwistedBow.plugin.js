@@ -86,6 +86,7 @@ let BonusManager;
 
 module.exports = {
   name: "TwistedBow",
+  description: "Gives the twisted bow its accuracy and damage scaling from the target's Magic level, with a higher cap inside Chambers of Xeric.",
   _test: { twistedBowDamagePercent, twistedBowAccuracyPercent, getTwistedBowScaleValue },
   members: true,
   register(api) {

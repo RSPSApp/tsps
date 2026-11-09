@@ -261,6 +261,7 @@ function repairEquipment(event) {
 
 module.exports = {
   name: "BarrowsEquipment",
+  description: "Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers.",
   members: true,
   _test: { durability, setDurability, stageFor, degradeEquipment, repairAll, refresh },
   register(api) {

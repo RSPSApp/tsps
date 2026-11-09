@@ -1842,6 +1842,7 @@ function registerWallDoorRoutes() {
 
 module.exports = {
   name: "Doors",
+  description: "Opens and closes doors, gates and double doors, swapping between closed and open locs, with route handling and reapplied state on region load.",
   register: (pluginApi) => {
     api = pluginApi;
     core = pluginApi.core;

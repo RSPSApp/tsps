@@ -52,6 +52,7 @@ function rewardReanimationKill({ npc, npcId, killer }) {
 
 module.exports = {
   name: "Reanimation",
+  description: "Gives Prayer XP to the caster who kills a creature reanimated by an Arceuus ensouled-head spell.",
   members: true,
   register(api) {
     core = api.core;

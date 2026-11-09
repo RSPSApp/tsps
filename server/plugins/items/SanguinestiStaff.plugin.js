@@ -215,6 +215,7 @@ function uncharge({ player, item }) {
 
 module.exports = {
   name: "SanguinestiStaff",
+  description: "Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

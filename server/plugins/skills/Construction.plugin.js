@@ -4,6 +4,7 @@
  */
 module.exports = {
   name: "Construction",
+  description: "Construction: player-owned houses, rooms, furniture and the house's facilities.",
   members: true,
   register(api) {
     require("./construction/Core.Construction").init(api);

@@ -10,6 +10,7 @@ const Ride = require("./keldagrimminecarts/Ride.KeldagrimMinecarts");
 
 module.exports = {
   name: "KeldagrimMinecarts",
+  description: "Keldagrim minecarts: conductors sell tickets, with rides between Keldagrim, Ice Mountain, White Wolf Mountain and the Grand Exchange.",
   members: true,
   register(api) {
     Common.init(api);

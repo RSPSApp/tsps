@@ -165,6 +165,7 @@ function sendLastHomeTeleport({ player }) {
 
 module.exports = {
   name: "HomeTeleports",
+  description: "The free home teleport of the standard, Ancient, Lunar and Arceuus spellbooks, with the long cast and one shared 30-minute cooldown.",
   register(api) {
     core = api.core;
     api.persistAttribute(LAST_HOME_TELEPORT_ATTRIBUTE);

@@ -281,6 +281,7 @@ function craftRepairKits({ player, object }) {
 
 module.exports = {
   name: "ShipwrightsWorkbench",
+  description: "The Shipwrights' Workbench: crafting hull parts, large hull parts and repair kits from planks and nails for Construction XP.",
   members: true,
   register(pluginApi) {
     pluginApi.onServerStartup(() => start(pluginApi));

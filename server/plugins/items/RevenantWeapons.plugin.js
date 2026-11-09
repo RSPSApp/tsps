@@ -253,6 +253,7 @@ function deathItemDrop(event) {
 
 module.exports = {
   name: "RevenantWeapons",
+  description: "Adds Viggora's chainmace, the Ursine chainmace and Craw's bow: revenant ether charging, Wilderness damage bonus, uncharging and dismantling.",
   members: true,
   _test: { CHARGES_META, DEPOSIT_META, UNPAID_META, ACTIVATION_ETHER, MAX_CHARGES, DISMANTLE_ETHER, chargesOf, addEther, chargeWithEther, uncharge, dismantle, attackStarted, checkAmmo, decrementAmmo, rangedBoost, rangedDamageBoost, addToSlayerBonus, meleeBoost, deathItemDrop },
   register(pluginApi) {

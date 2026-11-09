@@ -69,6 +69,7 @@ function playResolvedHitSound({ attacker, target, hit }) {
 
 module.exports = {
   name: "PlayerHitSounds",
+  description: "Plays the hurt sound to players struck in combat, using male or female variants.",
   register(api) {
     api.onServerStartup(initialize.bind(null, api.core));
     api.onCombatHitResolved(playResolvedHitSound);

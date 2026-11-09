@@ -256,6 +256,7 @@ function forceNextProc({ player }) {
 
 module.exports = {
   name: "EnchantedBolts",
+  description: "Enchanted crossbow bolt effects: gem proc chances, graphics, sounds, poison, drains and leech, plus a ::boltproc testing command.",
   members: true,
   register(api) {
     attach(api);

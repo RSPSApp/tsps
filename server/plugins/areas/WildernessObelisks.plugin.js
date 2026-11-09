@@ -253,6 +253,7 @@ function login({ player }) {
 
 module.exports = {
   name: "WildernessObelisks",
+  description: "The six Wilderness obelisks: activating one teleports everyone on its pad to a random or chosen obelisk, with Set Destination after the hard diary.",
   members: true,
   _test: { activate, activateOption, teleportToDestination, setDestination, chooseDestination, resetActive, padTiles, stones, active, get data() { return data; } },
   register(pluginApi) {

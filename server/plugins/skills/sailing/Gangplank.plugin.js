@@ -115,6 +115,7 @@ function disembarkBoat({ player, location }) {
 
 module.exports = {
   name: "SailingGangplank",
+  description: "Boarding and disembarking boats at gangplanks and mooring points, and docking at a port's buoy, with fades and sounds.",
   members: true,
   register(api) {
     content();

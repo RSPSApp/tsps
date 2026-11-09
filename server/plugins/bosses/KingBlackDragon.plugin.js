@@ -261,6 +261,7 @@ function combatClass(pluginApi) {
 
 module.exports = {
   name: "KingBlackDragon",
+  description: "The King Black Dragon: the Lava Maze ladder and lair lever, and the fight with dragonfire checked against antifire protection.",
   members: true,
   register(pluginApi) {
     const { NpcIdentifiers } = pluginApi.core;

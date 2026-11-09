@@ -93,6 +93,7 @@ function searchEmptyTree(event) {
 
 module.exports = {
   name: "BananaTree",
+  description: "Wild banana trees on Musa Point and Ape Atoll: Pick takes a banana and empties the tree stage by stage, regrowing after five minutes.",
   register(api) {
     ObjectManager = api.getObjectManager();
     TaskManager = api.getTaskManager();

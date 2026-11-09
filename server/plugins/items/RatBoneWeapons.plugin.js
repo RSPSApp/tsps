@@ -10,6 +10,7 @@ const Combat = require("./ratboneweapons/Combat.RatBoneWeapons");
 
 module.exports = {
   name: "RatBoneWeapons",
+  description: "Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus.",
   members: true,
   register(api) {
     Common.init(api);

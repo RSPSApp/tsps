@@ -6,6 +6,7 @@
  */
 module.exports = {
   name: "Gauntlet",
+  description: "Adds the Gauntlet and Corrupted Gauntlet: the lobby under Prifddinas, the maze built for each run and the Crystalline Hunllef.",
   members: true,
   register(api) {
     require("./gauntlet/Lobby.Gauntlet")(api);

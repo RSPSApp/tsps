@@ -19,6 +19,7 @@ function hitResolved({ attacker, target, hit } = {}) {
 let api;
 module.exports = {
   name: "ArdougneIceBarrageDiary",
+  description: "Credits the Ardougne diary task for casting Ice Barrage on another player within Castle Wars.",
   members: true,
   dependsOn: ["AchievementDiaries", "CastleWars"],
   register(pluginApi) {

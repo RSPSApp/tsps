@@ -1133,6 +1133,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
 module.exports = {
   name: "NpcDialogues",
+  description: "Plays Talk-to dialogue transcripts for NPCs from the generated dialogue data, with hooks so quests can alter lines, choices and conditions.",
   // Shared by quest transcript playback and dialogue regressions.
   pickVariant,
   aliasKeys,

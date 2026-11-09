@@ -332,6 +332,7 @@ function onItemAction(event) {
 
 module.exports = {
   name: "KourendTravelItems",
+  description: "Adds Kharedst's memoirs, the Book of the Dead and Xeric's talisman teleports to Kourend, with charges and Wilderness limits.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

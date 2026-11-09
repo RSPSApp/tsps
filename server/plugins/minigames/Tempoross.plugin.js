@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "Tempoross",
+  description: "Adds Tempoross, the Spirit Anglers' fishing boss: the Ruins of Unkah ferries, a cove instance per trip, the fight and the reward pool.",
   members: true,
   register(api) {
     require("./tempoross/Cove.Tempoross").attachCove(api);

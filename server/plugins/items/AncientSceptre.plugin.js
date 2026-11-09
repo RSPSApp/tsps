@@ -37,6 +37,7 @@ function drainNpcAttack(event) {
 
 module.exports = {
   name: "AncientSceptre",
+  description: "Ancient sceptre passive: boosts the Ancient magic smoke, shadow, blood and ice spell effects by 10%.",
   members: true,
   register(api) {
     core = api.core;

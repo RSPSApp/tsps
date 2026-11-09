@@ -2141,6 +2141,7 @@ let ItemOnGroundManager;
 
 module.exports = {
   name: "Pets",
+  description: "Pet followers: summoning, dismissing, item-backed ownership, storage, Probita reclaim, Metamorphosis variants and pet-specific behaviour.",
   config: {
     "Pets:skillingPetMultiplier": {
       type: "number", label: "Skilling pet multiplier", default: 1, min: 1,

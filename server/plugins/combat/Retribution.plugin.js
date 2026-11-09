@@ -110,6 +110,7 @@ function retribute({ player }) {
 
 module.exports = {
   name: "Retribution",
+  description: "The Retribution prayer: when its user dies, nearby enemies take damage up to a quarter of their Prayer level, with its graphic and sound.",
   _test: { maxHit, setsOff, isEnemy, occupants, land, reach },
   register(pluginApi) {
     api = pluginApi;

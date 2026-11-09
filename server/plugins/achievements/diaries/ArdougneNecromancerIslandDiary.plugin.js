@@ -26,6 +26,7 @@ function arrivedAtIsland({ player, from, fromInstance, to, source, code } = {}) 
 
 module.exports = {
   name: "ArdougneNecromancerIslandDiary",
+  description: "Credits the Ardougne diary task for visiting the island east of the Necromancer's tower.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

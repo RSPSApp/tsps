@@ -80,6 +80,7 @@ function taskUpdated(request) {
 
 module.exports = {
   name: "WildernessTriosDiary",
+  description: "Tracks the Wilderness diary boss trios: Crazy archaeologist, Chaos Fanatic and Scorpia (hard), and Callisto, Venenatis and Vet'ion (elite).",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

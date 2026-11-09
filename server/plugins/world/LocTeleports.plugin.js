@@ -321,6 +321,7 @@ function claimDoorToggle(request) {
 
 module.exports = {
   name: "LocTeleports",
+  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors, with level, item and quest gates.",
   _test: { entryFor, destinationFor, play, useItemOnLoc, claimDoorToggle, get entries() { return entries; }, get swaps() { return swaps; } },
   register(api) {
     core = api.core;

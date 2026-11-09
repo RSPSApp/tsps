@@ -81,6 +81,7 @@ function registerLogout(event) {
 
 module.exports = {
   name: "ArdougneEliteTaskProgress",
+  description: "Tracks per-session step progress for the Ardougne elite manta ray and rune crossbow tasks, which other diary plugins query.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

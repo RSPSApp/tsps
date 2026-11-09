@@ -197,6 +197,7 @@ function teleport({ player, destination, onArrival }) {
 
 module.exports = {
   name: "Levers",
+  description: "The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event.",
   register(pluginApi) {
     initialize(pluginApi);
     api.persistAttribute(SKIP_WARNING_ATTRIBUTE, false);

@@ -28,6 +28,7 @@ function taken(event, api) {
 
 module.exports = {
   name: "ArdougneNightshadeDiary",
+  description: "Credits the Ardougne diary task for collecting nightshade from the Skavid caves.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

@@ -11,6 +11,7 @@ const Fight = require("./madangel/Fight.MadAngel");
 
 module.exports = {
   name: "MadAngel",
+  description: "The Mad Angel in Ardeaglais on Wyrmscraig: the cathedral doors and pew, a private cathedral, the fight and the kill.",
   members: true,
   register(api) {
     Common.init(api);

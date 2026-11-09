@@ -38,6 +38,7 @@ function resolveCrossbows(attacker) {
 
 module.exports = {
   name: "AscensionCrossbows",
+  description: "Ascension crossbows: fires ascension bolts and alternates the left and right firing animations on every shot.",
   members: true,
   register(api) {
     core = api.core;

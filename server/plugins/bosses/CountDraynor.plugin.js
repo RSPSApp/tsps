@@ -153,6 +153,7 @@ function countDied({ npc }) {
 
 module.exports = {
   name: "CountDraynor",
+  description: "Count Draynor's coffin fight: the coffin raises him, with regeneration, garlic weakness and his hit modifiers.",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("ladders:climb", climbManorStairs);

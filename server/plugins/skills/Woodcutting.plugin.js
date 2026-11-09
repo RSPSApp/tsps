@@ -1432,6 +1432,7 @@ function interruptForEmote({ player }) {
 
 module.exports = {
   name: "Woodcutting",
+  description: "Woodcutting: chopping trees with the Forestry despawn timer, stump respawns, the logs-chopped tracker, and bird's nest and ring drops.",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("woodcutting:chop", requestedChop);

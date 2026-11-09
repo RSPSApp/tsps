@@ -32,6 +32,7 @@ function sync({ player }) {
 
 module.exports = {
   name: "RingOfVisibility",
+  description: "Lets a worn ring of visibility or ring of shadows reveal the shadow realm's hidden NPCs and objects by setting the shadow realm varbit.",
   members: true,
   _test: { visibility, sync },
   register(api) {

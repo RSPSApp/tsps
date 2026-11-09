@@ -23,6 +23,7 @@ function clickTeleport(input) {
 
 module.exports = {
   name: "ClickTeleport",
+  description: "Lets staff teleport to a clicked tile with Ctrl+Shift click; for everyone else the click is a plain Ctrl-click walk.",
   register(api) {
     api.onCustomEvent("player:world-input", clickTeleport);
   },

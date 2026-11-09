@@ -58,6 +58,7 @@ function resetOnDeath(event) {
 
 module.exports = {
   name: "ImbuedHeart",
+  description: "Adds the imbued and saturated hearts' Invigorate Magic boost with its seven-minute (five for saturated) shared cooldown, and the saturated upgrade.",
   members: true,
   COOLDOWN_MS,
   _test: { invigorate, readyAt: Timers.readyAt, READY_AT_ATTRIBUTE, IMBUED, SATURATED },

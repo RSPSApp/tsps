@@ -29,6 +29,7 @@ const Retrieval = require("./mimic/Retrieval.Mimic");
 
 module.exports = {
   name: "Mimic",
+  description: "The Mimic, the elite clue casket boss: the Strange casket dialogue and the fight.",
   members: true,
   register(api) {
     Shared.bind(api);

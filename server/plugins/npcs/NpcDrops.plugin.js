@@ -1096,6 +1096,7 @@ function placeDrops(player, drops, location, options = {}) {
 
 module.exports = {
   name: "NpcDrops",
+  description: "Rolls NPC drop tables from the Wiki-derived drop data, with subtables, tertiary drops and hand-edited overrides.",
   config: {
     "NpcDrops:bossRareMultiplier": {
       type: "number", label: "Boss unique drop multiplier", default: 1, min: 1,

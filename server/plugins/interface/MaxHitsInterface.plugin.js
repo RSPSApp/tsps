@@ -201,6 +201,7 @@ function open(player) {
 
 module.exports = {
   name: "MaxHitsInterface",
+  description: "Adds the ::maxhits command, an interface of live melee, ranged and per-spell max hits for the player's current gear and levels.",
   register(api) {
     INTERFACE_DEFINITION = buildInterface();
     api.registerCustomInterface(INTERFACE_DEFINITION);

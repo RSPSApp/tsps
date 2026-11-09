@@ -115,6 +115,7 @@ function createCampArea(api) {
 
 module.exports = {
   name: "ArdougneCombatTrainingCampDiary",
+  description: "Credits the Ardougne diary task for entering the Combat Training Camp north of West Ardougne.",
   members: true,
   dependsOn: ["AchievementDiaries", "Quests"],
   register(api) {

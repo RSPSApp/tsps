@@ -17,6 +17,7 @@ function harvested({ player, crop, patch }) {
 let api;
 module.exports = {
   name: "ArdougnePoisonIvyDiary",
+  description: "Credits the Ardougne diary task for picking poison ivy berries from the patch south of Ardougne.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

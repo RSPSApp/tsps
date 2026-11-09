@@ -48,6 +48,7 @@ function lockArceuusSpell(event) {
 
 module.exports = {
   name: "ArceuusQuestLock",
+  description: "Blocks the Arceuus combat and utility spells until A Kingdom Divided is done, except Ghostly Grasp, Inferior Demonbane, teleports and reanimation.",
   register(api) {
     pluginApi = api;
     core = api.core;

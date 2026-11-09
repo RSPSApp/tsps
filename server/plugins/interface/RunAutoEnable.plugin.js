@@ -80,6 +80,7 @@ function process({ player }) {
 
 module.exports = {
   name: "RunAutoEnable",
+  description: "Settings option to turn run back on by itself once energy recovers to a chosen threshold after running out.",
   register(api) {
     api.persistAttribute(THRESHOLD_ATTRIBUTE);
     api.onCustomEvent("settings:setting-clicked", settingClicked);

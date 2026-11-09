@@ -100,6 +100,7 @@ function answerLifetimeSeconds(request) {
 
 module.exports = {
   name: "PlayerOnlineTimer",
+  description: "Tracks each player's current session and lifetime online seconds, for other plugins to read through events.",
   register(api) {
     World = api.getWorld();
     core = api.core;

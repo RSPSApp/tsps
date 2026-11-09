@@ -14,6 +14,7 @@ const Forester = require("./forestry/Forester.Forestry");
 
 module.exports = {
   name: "Forestry",
+  description: "Adds Forestry's free-to-play woodcutting events, such as the Struggling Sapling and Rising Roots, which pay Anima-infused bark.",
   register(api) {
     Common.init(api);
     Spawns.attachSpawns(api);

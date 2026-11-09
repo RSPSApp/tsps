@@ -192,6 +192,7 @@ function handleItemAction({ player, buttonId, action }) {
 
 module.exports = {
   name: "EquipmentStats",
+  description: "Equipment stats screen opened from the worn-items tab, with the inventory beside it, so gear can be compared and swapped.",
   _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects },
   register(api) {
     pluginApi = api;

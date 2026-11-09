@@ -8,6 +8,7 @@ const Common = require("./hallowedsepulchre/Common.HallowedSepulchre");
 
 module.exports = {
   name: "HallowedSepulchre",
+  description: "Adds the Hallowed Sepulchre: the lobby under Darkmeyer and five timed floors of Agility obstacles, traps, coffins and obelisks.",
   members: true,
   register(api) {
     Common.init(api);

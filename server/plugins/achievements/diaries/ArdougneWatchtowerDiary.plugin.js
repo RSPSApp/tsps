@@ -28,6 +28,7 @@ function recordArrival(event) {
 
 module.exports = {
   name: "ArdougneWatchtowerDiary",
+  description: "Credits the Ardougne diary task for teleporting to the Watchtower.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(api) {

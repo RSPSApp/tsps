@@ -13,6 +13,7 @@ const Apprentice = require("./sorceressgarden/Apprentice.SorceresssGarden");
 
 module.exports = {
   name: "SorceresssGarden",
+  description: "Adds Sorceress's Garden in Al Kharid: the four seasonal mazes with elementals and sq'irk trees, and brewing and handing in sq'irkjuice.",
   members: true,
   register(api) {
     Apprentice(api);

@@ -25,6 +25,7 @@ function close({ player, buttonId }) {
 
 module.exports = {
   name: "CloseButtons",
+  description: "Makes cache Close buttons that have no client script, such as the book and minigame panels, close their interface.",
   CLOSE_BUTTONS,
   register(api) {
     api.onInterfaceActionButton(closeButtonIds(api), close);

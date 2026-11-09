@@ -202,6 +202,7 @@ function useCurrencyOnBankObject(api, event) {
 
 module.exports = {
   name: "BankBooths",
+  description: "Opens the bank from bank booths, bank chests and Banker NPCs, and handles the bank tab and settings buttons.",
   handleBankButton,
   handleBankInterfaceAction,
   register(api) {

@@ -181,6 +181,7 @@ const SCROLL_ITEM_NAMES = ["Dexterous prayer scroll", "Arcane prayer scroll", "T
 
 module.exports = {
   name: "PrayerUnlocks",
+  description: "Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

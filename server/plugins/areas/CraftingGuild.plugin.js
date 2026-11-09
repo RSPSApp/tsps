@@ -101,6 +101,7 @@ function useBank(event) {
 
 module.exports = {
   name: "CraftingGuild",
+  description: "Guards the Crafting Guild door (40 Crafting and a brown apron or cape) and limits its bank chest to the hard Falador diary or 99 Crafting.",
   _test: { openDoor, canBank, dressedForIt },
   register(pluginApi) {
     api = pluginApi;

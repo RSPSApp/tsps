@@ -387,6 +387,7 @@ function castSpell(event) {
 
 module.exports = {
   name: "SpellTeleports",
+  description: "Teleport tablets and spell teleports, including house tablets and redirected scrolls, from the teleport-tablets data file.",
   register(api) {
     core = api.core;
     pluginApi = api;

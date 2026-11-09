@@ -62,6 +62,7 @@ function guzzleRockCake({ player, itemId }) {
 
 module.exports = {
   name: "RockCake",
+  description: "Adds the Dwarven rock cake, which is never used up: Eat costs 1 Hitpoint and Guzzle costs 10% of current Hitpoints plus 1.",
   members: true,
   register(api) {
     init(api);

@@ -216,6 +216,7 @@ function start() {
 
 module.exports = {
   name: "MotherlodeMine",
+  description: "Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD.",
   members: true,
   _test: { tick, start, crawl, climb, squeezeThrough, percyCondition, percyPays, enterMine },
   register(api) {

@@ -28,6 +28,7 @@ function register(api) {
 
 module.exports = {
   name: "ArdougneBalloonDiary",
+  description: "Credits the Ardougne diary task for travelling to Castle Wars by hot air balloon.",
   members: true,
   dependsOn: ["AchievementDiaries", "BalloonTransport"],
   register,

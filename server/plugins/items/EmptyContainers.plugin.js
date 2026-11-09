@@ -36,6 +36,7 @@ function emptyContainer(event) {
 
 module.exports = {
   name: "EmptyContainers",
+  description: "Empty option on filled buckets of water, sand and compost: leaves an empty bucket and sends the captured message and sound.",
   register(api) {
     core = api.core;
     for (const { name } of EMPTYABLE_CONTAINERS) api.onItemAction(name, { Empty: emptyContainer });

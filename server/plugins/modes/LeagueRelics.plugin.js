@@ -11,6 +11,7 @@ const Common = require("./leaguerelics/Common.LeagueRelics");
 
 module.exports = {
   name: "LeagueRelics",
+  description: "Adds league relics: eight tiers unlocked with League Points, three relics per tier, chosen permanently through the relic interface.",
   members: true,
   dependsOn: ["LeagueMode", "LeaguePoints"],
   register(api) {

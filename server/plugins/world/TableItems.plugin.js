@@ -106,6 +106,7 @@ function putOnTable(event) {
 
 module.exports = {
   name: "TableItems",
+  description: "Using a tradeable item on a table places it there, visible to others after 60 seconds and despawning after 10 minutes.",
   register(api) {
     core = api.core;
     api.onItemOnObject(putOnTable, { fallback: true });

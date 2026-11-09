@@ -150,7 +150,7 @@ function closed(api,{player,interfaceId}) {if(interfaceId===data(api).group)sess
 function changed(api,{player,interfaceId}) {if(interfaceId!==data(api).group)sessions.delete(player);}
 function logout({player}) {sessions.delete(player);}
 
-module.exports={name:"HolidayRewards",register(api){
+module.exports={name:"HolidayRewards",description:"Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked.",register(api){
   api.persistAttribute(UNLOCKED_ATTRIBUTE,[]);
   api.persistAttribute(HouseState.HOUSE_ATTRIBUTE,HouseState.defaultHouse());
   api.persistAttribute(HouseState.DECORATIONS_ATTRIBUTE,{});

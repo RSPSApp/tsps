@@ -24,6 +24,7 @@ const UNITS = [
 
 module.exports = {
   name: "Slayer",
+  description: "Slayer: tasks, masters, points and rewards, superiors, finishers, and the slaughter and expeditious bracelets, built on the cache's Slayer tables.",
   members: true,
   register(api) {
     for (const unit of UNITS) unit.init?.(api);

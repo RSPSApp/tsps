@@ -72,6 +72,7 @@ function exitToVolcano(event) {
 
 module.exports = {
   name: "MorUiRek",
+  description: "Mor Ul Rek (the TzHaar city): its cave exit back to the Karamja volcano and its hot vent doors.",
   members: true,
   passVentDoor,
   register(api) {

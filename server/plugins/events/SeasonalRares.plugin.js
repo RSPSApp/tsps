@@ -225,6 +225,7 @@ function start(pluginApi) {
 
 module.exports = {
   name: "SeasonalRares",
+  description: "Hands out discontinued seasonal rares during the world's own event windows, with ::rares to list what a player can claim.",
   CLAIMS_ATTRIBUTE,
   /** Tests: point the world file elsewhere, load other rows, and read what a player may claim. */
   testing: {

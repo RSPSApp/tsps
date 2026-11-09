@@ -30,6 +30,7 @@ function resolver(core) {
 
 module.exports = {
   name: "MultiHitWeapons",
+  description: "Twin-hit weapons such as sulphur blades, tecpatls and Torag's hammers: independent accuracy rolls and two hitsplats on the same tick.",
   register(api) {
     api.registerCombatMethodResolver(resolver(api.core));
   },

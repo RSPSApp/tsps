@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "GuardiansOfTheRift",
+  description: "Adds Guardians of the Rift, the Runecraft minigame in the Temple of the Eye, with one world-wide game at a time.",
   members: true,
   // Abyssal pearls are Shopkeepers' item currency for the Temple Supplies shop.
   dependsOn: ["Shopkeepers"],

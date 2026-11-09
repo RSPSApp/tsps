@@ -144,6 +144,7 @@ function talkToSherlock({ player }) {
 
 module.exports = {
   name: "KandarinDiary",
+  description: "Credits Kandarin diary tasks from actions other plugins already perform, in the places the Wiki names, such as the Seers' Village maple shortbow.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(pluginApi) {

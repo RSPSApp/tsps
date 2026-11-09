@@ -57,6 +57,7 @@ function useCoating(event) {
 
 module.exports = {
   name: 'WeaponPoison',
+  description: 'Lets weapon poison coat melee weapons, darts and arrows, and a cleaning cloth strip the poison off again.',
   members: true,
   register(api) {
     api.onServerStartup(initialize.bind(null, api.core));

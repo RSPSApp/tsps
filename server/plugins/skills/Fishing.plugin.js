@@ -1034,6 +1034,7 @@ function pauseFishing(event) {
 
 module.exports = {
   name: "Fishing",
+  description: "Fishing at all spot types: nets, cages, harpoons, rods and karambwan vessels, with tool animations, rolls and catches.",
   register(api) {
     pluginApi = api;
     TaskManager = api.getTaskManager();

@@ -303,6 +303,7 @@ function onLogout({ player }) {
 
 module.exports = {
   name: "TransformationRings",
+  description: "Lets the Easter, Crate, Snowman and Ring of 3rd Age style rings morph the wearer into NPC forms, with an Unmorph option and choice menus.",
   register(api) {
     core = api.core;
     api.onItemAction("Easter ring", { Wear: wear });

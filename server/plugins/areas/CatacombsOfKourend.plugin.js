@@ -162,6 +162,7 @@ function boneRestore(event) {
 
 module.exports = {
   name: "CatacombsOfKourend",
+  description: "Catacombs of Kourend access: King Rada's statue, the vine ladder back up, and bones restoring Prayer points while buried or crushed there.",
   members: true,
   register(api) {
     core = api.core;

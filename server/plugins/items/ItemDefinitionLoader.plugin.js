@@ -399,6 +399,7 @@ function sendCustomItems({ player }) {
 
 module.exports = {
   name: "ItemDefinitionLoader",
+  description: "Loads custom item definitions and models from the custom-items and custom-models content files and sends the custom items to players at login.",
   _test: { loadItemPrices, loadItemAlch, applyItemOverrides, validateSpecialAttack },
   register(api) {
     const startedAt = Date.now();

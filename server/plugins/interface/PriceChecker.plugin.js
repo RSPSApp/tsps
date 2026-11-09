@@ -315,6 +315,7 @@ function handlePriceCheckerWithdraw(player, itemId, slot, clickType) {
 
 module.exports = {
   name: "PriceChecker",
+  description: "Price checker opened from the worn-items tab: deposit items to see each value and the total, and get them back on close.",
   register(api) {
     api.onCustomEvent("interface:closed", returnItems);
     api.onInterfaceActionButton(

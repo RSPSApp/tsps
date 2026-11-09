@@ -9,6 +9,7 @@ const Common = require("./wyrmscraig/Common.Wyrmscraig");
 
 module.exports = {
   name: "Wyrmscraig",
+  description: "The cave under Ardeaglais on Wyrmscraig, with its Fallen From Grace cliff state; its shortcuts and the Mad Angel are separate plugins.",
   members: true,
   register(api) {
     Common.init(api);

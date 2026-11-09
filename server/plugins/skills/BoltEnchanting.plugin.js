@@ -5,6 +5,7 @@
  */
 module.exports = {
   name: "BoltEnchanting",
+  description: "The Enchant Crossbow Bolt spell, which enchants gem bolts ten at a time from the spellbook.",
   members: true,
   register(api) {
     require("./boltenchanting/Cast.BoltEnchanting")(api);

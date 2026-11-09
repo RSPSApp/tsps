@@ -119,6 +119,7 @@ function shopName(shopId) {
 
 module.exports = {
   name: "LostProperty",
+  description: "Adds the Lost Property shop of Perdu and Chris, which sells back quest and diary rewards only to players who have unlocked them.",
   register(api) {
     pluginApi = api;
     core = api.core;

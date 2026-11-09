@@ -43,4 +43,4 @@ function attach(pluginApi){
  api.onItemOnItem(light,{noted:false});api.onItemOnItem(lens,{noted:false});api.onItemOnObject(fuel,{noted:false});
  api.onItemAction('Oil lamp',{Extinguish:extinguish});api.onItemAction('Oil lantern',{Extinguish:extinguish});api.onItemAction('Bullseye lantern',{Extinguish:extinguish});api.onItemAction('Sapphire lantern',{Extinguish:extinguish});
 }
-module.exports={name:'OilLights',members:true,register(api){attach(api);}};
+module.exports={name:'OilLights',description:'Handles oil lamps and lanterns: assembling them, distilling lamp oil at the Rimmington still, lighting with a tinderbox and extinguishing them.',members:true,register(api){attach(api);}};

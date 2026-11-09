@@ -266,6 +266,7 @@ function inspectIcon({ player, itemId }) {
 
 module.exports = {
   name: "AncientRingCrafting",
+  description: "Desert Treasure II ancient rings: break Fremennik rings with a chisel, combine icons with vestiges and craft the finished rings at a furnace.",
   members: true,
   _test: { recipes: () => recipes(), useChisel, useIconOnVestige, craft, peerVariant, peerAction, inspectIcon, LEARNED_ATTRIBUTE },
   register(pluginApi) {

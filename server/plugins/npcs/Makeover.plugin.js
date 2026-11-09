@@ -336,6 +336,7 @@ function init(pluginApi) {
 
 module.exports = {
   name: "Makeover",
+  description: "Opens the clothes, hair and shoe makeover interface that providers use, with live previews and restore-on-cancel.",
   openMakeover,
   TYPES: Object.freeze({
     HAIR: TYPE_HAIR, FACIAL_HAIR: TYPE_FACIAL_HAIR, TOP: TYPE_TOP, ARMS: TYPE_ARMS,

@@ -30,6 +30,7 @@ const Bots = require("./lms/Bots.LastManStanding");
 
 module.exports = {
   name: "LastManStanding",
+  description: "Adds Last Man Standing in Casual, Competitive and High Stakes modes, with ranks, load-outs, stashed belongings and Lisa's supply chest.",
   config: {
     "LastManStanding:seedBots": {
       type: "boolean", label: "Seed Last Man Standing with bots", default: true,

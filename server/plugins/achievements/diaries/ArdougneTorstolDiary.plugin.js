@@ -13,6 +13,7 @@ function harvested({ player, crop, patch }) {
 let api;
 module.exports = {
   name: "ArdougneTorstolDiary",
+  description: "Credits the Ardougne diary task for picking torstol from the patch north of Ardougne.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

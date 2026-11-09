@@ -15,6 +15,7 @@ const Rewards = require("./magetrainingarena/Rewards.MageTrainingArena");
 
 module.exports = {
   name: "MageTrainingArena",
+  description: "Adds the Mage Training Arena: the entrance hall, Pizazz Points and the Telekinetic, Enchanting, Alchemists' and Creature Graveyard rooms.",
   members: true,
   register(api) {
     Common.init(api);

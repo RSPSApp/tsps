@@ -801,6 +801,7 @@ function xpDropsOrbIds(api) {
 
 module.exports = {
   name: "Settings",
+  description: "All Settings browser, keybindings panel and game client layout dropdown, saving the chosen settings and XP drop options per player.",
   applyDefaultKeybindings,
   syncPlayerKeybindings,
   openAllSettings,

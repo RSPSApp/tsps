@@ -148,6 +148,7 @@ function initialize(pluginApi) {
 
 module.exports = {
   name: "AmuletOfChemistry",
+  description: "Amulet of chemistry: 5% chance of an extra potion dose when mixing in Herblore, five charges per amulet, with Options and Break.",
   members: true,
   _test: { initialize, onMix, onMade, withExtraDose, breakClicked, CHARGES_ATTRIBUTE, STOP_ON_BREAK_ATTRIBUTE, MAX_CHARGES },
   register(api) {

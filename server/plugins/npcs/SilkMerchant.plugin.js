@@ -128,6 +128,7 @@ function onDialogueLine(request) {
 
 module.exports = {
   name: "SilkMerchant",
+  description: "Silk merchant in Ardougne: haggling dialogue buys every un-noted silk in the inventory at the agreed price.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

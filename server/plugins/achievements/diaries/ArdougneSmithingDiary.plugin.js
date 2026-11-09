@@ -64,6 +64,7 @@ function onSmithingSuccess(api, event) {
 
 module.exports = {
   name: "ArdougneSmithingDiary",
+  description: "Credits the Ardougne diary smithing tasks: a mithril platebody near Ardougne and a dragon sq shield in West Ardougne.",
   members: true,
   dependsOn: ["AchievementDiaries", "Quests", "Smithing"],
   register(api) {

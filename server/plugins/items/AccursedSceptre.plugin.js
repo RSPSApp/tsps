@@ -355,6 +355,7 @@ function defineSceptres() {
 
 module.exports = {
   name: "AccursedSceptre",
+  description: "Accursed sceptre and Thammaron's sceptre: powered-staff casting on revenant ether charges, Wilderness NPC bonus, Check, Swap and Uncharge.",
   members: true,
   _test: {
     CHARGES_KEY, MAX_CHARGES, ACTIVATION_ETHER,

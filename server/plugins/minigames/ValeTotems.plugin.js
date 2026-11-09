@@ -18,6 +18,7 @@ const UNITS = [
 
 module.exports = {
   name: "ValeTotems",
+  description: "Adds the Vale Totems Fletching minigame in the Auburn Valley: building and decorating totems, ent offerings, loot and research points.",
   members: true,
   register(api) {
     for (const unit of UNITS) unit.init?.(api);

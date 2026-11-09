@@ -120,6 +120,7 @@ function openNameChanger({ player }) {
 
 module.exports = {
   name: "DisplayName",
+  description: "The ::displayname command, setting the name other players see within the 12-character, 28-day and 35-day reservation rules.",
   config: {
     "DisplayName:cooldownDays": {
       type: "number", label: "Display name change cooldown (days)", default: 28, min: 0,

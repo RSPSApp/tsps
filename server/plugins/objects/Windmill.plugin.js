@@ -216,6 +216,7 @@ function emptyFlourBin(api, event) {
 
 module.exports = {
   name: "Windmill",
+  description: "Windmill milling: fill the hopper with grain, operate the controls and empty the flour bin into a pot, as in Cook's Assistant.",
   register(api) {
     api.persistAttribute(HOPPER_ATTRIBUTE);
     api.persistAttribute(FLOUR_ATTRIBUTE);

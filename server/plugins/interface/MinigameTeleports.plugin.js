@@ -220,6 +220,7 @@ function attach(api) {
 
 module.exports = {
   name: "MinigameTeleports",
+  description: "Minigame Teleport spell: opens the minigame list, checks requirements, plays the home teleport cast and applies the 20-minute cooldown.",
   register(api) {
     attach(api);
     api.persistAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE);

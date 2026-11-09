@@ -276,6 +276,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "RingOfShadows",
+  description: "Charges the ring of shadows with runes and teleports to the Desert Treasure II vaults, unlocking each with its boss tablet, one charge per teleport.",
   members: true,
   register: attach,
   CHARGES_META_KEY,

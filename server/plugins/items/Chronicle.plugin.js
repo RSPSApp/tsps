@@ -102,6 +102,7 @@ function teleport({ player }) {
 
 module.exports = {
   name: "Chronicle",
+  description: "Chronicle: teleports to the Champions' Guild for one charge, charged with teleport cards up to 1,000, with Check charges.",
   _test: { MAX_CHARGES, CHARGES_ATTRIBUTE, LANDING_CENTRE, LANDING_RADIUS, charges, chargeWithCards, checkCharges, teleport },
   register(api) {
     core = api.core;

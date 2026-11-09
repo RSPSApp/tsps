@@ -12,6 +12,7 @@ function interfaceClosed(api, { player, interfaceId }) {
 
 module.exports = {
   name: "Trading",
+  description: "Closes a player-to-player trade when its offer, confirmation or inventory interface is closed.",
   register(api) {
     api.onCustomEvent("interface:closed", interfaceClosed.bind(null, api));
   },

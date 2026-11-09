@@ -52,6 +52,7 @@ function clear({ player }) {
 
 module.exports = {
   name: "WelcomeScreen",
+  description: "Welcome screen at login with the message of the week and a Play button, with the text set by the world's plugin config.",
   config: {
     "WelcomeScreen:messageOfTheWeek": {
       type: "string", label: "Message of the week", defaultText: "Welcome to <world name>!",

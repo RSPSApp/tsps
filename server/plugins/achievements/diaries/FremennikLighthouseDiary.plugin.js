@@ -72,6 +72,7 @@ function arrived({ player, objectId, location }) {
 
 module.exports = {
   name: "FremennikLighthouseDiary",
+  description: "Credits the Fremennik diary task for reaching the Lighthouse by the Waterbirth Island dungeon ladder, after Horror from the Deep.",
   members: true,
   dependsOn: ["AchievementDiaries"],
   register(registry) {

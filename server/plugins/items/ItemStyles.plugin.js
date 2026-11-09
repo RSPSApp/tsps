@@ -161,6 +161,7 @@ function logout({ player }) { sessions.delete(player); }
 
 module.exports = {
   name: "ItemStyles",
+  description: "Opens the native style chooser for holiday cosmetics whose Change, Colour, Carve or Paint option alters their look, and applies the chosen style.",
   register(api) {
     core = api.core;
     api.onItemAction(open);

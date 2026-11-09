@@ -118,6 +118,7 @@ function diaryCommand({ player, parts }) {
 
 module.exports = {
   name: "AchievementDiaries",
+  description: "Achievement diaries: task lists, progress, tier reward claims and lamps, plus the ::diary command to inspect, complete or reset tiers.",
   members: true,
   register(api) {
     Progress(api);

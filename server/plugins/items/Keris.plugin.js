@@ -72,6 +72,7 @@ function applyBreachingAccuracy(attacker, attackRoll) {
 
 module.exports = {
   name: "Keris",
+  description: "Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost.",
   members: true,
   register(api) {
     api.registerMeleeHitModifier(applyKerisDamage);

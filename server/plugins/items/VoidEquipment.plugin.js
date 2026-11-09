@@ -109,6 +109,7 @@ function magicDamageBonus(api, entity, permille) {
 
 module.exports = {
   name: "VoidEquipment",
+  description: "Applies the Void Knight set bonuses for melee, ranged and magic, normal or elite, and redraws the combat tab when the set changes.",
   members: true,
   _test: { voidSetForStyle, activeVoidStyle, effectLine, addVoidEffects },
   register(api) {

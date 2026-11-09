@@ -206,6 +206,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "PendantOfAtes",
+  description: "Charges the Pendant of Ates with frozen tears and teleports to the Ates statues the player has activated, one charge each.",
   members: true,
   register: attach,
   CHARGES_META_KEY,

@@ -1100,9 +1100,9 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
   t.after(() => PluginManager.emitServerShutdown({}));
   const Firemaking = require("../plugins/skills/Firemaking.plugin");
   const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
-  let nextIndex = 1920, routeIndex = 0;
+  let nextIndex = 1920;
+  const usedTiles = [];
   for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine", "permission veto", "equipment dispatch"]) {
-    const anchorX = 3226 + 3 * routeIndex++;
     await t.test(route, async t => {
       const accounts = [];
       t.after(() => {
@@ -1117,7 +1117,7 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
           for (const o of f.fires?.() ?? []) core.ObjectManager.deregister(o, true);
         }
       });
-      function account(x, y) {
+      function account() {
         const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
           send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
         const p = new Player(new PlayerSession(channel));
@@ -1125,8 +1125,22 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         const f = { p }; accounts.push(f);
         p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
         p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
-        p.setLocation(new core.Location(x, y, 0)); p.needsPlacement = false;
-        const anchor = p.getLocation().clone(), skills = p.getSkillManager();
+        // Find a real open, walkable tile distinct from every prior route's fire tile.
+        let anchor = null;
+        for (let y = 3200; y < 3264 && !anchor; y++) {
+          for (let x = 3200; x < 3264; x++) {
+            if (usedTiles.some(tile => Math.max(Math.abs(tile.getX() - x), Math.abs(tile.getY() - y)) < 3)) continue;
+            const candidate = new core.Location(x, y, 0);
+            if (Firemaking.isFireTileBlocked(candidate, null)) continue;
+            p.setLocation(candidate);
+            const queue = p.getMovementQueue();
+            if (![[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dx, dy]) => queue.canWalk(dx, dy))) continue;
+            anchor = candidate.clone(); usedTiles.push(anchor); break;
+          }
+        }
+        assert.ok(anchor, "setup: a distinct open fire tile with an exit exists");
+        p.needsPlacement = false;
+        const skills = p.getSkillManager();
         skills.setExperience(core.Skill.FIREMAKING, 13034431);
         skills.setMaxLevel(core.Skill.FIREMAKING, 99);
         skills.setCurrentLevel(core.Skill.FIREMAKING, 99, false);
@@ -1151,8 +1165,8 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         assert.equal(fires().length, 0);
         Object.assign(f, { c, anchor, gains, messages, ground, fires }); return f;
       }
-      // Each route owns fresh tiles: the plugin's tracked fire can outlive fixture deregistration.
-      const actor = account(anchorX, 3218), other = account(anchorX - 1, 3217);
+      // Each actor owns a fresh tile: tracked fires can outlive fixture deregistration.
+      const actor = account(), other = account();
       assert.notEqual(actor.p.getLongUsername(), other.p.getLongUsername());
       let turns = 0;
       const turn = () => {

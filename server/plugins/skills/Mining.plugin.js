@@ -260,8 +260,10 @@ const ROCKS = [
 // rsprox captures 70 (rev 227) and 3027 (rev 231): each essence plays sound 3600 and counts in
 // tracking_ore_mined, with no chat line.
 const ESSENCE_ROCKS = [
-  { objectName: "Rune Essence", objectIds: [ObjectIds.RUNE_ESSENCE_3], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, respawnTicks: 0, infinite: true, silent: true },
-  { objectName: "Rune essence", objectIds: [ObjectIds.RUNE_ESSENCE, ObjectIds.RUNE_ESSENCE_2], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, respawnTicks: 0, infinite: true, silent: true },
+  // `runeEssence`: Wiki (Rune Essence mine): "Free players, or members with less than level 30 Mining, will mine rune
+  // essence from the outcrops"; members at 30 or higher mine pure essence.
+  { objectName: "Rune Essence", objectIds: [ObjectIds.RUNE_ESSENCE_3], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, runeEssence: true, respawnTicks: 0, infinite: true, silent: true },
+  { objectName: "Rune essence", objectIds: [ObjectIds.RUNE_ESSENCE, ObjectIds.RUNE_ESSENCE_2], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, runeEssence: true, respawnTicks: 0, infinite: true, silent: true },
   // Wiki Ancient essence crystals: 75 Mining, 13.5 XP, 1-4 essence by level, never mined out (the active
   // spot moves instead, see AncientEssence.Mining), no pet. No published chart: every roll lands.
   { objectName: "Ancient essence crystals", level: 75, xp: 13.5, oreId: ItemIdentifiers.ANCIENT_ESSENCE, gems: true, respawnTicks: 0, infinite: true, essenceByLevel: true, oreMessage: "You manage to mine some ancient essence." },
@@ -618,7 +620,17 @@ function wearsBreathingFilter(player) {
   return BREATHING_FILTER_PATTERN.test(pluginApi.core.CacheDefinitions.getItem(head.getId())?.name ?? "");
 }
 
+const PURE_ESSENCE_LEVEL = 30;
+
+/** The essence mine's outcrops give rune essence on a free world or below 30 Mining: this session's copy of the rock. */
+function forMiner(player, rock) {
+  if (!rock.runeEssence) return rock;
+  const pure = pluginApi.core.WorldDefinition.isMembersWorld() && getMiningLevel(player) >= PURE_ESSENCE_LEVEL;
+  return pure ? rock : { ...rock, oreId: ItemIds.RUNE_ESSENCE };
+}
+
 function startMining(player, rockObject, rock, activeSessions) {
+  rock = forMiner(player, rock);
   if (rock.requiresBreathingFilter && !wearsBreathingFilter(player)) {
     player.sendMessage(NO_BREATHING_FILTER);
     return false;

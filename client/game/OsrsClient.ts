@@ -284,6 +284,7 @@ import { isInTouchScrollLayer } from "./widgets/input/widgetTouchScrollInput";
 import { MobileChatKeyboard } from "./chat/MobileChatKeyboard";
 import { KeyboardButtonProbe } from "./chat/keyboardButtonProbe";
 import { collectInputWidgetsAtPoint } from "./widgets/interaction/widgetClickProbe";
+import { isChatboxClickThroughActive } from "./widgets/interaction/chatboxClickThrough";
 import { CombatOptionsController } from "./combat/CombatOptionsController";
 import { HitsplatFlushController } from "./combat/HitsplatFlushController";
 import { ClientScriptLoader } from "./cs2/ClientScriptLoader";
@@ -724,6 +725,8 @@ export class OsrsClient {
     menuFrozenSimpleEntries?: SimpleMenuEntry[];
     menuFrozenSimpleEntriesVersion: number = 0;
     menuActiveSimpleEntries: SimpleMenuEntry[] = [];
+    /** A click-through chat line's options, shown above the world menu opened on `frame`. */
+    menuChatLineEntries: { frame: number; entries: SimpleMenuEntry[] } | undefined;
     menuState: MenuState = new MenuState();
 
     debugText?: string;
@@ -1579,7 +1582,19 @@ export class OsrsClient {
             getInputManager: () => this.inputManager,
             getRendererCanvas: () => this.renderer?.canvas,
             getChatRequestsByName: () => this.chatRequestsByName,
+            isChatboxClickThrough: () => this.isChatboxClickThrough(),
         });
+    }
+
+    /** Whether the transparent chatbox's message area lets clicks through to the world. */
+    isChatboxClickThrough(): boolean {
+        const varManager = this.varManager;
+        const widgetManager = this.widgetManager;
+        if (!varManager || !widgetManager) return false;
+        return isChatboxClickThroughActive(
+            (id) => varManager.getVarbit(id),
+            (uid) => widgetManager.getWidgetByUid(uid),
+        );
     }
 
     private initSpellSelectionController(): void {

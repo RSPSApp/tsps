@@ -8,13 +8,13 @@
 #   anim/          its animation (seq.dat, framemap-<id>.dat, frames/), if it has one
 #
 # Import (pick spotanim.dat) brings in the model with the OSRS model add-on and the animation with
-# the OSRS animation add-on, on that model: edit both as those add-ons describe. The definition's
-# size is the anim Empty's "width_scale" (x and z) and "height_scale" (y), 128 = as modelled, and
-# its turn is "orientation" (degrees); the preview shows them. Ambient / contrast and recolours are
-# kept as they are, but not shown.
+# the OSRS animation add-on, as a rig on that model: edit both as those add-ons describe. The
+# definition's size is the rig's "width_scale" (x and z) and "height_scale" (y), 128 = as
+# modelled, and its turn is "orientation" (degrees), in Tool Shelf > OSRS. They, ambient /
+# contrast and recolours are kept, but not shown.
 #
-# Export (pick where spotanim.dat goes) writes spotanim.dat (with the size and turn from the anim
-# Empty), model.dat (from the model, v2 encoding) and anim/ next to it. The model and animation ids
+# Export (pick where spotanim.dat goes) writes spotanim.dat (with the size and turn from the rig),
+# model.dat (from the model, v2 encoding) and anim/ next to it. The model and animation ids
 # inside spotanim.dat are unchanged: new ids are given when the graphic is added to the game.
 #
 # Needs the "OSRS model (.dat)" (io_osrs_dat.py) and "OSRS animation (seq.dat)" (io_osrs_anim.py)
@@ -135,17 +135,15 @@ if bpy is not None:
         root = None
         anim_folder = os.path.join(folder, "anim")
         if os.path.exists(os.path.join(anim_folder, "seq.dat")):
-            root, anim = anim_addon.import_animation(context, anim_folder, [obj], name=name)
+            root, anim, info = anim_addon.import_animation(context, anim_folder, [obj], name=name)
         else:
-            # No animation: an Empty still carries the definition (and an empty frame list).
+            # No animation: an Empty carries the definition.
             root = bpy.data.objects.new(name + " anim", None)
             context.scene.objects.link(root)
             root["osrs_targets"] = json.dumps([obj.name])
         root[SPOTANIM_KEY] = _read_hex(path)
         for key, value in spot.values.items():
             root[key] = value
-        if root.get("osrs_preview"):
-            anim_addon.update_preview(context.scene, root, force=True)
         for o in context.selected_objects:
             o.select = False
         root.select = True
@@ -178,7 +176,7 @@ if bpy is not None:
         model, size = model_addon.export_dat(context, os.path.join(folder, "model.dat"), obj=models[0])
         frames = 0
         if "osrs_anim" in root.keys():
-            seq, written = anim_addon.export_animation(root, os.path.join(folder, "anim"))
+            seq, written, worst = anim_addon.export_animation(context, root, os.path.join(folder, "anim"))
             frames = len(seq.frame_ids)
         return model, frames
 
@@ -215,7 +213,7 @@ if bpy is not None:
             try:
                 root = find_graphic_root(context)
                 if root is None:
-                    raise RuntimeError("select the graphic's anim Empty")
+                    raise RuntimeError("select the graphic's rig")
                 model, frames = export_graphic(context, self.filepath, root)
             except Exception as error:
                 self.report({'ERROR'}, "OSRS graphic export failed: %s" % error)

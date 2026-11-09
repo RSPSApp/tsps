@@ -13,10 +13,16 @@ The block of ice on the target is a different graphic (369) and isn't included.
 
 In Blender (with the three add-ons installed, see `../README.md`):
 1. File > Import > OSRS model (.dat): `player.dat`.
-2. With it selected, File > Import > OSRS animation: `player-anim/seq.dat`.
-3. File > Import > OSRS graphic: `graphic/spotanim.dat`. Both start on frame 0 and last 53 ticks,
-   as they play together in game.
+2. With it selected, File > Import > OSRS animation: `player-anim/seq.dat`. This makes the rig
+   `zgs_special_player rig`: Body, Torso, Head, both arms down to the hands, the Weapon (the
+   godsword, in the right hand) and both legs, plus small scale bones (the Body stretches slightly
+   upward during the swing).
+3. File > Import > OSRS graphic: `graphic/spotanim.dat`. This makes `gfx 1210 rig`: Trail (it
+   moves) and Section 1-19, a chain of trail pieces that each grow from nothing (scale), with
+   Fade 1-20 and Fade all in Tool Shelf > OSRS.
+4. Both start on frame 0 and last 53 ticks, as they play together in game. Play the timeline, or
+   pose a bone in Pose Mode and key it.
 
 The body kits keep their default colours (the game recolours them with the player's chosen
-colours). The preview doesn't apply the graphic's lighting (ambient 30), so the trail looks redder
+colours). Blender doesn't apply the graphic's lighting (ambient 30), so the trail looks redder
 than the game's orange.

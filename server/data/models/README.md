@@ -47,42 +47,48 @@ indices are stored uncompressed: a 1528-byte model can become 1653 bytes.
 ## Animations
 
 `io_osrs_anim.py` (Blender 2.79 add-on **Import-Export: OSRS animation (seq.dat)**) imports an
-OSRS frame animation onto models and exports it back. Install it like the model add-on.
+OSRS frame animation as an ordinary armature animation, and exports it back. Install it like the
+model add-on (if an older version is installed, install this file over it and restart Blender).
 
 An extracted animation is a folder: `seq.dat` (the sequence definition: frame list and lengths,
-hand items, priorities), `framemap-<id>.dat` (the frame map: an ordered list of slots, each a
-transform type and the vertex labels it moves) and `frames/<group>-<file>.dat` (per frame, the
-values for each slot it uses). `info.json` is only for reading. Skeletal animations (some newer
-content) aren't supported yet.
-
-How the game animates: every frame walks the frame map's slots in order. An **origin** slot sets
-the pivot to the middle of its labels' vertices, **move** moves its labels' vertices, **rotate**
-turns them about the pivot (256 steps per turn), **scale** scales them about the pivot (128 =
-unchanged), and **alpha** makes the faces of its face labels more transparent (8/255 per step).
-That is why animations only work on models whose vertices carry the right labels (`label_<n>`
-groups): a player animation moves every model built for players, including weapons.
+hand items, priorities), `framemap-<id>.dat` (the frame map, the game's skeleton) and
+`frames/<group>-<file>.dat` (one pose each). `info.json` is only for reading. Skeletal animations
+(some newer content) aren't supported yet.
 
 Import: select the model(s) to animate, then File > Import > OSRS animation and pick `seq.dat`.
-Several selected models are animated as one, as the game merges a player's body and equipment.
-- An Empty `<name> anim` holds the animation. Each slot the frames use gets a control Empty under
-  it, `<name> s<slot> <type> [<labels>]`, drawn at its pivot. Rotate, move or scale a control to
-  rotate, move or scale its labels; alpha (and other) slots use the control's custom properties
-  `x`, `y`, `z` (Tool Shelf > OSRS shows them). Rotations are Euler YXZ, which is the game's order.
+Select every part (a player's body and equipment are one model in game).
+- An armature `<name> rig` appears, with a bone per moving part, named and nested like the parts.
+  For players: Body > Torso > Head, Right upper arm > Right forearm > Right hand > Weapon, Left
+  upper arm > ... > Left hand, Right thigh > Right shin > Right foot, and so on (right is the
+  weapon hand). Other skeletons get bones named `Part <n>`. The model gets an Armature modifier
+  and a vertex group per bone.
+- Every game frame is a keyed pose. Animate in Pose Mode as usual: select a bone, rotate it, press
+  I. Children follow their parents. Bones only allow what the game can do with them: most can only
+  rotate, so their move and scale channels are locked. A part that stretches has its own small
+  `<part> scale` bone, and the Body can also move.
 - One Blender frame is one client tick (20 ms; the scene is set to 50 fps). Each keyframe of the
-  anim Empty's `osrs_frame` property starts a game frame. Move those keys in the Dope Sheet to
-  retime the animation. Tool Shelf > OSRS > Add frame / Remove frame adds or removes the game
-  frame at the current Blender frame, and Last frame length sets the last frame's length.
-- Keys are Constant, because the game shows one pose per frame. Key controls as usual (I); a
-  control's value at each game frame's start is what gets exported.
-- The preview hides the models and shows `<model> (pose)` copies in the pose at the current
-  frame, updated as you edit. Tool Shelf > OSRS > Preview turns it off, showing the models
-  themselves again (to edit or export them). Refresh re-reads the models after editing them.
-- Add control for slot... adds a control for a slot no frame uses yet.
+  rig's `osrs_frame` property starts a game frame (the rig's top row in the Dope Sheet). Drag
+  those keys to retime. Tool Shelf > OSRS has Add frame and Remove frame (at the current frame) and
+  the last frame's length.
+- Between game frames Blender blends the poses (as the client smooths them in game). Only the
+  pose at the start of each game frame is exported.
+- Fades (graphics fade parts in and out) are sliders in Tool Shelf > OSRS, keyed like anything
+  else: each step makes those faces 8/255 more transparent, so 32 hides them. The faces they act on
+  use copies of their material (`<material>~fade`), so the fade shows in Material or Textured view.
+  Recolour the original material; the copies follow it and export as it.
+- The model add-on exports the model unposed (the Armature modifier is left out), so the model and
+  the animation can be edited in the same file.
 
 Export: File > Export > OSRS animation (or Tool Shelf > OSRS > Export animation...), pick where
-`seq.dat` goes. It writes `seq.dat`, the frame map and the frames next to it. Unchanged frames
-keep their file ids. A changed or new frame that would clash gets the next free file id in the
-same group. Everything else in `seq.dat` is kept as it was.
+`seq.dat` goes. It writes `seq.dat`, the frame map and the frames next to it:
+- Frames you didn't change are written exactly as they were.
+- Changed and new frames are converted back to the game's numbers. Rotations are in steps of 1.4
+  degrees, so a pose can move by a fraction of a unit. The report (and Tool Shelf > OSRS) says how
+  far the game's pose is from Blender's, in game units (128 per tile).
+- A changed frame keeps its file id when it can, and gets the next free id in the same group
+  otherwise. Everything else in `seq.dat` is kept as it was.
+
+The rig only works while the bones are as imported: pose them, but don't move them in Edit Mode.
 
 ## Graphics
 
@@ -94,14 +100,17 @@ An extracted graphic is a folder: `spotanim.dat` (the definition: which model an
 size, turn and lighting), `model.dat` and `anim/` (its animation, as above).
 
 Import: File > Import > OSRS graphic, pick `spotanim.dat`. This brings in the model and its
-animation (edit them as above). The definition's size and turn are the anim Empty's
-`width_scale`, `height_scale` (128 = as modelled) and `orientation` (degrees), shown in Tool Shelf
-> OSRS and in the preview. Recolours, ambient and contrast are kept, but not shown.
+animation as a rig (edit them as above). The definition's size (`width_scale`, `height_scale`, 128
+= as modelled) and turn (`orientation`, degrees) are in Tool Shelf > OSRS > OSRS graphic. They
+are exported, but not shown in Blender, nor are recolours and lighting.
 
 Export: File > Export > OSRS graphic, pick where `spotanim.dat` goes. It writes `spotanim.dat`,
 `model.dat` (v2) and `anim/`. The model and animation ids inside `spotanim.dat` stay as they
 were; a custom graphic gets new ids when it is added to the game.
 
-Tested on the Zamorak godsword special (`zamorak-godsword-special/`): importing and exporting
-gives byte-identical `seq.dat`, frames, frame maps and `spotanim.dat`, and the same model. Edits,
-added frames and removed frames export as expected, and the preview's rotations match the game's.
+Tested on the Zamorak godsword special (`zamorak-godsword-special/`):
+- The rigs reproduce every game frame to within 0.0001 game units.
+- Importing and exporting gives byte-identical `seq.dat`, frames, frame maps and `spotanim.dat`,
+  and the same model.
+- Converting every frame back from the bones gives exactly the original numbers.
+- Edits, added frames and removed frames export as expected.

@@ -15,7 +15,9 @@
 #   osrs_render_type. Faces added later (joined geometry) read as 0 in all of them: priority 0,
 #   face label 0, no texture.
 #
-# Export uses the active mesh object (modifiers applied, world transform applied, triangulated).
+# Export uses the active mesh object (modifiers applied except an Armature modifier, world transform
+# applied, triangulated). Fade material copies made by the OSRS animation add-on export as the
+# material they copy.
 # Colour comes from an "osrs_<hsl>" material name, else the nearest palette colour of the material's
 # diffuse colour. Faces without layer values (new geometry) get priority / label / alpha 0 and no
 # texture. Vertices with no label_ group get label 0. Textured faces are written with their own
@@ -665,6 +667,9 @@ def material_colour(mat):
     several HSL values share one on-screen colour."""
     if mat is None:
         return 127, 0
+    # The OSRS animation add-on's fade copies stand for the model's own material.
+    if "osrs_material" in mat.keys() and mat["osrs_material"] in bpy.data.materials:
+        mat = bpy.data.materials[mat["osrs_material"]]
     alpha = int(round((1.0 - mat.alpha) * 255)) if mat.use_transparency else 0
     match = re.match(r"^%s(\d+)(?:_a(\d+))?$" % MATERIAL_PREFIX, mat.name.split(".")[0])
     if match:
@@ -692,7 +697,15 @@ def export_dat(context, path, obj=None):
     obj = obj or context.active_object
     if obj is None or obj.type != 'MESH':
         raise RuntimeError("select a mesh object to export")
-    mesh = obj.to_mesh(context.scene, True, 'PREVIEW')
+    # The model as modelled: an animation's Armature modifier (OSRS animation add-on) is left out.
+    posed = [m for m in obj.modifiers if m.type == 'ARMATURE' and m.show_viewport]
+    for m in posed:
+        m.show_viewport = False
+    try:
+        mesh = obj.to_mesh(context.scene, True, 'PREVIEW')
+    finally:
+        for m in posed:
+            m.show_viewport = True
     try:
         mesh.transform(obj.matrix_world)
         bm = bmesh.new()

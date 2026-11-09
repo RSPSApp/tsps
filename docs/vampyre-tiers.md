@@ -22,6 +22,7 @@ Efaritay's aid (ring slot): tier 1 gets +10% damage from every weapon and +15% a
 - Blisterwood sickle (e) keeps its bonus but, as the Wiki lists it among the tier 2 weapons, deals 0 to tier 3.
 - Poisoned silver bolts count as silver bolts (the Temple Trekking data this replaces treated them so); the Wiki lists only "Silver bolts".
 - Only the melee and ranged max-hit and accuracy modifiers are tiered. Spells, the cannon, thralls, recoil, Vengeance and special attacks or fixed hits that skip those modifiers are not changed at any tier: the Wiki says nothing about them for tiers 2 and 3.
+- Area hits judge each victim by its own tier, not by the attacker's primary target: Dinh's bulwark Shield Bash, chinchompas, barrages, scythe of Vitur cleaves and Venator bow bounces.
 - Temple Trekking juvinates used to take 0 from every player hit (spells included); spells now hit them for full damage, like any other vampyre.
 - Hits from NPCs (the Temple Trekking follower) are not affected.
 - Tier by name: NPCs not named above with the `vampyre` attribute count as tier 1. The juvenile/juvinate retreat-into-mist mechanic is not implemented.

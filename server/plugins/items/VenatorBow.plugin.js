@@ -11,6 +11,8 @@
  * cycles each, chained onto the arrow's landing, at height 31, angle 127 and progress 0; synth 6672
  * plays with one bounce, 6672 and 6735 with two.
  */
+const { withHitVictim } = require("../../src/main/typescript/elvarg/game/content/combat/EquipmentEffects");
+
 const MAX_CHARGES = 50000;
 const CHARGE_META_KEY = "venator-bow:charges";
 const SHARDS_PER_BOW = 5;
@@ -188,7 +190,9 @@ function ricochet(player, primary, method, primaryDelay) {
   const { CombatFactory, DamageFormulas, PendingHit, Projectile } = core;
   const targets = bounceTargets(player, primary);
   if (targets.length === 0) return [];
-  const bounceMax = Math.floor((DamageFormulas.calculateMaxRangedHit(player) * 2) / 3);
+  // Each bounce target's own max (vampyre tiers, salve, slayer gear), not the primary target's.
+  const bounceMax = (target) =>
+    Math.floor((withHitVictim(player, target, () => DamageFormulas.calculateMaxRangedHit(player)) * 2) / 3);
   const landed = arrowEndCycle(player, primary);
   const hits = [];
   let origin = primary;
@@ -201,7 +205,7 @@ function ricochet(player, primary, method, primaryDelay) {
       .sendProjectile();
     const delay = primaryDelay + BOUNCE_HIT_TICKS[index];
     const hit = new PendingHit(player, target, method, delay);
-    CombatFactory.applyStyleDamage(hit, bounceMax);
+    CombatFactory.applyStyleDamage(hit, bounceMax(target));
     hits.push(hit);
     origin = target;
   });

@@ -15,6 +15,7 @@
  * In multicombat the remaining hits can cleave adjacent targets in the forward 1x3 arc.
  */
 const { plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+const { withHitVictim } = require("../../src/main/typescript/elvarg/game/content/combat/EquipmentEffects");
 
 const MAX_CHARGES = 20000;
 const CHARGES_PER_VIAL = 100;
@@ -160,14 +161,21 @@ function createMethod() {
   const { MeleeCombatMethod, PendingHit, CombatFactory, DamageFormulas } = core;
   return new (class ScytheCombatMethod extends MeleeCombatMethod {
     hits(character, target) {
-      const maxHit = DamageFormulas.calculateMaxMeleeHit(character);
+      // Each victim's own max (vampyre tiers, salve, slayer gear): a cleave isn't judged by the primary target.
+      const maxHits = new Map();
+      const maxHitOf = (victim) => {
+        if (!maxHits.has(victim)) {
+          maxHits.set(victim, withHitVictim(character, victim, () => DamageFormulas.calculateMaxMeleeHit(character)));
+        }
+        return maxHits.get(victim);
+      };
       const hits = [];
       const budgets = new Map();
       const targets = [...Array(hitCount(target)).fill(target), ...cleaveTargets(character, target)];
       for (const [index, victim] of targets.entries()) {
         if (!budgets.has(victim)) budgets.set(victim, { remaining: victim.getHitpoints() });
         const hit = new PendingHit(character, victim, this, { damageBudget: budgets.get(victim) });
-        if (index > 0) CombatFactory.applyStyleDamage(hit, hitMax(maxHit, index));
+        if (index > 0) CombatFactory.applyStyleDamage(hit, hitMax(maxHitOf(victim), index));
         hits.push(hit);
       }
       if (character?.isPlayer?.()) {

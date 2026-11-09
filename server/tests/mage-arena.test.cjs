@@ -128,6 +128,8 @@ test("register persists one counter per god and the first cape, and wires the ho
     onPlayerProcess: () => hooks.push("onPlayerProcess"),
     registerNpcCombatMethodProvider: (ids) => hooks.push(`combatMethod:${ids}`),
     onCustomEvent: (name) => hooks.push(`onCustomEvent:${name}`),
+    onNpcDialogueVariant: () => hooks.push("onNpcDialogueVariant"),
+    onNpcDialogueCondition: () => hooks.push("onNpcDialogueCondition"),
   };
   MageArena.register(api);
 
@@ -141,6 +143,8 @@ test("register persists one counter per god and the first cape, and wires the ho
   assert.ok(hooks.includes("onObjectInteraction:Sparkling pool"));
   assert.ok(hooks.includes("onObjectInteraction:Statue of Saradomin"));
   assert.ok(hooks.includes("onCustomEvent:mage-arena:cape-received"), "answers whether a god cape was received");
+  assert.ok(hooks.includes("onNpcDialogueVariant"), "picks Kolodion's transcript branch");
+  assert.ok(hooks.includes("onNpcDialogueCondition"), "answers Kolodion's conditions");
 });
 
 test("the arena levers play the captured pull and cast, landing on the captured tiles", () => {

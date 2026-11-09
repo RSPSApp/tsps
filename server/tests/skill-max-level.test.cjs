@@ -1066,6 +1066,104 @@ test("Show level & unlocks: continuing opens a box with them, and the skill resu
   assert.equal(r.statements.length, 0);
 });
 
+test("as captured: a Sailing unlock box shows the level's pictures beside its text, logged in the chat as it opens", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  // The pictures are obj gamevals; an earlier test may have opened the cache already.
+  try { CachePipeline.getActive(); } catch { await CachePipeline.initialize(require("node:path").resolve(__dirname, "..")); }
+  const core = PluginManager.getCoreApi();
+  const objId = (name) => core.CacheDefinitions.getObjId(name);
+  const pictures = require("../plugins/interface/data/level-up-pictures.json");
+  const unlocks = require("../plugins/interface/data/level-up-messages.json");
+  // Every Sailing level that unlocks something has one or two pictures, each an obj in this cache.
+  for (const level of Object.keys(unlocks.Sailing)) {
+    const names = pictures.Sailing[level] ?? [];
+    assert.ok(names.length === 1 || names.length === 2, `Sailing ${level}`);
+    for (const name of names) assert.ok(Number.isInteger(objId(name)), `Sailing ${level}: ${name}`);
+  }
+
+  const submit = core.TaskManager.submit, tasks = [];
+  core.TaskManager.submit = (task) => tasks.push(task);
+  try {
+    const levelUp = (skill, oldLevel, newLevel) => {
+      const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+      const p = levelledPlayer(core);
+      p.getPacketSender().sendVarbit(4371, 1);
+      hooks.onPlayerLevelUp({ player: p, skill, oldLevel, newLevel });
+      return [hooks, p];
+    };
+    const boxes = (p) => [...p.statements.at(-1).dialogues.values()].filter((d) => typeof d.getText === "function");
+    const mesboxes = (p) => p.sent.filter(([type]) => type === "sendTypedMessage").map(([, type, text]) => [type, text]);
+
+    // Sailing 7: the cargo crate beside the text (objectbox), which is not a chat line until the box opens.
+    const [hooks, p] = levelUp(Skill.SAILING, 6, 7);
+    const text = "You can now accept up to two port tasks at the same time.";
+    assert.ok(!p.messages.includes(text), "with the box to say it, the level-up adds no chat line");
+    const shown = p.sent.find(([type, , hidden]) => type === "sendInterfaceDisplayState" && hidden === false);
+    p.sent.length = 0;
+    assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+    const [crate] = boxes(p);
+    assert.equal(crate.constructor.name, "ItemStatementDialogue");
+    assert.equal(crate.getItemId(), objId("sailing_skillguide_cargo_crate"));
+    assert.equal(crate.getText(), text);
+    assert.deepEqual(mesboxes(p), [[core.ChatType.MESBOX, text]]);
+    // Then, as live: the pop-up's skill icon hidden, the chatbox background reset, and the box.
+    assert.deepEqual(p.sent.filter(([type]) => type === "sendInterfaceDisplayState"), [["sendInterfaceDisplayState", shown[1], true]]);
+    assert.ok(p.sent.some(([type, id]) => type === "sendClientScript" && id === 2379));
+
+    // Sailing 22: two pictures, the keel then the duck (objectbox_double).
+    const [h22, p22] = levelUp(Skill.SAILING, 21, 22);
+    h22.onInterfaceActionButton({ player: p22 });
+    const [double] = boxes(p22);
+    assert.equal(double.constructor.name, "DoubleItemStatementDialogue");
+    assert.deepEqual(double.getItemIds(), [objId("sailing_skillguide_keel_iron"), objId("sailing_charting_current_duck")]);
+
+    // A level with no pictures listed keeps the plain message box.
+    const [hDef, pDef] = levelUp(Skill.DEFENCE, 39, 40);
+    hDef.onInterfaceActionButton({ player: pDef });
+    assert.equal(boxes(pDef)[0].constructor.name, "StatementDialogue");
+
+    // A lamp over several levels: a box for each that unlocked something, in order.
+    const [hLamp, pLamp] = levelUp(Skill.SAILING, 6, 10);
+    hLamp.onInterfaceActionButton({ player: pLamp });
+    assert.deepEqual(boxes(pLamp).map((box) => box.getItemId()),
+      [objId("sailing_skillguide_cargo_crate"), objId("sailing_skillguide_ports_musa_point")]);
+    assert.equal(mesboxes(pLamp).length, 2);
+
+    // The box follows its own skill's pop-up, before a combat level's; opening it in the pop-up's
+    // place keeps the paused skill paused, and it resumes once the combat pop-up is continued.
+    tasks.length = 0;
+    const [hCb, pCb, counts] = (() => {
+      const hooksCb = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+        emitCustomEvent(name, event) { if (name === "level-up:popup-opened") pauseHere(event.pause); },
+      });
+      const player = levelledPlayer(core, { combat: 90 });
+      hooksCb.onPlayerLogin({ player });
+      player.setCombat(91);
+      player.getPacketSender().sendVarbit(4371, 1);
+      let resumed = 0, cancelled = 0;
+      const pauseHere = (pause) => pause("skilling", () => resumed++, () => cancelled++);
+      hooksCb.onPlayerLevelUp({ player, skill: Skill.ATTACK, oldLevel: 39, newLevel: 40 });
+      return [hooksCb, player, () => [resumed, cancelled]];
+    })();
+    // The box opening in the chatbox closes the pop-up there, as the real sender reports it.
+    pCb.getDialogueManager = () => ({ startDialogues(chain) {
+      pCb.statements.push(chain);
+      pCb.getPacketSender().sendChatboxInterface(193);
+      for (const handler of hCb.customEvents.get("interface:closed")) handler({ player: pCb, interfaceId: 233 });
+    } });
+    assert.equal(hCb.onInterfaceActionButton({ player: pCb }), true);
+    assert.match(boxes(pCb)[0].getText(), /^You can now wield Rune Weaponry/);
+    assert.deepEqual(counts(), [0, 0], "the box takes the pop-up's place without ending the level-up");
+    pCb.getPacketSender().closeInterface(193);
+    for (const handler of hCb.customEvents.get("interface:closed")) handler({ player: pCb, interfaceId: 193 });
+    assert.equal(pCb.getPacketSender().isChatboxInterface(233), true, "then the combat pop-up");
+    assert.ok(pCb.sent.some(([type, line]) => type === "sendString" && line === "Your combat level is now 91."));
+    assert.equal(hCb.onInterfaceActionButton({ player: pCb }), true);
+    assert.deepEqual(counts(), [1, 0]);
+  } finally { core.TaskManager.submit = submit; }
+});
+
 test("as captured: a combat level gained waits behind the skill's pop-up", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();

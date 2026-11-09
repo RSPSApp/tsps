@@ -24,6 +24,11 @@ export interface WeaponCombatProfile {
     attackSpeed?: number;
     /** Tiles it reaches; ranged weapons take the cache's (ItemDefinition.ATTACK_RANGE_PARAM) first. */
     attackDistance?: number;
+    /**
+     * False for a weapon that reaches its melee distance but never swings: its wielder walks into
+     * reach, faces the target and waits (only a spell attacks with it).
+     */
+    meleeAllowed?: boolean;
     /** The style that adds 2 tiles (Longrange). */
     longRangeFightType?: FightType;
     hitDelays?: HitDelayProfile[];
@@ -149,6 +154,11 @@ export class WeaponProfiles {
     /** Melee reach: a profile's (halberds), or `fallback`. */
     public static meleeAttackDistance(player: Player, fallback: number): number {
         return this.get(player)?.attackDistance ?? fallback;
+    }
+
+    /** Whether the wielded weapon may swing in melee (WeaponCombatProfile.meleeAllowed). */
+    public static meleeAllowed(player: Player): boolean {
+        return this.get(player)?.meleeAllowed !== false;
     }
 
     public static hitDelays(player: Player, distance: number): number[] {

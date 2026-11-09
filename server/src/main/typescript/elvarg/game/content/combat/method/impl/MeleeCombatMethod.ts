@@ -22,6 +22,11 @@ export class MeleeCombatMethod extends CombatMethod {
         return [new PendingHit(character, target, this)];
     }
 
+    /** A weapon that allows no melee keeps its target but never swings (WeaponProfiles.meleeAllowed). */
+    canAttack(character: Mobile, target: Mobile): boolean {
+        return !character.isPlayer() || WeaponProfiles.meleeAllowed(character.getAsPlayer());
+    }
+
     attackDistance(character: Mobile): number {
         return character.isPlayer() ? WeaponProfiles.meleeAttackDistance(character.getAsPlayer(), 1) : 1;
     }

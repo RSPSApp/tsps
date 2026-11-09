@@ -168,15 +168,23 @@ export class Projectile {
         return this;
     }
 
+    /** Client cycles added to where it lands, its start unchanged (a slower second shot). */
+    private endDelay = 0;
+
+    public withEndDelay(cycles: number): Projectile {
+        this.endDelay = Math.max(0, Math.trunc(cycles));
+        return this;
+    }
+
     /** The exact relative client-cycle deadlines used by sendProjectile. */
     public getTiming(): { startCycleOffset: number; endCycleOffset: number; legacyMagic: boolean } {
         const legacyMagic = this.delay === 0 && this.speed === 20
             && this.startHeight === 43 && this.endHeight === 31;
         return {
             startCycleOffset: legacyMagic ? 51 : this.delay,
-            endCycleOffset: legacyMagic
+            endCycleOffset: (legacyMagic
                 ? Projectile.LEGACY_MAGIC_END_BASE + Projectile.flightDistance(this.start, this.end, this.lockon) * 10
-                : this.speed,
+                : this.speed) + this.endDelay,
             legacyMagic,
         };
     }

@@ -327,7 +327,7 @@ class FriendsChatManager {
                 display,
                 encoded,
             });
-            const visible = online?.getRelations().canReceivePrivateMessageFrom(player) === true;
+            const visible = online?.getRelations().isVisibleTo(player) === true;
             return {
                 name: online?.getDisplayName() ?? shownName(display, display),
                 previousName: DisplayNames.previousNameOf(display),

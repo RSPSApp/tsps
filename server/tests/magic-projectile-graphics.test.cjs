@@ -77,8 +77,14 @@ for(const distance of[1,3])for(const accurate of[true,false])test(`Fire Wave NPC
   assert.equal(f.callbacks.length,1);assert.equal(f.callbacks[0].cycle,f.cycle());assert.equal(f.callbacks[0].args[4],f.context);
   assert.equal(f.sounds.length,1,"no second sound at landing");assert.equal(f.sounds[0].cycle,castCycle);
 });
-for(const mode of["pvp","fixed","custom-projectile","no-projectile","no-context","arceuus","aoe"])test(`${mode} retains impact-time graphic fallback`,t=>{
-  const options={pvp:mode==="pvp",paid:mode!=="no-context",configure:({spell})=>{
+test("Fire Wave on a player queues its impact graphic for the projectile end, like an NPC",t=>{
+  const f=fixture(t,{distance:3,pvp:true});
+  assert.equal(f.graphics.length,1,"target visual sent in cast tick");
+  assert.equal(f.graphics[0].g.getDelay(),76);
+  f.land();assert.equal(f.graphics.length,1,"no second impact graphic");
+});
+for(const mode of["fixed","custom-projectile","no-projectile","no-context","arceuus","aoe"])test(`${mode} retains impact-time graphic fallback`,t=>{
+  const options={paid:mode!=="no-context",configure:({spell})=>{
     if(mode==="fixed")t.mock.method(spell,"hitDelay",()=>1);
     if(mode==="custom-projectile")t.mock.method(spell,"castProjectile",(a,b)=>core.Projectile.createProjectile(a,b,156,30,90,43,31));
     if(mode==="no-projectile")t.mock.method(spell,"castProjectile",()=>null);

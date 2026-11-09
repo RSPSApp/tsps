@@ -79,3 +79,11 @@ for (const [name, graphic] of Object.entries({
   assert.equal(played[0].getHeight(), 100);
   assert.equal(played[0].getDelay(), 0);
 });
+
+for (const name of ["WIND_WAVE", "WATER_WAVE", "EARTH_WAVE", "FIRE_WAVE", "WIND_SURGE", "EARTH_SURGE"]) test(`${name} casts at hand height like the strikes`, () => {
+  assert.ok(CombatSpells[name].startGraphic().getHeight() >= 92);
+});
+
+test("Tele Block declares no damage, so a player's cast cannot default to 1", () => {
+  assert.equal(CombatSpells.TELEBLOCK.maximumHit(), 0);
+});

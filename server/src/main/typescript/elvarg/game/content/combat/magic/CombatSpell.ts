@@ -84,9 +84,9 @@ export abstract class CombatSpell extends Spell {
       const timing = typeof projectile.getTiming === "function" ? projectile.getTiming() : null;
       projectile.sendProjectile();
       const context = Spell.getCastContext(cast, this);
-      // Native standard NPC casts queue their impact graphic at the cast, for the projectile's end cycle.
+      // Native standard casts on an NPC or a player queue their impact graphic at the cast, for the projectile's end cycle.
       // Other projectile profiles and independently timed/no-projectile spells keep their existing path.
-      if (context && cast.isPlayer() && castOn.isNpc() && timing?.legacyMagic
+      if (context && cast.isPlayer() && timing?.legacyMagic
           && timing.endCycleOffset > timing.startCycleOffset
           && this.getSpellbook() === MagicSpellbook.NORMAL && this.hitDelay() == null) {
         const radius = typeof (this as any).spellRadius === "function" ? (this as any).spellRadius() : 0;

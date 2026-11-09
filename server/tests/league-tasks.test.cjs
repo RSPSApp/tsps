@@ -382,6 +382,24 @@ test("a kill with a league area counts only there: Defeat a Snake in Karamja", (
   }
 });
 
+test("Defeat a Troll in Asgarnia credits a Mountain troll at Death Plateau", () => {
+  worldLeague = 6;
+  const hunter = character("trollhunter");
+  worldLeague = 4;
+  const taskId = "defeat-a-troll-in-asgarnia";
+  const areaAt = custom["league:area-at"];
+  custom["league:area-at"] = [(query) => { query.area = query.x === 2852 ? 3 : 21; }];
+  try {
+    const mountainTroll = npc(CacheDefinitions.getNpc(936).name);
+    hooks.onNpcDeath({ killer: hunter, npc: mountainTroll, npcId: 936, location: { x: 1219, y: 3490, z: 0 } });
+    assert.ok(!completed(hunter).includes(taskId));
+    hooks.onNpcDeath({ killer: hunter, npc: mountainTroll, npcId: 936, location: { x: 2852, y: 3591, z: 0 } });
+    assert.ok(completed(hunter).includes(taskId));
+  } finally {
+    if (areaAt) custom["league:area-at"] = areaAt; else delete custom["league:area-at"];
+  }
+});
+
 test("experience tasks: 25 million in a skill, and in 5 non-combat skills", () => {
   worldLeague = 6;
   const grinder = character("xpgrinder");

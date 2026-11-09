@@ -438,14 +438,11 @@ test("Dusuri: introduction until met, the Trade action sets star_trader_met, tra
 test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all four rewards", (t) => {
   const data = require("../data/definitions/shops.json").find((shop) => shop.name === "Dusuri's Star Shop");
   ShopDefinition.replace([new ShopDefinition(data.id, data.name, data.currency,
-    data.originalStock.map((stock) => ({ ...stock, price: data.prices[stock.id] })), 1, 1, 1, "test")]);
+    data.originalStock.map((stock) => ({ ...stock, price: data.prices[stock.id] })), 1, 1, 1, "test",
+    { generalStore: data.generalStore, sellMultiplier: data.sellMultiplier, priceChangePer: data.priceChangePer })]);
   ShopManager.initialize();
   ShopManager.registerItemCurrency(core.ItemIdentifiers.STARDUST);
-  t.mock.method(PluginManager, "emitCustomEvent", (name, request) => {
-    if (name === "shop:sell-price") Dusuri.sellPrice(request);
-    if (name === "shop:can-sell") Dusuri.canSell(request);
-    if (name === "shop:buys-back") Dusuri.buysBack(request);
-  });
+  t.mock.method(PluginManager, "emitCustomEvent", () => {});
   const p = miner();
   const packets = [];
   p.getSession = () => ({ sendClientPacket: (packet) => packets.push(packet) });
@@ -482,12 +479,6 @@ test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.STARDUST), before, "metadata-locked items remain unsellable");
   assert.equal(p.getInventory().getAmount(data.originalStock[0].id), 1);
   ShopManager.close(p);
-  const otherShop = { shopName: "Another shop", buyPrice: 2000, price: 1700 };
-  Dusuri.sellPrice(otherShop);
-  assert.equal(otherShop.price, 1700);
-  const otherSale = { shopName: "Another shop", sellable: false };
-  Dusuri.canSell(otherSale);
-  assert.equal(otherSale.sellable, false);
 });
 
 test("celestial ring: charge with stardust, extra ores up to adamantite spend charges, uncharge returns it", () => {

@@ -5,12 +5,16 @@
  */
 const Shared = require("./crafting/Shared.Crafting");
 
+function stopCraftingOnInteractionCleared({ player }) {
+  Shared.stopCrafting(player);
+}
+
 module.exports = {
   name: "Crafting",
   description: "Crafting: leather, gems, jewellery, glassblowing, pottery, spinning, weaving, battlestaves, snelms and light orbs.",
   register(api) {
     Shared.attach(api);
-    api.onCustomEvent("player:interaction-cleared", ({ player }) => Shared.stopCrafting(player));
+    api.onCustomEvent("player:interaction-cleared", stopCraftingOnInteractionCleared);
     require("./crafting/Leather.Crafting")(api);
     require("./crafting/Gems.Crafting")(api);
     require("./crafting/Snelms.Crafting")(api);

@@ -13,8 +13,8 @@
  * unlock hands the player across the gateway instead — one tile inside from the east side, and
  * one tile back out when it is used from within.
  *
- * The chest behind it is not this plugin's story: the map places a multiloc (34901, varbit 8396)
- * that currently resolves to nothing, so there is no click to accept. See the issue.
+ * The chest behind it (multiloc 34901, varbit hosdun_chest_status) is a key chest: see
+ * plugins/objects/keychests (the "grubby" entry in key-chests.json).
  *
  * The pick animation is the one Pyramid Plunder's tomb doors already use for their own Pick-lock
  * (Passages.PyramidPlunder.js, `human_pickuptable`); no capture of this door exists.

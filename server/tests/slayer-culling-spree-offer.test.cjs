@@ -213,6 +213,9 @@ test("a regular task takes the count typed (5), and out-of-range, 0 and a cancel
   assert.equal(Tasks.current(player), null, "0 is out of range, not dropped silently");
   assert.equal(player.sent.messages.at(-1), "You must choose an amount between 5 and 200.");
   regular[1]();
+  player.getEnteredAmountAction().execute(-3);
+  assert.equal(player.sent.messages.at(-1), "You must choose an amount between 5 and 200.", "a negative count says so too");
+  regular[1]();
   typeAmount(player, 4);
   assert.equal(Tasks.current(player), null);
   // A closed prompt sends nothing; the abort clears the action (PacketSender.abortInputPrompt).
@@ -304,4 +307,21 @@ test("Konar's offered task keeps her area; a remote assignment (slayer:assignmen
   typeAmount(remote, 10);
   assert.equal(Tasks.current(remote).count, 10);
   assert.match(remote.sent.messages.at(-1), /^Your new task is to kill 10 /, "said as a message without an NPC");
+});
+
+test("Krystilia's offered boss is a Wilderness one; any task assigned spends a waiting offer", () => {
+  const krystilia = Data.get().masters.get(7);
+  const player = character("krystilia", { areas: [VARLAMORE, ASGARNIA, WILDERNESS] });
+  const offer = Offer.offerFor(player, krystilia);
+  assert.equal(offer.wilderness, true);
+  const allowed = Tasks.bossChoices(player).filter(([, task]) => offer.bossAllowed(task)).map(([, task]) => task.displayName);
+  assert.ok(allowed.length > 0);
+  assert.ok(!allowed.includes("Vardorvis") && !allowed.includes("General Graardor"), "not outside the Wilderness");
+  assert.ok(allowed.includes("Callisto"));
+
+  const waiting = character("waiting");
+  assignment(waiting, "Duradel");
+  assert.equal(Offer.stored(waiting).length, 3);
+  Tasks.assign(waiting, Data.get().masters.get(10));
+  assert.deepEqual(Offer.stored(waiting), [], "another task (Mortimer's) spends the offer");
 });

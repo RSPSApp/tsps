@@ -59,6 +59,8 @@ function taskOffer(request) {
   request.boss = true;
   request.bossAllowed = (task) => {
     const area = effect.bossAreas[task?.displayName];
+    // Krystilia's tasks count only in the Wilderness: her boss comes from there.
+    if (request.wilderness && area !== "wilderness") return false;
     return area !== undefined && (unlocked === null || unlocked.includes(area));
   };
 }

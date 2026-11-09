@@ -4,15 +4,15 @@
  * A choice of tasks with a kill count the player picks, where content offers one in place of a
  * master's assignment (Demonic Pacts' Culling Spree relic, Wiki: Culling_Spree_(Demonic_Pacts_League)).
  *
- * `slayer:task-offer` { player, master, choices: 0, amount: null, boss: false, bossAllowed: null }
- * is asked whenever a master (not Mortimer, who has his own choice: Choice.Slayer.js) would
+ * `slayer:task-offer` { player, master, wilderness, choices: 0, amount: null, boss: false, bossAllowed: null }
+ * (`wilderness`: Krystilia, whose kills count only in the Wilderness) is asked whenever a master (not Mortimer, who has his own choice: Choice.Slayer.js) would
  * assign. An answer sets `choices` (how many tasks), `amount` ({ min, max }: the kill count the
  * player types), and with `boss` one of the choices is a boss task where the master could assign
  * one (its "Boss" row eligible, so Like a Boss bought), the boss even odds among those the
  * player has the levels for and `bossAllowed(task)` lets through (the relic: in an unlocked area).
  * The other choices are the master's eligible tasks by weight, none twice, never the Boss row.
  *
- * The roll is kept (OFFER_ATTRIBUTE) until a task is picked, so closing the menu, cancelling the
+ * The roll is kept (OFFER_ATTRIBUTE) until a task is assigned (picked, or got any other way), so closing the menu, cancelling the
  * count or talking again offers the same tasks; another master rolls his own. Picking asks for the
  * count; one outside the range assigns nothing and says so. The task is then set as the master
  * would set it (Tasks.assignPicked: Konar's area, streaks, boss task) and the master says its line.
@@ -43,7 +43,7 @@ function init(pluginApi) {
 /** The offer content makes for this master, or null when it makes none. */
 function offerFor(player, master) {
   if (!player || !master || master.id === Data.MORTIMER) return null;
-  const request = { player, master: master.id, choices: 0, amount: null, boss: false, bossAllowed: null };
+  const request = { player, master: master.id, wilderness: master.wilderness === true, choices: 0, amount: null, boss: false, bossAllowed: null };
   api.emitCustomEvent("slayer:task-offer", request);
   const { min, max } = request.amount ?? {};
   if (!(request.choices > 0) || !Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max < min) return null;
@@ -127,8 +127,8 @@ function pick(player, master, choice) {
   const offer = offerFor(player, master);
   if (!offer || Tasks.current(player) || !stored(player).includes(choice) || !entryFor(player, master, choice)) return;
   const { min, max } = offer.amount;
-  // acceptsZero: a 0 is out of range and says so, which the client's amount packet would otherwise drop.
-  player.setEnteredAmountAction({ acceptsZero: true, execute: (count) => chosenAmount(player, master, choice, count) });
+  // acceptsZero/acceptsNegative: 0 or less is out of range and says so, which the client's amount packet would otherwise drop.
+  player.setEnteredAmountAction({ acceptsZero: true, acceptsNegative: true, execute: (count) => chosenAmount(player, master, choice, count) });
   player.getPacketSender().sendEnterAmountPrompt(`How many would you like to slay? (${min}-${max})`);
 }
 
@@ -159,8 +159,14 @@ function say(player, text) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, definition.getId(), text), new EndDialogue(1)));
 }
 
+/** Any task assigned (an offered pick, Mortimer's choice, a quest's) spends the waiting offer. */
+function taskAssigned({ player }) {
+  if (player) clear(player);
+}
+
 function attach(pluginApi) {
   pluginApi.persistAttribute(OFFER_ATTRIBUTE, []);
+  pluginApi.onCustomEvent("slayer:task-assigned", taskAssigned);
 }
 
 module.exports = { init, attach, OFFER_ATTRIBUTE, offerFor, roll, open, pick, chosenAmount, stored, clear };

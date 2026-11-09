@@ -1682,6 +1682,15 @@ test("Varrock: the course helper is highlighted for the lap and told each obstac
   assert.equal(course("canifis").lapBonus, 0);
 });
 
+// Wiki (Obstacle pipe (Barbarian Outpost)): "Passing through the pipe awards the player 10 Agility experience."
+test("the Barbarian Outpost pipe gives 10 Agility XP, either way through", () => {
+  for (const from of [[2552, 3561, 0], [2552, 3558, 0]]) {
+    const player = createPlayer(...from);
+    const ticks = timeline(player, 20210, [2552, 3559, 0]);
+    assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 10, `from ${from}`);
+  }
+});
+
 test("rooftop gaps: the jump two ticks after arriving, the landing (2588) a tick later, the XP the tick after (rsprox captures)", () => {
   const gaps = [
     ["varrock", ObjectIds.GAP_5, [3201, 3416, 3], [3197, 3416, 1]],

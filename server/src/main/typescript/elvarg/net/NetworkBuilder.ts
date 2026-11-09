@@ -1479,6 +1479,11 @@ export class ClientConnection {
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now));
         if (save) await this.saveLoginTokens(primaryName, profile, save, loginTokens);
       }
+      // An unmade save (PlayerSave.unmake) enters as a new character, without the save's
+      // attributes: its remembered logins go across here, or the first save would drop them.
+      if (!loginTokens && save?.isUnmade?.() === true) {
+        loginTokens = readLoginTokens(save.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now());
+      }
     } catch (error) {
       console.error(`[login] failed to authenticate ${typedName}`, error);
       this.releasePendingName();

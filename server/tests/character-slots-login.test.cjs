@@ -23,7 +23,7 @@ const { DisplayNames } = require('../dist/game/entity/impl/player/DisplayNames')
 const { SkillManager, Skills } = require('../dist/game/content/skill/SkillManager');
 const { MAIN_PROFILE, LEAGUE_PROFILE, HARDCORE_PROFILE, PLAYER_PROFILES, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const net = require('../dist/net/NetworkBuilder');
-const { LOGIN_FLAG_CHARACTER_SELECT } = require('../dist/net/login/LoginTokens');
+const { LOGIN_FLAG_CHARACTER_SELECT, LOGIN_TOKENS_ATTRIBUTE, issueLoginToken } = require('../dist/net/login/LoginTokens');
 const Characters = require('../plugins/accounts/Characters.plugin');
 const { createLoginExtension } = require('../plugins/accounts/characters/Login.Characters');
 const picker = require('../plugins/accounts/characters/Picker.Characters');
@@ -698,6 +698,8 @@ test('an unmade save (a Hardcore World Reset) keeps the name: its password still
   t.after(() => { GameConstants.WORLD_PROFILE = world; });
   const save = seedSave('Zezima', { passwordHash: hashOf('pw'), profile: HARDCORE_PROFILE });
   save.isUnmade = () => true;
+  const { entries: remembered } = issueLoginToken([], Date.now());
+  save.attributes[LOGIN_TOKENS_ATTRIBUTE] = remembered;
   const refused = await login('Zezima', 'not-the-password');
   assert.equal(refused.success, false, 'the only save left still holds the password');
   const c = await connect('Zezima', 'pw');
@@ -705,6 +707,8 @@ test('an unmade save (a Hardcore World Reset) keeps the name: its password still
   const logins = await handshake(t, c.connection, 'Zezima');
   assert.equal(logins.length, 1);
   assert.equal(logins[0].isNewAccount, true, 'a brand-new character, not the old life');
+  assert.deepEqual(logins[0].player.getAttribute(LOGIN_TOKENS_ATTRIBUTE), remembered,
+    'a plain password login keeps the remembered logins, which its first save writes back');
 });
 
 test('a selected alt with an unmade save enters as a new character', async (t) => {

@@ -13,8 +13,10 @@
  *   hurts you in the process.". The temperatures are the strange device's (Wiki Strange_device:
  *   ice cold 500+ tiles, very cold 200-499, cold 150-199, warm 100-149, hot 70-99, very hot 30-69,
  *   incredibly hot 4-29, visibly shaking 0-3); the run's readings use the same words.
- * - The follower locations rotate on `ma2_timer_remaining` (6062): 250 at the first use, down one
- *   every 10 ticks, and (Wiki) only while the player is in the Wilderness. Once it runs out, the
+ * - The follower locations rotate on `ma2_timer_remaining` (6062), 250 at the first use. The Wiki
+ *   (Mage_Arena_II) says they "change approximately every 45 minutes", only while the player is in
+ *   the Wilderness, so it steps down one every 18 ticks (250 x 18 x 0.6 s = 45 minutes); the run
+ *   stepped it every 10 ticks (25 minutes), and the Wiki wins. Once it runs out, the
  *   next use only says "It appears the creatures have moved locations, ..." (a box and the chat
  *   line, no damage), then asks again.
  * - At "visibly shaking and burns to the touch" the follower appears and attacks
@@ -30,7 +32,8 @@ const Followers = require("./Followers.MageArena");
 
 const TIMER_VARBIT = 6062;
 const TIMER_START = 250;
-const TIMER_STEP_TICKS = 10;
+/** Wiki: about 45 minutes for the 250 steps (the recorded run stepped every 10 ticks, 235/03344). */
+const TIMER_STEP_TICKS = 18;
 const MAX_DAMAGE = 16;
 /** ma2_timer_remaining, and each follower's spawn point index, saved per player. */
 const TIMER_ATTRIBUTE = "mage-arena-ii:location-timer";
@@ -112,7 +115,7 @@ function pointOf(player, follower) {
   return SPAWN_POINTS[index] ?? null;
 }
 
-/** Counts the location timer down by one every 10 ticks the player spends in the Wilderness. */
+/** Counts the location timer down by one every 18 ticks the player spends in the Wilderness. */
 function startTimer(player) {
   if (ticking.has(player) || timerOf(player) <= 0) return;
   ticking.add(player);
@@ -229,7 +232,7 @@ module.exports = function registerSymbol(pluginApi) {
 
 Object.assign(module.exports, {
   _test: {
-    SPAWN_POINTS, TIMER_START, TIMER_ATTRIBUTE, LOCATIONS_ATTRIBUTE, MESSAGES, MAX_DAMAGE,
+    SPAWN_POINTS, TIMER_START, TIMER_STEP_TICKS, TIMER_ATTRIBUTE, LOCATIONS_ATTRIBUTE, MESSAGES, MAX_DAMAGE,
     inWilderness, trackable, temperature, rotate, pointOf, readingFor, locate, activate, timerOf, startTimer, destroyPrompt,
   },
 });

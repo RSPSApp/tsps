@@ -61,10 +61,14 @@ function pick(player, option) {
   player.getDialogueManager().handleOption(options.indexOf(option) + 1);
 }
 
-/** Stands the player `distance` tiles south of a follower's point (every point is in the Wilderness). */
+/** The Wiki point (3215, 3883), open ground where the live run's Justiciar appeared beside the player. */
+const OPEN_POINT = 5;
+
+/** Puts the follower at OPEN_POINT and stands the player `distance` tiles south of it. */
 function placeFollower(player, key, distance) {
   symbol.rotate(player);
-  const [x, y] = symbol.SPAWN_POINTS[player.getAttribute(symbol.LOCATIONS_ATTRIBUTE)[key]];
+  player.getAttribute(symbol.LOCATIONS_ATTRIBUTE)[key] = OPEN_POINT;
+  const [x, y] = symbol.SPAWN_POINTS[OPEN_POINT];
   player.setLocation(new core.Location(x, y - distance, 0));
 }
 
@@ -139,13 +143,16 @@ test("once the locations rotate the next use only says so, then asks", () => {
   assert.equal(symbol.timerOf(player), symbol.TIMER_START);
 });
 
-test("the location timer counts down only in the Wilderness", () => {
+test("the location timer steps every 18 ticks, only in the Wilderness", () => {
   const player = makePlayer();
   symbol.rotate(player);
-  for (let i = 0; i < 10; i++) core.TaskManager.process();
+  assert.equal(symbol.TIMER_STEP_TICKS * symbol.TIMER_START * 0.6, 45 * 60, "the Wiki's 45 minutes");
+  for (let i = 1; i < symbol.TIMER_STEP_TICKS; i++) core.TaskManager.process();
+  assert.equal(symbol.timerOf(player), symbol.TIMER_START, "not a step before 18 ticks");
+  core.TaskManager.process();
   assert.equal(symbol.timerOf(player), symbol.TIMER_START - 1);
   player.setLocation(new core.Location(...BANK, 0));
-  for (let i = 0; i < 20; i++) core.TaskManager.process();
+  for (let i = 0; i < 2 * symbol.TIMER_STEP_TICKS; i++) core.TaskManager.process();
   assert.equal(symbol.timerOf(player), symbol.TIMER_START - 1);
 });
 
@@ -225,6 +232,7 @@ test("its real death drops the remains for the killer, gated while one is carrie
   assert.equal(player.messages.some((m) => /Untradeable drop/.test(m)), false, "no second hand while one is carried");
   core.TaskManager.process();
   assert.equal(followers.stateOf(npc), null, "forgotten a tick later");
+  PluginManager.removeNpc(npc); // what the death task does; it doesn't run here
 });
 
 test("remains can't be banked and are always lost on death; the symbol can be", () => {

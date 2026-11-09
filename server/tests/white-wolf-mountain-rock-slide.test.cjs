@@ -103,7 +103,12 @@ function runClear(f, limit = 20) {
     const id = locHere();
     const name = id == null ? "cleared" : id;
     if (!seen.has(name)) seen.set(name, core.World.processCycle);
-    if (id == null) wasCleared = true;
+    if (id == null && !wasCleared) {
+      wasCleared = true;
+      seen.set("open", !blocked(2838, 3518) && !blocked(2839, 3518));
+      seen.set("clearedFrom", at(f));
+    }
+    if (!seen.has("arrived") && at(f).join() !== seen.get("clearedFrom")?.join() && wasCleared && seen.has("clearedFrom")) seen.set("firstStep", seen.get("firstStep") ?? core.World.processCycle);
     if (wasCleared && id === slideId && !RockSlide.clearing.size) break;
   }
   return seen;
@@ -134,6 +139,8 @@ test("50 Mining and a pickaxe clear it in the recorded stages, walk the player t
   assert.equal(first - swing, 1, "rockslide2 a tick after the first swing");
   assert.equal(seen.get(core.CacheDefinitions.getLocId("rockslide4")) - swing, 3);
   assert.equal(seen.get("cleared") - swing, 5);
+  assert.equal(seen.get("open"), true, "the cleared tiles are open");
+  assert.equal(seen.get("firstStep") - swing, 6, "the walk starts the tick after the clear");
   assert.deepEqual(f.animations.slice(0, 3).map((cycle) => cycle - swing), [0, 2, 4], "swings every two ticks");
   assert.deepEqual(at(f), EAST, "walked to the other side");
   assert.equal(locHere(), slideId, "the rock slide is back");

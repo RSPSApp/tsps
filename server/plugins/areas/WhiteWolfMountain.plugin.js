@@ -14,7 +14,7 @@
  *
  * Inferred: the cache gives invis2x2 solid collision, yet the recordings walk through it, so the cleared stage removes
  * the loc instead (invis2x2 shows nothing either way). The refusals (no pickaxe, under 50 Mining) have no capture and
- * are the Mining skill's own message boxes. The rock slide isn't put back while a player stands on its tiles.
+ * are the Mining skill's own message boxes. The rock slide isn't put back while a player or NPC stands on its tiles.
  */
 const ROCK_SLIDE_NAME = "Rock slide";
 const LOCS = { slide: "herorockslide", firstStage: "rockslide2", secondStage: "rockslide4" };
@@ -26,6 +26,8 @@ const LEVEL_MESSAGE = `You need a Mining level of ${MINING_LEVEL} to mine this r
 const STAGES = [[1, "firstStage"], [3, "secondStage"], [5, null]];
 const SWING_TICKS = [2, 4];
 const CLEARED_AT = 5;
+/** The walk through starts the tick after the clear, at walking pace even with run on (recorded). */
+const WALK_AT = CLEARED_AT + 1;
 const RESPAWN_AT = 9;
 /** The recorded standing tiles either side: west where the miner stood, east where the walk ended. */
 const WEST_SIDE = [2837, 3518];
@@ -81,7 +83,8 @@ function onFootprint(location, slide) {
 }
 
 function anyoneOn(slide) {
-  return core.World.getPlayers().stream().some((other) => other && other.isRegistered() && onFootprint(other.getLocation(), slide));
+  const on = (mobile) => mobile && mobile.isRegistered() && onFootprint(mobile.getLocation(), slide);
+  return core.World.getPlayers().stream().some(on) || core.World.getNpcs().stream().some(on);
 }
 
 /** Puts the rock slide back once nobody stands on its tiles. */
@@ -98,7 +101,7 @@ function walkThrough(player, slide, start) {
   if (!player.isRegistered() || !player.getLocation().equals(start)) return;
   const west = start.getX() < slide.getLocation().getX();
   const [x, y] = west ? EAST_SIDE : WEST_SIDE;
-  player.getMovementQueue().requestWalk(new core.Location(x, y, start.getZ()));
+  player.getMovementQueue().requestWalk(new core.Location(x, y, start.getZ()), false);
 }
 
 function mine({ player, object }) {
@@ -138,7 +141,7 @@ function mine({ player, object }) {
       shown = null;
     });
   }
-  after(CLEARED_AT, () => walkThrough(player, slide, start));
+  after(WALK_AT, () => walkThrough(player, slide, start));
   after(RESPAWN_AT, () => respawn(slide));
   return true;
 }

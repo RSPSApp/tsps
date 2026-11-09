@@ -218,14 +218,14 @@ const crateActions = {
 
 // ------------------------------------------------------------------ potions
 
-function mixOne(player, awardExperience = true) {
+function mixOne(player, awardExperience = true, quiet = false) {
   const unf = slotOf(player, Shared.ITEM.REJUVENATION_UNF);
   const herb = slotOf(player, Shared.ITEM.BRUMA_HERB);
   if (unf < 0 || herb < 0) return false;
   player.getInventory().setItem(unf, newItem(Shared.ITEM.REJUVENATION_4));
   player.getInventory().setItem(herb, newItem(-1, 0));
   player.getInventory().refreshItems();
-  Shared.spam(player, "You combine the bruma herb into the unfinished potion.");
+  if (!quiet) Shared.spam(player, "You combine the bruma herb into the unfinished potion.");
   if (awardExperience) Shared.addXp(player, "HERBLORE", XP.POTION * Shared.level(player, "HERBLORE"));
   return true;
 }
@@ -254,8 +254,21 @@ function brewma(event) {
   if (event.itemId !== Shared.ITEM.BRUMA_HERB && event.itemId !== Shared.ITEM.REJUVENATION_UNF) return;
   event.handled = true;
   let made = 0;
-  while (mixOne(event.player, false)) made++;
-  if (made === 0) event.player.sendMessage("You need both a bruma herb and an unfinished potion.");
+  while (mixOne(event.player, false, true)) made++;
+  if (made === 0) {
+    event.player.sendMessage("You need both a bruma herb and an unfinished potion.");
+    return;
+  }
+  // rsprox_transcripts/233/03262.txt:35549-35569: the mesbox chat line, then objectbox_double with both potions; no
+  // per-potion "You combine..." line. One potion's wording is not recorded (ours: "a Rejuvenation potion").
+  const words = ["", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"];
+  const text = made === 1 ? "Brew'ma quickly mixes a Rejuvenation potion."
+    : `Brew'ma quickly mixes ${words[made] ?? made} Rejuvenation potions.`;
+  const { ChatType, DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue } = Shared.core();
+  const potion = Shared.ITEM.REJUVENATION_4;
+  event.player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(made === 1
+    ? new ItemStatementDialogue(0, potion, text) : new DoubleItemStatementDialogue(0, potion, potion, text)));
 }
 
 function nextDose(id) {

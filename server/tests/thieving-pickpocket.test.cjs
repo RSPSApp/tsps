@@ -183,6 +183,14 @@ function attempt(t, { name = 'Man', npcId = 0, random = 0, who = player({ level:
     return { click, next: ticks[0], ticks, handled: event.handled, result };
 }
 
+// Wiki (Rocky): "1 in B - (Lvl * 25), where B is the base chance and Lvl is the player's Thieving level"; every common
+// target 257,211, Watchman 134,625, Paladin 127,056, Gnome 108,718, Hero/Elf/Vyre 99,175, TzHaar-Hur 176,743. The
+// base is the table's own: the player's level comes off once, in Pets.
+test("Rocky: each target's petBase is the Wiki's base, with no NPC level taken off it", () => {
+    const special = { watchman: 134625, paladin: 127056, gnome: 108718, hero: 99175, vyre: 99175, elf_lletya: 99175, elf_prifddinas: 99175, tzhaar_hur: 176743 };
+    for (const t of DATA.targets) assert.equal(t.petBase, special[t.key] ?? 257211, t.key);
+});
+
 test('the data file: every target is complete, its rates add up, and no NPC is claimed twice', () => {
     const { rateOf } = Pickpocket._test;
     const claimed = new Set();

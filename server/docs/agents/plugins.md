@@ -268,7 +268,9 @@ bot-sites.json sites by id, property by property, and adds new ones (`plugins/bo
   same rule.
 - world.json `pluginConfig` keys are `<plugin name>:<camelCaseOption>`, the plugin's `name`
   as registered (`TutorialIsland:allowSkip`, `PlayerBots:sites`). Read them with
-  `api.getPluginConfig(key, defaultValue)`, and give the key one constant.
+  `api.getPluginConfig(key, defaultValue)`, and give the key one constant. Every new
+  `getPluginConfig` read must also be declared in the plugin's `config` export
+  (tests/world-config-completeness.test.cjs fails on an undeclared key).
 - Derive from the cache where the cache knows the answer. A rule that reads definitions
   (`plugins/objects/Doors.plugin.js` builds its open/closed pairs this way) beats a
   hand-picked id list that only covers what someone happened to test.

@@ -7,5 +7,6 @@
 
 module.exports = {
   name: "IgnoreList",
+  description: "Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions.",
   register(api) {},
 };

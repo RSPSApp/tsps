@@ -41,7 +41,8 @@ function blowOne(player, recipe) {
   player.getInventory().addItem(new Item(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
   Shared.produced(player, recipe.itemId, 1, recipe.xp, "glassblowing");
-  player.sendMessage(`You make ${Shared.withArticle(recipe.name)}.`);
+  // rsprox captures: spam, and the orb's own wording ("You make an orb.", rsprox_transcripts/227/01854.txt).
+  Shared.spam(player, `You make ${recipe.made ?? Shared.withArticle(recipe.name)}.`);
   return true;
 }
 

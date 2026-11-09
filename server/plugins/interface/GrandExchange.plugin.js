@@ -1168,6 +1168,13 @@ const HISTORY_BUTTONS = [historyUid(2), historyUid(3)];
 
 module.exports = {
   name: "GrandExchange",
+  description: "The Grand Exchange: offers, offer collection and the item-price resource it uses.",
+  config: {
+    "GrandExchange:maxTradeDelay": {
+      type: "number", label: "Longest offer wait (ms)", default: 3600000, integer: true, min: 5000, max: 2147483647,
+      help: "Upper limit, in milliseconds, on how long an offer takes to complete. Applies to newly placed offers.",
+    },
+  },
   _test: {
     price,
     sellPrice,

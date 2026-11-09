@@ -22,6 +22,32 @@ import { ServerLogger } from "./util/ServerLogger";
 import { PlayerPunishment } from "./util/PlayerPunishment";
 import { Accounts } from "./game/entity/impl/player/Accounts";
 
+export interface ShutdownOptions {
+  /**
+   * Runs first, before plugins are told the server is shutting down. Throwing cancels the
+   * shutdown with nothing stopped, so a check that can fail belongs here rather than in afterPersist.
+   */
+  beforeShutdown?: () => void;
+  /** Runs after player persistence succeeds, before exit. Throwing cancels the shutdown. */
+  afterPersist?: () => void;
+  /** Process exit code for a plain exit (ignored by the nodemon restart mode). */
+  exitCode?: number;
+  /**
+   * Called once, with why, when this shutdown does not go ahead: another shutdown is already
+   * in progress, beforeShutdown threw, player persistence failed, or afterPersist threw. The
+   * server keeps running.
+   */
+  onCancelled?: (reason: string) => void;
+}
+
+function notifyCancelled(options: ShutdownOptions, reason: string): void {
+  try {
+    options.onCancelled?.(reason);
+  } catch (err) {
+    console.error("[shutdown] onCancelled hook failed", err);
+  }
+}
+
 export class Server {
   private static flooder: Flooder = new Flooder();
   public static PRODUCTION = false;
@@ -146,13 +172,24 @@ export class Server {
 
   private static async gracefulShutdown(
     reason: string,
-    mode: "exit" | "restart" = "exit"
+    mode: "exit" | "restart" = "exit",
+    options: ShutdownOptions = {}
   ): Promise<void> {
     if (Server.shuttingDown) {
       console.info(`[shutdown] ${reason} ignored: shutdown already in progress`);
+      notifyCancelled(options, "a shutdown is already in progress");
       return;
     }
     Server.shuttingDown = true;
+
+    try {
+      options.beforeShutdown?.();
+    } catch (err) {
+      console.error("[shutdown] beforeShutdown hook failed; shutdown cancelled before anything stopped.", err);
+      Server.shuttingDown = false;
+      notifyCancelled(options, err instanceof Error ? err.message : String(err));
+      return;
+    }
 
     try {
       const onlinePlayers = World.getPlayers().sizeReturn();
@@ -169,6 +206,16 @@ export class Server {
     } catch (err) {
       console.error("[shutdown] Persistence failed; shutdown cancelled. Fix the error and retry the shutdown.", err);
       Server.shuttingDown = false;
+      notifyCancelled(options, `saving players failed (${err instanceof Error ? err.message : String(err)})`);
+      return;
+    }
+
+    try {
+      options.afterPersist?.();
+    } catch (err) {
+      console.error("[shutdown] afterPersist hook failed; shutdown cancelled.", err);
+      Server.shuttingDown = false;
+      notifyCancelled(options, err instanceof Error ? err.message : String(err));
       return;
     }
 
@@ -190,7 +237,7 @@ export class Server {
       return;
     }
 
-    process.exit(0);
+    process.exit(options.exitCode ?? 0);
   }
 
   public static async main(args: string[]): Promise<void> {
@@ -275,6 +322,11 @@ export class Server {
     return Server.logger;
   }
 
+  /** True from the start of a graceful shutdown until it exits or cancels itself. */
+  public static isShuttingDown(): boolean {
+    return Server.shuttingDown;
+  }
+
   public static isUpdating() {
     return Server.updating;
   }
@@ -284,8 +336,8 @@ export class Server {
   }
 
   /** Trigger the graceful shutdown sequence (persist players, then exit the process). */
-  public static shutdown(reason: string = "shutdown"): void {
-    void Server.gracefulShutdown(reason, "exit");
+  public static shutdown(reason: string = "shutdown", options: ShutdownOptions = {}): void {
+    void Server.gracefulShutdown(reason, "exit", options);
   }
 
   public static getFlooder() {

@@ -701,6 +701,7 @@ function rulesMultiplier(entry, rules) {
  */
 const GEM_TABLE = "gem";
 const MEGA_RARE_TABLE = "megaRare";
+const TALISMAN_TABLE = "talisman";
 const UNDERGROUND_Y = 6400;
 
 function legendsQuestComplete(player) {
@@ -741,6 +742,10 @@ function rollSharedTable(name, player, depth = 0) {
       }
       if (entry.ref) {
         if (name === GEM_TABLE && entry.ref === MEGA_RARE_TABLE && !legendsQuestComplete(player)) {
+          return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
+        }
+        // The gem table's own talisman slot is that same talisman, not the talisman table.
+        if (name === GEM_TABLE && entry.ref === TALISMAN_TABLE) {
           return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
         }
         return rollSharedTable(entry.ref, player, depth + 1);
@@ -1014,6 +1019,17 @@ function extraRolls(event) {
   for (let i = 0; i < (event.rolls ?? 0); i++) event.drops.push(...rollTable(rolling, event.player, event.npc));
 }
 
+/**
+ * Answers npc-drops:roll-shared { player, table, drops }: one roll of a shared table by name
+ * ("gem", "rareSeed", "usefulHerb" ...), pushed onto `drops`; an empty slot pushes nothing.
+ * For content outside NPC kills that rolls the same tables (sorting salvage).
+ */
+function rollSharedRequest(event) {
+  ensureDropsLoaded?.();
+  if (!Array.isArray(event?.drops) || typeof event.table !== "string") return;
+  event.drops.push(...rollSharedTable(event.table, event.player));
+}
+
 let ensureDropsLoaded = null;
 
 /**
@@ -1141,6 +1157,7 @@ module.exports = {
     };
     ensureDropsLoaded = ensureDrops;
     api.onCustomEvent("npc-drops:extra-rolls", extraRolls);
+    api.onCustomEvent("npc-drops:roll-shared", rollSharedRequest);
 
     // "npc-drops:roll-table" { player, table, drops }: a table outside an NPC's own (a boss's
     // chest) rolled with the same roller and shared tables; the drops are pushed onto `drops`.
@@ -1209,7 +1226,7 @@ module.exports = {
 
     api.log("registered", { lazy: true });
   },
-  _test: { loadDrops, tablesByNpc, sharedTables, rollSharedTable },
+  _test: { loadDrops, tablesByNpc, sharedTables, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
   __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },

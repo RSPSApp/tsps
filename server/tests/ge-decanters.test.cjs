@@ -297,3 +297,18 @@ test("Bob's cost doesn't depend on slot order: spare vials from one family go to
     assert.equal(has(p, obj('vial_empty')), 0, 'the spare vial was used');
   }
 });
+
+test("Zahur's Decant (230/00333): the same interface, free, and he speaks the result", (t) => {
+  const p = player(t);
+  const speakers = [];
+  t.mock.method(p, 'getDialogueManager', () => ({ startDialogues: (b) => { for (const d of b.getDialogues().values()) { p.lines.push(d.getText()); speakers.push(d.getNpcId()); } } }));
+  give(p, obj('3doseprayerrestore'), 2);
+  assert.ok(npcs.Zahur?.Decant, 'Zahur has Decant');
+  npcs.Zahur.Decant({ player: p, npcId: core.CacheDefinitions.getNpcId('elid_herbalist') });
+  assert.ok(p.getPacketSender().isChatboxInterface(582), 'the decant interface');
+  click({ player: p, groupId: 582, childId: 6, handled: false });
+  assert.equal(has(p, obj('4doseprayerrestore')), 1);
+  assert.equal(has(p, obj('2doseprayerrestore')), 1);
+  assert.deepEqual(p.lines, ['There, all done.']);
+  assert.deepEqual(speakers, [core.CacheDefinitions.getNpcId('elid_herbalist')]);
+});

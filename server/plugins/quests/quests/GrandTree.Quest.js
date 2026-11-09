@@ -130,7 +130,8 @@ module.exports = function registerGrandTreeQuest(api) {
 
   /** Climbing the watchtower tree lands on its east side, beside the twig pillars. */
   const WATCHTOWER_DESTINATION = { x: 2485, y: 3465, z: 2 };
-  const CAVE_DESTINATION = { x: 2491, y: 9861, z: 0 };
+  /** The cave's entrance ladder is at 2492, 9864. Land on the open tile directly south. */
+  const CAVE_DESTINATION = { x: 2492, y: 9863, z: 0 };
   const CELL_DESTINATION = { x: 2464, y: 3495, z: 3 };
   /** The cell's door has no cached Open option, so release moves the player out. */
   const RELEASE_DESTINATION = { x: 2467, y: 3500, z: 3 };

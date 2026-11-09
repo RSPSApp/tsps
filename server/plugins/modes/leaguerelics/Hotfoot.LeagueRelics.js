@@ -22,9 +22,8 @@
  * nets less and doesn't count), before the league's rates; the base level, and the count kept
  * across stops, are ours ("roughly every 10 ticks"). A tick task per owner, from login or the
  * unlock, watches the tile.
- * Not here: termites finishing a lap or doubled (the Colossal
- * Wyrm courses give no termites: their spawn rate is unknown, the Wiki says, and its course page
- * is marked out of date).
+ * Not here: termites finishing a lap or doubled (the Colossal Wyrm courses' termites come through
+ * `agility:course-item`, but the relic's termite rules are not known).
  */
 const Common = require("./Common.LeagueRelics");
 

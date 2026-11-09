@@ -616,9 +616,12 @@ function rangedAmmoHandlerDecrementAmmo(player, pos, amount) {
     return true;
   }
   // Content may keep some shots from costing a scale (a league relic), as core asks for quiver ammunition.
-  const saving = { player, itemId: blowpipeItem.getId(), amount, saved: 0 };
+  // `extra`: scales given back on top (Demonic Pacts' Regenerate above 100%), up to the blowpipe's 16,383.
+  const saving = { player, itemId: blowpipeItem.getId(), amount, saved: 0, extra: 0 };
   pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
   const scales = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+  const extra = Math.max(0, saving.extra | 0);
+  if (extra > 0) BlowpipeState.addScales(blowpipeItem, extra);
   let depleted = false;
   for (let i = 0; i < scales; i++) {
     if (BlowpipeState.consumeScale(blowpipeItem) <= 0) {

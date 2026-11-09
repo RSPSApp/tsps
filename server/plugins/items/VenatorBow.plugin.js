@@ -218,9 +218,13 @@ function spendCharge(player) {
   const item = player.getEquipment().get(core.Equipment.WEAPON_SLOT);
   if (!item || ![bowId, echoBowId].includes(item.getId())) return;
   // Content may spare the charge (a league relic): the question every charged weapon asks.
-  const consume = { player, itemId: item.getId(), skip: false };
+  // `extra`: charges given back on top (Demonic Pacts' Regenerate above 100%), up to the bow's most.
+  const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
   pluginApi.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
+  if (consume.skip) {
+    if (consume.extra > 0) setCharges(item, charges(item) + consume.extra);
+    return;
+  }
   const left = charges(item) - 1;
   setCharges(item, left);
   if (left <= 0) {

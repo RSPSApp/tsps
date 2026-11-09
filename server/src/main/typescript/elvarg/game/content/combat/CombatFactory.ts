@@ -1768,9 +1768,11 @@ export class CombatFactory {
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
-                const consume = { player, itemId: currentWeaponId, skip: false };
+                // `extra`: shots given back on top (Demonic Pacts' Regenerate above 100%), within the bow's current stage.
+                const consume = { player, itemId: currentWeaponId, skip: false, extra: 0 };
                 PluginManager.emitCustomEvent("combat:consume-charge", consume);
                 if (consume.skip) {
+                    shotsInStage = Math.max(0, shotsInStage - Math.max(0, consume.extra | 0));
                     continue;
                 }
                 shotsInStage += 1;
@@ -1809,9 +1811,11 @@ export class CombatFactory {
         // the rest is recovered by a plugin (Ava's devices).
         // Content may keep some shots out of the roll altogether (a league relic): `saved` of
         // `amount` are neither broken nor dropped. The device's recovery applies to the rest.
-        const saving = { player, itemId: ammoItem.getId(), amount, saved: 0 };
+        // `extra`: shots the content gives back on top (Demonic Pacts' Regenerate above 100%), added to the same stack.
+        const saving = { player, itemId: ammoItem.getId(), amount, saved: 0, extra: 0 };
         PluginManager.emitCustomEvent("ranged:ammo-saving", saving);
         const rolled = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+        const extra = Math.max(0, saving.extra | 0);
         const recovery = CombatFactory.ammoRecovery(player);
         const dropChance = 80 - recovery;
         let lost = 0;
@@ -1840,6 +1844,12 @@ export class CombatFactory {
                 // still paid from the same ammo. A different stack swapped in is left alone.
                 const inventory = player.getInventory();
                 const at = inventory.getItems().findIndex(sameAmmo);
+                if (extra > 0) {
+                    // The stack is gone from the slot: what comes back goes to the pack (the floor if it is full).
+                    const back = new Item(ammoId, extra, firedMeta);
+                    if (inventory.getAddableAmount(back) >= extra) inventory.add(back, true);
+                    else ItemOnGroundManager.registers(player, back);
+                }
                 if (at < 0 || consumed <= 0) {
                     return;
                 }
@@ -1859,6 +1869,9 @@ export class CombatFactory {
 
             if (consumed > 0) {
                 worn.decrementAmountBy(consumed);
+            }
+            if (extra > 0) {
+                worn.incrementAmountBy(extra);
             }
 
             // If we are at 0 ammo remove the item from the equipment completely.

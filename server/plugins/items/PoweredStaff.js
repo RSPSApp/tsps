@@ -105,9 +105,13 @@ function definePoweredStaff(api, config) {
     const staff = weaponOf(player);
     if (!staff) return;
     // Content may spare the charge (a league relic): the question every powered staff asks.
-    const consume = { player, itemId: staff.getId(), skip: false };
+    // `extra`: charges given back on top (Demonic Pacts' Regenerate above 100%), up to the staff's most.
+    const consume = { player, itemId: staff.getId(), skip: false, extra: 0 };
     api.emitCustomEvent("combat:consume-charge", consume);
-    if (consume.skip) return;
+    if (consume.skip) {
+      if (consume.extra > 0) setCharges(staff, chargesOf(staff) + consume.extra);
+      return;
+    }
     const left = setCharges(staff, chargesOf(staff) - 1);
     config.chargeUsed?.(player, staff, left);
     if (left > 0 || config.swapWhenEmpty === false) return;

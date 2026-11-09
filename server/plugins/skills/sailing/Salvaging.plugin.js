@@ -239,10 +239,12 @@ function salvageTick(player, session) {
 /**
  * Rolls a salvage's loot: its pre-rolls first, then its main table; undefined is nothing. A
  * shared-table line comes back as { table, empty } for rollShared. `owns(ids)` says whether the
- * player owns any of a pre-roll's `unlessOwned` items, which skips that pre-roll.
+ * player owns any of a pre-roll's `unlessOwned` items, which skips that pre-roll. A pre-roll clue
+ * (one in `clueOneIn`, 0 for none) is rolled first and comes back as { clue: true }.
  */
-function rollLoot(salvage, random = Math.random, owns = () => false) {
+function rollLoot(salvage, random = Math.random, owns = () => false, clueOneIn = 0) {
   const quantity = (line) => line.min + Math.floor(random() * (line.max - line.min + 1));
+  if (clueOneIn > 0 && random() * clueOneIn < 1) return { clue: true };
   for (const line of salvage.preRolls) {
     if (line.unlessOwned && owns(line.unlessOwned)) continue;
     if (random() < 1 / line.oneIn) return { item: line.item, amount: quantity(line) };
@@ -270,28 +272,39 @@ function ownsAny(player, ids) {
   return ids.some((id) => containers.some((container) => container?.getAmount?.(id) > 0));
 }
 
-/**
- * A salvage's tertiary clue: one in `oneIn` (95% of it with the tier's combat achievements),
- * through the shared clue services (one per tier unless a scroll case allows more; a scroll box
- * after X Marks the Spot). Ours: it goes into the inventory, or under the player when full, with
- * no line of its own.
- */
-function rollClue(player, clue, random = Math.random) {
+/** A salvage clue's chance, one in this: 95% of it with the tier's combat achievements; 0 for none. */
+function clueOneIn(player, clue) {
   const tier = CLUE_TIERS[clue?.tier];
-  if (!tier) return;
-  let oneIn = clue.oneIn;
-  if (tier.achievements) {
-    const achievement = { player, tier: clue.tier, currentThresholdMet: false };
-    pluginApi?.emitCustomEvent("combat-achievements:tier", achievement);
-    if (achievement.currentThresholdMet === true) oneIn = Math.floor((oneIn * 95) / 100);
-  }
-  if (random() * oneIn >= 1) return;
+  if (!tier) return 0;
+  if (!tier.achievements) return clue.oneIn;
+  const achievement = { player, tier: clue.tier, currentThresholdMet: false };
+  pluginApi?.emitCustomEvent("combat-achievements:tier", achievement);
+  return achievement.currentThresholdMet === true ? Math.floor((clue.oneIn * 95) / 100) : clue.oneIn;
+}
+
+/** Whether the player can hold another clue of the tier (one per tier unless a scroll case allows more). */
+function canReceiveClue(player, clue) {
   const allowed = { player, tier: clue.tier, allowed: null };
   pluginApi?.emitCustomEvent("treasure-trails:can-receive", allowed);
-  if (allowed.allowed !== true) return;
-  const award = { player, itemId: pluginApi.core.ItemIdentifiers[tier.scroll], box: false };
+  return allowed.allowed === true;
+}
+
+/** The clue item to give: the tier's scroll, or its scroll box after X Marks the Spot. */
+function clueItem(player, clue) {
+  const award = { player, itemId: pluginApi.core.ItemIdentifiers[CLUE_TIERS[clue.tier].scroll], box: false };
   pluginApi.emitCustomEvent("treasure-trails:clue-item", award);
-  player.getInventory().forceAdd(player, new Item(award.itemId, 1));
+  return award.itemId;
+}
+
+/**
+ * A salvage's tertiary clue, through the shared clue services. Ours: it goes into the inventory,
+ * or under the player when full, with no line of its own.
+ */
+function rollClue(player, clue, random = Math.random) {
+  const oneIn = clueOneIn(player, clue);
+  if (oneIn <= 0 || random() * oneIn >= 1) return;
+  if (!canReceiveClue(player, clue)) return;
+  player.getInventory().forceAdd(player, new Item(clueItem(player, clue), 1));
 }
 
 /** The first salvage in the inventory, with its sorting data. */
@@ -329,7 +342,11 @@ function sortTick(player, session) {
     return stop(player);
   }
   player.getInventory().delete(next.id, 1);
-  let loot = rollLoot(next.data, Math.random, (ids) => ownsAny(player, ids));
+  // A pre-roll clue replaces the sort's loot; it isn't rolled while the player can't hold one.
+  const clue = next.data.clue;
+  const preRollClue = clue?.preRoll && canReceiveClue(player, clue) ? clueOneIn(player, clue) : 0;
+  let loot = rollLoot(next.data, Math.random, (ids) => ownsAny(player, ids), preRollClue);
+  if (loot?.clue) loot = { item: clueItem(player, clue), amount: 1 };
   if (loot?.table) loot = rollShared(player, loot);
   const salvageName = next.data.name.toLowerCase();
   if (loot) {
@@ -344,7 +361,7 @@ function sortTick(player, session) {
     spam(player, `You sort through the ${salvageName} and find nothing.`);
   }
   player.getSkillManager().addExperiences(Skill.SAILING, next.data.xp);
-  rollClue(player, next.data.clue);
+  if (!clue?.preRoll) rollClue(player, clue);
   // Soup can also come from sorting, at one chance for every salvage (Wiki, Soup).
   pluginApi?.emitCustomEvent("sailing:success", { player, skill: Skill.SAILING, petChance: salvageData().sortPetChance });
   playSound(player, SOUND_SORTED);

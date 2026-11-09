@@ -147,12 +147,12 @@ test("sorting rolls Soup at 1/800,000 for every salvage", () => {
   assert.equal(pet[0][1].petChance, 800000);
 });
 
-test("tertiary clues: 1/300 medium from Barracuda salvage, 1/285 with the medium combat achievements", () => {
+test("salvage clues: 1/300 medium from Barracuda salvage, 1/285 with the medium combat achievements", () => {
   const barracuda = data.salvage[32851];
   assert.deepEqual(barracuda.clue, { tier: "medium", oneIn: 300 });
   assert.deepEqual(data.salvage[SMALL].clue, { tier: "beginner", oneIn: 300 });
-  assert.deepEqual(data.salvage[32849].clue, { tier: "easy", oneIn: 300 });
-  assert.deepEqual(data.salvage[32857].clue, { tier: "hard", oneIn: 500 });
+  assert.deepEqual(data.salvage[32849].clue, { tier: "easy", oneIn: 300, preRoll: true });
+  assert.deepEqual(data.salvage[32857].clue, { tier: "hard", oneIn: 500, preRoll: true });
 
   const roll = (achievements, value) => {
     const p = player();
@@ -179,4 +179,42 @@ test("tertiary clues: 1/300 medium from Barracuda salvage, 1/285 with the medium
     delete handlers["treasure-trails:can-receive"];
   }
   assert.equal(p.getInventory().getAmount(2801), 0);
+});
+
+test("pre-roll clues: a Fishy or Martial salvage clue replaces the sort's loot", () => {
+  const FISHY = 32849;
+  const MARTIAL = 32857;
+  assert.equal(data.salvage[FISHY].clue.preRoll, true);
+  assert.equal(data.salvage[MARTIAL].clue.preRoll, true);
+  assert.equal(data.salvage[SMALL].clue.preRoll, undefined);
+  assert.equal(data.salvage[32851].clue.preRoll, undefined);
+  // Rolled ahead of the other pre-rolls, and only with a chance.
+  assert.deepEqual(plugin.rollLoot(data.salvage[FISHY], () => 0, undefined, 285), { clue: true });
+  assert.deepEqual(plugin.rollLoot(data.salvage[FISHY], () => 0), { item: 31989, amount: 1 });
+
+  const sort = (salvage, scroll, allowed) => {
+    const p = player();
+    handlers["treasure-trails:can-receive"] = (event) => { event.allowed = allowed; };
+    try {
+      sortOne(p, salvage, [0.999, 0, 0]);
+    } finally {
+      delete handlers["treasure-trails:can-receive"];
+    }
+    return p;
+  };
+  const easy = PluginManager.getCoreApi().ItemIdentifiers.CLUE_SCROLL_EASY_;
+  const p = sort(FISHY, easy, true);
+  assert.equal(p.getInventory().getAmount(easy), 1);
+  assert.equal(p.getInventory().getAmount(31989), 0, "no boat bottle from the same sort");
+  assert.ok(p.messages.includes("spam: You sort through the fishy salvage and find: 1 x Clue scroll (easy)."));
+
+  const hard = PluginManager.getCoreApi().ItemIdentifiers.CLUE_SCROLL_HARD_;
+  const q = sort(MARTIAL, hard, true);
+  assert.equal(q.getInventory().getAmount(hard), 1);
+  assert.equal(q.getInventory().getAmount(SAILORS_AMULET_INERT), 0, "no amulet from the same sort");
+
+  // Without room for another easy clue the pre-roll is skipped and the loot rolls as usual.
+  const r = sort(FISHY, easy, false);
+  assert.equal(r.getInventory().getAmount(easy), 0);
+  assert.equal(r.getInventory().getAmount(31989), 1);
 });

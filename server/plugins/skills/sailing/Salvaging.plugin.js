@@ -57,7 +57,7 @@ const CAST = "You cast out your salvaging hook towards the shipwreck...";
 const REELED = "You reel in some salvage.";
 const SUNK = "You salvage all you can from the shipwreck before it is reclaimed by the sea.";
 const SORT_BEGIN = "You begin sorting through your salvage...";
-/** A message box (rsprox captures, rev 235). */
+/** A message box (rsprox). */
 const NOTHING_TO_SORT = "You do not have any salvage to sort through.";
 /** Sent on the tick the last salvage is sorted. */
 const NO_MORE_TO_SORT = "You have no more salvage to sort.";

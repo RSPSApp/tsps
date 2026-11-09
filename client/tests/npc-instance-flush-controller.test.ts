@@ -141,10 +141,11 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
         // NPC 3 walked into the unbatched map; the existing map's batch still lists it.
         [3, unbatchedMap],
     ]);
+    let batchedNpcTypeId = 102;
     const ecs = {
         getServerLinkedEcsIds: () => [1, 2, 3],
         getWorldViewId: () => -1,
-        getNpcTypeId: (id: number) => 100 + id,
+        getNpcTypeId: (id: number) => id === 2 ? batchedNpcTypeId : 100 + id,
         getMapX: (id: number) => mapByNpc.get(id).mapX,
         getMapY: (id: number) => mapByNpc.get(id).mapY,
         // World positions, 1/128 tile: (64 + id * 128, 192 + id * 128) inside the owning map.
@@ -174,6 +175,7 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
             visibleMaps: [unbatchedMap, existingMap],
         },
         getEffectiveNpcType: () => ({}),
+        dynamicNpcAnimLoader: { isReady: () => true },
         // As in the renderer, a map draws an NPC only when it owns it: NPC 2 has a
         // valid map draw entry, while NPC 3's stale batch entry is suppressed, so
         // NPCs 1 and 3 must use the immediate path from the map that owns them.
@@ -198,6 +200,16 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
 
     // Animation smoothing draws NPC 2 through this path too, though its map's batch has it.
     host.smoothed.add(2);
+    host.actorRenderCount = 0;
+    addUnbatchedNpcRenderData(host as any);
+    assert.deepEqual(
+        host.unbatchedNpcRenderEntries.map((entry) => entry.ecsId),
+        [1, 2, 3],
+    );
+
+    // The museum exhibit needs its own draw even with animation smoothing off.
+    host.smoothed.clear();
+    batchedNpcTypeId = 6011;
     host.actorRenderCount = 0;
     addUnbatchedNpcRenderData(host as any);
     assert.deepEqual(

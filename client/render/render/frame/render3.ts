@@ -188,6 +188,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS } from "../constants";
+import { shouldDrawNpcUnbatched } from "../draw";
 
 export function renderTransparentNpcPass(host: WebGLOsrsRendererHost, 
         npcDataTextureIndex: number,
@@ -273,7 +274,7 @@ export function renderTransparentNpcPass(host: WebGLOsrsRendererHost,
 
                 for (let j = 0; j < npcCount; j++) {
                     const id = ids[j] | 0;
-                    if (!host.shouldRenderNpcFromMap(map, id) || host.isNpcSmoothed(id)) {
+                    if (!host.shouldRenderNpcFromMap(map, id) || shouldDrawNpcUnbatched(host, id)) {
                         (drawCall as any).offsets[j] = 0;
                         (drawCall as any).numElements[j] = 0;
                         drawRanges[j] = NULL_DRAW_RANGE;

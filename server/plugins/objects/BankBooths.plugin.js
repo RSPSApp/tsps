@@ -207,7 +207,8 @@ function useCurrencyOnBanker(api, event) {
   const { DialogueChainBuilder, NpcDialogue } = api.core;
   const npcId = event.npcId ?? event.target?.getId?.();
   event.player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-    .add(new NpcDialogue(0, npcId, "Hand me a banknote, and I'll try to convert it to an item.", "Banker")));
+    // Recorded with chatsad2 (611, DialogueExpression.VERY_SAD): rsprox 226/01645 tick 4882, 234/03299.
+    .add(new NpcDialogue(0, npcId, "Hand me a banknote, and I'll try to convert it to an item.", "Banker", 611)));
 }
 
 /** How many of the notes in `slot` the inventory can take unnoted: the free slots, and the note's own once it empties. */
@@ -235,7 +236,8 @@ function unnoteOnBanker(api, event) {
   const npcId = event.npcId ?? event.target?.getId?.() ?? CacheDefinitions.getNpcId("banker1_new");
   if (unnoteCount(inventory, slot) <= 0) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-      .add(new NpcDialogue(0, npcId, "You don't have any inventory space.", "Banker")));
+      // Recorded with chatsad1 (610, DialogueExpression.SLIGHTLY_SAD): rsprox 226/01645.
+      .add(new NpcDialogue(0, npcId, "You don't have any inventory space.", "Banker", 610)));
     return;
   }
   api.sendMultiChatboxPrompt(player, "Un-note the banknotes?", "Yes", () => {

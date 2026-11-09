@@ -39,6 +39,9 @@ function actor(t) {
   const lines = [];
   const sender = p.getPacketSender(), sendString = sender.sendString.bind(sender);
   t.mock.method(sender, "sendString", (text, ...rest) => { lines.push(String(text)); return sendString(text, ...rest); });
+  const anims = [];
+  const sendAnim = sender.sendInterfaceAnimation.bind(sender);
+  t.mock.method(sender, "sendInterfaceAnimation", (uid, anim, ...rest) => { anims.push(anim); return sendAnim(uid, anim, ...rest); });
   const c = new ClientConnection(channel); c.player = p;
   const banker = core.NPC.create(core.CacheDefinitions.getNpcId("banker1_new"), new core.Location(HOME[0] + 2, HOME[1], 0));
   core.World.getNpcs().add(banker);
@@ -48,7 +51,7 @@ function actor(t) {
     p.setRegistered(false);
     core.TaskManager.cancelTasks(p.getIndex());
   });
-  return { p, c, banker, inv: p.getInventory(), lines };
+  return { p, c, banker, inv: p.getInventory(), lines, anims };
 }
 
 async function send(f, packet) { await f.c.dispatch([packet]); f.c.processTurnPackets(); }
@@ -110,6 +113,7 @@ test("no room: the banker says so and asks nothing", async (t) => {
   await use(f, 26);
   assert.equal(pending(f), null);
   assert.ok(f.lines.includes("You don't have any inventory space."), f.lines.join(" / "));
+  assert.ok(f.anims.includes(610), `chatsad1, as recorded: ${f.anims}`);
   assert.equal(f.inv.getAmount(note(I.ANGLERFISH)), 9);
 });
 
@@ -121,5 +125,6 @@ test("an unnoted item that isn't currency: the banker's line, nothing taken (tic
   await use(f, 0);
   assert.equal(pending(f), null);
   assert.ok(f.lines.includes("Hand me a banknote, and I'll try to convert it to an item."), f.lines.join(" / "));
+  assert.ok(f.anims.includes(611), `chatsad2, as recorded: ${f.anims}`);
   assert.equal(f.inv.getAmount(I.RAKE), 1);
 });

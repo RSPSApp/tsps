@@ -44,6 +44,7 @@ function kill(t, f, npc, { random = 0 } = {}) {
 test("a kill in the dungeon can drop a key; outside it, never", (t) => {
   const f = actor(t);
   assert.deepEqual(kill(t, f, npcAt(3041, 10144)), [{ itemId: core.ItemIdentifiers.ECUMENICAL_KEY, amount: 1 }]);
+  assert.deepEqual(f.messages, ["<col=ef1020>Untradeable drop: Ecumenical key</col>"], "as recorded (224/01463:137735)");
   assert.deepEqual(kill(t, f, npcAt(3041, 10144), { random: 1 / 60 }), [], "a roll other than 1 in 60 drops nothing");
   assert.deepEqual(kill(t, f, npcAt(2900, 5300, 2)), [], "the main God Wars Dungeon");
   assert.deepEqual(kill(t, f, npcAt(3222, 3218)), []);

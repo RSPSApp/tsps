@@ -15,6 +15,8 @@ const DUNGEON = { minX: 3010, maxX: 3065, minY: 10110, maxY: 10170 };
 const BASE_RATE = 60;
 const CA_RATES = [["Grandmaster", 40], ["Master", 45], ["Elite", 50], ["Hard", 55]];
 const ENOUGH = "You already have enough of these";
+// rsprox_transcripts/224/01463.txt:137735: sent with the drop, as other untradeable drops are.
+const UNTRADEABLE_DROP = "<col=ef1020>Untradeable drop: Ecumenical key</col>";
 
 function inDungeon(npc) {
   const at = npc?.getLocation?.();
@@ -61,6 +63,7 @@ function addKey(event) {
     return;
   }
   drops.push({ itemId: Common.core.ItemIdentifiers.ECUMENICAL_KEY, amount: 1 });
+  player.sendMessage(UNTRADEABLE_DROP);
 }
 
 function attachKeys(api) {

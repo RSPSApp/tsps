@@ -49,16 +49,19 @@ function index() {
   for (const row of DATA.grinding) {
     grindsByItem.set(gameval("obj", row.item), { ...row, itemId: gameval("obj", row.item), productId: gameval("obj", row.product), amount: row.amount ?? [1, 1], alternateToolId: row.alternateTool ? gameval("obj", row.alternateTool) : null });
   }
-  const vialOfWater = gameval("obj", "vial_water");
+  // Zahur's bases (Wiki: "vials of water or vials of blood").
+  const bases = new Set([gameval("obj", "vial_water"), gameval("obj", "vial_blood")]);
   for (const row of DATA.recipes) {
     const recipe = { ...row, productId: gameval("obj", row.product), ingredients: items(row.ingredients), returns: items(row.returns) };
     for (const { id } of recipe.ingredients) {
       if (!recipesByIngredient.has(id)) recipesByIngredient.set(id, []);
       recipesByIngredient.get(id).push(recipe);
     }
-    const herb = recipe.ingredients.find(({ id }) => id !== vialOfWater);
-    if (recipe.ingredients.length === 2 && herb && recipe.ingredients.some(({ id }) => id === vialOfWater)) {
-      unfinishedByHerb.set(herb.id, recipe);
+    const base = recipe.ingredients.find(({ id }) => bases.has(id));
+    const herb = recipe.ingredients.find(({ id }) => !bases.has(id));
+    if (recipe.ingredients.length === 2 && herb && base) {
+      if (!unfinishedByHerb.has(herb.id)) unfinishedByHerb.set(herb.id, new Map());
+      unfinishedByHerb.get(herb.id).set(base.id, recipe);
     }
   }
 }
@@ -101,10 +104,14 @@ function answerClean(request) {
   if (herb) { request.clean = herb.cleanId; request.level = herb.level; }
 }
 
-/** "herblore:unfinished" `{ herbId, potion }`: the unfinished potion a clean herb makes (Zahur). */
+/**
+ * "herblore:unfinished" `{ herbId, baseId?, potion }`: the unfinished potion a clean herb makes with `baseId` (a vial
+ * of water when not given; Zahur also uses vials of blood).
+ */
 function answerUnfinished(request) {
   index();
-  const recipe = unfinishedByHerb.get(request?.herbId);
+  const baseId = request?.baseId ?? gameval("obj", "vial_water");
+  const recipe = unfinishedByHerb.get(request?.herbId)?.get(baseId);
   if (recipe) request.potion = recipe.productId;
 }
 

@@ -302,6 +302,33 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
 });
 
 
+// A shop that buys nothing: "You cannot sell to this shop." on Value and Sell (rsprox 234/03299 Mairin's Market,
+// 227/01840 Temple Supplies). One that buys some things: "You can't sell this item to this shop." (cache script9714).
+test("sell refusals: a shop that buys nothing, and an item a buying shop doesn't take", () => {
+  const TEARS = 21656;
+  DEFINITIONS[TEARS] = { name: "Mermaid's tear", stackable: true, value: 1 };
+  ShopManager.registerItemCurrency(TEARS, { name: "Mermaid's tear" });
+  ShopDefinition.replace([
+    new ShopDefinition(904, "Tear shop", "MERMAID'S TEAR", [{ id: STEEL_AXE, amount: 5, restockTicks: null, price: null }], 100, 100, 100, "test"),
+    new ShopDefinition(905, "Axe shop", "COINS", [{ id: STEEL_AXE, amount: 5, restockTicks: null, price: null }], 100, 100, 100, "test"),
+  ]);
+  ShopManager.initialize();
+  const tears = createPlayer();
+  tears.getInventory().add(new Item(STEEL_AXE, 1), false);
+  ShopManager.open(tears, 904);
+  ShopManager.handleItemContainerAction(tears, { kind: "value", containerId: ShopManager.INVENTORY_INTERFACE_ID, slot: 0, itemId: STEEL_AXE, amount: 0 });
+  sell(tears, 0);
+  assert.deepEqual(tears.messages, ["You cannot sell to this shop.", "You cannot sell to this shop."]);
+  assert.equal(tears.getInventory().getAmount(STEEL_AXE), 1);
+
+  const axes = createPlayer();
+  axes.getInventory().add(new Item(BRONZE_AXE, 1), false);
+  ShopManager.open(axes, 905);
+  ShopManager.handleItemContainerAction(axes, { kind: "value", containerId: ShopManager.INVENTORY_INTERFACE_ID, slot: 0, itemId: BRONZE_AXE, amount: 0 });
+  sell(axes, 0);
+  assert.deepEqual(axes.messages, ["You can't sell this item to this shop.", "You can't sell this item to this shop."]);
+});
+
 function fallbackActions(labels) {
   let actions;
   const opened = [];

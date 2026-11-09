@@ -34,9 +34,21 @@
  * Wiki: only a follower's own god spell hurts it (not its energy balls); god-spell max hits 43,
  * the Justiciar's 26; remains can't be banked and are always lost on death.
  *
- * Not built, for want of any rate, timing or visuals in either source: their melee, Ice Barrage,
- * Tele Block, Porazdir's energy ball and the Justiciar's shock wave, and a despawn timer ("if the
- * followers are not slain quick enough, they will despawn", no time given). A follower goes when it
+ * Also from the Wiki, with no rate, timing or visuals in either source (the run's 20 attacks show
+ * none of them), so those are TSPS choices, marked below:
+ * - melee beside the target, max 16 (the Justiciar's 43): TSPS half the time when adjacent;
+ * - Ice Barrage ("can be dodged by stepping off the tile"; the spell's 30 max and 20-second freeze);
+ * - Tele Block, 2 minutes or 1 with Protect from Magic, fading when the follower dies;
+ * - Porazdir's energy ball through prayer, "upwards of 30", none from 12 tiles away, with "Porazdir
+ *   fires a ball of energy directly linked to his power!";
+ * - the Justiciar's shock wave at the player's tile: still there, they're dragged into melee and
+ *   bound, his sword swinging every 3 ticks.
+ * TSPS: one attack in five is one of these specials (on Derwen's turns that aren't his recorded
+ * summons), each lands 2 ticks after it's cast (the dodge window), the bind lasts 8 ticks, and they
+ * reuse the follower's recorded cast animation, Ice Barrage the spell's own impact graphic.
+ *
+ * Not built: a despawn timer ("if the followers are not slain quick enough, they will despawn",
+ * no time given). A follower goes when it
  * dies, when its owner logs out or dies (Wiki: "If you're killed, you'll have to kill the follower
  * again"), when the symbol's locations rotate ("the creatures have moved locations"), and, a TSPS
  * choice, when its owner leaves the Wilderness, which frees its spawn point for other players.
@@ -61,28 +73,44 @@ const WATCH_INTERVAL_TICKS = 5;
 /** The Wilderness above ground (the underground half starts at y 9920). */
 const UNDERGROUND_Y = 9920;
 const untradeableDrop = (name) => `<col=ef1020>Untradeable drop: ${name}</col>`;
+// The Wiki's specials. TSPS choices: the chance, the 2-tick landing and the 8-tick bind.
+const SPECIAL_CHANCE = 5;
+const SPECIAL_LAND_TICKS = 2;
+const SHOCK_WAVE_BIND_TICKS = 8;
+/** Wiki: the sword attacks every 3 ticks while the player is bound. */
+const BOUND_ATTACK_SPEED = 3;
+/** Wiki (Ice Barrage): max hit 30, a 20-second (32-tick) freeze. */
+const BARRAGE_MAX_HIT = 30;
+const BARRAGE_FREEZE_TICKS = 32;
+/** Wiki: "upwards of 30", none 12 or more tiles away. */
+const ENERGY_BALL_MAX = 30;
+const ENERGY_BALL_RANGE = 12;
+const ENERGY_BALL_MESSAGE = "Porazdir fires a ball of energy directly linked to his power!";
+/** Wiki: 2 minutes, 1 with Protect from Magic. */
+const TELE_BLOCK_SECONDS = 120;
+const TELE_BLOCK_PROTECTED_SECONDS = 60;
 
 /** Each follower's recorded arrival and god-spell attack. */
 const COMBAT = Object.freeze({
   saradomin: {
-    spawnAnim: 7964, spawnTicks: 2,
+    spawnAnim: 7964, spawnTicks: 2, special: "shockWave", meleeMaxHit: 43,
     magic: { anim: 7962, gfx: 1518, height: 128, sound: 1659, splashSound: 1656, maxHit: 26 },
   },
   guthix: {
-    spawnAnim: 7844, spawnTicks: 3,
+    spawnAnim: 7844, spawnTicks: 3, special: null, meleeMaxHit: 16,
     summon: { projectile: 1512, start: 30, base: 46, perTile: 10, startHeight: 100, endHeight: 20 },
     heal: { projectile: 1513, start: 0, end: 106, angle: 20, startHeight: 10, endHeight: 220 },
     magic: { anim: 7849, gfx: 1511, height: 96, sound: 1653, splashSound: 227, maxHit: 43, drain: "DEFENCE", message: "You feel weakened." },
   },
   zamorak: {
-    spawnAnim: null, spawnTicks: 0,
+    spawnAnim: null, spawnTicks: 0, special: "energyBall", meleeMaxHit: 16,
     magic: { anim: 7841, gfx: 78, height: 0, sound: 1655, splashSound: 227, maxHit: 43, drain: "MAGIC", message: "You feel your magical powers weaken." },
   },
 });
 
 let api;
 let core;
-/** npc -> { player, follower, combat, attacks, healers } */
+/** npc -> { player, follower, combat, attacks, healers, bound, teleBlockUntil } */
 const active = new Map();
 
 function later(ticks, action) {
@@ -119,6 +147,30 @@ function graphic(id, height = 0, delay = 0) {
 
 function sound(source, id, delay = 0) {
   core.Sounds.sendSound(source, new core.Sound(id, 1, delay, 0));
+}
+
+function now() {
+  return core.World.getProcessCycle?.() ?? 0;
+}
+
+/** Tiles from the npc's footprint to the target, 0 when adjacent. */
+function edgeDistance(npc, target) {
+  const a = npc.getLocation();
+  const b = target.getLocation();
+  const size = npc.size?.() ?? FOLLOWER_SIZE;
+  const dx = Math.max(a.getX() - b.getX(), 0, b.getX() - (a.getX() + size - 1));
+  const dy = Math.max(a.getY() - b.getY(), 0, b.getY() - (a.getY() + size - 1));
+  return Math.max(dx, dy) - 1;
+}
+
+/** A copy of where a mobile stands now. */
+function tileOf(mobile) {
+  const at = mobile.getLocation();
+  return new core.Location(at.getX(), at.getY(), at.getZ());
+}
+
+function sameTile(a, b) {
+  return a.getX() === b.getX() && a.getY() === b.getY() && a.getZ() === b.getZ();
 }
 
 function stateOf(npc) {
@@ -172,7 +224,7 @@ function summon(player, follower, pointIndex, [x, y]) {
   });
   if (!npc) return null;
   const combat = COMBAT[follower.key];
-  active.set(npc, { player, follower, combat, attacks: 0, healers: new Set() });
+  active.set(npc, { player, follower, combat, attacks: 0, healers: new Set(), bound: false, teleBlockUntil: 0 });
   every(WATCH_INTERVAL_TICKS, () => watch(npc));
   sound(npc, SPAWN_SOUND);
   if (follower.spawningId != null) npc.setNpcTransformationId(follower.spawningId);
@@ -209,12 +261,14 @@ function dismiss(npc, state) {
   if (npc.isRegistered()) api.removeNpc(npc);
 }
 
-/** Its energy balls go with it. */
+/** Its energy balls go with it, and its Tele Block fades (Wiki), if it's still running: a later one (a PKer's) stays. */
 function release(state) {
   for (const healer of state.healers) {
     if (healer.isRegistered()) api.removeNpc(healer);
   }
   state.healers.clear();
+  if (now() < state.teleBlockUntil && core.TeleBlock.isBlocked(state.player)) core.TeleBlock.remove(state.player);
+  state.teleBlockUntil = 0;
 }
 
 function drain(target, skillName) {
@@ -272,16 +326,104 @@ function landingTicks(end) {
   return Math.max(1, Math.floor(end / 30));
 }
 
-/** This attack: Derwen's summon on its turn, otherwise the god spell. */
+// ---- The Wiki's specials (their timing is TSPS's; see the header) ----
+
+/** Ice Barrage at the tile the player stood on: dodged by leaving it (Wiki). */
+function iceBarrage(npc, target) {
+  const spell = core.CombatSpells.ICE_BARRAGE.getSpell();
+  npc.performAnimation(new core.Animation(npc.getAttackAnim()));
+  const aimed = tileOf(target);
+  later(SPECIAL_LAND_TICKS, () => {
+    if (!stateOf(npc) || !target.isRegistered() || !sameTile(target.getLocation(), aimed)) return;
+    const end = spell.endGraphic?.();
+    if (end) target.performGraphic(end);
+    const damage = core.Misc.randomInclusive(0, BARRAGE_MAX_HIT);
+    target.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+    core.CombatFactory.freezeTicks(target, BARRAGE_FREEZE_TICKS, "You have been frozen!", npc, "ice");
+  });
+}
+
+/** Tele Block: 2 minutes, 1 with Protect from Magic (Wiki), fading when the follower dies. */
+function teleBlock(npc, target, state) {
+  npc.performAnimation(new core.Animation(npc.getAttackAnim()));
+  later(SPECIAL_LAND_TICKS, () => {
+    if (!stateOf(npc) || !target.isRegistered() || core.TeleBlock.isBlocked(target)) return;
+    const protectedFromMagic = core.PrayerHandler.isActivated(target, core.PrayerHandler.PROTECT_FROM_MAGIC);
+    const seconds = protectedFromMagic ? TELE_BLOCK_PROTECTED_SECONDS : TELE_BLOCK_SECONDS;
+    core.TeleBlock.apply(target, npc.getDefinition().getName(), seconds);
+    state.teleBlockUntil = now() + core.Misc.getTicks(seconds);
+  });
+}
+
+/** Porazdir's energy ball: through prayer, up to 30 up close and nothing from 12 tiles (Wiki). */
+function energyBall(npc, target) {
+  npc.performAnimation(new core.Animation(COMBAT.zamorak.magic.anim));
+  target.sendMessage(ENERGY_BALL_MESSAGE);
+  later(SPECIAL_LAND_TICKS, () => {
+    if (!stateOf(npc) || !target.isRegistered()) return;
+    const distance = edgeDistance(npc, target) + 1;
+    if (distance >= ENERGY_BALL_RANGE) return;
+    const cap = Math.round(ENERGY_BALL_MAX * (ENERGY_BALL_RANGE - distance) / ENERGY_BALL_RANGE);
+    const damage = core.Misc.randomInclusive(Math.floor(cap / 2), cap);
+    target.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+  });
+}
+
+/** The Justiciar's shock wave at the player's tile: still there, they're pulled beside him and bound (Wiki). */
+function shockWave(npc, target, state) {
+  npc.performAnimation(new core.Animation(npc.getAttackAnim()));
+  const aimed = tileOf(target);
+  later(SPECIAL_LAND_TICKS, () => {
+    if (!stateOf(npc) || !target.isRegistered() || !sameTile(target.getLocation(), aimed)) return;
+    const at = npc.getLocation();
+    target.moveTo(new core.Location(at.getX() + 1, at.getY() - 1, at.getZ()));
+    core.CombatFactory.freezeTicks(target, SHOCK_WAVE_BIND_TICKS, null, npc);
+    // A freeze can be refused (still immune after the last one): no bind, no fast sword.
+    if (!target.getTimers().has(core.TimerKey.FREEZE)) return;
+    state.bound = true;
+    later(SHOCK_WAVE_BIND_TICKS, () => { state.bound = false; });
+  });
+}
+
+const SPECIALS = { shockWave, energyBall };
+
+function magicAttack(npc, state) {
+  const spec = state.combat.magic;
+  npc.performAnimation(new core.Animation(spec.anim));
+  return { style: "MAGIC", spec };
+}
+
+/** Melee only beside the target (bound, always; otherwise TSPS half the time), else the god spell. */
+function meleeOrMagic(npc, target, state) {
+  const adjacent = edgeDistance(npc, target) <= 0;
+  if (adjacent && (state.bound || core.Misc.randomInclusive(0, 1) === 0)) {
+    npc.performAnimation(new core.Animation(npc.getAttackAnim()));
+    return { style: "MELEE", maxHit: state.combat.meleeMaxHit };
+  }
+  return magicAttack(npc, state);
+}
+
+/**
+ * This attack: Derwen's recorded summon on its turn; otherwise, while not bound, a Wiki special one
+ * time in five (TSPS); otherwise melee beside the target or the god spell.
+ */
 function chooseAttack(npc, target, state) {
   state.attacks++;
   if (state.combat.summon && state.attacks >= SUMMON_FIRST && (state.attacks - SUMMON_FIRST) % SUMMON_EVERY === 0) {
     summonHealer(npc, target, state);
     return null;
   }
-  const spec = state.combat.magic;
-  npc.performAnimation(new core.Animation(spec.anim));
-  return { spec };
+  if (!state.bound && core.Misc.randomInclusive(1, SPECIAL_CHANCE) === 1) {
+    const options = ["barrage"];
+    if (!core.TeleBlock.isBlocked(target)) options.push("teleBlock");
+    if (state.combat.special) options.push(state.combat.special);
+    const pick = options[core.Misc.randomInclusive(0, options.length - 1)];
+    if (pick === "barrage") iceBarrage(npc, target);
+    else if (pick === "teleBlock") teleBlock(npc, target, state);
+    else SPECIALS[pick](npc, target, state);
+    return null;
+  }
+  return meleeOrMagic(npc, target, state);
 }
 
 function createCombatMethod() {
@@ -293,15 +435,15 @@ function createCombatMethod() {
     }
 
     type() {
-      return CombatType.MAGIC;
+      return CombatType[this.attack?.style ?? "MAGIC"];
     }
 
     attackDistance() {
       return 10;
     }
 
-    attackSpeed() {
-      return ATTACK_SPEED;
+    attackSpeed(npc) {
+      return stateOf(npc)?.bound ? BOUND_ATTACK_SPEED : ATTACK_SPEED;
     }
 
     start(npc, target) {
@@ -310,13 +452,16 @@ function createCombatMethod() {
     }
 
     hits(npc, target) {
-      const spec = this.attack?.spec;
-      if (!spec) return [];
+      const attack = this.attack;
+      if (!attack) return [];
       const hit = new PendingHit(npc, target, this, 1);
-      CombatFactory.applyStyleDamage(hit, spec.maxHit);
-      const landed = hit.isAccurate();
-      target.performGraphic(landed ? graphic(spec.gfx, spec.height, 30) : graphic(SPLASH_GRAPHIC, SPLASH_HEIGHT, 30));
-      sound(target, landed ? spec.sound : spec.splashSound, 30);
+      CombatFactory.applyStyleDamage(hit, attack.style === "MELEE" ? attack.maxHit : attack.spec.maxHit);
+      if (attack.style === "MAGIC") {
+        const { spec } = attack;
+        const landed = hit.isAccurate();
+        target.performGraphic(landed ? graphic(spec.gfx, spec.height, 30) : graphic(SPLASH_GRAPHIC, SPLASH_HEIGHT, 30));
+        sound(target, landed ? spec.sound : spec.splashSound, 30);
+      }
       return [hit];
     }
 
@@ -426,6 +571,7 @@ Object.assign(module.exports, {
   dismissFor,
   _test: {
     COMBAT, SPAWN_RADIUS, active, stateOf, summon, watch, dismiss, dismissFor, followerDied, chooseAttack, createCombatMethod, ballTile, landingTicks,
+    edgeDistance, meleeOrMagic, shockWave, teleBlock, iceBarrage, energyBall,
     godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
   },
 });

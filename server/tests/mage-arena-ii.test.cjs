@@ -272,24 +272,105 @@ test("only a follower's own god spell hurts it", () => {
   assert.equal(melee.getTotalDamage(), 0);
 });
 
-test("a follower only casts its god spell, up to its Wiki max, every 6 ticks", () => {
+test("a follower's god spell and melee hit up to their Wiki max, every 6 ticks; melee only beside it", () => {
   const player = makePlayer({ components: 6 });
   player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 99, false);
   placeFollower(player, "saradomin", 1);
   activate(player);
-  const [npc] = ownFollower(player, "saradomin");
+  const [npc, state] = ownFollower(player, "saradomin");
   const Method = followers.createCombatMethod();
   let landed = 0;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 60; i++) {
     const method = new Method();
     method.start(npc, player);
-    assert.equal(method.type(), core.CombatType.MAGIC);
+    if (!method.attack) continue; // a special (one in five): no ordinary hit
+    if (followers.edgeDistance(npc, player) > 0) assert.equal(method.attack.style, "MAGIC", "no melee from range");
     const [hit] = method.hits(npc, player);
-    assert.ok(hit.getTotalDamage() <= 26);
+    assert.ok(hit.getTotalDamage() <= (method.attack.style === "MAGIC" ? 26 : 43));
     if (hit.isAccurate()) landed++;
   }
-  assert.ok(landed > 0, "some casts land");
+  assert.ok(landed > 0, "some attacks land");
   assert.equal(new Method().attackSpeed(npc), 6);
+  state.bound = true;
+  assert.equal(new Method().attackSpeed(npc), 3, "the bound sword swings every 3 ticks (Wiki)");
+});
+
+test("bound or not, a follower never melees from range", (t) => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 8);
+  activate(player);
+  const [npc, state] = ownFollower(player, "saradomin");
+  state.bound = true;
+  t.mock.method(core.Misc, "randomInclusive", (min) => min);
+  assert.equal(followers.meleeOrMagic(npc, player, state).style, "MAGIC");
+});
+
+test("a shock wave on a freeze-immune player binds nothing", () => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 2);
+  activate(player);
+  const [npc, state] = ownFollower(player, "saradomin");
+  player.getTimers().registers(core.TimerKey.FREEZE_IMMUNITY, 20);
+  followers.shockWave(npc, player, state);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(state.bound, false);
+});
+
+test("Ice Barrage is dodged by leaving the tile (Wiki)", () => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 3);
+  activate(player);
+  const [npc] = ownFollower(player, "saradomin");
+  followers.iceBarrage(npc, player);
+  const at = player.getLocation();
+  player.setLocation(new core.Location(at.getX() + 1, at.getY(), 0));
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(player.getTimers().has(core.TimerKey.FREEZE), false);
+  followers.iceBarrage(npc, player);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(player.getTimers().has(core.TimerKey.FREEZE), true, "frozen when still on it");
+});
+
+test("Porazdir's energy ball does nothing from 12 tiles (Wiki)", () => {
+  const player = makePlayer({ components: 3 });
+  placeFollower(player, "zamorak", 14);
+  activate(player);
+  const [npc] = ownFollower(player, "zamorak");
+  const before = pendingDamage(player).length;
+  followers.energyBall(npc, player);
+  assert.ok(player.messages.includes("Porazdir fires a ball of energy directly linked to his power!"));
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(pendingDamage(player).length, before, "no damage from 12+ tiles");
+});
+
+test("a follower's Tele Block lasts 2 minutes, fades with it, and leaves anyone else's", () => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 2);
+  activate(player);
+  let [npc, state] = ownFollower(player, "saradomin");
+  followers.teleBlock(npc, player, state);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(core.TeleBlock.isBlocked(player), true);
+  assert.ok(player.messages.some((m) => /cast on you by Justiciar Zachariah\. It will expire in 2 minutes\./.test(m)));
+  followers.dismiss(npc, state);
+  assert.equal(core.TeleBlock.isBlocked(player), false, "its block fades with it");
+
+  placeFollower(player, "saradomin", 2);
+  activate(player);
+  [npc, state] = ownFollower(player, "saradomin");
+  followers.teleBlock(npc, player, state);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  state.teleBlockUntil = 0; // its own block has run out
+  core.TeleBlock.remove(player);
+  core.TeleBlock.apply(player, "a PKer");
+  followers.dismiss(npc, state);
+  assert.equal(core.TeleBlock.isBlocked(player), true, "someone else's block stays");
 });
 
 test("Derwen's 2nd attack and every 6th after summon an energy ball between him and the player", (t) => {

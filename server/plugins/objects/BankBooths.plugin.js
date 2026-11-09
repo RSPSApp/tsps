@@ -187,6 +187,9 @@ function confirmExchange(api, event, slot) {
     // overflowing stacks, so delete/add would silently destroy currency here.
     inventory.setItems(replacement);
     inventory.refreshItems();
+    // rsprox_transcripts/226/01645.txt: a mesbox (objectbox_double) with coins_1000 (1003) and the token model (3991).
+    manager.startDialogues(new api.core.DialogueChainBuilder().add(new api.core.DoubleItemStatementDialogue(0, 1003, 3991,
+      itemId === COINS ? "The bank exchanges your coins for platinum tokens." : "The bank exchanges your platinum tokens for coins.")));
   } }, "Yes", "No").setTitle(itemId === COINS
     ? "Exchange your coins for platinum tokens?" : "Exchange your platinum tokens for coins?");
   manager.startDialogues(new api.core.DialogueChainBuilder().add(dialogue));

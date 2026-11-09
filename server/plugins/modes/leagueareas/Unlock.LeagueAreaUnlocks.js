@@ -203,12 +203,13 @@ function pointsChanged({ player, tasks, previousTasks }) {
   });
 }
 
-/** `league:areas` { player } -> league, unlocked (ids in order), next ({ slot, tasks } or null), available. */
+/** `league:areas` { player } -> league, unlocked (ids in order) and unlockedKeys (their keys), next ({ slot, tasks } or null), available. */
 function answerAreas(query) {
   if (!query) return;
   const type = query.player ? Common.leagueOf(query.player) : null;
   query.league = type;
   query.unlocked = type === null ? [] : Common.unlocked(query.player);
+  query.unlockedKeys = query.unlocked.map((id) => Common.area(id)?.key).filter(Boolean);
   query.next = type === null ? null : Common.nextSlot(type, query.player);
   query.available = type !== null && Common.available(type, query.player);
 }

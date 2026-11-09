@@ -3,6 +3,7 @@ import PicoGL, { App as PicoApp, DrawCall, Program, VertexArray, VertexBuffer } 
 import type { ModelLoader } from "../rs/model/ModelLoader";
 import type { TextureLoader } from "../rs/texture/TextureLoader";
 import { buildSkyboxGeometry } from "./SkyboxGeometry";
+import { type SkyboxStateApp, withSkyboxState } from "./SkyboxState";
 
 /** Model units per tile: the scene draws `vertex / 128` tiles from its origin. */
 const UNITS_PER_TILE = 128;
@@ -60,15 +61,11 @@ export class SkyboxRenderer {
         this.cameraPos[0] = cameraX;
         this.cameraPos[1] = cameraY;
         this.cameraPos[2] = cameraZ;
-        this.app.disable(PicoGL.DEPTH_TEST);
-        this.app.depthMask(false);
-        this.app.disable(PicoGL.CULL_FACE);
-        this.app.enable(PicoGL.BLEND);
-        this.app.blendFunc(PicoGL.SRC_ALPHA, PicoGL.ONE_MINUS_SRC_ALPHA);
-        this.drawCall.uniform("u_viewProj", viewProjMatrix).uniform("u_cameraPos", this.cameraPos).draw();
-        this.app.depthMask(true);
-        this.app.enable(PicoGL.DEPTH_TEST);
-        this.app.disable(PicoGL.BLEND);
+        const drawCall = this.drawCall;
+        withSkyboxState(this.app as unknown as SkyboxStateApp, () => {
+            this.app.blendFunc(PicoGL.SRC_ALPHA, PicoGL.ONE_MINUS_SRC_ALPHA);
+            drawCall.uniform("u_viewProj", viewProjMatrix).uniform("u_cameraPos", this.cameraPos).draw();
+        });
     }
 
     dispose(): void {

@@ -8,11 +8,14 @@
  *
  * As the live run shows them:
  * - Each appears at its own location, inside the Wiki map's 5-tile circle round its spawn point
- *   (the Justiciar 3 tiles from point 15, Derwen 5 from point 17), 11-16 tiles from the player:
- *   the Justiciar as his spawning form (5977, sequence 7964), 7858 two ticks later; Derwen as 7513
- *   (sequence 7844), 7859 three ticks later; Porazdir as himself. Area sound 1930 there.
- * - Derwen attacks as he arrives; the Justiciar stood 16 ticks without attacking (Wiki: Derwen is
- *   aggressive, the other two aren't), so they only fight back.
+ *   (measured from its 3x3 centre: the Justiciar's 3 and Derwen's 5 tiles from points 15 and 17),
+ *   11-12 tiles from the player: the Justiciar as his spawning form (5977, sequence 7964), 7858 two
+ *   ticks later; Derwen as 7513 (sequence 7844), 7859 three ticks later. Area sound 1930 there.
+ *   Porazdir's arrival wasn't seen (he came into view later, already walking), so he simply
+ *   appears as 7860; cache id 7515 is probably his spawning form, unconfirmed.
+ * - Each then goes for the player: Derwen cast as he arrived; the Justiciar walked up and cast
+ *   unprovoked. The Wiki says "the follower will appear and attack you", though its infoboxes list
+ *   only Derwen as aggressive; the run and the Mage Arena II page agree, so all three attack.
  * - Each casts every 6 ticks: the Justiciar 7962 with spot animation 1518 (height 128) and sound
  *   1659; Derwen 7849, 1511 (height 96), 1653 and "You feel weakened.", Defence down 1 + 5% (197 to
  *   187); Porazdir 7841, 78, 1655 and "You feel your magical powers weaken.", Magic down the same
@@ -20,8 +23,11 @@
  *   tick after the cast.
  * - Derwen's 2nd attack, then every 6th (ticks 5836 and 5872 of a fight from 5830), is projectile
  *   1512 to a tile between him and the player, 2-4 tiles from them; an energy ball
- *   (ma2_guthix_healer 7514) appears there as it lands. One fired 1513 at Derwen 10 ticks later.
- *   Wiki: each heals him for 5 "every few seconds" and has 20 Hitpoints.
+ *   (ma2_guthix_healer 7514) appears there floor(end / 30) ticks later (end 106: 3, end 86: 2).
+ *   One fired 1513 at Derwen 10 ticks after appearing (the other was killed first). Wiki: each
+ *   heals him for 5 "every few seconds" and has 20 Hitpoints. Inferred: the target tile (a step of
+ *   up to 4 toward him on each axis; matches the second summon, not the first), the heal landing
+ *   with its projectile and repeating every 10 ticks, and no cap on balls (the run had one at a time).
  * - Their remains drop for the killer only, with "Untradeable drop: <name>" (npc-drops.json's
  *   always-drop rows).
  *
@@ -30,8 +36,9 @@
  *
  * Not built, for want of any rate, timing or visuals in either source: their melee, Ice Barrage,
  * Tele Block, Porazdir's energy ball and the Justiciar's shock wave, and a despawn timer ("if the
- * followers are not slain quick enough, they will despawn", no time given). A follower leaves only
- * with its owner (log out) or by dying.
+ * followers are not slain quick enough, they will despawn", no time given). A follower goes when it
+ * dies, when its owner logs out or dies (Wiki: "If you're killed, you'll have to kill the follower
+ * again"), and when the symbol's locations rotate ("the creatures have moved locations").
  */
 const MageArenaII = require("./MageArenaII.MageArena");
 
@@ -40,6 +47,8 @@ const SPLASH_GRAPHIC = 85;
 const SPLASH_HEIGHT = 124;
 const ATTACK_SPEED = 6;
 const SPAWN_RADIUS = 5;
+/** A follower's 3x3 centre is one tile in from its south-west tile. */
+const CENTRE_OFFSET = 1;
 const FOLLOWER_SIZE = 3;
 /** Derwen's 2nd attack and every 6th after it summon an energy ball (235/03344). */
 const SUMMON_FIRST = 2;
@@ -51,17 +60,17 @@ const untradeableDrop = (name) => `<col=ef1020>Untradeable drop: ${name}</col>`;
 /** Each follower's recorded arrival and god-spell attack. */
 const COMBAT = Object.freeze({
   saradomin: {
-    spawnAnim: 7964, spawnTicks: 2, aggressive: false,
+    spawnAnim: 7964, spawnTicks: 2,
     magic: { anim: 7962, gfx: 1518, height: 128, sound: 1659, splashSound: 1656, maxHit: 26 },
   },
   guthix: {
-    spawnAnim: 7844, spawnTicks: 3, aggressive: true,
+    spawnAnim: 7844, spawnTicks: 3,
     summon: { projectile: 1512, start: 30, base: 46, perTile: 10, startHeight: 100, endHeight: 20 },
     heal: { projectile: 1513, start: 0, end: 106, angle: 20, startHeight: 10, endHeight: 220 },
     magic: { anim: 7849, gfx: 1511, height: 96, sound: 1653, splashSound: 227, maxHit: 43, drain: "DEFENCE", message: "You feel weakened." },
   },
   zamorak: {
-    spawnAnim: null, spawnTicks: 0, aggressive: false,
+    spawnAnim: null, spawnTicks: 0,
     magic: { anim: 7841, gfx: 78, height: 0, sound: 1655, splashSound: 227, maxHit: 43, drain: "MAGIC", message: "You feel your magical powers weaken." },
   },
 });
@@ -115,13 +124,13 @@ function stateOf(npc) {
 function followerOfPlayer(player, follower) {
   for (const [npc, state] of active) {
     if (state.player !== player || state.follower !== follower) continue;
-    if (npc.isRegistered()) return state;
+    if (npc.isRegistered() || core.World.getAddNPCQueue().includes(npc)) return state;
     dismiss(npc, state);
   }
   return null;
 }
 
-/** A free 3x3 footprint within the map's 5-tile circle round the spawn point. */
+/** A free 3x3 footprint whose centre is within the map's 5-tile circle round the spawn point. */
 function spawnTile([px, py], random = Math.random) {
   const region = api.getRegionManager();
   const free = (x, y) => {
@@ -135,7 +144,9 @@ function spawnTile([px, py], random = Math.random) {
   const tiles = [];
   for (let dx = -SPAWN_RADIUS; dx <= SPAWN_RADIUS; dx++) {
     for (let dy = -SPAWN_RADIUS; dy <= SPAWN_RADIUS; dy++) {
-      if (dx * dx + dy * dy <= SPAWN_RADIUS * SPAWN_RADIUS && free(px + dx, py + dy)) tiles.push([px + dx, py + dy]);
+      const x = px + dx - CENTRE_OFFSET;
+      const y = py + dy - CENTRE_OFFSET;
+      if (dx * dx + dy * dy <= SPAWN_RADIUS * SPAWN_RADIUS && free(x, y)) tiles.push([x, y]);
     }
   }
   if (!tiles.length) return null;
@@ -163,7 +174,7 @@ function summon(player, follower, pointIndex, [x, y]) {
   later(Math.max(1, combat.spawnTicks), () => {
     if (!npc.isRegistered()) return;
     if (follower.spawningId != null) npc.setNpcTransformationId(-1);
-    if (combat.aggressive && player.isRegistered()) npc.getCombat().attack(player);
+    if (player.isRegistered()) npc.getCombat().attack(player);
   });
   return npc;
 }
@@ -189,7 +200,7 @@ function drain(target, skillName) {
   skills.setCurrentLevel(skill, Math.max(0, level - (1 + Math.floor(level * 0.05))), true);
 }
 
-/** The tile Derwen's ball aims at: from the player toward him, 2-4 tiles (the two recorded summons). */
+/** The tile Derwen's ball aims at: 2-4 tiles from the player toward him (inferred; see the header). */
 function ballTile(npc, target) {
   const from = target.getLocation();
   const centre = core.Projectile.centreOf(npc);
@@ -207,7 +218,7 @@ function summonHealer(npc, target, state) {
   const start = core.Projectile.centreOf(npc);
   const end = spec.base + spec.perTile * start.getDistance(tile);
   new core.Projectile(start, tile, null, spec.projectile, spec.start, end, spec.startHeight, spec.endHeight, null).sendProjectile();
-  later(core.Projectile.ticksToLand(end), () => {
+  later(landingTicks(end), () => {
     if (!stateOf(npc) || !npc.isRegistered()) return;
     const ball = api.spawnNpc({ id: core.NpcIdentifiers.COL_FF9040_ENERGY_BALL_COL, x: tile.getX(), y: tile.getY(), z: tile.getZ(), owner: state.player, wanderRadius: 0 });
     if (!ball) return;
@@ -216,16 +227,25 @@ function summonHealer(npc, target, state) {
   });
 }
 
+/** The ball's 1513 at Derwen; the heal lands with it. */
 function heal(npc, ball, state) {
-  if (!ball.isRegistered() || ball.getHitpoints() <= 0 || !stateOf(npc) || !npc.isRegistered() || npc.getHitpoints() <= 0) {
+  const alive = () => ball.isRegistered() && ball.getHitpoints() > 0 && stateOf(npc) && npc.isRegistered() && npc.getHitpoints() > 0;
+  if (!alive()) {
     state.healers.delete(ball);
     return false;
   }
   const spec = state.combat.heal;
   new core.Projectile(core.Projectile.centreOf(ball), core.Projectile.centreOf(npc), npc, spec.projectile, spec.start, spec.end, spec.startHeight, spec.endHeight, null)
     .withAngle(spec.angle).sendProjectile();
-  npc.heal(HEALER_HEAL);
+  later(landingTicks(spec.end), () => {
+    if (alive()) npc.heal(HEALER_HEAL);
+  });
   return true;
+}
+
+/** Ticks until a projectile ending at `end` client cycles lands, as recorded: 106 -> 3, 86 -> 2. */
+function landingTicks(end) {
+  return Math.max(1, Math.floor(end / 30));
 }
 
 /** This attack: Derwen's summon on its turn, otherwise the god spell. */
@@ -321,10 +341,15 @@ function followerDied({ npc }) {
   later(1, () => active.delete(npc));
 }
 
-function ownerLeft({ player }) {
+/** Its owner logged out or died, or the locations moved: their followers go. */
+function dismissFor(player) {
   for (const [npc, state] of [...active]) {
     if (state.player === player) dismiss(npc, state);
   }
+}
+
+function ownerLeft({ player }) {
+  dismissFor(player);
 }
 
 function isRemains(item) {
@@ -357,6 +382,7 @@ module.exports = function registerFollowers(pluginApi) {
   api.onNpcDeath(followerDied);
   api.onPlayerLogout(ownerLeft);
   api.onPlayerDisconnect(ownerLeft);
+  api.onPlayerDeath(ownerLeft);
   api.onCanBankItem(refuseBank);
   api.onShouldKeepItemOnDeath(loseOnDeath);
   api.onCustomEvent("destroy-item:prompt", remainsDestroyPrompt);
@@ -365,8 +391,9 @@ module.exports = function registerFollowers(pluginApi) {
 Object.assign(module.exports, {
   summon,
   spawnTile,
+  dismissFor,
   _test: {
-    COMBAT, SPAWN_RADIUS, active, stateOf, summon, dismiss, followerDied, chooseAttack, createCombatMethod, ballTile,
+    COMBAT, SPAWN_RADIUS, active, stateOf, summon, dismiss, dismissFor, followerDied, chooseAttack, createCombatMethod, ballTile, landingTicks,
     godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
   },
 });

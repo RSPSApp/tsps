@@ -111,6 +111,8 @@ function rotate(player, random = Math.random) {
     chosen[follower.key] = { point: index, tile: tile ? [tile.getX(), tile.getY()] : [...SPAWN_POINTS[index]] };
   }
   player.setAttribute(LOCATIONS_ATTRIBUTE, chosen);
+  // "The creatures have moved locations": a follower still up at its old place goes.
+  Followers.dismissFor(player);
   lastReadings.delete(player);
   setTimer(player, TIMER_START);
   startTimer(player);

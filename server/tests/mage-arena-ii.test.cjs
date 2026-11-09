@@ -152,8 +152,11 @@ test("each rotation gives every follower its own point and a spawn tile within 5
   assert.equal(new Set(points.map((l) => l.point)).size, 3);
   for (const { point, tile } of points) {
     const [px, py] = symbol.SPAWN_POINTS[point];
-    assert.ok((tile[0] - px) ** 2 + (tile[1] - py) ** 2 <= 25, `${tile} within 5 of ${px},${py}`);
+    const [cx, cy] = [tile[0] + 1, tile[1] + 1]; // the 3x3 follower's centre
+    assert.ok((cx - px) ** 2 + (cy - py) ** 2 <= 25, `${tile} centred within 5 of ${px},${py}`);
   }
+  // The recorded Derwen (3277,3823) by point 17 (3282,3821) fits only measured from his centre.
+  assert.ok((3278 - 3282) ** 2 + (3824 - 3821) ** 2 <= 25);
 });
 
 test("once the locations rotate the next use only says so, then asks", () => {
@@ -199,20 +202,31 @@ test("at visibly shaking the follower appears at its own spawn tile, once, throu
   assert.equal(npc.getId(), core.NpcIdentifiers.JUSTICIAR_ZACHARIAH_2, "then himself, two ticks on (235/03344)");
 });
 
-test("only Derwen attacks as he arrives (Wiki: the other two aren't aggressive)", () => {
-  const arrive = (key, components) => {
+test("each follower goes for its finder as it arrives (the run; Wiki: \"appear and attack you\")", () => {
+  for (const [key, components] of [["saradomin", 6], ["guthix", 5], ["zamorak", 3]]) {
     const player = makePlayer({ components });
     placeFollower(player, key, 2);
     activate(player);
     for (let i = 0; i < 4; i++) core.TaskManager.process();
     const [npc, state] = ownFollower(player, key);
-    const target = npc.getCombat().getTarget();
+    assert.equal(npc.getCombat().getTarget(), player, key);
     followers.dismiss(npc, state);
-    return target === player;
-  };
-  assert.equal(arrive("saradomin", 6), false);
-  assert.equal(arrive("zamorak", 3), false);
-  assert.equal(arrive("guthix", 5), true);
+  }
+});
+
+test("a follower goes when its owner dies, and when the locations move", () => {
+  const player = makePlayer({ components: 3 });
+  placeFollower(player, "zamorak", 1);
+  activate(player);
+  const [first] = ownFollower(player, "zamorak");
+  PluginManager.emitPlayerDeath({ player, killer: null, itemsLost: true, handled: false });
+  assert.equal(first.isRegistered(), false, "Wiki: if you're killed, you'll have to kill the follower again");
+  placeFollower(player, "zamorak", 1);
+  activate(player);
+  const [second] = ownFollower(player, "zamorak");
+  symbol.rotate(player);
+  assert.equal(second.isRegistered(), false, "the creatures have moved locations");
+  assert.equal(ownFollower(player, "zamorak"), undefined);
 });
 
 test("a follower leaves with its owner", () => {
@@ -271,6 +285,7 @@ test("Derwen's 2nd attack and every 6th after summon an energy ball between him 
     if (followers.chooseAttack(npc, player, state) === null) summons.push(attack);
   }
   assert.deepEqual(summons, [2, 8, 14], "as live: t5836 and t5872 of a fight from t5830");
+  assert.deepEqual([followers.landingTicks(106), followers.landingTicks(86)], [3, 2], "as recorded");
   for (let i = 0; i < 6; i++) core.TaskManager.process();
   assert.ok(state.healers.size >= 1, "a ball appears as the projectile lands");
   const [ball] = state.healers;

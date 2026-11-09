@@ -1104,11 +1104,22 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
   for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine"]) {
     await t.test(route, async t => {
       const accounts = [];
+      t.after(() => {
+        for (const f of accounts) {
+          PluginManager.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername() });
+          PluginManager.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+          core.World.unregisterPlayerPosition(f.p);
+          f.p.setRegistered(false); core.TaskManager.cancelTasks(f.p); core.TaskManager.cancelTasks(f.p.getIndex());
+          for (const g of f.ground?.() ?? []) core.ItemOnGroundManager.deregister(g);
+          for (const o of f.fires?.() ?? []) core.ObjectManager.deregister(o, true);
+        }
+      });
       function account(x, y) {
         const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
           send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
         const p = new Player(new PlayerSession(channel));
         p.setIndex(nextIndex++); p.setUsername("fmitem" + p.getIndex());
+        const f = { p }; accounts.push(f);
         p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
         p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
         p.setLocation(new core.Location(x, y, 0)); p.needsPlacement = false;
@@ -1135,19 +1146,10 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         const fires = () => core.ObjectManager.objectsAt(anchor)
           .filter(o => o.getId() === fireId && o.getPrivateArea() === null);
         assert.equal(fires().length, 0);
-        const f = { p, c, anchor, gains, messages, ground, fires }; accounts.push(f); return f;
+        Object.assign(f, { c, anchor, gains, messages, ground, fires }); return f;
       }
       const actor = account(3226, 3218), other = account(3225, 3217);
       assert.notEqual(actor.p.getLongUsername(), other.p.getLongUsername());
-      t.after(() => {
-        for (const f of accounts) {
-          PluginManager.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername() });
-          PluginManager.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
-          f.p.setRegistered(false); core.TaskManager.cancelTasks(f.p); core.TaskManager.cancelTasks(f.p.getIndex());
-          for (const g of f.ground()) core.ItemOnGroundManager.deregister(g);
-          for (const o of f.fires()) core.ObjectManager.deregister(o, true);
-        }
-      });
       let turns = 0;
       const turn = () => {
         assert.ok(++turns <= 32, "bounded actual task/movement phases");

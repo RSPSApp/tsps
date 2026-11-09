@@ -298,6 +298,24 @@ test("a follower's god spell and melee hit up to their Wiki max, every 6 ticks; 
   }
 });
 
+test("Protect from Magic halves a follower's hits rather than blocking them (Wiki; 235/03344 L182501)", (t) => {
+  const player = makePlayer({ components: 6 });
+  player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+  placeFollower(player, "saradomin", 3);
+  activate(player);
+  const [npc] = ownFollower(player, "saradomin");
+  t.mock.method(core.Misc, "randomInclusive", (min, max) => max);
+  t.mock.method(Math, "random", () => 0); // an accurate, maximum roll
+  const open = followers.magicHit(npc, player, 26);
+  t.mock.method(core.PrayerHandler, "isActivated", (_mob, prayer) => prayer === core.PrayerHandler.PROTECT_FROM_MAGIC);
+  const prayed = followers.magicHit(npc, player, 26);
+  assert.ok(open.getTotalDamage() > 0);
+  assert.ok(prayed.getTotalDamage() > 0, "it still lands through the prayer");
+  assert.equal(prayed.getTotalDamage(), Math.floor(open.getTotalDamage() * followers.PROTECTED_DAMAGE_FACTOR));
+  // CombatFactory.applyProtectionPrayer skips a hit that bypasses protection, so it isn't zeroed again.
+  assert.equal(prayed.bypassesProtectionPrayer(), true);
+});
+
 test("bound or not, a follower never melees from range", (t) => {
   const player = makePlayer({ components: 6 });
   placeFollower(player, "saradomin", 8);

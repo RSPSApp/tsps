@@ -38,8 +38,8 @@
  * none of them), so those are TSPS choices, marked below:
  * - melee beside the target (not diagonally), max 16 (the Justiciar's 43): TSPS half the time;
  * - Ice Barrage, "can be dodged by stepping off the square": the spell's own max 30, 32-tick
- *   freeze and impact graphic; accuracy and Protect from Magic apply ("Protection prayers reduce
- *   the accuracy and strength of their attacks"), a splash freezes nothing;
+ *   freeze and impact graphic; accuracy applies and Protect from Magic halves it, as for all their
+ *   hits (PROTECTED_DAMAGE_FACTOR); a splash freezes nothing;
  * - Tele Block, lasting "a minute if Protect from Magic is used, rather than two minutes" (read as 2
  *   minutes without: an interpretation), fading when the follower dies; it rolls magic accuracy
  *   (TSPS: the Wiki doesn't say);
@@ -95,6 +95,13 @@ const ENERGY_BALL_MESSAGE = "Porazdir fires a ball of energy directly linked to 
 /** Wiki: 2 minutes, 1 with Protect from Magic. */
 const TELE_BLOCK_SECONDS = 120;
 const TELE_BLOCK_PROTECTED_SECONDS = 60;
+/**
+ * Protection prayers reduce the followers' hits rather than block them (Wiki: "Protection prayers
+ * reduce the accuracy and strength of their attacks", hitting "up to 20+" through Protect from
+ * Magic; the run's Justiciar hit a 4 through it, rsprox_transcripts/235/03344.txt L182501).
+ * TSPS: half the damage under the matching prayer.
+ */
+const PROTECTED_DAMAGE_FACTOR = 0.5;
 
 /** Each follower's recorded arrival and god-spell attack. */
 const COMBAT = Object.freeze({
@@ -349,13 +356,25 @@ function landingTicks(end) {
 
 // ---- The Wiki's specials (their timing is TSPS's; see the header) ----
 
+/**
+ * Rolls a follower's hit: protection prayers don't block it (core's NPC rule would zero it) but
+ * the matching one scales it by PROTECTED_DAMAGE_FACTOR.
+ */
+function rollDamage(hit, target, style, maxHit) {
+  core.CombatFactory.applyStyleDamage(hit, maxHit, { bypassProtectionPrayer: true });
+  const { PrayerHandler } = core;
+  const prayer = style === "MELEE" ? PrayerHandler.PROTECT_FROM_MELEE : PrayerHandler.PROTECT_FROM_MAGIC;
+  if (target.isPlayer?.() && PrayerHandler.isActivated(target, prayer)) {
+    hit.setTotalDamage(Math.floor(hit.getTotalDamage() * PROTECTED_DAMAGE_FACTOR));
+  }
+}
+
 /** A magic hit from the follower with accuracy and protection prayers, as its own casts have. */
 function magicHit(npc, target, maxHit) {
-  const { PendingHit, CombatFactory } = core;
   const method = new (createCombatMethod())();
   method.attack = { style: "MAGIC", spec: { maxHit } };
-  const hit = new PendingHit(npc, target, method, { delay: 0 });
-  CombatFactory.applyStyleDamage(hit, maxHit);
+  const hit = new core.PendingHit(npc, target, method, { delay: 0 });
+  rollDamage(hit, target, "MAGIC", maxHit);
   return hit;
 }
 
@@ -485,7 +504,7 @@ function chooseAttack(npc, target, state) {
 }
 
 function createCombatMethod() {
-  const { CombatMethod, CombatType, CombatFactory, PendingHit } = core;
+  const { CombatMethod, CombatType, PendingHit } = core;
   return class FollowerCombat extends CombatMethod {
     constructor() {
       super();
@@ -516,7 +535,7 @@ function createCombatMethod() {
       const attack = this.attack;
       if (!attack) return [];
       const hit = new PendingHit(npc, target, this, 1);
-      CombatFactory.applyStyleDamage(hit, attack.style === "MELEE" ? attack.maxHit : attack.spec.maxHit);
+      rollDamage(hit, target, attack.style, attack.style === "MELEE" ? attack.maxHit : attack.spec.maxHit);
       if (attack.style === "MAGIC") {
         const { spec } = attack;
         const landed = hit.isAccurate();
@@ -632,7 +651,7 @@ Object.assign(module.exports, {
   dismissFor,
   _test: {
     COMBAT, SPAWN_RADIUS, active, stateOf, summon, watch, dismiss, dismissFor, followerDied, chooseAttack, createCombatMethod, ballTile, landingTicks,
-    edgeDistance, besideSide, dragTile, meleeOrMagic, shockWave, teleBlock, iceBarrage, energyBall,
+    PROTECTED_DAMAGE_FACTOR, rollDamage, magicHit, edgeDistance, besideSide, dragTile, meleeOrMagic, shockWave, teleBlock, iceBarrage, energyBall,
     godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
   },
 });

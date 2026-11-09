@@ -5,7 +5,7 @@ Extracted from the rev 241 cache, with what the server's `ZamorakGodsword.Specia
 | File | What | Cache id |
 | --- | --- | --- |
 | `player.dat` | A player to animate: the default male body kits (head 3, jaw 14, torso 18, arms 26, hands 34, legs 38, feet 42) and the Zamorak godsword's male wear model (27653), joined into one model with their labels | models 217, 246, 28515, 26632, 10218, 27639, 181, 27653 |
-| `player-anim/` | The player's animation, `zgs_special_player`: 25 frames, 53 ticks, frame map 0 (the player skeleton). It puts item 11808 (the godsword) in the right hand and empties the left hand while it plays, which is why it always shows the godsword | sequence 7638 |
+| `player-anim/` | The player's animation, `zgs_special_player`: 25 frames, 53 ticks, frame map 0 (the player skeleton). In the cache it also puts item 11808 (the godsword) in the right hand and empties the left hand while it plays; this copy has those two settings removed, so the player keeps their own weapon and shield | sequence 7638 |
 | `graphic/` | The orange sword trail: `spotanim.dat`, `model.dat` and its animation `dh_sword_update_zamorak_special_spotanim` in `graphic/anim/` (40 frames, 53 ticks, mostly fading parts of the trail in and out) | spot animation 1210, model 28085, sequence 7051 |
 | `preview.png` | Every 4th tick of both, rendered from the Blender preview | |
 

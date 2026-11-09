@@ -75,11 +75,12 @@ function player() {
   subjects.add(subject);
   subject.setUsername("barrows-run");
   subject.setRegistered(true);
-  const sent = { messages: [], varbits: new Map(), rewards: null };
+  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null };
   subject.collected = [];
   const sender = new Proxy({}, {
     get: (target, key) => (key === "sendVarbit" ? (id, value) => (sent.varbits.set(id, value), sender)
       : key === "sendMessage" ? (text) => (sent.messages.push(text), sender)
+      : key === "sendTypedMessage" ? (type, text) => (sent.spam.push(text), sender)
       : key === "sendInterfaceScript" ? (_id, _args, _a, _b, inventories) => (sent.rewards = inventories, sender)
       : () => sender),
   });
@@ -114,6 +115,36 @@ test("Barrows: a looted run stays looted through a teleport out and back to the 
   assert.equal(subject.sent.varbits.get(1394), 0, "the chest shut");
 });
 
+
+// rsprox_transcripts/226/01694.txt (a normal world): "You've broken into a crypt!" (spam, :165471); a brother-raising
+// search "You don't find anything." (spam, :165522); at the chest the diary's rune line (spam) and then
+// "Your Barrows chest count is: <col=ff0000>N</col>." (:170767-170768).
+test("Barrows: the recorded crypt and search lines", () => {
+  const subject = player();
+  arrive(subject, AHRIM_MOUND);
+  Barrows._test.dig({ player: subject });
+  for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
+  assert.ok(subject.sent.spam.includes("You've broken into a crypt!"), subject.sent.spam.join(" | "));
+  assert.ok(!subject.sent.messages.includes("You've found a crypt!"));
+
+  const run = subject.getAttribute("barrows");
+  const index = [0, 1, 2, 3, 4, 5].find((i) => i !== run.tunnel);
+  Barrows._test.searchCrypt(subject, index);
+  assert.ok(subject.sent.spam.includes("You don't find anything."), subject.sent.spam.join(" | "));
+});
+
+test("Barrows: the chest's diary rune line (spam), then 'Your Barrows chest count is: N.' (226/01694:170767)", () => {
+  const looter = player();
+  const diary = DiaryData.BY_KEY.get("morytania");
+  looter.setAttribute(DiaryProgress.TASKS_ATTRIBUTE, {
+    morytania: ["easy", "medium", "hard"].flatMap((tier) => diary.tiers[tier].tasks.map((task) => task.key)),
+  });
+  arrive(looter, CHEST_ROOM);
+  Object.assign(looter.getAttribute("barrows"), { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 1000, chestOpen: true });
+  Barrows._test.searchChest(looter, 1);
+  assert.ok(looter.sent.spam.includes("You receive more runes for completing the hard tier of the Morytania achievement diary."), looter.sent.spam.join(" | "));
+  assert.ok(looter.sent.messages.some((m) => /^Your Barrows chest count is: <col=ff0000>\d+<\/col>\.$/.test(m)), looter.sent.messages.join(" | "));
+});
 
 function rewardDraw() {
   const frames = new Error().stack.split("\n");

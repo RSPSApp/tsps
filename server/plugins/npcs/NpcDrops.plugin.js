@@ -701,7 +701,6 @@ function rulesMultiplier(entry, rules) {
  */
 const GEM_TABLE = "gem";
 const MEGA_RARE_TABLE = "megaRare";
-const TALISMAN_TABLE = "talisman";
 const UNDERGROUND_Y = 6400;
 
 function legendsQuestComplete(player) {
@@ -716,7 +715,8 @@ function locationTalisman(player) {
   return y >= UNDERGROUND_Y ? ItemIdentifiers.CHAOS_TALISMAN : ItemIdentifiers.NATURE_TALISMAN;
 }
 
-function rollSharedTable(name, player, depth = 0) {
+/** `ringOfWealth: false` rolls the full pool even with a ring of wealth worn. */
+function rollSharedTable(name, player, depth = 0, { ringOfWealth = true } = {}) {
   // Shared tables reference each other (rare -> gem -> mega-rare), so cap the chain.
   if (depth > 4) {
     return [];
@@ -725,7 +725,7 @@ function rollSharedTable(name, player, depth = 0) {
   if (!entries || entries.length === 0) {
     return [];
   }
-  const pool = isWearingRingOfWealth(player) && RING_OF_WEALTH_TABLES.has(name)
+  const pool = ringOfWealth && isWearingRingOfWealth(player) && RING_OF_WEALTH_TABLES.has(name)
     ? entries.filter((entry) => !entry.nothing)
     : entries;
   // Published as per-item n/outOf slots sharing one pool, so roll the pool once and walk
@@ -744,11 +744,7 @@ function rollSharedTable(name, player, depth = 0) {
         if (name === GEM_TABLE && entry.ref === MEGA_RARE_TABLE && !legendsQuestComplete(player)) {
           return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
         }
-        // The gem table's own talisman slot is that same talisman, not the talisman table.
-        if (name === GEM_TABLE && entry.ref === TALISMAN_TABLE) {
-          return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
-        }
-        return rollSharedTable(entry.ref, player, depth + 1);
+        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth });
       }
       const [min, max] = entry.quantity;
       return [{
@@ -1020,14 +1016,15 @@ function extraRolls(event) {
 }
 
 /**
- * Answers npc-drops:roll-shared { player, table, drops }: one roll of a shared table by name
- * ("gem", "rareSeed", "usefulHerb" ...), pushed onto `drops`; an empty slot pushes nothing.
- * For content outside NPC kills that rolls the same tables (sorting salvage).
+ * Answers npc-drops:roll-shared { player, table, drops, ringOfWealth }: one roll of a shared table
+ * by name ("gem", "rareSeed", "usefulHerb" ...), pushed onto `drops`; an empty slot pushes nothing.
+ * For content outside NPC kills that rolls the same tables (sorting salvage). `ringOfWealth: false`
+ * keeps the empty slots when a ring of wealth is worn.
  */
 function rollSharedRequest(event) {
   ensureDropsLoaded?.();
   if (!Array.isArray(event?.drops) || typeof event.table !== "string") return;
-  event.drops.push(...rollSharedTable(event.table, event.player));
+  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false }));
 }
 
 let ensureDropsLoaded = null;

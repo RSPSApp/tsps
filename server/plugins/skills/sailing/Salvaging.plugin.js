@@ -257,9 +257,12 @@ function rollLoot(salvage, random = Math.random, owns = () => false, clueOneIn =
   return undefined;
 }
 
-/** One roll of a shared drop table (NpcDrops); its empty slot gives `empty`, if any. */
+/**
+ * One roll of a shared drop table (NpcDrops); its empty slot gives `empty`, if any. A ring of
+ * wealth doesn't change it: the salvage variants have no "nothing" slot for the ring to remove.
+ */
 function rollShared(player, loot) {
-  const request = { player, table: loot.table, drops: [] };
+  const request = { player, table: loot.table, drops: [], ringOfWealth: false };
   pluginApi?.emitCustomEvent("npc-drops:roll-shared", request);
   const [drop] = request.drops;
   if (drop) return { item: drop.itemId, amount: drop.amount };

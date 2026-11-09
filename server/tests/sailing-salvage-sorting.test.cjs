@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/sailing-salvage-sorting.test.cjs
 // Sorting salvage at a salvaging station: Opulent salvage's shared seed, herb and gem tables
-// (through NpcDrops), the Sailors' amulet duplicate rule, tertiary clues and Soup, and the line
+// (through NpcDrops), the Sailors' amulet duplicate rule, clues and Soup, and the line
 // after the last salvage.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -19,7 +19,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const OPULENT = 32861;
 const SMALL = 32847;
 const COINS = 995;
-const NATURE_TALISMAN = 1462;
+const RING_OF_WEALTH = 2572;
 const GRIMY_AVANTOE = 211;
 const SAILORS_AMULET_INERT = 32398;
 const FACILITY_BOTTLE = 33074;
@@ -109,15 +109,18 @@ test("a shared-table roll on Opulent salvage gives that table's item", () => {
   assert.ok(p.messages.includes("spam: You sort through the opulent salvage and find: 1 x Grimy avantoe."));
 });
 
-test("the gem table's empty slot gives one coin, and its talisman slot a nature talisman above ground", () => {
+test("the gem table's empty slot gives one coin, with or without a ring of wealth", () => {
   const p = player();
   sortOne(p, OPULENT, [0.999, 0.999, 0.999, 0.999, 0.999, 0.999, 0.99, 0]);
   assert.equal(p.getInventory().getAmount(COINS), 1);
   assert.ok(p.messages.includes("spam: You sort through the opulent salvage and find: 1 x Coins."));
 
+  // The salvage variant has no "nothing" slot, so a worn ring of wealth leaves its pool alone.
   const q = player();
-  sortOne(q, OPULENT, [0.999, 0.999, 0.999, 0.999, 0.999, 0.999, 0.99, 120 / 128, 0]);
-  assert.equal(q.getInventory().getAmount(NATURE_TALISMAN), 1);
+  const ring = new Item(RING_OF_WEALTH, 1);
+  q.getEquipment = () => ({ get: () => ring, getAmount: () => 0 });
+  sortOne(q, OPULENT, [0.999, 0.999, 0.999, 0.999, 0.999, 0.999, 0.99, 0]);
+  assert.equal(q.getInventory().getAmount(COINS), 1);
 });
 
 test("the last salvage sorted is followed by \"You have no more salvage to sort.\"", () => {

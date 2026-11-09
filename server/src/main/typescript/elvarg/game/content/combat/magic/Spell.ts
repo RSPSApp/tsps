@@ -129,27 +129,36 @@ export abstract class Spell {
     /**
      * The rune ids in the order the cache's spell obj lists them (params 365/367/369/371), or null when the cache has
      * no such spell. Found by the spell's obj id, its widget, or (for spells keyed by an old button id, Wind Strike's
-     * 1152) the one cache spell of this spell's level whose runes are all among this spell's.
+     * 1152) the cache spells of this spell's level whose runes are all among this spell's: the fullest, if they agree.
      */
     public cacheRuneOrder(): number[] | null {
         if (this.cachedRuneOrder !== undefined) return this.cachedRuneOrder;
         const { CacheDefinitions } = require("../../../cache/CacheDefinitions");
         const id = this.spellId();
-        let name: string | undefined = CacheDefinitions.getSpellName(-1, id) ?? CacheDefinitions.getSpellName(id, -1);
-        if (!name) {
-            let listed: Item[] = [];
-            try { listed = this.itemsRequired(null as any) ?? []; } catch { listed = []; }
-            const own = new Set(listed.filter(Boolean).map((item: Item) => item.getId()));
-            const same = (CacheDefinitions.getSpellNames() as string[]).filter((candidate) => {
-                const requirements = CacheDefinitions.getSpellRequirements(candidate);
-                if (!requirements?.runes?.length || requirements.level !== this.levelRequired()) return false;
-                // Every rune the cache lists is this spell's (the cache may list fewer: Smoke Rush's obj has no fire rune).
-                return requirements.runes.every((rune: { id: number }) => own.has(rune.id));
-            });
-            if (same.length === 1) name = same[0];
+        const { ItemDefinition } = require("../../../definition/ItemDefinition");
+        // The cache's own list, runes only: its staff requirements (god, Iban and Slayer staves) are no part of the order.
+        const runesOf = (spellName: string): number[] => (CacheDefinitions.getSpellRequirements(spellName)?.runes ?? [])
+            .map((rune: { id: number }) => rune.id)
+            .filter((runeId: number) => /rune$/i.test(String(ItemDefinition.forId(runeId)?.getName?.() ?? "")));
+        const name: string | undefined = CacheDefinitions.getSpellName(-1, id) ?? CacheDefinitions.getSpellName(id, -1);
+        if (name) {
+            const order = runesOf(name);
+            return this.cachedRuneOrder = order.length ? order : null;
         }
-        const requirements = name ? CacheDefinitions.getSpellRequirements(name) : undefined;
-        return this.cachedRuneOrder = requirements?.runes?.length ? requirements.runes.map((rune: { id: number }) => rune.id) : null;
+        let listed: Item[] = [];
+        try { listed = this.itemsRequired(null as any) ?? []; } catch { listed = []; }
+        const own = new Set(listed.filter(Boolean).map((item: Item) => item.getId()));
+        const candidates = (CacheDefinitions.getSpellNames() as string[])
+            .filter((candidate) => CacheDefinitions.getSpellRequirements(candidate)?.level === this.levelRequired())
+            .map((candidate) => runesOf(candidate))
+            // Every rune the cache lists is this spell's (the cache may list fewer: Smoke Rush's obj has no fire rune).
+            .filter((order) => order.length > 0 && order.every((runeId) => own.has(runeId)));
+        // Ties (Fire Bolt and Ghostly Grasp at 35, Shadow Burst and Lesser Corruption at 64): the fullest lists, used when
+        // they agree.
+        const most = Math.max(0, ...candidates.map((order) => order.length));
+        const fullest = candidates.filter((order) => order.length === most);
+        const agree = fullest.length > 0 && fullest.every((order) => order.join(",") === fullest[0].join(","));
+        return this.cachedRuneOrder = agree ? fullest[0] : null;
     }
 
     /** The part of `items` the inventory cannot fully supply, aggregated per item. */

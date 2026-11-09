@@ -1243,6 +1243,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     encodePlayerMask(encoder: GPUCommandEncoder, width: number, height: number): GPUTextureView | undefined {
         const playerIndex = getControlledPlayerEcsIndex(this);
         if (!this.actors || playerIndex === undefined || width < 1 || height < 1) return undefined;
+        // Until the mask pipelines are built the aura keeps its generic figure.
+        if (!this.actors.playerMaskReady()) return undefined;
         const target = (this.playerMask ??= new PlayerMaskTarget(this.device));
         const view = target.ensure(width, height);
         const pass = encoder.beginRenderPass({

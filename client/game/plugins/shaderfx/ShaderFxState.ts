@@ -288,6 +288,11 @@ export class ShaderFxState {
         this.teleportStartAt = now;
     }
 
+    /** Whether a teleport graphic has started a wind-up that no landing has ended yet. */
+    teleportWinding(now: number): boolean {
+        return this.teleportStartAt > this.teleportLandAt && now - this.teleportStartAt < FxDuration.TELEPORT_TIMEOUT;
+    }
+
     /** The local player jumped a long way in one tick: the landing. */
     teleported(now: number): void {
         this.teleportLandAt = now;

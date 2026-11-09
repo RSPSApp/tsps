@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import type { Client } from "@runelite/api/Client";
+import { INV, WORN } from "@runelite/api/gameval/InventoryID";
 import { SA_ENERGY } from "@runelite/api/gameval/VarPlayerID";
 import { COLOR_GRADE_INDEX, ShaderFxConfig } from "../game/plugins/shaderfx/ShaderFxConfig";
 import { ShaderFxPlugin } from "../game/plugins/shaderfx/ShaderFxPlugin";
@@ -221,7 +222,14 @@ let weaponType = 0;
 let playerX = 3200;
 let prayerVarbits: Record<number, number> = {};
 let groundListener: ((event: any) => void) | undefined;
+let serverTick = 5000;
+/** The inventory (INV) and worn items (WORN) as item id -> quantity. */
+const held: Record<number, Record<number, number>> = { [INV]: {}, [WORN]: {} };
 const client = {
+    getItemContainer: (id: number) => ({
+        count: (item: number) => held[id]?.[item] ?? 0,
+        getItems: () => Object.entries(held[id] ?? {}).map(([item, quantity]) => ({ getId: () => Number(item), getQuantity: () => quantity })),
+    }),
     getLocalPlayer: () => ({ getWorldLocation: () => ({ getX: () => playerX, getY: () => 3200 }) }),
     getBoostedSkillLevel: (skill: SkillId) => (skill === SkillId.Hitpoints ? hp : 1),
     getRealSkillLevel: (skill: SkillId) => (skill === SkillId.Hitpoints ? 100 : skill === SkillId.Attack ? level : 1),
@@ -232,6 +240,7 @@ const plugin = new ShaderFxPlugin({
     client,
     localPlayerId: () => 7,
     now: () => now,
+    currentTick: () => serverTick,
     subscribeGroundItems: (listener) => {
         groundListener = listener;
         return () => { groundListener = undefined; };
@@ -373,44 +382,116 @@ plugin.onGameTick();
     const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
     assert.equal(runtime.fill(o), false, "running two tiles is not a teleport");
 }
+playerX += 6400; // a ladder or trapdoor into a dungeon: no teleport graphic came first
+plugin.onGameTick();
+{
+    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
+    assert.equal(runtime.fill(o), false, "a long move with no teleport graphic is not a teleport landing");
+}
+now += 400;
+(plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 111 }); // a lever's graphic plays on arrival
+{
+    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
+    assert.equal(runtime.fill(o), false, "a teleport graphic right after a jump is that arrival's, not a wind-up");
+}
+now += 5000;
+(plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 111 });
+now += 900;
 playerX += 40;
 plugin.onGameTick();
 {
     const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
-    assert.ok(runtime.fill(o) && o[FxSlot.STATUS + 2] > 0, "a 40 tile jump warps");
+    assert.ok(runtime.fill(o) && o[FxSlot.STATUS + 2] > 0, "a teleport graphic then a 40 tile jump warps");
+}
+now += 10_000;
+plugin.state.reset();
+plugin.onGameTick();
+playerX += 40; // the same jump with no wind-up: `::tele`, or a boat
+plugin.onGameTick();
+{
+    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
+    assert.equal(runtime.fill(o), false, "a landing with no wind-up before it is ignored");
 }
 
-// Loot: only your own valuable drops flash, and a snapshot re-adding a stack does not.
-const stack = (id: number, ownership: number, gePrice: number, quantity = 1) => ({ id, ownership, gePrice, quantity });
-const drop = (kind: string, s: ReturnType<typeof stack>) => groundListener!({ kind, stack: s });
+// Loot: only a new drop of yours worth the threshold flashes, not your own drops, your death pile,
+// a stack a region snapshot brings back, or one you left behind.
+const stack = (id: number, ownership: number, gePrice: number, quantity = 1, itemId = id, createdTick = serverTick) => ({
+    id, itemId, ownership, gePrice, quantity, createdTick,
+});
+const drop = (kind: string, spawned: ReturnType<typeof stack>) => groundListener!({ kind, stack: spawned });
+const tick = () => {
+    now += 600;
+    serverTick++;
+    plugin.onGameTick();
+};
+/** Lets the plugin judge the stacks that just appeared. */
+const settle = () => {
+    tick();
+    tick();
+};
+const flashing = () => {
+    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
+    runtime.fill(o);
+    return o[FxSlot.LOOT + 3] >= 0;
+};
+const fresh = () => {
+    now += 10_000;
+    plugin.state.reset();
+    held[INV] = {};
+    held[WORN] = {};
+    settle();
+    plugin.state.reset();
+};
 void (plugin as any).startUp();
 assert.ok(groundListener, "the plugin listens to the ground items once started");
-now += 10_000;
-plugin.state.reset();
+fresh();
 drop("spawn", stack(1, 2, 5_000_000));
-{
-    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
-    assert.equal(runtime.fill(o), false, "someone else's loot does not flash");
-}
+settle();
+assert.equal(flashing(), false, "someone else's loot does not flash");
 drop("spawn", stack(2, 1, 20_000, 3));
-{
-    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
-    assert.equal(runtime.fill(o), false, "60k in total is under the threshold");
-}
+settle();
+assert.equal(flashing(), false, "60k in total is under the threshold");
 drop("spawn", stack(3, 1, 20_000, 10));
-{
-    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
-    assert.ok(runtime.fill(o) && o[FxSlot.LOOT + 3] >= 0, "price times quantity counts");
-}
-now += 10_000;
-plugin.state.reset();
+assert.equal(flashing(), false, "a stack is judged a couple of ticks after it appears");
+settle();
+assert.equal(flashing(), true, "price times quantity counts");
+
+fresh();
 drop("despawn", stack(4, 1, 9_000_000));
 now += 20;
 drop("spawn", stack(4, 1, 9_000_000));
-{
-    const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
-    assert.equal(runtime.fill(o), false, "a snapshot's despawn and re-add is not a drop");
-}
+settle();
+assert.equal(flashing(), false, "a snapshot's despawn and re-add is not a drop");
+drop("spawn", stack(5, 1, 9_000_000, 1, 5, serverTick - 50));
+settle();
+assert.equal(flashing(), false, "a stack that was made long ago is one you walked back to, not a drop");
+
+// Dropping an item of your own: it leaves the inventory as the stack appears.
+fresh();
+held[INV] = { 7: 1 };
+tick();
+held[INV] = {};
+drop("spawn", stack(6, 1, 9_000_000, 1, 7));
+settle();
+assert.equal(flashing(), false, "an item you drop from your inventory is not loot");
+// Dying: the inventory and the worn items all become a pile.
+fresh();
+held[INV] = { 7: 1 };
+held[WORN] = { 8: 1 };
+tick();
+held[INV] = {};
+held[WORN] = {};
+drop("spawn", stack(7, 1, 9_000_000, 1, 7));
+drop("spawn", stack(8, 1, 9_000_000, 1, 8));
+settle();
+assert.equal(flashing(), false, "a death pile is not loot");
+// A real drop: the inventory keeps what it had, even when it already holds the same item.
+fresh();
+held[INV] = { 7: 1 };
+tick();
+drop("spawn", stack(9, 1, 9_000_000, 1, 7));
+settle();
+assert.equal(flashing(), true, "a drop that does not come out of your inventory flashes");
 
 void (plugin as any).shutDown();
 assert.equal(groundListener, undefined, "and stops listening when shut down");

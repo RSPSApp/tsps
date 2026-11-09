@@ -27,11 +27,16 @@ game events ──> ShaderFxPlugin ──> ShaderFxState ──fill()──> uni
   a generic figure shape around the player's screen spot; the plugin asks the scene for that spot
   every frame the aura shows. A teleport winds up when its graphic plays on you (a teleport
   graphic, not an animation: the ancient teleport shares one with the ancient combat spells), and
-  lands when you jump six tiles or more between two ticks; a teleport with no wind-up, such as
-  `::tele`, only plays the landing. If no landing follows within 3.6 s the wind-up fades out. Loot
-  flashes come from the ground item store: only a new stack that is yours (self or group
-  ownership), worth price times quantity over the threshold, counts; a snapshot's despawn and
-  re-add within 100 ms does not.
+  lands when you then jump six tiles or more between two ticks. A jump with no wind-up before it
+  (a ladder, a trapdoor into a dungeon, an instance, a boat, `::tele`) is not a landing, and a
+  teleport graphic right after a jump belongs to that arrival (a lever), so neither plays the
+  warp. If no landing follows within 3.6 s the wind-up fades out. Loot flashes come from the
+  ground item store and are limited to real drops: only a new stack that is yours (self or group
+  ownership), worth price times quantity over the threshold, made within the last few ticks (a
+  region snapshot's re-adds and stacks you walk back to are old), and not an item that just left
+  your inventory or worn items (your own drop, your death pile) counts. Stacks are judged two
+  game ticks after they appear, so that inventory change has arrived; a snapshot's despawn and
+  re-add within 100 ms is ignored too.
 - **`ShaderFxState.fill(out, settings, now)`** writes the frame's uniforms and returns whether
   any effect would change the picture. When it returns false nothing is recorded, so the plugin
   costs nothing while off or idle. The clock is passed in, so the state is testable without a GPU.

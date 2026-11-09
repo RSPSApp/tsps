@@ -147,6 +147,9 @@ export class WebGPUActors {
     /** Base player pipeline -> the same vertex stage writing a coverage mask (Shader Effects aura). */
     private readonly maskPipelines = new Map<GPURenderPipeline, GPURenderPipeline>();
     private maskPipelineLayout?: GPUPipelineLayout;
+    /** The base actor shader modules ([opaque, alpha]); they already hold the mask fragment entry. */
+    private readonly baseModules: (GPUShaderModule | undefined)[] = [undefined, undefined];
+    private maskPipelinesPending = false;
     private priorityPasses?: {
         base: [GPURenderPipeline, GPURenderPipeline];
         extended?: [GPURenderPipeline, GPURenderPipeline];
@@ -297,6 +300,7 @@ export class WebGPUActors {
                 ext: mode === "base" ? undefined : extension!.shaders,
                 depth,
             });
+            if (mode === "base" && !priorityPass) this.baseModules[alpha ? 1 : 0] = module;
             const out = new Map<ActorKind, GPURenderPipeline>();
             for (const { kind, stride, cullMode } of KINDS) {
                 if (priorityPass && kind !== "npc") continue;
@@ -536,7 +540,6 @@ export class WebGPUActors {
      */
     drawPlayerMask(pass: GPURenderPassEncoder, playerPid: number): boolean {
         const world = this.world;
-        if (this.maskPipelines.size === 0) this.createMaskPipelines();
         if (!world || !this.actorData || this.maskPipelines.size === 0) return false;
         pass.setBindGroup(0, world.sceneBindGroup);
         pass.setBindGroup(1, world.worldTextureBindGroup);
@@ -565,39 +568,54 @@ export class WebGPUActors {
     }
 
     /**
-     * The player pipelines' mask twins: the same vertex stage as the scene draw, writing coverage
-     * into a single-sampled r8 target. Built the first time the aura asks for a silhouette.
+     * Whether the player silhouette can be drawn yet. The first call starts building the mask
+     * pipelines (the player pipelines' twins: the same vertex stage as the scene draw, writing
+     * coverage into a single-sampled r8 target) off the frame, so showing the aura for the first time
+     * does not hitch; until they are ready the aura uses its generic figure.
      */
-    private createMaskPipelines(): void {
+    playerMaskReady(): boolean {
+        if (this.maskPipelines.size > 0) return true;
         const device = this.renderer.device;
         const playerPipelines = this.pipelines.get("player");
-        if (!device || !playerPipelines || !this.maskPipelineLayout) return;
-        for (const alpha of [false, true]) {
-            const maskModule = createActorShaderModule(device, { alpha });
-            this.maskPipelines.set(
-                playerPipelines[alpha ? 1 : 0],
-                device.createRenderPipeline({
-                    label: `webgpu actor player mask${alpha ? " alpha" : ""}`,
-                    layout: this.maskPipelineLayout,
-                    vertex: {
-                        module: maskModule,
-                        entryPoint: actorVertexEntry("player"),
-                        buffers: [
-                            {
-                                arrayStride: ACTOR_VERTEX_STRIDE,
-                                attributes: [
-                                    { shaderLocation: 0, offset: 0, format: "uint32x4" },
-                                    { shaderLocation: 3, offset: 16, format: "uint32" },
-                                ],
-                            },
-                            { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "uint32" }] },
-                        ],
-                    },
-                    fragment: { module: maskModule, entryPoint: ACTOR_MASK_FRAGMENT_ENTRY, targets: [{ format: "r8unorm" }] },
-                    primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-                }),
-            );
-        }
+        if (this.maskPipelinesPending || !device || !playerPipelines || !this.maskPipelineLayout) return false;
+        this.maskPipelinesPending = true;
+        const layout = this.maskPipelineLayout;
+        const builds = [false, true].map((alpha) => {
+            const maskModule = this.baseModules[alpha ? 1 : 0];
+            if (!maskModule) return Promise.resolve(undefined);
+            return device.createRenderPipelineAsync({
+                label: `webgpu actor player mask${alpha ? " alpha" : ""}`,
+                layout,
+                vertex: {
+                    module: maskModule,
+                    entryPoint: actorVertexEntry("player"),
+                    buffers: [
+                        {
+                            arrayStride: ACTOR_VERTEX_STRIDE,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: "uint32x4" },
+                                { shaderLocation: 3, offset: 16, format: "uint32" },
+                            ],
+                        },
+                        { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "uint32" }] },
+                    ],
+                },
+                fragment: { module: maskModule, entryPoint: ACTOR_MASK_FRAGMENT_ENTRY, targets: [{ format: "r8unorm" }] },
+                primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+            });
+        });
+        void Promise.all(builds)
+            .then(([opaque, alpha]) => {
+                // Dropped if the actors were torn down while the pipelines compiled.
+                if (!this.maskPipelineLayout || !opaque || !alpha) return;
+                this.maskPipelines.set(playerPipelines[0], opaque);
+                this.maskPipelines.set(playerPipelines[1], alpha);
+            })
+            .catch((error) => console.warn("[webgpu] player mask pipelines unavailable", error))
+            .finally(() => {
+                this.maskPipelinesPending = false;
+            });
+        return false;
     }
 
     private draw(pass: GPURenderPassEncoder, alpha: boolean, depth: boolean): void {
@@ -808,6 +826,7 @@ export class WebGPUActors {
         this.gfx = undefined;
         this.maskPipelines.clear();
         this.maskPipelineLayout = undefined;
+        this.baseModules.fill(undefined);
         this.playerPose?.clear();
         this.playerPose = undefined;
         this.geometry?.destroy();

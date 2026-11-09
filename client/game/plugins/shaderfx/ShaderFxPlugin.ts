@@ -1,12 +1,14 @@
 import type { Client } from "@runelite/api/Client";
 import { GameState } from "@runelite/api/GameState";
 import type { GameStateChanged } from "@runelite/api/events";
+import { INV, WORN } from "@runelite/api/gameval/InventoryID";
 import { SA_ENERGY } from "@runelite/api/gameval/VarPlayerID";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import type { ProjectileLaunch } from "../../../common/projectiles/ProjectileLaunch";
 import { subscribeProjectiles } from "../../../network/ServerConnection";
+import { getCurrentTick } from "../../../network/serverConnection/timing";
 import { SkillId } from "../../../rs/skill/skills";
 import { type ActorGraphicUpdate, subscribeActorGraphics, subscribeActorHitsplats } from "../../ActorEventHooks";
 import type { HitsplatEventPayload } from "../../GameRenderer";
@@ -48,6 +50,27 @@ const OWNERSHIP_SELF = 1;
 const OWNERSHIP_GROUP = 3;
 /** A ground item store snapshot removes a stack and puts it back at once: that is not a drop. */
 const SNAPSHOT_REPLAY_MS = 100;
+/**
+ * A drop shows up with its creation tick. One older than this when it arrives was not just dropped:
+ * a region snapshot brought it back, or you walked up to a stack you left.
+ */
+const FRESH_DROP_TICKS = 3;
+/**
+ * Game ticks a new stack waits before it is judged, so the inventory change that goes with your own
+ * drop (or your death pile) has arrived, and how many ticks of inventory counts are remembered.
+ */
+const LOOT_SETTLE_TICKS = 2;
+const INVENTORY_HISTORY_TICKS = 3;
+/** A teleport graphic this soon after a jump belongs to that arrival (a lever), not to a new wind-up. */
+const LANDING_GRAPHIC_WINDOW_MS = 1500;
+
+/** A new stack of yours waiting to be told apart from your own drops. */
+interface PendingLoot {
+    itemId: number;
+    quantity: number;
+    value: number;
+    ticks: number;
+}
 
 /** Reused for every frame's answer, so the haze's lookup makes no object of its own. */
 const PLAYER_SCREEN: PlayerScreen = { u: 0.5, v: 0.5, radius: 0.1 };
@@ -80,6 +103,8 @@ export interface ShaderFxDeps {
     now(): number;
     /** Where the local player is on screen right now, if the scene can say. */
     playerScreen?(): PlayerScreen | undefined;
+    /** The server tick the client is on, to tell a fresh drop from an old stack. Absent: ages are not checked. */
+    currentTick?(): number;
     /** Calls `listener` for each ground item change; returns how to stop. Absent: no loot flash. */
     subscribeGroundItems?(listener: (event: GroundItemMutation) => void): () => void;
 }
@@ -109,6 +134,10 @@ export class ShaderFxPlugin extends Plugin {
     private lastSpec = -1;
     private levelTotal = -1;
     private lastX = -1;
+    private lastJumpAt = -1e9;
+    private pendingLoot: PendingLoot[] = [];
+    /** How many of each item the inventory and worn items held at each of the last few ticks, newest first. */
+    private readonly inventoryHistory: Map<number, number>[] = Array.from({ length: INVENTORY_HISTORY_TICKS }, () => new Map());
     private lastY = -1;
     /** When each ground stack last despawned, to tell a snapshot's re-add from a real drop. */
     private readonly despawnedAt = new Map<number, number>();
@@ -119,7 +148,8 @@ export class ShaderFxPlugin extends Plugin {
             if (this.settings.prayerAura && this.state.hasPrayerAura()) this.state.setPlayerScreen(this.deps.playerScreen?.());
             return this.state.fill(out, this.settings, this.deps.now());
         },
-        wantsPlayerMask: () => this.settings.prayerAura && this.state.hasPrayerAura(),
+        // With the intensity at 0 nothing is drawn, so there is no silhouette to draw either.
+        wantsPlayerMask: () => this.settings.intensity > 0 && this.settings.prayerAura && this.state.hasPrayerAura(),
     };
 
     constructor(deps?: ShaderFxDeps) {
@@ -133,6 +163,7 @@ export class ShaderFxPlugin extends Plugin {
                 localPlayerId: () => osrs.controlledPlayerServerId | 0,
                 now: () => performance.now(),
                 playerScreen: () => playerScreenOf(osrs),
+                currentTick: () => getCurrentTick(),
                 subscribeGroundItems: (listener) => {
                     const store = osrs.groundItems;
                     store?.mutationListeners.add(listener);
@@ -160,6 +191,8 @@ export class ShaderFxPlugin extends Plugin {
         for (const unsubscribe of this.unsubscribers) unsubscribe();
         this.unsubscribers = [];
         this.despawnedAt.clear();
+        this.pendingLoot.length = 0;
+        for (const counts of this.inventoryHistory) counts.clear();
         this.state.reset();
     }
 
@@ -210,6 +243,7 @@ export class ShaderFxPlugin extends Plugin {
 
         this.state.setPrayerAura(this.prayerAura());
         this.watchTeleport(now);
+        this.settleLoot(now);
     }
 
     /** The colour of the active prayers with an aura, blended; undefined when none is on. */
@@ -228,14 +262,18 @@ export class ShaderFxPlugin extends Plugin {
         return count > 0 ? [r / count, g / count, b / count] : undefined;
     }
 
-    /** A teleport has no event of its own, so a long jump between two ticks is one. */
+    /**
+     * A teleport has no event of its own, so a long jump between two ticks is its landing, but only
+     * while a teleport graphic has started one: ladders, trapdoors, instances and boats also jump.
+     */
     private watchTeleport(now: number): void {
         const point = this.deps.client.getLocalPlayer()?.getWorldLocation();
         if (!point) return;
         const x = point.getX();
         const y = point.getY();
         if (this.lastX >= 0 && Math.max(Math.abs(x - this.lastX), Math.abs(y - this.lastY)) >= TELEPORT_TILES) {
-            this.state.teleported(now);
+            this.lastJumpAt = now;
+            if (this.state.teleportWinding(now)) this.state.teleported(now);
         }
         this.lastX = x;
         this.lastY = y;
@@ -257,7 +295,48 @@ export class ShaderFxPlugin extends Plugin {
         const replayed = now - (this.despawnedAt.get(stack.id) ?? -1e9) < SNAPSHOT_REPLAY_MS;
         if (replayed) return;
         if (stack.ownership !== OWNERSHIP_SELF && stack.ownership !== OWNERSHIP_GROUP) return;
-        this.state.lootDropped(stack.gePrice * Math.max(1, stack.quantity), this.settings.lootFlashValue, now);
+        // A stack that was not just created came back with a region snapshot or was left behind.
+        const tick = this.deps.currentTick?.();
+        if (tick !== undefined && stack.createdTick !== undefined && tick - stack.createdTick > FRESH_DROP_TICKS) return;
+        const quantity = Math.max(1, stack.quantity);
+        if (this.pendingLoot.length < 32) {
+            this.pendingLoot.push({ itemId: stack.itemId, quantity, value: stack.gePrice * quantity, ticks: 0 });
+        }
+    }
+
+    /**
+     * Judges the new stacks of yours a couple of ticks after they appear: one whose item just left
+     * your inventory or worn items is a drop of your own or your death pile, not loot. Then
+     * remembers this tick's counts for the next ones.
+     */
+    private settleLoot(now: number): void {
+        const client = this.deps.client;
+        if (!this.settings.lootFlash) {
+            this.pendingLoot.length = 0;
+            return;
+        }
+        for (let i = this.pendingLoot.length - 1; i >= 0; i--) {
+            const loot = this.pendingLoot[i];
+            if (++loot.ticks < LOOT_SETTLE_TICKS) continue;
+            this.pendingLoot.splice(i, 1);
+            let before = 0;
+            for (const counts of this.inventoryHistory) before = Math.max(before, counts.get(loot.itemId) ?? 0);
+            const held = (client.getItemContainer?.(INV)?.count(loot.itemId) ?? 0)
+                + (client.getItemContainer?.(WORN)?.count(loot.itemId) ?? 0);
+            if (before - held >= loot.quantity) continue;
+            this.state.lootDropped(loot.value, this.settings.lootFlashValue, now);
+        }
+        // Rotate the history: the oldest map is refilled with this tick's counts.
+        const newest = this.inventoryHistory.pop()!;
+        this.inventoryHistory.unshift(newest);
+        newest.clear();
+        for (const id of [INV, WORN]) {
+            const items = client.getItemContainer?.(id)?.getItems();
+            if (!items) continue;
+            for (const item of items) {
+                if (item.getId() >= 0) newest.set(item.getId(), (newest.get(item.getId()) ?? 0) + item.getQuantity());
+            }
+        }
     }
 
     private onGraphic(event: ActorGraphicUpdate): void {
@@ -268,7 +347,11 @@ export class ShaderFxPlugin extends Plugin {
         // The target-side graphics of freezing and rooting spells are statuses, not casts.
         if (ICE_GRAPHICS.has(event.graphic)) return this.state.frozen(now);
         if (ENTANGLE_GRAPHICS.has(event.graphic)) return this.state.entangled(now);
-        if (TELEPORT_GRAPHICS.has(event.graphic)) return this.state.teleportStarted(now);
+        if (TELEPORT_GRAPHICS.has(event.graphic)) {
+            // A graphic that plays on arrival (a lever) is not a wind-up for a landing that already happened.
+            if (now - this.lastJumpAt < LANDING_GRAPHIC_WINDOW_MS) return;
+            return this.state.teleportStarted(now);
+        }
         // A ranged weapon's draw-back plays right with its projectile: not a spell.
         if (this.rangedWeapon() && now - this.lastProjectileAt < PROJECTILE_GRAPHIC_WINDOW_MS) return;
         this.state.cast(event.graphic, now, this.settings);
@@ -295,6 +378,9 @@ export class ShaderFxPlugin extends Plugin {
         this.lastSpec = -1;
         this.levelTotal = -1;
         this.lastX = this.lastY = -1;
+        this.lastJumpAt = -1e9;
+        this.pendingLoot.length = 0;
+        for (const counts of this.inventoryHistory) counts.clear();
     }
 
     private readConfig(): ShaderFxSettings {

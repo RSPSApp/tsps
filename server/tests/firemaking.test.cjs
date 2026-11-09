@@ -1101,7 +1101,7 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
   const Firemaking = require("../plugins/skills/Firemaking.plugin");
   const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
   let nextIndex = 1920;
-  for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine"]) {
+  for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine", "permission veto", "equipment dispatch"]) {
     await t.test(route, async t => {
       const accounts = [];
       t.after(() => {
@@ -1190,6 +1190,24 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
       assert.equal(actor.p.getLocation().equals(actor.anchor), true, "still before successful step/commit");
       assert.equal(actor.p.getCombat().isAnimationStalled(), false, "ordinary Eat is not animation-stalled");
       const interrupted = route === "inventory Eat" || route === "widget Eat";
+      if (route === "permission veto" || route === "equipment dispatch") {
+        const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+        if (route === "permission veto") {
+          // Isolate a permission refusal at the real dispatcher boundary.
+          t.mock.method(PluginManager, "emitCanUseItem", () => false);
+          const slot = actor.p.getInventory().getSlotForItemId(I.SHARK);
+          assert.equal(ItemActionPacketListener.handleAction(actor.p, 3214, I.SHARK, slot, 1, "Eat"), true);
+          assert.equal(actor.p.getInventory().getAmount(I.SHARK), 1);
+        } else {
+          // Seed equipment to exercise the equipment-container branch; this does not assert unequip semantics.
+          const slot = core.Equipment.HEAD_SLOT, item = I.BRONZE_FULL_HELM;
+          actor.p.getEquipment().setItem(slot, new core.Item(item, 1));
+          ItemActionPacketListener.handleAction(actor.p, core.Equipment.INVENTORY_INTERFACE_ID, item, slot, 1, "Check");
+        }
+        assert.equal(Firemaking.isFiremakingActive(actor.p), true, "dispatcher branch does not clear the active interaction");
+        assert.deepEqual(actor.gains, []); assert.equal(pile.isPendingRemoval(), false);
+        return;
+      }
       if (interrupted) {
         const slot = actor.p.getInventory().getSlotForItemId(I.SHARK), hp = actor.p.getHitpoints();
         if (route === "inventory Eat") {

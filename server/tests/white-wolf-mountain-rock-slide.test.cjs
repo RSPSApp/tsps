@@ -108,7 +108,7 @@ function runClear(f, limit = 20) {
       seen.set("open", !blocked(2838, 3518) && !blocked(2839, 3518));
       seen.set("clearedFrom", at(f));
     }
-    if (!seen.has("arrived") && at(f).join() !== seen.get("clearedFrom")?.join() && wasCleared && seen.has("clearedFrom")) seen.set("firstStep", seen.get("firstStep") ?? core.World.processCycle);
+    if (wasCleared && !seen.has("firstStep") && at(f).join() !== seen.get("clearedFrom").join()) seen.set("firstStep", core.World.processCycle);
     if (wasCleared && id === slideId && !RockSlide.clearing.size) break;
   }
   return seen;

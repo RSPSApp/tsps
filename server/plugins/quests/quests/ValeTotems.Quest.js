@@ -454,9 +454,9 @@ module.exports = function registerValeTotemsQuest(api) {
       ["ranulph", "It seems the ents are very appreciative of those who maintain their totems. Given you seem to have a knack for it, you might want to keep helping them. They have plenty of other totem sites in the valley.", HAP4],
       ["isadora", "Yes! The ents like it when you help! They'll give you more gifts!", HAP2],
       ["ranulph", "As for me, I'm going to keep studying them. I've learnt so much today, both from Isadora and from the ents themselves. I've already documented it all, but I'm sure there's more to discover!", HAP4],
-      // Tick 758: the quest completes and the notebook's objectbox replaces Ranulph's
-      // "Speaking of which, here, take a notebook for yourself. ..." in the same tick.
+      // Tick 758: the quest completes as this line opens; its continue gives the notebook.
       ["action", () => complete(player)],
+      ["ranulph", "Speaking of which, here, take a notebook for yourself. I've left a copy of my notes in it, but you can also use it to document your own findings.", HAP3],
       ["item", [SACRAMENTS_OF_ENT_FOLK, "Ranulph gives you a notebook."]],
       ["ranulph", "Be sure to check in once in a while to compare findings. I'll happily trade items I find around the valley in exchange for your research assistance!", HAP3],
       ["player", "Sounds great, thanks!", HAP1],

@@ -459,8 +459,16 @@ test("as captured (cleaning-arrowtips): Clean turns dirty arrowtips into arrowhe
     hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
     assert.equal(player.getInventory().getAmount(dirty), 20);
     assert.deepEqual(["steel_arrowheads", "adamant_arrowheads", "mithril_arrowheads", "rune_arrowheads"].map((name) => player.getInventory().getAmount(obj(name))), [5, 1, 1, 0]);
-    assert.equal(player.messages.length, 1, "no message for a clean");
+    assert.equal(player.messages.length, 1, "no message for a clean stopped by room");
     assert.deepEqual(player.xp, {}, "and no xp");
+
+    // Room for the rest: all 20, "You clean a batch of arrowtips." (tick 72).
+    for (const slot of [6, 7, 8]) player.inventory[slot] = null;
+    rolls(...Array(20).fill(0));
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 0);
+    assert.equal(player.getInventory().getAmount(obj("steel_arrowheads")), 25);
+    assert.equal(player.messages.at(-1), "You clean a batch of arrowtips.");
   } finally {
     Math.random = random;
   }

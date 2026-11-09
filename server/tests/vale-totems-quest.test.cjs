@@ -397,6 +397,7 @@ test("the offering is 100, claiming it advances the quest, and the final talk co
   assert.equal(player.getInventory().contains(PluginManager.getCoreApi().ItemIdentifiers.SACRAMENTS_OF_ENT_FOLK), true);
   const ending = player.dialogues.at(-1);
   const notebook = ending.find((entry) => entry.constructor.name === "ItemStatementDialogue");
+  assert.match(ending[ending.indexOf(notebook) - 1].getText(), /^Speaking of which, here, take a notebook/);
   assert.equal(notebook.getText(), "Ranulph gives you a notebook.");
   assert.equal(player.messages.some((text) => /Congratulations/.test(text)), false, "no completion line for this miniquest");
 });

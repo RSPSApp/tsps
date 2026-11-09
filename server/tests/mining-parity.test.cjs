@@ -360,6 +360,15 @@ test("failed starts are message boxes with the live wording", () => {
   assert.match(text(full), /Your inventory is too full to hold any more iron ore\./);
 });
 
+test("daeyalt rocks, full inventory (226/01637:75573): 'Your inventory is too full to hold any more ore.'", () => {
+  const h = harness();
+  const full = createPlayer({ full: true });
+  const mined = mineRock(h, full, "Daeyalt rocks", loc("area_sanguine_mine_minerocks_01"));
+  mined.restore();
+  assert.equal(full.dialogues.length, 1);
+  assert.equal(full.dialogues[0].getDialogues().get(0).getText(), "Your inventory is too full to hold any more ore.");
+});
+
 test("an infernal pickaxe's smelted ore shows smoke and plays 2725, with the usual mining message", () => {
   const h = harness();
   const player = createPlayer({ pickaxe: ItemIds.INFERNAL_PICKAXE });

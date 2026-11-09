@@ -252,6 +252,8 @@ const ROCKS = [
     objectName: "Daeyalt rocks",
     level: 20, xp: 17.5, oreId: ItemIdentifiers.DAEYALT_ORE,
     chance: [96, 350], respawnTicks: 47, swing: "sang", sound: 2998, oreMessage: "You manage to mine some ore.", gameMessage: true,
+    // rsprox_transcripts/226/01637.txt:75573: "Your inventory is too full to hold any more ore."
+    fullName: "ore",
     stages: ["area_sanguine_mine_minerocks_01", "area_sanguine_mine_minerocks_02", "area_sanguine_mine_minerocks_03"],
     depletedRock: "area_sanguine_mine_minerocks_04", emptyMessage: "This rock face is now empty.",
   },
@@ -600,8 +602,9 @@ function messageBox(player, text) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
 }
 
-function inventoryFull(player, oreId) {
-  const name = pluginApi.core.CacheDefinitions.getItem(oreId).name.toLowerCase();
+/** "...any more iron ore."; a rock's own `fullName` where live names it otherwise (Daeyalt: "ore"). */
+function inventoryFull(player, oreId, rock = null) {
+  const name = rock?.fullName ?? pluginApi.core.CacheDefinitions.getItem(oreId).name.toLowerCase();
   messageBox(player, `Your inventory is too full to hold any more ${name}.`);
 }
 
@@ -637,7 +640,7 @@ function startMining(player, rockObject, rock, activeSessions) {
     return false;
   }
   if (inventoryBlocks(player, rock.oreId)) {
-    inventoryFull(player, rock.oreId);
+    inventoryFull(player, rock.oreId, rock);
     return false;
   }
 
@@ -797,7 +800,7 @@ class MiningTask extends Task {
       state.pickaxe = pickaxe;
 
       if (inventoryBlocks(player, state.rock.oreId)) {
-        inventoryFull(player, state.rock.oreId);
+        inventoryFull(player, state.rock.oreId, state.rock);
         stopMining(this.activeSessions, player);
         continue;
       }
@@ -895,7 +898,7 @@ class MiningTask extends Task {
       }
       if (state.rock.infinite || state.rock.depletionTicks) {
         if (inventoryBlocks(player, state.rock.oreId)) {
-          inventoryFull(player, state.rock.oreId);
+          inventoryFull(player, state.rock.oreId, state.rock);
           stopMining(this.activeSessions, player);
           continue;
         }

@@ -140,7 +140,15 @@ test("an autocast standard elemental spell fires a second spell: two projectiles
   player.getInventory().add(new core.Item(I.DEATH_RUNE, 100));
   projectiles.length = 0;
   player.getCombat().attack(target);
-  const landed = fight(player, target, 6);
+  const xp = () => player.getSkillManager().getExperience(core.Skill.MAGIC);
+  const before = xp();
+  const landed = fight(player, target, 1);
+  const castXp = xp() - before;
+  landed.push(...fight(player, target, 4).map((each) => ({ ...each, tick: each.tick + 1 })));
+  assert.equal(landed.length, 2, JSON.stringify(landed));
+  assert.ok(castXp > 0, "the cast pays its XP");
+  assert.equal(xp() - before, castXp, "the second spell pays none (live: a cast's XP is its first hit's)");
+  landed.push(...fight(player, target, 1).map((each) => ({ ...each, tick: each.tick + 5 })));
   assert.equal(landed.length, 2, JSON.stringify(landed));
   const [first, second] = landed;
   assert.equal(second.tick, first.tick + 1, "the second hitsplat a tick after the first");
@@ -152,6 +160,35 @@ test("an autocast standard elemental spell fires a second spell: two projectiles
   assert.equal(blast[0].id, blast[1].id);
   assert.equal(blast[1].endCycleOffset - blast[0].endCycleOffset, 30, "the second lands 30 cycles later");
   assert.equal(runes(player, I.DEATH_RUNE), 98, "two casts, one death rune each: the second spell costs nothing, the quadrant pays the fire and air");
+});
+
+test("a first hit that kills or nearly kills leaves the second spell only what is left, with no XP for the rest", (t) => {
+  accurate = true;
+  t.mock.method(Math, "random", () => 0.99); // Fire Surge rolls high
+  for (const hitpoints of [10, 30]) {
+    const player = wielder(t);
+    const target = npc(t, GUARD, hitpoints === 10 ? 3220 : 3222, 3224);
+    target.setHitpoints(hitpoints);
+    const queued = [];
+    const addPendingHit = core.CombatFactory.addPendingHit;
+    const spy = t.mock.method(core.CombatFactory, "addPendingHit", (hit) => { queued.push(hit); return addPendingHit.call(core.CombatFactory, hit); });
+    Autocasting.setAutocast(player, core.CombatSpells.FIRE_SURGE);
+    player.getInventory().add(new core.Item(I.WRATH_RUNE, 100));
+    player.getCombat().attack(target);
+    const landed = fight(player, target, 5);
+    spy.mock.restore();
+    const onTarget = queued.filter((hit) => hit.getTarget() === target);
+    assert.equal(landed.reduce((sum, each) => sum + each.damage, 0), hitpoints, JSON.stringify(landed));
+    if (hitpoints === 10) {
+      assert.equal(onTarget.length, 1, "a killing first hit queues no second");
+    } else {
+      assert.equal(onTarget.length, 2);
+      const left = hitpoints - onTarget[0].getTotalDamage();
+      assert.ok(left > 0 && left < Math.floor(onTarget[0].getTotalDamage() * 0.4), `a near kill (${onTarget[0].getTotalDamage()})`);
+      assert.equal(onTarget[1].getTotalDamage(), left, "the second spell is capped to what is left");
+      assert.equal(onTarget[1].rewardsExperience(), false);
+    }
+  }
 });
 
 test("a splashed first spell has no second hitsplat; other spells and other staves fire none", (t) => {
@@ -225,14 +262,16 @@ test("against a weak NPC the spell counts as its weakness for damage and accurac
 
 test("on a melee style it reaches 8 tiles but never swings, keeping its target", (t) => {
   const player = wielder(t);
-  const target = npc(t, HILL_GIANT, 3220, 3226);
+  const target = npc(t, HILL_GIANT, 3220, 3232);
   const method = core.CombatFactory.getMethod(player);
   assert.equal(method.type(), core.CombatType.MELEE);
   assert.equal(method.attackDistance(player), 8);
   player.getCombat().attack(target);
-  assert.equal(fight(player, target, 8).length, 0, "no melee hit");
+  assert.equal(fight(player, target, 12).length, 0, "no melee hit");
   assert.equal(player.getCombat().getTarget(), target, "it waits on its target");
-  assert.ok(player.getLocation().getDistance(target.getLocation()) > 1, "it does not walk to melee distance");
+  assert.ok(player.getLocation().getY() > 3220, "it walked in from 12 tiles");
+  const distance = target.getLocation().getY() - player.getLocation().getY(); // straight north, to its near edge
+  assert.ok(distance <= 8 && distance > 1, `it stops within 8 tiles, short of melee distance (${distance})`);
   const staff = wielder(t, { weapon: I.STAFF_OF_FIRE });
   assert.equal(core.CombatFactory.getMethod(staff).attackDistance(staff), 1, "a plain staff still melees at 1 tile");
 });

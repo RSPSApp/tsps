@@ -8,8 +8,9 @@
  *   ticks 15139-15154): the cast sends the spell's projectile twice on the same tick, the second
  *   landing 30 client cycles (a tick) later, and its hitsplat is floor(40%) of the first's a tick
  *   after it (3 -> 1, 12 -> 4, 27 -> 10, 32 -> 12). A cast whose first hit splashed showed no
- *   second hitsplat, so the second spell lands only behind a hit; it rolls no accuracy of its own
- *   and takes 40% of what the first one dealt as it landed.
+ *   second hitsplat, so the second spell lands only behind a hit; it rolls no accuracy or damage
+ *   of its own (40% of what the first one dealt as it landed) and pays no XP. As a landed spell of
+ *   its element it still counts for the Demonic Pacts that act on one (our reading).
  * - Elemental weakness: against an NPC with a weakness the spell counts as that element, for
  *   damage and accuracy, without changing the cast spell (`elemental-spells:weakness`); the NPC
  *   has one weakness, so it is its strongest. Demonic Pacts that check the weakness see it too.
@@ -65,13 +66,16 @@ function launchSecondSpell({ player, target, hit }) {
 function landSecondSpell({ attacker, target, hit }) {
   if (!launched.has(hit)) return;
   launched.delete(hit);
-  if (!hit.isAccurate() || target.getHitpoints() <= 0) return;
+  // The first hit's damage is still queued on the target (HitQueue.pendingDamage) as it resolves.
+  const remaining = target.getHitpoints() - target.getCombat().getHitQueue().getQueuedDamage();
+  if (!hit.isAccurate() || remaining <= 0) return;
+  // Fixed damage with no rolls of its own, and no XP: live pays a cast's XP for its first hit only
+  // (237/01161.txt ticks 15139, 15144, 15149: 24x (base + 2 per first-hit damage) each).
   const second = new core.PendingHit(attacker, target, core.CombatFactory.MAGIC_COMBAT, {
     delay: Math.max(0, SECOND_HIT_DELAY_TICKS - core.CombatFactory.hitProcessingDelay(hit)),
-    rollAccuracy: false,
-    damage: Math.floor((hit.getTotalDamage() * SECOND_HIT_PERCENT) / 100),
+    statusDamage: true,
+    damage: Math.min(remaining, Math.floor((hit.getTotalDamage() * SECOND_HIT_PERCENT) / 100)),
     handleAfterHitEffects: false,
-    ordinary: true,
   }, undefined, hit.getSpellContext()).setSpell(hit.getSpell());
   secondHits.add(second);
   core.CombatFactory.addPendingHit(second);

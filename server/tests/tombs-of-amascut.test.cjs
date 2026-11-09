@@ -745,6 +745,7 @@ test('logging out in the Nexus with an inventory escape crystal ejects instead o
     const p = new Player(new PlayerSession(channel), new Location(3550, 5161, 0));
     p.setUsername(name);
     p.setIndex(index);
+    p.setHitpoints(10);
     return p;
   };
   const leader = player('toaleader', 101);
@@ -791,4 +792,76 @@ test('logging out in the Nexus with an inventory escape crystal ejects instead o
   } finally {
     raid.dispose();
   }
+});
+
+test('active encounter logout distinguishes a crystal eject from a death and rejoin', () => {
+  CachePipeline.initialize();
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { Location } = require('../dist/game/model/Location');
+  const { Item } = PluginManager.getCoreApi();
+  const Shared = require('../plugins/minigames/toa/Shared.TombsOfAmascut');
+  const State = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const Parties = require('../plugins/minigames/toa/Parties.TombsOfAmascut');
+  const { api, calls } = recordingApi();
+  require('../plugins/minigames/toa/Raid.TombsOfAmascut')(api);
+  const login = calls.find((call) => call.name === 'onPlayerLogin').args[0];
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const makePlayer = (name, index) => {
+    const p = new Player(new PlayerSession(channel), new Location(3550, 5161, 0));
+    p.setUsername(name);
+    p.setIndex(index);
+    p.setHitpoints(10);
+    return p;
+  };
+  for (const crystal of [false, true]) {
+    const leader = makePlayer(`toaactiveleader${crystal}`, crystal ? 111 : 113);
+    const member = makePlayer(`toaactivemember${crystal}`, crystal ? 112 : 114);
+    const party = Parties.createParty(leader);
+    party.addPlayer(member);
+    const raid = new State.Raid(party, leader);
+    const room = new State.Room(raid, { key: 'TEST', spawn: { x: 3550, y: 5161, z: 0 }, bounds: { minX: 3549, maxX: 3551, minY: 5160, maxY: 5162, z: 0 } });
+    room.stage = State.STAGE.STARTED;
+    let leaves = 0;
+    room.onPlayerLeave = (p) => { if (p === member) leaves++; };
+    raid.rooms.set(room.key, room);
+    raid.roomKey = room.key;
+    for (const p of [leader, member]) {
+      raid.member(p).roomKey = room.key;
+      raid.area.enter(p);
+    }
+    if (crystal) member.getInventory().setItem(0, new Item(Shared.escapeCrystalId(), 1));
+    const memberState = raid.member(member);
+    try {
+      raid.area.leave(member, true);
+      assert.equal(memberState.deaths, crystal ? 0 : 1);
+      assert.equal(memberState.points, crystal ? 5000 : 4000);
+      assert.equal(leaves, crystal ? 1 : 0);
+      assert.equal(raid.players.includes(leader), true);
+      login({ player: member });
+      assert.equal(State.raidOf(member), crystal ? null : raid);
+      if (!crystal) assert.equal(raid.member(member).ghost, true);
+      assert.equal(leaves, crystal ? 1 : 0);
+    } finally {
+      raid.dispose();
+    }
+  }
+  const solo = makePlayer('toasolocrystal', 115);
+  const party = Parties.createParty(solo);
+  const raid = new State.Raid(party, solo);
+  const room = new State.Room(raid, { key: 'MAIN_HALL', spawn: { x: 3550, y: 5161, z: 0 } });
+  raid.rooms.set(room.key, room);
+  raid.roomKey = room.key;
+  raid.member(solo).roomKey = room.key;
+  raid.area.enter(solo);
+  solo.getInventory().setItem(0, new Item(Shared.escapeCrystalId(), 1));
+  raid.area.leave(solo, true);
+  assert.equal(raid.over, true);
+  assert.equal(party.raid, null);
+  login({ player: solo });
+  assert.equal(State.raidOf(solo), null);
+  assert.equal(solo.getInventory().contains(Shared.escapeCrystalId()), false);
+  assert.equal(solo.getLocation().getX(), Shared.LOBBY_RETURN.x);
+  assert.equal(solo.getLocation().getY(), Shared.LOBBY_RETURN.y);
 });

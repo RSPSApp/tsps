@@ -65,6 +65,23 @@ test("sandstone (rsprox capture 3162) and granite (Wiki) combust for their own S
   assert.deepEqual([ItemIdentifiers.GRANITE_500G_, ItemIdentifiers.GRANITE_2KG_, ItemIdentifiers.GRANITE_5KG_].map(xp), [7.2, 13.2, 22.2]);
 });
 
+// Wiki Infernal pickaxe (Smithing XP table): "Sunstone | 53 | 2", "Rubium splinters | 68 | 2".
+test("sunstone and rubium splinters combust for 2 Smithing XP (Wiki)", () => {
+  for (const ore of [ItemIdentifiers.SUNSTONE, ItemIdentifiers.RUBIUM_SPLINTERS]) {
+    assert.equal(InfernalPickaxe._test.oreXp(ore), 2);
+    const item = pickaxe();
+    const player = createPlayer([item]);
+    const originalRandom = Math.random;
+    try {
+      Math.random = () => 0;
+      assert.equal(InfernalPickaxe.tryCombustOre(player, item.getId(), ore), true);
+    } finally {
+      Math.random = originalRandom;
+    }
+    assert.deepEqual(player.xp, [[Skill.SMITHING, 2]]);
+  }
+});
+
 test("a charge is spent and the pickaxe turns uncharged at zero", () => {
   const item = pickaxe();
   assert.equal(InfernalPickaxe._test.charges(item), 5000, "new pickaxes start fully charged");

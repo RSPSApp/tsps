@@ -104,7 +104,9 @@ const PICKAXES = [
   { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED_, key: "infernal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(4482) },
   { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED__2, key: "trailblazer", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11831) },
   { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED__4, key: "trailblazer_reloaded", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11832) },
-  { id: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, key: "crystal", requiredLevel: 61, requiredAgility: 50, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8347) },
+  // The cache's param_23 is 71, as for the charged one (Wiki: "It requires 71 Mining ... to create and use"); it
+  // ranks with the dragon pickaxe it mines like.
+  { id: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, key: "crystal", requiredLevel: 71, rank: 61, requiredAgility: 50, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8347) },
   // The league's Echo pickaxe (Wiki): a crystal pickaxe with no requirement that always rolls every 2 ticks; `rank` places it above the crystal one.
   { id: ItemIds.ECHO_PICKAXE, key: "crystal", requiredLevel: 1, rank: 72, attemptIntervalTicks: 2, animation: new Animation(8347) },
 ];
@@ -250,6 +252,8 @@ const ROCKS = [
     objectName: "Daeyalt rocks",
     level: 20, xp: 17.5, oreId: ItemIdentifiers.DAEYALT_ORE,
     chance: [96, 350], respawnTicks: 47, swing: "sang", sound: 2998, oreMessage: "You manage to mine some ore.", gameMessage: true,
+    // rsprox_transcripts/226/01637.txt:75573: "Your inventory is too full to hold any more ore."
+    fullName: "ore",
     stages: ["area_sanguine_mine_minerocks_01", "area_sanguine_mine_minerocks_02", "area_sanguine_mine_minerocks_03"],
     depletedRock: "area_sanguine_mine_minerocks_04", emptyMessage: "This rock face is now empty.",
   },
@@ -260,8 +264,10 @@ const ROCKS = [
 // rsprox captures 70 (rev 227) and 3027 (rev 231): each essence plays sound 3600 and counts in
 // tracking_ore_mined, with no chat line.
 const ESSENCE_ROCKS = [
-  { objectName: "Rune Essence", objectIds: [ObjectIds.RUNE_ESSENCE_3], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, respawnTicks: 0, infinite: true, silent: true },
-  { objectName: "Rune essence", objectIds: [ObjectIds.RUNE_ESSENCE, ObjectIds.RUNE_ESSENCE_2], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, respawnTicks: 0, infinite: true, silent: true },
+  // `runeEssence`: Wiki (Rune Essence mine): "Free players, or members with less than level 30 Mining, will mine rune
+  // essence from the outcrops"; members at 30 or higher mine pure essence.
+  { objectName: "Rune Essence", objectIds: [ObjectIds.RUNE_ESSENCE_3], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, runeEssence: true, respawnTicks: 0, infinite: true, silent: true },
+  { objectName: "Rune essence", objectIds: [ObjectIds.RUNE_ESSENCE, ObjectIds.RUNE_ESSENCE_2], level: 1, xp: 5, oreId: ItemIds.PURE_ESSENCE, runeEssence: true, respawnTicks: 0, infinite: true, silent: true },
   // Wiki Ancient essence crystals: 75 Mining, 13.5 XP, 1-4 essence by level, never mined out (the active
   // spot moves instead, see AncientEssence.Mining), no pet. No published chart: every roll lands.
   { objectName: "Ancient essence crystals", level: 75, xp: 13.5, oreId: ItemIdentifiers.ANCIENT_ESSENCE, gems: true, respawnTicks: 0, infinite: true, essenceByLevel: true, oreMessage: "You manage to mine some ancient essence." },
@@ -598,8 +604,9 @@ function messageBox(player, text) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
 }
 
-function inventoryFull(player, oreId) {
-  const name = pluginApi.core.CacheDefinitions.getItem(oreId).name.toLowerCase();
+/** "...any more iron ore."; a rock's own `fullName` where live names it otherwise (Daeyalt: "ore"). */
+function inventoryFull(player, oreId, rock = null) {
+  const name = rock?.fullName ?? pluginApi.core.CacheDefinitions.getItem(oreId).name.toLowerCase();
   messageBox(player, `Your inventory is too full to hold any more ${name}.`);
 }
 
@@ -618,7 +625,17 @@ function wearsBreathingFilter(player) {
   return BREATHING_FILTER_PATTERN.test(pluginApi.core.CacheDefinitions.getItem(head.getId())?.name ?? "");
 }
 
+const PURE_ESSENCE_LEVEL = 30;
+
+/** The essence mine's outcrops give rune essence on a free world or below 30 Mining: this session's copy of the rock. */
+function forMiner(player, rock) {
+  if (!rock.runeEssence) return rock;
+  const pure = pluginApi.core.WorldDefinition.isMembersWorld() && getMiningLevel(player) >= PURE_ESSENCE_LEVEL;
+  return pure ? rock : { ...rock, oreId: ItemIds.RUNE_ESSENCE };
+}
+
 function startMining(player, rockObject, rock, activeSessions) {
+  rock = forMiner(player, rock);
   if (rock.requiresBreathingFilter && !wearsBreathingFilter(player)) {
     player.sendMessage(NO_BREATHING_FILTER);
     return false;
@@ -635,7 +652,7 @@ function startMining(player, rockObject, rock, activeSessions) {
     return false;
   }
   if (inventoryBlocks(player, rock.oreId)) {
-    inventoryFull(player, rock.oreId);
+    inventoryFull(player, rock.oreId, rock);
     return false;
   }
 
@@ -808,7 +825,7 @@ class MiningTask extends Task {
       state.pickaxe = pickaxe;
 
       if (inventoryBlocks(player, state.rock.oreId)) {
-        inventoryFull(player, state.rock.oreId);
+        inventoryFull(player, state.rock.oreId, state.rock);
         stopMining(this.activeSessions, player);
         continue;
       }
@@ -906,7 +923,7 @@ class MiningTask extends Task {
       }
       if (state.rock.infinite || state.rock.depletionTicks) {
         if (inventoryBlocks(player, state.rock.oreId)) {
-          inventoryFull(player, state.rock.oreId);
+          inventoryFull(player, state.rock.oreId, state.rock);
           stopMining(this.activeSessions, player);
           continue;
         }

@@ -360,6 +360,15 @@ test("failed starts are message boxes with the live wording", () => {
   assert.match(text(full), /Your inventory is too full to hold any more iron ore\./);
 });
 
+test("daeyalt rocks, full inventory (226/01637:75573): 'Your inventory is too full to hold any more ore.'", () => {
+  const h = harness();
+  const full = createPlayer({ full: true });
+  const mined = mineRock(h, full, "Daeyalt rocks", loc("area_sanguine_mine_minerocks_01"));
+  mined.restore();
+  assert.equal(full.dialogues.length, 1);
+  assert.equal(full.dialogues[0].getDialogues().get(0).getText(), "Your inventory is too full to hold any more ore.");
+});
+
 test("an infernal pickaxe's smelted ore shows smoke and plays 2725, with the usual mining message", () => {
   const h = harness();
   const player = createPlayer({ pickaxe: ItemIds.INFERNAL_PICKAXE });
@@ -461,6 +470,13 @@ test("mining:gem-roll: the gem pre-roll for content's own rocks, a find line and
   const miss = { player, gem: false };
   try { h.events["mining:gem-roll"](miss); } finally { restoreRandom(); }
   assert.equal(miss.gem, false, "1/256: most rolls miss");
+});
+
+test("the inactive crystal pickaxe needs 71 Mining, as the cache's param_23 says, and mines like a dragon pickaxe", () => {
+  assert.equal(Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 70 })), null);
+  const found = Mining.findBestPickaxe(createPlayer({ pickaxe: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, level: 71 }));
+  assert.equal(found?.id, ItemIds.CRYSTAL_PICKAXE_INACTIVE_);
+  assert.equal(found.fastRollChance, 1 / 6);
 });
 
 const itemName = (id) => core.CacheDefinitions.getItem(id).name;
@@ -837,18 +853,35 @@ test("a charged amulet of glory adds a 3/256 gem roll when the first one misses"
   }
 });
 
-test("rune essence: every roll gives essence and there is no gem pre-roll (Wiki Pure essence)", () => {
+/** The essence a miner at `level` gets from the outcrops on a members' or free world. */
+function essenceMined(level, members) {
+  const { WorldDefinition } = core;
+  const originalMembers = WorldDefinition.isMembersWorld;
+  WorldDefinition.isMembersWorld = () => members;
   const h = harness();
-  const player = createPlayer({ pickaxe: ItemIds.BRONZE_PICKAXE, level: 1 });
+  const player = createPlayer({ pickaxe: ItemIds.BRONZE_PICKAXE, level });
   const restoreRandom = scriptRandom([], 0.999);
   const { restore } = mineRock(h, player, "Rune essence", core.ObjectIdentifiers.RUNE_ESSENCE);
   try {
     h.tick(10);
-    assert.deepEqual(player.added, [[ItemIds.PURE_ESSENCE, 1], [ItemIds.PURE_ESSENCE, 1]], "rolls at +2 and +10");
+    return player.added;
   } finally {
     restoreRandom();
     restore();
+    WorldDefinition.isMembersWorld = originalMembers;
   }
+}
+
+test("rune essence: every roll gives essence and there is no gem pre-roll (Wiki Pure essence)", () => {
+  assert.deepEqual(essenceMined(30, true), [[ItemIds.PURE_ESSENCE, 1], [ItemIds.PURE_ESSENCE, 1]], "rolls at +2 and +10");
+});
+
+// Wiki (Rune Essence mine): "Free players, or members with less than level 30 Mining, will mine rune essence from the
+// outcrops"; "Members with a Mining level of 30 or higher will start mining pure essence".
+test("the essence mine: rune essence on a free world or below 30 Mining, pure essence for members from 30", () => {
+  assert.deepEqual(essenceMined(29, true), [[ItemIds.RUNE_ESSENCE, 1], [ItemIds.RUNE_ESSENCE, 1]], "a member at 29");
+  assert.deepEqual(essenceMined(99, false), [[ItemIds.RUNE_ESSENCE, 1], [ItemIds.RUNE_ESSENCE, 1]], "99 on a free world");
+  assert.deepEqual(essenceMined(30, true), [[ItemIds.PURE_ESSENCE, 1], [ItemIds.PURE_ESSENCE, 1]], "a member at 30");
 });
 
 /** Mines `name` with every roll on face 0 (no gem, a hit, the first outcome), following a staged rock's new locs. */
@@ -1002,7 +1035,8 @@ test("expert gloves: a content-kept amethyst wall does not redraw its spent base
 
 test("rune essence (70, 3027): sound 3600 and the ore counter with each essence, and no chat line", () => {
   const h = harness();
-  const player = createPlayer({ level: 1, pickaxe: ItemIds.BRONZE_PICKAXE });
+  // Recorded at 31 Mining (227/00070 levels up to 32): pure essence.
+  const player = createPlayer({ level: 30, pickaxe: ItemIds.BRONZE_PICKAXE });
   const restoreRandom = scriptRandom([], 0.999);
   const { restore } = mineRock(h, player, "Rune essence", core.ObjectIdentifiers.RUNE_ESSENCE);
   try {

@@ -70,7 +70,8 @@ function chopChance(player, axe) {
 function chop(event) {
   const { player } = event;
   if (!Round.isActive()) {
-    player.sendMessage("There's no use for bruma roots at this time.");
+    // rsprox_transcripts/233/03262: spam.
+    Shared.spam(player, "There's no use for bruma roots at this time.");
     return true;
   }
   const axe = Woodcutting.findBestUsableAxe(player);

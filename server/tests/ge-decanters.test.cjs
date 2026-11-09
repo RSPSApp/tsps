@@ -150,12 +150,10 @@ test('families come from the cache: two Attack mix(1)s make an Attack mix(2), th
   assert.equal(has(p, obj('vial_empty')), 1);
 });
 
-test('only vial potions: Guthix rest (a cup) and Egniol (no vessel) are left as they are', (t) => {
+test('a potion that empties into nothing (Egniol) is left as it is', (t) => {
   const p = player(t);
-  give(p, I().GUTHIX_REST_1_, 4);
   give(p, I().EGNIOL_POTION_2_, 2);
   bob(p, 4);
-  assert.equal(has(p, I().GUTHIX_REST_1_), 4);
   assert.equal(has(p, I().EGNIOL_POTION_2_), 2);
   assert.equal(has(p, obj('vial_empty')), 0, 'no vial out of nowhere');
   assert.deepEqual(p.lines, ["I don't think you've got anything that I can decant."]);
@@ -311,4 +309,21 @@ test("Zahur's Decant (230/00333): the same interface, free, and he speaks the re
   assert.equal(has(p, obj('2doseprayerrestore')), 1);
   assert.deepEqual(p.lines, ['There, all done.']);
   assert.deepEqual(speakers, [core.CacheDefinitions.getNpcId('elid_herbalist')]);
+});
+
+test('Guthix rest (Wiki: Bob Barter (herbs), Guthix rest): two (3)s give a (4) and a (2); emptied ones give cups', (t) => {
+  const I = core.ItemIdentifiers;
+  const p = player(t);
+  give(p, I.GUTHIX_REST_3_, 2);
+  bob(p, 4);
+  assert.equal(has(p, I.GUTHIX_REST_4_), 1);
+  assert.equal(has(p, I.GUTHIX_REST_2_), 1);
+  assert.deepEqual(p.lines, ['There, all done.']);
+
+  const ones = player(t);
+  give(ones, I.GUTHIX_REST_1_, 3);
+  bob(ones, 4);
+  assert.equal(has(ones, I.GUTHIX_REST_3_), 1);
+  assert.equal(has(ones, I.EMPTY_CUP), 2, 'empty cups back, not vials');
+  assert.equal(has(ones, obj('vial_empty')), 0);
 });

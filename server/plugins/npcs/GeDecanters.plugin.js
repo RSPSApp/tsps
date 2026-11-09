@@ -1,8 +1,8 @@
 // The Grand Exchange's two decanters (rsprox 226/01637, 226/01671, 232/03238, 238/04168; Wiki):
 // - Bob Barter (herbs) > Decant opens the decant interface (582); its four buttons pool every potion
 //   family's doses into potions of that many doses, the rest in one smaller potion, empty vials back.
-//   Families come from the cache's dose enum (Potions' "potions:dose-family"); only those that empty
-//   into a vial are his to decant.
+//   Families come from the cache's dose enum (Potions' "potions:dose-family"); those that empty
+//   into a vial are his to decant, and Guthix rest, which empties into a cup.
 // - Murky Matt (runes) > Decant pools the charges on teleport jewellery the same way, up to each
 //   piece's normal capacity; an emptied piece comes back uncharged, or is gone.
 // - Zahur (Nardah) > Decant opens the same interface and speaks the result himself (rsprox 230/00333).
@@ -101,7 +101,7 @@ function planGroup(slots, group) {
     next[piece.slot] = null;
   }
   if (group.vialsNeeded > 0) {
-    const vial = asNoted(objId(DATA.vial), group.noted);
+    const vial = asNoted(group.container, group.noted);
     const own = takeFrom(next, vial, Math.min(group.vialsNeeded, count(next, vial)));
     const price = (group.vialsNeeded - own) * DATA.vialPrice;
     if (price > 0 && takeFrom(next, objId(DATA.coins), price) < price) return { refused: "poor" };
@@ -171,13 +171,13 @@ function doseFamily(itemId) {
 
 /** Potion groups (one per family, noted apart from unnoted) decanted into `target` doses. */
 function potionGroups(player, target) {
-  const vial = objId(DATA.vial);
+  const containers = new Set([objId(DATA.vial), objId(DATA.cup)]);
   const groups = new Map();
   for (const stack of stacks(player)) {
     if (stack.meta != null) continue;
     const family = doseFamily(stack.base);
-    // Bob's are the vial potions; a family that empties into something else (or nothing) is not.
-    if (!family || family.byDose[0] !== vial) continue;
+    // Bob's are the vial potions and Guthix rest (cups); a family that empties into something else (or nothing) is not.
+    if (!family || !containers.has(family.byDose[0])) continue;
     const key = `${family.byDose.join(",")}:${stack.noted}`;
     if (!groups.has(key)) groups.set(key, { noted: stack.noted, family, pieces: [], stacks: 0 });
     const group = groups.get(key);
@@ -197,7 +197,8 @@ function potionGroups(player, target) {
     const potions = group.pieces.reduce((sum, piece) => sum + piece.amount, 0);
     const spare = potions - group.outputs.reduce((sum, out) => sum + out.amount, 0);
     // Splitting needs vials: the player's own (noted for a noted split) first, then Bob's at 5 coins each (Wiki).
-    if (spare >= 0) group.spare = { id: asNoted(vial, group.noted), amount: spare };
+    group.container = group.family.byDose[0];
+    if (spare >= 0) group.spare = { id: asNoted(group.container, group.noted), amount: spare };
     else group.vialsNeeded = -spare;
     result.push(group);
   }

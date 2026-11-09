@@ -95,8 +95,11 @@ test("conditional object interceptors run before earlier object handlers and can
 test("every easy step is a distinct cache clue item with a solvable target", () => {
   fixture();
   const data = Runtime.data(EASY);
-  assert.equal(data.steps.length, 166);
-  for (const [family, target, count] of [["cryptic", "npc", 41], ["cryptic", "loc", 71], ["cryptic", "coord", 8], ["emote", "coord", 33], ["map", "coord", 7], ["music", "npc", 6]])
+  // Rev 242: item 3499's clue (param 623) moved from row 1327 ("Search the boxes in a shop in Taverley.",
+  // now row 17195, which no easy clue item names) to row 1328, the Duke's bedroom chest that item 2677
+  // already gives, so the cache has one easy step (a cryptic loc) fewer than 241's 166.
+  assert.equal(data.steps.length, 165);
+  for (const [family, target, count] of [["cryptic", "npc", 41], ["cryptic", "loc", 70], ["cryptic", "coord", 8], ["emote", "coord", 33], ["map", "coord", 7], ["music", "npc", 6]])
     assert.equal(ofFamily(family, target).length, count, `${family}/${target}`);
   assert.equal(new Set(data.steps.map(step => step.itemId)).size, data.steps.length);
   for (const step of data.steps) {

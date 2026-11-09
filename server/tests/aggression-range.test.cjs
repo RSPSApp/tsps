@@ -546,3 +546,18 @@ test("in single-combat, an always-multi hunter still engages after a single-comb
   assert.equal(minion.getCombat().getTarget(), s.player, "the always-multi hunter is not cut off by list order");
   assert.equal(third.getCombat().getTarget(), null, "a second single-combat hunter still waits");
 });
+
+test("a hunter on a single tile does not join one that engaged under multi rules", (t) => {
+  // Review of #3861: a mugger on a multi tile engages, and one on the single tile beside the
+  // multi boundary must still leave the player to it.
+  const multiAt = new core.Location(3305, 3160, 0), singleAt = new core.Location(3309, 3158, 0);
+  const s = scene(t, { spawn: multiAt, playerAt: new core.Location(3306, 3158, 0) });
+  const single = secondHunter(t, MUGGER, singleAt);
+  assert.ok(AreaManager.inMulti(s.player), "the player stands in multi");
+  assert.ok(AreaManager.inMulti(s.npc), "the first hunter stands in multi");
+  assert.equal(AreaManager.inMulti(single), false, "the second hunter stands in single");
+
+  NpcAggression.runAggression(s.player, [s.npc, single]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(single.getCombat().getTarget(), null, "the single-tile hunter waits");
+});

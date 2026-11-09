@@ -99,7 +99,9 @@ export class NpcAggression {
                         continue;
                     }
                     npc.getCombat().attack(player);
-                    if (!multi) {
+                    // Any ordinary NPC that engages counts, even under multi rules: a hunter on
+                    // a single tile next to the multi area must not join it this tick.
+                    if (!npc.isMultiCombat()) {
                         singleCombatEngaged = true;
                     }
                 }

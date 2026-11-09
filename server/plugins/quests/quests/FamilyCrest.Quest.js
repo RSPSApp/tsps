@@ -11,9 +11,10 @@
  * Ported interactions: crest-piece assembly (item on item), antipoison on Johnathon,
  * mining perfect gold (object 11371), the fish/jewellery exchanges and the stage
  * transitions driven by the transcript's choice/condition/message steps. Chronozon's
- * four Blast spells print the wiki weakening message (the "returns to full health"
- * gate is not simulated). The Witchaven lever/doors puzzle (aux varp 149) and the
- * post-quest gauntlet enchantment are not wired.
+ * four Blast spells print the wiki weakening message and Chronozon cannot die (he
+ * returns to full health) until the killer has landed all four. The first gauntlet
+ * enchantment is free, later changes cost 25,000 coins. The Witchaven lever/doors
+ * puzzle (aux varp 149) is not wired.
  */
 module.exports = function registerFamilyCrestQuest(api) {
   const { Skill, CombatType, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
@@ -62,6 +63,20 @@ module.exports = function registerFamilyCrestQuest(api) {
     [1181, "fire"],
   ]);
   const weakenedByPlayer = new WeakMap();
+  const lastHitterByChronozon = new WeakMap();
+
+  const GAUNTLET_CHANGE_COST = 25000;
+  const STEEL_GAUNTLETS = ItemIdentifiers.STEEL_GAUNTLETS;
+  const GAUNTLETS = [STEEL_GAUNTLETS, ItemIdentifiers.COOKING_GAUNTLETS, ItemIdentifiers.GOLDSMITH_GAUNTLETS, ItemIdentifiers.CHAOS_GAUNTLETS];
+  // Message-step ids of each brother's imbue: the free first one (post-quest page) and the paid change (standard page).
+  const IMBUE_STEPS = new Map([
+    ["MOcYDq", { target: ItemIdentifiers.COOKING_GAUNTLETS, free: true }],
+    ["Ajs0NX", { target: ItemIdentifiers.COOKING_GAUNTLETS, free: false }],
+    ["P09-0v", { target: ItemIdentifiers.GOLDSMITH_GAUNTLETS, free: true }],
+    ["aGBezT", { target: ItemIdentifiers.GOLDSMITH_GAUNTLETS, free: false }],
+    ["oicU8Z", { target: ItemIdentifiers.CHAOS_GAUNTLETS, free: true }],
+    ["CWShbu", { target: ItemIdentifiers.CHAOS_GAUNTLETS, free: false }],
+  ]);
 
   const DIMINTHEIS_NPC_IDS = new Set([NpcIdentifiers.DIMINTHEIS, NpcIdentifiers.DIMINTHEIS_2]);
   const CALEB_NPC_IDS = new Set([NpcIdentifiers.CALEB, NpcIdentifiers.CALEB_2]);
@@ -126,6 +141,13 @@ module.exports = function registerFamilyCrestQuest(api) {
     // Family Crest's listed reward is the gauntlets (granted by registerQuest); no XP.
   }
 
+  /** Plain steel gauntlets get the free first imbue; otherwise the brother's paid 25,000 coin change. */
+  function gauntletPage(player, brother, freeVariant) {
+    return has(player, STEEL_GAUNTLETS)
+      ? page(PAGE, freeVariant)
+      : page(brother, "standard-dialogue-after-completing-family-crest");
+  }
+
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
 
@@ -138,7 +160,7 @@ module.exports = function registerFamilyCrestQuest(api) {
     }
 
     if (CALEB_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return page(PAGE, "post-quest-dialogue-talking-to-caleb-after-the-quest");
+      if (stage >= STAGE_COMPLETE) return gauntletPage(player, "Caleb", "post-quest-dialogue-talking-to-caleb-after-the-quest");
       if (has(player, FAMILY_CREST)) return page(PAGE, "caleb-talking-to-caleb-after-assembling-the-family-crest");
       if (stage >= STAGE_CALEB_PIECE) return page(PAGE, "caleb-talking-to-caleb-again-after-obtaining-the-first-crest-piece");
       if (stage >= STAGE_SPOKEN_CALEB) return page(PAGE, "caleb-talking-to-caleb-again");
@@ -151,7 +173,7 @@ module.exports = function registerFamilyCrestQuest(api) {
     }
 
     if (AVAN_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return page(PAGE, "post-quest-dialogue-talking-to-avan-after-the-quest");
+      if (stage >= STAGE_COMPLETE) return gauntletPage(player, "Avan", "post-quest-dialogue-talking-to-avan-after-the-quest");
       if (stage >= STAGE_AVAN_PIECE) return page(PAGE, "avan-talking-to-avan-after-getting-his-crest-piece");
       if (stage >= STAGE_SPOKEN_BOOT) {
         return page(PAGE, has(player, PERFECT_RING) && has(player, PERFECT_NECKLACE)
@@ -169,7 +191,7 @@ module.exports = function registerFamilyCrestQuest(api) {
     }
 
     if (JOHNATHON_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return page(PAGE, "post-quest-dialogue-talking-to-johnathon-after-the-quest");
+      if (stage >= STAGE_COMPLETE) return gauntletPage(player, "Johnathon", "post-quest-dialogue-talking-to-johnathon-after-the-quest");
       if (stage >= STAGE_CURED_JOHNATHON) return page(PAGE, "johnathon-talking-to-johnathon-again-2");
       if (stage >= STAGE_SPOKEN_JOHNATHON) return page(PAGE, "johnathon-talking-to-johnathon-again");
       if (stage >= STAGE_AVAN_PIECE) return page(PAGE, "johnathon");
@@ -179,9 +201,17 @@ module.exports = function registerFamilyCrestQuest(api) {
     return null;
   }
 
-  function answerCondition({ player, text }) {
+  function answerCondition({ player, text, npcId }) {
     const value = String(text).toLowerCase();
     const stage = quest.getStage(player);
+    if (CALEB_NPC_IDS.has(npcId)) {
+      const cooking = has(player, ItemIdentifiers.COOKING_GAUNTLETS);
+      const other = GAUNTLETS.some((id) => id !== ItemIdentifiers.COOKING_GAUNTLETS && has(player, id));
+      if (value.includes("already has a pair of cooking gauntlets")) return cooking;
+      if (value.includes("does not have any other gauntlets")) return !cooking && !other;
+      if (value.includes("has another set of gauntlets")) return !cooking && other;
+    }
+    if (value.includes("does not have enough coins")) return !has(player, ItemIdentifiers.COINS, GAUNTLET_CHANGE_COST);
     if (value.includes("lacks one or more requirements")) return false;
     if (value.includes("does not have all the fish")) return !FISH.every((id) => has(player, id));
     if (value.includes("has all the fish")) return FISH.every((id) => has(player, id));
@@ -323,6 +353,7 @@ module.exports = function registerFamilyCrestQuest(api) {
   /** Chronozon drops Johnathon's crest piece once cured. */
   function handleNpcDeath({ killer, npcId }) {
     if (!killer || npcId !== NpcIdentifiers.CHRONOZON) return;
+    weakenedByPlayer.delete(killer);
     if (quest.getStage(killer) !== STAGE_CURED_JOHNATHON) return;
     if (has(killer, JOHNATHON_CREST) || has(killer, FAMILY_CREST)) return;
     killer.getInventory().adds(JOHNATHON_CREST, 1);
@@ -366,6 +397,27 @@ module.exports = function registerFamilyCrestQuest(api) {
     }
   }
 
+  /** The brothers imbue the gauntlets: free for plain steel ones, 25,000 coins to change an imbued pair. */
+  function handleGauntletImbue(event) {
+    const imbue = IMBUE_STEPS.get(event.stepId);
+    if (!imbue) return;
+    const { player } = event;
+    const inventory = player.getInventory();
+    const source = (imbue.free ? [STEEL_GAUNTLETS] : GAUNTLETS.filter((id) => id !== imbue.target)).find((id) => has(player, id));
+    const refuse = (message) => {
+      player.sendMessage(message);
+      event.handled = true;
+      event.end = true;
+    };
+    if (source === undefined) return refuse("You don't have any gauntlets for them to imbue.");
+    if (!imbue.free && !has(player, ItemIdentifiers.COINS, GAUNTLET_CHANGE_COST)) {
+      return refuse("You need 25,000 coins to change your gauntlets.");
+    }
+    if (!imbue.free) inventory.deleteNumber(ItemIdentifiers.COINS, GAUNTLET_CHANGE_COST);
+    inventory.deleteNumber(source, 1);
+    inventory.adds(imbue.target, 1);
+  }
+
   /** The spell behind a player's pending hit (manual casts sit in previousCast). */
   function blastElement(player) {
     const combat = player.getCombat?.();
@@ -375,16 +427,15 @@ module.exports = function registerFamilyCrestQuest(api) {
 
   /**
    * The wiki confirms each of the four Blast spells on Chronozon with "Chronozon
-   * weakens...". ponytail: message-only; the wiki's "returns to full health when
-   * nearly dead" gate is not simulated so the quest cannot be soft-locked by it.
+   * weakens..."; the killer's elements are tracked per player (see keepChronozonUp).
    */
   function handleNpcHitModify({ npc, hit }) {
     if (npc?.getId?.() !== NpcIdentifiers.CHRONOZON) return;
+    if (hit?.getAttacker?.()?.isPlayer?.() === true) lastHitterByChronozon.set(npc, hit.getAttacker().getAsPlayer());
     if (hit?.getCombatType?.() !== CombatType.MAGIC || hit.isAccurate?.() !== true || hit.getTotalDamage?.() <= 0) return;
     const attacker = hit.getAttacker?.();
     if (attacker?.isPlayer?.() !== true) return;
     const player = attacker.getAsPlayer();
-    if (quest.getStage(player) !== STAGE_CURED_JOHNATHON) return;
     const element = blastElement(player);
     if (!element) return;
     let weakened = weakenedByPlayer.get(player);
@@ -395,6 +446,17 @@ module.exports = function registerFamilyCrestQuest(api) {
     if (weakened.has(element)) return;
     weakened.add(element);
     player.sendMessage("Chronozon weakens...");
+  }
+
+  /** Wiki: unless all four Blast spells have hit him, Chronozon returns to full health when nearly dead. */
+  function keepChronozonUp(event) {
+    const { npc } = event;
+    if (npc?.getId?.() !== NpcIdentifiers.CHRONOZON) return;
+    const killer = lastHitterByChronozon.get(npc) ?? npc.getCombat?.()?.getKiller?.(false);
+    if (killer && weakenedByPlayer.get(killer)?.size >= BLAST_SPELL_ELEMENTS.size) return;
+    event.preventDeath = true;
+    npc.setHitpoints(npc.getDefinition().getHitpoints());
+    npc.getCombat?.()?.reset?.();
   }
 
   function handleLogin({ player }) {
@@ -425,6 +487,8 @@ module.exports = function registerFamilyCrestQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcHitModify(handleNpcHitModify);
+  api.onCustomEvent("npc-dialogue:action", handleGauntletImbue);
+  api.onNpcBeforeDeath(keepChronozonUp);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
 };

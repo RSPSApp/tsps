@@ -218,6 +218,46 @@ test('Family Crest only handles gold rocks in Witchaven and Mining recognizes th
   assert.ok(ROCKS.find(rock => rock.objectName === 'Gold rocks').objectIds.includes(GOLD_ROCKS_2));
 });
 
+test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronozon needs all four blasts', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/FamilyCrest.Quest')(api);
+  const { ItemIdentifiers: Items, NpcIdentifiers } = api.core;
+  const items = new Map();
+  const messages = [];
+  const player = {
+    getAttribute: () => 0,
+    sendMessage: m => messages.push(m),
+    getInventory: () => ({
+      getAmount: id => items.get(id) ?? 0,
+      deleteNumber: (id, n) => items.set(id, (items.get(id) ?? 0) - n),
+      adds: (id, n) => items.set(id, (items.get(id) ?? 0) + n),
+    }),
+  };
+  const action = stepId => {
+    const event = { player, stepId, handled: false };
+    for (const handler of handlers.custom.get('npc-dialogue:action')) handler(event);
+    return event;
+  };
+  items.set(Items.STEEL_GAUNTLETS, 1);
+  assert.equal(action('MOcYDq').handled, false);
+  assert.equal(items.get(Items.COOKING_GAUNTLETS), 1);
+  assert.equal(items.get(Items.STEEL_GAUNTLETS), 0, 'the free imbue swaps the steel pair');
+
+  assert.equal(action('aGBezT').handled, true, 'changing without 25,000 coins is refused');
+  assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS) ?? 0, 0);
+  items.set(Items.COINS, 30000);
+  assert.equal(action('aGBezT').handled, false, messages.join('|'));
+  assert.equal(items.get(Items.COINS), 5000);
+  assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS), 1);
+  assert.equal(items.get(Items.COOKING_GAUNTLETS), 0);
+
+  const npc = { getId: () => NpcIdentifiers.CHRONOZON, getDefinition: () => ({ getHitpoints: () => 170 }), setHitpoints(v) { this.hp = v; } };
+  const beforeDeath = { npc, preventDeath: false };
+  for (const handler of handlers.npcBeforeDeath) handler(beforeDeath);
+  assert.equal(beforeDeath.preventDeath, true, 'Chronozon returns to full health without all four blasts');
+  assert.equal(npc.hp, 170);
+});
+
 test('a shop version named after a quest opens once its quest state matches (#831)', () => {
   const { api } = mockApi();
   require('../plugins/quests/Quests.plugin').register(api);

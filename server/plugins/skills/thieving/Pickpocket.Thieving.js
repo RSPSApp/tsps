@@ -2,8 +2,8 @@
  * Pickpocketing, driven by plugins/skills/data/pickpocketing.json (OSRS Wiki: Thieving#Pickpocketing,
  * each target's page, Coin pouch, Rogue equipment, Gloves of silence, Dodgy necklace, Thieving cape).
  *
- * The click sends the attempt message and starts the two-tick cooldown. On the next tick a success
- * plays the animation with its loot; a failure sends its message, and the 9-tick stun (8 without
+ * The click sends the attempt message and starts the two-tick cooldown. Most successes resolve on
+ * the next tick; the workman's recorded success takes three. A failure sends its message, and the 9-tick stun (8 without
  * pickpocketing) lands a tick later, the stun message and damage a tick after that.
  * The Ardougne Diary's +10% success and 56/84/140 coin pouches answer "thieving:pickpocket-target"
  * from plugins/items/diaryrewards/Pickpocketing.DiaryRewards.js.
@@ -72,6 +72,8 @@ const POUCH_COINS = new Map(TARGETS.filter((t) => t.coinPouch).map((t) => [t.coi
  * timestamp rather than a flag, so a lost stun can never lock pickpocketing for good.
  */
 const caughtAt = new WeakMap();
+// The newest admitted attempt owns interaction cleanup and any requested repeat.
+const latestAttempt = new WeakMap();
 const CAUGHT_HOLD_TICKS = 3;
 /** The hits a failed attempt dealt: dying to one doesn't set Retribution off (Wiki: Retribution). */
 const stunHits = new WeakSet();
@@ -385,7 +387,7 @@ function caughtTask(player, npc, target) { return new (class extends core.Task {
   }
 })(player, npc, target); }
 
-/** The attempt message goes out on the click; the outcome follows a tick later. */
+/** The attempt message goes out on the click; successful outcomes may take longer. */
 function pickpocketTask(player, npc, target, name, event) { return new (class extends core.Task {
   constructor(player, npc, target, name, event) {
     // Not keyed to the player: a new click cancels the player's keyed tasks, but OSRS still
@@ -399,15 +401,24 @@ function pickpocketTask(player, npc, target, name, event) { return new (class ex
   }
 
   execute() {
-    this.stop();
     const { player, npc, target, name, event } = this;
-    if (!player.isRegistered() || !npc.isRegistered() || player.getHitpoints() <= 0) return;
-    const succeeded = Math.random() < successChance(player, target);
+    if (!player.isRegistered() || !npc.isRegistered() || player.getHitpoints() <= 0) {
+      this.stop();
+      if (latestAttempt.get(player) === this) latestAttempt.delete(player);
+      return;
+    }
+    // The workman capture establishes a delayed success, but does not establish failure timing.
+    if (this.succeeded === undefined) this.succeeded = Math.random() < successChance(player, target);
+    if (this.succeeded && (this.ticks = (this.ticks ?? 0) + 1) < (target.successTicks ?? 1)) return;
+    this.stop();
+    const succeeded = this.succeeded;
     if (succeeded) succeed(player, npc, target, name);
     else fail(player, npc, target, name);
     // Content may ask for another go ("thieving:done", a league relic that keeps pickpocketing): the same click, a tick later.
     const done = { player, kind: "pickpocket", npc, succeeded, again: false };
     pluginApi.emitCustomEvent("thieving:done", done);
+    if (latestAttempt.get(player) !== this) return;
+    latestAttempt.delete(player);
     // Leagues VI captures (recs 1104-1106, Larcenist): the player keeps facing the NPC and follows it as it
     // wanders, with no clicks of their own, an attempt every 2 ticks for hundreds of attempts. The repeat is the
     // player's action, keyed by their index, so any click (MovementQueue.walkToReset) ends the chain; and only
@@ -484,7 +495,9 @@ function pickpocket(event) {
   // `chanceBonus` raises the success chance by that percent and `painless` stuns without the damage (a league fragment).
   const tuned = request.chanceBonus > 0 || request.painless ? { ...target, chanceBonus: Math.max(0, request.chanceBonus | 0), painless: request.painless === true } : target;
   const rolled = request.unconscious ? { ...tuned, low: 256, high: 256, coinPouch: null } : request.alwaysSucceeds ? { ...tuned, low: 256, high: 256 } : tuned;
-  core.TaskManager.submit(pickpocketTask(player, npc, rolled, name, event));
+  const task = pickpocketTask(player, npc, rolled, name, event);
+  latestAttempt.set(player, task);
+  core.TaskManager.submit(task);
 }
 
 /** Coins in one pouch of this kind (a range rolls per pouch). */

@@ -1612,7 +1612,7 @@ test("registered Wilderness assignment and NPC death keep the first-four points 
     const env = { ...process.env, SLAYER_POINTS_NATIVE_CHILD: "1" };
     delete env.NODE_TEST_CONTEXT;
     const child = require("node:child_process").spawnSync(process.execPath,
-      ["--test", "--test-name-pattern=^registered Wilderness assignment and NPC death", __filename],
+      ["--test", "--test-reporter=tap", "--test-name-pattern=^registered Wilderness assignment and NPC death", __filename],
       { env, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
     process.stdout.write(child.stdout ?? ""); process.stderr.write(child.stderr ?? "");
     assert.equal(child.error, undefined, "the isolated registered-world process finishes");

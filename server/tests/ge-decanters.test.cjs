@@ -327,3 +327,19 @@ test('Guthix rest (Wiki: Bob Barter (herbs), Guthix rest): two (3)s give a (4) a
   assert.equal(has(ones, I.EMPTY_CUP), 2, 'empty cups back, not vials');
   assert.equal(has(ones, obj('vial_empty')), 0);
 });
+
+test('Guthix rest split: cups he supplies cost 5 each (GE 3 + 2, Wiki), and with no coins he asks for coins for the cups', (t) => {
+  const I = core.ItemIdentifiers;
+  const p = player(t);
+  give(p, I.GUTHIX_REST_4_, 1);
+  give(p, 995, 15);
+  bob(p, 1);
+  assert.equal(has(p, I.GUTHIX_REST_1_), 4);
+  assert.equal(has(p, 995), 0, '3 cups at 5 coins');
+
+  const poor = player(t);
+  give(poor, I.GUTHIX_REST_4_, 1);
+  bob(poor, 1);
+  assert.equal(has(poor, I.GUTHIX_REST_4_), 1);
+  assert.deepEqual(poor.lines, ["You'll need some coins for the cups I'd have to give you."]);
+});

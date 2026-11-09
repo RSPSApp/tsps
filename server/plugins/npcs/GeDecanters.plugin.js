@@ -135,7 +135,9 @@ function plan(player, groups) {
     }
   }
   const left = [...refusals.values()];
-  return { slots, changed, short: left.includes("short"), poor: left.includes("poor") };
+  const poorFor = [...refusals].filter(([, reason]) => reason === "poor").map(([group]) => group);
+  return { slots, changed, short: left.includes("short"), poor: poorFor.length > 0,
+    poorCups: poorFor.length > 0 && poorFor.every((group) => group.container === objId(DATA.cup)) };
 }
 
 /** Writes a planned copy back, slot by slot. */
@@ -216,10 +218,10 @@ function openDecant({ player, npcId }) {
 
 function decant(player, target) {
   player.getPacketSender().sendSoundEffect(DATA.decantSound, 1, 0, 1);
-  const { changed, short, poor } = apply(player, potionGroups(player, target));
+  const { changed, short, poor, poorCups } = apply(player, potionGroups(player, target));
   const who = decanters.get(player) ?? DATA.bob;
   if (short) return talk(player, who, DATA.messages.short, "sad");
-  if (poor && !changed) return talk(player, who, DATA.messages.poor, "sad");
+  if (poor && !changed) return talk(player, who, poorCups ? DATA.messages.poorCups : DATA.messages.poor, "sad");
   if (!changed) return talk(player, who, DATA.messages.nothingToDecant, "sad");
   talk(player, who, DATA.messages.decanted, "happy");
 }

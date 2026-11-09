@@ -1229,3 +1229,126 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
     });
   });
 });
+
+
+// These cases use real registered item consumers and native queued client input. Only the
+// actor/inventory seed, in-memory channel and explicit world-phase scheduler are fixtures.
+test("native ordinary crafting stops for inventory Bury and permits the same actor's next craft", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+  const Shared = require("../plugins/skills/crafting/Shared.Crafting");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  assert.equal(core.WorldDefinition.isMembersWorld, productionMembersWorld);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  assert.equal(CREATION_MENU_GROUP_ID, 270);
+  let index = 1920;
+  for (const route of ["leather", "glass"]) {
+    for (const input of ["stationary", "inventory Bury", "widget Bury", "widget Examine"]) {
+      await t.test(`${route}: ${input}`, async t => {
+        const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+          send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+        const p = new Player(new PlayerSession(channel));
+        p.setIndex(index++); p.setUsername("craft" + index);
+        p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+        assert.ok(p.getLongUsername() > 0n);
+        p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
+        p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+        const c = new ClientConnection(channel); c.player = p;
+        const inv = p.getInventory(), skills = p.getSkillManager(), craft = core.Skill.CRAFTING;
+        t.after(() => {
+          Shared.stopCrafting(p);
+          PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+          PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+          p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+        });
+        // High Crafting avoids a level-up popup changing the task's interface state.
+        skills.setCurrentLevel(craft, 99, false).setMaxLevels(craft, 99, false)
+          .setExperience(craft, core.SkillManager.getExperienceForLevel(99));
+        const tool = route === "leather" ? I.NEEDLE : I.GLASSBLOWING_PIPE;
+        const material = route === "leather" ? I.LEATHER : I.MOLTEN_GLASS;
+        const product = route === "leather" ? I.LEATHER_BOOTS : I.BEER_GLASS;
+        const xp = route === "leather" ? 16.25 : 17.5;
+        for (const [id, amount] of [[tool, 1], [material, 2], [I.BONES, 1],
+          ...(route === "leather" ? [[I.THREAD, 1]] : [])]) inv.add(new core.Item(id, amount), false);
+        assert.equal(core.ItemDefinition.forId(material).isStackable(), false);
+        assert.ok(core.CacheDefinitions.getItem(I.BONES).inventoryActions.includes("Bury"));
+        const initialXp = skills.getExperience(craft), gains = [];
+        const add = skills.addExperiences.bind(skills);
+        t.mock.method(skills, "addExperiences", (skill, amount) => {
+          if (skill === craft) gains.push(amount);
+          return add(skill, amount);
+        });
+        const total = id => inv.getAmount(id) + p.getEquipment().getAmount(id) + core.World.getItems()
+          .filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername() &&
+            g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id)
+          .reduce((n, g) => n + g.getItem().getAmount(), 0);
+        let turns = 0;
+        const turn = () => {
+          assert.ok(++turns <= 28);
+          p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+          core.TaskManager.process(); c.processTurnPackets();
+          const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+          if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+        };
+        const begin = async () => {
+          await c.dispatch([{ type: "inventory_use_on", itemId: tool, slot: inv.getSlotForItemId(tool),
+            target: { kind: "inventory", itemId: material, slot: inv.getSlotForItemId(material) } }]);
+          turn();
+          const menu = p.getCreationMenu(); assert.ok(menu, "ordinary tool-on-material opens make menu");
+          const child = menu.getItems().indexOf(product); assert.ok(child >= 0);
+          await c.dispatch([{ type: "dialogue_continue", widgetId: (CREATION_MENU_GROUP_ID << 16) |
+            (CREATION_MENU_FIRST_ITEM_COMPONENT + child), childIndex: 1 }]);
+          turn();
+          assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(), true,
+            "real menu selection admits a pending crafting task");
+        };
+        await begin();
+        assert.equal(total(material), 2); assert.equal(total(product), 0); assert.deepEqual(gains, []);
+        const interrupted = input.endsWith("Bury");
+        if (input !== "stationary") {
+          const slot = inv.getSlotForItemId(I.BONES);
+          const packet = input === "inventory Bury" ? { type: "inventory_action", widgetId: 3214,
+            slot, itemId: I.BONES, option: "Bury" } : { type: "widget_action", widgetId: 149 << 16,
+            groupId: 149, childId: 0, buttonNum: input === "widget Examine" ? 10 :
+              [2, 3, 4, 6, 7][core.CacheDefinitions.getItem(I.BONES).inventoryActions.indexOf("Bury")],
+            slot, itemId: I.BONES };
+          await c.dispatch([packet]); turn();
+          assert.equal(total(material), 2, "the interrupting input resolves before the craft commit");
+          assert.equal(total(product), 0); assert.deepEqual(gains, []);
+          assert.equal(total(I.BONES), interrupted ? 0 : 1, "registered Bury actually consumes the bone");
+        }
+        for (let i = 0; i < 5; i++) turn();
+        const state = { route, input, turns, material: total(material), product: total(product), gains,
+          threadUses: p.getAttribute(THREAD_USES_ATTRIBUTE) ?? 0,
+          taskActive: p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning() ?? false };
+        console.log("CRAFTING_INVENTORY_INTERRUPT_OBSERVATION " + JSON.stringify(state));
+        assert.equal(total(material), interrupted ? 2 : 1, JSON.stringify(state));
+        assert.equal(total(product), interrupted ? 0 : 1, JSON.stringify(state));
+        assert.deepEqual(gains, interrupted ? [] : [xp]);
+        if (interrupted) assert.equal(skills.getExperience(craft), initialXp);
+        else assert.ok(skills.getExperience(craft) > initialXp);
+        assert.equal(total(tool), 1);
+        if (route === "leather") {
+          assert.equal(total(I.THREAD), 1);
+          assert.equal(p.getAttribute(THREAD_USES_ATTRIBUTE) ?? 0, interrupted ? 0 : 1);
+        }
+        assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE), null);
+        // The same actor must be able to start and finish the next ordinary action.
+        await begin();
+        for (let i = 0; i < 5; i++) turn();
+        assert.equal(total(material), interrupted ? 1 : 0);
+        assert.equal(total(product), interrupted ? 1 : 2);
+        assert.deepEqual(gains, interrupted ? [xp] : [xp, xp]);
+        assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE), null);
+      });
+    }
+  }
+});

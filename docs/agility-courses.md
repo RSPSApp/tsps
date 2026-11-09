@@ -204,14 +204,23 @@ course's `marks` block:
 - **Progress varbits** (1106): `varlamore_wyrm_agility_basic_progress` / `_advanced_progress`
   (11292/11293) follow the obstacle index and go to 0 with the lap; the shared ladder and
   tightrope set both.
-- **Termites** (1106, 1108, pre-rework): a lap's end may set `varlamore_wyrm_agility_termite_obstacle`
-  (11412) to a marker (1-5, 8-10); finishing the obstacle that ends there scoops them ("You managed
-  to scoop up N termites!", sound 2581), sometimes with bone shards ("You also find N piles of bone
-  shards they chipped off!"). The Wiki gives per-scoop amounts but no spawn rate, so none are given.
+- **Termites** (1106, 1108, pre-rework; `plugins/areas/ColossalWyrmAgility.plugin.js`): a lap's end
+  may set `varlamore_wyrm_agility_termite_obstacle` (11412) to one of that course's markers (basic
+  1-5, advanced 1, 2 and 8-10); a new spawn replaces one not collected, a lap without one leaves
+  it, and it is kept across logins. Finishing the obstacle that ends there scoops them ("You
+  managed to scoop up N termites!", sound 2581), with an 80% chance of 22-38 bone shards ("You also
+  find N piles of bone shards they chipped off!"). Scoops (Wiki): 11-14 on basic and shared
+  markers, 16-21 on the advanced ones. The Wiki has no spawn rate, only 5.6 termites an advanced
+  lap on average; the spawn chance (about 35%) is worked out from that. Where one obstacle here
+  plays two live ones (the first tightrope and its edges, the basic rope and its jumps, the
+  advanced tightrope and its rope), termites on the first marker are scooped as it ends.
+- **Worm Tongue's Wares** is the cache's omnishop `wyrm_agility_rewards_shop` (Shop option, 1106):
+  100/40/650/900 termites. The graceful crafting kit also takes one of each plain graceful piece
+  from the inventory and gives the Varlamore set for them.
 - **Worm Tongue** (1106): the start ladder before a talk with him gives his "You there! Over here!
   Let's have a little chat before you head up there!" (varbit 11354 records the talk). Not done.
-- **Not given yet:** termites, blessed bone shards and Worm Tongue's rewards; the giant squirrel
-  rate is unknown on the Wiki since its 2026 change, so these courses don't roll it.
+- **Not given yet:** the lap loot tracker; the giant squirrel rate is unknown on the Wiki since
+  its 2026 change, so these courses don't roll it.
 
 ## Werewolf Agility Course
 

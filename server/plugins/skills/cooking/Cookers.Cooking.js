@@ -513,8 +513,9 @@ function refuseCook(event) {
   Common.mesbox(event.player, CANNOT_COOK_MESSAGE);
 }
 
-function handleRangeCook(event) {
-  const cookables = carriedCookables(event.player, false);
+function handleCookClick(event) {
+  const onFire = FIRE_OBJECT_NAMES.has(event.object.getDefinition().getName());
+  const cookables = carriedCookables(event.player, onFire);
   if (cookables.length === 0) {
     Common.mesbox(event.player, NOTHING_TO_COOK_MESSAGE);
     return;
@@ -569,15 +570,16 @@ function attachCookers(api) {
 
   api.onItemOnObject(handleCook, { noted: false });
   api.onItemOnObject(refuseCook, { noted: false, fallback: true });
-  api.onObjectInteraction("Range", { Cook: handleRangeCook });
-  api.onObjectInteraction("Cooking range", { Cook: handleRangeCook });
-  api.onObjectInteraction("Stove", { Cook: handleRangeCook });
-  api.onObjectInteraction("Oven", { Cook: handleRangeCook });
-  api.onObjectInteraction("Clay Oven", { Cook: handleRangeCook });
-  api.onObjectInteraction("Small oven", { Cook: handleRangeCook });
-  api.onObjectInteraction("Large oven", { Cook: handleRangeCook });
-  api.onObjectInteraction("Steel range", { Cook: handleRangeCook });
-  api.onObjectInteraction("Fancy range", { Cook: handleRangeCook });
+  api.onObjectInteraction("Fire", { Cook: handleCookClick });
+  api.onObjectInteraction("Range", { Cook: handleCookClick });
+  api.onObjectInteraction("Cooking range", { Cook: handleCookClick });
+  api.onObjectInteraction("Stove", { Cook: handleCookClick });
+  api.onObjectInteraction("Oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Clay Oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Small oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Large oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Steel range", { Cook: handleCookClick });
+  api.onObjectInteraction("Fancy range", { Cook: handleCookClick });
   api.onCustomEvent("cooking:raw-xp", answerRawXp);
   api.onCustomEvent("cooking:cooked", answerCooked);
 }

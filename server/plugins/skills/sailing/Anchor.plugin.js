@@ -1,21 +1,16 @@
 // A boat's anchor at sea (docs/sailing.md):
-// - Drop: "You drop the anchor, bringing the boat to a stop.", the drop animation on the player
-//   and the anchor, and 4 ticks later the lowered anchor. Dropped from the helm, the helmsman lets
-//   go of it first (Helm.plugin.js), so the sails come down.
-// - Raise: "You raise the anchor, allowing the boat to move.", the pull animations, and 3 ticks
-//   later the raised anchor.
+// - Drop: the player turns to it, "You drop the anchor, bringing the boat to a stop.", the drop
+//   animation on the player and the anchor, and 4 ticks later the lowered anchor. Dropped from the
+//   helm, the helmsman lets go of it first (Helm.plugin.js), so the sails come down.
+// - Raise: the player turns to it, "You raise the anchor, allowing the boat to move.", the pull
+//   animations, and 3 ticks later the raised anchor.
+// - Clicked again before its loc has changed: "That anchor is already in use!" a tick later.
 // - While it's down the boat doesn't move, whatever the sails. 10 ticks after the sails are set,
 //   once a login: "Trying to move the boat? Don't forget to weigh anchor!" and
 //   sailing_boat_anchor_reminder 1.
 // The anchor stays down with the boat. Ours: once a login for the reminder, and the 3x8 anchor's
 // drop playing the 2x5's player animation, as the cache has no large one.
-const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
-const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
-const { BoatMoveMode } = require("../../../src/main/typescript/elvarg/game/content/sailing/Boat");
-const { Animation } = require("../../../src/main/typescript/elvarg/game/model/Animation");
-const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
-const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
-const { animateDeckLoc, setVarbit } = require("./SailingContent.Sailing");
+const { animateDeckLoc, later, setVarbit } = require("./SailingContent.Sailing");
 const { ANCHOR_LOWERED } = require("./BoatFacilities.Sailing");
 
 /** Each anchor's raised and lowered locs and its animations (cache seq names). */
@@ -25,24 +20,25 @@ const ANCHORS = [
 ];
 /** The speed limit that holds an anchored boat (Boat.speedLimits). */
 const ANCHOR_LIMIT = "anchor";
+const LOC_SHAPE = 10;
 const LOWERED_TICKS = 4;
 const RAISED_TICKS = 3;
+const IN_USE_TICKS = 1;
 const REMINDER_TICKS = 10;
 const VARBIT_REMINDER = 19119;
 const REMINDED_ATTRIBUTE = "sailing:anchor-reminded";
 
 const DROPPED = "You drop the anchor, bringing the boat to a stop.";
 const RAISED = "You raise the anchor, allowing the boat to move.";
+const IN_USE = "That anchor is already in use!";
 const REMINDER = "Trying to move the boat? Don't forget to weigh anchor!";
 
-function later(player, ticks, action) {
-  TaskManager.submit(new (class extends Task {
-    constructor() { super(ticks, player, false); }
-    execute() {
-      this.stop();
-      action();
-    }
-  })());
+let pluginApi = null;
+/** Boats whose anchor is being dropped or raised: their loc hasn't changed yet. */
+const swapping = new WeakSet();
+
+function core() {
+  return pluginApi.core;
 }
 
 function anchorKind(id) {
@@ -51,8 +47,8 @@ function anchorKind(id) {
 
 /** The player's own boat they're aboard and its saved state, or undefined. */
 function ownBoat(player) {
-  const boat = Sailing.instanceAboard(player);
-  const owned = boat && Sailing.activeBoat(player);
+  const boat = core().Sailing.instanceAboard(player);
+  const owned = boat && core().Sailing.activeBoat(player);
   return boat && owned ? { boat, owned } : undefined;
 }
 
@@ -60,7 +56,7 @@ function ownBoat(player) {
 function deckAnchor(boat, location) {
   const x = location.x - boat.deckBaseX;
   const y = location.y - boat.deckBaseY;
-  return BoatManager.getSpec(boat)?.locs.find((loc) => loc.x === x && loc.y === y && loc.shape === 10 && anchorKind(loc.id));
+  return core().BoatManager.getSpec(boat)?.locs.find((loc) => loc.x === x && loc.y === y && loc.shape === LOC_SHAPE && anchorKind(loc.id));
 }
 
 /** Holds the boat still while the anchor is down, and lets it go once it's up. */
@@ -75,40 +71,57 @@ function holdBoat(boat, down) {
 
 /** Swaps the anchor's loc once its animation is done, if the player is still aboard. */
 function swapLoc(player, boat, loc, id, ticks) {
+  swapping.add(boat);
   later(player, ticks, () => {
-    if (Sailing.instanceAboard(player) !== boat) return;
-    const current = BoatManager.getSpec(boat)?.locs.find((candidate) => candidate.x === loc.x && candidate.y === loc.y && candidate.shape === loc.shape);
-    if (current && anchorKind(current.id)) BoatManager.setDeckLoc(boat, { ...current, id });
+    swapping.delete(boat);
+    if (core().Sailing.instanceAboard(player) !== boat) return;
+    const current = core().BoatManager.getSpec(boat)?.locs.find((candidate) => candidate.x === loc.x && candidate.y === loc.y && candidate.shape === loc.shape);
+    if (current && anchorKind(current.id)) core().BoatManager.setDeckLoc(boat, { ...current, id });
   });
 }
 
-function drop(player, aboard, loc, kind) {
+/**
+ * The clicked anchor on the player's own boat, turning the player to it; or undefined (not
+ * theirs), or null once it has said the anchor is in use.
+ */
+function clickedAnchor(event, down) {
+  const aboard = ownBoat(event.player);
+  const loc = aboard && deckAnchor(aboard.boat, event.location);
+  if (!loc) return undefined;
+  event.player.setPositionToFace?.(new (core().Location)(event.location.x, event.location.y, event.location.z));
+  if (swapping.has(aboard.boat) || aboard.owned.anchorDown === down) {
+    later(event.player, IN_USE_TICKS, () => event.player.sendMessage(IN_USE));
+    return null;
+  }
+  return { aboard, loc, kind: anchorKind(loc.id) };
+}
+
+function dropAnchor(event) {
+  const clicked = clickedAnchor(event, true);
+  if (clicked === undefined) return false;
+  if (!clicked) return;
+  const { player } = event;
+  const { aboard, loc, kind } = clicked;
   aboard.owned.anchorDown = true;
   holdBoat(aboard.boat, true);
   player.sendMessage(DROPPED);
-  player.performAnimation(new Animation(kind.playerDrop));
+  player.performAnimation(new (core().Animation)(kind.playerDrop));
   animateDeckLoc(player, aboard.boat, loc, kind.drop);
   swapLoc(player, aboard.boat, loc, kind.lowered, LOWERED_TICKS);
 }
 
-function raise(player, aboard, loc, kind) {
+function raiseAnchor(event) {
+  const clicked = clickedAnchor(event, false);
+  if (clicked === undefined) return false;
+  if (!clicked) return;
+  const { player } = event;
+  const { aboard, loc, kind } = clicked;
   aboard.owned.anchorDown = false;
   holdBoat(aboard.boat, false);
   player.sendMessage(RAISED);
-  player.performAnimation(new Animation(kind.playerPull));
+  player.performAnimation(new (core().Animation)(kind.playerPull));
   animateDeckLoc(player, aboard.boat, loc, kind.pull);
   swapLoc(player, aboard.boat, loc, kind.raised, RAISED_TICKS);
-}
-
-function onAnchor(event) {
-  const kind = anchorKind(event.objectId ?? event.definition?.getId?.());
-  if (!kind || event.clickType !== 1) return;
-  const aboard = ownBoat(event.player);
-  const loc = aboard && deckAnchor(aboard.boat, event.location);
-  if (!loc) return;
-  event.handled = true;
-  if (aboard.owned.anchorDown) raise(event.player, aboard, loc, kind);
-  else drop(event.player, aboard, loc, kind);
 }
 
 /** Setting sail with the anchor down: once a login, the reminder 10 ticks later. */
@@ -119,7 +132,7 @@ function remindToWeigh({ player, boat, mode }) {
   later(player, REMINDER_TICKS, () => {
     const now = ownBoat(player);
     if (!now?.owned.anchorDown || now.boat !== boat || player.getAttribute?.(REMINDED_ATTRIBUTE)) return;
-    if (boat.moveMode === BoatMoveMode.Stopped) return;
+    if (boat.moveMode === core().BoatMoveMode.Stopped) return;
     player.setAttribute?.(REMINDED_ATTRIBUTE, true);
     player.sendMessage(REMINDER);
     setVarbit(player, VARBIT_REMINDER, 1);
@@ -129,7 +142,7 @@ function remindToWeigh({ player, boat, mode }) {
 /** Aboard a boat left at anchor: it stays where it is, as long as it still has an anchor. */
 function onBoarded({ boat, owned }) {
   if (!boat?.speedLimits) return;
-  const hasAnchor = BoatManager.getSpec(boat)?.locs.some((loc) => loc.shape === 10 && anchorKind(loc.id)) === true;
+  const hasAnchor = core().BoatManager.getSpec(boat)?.locs.some((loc) => loc.shape === LOC_SHAPE && anchorKind(loc.id)) === true;
   if (owned?.anchorDown && !hasAnchor) delete owned.anchorDown;
   holdBoat(boat, owned?.anchorDown === true && hasAnchor);
 }
@@ -140,7 +153,8 @@ module.exports = {
   members: true,
   ANCHORS,
   register(api) {
-    api.onObjectInteraction(onAnchor);
+    pluginApi = api;
+    api.onObjectInteraction("Anchor", { Drop: dropAnchor, Raise: raiseAnchor });
     api.onCustomEvent("sailing:boarded", onBoarded);
     api.onCustomEvent("sailing:sail-mode-changed", remindToWeigh);
   },

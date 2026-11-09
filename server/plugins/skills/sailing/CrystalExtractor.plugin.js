@@ -5,24 +5,17 @@
 // - Switched on, it harvests a crystal mote 105 ticks after it was enabled or last emptied:
 //   "Your crystal extractor has harvested a crystal mote!" and the loc's extracted animation. It
 //   holds one mote.
-// - Harvest: with a mote, the collect animation and 4 ticks later sound 1298, 250 Sailing XP, a
-//   wind mote for a wind or gale catcher that's on and has room (sound 10895), and after Song of
-//   the Elves a 1 in 6 chance of a crystal shard; the extractor starts on the next mote. Moving
-//   off first cancels it. Without one: "There are no motes in the crystal extractor."
+// - Harvest: with a mote, a tick later the player turns to it and plays the collect animation;
+//   4 ticks after the click, sound 1298, 250 Sailing XP, a wind mote for a wind or gale catcher
+//   that's on and has room (sound 10895), and after Song of the Elves a 1 in 6 chance of a
+//   crystal shard; the extractor starts on the next mote. Moving off first cancels it. Without
+//   one: "There are no motes in the crystal extractor."
 // - Deactivate (ours, no capture): "The crystal extractor is now disabled." and the switched-off
 //   loc; the mote being made is lost, one already made is kept.
 // Ours: it charges only while its owner is aboard; the crystal-flecked waters' second shard and
 // live's refusals ("The crystal extractor doesn't seem to respond in this area.", which the Wiki
 // now keeps for bank boats) aren't modelled.
-const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
-const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
-const { Animation } = require("../../../src/main/typescript/elvarg/game/model/Animation");
-const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
-const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
-const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
-const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
-const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
-const { animateDeckLoc, playSound } = require("./SailingContent.Sailing");
+const { animateDeckLoc, later, playSound } = require("./SailingContent.Sailing");
 const { EXTRACTOR_SWITCHED_ON } = require("./BoatFacilities.Sailing");
 const windCatcher = require("./WindCatcher.Helm");
 
@@ -40,6 +33,7 @@ const CRYSTAL_SHARD = 23962; // prif_crystal_shard
 const SONG_OF_THE_ELVES = "song_of_the_elves";
 const MOTE_TICKS = 105;
 const ACTIVATE_ANIM_TICKS = 1;
+const HARVEST_ANIM_TICKS = 1;
 const ACTIVATE_TICKS = 3;
 const HARVEST_TICKS = 4;
 const HARVEST_XP = 250;
@@ -54,26 +48,20 @@ let pluginApi = null;
 /** Each player whose extractor is making a mote: that mote's token, so a restart drops the old one. */
 const charging = new Map();
 
-function later(player, ticks, action) {
-  TaskManager.submit(new (class extends Task {
-    constructor() { super(ticks, player, false); }
-    execute() {
-      this.stop();
-      action();
-    }
-  })());
+function core() {
+  return pluginApi.core;
 }
 
 /** The player's own boat they're aboard and its saved state, or undefined. */
 function ownBoat(player) {
-  const boat = Sailing.instanceAboard(player);
-  const owned = boat && Sailing.activeBoat(player);
+  const boat = core().Sailing.instanceAboard(player);
+  const owned = boat && core().Sailing.activeBoat(player);
   return boat && owned ? { boat, owned } : undefined;
 }
 
 /** The extractor's deck loc on the boat, or undefined without one. */
 function extractorOf(boat) {
-  return BoatManager.getSpec(boat)?.locs.find((loc) => loc.id === EXTRACTOR_OFF || loc.id === EXTRACTOR_ON);
+  return core().BoatManager.getSpec(boat)?.locs.find((loc) => loc.id === EXTRACTOR_OFF || loc.id === EXTRACTOR_ON);
 }
 
 /** Whether `ticks` later the player is still on the same boat, which still has its extractor. */
@@ -83,7 +71,7 @@ function stillAboard(player, boat) {
 
 function setLoc(boat, id) {
   const loc = extractorOf(boat);
-  if (loc && loc.id !== id) BoatManager.setDeckLoc(boat, { ...loc, id });
+  if (loc && loc.id !== id) core().BoatManager.setDeckLoc(boat, { ...loc, id });
   return extractorOf(boat);
 }
 
@@ -108,13 +96,13 @@ function startCharging(player, owned) {
 }
 
 function faceExtractor(player, boat, loc) {
-  player.setPositionToFace?.(new Location(boat.deckBaseX + loc.x, boat.deckBaseY + loc.y, loc.level));
+  player.setPositionToFace?.(new (core().Location)(boat.deckBaseX + loc.x, boat.deckBaseY + loc.y, loc.level));
 }
 
 function activate(player, aboard, loc) {
   faceExtractor(player, aboard.boat, loc);
   later(player, ACTIVATE_ANIM_TICKS, () => {
-    if (stillAboard(player, aboard.boat)) player.performAnimation(new Animation(SEQ_ACTIVATE));
+    if (stillAboard(player, aboard.boat)) player.performAnimation(new (core().Animation)(SEQ_ACTIVATE));
   });
   later(player, ACTIVATE_TICKS, () => {
     if (!stillAboard(player, aboard.boat) || aboard.owned.crystalExtractorOn) return;
@@ -144,13 +132,19 @@ function songOfTheElvesComplete(player) {
 }
 
 function harvest(player, aboard, loc) {
-  faceExtractor(player, aboard.boat, loc);
   if (!aboard.owned.crystalMote) {
-    later(player, 1, () => player.sendMessage(NO_MOTES));
+    later(player, HARVEST_ANIM_TICKS, () => {
+      faceExtractor(player, aboard.boat, loc);
+      player.sendMessage(NO_MOTES);
+    });
     return;
   }
   const from = player.getLocation();
-  player.performAnimation(new Animation(SEQ_COLLECT));
+  later(player, HARVEST_ANIM_TICKS, () => {
+    if (!stillAboard(player, aboard.boat)) return;
+    faceExtractor(player, aboard.boat, loc);
+    player.performAnimation(new (core().Animation)(SEQ_COLLECT));
+  });
   later(player, HARVEST_TICKS, () => {
     const now = player.getLocation();
     if (!stillAboard(player, aboard.boat) || !aboard.owned.crystalMote) return;
@@ -162,37 +156,44 @@ function harvest(player, aboard, loc) {
 function collectMote(player, aboard) {
   aboard.owned.crystalMote = false;
   playSound(player, SOUND_HARVEST);
-  player.getSkillManager().addExperiences(Skill.SAILING, HARVEST_XP);
+  player.getSkillManager().addExperiences(core().Skill.SAILING, HARVEST_XP);
   if (windCatcher.addCrystalMote(player)) playSound(player, SOUND_WIND_MOTE);
   if (songOfTheElvesComplete(player) && Math.random() < SHARD_CHANCE) {
-    player.getInventory().add(new Item(CRYSTAL_SHARD, 1), true);
+    player.getInventory().add(new (core().Item)(CRYSTAL_SHARD, 1), true);
   }
   const loc = extractorOf(aboard.boat);
   if (loc) animateDeckLoc(player, aboard.boat, loc, LOC_ACTIVE);
   startCharging(player, aboard.owned);
 }
 
-function onExtractor(event) {
-  const id = event.objectId;
-  if (id !== EXTRACTOR_OFF && id !== EXTRACTOR_ON) return;
+/** The extractor on the player's own boat they're aboard, or undefined (not theirs: fall through). */
+function clickedExtractor(event) {
   const aboard = ownBoat(event.player);
   const loc = aboard && extractorOf(aboard.boat);
-  if (!loc) return;
-  if (id === EXTRACTOR_OFF && event.clickType === 1) {
-    event.handled = true;
-    activate(event.player, aboard, loc);
-  } else if (id === EXTRACTOR_ON && event.clickType === 1) {
-    event.handled = true;
-    harvest(event.player, aboard, loc);
-  } else if (id === EXTRACTOR_ON && event.clickType === 2) {
-    event.handled = true;
-    deactivate(event.player, aboard);
-  }
+  return loc ? { aboard, loc } : undefined;
+}
+
+function onActivate(event) {
+  const clicked = clickedExtractor(event);
+  if (!clicked) return false;
+  activate(event.player, clicked.aboard, clicked.loc);
+}
+
+function onHarvest(event) {
+  const clicked = clickedExtractor(event);
+  if (!clicked) return false;
+  harvest(event.player, clicked.aboard, clicked.loc);
+}
+
+function onDeactivate(event) {
+  const clicked = clickedExtractor(event);
+  if (!clicked) return false;
+  deactivate(event.player, clicked.aboard);
 }
 
 /** Aboard a boat whose extractor was left on: it carries on making a mote. */
 function onBoarded({ player, boat, owned }) {
-  if (owned && Sailing.instanceAboard(player) === boat && extractorOf(boat)) startCharging(player, owned);
+  if (owned && core().Sailing.instanceAboard(player) === boat && extractorOf(boat)) startCharging(player, owned);
 }
 
 function onLeft({ player }) {
@@ -206,7 +207,7 @@ module.exports = {
   MOTE_TICKS,
   register(api) {
     pluginApi = api;
-    api.onObjectInteraction(onExtractor);
+    api.onObjectInteraction("Crystal extractor", { Activate: onActivate, Harvest: onHarvest, Deactivate: onDeactivate });
     api.onCustomEvent("sailing:boarded", onBoarded);
     api.onCustomEvent("sailing:left", onLeft);
   },

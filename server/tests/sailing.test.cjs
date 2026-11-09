@@ -910,7 +910,15 @@ test("the sail buttons follow their labels for each move mode", () => {
 function registerPlugin(file) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
-    core: { BoatManager },
+    core: {
+      BoatManager,
+      Sailing,
+      BoatMoveMode,
+      Animation: require("../dist/game/model/Animation").Animation,
+      Item,
+      Location,
+      Skill: require("../dist/game/model/Skill").Skill,
+    },
     onObjectInteraction: (name, actions) => {
       if (typeof name === "function") hooks.objectHandlers.push(name);
       else hooks.objects[name] = actions;
@@ -2784,7 +2792,7 @@ function facilityAtSea(type, facilityName, setup = () => {}) {
   clearTasks();
   registerPlugin("Sailing.plugin"); // the built-spec resolver
   const player = sailor();
-  const log = { anims: [], sounds: [], xp: [], locAnims: [], varbits: new Map() };
+  const log = { anims: [], sounds: [], xp: [], locAnims: [], varbits: new Map(), faces: [] };
   const attributes = new Map();
   const sender = new Proxy({}, {
     get: (_t, key) => (...args) => {
@@ -2797,7 +2805,7 @@ function facilityAtSea(type, facilityName, setup = () => {}) {
   });
   Object.assign(player, {
     performAnimation: (anim) => log.anims.push(anim.getId()),
-    setPositionToFace: () => player,
+    setPositionToFace: (location) => { log.faces.push([location.getX(), location.getY()]); return player; },
     getLocalPlayers: () => [],
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -2817,7 +2825,11 @@ function facilityAtSea(type, facilityName, setup = () => {}) {
     const loc = locAt();
     const event = { player, objectId: loc.id, clickType, handled: false,
       location: { x: boat.deckBaseX + loc.x, y: boat.deckBaseY + loc.y, z: 0 } };
-    plugin.objectHandlers.forEach((handler) => handler(event));
+    // As PluginManager runs a named hook: the loc's name, then its option for the click.
+    const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+    const definition = CacheDefinitions.getObject(loc.id);
+    const action = plugin.objects[definition.name]?.[definition.actions[clickType - 1]];
+    if (action && action(event) !== false) event.handled = true;
     return event.handled;
   };
   const tick = (count = 1) => { for (let i = 0; i < count; i++) TaskManager.process(); };
@@ -2885,6 +2897,43 @@ test("Drop stops the boat and holds it until Raise; the anchor's loc follows 4 a
   }
 });
 
+test("an anchor clicked again before its loc changes is already in use; Drop and Raise turn the player to it (rsprox)", () => {
+  const anchor = registerPlugin("Anchor.plugin");
+  const h = facilityAtSea("skiff", "Anchor");
+  try {
+    const tile = [h.boat.deckBaseX + h.locAt().x, h.boat.deckBaseY + h.locAt().y];
+    h.click(anchor);
+    assert.deepEqual(h.log.faces.at(-1), tile, "Drop turns the player to the anchor");
+    h.tick();
+    assert.equal(h.locAt().id, 59687, "still raised, with Drop");
+    assert.equal(h.click(anchor), true);
+    assert.notEqual(h.player.messages.at(-1), "That anchor is already in use!");
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "That anchor is already in use!", "a tick later");
+    assert.equal(h.owned.anchorDown, true, "still down");
+    assert.equal(h.boat.speedLimits.get("anchor"), 0, "and holding the boat");
+    assert.equal(h.player.messages.filter((line) => line.startsWith("You raise")).length, 0);
+    h.tick(2);
+    assert.equal(h.locAt().id, 59688);
+
+    h.log.faces.length = 0;
+    h.click(anchor);
+    assert.equal(h.owned.anchorDown, false);
+    assert.deepEqual(h.log.faces.at(-1), tile, "Raise turns the player to the anchor");
+    h.click(anchor);
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "That anchor is already in use!");
+    assert.equal(h.owned.anchorDown, false, "the second click didn't drop it again");
+    assert.equal(h.boat.speedLimits.has("anchor"), false);
+    h.tick(2);
+    assert.equal(h.locAt().id, 59687);
+    h.click(anchor);
+    assert.equal(h.player.messages.at(-1), "You drop the anchor, bringing the boat to a stop.", "usable again once it's up");
+  } finally {
+    h.done();
+  }
+});
+
 test("a boat left at anchor comes back lowered and held; the sloop's anchor pulls with the large animations", () => {
   const anchor = registerPlugin("Anchor.plugin");
   const h = facilityAtSea("sloop", "Anchor", (owned) => { owned.anchorDown = true; });
@@ -2934,8 +2983,12 @@ test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (r
 
     withRandom(0, () => {
       h.click(extractor);
-      assert.equal(h.log.anims.at(-1), 13178);
-      h.tick(3);
+      assert.notEqual(h.log.anims.at(-1), 13178, "not on the click's tick");
+      const faced = h.log.faces.length;
+      h.tick();
+      assert.equal(h.log.anims.at(-1), 13178, "the collect animation a tick later");
+      assert.equal(h.log.faces.length, faced + 1, "turning to the extractor with it");
+      h.tick(2);
       assert.deepEqual(h.log.xp, []);
       h.tick();
     });

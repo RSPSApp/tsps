@@ -618,9 +618,10 @@ export class ShopManager {
         }
         const unit = this.currencyUnit(shop.definition.getCurrency());
         if (unit) {
+            const named = unit === "coins" && price === 1 ? "coin" : unit;
             player.sendMessage(
                 `${definition.getName()}: ${fromShop ? "currently costs" : "shop will buy for"} ` +
-                `${Misc.insertCommasToNumber(String(price))} ${unit}.`
+                `${Misc.insertCommasToNumber(String(price))} ${named}.`
             );
             return;
         }
@@ -1045,8 +1046,12 @@ export class ShopManager {
             : Number(definition.getValue?.() ?? 0);
     }
 
+    /**
+     * Coins have a unit too (rsprox: "Blood rune: currently costs 400 coins.", "Empty plant pot: currently costs 1
+     * coin.", "Raw chicken: shop will buy for 0 coins.", "You don't have enough coins.").
+     */
     private static currencyUnit(currency: ShopCurrency): string | null {
-        return this.currencyHandlers.get(currency)?.unit ?? null;
+        return this.currencyHandlers.get(currency)?.unit ?? (currency === "COINS" ? "coins" : null);
     }
 
     private static currencyAmount(player: any, currency: ShopCurrency): number {

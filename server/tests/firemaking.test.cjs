@@ -1106,8 +1106,10 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
       const accounts = [];
       t.after(() => {
         for (const f of accounts) {
-          PluginManager.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername() });
-          PluginManager.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+          if (f.p.isRegistered()) {
+            PluginManager.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername() });
+            PluginManager.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+          }
           core.World.unregisterPlayerPosition(f.p);
           f.p.setRegistered(false); core.TaskManager.cancelTasks(f.p); core.TaskManager.cancelTasks(f.p.getIndex());
           for (const g of f.ground?.() ?? []) core.ItemOnGroundManager.deregister(g);

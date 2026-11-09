@@ -351,6 +351,12 @@ function cancelPending({ player }) {
   if (!state || state.replacing) return;
   pending.delete(player);
   player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, undefined);
+  // With "Show level & unlocks" the unlock lines wait for the box; a level-up given up before
+  // its box opens still puts them in the chat, for the open pop-up's skill and every queued one.
+  if (listsUnlocks(player)) {
+    if (state.current) announceUnlocks(player, state.current.skill, state.current.from, state.current.to);
+    for (const { skill, oldLevel, newLevel } of state.queue) announceUnlocks(player, skill, oldLevel, newLevel);
+  }
   for (const action of state.actions.values()) action.cancel();
 }
 

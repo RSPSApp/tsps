@@ -1170,6 +1170,46 @@ test("as captured: a Sailing unlock box shows the level's pictures beside its te
   } finally { core.TaskManager.submit = submit; }
 });
 
+test("Show level & unlocks: a level-up given up before Continue still logs its unlocks, and a queued skill's", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const unlocks = (skill, level) => require("../plugins/interface/data/level-up-messages.json")[skill][level]
+    .map((entry) => typeof entry === "string" ? entry : entry.text);
+  const cancels = {
+    walking: (hooks, p) => { for (const handler of hooks.customEvents.get("player:world-input")) handler({ player: p }); },
+    item: (hooks, p) => hooks.onCanUseItem({ player: p, action: "action" }),
+    logout: (hooks, p) => hooks.onPlayerLogout({ player: p }),
+    death: (hooks, p) => hooks.onPlayerDeath({ player: p }),
+  };
+  for (const [mode, cancel] of Object.entries(cancels)) {
+    const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(4371, 1);
+    hooks.onPlayerLevelUp({ player: p, skill: Skill.SAILING, oldLevel: 6, newLevel: 7 });
+    hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+    const lines = [...unlocks("Sailing", 7), ...unlocks("Defence", 40)];
+    assert.deepEqual(p.messages.filter((m) => lines.includes(m)), [], `${mode}: the lines wait for the box`);
+    cancel(hooks, p);
+    assert.deepEqual(p.messages.filter((m) => lines.includes(m)), lines, mode);
+    // Nothing more once it is given up, and no box opens.
+    hooks.onInterfaceActionButton({ player: p });
+    cancel(hooks, p);
+    assert.deepEqual(p.messages.filter((m) => lines.includes(m)), lines, `${mode}: once`);
+    assert.equal(p.statements.length, 0, mode);
+  }
+
+  // Once the box has opened, its mesbox line is the chat line: giving up then adds no second one.
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+  const p = levelledPlayer(core);
+  p.getPacketSender().sendVarbit(4371, 1);
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+  const logged = () => p.messages.filter((m) => unlocks("Defence", 40).includes(m));
+  assert.deepEqual(logged(), unlocks("Defence", 40));
+  cancels.walking(hooks, p);
+  assert.deepEqual(logged(), unlocks("Defence", 40));
+});
+
 test("level-ups play the skill's jingle: the unlocks one only where the level unlocks something and the guide list is on", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();

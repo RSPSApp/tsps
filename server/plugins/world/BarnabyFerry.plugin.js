@@ -11,6 +11,7 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 // shortcut: shared ferry fade timings; replace with Barnaby's exact sequence when a capture is available.
 const FERRY_ROUTES = require("./data/ferries.json").routes;
+const DIALOGUES = require("../../data/definitions/npc-dialogues.json");
 
 const BASE_FARE = 30;
 const GLOVES_FARE = 15;
@@ -97,6 +98,29 @@ function answerFareCondition(event) {
   return event.player.getInventory().getAmount(ItemIdentifiers.COINS) < fareFor(event.player);
 }
 
+/**
+ * The transcript puts the "[Charm]" option in a menu of its own after the paid menu, behind "If wearing the Ring of
+ * Charos(a):", and the paid menu's options all end, so it is never reached. Offer it in the paid menu, guarded by that
+ * condition (answered from the worn ring when the menu is drawn): the dock variant's own option node, with its steps.
+ */
+function charmOption(variantName) {
+  const record = DIALOGUES?.["Captain Barnaby"]?.variants?.[variantName] ?? [];
+  for (const step of record) {
+    const option = (step.options ?? []).find((candidate) => String(candidate.text ?? "").startsWith("[Charm]"));
+    if (option) return option;
+  }
+  return null;
+}
+
+function offerCharm(notice) {
+  if (!isBarnaby(notice) || !Array.isArray(notice.options)) return;
+  if (!notice.options.some((option) => option.text === "I'm good thanks.")) return;
+  if (notice.options.some((option) => String(option.text ?? "").startsWith("[Charm]"))) return;
+  const variant = selectDockVariant(notice);
+  const charm = variant ? charmOption(variant) : null;
+  if (charm) notice.options = [...notice.options, { ...charm, condition: CHAROS_CONDITION }];
+}
+
 function boardFromDialogue(event) {
   const port = isBarnaby(event) ? portNamed(BOARD_MESSAGE.exec(String(event.text ?? ""))?.[1]) : null;
   if (!port) return;
@@ -109,12 +133,13 @@ module.exports = {
   name: "BarnabyFerry",
   description: "Captain Barnaby's ferry from the Ardougne, Brimhaven and Rimmington docks, with his dialogue and a fade between ports.",
   members: true,
-  _test: { fareFor, sail, sailToOption, selectDockVariant, answerFareCondition, boardFromDialogue, PORTS },
+  _test: { fareFor, sail, sailToOption, selectDockVariant, answerFareCondition, boardFromDialogue, offerCharm, PORTS },
   register(pluginApi) {
     api = pluginApi;
     api.onNpcInteraction("Captain Barnaby", { Ardougne: sailToOption, Brimhaven: sailToOption, Rimmington: sailToOption });
     api.onNpcDialogueVariant(selectDockVariant);
     api.onNpcDialogueCondition(answerFareCondition);
     api.onCustomEvent("npc-dialogue:action", boardFromDialogue);
+    api.onCustomEvent("npc-dialogue:menu", offerCharm);
   },
 };

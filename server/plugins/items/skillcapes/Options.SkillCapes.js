@@ -73,7 +73,8 @@ function syncVarbits({ player }) {
 
 function staminaBoost(player) {
   if (Capes.dailyUses(player, STAMINA_KEY) >= STAMINA_PER_DAY) {
-    player.sendMessage("You have already used your cape's stamina boost today.");
+    // rsprox captures (2 recordings).
+    player.sendMessage("You have used your stamina boost for today. Try again tomorrow.");
     return;
   }
   Capes.useDaily(player, STAMINA_KEY);
@@ -99,11 +100,20 @@ function searchGrapple(player) {
   const { ItemIdentifiers, Animation } = Capes.core;
   const used = Capes.dailyUses(player, GRAPPLE_KEY);
   if (used >= GRAPPLES_PER_DAY) {
+    // ponytail: no recording reaches a fourth search; the live text may differ.
     player.sendMessage("You have already searched your cape three times today.");
     return;
   }
+  // rsprox_transcripts/232/03140.txt: still holding the grapple from a search refuses the next one (66219); after
+  // dropping it and the crossbow the search works again (66491-66494).
+  const grapple = ItemIdentifiers.MITH_GRAPPLE_2;
+  if (player.getInventory().contains(grapple) || player.getEquipment().contains(grapple)) {
+    player.sendMessage("You already have a mithril grapple with you.");
+    return;
+  }
   if (player.getInventory().getFreeSlots() < 2) {
-    player.sendMessage("You need two free inventory spaces to search your cape.");
+    // rsprox_transcripts/232/03140.txt:66034.
+    player.sendMessage("You need at least two inventory spaces to search your cape.");
     return;
   }
   player.performAnimation(new Animation(Capes.seqId("searchcape_grapple")));

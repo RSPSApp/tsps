@@ -39,10 +39,46 @@ test("three Fletching cape searches: crossbow then roped grapple, the recorded l
       left[i],
     ]);
     assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("free_grapple")), i + 1);
+    const inv = p.getInventory();
+    assert.equal(inv.getAmount(9419), 1, "the mith grapple with its rope");
+    assert.equal(inv.getAmount(9418), 0, "not the rope-less one");
+    assert.equal(inv.getItems()[0].getId(), core.ItemIdentifiers.BRONZE_CROSSBOW, "the crossbow comes first");
+    // As recorded (232/03140.txt:66491-66494), the next search follows dropping both.
+    inv.resetItems();
   }
-  const inv = p.getInventory();
-  assert.equal(inv.getAmount(9419), 3, "the mith grapple with its rope");
-  assert.equal(inv.getAmount(9418), 0, "not the rope-less one");
-  assert.equal(inv.getAmount(core.ItemIdentifiers.BRONZE_CROSSBOW), 3);
-  assert.equal(inv.getItems()[0].getId(), core.ItemIdentifiers.BRONZE_CROSSBOW, "the crossbow comes first");
+});
+
+// rsprox_transcripts/232/03140.txt: holding the grapple refuses the search (66219); a full bag says "You need at least
+// two inventory spaces to search your cape." (66034).
+test("a held grapple or a full bag refuses the search, as recorded", (t) => {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++); p.setUsername("fletchcape" + next); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
+  const messages = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+  p.getInventory().add(new core.Item(9419, 1), true);
+  Options.searchGrapple(p);
+  assert.deepEqual(messages, ["You already have a mithril grapple with you."]);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BRONZE_CROSSBOW), 0);
+  p.getInventory().resetItems();
+  for (let slot = 0; slot < 27; slot++) p.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.LOGS, 1));
+  messages.length = 0;
+  Options.searchGrapple(p);
+  assert.deepEqual(messages, ["You need at least two inventory spaces to search your cape."]);
+});
+
+// rsprox captures (2 recordings): a second Agility cape stamina boost in a day says "You have used your stamina boost
+// for today. Try again tomorrow."
+test("the cape's second stamina boost of the day is refused with the recorded line", (t) => {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++); p.setUsername("staminacape" + next); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
+  const messages = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+  Options.staminaBoost(p);
+  messages.length = 0;
+  Options.staminaBoost(p);
+  assert.deepEqual(messages, ["You have used your stamina boost for today. Try again tomorrow."]);
 });

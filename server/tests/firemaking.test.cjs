@@ -1100,8 +1100,9 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
   t.after(() => PluginManager.emitServerShutdown({}));
   const Firemaking = require("../plugins/skills/Firemaking.plugin");
   const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
-  let nextIndex = 1920;
+  let nextIndex = 1920, routeIndex = 0;
   for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine", "permission veto", "equipment dispatch"]) {
+    const anchorX = 3226 + 3 * routeIndex++;
     await t.test(route, async t => {
       const accounts = [];
       t.after(() => {
@@ -1150,7 +1151,8 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         assert.equal(fires().length, 0);
         Object.assign(f, { c, anchor, gains, messages, ground, fires }); return f;
       }
-      const actor = account(3226, 3218), other = account(3225, 3217);
+      // Each route owns fresh tiles: the plugin's tracked fire can outlive fixture deregistration.
+      const actor = account(anchorX, 3218), other = account(anchorX - 1, 3217);
       assert.notEqual(actor.p.getLongUsername(), other.p.getLongUsername());
       let turns = 0;
       const turn = () => {

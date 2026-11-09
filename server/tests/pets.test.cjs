@@ -47,7 +47,10 @@ Pets.register({
     events.set(name, previous ? event => { previous(event); handler(event); } : handler);
   },
   emitCustomEvent: (name, request) => {
-    if (name === "collection-log:obtain") collectionLogObtains.push(request);
+    if (name === "collection-log:obtain") {
+      collectionLogObtains.push(request);
+      request.player.messages?.push?.(`[log ${request.itemId}${request.silent ? " silent" : ""}]`);
+    }
     // Stub the public diary query here; real service coverage is in chompy-pet-acquisition.
     if (name === "diary:is-reward-claimed") request.claimed = request.player.getAttribute("achievement-diaries:rewards")?.western?.includes("elite") === true;
   },
@@ -209,7 +212,7 @@ test("a second pet of the same skill is a would-have-been-followed miss", () => 
   events.get("runecrafting:success")({ player, skill: Skill.RUNECRAFTING, petBase: 804984, runeId: ItemIdentifiers.BLOOD_RUNE });
   assert.deepEqual(player.inventory, [AIR_RIFT_GUARDIAN]);
   assert.ok(!player.inventory.includes(BLOOD_RIFT_GUARDIAN));
-  assert.equal(player.messages.at(-1), "You have a funny feeling like you would have been followed...");
+  assert.equal(player.messages.at(-1), "<col=ef1020>You have a funny feeling like you would have been followed...</col>");
 });
 
 test("a boss pet drop goes to the killer, not the floor", () => {
@@ -219,6 +222,21 @@ test("a boss pet drop goes to the killer, not the floor", () => {
   assert.deepEqual(drops.map((drop) => drop.itemId), [ItemIdentifiers.BONES]);
   assert.deepEqual(player.inventory, [HELLPUPPY]);
   assert.deepEqual(player.getAttribute("pets.owned"), [HELLPUPPY]);
+});
+
+// rsprox_transcripts/234/03285.txt:287458-287462 (and 227/00101, 227/01857): the red follow line, then the purple
+// "automatically insured" line, then the collection log's.
+test("a new pet: the follow line, the insurance line, then the collection log, as recorded", () => {
+  const player = createPlayer();
+  player.setAttribute("pets:current", undefined);
+  events.get("npc-drops:roll")({ player, drops: [{ itemId: HELLPUPPY, amount: 1 }] });
+  const logAt = player.messages.findIndex((m) => m.startsWith("[log "));
+  const insuredAt = player.messages.indexOf("<col=800080>Your new pet has been automatically insured. If lost, it can be reclaimed from Probita in Ardougne.</col>");
+  assert.ok(insuredAt >= 0, player.messages.join(" | "));
+  assert.ok(logAt > insuredAt, `the log comes last: ${player.messages.join(" | ")}`);
+  assert.equal(player.messages[insuredAt - 1], "<col=ef1020>You have a funny feeling like you're being followed.</col>");
+  const before = player.messages.slice(0, insuredAt);
+  assert.ok(!before.some((m) => m.startsWith("[log ")), "no log line before the pet's");
 });
 
 test("every owned pet reaches the collection log; only the new one announces itself", () => {

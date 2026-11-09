@@ -173,7 +173,7 @@ test("an owned Bloodhound is a would-have-been-followed miss and a casket withou
   player.setAttribute("pets.owned", [BLOODHOUND]);
   openMasterCasket(player, () => 0);
   assert.equal(inventory.getAmount(BLOODHOUND), 0);
-  assert.ok(messages.includes("You have a funny feeling like you would have been followed..."));
+  assert.ok(messages.includes("<col=ef1020>You have a funny feeling like you would have been followed...</col>"));
 
   const second = realPlayer({ follower: OTHER_FOLLOWER });
   openMasterCasket(second.player, () => 0.5);

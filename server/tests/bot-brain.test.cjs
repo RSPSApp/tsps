@@ -3356,3 +3356,27 @@ test('a bot fighting away from players eats every cycle while its activity stays
   assert.ok(player.getInventory().getAmount(core.ItemIdentifiers.SWORDFISH) < 20, "it ate its real food");
   assert.ok(activityTicks < 10, `its activity is still downsampled (${activityTicks} of 60 cycles)`);
 });
+
+test('rare cosmetic swaps replace armour with stat-identical variants in the same slot', () => {
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const { Item } = require('../dist/game/model/Item');
+  const { PVP_LOADOUT_DEFINITIONS } = require('../plugins/bots/behaviours/pvp/PvpLoadoutRegistry.PlayerBots');
+  const { applyCosmeticSwaps } = loadoutTesting;
+  const rolls = (...values) => () => values.shift() ?? 0;
+  const body = new Item(ItemIdentifiers.RUNE_PLATEBODY, 1);
+  const legs = new Item(ItemIdentifiers.RUNE_PLATELEGS, 1);
+  // Roll under the chance, then 1 slot, then pick the body, then its first variant (gilded).
+  const [swapped, kept] = applyCosmeticSwaps([body, legs], () => true, rolls(0, 0, 0, 0));
+  assert.equal(swapped.getId(), ItemIdentifiers.GILDED_PLATEBODY);
+  assert.equal(kept, legs);
+  assert.deepEqual(applyCosmeticSwaps([body, legs], () => true, rolls(0.99)), [body, legs]);
+  for (const [base, variants] of Object.entries(PVP_LOADOUT_DEFINITIONS.cosmetics.swaps)) {
+    const def = new Item(ItemIdentifiers[base], 1).getDefinition();
+    for (const key of variants) {
+      const variant = new Item(ItemIdentifiers[key], 1).getDefinition();
+      assert.equal(variant.getEquipmentType().getSlot(), def.getEquipmentType().getSlot(), key);
+      assert.deepEqual(variant.getBonuses(), def.getBonuses(), `${key} matches ${base}`);
+      assert.equal(variant.getRequirements?.()?.toString(), def.getRequirements?.()?.toString(), key);
+    }
+  }
+});

@@ -563,7 +563,9 @@ function fertilize(player, patch, tier, consume = true, xp = [0, 18, 26, 36][tie
         player.getInventory().addItem(new core.Item(Data.itemId("Bucket")));
     }
     treat(player, patch, tier, xp);
-    animate(player, ANIM.COMPOST);
+    // Only a bucket is poured. The spell has already played its own cast animation, and playing
+    // the pour over it is what made Fertile Soil look like a bucket of supercompost (#4024).
+    if (consume) animate(player, ANIM.COMPOST);
     return true;
 }
 function swapForBucket(player, id) {

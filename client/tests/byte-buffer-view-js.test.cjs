@@ -52,3 +52,13 @@ test("JS unsigned input is copied by its existing constructor", () => {
     assert.equal(bytes.buffer, buffer.data.buffer);
     bytes[0] = 31; assert.equal(buffer.data[1], 31); assert.equal(backing[2], 226);
 });
+
+test("JS and TS ByteBuffer expose the same reads (webpack resolves the .js first)", () => {
+    const ts = require("node:fs").readFileSync(path.resolve(__dirname, "../rs/io/ByteBuffer.ts"), "utf8");
+    for (const [, name] of ts.matchAll(/^    (read\w+)\(/gm)) {
+        assert.equal(typeof ByteBuffer.prototype[name], "function", name + " missing from ByteBuffer.js");
+    }
+    const buffer = new ByteBuffer(new Int8Array([-1, -1, -1, 0x00, 0x24, 0x1b]));
+    assert.equal(buffer.readSignedMedium(), -1);
+    assert.equal(buffer.readSignedMedium(), 0x241b);
+});

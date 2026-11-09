@@ -218,6 +218,93 @@ test('Family Crest only handles gold rocks in Witchaven and Mining recognizes th
   assert.ok(ROCKS.find(rock => rock.objectName === 'Gold rocks').objectIds.includes(GOLD_ROCKS_2));
 });
 
+test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronozon needs all four blasts', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/FamilyCrest.Quest')(api);
+  const { ItemIdentifiers: Items, NpcIdentifiers } = api.core;
+  const items = new Map();
+  const messages = [];
+  const player = {
+    getAttribute: () => 0,
+    sendMessage: m => messages.push(m),
+    getInventory: () => ({
+      getAmount: id => items.get(id) ?? 0,
+      deleteNumber: (id, n) => items.set(id, (items.get(id) ?? 0) - n),
+      adds: (id, n) => items.set(id, (items.get(id) ?? 0) + n),
+    }),
+  };
+  const action = stepId => {
+    const event = { player, stepId, handled: false };
+    for (const handler of handlers.custom.get('npc-dialogue:action')) handler(event);
+    return event;
+  };
+  items.set(Items.STEEL_GAUNTLETS, 1);
+  assert.equal(action('MOcYDq').handled, false);
+  assert.equal(items.get(Items.COOKING_GAUNTLETS), 1);
+  assert.equal(items.get(Items.STEEL_GAUNTLETS), 0, 'the free imbue swaps the steel pair');
+
+  assert.equal(action('aGBezT').handled, true, 'changing without 25,000 coins is refused');
+  assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS) ?? 0, 0);
+  items.set(Items.COINS, 30000);
+  assert.equal(action('aGBezT').handled, false, messages.join('|'));
+  assert.equal(items.get(Items.COINS), 5000);
+  assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS), 1);
+  assert.equal(items.get(Items.COOKING_GAUNTLETS), 0);
+
+  const coinAnswer = handlers.condition.map(h => h({ player, npcId: -1, text: 'If the player does not have enough coins:' })).find(a => typeof a === 'boolean');
+  assert.equal(coinAnswer, undefined, "other NPCs' coin checks are not answered with the 25,000 gauntlet price");
+
+  const { CombatSpells, CombatType } = api.core;
+  const caster = { ...player, isPlayer: () => true, getAsPlayer() { return this; }, getAttribute: () => 10,
+    getCombat: () => ({ getSelectedSpell: () => CombatSpells.FIRE_BLAST, getPreviousCast: () => null }) };
+  const other = { ...caster };
+  let creditedKiller = caster;
+  const npc = {
+    getId: () => NpcIdentifiers.CHRONOZON,
+    getDefinition: () => ({ getHitpoints: () => 170 }),
+    setHitpoints(v) { this.hp = v; },
+    getCombat: () => ({ getKiller: () => creditedKiller }),
+  };
+  const impact = (spell, attacker = caster, damage = 5) => {
+    const hit = { getAttacker: () => attacker, getCombatType: () => CombatType.MAGIC, isAccurate: () => damage > 0, getTotalDamage: () => damage, getSpell: () => spell };
+    for (const handler of handlers.npcHitModify) handler({ npc, hit });
+  };
+  const beforeDeath = () => {
+    const event = { npc, preventDeath: false };
+    for (const handler of handlers.npcBeforeDeath) handler(event);
+    return event.preventDeath;
+  };
+
+  messages.length = 0;
+  impact(null);
+  assert.deepEqual(messages, [], 'spell-less magic damage does not count as the selected Blast');
+  impact(CombatSpells.FIRE_BLAST);
+  impact(CombatSpells.WIND_BLAST);
+  assert.deepEqual(messages, ['Chronozon weakens...', 'Chronozon weakens...'],
+    'a manual Wind Blast counts while Fire Blast is autocast');
+  impact(CombatSpells.WATER_BLAST);
+  assert.equal(beforeDeath(), true, 'Chronozon returns to full health without all four blasts');
+  assert.equal(npc.hp, 170);
+
+  impact(CombatSpells.EARTH_BLAST);
+  impact(null, other, 0);
+  assert.equal(beforeDeath(), false, "another player's splash does not block the qualified credited killer");
+  creditedKiller = other;
+  assert.equal(beforeDeath(), true, 'an unqualified credited killer cannot bypass the gate');
+  creditedKiller = null;
+  assert.equal(beforeDeath(), true, 'Chronozon heals when nobody has damage credit');
+
+  const award = killer => {
+    for (const handler of handlers.npcDeath) handler({ killer, npcId: NpcIdentifiers.CHRONOZON });
+  };
+  award(other);
+  assert.equal(items.get(Items.CREST_PART_3) ?? 0, 0, 'a new killer selected at death still needs all four blasts');
+  award(caster);
+  assert.equal(items.get(Items.CREST_PART_3), 1, 'the qualified killer receives the crest part');
+  creditedKiller = caster;
+  assert.equal(beforeDeath(), true, 'the award consumes the killer’s Blast progress');
+});
+
 test('a shop version named after a quest opens once its quest state matches (#831)', () => {
   const { api } = mockApi();
   require('../plugins/quests/Quests.plugin').register(api);

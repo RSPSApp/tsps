@@ -97,12 +97,12 @@ function sum(values: Iterable<number>): number {
 /**
  * The speed the boat is heading for: the sails, plus what pushes them under the hull's cap (a
  * trial's rapids; a lightning strike takes off), plus a burst past it (at most a step past the
- * cap), held under any limit (a fetid pool).
+ * cap), held under any limit (a fetid pool, an anchor), backing up too.
  */
 export function targetSpeed(boat: Boat): number {
     const sails = sailSpeed(boat);
     if (sails <= 0) return 0;
-    if (boat.moveMode === BoatMoveMode.Reverse) return sails;
+    if (boat.moveMode === BoatMoveMode.Reverse) return Math.max(0, Math.min(sails, ...boat.speedLimits.values()));
     let target = Math.max(0, Math.min(sails + sum(boat.speedBonuses.values()), boat.speedCap));
     const burst = (boat.boostSpeed ?? 0) + sum(boat.burstBonuses.values());
     if (burst > 0) target = Math.min(target + burst, boat.speedCap + BURST_STEP);

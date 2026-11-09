@@ -11,15 +11,27 @@
  * special energy from range (62) does (ours).
  *
  * - 1 `talent_regen_ammo_chance`, Regenerate: a value% chance that what a cast, a shot or a charged
- *   weapon spends is not spent. Runes: the whole cast's runes (`magic:spell-cost` says which,
- *   `magic:rune-saving` saves them, `magic:cast-committed` confirms the cast); a cast that spends no
- *   rune (a staff covers it) has nothing to Regenerate. Ammunition: each shot rolled on
- *   `ranged:ammo-saving` (quivers, thrown weapons, chinchompas, blowpipe scales). Charges:
- *   `combat:consume-charge`. Each proc then emits `league:pact-regenerated` { player, kind "rune" |
- *   "ammo" | "charge", itemId (the rune or ammunition, -1 for a charge), amount, combat, spell?,
- *   spellId?, weaponId?, first? }, one per rune id for a cast (`first` on the cast's first, so a
- *   once-a-proc effect acts once). Ours: a proc saves the whole cast's runes (the text: "generate
- *   an additional resource spent").
+ *   weapon spends comes back. Above 100% it always does, and the rest is a chance of one more copy
+ *   (`copies`: 145 makes 1 or 2), a net gain. Every rune proc shows leagues_6_regenerating_runes
+ *   on the caster in spotanim slot 1 on the cast tick.
+ *   Runes: `magic:spell-cost` says what the cast pays (`items`) and what a staff or tome supplies
+ *   (`covered`), `magic:rune-saving` keeps the paid runes (the first copy), `magic:cast-committed`
+ *   confirms the cast and gives the rest: each copy past the first of every paid rune, and every
+ *   copy of the covered ones, which come as real runes even below 100%. A given rune goes to the
+ *   rune pouch slot already holding it while it has room (`magic:rune-refund`), else the
+ *   inventory, else the floor (ours). Another saver (Kodai, staff of the dead) leaves nothing to
+ *   roll. Only runes are made again: a cast paid with something else (a blighted sack) is only
+ *   saved (ours).
+ *   Ammunition: each shot rolled on `ranged:ammo-saving` (quivers, thrown weapons, chinchompas,
+ *   blowpipe scales); copies past the first come back to the stack as `extra`. Charges:
+ *   `combat:consume-charge`, `extra` charges back where the weapon keeps a plain count. Ours: the
+ *   net gain above 100% for ammunition and charges, as for runes.
+ *   Each proc then emits `league:pact-regenerated` { player, kind "rune" | "ammo" | "charge",
+ *   itemId (the rune or ammunition, -1 for a charge), amount (all of it: saved, extra and
+ *   covered), extra, covered?, combat, spell?, spellId?, weaponId?, first? }, one per rune id for a
+ *   cast (`first` on the cast's first, so a once-a-proc effect acts once: a second copy is not a
+ *   second proc, ours). Ours: a proc saves the whole cast's runes (the text: "generate an
+ *   additional resource spent").
  * - 12 `talent_all_style_accuracy`: +value% to the three attack rolls (the accuracy modifiers),
  *   summed with the small damage nodes' "+10% accuracy in all combat styles" each (7, 14, 15), so
  *   every pact's accuracy adds up.
@@ -59,6 +71,9 @@
 const Common = require("./Common.LeaguePacts");
 
 const REGENERATE = "talent_regen_ammo_chance";
+/** On the caster on every rune proc's cast tick, in spotanim slot 1 beside the spell's own. */
+const REGENERATE_GRAPHIC = "leagues_6_regenerating_runes";
+const REGENERATE_GRAPHIC_SLOT = 1;
 const ACCURACY = "talent_all_style_accuracy";
 /** The small damage nodes, each also +10% accuracy in all combat styles (their text). */
 const DAMAGE_NODE_EFFECTS = ["talent_percentage_magic_damage", "talent_percentage_melee_damage", "talent_percentage_ranged_damage"];
@@ -128,12 +143,23 @@ function emitRegenerated(payload) {
 
 // ------------------------------------------------------------------ 1 Regenerate
 
+/**
+ * How many copies a Regenerate proc makes of what was spent: one per whole 100%, and the rest a
+ * chance of one more (145: always one, 45% two). 0 is no proc. One random draw at most.
+ */
+function copies(percent) {
+  if (!(percent > 0)) return 0;
+  const whole = Math.floor(percent / 100);
+  const part = percent - whole * 100;
+  return whole + (part > 0 && Math.random() * 100 < part ? 1 : 0);
+}
+
 function rememberSpellCost(cost) {
   if (cost?.player && value(cost.player, REGENERATE) > 0) spellCosts.set(cost.player, cost);
 }
 
-/** Rune id -> amount. */
-function runeTotals(items) {
+/** Item id -> amount. */
+function totals(items) {
   const totals = new Map();
   for (const item of items ?? []) {
     const id = item?.getId?.() ?? item?.id;
@@ -143,15 +169,58 @@ function runeTotals(items) {
   return totals;
 }
 
+function isRune(itemId) {
+  return / rune$/i.test(String(core.CacheDefinitions.getItem(itemId)?.name ?? ""));
+}
+
 function regenerateRunes(request) {
   const player = request?.player;
   if (!player || request.saved) return;
   const cost = spellCosts.get(player);
   spellCosts.delete(player);
-  const runes = runeTotals(cost?.items);
-  if (runes.size === 0 || !chance(value(player, REGENERATE))) return;
+  const spent = totals(cost?.items);
+  // Runes a staff or tome supplied: never spent, yet a proc makes them as real runes.
+  const covered = new Map([...totals(cost?.covered)].filter(([id]) => isRune(id)));
+  if (spent.size === 0 && covered.size === 0) return;
+  const n = copies(value(player, REGENERATE));
+  if (n === 0) return;
   request.saved = true;
-  regenerating.set(player, { spell: cost.spell, runes, combat: request.offensive === true });
+  regenerating.set(player, { spell: cost.spell, spent, covered, copies: n, combat: request.offensive === true });
+}
+
+/**
+ * Gives `amount` of a regenerated rune: to the rune pouch slot already holding it while it has room
+ * (`magic:rune-refund`, answered by the pouch), else the inventory, else the floor (ours).
+ */
+function giveRune(player, runeId, amount) {
+  const refund = { player, runeId, amount, stored: 0 };
+  api.emitCustomEvent("magic:rune-refund", refund);
+  const left = amount - Math.min(amount, Math.max(0, refund.stored | 0));
+  if (left <= 0) return;
+  const item = new core.Item(runeId, left);
+  const inventory = player.getInventory();
+  if (inventory.getAddableAmount(item) >= left) {
+    inventory.add(item, false);
+    inventory.refreshItems();
+  } else {
+    core.ItemOnGroundManager.registers(player, item);
+  }
+}
+
+/**
+ * The kept runes the inventory paid: as much as the rune pouch slot already holding that rune takes
+ * moves there from the inventory.
+ */
+function moveKeptToPouch(player, runeId, spent) {
+  const inventory = player.getInventory();
+  const held = Math.min(spent, inventory.getAmount(runeId));
+  if (!(held > 0)) return;
+  const refund = { player, runeId, amount: held, stored: 0 };
+  api.emitCustomEvent("magic:rune-refund", refund);
+  const moved = Math.min(held, Math.max(0, refund.stored | 0));
+  if (moved <= 0) return;
+  inventory.deletes(new core.Item(runeId, moved));
+  inventory.refreshItems();
 }
 
 function castCommitted({ player, spell, runesSaved }) {
@@ -159,11 +228,19 @@ function castCommitted({ player, spell, runesSaved }) {
   if (!saved) return;
   regenerating.delete(player);
   if (!runesSaved || saved.spell !== spell) return;
+  const { spent, covered, copies: n } = saved;
+  player.performGraphicInSlot?.(REGENERATE_GRAPHIC_SLOT, new core.Graphic(core.CacheDefinitions.getSpotanimId(REGENERATE_GRAPHIC)));
   const spellId = spell?.spellId?.();
   const spellName = typeof spell?.name === "string" ? spell.name : undefined;
   let first = true;
-  for (const [itemId, amount] of saved.runes) {
-    emitRegenerated({ player, kind: "rune", itemId, amount, combat: saved.combat, spell, spellId, spellName, first });
+  for (const itemId of new Set([...spent.keys(), ...covered.keys()])) {
+    // The first copy of what was spent is the save; only runes are made again past it.
+    const extra = isRune(itemId) ? (n - 1) * (spent.get(itemId) ?? 0) : 0;
+    const made = n * (covered.get(itemId) ?? 0);
+    if (isRune(itemId) && spent.get(itemId) > 0) moveKeptToPouch(player, itemId, spent.get(itemId));
+    if (extra + made > 0) giveRune(player, itemId, extra + made);
+    const amount = (spent.get(itemId) ?? 0) + extra + made;
+    emitRegenerated({ player, kind: "rune", itemId, amount, extra, covered: made, combat: saved.combat, spell, spellId, spellName, first });
     first = false;
   }
 }
@@ -175,19 +252,31 @@ function regenerateAmmo(request) {
   const amount = Math.max(0, request.amount | 0);
   const saved = Math.min(amount, Math.max(0, request.saved | 0));
   let regenerated = 0;
-  for (let shot = saved; shot < amount; shot++) if (chance(percent)) regenerated++;
+  let extra = 0;
+  for (let shot = saved; shot < amount; shot++) {
+    const n = copies(percent);
+    if (n === 0) continue;
+    regenerated++;
+    extra += n - 1;
+  }
   if (regenerated === 0) return;
   request.saved = saved + regenerated;
+  // Each emitter puts `extra` back on the stack the shots came from (ours above 100%).
+  if (extra > 0) request.extra = Math.max(0, request.extra | 0) + extra;
   // The shot's target and whether a special fired it (the ammo event carries neither; Ranged's echo needs both).
   const target = player.getCombat?.()?.getTarget?.() ?? null;
-  emitRegenerated({ player, kind: "ammo", itemId: request.itemId ?? -1, amount: regenerated, combat: true, target, special: player.isSpecialActivated?.() === true });
+  emitRegenerated({ player, kind: "ammo", itemId: request.itemId ?? -1, amount: regenerated + extra, extra, combat: true, target, special: player.isSpecialActivated?.() === true });
 }
 
 function regenerateCharge(request) {
   const player = request?.player;
-  if (!player || request.skip || !chance(value(player, REGENERATE))) return;
+  if (!player || request.skip) return;
+  const n = copies(value(player, REGENERATE));
+  if (n === 0) return;
   request.skip = true;
-  emitRegenerated({ player, kind: "charge", itemId: -1, weaponId: request.itemId ?? -1, amount: 1, combat: true });
+  // The weapons that keep a plain count give `extra` charges back (ours above 100%).
+  if (n > 1) request.extra = Math.max(0, request.extra | 0) + n - 1;
+  emitRegenerated({ player, kind: "charge", itemId: -1, weaponId: request.itemId ?? -1, amount: n, extra: n - 1, combat: true });
 }
 
 // ------------------------------------------------------------------ 12 accuracy, 13 Defence, 16 off-hand

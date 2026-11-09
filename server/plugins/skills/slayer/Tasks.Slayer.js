@@ -477,9 +477,8 @@ function complete(player, task) {
     return;
   }
   const reward = taskReward(player, task.masterId);
-  const totalTasks = State.varbit(player, "slayer_tasks_completed") + State.varbit(player, "slayer_wilderness_tasks_completed");
-  if (totalTasks <= reward.freeTasks) {
-    player.sendMessage(fill(FREE_TASK, { streak, tasks: streak === 1 ? "task" : "tasks", more: reward.freeTasks + 1 - totalTasks }));
+  if (streak <= reward.freeTasks) {
+    player.sendMessage(fill(FREE_TASK, { streak, tasks: streak === 1 ? "task" : "tasks", more: reward.freeTasks + 1 - streak }));
     return;
   }
   // Whole points, as the message shows them: a multiplier may be fractional (a league fragment's +10%).

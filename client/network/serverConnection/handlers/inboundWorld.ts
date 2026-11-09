@@ -118,6 +118,10 @@ export function handleInboundWorld(msg: any): boolean {
                 client.camera.setScriptedPitchUnlocked(payload.unlock === true);
                 return true;
             }
+            if (payload.mode === "skybox") {
+                client.renderer?.setSkybox?.(payload.model);
+                return true;
+            }
             if (payload.mode === "translate") {
                 client.camera.translateScriptedCamera(payload.dx, payload.dy);
                 return true;

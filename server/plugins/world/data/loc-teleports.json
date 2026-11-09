@@ -363,7 +363,7 @@
     {"name":"piscarilius_ladder_bottom","id":27634,"display":"Ladder","option":"Climb","op":1,"x":1890,"y":3295,"z":0,"to":[1889,3295,1],"anim":828,"animTick":2,"tick":3,"recordings":1},
     {"name":"piscarilius_ladder_top_01","id":27635,"display":"Ladder","option":"Climb","op":1,"x":1890,"y":3295,"z":1,"to":[1889,3295,0],"anim":827,"animTick":0,"tick":1,"recordings":1},
     {"name":"pog_canyon_sewer_entrance_lower_02","id":49868,"display":"Sewer entrance","option":"Enter","op":1,"x":2322,"y":3101,"z":0,"to":[1473,4238,0],"tick":4,"fade":true,"recordings":1},
-    {"name":"porcine_cave_exit_rope","id":40330,"display":"Rope","option":"Climb-up","op":1,"x":3157,"y":9714,"z":0,"to":[3149,3348,0],"anim":828,"animTick":2,"tick":4,"fade":true,"recordings":2},
+    {"name":"porcine_cave_exit_rope","id":40330,"display":"Rope","option":"Climb-up","op":1,"x":3157,"y":9714,"z":0,"to":[3149,3348,0],"anim":828,"animTick":2,"tick":4,"fade":true,"message":"You climb up the rope.","messageType":"spam","recordings":2},
     {"name":"prif_clan_tower_teleporter","id":36490,"display":"Teleport Platform","option":"Channel","op":1,"x":3220,"y":6065,"z":0,"to":[3220,6065,2],"tick":2,"recordings":0},
     {"name":"prif_clan_tower_teleporter","id":36490,"display":"Teleport Platform","option":"Channel","op":1,"x":3220,"y":6065,"z":2,"to":[3220,6065,0],"tick":2,"recordings":0},
     {"name":"prif_clan_tower_teleporter","id":36490,"display":"Teleport Platform","option":"Channel","op":1,"x":3220,"y":6099,"z":0,"to":[3220,6099,2],"tick":2,"recordings":0},

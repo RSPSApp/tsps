@@ -427,7 +427,7 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 - 1 gives 60581, whose first op is Deposit-held (when carrying cargo).
 
 **What it holds** (OSRS Wiki, Cargo hold):
-- **Capacity:** by boat and hold tier. A basic hold has 20 slots on the raft, 30 on the skiff and 40 on the sloop; a rosewood hold has 120, 180 and 240.
+- **Capacity:** by boat and hold tier, from the cache: the hold's facility row (table 176, column 20) names a stats row (table 164) whose column 28 is its slots. A basic hold has 20 slots on the raft, 30 on the skiff and 40 on the sloop; a rosewood hold has 120, 180 and 240. Live's hold shows the same (rsprox, 943:5): raft basic 20; skiff basic, oak and teak 30, 45 and 60; sloop mahogany, camphor, ironwood and rosewood 120, 160, 210 and 240.
 - **Slots:** every item takes a slot, except that a stackable item's whole stack takes one.
 - **Which items:** only the wiki's "Storable items": sailing capes and tools, salvage, courier crates, bounty items, repair kits, cannonballs, ship drinks, fish, fish offcuts and crates, and fishing gear. Noted items aren't accepted.
 - **Recovery losses:** courier crates, bounty items, salvage, fish and full fish crates are lost when a shipwright recovers the boat.
@@ -536,7 +536,7 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
 - **Shipyard:**
   - The shown boat, and the owner while aboard it, are shown only to the owner. Other players in the shipyard see neither.
   - "Shipwright assistance" (paying to build without the Construction level) isn't built yet.
-  - Facilities are built, removed and replaced there, but only placed: none of them can be used yet (cooking on the range, firing cannons and so on). A cargo hold's tier doesn't change its capacity yet.
+  - Facilities are built, removed and replaced there. At sea the cargo hold, salvaging hooks and station, wind and gale catchers, cannons, range, anchor and crystal extractor work (docs/sailing.md); the inoculation station, chum stations, nets, fathom stone, bosun's workbench and eternal brazier are only placed.
   - Guessed rather than captured for facilities:
     - "Replace it." opens the hotspot's options, and building over a facility replaces it without a refund;
     - a hotspot's Build and a facility's Modify do nothing away from the shipyard;

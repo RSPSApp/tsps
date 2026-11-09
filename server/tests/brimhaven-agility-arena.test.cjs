@@ -71,6 +71,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     setWalkingDirection() {},
     getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, handleRegionChange() {} }),
     getPacketSender: () => ({
+      sendGlobalGraphic() {},
       sendSoundEffect() {},
       sendTypedMessage: (_type, message) => p.messages.push(message),
       sendPositionalHint: (loc) => p.hints.push(loc),

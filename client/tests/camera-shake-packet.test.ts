@@ -12,6 +12,7 @@ import {
     encodeCameraRotateBy,
     encodeCameraMoveArc,
     encodeCameraRotateToCoordinate,
+    encodeCameraSkybox,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 
 // A coordinate rotation freezes command-time angles; it is not CAM_LOOKAT_CYCLES.
@@ -27,6 +28,11 @@ assert.deepEqual(shake, {
     type: "camera",
     payload: { mode: "shake", slot: 1, randomAmplitude: 7, sineAmplitude: 0, sineFrequency: 0 },
 });
+
+// cam_skybox: a model id, and -1 to clear it (Crab Quest's dance sends 61359, then -1).
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraSkybox(61359))), { type: "camera", payload: { mode: "skybox", model: 61359 } });
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraSkybox(-1))), { type: "camera", payload: { mode: "skybox", model: -1 } });
+assert.throws(() => encodeCameraSkybox(-2), RangeError);
 
 const reset = decodeServerPacket(new Uint8Array(encodeCameraReset())) as any;
 assert.deepEqual(reset, { type: "camera", payload: { mode: "reset" } });

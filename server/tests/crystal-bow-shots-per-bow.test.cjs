@@ -29,6 +29,22 @@ function archer(t) {
 const wield = (p, item) => p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, item);
 const fire = (p, shots) => CombatFactory.decrementAmmo(p, p.getLocation(), shots);
 
+test("a kept shot with extra charges given back (combat:consume-charge extra) takes shots off the bow's stage count", (t) => {
+  const p = archer(t);
+  const bow = new core.Item(I.CRYSTAL_BOW_FULL, 1);
+  wield(p, bow);
+  fire(p, 10);
+  const emit = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "combat:consume-charge" && event.player === p) { event.skip = true; event.extra = 3; return; }
+    return emit.call(PluginManager, name, event);
+  });
+  fire(p, 1);
+  assert.equal(bow.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META), 7);
+  fire(p, 5);
+  assert.equal(bow.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META), 0, "never below the stage's start");
+});
+
 test("each crystal bow keeps its own shot count: swapping bows doesn't reset it", (t) => {
   const p = archer(t);
   const first = new core.Item(I.CRYSTAL_BOW_FULL, 1);

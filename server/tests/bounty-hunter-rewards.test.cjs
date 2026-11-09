@@ -41,6 +41,13 @@ const core = {
   ObjectIdentifiers: identifiers("ObjectIdentifiers.ts").ids,
   ItemDefinition: { forId: (id) => ({ getName: () => items.names.get(id), getNoteId: () => id + 1 }) },
   Misc: { getTicks: (seconds) => seconds / 0.6 },
+  Bank: {
+    TOTAL_BANK_TABS: 11,
+    getTabForItem: (player, id) => {
+      for (let tab = 0; tab < 11; tab++) if (player.getBank(tab).contains(id)) return tab;
+      return -1;
+    },
+  },
   SkullType: { WHITE_SKULL: "white" },
   Flag: { APPEARANCE: "appearance" },
   DialogueChainBuilder: class { add() { return this; } },
@@ -70,8 +77,14 @@ const emit = (name, payload) => api.emitCustomEvent(name, payload);
 let ironman = false;
 api.onCustomEvent("ironman:mode", (query) => { query.mode = ironman ? "standard" : "none"; });
 
-function player({ combat = 100, skulled = false, inventory = {} } = {}) {
+function player({ combat = 100, skulled = false, inventory = {}, bank = {} } = {}) {
   const attributes = new Map();
+  // Coins live in the first bank tab only; the mock bank has no other tab contents.
+  const bankTab = (tab) => ({
+    getAmount: (id) => (tab === 0 ? bank[id] ?? 0 : 0),
+    contains: (id) => tab === 0 && (bank[id] ?? 0) > 0,
+    deleteNumber: (id, amount) => { bank[id] -= amount; },
+  });
   const slots = Array.from({ length: 28 }, () => new Item(-1, 0));
   Object.entries(inventory).forEach(([id, amount], slot) => { slots[slot] = new Item(Number(id), amount); });
   const container = {
@@ -97,6 +110,7 @@ function player({ combat = 100, skulled = false, inventory = {} } = {}) {
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => container,
     getBanks: () => [],
+    getBank: bankTab,
     getSkillManager: () => ({ getCombatLevel: () => combat }),
     isSkulled: () => p.skullTimer > 0,
     getSkullTimer: () => p.skullTimer,
@@ -222,6 +236,26 @@ test("bounty crates roll coins, noted restores and food, and a 1/10 artefact", (
   assert.equal(BountyCrates.rollCrate(9, () => 0.999999)[0][1], 600000);
   const relic = [0, 0, 0, 0, 0, 0.999];
   assert.equal(BountyCrates.rollCrate(5, () => relic.shift()).at(-1)[0], "ANCIENT_RELIC");
+});
+
+test("the coffer deposit takes the inventory's coins first, then the bank's; a total short of the amount is refused", () => {
+  const bankOnly = player({ combat: 70, bank: { [I.COINS]: 500_000 } });
+  Coffer.deposit(bankOnly, 300_000);
+  assert.equal(Coffer.balance(bankOnly), 300_000);
+  assert.equal(bankOnly.getBank(0).getAmount(I.COINS), 200_000);
+
+  const both = player({ combat: 70, inventory: { [I.COINS]: 100_000 }, bank: { [I.COINS]: 500_000 } });
+  Coffer.deposit(both, 250_000);
+  assert.equal(Coffer.balance(both), 250_000);
+  assert.equal(both.getInventory().getAmount(I.COINS), 0);
+  assert.equal(both.getBank(0).getAmount(I.COINS), 350_000);
+
+  const short = player({ combat: 70, inventory: { [I.COINS]: 100_000 }, bank: { [I.COINS]: 50_000 } });
+  Coffer.deposit(short, 200_000);
+  assert.equal(Coffer.balance(short), 0);
+  assert.equal(short.getInventory().getAmount(I.COINS), 100_000);
+  assert.equal(short.getBank(0).getAmount(I.COINS), 50_000);
+  assert.deepEqual(short.messages, ["You don't have enough coins."]);
 });
 
 test("the coffer: minimum deposits by combat level, a 2m cap, and death costs to the killer", () => {

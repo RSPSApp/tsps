@@ -97,9 +97,15 @@ export abstract class Spell {
         ) === true) {
             return [];
         }
-        const cost = { player, spell: this, items: items.filter((item) => item != null && PluginManager.emitSpellRuneBypass(
-            player, this.getSpellbook(), this.spellId(), item.id
-        ) !== true) };
+        // `covered`: the runes a staff or tome supplies (the per-rune bypass), which the cast never spends.
+        const paid: Item[] = [];
+        const covered: Item[] = [];
+        for (const item of items) {
+            if (item == null) continue;
+            const bypassed = PluginManager.emitSpellRuneBypass(player, this.getSpellbook(), this.spellId(), item.id) === true;
+            (bypassed ? covered : paid).push(item);
+        }
+        const cost = { player, spell: this, items: paid, covered };
         PluginManager.emitCustomEvent("magic:spell-cost", cost);
         return cost.items;
     }

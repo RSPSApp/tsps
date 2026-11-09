@@ -1,6 +1,7 @@
 /** A Porcine of Interest. Capture 1693 and remaining limits: docs/p2p-skilling-parity.md. */
 module.exports = function registerPorcineOfInterestQuest(api) {
   const {
+    ChatType,
     CombatMethod,
     CombatType,
     PendingHit,
@@ -729,11 +730,10 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     ensureSourhog(player);
   }
 
-  /** "The player climbs over the blockage." on the warning transcript's Yes. */
-  function handleBlockageClimb(player, text) {
+  /** The warning transcript's Yes. Its "The player climbs over the blockage." is a wiki stage direction: capture 1693 sends no chat line for it. */
+  function handleBlockageClimb(player) {
     const destination = blockageDestination.get(player);
     blockageDestination.delete(player);
-    if (text) player.sendMessage(text);
     if (destination) climbBlockage(player, destination);
   }
 
@@ -774,7 +774,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       case "EaeUfj": event.handled = true; wakeInHouse(player); return;
       case "f8rW5G":
         event.handled = true;
-        handleBlockageClimb(player, event.text);
+        handleBlockageClimb(player);
         return;
       case "LFxcPW":
         event.handled = true;
@@ -838,6 +838,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       return;
     }
     if (stage < STAGE_COMPLETE) enterCave(player);
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You climb down the rope.");
     player.moveTo(new Location(CAVE_LANDING_TILE.x, CAVE_LANDING_TILE.y, 0));
     ensureScimitar(player); ensureSourhog(player);
     restoreCorpse(player);
@@ -962,6 +963,17 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       default:
         return;
     }
+  }
+
+  /**
+   * LocTeleports plays the captured climb (animation, fade, message) for the cave rope, and it
+   * answers before this plugin's own hook. Only the Sourhog-dead, foot-uncut warning has to come
+   * first, so the climb is left alone otherwise.
+   */
+  function gateCaveRope(event) {
+    if (event.objectId !== CAVE_ROPE_OBJECT_ID || event.clickType !== 1) return;
+    if (quest.getStage(event.player) !== STAGE_SOURHOG_DEAD) return;
+    handleObjectInteraction(event);
   }
 
   /** Rope on either hole form, or any item on the dead sourhog. */
@@ -1102,6 +1114,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("interface:closed", noteClosed);
+  api.onBeforeObjectInteraction(gateCaveRope);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.registerNpcCombatMethodProvider([QUEST_SOURHOG_NPC_ID], QuestSourhogCombat, { singleton: false });

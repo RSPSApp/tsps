@@ -289,8 +289,12 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
   assert.equal(h.quest.getStage(p), 5);
   assert.equal(p.configs.get(VARP), 5);
 
-  object(h, p, 2185, 'Climb-over');
-  assert.equal(p.getLocation().y, 3254);
+  // The wall is an agility shortcut (human_walk_crumbledwall), not a quest teleport.
+  assert.equal(object(h, p, 2185, 'Climb-over').handled, false);
+  const wall = require('../plugins/skills/data/agility-shortcuts.json').shortcuts.find(entry => entry.object === 2185);
+  assert.deepEqual(wall.between.ends, [[2509, 3252, 0], [2509, 3254, 0]]);
+  assert.ok(wall.between.cross.some(step => step.anim === 'CRUMBLED_WALL'));
+  p.setLocation(2509, 3254, 0);
   assert.equal(object(h, p, 2183, 'Open').handled, false, 'shared chest handler opens the closed loc');
   object(h, p, 2182, 'Search');
   assert.deepEqual(h.transcripts.at(-1), {
@@ -576,23 +580,17 @@ test('warlord owned combat cancels on logout and can retry without progress gran
 });
 
 
-test('the warlord gives up past his combat follow distance instead of chasing across the map', () => {
+test('the warlord is never despawned by the quest: the core retreat sends him home while he stays attackable', () => {
   const h=harness(),p=makePlayer();h.quest.setStage(p,7);p.setLocation(2458,3302,0);
   const source=new NPC(7621,new core.Location(2457,3302,0));source.isRegistered=()=>true;
   const e={player:p,npc:source,npcId:7621,text:"Ha, you really think you stand a chance? I'll crush you."};
   emit(h,'npc-dialogue:line',e);e.after();
   const fighter=h.spawned.at(-1);
-  const leash=h.tasks.find(task=>task.constructor.name==='WarlordLeashTask');
-  assert.ok(leash,'the encounter is leashed');
-  const follow=fighter.getCurrentDefinition().getCombatFollowDistance();
-  fighter.moveTo(new core.Location(2457+follow,3302,0));
-  leash.execute();
-  assert.notEqual(fighter.removed,true,'within reach he keeps fighting');
-  fighter.moveTo(new core.Location(2457+follow+1,3302,0));
-  leash.execute();
-  assert.equal(fighter.removed,true,'past it he goes');
-  assert.equal(p.varbits.get(3460),0);
-  assert.equal(h.quest.getStage(p),7,'the fight can be started again');
+  assert.equal(h.tasks.some(task=>task.constructor.name==='WarlordLeashTask'),false);
+  assert.equal(fighter.getSpawnPosition().equals(new core.Location(2457,3302,0)),true,'he retreats to where he stood');
+  fighter.moveTo(new core.Location(2457+fighter.getCurrentDefinition().getCombatFollowDistance()+1,3302,0));
+  assert.notEqual(fighter.removed,true);
+  assert.equal(p.varbits.get(3460),1);
 });
 
 test('warlord fighting visibility replays actual encounter and clears orphan state without touching siblings', () => {

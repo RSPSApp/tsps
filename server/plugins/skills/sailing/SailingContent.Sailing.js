@@ -208,6 +208,17 @@ function animateDeckLocs(player, boat, isLoc, animId) {
 }
 
 /** Plays a loc animation on one deck loc, for the player and everyone who sees them. */
+/** Runs `action` once, `ticks` ticks from now, as a task of the player's. */
+function later(player, ticks, action) {
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(ticks, player, false); }
+    execute() {
+      this.stop();
+      action();
+    }
+  })());
+}
+
 function animateDeckLoc(player, boat, loc, animId) {
   const viewers = [player, ...player.getLocalPlayers().filter((other) => other.getLocalPlayers().includes(player))];
   const drawn = {
@@ -329,6 +340,7 @@ module.exports = {
   fade,
   animateDeckLocs,
   animateDeckLoc,
+  later,
   isHelm,
   isSail,
   isSailCloth,

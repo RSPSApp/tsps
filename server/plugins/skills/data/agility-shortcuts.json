@@ -2661,6 +2661,19 @@
       "note": "rsprox captures 1098, 1100, 1105, 1108 (Leagues worlds only)"
     },
     {
+      "name": "Crumbled wall (Tree Gnome Village)",
+      "object": 2185,
+      "level": 1,
+      "between": {
+        "ends": [[2509,3252,0],[2509,3254,0]],
+        "cross": [
+          {"sound":2453,"delay":10},
+          {"move":"to","anim":"CRUMBLED_WALL","speed":[0,70],"ticks":3}
+        ]
+      },
+      "unverified": "the sound, timing and ends (no Tree Gnome Village capture); the animation is human_walk_crumbledwall, as the Nemus Retreat broken walls (rsprox 1098, 1100, 1105, 1108)"
+    },
+    {
       "name": "Rocks (Catherby)",
       "object": 17042,
       "at": [2869,3429,0],
@@ -2902,6 +2915,17 @@
         ]
       },
       "note": "rsprox captures 1105 (Leagues worlds only)"
+    },
+    {
+      "name": "Log balance (Nemus Retreat)",
+      "object": 56990,
+      "at": [[1401,3284,0],[1401,3290,0]],
+      "level": 45,
+      "xp": 19.5,
+      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "render": "BALANCE_WALK",
+      "between": {"ends":[[1401,3283,0],[1401,3291,0]],"cross":[{"walk":["to"]}]},
+      "note": "https://oldschool.runescape.wiki/w/Log_balance_(Auburn_Valley): the identical second shortcut south-east of Nemus Retreat (ids 56990-56993; 56992 and 56993 are the log between the ends)."
     },
     {
       "name": "Log balance (Auburn Valley)",

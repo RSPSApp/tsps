@@ -148,6 +148,12 @@ function store(player, runeId, amount, slotLimit = slotCount(player)) {
   return moved;
 }
 
+/** Adds up to `amount` of `runeId` to the slot already holding it, never an empty one; returns how many went in. */
+function refill(player, runeId, amount, slotLimit = slotCount(player)) {
+  const held = slots(player).findIndex((entry) => entry?.id === runeId);
+  return held >= 0 && held < slotLimit ? store(player, runeId, amount, slotLimit) : 0;
+}
+
 /** Removes up to `amount` from `slot`; returns `{ id, amount }` taken, or null. */
 function take(player, slot, amount) {
   const current = slots(player);
@@ -359,6 +365,7 @@ module.exports = {
   amountOf,
   room,
   store,
+  refill,
   take,
   spend,
   inventoryFits,

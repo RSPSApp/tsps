@@ -114,6 +114,13 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
         }
     }
 
+    /** cam_skybox: the cache model drawn as the sky, or -1. Only an explicit -1 clears it. */
+    public skyboxModel: number = -1;
+
+    setSkybox(model: number): void {
+        this.skyboxModel = model >= 0 ? model | 0 : -1;
+    }
+
     // OSRS camera shake slots (0:X, 1:Y, 2:Z, 3:Yaw, 4:Pitch).
     public readonly cameraShakeEnabled: boolean[] = [false, false, false, false, false];
     public readonly cameraShakeRandomAmplitude: number[] = [0, 0, 0, 0, 0];

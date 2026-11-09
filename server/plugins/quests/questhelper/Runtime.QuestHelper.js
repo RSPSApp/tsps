@@ -2,6 +2,7 @@
 const {randomUUID}=require('node:crypto');
 const {ChunkedPluginMessageAssembler,encodeChunkedPluginMessage}=require('./Chunks.QuestHelper');
 const {tutorialResult}=require('./Tutorial.QuestHelper');
+const {journalWidgets}=require('../QuestRuntime');
 const validSession=s=>typeof s==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(s);
 const record=v=>v&&typeof v==='object'&&!Array.isArray(v);
 // Quest Helper settings forwarded to the engine: flat upstream keys with boolean or colour values.
@@ -10,6 +11,32 @@ function lockSection(value){return record(value)&&Number.isSafeInteger(value.sec
 const status=(q,p)=>q.isComplete(p)?'FINISHED':q.isStarted(p)?'IN_PROGRESS':'NOT_STARTED';
 function items(container){return container.getItems().flatMap((item,slot)=>item&&item.getId()>0&&item.getAmount()>0?[{id:item.getId(),quantity:item.getAmount(),slot}]:[]);}
 const MAX_EVENTS=1024;
+const WIDGET_CHILD_KEYS=['children','staticChildren','dynamicChildren','nestedChildren'];
+/**
+ * Puts the authoritative journal into the snapshot's widget tree. The browser nests an open journal
+ * under its own roots and the bridge indexes nested widgets first, keeping the first widget per id,
+ * so a journal the client sent for another quest would otherwise win. Overlay the text on the
+ * matching widget wherever it sits, keeping its metadata, and add whatever the tree does not have.
+ */
+function overlayJournal(widgets,journal){
+ const byId=new Map(journal.map(widget=>[widget.id,widget]));
+ const seen=new Set();
+ const walk=list=>list.map(widget=>{
+  if(!widget||typeof widget!=='object')return widget;
+  const replacement=byId.get(widget.id);
+  let next=widget;
+  if(replacement){
+   seen.add(widget.id);
+   next={...widget,text:replacement.text??widget.text};
+   if(replacement.staticChildren)next.staticChildren=replacement.staticChildren;
+  }
+  for(const key of WIDGET_CHILD_KEYS)if(Array.isArray(next[key]))next={...next,[key]:walk(next[key])};
+  return next;
+ });
+ const merged=walk(Array.isArray(widgets)?widgets:[]);
+ for(const widget of journal)if(!seen.has(widget.id))merged.push(widget);
+ return merged;
+}
 // One round per value the helper discovers, because SnapshotClient.varbit() throws on the first
 // missing id: Ernest's six-lever condition tree needs six rounds in a single call. The bound is
 // above the largest number of distinct varbits any single helper file reads (55, Mourning's End
@@ -192,6 +219,12 @@ class QuestHelperRuntime {
   const location=player.getLocation();snapshot.localPlayer={...raw.localPlayer,name:player.getUsername(),x:location.getX(),y:location.getY(),plane:location.getZ()};snapshot.plane=location.getZ();
   const delivered=Number(player.getAttribute('cooks-assistant:delivered-ingredients'))||0;
   snapshot.dialogueHistory=questKey==='cooks_assistant'?["Here's a bucket of milk.","Here's a fresh egg.","Here's a pot of flour."].filter((_,bit)=>(delivered&(1<<bit))!==0):[];
+  // The quest journal is built client-side, so a headless snapshot has none of its text. Guides
+  // that sync on the journal (Clock Tower and 46 others) read it through WidgetTextRequirement;
+  // give them the journal the player would see rather than a route they cannot resolve.
+  const journalQuest=this.getQuests().find(q=>q.key===questKey);
+  const journal=journalQuest?journalWidgets(journalQuest,player):[];
+  if(journal.length)snapshot.widgets=overlayJournal(snapshot.widgets,journal);
   return snapshot;
  }
 }

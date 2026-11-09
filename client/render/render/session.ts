@@ -194,6 +194,7 @@ import { cleanUpRenderer } from "./handlers";
 
 export function clearSessionCaches(host: WebGLOsrsRendererHost, ): void {
         cancelPendingMapUploads(host);
+        host.setSkybox(-1);
         // Clear NPC type caches (grow with each unique NPC type seen)
         host.npcDefaultHeightCache.clear();
         host.npcNameCache.clear();

@@ -1425,6 +1425,11 @@ function pauseWoodcutting(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopWoodcutting(activeSessionsRef, player, false));
 }
 
+/** Inventory actions clear the player interaction and end that player's chop. */
+function interruptForInteraction({ player }) {
+  stopWoodcutting(activeSessionsRef, player, false);
+}
+
 /** An accepted emote replaces chopping while keeping the new emote animation. */
 function interruptForEmote({ player }) {
   stopWoodcutting(activeSessionsRef, player, false);
@@ -1458,6 +1463,7 @@ module.exports = {
     });
     api.onCustomEvent("level-up:popup-opened", pauseWoodcutting);
     api.onCustomEvent("player:emote", interruptForEmote);
+    api.onCustomEvent("player:interaction-cleared", interruptForInteraction);
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
     api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);

@@ -20,11 +20,13 @@ const customEvents = new Map();
 const ammoHandlers = [];
 const finishedHandlers = [];
 const events = [];
+/** A test's stand-in for another plugin answering the weapon's events. */
+let onEmit = null;
 
 function api() {
     return {
         core: { ...core, BonusManager: { update() {} }, WeaponInterfaceManager: { assign() {} } },
-        emitCustomEvent: (name, payload) => events.push([name, payload]),
+        emitCustomEvent: (name, payload) => { events.push([name, payload]); onEmit?.(name, payload); },
         onItemAction: (name, actions) => itemActions.set(name, actions),
         onItemOnItem: (a, b, handler) => itemOnItem.push({ a, b, handler }),
         onCustomEvent: (name, handler) => {
@@ -116,4 +118,18 @@ test('1,000 blade charges used is 1% progress', () => {
     const player = wielder(I.BLADE_OF_SAELDOR, { key: BLADE_KEY, value: { charges: 9000, used: 1000 } });
     itemActions.get('Blade of Saeldor').Check({ player, item: player.weapon });
     assert.match(player.messages[0], /9,000 charges remaining, and 1% progress/);
+});
+
+test('a kept charge with extra charges given back (combat:consume-charge extra) adds them, up to 20,000', () => {
+    onEmit = (name, payload) => { if (name === 'combat:consume-charge') { payload.skip = true; payload.extra = 2; } };
+    try {
+        const player = wielder(I.BOW_OF_FAERDHINEN, { key: BOW_KEY, value: { charges: 100, used: 5 } });
+        ammoHandlers[0].decrementAmmo(player, null, 1);
+        assert.deepEqual(player.weapon.getMetaValue(BOW_KEY), { charges: 102, used: 5 });
+        player.weapon.setMetaValue(BOW_KEY, { charges: 19999, used: 5 });
+        ammoHandlers[0].decrementAmmo(player, null, 1);
+        assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 20000);
+    } finally {
+        onEmit = null;
+    }
 });

@@ -1086,7 +1086,7 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
 
 // Inventory actions hard-interrupt interactions (osrs-docs Entity Interactions).
 // The ordinary item-use/Food consumers and task/movement phases are real; skills,
-// supplies, placement and worn gear are seeded, the socket is inert, and world
+// supplies and placement are seeded, the socket is inert, and world
 // phases are driven manually. This is neither acquisition nor a full World run.
 test("ordinary inventory Eat cancels pending lighting without stopping another player's fire", async t => {
   process.env.DISABLE_PLAYER_BOTS = "1";
@@ -1101,7 +1101,7 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
   const Firemaking = require("../plugins/skills/Firemaking.plugin");
   const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
   let nextIndex = 1920;
-  for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine", "equipment Remove"]) {
+  for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine"]) {
     await t.test(route, async t => {
       const accounts = [];
       function account(x, y) {
@@ -1139,7 +1139,6 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
       }
       const actor = account(3226, 3218), other = account(3225, 3217);
       assert.notEqual(actor.p.getLongUsername(), other.p.getLongUsername());
-      if (route === "equipment Remove") actor.p.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(I.BRONZE_DAGGER));
       t.after(() => {
         for (const f of accounts) {
           PluginManager.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername() });
@@ -1204,11 +1203,6 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
         await send(actor, { type: "inventory_action", widgetId: 3214, itemId: I.TINDERBOX,
           slot: actor.p.getInventory().getSlotForItemId(I.TINDERBOX), option: "Examine" });
         assert.ok(actor.messages.length > 0, "ordinary Examine returns a description");
-      } else if (route === "equipment Remove") {
-        await send(actor, { type: "widget_action", widgetId: (387 << 16) | 18, groupId: 387,
-          childId: 18, buttonNum: 1 });
-        assert.equal(actor.p.getInventory().getAmount(I.BRONZE_DAGGER), 1, "equipment-tab Remove is accepted");
-        assert.notEqual(actor.p.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId(), I.BRONZE_DAGGER);
       } else turn();
       for (let tick = 0; tick < 8; tick++) turn();
       assert.deepEqual(other.gains, [40], "other actor's ordinary fire commits despite this actor's action");

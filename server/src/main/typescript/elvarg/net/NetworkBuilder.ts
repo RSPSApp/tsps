@@ -1665,6 +1665,8 @@ export class ClientConnection {
       && ItemDefinition.forId(packet.itemId).getEquipmentType().getSlot() >= 0) {
       // As the left-click route refuses (ItemActionPacketListener): no gear swap mid-teleport or while dead.
       if (player.isTeleportingReturn() || player.getHitpoints() <= 0) return;
+      // Inventory item actions clear the current interaction before equip checks.
+      player.clearPendingAction();
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
       return;
     }

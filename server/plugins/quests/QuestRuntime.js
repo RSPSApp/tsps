@@ -282,6 +282,22 @@ function journalText(line) {
 }
 
 /**
+ * The journal widgets a quest's guide reads, for a snapshot with no client attached. Live sends
+ * these when the journal opens (openJournal); a headless evaluation never opens it, so a guide
+ * whose conditions are WidgetTextRequirements (Clock Tower's sync, its cog steps) would see
+ * nothing and report the route unsupported.
+ */
+function journalWidgets(quest, player) {
+  // A quest with no journal of its own has nothing for a guide to read; leave the snapshot alone.
+  if (typeof quest.buildJournal !== "function") return [];
+  const widgets = [{ id: (JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, text: `<col=7f0000>${quest.name}</col>` }];
+  journalLines(quest, player).forEach((line, index) => {
+    widgets.push({ id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), text: journalText(line) });
+  });
+  return widgets;
+}
+
+/**
  * How the overview says the quest starts, after "I can start this quest by": from the data file
  * (Wiki journal transcripts and live captures), else from the quest's own not-started journal
  * line, which may wrap over several lines. Null when neither has one.
@@ -900,6 +916,7 @@ function giveReward(player, itemId, amount = 1) {
 module.exports = {
   openBook,
   openIndexedBook,
+  journalWidgets,
   QUEST_POINTS_VARP,
   QUEST_POINTS_ATTRIBUTE,
   EXPERIENCE_WITHHELD_ATTRIBUTE,

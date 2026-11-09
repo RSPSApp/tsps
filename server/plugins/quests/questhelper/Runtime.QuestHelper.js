@@ -2,6 +2,7 @@
 const {randomUUID}=require('node:crypto');
 const {ChunkedPluginMessageAssembler,encodeChunkedPluginMessage}=require('./Chunks.QuestHelper');
 const {tutorialResult}=require('./Tutorial.QuestHelper');
+const {journalWidgets}=require('../QuestRuntime');
 const validSession=s=>typeof s==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(s);
 const record=v=>v&&typeof v==='object'&&!Array.isArray(v);
 // Quest Helper settings forwarded to the engine: flat upstream keys with boolean or colour values.
@@ -192,6 +193,16 @@ class QuestHelperRuntime {
   const location=player.getLocation();snapshot.localPlayer={...raw.localPlayer,name:player.getUsername(),x:location.getX(),y:location.getY(),plane:location.getZ()};snapshot.plane=location.getZ();
   const delivered=Number(player.getAttribute('cooks-assistant:delivered-ingredients'))||0;
   snapshot.dialogueHistory=questKey==='cooks_assistant'?["Here's a bucket of milk.","Here's a fresh egg.","Here's a pot of flour."].filter((_,bit)=>(delivered&(1<<bit))!==0):[];
+  // The quest journal is built client-side, so a headless snapshot has none of its text. Guides
+  // that sync on the journal (Clock Tower and 46 others) read it through WidgetTextRequirement;
+  // give them the journal the player would see rather than a route they cannot resolve.
+  const journalQuest=this.getQuests().find(q=>q.key===questKey);
+  const journal=journalQuest?journalWidgets(journalQuest,player):[];
+  if(journal.length){
+   const widgets=new Map((Array.isArray(snapshot.widgets)?snapshot.widgets:[]).map(widget=>[widget.id,widget]));
+   for(const widget of journal)widgets.set(widget.id,widget);
+   snapshot.widgets=[...widgets.values()];
+  }
   return snapshot;
  }
 }

@@ -45,6 +45,10 @@ export class HitQueue {
             return;
         }
 
+        // NPC attacks queued before this turn read the protection prayer now, after this tick's
+        // clicks (CombatFactory.addPendingHit), whenever they land; held or not.
+        for (const { hit } of this.pendingHits) CombatFactory.applyProtectionPrayer(hit);
+
         // Wiki: Animation stall. A full stall queues hits up on the player and delivers them only
         // once the action completes. The hold is read here, at impact, rather than when the hit was
         // queued: a shot already in the air when the swing starts must still wait for it, and
@@ -106,6 +110,11 @@ export class HitQueue {
     private static incomingFromOther(damage: HitDamage, owner: Mobile): boolean {
         const source = damage.getSource();
         return source != null && source !== owner;
+    }
+
+    /** Whether the owner's queue has already been drained this cycle (its turn has passed). */
+    hasProcessed(cycle: number): boolean {
+        return this.lastProcessedCycle === cycle;
     }
 
     /** Takes a hit off the owner's hitpoints, then runs effects that react to the result. */

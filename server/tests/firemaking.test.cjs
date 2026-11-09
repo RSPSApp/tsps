@@ -12,7 +12,7 @@ function emptyApi() {
     getObjectManager: () => ({ register() {}, deregister() {} }),
     getItemOnGroundManager: () => ({ registerLocation() {}, getGroundItem() {}, deregister() {} }),
     getWorld: () => ({ getObjects: () => [] }),
-    onCustomEvent() {}, onPlayerDisconnect() {}, onItemOnItem() {}, onItemOnGroundItem() {},
+    onCanUseItem() {}, onCustomEvent() {}, onPlayerDisconnect() {}, onItemOnItem() {}, onItemOnGroundItem() {},
     onGroundItemClick() {}, onItemOnObject() {}, onObjectInteraction() {}, log() {} };
 }
 
@@ -135,6 +135,7 @@ test("lighting, tending and expiry move a log from inventory to fire to ashes", 
     getObjectManager: () => ObjectManager,
     getItemOnGroundManager: () => ItemOnGroundManager,
     getWorld: () => World,
+    onCanUseItem: () => {},
     onCustomEvent: () => {},
     emitCustomEvent: () => {},
     emitFiremakingBlocked: () => false,
@@ -246,7 +247,7 @@ async function campfireHarness(t) {
       deregister: g => ground.splice(ground.indexOf(g), 1),
     }),
     getWorld: () => ({ getObjects: () => [...objects] }),
-    onCustomEvent() {}, emitCustomEvent() {}, emitFiremakingBlocked: () => false,
+    onCanUseItem() {}, onCustomEvent() {}, emitCustomEvent() {}, emitFiremakingBlocked: () => false,
     onPlayerDisconnect: h => hooks.disconnect = h, onItemOnGroundItem() {},
     onGroundItemClick: (_ids, _type, h) => hooks.groundLight = h,
     onItemOnItem: h => hooks.combine = h,
@@ -1081,4 +1082,160 @@ test("Otto teaches bow firemaking and remembers an owned oak exercise through sa
   const cancelled = actor(), initial = await talk(cancelled);
   await choose(cancelled, initial, LESSON); cancelled.player.closeInterruptibleInterfaces();
   assert.equal(level(cancelled), 0, "closing the instruction before its spoken end does not mark it taught");
+});
+
+// Inventory actions hard-interrupt interactions (osrs-docs Entity Interactions).
+// The ordinary item-use/Food consumers and task/movement phases are real; skills,
+// supplies, placement and worn gear are seeded, the socket is inert, and world
+// phases are driven manually. This is neither acquisition nor a full World run.
+test("ordinary inventory Eat cancels pending lighting without stopping another player's fire", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { decodeClientPackets } = require("../dist/net/protocol/ClientProtocol");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3226, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const Firemaking = require("../plugins/skills/Firemaking.plugin");
+  const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
+  let nextIndex = 1920;
+  for (const route of ["uninterrupted", "inventory Eat", "widget Eat", "Examine", "equipment Remove"]) {
+    await t.test(route, async t => {
+      const accounts = [];
+      function account(x, y) {
+        const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+          send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+        const p = new Player(new PlayerSession(channel));
+        p.setIndex(nextIndex++); p.setUsername("fmitem" + p.getIndex());
+        p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+        p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
+        p.setLocation(new core.Location(x, y, 0)); p.needsPlacement = false;
+        const anchor = p.getLocation().clone(), skills = p.getSkillManager();
+        skills.setExperience(core.Skill.FIREMAKING, 13034431);
+        skills.setMaxLevel(core.Skill.FIREMAKING, 99);
+        skills.setCurrentLevel(core.Skill.FIREMAKING, 99, false);
+        skills.setMaxLevel(core.Skill.HITPOINTS, 10); p.setHitpoints(5);
+        assert.ok(p.getLongUsername() > 0n);
+        assert.equal(p.getHitpoints(), 5);
+        assert.equal(p.getPrivateArea(), null);
+        assert.equal(Firemaking.isFireTileBlocked(anchor, null), false, "setup: ordinary tile admits a fire");
+        const c = new ClientConnection(channel); c.player = p;
+        const gains = [], messages = [];
+        const add = skills.addExperiences.bind(skills), message = p.sendMessage.bind(p);
+        t.mock.method(skills, "addExperiences", (skill, xp) => {
+          if (skill === core.Skill.FIREMAKING) gains.push(xp);
+          return add(skill, xp);
+        });
+        t.mock.method(p, "sendMessage", text => { messages.push(text); return message(text); });
+        for (const id of [I.TINDERBOX, I.LOGS, I.SHARK]) p.getInventory().add(new core.Item(id, 1), false);
+        const ground = () => core.World.getItems().filter(g => !g.isPendingRemoval()
+          && g.getOwner() === p.getUsername() && g.getPrivateArea() === null);
+        const fires = () => core.ObjectManager.objectsAt(anchor)
+          .filter(o => o.getId() === fireId && o.getPrivateArea() === null);
+        assert.equal(fires().length, 0);
+        const f = { p, c, anchor, gains, messages, ground, fires }; accounts.push(f); return f;
+      }
+      const actor = account(3226, 3218), other = account(3225, 3217);
+      assert.notEqual(actor.p.getLongUsername(), other.p.getLongUsername());
+      if (route === "equipment Remove") actor.p.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(I.BRONZE_DAGGER));
+      t.after(() => {
+        for (const f of accounts) {
+          PluginManager.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername() });
+          PluginManager.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+          f.p.setRegistered(false); core.TaskManager.cancelTasks(f.p); core.TaskManager.cancelTasks(f.p.getIndex());
+          for (const g of f.ground()) core.ItemOnGroundManager.deregister(g);
+          for (const o of f.fires()) core.ObjectManager.deregister(o, true);
+        }
+      });
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 32, "bounded actual task/movement phases");
+        for (const { p } of accounts) p.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        for (const { p, c } of accounts) {
+          c.processTurnPackets();
+          const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+          if (q.hasPendingWork()) q.process();
+          core.TaskManager.processWalkTo(p.getIndex());
+        }
+      };
+      const send = async (f, packet) => { await f.c.dispatch([packet]); turn(); };
+      const decodeAndSend = async (f, bytes, expected) => {
+        const packets = decodeClientPackets(bytes); assert.deepEqual(packets, [expected]);
+        await send(f, packets[0]);
+      };
+      async function start(f) {
+        const slot = f.p.getInventory().getSlotForItemId(I.TINDERBOX);
+        const logSlot = f.p.getInventory().getSlotForItemId(I.LOGS);
+        const body = Buffer.alloc(13); body.writeUInt16BE(slot, 0); body.writeUInt16BE(I.TINDERBOX, 2);
+        body[4] = 4; body.writeUInt16BE(logSlot, 9); body.writeUInt16BE(I.LOGS, 11);
+        await decodeAndSend(f, Buffer.concat([Buffer.from([241, body.length]), body]), {
+          type: "inventory_use_on", slot, itemId: I.TINDERBOX,
+          target: { kind: "inventory", slot: logSlot, itemId: I.LOGS },
+        });
+        assert.equal(Firemaking.isFiremakingActive(f.p), true, "real registered ordinary admission");
+        assert.equal(f.p.getInventory().getAmount(I.LOGS), 0);
+        assert.equal(f.ground().filter(g => g.getItem().getId() === I.LOGS).length, 1);
+        assert.equal(f.fires().length, 0); assert.deepEqual(f.gains, []);
+      }
+      await start(actor); await start(other);
+      const pile = actor.ground().find(g => g.getItem().getId() === I.LOGS);
+      assert.equal(pile.getItem().getAmount(), 1);
+      assert.equal(actor.p.getLocation().equals(actor.anchor), true, "still before successful step/commit");
+      assert.equal(actor.p.getCombat().isAnimationStalled(), false, "ordinary Eat is not animation-stalled");
+      const interrupted = route === "inventory Eat" || route === "widget Eat";
+      if (interrupted) {
+        const slot = actor.p.getInventory().getSlotForItemId(I.SHARK), hp = actor.p.getHitpoints();
+        if (route === "inventory Eat") {
+          await send(actor, { type: "inventory_action", widgetId: 3214, itemId: I.SHARK, slot, option: "Eat" });
+        } else {
+          const frame = Buffer.alloc(9); frame[0] = 25;
+          frame.writeInt32BE(149 << 16, 1); frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(I.SHARK, 7);
+          await decodeAndSend(actor, frame, { type: "widget_action", widgetId: 149 << 16,
+            groupId: 149, childId: 0, buttonNum: 2, slot, itemId: I.SHARK });
+        }
+        assert.equal(actor.p.getInventory().getAmount(I.SHARK), 0, "real Food accepts the inventory action");
+        assert.ok(actor.p.getHitpoints() > hp, "accepted Eat heals this actor");
+        assert.ok(actor.messages.includes("You eat the shark."));
+      } else if (route === "Examine") {
+        await send(actor, { type: "inventory_action", widgetId: 3214, itemId: I.TINDERBOX,
+          slot: actor.p.getInventory().getSlotForItemId(I.TINDERBOX), option: "Examine" });
+        assert.ok(actor.messages.length > 0, "ordinary Examine returns a description");
+      } else if (route === "equipment Remove") {
+        await send(actor, { type: "widget_action", widgetId: (387 << 16) | 18, groupId: 387,
+          childId: 18, buttonNum: 1 });
+        assert.equal(actor.p.getInventory().getAmount(I.BRONZE_DAGGER), 1, "equipment-tab Remove is accepted");
+        assert.notEqual(actor.p.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId(), I.BRONZE_DAGGER);
+      } else turn();
+      for (let tick = 0; tick < 8; tick++) turn();
+      assert.deepEqual(other.gains, [40], "other actor's ordinary fire commits despite this actor's action");
+      assert.equal(other.fires().length, 1);
+      assert.equal(other.ground().filter(g => g.getItem().getId() === I.LOGS).length, 0);
+      assert.equal(other.p.getInventory().getAmount(I.TINDERBOX), 1);
+      assert.equal(other.p.getInventory().getAmount(I.SHARK), 1);
+      assert.equal(Firemaking.isFiremakingActive(other.p), false);
+      assert.deepEqual(actor.gains, interrupted ? [] : [40], "pending lighting respects the accepted inventory interruption");
+      assert.equal(actor.fires().length, interrupted ? 0 : 1);
+      assert.equal(pile.isPendingRemoval(), !interrupted, "interrupted log remains the exact owned ground intermediate");
+      assert.equal(pile.getItem().getAmount(), 1);
+      assert.equal(actor.p.getInventory().getAmount(I.TINDERBOX), 1);
+      assert.equal(Firemaking.isFiremakingActive(actor.p), false);
+      if (interrupted) {
+        assert.equal(actor.p.getLocation().equals(actor.anchor), true, "cancelled attempt never queued its automatic step");
+        await send(actor, { type: "ground_item_action", itemId: I.LOGS, stackId: pile.getId(),
+          x: actor.anchor.getX(), y: actor.anchor.getY(), option: "Light", optionIndex: 4 });
+        assert.equal(Firemaking.isFiremakingActive(actor.p), true, "same actor starts the next ordinary Light");
+        assert.equal(pile.isPendingRemoval(), false); assert.deepEqual(actor.gains, []);
+        for (let tick = 0; tick < 8; tick++) turn();
+        assert.deepEqual(actor.gains, [40]); assert.equal(actor.fires().length, 1);
+        assert.equal(pile.isPendingRemoval(), true, "next ordinary Light burns the preserved log once");
+        assert.equal(actor.p.getInventory().getAmount(I.TINDERBOX), 1);
+        assert.equal(Firemaking.isFiremakingActive(actor.p), false);
+        assert.deepEqual(other.gains, [40], "repeated actor action does not duplicate bystander's reward");
+      }
+    });
+  }
 });

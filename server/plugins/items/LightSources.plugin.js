@@ -68,6 +68,11 @@ function assembleCandleLantern(event) {
   if (lanternSlot === candleSlot || inventory.getItems()[lanternSlot] !== lantern ||
       inventory.getItems()[candleSlot] !== candle || lantern?.getId() !== I.EMPTY_CANDLE_LANTERN ||
       candle?.getId() !== candleId || lantern.getAmount() !== 1 || candle.getAmount() !== 1) return;
+  // The lantern retains its own metadata; refusing restricted candles prevents their marks being lost.
+  if (candle.isPresetItem() || candle.isUntradeable() || candle.isUnbankable()) {
+    player.sendMessage("You cannot use that candle to make a lantern.");
+    return;
+  }
   if (player.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING) < recipe.level) {
     player.sendMessage(`You need ${recipe.level} Firemaking to do this.`);
     return;

@@ -495,3 +495,34 @@ test('active cache identifies the ordinary candles and lantern variants', () => 
   }
   assert.equal(core.CacheDefinitions.getItem(I.EMPTY_CANDLE_LANTERN).name, 'Empty candle lantern');
 });
+
+test('restricted selected candles cannot become unrestricted lanterns in either direction', async t => {
+  for (const mark of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    for (const candleFirst of [true, false]) {
+      const f = actor(t);
+      const lantern = item(I.EMPTY_CANDLE_LANTERN);
+      const candle = item(I.CANDLE).setMetaValue(mark, true);
+      f.inv.setItem(0, lantern); f.inv.setItem(1, candle); f.inv.setItem(2, item(I.CANDLE));
+      await useOn(f, candleFirst ? 1 : 0, candleFirst ? 0 : 1);
+      assert.deepEqual(carried(f), [I.EMPTY_CANDLE_LANTERN, I.CANDLE, I.CANDLE]);
+      assert.equal(f.inv.getItems()[0], lantern);
+      assert.equal(f.inv.getItems()[1], candle);
+      assert.equal(candle.getMetaValue(mark), true);
+      assert.ok(f.messages.length > 0);
+    }
+  }
+});
+
+test('assembly preserves restrictions on the selected lantern', async t => {
+  for (const mark of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    for (const candleFirst of [true, false]) {
+      const f = actor(t);
+      const lantern = item(I.EMPTY_CANDLE_LANTERN).setMetaValue(mark, true);
+      f.inv.setItem(0, lantern); f.inv.setItem(1, item(I.CANDLE));
+      await useOn(f, candleFirst ? 1 : 0, candleFirst ? 0 : 1);
+      assert.deepEqual(carried(f), [I.CANDLE_LANTERN]);
+      assert.equal(f.inv.getItems()[0], lantern);
+      assert.equal(lantern.getMetaValue(mark), true);
+    }
+  }
+});

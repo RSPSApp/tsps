@@ -9,14 +9,17 @@
  *   lands beside the statue at 2457,2849, so the two are one doorway in both directions. Ours: no
  *   capture of the statue's Enter was available, so the move is immediate, as the ladder's is,
  *   and it lands at the foot of that ladder.
- * - **The guild dog** (8041): Pet, added by Jagex on 28 April 2021 — the player says
- *   "Who's a good doggy!" over their head and a message answers "She gives you a look of
- *   appreciation." (Wiki: Dog (Myths' Guild)).
+ * - **The guild dog** (8041): Pet, added by Jagex on 28 April 2021 — the player kneels
+ *   (`human_pickupfloor`), says "Who's a good doggy!" over their head and a message answers
+ *   "She gives you a look of appreciation." (Wiki: Dog (Myths' Guild)). No capture of this dog's
+ *   own Pet exists; the animation and the line are what every recorded dog Pet shows
+ *   (226/01663, 227/01723, 231/00365) and what StrayDogs.plugin.js plays for the same dogs.
  */
 
 const BASEMENT = { x: 1937, y: 9008, z: 1 };
 const DOG_LINE = "Who's a good doggy!";
 const DOG_ANSWER = "She gives you a look of appreciation.";
+const PET_ANIMATION = "human_pickupfloor";
 
 let api = null;
 let core = null;
@@ -32,6 +35,8 @@ function enterBasement({ player }) {
  */
 function petDog({ player, npc }) {
   if (npc?.getId?.() !== core.NpcIdentifiers.DOG_3) return false;
+  const sequence = core.CacheDefinitions.getSeqId(PET_ANIMATION);
+  if (sequence != null) player.performAnimation(new core.Animation(sequence));
   player.forceChat(DOG_LINE);
   player.sendMessage(DOG_ANSWER);
   return true;
@@ -41,7 +46,7 @@ module.exports = {
   name: "MythsGuild",
   description: "The Myths' Guild's statue down to its basement, and the guild dog's Pet.",
   members: true,
-  _test: { enterBasement, petDog, BASEMENT, DOG_LINE, DOG_ANSWER },
+  _test: { enterBasement, petDog, BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION },
   register(pluginApi) {
     api = pluginApi;
     core = api.core;

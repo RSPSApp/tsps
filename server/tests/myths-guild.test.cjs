@@ -15,7 +15,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { Location } = require("../dist/game/model/Location");
 
 const plugin = require("../plugins/areas/MythsGuild.plugin");
-const { BASEMENT, DOG_LINE, DOG_ANSWER } = plugin._test;
+const { BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION } = plugin._test;
 
 let core, objects, npcs;
 
@@ -58,14 +58,21 @@ test("the Mythic Statue's Enter takes the player into the guild basement", () =>
   player.setRegistered(false);
 });
 
-test("petting the guild dog answers with the Wiki's two lines", () => {
+test("petting the guild dog kneels, then answers with the Wiki's two lines", () => {
   const player = makePlayer();
-  const chats = [], messages = [];
+  const chats = [], messages = [], animations = [];
   player.forceChat = (line) => chats.push(line);
   player.sendMessage = (message) => messages.push(String(message));
+  player.performAnimation = (animation) => animations.push(animation);
   const pet = npcs.get("Dog")?.Pet;
   assert.equal(typeof pet, "function", "Pet is registered for the dog");
   assert.equal(pet({ player, npc: { getId: () => core.NpcIdentifiers.DOG_3 } }), true, "the guild dog is ours");
+  // Every recorded dog Pet plays human_pickupfloor on the same tick as the line (226/01663,
+  // 227/01723, 231/00365); the name has to resolve in the cache, not just be a number.
+  const sequence = core.CacheDefinitions.getSeqId(PET_ANIMATION);
+  assert.equal(sequence, 827, `${PET_ANIMATION} is the kneeling animation`);
+  assert.deepEqual(animations.map((animation) => animation.getId?.() ?? animation),
+    [sequence], "the player kneels");
   assert.deepEqual(chats, [DOG_LINE], "the player says it over their head");
   assert.deepEqual(messages, [DOG_ANSWER], "and the chatbox answers");
   player.setRegistered(false);
@@ -77,7 +84,10 @@ test("another Dog is left to its own Pet handler", () => {
   player.forceChat = (line) => chats.push(line);
   player.sendMessage = (message) => messages.push(String(message));
   // 111 is the ordinary wandering dog; TheFinalDawn's guard dogs and every other variant too.
+  const animations = [];
+  player.performAnimation = (animation) => animations.push(animation);
   assert.equal(npcs.get("Dog").Pet({ player, npc: { getId: () => 111 } }), false, "declines");
+  assert.deepEqual(animations, [], "and does not kneel");
   assert.deepEqual(chats, [], "nothing is said");
   assert.deepEqual(messages, [], "nothing is sent");
   player.setRegistered(false);

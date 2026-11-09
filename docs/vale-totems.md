@@ -16,13 +16,12 @@ Status:
   - the carve menu coming back two ticks after each carving;
   - Ranulph's Vale Research Exchange (Trade, the cache omnishop, paid in research points);
   - the Sacraments of Ent Folk (Read: the captured book with the reader's own notes);
-  - Bale of flax (Unpack: 25 flax);
+  - Bale of flax (Unpack: 25 flax) and Dirty arrowtips (Clean: arrowheads by Fletching level);
   - `::entvisit` for testing.
 - **Not done:**
   - the ents walking their route, ent trails (double offerings and +15% xp for four actions, `ent_totems_trail_*`), and admiring beautiful scenery for run energy;
   - the fletching knife's faster actions, the Carpenter's outfit bonus, ent seeds and the clue nests;
-  - filterable ("spam") chat messages, which the server doesn't support yet;
-  - Dirty arrowtips (Clean): not captured yet.
+  - filterable ("spam") chat messages, which the server doesn't support yet.
 
 ## Layout
 
@@ -37,7 +36,7 @@ Status:
 | `Spirits.ValeTotems.js` | References to the actual shared spirit NPCs and effects sent to one viewer. |
 | `Icons.ValeTotems.js` | Invisible site NPCs and viewer-specific durability leaves derived from saved site state. |
 | `Commands.ValeTotems.js` | `::entvisit`. |
-| `Items.ValeTotems.js` | Bale of flax (Unpack). |
+| `Items.ValeTotems.js` | Bale of flax (Unpack) and Dirty arrowtips (Clean). |
 | `Book.ValeTotems.js` | The Sacraments of Ent Folk (Read, its Destroy warning) and the counts its notes give. |
 | `Shop.ValeTotems.js` | Ranulph's Trade: the `ent_totems_shop` omnishop and its research-point currency. |
 
@@ -126,6 +125,7 @@ Not captured: the wrong-animal warning, the "still working on it" reminders and 
 - **Claim:** a tick after arriving, `human_pickupfloor` with sound 2582 and "You collect 40 offerings." (an objectbox during the miniquest). **Inspect:** an objectbox with the offerings, "There are ten offerings here." / "There are 20 offerings here." (words up to ten).
 - **Exchange:** Trade opens the omnishop (`omnishop_main_init` [5458]); the info panel shows the items' examines; "You don't have enough Vale Research Points.".
 - **Sacraments of Ent Folk:** Read opens `indexed_book` (680), ten pages: contents, the reader's notes (totems built, rummages, research points) and Ranulph's notes. Destroy warns "Ranulph in Auburnvale can give you another.".
+- **Dirty arrowtips:** Clean turns one dirty arrowtip into one arrowhead at a time, on the click's tick, with no message, sound, animation or xp, and stops at the first arrowhead with no room (RSProx cleaning-arrowtips, rev 242, Fletching 59: 27 to 26 for a steel arrowhead with one free slot; 26 to 20 for 4 steel, an adamant and a mithril with two). With no free slot: "You need at least one free inventory space to clean those.". The arrowheads' weights per Fletching band (boostable) and the 50 a click are the Wiki's.
 - **Bale of flax:** Unpack takes one bale for 25 flax, "You unpack a bale of flax."; with fewer than 25 empty slots, "You need at least 25 empty spaces to unpack the flax.".
 - **Rummage:**
   - Uses 100 offerings every 2 ticks while there are enough. Each plays sound 1412 with "You rummage through the offerings..." and "You find some loot: 26 x Dirty arrowtips" ("You find some loot: Bird nest" for one), and gives a research point.

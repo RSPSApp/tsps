@@ -432,3 +432,52 @@ test("as captured: Ranulph's Trade opens the cache omnishop, paid in research po
   const described = custom("omnishop:describe", { player, shop: "ent_totems_shop", stock: "ent_totems_shop_stock_knife", description: "" });
   assert.equal(described.description, "A crafty looking knife.");
 });
+
+test("as captured (cleaning-arrowtips): Clean turns dirty arrowtips into arrowheads one for one until one has no room", () => {
+  const dirty = obj("dirty_arrowtips");
+  const filler = Array.from({ length: 24 }, () => item("maple_logs"));
+  const player = createPlayer({ fletching: 59, items: [item("knife"), item("ent_totems_loot", 76), { id: dirty, amount: 27 }, null, ...filler] });
+  const random = Math.random;
+  const rolls = (...values) => { const queue = values.map((v) => v / 8774); Math.random = () => queue.shift() ?? 0; };
+  try {
+    player.inventory[3] = item("maple_logs");
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.deepEqual(player.messages, ["You need at least one free inventory space to clean those."]);
+    assert.equal(player.getInventory().getAmount(dirty), 27);
+
+    // One free slot: a steel arrowhead, then a mithril one with no room for it (tick 48).
+    player.inventory[3] = null;
+    rolls(0, 5200);
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 26);
+    assert.equal(player.getInventory().getAmount(obj("steel_arrowheads")), 1);
+
+    // Two more free slots: four steel, an adamant and a mithril, then a rune one has no room (tick 64).
+    player.inventory[4] = null;
+    player.inventory[5] = null;
+    rolls(0, 100, 200, 300, 7100, 5200, 8200);
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 20);
+    assert.deepEqual(["steel_arrowheads", "adamant_arrowheads", "mithril_arrowheads", "rune_arrowheads"].map((name) => player.getInventory().getAmount(obj(name))), [5, 1, 1, 0]);
+    assert.equal(player.messages.length, 1, "no message for a clean");
+    assert.deepEqual(player.xp, {}, "and no xp");
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Wiki: a clean takes at most 50, and the arrowhead band follows the boosted Fletching level", () => {
+  const Items = require("../plugins/minigames/valetotems/Items.ValeTotems");
+  const dirty = obj("dirty_arrowtips");
+  const player = createPlayer({ fletching: 99, items: [{ id: dirty, amount: 80 }] });
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    assert.equal(Items.rollArrowhead(player), obj("dragon_arrowheads"));
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 30);
+    assert.equal(player.getInventory().getAmount(obj("dragon_arrowheads")), 50);
+  } finally {
+    Math.random = random;
+  }
+});

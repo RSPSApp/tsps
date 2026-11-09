@@ -59,7 +59,7 @@ function recordBests(player, ticks, points) {
   const before = { time: bestTime(player), points: bestPoints(player) };
   if (!before.time || ticks < before.time) player.setAttribute(BEST_TIME_ATTRIBUTE, ticks);
   if (points > before.points) player.setAttribute(BEST_POINTS_ATTRIBUTE, points);
-  return { time: bestTime(player), points: bestPoints(player) };
+  return { time: bestTime(player), points: bestPoints(player), newPoints: points > before.points };
 }
 
 /** 0.6 seconds a tick, shown as m:ss.cc like the captures' "3:25.80". */

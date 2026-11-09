@@ -415,7 +415,10 @@ function thornsExperience(player, attacker, damage) {
 }
 
 function reflect(player, attacker, damage) {
-  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setSource(player);
+  // Thorns counts as the wearer's damage, which is why it could stop a "magic damage only"
+  // Combat Achievement (Jagex, Further Leagues VI Changes); a ring of recoil's does not, and a
+  // monster killed by recoil alone drops nothing (Wiki: Ring of recoil).
+  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().markCreditsSource().setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
   return hit;
 }

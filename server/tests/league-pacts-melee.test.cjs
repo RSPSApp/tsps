@@ -758,7 +758,8 @@ test("Thorns alone holds an NPC's regeneration timer through real queued damage 
   assert.equal(npc.getHitpoints(), 97, "the real Thorns hit survives the same NPC turn's healing check");
   assert.equal(npc.getCombat().getAttacker(), holder);
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
-  assert.deepEqual(npc.getCombat().getRecentDamagers(), [], "PvM reflection keeps its existing credit policy");
+  assert.deepEqual(npc.getCombat().getRecentDamagers(), [holder],
+    "thorns is the wearer's damage, so it credits them with the kill (#3919)");
   for (let tick = 10001; tick <= 10033; tick++) {
     cycle(tick);
     npc.process();

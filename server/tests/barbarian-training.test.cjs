@@ -289,3 +289,43 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
   assert.equal(who.inv.count("brutal_2dose1attack"), 1);
   assert.equal(who.inv.getItems()[0].getMetaValue(core.Item.UNTRADEABLE_META), true, "the restricted copy stays");
 });
+
+test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the Ancient Cavern whirlpool", () => {
+  const who = player();
+  const varbit = (id) => who.sent.varbits.get(id) ?? 0;
+  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 });
+
+  let shown = pick(who, talk(who), T.TOPIC.firemaking);
+  assert.equal(varbit(T.VARBITS.firemaking), 1);
+
+  // Not an oak-log bow fire: nothing changes.
+  api.emitCustomEvent("firemaking:success", { player: who, itemId: core.ItemIdentifiers.LOGS, bow: true });
+  api.emitCustomEvent("firemaking:success", { player: who, itemId: core.ItemIdentifiers.OAK_LOGS, bow: false });
+  assert.equal(varbit(T.VARBITS.firemaking), 1);
+  api.emitCustomEvent("firemaking:success", { player: who, itemId: core.ItemIdentifiers.OAK_LOGS, bow: true });
+  assert.equal(varbit(T.VARBITS.firemaking), 2);
+
+  shown = talk(who);
+  assert.ok(shown.options.includes(T.TOPIC.firemakingDone));
+  assert.ok(!shown.options.includes(T.TOPIC.pyreShips), "pyre ships come after Otto acknowledges the fire");
+  shown = pick(who, shown, T.TOPIC.firemakingDone);
+  assert.equal(varbit(T.VARBITS.firemaking), 3);
+  assert.equal(varbit(T.VARBITS.pyreShips), 0, "the whirlpool is still shut");
+
+  // "I seek more knowledge." now offers the pyre ship question, whose reply names the whirlpool.
+  shown = pick(who, shown, "I seek more knowledge.");
+  assert.ok(shown.options.includes(T.TOPIC.pyreShips));
+  assert.ok(!shown.options.includes(T.TOPIC.firemakingDone));
+  shown = pick(who, shown, T.TOPIC.pyreShips);
+  assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
+  assert.equal(varbit(T.VARBITS.pyreShips), 1);
+  // It stays on offer and replays the explanation, leaving the varbit at 1.
+  shown = pick(who, talk(who), T.TOPIC.pyreShips);
+  assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
+  assert.equal(varbit(T.VARBITS.pyreShips), 1);
+
+  // The whirlpool's own requirements are exactly these two varbits.
+  const gate = require("fs").readFileSync(require.resolve("../plugins/world/data/loc-teleport-sync.json"), "utf8");
+  assert.match(gate, /"varbit": ?3759, ?"atLeast": ?3/);
+  assert.match(gate, /"varbit": ?3764, ?"atLeast": ?1/);
+});

@@ -2240,6 +2240,16 @@ test('RFD kitchen door enters and leaves the same dining dimension as the large 
   assert.ok(player.getLocation().getX() > 3000, 'from the real dining room the kitchen door still leads to the kitchen');
 });
 
+test('RFD kitchen door is an ordinary door again once the quest is complete', async t => {
+  const f = rfdFeastFixture(t, { historical: true }), { player } = f;
+  f.quest.setStage(player, 5);
+  player.setLocation(new core.Location(3207, 3216));
+  await f.click(core.CacheDefinitions.getLocId('hundred_lumbridge_door'), 3207, 3217);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3207, 3217],
+    'the kitchen door is walked through like any door, not a portal into the dimension');
+  assert.equal(player.getPrivateArea(), null);
+});
+
 test('RFD dining dimension shows the cache frozen-room barrier and the Culinaromancer rings', async t => {
   const f = rfdFeastFixture(t, { historical: true }), { player } = f;
   player.setAttribute('recipe-for-disaster:rescues', 17);

@@ -3318,7 +3318,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     // The kitchen door leads into the dimension only from the kitchen; from the real dining room
     // it is still the way into the kitchen.
     const fromKitchen = (player.getLocation()?.getY() ?? 0) <= KITCHEN_EXIT.y;
-    const lumbridgeDoor = DINING_LARGE_DOORS.has(objectId) || (objectId === DINING_KITCHEN_DOOR && fromKitchen);
+    // After the quest the kitchen door is an ordinary door again; only the large doors keep the way in.
+    const lumbridgeDoor = DINING_LARGE_DOORS.has(objectId)
+      || (objectId === DINING_KITCHEN_DOOR && fromKitchen && !quest.isComplete(player));
     if (!inside && !(lumbridgeDoor && stage(player) >= STAGE_OPENING_COMPLETE)) return;
     if (recoverOpeningFeast(player)) syncRescueQuestVarbits(player);
     event.handled = true;

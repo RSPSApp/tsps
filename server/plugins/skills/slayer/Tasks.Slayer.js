@@ -15,6 +15,8 @@
  *   task's areas (varp slayer_area).
  * - A kill counts when the NPC counts for the task (Data.npcCountsFor); Konar's must be in her
  *   area, Krystilia's in the Wilderness. Slayer XP is the monster's hitpoints.
+ * - Content may offer a choice of tasks with a kill count the player picks (Offer.Slayer.js,
+ *   "slayer:task-offer": a league relic); the pick comes here (assignPicked).
  * - Mortimer offers a choice of tasks instead (Choice.Slayer.js); the chosen one comes here
  *   (assignChosen) with its modifier (varbits slayer_modifier_id, _value, _negative): Slayer
  *   points on completion, a longer or shorter task, more clue scrolls, more superior uniques
@@ -245,18 +247,30 @@ function assign(player, master, random = Math.random) {
   const repeat = previous && hasSlayerCape(player, true) && random() < CAPE_REPEAT_CHANCE;
   const entry = repeat ? previous : weightedPick(choices, random);
   const bossId = entry.task.id === Data.BOSS_TASK_ID ? rollBoss(player, random) : 0;
-  const area = master.locations ? pickArea(entry, random) : null;
-  const { task, amount } = setTask(player, master, entry, bossId, area, null, random);
-  const name = task.displayName;
-  const line = area
-    ? `You are to bring balance to ${amount} ${name} ${area.text}.`
-    : `Your new task is to kill ${amount} ${name}.`;
-  return { line };
+  return { line: assignLine(player, master, entry, bossId, null, random) };
 }
 
-/** One of the boss tasks the player qualifies for, by boss id. */
-function rollBoss(player, random = Math.random) {
-  const bosses = bossChoices(player);
+/**
+ * Sets the task (Konar's with one of its areas) and returns the master's line for it. `amount`
+ * is a kill count the player chose (Offer.Slayer.js); without it the count is rolled.
+ */
+function assignLine(player, master, entry, bossId, amount, random) {
+  const area = master.locations ? pickArea(entry, random) : null;
+  const set = setTask(player, master, entry, bossId, area, null, random, amount);
+  const name = set.task.displayName;
+  return area
+    ? `You are to bring balance to ${set.amount} ${name} ${area.text}.`
+    : `Your new task is to kill ${set.amount} ${name}.`;
+}
+
+/** A task the player picked from an offer (Offer.Slayer.js), with the kill count they chose; returns the master's line. */
+function assignPicked(player, master, entry, bossId, amount, random = Math.random) {
+  return assignLine(player, master, entry, bossId, amount, random);
+}
+
+/** One of the boss tasks the player qualifies for (and `allowed` lets through), by boss id. */
+function rollBoss(player, random = Math.random, allowed = null) {
+  const bosses = bossChoices(player).filter(([, task]) => !allowed || allowed(task));
   return bosses.length ? bosses[Math.floor(random() * bosses.length)][0] : 0;
 }
 
@@ -274,10 +288,10 @@ function rollAmount(player, entry, bossId, random) {
  * the base roll set (live sends the base count, then the changed one; the original count stays
  * the base roll).
  */
-function setTask(player, master, entry, bossId, area, chosenModifier, random) {
+function setTask(player, master, entry, bossId, area, chosenModifier, random, chosenAmount = null) {
   player.setAttribute(PREVIOUS_TASK_ATTRIBUTE, entry.task.id);
   const task = bossId ? Data.get().bosses.get(bossId) ?? entry.task : entry.task;
-  const base = rollAmount(player, entry, bossId, random);
+  const base = Number.isInteger(chosenAmount) && chosenAmount > 0 ? chosenAmount : rollAmount(player, entry, bossId, random);
   if (chosenModifier) {
     State.update(player, {
       slayer_modifier_id: chosenModifier.id,
@@ -594,6 +608,8 @@ module.exports = {
   killBoost,
   assign,
   assignChosen,
+  assignPicked,
+  bossChoices,
   eligible,
   blockedTaskIds,
   weightedPick,

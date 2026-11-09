@@ -32,13 +32,14 @@ function load(player) {
 
 /** One attempt's bait: the vessel empties, then reloads if karambwanji are left. */
 function useBait(player) {
-  const { empty, baited } = ids();
+  const { empty, baited, bait } = ids();
   const inventory = player.getInventory();
   const slot = inventory.getSlotForItemId(baited);
   if (slot < 0) return;
-  inventory.setItem(slot, new core.Item(empty, 1));
+  const refill = inventory.contains(bait);
+  if (refill) inventory.deleteNumber(bait, 1);
+  inventory.setItem(slot, new core.Item(refill ? baited : empty, 1));
   inventory.refreshItems();
-  load(player);
 }
 
 function attach(api) {

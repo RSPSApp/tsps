@@ -105,6 +105,7 @@ public final class SnapshotClient {
                 case "isClientThread" -> true;
                 case "getGameState" -> GameState.LOGGED_IN;
                 case "getLocalPlayer" -> player;
+                case "macroExpand" -> macroExpand((String) a[0]);
                 case "getTopLevelWorldView", "getWorldView" -> world;
                 case "getScene" -> scene;
                 case "getBaseX" -> number("baseX");
@@ -372,6 +373,19 @@ public final class SnapshotClient {
 
   int number(String key) {
     return required(key).getAsInt();
+  }
+
+  /**
+   * RuneLite's Client.macroExpand, which WidgetTextRequirement runs over every widget it reads.
+   * Only %USERNAME% is meaningful here; anything else is left as written rather than blanked.
+   */
+  String macroExpand(String text) {
+    if (text == null) return null;
+    JsonObject local = state.has("localPlayer") ? state.getAsJsonObject("localPlayer") : null;
+    String name = local != null && local.has("name") && !local.get("name").isJsonNull()
+        ? local.get("name").getAsString()
+        : "";
+    return text.replace("%USERNAME%", name);
   }
 
   JsonArray array(String key) {

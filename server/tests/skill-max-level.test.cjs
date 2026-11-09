@@ -1016,7 +1016,7 @@ test("every level-up message is player-facing text with no wiki markup left", ()
       for (const entry of entries) {
         total++;
         const text = typeof entry === "string" ? entry : entry.text;
-        if (typeof entry !== "string" && !entry.when) offenders.push(`${skill} ${level}: conditional entry with no condition`);
+        if (typeof entry !== "string" && !entry.when && !entry.items) offenders.push(`${skill} ${level}: object entry with neither condition nor items`);
         if (!text || !text.trim()) offenders.push(`${skill} ${level}: empty message`);
         else if (/\{\{|\}\}|\[\[|\]\]|'''?/.test(text)) offenders.push(`${skill} ${level}: ${text}`);
       }
@@ -1118,10 +1118,16 @@ test("as captured: a Sailing unlock box shows the level's pictures beside its te
     assert.equal(double.constructor.name, "DoubleItemStatementDialogue");
     assert.deepEqual(double.getItemIds(), [objId("sailing_skillguide_keel_iron"), objId("sailing_charting_current_duck")]);
 
-    // A level with no pictures listed keeps the plain message box.
+    // A level not listed in the pictures file uses the generated messages' item.
     const [hDef, pDef] = levelUp(Skill.DEFENCE, 39, 40);
     hDef.onInterfaceActionButton({ player: pDef });
-    assert.equal(boxes(pDef)[0].constructor.name, "StatementDialogue");
+    assert.equal(boxes(pDef)[0].constructor.name, "ItemStatementDialogue");
+    assert.equal(boxes(pDef)[0].getItemId(), 1127, "Rune platebody");
+
+    // A level with neither keeps the plain message box.
+    const [hPlain, pPlain] = levelUp(Skill.STRENGTH, 18, 19);
+    hPlain.onInterfaceActionButton({ player: pPlain });
+    assert.equal(boxes(pPlain)[0].constructor.name, "StatementDialogue");
 
     // A lamp over several levels: a box for each that unlocked something, in order.
     const [hLamp, pLamp] = levelUp(Skill.SAILING, 6, 10);
@@ -1162,6 +1168,39 @@ test("as captured: a Sailing unlock box shows the level's pictures beside its te
     assert.equal(hCb.onInterfaceActionButton({ player: pCb }), true);
     assert.deepEqual(counts(), [1, 0]);
   } finally { core.TaskManager.submit = submit; }
+});
+
+test("level-ups play the skill's jingle: the unlocks one only where the level unlocks something and the guide list is on", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const jingle = (skill, from, to, guideListDisabled = 0) => {
+    const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(20159, guideListDisabled);
+    p.sent.length = 0;
+    hooks.onPlayerLevelUp({ player: p, skill, oldLevel: from, newLevel: to });
+    return p.sent.filter(([type]) => type === "sendJingle").map(([, id]) => id);
+  };
+  assert.deepEqual(jingle(Skill.DEFENCE, 39, 40), [38], "Rune armour unlocks");
+  assert.deepEqual(jingle(Skill.DEFENCE, 40, 41), [37]);
+  assert.deepEqual(jingle(Skill.DEFENCE, 39, 40, 1), [37], "guide list off: the plain jingle");
+  assert.deepEqual(jingle(Skill.HITPOINTS, 48, 49), [47]);
+  assert.deepEqual(jingle(Skill.HITPOINTS, 49, 50), [48]);
+  assert.deepEqual(jingle(Skill.AGILITY, 9, 10), [28]);
+});
+
+test("a single unlock with a picture opens as an objectbox with its item", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+  const p = levelledPlayer(core);
+  p.getPacketSender().sendVarbit(4371, 1);
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.ATTACK, oldLevel: 4, newLevel: 5 });
+  assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+  const [first] = p.statements.at(-1).dialogues.values();
+  assert.equal(first.constructor.name, "ItemStatementDialogue");
+  assert.equal(first.getItemId(), 1207, "Steel dagger, resolved from the transcript's picture name");
+  assert.match(first.getText(), /Steel weapons/);
 });
 
 test("as captured: a combat level gained waits behind the skill's pop-up", () => {

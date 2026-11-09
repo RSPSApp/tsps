@@ -240,11 +240,35 @@ function resolveConfiguredItem(spec, magicPackage, allowed) {
   return id == null ? null : item(id, amount);
 }
 
+const COSMETIC_SWAPS = new Map(Object.entries(BOT_LOADOUT_DEFINITIONS.cosmetics?.swaps ?? {}).map(([base, variants]) => [
+  itemId(base, "cosmetics.swaps"), itemIds(variants, "cosmetics.swaps." + base),
+]));
+
+/** A rare bot wears up to cosmetics.maxSlots stat-identical cosmetic variants of its armour (gilded, trimmed, heraldic). */
+function applyCosmeticSwaps(items, canWear = () => true, rng = Math.random) {
+  const { chance = 0, maxSlots = 1 } = BOT_LOADOUT_DEFINITIONS.cosmetics ?? {};
+  if (rng() >= chance) return items;
+  const swappable = items.filter((entry) => COSMETIC_SWAPS.has(entry.getId()));
+  const swaps = new Set();
+  for (let n = 1 + Math.floor(rng() * maxSlots); n > 0 && swappable.length > swaps.size; n--) {
+    let entry;
+    do entry = choose(swappable, rng); while (swaps.has(entry));
+    swaps.add(entry);
+  }
+  return items.map((entry) => {
+    if (!swaps.has(entry)) return entry;
+    const id = choose(COSMETIC_SWAPS.get(entry.getId()).filter(canWear), rng);
+    return id == null ? entry : item(id);
+  });
+}
+
 function buildConfiguredEquipment(definition, magicPackage) {
   const preset = { getStats: () => definition.stats };
-  return Object.values(definition.equipment ?? {})
-    .map((spec) => resolveConfiguredItem(spec, magicPackage, (id) => canEquipPresetItem(preset, item(id))))
+  const canWear = (id) => canEquipPresetItem(preset, item(id));
+  const equipment = Object.values(definition.equipment ?? {})
+    .map((spec) => resolveConfiguredItem(spec, magicPackage, canWear))
     .filter((entry) => entry != null);
+  return applyCosmeticSwaps(equipment, canWear);
 }
 
 function buildConfiguredInventory(definition, magicPackage) {
@@ -497,5 +521,5 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
 module.exports = {
   applyGeneratedPvpLoadout,
   needsLoadoutRestore,
-  __testing: { buildGeneratedPreset, matchesHotspotCombatBand },
+  __testing: { applyCosmeticSwaps, buildGeneratedPreset, matchesHotspotCombatBand },
 };

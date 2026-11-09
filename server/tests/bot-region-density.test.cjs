@@ -17,10 +17,10 @@ before(async () => {
   require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
 });
 
-function setup(t, overrides, globalTarget = 2, pool = 40) {
+function setup(t, overrides, globalTarget = 2, pool = 40, regions) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let update;
-  let snapshot = { radius: 0, regions: [50, 51, 52].map(regionX => ({ key: `0:${regionX}:57`, regionX, regionY: 57, z: 0 })) };
+  let snapshot = { radius: 0, regions: regions ?? [50, 51, 52].map(regionX => ({ key: `0:${regionX}:57`, regionX, regionY: 57, z: 0 })) };
   const api = { core: PluginManager.getCoreApi(), getWorld: () => World,
     getRegionManager: () => RegionManager, log() {} };
   const registry = createBotRegistry({
@@ -70,6 +70,20 @@ test('regional targets preserve global fallback and reserve queued real Players 
   assert.equal(h.count('0:50:57'), 1);
   assert.equal(h.count('0:52:57'), 2);
   assert.equal(new Set(h.registry.entries.map(e => e.player.getUsername())).size, h.registry.entries.length);
+});
+
+test('PvP-world roamers stay out of the Bounty Hunter crater', t => {
+  const { WORLD_ZONE_BOUNDARIES } = require('../dist/game/definition/WorldDefinition');
+  const { Boundary } = require('../dist/game/model/Boundary');
+  const pvp = WORLD_ZONE_BOUNDARIES.pvp;
+  const saved = [...pvp];
+  pvp.push(new Boundary(0, 0x3fff, 0, 0x3fff, 0)); // a PvP world's map-wide zone
+  t.after(() => { pvp.length = 0; pvp.push(...saved); });
+  const regions = [{ key: '0:50:57', regionX: 50, regionY: 57, z: 0 }, { key: '0:53:63', regionX: 53, regionY: 63, z: 0 }];
+  const h = setup(t, {}, 2, 40, regions);
+  h.update();
+  assert.equal(h.count('0:50:57'), 2);
+  assert.equal(h.count('0:53:63'), 0);
 });
 
 test('a positive regional target works with a zero global target', t => {

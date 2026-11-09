@@ -15,6 +15,9 @@ const {
 } = require("./PersistenceConstants.PlayerBots");
 const { SPAWNS_PER_BATCH, SPAWN_BATCH_DELAY_MS, runPaced } = require("./SpawnPacing.PlayerBots");
 
+// The crater keeps its own BhBot population; PvP-world roamers stay out of it.
+const BOUNTY_HUNTER_ARENA = require("../../minigames/bountyhunter/data/crater.json").arena;
+
 const { generateBotName } = require("../lib/BotNames.PlayerBots");
 const { normalizeRegionDensity } = require("../behaviours/pvp/RegionDensity.PlayerBots");
 
@@ -300,6 +303,10 @@ function createBotRegistry(options) {
   function regionIntersectsWilderness(region) {
     const bounds = createRegionBounds(region);
     if (!bounds) {
+      return false;
+    }
+    const a = BOUNTY_HUNTER_ARENA;
+    if (bounds.z === 0 && bounds.minX <= a.maxX && bounds.maxX >= a.minX && bounds.minY <= a.maxY && bounds.maxY >= a.minY) {
       return false;
     }
     return Wilderness.intersectsArea(

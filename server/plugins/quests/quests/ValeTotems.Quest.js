@@ -173,9 +173,15 @@ module.exports = function registerValeTotemsQuest(api) {
     sender.sendVarbit(DECORATE_CHAT_VARBIT, chatFlag(player, DECORATE_CHAT_ATTRIBUTE) ? 1 : 0);
   }
 
-  /** Before the miniquest, site 1 shows the old totem the intro breaks. */
+  /**
+   * Before the miniquest, site 1 shows the old totem the intro breaks. Only on an empty site:
+   * the minigame was open without the quest once, so a stage-0 save can hold its own site 1
+   * totem or an unclaimed pile, which stay as they are (the intro's break still clears them).
+   */
   function showIntactTotem({ player }) {
     if (!player || player.isPlayerBot?.() === true || quest.getStage(player) !== 0) return;
+    const { wood, points } = siteTotem(player);
+    if (wood !== 0 || points !== 0) return;
     setSite(player, INTACT_TOTEM);
   }
 

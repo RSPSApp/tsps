@@ -419,3 +419,17 @@ test("as captured: ents pass the quest's totem by until the miniquest is complet
   Ents.visitAll(player);
   assert.equal(State.totem(player, SITE).decay, 3, "after the miniquest it is an ordinary site");
 });
+
+test("a stage-0 save's own site 1 totem and unclaimed pile survive login", () => {
+  const player = createPlayer();
+  State.erect(player, SITE, 3);
+  State.set(player, SITE, { points: 12 });
+  for (const handler of hooks.login) handler({ player });
+  assert.equal(State.totem(player, SITE).wood, 3, "the player's maple totem stays");
+  assert.equal(State.totem(player, SITE).points, 12, "and so does the pile");
+
+  const piled = createPlayer();
+  State.set(piled, SITE, { points: 7 });
+  for (const handler of hooks.login) handler({ player: piled });
+  assert.deepEqual([State.totem(piled, SITE).wood, State.totem(piled, SITE).points], [0, 7], "a pile alone isn't covered by the old totem");
+});

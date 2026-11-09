@@ -287,3 +287,23 @@ test("Outer Fortis Herblore table imports only its exact ordinary pair and prese
  const legacy=[{id:995,location:{x:3000,y:3000,z:0},amt:2,respawn:30}];const r=importSpawns(source(herbloreTable),legacy);assert.deepEqual(r.definitions.slice(0,1),legacy);assert.deepEqual(r.definitions.slice(1).map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members]),[[233,1667,3068,0,1,100,true],[227,1668,3068,0,1,100,true]]);assert.deepEqual(importSpawns(source(herbloreTable),r.definitions).definitions,r.definitions);
  const held=herbloreTable.flatMap(r=>[{...r,x:r.x+1},{...r,id:r.id+1},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99},{...r,location:"unknown"},{...r,unresolved_reasons:["conditional"]}]);assert.equal(importSpawns(source(held),[]).definitions.length,0);assert.throws(()=>importSpawns(source([{...herbloreTable[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
 });
+
+test("Fortis items and Corsair Cove coins keep their source floor, membership and timer", () => {
+  const glass = row({ page: "Beer glass", id: 1919, x: 1673, y: 3155, plane: 1,
+    location: "[[Civitas illa Fortis]] - [[Sunrise Palace]] ({{FloorNumber|uk=1}})", members: true, quantity: 1 });
+  const coin = row({ page: "Coins", id: 995, x: 2012, y: 8994,
+    location: "[[Corsair Cove Dungeon]]", members: false, quantity: 1 });
+  const result = importSpawns(source([
+    glass, coin, { ...glass, plane: 0 }, { ...glass, x: 1674 },
+    { ...coin, members: true }, { ...coin, quantity: 3 }, { ...coin, location: "[[King Black Dragon Lair]]" },
+  ]), []);
+  assert.deepEqual(result.definitions.map((d) => [d.id, d.location.z, d.amt, d.respawn, d.members === true]), [
+    [1919, 1, 1, 100, true], [995, 0, 1, 100, false],
+  ]);
+  const installed = JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json", import.meta.url), "utf8"));
+  for (const expected of result.definitions) assert.equal(installed.filter((d) =>
+    d.id === expected.id && d.location.x === expected.location.x && d.location.y === expected.location.y
+    && d.location.z === expected.location.z && d.amt === expected.amt && d.respawn === expected.respawn
+    && d.members === expected.members).length, 1);
+  assert.deepEqual(importSpawns(source([glass, coin]), result.definitions).definitions, result.definitions);
+});

@@ -206364,6 +206364,11 @@
         {
           "type": "line",
           "speaker": "Crab",
+          "text": "We can make a great tune with this!"
+        },
+        {
+          "type": "line",
+          "speaker": "Crab",
           "text": "Oh no... I can't easily play 13 different shells on my own, but if I only play one... I won't stand out enough for her to see me!"
         },
         {
@@ -208485,7 +208490,7 @@
       ],
       "crab-hunting-after-finding-all-six-leaders-to-join-practise": [
         {
-          "player": "Unless I really like talking to crabs, I've probably found enough leaders. I could go back to see how the practise is going."
+          "player": "Unless I really like talking to crabs, I've probably found enough leaders. I could go back to see how the practice is going."
         }
       ],
       "crab-hunting-after-finding-all-six-leaders-to-join-practise-talking-to-the-main-crab": [
@@ -208851,7 +208856,7 @@
         {
           "type": "line",
           "speaker": "Crab",
-          "text": "Somehow, yes. But anyways, we are done here. Thank you for coming to my demonstration."
+          "text": "Somehow, yes. But anyway, we are done here. Thank you for coming to my demonstration."
         },
         {
           "type": "line",

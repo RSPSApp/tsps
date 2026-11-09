@@ -10,6 +10,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { CombatSpells } = require("../dist/game/content/combat/magic/CombatSpells");
 const { Projectile } = require("../dist/game/model/Projectile");
+const { DamageFormulas } = require("../dist/game/content/combat/formula/DamageFormulas");
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -80,10 +81,14 @@ for (const [name, graphic] of Object.entries({
   assert.equal(played[0].getDelay(), 0);
 });
 
-for (const name of ["WIND_WAVE", "WATER_WAVE", "EARTH_WAVE", "FIRE_WAVE", "WIND_SURGE", "EARTH_SURGE"]) test(`${name} casts at hand height like the strikes`, () => {
-  assert.ok(CombatSpells[name].startGraphic().getHeight() >= 92);
+for (const [name, height] of Object.entries({
+  WIND_WAVE: 100, WATER_WAVE: 100, EARTH_WAVE: 100, FIRE_WAVE: 100,
+  WIND_SURGE: 92, WATER_SURGE: 92, EARTH_SURGE: 92, FIRE_SURGE: 92,
+})) test(`${name} casts at the restored height`, () => {
+  assert.equal(CombatSpells[name].startGraphic().getHeight(), height);
 });
 
 test("Tele Block declares no damage, so a player's cast cannot default to 1", () => {
   assert.equal(CombatSpells.TELEBLOCK.maximumHit(), 0);
+  assert.deepEqual(DamageFormulas.getMagicHitBounds({}, CombatSpells.TELEBLOCK), { minimum: 0, maximum: 0 });
 });

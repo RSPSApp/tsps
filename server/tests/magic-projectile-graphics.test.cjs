@@ -98,10 +98,10 @@ test("queued visual ownership is the original paid cast and target, even across 
   const f=fixture(t),old=f.context;
   f.next();assert.equal(f.spell.canCast(f.caster,true),true);
   const later=core.Spell.getCastContext(f.caster,f.spell);assert.notEqual(later,old);
-  assert.equal(f.spell.getNpcProjectileVisual(old,f.target).queued,true);
+  assert.equal(f.spell.getProjectileVisual(old,f.target).queued,true);
   const other=new core.NPC(4176,f.target.getLocation().clone());other.setIndex(f.target.getIndex());
-  assert.equal(f.spell.getNpcProjectileVisual(old,other),null,"index reuse cannot claim the visual");
-  assert.equal(f.spell.getNpcProjectileVisual(later,f.target),null,"later cast has no sent projectile yet");
+  assert.equal(f.spell.getProjectileVisual(old,other),null,"index reuse cannot claim the visual");
+  assert.equal(f.spell.getProjectileVisual(later,f.target),null,"later cast has no sent projectile yet");
   f.method.handleAfterHitEffects(f.hit);assert.equal(f.graphics.length,1,"old hit still suppresses its own duplicate");
 });
 test("a delayed graphic copy preserves height and priority without mutating the original",()=>{
@@ -136,7 +136,7 @@ test("an overlapping legacy shot whose encoded end precedes launch keeps the exi
 for(const accurate of[true,false])test(`a higher-priority NPC graphic keeps the ${accurate?"impact":"splash"} fallback when the cast-time visual is rejected`,t=>{
   const f=fixture(t,{accurate,configure:({target})=>target.performGraphic(new core.Graphic(369,core.GraphicHeight.LOW,core.Priority.HIGH))});
   assert.equal(f.target.getGraphic().getId(),369,"the higher-priority graphic still owns the cast tick");
-  assert.equal(f.spell.getNpcProjectileVisual(f.context,f.target).queued,false,"a rejected graphic must not suppress the later visual");
+  assert.equal(f.spell.getProjectileVisual(f.context,f.target).queued,false,"a rejected graphic must not suppress the later visual");
   f.land();
   assert.equal(f.target.getGraphic().getId(),accurate?f.spell.endGraphic().getId():core.MagicCombatMethod.SPLASH_GRAPHIC.getId());
   assert.equal(f.target.getGraphic().getDelay(),0,"the existing impact-time path remains available");

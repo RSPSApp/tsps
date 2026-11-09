@@ -38,7 +38,8 @@
  * Tele Block, Porazdir's energy ball and the Justiciar's shock wave, and a despawn timer ("if the
  * followers are not slain quick enough, they will despawn", no time given). A follower goes when it
  * dies, when its owner logs out or dies (Wiki: "If you're killed, you'll have to kill the follower
- * again"), and when the symbol's locations rotate ("the creatures have moved locations").
+ * again"), when the symbol's locations rotate ("the creatures have moved locations"), and, a TSPS
+ * choice, when its owner leaves the Wilderness, which frees its spawn point for other players.
  */
 const MageArenaII = require("./MageArenaII.MageArena");
 
@@ -55,6 +56,10 @@ const SUMMON_FIRST = 2;
 const SUMMON_EVERY = 6;
 const HEALER_HEAL = 5;
 const HEAL_INTERVAL_TICKS = 10;
+/** How often a follower checks that its owner is still in the Wilderness. */
+const WATCH_INTERVAL_TICKS = 5;
+/** The Wilderness above ground (the underground half starts at y 9920). */
+const UNDERGROUND_Y = 9920;
 const untradeableDrop = (name) => `<col=ef1020>Untradeable drop: ${name}</col>`;
 
 /** Each follower's recorded arrival and god-spell attack. */
@@ -168,6 +173,7 @@ function summon(player, follower, pointIndex, [x, y]) {
   if (!npc) return null;
   const combat = COMBAT[follower.key];
   active.set(npc, { player, follower, combat, attacks: 0, healers: new Set() });
+  every(WATCH_INTERVAL_TICKS, () => watch(npc));
   sound(npc, SPAWN_SOUND);
   if (follower.spawningId != null) npc.setNpcTransformationId(follower.spawningId);
   if (combat.spawnAnim != null) npc.performAnimation(new core.Animation(combat.spawnAnim));
@@ -177,6 +183,24 @@ function summon(player, follower, pointIndex, [x, y]) {
     if (player.isRegistered()) npc.getCombat().attack(player);
   });
   return npc;
+}
+
+function ownerInWilderness(player) {
+  const at = player.getLocation();
+  return player.isRegistered() && core.Wilderness.isInLocation(at) && at.getY() < UNDERGROUND_Y;
+}
+
+/**
+ * A follower goes once its owner has left the Wilderness, so its spawn point (one follower each,
+ * for every player) is free again. TSPS choice: the Wiki only says they "will despawn" if not
+ * slain quickly, with no time. Stops once the follower is gone or dying (followerDied).
+ */
+function watch(npc) {
+  const state = stateOf(npc);
+  if (!state || !npc.isRegistered() || npc.getHitpoints() <= 0) return false;
+  if (ownerInWilderness(state.player)) return true;
+  dismiss(npc, state);
+  return false;
 }
 
 function dismiss(npc, state) {
@@ -401,7 +425,7 @@ Object.assign(module.exports, {
   spawnTile,
   dismissFor,
   _test: {
-    COMBAT, SPAWN_RADIUS, active, stateOf, summon, dismiss, dismissFor, followerDied, chooseAttack, createCombatMethod, ballTile, landingTicks,
+    COMBAT, SPAWN_RADIUS, active, stateOf, summon, watch, dismiss, dismissFor, followerDied, chooseAttack, createCombatMethod, ballTile, landingTicks,
     godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
   },
 });

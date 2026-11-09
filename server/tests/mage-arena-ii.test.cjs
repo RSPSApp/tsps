@@ -242,6 +242,20 @@ test("a follower leaves with its owner", () => {
   assert.equal(npc.isRegistered(), false);
 });
 
+test("a follower goes when its owner leaves the Wilderness, freeing its point for others", () => {
+  const first = makePlayer({ components: 3 });
+  placeFollower(first, "zamorak", 1);
+  activate(first);
+  const [npc] = ownFollower(first, "zamorak");
+  first.setLocation(new core.Location(...BANK, 0));
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
+  assert.equal(npc.isRegistered(), false);
+  const second = makePlayer({ components: 3 });
+  placeFollower(second, "zamorak", 1);
+  activate(second);
+  assert.ok(ownFollower(second, "zamorak"), "the same point summons again");
+});
+
 test("only a follower's own god spell hurts it", () => {
   const player = makePlayer({ components: 6 });
   placeFollower(player, "saradomin", 2);

@@ -389,10 +389,11 @@ plugin.onGameTick();
     assert.equal(runtime.fill(o), false, "a long move with no teleport graphic is not a teleport landing");
 }
 now += 400;
-(plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 111 }); // a lever's graphic plays on arrival
+(plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 111 }); // a teleport cast right after a jump
+now += 900;
 {
     const o = new Float32Array(SHADER_FX_UNIFORM_FLOATS);
-    assert.equal(runtime.fill(o), false, "a teleport graphic right after a jump is that arrival's, not a wind-up");
+    assert.ok(runtime.fill(o) && o[FxSlot.STATUS + 2] > 0, "a teleport cast soon after a jump still winds up");
 }
 now += 5000;
 (plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 111 });
@@ -465,6 +466,15 @@ assert.equal(flashing(), false, "a snapshot's despawn and re-add is not a drop")
 drop("spawn", stack(5, 1, 9_000_000, 1, 5, serverTick - 50));
 settle();
 assert.equal(flashing(), false, "a stack that was made long ago is one you walked back to, not a drop");
+// The login snapshot arrives before the first tick message, when the client's tick is still 0.
+fresh();
+const loginTick = serverTick;
+serverTick = 0;
+drop("spawn", stack(10, 1, 9_000_000, 1, 10, 0));
+settle();
+serverTick = loginTick + 3;
+settle();
+assert.equal(flashing(), false, "your own stack in the login snapshot, before the first tick, is not a drop");
 
 // Dropping an item of your own: it leaves the inventory as the stack appears.
 fresh();
@@ -485,6 +495,14 @@ drop("spawn", stack(7, 1, 9_000_000, 1, 7));
 drop("spawn", stack(8, 1, 9_000_000, 1, 8));
 settle();
 assert.equal(flashing(), false, "a death pile is not loot");
+// Dropping the moment the plugin turns on: starting it records the inventory as a baseline.
+fresh();
+held[INV] = { 7: 1 };
+void (plugin as any).startUp();
+held[INV] = {};
+drop("spawn", stack(11, 1, 9_000_000, 1, 7));
+settle();
+assert.equal(flashing(), false, "dropping an item right after the plugin turns on is not loot");
 // A real drop: the inventory keeps what it had, even when it already holds the same item.
 fresh();
 held[INV] = { 7: 1 };

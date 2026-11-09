@@ -61,8 +61,6 @@ const FRESH_DROP_TICKS = 3;
  */
 const LOOT_SETTLE_TICKS = 2;
 const INVENTORY_HISTORY_TICKS = 3;
-/** A teleport graphic this soon after a jump belongs to that arrival (a lever), not to a new wind-up. */
-const LANDING_GRAPHIC_WINDOW_MS = 1500;
 
 /** A new stack of yours waiting to be told apart from your own drops. */
 interface PendingLoot {
@@ -134,7 +132,6 @@ export class ShaderFxPlugin extends Plugin {
     private lastSpec = -1;
     private levelTotal = -1;
     private lastX = -1;
-    private lastJumpAt = -1e9;
     private pendingLoot: PendingLoot[] = [];
     /** How many of each item the inventory and worn items held at each of the last few ticks, newest first. */
     private readonly inventoryHistory: Map<number, number>[] = Array.from({ length: INVENTORY_HISTORY_TICKS }, () => new Map());
@@ -178,6 +175,8 @@ export class ShaderFxPlugin extends Plugin {
         this.settings = this.readConfig();
         this.state.reset();
         this.resetBaselines();
+        // A baseline for the first drop, so dropping an item the moment the plugin turns on is not loot.
+        this.recordInventory();
         this.unsubscribers = [
             subscribeActorGraphics((event) => this.onGraphic(event)),
             subscribeActorHitsplats((event) => this.handleHitsplat(event)),
@@ -272,7 +271,6 @@ export class ShaderFxPlugin extends Plugin {
         const x = point.getX();
         const y = point.getY();
         if (this.lastX >= 0 && Math.max(Math.abs(x - this.lastX), Math.abs(y - this.lastY)) >= TELEPORT_TILES) {
-            this.lastJumpAt = now;
             if (this.state.teleportWinding(now)) this.state.teleported(now);
         }
         this.lastX = x;
@@ -295,8 +293,11 @@ export class ShaderFxPlugin extends Plugin {
         const replayed = now - (this.despawnedAt.get(stack.id) ?? -1e9) < SNAPSHOT_REPLAY_MS;
         if (replayed) return;
         if (stack.ownership !== OWNERSHIP_SELF && stack.ownership !== OWNERSHIP_GROUP) return;
-        // A stack that was not just created came back with a region snapshot or was left behind.
+        // A stack that was not just created came back with a region snapshot or was left behind. The
+        // tick is 0 until the first tick message arrives, and the login snapshot comes before it, so
+        // nothing that arrives then can be told from a drop and none of it counts.
         const tick = this.deps.currentTick?.();
+        if (tick !== undefined && !(tick > 0)) return;
         if (tick !== undefined && stack.createdTick !== undefined && tick - stack.createdTick > FRESH_DROP_TICKS) return;
         const quantity = Math.max(1, stack.quantity);
         if (this.pendingLoot.length < 32) {
@@ -326,7 +327,12 @@ export class ShaderFxPlugin extends Plugin {
             if (before - held >= loot.quantity) continue;
             this.state.lootDropped(loot.value, this.settings.lootFlashValue, now);
         }
-        // Rotate the history: the oldest map is refilled with this tick's counts.
+        this.recordInventory();
+    }
+
+    /** Remembers what the inventory and worn items hold now: the oldest history map is refilled. */
+    private recordInventory(): void {
+        const client = this.deps.client;
         const newest = this.inventoryHistory.pop()!;
         this.inventoryHistory.unshift(newest);
         newest.clear();
@@ -347,11 +353,7 @@ export class ShaderFxPlugin extends Plugin {
         // The target-side graphics of freezing and rooting spells are statuses, not casts.
         if (ICE_GRAPHICS.has(event.graphic)) return this.state.frozen(now);
         if (ENTANGLE_GRAPHICS.has(event.graphic)) return this.state.entangled(now);
-        if (TELEPORT_GRAPHICS.has(event.graphic)) {
-            // A graphic that plays on arrival (a lever) is not a wind-up for a landing that already happened.
-            if (now - this.lastJumpAt < LANDING_GRAPHIC_WINDOW_MS) return;
-            return this.state.teleportStarted(now);
-        }
+        if (TELEPORT_GRAPHICS.has(event.graphic)) return this.state.teleportStarted(now);
         // A ranged weapon's draw-back plays right with its projectile: not a spell.
         if (this.rangedWeapon() && now - this.lastProjectileAt < PROJECTILE_GRAPHIC_WINDOW_MS) return;
         this.state.cast(event.graphic, now, this.settings);
@@ -378,7 +380,6 @@ export class ShaderFxPlugin extends Plugin {
         this.lastSpec = -1;
         this.levelTotal = -1;
         this.lastX = this.lastY = -1;
-        this.lastJumpAt = -1e9;
         this.pendingLoot.length = 0;
         for (const counts of this.inventoryHistory) counts.clear();
     }

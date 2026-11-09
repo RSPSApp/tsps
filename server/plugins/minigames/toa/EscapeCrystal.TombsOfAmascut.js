@@ -73,7 +73,13 @@ function escape(player, raid) {
   if (raid.member(player).ghost || !usesUp(player)) return false;
   player.__toaEscaping = true;
   raid.leave(player, { teleport: true, arrived: () => { player.__toaEscaping = false; } });
+  player.sendMessage("Your escape crystal saves you and is destroyed in the process.");
   return true;
+}
+
+/** `escape-crystal:claimed`: a crystal in the tombs is this unit's (the shared EscapeCrystal plugin leaves it). */
+function claimed(query) {
+  if (query?.player && raidIn(query.player)) query.claimed = true;
 }
 
 /**
@@ -171,6 +177,7 @@ module.exports = function registerTombsEscapeCrystal(api) {
   api.onItemAction("Escape crystal", { Teleport: teleport });
   api.onItemOnPlayer(useOnPlayer);
   api.onCustomEvent("combat:damage-apply", damageApplied);
+  api.onCustomEvent("escape-crystal:claimed", claimed);
 };
 
 Object.assign(module.exports, { teleport, useOnPlayer, damageApplied, shielded, settingsOf, afkFires, ringFires, wears, usesUp });

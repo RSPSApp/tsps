@@ -161,6 +161,19 @@ test("task levels come from the NPC definitions; sub-tasks count by name", () =>
   assert.ok(Data.npcCountsFor(taskId("Bloodveld"), npcNamed("Mutated Bloodveld").getId(), "Mutated Bloodveld"));
 });
 
+test("Zombies count the wiki's undead variants by name, but not the Zombies Champion", () => {
+  const zombies = taskId("Zombies");
+  const birds = taskId("Birds");
+  const chicken = npcNamed("Undead chicken");
+  assert.ok(Data.npcCountsFor(zombies, chicken.getId(), "Undead chicken"), "undead chicken counts for Zombies");
+  assert.ok(Data.npcCountsFor(birds, chicken.getId(), "Undead chicken"), "undead chicken still counts for Birds");
+  assert.ok(Data.npcCountsFor(zombies, npcNamed("Zombie rat").getId(), "Zombie rat"));
+  assert.ok(Data.npcCountsFor(zombies, npcNamed("Vorkath").getId(), "Vorkath"));
+  assert.ok(Data.npcCountsFor(zombies, npcNamed("Zombie").getId(), "Zombie"));
+  assert.ok(!Data.npcCountsFor(zombies, npcNamed("Zombies Champion").getId(), "Zombies Champion"));
+  assert.equal(Data.taskLevel(zombies), 1);
+});
+
 test("an assignment sets the task varps and respects the Slayer level", () => {
   const player = createPlayer({ slayer: 1, combat: 126 });
   const result = Tasks.assign(player, master(3), () => 0.5);

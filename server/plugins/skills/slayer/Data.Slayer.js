@@ -200,7 +200,7 @@ function taskSlayerLevels(namedTaskNpcs) {
     const taskId = npcTaskId(id);
     if (taskId >= 0) add(taskId, id);
     for (const [namedTask, names] of namedTaskNpcs) {
-      if (names.has(type.name)) add(namedTask, id);
+      if (namedTask !== taskId && names.has(type.name)) add(namedTask, id);
     }
   }
   const levels = new Map();

@@ -11,6 +11,8 @@ const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
+const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+const { RegionManager } = require("../dist/game/collision/RegionManager");
 
 const Levers = require("../plugins/objects/Levers.plugin");
 
@@ -18,6 +20,7 @@ let core;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ObjectDefinition.init();
+  RegionManager.init();
   core = PluginManager.getCoreApi();
 });
 
@@ -94,13 +97,20 @@ function use(h, who, name, option, x, y, shape = 4, face = 0) {
   const definition = ObjectDefinition.forPlayer(objectId, who);
   const clickType = definition.getInteractions().indexOf(option) + 1;
   assert.ok(clickType > 0, `${name} shows ${option}`);
-  const object = new core.GameObject(objectId, new core.Location(x, y, 0), shape, face, null);
+  const object = mapLever(objectId, x, y)
+    ?? new core.GameObject(objectId, new core.Location(x, y, 0), shape, face, null);
   return h.hooks.Lever[option]({ player: who, objectId, object, definition, clickType, location: { x, y, z: 0 } });
 }
 
-/** The loc ids on (x, y) of a wall-decoration shape. */
+/** The cache map's own lever at (x, y), as a click hands it over, or null where there is none. */
+function mapLever(objectId, x, y) {
+  RegionManager.loadMapFiles(x, y, true);
+  return MapObjects.get(objectId, new core.Location(x, y, 0), null) ?? null;
+}
+
+/** The loc ids MapObjects (clipping, later clicks) holds on (x, y) in a wall-decoration shape. */
 function locsAt(x, y, shape) {
-  return ObjectManager.objectsAt(new core.Location(x, y, 0)).filter((o) => o.getType() === shape).map((o) => o.getId());
+  return (MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).filter((o) => o.getType() === shape).map((o) => o.getId());
 }
 
 /**
@@ -165,6 +175,10 @@ for (const [name, down, x, y, shape, face] of [
     const h = harness();
     const who = player();
     who.setAttribute("levers:skip-wilderness-warning", true);
+    const lever = mapLever(loc(name), x, y);
+    assert.ok(lever, `the map has ${name} at ${x},${y}`);
+    assert.deepEqual([lever.getType(), lever.getFace()], [shape, face], "shape and rotation as recorded");
+    assert.deepEqual(locsAt(x, y, shape), [loc(name)]);
     use(h, who, name, "Pull", x, y, shape, face);
     const seen = [];
     runTicks(h, who, 8, () => seen.push(locsAt(x, y, shape)));
@@ -176,7 +190,14 @@ for (const [name, down, x, y, shape, face] of [
     const downTicks = seen.map((ids, i) => ids.includes(downId) ? i + 1 : null).filter((t) => t !== null);
     assert.deepEqual(downTicks, [pullTick + 1, pullTick + 2, pullTick + 3, pullTick + 4], "down from the click until the landing");
     assert.equal(landTick, pullTick + 5);
-    assert.deepEqual(seen.at(-1), [loc(name)], "the lever is back up");
+    assert.deepEqual(seen.at(-1), [loc(name)], "the lever is back up, with no down loc left behind");
+    assert.ok(seen.slice(pullTick, pullTick + 4).every((ids) => ids.length === 1 && ids[0] === downId),
+      "only the down loc while it is down");
+    // Pulled again: still one lever and nothing piled up.
+    who.setLocation(new core.Location(x, y, 0));
+    use(h, who, name, "Pull", x, y, shape, face);
+    runTicks(h, who, 8);
+    assert.deepEqual(locsAt(x, y, shape), [loc(name)], "a second pull leaves just the lever");
     const lowered = h.tasks.find((task) => task.constructor.name === "TimedObjectReplacementTask");
     assert.ok(lowered && !lowered.isRunning(), "the swap has finished");
   });

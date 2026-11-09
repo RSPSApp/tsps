@@ -183,6 +183,53 @@ test('a runtime object removed while out of a player\'s scene is removed when th
     }
 });
 
+test('an in-place swap (a lever down and up) sends one add each way and is put right for a player who left', () => {
+    const scenePlayer = (inScene) => {
+        const packets = [];
+        return {
+            packets,
+            inScene,
+            getPrivateArea: () => null,
+            getSession() { return { isTileInScene: () => this.inScene }; },
+            getPacketSender: () => ({
+                sendObject: (object) => packets.push(['add', object.getId()]),
+                sendObjectRemoval: (object) => packets.push(['del', object.getId()]),
+            }),
+        };
+    };
+    const watcher = scenePlayer(true);
+    const originalForEach = World.forEachNetworkPlayer;
+    World.forEachNetworkPlayer = (consumer) => [watcher].forEach(consumer);
+    try {
+        // The Edgeville lever (shape 4) and its down loc, rsprox_transcripts/224/01444.txt.
+        const at = new Location(3090, 3475, 0);
+        RegionManager.loadMapFiles(3090, 3475, true);
+        const lever = MapObjects.get(26761, at, null);
+        assert.ok(lever, 'the map lever');
+        const shape4 = () => (MapObjects.mapObjects.get(MapObjects.getHash(3090, 3475, 0)) ?? [])
+            .filter((o) => o.getType() === 4).map((o) => o.getId());
+        const down = new GameObject(88, at.clone(), 4, 0, null);
+        ObjectManager.replaceInPlace(lever, down);
+        assert.deepEqual(watcher.packets, [['add', 88]], 'one loc_add_change, no removal first');
+        assert.deepEqual(shape4(), [88], 'the lever is out of MapObjects while down');
+
+        // The watcher leaves before it goes back up, then returns.
+        watcher.inScene = false;
+        watcher.packets.length = 0;
+        ObjectManager.replaceInPlace(down, lever);
+        assert.deepEqual(watcher.packets, []);
+        assert.deepEqual(shape4(), [26761], 'only the lever again');
+        watcher.inScene = true;
+        ObjectManager.onRegionChange(watcher, 3090 - 52, 3475 - 52);
+        assert.deepEqual(watcher.packets, [['add', 26761]], 'the lever is sent back up on return');
+        watcher.packets.length = 0;
+        ObjectManager.onRegionChange(watcher, 3090 - 52, 3475 - 52);
+        assert.deepEqual(watcher.packets, [], 'once');
+    } finally {
+        World.forEachNetworkPlayer = originalForEach;
+    }
+});
+
 test('owner objects resolve through normal loc lookup and only enter their owner scene', () => {
     const ownerPackets = [], otherPackets = [];
     const player = (packets) => ({

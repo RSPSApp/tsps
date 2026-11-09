@@ -23,15 +23,22 @@ export class TimedObjectReplacementTask extends Task {
 
     execute() {
         if (this.progressTick === 0) {
-            ObjectManager.deregister(this.original, !this.sameTile);
-            ObjectManager.register(this.temp, true);
+            this.swap(this.original, this.temp);
         } else if (this.progressTick >= this.ticks) {
-            ObjectManager.deregister(this.temp, !this.sameTile);
-            ObjectManager.register(this.original, true);
+            this.swap(this.temp, this.original);
             this.stop();
         }
         this.progressTick++;
     }
+    private swap(outgoing: GameObject, incoming: GameObject): void {
+        if (this.sameTile) {
+            ObjectManager.replaceInPlace(outgoing, incoming);
+        } else {
+            ObjectManager.deregister(outgoing, true);
+            ObjectManager.register(incoming, true);
+        }
+    }
+
     onExecute() {
 
     }

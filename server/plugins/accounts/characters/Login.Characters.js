@@ -1,5 +1,10 @@
 const { maxCharactersPerAccount, characterDisplayName, characterListFor, defaultCharacterIndex } = require("./Picker.Characters");
 
+/** A character's save to enter with; an unmade one (PlayerSave.unmake: a Hardcore World Reset) enters as new. */
+function playedSave(save) {
+  return save && save.isUnmade?.() !== true ? save : null;
+}
+
 class LoginSession {
   constructor(context) {
     this.context = context;
@@ -46,7 +51,7 @@ class LoginSession {
       characterSave = isPrimary ? save : null;
       if (!isPrimary) {
         try {
-          characterSave = GameConstants.PLAYER_PERSISTENCE.load(chosen, profile) ?? null;
+          characterSave = playedSave(GameConstants.PLAYER_PERSISTENCE.load(chosen, profile));
         } catch (error) {
           // One unreadable character doesn't lock the account: the primary enters instead.
           console.error(`[login] failed to load ${chosen}; defaulting to ${primaryName}`, error);
@@ -129,7 +134,7 @@ class LoginSession {
     }
     let save;
     try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(character.name, pending.profile) ?? null;
+      save = playedSave(GameConstants.PLAYER_PERSISTENCE.load(character.name, pending.profile));
     } catch (error) {
       console.error(`[login] failed to load ${character.name}`, error);
       this.send(encodeCharacterResult(false, 8, "The login server is busy."));

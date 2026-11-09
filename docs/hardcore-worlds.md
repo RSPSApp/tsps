@@ -147,9 +147,14 @@ The crystal itself is the EscapeCrystal plugin's (`server/plugins/items/EscapeCr
 - **Drawn by the client:** the client draws everything from `hc_death_option` (0 none, 1 Reset,
   2 Transfer) and `hc_reset_count`. "Select" on an option highlights it and shows its text.
 - **Confirming** *(ours)*: a chatbox Yes, or choose again.
+- **Either choice:** the grave and Death's Office's items are destroyed (Wiki: "items that would
+  normally go to a gravestone are permanently deleted"; `gravestones:forfeit`).
 - **Reset:**
-  - The life ends: nothing of it is saved again, the Hardcore save is deleted, and the player is
-    logged out.
+  - The life ends: nothing of it is saved again, and the player is logged out.
+  - The Hardcore save is *unmade* (`PlayerSave.unmake`), not deleted. It keeps only the account:
+    the name, the password and the remembered logins. Its items, levels and attributes go, and the
+    next login treats it as a new character. A Hardcore World is often a new account's only save,
+    so deleting it would leave the name free for anyone to claim with any password.
   - The next login is a brand-new character: Tutorial Island where the world runs it, then
     Death's Office.
   - The reset count outlives every reset, in `data/saves/hardcore-world.json` (`HARDCORE_WORLD_FILE`
@@ -157,7 +162,7 @@ The crystal itself is the EscapeCrystal plugin's (`server/plugins/items/EscapeCr
 - **Transfer:**
   - The character, as the death left it (kept items, bank and all progress), becomes the
     account's main character (`PlayerPersistence.copyProfile`, reason `hardcore-transfer`), and
-    the Hardcore save is deleted.
+    the Hardcore save is unmade, as for Reset.
   - The next login here is a new Hardcore character. The transferred one plays on a world without
     the config that shares the saves.
   - *ours:* an account that already has a main character can't transfer ("You already have a
@@ -165,6 +170,8 @@ The crystal itself is the EscapeCrystal plugin's (`server/plugins/items/EscapeCr
 
 ## Not yet
 
+- **Reset's Stronghold of Security cooldown:** live starts a 3-day wait before a reset character
+  can claim the Stronghold's coins again (Wiki: Hardcore Worlds).
 - **The summary:** `hc_summary` (981), Death's mirror (`deaths_mirror` 50781) and the
   `hc_tracking_*` previous-life stats.
 - **Firsts:** the "first person to …" world firsts (`@hcm_wf@`).

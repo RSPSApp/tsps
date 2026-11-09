@@ -5,14 +5,17 @@
  * (982). The client draws it from two varbits: hc_death_option (1 Reset, 2 Transfer, 0 neither
  * picked: "Pick an option to read more about it.") and hc_reset_count, and its own texts say what
  * each does (scripts 10240-10249):
+ * Either way the grave and Death's Office's items are destroyed (Wiki: "items that would normally
+ * go to a gravestone are permanently deleted"; `gravestones:forfeit`).
  * - Reset: "You will lose all your items, quest progress and experience ... Your character will be
- *   set up as if it were a brand new character." The Hardcore save is deleted and the player
- *   logged out; the next login is a brand-new character (Tutorial Island where the world runs it,
- *   then Death's Office). The reset count outlives it (Common's resets file).
+ *   set up as if it were a brand new character." The player is logged out and the Hardcore save
+ *   unmade (PlayerSave.unmake): it keeps only the account's name, password and remembered logins,
+ *   so nobody else can claim the name, and the next login is a brand-new character (Tutorial Island
+ *   where the world runs it, then Death's Office). The reset count outlives it (Common's resets file).
  * - Transfer: "Continue as a Non-hardcore player ... You will keep all items still on your person,
  *   as well as in your bank". The save, as the death left it, becomes the account's main character
- *   (persistence copyProfile) and the Hardcore one is deleted, so the next login here starts a new
- *   Hardcore character. An account that already has a main character can't transfer (ours).
+ *   (persistence copyProfile) and the Hardcore one is unmade too, so the next login here starts a
+ *   new Hardcore character. An account that already has a main character can't transfer (ours).
  * UNVERIFIED (no capture of a death on a Hardcore world): when the screen opens (here the tick
  * after the respawn), its confirmation (here a chatbox Yes / choose again, data `ours`), that
  * closing it opens it again until the player has chosen, and that until then the player can't
@@ -122,16 +125,27 @@ function whenOffline(name, after) {
   setTimeout(poll, LOGOUT_WAIT_MS);
 }
 
+/** The death's grave and Death's Office's items are gone, whatever the choice. */
+function forfeitGrave(player) {
+  Common.api().emitCustomEvent("gravestones:forfeit", { player });
+}
+
+/** The Hardcore save keeps only the account (PlayerSave.unmake): never none, or the name is free to take. */
+function unmakeSave(name) {
+  return persistence().updateOffline(name, (save) => save.unmake(), "hardcore-reset", Common.HARDCORE_PROFILE);
+}
+
 function chooseReset(player) {
   if (!pending(player)) return;
   const name = player.getUsername();
   Common.recordReset(name);
   player.setAttribute(Common.LEAVING_ATTRIBUTE, "reset");
-  // The life is over: nothing of it is written again, and its save goes.
+  forfeitGrave(player);
+  // The life is over: nothing of it is written again, and its save keeps only the account.
   player.setAttribute(Common.SKIP_PERSISTENCE_ATTRIBUTE, true);
   player.getPacketSender().sendInterfaceRemoval();
   player.requestLogout();
-  whenOffline(name, () => persistence().delete(name, Common.HARDCORE_PROFILE));
+  whenOffline(name, () => unmakeSave(name));
 }
 
 function chooseTransfer(player) {
@@ -142,6 +156,7 @@ function chooseTransfer(player) {
     return;
   }
   player.setAttribute(Common.LEAVING_ATTRIBUTE, "transfer");
+  forfeitGrave(player);
   // The character goes on as it is: no longer Hardcore, nothing left to choose.
   player.setAttribute(Common.CHOICE_PENDING_ATTRIBUTE, false);
   player.setAttribute(Common.DEATH_OPTION_ATTRIBUTE, 0);
@@ -150,7 +165,7 @@ function chooseTransfer(player) {
   player.requestLogout();
   whenOffline(name, async () => {
     if (await persistence().copyProfile(name, Common.HARDCORE_PROFILE, Common.core().MAIN_PROFILE, "hardcore-transfer")) {
-      await persistence().delete(name, Common.HARDCORE_PROFILE);
+      await unmakeSave(name);
     }
   });
 }

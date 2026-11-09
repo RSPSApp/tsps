@@ -9,6 +9,7 @@
  * - `gravestones:state` { player } -> grave ({ items, fee, officeFee } or null), office
  *   (120 slots of { id, amount, fee } or null), coffer, style, metDeath, inTutorial, ironman.
  * - `gravestones:expire` { player }: the grave collapses now (Death collecting it early).
+ * - `gravestones:forfeit` { player }: the grave and Death's Office's items are destroyed.
  * - `gravestones:pay-fee` { player, amount, office } -> source ("coffer", "inventory", "bank" or
  *   null), message: the death-fee payment, Coffer first.
  * - `gravestones:fee` { player, items } -> fee: what a grave of these { id, amount } would cost.
@@ -51,6 +52,17 @@ function state(query) {
 
 function expire({ player }) {
   Timer.expire(player);
+}
+
+/**
+ * `gravestones:forfeit` { player }: everything the player's death left behind is destroyed, the
+ * standing grave and Death's Office alike (a Hardcore World's death choice: Wiki, "items that would
+ * normally go to a gravestone are permanently deleted").
+ */
+function forfeit({ player }) {
+  if (!player) return;
+  if (Storage.grave(player)) Grave.remove(player);
+  Storage.setOffice(player, []);
 }
 
 function payFee(request) {
@@ -104,6 +116,7 @@ function attach(api) {
   api.onCustomEvent("gravestones:fee", feeFor);
   api.onCustomEvent("gravestones:state", state);
   api.onCustomEvent("gravestones:expire", expire);
+  api.onCustomEvent("gravestones:forfeit", forfeit);
   api.onCustomEvent("gravestones:pay-fee", payFee);
   api.onCustomEvent("gravestones:office-take", officeTake);
   api.onCustomEvent("gravestones:coffer-adjust", cofferAdjust);

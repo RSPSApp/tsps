@@ -1494,9 +1494,13 @@ export class ClientConnection {
     }
     let username = primaryName;
     if (!this.loginExtension && account && Accounts.key(typedName) !== Accounts.key(primaryName)) username = typedName;
-    let characterSave = save;
+    // An unmade save (PlayerSave.unmake) vouched for the login above; its character is a new one.
+    let characterSave = save?.isUnmade?.() === true ? null : save;
     if (username !== primaryName) {
-      try { characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null; }
+      try {
+        characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null;
+        if (characterSave?.isUnmade?.() === true) characterSave = null;
+      }
       catch (error) { this.releasePendingName(); this.failLogin(8, "The login server is busy."); return; }
       // The alt enters with the capitals its save was made with, not the typed ones (PlayerSave
       // writes the entered name back as the display name).

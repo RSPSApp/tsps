@@ -21,7 +21,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
 const { DisplayNames } = require('../dist/game/entity/impl/player/DisplayNames');
 const { SkillManager, Skills } = require('../dist/game/content/skill/SkillManager');
-const { MAIN_PROFILE, LEAGUE_PROFILE, PLAYER_PROFILES, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
+const { MAIN_PROFILE, LEAGUE_PROFILE, HARDCORE_PROFILE, PLAYER_PROFILES, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const net = require('../dist/net/NetworkBuilder');
 const { LOGIN_FLAG_CHARACTER_SELECT } = require('../dist/net/login/LoginTokens');
 const Characters = require('../plugins/accounts/Characters.plugin');
@@ -690,6 +690,33 @@ test('creating a character: precondition, name rules, cap, success', async (t) =
   await create(c, 'Fourth');
   assert.equal(lastResult(c.channel).code, 3);
   assert.equal(Accounts.charactersOf('zezima').length, 3);
+});
+
+test('an unmade save (a Hardcore World Reset) keeps the name: its password still guards it, and the character is new', async (t) => {
+  const world = GameConstants.WORLD_PROFILE;
+  GameConstants.WORLD_PROFILE = HARDCORE_PROFILE;
+  t.after(() => { GameConstants.WORLD_PROFILE = world; });
+  const save = seedSave('Zezima', { passwordHash: hashOf('pw'), profile: HARDCORE_PROFILE });
+  save.isUnmade = () => true;
+  const refused = await login('Zezima', 'not-the-password');
+  assert.equal(refused.success, false, 'the only save left still holds the password');
+  const c = await connect('Zezima', 'pw');
+  assert.equal(c.response.success, true);
+  const logins = await handshake(t, c.connection, 'Zezima');
+  assert.equal(logins.length, 1);
+  assert.equal(logins[0].isNewAccount, true, 'a brand-new character, not the old life');
+});
+
+test('a selected alt with an unmade save enters as a new character', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(c, 'Alt');
+  seedSave('Alt').isUnmade = () => true;
+  await select(c.connection, 'Alt');
+  assert.equal(lastResult(c.channel).code, 0);
+  const logins = await handshake(t, c.connection, 'Zezima');
+  assert.equal(logins[0].username, 'Alt');
+  assert.equal(logins[0].isNewAccount, true);
 });
 
 test('a league-only primary save also allows creating', async () => {

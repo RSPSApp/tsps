@@ -24,6 +24,7 @@ Every save records why it happened (`PlayerPersistence.save(player, reason)`):
 | `quest-completion`, `diary-tier-completion`, `diary-tier-reward` | Final quest rewards, diary tiers and diary reward claims |
 | `death`, `respawn`, `hardcore-death` | Item loss, respawn state and Hardcore downgrade (or, on a [Hardcore World](hardcore-worlds.md), the death that ends the life), after the death operation finishes |
 | `hardcore-transfer` | A Hardcore World character transferring: its save copied into the account's main profile (`PlayerPersistence.copyProfile`) |
+| `hardcore-reset` | A Hardcore World life ending (Reset, or after a Transfer): the Hardcore save unmade (`PlayerSave.unmake`) to the account's name, password and remembered logins, so the next login is a new character |
 | `duel-settlement` | Both duelists after stakes, inventory and respawn changes |
 | `character-delete` | The history copy taken just before a character is deleted ([character slots](./character-slots.md)) |
 | `reward-shop`, `slayer-points` | Non-coin shop purchases and Slayer points spent or earned |

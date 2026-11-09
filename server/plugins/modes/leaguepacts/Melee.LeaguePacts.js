@@ -414,8 +414,16 @@ function thornsExperience(player, attacker, damage) {
   skills.addExperience(Skill.HITPOINTS, (damage * rate) / 3, true);
 }
 
-function reflect(player, attacker, damage) {
-  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setSource(player);
+/**
+ * A reflected hit. Thorns counts as the wearer's damage — that is what let it stop a "magic
+ * damage only" Combat Achievement (Jagex, Further Leagues VI Changes) — while the pact's shield
+ * reflect only bounces the damage back, as recoil and vengeance do, and a monster killed by
+ * recoil alone drops nothing (Wiki: Ring of recoil). So only Thorns' caller asks for the credit.
+ */
+function reflect(player, attacker, damage, credits = false) {
+  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected();
+  if (credits) hit.markCreditsSource();
+  hit.setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
   return hit;
 }
@@ -435,10 +443,10 @@ function thorns(player, attacker, hit) {
   };
   for (let i = 0; i < splats; i++) {
     if (attacker.getHitpoints() <= 0 || remaining <= 0) return;
-    thornsHits.add(reflect(player, attacker, damage));
+    thornsHits.add(reflect(player, attacker, damage, true));
     thornsExperience(player, attacker, paid(damage));
     if (second > 0) {
-      thornsHits.add(reflect(player, attacker, second));
+      thornsHits.add(reflect(player, attacker, second, true));
       thornsExperience(player, attacker, paid(second));
     }
     distanceHeal(player, attacker);

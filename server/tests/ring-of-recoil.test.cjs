@@ -169,6 +169,76 @@ test("Break is for the inventory, and for the ring itself rather than a note of 
   assert.equal(player.dialogues.length, 0);
 });
 
+// ---- The kill a reflection wins (issue #3919). A ring of recoil's damage is nobody's kill — a
+// monster killed by it alone drops nothing (Wiki: Ring of recoil) — while a League's Thorns
+// damage counts as the wearer's, which is what let it stop a "magic damage only" Combat
+// Achievement (Jagex, Further Leagues VI Changes). Only a hit that says it counts is credited.
+
+function reflectedFixture() {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+  const { Location } = require("../dist/game/model/Location");
+  const channel = {
+    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const player = new Player(new PlayerSession(channel), new Location(3222, 3218));
+  player.setIndex(2400);
+  player.setUsername("reflector");
+  player.setRegistered(true);
+  player.setHitpoints(10);
+  player.setNeedsPlacement(false);
+  const npc = NPC.create(NpcIdentifiers.MAN, new Location(3223, 3218));
+  npc.setIndex(2401);
+  npc.setRegistered(true);
+  npc.setHitpoints(6);
+  return { player, npc };
+}
+
+function reflectOnto(target, source, damage = 3, credits = false) {
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
+  const hit = new HitDamage(damage, HitMask.RED).markReflected();
+  if (credits) hit.markCreditsSource();
+  target.decrementHealth(hit.setSource(source));
+}
+
+test("a ring of recoil's reflection on an npc is nobody's kill", () => {
+  const { player, npc } = reflectedFixture();
+  reflectOnto(npc, player);
+  assert.equal(npc.getCombat().damageMapContains(player), false,
+    "recoil alone credits nobody, as live: such a kill drops nothing");
+  assert.equal(npc.getCombat().getKiller(false), null);
+  player.setRegistered(false);
+});
+
+test("a thorns hit counts as the wearer's damage, so they win the kill", () => {
+  const { player, npc } = reflectedFixture();
+  assert.equal(npc.getCombat().getKiller(false), null, "nothing credited yet");
+  reflectOnto(npc, player, 3, true);
+  assert.equal(npc.getCombat().damageMapContains(player), true,
+    "the thorns hit is recorded against the player");
+  assert.equal(npc.getCombat().getKiller(false), player,
+    "an npc killed by thorns is the wearer's kill");
+  player.setRegistered(false);
+});
+
+test("a reflection that does not come from a player still credits nobody", () => {
+  const { player, npc } = reflectedFixture();
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+  const { Location } = require("../dist/game/model/Location");
+  const other = NPC.create(NpcIdentifiers.MAN, new Location(3221, 3218));
+  other.setIndex(2402);
+  other.setRegistered(true);
+  reflectOnto(npc, other);
+  assert.equal(npc.getCombat().getKiller(false), null, "an npc's reflection is nobody's kill");
+  player.setRegistered(false);
+  other.setRegistered(false);
+});
+
 test("the Wiki's immune monsters take no recoil, other monsters and players still do", () => {
   const immune = (name) => ({
     isNpc: () => true,

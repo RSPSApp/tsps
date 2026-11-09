@@ -692,6 +692,25 @@ test("a shield reflects an NPC's whole hit on 0.1% per Defence level", () => {
   assert.deepEqual(attacker.damage, [12]);
 });
 
+test("shield reflect alone is nobody's kill, where thorns credits its wearer (#3919)", () => {
+  const { holder } = cast("pact-reflect-credit", { [effect("shield_reflect")]: 1 });
+  shield(holder, ITEMS.runeKiteshield);
+  const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  npc.setRegistered(true);
+  npc.setScriptedMovement(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(10);
+  const hit = Object.assign(landed(core.CombatType.MELEE, [splat(12)]), {
+    getAttacker: () => npc, updateTotalDamage() {},
+  });
+  randoms([0]);
+  hooks.onPlayerHitModify({ player: holder, hit });
+  npc.getCombat().getHitQueue().process(1);
+  assert.equal(npc.getHitpoints(), 0, "the reflected hit still lands");
+  assert.equal(npc.getCombat().getKiller(false), null,
+    "a shield reflection is not the wearer's damage: only thorns marks itself as counting");
+});
+
 test("0 damage taken with a two-handed shield or an off-hand heals 2 and restores 2 Prayer", () => {
   const { holder, others } = cast("pact-block", { [effect("shield_block_heal")]: 1 });
   const prayer = (player) => player.getSkillManager().getCurrentLevel(Skill.PRAYER);

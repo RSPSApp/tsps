@@ -933,17 +933,20 @@ class Raid {
     const room = this.roomFor(player);
     const member = this.member(player);
     const encounter = !!room?.isStarted() && room.inChallenge(player) && !member.ghost;
-    const crystal = encounter && player.getInventory().contains(Shared.escapeCrystalId());
+    const crystal = player.getInventory().contains(Shared.escapeCrystalId());
     if (crystal) player.getInventory().delete(Shared.escapeCrystalId(), 1);
     player.setAttribute(ATTR_LOGOUT, { encounter: encounter && !crystal, attempts: this.permittedTeamDeaths !== -1, crystal });
     const username = player.getUsername();
     if (encounter && !crystal) this.countDeath(player, member, room);
+    if (crystal) room?.onPlayerLeave(player);
     this.players = this.players.filter((other) => other !== player);
     if (crystal) {
       this.departedPoints += this.lootPoints(player);
       this.departed.push({ name: Shared.displayName(player), member });
       this.original.delete(username);
       this.members.delete(player);
+      player.setAttribute(ATTR_RAID, null);
+      this.lobby.leave(player, false);
     } else {
       this.absent.set(username, { member, player, room: room?.key ?? null });
       absentees.set(username, this);

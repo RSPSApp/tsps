@@ -350,6 +350,64 @@ function limbCounts(h) {
   };
 }
 
+test('soft clay makes a camel mask after the granite head is placed', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers, O = h.core.ObjectIdentifiers;
+  h.quest.setStage(h.player, 14);
+  h.inventory.set(I.SOFT_CLAY, 1);
+  h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL);
+  assert.equal(h.inventory.get(I.CAMEL_MOULD_P_), 1);
+  assert.equal(h.inventory.get(I.CAMEL_MASK) ?? 0, 0);
+  h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL_2); // No clay, even if another player changed the shared object.
+  assert.equal(h.inventory.get(I.CAMEL_MASK) ?? 0, 0);
+
+  h.inventory.set(I.GRANITE_5KG_, 1);
+  h.itemOnItem(I.CHISEL, I.GRANITE_5KG_);
+  h.itemOnObject(I.STONE_HEAD_5, O.PEDESTAL);
+  assert.equal(h.quest.getStage(h.player), 15);
+  for (let count = 1; count <= 2; count++) {
+    h.inventory.set(I.SOFT_CLAY, 1);
+    h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL_2);
+    assert.equal(h.inventory.get(I.SOFT_CLAY), 0);
+    assert.equal(h.inventory.get(I.CAMEL_MASK), count);
+    assert.equal(h.inventory.get(I.CAMEL_MOULD_P_), 0);
+    assert.equal(h.quest.getStage(h.player), 15);
+  }
+  h.quest.setStage(h.player, 20);
+  h.attrs.delete('quest.enakhras_lament.bits');
+  h.inventory.set(I.SOFT_CLAY, 1);
+  h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL_2);
+  assert.equal(h.inventory.get(I.CAMEL_MASK), 3);
+  h.logout();
+  h.login();
+  h.inventory.set(I.SOFT_CLAY, 1);
+  h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL);
+  assert.equal(h.inventory.get(I.CAMEL_MASK), 4);
+});
+
+test('camel mask eligibility follows the player, and clay frees its inventory slot', () => {
+  const other = setup();
+  const I = other.core.ItemIdentifiers, O = other.core.ObjectIdentifiers;
+  other.quest.setStage(other.player, 14);
+  other.inventory.set(I.SOFT_CLAY, 1);
+  other.itemOnObject(I.SOFT_CLAY, O.PEDESTAL_2);
+  assert.equal(other.inventory.get(I.CAMEL_MOULD_P_), 1);
+  assert.equal(other.inventory.get(I.CAMEL_MASK) ?? 0, 0);
+
+  const h = setup();
+  h.quest.setStage(h.player, 15);
+  let clay = 1, masks = 0;
+  h.useInventory({
+    getAmount(id) { return id === I.SOFT_CLAY ? clay : id === I.CAMEL_MASK ? masks : 0; },
+    getFreeSlots() { return clay ? 0 : 1; },
+    deleteNumber(id, amount) { assert.equal(id, I.SOFT_CLAY); clay -= amount; },
+    adds(id, amount) { assert.equal(id, I.CAMEL_MASK); masks += amount; },
+  });
+  h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL_2);
+  assert.equal(clay, 0);
+  assert.equal(masks, 1);
+});
+
 test('fresh stage 0 follows the full mandatory route to completion and rewards once', () => {
   const h = setup();
   const I = PluginManager.getCoreApi().ItemIdentifiers;

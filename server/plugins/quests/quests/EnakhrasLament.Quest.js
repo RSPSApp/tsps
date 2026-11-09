@@ -1429,7 +1429,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     if (itemId === SOFT_CLAY) {
       event.handled = true;
       if (!has(player, SOFT_CLAY)) return;
-      if (quest.getStage(player) >= STAGE_COMPLETE && hasBit(player, BIT_MOULD)) {
+      if (quest.getStage(player) >= STAGE_PEDESTAL_DONE) {
         take(player, SOFT_CLAY, 1);
         give(player, CAMEL_MASK, 1);
         return;

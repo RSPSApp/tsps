@@ -2069,9 +2069,19 @@ test('RFD native first dining entry plays the complete feast and freezes the own
   assert.equal(player.getAttribute(RFD_FEAST_PENDING), true);
   assert.equal(player.getAttribute('quest.points'), points + 1);
   assert.equal(player.getPacketSender().getVarbit(1850), 2, 'the pre-feast chest and finale portal stay hidden');
+  const camera = [];
+  for (const method of ['sendCameraMoveTo', 'sendCameraLookAt', 'sendCameraReset']) {
+    const original = player.getPacketSender()[method];
+    t.mock.method(player.getPacketSender(), method, function(...values) {
+      camera.push([method, ...values.slice(0, 2)]);
+      return original.apply(this, values);
+    });
+  }
   await f.enter();
   const scene = player.getPrivateArea();
   assert.ok(scene, 'real dining-door dispatch creates a private feast');
+  assert.deepEqual(camera.filter(([method]) => method === 'sendCameraLookAt').slice(0, 2).map(([, x, y]) => [x, y]),
+    [[1863, 5341], [1863, 5341]], 'the camera opens on Duke Horacio, not on the hidden player');
   assert.match(player.getDialogueManager().getCurrent()?.getText(), /Welcome, gentlemen/);
   const actors = f.owned();
   core.World.updateLocalNpcs(player, actors);
@@ -2085,6 +2095,23 @@ test('RFD native first dining entry plays the complete feast and freezes the own
     'Ooh – nice food!', "Aha! I'm BACK!", "And now I'll kill you!", "Sorry I'm late", 'TEMPUS CESSIT!']) {
     assert.ok(lines.some(line => line.includes(phrase)), phrase);
   }
+  const looks = camera.filter(([method]) => method === 'sendCameraLookAt').map(([, x, y]) => `${x},${y}`);
+  // Horacio, Osman, then each guest in the order Horacio welcomes them, then the empty chair.
+  const welcomes = ['1863,5341', '1865,5351', '1862,5345', '1862,5347', '1862,5350', '1864,5353', '1865,5349',
+    '1865,5347', '1865,5345', '1865,5343', '1863,5341'];
+  let from = 0;
+  for (const seat of welcomes) {
+    const at = looks.indexOf(seat, from);
+    assert.ok(at >= from, `the camera follows the welcomes to ${seat}: ${looks.join(' ')}`);
+    from = at + 1;
+  }
+  for (const seat of ['1866,5351', '1868,5348', '1867,5349', '1863,5346']) {
+    assert.ok(looks.slice(from).includes(seat), `the camera follows the later arrivals to ${seat}`);
+  }
+  assert.equal(camera.at(-1)[0], 'sendCameraReset', 'the camera comes back to the player when the feast ends');
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1866, 5347]);
+  assert.ok(rfdFrozenRoomLocs(player).some(([gameval]) => gameval === '100_rings_froze'),
+    'the Culinaromancer is ringed once time is frozen');
   assert.equal(!!player.getPrivateArea(), false);
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(player.isUntargetable(), false);
@@ -2183,6 +2210,57 @@ test('RFD historical stage4 saves retain their rescue progress and native Collec
   assert.notEqual(player.getInterfaceId(),402,'blank op2 does not collect');
   await f.click(12309,3219,9623,1);
   assert.notEqual(player.getInterfaceId(),402,'Bank stays with the bank handler');
+});
+
+// The cache's frozen copy of the dining room (y 5314-5334) is the room after the feast: its white
+// time-bubble walls, doorway barriers and the rings at the Culinaromancer's seat (issue 3839).
+function rfdFrozenRoomLocs(player) {
+  const name = id => core.CacheDefinitions.getObject(id)?.name;
+  const ids = new Map(['hundred_portal_door1', 'hundred_portal_door2', 'hundred_portal_door3', '100_bubble3',
+    '100_bubbleb3', '100_rings_froze'].map(gameval => [core.CacheDefinitions.getLocId(gameval), gameval]));
+  return core.MapObjects.ownerObjectsInScene(player, 1852, 5334, 24)
+    .filter(object => ids.has(object.getId()))
+    .map(object => [ids.get(object.getId()), object.getLocation().getX(), object.getLocation().getY(), name(object.getId())]);
+}
+
+test('RFD kitchen door enters and leaves the same dining dimension as the large doors', async t => {
+  const f = rfdFeastFixture(t, { historical: true }), { player } = f;
+  player.setAttribute('recipe-for-disaster:rescues', 17);
+  player.setLocation(new core.Location(3207, 3216));
+  await f.click(core.CacheDefinitions.getLocId('hundred_lumbridge_door'), 3207, 3217);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1861, 5341],
+    'the kitchen door lands inside the dimension kitchen doorway');
+  assert.equal(player.getPrivateArea(), null);
+  assert.ok(f.owned().some(npc => npc.getId() === core.NpcIdentifiers.CULINAROMANCER_2), 'the frozen council is there');
+  await f.click(core.CacheDefinitions.getLocId('elfdoor'), 1861, 5340);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3207, 3217],
+    'the dimension kitchen door leads back into the Lumbridge kitchen');
+  player.setLocation(new core.Location(3207, 3218));
+  await f.click(core.CacheDefinitions.getLocId('hundred_lumbridge_door'), 3207, 3217);
+  assert.ok(player.getLocation().getX() > 3000, 'from the real dining room the kitchen door still leads to the kitchen');
+});
+
+test('RFD dining dimension shows the cache frozen-room barrier and the Culinaromancer rings', async t => {
+  const f = rfdFeastFixture(t, { historical: true }), { player } = f;
+  player.setAttribute('recipe-for-disaster:rescues', 17);
+  await f.enter();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1866, 5347],
+    'the large doors land inside the barrier, as the live transport does');
+  const locs = rfdFrozenRoomLocs(player);
+  assert.deepEqual(locs.filter(([gameval]) => gameval === '100_rings_froze').map(([, x, y]) => [x, y]), [[1863, 5341]],
+    'the rings sit on the Culinaromancer at the head of the table');
+  assert.deepEqual(locs.filter(([gameval]) => gameval.startsWith('hundred_portal_door')).map(([, x, y, name]) => [x, y, name]).sort(),
+    [[1861, 5340, 'Barrier'], [1867, 5347, 'Barrier'], [1867, 5348, 'Barrier']], 'a barrier stands in each doorway');
+  assert.equal(locs.filter(([gameval]) => gameval.startsWith('100_bubble')).length, 41, 'the time bubble walls the whole room');
+  const stranger = fixture(t).player;
+  assert.equal(rfdFrozenRoomLocs(stranger).length, 0, 'the frozen room is drawn for its owner only');
+  await f.click(core.CacheDefinitions.getLocId('hundred_portal_door3'), 1867, 5347);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3214, 3221], 'the barrier leads out');
+  assert.equal(rfdFrozenRoomLocs(player).length, 0, 'leaving the room takes the barrier away');
+  await f.enter();
+  assert.ok(rfdFrozenRoomLocs(player).length > 0);
+  PM.emitPlayerLogout({ player, username: player.getUsername() });
+  assert.equal(rfdFrozenRoomLocs(player).length, 0, 'logging out takes the frozen room with it');
 });
 
 test('RFD feast logout persists the pending handoff and replays after real PlayerSave recovery', async t => {

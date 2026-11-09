@@ -156,7 +156,9 @@ const EFFECTS = {
     blocked: (shot) => shot.pvp
       ? protectedFromDragonfire(shot.target)
       : npcHasAttribute(shot.target, "fiery") || npcHasAttribute(shot.target, "dragon"),
-    shoot: (shot) => addDamage(shot, Math.trunc((rangedLevel(shot.player) * 2) / (shot.zaryte ? 9 : 10))),
+    // Wiki (Dragonstone bolts (e)): "20% of the attacker's visible Ranged level, rounded down", "22% instead of 20%"
+    // with the Zaryte crossbow (the Zaryte page's /10 -> /9 is opal's row).
+    shoot: (shot) => addDamage(shot, Math.floor((rangedLevel(shot.player) * (shot.zaryte ? 22 : 20)) / 100)),
   },
   "life-leech": {
     blocked: (shot) => npcHasAttribute(shot.target, "undead"),

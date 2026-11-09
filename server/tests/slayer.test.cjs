@@ -362,6 +362,39 @@ test("Turael's tasks give no points and say so", () => {
   assert.match(player.messages.at(-1), /eligible to earn reward points if you complete tasks from a more advanced Slayer Master/);
 });
 
+// Completion checkpoints: these exercise the points contract directly, without
+// claiming that the seeded prior streaks were earned or simulating NPC deaths.
+for (const { standard, wilderness, masterId, expectedPoints, expectedStreak } of [
+  { standard: 4, wilderness: 0, masterId: 7, expectedPoints: 0, expectedStreak: 1 },
+  { standard: 0, wilderness: 4, masterId: 3, expectedPoints: 0, expectedStreak: 1 },
+  { standard: 20, wilderness: 3, masterId: 7, expectedPoints: 0, expectedStreak: 4 },
+  { standard: 0, wilderness: 4, masterId: 7, expectedPoints: 25, expectedStreak: 5 },
+  { standard: 0, wilderness: 9, masterId: 7, expectedPoints: 125, expectedStreak: 10 },
+]) {
+  test(`completion points use master ${masterId}'s own streak (${standard} standard, ${wilderness} Wilderness)`, () => {
+    const player = createPlayer();
+    setVarbit(player, "slayer_tasks_completed", standard);
+    setVarbit(player, "slayer_wilderness_tasks_completed", wilderness);
+    const assigned = Tasks.assign(player, master(masterId));
+    assert.ok(assigned.line, "the master offers an eligible task");
+    const task = Tasks.current(player);
+    assert.ok(task);
+    assert.equal(task.masterId, masterId);
+    assert.ok(task.count > 0);
+    assert.equal(varbit(player, "slayer_points"), 0);
+    Tasks.complete(player, task);
+    assert.equal(Tasks.current(player), null, "completion clears the held task");
+    const own = masterId === 7 ? "slayer_wilderness_tasks_completed" : "slayer_tasks_completed";
+    const other = masterId === 7 ? "slayer_tasks_completed" : "slayer_wilderness_tasks_completed";
+    assert.equal(varbit(player, own), expectedStreak);
+    assert.equal(varbit(player, other), masterId === 7 ? standard : wilderness);
+    assert.equal(varbit(player, "slayer_points"), expectedPoints);
+    if (expectedPoints === 0) {
+      assert.match(player.messages.at(-1), new RegExp(`will need </col>${5 - expectedStreak} more`));
+    }
+  });
+}
+
 test("Turael replaces another master's task and resets the streak", () => {
   const player = createPlayer();
   setVarbit(player, "slayer_tasks_completed", 12);
@@ -1570,4 +1603,154 @@ test("the attack the speed was asked for is the attack that starts", () => {
   } finally {
     Math.random = random;
   }
+});
+
+test("registered Wilderness assignment and NPC death keep the first-four points gate independent", async (t) => {
+  // Earlier test bodies install partial native hooks. Isolate their accumulated
+  // registrations; the module's contract API setup still runs in the child.
+  if (process.env.SLAYER_POINTS_NATIVE_CHILD !== "1") {
+    const env = { ...process.env, SLAYER_POINTS_NATIVE_CHILD: "1" };
+    delete env.NODE_TEST_CONTEXT;
+    const child = require("node:child_process").spawnSync(process.execPath,
+      ["--test", "--test-name-pattern=^registered Wilderness assignment and NPC death", __filename],
+      { env, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
+    process.stdout.write(child.stdout ?? ""); process.stderr.write(child.stderr ?? "");
+    assert.equal(child.error, undefined, "the isolated registered-world process finishes");
+    assert.equal(child.signal, null);
+    assert.equal(child.status, 0, "the isolated registered-world assertions pass");
+    assert.match(child.stdout, /^ok \d+ - registered Wilderness assignment and NPC death/m,
+      "the isolated child executes the registered-world case");
+    return;
+  }
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { World, RegionManager, Location, NPC, TaskManager, PendingHit, CombatFactory, CombatType, SkillManager } = core;
+  const oldBots = process.env.DISABLE_PLAYER_BOTS;
+  const oldSubmit = TaskManager.submit;
+  const oldError = console.error;
+  const ownedTasks = new Set(), actors = [], targets = [], errors = [];
+  let started = false;
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  TaskManager.submit = function (task, ...args) { ownedTasks.add(task); return oldSubmit.call(this, task, ...args); };
+  console.error = (...args) => { errors.push(args.map(String).join(" ")); oldError(...args); };
+  t.after(() => {
+    const cleanupErrors = [];
+    const clean = (fn) => { try { fn(); } catch (error) { cleanupErrors.push(String(error)); } };
+    try {
+      for (const player of actors) {
+        clean(() => player.closeInterruptibleInterfaces());
+        clean(() => player.getCombat().getHitQueue().clear());
+        clean(() => { if (player.isRegistered()) World.getPlayers().removes(player); });
+      }
+      for (const target of targets) {
+        clean(() => target.getCombat().getHitQueue().clear());
+        clean(() => { if (target.isRegistered()) World.getNpcs().removes(target); });
+      }
+      if (started) clean(() => PluginManager.emitServerShutdown({}));
+      for (const task of ownedTasks) clean(() => { if (task.isRunning()) task.stop(); });
+      clean(() => World.process());
+      for (const task of ownedTasks) clean(() => { if (task.isRunning()) task.stop(); });
+    } finally {
+      TaskManager.submit = oldSubmit;
+      console.error = oldError;
+      if (oldBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = oldBots;
+    }
+    assert.deepEqual(cleanupErrors, []);
+    assert.deepEqual(errors, [], "registered hooks and tasks must not hide failures");
+  });
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  assert.equal(require("../dist/game/definition/WorldDefinition").isMembersWorld(), true);
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  assert.deepEqual(PluginManager.npcDeathHooks.filter((hook) => hook.pluginName === "Slayer").map((hook) => hook.handlerName),
+    ["npcKilled", "npcKilled"], "one full Slayer registration attaches both task and superior death handlers");
+  RegionManager.init();
+  RegionManager.loadMapFiles(3222, 3218);
+  PluginManager.emitServerStartup({}); started = true;
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel)); actors.push(player);
+  player.setUsername("slayerpoints"); player.setLongUsername(core.Misc.stringToLongBigInt("slayerpoints"));
+  player.setAttribute("bot-skip-persistence", true);
+  player.setLocation(new Location(3222, 3218, 0));
+  assert.equal(World.getPlayers().add(player), true); player.needsPlacement = false;
+  player.setAutoRetaliate(false);
+  const skills = player.getSkillManager();
+  for (const skill of Skill.values()) {
+    const level = skill === Skill.SLAYER ? 19 : 99;
+    skills.setExperiences(skill, SkillManager.getExperienceForLevel(level), false);
+    skills.setMaxLevel(skill, level); skills.setCurrentLevels(skill, level);
+  }
+  // Seed an existing career and final-kill checkpoint, not an earned task journey.
+  setVarbit(player, "slayer_tasks_completed", 20);
+  setVarbit(player, "slayer_wilderness_tasks_completed", 3);
+  assert.equal(varbit(player, "slayer_points"), 0);
+  const connection = new ClientConnection(channel); connection.player = player;
+  const masterId = Array.from({ length: CacheDefinitions.getCounts().npcs }, (_, id) => id)
+    .find((id) => { const def = core.NpcDefinition.forId(id); return def?.getName() === "Krystilia" && def.getActions()?.[2] === "Assignment"; });
+  assert.ok(Number.isInteger(masterId), "the active cache exposes Krystilia's Assignment option");
+  // The scene is placed beside the player; the input still uses native NPC dispatch.
+  const masterNpc = NPC.create(masterId, new Location(3223, 3218, 0)); targets.push(masterNpc);
+  masterNpc.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(masterNpc), true); masterNpc.needsPlacement = false;
+  await connection.dispatch([{ type: "npc_option", index: masterNpc.getIndex(), clickType: 3 }]);
+  connection.processTurnPackets();
+  for (let tick = 0; tick < 8 && !Tasks.current(player); tick++) {
+    TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process(); TaskManager.process();
+  }
+  const assigned = Tasks.current(player);
+  assert.ok(assigned, "the registered master assigns a task without a direct assignment call");
+  assert.equal(assigned.masterId, 7);
+  assert.ok(assigned.count > 0);
+  assert.equal(assigned.original, assigned.count);
+  player.closeInterruptibleInterfaces();
+  // Any naturally selected eligible row is supported; do not hold or replace RNG.
+  const matches = [];
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) {
+    const def = core.NpcDefinition.forId(id);
+    if (def?.getHitpoints() > 0 && def.getActions()?.includes("Attack") && Data.npcCountsFor(assigned.taskId, id, def.getName())) {
+      matches.push({ id, hp: def.getHitpoints() });
+    }
+  }
+  matches.sort((a, b) => a.hp - b.hp || a.id - b.id);
+  assert.ok(matches.length, "the assigned task has an attackable cache-backed target");
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_count"), 1);
+  function targetAt(x, y) {
+    RegionManager.loadMapFiles(x, y);
+    const target = NPC.create(matches[0].id, new Location(x, y, 0)); targets.push(target);
+    target.setScriptedMovement(true);
+    assert.equal(World.getNpcs().add(target), true); target.needsPlacement = false;
+    target.setHitpoints(1); // final-hit checkpoint; damage and death remain real engine work
+    return target;
+  }
+  let hitCycle = 1000;
+  function killTarget(target) {
+    assert.equal(CombatFactory.canAttackByPolicy(player, target), core.CanAttackResponse.CAN_ATTACK);
+    const hit = new PendingHit(player, target, { type: () => CombatType.MELEE, accuracyDefenceType: () => undefined },
+      { damage: 1, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
+    CombatFactory.executeHit(hit);
+    target.getCombat().getHitQueue().process(hitCycle++);
+    assert.equal(target.getHitpoints(), 0, "the applied hit is lethal");
+    assert.equal(target.getCombat().getLastDamager(), player, "the actual player owns the lethal damage");
+    for (let tick = 0; tick < 50 && target.isDyingFunction(); tick++) TaskManager.process();
+    assert.equal(target.isDyingFunction(), false, "the engine death task finishes");
+  }
+  const outside = targetAt(3223, 3218);
+  assert.equal(Tasks.countsFor(Tasks.current(player), outside, player), false);
+  const beforeXp = skills.getExperience(Skill.SLAYER);
+  killTarget(outside);
+  assert.equal(Tasks.current(player).count, 1, "a matching monster outside Wilderness gives no task credit");
+  assert.equal(skills.getExperience(Skill.SLAYER), beforeXp);
+  assert.equal(varbit(player, "slayer_points"), 0);
+  player.setLocation(new Location(3100, 3700, 0));
+  const inside = targetAt(3101, 3700);
+  assert.equal(core.Wilderness.isInLocation(inside.getLocation()), true);
+  assert.equal(Tasks.countsFor(Tasks.current(player), inside, player), true);
+  killTarget(inside);
+  assert.equal(Tasks.current(player), null, "the eligible engine death completes the task");
+  assert.equal(varbit(player, "slayer_wilderness_tasks_completed"), 4);
+  assert.equal(varbit(player, "slayer_tasks_completed"), 20);
+  assert.ok(skills.getExperience(Skill.SLAYER) > beforeXp);
+  assert.equal(varbit(player, "slayer_points"), 0, "the fourth Wilderness completion gives no points despite twenty standard completions");
 });

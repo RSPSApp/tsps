@@ -340,6 +340,10 @@ export async function cleanUp(host: WebGLOsrsRendererHost, ): Promise<void> {
         host.textureDepthTarget = undefined;
 
         deleteShaderFxTarget(host);
+        host.frameShaderFxDrawCall = undefined;
+        host.frameShaderFxProgram?.delete();
+        host.frameShaderFxProgram = undefined;
+        host.shaderFxProgramState = undefined;
 
         // Textures
         host.textureArray?.delete();

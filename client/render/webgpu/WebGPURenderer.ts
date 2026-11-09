@@ -52,6 +52,7 @@ import { getControlledPlayerEcsIndex, updateFollowCamera } from "./camera";
 import { resolveWebGPULodDistance, resolveWebGPURenderDistance, updateWebGPUMapStreaming } from "./frameConfig";
 import { FxaaPass } from "./fxaa";
 import { ShaderFxPass } from "./shaderFxPass";
+import { PlayerMaskTarget } from "./playerMask";
 import { SceneMsaaTargets } from "./msaaTargets";
 import { WEBGPU_MSAA_SAMPLES } from "./multisample";
 import { EditorOverlays } from "./overlays/EditorOverlays";
@@ -127,6 +128,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     private fxaa?: FxaaPass;
     /** The Shader Effects plugin's pass on the base path (117 HD runs its own in the HDR chain). */
     private shaderFxPass?: ShaderFxPass;
+    private playerMask?: PlayerMaskTarget;
     /** The last world drawn, presented while the player's square builds (SceneFrameHold). */
     private heldScene?: WebGPUHeldScene;
     private readonly sceneFrameHold = new SceneFrameHold();
@@ -1060,11 +1062,18 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             this.shaderFxPass.dispose();
             this.shaderFxPass = undefined;
         }
+        // The prayer aura's silhouette target is kept only while the aura wants it.
+        if (this.playerMask && shaderFxPlugin?.wantsPlayerMask?.() !== true) {
+            this.playerMask.dispose();
+            this.playerMask = undefined;
+        }
         const shaderFxRuntime = !hdrTarget && drawScene ? shaderFxPlugin : undefined;
         const shaderFx = shaderFxRuntime
             ? (this.shaderFxPass ??= new ShaderFxPass(this.device, this.format, true))
             : undefined;
         const shaderFxActive = shaderFx?.prepare(shaderFxRuntime) === true;
+        // The prayer aura follows the player's own model, so the silhouette is drawn first.
+        const shaderFxMask = shaderFxActive && shaderFxRuntime?.wantsPlayerMask?.() === true;
         const sceneTarget = hdrTarget
             ?? (shaderFxActive ? shaderFx!.ensureSource(width, height) : fxaa?.ensure(width, height) ?? canvasView);
         // MSAA draws into multisampled targets that resolve into sceneTarget as the pass ends.
@@ -1149,7 +1158,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         // The extension's post passes read and depth-test against the single-sampled depth.
         if (msaa && hdrTarget) msaa.resolveDepth(encoder, this.depthView);
         if (shaderFxActive) {
-            shaderFx!.encodeTo(encoder, shaderFx!.ensureSource(width, height), fxaa?.ensure(width, height) ?? canvasView, width, height);
+            const mask = shaderFxMask ? this.encodePlayerMask(encoder, width, height) : undefined;
+            shaderFx!.encodeTo(encoder, shaderFx!.ensureSource(width, height), fxaa?.ensure(width, height) ?? canvasView, width, height, mask);
         }
         fxaa?.encode(encoder, canvasView);
 
@@ -1224,6 +1234,24 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 map.drawDepth(pass, this.frameRoofPlaneLimit, visibility);
             }
         }
+    }
+
+    /**
+     * Draws the controlled player's posed model as a coverage mask the size of the frame, with
+     * the scene's camera, for the Shader Effects prayer aura. Undefined when there is no player.
+     */
+    encodePlayerMask(encoder: GPUCommandEncoder, width: number, height: number): GPUTextureView | undefined {
+        const playerIndex = getControlledPlayerEcsIndex(this);
+        if (!this.actors || playerIndex === undefined || width < 1 || height < 1) return undefined;
+        const target = (this.playerMask ??= new PlayerMaskTarget(this.device));
+        const view = target.ensure(width, height);
+        const pass = encoder.beginRenderPass({
+            label: "shaderfx player mask",
+            colorAttachments: [{ view, clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: "clear", storeOp: "store" }],
+        });
+        this.actors.drawPlayerMask(pass, playerIndex);
+        pass.end();
+        return view;
     }
 
     drawActorDepth(pass: GPURenderPassEncoder): void {
@@ -1448,6 +1476,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.fxaa = undefined;
         this.shaderFxPass?.dispose();
         this.shaderFxPass = undefined;
+        this.playerMask?.dispose();
+        this.playerMask = undefined;
         this.heldScene?.destroy();
         this.heldScene = undefined;
     }

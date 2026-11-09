@@ -709,6 +709,21 @@ ${slots?.shade ?? ""}
 const ACTOR_KINDS: ActorKind[] = ["npc", "gfx", "player", "projectile"];
 
 export const ACTOR_FRAGMENT_ENTRY = "fs_actor";
+/** Writes 1 wherever a model covers the pixel: the Shader Effects prayer aura's player silhouette. */
+export const ACTOR_MASK_FRAGMENT_ENTRY = "fs_mask";
+const ACTOR_MASK_WGSL = `
+@fragment
+fn fs_mask(input: ActorVertexOutput) -> @location(0) vec4<f32> {
+    var coverage = input.v_color.a;
+    if (input.v_texId != 0u) {
+        coverage = coverage * sampleModelTexture(input.v_texId, input.v_texCoord).a;
+    }
+    if (coverage < 0.3) {
+        discard;
+    }
+    return vec4<f32>(1.0);
+}
+`;
 export const ACTOR_DEPTH_FRAGMENT_ENTRY = "fs_depth";
 
 /** Vertex entry for an actor kind; `depth` picks the depth-pass entry. */
@@ -760,6 +775,7 @@ struct DepthVertexOutput {
         ACTOR_COMMON_WGSL +
         outputs +
         fragmentWgsl(options.alpha, ext) +
+        (depth || ext ? "" : ACTOR_MASK_WGSL) +
         entries;
     return device.createShaderModule({
         code,

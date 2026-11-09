@@ -1,13 +1,13 @@
 # Shader Effects
 
 Optional screen shaders that react to the game: hits taken and landed, spells, ranged shots,
-special attacks, level-ups, poison and low health, plus a set of always-on looks (colour grades,
-grain, scanlines and so on). Off by default; turn it on in the plugin list.
+special attacks, level-ups, poison and low health, freezes and roots, teleports, valuable drops and
+active prayers, plus a set of always-on looks (colour grades, grain, scanlines, ink outlines and so on). Off by default; turn it on in the plugin list.
 
 ## How it fits together
 
 ```
-game events ──> ShaderFxPlugin ──> ShaderFxState ──fill()──> uniform block (40 floats)
+game events ──> ShaderFxPlugin ──> ShaderFxState ──fill()──> uniform block (56 floats)
                                                                  │
         117 HD (WebGPU, linear HDR)  ── shaderFxPass.ts ◄────────┤
         core WebGPU (display colour) ── shaderFxPass.ts ◄────────┤
@@ -18,7 +18,20 @@ game events ──> ShaderFxPlugin ──> ShaderFxState ──fill()──> uni
   **`ShaderFxState`**. It does no drawing. Hits come from the actor hitsplat feed (the engine's
   `onHitsplat` hook only sees hits on players), graphics from `subscribeActorGraphics`,
   projectiles from `subscribeProjectiles`, and hitpoints, special energy, poison (varp 102) and
-  levels are polled on the game tick.
+  levels are polled on the game tick. Ice and root graphics on you (Ice Rush to Barrage; Bind,
+  Snare, Entangle) are statuses, not spell glows. Prayer auras read the prayer varbits each tick,
+  and the aura follows the player's own model: on the WebGPU renderers (117 HD and core) the
+  controlled player's posed geometry is drawn into a frame-sized r8 mask (`playerMask.ts`,
+  `WebGPUActors.drawPlayerMask`, the actor shader's `fs_mask`) before the effects pass, and the
+  shader glows outward from it with wisps rising. The WebGL renderer has no mask and falls back to
+  a generic figure shape around the player's screen spot; the plugin asks the scene for that spot
+  every frame the aura shows. A teleport winds up when its graphic plays on you (a teleport
+  graphic, not an animation: the ancient teleport shares one with the ancient combat spells), and
+  lands when you jump six tiles or more between two ticks; a teleport with no wind-up, such as
+  `::tele`, only plays the landing. If no landing follows within 3.6 s the wind-up fades out. Loot
+  flashes come from the ground item store: only a new stack that is yours (self or group
+  ownership), worth price times quantity over the threshold, counts; a snapshot's despawn and
+  re-add within 100 ms does not.
 - **`ShaderFxState.fill(out, settings, now)`** writes the frame's uniforms and returns whether
   any effect would change the picture. When it returns false nothing is recorded, so the plugin
   costs nothing while off or idle. The clock is passed in, so the state is testable without a GPU.
@@ -36,6 +49,13 @@ The WGSL (`render/webgpu/shaders/shaderfx.wgsl.ts`) and the GLSL
 (`render/shaders/frame-shaderfx.frag.glsl`) are ports of each other. Both work in linear light:
 display-colour input is linearised on every read and encoded again on the way out
 (`grade.z` is 1 for display colour in WGSL; the GLSL is always display colour).
+
+## While off or idle
+
+Nothing is allocated while the plugin is off, on any path, and `fill` makes no objects per frame.
+The prayer aura's extras follow the same rule: the player silhouette pipelines are built the
+first time an aura shows, and the frame-sized mask target is freed the first frame no aura wants
+it (a player who never turns on a prayer never pays for either).
 
 ## Adding an effect
 

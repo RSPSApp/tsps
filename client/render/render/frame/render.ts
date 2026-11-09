@@ -747,6 +747,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         if (!holdScene) {
             let passStartIndices = host._frameIndices;
             let passStartBatches = host._frameBatches;
+            host.drawSkybox(camera);
             host.app.disable(PicoGL.BLEND);
             profiler.startPhase("opaque");
             passStartIndices = host._frameIndices;

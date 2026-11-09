@@ -1678,6 +1678,18 @@ export function encodeCameraUnlock(unlock: boolean): Buffer {
   return encodeServerPacket(ServerPacketId.CAMERA_CONTROL, Buffer.from([6, unlock ? 1 : 0]));
 }
 
+/**
+ * Draws a cache model as the sky around the camera (OSRS's cam_skybox), or clears it with -1.
+ * The skybox stays until an explicit -1: cam_reset does not clear it.
+ */
+export function encodeCameraSkybox(model: number): Buffer {
+  if (!Number.isSafeInteger(model) || model < -1 || model > 0x7fffffff) throw new RangeError("Invalid skybox model");
+  const payload = Buffer.alloc(5);
+  payload[0] = 14;
+  payload.writeInt32BE(model, 1);
+  return encodeServerPacket(ServerPacketId.CAMERA_CONTROL, payload);
+}
+
 /** Rebase an active shot when a private scene returns to its source map. */
 export function encodeCameraTranslate(dx: number, dy: number): Buffer {
   if (!Number.isSafeInteger(dx) || !Number.isSafeInteger(dy) || Math.abs(dx) > 0x7fffffff || Math.abs(dy) > 0x7fffffff) throw new RangeError("Invalid camera translation");

@@ -13,6 +13,7 @@ import net.rsprot.protocol.game.outgoing.camera.CamReset
 import net.rsprot.protocol.game.outgoing.camera.CamRotateBy
 import net.rsprot.protocol.game.outgoing.camera.CamRotateToCoordinateV3
 import net.rsprot.protocol.game.outgoing.camera.CamShake
+import net.rsprot.protocol.game.outgoing.camera.CamSkybox
 import net.rsprot.protocol.game.outgoing.camera.CamTargetV4
 import net.rsprot.protocol.game.outgoing.camera.CamUnlock
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
@@ -239,6 +240,7 @@ class World(
             }
             CAM_SHAKE -> send(CamShake(reader.u8(), reader.u16().coerceAtMost(MAX_BYTE), reader.u16().coerceAtMost(MAX_BYTE), reader.u16().coerceAtMost(MAX_BYTE)))
             CAM_UNLOCK -> send(CamUnlock(reader.u8() != 0))
+            CAM_SKYBOX -> send(CamSkybox(reader.i32()))
             CAM_ROTATE_BY -> send(CamRotateBy(reader.s16(), reader.s16(), reader.u16(), EASINGS[reader.u8()]))
             CAM_ROTATE_COORDINATE -> {
                 val rotation = CamRotateToCoordinateV3(reader.u16(), reader.u16(), reader.s16(), reader.u16(), EASINGS[reader.u8()], false, false)
@@ -356,6 +358,7 @@ class World(
         const val CAM_ARC = 11
         const val CAM_TARGET = 12
         const val CAM_ROTATE_COORDINATE = 13
+        const val CAM_SKYBOX = 14
         const val TARGET_TILE = 0
         const val TARGET_PLAYER = 1
         const val TARGET_NPC = 2

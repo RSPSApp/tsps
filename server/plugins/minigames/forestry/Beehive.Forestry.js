@@ -50,7 +50,7 @@ function smoke(location, range) {
 
 function start(site) {
   const beehive = B();
-  const tiles = Common.freeTiles(site.location, beehive.range, site.size);
+  const tiles = Common.freeTiles(site, site.location, beehive.range, site.size);
   if (tiles.length < 4) return null;
   const { sounds } = beehive;
   const event = { site, elapsed: 0, needed: Math.min(beehive.maxLogs, beehive.logsPerPlayer * Math.max(1, site.participants.size)), oldBoxes: new Set(), over: false };
@@ -221,7 +221,7 @@ function rehome(event, box, at) {
     Common.sound(player, beehive.sounds.parts);
   }
   // No room elsewhere: the next one goes where this one stood.
-  const next = Common.freeTiles(at, beehive.range).find((tile) => !tile.equals(at)) ?? at;
+  const next = Common.freeTiles(event.site, at, beehive.range).find((tile) => !tile.equals(at)) ?? at;
   event.box = newBox(event, next);
 }
 

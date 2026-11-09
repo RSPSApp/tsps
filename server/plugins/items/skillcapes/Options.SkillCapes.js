@@ -104,16 +104,16 @@ function searchGrapple(player) {
     player.sendMessage("You have already searched your cape three times today.");
     return;
   }
-  // rsprox_transcripts/232/03140.txt: still holding the grapple from a search refuses the next one (66219); after
-  // dropping it and the crossbow the search works again (66491-66494).
+  // rsprox_transcripts/232/03140.txt: the free-space check comes first (66034: grapple held and a full bag gives the
+  // spaces line); still holding the grapple from a search then refuses the next one (66219); after dropping it and the
+  // crossbow the search works again (66491-66494).
+  if (player.getInventory().getFreeSlots() < 2) {
+    player.sendMessage("You need at least two inventory spaces to search your cape.");
+    return;
+  }
   const grapple = ItemIdentifiers.MITH_GRAPPLE_2;
   if (player.getInventory().contains(grapple) || player.getEquipment().contains(grapple)) {
     player.sendMessage("You already have a mithril grapple with you.");
-    return;
-  }
-  if (player.getInventory().getFreeSlots() < 2) {
-    // rsprox_transcripts/232/03140.txt:66034.
-    player.sendMessage("You need at least two inventory spaces to search your cape.");
     return;
   }
   player.performAnimation(new Animation(Capes.seqId("searchcape_grapple")));

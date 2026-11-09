@@ -66,6 +66,11 @@ test("a held grapple or a full bag refuses the search, as recorded", (t) => {
   messages.length = 0;
   Options.searchGrapple(p);
   assert.deepEqual(messages, ["You need at least two inventory spaces to search your cape."]);
+  // The grapple held and the bag full: the spaces line comes first (232/03140.txt:66034).
+  p.getInventory().setItem(0, new core.Item(9419, 1));
+  messages.length = 0;
+  Options.searchGrapple(p);
+  assert.deepEqual(messages, ["You need at least two inventory spaces to search your cape."]);
 });
 
 // rsprox captures (2 recordings): a second Agility cape stamina boost in a day says "You have used your stamina boost

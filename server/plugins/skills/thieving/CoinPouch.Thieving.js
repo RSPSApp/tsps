@@ -13,6 +13,7 @@ const OPEN_SOUND = 2115;
 const NO_SPACE = "You don't have enough inventory space.";
 
 let core;
+let api;
 
 function open(player, pouchId, count, all = false) {
   if (!POUCH_COINS.has(pouchId) || count <= 0) return;
@@ -29,6 +30,8 @@ function open(player, pouchId, count, all = false) {
   }
   player.getInventory().delete(pouchId, count);
   player.getInventory().adds(core.ItemIdentifiers.COINS, coins);
+  // "coin-pouch:opened" { player, coins, all }: the coins the pouch(es) paid, for a league's "Obtain 800 Coins From Coin Pouches At Once".
+  api.emitCustomEvent("coin-pouch:opened", { player, coins, all });
   if (!all) {
     player.sendMessage(`You open the pouch and find ${coins} coins.`);
     return;
@@ -47,8 +50,9 @@ function openOne(event) {
   event.handled = true;
 }
 
-function register(api) {
-  core = api.core;
+function register(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
   api.onItemAction("Coin pouch", { "Open-all": openAll, Open: openOne });
 }
 

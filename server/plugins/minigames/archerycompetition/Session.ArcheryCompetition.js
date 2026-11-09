@@ -166,6 +166,8 @@ function claimTickets(player) {
   if (tickets > 0) {
     player.getInventory().forceAdd(player, new core.Item(core.ItemIdentifiers.ARCHERY_TICKET, tickets));
   }
+  // "archery-competition:score" { player, score, tickets }: the round's score, for a league's "Get 250/750/1000 Target points".
+  api.emitCustomEvent("archery-competition:score", { player, score: session.score, tickets });
   return tickets;
 }
 

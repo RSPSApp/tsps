@@ -778,6 +778,8 @@ function rollAttempt(player, rock) {
  */
 function giveGem(player, { itemId }) {
   if (itemId == null) return;
+  // "mining:gem" { player, itemId }: the gem pre-roll's find, for a league's "Obtain a Gem While Mining".
+  pluginApi.emitCustomEvent("mining:gem", { player, itemId });
   player.sendMessage(gemMessage(itemId));
   // Ours (no source covers it): with no room anywhere, which an open coal bag can bring about while
   // still mining, the gem falls to the floor rather than vanishing.

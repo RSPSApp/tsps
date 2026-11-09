@@ -155,6 +155,8 @@ function stateOf(player) {
       /** The tile the player stood on at the end of the previous tick, to tell which way they go. */
       lastAt: null,
       lastTrap: null,
+      /** Tickets won since the last trap hit, for a league's "30 without missing any pillars". */
+      ticketStreak: 0,
       padUses: 0,
       padCooldownUntil: 0,
     };
@@ -211,6 +213,8 @@ function trapDamage(hitpoints) {
 }
 
 function hit(player, amount) {
+  // A trap hit breaks the run of clean tags ("without missing any pillars").
+  if (sessions.has(player)) stateOf(player).ticketStreak = 0;
   player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(amount, core.HitMask.RED)]);
 }
 
@@ -288,6 +292,10 @@ function rewardTag(player) {
   const count = diaryComplete(player, "elite") && random() < DIARY_DOUBLE_CHANCE ? 2 : 1;
   const award = { player, minigame: "brimhaven-agility-arena", points: count };
   api.emitCustomEvent("minigame:points", award);
+  // "brimhaven-agility-arena:streak" { player, tickets }: the run of clean tags so far, for a
+  // league's "Receive 30 Agility Arena Tickets without missing any pillars".
+  state.ticketStreak += count;
+  api.emitCustomEvent("brimhaven-agility-arena:streak", { player, tickets: state.ticketStreak });
   const laps = (Number(player.getAttribute(LAPS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(LAPS_ATTRIBUTE, laps);
   player.sendMessage(LAP_MESSAGE(laps));

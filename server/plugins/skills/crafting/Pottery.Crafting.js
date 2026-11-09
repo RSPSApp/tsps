@@ -12,7 +12,7 @@
 const Shared = require("./Shared.Crafting");
 
 const POTTER_WHEEL_NAMES = new Set(["Potter's Wheel", "Potter's wheel"]);
-const POTTERY_OVEN_NAMES = new Set(["Pottery Oven"]);
+const POTTERY_OVEN_NAMES = new Set(["Pottery Oven", "Pottery oven"]);
 
 const SOFT_CLAY_MESSAGE = "You mix the clay and water.<br>You now have some soft workable clay.";
 
@@ -221,4 +221,6 @@ module.exports = function attach(api) {
   api.onObjectInteraction("Potter's Wheel", { Use: usePotterWheel });
   api.onObjectInteraction("Potter's wheel", { Use: usePotterWheel });
   api.onObjectInteraction("Pottery Oven", { Fire: usePotteryOven });
+  // Civitas illa Fortis labels its oven "Pottery oven" (lower-case o); the same firing.
+  api.onObjectInteraction("Pottery oven", { Fire: usePotteryOven });
 };

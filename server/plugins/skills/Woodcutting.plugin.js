@@ -1040,6 +1040,9 @@ function searchBirdNest(player, nestId) {
 
   if (seed) {
     inventory.adds(seed.id, 1);
+    // "woodcutting:nest-search" { player, itemId }: the seed taken from the nest, for a league's
+    // "Obtain a High level tree seed from a birds nest".
+    pluginApi.emitCustomEvent("woodcutting:nest-search", { player, itemId: seed.id });
     sendSpam(player, `You take ${seed.text} out of the bird's nest.`);
     return true;
   }

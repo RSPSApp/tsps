@@ -92,11 +92,13 @@ export class ObjectActionPacketListener {
         handled: false,
       });
       if (pluginHandled) {
+        ObjectActionPacketListener.emitOperated(player, object, option);
         return;
       }
 
       if (option === "bank") {
         player.getBank(player.getCurrentBankTab()).open();
+        ObjectActionPacketListener.emitOperated(player, object, option);
         return;
       }
 
@@ -166,6 +168,28 @@ export class ObjectActionPacketListener {
     player.getMovementQueue().walkToObject(object, {
       execute: executeInteraction,
     }, clickType);
+  }
+
+  /**
+   * A loc's menu option that something answered (not a click nothing handled): `object:operated`
+   * { player, object, objectId, option, location } (the option lower-cased: an Open, a Bank the
+   * engine opens, a Fill a plugin did). A click no plugin took and no engine option covers stays
+   * silent, so a mere attempt is no deed.
+   */
+  public static readonly OPERATED_EVENT = "object:operated";
+
+  private static emitOperated(player: Player, object: GameObject, option: string | undefined): void {
+    PluginManager.emitCustomEvent(ObjectActionPacketListener.OPERATED_EVENT, {
+      player,
+      object,
+      objectId: object.getId(),
+      option,
+      location: {
+        x: object.getLocation().getX(),
+        y: object.getLocation().getY(),
+        z: object.getLocation().getZ(),
+      },
+    });
   }
 
   /** The clicked loc on a boat's deck other than the one the player is on, and that boat. */

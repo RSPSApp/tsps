@@ -145,7 +145,7 @@
       }
     }
   },
-  "regionRules": "A map square belongs to the lowest-numbered area that names it in `squares` or `rects`, then a league's `overrides` reassign squares. An underground square (map y >= 100) named by no area takes its surface square's area (y - 100): the Wiki's 'underground areas with an entrance in X'. A square named by no area is open to everyone: instances, Death's Office, the POH, random events, the essence mine, Tutorial Island, the sea. An area the league does not offer (Varlamore on a Trailblazer Reloaded world) is locked for good. Known approximations of the 64-tile grid: the four-tile strip between Lumbridge and the Al Kharid gate and the Catherby beach east of x 2816 fall with Al Kharid / Asgarnia; the River Salve's east bank at Paterdomus with Misthalin; Tutorial Island's easternmost tiles with the desert.",
+  "regionRules": "A map square belongs to the lowest-numbered area that names it in `squares` or `rects`, then a league's `overrides` reassign squares. An underground square (map y >= 100) named by no area takes its surface square's area (y - 100): the Wiki's 'underground areas with an entrance in X'. A square named by no area is open to everyone: instances, Death's Office, the POH, random events, the essence mine, Tutorial Island, the sea. An area the league does not offer (Varlamore on a Trailblazer Reloaded world) is locked for good. Known approximations of the 64-tile grid: the four-tile strip between Lumbridge and the Al Kharid gate and the Catherby beach east of x 2816 fall with Al Kharid / Asgarnia; the River Salve's east bank at Paterdomus with Misthalin; the Citharede Abbey and the Giants' Plateau east of Al Kharid (map square 53,49, whose Cabbage field the abbey's task wants) with the desert while the Abandoned Mine below it stays Morytania; Tutorial Island's easternmost tiles with the desert.",
   "open": {
     "_comment": "Open from everywhere (Wiki); listed for the record and the tests, since squares named by no area are open anyway.",
     "deathsOffice": [49, 89],
@@ -177,13 +177,13 @@
     },
     "5": {
       "key": "morytania",
-      "_comment": "Morytania (Canifis, the Slayer Tower, Mort Myre, Mort'ton, Barrows, Burgh de Rott, Meiyerditch, Darkmeyer, Slepe, Port Phasmatys, the Haunted Woods, Fenkenstrain's Castle), Dragontooth Island, Mos Le'Harmless with its caves, Harmony Island and Braindeath Island.",
-      "rects": [[54, 49, 60, 57], [53, 49, 53, 52], [53, 55, 53, 57], [57, 45, 60, 47], [58, 43, 59, 44], [32, 79, 33, 79], [57, 147, 59, 149]]
+      "_comment": "Morytania (Canifis, the Slayer Tower, Mort Myre, Mort'ton, Barrows, Burgh de Rott, Meiyerditch, Darkmeyer, Slepe, Port Phasmatys, the Haunted Woods, Fenkenstrain's Castle), Dragontooth Island, Mos Le'Harmless with its caves, Harmony Island and Braindeath Island, and the Abandoned Mine below the Giants' Plateau.",
+      "rects": [[54, 49, 60, 57], [53, 50, 53, 52], [53, 55, 53, 57], [57, 45, 60, 47], [58, 43, 59, 44], [32, 79, 33, 79], [57, 147, 59, 149]]
     },
     "6": {
       "key": "kharidian_desert",
-      "_comment": "The Kharidian Desert (Al Kharid and its mine, the Emir's Arena, the Mage Training Arena, the Shantay Pass, the Bedabin and Bandit camps, the Desert Mining Camp, Pollnivneach, Nardah, the Ruins of Uzer, Sophanem, Menaphos, the Necropolis, the Ruins of Unkah, the Kalphite Lair).",
-      "rects": [[49, 42, 55, 47], [50, 48, 55, 48], [51, 49, 52, 51]]
+      "_comment": "The Kharidian Desert (Al Kharid and its mine, the Emir's Arena, the Mage Training Arena, the Shantay Pass, the Bedabin and Bandit camps, the Desert Mining Camp, Pollnivneach, Nardah, the Ruins of Uzer, Sophanem, Menaphos, the Necropolis, the Ruins of Unkah, the Kalphite Lair), and the Citharede Abbey on the Giants' Plateau east of Al Kharid.",
+      "rects": [[49, 42, 55, 47], [50, 48, 55, 48], [51, 49, 52, 51], [53, 49, 53, 49]]
     },
     "7": {
       "key": "tirannwn",

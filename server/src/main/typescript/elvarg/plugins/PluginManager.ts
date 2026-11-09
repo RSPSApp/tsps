@@ -1979,8 +1979,22 @@ export class PluginManager {
   }
 
   public static emitItemAction(event: PluginItemActionEvent): boolean {
+    // The stack the click covered, read before any handler consumes it ("Open-all" empties it).
+    const covered = Number.isInteger(event?.itemId) ? Number(event?.player?.getInventory?.().getAmount?.(event.itemId) ?? 1) || 1 : 1;
     for (const hook of PluginManager.itemActionHooks) {
       PluginManager.executeHook(hook, event, "item_action", "item_action");
+    }
+    // An inventory action something answered (not a click nothing took): `item:operated`
+    // { player, itemId, option, amount }, the option lower-cased and the amount the stack it covered,
+    // for whatever counts the deed itself (a league task).
+    if (event.handled === true && event.player && Number.isInteger(event.itemId)) {
+      const option = PluginManager.itemActionOption(CacheDefinitions.getItem(event.itemId), event);
+      PluginManager.emitCustomEvent("item:operated", {
+        player: event.player,
+        itemId: event.itemId,
+        option: option === null ? undefined : String(option).toLowerCase(),
+        amount: covered,
+      });
     }
     return event.handled === true;
   }

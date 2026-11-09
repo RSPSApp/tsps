@@ -96,6 +96,9 @@ function collect(player) {
   Common.save(player, kingdom);
   pending.delete(player);
   player.sendMessage("Your subjects have delivered their resources to your bank.");
+  // "miscellania:collected" { player, approval }: the collection and its approval percentage,
+  // for a league's "Collect Miscellania Resources at Full Approval".
+  Common.getApi().emitCustomEvent("miscellania:collected", { player, approval: Common.approvalPercent(Common.favour(player)) });
   for (const line of lines) player.sendMessage(line);
   return true;
 }

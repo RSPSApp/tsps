@@ -30,6 +30,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     ObjectManager,
     CountdownTask,
     TaskManager,
+    HitDamage,
+    HitMask,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -666,7 +668,12 @@ module.exports = function registerMerlinsCrystalQuest(api) {
       return true;
     }
     if (player.getAttribute(HIVE_REPELLED_ATTRIBUTE) !== true && !wearingBeekeeperOutfit(player)) {
-      player.sendMessage("The bees are too angry to approach. I should use some insect repellent first.");
+      // Wiki (Transcript:Beehive): bees fly out and sting the player for 2 damage when the hive is
+      // taken from unprotected; the sting is the league's "Get Stung By Bees" (its own event).
+      player.sendMessage("Bees fly out of the hive and sting you!");
+      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(2, HitMask.RED)]);
+      player.sendMessage("Maybe you can find something to drive them away briefly.");
+      api.emitCustomEvent("bees:stung", { player });
       return true;
     }
     player.getInventory().deleteNumber(ItemIdentifiers.BUCKET, 1);

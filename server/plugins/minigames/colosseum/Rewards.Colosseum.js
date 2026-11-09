@@ -113,6 +113,8 @@ function waveCompleted(run) {
   }
   run.glory += gloryFor(run, wave);
   run.player.getPacketSender().sendConfig(VARP_CURRENT_GLORY, run.glory);
+  // "colosseum:glory" { player, glory }: the run's Glory so far, for a league's "Obtain 40,000/58,000 Glory".
+  Shared.api().emitCustomEvent("colosseum:glory", { player: run.player, glory: run.glory });
 }
 
 /** Only the best run's Glory counts. */

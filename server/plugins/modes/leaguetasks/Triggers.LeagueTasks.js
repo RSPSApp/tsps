@@ -14,6 +14,18 @@
  * `area` counts only on the areas plugin's map there (`league:area-at`; the death's tile, or the
  * player's for a credited kill); one marked `credited` (a minigame's completion) only the credited
  * event, not a death of the same name.
+ *
+ * A kill may also carry conditions, kept in a separate list and read off the killing blow when the
+ * NPC dies (`onCombatHitResolved` records the last hit each player landed, keyed by the NPC, and
+ * `onNpcDeath` reads it): `weapon`/`weapons` (the final blow from one of those items), `spell`/`spells`
+ * (from one of those spells), `style` ("melee", "ranged", "magic"), `worn` (that equipment on at the
+ * death), `oneHit` (one blow of at least the target's hitpoints), `noDamage` (the target never hurt a
+ * player), `solo` (no other player damaged it) and `window { count, ticks }` (the count of its kills
+ * within that many ticks). A creature killed with a named weapon whatever it is ("5 creatures with a
+ * mace as the final hit") is `kill-any-with { items, count }`, counted on any attackable NPC's death;
+ * "any one of a group N times" (the God Wars bosses) is `kill-any-one { npcs, count }`, one of them
+ * reaching N, not their total; and a `kill-each` may add `noLeave` (every one of its NPCs without
+ * leaving, one after the other, reset when the player does).
  */
 const Common = require("./Common.LeagueTasks");
 const Complete = require("./Complete.LeagueTasks");
@@ -30,21 +42,35 @@ const plainName = (name) => String(name ?? "").toLowerCase().replace(/^the /, ""
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { kills: new Map(), killEach: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], experienceBySkill: new Map(), diaries: [], achievements: [] };
+  const entry = { kills: new Map(), killEach: new Map(), killEachNoLeave: [], conditional: new Map(), anyWith: [], anyOne: new Map(), caTasks: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], experienceBySkill: new Map(), diaries: [], achievements: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (!trigger) continue;
     if (trigger.kind === "kill") {
-      // Every NPC the task accepts ("Callisto or Artio"); an overlay may still give one `npc`.
+      // Every NPC the task accepts ("Callisto or Artio"); an overlay may still give one `npc`. A kill
+      // with a condition (a named weapon, a time window) is read off the killing blow instead.
+      const bucket = conditionalKill(trigger) ? entry.conditional : entry.kills;
       for (const npc of trigger.npcs ?? [trigger.npc]) {
         const key = String(npc).toLowerCase();
-        entry.kills.set(key, (entry.kills.get(key) ?? []).concat(task));
+        bucket.set(key, (bucket.get(key) ?? []).concat(task));
       }
+    } else if (trigger.kind === "kill-any-with") {
+      entry.anyWith.push(task);
+    } else if (trigger.kind === "kill-any-one") {
+      for (const npc of trigger.npcs ?? []) {
+        const key = String(npc).toLowerCase();
+        entry.anyOne.set(key, (entry.anyOne.get(key) ?? []).concat(task));
+      }
+    } else if (trigger.kind === "ca-complete") {
+      const key = String(trigger.task).toLowerCase();
+      entry.caTasks.set(key, (entry.caTasks.get(key) ?? []).concat(task));
     } else if (trigger.kind === "kill-each") {
       for (const npc of Object.keys(trigger.npcs)) {
         const key = npc.toLowerCase();
         entry.killEach.set(key, (entry.killEach.get(key) ?? []).concat(task));
       }
+      // A `noLeave` one resets when the player is outside its place (every NPC of it in one sitting).
+      if (trigger.noLeave) entry.killEachNoLeave.push(task);
     } else if (LEVEL_KINDS.has(trigger.kind)) {
       entry.levels.push(task);
     } else if (CA_KINDS.has(trigger.kind)) {
@@ -175,8 +201,16 @@ function checkAchievements(player) {
   }
 }
 
-function achievementCompleted({ player }) {
-  if (player) checkAchievements(player);
+function achievementCompleted({ player, task }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type !== null && task?.name) {
+    const done = new Set(Common.completedIds(player));
+    for (const each of indexOf(type).caTasks.get(String(task.name).toLowerCase()) ?? []) {
+      if (!done.has(each.id)) Complete.complete(player, each.id, type);
+    }
+  }
+  checkAchievements(player);
 }
 
 /** `diary:task` { player }: a diary task done (the diaries plugin, loaded first, has counted it). */
@@ -213,11 +247,6 @@ function npcName(npc) {
  */
 const CREDIT_WINDOW_TICKS = 20;
 
-/**
- * `amount` kills of the NPC `name` from `source` ("deaths" or "events") for the character's open
- * kill tasks that accept it: each task's progress takes the window's larger count, then any task
- * that reached its count completes.
- */
 /** "The Hueycoatl" and "Hueycoatl, The" are one name: a plugin's kill report may use either form. */
 function articleSwapped(key) {
   const leading = /^the (.+)$/.exec(key);
@@ -226,11 +255,189 @@ function articleSwapped(key) {
   return trailing ? `the ${trailing[1]}` : null;
 }
 
+/**
+ * A `kill` with a condition (a named weapon or spell, a combat style, worn equipment, one hit, no
+ * damage taken, solo, or a time window): read off the killing blow rather than a plain count.
+ */
+function conditionalKill(trigger) {
+  return trigger.weapon !== undefined || trigger.weapons !== undefined || trigger.spell !== undefined || trigger.spells !== undefined
+    || trigger.style !== undefined || trigger.worn !== undefined || trigger.oneHit === true || trigger.noDamage === true
+    || trigger.solo === true || trigger.window !== undefined;
+}
+
+/** NPC -> Map(player -> the last hit the player landed on it; its killing blow at death). */
+const lastHits = new WeakMap();
+/** The NPCs that have damaged a player this life (a `noDamage` kill must not have). */
+const hurtPlayers = new WeakSet();
+/** Player -> task id -> the ticks of its `window` kills, newest last (a session, not persisted). */
+const killWindows = new WeakMap();
+
+const WEAPON_SLOT = 3;
+
+function equippedWeaponId(player) {
+  const item = player.getEquipment?.()?.getItems?.()?.[WEAPON_SLOT];
+  return item && Number(item.getId?.()) >= 0 ? Number(item.getId()) : -1;
+}
+
+function wornIds(player) {
+  const ids = new Set();
+  for (const item of player.getEquipment?.()?.getItems?.() ?? []) if (item && Number(item.getId?.()) >= 0) ids.add(Number(item.getId()));
+  return ids;
+}
+
+/** The server's combat spell by name (CombatSpells' key: EARTH_BLAST is "earth blast"). */
+let spellNames = null;
+function spellNameOf(spell) {
+  if (!spell) return null;
+  if (!spellNames) {
+    spellNames = new Map();
+    for (const key of Object.getOwnPropertyNames(Common.core.CombatSpells ?? {})) {
+      const value = Common.core.CombatSpells[key];
+      if (value && typeof value.spellId === "function") spellNames.set(value, key.toLowerCase().replace(/_/g, " "));
+    }
+  }
+  return spellNames.get(spell) ?? null;
+}
+
+/** A hit's combat style as a task names it: "melee", "ranged" or "magic". */
+function styleName(type) {
+  const { MELEE, RANGED, MAGIC } = Common.core.CombatType ?? {};
+  return type === MELEE ? "melee" : type === RANGED ? "ranged" : type === MAGIC ? "magic" : null;
+}
+
+/** What a player's blow was: the weapon, the spell, the style, the damage, what was worn, the target's HP. */
+function blowOf(player, hit, target) {
+  return {
+    weapon: equippedWeaponId(player),
+    spell: spellNameOf(hit?.getSpell?.()),
+    style: styleName(hit?.getCombatType?.()),
+    damage: Number(hit?.getTotalDamage?.() ?? 0),
+    worn: wornIds(player),
+    hitpoints: Number(target?.getMaxHitpoints?.() ?? 0),
+  };
+}
+
+function blowFor(npc, player) {
+  return lastHits.get(npc)?.get(player) ?? null;
+}
+
+/** The last hit each player landed on the npc (the killing blow among them), and who the npc hurt. */
+function combatHitResolved({ attacker, target, hit }) {
+  if (!attacker || !target) return;
+  if (attacker.isPlayer?.() && target.isNpc?.()) {
+    const player = attacker.getAsPlayer();
+    let byPlayer = lastHits.get(target);
+    if (!byPlayer) lastHits.set(target, (byPlayer = new Map()));
+    byPlayer.set(player, blowOf(player, hit, target));
+  } else if (attacker.isNpc?.() && target.isPlayer?.()) {
+    hurtPlayers.add(attacker);
+  }
+}
+
+/** Whether a blow satisfies a conditional kill's conditions (and the death event, for solo). */
+function blowSatisfies(task, blow, event, player) {
+  const trigger = task.trigger;
+  if (!blow) return trigger.noDamage === true && trigger.worn === undefined && trigger.oneHit !== true && trigger.solo !== true;
+  const weapons = trigger.weapons ?? trigger.weapon;
+  if (weapons !== undefined && !weapons.map(Number).includes(blow.weapon)) return false;
+  const spells = trigger.spells ?? trigger.spell;
+  if (spells !== undefined && !spells.includes(blow.spell)) return false;
+  if (trigger.style !== undefined && trigger.style !== blow.style) return false;
+  if (trigger.worn !== undefined && !(trigger.worn.map(Number).some((id) => blow.worn.has(id)))) return false;
+  if (trigger.oneHit === true && !(blow.hitpoints > 0 && blow.damage >= blow.hitpoints)) return false;
+  if (trigger.noDamage === true && hurtPlayers.has(event.npc)) return false;
+  if (trigger.solo === true && (event.damagers ?? []).some((each) => each !== player && each?.isRegistered?.())) return false;
+  return true;
+}
+
+/** `kill { ...conditions }`: credit the open conditional tasks for the NPC, if the blow meets them. */
+function creditConditional(player, type, name, npcId, at, event) {
+  const entry = indexOf(type);
+  const tasks = [...(entry.conditional.get(String(name ?? "").toLowerCase()) ?? []), ...(entry.conditional.get(String(npcId)) ?? [])];
+  if (!tasks.length) return;
+  const blow = blowFor(event.npc, player);
+  const done = new Set(Common.completedIds(player));
+  const progress = { ...killsOf(player) };
+  const reached = [];
+  for (const task of tasks) {
+    if (done.has(task.id) || !inArea(task, type, at ?? tileOf(player)) || !blowSatisfies(task, blow, event, player)) continue;
+    if (task.trigger.window) {
+      const ticks = windowOf(player, task.id, Number(task.trigger.window.ticks));
+      const tick = Common.core.World.getProcessCycle?.() ?? 0;
+      ticks.push(tick);
+      while (ticks.length && tick - ticks[0] > Number(task.trigger.window.ticks)) ticks.shift();
+      if (ticks.length >= (Number(task.trigger.window.count) || Number(task.trigger.count) || 1)) { deleteWindow(player, task.id); reached.push(task); }
+      continue;
+    }
+    const total = (Number(progress[task.id]) || 0) + 1;
+    if (total >= (Number(task.trigger.count) || 1)) { delete progress[task.id]; reached.push(task); }
+    else progress[task.id] = total;
+  }
+  player.setAttribute(Common.KILLS_ATTRIBUTE, progress);
+  for (const task of reached) Complete.complete(player, task.id, type);
+}
+
+function windowOf(player, taskId, ticks) {
+  let perPlayer = killWindows.get(player);
+  if (!perPlayer) killWindows.set(player, (perPlayer = new Map()));
+  let list = perPlayer.get(taskId);
+  if (!list) perPlayer.set(taskId, (list = []));
+  return list;
+}
+function deleteWindow(player, taskId) { killWindows.get(player)?.delete(taskId); }
+
+/** `kill-any-with { items, count }`: any NPC killed with one of the items as the final blow. */
+function creditAnyWith(player, type, npc, at) {
+  const tasks = indexOf(type).anyWith;
+  if (!tasks.length) return;
+  const blow = blowFor(npc, player);
+  if (!blow) return;
+  const done = new Set(Common.completedIds(player));
+  const progress = { ...killsOf(player) };
+  const reached = [];
+  for (const task of tasks) {
+    if (done.has(task.id) || !inArea(task, type, at ?? tileOf(player))) continue;
+    if (!task.trigger.items.map(Number).includes(blow.weapon)) continue;
+    const total = (Number(progress[task.id]) || 0) + 1;
+    if (total >= (Number(task.trigger.count) || 1)) { delete progress[task.id]; reached.push(task); }
+    else progress[task.id] = total;
+  }
+  player.setAttribute(Common.KILLS_ATTRIBUTE, progress);
+  for (const task of reached) Complete.complete(player, task.id, type);
+}
+
+/** `kill-any-one { npcs, count }`: one of the group reaching the count (its own kills, not the total). */
+function creditAnyOne(player, type, name, at) {
+  const tasks = indexOf(type).anyOne.get(String(name ?? "").toLowerCase());
+  if (!tasks) return;
+  const done = new Set(Common.completedIds(player));
+  const progress = { ...killsOf(player) };
+  const reached = [];
+  for (const task of tasks) {
+    if (done.has(task.id) || !inArea(task, type, at ?? tileOf(player))) continue;
+    const wanted = (task.trigger.npcs ?? []).find((npc) => String(npc).toLowerCase() === String(name ?? "").toLowerCase());
+    const counts = { ...(progress[task.id] && typeof progress[task.id] === "object" ? progress[task.id] : {}) };
+    counts[wanted] = (Number(counts[wanted]) || 0) + 1;
+    progress[task.id] = counts;
+    if (counts[wanted] >= (Number(task.trigger.count) || 1)) reached.push(task);
+  }
+  player.setAttribute(Common.KILLS_ATTRIBUTE, progress);
+  for (const task of reached) Complete.complete(player, task.id, type);
+}
+/**
+ * `amount` kills of the NPC `name` from `source` ("deaths" or "events") for the character's open
+ * kill tasks that accept it: each task's progress takes the window's larger count, then any task
+ * that reached its count completes.
+ */
+
 function credit(player, type, name, source, amount, tile = null) {
   const kills = indexOf(type).kills;
-  const key = String(name ?? "").toLowerCase();
-  const tasks = kills.get(key) ?? kills.get(articleSwapped(key));
-  if (!tasks || !(amount > 0)) return;
+  const keys = Array.isArray(name) ? name : [name];
+  const tasks = keys.flatMap((each) => {
+    const key = String(each ?? "").toLowerCase();
+    return kills.get(key) ?? kills.get(articleSwapped(key)) ?? [];
+  });
+  if (!tasks.length || !(amount > 0)) return;
   const done = new Set(Common.completedIds(player));
   // A `credited` task (a minigame's completion: "Complete the TzHaar Fight Cave") counts only the
   // credited event: the same NPC can die elsewhere (TzTok-Jad in TzHaar-Ket-Rak's Challenges).
@@ -279,7 +486,8 @@ function inArea(task, type, tile) {
 
 /**
  * `kill-each { npcs: { name: count } }`: that many deaths of each NPC, counted per NPC in the task's
- * kills entry ({ name: kills }), in its area or place.
+ * kills entry ({ name: kills }), in its area or place. A `noLeave` one keeps its counts only while
+ * the player stays inside it: each tick outside its place wipes them, so the kills must be one sitting.
  */
 function creditEach(player, type, name, tile) {
   const tasks = indexOf(type).killEach.get(String(name ?? "").toLowerCase());
@@ -299,14 +507,35 @@ function creditEach(player, type, name, tile) {
   for (const task of reached) Complete.complete(player, task.id, type);
 }
 
+function checkKillEachLeft({ player } = {}) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const tasks = indexOf(type).killEachNoLeave;
+  if (!tasks.length) return;
+  const at = tileOf(player);
+  const done = new Set(Common.completedIds(player));
+  const progress = { ...killsOf(player) };
+  let changed = false;
+  for (const task of tasks) {
+    if (done.has(task.id) || progress[task.id] === undefined) continue;
+    if (!inArea(task, type, at)) { delete progress[task.id]; changed = true; }
+  }
+  if (changed) player.setAttribute(Common.KILLS_ATTRIBUTE, progress);
+}
+
 function npcDeath(event) {
   const player = event?.killer;
   if (!player?.isPlayer?.() && !player?.getPacketSender) return;
   const type = Common.leagueOf(player);
   const at = event.location ? { x: Number(event.location.x ?? event.location.getX?.()), y: Number(event.location.y ?? event.location.getY?.()) } : tileOf(event.npc);
   if (type === null) return;
-  credit(player, type, npcName(event.npc), "deaths", 1, at);
-  creditEach(player, type, npcName(event.npc), at ?? tileOf(player));
+  const name = npcName(event.npc);
+  credit(player, type, [name, event.npcId], "deaths", 1, at);
+  creditConditional(player, type, name, event.npcId, at, event);
+  creditAnyWith(player, type, event.npc, at);
+  creditAnyOne(player, type, name, at);
+  creditEach(player, type, name, at ?? tileOf(player));
 }
 
 /** `combat-achievements:kill` { player, monster, amount? }: a credited kill, from a death or a scripted ending. */
@@ -345,7 +574,9 @@ function login({ player, league }) {
 module.exports = function attach(api) {
   api.persistAttribute(Common.KILLS_ATTRIBUTE, {});
   api.onNpcDeath(npcDeath);
+  api.onPlayerProcess(checkKillEachLeft);
   api.onCustomEvent("combat-achievements:kill", creditedKill);
+  api.onCombatHitResolved(combatHitResolved);
   api.onPlayerLevelUp(levelUp);
   api.onExperienceGained(experienceGained);
   api.onCustomEvent("diary:task", diaryTask);
@@ -353,3 +584,5 @@ module.exports = function attach(api) {
   api.onCustomEvent("quest:completed", questCompleted);
   api.onCustomEvent("league:login", login);
 };
+// The pure decision the kill conditions make, for tests (a task's trigger, a recorded blow, the death).
+module.exports._test = { blowSatisfies, conditionalKill };

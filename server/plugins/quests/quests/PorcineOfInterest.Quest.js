@@ -1,6 +1,7 @@
 /** A Porcine of Interest. Capture 1693 and remaining limits: docs/p2p-skilling-parity.md. */
 module.exports = function registerPorcineOfInterestQuest(api) {
   const {
+    ChatType,
     CombatMethod,
     CombatType,
     PendingHit,
@@ -837,7 +838,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       return;
     }
     if (stage < STAGE_COMPLETE) enterCave(player);
-    player.sendMessage("You climb down the rope.");
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You climb down the rope.");
     player.moveTo(new Location(CAVE_LANDING_TILE.x, CAVE_LANDING_TILE.y, 0));
     ensureScimitar(player); ensureSourhog(player);
     restoreCorpse(player);
@@ -850,7 +851,6 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     }
     caves.get(player)?.leave(player, false);
     player.moveTo(new Location(HOLE_RETURN_TILE.x, HOLE_RETURN_TILE.y, 0));
-    player.sendMessage("You climb up the rope.");
   }
 
   function climbOverBlockage(player) {
@@ -966,11 +966,13 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   }
 
   /**
-   * The cave rope is named "Rope", so the generic ladder handler claims it first and the quest's
-   * Spria warning and cave exit never ran. This runs before every named handler.
+   * LocTeleports plays the captured climb (animation, fade, message) for the cave rope, and it
+   * answers before this plugin's own hook. Only the Sourhog-dead, foot-uncut warning has to come
+   * first, so the climb is left alone otherwise.
    */
-  function handleCaveRope(event) {
+  function gateCaveRope(event) {
     if (event.objectId !== CAVE_ROPE_OBJECT_ID || event.clickType !== 1) return;
+    if (quest.getStage(event.player) !== STAGE_SOURHOG_DEAD) return;
     handleObjectInteraction(event);
   }
 
@@ -1112,7 +1114,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("interface:closed", noteClosed);
-  api.onBeforeObjectInteraction(handleCaveRope);
+  api.onBeforeObjectInteraction(gateCaveRope);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.registerNpcCombatMethodProvider([QUEST_SOURHOG_NPC_ID], QuestSourhogCombat, { singleton: false });

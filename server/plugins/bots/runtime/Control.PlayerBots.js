@@ -30,6 +30,33 @@ function controlBot({ player, parts }) {
   return true;
 }
 
+/** Copies the administrator's base levels and experience onto an active bot. */
+function copyStatsToBot({ player, parts }) {
+  const { api, runtime } = services;
+  const name = parts.slice(1).join(" ").replace(/_/g, " ").toLowerCase();
+  const entry = [...runtime.entriesByUsername.values()].find(({ player: bot }) =>
+    bot.getUsername().toLowerCase() === name || bot.getDisplayName().toLowerCase() === name);
+  if (!entry || !runtime.playerBotUsernames.has(entry.player.getUsername())) {
+    player.sendMessage("Usage: ::botstatsme <bot name>. Choose an active bot.");
+    return true;
+  }
+  const bot = entry.player;
+  // While driving a bot (::botcontrol) the command runs as that bot; "me" is still the parked owner.
+  const source = controls.get(player) ?? player;
+  const from = source.getSkillManager();
+  const to = bot.getSkillManager();
+  for (const skill of api.core.Skill.values()) {
+    const level = from.getMaxLevel(skill);
+    to.setMaxLevels(skill, level, false)
+      .setCurrentLevel(skill, level, false)
+      .setExperiences(skill, from.getExperience(skill), false);
+  }
+  bot.getPacketSender().sendSkillsSnapshot();
+  bot.getUpdateFlag().flag(api.core.Flag.APPEARANCE);
+  player.sendMessage(`Copied your stats to ${bot.getDisplayName()}.`);
+  return true;
+}
+
 function returnToMain({ player }) {
   if (!services.api.core.releasePlayerControl(player)) {
     player.sendMessage("You are already on your own character.");
@@ -52,6 +79,7 @@ function registerBotControlCommands(options) {
   services = options;
   const { api } = options;
   api.registerCommand("botcontrol", controlBot, api.core.PlayerRights.ADMINISTRATOR, "Manually control an active bot");
+  api.registerCommand("botstatsme", copyStatsToBot, api.core.PlayerRights.ADMINISTRATOR, "Copy your stats onto a bot");
   // A controlled bot keeps its own rank; returning only restores this connection's owner.
   api.registerCommand("botback", returnToMain, api.core.PlayerRights.NONE, "Return to your own character");
   api.onPlayerLogout(releaseRemovedPlayer);

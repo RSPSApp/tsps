@@ -3143,6 +3143,76 @@ test('bh manual stops AI and movement without logging out; another bh assignment
   entry.brain.reset();
 });
 
+test('::botstatsme copies the administrator\'s levels and experience onto an active bot', () => {
+  const { registerBotControlCommands } = require('../plugins/bots/runtime/Control.PlayerBots');
+  const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
+  const { Skill } = require('../dist/game/model/Skill');
+  const { Flag } = require('../dist/game/model/Flag');
+  const levels = new Map(Skill.values().map((skill) => [skill, 40 + skill.getIndex()]));
+  const experiences = new Map(Skill.values().map((skill) => [skill, 100000 + skill.getIndex()]));
+  const copied = new Map();
+  const source = {
+    getMaxLevel: (skill) => levels.get(skill),
+    getExperience: (skill) => experiences.get(skill),
+  };
+  const target = {
+    setMaxLevels(skill, level) {
+      copied.set(skill, { ...copied.get(skill), max: level });
+      return this;
+    },
+    setCurrentLevel(skill, level) {
+      copied.set(skill, { ...copied.get(skill), current: level });
+      return this;
+    },
+    setExperiences(skill, experience) {
+      copied.set(skill, { ...copied.get(skill), experience });
+      return this;
+    },
+  };
+  let snapshots = 0;
+  const flags = [];
+  const messages = [];
+  const bot = {
+    getUsername: () => 'devbot1',
+    getDisplayName: () => 'Dev Bot1',
+    getSkillManager: () => target,
+    getPacketSender: () => ({ sendSkillsSnapshot() { snapshots++; return this; } }),
+    getUpdateFlag: () => ({ flag(flag) { flags.push(flag); } }),
+  };
+  const owner = {
+    getUsername: () => 'admin',
+    getSkillManager: () => source,
+    sendMessage: (message) => messages.push(message),
+  };
+  const commands = new Map();
+  registerBotControlCommands({
+    api: {
+      core: { PlayerRights, Skill, Flag },
+      registerCommand: (name, handler) => commands.set(name, handler),
+      onPlayerLogout() {}, onPlayerDisconnect() {},
+    },
+    runtime: {
+      entriesByUsername: new Map([['devbot1', { player: bot }]]),
+      playerBotUsernames: new Set(['devbot1']),
+    },
+  });
+
+  commands.get('botstatsme')({ player: owner, parts: ['botstatsme', 'dev_bot1'] });
+  for (const skill of Skill.values()) {
+    assert.deepEqual(copied.get(skill), {
+      max: levels.get(skill),
+      current: levels.get(skill),
+      experience: experiences.get(skill),
+    }, `${skill.getName()} copied`);
+  }
+  assert.equal(snapshots, 1, 'one skills snapshot refresh');
+  assert.deepEqual(flags, [Flag.APPEARANCE], 'the combat level above the bot is refreshed');
+  assert.deepEqual(messages, ['Copied your stats to Dev Bot1.']);
+
+  commands.get('botstatsme')({ player: owner, parts: ['botstatsme', 'missing'] });
+  assert.match(messages.at(-1), /Usage: ::botstatsme/);
+});
+
 // Review fixes (#3676): a bot an administrator drives has a real client, so it gets what a player gets.
 function watchedBot(t, name, location, watched) {
   const { Player } = require('../dist/game/entity/impl/player/Player');

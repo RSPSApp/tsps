@@ -1,8 +1,9 @@
 // Level-up feedback as live OSRS sends it (rsprox captures, docs/settings.md): the chat
-// message, the level's unlock message(s) from the OSRS Wiki transcripts, graphic and sounds,
-// then the chatbox pop-up (levelup_display, 233) unless the player turned it off in
-// Settings > Interfaces > "Level-up pop-up notifications". A combat level gained with it
-// follows a tick later; its pop-up waits until the skill's is continued.
+// message, graphic and sounds, then the chatbox pop-up (levelup_display, 233) unless the player
+// turned it off in Settings > Interfaces > "Level-up pop-up notifications". With "Show level &
+// unlocks", Continue opens a box per level saying what it unlocked (the OSRS Wiki transcripts'
+// text, beside the level's pictures); otherwise those lines go to the chat. A combat level
+// gained with it follows a tick later; its pop-up waits until the skill's (and its box) is done.
 //
 // Opening a pop-up interrupts what the player is doing: it emits "level-up:popup-opened"
 // { player, skill, pause }, which holds skilling until Continue. With pop-ups off, nothing stops.
@@ -23,9 +24,12 @@ const TOPLEVEL_CHATBOX_RESETBACKGROUND_SCRIPT = 2379;
 const POPUP_DISABLED_VARBIT = 20157;
 // option_level_up_popup_list: "Show level & unlocks". Continuing then opens a box listing them.
 const POPUP_LISTS_UNLOCKS_VARBIT = 4371;
-// The message box that box is (StatementDialogue, core 229); its close ends the level-up,
-// or, for a single unlock with pictures, objectbox (193) / objectbox_double (11).
-const UNLOCK_BOX_GROUPS = [229, 193, 11];
+// The box that lists them: the level's picture beside its text (objectbox, 193), two
+// pictures either side of it (objectbox_double, 11), or the text alone (messagebox, 229).
+const UNLOCK_BOX_GROUPS = [193, 11, 229];
+// Which picture(s) each level's box shows, as obj gamevals (see the file's _source); levels
+// not listed there use the generated messages' items.
+const UNLOCK_PICTURES = require("./data/level-up-pictures.json");
 const INTERRUPT_ACTIONS_CONFIG = "SkillLevelUp:interruptActions";
 
 const LEVELUP_ANIM = 199;
@@ -138,19 +142,53 @@ function announceUnlocks(player, skill, oldLevel, newLevel) {
   for (const line of unlocksFor(player, skill, oldLevel, newLevel)) player.sendMessage(line);
 }
 
-/** The box "Show level & unlocks" opens after Continue; false when those levels unlock nothing. */
-function showUnlockBox(player, skill, fromLevel, toLevel) {
-  const entries = unlockEntries(player, skill, fromLevel, toLevel);
-  if (entries.length === 0) return false;
-  const { DialogueChainBuilder, StatementDialogue, ItemStatementDialogue, DoubleItemStatementDialogue, EndDialogue } = pluginApi.core;
+const listsUnlocks = (player) => player.getPacketSender().getVarbit(POPUP_LISTS_UNLOCKS_VARBIT) === 1;
+
+/** The level's pictures as item ids: none, one or two. */
+function picturesFor(player, skill, level) {
+  const names = UNLOCK_PICTURES[skill.getName()]?.[level];
+  if (names) return names.map((name) => pluginApi.core.CacheDefinitions.getObjId(name)).filter(Number.isInteger).slice(0, 2);
+  // A single unlock whose picture names a cache item.
+  const entries = unlockEntries(player, skill, level - 1, level);
+  return entries.length === 1 ? (entries[0].items ?? []).slice(0, 2) : [];
+}
+
+function unlockDialogue(index, items, text) {
+  const { StatementDialogue, ItemStatementDialogue, DoubleItemStatementDialogue } = pluginApi.core;
+  if (items.length === 2) return new DoubleItemStatementDialogue(index, items[0], items[1], text);
+  if (items.length === 1) return new ItemStatementDialogue(index, items[0], text);
+  return new StatementDialogue(index, text);
+}
+
+/**
+ * The box "Show level & unlocks" opens after Continue, one per level that unlocked something
+ * (Ours: a lamp's several levels each get theirs, in order). Its text also goes to the chat as
+ * a message-box line. False when those levels unlock nothing.
+ */
+function showUnlockBox(player, state, skill, fromLevel, toLevel) {
+  const { DialogueChainBuilder, EndDialogue, ChatType } = pluginApi.core;
   const chain = new DialogueChainBuilder();
-  // One unlock with its picture(s) is an objectbox; several (a lamp's worth) are one text box.
-  const items = entries.length === 1 ? entries[0].items ?? [] : [];
-  const text = entries.map((entry) => entry.text).join("<br>");
-  chain.add(items.length === 2 ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
-    : items.length === 1 ? new ItemStatementDialogue(0, items[0], text) : new StatementDialogue(0, text));
-  chain.add(new EndDialogue(1));
-  player.getDialogueManager().startDialogues(chain);
+  const texts = [];
+  for (let level = fromLevel + 1; level <= toLevel; level++) {
+    const lines = unlocksFor(player, skill, level - 1, level);
+    if (lines.length === 0) continue;
+    const text = lines.join("<br>");
+    chain.add(unlockDialogue(texts.length, picturesFor(player, skill, level), text));
+    texts.push(text);
+  }
+  if (texts.length === 0) return false;
+  chain.add(new EndDialogue(texts.length));
+  const sender = player.getPacketSender();
+  for (const text of texts) sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
+  // The box takes the pop-up's place in the chatbox; that is no reason to stop the level-up.
+  if (state) state.replacing = true;
+  try {
+    sender.sendInterfaceDisplayState((GROUP << 16) | SKILL_LAYERS[skill.getIndex()], true);
+    sender.sendClientScript(TOPLEVEL_CHATBOX_RESETBACKGROUND_SCRIPT);
+    player.getDialogueManager().startDialogues(chain);
+  } finally {
+    if (state) state.replacing = false;
+  }
   return true;
 }
 
@@ -175,13 +213,13 @@ function openPopup(player, layer, line1, line2) {
   }
 }
 
-function openSkillPopup(player, skill, oldLevel, newLevel) {
+function openSkillPopup(player, skill, oldLevel, newLevel, boxed) {
   let state = pending.get(player);
   if (!state) {
     state = { actions: new Map(), queue: [], location: player.getLocation().clone(), replacing: false };
     pending.set(player, state);
   } else {
-    state.queue.push({ skill, oldLevel, newLevel });
+    state.queue.push({ skill, oldLevel, newLevel, boxed });
     return;
   }
   pluginApi.emitCustomEvent(POPUP_OPENED_EVENT, {
@@ -194,12 +232,12 @@ function openSkillPopup(player, skill, oldLevel, newLevel) {
   if (!combat.getTarget() && !combat.getAttacker()) {
     player.performAnimation(pluginApi.core.Animation.DEFAULT_RESET_ANIMATION);
   }
-  showSkillPopup(player, skill, oldLevel, newLevel);
+  showSkillPopup(player, skill, oldLevel, newLevel, boxed);
 }
 
-function showSkillPopup(player, skill, oldLevel, newLevel) {
+function showSkillPopup(player, skill, oldLevel, newLevel, boxed) {
   const state = pending.get(player);
-  if (state) state.current = { skill, from: oldLevel, to: newLevel };
+  if (state) state.current = { skill, from: oldLevel, to: newLevel, boxed };
   const name = skill.getName();
   openPopup(player, SKILL_LAYERS[skill.getIndex()],
     `Congratulations, you just advanced a ${name} level.`, `Your ${name} level is now ${newLevel}.`);
@@ -241,7 +279,11 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   } else {
     celebrate(player, `Congratulations, you've just advanced your ${name} level. You are now level ${newLevel}.`, LEVELUP_ANIM);
   }
-  announceUnlocks(player, skill, oldLevel, newLevel);
+  const popupOpens = popupsEnabled(player) && pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) !== false;
+  // With "Show level & unlocks" the unlock box says it, and logs it in the chat as it opens.
+  // The setting at level-up decides Continue and cancelling, even if it changes while the pop-up is open.
+  const boxed = popupOpens && listsUnlocks(player);
+  if (!boxed) announceUnlocks(player, skill, oldLevel, newLevel);
   playJingle(player, skill, newLevel);
 
   const total = skills.getTotalLevel();
@@ -256,38 +298,43 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   const combatGained = Number.isInteger(previousCombat) && combat > previousCombat;
   if (combatGained) announceCombatLevel(player);
 
-  if (!popupsEnabled(player) || pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) === false) return;
+  if (!popupOpens) return;
   if (combatGained && player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE) === undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, previousCombat);
   }
-  openSkillPopup(player, skill, oldLevel, newLevel);
+  openSkillPopup(player, skill, oldLevel, newLevel, boxed);
 }
 
-/** Continue: a queued combat pop-up comes next, otherwise the pop-up closes. */
+/**
+ * Continue: with "Show level & unlocks", the skill's unlock box comes straight after its own
+ * pop-up; then a queued skill's pop-up, a combat level gained, or the end of the level-up.
+ */
 function continueLevelUp({ player }) {
   if (!player.getPacketSender().isChatboxInterface(GROUP)) return false;
   const state = pending.get(player);
+  const current = state?.current;
+  if (current) state.current = null;
+  if (current?.boxed && showUnlockBox(player, state, current.skill, current.from, current.to)) {
+    state.awaitingUnlockBox = true;
+    return true;
+  }
+  showNext(player, state);
+  return true;
+}
+
+function showNext(player, state) {
   const next = state?.queue.shift();
   if (next) {
-    showSkillPopup(player, next.skill, next.oldLevel, next.newLevel);
-    return true;
+    showSkillPopup(player, next.skill, next.oldLevel, next.newLevel, next.boxed);
+    return;
   }
   const combatFrom = player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE);
   if (combatFrom !== undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, undefined);
     openCombatPopup(player, combatFrom);
-    return true;
-  }
-  // "Show level & unlocks": the box that lists them comes before the skill resumes.
-  const current = state?.current;
-  if (current && player.getPacketSender().getVarbit(POPUP_LISTS_UNLOCKS_VARBIT) === 1 &&
-      showUnlockBox(player, current.skill, current.from, current.to)) {
-    state.awaitingUnlockBox = true;
-    player.getPacketSender().closeInterface(GROUP);
-    return true;
+    return;
   }
   finishPending(player, state);
-  return true;
 }
 
 /** The level-up is over: close its pop-up and let whatever it paused carry on. */
@@ -306,15 +353,23 @@ function cancelPending({ player }) {
   if (!state || state.replacing) return;
   pending.delete(player);
   player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, undefined);
+  // With "Show level & unlocks" the unlock lines wait for the box; a level-up given up before
+  // its box opens still puts them in the chat, for the open pop-up's skill and every queued one.
+  if (state.current?.boxed) announceUnlocks(player, state.current.skill, state.current.from, state.current.to);
+  for (const { skill, oldLevel, newLevel, boxed } of state.queue) if (boxed) announceUnlocks(player, skill, oldLevel, newLevel);
   for (const action of state.actions.values()) action.cancel();
 }
 
 function interfaceClosed(event) {
   if (event.interfaceId === GROUP) { cancelPending(event); return; }
-  if (UNLOCK_BOX_GROUPS.includes(event.interfaceId)) {
-    const state = pending.get(event.player);
-    if (state?.awaitingUnlockBox) finishPending(event.player, state);
-  }
+  if (!UNLOCK_BOX_GROUPS.includes(event.interfaceId)) return;
+  const state = pending.get(event.player);
+  if (!state?.awaitingUnlockBox) return;
+  // One level's box giving way to the next level's is not the end of them.
+  const sender = event.player.getPacketSender();
+  if (UNLOCK_BOX_GROUPS.some((group) => sender.isChatboxInterface(group))) return;
+  state.awaitingUnlockBox = false;
+  showNext(event.player, state);
 }
 
 function itemAction(event) {

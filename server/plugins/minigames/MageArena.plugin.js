@@ -11,11 +11,13 @@
  * nothing here duplicates them.
  */
 const BattleMages = require("./magearena/BattleMages.MageArena");
+const Followers = require("./magearena/Followers.MageArena");
 const Kolodion = require("./magearena/Kolodion.MageArena");
 const MageArenaII = require("./magearena/MageArenaII.MageArena");
 const Levers = require("./magearena/Levers.MageArena");
 const Spells = require("./magearena/Spells.MageArena");
 const Statues = require("./magearena/Statues.MageArena");
+const EnchantedSymbol = require("./magearena/Symbol.MageArena");
 
 module.exports = {
   name: "MageArena",
@@ -24,17 +26,21 @@ module.exports = {
   register(api) {
     BattleMages(api);
     MageArenaII(api);
+    Followers(api);
     Kolodion(api);
     Levers(api);
     Spells(api);
     Statues(api);
+    EnchantedSymbol(api);
   },
   _test: {
     battleMages: BattleMages._test,
+    followers: Followers._test,
     kolodion: Kolodion._test,
     mageArenaII: MageArenaII._test,
     levers: Levers._test,
     spells: Spells._test,
     statues: Statues._test,
+    symbol: EnchantedSymbol._test,
   },
 };

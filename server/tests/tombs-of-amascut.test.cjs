@@ -726,3 +726,69 @@ test('the escape crystal never fires on a killing hit, and nothing lands between
     PluginManager.customEventHooks.delete('escape-crystal:settings');
   }
 });
+
+test('logging out in the Nexus with an inventory escape crystal ejects instead of rejoining the party', () => {
+  CachePipeline.initialize();
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { Location } = require('../dist/game/model/Location');
+  const { Item, ItemIdentifiers: I } = PluginManager.getCoreApi();
+  const Shared = require('../plugins/minigames/toa/Shared.TombsOfAmascut');
+  const State = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const Parties = require('../plugins/minigames/toa/Parties.TombsOfAmascut');
+  const { api, calls } = recordingApi();
+  require('../plugins/minigames/toa/Raid.TombsOfAmascut')(api);
+  const login = calls.find((call) => call.name === 'onPlayerLogin').args[0];
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = (name, index) => {
+    const p = new Player(new PlayerSession(channel), new Location(3550, 5161, 0));
+    p.setUsername(name);
+    p.setIndex(index);
+    return p;
+  };
+  const leader = player('toaleader', 101);
+  const member = player('toamember', 102);
+  const party = Parties.createParty(leader);
+  party.addPlayer(member);
+  const raid = new State.Raid(party, leader);
+  const room = new State.Room(raid, { key: 'MAIN_HALL', spawn: { x: 3550, y: 5161, z: 0 }, spread: 0 });
+  raid.rooms.set(room.key, room);
+  raid.roomKey = room.key;
+  for (const p of [leader, member]) {
+    raid.member(p).roomKey = room.key;
+    raid.area.enter(p);
+  }
+  leader.getInventory().setItem(0, new Item(Shared.escapeCrystalId(), 1));
+  leader.getInventory().setItem(1, new Item(I.COINS, 100));
+  State.registerRaidItems(I.NECTAR_4_);
+  leader.getInventory().setItem(2, new Item(I.NECTAR_4_, 1));
+  try {
+    // Without a crystal, the member can rejoin the surviving leader.
+    raid.area.leave(member, true);
+    login({ player: member });
+    assert.equal(State.raidOf(member), raid);
+    assert.equal(Parties.currentParty(member), party);
+    // Area.leave is the logout dispatch used by Player.onLogout; the member stays in the raid.
+    raid.area.leave(leader, true);
+    assert.equal(leader.getInventory().contains(Shared.escapeCrystalId()), false);
+    assert.equal(leader.getInventory().getAmount(I.COINS), 100);
+    assert.equal(party.players.includes(leader), false);
+    assert.equal(State.absentees.has(leader.getUsername()), false);
+    assert.equal(party.leader, member);
+    assert.equal(raid.leader, member);
+    login({ player: leader });
+    assert.equal(State.raidOf(leader), null);
+    assert.equal(Parties.currentParty(leader), null);
+    assert.equal(leader.getLocation().getX(), Shared.LOBBY_RETURN.x);
+    assert.equal(leader.getLocation().getY(), Shared.LOBBY_RETURN.y);
+    assert.equal(leader.getInventory().getAmount(I.COINS), 100);
+    assert.equal(raid.players.includes(member), true);
+    assert.equal(leader.getInventory().contains(I.NECTAR_4_), false);
+    const nextParty = Parties.createParty(leader);
+    assert.equal(Parties.currentParty(leader), nextParty);
+    nextParty.disband();
+  } finally {
+    raid.dispose();
+  }
+});

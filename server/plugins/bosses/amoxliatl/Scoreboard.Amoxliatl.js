@@ -22,6 +22,10 @@ const Chamber = require("./Chamber.Amoxliatl");
 /** Cache names: the locs, the interface and its components. */
 const SCOREBOARD_LOCS = ["amoxliatl_scoreboard", "amoxliatl_scoreboard_op"];
 const INTERFACE_NAME = "amoxliatl_scoreboard";
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const COMPONENT = {
   title: "title_text", kills: "pkc_content", deaths: "pd_content", best: "pbt_content",
   worldKills: "gkc_content", worldDeaths: "gd_content", worldBest: "gbt_content",
@@ -105,6 +109,7 @@ function read(event) {
   if (!SCOREBOARD_LOCS.some((name) => cache().getLocId(name) === event.objectId)) return false;
   const player = event.player;
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   for (const [component, text] of lines(player)) sender.sendString(text, uid(component));
   return true;

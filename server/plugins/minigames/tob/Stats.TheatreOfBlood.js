@@ -30,6 +30,9 @@ const ATTR_COMPLETIONS = { entry: "tob:entry-completions", normal: "tob:completi
 const COUNT_NAME = { entry: "Theatre of Blood: Entry Mode", normal: "Theatre of Blood", hard: "Theatre of Blood: Hard Mode" };
 const TAB_MODES = ["normal", "entry", "hard"];
 const SCOREBOARD = 363;
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does (rsprox_transcripts/231/00409.txt):
+ * a modal before it (the bank's -2) can leave the main modal stretched, which misplaces the board. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
 const TAB_VARBIT = 12270;
 const TAB_FIRST = 4;
 const GRID_FIRST = 41;
@@ -246,7 +249,7 @@ function sendScoreboard(player) {
 function openScoreboard(event) {
   const { player } = event;
   if (!Shared.inVerSinhaza(player.getLocation())) return false;
-  player.getPacketSender().sendInterface(SCOREBOARD);
+  player.getPacketSender().sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]).sendInterface(SCOREBOARD);
   sendScoreboard(player);
   return true;
 }

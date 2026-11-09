@@ -5,6 +5,10 @@ const Common = require('./Common.Leviathan');
 // As with the native Nex/Doom scoreboards, plugin world records survive restart.
 // These counts begin with recorded events; there is no fabricated old history.
 const FILE = path.join(process.cwd(), 'data', 'saves', 'leviathan-scoreboard.json');
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 let world;
 const count = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : 0;
 function records() {
@@ -35,6 +39,7 @@ function read(player) {
     worldDeaths: `${number(records().deaths)} (recorded)`,
     worldBest: time(records().bestTicks),
   };
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(group);
   for (const [key, component] of Object.entries(Common.data.scoreboard.components))
     sender.sendString(values[key], (group << 16) | component);

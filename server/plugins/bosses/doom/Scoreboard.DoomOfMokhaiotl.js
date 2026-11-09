@@ -16,6 +16,10 @@ const Records = require("./Records.DoomOfMokhaiotl");
 const { onObject } = require("./Lobby.DoomOfMokhaiotl");
 
 const INTERFACE = 920;
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const PANEL = { GENERAL: 3, DELVES: 5 };
 const LEVELS = ["1", "2", "3", "4", "5", "6", "7", "8", "8+"];
 const PERSONAL = { total: 44, first: 46 };
@@ -61,6 +65,7 @@ function lines(player) {
 
 function show(player, panel) {
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(INTERFACE);
   for (const [component, text] of lines(player)) sender.sendString(text, uid(component));
   sender.sendInterfaceDisplayState(uid(PANEL.GENERAL), panel !== PANEL.GENERAL);

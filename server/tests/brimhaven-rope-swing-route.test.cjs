@@ -106,7 +106,7 @@ test('native blade hazards use the shared clock, real clipping, movement and ses
     const perform=p.performAnimation.bind(p);
     test.mock.method(p,'performAnimation',animation=>{events.push([Shared.cycle.tick,'performAnimation',animation]);return perform(animation);});
     const sender=p.getPacketSender();
-    for(const name of ['sendObject','sendObjectRemoval','sendObjectAnimation','sendTypedMessage','sendSoundEffect']) {
+    for(const name of ['sendObject','sendObjectRemoval','sendObjectAnimation','sendTypedMessage','sendSoundEffect','sendGraphic','sendProjectile']) {
       const original=sender[name].bind(sender);
       test.mock.method(sender,name,(...args)=>{events.push([Shared.cycle.tick,name,...args]);return original(...args);});
     }
@@ -255,6 +255,35 @@ test('native blade hazards use the shared clock, real clipping, movement and ses
       const hp=f.p.getHitpoints(); for(let i=0;i<4;i++)turn();
       assert.equal(f.p.getSkillManager().getExperience(core.Skill.AGILITY),xp); assert.equal(f.p.getHitpoints(),hp);
       assert.equal(f.events.filter(([,name,,a])=>name==='sendObjectAnimation'&&a.getId()===1111).length,1);
+    });
+  });
+
+  await t.test('pressure pads send the captured falling-rock tile graphic',test=>{
+    phase(0); const f=actor(test,2798,9557), observer=actor(test,2801,9557); Shared.setRandom(()=>0);
+    f.p.getMovementQueue().requestWalk(at(2799,9557)); turn(); turn(); const started=Shared.cycle.tick;
+    turn(); turn(); turn();
+    for(const a of [f,observer]) {
+      const effects=a.events.filter(([,name,graphic])=>name==='sendGraphic'&&graphic.getId()===271);
+      assert.deepEqual(effects.map(([tick,,graphic,tile])=>
+        [tick,graphic.getDelay(),tile.getX(),tile.getY(),tile.getZ()]),
+      [[started,20,2799,9557,3],[started+2,0,2799,9557,3]]);
+    }
+  });
+
+  await t.test('dart projectiles match the captured visual in both successful and failed crossings',async test=>{
+    for(const outcome of ['pass','fail']) await test.test(outcome, sub => {
+      const f=actor(sub,2776,9568); Shared.setRandom(()=>outcome==='pass'?0:0.99999);
+      if (outcome==='fail') f.p.getSkillManager().setMaxLevels(core.Skill.AGILITY,40,false).setCurrentLevel(core.Skill.AGILITY,40,false);
+      f.p.getMovementQueue().requestWalk(at(2777,9568)); turn(); turn();
+      for(let i=0;i<4;i++)turn();
+      const event=f.events.find(([,name])=>name==='sendProjectile');
+      assert.ok(event,`${outcome} crossing sends the dart`);
+      const [, ,start,end,offset,speed,id,startHeight,endHeight,target,delay,angle,distanceOffset]=event;
+      const hit=outcome==='fail';
+      assert.deepEqual([start.getX(),start.getY(),start.getZ()],[2783,9568,3]);
+      assert.deepEqual([end.getX(),end.getY(),end.getZ()],[hit?2777:2775,9568,3]);
+      assert.deepEqual([offset,speed,id,startHeight,endHeight,delay,angle,distanceOffset],[0,hit?25:150,270,0,10,0,2,40]);
+      assert.equal(target,hit?-(f.p.getIndex()+1):0);
     });
   });
 

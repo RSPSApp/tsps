@@ -19,6 +19,9 @@ const BLADES_AFTER_SOUND = 2469;
 const KNOCKBACK = { ANIM: 1114, BLADES_DELAY: 11, DARTS_DELAY: 25, BLADES_SPEED: [30, 60], DARTS_SPEED: [44, 74] };
 const BLADES_HIT_SOUND = 1376;
 const DARTS_HIT_SOUND = 1382;
+/** rsprox 1735: pressure-pad tile graphic and darts projectile. */
+const PRESSURE_PAD_GRAPHIC = 271;
+const DARTS_PROJECTILE = 270;
 /** The dodge: sound 1378, then anim 1110 (delay 70) and five ticks' wait (rsprox 1735, 1738). */
 const DART_DODGE = { SOUND: 1378, ANIM: 1110, DELAY: 70, HOLD: 5 };
 /** rsprox 1102/1735/1738/4308: three decoration ticks, then four of solid 3567 (cache seq 1103). */
@@ -113,6 +116,23 @@ function animateFloorSpikes({ player, core, pos }) {
   }
 }
 
+function animatePressurePad({ player, core, pos }, delay) {
+  player.getPacketSender().sendGlobalGraphic(
+    new core.Graphic(PRESSURE_PAD_GRAPHIC, delay),
+    new core.Location(pos.x, pos.y, pos.z),
+  );
+}
+
+function fireDartProjectile({ player, core, pos }, span, dir, hit) {
+  // The darts fire from ahead of the runner. On a dodge, they keep flying past the trap.
+  const entry = dir > 0 ? span.from : span.to;
+  const start = new core.Location(...spanTile(span, entry + dir * 6), pos.z);
+  const end = new core.Location(...spanTile(span, hit ? entry : entry - dir * 2), pos.z);
+  new core.Projectile(start, end, hit ? player : null, DARTS_PROJECTILE,
+    0, hit ? 25 : 150, 0, 10, player.getPrivateArea?.() ?? null,
+  ).withAngle(2).withProgress(40).sendProjectile();
+}
+
 function createArea() {
   const { Area, Boundary } = Shared.core();
   class BrimhavenAgilityArena extends Area {
@@ -191,13 +211,13 @@ function trapSteps(player, span, outcome, dir) {
       const next = spanTile(span, dir > 0 ? span.to : span.from);
       const walk = next[0] === at.getX() && next[1] === at.getY() ? [past] : [next, past];
       steps.push(
-        { sound: DART_DODGE.SOUND }, { wait: 1 },
+        { sound: DART_DODGE.SOUND }, { wait: 1 }, { run: (ctx) => fireDartProjectile(ctx, span, dir, false) },
         { anim: DART_DODGE.ANIM, delay: DART_DODGE.DELAY }, { wait: DART_DODGE.HOLD },
         { walk },
       );
     } else {
       steps.push(
-        { sound: DARTS_HIT_SOUND },
+        { sound: DARTS_HIT_SOUND }, { run: (ctx) => fireDartProjectile(ctx, span, dir, true) },
         { move: [...back, z], anim: KNOCKBACK.ANIM, delay: KNOCKBACK.DARTS_DELAY, speed: KNOCKBACK.DARTS_SPEED, ticks: 1 },
         { wait: 1 },
         { msg: { spam: Shared.DARTS_FAIL_MESSAGE } },
@@ -242,8 +262,12 @@ function trapSteps(player, span, outcome, dir) {
       { wait: 1 }, { run: animateFloorSpikes }, { wait: 1 }, { tele: [...past, z] },
     );
   } else {
-    // Pads: XP two ticks after the jump (rsprox 1735 350 -> 352).
-    steps.push({ move: [...past, z], anim: TRAP_JUMP.ANIM, delay: TRAP_JUMP.DELAY, speed: TRAP_JUMP.SPEED, ticks: 2 });
+    // Pads: the rocks play at take-off and again on landing (rsprox 1735 350 -> 352).
+    steps.push(
+      { run: (ctx) => animatePressurePad(ctx, 20) },
+      { move: [...past, z], anim: TRAP_JUMP.ANIM, delay: TRAP_JUMP.DELAY, speed: TRAP_JUMP.SPEED, ticks: 2 },
+      { run: (ctx) => animatePressurePad(ctx, 0) },
+    );
   }
   return steps;
 }

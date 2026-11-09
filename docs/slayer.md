@@ -114,6 +114,8 @@ levels for, 3-35 kills (Wiki; in OSRS the player chooses the amount).
   - Slayer XP: kills on the task, superiors included, give that much more Slayer XP.
 - **Completing:** his tasks add to his own streak and give their points modifier, with no streak
   multiplier.
+- **Talk:** his transcript's assignment opens the choice; after the pick he says the line for the
+  task's modifier, then offers tips, cancelling (100 points) or "Okay, great!".
 
 ### Offered choices (`slayer:task-offer`)
 
@@ -122,12 +124,10 @@ levels for, 3-35 kills (Wiki; in OSRS the player chooses the amount).
   many tasks, the kill count range the player types, and whether one is a boss task (with a
   `bossAllowed(task)` filter). Demonic Pacts' Culling Spree answers it: three tasks, one a boss
   from the unlocked areas with Like a Boss, 5-200 kills (Wiki).
-- The talk ends and a chatbox menu lists the tasks; a pick asks for the count (an amount prompt
-  that takes 0 so it can refuse it). Out of range assigns nothing; the roll is saved
-  (`slayer:offered-tasks`) and offered again until a task is picked, then set as the master
-  would set it (Konar's area, the master's streak and points).
-- **Talk:** his transcript's assignment opens the choice; after the pick he says the line for the
-  task's modifier, then offers tips, cancelling (100 points) or "Okay, great!".
+- The talk ends and a chatbox menu lists the tasks; a pick asks for the count (an amount
+  prompt that takes 0 and negatives so it can refuse them). Out of range assigns nothing; the
+  roll is saved (`slayer:offered-tasks`) and offered again until any task is assigned. A pick
+  is set as the master would set it (Konar's area, the master's streak and points).
 
 ### Superior uniques
 

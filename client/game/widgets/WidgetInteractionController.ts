@@ -22,6 +22,8 @@ export type WidgetInteractionControllerDeps = {
     getInputManager: () => InputManager | undefined;
     getRendererCanvas: () => unknown;
     getChatRequestsByName: () => ReadonlyMap<string, ChatRequest>;
+    /** Whether the transparent chatbox's message area is click-through now. */
+    isChatboxClickThrough?: () => boolean;
 };
 
 /**
@@ -185,6 +187,7 @@ export class WidgetInteractionController {
             this.clickedWidget,
             px,
             py,
+            this.deps.isChatboxClickThrough?.() ?? false,
         );
     }
 

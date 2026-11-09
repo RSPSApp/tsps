@@ -6,6 +6,7 @@ import {
     collectWidgetsAtPointAcrossRoots,
     findBlockingWidgetInHits,
 } from "../../../widgets/menu/utils";
+import { isChatMessageAreaWidget } from "./chatboxClickThrough";
 
 export function getUiClickRegistry(rendererCanvas: unknown): ClickRegistry | null {
     const clicks = (rendererCanvas as any)?.__clicks;
@@ -33,6 +34,7 @@ export function getWorldClickBlockingWidgetAtPoint(
     clickedWidget: any,
     px: number,
     py: number,
+    chatClickThrough = false,
 ): any | null {
     if (clickedWidget !== null) {
         return clickedWidget;
@@ -41,7 +43,10 @@ export function getWorldClickBlockingWidgetAtPoint(
     if (!widgetManager || widgetManager.rootInterface === -1) {
         return null;
     }
-    const hits = collectInputWidgetsAtPoint(widgetManager, px, py);
+    let hits = collectInputWidgetsAtPoint(widgetManager, px, py);
+    // A click-through chatbox's message area passes clicks to the world (its lines' options
+    // join the world's right-click menu instead).
+    if (chatClickThrough) hits = hits.filter((hit) => !isChatMessageAreaWidget(hit));
     if (hits.length === 0) {
         return null;
     }

@@ -29,6 +29,8 @@ const QUEST_LIST_ENTRY_FLAGS = 0x3e; // Native OP1–5 (RSProx4267); Pin journal
 // Quest journal overlay (xrsps client/common/ui constants).
 const JOURNAL_GROUP = 119;
 const JOURNAL_TITLE_CHILD = 5;
+// The text layer the line widgets hang under (InterfaceID.Questjournal.TEXTLAYER, 119:6).
+const JOURNAL_TEXTLAYER_CHILD = 6;
 const JOURNAL_CLOSE_CHILD = 8;
 const JOURNAL_SWITCH_CHILD = 9;
 const JOURNAL_FIRST_LINE_CHILD = 11;
@@ -290,11 +292,19 @@ function journalText(line) {
 function journalWidgets(quest, player) {
   // A quest with no journal of its own has nothing for a guide to read; leave the snapshot alone.
   if (typeof quest.buildJournal !== "function") return [];
-  const widgets = [{ id: (JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, text: `<col=7f0000>${quest.name}</col>` }];
-  journalLines(quest, player).forEach((line, index) => {
-    widgets.push({ id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), text: journalText(line) });
-  });
-  return widgets;
+  // The lines are the text layer's static children, as live mounts them: guides read placed-cog
+  // and other progress lines with WidgetTextRequirement(TEXTLAYER, checkChildren = true), which
+  // walks getStaticChildren() and never looks at a line widget on its own.
+  return [
+    { id: (JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, text: `<col=7f0000>${quest.name}</col>` },
+    {
+      id: (JOURNAL_GROUP << 16) | JOURNAL_TEXTLAYER_CHILD,
+      staticChildren: journalLines(quest, player).map((line, index) => ({
+        id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index),
+        text: journalText(line),
+      })),
+    },
+  ];
 }
 
 /**

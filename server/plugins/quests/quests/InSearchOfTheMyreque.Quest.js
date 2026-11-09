@@ -107,7 +107,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   /** The steel delivery Vanstrom asks for (amounts matter for two swords). */
   const WEAPONS = [
     { itemId: STEEL_LONGSWORD_ITEM_ID, amount: 1, label: "1 x Steel longsword" },
-    { itemId: STEEL_SWORD_ITEM_ID, amount: 2, label: "2 x Steel sword" },
+    { itemId: STEEL_SWORD_ITEM_ID, amount: 2, label: "2 x Steel shortsword" },
     { itemId: STEEL_DAGGER_ITEM_ID, amount: 1, label: "1 x Steel dagger" },
     { itemId: STEEL_MACE_ITEM_ID, amount: 1, label: "1 x Steel mace" },
     { itemId: STEEL_WARHAMMER_ITEM_ID, amount: 1, label: "1 x Steel warhammer" },

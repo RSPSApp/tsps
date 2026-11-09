@@ -476,6 +476,29 @@ test("Abandoned Mine ore veins: mined as their ore, wall swing, the matching dep
   for (const vein of ["Tin ore vein", "Copper ore vein", "Clay ore vein", "Iron ore vein", "Mithril ore vein", "Adamant ore vein"]) {
     assert.ok(h.interactions.get(vein)?.Mine, `${vein} can be mined`);
   }
+  // Every vein loc in the cache, each position going to its own depleted vein (the map places tin_l, tin_r,
+  // tin_single, copper_l and copper_r too).
+  for (const ore of ["tin", "copper", "clay", "coal", "iron", "mithril", "adamant"]) {
+    const vein = Mining.ORE_VEINS.find((rock) => Object.keys(rock.depletedRocks)[0].startsWith(`lotr_mine_wall_${ore}_`));
+    assert.ok(vein, ore);
+    for (const pos of ["l", "r", "mid", "single"]) {
+      assert.notEqual(loc(`lotr_mine_wall_${ore}_${pos}`), null, `${ore}_${pos} is a cache loc`);
+      assert.equal(vein.depletedRocks[`lotr_mine_wall_${ore}_${pos}`], `lotr_mine_wall_depleted_${pos}`, `${ore}_${pos}`);
+    }
+  }
+  // The review's repro: tin on lotr_mine_wall_tin_l goes to lotr_mine_wall_depleted_l, not rocks1.
+  const tinHarness = harness();
+  const tinMiner = createPlayer();
+  const restoreTinRandom = scriptRandom([], 0);
+  const tin = mineRock(tinHarness, tinMiner, "Tin ore vein", loc("lotr_mine_wall_tin_l"));
+  try {
+    for (let tick = 0; tick < 12 && !tinHarness.registered.length; tick++) tinHarness.tick(1);
+    assert.deepEqual(tinMiner.added, [[ItemIds.TIN_ORE, 1]]);
+    assert.equal(tinHarness.registered.at(-1)?.getId(), loc("lotr_mine_wall_depleted_l"));
+  } finally {
+    restoreTinRandom();
+    tin.restore();
+  }
   const depleted = createPlayer();
   const empty = new GameObject(loc("lotr_mine_wall_depleted_mid"), new core.Location(3285, 3368, 0), 0, 0, null);
   h.interactions.get("Depleted vein").Mine({ player: depleted, object: empty, definition: { getName: () => "Depleted vein" } });

@@ -276,15 +276,18 @@ const ESSENCE_ROCKS = [
  * lotr_mine_wall_depleted_mid with coal's timer, and the depleted vein's "There is no ore currently available in this
  * vein." (spam).
  */
+// Every ore has all four positions in the cache (lotr_mine_wall_<ore>_l/_r/_mid/_single).
+const VEIN_POSITIONS = ["l", "r", "mid", "single"];
 const ORE_VEINS = [
-  ["Tin ore vein", "Tin rocks", "tin", ["mid"]],
-  ["Copper ore vein", "Copper rocks", "copper", ["mid"]],
-  ["Clay ore vein", "Clay rocks", "clay", ["mid"]],
-  ["Coal ore vein", "Coal rocks", "coal", ["l", "r", "mid", "single"]],
-  ["Iron ore vein", "Iron rocks", "iron", ["l", "r", "mid", "single"]],
-  ["Mithril ore vein", "Mithril rocks", "mithril", ["l", "r", "mid", "single"]],
-  ["Adamant ore vein", "Adamantite rocks", "adamant", ["l", "r", "mid", "single"], "You manage to mine some adamantite."],
-].map(([objectName, base, ore, positions, oreMessage]) => {
+  ["Tin ore vein", "Tin rocks", "tin"],
+  ["Copper ore vein", "Copper rocks", "copper"],
+  ["Clay ore vein", "Clay rocks", "clay"],
+  ["Coal ore vein", "Coal rocks", "coal"],
+  ["Iron ore vein", "Iron rocks", "iron"],
+  ["Mithril ore vein", "Mithril rocks", "mithril"],
+  ["Adamant ore vein", "Adamantite rocks", "adamant", "You manage to mine some adamantite."],
+].map(([objectName, base, ore, oreMessage]) => {
+  const positions = VEIN_POSITIONS;
   const rock = ROCKS.find((candidate) => candidate.objectName === base);
   const { objectIds, ...stats } = rock;
   return {
@@ -1129,6 +1132,7 @@ module.exports = {
   PICKAXES_DESC,
   ROCKS,
   ESSENCE_ROCKS,
+  ORE_VEINS,
   findBestPickaxe,
   wearsBreathingFilter,
   rollOutcome,

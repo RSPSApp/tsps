@@ -49,6 +49,8 @@ function player({ level = 99, items = {}, name = "tester" } = {}) {
       contains: (id) => (inventory.get(id) ?? 0) > 0,
       delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
       adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
+      add: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
+      getAddableAmount: (item) => item.getAmount(),
       refreshItems: () => {},
     }),
     getSkillManager: () => ({

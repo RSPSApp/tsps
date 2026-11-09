@@ -1,0 +1,1613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>World config</title>
+<style>
+  /* OSRS-style interface: stone panels with bevelled frames (dark, the default) and a
+     parchment variant for light schemes. Every colour is a token on :root. */
+  :root {
+    color-scheme: dark;
+    --bg: #1e1913;
+    --panel: #3e3529;
+    --panel-deep: #2b241c;
+    --bevel-light: #645640;
+    --bevel-dark: #120e09;
+    --field: #19140f;
+    --line: #554836;
+    --text: #ffeab8;
+    --muted: #dccb9c;
+    --heading: #ff981f;
+    --heading-shadow: 1px 1px 0 #000;
+    --label-shadow: 1px 1px 0 #000;
+    --focus: #ffff00;
+    --focus-halo: #000000;
+    --accent: #ff981f;
+    --on: #2fbf3a;
+    --on-mark: #0b2a0d;
+    --off-bg: #a8291e;
+    --off-mark: #ffe3dc;
+    --changed: #ffd27a;
+    --changed-bg: #5a4214;
+    --edited: #9df0a4;
+    --edited-bg: #1f4422;
+    --error: #ffb4a8;
+    --error-bg: #4d1c15;
+    --warn: #ffe08a;
+    --warn-bg: #4a3a12;
+    --info: #ffeab8;
+    --info-bg: #2e3a2b;
+    --off: #b8aa88;
+    --badge-warn-bg: #5c1d12;
+    --badge-warn-text: #ffd2b8;
+    --badge-ok-bg: #1f4422;
+    --badge-ok-text: #b4f5b9;
+    --shadow: rgba(0, 0, 0, 0.55);
+    --backdrop: rgba(0, 0, 0, 0.6);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #c9b48a;
+      --panel: #eadcb4;
+      --panel-deep: #dccb9c;
+      --bevel-light: #fbf2d8;
+      --bevel-dark: #8c7550;
+      --field: #f8efd6;
+      --line: #b59d72;
+      --text: #3a2812;
+      --muted: #5a4224;
+      --heading: #6e3500;
+      --heading-shadow: 1px 1px 0 rgba(255, 246, 220, 0.6);
+      --label-shadow: 1px 1px 0 rgba(90, 50, 4, 0.18);
+      --focus: #ffff00;
+      --focus-halo: #3a2812;
+      --accent: #8a4400;
+      --on: #2a8f30;
+      --on-mark: #ffffff;
+      --off-bg: #b8352a;
+      --off-mark: #ffffff;
+      --changed: #6b4400;
+      --changed-bg: #f7d98c;
+      --edited: #1d5a22;
+      --edited-bg: #cfe8c2;
+      --error: #8a1d12;
+      --error-bg: #f3c9bd;
+      --warn: #5e4300;
+      --warn-bg: #f4e09a;
+      --info: #3a2812;
+      --info-bg: #d9e2c4;
+      --off: #66553a;
+      --badge-warn-bg: #f1c4b0;
+      --badge-warn-text: #5e1306;
+      --badge-ok-bg: #cfe8c2;
+      --badge-ok-text: #1a4f1e;
+      --shadow: rgba(60, 40, 10, 0.35);
+      --backdrop: rgba(40, 25, 5, 0.45);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 500 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Verdana, sans-serif;
+  }
+  /* The game's interface frame: light top-left edge, dark bottom-right. */
+  .bevel, header, .rows, .footer, dialog, .overlay-box, .tip, .banner {
+    border: 2px solid;
+    border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--panel);
+    border-width: 0 0 2px;
+  }
+  .bar {
+    max-width: 960px; margin: 0 auto; padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+  }
+  h1, h2, h3 { color: var(--heading); text-shadow: var(--heading-shadow); font-weight: 700; }
+  h1 { font-size: 24px; line-height: 1.2; margin: 0; flex: 1 1 auto; }
+  h3 { font-size: 16px; margin: 12px 0 4px; }
+  main { max-width: 960px; margin: 0 auto; padding: 12px 16px 84px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 4px var(--focus-halo); }
+
+  /* Stone buttons; pressing inverts the bevel. */
+  button {
+    background: var(--panel-deep); color: var(--text);
+    border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+    border-radius: 2px; padding: 5px 12px; cursor: pointer; font-weight: 600;
+    text-shadow: var(--label-shadow);
+  }
+  button:hover:not(:disabled) { filter: brightness(1.12); }
+  button:active:not(:disabled), .tabs button[aria-selected="true"] {
+    border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  }
+  button.primary { color: var(--heading); text-shadow: var(--heading-shadow); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.link {
+    border: none; background: none; padding: 2px 0; color: var(--accent); text-decoration: underline;
+    font-weight: 500; text-shadow: none; align-self: flex-start;
+  }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button[aria-selected="true"] { background: var(--bg); color: var(--heading); text-shadow: var(--heading-shadow); }
+
+  /* Inset fields. */
+  input[type="text"], input[type="search"], input[type="number"], input[type="date"], select, textarea {
+    background: var(--field); color: var(--text);
+    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+    border-radius: 2px;
+  }
+  input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.85; }
+  .search { flex: 1 1 220px; min-width: 0; }
+  .search input { width: 100%; padding: 5px 10px; }
+
+  .banner { border-radius: 2px; padding: 10px 12px; margin: 0 0 12px; display: flex; gap: 12px; align-items: flex-start; }
+  .banner > .text { flex: 1 1 auto; overflow-wrap: anywhere; }
+  .banner.error { background: var(--error-bg); color: var(--error); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  .banner.info { background: var(--info-bg); color: var(--info); }
+
+  section.group { margin: 20px 0 0; }
+  section.group > h2 { font-size: 19px; line-height: 1.3; margin: 0 0 8px; }
+  .rows { background: var(--panel); border-radius: 2px; box-shadow: 0 2px 6px var(--shadow); }
+  .row {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 260px);
+    gap: 6px 16px; padding: 10px 12px; border-top: 1px solid var(--line);
+  }
+  .row:first-child { border-top: none; }
+  .row.inactive .label, .row.inactive .help { color: var(--off); }
+  .label { font-weight: 700; color: var(--text); text-shadow: var(--label-shadow); }
+  .title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .info-wrap { position: relative; display: inline-flex; }
+  /* Not ".info": that is also a banner kind (.banner.info), which this rule shrank to an icon. */
+  .info-button {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5em; height: 1.5em; padding: 0; border: none; border-radius: 50%;
+    background: none; color: var(--muted); cursor: help; text-shadow: none;
+  }
+  .info-button:hover, .info-button:focus-visible { color: var(--heading); filter: none; }
+  .info-button svg { width: 1em; height: 1em; display: block; }
+  .tip {
+    position: absolute; left: 0; top: 100%; z-index: 4;
+    width: max-content; max-width: min(320px, 70vw);
+    padding: 4px 8px; border-radius: 2px;
+    background: var(--panel-deep); color: var(--text);
+    box-shadow: 0 2px 8px var(--shadow);
+    font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-wrap: anywhere; user-select: text; cursor: text;
+    visibility: hidden; opacity: 0;
+  }
+  .info-wrap:hover .tip, .info-wrap:focus-within .tip { visibility: visible; opacity: 1; }
+  .badge {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px;
+    padding: 6px 10px; border-radius: 2px; font-weight: 700;
+    background: var(--badge-warn-bg); color: var(--badge-warn-text);
+    border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  }
+  .badge.pending { background: var(--badge-ok-bg); color: var(--badge-ok-text); }
+  .badge-icon { width: 1.1em; height: 1.1em; flex: none; }
+  .badge-text { flex: 1 1 12em; }
+  .badge button { padding: 3px 10px; }
+  .badge button.link { color: inherit; font-weight: 700; padding: 2px 0; }
+  .help { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .meta { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .tag { font-size: 12px; border-radius: 2px; padding: 0 6px; font-weight: 600; }
+  .tag.changed { background: var(--changed-bg); color: var(--changed); }
+  .tag.edited { background: var(--edited-bg); color: var(--edited); }
+  .tag.note { background: var(--panel-deep); color: var(--muted); border: 1px solid var(--line); }
+  .control { display: flex; flex-direction: column; gap: 4px; align-items: stretch; justify-content: center; }
+  .control input[type="text"], .control input[type="number"], .control input[type="date"], .control select, .control textarea {
+    width: 100%; padding: 4px 8px;
+  }
+  .control textarea { min-height: 80px; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+  .control .invalid { border-color: var(--error); }
+  .field-error { color: var(--error); font-size: 13px; }
+
+  /* On/off: a stone box with a green tick or a red cross, plus the On/Off text beside it. */
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; align-self: flex-start; font-weight: 700; }
+  .switch input {
+    appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer; position: relative;
+    width: 24px; height: 24px; border-radius: 2px;
+    background: var(--off-bg);
+    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  }
+  .switch input::after {
+    content: "\2715"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 14px/1 system-ui, sans-serif; color: var(--off-mark);
+  }
+  .switch input:checked { background: var(--on); }
+  .switch input:checked::after { content: "\2713"; color: var(--on-mark); font-size: 16px; }
+  .switch input:disabled { opacity: 0.5; cursor: not-allowed; }
+  .switch-text { text-shadow: var(--label-shadow); min-width: 2em; }
+
+  .footer {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-width: 2px 0 0;
+  }
+  .footer .bar { justify-content: flex-end; }
+  .footer .status { flex: 1 1 auto; color: var(--muted); font-size: 14px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  dialog {
+    border-radius: 2px; background: var(--panel); color: var(--text);
+    width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0;
+    box-shadow: 0 6px 24px var(--shadow);
+  }
+  dialog::backdrop { background: var(--backdrop); }
+  .dialog-body { padding: 16px; overflow: auto; max-height: calc(100vh - 140px); }
+  .dialog-body h2 { margin: 0 0 12px; font-size: 19px; }
+  .dialog-actions { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
+  table.diff { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--panel-deep); }
+  table.diff th { color: var(--heading); text-shadow: var(--heading-shadow); }
+  table.diff th, table.diff td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  table.diff td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  ul.list { margin: 6px 0 12px; padding-left: 20px; }
+  .seconds { display: inline-flex; gap: 6px; align-items: center; }
+  .seconds label { text-shadow: var(--label-shadow); font-weight: 700; }
+  .seconds input { width: 90px; padding: 4px 8px; }
+  .overlay {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg); color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay-box {
+    display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+    background: var(--panel); border-radius: 2px; padding: 24px 28px; max-width: 420px;
+    box-shadow: 0 6px 24px var(--shadow);
+  }
+  .overlay-box p { margin: 0; font-size: 19px; line-height: 1.3; font-weight: 700; color: var(--heading); text-shadow: var(--heading-shadow); }
+  .spinner {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid var(--panel-deep); border-top-color: var(--heading);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+  .map-dialog { width: min(820px, calc(100vw - 24px)); }
+  .map-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .map-toolbar label { font-weight: 700; text-shadow: var(--label-shadow); }
+  .map-toolbar select { padding: 3px 6px; }
+  .map-readout { flex: 1 1 14em; font: 600 13px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text); }
+  .map-view {
+    position: relative; overflow: hidden; height: min(60vh, 480px); touch-action: none; cursor: crosshair;
+    background: var(--field); user-select: none;
+    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  }
+  .map-view.dragging { cursor: grabbing; }
+  .map-view img { position: absolute; width: 256px; height: 256px; image-rendering: pixelated; pointer-events: none; }
+  .map-marker {
+    position: absolute; pointer-events: none; transform: translate(-50%, -50%);
+    border: 2px solid #ffff00; outline: 2px solid #000; border-radius: 2px;
+  }
+  .map-marker::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; transform: translate(-50%, -50%);
+    background: #ffff00; border: 1px solid #000; border-radius: 50%;
+  }
+  .map-status { margin: 8px 0 0; font-weight: 600; }
+  .map-attribution { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .spawn-pick { align-self: flex-start; }
+  [hidden] { display: none !important; }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: minmax(0, 1fr); }
+    h1 { flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>World config</h1>
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="true">Settings</button>
+      <button type="button" role="tab" id="tab-plugins" aria-controls="panel-plugins" aria-selected="false" tabindex="-1">Plugins</button>
+    </div>
+    <div class="search">
+      <input type="search" id="search" placeholder="Search settings" aria-label="Search">
+    </div>
+  </div>
+</header>
+<main>
+  <div id="flashes" aria-live="polite"></div>
+  <div id="banners" aria-live="polite"></div>
+  <div id="countdown-banner"></div>
+  <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings"></div>
+  <div id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+  <p id="loading" class="empty">Loading…</p>
+</main>
+<div class="footer">
+  <div class="bar">
+    <span class="status" id="footer-status" aria-live="polite"></span>
+    <button type="button" id="discard" disabled>Discard edits</button>
+    <button type="button" class="primary" id="save" disabled>Save</button>
+  </div>
+</div>
+<div id="overlay" class="overlay" hidden>
+  <div class="overlay-box" role="status" aria-live="assertive">
+    <span id="overlay-spinner" class="spinner" aria-hidden="true"></span>
+    <p id="overlay-text"></p>
+  </div>
+</div>
+<dialog id="map-dialog" class="map-dialog" aria-labelledby="map-title">
+  <div class="dialog-body">
+    <h2 id="map-title">Pick the spawn point</h2>
+    <div class="map-toolbar">
+      <button type="button" id="map-zoom-out" aria-label="Zoom out">&minus;</button>
+      <button type="button" id="map-zoom-in" aria-label="Zoom in">+</button>
+      <label for="map-plane">Plane</label>
+      <select id="map-plane">
+        <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      </select>
+      <span class="map-readout" id="map-readout" aria-live="polite"></span>
+    </div>
+    <div class="map-view" id="map-view" tabindex="0" role="application"
+      aria-label="Map. Drag or use the arrow keys to move, plus and minus to zoom, click to mark a tile, Enter to use the marked point."
+      aria-describedby="map-marked">
+      <div id="map-tiles"></div>
+      <div class="map-marker" id="map-marker" hidden></div>
+    </div>
+    <p class="map-status" id="map-marked"></p>
+    <p class="map-status" id="map-error" role="alert" hidden>The map tiles couldn't be loaded (offline, or the wiki's map has moved). You can still type the spawn point into the JSON box.</p>
+    <p class="map-attribution">Map tiles: OSRS Wiki</p>
+  </div>
+  <div class="dialog-actions">
+    <button type="button" id="map-cancel">Cancel</button>
+    <button type="button" class="primary" id="map-use" disabled>Use this point</button>
+  </div>
+</dialog>
+<dialog id="preview" aria-labelledby="preview-title">
+  <div class="dialog-body">
+    <h2 id="preview-title">Review changes to world.local.json</h2>
+    <div id="preview-content"></div>
+  </div>
+  <div class="dialog-actions">
+    <span class="seconds" id="seconds-wrap" hidden>
+      <label for="seconds">Countdown (seconds)</label>
+      <input type="number" id="seconds" min="1" max="86400" step="1" value="60">
+    </span>
+    <button type="button" id="preview-close">Back</button>
+    <button type="button" class="primary" id="apply" disabled>Apply</button>
+  </div>
+</dialog>
+<script>
+"use strict";
+(function () {
+  // Everything shown from the API goes through textContent; nothing from it is ever parsed as HTML.
+  var DEFAULT_SECONDS = 60;
+  var POLL_MS = 2000;
+  var state = {
+    data: null,          // last /api/catalog response
+    edits: { world: {}, plugins: {}, pluginConfig: {} },
+    rows: [],            // { el, kind, key, search, refresh() }
+    tab: "settings",
+    dismissedFailure: null,
+    pollTimer: null,
+    reconnect: null,     // { delay } while the server is down
+    applied: false,      // an Apply was accepted; its edits clear once the server is back
+    appliedHash: null,   // world.local.json's localHash the Apply was made against
+    outcomeNote: null,   // the flash saying how the last accepted Apply ended
+    lastPlan: null,
+  };
+
+  function el(tag, props, children) {
+    var node = document.createElement(tag);
+    if (props) {
+      for (var name in props) {
+        if (!Object.prototype.hasOwnProperty.call(props, name)) continue;
+        var value = props[name];
+        if (value === undefined || value === null || value === false) continue;
+        if (name === "text") node.textContent = value;
+        else if (name === "className") node.className = value;
+        else if (name.indexOf("on") === 0) node.addEventListener(name.slice(2), value);
+        else if (name in node && typeof value !== "string") node[name] = value;
+        else node.setAttribute(name, value === true ? "" : String(value));
+      }
+    }
+    (children || []).forEach(function (child) {
+      if (child === null || child === undefined || child === false) return;
+      node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+    });
+    return node;
+  }
+
+  function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function has(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+
+  function api(path, body) {
+    var init = { credentials: "same-origin", headers: {} };
+    if (body !== undefined) {
+      init.method = "POST";
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+    return fetch(path, init).then(function (response) {
+      return response.text().then(function (text) {
+        var json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+        return { status: response.status, ok: response.ok, body: json };
+      });
+    });
+  }
+
+  // ---------- value helpers ----------
+
+  function formatValue(decl, value) {
+    if (value === undefined) return "(not set)";
+    if (decl && decl.type === "boolean") return value === true ? "on" : value === false ? "off" : JSON.stringify(value);
+    if (decl && decl.type === "enum" && decl.values) {
+      for (var i = 0; i < decl.values.length; i++) {
+        if (decl.values[i].value === value) return decl.values[i].label;
+      }
+    }
+    if (typeof value === "string") return value === "" ? "(empty)" : value;
+    return JSON.stringify(value);
+  }
+
+  function sectionOf(row) { return row.kind === "world" ? "world" : "pluginConfig"; }
+
+  /** The value the world runs with now, before this page's edits. */
+  function savedValue(option) {
+    if (option.local !== undefined) return option.local;
+    if (option.shipped !== undefined) return option.shipped;
+    return option.decl.default;
+  }
+
+  /** What world.json (or the declaration) gives without world.local.json. */
+  function baseValue(option) {
+    return option.shipped !== undefined ? option.shipped : option.decl.default;
+  }
+
+  function currentValue(section, option) {
+    var edits = state.edits[section];
+    if (has(edits, option.key)) {
+      return edits[option.key] === null ? baseValue(option) : edits[option.key];
+    }
+    return savedValue(option);
+  }
+
+  function setEdit(section, option, value) {
+    var edits = state.edits[section];
+    if (value === null) {
+      if (option.local !== undefined) edits[option.key] = null;
+      else delete edits[option.key];
+    } else if (same(value, savedValue(option))) {
+      delete edits[option.key];
+    } else {
+      edits[option.key] = value;
+    }
+    updateFooter();
+  }
+
+  function numberProblem(decl, n) {
+    if (!Number.isFinite(n)) return "Enter a number.";
+    if (decl.integer && !Number.isInteger(n)) return "Must be a whole number.";
+    if (decl.min !== undefined) {
+      if (decl.exclusiveMin ? n <= decl.min : n < decl.min) {
+        return decl.exclusiveMin ? "Must be greater than " + decl.min + "." : "Must be at least " + decl.min + ".";
+      }
+    }
+    if (decl.max !== undefined && n > decl.max) return "Must be at most " + decl.max + ".";
+    return null;
+  }
+
+  // ---------- rows ----------
+
+  var idCounter = 0;
+  function nextId(prefix) { idCounter += 1; return prefix + "-" + idCounter; }
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svgNode(tag, attrs) {
+    var node = document.createElementNS(SVG_NS, tag);
+    for (var name in attrs) node.setAttribute(name, attrs[name]);
+    return node;
+  }
+  function infoIcon() {
+    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false" });
+    svg.appendChild(svgNode("circle", { cx: "8", cy: "8", r: "7", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }));
+    svg.appendChild(svgNode("rect", { x: "7.25", y: "7", width: "1.5", height: "5", rx: "0.75", fill: "currentColor" }));
+    svg.appendChild(svgNode("circle", { cx: "8", cy: "4.75", r: "1", fill: "currentColor" }));
+    return svg;
+  }
+
+  /** Row title plus an info button whose tooltip holds the key or file (shown on hover and focus). */
+  function titleLine(label, detail) {
+    var tipId = nextId("tip");
+    var button = el("button", { type: "button", className: "info-button", title: detail,
+      "aria-label": "Details: " + detail, "aria-describedby": tipId,
+      onkeydown: function (event) { if (event.key === "Escape") button.blur(); } }, [infoIcon()]);
+    var tip = el("span", { className: "tip", role: "tooltip", id: tipId, text: detail });
+    return el("div", { className: "title-line" }, [label, el("span", { className: "info-wrap" }, [button, tip])]);
+  }
+
+  // ---------- spawn point map picker ----------
+
+  // Tiles from the OSRS Wiki's map server (the same tiles its interactive maps use):
+  //   <base>/<zoom>/<plane>_<tx>_<ty>.png, 256 px, zoom -3..3 = 2^zoom px per game tile,
+  //   tx = floor(x * 2^zoom / 256), ty = floor(y * 2^zoom / 256), ty grows north (image top = north).
+  // The version folder changes when the wiki re-renders its map; update it here if tiles stop loading.
+  var MAP_TILE_BASE = "https://maps.runescape.wiki/osrs/versions/2026-10-20_a/tiles/rendered/0/";
+  var MAP_MIN_ZOOM = -3;
+  var MAP_MAX_ZOOM = 3;
+  var TILE_PX = 256;
+  var LUMBRIDGE = { x: 3222, y: 3218, z: 0 };
+
+  var mapDialog = document.getElementById("map-dialog");
+  var mapView = document.getElementById("map-view");
+  var mapTiles = document.getElementById("map-tiles");
+  var mapMarker = document.getElementById("map-marker");
+  var mapReadout = document.getElementById("map-readout");
+  var mapMarked = document.getElementById("map-marked");
+  var mapError = document.getElementById("map-error");
+  var mapPlane = document.getElementById("map-plane");
+  var mapUse = document.getElementById("map-use");
+  var map = null; // { zoom, plane, cx, cy, marker, onUse, loads, errors, drag }
+
+  function validPoint(v) {
+    return v && typeof v === "object" && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y));
+  }
+
+  function mapScale() { return Math.pow(2, map.zoom); }
+
+  /** World pixel of the view's top-left corner (x right, y down = south). */
+  function mapOrigin() {
+    var s = mapScale();
+    return { left: map.cx * s - mapView.clientWidth / 2, top: -map.cy * s - mapView.clientHeight / 2 };
+  }
+
+  function gameAt(offsetX, offsetY) {
+    var s = mapScale();
+    var o = mapOrigin();
+    return { x: Math.floor((o.left + offsetX) / s), y: Math.floor(-(o.top + offsetY) / s) };
+  }
+
+  function renderMap() {
+    if (!map) return;
+    var s = mapScale();
+    var o = mapOrigin();
+    var w = mapView.clientWidth;
+    var h = mapView.clientHeight;
+    mapTiles.textContent = "";
+    var txMin = Math.floor(o.left / TILE_PX);
+    var txMax = Math.floor((o.left + w) / TILE_PX);
+    var tyMin = Math.floor(-(o.top + h) / TILE_PX);
+    var tyMax = Math.floor(-o.top / TILE_PX);
+    for (var tx = txMin; tx <= txMax; tx++) {
+      for (var ty = tyMin; ty <= tyMax; ty++) {
+        if (tx < 0 || ty < 0) continue;
+        var img = document.createElement("img");
+        img.alt = "";
+        img.referrerPolicy = "no-referrer";
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.draggable = false;
+        img.style.left = (tx * TILE_PX - o.left) + "px";
+        img.style.top = (-(ty + 1) * TILE_PX - o.top) + "px";
+        img.addEventListener("load", onTileLoad);
+        img.addEventListener("error", onTileError);
+        img.src = MAP_TILE_BASE + map.zoom + "/" + map.plane + "_" + tx + "_" + ty + ".png";
+        mapTiles.appendChild(img);
+      }
+    }
+    if (map.marker) {
+      var size = Math.max(s, 10);
+      mapMarker.style.width = size + "px";
+      mapMarker.style.height = size + "px";
+      mapMarker.style.left = ((map.marker.x + 0.5) * s - o.left) + "px";
+      mapMarker.style.top = (-(map.marker.y + 0.5) * s - o.top) + "px";
+      mapMarker.style.opacity = map.marker.z === map.plane ? "1" : "0.45";
+      mapMarker.hidden = false;
+      mapMarked.textContent = "Marked: x " + map.marker.x + ", y " + map.marker.y + ", plane " + map.marker.z;
+    } else {
+      mapMarker.hidden = true;
+      mapMarked.textContent = "Click a tile to mark the spawn point.";
+    }
+    mapUse.disabled = !map.marker;
+  }
+
+  function onTileLoad() {
+    if (!map) return;
+    map.loads += 1;
+    mapError.hidden = true;
+  }
+  function onTileError(event) {
+    event.target.hidden = true; // Tiles outside the map are missing on the server too.
+    if (!map) return;
+    map.errors += 1;
+    if (map.loads === 0) mapError.hidden = false;
+  }
+
+  function zoomMap(delta, offsetX, offsetY) {
+    var next = Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, map.zoom + delta));
+    if (next === map.zoom) return;
+    if (offsetX === undefined) { offsetX = mapView.clientWidth / 2; offsetY = mapView.clientHeight / 2; }
+    // Keep the point under the cursor where it is.
+    var s = mapScale();
+    var o = mapOrigin();
+    var gx = (o.left + offsetX) / s;
+    var gy = -(o.top + offsetY) / s;
+    map.zoom = next;
+    s = mapScale();
+    map.cx = gx - (offsetX - mapView.clientWidth / 2) / s;
+    map.cy = gy + (offsetY - mapView.clientHeight / 2) / s;
+    renderMap();
+  }
+
+  function panMap(dxPx, dyPx) {
+    var s = mapScale();
+    map.cx += dxPx / s;
+    map.cy -= dyPx / s;
+    renderMap();
+  }
+
+  function showHover(offsetX, offsetY) {
+    var g = gameAt(offsetX, offsetY);
+    mapReadout.textContent = "x " + g.x + ", y " + g.y + ", plane " + map.plane;
+  }
+
+  mapView.addEventListener("pointerdown", function (event) {
+    if (!map || event.button !== 0) return;
+    mapView.setPointerCapture(event.pointerId);
+    map.drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+  });
+  mapView.addEventListener("pointermove", function (event) {
+    if (!map) return;
+    var rect = mapView.getBoundingClientRect();
+    showHover(event.clientX - rect.left, event.clientY - rect.top);
+    var drag = map.drag;
+    if (!drag || drag.id !== event.pointerId) return;
+    var dx = event.clientX - drag.x;
+    var dy = event.clientY - drag.y;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+    drag.moved = true;
+    mapView.classList.add("dragging");
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    panMap(-dx, -dy);
+  });
+  function endDrag(event, click) {
+    if (!map || !map.drag || map.drag.id !== event.pointerId) return;
+    var drag = map.drag;
+    map.drag = null;
+    mapView.classList.remove("dragging");
+    if (click && !drag.moved) {
+      var rect = mapView.getBoundingClientRect();
+      var g = gameAt(event.clientX - rect.left, event.clientY - rect.top);
+      map.marker = { x: g.x, y: g.y, z: map.plane };
+      renderMap();
+    }
+  }
+  mapView.addEventListener("pointerup", function (event) { endDrag(event, true); });
+  mapView.addEventListener("pointercancel", function (event) { endDrag(event, false); });
+  mapView.addEventListener("pointerleave", function () { if (map && !map.drag) mapReadout.textContent = ""; });
+  mapView.addEventListener("wheel", function (event) {
+    if (!map) return;
+    event.preventDefault();
+    var rect = mapView.getBoundingClientRect();
+    zoomMap(event.deltaY < 0 ? 1 : -1, event.clientX - rect.left, event.clientY - rect.top);
+  }, { passive: false });
+
+  mapDialog.addEventListener("keydown", function (event) {
+    if (!map) return;
+    var inSelect = event.target === mapPlane;
+    var step = Math.round(mapView.clientWidth / 4);
+    if (event.key === "+" || event.key === "=") { zoomMap(1); event.preventDefault(); }
+    else if (event.key === "-" || event.key === "_") { zoomMap(-1); event.preventDefault(); }
+    else if (inSelect) return;
+    else if (event.key === "ArrowLeft") { panMap(-step, 0); event.preventDefault(); }
+    else if (event.key === "ArrowRight") { panMap(step, 0); event.preventDefault(); }
+    else if (event.key === "ArrowUp") { panMap(0, -step); event.preventDefault(); }
+    else if (event.key === "ArrowDown") { panMap(0, step); event.preventDefault(); }
+    else if (event.key === "Enter" && event.target === mapView && map.marker) { useMapPoint(); event.preventDefault(); }
+  });
+
+  document.getElementById("map-zoom-in").addEventListener("click", function () { zoomMap(1); });
+  document.getElementById("map-zoom-out").addEventListener("click", function () { zoomMap(-1); });
+  mapPlane.addEventListener("change", function () { map.plane = Number(mapPlane.value); renderMap(); });
+  document.getElementById("map-cancel").addEventListener("click", function () { mapTiles.textContent = ""; mapDialog.close(); });
+  mapUse.addEventListener("click", useMapPoint);
+  // Escape (the dialog's cancel) and Cancel both close without changing anything; no tiles load while closed.
+  mapDialog.addEventListener("close", function () { map = null; mapTiles.textContent = ""; });
+
+  function useMapPoint() {
+    if (!map || !map.marker) return;
+    var point = { x: map.marker.x, y: map.marker.y, z: map.marker.z };
+    var onUse = map.onUse;
+    mapTiles.textContent = "";
+    mapDialog.close();
+    onUse(point);
+  }
+
+  /** Opens the picker at `start` ({x, y, z}); `onUse(point)` receives the chosen tile. */
+  function openMapPicker(start, onUse) {
+    var origin = validPoint(start) ? start : LUMBRIDGE;
+    var plane = Math.max(0, Math.min(3, Math.floor(Number(origin.z) || 0)));
+    map = {
+      zoom: 2, plane: plane, cx: Number(origin.x) + 0.5, cy: Number(origin.y) + 0.5,
+      marker: validPoint(start) ? { x: Math.floor(Number(start.x)), y: Math.floor(Number(start.y)), z: plane } : null,
+      onUse: onUse, loads: 0, errors: 0, drag: null,
+    };
+    mapPlane.value = String(plane);
+    mapError.hidden = true;
+    mapReadout.textContent = "";
+    if (typeof mapDialog.showModal === "function") mapDialog.showModal(); else mapDialog.setAttribute("open", "");
+    renderMap();
+    mapView.focus();
+  }
+
+  // ---------- plugin-off badges ----------
+
+  function warnIcon() {
+    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", class: "badge-icon" });
+    svg.appendChild(svgNode("path", { d: "M8 1.5 15 14.5H1z", fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linejoin": "round" }));
+    svg.appendChild(svgNode("rect", { x: "7.2", y: "5.5", width: "1.6", height: "5", rx: "0.8", fill: "currentColor" }));
+    svg.appendChild(svgNode("circle", { cx: "8", cy: "12.3", r: "0.95", fill: "currentColor" }));
+    return svg;
+  }
+  function tickIcon() {
+    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", class: "badge-icon" });
+    svg.appendChild(svgNode("path", { d: "M2.5 8.5 6.5 12.5 13.5 4", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+    return svg;
+  }
+
+  /** Plugins that are switched off now and must be turned on for `plugin` to load: itself (optional) and its dependencies. */
+  function switchesNeeded(plugin, includeSelf) {
+    var needed = [];
+    var seen = {};
+    (function visit(p, self) {
+      if (!p || seen[p.name]) return;
+      seen[p.name] = true;
+      if ((!self || includeSelf) && !p.enabled) needed.push(p.name);
+      (p.dependsOn || []).forEach(function (dep) { visit(state.byName[dep], false); });
+    })(plugin, true);
+    return needed;
+  }
+
+  /** Sets a plugin switch in the pending edits; the Plugins tab toggle and the badges share this. */
+  function setPluginSwitch(name, on) {
+    var plugin = state.byName[name];
+    if (!plugin) return;
+    if (on === plugin.enabled) delete state.edits.plugins[name];
+    else state.edits.plugins[name] = on;
+    updateFooter();
+    state.rows.forEach(function (r) { if (r.refreshPlugins) r.refreshPlugins(); });
+  }
+
+  function listNames(names) {
+    if (names.length <= 1) return names.join("");
+    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  /**
+   * A warning badge for an option whose plugin isn't loaded (`context` "option"), or a plugin
+   * whose dependency is off ("dependency"), with a button that turns the missing switches on.
+   */
+  function pluginOffBadge(plugin, context) {
+    var box = el("div", { className: "badge", role: "status" });
+    // The badge is rebuilt on every change; keep keyboard focus on its (new) button.
+    function focusBadge() {
+      var button = box.querySelector("button");
+      if (button) button.focus();
+    }
+    function refresh() {
+      box.textContent = "";
+      var needed = switchesNeeded(plugin, context === "option");
+      var deps = needed.filter(function (n) { return n !== plugin.name; });
+      var selfOff = needed.indexOf(plugin.name) !== -1;
+      var pending = needed.length > 0 && needed.every(function (n) { return state.edits.plugins[n] === true; });
+      box.classList.toggle("pending", pending);
+      if (pending) {
+        box.appendChild(tickIcon());
+        box.appendChild(el("span", { className: "badge-text", text: listNames(needed) + " will be turned on when you save" }));
+        box.appendChild(el("button", { type: "button", text: "Undo", "aria-label": "Undo turning on " + listNames(needed),
+          onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, false); }); focusBadge(); } }));
+        return;
+      }
+      var message;
+      if (context === "dependency") {
+        message = "Needs " + listNames(deps) + ", which " + (deps.length > 1 ? "are" : "is") + " off";
+      } else if (selfOff && deps.length === 0) {
+        message = "Plugin " + plugin.name + " is off — this setting has no effect";
+      } else if (selfOff) {
+        message = "Plugin " + plugin.name + " is off and needs " + listNames(deps) + " — this setting has no effect";
+      } else if (deps.length) {
+        message = "Plugin " + plugin.name + " needs " + listNames(deps) + ", which " + (deps.length > 1 ? "are" : "is") + " off — this setting has no effect";
+      } else {
+        message = "Plugin " + plugin.name + " isn't loaded — this setting has no effect";
+      }
+      box.appendChild(warnIcon());
+      box.appendChild(el("span", { className: "badge-text", text: message }));
+      if (needed.length && !readOnly()) {
+        var label = context === "option" && selfOff && deps.length === 0 ? "Turn on" : "Turn on " + listNames(context === "dependency" ? deps : needed);
+        box.appendChild(el("button", { type: "button", text: label, "aria-label": "Turn on " + listNames(needed),
+          onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, true); }); focusBadge(); } }));
+      }
+    }
+    refresh();
+    return { el: box, refresh: refresh };
+  }
+
+  /** Members-only content on a free world: the fix is the Members world switch. */
+  function membersBadge() {
+    var box = el("div", { className: "badge", role: "status" }, [
+      warnIcon(),
+      el("span", { className: "badge-text", text: "Members only — won't load on a free world" }),
+      el("button", { type: "button", className: "link", text: "Go to Members world", onclick: goToMembersWorld }),
+    ]);
+    return { el: box, refresh: function () {} };
+  }
+
+  function goToMembersWorld() {
+    var row = state.rows.filter(function (r) { return r.kind === "world" && r.key === "membersWorld"; })[0];
+    if (!row) return;
+    selectTab("settings");
+    if (row.el.hidden) {
+      document.getElementById("search").value = "";
+      applySearch();
+    }
+    row.el.scrollIntoView({ block: "center" });
+    row.focus();
+  }
+
+  function readOnly() { return !!(state.data && state.data.layers && state.data.layers.localError); }
+
+  /**
+   * One option row. `owner` is the CatalogPlugin that declares it (or null for world/core).
+   * The control reports invalid input through row.invalid, which blocks Save.
+   */
+  function optionRow(kind, option, owner) {
+    var decl = option.decl;
+    var section = kind === "world" ? "world" : "pluginConfig";
+    var controlId = nextId("opt");
+    var helpId = controlId + "-help";
+    var errorEl = el("div", { className: "field-error", role: "alert", hidden: true });
+    var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from world.json / the shipped default" });
+    var editedTag = el("span", { className: "tag edited", text: "unsaved" });
+    var resetButton = el("button", { type: "button", className: "link", text: "Reset to shipped" });
+    var row = { kind: kind, key: option.key, invalid: false };
+
+    var defaultText = decl.defaultText !== undefined ? decl.defaultText : formatValue(decl, decl.default);
+    var meta = el("div", { className: "meta" }, [
+      el("span", { text: "default: " + defaultText }),
+      option.shipped !== undefined && decl.default !== undefined && !same(option.shipped, decl.default)
+        ? el("span", { text: "world.json: " + formatValue(decl, option.shipped) }) : null,
+      changedTag, editedTag,
+    ]);
+    var membersOff = state.data.catalog.membersWorld === false && (decl.members || (owner && owner.members));
+    var badge = membersOff ? membersBadge()
+      : (!option.ownerEnabled && owner) ? pluginOffBadge(owner, "option") : null;
+
+    var control;
+    var input;
+    function showError(message) {
+      row.invalid = !!message;
+      errorEl.textContent = message || "";
+      errorEl.hidden = !message;
+      if (input) {
+        input.classList.toggle("invalid", !!message);
+        input.setAttribute("aria-invalid", message ? "true" : "false");
+      }
+      updateFooter();
+    }
+    var describedBy = helpId;
+
+    if (decl.type === "boolean") {
+      input = el("input", { type: "checkbox", id: controlId, role: "switch", "aria-describedby": describedBy,
+        onchange: function () { setEdit(section, option, input.checked); refresh(); } });
+      control = el("label", { className: "switch" }, [input, el("span", { className: "switch-text" })]);
+    } else if (decl.type === "enum") {
+      input = el("select", { id: controlId, "aria-describedby": describedBy,
+        onchange: function () {
+          if (input.value === "") setEdit(section, option, null);
+          else setEdit(section, option, decl.values[Number(input.value)].value);
+          refresh();
+        } });
+      input.appendChild(el("option", { value: "", text: decl.defaultText !== undefined ? "Default (" + decl.defaultText + ")" : "Shipped value" }));
+      decl.values.forEach(function (v, i) { input.appendChild(el("option", { value: String(i), text: v.label })); });
+      control = input;
+    } else if (decl.type === "number") {
+      input = el("input", { type: "number", id: controlId, "aria-describedby": describedBy, inputMode: decl.integer ? "numeric" : "decimal",
+        step: decl.integer ? "1" : "any",
+        oninput: function () {
+          if (input.value.trim() === "") { showError(null); setEdit(section, option, null); refreshMarkers(); return; }
+          var n = Number(input.value);
+          var problem = input.validity.badInput ? "Enter a number." : numberProblem(decl, n);
+          showError(problem);
+          if (!problem) setEdit(section, option, n);
+          refreshMarkers();
+        } });
+      if (decl.min !== undefined) input.min = String(decl.min);
+      if (decl.max !== undefined) input.max = String(decl.max);
+      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
+      control = input;
+    } else if (decl.type === "date") {
+      input = el("input", { type: "date", id: controlId, "aria-describedby": describedBy,
+        onchange: function () {
+          if (input.value === "") { showError(null); setEdit(section, option, null); }
+          else if (!/^\d{4}-\d{2}-\d{2}$/.test(input.value)) { showError("Enter a date."); }
+          else { showError(null); setEdit(section, option, input.value); }
+          refreshMarkers();
+        } });
+      control = input;
+    } else if (decl.type === "json") {
+      input = el("textarea", { id: controlId, "aria-describedby": describedBy, spellcheck: "false",
+        onblur: function () {
+          var text = input.value.trim();
+          if (text === "") { showError(null); setEdit(section, option, null); refreshMarkers(); return; }
+          try {
+            var parsed = JSON.parse(text);
+            showError(null);
+            setEdit(section, option, parsed);
+          } catch (e) {
+            showError("Not valid JSON: " + e.message);
+          }
+          refreshMarkers();
+        } });
+      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
+      control = input;
+    } else {
+      input = el("input", { type: "text", id: controlId, "aria-describedby": describedBy,
+        oninput: function () { showError(null); setEdit(section, option, input.value); refreshMarkers(); } });
+      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
+      control = input;
+    }
+
+    resetButton.addEventListener("click", function () {
+      showError(null);
+      setEdit(section, option, null);
+      refresh();
+    });
+
+    var labelText = decl.label || option.key;
+    var label = el("label", { className: "label", for: controlId, text: labelText });
+    var text = el("div", null, [
+      titleLine(label, option.key),
+      el("div", { className: "help", id: helpId, text: decl.help || "" }),
+      meta,
+      badge ? badge.el : null,
+    ]);
+    var pickButton = null;
+    if (kind === "world" && option.key === "spawn" && decl.type === "json") {
+      pickButton = el("button", { type: "button", className: "spawn-pick", text: "Pick on map",
+        onclick: function () {
+          openMapPicker(currentValue(section, option), function (point) {
+            input.value = JSON.stringify(point, null, 2);
+            showError(null);
+            setEdit(section, option, point);
+            refreshMarkers();
+          });
+        } });
+    }
+    var controlBox = el("div", { className: "control" }, [control, pickButton, errorEl, resetButton]);
+    var rowEl = el("div", { className: "row" + (membersOff || (!option.ownerEnabled && owner) ? " inactive" : "") }, [text, controlBox]);
+
+    function refreshMarkers() {
+      var value = currentValue(section, option);
+      changedTag.hidden = same(value, baseValue(option)) || value === undefined;
+      editedTag.hidden = !has(state.edits[section], option.key);
+      var edited = has(state.edits[section], option.key);
+      var resetPending = edited && state.edits[section][option.key] === null;
+      resetButton.hidden = readOnly() || resetPending || !(edited || option.local !== undefined);
+    }
+
+    /** Puts the control back to the current value (after load, reset or discard). */
+    function refresh() {
+      var value = currentValue(section, option);
+      if (decl.type === "boolean") {
+        input.checked = value === true;
+        control.lastChild.textContent = value === true ? "On" : "Off";
+      } else if (decl.type === "enum") {
+        var index = "";
+        (decl.values || []).forEach(function (v, i) { if (v.value === value || (typeof v.value === "number" && typeof value === "string" && v.value === Number(value))) index = String(i); });
+        input.value = index;
+      } else if (decl.type === "json") {
+        input.value = value === undefined ? "" : JSON.stringify(value, null, 2);
+      } else if (decl.type === "number") {
+        input.value = value === undefined ? "" : String(value);
+      } else {
+        input.value = value === undefined ? "" : String(value);
+      }
+      input.disabled = readOnly();
+      showError(null);
+      refreshMarkers();
+      if (badge) badge.refresh();
+      if (pickButton) pickButton.disabled = readOnly() || busy();
+    }
+
+    row.el = rowEl;
+    row.search = [labelText, option.key, decl.help, owner ? owner.name : ""].join(" ").toLowerCase();
+    row.refresh = refresh;
+    row.refreshPlugins = function () { if (badge) badge.refresh(); };
+    row.focus = function () { input.focus(); };
+    refresh();
+    return row;
+  }
+
+  function pluginRow(plugin) {
+    var controlId = nextId("plugin");
+    var helpId = controlId + "-help";
+    var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from the plugin's default" });
+    var editedTag = el("span", { className: "tag edited", text: "unsaved" });
+    var input = el("input", { type: "checkbox", id: controlId, role: "switch", "aria-describedby": helpId });
+    var stateText = el("span", { className: "switch-text" });
+    var row = { kind: "plugin", key: plugin.name, invalid: false };
+
+    function current() {
+      return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
+    }
+    input.addEventListener("change", function () { setPluginSwitch(plugin.name, input.checked); });
+
+    var meta = el("div", { className: "meta" }, [
+      el("span", { text: "default: " + (plugin.defaultEnabled ? "on" : "off") }),
+      plugin.dependsOn && plugin.dependsOn.length ? el("span", { text: "needs " + plugin.dependsOn.join(", ") }) : null,
+      changedTag, editedTag,
+    ]);
+    var membersOff = state.data.catalog.membersWorld === false && plugin.members;
+    var badge = membersOff ? membersBadge()
+      : (plugin.enabled && !plugin.loaded) ? pluginOffBadge(plugin, "dependency") : null;
+
+    var rowEl = el("div", { className: "row" + (membersOff ? " inactive" : "") }, [
+      el("div", null, [
+        titleLine(el("label", { className: "label", for: controlId, text: plugin.name }), plugin.file),
+        el("div", { className: "help", id: helpId, text: plugin.description || "" }),
+        meta,
+        badge ? badge.el : null,
+      ]),
+      el("div", { className: "control" }, [el("label", { className: "switch" }, [input, stateText])]),
+    ]);
+
+    function refresh() {
+      var on = current();
+      input.checked = on;
+      input.disabled = readOnly();
+      stateText.textContent = on ? "On" : "Off";
+      changedTag.hidden = on === plugin.defaultEnabled;
+      editedTag.hidden = !has(state.edits.plugins, plugin.name);
+      if (badge) badge.refresh();
+    }
+    row.el = rowEl;
+    row.search = [plugin.name, plugin.file, plugin.description || "", plugin.area].join(" ").toLowerCase();
+    row.refresh = refresh;
+    row.refreshPlugins = refresh;
+    refresh();
+    return row;
+  }
+
+  function group(title, rows) {
+    var section = el("section", { className: "group" }, [
+      el("h2", { text: title }),
+      el("div", { className: "rows" }, rows.map(function (r) { return r.el; })),
+    ]);
+    return { el: section, rows: rows };
+  }
+
+  function areaTitle(area) {
+    if (!area) return "Other";
+    return area.charAt(0).toUpperCase() + area.slice(1);
+  }
+
+  function build() {
+    var catalog = state.data.catalog;
+    var settings = document.getElementById("panel-settings");
+    var plugins = document.getElementById("panel-plugins");
+    settings.textContent = "";
+    plugins.textContent = "";
+    state.rows = [];
+    state.groups = { settings: [], plugins: [] };
+
+    var byName = {};
+    catalog.plugins.forEach(function (p) { byName[p.name] = p; });
+    state.byName = byName;
+
+    // Settings: world values first, then options grouped by the owning plugin's area.
+    var worldRows = catalog.world.map(function (o) { return optionRow("world", o, null); });
+    state.groups.settings.push(group("World", worldRows));
+    var areas = {};
+    catalog.options.forEach(function (o) {
+      var owner = o.owner === "core" ? null : byName[o.owner] || null;
+      var area = owner ? owner.area : "core";
+      (areas[area] = areas[area] || []).push(optionRow("option", o, owner));
+    });
+    Object.keys(areas).sort().forEach(function (area) {
+      state.groups.settings.push(group(areaTitle(area), areas[area]));
+    });
+
+    // Plugins: default-off and described plugins pinned first, then the rest by area.
+    var pinned = [];
+    var pluginAreas = {};
+    catalog.plugins.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (p) {
+      var row = pluginRow(p);
+      if (!p.defaultEnabled || p.description) pinned.push(row);
+      else (pluginAreas[p.area] = pluginAreas[p.area] || []).push(row);
+    });
+    if (pinned.length) state.groups.plugins.push(group("Common switches", pinned));
+    Object.keys(pluginAreas).sort().forEach(function (area) {
+      state.groups.plugins.push(group(areaTitle(area), pluginAreas[area]));
+    });
+
+    state.groups.settings.forEach(function (g) { settings.appendChild(g.el); state.rows = state.rows.concat(g.rows); });
+    state.groups.plugins.forEach(function (g) { plugins.appendChild(g.el); state.rows = state.rows.concat(g.rows); });
+    settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
+    plugins.appendChild(el("p", { className: "empty", id: "plugins-empty", text: "Nothing matches.", hidden: true }));
+    document.getElementById("loading").hidden = true;
+    applySearch();
+    updateFooter();
+  }
+
+  function applySearch() {
+    if (!state.groups) return;
+    var words = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    ["settings", "plugins"].forEach(function (tab) {
+      var any = false;
+      state.groups[tab].forEach(function (g) {
+        var visible = 0;
+        g.rows.forEach(function (r) {
+          var match = words.every(function (w) { return r.search.indexOf(w) !== -1; });
+          r.el.hidden = !match;
+          if (match) visible += 1;
+        });
+        g.el.hidden = visible === 0;
+        if (visible) any = true;
+      });
+      document.getElementById(tab + "-empty").hidden = any;
+    });
+  }
+
+  // ---------- tabs ----------
+
+  function selectTab(tab) {
+    state.tab = tab;
+    ["settings", "plugins"].forEach(function (name) {
+      var button = document.getElementById("tab-" + name);
+      var selected = name === tab;
+      button.setAttribute("aria-selected", selected ? "true" : "false");
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById("panel-" + name).hidden = !selected;
+    });
+    document.getElementById("search").placeholder = tab === "settings" ? "Search settings" : "Search plugins";
+  }
+  document.getElementById("tab-settings").addEventListener("click", function () { selectTab("settings"); });
+  document.getElementById("tab-plugins").addEventListener("click", function () { selectTab("plugins"); });
+  document.querySelector(".tabs").addEventListener("keydown", function (event) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    var next = state.tab === "settings" ? "plugins" : "settings";
+    selectTab(next);
+    document.getElementById("tab-" + next).focus();
+  });
+  document.getElementById("search").addEventListener("input", applySearch);
+
+  // ---------- edits, footer ----------
+
+  function editCount() {
+    return Object.keys(state.edits.world).length + Object.keys(state.edits.plugins).length + Object.keys(state.edits.pluginConfig).length;
+  }
+  function anyInvalid() { return state.rows.some(function (r) { return r.invalid; }); }
+  function busy() {
+    var d = state.data;
+    return !!state.reconnect || !!(d && (d.pending || (d.countdown && d.countdown.scheduled)));
+  }
+
+  function updateFooter() {
+    var save = document.getElementById("save");
+    var discard = document.getElementById("discard");
+    var status = document.getElementById("footer-status");
+    var count = editCount();
+    var mode = state.data ? state.data.mode : "manual";
+    save.textContent = mode === "manual" ? "Save (takes effect next restart)" : "Save and restart";
+    var invalid = anyInvalid();
+    save.disabled = !state.data || readOnly() || busy() || count === 0 || invalid;
+    discard.disabled = count === 0 && !invalid;
+    document.querySelectorAll(".spawn-pick").forEach(function (button) { button.disabled = !state.data || readOnly() || busy(); });
+    if (!state.data) status.textContent = "";
+    else if (readOnly()) status.textContent = "Read only: world.local.json does not parse.";
+    else if (invalid) status.textContent = "Fix the highlighted values before saving.";
+    else if (busy()) status.textContent = "A restart is pending.";
+    else status.textContent = count === 0 ? "No unsaved edits." : count + (count === 1 ? " unsaved edit." : " unsaved edits.");
+  }
+
+  document.getElementById("discard").addEventListener("click", function () {
+    state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    state.rows.forEach(function (r) { r.invalid = false; r.refresh(); });
+    updateFooter();
+  });
+
+  /**
+   * The edits as the server takes them. A value that is what the world gets with no entry at all
+   * (world.json has none, and it equals the declared default, or the plugin's own default) goes
+   * as null, so the key leaves world.local.json instead of being written out.
+   */
+  function changesPayload() {
+    var catalog = state.data && state.data.catalog;
+    var optionsBySection = { world: {}, pluginConfig: {} };
+    if (catalog) {
+      (catalog.world || []).forEach(function (o) { optionsBySection.world[o.key] = o; });
+      (catalog.options || []).forEach(function (o) { optionsBySection.pluginConfig[o.key] = o; });
+    }
+    var changes = {};
+    ["world", "plugins", "pluginConfig"].forEach(function (section) {
+      var keys = Object.keys(state.edits[section]);
+      if (!keys.length) return;
+      var out = {};
+      keys.forEach(function (key) {
+        var value = state.edits[section][key];
+        if (value !== null && section === "plugins") {
+          var plugin = state.byName[key];
+          if (plugin && plugin.shippedSwitch === undefined && plugin.localSwitch !== undefined && value === plugin.defaultEnabled) value = null;
+        } else if (value !== null) {
+          var option = optionsBySection[section][key];
+          if (option && option.shipped === undefined && option.decl.default !== undefined && same(value, option.decl.default)) value = null;
+        }
+        out[key] = value;
+      });
+      changes[section] = out;
+    });
+    return changes;
+  }
+
+  // ---------- banners ----------
+
+  function renderBanners() {
+    renderStaticBanners();
+    renderCountdownBanner();
+  }
+
+  /** Error/info banners; rebuilt only when what they say changes, so focus and screen readers aren't disturbed by polling. */
+  function renderStaticBanners() {
+    var d = state.data;
+    var items = [];
+    if (d && d.layers && d.layers.localError) {
+      items.push({ kind: "error", text: "world.local.json does not parse, so this page is read only. Fix the file by hand, then reload: " + d.layers.localError });
+    }
+    if (d && d.lastFailure && d.lastFailure.at !== state.dismissedFailure) {
+      items.push({ kind: "error", text: d.lastFailure.message, dismiss: d.lastFailure.at });
+    }
+    if (d && d.countdown && d.countdown.available === false) {
+      items.push({ kind: "warn", text: "Countdown unavailable (GameUpdate is off): Apply restarts immediately." });
+    }
+    if (d && d.mode === "manual") {
+      items.push({ kind: "info", text: "This server can't restart itself, so saving only writes world.local.json. Restart the server by hand for it to take effect." });
+    }
+    var signature = JSON.stringify(items);
+    if (signature === state.bannerSignature) return;
+    state.bannerSignature = signature;
+    var box = document.getElementById("banners");
+    box.textContent = "";
+    items.forEach(function (item) {
+      box.appendChild(el("div", { className: "banner " + item.kind, role: item.kind === "error" ? "alert" : null }, [
+        el("div", { className: "text", text: item.text }),
+        item.dismiss ? el("button", { type: "button", text: "Dismiss", "aria-label": "Dismiss this error",
+          onclick: function () { state.dismissedFailure = item.dismiss; renderStaticBanners(); } }) : null,
+      ]));
+    });
+  }
+
+  /** The running countdown: built once per kind, then only its text changes (role=timer is not announced on every tick). */
+  function renderCountdownBanner() {
+    var box = document.getElementById("countdown-banner");
+    var d = state.data;
+    if (!d || !(d.pending || (d.countdown && d.countdown.scheduled))) {
+      box.textContent = "";
+      state.countdownKey = null;
+      return;
+    }
+    var remaining = d.countdown ? d.countdown.remainingSeconds : 0;
+    var ours = !!d.pending;
+    var cancellable = !ours || d.pending.kind === "countdown";
+    var key = (ours ? d.pending.kind : "foreign") + "|" + cancellable;
+    if (state.countdownKey !== key) {
+      state.countdownKey = key;
+      box.textContent = "";
+      state.countdownText = el("div", { className: "text" });
+      box.appendChild(el("div", { className: "banner warn", role: "timer" }, [
+        state.countdownText,
+        cancellable ? el("button", { type: "button", text: "Cancel", "aria-label": "Cancel the restart", onclick: cancelCountdown }) : null,
+      ]));
+    }
+    state.countdownText.textContent = ours
+      ? (d.pending.kind === "countdown"
+        ? "Restarting to apply your changes in " + remaining + " s. world.local.json is written when the countdown ends."
+        : "Restarting now to apply your changes…")
+      : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
+  }
+
+  function flash(kind, text) {
+    var box = document.getElementById("flashes");
+    var node = el("div", { className: "banner " + kind, role: kind === "error" ? "alert" : "status" }, [
+      el("div", { className: "text", text: text }),
+      el("button", { type: "button", text: "Dismiss", onclick: function () { node.remove(); } }),
+    ]);
+    box.insertBefore(node, box.firstChild);
+    return node;
+  }
+
+  // ---------- loading and polling ----------
+
+  // While the server is down (a restart, or it stopped answering) the page stays put behind an
+  // overlay and polls with backoff; it never navigates or reloads, so the browser's own
+  // "can't connect" page never appears.
+  var RECONNECT_FIRST_MS = 1000;
+  var RECONNECT_MAX_MS = 5000;
+  var overlay = document.getElementById("overlay");
+  var overlayText = document.getElementById("overlay-text");
+  var overlaySpinner = document.getElementById("overlay-spinner");
+
+  function showOverlay(text, spinning) {
+    overlayText.textContent = text;
+    overlaySpinner.hidden = !spinning;
+    overlay.hidden = false;
+  }
+
+  /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
+  function enterReconnect(unreachable) {
+    if (dialog.open) dialog.close();
+    if (mapDialog.open) { mapTiles.textContent = ""; mapDialog.close(); }
+    if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
+    if (unreachable) state.reconnect.wasDown = true;
+    showOverlay("Restarting the server… reconnecting", true);
+    updateFooter();
+    stopPolling();
+    var delay = state.reconnect.delay;
+    state.reconnect.delay = Math.min(delay * 2, RECONNECT_MAX_MS);
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, delay);
+  }
+
+  /**
+   * Back in touch with the server. The edits are cleared only when the apply went through:
+   * nothing is pending any more and world.local.json changed since the Apply. Another restart
+   * during the countdown (nodemon on a file edit, SIGTERM) comes back with nothing pending and
+   * no failure either, but the file unchanged: the edits stay.
+   */
+  function finishReconnect(body) {
+    var wasDown = !!(state.reconnect && state.reconnect.wasDown);
+    state.reconnect = null;
+    overlay.hidden = true;
+    settleApply(body, wasDown, true);
+  }
+
+  /** What an accepted Apply came to; stays up until dismissed or the next accepted Apply. */
+  function showOutcome(kind, text) {
+    clearOutcome();
+    state.outcomeNote = flash(kind, text);
+  }
+  function clearOutcome() {
+    if (state.outcomeNote) state.outcomeNote.remove();
+    state.outcomeNote = null;
+  }
+
+  /**
+   * `wasDown`: the page lost the server for a while (a restart happened). Without that, an Apply
+   * request that was lost before reaching a server that stayed up reads as "not applied".
+   * `reconnecting`: called on the way out of the reconnect overlay.
+   */
+  function settleApply(body, wasDown, reconnecting) {
+    var settled = !body.pending;
+    var awaited = settled && !body.lastFailure && (state.applied === true || state.applied === "unknown");
+    var applied = awaited && body.layers.localHash !== state.appliedHash;
+    if (applied) state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    if (settled || body.lastFailure) { state.applied = false; state.appliedHash = null; }
+    state.data = body;
+    build();
+    renderBanners();
+    updateFooter();
+    if (applied) {
+      showOutcome("info", "Restarted with your changes.");
+    } else if (awaited) {
+      showOutcome("warn", wasDown
+        ? "The server restarted before your change was written; nothing was saved."
+        : "Your change wasn't applied; nothing was saved.");
+    } else if (body.lastFailure) {
+      clearOutcome();
+    } else if (reconnecting) {
+      var note = flash("info", "Reconnected.");
+      setTimeout(function () { note.remove(); }, 4000);
+    }
+    schedulePoll();
+  }
+
+  function load(rebuild) {
+    return api("/api/catalog").then(function (res) {
+      if (res.status === 401) {
+        stopPolling();
+        if (state.reconnect) {
+          showOverlay("The server's access link changed — open the new link from the server log.", false);
+        } else {
+          showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…).");
+        }
+        return;
+      }
+      if (!res.ok || !res.body) {
+        if (state.reconnect) { enterReconnect(true); return; }
+        showFatal("Could not load the catalog: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      if (state.reconnect) {
+        // Still the old process on its way down: keep waiting. A countdown that is still running
+        // (a network blip) returns to the page, where its Cancel is.
+        var down = res.body.pending;
+        if (down && !res.body.lastFailure && (down.kind === "now" || (res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
+          enterReconnect();
+          return;
+        }
+        finishReconnect(res.body);
+        return;
+      }
+      // Nothing pending any more for an accepted Apply that the page never saw the server drop
+      // for: it was cancelled in game, or the server restarted between two polls.
+      if (state.applied && !res.body.pending) {
+        settleApply(res.body, false, false);
+        return;
+      }
+      var hadData = !!state.data;
+      var hashChanged = hadData && state.data.layers.localHash !== res.body.layers.localHash;
+      state.data = res.body;
+      if (rebuild || !hadData || hashChanged) {
+        if (hashChanged && !rebuild && editCount() > 0) flash("warn", "world.local.json changed on disk; the page reloaded it and kept your unsaved edits where they still apply.");
+        build();
+      }
+      renderBanners();
+      updateFooter();
+      var pending = res.body.pending;
+      if (pending && (pending.kind === "now" || (pending.kind === "countdown" && res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
+        // The countdown reached zero (or there was none): the server is about to go down.
+        enterReconnect();
+        return;
+      }
+      schedulePoll();
+    }, function () {
+      // Network error: the server is restarting or stopped answering.
+      enterReconnect(true);
+    });
+  }
+
+  function showFatal(text) {
+    document.getElementById("loading").hidden = true;
+    var box = document.getElementById("banners");
+    box.textContent = "";
+    box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: text })]));
+    state.bannerSignature = null;
+    document.getElementById("countdown-banner").textContent = "";
+    state.countdownKey = null;
+  }
+
+  function stopPolling() {
+    if (state.pollTimer) clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+  }
+  function schedulePoll() {
+    stopPolling();
+    if (!busy()) return;
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, POLL_MS);
+  }
+
+  function cancelCountdown() {
+    api("/api/cancel", {}).then(function (res) {
+      if (!res.ok) flash("error", "Cancel failed: " + ((res.body && res.body.error) || "HTTP " + res.status));
+      else if (res.body && res.body.cancelled) {
+        state.applied = false;
+        state.appliedHash = null;
+        flash("info", "Restart cancelled. world.local.json was not changed.");
+      }
+      else flash("warn", "There was no countdown to cancel.");
+      load(false);
+    }, function () { enterReconnect(); });
+  }
+
+  // ---------- preview and apply ----------
+
+  var dialog = document.getElementById("preview");
+  var applyButton = document.getElementById("apply");
+
+  function renderPlan(plan, extraError) {
+    var box = document.getElementById("preview-content");
+    box.textContent = "";
+    if (extraError) box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: extraError })]));
+    if (plan.errors && plan.errors.length) {
+      box.appendChild(el("h3", { text: "Errors (nothing can be saved until these are fixed)" }));
+      box.appendChild(el("ul", { className: "list" }, plan.errors.map(function (e) { return el("li", { text: e }); })));
+    }
+    if (plan.warnings && plan.warnings.length) {
+      box.appendChild(el("h3", { text: "Warnings" }));
+      box.appendChild(el("ul", { className: "list" }, plan.warnings.map(function (w) { return el("li", { text: w }); })));
+    }
+    if (plan.diff && plan.diff.length) {
+      var table = el("table", { className: "diff" }, [
+        el("thead", null, [el("tr", null, [el("th", { scope: "col", text: "Key" }), el("th", { scope: "col", text: "Before" }), el("th", { scope: "col", text: "After" })])]),
+        el("tbody", null, plan.diff.map(function (d) {
+          return el("tr", null, [
+            el("td", { text: d.path }),
+            el("td", { text: d.before === undefined ? "(not set)" : JSON.stringify(d.before) }),
+            el("td", { text: d.after === undefined ? "(removed)" : JSON.stringify(d.after) }),
+          ]);
+        })),
+      ]);
+      box.appendChild(table);
+    } else {
+      box.appendChild(el("p", { text: "world.local.json would not change." }));
+    }
+    var d = state.data;
+    var players = d.onlinePlayers || 0;
+    var countdown = d.mode !== "manual" && players > 0 && d.countdown && d.countdown.available !== false;
+    document.getElementById("seconds-wrap").hidden = !countdown;
+    var note;
+    if (d.mode === "manual") note = "Apply writes world.local.json now. Restart the server by hand for it to take effect.";
+    else if (countdown) note = players + (players === 1 ? " player is" : " players are") + " online: Apply starts the world update countdown. The file is written when it ends; Cancel leaves it unchanged.";
+    else if (players > 0) note = "Countdown unavailable (GameUpdate is off): Apply restarts immediately.";
+    else note = "Nobody is online: Apply saves, writes world.local.json and restarts the server now.";
+    box.appendChild(el("p", { text: note }));
+    applyButton.textContent = d.mode === "manual" ? "Write file" : countdown ? "Start countdown" : "Restart now";
+    applyButton.disabled = !!(plan.errors && plan.errors.length) || !(plan.diff && plan.diff.length);
+  }
+
+  document.getElementById("save").addEventListener("click", function () {
+    // A JSON box validates on blur; make sure the one being typed in has been checked.
+    if (document.activeElement && document.activeElement.tagName === "TEXTAREA") document.activeElement.blur();
+    if (anyInvalid()) { updateFooter(); return; }
+    var body = { changes: changesPayload(), localHash: state.data.layers.localHash };
+    api("/api/preview", body).then(function (res) {
+      if (!res.ok || !res.body || !res.body.diff) {
+        flash("error", "Preview failed: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      state.lastPlan = res.body;
+      document.getElementById("seconds").value = String(DEFAULT_SECONDS);
+      renderPlan(res.body);
+      if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+    }, function () { enterReconnect(); });
+  });
+
+  document.getElementById("preview-close").addEventListener("click", function () { dialog.close(); });
+
+  applyButton.addEventListener("click", function () {
+    var body = { changes: changesPayload(), localHash: state.data.layers.localHash };
+    if (!document.getElementById("seconds-wrap").hidden) {
+      var seconds = Number(document.getElementById("seconds").value);
+      if (!Number.isInteger(seconds) || seconds < 1 || seconds > 86400) {
+        renderPlan(state.lastPlan, "Countdown must be a whole number of seconds from 1 to 86400.");
+        return;
+      }
+      body.seconds = seconds;
+    }
+    applyButton.disabled = true;
+    api("/api/apply", body).then(function (res) {
+      var b = res.body || {};
+      // A newly accepted Apply makes the previous one's outcome note stale.
+      if ((res.status === 200 || res.status === 202) && b.applied) clearOutcome();
+      if (res.status === 200 && b.applied === "written") {
+        dialog.close();
+        state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+        flash("info", "world.local.json written. Restart the server for the change to take effect.");
+        load(true);
+      } else if (res.status === 202 && b.applied === "countdown") {
+        dialog.close();
+        state.applied = true;
+        state.appliedHash = body.localHash;
+        load(false);
+      } else if (res.status === 202 && b.applied === "restarting") {
+        state.applied = true;
+        state.appliedHash = body.localHash;
+        enterReconnect();
+      } else if (res.status === 400 && b.diff) {
+        state.lastPlan = b;
+        renderPlan(b);
+      } else {
+        renderPlan(state.lastPlan, b.error || "Apply failed (HTTP " + res.status + ").");
+        if (res.status === 409) load(false);
+      }
+    }, function () {
+      // The server went away mid-request: wait for it, and judge by world.local.json afterwards.
+      state.applied = "unknown";
+      state.appliedHash = body.localHash;
+      enterReconnect();
+    });
+  });
+
+  window.addEventListener("beforeunload", function (event) {
+    if (editCount() > 0 && !state.reconnect) { event.preventDefault(); event.returnValue = ""; }
+  });
+
+  load(true);
+})();
+</script>
+</body>
+</html>

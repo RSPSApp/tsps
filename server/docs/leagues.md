@@ -20,6 +20,8 @@ world runs a league when its plugin config says so:
 "pluginConfig": { "league:type": 6 }
 ```
 
+The league options are also on the [world config page](../../docs/world-configuration.md#world-config-page).
+
 (every league the cache names in enum 2670: 1 Twisted, 2 Trailblazer, 3 Shattered Relics, 4
 Trailblazer Reloaded, 5 Raging Echoes, 6 Demonic Pacts, the league this cache carries and the
 data's `default`, which a league character takes when the config names a type the data does not

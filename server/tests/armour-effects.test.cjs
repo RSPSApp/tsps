@@ -347,16 +347,31 @@ test("barrows degradation reports each stage, breaks at 0 and refreshes the pane
   const { player, items, messages, flags, counts } = barrowsPlayer({ equipmentIds: { 0: 4716 } });
 
   for (let i = 0; i < 250; i++) BarrowsEquipment._test.degradeEquipment(player);
-  assert.deepEqual(messages, ["Your Dharok's helm has degraded to 75%."]);
+  // rsprox 227/00086:294617-294622: red "<Brother>'s <part> has degraded slightly.", on first use (pristine -> 100) too.
+  assert.deepEqual(messages, ["<col=ef1020>Dharok's helmet has degraded slightly.</col>", "<col=ef1020>Dharok's helmet has degraded slightly.</col>"]);
   assert.equal(counts.equipment, 250);
   assert.equal(counts.inventory, 250);
   assert.equal(flags.length, 250, "the appearance flag redraws the worn model");
 
   for (let i = 0; i < 750; i++) BarrowsEquipment._test.degradeEquipment(player);
   assert.equal(messages.at(-1), "Your Dharok's helm has fully degraded and can no longer be used.");
-  assert.equal(Math.round(messages.filter((message) => message.includes("degraded to")).length), 3);
+  assert.equal(messages.filter((message) => message.includes("degraded slightly")).length, 4, "pristine -> 100, 75, 50, 25");
   assert.ok(Barrows.isBroken(items[0].getId()));
   assert.equal(BarrowsEquipment._test.durability(items[0]), 0);
+});
+
+test("the degrade line names the part as recorded: helmet, hood, body, legs (have), skirt", () => {
+  const { api } = buildApi();
+  BarrowsEquipment.register(api);
+  const expected = [
+    [0, 4716, "Dharok's helmet has"], [0, 4708, "Ahrim's hood has"], [4, 4720, "Dharok's body has"],
+    [7, 4722, "Dharok's legs have"], [7, 4759, "Verac's skirt has"], [7, 4738, "Karil's skirt has"],
+  ];
+  for (const [slot, id, text] of expected) {
+    const { player, messages } = barrowsPlayer({ equipmentIds: { [slot]: id } });
+    BarrowsEquipment._test.degradeEquipment(player);
+    assert.deepEqual(messages, [`<col=ef1020>${text} degraded slightly.</col>`], `${id}`);
+  }
 });
 
 test("an Echo Ahrim's piece degrades through its own staged ids", () => {
@@ -373,7 +388,7 @@ test("an Echo Ahrim's piece degrades through its own staged ids", () => {
   for (let i = 0; i < 250; i++) BarrowsEquipment._test.degradeEquipment(player);
   assert.equal(items[0].getId(), 30525, "Echo ahrim's hood 75");
   assert.equal(Barrows.baseItemId(items[0].getId()), 4708);
-  assert.deepEqual(messages, ["Your Echo ahrim's hood has degraded to 75%."]);
+  assert.deepEqual(messages, ["<col=ef1020>Echo ahrim's hood has degraded slightly.</col>", "<col=ef1020>Echo ahrim's hood has degraded slightly.</col>"]);
 
   for (let i = 0; i < 750; i++) BarrowsEquipment._test.degradeEquipment(player);
   assert.equal(items[0].getId(), 30543, "Echo ahrim's hood 0");

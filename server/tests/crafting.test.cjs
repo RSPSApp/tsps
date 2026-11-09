@@ -1256,20 +1256,23 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
         const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
           send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
         const p = new Player(new PlayerSession(channel));
-        p.setIndex(index++); p.setUsername("craft" + index);
+        p.setIndex(index++);
+        t.after(() => {
+          Shared.stopCrafting(p);
+          if (p.isRegistered()) {
+            PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+            PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+          }
+          p.setRegistered(false); core.World.unregisterPlayerPosition(p);
+          core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+        });
+        p.setUsername("craft" + index);
         p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
         assert.ok(p.getLongUsername() > 0n);
         p.setAttribute("bot-skip-persistence", true); p.setRegistered(true);
         p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
         const c = new ClientConnection(channel); c.player = p;
         const inv = p.getInventory(), skills = p.getSkillManager(), craft = core.Skill.CRAFTING;
-        t.after(() => {
-          Shared.stopCrafting(p);
-          PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
-          PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
-          p.setRegistered(false); core.World.unregisterPlayerPosition(p);
-          core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
-        });
         // High Crafting avoids a level-up popup changing the task's interface state.
         skills.setCurrentLevel(craft, 99, false).setMaxLevels(craft, 99, false)
           .setExperience(craft, core.SkillManager.getExperienceForLevel(99));

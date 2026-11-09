@@ -213,13 +213,13 @@ function openPopup(player, layer, line1, line2) {
   }
 }
 
-function openSkillPopup(player, skill, oldLevel, newLevel) {
+function openSkillPopup(player, skill, oldLevel, newLevel, boxed) {
   let state = pending.get(player);
   if (!state) {
     state = { actions: new Map(), queue: [], location: player.getLocation().clone(), replacing: false };
     pending.set(player, state);
   } else {
-    state.queue.push({ skill, oldLevel, newLevel });
+    state.queue.push({ skill, oldLevel, newLevel, boxed });
     return;
   }
   pluginApi.emitCustomEvent(POPUP_OPENED_EVENT, {
@@ -232,12 +232,12 @@ function openSkillPopup(player, skill, oldLevel, newLevel) {
   if (!combat.getTarget() && !combat.getAttacker()) {
     player.performAnimation(pluginApi.core.Animation.DEFAULT_RESET_ANIMATION);
   }
-  showSkillPopup(player, skill, oldLevel, newLevel);
+  showSkillPopup(player, skill, oldLevel, newLevel, boxed);
 }
 
-function showSkillPopup(player, skill, oldLevel, newLevel) {
+function showSkillPopup(player, skill, oldLevel, newLevel, boxed) {
   const state = pending.get(player);
-  if (state) state.current = { skill, from: oldLevel, to: newLevel };
+  if (state) state.current = { skill, from: oldLevel, to: newLevel, boxed };
   const name = skill.getName();
   openPopup(player, SKILL_LAYERS[skill.getIndex()],
     `Congratulations, you just advanced a ${name} level.`, `Your ${name} level is now ${newLevel}.`);
@@ -281,7 +281,9 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   }
   const popupOpens = popupsEnabled(player) && pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) !== false;
   // With "Show level & unlocks" the unlock box says it, and logs it in the chat as it opens.
-  if (!popupOpens || !listsUnlocks(player)) announceUnlocks(player, skill, oldLevel, newLevel);
+  // The setting at level-up decides Continue and cancelling, even if it changes while the pop-up is open.
+  const boxed = popupOpens && listsUnlocks(player);
+  if (!boxed) announceUnlocks(player, skill, oldLevel, newLevel);
   playJingle(player, skill, newLevel);
 
   const total = skills.getTotalLevel();
@@ -300,7 +302,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   if (combatGained && player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE) === undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, previousCombat);
   }
-  openSkillPopup(player, skill, oldLevel, newLevel);
+  openSkillPopup(player, skill, oldLevel, newLevel, boxed);
 }
 
 /**
@@ -312,7 +314,7 @@ function continueLevelUp({ player }) {
   const state = pending.get(player);
   const current = state?.current;
   if (current) state.current = null;
-  if (current && listsUnlocks(player) && showUnlockBox(player, state, current.skill, current.from, current.to)) {
+  if (current?.boxed && showUnlockBox(player, state, current.skill, current.from, current.to)) {
     state.awaitingUnlockBox = true;
     return true;
   }
@@ -323,7 +325,7 @@ function continueLevelUp({ player }) {
 function showNext(player, state) {
   const next = state?.queue.shift();
   if (next) {
-    showSkillPopup(player, next.skill, next.oldLevel, next.newLevel);
+    showSkillPopup(player, next.skill, next.oldLevel, next.newLevel, next.boxed);
     return;
   }
   const combatFrom = player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE);
@@ -353,10 +355,8 @@ function cancelPending({ player }) {
   player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, undefined);
   // With "Show level & unlocks" the unlock lines wait for the box; a level-up given up before
   // its box opens still puts them in the chat, for the open pop-up's skill and every queued one.
-  if (listsUnlocks(player)) {
-    if (state.current) announceUnlocks(player, state.current.skill, state.current.from, state.current.to);
-    for (const { skill, oldLevel, newLevel } of state.queue) announceUnlocks(player, skill, oldLevel, newLevel);
-  }
+  if (state.current?.boxed) announceUnlocks(player, state.current.skill, state.current.from, state.current.to);
+  for (const { skill, oldLevel, newLevel, boxed } of state.queue) if (boxed) announceUnlocks(player, skill, oldLevel, newLevel);
   for (const action of state.actions.values()) action.cancel();
 }
 

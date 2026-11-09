@@ -1210,6 +1210,29 @@ test("Show level & unlocks: a level-up given up before Continue still logs its u
   assert.deepEqual(logged(), unlocks("Defence", 40));
 });
 
+test("Show level & unlocks: the setting at level-up decides, even if it changes before Continue", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const line = "You can now wear Rune Armour!";
+  const run = (atLevelUp, beforeContinue, end) => {
+    const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+    const p = levelledPlayer(core);
+    p.getPacketSender().sendVarbit(4371, atLevelUp);
+    hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+    p.getPacketSender().sendVarbit(4371, beforeContinue);
+    if (end === "continue") assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+    else for (const handler of hooks.customEvents.get("player:world-input")) handler({ player: p });
+    return { logged: p.messages.filter((m) => m === line).length, boxes: p.statements.length };
+  };
+  // On at level-up, off before Continue: the box still opens and logs the line once.
+  assert.deepEqual(run(1, 0, "continue"), { logged: 1, boxes: 1 });
+  // Off at level-up, on before Continue: the line was already logged; no box repeats it.
+  assert.deepEqual(run(0, 1, "continue"), { logged: 1, boxes: 0 });
+  // Given up before Continue: the line is logged once either way.
+  assert.deepEqual(run(1, 0, "walk"), { logged: 1, boxes: 0 });
+  assert.deepEqual(run(0, 1, "walk"), { logged: 1, boxes: 0 });
+});
+
 test("level-ups play the skill's jingle: the unlocks one only where the level unlocks something and the guide list is on", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();

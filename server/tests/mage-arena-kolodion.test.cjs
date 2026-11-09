@@ -1,5 +1,7 @@
-// Kolodion's Talk-to branch and conditions (issue #3701). Run after `yarn build`:
+// Kolodion and Mage Arena II's talk, hand-ins and imbuing (issue #3701). Run after `yarn build`:
 // node --test tests/mage-arena-kolodion.test.cjs
+// Every plugin is loaded through the real PluginManager; a real Player talks to Kolodion through the
+// real transcript runtime, its real DialogueManager and native chatbox prompts. Only the network is stubbed.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -10,135 +12,251 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
 const { Player } = require("../dist/game/entity/impl/player/Player");
-const { startDialogue } = require("../plugins/npcs/NpcDialogues.plugin");
-const MageArena = require("../plugins/minigames/MageArena.plugin");
-const data = require("../data/definitions/npc-dialogues.json");
+const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+const { OptionDialogue } = require("../dist/game/model/dialogues/entries/impl/OptionDialogue");
 
 const core = PluginManager.getCoreApi();
-const { kolodion, spells, statues } = MageArena._test;
-const [SARADOMIN, GUTHIX, ZAMORAK] = spells.GODS;
+const Items = core.ItemIdentifiers;
 const KOLODION = core.NpcIdentifiers.KOLODION;
-const variants = [];
-const conditions = [];
+let MageArena;
+let MageArenaII;
+let Statues;
+let Spells;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   new NpcDefinitionLoader().load();
-  // The unit alone, as MageArena.register wires it.
-  require("../plugins/minigames/magearena/Kolodion.MageArena")({
-    core,
-    onNpcDialogueVariant: (handler) => variants.push(handler),
-    onNpcDialogueCondition: (handler) => conditions.push(handler),
-  });
+  await PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  MageArena = require("../plugins/minigames/MageArena.plugin");
+  MageArenaII = require("../plugins/minigames/magearena/MageArenaII.MageArena");
+  Statues = require("../plugins/minigames/magearena/Statues.MageArena");
+  Spells = require("../plugins/minigames/magearena/Spells.MageArena");
 });
 
-function makePlayer({ magic = 99, cape = true, casts = [0, 0, 0] } = {}) {
+function makePlayer({ magic = 99, cape = true, casts = [100, 100, 100], stage = 0, components = 0, inventory = [] } = {}) {
   const player = new Player(null);
-  player.getSession = () => ({ sendClientPacket: () => true }); // Only the network is stubbed.
+  player.getSession = () => ({ sendClientPacket: () => true });
+  player.setUsername("ma2 tester");
+  player.setRegistered(true);
+  const messages = [];
+  const send = player.sendMessage.bind(player);
+  player.sendMessage = (message) => { messages.push(message); return send(message); };
+  player.messages = messages;
   const skills = player.getSkillManager();
   skills.setExperience(core.Skill.MAGIC, core.SkillManager.getExperienceForLevel(magic));
   skills.setMaxLevel(core.Skill.MAGIC, magic, false).setCurrentLevel(core.Skill.MAGIC, magic, false);
-  if (cape) player.setAttribute(statues.CAPE_RECEIVED_ATTRIBUTE, true);
-  [SARADOMIN, GUTHIX, ZAMORAK].forEach((god, i) => player.setAttribute(god.counter, casts[i]));
+  if (cape) player.setAttribute(Statues.CAPE_RECEIVED_ATTRIBUTE, true);
+  Spells.GODS.forEach((god, i) => player.setAttribute(god.counter, casts[i]));
+  if (stage) MageArenaII.setStage(player, stage);
+  MageArenaII.setComponents(player, components);
+  for (const id of inventory) player.getInventory().adds(id, 1);
   return player;
 }
 
-function context(player) {
-  return { player, npcId: KOLODION, definition: NpcDefinition.forId(KOLODION), pages: [] };
-}
-
-function variantFor(player) {
-  return variants.map((handler) => handler(context(player))).find((answer) => answer != null) ?? null;
-}
-
-/**
- * Kolodion's lines after choosing `option` in the after-Mage-Arena-I menu, played by the real
- * Talk-to runner (startDialogue). Only the dispatch to plugin condition handlers is routed to this
- * unit's handler, and the chat chain is walked instead of sent to a client.
- */
-function linesAfter(t, player, option) {
-  const menu = data.Kolodion.variants[kolodion.AFTER_MAGE_ARENA_I].find((step) => step.type === "choice");
-  const chosen = menu.options.find((each) => each.text === option);
-  t.mock.method(PluginManager, "emitNpcDialogueCondition", (event) =>
-    conditions.map((handler) => handler(event)).find((answer) => answer != null) ?? null);
-  let chain = null;
-  let current = null;
-  const manager = {
-    reset() { current = null; },
-    getCurrent: () => current,
-    startDialogues(builder) { chain = builder; current = [...builder.getDialogues().values()][0]; },
-  };
-  const talker = new Proxy(player, {
-    get: (target, key) => (key === "getDialogueManager" ? () => manager : Reflect.get(target, key, target)),
-  });
+/** Plays whatever is on screen, picking `choices` in order at each menu; returns what was said. */
+function play(player, choices = []) {
   const lines = [];
-  startDialogue({ core, emitCustomEvent() {} }, { ...context(talker) }, chosen.steps, {}, { ...context(talker) });
-  for (let guard = 0; guard < 50 && chain; guard++) {
-    const entries = [...chain.getDialogues().values()];
-    chain = null;
-    // NpcDialogue lines, unwrapped from the chatbox's line breaks.
-    for (const entry of entries) if (entry instanceof core.NpcDialogue) lines.push(String(entry.getText()).replace(/\s+/g, " "));
-    current = entries.at(-1);
-    current.send(talker);
+  const manager = player.getDialogueManager();
+  const picks = [...choices];
+  for (let guard = 0; guard < 80; guard++) {
+    const prompt = MultiChatboxPrompt.getPending(player);
+    if (prompt) {
+      const wanted = picks.shift();
+      const index = prompt.options.indexOf(wanted);
+      assert.ok(index >= 0, `menu ${JSON.stringify(prompt.options)} offers ${wanted}`);
+      lines.push(`> ${wanted}`);
+      MultiChatboxPrompt.handleInterfaceActionClick({ player, buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, slot: index + 1 });
+      continue;
+    }
+    const current = manager.getCurrent();
+    if (!current) break;
+    if (current instanceof OptionDialogue) {
+      const wanted = picks.shift();
+      const index = current.getOptions().indexOf(wanted);
+      assert.ok(index >= 0, `options ${JSON.stringify(current.getOptions())} offer ${wanted}`);
+      lines.push(`> ${wanted}`);
+      manager.handleOption(index + 1);
+      continue;
+    }
+    if (typeof current.getText === "function") lines.push(String(current.getText()).replace(/\s+/g, " "));
+    manager.advance();
   }
   return lines;
 }
 
-const PROGRESS = "How can I use my new spells outside of the arena?";
+function talk(player, choices) {
+  const request = { player, npc: null, npcId: KOLODION, handled: false };
+  PluginManager.emitCustomEvent("npc-dialogue:start", request);
+  assert.equal(request.handled, true, "Kolodion's transcript plays");
+  return play(player, choices);
+}
+
+function useOnKolodion(player, itemId, choices) {
+  const target = new core.NPC(KOLODION, new core.Location(2542, 4715, 0));
+  const event = { player, target, definition: NpcDefinition.forId(KOLODION), npcId: KOLODION, itemId, item: new core.Item(itemId, 1), slot: 0, handled: false };
+  const handled = PluginManager.emitItemOnNpc(event);
+  return { handled, lines: handled ? play(player, choices) : [] };
+}
+
 const CHALLENGES = "Are there any more challenges available?";
+const ACCEPT = "Great, I've been waiting for an improvement!";
+const PROGRESS = "How can I use my new spells outside of the arena?";
+const said = (lines, pattern) => lines.some((line) => pattern.test(line));
 
-test("Kolodion's cache name is what the unit keys on", () => {
-  assert.equal(NpcDefinition.forId(KOLODION).getName(), "Kolodion");
+test("without Mage Arena I's god cape Kolodion turns away even a 99 Magic player", () => {
+  const lines = talk(makePlayer({ cape: false }));
+  assert.ok(said(lines, /A wizard of your level\? Don't be absurd\./));
 });
 
-test("a player with the Mage Arena I god cape gets the after-Mage-Arena-I talk, whatever their Magic", () => {
-  assert.equal(variantFor(makePlayer({ magic: 99 })), kolodion.AFTER_MAGE_ARENA_I);
-  assert.equal(variantFor(makePlayer({ magic: 60 })), kolodion.AFTER_MAGE_ARENA_I);
-  assert.equal(variantFor(makePlayer({ magic: 99, cape: false })), null, "the default plays until Mage Arena I");
-  assert.equal(data.Kolodion.default, "without-level-60-magic");
+test("after Mage Arena I: one progress line per god spell from its arena casts", () => {
+  const lines = talk(makePlayer({ casts: [50, 89, 100] }), [PROGRESS]);
+  assert.ok(said(lines, /^You still need to train with the strike spell/));
+  assert.ok(said(lines, /^You have completed over half of the training needed to use the claw spell/));
+  assert.ok(said(lines, /^You're experienced enough to use the flame spell anywhere\./));
+  assert.equal(lines.filter((line) => /spell (inside|outside|anywhere)/.test(line)).length, 3);
+  const edges = talk(makePlayer({ casts: [51, 90, 99] }), [PROGRESS]);
+  assert.ok(said(edges, /over half of the training needed to use the strike spell/));
+  assert.ok(said(edges, /almost ready to use the claw spell/));
+  assert.ok(said(edges, /almost ready to use the flame spell/));
 });
 
-test("the progress report gives one line per god spell from its arena casts", (t) => {
-  const lines = linesAfter(t, makePlayer({ casts: [50, 89, 100] }), PROGRESS);
-  assert.deepEqual(lines.slice(-3), [
-    "You still need to train with the strike spell inside the arena before you can use it outside.",
-    "You have completed over half of the training needed to use the claw spell outside of the arena.",
-    "You're experienced enough to use the flame spell anywhere.",
+test("more challenges: spells first, then 75 base Magic", () => {
+  assert.ok(said(talk(makePlayer({ casts: [100, 100, 99] }), [CHALLENGES]), /still need to learn how to cast all god spells/));
+  const boosted = makePlayer({ magic: 74 });
+  boosted.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 80, false);
+  assert.ok(said(talk(boosted, [CHALLENGES]), /a wizard of your level wouldn't stand a chance/));
+  assert.equal(MageArenaII.stageOf(boosted), MageArenaII.STAGE.NOT_STARTED);
+});
+
+test("starting Mage Arena II hands over one enchanted symbol", () => {
+  const player = makePlayer();
+  const lines = talk(player, [CHALLENGES, ACCEPT, "Thanks, bye."]);
+  assert.ok(said(lines, /^Kolodion hands you an enchanted symbol\.$/), "the hand-out shows as its item box");
+  assert.equal(player.getInventory().getAmount(Items.ENCHANTED_SYMBOL), 1);
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.HUNTING);
+  // Talking again with it owned hands out no second one.
+  talk(player, ["Thanks, bye."]);
+  assert.equal(player.getInventory().getAmount(Items.ENCHANTED_SYMBOL), 1);
+});
+
+test("a full pack gets the symbol on the next talk, once there's room", () => {
+  const player = makePlayer();
+  player.getInventory().adds(Items.COINS, 1);
+  for (let i = player.getInventory().getFreeSlots(); i > 0; i--) player.getInventory().adds(Items.BONES, 1);
+  const lines = talk(player, [CHALLENGES, ACCEPT]);
+  assert.ok(said(lines, /free up an inventory space/));
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.STARTED);
+  assert.equal(player.getInventory().contains(Items.ENCHANTED_SYMBOL), false);
+  player.getInventory().delete(Items.BONES, 1);
+  talk(player, ["Thanks, bye."]);
+  assert.equal(player.getInventory().getAmount(Items.ENCHANTED_SYMBOL), 1);
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.HUNTING);
+});
+
+test("a lost symbol is replaced; a banked one isn't", () => {
+  const lost = makePlayer({ stage: MageArenaII.STAGE.HUNTING });
+  talk(lost, ["Thanks, bye."]);
+  assert.equal(lost.getInventory().getAmount(Items.ENCHANTED_SYMBOL), 1);
+  const banked = makePlayer({ stage: MageArenaII.STAGE.HUNTING });
+  banked.getBank(0).add(new core.Item(Items.ENCHANTED_SYMBOL, 1), false);
+  talk(banked, ["Thanks, bye."]);
+  assert.equal(banked.getInventory().contains(Items.ENCHANTED_SYMBOL), false);
+});
+
+test("a lone remains is handed in with the hand-in's own ending", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.HUNTING, inventory: [Items.ENCHANTED_SYMBOL, Items.JUSTICIARS_HAND, Items.JUSTICIARS_HAND] });
+  const lines = talk(player, ["Thanks, bye."]);
+  assert.ok(said(lines, /^I've got the remains of the Saradominist justiciar\.$/));
+  assert.ok(said(lines, /^Kolodion takes the Justiciar's remains\.$/), "its item box");
+  assert.ok(said(lines, /but we aren't finished yet/));
+  assert.equal(player.getInventory().contains(Items.JUSTICIARS_HAND), false, "duplicates are all taken (Wiki)");
+  assert.ok(player.messages.includes("You hand Kolodion the remains of the Saradominist justiciar."));
+  assert.equal(MageArenaII.components(player), 1);
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.HUNTING);
+});
+
+test("all carried remains go in one conversation, straight on to the god cape (235/03344)", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.HUNTING, inventory: [Items.ENCHANTED_SYMBOL, Items.JUSTICIARS_HAND, Items.ENTS_ROOTS, Items.DEMONS_HEART] });
+  const lines = talk(player, []);
+  const handed = lines.filter((line) => /^I've got the remains of /.test(line));
+  assert.deepEqual(handed, [
+    "I've got the remains of the Saradominist justiciar.",
+    "I've got the remains of the Guthixian Ent.",
+    "I've got the remains of the Zamorakian Demon.",
   ]);
-  const edges = linesAfter(t, makePlayer({ casts: [51, 90, 99] }), PROGRESS);
-  assert.deepEqual(edges.slice(-3), [
-    "You have completed over half of the training needed to use the strike spell outside of the arena.",
-    "You are almost ready to use the claw spell outside of the arena.",
-    "You are almost ready to use the flame spell outside of the arena.",
-  ]);
+  assert.equal(said(lines, /but we aren't finished yet/), false);
+  assert.ok(said(lines, /now you just need to hand me the god cape you wish to have imbued/));
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.ALL_REMAINS);
+  assert.equal(MageArenaII.components(player), MageArenaII.ALL_COMPONENTS);
+  assert.equal(player.messages.filter((m) => /^You hand Kolodion the remains of /.test(m)).length, 3);
 });
 
-test("every cast-count tier's step id is in the generated transcript, in order", () => {
-  const menu = data.Kolodion.variants[kolodion.AFTER_MAGE_ARENA_I].find((step) => step.type === "choice");
-  const ids = menu.options.find((each) => each.text === PROGRESS).steps.filter((step) => step.type === "condition").map((step) => step.id);
-  assert.deepEqual(ids, kolodion.TIERS.flatMap((tier) => tier.ids));
+test("a god cape before all three remains is nothing to Kolodion", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.HUNTING, inventory: [Items.ZAMORAK_CAPE] });
+  assert.equal(useOnKolodion(player, Items.ZAMORAK_CAPE).handled, false);
 });
 
-test("more challenges: spells first, then 75 Magic, then the hand-over to Mage Arena II", (t) => {
-  assert.deepEqual(linesAfter(t, makePlayer({ casts: [100, 100, 99] }), CHALLENGES), [
-    "You still need to learn how to cast all god spells outside of the arena.",
-    "I've made a note of the spells you still need to learn in your journal.",
-  ]);
-  const low = linesAfter(t, makePlayer({ magic: 74, casts: [100, 100, 100] }), CHALLENGES);
-  assert.equal(low.at(-1), "However, a wizard of your level wouldn't stand a chance.");
-  const ready = linesAfter(t, makePlayer({ magic: 75, casts: [100, 100, 100] }), CHALLENGES);
-  assert.equal(ready.length, 1);
-  assert.match(ready[0], /^I am one of the most powerful mages in existence\./);
+test("the first imbue takes the three remains and quietly completes the miniquest", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.ALL_REMAINS, components: 7, inventory: [Items.ZAMORAK_CAPE] });
+  const { handled, lines } = useOnKolodion(player, Items.ZAMORAK_CAPE, ["Yes."]);
+  assert.equal(handled, true);
+  assert.ok(said(lines, /^Kolodion takes your cape and imbues it with the power of the gods/));
+  assert.equal(player.getInventory().contains(Items.ZAMORAK_CAPE), false);
+  assert.equal(player.getInventory().getAmount(Items.IMBUED_ZAMORAK_CAPE), 1);
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.COMPLETE);
+  assert.equal(MageArenaII.components(player), 0);
+  assert.equal(player.messages.some((message) => /completed a quest/.test(message)), false, "no announcement, as live");
 });
 
-test("75 Magic is the base level, not a boost", (t) => {
-  const player = makePlayer({ magic: 70, casts: [100, 100, 100] });
-  player.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 80, false);
-  assert.equal(linesAfter(t, player, CHALLENGES).at(-1), "However, a wizard of your level wouldn't stand a chance.");
+test('choosing "No." keeps the cape', () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.ALL_REMAINS, components: 7, inventory: [Items.GUTHIX_CAPE] });
+  useOnKolodion(player, Items.GUTHIX_CAPE, ["No."]);
+  assert.equal(player.getInventory().contains(Items.GUTHIX_CAPE), true);
+  assert.equal(MageArenaII.stageOf(player), MageArenaII.STAGE.ALL_REMAINS);
 });
 
-test("other NPCs' conditions and variants are left alone", () => {
-  const event = { player: makePlayer(), npcId: 1, definition: NpcDefinition.forId(1), pages: [], text: "If player doesn't have 75 Magic:" };
-  assert.equal(kolodion.answerCondition(event), null);
-  assert.equal(kolodion.pickVariant(event), null);
+test("after the miniquest each further cape needs its own follower's remains", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.COMPLETE, inventory: [Items.SARADOMIN_CAPE] });
+  const refused = useOnKolodion(player, Items.SARADOMIN_CAPE, []);
+  assert.ok(said(refused.lines, /You'll have to bring me the Saradomin creature's remains to imbue this cape\./));
+  assert.equal(said(refused.lines, /^> /), false, "no Yes/No menu");
+  assert.equal(player.getInventory().contains(Items.SARADOMIN_CAPE), true);
+
+  player.getInventory().adds(Items.JUSTICIARS_HAND, 1);
+  useOnKolodion(player, Items.SARADOMIN_CAPE, ["Yes."]);
+  assert.equal(player.getInventory().getAmount(Items.IMBUED_SARADOMIN_CAPE), 1);
+  assert.equal(player.getInventory().contains(Items.JUSTICIARS_HAND), false);
+  assert.equal(MageArenaII.components(player), 0);
+});
+
+test("after the miniquest Kolodion keeps carried remains and names the capes he can imbue", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.COMPLETE, inventory: [Items.ENCHANTED_SYMBOL, Items.ENTS_ROOTS] });
+  const lines = talk(player, []);
+  assert.equal(player.getInventory().contains(Items.ENTS_ROOTS), false);
+  assert.equal(MageArenaII.components(player), 2);
+  assert.ok(lines.includes("You may currently have a Guthix cape imbued, just hand over the cape when you're ready."));
+});
+
+test("after the miniquest a symbol is offered again when none is owned", () => {
+  const player = makePlayer({ stage: MageArenaII.STAGE.COMPLETE });
+  talk(player, ["Thanks, bye."]);
+  assert.equal(player.getInventory().getAmount(Items.ENCHANTED_SYMBOL), 1);
+});
+
+test("Mage Arena II is a registered miniquest with the cache row's stages", () => {
+  const QuestRuntime = require("../plugins/quests/QuestRuntime");
+  const quest = QuestRuntime.questNamed("Mage Arena II");
+  assert.ok(quest);
+  assert.equal(quest.varbitId, 6067);
+  assert.equal(quest.completionValue, 4);
+  assert.equal(quest.questPoints, 0);
+  assert.ok(MageArena.members);
+  // Lost Property's imbued god cape rows ask this (lost-property.json "quest": "Mage Arena II").
+  const ask = (player) => {
+    const request = { player, name: "Mage Arena II", complete: null };
+    PluginManager.emitCustomEvent("quest:is-complete", request);
+    return request.complete;
+  };
+  assert.equal(ask(makePlayer({ stage: MageArenaII.STAGE.ALL_REMAINS })), false);
+  assert.equal(ask(makePlayer({ stage: MageArenaII.STAGE.COMPLETE })), true);
 });

@@ -117,25 +117,25 @@ function recordingSender(calls = []) {
 test("register persists one counter per god and the first cape, and wires the hooks", () => {
   const persisted = [];
   const hooks = [];
-  const api = {
+  const named = {
     core,
     persistAttribute: (key) => persisted.push(key),
     getTaskManager: () => ({ submit() {} }),
-    onSpellDisabled: () => hooks.push("onSpellDisabled"),
-    onCombatHitResolved: () => hooks.push("onCombatHitResolved"),
     onObjectInteraction: (name) => hooks.push(`onObjectInteraction:${name}`),
-    onServerStartup: () => hooks.push("onServerStartup"),
-    onPlayerProcess: () => hooks.push("onPlayerProcess"),
+    onItemAction: (name) => hooks.push(`onItemAction:${name}`),
     registerNpcCombatMethodProvider: (ids) => hooks.push(`combatMethod:${ids}`),
     onCustomEvent: (name) => hooks.push(`onCustomEvent:${name}`),
-    onNpcDialogueVariant: () => hooks.push("onNpcDialogueVariant"),
-    onNpcDialogueCondition: () => hooks.push("onNpcDialogueCondition"),
   };
+  // Any other hook (the quest runtime's widgets among them) is recorded by name.
+  const api = new Proxy(named, { get: (target, key) => (key in target ? target[key] : () => hooks.push(String(key))) });
   MageArena.register(api);
 
   assert.deepEqual(
     persisted.sort(),
-    ["mage-arena:cape-received", "mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak"]
+    [
+      "mage-arena-ii:components", "mage-arena-ii:location-timer", "mage-arena-ii:locations",
+      "mage-arena:cape-received", "mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak",
+    ].concat(persisted.filter((key) => key.startsWith("quest")).sort()).sort()
   );
   assert.ok(hooks.includes("onSpellDisabled"));
   assert.ok(hooks.includes("onCombatHitResolved"));
@@ -145,6 +145,11 @@ test("register persists one counter per god and the first cape, and wires the ho
   assert.ok(hooks.includes("onCustomEvent:mage-arena:cape-received"), "answers whether a god cape was received");
   assert.ok(hooks.includes("onNpcDialogueVariant"), "picks Kolodion's transcript branch");
   assert.ok(hooks.includes("onNpcDialogueCondition"), "answers Kolodion's conditions");
+  assert.ok(hooks.includes("onItemOnNpc"), "takes god capes to imbue");
+  assert.ok(hooks.includes("onItemAction:Enchanted symbol"), "activates the symbol");
+  for (const id of [7858, 7859, 7860]) assert.ok(hooks.includes(`combatMethod:${id}`), `fights as follower ${id}`);
+  assert.ok(hooks.includes("onNpcHitModify"), "only god spells hurt the followers");
+  assert.ok(hooks.includes("onCanBankItem") && hooks.includes("onShouldKeepItemOnDeath"), "remains rules");
 });
 
 test("the arena levers play the captured pull and cast, landing on the captured tiles", () => {

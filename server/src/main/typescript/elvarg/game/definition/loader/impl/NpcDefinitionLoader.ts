@@ -54,6 +54,8 @@ type CombatAnimation = {
     deathTicks?: number;
     /** Ticks from removal to respawn; 25 when absent, 0 to disable. */
     respawn?: number;
+    /** Tiles an aggressive NPC searches for a target from its current south-west tile; 3 when absent. */
+    huntRange?: number;
     /** Manager-authored combat values, applied only to cloned custom NPC IDs. */
     maxHit?: number;
     attackType?: string;
@@ -462,6 +464,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
 
             const respawn = animationFile.npcs?.[key]?.respawn;
             if (Number.isInteger(respawn) && respawn >= 0) definition.setRespawn(respawn);
+
+            const huntRange = animationFile.npcs?.[key]?.huntRange;
+            if (Number.isInteger(huntRange) && huntRange >= 1) definition.setHuntRange(huntRange);
 
             const animation = animations[key];
             if (animation) {

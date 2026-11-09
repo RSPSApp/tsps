@@ -1832,9 +1832,12 @@ test("Atlax's diary: the captured 24 pages in indexed_book (680), with a content
     sendString: (text, uid) => { strings.set(uid & 0xffff, text); return packet; },
     sendInterfaceDisplayState: (uid, hide) => { hidden.set(uid & 0xffff, hide); return packet; },
     sendInterfaceScript: () => packet,
+    sendConfig: (id, value) => { configs.set(id, value); return packet; },
   };
+  const configs = new Map();
   player.getPacketSender = () => packet;
   hooks.items["Atlax's diary"].Read({ player });
+  assert.equal(configs.get(334), 0, "pagepos: the left page of the spread");
   assert.equal(player.interfaces.at(-1), 680);
   assert.ok(player.animations.includes(Shared.seq('human_readbook')));
   assert.equal(strings.get(6), "Atlax's Diary");
@@ -1847,8 +1850,11 @@ test("Atlax's diary: the captured 24 pages in indexed_book (680), with a content
   assert.equal(hidden.get(9), true, 'no index button on the contents');
 
   const click = (child) => buttons.get((680 << 16) | child)({ player, buttonId: (680 << 16) | child });
+  const opens = player.interfaces.length;
   click(110);
   assert.equal(strings.get(10), '3');
+  assert.equal(configs.get(334), 2);
+  assert.equal(player.interfaces.length, opens + 1, 'each spread is sent and then opened again, as live does');
   assert.equal(strings.get(45), "battle, but now there's just a");
   assert.equal(hidden.get(9), false, 'the index button past the contents');
   click(9);

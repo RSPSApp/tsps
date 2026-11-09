@@ -604,7 +604,6 @@ function showBookPage(player) {
  */
 function openIndexedBook(player, { title, spreads, spreadOf }, onClose) {
   if (!spreads.length) return;
-  player.getPacketSender().sendInterface(INDEXED_BOOK_GROUP);
   openBooks.set(player, { indexed: true, title, spreads, spreadOf, page: 0, onClose });
   showIndexedBookPage(player);
 }
@@ -629,6 +628,10 @@ function showIndexedBookPage(player) {
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.previous), page === 0);
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.indexJump), page === 0);
   packet.sendInterfaceScript(2524, [-1, -1]);
+  // Live (Sacraments of Ent Folk, RSProx 20261109T224258-5ab63b4 ticks 826-847) sends each
+  // spread's content first and then opens the book again, the left page in varp pagepos.
+  packet.sendConfig(BOOK_PAGE_VARP, page * 2);
+  packet.sendInterface(INDEXED_BOOK_GROUP);
 }
 
 function turnIndexedBookPage(event) {
@@ -648,8 +651,20 @@ function turnIndexedBookPage(event) {
     page = book.spreadOf(entry.index);
   }
   if (page < 0 || page >= book.spreads.length || page === book.page) return;
+  const forward = page > book.page;
   book.page = page;
+  turnAnimation(player, forward);
   showIndexedBookPage(player);
+}
+
+/** The reader's page-turn animation and spot effect, both books. */
+function turnAnimation(player, forward) {
+  if (!coreApi) return;
+  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
+  player.performAnimation?.(new coreApi.Animation(turn.animation));
+  const graphic = new coreApi.Graphic(turn.graphic);
+  graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
+  player.performGraphic?.(graphic);
 }
 
 function turnBookPage(event) {
@@ -668,13 +683,7 @@ function turnBookPage(event) {
   const page = book.page + (forward ? 1 : -1);
   if (page < 0 || page >= book.pages.length) return;
   book.page = page;
-  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
-  if (coreApi) {
-    player.performAnimation?.(new coreApi.Animation(turn.animation));
-    const graphic = new coreApi.Graphic(turn.graphic);
-    graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
-    player.performGraphic?.(graphic);
-  }
+  turnAnimation(player, forward);
   showBookPage(player);
 }
 

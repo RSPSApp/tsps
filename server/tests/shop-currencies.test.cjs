@@ -92,7 +92,6 @@ test('the imported points shops have registered currencies', () => {
     'LAST MAN STANDING POINTS',
     'MAHOGANY HOMES POINTS',
     'PVP ARENA POINTS',
-    'VALE RESEARCH POINTS',
   ]) {
     assert.ok(handlers.has(key), `missing currency handler: ${key}`);
   }

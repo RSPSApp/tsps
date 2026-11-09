@@ -1,0 +1,89 @@
+{
+  "capture": "20261109T224258-5ab63b4 (revision 242)",
+  "note": "Tiles are the real map's (live copies x 1312-1415, y 3320-3423 into an instance). Ticks count from the scene's first fade (the continue that starts it), and again from each line's continue.",
+  "scenes": {
+    "worship": {
+      "ticks": [469, 495],
+      "segments": [
+        [
+          { "tick": 0, "fade": "out", "hold": true },
+          { "tick": 2, "enter": { "player": [1366, 3368], "face": [1370, 3375] } },
+          { "tick": 2, "actor": { "key": "ranulph", "id": 14582, "at": [1367, 3368], "face": [1370, 3375] } },
+          { "tick": 2, "actor": { "key": "buffalo", "id": 14584, "at": [1371, 3378], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "jaguar", "id": 14585, "at": [1372, 3376], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "eagle", "id": 14586, "at": [1367, 3378], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "ent", "id": 14583, "at": [1375, 3377] } },
+          { "tick": 3, "camera": { "to": [1369, 3366, 570], "look": [1370, 3375, 569] } },
+          { "tick": 3, "walk": { "who": "ent", "path": [[1375, 3375], [1372, 3372], [1370, 3372]] } },
+          { "tick": 4, "fade": "in" },
+          { "tick": 10, "face": { "who": "ent", "at": [1370, 3375] } },
+          { "tick": 11, "action": "ent-worshipped", "anim": { "who": "ent", "id": 12511 } },
+          { "tick": 13, "glide": { "to": [1366, 3361], "height": 570, "cycles": 120 } },
+          { "tick": 14, "walk": { "who": "ent", "path": [[1368, 3370], [1368, 3366], [1366, 3364]] } },
+          { "tick": 20, "fade": "out", "hold": true },
+          { "tick": 22, "exit": { "player": [1366, 3368], "face": [1370, 3375] } },
+          { "tick": 24, "fade": "in" },
+          { "tick": 26, "closeFade": true, "done": true }
+        ]
+      ]
+    },
+    "break": {
+      "ticks": [506, 538],
+      "segments": [
+        [
+          { "tick": 0, "fade": "out", "hold": true },
+          { "tick": 2, "enter": { "player": [1371, 3370] } },
+          { "tick": 2, "actor": { "key": "ranulph", "id": 14582, "at": [1370, 3369], "face": [1370, 3370] } },
+          { "tick": 2, "actor": { "key": "buffalo", "id": 14584, "at": [1371, 3378], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "jaguar", "id": 14585, "at": [1372, 3376], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "eagle", "id": 14586, "at": [1367, 3378], "wander": 2 } },
+          { "tick": 3, "camera": { "to": [1369, 3366, 540], "look": [1370, 3375, 539] } },
+          { "tick": 3, "walk": { "who": "player", "path": [[1371, 3373]] } },
+          { "tick": 3, "walk": { "who": "ranulph", "path": [[1370, 3373]] } },
+          { "tick": 4, "fade": "in" },
+          { "tick": 6, "face": { "who": "player", "at": [1370, 3375] } },
+          { "tick": 7, "face": { "who": "ranulph", "at": [1370, 3375] } },
+          { "tick": 8, "line": { "speaker": "player", "text": "It's a beautiful totem.", "expression": 567 } }
+        ],
+        [
+          { "tick": 0, "line": { "speaker": "npc", "npc": 14582, "name": "Ranulph", "text": "Indeed! Look at this bit!", "expression": 567 } }
+        ],
+        [
+          { "tick": 0, "anim": { "who": "ranulph", "id": 881 }, "hold": true },
+          { "tick": 1, "action": "totem-broken", "mapAnim": { "id": 2369, "at": [1370, 3375] }, "sounds": [1739, 7018] },
+          { "tick": 6, "fade": "out", "hold": true },
+          { "tick": 8, "exit": { "player": [1366, 3368], "face": [1370, 3375] } },
+          { "tick": 10, "fade": "in" },
+          { "tick": 12, "closeFade": true, "done": true }
+        ]
+      ]
+    },
+    "offering": {
+      "ticks": [696, 722],
+      "segments": [
+        [
+          { "tick": 0, "fade": "out", "hold": true },
+          { "tick": 2, "enter": { "player": [1366, 3368], "face": [1370, 3375] } },
+          { "tick": 2, "actor": { "key": "ranulph", "id": 14582, "at": [1367, 3368], "face": [1370, 3375] } },
+          { "tick": 2, "actor": { "key": "isadora", "id": 14581, "at": [1368, 3368], "face": [1370, 3375] } },
+          { "tick": 2, "actor": { "key": "buffalo", "id": 14584, "at": [1371, 3378], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "jaguar", "id": 14585, "at": [1372, 3376], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "eagle", "id": 14586, "at": [1367, 3378], "wander": 2 } },
+          { "tick": 2, "actor": { "key": "ent", "id": 14583, "at": [1375, 3377] } },
+          { "tick": 3, "camera": { "to": [1369, 3366, 570], "look": [1370, 3375, 569] } },
+          { "tick": 3, "walk": { "who": "ent", "path": [[1375, 3375], [1372, 3372], [1370, 3372]] } },
+          { "tick": 4, "fade": "in" },
+          { "tick": 10, "face": { "who": "ent", "at": [1370, 3375] } },
+          { "tick": 11, "anim": { "who": "ent", "id": 12511 } },
+          { "tick": 13, "glide": { "to": [1366, 3361], "height": 570, "cycles": 120 } },
+          { "tick": 14, "action": "offerings-left", "mapAnim": { "id": 3359, "at": [1370, 3374] } },
+          { "tick": 14, "walk": { "who": "ent", "path": [[1368, 3370], [1368, 3366], [1366, 3364]] } },
+          { "tick": 20, "fade": "out", "hold": true },
+          { "tick": 22, "exit": { "player": [1366, 3368], "face": [1370, 3375] } },
+          { "tick": 24, "fade": "in" },
+          { "tick": 26, "closeFade": true, "done": true }
+        ]
+      ]
+    }
+  }
+}

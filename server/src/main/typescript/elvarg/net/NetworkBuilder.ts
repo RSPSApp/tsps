@@ -894,7 +894,10 @@ export class ClientConnection {
           if (action && (packet.amount > 0 || (packet.amount === 0 && action.acceptsZero === true) || (packet.amount < 0 && action.acceptsNegative === true))) {
             action.execute(packet.amount);
           }
-          this.player?.setEnteredAmountAction(null);
+          // The answer may open another amount prompt, such as a Bank PIN keypad.
+          if (this.player?.getEnteredAmountAction() === action) {
+            this.player?.setEnteredAmountAction(null);
+          }
           continue;
         }
         case "dialogue_input": {

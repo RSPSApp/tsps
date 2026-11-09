@@ -51,6 +51,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const SHIP_AT_SEA_CHUNK = { sourceChunkX: 3064 >> 3, sourceChunkY: 3208 >> 3, sourcePlane: 1, rotation: 0 };
   const SHIP_JOURNEY_INTERFACE = 299;
   const SHIP_JOURNEY_SCRIPT = 1131;
+  /** toplevel_mainmodal_open: ship_journey's brown (0x2a1e06) fills the screen, as captured; cleared on landing. */
+  const MAIN_MODAL_OPEN = 2524, SHIP_JOURNEY_BACKGROUND = [0x2a1e06, 0], NO_MODAL_BACKGROUND = [-1, -1];
   const TO_KARAMJA_ROUTE = 4;
   const TO_PORT_SARIM_ROUTE = 5;
   const SHIP_JOURNEY_TICKS = 9;
@@ -626,7 +628,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
     player.moveTo(ship.tile(0, 0, 0));
     ship.enter(player);
     const sender = player.getPacketSender();
-    sender.sendSong(SEA_SONG).sendJingle(SAILING_JINGLE, 0)
+    sender.sendSong(SEA_SONG).sendJingle(SAILING_JINGLE, 0).sendInterfaceScript(MAIN_MODAL_OPEN, SHIP_JOURNEY_BACKGROUND)
       .sendInterface(SHIP_JOURNEY_INTERFACE).sendClientScript(SHIP_JOURNEY_SCRIPT, route);
     for (const slot of [COMBAT_TAB, PRAYER_TAB, MAGIC_TAB, ...VOYAGE_TABS.map(([tab]) => tab)]) {
       sender.closeSubInterface((TOPLEVEL << 16) | slot);
@@ -654,7 +656,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
     for (const [slot, group] of VOYAGE_TABS) sender.sendTabInterface(slot, group);
     player.getInventory().refreshItems();
     player.getEquipment().refreshItems();
-    sender.sendInterfaceRemoval();
+    sender.sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
   }
 
   function payForBananas(player) {

@@ -400,10 +400,12 @@ export class Bank extends ItemContainer {
     /**
      * Moves up to `amount` of the inventory item in `slot` into `bank`, each
      * item as itself so it keeps its metadata (charges, contents). A stack
-     * moves from the clicked slot only; unstackable items start there and
-     * continue through the other bankable slots holding the same item.
+     * moves from the clicked slot only. Unstackable items go from the first
+     * (top-left) bankable slot holding the same item onward, wherever the
+     * click landed, as in OSRS; a dragged item (`fromClickedSlot`) starts at
+     * the slot it was dragged from.
      */
-    private static depositFromSlots(player: Player, bank: Bank, slot: number, amount: number) {
+    private static depositFromSlots(player: Player, bank: Bank, slot: number, amount: number, fromClickedSlot = false) {
         const inventory = player.getInventory();
         const clicked = inventory.getItems()[slot];
         if (clicked.getDefinition().isStackable()) {
@@ -411,7 +413,8 @@ export class Bank extends ItemContainer {
             return;
         }
         const id = clicked.getId();
-        const slots = [slot, ...inventory.getItems().map((_, index) => index).filter((index) => index !== slot)];
+        const indexes = inventory.getItems().map((_, index) => index);
+        const slots = fromClickedSlot ? [slot, ...indexes.filter((index) => index !== slot)] : indexes;
         let moved = 0;
         for (const index of slots) {
             if (moved >= amount) break;
@@ -696,7 +699,7 @@ export class Bank extends ItemContainer {
         if (target === undefined) {
             target = tab === undefined ? Bank.getTabForItem(player, itemId) : Bank.dropTab(player, tab);
         }
-        Bank.depositFromSlots(player, player.getBank(target), slot, item.getDefinition().isStackable() ? item.getAmount() : 1);
+        Bank.depositFromSlots(player, player.getBank(target), slot, item.getDefinition().isStackable() ? item.getAmount() : 1, true);
         player.getBank(target).refreshItems();
         player.getInventory().refreshItems();
     }

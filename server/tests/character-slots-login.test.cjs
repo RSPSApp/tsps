@@ -21,7 +21,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
 const { DisplayNames } = require('../dist/game/entity/impl/player/DisplayNames');
 const { SkillManager, Skills } = require('../dist/game/content/skill/SkillManager');
-const { MAIN_PROFILE, LEAGUE_PROFILE, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
+const { MAIN_PROFILE, LEAGUE_PROFILE, PLAYER_PROFILES, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const net = require('../dist/net/NetworkBuilder');
 const { LOGIN_FLAG_CHARACTER_SELECT } = require('../dist/net/login/LoginTokens');
 const Characters = require('../plugins/accounts/Characters.plugin');
@@ -758,7 +758,7 @@ test('deleting: primary, online, confirmation, success, and persistence failure'
   await remove(c, 'ALT', 'alt');
   assert.deepEqual(lastResult(c.channel), { ok: true, code: 0, message: '' });
   assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima', 'Other']);
-  assert.deepEqual(persistence.deleted.map((d) => d[1]).sort(), [LEAGUE_PROFILE, MAIN_PROFILE].sort());
+  assert.deepEqual(persistence.deleted.map((d) => d[1]).sort(), [...PLAYER_PROFILES].sort());
   assert.equal(packetsOf(c.channel, CHARACTER_LIST).length, lists + 1);
   assert.equal(net.ClientConnection.isLoginPending('Alt'), false, 'the deleted character is released');
   const logins = await handshake(t, c.connection, 'Zezima');

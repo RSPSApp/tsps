@@ -8,7 +8,9 @@
  *
  * Other plugins ask a player's mode with `ironman:mode` ({ player } -> mode, label), and may lock
  * it: every choice first asks `ironman:change-mode` ({ player, from, to, allowed, reason }), and
- * one answered `allowed: false` is refused with its reason.
+ * one answered `allowed: false` is refused with its reason. Opening the setup at all first asks
+ * `ironman:can-open-setup` ({ player, allowed, reason }): refused, it stays shut and the reason
+ * is said.
  */
 const Ironman = require("./Common.Ironman");
 
@@ -39,6 +41,15 @@ function openSetup(request) {
   const { player } = request;
   if (!player) return;
   request.handled = true;
+  // A world or mode without Ironmen (a Hardcore World) keeps the setup shut, with its reason.
+  const query = { player, allowed: true, reason: null };
+  Ironman.api.emitCustomEvent("ironman:can-open-setup", query);
+  if (query.allowed === false) {
+    // The automatic first-login offer just doesn't happen; a setup asked for says why.
+    if (query.reason && request.initial !== true) player.sendMessage(query.reason);
+    request.onClosed?.();
+    return;
+  }
   const setup = setupData();
   for (const [varp, value] of Object.entries(setup.varps)) player.getPacketSender().sendConfig(Number(varp), value);
   openSetups.set(player, { upgrades: request.upgrades === true, initial: request.initial === true, onClosed: request.onClosed });

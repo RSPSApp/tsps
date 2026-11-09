@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Misc } from "../../../../util/Misc";
-import { LEAGUE_PROFILE, MAIN_PROFILE } from "./persistence/PlayerProfile";
+import { PLAYER_PROFILES } from "./persistence/PlayerProfile";
 
 /** A name an account gave up, kept for it until `until` so nobody else can take it straight away. */
 export interface HeldDisplayName {
@@ -167,8 +167,7 @@ export class DisplayNames {
             (Accounts.isDeleted(key) && !(exceptDeletedBy !== undefined && Accounts.deletedBy(key, exceptDeletedBy))) ||
             !!World.getPlayerByName(key) ||
             ClientConnection.isLoginPending(key) ||
-            persistence.exists(key, MAIN_PROFILE) ||
-            persistence.exists(key, LEAGUE_PROFILE);
+            PLAYER_PROFILES.some((profile) => persistence.exists(key, profile));
     }
 
     /**

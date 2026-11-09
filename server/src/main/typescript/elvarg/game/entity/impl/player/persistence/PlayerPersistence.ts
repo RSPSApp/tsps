@@ -1,6 +1,6 @@
 import type { Player } from "../Player";
 import { PlayerSave } from "../persistence/PlayerSave";
-import { MAIN_PROFILE, profileStorageKey, siblingProfile, type PlayerProfile } from "./PlayerProfile";
+import { MAIN_PROFILE, PLAYER_PROFILES, profileStorageKey, type PlayerProfile } from "./PlayerProfile";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../../net/login/LoginTokens";
 const SKIP_PERSISTENCE_ATTRIBUTE = "bot-skip-persistence";
 
@@ -61,6 +61,24 @@ export abstract class PlayerPersistence {
         return true;
     }
 
+    /**
+     * Copies a character's save into another of the account's profiles (a Hardcore character
+     * transferring to the normal game). Never overwrites: false when `to` already has a save or
+     * `from` has none. The account must be offline, as for any offline edit.
+     */
+    public async copyProfile(username: string, from: PlayerProfile, to: PlayerProfile, reason = "profile-copy"): Promise<boolean> {
+        const { World } = require("../../../../World") as typeof import("../../../../World");
+        if (World.getPlayerByName(username)) {
+            throw new Error("Cannot copy an online account's save");
+        }
+        if (from === to || this.exists(username, to)) return false;
+        const save = this.load(username, from);
+        if (!save) return false;
+        this.saveOffline(username, save, reason, to);
+        await this.flush();
+        return true;
+    }
+
     /** Removes a profile's save; a backend that keeps a history re-keys it so a new character of that name starts clean. */
     public async delete(_username: string, _profile: PlayerProfile = MAIN_PROFILE): Promise<void> {
         throw new Error("This persistence backend does not support deleting saves");
@@ -90,7 +108,7 @@ export abstract class PlayerPersistence {
         let failure: unknown = null;
         for (const name of names) {
             const live = Accounts.key(name) === liveKey;
-            for (const profile of [MAIN_PROFILE, siblingProfile(MAIN_PROFILE)]) {
+            for (const profile of PLAYER_PROFILES) {
                 // The live character's own save is the one requestSave writes.
                 if (live && profile === player.getProfile()) continue;
                 try {

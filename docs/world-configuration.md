@@ -119,6 +119,19 @@ Explicit boolean values override the older `CROSS_FLOOR_VISIBILITY`, `CROSS_FLOO
 `CROSS_FLOOR_VISIBILITY_AND_COMBAT` environment flags. Those flags remain fallbacks for existing
 setups, but combat now always requires visibility, including when using the old flags.
 
+## Hardcore World
+
+`pluginConfig` `"HardcoreWorld:enabled": true` makes the server a Hardcore World: every login is
+the account's Hardcore character, a save of its own, with one life. A death that counts is
+announced to the world, and the character then resets or transfers out. The world list and the
+client are told it is a Hardcore world. See [hardcore-worlds.md](hardcore-worlds.md).
+
+```json
+{
+  "pluginConfig": { "HardcoreWorld:enabled": true }
+}
+```
+
 ## Welcome screen message
 
 `pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of

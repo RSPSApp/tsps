@@ -207,7 +207,9 @@ test('q059 cache contract: varbit 34 is the wire, not whole varp 351', () => {
   // The canonical completion is at or above the cache threshold (10).
   h.quest.complete(h.player);
   assert.equal(h.quest.getStage(h.player), 10);
-  assert.equal(h.varbits.get(35), 0, 'completion alone does not fabricate wall offerings');
+  // A completed account's login sends horrordoor (35) as 1 (rsprox_transcripts/224/01512.txt),
+  // so completion, played through or not, opens the strange wall (#3851).
+  assert.equal(h.varbits.get(35), 1, 'completion opens the strange wall');
   assert.ok(h.varbits.get(34) >= 10);
   assert.equal(h.inventory.get(I.RUSTY_CASKET), 1, 'completion hands over the casket');
 });

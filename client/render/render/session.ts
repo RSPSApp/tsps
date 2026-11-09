@@ -28,6 +28,7 @@ import {
     subscribeTick,
 } from "../../network/ServerConnection";
 import { sendLogin } from "../../network/ServerConnection";
+import { deleteShaderFxTarget } from "./shaderFx";
 import { flushPackets } from "../../network/packet";
 import { createTextureArray } from "../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../rs/MathConstants";
@@ -336,6 +337,8 @@ export async function cleanUp(host: WebGLOsrsRendererHost, ): Promise<void> {
 
         host.textureDepthTarget?.delete();
         host.textureDepthTarget = undefined;
+
+        deleteShaderFxTarget(host);
 
         // Textures
         host.textureArray?.delete();

@@ -1,7 +1,7 @@
 /**
  * Zahur's "Make unfinished potion(s)" in Nardah (https://oldschool.runescape.wiki/w/Zahur):
  * after the hard Desert Diary, or while wearing a Herblore cape (or max cape), she makes every
- * clean herb and vial of water the player carries - noted or not - into unfinished potions for
+ * clean herb and vial of water or blood the player carries - noted or not - into unfinished potions for
  * 200 coins each, as many as they can pay for. Noted pairs come back noted. The option is only
  * on her right-click menu; its messages have no capture.
  *
@@ -94,8 +94,13 @@ function cleanHerbs(event) {
   return true;
 }
 
-function unfinishedFor(herbId) {
-  const request = { herbId, potion: null };
+/** Wiki: "vials of water or vials of blood" (blood since 5 July 2018); water first when a herb takes both. */
+function bases() {
+  return [core.ItemIdentifiers.VIAL_OF_WATER, core.CacheDefinitions.getObjId("vial_blood")];
+}
+
+function unfinishedFor(herbId, baseId) {
+  const request = { herbId, baseId, potion: null };
   api.emitCustomEvent("herblore:unfinished", request);
   return request.potion;
 }
@@ -104,7 +109,7 @@ function notedOf(id) {
   return core.ItemDefinition.forId(id)?.getNoteId?.() ?? -1;
 }
 
-/** Each kind of carried clean herb with its unfinished potion, unnoted and noted counts. */
+/** Each kind of carried clean herb with its unfinished potion per base (`potions`: base id -> potion), and counts. */
 function herbsCarried(player) {
   const inventory = player.getInventory();
   const herbs = new Map();
@@ -114,8 +119,12 @@ function herbsCarried(player) {
     const definition = core.ItemDefinition.forId(id);
     const herbId = definition.isNoted() ? definition.unNote() : id;
     if (herbs.has(herbId)) continue;
-    const potion = unfinishedFor(herbId);
-    if (potion) herbs.set(herbId, { potion, unnoted: inventory.getAmount(herbId), noted: inventory.getAmount(notedOf(herbId)) });
+    const potions = new Map();
+    for (const baseId of bases()) {
+      const potion = unfinishedFor(herbId, baseId);
+      if (potion) potions.set(baseId, potion);
+    }
+    if (potions.size) herbs.set(herbId, { potions, unnoted: inventory.getAmount(herbId), noted: inventory.getAmount(notedOf(herbId)) });
   }
   return herbs;
 }
@@ -128,35 +137,40 @@ function makeUnfinished(event) {
   }
   const inventory = player.getInventory();
   const { ItemIdentifiers } = core;
-  const vial = ItemIdentifiers.VIAL_OF_WATER;
-  let vials = { unnoted: inventory.getAmount(vial), noted: inventory.getAmount(notedOf(vial)) };
+  const vials = new Map(bases().map((id) => [id, { unnoted: inventory.getAmount(id), noted: inventory.getAmount(notedOf(id)) }]));
   let affordable = Math.floor(inventory.getAmount(ItemIdentifiers.COINS) / COST);
   // rsprox_transcripts/232/03159.txt: Zahur's own refusals, as dialogue, for what is missing (no herbs, no vials, no
   // coins; 16028, 12090, 15340), and nothing said when she makes them (15767: only the inventory and the coins change).
   const carried = herbsCarried(player);
   if (carried.size === 0) { say(player, npcId, "You don't have anything for me to combine."); return true; }
-  if (vials.unnoted + vials.noted <= 0) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with."); return true; }
+  // Only a base some carried herb combines with counts (guam with vials of blood alone has none).
+  const usable = [...carried.values()].some((herb) => [...herb.potions.keys()].some((base) => vials.get(base).unnoted + vials.get(base).noted > 0));
+  if (!usable) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with."); return true; }
   if (affordable <= 0) { say(player, npcId, `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`); return true; }
   let made = 0;
   let refused = false;
   for (const [herbId, herb] of carried) {
-    for (const kind of ["unnoted", "noted"]) {
-      const wanted = Math.min(herb[kind], vials[kind], affordable);
-      if (wanted <= 0) continue;
-      const noted = kind === "noted";
-      const herbItem = noted ? notedOf(herbId) : herbId;
-      const vialItem = noted ? notedOf(vial) : vial;
-      const output = noted ? notedOf(herb.potion) : herb.potion;
-      const count = fitting(player, [[herbItem, wanted], [vialItem, wanted], [ItemIdentifiers.COINS, wanted * COST]], output, wanted);
-      if (count < wanted) refused = true;
-      if (count <= 0) continue;
-      inventory.deleteNumber(herbItem, count);
-      inventory.deleteNumber(vialItem, count);
-      inventory.deleteNumber(ItemIdentifiers.COINS, count * COST);
-      inventory.adds(output, count);
-      vials = { ...vials, [kind]: vials[kind] - count };
-      affordable -= count;
-      made += count;
+    for (const [vial, potion] of herb.potions) {
+      const held = vials.get(vial);
+      for (const kind of ["unnoted", "noted"]) {
+        const wanted = Math.min(herb[kind], held[kind], affordable);
+        if (wanted <= 0) continue;
+        const noted = kind === "noted";
+        const herbItem = noted ? notedOf(herbId) : herbId;
+        const vialItem = noted ? notedOf(vial) : vial;
+        const output = noted ? notedOf(potion) : potion;
+        const count = fitting(player, [[herbItem, wanted], [vialItem, wanted], [ItemIdentifiers.COINS, wanted * COST]], output, wanted);
+        if (count < wanted) refused = true;
+        if (count <= 0) continue;
+        inventory.deleteNumber(herbItem, count);
+        inventory.deleteNumber(vialItem, count);
+        inventory.deleteNumber(ItemIdentifiers.COINS, count * COST);
+        inventory.adds(output, count);
+        held[kind] -= count;
+        herb[kind] -= count;
+        affordable -= count;
+        made += count;
+      }
     }
   }
   if (refused) player.sendMessage(NO_SPACE);
@@ -165,7 +179,7 @@ function makeUnfinished(event) {
 
 module.exports = {
   name: "Zahur",
-  description: "Zahur in Nardah makes unfinished potions from clean herbs and vials of water for 200 coins each, after the hard Desert Diary or with a Herblore cape.",
+  description: "Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape.",
   members: true,
   _test: { makeUnfinished, unlocked, herbsCarried, cleanHerbs, cleanAll },
   register(pluginApi) {

@@ -11,6 +11,8 @@
   "coins": "coins",
   "_vialPrice": "Wiki (Decanting): a vial Bob has to supply costs 5 coins.",
   "vialPrice": 5,
+  "_cup": "Wiki (Bob Barter (herbs)): \"He will also decant Guthix rests\"; Guthix rest (Wiki): two (3)s give a (4) and a (2). Emptied ones come back as empty cups; a cup he supplies costs its Grand Exchange price plus 2 (Wiki, Bob Barter (herbs) and Zahur): 3 + 2 = 5 by item-prices.json, the same as a vial.",
+  "cup": "cup_empty",
   "decantSound": 2266,
   "_jewellery": "Charges pooled per family up to its normal capacity (recorded: dueling 8, glory 4, skills 4; Wiki: not past it, as for a Fountain of Rune glory(6)). `empty`: what an emptied piece becomes (recorded: glory and skills necklaces come back uncharged; dueling rings are gone). `fountain`: the Fountain of Rune can charge it further.",
   "jewellery": [
@@ -25,12 +27,13 @@
   ],
   "_anim": "Chathead animations, as recorded.",
   "anim": { "happy": 567, "sad": 610, "sad3": 612 },
-  "_messages": "All recorded except nothingToDecant (Zahur's line for the same interface, 230/00333) and poor (mine). Bob's recorded lead-in (\"Let's see what you have...\") opens and is replaced by the result on the same tick, so only the result is shown.",
+  "_messages": "All recorded except nothingToDecant (Zahur's line for the same interface, 230/00333) and poor/poorCups (mine). Bob's recorded lead-in (\"Let's see what you have...\") opens and is replaced by the result on the same tick, so only the result is shown.",
   "messages": {
     "decanted": "There, all done.",
     "short": "You're a bit short of inventory space.",
     "nothingToDecant": "I don't think you've got anything that I can decant.",
     "poor": "You'll need some coins for the vials I'd have to give you.",
+    "poorCups": "You'll need some coins for the cups I'd have to give you.",
     "combined": "Arr, all done.",
     "nothingToCombine": "Arrr, ye've got nothing that I can combine.",
     "fountain": "Arrr, ye've nothing I can combine. Maybe ye needs to take yer stuff up to the Wilderness and charge it on the Fountain of Rune. It be more powerful than me."

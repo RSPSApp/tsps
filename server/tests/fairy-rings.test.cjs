@@ -24,6 +24,7 @@ let core;
 let canAttackHook;
 
 const undoneQuests = new Set();
+const eliteLumbridge = new Set();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -34,7 +35,10 @@ before(async () => {
     core, persistAttribute() {}, onObjectInteraction() {}, onInterfaceActionClick() {},
     onCustomEvent() {},
     // Quests are done unless a test says otherwise (the codes' own quest locks).
-    emitCustomEvent(name, event) { if (name === "quest:is-complete") event.complete = !undoneQuests.has(event.key); },
+    emitCustomEvent(name, event) {
+      if (name === "quest:is-complete") event.complete = !undoneQuests.has(event.key);
+      if (name === "diary:is-complete") event.complete = event.diary === "lumbridge" && event.tier === "elite" && eliteLumbridge.has(event.player);
+    },
     onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
   });
 });
@@ -144,6 +148,14 @@ test("a fairy ring needs fairy magic wielded, not carried", () => {
   const carried = player({ weapon: -1, inventory: [DRAMEN_STAFF] });
   T.openDial({ player: carried.p });
   assert.deepEqual(carried.ticks.flat(), ["The fairy ring only works for those who wield fairy magic."]);
+});
+
+test("the elite Lumbridge & Draynor Diary needs no staff (Wiki, Fairy ring)", () => {
+  const diary = player({ weapon: -1 });
+  eliteLumbridge.add(diary.p);
+  T.openDial({ player: diary.p });
+  assert.ok(!diary.ticks.flat().includes("The fairy ring only works for those who wield fairy magic."), diary.ticks.flat().join(" / "));
+  assert.ok(diary.p.getInterfaceId() > 0, "the dials open");
 });
 
 test("Configure: the travel log with the codes used, the backdrop, both interfaces, busy a tick later", () => {

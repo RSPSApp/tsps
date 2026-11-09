@@ -1251,7 +1251,7 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
   assert.equal(CREATION_MENU_GROUP_ID, 270);
   let index = 1920;
   for (const route of ["leather", "glass"]) {
-    for (const input of ["stationary", "inventory Bury", "widget Bury", "widget Examine"]) {
+    for (const input of ["stationary", "inventory Bury", "widget Bury", "widget Examine", "permission veto", "equipment dispatch"]) {
       await t.test(`${route}: ${input}`, async t => {
         const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
           send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -1317,7 +1317,23 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
         await begin();
         assert.equal(total(material), 2); assert.equal(total(product), 0); assert.deepEqual(gains, []);
         const interrupted = input.endsWith("Bury");
-        if (input !== "stationary") {
+        if (input === "permission veto" || input === "equipment dispatch") {
+          const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+          if (input === "permission veto") {
+            // The real dispatcher must honor a refusal before clearing an interaction.
+            const veto = t.mock.method(PluginManager, "emitCanUseItem", () => false);
+            const slot = inv.getSlotForItemId(I.BONES);
+            assert.equal(ItemActionPacketListener.handleAction(p, 3214, I.BONES, slot, 1, "Bury"), true);
+            veto.mock.restore();
+          } else {
+            // Seed equipment solely to exercise the equipment-container branch.
+            const slot = core.Equipment.HEAD_SLOT, item = I.BRONZE_FULL_HELM;
+            p.getEquipment().setItem(slot, new core.Item(item, 1));
+            ItemActionPacketListener.handleAction(p, core.Equipment.INVENTORY_INTERFACE_ID, item, slot, 1, "Check");
+          }
+          assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(), true);
+          assert.equal(total(I.BONES), 1); assert.equal(total(material), 2); assert.deepEqual(gains, []);
+        } else if (input !== "stationary") {
           const slot = inv.getSlotForItemId(I.BONES);
           const packet = input === "inventory Bury" ? { type: "inventory_action", widgetId: 3214,
             slot, itemId: I.BONES, option: "Bury" } : { type: "widget_action", widgetId: 149 << 16,

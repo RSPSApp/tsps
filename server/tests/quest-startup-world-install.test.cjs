@@ -16,7 +16,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager');
 
 const WORLD_INSTALLER_QUESTS = [
-  'BeneathCursedSands', 'CrabQuest', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
+  'BeneathCursedSands', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
   'EaglesPeak', 'EyesOfGlouphrie', 'GrimTales', 'InAidOfTheMyreque', 'Pandemonium',
   'PerilousMoons', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
 ];

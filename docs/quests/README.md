@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 26 · ⚠️ passed with issues: 16 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 105
+193 quests · ✅ passed: 26 · ⚠️ passed with issues: 17 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 104
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -37,7 +37,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Cold War | untested |  |  |  |  |
 | [Contact!](contact/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Cook's Assistant](cooks-assistant/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
-| Crab Quest | untested |  |  |  |  |
+| [Crab Quest](crab-quest/README.md) | ⚠️ passed with issues | 2026-11-09 | agent | claude-opus-5-5 | 3 |
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Curse of the Empty Lord | untested |  |  |  |  |

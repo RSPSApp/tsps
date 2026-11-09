@@ -658,14 +658,38 @@ test("a refused inventory wield interrupts an altar offering and the player can 
   const { EquipmentRequirements } = require("../dist/game/model/equipment/EquipmentRequirements");
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   const core = PluginManager.getCoreApi();
+  let player = null;
+  t.after(() => {
+    let cleanupError = null;
+    try {
+      if (player) {
+        PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+        PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+        player.setRegistered(false);
+        core.TaskManager.cancelTasks(player.getIndex());
+        core.TaskManager.cancelTasks(player);
+        assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
+        assert.equal(core.TaskManager.hasActiveTask(player), false);
+      }
+    } catch (error) {
+      cleanupError = error;
+      throw error;
+    } finally {
+      try {
+        PluginManager.emitServerShutdown({});
+      } catch (error) {
+        if (!cleanupError) throw error;
+        cleanupError.shutdownError = error;
+      }
+    }
+  });
   assert.equal(core.WorldDefinition.isMembersWorld(), true);
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(2947, 3820);
   PluginManager.emitServerStartup({});
-  t.after(() => PluginManager.emitServerShutdown({}));
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
     send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
-  const player = new Player(new PlayerSession(channel));
+  player = new Player(new PlayerSession(channel));
   player.setIndex(1785);
   player.setUsername("prayerwieldrefusal");
   player.setRegistered(true);
@@ -673,15 +697,6 @@ test("a refused inventory wield interrupts an altar offering and the player can 
   player.needsPlacement = false;
   const connection = new ClientConnection(channel);
   connection.player = player;
-  t.after(() => {
-    PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
-    PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
-    player.setRegistered(false);
-    core.TaskManager.cancelTasks(player.getIndex());
-    core.TaskManager.cancelTasks(player);
-    assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
-    assert.equal(core.TaskManager.hasActiveTask(player), false);
-  });
   const skills = player.getSkillManager();
   skills.setCurrentLevel(core.Skill.PRAYER, 99, false).setMaxLevels(core.Skill.PRAYER, 99, false);
   skills.setExperience(core.Skill.PRAYER, core.SkillManager.getExperienceForLevel(99));

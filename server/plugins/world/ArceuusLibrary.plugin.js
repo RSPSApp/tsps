@@ -315,13 +315,19 @@ function helpCustomer(event) {
   return start.handled;
 }
 
+/** Stairs inside the library that no capture covers: LocTeleports' captured entries keep their own tile, tick and sound. */
 function climbStairs(request) {
   if (request.handled) return;
   const up = STAIRS_UP.has(request.objectId);
   if (!up && !STAIRS_DOWN.has(request.objectId)) return;
+  const location = request.object?.getLocation?.();
+  if (!inLibrary(location)) return;
+  const covered = { object: request.object, clickType: request.clickType, captured: false };
+  api.emitCustomEvent("loc-teleports:captured", covered);
+  if (covered.captured) return;
   api.emitCustomEvent(up ? "ladders:climbUp" : "ladders:climbDown", {
     player: request.player, object: request.object, objectId: request.objectId,
-    clickType: request.clickType, location: request.object?.getLocation?.(),
+    clickType: request.clickType, location, animate: false,
   });
   request.handled = true;
 }

@@ -307,6 +307,11 @@ function claimLadder(request) {
   if (play(request.player, request.object, request.clickType)) request.handled = true;
 }
 
+/** "loc-teleports:captured" { object, clickType, captured }: whether a captured entry covers this placement. */
+function answerCaptured(request) {
+  if (request.object) request.captured = entryFor(request.object, request.clickType) != null;
+}
+
 /** Route to an explicit threshold when surrounding walls block ordinary loc reach. */
 function routeToLoc(event) {
   const approach = entryFor(event.object, event.clickType)?.approach;
@@ -333,6 +338,7 @@ module.exports = {
     api.onObjectRoute(routeToLoc);
     api.onItemOnObject(useItemOnLoc);
     api.onCustomEvent("ladders:climb", claimLadder);
+    api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);
   },
 };

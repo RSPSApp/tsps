@@ -8,6 +8,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Library = require("../plugins/world/ArceuusLibrary.plugin");
+const LocTeleports = require("../plugins/world/LocTeleports.plugin");
 const dialogues = require("../data/definitions/npc-dialogues.json");
 const LIBRARY = require("../plugins/world/data/arceuus-library.json");
 
@@ -39,6 +40,7 @@ before(async () => {
     getTaskManager: () => ({ submit() {} }),
   }, { get: (target, key) => key in target ? target[key] : () => {} });
   Library.register(api);
+  LocTeleports.register(api);
   // Stands in for NpcDialogues, which plays the variant.
   api.onCustomEvent("npc-dialogue:start", (request) => { request.handled = true; });
 });
@@ -65,18 +67,35 @@ function fixture(t) {
 
 const customer = (npcId) => ({ getId: () => npcId });
 
-test("each library staircase climbs the way it goes, with no prompt", () => {
-  for (const [objectId, event] of [[27853, "ladders:climbUp"], [27851, "ladders:climbUp"], [27854, "ladders:climbUp"],
-    [27852, "ladders:climbDown"], [27855, "ladders:climbDown"], [27856, "ladders:climbDown"]]) {
+const stairs = (objectId, x, y, z) => new core.GameObject(objectId, new core.Location(x, y, z), 10, 0, null);
+
+test("uncaptured library staircases climb the way they go, with no prompt or animation", () => {
+  // Placements with no loc-teleports entry (rsprox 1702 gives the directions).
+  for (const [objectId, at, event] of [[27853, [1643, 3819, 0], "ladders:climbUp"], [27854, [1614, 3796, 0], "ladders:climbUp"],
+    [27851, [1621, 3792, 1], "ladders:climbUp"], [27852, [1621, 3794, 2], "ladders:climbDown"],
+    [27855, [1611, 3794, 1], "ladders:climbDown"], [27856, [1645, 3821, 1], "ladders:climbDown"]]) {
     emitted = [];
-    const request = { player: {}, object: null, objectId, clickType: 1, handled: false };
+    const request = { player: {}, object: stairs(objectId, ...at), objectId, clickType: 1, handled: false };
     T.climbStairs(request);
     assert.equal(request.handled, true, `${objectId}`);
-    assert.equal(emitted[0][0], event, `${objectId}`);
+    const climb = emitted.find(([name]) => name === event);
+    assert.ok(climb, `${objectId}`);
+    assert.equal(climb[1].animate, false);
   }
-  const other = { player: {}, objectId: 12345, handled: false };
+  const other = { player: {}, object: stairs(12345, 1643, 3819, 0), objectId: 12345, handled: false };
   T.climbStairs(other);
   assert.equal(other.handled, false);
+});
+
+test("captured stair placements and stairs outside the library are left to LocTeleports", () => {
+  for (const [objectId, at] of [[27853, [1614, 3825, 0]], [27851, [1612, 3818, 1]], [27852, [1609, 3818, 2]],
+    [27856, [1611, 3827, 1]], [27853, [1679, 3785, 0]], [27852, [1689, 3793, 1]]]) {
+    emitted = [];
+    const request = { player: {}, object: stairs(objectId, ...at), objectId, clickType: 1, handled: false };
+    T.climbStairs(request);
+    assert.equal(request.handled, false, `${objectId} at ${at}`);
+    assert.equal(emitted.some(([name]) => name.startsWith("ladders:climb")), false);
+  }
 });
 
 test("Help starts the request at the book line, without the intro and menu", (t) => {

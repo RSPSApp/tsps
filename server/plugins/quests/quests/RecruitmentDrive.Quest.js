@@ -448,13 +448,13 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   }
 
   function openRenDoorPrompt(player) {
-    if (renClues(player) <= 0) {
+    const answer = renWord(player);
+    if (answer === undefined) {
       player.sendMessage(
         "The door has a four-letter combination lock. Sir Ren Itchood may have a clue for you."
       );
       return;
     }
-    const answer = ensureRenWord(player);
     const options = [REN_WORDS[answer]];
     for (const word of REN_WORDS) {
       if (options.length >= 5) break;

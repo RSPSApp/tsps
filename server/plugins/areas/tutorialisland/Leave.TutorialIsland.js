@@ -41,7 +41,7 @@ function giveStarterKit(player) {
   const inv = player.getInventory();
   for (const item of [
     Items.BRONZE_AXE, Items.BRONZE_PICKAXE, Items.TINDERBOX, Items.SMALL_FISHING_NET, Items.SHRIMPS,
-    Items.BRONZE_DAGGER, Items.BRONZE_SWORD, Items.WOODEN_SHIELD, Items.SHORTBOW,
+    Items.BRONZE_DAGGER, Items.BRONZE_SHORTSWORD, Items.WOODEN_SHIELD, Items.SHORTBOW,
   ]) inv.adds(item, 1);
   inv.adds(Items.BRONZE_ARROW, 25);
   inv.adds(Items.AIR_RUNE, 25);

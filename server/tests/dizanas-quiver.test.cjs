@@ -236,7 +236,8 @@ test('shots use up the quiver: 20% break, the rest drop, and it runs out', () =>
     PluginManager.decrementRangedAmmo(player, { getX: () => 0 }, 2);
     assert.deepEqual(drops, [2]);
     assert.equal(Quiver.stored(player), null);
-    assert.equal(player.messages.at(-1), 'You have run out of ammunition!');
+    // No line as it empties (rsprox 227/00096:101682); the next attempt names it.
+    assert.ok(!player.messages.includes('You have run out of ammunition!'));
     assert.equal(player.varps.get(Quiver.VARP.ITEM), -1);
   } finally {
     Misc.getRandom = getRandom;

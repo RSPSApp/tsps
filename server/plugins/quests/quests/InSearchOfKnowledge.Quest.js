@@ -668,7 +668,7 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
         if (!player.getInventory().contains(itemId)) return null;
         const manager = player.getSkillManager();
         const before = manager.getExperience(skill);
-        manager.addExperience(skill, LAMP_XP, false);
+        manager.addExperience(skill, LAMP_XP, true);
         if (manager.getExperience(skill) === before) {
           player.sendMessage("You cannot gain experience in that skill right now.");
           return null;

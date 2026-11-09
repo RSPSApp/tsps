@@ -1,5 +1,6 @@
 /**
- * Daddy's Home (members miniquest, Mahogany Homes prerequisite content).
+ * Daddy's Home (members quest from rev 242, 1 Quest Point; a miniquest before; Mahogany Homes
+ * prerequisite content).
  *
  * Source of truth: the OSRS Wiki walkthrough/quick guide and Transcript:Daddy's Home.
  * Quest Helper `helpers/miniquests/daddyshome/DaddysHome.java` supplies the stage map:
@@ -9,7 +10,9 @@
  *   3/4 all removed, talk to Yarlo again
  *   5-9 rebuild the furniture (stools, tables, chair, carpet, waxwood bed)
  *   10-12 talk to Marlo for the reward
- * Cache DB row 159 (type 1 = miniquest) completes at varbit 10570 (varp 393 bits 19-22) = 13.
+ * Cache DB row 159 (type 0 = quest from rev 242, 1 before) completes at varbit 10570 (varp 393
+ * bits 19-22) = 13. The rev 242 capture (2026-11-05) gives the start/complete messages, +1 qp and
+ * the scroll's rewards and saw model.
  *
  * The seven furniture varbits live in the same shared varp as Karamja/Kalphite/God Wars
  * bits, so they are read and written individually:
@@ -49,7 +52,9 @@ module.exports = function registerDaddysHomeQuest(api) {
     Task,
     TaskManager,
   } = api.core;
-  const { registerQuest } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
+  // Set once a player who finished the miniquest before rev 242 has been given its new Quest Point.
+  const QP_CREDITED_ATTRIBUTE = "daddys-home:quest-point-credited";
   const { createQuestScenes } = require("../QuestScenes");
 
   // Cache ids (gamevals from osrs-241_2026-10-20).
@@ -172,7 +177,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     [Items.FALADOR_TELEPORT, 1],
   ];
 
-  const START_MESSAGE = "You've started a new miniquest: <col=081190>Daddy's Home</col>";
+  const START_MESSAGE = "You've started a new quest: <col=081190>Daddy's Home</col>";
 
   let quest;
   const Scenes = createQuestScenes(api, { onEnd: onCutsceneEnd });
@@ -219,6 +224,22 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   function syncFurniture({ player }) {
     sendFurniture(player);
+    creditQuestPoint(player);
+  }
+
+  /**
+   * Rev 242 made the miniquest a 1 QP quest: a save that finished it earlier gets the point once.
+   * The flag is set on the first login either way, so a later completion (which awards the point
+   * itself) is never credited twice.
+   */
+  function creditQuestPoint(player) {
+    if (player.getAttribute(QP_CREDITED_ATTRIBUTE) === true) return;
+    player.setAttribute(QP_CREDITED_ATTRIBUTE, true);
+    if (!quest?.isComplete(player)) return;
+    const points = (Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0) + 1;
+    player.setAttribute(QUEST_POINTS_ATTRIBUTE, points);
+    player.getPacketSender().sendConfig(QUEST_POINTS_VARP, points);
+    refreshQuestList(player);
   }
 
   function setPieceState(player, index, value) {
@@ -979,13 +1000,14 @@ module.exports = function registerDaddysHomeQuest(api) {
       return ["Marlo asked me to help his father, <col=800000>Old Man Yarlo</col>,", "in his house in south-east Varrock, west of Aubury's Rune Shop."];
     }
     return [
-      "I can start this miniquest by talking to <col=800000>Marlo</col> in the",
+      "I can start this quest by talking to <col=800000>Marlo</col> in the",
       "<col=800000>Varrock Estate Agent's</col> office.",
     ];
   }
 
   api.persistAttribute(FURNITURE_ATTRIBUTE, [0, 0, 0, 0, 0, 0, 0]);
   api.persistAttribute(CRATE_OPENED_ATTRIBUTE, 0);
+  api.persistAttribute(QP_CREDITED_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "daddys_home",
@@ -994,13 +1016,14 @@ module.exports = function registerDaddysHomeQuest(api) {
     varbitId: VARBIT_STATUS,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
-    questPoints: 0,
+    questPoints: 1,
     rewardItemId: MARLOS_CRATE,
-    scrollItemId: MARLOS_CRATE,
+    scrollItemId: Items.SAW, // poh_saw 8794 on the rev 242 scroll
+    // The rev 242 scroll's lines, in its order.
     otherRewards: [
+      "A house in Rimmington",
       "400 Construction XP",
-      "Marlo's crate (Construction supplies)",
-      "A house in Rimmington, or 1,000 coins",
+      "A crate of supplies",
     ],
     onReward,
     buildJournal,

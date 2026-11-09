@@ -290,7 +290,7 @@ function land(player, flight) {
     release(player);
     if (!flight.opensRoute) return;
     Common.openRoute(player, station);
-    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, Common.data.unlockXp, false);
+    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, Common.data.unlockXp, true);
   };
   flight.arrive = () => {
     if (flight.arrived) return;

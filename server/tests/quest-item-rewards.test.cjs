@@ -14,7 +14,7 @@ const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/Ite
 const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const runtime = require('../plugins/quests/QuestRuntime');
 
-const REWARD_ITEM = ItemIdentifiers.BRONZE_SWORD;
+const REWARD_ITEM = ItemIdentifiers.BRONZE_SHORTSWORD;
 const STACKABLE_REWARD = ItemIdentifiers.COINS;
 const FILLER_ITEM = ItemIdentifiers.SHARK;
 

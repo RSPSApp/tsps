@@ -15,8 +15,8 @@ import net.rsprox.cache.api.type.NpcType
 import net.rsprox.cache.api.type.VarBitType
 import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
-import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
-import net.rsprox.protocol.v241.game.outgoing.decoder.prot.GameServerProt
+import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
+import net.rsprox.protocol.v242.game.outgoing.decoder.prot.GameServerProt
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.EOFException
@@ -178,9 +178,9 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendFixed(
                 OPNPC1,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p1Alt1(0) // subop
-                    p2Alt3(index)
-                    p1Alt2(0) // ctrl
+                    p1Alt3(0) // ctrl
+                    p2(index)
+                    p1Alt2(0) // subop
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -189,8 +189,8 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendFixed(
                 RESUME_PAUSEBUTTON,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p2Alt1(sub)
-                    p4Alt1((interfaceId shl 16) or componentId)
+                    p2Alt2(sub)
+                    p4Alt3((interfaceId shl 16) or componentId)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -206,12 +206,12 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendFixed(
                 IF_BUTTONT,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p4Alt1(target)
-                    p2Alt3(selectedObj)
+                    p4(target)
+                    p2Alt2(selectedObj)
                     p4Alt2(selected)
-                    p2Alt3(targetObj)
-                    p2(targetSub)
-                    p2Alt3(selectedSub)
+                    p2Alt2(selectedSub)
+                    p2Alt1(targetSub)
+                    p2(targetObj)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -220,9 +220,9 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendFixed(
                 OPNPC2,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p1Alt1(0) // ctrl
-                    p1Alt3(0) // subop
-                    p2Alt3(index)
+                    p1Alt3(0) // ctrl
+                    p2Alt1(index)
+                    p1Alt1(0) // subop
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -231,10 +231,10 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendVarShort(
                 IF_SCRIPT_TRIGGER,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p4Alt2((interfaceId shl 16) or componentId)
-                    p2Alt1(0xFFFF) // obj
-                    p2Alt1(0xFFFF) // sub
-                    p4Alt2(0) // crc
+                    p2Alt2(0xFFFF) // obj
+                    p4Alt1(0) // crc
+                    p4Alt1((interfaceId shl 16) or componentId)
+                    p2Alt2(0xFFFF) // sub
                     var zigzag = (argument shl 1) xor (argument shr 31)
                     while (zigzag and 0x7F.inv() != 0) {
                         p1((zigzag and 0x7F) or 0x80)
@@ -249,25 +249,25 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendFixed(
                 IF_BUTTOND,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p2Alt1(fromObj)
-                    p4Alt3((fromInterface shl 16) or fromComponent)
-                    p2Alt1(fromSub)
-                    p2(toSub)
-                    p2Alt2(toObj)
-                    p4Alt3((toInterface shl 16) or toComponent)
+                    p2(toObj)
+                    p2Alt3(fromSub)
+                    p2Alt2(fromObj)
+                    p4((toInterface shl 16) or toComponent)
+                    p2Alt2(toSub)
+                    p4Alt2((fromInterface shl 16) or fromComponent)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
-        /** OPLOC1_V2: a loc's first op. */
+        /** OPLOC1_V3: a loc's first op, with the three-byte loc id the rev 242 client sends. */
         fun opLoc1(id: Int, x: Int, z: Int) =
             sendFixed(
-                OPLOC1_V2,
+                OPLOC1_V3,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p2Alt1(z)
-                    p2Alt3(id)
-                    p1(0) // subop
-                    p2(x)
-                    p1Alt3(0) // control key
+                    p1Alt3(0) // subop
+                    p2(z)
+                    p2Alt3(x)
+                    p3(id)
+                    p1(0) // control key
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -276,8 +276,8 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendFixed(
                 OPPLAYER4,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p2Alt3(index)
-                    p1Alt3(0)
+                    p1Alt1(0) // ctrl
+                    p2(index)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -312,12 +312,12 @@ class HeadlessClient(private val host: String, private val port: Int) {
             sendVarByte(
                 MOVE_GAMECLICK,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p1Alt1(keys)
+                    p1Alt2(keys)
+                    p2(x)
                     p2Alt2(z)
-                    p2Alt2(x)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
-        private val decoder = ServerPacketDecoderServiceV241(huffman, CacheProvider { NoCache })
+        private val decoder = ServerPacketDecoderServiceV242(huffman, CacheProvider { NoCache })
         private val session = Session(index, AttributeMap())
 
         /** The next packet, or null on timeout or a closed stream. */
@@ -364,6 +364,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 p4(0)
                 p1(if (token) TOKEN_AUTHENTICATION else PASSWORD_AUTHENTICATION)
                 pjstr(password)
+                p1(0) // rev 242: no optional string after the credential
             }
         val rsaBytes = BigInteger(rsa.buffer.array().copyOf(rsa.buffer.writerIndex())).modPow(PUBLIC_EXPONENT, modulus).toByteArray()
 
@@ -452,7 +453,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
     }
 
     private companion object {
-        const val REVISION = 241
+        const val REVISION = 242
         const val TIMEOUT_MS = 15_000
         const val INIT_GAME_CONNECTION = 14
         const val INIT_JS5REMOTE_CONNECTION = 15
@@ -460,24 +461,25 @@ class HeadlessClient(private val host: String, private val port: Int) {
         const val JS5_URGENT_REQUEST = 1
         const val JS5_BLOCK = 512
         const val LOGIN_OK = 2
-        const val MOVE_GAMECLICK = 55
-        const val OPPLAYER4 = 26
-        const val IF_BUTTOND = 46
-        const val OPLOC1_V2 = 72
-        const val IF_SCRIPT_TRIGGER = 17
-        const val UPDATE_PLAYER_MODEL_V2 = 88
-        const val NO_TIMEOUT = 75
+        // Client opcodes follow rsprot's revision; the payloads below are laid out as its 242 decoders read them.
+        val MOVE_GAMECLICK = GameClientProt.MOVE_GAMECLICK.opcode
+        val OPPLAYER4 = GameClientProt.OPPLAYER4.opcode
+        val IF_BUTTOND = GameClientProt.IF_BUTTOND.opcode
+        val OPLOC1_V3 = GameClientProt.OPLOC1_V3.opcode
+        val IF_SCRIPT_TRIGGER = GameClientProt.IF_SCRIPT_TRIGGER.opcode
+        val UPDATE_PLAYER_MODEL_V2 = GameClientProt.UPDATE_PLAYER_MODEL_V2.opcode
+        val NO_TIMEOUT = GameClientProt.NO_TIMEOUT.opcode
         const val KEEPALIVE_MS = 5_000L
-        const val OPNPC2 = 44
-        const val OPNPC1 = 92
-        const val IF_BUTTONT = 15
-        const val RESUME_PAUSEBUTTON = 16
-        const val FRIENDLIST_ADD = 14
-        const val MESSAGE_PRIVATE = 50
-        const val MESSAGE_PUBLIC = 49
-        const val IF_BUTTONX = 38
-        const val CLOSE_MODAL = 41
-        const val CLIENT_CHEAT = 84
+        val OPNPC2 = GameClientProt.OPNPC2_V2.opcode
+        val OPNPC1 = GameClientProt.OPNPC1_V2.opcode
+        val IF_BUTTONT = GameClientProt.IF_BUTTONT.opcode
+        val RESUME_PAUSEBUTTON = GameClientProt.RESUME_PAUSEBUTTON.opcode
+        val FRIENDLIST_ADD = GameClientProt.FRIENDLIST_ADD.opcode
+        val MESSAGE_PRIVATE = GameClientProt.MESSAGE_PRIVATE.opcode
+        val MESSAGE_PUBLIC = GameClientProt.MESSAGE_PUBLIC.opcode
+        val IF_BUTTONX = GameClientProt.IF_BUTTONX.opcode
+        val CLOSE_MODAL = GameClientProt.CLOSE_MODAL.opcode
+        val CLIENT_CHEAT = GameClientProt.CLIENT_CHEAT.opcode
         const val LOGIN_OK_PAYLOAD = 34
         const val OTP_NONE = 2
         const val PASSWORD_AUTHENTICATION = 0

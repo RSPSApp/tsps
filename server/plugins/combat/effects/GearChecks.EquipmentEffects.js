@@ -4,6 +4,7 @@
  */
 const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { ItemDefinition } = require("../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
+const { hitVictimOf } = require("../../../src/main/typescript/elvarg/game/content/combat/EquipmentEffects");
 
 function asPlayer(entity) {
   return entity?.isPlayer?.() ? entity.getAsPlayer() : null;
@@ -24,9 +25,9 @@ function weaponName(player) {
   return wornName(player, Equipment.WEAPON_SLOT);
 }
 
-/** The NPC the entity is fighting, or null. */
+/** The NPC the entity's hit lands on (the real victim of an area hit), else the NPC it is fighting, or null. */
 function targetNpc(entity) {
-  const target = entity?.getCombat?.()?.getTarget?.();
+  const target = hitVictimOf(entity) ?? entity?.getCombat?.()?.getTarget?.();
   return target?.isNpc?.() ? target.getAsNpc() : null;
 }
 

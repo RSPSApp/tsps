@@ -1173,7 +1173,7 @@ module.exports = function registerTailOfTwoCatsQuest(api) {
     if (player.getInventory().get(slot) !== item) return null;
     const manager = player.getSkillManager();
     const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_EXPERIENCE, false);
+    manager.addExperience(skill, LAMP_EXPERIENCE, true);
     if (manager.getExperience(skill) === before) return null;
     player.getInventory().deleteAtSlot(slot, 1);
     return `You have been awarded ${LAMP_EXPERIENCE} ${name ?? skill.getName()} XP!`;

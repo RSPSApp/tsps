@@ -6,7 +6,7 @@ tested: 2026-11-09
 tester: agent
 model: claude-opus-5-5
 commit: feat/crab-quest-instance
-cache: osrs-241_2026-10-20
+cache: osrs-242_2026-11-03 (run on osrs-241_2026-10-20)
 start: fresh
 travel: walk_to
 ---
@@ -26,7 +26,7 @@ collection's own options and the band's practice animations are not done.
   `human_death_reverse` 7330, then the first line. `crab_put_back_in_instance` 15868 and
   `crab_net` 15888 are 1 inside it.
 - **Inside it, for the owner only:** `crab_maincrab` 16469 at 3054,2637 (16470 at 3056,2637 once
-  the instrument is in), one floatsam 16478 at 3051,2632, the shell/bass/drum multilocs on the
+  the instrument is in), one floatsam (16478 `crab_floatsam_multi` in the 241 capture; 16820 `crab_flotsam_multi` in cache 242) at 3051,2632, the shell/bass/drum multilocs on the
   practice spot, `crab_magictree_noop` 62474 until recruiting, and the shells and big net with
   `despawn=16959`: shell 1 3059,2648, 2 3044,2652, 3 3051,2634, 4 3036,2643, 5 3050,2655,
   6 3063,2642, 7 3040,2636, bad 1 3048,2645, bad 2 3055,2654, net 3061,2646.

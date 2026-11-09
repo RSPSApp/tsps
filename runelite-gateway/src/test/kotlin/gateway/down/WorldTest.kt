@@ -31,7 +31,7 @@ import net.rsprot.protocol.message.OutgoingGameMessage
 import net.rsprox.cache.api.CacheProvider
 import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
-import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
+import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import net.rsprox.protocol.game.outgoing.model.specific.ObjEnabledOpsSpecific as DecodedObjEnabledOpsSpecific
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -118,7 +118,7 @@ class WorldTest {
         world.handle(packet(TspsServerPacket.SOUND, TspsWriter().u16(SOUND).u8(1).u16(3222).u16(3218).u8(0).u8(1).u16(0).u8(5).u8(0)))
         world.handle(packet(TspsServerPacket.SOUND, TspsWriter().u16(SOUND).u8(0).u8(1).u16(0).u8(0).u8(0)))
         assertEquals(SOUND, (sent.single() as SynthSound).id)
-        // Revision 241 only takes SOUND_AREA inside an enclosed zone update.
+        // Revisions 241 and 242 only take SOUND_AREA inside an enclosed zone update.
         world.flushZones()
         assertTrue(sent.last() is UpdateZonePartialEnclosed)
     }
@@ -228,11 +228,11 @@ class WorldTest {
         assertEquals(listOf(ObjCountSpecific::class, ObjEnabledOpsSpecific::class), sent.map { it::class })
         assertEquals(0b01010.toByte(), (sent.last() as ObjEnabledOpsSpecific).opFlags)
         val encoder = ObjEnabledOpsSpecificEncoder()
-        assertEquals(56, encoder.prot.opcode, "revision 241 obj_enabled_ops_specific")
+        assertEquals(42, encoder.prot.opcode, "revision 242 obj_enabled_ops_specific")
         val wire = Unpooled.buffer().toJagByteBuf()
         try {
             encoder.encode(NopStreamCipher, wire, sent.last() as ObjEnabledOpsSpecific)
-            val decoder = ServerPacketDecoderServiceV241(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
+            val decoder = ServerPacketDecoderServiceV242(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
             val decoded = decoder.decode(encoder.prot.opcode, wire, Session(0, AttributeMap())) as DecodedObjEnabledOpsSpecific
             assertEquals(0b01010, decoded.opFlags.value)
             assertEquals(PLANK, decoded.id)

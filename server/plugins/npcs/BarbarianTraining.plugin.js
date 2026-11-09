@@ -17,14 +17,20 @@
  * Otto's agricultural topic stays Farming's: choosing it hands the Talk-to over to
  * skills/farming/Services.Farming's own Otto menu. The other sections (harpoon
  * fishing, spears and hastae) have no topic here yet.
- * Bow firemaking uses its existing instruction and return transcript, with saved internal
- * lesson progress: taught, an oak-log bow fire, then acknowledgement. It neither changes
- * Logs' lighting permissions nor publishes an unverified retail Firemaking varbit.
+ * Bow firemaking uses its existing instruction and return transcript, with saved lesson
+ * progress: taught, an oak-log bow fire, then acknowledgement (cache varbit brut_fire, same
+ * 1/2/3 stages). It does not change Logs' lighting permissions. Once Otto is told, he also
+ * explains pyre ships ("I have completed firemaking with a bow. What follows this?", cache
+ * varbit brut_craft_ship = 1): with both, the whirlpool into the Ancient Cavern opens
+ * (world/data/loc-teleport-sync.json, Wiki: Ancient Cavern).
  */
 
 const STATE_ATTRIBUTE = "barbarian-training";
-/** Cache varbits (osrs-dumps varbit.sym): brut_fishing_r 3758, brut_herb_potion 3761. */
-const VARBITS = { fishingRod: 3758, herblore: 3761 };
+/**
+ * Cache varbits (osrs-dumps varbit.sym): brut_fishing_r 3758, brut_fire 3759,
+ * brut_herb_potion 3761, brut_craft_ship 3764.
+ */
+const VARBITS = { fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 };
 const TASKED = 1;
 const DONE = 2;
 const TOLD = 3;
@@ -43,6 +49,7 @@ const TRANSCRIPT = {
 const TOPIC = {
   firemaking: "I'm ready for your firemaking wisdom. Please instruct me.",
   firemakingDone: "I've set fire to logs with a bow!",
+  pyreShips: "I have completed firemaking with a bow. What follows this?",
   rod: "What can I learn about the use of a fishing rod?",
   rodDone: "I've fished with a barbarian rod!",
   herblore: "What was that secret knowledge of herblore we talked of?",
@@ -71,6 +78,7 @@ function state(player) {
   current.fishingRod = stage(current.fishingRod);
   current.herblore = stage(current.herblore);
   current.firemaking = stage(current.firemaking);
+  current.pyreShips = current.pyreShips === 1 ? 1 : 0;
   if (saved !== current) player.setAttribute(STATE_ATTRIBUTE, current);
   return current;
 }
@@ -178,6 +186,7 @@ function topics(player, talk) {
   const list = [];
   if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
   else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
+  else list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
   if (current.fishingRod === DONE) list.push([TOPIC.rodDone, () => rodDone(player, talk)]);
   else if (current.fishingRod < DONE) list.push([TOPIC.rod, () => rodLesson(player, talk)]);
   if (current.fishingRod === TOLD && current.herblore < TOLD) {
@@ -234,23 +243,30 @@ function lesson(player, talk, variant, option, onReply = null, onFinished = null
 /** Complete the spoken instruction before recording that this player has heard it. */
 function firemakingLesson(player, talk) {
   lesson(player, talk, TRANSCRIPT.first, TOPIC.firemaking, null, () => {
-    const current = state(player);
-    current.firemaking = Math.max(current.firemaking, TASKED);
+    if (state(player).firemaking < TASKED) setStage(player, "firemaking", TASKED);
   });
 }
 
 function firemakingDone(player, talk) {
   if (state(player).firemaking !== DONE) return;
   lesson(player, talk, TRANSCRIPT.firemaking, TOPIC.firemakingDone, null, () => {
-    if (state(player).firemaking === DONE) state(player).firemaking = TOLD;
+    if (state(player).firemaking === DONE) setStage(player, "firemaking", TOLD);
+  });
+}
+
+/** Otto's pyre ship explanation, which also says how to reach the whirlpool into the caverns. It stays on offer, replaying the same words. */
+function pyreShipsLesson(player, talk) {
+  if (state(player).firemaking !== TOLD) return;
+  lesson(player, talk, TRANSCRIPT.firemaking, TOPIC.pyreShips, null, () => {
+    const current = state(player);
+    if (current.firemaking === TOLD && !current.pyreShips) setStage(player, "pyreShips", 1);
   });
 }
 
 /** Observe the existing successful skill action, not a request or another training section. */
 function madeBowFire({ player, itemId, bow } = {}) {
   if (!player || bow !== true || itemId !== core.ItemIdentifiers.OAK_LOGS) return;
-  const current = player.getAttribute(STATE_ATTRIBUTE);
-  if (current && stage(current.firemaking) === TASKED) current.firemaking = DONE;
+  if (state(player).firemaking === TASKED) setStage(player, "firemaking", DONE);
 }
 
 function rodLesson(player, talk) {

@@ -489,3 +489,51 @@ test("a ritual that can't place its circles ends instead of wedging", () => {
   assert.equal(Ritual.events.has(event), false);
   assert.equal(Spawns.active.has(event), false);
 });
+
+// ------------------------------------------------------------------ placement (#3872)
+
+test('every event puts its npcs and locs where a player can walk to them from the tree (#3872)', () => {
+  // The Draynor willow is on the river bank: walkable() lets through water and the rocks out in
+  // it to the south-west, where sapling piles and the pheasant forester used to land.
+  const Common = require('../plugins/minigames/forestry/Common.Forestry');
+  const { placeLoc, spawnNpc } = Common;
+  const placed = [];
+  Common.placeLoc = (id, at, face) => { placed.push({ kind: 'loc', at: at.clone() }); return placeLoc(id, at, face); };
+  Common.spawnNpc = (id, at, ...rest) => { placed.push({ kind: 'npc', at: at.clone() }); return spawnNpc(id, at, ...rest); };
+  const routes = new core.RsmodRouteFinding();
+  // Where the willow's chopper stands, east of the 2x2 trunk.
+  const from = { level: 0, srcX: WILLOW.x + 2, srcY: WILLOW.y, srcSize: 1, privateArea: null };
+  // A player can walk onto the tile itself: event locs (piles, nests, roots, rainbows) don't block
+  // it, and rainbows and ritual circles are stood on. The sapling on the tree's own tile is the
+  // one thing that isn't walked to.
+  const onTree = ({ at }) => at.getX() === WILLOW.x && at.getY() === WILLOW.y;
+  const reaches = ({ at }) => routes.findRoute({
+    ...from, destX: at.getX(), destY: at.getY(), destWidth: 1, destLength: 1,
+    locAngle: 0, locShape: -1, moveNear: false, maxWaypoints: 25,
+  }).success;
+  const site = { tree: null, location: new Location(WILLOW.x, WILLOW.y, 0), size: 2 };
+  const water = new Location(WILLOW.x - 5, WILLOW.y - 3, 0);
+  try {
+    assert.ok(Common.walkable(water.getX(), water.getY(), 0), 'the river tile passes the old walkable() check');
+    assert.ok(!Common.reachableTiles(site).has(`${water.getX()},${water.getY()}`), 'but is not reachable from the tree');
+    const kinds = [...Spawns.EVENT_TYPES.keys()];
+    for (const name of ['sapling', 'pheasant', 'roots', 'flowering', 'entlings', 'beehive', 'leprechaun', 'poachers', 'ritual']) assert.ok(kinds.includes(name), name);
+    for (const kind of kinds) {
+      for (let round = 0; round < 6; round++) {
+        placed.length = 0;
+        const event = startEvent(kind, [fakePlayer({ at: new Location(from.srcX, from.srcY, 0) })]); // chopping beside it
+        assert.ok(event, `${kind} started`);
+        ticks(60); // later placements: ritual circles, rainbows, root waves, regrown bushes
+        assert.ok(placed.length > 0, `${kind} placed something`);
+        for (const thing of placed.filter((t) => !onTree(t))) assert.ok(reaches(thing), `${kind}: ${thing.kind} at ${thing.at.getX()},${thing.at.getY()} can't be walked to`);
+        ticks(420);
+        for (const event of [...Spawns.active]) Spawns.active.delete(event);
+        Spawns.quiet.length = 0;
+        Spawns.heldTrees.clear();
+      }
+    }
+  } finally {
+    Common.placeLoc = placeLoc;
+    Common.spawnNpc = spawnNpc;
+  }
+});

@@ -125,7 +125,7 @@
           { "item_id": 1093, "name": "Rune plateskirt", "quantity": [1, 1], "weight": 6 },
           { "item_id": 1079, "name": "Rune platelegs", "quantity": [1, 1], "weight": 6 },
           { "item_id": 1185, "name": "Rune sq shield", "quantity": [1, 1], "weight": 6 },
-          { "item_id": 1289, "name": "Rune sword", "quantity": [2, 2], "weight": 5 },
+          { "item_id": 1289, "name": "Rune shortsword", "quantity": [2, 2], "weight": 5 },
           { "item_id": 1123, "name": "Adamant platebody", "quantity": [5, 5], "noted": true, "weight": 3 },
           { "item_id": 1391, "name": "Battlestaff", "quantity": [3, 3], "noted": true, "weight": 3 },
           { "item_id": 1199, "name": "Adamant kiteshield", "quantity": [3, 3], "weight": 1 },

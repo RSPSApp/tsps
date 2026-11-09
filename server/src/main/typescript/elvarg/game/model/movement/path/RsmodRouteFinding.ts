@@ -1333,9 +1333,11 @@ export class RsmodRouteFinding {
     locAngle: number,
     privateArea: PrivateArea | null
   ): boolean {
-    // Shapes 4/5 are the straight wall decorations: they use the same wall-edge
-    // checks as the diagonal 6/7 forms. Only 7 has the no-offset angle flip.
-    if (locShape >= 4 && locShape <= 7) {
+    // Only the diagonal forms 6/7 reach from a neighbouring tile (7 with the no-offset
+    // angle flip). The straight wall decorations 4/5 are operated from their own tile,
+    // as the client's reach strategy does: live players walk onto a wall lever's tile
+    // before pulling it (rsprox_transcripts/224/01444.txt, 233/00454.txt).
+    if (locShape >= 6 && locShape <= 7) {
       const angle = locShape === WALLDECOR_DIAGONAL_NOOFFSET_SHAPE ? (locAngle + 2) & 0x3 : locAngle;
       switch (angle) {
         case 0:
@@ -1407,9 +1409,11 @@ export class RsmodRouteFinding {
   ): boolean {
     const east = srcX + srcSize - 1;
     const north = srcY + srcSize - 1;
-    // Shapes 4/5 are the straight wall decorations: they use the same wall-edge
-    // checks as the diagonal 6/7 forms. Only 7 has the no-offset angle flip.
-    if (locShape >= 4 && locShape <= 7) {
+    // Only the diagonal forms 6/7 reach from a neighbouring tile (7 with the no-offset
+    // angle flip). The straight wall decorations 4/5 are operated from their own tile,
+    // as the client's reach strategy does: live players walk onto a wall lever's tile
+    // before pulling it (rsprox_transcripts/224/01444.txt, 233/00454.txt).
+    if (locShape >= 6 && locShape <= 7) {
       const angle = locShape === WALLDECOR_DIAGONAL_NOOFFSET_SHAPE ? (locAngle + 2) & 0x3 : locAngle;
       switch (angle) {
         case 0:

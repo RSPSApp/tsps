@@ -143,11 +143,16 @@ module.exports = function registerCrabQuestQuest(api) {
   // the capture's op=1 plays emote_sit_loop 10061.
   const SIT_EMOTE_SLOT = 54;
   // The dream's one floatsam: its multi parent and the forms crab_floatsam_hidden picks.
+  // crab_flotsam_multi (crab_floatsam_multi 16478 in the revision 241 capture); its
+  // crab_floatsam_hidden varbit picks the form.
+  const FLOATSAM_RAW_NPC_ID = 16820;
   const FLOATSAM_NPC_IDS = new Set([
-    16478, // crab_floatsam_multi
-    NpcIdentifiers.FLOATSAM, // 16475, "Net"
-    NpcIdentifiers.FLOATSAM_2, // 16476
-    NpcIdentifiers.FLOATSAM_3, // 16477
+    // Rev 242 renamed Floatsam (16475-16478) to Flotsam under new ids; the multi parent's
+    // crab_floatsam_hidden form is one of these.
+    FLOATSAM_RAW_NPC_ID, // 16820, crab_flotsam_multi
+    NpcIdentifiers.FLOTSAM, // 16817, "Net"
+    NpcIdentifiers.FLOTSAM_2, // 16818
+    NpcIdentifiers.FLOTSAM_3, // 16819
   ]);
 
   // Items from the 2026 quest, absent from the generated ItemIdentifiers.
@@ -192,7 +197,6 @@ module.exports = function registerCrabQuestQuest(api) {
   const SHY_CRAB_TILE = { x: 3045, y: 2653 };
   const SHY_CRAB_RELOCATED_TILE = { x: 3055, y: 2650 };
   const NET_TILE = { x: 3061, y: 2646 };
-  const FLOATSAM_RAW_NPC_ID = 16478; // crab_floatsam_multi; crab_floatsam_hidden picks its form
   const FLOATSAM_TILE = { x: 3051, y: 2632 };
   // Each shell item's tile, in ALL_SHELL_ITEM_IDS order (capture obj_add_specific).
   const SHELL_TILES = [
@@ -317,7 +321,8 @@ module.exports = function registerCrabQuestQuest(api) {
   const NEED_NET_TEXT = "You need a big net to gather items from this floatsam.";
   const NO_SPACE_TEXT = "You can't carry any more floatsam.";
   const NOTHING_LEFT_TEXT = "There is nothing left here.";
-  const CRAFT_MESSAGE_TEXT = "You fashion a makeshift string instrument out of the floatsam.";
+  // The revision 241 capture spells it "floatsam"; revision 242 renamed the NPCs Flotsam.
+  const CRAFT_MESSAGE_TEXT = "You fashion a makeshift string instrument out of the flotsam.";
   const SHELL_COLLECTION_RECOVERY_TEXT =
     "As you look at the bottle, you notice familiar shells nearby. You collect them.";
   const NEED_MATERIALS_TEXT =
@@ -1707,7 +1712,7 @@ module.exports = function registerCrabQuestQuest(api) {
       lines.push("them to the crab. I have handed in " + handedShellCount(player) + "/7 good shells.");
     } else if (stage < STAGE_RECRUITING) {
       lines.push("The crab can't play 7 shells at once, so I agreed to make him");
-      lines.push("a string instrument from the floatsam on the beach.");
+      lines.push("a string instrument from the flotsam on the beach.");
     } else if (stage < STAGE_ALL_LEADERS) {
       lines.push("The crab is practising his instrument while I recruit more crabs");
       lines.push("to become ceremonial leaders. Leaders found: " + leaderCount(player) + "/11.");

@@ -48,7 +48,9 @@ area with its default and a short explanation, and saving writes `world.local.js
 
 `experienceMultiplier` sets the global experience rate for all skills. `1` is the normal rate;
 `2` awards twice as much experience, and `5` awards five times as much. It must be a positive
-number.
+number. It applies to every gain, reward XP included (lamps, tomes, the Book of Knowledge, quest
+and minigame rewards), as a league's own rate does on live; the message still shows the base
+amount. Only a league relic's bonus XP (Equilibrium, Barbarian Gathering) is added without it.
 
 ```json
 {

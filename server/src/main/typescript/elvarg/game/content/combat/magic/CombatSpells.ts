@@ -1151,7 +1151,7 @@ export class CombatSpells {
             return 17;
         },
         startGraphic: (): Graphic => {
-            return new Graphic(158, GraphicHeight.MIDDLE);
+            return new Graphic(158, GraphicHeight.HIGH);
         },
         baseExperience: (): number => {
             return 36;
@@ -1185,7 +1185,7 @@ export class CombatSpells {
             return 18;
         },
         startGraphic() {
-            return new Graphic(161, GraphicHeight.MIDDLE);
+            return new Graphic(161, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 37.5;
@@ -1248,7 +1248,7 @@ export class CombatSpells {
             return 19;
         },
         startGraphic() {
-            return new Graphic(164, GraphicHeight.MIDDLE);
+            return new Graphic(164, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 40;
@@ -1316,7 +1316,7 @@ export class CombatSpells {
         },
 
         startGraphic() {
-            return new Graphic(155, GraphicHeight.MIDDLE);
+            return new Graphic(155, GraphicHeight.HIGH);
         },
 
         baseExperience() {
@@ -1346,7 +1346,7 @@ export class CombatSpells {
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1456, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1457, GraphicHeight.HIGH),
         maximumHit: () => 21,
-        startGraphic: () => new Graphic(1455, GraphicHeight.MIDDLE),
+        startGraphic: () => new Graphic(1455, GraphicHeight.SURGE_CAST),
         baseExperience: () => 44.5,
         itemsRequired: () => [new Item(556, 7), new Item(21880)],
         levelRequired: () => 81,
@@ -1372,7 +1372,7 @@ export class CombatSpells {
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1462, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1463, GraphicHeight.HIGH),
         maximumHit: () => 23,
-        startGraphic: () => new Graphic(1461, GraphicHeight.MIDDLE),
+        startGraphic: () => new Graphic(1461, GraphicHeight.SURGE_CAST),
         baseExperience: () => 48.2,
         itemsRequired: () => [new Item(556, 7), new Item(557, 10), new Item(21880)],
         levelRequired: () => 90,
@@ -1586,6 +1586,8 @@ export class CombatSpells {
     });
 
     public static TELEBLOCK = new TeleBlockSpell({
+        // Wiki: Tele Block deals no damage; without a declared maximum a player's cast defaults to 1.
+        maximumHit: () => 0,
         castAnimation: function () {
             return new Animation(1819);
         },

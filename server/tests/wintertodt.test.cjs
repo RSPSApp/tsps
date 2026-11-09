@@ -277,7 +277,8 @@ test('a round ends at 0 energy: 500+ points earn XP, a kill and rewards; fewer e
   assert.equal(Round.isActive(), false);
   assert.equal(winner.xp, 9900);
   const gained = 9900 * (PluginManager.getCoreApi().GameConstants.EXPERIENCE_MULTIPLIER ?? 1);
-  assert.equal(winner.messages[1], `You have gained ${gained.toLocaleString('en-US')} Firemaking XP.`);
+  // 233/03254:15102: "You have gained 9900 Firemaking XP." (no separator).
+  assert.equal(winner.messages[1], `You have gained ${gained} Firemaking XP.`);
   assert.equal(winner.messages[2], 'Your subdued Wintertodt count is: <col=ff0000>1</col>.');
   const owed = Round.rewardsOwed(winner);
   assert.ok(owed === 2 || owed === 3);
@@ -482,7 +483,7 @@ test('lighting needs a tinderbox or torch and a healthy pyromancer; it pays 25 p
   assert.equal(torch.animations.at(-1), Shared.ANIM.LIGHT_TORCH, 'capture: 7174 with the bruma torch');
 });
 
-test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, and no other skill', () => {
+test('the pyromancer outfit raises the Firemaking XP of feeding but not of lighting, and no other skill', () => {
   // The Firemaking plugin answers "firemaking:xp-multiplier" with the outfit's bonus.
   const { Equipment } = require('../dist/game/model/container/impl/Equipment');
   const api = fakeApi();
@@ -503,7 +504,8 @@ test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, an
   dressed.equipment.setItem(Equipment.HEAD_SLOT, new Item(I.PYROMANCER_HOOD, 1));
   hooks.objects.Brazier.Light({ player: dressed, object: swBrazier });
   ticks(3);
-  assert.equal(dressed.xp, 6 * 99 * 1.004, 'the hood alone: 0.4% on the 6x lighting XP');
+  // rsprox 233/03254 (tick 450): the full outfit worn, lighting gives exactly 6 x 99 = 594.
+  assert.equal(dressed.xp, 6 * 99, 'no outfit bonus on lighting');
   dressed.equipment.setItem(Equipment.BODY_SLOT, new Item(I.PYROMANCER_GARB, 1));
   dressed.equipment.setItem(Equipment.LEG_SLOT, new Item(I.PYROMANCER_ROBE, 1));
   dressed.equipment.setItem(Equipment.FEET_SLOT, new Item(I.PYROMANCER_BOOTS, 1));
@@ -512,6 +514,14 @@ test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, an
   ticks(3);
   assert.equal(dressed.xp, 99 * 3.8 * 1.025, 'the full set: 2.5% on feeding kindling');
   assert.equal(dressed.xpBySkill.Construction ?? 0, 0);
+});
+
+// rsprox_transcripts/233/03262: between rounds, "There's no use for bruma roots at this time." on the spam channel.
+test("feeding a brazier between rounds: the bruma roots line, as spam", () => {
+  const player = fighter('Early');
+  hooks.objects['Burning brazier'].Feed({ player, object: swBrazier });
+  assert.deepEqual(player.spam, ["There's no use for bruma roots at this time."]);
+  assert.ok(!player.messages.includes("There's no use for bruma roots at this time."));
 });
 
 test('feeding burns kindling first, then roots, one every 3 ticks, until they run out', () => {
@@ -683,11 +693,12 @@ test("the Wintertodt's attacks follow its energy: standard ones fade, brazier on
   const ctx = { ticks: 5, energy: 3500, players: Round.playersInPrison, isActive: Round.isActive, broadcast: Round.broadcast };
   Attacks.useRandom(() => 0.5);
   attacksTick(ctx);
-  assert.equal(player.messages.at(-1), Attacks.COLD_MESSAGE, 'a roll under full energy hits');
+  // Spam, as recorded 53 times (233/03254, 03262).
+  assert.equal(player.spam.at(-1), Attacks.COLD_MESSAGE, 'a roll under full energy hits');
   attacksTick({ ...ctx, ticks: 10 });
-  assert.equal(player.messages.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, '10-tick cooldown');
+  assert.equal(player.spam.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, '10-tick cooldown');
   attacksTick({ ...ctx, ticks: 15, energy: 100 });
-  assert.equal(player.messages.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, 'rare near the end');
+  assert.equal(player.spam.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, 'rare near the end');
   assert.equal(Attacks.standardChance(3500), 1);
   assert.ok(Math.abs(Attacks.standardChance(2100) - 0.216) < 0.001, '60% energy: 0.6 cubed');
   Attacks.useRandom(Math.random);
@@ -725,8 +736,13 @@ test('the cart: Check counts, Search takes one every 3 ticks, and the last ends 
   assert.equal(player.animations.at(-1), Shared.ANIM.CART_SEARCH);
   ticks(3);
   assert.equal(Round.rewardsOwed(player), 1);
-  assert.match(player.spam.at(-1), /^You found some loot: \d+ x .+/);
+  // 233/03264: "You found some loot: Grimy torstol" (one, no "1 x"), "...: 4,886 x Coins" (commas).
+  assert.match(player.spam.at(-1), /^You found some loot: (?!1 x )((\d{1,3}(,\d{3})*) x )?.+/);
   assert.deepEqual(player.sounds, [Shared.SOUND.PICK]);
+  const I2 = Shared.core().ItemIdentifiers;
+  assert.equal(Cart.lootText({ id: I2.GRIMY_TORSTOL, amount: 1 }), "Grimy torstol");
+  assert.equal(Cart.lootText({ id: I2.COINS, amount: 4886 }), "4,886 x Coins");
+  assert.equal(Cart.lootText({ id: I2.MAHOGANY_LOGS, amount: 10 }), "10 x Mahogany logs");
   Cart.check({ player });
   assert.equal(player.messages.at(-1), 'You are owed one more reward from the cart.', 'capture');
   ticks(3);

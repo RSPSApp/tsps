@@ -36,18 +36,9 @@ function sizeOf(site) {
   return site.size >= 3 ? 3 : 2;
 }
 
-/** Tiles around the tree, outside it, where a pile can go. */
+/** Tiles around the tree, outside it, where a pile can go: ones a player can walk to from it. */
 function pileTiles(site, size) {
-  const { ingredientRange: range } = S();
-  const [x0, y0, z] = [site.location.getX(), site.location.getY(), site.location.getZ()];
-  const tiles = [];
-  for (let x = x0 - range; x < x0 + size + range; x++) {
-    for (let y = y0 - range; y < y0 + size + range; y++) {
-      const inside = x >= x0 && x < x0 + size && y >= y0 && y < y0 + size;
-      if (!inside && Common.walkable(x, y, z)) tiles.push(new Common.core.Location(x, y, z));
-    }
-  }
-  return tiles;
+  return Common.freeTiles(site, site.location, S().ingredientRange, size);
 }
 
 function start(site) {

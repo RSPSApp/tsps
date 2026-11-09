@@ -1,6 +1,6 @@
 # Coverage
 
-Every tsps message, and the revision-241 packet it becomes. **State** is `mapped`, `dropped`
+Every tsps message, and the revision-242 packet it becomes. **State** is `mapped`, `dropped`
 (never reaches the official client; counted at runtime) or `todo`. **M** is the milestone that
 maps it. A row only becomes `mapped` with a test that decodes the result.
 
@@ -9,7 +9,7 @@ sessions, so the browser wire format doesn't change.
 
 ## tsps → client
 
-| tsps message | 241 packet(s) | State | M | Notes |
+| tsps message | 242 packet(s) | State | M | Notes |
 | --- | --- | --- | --- | --- |
 | 0 WELCOME | — | dropped | 1 | browser clock sync |
 | 1 TICK | SERVER_TICK_END | mapped | 1 | tsps sends it first; the gateway flushes the tick and ends with it |
@@ -56,6 +56,7 @@ sessions, so the browser wire format doesn't change.
 | 132 PLAY_JINGLE / 133 PLAY_SONG | MIDI_JINGLE / MIDI_SONG_V2 | mapped | 7 | |
 | 134 / 135 / 136 LOC_ADD_CHANGE / DEL / ANIM | LOC_ADD_CHANGE_V2 / LOC_DEL behind UPDATE_ZONE_PARTIAL_FOLLOWS; LOC_ANIM_SPECIFIC | mapped | 7 | tsps replays the scene's loc changes itself after a rebuild |
 | 137 CAMERA_CONTROL | CAM_* | mapped | 7 | easings remapped to OSRS ids; skybox (sub 14) is CAM_SKYBOX; plain instant/animated moves use rates 100/100 and 2/10; translate dropped, a tile glide becomes a tile target, trackTarget dropped: rev 241 has no form for them (no target tracking during a timed move, no timed tile glide, no shift of a running shot), and imitating them would need guessed camera state |
+| 138 LOC_MERGE | — | dropped | 7 | the 242 client reads LOC_MERGE and discards its bytes (rsprot has no 242 layout) |
 | 140 / 141 REBUILD_REGION / NORMAL | REBUILD_REGION_V2 / REBUILD_LOGIN_V2 / REBUILD_NORMAL_V2 | mapped | 1–2 | the scene before login becomes REBUILD_LOGIN (an instance follows as REBUILD_REGION); tsps's template chunks are rsprot ReferenceZones. tsps's rebuilds of a scene that still covers the player (it moves an instance's scene every zone or two) are dropped, as the client would reload. In a private area on the real map (the Fractured Archive) tsps sends none, so the gateway sends REBUILD_NORMAL itself once the player is 16 tiles from the scene's edge, tsps's own rule |
 | 142 / 143 REBUILD_WORLDENTITY / WORLDENTITY_INFO | REBUILD_WORLDENTITY_V4 / WORLDENTITY_INFO_V7, SET_ACTIVE_WORLD_V2 | mapped | 13 | each boat is a world-entity avatar (fine coords and angle as tsps sends them; owner 0, which tsps doesn't send and rsprot doesn't need: the world the player is on goes first). Its deck scene is REBUILD_WORLDENTITY_V4 from tsps's template grid, sent inside the boat's world when rsprot adds it. tsps keeps everything on a deck at real instance coordinates, as rsprot does: deck locs and animations go to the boat's world relative to the deck (held until that world is active), deck NPCs are placed from the deck's corner, and players and NPCs aboard are lifted to the deck's level 1, where OSRS has them (tsps keeps them on 0 for its browser renderer); boats get session-local world ids, as rsprot takes ids below 2048 and tsps numbers boats from 3000. Tick order: boats, then each boat's world (scene, zones, NPCs), then the main world. Boarding, the helm and sailing work in RuneLite |
 | 144 / 147 REGION_REPLACEMENT / _COMPRESSED | — | dropped | 2 | server map data the client can't load |
@@ -73,7 +74,7 @@ sessions, so the browser wire format doesn't change.
 
 ## Client → tsps
 
-| 241 packet | tsps opcode | State | M | Notes |
+| 242 packet | tsps opcode | State | M | Notes |
 | --- | --- | --- | --- | --- |
 | login block | 204 LOGIN, 202 HANDSHAKE | mapped | 1 | X-Real-IP; native bit; token logins rejected |
 | NO_TIMEOUT | 201 PING | mapped | 1 | sent by the gateway every 5 s while ticks arrive |
@@ -90,10 +91,10 @@ sessions, so the browser wire format doesn't change.
 | logout button | 203 LOGOUT | mapped | 4 | logout tab 182:8 and world switcher 69:25 |
 | OPPLAYER1–8 / OPPLAYERT | 44… / 32 or 65 | mapped | 3, 5 | ops 2 and 4 swapped back (`PlayerOps`): a trade request clicked in the chatbox sends OPPLAYER4 (scripts 84, 86, 7822); `T` from the inventory (149:0) is item use (65), otherwise a spell (32) |
 | OPNPC1–5 / OPNPC6 / OPNPCT | 76, 12, 34, 70, 57 / 9 / 75 or 36 | mapped | 3, 5 | subop dropped; `T` split as for players |
-| OPLOC1–5 / OPLOC6 / OPLOCT | 96, 28, 42, 38, 51 / 85 / 2 or 86 | mapped | 5 | subop dropped |
+| OPLOC1–5 (V2, V3) / OPLOC6 (V1, V2) / OPLOCT (V1, V2) | 96, 28, 42, 38, 51 / 85 / 2 or 86 | mapped | 5 | subop dropped; the 242 client sends the V3/V2 forms (three-byte loc id) |
 | OPOBJ1–5 / OPOBJ6 / OPOBJT | 102, 43, 103, 56, 82 / 104 / 94 or 79 | mapped | 5 | |
 | OPWORLDENTITY1–5 | 220–224 | mapped | 9 | (boats aren't drawn yet, see 142/143) |
-| OPWORLDENTITY6 | — | dropped | 9 | 241 sends a type id, tsps reads an index |
+| OPWORLDENTITY6 | — | dropped | 9 | the client sends a type id, tsps reads an index |
 | OPWORLDENTITYT | — | dropped | 9 | item or spell on a boat; tsps has no packet for it (OPWORLDENTITY1–6 only) |
 | MESSAGE_PUBLIC / CLIENT_CHEAT | 190 CHAT | mapped | 2–3 | public (0), autotyper (1 → autochat) and friends chat (2); colour, effect and pattern are appended for tsps. Clan chat: type 3 with clan type 0 → kind 4 clan 0, type 4 (guest) → kind 4 clan -1, without colour or effect, which tsps's clan chat has no field for; other clan types dropped. CLIENT_CHEAT: `::cmd`, autocomplete requests dropped |
 | CLANCHANNEL_FULL_REQUEST, CLANSETTINGS_FULL_REQUEST | — (answered by the gateway) | mapped | — | sent by the client when a delta's number is past its count (one it missed) or it has no clan to apply it to; it drops the delta. tsps has no handler, so the gateway resends the clan's channel or settings as tsps's full update and deltas since have left them, at the current count. Nothing is sent for a clan type it has nothing for |

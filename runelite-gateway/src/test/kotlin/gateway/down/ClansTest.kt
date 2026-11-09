@@ -34,7 +34,7 @@ import net.rsprox.protocol.game.outgoing.model.clan.ClanSettingsDelta as Decoded
 import net.rsprox.protocol.game.outgoing.model.clan.VarClan as DecodedVarClan
 import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
-import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
+import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -49,7 +49,7 @@ class ClansTest {
     private val sent = ArrayList<OutgoingGameMessage>()
     private val clans = Clans { sent += it }
     private val session = Session(0, AttributeMap())
-    private val decoder = ServerPacketDecoderServiceV241(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
+    private val decoder = ServerPacketDecoderServiceV242(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
 
     private fun handle(opcode: Int, writer: TspsWriter): Boolean = clans.handle(TspsPacket(opcode, writer.body()))
 

@@ -54,7 +54,7 @@ const WORN = [
   [() => core.Equipment.HEAD_SLOT, 15, () => core.ItemIdentifiers.BRONZE_FULL_HELM],
   [() => core.Equipment.CAPE_SLOT, 16, () => core.ItemIdentifiers.RED_CAPE],
   [() => core.Equipment.AMULET_SLOT, 17, () => core.ItemIdentifiers.AMULET_OF_STRENGTH],
-  [() => core.Equipment.WEAPON_SLOT, 18, () => core.ItemIdentifiers.BRONZE_SWORD],
+  [() => core.Equipment.WEAPON_SLOT, 18, () => core.ItemIdentifiers.BRONZE_SHORTSWORD],
   [() => core.Equipment.BODY_SLOT, 19, () => core.ItemIdentifiers.BRONZE_PLATEBODY],
 ];
 

@@ -12,11 +12,19 @@ const BORDER_OBJECT_NAME = /gate|door|curtain/i;
 
 let core;
 let MEMBERS_SKILLS;
+let FREE_ENCHANT_ITEMS;
 
-function defineData({ Skill }) {
+function defineData({ Skill, ItemIds }) {
   MEMBERS_SKILLS = new Set([
     Skill.AGILITY, Skill.HERBLORE, Skill.THIEVING, Skill.FLETCHING, Skill.SLAYER,
     Skill.FARMING, Skill.CONSTRUCTION, Skill.HUNTER, Skill.SAILING,
+  ]);
+  // Wiki Lvl-1 through Lvl-4 Enchant: only the corresponding amulet is free to enchant.
+  FREE_ENCHANT_ITEMS = new Map([
+    ["Lvl-1 Enchant", ItemIds.SAPPHIRE_AMULET],
+    ["Lvl-2 Enchant", ItemIds.EMERALD_AMULET],
+    ["Lvl-3 Enchant", ItemIds.RUBY_AMULET],
+    ["Lvl-4 Enchant", ItemIds.DIAMOND_AMULET],
   ]);
 }
 
@@ -75,6 +83,12 @@ function disableMembersSpell(event) {
   event.disabled = true;
 }
 
+function blockMembersEnchantment(recipe) {
+  if (recipe.declined || recipe.resultId === undefined || FREE_ENCHANT_ITEMS.get(recipe.spellName) === recipe.itemId) return;
+  recipe.declined = true;
+  recipe.message = "You need to be on a members' world to enchant that item.";
+}
+
 function disableMembersPrayer(event) {
   if (event.prayer.requirement <= MAX_F2P_PRAYER_LEVEL) return;
   event.message = "You need to be on a members' world to use this prayer.";
@@ -123,6 +137,7 @@ module.exports = {
     api.onCanSpawnNpc(blockMembersSpawn);
     api.onCanStockItem(blockMembersStock);
     api.onCustomEvent("npc-drops:roll", removeMembersDrops);
+    api.onCustomEvent("magic:enchant-item-policy", blockMembersEnchantment);
     api.onSpellDisabled(disableMembersSpell);
     api.onPrayerDisabled(disableMembersPrayer);
     api.onCanTeleport(blockMembersTeleport);

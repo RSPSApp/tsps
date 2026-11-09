@@ -14,6 +14,8 @@ const STAFF_GROUPS = [
   [[ItemIdentifiers.DUST_BATTLESTAFF, ItemIdentifiers.MYSTIC_DUST_STAFF], [ItemIdentifiers.AIR_RUNE, ItemIdentifiers.EARTH_RUNE]],
   [[ItemIdentifiers.KODAI_WAND, ItemIdentifiers.KODAI_WAND_3], [ItemIdentifiers.WATER_RUNE]],
   [[ItemIdentifiers.TWINFLAME_STAFF], [ItemIdentifiers.FIRE_RUNE, ItemIdentifiers.WATER_RUNE]],
+  // Wiki (Shadowflame quadrant): an infinite source of air, water, earth and fire runes.
+  [[ItemIdentifiers.SHADOWFLAME_QUADRANT], [ItemIdentifiers.AIR_RUNE, ItemIdentifiers.WATER_RUNE, ItemIdentifiers.EARTH_RUNE, ItemIdentifiers.FIRE_RUNE]],
 ];
 
 function suppliedRunes(player) {
@@ -34,7 +36,7 @@ function reportSuppliedRunes(request) {
 
 module.exports = {
   name: "ElementalStaves",
-  description: "Elemental staves, battlestaves and the Kodai wand and twinflame staff supply their element's runes to spells automatically.",
+  description: "Elemental staves, battlestaves, the Kodai wand, the twinflame staff and the Shadowflame quadrant supply their element's runes to spells automatically.",
   register(api) {
     api.onSpellRuneBypass(bypassSuppliedRune);
     api.onCustomEvent("elemental-staves:runes", reportSuppliedRunes);

@@ -221,6 +221,39 @@ test('Porcine preserves the recorded eye-protection warning and checks goggles a
   q.quest.setStage(p, 6); unequip.allow = null; q.call('onCanUnequip', unequip); assert.equal(unequip.allow, null);
 });
 
+test('Porcine cave rope is left to loc-teleports except while the foot is uncut, and climbing down is a spam line', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 5);
+  const rope = { player: p, objectId: 40330, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', rope);
+  assert.equal(rope.handled, false, 'LocTeleports plays the captured climb (animation, fade, message)');
+  const other = { player: p, objectId: 40331, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', other);
+  assert.equal(other.handled, false, 'only the cave rope is looked at');
+  p.equipment.set(core.Equipment.HEAD_SLOT, 24942);
+  q.call('onObjectInteraction', { player: p, objectId: 40341, clickType: 1, handled: false });
+  assert.deepEqual(p.packets.findLast(([m]) => m === 'sendTypedMessage'), ['sendTypedMessage', core.ChatType.SPAM, 'You climb down the rope.']);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3158, 9713]);
+  const entry = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../plugins/world/data/loc-teleports.json'), 'utf8')).locs.find(loc => loc.id === 40330);
+  assert.equal(entry.message, 'You climb up the rope.'); assert.equal(entry.messageType, 'spam');
+  assert.equal(entry.anim, 828); assert.equal(entry.fade, true);
+});
+
+test('Porcine rope with the sourhog dead and the foot uncut stays in the cave', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 6);
+  const rope = { player: p, objectId: 40330, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', rope);
+  assert.equal(rope.handled, true);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3158, 9713]);
+});
+
+test('Porcine blockage Yes does not put the wiki stage direction in chat', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 5);
+  q.call('onObjectInteraction', { player: p, objectId: 40331, clickType: 1, handled: false });
+  q.emit('npc-dialogue:action', { player: p, npcId: 10432, stepId: 'f8rW5G', kind: 'action', text: 'The player climbs over the blockage.' });
+  assert.equal(p.messages.length, 0, 'capture 1693 sends no chat line for the crossing');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3157, 9703]);
+});
+
 test('Sleeping Giants leaves its repair instance before the captured public sword tutorial', () => {
   const q = register('SleepingGiants', 'sleeping_giants'), p = player(); p.moveTo(new core.Location(3366,11483,0)); q.quest.setStage(p,2);
   q.call('onPlayerLogin',{player:p}); assert.ok(p.getPrivateArea());

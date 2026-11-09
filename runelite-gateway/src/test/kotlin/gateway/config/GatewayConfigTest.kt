@@ -10,7 +10,7 @@ class GatewayConfigTest {
     @Test
     fun `folder rename preserves an existing login key and prefers the new location`(@TempDir root: Path) {
         Files.createDirectories(root.resolve("server"))
-        Files.writeString(root.resolve("server/target.txt"), "osrs-241_2026-10-20")
+        Files.writeString(root.resolve("server/target.txt"), "osrs-242_2026-11-03")
         val key = root.resolve("runelite-gateway/keys/rsa.txt")
         val legacyKey = root.resolve("gateway/keys/rsa.txt")
         assertEquals(key, GatewayConfig.load(root).keyFile)

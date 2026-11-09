@@ -15,7 +15,7 @@ const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketList
 
 const I = PluginManager.getCoreApi().ItemIdentifiers;
 const TWO_HANDED = I.BRONZE_HALBERD;
-const ONE_HANDED = I.BRONZE_SWORD;
+const ONE_HANDED = I.BRONZE_SHORTSWORD;
 const SHIELD = I.WOODEN_SHIELD;
 const FILLER = I.RAKE;
 const NO_ITEM = -1;

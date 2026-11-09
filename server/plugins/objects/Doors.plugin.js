@@ -38,6 +38,9 @@ const DOOR_NAMES = new Set([
   "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
   // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
   "Curtain",
+  // Tower of Life's entrance (21814): tol_tower_wall_door -> tol_tower_wall_door_open (21815).
+  // TowerOfLife.Quest.js checks the builder's outfit first (door:toggle).
+  "Tower door",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
@@ -70,6 +73,10 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // grim_inactiveposhdoor: Witch's House front and back doors open onto it (capture 20261108T030409
   // ticks 154, 389); ObjectIdentifiers has no property for it.
   WITCH_HOUSE_DOOR_OPEN: 24719,
+  // kebos_farming_guild_door_left_open/_right_open: the Farming Guild entrance's leaves (rsprox 1692
+  // tick 940, 239 tick 1649); nameless in the cache, so ObjectIdentifiers has no property for them.
+  FARMING_GUILD_DOOR_LEFT_OPEN: 34465,
+  FARMING_GUILD_DOOR_RIGHT_OPEN: 34466,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -120,7 +127,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Holy Grail: Merlin's workshop door in Camelot (24, merlinworkshop) and the Draynor Manor
     // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
     // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
-    O.DOOR_3, O.DOOR_4]);
+    O.DOOR_3, O.DOOR_4,
+    // Khazard stronghold: Open-only ordinary door models, no distinct open loc.
+    O.DOOR_67]);
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
   // the way to the Blast Furnace, shares DOOR_180's model but offers no option). Witch's House's
@@ -153,6 +162,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Troll Stronghold's cache has an action-less open loc 3811 with the same
     // model as closed 3810, so it cannot be paired by the normal action scan.
     [O.STOREROOM_DOOR, O.STOREROOM_DOOR + 1],
+    // Tower of Life's door: the open loc 21815 has the same model but no action (cache gameval
+    // tol_tower_wall_door / tol_tower_wall_door_open).
+    [O.TOWER_DOOR, O.TOWER_DOOR + 1],
     // Slepe church crypt gate: its open form 39513 has the same model but no action.
     [O.GATE_210, O.GATE_211],
     // Active cache dump (osrs-241 2026-10-20): 2000/2002 "Door" have Open and
@@ -369,6 +381,24 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
+    // Farming Guild entrance (kebos_farming_guild_door_left/right_closed), crossed both ways in rsprox
+    // 239 ticks 1648-1651 (in) and 1692 ticks 939-942 (out): Open puts inviswall 38848 on both doorway
+    // tiles and the open leaves on the tiles south, sound 62, the player steps across in the same tick
+    // and the door is back two ticks later. Its cache open leaves are nameless with no Close, so the
+    // catalog never pairs them. The 45 Farming check is Guild.Farming's (door:toggle).
+    Object.freeze({
+      closed: [[O.DOOR_578, 1248, 3723, 0, 3], [O.DOOR_579, 1249, 3723, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 1249, 3723, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.FARMING_GUILD_DOOR_RIGHT_OPEN, 1249, 3722, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 1248, 3723, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.FARMING_GUILD_DOOR_LEFT_OPEN, 1248, 3722, 0, 0],
+      ],
+      crossY: 3723,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
     // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
     Object.freeze({

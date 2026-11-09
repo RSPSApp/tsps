@@ -28,6 +28,8 @@ export class Autocasting {
         ItemIdentifiers.ZURIELS_STAFF, ItemIdentifiers.ZURIELS_STAFF_BH_,
         // Wiki (Blue Moon spear, Autocast): it autocasts Ancient Magicks.
         ItemIdentifiers.BLUE_MOON_SPEAR, 29849,
+        // Wiki (Shadowflame quadrant): it autocasts spells from all spellbooks.
+        ItemIdentifiers.SHADOWFLAME_QUADRANT,
     ]);
 
     private static readonly AUTOCAST_SPELLS = new Map<number, CombatSpell>([
@@ -64,6 +66,8 @@ export class Autocasting {
     private static readonly ARCEUUS_AUTOCAST_WEAPONS = [
         "ahrim's staff", "blue moon spear", "kodai wand", "master wand", "purging staff", "skull sceptre",
         "slayer's staff", "staff of the dead", "toxic staff of the dead",
+        // Wiki (Shadowflame quadrant): every spellbook's spells.
+        "shadowflame quadrant",
     ];
 
     /**

@@ -117,7 +117,7 @@ test("the data: every diary and tier, its varbits in the cache, its tasks, rewar
   assert.equal(Data.DIARIES.length, 12);
   const width = (id) => { const v = CacheDefinitions.getVarbit(id); assert.ok(v, `varbit ${id}`); return v.endBit - v.startBit + 1; };
   const npcs = new Set();
-  for (let id = 0; id < 16000; id++) {
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) {
     const npc = CacheDefinitions.getNpc(id);
     if (npc?.actions?.includes("Talk-to")) npcs.add(npc.name);
   }

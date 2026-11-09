@@ -19,6 +19,10 @@ const Area = require("./Area.Araxxor");
 /** Cache names: the loc, interface araxxor_scoreboard and its components (rsprox 237/01076). */
 const SCOREBOARD_LOC = "araxxor_scoreboard_multi";
 const INTERFACE_NAME = "araxxor_scoreboard";
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const COMPONENT = {
   title: "title_text", kills: "pkc_content", deaths: "pd_content", best: "pbt_content",
   worldKills: "gkc_content", worldDeaths: "gd_content", worldBest: "gbt_content",
@@ -99,6 +103,7 @@ function read(event) {
   if (event.objectId !== cache.getLocId(SCOREBOARD_LOC)) return false;
   const player = event.player;
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache.getInterfaceId(INTERFACE_NAME));
   for (const [component, text] of lines(player)) sender.sendString(text, uid(component));
   return true;

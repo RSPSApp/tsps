@@ -7,6 +7,14 @@ Server.installProductionPathResolver();
 const { Equipment } = require('../dist/game/model/container/impl/Equipment');
 const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const VenatorBow = require('../plugins/items/VenatorBow.plugin');
+const { hitVictimOf } = require('../dist/game/content/combat/EquipmentEffects');
+
+/**
+ * Per-victim max hits (vampyre tiers, salve): the formula sees the hit's victim through the hit scope,
+ * and falls back to the primary target outside one, as GearChecks.targetNpc does.
+ */
+let maxHitByVictim = new Map();
+let primaryTarget = null;
 
 const BOW = ItemIdentifiers.VENATOR_BOW;
 const UNCHARGED = ItemIdentifiers.VENATOR_BOW_UNCHARGED_;
@@ -66,8 +74,10 @@ class PendingHit {
         return this.target;
     }
 }
+/** A test's stand-in for another plugin answering the bow's events. */
+let onEmit = null;
 VenatorBow.register({
-    emitCustomEvent: () => {},
+    emitCustomEvent: (name, payload) => onEmit?.(name, payload),
     core: {
         Equipment,
         ItemIdentifiers,
@@ -98,7 +108,7 @@ VenatorBow.register({
             canAttackSecondaryTarget: (attacker, origin, candidate) => candidate !== attacker && candidate !== origin,
             applyStyleDamage: (_, max) => rerolled.push(max),
         },
-        DamageFormulas: { calculateMaxRangedHit: () => 40 },
+        DamageFormulas: { calculateMaxRangedHit: (attacker) => maxHitByVictim.get(hitVictimOf(attacker) ?? primaryTarget) ?? 40 },
         Bank: { ITEM_OP_EVENT: 'bank:item-op' },
     },
     registerCombatMethodResolver: (r) => { resolver = r; },
@@ -141,6 +151,28 @@ test('a charged bow ricochets to the two nearest targets in multicombat', () => 
     assert.deepEqual(sounds, [6672, 6735]);
 });
 
+test('each bounce takes its max hit from its own target, not the primary', () => {
+    const goblin = npc(3201, 3200);
+    const vyrewatch = npc(3203, 3200);
+    const other = npc(3204, 3200);
+    // A tier 3 vampyre takes 0 from a venator bow (Wiki: Vampyre); the others take the full 40.
+    maxHitByVictim = new Map([[vyrewatch, 0]]);
+    try {
+        primaryTarget = goblin;
+        shoot(bow(1000), goblin, [other, vyrewatch]);
+        assert.deepEqual(rerolled, [0, 26], 'Vyrewatch bounce under a Goblin primary, then a 40-max target');
+        // Off a Vyrewatch primary: the goblin beside it takes its own 26, then the second bounce returns to the Vyrewatch.
+        primaryTarget = vyrewatch;
+        const beside = npc(3204, 3200);
+        const { hits } = shoot(bow(1000), vyrewatch, [beside]);
+        assert.deepEqual(hits.map((hit) => hit.getTarget()), [vyrewatch, beside, vyrewatch]);
+        assert.deepEqual(rerolled, [26, 0], 'each bounce keeps its own target\'s max');
+    } finally {
+        maxHitByVictim = new Map();
+        primaryTarget = null;
+    }
+});
+
 test('bounces chain from the arrow landing, 15 cycles each, as captured', () => {
     const primary = npc(3201, 3200);
     const near = npc(3203, 3200);
@@ -178,6 +210,17 @@ test('no ricochet in single combat, but the attack still spends a charge', () =>
         assert.equal(VenatorBow._test.charges(weapon), 999);
     } finally {
         multi = true;
+    }
+});
+
+test('a kept charge with extra charges given back (combat:consume-charge extra) adds them', () => {
+    onEmit = (name, payload) => { if (name === 'combat:consume-charge') { payload.skip = true; payload.extra = 2; } };
+    try {
+        const weapon = bow(1000);
+        shoot(weapon, npc(3203, 3200), []);
+        assert.equal(VenatorBow._test.charges(weapon), 1002);
+    } finally {
+        onEmit = null;
     }
 });
 

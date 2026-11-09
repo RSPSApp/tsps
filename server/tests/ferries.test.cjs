@@ -226,7 +226,7 @@ test("Take-boat to Entrana: the captured search line, ship_journey route 1, the 
 });
 
 test("the monks turn back weapons or armour, worn or carried, with the transcript's own refusal", () => {
-  const sword = ItemIdentifiers.BRONZE_SWORD;
+  const sword = ItemIdentifiers.BRONZE_SHORTSWORD;
   const armed = createPlayer({ items: [sword] });
   click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk1_b" });
   assert.equal(armed.sent.interfaces.length, 0, "no boat");
@@ -678,7 +678,7 @@ test("Entrana boarding credit follows only an accepted outward voyage", () => {
   const back = createPlayer({ at: new Location(2829, 3335, 0) });
   click(back, "Monk of Entrana", "Take-boat", { gameval: "shipmonk2" });
   assert.deepEqual(boarded, [outward]);
-  const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SWORD] });
+  const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SHORTSWORD] });
   click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
   assert.deepEqual(boarded, [outward]);
 });

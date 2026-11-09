@@ -12,20 +12,20 @@ function disabled(player) {
 }
 
 function answerCondition({ player, npcId, stepId }) {
-  if (!player || npcId !== core.NpcIdentifiers.ARTHUR_THE_CLUE_HUNTER) return null;
+  if (!player || npcId !== core.NpcIdentifiers.ARTHUR_2) return null;
   if (stepId === ON_CONDITION) return !disabled(player);
   if (stepId === OFF_CONDITION) return disabled(player);
   return null;
 }
 
 function conditionChosen({ player, npcId, stepId }) {
-  if (!player || npcId !== core.NpcIdentifiers.ARTHUR_THE_CLUE_HUNTER) return;
+  if (!player || npcId !== core.NpcIdentifiers.ARTHUR_2) return;
   if (stepId === ON_CONDITION || stepId === OFF_CONDITION) pending.set(player, stepId);
   else pending.delete(player);
 }
 
 function confirmChoice({ player, npcId, option }) {
-  if (!player || npcId !== core.NpcIdentifiers.ARTHUR_THE_CLUE_HUNTER) return;
+  if (!player || npcId !== core.NpcIdentifiers.ARTHUR_2) return;
   const condition = pending.get(player);
   pending.delete(player);
   if (condition === ON_CONDITION && option === STOP_CHOICE && !disabled(player)) {
@@ -40,7 +40,7 @@ function clearPending({ player }) {
 }
 
 function clearOnStart({ player, npcId }) {
-  if (player && npcId === core.NpcIdentifiers.ARTHUR_THE_CLUE_HUNTER) pending.delete(player);
+  if (player && npcId === core.NpcIdentifiers.ARTHUR_2) pending.delete(player);
 }
 
 function vesselChance(request) {

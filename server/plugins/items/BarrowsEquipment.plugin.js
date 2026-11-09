@@ -70,12 +70,28 @@ function checkDurability(event) {
   event.handled = true;
 }
 
-function sendDegradeMessage(player, item, stage) {
+/**
+ * "<Brother>'s <part> has degraded slightly." in red, each time the item moves to its next stage, the first use's
+ * pristine -> 100 included (rsprox_transcripts/227/00086.txt:294617-294622, 227/00551.txt:48949-48952): helmet (Ahrim's
+ * hood, Karil's coif), body, legs ("have", platelegs) or skirt, weapon.
+ */
+function degradedLine(item) {
   const name = baseName(item);
+  const brother = name.split("'s")[0];
+  const slot = item.getDefinition?.()?.getEquipmentType?.()?.getSlot?.();
+  let part = "weapon";
+  if (slot === Equipment.HEAD_SLOT) part = /hood/i.test(name) ? "hood" : /coif/i.test(name) ? "coif" : "helmet";
+  else if (slot === Equipment.BODY_SLOT) part = "body";
+  else if (slot === Equipment.LEG_SLOT) part = /skirt/i.test(name) ? "skirt" : "legs";
+  return `<col=ef1020>${brother}'s ${part} ${part === "legs" ? "have" : "has"} degraded slightly.</col>`;
+}
+
+function sendDegradeMessage(player, item, stage) {
   if (stage === 4) {
-    player.sendMessage(`Your ${name} has fully degraded and can no longer be used.`);
+    // Ours: no recording shows the last stage break.
+    player.sendMessage(`Your ${baseName(item)} has fully degraded and can no longer be used.`);
   } else {
-    player.sendMessage(`Your ${name} has degraded to ${[100, 75, 50, 25][stage]}%.`);
+    player.sendMessage(degradedLine(item));
   }
 }
 
@@ -106,11 +122,10 @@ function degradeEquipment(player) {
     if (!Barrows.isBarrowsItem(item?.getId?.())) continue;
     weaponChanged ||= BARROWS_WEAPONS.has(Barrows.baseItemId(item.getId()));
     const remaining = durability(item);
-    const beforeStage = stageFor(remaining);
+    const beforeId = item.getId();
     const next = Math.max(0, remaining - 1);
     changed = setDurability(item, next) || changed;
-    const afterStage = stageFor(next);
-    if (afterStage > beforeStage) sendDegradeMessage(player, item, afterStage);
+    if (item.getId() !== beforeId) sendDegradeMessage(player, item, stageFor(next));
   }
 
   const amulet = player.getEquipment().get(Equipment.AMULET_SLOT);

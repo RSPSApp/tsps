@@ -459,6 +459,21 @@ class BotBrain {
     });
   }
 
+  /**
+   * Boosts, defensive/retreat and eating, without the activity. The task also runs this alone
+   * on the cycles a fighting bot's brain is downsampled. Held while the brain is paused.
+   */
+  tickSupport(nowMs = Date.now()) {
+    if (this.paused) {
+      return null;
+    }
+    return this.world?.supportTick?.({
+      player: this.player,
+      state: this.ensureState(),
+      nowMs,
+    }) ?? null;
+  }
+
   /** @returns {"running"|"idle"} */
   tick(nowMs = Date.now()) {
     this.lastTickAt = nowMs;
@@ -473,11 +488,7 @@ class BotBrain {
     }
     // Support runs before the activity action: boosts, defensive/retreat,
     // then eating.
-    const support = this.world?.supportTick?.({
-      player: this.player,
-      state: this.ensureState(),
-      nowMs,
-    });
+    const support = this.tickSupport(nowMs);
     if (support?.skip === true || resting) {
       return "running";
     }

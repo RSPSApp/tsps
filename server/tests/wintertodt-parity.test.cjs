@@ -137,8 +137,29 @@ test("Brew'ma mixes both without and with Druidic Ritual for zero XP; own unlock
   ingredients(p);const xp=p.getSkillManager().getExperience(core.Skill.HERBLORE);
   PM.emitItemOnNpc({player:p,target:npc,npcId:npc.getId(),targetIndex:0,item:p.getInventory().getItems()[0],itemId:Shared.ITEM.BRUMA_HERB,slot:0,interfaceId:0,handled:false});
   assert.equal(p.getInventory().getAmount(Shared.ITEM.REJUVENATION_4),1);assert.equal(p.getSkillManager().getExperience(core.Skill.HERBLORE),xp);
+  assert.equal(p.getDialogueManager().getCurrent()?.getText?.(),"Brew'ma quickly mixes a Rejuvenation potion.");
   p.getInventory().resetItems();
  }
  ingredients(p);const xp=p.getSkillManager().getExperience(core.Skill.HERBLORE);assert.equal(mix(p),true);
  assert.equal(p.getInventory().getAmount(Shared.ITEM.REJUVENATION_4),1);assert.ok(p.getSkillManager().getExperience(core.Skill.HERBLORE)>xp);
+});
+
+// rsprox_transcripts/233/03262.txt:35549-35569: two pairs, "Brew'ma quickly mixes two Rejuvenation potions." as a mesbox
+// line and a box showing both potions, with no per-potion "You combine..." line.
+test("Brew'ma mixing two pairs: the recorded box and line", t => {
+ const {p, messages} = actor(t);
+ const npc = new core.NPC(core.NpcIdentifiers.BREWMA, new core.Location(1631, 3980, 0));
+ p.getInventory().setItem(0, new core.Item(Shared.ITEM.BRUMA_HERB));
+ p.getInventory().setItem(1, new core.Item(Shared.ITEM.REJUVENATION_UNF));
+ p.getInventory().setItem(2, new core.Item(Shared.ITEM.BRUMA_HERB));
+ p.getInventory().setItem(3, new core.Item(Shared.ITEM.REJUVENATION_UNF));
+ const typed = [];
+ t.mock.method(p.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); return p.getPacketSender(); });
+ PM.emitItemOnNpc({player: p, target: npc, npcId: npc.getId(), targetIndex: 0, item: p.getInventory().getItems()[0], itemId: Shared.ITEM.BRUMA_HERB, slot: 0, interfaceId: 0, handled: false});
+ assert.equal(p.getInventory().getAmount(Shared.ITEM.REJUVENATION_4), 2);
+ assert.deepEqual(typed, [[core.ChatType.MESBOX, "Brew'ma quickly mixes two Rejuvenation potions."]]);
+ const box = p.getDialogueManager().getCurrent();
+ assert.equal(box.getText(), "Brew'ma quickly mixes two Rejuvenation potions.");
+ assert.deepEqual(box.getItemIds(), [Shared.ITEM.REJUVENATION_4, Shared.ITEM.REJUVENATION_4]);
+ assert.ok(!messages.some(m => /You combine/.test(m)));
 });

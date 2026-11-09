@@ -24,6 +24,10 @@ const Common = require("./Common.Vardorvis");
 const SCOREBOARD_LOC = "vardorvis_scoreboard";
 const VISIBLE_LOCS = ["vardorvis_scoreboard_vis", "vardorvis_scoreboard_vis_awakened"];
 const INTERFACE_NAME = "vardorvis_scoreboard";
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const COMPONENT = {
   title: "title_text", kills: "pkc_content", deaths: "pd_content", best: "pbt_content",
   worldKills: "gkc_content", worldDeaths: "gd_content", worldBest: "gbt_content",
@@ -127,6 +131,7 @@ function questComplete(player) {
 function show(event, mode) {
   if (!ours(event.objectId) || !questComplete(event.player)) return false;
   const sender = event.player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   for (const [component, text] of lines(event.player, mode)) sender.sendString(text, uid(component));
   return true;

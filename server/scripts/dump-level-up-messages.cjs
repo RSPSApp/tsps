@@ -6,7 +6,9 @@
 //
 // The level-up box's text is server-side, so it isn't in the cache: the only source is
 // the "Level up messages" section of each `Transcript:<Skill>` page, read as raw wikitext.
-// Requires network access; the output carries no timestamp, so the same page content
+// Each box's picture names ("Rune platebody.png") are resolved to item ids by exact cache item
+// name (needs `yarn build` and the cache); names that match no item are listed and the box
+// stays text-only. Requires network access; the output carries no timestamp, so the same page content
 // produces byte-identical output and --check can compare against the committed file.
 const fs = require("node:fs");
 const path = require("node:path");
@@ -23,11 +25,37 @@ const DEST = path.join(__dirname, "..", "plugins", "interface", "data", "level-u
 const SOURCE_NOTE = "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read "
   + "as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the "
   + "game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from "
-  + "the transcript's own qualifier, because those levels show a different message per player state. "
+  + "the transcript's own qualifier, because those levels show a different message per player state; "
+  + "an 'items' list holds the cache ids of the box's picture(s), resolved by exact item name. "
   + "Magic merges its four spellbook sections, Sailing's beta section is commented out on the wiki "
   + "and is skipped, and a level the wiki marks only with {{tmissing}} has no message. "
   + "Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather "
   + "than splitting by world type.";
+/** Lower-cased cache item name -> lowest id, noted copies and placeholders excluded. */
+let itemIdsByName = null;
+const unresolved = new Set();
+function loadItemNames() {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const ids = new Map();
+  const count = CacheDefinitions.getBaseCounts().items;
+  for (let id = 0; id < count; id++) {
+    const item = CacheDefinitions.getItem(id);
+    if (!item?.name || item.name === "null" || item.noteTemplate > 0 || item.placeholderTemplate > 0) continue;
+    const key = item.name.toLowerCase();
+    if (!ids.has(key)) ids.set(key, id);
+  }
+  return ids;
+}
+
+/** "Rune platebody detail.png" -> the id of the cache item named "Rune platebody", or null. */
+function itemFor(picture) {
+  const name = picture.trim().replace(/^file:/i, "").replace(/\.png$/i, "").replace(/_/g, " ")
+    .replace(/ detail$/i, "").trim();
+  const id = itemIdsByName.get(name.toLowerCase());
+  if (id === undefined) unresolved.add(picture.trim());
+  return id ?? null;
+}
+
 const SKILL_NAMES = { attack: "Attack", strength: "Strength", defence: "Defence", defense: "Defence",
   ranged: "Ranged", prayer: "Prayer", magic: "Magic", runecraft: "Runecrafting",
   runecrafting: "Runecrafting", hitpoints: "Hitpoints", crafting: "Crafting", mining: "Mining",
@@ -178,11 +206,17 @@ function parseSkill(skill, raw) {
       const boxes = templates(trimmed, ["tbox"]);
       if (boxes.length) {
         for (const { body: box } of boxes) {
-          const parts = splitTop(box).filter((part) => !/^\s*(pic2?|align|float)\s*=/i.test(part));
+          const split = splitTop(box);
+          const parts = split.filter((part) => !/^\s*(pic2?|align|float)\s*=/i.test(part));
           const text = clean(parts.join("|"));
           if (!text) continue;
           const predicate = when ? condition(when) : null;
-          entries.push(predicate ? { text, when: predicate } : text);
+          const items = split.map((part) => /^\s*pic2?\s*=(.*)$/i.exec(part)).filter(Boolean)
+            .map((match) => itemFor(match[1])).filter((id) => id !== null);
+          const entry = { text };
+          if (predicate) entry.when = predicate;
+          if (items.length) entry.items = items;
+          entries.push(Object.keys(entry).length === 1 ? text : entry);
         }
         continue;
       }
@@ -228,6 +262,8 @@ async function fetchRaw(skill, fromDir) {
 (async () => {
   const fromIndex = process.argv.indexOf("--from");
   const fromDir = fromIndex > 0 ? process.argv[fromIndex + 1] : null;
+  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(path.join(__dirname, ".."));
+  itemIdsByName = loadItemNames();
   const data = { _source: SOURCE_NOTE };
   const empty = [];
   for (const skill of SKILLS) {
@@ -246,6 +282,7 @@ async function fetchRaw(skill, fromDir) {
   const leaked = SKILLS.flatMap((skill) => Object.entries(data[skill]).flatMap(([level, entries]) =>
     entries.filter((entry) => (typeof entry === "string" ? entry : entry.text).includes("{{"))
       .map((entry) => skill + " " + level + ": " + (typeof entry === "string" ? entry : entry.text))));
+  if (unresolved.size) console.error("pictures with no cache item (text-only): " + [...unresolved].sort().join("; "));
   console.error("skills: " + SKILLS.length + ", messages: " + messages + ", raw markup left: " + leaked.length);
   for (const line of leaked.slice(0, 10)) console.error("  " + line);
 

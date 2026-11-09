@@ -107,7 +107,7 @@ test("Tindel replaces consumed slots in a full real inventory", () => {
   assert.equal(result.ok, true);
   assert.equal(player.getInventory().getAmount(I.RUSTY_SWORD), 0);
   assert.equal(player.getInventory().getAmount(I.COINS), 0);
-  assert.equal(player.getInventory().getAmount(I.IRON_SWORD), 1);
+  assert.equal(player.getInventory().getAmount(I.IRON_SHORTSWORD), 1);
   assert.equal(player.getInventory().getFreeSlots(), 1);
 });
 
@@ -149,7 +149,7 @@ test("Tindel standard dialogue conditions and action use the imported result bra
   assert.equal(action.handled, true);
   assert.equal(player.getInventory().getAmount(I.RUSTY_SWORD), 0);
   assert.equal(player.getInventory().getAmount(I.COINS), 0);
-  assert.equal(player.getInventory().getAmount(I.IRON_SWORD), 1);
+  assert.equal(player.getInventory().getAmount(I.IRON_SHORTSWORD), 1);
   assert.equal(action.steps[0].npc, "There you go my friend, it turned out to be an iron sword.");
   assert.equal(action.steps[1].text, "Tindel gives you an iron sword.");
   assert.equal(emitted.filter(([name]) => name === "diary:task").length, 1);
@@ -160,7 +160,7 @@ test("Tindel standard dialogue conditions and action use the imported result bra
   hooks.actions[0](duplicateAction);
   assert.equal(duplicatePlayer.getInventory().getAmount(I.RUSTY_SWORD), 1);
   assert.equal(duplicatePlayer.getInventory().getAmount(I.COINS), 100);
-  assert.equal(duplicatePlayer.getInventory().getAmount(I.IRON_SWORD), 1);
+  assert.equal(duplicatePlayer.getInventory().getAmount(I.IRON_SHORTSWORD), 1);
   assert.equal(emitted.filter(([name]) => name === "diary:task").length, 2);
 
   const scimitarPlayer = playerWith([[0, I.RUSTY_SCIMITAR], [1, I.COINS, 100]]);
@@ -193,7 +193,7 @@ test("Tindel item-on-NPC handler and Give-Sword suppress duplicate callbacks", (
   assert.equal(event.handled, true);
   assert.equal(player.getInventory().getAmount(I.RUSTY_SWORD), 1);
   assert.equal(player.getInventory().getAmount(I.COINS), 100);
-  assert.equal(player.getInventory().getAmount(I.IRON_SWORD), 1);
+  assert.equal(player.getInventory().getAmount(I.IRON_SHORTSWORD), 1);
   assert.equal(emitted.filter(([name]) => name === "diary:task").length, 1);
   assert.equal(emitted.filter(([name]) => name === "npc-dialogue:start").length, 1);
 
@@ -202,7 +202,7 @@ test("Tindel item-on-NPC handler and Give-Sword suppress duplicate callbacks", (
   const giveEvent = { npcId: 1358, player: givePlayer, npc: publicNpc() };
   assert.equal(giveSword(giveEvent), true);
   assert.equal(giveSword(giveEvent), false);
-  assert.equal(givePlayer.getInventory().getAmount(I.IRON_SWORD), 1);
+  assert.equal(givePlayer.getInventory().getAmount(I.IRON_SHORTSWORD), 1);
   assert.equal(givePlayer.getInventory().getAmount(I.COINS), 100);
   assert.equal(givePlayer.getInventory().getAmount(I.RUSTY_SWORD), 1);
   assert.equal(emitted.filter(([name]) => name === "diary:task").length, 2);
@@ -303,7 +303,7 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
   }
 
   for (const [choice, outputId, consumedId] of [
-    ["The sword", I.IRON_SWORD, I.RUSTY_SWORD],
+    ["The sword", I.IRON_SHORTSWORD, I.RUSTY_SWORD],
     ["The scimitar", I.BRONZE_SCIMITAR, I.RUSTY_SCIMITAR],
   ]) {
     const creditsBefore = diaryCredits.length;
@@ -387,7 +387,7 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
 
   const nativeRandom = Math.random;
   for (const [choice, outputId, consumedId, index] of [
-    ["The sword", I.IRON_SWORD, I.RUSTY_SWORD, 918280],
+    ["The sword", I.IRON_SHORTSWORD, I.RUSTY_SWORD, 918280],
     ["The scimitar", I.BRONZE_SCIMITAR, I.RUSTY_SCIMITAR, 918281],
   ]) {
     const { player } = createRunnerPlayer(index);
@@ -481,7 +481,7 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
       Math.random = originalRandom;
     }
     assert.equal(player.getInventory().getAmount(I.RUSTY_SWORD), 0);
-    assert.equal(player.getInventory().getAmount(I.IRON_SWORD), 1);
+    assert.equal(player.getInventory().getAmount(I.IRON_SHORTSWORD), 1);
     if (lifecycle === "logout") {
       PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
       player.isRegistered = () => false;

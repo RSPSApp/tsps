@@ -125,6 +125,9 @@ function attach(pluginApi) {
     [core.ItemIdentifiers.GRANITE_500G_, 7.2],
     [core.ItemIdentifiers.GRANITE_2KG_, 13.2],
     [core.ItemIdentifiers.GRANITE_5KG_, 22.2],
+    // Wiki Infernal pickaxe (Smithing XP table): sunstone (53 Mining) 2, rubium splinters (68) 2.
+    [core.ItemIdentifiers.SUNSTONE, 2],
+    [core.ItemIdentifiers.RUBIUM_SPLINTERS, 2],
   ]);
 
   api.onItemOnItem((event) => {

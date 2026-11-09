@@ -894,7 +894,10 @@ export class ClientConnection {
           if (action && (packet.amount > 0 || (packet.amount === 0 && action.acceptsZero === true) || (packet.amount < 0 && action.acceptsNegative === true))) {
             action.execute(packet.amount);
           }
-          this.player?.setEnteredAmountAction(null);
+          // The answer may open another amount prompt, such as a Bank PIN keypad.
+          if (this.player?.getEnteredAmountAction() === action) {
+            this.player?.setEnteredAmountAction(null);
+          }
           continue;
         }
         case "dialogue_input": {
@@ -1665,6 +1668,8 @@ export class ClientConnection {
       && ItemDefinition.forId(packet.itemId).getEquipmentType().getSlot() >= 0) {
       // As the left-click route refuses (ItemActionPacketListener): no gear swap mid-teleport or while dead.
       if (player.isTeleportingReturn() || player.getHitpoints() <= 0) return;
+      // Inventory item actions clear the current interaction before equip checks.
+      player.clearPendingAction();
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
       return;
     }

@@ -611,7 +611,8 @@ function ownsPetFamily(player, pet) {
   });
 }
 
-function recordOwnership(player, pet) {
+/** `announce`: false records the pet without the collection log sync (awardPet sends its lines first). */
+function recordOwnership(player, pet, { announce = true } = {}) {
   if (pet?.reclaimable === false) return;
   const family = petFamily(pet);
   const owned = getOwnedPetItems(player);
@@ -624,8 +625,17 @@ function recordOwnership(player, pet) {
   if (others.length === owned.length && owned.includes(pet.itemId)) return;
   player.setAttribute(OWNED_ATTRIBUTE, [...others, pet.itemId]);
   pluginApi.emitCustomEvent("persistence:save", { player, reason: "pet-insurance" });
-  syncCollectionLog(player, { silent: false });
+  if (announce) syncCollectionLog(player, { silent: false });
 }
+
+/**
+ * A new pet's lines, as recorded (rsprox_transcripts/234/03285.txt:287458-287462, 227/00101.txt:602776-602778,
+ * 227/01857.txt:421583-421585): the red follow line, the purple insurance line (Wiki, Probita: "One-off pets are now
+ * automatically insured upon receiving one"), then the collection log's.
+ */
+const FOLLOWED = "<col=ef1020>You have a funny feeling like you're being followed.</col>";
+const WOULD_HAVE_BEEN_FOLLOWED = "<col=ef1020>You have a funny feeling like you would have been followed...</col>";
+const INSURED = "<col=800080>Your new pet has been automatically insured. If lost, it can be reclaimed from Probita in Ardougne.</col>";
 
 /** The collection log lists one item per pet: a skilling pet's base colour, never a morph. */
 function collectionLogItemId(pet) {
@@ -676,24 +686,33 @@ function awardPet(player, itemId) {
       deliverPetItem(player, pet.itemId);
       return true;
     }
-    player.sendMessage("You have a funny feeling like you would have been followed...");
+    // rsprox_transcripts/227/01751.txt:97166: red, as the follow line.
+    player.sendMessage(WOULD_HAVE_BEEN_FOLLOWED);
     return false;
   }
-  recordOwnership(player, pet);
+  recordOwnership(player, pet, { announce: false });
+  const announce = () => {
+    if (pet.reclaimable !== false) player.sendMessage(INSURED);
+    syncCollectionLog(player, { silent: false });
+  };
   // "pets:obtained" { player, itemId, skill }: a new pet (a league's "Obtain any Skilling Pet"); `skill` a skilling pet's.
   pluginApi?.emitCustomEvent?.("pets:obtained", { player, itemId: pet.itemId, skill: pet.skill?.getName?.() ?? null });
   const following = player.getAttribute?.(CURRENT_PET_ATTRIBUTE)?.isRegistered?.() === true;
   if (following && player.getInventory().isFull()) {
     // OSRS then loses the pet to Probita; the owned record lets her return it.
     player.sendMessage("You have a funny feeling like you would have been followed... Probita can help.");
+    announce();
     return true;
   }
   if (following) {
     player.getInventory().adds(pet.itemId, 1);
     player.sendMessage("You feel something weird sneaking into your backpack.");
+    announce();
     return true;
   }
-  return drop(player, pet.itemId, true);
+  const dropped = drop(player, pet.itemId, true);
+  announce();
+  return dropped;
 }
 
 /**
@@ -1750,10 +1769,11 @@ function drop(player, itemId, reward, { silent = false } = {}) {
       }
     }, 1200);
 
-    recordOwnership(player, getPetByNpcId(npc.getId()) ?? pet);
+    // A reward's lines are awardPet's to send (the log after the follow and insurance lines).
+    recordOwnership(player, getPetByNpcId(npc.getId()) ?? pet, { announce: !reward });
     trackCatFollower(player, npc, pet);
     if (reward) {
-      if (!silent) player.sendMessage("You have a funny feeling like you're being followed.");
+      if (!silent) player.sendMessage(FOLLOWED);
     } else {
       player.getInventory().deleteNumber(pet.itemId, 1);
       Sounds.sendSound(player, Sound.DROP_ITEM);
@@ -1776,7 +1796,8 @@ function drop(player, itemId, reward, { silent = false } = {}) {
       currentPetId: currentPet?.getId?.() ?? null,
       currentPetRegistered: currentPet?.isRegistered?.() ?? null,
     });
-    player.sendMessage("You already have a pet following you.");
+    // rsprox_transcripts/232/03153.txt:10326 (Drop on a pet with one out; 229/00265:24055, the menagerie, the same).
+    player.sendMessage("You already have a follower.");
   }
 
   return true;
@@ -2095,11 +2116,7 @@ function onSkill(player, skill, { petBase, petChance, rolls = 1, runeId, npcId, 
     hit = Math.random() < 1 / chance;
   }
   if (!hit) return false;
-  if (!ownsPetFamily(player, pet)) {
-    World.sendMessage(
-      `@dre@${player.getDisplayName()} just found a stray ${getPetDisplayName(pet)} while ${normalizeSkillName(skill)}!`
-    );
-  }
+  // No world-wide line: live sends only the player's own (rsprox_transcripts/227/01857.txt:421576-421590, Rocky).
   awardPet(player, pet.itemId);
   return true;
 }
@@ -2226,6 +2243,7 @@ module.exports = {
     morph,
     interact,
     pickup,
+    drop,
     handlePetClick,
     awardPet,
     getOwnedPetItems,

@@ -245,12 +245,12 @@ function grantNamed(player, text) {
     return ids;
   }
   if (value.includes("bronze sword and a wooden shield")) {
-    const ids = given([Items.BRONZE_SWORD, Items.WOODEN_SHIELD]);
+    const ids = given([Items.BRONZE_SHORTSWORD, Items.WOODEN_SHIELD]);
     T.advanceFrom(player, STEP.DAGGER_EQUIPPED, STEP.EQUIP_SWORD_SHIELD);
     return ids;
   }
   if (value.includes("wooden shield")) return given([Items.WOODEN_SHIELD]);
-  if (value.includes("bronze sword")) return given([Items.BRONZE_SWORD]);
+  if (value.includes("bronze sword")) return given([Items.BRONZE_SHORTSWORD]);
   if (value.includes("shortbow") || value.includes("arrows")) {
     const ids = [];
     if (value.includes("shortbow") && inv.getAmount(Items.SHORTBOW) <= 0) ids.push(...given([Items.SHORTBOW]));
@@ -285,8 +285,8 @@ function boxItems(text) {
     ["some flour", [Items.POT_OF_FLOUR_3]],
     ["bronze pickaxe", [Items.BRONZE_PICKAXE]],
     ["hammer", [Items.HAMMER]],
-    ["bronze sword and a wooden shield", [Items.BRONZE_SWORD, Items.WOODEN_SHIELD]],
-    ["bronze sword", [Items.BRONZE_SWORD]],
+    ["bronze sword and a wooden shield", [Items.BRONZE_SHORTSWORD, Items.WOODEN_SHIELD]],
+    ["bronze sword", [Items.BRONZE_SHORTSWORD]],
     ["wooden shield", [Items.WOODEN_SHIELD]],
     ["shortbow and some bronze arrows", [Items.SHORTBOW, Items.BRONZE_ARROW]],
     ["shortbow", [Items.SHORTBOW]],
@@ -367,7 +367,7 @@ function answerCondition(player, npcId, text) {
   // Paired with a following "exactly one free inventory space" branch: zero free spaces, not < 2.
   if (value.includes("does not have two free inventory spaces")) return freeSpace(player) === 0;
   if (value.includes("exactly one free inventory space")) return freeSpace(player) === 1;
-  const sword = T.hasItem(player, Items.BRONZE_SWORD);
+  const sword = T.hasItem(player, Items.BRONZE_SHORTSWORD);
   const shield = T.hasItem(player, Items.WOODEN_SHIELD);
   if (value.includes("missing a sword or shield")) return !sword || !shield;
   if (value.includes("one free inventory space and does not have a sword or shield")) return freeSpace(player) === 1 && !sword && !shield;

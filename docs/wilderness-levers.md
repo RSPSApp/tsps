@@ -19,15 +19,24 @@ lever's pull through the `lever:teleport` event.
 ## A pull, as captured
 
 From rsprox captures (recordings 454, 457 and 4155 for the Mage Arena bank levers, 1444, 3275 and
-4155 for the Edgeville lever, 1444 for the Keep lever). The pull comes a tick after the warning's
-option is picked (1444) and two ticks after a click made beside the lever (4155); from the pull:
+4155 for the Edgeville lever, 1444 for the Keep lever). The player walks onto the lever's own tile
+(the levers are straight wall decorations, shapes 4 and 5, which are operated from their tile) and
+faces the wall it is mounted on (rotation 0 west, 3 south). The pull comes a tick after the
+warning's option is picked (1444) and two ticks after arriving on the tile (454, 1444); from the
+pull:
 
 | Tick | What happens |
 | --- | --- |
 | 0 | `macro_lever_switch_down`, "You pull the lever...", varbit `busy` 1 (rev 238) |
-| +1 | synth 2400 (the lever) |
+| +1 | synth 2400 (the lever), the lever becomes its down loc for everyone |
 | +2 | `human_castteleport` with `teleport_casting` at height 92, synth 200 |
-| +5 | the teleport, the landing line, varbit `busy` 0 (rev 238) |
+| +5 | the teleport, the landing line, varbit `busy` 0 (rev 238), the lever back up |
+
+The down loc is `ikov_leverdown` for the Edgeville and Keep levers (1444) and
+`magearena_lever_down` for the bank pair (454); every one of these levers uses the same up and down
+models, so the East Ardougne lever (no recording) uses `ikov_leverdown`. Bystanders see it come
+back up four ticks after it went down (1487, 1506, 1630, 454). It comes back up even when the pull
+is cut short.
 
 The usual teleport checks (teleblock) run before the pull, unchanged.
 
@@ -62,6 +71,5 @@ Ardougne Lever to teleport to the Wilderness." and, as from Edgeville, sets the 
 ## Not covered
 
 - The Keep lever's Edgeville tile: no recording shows it; it keeps the tile this server used before.
-- Swap-options (no recording of what it sends), the lever's down state (`magearena_lever_down`
-  appears a tick after the pull, but no recording shows it turning back), the High Risk world
-  warning, and the King Black Dragon lair lever (no recording).
+- Swap-options (no recording of what it sends), the High Risk world warning, and the King Black
+  Dragon lair lever (no recording).

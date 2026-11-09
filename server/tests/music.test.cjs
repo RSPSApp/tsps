@@ -621,7 +621,9 @@ test('every quest a cache hint names is a registered quest, or a known missing o
   assert.ok(registered.size > 100, `found ${registered.size} quest definitions`);
   // Quests the server has not got yet; their tracks stay locked until it does.
   const knownMissing = ['A Night at the Theatre', 'Blood Moon Rises', 'Garden of Death', "General's Shadow",
-    'Lair of Tarn Razorlor', 'Song of the Elves', 'While Guthix Sleeps'];
+    'Lair of Tarn Razorlor', 'Song of the Elves', 'While Guthix Sleeps',
+    // Rev 242: The Writing's on the Wall (its track hint drops the "The").
+    "Writing's on the Wall"];
   const unmatched = catalog.questUnlocks.questNames
     .filter((hint) => ![...registered].some((name) => QuestUnlocks.hintNamesQuest(hint, name)));
   assert.deepEqual(unmatched.filter((name) => !knownMissing.includes(name)), [],

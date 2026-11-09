@@ -248,6 +248,9 @@ test("Lucky Lightning, Sea Curse and Dragon's Breath add a share of the visible 
   assert.equal(shoot(createPlayer({ ammo: Items.PEARL_BOLTS_E_ }), createNpc(), { damage: 1 }).event.damage.getDamage(), 5);
   assert.equal(shoot(createPlayer({ ammo: Items.PEARL_BOLTS_E_ }), createNpc({ attributes: ["fiery"] }), { damage: 1 }).event.damage.getDamage(), 7);
   assert.equal(shoot(createPlayer({ ammo: Items.DRAGONSTONE_BOLTS_E_ }), createNpc(), { damage: 1 }).event.damage.getDamage(), 20);
+  // Wiki: 22% with the Zaryte crossbow, rounded down: 99 -> 21 extra (2/9 gave 22), 112 -> 24; plus the 1 hit.
+  assert.equal(shoot(createPlayer({ ammo: Items.DRAGONSTONE_BOLTS_E_, weapon: ZARYTE }), createNpc(), { damage: 1 }).event.damage.getDamage(), 22);
+  assert.equal(shoot(createPlayer({ ammo: Items.DRAGONSTONE_BOLTS_E_, weapon: ZARYTE, ranged: 112 }), createNpc(), { damage: 1 }).event.damage.getDamage(), 25);
   assert.equal(shoot(createPlayer({ ammo: Items.DRAGONSTONE_BOLTS_E_ }), createNpc({ attributes: ["dragon"] }), { damage: 1 }).event.damage.getDamage(), 1);
   assert.equal(shoot(createPlayer({ ammo: Items.DRAGONSTONE_BOLTS_E_ }), createNpc(), { accurate: false }).event.damage.getDamage(), 0);
 });

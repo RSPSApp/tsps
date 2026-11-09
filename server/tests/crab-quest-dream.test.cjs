@@ -54,7 +54,7 @@ test('the dream holds the crab, the floatsam, the quest locs and the shells wher
   const h = setup();
   const offset = dream(h);
   const spawned = h.spawned.map((npc) => [npc.definition.id, ...sourceOf(offset, npc.definition.x, npc.definition.y)]);
-  assert.deepEqual(spawned, [[16469, 3054, 2637], [16478, 3051, 2632]]);
+  assert.deepEqual(spawned, [[16469, 3054, 2637], [16820, 3051, 2632]]);
   const placed = h.placed.map(({ id, x, y }) => [id, ...sourceOf(offset, x, y)]);
   for (const loc of [[62438 + 4, 3057, 2637], [62459, 3056, 2637], [62466, 3054, 2637], [62474, 3043, 2640], [13723, 3059, 2639]]) {
     assert.ok(placed.some((entry) => entry.join() === loc.join()), `loc ${loc}`);
@@ -96,9 +96,9 @@ test('the floatsam gives the bowstring, barrel and plank one catch at a time', (
   const h = setup();
   const { quest } = dream(h, 30);
   h.inventory.set(305, 1);
-  const floatsam = h.spawned.find((npc) => npc.definition.id === 16478);
+  const floatsam = h.spawned.find((npc) => npc.definition.id === 16820);
   const definition = { getActions: () => ['Net'] };
-  h.hooks.npcs[0]({ player: h.player, npcId: 16478, clickType: 1, definition, npc: floatsam });
+  h.hooks.npcs[0]({ player: h.player, npcId: 16820, clickType: 1, definition, npc: floatsam });
   h.tick(2);
   assert.ok(h.messages.includes('You cast out your net...'));
   h.tick(3);

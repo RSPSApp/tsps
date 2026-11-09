@@ -22,6 +22,10 @@ const CHESTS_ATTRIBUTE = "moons-of-peril:chests";
 
 /** Cache names: the interface and its components. */
 const INTERFACE_NAME = "perilous_moons_scoreboard";
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const COMPONENT = { title: "title_text", chests: "pkc_content", deaths: "pd_content", worldChests: "gkc_content", worldDeaths: "gd_content" };
 const TITLE = "Perilous Moons Statistics";
 const DEATHS_ATTRIBUTE = "moons-of-peril:deaths";
@@ -84,6 +88,7 @@ function lines(player) {
 /** Scoreboard on Eyatlalli: only the post-quest form has the option, so any click is hers. */
 function read({ player }) {
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   for (const [component, text] of lines(player)) sender.sendString(text, uid(component));
   return true;

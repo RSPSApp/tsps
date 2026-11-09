@@ -389,6 +389,23 @@ function withdrawalEntries(stored, kind) {
     }));
     return entries.sort(([a], [b]) => levels.get(a) - levels.get(b) || +a - +b);
 }
+/**
+ * Wiki (Farming Guild): "To enter the guild, a minimum Farming level of 45 is required", and "boosts may be used
+ * for all tiers". The entrance (kebos_farming_guild_door_left/right_closed) is a pass-through door in Doors.plugin;
+ * this refuses it to anyone below 45 coming in from the south. Leaving is never stopped. No capture shows the
+ * refusal, so the line is TSPS wording.
+ */
+const GUILD_ENTRY_LEVEL = 45;
+const GUILD_DOORWAY_Y = 3723;
+function guardGuildDoor(event) {
+    const O = core.ObjectIdentifiers;
+    if (event.handled || (event.objectId !== O.DOOR_578 && event.objectId !== O.DOOR_579)) return;
+    const { player } = event;
+    if (player.getLocation().getY() >= GUILD_DOORWAY_Y) return;
+    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= GUILD_ENTRY_LEVEL) return;
+    event.handled = true;
+    player.sendMessage(`You need a Farming level of ${GUILD_ENTRY_LEVEL} to enter the Farming Guild.`);
+}
 function guildObject(event) {
     if (event.definition?.getName()?.toLowerCase() !== "seed vault") return;
     event.handled = true;
@@ -401,4 +418,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });
+Object.assign(module.exports, { seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });

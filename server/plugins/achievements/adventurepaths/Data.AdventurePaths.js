@@ -57,7 +57,7 @@ function vouchers() {
             [I.MITHRIL_PLATEBODY, 1],
             [I.STUDDED_BODY, 1],
         ],
-        5: [[I.ADAMANT_SWORD, 1]],
+        5: [[I.ADAMANT_SHORTSWORD, 1]],
         6: [
             [I.MAPLE_SHORTBOW, 1],
             [I.IRON_ARROW, 100],

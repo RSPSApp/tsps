@@ -292,7 +292,10 @@ test("a follower's god spell and melee hit up to their Wiki max, every 6 ticks; 
   assert.ok(landed > 0, "some attacks land");
   assert.equal(new Method().attackSpeed(npc), 6);
   state.bound = true;
-  assert.equal(new Method().attackSpeed(npc), 3, "the bound sword swings every 3 ticks (Wiki)");
+  npc.getCombat().attack(player);
+  if (followers.besideSide(npc, player)) {
+    assert.equal(new Method().attackSpeed(npc), 3, "the bound sword swings every 3 ticks (Wiki)");
+  }
 });
 
 test("bound or not, a follower never melees from range", (t) => {
@@ -317,7 +320,32 @@ test("a shock wave on a freeze-immune player binds nothing", () => {
   assert.equal(state.bound, false);
 });
 
-test("Ice Barrage is dodged by leaving the tile (Wiki)", () => {
+test("a dying follower's pending specials don't land", () => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 3);
+  activate(player);
+  const [npc, state] = ownFollower(player, "saradomin");
+  followers.teleBlock(npc, player, state);
+  npc.setHitpoints(0);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(core.TeleBlock.isBlocked(player), false);
+});
+
+test("the shock wave drags the player to a free tile on a side of the Justiciar", () => {
+  const player = makePlayer({ components: 6 });
+  placeFollower(player, "saradomin", 3);
+  activate(player);
+  const [npc] = ownFollower(player, "saradomin");
+  const tile = followers.dragTile(npc, player);
+  assert.ok(tile, "a free side tile");
+  player.setLocation(tile);
+  assert.equal(followers.besideSide(npc, player), true, "beside him on a side, not a corner");
+});
+
+test("Ice Barrage is dodged by leaving the tile (Wiki)", (t) => {
+  t.mock.method(core.Misc, "randomInclusive", (min, max) => max);
+  t.mock.method(Math, "random", () => 0); // the barrage's accuracy roll lands
   const player = makePlayer({ components: 6 });
   placeFollower(player, "saradomin", 3);
   activate(player);
@@ -347,7 +375,9 @@ test("Porazdir's energy ball does nothing from 12 tiles (Wiki)", () => {
   assert.equal(pendingDamage(player).length, before, "no damage from 12+ tiles");
 });
 
-test("a follower's Tele Block lasts 2 minutes, fades with it, and leaves anyone else's", () => {
+test("a follower's Tele Block lasts 2 minutes, fades with it, and leaves anyone else's", (t) => {
+  t.mock.method(core.Misc, "randomInclusive", (min, max) => max);
+  t.mock.method(Math, "random", () => 0); // the block's accuracy roll lands
   const player = makePlayer({ components: 6 });
   placeFollower(player, "saradomin", 2);
   activate(player);

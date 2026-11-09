@@ -36,16 +36,22 @@
  *
  * Also from the Wiki, with no rate, timing or visuals in either source (the run's 20 attacks show
  * none of them), so those are TSPS choices, marked below:
- * - melee beside the target, max 16 (the Justiciar's 43): TSPS half the time when adjacent;
- * - Ice Barrage ("can be dodged by stepping off the tile"; the spell's 30 max and 20-second freeze);
- * - Tele Block, 2 minutes or 1 with Protect from Magic, fading when the follower dies;
+ * - melee beside the target (not diagonally), max 16 (the Justiciar's 43): TSPS half the time;
+ * - Ice Barrage, "can be dodged by stepping off the square": the spell's own max 30, 32-tick
+ *   freeze and impact graphic; accuracy and Protect from Magic apply ("Protection prayers reduce
+ *   the accuracy and strength of their attacks"), a splash freezes nothing;
+ * - Tele Block, lasting "a minute if Protect from Magic is used, rather than two minutes" (read as 2
+ *   minutes without: an interpretation), fading when the follower dies; it rolls magic accuracy
+ *   (TSPS: the Wiki doesn't say);
  * - Porazdir's energy ball through prayer, "upwards of 30", none from 12 tiles away, with "Porazdir
- *   fires a ball of energy directly linked to his power!";
- * - the Justiciar's shock wave at the player's tile: still there, they're dragged into melee and
- *   bound, his sword swinging every 3 ticks.
+ *   fires a ball of energy directly linked to his power!"; TSPS: up to 30 beside him falling to
+ *   none at 12 tiles, rolled between half that and it;
+ * - the Justiciar's shock wave at the player's tile: still there, they're dragged into melee (TSPS:
+ *   the nearest free tile beside him) and bound, his sword swinging every 3 ticks.
  * TSPS: one attack in five is one of these specials (on Derwen's turns that aren't his recorded
  * summons), each lands 2 ticks after it's cast (the dodge window), the bind lasts 8 ticks, and they
- * reuse the follower's recorded cast animation, Ice Barrage the spell's own impact graphic.
+ * play the follower's attack animation (the energy ball its recorded cast). A dying follower's
+ * pending specials don't land.
  *
  * Not built: a despawn timer ("if the followers are not slain quick enough, they will despawn",
  * no time given). A follower goes when it
@@ -171,6 +177,21 @@ function tileOf(mobile) {
 
 function sameTile(a, b) {
   return a.getX() === b.getX() && a.getY() === b.getY() && a.getZ() === b.getZ();
+}
+
+/** Still fighting: in the world and not in its death animation. */
+function alive(npc) {
+  return npc.isRegistered() && npc.getHitpoints() > 0;
+}
+
+/** Beside the follower's footprint on a side, not a corner (NPCs don't melee diagonally). */
+function besideSide(npc, target) {
+  const a = npc.getLocation();
+  const b = target.getLocation();
+  const size = npc.size?.() ?? FOLLOWER_SIZE;
+  const inX = b.getX() >= a.getX() && b.getX() < a.getX() + size;
+  const inY = b.getY() >= a.getY() && b.getY() < a.getY() + size;
+  return edgeDistance(npc, target) === 0 && (inX || inY);
 }
 
 function stateOf(npc) {
@@ -328,18 +349,49 @@ function landingTicks(end) {
 
 // ---- The Wiki's specials (their timing is TSPS's; see the header) ----
 
+/** A magic hit from the follower with accuracy and protection prayers, as its own casts have. */
+function magicHit(npc, target, maxHit) {
+  const { PendingHit, CombatFactory } = core;
+  const method = new (createCombatMethod())();
+  method.attack = { style: "MAGIC", spec: { maxHit } };
+  const hit = new PendingHit(npc, target, method, { delay: 0 });
+  CombatFactory.applyStyleDamage(hit, maxHit);
+  return hit;
+}
+
+/** The nearest free tile on a side of the follower, toward the player, or null. */
+function dragTile(npc, target) {
+  const at = npc.getLocation();
+  const size = npc.size?.() ?? FOLLOWER_SIZE;
+  const region = api.getRegionManager();
+  const from = target.getLocation();
+  const sides = [];
+  for (let i = 0; i < size; i++) {
+    sides.push([at.getX() + i, at.getY() - 1], [at.getX() + i, at.getY() + size], [at.getX() - 1, at.getY() + i], [at.getX() + size, at.getY() + i]);
+  }
+  const free = sides.map(([x, y]) => new core.Location(x, y, at.getZ()))
+    .filter((tile) => !region.blocked(tile, null) && core.Wilderness.isInLocation(tile));
+  free.sort((p, q) => p.getDistance(from) - q.getDistance(from));
+  return free[0] ?? null;
+}
+
 /** Ice Barrage at the tile the player stood on: dodged by leaving it (Wiki). */
 function iceBarrage(npc, target) {
   const spell = core.CombatSpells.ICE_BARRAGE.getSpell();
   npc.performAnimation(new core.Animation(npc.getAttackAnim()));
   const aimed = tileOf(target);
   later(SPECIAL_LAND_TICKS, () => {
-    if (!stateOf(npc) || !target.isRegistered() || !sameTile(target.getLocation(), aimed)) return;
+    if (!stateOf(npc) || !alive(npc) || !target.isRegistered() || !sameTile(target.getLocation(), aimed)) return;
+    const hit = magicHit(npc, target, BARRAGE_MAX_HIT);
+    target.getCombat().getHitQueue().addPendingHit(hit, core.World.getProcessCycle());
+    if (!hit.isAccurate()) {
+      target.performGraphic(graphic(SPLASH_GRAPHIC, SPLASH_HEIGHT));
+      return;
+    }
     const end = spell.endGraphic?.();
     if (end) target.performGraphic(end);
-    const damage = core.Misc.randomInclusive(0, BARRAGE_MAX_HIT);
-    target.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
-    core.CombatFactory.freezeTicks(target, BARRAGE_FREEZE_TICKS, "You have been frozen!", npc, "ice");
+    // The red freeze line comes from the freeze itself (kind "ice"), as for the real spell.
+    core.CombatFactory.freezeTicks(target, BARRAGE_FREEZE_TICKS, null, npc, "ice");
   });
 }
 
@@ -347,7 +399,11 @@ function iceBarrage(npc, target) {
 function teleBlock(npc, target, state) {
   npc.performAnimation(new core.Animation(npc.getAttackAnim()));
   later(SPECIAL_LAND_TICKS, () => {
-    if (!stateOf(npc) || !target.isRegistered() || core.TeleBlock.isBlocked(target)) return;
+    if (!stateOf(npc) || !alive(npc) || !target.isRegistered() || core.TeleBlock.isBlocked(target)) return;
+    if (!magicHit(npc, target, 0).isAccurate()) {
+      target.performGraphic(graphic(SPLASH_GRAPHIC, SPLASH_HEIGHT));
+      return;
+    }
     const protectedFromMagic = core.PrayerHandler.isActivated(target, core.PrayerHandler.PROTECT_FROM_MAGIC);
     const seconds = protectedFromMagic ? TELE_BLOCK_PROTECTED_SECONDS : TELE_BLOCK_SECONDS;
     core.TeleBlock.apply(target, npc.getDefinition().getName(), seconds);
@@ -360,10 +416,11 @@ function energyBall(npc, target) {
   npc.performAnimation(new core.Animation(COMBAT.zamorak.magic.anim));
   target.sendMessage(ENERGY_BALL_MESSAGE);
   later(SPECIAL_LAND_TICKS, () => {
-    if (!stateOf(npc) || !target.isRegistered()) return;
+    if (!stateOf(npc) || !alive(npc) || !target.isRegistered()) return;
+    // Tiles from his footprint: 1 beside him, where it does the most.
     const distance = edgeDistance(npc, target) + 1;
     if (distance >= ENERGY_BALL_RANGE) return;
-    const cap = Math.round(ENERGY_BALL_MAX * (ENERGY_BALL_RANGE - distance) / ENERGY_BALL_RANGE);
+    const cap = Math.round(ENERGY_BALL_MAX * (ENERGY_BALL_RANGE - distance) / (ENERGY_BALL_RANGE - 1));
     const damage = core.Misc.randomInclusive(Math.floor(cap / 2), cap);
     target.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
   });
@@ -374,10 +431,11 @@ function shockWave(npc, target, state) {
   npc.performAnimation(new core.Animation(npc.getAttackAnim()));
   const aimed = tileOf(target);
   later(SPECIAL_LAND_TICKS, () => {
-    if (!stateOf(npc) || !target.isRegistered() || !sameTile(target.getLocation(), aimed)) return;
-    const at = npc.getLocation();
-    target.moveTo(new core.Location(at.getX() + 1, at.getY() - 1, at.getZ()));
-    core.CombatFactory.freezeTicks(target, SHOCK_WAVE_BIND_TICKS, null, npc);
+    if (!stateOf(npc) || !alive(npc) || !target.isRegistered() || !sameTile(target.getLocation(), aimed)) return;
+    const tile = dragTile(npc, target);
+    if (!tile) return;
+    target.moveTo(tile);
+    core.CombatFactory.freezeTicks(target, SHOCK_WAVE_BIND_TICKS, null, npc, "bind");
     // A freeze can be refused (still immune after the last one): no bind, no fast sword.
     if (!target.getTimers().has(core.TimerKey.FREEZE)) return;
     state.bound = true;
@@ -393,9 +451,9 @@ function magicAttack(npc, state) {
   return { style: "MAGIC", spec };
 }
 
-/** Melee only beside the target (bound, always; otherwise TSPS half the time), else the god spell. */
+/** Melee only beside the target, on a side (bound, always; otherwise TSPS half the time), else the god spell. */
 function meleeOrMagic(npc, target, state) {
-  const adjacent = edgeDistance(npc, target) <= 0;
+  const adjacent = besideSide(npc, target);
   if (adjacent && (state.bound || core.Misc.randomInclusive(0, 1) === 0)) {
     npc.performAnimation(new core.Animation(npc.getAttackAnim()));
     return { style: "MELEE", maxHit: state.combat.meleeMaxHit };
@@ -443,7 +501,10 @@ function createCombatMethod() {
     }
 
     attackSpeed(npc) {
-      return stateOf(npc)?.bound ? BOUND_ATTACK_SPEED : ATTACK_SPEED;
+      // The fast sword only for a bound player still beside him.
+      const state = stateOf(npc);
+      const target = npc.getCombat?.()?.getTarget?.();
+      return state?.bound && target && besideSide(npc, target) ? BOUND_ATTACK_SPEED : ATTACK_SPEED;
     }
 
     start(npc, target) {
@@ -571,7 +632,7 @@ Object.assign(module.exports, {
   dismissFor,
   _test: {
     COMBAT, SPAWN_RADIUS, active, stateOf, summon, watch, dismiss, dismissFor, followerDied, chooseAttack, createCombatMethod, ballTile, landingTicks,
-    edgeDistance, meleeOrMagic, shockWave, teleBlock, iceBarrage, energyBall,
+    edgeDistance, besideSide, dragTile, meleeOrMagic, shockWave, teleBlock, iceBarrage, energyBall,
     godSpellOnly, remainsDrop, refuseBank, loseOnDeath, remainsDestroyPrompt, drain,
   },
 });

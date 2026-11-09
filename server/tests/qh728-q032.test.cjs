@@ -396,16 +396,15 @@ test('camel mask eligibility follows the player, and clay frees its inventory sl
 
   const h = setup();
   h.quest.setStage(h.player, 15);
-  let clay = 1, masks = 0;
-  h.useInventory({
-    getAmount(id) { return id === I.SOFT_CLAY ? clay : id === I.CAMEL_MASK ? masks : 0; },
-    getFreeSlots() { return clay ? 0 : 1; },
-    deleteNumber(id, amount) { assert.equal(id, I.SOFT_CLAY); clay -= amount; },
-    adds(id, amount) { assert.equal(id, I.CAMEL_MASK); masks += amount; },
-  });
+  const inventory = new Inventory(h.player);
+  h.useInventory(inventory);
+  for (let slot = 0; slot < 27; slot++) inventory.setItem(slot, new Item(I.SHARK, 1));
+  inventory.setItem(27, new Item(I.SOFT_CLAY, 1));
+  assert.equal(inventory.isFull(), true);
   h.itemOnObject(I.SOFT_CLAY, O.PEDESTAL_2);
-  assert.equal(clay, 0);
-  assert.equal(masks, 1);
+  assert.equal(inventory.getAmount(I.SOFT_CLAY), 0);
+  assert.equal(inventory.getAmount(I.CAMEL_MASK), 1);
+  assert.equal(inventory.getAmount(I.SHARK), 27);
 });
 
 test('fresh stage 0 follows the full mandatory route to completion and rewards once', () => {

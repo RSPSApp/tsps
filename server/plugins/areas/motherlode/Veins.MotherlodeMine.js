@@ -154,6 +154,8 @@ function rollTicks(player, pickaxe) {
   return actionInterval(api, player, Skill.MINING, "mine", request.ticks ?? pickaxe.attemptIntervalTicks);
 }
 
+const ROCK_GOLEM_BASE = 247200;
+
 function init(pluginApi) {
   api = pluginApi;
 }
@@ -166,6 +168,9 @@ function awardPayDirt(player, vein, now) {
   api?.emitCustomEvent?.("minigame:chance", nuggets);
   state.held.push(Mine.rollOre(Mine.miningLevel(player), Math.random, nuggets.multiplier).key);
   Mine.save(player, state);
+  // The Rock golem, per pay-dirt (Wiki, Rock golem: Motherlode Mine 247,200), before the pay-dirt as Mining's rocks
+  // roll it (a winning pet takes the last backpack slot).
+  api?.emitCustomEvent?.("pets:skilling-roll", { player, skill: Skill.MINING, petBase: ROCK_GOLEM_BASE, handled: false });
   player.getInventory().add(new Item(Mine.PAY_DIRT, 1), true);
   // The prospector outfit raises it ("mining:xp-multiplier"; the Wiki's Motherlode Mine shop table lists its Exp boost).
   const xp = { player, multiplier: 1 };

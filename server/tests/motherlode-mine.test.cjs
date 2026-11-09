@@ -54,6 +54,9 @@ const { tick, percyCondition } = MotherlodeMine._test;
 // Mining answers "mining:gem-roll" (its gem pre-roll); here a test switches the hit on.
 let gemHits = false;
 (hooks.events["mining:gem-roll"] ??= []).push((request) => { if (gemHits) request.gem = true; });
+// The pet rolls each pay-dirt asks for (Pets answers "pets:skilling-roll").
+const petRolls = [];
+(hooks.events["pets:skilling-roll"] ??= []).push((request) => petRolls.push(request));
 // The prospector outfit answers "mining:xp-multiplier" for the pay-dirt XP.
 require("../plugins/skills/mining/ProspectorOutfit.Mining").attach({
   core: require("../dist/plugins/PluginManager").PluginManager.getCoreApi(),
@@ -204,6 +207,8 @@ test("mining a vein gives pay-dirt with its ore rolled then, and the vein deplet
   assert.equal(p.messages.at(-1), "You manage to mine some pay-dirt.");
   assert.deepEqual(p.xp.at(-1), ["Mining", 60]);
   assert.deepEqual(Mine.stateOf(p).held, ["nugget"], "its ore is rolled as it is mined");
+  // Wiki (Rock golem): Motherlode Mine 247,200, a roll per pay-dirt.
+  assert.deepEqual(petRolls.filter((r) => r.player === p).map((r) => [r.skill, r.petBase]), [[Skill.MINING, 247200]]);
   assert.ok(vein.depletesAt > now, "its first pay-dirt starts its timer");
 
   Veins.stopMining(p);

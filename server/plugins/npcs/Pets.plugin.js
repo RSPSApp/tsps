@@ -2096,11 +2096,7 @@ function onSkill(player, skill, { petBase, petChance, rolls = 1, runeId, npcId, 
     hit = Math.random() < 1 / chance;
   }
   if (!hit) return false;
-  if (!ownsPetFamily(player, pet)) {
-    World.sendMessage(
-      `@dre@${player.getDisplayName()} just found a stray ${getPetDisplayName(pet)} while ${normalizeSkillName(skill)}!`
-    );
-  }
+  // No world-wide line: live sends only the player's own (rsprox_transcripts/227/01857.txt:421576-421590, Rocky).
   awardPet(player, pet.itemId);
   return true;
 }

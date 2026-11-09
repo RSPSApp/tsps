@@ -173,11 +173,13 @@ test("agility rolls the giant squirrel at 1 in (base - level * 25)", () => {
   events.get("agility:success")({ player, skill: Skill.AGILITY, petBase: 35609 });
   assert.ok(seen);
   assert.deepEqual(player.inventory, [GIANT_SQUIRREL]);
-  assert.match(broadcasts[0], /Giant Squirrel while agility/i);
+  // Live has no world message for it, only the player's own lines (227/01857:421576-421590).
+  assert.deepEqual(broadcasts, [], "no world broadcast");
 
+  const miss = createPlayer();
   Math.random = () => 1 / (35609 - 99 * 25);
-  events.get("agility:success")({ player: createPlayer(), skill: Skill.AGILITY, petBase: 35609 });
-  assert.equal(broadcasts.length, 1);
+  events.get("agility:success")({ player: miss, skill: Skill.AGILITY, petBase: 35609 });
+  assert.deepEqual(miss.inventory, [], "a roll at 1 / chance misses");
 });
 
 test("an action without a rate never rolls", () => {

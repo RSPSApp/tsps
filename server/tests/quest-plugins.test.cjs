@@ -251,11 +251,58 @@ test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronoz
   assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS), 1);
   assert.equal(items.get(Items.COOKING_GAUNTLETS), 0);
 
-  const npc = { getId: () => NpcIdentifiers.CHRONOZON, getDefinition: () => ({ getHitpoints: () => 170 }), setHitpoints(v) { this.hp = v; } };
-  const beforeDeath = { npc, preventDeath: false };
-  for (const handler of handlers.npcBeforeDeath) handler(beforeDeath);
-  assert.equal(beforeDeath.preventDeath, true, 'Chronozon returns to full health without all four blasts');
+  const coinAnswer = handlers.condition.map(h => h({ player, npcId: -1, text: 'If the player does not have enough coins:' })).find(a => typeof a === 'boolean');
+  assert.equal(coinAnswer, undefined, "other NPCs' coin checks are not answered with the 25,000 gauntlet price");
+
+  const { CombatSpells, CombatType } = api.core;
+  const caster = { ...player, isPlayer: () => true, getAsPlayer() { return this; }, getAttribute: () => 10,
+    getCombat: () => ({ getSelectedSpell: () => CombatSpells.FIRE_BLAST, getPreviousCast: () => null }) };
+  const other = { ...caster };
+  let creditedKiller = caster;
+  const npc = {
+    getId: () => NpcIdentifiers.CHRONOZON,
+    getDefinition: () => ({ getHitpoints: () => 170 }),
+    setHitpoints(v) { this.hp = v; },
+    getCombat: () => ({ getKiller: () => creditedKiller }),
+  };
+  const impact = (spell, attacker = caster, damage = 5) => {
+    const hit = { getAttacker: () => attacker, getCombatType: () => CombatType.MAGIC, isAccurate: () => damage > 0, getTotalDamage: () => damage, getSpell: () => spell };
+    for (const handler of handlers.npcHitModify) handler({ npc, hit });
+  };
+  const beforeDeath = () => {
+    const event = { npc, preventDeath: false };
+    for (const handler of handlers.npcBeforeDeath) handler(event);
+    return event.preventDeath;
+  };
+
+  messages.length = 0;
+  impact(null);
+  assert.deepEqual(messages, [], 'spell-less magic damage does not count as the selected Blast');
+  impact(CombatSpells.FIRE_BLAST);
+  impact(CombatSpells.WIND_BLAST);
+  assert.deepEqual(messages, ['Chronozon weakens...', 'Chronozon weakens...'],
+    'a manual Wind Blast counts while Fire Blast is autocast');
+  impact(CombatSpells.WATER_BLAST);
+  assert.equal(beforeDeath(), true, 'Chronozon returns to full health without all four blasts');
   assert.equal(npc.hp, 170);
+
+  impact(CombatSpells.EARTH_BLAST);
+  impact(null, other, 0);
+  assert.equal(beforeDeath(), false, "another player's splash does not block the qualified credited killer");
+  creditedKiller = other;
+  assert.equal(beforeDeath(), true, 'an unqualified credited killer cannot bypass the gate');
+  creditedKiller = null;
+  assert.equal(beforeDeath(), true, 'Chronozon heals when nobody has damage credit');
+
+  const award = killer => {
+    for (const handler of handlers.npcDeath) handler({ killer, npcId: NpcIdentifiers.CHRONOZON });
+  };
+  award(other);
+  assert.equal(items.get(Items.CREST_PART_3) ?? 0, 0, 'a new killer selected at death still needs all four blasts');
+  award(caster);
+  assert.equal(items.get(Items.CREST_PART_3), 1, 'the qualified killer receives the crest part');
+  creditedKiller = caster;
+  assert.equal(beforeDeath(), true, 'the award consumes the killer’s Blast progress');
 });
 
 test('a shop version named after a quest opens once its quest state matches (#831)', () => {

@@ -63,7 +63,6 @@ module.exports = function registerFamilyCrestQuest(api) {
     [1181, "fire"],
   ]);
   const weakenedByPlayer = new WeakMap();
-  const lastHitterByChronozon = new WeakMap();
 
   const GAUNTLET_CHANGE_COST = 25000;
   const STEEL_GAUNTLETS = ItemIdentifiers.STEEL_GAUNTLETS;
@@ -210,8 +209,8 @@ module.exports = function registerFamilyCrestQuest(api) {
       if (value.includes("already has a pair of cooking gauntlets")) return cooking;
       if (value.includes("does not have any other gauntlets")) return !cooking && !other;
       if (value.includes("has another set of gauntlets")) return !cooking && other;
+      if (value.includes("does not have enough coins")) return !has(player, ItemIdentifiers.COINS, GAUNTLET_CHANGE_COST);
     }
-    if (value.includes("does not have enough coins")) return !has(player, ItemIdentifiers.COINS, GAUNTLET_CHANGE_COST);
     if (value.includes("lacks one or more requirements")) return false;
     if (value.includes("does not have all the fish")) return !FISH.every((id) => has(player, id));
     if (value.includes("has all the fish")) return FISH.every((id) => has(player, id));
@@ -353,7 +352,9 @@ module.exports = function registerFamilyCrestQuest(api) {
   /** Chronozon drops Johnathon's crest piece once cured. */
   function handleNpcDeath({ killer, npcId }) {
     if (!killer || npcId !== NpcIdentifiers.CHRONOZON) return;
+    const weakened = weakenedByPlayer.get(killer);
     weakenedByPlayer.delete(killer);
+    if (weakened?.size !== BLAST_SPELL_ELEMENTS.size) return;
     if (quest.getStage(killer) !== STAGE_CURED_JOHNATHON) return;
     if (has(killer, JOHNATHON_CREST) || has(killer, FAMILY_CREST)) return;
     killer.getInventory().adds(JOHNATHON_CREST, 1);
@@ -418,25 +419,17 @@ module.exports = function registerFamilyCrestQuest(api) {
     inventory.adds(imbue.target, 1);
   }
 
-  /** The spell behind a player's pending hit (manual casts sit in previousCast). */
-  function blastElement(player) {
-    const combat = player.getCombat?.();
-    const spell = combat?.getSelectedSpell?.() ?? combat?.getPreviousCast?.();
-    return BLAST_SPELL_ELEMENTS.get(spell?.spellId?.());
-  }
-
   /**
    * The wiki confirms each of the four Blast spells on Chronozon with "Chronozon
    * weakens..."; the killer's elements are tracked per player (see keepChronozonUp).
    */
   function handleNpcHitModify({ npc, hit }) {
     if (npc?.getId?.() !== NpcIdentifiers.CHRONOZON) return;
-    if (hit?.getAttacker?.()?.isPlayer?.() === true) lastHitterByChronozon.set(npc, hit.getAttacker().getAsPlayer());
     if (hit?.getCombatType?.() !== CombatType.MAGIC || hit.isAccurate?.() !== true || hit.getTotalDamage?.() <= 0) return;
     const attacker = hit.getAttacker?.();
     if (attacker?.isPlayer?.() !== true) return;
     const player = attacker.getAsPlayer();
-    const element = blastElement(player);
+    const element = BLAST_SPELL_ELEMENTS.get(hit.getSpell?.()?.spellId?.());
     if (!element) return;
     let weakened = weakenedByPlayer.get(player);
     if (!weakened) {
@@ -452,7 +445,7 @@ module.exports = function registerFamilyCrestQuest(api) {
   function keepChronozonUp(event) {
     const { npc } = event;
     if (npc?.getId?.() !== NpcIdentifiers.CHRONOZON) return;
-    const killer = lastHitterByChronozon.get(npc) ?? npc.getCombat?.()?.getKiller?.(false);
+    const killer = npc.getCombat?.()?.getKiller?.(false);
     if (killer && weakenedByPlayer.get(killer)?.size >= BLAST_SPELL_ELEMENTS.size) return;
     event.preventDeath = true;
     npc.setHitpoints(npc.getDefinition().getHitpoints());

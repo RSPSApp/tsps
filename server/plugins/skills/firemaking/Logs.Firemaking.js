@@ -1008,6 +1008,11 @@ function answerXpMultiplier(request) {
   request.multiplier *= firemakingXpMultiplier(request.player);
 }
 
+/** Stop this player's firemaking when their interaction is cleared. */
+function handleInteractionCleared({ player }) {
+  stopFiremaking(activeSessionsRef, player);
+}
+
 function handlePlayerDisconnect({ player }) {
   stopFiremaking(activeSessionsRef, player, false);
 }
@@ -1157,6 +1162,7 @@ function attach(api) {
   api.onCustomEvent("firemaking:log-xp", answerLogXp);
   api.onCustomEvent("firemaking:xp-multiplier", answerXpMultiplier);
   api.onPlayerDisconnect(handlePlayerDisconnect);
+  api.onCustomEvent("player:interaction-cleared", handleInteractionCleared);
   api.onCustomEvent("level-up:popup-opened", handlePlayerLevelUp);
   api.onItemOnItem(onItemOnItemEvent, { noted: false });
   api.onItemOnGroundItem(onItemOnGroundItemEvent, { noted: false });

@@ -952,6 +952,22 @@ test('wooden gate swings hinge + extension panels open from a closed hinge click
   }
 });
 
+test("Tenzing's gate swings both leaves east from either closed panel", () => {
+  for (const [id, y] of [[3725, 3555], [3726, 3554]]) {
+    const h = buildHarness();
+    try {
+      h.place(3725, 2824, 3555, 2);
+      h.place(3726, 2824, 3554, 2);
+      assert.deepEqual(h.click(id, 2824, y, 2), [
+        ['deregister', 3725, 2824, 3555, 2],
+        ['deregister', 3726, 2824, 3554, 2],
+        ['register', 3727, 2825, 3555, 1],
+        ['register', 3728, 2826, 3555, 1],
+      ]);
+    } finally { h.restore(); }
+  }
+});
+
 test('clicking the closed extension opens the same way as the hinge', () => {
   const h = buildHarness();
   try {

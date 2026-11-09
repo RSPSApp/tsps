@@ -167,6 +167,15 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const setIngredient = (player, key, itemId) => {
     if (itemId) player.setAttribute(key, itemId);
   };
+  /** How each seasoning is named in the transcript's "Remember what the Ogre family wanted?" line. */
+  const INGREDIENT_NAMES = new Map([
+    [ItemIdentifiers.POTATO, "potato"],
+    [ItemIdentifiers.ONION, "onion"],
+    [ItemIdentifiers.TOMATO, "tomato"],
+    [ItemIdentifiers.DOOGLE_LEAVES, "doogle leaves"],
+    [ItemIdentifiers.CABBAGE, "cabbage"],
+    [ItemIdentifiers.EQUA_LEAVES, "equa leaves"],
+  ]);
   const actionFor = (event) => String(event.option ?? event.definition?.getActions?.()?.[event.clickType - 1] ?? "").toLowerCase();
 
   let quest;
@@ -365,8 +374,14 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       return;
     }
     if (!wanted.every((id) => has(player, id))) {
-      // The transcript's refusal (npc-dialogues, "…without-the-requested-ingredients"), word for word.
+      // Both lines of the transcript's refusal (npc-dialogues, "…without-the-requested-ingredients").
+      // The second is a template there — "[potato/onion]" and friends are the Wiki's either/or
+      // notation for the random pairs — so it is filled from what the family actually asked for,
+      // in the transcript's order: Rantz, then Fycie, then Bugs.
       player.sendMessage("You don't have all the ingredients yet to cook the chompy bird for the ogre family.");
+      const [rantz, bugs, fycie] = wanted.map((id) => INGREDIENT_NAMES.get(id));
+      player.sendMessage(`Remember what the Ogre family wanted? Rantz wanted ${rantz}. ` +
+        `Fycie wanted ${fycie}. Bugs wanted ${bugs}.`);
       return;
     }
     player.getInventory().deleteNumber(RAW_CHOMPY, 1);

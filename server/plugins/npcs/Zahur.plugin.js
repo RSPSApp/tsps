@@ -121,7 +121,7 @@ function herbsCarried(player) {
 }
 
 function makeUnfinished(event) {
-  const { player } = event;
+  const { player, npcId } = event;
   if (!unlocked(player)) {
     player.sendMessage("Zahur will only do that for those who have completed the hard Desert Diary.");
     return true;
@@ -131,9 +131,15 @@ function makeUnfinished(event) {
   const vial = ItemIdentifiers.VIAL_OF_WATER;
   let vials = { unnoted: inventory.getAmount(vial), noted: inventory.getAmount(notedOf(vial)) };
   let affordable = Math.floor(inventory.getAmount(ItemIdentifiers.COINS) / COST);
+  // rsprox_transcripts/232/03159.txt: Zahur's own refusals, as dialogue, for what is missing (no herbs, no vials, no
+  // coins; 16028, 12090, 15340), and nothing said when she makes them (15767: only the inventory and the coins change).
+  const carried = herbsCarried(player);
+  if (carried.size === 0) { say(player, npcId, "You don't have anything for me to combine."); return true; }
+  if (vials.unnoted + vials.noted <= 0) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with."); return true; }
+  if (affordable <= 0) { say(player, npcId, `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`); return true; }
   let made = 0;
   let refused = false;
-  for (const [herbId, herb] of herbsCarried(player)) {
+  for (const [herbId, herb] of carried) {
     for (const kind of ["unnoted", "noted"]) {
       const wanted = Math.min(herb[kind], vials[kind], affordable);
       if (wanted <= 0) continue;
@@ -154,8 +160,6 @@ function makeUnfinished(event) {
     }
   }
   if (refused) player.sendMessage(NO_SPACE);
-  if (made > 0) player.sendMessage(`Zahur makes ${made} unfinished potion${made === 1 ? "" : "s"} for you.`);
-  else if (!refused) player.sendMessage("Zahur needs clean herbs, vials of water and 200 coins for each potion.");
   return true;
 }
 

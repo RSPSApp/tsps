@@ -482,7 +482,7 @@ test('lighting needs a tinderbox or torch and a healthy pyromancer; it pays 25 p
   assert.equal(torch.animations.at(-1), Shared.ANIM.LIGHT_TORCH, 'capture: 7174 with the bruma torch');
 });
 
-test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, and no other skill', () => {
+test('the pyromancer outfit raises the Firemaking XP of feeding but not of lighting, and no other skill', () => {
   // The Firemaking plugin answers "firemaking:xp-multiplier" with the outfit's bonus.
   const { Equipment } = require('../dist/game/model/container/impl/Equipment');
   const api = fakeApi();
@@ -503,7 +503,8 @@ test('the pyromancer outfit raises the Firemaking XP of lighting and feeding, an
   dressed.equipment.setItem(Equipment.HEAD_SLOT, new Item(I.PYROMANCER_HOOD, 1));
   hooks.objects.Brazier.Light({ player: dressed, object: swBrazier });
   ticks(3);
-  assert.equal(dressed.xp, 6 * 99 * 1.004, 'the hood alone: 0.4% on the 6x lighting XP');
+  // rsprox 233/03254 (tick 450): the full outfit worn, lighting gives exactly 6 x 99 = 594.
+  assert.equal(dressed.xp, 6 * 99, 'no outfit bonus on lighting');
   dressed.equipment.setItem(Equipment.BODY_SLOT, new Item(I.PYROMANCER_GARB, 1));
   dressed.equipment.setItem(Equipment.LEG_SLOT, new Item(I.PYROMANCER_ROBE, 1));
   dressed.equipment.setItem(Equipment.FEET_SLOT, new Item(I.PYROMANCER_BOOTS, 1));

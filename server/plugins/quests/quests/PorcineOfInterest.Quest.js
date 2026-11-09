@@ -729,11 +729,10 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     ensureSourhog(player);
   }
 
-  /** "The player climbs over the blockage." on the warning transcript's Yes. */
-  function handleBlockageClimb(player, text) {
+  /** The warning transcript's Yes. Its "The player climbs over the blockage." is a wiki stage direction: capture 1693 sends no chat line for it. */
+  function handleBlockageClimb(player) {
     const destination = blockageDestination.get(player);
     blockageDestination.delete(player);
-    if (text) player.sendMessage(text);
     if (destination) climbBlockage(player, destination);
   }
 
@@ -774,7 +773,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       case "EaeUfj": event.handled = true; wakeInHouse(player); return;
       case "f8rW5G":
         event.handled = true;
-        handleBlockageClimb(player, event.text);
+        handleBlockageClimb(player);
         return;
       case "LFxcPW":
         event.handled = true;
@@ -838,6 +837,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       return;
     }
     if (stage < STAGE_COMPLETE) enterCave(player);
+    player.sendMessage("You climb down the rope.");
     player.moveTo(new Location(CAVE_LANDING_TILE.x, CAVE_LANDING_TILE.y, 0));
     ensureScimitar(player); ensureSourhog(player);
     restoreCorpse(player);
@@ -850,6 +850,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     }
     caves.get(player)?.leave(player, false);
     player.moveTo(new Location(HOLE_RETURN_TILE.x, HOLE_RETURN_TILE.y, 0));
+    player.sendMessage("You climb up the rope.");
   }
 
   function climbOverBlockage(player) {
@@ -962,6 +963,15 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       default:
         return;
     }
+  }
+
+  /**
+   * The cave rope is named "Rope", so the generic ladder handler claims it first and the quest's
+   * Spria warning and cave exit never ran. This runs before every named handler.
+   */
+  function handleCaveRope(event) {
+    if (event.objectId !== CAVE_ROPE_OBJECT_ID || event.clickType !== 1) return;
+    handleObjectInteraction(event);
   }
 
   /** Rope on either hole form, or any item on the dead sourhog. */
@@ -1102,6 +1112,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("interface:closed", noteClosed);
+  api.onBeforeObjectInteraction(handleCaveRope);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.registerNpcCombatMethodProvider([QUEST_SOURHOG_NPC_ID], QuestSourhogCombat, { singleton: false });

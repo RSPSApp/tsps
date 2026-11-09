@@ -221,6 +221,40 @@ test('Porcine preserves the recorded eye-protection warning and checks goggles a
   q.quest.setStage(p, 6); unequip.allow = null; q.call('onCanUnequip', unequip); assert.equal(unequip.allow, null);
 });
 
+test('Porcine cave rope is claimed before the generic ladder handler, with the captured rope messages', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 5);
+  const rope = { player: p, objectId: 40330, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', rope);
+  assert.equal(rope.handled, true, 'the quest must claim the rope ahead of the named Ladders handler');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3149, 3347]);
+  assert.equal(p.messages.at(-1), 'You climb up the rope.');
+  const other = { player: p, objectId: 40331, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', other);
+  assert.equal(other.handled, false, 'only the cave rope is intercepted');
+  p.equipment.set(core.Equipment.HEAD_SLOT, 24942);
+  const down = { player: p, objectId: 40341, clickType: 1, handled: false };
+  q.call('onObjectInteraction', down);
+  assert.equal(p.messages.at(-1), 'You climb down the rope.');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3158, 9713]);
+});
+
+test('Porcine rope with the sourhog dead and the foot uncut stays in the cave', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 6);
+  const rope = { player: p, objectId: 40330, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', rope);
+  assert.equal(rope.handled, true);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3158, 9713]);
+  assert.ok(!p.messages.includes('You climb up the rope.'));
+});
+
+test('Porcine blockage Yes does not put the wiki stage direction in chat', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 5);
+  q.call('onObjectInteraction', { player: p, objectId: 40331, clickType: 1, handled: false });
+  q.emit('npc-dialogue:action', { player: p, npcId: 10432, stepId: 'f8rW5G', kind: 'action', text: 'The player climbs over the blockage.' });
+  assert.equal(p.messages.length, 0, 'capture 1693 sends no chat line for the crossing');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3157, 9703]);
+});
+
 test('Sleeping Giants leaves its repair instance before the captured public sword tutorial', () => {
   const q = register('SleepingGiants', 'sleeping_giants'), p = player(); p.moveTo(new core.Location(3366,11483,0)); q.quest.setStage(p,2);
   q.call('onPlayerLogin',{player:p}); assert.ok(p.getPrivateArea());

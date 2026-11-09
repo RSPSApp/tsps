@@ -891,7 +891,6 @@ test('TP Mezan prays against a style used four times, falls without dying and an
 
 test('TP judgement: the crest goes back (24), the letter (26) and its paper (28), then the verdict (30, 32) and Regulus (34)', () => {
   const { h, p } = tp(); h.quest.setStage(p, 22); p.items.set(I.VARLAMORE_CREST, 1);
-  const unlocked = []; (h.events['music:unlock-track'] ??= []).push(event => unlocked.push(event.trackId));
   tpTalk(h, p, N.FURIA_TULLUS_2); h.continueUntil(p, () => p.text === "We'll keep the knights busy until you're done.");
   assert.equal(h.quest.getStage(p), 24); assert.equal(p.items.get(I.VARLAMORE_CREST), 0); assert.equal(p.varbits.get(11123), 1); assert.equal(p.varbits.get(9834), 0);
   finish(h, p); p.attrs.set('quest.twilights_promise.letter-chest', 50866);
@@ -910,8 +909,7 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   for (const id of [12903, 12905, 12907, 12909, 12911, 12915, 12891, 12893]) assert.ok(live().includes(id), `actor ${id}`);
   const ennius = h.npcs.find(npc => npc.id === 12893);
   assertCopy(p, [204, 388]); assert.deepEqual(src(p, p.getLocation()), [1684, 3157]);
-  assert.ok(p.log.some(row => row[0] === 'sendSong' && row[1] === 810), 'A Matter of Intrigue plays as the judgement loads (tick 2290)');
-  assert.deepEqual(unlocked, [810], 'and unlocks there');
+  assert.equal(p.getArea().getMusicTrack(p), 810, 'A Matter of Intrigue is the judgement copy\'s track (tick 2290)');
   h.tick(2); assert.deepEqual(src(p, ennius.getLocation()), [1682, 3156]);
   for (const x of [1681, 1680, 1679]) {
     h.tick(1);
@@ -972,7 +970,7 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
     assert.ok(cultist.getLocation().getDistance(cultist.__tpPartner.getLocation()) <= 1, `cultist ${cultist.getId()} closes to melee range`);
     assert.ok(cultist.__tpPartner.animations.length > 0, `ally paired with cultist ${cultist.getId()} fights`);
   }
-  assertCopy(p, [174, 391]);
+  assertCopy(p, [174, 391]); assert.equal(p.getArea().getMusicTrack(p), 774, 'vmq1_cs2_01 plays in the battle (tick 2539)');
   assert.deepEqual(src(p, cultists[6].faceTo), [1444, 3176], 'the cultist turns to the guard it fights');
   assert.ok(guards.some(npc => (npc.damage ?? 0) > 0), 'the cultists take hitpoints off the guards');
   assert.ok(cultists.some(npc => (npc.damage ?? 0) > 0), 'the guards take hitpoints off the cultists');
@@ -1010,6 +1008,7 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   h.tick(3); assert.equal(h.quest.getStage(p), 46); assert.equal(p.varbits.get(11123), 2);
   h.tick(8); assert.equal(p.text, 'What happened?!');
   assertCopy(p, [174, 390]); assert.deepEqual(src(p, p.getLocation()), [1447, 3173]);
+  assert.equal(p.getArea().getMusicTrack(p), 774, 'and in the aftermath (tick 2764)');
   const unrelated = { player: p, npcId: N.PRINCE_ITZLA_ARKAN_3, step: { speaker: 'Guard' },
     pages: [{ page: 'Another quest' }], speakerId: 397, text: 'Unrelated guard speech' };
   h.emit('npc-dialogue:line', unrelated);
@@ -1671,4 +1670,40 @@ test("TP ending: another quest's requirements guard (Beneath Cursed Sands) leave
   const unmet = 'If the player does not meet all of the requirements to start The Heart of Darkness:';
   assert.equal(ask("Twilight's Promise", unmet), null, 'Beneath Cursed Sands does not answer for Twilight\'s Promise');
   assert.equal(ask('Prince Itzla Arkan', 'If the player does not meet all of the requirements:'), null, "nor for Prince Itzla Arkan's page");
+});
+
+test('QuestScenes music: a scene copy plays its own track, unlocks it, and the area\'s own music comes back as it ends', () => {
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { createQuestScenes } = require('../plugins/quests/QuestScenes');
+  const { h, p } = tp();
+  const Scenes = createQuestScenes(h.api, {});
+  const songs = [], unlocked = [];
+  const sender = p.getPacketSender();
+  const audio = p.getAudioSettings;
+  p.getAudioSettings = () => ({ 18: 0 });
+  const sendSong = sender.sendSong;
+  const realSender = new Proxy(sender, { get: (target, key) => key === 'sendSong' ? (id => { songs.push(id); return realSender; }) : target[key] });
+  p.getPacketSender = () => realSender;
+  const ground = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager').ItemOnGroundManager;
+  const onRegionChange = ground.onRegionChange, emit = PluginManager.emitCustomEvent;
+  ground.onRegionChange = noop;
+  PluginManager.emitCustomEvent = (name, event) => { if (name === 'music:unlock-track') unlocked.push(event.trackId); };
+  const session = new PlayerSession({ isOpen: true });
+  session.setPlayer(p);
+  const flush = () => { try { session.flush(); } catch {} };
+  try {
+    p.moveTo(new core.Location(1683, 3156, 0));
+    flush(); const palace = songs.splice(0);
+    assert.equal(palace.length, 1, 'the palace region plays its track');
+    Scenes.open(p, 'verdict', [[1665, 1700, 3145, 3170, 0]], { musicTrack: 810 },
+      { instance: { sourceChunk: [204, 388] }, at: [1684, 3157, 0], exit: [1683, 3156, 0] });
+    unlocked.length = 0;
+    flush(); assert.deepEqual(songs.splice(0), [810]); assert.deepEqual(unlocked, [810], 'and unlocks it (tick 2290)');
+    Scenes.end(p, false); p.moveTo(new core.Location(1683, 3156, 0));
+    flush(); assert.deepEqual(songs.splice(0), palace, 'the palace music comes back (tick 2348)');
+    assert.throws(() => Scenes.open(p, 'nowhere', [[1665, 1700, 3145, 3170, 0]], {}, { instance: { sourceChunk: [204, 388] } }),
+      /without an exit/, 'an instance scene needs an exit to save a logout at');
+  } finally {
+    ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
+  }
 });

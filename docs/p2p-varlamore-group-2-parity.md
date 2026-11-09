@@ -177,6 +177,9 @@ changed (run record: [docs/quests/twilights-promise](quests/twilights-promise/RE
 - **Wording** (RSPSApp/osrsreboxed-db#62): the comma after "Well"/"Hey", "Colosseum", "the Fortis
   Spark"; the stage keys use the captured text.
 - **First trip.** Starting the quest moves `vmq2_first_travel` 3 to 4 (tick 1117).
+- **Scene music** (`rules.musicTrack`, the area's `getMusicTrack`): Mezan 775, the judgement 810
+  (unlocked there), the battle and aftermath 774; the area's music returns as each ends. The
+  secondary tracks aren't sent (no `midi_song_withsecondary`).
 
 ## The Heart of Darkness (ticks 2423–4992)
 

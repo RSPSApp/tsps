@@ -55,6 +55,8 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
       npcAggression(player, npc) { return scenes.get(this.owner)?.rules?.npcAggression?.(player, npc) ?? false; }
       canAttack(attacker, target, method) { return scenes.get(this.owner)?.rules?.canAttack?.(attacker, target, method) ?? null; }
       isMulti() { return scenes.get(this.owner)?.rules?.multi === true; }
+      /** `rules.musicTrack`: the scene's own track; the area's own music comes back when it ends. */
+      getMusicTrack(player) { return scenes.get(this.owner)?.rules?.musicTrack ?? null; }
       postLeave(mobile, logout) {
         const scene = scenes.get(mobile);
         if (mobile === this.owner && scene?.area === this) {
@@ -213,6 +215,8 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   }
 
   function open(player, name, bounds, rules = {}, { instance, at, exit } = {}) {
+    // A copy goes when its scene ends, so a logout inside one must have somewhere real to save.
+    if (instance && !exit) throw new Error(`Quest scene ${name} is an instance without an exit tile.`);
     end(player, false);
     const scene = { name, owner: player, actors: [], locs: [], rules, exit: exit ?? null, area: null };
     scene.area = instance
@@ -306,7 +310,7 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   }
 
   if (recoveryAttribute) {
-    api.persistAttribute(recoveryAttribute);
+    api.persistAttribute(recoveryAttribute, null);
     api.onPlayerLogin(recover);
     api.onCustomEvent("gravestones:grave-location", graveAtExit);
   }

@@ -140,11 +140,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const GATE_OPEN_OBJECT_ID = ObjectIdentifiers.GATE_296; // 50862
   const GATEWAY_OBJECT_ID = 38848; // the nameless loc the capture swaps onto the gate
   /**
-   * "A Matter of Intrigue" (archive track 810): unlocked and played as the judgement's instance
-   * loads (rev 242 capture tick 2290, midi_song_withsecondary 810 with 774). The crypt gate plays
-   * nothing of its own there; the older rev 226 recording 1695 had it at the gate.
+   * Each scene's own track as its instance loads (rev 242 capture): Mezan's spar vmq1_cs3_01 775
+   * (tick 1984), the judgement "A Matter of Intrigue" 810 (2290, where it unlocks; the crypt gate
+   * plays nothing of its own), the battle and aftermath vmq1_cs2_01 774 (2539, 2764). The area's own
+   * music comes back as each ends (787 at tick 2348). Ours: the captured secondary tracks (774 under
+   * 810, 810 under 774) aren't sent, as the server has no midi_song_withsecondary.
    */
-  const INTRIGUE_TRACK = 810;
+  const SCENE_MUSIC = { mezan: 775, verdict: 810, battle: 774, aftermath: 774 };
   const GATE_TILE = { x: 1698, y: 9496 };
   const CRATE_OBJECT_ID = 50870; // vmq2_cothon_crate
   const CRATES_OBJECT_ID = 50871; // vmq2_cothon_crates
@@ -371,7 +373,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
 
   /** One of the quest's scenes, in its captured instance, with the player placed at `at`. */
   function openScene(player, name, bounds, rules, at) {
-    return Scenes.open(player, name, bounds, rules, {
+    return Scenes.open(player, name, bounds, { ...rules, musicTrack: SCENE_MUSIC[name] }, {
       instance: { sourceChunk: SCENE_SOURCE_CHUNKS[name] }, at, exit: SCENE_EXITS[name],
     });
   }
@@ -874,13 +876,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return loc;
   }
 
-  /** The quest's own track, first heard as the crypt gate opens; completion unlocks it as well. */
-  // Ours: the server has no midi_song_withsecondary, so the secondary track 774 is not sent.
-  function playIntrigueTrack(player) {
-    api.emitCustomEvent("music:unlock-track", { player, trackId: INTRIGUE_TRACK });
-    player.getPacketSender().sendSong(INTRIGUE_TRACK);
-  }
-
   /** The crypt gate lets the player through and shuts two ticks after they cross, as captured. */
   function handleGate(request) {
     if (request.handled || request.objectId !== GATE_OBJECT_ID) return;
@@ -1224,7 +1219,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.later(player, 2, () => {
       const scene = openScene(player, "verdict", PALACE_BOUNDS, {}, [1684, 3157, 0]);
       Scenes.controls(player, true, true);
-      playIntrigueTrack(player);
       Scenes.face(player, [1680, 3159]);
       scene.knights = KNIGHT_ACTORS.map((id, index) =>
         Scenes.actor(scene, id, [1677, 3156 + index], [1679, 3156 + index]));

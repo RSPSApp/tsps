@@ -962,8 +962,8 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       default:
         break;
     }
-    // Only this quest's own transcripts: the same words guard other quests' requirements (Twilight's
-    // Promise's ending, Prince Itzla Arkan's, Garden of Tranquillity's), which are theirs to answer.
+    // Only for an NPC with this quest's page: the same words guard other quests' requirements
+    // (Twilight's Promise's ending, Prince Itzla Arkan's, Garden of Tranquillity's), theirs to answer.
     const own = Array.isArray(pages) && pages.some((page) => page?.page === PAGE);
     if (own && value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
     return null;

@@ -29,8 +29,10 @@ were checked: the capture's (below The Heart of Darkness's requirements) nativel
   dunk from 1704,3016 (tick 1855), Mezan's spar from 1776,3048 (1984), the judgement from
   1632,3104 (2290), the Teomat battle from 1392,3128 (2539) and the aftermath from 1392,3120
   (2764). Each ends back on the real map.
-- **"A Matter of Intrigue"** (810, with 774 as a secondary track) unlocks and plays as the
-  judgement's instance loads (tick 2290), not at the crypt gate.
+- **Scene music**: each instance plays its own track as it loads and the area's music returns as it
+  ends: Mezan's spar 775 (tick 1984), the judgement "A Matter of Intrigue" 810 with 774 as a
+  secondary (2290, where it unlocks; not at the crypt gate), the battle and aftermath 774 with 810
+  (2539, 2764); back in the palace, Civitas illa Fortis 787 (2348).
 - **The ending** depends on The Heart of Darkness's requirements. Below them (this account had
   44 Slayer): "I'm not sure... yet. No doubt mother will quickly learn...", "In that case, I'll
   make sure to keep checking in.", "Thank you, iknami. Timoiva for now, and may the sun light
@@ -49,12 +51,13 @@ were checked: the capture's (below The Heart of Darkness's requirements) nativel
 - **open** A level-up from the 3,000 Thieving XP closes the conversation, so a player meeting The
   Heart of Darkness's requirements who levels up there misses its offer (talking to Itzla again
   gives it). Not captured.
-- **open** The judgement's music has no secondary track (774): the server has no
-  `midi_song_withsecondary`.
+- **open** The scenes' secondary tracks (774 under 810, 810 under 774) aren't sent: the server has
+  no `midi_song_withsecondary`.
 - **fixed** The ending always offered The Heart of Darkness, even below its requirements; Beneath
   Cursed Sands also answered that condition for every quest that uses its words.
 - **fixed** The scenes played as private areas on the real map; they are instances.
-- **fixed** The crypt gate played and unlocked "A Matter of Intrigue"; the judgement does.
+- **fixed** The crypt gate played and unlocked "A Matter of Intrigue"; the judgement does, and
+  each scene plays its captured track (QuestScenes `rules.musicTrack` through `getMusicTrack`).
 
 ## Runs
 

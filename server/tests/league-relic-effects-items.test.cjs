@@ -417,6 +417,24 @@ test("Grimoire: the Mage Arena's god spells cast anywhere without their 100 cast
   for (const player of others(who)) assert.equal(disabled(player), true, player.getUsername());
 });
 
+test("Grimoire (Demonic Pacts): choosing it re-sends the prayer book's unlock flags (capture 237/01107)", () => {
+  const synced = [];
+  const record = ({ player }) => synced.push(player.getUsername());
+  custom["prayer:sync-unlocks"] = (custom["prayer:sync-unlocks"] ?? []).concat(record);
+  try {
+    const pacts = character("pacts", "league", {}, 6);
+    const echoes = character("echoes", "league", {}, 5);
+    for (const handler of custom["league:relic-unlocked"]) handler({ player: pacts, relic: "grimoire" });
+    for (const handler of custom["league:relic-unlocked"]) handler({ player: pacts, relic: "abundance" });
+    for (const handler of custom["league:relic-unlocked"]) handler({ player: echoes, relic: "grimoire" });
+    assert.deepEqual(synced, ["pacts"], "only Demonic Pacts' Grimoire hands out the prayers");
+    for (const handler of custom["league:relics-reset"]) handler({ player: pacts });
+    assert.deepEqual(synced, ["pacts", "pacts"], "a relic reset takes them back");
+  } finally {
+    custom["prayer:sync-unlocks"] = custom["prayer:sync-unlocks"].filter((handler) => handler !== record);
+  }
+});
+
 test("Reloaded: a second relic of tiers 1 to 3, a different one from the tier's own; its item; only one", () => {
   const relic = character("reloaded", "league", { 0: 1, 1: 1, 2: 1, 3: 2 }, 5);
   const has = (key) => require("../plugins/modes/leaguerelics/Common.LeagueRelics").hasRelic(relic, key);

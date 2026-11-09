@@ -68,12 +68,31 @@ function presetBusyRefusal(player) {
 }
 
 /**
+ * "presets:account-barred" { player, barred, message }: an account that may never use presets,
+ * wherever it stands (an Ironman, and so every league character), answers barred = true.
+ */
+function accountBarred(player) {
+  const request = { player, barred: false, message: null };
+  pluginApi?.emitCustomEvent?.("presets:account-barred", request);
+  return request;
+}
+
+/** Whether this account may ever load a preset (not whether it may here, now). */
+function accountMayUsePresets(player) {
+  return accountBarred(player).barred !== true;
+}
+
+/**
  * "presets:can-use" { player, allow, message }: other content may keep a player from presets
- * (an Ironman). `quiet` skips the message (the automatic opening after a death).
+ * where they stand (a Clan Wars match), after "presets:account-barred". `quiet` skips the
+ * message (the automatic opening after a death).
  */
 function canUsePresets(player, quiet = false) {
-  const request = { player, allow: true, message: null };
-  pluginApi?.emitCustomEvent?.("presets:can-use", request);
+  const account = accountBarred(player);
+  const request = account.barred === true
+    ? { player, allow: false, message: account.message }
+    : { player, allow: true, message: null };
+  if (request.allow) pluginApi?.emitCustomEvent?.("presets:can-use", request);
   if (!request.allow && !quiet && request.message) player.sendMessage(request.message);
   return request.allow;
 }
@@ -948,6 +967,7 @@ module.exports = {
   openPresetInterface,
   shouldOpenOnDeath,
   canUsePresets,
+  accountMayUsePresets,
   _test: { spawnPresetItem, bankCarriedItems, bankRefusal, presetCombatLevel },
   register(api) {
     pluginApi = api;

@@ -51,6 +51,12 @@ assert.equal(state.fill(out, defaults, 1000), false, "nothing happening: nothing
 assert.equal(out[FxSlot.TAKEN + 3], -1, "no shockwave");
 assert.equal(out[FxSlot.EVENTS], -1, "no level-up ring");
 
+assert.deepEqual(
+    [out[FxSlot.DAMAGE_COLOR], out[FxSlot.DAMAGE_COLOR + 1], out[FxSlot.DAMAGE_COLOR + 2]].map((v) => Math.round(v * 255)),
+    [0xd0, 0x18, 0x18],
+    "the damage colour is unpacked into the block",
+);
+
 state.hitTaken(5, 15, 1000);
 assert.equal(state.fill(out, defaults, 1000), true);
 assert.ok(out[FxSlot.TAKEN] > 0, "a small hit flashes the vignette");

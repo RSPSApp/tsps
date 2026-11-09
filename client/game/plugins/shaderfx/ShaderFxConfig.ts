@@ -27,8 +27,8 @@ export const COLOR_GRADE_INDEX: Readonly<Record<ColorGrade, number>> = {
 };
 
 /**
- * Shader Effects: optional screen shaders reacting to combat, magic, ranged and more. They are
- * drawn by 117 HD's WebGPU post chain, so they need the 117 HD plugin on the WebGPU renderer.
+ * Shader Effects: optional screen shaders reacting to combat, magic, ranged and more. They work on
+ * every renderer: 117 HD's WebGPU post chain, the core WebGPU renderer and WebGL.
  */
 export const ShaderFxConfig = ConfigGroup(
     "shaderfx",

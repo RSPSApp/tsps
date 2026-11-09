@@ -41,13 +41,13 @@ export interface ShaderFxDeps {
 
 /**
  * Shader Effects: optional screen shaders for combat, magic and ranged. The plugin only watches
- * the game (hits, graphics, projectiles, stats) and keeps a few decaying impulses; 117 HD's
- * WebGPU post chain asks for them each frame through `shaderFx()` and draws the shader.
+ * the game (hits, graphics, projectiles, stats) and keeps a few decaying impulses; each renderer
+ * (117 HD, core WebGPU, WebGL) asks for them every frame through `shaderFx()` and draws the shader.
  */
 export class ShaderFxPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
         name: "Shader Effects",
-        description: "Optional screen shaders for hits, magic, ranged and more. Needs 117 HD on WebGPU.",
+        description: "Optional screen shaders for hits, magic, ranged and more. Works on every renderer.",
         tags: ["shader", "effects", "combat", "magic", "ranged", "bloom", "vignette", "post", "graphics", "hd"],
         enabledByDefault: false,
         configKey: "shaderfxplugin",

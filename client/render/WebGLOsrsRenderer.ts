@@ -505,6 +505,10 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     frameFxaaDrawCall?: DrawCall;
     frameShaderFxDrawCall?: DrawCall;
     readonly shaderFxUniforms = createShaderFxUniforms();
+    /** Views onto shaderFxUniforms, one per vec4, made on first use. */
+    shaderFxViews?: Float32Array[];
+    /** The effects program is compiled when the plugin is first on. */
+    shaderFxProgramState?: "loading" | "ready" | "failed";
     /** The effects' output when FXAA reads it next; made on demand at the canvas size. */
     shaderFxFramebuffer?: Framebuffer;
     shaderFxColorTarget?: Texture;

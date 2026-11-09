@@ -123,6 +123,13 @@ export class ShaderFxState {
     private castColor: [number, number, number] = [0.42, 0.36, 1];
     private rangedAt = -1e9;
     private levelUpAt = -1e9;
+    /** Whether anything in the frame being filled would change the picture. */
+    private active = false;
+    /** Notes a strength for fill(): kept as a field so no closure is made per frame. */
+    private readonly mark = (value: number): number => {
+        if (value > 0) this.active = true;
+        return value;
+    };
     /** Hitpoints over maximum, 1 when unknown. */
     private healthFraction = 1;
     private poisoned = false;
@@ -193,11 +200,7 @@ export class ShaderFxState {
         out.fill(0);
         const k = Math.max(0, Math.min(2, settings.intensity));
         if (k <= 0) return false;
-        let active = false;
-        const mark = (value: number) => {
-            if (value > 0) active = true;
-            return value;
-        };
+        this.active = false;
 
         out[FxSlot.TIME] = (now / 1000) % 1000;
 
@@ -205,60 +208,63 @@ export class ShaderFxState {
         const damage = settings.damageVignette
             ? fade(now - this.damageAt, FxDuration.DAMAGE) * this.damageStrength * k : 0;
         const bigFade = fade(now - this.bigHitAt, FxDuration.BIG_HIT) * this.bigHitStrength * k;
-        out[FxSlot.TAKEN] = mark(damage);
-        out[FxSlot.TAKEN + 1] = mark(settings.hitChromatic ? bigFade : 0);
-        out[FxSlot.TAKEN + 2] = mark(settings.hitShake ? bigFade : 0);
+        out[FxSlot.TAKEN] = this.mark(damage);
+        out[FxSlot.TAKEN + 1] = this.mark(settings.hitChromatic ? bigFade : 0);
+        out[FxSlot.TAKEN + 2] = this.mark(settings.hitShake ? bigFade : 0);
         const waveAge = now - this.bigHitAt;
         const waveOn = settings.hitShockwave && waveAge >= 0 && waveAge < FxDuration.SHOCKWAVE;
         out[FxSlot.TAKEN + 3] = -1;
         if (waveOn) {
-            active = true;
+            this.active = true;
             out[FxSlot.TAKEN + 3] = Math.min(0.9999, Math.max(0.0001, waveAge / FxDuration.SHOCKWAVE));
         }
 
         // Dealt: punch, low health, spec flash, level-up strength
-        out[FxSlot.DEALT] = mark(
+        out[FxSlot.DEALT] = this.mark(
             settings.dealPunch ? fade(now - this.punchAt, FxDuration.PUNCH) * this.punchStrength * k : 0,
         );
         const lowAt = Math.max(0.05, Math.min(0.9, settings.lowHealthPercent / 100));
         const low = settings.lowHealth && this.healthFraction < lowAt
             ? clamp01(1 - this.healthFraction / lowAt) * 0.6 + 0.4 : 0;
-        out[FxSlot.DEALT + 1] = mark(low * k);
-        out[FxSlot.DEALT + 2] = mark(settings.specFlash ? fade(now - this.specAt, FxDuration.SPEC) * k : 0);
+        out[FxSlot.DEALT + 1] = this.mark(low * k);
+        out[FxSlot.DEALT + 2] = this.mark(settings.specFlash ? fade(now - this.specAt, FxDuration.SPEC) * k : 0);
         const levelAge = now - this.levelUpAt;
         const levelOn = settings.levelUpBurst && levelAge >= 0 && levelAge < FxDuration.LEVEL_UP;
-        out[FxSlot.DEALT + 3] = levelOn ? mark(1 - levelAge / FxDuration.LEVEL_UP) * k : 0;
+        out[FxSlot.DEALT + 3] = levelOn ? this.mark(1 - levelAge / FxDuration.LEVEL_UP) * k : 0;
 
         // Events: level-up ring progress (-1 none), poison, ranged focus, glitch
         out[FxSlot.EVENTS] = levelOn ? clamp01(levelAge / (FxDuration.LEVEL_UP * 0.7)) : -1;
-        out[FxSlot.EVENTS + 1] = mark(settings.poisonTint && this.poisoned ? k : 0);
-        out[FxSlot.EVENTS + 2] = mark(
+        out[FxSlot.EVENTS + 1] = this.mark(settings.poisonTint && this.poisoned ? k : 0);
+        out[FxSlot.EVENTS + 2] = this.mark(
             settings.rangedFocus ? fade(now - this.rangedAt, FxDuration.RANGED) * k : 0,
         );
-        out[FxSlot.EVENTS + 3] = mark(settings.hitGlitch ? bigFade : 0);
+        out[FxSlot.EVENTS + 3] = this.mark(settings.hitGlitch ? bigFade : 0);
 
         // Cast glow, with the colour in rgb and the strength in alpha
         const castFade = settings.castGlow ? fade(now - this.castAt, FxDuration.CAST) * k : 0;
         out.set(this.castColor, FxSlot.CAST);
-        out[FxSlot.CAST + 3] = mark(castFade);
-        out.set(unpackRgb(settings.damageColor), FxSlot.DAMAGE_COLOR);
+        out[FxSlot.CAST + 3] = this.mark(castFade);
+        const damageColor = settings.damageColor;
+        out[FxSlot.DAMAGE_COLOR] = ((damageColor >>> 16) & 0xff) / 255;
+        out[FxSlot.DAMAGE_COLOR + 1] = ((damageColor >>> 8) & 0xff) / 255;
+        out[FxSlot.DAMAGE_COLOR + 2] = (damageColor & 0xff) / 255;
         // The shockwave's strength rides in the damage colour's spare alpha.
         out[FxSlot.DAMAGE_COLOR + 3] = this.bigHitStrength * k;
 
         // Always-on looks
-        out[FxSlot.LOOK_A] = mark(settings.filmGrain ? GRAIN * k : 0);
-        out[FxSlot.LOOK_A + 1] = mark(settings.scanlines ? SCANLINES * Math.min(1, k) : 0);
-        out[FxSlot.LOOK_A + 2] = mark(settings.staticVignette ? VIGNETTE * k : 0);
-        out[FxSlot.LOOK_A + 3] = mark(settings.staticChromatic ? FRINGE * k : 0);
-        out[FxSlot.LOOK_B] = mark(settings.sharpen ? SHARPEN * k : 0);
-        out[FxSlot.LOOK_B + 1] = mark(settings.tiltShift ? TILT_SHIFT * k : 0);
-        out[FxSlot.LOOK_B + 2] = mark(settings.pixelate ? PIXEL_SIZE : 0);
-        out[FxSlot.LOOK_B + 3] = mark(settings.posterize ? POSTERIZE_LEVELS : 0);
+        out[FxSlot.LOOK_A] = this.mark(settings.filmGrain ? GRAIN * k : 0);
+        out[FxSlot.LOOK_A + 1] = this.mark(settings.scanlines ? SCANLINES * Math.min(1, k) : 0);
+        out[FxSlot.LOOK_A + 2] = this.mark(settings.staticVignette ? VIGNETTE * k : 0);
+        out[FxSlot.LOOK_A + 3] = this.mark(settings.staticChromatic ? FRINGE * k : 0);
+        out[FxSlot.LOOK_B] = this.mark(settings.sharpen ? SHARPEN * k : 0);
+        out[FxSlot.LOOK_B + 1] = this.mark(settings.tiltShift ? TILT_SHIFT * k : 0);
+        out[FxSlot.LOOK_B + 2] = this.mark(settings.pixelate ? PIXEL_SIZE : 0);
+        out[FxSlot.LOOK_B + 3] = this.mark(settings.posterize ? POSTERIZE_LEVELS : 0);
         const grade = COLOR_GRADE_INDEX[settings.colorGrade] ?? 0;
         out[FxSlot.GRADE] = grade;
         out[FxSlot.GRADE + 1] = grade > 0 ? Math.min(1, k) : 0;
-        if (grade > 0) active = true;
+        if (grade > 0) this.active = true;
 
-        return active;
+        return this.active;
     }
 }

@@ -1054,7 +1054,13 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const fxaa = !hdrTarget && gpu?.fxaa ? (this.fxaa ??= new FxaaPass(this.device, this.format)) : undefined;
         // The Shader Effects plugin without HD: the world draws into its own display-colour target,
         // and the effects run from there into FXAA's target or the canvas. Idle, nothing changes.
-        const shaderFxRuntime = !hdrTarget && drawScene ? this.osrsClient.clientPlugins.shaderFx() : undefined;
+        const shaderFxPlugin = this.osrsClient.clientPlugins.shaderFx();
+        // Plugin off, or HD running its own pass: free this one rather than keep its textures.
+        if (this.shaderFxPass && (!shaderFxPlugin || hdrTarget)) {
+            this.shaderFxPass.dispose();
+            this.shaderFxPass = undefined;
+        }
+        const shaderFxRuntime = !hdrTarget && drawScene ? shaderFxPlugin : undefined;
         const shaderFx = shaderFxRuntime
             ? (this.shaderFxPass ??= new ShaderFxPass(this.device, this.format, true))
             : undefined;

@@ -27,6 +27,9 @@ export class ObjectManager {
     private static readonly shownObjects = new WeakMap<Player, Map<string, GameObject>>();
     private static readonly missedRemovals = new WeakMap<Player, Map<string, GameObject>>();
 
+    /** Map objects a quest hides from one player only; the loc stays in the world for everyone else. */
+    private static readonly hiddenFor = new WeakMap<Player, Map<string, GameObject>>();
+
     private static tileKey(location: Location): string {
         return `${location.getX()},${location.getY()},${location.getZ()}`;
     }
@@ -50,6 +53,28 @@ export class ObjectManager {
         const key = ObjectManager.shownKey(object);
         ObjectManager.playerMap(ObjectManager.shownObjects, player).set(key, object);
         ObjectManager.missedRemovals.get(player)?.delete(key);
+    }
+
+    /** Hide the map object `id` at `location` for this player alone (idempotent). */
+    public static hideMapObjectFor(player: Player, id: number, location: Location): boolean {
+        const base = MapObjects.get(id, location.clone(), null);
+        if (!base) return false;
+        const hidden = ObjectManager.playerMap(ObjectManager.hiddenFor, player);
+        const key = ObjectManager.shownKey(base);
+        hidden.set(key, base);
+        player.getPacketSender().sendObjectRemoval(base);
+        return true;
+    }
+
+    /** Undo hideMapObjectFor: the player sees the map object again. */
+    public static showMapObjectFor(player: Player, id: number, location: Location): void {
+        const hidden = ObjectManager.hiddenFor.get(player);
+        if (!hidden) return;
+        const base = MapObjects.get(id, location.clone(), null);
+        if (!base) return;
+        if (hidden.delete(ObjectManager.shownKey(base))) {
+            player.getPacketSender().sendObject(base);
+        }
     }
 
     /** Removals of objects this player was shown that happened while they were away, in the new scene. */
@@ -175,6 +200,15 @@ export class ObjectManager {
             if (viewedArea !== object.getPrivateArea()) {
                 continue;
             }
+            const location = object.getLocation();
+            if (location.getX() < baseX || location.getX() >= baseX + this.SCENE_SIZE
+                || location.getY() < baseY || location.getY() >= baseY + this.SCENE_SIZE) {
+                continue;
+            }
+            player.getPacketSender().sendObjectRemoval(object);
+        }
+
+        for (const object of ObjectManager.hiddenFor.get(player)?.values() ?? []) {
             const location = object.getLocation();
             if (location.getX() < baseX || location.getX() >= baseX + this.SCENE_SIZE
                 || location.getY() < baseY || location.getY() >= baseY + this.SCENE_SIZE) {

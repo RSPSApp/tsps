@@ -31,6 +31,18 @@ test("loot on spam (commas for thousands), soaked pages a red game message", (t)
   Rewards.giveReward(p, { id: I.SPIRIT_FLAKES, amount: 60 });
   Rewards.giveReward(p, { id: I.FEATHER, amount: 1600 });
   Rewards.giveReward(p, { id: I.SOAKED_PAGE, amount: 9 });
-  assert.deepEqual(spam, ["You found some loot: 60 x Spirit flakes", "You found some loot: 1,600 x Feather"]);
-  assert.deepEqual(game.filter((m) => m.startsWith("You found some loot")), ["You found some loot: <col=ef1020>9 x Soaked page</col>"]);
+  Rewards.giveReward(p, { id: I.CASKET, amount: 1 });
+  // 227/01858.txt:126143: a unique, red: "You found some loot: <col=ef1020>Tackle box</col>".
+  Rewards.giveReward(p, { id: I.TACKLE_BOX, amount: 1, unique: true });
+  assert.deepEqual(spam, ["You found some loot: 60 x Spirit flakes", "You found some loot: 1,600 x Feather", "You found some loot: Casket"]);
+  assert.deepEqual(game.filter((m) => m.startsWith("You found some loot")),
+    ["You found some loot: <col=ef1020>9 x Soaked page</col>", "You found some loot: <col=ef1020>Tackle box</col>"]);
+});
+
+test("the uniques roll marks its reward as a unique", (t) => {
+  const p = new Player(new BotPlayerSession());
+  p.setUsername("tempoross-unique");
+  t.mock.method(Math, "random", () => 0);
+  const reward = Rewards.roll(p);
+  assert.equal(reward.unique, true, JSON.stringify(reward));
 });

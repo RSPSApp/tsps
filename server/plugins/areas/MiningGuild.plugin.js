@@ -41,9 +41,12 @@ function halveRespawn(request) {
   request.ticks = Math.floor(request.ticks / 2);
 }
 
+/** rsprox_transcripts/234/03285.txt:506107 (the guild door at 56 Mining): a message box, "...to access...". */
 function canEnter(player) {
   if (player.getSkillManager().getCurrentLevel(core.Skill.MINING) >= REQUIRED_LEVEL) return true;
-  player.sendMessage(`You need a Mining level of ${REQUIRED_LEVEL} to enter the Mining Guild.`);
+  const { DialogueChainBuilder, StatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new StatementDialogue(0, `You need a Mining level of ${REQUIRED_LEVEL} to access the Mining Guild.`)));
   return false;
 }
 

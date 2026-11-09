@@ -30,7 +30,7 @@ const noop = () => {};
 
 /** Exercise guild guards through the real generic door/ladder handlers and cache map. */
 function guildVisitor(x, y, current = 60, members = true) {
-  const hooks = new Map(), interactions = new Map(), tasks = [], packets = [], messages = [];
+  const hooks = new Map(), interactions = new Map(), tasks = [], packets = [], messages = [], boxes = [];
   const guildCore = { ...core, TaskManager: { submit: task => tasks.push(task) },
     WorldDefinition: { ...core.WorldDefinition, isMembersWorld: () => members } };
   const api = new Proxy({ core: guildCore, getTaskManager: () => guildCore.TaskManager,
@@ -51,6 +51,7 @@ function guildVisitor(x, y, current = 60, members = true) {
   player.getSkillManager().setMaxLevel(core.Skill.MINING, 59);
   player.getSkillManager().setCurrentLevel(core.Skill.MINING, current);
   player.sendMessage = message => messages.push(message);
+  player.getDialogueManager = () => ({ startDialogues: chain => { for (const d of chain.getDialogues().values()) boxes.push(d.getText()); } });
   player.getPacketSender = () => new Proxy({
     sendObjectRemoval: object => packets.push(["remove", object]),
     sendObject: object => packets.push(["restore", object]),
@@ -63,7 +64,7 @@ function guildVisitor(x, y, current = 60, members = true) {
   function finish() {
     for (let tick = 0; tick < 8; tick++) for (const task of [...tasks]) task.execute();
   }
-  return { player, click, finish, tasks, packets, messages };
+  return { player, click, finish, tasks, packets, messages, boxes };
 }
 
 function guildObject(x, y, name) {
@@ -81,7 +82,8 @@ test("Mining Guild: all four surface ladders require 60 current Mining, and boos
     const low = guildVisitor(x, y, 59);
     low.click(ladder, "Climb-down");
     assert.equal(low.tasks.length, 0, "under-level entry never reaches the generic climb");
-    assert.match(low.messages[0], /Mining level of 60/);
+    assert.deepEqual(low.boxes, ["You need a Mining level of 60 to access the Mining Guild."], "a message box (234/03285)");
+    assert.deepEqual(low.messages, []);
     const boosted = guildVisitor(x, y, 60);
     boosted.click(ladder, "Climb-down");
     assert.ok(boosted.tasks.length > 0, "59 base boosted to 60 may climb");
@@ -103,7 +105,8 @@ test("Mining Guild: outer and both members doors check entry, cross, and restore
     low.click(door, "Open");
     assert.equal(low.tasks.length, 0);
     assert.equal(low.packets.length, 0);
-    assert.match(low.messages[0], /Mining level of 60/);
+    assert.deepEqual(low.boxes, ["You need a Mining level of 60 to access the Mining Guild."], "a message box (234/03285)");
+    assert.deepEqual(low.messages, []);
     const eligible = guildVisitor(x, y + 1, 60);
     eligible.click(door, "Open");
     eligible.finish();
@@ -684,6 +687,17 @@ function guildEvents() {
   }, { get: (target, key) => target[key] ?? noop }));
   return (key, request) => { for (const fn of handlers.get(key) ?? []) fn(request); };
 }
+
+test("Mining Guild below 60 Mining (234/03285:506107): a message box, 'You need a Mining level of 60 to access the Mining Guild.'", () => {
+  const emit = guildEvents();
+  const player = createPlayer({ level: 56, at: [3020, 3339] });
+  const request = { player, objectId: core.ObjectIdentifiers.LADDER_354, handled: false };
+  emit("ladders:climb", request);
+  assert.equal(request.handled, true, "kept out");
+  assert.deepEqual(player.messages, [], "not a chat line");
+  const texts = player.dialogues.flatMap((chain) => [...chain.getDialogues().values()].map((d) => d.getText?.() ?? d.text));
+  assert.deepEqual(texts, ["You need a Mining level of 60 to access the Mining Guild."]);
+});
 
 test("Mining Guild members' area (Wiki; recording 3285): iron empties for 4 ticks instead of 9, the timer says so", () => {
   const emit = guildEvents();

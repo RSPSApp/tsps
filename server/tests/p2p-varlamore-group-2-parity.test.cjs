@@ -770,7 +770,7 @@ test('TP crypt gate: the open leaf and gateway stand for the party, then the gat
   assert.ok(open, 'the open leaf is registered in the world, not just sent to the clicker');
   assert.ok(gateway, 'the captured inviswall stands on the gate tile');
   assert.deepEqual([open.getLocation().getX(), open.getLocation().getY(), open.getFace()], [1698, 9495, 0]);
-  assert.ok(p.log.some(row => row[0] === 'sendSong' && row[1] === 810), 'the quest track plays as the gate opens');
+  assert.ok(!p.log.some(row => row[0] === 'sendSong' && row[1] === 810), 'the rev 242 gate plays no quest track of its own');
   h.tick(6);
   assert.equal(h.objects.some(object => object.getId() === 50862 || object.getId() === 38848), false);
   assert.ok(h.objects.some(object => object.getId() === 50861), 'the closed gate is back');
@@ -891,6 +891,7 @@ test('TP Mezan prays against a style used four times, falls without dying and an
 
 test('TP judgement: the crest goes back (24), the letter (26) and its paper (28), then the verdict (30, 32) and Regulus (34)', () => {
   const { h, p } = tp(); h.quest.setStage(p, 22); p.items.set(I.VARLAMORE_CREST, 1);
+  const unlocked = []; (h.events['music:unlock-track'] ??= []).push(event => unlocked.push(event.trackId));
   tpTalk(h, p, N.FURIA_TULLUS_2); h.continueUntil(p, () => p.text === "We'll keep the knights busy until you're done.");
   assert.equal(h.quest.getStage(p), 24); assert.equal(p.items.get(I.VARLAMORE_CREST), 0); assert.equal(p.varbits.get(11123), 1); assert.equal(p.varbits.get(9834), 0);
   finish(h, p); p.attrs.set('quest.twilights_promise.letter-chest', 50866);
@@ -909,6 +910,8 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   for (const id of [12903, 12905, 12907, 12909, 12911, 12915, 12891, 12893]) assert.ok(live().includes(id), `actor ${id}`);
   const ennius = h.npcs.find(npc => npc.id === 12893);
   assertCopy(p, [204, 388]); assert.deepEqual(src(p, p.getLocation()), [1684, 3157]);
+  assert.ok(p.log.some(row => row[0] === 'sendSong' && row[1] === 810), 'A Matter of Intrigue plays as the judgement loads (tick 2290)');
+  assert.deepEqual(unlocked, [810], 'and unlocks there');
   h.tick(2); assert.deepEqual(src(p, ennius.getLocation()), [1682, 3156]);
   for (const x of [1681, 1680, 1679]) {
     h.tick(1);
@@ -1044,10 +1047,9 @@ test('TP ending: below The Heart of Darkness requirements Itzla says "Timoiva fo
       finish(h, p); assert.equal(p.prompt, null, 'no Heart of Darkness offer below its requirements');
     } else {
       assert.match(p.text, /^Word has been sent to\s+mother/, p.text);
-      h.continueUntil(p, () => p.text.startsWith("However, let's not worry")); assert.equal(h.quest.getStage(p), 48);
-      // The line runs onto a second page; the quest completes once the player is past all of it.
-      continueToMenu(h, p); assert.equal(h.quest.getStage(p), 50);
-      assert.equal(p.prompt.title, 'Start The Heart of Darkness quest?');
+      // Completes as the line shows (rec 1695 tick 2411); the offer follows.
+      h.continueUntil(p, () => p.text.startsWith("However, let's not worry")); assert.equal(h.quest.getStage(p), 50);
+      continueToMenu(h, p); assert.equal(p.prompt.title, 'Start The Heart of Darkness quest?');
     }
     assert.equal(p.messages.filter(text => text.startsWith("Congratulations, you've completed a quest")).length, 1);
   }
@@ -1660,4 +1662,13 @@ test('QuestScenes instances: the copy, translated tiles, and walking out, logout
   // Scenes without an instance are the private areas they were.
   const plain = Scenes.open(p, 'plain', BOUNDS);
   assert.ok(!(plain.area instanceof core.TemplatedInstanceArea)); Scenes.end(p, false);
+});
+
+test("TP ending: another quest's requirements guard (Beneath Cursed Sands) leaves Twilight's Promise's condition to it", () => {
+  const h = harness('BeneathCursedSands'), p = player();
+  const ask = (page, text) => (h.hooks.onNpcDialogueCondition ?? []).map(fn => fn({ player: p, npcId: N.PRINCE_ITZLA_ARKAN_3,
+    pages: [{ page }], stepId: 'Yuos3g', text })).find(answer => answer !== null && answer !== undefined) ?? null;
+  const unmet = 'If the player does not meet all of the requirements to start The Heart of Darkness:';
+  assert.equal(ask("Twilight's Promise", unmet), null, 'Beneath Cursed Sands does not answer for Twilight\'s Promise');
+  assert.equal(ask('Prince Itzla Arkan', 'If the player does not meet all of the requirements:'), null, "nor for Prince Itzla Arkan's page");
 });

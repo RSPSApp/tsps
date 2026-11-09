@@ -459,7 +459,7 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.ok(p.messages.some(message => message.includes("Congratulations, you've completed a quest")));
 
   // Replaying either ending's final line must not pay twice.
-  h.line(p, "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.", ITZLA).after();
+  h.line(p, "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.", ITZLA).before();
   h.line(p, "Thank you, iknami. Timoiva for now, and may the sun light your way.", ITZLA).after();
   assert.equal(p.attrs.get('quest.points'), 1);
   assert.deepEqual(p.xp, [{ skill: core.Skill.THIEVING, amount: 3000 }]);
@@ -468,6 +468,14 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   p.varbits.delete(STAGE_VARBIT);
   runtime.sendQuestVarps({ player: p });
   assert.equal(p.varbits.get(STAGE_VARBIT), 50);
+});
+
+test("the Wiki's ending (meeting The Heart of Darkness's requirements) completes as its last line shows, as rec 1695 does", () => {
+  const h = harness();
+  const p = h.player = makePlayer();
+  h.quest.setStage(p, 48);
+  h.line(p, "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.", 12896).before();
+  assert.equal(h.quest.getStage(p), 50, 'rec 1695 tick 2411: the varbit, the line and the scroll together');
 });
 
 test('the bazaar amulet handout stays retryable when full or after the item is destroyed', () => {

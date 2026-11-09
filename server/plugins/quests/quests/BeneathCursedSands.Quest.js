@@ -848,7 +848,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // Condition answers
   // ==========================================================================
 
-  function answerCondition({ player, text, stepId }) {
+  function answerCondition({ player, text, stepId, pages }) {
     const value = String(text ?? "").toLowerCase();
     switch (stepId) {
       case "EG72ae": // requirements not met
@@ -962,7 +962,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       default:
         break;
     }
-    if (value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
+    // Only this quest's own transcripts: the same words guard other quests' requirements (Twilight's
+    // Promise's ending, Prince Itzla Arkan's, Garden of Tranquillity's), which are theirs to answer.
+    const own = Array.isArray(pages) && pages.some((page) => page?.page === PAGE);
+    if (own && value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
     return null;
   }
 

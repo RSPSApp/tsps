@@ -139,8 +139,12 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const GATE_OBJECT_ID = ObjectIdentifiers.GATE_295; // 50861, vmq2_temple_gate
   const GATE_OPEN_OBJECT_ID = ObjectIdentifiers.GATE_296; // 50862
   const GATEWAY_OBJECT_ID = 38848; // the nameless loc the capture swaps onto the gate
-  /** "A Matter of Intrigue" (archive track 810), unlocked and played in the temple during the quest. */
-  const TEMPLE_QUEST_TRACK = 810;
+  /**
+   * "A Matter of Intrigue" (archive track 810): unlocked and played as the judgement's instance
+   * loads (rev 242 capture tick 2290, midi_song_withsecondary 810 with 774). The crypt gate plays
+   * nothing of its own there; the older rev 226 recording 1695 had it at the gate.
+   */
+  const INTRIGUE_TRACK = 810;
   const GATE_TILE = { x: 1698, y: 9496 };
   const CRATE_OBJECT_ID = 50870; // vmq2_cothon_crate
   const CRATES_OBJECT_ID = 50871; // vmq2_cothon_crates
@@ -315,13 +319,12 @@ module.exports = function registerTwilightPromiseQuest(api) {
     LIBRARY: "Right, I'll go and see if she can help me.",
     BATTLE: "I guess I'd better...",
     CALL_OUT: "[player name]! I need you outside, now! We have a little bit of an issue!",
-    // The two endings' last lines; the quest completes as the player continues past either (the
-    // capture's tick 2794, the continue after "Timoiva for now"). The first is the Wiki's ending,
-    // for a player who meets The Heart of Darkness's requirements.
-    COMPLETE: new Set([
-      "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.",
-      "Thank you, iknami. Timoiva for now, and may the sun light your way.",
-    ]),
+    // The two endings complete at different moments, both captured. Meeting The Heart of
+    // Darkness's requirements, as this line shows (rec 1695 tick 2411: varbit, line and scroll
+    // together; the offer follows once the scroll is closed). Below them, as the player continues
+    // past "Timoiva for now" (rev 242 capture tick 2794).
+    COMPLETE: "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.",
+    COMPLETE_UNMET: "Thank you, iknami. Timoiva for now, and may the sun light your way.",
   };
 
   // Transcript steps the plugin plays itself.
@@ -674,7 +677,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     at(LINES.LIBRARY, STAGE_TEOMAT, STAGE_TEOMAT, () => advance(player, STAGE_LIBRARY));
     at(LINES.BATTLE, STAGE_LIBRARY, STAGE_LIBRARY, () => advance(player, STAGE_BATTLE));
     if (text === LINES.CALL_OUT) event.after = () => stage(player) === STAGE_BATTLE && beginBattle(player);
-    if (LINES.COMPLETE.has(text)) {
+    at(LINES.COMPLETE, STAGE_GUARD_LEFT, STAGE_GUARD_LEFT, () => quest.complete(player));
+    if (text === LINES.COMPLETE_UNMET) {
       const previous = event.after;
       event.after = () => {
         previous?.();
@@ -871,9 +875,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
   }
 
   /** The quest's own track, first heard as the crypt gate opens; completion unlocks it as well. */
-  function playTempleTrack(player) {
-    api.emitCustomEvent("music:unlock-track", { player, trackId: TEMPLE_QUEST_TRACK });
-    player.getPacketSender().sendSong(TEMPLE_QUEST_TRACK);
+  // Ours: the server has no midi_song_withsecondary, so the secondary track 774 is not sent.
+  function playIntrigueTrack(player) {
+    api.emitCustomEvent("music:unlock-track", { player, trackId: INTRIGUE_TRACK });
+    player.getPacketSender().sendSong(INTRIGUE_TRACK);
   }
 
   /** The crypt gate lets the player through and shuts two ticks after they cross, as captured. */
@@ -893,7 +898,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
     const [dx, dy] = [[-1, 0], [0, 1], [1, 0], [0, -1]][face];
     const gateway = placeGateLoc(GATEWAY_OBJECT_ID, location.getX(), location.getY(), location.getZ(), face);
     const open = placeGateLoc(GATE_OPEN_OBJECT_ID, location.getX() + dx, location.getY() + dy, location.getZ(), (face + 1) & 3);
-    if (stage(player) < STAGE_COMPLETE) playTempleTrack(player);
     ObstacleRunner.run({ player, object }, [{ walk: [[crossing.destination.x, crossing.destination.y]] }], {
       // The gate shut two ticks after the player crossed, never two ticks after the click: a
       // route to the gate from a distance must not finish with it already closed.
@@ -1220,6 +1224,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.later(player, 2, () => {
       const scene = openScene(player, "verdict", PALACE_BOUNDS, {}, [1684, 3157, 0]);
       Scenes.controls(player, true, true);
+      playIntrigueTrack(player);
       Scenes.face(player, [1680, 3159]);
       scene.knights = KNIGHT_ACTORS.map((id, index) =>
         Scenes.actor(scene, id, [1677, 3156 + index], [1679, 3156 + index]));

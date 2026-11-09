@@ -141,8 +141,9 @@ The crypt gate is now a world loc change: the invisible wall 38848 stands on the
 gate tile, the open leaf 50862 swings onto the tile across the doorway, and both
 are sent to every player. It shuts two ticks after `ObstacleRunner` reports the
 crossing finished, rather than two ticks after the click, so a route from a
-distance cannot leave the player walking through a closed gate. "A Matter of
-Intrigue" (810) plays and unlocks as the gate opens during the quest.
+distance cannot leave the player walking through a closed gate. Recording 1695 played "A Matter
+of Intrigue" (810) at the gate; the revision 242 capture below plays it, and unlocks it, as the
+judgement's instance loads instead, so the gate plays nothing of its own.
 
 Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera
@@ -153,6 +154,29 @@ table entry, matching the [pinned RuneLite transport data](https://github.com/Sk
 and the [April 2024 landing-site swap](https://oldschool.runescape.wiki/w/Quetzal_Transport_System#Changes).
 Its first-trip and visited varbits are saved individually alongside the quetzal
 snapshot; restoring the whole shared parent varp would overwrite Twilight's Promise progress.
+
+### Revision 242 capture (2026-11-09)
+
+A full rev 242 RSProx capture (`20261109T221430-5ab63b4`, ticks 1103-2794, an account below The
+Heart of Darkness's Slayer requirement) agrees with the stages and side varbits above. What it
+changed (run record: [docs/quests/twilights-promise](quests/twilights-promise/README.md)):
+
+- **Instances.** The five scenes are `rebuild_region` copies, 13 x 13 zones of every plane,
+  unturned: fountain from chunk 213,377 (tick 1855), Mezan from 222,381 (1984), the judgement
+  from 204,388 (2290), the battle from 174,391 (2539) and the aftermath from 174,390 (2764).
+  `QuestScenes.open(..., { instance: { sourceChunk }, at, exit })` builds them as a
+  `TemplatedInstanceArea`; the plugin's tiles stay in source coordinates and are translated.
+  Walking out of a scene's box ends it on the matching real tile. A logout, a death (grave) or a
+  server stop inside comes back to the scene's exit (`twilights-promise:scene-exit`).
+- **The ending** has a branch for a player below The Heart of Darkness's requirements: "I'm not
+  sure... yet..." and "Timoiva for now", completing on the continue after it (tick 2794). The
+  requirements come from The Heart of Darkness (`heart-of-darkness:requirements`, its skill levels;
+  this quest is the one finishing). Meeting them keeps recording 1695's timing: complete as
+  "However, let's not worry..." shows (tick 2411), then the offer. Beneath Cursed Sands had been
+  answering that condition for every quest with the same words; it now answers only its own page.
+- **Wording** (RSPSApp/osrsreboxed-db#62): the comma after "Well"/"Hey", "Colosseum", "the Fortis
+  Spark"; the stage keys use the captured text.
+- **First trip.** Starting the quest moves `vmq2_first_travel` 3 to 4 (tick 1117).
 
 ## The Heart of Darkness (ticks 2423–4992)
 

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 26 · ⚠️ passed with issues: 17 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 104
+193 quests · ✅ passed: 26 · ⚠️ passed with issues: 18 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 103
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -191,7 +191,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Troll Romance | untested |  |  |  |  |
 | [Troll Stronghold](troll-stronghold/README.md) | untested |  |  |  |  |
 | [Troubled Tortugans](troubled-tortugans/README.md) | 🔁 needs recheck | 2026-11-03 | agent | deepseek-v4.1-flash | 1 |
-| [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
+| [Twilight's Promise](twilights-promise/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 4 |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |

@@ -59,6 +59,10 @@ server's policies, rather than captured retail wording or internal-teleport rule
 The public Enter and Use options remain available. [Jagex's original update](https://secure.runescape.com/m=news/boss-pets-sets-chat--more?oldschool=1)
 describes the fee, payment sources and room lifetime.
 
+Floor items in the private room last 30 minutes, as specified in the
+[17 August 2017 update](https://oldschool.runescape.wiki/w/Update:Runes_and_Ammunition_%26_Log_In_Screen_Competition!).
+Leaving the room still destroys its remaining floor items.
+
 Respawn: live OSRS respawns the Kraken more slowly in a private instance (Wiki: "The boss
 respawns more slowly in a private instance than the public arena"), but no figure is
 documented, and the public infobox gives 10-14 ticks. This server uses the public delay in

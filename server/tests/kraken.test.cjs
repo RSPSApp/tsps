@@ -293,6 +293,43 @@ test("inventory rental creates an isolated room and exit closes it", async t => 
   assert.equal(room.getNpcs().filter(npc => npc.isRegistered()).length, 0);
 });
 
+test("private floor items last thirty minutes and are removed on exit", async t => {
+  const { core, PluginManager } = await nativeBootstrap(), actor = nativeActor(t, core);
+  const { ItemOnGroundManager: ground } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  const publicItem = ground.registerLocation(actor.player, new core.Item(core.ItemIdentifiers.COINS, 1), actor.player.getLocation().clone());
+  assert.equal(publicItem.getDespawnDelay(), 300, "public floor lifetime remains unchanged");
+  ground.deregister(publicItem);
+  actor.player.getInventory().adds(core.ItemIdentifiers.COINS, 25010);
+  assert.equal(nativeObject(PluginManager, actor, 2), true);
+  await nativeChoice(actor, 1);
+  const room = actor.player.getPrivateArea();
+  actor.rooms.push(room);
+  assert.ok(room?.isKrakenInstance);
+  const position = actor.player.getLocation().clone();
+  const slot = actor.player.getInventory().getItems().findIndex(item => item?.getId() === core.ItemIdentifiers.COINS);
+  assert.ok(slot >= 0);
+  require("../dist/net/packet/impl/DropItemPacketListener").DropItemPacketListener.drop(
+    actor.player, core.ItemIdentifiers.COINS, core.Inventory.INTERFACE_ID, slot);
+  const item = core.World.getItems().find(item => item.getPrivateArea() === room && !item.isPendingRemoval());
+  assert.ok(item, "the ordinary inventory drop reaches the room floor");
+  assert.equal(actor.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
+  const custom = ground.registerLocation(actor.player, new core.Item(core.ItemIdentifiers.COINS, 2), position,
+    room, { despawnDelay: 600 });
+  assert.equal(item.getDespawnDelay(), 3000);
+  assert.equal(custom.getDespawnDelay(), 600, "explicit lifetimes remain intact");
+  assert.equal(core.World.getItems().includes(custom), true, "different lifetimes do not merge");
+  for (let tick = 0; tick < 2999; tick++) item.process();
+  assert.equal(item.isPendingRemoval(), false);
+  item.process();
+  assert.equal(item.isPendingRemoval(), true);
+  const remaining = ground.registerLocation(actor.player, new core.Item(core.ItemIdentifiers.COINS, 3), position);
+  const exit = core.World.findCacheObject(actor.player, core.ObjectIdentifiers.CREVICE_5, new core.Location(2280, 10021, 0));
+  assertNativeReach(core, actor.player, exit);
+  assert.equal(nativeObject(PluginManager, { ...actor, object: exit }, 1), true);
+  assert.equal(remaining.isPendingRemoval(), true);
+  assert.equal(custom.isPendingRemoval(), true);
+});
+
 test("a second player in the public cove cannot see the owner's private actors", async t => {
   const { core, PluginManager } = await nativeBootstrap(), owner = nativeActor(t, core);
   owner.player.getInventory().adds(core.ItemIdentifiers.COINS, 25000);

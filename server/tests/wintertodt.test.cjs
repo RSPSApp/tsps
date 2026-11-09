@@ -725,8 +725,13 @@ test('the cart: Check counts, Search takes one every 3 ticks, and the last ends 
   assert.equal(player.animations.at(-1), Shared.ANIM.CART_SEARCH);
   ticks(3);
   assert.equal(Round.rewardsOwed(player), 1);
-  assert.match(player.spam.at(-1), /^You found some loot: \d+ x .+/);
+  // 233/03264: "You found some loot: Grimy torstol" (one, no "1 x"), "...: 4,886 x Coins" (commas).
+  assert.match(player.spam.at(-1), /^You found some loot: (?!1 x )((\d{1,3}(,\d{3})*) x )?.+/);
   assert.deepEqual(player.sounds, [Shared.SOUND.PICK]);
+  const I2 = Shared.core().ItemIdentifiers;
+  assert.equal(Cart.lootText({ id: I2.GRIMY_TORSTOL, amount: 1 }), "Grimy torstol");
+  assert.equal(Cart.lootText({ id: I2.COINS, amount: 4886 }), "4,886 x Coins");
+  assert.equal(Cart.lootText({ id: I2.MAHOGANY_LOGS, amount: 10 }), "10 x Mahogany logs");
   Cart.check({ player });
   assert.equal(player.messages.at(-1), 'You are owed one more reward from the cart.', 'capture');
   ticks(3);

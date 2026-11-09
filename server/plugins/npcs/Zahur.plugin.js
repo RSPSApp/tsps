@@ -143,7 +143,9 @@ function makeUnfinished(event) {
   // coins; 16028, 12090, 15340), and nothing said when she makes them (15767: only the inventory and the coins change).
   const carried = herbsCarried(player);
   if (carried.size === 0) { say(player, npcId, "You don't have anything for me to combine."); return true; }
-  if ([...vials.values()].every((held) => held.unnoted + held.noted <= 0)) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with."); return true; }
+  // Only a base some carried herb combines with counts (guam with vials of blood alone has none).
+  const usable = [...carried.values()].some((herb) => [...herb.potions.keys()].some((base) => vials.get(base).unnoted + vials.get(base).noted > 0));
+  if (!usable) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with."); return true; }
   if (affordable <= 0) { say(player, npcId, `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`); return true; }
   let made = 0;
   let refused = false;
@@ -177,7 +179,7 @@ function makeUnfinished(event) {
 
 module.exports = {
   name: "Zahur",
-  description: "Zahur in Nardah makes unfinished potions from clean herbs and vials of water for 200 coins each, after the hard Desert Diary or with a Herblore cape.",
+  description: "Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape.",
   members: true,
   _test: { makeUnfinished, unlocked, herbsCarried, cleanHerbs, cleanAll },
   register(pluginApi) {

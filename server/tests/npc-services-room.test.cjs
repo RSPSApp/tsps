@@ -530,6 +530,19 @@ test("Zahur Make unfinished: vials of blood make Cadantine blood potions, beside
   blood.inv.setItem(2, plain(I.COINS, COST * 2));
   await npcOption(t, blood, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
   assert.equal(amount(blood, noted(obj("cadantine_bloodvial"))), 2, "blood alone is a base");
+
+  // A herb with no blood recipe and only vials of blood: the no-base refusal, as with no vials at all.
+  const guam = actor(t);
+  const said = [];
+  const sender = guam.p.getPacketSender(), sendString = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, ...rest) => { said.push(String(text)); return sendString(text, ...rest); });
+  guam.inv.setItem(0, plain(noted(I.GUAM_LEAF), 5));
+  guam.inv.setItem(1, plain(noted(obj("vial_blood")), 5));
+  guam.inv.setItem(2, plain(I.COINS, 1000));
+  await npcOption(t, guam, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
+  assert.ok(said.some((text) => text.includes("You need to bring along a base for me to make unfinished potions with.")), said.join(" / "));
+  assert.equal(amount(guam, noted(I.GUAM_LEAF)), 5);
+  assert.equal(amount(guam, I.COINS), 1000);
 });
 
 // ------------------------------------------------------------------ Mawnis

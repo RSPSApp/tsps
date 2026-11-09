@@ -483,6 +483,20 @@ function addChangeSlotIds(
     );
 }
 
+/** The cache (map data) loc ids on one level of a tile: what an added loc can legitimately replace. */
+function cacheLocIdsAtTile(
+    host: WebGLOsrsRendererHost,
+    tile: { x: number; y: number },
+    level: number,
+): Set<number> {
+    const square = host.mapManager?.getMapForWorldTile?.(tile.x | 0, tile.y | 0);
+    if (!square) return new Set();
+    const lx = (tile.x | 0) - square.getRenderBaseWorldX();
+    const ly = (tile.y | 0) - square.getRenderBaseWorldY();
+    const ids = square.getLocIdsAtLocal?.(level | 0, lx, ly) ?? [];
+    return new Set(ids.map((id) => id | 0));
+}
+
 /**
  * Reconciles a replayed add with the scenery it replaced: keeps the recorded replacements, picks
  * up a cache loc that has appeared in the slot since (a square that loaded late), and reapplies
@@ -574,9 +588,18 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
             // only the exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of
             // another rotation, and matching by shape alone erased a floor tile per fire
             // (issue #1748).
+            // A loc added on a tile that shares its own id with something in the *cache* replaces
+            // that cache copy, so the copy goes (a door's closed leaf, #1748's paving rule). An
+            // id that only the built index has is this renderer's own previous geometry: a fire
+            // re-lit where the last one burned still sits in the index, and sweeping it in
+            // recorded "this fire is removed" for the fire that was arriving — the tile then drew
+            // neither the logs nor the fire (#3603).
+            const cacheIds = cacheLocIdsAtTile(host, tile, level);
             const derived = host.instanceActive
                 ? []
-                : addChangeSlotIds(host, tile, level, shape, rotation).filter((id) => host.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
+                : addChangeSlotIds(host, tile, level, shape, rotation).filter((id) =>
+                    ((id | 0) !== (locId | 0) || cacheIds.has(id | 0)) &&
+                    host.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id | 0}`)?.newId !== LOC_OVERRIDE_REMOVED);
             // A different object taking over the same slot inherits what its predecessor replaced.
             const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
             host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });

@@ -320,3 +320,35 @@ for (const backend of ["WebGL", "WebGPU"]) {
 }
 
 console.log("loc add/change floor checks passed");
+
+// Issue #3603: the fire's own LOC_ADD_CHANGE must not suppress the fire. A tile that already
+// holds this loc in its built scene (re-lighting at the same spot, the previous fire's geometry
+// still in the index) had its own id swept into the "what did this add replace" list, so the
+// renderer recorded "26185 -> removed" for the fire that was arriving. The tile then drew
+// neither the logs nor the fire until the next rebuild.
+{
+    // The cache has nothing here — the fire is spawned on empty ground, and only the built index
+    // still remembers the previous fire.
+    const square = stubSquare([], []);
+    const host: any = {
+        addedLocs: new Map(),
+        locOverrides: new Map(),
+        locSpawns: new Map(),
+        instanceActive: false,
+        getLocIdsAtTileAllLevels: () => [{ id: FIRE, level: 0, typeRot: 10 }],
+        mapManager: {
+            getMapForWorldTile: () => square,
+            getMap: () => square,
+            loadingMapIds: new Set<number>(),
+        },
+        osrsClient: { locTypeLoader: { load: () => ({ seqId: -1, name: "fire" }) } },
+        scheduleLocGeometryUpdate: () => {},
+    };
+    onLocAddChange(host, FIRE, TILE, 0, 10, 0);
+    assert.equal(host.locOverrides.has(tileKey(FIRE)), false, "a fire never suppresses its own id");
+    assert.deepEqual(
+        host.addedLocs.get(`${TILE.x},${TILE.y},0,10`).replacedIds,
+        [],
+        "the fire replaced nothing",
+    );
+}

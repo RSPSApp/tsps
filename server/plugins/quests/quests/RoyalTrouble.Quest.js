@@ -1174,6 +1174,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
 
   function canEnterDeeper(player) {
     if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) >= 40) return true;
+    player.sendMessage("You need an Agility level of 40 to go further into the dungeon.");
     return false;
   }
 

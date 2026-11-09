@@ -313,6 +313,7 @@ function fakePlayer(name = 'Tester') {
         sendSubInterface: (uid, id) => { p.interfaces.push(id); return sender; },
         closeSubInterface: (uid) => { p.interfaces.push(-uid); return sender; },
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
+        sendInterfaceScript: (id, args = []) => { p.scripts.push([id, ...args]); return sender; },
         sendCreationMenu: (menu) => { p.menu = menu; return sender; },
         sendInterface: (id) => { p.interfaces.push(id); return sender; },
         sendString: (text, uid) => { (p.strings ??= new Map()).set(uid, text); return sender; },

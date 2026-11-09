@@ -38,6 +38,10 @@ const BOARDS = {
 const { DEATHS_ATTRIBUTE, PHOSANI_DEATHS_ATTRIBUTE } = Common;
 const PRECISE_TIMING_VARBIT = "option_precise_timing";
 const INTERFACE_NAME = "nightmare_scoreboard";
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const COMPONENT = {
   title: "title_text", kills: "ms2", deaths: "ms4", best: "ms6",
   worldKills: "ms8", worldDeaths: "ms10", worldBest: "ms12",
@@ -136,6 +140,7 @@ function read(event) {
   const version = Object.keys(BOARDS).find((key) => cache().getLocId(BOARDS[key].loc) === event.objectId);
   if (!version) return false;
   const sender = event.player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   for (const [component, text] of lines(event.player, version)) sender.sendString(text, uid(component));
   return true;

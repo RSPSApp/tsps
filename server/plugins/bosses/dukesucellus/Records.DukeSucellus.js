@@ -5,6 +5,10 @@ const Common = require('./Common.DukeSucellus');
 const DEATHS = 'duke-sucellus:deaths';
 const FILE = path.join(process.cwd(), 'data', 'saves', 'duke-sucellus-scoreboard.json');
 const INTERFACE = 828;
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 let world = null, persist = true;
 const number = value => Math.max(0, Math.trunc(Number(value) || 0));
 function worldRecords() {
@@ -58,6 +62,7 @@ function read(event) {
   if (quest.complete !== true)
     return false;
   const w = worldRecords(), sender = p.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(INTERFACE);
   for (const [component, value] of [[9, Common.kills(p)], [11, `${Common.count(p, DEATHS)} (recorded)`], [13, time(Common.count(p, Common.BEST))], [15, `${w.kills} (recorded)`], [17, `${w.deaths} (recorded)`], [19, time(w.best)]])
     sender.sendString(String(value), (INTERFACE << 16) | component);

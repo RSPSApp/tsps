@@ -319,7 +319,10 @@ test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the An
   shown = pick(who, shown, T.TOPIC.pyreShips);
   assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
   assert.equal(varbit(T.VARBITS.pyreShips), 1);
-  assert.ok(!talk(who).options.includes(T.TOPIC.pyreShips), "asked once");
+  // It stays on offer and replays the explanation, leaving the varbit at 1.
+  shown = pick(who, talk(who), T.TOPIC.pyreShips);
+  assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
+  assert.equal(varbit(T.VARBITS.pyreShips), 1);
 
   // The whirlpool's own requirements are exactly these two varbits.
   const gate = require("fs").readFileSync(require.resolve("../plugins/world/data/loc-teleport-sync.json"), "utf8");

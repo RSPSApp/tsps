@@ -186,7 +186,7 @@ function topics(player, talk) {
   const list = [];
   if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
   else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
-  else if (!current.pyreShips) list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
+  else list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
   if (current.fishingRod === DONE) list.push([TOPIC.rodDone, () => rodDone(player, talk)]);
   else if (current.fishingRod < DONE) list.push([TOPIC.rod, () => rodLesson(player, talk)]);
   if (current.fishingRod === TOLD && current.herblore < TOLD) {
@@ -254,11 +254,12 @@ function firemakingDone(player, talk) {
   });
 }
 
-/** Otto's pyre ship explanation, which also says how to reach the whirlpool into the caverns. */
+/** Otto's pyre ship explanation, which also says how to reach the whirlpool into the caverns. It stays on offer, replaying the same words. */
 function pyreShipsLesson(player, talk) {
   if (state(player).firemaking !== TOLD) return;
   lesson(player, talk, TRANSCRIPT.firemaking, TOPIC.pyreShips, null, () => {
-    if (state(player).firemaking === TOLD) setStage(player, "pyreShips", 1);
+    const current = state(player);
+    if (current.firemaking === TOLD && !current.pyreShips) setStage(player, "pyreShips", 1);
   });
 }
 

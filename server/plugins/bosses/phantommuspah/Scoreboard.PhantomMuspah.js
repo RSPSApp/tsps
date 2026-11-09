@@ -15,7 +15,7 @@
  *
  * The cache places the board as a straight wall decoration (shape 4, rotation 0) on the cave
  * rock's west face at 2914,10317; its own tile is rock, so the shared wall-decoration reach
- * (its tile, or the tiles east and south of it) has nowhere to stand. It is read from the open
+ * (its own tile) has nowhere to stand. It is read from the open
  * floor in front of it, the tile west of it, so the route goes there.
  */
 

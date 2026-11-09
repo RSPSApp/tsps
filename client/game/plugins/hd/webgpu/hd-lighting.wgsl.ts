@@ -101,7 +101,8 @@ fn hdShadow(position: vec3<f32>, normal: vec3<f32>) -> f32 {
     let m = hd.u_hdShadowMatrix;
     let texelWorld = 2.0 / (f32(size.x) * length(vec3<f32>(m[0].x, m[1].x, m[2].x)));
     let depthPerTile = 0.5 * length(vec3<f32>(m[0].z, m[1].z, m[2].z));
-    let ndl = clamp(dot(normal, hd.u_hdLightDirection.xyz), 0.0, 1.0);
+    let facing = dot(normal, hd.u_hdLightDirection.xyz);
+    let ndl = clamp(facing, 0.0, 1.0);
     let sinAngle = sqrt(1.0 - ndl * ndl);
     // Normal offset: sample a little off the surface, more the further it tilts from the sun.
     let projected = m * vec4<f32>(position + normal * (texelWorld * 1.5 * sinAngle), 1.0);
@@ -109,22 +110,27 @@ fn hdShadow(position: vec3<f32>, normal: vec3<f32>) -> f32 {
     if (hd.u_hdShadowStrength == 0.0 || any(p < vec3<f32>(0.0)) || any(p > vec3<f32>(1.0))) {
         return 1.0;
     }
-    // Slope-scaled depth bias covering the 3x3 filter's reach (two texels) plus a constant.
-    // A fixed bias let sun-grazed ground shadow itself in stripes that crawled as the map moved.
-    let slope = min(sinAngle / max(ndl, 0.05), 10.0);
-    let bias = (0.03 + texelWorld * 2.0 * slope) * depthPerTile;
-    // GL texture rows start at NDC y = -1, WebGPU's at y = +1: flip v or every shadow is
-    // mirrored across the player-centred shadow map.
-    let base = vec2<i32>(vec2<f32>(p.x, 1.0 - p.y) * vec2<f32>(size));
-    var shadow = 0.0;
-    for (var x = -1; x <= 1; x++) {
-        for (var y = -1; y <= 1; y++) {
-            // textureLoad takes integer texel coords; clamp to match the GLSL sampler's
-            // CLAMP_TO_EDGE instead of the zero an out-of-bounds load returns.
-            let coord = clamp(base + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
-            let depth = textureLoad(u_hdShadowMap, coord, 0);
-            if (p.z - bias > depth) {
-                shadow += 1.0;
+    // A face turned away from the sun is in its own shadow.
+    var shadow = 9.0;
+    if (facing > 0.0) {
+        // Slope-scaled depth bias covering the 3x3 filter's reach (two texels) plus a constant,
+        // capped so steep faces still catch shadows cast from close by. A fixed bias let
+        // sun-grazed ground shadow itself in stripes that crawled as the map moved.
+        let slope = min(sinAngle / max(ndl, 0.001), 4.0);
+        let bias = (0.03 + texelWorld * 2.0 * slope) * depthPerTile;
+        // GL texture rows start at NDC y = -1, WebGPU's at y = +1: flip v or every shadow is
+        // mirrored across the player-centred shadow map.
+        let base = vec2<i32>(vec2<f32>(p.x, 1.0 - p.y) * vec2<f32>(size));
+        shadow = 0.0;
+        for (var x = -1; x <= 1; x++) {
+            for (var y = -1; y <= 1; y++) {
+                // textureLoad takes integer texel coords; clamp to match the GLSL sampler's
+                // CLAMP_TO_EDGE instead of the zero an out-of-bounds load returns.
+                let coord = clamp(base + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
+                let depth = textureLoad(u_hdShadowMap, coord, 0);
+                if (p.z - bias > depth) {
+                    shadow += 1.0;
+                }
             }
         }
     }

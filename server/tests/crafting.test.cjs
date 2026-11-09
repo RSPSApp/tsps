@@ -37,6 +37,7 @@ before(async () => {
     sendMultiChatboxPrompt: player => player.log.push(["legacy-choice-menu"]),
     emitCustomEvent: (name, event) => {
       if (name === "quest:get-stage") event.stage = event.player.questStage ?? 0;
+      else if (name === "diary:is-complete" && event.player.diaries) event.complete = event.player.diaries.includes(`${event.diary}:${event.tier}`);
       else {
         if (name === "crafting:spun") provenanceEvents.push(event);
         api.emitCustomEvent(name, event);
@@ -455,7 +456,9 @@ test('leather, thread and glassblowing lines are spam, and an unpowered orb is "
   assert.deepEqual(blown.map(row => [row[1], row[2]]), [['You make an orb.', SPAM]]);
 });
 
-test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 2 ticks from the second', t => {
+// Wiki (Bow string, Rope, Golden wool): a spin takes 3 ticks. rsprox_transcripts/232/03178.txt (Lumbridge castle's
+// wheel, a normal world): the wheel turns at the choice, two ticks on, then every 3.
+test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 3 ticks from the second', t => {
   membersWorld(t, true);
   provenanceEvents.length = 0;
   const { player, getMenu } = playerWith([[ItemIds.FLAX, 2]], { level: 12 });
@@ -468,13 +471,31 @@ test('the wheel offers what the carried materials spin into, starts on the choic
   assert.ok(byTick[0].some(row => row[0] === 'loc-animation' && row[1] === 466));
   assert.equal(byTick[1].some(row => row[0] === 'animation'), false);
   assert.ok(byTick[2].some(row => row[0] === 'animation' && row[1] === 13139));
-  assert.deepEqual(byTick.flatMap((rows, tick) => rows.some(row => row[0] === 'xp') ? [tick] : []), [2, 4]);
+  assert.deepEqual(byTick.flatMap((rows, tick) => rows.some(row => row[0] === 'xp') ? [tick] : []), [2, 5]);
   assert.deepEqual(xpOn(byTick, 2), [16]);
   assert.equal(player.amounts.get(ItemIds.LINEN_YARN), 2);
   assert.equal(player.amounts.get(ItemIds.FLAX), 0);
   assert.equal(provenanceEvents.length, 2);
   assert.equal(Object.hasOwn(provenanceEvents[0], 'stationObjectId'), false);
   assert.equal(Object.hasOwn(provenanceEvents[0], 'location'), false);
+});
+
+// Wiki (Kandarin Diary, medium): flax is spun 33% faster at the Seers' Village wheel (rsprox 235/03467: every 2
+// ticks there, the diary done). Wool there, or flax there without the diary, stays at 3.
+test('flax at the Seers wheel with the Kandarin medium diary spins every 2 ticks; otherwise every 3', t => {
+  membersWorld(t, true);
+  const seers = { getId: () => 25824, getLocation: () => new (PluginManager.getCoreApi().Location)(2710, 3471, 1) };
+  const spunOn = (items, diaries, choice) => {
+    const { player, getMenu } = playerWith(items, { level: 12 });
+    player.diaries = diaries;
+    player.getLocation = () => new (PluginManager.getCoreApi().Location)(2711, 3471, 1);
+    namedObjects['Spinning wheel'].Spin({ player, object: seers, handled: false });
+    const byTick = make(player, getMenu(), choice, 2, 7);
+    return byTick.flatMap((rows, tick) => rows.some(row => row[0] === 'xp') ? [tick] : []);
+  };
+  assert.deepEqual(spunOn([[ItemIds.FLAX, 2]], ['kandarin:medium'], ItemIds.BOW_STRING), [2, 4], 'the diary rate');
+  assert.deepEqual(spunOn([[ItemIds.FLAX, 2]], [], ItemIds.BOW_STRING), [2, 5], 'no diary');
+  assert.deepEqual(spunOn([[ItemIds.WOOL, 2]], ['kandarin:medium'], ItemIds.BALL_OF_WOOL), [2, 5], 'wool is not flax');
 });
 
 test('free-to-play wheels only spin wool, and wool used on the wheel opens the menu', t => {

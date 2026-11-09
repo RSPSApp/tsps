@@ -22,7 +22,7 @@ uniform vec4 u_fx9; // grade: grade index, grade strength, 0, 0
 uniform vec4 u_fx10; // status: ice freeze, entangle thorns, teleport warp, ink outlines
 uniform vec4 u_fx11; // prayer aura rgb, strength
 uniform vec4 u_fx12; // loot flash rgb (scaled by its strength), sweep progress (<0 off)
-uniform vec4 u_fx13; // player on screen (u, v from the top, half height as a share of the height), teleport whiteout
+uniform vec4 u_fx13; // player on screen (u, v from the top, half height as a share of the height), 0
 
 out vec4 fragColor;
 
@@ -373,11 +373,6 @@ void main() {
         float glint = (point * 0.9 + flare * 0.8) * life * shows * trail;
         vec3 hot = vec3(1.0, 0.97, 0.9);
         col += u_fx12.rgb * (body * 0.55 * (1.0 - p * 0.4) + bloom + glint * 1.6) + hot * u_fx12.rgb * core * 0.7;
-    }
-
-    // Teleport whiteout: the picture fades to white as the teleport peaks and back in after landing.
-    if (u_fx13.w > 0.0) {
-        col = mix(col, vec3(1.1, 1.06, 1.0), u_fx13.w * 0.9);
     }
 
     // Always-on: vignette, grade, scanlines, grain, posterize.

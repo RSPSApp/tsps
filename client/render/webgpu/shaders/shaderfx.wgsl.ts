@@ -25,7 +25,7 @@ struct Fx {
     status: vec4<f32>,    // ice freeze, entangle thorns, teleport warp, ink outlines
     aura: vec4<f32>,      // prayer aura rgb, strength
     loot: vec4<f32>,      // loot flash rgb (scaled by its strength), sweep progress (<0 off)
-    focus: vec4<f32>,     // player on screen (u, v from the top, half height as a share of the height), teleport whiteout
+    focus: vec4<f32>,     // player on screen (u, v from the top, half height as a share of the height), 0
 };
 
 @group(0) @binding(0) var<uniform> fx: Fx;
@@ -454,11 +454,6 @@ fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
         let glint = (point * 0.9 + flare * 0.8) * life * shows * trail;
         let hot = vec3<f32>(1.0, 0.97, 0.9);
         col = col + fx.loot.rgb * (body * 0.55 * (1.0 - p * 0.4) + bloom + glint * 1.6) + hot * fx.loot.rgb * core * 0.7;
-    }
-
-    // Teleport whiteout: the picture fades to white as the teleport peaks and back in after landing.
-    if (fx.focus.w > 0.0) {
-        col = mix(col, vec3<f32>(1.1, 1.06, 1.0), fx.focus.w * 0.9);
     }
 
     // Always-on: vignette, grade, scanlines, grain, posterize.

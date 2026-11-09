@@ -21,7 +21,7 @@ export const FxSlot = {
     AURA: 44,
     /** Loot flash colour rgb (already scaled by its strength), sweep progress (<0 off). */
     LOOT: 48,
-    /** Player on screen (u, v from the top left, radius as a share of the height), teleport whiteout. */
+    /** Player on screen (u, v from the top left, radius as a share of the height). */
     FOCUS: 52,
 } as const;
 
@@ -140,31 +140,20 @@ export interface PlayerScreen {
 }
 
 /**
- * The teleport warp at `now`: how far the picture is bent (warp) and whited out (flash). It builds
- * while the teleport plays, holds until the landing, then settles back.
+ * How far the teleport bends the picture at `now`, 0 to 1. It builds while the teleport plays,
+ * holds until the landing, then settles back.
  */
-export function teleportWarp(
-    now: number,
-    startAt: number,
-    landAt: number,
-    out: { warp: number; flash: number } = { warp: 0, flash: 0 },
-): { warp: number; flash: number } {
-    out.warp = 0;
-    out.flash = 0;
+export function teleportWarp(now: number, startAt: number, landAt: number): number {
     if (startAt > landAt) {
         const age = now - startAt;
-        if (!(age >= 0) || age >= FxDuration.TELEPORT_TIMEOUT) return out;
+        if (!(age >= 0) || age >= FxDuration.TELEPORT_TIMEOUT) return 0;
         const p = clamp01(age / FxDuration.TELEPORT_WINDUP);
-        out.warp = p * p;
-        out.flash = p * p * p * 0.9;
-        return out;
+        return p * p;
     }
     const age = now - landAt;
-    if (!(age >= 0) || age >= FxDuration.TELEPORT_LAND) return out;
+    if (!(age >= 0) || age >= FxDuration.TELEPORT_LAND) return 0;
     const left = 1 - age / FxDuration.TELEPORT_LAND;
-    out.warp = left * left;
-    out.flash = Math.pow(left, 2.5);
-    return out;
+    return left * left;
 }
 
 /** Where the prayer haze sits when the player's spot is unknown: the middle of the screen. */
@@ -227,8 +216,6 @@ export class ShaderFxState {
     private teleportStartAt = -1e9;
     private teleportLandAt = -1e9;
     private playerScreen: PlayerScreen | undefined;
-    /** The teleport warp for the frame being filled: kept as a field so no object is made per frame. */
-    private readonly tele = { warp: 0, flash: 0 };
     private lootAt = -1e9;
     private lootRgb: [number, number, number] = [1, 0.8, 0.28];
     private auraRgb: [number, number, number] | undefined;
@@ -428,17 +415,12 @@ export class ShaderFxState {
         out[FxSlot.STATUS + 1] = this.mark(
             settings.thornsEffect ? rampFade(now - this.thornsAt, FxDuration.THORNS, STATUS_RAMP_MS, STATUS_HOLD) * k : 0,
         );
-        const tele = this.tele;
-        if (settings.teleportWarp) teleportWarp(now, this.teleportStartAt, this.teleportLandAt, tele);
-        else {
-            tele.warp = 0;
-            tele.flash = 0;
-        }
-        out[FxSlot.STATUS + 2] = this.mark(tele.warp * k);
+        out[FxSlot.STATUS + 2] = this.mark(
+            settings.teleportWarp ? teleportWarp(now, this.teleportStartAt, this.teleportLandAt) * k : 0,
+        );
         out[FxSlot.STATUS + 3] = this.mark(settings.inkOutlines ? INK * Math.min(1, k) : 0);
 
         // Prayer aura, with the colour in rgb and the strength in alpha; the focus slot says where
-        out[FxSlot.FOCUS + 3] = this.mark(tele.flash * Math.min(1, k));
         const focus = this.playerScreen ?? SCREEN_CENTRE;
         out[FxSlot.FOCUS] = focus.u;
         out[FxSlot.FOCUS + 1] = focus.v;

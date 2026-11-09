@@ -223,7 +223,7 @@ export const ShaderFxConfig = ConfigGroup(
         }),
         teleportWarp: ConfigItem({
             name: "Teleport warp",
-            description: "The picture swirls and whites out while a teleport plays, then clears again when you land.",
+            description: "The picture swirls while a teleport plays, then settles back when you land.",
             position: 45,
             section: "events",
             default: true,

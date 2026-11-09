@@ -1267,7 +1267,8 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
           Shared.stopCrafting(p);
           PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
           PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
-          p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+          p.setRegistered(false); core.World.unregisterPlayerPosition(p);
+          core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
         });
         // High Crafting avoids a level-up popup changing the task's interface state.
         skills.setCurrentLevel(craft, 99, false).setMaxLevels(craft, 99, false)

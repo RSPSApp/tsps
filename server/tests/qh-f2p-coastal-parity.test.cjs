@@ -355,3 +355,24 @@ test('Recruitment Drive statue room is outside the earlier registered Dondakan m
   assert.equal(contains(mine, 2457, 4981), false);
   assert.equal(contains(room, 2457, 4981), true);
 });
+
+test('Recruitment Drive offers the combination after Sir Ren introduces the riddle', () => {
+  let prompt;
+  const r = register('RecruitmentDrive', 'recruitment_drive');
+  r.api.sendMultiChatboxPrompt = (_player, title, ...pairs) => { prompt = { title, pairs }; };
+  const p = player();
+  p.attributes.set('quest.recruitment_drive.stage', 2);
+  const openDoor = () => r.api.emitCustomEvent('door:toggle', {
+    player: p, objectId: core.ObjectIdentifiers.DOOR_195, handled: false,
+  });
+  openDoor();
+  assert.equal(prompt, undefined, 'the code is not offered before the assigned riddle exists');
+  assert.match(p.messages.at(-1), /Sir Ren Itchood may have a clue/);
+  const selected = r.hooks.get('onNpcDialogueVariant').at(-1)({
+    player: p, npcId: core.NpcIdentifiers.SIR_REN_ITCHOOD,
+  });
+  assert.equal(selected.variant, 'the-tests-sir-ren-itchood-entering-the-room');
+  openDoor();
+  assert.equal(prompt?.title, 'Enter the combination');
+  assert.equal(prompt.pairs.length, 10, 'all five candidate words are offered before asking for another clue');
+});

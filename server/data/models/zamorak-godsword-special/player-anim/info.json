@@ -1,0 +1,37 @@
+{
+  "seq": 7638,
+  "name": "zgs_special_player",
+  "frames": 25,
+  "frameLengths": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "framemaps": [
+    0
+  ],
+  "leftHand": 0,
+  "rightHand": 12320
+}

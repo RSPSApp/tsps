@@ -2935,6 +2935,38 @@ test("All Settings 462: a heading starts the boat the first time only, always, o
   }
 });
 
+test("All Settings 501: the Special Attack orb releases a wind mote at the helm (rsprox), unless unticked (11624 = 1)", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const orb = CacheDefinitions.getComponentId("orbs:specbutton");
+  for (const disabled of [0, 1]) {
+    const h = facilityAtSea("skiff", "Wind catcher", (owned) => {
+      owned.windCatcherOn = true;
+      owned.windMotes = 2;
+    });
+    const helm = registerPlugin("Helm.plugin");
+    const orbClick = (buttonNum = 1) => {
+      const event = { player: h.player, packet: { widgetId: orb, buttonNum }, handled: false };
+      helm.events["player:widget-action"](event);
+      return event.handled;
+    };
+    try {
+      helm.events["sailing:boarded"]({ player: h.player, boat: h.boat, owned: h.owned });
+      assert.equal(h.log.varbits.get(11629), 2, "the wind catcher's capacity goes out on boarding");
+      h.log.varbits.set(11624, disabled);
+      assert.equal(orbClick(), false, "away from the helm the orb is the special attack");
+      helm.objects.Helm.Navigate({ player: h.player });
+      assert.equal(orbClick(2), false, "op2 is the offhand special attack");
+      assert.equal(orbClick(), disabled === 0, `at the helm (${disabled})`);
+      assert.equal(h.owned.windMotes, disabled ? 2 : 1);
+      if (!disabled) assert.equal(h.player.messages.at(-1), "You release the wind mote for a burst of speed!");
+      helm.events["sailing:left"]({ player: h.player, boat: h.boat, reason: "disembark" });
+      assert.equal(h.log.varbits.get(11629), 0, "and back to 0 on leaving");
+    } finally {
+      h.done();
+    }
+  }
+});
+
 test("::maxboat presets fill every hotspot with a facility it allows, the best parts, and their caps", () => {
   const { _test } = require("../plugins/skills/sailing/SailingCommands.plugin");
   const { hotspotsOf } = require("../plugins/skills/sailing/BoatFacilities.Sailing");

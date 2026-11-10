@@ -16,6 +16,10 @@
  *   release the wind mote for a burst of speed!", graphic 3536 on the catcher, the trim's burst
  *   (Trim.Helm.js releaseBurst); 40 XP for a mote owed full XP (a gale catcher's 70), else 10.
  *   None left: "There are no wind motes in the wind catcher."
+ * - The Special Attack orb, at the helm of your own boat with a catcher, is the client's "Release"
+ *   on "Wind Mote" (script 9482) unless All Settings 501 turns it off: op1 releases a mote, as
+ *   Release-mote does. The client shows that only while the boat's max charges (11629) are set,
+ *   which go out with boarding and back to 0 with leaving.
  * - The motes, the switch and the motes owed are kept with the boat; the side panel's charges show
  *   while aboard. A Barracuda Trial's start empties the motes (the owed count stays).
  * Ours: the deactivate sound (10239, captured on rev 229 only); what a crewmate assigned to the
@@ -28,7 +32,8 @@ const { Location } = require("../../../src/main/typescript/elvarg/game/model/Loc
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
-const { SIDEPANEL_GROUP, SIDEPANEL_FACILITIES_CHILD, facilityRowSlot, playSound } = require("./SailingContent.Sailing");
+const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
+const { SIDEPANEL_GROUP, SIDEPANEL_FACILITIES_CHILD, facilityRowSlot, playSound, getVarbit } = require("./SailingContent.Sailing");
 
 /** Each catcher's locs (off, on), how many motes it holds and what a mote owed full XP pays. */
 const CATCHERS = [
@@ -39,6 +44,11 @@ const VARBIT_ENABLED = 19124;
 const VARBIT_OWED = 19126;
 const VARBIT_CHARGES = 19178;
 const VARBIT_PANEL_ENABLED = 19179;
+const VARBIT_MAX_CHARGES = 11629;
+/** All Settings 501 "Special Attack orb releases wind motes": ticked while 0. */
+const VARBIT_ORB_DISABLED = 11624;
+const SPECIAL_ATTACK_ORBS = ["orbs:specbutton", "orbs_nomap:specbutton", "orbs_osm:specbutton", "orbs_osm_nomap:specbutton"];
+let specialAttackOrbIds;
 const MAX_OWED = 3;
 const MOTE_XP = 10;
 const SOUND_ENABLE = 10899;
@@ -205,8 +215,27 @@ function onPanelClick(event) {
   release(event.player);
 }
 
-/** Aboard: the panel's charges and switch; ashore they clear (rsprox 4306 12251 -> 12296). */
+function isSpecialAttackOrb(widgetId) {
+  specialAttackOrbIds ??= new Set(SPECIAL_ATTACK_ORBS.map((name) => CacheDefinitions.getComponentId(name)).filter(Number.isInteger));
+  return specialAttackOrbIds.has(widgetId);
+}
+
+/** The Special Attack orb's op1 at the helm, while it shows the wind mote: a release, not a special attack. */
+function onOrbClick(event) {
+  const { player, packet } = event;
+  if (packet?.buttonNum !== 1 || !isSpecialAttackOrb(packet.widgetId)) return;
+  const aboard = ownBoat(player);
+  if (!aboard || aboard.boat.helmPlayerId !== player.getIndex() || !catcherOf(aboard.boat)) return;
+  if (getVarbit(player, VARBIT_ORB_DISABLED) === 1) return;
+  event.handled = true;
+  release(player);
+}
+
+/** Aboard: the catcher's capacity at once; the panel's charges and switch a tick later; ashore they clear (rsprox 4306 12251 -> 12296). */
 function onBoarded({ player, owned }) {
+  const aboard = ownBoat(player);
+  const catcher = aboard && catcherOf(aboard.boat);
+  if (catcher) player.getPacketSender().sendVarbit(VARBIT_MAX_CHARGES, catcher.kind.capacity);
   later(player, 1, () => {
     sendCharges(player, owned);
     player.getPacketSender().sendVarbit(VARBIT_PANEL_ENABLED, owned?.windCatcherOn ? 1 : 0);
@@ -215,7 +244,7 @@ function onBoarded({ player, owned }) {
 
 function onLeft({ player, reason }) {
   if (reason === "logout") return;
-  player.getPacketSender().sendVarbit(VARBIT_CHARGES, 0).sendVarbit(VARBIT_PANEL_ENABLED, 0);
+  player.getPacketSender().sendVarbit(VARBIT_CHARGES, 0).sendVarbit(VARBIT_PANEL_ENABLED, 0).sendVarbit(VARBIT_MAX_CHARGES, 0);
 }
 
 function onLogin({ player }) {
@@ -228,6 +257,7 @@ function onLogin({ player }) {
 function attach(api) {
   api.onObjectInteraction(onLoc);
   api.onInterfaceActionClick(onPanelClick);
+  api.onCustomEvent("player:widget-action", onOrbClick);
   api.onCustomEvent("sailing:boarded", onBoarded);
   api.onCustomEvent("sailing:left", onLeft);
   api.onPlayerLogin(onLogin);

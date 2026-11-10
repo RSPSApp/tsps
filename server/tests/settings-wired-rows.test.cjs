@@ -19,6 +19,7 @@ const DROPDOWN = 2;
 // setting id -> the varbit its row sets. Toggles unless listed in DROPDOWNS.
 const TOGGLES = {
   2: 4609, 3: 4181, 4: 5711, 6: 5712, 9: 10113, 265: 14179, 442: 17772, 472: 19615, 473: 19646, 474: 19647,
+  36: 4089, 83: 11890, 195: 13120, 430: 16116,
 };
 const DROPDOWNS = { 1: 6374 };
 // Live defaults that are not zero: the fresh-account (Tutorial Island) logins in the rsprox captures.
@@ -169,4 +170,47 @@ test('a fresh account starts with the side panel setting live sends', () => {
   const p = player();
   handlers.restoreSettings({ player: p });
   assert.equal(p.getPacketSender().getVarbit(4609), 1);
+});
+
+const LOGINLOGOUT_PERMANENT = 1627;
+const LOGINLOGOUT_SETTING = 12274;
+
+test('Friend Login/Logout messages sets the two vars the cache reads it from, for each option', () => {
+  assert.equal(catalog.get(44), DROPDOWN);
+  assert.deepEqual(readerCase(DROPDOWN_READER, 44)[0], [GOSUB, 4487]);
+  const reads = readScript(4487);
+  const varbits = reads.ops.map((op, i) => op === PUSH_VARBIT && reads.operands[i]).filter(Boolean);
+  assert.deepEqual([...new Set(varbits)].sort(), [LOGINLOGOUT_PERMANENT, LOGINLOGOUT_SETTING].sort());
+  // Script 4487: loginlogout_permanent when it is set, else loginlogout_setting.
+  const shown = (p) => p.getPacketSender().getVarbit(LOGINLOGOUT_PERMANENT) || p.getPacketSender().getVarbit(LOGINLOGOUT_SETTING);
+  for (const option of [2, 1, 0]) {
+    const p = player();
+    assert.equal(choose(p, 44, option), true);
+    assert.equal(shown(p), option, `option ${option} reads back as itself`);
+    const next = player(p.attributes);
+    handlers.restoreSettings({ player: next });
+    assert.equal(shown(next), option, `option ${option} is restored at login`);
+  }
+});
+
+test('Enable separating hours changes only its bit of the varp it shares with precise timing and the collection log rows', () => {
+  const p = player();
+  const sender = p.getPacketSender();
+  const varp = CacheDefinitions.getVarbit(11890).baseVar;
+  assert.equal(varp, CacheDefinitions.getVarbit(11866).baseVar, 'precise timing shares it');
+  sender.sendVarbit(11866, 1).sendVarbit(11959, 3);
+  const others = () => [sender.getVarbit(11866), sender.getVarbit(11959)];
+  click(p, 83);
+  assert.equal(sender.getVarbit(11890), 1);
+  assert.deepEqual(others(), [1, 3]);
+  // The client also flips it locally and transmits the whole varp first: the click must not undo it.
+  const transmitted = sender.getVarp(varp) & ~(1 << CacheDefinitions.getVarbit(11890).startBit);
+  sender.sendConfig(varp, transmitted);
+  handlers.handleSettingsVarpTransmit({ player: p, varpId: varp, value: transmitted });
+  click(p, 83);
+  assert.equal(sender.getVarbit(11890), 0, 'the transmitted value stands');
+  assert.deepEqual(others(), [1, 3]);
+  const next = player(p.attributes);
+  handlers.restoreSettings({ player: next });
+  assert.equal(next.getPacketSender().getVarbit(11890), 0);
 });

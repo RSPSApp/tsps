@@ -311257,9 +311257,16 @@
                           "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
                         },
                         {
-                          "type": "message",
-                          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-                          "id": "G3MbVq"
+                          "type": "condition",
+                          "text": "If the player's combat level is lower than 10:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+                              "id": "jO5-Q2"
+                            }
+                          ],
+                          "id": "Jp6ea2"
                         },
                         {
                           "type": "choice",
@@ -311356,9 +311363,16 @@
                   "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-                  "id": "qjnirf"
+                  "type": "condition",
+                  "text": "If the player's combat level is lower than 10:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+                      "id": "iGpF4E"
+                    }
+                  ],
+                  "id": "5AYfRB"
                 },
                 {
                   "type": "choice",
@@ -311427,7 +311441,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-897c2bbb1545184e"
+                              "branch": "jump-1575fd5b9b3480d1"
                             }
                           ]
                         }
@@ -311442,7 +311456,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-523f0add06d19ea3"
+                              "branch": "jump-8c912db9efd06f6e"
                             }
                           ]
                         }
@@ -311788,7 +311802,7 @@
       ]
     },
     "branches": {
-      "jump-897c2bbb1545184e": [
+      "jump-1575fd5b9b3480d1": [
         {
           "player": "What about the stone circle full of dark wizards?"
         },
@@ -311803,9 +311817,16 @@
           "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-          "id": "G3MbVq"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 10:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+              "id": "jO5-Q2"
+            }
+          ],
+          "id": "Jp6ea2"
         },
         {
           "type": "choice",
@@ -311836,7 +311857,7 @@
           ]
         }
       ],
-      "jump-523f0add06d19ea3": [
+      "jump-8c912db9efd06f6e": [
         {
           "type": "line",
           "speaker": "Kaqemeex",
@@ -311853,9 +311874,16 @@
           "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-          "id": "qjnirf"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 10:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+              "id": "iGpF4E"
+            }
+          ],
+          "id": "5AYfRB"
         },
         {
           "type": "choice",
@@ -361450,9 +361478,16 @@
                           "id": "qeSx96"
                         },
                         {
-                          "type": "message",
-                          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
-                          "id": "YlG6-4"
+                          "type": "condition",
+                          "text": "If the player's combat level is lower than 50:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
+                              "id": "i_bts5"
+                            }
+                          ],
+                          "id": "5OInfd"
                         },
                         {
                           "type": "choice",
@@ -361556,7 +361591,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-074a841585585eeb"
+                                      "branch": "jump-bce03843f3d115cc"
                                     }
                                   ]
                                 }
@@ -362991,7 +363026,7 @@
       ]
     },
     "branches": {
-      "jump-074a841585585eeb": [
+      "jump-bce03843f3d115cc": [
         {
           "type": "line",
           "speaker": "Martin the Master Gardener",
@@ -363063,9 +363098,16 @@
           "id": "qeSx96"
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
-          "id": "YlG6-4"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 50:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
+              "id": "i_bts5"
+            }
+          ],
+          "id": "5OInfd"
         },
         {
           "type": "choice",
@@ -380081,9 +380123,16 @@
           "text": "The cart? That's the least of my problems. I've got to find my family..."
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50.",
-          "id": "IP6tLX"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 50:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50.",
+              "id": "hDvfCc"
+            }
+          ],
+          "id": "resAbW"
         },
         {
           "type": "choice",
@@ -788935,9 +788984,16 @@
                           "text": "Very good. Well, it has been some days since last I heard from Drezel, the priest who lives there. Be a sport and go check in on the silly old codger for me, would you?"
                         },
                         {
-                          "type": "message",
-                          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
-                          "id": "0cBLcT"
+                          "type": "condition",
+                          "text": "If the player's combat level is lower than 15:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
+                              "id": "gtY6Dq"
+                            }
+                          ],
+                          "id": "2c4iPI"
                         },
                         {
                           "type": "choice",
@@ -1026265,9 +1026321,16 @@
                   "text": "They have set up a magical barrier which even my power cannot overcome!"
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it. Your combat level is also lower than the recommended level of 45.",
-                  "id": "QBaako"
+                  "type": "condition",
+                  "text": "If the player's skill levels are lower than the quest requirements:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it. Your combat level is also lower than the recommended level of 45.",
+                      "id": "HHJ-zD"
+                    }
+                  ],
+                  "id": "xFlk36"
                 },
                 {
                   "type": "choice",
@@ -1055187,9 +1055250,16 @@
                   "text": "Are you sure you want to? Our exams are serious business."
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it.",
-                  "id": "h7ioYg"
+                  "type": "condition",
+                  "text": "If the player's skill levels are lower than the quest requirements:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it.",
+                      "id": "49Kzb7"
+                    }
+                  ],
+                  "id": "VMELHC"
                 },
                 {
                   "type": "choice",
@@ -1121961,9 +1122031,16 @@
           "text": "Would you like to think more about it?"
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
-          "id": "bkgpn5"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 15:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
+              "id": "kbEA-p"
+            }
+          ],
+          "id": "YhMoM2"
         },
         {
           "type": "choice",
@@ -1182733,9 +1182810,16 @@
                   "text": "You would be a huge benefit on the battlefield. If you would go there and try to retrieve the orb, my people and I will be forever grateful."
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 45.",
-                  "id": "X4O1Wa"
+                  "type": "condition",
+                  "text": "If the player's combat level is lower than 45:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 45.",
+                      "id": "HAv86P"
+                    }
+                  ],
+                  "id": "f9cm-w"
                 },
                 {
                   "type": "choice",

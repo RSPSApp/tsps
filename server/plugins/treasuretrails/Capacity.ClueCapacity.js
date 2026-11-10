@@ -7,6 +7,8 @@ const MIMIC_ATTRIBUTE = "treasure-trails:mimic-case";
 const CASE_ATTRIBUTES = Object.freeze(Object.fromEntries(TIERS.map(tier => [tier, Object.freeze({
   minor: `treasure-trails:${tier}-minor-case`, major: `treasure-trails:${tier}-major-case`,
 })])));
+/** All Settings' clue scroll warnings (374-379), by tier. */
+const WARNING_VARBITS = Object.freeze({beginner: 10693, easy: 10694, medium: 10695, hard: 10723, elite: 10724, master: 10725});
 const MINOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.minor;
 const MAJOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.major;
 const FORM = /^(Clue scroll|Scroll box|Clue bottle|Clue nest|Clue geode) \((beginner|easy|medium|hard|elite|master)\)$/;
@@ -104,6 +106,13 @@ function taken(request) {
     : "Some of your scroll boxes were destroyed as you have too many of that tier.");
 }
 
+/** With the tier's clue scroll warning on, a clue dropped for a player at capacity is mentioned. */
+function warnMissedClue(player, tier, box) {
+  if (player.getPacketSender?.().getVarbit?.(WARNING_VARBITS[tier]) !== 1) return;
+  const article = tier === "easy" || tier === "elite" ? "an" : "a";
+  player.sendMessage(`You have a sneaking suspicion that you would have received ${article} ${tier} ${box ? "scroll box" : "clue scroll"}.`);
+}
+
 function filterDrops(request) {
   if (!request?.player || !Array.isArray(request.drops)) return;
   const unlocked = boxUnlocked(request.player);
@@ -113,7 +122,11 @@ function filterDrops(request) {
     if (!type) continue;
     if (type.tier !== "beginner" && !core.WorldDefinition.isMembersWorld()) { request.drops.splice(index--, 1); continue; }
     const room = remaining.get(type.tier);
-    if (room < 1) { request.drops.splice(index--, 1); continue; }
+    if (room < 1) {
+      request.drops.splice(index--, 1);
+      warnMissedClue(request.player, type.tier, unlocked);
+      continue;
+    }
     drop.amount = Math.min(drop.amount, room);
     remaining.set(type.tier, room - drop.amount);
     if (type.form === "Clue scroll" || type.form === "Scroll box") {
@@ -275,5 +288,5 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("npc-drops:roll", filterDrops);
   api.onPlayerLogin(sync);
 };
-Object.assign(module.exports, {MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, MIMIC_ATTRIBUTE, CASE_ATTRIBUTES,
+Object.assign(module.exports, {MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, MIMIC_ATTRIBUTE, CASE_ATTRIBUTES, WARNING_VARBITS,
   capacity, count, canReceive, filterDrops, openBox, openCase, milestoneRewards, sync});

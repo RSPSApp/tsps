@@ -144,3 +144,6 @@ These are server conservation guards; the exact full-bank refusal sequence was n
 
 ## Spells (captured)
 A Fire Blast paid from the pouch lowered the quantity varbits on the cast tick. The inventory pays first, and the pouch only covers the shortfall, through `registerSpellRuneSource`.
+
+## Death
+A PvP death empties the pouch, kept or lost, and its runes drop for the killer. On a PvM death the runes stay in the pouch, whether the pouch is kept or goes to the grave, unless "Always empty rune pouches on death" (setting 354) is on; then they go to the grave as runes. `Death.RunePouch.js` adds the pouch to the storage items' death hook ([storage-items.md](storage-items.md#death)).

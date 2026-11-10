@@ -83,7 +83,7 @@ function createPlayer() {
   const { Location } = PluginManager.getCoreApi();
   const varps = new Map();
   const chains = [];
-  const sent = { graphics: [], sounds: [], songs: [], cameras: [] };
+  const sent = { graphics: [], sounds: [], songs: [], cameras: [], tabSetups: [] };
   const sender = new Proxy({
     getVarp: (id) => varps.get(id) ?? 0,
     sendConfig: (id, value) => { varps.set(id, value); return sender; },
@@ -101,6 +101,7 @@ function createPlayer() {
     sendSound: (id) => { sent.sounds.push(id); return sender; },
     sendSong: (id) => { sent.songs.push(id); return sender; },
     sendCameraMoveTo: (x, y, height, options) => { sent.cameras.push({ x, y, height, cycles: options?.cycles }); return sender; },
+    sendGameframeTabSetup: (group) => { sent.tabSetups.push(group); return sender; },
   }, { get: (target, key) => key in target ? target[key] : () => sender });
   const player = {
     location: new Location(1366, 3367, 0), area: null, registered: true, chains, sent,
@@ -187,6 +188,7 @@ test("as captured (ticks 469-495): the ent's worship scene, its stage checkpoint
   assert.equal(varbit(player, "minimap_state"), 0);
   assert.equal(player.getMovementQueue().blocked, true, "still locked until the fade-in");
   assert.equal(ent.registered, false, "the actors go with the instance");
+  assert.ok(player.sent.tabSetups.includes(149), "the inventory goes back with its item ops (relog-only otherwise)");
   while (tickCount < 26) step();
   assert.deepEqual(log.at(-1), ["done", 26], "the talk goes on on tick 495");
   assert.equal(varbit(player, "cutscene_status"), 0);

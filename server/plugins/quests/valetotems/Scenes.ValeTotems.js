@@ -270,11 +270,17 @@ module.exports = function createValeTotemsScenes(api) {
     for (const slot of [COMBAT_TAB[0], MAGIC_TAB, ...TABS.map(([tab]) => tab)]) sender.closeSubInterface((TOPLEVEL << 16) | slot);
   }
 
+  /**
+   * The client drops a closed tab's op events, so each tab goes back with its login setup
+   * (live re-sends if_setevents on inventory 149:0 as it reopens the tab, tick 491); without it
+   * the inventory's item options did nothing until a relog.
+   */
   function restoreTabs(player) {
     const sender = player.getPacketSender();
-    sender.sendTabInterface(0, COMBAT_TAB[1]);
-    sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
-    for (const [slot, group] of TABS) sender.sendTabInterface(slot, group);
+    const spellbook = player.getSpellbook().getInterfaceId();
+    sender.sendTabInterface(0, COMBAT_TAB[1]).sendGameframeTabSetup(COMBAT_TAB[1]);
+    sender.sendTabInterface(6, spellbook).sendGameframeTabSetup(spellbook);
+    for (const [slot, group] of TABS) sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
     player.getInventory().refreshItems();
     player.getEquipment().refreshItems();
   }

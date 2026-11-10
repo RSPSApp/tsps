@@ -170,3 +170,22 @@ test("a logout during the two-tick wake still gets the guard up, so the gate is 
   assert.ok(until(isOpen, 4), `with him dead another player gets through: ${messages}`);
   tick(30);
 });
+
+test("the hidden sleeper holds no tile, so a goblin guard lured off can walk back onto the post", (t) => {
+  tick(30);
+  const { player } = actor(t, 2327, NORTH_Y + 1);
+  const post = new core.Location(2327, 9394, 0);
+  assert.equal(World.isNpcOccupyingTile(post), true, "asleep, he holds his post");
+  PluginManager.emitNpcInteraction({ player, npc: sleeper, npcId: SLEEPING_GUARD, clickType: 1, handled: false });
+  assert.ok(until(() => goblinGuard() != null, 4));
+  const guard = goblinGuard();
+  assert.equal(sleeper.isVisible(), false);
+  // Retreating home (he gave up the chase), a step onto an occupied post is refused, so he'd
+  // stay retreating: refusing every attack and healing 10% a tick.
+  guard.moveTo(new core.Location(2327, 9395, 0));
+  assert.equal(World.isNpcOccupyingTile(post, guard), false, "the hidden sleeper holds no tile");
+  PluginManager.emitNpcDeath({ npc: guard, npcId: GOBLIN_GUARD, killer: player, location: { x: 2327, y: 9395, z: 0 } });
+  PluginManager.removeNpc(guard);
+  tick(30);
+  assert.equal(World.isNpcOccupyingTile(post), true, "back asleep, he holds it again");
+});

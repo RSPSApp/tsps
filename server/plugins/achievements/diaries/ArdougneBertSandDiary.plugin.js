@@ -73,10 +73,6 @@ function onDialogueAction(event) {
   if (stepId === INTRO_MESSAGE_ID) player.setAttribute(INTRO_SEEN_ATTRIBUTE, true);
 }
 
-function onItemOnObject(api, event) {
-  fillUimSandPit(api, event);
-}
-
 function sandOption(api, now, { player, npcId }) {
   if (npcId !== api.core.NpcIdentifiers.BERT_2 || !isComplete(player)) return false;
   if (payClaim(api, player, now)) {
@@ -99,34 +95,15 @@ function register(api, options = {}) {
   api.onNpcDialogueCondition(onDialogueCondition.bind(null, api, options.now));
   api.onCustomEvent("npc-dialogue:condition", onDialogueConditionEvent.bind(null, api, options.now));
   api.onCustomEvent("npc-dialogue:action", onDialogueAction);
-  api.onItemOnObject(onItemOnObject.bind(null, api), { noted: false });
+  api.onCustomEvent("sand-pit:filled", onSandPitFilled.bind(null, api));
   api.onNpcInteraction("Bert", { Sand: sandOption.bind(null, api, options.now) });
 }
 
-function fillUimSandPit(api, event) {
-  const { ItemIdentifiers, ObjectIdentifiers } = api.core;
-  if (!event?.player || event.objectId !== ObjectIdentifiers.SANDPIT ||
-      event.itemId !== ItemIdentifiers.BUCKET || !isUltimateIronman(api, event.player)) return false;
-  const { x, y, z } = event.location ?? {};
-  if (x !== 2542 || y !== 3103 || z !== 0) return false;
-
-  const inventory = event.player.getInventory();
-  const held = inventory.getItems?.()[event.itemSlot];
-  if (held?.getId?.() !== ItemIdentifiers.BUCKET) return false;
-
-  const sandBefore = inventory.getAmount(ItemIdentifiers.BUCKET_OF_SAND);
-  inventory.deleteNumber(ItemIdentifiers.BUCKET, 1);
-  inventory.add(new api.core.Item(ItemIdentifiers.BUCKET_OF_SAND, 1), true);
-  const converted = inventory.getAmount(ItemIdentifiers.BUCKET_OF_SAND) - sandBefore;
-  if (converted !== 1) {
-    if (converted > 0) inventory.deleteNumber(ItemIdentifiers.BUCKET_OF_SAND, converted);
-    inventory.add(new api.core.Item(ItemIdentifiers.BUCKET, 1), true);
-    return false;
-  }
-
-  event.handled = true;
-  api.emitCustomEvent("diary:task", { player: event.player, diary: DIARY, task: TASK });
-  return true;
+function onSandPitFilled(api, { player, objectId, location }) {
+  if (objectId !== api.core.ObjectIdentifiers.SANDPIT || !isUltimateIronman(api, player)) return;
+  const { x, y, z } = location;
+  if (x !== 2542 || y !== 3103 || z !== 0) return;
+  api.emitCustomEvent("diary:task", { player, diary: DIARY, task: TASK });
 }
 
 function payClaim(api, player, now) {
@@ -171,7 +148,7 @@ module.exports = {
   members: true,
   dependsOn: ["AchievementDiaries", "Quests"],
   register,
-  _test: { isComplete, isUltimateIronman, bankTabs, deliveryBank, hasDeliverySpace, selectVariant, today, payClaim, fillUimSandPit,
+  _test: { isComplete, isUltimateIronman, bankTabs, deliveryBank, hasDeliverySpace, selectVariant, today, payClaim, onSandPitFilled,
     QUEST_STAGE_ATTRIBUTE, INTRO_SEEN_ATTRIBUTE, LAST_DELIVERY_ATTRIBUTE, BANK_SPACE_CONDITION_ID,
     SAND_AMOUNT,
     INTRO_MESSAGE_ID, INTRO_VARIANT, DAILY_VARIANT },

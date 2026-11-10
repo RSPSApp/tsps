@@ -98,7 +98,6 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     AFTER_QUEEN_AGAIN: "meeting-with-queen-zyani-arkan-to-begin-planning-the-infiltration-talking-to-prince-itzla-arkan-after-meeting-with-queen-zyani-arkan-talking-to-itzla-again",
     BARTENDER: "visiting-the-windbreaker-bar-talking-to-the-bartender-at-quetzacalli-gorge",
     BED: "visiting-the-windbreaker-bar-resting-in-the-bed",
-    BED_AGAIN: "visiting-the-windbreaker-bar-resting-in-the-bed-talking-to-itzla-again-before-fully-going-through-the-initial-dialogue",
     PUB_ITZLA: "visiting-the-windbreaker-bar-resting-in-the-bed-talking-to-itzla-again",
     SHOP: "talking-to-the-quetzacalli-gorge-shopkeeper",
     SHOP_AGAIN: "talking-to-the-quetzacalli-gorge-shopkeeper-talking-to-him-again-after-getting-directions-to-the-twilight-temple",
@@ -385,15 +384,28 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     const variant = selectVariant({ player: event.player, npcId, npc: event.npc });
     if (!variant) return false;
     event.handled = true;
-    play(event.player, npcId, variant, null, event.npc);
+    const resume = variant === V.BED ? resumeWindbreaker(stage(event.player)) : null;
+    play(event.player, npcId, variant, resume, event.npc);
     return true;
+  }
+
+  function resumeWindbreaker(current) {
+    return (steps) => {
+      // Reopen the unfinished briefing without replaying the sleep action.
+      if (current === S.REASONS) {
+        const index = steps.findIndex((step) => step.player === LINE.REASONS);
+        if (index >= 0) return steps.slice(index + 1);
+      }
+      return after(STEP.SLEEP)(steps);
+    };
   }
 
   function selectItzlaVariant(player, npc) {
     const current = stage(player);
     const tower = units.tower.selectVariant({ npcId: NPC.ITZLA, player, npc });
     if (tower) return tower;
-    if (current < S.REASONS) return V.BED_AGAIN;
+    if (current < S.WOKE) return null;
+    if (current < S.TO_SHOP) return V.BED;
     if (current < S.ITZLA_LEFT) return current === S.SHOP_AGREED ? V.REPORT : V.PUB_ITZLA;
     if (current === S.ITZLA_LEFT) return V.TOWER;
     if (current === S.TOWER) return V.TOWER_AGAIN;

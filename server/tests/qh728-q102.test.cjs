@@ -426,7 +426,7 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   }
   assert.equal(p.items.get(I.LIT_TORCH), 1, 'the unlit torch becomes lit');
   assert.equal(p.items.get(I.UNLIT_TORCH) ?? 0, 0);
-  assert.equal(p.items.get(I.DRY_STICKS) ?? 0, 0);
+  assert.equal(p.items.get(I.DRY_STICKS), 1, 'the dry sticks stay in the pack (capture tick 297)');
   assert.equal(h.quest.getStage(p), 7, 'torch lit');
   assert.equal(wireValue(p), 7, 'stage 7 is mirrored to varp 159');
   assert.ok(p.log.some(row => row[0] === 'sendSound' && row[1] === 3028), 'slug_torch_lit');
@@ -736,7 +736,7 @@ test('natural torch route uses the damp sticks at the canonical tile and never c
   assert.equal(p.items.get(I.UNLIT_TORCH), 1, 'normal Bailey handout still works');
   rubDrySticks(h, p);
   assert.equal(p.items.get(I.LIT_TORCH), 1);
-  assert.equal(p.items.get(I.DRY_STICKS) ?? 0, 0, 'sticks are consumed only after the torch lights');
+  assert.equal(p.items.get(I.DRY_STICKS), 1, 'the sticks are kept when the torch lights too (capture tick 297)');
   assert.equal(h.quest.getStage(p), 7);
 });
 

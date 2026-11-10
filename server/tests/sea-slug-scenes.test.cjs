@@ -142,3 +142,19 @@ test('one Kick plays the kick with its three messages three ticks apart and open
   assert.equal(hooks.panelOpened, 1, 'the stage moves with the last message');
   assert.equal(player.blocked(), false);
 });
+
+test('a logout mid-kick or before Kent calls back drops the pending steps', () => {
+  const { clock, transcripts, hooks, scenes } = load();
+  const kicker = makePlayer();
+  scenes.kickPanel(kicker);
+  scenes.interrupted({ player: kicker });
+  clock.tick(6);
+  assert.deepEqual(kicker.messages, ['You kick the loose panel.'], 'no later messages');
+  assert.equal(hooks.panelOpened, 0, 'the wall does not open for a logged-out player');
+
+  const waiting = makePlayer();
+  scenes.startKent(waiting, kentNpc(), core.NpcIdentifiers.KENT, KENT_VARIANT);
+  scenes.interrupted({ player: waiting });
+  clock.tick(4);
+  assert.equal(transcripts.length, 0, 'Kent does not call a logged-out player back');
+});

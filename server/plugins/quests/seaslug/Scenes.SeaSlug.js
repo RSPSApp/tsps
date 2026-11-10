@@ -156,7 +156,7 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
     if (Scenes.get(player)) return;
     Scenes.fade(player, true);
     Scenes.controls(player, true);
-    Scenes.later(player, REPAIR.open, () => openRepair(player));
+    Scenes.later(player, REPAIR.open, () => { if (online(player)) openRepair(player); });
   }
 
   function openRepair(player) {
@@ -312,7 +312,7 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
       held.delete(player);
       Scenes.fade(player, true);
       Scenes.controls(player, true);
-      Scenes.later(player, CRANE.open, () => openCrane(player));
+      Scenes.later(player, CRANE.open, () => { if (online(player)) openCrane(player); });
     });
   }
 
@@ -373,10 +373,14 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
     api.core.StatementDialogue.send(player, text, next);
   }
 
+  /** A logout drops the player's pending steps (the kick, Kent's grab, a scene not yet open). */
   function interrupted({ player }) {
+    Scenes.cancel(player);
     held.delete(player);
     kentScene.delete(player);
   }
+
+  const online = (player) => player.isRegistered?.() !== false;
 
   return { boatRepair, startKent, marker, kickPanel, crane, interrupted, isHeld: (player) => held.has(player), inScene, MARK, CRANE, PANEL };
 };

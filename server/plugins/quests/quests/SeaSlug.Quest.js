@@ -516,7 +516,7 @@ module.exports = function registerSeaSlugQuest(api) {
       event.handled = true;
       return;
     }
-    inventory.deleteNumber(DRY_STICKS_ITEM_ID, 1);
+    // The dry sticks stay in the pack: only the torch changes (capture tick 297).
     player.sendMessage("You place the smoulding twigs to your torch.");
     player.sendMessage("Your torch lights.");
     inventory.deleteNumber(UNLIT_TORCH_ITEM_ID, 1);

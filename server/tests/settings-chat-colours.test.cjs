@@ -120,7 +120,7 @@ function allSettings() {
   return { player, varps, click, restore };
 }
 
-const colourRows = [...OPAQUE, ...TRANSPARENT];
+const colourRows = [...OPAQUE, ...TRANSPARENT, ...SPLIT];
 
 test('each chat colour row is a colour picker in the cache, in its chatbox mode\'s group', () => {
   for (const [group, ids] of [['opaque', OPAQUE], ['transparent', TRANSPARENT], ['split', SPLIT]]) {
@@ -170,4 +170,16 @@ test('chosen colours come back at login', () => {
   next.player.setAttribute('settings:values', first.player.getAttribute('settings:values'));
   next.restore({ player: next.player });
   for (const id of colourRows) assert.equal(next.varps.get(readerVarps.get(id)), 0x123457, `setting ${id} restored`);
+});
+
+test('each reset row clears its own group and leaves the others', () => {
+  for (const [reset, ids] of Object.entries(RESETS)) {
+    const { varps, click } = allSettings();
+    for (const id of colourRows) click(id).amount.execute(0x123456);
+    click(Number(reset));
+    for (const id of colourRows) {
+      const expected = ids.includes(id) ? 0 : 0x123457;
+      assert.equal(varps.get(readerVarps.get(id)), expected, `reset ${reset}, setting ${id}`);
+    }
+  }
 });

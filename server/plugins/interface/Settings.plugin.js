@@ -149,7 +149,7 @@ const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEn
 const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
 // Colour rows: the varp holding the colour + 1 (0 for the default) and the default colour.
 // The varps are cache script 4181's, the defaults each row's struct (param 1230).
-// Chat colours by chatbox mode (opaque, transparent), quest list (224-227)
+// Chat colours by chatbox mode (opaque, transparent, split private chat), quest list (224-227)
 // and music player track colours (485-488).
 const OPAQUE_CHAT_COLOURS = {
   87: [2992, 0x0000ff], 89: [2993, 0x7f0000], 92: [2994, 0x2020ef], 94: [2995, 0x000000],
@@ -163,13 +163,18 @@ const TRANSPARENT_CHAT_COLOURS = {
   106: [3061, 0x00d300], 194: [3194, 0x7f0000], 197: [3195, 0xffffff], 199: [3196, 0xffffff],
   435: [4698, 0xffff00],
 };
+const SPLIT_CHAT_COLOURS = { 91: [3008, 0x00ffff], 96: [3009, 0xffff00] };
 const COLOUR_SETTINGS = {
-  ...OPAQUE_CHAT_COLOURS, ...TRANSPARENT_CHAT_COLOURS,
+  ...OPAQUE_CHAT_COLOURS, ...TRANSPARENT_CHAT_COLOURS, ...SPLIT_CHAT_COLOURS,
   224: [3410, 0xff0000], 225: [3409, 0xffff00], 226: [3411, 901389], 227: [3412, 10461087],
   485: [5235, 0xff0000], 486: [5236, 901389], 487: [5401, 3991270], 488: [5237, 10461087],
 };
+const varpsOf = (rows) => Object.values(rows).map(([varp]) => varp);
 // "Reset ... colours" rows and the colour varps each one clears.
-const COLOUR_RESETS = { 228: [3409, 3410, 3411, 3412], 489: [5235, 5236, 5401, 5237] };
+const COLOUR_RESETS = {
+  107: varpsOf(OPAQUE_CHAT_COLOURS), 108: varpsOf(TRANSPARENT_CHAT_COLOURS), 109: varpsOf(SPLIT_CHAT_COLOURS),
+  228: [3409, 3410, 3411, 3412], 489: [5235, 5236, 5401, 5237],
+};
 const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 2;
 const SETTINGS_COLOUR_INTERFACE = 288;
 const SETTINGS_COLOUR_SCRIPT = 4185;

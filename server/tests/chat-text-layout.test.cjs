@@ -41,3 +41,8 @@ test("an explicit break is kept and tags draw nothing", () => {
     ["You pour water onto the soil.<br>The soil softens slightly."]);
   assert.equal(ChatTextLayout.width("<col=800000>Edmond</col>"), ChatTextLayout.width("Edmond"));
 });
+
+test("plugins get it through api.core", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  assert.equal(PluginManager.getCoreApi().ChatTextLayout, ChatTextLayout);
+});

@@ -351,3 +351,34 @@ test("the West Ardougne manhole opens with its cover and closes again", (t) => {
   assert.ok(until(() => locAt(O.MANHOLE_3, 2529, 3303) !== null, 4), "closed again");
   assert.equal(locAt(O.MANHOLE_COVER, 2529, 3302), null);
 });
+
+test("cured Bravek but no warrant: the plague house stays shut", (t) => {
+  const { player } = actor(t, 27, 2540, 3273);
+  tick(2);
+  click(player, 37321, 2540, 3273);
+  tick(2);
+  action(player, core.NpcIdentifiers.MOURNER, "uflJGj");
+  tick(4);
+  assert.equal(at(player)[1], 3273, "no sneak-in without the warrant");
+  const npcId = 7382;
+  assert.equal(PluginManager.emitNpcDialogueVariant({ player, npcId, definition: core.NpcDefinition.forId(8975), pages: [] }), null);
+});
+
+test("after Elena is freed the cell door is only locked", (t) => {
+  const { player, chatboxes } = actor(t, 29, 2539, 9671);
+  tick(2);
+  click(player, core.ObjectIdentifiers.DOOR_78, 2539, 9672);
+  tick(2);
+  assert.deepEqual(chatboxes, [229], "the locked box, not Elena's plea");
+});
+
+test("a second spade use during the fall does nothing", (t) => {
+  const { player, chatboxes } = actor(t, 7, 2566, 3331);
+  player.getInventory().adds(core.ItemIdentifiers.SPADE, 1);
+  itemOnObject(player, core.ItemIdentifiers.SPADE, 2532, 2566, 3332);
+  tick(1);
+  itemOnObject(player, core.ItemIdentifiers.SPADE, 2532, 2566, 3332);
+  tick(4);
+  assert.equal(chatboxes.length, 2, "one dig: the box and its repeat after the fall");
+  assert.deepEqual(at(player), [2518, 9759, 0]);
+});

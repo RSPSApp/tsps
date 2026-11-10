@@ -215,6 +215,8 @@ module.exports = function registerPlagueCityQuest(api) {
   let quest;
   const Scenes = createQuestScenes(api, { recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
   const pendingDoors = new WeakMap();
+  /** Players mid-dig: the stage moves three ticks after the spade. */
+  const digging = new WeakSet();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
   const wearingGasMask = (player) =>
@@ -427,7 +429,7 @@ module.exports = function registerPlagueCityQuest(api) {
       return "entering-west-ardougne-talking-to-main-clerk-in-west-ardougne";
     }
     if (BRAVEK_NPC_IDS.has(npcId)) return bravekVariant(stage, player);
-    if (PLAGUE_HOUSE_MOURNER_IDS.has(npcId) && stage === STAGE_HAVE_WARRANT && !inPlagueHouse(player)) {
+    if (PLAGUE_HOUSE_MOURNER_IDS.has(npcId) && stage === STAGE_HAVE_WARRANT && held(player, WARRANT_ITEM_ID) && !inPlagueHouse(player)) {
       return WARRANT_MOURNER_VARIANT;
     }
     if (ELENA_NPC_IDS.has(npcId)) {
@@ -540,9 +542,9 @@ module.exports = function registerPlagueCityQuest(api) {
       event.handled = true;
       return;
     }
-    if (stepId === "uflJGj" && stage === STAGE_HAVE_WARRANT) sneakIn(player);
+    if (stepId === "uflJGj" && stage === STAGE_HAVE_WARRANT && held(player, WARRANT_ITEM_ID)) sneakIn(player);
     // Ticks 729-734: talking to the mourner, the two of them still talk overhead before the box.
-    if (stepId === "0kLoiV" && stage === STAGE_HAVE_WARRANT) {
+    if (stepId === "0kLoiV" && stage === STAGE_HAVE_WARRANT && held(player, WARRANT_ITEM_ID)) {
       event.handled = true;
       event.end = true;
       mournersConfer(player, () => {
@@ -702,7 +704,8 @@ module.exports = function registerPlagueCityQuest(api) {
       // From inside (south of the doors), and once Elena is free, the doors open as doors do (tick 837).
       if (stage >= STAGE_FREED_ELENA || player.getLocation().getY() < location.y) return;
       event.handled = true;
-      if (stage === STAGE_HAVE_WARRANT) {
+      // Bravek's cure moves the stage before the warrant changes hands: no warrant, no entry.
+      if (stage === STAGE_HAVE_WARRANT && held(player, WARRANT_ITEM_ID)) {
         startTranscript(api, player, NpcIdentifiers.MOURNER, PAGE, WARRANT_DOOR_VARIANT);
         return;
       }
@@ -717,7 +720,11 @@ module.exports = function registerPlagueCityQuest(api) {
       if (player.getLocation().getX() > location.x) return;
       event.handled = true;
       if (held(player, SMALL_KEY_ITEM_ID)) unlockCell(player, object);
-      else startTranscript(api, player, NpcIdentifiers.ELENA_2, PAGE, ELENA_LOCKED_VARIANT);
+      else if (stage >= STAGE_FREED_ELENA) {
+        // Ours: Elena has gone home; the locked door alone, as tick 762 begins.
+        statement(player, "The door is locked.");
+        sound(player, LOCKED_SOUND);
+      } else startTranscript(api, player, NpcIdentifiers.ELENA_2, PAGE, ELENA_LOCKED_VARIANT);
     }
   }
 
@@ -807,7 +814,8 @@ module.exports = function registerPlagueCityQuest(api) {
       statement(player, "You dig the soil... The ground is rather hard.");
       return;
     }
-    if (stage > STAGE_WATER_4) return;
+    if (stage > STAGE_WATER_4 || digging.has(player)) return;
+    digging.add(player);
     const text = "You dig deep into the soft soil... Suddenly it crumbles away! You fall through into the sewer. Edmond follows you down the hole.";
     player.getMovementQueue().reset().setBlockMovement(true);
     player.performAnimation(new Animation(DIG_ANIMATION));
@@ -815,6 +823,7 @@ module.exports = function registerPlagueCityQuest(api) {
     fadeOut(player);
     statement(player, text);
     later(player, 3, () => {
+      digging.delete(player);
       quest.setStage(player, STAGE_TUNNEL_OPEN);
       player.moveTo(tile(SEWER_LANDING));
       fadeIn(player);

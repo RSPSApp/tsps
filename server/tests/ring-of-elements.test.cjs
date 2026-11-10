@@ -257,6 +257,18 @@ test("each Rub submenu entry goes to its own altar (rsprox 364: subops 0-3 land 
   assert.equal(prompts.length, 0, "a submenu entry never opens the destination prompt");
 });
 
+test("the agent MCP's Rub subOption sends the packet the server decodes back to Rub and that entry", () => {
+  const { inventorySubOp } = require("../plugins/agent/mcp/World.AgentMcp");
+  const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+  const packet = inventorySubOp(core, ItemIdentifiers.RING_OF_THE_ELEMENTS_4, 0, "Rub", "Fire Altar");
+  assert.equal(packet.type, "widget_action");
+  assert.equal(packet.groupId, 149);
+  assert.equal(packet.subOpId, 4, "the fourth Rub entry, 1-based as ClientProtocol decodes it");
+  assert.equal(ItemActionPacketListener.resolveInventoryWidgetAction(packet.itemId, packet.buttonNum)?.option, "Rub");
+  assert.throws(() => inventorySubOp(core, ItemIdentifiers.RING_OF_THE_ELEMENTS_4, 0, "Rub", "Law Altar"), /no submenu entry/);
+  assert.throws(() => inventorySubOp(core, ItemIdentifiers.RING_OF_THE_ELEMENTS, 0, "Teleport", "Air Altar"), /no inventory option/);
+});
+
 test("worn options go to Last Destination, then Air, Water, Earth and Fire in cache order", (t) => {
   const { started } = stubTeleports(t);
   const player = createPlayer();
@@ -286,11 +298,11 @@ test("the last charges are announced on landing and the last one leaves the unch
     assert.equal(Ring._test.getCharges(player), remaining);
   }
   assert.deepEqual(player.state.messages, [
-    "<col=ef1c1c>Your ring of elements has 5 charges remaining.",
-    "<col=ef1c1c>Your ring of elements has 4 charges remaining.",
-    "<col=ef1c1c>Your ring of elements has 3 charges remaining.",
-    "<col=ef1c1c>Your ring of elements has 2 charges remaining.",
-    "<col=ef1c1c>Your ring of elements has 1 charge remaining.",
+    "<col=ef1020>Your ring of elements has 5 charges remaining.",
+    "<col=ef1020>Your ring of elements has 4 charges remaining.",
+    "<col=ef1020>Your ring of elements has 3 charges remaining.",
+    "<col=ef1020>Your ring of elements has 2 charges remaining.",
+    "<col=ef1020>Your ring of elements has 1 charge remaining.",
   ]);
   assert.equal(ring.getId(), ItemIdentifiers.RING_OF_THE_ELEMENTS);
 });

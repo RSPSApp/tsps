@@ -11,8 +11,8 @@ const CHARGES_ATTRIBUTE = "ring-of-elements:charges";
 const LAST_DESTINATION_ATTRIBUTE = "ring-of-elements:last-destination";
 const CHARGES_VARBIT = "ring_of_the_elements_charges";
 const LAST_DESTINATION_VARBIT = "ring_of_elements_last_destination";
-/** Teleport message colour (game warning red), sent once five or fewer charges remain. */
-const LOW_CHARGES_COLOUR = "ef1c1c";
+/** Teleport message colour (rsprox 364: all five warnings), sent once five or fewer charges remain. */
+const LOW_CHARGES_COLOUR = "ef1020";
 const LOW_CHARGES_AT = 5;
 const CAST_GRAPHIC_HEIGHT = 92;
 /** A bank is a loc (booth, counter) or NPC with this option within this many tiles. */

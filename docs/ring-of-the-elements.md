@@ -24,7 +24,7 @@ item (26815 uncharged, 26818 charged) and the varbits/spotanims named below.
   (3165-3167, 3156-3160). The server uses one recorded tile for each altar (water 3165, 3160),
   the live ring's small spread is not reproduced.
 - **Low charges.** On landing with 5, 4, 3, 2 or 1 charges left the player receives
-  `<col=ef1c1c>Your ring of elements has N charges remaining.` ("1 charge remaining" for one).
+  `<col=ef1020>Your ring of elements has N charges remaining.` ("1 charge remaining" for one).
   No message is sent at 99-96 charges. Recordings show nothing between 6 and 95 remaining, so
   the server warns from five down.
 - **Uncharged ring.** Rub shows an item box with the ring: "Your ring of the elements has no

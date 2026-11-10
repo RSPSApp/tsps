@@ -5,6 +5,25 @@ const { planRoute } = require("../../bots/behaviours/navigation/LongRoutePlanner
 const INVENTORY_GROUP_ID = 149;
 const INVENTORY_WIDGET_OPS = [2, 3, 4, 6, 7];
 
+/**
+ * The widget action a client sends for an inventory submenu entry (IF_BUTTON_SUB): the
+ * option's inventory widget op and the entry's 1-based index, as ClientProtocol decodes it.
+ */
+function inventorySubOp(core, itemId, slot, option, subOption) {
+  const definition = core.CacheDefinitions.getItem(itemId);
+  const matches = (label) => String(label ?? "").toLowerCase() === String(option).toLowerCase();
+  const index = definition?.inventoryActions?.findIndex(matches) ?? -1;
+  const widgetOp = INVENTORY_WIDGET_OPS[index];
+  if (widgetOp === undefined) throw new Error(`Item ${itemId} has no inventory option ${option}`);
+  const entries = definition.subops?.[index] ?? [];
+  const sub = entries.findIndex((label) => String(label ?? "").toLowerCase() === subOption.toLowerCase());
+  if (sub < 0) throw new Error(`${option} has no submenu entry ${subOption} (has: ${entries.filter(Boolean).join(", ")})`);
+  return {
+    type: "widget_action", widgetId: INVENTORY_GROUP_ID << 16, groupId: INVENTORY_GROUP_ID, childId: 0,
+    buttonNum: widgetOp, subOpId: sub + 1, slot, itemId,
+  };
+}
+
 module.exports = function registerWorldTools(ctx) {
   const {
     core, tool, z, player, find, send, items, tile, settle, status, sleepTicks, takeMessages, takeClient, area,
@@ -214,29 +233,10 @@ module.exports = function registerWorldTools(ctx) {
       if (slot === undefined) throw new Error("item or slot is required");
       const item = p.getInventory().getItems()[slot];
       if (!item || item.getId() < 0) throw new Error(`Inventory slot ${slot} is empty`);
-      if (subOption !== undefined) return send(p, inventorySubOp(item.getId(), slot, option, subOption));
+      if (subOption !== undefined) return send(p, inventorySubOp(core, item.getId(), slot, option, subOption));
       return send(p, { type: "inventory_action", slot, itemId: item.getId(), widgetId: 3214, option });
     }
   );
-
-  /**
-   * The widget action a client sends for an inventory submenu entry (IF_BUTTON_SUB): the
-   * option's inventory widget op and the entry's 1-based index, as ClientProtocol decodes it.
-   */
-  function inventorySubOp(itemId, slot, option, subOption) {
-    const definition = core.CacheDefinitions.getItem(itemId);
-    const matches = (label) => String(label ?? "").toLowerCase() === String(option).toLowerCase();
-    const index = definition?.inventoryActions?.findIndex(matches) ?? -1;
-    const widgetOp = INVENTORY_WIDGET_OPS[index];
-    if (widgetOp === undefined) throw new Error(`Item ${itemId} has no inventory option ${option}`);
-    const entries = definition.subops?.[index] ?? [];
-    const sub = entries.findIndex((label) => String(label ?? "").toLowerCase() === subOption.toLowerCase());
-    if (sub < 0) throw new Error(`${option} has no submenu entry ${subOption} (has: ${entries.filter(Boolean).join(", ")})`);
-    return {
-      type: "widget_action", widgetId: INVENTORY_GROUP_ID << 16, groupId: INVENTORY_GROUP_ID, childId: 0,
-      buttonNum: widgetOp, subOpId: sub + 1, slot, itemId,
-    };
-  }
 
   tool(
     "use_item",
@@ -315,3 +315,5 @@ module.exports = function registerWorldTools(ctx) {
     }
   );
 };
+
+module.exports.inventorySubOp = inventorySubOp;

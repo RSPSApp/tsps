@@ -34,8 +34,8 @@
  *    five stops the transcript gates on (Duke, a common man/woman, Father
  *    Aereck, goblins, the shopkeeper) plus Cook, Hans, Bob, the Guide, Mistag
  *    and Kazgar.
- *  - The Tears of Guthix collection minigame is skipped: Juna's dialogue hands
- *    the sequence straight to the twenty-tears cutscene.
+ *  - The twenty tears are collected in the Tears of Guthix cave (the minigame's
+ *    quest mode: no time limit, nothing drunk, the weekly visit untouched).
  *  - The water mill tunnel, both quest trapdoors and the working drilling
  *    machine are runtime objects registered by this plugin, because the cache
  *    maps place only the broken machine. Smashing deregisters the working model
@@ -44,7 +44,11 @@
  *    the full patrol/line-of-sight puzzle; the agility crack and lock doors keep
  *    their 23 Agility / Thieving checks.
  *  - No Sigmund prayer switching; the cellar Sigmund is the level-50 cache NPC
- *    (991) and dies to ordinary combat. The three henchmen are optional.
+ *    (991) and dies to ordinary combat. He and his guards attack once he has
+ *    confronted the player.
+ *  - No tunnel loc is placed in the cache for the exit, and the runtime one sat
+ *    inside the wall: walking down the southern exit tunnel after the machine is
+ *    smashed plays the ending, as the Quick guide describes.
  *  - Followers/pets are always allowed, so the transcript's pet condition
  *    answers false; there is no light-source requirement in the caves, and the
  *    end-of-quest torch is only granted when the player carries no light.
@@ -63,6 +67,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const TearsCave = require("../../minigames/tearsofguthix/Cave.TearsOfGuthix");
 
   const PAGE = "Death to the Dorgeshuun";
   const ZANIK_PAGE = "Zanik";
@@ -239,6 +244,15 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   const STORE_ZONE = { minX: 2555, maxX: 2595, minY: 5175, maxY: 5230 };
   const MILL_ZONE = { minX: 3195, maxX: 3255, minY: 3260, maxY: 3315 };
   const CELLAR_ZONE = { minX: 3202, maxX: 3230, minY: 9610, maxY: 9630 };
+  /** The water mill cellar where Sigmund and his guards fight. */
+  const MILL_CELLAR_ZONE = { minX: 3200, maxX: 3250, minY: 9678, maxY: 9715 };
+  /** The southern tunnel out of the mill cellar, towards the Dorgeshuun mine (cache map). */
+  const EXIT_TUNNEL_ZONE = { minX: 3229, maxX: 3243, minY: 9664, maxY: 9676 };
+  const TEARS_GOAL = 20;
+  /** Juna's step: "If the player's hands are free" before collecting the tears. */
+  const TEARS_HANDS_FREE_ID = "QpmtZU";
+  /** Zanik follows: put her back beside the player once this far away (or another plane). */
+  const FOLLOWER_LEASH = 12;
   const LUMBRIDGE_ZONE = { minX: 3190, maxX: 3270, minY: 3185, maxY: 3265 };
 
   const HIDDEN_TRAPDOOR_TILE = { x: 3166, y: 9622 };
@@ -489,6 +503,13 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
         wanderRadius: 0, owner: player, ownerOnly: true });
       if (!npc) return;
       zanikByPlayer.set(player, npc);
+    } else {
+      // After a teleport (the hidden trapdoor, the tunnel) a follower would be left behind,
+      // out of sight with no options: bring her to the player's side.
+      const at = player.getLocation(), here = npc.getLocation();
+      if (here.getZ() !== at.getZ() || Math.max(Math.abs(here.getX() - at.getX()), Math.abs(here.getY() - at.getY())) > FOLLOWER_LEASH) {
+        npc.moveTo(new Location(at.getX() + 1, at.getY(), at.getZ()));
+      }
     }
     npc.setNpcTransformationId(id);
     const wasFollowing = npc.getFollowing() === player;
@@ -563,6 +584,15 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       }
     }
     cellarNpcsByPlayer.set(player, npcs);
+  }
+
+  /** Sigmund and his guards attack the player (as soon as he has confronted them). */
+  function engageCellar(player) {
+    if (quest.getStage(player) !== STAGE_MILL || !inZone(player, MILL_CELLAR_ZONE)) return;
+    for (const npc of cellarNpcsByPlayer.get(player) ?? []) {
+      if (!npc?.isRegistered?.() || npc.getHitpoints?.() <= 0) continue;
+      npc.getCombat?.()?.attack(player);
+    }
   }
 
   function registerObject(objectId, tile, rotation = 0) {
@@ -922,10 +952,11 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       return true;
     }
     if (stage === STAGE_TEARS) {
-      if (hasBit(player, BIT_TEARS_READY)) {
+      if (TearsCave.isQuestRun(player)) {
+        playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-trying-to-exit-tears-of-guthix-before-collecting-all-the-tears");
+      } else if (hasBit(player, BIT_TEARS_READY)) {
         playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-upon-collecting-twenty-tears");
       } else {
-        setBit(player, BIT_TEARS_READY);
         playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-talking-to-juna-before-collecting-the-tears");
       }
       return true;
@@ -992,8 +1023,35 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
 
   function handleDialogueCondition(event) {
     const { player, stepId } = event;
+    if (stepId === TEARS_HANDS_FREE_ID) {
+      // "Twenty tears should be sufficient...": Juna lets the player into the cave.
+      if (quest.getStage(player) === STAGE_TEARS && !hasBit(player, BIT_TEARS_READY)) {
+        playAfterChat(player, () => collectTears(player));
+      }
+      return;
+    }
     if (stepId !== TOUR_MARK_CONDITION_ID) return;
     if (quest.getStage(player) === STAGE_TOURING) quest.setStage(player, STAGE_TOUR_DONE);
+  }
+
+  function collectTears(player) {
+    if (quest.getStage(player) !== STAGE_TEARS || hasBit(player, BIT_TEARS_READY) || TearsCave.isPlaying(player)) return;
+    if (!handsFree(player)) return;
+    TearsCave.enter(player, {
+      goal: TEARS_GOAL,
+      onGoal: () => {
+        if (quest.getStage(player) !== STAGE_TEARS) return;
+        setBit(player, BIT_TEARS_READY);
+        playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-upon-collecting-twenty-tears");
+      },
+    });
+  }
+
+  /** "I want to get out now!" while collecting: Juna lets the player out with nothing. */
+  function handleDialogueChoice(event) {
+    const { player, npcId, option } = event;
+    if (npcId !== NpcIdentifiers.JUNA || option !== "I want to get out now!") return;
+    if (quest.getStage(player) === STAGE_TEARS && TearsCave.isQuestRun(player)) TearsCave.finish(player);
   }
 
   function handleDialogueAction(event) {
@@ -1080,6 +1138,9 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (stage >= STAGE_MILL) {
       player.moveTo(new Location(MILL_CELLAR_TILE.x, MILL_CELLAR_TILE.y, 0));
       spawnCellar(player);
+      TaskManager.submit(new CountdownTask(player, 1, () => {
+        if (player.isRegistered?.() !== false) engageCellar(player);
+      }));
       return;
     }
     if (!wearingHam(player)) {
@@ -1111,6 +1172,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       new CountdownTask(player, 1, () => {
         if (player.isRegistered?.() === false) return;
         playVariant(player, NpcIdentifiers.SIGMUND_2, "showdown-with-sigmund-confronting-sigmund");
+        playAfterChat(player, () => engageCellar(player));
       })
     );
   }
@@ -1342,6 +1404,13 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
 
   function handleStoreZoneEnter({ player }) {
     if (quest.getStage(player) === STAGE_TRAPDOOR) placeZanik(player);
+  }
+
+  /** Walking down the southern exit tunnel once the machine is smashed plays the ending. */
+  function handleExitTunnelEnter({ player }) {
+    if (quest.getStage(player) !== STAGE_MACHINE_SMASHED || quest.isComplete(player)) return;
+    if (player.getLocation().getZ() !== 0) return;
+    enterTunnel(player);
   }
 
   function handleMillZoneEnter({ player }) {
@@ -1624,6 +1693,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleSunLine);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);
+  api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onCustomEvent("quest:stage-changed", handleQuestStageChanged);
@@ -1636,6 +1706,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onZoneEnter(RUBBLE_ZONE, handleRubbleZoneEnter);
   api.onZoneEnter(STORE_ZONE, handleStoreZoneEnter);
   api.onZoneEnter(MILL_ZONE, handleMillZoneEnter);
+  api.onZoneEnter(EXIT_TUNNEL_ZONE, handleExitTunnelEnter);
   api.onZoneEnter(LUMBRIDGE_ZONE, handleLumbridgeZoneEnter);
   api.onServerStartup(ensureWorldObjects);
   api.onPlayerLogin(handleLogin);

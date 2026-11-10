@@ -181,12 +181,14 @@ async function clickLoc(t, f, id) {
 // ------------------------------------------------------------------ The Dig Site
 
 test("Dig Site: the student refuses a full bag and the exam waits; with room he signs", async (t) => {
-  const control = actor(t, DIG, 1);
+  // The students only take part once the examiner has the curator's stamped letter (stage 1).
+  const letterDelivered = (f) => { f.p.setAttribute("quest.the_dig_site.letter_delivered", true); return f; };
+  const control = letterDelivered(actor(t, DIG, 1));
   await talk(t, control, N.STUDENT);
   assert.equal(control.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1, "control: the certificate");
   assert.equal(stageOf(control, DIG), 2, "control: and the stage");
 
-  const f = actor(t, DIG, 1);
+  const f = letterDelivered(actor(t, DIG, 1));
   fill(f);
   await talk(t, f, N.STUDENT);
   assert.equal(stageOf(f, DIG), 1, "the exam waits");

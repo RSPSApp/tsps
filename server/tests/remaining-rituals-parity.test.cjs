@@ -385,14 +385,24 @@ test("Shades of Mort'ton repairs to native 100/20, sanctifies serum and complete
   h.object(O.BROKEN_WALL);
   assert.match(h.messages.at(-1), /material resource pool/);
 
-  h.give(I.LIMESTONE_BRICK, 100);
-  h.give(I.PLANK, 100);
-  h.give(I.SWAMP_PASTE, 500);
+  // Twenty material sets are 100% resources (Wiki: 5% a set); one click keeps building.
+  h.give(I.LIMESTONE_BRICK, 20);
+  h.give(I.PLANK, 20);
+  h.give(I.SWAMP_PASTE, 100);
   h.equipment.hands = I.FLAMTAER_BRACELET;
-  for (let i = 0; i < 19; i++) h.object(O.BROKEN_WALL);
-  assert.equal(h.quest.getStage(h.player), 55, '19 bracelet clicks are not enough');
-  h.object(O.BROKEN_WALL);
+  const random = Math.random;
+  Math.random = () => 0; // every build roll succeeds
+  try {
+    h.object(O.BROKEN_WALL);
+    assert.equal(h.configs.get(343), 1, 'the first build lands at once');
+    assert.equal(h.quest.getStage(h.player), 55);
+    h.runTasks();
+  } finally {
+    Math.random = random;
+  }
   assert.equal(h.configs.get(343), 100);
+  assert.equal(h.configs.get(344), 0, 'every set went into the resource pool and was spent');
+  assert.equal(h.inventory.get(I.LIMESTONE_BRICK), 0);
   assert.ok(h.configs.get(345) >= 20);
   assert.equal(h.quest.getStage(h.player), 60);
 
@@ -589,7 +599,7 @@ test("Shades of Mort'ton migrates old saves and publishes the native 207/208 cur
   temple.attrs.set('quest.shades_of_mortton.met_razmire', 'cured');
   temple.login();
   assert.equal(temple.configs.get(343), 0, 'legacy quest state cannot set a world repair percentage');
-  assert.equal(temple.configs.get(345), 20);
+  assert.equal(temple.configs.get(345), 0, 'sanctity is lost on logout (Wiki)');
   assert.ok((temple.configs.get(340) & 12) !== 0, 'old cured-NPC saves rebuild varp 340');
 
   const cured = setup('../plugins/quests/quests/ShadesOfMortton.Quest');
@@ -633,11 +643,62 @@ test("Shades of Mort'ton first repair gives the captured 1% repair / 2% sanctity
   h.give(I.LIMESTONE_BRICK, 1);
   h.give(I.PLANK, 1);
   h.give(I.SWAMP_PASTE, 5);
-  h.object(O.BROKEN_WALL);
+  const random = Math.random;
+  Math.random = () => 0;
+  try {
+    h.object(O.BROKEN_WALL);
+  } finally {
+    Math.random = random;
+  }
   assert.equal(h.configs.get(343), 1);
+  assert.equal(h.configs.get(344), 4, 'one set is 5% resources and the build spent 1%');
   assert.equal(h.configs.get(345), 2);
+  h.setLocation(3432, 2930); // stepping away ends the building
   h.runTasks();
+  assert.equal(h.configs.get(343), 1);
   assert.equal(h.configs.get(345), 3);
+});
+
+test("Shades of Mort'ton serums change the NPC for a while; Razmire's Trade options open his two stores", () => {
+  const h = setup('../plugins/quests/quests/ShadesOfMortton.Quest');
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 55);
+  const npc = () => ({ form: -1, setNpcTransformationId(id) { this.form = id; }, getNpcTransformationId() { return this.form; } });
+  const use = (itemId, npcId, target) => {
+    const event = { player: h.player, itemId, npcId, target, handled: false };
+    for (const fn of h.hooks.itemOnNpc) fn(event);
+    return event;
+  };
+  const razmire = npc();
+  h.give(I.SERUM_207_4_, 1);
+  use(I.SERUM_207_4_, N.AFFLICTED_RAZMIRE_, razmire);
+  assert.equal(razmire.form, N.RAZMIRE_KEELGAN, 'serum 207 turns Razmire into his cured, tradeable NPC');
+  h.runTasks();
+  assert.equal(razmire.form, -1, 'a 207 cure wears off');
+  h.give(I.SERUM_208_4_, 1);
+  use(I.SERUM_208_4_, N.AFFLICTED_RAZMIRE_, razmire);
+  h.runTasks();
+  assert.equal(razmire.form, -1);
+  for (const fn of h.hooks.variants) fn({ player: h.player, npc: razmire, npcId: N.AFFLICTED_RAZMIRE_ });
+  assert.equal(razmire.form, N.RAZMIRE_KEELGAN, 'Wiki: a 208-cured Razmire is cured again when talked to');
+
+  const villager = npc();
+  h.give(I.SERUM_207_4_, 1);
+  assert.equal(use(I.SERUM_207_4_, N.AFFLICTED_3, villager).handled, true);
+  assert.equal(villager.form, N.MORTTON_LOCAL_3);
+  assert.match(h.messages.at(-1), /^You've been given /);
+
+  const opened = [];
+  const open = h.core.ShopManager.open;
+  h.core.ShopManager.open = (player, shopId) => { opened.push(shopId); return true; };
+  try {
+    const razmireOptions = h.hooks.namedNpcs.find(({ name }) => name === 'Razmire Keelgan').actions;
+    razmireOptions['Trade-General-Store']({ player: h.player, handled: false });
+    razmireOptions['Trade-Builders-Store']({ player: h.player, handled: false });
+  } finally {
+    h.core.ShopManager.open = open;
+  }
+  assert.deepEqual(opened, [1294, 1293]);
 });
 
 test('Shades of Mort\'ton reading the diary opens the captured book spread', () => {
@@ -780,7 +841,7 @@ test('Spirits ranged target validates the real Shoot option and generic ranged a
   prepare(h);
   h.equipment.weapon = h.core.ItemIdentifiers.MAGIC_SHORTBOW;
   shoot(h);
-  assert.match(h.messages.at(-1), /ammunition/);
+  assert.equal(h.messages.at(-1), 'There is no ammo left in your quiver.');
   assert.notEqual(h.varbits.get(1451), 1);
 
   h = setup('../plugins/quests/quests/SpiritsOfTheElid.Quest');
@@ -788,7 +849,7 @@ test('Spirits ranged target validates the real Shoot option and generic ranged a
   h.equipment.weapon = h.core.ItemIdentifiers.MAGIC_SHORTBOW;
   h.equipment.ammo = h.core.ItemIdentifiers.DRAGON_ARROW;
   shoot(h);
-  assert.match(h.messages.at(-1), /can not use/);
+  assert.equal(h.messages.at(-1), "You can't use that ammo with your bow.");
   assert.notEqual(h.varbits.get(1451), 1);
 
   h = setup('../plugins/quests/quests/SpiritsOfTheElid.Quest');
@@ -916,14 +977,20 @@ test("Shades repair registrations do not seed a new world from player saves", ()
   const I = a.core.ItemIdentifiers, O = a.core.ObjectIdentifiers;
   a.quest.setStage(a.player, 55);
   for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 1], [I.PLANK, 1], [I.SWAMP_PASTE, 5]]) a.give(id, count);
-  a.object(O.BROKEN_WALL);
+  const random = Math.random;
+  Math.random = () => 0; // the build roll succeeds
+  try {
+    a.object(O.BROKEN_WALL);
+  } finally {
+    Math.random = random;
+  }
   assert.equal(a.configs.get(343), 1);
   b.quest.setStage(b.player, 60);
   b.attrs.set('shades-of-mortton:temple-repaired', 84);
   b.attrs.set('shades-of-mortton:temple-sanctity', 31);
   b.login();
   assert.equal(b.configs.get(343), 0, 'old personal repair does not seed this world');
-  assert.equal(b.configs.get(345), 31, 'saved sanctity remains personal');
+  assert.equal(b.configs.get(345), 0, 'old saved sanctity is dropped: sanctity is lost on logout (Wiki)');
   assert.equal(b.quest.getStage(b.player), 60, 'prior altar eligibility remains personal');
   a.login();
   assert.equal(a.configs.get(343), 1, 'the first registration retains its own repair state');
@@ -975,6 +1042,10 @@ test("Shades repair fans out between real world players and preserves personal s
     player.setUsername(name);
     player.setAttribute('bot-skip-persistence', true);
     player.setLocation(new core.Location(3506, 3315, 0));
+    const skills = player.getSkillManager();
+    skills.setMaxLevels(core.Skill.CRAFTING, 20, false);
+    skills.setExperience(core.Skill.CRAFTING, core.SkillManager.getExperienceForLevel(20));
+    skills.setCurrentLevel(core.Skill.CRAFTING, 20, false);
     actors.push(player); // cleanup is installed before the actual onAdd/login
     assert.equal(World.getPlayers().add(player), true);
     assert.equal(World.getPlayers().get(player.getIndex()), player);
@@ -982,15 +1053,19 @@ test("Shades repair fans out between real world players and preserves personal s
     return { player, configs };
   }
   const a = actor('shadesrepaira'), b = actor('shadesrepairb');
+  const random = Math.random;
+  Math.random = () => 0; // every build roll succeeds
+  t.after(() => { Math.random = random; });
+  const atWall = new core.Location(3506, 3315, 0), aside = new core.Location(3506, 3313, 0);
   quest.setStage(a.player, 55);
   quest.setStage(b.player, 55);
   b.player.setAttribute('shades-of-mortton:temple-sanctity', 11);
   for (const f of [a, b]) PluginManager.emitPlayerLogin({ player:f.player, username:f.player.getUsername(), isNewAccount:false });
   assert.equal(a.configs.get(343), 0);
   assert.equal(b.configs.get(343), 0, 'both online players start in the same unbuilt world');
-  assert.equal(b.configs.get(345), 11);
+  assert.equal(b.configs.get(345), 0, 'sanctity is lost on logout (Wiki), so an old saved value is not restored');
   const inventory = a.player.getInventory();
-  for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 2], [I.PLANK, 2], [I.SWAMP_PASTE, 10]]) {
+  for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 1], [I.PLANK, 1], [I.SWAMP_PASTE, 5]]) {
     inventory.add(new core.Item(id, count), true);
     assert.equal(inventory.getAmount(id), count);
   }
@@ -998,19 +1073,22 @@ test("Shades repair fans out between real world players and preserves personal s
   const wall = new core.GameObject(O.BROKEN_WALL, wallLocation, 10, 0, null);
   const repair = (player = a.player) => PluginManager.emitObjectInteraction({player, object:wall,
     objectId:wall.getId(), clickType:1, location:wallLocation, handled:false});
+  // Wiki: one set (1 brick, 1 plank, 5 swamp paste) is 5% resources; the click's first build spends 1%.
   assert.equal(repair(), true, 'registered object handler receives the repair action');
-  assert.equal(inventory.getAmount(I.LIMESTONE_BRICK), 1);
-  assert.equal(inventory.getAmount(I.PLANK), 1);
-  assert.equal(inventory.getAmount(I.SWAMP_PASTE), 5);
+  for (const id of [I.LIMESTONE_BRICK, I.PLANK, I.SWAMP_PASTE]) assert.equal(inventory.getAmount(id), 0);
   assert.equal(inventory.getAmount(I.HAMMER), 1);
+  assert.equal(a.configs.get(344), 4, 'the set became 5% resources, 1% of it built');
   assert.equal(a.configs.get(343), 1);
   assert.equal(b.configs.get(343), 1, 'online observer receives the shared percentage');
   assert.equal(a.configs.get(345), 2);
-  assert.equal(b.configs.get(345), 11, 'observer sanctity is not the contributor sanctity');
+  assert.equal(b.configs.get(345), 0, 'observer sanctity is not the contributor sanctity');
   assert.equal(quest.getStage(b.player), 55, 'observation grants no quest progress');
+  a.player.setLocation(aside); // stepping away ends the build loop
   for (let i = 0; i < 4; i++) World.process();
   assert.equal(a.configs.get(345), 3, 'the actual delayed task updates only the contributor');
-  assert.equal(b.configs.get(345), 11);
+  assert.equal(a.configs.get(343), 1, 'nobody is building any more');
+  assert.equal(b.configs.get(345), 0);
+
   const peerInventory = b.player.getInventory();
   for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 1], [I.PLANK, 1], [I.SWAMP_PASTE, 5]]) {
     peerInventory.add(new core.Item(id, count), true);
@@ -1019,39 +1097,46 @@ test("Shades repair fans out between real world players and preserves personal s
   assert.equal(repair(b.player), true, 'the peer contributes through the same registered handler');
   for (const id of [I.LIMESTONE_BRICK, I.PLANK, I.SWAMP_PASTE]) assert.equal(peerInventory.getAmount(id), 0);
   assert.equal(peerInventory.getAmount(I.HAMMER), 1);
+  b.player.setLocation(aside);
   assert.equal(a.configs.get(343), 2);
   assert.equal(b.configs.get(343), 2, 'both contributions accumulate in the same world');
   assert.equal(a.configs.get(345), 3);
-  assert.equal(b.configs.get(345), 13);
+  assert.equal(b.configs.get(345), 2);
+
   assert.equal(World.getPlayers().removes(b.player), true);
-  assert.equal(repair(), true);
+  a.player.setLocation(atWall);
+  assert.equal(repair(), true, 'a builds from the resources left in their pool');
+  a.player.setLocation(aside);
   assert.equal(a.configs.get(343), 3);
+  assert.equal(a.configs.get(344), 3);
   assert.equal(b.configs.get(343), 2, 'offline observers do not receive fan-out');
   assert.equal(World.getPlayers().add(b.player), true);
   b.player.needsPlacement = false;
   PluginManager.emitPlayerLogin({ player:b.player, username:b.player.getUsername(), isNewAccount:false });
   assert.equal(b.configs.get(343), 3, 'login sends the current world state');
-  assert.equal(b.configs.get(345), 13);
+  assert.equal(b.configs.get(345), 0, 'logging out lost the peer\'s sanctity');
+  assert.equal(b.configs.get(344), 4, 'resources are kept across logout');
   assert.equal(quest.getStage(b.player), 55);
-  assert.equal(inventory.getAmount(I.LIMESTONE_BRICK), 0);
-  assert.equal(inventory.getAmount(I.PLANK), 0);
-  assert.equal(inventory.getAmount(I.SWAMP_PASTE), 0);
 
-  // Reach the existing contributor-only quest threshold while the peer watches.
+  // Restock a set at a time so the real inventory can hold the materials.
   a.player.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(I.FLAMTAER_BRACELET));
-  for (let i = 0; i < 20; i++) {
-    for (const [id, count] of [[I.LIMESTONE_BRICK, 5], [I.PLANK, 5], [I.SWAMP_PASTE, 25]]) {
-      inventory.add(new core.Item(id, count), true);
-      assert.equal(inventory.getAmount(id), count);
+  a.player.setLocation(atWall);
+  assert.equal(repair(), true);
+  for (let i = 0; i < 1000 && a.configs.get(343) < 100; i++) {
+    if (a.configs.get(344) === 0) {
+      for (const [id, count] of [[I.LIMESTONE_BRICK, 1], [I.PLANK, 1], [I.SWAMP_PASTE, 5]]) {
+        inventory.add(new core.Item(id, count), true);
+        assert.equal(inventory.getAmount(id), count);
+      }
+      assert.equal(repair(), true);
+      assert.equal(a.configs.get(344), 4, 'restocking adds one set and uses one build');
     }
-    assert.equal(repair(), true);
-    assert.equal(inventory.getAmount(I.LIMESTONE_BRICK), 0);
-    assert.equal(inventory.getAmount(I.PLANK), 0);
-    assert.equal(inventory.getAmount(I.SWAMP_PASTE), 0);
+    World.process();
   }
+  a.player.setLocation(aside);
   assert.equal(a.configs.get(343), 100);
   assert.equal(b.configs.get(343), 100);
   assert.equal(quest.getStage(a.player), 60, 'the eligible contributor receives their own quest credit');
   assert.equal(quest.getStage(b.player), 55, 'a shared 100 percent does not grant observer quest credit');
-  assert.equal(b.configs.get(345), 13);
+  assert.equal(b.configs.get(345), 0);
 });

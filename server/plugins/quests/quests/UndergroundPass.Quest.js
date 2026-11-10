@@ -17,11 +17,16 @@
  * "quest.underground_pass.bits" attribute (bit 30 reuses the source's reserved
  * maze range for Kamen's free food).
  *
- * Gaps (no dump/coordinate support): the grid-tile maze, Iban's bolt pattern
- * and the soulless bite damage are not simulated; the unicorn boulder is folded
- * into the smashed cage; most other obstacles show the transcript words and
- * advance the stage without moving the player. Source: LostCity quest_upass
- * (pinned in issue #196).
+ * Gaps: the grid-tile maze, Iban's bolt pattern and the soulless bite damage
+ * are not simulated; the unicorn boulder is folded into the smashed cage; the
+ * rope swing never fails and the ledge/bridge falls do not drop the player into
+ * the pits below. Source: LostCity quest_upass (pinned in issue #196).
+ *
+ * Travel through the pass follows data/underground-pass-route.json (the live
+ * Shortest Path transport table): the Well of Iban, the cell gates and loose
+ * mud, the ledges and stone-bridge maze, the pipes, the unicorn-room tunnels,
+ * the rockpile, the rope swing, the portcullis lever, Iban's door to the cavern
+ * below, the cavern bridges and the temple doors.
  *
  * Movement that is reproduced: entering the cave appears by the interior cave
  * exit (3214 at 2496,9713), the cave exit returns to West Ardougne, crossing
@@ -216,6 +221,7 @@ module.exports = function registerUndergroundPassQuest(api) {
   const TEMPLE_DOOR_DOLL_CONDITION_ID = "_NEbY7";
   const BRIDGE_LEVER_IDS = new Set([ObjectIdentifiers.LEVER_19, ObjectIdentifiers.LEVER_20]);
   const PORTCULLIS_LEVER_IDS = new Set([ObjectIdentifiers.LEVER_21]);
+  const PORTCULLIS_LEVER_ID = ObjectIdentifiers.LEVER_21; // 3337
   const GUIDE_ROPE_IDS = new Set([ObjectIdentifiers.GUIDE_ROPE, ObjectIdentifiers.GUIDE_ROPE_2]);
   const WELL_OF_IBAN = ObjectIdentifiers.WELL_3;
   const BLOOD_WELL = ObjectIdentifiers.WELL_4;
@@ -250,11 +256,25 @@ module.exports = function registerUndergroundPassQuest(api) {
   const PLANK_ROCK_IDS = new Set([ObjectIdentifiers.FLAT_ROCK, ObjectIdentifiers.FLAT_ROCK_2]);
   const SWAMP = ObjectIdentifiers.SWAMP;
   const ROCKSLIDE = ObjectIdentifiers.ROCKSLIDE;
-  const PIPE_IDS = new Set([
-    ObjectIdentifiers.PIPE_18,
-    ObjectIdentifiers.PIPE_19,
-    ObjectIdentifiers.PIPE_20,
-  ]);
+  // Obstacles the route table moves the player through (cache ids, revision 241).
+  const ONE_WAY_PIPE = ObjectIdentifiers.PIPE_18; // 3235, the grilled pipe back to the rope swing
+  const ONE_WAY_PIPE_BLOCKED_END = ObjectIdentifiers.PIPE_19; // 3236, its grilled far end
+  const UNICORN_ROOM_PIPE = ObjectIdentifiers.PIPE_20; // 3237
+  const MAZE_PIPE = 35941;
+  const MAZE_PIPE_BLOCKED = 35942;
+  const UNICORN_TUNNEL_IDS = new Set([3218, 3219]);
+  const CELL_GATE = 3266;
+  const MAZE_SHORTCUT_GATE = 3268; // 50 Thieving
+  const MAZE_SHORTCUT_THIEVING = 50;
+  const ROCKPILE = 3307;
+  const MUD_TUNNEL_CAVE = 3217;
+  const POST_IBAN_CAVE = 3224;
+  const LOOSE_MUD = 3216;
+  const LOOSE_MUD_TILE = { x: 2393, y: 9650 }; // Quest Helper's "Dig the loose mud" tile
+  const ROPE_SWING = 23123;
+  const PIPE_CRAWL_MESSAGE_ID = "2FlXvw"; // "You crawl through the pipe." (the grilled pipe, "Yes")
+  const PORTCULLIS_PASS_ACTION_ID = "bqNjX5"; // "The player passes through."
+  const ROUTED_PLATFORM_IDS = new Set([ObjectIdentifiers.STONE_BRIDGE, ObjectIdentifiers.LEDGE_4, 3254, 3255]);
   const PLATFORM_JUMP_IDS = new Set([
     ObjectIdentifiers.BRIDGE_3,
     ObjectIdentifiers.BRIDGE_4,
@@ -417,6 +437,45 @@ module.exports = function registerUndergroundPassQuest(api) {
     player.moveTo(new Location(tile.x, tile.y, tile.z ?? 0));
   }
 
+  /**
+   * Where each pass obstacle takes the player (data/underground-pass-route.json, from the live
+   * Shortest Path transport table): the link whose start tile is nearest the player, within a
+   * few tiles, on the same plane. 3221 is the second leaf of Iban's door 3220.
+   */
+  const ROUTE_LINKS = require("./data/underground-pass-route.json").links;
+  const ROUTE_BY_ID = new Map();
+  for (const link of ROUTE_LINKS) {
+    if (!ROUTE_BY_ID.has(link.id)) ROUTE_BY_ID.set(link.id, []);
+    ROUTE_BY_ID.get(link.id).push(link);
+  }
+  const ROUTE_ALIASES = new Map([[3221, 3220]]);
+  const ROUTE_REACH = 4;
+
+  function routeLanding(player, objectId) {
+    const links = ROUTE_BY_ID.get(ROUTE_ALIASES.get(objectId) ?? objectId);
+    if (!links) return null;
+    const here = player.getLocation();
+    let best = null;
+    let bestDistance = Infinity;
+    for (const link of links) {
+      if (link.from[2] !== here.getZ()) continue;
+      const distance = Math.max(Math.abs(link.from[0] - here.getX()), Math.abs(link.from[1] - here.getY()));
+      if (distance < bestDistance) {
+        best = link;
+        bestDistance = distance;
+      }
+    }
+    return best && bestDistance <= ROUTE_REACH ? best.to : null;
+  }
+
+  /** Moves the player along the obstacle's route link; false when none starts near them. */
+  function travel(player, objectId) {
+    const to = routeLanding(player, objectId);
+    if (!to) return false;
+    player.moveTo(new Location(to[0], to[1], to[2]));
+    return true;
+  }
+
   /** Teleport to the far bank of the bridge, whichever bank the player is on. */
   function crossBridge(player) {
     const x = player.getLocation?.()?.getX?.() ?? 0;
@@ -427,6 +486,19 @@ module.exports = function registerUndergroundPassQuest(api) {
    * Climb a rockslide the way OSRS moves the player: over the object, onto the walkable
    * tile beyond it, away from the side the player approached from.
    */
+  /** The rope swing over the pit: a rope is tied on the way over; coming back needs none. */
+  function swingAcross(player) {
+    const landing = routeLanding(player, ROPE_SWING);
+    if (!landing) return;
+    const westward = landing[0] < player.getLocation().getX();
+    if (!westward && !hasItem(player, ROPE)) {
+      player.sendMessage("You need a rope to swing across the pit.");
+      return;
+    }
+    playVariant(player, UP + "rope-swinging-across");
+    travel(player, ROPE_SWING);
+  }
+
   function climbOverRockslide(player, event) {
     const at = event.location ?? {};
     const here = player.getLocation();
@@ -950,6 +1022,14 @@ module.exports = function registerUndergroundPassQuest(api) {
       crossBridge(player);
       return;
     }
+    if (stepId === PIPE_CRAWL_MESSAGE_ID) {
+      travel(player, ONE_WAY_PIPE);
+      return;
+    }
+    if (stepId === PORTCULLIS_PASS_ACTION_ID) {
+      travel(player, PORTCULLIS_LEVER_ID);
+      return;
+    }
     if (CLOTH_MESSAGE_IDS.has(stepId)) {
       if (!hasItem(player, OILY_CLOTH)) give(player, OILY_CLOTH, 1);
       return;
@@ -1108,6 +1188,16 @@ module.exports = function registerUndergroundPassQuest(api) {
       if (!testBit(player, BIT_READ_JOURNAL)) setBit(player, BIT_READ_JOURNAL);
       player.sendMessage("Randas' journal speaks of the Spheres of Light he hid in the caverns.");
       event.handled = true;
+      return;
+    }
+    // Digging with the spade while standing at the cell's loose mud does the same as using it on the mud.
+    if (itemId === ItemIdentifiers.SPADE && /dig/i.test(String(event.option ?? "")) && routeLanding(player, LOOSE_MUD)) {
+      const here = player.getLocation();
+      if (Math.abs(here.getX() - LOOSE_MUD_TILE.x) <= 1 && Math.abs(here.getY() - LOOSE_MUD_TILE.y) <= 1) {
+        event.handled = true;
+        playVariant(player, UP + "digging-the-loose-mud");
+        travel(player, LOOSE_MUD);
+      }
     }
   }
 
@@ -1116,6 +1206,18 @@ module.exports = function registerUndergroundPassQuest(api) {
     const { player, itemId, objectId } = event;
     if (!player) return;
     const stage = quest.getStage(player);
+
+    if (objectId === LOOSE_MUD && itemId === ItemIdentifiers.SPADE) {
+      event.handled = true;
+      playVariant(player, UP + "digging-the-loose-mud");
+      travel(player, LOOSE_MUD);
+      return;
+    }
+    if (objectId === ROPE_SWING && itemId === ROPE) {
+      event.handled = true;
+      swingAcross(player);
+      return;
+    }
 
     if (objectId === FURNACE && ORB_BIT_BY_ITEM.has(itemId)) {
       event.handled = true;
@@ -1287,7 +1389,7 @@ module.exports = function registerUndergroundPassQuest(api) {
     }
   }
 
-  function useUnicornDoor(player) {
+  function useUnicornDoor(player, objectId) {
     if (!unicornDoorUnlocked(player)) {
       player.sendMessage("The door is locked.");
       return;
@@ -1297,9 +1399,11 @@ module.exports = function registerUndergroundPassQuest(api) {
       setBit(player, BIT_KOFTIK_INSANE);
     }
     playVariant(player, UP + "opening-the-door");
+    // "You pass through the doors..." into Iban's cavern below, or back up.
+    travel(player, objectId);
   }
 
-  function useTempleDoor(player) {
+  function useTempleDoor(player, objectId) {
     if (!testBit(player, BIT_READ_HISTORY)) {
       player.sendMessage("You have no reason to go in there.");
       return;
@@ -1314,13 +1418,14 @@ module.exports = function registerUndergroundPassQuest(api) {
     }
     if (quest.getStage(player) < STAGE_CONFRONTED_IBAN) quest.setStage(player, STAGE_CONFRONTED_IBAN);
     playVariant(player, UP + "entering-iban-s-temple");
+    travel(player, objectId);
   }
 
   /** Doors' generic name hook claims "Door" locs; claim the quest doors first. */
   function handleDoorToggle(event) {
     if (UNICORN_DOOR_IDS.has(event.objectId)) {
       event.handled = true;
-      useUnicornDoor(event.player);
+      useUnicornDoor(event.player, event.objectId);
       return;
     }
     if (TEMPLE_DOOR_IDS.has(event.objectId)) {
@@ -1328,7 +1433,7 @@ module.exports = function registerUndergroundPassQuest(api) {
       // temple was entered; do not keep enforcing its pre-completion bits.
       if (quest.isComplete(event.player)) return;
       event.handled = true;
-      useTempleDoor(event.player);
+      useTempleDoor(event.player, event.objectId);
     }
   }
 
@@ -1402,6 +1507,7 @@ module.exports = function registerUndergroundPassQuest(api) {
       if (orbCount(player) === 4) {
         if (stage < STAGE_SECOND_AREA) quest.setStage(player, STAGE_SECOND_AREA);
         playVariant(player, UP + "climbing-down-the-well");
+        travel(player, WELL_OF_IBAN);
       } else {
         playVariant(player, UP + "trying-to-climb-down-the-well-before-destroying-the-orbs");
       }
@@ -1418,7 +1524,7 @@ module.exports = function registerUndergroundPassQuest(api) {
 
     if (UNICORN_DOOR_IDS.has(objectId)) {
       event.handled = true;
-      useUnicornDoor(player);
+      useUnicornDoor(player, objectId);
       return;
     }
 
@@ -1622,14 +1728,85 @@ module.exports = function registerUndergroundPassQuest(api) {
         player.sendMessage("...but you slip and tumble into the darkness.");
         return;
       }
-      landAcrossPlatform(player, event);
+      // Live landings where the route table has them; the footprint guess otherwise.
+      if (!ROUTED_PLATFORM_IDS.has(objectId) || !travel(player, objectId)) landAcrossPlatform(player, event);
       player.sendMessage("...you manage to cross safely.");
       return;
     }
 
-    if (PIPE_IDS.has(objectId)) {
+    if (objectId === ONE_WAY_PIPE) {
+      event.handled = true;
+      // The transcript asks to confirm; its "You crawl through the pipe." moves the player.
+      playVariant(player, UP + "squeezing-through-the-pipe");
+      return;
+    }
+
+    if (objectId === ONE_WAY_PIPE_BLOCKED_END) {
+      event.handled = true;
+      player.sendMessage("The other end of the pipe is blocked by a grill.");
+      return;
+    }
+
+    if (objectId === UNICORN_ROOM_PIPE) {
+      event.handled = true;
+      playVariant(player, UP + "crawling-through-the-pipe-into-the-unicorn-room");
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === MAZE_PIPE) {
       event.handled = true;
       player.sendMessage("You crawl through the pipe.");
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === MAZE_PIPE_BLOCKED) {
+      event.handled = true;
+      playVariant(player, UP + "attempting-to-use-the-pipe-shortcut");
+      return;
+    }
+
+    if (UNICORN_TUNNEL_IDS.has(objectId)) {
+      event.handled = true;
+      playVariant(player, UP + "passing-through-the-unicorn-room-tunnel");
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === CELL_GATE || objectId === MAZE_SHORTCUT_GATE) {
+      event.handled = true;
+      if (objectId === MAZE_SHORTCUT_GATE && player.getSkillManager().getCurrentLevel(Skill.THIEVING) < MAZE_SHORTCUT_THIEVING) {
+        player.sendMessage(`You need a Thieving level of ${MAZE_SHORTCUT_THIEVING} to pick this lock.`);
+        return;
+      }
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === ROCKPILE) {
+      event.handled = true;
+      playVariant(player, UP + "climbing-over-rockslides");
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === MUD_TUNNEL_CAVE) {
+      event.handled = true;
+      playVariant(player, UP + "climbing-back-through-the-tunnel");
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === POST_IBAN_CAVE) {
+      event.handled = true;
+      travel(player, objectId);
+      return;
+    }
+
+    if (objectId === ROPE_SWING) {
+      event.handled = true;
+      swingAcross(player);
       return;
     }
 

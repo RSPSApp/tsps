@@ -226,6 +226,49 @@ test("two divine potions keep their own five minutes: the second doesn't drop th
   assert.equal(player.getAttribute("potions:divine:state"), null);
 });
 
+// rsprox_transcripts/239/04263.txt (a normal world): the warning as the timers reach 30 ticks, the worn-off line at 0,
+// one line for a potion's skills together. 234 and 237: a divine ranging potion's own warning. 237/01148.txt and seven
+// more: dying clears the timers with no line.
+test("divine potions: the warning at 30 ticks left, the worn-off line at the end, and a silent clear on death", (t) => {
+  const WARNING = "<col=ff3045>Your divine potion effect is about to expire.</col>";
+  const RANGING = "<col=ff3045>Your divine ranging potion is about to expire.</col>";
+  const WORN_OFF = "<col=ff3045>The effects of the divine potion have worn off.";
+  const TICK = 600;
+  let now = 2_000_000;
+  t.mock.method(Date, "now", () => now);
+  const drink = (skills) => {
+    const player = createPlayer({ current: 99 });
+    const lines = [];
+    player.sendMessage = (text) => lines.push(text);
+    applyDivine(player, (p) => { for (const skill of skills) p.levels.set(skill, 112); }, skills, { damage: 0 });
+    return { player, lines };
+  };
+  const bastion = drink([Skill.RANGED, Skill.DEFENCE]);
+  now += 469 * TICK;
+  processDivine(bastion.player);
+  assert.deepEqual(bastion.lines, [], "31 ticks left: nothing yet");
+  now += TICK;
+  processDivine(bastion.player);
+  processDivine(bastion.player);
+  assert.deepEqual(bastion.lines, [WARNING], "30 ticks left: one line for both skills, once");
+  now += 30 * TICK;
+  processDivine(bastion.player);
+  assert.deepEqual(bastion.lines, [WARNING, WORN_OFF]);
+  assert.equal(bastion.player.levels.get(Skill.RANGED), 99);
+
+  const ranging = drink([Skill.RANGED]);
+  now += 470 * TICK;
+  processDivine(ranging.player);
+  assert.deepEqual(ranging.lines, [RANGING], "the divine ranging potion names itself");
+
+  const dead = drink([Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]);
+  Potions._test.clearDivineOnDeath({ player: dead.player });
+  assert.equal(dead.player.getAttribute("potions:divine:state"), null);
+  now += 600 * TICK;
+  processDivine(dead.player);
+  assert.deepEqual(dead.lines, [], "no line on death, and none later");
+});
+
 test("a divine potion's timer pauses while logged out and the state survives a save", () => {
   const player = createPlayer({ current: 99 });
   applyDivine(player, (p) => p.levels.set(Skill.ATTACK, 118), [Skill.ATTACK]);

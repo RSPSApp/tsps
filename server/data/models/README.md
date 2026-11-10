@@ -76,6 +76,13 @@ Select every part (a player's body and equipment are one model in game).
   else: each step makes those faces 8/255 more transparent, so 32 hides them. The faces they act on
   use copies of their material (`<material>~fade`), so the fade shows in Material or Textured view.
   Recolour the original material; the copies follow it and export as it.
+- What the player holds during the animation is in Tool Shelf > OSRS > Held items: **Weapon slot**
+  and **Shield slot** (the rig's `osrs_right_hand` and `osrs_left_hand` properties). An item id
+  shows that item, 0 empties the hand, -1 keeps what is worn. They apply to the whole animation
+  (the game has one value per hand for each animation, not one per frame). Jagex's godsword
+  specials empty both hands (0); `zamorak-godsword-special` here keeps what is worn (-1). The
+  game stores an item id plus 512; the add-on adds and removes the 512 itself. A rig imported
+  before these existed has an **Add held items** button that reads them from its `seq.dat`.
 - The model add-on exports the model unposed (the Armature modifier is left out), so the model and
   the animation can be edited in the same file.
 
@@ -86,7 +93,8 @@ Export: File > Export > OSRS animation (or Tool Shelf > OSRS > Export animation.
   degrees, so a pose can move by a fraction of a unit. The report (and Tool Shelf > OSRS) says how
   far the game's pose is from Blender's, in game units (128 per tile).
 - A changed frame keeps its file id when it can, and gets the next free id in the same group
-  otherwise. Everything else in `seq.dat` is kept as it was.
+  otherwise. The held items are written from Weapon slot and Shield slot (left out for -1).
+  Everything else in `seq.dat` is kept as it was.
 
 The rig only works while the bones are as imported: pose them, but don't move them in Edit Mode.
 

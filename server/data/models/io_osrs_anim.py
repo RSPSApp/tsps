@@ -23,6 +23,9 @@
 #   have their own "<part> scale" bone;
 # - fades (graphics often fade parts in and out) are the rig's "Fade" properties, in
 #   Tool Shelf > OSRS; the faces they act on show their transparency in Material/Textured view;
+# - what the player holds during the animation is the rig's "Weapon slot" and "Shield slot"
+#   properties (osrs_right_hand / osrs_left_hand), in Tool Shelf > OSRS: an item id to hold that
+#   item, 0 for an empty hand, or -1 to keep what is worn. They apply to the whole animation;
 # - one Blender frame is one client tick (20 ms; the scene is set to 50 fps). Each keyframe of the
 #   rig's "osrs_frame" property starts a game frame: move those keys in the Dope Sheet to retime,
 #   and use Tool Shelf > OSRS > Add frame / Remove frame. Between game frames, Blender's
@@ -38,7 +41,7 @@
 bl_info = {
     "name": "OSRS animation (seq.dat)",
     "author": "tsps",
-    "version": (2, 0, 0),
+    "version": (2, 1, 0),
     "blender": (2, 79, 0),
     "location": "File > Import / Export > OSRS animation; 3D View > Tool Shelf > OSRS",
     "description": "Import OSRS frame animations as armature animations, edit them and export them back",
@@ -243,15 +246,27 @@ class Seq(object):
     def encode(self):
         out = bytearray()
         wrote_frames = False
+        wrote_hands = set()
         for op, payload in self.ops:
             if op == 1:
                 payload = self._frames_payload()
                 wrote_frames = True
+            elif op in (6, 7):
+                # The hands: rewritten from left_hand / right_hand, dropped when set to None.
+                value = self.left_hand if op == 6 else self.right_hand
+                if value is None or op in wrote_hands:
+                    continue
+                payload = struct.pack(">H", value)
+                wrote_hands.add(op)
             out.append(op)
             out.extend(payload)
         if not wrote_frames and self.frame_ids:
             out.append(1)
             out.extend(self._frames_payload())
+        for op, value in ((6, self.left_hand), (7, self.right_hand)):
+            if value is not None and op not in wrote_hands:
+                out.append(op)
+                out.extend(struct.pack(">H", value))
         out.append(0)
         return bytes(out)
 
@@ -265,6 +280,34 @@ class Seq(object):
         for v in self.frame_ids:
             out.extend(struct.pack(">H", v >> 16))
         return bytes(out)
+
+
+# What the player holds during the animation (seq opcodes 6 and 7). The game stores an item id + 512,
+# 0 for an empty hand, or nothing to keep what is worn. In Blender it is a plain item id, 0 for an
+# empty hand, or -1 to keep what is worn.
+HAND_ITEM_OFFSET = 512
+KEEP_WORN = -1
+HIGHEST_HAND_ITEM = 0xffff - HAND_ITEM_OFFSET
+
+
+def hand_to_item(raw):
+    """The seq's hand value (None, 0, or item id + 512) as the Blender property's item id."""
+    if raw is None:
+        return KEEP_WORN
+    return raw - HAND_ITEM_OFFSET if raw >= HAND_ITEM_OFFSET else 0
+
+
+def item_to_hand(item, original=None):
+    """The Blender property's item id as the seq's hand value; the original value when they mean the same."""
+    item = int(item)
+    if item < KEEP_WORN or item > HIGHEST_HAND_ITEM:
+        raise ValueError("a held item must be -1 (keep what is worn), 0 (empty) or an item id up to %d, not %d"
+                         % (HIGHEST_HAND_ITEM, item))
+    if hand_to_item(original) == item:
+        return original
+    if item == KEEP_WORN:
+        return None
+    return 0 if item == 0 else item + HAND_ITEM_OFFSET
 
 
 def _frame_file(folder, frame_id):
@@ -509,6 +552,9 @@ if bpy is not None:
     LABEL_PREFIX = "label_"
     ROOT_KEY = "osrs_anim"
     FRAME_KEY = "osrs_frame"
+    RIGHT_HAND_KEY = "osrs_right_hand"    # the weapon slot
+    LEFT_HAND_KEY = "osrs_left_hand"      # the shield slot
+    HAND_DESCRIPTION = "Item id held for the whole animation; 0 empties the hand, -1 keeps what is worn"
     FADE_PREFIX = "fade_s"
     MODIFIER = "OSRS animation"
     FADE_MATERIAL_KEY = "osrs_material"   # on fade material copies: the model material they copy
@@ -625,6 +671,24 @@ if bpy is not None:
 
     def anim_data(arm):
         return json.loads(arm[ROOT_KEY])
+
+    def set_hand_properties(arm, seq):
+        """The rig's held-item properties from the sequence (as imported)."""
+        arm[RIGHT_HAND_KEY] = hand_to_item(seq.right_hand)
+        arm[LEFT_HAND_KEY] = hand_to_item(seq.left_hand)
+        ui = arm.get("_RNA_UI")
+        ui = ui.to_dict() if ui is not None else {}
+        for key in (RIGHT_HAND_KEY, LEFT_HAND_KEY):
+            ui[key] = {"min": KEEP_WORN, "max": HIGHEST_HAND_ITEM, "soft_min": KEEP_WORN,
+                       "soft_max": HIGHEST_HAND_ITEM, "description": HAND_DESCRIPTION}
+        arm["_RNA_UI"] = ui
+
+    def apply_hand_properties(arm, seq):
+        """The sequence's hands from the rig's properties; a rig without them keeps the original hands."""
+        if RIGHT_HAND_KEY in arm.keys():
+            seq.right_hand = item_to_hand(arm[RIGHT_HAND_KEY], seq.right_hand)
+        if LEFT_HAND_KEY in arm.keys():
+            seq.left_hand = item_to_hand(arm[LEFT_HAND_KEY], seq.left_hand)
 
     def find_root(context, obj=None):
         obj = obj or context.active_object
@@ -975,6 +1039,7 @@ if bpy is not None:
         })
         arm["osrs_targets"] = json.dumps([o.name for o in meshes])
         arm["last_frame_length"] = anim.seq.frame_lengths[-1] if anim.seq.frame_lengths else 1
+        set_hand_properties(arm, anim.seq)
         arm["osrs_accuracy"] = "Imported: Blender's pose is within %.2f game units of the game's" % worst
 
         scene = context.scene
@@ -1181,6 +1246,7 @@ if bpy is not None:
         lengths = [b - a for a, b in zip(starts, starts[1:])] + [int(arm.get("last_frame_length", 1))]
         seq.frame_ids = frame_ids
         seq.frame_lengths = [max(0, min(65535, n)) for n in lengths]
+        apply_hand_properties(arm, seq)
         return seq, data["framemap_id"], fm, frames, worst
 
     def _close(a, b, eps=1e-3):
@@ -1290,6 +1356,19 @@ if bpy is not None:
             arm.update_tag()
             return {'FINISHED'}
 
+    class OsrsAnimAddHands(bpy.types.Operator):
+        """Add the held-item properties to a rig imported before they existed, from its imported seq.dat"""
+        bl_idname = "osrs_anim.add_hands"
+        bl_label = "Add held items"
+        bl_options = {'REGISTER', 'UNDO'}
+
+        def execute(self, context):
+            arm = find_root(context)
+            if arm is None:
+                return {'CANCELLED'}
+            set_hand_properties(arm, Seq(bytes.fromhex(anim_data(arm)["seq_hex"])))
+            return {'FINISHED'}
+
     class OsrsAnimPanel(bpy.types.Panel):
         bl_label = "OSRS animation"
         bl_space_type = 'VIEW_3D'
@@ -1313,6 +1392,13 @@ if bpy is not None:
             row = layout.row(align=True)
             row.operator(OsrsAnimAddFrame.bl_idname, text="Add frame")
             row.operator(OsrsAnimRemoveFrame.bl_idname, text="Remove frame")
+            box = layout.box()
+            box.label("Held items (item id, 0 empty, -1 worn)")
+            if RIGHT_HAND_KEY in arm.keys():
+                box.prop(arm, '["%s"]' % RIGHT_HAND_KEY, text="Weapon slot")
+                box.prop(arm, '["%s"]' % LEFT_HAND_KEY, text="Shield slot")
+            else:
+                box.operator(OsrsAnimAddHands.bl_idname, text="Add held items")
             data = anim_data(arm)
             if data["fades"]:
                 box = layout.box()
@@ -1329,7 +1415,7 @@ if bpy is not None:
     def menu_export(self, context):
         self.layout.operator(ExportOsrsAnim.bl_idname, text="OSRS animation (seq.dat)")
 
-    CLASSES = (ImportOsrsAnim, ExportOsrsAnim, OsrsAnimAddFrame, OsrsAnimRemoveFrame, OsrsAnimPanel)
+    CLASSES = (ImportOsrsAnim, ExportOsrsAnim, OsrsAnimAddFrame, OsrsAnimRemoveFrame, OsrsAnimAddHands, OsrsAnimPanel)
 
     def register():
         for cls in CLASSES:

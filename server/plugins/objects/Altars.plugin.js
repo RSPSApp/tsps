@@ -4,6 +4,7 @@ const { MagicSpellbook } = require("../../src/main/typescript/elvarg/game/model/
 const { spellbookLockedRefusal } = require("../../src/main/typescript/elvarg/game/content/combat/magic/SpellbookLocks");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
+const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
@@ -70,7 +71,9 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
   skillManager.updateSkill(Skill.PRAYER);
   // Wiki: Prayer (5 April 2023) - praying at an altar resets the timer on Prayer point draining effects.
   player.setPrayerPointDrain(0);
-  player.sendMessage("You recharge your Prayer points.");
+  // Spam (filtered) chat: all 56 recorded recharges, revisions 227 to 237 (rsprox_transcripts/233/03242.txt:5471, a
+  // normal world, after oploc1 on chaosaltar). "You already have full Prayer points." stays a game message (230/02850).
+  player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You recharge your Prayer points.");
   return true;
 }
 

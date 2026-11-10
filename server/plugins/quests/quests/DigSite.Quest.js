@@ -394,6 +394,8 @@ module.exports = function registerDigSiteQuest(api) {
     refreshQuestList(player);
   }
 
+  api.persistAttribute(STAMPED_ATTRIBUTE, false);
+  api.persistAttribute(DELIVERED_ATTRIBUTE, false);
   quest = registerQuest(api, {
     key: "the_dig_site",
     name: "The Dig Site",

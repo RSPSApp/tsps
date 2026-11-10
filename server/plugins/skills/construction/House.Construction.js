@@ -73,6 +73,7 @@ const FURNITURE_BUILD_LIST_UID = (FURNITURE_BUILD_INTERFACE << 16) | 2;
 // poh_furniture_creation's scripts: one furniture entry, then the list (no gamevals for scripts).
 const FURNITURE_ENTRY_SCRIPT = 1404;
 const FURNITURE_LIST_SCRIPT = 1406;
+const RESTORE_CHAT_INPUT_SCRIPT = 2158;
 const REMOVE_ANIMATION = Ids.seq("human_throw_away");
 const HOUSE_BOARD_INTERFACE = Ids.iface("poh_board");
 const HOUSE_BOARD_ROW_SCRIPT = 3110;
@@ -591,7 +592,6 @@ function exitHouse(player) {
   const house = houseFor(player);
   if (!house) return false;
   standFromChair(player);
-  pendingFurnitureMenus.delete(player);
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   if (house.owner === player) advertisedHouses.delete(house);
@@ -1089,6 +1089,12 @@ function chooseFurniture(player, house, target) {
   pendingFurnitureMenus.set(player, { house, target, choices });
 }
 
+function closeFurnitureMenu({ player, interfaceId }) {
+  if (interfaceId !== FURNITURE_BUILD_INTERFACE || !pendingFurnitureMenus.delete(player)) return;
+  // The furniture list script suspends normal chat input while the number shortcuts are active.
+  player.getPacketSender().sendClientScript(RESTORE_CHAT_INPUT_SCRIPT);
+}
+
 function selectFurnitureFromInterface(event) {
   if (event.groupId !== FURNITURE_BUILD_INTERFACE || event.childId !== 2) return false;
   const pending = pendingFurnitureMenus.get(event.player);
@@ -1096,7 +1102,6 @@ function selectFurnitureFromInterface(event) {
   // Script 1405 sends RESUME_PAUSEBUTTON with a one-based child index.
   const choice = Number.isInteger(event.action) && event.action > 0 ? pending.choices[event.action - 1] : undefined;
   if (!choice || houseFor(event.player) !== pending.house || !isBuildingMode(event.player)) return false;
-  pendingFurnitureMenus.delete(event.player);
   event.player.getPacketSender().sendInterfaceRemoval();
   buildFurniture(event.player, pending.house, pending.target, choice);
   return true;
@@ -1508,6 +1513,7 @@ function attach(api) {
   api.onCustomEvent("player:option-route", kickGuest);
   api.onCustomEvent("door:toggle", openHouseDoor);
   api.onCustomEvent("interface:close", closeHouseSettings);
+  api.onCustomEvent("interface:closed", closeFurnitureMenu);
   api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
   api.onCustomEvent("construction:house-tablet", houseTablet);
   api.onCustomEvent("construction:owns-house", ownsHouse);

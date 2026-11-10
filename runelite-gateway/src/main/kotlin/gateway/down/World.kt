@@ -102,6 +102,7 @@ class World(
      * after it loads, so a loc tsps no longer sends would stay: a removed POH chair stood until
      * the player left the house. UPDATE_ZONE_FULL_FOLLOWS reverts a zone's loc changes to the
      * scene's own locs (and clears its objs: the ground items are sent again after this).
+     * A REBUILD_NORMAL resets nothing: the browser keeps its loc changes across one too.
      */
     fun rebuild(zoneX: Int, zoneZ: Int, replayed: Boolean = false) {
         // Updates for the old scene would land on the wrong zones of the new one.

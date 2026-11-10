@@ -1090,7 +1090,7 @@ test("the sailing plugins register their hooks and load the boat and dock data",
   assert.deepEqual(Object.keys(helm.objects.Helm), ["Navigate", "Stop-navigating", "Escape"]);
   assert.equal(helm.interfaceClicks.length, 2, "the sail buttons and the wind catcher's release");
   assert.deepEqual(Object.keys(registerPlugin("Sailing.plugin").events).sort(),
-    ["sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
+    ["quest:stage-changed", "sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
      "sailing:leave-supplied-panel", "sailing:left", "settings:option-chosen"]);
   assert.deepEqual(Object.keys(registerPlugin("Shipwright.plugin").npcs).sort(),
     ["Junior Jim", "Shipwright Sam"]);
@@ -1529,6 +1529,9 @@ test("off a boat, the combat tab offers the sidepanel as the Sailing side panel 
   login({ player });
   assert.equal(varbits.get(FROM_COMBAT_TAB), 0, "not offered before The Pandemonium reaches stage 6");
   varbits.set(SAILING_INTRO, 6);
+  events["quest:stage-changed"]({ player, key: "pandemonium", stage: 6 });
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "offered once it does");
+  varbits.set(FROM_COMBAT_TAB, 0);
   login({ player });
   assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "Always show (the default) offers it at login");
 

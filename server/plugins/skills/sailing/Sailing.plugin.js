@@ -1,6 +1,7 @@
 // The client side of being on a boat: the boarded varbits and the sailing sidepanel on the
 // combat tab, applied whenever Sailing puts a player aboard and cleared whenever they leave
-// (disembarking, sinking or logging out). Values follow xrsps's raft port, taken from rsmod's
+// (disembarking, sinking or logging out). Off a boat, the combat tab offers the sidepanel as the
+// Sailing side panel setting says. Values follow xrsps's raft port, taken from rsmod's
 // `applyBoardedState` (https://github.com/rsmod/rsmod, ISC).
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
@@ -51,10 +52,20 @@ function offBoatCombatTabSidepanel(player, onlyOnBoat = getVarbit(player, VARBIT
   return onlyOnBoat !== SIDE_PANEL_ONLY_ON_BOAT && getVarbit(player, VARBIT.SAILING_INTRO) >= OFF_BOAT_SIDEPANEL_STAGE ? 1 : 0;
 }
 
-/** The Sailing side panel row changed: the combat tab follows it at once, unless aboard. */
+/** Off a boat, the combat tab follows a change at once; aboard, it keeps offering the panel. */
+function refreshOffBoatCombatTab(player, onlyOnBoat) {
+  if (getVarbit(player, VARBIT.BOARDED_BOAT) === 1) return;
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player, onlyOnBoat));
+}
+
+/** The Sailing side panel row changed (its varbit is set after this event). */
 function sidePanelSettingChosen({ player, settingId, option }) {
-  if (settingId !== SIDE_PANEL_SETTING || getVarbit(player, VARBIT.BOARDED_BOAT) === 1) return;
-  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player, option));
+  if (settingId === SIDE_PANEL_SETTING) refreshOffBoatCombatTab(player, option);
+}
+
+/** The Pandemonium reaching the stage the panel is offered from. */
+function pandemoniumStageChanged({ player, key }) {
+  if (key === "pandemonium") refreshOffBoatCombatTab(player);
 }
 
 /** Values from live OSRS boarding traces (docs/sailing-osrs-reference.md). */
@@ -320,7 +331,7 @@ function describeBoatsOnLogin({ player }) {
 
 module.exports = {
   name: "Sailing",
-  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving.",
+  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving; off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says.",
   members: true,
   register(api) {
     attachCore(api);
@@ -333,6 +344,7 @@ module.exports = {
     api.onCustomEvent("sailing:guest-left", onGuestLeft);
     api.onPlayerLogin(describeBoatsOnLogin);
     api.onCustomEvent("settings:option-chosen", sidePanelSettingChosen);
+    api.onCustomEvent("quest:stage-changed", pandemoniumStageChanged);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);
   },

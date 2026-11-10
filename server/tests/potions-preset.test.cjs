@@ -376,7 +376,9 @@ for (const [name, drink, next] of [
   });
 }
 
-test("a death reset and later reboost update the maintained divine level", async t => {
+// Dying ends a divine potion: its timers go to 0 right after "Oh dear, you are dead!" with no line
+// (rsprox_transcripts/237/01148.txt and seven more in revision 237; 229/02508.txt:23248-23252).
+test("a death ends the divine effect; a later boost is an ordinary one", async t => {
   const f = divineActor(t, 99);
   await boostThenBrew(f, true);
   const expiry = f.p.getAttribute("potions:divine:state").endsAt;
@@ -425,10 +427,10 @@ test("a death reset and later reboost update the maintained divine level", async
   assert.equal(f.p.isDyingReturn(), false);
   assert.equal(f.p.getHitpoints(), 99);
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 99);
-  assert.equal(f.p.getAttribute("potions:divine:state").endsAt, expiry);
+  assert.ok(Number.isFinite(expiry), "the potion was running before the death");
+  assert.equal(f.p.getAttribute("potions:divine:state"), null, "the death cleared it");
   PM.emitPlayerProcess({ player: f.p });
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 99);
-  assert.equal(f.p.getAttribute("potions:divine:state").targets.find(entry => entry.skillIndex === core.Skill.ATTACK.getIndex()).target, 99);
 
   giveDrink(f, 0, I.SUPER_ATTACK_4_);
   await browserOp(f, 0, "Drink");
@@ -436,7 +438,7 @@ test("a death reset and later reboost update the maintained divine level", async
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
   PM.emitPlayerProcess({ player: f.p });
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
-  assert.equal(f.p.getAttribute("potions:divine:state").endsAt, expiry);
+  assert.equal(f.p.getAttribute("potions:divine:state"), null, "no divine effect holds the new boost");
 });
 
 // ------------------------------------------------------------------ the tests

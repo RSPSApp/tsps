@@ -5,27 +5,40 @@
  * assistant and the sleeping goblin guard are indexed, so this plugin supplies the
  * by-stage variant selector, the prose-condition answers, the start hook and the
  * "Quest complete!" actions from after-viewing-the-telescope. Stage machine (varp
- * 112) ported from xrsps: 1 planks, 2 bronze, 3 glass, 4 mould, 5 lens, 6 telescope,
- * 7 complete, 8 wine claimed.
+ * 112): 1 planks, 2 bronze, 3 glass, 4 mould, 5 lens, 6 telescope, 7 complete, 8 wine claimed.
  *
- * Ported interactions: the item hand-ins (planks/bronze/glass/lens), the dungeon
- * chests (kitchen key), prodding the sleeping guard and the kitchen gate, the
- * goblin stove (lens mould), casting the lens (mould + molten glass), the two
- * dungeon stair runs and looking through the telescope.
- * The telescope assigns the player a constellation (announced in the message, so
- * text-only clients can answer the professor); the matching wiki reward table is
- * granted alongside the sapphire, and the assistant's post-quest jug of wine is wired.
+ * What the player sees follows live OSRS (RSProx capture 20261110T110141-5ab63b4, rev 242,
+ * docs/quests/observatory-quest/README.md has the facts and ticks):
+ * - the start rolls the star sign (observatory_starsign 3828), the glass hand-in which marked
+ *   dungeon chest holds the kitchen key (observatory_chestchoice 3827);
+ * - the surface stairs warn first (cws_warning_9, interface 560);
+ * - the three marked chests open, are searched and close; the sleeping guard sleeps until
+ *   prodded, when a goblin guard takes his place and attacks;
+ * - the kitchen gate stays shut while that guard is awake (unless he is trapped north of it),
+ *   unlocks once with the key and lets the player through like any gate;
+ * - the goblin stove gives the mould in two message boxes, the mould and glass make the lens;
+ * - the first climb into the Observatory with the lens handed over plays the professor's
+ *   cutscene (../observatory/Cutscene.ObservatoryQuest.js);
+ * - the telescope shows the player's constellation in its own interface (552).
  */
 module.exports = function registerObservatoryQuest(api) {
-  const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ObjectManager, MapObjects } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const {
+    Animation, Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ObjectManager, GameObject,
+    TaskManager, CountdownTask, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemStatementDialogue,
+  } = api.core;
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const Cutscene = require("../observatory/Cutscene.ObservatoryQuest")(api, { onSeen: cutsceneSeen });
 
   const PAGE = "Observatory Quest";
 
   const VARP_OBSERVATORY_QUEST = 112;
-  const VARBIT_GATE_UNLOCKED = 3826; // varp 113 bit 0
-  const VARBIT_SCOPE_LOOKED = 3836; // varp 113 bit 14
-  const VARBIT_MOULD_PRESENT = 3837; // varp 113 bit 15
+  const VARBIT_GATE_UNLOCKED = 3826; // observatory_gatelock
+  const VARBIT_CHEST_CHOICE = 3827; // observatory_chestchoice
+  const VARBIT_STAR_SIGN = 3828; // observatory_starsign
+  const VARBIT_SCOPE_LOOKED = 3836; // observatory_scopelooked
+  const VARBIT_MOULD_PRESENT = 3837; // observatory_mould_pres
+  const VARBIT_CUTSCENE_SEEN = 3838; // observatory_cutscene_seen
+  const VARBIT_DUNGEON_WARNINGS = 3859; // cws_warning_9
 
   const STAGE_PLANKS = 1;
   const STAGE_BRONZE = 2;
@@ -37,35 +50,52 @@ module.exports = function registerObservatoryQuest(api) {
   const STAGE_CLAIMED_WINE = 8;
 
   const VIEWED_ATTRIBUTE = "quest.observatory_quest.viewed";
-  const GUARD_AWAKE_ATTRIBUTE = "quest.observatory_quest.guard_awake";
   const CONSTELLATION_ATTRIBUTE = "quest.observatory_quest.constellation";
   const GATE_UNLOCKED_ATTRIBUTE = "observatory-quest:gate-unlocked";
   const PROFESSOR_NAME_ATTRIBUTE = "observatory-quest:professor-name-known";
+  const CHEST_CHOICE_ATTRIBUTE = "observatory-quest:chest-choice";
+  const CUTSCENE_SEEN_ATTRIBUTE = "observatory-quest:cutscene-seen";
+  const DUNGEON_WARNINGS_ATTRIBUTE = "observatory-quest:dungeon-warnings";
 
   const START_HOOK = "quest:observatory-quest:start";
 
-  /** Each "Quest complete!" action id and the constellation its branch answers for. */
-  const COMPLETION_ACTIONS = new Map([
-    ["RZIxJd", "Aquarius"],
-    ["42iZjm", "Capricorn"],
-    ["az5TSU", "Sagittarius"],
-    ["jFQCJj", "Scorpio"],
-    ["JTTGjU", "Libra"],
-    ["3JvMiY", "Virgo"],
-    ["uJHYgt", "Leo"],
-    ["5ogiFw", "Cancer"],
-    ["OX2wkW", "Gemini"],
-    ["b-a96m", "Taurus"],
-    ["AlVBZ2", "Aries"],
-    ["hHQ5V3", "Pisces"],
+  /**
+   * The signs in observatory_starsign order, which is also the professor's menu order (capture
+   * tick 1626: Aquarius|Capricorn|Sagittarius|Scorpio, then Libra|Virgo|Leo, Cancer|Gemini|Taurus;
+   * Quest Helper's ObservatoryQuest maps 0-11 the same way). `model` is the telescope view
+   * (qip_obs_telescope:stars): 27059 is Taurus in the capture, the rest are matched against the
+   * Wiki's star chart images by their stars.
+   */
+  const SIGNS = Object.freeze([
+    { name: "Aquarius", model: 27064, action: "RZIxJd", items: [[ItemIdentifiers.WATER_RUNE, 25]] },
+    { name: "Capricorn", model: 27061, action: "42iZjm", xp: [Skill.STRENGTH, 875] },
+    { name: "Sagittarius", model: 27056, action: "az5TSU", items: [[ItemIdentifiers.MAPLE_LONGBOW, 1]] },
+    { name: "Scorpio", model: 27055, action: "jFQCJj", items: [[ItemIdentifiers.WEAPON_POISON, 1]] },
+    { name: "Libra", model: 27057, action: "JTTGjU", items: [[ItemIdentifiers.LAW_RUNE, 3]] },
+    { name: "Virgo", model: 27060, action: "3JvMiY", xp: [Skill.DEFENCE, 875] },
+    { name: "Leo", model: 27058, action: "uJHYgt", xp: [Skill.HITPOINTS, 875] },
+    { name: "Cancer", model: 27067, action: "5ogiFw", items: [[ItemIdentifiers.AMULET_OF_DEFENCE, 1]] },
+    { name: "Gemini", model: 27068, action: "OX2wkW", items: [[ItemIdentifiers.BLACK_2H_SWORD, 1]] },
+    { name: "Taurus", model: 27059, action: "b-a96m", items: [[ItemIdentifiers.SUPER_STRENGTH_1_, 1]] },
+    { name: "Aries", model: 27066, action: "AlVBZ2", xp: [Skill.ATTACK, 875] },
+    { name: "Pisces", model: 27062, action: "hHQ5V3", items: [[ItemIdentifiers.TUNA, 3]] },
   ]);
+  const SIGN_BY_NAME = new Map(SIGNS.map((sign) => [sign.name, sign]));
+  const SIGN_BY_ACTION = new Map(SIGNS.map((sign) => [sign.action, sign]));
 
   /** Item hand-in actions in the returning-with-* branches (stages 1-6). */
   const PLANK_HAND_IN_ACTION = "p1dp6a";
   const BRONZE_HAND_IN_ACTION = "7a36YD";
   const GLASS_HAND_IN_ACTION = "Y5Z4-D";
   const GLASS_RETURN_ACTION = "JH15Z2";
-  const LENS_HAND_IN_ACTION = "p1dzXH";
+  const LENS_HAND_IN_ACTION = "HgpGGr";
+  /** "The professor has gone ahead to the Observatory dome...": live takes the lens here. */
+  const GONE_AHEAD_MESSAGE = "vj7Nry";
+  /** "The professor gives you back the molten glass.": an item box with the glass (tick 1023). */
+  const GLASS_BACK_MESSAGE = "URgSXm";
+  /** "The professor carries on with his studies.": a message box (tick 84). */
+  const CARRIES_ON_MESSAGE = "Lmq76H";
+  const WINE_MESSAGE_ACTION = "3f2Vz2";
 
   const PROFESSOR_NPC_ID = NpcIdentifiers.OBSERVATORY_PROFESSOR;
   const PROFESSOR_NPC_IDS = new Set([PROFESSOR_NPC_ID, NpcIdentifiers.OBSERVATORY_PROFESSOR_2]);
@@ -73,29 +103,23 @@ module.exports = function registerObservatoryQuest(api) {
   const SLEEPING_GUARD_NPC_ID = NpcIdentifiers.SLEEPING_GUARD;
   const GOBLIN_GUARD_NPC_ID = NpcIdentifiers.GOBLIN_GUARD;
 
-  // 25385-25390: the three marked Observatory Dungeon chests and their open forms.
-  const DUNGEON_CHEST_IDS = new Set([
-    ObjectIdentifiers.CHEST_79,
-    ObjectIdentifiers.CHEST_80,
-    ObjectIdentifiers.CHEST_81,
-    ObjectIdentifiers.CHEST_82,
-    ObjectIdentifiers.CHEST_83,
-    ObjectIdentifiers.CHEST_84,
+  /**
+   * The three marked dungeon chests (qip_obs_dungeon_chest_closed, 2 and 3) and their open forms,
+   * in observatory_chestchoice order: 0 is 2364,9355 (the capture's key chest), 2 is 2351,9361
+   * (Quest Helper's note on chestchoice 2), so 1 is 2360,9366.
+   */
+  const DUNGEON_CHESTS = Object.freeze([
+    { closed: ObjectIdentifiers.CHEST_79, open: ObjectIdentifiers.CHEST_80 },
+    { closed: ObjectIdentifiers.CHEST_81, open: ObjectIdentifiers.CHEST_82 },
+    { closed: ObjectIdentifiers.CHEST_83, open: ObjectIdentifiers.CHEST_84 },
   ]);
+  const CHEST_BY_CLOSED = new Map(DUNGEON_CHESTS.map((chest, choice) => [chest.closed, { ...chest, choice }]));
+  const CHEST_BY_OPEN = new Map(DUNGEON_CHESTS.map((chest, choice) => [chest.open, { ...chest, choice }]));
   const KITCHEN_GATE_IDS = new Set([ObjectIdentifiers.KITCHEN_GATE, ObjectIdentifiers.KITCHEN_GATE_2]);
   /** 25442 is the cache transform parent of GOBLIN_STOVE/GOBLIN_STOVE_2. */
-  const GOBLIN_STOVE_IDS = new Set([
-    ObjectIdentifiers.GOBLIN_STOVE,
-    ObjectIdentifiers.GOBLIN_STOVE_2,
-    25442,
-  ]);
+  const GOBLIN_STOVE_IDS = new Set([ObjectIdentifiers.GOBLIN_STOVE, ObjectIdentifiers.GOBLIN_STOVE_2, 25442]);
   /** 25591 is the cache transform parent of TELESCOPE_8/TELESCOPE_9 (upstairs). */
-  const TELESCOPE_IDS = new Set([
-    ObjectIdentifiers.TELESCOPE,
-    ObjectIdentifiers.TELESCOPE_8,
-    ObjectIdentifiers.TELESCOPE_9,
-    25591,
-  ]);
+  const TELESCOPE_IDS = new Set([ObjectIdentifiers.TELESCOPE, ObjectIdentifiers.TELESCOPE_8, ObjectIdentifiers.TELESCOPE_9, 25591]);
   const SURFACE_STAIRS_ID = ObjectIdentifiers.STAIRS_129; // 25432, east hill
   const DUNGEON_STAIRS_ID = ObjectIdentifiers.STAIRS_127; // 25429, north + south
 
@@ -106,6 +130,15 @@ module.exports = function registerObservatoryQuest(api) {
   const DUNGEON_NORTH_LANDING = { x: 2355, y: 9394, z: 0 };
   const OBSERVATORY_LANDING = { x: 2443, y: 3158, z: 0 };
 
+  /** The tile north of the gate that traps the woken guard (Quest Helper; capture tick 856). */
+  const GUARD_TRAP_TILE = { x: 2327, y: 9399 };
+  /** The gate's south side, inside the kitchen. */
+  const KITCHEN_SIDE_MAX_Y = 9393;
+  /** Ours: an awake guard nobody fights for this long goes back to sleep. */
+  const GUARD_IDLE_TICKS = 100;
+  const GUARD_CHECK_TICKS = 5;
+  /** Ours: when the goblin guard's definition has no respawn time. */
+  const GUARD_RESPAWN_TICKS = 25;
 
   const PLANK = ItemIdentifiers.PLANK;
   const BRONZE_BAR = ItemIdentifiers.BRONZE_BAR;
@@ -115,28 +148,65 @@ module.exports = function registerObservatoryQuest(api) {
   const OBSERVATORY_LENS = ItemIdentifiers.OBSERVATORY_LENS;
   const JUG_OF_WINE = ItemIdentifiers.JUG_OF_WINE;
 
-  const WINE_MESSAGE_ACTION = "3f2Vz2";
+  const ANIM = {
+    handOver: 6291, // dream_player_feed_cyrisus_standing, the hand-ins (ticks 140, 156, 171, 1022, 1040)
+    openChest: 536, // human_openchest (also the stove's second box)
+    closeChest: 535, // human_closechest
+    search: 6840, // generic_look_and_search
+    chestOpens: 6851, // chest_kicked_open (loc)
+    chestCloses: 6850, // chest_closes (loc)
+    prod: 6839, // qip_observatory_human_wakes_up_goblin
+    guardWakes: 6827, // qip_observatory_goblin_wake_up
+    lookThroughScope: 6849, // look_through_scope
+  };
+  const SOUND = { chestOpen: 52, chestClose: 51 };
 
-  /** The wiki's per-sign reward, on top of the uncut sapphire every run gives. */
-  const CONSTELLATION_REWARDS = Object.freeze({
-    Aquarius: { items: [[ItemIdentifiers.WATER_RUNE, 25]] },
-    Aries: { xp: [Skill.ATTACK, 875] },
-    Cancer: { items: [[ItemIdentifiers.AMULET_OF_DEFENCE, 1]] },
-    Capricorn: { xp: [Skill.STRENGTH, 875] },
-    Gemini: { items: [[ItemIdentifiers.BLACK_2H_SWORD, 1]] },
-    Leo: { xp: [Skill.HITPOINTS, 875] },
-    Libra: { items: [[ItemIdentifiers.LAW_RUNE, 3]] },
-    Pisces: { items: [[ItemIdentifiers.TUNA, 3]] },
-    Sagittarius: { items: [[ItemIdentifiers.MAPLE_LONGBOW, 1]] },
-    Scorpio: { items: [[ItemIdentifiers.WEAPON_POISON, 1]] },
-    Taurus: { items: [[ItemIdentifiers.SUPER_STRENGTH_1_, 1]] },
-    Virgo: { xp: [Skill.DEFENCE, 875] },
-  });
+  const TELESCOPE_INTERFACE = 552; // qip_obs_telescope
+  const TELESCOPE_STARS = (TELESCOPE_INTERFACE << 16) | 7;
+  const MAINMODAL_OPEN_SCRIPT = 2524; // toplevel_mainmodal_open
+  const DUNGEON_WARNING = 560; // cws_warning_9
+  const WARNING_PROCEED = 17; // warn1, "Proceed regardless"
+  const WARNING_STAY_OUT = 18; // warn2
+  const WARNING_CLOSE = 12; // cws_close
+  /** Ours: the count stops below 7, the value the box's script draws as "Don't ask me this again". */
+  const WARNING_COUNT_MAX = 6;
+  const PENDING_DESCENT = new WeakSet();
+
+  /** Live wording where the Wiki transcript differs or has none (capture ticks in the docs). */
+  const MESSAGES = {
+    openChest: "You open the chest.",
+    closeChest: "You close the chest.",
+    emptyChest: "The chest is empty.",
+    findKey: "You find a kitchen key.",
+    haveKey: ["You already have a kitchen key.", "Another one will be of no use."],
+    gateUnlocks: ["The gate unlocks.", "The key is useless now. You discard it."],
+    guardAwake: "You need to get rid of that goblin guard first.",
+    guardAsleep: "If you open the gate, the guard will hear you. You need to get rid of him.",
+    stoveMould: "The goblins appear to have been using the lens mould to cook their stew!",
+    stoveShake: "You shake out its contents and take it with you.",
+    stoveEmpty: "Just a plain stove. Nothing there.",
+    lensPour: "You pour the molten glass into the mould and clasp it together...",
+    lensDone: "You pour the molten glass into the mould and clasp it together...<br>It has produced a small, convex glass disc.",
+    lookThroughScope: "You look through the telescope.",
+    goneAhead: "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
+  };
 
   const page = (p, variant) => ({ page: p, variant });
   const has = (player, itemId, quantity = 1) => player.getInventory().getAmount(itemId) >= quantity;
+  const later = (key, ticks, callback) => TaskManager.submit(new CountdownTask(key, ticks, callback));
 
   let quest;
+  /** The woken guard: { guard, sleeper, idle }, while one is about. */
+  let awake = null;
+
+  function transcriptLine(variant, index) {
+    const step = loadTranscripts(api)?.[PAGE]?.variants?.[variant]?.[index];
+    return step?.player ?? step?.text ?? null;
+  }
+
+  // ==========================================================================
+  // State
+  // ==========================================================================
 
   function ownsMould(player) {
     return has(player, LENS_MOULD)
@@ -156,10 +226,23 @@ module.exports = function registerObservatoryQuest(api) {
     if (victim.getPacketSender().getVarbit(VARBIT_MOULD_PRESENT) === 1) syncMouldPresence(victim);
   }
 
+  function signOf(player) {
+    return SIGN_BY_NAME.get(String(player.getAttribute(CONSTELLATION_ATTRIBUTE) ?? "")) ?? null;
+  }
+
+  function chestChoice(player) {
+    const value = Number(player.getAttribute(CHEST_CHOICE_ATTRIBUTE));
+    return Number.isInteger(value) && value >= 0 && value < DUNGEON_CHESTS.length ? value : 0;
+  }
+
   function syncHelperState({ player }) {
     const sender = player.getPacketSender();
     sender.sendVarbit(VARBIT_GATE_UNLOCKED, player.getAttribute(GATE_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
     sender.sendVarbit(VARBIT_SCOPE_LOOKED, player.getAttribute(VIEWED_ATTRIBUTE) ? 1 : 0);
+    sender.sendVarbit(VARBIT_CUTSCENE_SEEN, player.getAttribute(CUTSCENE_SEEN_ATTRIBUTE) === true ? 1 : 0);
+    sender.sendVarbit(VARBIT_STAR_SIGN, Math.max(0, SIGNS.indexOf(signOf(player))));
+    sender.sendVarbit(VARBIT_CHEST_CHOICE, chestChoice(player));
+    sender.sendVarbit(VARBIT_DUNGEON_WARNINGS, Number(player.getAttribute(DUNGEON_WARNINGS_ATTRIBUTE)) || 0);
     syncMouldPresence(player);
   }
 
@@ -178,6 +261,10 @@ module.exports = function registerObservatoryQuest(api) {
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.CRAFTING, 2250);
   }
+
+  // ==========================================================================
+  // Dialogue
+  // ==========================================================================
 
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
@@ -251,10 +338,6 @@ module.exports = function registerObservatoryQuest(api) {
       return page("Observatory assistant", "before-observatory-quest");
     }
 
-    if (npcId === SLEEPING_GUARD_NPC_ID && stage === STAGE_MOULD && !has(player, LENS_MOULD)) {
-      return page(PAGE, "prodding-the-goblin-guard");
-    }
-
     return null;
   }
 
@@ -271,47 +354,63 @@ module.exports = function registerObservatoryQuest(api) {
     if (value.includes("has inventory space")) return !player.getInventory().isFull();
     if (value.includes("did not see this sign")) return true;
     const seen = /did see ([a-z]+)/.exec(value);
-    if (seen) {
-      const observed = String(player.getAttribute(CONSTELLATION_ATTRIBUTE) ?? "").toLowerCase();
-      return observed === seen[1];
-    }
+    if (seen) return signOf(player)?.name.toLowerCase() === seen[1];
     return null;
+  }
+
+  /**
+   * The sign the telescope shows, rolled as the quest starts (capture tick 131 sends
+   * observatory_starsign with the stage). Live reads the player's birth sign; with none here,
+   * one is rolled, keeping OSRS's pure protection: no combat-XP sign for a level-1 skill.
+   */
+  function rollSign(player) {
+    const fair = SIGNS.filter((sign) => !sign.xp || player.getSkillManager().getMaxLevel(sign.xp[0]) > 1);
+    const pool = fair.length ? fair : SIGNS;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function ensureSign(player) {
+    const existing = signOf(player);
+    if (existing) return existing;
+    const sign = rollSign(player);
+    player.setAttribute(CONSTELLATION_ATTRIBUTE, sign.name);
+    player.getPacketSender().sendVarbit(VARBIT_STAR_SIGN, SIGNS.indexOf(sign));
+    return sign;
   }
 
   function handleStartHook({ player, npcId, hook }) {
     if (!PROFESSOR_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
-    if (quest.getStage(player) < STAGE_PLANKS) quest.setStage(player, STAGE_PLANKS);
+    if (quest.getStage(player) >= STAGE_PLANKS) return;
+    ensureSign(player);
+    quest.setStage(player, STAGE_PLANKS);
   }
 
-  /**
-   * Picks the sign a fresh telescope view shows. Since this server has no
-   * character-creation star sign, one is rolled and persisted per player, with
-   * OSRS's pure protection: no combat-XP sign for a level-1 skill.
-   */
-  function rollConstellation(player) {
-    const names = Object.keys(CONSTELLATION_REWARDS).filter((name) => {
-      const xp = CONSTELLATION_REWARDS[name].xp;
-      return !xp || player.getSkillManager().getCurrentLevel(xp[0]) > 1;
-    });
-    const pool = names.length ? names : Object.keys(CONSTELLATION_REWARDS);
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  function constellationForViewing(player) {
-    const existing = String(player.getAttribute(CONSTELLATION_ATTRIBUTE) ?? "");
-    if (CONSTELLATION_REWARDS[existing]) return existing;
-    const rolled = rollConstellation(player);
-    player.setAttribute(CONSTELLATION_ATTRIBUTE, rolled);
-    return rolled;
-  }
-
-  function grantConstellationReward(player, stepId) {
-    const reward = CONSTELLATION_REWARDS[COMPLETION_ACTIONS.get(stepId)];
-    if (!reward) return;
-    for (const [itemId, amount] of reward.items ?? []) {
+  function grantConstellationReward(player, sign) {
+    for (const [itemId, amount] of sign.items ?? []) {
       player.getInventory().forceAdd(player, new api.core.Item(itemId, amount));
     }
-    if (reward.xp) player.getSkillManager().addExperiences(reward.xp[0], reward.xp[1]);
+    if (sign.xp) player.getSkillManager().addExperiences(sign.xp[0], sign.xp[1]);
+  }
+
+  /** Ours (when): the key's chest is picked as the professor asks for the mould. */
+  function rollChestChoice(player) {
+    const choice = Math.floor(Math.random() * DUNGEON_CHESTS.length);
+    player.setAttribute(CHEST_CHOICE_ATTRIBUTE, choice);
+    player.getPacketSender().sendVarbit(VARBIT_CHEST_CHOICE, choice);
+  }
+
+  function handOver(player) {
+    player.performAnimation(new Animation(ANIM.handOver));
+  }
+
+  function fadeAround(player) {
+    const sender = player.getPacketSender();
+    const uid = (161 << 16) | 1;
+    sender.mountSubInterface(uid, 174, 1, { postScripts: [{ scriptId: 948, args: [0, 255, 0, 0, 50] }] });
+    later(player, 2, () => {
+      const mount = sender.mountSubInterface(uid, 174, 1, { postScripts: [{ scriptId: 948, args: [0, 0, 0, 255, 50] }] });
+      later(player, 3, () => sender.closeSubInterfaceMount(mount));
+    });
   }
 
   /** Item hand-ins, the assistant's wine and the after-viewing completion action. */
@@ -331,191 +430,56 @@ module.exports = function registerObservatoryQuest(api) {
     switch (stepId) {
       case PLANK_HAND_IN_ACTION:
         if (stage !== STAGE_PLANKS || !has(player, PLANK, 3)) return;
+        handOver(player);
         player.getInventory().deleteNumber(PLANK, 3);
         quest.setStage(player, STAGE_BRONZE);
         return;
       case BRONZE_HAND_IN_ACTION:
         if (stage !== STAGE_BRONZE || !has(player, BRONZE_BAR)) return;
+        handOver(player);
         player.getInventory().deleteNumber(BRONZE_BAR, 1);
         quest.setStage(player, STAGE_GLASS);
         return;
       case GLASS_HAND_IN_ACTION:
         if (stage !== STAGE_GLASS || !has(player, MOLTEN_GLASS)) return;
+        handOver(player);
         player.getInventory().deleteNumber(MOLTEN_GLASS, 1);
+        rollChestChoice(player);
         quest.setStage(player, STAGE_MOULD);
         return;
       case GLASS_RETURN_ACTION:
         if (stage !== STAGE_MOULD || !has(player, LENS_MOULD)) return;
+        handOver(player);
         if (!has(player, MOLTEN_GLASS)) player.getInventory().adds(MOLTEN_GLASS, 1);
         quest.setStage(player, STAGE_LENS);
         return;
       case LENS_HAND_IN_ACTION:
-        if (stage !== STAGE_LENS) return;
+        // Live hands it over here but takes it at the closing message (tick 1047).
+        if (stage === STAGE_LENS && has(player, OBSERVATORY_LENS)) handOver(player);
+        return;
+      case CARRIES_ON_MESSAGE:
+        if (kind === "message") event.box = { statement: true };
+        return;
+      case GLASS_BACK_MESSAGE:
+        if (kind === "message") event.box = { items: [MOLTEN_GLASS] };
+        return;
+      case GONE_AHEAD_MESSAGE:
+        // A message box, as live shows it (tick 1047).
+        if (kind === "message") event.box = { statement: true };
+        if (stage !== STAGE_LENS || !has(player, OBSERVATORY_LENS)) return;
         player.getInventory().deleteNumber(OBSERVATORY_LENS, 1);
         player.getInventory().deleteNumber(LENS_MOULD, 1);
         syncMouldPresence(player);
         quest.setStage(player, STAGE_TELESCOPE);
+        fadeAround(player);
         return;
       default:
         break;
     }
-    if (!COMPLETION_ACTIONS.has(stepId)) return;
-    if (stage < STAGE_TELESCOPE || quest.isComplete(player)) return;
+    const sign = SIGN_BY_ACTION.get(stepId);
+    if (!sign || stage < STAGE_TELESCOPE || quest.isComplete(player)) return;
     quest.complete(player);
-    grantConstellationReward(player, stepId);
-  }
-
-  /** Cast the lens from the mould and molten glass. */
-  function handleItemOnItem(event) {
-    const ids = [event.usedItemId, event.usedWithItemId];
-    if (!ids.includes(LENS_MOULD) || !ids.includes(MOLTEN_GLASS)) return;
-    const { player } = event;
-    if (quest.getStage(player) !== STAGE_LENS) return;
-    if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < 10) {
-      player.sendMessage("You need level 10 Crafting to cast the lens.");
-      event.handled = true;
-      return;
-    }
-    player.getInventory().deleteNumber(MOLTEN_GLASS, 1);
-    player.getInventory().adds(OBSERVATORY_LENS, 1);
-    player.sendMessage("You pour the glass into the mould and make an Observatory lens.");
-    event.handled = true;
-  }
-
-  /**
-   * Opens the kitchen gate by removing both leaves, clearing their collision so the
-   * doorway is passable on foot (the old teleport dropped the player on the wrong side).
-   */
-  function openKitchenGate(object) {
-    if (!object?.getLocation) return;
-    const location = object.getLocation();
-    const partnerId = object.getId() === ObjectIdentifiers.KITCHEN_GATE
-      ? ObjectIdentifiers.KITCHEN_GATE_2
-      : ObjectIdentifiers.KITCHEN_GATE;
-    ObjectManager.deregister(object, true);
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      const partner = MapObjects.get(
-        partnerId,
-        new Location(location.getX() + dx, location.getY() + dy, location.getZ()),
-        null
-      );
-      if (partner) {
-        ObjectManager.deregister(partner, true);
-        break;
-      }
-    }
-  }
-
-  /** The marked dungeon chests hold the kitchen key; the stove holds the lens mould. */
-  function handleObjectInteraction(event) {
-    const { player, objectId } = event;
-    const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
-
-    if (DUNGEON_CHEST_IDS.has(objectId) && (option.includes("search") || option.includes("open"))) {
-      // The key can be re-obtained at stage 5 if it was lost after the gate was unlocked.
-      const stage = quest.getStage(player);
-      if (stage < STAGE_MOULD || stage > STAGE_LENS) return;
-      event.handled = true;
-      if (!has(player, GOBLIN_KITCHEN_KEY)) {
-        player.getInventory().adds(GOBLIN_KITCHEN_KEY, 1);
-        player.sendMessage("You find a kitchen key.");
-      } else {
-        player.sendMessage("The chest is empty.");
-      }
-      return;
-    }
-
-    /** Kitchen gate: locked until the guard is dealt with, opened with the key. */
-    if (KITCHEN_GATE_IDS.has(objectId) && option.includes("open")) {
-      if (quest.getStage(player) < STAGE_MOULD) return;
-      event.handled = true;
-      const unlocked = player.getAttribute(GATE_UNLOCKED_ATTRIBUTE) === true;
-      if (!unlocked && !has(player, GOBLIN_KITCHEN_KEY)) {
-        player.sendMessage("The kitchen gate is locked.");
-        return;
-      }
-      if (Number(player.getAttribute(GUARD_AWAKE_ATTRIBUTE)) !== 1) {
-        player.sendMessage("If you open the gate, the guard will hear you. You need to get rid of him.");
-        return;
-      }
-      if (!unlocked) player.getInventory().deleteNumber(GOBLIN_KITCHEN_KEY, 1);
-      player.sendMessage("You unlock the kitchen gate.");
-      player.sendMessage("You had better be quick, there may be more guards about.");
-      openKitchenGate(event.object);
-      player.setAttribute(GATE_UNLOCKED_ATTRIBUTE, true);
-      player.getPacketSender().sendVarbit(VARBIT_GATE_UNLOCKED, 1);
-      return;
-    }
-
-    /** Goblin stove: the lens mould is hidden in the stew. */
-    if (GOBLIN_STOVE_IDS.has(objectId) && option.includes("inspect")) {
-      if (quest.getStage(player) < STAGE_MOULD) return;
-      event.handled = true;
-      syncMouldPresence(player);
-      if (ownsMould(player)) {
-        player.sendMessage("Just a plain stove. Nothing here.");
-        return;
-      }
-      if (player.getInventory().isFull()) {
-        player.sendMessage("You need a free inventory space.");
-        return;
-      }
-      player.getInventory().adds(LENS_MOULD, 1);
-      syncMouldPresence(player);
-      player.sendMessage("The goblins appear to have been using the lens mould to cook their stew!");
-      player.sendMessage("You shake out its contents and take it with you.");
-      return;
-    }
-
-    if (TELESCOPE_IDS.has(objectId) && (option.includes("look") || option.includes("view"))) {
-      if (quest.getStage(player) !== STAGE_TELESCOPE) return;
-      const sign = constellationForViewing(player);
-      player.setAttribute(VIEWED_ATTRIBUTE, true);
-      player.getPacketSender().sendVarbit(VARBIT_SCOPE_LOOKED, 1);
-      player.sendMessage(`You look through the telescope and see the constellation ${sign}.`);
-      event.handled = true;
-    }
-  }
-
-  /** Prodding the sleeping guard wakes the attackable goblin guard. */
-  function prodSleepingGuard(event) {
-    const { player, npc } = event;
-    if (!npc || quest.getStage(player) !== STAGE_MOULD) return;
-    player.setAttribute(GUARD_AWAKE_ATTRIBUTE, 1);
-    npc.setNpcTransformationId(GOBLIN_GUARD_NPC_ID);
-    startTranscript(api, player, GOBLIN_GUARD_NPC_ID, PAGE, "prodding-the-goblin-guard");
-  }
-
-  /**
-   * The two dungeon stair runs are far from anything ClimbLinks can pair, so give
-   * them explicit destinations: the north stairs lead out to the east hill, the
-   * south stairs lead up into the Observatory, and the surface stairs lead down.
-   */
-  function claimObservatoryClimb(request) {
-    if (request.handled) return;
-    const { player, object, objectId } = request;
-    if (!player || !object) return;
-    const location = object.getLocation?.();
-    if (!location) return;
-    if (objectId === SURFACE_STAIRS_ID) {
-      player.moveTo(new Location(DUNGEON_NORTH_LANDING.x, DUNGEON_NORTH_LANDING.y, DUNGEON_NORTH_LANDING.z));
-      request.handled = true;
-      return;
-    }
-    if (objectId !== DUNGEON_STAIRS_ID) return;
-    const x = location.getX();
-    const y = location.getY();
-    if (x === DUNGEON_STAIRS_SOUTH.x && y === DUNGEON_STAIRS_SOUTH.y) {
-      player.moveTo(new Location(OBSERVATORY_LANDING.x, OBSERVATORY_LANDING.y, OBSERVATORY_LANDING.z));
-      if (quest.getStage(player) === STAGE_TELESCOPE && !player.getAttribute(VIEWED_ATTRIBUTE)) {
-        startTranscript(api, player, PROFESSOR_NPC_ID, PAGE, "entering-the-observatory");
-      }
-    } else if (x === DUNGEON_STAIRS_NORTH.x && y === DUNGEON_STAIRS_NORTH.y) {
-      player.moveTo(new Location(SURFACE_STAIRS_LANDING.x, SURFACE_STAIRS_LANDING.y, SURFACE_STAIRS_LANDING.z));
-    } else {
-      return;
-    }
-    request.handled = true;
+    grantConstellationReward(player, sign);
   }
 
   /** Fill player names and record the assistant's actual name revelation. */
@@ -531,6 +495,382 @@ module.exports = function registerObservatoryQuest(api) {
     }
     if (!request.text.includes("[player name]")) return;
     request.text = request.text.replace(/\[player name\]/gi, request.player.getDisplayName());
+  }
+
+  // ==========================================================================
+  // The dungeon
+  // ==========================================================================
+
+  function statement(player, text, then) {
+    const chain = new DialogueChainBuilder().add(new StatementDialogue(0, text));
+    if (then) chain.add(new ActionDialogue(1, { execute: () => { player.getPacketSender().sendInterfaceRemoval(); then(); } }));
+    player.getDialogueManager().startDialogues(chain);
+  }
+
+  function itemBox(player, itemId, text, then) {
+    const chain = new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text));
+    if (then) chain.add(new ActionDialogue(1, { execute: () => { player.getPacketSender().sendInterfaceRemoval(); then(); } }));
+    player.getDialogueManager().startDialogues(chain);
+  }
+
+  /** Swaps a chest loc for its other form, for everyone, as live's loc_add_change does. */
+  function swapChest(object, nextId) {
+    const location = object.getLocation();
+    ObjectManager.deregister(object, true);
+    ObjectManager.register(new GameObject(nextId, location.clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null), true);
+  }
+
+  /** Open: the message, animation and sound on arrival, the open loc a tick later (ticks 466-467). */
+  function openChest(player, object, chest) {
+    player.sendMessage(MESSAGES.openChest);
+    player.performAnimation(new Animation(ANIM.openChest));
+    player.getPacketSender().sendObjectAnimation(object, new Animation(ANIM.chestOpens)).sendSound(SOUND.chestOpen, 1, 0);
+    later(object, 1, () => swapChest(object, chest.open));
+  }
+
+  function closeChest(player, object, chest) {
+    player.sendMessage(MESSAGES.closeChest);
+    player.performAnimation(new Animation(ANIM.closeChest));
+    player.getPacketSender().sendObjectAnimation(object, new Animation(ANIM.chestCloses)).sendSound(SOUND.chestClose, 1, 0);
+    later(object, 1, () => swapChest(object, chest.closed));
+  }
+
+  /** Search: the look animation, then two ticks later the key's box or an empty chest (703-705). */
+  function searchChest(player, chest) {
+    player.performAnimation(new Animation(ANIM.search));
+    later(player, 2, () => {
+      const stage = quest.getStage(player);
+      const holdsKey = stage >= STAGE_MOULD && stage <= STAGE_LENS && chest.choice === chestChoice(player);
+      if (!holdsKey) {
+        player.sendMessage(MESSAGES.emptyChest);
+        return;
+      }
+      if (has(player, GOBLIN_KITCHEN_KEY)) {
+        for (const message of MESSAGES.haveKey) player.sendMessage(message);
+        return;
+      }
+      // The key arrives as the box is continued (tick 707).
+      itemBox(player, GOBLIN_KITCHEN_KEY, MESSAGES.findKey, () => {
+        if (!has(player, GOBLIN_KITCHEN_KEY)) player.getInventory().adds(GOBLIN_KITCHEN_KEY, 1);
+      });
+    });
+  }
+
+  function handleChest(event, option) {
+    const { player, objectId, object } = event;
+    const closed = CHEST_BY_CLOSED.get(objectId);
+    const open = CHEST_BY_OPEN.get(objectId);
+    if (closed && option === "open") openChest(player, object, closed);
+    else if (open && option === "search") searchChest(player, open);
+    else if (open && option === "close") closeChest(player, object, open);
+    else return false;
+    event.handled = true;
+    return true;
+  }
+
+  /** The woken guard is up and free: waking, fighting or wandering, but not dead or trapped. */
+  function guardStillAwake() {
+    if (!awake) return false;
+    if (awake.dead) return false;
+    const guard = awake.guard;
+    if (!guard) return true;
+    if (!guard.isRegistered?.() || guard.getHitpoints?.() <= 0 || guard.isDyingFunction?.()) return false;
+    const at = guard.getLocation();
+    return !(at.getX() === GUARD_TRAP_TILE.x && at.getY() === GUARD_TRAP_TILE.y);
+  }
+
+  function sleeperAsleep(npc) {
+    return npc?.isVisible?.() !== false;
+  }
+
+  /**
+   * The kitchen gate (door:toggle, before Doors swings it): locked without the key, shut while
+   * the guard sleeps beside it or is awake and free, unlocked once by the key, then a gate the
+   * player passes through (Doors' kitchen gate entry). Going in, the player says to be quick.
+   */
+  function handleKitchenGate(request) {
+    const { player, objectId } = request;
+    if (!player || !KITCHEN_GATE_IDS.has(objectId)) return;
+    const unlocked = player.getAttribute(GATE_UNLOCKED_ATTRIBUTE) === true;
+    // Leaving the kitchen is never stopped (live leaves it at tick 888; nothing shows a refusal).
+    if (player.getLocation().getY() <= KITCHEN_SIDE_MAX_Y) return;
+    const refuse = (message) => {
+      player.sendMessage(message);
+      request.handled = true;
+    };
+    if (!unlocked && (quest.getStage(player) < STAGE_MOULD || !has(player, GOBLIN_KITCHEN_KEY))) {
+      // Ours: no capture or Wiki line for trying the gate without its key.
+      refuse("The kitchen gate is locked.");
+      return;
+    }
+    // Nobody has woken the sleeping guard at his post beside the gate.
+    if (!awake) {
+      refuse(unlocked ? MESSAGES.guardAwake : MESSAGES.guardAsleep);
+      return;
+    }
+    if (guardStillAwake()) {
+      refuse(MESSAGES.guardAwake);
+      return;
+    }
+    if (!unlocked) {
+      player.getInventory().deleteNumber(GOBLIN_KITCHEN_KEY, 1);
+      player.setAttribute(GATE_UNLOCKED_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(VARBIT_GATE_UNLOCKED, 1);
+      for (const message of MESSAGES.gateUnlocks) player.sendMessage(message);
+    }
+    startTranscript(api, player, PROFESSOR_NPC_ID, PAGE, "unlocking-the-kitchen-gate");
+  }
+
+  /**
+   * Prod: the player prods and the guard stirs on arrival; two ticks later the goblin guard is
+   * up in his place, shouts and attacks (ticks 806-808). He's a real fight; killed, or once
+   * nobody has fought him for a while, the sleeping guard is back at his post. Ours: he can be
+   * prodded at any stage (the capture prods him at stage 4 only).
+   */
+  function prodSleepingGuard(event) {
+    const { player, npc } = event;
+    if (!npc || awake || !sleeperAsleep(npc)) return;
+    player.performAnimation(new Animation(ANIM.prod));
+    npc.performAnimation(new Animation(ANIM.guardWakes));
+    const entry = { guard: null, sleeper: npc, idle: 0 };
+    awake = entry;
+    later(player, 2, () => {
+      if (awake !== entry) return;
+      npc.setVisible(false);
+      const at = npc.getLocation();
+      const guard = api.spawnNpc({ id: GOBLIN_GUARD_NPC_ID, x: at.getX(), y: at.getY(), z: at.getZ() });
+      if (!guard) {
+        wakeEnds(entry);
+        return;
+      }
+      guard.__skipDefaultRespawn = true;
+      guard.setPositionToFace(new Location(at.getX(), at.getY() + 1, at.getZ()));
+      entry.guard = guard;
+      const shout = transcriptLine("prodding-the-goblin-guard", 0);
+      if (shout) guard.forceChat(shout);
+      if (player.isRegistered?.() !== false) guard.getCombat().attack(player);
+      watchGuard(entry);
+    });
+  }
+
+  function wakeEnds(entry) {
+    if (awake !== entry) return;
+    awake = null;
+    if (entry.guard?.isRegistered?.()) api.removeNpc(entry.guard);
+    entry.sleeper?.setVisible?.(true);
+  }
+
+  function watchGuard(entry) {
+    const task = new api.core.Task(GUARD_CHECK_TICKS, entry);
+    task.execute = () => {
+      if (awake !== entry) {
+        task.stop();
+        return;
+      }
+      const guard = entry.guard;
+      if (entry.dead) {
+        task.stop();
+        return;
+      }
+      if (!guard?.isRegistered?.() && !guard?.isDyingFunction?.()) {
+        task.stop();
+        wakeEnds(entry);
+        return;
+      }
+      const fighting = guard.getCombat?.().getTarget?.() || guard.getCombat?.().getAttacker?.();
+      entry.idle = fighting ? 0 : entry.idle + GUARD_CHECK_TICKS;
+      if (entry.idle >= GUARD_IDLE_TICKS) {
+        task.stop();
+        wakeEnds(entry);
+      }
+    };
+    TaskManager.submit(task);
+  }
+
+  /**
+   * Killed, the goblin guard no longer stops the gate (live opens it as he falls, tick 914); the
+   * sleeping guard is back at his post once the goblin guard would respawn. Ours: no capture shows
+   * the sleeper's return, so his definition's respawn time stands in.
+   */
+  function handleNpcDeath({ npc }) {
+    const entry = awake;
+    if (!entry || entry.guard !== npc) return;
+    entry.dead = true;
+    const respawn = npc.getDefinition?.()?.getRespawn?.() ?? GUARD_RESPAWN_TICKS;
+    later(entry, Math.max(1, respawn), () => wakeEnds(entry));
+  }
+
+  /** Goblin stove: two message boxes, then the mould two ticks after the player's remark (871-876). */
+  function inspectStove(player) {
+    syncMouldPresence(player);
+    if (ownsMould(player)) {
+      statement(player, MESSAGES.stoveEmpty);
+      return;
+    }
+    if (player.getInventory().isFull()) {
+      // Ours: no capture or Wiki line for a full inventory here.
+      player.sendMessage("You need a free inventory space.");
+      return;
+    }
+    statement(player, MESSAGES.stoveMould, () => {
+      player.performAnimation(new Animation(ANIM.openChest));
+      statement(player, MESSAGES.stoveShake, () => {
+        const remark = transcriptLine("inspecting-the-goblin-stove-2", 2);
+        if (remark) player.forceChat(remark);
+        later(player, 2, () => {
+          if (ownsMould(player) || player.getInventory().isFull()) return;
+          player.getInventory().adds(LENS_MOULD, 1);
+          syncMouldPresence(player);
+        });
+      });
+    });
+  }
+
+  /** Cast the lens from the mould and molten glass: two item boxes two ticks apart (1029-1031). */
+  function handleItemOnItem(event) {
+    const ids = [event.usedItemId, event.usedWithItemId];
+    if (!ids.includes(LENS_MOULD) || !ids.includes(MOLTEN_GLASS)) return;
+    const { player } = event;
+    if (quest.getStage(player) !== STAGE_LENS) return;
+    event.handled = true;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ActionDialogue(0, {
+      execute: () => {
+        player.getPacketSender()
+          .sendChatboxInterface(193)
+          .sendClientScript(2868, "")
+          .sendInterfaceFlagsRange((193 << 16) | 0, -1, -1, 0)
+          .sendItemOnInterfaces((193 << 16) | 1, LENS_MOULD, 400)
+          .sendString(MESSAGES.lensPour, (193 << 16) | 2);
+        later(player, 2, () => {
+          if (!has(player, MOLTEN_GLASS) || !has(player, LENS_MOULD)) {
+            player.getPacketSender().sendInterfaceRemoval();
+            return;
+          }
+          player.getInventory().deleteNumber(MOLTEN_GLASS, 1);
+          player.getInventory().adds(OBSERVATORY_LENS, 1);
+          itemBox(player, LENS_MOULD, MESSAGES.lensDone);
+        });
+      },
+    }, true)));
+  }
+
+  // ==========================================================================
+  // Stairs, the Observatory and its telescope
+  // ==========================================================================
+
+  /** The surface stairs' "Low level players beware" box; it counts each showing (227-236). */
+  function warnBeforeDungeon(player) {
+    const shown = Math.min(WARNING_COUNT_MAX, (Number(player.getAttribute(DUNGEON_WARNINGS_ATTRIBUTE)) || 0) + 1);
+    player.setAttribute(DUNGEON_WARNINGS_ATTRIBUTE, shown);
+    PENDING_DESCENT.add(player);
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_DUNGEON_WARNINGS, shown);
+    sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [-1, -1]);
+    sender.sendInterface(DUNGEON_WARNING);
+  }
+
+  /** Proceed closes the box and the player is below two ticks later (237-239). */
+  function dungeonWarningClick(event) {
+    const buttonId = Number(event.buttonId ?? 0);
+    if ((event.groupId ?? (buttonId >>> 16)) !== DUNGEON_WARNING) return;
+    const child = event.childId ?? (buttonId & 0xffff);
+    if (child !== WARNING_PROCEED && child !== WARNING_STAY_OUT && child !== WARNING_CLOSE) return;
+    const { player } = event;
+    event.handled = true;
+    const pending = PENDING_DESCENT.has(player);
+    PENDING_DESCENT.delete(player);
+    player.getPacketSender().sendInterfaceRemoval();
+    if (child !== WARNING_PROCEED || !pending) return;
+    later(player, 2, () => player.moveTo(new Location(DUNGEON_NORTH_LANDING.x, DUNGEON_NORTH_LANDING.y, DUNGEON_NORTH_LANDING.z)));
+  }
+
+  function cutsceneSeen(player) {
+    player.setAttribute(CUTSCENE_SEEN_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(VARBIT_CUTSCENE_SEEN, 1);
+  }
+
+  /**
+   * The two dungeon stair runs are far from anything ClimbLinks can pair, so give
+   * them explicit destinations: the north stairs lead out to the east hill, the
+   * south stairs lead up into the Observatory, and the surface stairs lead down.
+   */
+  function claimObservatoryClimb(request) {
+    if (request.handled) return;
+    const { player, object, objectId } = request;
+    if (!player || !object) return;
+    const location = object.getLocation?.();
+    if (!location) return;
+    if (objectId === SURFACE_STAIRS_ID) {
+      warnBeforeDungeon(player);
+      request.handled = true;
+      return;
+    }
+    if (objectId !== DUNGEON_STAIRS_ID) return;
+    const x = location.getX();
+    const y = location.getY();
+    if (x === DUNGEON_STAIRS_SOUTH.x && y === DUNGEON_STAIRS_SOUTH.y) {
+      const firstVisit = quest.getStage(player) === STAGE_TELESCOPE && player.getAttribute(CUTSCENE_SEEN_ATTRIBUTE) !== true;
+      if (!firstVisit || !Cutscene.start(player)) {
+        player.moveTo(new Location(OBSERVATORY_LANDING.x, OBSERVATORY_LANDING.y, OBSERVATORY_LANDING.z));
+      }
+    } else if (x === DUNGEON_STAIRS_NORTH.x && y === DUNGEON_STAIRS_NORTH.y) {
+      player.moveTo(new Location(SURFACE_STAIRS_LANDING.x, SURFACE_STAIRS_LANDING.y, SURFACE_STAIRS_LANDING.z));
+    } else {
+      return;
+    }
+    request.handled = true;
+  }
+
+  /**
+   * View: the message and animation on arrival; two ticks later the telescope's interface with
+   * the player's constellation (ticks 1604-1606), and observatory_scopelooked the first time.
+   */
+  function viewTelescope(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_TELESCOPE) return false;
+    const sign = ensureSign(player);
+    player.sendMessage(MESSAGES.lookThroughScope);
+    player.performAnimation(new Animation(ANIM.lookThroughScope));
+    later(player, 2, () => {
+      if (stage === STAGE_TELESCOPE) {
+        player.setAttribute(VIEWED_ATTRIBUTE, true);
+        player.getPacketSender().sendVarbit(VARBIT_SCOPE_LOOKED, 1);
+      }
+      const sender = player.getPacketSender();
+      sender.sendInterfaceRawModel(TELESCOPE_STARS, sign.model);
+      sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [0, 0]);
+      sender.sendInterface(TELESCOPE_INTERFACE);
+    });
+    return true;
+  }
+
+  function telescopeClose(event) {
+    const buttonId = Number(event.buttonId ?? 0);
+    if ((event.groupId ?? (buttonId >>> 16)) !== TELESCOPE_INTERFACE) return;
+    event.handled = true;
+    event.player.getPacketSender().sendInterfaceRemoval();
+  }
+
+  /** The marked chests, the kitchen stove and the telescope. */
+  function handleObjectInteraction(event) {
+    const { player, objectId } = event;
+    const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+
+    if (CHEST_BY_CLOSED.has(objectId) || CHEST_BY_OPEN.has(objectId)) {
+      handleChest(event, option);
+      return;
+    }
+
+    if (GOBLIN_STOVE_IDS.has(objectId) && option.includes("inspect")) {
+      if (quest.getStage(player) < STAGE_MOULD) return;
+      event.handled = true;
+      inspectStove(player);
+      return;
+    }
+
+    if (TELESCOPE_IDS.has(objectId) && (option.includes("look") || option.includes("view"))) {
+      if (viewTelescope(player)) event.handled = true;
+    }
   }
 
   function handleLogin({ player }) {
@@ -556,20 +896,26 @@ module.exports = function registerObservatoryQuest(api) {
   });
 
   api.persistAttribute(VIEWED_ATTRIBUTE);
-  api.persistAttribute(GUARD_AWAKE_ATTRIBUTE);
   api.persistAttribute(CONSTELLATION_ATTRIBUTE);
   api.persistAttribute(GATE_UNLOCKED_ATTRIBUTE, false);
   api.persistAttribute(PROFESSOR_NAME_ATTRIBUTE, false);
+  api.persistAttribute(CHEST_CHOICE_ATTRIBUTE, 0);
+  api.persistAttribute(CUTSCENE_SEEN_ATTRIBUTE, false);
+  api.persistAttribute(DUNGEON_WARNINGS_ATTRIBUTE, 0);
   api.onCustomEvent("player:bootstrap-complete", syncHelperState);
   api.onCustomEvent("item:discarded", handleMouldDiscarded);
   api.onPlayerDefeated(handleMouldAfterDeath);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Sleeping guard", { Prod: prodSleepingGuard });
+  api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("ladders:climb", claimObservatoryClimb);
+  api.onCustomEvent("door:toggle", handleKitchenGate);
+  api.onInterfaceActionClick(dungeonWarningClick);
+  api.onInterfaceActionClick(telescopeClose);
   api.onItemOnItem(handleItemOnItem);
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);

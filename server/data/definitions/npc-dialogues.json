@@ -733594,8 +733594,8 @@
       "inspecting-the-goblin-stove": [
         {
           "type": "message",
-          "text": "Just a plain stove. Nothing here.",
-          "id": "1J3qkz"
+          "text": "Just a plain stove. Nothing there.",
+          "id": "kxDt7S"
         }
       ],
       "starting-off": [
@@ -735536,14 +735536,6 @@
                 {
                   "type": "line",
                   "speaker": "Observatory professor",
-                  "text": "How are you getting on finding me some molten glass?"
-                },
-                {
-                  "player": "Here it is."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Observatory professor",
                   "text": "Did you bring me the mould?"
                 },
                 {
@@ -735877,54 +735869,56 @@
           "type": "choice",
           "options": [
             {
-              "text": "Talk about the Observatory quest."
-            }
-          ]
-        },
-        {
-          "player": "Yes, here it is. You may as well take this mould too.",
-          "steps": [
-            {
-              "type": "action",
-              "text": "The player hands the observatory professor the observatory lens.",
-              "id": "p1dzXH"
-            }
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Wonderful, at last I can fix the telescope."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
-        },
-        {
-          "player": "Sounds interesting. Count me in."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
-        },
-        {
-          "player": "Okay. See you there."
-        },
-        {
-          "type": "message",
-          "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
-          "steps": [
-            {
-              "type": "end"
-            }
-          ],
-          "id": "57NA_7"
-        },
-        {
-          "type": "choice",
-          "options": [
+              "text": "Talk about the Observatory quest.",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Is the lens finished?"
+                },
+                {
+                  "player": "Yes, here it is. You may as well take this mould too.",
+                  "steps": [
+                    {
+                      "type": "action",
+                      "text": "The player hands the observatory professor the observatory lens.",
+                      "id": "HgpGGr"
+                    }
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Wonderful, at last I can fix the telescope."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
+                },
+                {
+                  "player": "Sounds interesting. Count me in."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
+                },
+                {
+                  "player": "Okay. See you there."
+                },
+                {
+                  "type": "message",
+                  "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
+                  "steps": [
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "vj7Nry"
+                }
+              ]
+            },
             {
               "text": "Talk about Treasure Trails."
             }

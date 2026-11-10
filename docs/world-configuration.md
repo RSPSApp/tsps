@@ -19,9 +19,10 @@ enabled state. The `enabled` field, when present, must be a boolean.
 }
 ```
 
-Use the plugin's exported name. Within each file, scoped settings override the equivalent
-`pluginConfig` keys. Then the local file overrides the shipped file. This merges the individual
-switches and settings, with nested values replaced in full. For example, a local
+Use the plugin's exported name with its exact casing. When a plugin loads, the server warns about
+scoped options that have no matching declaration. Within each file, scoped settings override
+the equivalent `pluginConfig` keys. Then the local file overrides the shipped file. This merges the
+individual switches and settings, with nested values replaced in full. For example, a local
 `"Prayer": false` disables the plugin and keeps its shipped settings. Plugins can read
 their options by short name, such as `api.getPluginConfig("sequentialBurying", false)`.
 

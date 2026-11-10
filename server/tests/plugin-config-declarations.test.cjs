@@ -111,6 +111,43 @@ test('a configured value that fails its declaration is warned about once and sti
   assert.equal(PluginManager.getPluginConfig('Fixture:count', 5), 'abc');
 });
 
+test('startup warns about undeclared scoped settings and suggests the declared casing', () => {
+  const cwd = process.cwd();
+  const world = fs.mkdtempSync(path.join(os.tmpdir(), 'plugin-world-'));
+  const definitions = path.join(world, 'data', 'definitions');
+  fs.mkdirSync(definitions, { recursive: true });
+  fs.writeFileSync(path.join(definitions, 'world.json'), JSON.stringify({
+    plugins: {
+      fixture: { enabled: true, count: 4 },
+      CHARACTERS: { maxPerAccount: 2 },
+      Off: { count: 3 },
+    },
+    pluginConfig: { 'fixture:legacy': 1 },
+  }));
+  fs.writeFileSync(path.join(definitions, 'world.local.json'), JSON.stringify({
+    plugins: { Fixture: { count: 6, typo: 7 } },
+  }));
+  process.chdir(world);
+  try {
+    const warnings = load({
+      F: plugin('Fixture', { 'Fixture:count': COUNT }),
+      C: plugin('Characters', { 'characters:maxPerAccount': COUNT }),
+      Off: 'module.exports={name:"Off",enabled:false,register(){}}',
+    }, null).filter((warning) => warning.includes('scoped setting'));
+    assert.equal(warnings.length, 2);
+    assert.match(warnings[0], /plugins\.fixture\.count.*use the spelling in "Fixture:count"/);
+    assert.match(warnings[1], /plugins\.Fixture\.typo.*no declared key "Fixture:typo"/);
+    assert.deepEqual(loaded(), ['Characters', 'Fixture']);
+    assert.equal(PluginManager.createApi('Fixture').getPluginConfig('count'), 6);
+    assert.equal(PluginManager.createApi('Characters').getPluginConfig('maxPerAccount'), 2);
+    assert.equal(PluginManager.getPluginConfig('Fixture:typo'), 7);
+    assert.equal(PluginManager.getPluginConfig('fixture:legacy'), 1);
+  } finally {
+    process.chdir(cwd);
+    fs.rmSync(world, { recursive: true, force: true });
+  }
+});
+
 test('getConfigDeclarations lists loaded plugin keys with their owner plus the core keys', () => {
   load({ F: plugin('Fixture', { 'Fixture:count': COUNT }) });
   const all = PluginManager.getConfigDeclarations();

@@ -1,4 +1,5 @@
 type JsonObject = Record<string, unknown>;
+export type ScopedPluginSettings = Map<string, { plugin: string; setting: string }>;
 
 function isObject(value: unknown): value is JsonObject {
     return !!value && typeof value === "object" && !Array.isArray(value);
@@ -17,7 +18,7 @@ export function pluginConfigKey(plugin: string, setting: string): string {
 }
 
 /** Normalize each file separately so either syntax in the local file can override the shipped one. */
-export function normalizeWorldPluginConfig(world: JsonObject): JsonObject {
+export function normalizeWorldPluginConfig(world: JsonObject, scopedSettings?: ScopedPluginSettings): JsonObject {
     if (!isObject(world.plugins) || !Object.values(world.plugins).some(isObject)) return world;
 
     const switches: [string, unknown][] = [];
@@ -34,7 +35,9 @@ export function normalizeWorldPluginConfig(world: JsonObject): JsonObject {
         }
         for (const [key, value] of Object.entries(options)) {
             if (!/^[^:\s]+$/.test(key) || /[:\s]/.test(plugin)) throw new Error(`Invalid plugin setting plugins.${plugin}.${key}`);
-            settings.push([pluginConfigKey(plugin, key), value]);
+            const flatKey = pluginConfigKey(plugin, key);
+            settings.push([flatKey, value]);
+            scopedSettings?.set(flatKey, { plugin, setting: key });
         }
     }
     return {

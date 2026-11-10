@@ -1,4 +1,4 @@
-import { pluginConfigKey } from "../game/definition/WorldPluginConfig";
+import { pluginConfigKey, type ScopedPluginSettings } from "../game/definition/WorldPluginConfig";
 import { CacheDefinitions } from "../game/cache/CacheDefinitions";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
 import { ObjectDefinition } from "../game/definition/ObjectDefinition";
@@ -722,7 +722,8 @@ export class PluginManager {
     });
 
     // The exported name is only known after evaluation; filter by filename first.
-    const { switches, defaultEnabled } = PluginManager.loadPluginSwitches();
+    const scopedSettings: ScopedPluginSettings = new Map();
+    const { switches, defaultEnabled } = PluginManager.loadPluginSwitches(scopedSettings);
     const switchFor = (name: string) => switches.get(normalizePluginName(name));
     const enabledPluginFiles = filteredPluginFiles.filter((pluginPath) => {
       if (switchFor(pluginNameFromFile(pluginPath)) !== false) {
@@ -771,7 +772,7 @@ export class PluginManager {
     PluginManager.loadPluginCandidatesWithDependencies(toLoad);
 
     PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
-    PluginManager.warnAboutInvalidConfigValues();
+    PluginManager.warnAboutInvalidConfigValues(scopedSettings);
 
     if (PluginManager.lastPersistenceOverride) {
       console.info(PluginManager.lastPersistenceOverride);
@@ -2192,8 +2193,8 @@ export class PluginManager {
    * it leaves out keeps its own `enabled` default. The older `disabledPlugins` list is read
    * as it always was: what it names is off and everything else on, defaults included.
    */
-  private static loadPluginSwitches(): { switches: Map<string, boolean>; defaultEnabled?: boolean } {
-    return PluginManager.parsePluginSwitches(readWorldConfig());
+  private static loadPluginSwitches(scopedSettings?: ScopedPluginSettings): { switches: Map<string, boolean>; defaultEnabled?: boolean } {
+    return PluginManager.parsePluginSwitches(readWorldConfig(scopedSettings));
   }
 
   /** Reads the plugin switches out of an already merged world config. Throws when they are malformed. */
@@ -2357,10 +2358,17 @@ export class PluginManager {
     }
   }
 
-  /** Warns (never replaces) about configured values that do not fit their declaration. */
-  private static warnAboutInvalidConfigValues(): void {
+  /** Warns about undeclared scoped settings and values that do not fit their declaration. */
+  private static warnAboutInvalidConfigValues(scopedSettings: ScopedPluginSettings): void {
     const config = PluginManager.loadPluginConfig();
     const declarations = PluginManager.getConfigDeclarations();
+    const loadedNames = new Set(PluginManager.loadedPlugins.map(normalizePluginName));
+    for (const [key, { plugin, setting }] of scopedSettings) {
+      if (declarations.has(key) || !loadedNames.has(normalizePluginName(plugin))) continue;
+      const exactKey = [...declarations.keys()].find((name) => name.toLowerCase() === key.toLowerCase());
+      const hint = exactKey ? `; use the spelling in "${exactKey}"` : "";
+      console.warn(`[plugins] world.json scoped setting plugins.${plugin}.${setting} has no declared key "${key}"${hint}`);
+    }
     for (const [key, value] of Object.entries(config)) {
       const entry = declarations.get(key);
       if (!entry) {

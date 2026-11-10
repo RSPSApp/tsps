@@ -297,6 +297,7 @@ import { isChatboxClickThroughActive } from "./widgets/interaction/chatboxClickT
 import { CombatOptionsController } from "./combat/CombatOptionsController";
 import { HitsplatFlushController } from "./combat/HitsplatFlushController";
 import { ClientScriptLoader } from "./cs2/ClientScriptLoader";
+import type { GroundItemsServerPayload } from "../network/serverConnection/types/messages";
 import { ClientGroundItemStack, GroundItemStore } from "./data/ground/GroundItemStore";
 import { PlayerEcs } from "./ecs/PlayerEcs";
 import { ModelHighlightManager } from "./highlights/ModelHighlightManager";
@@ -1136,6 +1137,30 @@ export class OsrsClient {
     private refreshGroundItemMeshes(): void {
         this.groundItemMeshesPending =
             (this.renderer as any)?.updateGroundItemMeshes?.(this.getGroundItemMeshStacks()) === true;
+    }
+
+    private applyGroundItemUpdate(payload: GroundItemsServerPayload): void {
+        if (payload?.kind === "delta") {
+            for (const stackId of payload.removes ?? []) {
+                const stack = this.groundItems.getStackById(stackId);
+                if (!stack || !this.objTypeLoader?.load(stack.itemId)?.groundActions?.includes("Light")) continue;
+                if (!this.removedLogs) {
+                    this.removedLogs = [];
+                    // The server sends the consumed log and its fire in one socket message.
+                    // Pair them before changing the mesh, while applying store mutations immediately.
+                    queueMicrotask(() => {
+                        this.removedLogs = undefined;
+                        this.refreshGroundItemMeshes();
+                    });
+                }
+                this.removedLogs.push(stack);
+            }
+        } else {
+            if (this.removedLogs) this.removedLogs.length = 0;
+            this.burningLogMeshes.clear();
+        }
+        this.groundItems.update(payload);
+        if (!this.removedLogs) this.refreshGroundItemMeshes();
     }
 
     private pruneBurningLogMeshes(): boolean {
@@ -4106,27 +4131,7 @@ export class OsrsClient {
             );
             this.unsubscribeGroundItems = subscribeGroundItems((payload) => {
                 try {
-                    if (payload?.kind === "delta") {
-                        for (const stackId of payload.removes ?? []) {
-                            const stack = this.groundItems.getStackById(stackId);
-                            if (!stack || !this.objTypeLoader?.load(stack.itemId)?.groundActions?.includes("Light")) continue;
-                            if (!this.removedLogs) {
-                                this.removedLogs = [];
-                                // The server sends the consumed log and its fire in one socket message.
-                                // Pair them before changing the mesh, while applying store mutations immediately.
-                                queueMicrotask(() => {
-                                    this.removedLogs = undefined;
-                                    this.refreshGroundItemMeshes();
-                                });
-                            }
-                            this.removedLogs.push(stack);
-                        }
-                    } else {
-                        if (this.removedLogs) this.removedLogs.length = 0;
-                        this.burningLogMeshes.clear();
-                    }
-                    this.groundItems.update(payload);
-                    if (!this.removedLogs) this.refreshGroundItemMeshes();
+                    this.applyGroundItemUpdate(payload);
                 } catch (err) {
                     console.warn("ground item update failed", err);
                 }

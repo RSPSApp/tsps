@@ -129,3 +129,16 @@ Native acceptance: at the isolated worktree URL open Quests →Settings, scroll
 Interfaces to Quest List, change sorting/filter, close and open row journals. Choose
 Large, disable shadows, choose a colour (including black), reset and relog. Use the
 worktree ports; leave the main play world running.
+
+## Notification and warning rows
+
+These rows show, save and resend the player's choice (`data/settings.json`; cache check in `tests/builtin-warning-settings.test.cjs`). **Most do not change anything in game yet.** In the osrs-dumps client scripts, the drop warning (5411/5412), loot notification (5399/5400/5402), Grand Exchange price warning (14700/14701) and Alchemy value (6091) varbits are read only by the settings scripts themselves; on live the server shows those warnings, and tsps does not read the varbits yet. The other rows below were not traced to a reader either.
+
+- **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), High Risk lever / Ferox / canoe warnings (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471) and the Leagues stepping-stones teleport (500).
+- **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
+- **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`. Nothing reads it yet: `castAlchemy` only confirms untradeable items.
+- **Not done**:
+  - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
+  - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
+  - The respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77) and the Sailing drop-item warning (465, default differs between captures).
+  - Rows already handled elsewhere: teleport spells 60-64, levers 253, Ferox 255, drink crate 455.

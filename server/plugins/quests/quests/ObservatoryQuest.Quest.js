@@ -634,7 +634,9 @@ module.exports = function registerObservatoryQuest(api) {
     npc.performAnimation(new Animation(ANIM.guardWakes));
     const entry = { guard: null, sleeper: npc, idle: 0 };
     awake = entry;
-    later(player, 2, () => {
+    // Keyed to the wake, not the player: a logout cancels the player's tasks, and a wake left
+    // half done would hold the gate shut for everyone.
+    later(entry, 2, () => {
       if (awake !== entry) return;
       npc.setVisible(false);
       const at = npc.getLocation();

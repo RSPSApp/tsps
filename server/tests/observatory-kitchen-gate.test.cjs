@@ -153,3 +153,20 @@ test("prodded, a goblin guard takes his place; trapped north of the gate, the ke
   assert.ok(until(isShut, 4));
   tick(6);
 });
+
+test("a logout during the two-tick wake still gets the guard up, so the gate is not held shut for everyone", (t) => {
+  tick(30);
+  assert.equal(sleeper.isVisible(), true, "the sleeper is back from the previous test");
+  const { player: prodder } = actor(t, 2327, NORTH_Y + 1);
+  assert.equal(PluginManager.emitNpcInteraction({ player: prodder, npc: sleeper, npcId: SLEEPING_GUARD, clickType: 1, handled: false }), true);
+  core.TaskManager.cancelTasks(prodder); // what Player.onLogout does
+  assert.ok(until(() => goblinGuard() != null, 4), "the goblin guard still gets up");
+  const guard = goblinGuard();
+  PluginManager.emitNpcDeath({ npc: guard, npcId: GOBLIN_GUARD, killer: prodder, location: { x: 2327, y: 9395, z: 0 } });
+  PluginManager.removeNpc(guard);
+  const { player, messages } = actor(t, 2326, NORTH_Y);
+  player.setAttribute("observatory-quest:gate-unlocked", false);
+  click(player, GATE_LEFT, 2326);
+  assert.ok(until(isOpen, 4), `with him dead another player gets through: ${messages}`);
+  tick(30);
+});

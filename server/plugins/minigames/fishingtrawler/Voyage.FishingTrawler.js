@@ -21,7 +21,7 @@
 const Shared = require("./Shared.FishingTrawler");
 
 const SIDES = ["port", "starboard"];
-
+
 const ELITE_DIARY_FISH = 1.5;
 
 class Voyage {

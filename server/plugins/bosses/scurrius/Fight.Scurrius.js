@@ -263,6 +263,16 @@ function sendProjectile(npc, target, projectileId, kind, toward = target.getLoca
   ).withAngle(PROJECTILE.angle).withProgress(PROJECTILE.progress).sendProjectile();
 }
 
+/**
+ * Who a bolt or fur ball turn is thrown at: every player in the room, his target among them
+ * (captured, recording 84: one projectile per player in the public lair on each cast, up to six
+ * at once, from the same tile, a player still on the entrance tile included).
+ */
+function volleyTargets(npc, target) {
+  const players = Common.playersInRoom(npc);
+  return target && !players.includes(target) ? [target, ...players] : players;
+}
+
 function areaSound(npc, soundId, [x, y, z], delay, range) {
   for (const player of Common.playersInRoom(npc)) player.getPacketSender().sendAreaSound(soundId, x, y, z, 1, delay, range);
 }
@@ -656,6 +666,8 @@ function defineCombatMethod() {
       this.stance = CombatType.MELEE;
       this.action = "melee";
       this.npc = null;
+      /** The players a bolt or fur ball turn was thrown at, for hits(). */
+      this.volley = null;
     }
 
     /** In phase one and between rounds, melee beside his target; out of reach, the stomp works from range. */
@@ -716,19 +728,22 @@ function defineCombatMethod() {
         summonRats(character, state);
         return;
       }
-      const sender = target.isPlayer?.() ? target.getPacketSender() : null;
-      if (this.action === "ranged") {
-        this.stance = CombatType.RANGED;
+      const ranged = this.action === "ranged";
+      this.stance = ranged ? CombatType.RANGED : CombatType.MAGIC;
+      if (ranged) {
         character.performAnimation(new Animation(feeding ? ANIM.feedingRanged : ANIM.ranged));
-        sendProjectile(character, target, GFX.rangedProjectile, "ranged", facingFor(state, target));
-        sender?.sendSound(SOUND.ranged, 1, 0);
-        return;
+      } else {
+        character.performAnimation(new Animation(feeding ? ANIM.feedingMagic : ANIM.magic));
+        character.performGraphic(new Graphic(feeding ? GFX.feedingMagicCast : GFX.magicCast));
       }
-      this.stance = CombatType.MAGIC;
-      character.performAnimation(new Animation(feeding ? ANIM.feedingMagic : ANIM.magic));
-      character.performGraphic(new Graphic(feeding ? GFX.feedingMagicCast : GFX.magicCast));
-      sendProjectile(character, target, GFX.magicProjectile, "magic", facingFor(state, target));
-      sender?.sendSound(SOUND.magic, 1, 0);
+      // One cast, one projectile and cast sound for each player in the room, all from the same
+      // hand tile (he faces the pile or his last turn, never each player).
+      const toward = facingFor(state, target);
+      this.volley = volleyTargets(character, target);
+      for (const victim of this.volley) {
+        sendProjectile(character, victim, ranged ? GFX.rangedProjectile : GFX.magicProjectile, this.action, toward);
+        if (victim.isPlayer?.()) victim.getPacketSender().sendSound(ranged ? SOUND.ranged : SOUND.magic, 1, 0);
+      }
     }
 
     hits(character, target) {
@@ -740,15 +755,19 @@ function defineCombatMethod() {
       }
       if (this.action !== "ranged" && this.action !== "magic") return [];
       const kind = this.action;
-      // Queued at 0 as the flight ends and rolled by distantHitLands in the player's turn, so a
+      const volley = this.volley ?? [target];
+      this.volley = null;
+      // Queued at 0 as the flight ends and rolled by distantHitLands in each player's turn, so a
       // prayer clicked on the landing tick counts (the task runs before the player's clicks).
       Common.later(DISTANT_HIT_DELAY, () => {
         if (character.getHitpoints() <= 0 || !character.isRegistered?.()) return;
-        if (target.getHitpoints() <= 0 || target.isRegistered?.() === false) return;
-        const placeholder = new PendingHit(character, target, DISTANT_STYLES[kind],
-          { delay: 0, rollAccuracy: false, experience: false, damage: 0, bypassProtectionPrayer: true });
-        landing.set(placeholder, maxHits[kind]);
-        core.CombatFactory.addPendingHit(placeholder);
+        for (const victim of volley) {
+          if (victim.getHitpoints() <= 0 || victim.isRegistered?.() === false) continue;
+          const placeholder = new PendingHit(character, victim, DISTANT_STYLES[kind],
+            { delay: 0, rollAccuracy: false, experience: false, damage: 0, bypassProtectionPrayer: true });
+          landing.set(placeholder, maxHits[kind]);
+          core.CombatFactory.addPendingHit(placeholder);
+        }
       }, character);
       return [];
     }
@@ -814,6 +833,6 @@ module.exports = {
     SOLO_MAX_HITS, PUBLIC_MAX_HITS, PHASE_ONE, FEEDING, ENRAGED, RAT_WAVE_LIMIT, ROCKFALL_TILES,
     RAT_CALL_COOLDOWN_TICKS, FEED_HEALS, MELEE_BETWEEN_ROUNDS, PROJECTILE, pickAction, rockfallTiles, stomp, summonRats,
     FEED_HEAL_AMOUNTS, DISTANT_HIT_DELAY, startFeeding, feedingTurn, finishFeeding, stepOff, ratsAlive, facingFor, heal, goEat, enrage, handTile, oneShotRat, removeRatAttackDelay,
-    defineCombatMethod, distantHitLands, maxHitsFor, STUCK_TICKS, ratHitRoll, ratHitLands, ratTile, RAT_PROTECTED_MAX_HIT,
+    defineCombatMethod, distantHitLands, volleyTargets, maxHitsFor, STUCK_TICKS, ratHitRoll, ratHitLands, ratTile, RAT_PROTECTED_MAX_HIT,
   },
 };

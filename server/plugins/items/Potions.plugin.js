@@ -335,6 +335,18 @@ const PRAYER_REGEN_WARNING_STEPS = 3;
 const PRAYER_REGEN_WARNING = "<col=ff3045>Your Prayer Regeneration potion has almost run out!";
 const PRAYER_REGEN_WORN_OFF = "<col=ff3045>The effects of your Prayer Regeneration potion have worn off.";
 
+/**
+ * The client's timer for the potion: prayer_regeneration_potion_timer (11361) holds the steps left. Live sends it on
+ * every change: 0 -> 66 on a drink (rsprox_transcripts/231/02990.txt:8541), a step down every 12 ticks, 57 -> 66 on a
+ * re-drink (239/04272.txt:13136) and -> 0 on expiry or death (239/04272.txt:65174-65180), before the line.
+ */
+const PRAYER_REGEN_TIMER_VARBIT = "prayer_regeneration_potion_timer";
+
+function sendPrayerRegenerationTimer(player, steps) {
+  const id = pluginApi?.core?.CacheDefinitions?.getVarbitId?.(PRAYER_REGEN_TIMER_VARBIT);
+  if (Number.isInteger(id)) player.getPacketSender().sendVarbit(id, steps);
+}
+
 /** Wiki: restores one Prayer point every 12 ticks; never over max. */
 function applyPrayerRegeneration(player) {
   const now = Date.now();
@@ -343,12 +355,20 @@ function applyPrayerRegeneration(player) {
     endsAt: now + PRAYER_REGEN_STEPS * PRAYER_REGEN_INTERVAL_MS,
     nextRestoreAt: now + PRAYER_REGEN_INTERVAL_MS,
   });
+  sendPrayerRegenerationTimer(player, PRAYER_REGEN_STEPS);
 }
 
 function endPrayerRegeneration(player) {
   if (!player.getAttribute(ATTR_PRAYER_REGEN_STATE)) return;
   player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+  sendPrayerRegenerationTimer(player, 0);
   player.sendMessage(PRAYER_REGEN_WORN_OFF);
+}
+
+/** On login the client's timer starts at 0: a potion still running shows its steps again. */
+function resumePrayerRegenerationTimer({ player }) {
+  const left = player.getAttribute(ATTR_PRAYER_REGEN_STATE)?.left;
+  if (Number.isInteger(left) && left > 0) sendPrayerRegenerationTimer(player, left);
 }
 
 function clearPrayerRegeneration({ player }) {
@@ -377,6 +397,7 @@ function processPrayerRegeneration(player) {
     endPrayerRegeneration(player);
     return;
   }
+  sendPrayerRegenerationTimer(player, left);
   if (left === PRAYER_REGEN_WARNING_STEPS) player.sendMessage(PRAYER_REGEN_WARNING);
   state.left = left;
   state.nextRestoreAt = now + PRAYER_REGEN_INTERVAL_MS;
@@ -1844,6 +1865,7 @@ module.exports = {
   _test: {
     applyPrayerRestore, applySanfewRestore, applyAncientBrew, restorePrayerOverheal, applyDivine, processDivine,
     applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration, clearPrayerRegeneration,
+    resumePrayerRegenerationTimer,
     clearDivineOnDeath,
     applyRankFrothyPotion, applyFoulChunkyPotion, applyRancidSlimyPotion, applyJarOfCongealedBlood,
     processBoostDecay, notePreserveActivated, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
@@ -1886,6 +1908,7 @@ module.exports = {
     api.persistAttribute(ATTR_PRAYER_REGEN_STATE, null);
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogin(resumeTimedEffects);
+    api.onPlayerLogin(resumePrayerRegenerationTimer);
     api.onPlayerDeath(clearPrayerRegeneration);
     api.onPlayerDeath(clearDivineOnDeath);
     api.onItemOnItem(pourPotion, { noted: false });

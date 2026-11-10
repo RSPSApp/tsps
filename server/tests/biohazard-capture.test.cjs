@@ -286,6 +286,63 @@ test("the HQ door is its mourner: turned away, then let in in the gown at stage 
   assert.ok(objectAt(2037, 2551, 3321));
 });
 
+test("after the quest only the full mourner outfit passes the front door (Wiki: Mourner Headquarters)", () => {
+  const done = actor(16, 2551, 3320);
+  tick(done, 3); // the door the previous test opened shuts first
+  wear(done, core.Equipment.BODY_SLOT, core.ItemIdentifiers.MEDICAL_GOWN);
+  assert.equal(objectOption(done, 2036, 2551, 3320, 0, "Open").handled, true);
+  assert.equal(shown(done), "Back away citizen. Only mourners are allowed inside the headquarters.");
+  tick(done);
+  assert.deepEqual(at(done), [2551, 3320, 0]);
+  const mourner = actor(16, 2551, 3320);
+  for (const [slot, item] of [["HEAD_SLOT", "GAS_MASK"], ["BODY_SLOT", "MOURNER_TOP"], ["LEG_SLOT", "MOURNER_TROUSERS"],
+    ["HANDS_SLOT", "MOURNER_GLOVES"], ["FEET_SLOT", "MOURNER_BOOTS"], ["CAPE_SLOT", "MOURNER_CLOAK"]]) {
+    wear(mourner, core.Equipment[slot], core.ItemIdentifiers[item]);
+  }
+  tick(mourner, 3);
+  objectOption(mourner, 2036, 2551, 3320, 0, "Open");
+  assert.equal(current(mourner), undefined);
+  tick(mourner);
+  assert.deepEqual(at(mourner), [2551, 3321, 0]);
+  tick(mourner, 3);
+});
+
+test("a walked-away door click is not opened by the same line in another conversation", () => {
+  const player = actor(6, 2551, 3320);
+  tick(player, 3);
+  wear(player, core.Equipment.BODY_SLOT, core.ItemIdentifiers.MEDICAL_GOWN);
+  objectOption(player, 2036, 2551, 3320, 0, "Open");
+  player.getDialogueManager().reset();
+  doorOpens.length = 0;
+  // Talk-to on the mourner picks this same variant.
+  assert.equal(PluginManager.emitNpcDialogueVariant({ player, npcId: core.NpcIdentifiers.MOURNER_12 }),
+    "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown");
+  QuestRuntime.startTranscript(api, player, core.NpcIdentifiers.MOURNER_12, "Biohazard",
+    "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown");
+  next(player);
+  next(player);
+  next(player);
+  assert.equal(doorOpens.length, 0);
+});
+
+test("two crossings in a row keep the ladder up until the later one drops", () => {
+  const first = actor(4, 2559, 3267);
+  const second = actor(7, 2556, 3267);
+  wear(first, core.Equipment.HEAD_SLOT, core.ItemIdentifiers.GAS_MASK);
+  QuestRuntime.startTranscript(api, first, core.NpcIdentifiers.OMART, "Biohazard",
+    "getting-started-talking-to-omart-after-freeing-the-birds", omartYes);
+  next(first);
+  tick(first, 3);
+  QuestRuntime.startTranscript(api, second, core.NpcIdentifiers.KILRON, "Biohazard",
+    "infiltrating-the-mourner-hq-talking-to-kilron", (steps) => steps.find((step) => step.type === "choice").options[0].steps);
+  next(second);
+  next(second);
+  tick(first, 3);
+  assert.ok(objectAt(2065, 2558, 3267), "the first drop leaves the second crossing's ladder");
+  tick(second, 3);
+  assert.ok(objectAt(2066, 2558, 3267) && objectAt(2066, 2557, 3267));
+});
+
 test("the cage gate with the key shows its box going in, none coming out (ticks 557, 580)", () => {
   const entering = actor(6, 2550, 3325, 1);
   entering.getInventory().adds(core.ItemIdentifiers.KEY_2, 1);

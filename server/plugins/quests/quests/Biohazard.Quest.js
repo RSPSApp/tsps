@@ -251,6 +251,10 @@ module.exports = function registerBiohazardQuest(api) {
   ]);
 
   let quest;
+  /** Doors the quest opens once a conversation ends ("door:open" through Doors.plugin). */
+  const pendingDoors = new WeakMap();
+  /** A door opened for the quest, so its own door:toggle passes it to Doors. */
+  const passingDoors = new WeakSet();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
   const hasAllVials = (player) =>
@@ -262,6 +266,15 @@ module.exports = function registerBiohazardQuest(api) {
 
   const wornId = (player, slot) => player.getEquipment().get(slot)?.getId?.();
   const wearingGasMask = (player) => wornId(player, Equipment.HEAD_SLOT) === GAS_MASK_ITEM_ID;
+  const MOURNER_OUTFIT = [
+    [Equipment.HEAD_SLOT, GAS_MASK_ITEM_ID],
+    [Equipment.BODY_SLOT, ItemIdentifiers.MOURNER_TOP],
+    [Equipment.LEG_SLOT, ItemIdentifiers.MOURNER_TROUSERS],
+    [Equipment.HANDS_SLOT, ItemIdentifiers.MOURNER_GLOVES],
+    [Equipment.FEET_SLOT, ItemIdentifiers.MOURNER_BOOTS],
+    [Equipment.CAPE_SLOT, ItemIdentifiers.MOURNER_CLOAK],
+  ];
+  const wearingMournerOutfit = (player) => MOURNER_OUTFIT.every(([slot, itemId]) => wornId(player, slot) === itemId);
   const wearingMedicalGown = (player) => wornId(player, Equipment.BODY_SLOT) === MEDICAL_GOWN_ITEM_ID;
   const wearingPriestGown = (player) =>
     wornId(player, Equipment.BODY_SLOT) === PRIEST_GOWN_TOP_ITEM_ID &&
@@ -478,13 +491,32 @@ module.exports = function registerBiohazardQuest(api) {
     }
   }
 
+  /** Crossings using the shared ladder; the walls come back when the last one ends. */
+  let ladderCrossings = 0;
+  const ladderScenes = new WeakMap();
+
+  function endLadderScene(player) {
+    const scene = ladderScenes.get(player);
+    if (!scene || scene.ended) return;
+    scene.ended = true;
+    ladderScenes.delete(player);
+    if (scene.shown && --ladderCrossings === 0) showRopeLadder(false);
+  }
+
   /** "... throws a rope ladder over the wall.": the ladder goes up and the player looks at it. */
   function throwRopeLadder(player, westbound) {
-    later(player, 1, () => showRopeLadder(true));
+    endLadderScene(player);
+    const scene = { shown: false, ended: false };
+    ladderScenes.set(player, scene);
+    later(player, 1, () => {
+      if (scene.ended) return;
+      scene.shown = true;
+      if (ladderCrossings++ === 0) showRopeLadder(true);
+    });
     const [x, y] = westbound ? LADDER_TILES[0] : LADDER_TILES[1];
     later(player, 2, () => player.setPositionToFace(new Location(x, y, 0)));
-    // The drop box puts the walls back; an interrupted scene must not leave the ladder up.
-    later(player, LADDER_BOX_TICKS * 2, () => showRopeLadder(false));
+    // The drop box ends the scene; an interrupted one must not leave the ladder up.
+    later(player, LADDER_BOX_TICKS * 2, () => { if (ladderScenes.get(player) === scene) endLadderScene(player); });
   }
 
   /** "You climb up the rope ladder...": the climb, and the landing a tick later. */
@@ -498,8 +530,8 @@ module.exports = function registerBiohazardQuest(api) {
   }
 
   /** "...and drop down on the other side.": the walls are back and the helper turns north. */
-  function dropDownFromLadder(npc) {
-    showRopeLadder(false);
+  function dropDownFromLadder(player, npc) {
+    endLadderScene(player);
     const at = npc?.getLocation?.();
     if (at) npc.setPositionToFace(new Location(at.getX() + NORTH_ANGLE_TILE[0], at.getY() + NORTH_ANGLE_TILE[1], at.getZ()));
   }
@@ -671,6 +703,8 @@ module.exports = function registerBiohazardQuest(api) {
   }
 
   function selectVariant({ npcId, player }) {
+    // Talking to someone is a new conversation: a door click walked away from stays shut.
+    pendingDoors.delete(player);
     const stage = quest.getStage(player);
     if (ELENA_NPC_IDS.has(npcId)) {
       // Plague City registers after this quest; keep Elena's own quest until
@@ -843,7 +877,9 @@ module.exports = function registerBiohazardQuest(api) {
       return;
     }
     if (value === "You may now pass." || value === "You heard right. Head on in and see what you can do.") {
-      if (pendingDoors.get(player)?.kind === "line") request.after = () => openPendingDoor(player);
+      // Only the conversation the door started opens it; the same line elsewhere does not.
+      const pending = pendingDoors.get(player);
+      if (pending?.kind === "line" && playing(pages, pending.variant)) request.after = () => openPendingDoor(player);
       return;
     }
     handleGuidorLine(request);
@@ -977,7 +1013,7 @@ module.exports = function registerBiohazardQuest(api) {
       return true;
     }
     if (LADDER_DROPS.has(stepId)) {
-      dropDownFromLadder(npc);
+      dropDownFromLadder(player, npc);
       return true;
     }
     switch (stepId) {
@@ -1153,10 +1189,11 @@ module.exports = function registerBiohazardQuest(api) {
     startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", "infiltrating-the-mourner-hq-using-rotten-apple-on-cauldron");
   }
 
-  /** Doors the quest opens once a conversation ends ("door:open" through Doors.plugin). */
-  const pendingDoors = new WeakMap();
-  /** A door opened for the quest, so its own door:toggle passes it to Doors. */
-  const passingDoors = new WeakSet();
+
+  /** Whether a dialogue event comes from this Biohazard variant. */
+  function playing(pages, variant) {
+    return pages?.some(({ page, variants }) => page === "Biohazard" && variants?.includes(variant)) === true;
+  }
 
   function openPendingDoor(player) {
     const object = pendingDoors.get(player)?.object;
@@ -1191,7 +1228,15 @@ module.exports = function registerBiohazardQuest(api) {
         : "infiltrating-the-mourner-hq-opening-back-door-of-the-mourner-headquarters");
       return true;
     }
-    if (quest.isComplete(player) || inMournerHq(player)) return false;
+    if (inMournerHq(player)) return false;
+    if (quest.isComplete(player)) {
+      // After the quest the medical gown no longer works; only mourners pass (Wiki: Mourner
+      // Headquarters). Not captured: the guard's own transcript line.
+      if (wearingMournerOutfit(player)) return false;
+      event.handled = true;
+      startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Mourner (Biohazard)", "mourner-headquarters-guard");
+      return true;
+    }
     const stage = quest.getStage(player);
     if (stage >= STAGE_FOUND_DISTILLATOR && wearingMedicalGown(player)) return false;
     event.handled = true;
@@ -1201,7 +1246,7 @@ module.exports = function registerBiohazardQuest(api) {
         ? "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown"
         : "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-after-poisoning-the-stew";
     }
-    if (object && wearingMedicalGown(player) && stage >= STAGE_POISONED_STEW) pendingDoors.set(player, { object, kind: "line" });
+    if (object && wearingMedicalGown(player) && stage >= STAGE_POISONED_STEW) pendingDoors.set(player, { object, kind: "line", variant });
     else pendingDoors.delete(player);
     startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", variant);
     return true;
@@ -1306,16 +1351,18 @@ module.exports = function registerBiohazardQuest(api) {
     const entering = player.getLocation().getX() < SOUTH_EAST_VARROCK_GATE_X;
     if (!entering && ![ETHENEA_ITEM_ID, LIQUID_HONEY_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID].some((itemId) => held(player, itemId))) return false;
     event.handled = true;
-    pendingDoors.set(player, { object, kind: entering ? "line" : "choice" });
-    startTranscript(api, player, GUARD_NPC_ID, "Biohazard", entering
+    const variant = entering
       ? "visiting-south-east-varrock-entering-south-east-varrock"
-      : "visiting-south-east-varrock-exiting-south-east-varrock-while-holding-the-vials");
+      : "visiting-south-east-varrock-exiting-south-east-varrock-while-holding-the-vials";
+    pendingDoors.set(player, { object, kind: entering ? "line" : "choice", variant });
+    startTranscript(api, player, GUARD_NPC_ID, "Biohazard", variant);
     return true;
   }
 
   /** "Leave anyway?" at the gate: Yes walks out through it. */
   function handleChoice({ player, option, pages }) {
-    if (!pages?.some(({ page }) => page === "Biohazard") || pendingDoors.get(player)?.kind !== "choice") return;
+    const pending = pendingDoors.get(player);
+    if (pending?.kind !== "choice" || !playing(pages, pending.variant)) return;
     if (option === "Yes.") openPendingDoor(player);
     else if (option === "No.") pendingDoors.delete(player);
   }
@@ -1358,7 +1405,8 @@ module.exports = function registerBiohazardQuest(api) {
       return false;
     }
     if (slot === Equipment.BODY_SLOT && stage >= STAGE_POISONED_STEW && wearingMedicalGown(player) && inMournerHq(player)) {
-      player.sendMessage("You should leave your medical gown on while you're in the Mourner Headquarters.");
+      startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard",
+        "infiltrating-the-mourner-hq-attempting-to-remove-gown-while-inside-mourner-headquarters");
       return false;
     }
     return true;

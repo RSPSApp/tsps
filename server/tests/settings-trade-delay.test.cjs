@@ -30,7 +30,7 @@ ItemDefinition.forId = (id) => {
 };
 
 /** A trader whose packet sender keeps varbits; every other packet is a chainable no-op. */
-function createPlayer(name, index, delay) {
+function createPlayer(name, index, delay, bot = false) {
   const varbits = new Map([[DELAY_VARBIT, delay]]);
   let status = PlayerStatus.NONE;
   let interfaceId = -1;
@@ -49,7 +49,7 @@ function createPlayer(name, index, delay) {
     sendMessage: (message) => player.messages.push(message),
     getStatus: () => status, setStatus: (next) => { status = next; },
     getInterfaceId: () => interfaceId, setInterfaceId: (next) => { interfaceId = next; },
-    isPlayerBot: () => false,
+    isPlayerBot: () => bot,
     getFrameUpdater: () => ({ clear() {}, clearGroup() {} }),
     getAttribute: () => undefined,
   };
@@ -136,4 +136,19 @@ test("with the delay off for both, Accept works straight after a change", (t) =>
   const { alice, bob } = startTrade(t, 0, 0);
   bothAccept(alice, bob);
   assert.equal(state(alice), TradeState.CONFIRM_SCREEN);
+});
+
+test("an AI bot never waits, so its offer-then-accept in one tick still counts", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const bot = createPlayer("bot", 1, 1, true);
+  const alice = createPlayer("alice", 2, 1);
+  bot.getInventory().adds(LOBSTER, 1);
+  bot.getTrading().requestTrade(alice);
+  alice.getTrading().requestTrade(bot);
+  offer(bot, LOBSTER, 1);
+  bot.getTrading().acceptTrade();
+  assert.equal(state(bot), TradeState.ACCEPTED_TRADE_SCREEN, "the bot's accept is kept");
+  alice.getTrading().getButtonDelay().stop();
+  alice.getTrading().acceptTrade();
+  assert.equal(state(alice), TradeState.TRADE_SCREEN, "the player still waits out the delay");
 });

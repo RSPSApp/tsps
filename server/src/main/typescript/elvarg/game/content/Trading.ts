@@ -360,8 +360,13 @@ export class Trading {
         this.button_delay.start(1);
     }
 
-    /** Whether this player's accept trade delay is on and the offers changed less than 3 seconds ago. */
+    /**
+     * Whether this player's accept trade delay is on and the offers changed less than 3 seconds ago.
+     * AI bots never wait: one may offer and accept in the same tick, and a dropped accept would leave
+     * the trade hanging.
+     */
     private acceptDelayed(): boolean {
+        if (this.player.isPlayerBot?.()) return false;
         return this.player.getPacketSender().getVarbit(Trading.ACCEPT_DELAY_VARBIT) === 1
             && Date.now() - this.offerChangedAt < Trading.ACCEPT_DELAY_MS;
     }

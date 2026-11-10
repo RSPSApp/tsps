@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import { isMembersWorld } from "../../WorldDefinition";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
-import { ItemOnGround, State } from "../../../entity/impl/grounditem/ItemOnGround";
+import { GroundPickupReplacement, ItemOnGround, State } from "../../../entity/impl/grounditem/ItemOnGround";
 import { ItemOnGroundManager } from "../../../entity/impl/grounditem/ItemOnGroundManager";
 import { GameConstants } from "../../../GameConstants";
 import { Item } from "../../../model/Item";
@@ -14,6 +14,7 @@ interface RawGroundItemSpawn {
     amt?: number;
     respawn?: number;
     members?: boolean;
+    pickupReplacement?: GroundPickupReplacement;
 }
 
 /**
@@ -99,6 +100,7 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
         const z = Number(raw?.location?.z);
         const amount = raw?.amt === undefined ? 1 : Number(raw.amt);
         const respawn = raw?.respawn === undefined ? 0 : Number(raw.respawn);
+        const replacement = raw?.pickupReplacement;
         if (
             !Number.isInteger(id) || id < 0 ||
             !Number.isInteger(x) ||
@@ -106,7 +108,10 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
             !Number.isInteger(z) || z < 0 || z > 3 ||
             !Number.isInteger(amount) || amount <= 0 ||
             !Number.isInteger(respawn) || respawn < 0 ||
-            (raw.members !== undefined && typeof raw.members !== "boolean")
+            (raw.members !== undefined && typeof raw.members !== "boolean") ||
+            (replacement !== undefined && (!replacement || !Number.isInteger(replacement.id)
+                || !CacheDefinitions.hasItem(replacement.id) || (replacement.telegrabDenial !== undefined
+                    && (typeof replacement.telegrabDenial !== "string" || !replacement.telegrabDenial))))
         ) {
             return null;
         }
@@ -118,7 +123,8 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
             false,
             respawn > 0 ? respawn : -1,
             null,
-            true
+            true,
+            replacement
         );
     }
 }

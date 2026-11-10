@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Boundary } from "../model/Boundary";
 import { Location } from "../model/Location";
+import { normalizeWorldPluginConfig, type ScopedPluginSettings } from "./WorldPluginConfig";
 
 export type WorldZoneTag = string;
 
@@ -53,19 +54,21 @@ type JsonObject = Record<string, unknown>;
  * world.json's, except pluginConfig and plugins, which are merged key by key. Read by both
  * the world definition and PluginManager (plugins, pluginConfig).
  */
-export function readWorldConfig(): JsonObject {
+export function readWorldConfig(scopedSettings?: ScopedPluginSettings): JsonObject {
     // Resolved per call from the working directory, as PluginManager always did.
     const shipped = object(JSON.parse(fs.readFileSync(path.resolve("data/definitions/world.json"), "utf8")), "world.json");
     // Optional per-deployment overrides (gitignored), so a live world can differ from the
     // shipped world.json (e.g. its XP rate or tutorial) and still update from main by fast-forward.
     const localFile = path.resolve("data/definitions/world.local.json");
-    if (!fs.existsSync(localFile)) return shipped;
+    if (!fs.existsSync(localFile)) return normalizeWorldPluginConfig(shipped, scopedSettings);
     const local = object(JSON.parse(fs.readFileSync(localFile, "utf8")), "world.local.json");
-    return mergeWorldConfig(shipped, local);
+    return mergeWorldConfig(shipped, local, scopedSettings);
 }
 
 /** The layering rule of readWorldConfig, for callers that already hold both layers. */
-export function mergeWorldConfig(shipped: JsonObject, local: JsonObject): JsonObject {
+export function mergeWorldConfig(shipped: JsonObject, local: JsonObject, scopedSettings?: ScopedPluginSettings): JsonObject {
+    shipped = normalizeWorldPluginConfig(shipped, scopedSettings);
+    local = normalizeWorldPluginConfig(local, scopedSettings);
     const merged: JsonObject = { ...shipped, ...local };
     for (const key of ["pluginConfig", "plugins"]) {
         const shippedValue = shipped[key];

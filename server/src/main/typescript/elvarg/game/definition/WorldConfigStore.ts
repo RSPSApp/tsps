@@ -2,13 +2,14 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { mergeWorldConfig, parseWorldDefinition } from "./WorldDefinition";
+import { normalizeWorldPluginConfig } from "./WorldPluginConfig";
 import { checkConfigValue, WORLD_SETTING_DECLARATIONS } from "./WorldSettingDeclarations";
 import type { WorldConfigCatalogData } from "../../plugins/WorldConfigCatalog";
 
 type JsonObject = Record<string, unknown>;
 type CatalogOptionLike = WorldConfigCatalogData["options"][number];
 
-/** world.json and world.local.json as they are on disk, kept apart. */
+/** The two world files normalized independently, with the raw local file hash. */
 export interface WorldConfigLayers {
     shipped: JsonObject;
     local: JsonObject;
@@ -53,21 +54,22 @@ export class WorldConfigStore {
 
     /** Reads both layers from `dir` (default: data/definitions under the working directory). Never throws for a bad local file. */
     public static read(dir: string = path.resolve("data/definitions")): WorldConfigLayers {
-        const shippedParsed = JSON.parse(fs.readFileSync(path.join(dir, "world.json"), "utf8"));
-        if (!isObject(shippedParsed)) throw new Error("world.json must be an object");
+        const shippedFile = JSON.parse(fs.readFileSync(path.join(dir, "world.json"), "utf8"));
+        if (!isObject(shippedFile)) throw new Error("world.json must be an object");
+        const shipped = normalizeWorldPluginConfig(shippedFile);
         const localFile = path.join(dir, "world.local.json");
         if (!fs.existsSync(localFile)) {
-            return { shipped: shippedParsed, local: {}, localExists: false, localHash: "" };
+            return { shipped, local: {}, localExists: false, localHash: "" };
         }
         const raw = fs.readFileSync(localFile);
         const localHash = sha256(raw);
         try {
             const parsed = JSON.parse(raw.toString("utf8"));
             if (!isObject(parsed)) throw new Error("world.local.json must be an object");
-            return { shipped: shippedParsed, local: parsed, localExists: true, localHash };
+            return { shipped, local: normalizeWorldPluginConfig(parsed), localExists: true, localHash };
         } catch (err) {
             return {
-                shipped: shippedParsed,
+                shipped,
                 local: {},
                 localExists: true,
                 localHash,

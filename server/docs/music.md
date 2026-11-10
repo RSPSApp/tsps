@@ -12,42 +12,64 @@ Track unlocks send a message once: "You have unlocked a new music track: <col=ff
 
 The cache's unlock hints (DB table 44, column 2: "in Varrock.", "during the Dragon Slayer II quest.",
 "after completing the While Guthix Sleeps and Dragon Slayer II quests.", "during a Christmas event.")
-say where each track plays. Area tracks unlock from `music-data.json` region changes, boss and
+say where each track plays. Area tracks unlock from the music area under the player, boss and
 minigame tracks from their own plugins' `music:unlock-track` events.
 
-Varlamore's region entries come from the Wiki's own music-track maps (Civitas illa Fortis,
-Aldarin, the Avium Savannah, the Auburn Valley, Whispering Wind and the quest/underground
-areas), rasterised onto the 64x64 map regions the server selects by. The smallest area covering
-a region's centre wins, so the Colosseum (782), the Twilight Temple (809) and the other small
-areas keep their own track instead of the surrounding one.
+## Music areas
+
+Music follows the Wiki's music maps tile by tile. `data/definitions/music-areas.json` is generated
+by `scripts/import-music-areas.mjs` from the `music` and `map` buckets behind Template:Music track
+map: every current polygon is a music area, played by each track whose map holds it, and a tile
+belongs to the smallest polygon covering its centre. Polygons with the same tracks are one area.
+The file lists the areas, then per plane and 64x64 region the area of every tile, as `id*count`
+runs row by row from the region's south-west corner (`-` is no area). `Music.tracksAt(x, y, plane)`
+decodes a region the first time it is asked and returns the area's track list, one list per area. A
+floor with no area of its own plays the ground floor's; an instance plays the cache-map tile its
+chunk copies (`Music.instanceSourceTile`, through the chunk's rotation); a player on a boat deck
+plays the sea under it. `MAP_PAGES` in the import reads the Wiki music map pages whose tracks hold
+no map of their own (the Ardent Ocean's, for All Aboard and Set Sail), resolving its
+`{{Map polygon|…}}` islands as holes. `UNMAPPED_AREAS` adds the areas no Wiki map draws, under the
+Wiki's own: the Wilderness bosses' lairs and the Escape Caves ("A Dangerous Game", as captured), each
+Tombs of Amascut path's puzzle room (its Test of track, which the Wiki's track pages place in that
+path) and the Sorceress's Garden's centre, the fountain between its four seasonal gardens. Impulses
+is painted over Zanaris around its crop circle, the server's only one (ours: within 3 tiles; live
+plays it beside any active crop circle).
+A private area's `getMusicTrack` hook names its track instead: a player-owned house, whose rooms
+sit at allocated tiles outside every map area, plays Home Sweet Home ("inside a Player-owned house.").
+
+Regenerate with `yarn build` then `node scripts/import-music-areas.mjs`; `--check` reports whether
+the file still matches. Both read the Wiki response cached outside the repo
+(`<tmpdir>/tsps-wiki-music`, or `--cache <dir>`) and fetch it, in four paged requests, only when
+the cache is missing or with `--refresh`, so neither runs in CI. The tests cover the import's rules
+on small made-up maps and the generated file's own consistency.
+`tests/fixtures/music-unmapped-tracks.json` lists the cache tracks whose hint names a place but that
+no music area plays: only Rhapsody, which the clan hall piano plays and unlocks itself;
+`tests/music.test.cjs` fails when that list changes.
 
 ## Area shuffle
 
-`data/definitions/music-shuffle-areas.json` lists the music areas that shuffle, each with its
-regions and tracks, from the Wiki's music maps. Any other region plays only the first track of its
-`music-data.json` list: those lists also hold other areas and events that share the 64x64 region
-(Burthorpe and the Warriors' Guild, Title Fight and its win track Victory is Mine), so the later
-entries neither play nor unlock from the region. In Area mode the session starts a random track of
-the area on entering it, and keeps the playing track when the player moves on to another region
-that plays it too. A track plays for its cache length (DB table 44,
-column 3, in ticks) plus one tick. Then the server sends track 147 (silence) with fade-out speed 20
-and sets the current-track varp 3883 to -1; two ticks later it starts another of the area's
-tracks, picked at random but never the one that just ended, with zero fades. An area with one
-track plays it again. Every track started this way unlocks. Ours: a song a plugin sends (a boss
-fight, a minigame) takes over until the next area change, and the area track sent again from its
-start, as the volume restart does, plays its full length from then.
+In Area mode the session starts a random track of the area on entering it, and keeps the playing
+track when the player moves on to another area that plays it too; moving within an area changes
+nothing, and neither does a tile with no area (a gap between two), which keeps the last one. A track plays for its cache length (DB table 44, column 3, in ticks) plus one tick. Then
+the server sends track 147 (silence) with fade-out speed 20 and sets the current-track varp 3883 to
+-1; two ticks later it starts another of the area's tracks, picked at random but never the one
+that just ended, with zero fades. An area with one track plays it again. Entering an area unlocks
+all its tracks at once, in Area, Manual and Shuffle mode alike: the one that starts (in Manual and
+Shuffle mode, one picked the same way) first, then the rest by name. Checked on live: Lumbridge,
+Draynor, Al Kharid, the land north of its mine and Varrock each unlocked their whole Wiki list on
+entry, and the Lumbridge track played on right up to the Al Kharid gate. Ours: a song a plugin sends (a boss fight, a minigame) takes over until the next area
+change, and the area track sent again from its start, as the volume restart does, plays its full
+length from then. A plugin handing the music back after its own (`Music.areaTrackAt`) picks one of
+the area's tracks the same way.
 
 As captured (rsprox, 1,857 track ends in Area mode): the gap is two ticks in all but a few that
 an area change cut short. Tracks started after a gap end exactly length + 1 ticks later (1,482 of
 1,551); tracks started by an area change (with the 60-cycle fade-in) end at length + 1 or length + 3
 about equally, and the server uses + 1. In the 33 multi-track areas seen, none of 247 picks
 repeated the track that had just ended (e.g. 237/04001, Yanille's Big Chords and Magic Dance
-alternating).
-
-The Karuulm Slayer Dungeon (regions 5022-5024 and 5278-5280) is the first shuffle area, from the
-Wiki's music map: Way of the Wyrm, Ful to the Brim and Kanon of Kahlith. The other regions still
-play the single track of the pre-2021 map. `tests/fixtures/music-unbound-area-tracks.json` lists the cache tracks whose hint
-names a place but that no region plays; `tests/music.test.cjs` fails when that list changes.
+alternating). Across 12 Area-mode recordings (641 track starts, the player's tile at each), the
+tile's Wiki area lists the track that started 462 times; most of the rest are starts on tiles the
+Wiki maps no area for, a Ferox Enclave playlist and a quest's own music.
 
 Quest tracks are the live floor: live unlocks each the first time it plays, somewhere inside the
 quest, and a quest plugin that knows the moment emits `music:unlock-track` there (Below Ice Mountain,

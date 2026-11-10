@@ -1677,10 +1677,8 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
     }
   } finally { core.MagicSpellbook.changeSpellbook = change; PluginManager.emitCustomEvent = emit; }
 
-  const regions = require("../data/definitions/music-data.json").regions;
-  const [region, tracks] = Object.entries(regions).find(([, tracks]) => tracks.length > 0);
-  assert.equal(Music.forRegion(Number(region)), tracks[0]);
-  assert.equal(Music.forRegion(-1), undefined);
+  assert.deepEqual(Music.tracksAt(1310, 10205, 0).map(id => Music.trackNames()[id]), ['Ful to the Brim', 'Kanon of Kahlith', 'Way of the Wyrm']);
+  assert.deepEqual(Music.tracksAt(0, 0, 0), []);
 });
 
 test("the cache Shrine of Ralos Bask action restores Prayer without reducing boosts", async () => {

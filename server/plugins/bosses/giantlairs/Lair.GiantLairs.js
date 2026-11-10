@@ -156,10 +156,10 @@ class LairSession {
     this.ended = true;
     for (const task of this.tasks) task.stop();
     if (sessions.get(this.player) === this) sessions.delete(this.player);
-    // Wherever the player went (the exit, a teleport, death), its region's song again.
+    // Wherever the player went (the exit, a teleport, death), its music area's song again.
     if (this.lair.music != null && this.player.isRegistered?.()) {
       const at = this.player.getLocation();
-      const track = core.Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+      const track = core.Music.areaTrackAt(at.getX(), at.getY(), at.getZ());
       if (track !== undefined) this.player.getPacketSender().sendSong(track);
     }
   }

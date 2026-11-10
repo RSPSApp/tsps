@@ -178,44 +178,193 @@ test('region-change unlock uses the cache row slot for archive song IDs', async 
   assert.deepEqual(player.attrs.get(Progress.UNLOCKED_TRACKS_ATTRIBUTE), [549]);
 });
 
-test('Varlamore regions play their area tracks', async () => {
+test('Varlamore plays the tracks of the Wiki music area under the player', async () => {
   await setup();
-  // Civitas illa Fortis, the Twilight Temple, the crypt below it and Ralos' Rise.
-  assert.equal(api.core.Music.forRegion(6704), 787, 'Civitas illa Fortis');
-  assert.equal(api.core.Music.forRegion(6706), 809, 'Twilight Temple');
-  assert.equal(api.core.Music.forRegion(6804), 787, 'the temple crypt');
-  assert.equal(api.core.Music.forRegion(5681), 766, "Ralos' Rise");
-  assert.equal(api.core.Music.forRegion(5679), 783, 'Avium Savannah');
-  assert.equal(api.core.Music.forRegion(5426), 822, 'Auburn Valley');
-  assert.equal(api.core.Music.forRegion(5165), 805, 'Aldarin');
+  const { Music } = api.core;
+  const plays = (x, y, track, where) => assert.ok(Music.tracksAt(x, y, 0).includes(track), where);
+  plays(1696, 3104, 787, 'Civitas illa Fortis');
+  assert.deepEqual(Music.tracksAt(1696, 3232, 0), [809], 'the Twilight Temple');
+  plays(1696, 9504, 787, 'the temple crypt');
+  assert.deepEqual(Music.tracksAt(1440, 3168, 0), [766], "Ralos' Rise");
+  plays(1440, 3040, 783, 'the Avium Savannah');
+  plays(1376, 3232, 822, 'the Auburn Valley');
+  plays(1314, 2958, 805, 'Aldarin');
 });
 
-test('every area track has a music area, apart from the known gaps', async () => {
+// The track ids that some tile's music area plays, read straight from music-areas.json.
+function tileTracks() {
+  const { areas, tiles } = require('../data/definitions/music-areas.json');
+  const used = new Set();
+  for (const regions of Object.values(tiles)) for (const runs of Object.values(regions)) {
+    for (const run of runs.split(',')) if (!run.startsWith('-')) used.add(Number(run.split('*')[0]));
+  }
+  return { areas, used, tracks: new Set([...used].flatMap(area => areas[area].tracks)) };
+}
+
+test('every area track plays in some music area, apart from the tracks the Wiki maps nowhere', async () => {
   await setup();
   // Hints that name a place ("in Varrock.", "south of Falador.") rather than a quest, boss or event.
   const notArea = /^(during|while|after|automatically|somewhere)/i;
-  const bound = new Set();
-  for (let region = 0; region < 1 << 16; region++) for (const id of api.core.Music.tracksForRegion(region)) bound.add(id);
-  const unbound = [...new Set(api.core.Music.tracks()
-    .filter(({ id, unlockHint }) => unlockHint && !notArea.test(unlockHint.trim()) && !bound.has(id))
+  const { tracks } = tileTracks();
+  const unmapped = [...new Set(api.core.Music.tracks()
+    .filter(({ id, unlockHint }) => unlockHint && !notArea.test(unlockHint.trim()) && !tracks.has(id))
     .map(({ name }) => name))].sort();
-  const known = require('./fixtures/music-unbound-area-tracks.json');
-  assert.deepEqual(unbound.filter(name => !known.includes(name)), [], 'newly unbound area tracks');
-  assert.deepEqual(known.filter(name => !unbound.includes(name)), [], 'tracks bound since: drop them from the fixture');
+  const known = require('./fixtures/music-unmapped-tracks.json');
+  assert.deepEqual(unmapped.filter(name => !known.includes(name)), [], 'area tracks no music area plays any more');
+  assert.deepEqual(known.filter(name => !unmapped.includes(name)), [], 'tracks a music area plays since: drop them from the list');
+});
+
+test('music-areas.json: every area has tiles, cache tracks and whole region grids', async () => {
+  await setup();
+  const { areas, used } = tileTracks();
+  const { tiles } = require('../data/definitions/music-areas.json');
+  for (const [index, { names, tracks }] of areas.entries()) {
+    assert.deepEqual(tracks.map(id => trackNames[id]), names, `area ${index} names its cache tracks`);
+    assert.ok(used.has(index), `${names.join(', ')} owns tiles`);
+  }
+  for (const [plane, regions] of Object.entries(tiles)) for (const [region, runs] of Object.entries(regions)) {
+    const length = runs.split(',').reduce((sum, run) => sum + Number(run.split('*')[1] ?? 1), 0);
+    assert.equal(length, 4096, `plane ${plane} region ${region}`);
+  }
+  assert.ok(areas.filter(({ tracks }) => tracks.length > 1).length >= 50, 'the Wiki shuffle areas are there');
+});
+
+test('music areas follow the Wiki tile by tile, not by map region', async () => {
+  await setup();
+  const { Music } = api.core;
+  const names = (x, y, plane = 0) => Music.tracksAt(x, y, plane).map(id => trackNames[id]);
+  // Title Fight's area is the Champions' Guild basement; Victory is Mine's is the arena inside it.
+  assert.deepEqual(names(3150, 9740), ['Title Fight']);
+  assert.deepEqual(names(3170, 9758), ['Victory is Mine']);
+  // Burthorpe and the Warriors' Guild share a map region.
+  assert.deepEqual(names(2899, 3545), ['Kingdom', 'Principality']);
+  assert.deepEqual(names(2855, 3545), ["Warriors' Guild"]);
+  assert.deepEqual(names(2855, 3545, 1), ["Warriors' Guild"], "a floor with no area of its own plays the ground floor's");
+  assert.deepEqual(names(3338, 10250), ['A Dangerous Game'], 'a captured area the Wiki maps miss');
+  assert.deepEqual(Music.tracksAt(0, 0, 0), []);
+  assert.equal(Music.tracksAt(3222, 3218, 0), Music.tracksAt(3200, 3210, 0), 'one list for the whole area');
+});
+
+test('the music areas the Wiki maps draw no polygon for', async () => {
+  await setup();
+  const { Music } = api.core;
+  const names = (x, y) => Music.tracksAt(x, y, 0).map(id => trackNames[id]);
+  // All Aboard and Set Sail share the Ardent Ocean's map page.
+  assert.deepEqual(names(2600, 2763), ['All Aboard', 'Set Sail']);
+  // Each Tombs of Amascut path's puzzle room plays its test.
+  assert.deepEqual(names(3680, 5280), ['Test of Strength'], 'the Path of Het');
+  assert.deepEqual(names(3808, 5280), ['Test of Companionship'], 'the Path of Apmeken');
+  assert.deepEqual(names(3550, 5280), ['Test of Isolation'], 'the Path of Scabaras');
+  assert.deepEqual(names(3936, 5280), ['Test of Resourcefulness'], 'the Path of Crondis');
+  assert.deepEqual(names(2911, 5470), ["Sorceress's Garden"], "the garden's centre, by the fountain");
+  assert.deepEqual(names(2427, 4446), ['Impulses'], "beside Zanaris' crop circle, over Zanaris' own music");
+  assert.deepEqual(names(2423, 4443), ['Crystal Cave', 'Faerie'], 'and Zanaris a few steps away');
+});
+
+test('an instance tile plays the music of the cache-map tile its chunk copies', async () => {
+  await setup();
+  const { Music } = api.core;
+  const chunk = { sourceChunkX: 3150 >> 3, sourceChunkY: 9740 >> 3, sourcePlane: 0, rotation: 0 };
+  const area = { getBaseX: () => 6400, getBaseY: () => 6400, getChunk: (plane, cx, cy) => (cx === 0 && cy === 0 ? chunk : null) };
+  assert.deepEqual(Music.instanceSourceTile(area, 6401, 6402, 0), { x: (3150 & ~7) + 1, y: (9740 & ~7) + 2, plane: 0 });
+  chunk.rotation = 1; // a chunk turned once puts source (x, y) at (y, 7 - x)
+  assert.deepEqual(Music.instanceSourceTile(area, 6401, 6402, 0), { x: (3150 & ~7) + 5, y: (9740 & ~7) + 1, plane: 0 });
+  assert.equal(Music.instanceSourceTile(area, 6420, 6402, 0), undefined, 'outside the copied chunks');
 });
 
 test('the Karuulm Slayer Dungeon shuffles Way of the Wyrm, Ful to the Brim and Kanon of Kahlith', async () => {
   await setup();
   const { Music } = api.core;
-  for (const region of [5022, 5023, 5024, 5278, 5279, 5280]) {
-    assert.deepEqual(Music.tracksForRegion(region).map(id => trackNames[id]),
-      ['Way of the Wyrm', 'Ful to the Brim', 'Kanon of Kahlith'], `region ${region}`);
+  for (const [x, y] of [[1310, 10205], [1240, 10150]]) {
+    assert.deepEqual(Music.tracksAt(x, y, 0).map(id => trackNames[id]), ['Ful to the Brim', 'Kanon of Kahlith', 'Way of the Wyrm'], `${x}, ${y}`);
   }
   assert.equal(Music.lengthTicks(595), 553, "Way of the Wyrm's cache length");
   assert.equal(Music.pickAreaTrack([595, 635, 608], -1, () => 0.99), 608);
   assert.equal(Music.pickAreaTrack([595, 635, 608], 595, () => 0), 635, 'the next track is never the one that ended');
   assert.equal(Music.pickAreaTrack([595], 595), 595, 'a one-track area plays it again');
   assert.equal(Music.pickAreaTrack([]), undefined);
+});
+
+test('import-music-areas: rectangles under or over the Wiki, and a map page with Map polygon holes', async () => {
+  const { buildMusicAreas, mapPagePolygon } = await import('../scripts/import-music-areas.mjs');
+  const square = (x, y, size) => [[x, y], [x + size, y], [x + size, y + size], [x, y + size]];
+  const map = (title, rings) => ({ title, page_name: title, 'map.features': JSON.stringify([{ type: 'Feature', properties: { mapID: -1, plane: 0 }, geometry: { type: 'Polygon', coordinates: [rings[0], ...rings.slice(1)] } }]) });
+  const rows = [map('Town', [square(0, 0, 20)]), map('Isle', [square(40, 40, 4), square(41, 41, 1)])];
+  const page = `{{Music track map|[
+[ [30,30],[60,30],[60,60],[30,60] ], <!-- the sea -->
+{{Map polygon|Isle}}
+]|plane=0|mapID=-1
+|songs = Sea One, Sea Two
+}}`;
+  const polygon = mapPagePolygon(page, rows);
+  assert.deepEqual(polygon.songs, ['Sea One', 'Sea Two']);
+  assert.deepEqual(polygon.rings, [square(30, 30, 30), square(40, 40, 4)], "the island's outer ring only, as a hole");
+  const tracks = [{ id: 1, name: 'Town' }, { id: 2, name: 'Isle' }, { id: 3, name: 'Sea One' }, { id: 4, name: 'Sea Two' }, { id: 5, name: 'Under' }, { id: 6, name: 'Over' }];
+  const unmapped = [{ tracks: ['Under'], rects: [[0, 0, 30, 5]] }, { tracks: ['Over'], rects: [[2, 2, 3, 3]], over: true }];
+  const { areas, tiles } = buildMusicAreas({ rows, tracks, unmapped, mapPages: { 'Map:Sea': page } });
+  const at = (x, y) => {
+    let tile = ((y & 63) << 6) | (x & 63);
+    for (const run of tiles[0][0].split(',')) {
+      const [id, count = 1] = run.split('*');
+      if (tile < Number(count)) return id === '-' ? undefined : areas[Number(id)].names.join('/');
+      tile -= Number(count);
+    }
+  };
+  assert.equal(at(45, 45), 'Sea One/Sea Two', "the map page's songs share its polygon");
+  assert.equal(at(42, 42), 'Isle', 'the island cut out of the sea keeps its own area');
+  assert.equal(at(5, 1), 'Town', 'a Wiki polygon wins over a rectangle under it');
+  assert.equal(at(25, 1), 'Under', 'which fills where the Wiki has nothing');
+  assert.equal(at(2, 2), 'Over', 'a rectangle over the Wiki wins');
+});
+
+test('import-music-areas: the smallest Wiki polygon on a tile wins, holes and history left out', async () => {
+  const { buildMusicAreas, polygonSize } = await import('../scripts/import-music-areas.mjs');
+  const square = (x, y, size) => [[x, y], [x + size, y], [x + size, y + size], [x, y + size]];
+  assert.equal(polygonSize([square(0, 0, 10), square(2, 2, 2), square(20, 20, 3)]), 100 - 4 + 9, 'a hole subtracts, a separate piece adds');
+  const map = (title, rings, { plane = 0, historic = false } = {}) => ({
+    title, page_name: title,
+    ...(historic ? { 'map.is_historic': '' } : {}),
+    'map.features': JSON.stringify([{ type: 'Feature', properties: { mapID: -1, plane }, geometry: { type: 'Polygon', coordinates: rings } }]),
+  });
+  const tracks = [
+    { id: 1, name: 'Town' }, { id: 2, name: 'Town 2' }, { id: 3, name: 'Hall' },
+    { id: 4, name: 'Old' }, { id: 6, name: 'Upstairs' }, { id: 9, name: 'Cave' },
+    { id: 10, name: 'Work\t Work' }, // the cache writes a comma as a tab
+  ];
+  const town = [square(0, 0, 128), square(32, 32, 4)]; // with a hole at (32..35, 32..35)
+  const rows = [
+    map('Town 2', town), map('Town', town),
+    map('Hall', [square(10, 10, 2)]), // inside the town, and smaller
+    map('Old', [square(0, 0, 256)], { historic: true }),
+    map('Upstairs', [square(0, 0, 2)], { plane: 1 }),
+    map('Gone', [square(500, 500, 8)]), // not in the cache
+    map('Work Work', [square(300, 300, 4)]),
+  ];
+  // Region (1, 0) lies under the town; region (2, 0) has no Wiki polygon.
+  const unmapped = [{ tracks: ['Cave'], regions: [(1 << 8) | 0, (2 << 8) | 0] }];
+  const { areas, tiles, unknown } = buildMusicAreas({ rows, tracks, unmapped });
+  assert.deepEqual(areas.map(({ names }) => names), [['Cave'], ['Hall'], ['Town', 'Town 2'], ['Upstairs'], ['Work\t Work']]);
+  assert.deepEqual(unknown, ['Gone']);
+  const area = (plane, x, y) => {
+    const runs = tiles[plane]?.[((x >> 6) << 8) | (y >> 6)];
+    if (!runs) return undefined;
+    let tile = ((y & 63) << 6) | (x & 63);
+    for (const run of runs.split(',')) {
+      const [id, count = 1] = run.split('*');
+      if (tile < Number(count)) return id === '-' ? undefined : areas[Number(id)].names[0];
+      tile -= Number(count);
+    }
+  };
+  assert.equal(area(0, 5, 5), 'Town', 'polygons with the same tracks are one area');
+  assert.equal(area(0, 11, 11), 'Hall', 'the smaller polygon wins');
+  assert.equal(area(0, 12, 12), 'Town', "the tile past the hall's edge");
+  assert.equal(area(0, 33, 33), undefined, 'a hole is no area');
+  assert.equal(area(0, 127, 127), 'Town', 'the polygon crosses into other regions, up to its edge');
+  assert.equal(area(0, 5, 130), undefined, 'outside every polygon, and the historic map ignored');
+  assert.equal(area(1, 1, 1), 'Upstairs');
+  assert.equal(area(1, 5, 5), undefined, 'upper floors have their own grids');
+  assert.equal(area(0, 70, 5), 'Town', 'a Wiki polygon wins over the unmapped region under it');
+  assert.equal(area(0, 130, 5), 'Cave', 'the unmapped region fills where the Wiki has nothing');
 });
 
 test('playing a song selects its native Music DB row in the now-playing varp', async () => {
@@ -228,37 +377,36 @@ test('playing a song selects its native Music DB row in the now-playing varp', a
   assert.deepEqual(player.scripts, [[3936]]);
 });
 
-test('PlayerSession unlocks the current region in manual mode without starting its song', async () => {
+test('entering a music area unlocks all its tracks in manual mode, the picked one first, and starts none', async t => {
   await setup();
-  const trackId = api.core.Music.forRegion(12850);
-  assert.equal(typeof trackId, 'number', 'Lumbridge region has a cache-mapped song');
+  const lumbridge = api.core.Music.tracksAt(3222, 3218, 0);
+  assert.deepEqual(lumbridge.map(id => trackNames[id]), ['Autumn Voyage', 'Book of Spells', 'Dream', 'Flute Salad', 'Harmony', 'Yesteryear']);
   const player = {
     getLocation: () => new Location(3222, 3218, 0),
     getArea: () => null,
     getAudioSettings: () => ({ 18: 1 }),
-    getPacketSender: () => ({ sendSong() { assert.fail('manual mode must not start region music'); } }),
+    getPacketSender: () => ({ sendSong() { assert.fail('manual mode must not start area music'); } }),
   };
   const session = new PlayerSession({ isOpen: true });
   session.setPlayer(player);
   // Region-item bookkeeping is independent from music and requires a fully initialized Player.
   session.lastGroundItemRegion = 12850;
   session.lastGroundItemLevel = 0;
+  t.mock.method(Math, 'random', () => 0.99);
   const emit = PluginManager.emitCustomEvent;
-  let unlock;
-  const stopAtUnlock = new Error('captured region unlock');
+  const unlocked = [];
   PluginManager.emitCustomEvent = (name, payload) => {
     if (name === 'music:unlock-track') {
-      unlock = payload;
-      throw stopAtUnlock;
+      assert.equal(payload.player, player);
+      unlocked.push(trackNames[payload.trackId]);
     }
   };
   try {
-    assert.throws(() => session.flush(), stopAtUnlock);
+    try { session.flush(); } catch { /* the fake player stops the rest of flush; music ran first */ }
   } finally {
     PluginManager.emitCustomEvent = emit;
   }
-  assert.equal(unlock.player, player);
-  assert.equal(unlock.trackId, trackId);
+  assert.deepEqual(unlocked, ['Yesteryear', 'Autumn Voyage', 'Book of Spells', 'Dream', 'Flute Salad', 'Harmony']);
 });
 
 test('PacketSender unlocks only after the song packet is accepted', async () => {
@@ -400,9 +548,10 @@ test('sendJingle first re-sends the current track with zero fades, then the jing
   assert.deepEqual(frames.map((f) => f[0]), [132], 'no known track: only the jingle');
 });
 
-test('PlayerSession remembers the track it started for the region, for the pre-jingle re-send', async () => {
+test('PlayerSession remembers the track it started for the region, for the pre-jingle re-send', async t => {
   await setup();
-  const trackId = api.core.Music.forRegion(12850);
+  t.mock.method(Math, 'random', () => 0); // Lumbridge shuffles: pick its own track, first in the list.
+  const trackId = api.core.Music.tracksAt(3222, 3218, 0)[0];
   const songs = [];
   const player = {
     getLocation: () => new Location(3222, 3218, 0),
@@ -688,10 +837,11 @@ test('area music follows actual same-region movement, dynamic selection and manu
   const player = new Player(session);
   session.setPlayer(player);
   player.setUsername('areamusic');
+  t.mock.method(Math, 'random', () => 0); // Lumbridge shuffles: pick its own track, first in the list.
   assert.equal(core.World.getPlayers().add(player), true);
   player.setLocation(new Location(3222, 3218, 0));
   player.setNeedsPlacement(false);
-  const regionTrack = core.Music.forRegion(12850);
+  const regionTrack = core.Music.tracksAt(3222, 3218, 0)[0];
   const [first, second, third] = catalog.allTrackIds.filter(id => id !== regionTrack && !catalog.autoUnlockTrackIds.includes(id));
   let selected = first;
   class MusicArea extends core.Area { getMusicTrack() { return selected; } }
@@ -758,6 +908,7 @@ test('native music Play selects the visible cache row, refuses locked tracks and
   const player = new Player(session);
   session.setPlayer(player);
   player.setUsername('musicclick');
+  t.mock.method(Math, 'random', () => 0); // Lumbridge shuffles: pick its own track, first in the list.
   assert.equal(core.World.getPlayers().add(player), true);
   player.setLocation(new Location(3222, 3218, 0));
   player.setNeedsPlacement(false);
@@ -817,7 +968,7 @@ test('native music Play selects the visible cache row, refuses locked tracks and
   assert.equal(restored.getAudioSettings()[18], 0, 'a no-longer-unlocked selection falls back to Area mode');
   player.applyAudioSettingFromClient(18, 0);
   session.flush(2);
-  assert.equal(session.getCurrentMusicTrack(), core.Music.forRegion(12850), 'Area mode still restores region music');
+  assert.equal(session.getCurrentMusicTrack(), core.Music.tracksAt(3222, 3218, 0)[0], 'Area mode still restores region music');
   // Live keeps Shuffle on Play (rsprox 236/03935 L24943 sets Shuffle; the Play at L25846 sends no musicplay change).
   player.applyAudioSettingFromClient(18, 1);
   const played = events.length;
@@ -852,23 +1003,58 @@ test('an area track plays out, falls silent for two ticks, then another of the a
     await Promise.resolve();
     return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
   };
-  const WYRM = 595, FUL = 635, KANON = 608;
-  assert.deepEqual(await songs(100), [WYRM], 'entering the dungeon starts one of its tracks');
-  assert.equal(Progress.isUnlocked(player, WYRM), true, 'and unlocks it');
+  const [FIRST, SECOND, LAST] = core.Music.tracksAt(1310, 10205, 0);
+  const firstLength = core.Music.lengthTicks(FIRST), lastLength = core.Music.lengthTicks(LAST);
+  assert.deepEqual(await songs(100), [FIRST], 'entering the dungeon starts one of its tracks');
+  assert.equal(Progress.isUnlocked(player, FIRST), true, 'and unlocks it');
+  assert.equal(Progress.isUnlocked(player, SECOND) && Progress.isUnlocked(player, LAST), true, "with the rest of the area's tracks");
   player.setLocation(new Location(1240, 10150, 0));
   assert.deepEqual(await songs(101), [], 'another region of the same area keeps the track playing');
-  assert.deepEqual(await songs(100 + 553), [], 'still playing at its cache length');
+  assert.deepEqual(await songs(100 + firstLength), [], 'still playing at its cache length');
   configs.length = 0;
-  assert.deepEqual(await songs(100 + 554), [147], 'one tick later it ends in silence');
+  assert.deepEqual(await songs(100 + firstLength + 1), [147], 'one tick later it ends in silence');
   assert.deepEqual(configs, [-1], 'with no current track');
-  assert.deepEqual(await songs(100 + 555), []);
+  assert.deepEqual(await songs(100 + firstLength + 2), []);
   roll = 0.99;
-  assert.deepEqual(await songs(100 + 556), [KANON], 'two ticks later another of the area starts');
-  assert.equal(Progress.isUnlocked(player, KANON), true, 'every track heard unlocks');
+  const next = 100 + firstLength + 3;
+  assert.deepEqual(await songs(next), [LAST], 'two ticks later another of the area starts');
+  assert.equal(Progress.isUnlocked(player, LAST), true, 'every track heard unlocks');
   roll = 0;
-  assert.deepEqual(await songs(100 + 556 + 647), [147]);
-  assert.deepEqual(await songs(100 + 556 + 649), [WYRM]);
-  assert.notEqual(session.getCurrentMusicTrack(), FUL);
+  assert.deepEqual(await songs(next + lastLength + 1), [147]);
+  assert.deepEqual(await songs(next + lastLength + 3), [FIRST]);
+  assert.notEqual(session.getCurrentMusicTrack(), SECOND);
+});
+
+test('a tile with no music area keeps the area the player came from, and its shuffle', async t => {
+  await setup();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  const session = new PlayerSession({ isOpen: () => true, send: () => true });
+  const player = new Player(session);
+  session.setPlayer(player);
+  player.setUsername('musicgap');
+  assert.equal(core.World.getPlayers().add(player), true);
+  t.after(() => core.World.getPlayers().remove(player));
+  player.setLocation(new Location(1310, 10205, 0));
+  player.setNeedsPlacement(false);
+  t.mock.method(Math, 'random', () => 0);
+  const songs = async tick => {
+    session.flush(tick);
+    const frames = [...session.pendingPackets];
+    await Promise.resolve();
+    return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
+  };
+  const [FIRST, SECOND] = core.Music.tracksAt(1310, 10205, 0);
+  const end = core.Music.lengthTicks(FIRST) + 1;
+  assert.deepEqual(core.Music.tracksAt(1, 1, 0), [], 'a tile with no music area');
+  assert.deepEqual(await songs(100), [FIRST]);
+  player.setLocation(new Location(1, 1, 0));
+  assert.deepEqual(await songs(101), [], 'the track plays on');
+  player.setLocation(new Location(1310, 10205, 0));
+  assert.deepEqual(await songs(102), [], 'and back in the area, nothing restarts');
+  assert.deepEqual(await songs(100 + end), [147], 'it still ends on time');
+  assert.deepEqual(await songs(100 + end + 2), [SECOND], 'and the area moves on to another track');
 });
 
 test('another song takes over from the area track, and the area track sent again starts its time anew', async t => {
@@ -891,43 +1077,41 @@ test('another song takes over from the area track, and the area track sent again
     await Promise.resolve();
     return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
   };
-  const WYRM = 595, FUL = 635, BOSS = 549;
-  assert.deepEqual(await songs(10), [WYRM]);
+  const [FIRST, SECOND] = core.Music.tracksAt(1310, 10205, 0), BOSS = 549;
+  const end = core.Music.lengthTicks(FIRST) + 1;
+  assert.deepEqual(await songs(10), [FIRST]);
   player.getPacketSender().sendSong(BOSS);
   await Promise.resolve();
-  assert.deepEqual(await songs(10 + 554), [], "a plugin's song is not cut off when the area track's time is up");
+  assert.deepEqual(await songs(10 + end), [], "a plugin's song is not cut off when the area track's time is up");
   player.setLocation(new Location(3222, 3218, 0));
-  assert.deepEqual(await songs(600), [core.Music.forRegion(12850)], 'a new area takes the music back');
+  assert.deepEqual(await songs(600), [core.Music.tracksAt(3222, 3218, 0)[0]], 'a new area takes the music back');
   player.setLocation(new Location(1310, 10205, 0));
-  assert.deepEqual(await songs(700), [WYRM]);
+  assert.deepEqual(await songs(700), [FIRST]);
   assert.deepEqual(await songs(800), []);
-  player.getPacketSender().sendSong(WYRM);
+  player.getPacketSender().sendSong(FIRST);
   await Promise.resolve();
-  assert.deepEqual(await songs(700 + 554), [], 'the same track sent again (the volume restart) plays its full length from then');
-  assert.deepEqual(await songs(800 + 554), [147]);
+  assert.deepEqual(await songs(700 + end), [], 'the same track sent again (the volume restart) plays its full length from then');
+  assert.deepEqual(await songs(800 + end), [147]);
   assert.equal(session.getCurrentMusicTrack(), -1, 'between tracks there is none for a jingle to resume');
   player.setLocation(new Location(1240, 10150, 0));
-  assert.deepEqual(await songs(800 + 555), [FUL], 'an area change in the gap still skips the track that ended');
+  assert.deepEqual(await songs(800 + end + 1), [], 'a step to another part of the same area waits out the gap');
+  assert.deepEqual(await songs(800 + end + 2), [SECOND], 'then another of its tracks, never the one that ended');
 });
 
-test('a region whose list holds other areas plays and unlocks only its first track', async t => {
+test("the Champions' Guild basement plays Title Fight, and its arena Victory is Mine", async t => {
   await setup();
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const core = PluginManager.getCoreApi();
   core.RegionManager.init();
-  MusicPlugin.register(PluginManager.createApi('MusicFirstTrack'));
+  MusicPlugin.register(PluginManager.createApi('MusicTileAreas'));
   const TITLE_FIGHT = 525, VICTORY_IS_MINE = 528;
-  const listed = require('../data/definitions/music-data.json').regions[12696];
-  assert.deepEqual(listed, [TITLE_FIGHT, VICTORY_IS_MINE], 'the region lists a second, event track');
-  assert.deepEqual(core.Music.tracksForRegion(12696), [TITLE_FIGHT]);
-  assert.deepEqual(core.Music.tracksForRegion(11319).map(id => trackNames[id]), ['Kingdom'], "Burthorpe, not the Warriors' Guild");
   const session = new PlayerSession({ isOpen: () => true, send: () => true });
   const player = new Player(session);
   session.setPlayer(player);
-  player.setUsername('musicfirsttrack');
+  player.setUsername('musictileareas');
   assert.equal(core.World.getPlayers().add(player), true);
   t.after(() => core.World.getPlayers().remove(player));
-  player.setLocation(new Location(3168, 9760, 0));
+  player.setLocation(new Location(3150, 9740, 0));
   player.setNeedsPlacement(false);
   t.mock.method(Math, 'random', () => 0.99);
   const songs = async tick => {
@@ -937,9 +1121,15 @@ test('a region whose list holds other areas plays and unlocks only its first tra
     return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
   };
   assert.deepEqual(await songs(10), [TITLE_FIGHT]);
+  assert.deepEqual(await songs(11), [], 'ordinary ticks keep it');
+  player.setLocation(new Location(3151, 9741, 0));
+  assert.deepEqual(await songs(12), [], 'a step inside the same area keeps it');
   const length = core.Music.lengthTicks(TITLE_FIGHT);
   assert.deepEqual(await songs(10 + length + 1), [147]);
   assert.deepEqual(await songs(10 + length + 3), [TITLE_FIGHT], 'a one-track area plays its track again');
+  assert.equal(Progress.isUnlocked(player, VICTORY_IS_MINE), false);
+  player.setLocation(new Location(3170, 9758, 0));
+  assert.deepEqual(await songs(10 + length + 4), [VICTORY_IS_MINE], 'the arena, in the same map region, is another area');
   assert.equal(Progress.isUnlocked(player, TITLE_FIGHT), true);
-  assert.equal(Progress.isUnlocked(player, VICTORY_IS_MINE), false, 'the event track needs its event');
+  assert.equal(Progress.isUnlocked(player, VICTORY_IS_MINE), true);
 });

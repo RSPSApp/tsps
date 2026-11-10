@@ -848,6 +848,7 @@ test('Christmas music unlocks on active pub entry, restores on exit and respects
   const MusicProgress=require('../plugins/world/Progress.Music');
   const delivered=[],channel={isOpen:()=>true,send:frame=>delivered.push(Buffer.from(frame))};
   const session=new PlayerSession(channel),player=new Player(session);session.setPlayer(player);player.setUsername('christmasmusic');
+  t.mock.method(Math,'random',()=>0); // Varrock shuffles: pick its own track, first in the list.
   assert.equal(c.World.getPlayers().add(player),true);
   let privateArea;
   t.after(()=>{
@@ -856,7 +857,7 @@ test('Christmas music unlocks on active pub entry, restores on exit and respects
     player.setArea(null);c.World.getPlayers().remove(player);
   });
   const track=c.Music.tracks().find(row=>row.name==='All the Trimmings');assert.ok(track);
-  const normal=c.Music.forRegion((50<<8)|53);assert.notEqual(normal,track.id);
+  const normal=c.Music.areaTrackAt(3217,3395,0);assert.notEqual(normal,track.id);
   player.setLocation(new c.Location(3217,3395,0));player.setNeedsPlacement(false);
   let tick=0;
   async function flush(){

@@ -52,6 +52,9 @@ function createTestHouseSave() {
   return { rooms };
 }
 
+/** Home Sweet Home, the music of every player-owned house. */
+const HOME_SWEET_HOME_TRACK = 454;
+
 class PlayerHouseInstance extends PrivateArea {
   owner = null;
   buildingMode = false;
@@ -66,6 +69,11 @@ class PlayerHouseInstance extends PrivateArea {
   /** Objects drawn over the furniture for now (open dungeon doors, a throne room cage); sent to everyone who enters. */
   extraObjects = [];
   allocation;
+
+  /** A house plays Home Sweet Home, in every room and on every floor. */
+  getMusicTrack() {
+    return HOME_SWEET_HOME_TRACK;
+  }
 
   /** Test-house allocations are process-local and must never be restored as normal map tiles. */
   static isAllocationLocation(location) {
@@ -977,4 +985,4 @@ class PlayerHouseInstance extends PrivateArea {
   }
 }
 
-Object.assign(module.exports, { createDefaultHouseSave, createTestHouseSave, PlayerHouseInstance });
+Object.assign(module.exports, { createDefaultHouseSave, createTestHouseSave, PlayerHouseInstance, HOME_SWEET_HOME_TRACK });

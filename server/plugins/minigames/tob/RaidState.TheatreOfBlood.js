@@ -576,8 +576,8 @@ class Raid {
   }
 
   /**
-   * Each room's track, as captured on arrival. Sent a tick later so it follows the region's
-   * own music, which the move to the room would otherwise play (Xarpus' region lists another).
+   * Each room's track, as captured on arrival. Sent a tick later so it follows the music area's
+   * own track, which the move to the room would otherwise play (Xarpus' room has another).
    */
   playMusic(player, room) {
     const track = room.def.music;

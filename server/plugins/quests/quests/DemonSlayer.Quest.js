@@ -178,7 +178,7 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   function restoreAreaSong(player) {
     const at = player.getLocation();
-    const track = Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+    const track = Music.areaTrackAt(at.getX(), at.getY(), at.getZ());
     if (track !== undefined) player.getPacketSender().sendSong(track);
   }
 

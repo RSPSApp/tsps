@@ -281,7 +281,7 @@ worktree ports; leave the main play world running.
 
 These rows show, save and resend the player's choice (`data/settings.json`; cache check in `tests/builtin-warning-settings.test.cjs`). **Most do not change anything in game yet.** In the osrs-dumps client scripts, the drop warning (5411/5412), loot notification (5399/5400/5402), Grand Exchange price warning (14700/14701) and Alchemy value (6091) varbits are read only by the settings scripts themselves; on live the server shows those warnings, and tsps does not read the varbits yet. The other rows below were not traced to a reader either.
 
-- **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), High Risk lever / Ferox / canoe warnings (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471) and the Leagues stepping-stones teleport (500).
+- **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), High Risk lever / Ferox / canoe warnings (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423, see "Confirmations and messages"), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471; 471 is under "Confirmations and messages") and the Leagues stepping-stones teleport (500).
 - **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
 - **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`.
 - **Value warnings** (`ValueWarnings.plugin.js`, shared pieces in `ValueWarning.js`). An item's worth is the Grand Exchange guide price of the unnoted item times the quantity; an untradeable item is worth nothing. A warning shows when the worth is at least the threshold.
@@ -313,6 +313,27 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Tablets** (rsprox 3931 Annakarl and Ghorrock, 1463 Dareeyak): "Teleport into the DEEP wilderness?" or "Teleport into the wilderness?", "Yes" / "No"; Yes breaks the tablet then, which is used up as it is absorbed. Ours: the deep line for Ice Plateau, Cemetery and Wilderness crabs (past level 30), the other for Carrallanger.
 - **Buttons.** No capture; each sets every row of its group on or off, with no message.
 - **Not done:** the tablets' own Configure option (no capture).
+
+## Confirmations and messages
+
+Each row is a toggle in `data/settings.json`, read when its dialogue or message would show. Tests: `tests/settings-confirmations.test.cjs` (which also checks each row's varbit against the cache's toggle reader, script 6716) and `tests/settings-trade-delay.test.cjs`.
+
+| Setting | Id | Varbit (live default) | While on |
+| --- | --- | --- | --- |
+| Clue scroll warnings, Beginner to Master | 374–379 | 10693, 10694, 10695, 10723, 10724, 10725 `option_trail_reminder_*` (off) | A clue an NPC drops for a player already holding that tier says "You have a sneaking suspicion that you would have received a medium clue scroll." ("scroll box" once boxes are unlocked; "an" before easy and elite; rsprox 224/1445, 231/391, 235/941, 236/3932) |
+| STASH units take equipped items | 451 | 17938 `option_hidey_holes_equipped` (off) | Filling a STASH takes each outfit item from the inventory first, then from what the player wears |
+| Plank Make confirmation: basic, oak, teak, mahogany | 420–423 | 624, 2319, 2320, 3939 `dream_plankspell_*` (on, off, off, on) | Plank Make on that log asks "Pay 70 coins for each plank?" (the log's price), Yes / No, before it takes coins, runes or the log; the other logs never ask |
+| Show confirmation when paying for items from gravestone | 192 | 13113 `gravestone_disable_warning`, read as is (on) | The grave's pay button asks "Pay 15,000 coins to retrieve your items?", Yes / No; either answer reopens the grave's interface while the player is within reach, and Yes pays only if the fee is unchanged |
+| Accept trade delay | 205 | 13130 `trade_delay_disabled`, read as is (on) | Accept on the first trade screen does nothing for 3 seconds after either player changes an offer; each player's own setting decides their wait |
+| Show warning when teleporting from your boat at sea | 471 | 16620 `sailing_warning_teleportoffboat` (off) | A teleport spell cast aboard your own boat (which would leave it lost at sea) asks "Accept that your boat may be lost at sea?", "Yes, teleport away." / "No, stay on the boat.", after any Wilderness warning the spell has (`skills/sailing/TeleportWarning.plugin.js`) |
+
+- **Defaults** for 192 and 205: all 918 default-state logins (rev 235+) in the rsprox captures send both varbits as 1. Row 278 ("Display a warning on login if there are items stored in an item retrieval service") is shown by the toggle reader as 1 − varbit 14194 `option_item_retrieval_warning_disabled`, so it now flips 14194 instead of sharing 192's 13113.
+- **Ours** (no capture or Wiki text): the Plank Make, gravestone and boat teleport questions and options (the boat one follows live's Escape prompt), and that a click on Accept during the trade delay does nothing and says nothing.
+- **Not done**:
+  - The clue warning for clues from skilling (nests, geodes, bottles, salvage, Agility): those sources skip the roll at capacity, so there is nothing to mention yet.
+  - The boat teleport warning for tablets, jewellery and other non-spell teleports; the row's description names teleport spells.
+  - Port task cargo deposit (463), port task cargo in hold (467) and Ironman cargo hold (469) warnings: no capture or Wiki text of any of them. 469's varbit (10385) is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
+  - The Sailing drop-item warning (465), which builds on the drop warning (42/43).
 
 ## Rows that switch existing behaviour
 

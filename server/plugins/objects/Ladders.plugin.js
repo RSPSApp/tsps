@@ -27,6 +27,12 @@ const CLIMBABLE_NAMES = [
 /** Option spellings for each direction, as the cache has them. */
 const UP_OPTIONS = ["Climb-up", "Climb up", "Climb Up", "Walk-up", "Walk-Up", "Ascend"];
 const DOWN_OPTIONS = ["Climb-down", "Climb down", "Climb Down", "Walk-down", "Walk-Down", "Descend"];
+/**
+ * Straight to the far end of the shaft. The cache spells these two ways: Lumbridge's staircases
+ * say "Top-floor", the Grand Tree's ladder column (2466,3495) says "Top-Floor".
+ */
+const TOP_FLOOR_OPTIONS = ["Top-floor", "Top-Floor"];
+const BOTTOM_FLOOR_OPTIONS = ["Bottom-floor", "Bottom-Floor"];
 let pluginApi;
 let TaskManager;
 
@@ -224,7 +230,9 @@ module.exports = {
     TaskManager = api.getTaskManager();
     api.onCustomEvent("ladders:climbUp", climbUp);
     api.onCustomEvent("ladders:climbDown", climbDown);
-    const options = { "Climb": climbOption, "Top-floor": topFloorOption, "Bottom-floor": bottomFloorOption };
+    const options = { "Climb": climbOption };
+    for (const option of TOP_FLOOR_OPTIONS) options[option] = topFloorOption;
+    for (const option of BOTTOM_FLOOR_OPTIONS) options[option] = bottomFloorOption;
     for (const option of UP_OPTIONS) options[option] = climbUpOption;
     for (const option of DOWN_OPTIONS) options[option] = climbDownOption;
     for (const name of CLIMBABLE_NAMES) api.onObjectInteraction(name, options);

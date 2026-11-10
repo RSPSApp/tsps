@@ -42,6 +42,8 @@ const VARBIT = Object.freeze({
 
 const SOUND_CHARTED = 11166;
 const NOTIFICATION_TITLE = "Charting Complete!";
+/** settings_sailing_charting_popup: All Settings "Charting popups" off. */
+const POPUP_DISABLED_VARBIT = 18142;
 
 let core;
 let pluginApi;
@@ -287,7 +289,7 @@ function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) }
     sender.sendVarbit(VARBIT.FULL_COMPLETION_EVER, 1);
     sender.sendVarbit(VARBIT.FULL_COMPLETION_XP_OWED, 1);
   }
-  pluginApi.emitCustomEvent("notification:show", { player, title: NOTIFICATION_TITLE, text: spot.hint });
+  if (sender.getVarbit(POPUP_DISABLED_VARBIT) !== 1) pluginApi.emitCustomEvent("notification:show", { player, title: NOTIFICATION_TITLE, text: spot.hint });
   sender.sendSoundEffect(SOUND_CHARTED, 1, 0);
   addXp(player, xp + bonus);
   pluginApi.emitCustomEvent("charting:complete", { player, spot: spot.key, uid: spot.uid, type: spot.type });

@@ -19,6 +19,9 @@ const POPUP_TITLE = "Combat Task Completed!";
 const POPUP_COLOUR = 14733725;
 const JINGLE = { id: 76, length: 4974 };
 const TASK_NAME_COLOUR = "0cc919";
+// All Settings: "Combat Achievement Tasks - Failure" (on by default) and "- Repeat failure".
+const FAILURE_SETTING_VARBIT = 12454; // ca_failure_notifications_enabled
+const REFAILURE_SETTING_VARBIT = 12457; // ca_refailure_notifications_enabled
 
 let pluginApi;
 
@@ -123,6 +126,19 @@ function announceUnlock(player, tier) {
   player.sendMessage(`You've completed enough Combat Achievement tasks to unlock ${tier.name} Tier rewards! You can now claim your rewards from Ghommal.`);
 }
 
+/**
+ * "You have failed <task>: <reason>", when failure notifications are on, and for a task already
+ * done only when repeat failures are on too.
+ */
+function announceFailure(player, taskName, reason) {
+  const task = Data.taskNamed(taskName);
+  const sender = player.getPacketSender();
+  if (sender.getVarbit(FAILURE_SETTING_VARBIT) !== 1) return false;
+  if (task && isComplete(player, task.id) && sender.getVarbit(REFAILURE_SETTING_VARBIT) !== 1) return false;
+  player.sendMessage(`You have failed <col=${TASK_NAME_COLOUR}>${task?.name ?? taskName}</col>: ${reason}`);
+  return true;
+}
+
 function popup(player, task) {
   if (player.getPacketSender().getVarbit?.(POPUP_SETTING_VARBIT) === POPUP_OFF) return;
   pluginApi?.emitCustomEvent("notification:show", {
@@ -179,5 +195,5 @@ module.exports = function attachProgress(api) {
 Object.assign(module.exports, {
   COMPLETED_ATTRIBUTE, CLAIMED_ATTRIBUTE,
   isComplete, completedTasks, points, claimedTiers, tierStatus, claimableTiers, setClaimed,
-  tierCount, monsterCount, sendAll, sendCounts, complete, reset,
+  tierCount, monsterCount, sendAll, sendCounts, complete, announceFailure, reset,
 });

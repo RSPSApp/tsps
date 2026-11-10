@@ -1,4 +1,5 @@
 import { CachePipeline } from "./CachePipeline";
+import { CacheDefinitions } from "./CacheDefinitions";
 import { CacheIndexDat2 } from "./codec/rs/cache/CacheIndex";
 import { ConfigType } from "./codec/rs/cache/ConfigType";
 import { IndexType } from "./codec/rs/cache/IndexType";
@@ -79,6 +80,7 @@ export type SequenceDefinition = {
 };
 
 const sequenceDefinitions = new Map<number, SequenceDefinition>();
+const customSequenceDefinitions = new WeakMap<Int8Array, SequenceDefinition>();
 
 /** The decoded sequence archive: decompressing it took ~100 ms, once per animation looked up. */
 let sequenceArchive: ReturnType<CacheIndexDat2["getArchive"]> | null = null;
@@ -108,7 +110,10 @@ const CLIENT_CYCLES_PER_TICK = 30;
  * then left at their defaults, which is what the previous priority-only decoder did.
  */
 function decodeSequence(id: number): SequenceDefinition {
-    const cached = sequenceDefinitions.get(id);
+    // A custom animation (custom-animations.json) has no file in the cache's archive: read its
+    // own bytes, cached by those bytes so a re-registered definition is decoded afresh.
+    const custom = CacheDefinitions.getCustomSeqData(id);
+    const cached = custom ? customSequenceDefinitions.get(custom) : sequenceDefinitions.get(id);
     if (cached !== undefined) return cached;
     const definition: SequenceDefinition = {
         priority: -1,
@@ -116,7 +121,7 @@ function decodeSequence(id: number): SequenceDefinition {
         clientCycles: 0,
     };
     try {
-        const data = sequences().getFile(id)?.data;
+        const data = custom ?? sequences().getFile(id)?.data;
         const revision = CachePipeline.getActive().revision;
         const rev226 = revision >= 226;
         const rev220 = revision >= 220;
@@ -176,7 +181,8 @@ function decodeSequence(id: number): SequenceDefinition {
     } catch {
         // No cache (tests, tools): treat as unset.
     }
-    sequenceDefinitions.set(id, definition);
+    if (custom) customSequenceDefinitions.set(custom, definition);
+    else sequenceDefinitions.set(id, definition);
     return definition;
 }
 

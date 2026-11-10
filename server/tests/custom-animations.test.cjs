@@ -48,6 +48,16 @@ test("custom animations get their own frame group, with the cache's frames", () 
   assert.equal(CacheDefinitions.getSeq(50001).frameIds.every((id) => id >> 16 === FIRST_FRAME_GROUP + 1), true);
 });
 
+test("combat sees a custom animation's length and priorities, not an empty cache entry", () => {
+  const { getSequenceStall, getSequenceForcedPriority, getSequencePriority } = require("../dist/game/cache/NpcAnimationScanner");
+  const [id, cacheId] = [50000, 7638];
+  assert.deepEqual(getSequenceStall(id), getSequenceStall(cacheId), `${id}: as long as ${cacheId}`);
+  assert.ok(getSequenceStall(id).ticks > 0, `${id}: lasts at least a tick`);
+  assert.equal(getSequenceForcedPriority(id), getSequenceForcedPriority(cacheId), `${id}: same interrupt priority`);
+  assert.equal(getSequencePriority(id), getSequencePriority(cacheId), `${id}: same standing priority`);
+  assert.equal(getSequenceForcedPriority(50000), 6, "a block (5) can't cut the swing short");
+});
+
 test("custom graphics point at their model and animation, and names resolve", () => {
   const gfx = CacheDefinitions.getSpotanim(50000);
   assert.equal(gfx.modelId, 1900000);

@@ -82,6 +82,8 @@ export class CacheDefinitions {
     /** Animations and graphics added on top of the cache (`custom-animations.json`), by id. */
     private static customSequences = new Map<number, { name: string; value: SeqType }>();
     private static customSpotanims = new Map<number, { name: string; value: SpotAnimType }>();
+    /** Each custom animation's definition bytes, for decoders that read the raw seq config. */
+    private static customSequenceData = new Map<number, Int8Array>();
     private static dbArchive?: Archive;
     private static dbRowIdsByTable?: Map<number, number[]>;
     private static readonly dbRows = new Map<number, DbRowType>();
@@ -598,6 +600,18 @@ export class CacheDefinitions {
         const spotanimMap = decode("graphic", spotanims, SpotAnimType, (id) => this.isCacheSpotanim(id), GamevalKind.SPOTANIM);
         this.customSequences = sequenceMap;
         this.customSpotanims = spotanimMap;
+        this.customSequenceData = new Map(sequences.map((row) => {
+            const bytes = Buffer.from(row.data, "base64");
+            return [row.id, new Int8Array(bytes.buffer, bytes.byteOffset, bytes.length)];
+        }));
+    }
+
+    /**
+     * A custom animation's seq config bytes (as the cache's file data), or undefined for a cache
+     * animation. NpcAnimationScanner reads its length and priorities from them.
+     */
+    static getCustomSeqData(id: number): Int8Array | undefined {
+        return this.customSequenceData.get(id);
     }
 
     /** A frame map (an animation's skeleton: index 1, file 0 of its group) as bytes, or undefined. */

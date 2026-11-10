@@ -1,3 +1,4 @@
+import { preparedLocSequence } from "./LocPacketAnimation";
 import { finishBuild } from "../../common/utils/BuildSteps";
 import {
     CHUNK_SIZE,
@@ -911,6 +912,7 @@ export class SceneBuilder {
 
         const isEntity =
             seqId !== -1 ||
+            preparedLocSequence(id, type) !== undefined ||
             locType.transforms !== undefined ||
             locLoadType === LocLoadType.NO_MODELS;
 

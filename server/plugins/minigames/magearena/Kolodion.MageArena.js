@@ -5,10 +5,8 @@
  * and Transcript:Mage Arena II). This unit picks his variant, answers its conditions and does what
  * its steps say; the words are the transcripts'.
  *
- * - Without Mage Arena I behind him the record's default plays, "without-level-60-magic". tsps has
- *   no Kolodion duel, so the god cape from the statues stands in for Mage Arena I
- *   (Statues.MageArena.js). Transcript:Mage Arena I's "With 60 Magic or higher" duel offer isn't in
- *   the dump.
+ * - MageArenaI.MageArena.js handles the duel offer and post-duel dialogue. This unit takes
+ *   over once the player chooses a god cape at the statues.
  * - After it, Mage Arena II's stage picks the variant: "starting-off" (his after-Mage-Arena-I talk
  *   with the cast thresholds, and the miniquest's start), "talking to Kolodion again" (a symbol if
  *   none is owned), a remains hand-in, "after handing in all 3 remains", and after the miniquest.

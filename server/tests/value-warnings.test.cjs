@@ -164,6 +164,17 @@ test('the prompt caps fit each row var', () => {
   }
 });
 
+test('untradeable loot notifications cannot be changed while loot notifications are off', () => {
+  const off = player({ 5399: 0 });
+  const request = { player: off, settingId: 40, handled: false };
+  Warnings._test.settingClicked(request);
+  assert.equal(request.handled, true);
+  assert.deepEqual(off.log.messages, ['You must have loot drop notifications turned on to change this setting.']);
+  const on = { player: player({ 5399: 1 }), settingId: 40, handled: false };
+  Warnings._test.settingClicked(on);
+  assert.equal(on.handled, false, 'with them on, the row toggles as usual');
+});
+
 test('the new rows are the cache type their handler expects and start at the live values', () => {
   assert.equal(catalog.get(65), 0, '65 is a toggle');
   assert.equal(catalog.get(249), 4, '249 is a number');
@@ -305,5 +316,42 @@ test('untradeable items always warn with row 65 on (the default) and cast withou
   const off = player({ 6091: 20000, 6092: 0 }, [alchItem(id, 1, false)]);
   listener.castOnItem(off, HIGH_ALCHEMY, id, 0);
   assert.equal(off.log.dialogues.length, 0);
+});
+
+// ------------------------------------------------------------------ loot notifications
+
+test('loot notifications: the captured lines, at and above the threshold only', () => {
+  const each = price(RUNE_PLATELEGS);
+  const line = Warnings._test.lootLine;
+  assert.equal(line(core, { itemId: RUNE_PLATELEGS, amount: 1 }, each, true),
+    `<col=ef1020>Valuable drop: Rune platelegs (${each.toLocaleString('en-GB')} coins)</col>`);
+  assert.equal(line(core, { itemId: RUNE_PLATELEGS, amount: 1 }, each + 1, true), null);
+  assert.equal(line(core, { id: CANNONBALL, amount: 1107 }, 1, true),
+    `<col=ef1020>Valuable drop: 1,107 x ${ItemDefinition.forId(CANNONBALL).getName()} (${(1107 * price(CANNONBALL)).toLocaleString('en-GB')} coins)</col>`);
+  const name = ItemDefinition.forId(untradeableId).getName();
+  assert.equal(line(core, { itemId: untradeableId, amount: 1 }, 1, true), `<col=ef1020>Untradeable drop: ${name}</col>`);
+  assert.equal(line(core, { itemId: untradeableId, amount: 1 }, 1, false), null, 'row 40 off');
+});
+
+test('loot notifications follow rows 38-40, for an NPC drop, once the roll has been edited', async () => {
+  const each = price(RUNE_PLATELEGS);
+  const roll = (vars) => {
+    const p = player(vars);
+    const request = { player: p, npc: {}, drops: [{ itemId: RUNE_PLATELEGS, amount: 1 }, { itemId: untradeableId, amount: 1 }] };
+    Warnings._test.lootNotifications(request);
+    request.drops.push({ itemId: RUNE_PLATELEGS, amount: 2 });
+    return p;
+  };
+  const on = roll({ 5399: 1, 5400: each, 5402: 1 });
+  const off = roll({ 5399: 0, 5400: each, 5402: 1 });
+  const noUntradeables = roll({ 5399: 1, 5400: each * 2, 5402: 0 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(on.log.messages.length, 3, 'both valuable stacks and the untradeable one, read after the edit');
+  assert.deepEqual(off.log.messages, []);
+  assert.equal(noUntradeables.log.messages.length, 1, 'only the 2 x stack reaches the doubled threshold');
+  const noNpc = player({ 5399: 1, 5400: 1, 5402: 1 });
+  Warnings._test.lootNotifications({ player: noNpc, drops: [{ itemId: RUNE_PLATELEGS, amount: 1 }] });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(noNpc.log.messages, [], 'a reward that is not an NPC drop says nothing');
 });
 

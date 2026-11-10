@@ -712,6 +712,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Biohazard capture 20261110T121228-5ab63b4 ticks 483 (in) and 598 (out). Biohazard decides
     // who may pass (door:toggle); its back door stays locked by the quest.
     [O.DOOR_51, { open: O.DOOR_52 }],
+    // Its upstairs door to the sickest mourner (mournerstewdoorup 2034 -> 2035 at 2547,3325,1),
+    // the same capture's ticks 499 (in) and 586 (out).
+    [O.DOOR_49, { open: O.DOOR_50 }],
   ].map(([closed, family]) => [closed, Object.freeze({ openSoundId: 62, closeTicks: 2, ...family })]));
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
     DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>

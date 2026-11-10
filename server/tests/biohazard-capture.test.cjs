@@ -358,6 +358,20 @@ test("two crossings in a row keep the ladder up until the later one drops", () =
   assert.ok(objectAt(2066, 2558, 3267) && objectAt(2066, 2557, 3267));
 });
 
+test("the HQ's upstairs door is a pass-through door both ways (ticks 499, 586)", () => {
+  const player = actor(6, 2546, 3325, 1);
+  objectOption(player, 2034, 2547, 3325, 1, "Open");
+  assert.ok(objectAt(2035, 2546, 3325, 1));
+  tick(player);
+  assert.deepEqual(at(player), [2547, 3325, 1]);
+  tick(player, 2);
+  assert.ok(objectAt(2034, 2547, 3325, 1), "it shuts two ticks later");
+  objectOption(player, 2034, 2547, 3325, 1, "Open");
+  tick(player);
+  assert.deepEqual(at(player), [2546, 3325, 1]);
+  tick(player, 2);
+});
+
 test("the cage gate with the key shows its box going in, none coming out (ticks 557, 580)", () => {
   const entering = actor(6, 2550, 3325, 1);
   entering.getInventory().adds(core.ItemIdentifiers.KEY_2, 1);

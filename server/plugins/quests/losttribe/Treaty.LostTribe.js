@@ -10,9 +10,9 @@ const TREATY_MUSIC = 410;
 const HUMAN_WALK = 819;
 const HUMAN_BOW = 858;
 const CAVE_GOBLIN_BOW = 2122;
-const SOURCE_X = 3200;
-const SOURCE_Y = 3208;
-const SIZE = 4;
+const ROOM_INSTANCE = { sourceChunk: [400, 401], size: 4 };
+const ROOM_BOUNDS = [[3200, 3231, 3208, 3239, 0]];
+const RECOVERY_ATTRIBUTE = "lost-tribe:treaty-scene-exit";
 const DINING_DOOR = [3207, 3217];
 const PLAYER_ENTRANCE = [3207, 3218];
 const PLAYER_INTRO = [3207, 3220];
@@ -24,78 +24,42 @@ const UR_TAG_TILE = [3206, 3220];
 // OSRS Quest Guides (2025) 8:22–8:35 and Slayermusiq1 (2015) 17:28–17:44.
 module.exports = function createTreatyScene(api, complete) {
   const { ActionDialogue, Animation, DialogueChainBuilder, ForceMovement, Location,
-    NpcIdentifiers, ObjectIdentifiers, StatementDialogue, TaskManager, TemplatedInstanceArea } = api.core;
+    NpcIdentifiers, ObjectIdentifiers, StatementDialogue } = api.core;
   const speakers = {
     "Duke Horacio": NpcIdentifiers.DUKE_HORACIO_2,
     "Ur-tag": NpcIdentifiers.UR_TAG_3,
     Sigmund: NpcIdentifiers.SIGMUND_15,
   };
-  const Scenes = createQuestScenes(api);
   const active = new WeakMap();
+  const Scenes = createQuestScenes(api, { recoveryAttribute: RECOVERY_ATTRIBUTE, onEnd });
 
-  class TreatyRoom extends TemplatedInstanceArea {
-    constructor(scene) {
-      super(SIZE, SIZE);
-      this.scene = scene;
-      this.copySquare(SIZE, SOURCE_X / 8, SOURCE_Y / 8, 0, 0, 0, 0, 0);
-    }
+  function onEnd(player, _instance, logout) {
+    const scene = active.get(player);
+    if (!scene) return;
+    active.delete(player);
+    player.setForceMovement(null);
+    if (logout) return;
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendCameraUnlock(false);
+    if (scene.song >= 0) player.getPacketSender().sendSong(scene.song);
+    if (scene.destination) player.moveTo(scene.destination);
+    Scenes.fade(player, false);
+  }
 
-    sourceTile([x, y]) { return this.tile(x - SOURCE_X, y - SOURCE_Y, 0); }
-    getName() { return "Lumbridge-Dorgeshuun Treaty"; }
-    canTeleport() { return false; }
-    canAttack() { return false; }
-    npcAggression() { return false; }
-
-    process(mobile) {
-      const { player, speaking } = this.scene;
-      if (mobile === player && speaking && !Scenes.chatOpen(player)) this.leave(player, false);
-    }
-
-    postLeave(mobile, logout) {
-      const scene = this.scene;
-      super.postLeave(mobile, logout);
-      if (mobile !== scene.player || active.get(mobile) !== scene) return;
-      active.delete(mobile);
-      TaskManager.cancelTasks(scene);
-      mobile.setForceMovement(null);
-      Scenes.controls(mobile, false);
-      if (logout) {
-        mobile.setLocation(scene.origin);
-        return;
-      }
-      mobile.getDialogueManager().reset();
-      mobile.getPacketSender().sendCameraUnlock(false).sendCameraReset();
-      if (scene.song >= 0) mobile.getPacketSender().sendSong(scene.song);
-      if (this.contains(mobile.getLocation())) mobile.moveTo(scene.exit ?? scene.origin);
-      Scenes.fade(mobile, false);
-    }
+  function endAt(scene, destination) {
+    scene.destination = destination;
+    Scenes.end(scene.player, false);
   }
 
   function later(scene, ticks, action) {
-    Scenes.later(scene, ticks, () => {
+    Scenes.later(scene.instance ?? scene, ticks, () => {
       if (active.get(scene.player) === scene && scene.player.isRegistered()) action();
     });
   }
 
-  function face(scene, mobile, target) {
-    mobile.setPositionToFace(scene.room.sourceTile(target));
-  }
-
-  function actor(scene, id, at) {
-    const tile = scene.room.sourceTile(at);
-    const npc = api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: 0,
-      owner: scene.player, ownerOnly: true, wanderRadius: 0 });
-    if (npc) {
-      npc.__skipDefaultRespawn = true;
-      scene.room.add(npc);
-    }
-    return npc;
-  }
-
   function walkActor(scene, npc, at) {
-    const to = scene.room.sourceTile(at);
-    npc.setSpawnPosition(to);
-    npc.getMovementQueue().addSteps(to);
+    npc.setSpawnPosition(scene.instance.area.sourceTile(...at));
+    Scenes.walk(npc, at);
   }
 
   // The player takes two short northbound walks while regular movement stays locked.
@@ -105,16 +69,9 @@ module.exports = function createTreatyScene(api, complete) {
     player.setForceMovement(new ForceMovement(start, new Location(0, tiles), 0, 30 * tiles, 0, HUMAN_WALK));
     later(scene, tiles, () => {
       player.setForceMovement(null);
-      player.moveTo(scene.room.sourceTile(at));
-      face(scene, player, facing);
+      Scenes.place(player, at);
+      Scenes.face(player, facing);
     });
-  }
-
-  function camera(scene, from, look, rates) {
-    const position = scene.room.sourceTile(from);
-    const target = scene.room.sourceTile(look);
-    Scenes.camera(scene.player, [position.getX(), position.getY(), from[2]],
-      [target.getX(), target.getY(), look[2]], rates);
   }
 
   function play(scene, after) {
@@ -123,7 +80,7 @@ module.exports = function createTreatyScene(api, complete) {
       return index === -1 ? [] : steps.slice(index + 1);
     } : undefined;
     if (!startTranscript(api, scene.player, NpcIdentifiers.DUKE_HORACIO_2, PAGE, VARIANT,
-      select, scene.duke, { scoped: true })) scene.room.leave(scene.player, false);
+      select, scene.duke, { scoped: true })) endAt(scene, scene.origin);
   }
 
   function start(player) {
@@ -134,32 +91,43 @@ module.exports = function createTreatyScene(api, complete) {
     Scenes.fade(player, true);
     later(scene, 2, () => {
       try {
-        scene.room = new TreatyRoom(scene);
+        const { origin } = scene;
+        scene.instance = Scenes.open(player, "Lumbridge-Dorgeshuun Treaty", ROOM_BOUNDS, {
+          canAttack: () => false,
+          process(mobile) {
+            if (mobile === player && scene.speaking && !player.isDyingReturn() && !Scenes.chatOpen(player)) {
+              endAt(scene, origin);
+            }
+          },
+        }, {
+          instance: ROOM_INSTANCE,
+          at: PLAYER_ENTRANCE,
+          exit: [origin.getX(), origin.getY(), origin.getZ()],
+        });
       } catch (error) {
         active.delete(player);
         Scenes.controls(player, false);
         Scenes.fade(player, false);
         throw error;
       }
-      scene.room.enter(player);
-      player.moveTo(scene.room.sourceTile(PLAYER_ENTRANCE));
-      scene.duke = actor(scene, NpcIdentifiers.DUKE_HORACIO_2, DUKE_TILE);
-      scene.urTag = actor(scene, NpcIdentifiers.UR_TAG_3, [3206, 3218]);
-      scene.mistag = actor(scene, NpcIdentifiers.MISTAG, PLAYER_ENTRANCE);
-      scene.sigmund = actor(scene, NpcIdentifiers.SIGMUND_15, [3214, 3222]);
+      scene.duke = Scenes.actor(scene.instance, NpcIdentifiers.DUKE_HORACIO_2, DUKE_TILE);
+      scene.urTag = Scenes.actor(scene.instance, NpcIdentifiers.UR_TAG_3, [3206, 3218]);
+      scene.mistag = Scenes.actor(scene.instance, NpcIdentifiers.MISTAG, PLAYER_ENTRANCE);
+      scene.sigmund = Scenes.actor(scene.instance, NpcIdentifiers.SIGMUND_15, [3214, 3222]);
       if (!scene.duke || !scene.urTag || !scene.mistag || !scene.sigmund) {
-        scene.room.leave(player, false);
+        endAt(scene, scene.origin);
         return;
       }
-      face(scene, scene.duke, UR_TAG_TILE);
-      face(scene, scene.sigmund, [3213, 3222]);
+      Scenes.face(scene.duke, UR_TAG_TILE);
+      Scenes.face(scene.sigmund, [3213, 3222]);
       later(scene, 1, () => {
-        const door = scene.room.resolveObject(ObjectIdentifiers.DOOR_302, scene.room.sourceTile(DINING_DOOR));
+        const { area } = scene.instance;
+        const door = area.resolveObject(ObjectIdentifiers.DOOR_302, area.sourceTile(...DINING_DOOR));
         const sender = player.getPacketSender();
         // The copy starts with the dining entrance open, as the party comes through it.
         if (door) sender.sendObjectRemoval(door);
         sender.sendSong(TREATY_MUSIC);
-        camera(scene, [3209, 3225, 310], [3206, 3220, 100]);
+        Scenes.camera(player, [3209, 3225, 310], [3206, 3220, 100]);
         Scenes.fade(player, false);
         play(scene);
       });
@@ -169,7 +137,7 @@ module.exports = function createTreatyScene(api, complete) {
   function action(event) {
     const { player, stepId } = event;
     const scene = active.get(player);
-    if (!scene?.room || !event.pages?.some(({ page }) => page === PAGE)) return false;
+    if (!scene?.instance || !event.pages?.some(({ page }) => page === PAGE)) return false;
     if (stepId === TITLE) {
       const title = new ActionDialogue(0, { execute: () => StatementDialogue.send(player, event.text, false) }, true);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(title));
@@ -177,21 +145,20 @@ module.exports = function createTreatyScene(api, complete) {
       walkActor(scene, scene.urTag, UR_TAG_TILE);
       walkActor(scene, scene.mistag, [3207, 3219]);
       later(scene, 6, () => {
-        face(scene, scene.urTag, DUKE_TILE);
-        face(scene, scene.mistag, DUKE_TILE);
+        Scenes.face(scene.urTag, DUKE_TILE);
+        Scenes.face(scene.mistag, DUKE_TILE);
         scene.speaking = true;
         play(scene, TITLE);
       });
     } else if (stepId === CUTAWAY) {
       // The east hallway is between the dining doors at x=3213 and the wall at x=3217.
-      camera(scene, [3216, 3224, 265], [3214, 3222, 105], { rate: 14, rate2: 9 });
+      Scenes.camera(player, [3216, 3224, 265], [3214, 3222, 105], { rate: 14, rate2: 9 });
     } else if (stepId === COMPLETE) {
       scene.speaking = false;
       event.end = true;
       Scenes.fade(player, true);
       later(scene, 2, () => {
-        scene.exit = new Location(...PLAYER_WITNESS, 0);
-        scene.room.leave(player, false);
+        endAt(scene, new Location(...PLAYER_WITNESS, 0));
         complete(player);
       });
     } else {
@@ -217,11 +184,11 @@ module.exports = function createTreatyScene(api, complete) {
       };
     } else if (event.text.includes("Lumbridge is in your debt")) {
       event.before = () => {
-        face(scene, scene.duke, PLAYER_WITNESS);
-        camera(scene, [3210, 3222, 290], [3206, 3222, 100], { rate: 8, rate2: 8 });
+        Scenes.face(scene.duke, PLAYER_WITNESS);
+        Scenes.camera(player, [3210, 3222, 290], [3206, 3222, 100], { rate: 8, rate2: 8 });
       };
     } else if (event.text.startsWith("I too thank you")) {
-      event.before = () => face(scene, scene.urTag, PLAYER_WITNESS);
+      event.before = () => Scenes.face(scene.urTag, PLAYER_WITNESS);
     } else if (event.step?.speaker === "Sigmund" && event.text.startsWith("Prattle on")) {
       event.holdTicks = 3;
     }

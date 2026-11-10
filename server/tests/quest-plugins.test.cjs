@@ -21857,7 +21857,7 @@ test('The Lost Tribe reads its symbol book and advances only when the reader clo
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
     getPacketSender: () => sender,
   };
-  handlers.playerLogin[0]({ player });
+  handlers.playerLogin.find((handler) => handler.name === "handleLogin")({ player });
   handlers.namedItemActions.get('Goblin symbol book').Read({ player });
   assert.equal(openInterface, 392, 'Read opens the shared book interface');
   assert.equal(texts.get((392 << 16) | 6), 'A History of the Goblin Race');
@@ -21867,6 +21867,25 @@ test('The Lost Tribe reads its symbol book and advances only when the reader clo
   assert.equal(openInterface, -1);
   assert.equal(quest.getStage(player), 8, 'closing the book completes the reading step');
   assert.equal(varbits.get(532), 6);
+});
+
+test('The Lost Tribe login recovers the saved treaty scene exit', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const recovery = 'lost-tribe:treaty-scene-exit';
+  const attrs = new Map([[recovery, [3318, 9616, 0]], ['quest.the_lost_tribe.stage', 10]]);
+  const destinations = [];
+  const player = {
+    getAttribute: (key) => attrs.get(key),
+    setAttribute: (key, value) => attrs.set(key, value),
+    moveTo: (at) => destinations.push([at.getX(), at.getY(), at.getZ()]),
+  };
+  const recover = handlers.playerLogin.find((handler) => handler.name === 'recover');
+  recover({ player });
+  recover({ player });
+  assert.deepEqual(destinations, [[3318, 9616, 0]]);
+  assert.equal(attrs.get(recovery), null);
+  assert.equal(attrs.get('quest.the_lost_tribe.stage'), 10);
 });
 
 test('The Lost Tribe replaces a missing treaty after Kazgar has escorted the player', () => {

@@ -166,6 +166,23 @@ export class PlayerSession {
     }
   }
 
+  /**
+   * Shuffle's next track: a random unlocked track other than the one that ended, which the Music
+   * plugin picks ("music:shuffle-track" { player, previous, track }); with no other, the ended one
+   * again only when the loop setting is on.
+   */
+  private startShuffleTrack(player: Player, previous: number, replay: boolean, fades?: SongFades): void {
+    const request: { player: Player; previous: number; track?: number } = { player, previous };
+    PluginManager.emitCustomEvent("music:shuffle-track", request);
+    const track = request.track ?? (replay && previous >= 0 ? previous : undefined);
+    if (track === undefined) {
+      this.musicNextTrackAt = -1;
+      this.musicEndedTrack = -1;
+      return;
+    }
+    this.startAreaTrack(player, track, fades);
+  }
+
   private areaTrackEnd(track: number): number {
     const length = Music.lengthTicks(track);
     return length === undefined ? -1 : this.musicTick + length + 1;
@@ -362,7 +379,8 @@ export class PlayerSession {
       const musicTile = privateArea instanceof TemplatedInstanceArea
         ? Music.instanceSourceTile(privateArea, current.x, current.y, current.level)
         : { x: sceneTile.x, y: sceneTile.y, plane: sceneTile.level };
-      const tileArea = musicTile ? Music.tracksAt(musicTile.x, musicTile.y, musicTile.plane) : NO_TRACKS;
+      const audio = player.getAudioSettings?.();
+      const tileArea = musicTile ? Music.tracksAt(musicTile.x, musicTile.y, musicTile.plane, Music.classic(audio)) : NO_TRACKS;
       // A tile with no music area (a gap between areas, an unmapped spot) keeps the one the player came from.
       const musicArea = tileArea.length === 0 && this.lastMusicArea ? this.lastMusicArea : tileArea;
       if (groundItemRegion !== this.lastGroundItemRegion || current.level !== this.lastGroundItemLevel) {
@@ -371,7 +389,8 @@ export class PlayerSession {
         require("../game/entity/impl/grounditem/ItemOnGroundManager")
           .ItemOnGroundManager.onRegionChange(player);
       }
-      const musicMode = player.getAudioSettings?.()?.[18] ?? 0;
+      const musicMode = audio?.[Music.MODE_VARP] ?? Music.AREA_MODE;
+      const replay = Music.setting(audio, Music.LOOP_BIT) === 1;
       const areaTrack = typeof privateArea?.getMusicTrack === "function"
         ? PluginManager.callArea(privateArea, "getMusicTrack", player)
         : null;
@@ -380,6 +399,8 @@ export class PlayerSession {
         ? [areaTrack as number]
         : musicArea;
       const selectionChanged = !sameTracks(tracks, this.lastResolvedMusicTracks);
+      // Area and Shuffle play one track after another; Single keeps the one chosen.
+      const timed = musicMode === Music.AREA_MODE || musicMode === Music.SHUFFLE_MODE;
       if (musicArea !== this.lastMusicArea || musicMode !== this.lastMusicMode || selectionChanged) {
         const areaChanged = musicArea !== this.lastMusicArea;
         const previousMusicMode = this.lastMusicMode;
@@ -389,25 +410,36 @@ export class PlayerSession {
         // A track that also belongs to the new area plays on; otherwise one of the area's starts.
         const keep = musicMode === 0 && previousMusicMode === 0 && tracks.includes(this.lastMusicTrack);
         const track = keep ? this.lastMusicTrack
-          : Music.pickAreaTrack(tracks, musicMode === 0 ? this.musicEndedTrack : -1);
+          : Music.pickAreaTrack(tracks, musicMode === 0 ? this.musicEndedTrack : -1, Math.random, replay);
         // Entering an area unlocks all its tracks, in every music mode: the picked one first, then the rest.
         if ((areaChanged || selectionChanged) && track !== undefined) {
           for (const trackId of [track, ...tracks.filter((other) => other !== track)]) {
             PluginManager.emitCustomEvent("music:unlock-track", { player, trackId });
           }
         }
-        if (musicMode !== 0 || track === undefined) {
+        if (musicMode === Music.SHUFFLE_MODE) {
+          // Shuffle ignores areas. Switched to, it lets the playing track finish (one without an
+          // end time, a Single choice, gets its full length from now); with nothing playing it starts one.
+          if (musicMode !== previousMusicMode) {
+            if (this.lastMusicTrack < 0) this.startShuffleTrack(player, -1, replay);
+            else if (this.musicTrackEndsAt < 0 && this.musicNextTrackAt < 0) this.musicTrackEndsAt = this.areaTrackEnd(this.lastMusicTrack);
+          }
+        } else if (musicMode !== 0 || track === undefined) {
           this.musicTrackEndsAt = -1;
           this.musicNextTrackAt = -1;
           this.musicEndedTrack = -1;
         } else if (!keep) {
           this.startAreaTrack(player, track);
         }
-      } else if (musicMode === 0 && this.musicNextTrackAt >= 0 && tick >= this.musicNextTrackAt) {
-        const track = Music.pickAreaTrack(tracks, this.musicEndedTrack);
-        if (track === undefined) this.musicNextTrackAt = -1;
-        else this.startAreaTrack(player, track, SONG_NO_FADES);
-      } else if (musicMode === 0 && this.musicTrackEndsAt >= 0 && tick >= this.musicTrackEndsAt) {
+      } else if (timed && this.musicNextTrackAt >= 0 && tick >= this.musicNextTrackAt) {
+        if (musicMode === Music.SHUFFLE_MODE) {
+          this.startShuffleTrack(player, this.musicEndedTrack, replay, SONG_NO_FADES);
+        } else {
+          const track = Music.pickAreaTrack(tracks, this.musicEndedTrack, Math.random, replay);
+          if (track === undefined) this.musicNextTrackAt = -1;
+          else this.startAreaTrack(player, track, SONG_NO_FADES);
+        }
+      } else if (timed && this.musicTrackEndsAt >= 0 && tick >= this.musicTrackEndsAt) {
         // The track has finished: silence, no current track, and the next one two ticks later.
         this.musicTrackEndsAt = -1;
         this.musicNextTrackAt = tick + 2;

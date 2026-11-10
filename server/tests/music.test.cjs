@@ -960,6 +960,7 @@ test('native music Play selects the visible cache row, refuses locked tracks and
   const restored = new Player(restoredSession);
   restoredSession.setPlayer(restored);
   saved.applyToPlayer(restored);
+  restored.setAudioSetting(19, 1 << 21); // "Default to area music mode on login" turned off
   MusicPlugin._test.onMusicLogin({ player: restored });
   assert.equal(restored.getAudioSettings()[18], 2);
   assert.equal(restoredSession.getCurrentMusicTrack(), track.id, 'a fresh session resumes the saved Single selection');
@@ -1132,4 +1133,275 @@ test("the Champions' Guild basement plays Title Fight, and its arena Victory is 
   assert.deepEqual(await songs(10 + length + 4), [VICTORY_IS_MINE], 'the arena, in the same map region, is another area');
   assert.equal(Progress.isUnlocked(player, TITLE_FIGHT), true);
   assert.equal(Progress.isUnlocked(player, VICTORY_IS_MINE), true);
+});
+
+/** A real player and session at a tile, with the Music plugin on the real PluginManager. */
+async function musicSession(t, name, location) {
+  await setup();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  MusicPlugin.register(PluginManager.createApi(`Music-${name}`));
+  const session = new PlayerSession({ isOpen: () => true, send: () => true });
+  const player = new Player(session);
+  session.setPlayer(player);
+  player.setUsername(name);
+  assert.equal(core.World.getPlayers().add(player), true);
+  t.after(() => core.World.getPlayers().remove(player));
+  player.setLocation(location);
+  player.setNeedsPlacement(false);
+  const messages = [];
+  player.sendMessage = message => messages.push(message);
+  const songs = async tick => {
+    session.flush(tick);
+    const frames = [...session.pendingPackets];
+    await Promise.resolve();
+    return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
+  };
+  return { core, session, player, messages, songs };
+}
+
+test('the music settings varp: the client sets its bits, the server keeps its own, and both survive a save', async t => {
+  const { core, player } = await musicSession(t, 'musicsettings', new Location(3222, 3218, 0));
+  const sender = player.getPacketSender();
+  assert.equal(player.getAudioSettings()[19], 1, 'a new player has "play the last track" on, as live sends at login');
+  sender.sendVarbit(8371, 2); // music_cape_status, the server's
+  sender.sendVarbit(4814, 1); // trawler_camera_static, the server's
+  const serverBits = sender.getVarp(19);
+  // The client turns the loop off, hides unlock messages and picks Classic areas; its copy of the
+  // varp still carries the server's bits, and a stale copy might not.
+  const clientValue = (1 << 9) | (1 << 10);
+  assert.equal(player.applyAudioSettingFromClient(19, clientValue), true);
+  assert.equal(player.getAudioSettings()[19], clientValue, 'only the setting bits are saved');
+  assert.equal(sender.getVarp(19), serverBits & ~core.Music.SETTINGS_MASK | clientValue, 'the server bits are put back');
+  assert.equal(sender.getVarbit(8371), 2);
+  assert.equal(sender.getVarbit(12233), 1);
+  assert.equal(sender.getVarbit(4137), 0);
+  player.applyAudioSettingFromClient(19, -1);
+  assert.equal(player.getAudioSettings()[19], core.Music.SETTINGS_MASK, 'a value with every bit set keeps only the settings');
+  player.applyAudioSettingFromClient(19, clientValue);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const restored = new (require('../dist/game/entity/impl/player/Player').Player)(new PlayerSession({ isOpen: () => true, send: () => true }));
+  restored.getSession().setPlayer(restored);
+  PlayerSave.fromPlayer(player).applyToPlayer(restored);
+  assert.equal(restored.getAudioSettings()[19], clientValue, 'saved with the other audio settings');
+  const old = new (require('../dist/game/entity/impl/player/Player').Player)(new PlayerSession({ isOpen: () => true, send: () => true }));
+  old.setAudioSettings({ 18: 0, 168: 50 });
+  assert.equal(old.getAudioSettings()[19], 1, 'a save from before has the defaults');
+  assert.equal(MusicPlugin._test.musicSettingsVarp(restored) & core.Music.SETTINGS_MASK, clientValue);
+});
+
+test('the unlock message is left out when the music unlock message setting is off', async () => {
+  await setup();
+  const [first, second] = catalog.allTrackIds.filter(id => !catalog.autoUnlockTrackIds.includes(id));
+  const player = makePlayer();
+  player.getAudioSettings = () => ({ 19: 1 | (1 << 9) });
+  MusicPlugin._test.unlockTrack({ player, trackId: first });
+  assert.equal(Progress.isUnlocked(player, first), true, 'the track still unlocks');
+  assert.ok(player.configs.some(([id]) => id === catalog.slotByTrackId[first].varp), 'and its varp is sent');
+  assert.deepEqual(player.messages, []);
+  player.getAudioSettings = () => ({ 19: 1 });
+  MusicPlugin._test.unlockTrack({ player, trackId: second });
+  assert.equal(player.messages.length, 1, 'on, the message is shown');
+});
+
+test('Shuffle: a finished track gives way to a random unlocked one, never the one that ended', async t => {
+  const { core, session, player, songs } = await musicSession(t, 'musicshufflemode', new Location(3222, 3218, 0));
+  t.mock.method(Math, 'random', () => 0);
+  const LUMBRIDGE = core.Music.tracksAt(3222, 3218, 0)[0];
+  assert.deepEqual(await songs(100), [LUMBRIDGE]);
+  const unlocked = Progress.unlockedTracks(player);
+  player.applyAudioSettingFromClient(18, 1);
+  assert.deepEqual(await songs(101), [], 'switching to Shuffle lets the playing track finish');
+  const end = 100 + core.Music.lengthTicks(LUMBRIDGE) + 1;
+  assert.deepEqual(await songs(end), [147], 'it ends in silence, as in Area mode');
+  assert.deepEqual(await songs(end + 1), []);
+  const [next] = await songs(end + 2);
+  assert.notEqual(next, LUMBRIDGE, 'two ticks later a different track starts');
+  assert.ok(Progress.isUnlocked(player, next), 'one the player has unlocked');
+  assert.ok(unlocked.length > 1);
+  player.setLocation(new Location(3293, 3180, 0));
+  assert.deepEqual(await songs(end + 3), [], 'Shuffle ignores music areas');
+  assert.equal(session.getCurrentMusicTrack(), next);
+  const nextEnd = end + 2 + core.Music.lengthTicks(next) + 1;
+  assert.deepEqual(await songs(nextEnd), [147], 'and the shuffled track runs its length too');
+});
+
+test('Skip Track starts another unlocked track in Shuffle mode only', async t => {
+  const { core, session, player, songs } = await musicSession(t, 'musicskip', new Location(3222, 3218, 0));
+  t.mock.method(Math, 'random', () => 0.5);
+  await songs(10);
+  const LUMBRIDGE = session.getCurrentMusicTrack();
+  const skip = () => MusicPlugin._test.skipTrack({ player, buttonId: (239 << 16) | 17, opId: 1 });
+  skip();
+  assert.equal(session.getCurrentMusicTrack(), LUMBRIDGE, 'Area mode has nothing to skip to');
+  player.applyAudioSettingFromClient(18, 1);
+  await songs(11);
+  const sent = [];
+  PluginManager.createApi('MusicSkipObserver').onCustomEvent('audio:play-song', event => {
+    if (event.player === player) sent.push(event.trackId);
+  });
+  skip();
+  assert.equal(sent.length, 1, 'a track starts at once');
+  assert.notEqual(sent[0], LUMBRIDGE, 'another one');
+  assert.ok(Progress.isUnlocked(player, sent[0]));
+  assert.equal(session.getCurrentMusicTrack(), sent[0]);
+  assert.deepEqual(await songs(12), [sent[0]], 'its song packet');
+  const end = 11 + core.Music.lengthTicks(sent[0]) + 1;
+  assert.deepEqual(await songs(end), [147], 'and runs its length before the next');
+});
+
+test('the mode buttons set the mode with the live line; selection follows the manual selection setting', async t => {
+  const { player, messages } = await musicSession(t, 'musicmodes', new Location(3222, 3218, 0));
+  const button = child => MusicPlugin._test.chooseMusicMode({ player, buttonId: (239 << 16) | child, opId: 1 });
+  button(15);
+  assert.equal(player.getAudioSettings()[18], 1);
+  button(16);
+  assert.equal(player.getAudioSettings()[18], 2);
+  button(14);
+  assert.equal(player.getAudioSettings()[18], 0);
+  assert.deepEqual(messages, [
+    'You are now using the shuffle music mode.',
+    'You are now using the single music mode.',
+    'You are now using the area music mode.',
+  ]);
+});
+
+
+test('login starts in Area mode unless "Default to area music mode on login" is off', async t => {
+  const { player } = await musicSession(t, 'musiclogin', new Location(3222, 3218, 0));
+  player.setAudioSetting(18, 1);
+  MusicPlugin._test.onMusicLogin({ player });
+  assert.equal(player.getAudioSettings()[18], 0, 'Shuffle is reset to Area by default');
+  player.setAudioSetting(19, 1 | (1 << 21));
+  player.setAudioSetting(18, 1);
+  MusicPlugin._test.onMusicLogin({ player });
+  assert.equal(player.getAudioSettings()[18], 1, 'with the setting off, the last mode stays');
+});
+
+test('a track picked from the list in Area mode switches to Single, or Shuffle with that setting', async t => {
+  const { core, player } = await musicSession(t, 'musicselectmode', new Location(3222, 3218, 0));
+  const rows = core.CacheDefinitions.getDbTableRows(44).filter(row => row.int(9, 0) === 0);
+  const row = rows.find(row => row.string(1) === 'Adventure');
+  const track = core.Music.tracks().find(track => track.rowId === row.id);
+  Progress.unlock(player, track.id);
+  const select = () => MusicPlugin._test.selectMusicTrack({ player, groupId: 239, childId: 11, opId: 1, slot: rows.indexOf(row) });
+  select();
+  assert.equal(player.getAudioSettings()[18], 2, 'Single by default');
+  player.setAudioSetting(18, 0);
+  player.setAudioSetting(19, 1 | (1 << 24));
+  select();
+  assert.equal(player.getAudioSettings()[18], 1, 'Shuffle with "Music mode to use when manually selecting" on Shuffle');
+  player.setAudioSetting(18, 2);
+  select();
+  assert.equal(player.getAudioSettings()[18], 2, 'Single, already a manual mode, stays');
+});
+
+test('Shuffle at login, with nothing playing, starts a random unlocked track', async t => {
+  const { core, session, player, songs } = await musicSession(t, 'musicshufflelogin', new Location(1, 1, 0));
+  t.mock.method(Math, 'random', () => 0);
+  const [track] = catalog.allTrackIds.filter(id => !catalog.autoUnlockTrackIds.includes(id));
+  Progress.unlock(player, track);
+  player.setAudioSetting(18, 1);
+  const [first] = await songs(5);
+  assert.ok(Progress.isUnlocked(player, first));
+  assert.equal(session.getCurrentMusicTrack(), first);
+  assert.ok(core.Music.lengthTicks(first) > 0);
+});
+
+test('the loop setting: with no other track to play, the last one restarts only when it is on', async t => {
+  const { core, songs, player } = await musicSession(t, 'musicloop', new Location(3150, 9740, 0));
+  const TITLE_FIGHT = 525;
+  const length = core.Music.lengthTicks(TITLE_FIGHT);
+  assert.deepEqual(await songs(10), [TITLE_FIGHT]);
+  assert.deepEqual(await songs(10 + length + 1), [147]);
+  assert.deepEqual(await songs(10 + length + 3), [TITLE_FIGHT], 'on (the default): a one-track area plays it again');
+  player.applyAudioSettingFromClient(19, 0);
+  const again = 10 + length + 3;
+  assert.deepEqual(await songs(again + length + 1), [147]);
+  assert.deepEqual(await songs(again + length + 3), [], 'off: the area falls silent');
+  assert.deepEqual(await songs(again + length + 50), []);
+  assert.equal(core.Music.pickAreaTrack([1, 2], 1, () => 0, false), 2, 'another track still plays with the loop off');
+});
+
+test('Classic music areas: the Wiki maps from before the 2026 areas, picked by the area type setting', async t => {
+  const { core, songs, player } = await musicSession(t, 'musicclassic', new Location(2700, 3600, 0));
+  const name = id => core.Music.trackNames()[id];
+  t.mock.method(Math, 'random', () => 0);
+  assert.deepEqual(core.Music.tracksAt(2700, 3600, 0).map(name), ['Borderland', 'Legend', 'Saga'], "Modern: Rellekka's surroundings as one area");
+  assert.deepEqual(core.Music.tracksAt(2700, 3600, 0, true).map(name), ['Legend'], "Classic: Legend's old square");
+  assert.deepEqual(core.Music.tracksAt(3222, 3218, 0, true).map(name), ['Harmony']);
+  assert.deepEqual(core.Music.tracksAt(3330, 3600, 0, true).map(name), ['Underground'], 'Underground in its old Wilderness square');
+  assert.deepEqual(core.Music.tracksAt(3150, 9740, 0, true).map(name), ['Title Fight'], 'a track with no old map plays as in Modern');
+  player.applyAudioSettingFromClient(19, 1 | (1 << 10));
+  assert.deepEqual((await songs(10)).map(name), ['Legend'], 'a Classic player hears the Classic area');
+  player.applyAudioSettingFromClient(19, 1);
+  assert.deepEqual(await songs(11), [], "back to Modern, Legend plays on: Modern's area has it too");
+});
+
+test("import-music-areas: Classic takes each track's historic maps, and its current maps away from them", async () => {
+  const { buildMusicAreas, modeRows, polygonsOverlap } = await import('../scripts/import-music-areas.mjs');
+  const square = (x, y, size) => [[x, y], [x + size, y], [x + size, y + size], [x, y + size]];
+  const map = (title, rings, historic = false) => ({
+    title, page_name: title, ...(historic ? { 'map.is_historic': '' } : {}),
+    'map.features': JSON.stringify([{ type: 'Feature', properties: { mapID: -1, plane: 0 }, geometry: { type: 'Polygon', coordinates: rings } }]),
+  });
+  const polygon = (rings, plane = 0) => ({ plane, rings });
+  assert.equal(polygonsOverlap(polygon([square(0, 0, 10)]), polygon([square(5, 5, 10)])), true);
+  assert.equal(polygonsOverlap(polygon([[[0, 4], [20, 4], [20, 6], [0, 6]]]), polygon([[[8, 0], [10, 0], [10, 20], [8, 20]]])), true, 'a cross with no corner inside');
+  assert.equal(polygonsOverlap(polygon([square(0, 0, 10)]), polygon([square(20, 0, 10)])), false);
+  assert.equal(polygonsOverlap(polygon([square(0, 0, 10)]), polygon([square(0, 0, 10)], 1)), false);
+  const rows = [
+    map('Big', [square(0, 0, 64)]), map('Big', [square(0, 0, 32)], true), // reworked: the old square in Classic
+    map('Big', [square(100, 100, 8)]), // an area added away from the old map, kept
+    map('Shared', [square(0, 0, 64)]), map('Shared', [square(32, 0, 32)], true),
+    map('New', [square(200, 200, 8)]), // never reworked: as in Modern
+  ];
+  assert.equal(modeRows(rows, false).length, 4);
+  assert.deepEqual(modeRows(rows, true).map(row => row.title), ['Big', 'Shared', 'Big', 'New']);
+  const tracks = [{ id: 1, name: 'Big' }, { id: 2, name: 'Shared' }, { id: 3, name: 'New' }];
+  const modern = buildMusicAreas({ rows, tracks, unmapped: [] });
+  const classic = buildMusicAreas({ rows, tracks, unmapped: [], classic: true });
+  assert.deepEqual(modern.areas.map(({ names }) => names), [['Big'], ['Big', 'Shared'], ['New']]);
+  assert.deepEqual(classic.areas.map(({ names }) => names), [['Big'], ['New'], ['Shared']]);
+});
+
+test('music-areas-classic.json: whole region grids and cache tracks only', async () => {
+  await setup();
+  const fs = require('fs');
+  const data = JSON.parse(fs.readFileSync(require('path').join(__dirname, '../data/definitions/music-areas-classic.json'), 'utf8'));
+  const ids = new Set(PluginManager.getCoreApi().Music.tracks().map(({ id }) => id));
+  assert.ok(data.areas.length > 0);
+  for (const area of data.areas) assert.ok(area.tracks.every(id => ids.has(id)), area.names.join(', '));
+  for (const regions of Object.values(data.tiles)) {
+    for (const runs of Object.values(regions)) {
+      assert.equal(runs.split(',').reduce((sum, run) => sum + Number(run.split('*')[1] ?? 1), 0), 64 * 64);
+    }
+  }
+});
+
+test('All Settings music dropdowns: area type, manual selection mode, track list and music mode', async t => {
+  const { core, player, messages } = await musicSession(t, 'musicdropdowns', new Location(3222, 3218, 0));
+  const sender = player.getPacketSender();
+  sender.sendVarbit(4814, 1); // a server bit of the same varp
+  const choose = (settingId, option) => {
+    const request = { player, settingId, option, handled: false };
+    MusicPlugin._test.chooseMusicSettingOption(request);
+    return request.handled;
+  };
+  assert.equal(choose(110, 1), true);
+  assert.equal(core.Music.classic(player.getAudioSettings()), true, 'Music area type: Classic');
+  assert.equal(sender.getVarbit(12233), 1);
+  assert.equal(sender.getVarbit(4814), 1, "the server's bit is kept");
+  assert.equal(choose(482, 1), true);
+  assert.equal(sender.getVarbit(19737), 1, 'manual selection uses Shuffle');
+  assert.equal(choose(483, 2), true);
+  assert.equal(sender.getVarbit(19733), 2, 'Hide unlocked tracks');
+  assert.equal(choose(110, 0), true);
+  assert.equal(core.Music.classic(player.getAudioSettings()), false, 'back to Modern');
+  assert.equal(player.getAudioSettings()[19], 1 | (1 << 24) | (2 << 19), 'the other settings stay');
+  assert.equal(choose(477, 1), true);
+  assert.equal(player.getAudioSettings()[18], 1, 'Music mode: Shuffle');
+  assert.deepEqual(messages, ['You are now using the shuffle music mode.']);
+  assert.equal(choose(999, 0), false, "another plugin's setting is left alone");
 });

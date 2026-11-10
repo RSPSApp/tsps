@@ -15,6 +15,18 @@ const MUSIC_NOW_PLAYING_REFRESH_SCRIPT = 3936;
 const MUSIC_JUKEBOX_ROW_FLAGS = 62;
 const MUSIC_NOW_PLAYING_FLAGS = 60;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
+/** The Music tab's Area, Shuffle and Single mode buttons and Skip Track, by the mode each sets. */
+const MODE_BUTTONS = new Map([[14, 0], [15, 1], [16, 2]].map(([child, mode]) => [(MUSIC_GROUP_ID << 16) | child, mode]));
+const SKIP_BUTTON_UID = (MUSIC_GROUP_ID << 16) | 17;
+const MODE_NAMES = ["area", "shuffle", "single"];
+/** All Settings' "Music mode" dropdown (setting id, cache struct param 1077). */
+const MUSIC_MODE_SETTING = 477;
+/**
+ * All Settings' music dropdowns the server applies, by setting id: the varbit of varp 19 each sets
+ * to the option's index (shift, bits). Music area type (Modern, Classic), the mode for a track
+ * picked from the list (Single, Shuffle), and which tracks the list shows.
+ */
+const MUSIC_SETTING_DROPDOWNS = new Map([[110, [10, 2]], [482, [24, 1]], [483, [19, 2]]]);
 /**
  * chatbox_transparency: live colours an unlocked track's name by it, with no closing tag or
  * full stop (rsprox 224/01437: "<col=ff3045>Everywhere" on a transparent chatbox; 234/03275
@@ -105,7 +117,9 @@ function unlockTrack({ player, trackId, silent = false }) {
   if (silent) return;
   const fullVarps = Progress.varpsFor(Progress.unlockedTracks(player), slotByTrackId);
   player.getPacketSender().sendConfig(slot.varp, fullVarps[slot.varp]);
-  player.sendMessage(`You have unlocked a new music track: <col=${unlockNameColour(player)}>${name}`);
+  if (core.Music.setting(player.getAudioSettings?.(), core.Music.HIDE_UNLOCK_MESSAGE_BIT) === 0) {
+    player.sendMessage(`You have unlocked a new music track: <col=${unlockNameColour(player)}>${name}`);
+  }
   Progress.refreshCapeUnlock(player, nonHolidayTrackIds);
 }
 
@@ -280,12 +294,14 @@ function selectMusicTrack(event) {
     player.sendMessage("You have not unlocked this track yet.");
     return;
   }
-  // Cache musicplay: 0 Area, 1 Shuffle, 2 Single. Area switches to Single so the area tick doesn't
-  // replace the choice; Shuffle stays Shuffle (rsprox 236/03935: the Play at L25846 after Shuffle
-  // at L24943 sends no musicplay change).
+  // Cache musicplay: 0 Area, 1 Shuffle, 2 Single. Area switches to Single, or to Shuffle with the
+  // "Music mode to use when manually selecting music tracks" setting, so the area tick doesn't
+  // replace the choice; Shuffle and Single stay as they are (rsprox 236/03935: the Play at L25846
+  // after Shuffle at L24943 sends no musicplay change).
   if ((player.getAudioSettings?.()[MUSIC_MODE_VARP] ?? 0) === 0) {
-    player.setAudioSetting(MUSIC_MODE_VARP, 2);
-    player.getPacketSender().sendConfig(MUSIC_MODE_VARP, 2);
+    const mode = core.Music.setting(player.getAudioSettings(), core.Music.SHUFFLE_ON_SELECTION_BIT) === 1 ? 1 : 2;
+    player.setAudioSetting(MUSIC_MODE_VARP, mode);
+    player.getPacketSender().sendConfig(MUSIC_MODE_VARP, mode);
   }
   player.setAttribute(SELECTED_TRACK_ATTRIBUTE, track.id);
   player.getSession().setCurrentMusicTrack(track.id);
@@ -296,6 +312,12 @@ function selectMusicTrack(event) {
 function onMusicLogin({ player }) {
   unlockCompletedQuestTracks(player);
   syncMusicVarps(player);
+  // "Default to area music mode on login", on unless the player turned it off.
+  if (core.Music.setting(player.getAudioSettings?.(), core.Music.KEEP_MODE_ON_LOGIN_BIT) === 0
+      && (player.getAudioSettings?.()[MUSIC_MODE_VARP] ?? 0) !== 0) {
+    player.setAudioSetting(MUSIC_MODE_VARP, 0);
+    player.getPacketSender().sendConfig(MUSIC_MODE_VARP, 0);
+  }
   if (player.getAudioSettings?.()[MUSIC_MODE_VARP] === 2) {
     const selected = player.getAttribute(SELECTED_TRACK_ATTRIBUTE);
     const track = selectableTracks.find(track => track.id === selected && track.released);
@@ -310,6 +332,82 @@ function onMusicLogin({ player }) {
     }
   }
   queueMicrotask(() => enableMusicActions(player));
+}
+
+/**
+ * Varp 19 as the client should hold it: the server's own bits as last sent, and the player's saved
+ * music settings in theirs.
+ */
+function musicSettingsVarp(player) {
+  const { SETTINGS_VARP, SETTINGS_MASK } = core.Music;
+  const settings = player.getAudioSettings?.()[SETTINGS_VARP] ?? core.Music.DEFAULT_SETTINGS;
+  return (player.getPacketSender().getVarp(SETTINGS_VARP) & ~SETTINGS_MASK) | (settings & SETTINGS_MASK);
+}
+
+function sendMusicSettings(player) {
+  player.getPacketSender().sendConfig(core.Music.SETTINGS_VARP, musicSettingsVarp(player));
+}
+
+/**
+ * The client sets its music settings itself and transmits the whole varp; the setting bits were
+ * saved (Player.setAudioSetting keeps only those), and the server's bits are put back.
+ */
+function onMusicSettingsTransmitted({ player, varpId }) {
+  if (varpId === core.Music.SETTINGS_VARP) sendMusicSettings(player);
+}
+
+/** Every released track the player has unlocked, as the Music tab lists them. */
+function unlockedPlayableTracks(player) {
+  const ids = new Set();
+  for (const track of selectableTracks) {
+    const slot = slotByTrackId[track.id];
+    if (track.released && slot && Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) ids.add(track.id);
+  }
+  return [...ids];
+}
+
+/** Shuffle's pick: a random unlocked track, never the one that just ended. */
+function pickShuffleTrack(request) {
+  const choices = unlockedPlayableTracks(request.player).filter((id) => id !== request.previous);
+  if (choices.length > 0) request.track = choices[Math.floor(Math.random() * choices.length) % choices.length];
+}
+
+/** The Area, Shuffle and Single buttons: the mode, and the line live sends for each. */
+function chooseMusicMode({ player, buttonId, opId, action }) {
+  if ((opId ?? action ?? 1) !== 1) return;
+  const mode = MODE_BUTTONS.get(buttonId);
+  player.setAudioSetting(MUSIC_MODE_VARP, mode);
+  player.getPacketSender().sendConfig(MUSIC_MODE_VARP, mode);
+  player.sendMessage(`You are now using the ${MODE_NAMES[mode]} music mode.`);
+}
+
+/** A music dropdown in All Settings: its varbit of varp 19, or the mode. */
+function chooseMusicSettingOption(request) {
+  const { player, settingId, option } = request;
+  if (settingId === MUSIC_MODE_SETTING) {
+    chooseMusicMode({ player, buttonId: [...MODE_BUTTONS.keys()][option] });
+    request.handled = true;
+    return;
+  }
+  const field = MUSIC_SETTING_DROPDOWNS.get(settingId);
+  if (!field) return;
+  const [shift, bits] = field;
+  const mask = ((1 << bits) - 1) << shift;
+  const settings = player.getAudioSettings?.()[core.Music.SETTINGS_VARP] ?? core.Music.DEFAULT_SETTINGS;
+  player.setAudioSetting(core.Music.SETTINGS_VARP, (settings & ~mask) | ((option << shift) & mask));
+  sendMusicSettings(player);
+  request.handled = true;
+}
+
+/** Skip Track, in Shuffle mode only: another unlocked track starts at once. */
+function skipTrack({ player, opId, action }) {
+  if ((opId ?? action ?? 1) !== 1 || (player.getAudioSettings?.()[MUSIC_MODE_VARP] ?? 0) !== 1) return;
+  const session = player.getSession();
+  const request = { player, previous: session.getCurrentMusicTrack() };
+  pickShuffleTrack(request);
+  if (request.track === undefined) return;
+  session.setCurrentMusicTrack(request.track);
+  player.getPacketSender().sendSong(request.track);
 }
 
 function onMusicWelcomeAction({ player }) {
@@ -424,6 +522,11 @@ module.exports = {
     if (group === MUSIC_GROUP_ID) queueMicrotask(() => enableMusicActions(player));
   });
   api.onCustomEvent("audio:setting-changed", restartMusicAfterVolumeRaised);
+    api.onCustomEvent("audio:setting-changed", onMusicSettingsTransmitted);
+    api.onCustomEvent("music:shuffle-track", pickShuffleTrack);
+    api.onCustomEvent("settings:option-chosen", chooseMusicSettingOption);
+    api.onInterfaceActionButton([...MODE_BUTTONS.keys()], chooseMusicMode);
+    api.onInterfaceActionButton(SKIP_BUTTON_UID, skipTrack);
     api.onCustomEvent("audio:play-song", onTrackPlayed);
     api.onCustomEvent("music:unlock-track", unlockTrack);
     api.onCustomEvent("quest:completed", onQuestCompleted);
@@ -438,5 +541,6 @@ module.exports = {
     getCatalog: () => ({ allTrackIds, nonHolidayTrackIds, slotByTrackId, canonicalTrackBySlot, autoUnlockTrackIds, questUnlocks }),
     canEquipMusicCape, onMusicLogin, onMusicWelcomeAction, answerAirGuitarUnlock,
     onTrackPlayed, questComplete, unlockQuestTracks, onQuestCompleted, unlockCompletedQuestTracks,
+    musicSettingsVarp, pickShuffleTrack, chooseMusicMode, skipTrack, selectMusicTrack, chooseMusicSettingOption,
   },
 };

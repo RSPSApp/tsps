@@ -129,7 +129,8 @@ export class PlayerSession {
     if (this.player && this.isBinaryChannelOpen()) this.npcSpecificEffects.queue(npc, packet);
   }
   private appearanceCache = new Map<number, { player: Player; payload: Buffer }>();
-  private lastMusicRegion = -1;
+  /** The music area the player was last in, as its track list; undefined before the first flush. */
+  private lastMusicArea?: readonly number[];
   private lastMusicTrack = -1;
   private lastMusicMode = -1;
   private lastResolvedMusicTracks?: readonly number[];
@@ -357,9 +358,13 @@ export class PlayerSession {
     ServerPerf.measurePhase("network.flush.region_updates", () => {
       const groundItemRegion = ((sceneTile.x >> 6) << 8) | (sceneTile.y >> 6);
       const privateArea = player.getArea?.();
-      const musicRegion = privateArea instanceof TemplatedInstanceArea
-        ? Music.regionForInstanceLocation(privateArea, current.x, current.y, current.level) ?? -1
-        : groundItemRegion;
+      // An instance plays the music of the cache-map tiles it copies; a boat deck, the sea under it.
+      const musicTile = privateArea instanceof TemplatedInstanceArea
+        ? Music.instanceSourceTile(privateArea, current.x, current.y, current.level)
+        : { x: sceneTile.x, y: sceneTile.y, plane: sceneTile.level };
+      const tileArea = musicTile ? Music.tracksAt(musicTile.x, musicTile.y, musicTile.plane) : NO_TRACKS;
+      // A tile with no music area (a gap between areas, an unmapped spot) keeps the one the player came from.
+      const musicArea = tileArea.length === 0 && this.lastMusicArea ? this.lastMusicArea : tileArea;
       if (groundItemRegion !== this.lastGroundItemRegion || current.level !== this.lastGroundItemLevel) {
         this.lastGroundItemRegion = groundItemRegion;
         this.lastGroundItemLevel = current.level;
@@ -373,20 +378,23 @@ export class PlayerSession {
       this.musicTick = tick;
       const tracks: readonly number[] = Number.isInteger(areaTrack) && areaTrack >= 0 && areaTrack < 0xffff
         ? [areaTrack as number]
-        : musicRegion < 0 ? NO_TRACKS : Music.tracksForRegion(musicRegion);
+        : musicArea;
       const selectionChanged = !sameTracks(tracks, this.lastResolvedMusicTracks);
-      if (musicRegion !== this.lastMusicRegion || musicMode !== this.lastMusicMode || selectionChanged) {
-        const regionChanged = musicRegion !== this.lastMusicRegion;
+      if (musicArea !== this.lastMusicArea || musicMode !== this.lastMusicMode || selectionChanged) {
+        const areaChanged = musicArea !== this.lastMusicArea;
         const previousMusicMode = this.lastMusicMode;
-        this.lastMusicRegion = musicRegion;
+        this.lastMusicArea = musicArea;
         this.lastMusicMode = musicMode;
         this.lastResolvedMusicTracks = tracks;
         // A track that also belongs to the new area plays on; otherwise one of the area's starts.
         const keep = musicMode === 0 && previousMusicMode === 0 && tracks.includes(this.lastMusicTrack);
         const track = keep ? this.lastMusicTrack
-          : musicMode === 0 ? Music.pickAreaTrack(tracks, this.musicEndedTrack) : tracks[0];
-        if ((regionChanged || selectionChanged) && track !== undefined) {
-          PluginManager.emitCustomEvent("music:unlock-track", { player, trackId: track });
+          : Music.pickAreaTrack(tracks, musicMode === 0 ? this.musicEndedTrack : -1);
+        // Entering an area unlocks all its tracks, in every music mode: the picked one first, then the rest.
+        if ((areaChanged || selectionChanged) && track !== undefined) {
+          for (const trackId of [track, ...tracks.filter((other) => other !== track)]) {
+            PluginManager.emitCustomEvent("music:unlock-track", { player, trackId });
+          }
         }
         if (musicMode !== 0 || track === undefined) {
           this.musicTrackEndsAt = -1;

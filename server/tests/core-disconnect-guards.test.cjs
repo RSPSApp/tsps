@@ -875,7 +875,7 @@ test('changing floors in one map region refreshes ground items, including Drayno
   const channel = { isOpen: true };
   const session = new PlayerSession(channel);
   session.sendRebuildNormal = () => false; // Stop after the actual region/plane bookkeeping.
-  session.lastMusicRegion = ((3109 >> 6) << 8) | (3357 >> 6);
+  session.lastMusicArea = require('../dist/game/Music').Music.tracksAt(3109, 3357, 0);
   session.lastMusicMode = 1;
   const player = {
     getUsername: () => 'fish537',

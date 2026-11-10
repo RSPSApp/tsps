@@ -128,7 +128,7 @@ function stopBoat(player) {
 function areaSong(player) {
   const { BoatManager, Music } = common.core();
   const at = BoatManager.rootLocation(player);
-  const track = Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+  const track = Music.areaTrackAt(at.getX(), at.getY(), at.getZ());
   if (track !== undefined) sender(player).sendSong(track);
 }
 

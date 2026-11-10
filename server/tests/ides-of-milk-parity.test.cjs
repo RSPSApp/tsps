@@ -525,7 +525,7 @@ function nativeFight(stage = 22) {
   Object.assign(session, {
     hasReplayedScene: true, replayedSceneBaseX: (at.getX() - 48) & ~7,
     replayedSceneBaseY: (at.getY() - 48) & ~7, replayedSceneLevel: 0,
-    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicRegion: region, lastMusicMode: 1,
+    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicArea: require('../dist/game/Music').Music.tracksAt(at.getX(), at.getY(), 0), lastMusicMode: 1,
   });
   const packets = []; let tick = 0;
   session.sendClientPacket = packet => { packets.push(packet); return true; };

@@ -212,3 +212,30 @@ test("in a multi-target attack the HUD follows the player's own target", () => {
   first.hit(10);
   assert.deepEqual(player.log, [], 'the old NPC no longer updates it');
 });
+
+test('a cancelled fade count starts again on the next attack', () => {
+  const player = attacker();
+  const man = npc(2613, 60);
+  player.target(man);
+  swing(player, man);
+  TaskManager.cancelTasks(player);
+  for (const task of [...TaskManager.activeTasks ?? [], ...(TaskManager.pendingTasks?.toArray?.() ?? [])]) task.stop();
+  ticks(3);
+  swing(player, man);
+  player.log.length = 0;
+  ticks(8);
+  assert.deepEqual(player.log, [['script', 2889, 0]]);
+});
+
+test('an NPC that changes form mid-fight shows its new id on the next hit', () => {
+  const player = attacker();
+  let id = 2613;
+  const man = npc(2613, 60);
+  man.getId = () => id;
+  player.target(man);
+  swing(player, man);
+  player.log.length = 0;
+  id = 2614;
+  man.hit(3);
+  assert.deepEqual(player.log, [['varp', 1683, 2614], ['varbit', 6099, 57]]);
+});

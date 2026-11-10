@@ -83,7 +83,7 @@ const watchers = new WeakMap();
 function stateOf(player) {
   let state = shown.get(player);
   if (!state) {
-    state = { npcId: -1, current: -1, maximum: -1, colours: null, generation: 0, mode: null, npc: null, idleTicks: 0 };
+    state = { npcId: -1, current: -1, maximum: -1, colours: null, generation: 0, mode: null, npc: null, idleTicks: 0, hiding: false, idleTask: null };
     shown.set(player, state);
   }
   return state;
@@ -224,6 +224,7 @@ function onHitRolled({ attacker, target }) {
   if (state.mode === "boss") return;
   if (state.mode === "standard" && state.npc === target && !state.hiding) {
     state.idleTicks = 0;
+    if (!state.idleTask?.isRunning()) startIdleTask(player, state, state.generation);
     return;
   }
   if (bossNpcIds.has(target.getId()) || !standardEnabled(player)) return;
@@ -247,40 +248,41 @@ function showStandard(player, state, npc) {
   state.colours = COLOURS;
   sender.sendInterfaceScript(OPEN_SCRIPT, OPEN_COMPONENTS);
   sender.sendInterfaceScript(FADE_IN_SCRIPT, [...FADE_COMPONENTS, SHOW_FADE_FROM]);
-  if (!state.idleTask) startIdleTask(player, state);
+  startIdleTask(player, state, state.generation);
 }
 
-/** Counts the ticks since the player's last attack and fades the standard HUD out after 8. */
-function startIdleTask(player, state) {
+/**
+ * Counts the ticks since the player's last attack and fades the standard HUD out after 8. The task
+ * has its own key: other systems cancel every task keyed on the player.
+ */
+function startIdleTask(player, state, generation) {
   const { Task, TaskManager } = core;
-  state.idleTask = true;
-  TaskManager.submit(new (class extends Task {
+  state.idleTask = new (class extends Task {
     constructor() {
-      super(1, player, false);
+      super(1, {}, false);
     }
     execute() {
-      const live = player.isRegistered?.() !== false;
-      if (!live || state.mode !== "standard" || state.hiding) {
-        state.idleTask = false;
+      if (state.generation !== generation || player.isRegistered?.() === false) {
         this.stop();
         return;
       }
       if (++state.idleTicks < STANDARD_FADE_AFTER_TICKS) return;
-      state.idleTask = false;
       this.stop();
       hideHud({ player });
     }
-  })());
+  })();
+  TaskManager.submit(state.idleTask);
 }
 
 /** A hit on an NPC updates the hitpoints of every standard HUD showing it. */
 function onDamageApplied({ target }) {
   const set = target && watchers.get(target);
   if (!set) return;
+  const npcId = target.getId();
   const current = target.getHitpoints();
   for (const player of set) {
     const state = stateOf(player);
-    if (state.mode === "standard" && state.npc === target) sendValues(player, state, { current }, false);
+    if (state.mode === "standard" && state.npc === target) sendValues(player, state, { npcId, current }, false);
   }
 }
 

@@ -76,6 +76,13 @@ Hotspot locs are shared between some rooms (the hall and dungeon stair spaces), 
 resolved to a hotspot through its room (`Data.hotspotIn`). Building on a hotspot furnishes every
 placement of it in the room (all tiles of a rug, every window's curtains); Remove takes them all.
 
+Some furniture draws nothing on part of its hotspot. A hall's rug and stair spaces are one hotspot
+(the cache's `poh_hotspot` row `stair_hotspot`; the Wiki's Oak staircase and Opulent rug pages
+list both under "Rug space, stair space"), so a staircase takes the rug tiles and a hall rug takes
+the stair tile. Tool stores, combat rings and oubliette floors do the same. In building mode such
+a placement's Build ghost is removed with the rest of the scene's built furniture: the space is
+taken, and the server offers no build there (issue #4189).
+
 ## Furniture with behaviour
 
 ### Chat input

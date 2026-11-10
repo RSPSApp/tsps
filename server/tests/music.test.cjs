@@ -909,3 +909,37 @@ test('another song takes over from the area track, and the area track sent again
   player.setLocation(new Location(1240, 10150, 0));
   assert.deepEqual(await songs(800 + 555), [FUL], 'an area change in the gap still skips the track that ended');
 });
+
+test('a region whose list holds other areas plays and unlocks only its first track', async t => {
+  await setup();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  MusicPlugin.register(PluginManager.createApi('MusicFirstTrack'));
+  const TITLE_FIGHT = 525, VICTORY_IS_MINE = 528;
+  const listed = require('../data/definitions/music-data.json').regions[12696];
+  assert.deepEqual(listed, [TITLE_FIGHT, VICTORY_IS_MINE], 'the region lists a second, event track');
+  assert.deepEqual(core.Music.tracksForRegion(12696), [TITLE_FIGHT]);
+  assert.deepEqual(core.Music.tracksForRegion(11319).map(id => trackNames[id]), ['Kingdom'], "Burthorpe, not the Warriors' Guild");
+  const session = new PlayerSession({ isOpen: () => true, send: () => true });
+  const player = new Player(session);
+  session.setPlayer(player);
+  player.setUsername('musicfirsttrack');
+  assert.equal(core.World.getPlayers().add(player), true);
+  t.after(() => core.World.getPlayers().remove(player));
+  player.setLocation(new Location(3168, 9760, 0));
+  player.setNeedsPlacement(false);
+  t.mock.method(Math, 'random', () => 0.99);
+  const songs = async tick => {
+    session.flush(tick);
+    const frames = [...session.pendingPackets];
+    await Promise.resolve();
+    return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
+  };
+  assert.deepEqual(await songs(10), [TITLE_FIGHT]);
+  const length = core.Music.lengthTicks(TITLE_FIGHT);
+  assert.deepEqual(await songs(10 + length + 1), [147]);
+  assert.deepEqual(await songs(10 + length + 3), [TITLE_FIGHT], 'a one-track area plays its track again');
+  assert.equal(Progress.isUnlocked(player, TITLE_FIGHT), true);
+  assert.equal(Progress.isUnlocked(player, VICTORY_IS_MINE), false, 'the event track needs its event');
+});

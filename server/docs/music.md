@@ -23,9 +23,13 @@ areas keep their own track instead of the surrounding one.
 
 ## Area shuffle
 
-A region's entry in `music-data.json` lists every track of its music area. In Area mode the
-session starts a random one on entering the area, and keeps the playing track when the player
-moves on to another region that lists it too. A track plays for its cache length (DB table 44,
+`data/definitions/music-shuffle-areas.json` lists the music areas that shuffle, each with its
+regions and tracks, from the Wiki's music maps. Any other region plays only the first track of its
+`music-data.json` list: those lists also hold other areas and events that share the 64x64 region
+(Burthorpe and the Warriors' Guild, Title Fight and its win track Victory is Mine), so the later
+entries neither play nor unlock from the region. In Area mode the session starts a random track of
+the area on entering it, and keeps the playing track when the player moves on to another region
+that plays it too. A track plays for its cache length (DB table 44,
 column 3, in ticks) plus one tick. Then the server sends track 147 (silence) with fade-out speed 20
 and sets the current-track varp 3883 to -1; two ticks later it starts another of the area's
 tracks, picked at random but never the one that just ended, with zero fades. An area with one
@@ -40,9 +44,9 @@ about equally, and the server uses + 1. In the 33 multi-track areas seen, none o
 repeated the track that had just ended (e.g. 237/04001, Yanille's Big Chords and Magic Dance
 alternating).
 
-The Karuulm Slayer Dungeon (regions 5022-5024 and 5278-5280) follows the Wiki's music map: Way of
-the Wyrm, Ful to the Brim and Kanon of Kahlith. Most other regions still list the single track of
-the pre-2021 map. `tests/fixtures/music-unbound-area-tracks.json` lists the cache tracks whose hint
+The Karuulm Slayer Dungeon (regions 5022-5024 and 5278-5280) is the first shuffle area, from the
+Wiki's music map: Way of the Wyrm, Ful to the Brim and Kanon of Kahlith. The other regions still
+play the single track of the pre-2021 map. `tests/fixtures/music-unbound-area-tracks.json` lists the cache tracks whose hint
 names a place but that no region plays; `tests/music.test.cjs` fails when that list changes.
 
 Quest tracks are the live floor: live unlocks each the first time it plays, somewhere inside the

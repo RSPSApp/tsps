@@ -32,12 +32,32 @@ const MUSIC_DATA: MusicData = (() => {
 
 const NO_TRACKS: readonly number[] = [];
 
+/**
+ * Music areas that shuffle between several tracks, from the Wiki's music maps. A region outside
+ * them plays only the first track of its `music-data.json` list: those lists also hold other
+ * areas and events that share the 64x64 region.
+ */
+const SHUFFLE_TRACKS_BY_REGION: ReadonlyMap<number, readonly number[]> = (() => {
+    const byRegion = new Map<number, readonly number[]>();
+    try {
+        const data = JSON.parse(fs.readFileSync(path.resolve("data/definitions/music-shuffle-areas.json"), "utf8"));
+        for (const { regions, tracks } of data.areas ?? []) {
+            const list = Object.freeze([...tracks]);
+            for (const region of regions) byRegion.set(region, list);
+        }
+    } catch (error) {
+        console.warn("[music] failed to load music shuffle areas", error);
+    }
+    return byRegion;
+})();
+
 export class Music {
     /** The silent track. */
     public static readonly SILENCE_TRACK = 147;
     /** Native varp holding the playing track's DB row, -1 between tracks. */
     public static readonly CURRENT_TRACK_VARP = 3883;
     private static tracksCache?: CachedTrack[];
+    private static firstTrackLists = new Map<number, readonly number[]>();
     private static lengthsById?: Map<number, number>;
 
     private static cachedTracks(): CachedTrack[] {
@@ -86,9 +106,15 @@ export class Music {
         return MUSIC_DATA.regions[regionId]?.[0];
     }
 
-    /** Every track that plays in the region's music area; the area shuffles between them. */
+    /** The tracks the region's music area plays: a shuffle area's list, else the region's first track. */
     public static tracksForRegion(regionId: number): readonly number[] {
-        return MUSIC_DATA.regions[regionId] ?? NO_TRACKS;
+        const shuffle = SHUFFLE_TRACKS_BY_REGION.get(regionId);
+        if (shuffle) return shuffle;
+        const first = MUSIC_DATA.regions[regionId]?.[0];
+        if (first === undefined) return NO_TRACKS;
+        let list = this.firstTrackLists.get(regionId);
+        if (!list) this.firstTrackLists.set(regionId, list = Object.freeze([first]));
+        return list;
     }
 
     /** How many ticks the track plays for, or undefined when the cache has no length. */

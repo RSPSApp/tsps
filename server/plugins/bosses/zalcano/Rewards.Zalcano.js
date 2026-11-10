@@ -14,6 +14,7 @@
  * (npc-drops:place), the pet through Pets (npc-drops:roll).
  */
 const Common = require("./Common.Zalcano");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 function points({ shield, health }) {
   return {
@@ -139,7 +140,7 @@ function countKill(player) {
   const kills = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, kills);
   player.getPacketSender().sendConfig?.(Common.ids.varps.kills, kills);
-  player.sendMessage(Common.message("killCount", { kills }));
+  sendBossKillCount(player, Common.message("killCount", { kills }));
 }
 
 /** On login, the kill count's varp (the collection log and hiscores read it). */

@@ -248,6 +248,37 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Buttons.** No capture; each sets every row of its group on or off, with no message.
 - **Not done:** the tablets' own Configure option (no capture).
 
+## Rows that switch existing behaviour
+
+Each of these rows is a plain toggle (`data/settings.json`). The plugin that owns the behaviour reads the varbit when it acts, so a change applies from the next time. A row whose cache struct has param 1084 is ticked while its varbit is 0. New accounts start with every one at 0, as live sends none of them at login (161 aside, which is on). Tests: `tests/settings-gates.test.cjs`, plus the area suites named below.
+
+| Setting | Id | Varbit | With the varbit at 1 |
+| --- | --- | --- | --- |
+| Warning on digging up a farming patch | 446 | 17797 `settings_farming_dig_disable_warning` | Dig-up clears the patch without "Are you sure you want to dig up this patch?" |
+| Show warning on taking a canoe to the Wilderness | 256 | 13988 `wildy_canoe_warning` | The waka goes into the Wilderness without the one-way-trip question |
+| Bank Deposit Box item quantity check | 424 | 15958 `bank_depositbox_oplocu_askquantity` | An item used on a deposit box deposits all of it, without "How many would you like to deposit?" (a full bank keeps them, as Bank.deposit does) |
+| Disable Phantom Muspah messages | 302 | 14711 `settings_muspah_messages` | No darkness, prayer shield or corruption lines in the fight (`Common.PhantomMuspah.fightMessage`) |
+| Iron loot restriction messages | 183 | 13040 `iron_noloot_message_disabled` | No "you might not receive kill-credit" or shared-kill loot line for an Ironman |
+| Filter out boss kill-count with spam-filter | 41 | 4930 `boss_killcount_filtered` | Boss kill-count lines go to the spam channel, which the chatbox's Game filter hides (ours: no capture shows the setting on). Every boss sends them through `interface/BossKillCount.plugin.js`; a test fails on one sent any other way |
+| Combat Achievement Tasks - Failure | 161 | 12454 `ca_failure_notifications_enabled` | (on by default) "You have failed <task>: <reason>" for tasks not yet done; at 0, no failure lines. Content reports failures with `combat-achievements:failed` { player, task, reason } |
+| Combat Achievement Tasks - Repeat failure | 162 | 12457 `ca_refailure_notifications_enabled` | Failure lines for tasks already done too, while 161 is on |
+| Charting popups | 456 | 18142 `settings_sailing_charting_popup` | Charting is told in chat only, with no "Charting Complete!" popup |
+| Make-X barbarian potions | 373 | 5983 `settings_barbarian_potion_makex` | A barbarian mix offers the Make-X menu; at 0 (default) it is made one at a time |
+| Deep Wilderness lever default option | 296 | 14674 `wilderness_lever_first_op` | Landing in the Deserted Keep with the easy Wilderness Diary sets `wildoutlever_vis` to 2: Edgeville first (rsprox 4155) |
+| Current duck hint arrow | 458 | 18133 `sailing_current_duck_hintarrow_disabled` | No hint arrow (or `current_hint_arrow`) over a released current duck |
+| Barracuda trials hint arrow | 459 | 18134 `sailing_barracuda_trials_hintarrow_disabled` | No hint arrow over the trial's rum or toad boat. The intro tour's arrows stay |
+| Combat task interface remembers last interface opened | 452 | 17939 `settings_ca_open_last_interface_disabled` | The account summary's row opens the overview instead of the screen used last |
+
+**Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
+
+Not done yet:
+
+- **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
+- **Level-up chatbox list** (493): no capture shows what it writes.
+- **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
+- **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+- **Alchemy on untradeables warning** (65): its own change with the alchemy value warning.
+
 ## Containers on death
 
 Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).

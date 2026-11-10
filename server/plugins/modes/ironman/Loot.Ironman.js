@@ -11,10 +11,13 @@
  *   player instead, so only non-Iron players get it once it goes public (Wiki). The same answer,
  *   `player-death:loot-owner`, covers what other plugins drop for the killer (repair coins, ether, fees).
  * - No combat experience from fighting players (Wiki).
+ * The two kill messages are the loot restriction messages All Settings can turn off (varbit 13040).
  */
 const Common = require("./Common.Ironman");
 
 const WARNED_ATTRIBUTE = "ironman:kill-credit-warned";
+/** iron_noloot_message_disabled: All Settings "Iron loot restriction messages" off. */
+const LOOT_MESSAGES_DISABLED_VARBIT = 13040;
 const COMBAT_SKILLS = new Set(["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS"]);
 
 function pickup(event) {
@@ -47,7 +50,12 @@ function rolledDrops(event) {
   const kept = drops.filter((drop) => request.keep.includes(drop.itemId));
   if (kept.length === drops.length) return;
   drops.splice(0, drops.length, ...kept);
-  player.sendMessage(Common.message("sharedKill"));
+  restrictionMessage(player, "sharedKill");
+}
+
+function restrictionMessage(player, key) {
+  if (player.getPacketSender?.()?.getVarbit?.(LOOT_MESSAGES_DISABLED_VARBIT) === 1) return;
+  player.sendMessage(Common.message(key));
 }
 
 function attacking(event) {
@@ -57,7 +65,7 @@ function attacking(event) {
   if (!others.some((other) => other !== attacker)) return;
   if (attacker.getAttribute(WARNED_ATTRIBUTE) === target) return;
   attacker.setAttribute(WARNED_ATTRIBUTE, target);
-  attacker.sendMessage(Common.message("killCredit"));
+  restrictionMessage(attacker, "killCredit");
 }
 
 function playerLoot(event) {

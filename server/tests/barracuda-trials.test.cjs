@@ -789,3 +789,19 @@ test("Collect-rum clicked on the rum boat's deck goes through the object listene
     leave(player);
   }
 });
+
+test("All Settings' Barracuda trials hint arrow off: the trial's boat gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_barracuda_trials_hintarrow_disabled"), off);
+      run.start(player, TEMPOR(), 1);
+      tick();
+      assert.equal(player.sent.some(([key]) => key === "sendWorldEntityHint"), off === 0);
+      assert.equal(player.varbits.get(varbit("current_hint_arrow")) ?? 0, off ? 0 : 6);
+    } finally {
+      leave(player);
+    }
+  }
+});

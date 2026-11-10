@@ -6,6 +6,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const data = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "godwars.json"), "utf8"));
 
@@ -108,7 +109,7 @@ function addGeneralKill(player, faction, npcName) {
   const kills = (Number(player.getAttribute(killsAttribute(faction.key))) || 0) + 1;
   player.setAttribute(killsAttribute(faction.key), kills);
   player.getPacketSender().sendConfig(faction.killsVarp, kills);
-  player.sendMessage(`Your ${npcName} kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your ${npcName} kill count is: <col=ff0000>${kills}</col>.`);
 }
 
 function syncKills(player) {

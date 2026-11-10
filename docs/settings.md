@@ -22,9 +22,10 @@ The client only reports the click. The server sets the variable and sends it bac
 | --- | --- | --- |
 | Hide roofs | 7 | varbit 12378 `option_hide_rooftops` |
 | Hitsplat tinting | 5 | varbit 10236 `hitsplat_tint_disabled` |
-| Max hit hitsplats | 279 | varbit 14196 `hitsplat_maxhit_disabled` |
+| Max hit hitsplats | 279 | varbit 14196 `hitsplat_maxhit_disabled`; the client swaps hitsplat types 43-47 for the ordinary ones by it |
 | Show boss health overlay | 10 | varbit 12389 `hpbar_hud_boss_disabled` |
 | Show enemy name on health overlay | 299 | varbit 14706 `hpbar_hud_boss_name_disabled` |
+| Max hit hitsplats threshold (number) | 280 | varbit 14195 `settings_hitsplat_threshold` (9 bits), set by `MaxHitThreshold.plugin.js` from an enter-amount prompt; PlayerSession sends type 43 (red) or 46 (yellow) for a rolled max hit the player dealt that is at least the threshold |
 | Health overlay display type (dropdown) | 301 | varbit 14708 `hpbar_hud_boss_percentage_enabled` = option |
 | Compact boss health overlay | 300 | varbit 14707 `hpbar_hud_boss_compact_enabled` |
 | Last Man Standing fog colour (dropdown) | 81 | varbit 11865 `br_custom_fog_colour` = option |

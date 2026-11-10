@@ -88,6 +88,11 @@ export class PlayerSession {
    * decodes it with the same offset (client/rs/interaction/InteractionIndex.ts).
    */
   public static readonly PLAYER_INTERACTION_OFFSET = 0x10000;
+  /** HitsplatID DAMAGE_MAX_ME and its yellow twin: the client swaps them for the ordinary splat by varbit 14196. */
+  private static readonly DAMAGE_MAX_ME = 43;
+  private static readonly DAMAGE_MAX_ME_YELLOW = 46;
+  /** settings_hitsplat_threshold: max hits below it keep the ordinary splat. */
+  private static readonly MAX_HIT_THRESHOLD_VARBIT = 14195;
   private channel: SessionChannel;
   private pendingPackets: Buffer[] = [];
   private pendingPacketBytes = 0;
@@ -737,9 +742,23 @@ export class PlayerSession {
   private hitView(hit: any, onMe: boolean): { type: number; damage: number } {
     const own = onMe || (this.player != null && hit.getSource?.() === this.player);
     return {
-      type: hit.getSplatType?.(own) ?? this.hitsplatType(hit.getHitmask(), own),
+      type: hit.getSplatType?.(own) ?? this.maxHitsplatType(hit, onMe) ?? this.hitsplatType(hit.getHitmask(), own),
       damage: hit.getDamage(),
     };
+  }
+
+  /**
+   * The max hit variant of a hit this player dealt, when it met the "Max hit hitsplats threshold"
+   * setting. The client shows it or the ordinary splat by the "Max hit hitsplats" setting; only
+   * damage from a weapon or spell roll counts.
+   */
+  private maxHitsplatType(hit: any, onMe: boolean): number | null {
+    if (onMe || this.player == null || hit.getSource?.() !== this.player || hit.isMaxHit?.() !== true) return null;
+    if (hit.getDamage() < this.player.getPacketSender().getVarbit(PlayerSession.MAX_HIT_THRESHOLD_VARBIT)) return null;
+    const mask = hit.getHitmask();
+    if (mask === HitMask.RED) return PlayerSession.DAMAGE_MAX_ME;
+    if (mask === HitMask.YELLOW) return PlayerSession.DAMAGE_MAX_ME_YELLOW;
+    return null;
   }
 
   private hitsplatType(mask: HitMask, mine: boolean): number {

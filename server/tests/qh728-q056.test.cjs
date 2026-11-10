@@ -22,13 +22,16 @@ const PAGE = 'The Heart of Darkness';
 const STAGE_VARBIT = 11117;
 const START_HOOK = 'quest:the-heart-of-darkness:start';
 const transcripts = [];
-runtime.startTranscript = (_api, _player, npcId, page, variant) => {
+const resumedSteps = new Map();
+runtime.startTranscript = (api, _player, npcId, page, variant, transform) => {
+  if (transform) resumedSteps.set(variant, transform(runtime.loadTranscripts(api)[page].variants[variant]));
   transcripts.push({ npcId, page, variant });
   return true;
 };
 
 function setup() {
   transcripts.length = 0;
+  resumedSteps.clear();
   const attributes = new Map();
   const items = new Map();
   const messages = [];
@@ -298,4 +301,27 @@ test('the Tapoyauik temple entrance still answers after completion instead of si
   assert.equal(h.transcripts.at(-1)?.variant,
     'heart-of-the-ruins-attempting-to-re-enter-the-ruins',
     'post-quest re-entry plays the canonical player line');
+});
+
+test('the Windbreaker resumes Itzla’s briefing before it unlocks the shopkeeper', () => {
+  const h = setup();
+  const itzla = 13690;
+  const shopkeeper = 14021;
+  const briefing = 'visiting-the-windbreaker-bar-resting-in-the-bed';
+  const shopDialogue = 'talking-to-the-quetzacalli-gorge-shopkeeper';
+
+  for (const [interruptedStage, speakerField, firstLine] of [
+    [14, 'player', /^Itzla\? Is that you\? What are you doing here\?$/],
+    [16, 'text', /^We need to infiltrate/],
+  ]) {
+    h.setStage(interruptedStage);
+    assert.equal(h.variant(shopkeeper), null, 'the shopkeeper still needs the briefing');
+    assert.equal(h.npcOption('Prince Itzla Arkan', 'Talk-to', itzla), true);
+    assert.equal(h.transcripts.at(-1).variant, briefing);
+    assert.match(resumedSteps.get(briefing)[0][speakerField], firstLine);
+  }
+
+  h.line("Exactly! Return to me here once you've hopefully been successful and we can discuss the next steps.", itzla);
+  assert.equal(h.quest.getStage(h.player), 18);
+  assert.equal(h.variant(shopkeeper), shopDialogue);
 });

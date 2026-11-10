@@ -98,7 +98,6 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     AFTER_QUEEN_AGAIN: "meeting-with-queen-zyani-arkan-to-begin-planning-the-infiltration-talking-to-prince-itzla-arkan-after-meeting-with-queen-zyani-arkan-talking-to-itzla-again",
     BARTENDER: "visiting-the-windbreaker-bar-talking-to-the-bartender-at-quetzacalli-gorge",
     BED: "visiting-the-windbreaker-bar-resting-in-the-bed",
-    BED_AGAIN: "visiting-the-windbreaker-bar-resting-in-the-bed-talking-to-itzla-again-before-fully-going-through-the-initial-dialogue",
     PUB_ITZLA: "visiting-the-windbreaker-bar-resting-in-the-bed-talking-to-itzla-again",
     SHOP: "talking-to-the-quetzacalli-gorge-shopkeeper",
     SHOP_AGAIN: "talking-to-the-quetzacalli-gorge-shopkeeper-talking-to-him-again-after-getting-directions-to-the-twilight-temple",
@@ -147,6 +146,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     TO_GORGE: "One of the only people left that I can trust. They'll fill you in on the details of how you'll infiltrate the Emissaries. Good luck, [player name]. May the sun light your way.",
     BASEMENT: "We don't have a basement room... but I do have a nice big one here on the ground floor that's available. It's 30 coins for the night.",
     BASEMENT_AGAIN: "Like I said, we don't have a basement room. However, I do have a nice big one here on the ground floor that's available. It's 30 coins for the night.",
+    RECOGNIZE_ITZLA: "Itzla? Is that you? What are you doing here?",
     REASONS: "Okay, I'm still not sure if I like this plan, but I see your point. What's our next move?",
     TO_SHOP: "Exactly! Return to me here once you've hopefully been successful and we can discuss the next steps.",
     SHOP_AGREED: "Well... if you're sure, fetch your friend and then head east to the Twilight Temple. I will send word for them to expect you both.",
@@ -385,15 +385,27 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     const variant = selectVariant({ player: event.player, npcId, npc: event.npc });
     if (!variant) return false;
     event.handled = true;
-    play(event.player, npcId, variant, null, event.npc);
+    const resume = variant === V.BED ? resumeWindbreaker(stage(event.player)) : null;
+    play(event.player, npcId, variant, resume, event.npc);
     return true;
+  }
+
+  function resumeWindbreaker(current) {
+    return (steps) => {
+      const heardReasons = current === S.REASONS;
+      const checkpoint = heardReasons ? LINE.REASONS : LINE.RECOGNIZE_ITZLA;
+      const index = steps.findIndex((step) => step.player === checkpoint);
+      if (index < 0) return after(STEP.SLEEP)(steps);
+      return steps.slice(heardReasons ? index + 1 : index);
+    };
   }
 
   function selectItzlaVariant(player, npc) {
     const current = stage(player);
     const tower = units.tower.selectVariant({ npcId: NPC.ITZLA, player, npc });
     if (tower) return tower;
-    if (current < S.REASONS) return V.BED_AGAIN;
+    if (current < S.WOKE) return null;
+    if (current < S.TO_SHOP) return V.BED;
     if (current < S.ITZLA_LEFT) return current === S.SHOP_AGREED ? V.REPORT : V.PUB_ITZLA;
     if (current === S.ITZLA_LEFT) return V.TOWER;
     if (current === S.TOWER) return V.TOWER_AGAIN;

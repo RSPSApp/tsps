@@ -409,6 +409,10 @@ function openCompletedScroll(player, quest, questPoints) {
     packet.sendString(String(text ?? ""), uid);
   };
   packet.sendInterfaceRemoval();
+  // Live opens the scroll with toplevel_mainmodal_open [-1, -1] (Observatory Quest capture
+  // 20261110T110141-5ab63b4 tick 1644): the main modal's backdrop goes back to none, so one an
+  // earlier modal set (the telescope's black [0, 0], tick 1606) doesn't show around the scroll.
+  packet.sendInterfaceScript(2524, [-1, -1]);
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");

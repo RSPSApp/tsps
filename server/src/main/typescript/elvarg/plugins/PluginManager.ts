@@ -2565,6 +2565,7 @@ export class PluginManager {
       CombatSpecial: require(`${combat}/CombatSpecial`).CombatSpecial,
       CombatFactory: require(`${combat}/CombatFactory`).CombatFactory,
       BonusManager: require(`${model}/equipment/BonusManager`).BonusManager,
+      EquipmentRequirements: require(`${model}/equipment/EquipmentRequirements`).EquipmentRequirements,
       WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
       Barrows: require(`${combat}/Barrows`).Barrows,
       applyPrayerDrainModifiers: require(`${combat}/EquipmentEffects`).applyPrayerDrainModifiers,

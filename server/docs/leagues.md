@@ -146,7 +146,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `combat-special:regenerate` | core `RestoreSpecialAttackTask` | `{ player, amount }` a restore cycle (the cycle length is the lightbearer modifier's) |
 | `registerMeleeStrengthBonusModifier` | core `DamageFormulas.calculateMaxMeleeHit` | `(entity, strengthBonus) -> strengthBonus`: added to the worn melee strength bonus before the max-hit formula (Demonic Pacts' prayer-bonus and Strength-level pacts) |
 | `registerRestingLevelModifier` | core `SkillManager.getRestingLevel`, read by `Player.processStatRestoration` and Potions' boost decay | `(player, skill, level) -> level`: a permanent boost; restoration climbs to it, decay stops at it (Demonic Pacts' Defence pact) |
-| `skills:experience-gained` | core `SkillManager.addExperience`, after the gain | `{ player, skill, experience, multiplied }` |
+| `skills:experience-gained` | core `SkillManager.addExperience`, after the gain | `{ player, skill, experience, multiplied, rate }` |
 | `storage:gather`, `storage:room` (extended) | Mining, Woodcutting, Fishing | the existing `{ player, itemId, amount, stored }` now carries `skill` and the resource's `xp`, so a listener can bank or double what a skill gathered; `storage:room` carries `skill` too, so a relic answers room only for its own skill's resource (and for what its tool's mode turns it into) |
 | `mining:attempt`, `woodcutting:attempt`, `fishing:attempt` | the skill, after its success roll | `{ player, ..., success }`: a listener may turn a miss into a hit (Fishing then lands the best fish the player can) |
 | `mining:deplete-rock` | Mining | `{ player, object, rock, handled }`: handled keeps the rock standing |

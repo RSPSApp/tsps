@@ -382,7 +382,22 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
   - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
   - **Level-up chatbox list** (493): no capture shows what it writes.
   - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
-  - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Row locks and hit sounds
+
+**Locked rows.** A setting struct with param 1115 can be locked, and param 1116 is its locked text; the cache's settings scripts grey the row out while script 2520 says so. `Settings.refuseLockedSetting(player, settingId)` is the server's check: a click on a locked row, or a dropdown option chosen for one, sends the row's text, sends back the var the row keeps (the client may have flipped it itself) and changes nothing. Its `ROW_UNLOCKS` table says when each row unlocks; any other path that changes a row from the client should ask it first. Rows 380 and 381 keep their own checks in their plugins (see "Rows owned by other plugins").
+
+| Setting | Id | Unlocked by | Asked through |
+| --- | --- | --- | --- |
+| Deep Wilderness lever default option | 296 | Any tier of the Wilderness Diary | `diary:is-complete`. The diaries also send varbit 4470 `wilderness_diary_any_complete` (a bit per tier done, easy first; live logins send 1, 3, 7 and 15), which script 2520 reads for this row |
+| Disable Phantom Muspah messages | 302 | Secrets of the North | `quest:is-complete`. Ours: script 2520 has no case for this row, so the client never greys it out; the row's locked text names the quest |
+| Make-X barbarian potions | 373 | Barbarian Training's Herblore section | `herblore:unlocked` "barbarian_herblore" (script 2520: varbit 3761 `brut_herb_potion` at 3) |
+
+**Hit sounds** (382, a dropdown: Type A / Type B, varbit 10731 `settings_hit_sounds`). `combat/PlayerHitSounds.plugin.js` owns the row through `settings:option-chosen` and saves the choice (`hit-sounds:type`). Type A is the body0 hurt voices (518-521), Type B the body1 ones (509, 510); most captures are body type A characters on Type A. Ours: until the player chooses, the voice follows the body type as before, and a body type B player's login sends Type B so the row shows it. Tests: `tests/player-hit-sounds.test.cjs`, `tests/settings-row-locks.test.cjs`.
+
+**Pronouns.** The Ironman trade refusal and the Surprise Exam's praise follow the player's pronouns (he, she, they), not the body type: "<name> is an Ironman. They stand alone." (the Wiki gives the They form).
+
+- **Not done**: nothing known.
 
 ## Containers on death
 

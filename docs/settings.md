@@ -154,7 +154,7 @@ Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), whic
 
 - **Not done**:
   - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
-  - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
+  - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, the Staff of the dead special, the Sire stun, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
   - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
   - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
 
@@ -383,6 +383,29 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
   - **Level-up chatbox list** (493): no capture shows what it writes.
   - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
   - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Buff timers read from a var
+
+The buff bar's script (5923) draws most buffs from a var, in steps set by the buff's struct (param 1541, ticks per step). `BuffTimers.plugin.js` reads each effect's own state every tick and sends the var when it changes; the client starts them at 0 at login, so only running ones go out then. `tests/buff-timers-effects.test.cjs` checks each one.
+
+| Row | Effect | Var | Value |
+| --- | --- | --- | --- |
+| 130 | Charge | varp 272 `magearena_charge` | time left in steps of 2 ticks (350 for a cast, as recorded) |
+| 131 | God Wars altar | varbit 4099 `godwars_altar_delay` | cooldown left in steps of 100 ticks |
+| 137 | Prayer enhance (Chambers of Xeric) | varbits 12397 tier, 5419 rate, 5417 timer | tier 1-3 for (-), plain and (+); rate 6; timer in steps of 6 ticks, as recorded |
+| 138 | Overload (Chambers of Xeric) | varbits 5420 tier, 5418 timer | tier 1-3; timer in steps of 25 ticks, as recorded. The Nightmare Zone overload keeps 3955 |
+| 139 | Magic Imbue | varbit 5438 `magic_imbue_active` | time left in steps of 10 ticks |
+| 143 | Divine potions | varbits 8429-8433 (attack, strength, defence, ranged, magic), 13663-13665 (combat, bastion, battlemage) | ticks left (500 for a dose); a combined potion's while all its skills are locked, as recorded |
+| 152 | Lesser and greater corruption | varbit 12136 `arceuus_corruption`, 12288 cooldown | 1 or 2 while the corruption waits for its hit; the cooldown 1 while it lasts |
+| 154, 156, 157 | Shadow Veil, Ward of Arceuus and Resurrection cooldowns; a thrall | varbits 12291, 12293, 12290; 12413 `arceuus_resurrection_active` | 1 while each cooldown lasts (17 ticks for a thrall, as recorded); 1 while a thrall is up |
+| 170 | Remaining ammo | varps 3158 `buff_bar_ammo_type`, 3159 amount, 3160 weapon | the ammo slot's item (-1 when empty) and count; the weapon -1, as recorded |
+| 213 | Cannon ammo | varp 3 `rockthrower`, with varp 2 at 4 and varbit 1968 `mcannon_world` | the bar shows it only while 1968 is the client's world modulo 128, so it is now 45 (world 301) |
+| 284 | Menaphite remedy | varbit 14448 `statrenewal_potion_timer` | time left in steps of 25 ticks |
+| 363 | Group Woodcutting Bonus | varp 4007, varbits 15347, 15348 | 96 while chopping a tree with the bonus (-1 when not), the players at it, and one less as the value shown (as recorded) |
+
+- **Not done**:
+  - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), the Staff of the dead special (142), the Sire stun (140), freeze (141), poison damage (186), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var: the bar keeps their start or end tick in client vars that only `buff_bar_start` (script 5931, a struct and a value) sets. No capture shows live running it for any of them (it does for burn damage, with 0, at login): a freeze sends only its message, and a thrall only its varbits. So they stay unsent.
+  - Desert water (244): not checked. Its buff (struct 340) reads no var in script 5923, so what drives it is unknown.
 
 ## Containers on death
 

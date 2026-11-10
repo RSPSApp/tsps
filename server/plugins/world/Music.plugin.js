@@ -36,6 +36,8 @@ const PLAYLIST_STOP_FADES = { fadeOutDelay: 0, fadeOutSpeed: 50, fadeInDelay: 0,
 const MODE_NAMES = ["area", "shuffle", "single"];
 /** All Settings' "Music mode" dropdown (setting id, cache struct param 1077). */
 const MUSIC_MODE_SETTING = 477;
+// All Settings' "Music playlist" (enum 2772: All music, playlists 1-3), as the tab's dropdown.
+const MUSIC_PLAYLIST_SETTING = 478;
 /**
  * All Settings' music dropdowns the server applies, by setting id: the varbit of varp 19 each sets
  * to the option's index (shift, bits). Music area type (Modern, Classic), the mode for a track
@@ -511,6 +513,11 @@ function chooseMusicSettingOption(request) {
   const { player, settingId, option } = request;
   if (settingId === MUSIC_MODE_SETTING) {
     chooseMusicMode({ player, buttonId: [...MODE_BUTTONS.keys()][option] });
+    request.handled = true;
+    return;
+  }
+  if (settingId === MUSIC_PLAYLIST_SETTING) {
+    choosePlaylist({ player, slot: option * 2 + 1 });
     request.handled = true;
     return;
   }

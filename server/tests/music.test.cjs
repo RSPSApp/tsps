@@ -1407,6 +1407,30 @@ test('All Settings music dropdowns: area type, manual selection mode, track list
   assert.equal(choose(999, 0), false, "another plugin's setting is left alone");
 });
 
+test('All Settings music playlist: chooses the playlist as the music tab dropdown does', async t => {
+  const { core, session, player, messages } = await musicSession(t, 'musicsettingsplaylist', new Location(3222, 3218, 0));
+  const Playlists = require('../plugins/world/Playlists.Music');
+  const alKharid = listTrack(core, 'Al Kharid');
+  Progress.unlock(player, alKharid.track.id);
+  player.setAttribute(Playlists.PLAYLISTS_ATTRIBUTE, [[Playlists.valueOf(alKharid.track)]]);
+  const choose = option => {
+    const request = { player, settingId: 478, option, handled: false };
+    MusicPlugin._test.chooseMusicSettingOption(request);
+    return request.handled;
+  };
+  messages.length = 0;
+  assert.equal(choose(1), true);
+  assert.equal(player.getPacketSender().getVarbit(19731), 1, 'Playlist 1');
+  assert.equal(player.getAudioSettings()[18], 1, 'Area mode becomes Shuffle');
+  assert.deepEqual(messages, ['You are now using the shuffle music mode.']);
+  assert.equal(session.getCurrentMusicTrack(), alKharid.track.id);
+  assert.equal(choose(2), true);
+  assert.equal(player.getPacketSender().getVarbit(19731), 2);
+  assert.equal(session.getCurrentMusicTrack(), -1, 'an empty playlist stops the music');
+  assert.equal(choose(0), true);
+  assert.equal(player.getPacketSender().getVarbit(19731), 0, 'All music');
+});
+
 test('Shuffle takes the music back from another song on the next area change, as Area mode does', async t => {
   const { core, session, player, songs } = await musicSession(t, 'musicshuffleboss', new Location(3222, 3218, 0));
   t.mock.method(Math, 'random', () => 0);

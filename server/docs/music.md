@@ -113,7 +113,7 @@ cape flags 4670-4672 and 8371, the farming tab 4776, the Trawler camera 4814, a 
 | 12233 `music_area_mode` | "Music area type": Modern, Classic | Above. |
 | 19734 `use_previous_music_mode_on_login` | "Default to area music mode on login", on when 0 | Login resets Shuffle or Single to Area unless the player turned it off. |
 | 19737 `use_shuffle_mode_on_manual_music_selection` | "Music mode to use when manually selecting music tracks": Single, Shuffle | A track picked from the list in Area mode switches to that mode; Shuffle and Single stay. |
-| 19731 `music_current_playlist` | The playlist in use, 0 All music | Below. |
+| 19731 `music_current_playlist` | The playlist in use, 0 All music; the tab's dropdown or All Settings' "Music playlist" | Below. |
 | 19736 `dont_update_music_on_playlist_change` | "Update music when changing playlists", on when 0 | Below. |
 | 19732, 19733 | Text shadow, which tracks the list shows | The client's own; saved only. |
 
@@ -121,6 +121,10 @@ The client's scripts write the checkboxes (and the playlist, bits 14-17) into va
 and transmit it; `Player.setAudioSetting` saves only the setting bits (`Music.SETTINGS_MASK`), and
 the Music plugin sends the varp back with the server's bits as last sent. All Settings' dropdowns
 reach the server instead (`settings:option-chosen`), and the Music plugin sets the varbit.
+
+All Settings' music player track colours (locked, unlocked, playing, unavailable: varps 5235,
+5236, 5401, 5237) open the colour picker as the quest list colours do, and hold the colour + 1
+(0 for the default). "Reset music player text colours" sets all four back to 0.
 
 ## Shuffle mode
 

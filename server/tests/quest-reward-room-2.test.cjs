@@ -198,7 +198,7 @@ async function reloadDigSite(t, original) {
     const restored = actor(t, DIG, 0);
     restored.p.setUsername(username);
     saved.applyToPlayer(restored.p);
-    assert.equal(stageOf(restored, DIG), 1);
+    assert.equal(stageOf(restored, DIG), stageOf(original, DIG));
     return restored;
   } finally {
     JsonPlayerPersistence.SAVE_DIRECTORY = previousDirectory;
@@ -229,6 +229,14 @@ test("Dig Site: the first student signs after a reload following letter delivery
   await talk(t, restored, N.STUDENT);
   assert.equal(restored.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1);
   assert.equal(stageOf(restored, DIG), 2);
+});
+
+test("Dig Site: a legacy save after the first exam still points to the students", async (t) => {
+  const digSite = quest(DIG);
+  for (const stage of [2, 3]) {
+    const restored = await reloadDigSite(t, actor(t, DIG, stage));
+    assert.match(digSite.buildJournal(restored.p, digSite).join(" "), /three students/);
+  }
 });
 
 test("Dig Site: the student refuses a full bag and the exam waits; with room he signs", async (t) => {

@@ -142,7 +142,7 @@ module.exports = function registerDigSiteQuest(api) {
         "I should speak to <col=800000>Terry Balando</col> at the Exam Centre.",
       ];
     }
-    if (stage >= STAGE_STARTED && !delivered(player)) {
+    if (awaitingLetter(player)) {
       return stamped(player)
         ? ["The curator stamped my letter of recommendation.", "I should take it back to the <col=800000>Examiner</col>."]
         : ["The examiner gave me a letter of recommendation.", "I should get it stamped by the <col=800000>Curator</col> of Varrock's museum."];

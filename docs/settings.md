@@ -227,8 +227,26 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Not done**:
   - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
   - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
-  - The respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77) and the Sailing drop-item warning (465, default differs between captures).
-  - Rows already handled elsewhere: teleport spells 60-64; levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+  - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
+  - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+
+## Wilderness teleport warnings
+
+`server/plugins/combat/SpellTeleports.plugin.js` warns before a Wilderness teleport spell is cast or a Wilderness tablet is broken, while the spell's or tablet's row is on (cache check and every case in `tests/wilderness-teleport-warnings.test.cjs`).
+
+| Setting | Id | Variable | Warns while |
+| --- | --- | --- | --- |
+| Show warning when casting: Teleport to Target, Dareeyak, Carrallanger, Annakarl, Ghorrock Teleport | 60-64 | varbits 236 `bounty_teleport_warning`, 6284-6287 `*_teleport_warning` | 1 (default, sent at login) |
+| Show warning when using tablet: Ice Plateau, Cemetery, Wilderness Crabs, Dareeyak, Carrallanger, Annakarl, Ghorrock | 67-73 | varbits 2323, 2322, 3932, 3930, 2325, 2324, 3931 `teletab_*_warning` | 0 (default; the row's struct reads it inverted, param 1084) |
+| Enable / Disable Wilderness teleport warnings (buttons) | 77 / 76 | sets 60-64 | |
+| Enable / Disable tablet warnings (buttons) | 75 / 74 | sets 67-73 | |
+
+- **Defaults.** Live sends 1 for the four Ancient spells' varbits at login in 3,238 rsprox recordings (and `bounty_teleport_warning` in 2,966), and never changes the tablets' varbits, whose warning shows: both are on by default.
+- **One value.** The rows are in `data/settings.json`, so they are saved in `settings:values`. The spellbook's op10 ("Disable warning" / "Enable warning") sets the same row through `settings:set`. The `spell-teleports:wilderness-warnings` attribute that op10 used to save (off by default, and read by nothing) is cleared at login.
+- **Spells** (rsprox 3330, an event world, Annakarl Teleport): "Are you sure you wish to teleport to the Wilderness?", "Yes, teleport me now." / "No, I want to stay here."; Yes casts on that tick. The spell's level, rune and Wilderness checks run before the warning, and again on Yes, when the runes are taken. Ours: the same line for the other spells, Teleport to Target included (it asks after its own Bounty Hunter checks).
+- **Tablets** (rsprox 3931 Annakarl and Ghorrock, 1463 Dareeyak): "Teleport into the DEEP wilderness?" or "Teleport into the wilderness?", "Yes" / "No"; Yes breaks the tablet then, which is used up as it is absorbed. Ours: the deep line for Ice Plateau, Cemetery and Wilderness crabs (past level 30), the other for Carrallanger.
+- **Buttons.** No capture; each sets every row of its group on or off, with no message.
+- **Not done:** the tablets' own Configure option (no capture).
 
 ## Rows that switch existing behaviour
 

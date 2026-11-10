@@ -13,6 +13,9 @@ const WORN_OPTION_PARAM = 451;
 const AUTO_SMASH_POTS_SETTING = 381;
 const AUTO_SMASH_POTS_VARBIT = 9614; // brut_smash_pots_automatically
 const AUTO_SMASH_POTS_LOCKED = "You must complete the Farming portion of Barbarian Training to access this setting.";
+/** All Settings > Warnings: "Farming protection payment confirmation" (on: pay without asking). */
+const PROTECTION_SETTING = 295;
+const PROTECTION_NO_ASK_VARBIT = 98; // settings_warning_confirmation_farming_protection
 const COMPOST_NAMES = ["", "Compost", "Supercompost", "Ultracompost", "Rotten tomato"];
 const ROTTEN_TOMATO_TIER = 4;
 // Rev 241 gamevals human_push and human_pickuptable, with the sounds captured on the bin (recording 1858).
@@ -588,9 +591,16 @@ function askGardener(player, npc, p) {
         Patches.spam(player, `You pay the gardener ${paymentText(crop.payment)} to protect the patch.`);
         gardenerSays(player, npc, `That'll do nicely, ${player.getAppearance().isMale() ? "sir" : "madam"}. Leave it with me - I'll make sure that patch grows for you.`);
     };
-    if (farm.gardenerNoAsk) { accept(); return; }
-    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { farm.gardenerNoAsk = true; accept(); }]],
+    if (skipsProtectionConfirmation(player)) { accept(); return; }
+    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { setSkipProtectionConfirmation(player); accept(); }]],
         0, `Pay ${paymentText(crop.payment)}?`);
+}
+function skipsProtectionConfirmation(player) {
+    return player.getPacketSender().getVarbit(PROTECTION_NO_ASK_VARBIT) === 1;
+}
+/** The gardener's "don't ask again" turns the All Settings row on, which the Settings plugin saves. */
+function setSkipProtectionConfirmation(player) {
+    core.PluginManager.emitCustomEvent("settings:set", { player, settingId: PROTECTION_SETTING, value: 1 });
 }
 function setAutoSmashPots(player, training, on) {
     training.autoSmash = on;
@@ -604,11 +614,18 @@ function settingClicked(request) {
     if (training?.smashing !== 3) { player.sendMessage(AUTO_SMASH_POTS_LOCKED); return; }
     setAutoSmashPots(player, training, !training.autoSmash);
 }
-/** Login: the pot-smashing switch. */
+/**
+ * Login: the pot-smashing switch, and the gardener's old per-player "don't ask again" moved onto the
+ * protection confirmation setting once.
+ */
 function settingsLogin({ player }) {
     if (player.isPlayerBot?.() === true) return;
     const farm = Patches.farmFor(player);
     if (farm.barbarian?.autoSmash) player.getPacketSender().sendVarbit(AUTO_SMASH_POTS_VARBIT, 1);
+    if (farm.gardenerNoAsk !== undefined) {
+        if (farm.gardenerNoAsk) setSkipProtectionConfirmation(player);
+        delete farm.gardenerNoAsk;
+    }
 }
 function canPay(player, payment) {
     const inventory = player.getInventory();

@@ -453,7 +453,11 @@ export class World {
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
+                // A hidden NPC (setVisible(false): burrowed, vanished, swapped out for another) is out of
+                // the world for players, so it holds no tile: a woken Observatory guard has to walk back
+                // onto the post the hidden sleeping guard keeps.
                 if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc !== ignoredNpc && !npc.isPet() &&
+                    npc.isVisible() &&
                     (privateArea === undefined || npc.getPrivateArea() === privateArea))) {
                     return true;
                 }
@@ -475,6 +479,7 @@ export class World {
             for (let y = 0; y < Math.max(1, size); y++) {
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc.hasFlag(NPC.BLOCKS_PLAYERS_FLAG) &&
+                    npc.isVisible() &&
                     (privateArea === undefined || npc.getPrivateArea() === privateArea))) {
                     return true;
                 }

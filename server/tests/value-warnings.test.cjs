@@ -164,6 +164,18 @@ test('the prompt caps fit each row var', () => {
   }
 });
 
+test('the new rows are the cache type their handler expects and start at the live values', () => {
+  assert.equal(catalog.get(65), 0, '65 is a toggle');
+  assert.equal(catalog.get(249), 4, '249 is a number');
+  assert.equal(catalog.get(449), 4, '449 is a number');
+  for (const id of [39, 43]) assert.equal(catalog.get(id), 4);
+  const p = player();
+  restoreSettings({ player: p });
+  assert.equal(p.vars[6092], 1, 'untradeable alchemy warns, as 2,664 of 3,978 captured logins');
+  assert.equal(p.vars.p4850, 1000, 'birdhouse threshold');
+  assert.equal(p.vars[14176] ?? 0, 0);
+});
+
 // ------------------------------------------------------------------ drop warning
 
 function dropHarness(t) {
@@ -234,5 +246,64 @@ test('the item changing slot before the answer cancels the drop', (t) => {
   p.slots[0] = new Item(RUNE_PLATELEGS, 1);
   p.log.dialogues[0][1].execute(1);
   assert.deepEqual(landed, []);
+});
+
+// ------------------------------------------------------------------ alchemy
+
+/** A real item, with the alch values the item plugins load at startup. */
+function alchItem(id, amount = 1, tradeable = true) {
+  const item = new Item(id, amount);
+  const definition = item.getDefinition();
+  item.getDefinition = () => Object.assign(Object.create(definition), {
+    getHighAlchValue: () => 1000, getLowAlchValue: () => 600, isTradeable: () => tradeable });
+  return item;
+}
+
+function alchemyHarness(t) {
+  t.mock.method(World, 'getProcessCycle', () => 1000);
+  t.mock.method(TaskManager, 'submit', () => {});
+  t.mock.method(Sounds, 'sendSound', () => {});
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => {
+    if (name === 'magic:alchemy-warning') Warnings._test.alchemyWarning(payload);
+  });
+  return new MagicOnItemPacketListener();
+}
+
+test('Alchemy on an item worth at least the threshold asks "considered valuable" first, as live', (t) => {
+  const listener = alchemyHarness(t);
+  const each = price(RUNE_PLATELEGS);
+  for (const [threshold, warns] of [[each + 1, false], [each, true], [1, true]]) {
+    const p = player({ 6091: threshold, 6092: 1 }, [alchItem(RUNE_PLATELEGS)]);
+    listener.castOnItem(p, HIGH_ALCHEMY, RUNE_PLATELEGS, 0);
+    assert.equal(p.log.dialogues.length, warns ? 1 : 0, `threshold ${threshold}`);
+    assert.equal(p.amounts.get(COINS) > 0, !warns, 'cast at once only without the warning');
+  }
+  const p = player({ 6091: each, 6092: 1 }, [alchItem(RUNE_PLATELEGS)]);
+  listener.castOnItem(p, LOW_ALCHEMY, RUNE_PLATELEGS, 0);
+  const [statement, options] = p.log.dialogues[0];
+  assert.equal(statement.getText(), 'That item is considered <col=7f0000>valuable</col>.<br>Really cast Low Level Alchemy on it?');
+  assert.deepEqual(p.log.messages, ['That item is considered <col=7f0000>valuable</col>. Really cast Low Level Alchemy on it?']);
+  assert.deepEqual(options.getOptions(), ['Proceed to cast Low Level Alchemy on it.', 'Cancel the alchemy spell.']);
+  options.execute(1);
+  assert.ok(p.amounts.get(COINS) > 0, 'cast once accepted');
+});
+
+test('a noted item is worth its unnoted guide price for the Alchemy warning', (t) => {
+  const listener = alchemyHarness(t);
+  const p = player({ 6091: price(RUNE_PLATELEGS), 6092: 1 }, [alchItem(RUNE_PLATELEGS_NOTED, 2)]);
+  listener.castOnItem(p, HIGH_ALCHEMY, RUNE_PLATELEGS_NOTED, 0);
+  assert.equal(p.log.dialogues.length, 1);
+});
+
+test('untradeable items always warn with row 65 on (the default) and cast without asking with it off', (t) => {
+  const listener = alchemyHarness(t);
+  const id = untradeableId;
+  const on = player({ 6091: 20000, 6092: 1 }, [alchItem(id, 1, false)]);
+  listener.castOnItem(on, HIGH_ALCHEMY, id, 0);
+  assert.equal(on.log.dialogues.length, 1);
+  assert.match(on.log.dialogues[0][0].getText(), /^That item cannot be traded\.<br>/);
+  const off = player({ 6091: 20000, 6092: 0 }, [alchItem(id, 1, false)]);
+  listener.castOnItem(off, HIGH_ALCHEMY, id, 0);
+  assert.equal(off.log.dialogues.length, 0);
 });
 

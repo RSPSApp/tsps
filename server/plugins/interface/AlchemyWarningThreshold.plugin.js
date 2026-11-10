@@ -3,8 +3,7 @@
  * alchemy_warning_valuethreshold, varbit 6091). Clicking it asks "Set value threshold for alchemy
  * warnings:" (script 108; rsprox 338, 3275) and the number answered is saved through "settings:set"
  * and resent at login; a new account starts at 20000 (settings.json, rsprox: 703 of 703 default-state
- * logins). Only the setting is done: no client script reads the varbit and castAlchemy does not check
- * it yet, so changing it has no effect in game.
+ * logins). ValueWarnings.plugin.js compares an item's worth against it before an Alchemy cast.
  */
 const SETTING_ID = 66;
 const FLOATER_CHATBOX_VARBIT = 16075;

@@ -5,17 +5,22 @@
  * - Drop item warning (42, threshold 43): an item worth at least the threshold asks before it lands
  *   on the floor, as live does: "The item you are trying to put down is considered valuable...",
  *   then "<name>: Really put it down?" with "Put it down." / "No, don't put it down."
+ * - Alchemy (66 threshold, 65 untradeables): a valuable item asks "That item is considered
+ *   valuable." before the cast; with 65 off an untradeable item no longer asks.
  *
  * The number rows 39, 43, 249 and 449 ask for their value here (the Alchemy row 66 has its own
  * plugin). Ours: the prompts' wording, from the Alchemy row's "Set value threshold for alchemy
  * warnings:".
  *
  *   hear "item:drop-warning" { player, item, itemId, slot, warned, proceed }
+ *   hear "magic:alchemy-warning" { player, item, itemId, spellId, high, text }
  */
 const Value = require("./ValueWarning");
 
 const DROP_WARNING_ON = 5411;
 const DROP_WARNING_VALUE = 5412;
+const ALCHEMY_VALUE = 6091;
+const ALCHEMY_UNTRADEABLES = 6092;
 
 /** Number rows: the prompt and the largest value the row's var holds. */
 const PROMPTS = {
@@ -57,13 +62,25 @@ function dropWarning(request) {
   });
 }
 
+function alchemyWarning(request) {
+  const { player, itemId } = request;
+  if (!Value.tradeable(pluginApi.core, itemId)) {
+    if (varbit(player, ALCHEMY_UNTRADEABLES) === 0) request.text = null;
+    return;
+  }
+  if (Value.reaches(Value.itemValue(pluginApi.core, itemId), varbit(player, ALCHEMY_VALUE))) {
+    request.text = `That item is considered ${VALUABLE}.`;
+  }
+}
+
 module.exports = {
   name: "ValueWarnings",
-  description: "All Settings value warnings and their thresholds.",
+  description: "All Settings value warnings (drop, Alchemy) and their thresholds.",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("settings:setting-clicked", settingClicked);
     api.onCustomEvent("item:drop-warning", dropWarning);
+    api.onCustomEvent("magic:alchemy-warning", alchemyWarning);
   },
-  _test: { settingClicked, dropWarning, PROMPTS, setApi: (api) => { pluginApi = api; } },
+  _test: { settingClicked, dropWarning, alchemyWarning, PROMPTS, setApi: (api) => { pluginApi = api; } },
 };

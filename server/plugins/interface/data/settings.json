@@ -75,6 +75,7 @@
         { "varbits": { "12274": 2, "1627": 0 } }
       ]
     },
+    "65": { "name": "Casting Alchemy spells on untradeable items always triggers a warning", "varbit": 6092, "default": 1 },
     "66": { "name": "Minimum item value needed for Alchemy spells warning", "varbit": 6091, "default": 20000 },
     "159": { "name": "Combat Achievement Tasks - Completion popup", "varbit": 12455 },
     "161": { "name": "Combat Achievement Tasks - Failure", "varbit": 12454, "default": 1 },

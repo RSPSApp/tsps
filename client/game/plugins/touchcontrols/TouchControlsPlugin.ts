@@ -585,12 +585,10 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
         // On/Off beat detection and the ?touch= query override; Default keeps both.
         const padOn =
             this.padMode === PadMode.ON ? true : this.padMode === PadMode.OFF ? false : this.touchDevice;
-        // Portrait Mode centres banks and shops right above the minimap, where the stick sits. It
-        // can't move then anyway, so it steps aside instead of covering their buttons.
+        // While movement is blocked, let taps reach the interface under the stick.
         const portrait = isMobilePortraitLayoutActive();
-        const visible = this.isEnabled() && padOn && this.client.isLoggedIn() &&
-            (!portrait || this.canMove());
-        const action = visible && this.focus && this.canMove()
+        const visible = this.isEnabled() && padOn && this.canMove();
+        const action = visible && this.focus
             ? { kind: this.focus.kind, options: this.menuOrder(this.focus) } : undefined;
         const stonesInset = visible ? this.stonesInset() : 0;
         const hudInset = visible ? this.hudInset() : 0;

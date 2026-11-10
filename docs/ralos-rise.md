@@ -68,6 +68,11 @@ Estimated (ours):
 - Repeating the shards line when a sacrifice uses the last shards.
 - A Fill with no shards or Prayer points just leaves the bowl filled. No box appears 4 ticks later.
 
+Soul shards (Demonic Pacts League; Wiki: Soul shard) give 550 Prayer experience a 100 at the bowl, at 30 Prayer, with no wine. No recording shows them, so the rest is ours:
+- They are sacrificed by using them on the bowl, by Sacrifice when there are no blessed bone shards for the bowl's wine, and by Fill when there is no blessed jug.
+- Up to 100 an action at 5.5 experience each, at the blessed shards' pace, animation and sound. They cost no Prayer points or charges, and the Zealot's robes don't save them.
+- One kind of shard a loop: when that stack runs out, the loop stops with "You don't have any soul shards to sacrifice into the libation bowl." (or the blessed shards' line), and the next Sacrifice takes the other kind.
+
 The Prayer loops pause for a level-up pop-up, as the bone altars' loop does (docs/bone-altars.md). They are paced through `skills:action-interval`, kind `libation` (Prayer) and `blessed-bones` (Crafting).
 
 Virilis at the foot of the altar unnotes the bones for 10 coins each (docs/note-exchange.md).

@@ -10,6 +10,13 @@
  *   on their own roll, not the charges (Wiki). When the bowl runs dry a blessed jug carried
  *   refills it.
  * - Check: the charges left, in our own words (no recording or Wiki text).
+ * - Soul shards (Wiki: Soul shard; a Demonic Pacts League item): 550 Prayer experience a 100,
+ *   at 30 Prayer, with no wine. Ours (no recording): Sacrifice takes them when there are no
+ *   blessed bone shards to burn the wine on, and Fill does when there is no blessed jug, as does
+ *   using them on the bowl. Up to 100 an action at 5.5 experience each, at the blessed shards'
+ *   pace, animation and sound, with no Prayer points, charges or Zealot's robes. One kind of
+ *   shard an action loop: when its stack runs out the loop stops, and the next Sacrifice takes
+ *   the other.
  *
  * The bowl is a multiloc on the charge: empty (Fill) at 0, full (Sacrifice, Check) above. The
  * charge and kind are saved and sent again at login.
@@ -105,12 +112,8 @@ function sacrifice(player) {
   if (used > 0) inventory.deleteNumber(ids.shard, used);
   setBowl(player, left - count);
   const wine = ids.bowlWines.find((entry) => entry.type === wineType(player)) ?? ids.bowlWines[0];
-  player.getPacketSender().closeChatboxFor(FILL_BOX);
   player.getSkillManager().decreaseCurrentLevel(core.Skill.PRAYER, DATA.bowl.prayerPerAction, 0);
-  // Experience first: a level-up pop-up resets the animation, and this one still plays over it.
-  player.getSkillManager().addExperiences(core.Skill.PRAYER, count * wine.xpPerShard);
-  player.performAnimation(new core.Animation(ids.seq.sacrifice));
-  player.getPacketSender().sendSound(DATA.bowl.sacrifice.sound, 1, 0);
+  offered(player, count * wine.xpPerShard);
   return afterSacrifice(player);
 }
 
@@ -138,8 +141,45 @@ function stopSacrificing({ player }) {
   sessions.delete(player);
 }
 
+/** What every offering shows: the fill's box closes, the experience, the animation and sound. */
+function offered(player, experience) {
+  const core = Common.core();
+  player.getPacketSender().closeChatboxFor(FILL_BOX);
+  // Experience first: a level-up pop-up resets the animation, and this one still plays over it.
+  player.getSkillManager().addExperiences(core.Skill.PRAYER, experience);
+  player.performAnimation(new core.Animation(Common.resolved().seq.sacrifice));
+  player.getPacketSender().sendSound(DATA.bowl.sacrifice.sound, 1, 0);
+}
+
+/** One soul shard offering; false once they have run out (with its message box). */
+function sacrificeSoulShards(player) {
+  const core = Common.core();
+  const { soulShard } = Common.resolved();
+  const inventory = player.getInventory();
+  const held = inventory.getAmount(soulShard);
+  if (held <= 0) {
+    Common.messageBox(player, Common.text("noSoulShards"));
+    return false;
+  }
+  lastSacrifice.set(player, core.World.getProcessCycle());
+  const count = Math.min(DATA.bowl.shardsPerAction, held);
+  inventory.deleteNumber(soulShard, count);
+  offered(player, count * DATA.bowl.soulShards.xpPerShard);
+  if (inventory.getAmount(soulShard) > 0) return true;
+  Common.messageBox(player, Common.text("noSoulShards"));
+  return false;
+}
+
+/** What Sacrifice offers: the blessed bone shards while the bowl has wine for them, else the soul shards. */
+function offering(player) {
+  const { shard, soulShard } = Common.resolved();
+  const inventory = player.getInventory();
+  const blessed = charge(player) > 0 && inventory.getAmount(shard) > 0;
+  return !blessed && inventory.getAmount(soulShard) > 0 ? sacrificeSoulShards : sacrifice;
+}
+
 /** Sacrifices every few ticks from the next one, keyed to the player so a walk or click stops it. */
-function keepSacrificing(player) {
+function keepSacrificing(player, offer = sacrifice) {
   const core = Common.core();
   let tick = 0;
   const interval = actionInterval(Common.api(), player, core.Skill.PRAYER, "libation", DATA.bowl.intervalTicks);
@@ -149,7 +189,7 @@ function keepSacrificing(player) {
       if (!player.isRegistered() || player.getHitpoints() <= 0) return this.stop();
       if (this.levelUpPaused) return;
       if (++tick % interval !== 0) return;
-      if (!sacrifice(player)) stopSacrificing({ player });
+      if (!offer(player)) stopSacrificing({ player });
     }
   })();
   sessions.set(player, task);
@@ -167,20 +207,37 @@ function levelTooLow(player) {
 }
 
 /** Sacrifice: one offering now (unless one was made this tick), then the loop from here. */
-function sacrificeOption({ player }) {
-  if (levelTooLow(player)) return true;
+/** Starts `offer` now (at most once a tick) and every few ticks after. */
+function startSacrificing(player, offer) {
   const core = Common.core();
   stopSacrificing({ player });
   // Register the loop before the offering, so its first level-up can pause it too.
-  keepSacrificing(player);
-  if (lastSacrifice.get(player) === core.World.getProcessCycle()) return true;
-  if (!sacrifice(player)) stopSacrificing({ player });
+  keepSacrificing(player, offer);
+  if (lastSacrifice.get(player) === core.World.getProcessCycle()) return;
+  if (!offer(player)) stopSacrificing({ player });
+}
+
+function sacrificeOption({ player }) {
+  if (levelTooLow(player)) return true;
+  startSacrificing(player, offering(player));
   return true;
+}
+
+/** Soul shards used on the bowl, full or empty. */
+function useOnBowl(event) {
+  const { soulShard, bowlLocs } = Common.resolved();
+  if (event.handled || event.itemId !== soulShard || !bowlLocs.has(event.objectId)) return;
+  event.handled = true;
+  if (!levelTooLow(event.player)) startSacrificing(event.player, sacrificeSoulShards);
 }
 
 function fill({ player }) {
   if (levelTooLow(player)) return true;
   const jug = blessedJug(player);
+  if (!jug && player.getInventory().getAmount(Common.resolved().soulShard) > 0) {
+    startSacrificing(player, sacrificeSoulShards);
+    return true;
+  }
   if (!jug) {
     Common.messageBox(player, Common.text("noWineToFill"));
     return true;
@@ -212,6 +269,7 @@ function attach(api) {
   api.persistAttribute(CHARGE_ATTRIBUTE, 0);
   api.persistAttribute(WINE_TYPE_ATTRIBUTE, 0);
   api.onObjectInteraction("Libation bowl", { Fill: fill, Sacrifice: sacrificeOption, Check: check });
+  api.onItemOnObject(useOnBowl, { noted: false });
   api.onPlayerLogin(login);
   api.onCustomEvent("level-up:popup-opened", pauseSacrificing);
 }
@@ -220,5 +278,5 @@ module.exports = {
   attach,
   CHARGE_ATTRIBUTE,
   WINE_TYPE_ATTRIBUTE,
-  _test: { sacrifice, savedShards, blessedJug, sessions, FILL_BOX },
+  _test: { sacrifice, sacrificeSoulShards, savedShards, blessedJug, sessions, FILL_BOX },
 };

@@ -9,10 +9,8 @@
  * stay owed: ours). The shards bind as pure essence at any altar that takes it, the Ourania
  * Altar's and the combination runes' among them, and as dark essence fragments at Kourend's
  * Blood Altar (`runecrafting:essence`), one shard for one essence (ours: the Wiki gives no rate).
- * Not here: Soul shards in the Teomat's libation bowl (100 shards for 550 Prayer XP). The bowl
- * itself is plugins/skills/RalosRise.plugin.js, but it takes only blessed bone shards: no
- * recording shows Soul shards' rate there, so hooking them in is a follow-up. Also not here:
- * the minigames' altars, which bind their own essence lists.
+ * The Teomat's libation bowl takes the shards itself (plugins/skills/ralosrise/LibationBowl.RalosRise.js).
+ * Not here: the minigames' altars, which bind their own essence lists.
  */
 const Common = require("./Common.LeagueRelics");
 const Toggles = require("./Toggles.LeagueRelics");

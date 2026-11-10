@@ -97,3 +97,28 @@ test("Cast still follows the house's teleport setting", async (t) => {
   await cast(outside, 1);
   assert.deepEqual(at(outside.p), [2894, 3465, 0], "outside the Taverley portal");
 });
+
+test("Inside the house Home Sweet Home plays and unlocks, whatever played outside", async (t) => {
+  const f = actor(t, true);
+  f.p.getAttribute("construction:house").teleportOutside = false;
+  const session = f.p.getSession();
+  session.setPlayer(f.p);
+  let tick = 0;
+  const songs = async () => {
+    // The test player has no player sync; music runs before it in the flush.
+    try { session.flush(++tick); } catch { /* player sync */ }
+    const frames = [...session.pendingPackets];
+    session.pendingPackets.length = 0;
+    await Promise.resolve();
+    return frames.filter((frame) => frame[0] === 133).map((frame) => frame.readUInt16BE(frame.length - 10));
+  };
+  const outside = await songs();
+  assert.equal(outside.length, 1, "Lumbridge plays one of its tracks");
+  assert.ok(core.Music.tracksAt(3200, 3200, 0).includes(outside[0]));
+  await cast(f, 1);
+  assert.equal(Instance().PlayerHouseInstance.isAllocationLocation(f.p.getLocation()), true, "taken inside");
+  assert.deepEqual(await songs(), [Instance().HOME_SWEET_HOME_TRACK]);
+  assert.equal(core.Music.trackNames()[Instance().HOME_SWEET_HOME_TRACK], "Home Sweet Home");
+  assert.ok(f.messages.some((message) => message.includes("You have unlocked a new music track:") && message.includes("Home Sweet Home")), f.messages.join(" | "));
+  assert.deepEqual(await songs(), [], "and keeps playing");
+});

@@ -28,6 +28,8 @@ floor with no area of its own plays the ground floor's; an instance plays the ca
 chunk copies (`Music.instanceSourceTile`, through the chunk's rotation); a player on a boat deck
 plays the sea under it. `UNMAPPED_AREAS` in the import adds the few captured areas the Wiki's maps
 miss (the Wilderness bosses' lairs and the Escape Caves, "A Dangerous Game"), under the Wiki's own.
+A private area's `getMusicTrack` hook names its track instead: a player-owned house, whose rooms
+sit at allocated tiles outside every map area, plays Home Sweet Home ("inside a Player-owned house.").
 
 Regenerate with `yarn build` then `node scripts/import-music-areas.mjs`; `--check` reports whether
 the file still matches. Both read the Wiki response cached outside the repo

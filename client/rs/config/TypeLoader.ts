@@ -2,6 +2,7 @@ import { BIT_MASKS } from "../MathConstants";
 import { Archive } from "../cache/Archive";
 import { CacheIndex } from "../cache/CacheIndex";
 import { CacheInfo } from "../cache/CacheInfo";
+import { ConfigType } from "../cache/ConfigType";
 import { isGroupMissingError } from "../cache/js5/GroupMissingError";
 import { ByteBuffer } from "../io/ByteBuffer";
 import { Type } from "./Type";
@@ -33,8 +34,46 @@ export class DummyTypeLoader<T extends Type> implements TypeLoader<T> {
     clearCache(): void {}
 }
 
+/** How long the decode-failure summary waits after the last failure before it is logged. */
+const DECODE_FAILURE_SUMMARY_DELAY_MS = 2000;
+
+/** The config archive's name ("locs", "objs") for a DAT2/OSRS archive id, else its number. */
+function configArchiveLabel(id: number): string {
+    for (const table of [ConfigType.DAT2, ConfigType.OSRS]) {
+        for (const [name, archiveId] of Object.entries(table)) {
+            if (archiveId === id) return name;
+        }
+    }
+    return "config-" + id;
+}
+
 export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
     static readonly typeDecodedListeners = new Set<(type: Type) => void>();
+    /**
+     * Types that threw while decoding, by loader label ("locs", "objs", ...). A failed type is
+     * still cached half-decoded, so a broken decoder shows in game as missing locs, NPCs or items
+     * rather than a crash; this count and its summary line make that visible.
+     */
+    static readonly decodeFailures = new Map<string, number>();
+    private static decodeFailureSummaryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    static decodeFailureSummary(): string {
+        const parts = [...BaseTypeLoader.decodeFailures].map(([label, count]) => label + "=" + count);
+        return "type decode failures: " + parts.join(", ");
+    }
+
+    private static recordDecodeFailure(label: string): void {
+        BaseTypeLoader.decodeFailures.set(label, (BaseTypeLoader.decodeFailures.get(label) ?? 0) + 1);
+        if (BaseTypeLoader.decodeFailureSummaryTimer !== undefined) {
+            clearTimeout(BaseTypeLoader.decodeFailureSummaryTimer);
+        }
+        BaseTypeLoader.decodeFailureSummaryTimer = setTimeout(() => {
+            BaseTypeLoader.decodeFailureSummaryTimer = undefined;
+            console.warn(BaseTypeLoader.decodeFailureSummary());
+        }, DECODE_FAILURE_SUMMARY_DELAY_MS);
+        // Don't keep Node (tests, tools) alive just to print the summary.
+        (BaseTypeLoader.decodeFailureSummaryTimer as { unref?: () => void }).unref?.();
+    }
     // LRU-bounded cache to avoid unbounded memory growth
     cache: Map<number, T> = new Map();
     // Conservative default; can be tuned per loader if needed
@@ -66,6 +105,7 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
             // Do not poison the definition cache with an empty type while JS5 is streaming.
             if (isGroupMissingError(e)) throw e;
             console.error("Failed loading type " + id, e);
+            BaseTypeLoader.recordDecodeFailure(this.decodeFailureLabel());
         }
         this.cache.set(id, type);
         for (const listener of BaseTypeLoader.typeDecodedListeners) listener(type);
@@ -74,6 +114,11 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
     }
 
     abstract getCount(): number;
+
+    /** Names this loader in `decodeFailures`; class names are minified in production builds. */
+    protected decodeFailureLabel(): string {
+        return "types";
+    }
 
     clearCache(): void {
         this.cache.clear();
@@ -89,6 +134,10 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
     }
 }
 
+// Read by the vision harness (tests/vision-capture.browser.cjs) once the client is logged in.
+(globalThis as { __typeDecodeFailures?: Map<string, number> }).__typeDecodeFailures =
+    BaseTypeLoader.decodeFailures;
+
 export class ArchiveTypeLoader<T extends Type> extends BaseTypeLoader<T> {
     constructor(
         readonly typeConstructor: TypeConstructor<T>,
@@ -96,6 +145,10 @@ export class ArchiveTypeLoader<T extends Type> extends BaseTypeLoader<T> {
         readonly archive: Archive,
     ) {
         super(typeConstructor, cacheInfo);
+    }
+
+    protected override decodeFailureLabel(): string {
+        return configArchiveLabel(this.archive.id);
     }
 
     override getDataBuffer(id: number): ByteBuffer | undefined {
@@ -125,6 +178,10 @@ export class IndexTypeLoader<T extends Type> extends BaseTypeLoader<T> {
         this.count =
             Math.max((index.getArchiveCount() - 1) * filesPerArchive, 0) +
             index.getFileCount(index.getLastArchiveId());
+    }
+
+    protected override decodeFailureLabel(): string {
+        return "index-" + this.index.id;
     }
 
     override getDataBuffer(id: number): ByteBuffer | undefined {

@@ -55,6 +55,10 @@ scene first with the tools above.
   `videos/t<tick>-<label>.mp4`. The tick ties media to the run.log lines.
 - **Inspect:** read the PNGs/videos back; screenshots are also the fastest way to verify
   visual fixes a PR describes.
+- **Decode failures:** a result carries `typeDecodeFailures` (e.g. `{ "locs": 120 }`) when config
+  types threw while the page decoded them. The client keeps them half-decoded, so they show as
+  missing locs, NPCs or items; see `docs/cache-revision-update.md` step 5. It counts the page
+  only, not the map-building workers.
 - **Toggles:** `VISION_EXPORTS=0` sends captures to the OS temp dir and writes no logs (use
   when probing without wanting to accumulate data); `VISION_KEEP_FRAMES=1` keeps clip frame
   JPEGs after a video builds (they are deleted otherwise); `VISION_CHROME_PATH` picks a

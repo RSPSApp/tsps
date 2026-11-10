@@ -109,6 +109,11 @@ function uniquePath(dir, name) {
   return candidate;
 }
 
+// Config types the page failed to decode (client BaseTypeLoader), only when there are any.
+function decodeFailures(summary) {
+  return summary.typeDecodeFailures ? { typeDecodeFailures: summary.typeDecodeFailures } : {};
+}
+
 function runHarness(args, timeoutMs) {
   const harness = path.join(worktreeRoot(), "client", "tests", "vision-capture.browser.cjs");
   if (!fs.existsSync(harness)) return Promise.reject(new Error(`vision harness missing: ${harness}`));
@@ -190,7 +195,8 @@ module.exports = function registerVisionTools(ctx) {
           `camera=${JSON.stringify(summary.camera ?? null)} files=${path.relative(runDir, summary.screenshot)}`);
       }
       return { run: runId, exported: enabled, screenshot: summary.screenshot, tick: tickEnd,
-        camera: summary.camera ?? null, client: summary.client ?? null, ms: summary.wallMs };
+        camera: summary.camera ?? null, client: summary.client ?? null, ms: summary.wallMs,
+        ...decodeFailures(summary) };
     }
   );
 
@@ -243,6 +249,7 @@ module.exports = function registerVisionTools(ctx) {
         framesDeleted,
         screenshot: summary.screenshot ?? null,
         tick: tickEnd,
+        ...decodeFailures(summary),
         ms: summary.wallMs,
       };
     }

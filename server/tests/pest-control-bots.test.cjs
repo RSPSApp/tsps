@@ -53,6 +53,7 @@ const api = {
   onObjectInteraction(handler) { objectHandler = handler; },
   onNpcInteraction(name, options) { npcHandlers[name] = options; },
   onInterfaceActionButton(uid, handler) { buttonHandlers.set(uid, handler); },
+  onCustomEvent() {},
   onCanAttack() {},
   onPlayerDealtDamage() {},
   onNpcDeath() {},

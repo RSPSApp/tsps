@@ -106,6 +106,8 @@ module.exports = {
       level: 1, // Wiki: the obstacles after the pipe have no level of their own
       xp: 20,
       route: [3005, 3953, 0],
+      // The logical landing unlocks before cycle 70. Let the captured swing pose finish.
+      keepAnimation: true,
       end: { spam: "You skillfully swing across." },
       steps: [...ropeSwing([3005, 3958]), { sound: ROPE_SWING_SOUND }],
       // Wiki: 200-250 out of 256 (78%-98% from level 1 to 99, Mod Ash), failable at any level.

@@ -73,6 +73,35 @@ test('Fossil Island mapped multicombat coasts retain their boundaries and plane'
   }
 });
 
+test('Falador multicombat follows the city boundary and excludes the ground-floor crypt', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+  const { Location } = require('../dist/game/model/Location');
+  const cityEdges = [
+    [2943, 3370, false], [2944, 3370, true],
+    [2970, 3455, true], [2970, 3456, false],
+    [3007, 3370, true], [3008, 3370, false],
+    [3015, 3327, true], [3015, 3328, false], [3016, 3327, false],
+    [2990, 3303, false], [2990, 3304, true],
+  ];
+  for (const z of [0, 1, 2, 3]) {
+    const samples = [
+      ...cityEdges,
+      [3007, 3303, false], [3008, 3302, false],
+      [3008, 3303, z === 0], [3015, 3303, z === 0],
+      [2959, 3333, true], [2960, 3333, z !== 0],
+      [2967, 3333, z !== 0], [2968, 3333, true],
+      [2964, 3327, true], [2964, 3328, z !== 0],
+      [2964, 3335, z !== 0], [2964, 3336, true],
+    ];
+    for (const [x, y, multi] of samples) {
+      const location = new Location(x, y, z);
+      assert.equal(AreaManager.inMulti({ getArea: () => null, getLocation: () => location }), multi, `${x},${y},${z}`);
+      assert.equal(Wilderness.isPvpArea(location), false, `${x},${y},${z} is not PvP`);
+    }
+  }
+});
+
 test('allow hooks: first answer wins, no answer is null', () => {
   const api = PluginManager.createApi('MembersHookTest');
   // Experience gains also carry a multiplier (a league profile's rate), so the answer is a pair.

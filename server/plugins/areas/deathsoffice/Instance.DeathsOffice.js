@@ -211,8 +211,24 @@ function leave(player, destination) {
 /** Logged in inside: a new copy, the walk to the desk, and Death speaks again. */
 function login({ player }) {
   if (player.getAttribute(INSIDE_ATTRIBUTE) !== true || inOffice(player)) return;
+  enterAtLogin(player);
+}
+
+function enterAtLogin(player) {
   enter(player, Common.DATA.loginArrival);
   approachDesk(player, () => greet(player, { login: true }));
+}
+
+/**
+ * `deaths-office:enter` { player }: another plugin puts the player in the office, arriving as a
+ * login inside does (a Hardcore character starting out). Sets `entered`.
+ */
+function enterRequest(request) {
+  if (!request?.player || request.entered) return;
+  request.entered = true;
+  // Already inside (a login inside re-entered it): one copy, one greeting.
+  if (inOffice(request.player)) return;
+  enterAtLogin(request.player);
 }
 
 function dropItem(event) {
@@ -252,6 +268,7 @@ function attach(api) {
   api.persistAttribute(INSIDE_ATTRIBUTE);
   api.onPlayerLogin(login);
   api.onItemDropPolicy(dropItem);
+  api.onCustomEvent("deaths-office:enter", enterRequest);
 }
 
 module.exports = { attach, enter, leave, approachDesk, throughPortal, inOffice, deathOf, tileOf, onGreet, onLeave };

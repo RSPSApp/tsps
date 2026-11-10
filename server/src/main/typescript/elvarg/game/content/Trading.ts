@@ -393,7 +393,7 @@ export class Trading {
                 const offered = from.getItems()[slot];
                 if (offered.getId() === id) {
 
-                    if (!offered.isTradeable()) {
+                    if (!Trading.canOffer(offered)) {
                         this.player.sendMessage("You cannot trade that item.");
                         return;
                     }
@@ -422,6 +422,15 @@ export class Trading {
         }
     }
 
+    private static canOffer(item: Item): boolean {
+        if (item.isTradeable()) return true;
+        if (item.isUntradeable()) return false;
+
+        const request = { item, allowed: false };
+        PluginManager.emitCustomEvent("trade:item-eligibility", request);
+        return request.allowed;
+    }
+
     /**
      * Moves up to `amount` of the item in `slot`, slot by slot, so each item
      * keeps its own metadata (charges, contents). A stack moves only from the
@@ -440,7 +449,7 @@ export class Trading {
             for (const index of slots) {
                 if (moved >= amount || to.getFreeSlots() <= 0) break;
                 const item = from.getItems()[index];
-                if (item.getId() !== id || !item.isTradeable()) continue;
+                if (item.getId() !== id || !Trading.canOffer(item)) continue;
                 from.switchItem(to, item.clone(), false, index, false);
                 moved++;
             }

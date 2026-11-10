@@ -1,5 +1,10 @@
 const { maxCharactersPerAccount, characterDisplayName, characterListFor, defaultCharacterIndex } = require("./Picker.Characters");
 
+/** A character's save to enter with; an unmade one (PlayerSave.unmake: a Hardcore World Reset) enters as new. */
+function playedSave(save) {
+  return save && save.isUnmade?.() !== true ? save : null;
+}
+
 class LoginSession {
   constructor(context) {
     this.context = context;
@@ -46,7 +51,7 @@ class LoginSession {
       characterSave = isPrimary ? save : null;
       if (!isPrimary) {
         try {
-          characterSave = GameConstants.PLAYER_PERSISTENCE.load(chosen, profile) ?? null;
+          characterSave = playedSave(GameConstants.PLAYER_PERSISTENCE.load(chosen, profile));
         } catch (error) {
           // One unreadable character doesn't lock the account: the primary enters instead.
           console.error(`[login] failed to load ${chosen}; defaulting to ${primaryName}`, error);
@@ -129,7 +134,7 @@ class LoginSession {
     }
     let save;
     try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(character.name, pending.profile) ?? null;
+      save = playedSave(GameConstants.PLAYER_PERSISTENCE.load(character.name, pending.profile));
     } catch (error) {
       console.error(`[login] failed to load ${character.name}`, error);
       this.send(encodeCharacterResult(false, 8, "The login server is busy."));
@@ -151,7 +156,7 @@ class LoginSession {
 
   /** Between login and handshake: adds a character to the account. Creating writes no save. */
   createCharacter(rawName) {
-    const { Accounts, DisplayNames, Misc, GameConstants, MAIN_PROFILE, LEAGUE_PROFILE, encodeCharacterResult } = this.api.core;
+    const { Accounts, DisplayNames, Misc, GameConstants, PLAYER_PROFILES, encodeCharacterResult } = this.api.core;
     const pending = this.pending;
     if (!pending || !this.context.isActive(pending)) {
       this.send(encodeCharacterResult(false, 4, "There is no account to add a character to right now."));
@@ -165,7 +170,7 @@ class LoginSession {
         this.send(encodeCharacterResult(false, 10, "Your account has been disabled."));
         return;
       }
-      if (!primary || !(persistence.exists(primary, MAIN_PROFILE) || persistence.exists(primary, LEAGUE_PROFILE))) {
+      if (!primary || !PLAYER_PROFILES.some((profile) => persistence.exists(primary, profile))) {
         this.send(encodeCharacterResult(false, 9, "Enter the world once with your first character."));
         return;
       }
@@ -212,7 +217,7 @@ class LoginSession {
 
   /** Between login and handshake: deletes a non-primary character and its saves. */
   async deleteCharacter(rawName, rawConfirm) {
-    const { Accounts, DisplayNames, GameConstants, MAIN_PROFILE, LEAGUE_PROFILE, encodeCharacterResult } = this.api.core;
+    const { Accounts, DisplayNames, GameConstants, PLAYER_PROFILES, encodeCharacterResult } = this.api.core;
     const pending = this.pending;
     if (!pending || !this.context.isActive(pending)) {
       this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
@@ -258,7 +263,7 @@ class LoginSession {
         const next = remaining[Math.max(0, defaultCharacterIndex(this.api, remaining, pending.account, { banned: (name) => this.isBanned(name) }))];
         fallback = { name: next.name, save: persistence.load(next.name, pending.profile) ?? null };
       }
-      for (const profile of [MAIN_PROFILE, LEAGUE_PROFILE]) {
+      for (const profile of PLAYER_PROFILES) {
         try {
           await persistence.delete(character.name, profile);
         } catch (error) {

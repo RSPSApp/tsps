@@ -19,6 +19,7 @@ module.exports = function registerPriestInPerilQuest(api) {
     StatementDialogue, ItemStatementDialogue, DoubleItemStatementDialogue, DialogueChainBuilder,
     HitDamage, HitMask, Item, ItemDefinition,
     CombatMethod, MeleeCombatMethod, MagicCombatMethod, CombatSpells, Projectile, Animation, Graphic, GraphicHeight,
+    Sounds, Sound,
   } = api.core;
   const { registerQuest, startTranscript, startDialogue, refreshQuestList } = require("../QuestRuntime");
 
@@ -104,7 +105,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   /** Bit per monument (MONUMENTS index) whose golden souvenir has been swapped out. */
   const SOUVENIRS_ATTRIBUTE = "priest-in-peril:souvenirs";
   /** Transcript message shown only below the recommended combat level. */
-  const COMBAT_WARNING_STEP_ID = "0cBLcT";
+  const COMBAT_WARNING_STEP_ID = "gtY6Dq";
   const RECOMMENDED_COMBAT_LEVEL = 15;
 
   // The mausoleum trapdoors, closed and open: 1579/1581 north of the temple (over the
@@ -126,13 +127,6 @@ module.exports = function registerPriestInPerilQuest(api) {
   const COFFIN_ID = ObjectIdentifiers.COFFIN_7; // 3480 at 3413,3486,2
   const WELL_ID = ObjectIdentifiers.WELL_6; // 3485 at 3423,9890,0
   const MYSTERIOUS_VOICE_NPC_ID = 12240;
-  /**
-   * The large doors' wall is on the east edge of x 3408: the temple is east of it. Live
-   * swings them open and shut again two ticks later (rsprox.net #365), so one player
-   * opening them never lets the next one in; the quest walks the player through instead.
-   */
-  const TEMPLE_DOOR_OUTSIDE_X = 3408;
-  const TEMPLE_DOOR_INSIDE_X = 3409;
   /** The temple's ground floor (Quest Helper's temple zones). */
   const TEMPLE_GROUND_FLOOR = { minX: 3409, maxX: 3419, minY: 3483, maxY: 3494 };
   const DOOR_ANSWERED_ATTRIBUTE = "priest-in-peril:door-answered";
@@ -177,9 +171,8 @@ module.exports = function registerPriestInPerilQuest(api) {
   /** The voice's last line before the player agrees to deal with the dog. */
   const DOG_REQUEST_LINE = "Then please, deal with that dog for me.";
   const HOLY_BARRIER_LANDING = new Location(3423, 3485, 0);
-  /** The cell gate's wall is on the east edge of its tile: Drezel's cell is east of it. */
-  const CELL_OUTSIDE = new Location(3415, 3489, 2);
-  const CELL_INSIDE = new Location(3416, 3489, 2);
+  /** "You use the key to unlock the cell gate." plays this (capture 2026-11-02 tick 11429). */
+  const CELL_UNLOCK_SOUND_ID = 2419;
   /** Drezel's cell spawn is on the temple's top floor; the mausoleum one is underground. */
   const MAUSOLEUM_MIN_Y = 9000;
 
@@ -726,20 +719,15 @@ module.exports = function registerPriestInPerilQuest(api) {
 
   /**
    * Knocking the large door: the Mysterious Voice asks about the dog before the
-   * kill and thanks the player after it. Once the King has been told, the door
-   * just opens (the doors plugin's normal toggle). Before the quest nobody
-   * answers and the door stays shut.
+   * kill and thanks the player after it. Once the King has been told, and for anyone
+   * inside, the doors open: Doors swings them, walks the player through and shuts
+   * them two ticks later, as captured (its PASS_THROUGH_GATES).
    */
   function handleLargeDoor(request) {
     if (!LARGE_DOOR_IDS.has(request.objectId)) return;
     const { player } = request;
     const stage = quest.getStage(player);
-    const inside = inTemple(player);
-    if (stage >= STAGE_TOLD_KING_ROALD || inside) {
-      crossTempleDoor(player, inside);
-      request.handled = true;
-      return;
-    }
+    if (stage >= STAGE_TOLD_KING_ROALD || inTemple(player)) return;
     if (stage < STAGE_STARTED) {
       startTranscript(api, player, MYSTERIOUS_VOICE_NPC_ID, PAGE, "pre-quest-at-the-temple-before-starting-the-quest");
       request.handled = true;
@@ -758,11 +746,6 @@ module.exports = function registerPriestInPerilQuest(api) {
     return location.getZ() === 0
       && location.getX() >= TEMPLE_GROUND_FLOOR.minX && location.getX() <= TEMPLE_GROUND_FLOOR.maxX
       && location.getY() >= TEMPLE_GROUND_FLOOR.minY && location.getY() <= TEMPLE_GROUND_FLOOR.maxY;
-  }
-
-  function crossTempleDoor(player, inside) {
-    const location = player.getLocation();
-    player.moveTo(new Location(inside ? TEMPLE_DOOR_OUTSIDE_X : TEMPLE_DOOR_INSIDE_X, location.getY(), location.getZ()));
   }
 
   /**
@@ -822,36 +805,44 @@ module.exports = function registerPriestInPerilQuest(api) {
     return (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(itemId));
   }
 
-  function crossCellGate(player) {
-    const inside = player.getLocation().getX() >= CELL_INSIDE.getX();
-    player.moveTo((inside ? CELL_OUTSIDE : CELL_INSIDE).clone());
+  /** Doors swings the unlocked gate open, walks the player across and shuts it (PASS_THROUGH_GATES). */
+  function passCellGate(player, object) {
+    if (object) api.emitCustomEvent("door:open", { player, object, handled: false });
   }
 
+  /** Live leaves the player outside the cell: the gate is only unlocked (capture 2026-11-02 tick 11429). */
   function unlockCellGate(player) {
     quest.setStage(player, STAGE_CELL_UNLOCKED);
-    crossCellGate(player);
+    Sounds.sendSound(player, new Sound(CELL_UNLOCK_SOUND_ID, 1, 0, 0));
     playPage(player, UNLOCK_VARIANT);
   }
 
-  /** The cell gate: locked until the iron key opens it, then a plain gate. */
+  /**
+   * The cell gate. Locked, its Open talks to Drezel through it (capture 2026-11-02 tick 11168: the
+   * meeting starts there, with no Talk-to); with the iron key held it unlocks the gate instead
+   * (tick 11429). Once unlocked it opens and shuts like a door.
+   */
   function openCellGate(event) {
-    const { player, objectId, location } = event;
+    const { player, objectId, location, object } = event;
     if (objectId !== CELL_GATE_ID || !sameTile(location, CELL_GATE_LOCATION)) return false;
     const stage = quest.getStage(player);
     if (stage >= STAGE_CELL_UNLOCKED) {
-      crossCellGate(player);
+      passCellGate(player, object);
     } else if (stage >= STAGE_MET_DREZEL && held(player, IRON_KEY_ITEM_ID)) {
       unlockCellGate(player);
+    } else if (stage >= STAGE_TOLD_KING_ROALD) {
+      playPage(player, cellDrezelVariant(stage, player));
     } else {
       playPage(player, "pre-quest-attempting-to-open-the-gate");
     }
     return true;
   }
 
-  function useItemOnCellGate(player, itemId) {
+  function useItemOnCellGate(player, itemId, object) {
     const stage = quest.getStage(player);
     if (itemId === IRON_KEY_ITEM_ID) {
-      if (stage >= STAGE_CELL_UNLOCKED) crossCellGate(player);
+      // Ours: the key on the unlocked gate opens it, as its Open does.
+      if (stage >= STAGE_CELL_UNLOCKED) passCellGate(player, object);
       else if (stage >= STAGE_MET_DREZEL) unlockCellGate(player);
       else return false;
       return true;
@@ -998,9 +989,9 @@ module.exports = function registerPriestInPerilQuest(api) {
   }
 
   function handleItemOnObject(event) {
-    const { player, objectId, itemId, location } = event;
+    const { player, objectId, itemId, location, object } = event;
     let handled = false;
-    if (objectId === CELL_GATE_ID && sameTile(location, CELL_GATE_LOCATION)) handled = useItemOnCellGate(player, itemId);
+    if (objectId === CELL_GATE_ID && sameTile(location, CELL_GATE_LOCATION)) handled = useItemOnCellGate(player, itemId, object);
     else if (objectId === COFFIN_ID && sameTile(location, COFFIN_LOCATION)) handled = useItemOnCoffin(player, itemId);
     else if (objectId === WELL_ID && sameTile(location, WELL_LOCATION)) handled = useItemOnWell(player, itemId);
     else handled = useItemOnMonument(player, objectId, itemId);

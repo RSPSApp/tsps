@@ -61,6 +61,8 @@ function handOverCape(event) {
  */
 function showEntrance(player) {
   if (!sacrificed(player)) return;
+  // Preserve access for players who sacrificed their cape before the city gates were enforced.
+  api.emitCustomEvent("mor-ul-rek:grant-access", { player });
   const { CacheDefinitions } = core;
   const loc = CacheDefinitions.getObject(INFERNO_ENTRANCE);
   if (!loc?.transforms || loc.transformVarbit === -1) return;

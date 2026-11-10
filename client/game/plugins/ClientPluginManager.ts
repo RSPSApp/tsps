@@ -278,6 +278,15 @@ export interface ClientPlugin {
     updateInteractionPointer?(camera: Camera): void;
     transformCameraRotation?(rotation: CameraRotation): void;
     handleCameraFollow?(context: CameraFollowContext): boolean;
+    /**
+     * The tile roof hiding treats as the camera's (world tiles): roofs on the line from it to
+     * the player hide the planes above. A plugin camera far from the player returns a nearer,
+     * steadier tile so roofs don't flicker as that long line sweeps across buildings.
+     */
+    roofCameraTile?(
+        cameraTile: { x: number; y: number },
+        playerTile: { x: number; y: number },
+    ): { x: number; y: number } | undefined;
     /** A connected standard-mapping controller, each frame; return true to take it over. */
     handleGamepad?(context: GamepadContext): boolean;
     /** A hitsplat arrived from the server (before it is drawn). */
@@ -509,6 +518,18 @@ export class ClientPluginManager {
 
     handleCameraFollow(context: CameraFollowContext): boolean {
         return this.plugins.some((plugin) => plugin.handleCameraFollow?.(context) === true);
+    }
+
+    /** Runs every frame: with no plugin implementing it, it costs a cached empty list. */
+    roofCameraTile(
+        cameraTile: { x: number; y: number },
+        playerTile: { x: number; y: number },
+    ): { x: number; y: number } {
+        for (const plugin of this.implementing("roofCameraTile")) {
+            const tile = plugin.roofCameraTile!(cameraTile, playerTile);
+            if (tile) return tile;
+        }
+        return cameraTile;
     }
 
     handleGamepad(context: GamepadContext): boolean {

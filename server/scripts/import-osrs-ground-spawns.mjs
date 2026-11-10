@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Import an audited ordinary subset of the osrsreboxed ItemSpawnLine export.
- * Existing definitions are preserved byte-for-field and order; equality is exact
- * item/x/y/plane, never a two-tile equivalence. Raw/conditional rows remain in the report.
+ * Legacy definitions keep their fields and order except where the source explicitly identifies
+ * a pickup replacement at the same tile. Raw and conditional rows remain in the report.
  *
  * Infobox Item documents respawn in ticks. For these audited ordinary rows with
  * no tile override, apply the item's explicit infobox value as the spawn's timer.
@@ -16,8 +16,8 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const SOURCE_PIN = Object.freeze({
-  revision: "50574b943b447ed8b9c86eb9813f90960757d61b",
-  exportSha256: "251bc25a375029cd746c3fdb8ca21478f87b740473e38dd6828e11595223c924",
+  revision: "e689983a7341e7306de06e5dfb6bc8e7886df238",
+  exportSha256: "ac6ab32e5637ae03595e216fb3385add0b630811abb72535bde160a28abd49f2",
   inputSha256: "3c2de222f445a46dc47aecd7c7bd9fb5857932c3ffb5be52322c21c30169bcaa",
 });
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -110,10 +110,46 @@ const definitionKey = (r) => keyOf(r.id, r.location?.x, r.location?.y, r.locatio
 const ownerOf = (r) => OWNED_EXACT.get(rowKey(r))
   ?? (r.location?.includes("[[Hallowed Sepulchre]]") ? "HallowedSepulchre per-player floor template integration required" : null);
 
+function reconcilePickupReplacements(rows, existing) {
+  const statuses = new Map();
+  const replacements = new Map();
+  const projections = new Set();
+  for (const row of rows) {
+    const pickup = row.pickup_replacement;
+    if (!pickup || row.unresolved_reasons.length) continue;
+    const key = rowKey(row);
+    const display = existing.filter(d => definitionKey(d) === key);
+    if (display.length !== 1 || (display[0].amt ?? 1) !== row.quantity
+      || display[0].respawn !== row.infobox_respawn_ticks || (display[0].members === true) !== row.members) continue;
+
+    const rewardKey = keyOf(pickup.id, row.x, row.y, row.plane);
+    const projectionsAtTile = rows.filter(other => rowKey(other) === rewardKey && other.name === row.name
+      && other.location === row.location && other.members === row.members && other.quantity === row.quantity
+      && !other.unresolved_reasons.length && !other.pickup_replacement);
+    if (projectionsAtTile.length !== 1) continue;
+    const [projection] = projectionsAtTile;
+
+    replacements.set(key, {
+      id: pickup.id,
+      ...(pickup.telegrab_denial ? { telegrabDenial: pickup.telegrab_denial } : {}),
+    });
+    projections.add(rewardKey);
+    statuses.set(row, "existing-pickup-replacement");
+    statuses.set(projection, "pickup-reward-projection");
+  }
+  const definitions = existing.filter(d => !projections.has(definitionKey(d))).map(d => {
+    const replacement = replacements.get(definitionKey(d));
+    return replacement ? { ...d, pickupReplacement: replacement } : d;
+  });
+  return { definitions, statuses };
+}
+
 export function importSpawns(source, existing) {
   if (source.schema !== 1 || !Array.isArray(source.rows) || !Array.isArray(existing)) {
     throw new Error("Expected source schema1 and an array of existing definitions");
   }
+  const reconciled = reconcilePickupReplacements(source.rows, existing);
+  existing = reconciled.definitions;
   const definitions = structuredClone(existing);
   const exact = new Map();
   for (const d of existing) {
@@ -125,7 +161,9 @@ export function importSpawns(source, existing) {
   for (const row of source.rows) {
     const entry = { source: row, status: null, reasons: [...row.unresolved_reasons] };
     const owner = ownerOf(row);
-    if (owner) {
+    if (reconciled.statuses.has(row)) {
+      entry.status = reconciled.statuses.get(row);
+    } else if (owner) {
       entry.status = "area-owned-or-instance-integration";
       entry.owner = owner;
     } else if (entry.reasons.length) {
@@ -190,7 +228,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member ordinary rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows and the ordinary Corsair Cove Dungeon Coins row; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member ordinary rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows and the ordinary Corsair Cove Dungeon Coins row; explicit infobox ticks applied only without tile override; legacy entries preserved except exact source-proven pickup reward projections.",
     counts, rows:report } };
 }
 

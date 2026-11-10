@@ -931,12 +931,25 @@ module.exports = function registerCabinFeverQuest(api) {
   // Objects
   // ==========================================================================
 
+  /**
+   * The locker hands out the real quest plank (7148). 7121 is the animation dummy the
+   * client wields during the repair animation, and older saves still hold it, so both
+   * count towards the six and only the shortfall is topped up.
+   */
+  function givePlanks(player, amount) {
+    const have =
+      player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT);
+    if (have >= amount) return false;
+    player.getInventory().adds(REPAIR_PLANK_ALT, amount - have);
+    return true;
+  }
+
   function openRepairLocker(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
     giveSupply(player, ROPE, 4);
     giveSupply(player, HAMMER, 1);
-    giveSupply(player, REPAIR_PLANK, 6);
+    givePlanks(player, 6);
     giveSupply(player, TACKS, 30);
     giveSupply(player, SWAMP_PASTE, 3);
   }
@@ -1286,83 +1299,104 @@ module.exports = function registerCabinFeverQuest(api) {
     return false;
   }
 
-  function useOnHole(player, itemId, objectId) {
+  /**
+   * Nail planks over a hull hole. Reached two ways, as in live: the hull's own Fill option
+   * (the cache gives the visible transform that action) and a repair plank used on it.
+   */
+  function plankHole(player, objectId) {
     const holeVarbit = HOLE_VARBIT_BY_OBJECT.get(objectId);
     if (holeVarbit === undefined) return false;
     const stage = quest.getStage(player);
-    if (stage === STAGE_LEAKS) {
-      const value = varbitValue(player, holeVarbit);
-      if (REPAIR_PLANKS.has(itemId)) {
-        if (value !== 0) {
-          player.sendMessage("This hole has already been planked.");
-          return true;
-        }
-        if (!held(player, HAMMER)) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-repair-a-hole-without-a-hammer"
-          );
-          return true;
-        }
-        if (player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT) < 2) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-planks"
-          );
-          return true;
-        }
-        if (!held(player, TACKS, 10)) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-tacks"
-          );
-          return true;
-        }
-        let remaining = 2;
-        for (const plankId of [REPAIR_PLANK, REPAIR_PLANK_ALT]) {
-          const take = Math.min(remaining, player.getInventory().getAmount(plankId));
-          if (take > 0) {
-            player.getInventory().deleteNumber(plankId, take);
-            remaining -= take;
-          }
-        }
-        player.getInventory().deleteNumber(TACKS, 10);
-        setVarbitValue(player, holeVarbit, 1);
-        syncHoleCounters(player);
-        playVariant(player, "sort-out-the-leaks-planking-up-a-hole");
-        return true;
-      }
-      if (itemId === SWAMP_PASTE) {
-        if (value === 0) {
-          player.sendMessage("You need to nail planks over the hole first.");
-          return true;
-        }
-        if (value !== 1) {
-          player.sendMessage("This hole has already been waterproofed.");
-          return true;
-        }
-        if (!held(player, SWAMP_PASTE)) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-planking-up-a-hole-trying-to-waterproof-a-hole-without-swamp-paste"
-          );
-          return true;
-        }
-        player.getInventory().deleteNumber(SWAMP_PASTE, 1);
-        setVarbitValue(player, holeVarbit, 2);
-        syncHoleCounters(player);
-        playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
-        return true;
-      }
-      return false;
-    }
-    if (stage === STAGE_CANNON && (REPAIR_PLANKS.has(itemId) || itemId === SWAMP_PASTE)) {
+    if (stage === STAGE_CANNON) {
       playVariant(
         player,
         "dealing-with-the-cannon-trying-to-fill-the-ship-hull-before-taking-out-the-cannon"
       );
       return true;
     }
+    if (stage !== STAGE_LEAKS) return false;
+    if (varbitValue(player, holeVarbit) !== 0) {
+      player.sendMessage("This hole has already been planked.");
+      return true;
+    }
+    if (!held(player, HAMMER)) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-repair-a-hole-without-a-hammer"
+      );
+      return true;
+    }
+    if (player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT) < 2) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-planks"
+      );
+      return true;
+    }
+    if (!held(player, TACKS, 10)) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-tacks"
+      );
+      return true;
+    }
+    let remaining = 2;
+    for (const plankId of [REPAIR_PLANK, REPAIR_PLANK_ALT]) {
+      const take = Math.min(remaining, player.getInventory().getAmount(plankId));
+      if (take > 0) {
+        player.getInventory().deleteNumber(plankId, take);
+        remaining -= take;
+      }
+    }
+    player.getInventory().deleteNumber(TACKS, 10);
+    setVarbitValue(player, holeVarbit, 1);
+    syncHoleCounters(player);
+    playVariant(player, "sort-out-the-leaks-planking-up-a-hole");
+    return true;
+  }
+
+  /**
+   * Waterproof a planked hole. Reached two ways, as in live: the hull's own Waterproof option
+   * (the transform at varbit 1) and swamp paste used on it.
+   */
+  function waterproofHole(player, objectId) {
+    const holeVarbit = HOLE_VARBIT_BY_OBJECT.get(objectId);
+    if (holeVarbit === undefined) return false;
+    const stage = quest.getStage(player);
+    if (stage === STAGE_CANNON) {
+      playVariant(
+        player,
+        "dealing-with-the-cannon-trying-to-fill-the-ship-hull-before-taking-out-the-cannon"
+      );
+      return true;
+    }
+    if (stage !== STAGE_LEAKS) return false;
+    const value = varbitValue(player, holeVarbit);
+    if (value === 0) {
+      player.sendMessage("You need to nail planks over the hole first.");
+      return true;
+    }
+    if (value !== 1) {
+      player.sendMessage("This hole has already been waterproofed.");
+      return true;
+    }
+    if (!held(player, SWAMP_PASTE)) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-planking-up-a-hole-trying-to-waterproof-a-hole-without-swamp-paste"
+      );
+      return true;
+    }
+    player.getInventory().deleteNumber(SWAMP_PASTE, 1);
+    setVarbitValue(player, holeVarbit, 2);
+    syncHoleCounters(player);
+    playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
+    return true;
+  }
+
+  function useOnHole(player, itemId, objectId) {
+    if (REPAIR_PLANKS.has(itemId)) return plankHole(player, objectId);
+    if (itemId === SWAMP_PASTE) return waterproofHole(player, objectId);
     return false;
   }
 
@@ -1457,6 +1491,19 @@ module.exports = function registerCabinFeverQuest(api) {
     const { player, objectId } = event;
     if (!player || event.handled) return false;
     const option = optionOf(event);
+    // The hull's own options: the visible transform offers Fill at varbit 0 and Waterproof at 1,
+    // so a plain click has to do what using the plank or the paste does.
+    if (HOLE_VARBIT_BY_OBJECT.has(objectId)) {
+      const handled =
+        option === "fill"
+          ? plankHole(player, objectId)
+          : option === "waterproof"
+            ? waterproofHole(player, objectId)
+            : false;
+      if (!handled) return false;
+      event.handled = true;
+      return true;
+    }
     if (objectId === ADVENTUROUS_CANNON) {
       event.handled = true;
       handleCannonClick(player, option);

@@ -41,6 +41,8 @@ export interface LoginRendererHost {
     /** The title art is the cache's (drawn whole), not the bundled image (which covers the viewport). */
     titleBackgroundFromCache: boolean;
     logoSprite: IndexedSprite | undefined;
+    /** logo_hcmain (8921, rev 242): the title logo on a Hardcore world. */
+    hardcoreLogoSprite: IndexedSprite | undefined;
     logoImage: HTMLImageElement | undefined;
     logoImageLoaded: boolean;
     titleboxSprite: IndexedSprite | undefined;

@@ -567,7 +567,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   function handleAction(event) {
     const { player, stepId } = event;
     if (event.npcId && ![CASSIUS_NPC_ID, SETH_NPC_ID, GILLIE_NPC_ID, BULL_NPC_ID].includes(event.npcId)) return;
-    if (stepId === "bkgpn5") { event.handled = true; return; }
+    if (stepId === "kbEA-p") { event.handled = true; return; }
     if (stepId === "y7Vpgm") {
       grantItem(player, BOOK_ITEM_ID);
       event.box = { items: [BOOK_ITEM_ID] };

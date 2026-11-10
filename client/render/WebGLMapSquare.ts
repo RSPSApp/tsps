@@ -811,6 +811,7 @@ export class WebGLMapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
             );
         }
@@ -1891,11 +1892,10 @@ export class WebGLMapSquare {
         this.tilePresenceByLevel = mapData.tilePresenceByLevel;
         if (this.tileLocOffsetsByLevel && this.tileLocIdsByLevel && this.tileLocTypeRotByLevel) {
             this.tileLocOffsetsByLevel.length = 0;
-            this.tileLocIdsByLevel.length = 0;
+            this.tileLocIdsByLevel = mapData.tileLocIdsByLevel;
             this.tileLocTypeRotByLevel.length = 0;
             for (let level = 0; level < mapData.tileLocOffsetsByLevel.length; level++) {
                 this.tileLocOffsetsByLevel.push(mapData.tileLocOffsetsByLevel[level]);
-                this.tileLocIdsByLevel.push(mapData.tileLocIdsByLevel[level]);
                 this.tileLocTypeRotByLevel.push(mapData.tileLocTypeRotByLevel[level]);
             }
             this.locIdsAtLocalBuffer.length = 0;
@@ -1966,6 +1966,7 @@ export class WebGLMapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
             );
         }
@@ -2257,11 +2258,10 @@ export class WebGLMapSquare {
         this.tilePresenceByLevel = mapData.tilePresenceByLevel;
         if (this.tileLocOffsetsByLevel && this.tileLocIdsByLevel && this.tileLocTypeRotByLevel) {
             this.tileLocOffsetsByLevel.length = 0;
-            this.tileLocIdsByLevel.length = 0;
+            this.tileLocIdsByLevel = mapData.tileLocIdsByLevel;
             this.tileLocTypeRotByLevel.length = 0;
             for (let level = 0; level < mapData.tileLocOffsetsByLevel.length; level++) {
                 this.tileLocOffsetsByLevel.push(mapData.tileLocOffsetsByLevel[level]);
-                this.tileLocIdsByLevel.push(mapData.tileLocIdsByLevel[level]);
                 this.tileLocTypeRotByLevel.push(mapData.tileLocTypeRotByLevel[level]);
             }
             this.locIdsAtLocalBuffer.length = 0;
@@ -2431,6 +2431,7 @@ export class WebGLMapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
             );
         }

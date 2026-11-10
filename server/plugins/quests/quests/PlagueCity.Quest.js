@@ -89,6 +89,10 @@ module.exports = function registerPlagueCityQuest(api) {
 
   const pendingDoors = new WeakMap();
 
+  const ELENA_LOCKED_VARIANT = "freeing-elena-attempting-to-open-the-basement-door-of-the-plague-house-without-the-key";
+  const DOOR_LOCKED_MESSAGE_STEP = "Gtrtgc";
+  const talkingThroughBars = new WeakSet();
+
   let quest;
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
@@ -275,7 +279,11 @@ module.exports = function registerPlagueCityQuest(api) {
         quest.setStage(player, STAGE_FREED_ELENA);
         return "freeing-elena-talking-to-elena-after-unlocking-the-basement-door";
       }
-      if (stage < STAGE_FREED_ELENA) return null;
+      if (stage < STAGE_FREED_ELENA) {
+        if (npcId !== NpcIdentifiers.ELENA_2 || stage < STAGE_FIND_DWELLBERRIES) return null;
+        talkingThroughBars.add(player);
+        return ELENA_LOCKED_VARIANT;
+      }
       return "freeing-elena-talking-to-elena-after-unlocking-the-basement-door";
     }
     return null;
@@ -307,7 +315,13 @@ module.exports = function registerPlagueCityQuest(api) {
     if (quest.getStage(player) < STAGE_FIND_DWELLBERRIES) quest.setStage(player, STAGE_FIND_DWELLBERRIES);
   }
 
-  function handleAction({ player, npcId, stepId }) {
+  function handleAction(event) {
+    const { player, npcId, stepId } = event;
+    if (npcId === NpcIdentifiers.ELENA_2 && stepId === DOOR_LOCKED_MESSAGE_STEP && talkingThroughBars.has(player)) {
+      talkingThroughBars.delete(player);
+      event.handled = true;
+      return;
+    }
     const stage = quest.getStage(player);
     const inventory = player.getInventory();
     if (ALRENA_NPC_IDS.has(npcId) && stepId === "Br9tOd" && stage === STAGE_FIND_DWELLBERRIES && held(player, DWELLBERRIES_ITEM_ID)) {
@@ -384,7 +398,8 @@ module.exports = function registerPlagueCityQuest(api) {
         player.setAttribute(CELL_UNLOCKED_ATTRIBUTE, true);
       } else {
         event.handled = true;
-        startTranscript(api, player, NpcIdentifiers.ELENA_2, "Plague City", "freeing-elena-attempting-to-open-the-basement-door-of-the-plague-house-without-the-key");
+        talkingThroughBars.delete(player);
+        startTranscript(api, player, NpcIdentifiers.ELENA_2, "Plague City", ELENA_LOCKED_VARIANT);
       }
     }
   }

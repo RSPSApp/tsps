@@ -251,3 +251,12 @@ test('Draynor east stairs claim the Count room and return to the manor, leaving 
     assert.equal(request.handled, false);
     assert.equal(climbs.length, 2);
 });
+
+test('Ardougne castle main staircase arrives on walkable landings in both directions', () => {
+    const up = mapObject(2571, 3295, 0, 15645);
+    const down = mapObject(2571, 3295, 1, 15648);
+    assert.deepEqual(lands(up, ClimbLinks.UP, new Location(2571, 3298, 0)), [2571, 3294, 1]);
+    assert.deepEqual(lands(down, ClimbLinks.DOWN, new Location(2571, 3294, 1)), [2571, 3298, 0]);
+    assert.equal(RegionManager.blocked(new Location(2571, 3294, 1), null), false);
+    assert.equal(RegionManager.blocked(new Location(2571, 3298, 0), null), false);
+});

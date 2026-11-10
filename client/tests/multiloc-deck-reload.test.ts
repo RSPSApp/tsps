@@ -48,24 +48,24 @@ const renderer: any = {
         ]),
         worldEntityMapIds: new Set([deckMapId]),
     },
-    reloadMultiLocSquare: (mapX: number, mapY: number) => reloaded.push(`${mapX},${mapY}`),
+    reloadMultiLocSquare: (mapX: number, mapY: number, group: string) => reloaded.push(`${mapX},${mapY},${group}`),
     scheduleWorldEntityLocRebuild: (entityIndex: number) => rebuiltDecks.push(entityIndex),
 };
 
 (GameRenderer.prototype as any).reloadMultiLocSquares.call(renderer);
-assert.deepEqual(reloaded, ["50,50"], "the world square reloads as a map square");
+assert.deepEqual(reloaded, ["50,50,loc"], "the world square reloads as a map square");
 assert.deepEqual(rebuiltDecks, [3008], "the deck rebuilds from its template");
 
 // Another change to varp 42 that leaves the multiloc showing the same variant (an unrelated
 // varbit on it) rebuilds nothing: a rebuild restarts every loc animation in the square.
 renderer.changedVarps = new Set([42]);
 (GameRenderer.prototype as any).reloadMultiLocSquares.call(renderer);
-assert.deepEqual(reloaded, ["50,50"], "an unchanged variant leaves the square alone");
+assert.deepEqual(reloaded, ["50,50,loc"], "an unchanged variant leaves the square alone");
 
 varp42 = 1;
 renderer.changedVarps = new Set([42]);
 (GameRenderer.prototype as any).reloadMultiLocSquares.call(renderer);
-assert.deepEqual(reloaded, ["50,50", "50,50"], "a changed variant reloads it");
+assert.deepEqual(reloaded, ["50,50,loc", "50,50,loc"], "a changed variant reloads it");
 assert.equal(factoryVarBitLoaderCalls, 0, "reloads reuse the VarManager's varbit loader");
 
 console.log("multiloc-deck-reload: ok");

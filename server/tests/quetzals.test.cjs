@@ -810,3 +810,43 @@ test("every site's Renu stands on its landing site, facing the way the site does
     assert.equal(spawn.direction ?? 1, facing[loc.getFace()], `${varbit} faces as its landing site`);
   }
 });
+
+test("starting Twilight's Promise ends a first trip still waiting on Regulus's welcome (3 -> 4), and nothing else", () => {
+  const handlers = hooks.events.get("quetzal:first-trip-welcomed") ?? [];
+  assert.equal(handlers.length, 1, "Primio listens for the quest start");
+  for (const [before, after] of [[0, 0], [2, 2], [3, 4], [4, 4]]) {
+    const player = createPlayer({ varbits: { vmq2_first_travel: before, vmq2: 2 } });
+    handlers.forEach((handler) => handler({ player }));
+    const sender = player.getPacketSender();
+    assert.equal(sender.getVarbit(varbitId("vmq2_first_travel")), after, `first trip ${before}`);
+    assert.equal(sender.getVarbit(varbitId("vmq2")), 2, "the shared varp keeps the quest stage");
+  }
+});
+
+test("Varrock's Regulus: Talk-to plays the first trip, 'Sounds good.' moves it to 2, then the retry and after-trip lines (rec 1695)", () => {
+  completeQuests = new Set(["children_of_the_sun"]);
+  try {
+    const player = createPlayer({ at: new Location(3280, 3413, 0), varbits: { vmq2_first_travel: 1 } });
+    const sender = player.getPacketSender();
+    const talk = (npcId) => { const event = { player, npcId, handled: false }; return [Primio.talkToRegulus(event), event.handled]; };
+    assert.deepEqual(talk(12883), [true, true]);
+    assert.equal(dialogueStarts.at(-1).variant, "talking-in-varrock-talking-to-take-the-first-trip");
+    assert.equal(sender.getVarbit(varbitId("vmq2_first_travel")), 1, "talking alone does not agree to the trip");
+    const line = { player, npcId: 12884, text: "Sounds good." };
+    (hooks.events.get("npc-dialogue:line") ?? []).forEach((handler) => handler(line));
+    line.after();
+    assert.equal(sender.getVarbit(varbitId("vmq2_first_travel")), 2, "the trip is agreed, so both gain Travel");
+    talk(12884);
+    assert.equal(dialogueStarts.at(-1).variant, "talking-in-varrock-talking-again-before-taking-the-first-trip");
+    Common.setVarbits(player, { vmq2_first_travel: 4, varlamore_visited: 1 });
+    talk(12884);
+    assert.equal(dialogueStarts.at(-1).variant, "talking-in-varrock-talking-after-taking-the-first-trip");
+    assert.deepEqual(talk(12885), [false, false], "the Fortis Regulus keeps his own dialogue");
+  } finally {
+    completeQuests = new Set();
+  }
+  const spawns = require("../data/definitions/npc-spawns.json");
+  const at = (x, y) => spawns.filter((spawn) => spawn.x === x && spawn.y === y && spawn.level === 0).map((spawn) => spawn.id);
+  assert.deepEqual(at(3281, 3413), [13370], "Regulus stands outside the east gate as his multi-NPC (rev 242 capture tick 410)");
+  assert.deepEqual(at(3277, 3411), [13371], "and Primio as hers, without Travel before the trip is agreed");
+});

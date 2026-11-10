@@ -9,6 +9,8 @@
 // No capture shows a full bag at any of these: refusal wording is ours.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
+const { mkdtempSync, rmSync } = require("node:fs");
+const { tmpdir } = require("node:os");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
@@ -21,6 +23,7 @@ const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/ActionDialogue");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
 
 const HOME = [3222, 3218];
 const CONTINUE_CHILD = { 231: 5, 217: 5, 193: 0, 229: 2 };
@@ -180,13 +183,71 @@ async function clickLoc(t, f, id) {
 
 // ------------------------------------------------------------------ The Dig Site
 
+async function reloadDigSite(t, original) {
+  const directory = mkdtempSync(path.join(tmpdir(), "tsps-digsite-"));
+  const previousDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+  JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  try {
+    const persistence = new JsonPlayerPersistence();
+    const username = original.p.getUsername();
+    persistence.save(original.p);
+    await persistence.flush();
+
+    const saved = new JsonPlayerPersistence().load(username);
+    assert.ok(saved);
+    const restored = actor(t, DIG, 0);
+    restored.p.setUsername(username);
+    saved.applyToPlayer(restored.p);
+    assert.equal(stageOf(restored, DIG), stageOf(original, DIG));
+    return restored;
+  } finally {
+    JsonPlayerPersistence.SAVE_DIRECTORY = previousDirectory;
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test("Dig Site: the journal remembers the curator's stamp after a stage 1 reload", async (t) => {
+  const started = actor(t, DIG, 1);
+  put(started, I.UNSTAMPED_LETTER, 0);
+  await talk(t, started, N.CURATOR_HAIG_HALEN);
+
+  const restored = await reloadDigSite(t, started);
+  assert.equal(restored.inv.getAmount(I.SEALED_LETTER), 1);
+  const digSite = quest(DIG);
+  assert.match(digSite.buildJournal(restored.p, digSite).join(" "), /curator stamped my letter/);
+});
+
+test("Dig Site: the first student signs after a reload following letter delivery", async (t) => {
+  const started = actor(t, DIG, 1);
+  put(started, I.UNSTAMPED_LETTER, 0);
+  await talk(t, started, N.CURATOR_HAIG_HALEN);
+  assert.equal(started.inv.getAmount(I.SEALED_LETTER), 1);
+  await talk(t, started, N.EXAMINER);
+  assert.equal(started.inv.getAmount(I.SEALED_LETTER), 0);
+
+  const restored = await reloadDigSite(t, started);
+  await talk(t, restored, N.STUDENT);
+  assert.equal(restored.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1);
+  assert.equal(stageOf(restored, DIG), 2);
+});
+
+test("Dig Site: a legacy save after the first exam still points to the students", async (t) => {
+  const digSite = quest(DIG);
+  for (const stage of [2, 3]) {
+    const restored = await reloadDigSite(t, actor(t, DIG, stage));
+    assert.match(digSite.buildJournal(restored.p, digSite).join(" "), /three students/);
+  }
+});
+
 test("Dig Site: the student refuses a full bag and the exam waits; with room he signs", async (t) => {
-  const control = actor(t, DIG, 1);
+  // The students only take part once the examiner has the curator's stamped letter (stage 1).
+  const letterDelivered = (f) => { f.p.setAttribute("quest.the_dig_site.letter_delivered", true); return f; };
+  const control = letterDelivered(actor(t, DIG, 1));
   await talk(t, control, N.STUDENT);
   assert.equal(control.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1, "control: the certificate");
   assert.equal(stageOf(control, DIG), 2, "control: and the stage");
 
-  const f = actor(t, DIG, 1);
+  const f = letterDelivered(actor(t, DIG, 1));
   fill(f);
   await talk(t, f, N.STUDENT);
   assert.equal(stageOf(f, DIG), 1, "the exam waits");

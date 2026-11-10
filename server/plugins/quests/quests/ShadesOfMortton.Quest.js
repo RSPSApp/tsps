@@ -29,10 +29,24 @@
  * capture 1846. Legacy LostCityRS scripts (quest_mortton/game_mortton, pinned
  * in issue #196) remain the starting point for the minigame state.
  *
- * Gaps: the afflicted/cured transformations are modelled with per-player flags
- * rather than NPC changes (the fire altar is a real spawned object and its lit
- * state is world-wide); the diary book interface, the Flamtaer resource-pool
- * percentages are not reproduced; pyre-log sacred-oil dose counts are approximates.
+ * The temple follows the OSRS Wiki minigame page: interface 171 shows repair
+ * (varp 343, shared), resources (varp 344, the player's own pool: +5% for each
+ * set of 1 limestone brick, 1 timber beam or plank and 5 swamp paste) and
+ * sanctity (varp 345, the player's own, -1% a minute and gone on logout). Each
+ * successful build spends 1% resources for +1% repair; walls show the repair
+ * state (cache locs 4068-4078 and corners 4079-4089) and the cache's broken altar
+ * (4092) becomes the unlit (4091) and lit (4090) fire altar. Sacred oil needs 10%
+ * sanctity and costs 0.9% a dose; serum 208 needs 20% and costs 5% a dose.
+ * Serums turn Razmire, Ulsquire and the afflicted villagers into their cured NPCs
+ * for a while (the NPC itself changes, for every player, as on live); a 208 cure
+ * of Razmire or Ulsquire is the player's for good, so talking to him cures him
+ * again. Razmire's two Trade options open his own stores.
+ *
+ * Unverified (no recording found): build cadence and success chance, the
+ * Crafting XP per build (tip.it: about 76 per 1% of supplies), how fast idle
+ * repair decays, the altar's repair thresholds, how long each cure lasts and
+ * the villagers' cure rewards (Wiki names coins, olive oil, tarromin and, for
+ * 208, the odd bronze key). Those are the TUNABLE constants below.
  */
 module.exports = function registerShadesOfMorttonQuest(api) {
   const {
@@ -57,6 +71,20 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     NpcIdentifiers.AFFLICTED_RAZMIRE_,
     NpcIdentifiers.RAZMIRE_KEELGAN,
   ]);
+  /** Afflicted NPC -> the cured NPC it turns into (cache: same model, Talk-to only). */
+  const CURED_FORM = new Map([
+    [NpcIdentifiers.AFFLICTED_ULSQUIRE_, NpcIdentifiers.ULSQUIRE_SHAUNCY],
+    [NpcIdentifiers.AFFLICTED_RAZMIRE_, NpcIdentifiers.RAZMIRE_KEELGAN],
+  ]);
+  const VILLAGER_CURED_FORM = new Map([
+    [NpcIdentifiers.AFFLICTED, NpcIdentifiers.MORTTON_LOCAL],
+    [NpcIdentifiers.AFFLICTED_2, NpcIdentifiers.MORTTON_LOCAL_2],
+    [NpcIdentifiers.AFFLICTED_3, NpcIdentifiers.MORTTON_LOCAL_3],
+    [NpcIdentifiers.AFFLICTED_4, NpcIdentifiers.MORTTON_LOCAL_4],
+  ]);
+  // Razmire's stores (shops.json ids). shops.json binds both to one option, so neither opened.
+  const RAZMIRE_GENERAL_STORE = 1294;
+  const RAZMIRE_BUILDERS_STORE = 1293;
 
   const SHADE_NPC_IDS = new Set([
     NpcIdentifiers.LOAR_SHADOW,
@@ -77,7 +105,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const VARP_SHADES_OF_MORTTON = 339;
   const VARP_MORTTON_MULTI = 340;
   const VARP_TEMPLE_REPAIRED = 343;
+  const VARP_TEMPLE_RESOURCES = 344;
   const VARP_TEMPLE_SANCTITY = 345;
+  // Interface 171 is the temple HUD (clientscript 947 reads varps 343-345).
+  const TEMPLE_HUD_INTERFACE = 171;
+  const OVERLAY_HUD_UID = (161 << 16) | 8;
   // Varp 340: bits 1/3 are Quest Helper's partial 207 visible flags (kept as
   // 3/12 with the LostCity-derived 0/2 used flags), bits 5/6 are its permanent
   // 208 flags, and bit 7 is the cache's made_perm_serum, set at the altar.
@@ -86,7 +118,35 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const MULTI_ULSQUIRE_PERMANENT = 1 << 5;
   const MULTI_RAZMIRE_PERMANENT = 1 << 6;
   const MULTI_PERM_SERUM = 1 << 7;
-  const FLAMTAER_BRACELET_REPAIRS = 5;
+  // Wiki (Flamtaer bracelet): 80 charges, one per build, about 75% more sanctity.
+  const FLAMTAER_BRACELET_CHARGES = 80;
+  const FLAMTAER_BRACELET_SANCTITY = 1.75;
+  // Mod Ash (Wiki, Flamtaer hammer): an invisible +40 Crafting while building.
+  const FLAMTAER_HAMMER_BOOST = 40;
+  const REPAIR_CRAFTING_LEVEL = 20;
+
+  // TUNABLE (unverified). Sanctity is kept in tenths of a percent.
+  const BUILD_ATTEMPT_TICKS = 4;
+  const BUILD_SANCTITY_TENTHS = 30; // capture 1846: +2 at once, +1 four ticks later
+  const BUILD_CRAFTING_XP = 76; // tip.it: "around 76 exp per 1% of used building supplies"
+  const RESOURCES_PER_SET = 5;
+  const REPAIR_IDLE_DECAY_TICKS = 100; // -1% a minute once nobody has built for a minute
+  const SANCTITY_DECAY_TICKS = 100; // Wiki: -1% per minute
+  const SHADE_KILL_SANCTITY_TENTHS = 20; // Wiki: 2% per shade killed near the temple
+  const OIL_MIN_SANCTITY_TENTHS = 100; // Wiki: 10%
+  const OIL_COST_TENTHS_PER_DOSE = 9; // Wiki: 0.9% per dose
+  const SERUM_MIN_SANCTITY_TENTHS = 200; // Wiki: 20%
+  const SERUM_COST_TENTHS_PER_DOSE = 50; // Wiki: 5% per dose
+  const QUEST_MIN_SANCTITY_TENTHS = 200; // quest: 100% repair and 20 sanctity
+  const ALTAR_BREAKS_BELOW = 50; // the restored altar crumbles again below this repair
+  const ALTAR_GOES_OUT_BELOW = 90; // the flame goes out below this repair
+  const SANCTIFY_TICKS = 3;
+  const CURE_TICKS_FRESH_207 = 300;
+  const CURE_TICKS_STALE_207 = 30; // "not too fresh": about one conversation
+  const CURE_TICKS_208 = 1000;
+  const CURE_TICKS_VILLAGER = 100;
+  // The temple island, where the HUD shows and shade kills count.
+  const TEMPLE_AREA = { minX: 3496, maxX: 3516, minY: 3306, maxY: 3326 };
 
   const STAGE_NOT_STARTED = 0;
   const STAGE_READ_DIARY = 5;
@@ -148,9 +208,21 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     ObjectIdentifiers.FIRE_ALTAR,
     ObjectIdentifiers.BROKEN_FIRE_ALTAR,
   ]);
-  // The cache's Mort'ton map has no altar at the temple centre, so the plugin spawns one.
+  // The cache places the broken fire altar (4092, type 10, rotation 0) at the temple centre.
   const FIRE_ALTAR_LOCATION = new Location(3506, 3316, 0);
   const FIRE_ALTAR_OBJECT_TYPE = 10;
+  // Cache map region 54_51: the temple's wall locs (type 10) and their rotations. A wall
+  // shows repair/10 steps past its broken form: 4068 -> 4069..4077 -> 4078 ("Reinforce"),
+  // corners 4079 -> 4080..4088 -> 4089.
+  const WALL_BASE_ID = ObjectIdentifiers.BROKEN_WALL;
+  const CORNER_BASE_ID = ObjectIdentifiers.BROKEN_WALL_2;
+  const TEMPLE_WALLS = [
+    [3504, 3315, 0, false], [3504, 3316, 0, false], [3504, 3317, 0, false],
+    [3505, 3314, 3, false], [3505, 3318, 1, false], [3506, 3318, 1, false],
+    [3507, 3314, 3, false], [3507, 3318, 1, false],
+    [3508, 3315, 2, false], [3508, 3316, 2, false], [3508, 3317, 2, false],
+    [3504, 3314, 3, true], [3504, 3318, 0, true], [3508, 3314, 2, true], [3508, 3318, 1, true],
+  ].map(([x, y, rotation, corner]) => ({ x, y, rotation, corner }));
   const FLAMTAER_REGION_ID = ((FIRE_ALTAR_LOCATION.getX() >> 6) << 8) | (FIRE_ALTAR_LOCATION.getY() >> 6);
   const TEMPLE_WALL_OBJECT_IDS = new Set([
     ObjectIdentifiers.BROKEN_WALL,
@@ -234,8 +306,12 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const TABLE_SEARCHED_ATTRIBUTE = "quest.shades_of_mortton.table_searched";
   const TEMPLE_REPAIRED_ATTRIBUTE = "shades-of-mortton:temple-repaired";
   const TEMPLE_SANCTITY_ATTRIBUTE = "shades-of-mortton:temple-sanctity";
-  // Older saves stored a 0..5 wall-repair count under this key.
-  const LEGACY_TEMPLE_BUILD_ATTRIBUTE = "quest.shades_of_mortton.temple_build";
+  // Sanctity in tenths of a percent; deliberately not persisted (Wiki: lost on logout).
+  const SANCTITY_TENTHS_ATTRIBUTE = "shades-of-mortton:sanctity-tenths";
+  const TEMPLE_RESOURCES_ATTRIBUTE = "shades-of-mortton:temple-resources";
+  const BRACELET_CHARGES_ATTRIBUTE = "shades-of-mortton:flamtaer-bracelet-charges";
+  // A running build or sanctify loop, so a new click or a step away ends the old one.
+  const ACTION_ATTRIBUTE = "shades-of-mortton:action";
   const PERM_ULSQUIRE_ATTRIBUTE = "shades-of-mortton:perm-ulsquire";
   const PERM_RAZMIRE_ATTRIBUTE = "shades-of-mortton:perm-razmire";
   const MULTI_ATTRIBUTE = "shades-of-mortton:multi";
@@ -275,10 +351,21 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   let quest;
   // One quest registration belongs to one server World, like the altar below.
   const world = api.getWorld();
+  // Shared by everyone on the world, as on live; it starts at 0 after a restart.
   let templeRepaired = 0;
-  // The Flamtaer altar is one world object: unlit (4091) until someone lights it (4090).
+  let lastBuildTick = 0;
+  let templeTicks = 0;
+  let templeTaskStarted = false;
+  let templeRegionLoaded = false;
+  // The Flamtaer altar is one world object: broken (4092), unlit (4091) or lit (4090).
   let altarObject = null;
+  let altarRestored = false;
   let altarLit = false;
+  // The wall loc each temple wall currently shows (null until first swapped from the cache's).
+  const wallObjects = TEMPLE_WALLS.map(() => null);
+  let wallStep = 0;
+  // Players who have the temple HUD open.
+  const hudShown = new Set();
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
@@ -292,32 +379,161 @@ module.exports = function registerShadesOfMorttonQuest(api) {
         : 28;
   }
 
-  function templeProgress(player) {
-    const oldRepaired = Math.min(100, Number(player.getAttribute(TEMPLE_REPAIRED_ATTRIBUTE)) || 0);
-    let sanctity = Math.min(100, Number(player.getAttribute(TEMPLE_SANCTITY_ATTRIBUTE)) || 0);
-    if (oldRepaired === 0 && sanctity === 0) {
-      // Preserve old personal sanctity without inferring a world repair percentage.
-      if (quest.getStage(player) >= STAGE_CAN_LIGHT_ALTAR) {
-        sanctity = 20;
-      } else {
-        const built = Number(player.getAttribute(LEGACY_TEMPLE_BUILD_ATTRIBUTE)) || 0;
-        sanctity = Math.min(100, built);
-      }
-    }
-    return { repaired: templeRepaired, sanctity };
+  function later(ticks, action) {
+    TaskManager.submit(new CountdownTask(null, Math.max(1, ticks), action));
+  }
+
+  function isOnline(player) {
+    return player && player.isRegistered?.() !== false;
+  }
+
+  function inTempleArea(player) {
+    const location = player.getLocation();
+    return location.getZ() === 0 &&
+      location.getX() >= TEMPLE_AREA.minX && location.getX() <= TEMPLE_AREA.maxX &&
+      location.getY() >= TEMPLE_AREA.minY && location.getY() <= TEMPLE_AREA.maxY;
+  }
+
+  /** The player's sanctity in tenths of a percent (0..1000). Not saved: logging out loses it. */
+  function sanctityOf(player) {
+    return Math.max(0, Math.min(1000, Number(player.getAttribute(SANCTITY_TENTHS_ATTRIBUTE)) || 0));
+  }
+
+  function setSanctity(player, tenths) {
+    player.setAttribute(SANCTITY_TENTHS_ATTRIBUTE, Math.max(0, Math.min(1000, Math.round(tenths))));
+    syncTemple(player);
+  }
+
+  /** The player's own building resources, 0..100%. Saved, unlike sanctity. */
+  function resourcesOf(player) {
+    return Math.max(0, Math.min(100, Number(player.getAttribute(TEMPLE_RESOURCES_ATTRIBUTE)) || 0));
+  }
+
+  function setResources(player, value) {
+    player.setAttribute(TEMPLE_RESOURCES_ATTRIBUTE, Math.max(0, Math.min(100, value)));
+    syncTemple(player);
   }
 
   function syncTemple(player) {
-    const { repaired, sanctity } = templeProgress(player);
     const packet = player.getPacketSender();
-    packet.sendConfig(VARP_TEMPLE_REPAIRED, repaired);
-    packet.sendConfig(VARP_TEMPLE_SANCTITY, sanctity);
+    packet.sendConfig(VARP_TEMPLE_REPAIRED, templeRepaired);
+    packet.sendConfig(VARP_TEMPLE_RESOURCES, resourcesOf(player));
+    packet.sendConfig(VARP_TEMPLE_SANCTITY, Math.floor(sanctityOf(player) / 10));
   }
 
   function syncTempleRepairOthers(actor) {
     for (const player of world.getPlayers()) {
       if (player && player !== actor) player.getPacketSender().sendConfig(VARP_TEMPLE_REPAIRED, templeRepaired);
     }
+  }
+
+  function showHud(player) {
+    if (hudShown.has(player)) return;
+    hudShown.add(player);
+    syncTemple(player);
+    player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, TEMPLE_HUD_INTERFACE, 1);
+  }
+
+  function hideHud(player) {
+    if (!hudShown.delete(player)) return;
+    if (isOnline(player)) player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
+  }
+
+  function makeLoc(id, x, y, rotation) {
+    return new GameObject(id, new Location(x, y, 0), FIRE_ALTAR_OBJECT_TYPE, rotation, null);
+  }
+
+  /** Swaps a temple loc for its next form in the same tile and shape slot. */
+  function swapLoc(outgoing, incoming) {
+    if (typeof ObjectManager.replaceInPlace === "function") {
+      ObjectManager.replaceInPlace(outgoing, incoming);
+    } else {
+      ObjectManager.deregister(outgoing, true);
+      ObjectManager.register(incoming, true);
+    }
+  }
+
+  /** Walls show the shared repair state in eleven steps. */
+  function refreshWalls() {
+    if (!templeRegionLoaded) return;
+    const step = Math.max(0, Math.min(10, Math.floor(templeRepaired / 10)));
+    if (step === wallStep) return;
+    wallStep = step;
+    TEMPLE_WALLS.forEach((wall, index) => {
+      const base = wall.corner ? CORNER_BASE_ID : WALL_BASE_ID;
+      const outgoing = wallObjects[index] ?? makeLoc(base, wall.x, wall.y, wall.rotation);
+      const incoming = makeLoc(base + step, wall.x, wall.y, wall.rotation);
+      swapLoc(outgoing, incoming);
+      wallObjects[index] = incoming;
+    });
+  }
+
+  function altarIdFor() {
+    if (!altarRestored) return ObjectIdentifiers.BROKEN_FIRE_ALTAR;
+    return altarLit ? ObjectIdentifiers.FLAMING_FIRE_ALTAR : ObjectIdentifiers.FIRE_ALTAR;
+  }
+
+  /** The altar comes back at full repair, goes out and crumbles again as repair falls. */
+  function refreshAltar() {
+    if (templeRepaired >= 100) altarRestored = true;
+    if (templeRepaired < ALTAR_BREAKS_BELOW) altarRestored = false;
+    if (!altarRestored || templeRepaired < ALTAR_GOES_OUT_BELOW) altarLit = false;
+    if (!templeRegionLoaded) return;
+    const id = altarIdFor();
+    const outgoing = altarObject ?? makeLoc(ObjectIdentifiers.BROKEN_FIRE_ALTAR,
+      FIRE_ALTAR_LOCATION.getX(), FIRE_ALTAR_LOCATION.getY(), 0);
+    if (outgoing.getId() === id) return;
+    const incoming = makeLoc(id, FIRE_ALTAR_LOCATION.getX(), FIRE_ALTAR_LOCATION.getY(), 0);
+    swapLoc(outgoing, incoming);
+    altarObject = incoming;
+  }
+
+  function setTempleRepaired(value) {
+    const next = Math.max(0, Math.min(100, value));
+    if (next === templeRepaired) return;
+    templeRepaired = next;
+    for (const player of world.getPlayers()) {
+      if (player) player.getPacketSender().sendConfig(VARP_TEMPLE_REPAIRED, templeRepaired);
+    }
+    refreshWalls();
+    refreshAltar();
+  }
+
+  /** Once a tick: HUD in the temple area, idle repair decay and sanctity decay. */
+  function templeTick() {
+    templeTicks++;
+    for (const player of [...hudShown]) {
+      if (!isOnline(player) || !inTempleArea(player)) hideHud(player);
+    }
+    for (const player of world.getPlayers()) {
+      if (!player) continue;
+      if (inTempleArea(player) && quest.getStage(player) >= STAGE_ULSQUIRE_TEMPLE) showHud(player);
+      if (templeTicks % SANCTITY_DECAY_TICKS === 0 && sanctityOf(player) > 0) {
+        setSanctity(player, sanctityOf(player) - 10);
+      }
+    }
+    if (templeRepaired > 0 && templeTicks - lastBuildTick >= REPAIR_IDLE_DECAY_TICKS &&
+        templeTicks % REPAIR_IDLE_DECAY_TICKS === 0) {
+      setTempleRepaired(templeRepaired - 1);
+    }
+  }
+
+  function startTempleTask() {
+    if (templeTaskStarted) return;
+    templeTaskStarted = true;
+    const { Task } = api.core;
+    TaskManager.submit(new (class extends Task {
+      constructor() {
+        super(1, null, false);
+      }
+      execute() {
+        try {
+          templeTick();
+        } catch (error) {
+          console.error("[ShadesOfMortton] temple tick failed", error);
+        }
+      }
+    })());
   }
 
   function curedMultiValue(player) {
@@ -503,8 +719,9 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   }
 
   /** Which transcript variant each speaker plays, by quest stage. */
-  function selectVariant({ npcId, player }) {
+  function selectVariant({ npcId, player, npc }) {
     if (!ULSQUIRE_NPC_IDS.has(npcId) && !RAZMIRE_NPC_IDS.has(npcId)) return null;
+    recureOnTalk({ player, npc, npcId });
     const stage = quest.getStage(player);
 
     if (ULSQUIRE_NPC_IDS.has(npcId)) {
@@ -705,6 +922,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   /** Count the shades killed for Razmire and narrate each kill. */
   function handleNpcDeath({ killer, npcId }) {
     if (!killer || !SHADE_NPC_IDS.has(npcId)) return;
+    // Wiki: killing the shades around the temple gives 2% sanctity.
+    if (inTempleArea(killer) && quest.getStage(killer) >= STAGE_ULSQUIRE_TEMPLE) {
+      setSanctity(killer, sanctityOf(killer) + SHADE_KILL_SANCTITY_TENTHS);
+      checkAltarUnlock(killer);
+    }
     const stage = quest.getStage(killer);
     if (stage < STAGE_KILL_SHADES || stage >= STAGE_SHADES_TO_RAZMIRE) return;
     const kills = Math.min(5, (Number(killer.getAttribute(KILLS_ATTRIBUTE)) || 0) + 1);
@@ -821,18 +1043,109 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     }
   }
 
-  /** Serum cures Ulsquire and Razmire so their quest dialogue opens up. */
+  /** Turns an NPC into another form for `ticks`, then back, unless a newer cure took over. */
+  function transformFor(npc, formId, ticks) {
+    if (!npc?.setNpcTransformationId) return;
+    const token = {};
+    npc.__morttonCure = token;
+    npc.setNpcTransformationId(formId);
+    later(ticks, () => {
+      if (npc.__morttonCure !== token) return;
+      npc.__morttonCure = null;
+      if (npc.getNpcTransformationId?.() === formId) npc.setNpcTransformationId(-1);
+    });
+  }
+
+  function npcOf(event) {
+    return event.target ?? event.npc ?? null;
+  }
+
+  function itemName(itemId) {
+    return api.core.ItemDefinition?.forId?.(itemId)?.getName?.() ?? "something";
+  }
+
+  function give(player, itemId, amount) {
+    const inventory = player.getInventory();
+    const item = new api.core.Item(itemId, amount);
+    if (inventory.getAddableAmount?.(item) < amount && typeof inventory.forceAdd === "function") {
+      inventory.forceAdd(player, item);
+    } else {
+      inventory.adds(itemId, amount);
+    }
+  }
+
+  const randomInt = (low, high) => low + Math.floor(Math.random() * (high - low + 1));
+  const BRONZE_KEYS = [
+    ItemIdentifiers.BRONZE_KEY_RED,
+    ItemIdentifiers.BRONZE_KEY_BROWN,
+    ItemIdentifiers.BRONZE_KEY_CRIMSON,
+    ItemIdentifiers.BRONZE_KEY_BLACK,
+    ItemIdentifiers.BRONZE_KEY_PURPLE,
+  ];
+
+  /**
+   * A cured villager's thanks. TUNABLE (unverified weights): the Wiki names coins, olive oil and
+   * tarromin, and for serum 208 a better haul and the occasional bronze key.
+   */
+  function villagerReward(player, permanent) {
+    const roll = Math.random() * 100;
+    if (permanent && roll < 4) {
+      const key = BRONZE_KEYS[randomInt(0, BRONZE_KEYS.length - 1)];
+      give(player, key, 1);
+      player.sendMessage(`You've been given a ${itemName(key).toLowerCase()}.`);
+      return;
+    }
+    if (roll < (permanent ? 34 : 30)) {
+      const amount = permanent ? randomInt(1, 2) : 1;
+      give(player, ItemIdentifiers.TARROMIN, amount);
+      player.sendMessage(`You've been given ${amount === 1 ? "some" : amount} tarromin.`);
+      return;
+    }
+    if (roll < (permanent ? 59 : 50)) {
+      const oil = permanent ? ItemIdentifiers.OLIVE_OIL_2_ : ItemIdentifiers.OLIVE_OIL_1_;
+      give(player, oil, 1);
+      player.sendMessage(`You've been given some ${itemName(oil).toLowerCase()}.`);
+      return;
+    }
+    const coins = permanent ? randomInt(20, 60) : randomInt(3, 25);
+    give(player, ItemIdentifiers.COINS, coins);
+    player.sendMessage(`You've been given ${coins} coins.`);
+  }
+
+  function cureVillager(event, is208) {
+    const { player } = event;
+    const npc = npcOf(event);
+    const curedId = VILLAGER_CURED_FORM.get(event.npcId);
+    if (!npc || curedId === undefined) return;
+    if (!drainDoses(player, is208 ? SERUM_208_ITEM_IDS : SERUM_207_ITEM_IDS, 1)) return;
+    npc.getCombat?.()?.reset?.();
+    // Wiki (Afflicted): even serum 208 only cures ordinary villagers for a while.
+    transformFor(npc, curedId, CURE_TICKS_VILLAGER);
+    villagerReward(player, is208);
+  }
+
+  /** Serum cures Ulsquire and Razmire so their quest dialogue opens up, and changes the NPC. */
   function handleItemOnNpc(event) {
     const npcId = event.npcId ?? event.target?.getId?.();
-    if (!ULSQUIRE_NPC_IDS.has(npcId) && !RAZMIRE_NPC_IDS.has(npcId)) return;
     const is207 = SERUM_207_ITEM_IDS.includes(event.itemId);
     const is208 = SERUM_208_ITEM_IDS.includes(event.itemId);
     if (!is207 && !is208) return;
+    if (VILLAGER_CURED_FORM.has(npcId)) {
+      event.handled = true;
+      if (quest.getStage(event.player) < STAGE_READ_DIARY) return;
+      cureVillager(event, is208);
+      return;
+    }
+    if (!ULSQUIRE_NPC_IDS.has(npcId) && !RAZMIRE_NPC_IDS.has(npcId)) return;
     event.handled = true;
     const { player } = event;
     if (quest.getStage(player) < STAGE_READ_DIARY) return;
     if (!drainDoses(player, is207 ? SERUM_207_ITEM_IDS : SERUM_208_ITEM_IDS, 1)) return;
     const isUlsquire = ULSQUIRE_NPC_IDS.has(npcId);
+    const fresh = quest.getStage(player) >= STAGE_MADE_SERUM;
+    const npc = npcOf(event);
+    const curedId = isUlsquire ? NpcIdentifiers.ULSQUIRE_SHAUNCY : NpcIdentifiers.RAZMIRE_KEELGAN;
+    transformFor(npc, curedId, is208 ? CURE_TICKS_208 : fresh ? CURE_TICKS_FRESH_207 : CURE_TICKS_STALE_207);
     if (is208) {
       player.setAttribute(
         isUlsquire ? PERM_ULSQUIRE_ATTRIBUTE : PERM_RAZMIRE_ATTRIBUTE,
@@ -847,7 +1160,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       );
       setMulti(player);
     }
-    if (quest.getStage(player) < STAGE_MADE_SERUM) {
+    if (!fresh) {
       player.sendMessage(
         "The serum it works...but it's not too fresh, make some yourself and then it might work for longer."
       );
@@ -859,6 +1172,27 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       player.getInventory().adds(ItemIdentifiers.COINS, coins);
       player.sendMessage(`You've been given ${coins} coins.`);
     }
+  }
+
+  /**
+   * Wiki (Serum 208): a permanently cured Razmire or Ulsquire may look afflicted again after a
+   * while, but becomes cured when talked to, for that player and everyone else.
+   */
+  function recureOnTalk({ player, npc, npcId }) {
+    const curedId = CURED_FORM.get(npcId);
+    if (curedId === undefined || !npc) return;
+    const permanent = npcId === NpcIdentifiers.AFFLICTED_RAZMIRE_
+      ? player.getAttribute(PERM_RAZMIRE_ATTRIBUTE)
+      : player.getAttribute(PERM_ULSQUIRE_ATTRIBUTE);
+    if (permanent) transformFor(npc, curedId, CURE_TICKS_208);
+  }
+
+  /** Razmire's two Trade options, each to its own store (the quest-shop gates still apply). */
+  function tradeWithRazmire(shopId) {
+    return (event) => {
+      event.handled = true;
+      api.core.ShopManager.open(event.player, shopId, true);
+    };
   }
 
   /** Materials repair the temple; sacred flame oil; logs and remains on the pyre. */
@@ -885,74 +1219,87 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     }
   }
 
-  function repairTemple(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_ULSQUIRE_TEMPLE) {
-      player.sendMessage("You're not sure how you would go about fixing this.");
-      return;
-    }
-    if (
-      !held(player, ItemIdentifiers.HAMMER) &&
-      !held(player, ItemIdentifiers.FLAMTAER_HAMMER)
-    ) {
-      player.sendMessage("You need a hammer to repair this temple.");
-      return;
-    }
-    const hasTimber =
-      held(player, ItemIdentifiers.TIMBER_BEAM) || held(player, ItemIdentifiers.PLANK);
-    if (
-      !held(player, ItemIdentifiers.LIMESTONE_BRICK) ||
-      !hasTimber ||
-      !held(player, ItemIdentifiers.SWAMP_PASTE, 5)
-    ) {
-      player.sendMessage(REPAIR_MATERIALS_MESSAGE);
-      return;
-    }
-    // One build tick consumes one material set. A worn Flamtaer bracelet
-    // performs the bracelet's rapid-build ticks from one click (capture 1846).
-    const bracelet =
-      player.getEquipment?.()?.get?.(Equipment.HANDS_SLOT)?.getId?.() ===
+  /**
+   * Runs `step` every `ticks` until it returns false, the player walks away or logs out, or
+   * another loop replaces it.
+   */
+  function repeatAction(player, ticks, step) {
+    const token = {};
+    player.setAttribute(ACTION_ATTRIBUTE, token);
+    const start = player.getLocation().clone();
+    const run = () => {
+      if (!isOnline(player) || player.getAttribute(ACTION_ATTRIBUTE) !== token) return;
+      if (!player.getLocation().equals(start)) {
+        player.setAttribute(ACTION_ATTRIBUTE, null);
+        return;
+      }
+      if (step() === false) {
+        player.setAttribute(ACTION_ATTRIBUTE, null);
+        return;
+      }
+      later(ticks, run);
+    };
+    run();
+  }
+
+  function hammerBoost(player) {
+    if (held(player, ItemIdentifiers.FLAMTAER_HAMMER)) return FLAMTAER_HAMMER_BOOST;
+    if (held(player, ItemIdentifiers.HAMMER) || held(player, ItemIdentifiers.IMCANDO_HAMMER)) return 0;
+    return null;
+  }
+
+  function wearingBracelet(player) {
+    return player.getEquipment?.()?.get?.(Equipment.HANDS_SLOT)?.getId?.() ===
       ItemIdentifiers.FLAMTAER_BRACELET;
-    const ticks = bracelet ? FLAMTAER_BRACELET_REPAIRS : 1;
-    const timberId = held(player, ItemIdentifiers.TIMBER_BEAM)
-      ? ItemIdentifiers.TIMBER_BEAM
-      : ItemIdentifiers.PLANK;
-    if (
-      !held(player, ItemIdentifiers.LIMESTONE_BRICK, ticks) ||
-      !held(player, timberId, ticks) ||
-      !held(player, ItemIdentifiers.SWAMP_PASTE, 5 * ticks)
-    ) {
-      player.sendMessage(REPAIR_MATERIALS_MESSAGE);
+  }
+
+  /** One bracelet charge per build; Wiki: it disappears after 80. */
+  function useBraceletCharge(player) {
+    const left = (Number(player.getAttribute(BRACELET_CHARGES_ATTRIBUTE)) || FLAMTAER_BRACELET_CHARGES) - 1;
+    if (left > 0) {
+      player.setAttribute(BRACELET_CHARGES_ATTRIBUTE, left);
       return;
     }
-    player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, ticks);
-    player.getInventory().deleteNumber(timberId, ticks);
-    player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5 * ticks);
-    const { sanctity } = templeProgress(player);
-    templeRepaired = Math.min(100, templeRepaired + ticks);
-    // Capture 1846: one repair click gives +1% repair and +2 sanctity, then a
-    // separate sanctity tick lands a few ticks later.
-    player.setAttribute(
-      TEMPLE_SANCTITY_ATTRIBUTE,
-      Math.min(100, sanctity + Math.min(2, ticks + 1))
+    player.setAttribute(BRACELET_CHARGES_ATTRIBUTE, FLAMTAER_BRACELET_CHARGES);
+    const equipment = player.getEquipment();
+    equipment.set?.(Equipment.HANDS_SLOT, new api.core.Item(-1));
+    equipment.refreshItems?.();
+    player.sendMessage("Your Flamtaer bracelet crumbles to dust.");
+  }
+
+  function setsInInventory(player) {
+    const timber = player.getInventory().getAmount(ItemIdentifiers.TIMBER_BEAM) +
+      player.getInventory().getAmount(ItemIdentifiers.PLANK);
+    return Math.min(
+      player.getInventory().getAmount(ItemIdentifiers.LIMESTONE_BRICK),
+      timber,
+      Math.floor(player.getInventory().getAmount(ItemIdentifiers.SWAMP_PASTE) / 5)
     );
-    syncTemple(player);
-    syncTempleRepairOthers(player);
-    TaskManager.submit(new CountdownTask(player, 4, () => {
-      if (player.isRegistered?.() === false) return;
-      const progress = templeProgress(player);
-      player.setAttribute(
-        TEMPLE_SANCTITY_ATTRIBUTE,
-        Math.min(100, progress.sanctity + 1)
-      );
-      syncTemple(player);
-    }));
-    player.sendMessage("You repair the temple wall.");
-    if (stage < STAGE_REBUILD_TEMPLE) quest.setStage(player, STAGE_REBUILD_TEMPLE);
-    const progress = templeProgress(player);
+  }
+
+  /** Turns whole material sets from the inventory into resources, 5% each, up to 100%. */
+  function topUpResources(player) {
+    let resources = resourcesOf(player);
+    let added = 0;
+    while (resources + RESOURCES_PER_SET <= 100 && setsInInventory(player) > 0) {
+      const timberId = held(player, ItemIdentifiers.TIMBER_BEAM)
+        ? ItemIdentifiers.TIMBER_BEAM
+        : ItemIdentifiers.PLANK;
+      player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, 1);
+      player.getInventory().deleteNumber(timberId, 1);
+      player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5);
+      resources += RESOURCES_PER_SET;
+      added++;
+    }
+    if (added > 0) setResources(player, resources);
+    return added;
+  }
+
+  function checkAltarUnlock(player) {
     if (
-      progress.repaired >= 100 &&
-      progress.sanctity >= 20 &&
+      templeRepaired >= 100 &&
+      sanctityOf(player) >= QUEST_MIN_SANCTITY_TENTHS &&
+      quest.getStage(player) >= STAGE_REBUILD_TEMPLE &&
       quest.getStage(player) < STAGE_CAN_LIGHT_ALTAR
     ) {
       quest.setStage(player, STAGE_CAN_LIGHT_ALTAR);
@@ -960,63 +1307,156 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     }
   }
 
-  /** Serum 207 placed in the sacred flame becomes serum 208 of the same dose. */
-  function sanctifySerum(player) {
+  /** Repair or Reinforce: keeps building while there are resources and the player stays put. */
+  function repairTemple(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_ULSQUIRE_TEMPLE) {
+      player.sendMessage("You're not sure how you would go about fixing this.");
+      return;
+    }
+    if (hammerBoost(player) === null) {
+      player.sendMessage("You need a hammer to repair this temple.");
+      return;
+    }
+    if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < REPAIR_CRAFTING_LEVEL) {
+      player.sendMessage(`You need a Crafting level of ${REPAIR_CRAFTING_LEVEL} to repair this temple.`);
+      return;
+    }
+    topUpResources(player);
+    if (resourcesOf(player) < 1) {
+      player.sendMessage(REPAIR_MATERIALS_MESSAGE);
+      return;
+    }
+    if (stage < STAGE_REBUILD_TEMPLE) quest.setStage(player, STAGE_REBUILD_TEMPLE);
+    showHud(player);
+    // Capture 1846: the click's first build lands at once (+1% repair, +2% sanctity).
+    repeatAction(player, BUILD_ATTEMPT_TICKS, () => {
+      lastBuildTick = templeTicks;
+      const boost = hammerBoost(player);
+      if (boost === null) {
+        player.sendMessage("You need a hammer to repair this temple.");
+        return false;
+      }
+      if (resourcesOf(player) < 1) topUpResources(player);
+      if (resourcesOf(player) < 1) {
+        player.sendMessage("You have run out of building resources.");
+        return false;
+      }
+      // TUNABLE: a Crafting roll; the Flamtaer hammer adds an invisible +40.
+      const level = player.getSkillManager().getCurrentLevel(Skill.CRAFTING) + boost;
+      const chance = Math.max(0.25, Math.min(0.6, 0.25 + (level - REPAIR_CRAFTING_LEVEL) / 200));
+      if (Math.random() >= chance) return true;
+      setResources(player, resourcesOf(player) - 1);
+      setTempleRepaired(templeRepaired + 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, BUILD_CRAFTING_XP);
+      let gain = BUILD_SANCTITY_TENTHS;
+      if (wearingBracelet(player)) {
+        gain = Math.round(gain * FLAMTAER_BRACELET_SANCTITY);
+        useBraceletCharge(player);
+      }
+      // Capture 1846: most of the sanctity at once, the last 1% four ticks later.
+      setSanctity(player, sanctityOf(player) + gain - 10);
+      later(4, () => {
+        if (isOnline(player)) setSanctity(player, sanctityOf(player) + 10);
+        if (isOnline(player)) checkAltarUnlock(player);
+      });
+      checkAltarUnlock(player);
+      return true;
+    });
+  }
+
+  function sanctifyGate(player, item) {
     if (quest.getStage(player) < STAGE_CAN_LIGHT_ALTAR) {
       player.sendMessage(
         "You need to have repaired or reinforced the walls of the temple before you can use the sacred flame."
       );
-      return;
+      return false;
     }
     if (!altarLit) {
-      player.sendMessage("The fire altar needs to be lit before you can sanctify the serum.");
-      return;
+      player.sendMessage(`The fire altar needs to be lit before you can sanctify ${item}.`);
+      return false;
     }
+    return true;
+  }
+
+  const doseCount = (itemId, chain) => 4 - chain.indexOf(itemId);
+
+  /** Serum 207 placed in the sacred flame becomes serum 208: 20% needed, 5% a dose. */
+  function sanctifySerumOnce(player) {
     for (const [serumId, permanentId] of SERUM_207_TO_208) {
       if (player.getInventory().getAmount(serumId) <= 0) continue;
+      const cost = doseCount(serumId, SERUM_207_ITEM_IDS) * SERUM_COST_TENTHS_PER_DOSE;
+      if (sanctityOf(player) < Math.max(SERUM_MIN_SANCTITY_TENTHS, cost)) return "sanctity";
       player.getInventory().deleteNumber(serumId, 1);
       player.getInventory().adds(permanentId, 1);
+      setSanctity(player, sanctityOf(player) - cost);
       player.setAttribute(MADE_PERM_SERUM_ATTRIBUTE, true);
       setMulti(player);
       player.sendMessage("You sanctify the serum in the sacred flame.");
-      return;
+      return "done";
     }
+    return "none";
   }
 
-  function sanctifyOil(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_CAN_LIGHT_ALTAR) {
-      player.sendMessage(
-        "You need to have repaired or reinforced the walls of the temple before you can use the sacred flame."
-      );
-      return;
-    }
-    if (!altarLit) {
-      player.sendMessage("The fire altar needs to be lit before you can sanctify oil.");
-      return;
-    }
+  /** Olive oil becomes sacred oil: 10% needed, 0.9% a dose. */
+  function sanctifyOilOnce(player) {
     for (const [oilId, sacredId] of OLIVE_TO_SACRED) {
       if (player.getInventory().getAmount(oilId) <= 0) continue;
+      const cost = doseCount(oilId, OLIVE_OIL_ITEM_IDS) * OIL_COST_TENTHS_PER_DOSE;
+      if (sanctityOf(player) < Math.max(OIL_MIN_SANCTITY_TENTHS, cost)) return "sanctity";
       player.getInventory().deleteNumber(oilId, 1);
       player.getInventory().adds(sacredId, 1);
+      setSanctity(player, sanctityOf(player) - cost);
       player.sendMessage("You carefully sanctify the oil in the sacred flame.");
       if (quest.getStage(player) < STAGE_CREATED_SACRED_OIL) {
         quest.setStage(player, STAGE_CREATED_SACRED_OIL);
       }
-      return;
+      return "done";
     }
+    return "none";
+  }
+
+  /** Wiki (31 July 2024): sanctifying carries on through the rest of the vials. */
+  function sanctifyLoop(player, steps) {
+    let made = 0;
+    repeatAction(player, SANCTIFY_TICKS, () => {
+      if (!altarLit) return false;
+      for (const step of steps) {
+        const result = step(player);
+        if (result === "done") {
+          made++;
+          return true;
+        }
+        if (result === "sanctity") {
+          player.sendMessage("You don't have enough sanctity to do that.");
+          return false;
+        }
+      }
+      if (made === 0) player.sendMessage("You have nothing to sanctify.");
+      return false;
+    });
+  }
+
+  function sanctifySerum(player) {
+    if (sanctifyGate(player, "the serum")) sanctifyLoop(player, [sanctifySerumOnce]);
+  }
+
+  function sanctifyOil(player) {
+    if (sanctifyGate(player, "oil")) sanctifyLoop(player, [sanctifyOilOnce]);
+  }
+
+  /** The lit altar's left-click Use: olive oil first, then serum 207. */
+  function useAltar(player) {
+    if (sanctifyGate(player, "anything")) sanctifyLoop(player, [sanctifyOilOnce, sanctifySerumOnce]);
   }
 
   function installAltar({ regionId }) {
-    if (regionId !== FLAMTAER_REGION_ID || altarObject) return;
-    altarObject = new GameObject(
-      altarLit ? ObjectIdentifiers.FLAMING_FIRE_ALTAR : ObjectIdentifiers.FIRE_ALTAR,
-      FIRE_ALTAR_LOCATION.clone(),
-      FIRE_ALTAR_OBJECT_TYPE,
-      0,
-      null
-    );
-    ObjectManager.register(altarObject, true);
+    if (regionId !== FLAMTAER_REGION_ID || templeRegionLoaded) return;
+    templeRegionLoaded = true;
+    startTempleTask();
+    wallStep = 0;
+    refreshWalls();
+    refreshAltar();
   }
 
   function lightAltar(player) {
@@ -1024,6 +1464,10 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       player.sendMessage(
         "You need to have repaired or reinforced the walls of the temple before you can light the sacred flame."
       );
+      return;
+    }
+    if (!altarRestored) {
+      player.sendMessage("The temple needs to be repaired before the fire altar can be lit.");
       return;
     }
     if (!held(player, ItemIdentifiers.TINDERBOX)) {
@@ -1035,18 +1479,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       return;
     }
     altarLit = true;
-    if (altarObject) {
-      const lit = new GameObject(
-        ObjectIdentifiers.FLAMING_FIRE_ALTAR,
-        FIRE_ALTAR_LOCATION.clone(),
-        FIRE_ALTAR_OBJECT_TYPE,
-        0,
-        null
-      );
-      ObjectManager.deregister(altarObject, true);
-      ObjectManager.register(lit, true);
-      altarObject = lit;
-    }
+    refreshAltar();
     player.sendMessage("You light the temple fire.");
   }
 
@@ -1067,6 +1500,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     if (objectId === ObjectIdentifiers.FIRE_ALTAR && event.clickType === 1) {
       event.handled = true;
       lightAltar(player);
+      return;
+    }
+    if (objectId === ObjectIdentifiers.FLAMING_FIRE_ALTAR && event.clickType === 1) {
+      event.handled = true;
+      useAltar(player);
       return;
     }
     if (TEMPLE_WALL_OBJECT_IDS.has(objectId) && event.clickType === 1) {
@@ -1111,8 +1549,12 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     // The old completion value was 100; native rev-227 uses 85.
     if (quest.getStage(player) > STAGE_COMPLETE) quest.setStage(player, STAGE_COMPLETE);
     refreshQuestList(player);
+    // Wiki: sanctity is lost on logout.
+    player.setAttribute(SANCTITY_TENTHS_ATTRIBUTE, 0);
+    hudShown.delete(player);
     syncTemple(player);
     syncCuredNpcs(player);
+    startTempleTask();
   }
 
   api.persistAttribute(KILLS_ATTRIBUTE);
@@ -1120,8 +1562,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   api.persistAttribute(MET_RAZMIRE_ATTRIBUTE);
   api.persistAttribute(OLIVE_OIL_ATTRIBUTE);
   api.persistAttribute(TABLE_SEARCHED_ATTRIBUTE);
+  // Retired keys from older saves (temple repair is world-wide and sanctity is not saved).
   api.persistAttribute(TEMPLE_REPAIRED_ATTRIBUTE, 0);
   api.persistAttribute(TEMPLE_SANCTITY_ATTRIBUTE, 0);
+  api.persistAttribute(TEMPLE_RESOURCES_ATTRIBUTE, 0);
+  api.persistAttribute(BRACELET_CHARGES_ATTRIBUTE, FLAMTAER_BRACELET_CHARGES);
   api.persistAttribute(PERM_ULSQUIRE_ATTRIBUTE, false);
   api.persistAttribute(PERM_RAZMIRE_ATTRIBUTE, false);
   api.persistAttribute(MULTI_ATTRIBUTE);
@@ -1145,6 +1590,10 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   });
 
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Razmire Keelgan", {
+    "Trade-General-Store": tradeWithRazmire(RAZMIRE_GENERAL_STORE),
+    "Trade-Builders-Store": tradeWithRazmire(RAZMIRE_BUILDERS_STORE),
+  });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);

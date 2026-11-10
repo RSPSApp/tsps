@@ -4,6 +4,7 @@ export function dispose(host: LoginRendererHost): void {
 
         // Clear sprite references
         host.logoSprite = undefined;
+        host.hardcoreLogoSprite = undefined;
         host.logoImage = undefined;
         host.logoImageLoaded = false;
         host.titleboxSprite = undefined;

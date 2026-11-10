@@ -523,6 +523,45 @@ test('native trades preserve confirmation, settle once and still cancel through 
     assert.equal(saves.length, before + 2, 'late accept/decline never settles twice');
     assert.deepEqual([count(a, COINS), count(b, LOBSTER), count(b, COINS)], [200, 3, 300]);
   });
+  await t.test('Shield of Arrav handover items can be traded directly', async test => {
+    require('../plugins/quests/quests/ShieldOfArrav.Quest')(PluginManager.createApi('ShieldOfArravTrade'));
+    const { WEAPON_STORE_KEY: key, WEAPON_STORE_KEY_2: note, PHOENIX_CROSSBOW: crossbow,
+      HALF_CERTIFICATE: left, HALF_CERTIFICATE_2: right, CERTIFICATE: certificate } = core.ItemIdentifiers;
+    const pair = [actor(test), actor(test)];
+    const [alice, bob] = pair.map(f => f.player);
+    const inventory = alice.getInventory();
+    inventory.setItem(0, new Item(key, 1));
+    inventory.setItem(1, new Item(key, 1).setMetaValue(Item.UNTRADEABLE_META, true));
+    inventory.setItem(2, new Item(key, 1));
+    inventory.setItem(3, new Item(note, 2));
+    inventory.setItem(4, new Item(crossbow, 1));
+    inventory.setItem(5, new Item(left, 2));
+    inventory.setItem(6, new Item(certificate, 1));
+    bob.getInventory().setItem(0, new Item(right, 2));
+    alice.getTrading().requestTrade(bob);
+    bob.getTrading().requestTrade(alice);
+    await action(pair[0], 0, 0, 3, key);
+    for (const [slot, id] of [[1, key], [3, note], [4, crossbow], [5, left], [6, certificate]]) {
+      await action(pair[0], 0, slot, 1, id);
+    }
+    await action(pair[1], 0, 0, 1, right);
+
+    const offer = alice.getTrading().getContainer();
+    assert.equal(offer.getAmount(key), 2, 'both normal keys enter the offer');
+    assert.equal(count(alice, key), 1, 'the untradeable copy stays in the inventory');
+    assert.equal(offer.getAmount(certificate), 0, 'the combined certificate cannot be traded');
+    await action(pair[0], 1, offer.getSlotForItemId(key), 1, key);
+    assert.equal(offer.getAmount(key), 1, 'a key can be removed from the offer');
+    for (const f of pair) await action(f, 2);
+    for (const f of pair) await action(f, 4);
+    ended(pair);
+    assert.deepEqual([key, note, crossbow, left].map(id => count(bob, id)), [1, 1, 1, 1]);
+    assert.equal(count(alice, right), 1);
+    assert.equal(count(alice, certificate), 1);
+    for (const id of [key, note, crossbow, left, right]) {
+      assert.equal(ItemDefinition.forId(id).isTradeable(), false, 'the cache trade flag stays false');
+    }
+  });
   for (const stage of ['offer', 'confirm']) for (const cancel of ['decline', 'interface-close']) {
     await t.test(stage + ' ' + cancel + ' returns offers and closes both sessions', async test => {
       const pair = await start(test); if (stage === 'confirm') await confirm(pair);

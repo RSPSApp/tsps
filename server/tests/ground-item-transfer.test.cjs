@@ -361,3 +361,30 @@ for(const[id,x,y]of[[1925,1667,3124],[1925,1644,3093],[1931,1666,3124]])test("Ci
  f.inventory.setItem(0,new Item(-1,0));ItemOnGroundManager.pickup(f.player,pile);assert.equal(f.inventory.getAmount(id),1);assert.equal(pile.isPendingRemoval(),true);
  assert.equal(finishRespawn(f,1).getRespawnTimer(),100);
 });
+
+test("Gerrant's display spawn gives the wearable apron and refuses Telekinetic Grab", t => {
+  const {GroundItemSpawnDefinitionLoader} = require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+  const data = require("../data/definitions/ground-items.json");
+  const spawns = data.filter(d => d.location.x === 3016 && d.location.y === 3229 && d.location.z === 0);
+  assert.equal(spawns.filter(d => d.id === 1005).length, 0);
+  const definition = spawns.find(d => d.id === 7957);
+  assert.equal(definition.respawn, 10);
+  const pile = new GroundItemSpawnDefinitionLoader().toItemOnGround(definition);
+  assert.equal(pile.clone().getPickupItem().getId(), 1005, "the next display spawn keeps its pickup policy");
+  const f = fixture();
+  f.player.getLocation = () => pile.getPosition();
+  const items = World.getItems(), previous = items.splice(0);
+  t.after(() => items.splice(0, items.length, ...previous));
+  ItemOnGroundManager.register(pile);
+  f.grab(pile);
+  assert.deepEqual(f.messages, ["It seems to be firmly on the hook. I cannot get that this way."]);
+  assert.equal(f.inventory.getAmount(1005), 0);
+  assert.equal(pile.isPendingRemoval(), false);
+
+  ItemOnGroundManager.pickup(f.player, pile);
+  assert.equal(f.inventory.getAmount(1005), 1);
+  assert.equal(f.inventory.getAmount(7957), 0);
+  assert.equal(pile.isPendingRemoval(), true);
+  ItemOnGroundManager.pickup(f.player, pile);
+  assert.equal(f.inventory.getAmount(1005), 1, "the removed display cannot be collected again");
+});

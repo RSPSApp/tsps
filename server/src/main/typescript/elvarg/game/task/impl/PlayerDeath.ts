@@ -108,6 +108,13 @@ export class PlayerDeathTask extends Task {
                         itemsLost: this.loseItems,
                         handled: false,
                     });
+                    // Every observer hears the death, whichever death hook took it: `onPlayerDeath`
+                    // stops at the first handler that sets `handled` (a quest's own respawn).
+                    PluginManager.emitCustomEvent("player:died", {
+                        player: this.player,
+                        killer: this.killer ?? null,
+                        itemsLost: this.loseItems,
+                    });
 
                     if (!handledDeath) {
                         // Respawn policies run after every dangerous-death observer, including Hardcore.

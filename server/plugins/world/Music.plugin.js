@@ -390,10 +390,11 @@ function currentPlaylist(player) {
  */
 function shuffleTracks(player, playlist = currentPlaylist(player)) {
   const inPlaylist = playlist > 0 ? new Set(Playlists.values(player, playlist)) : null;
+  const unlocked = new Set(Progress.unlockedTracks(player));
   const ids = new Set();
   for (const track of selectableTracks) {
     const slot = slotByTrackId[track.id];
-    if (!track.released || !slot || !Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) continue;
+    if (!track.released || !slot || !unlocked.has(canonicalTrackBySlot[slot.key])) continue;
     if (inPlaylist && !inPlaylist.has(Playlists.valueOf(track))) continue;
     ids.add(track.id);
   }

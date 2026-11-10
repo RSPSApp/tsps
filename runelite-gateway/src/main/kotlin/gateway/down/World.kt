@@ -30,6 +30,7 @@ import net.rsprot.protocol.game.outgoing.specific.MapAnimSpecific
 import net.rsprot.protocol.game.outgoing.specific.ProjAnimSpecificV4
 import net.rsprot.protocol.api.util.ZonePartialEnclosedCacheBuffer
 import net.rsprot.protocol.common.client.OldSchoolClientType
+import net.rsprot.protocol.game.outgoing.zone.header.UpdateZoneFullFollows
 import net.rsprot.protocol.game.outgoing.zone.header.UpdateZonePartialEnclosed
 import net.rsprot.protocol.message.ZoneProt
 import net.rsprot.protocol.game.outgoing.zone.payload.LocAddChangeV2
@@ -62,8 +63,15 @@ class World(
     private val pendingDecks = HashMap<Int, LinkedHashMap<Triple<Int, Int, Int>, MutableList<ZoneProt>>>()
     private val zoneBuffers = ZonePartialEnclosedCacheBuffer(listOf(OldSchoolClientType.DESKTOP))
 
+    /** Absolute zones (south-west tile, level) of the root scene the client got loc changes in. */
+    private val changedZones = HashSet<Triple<Int, Int, Int>>()
+
     /** Sends this tick's zone updates, one UPDATE_ZONE_PARTIAL_ENCLOSED per zone. */
     fun flushZones() {
+        for ((zone, payloads) in pending) {
+            val (zoneX, zoneZ, level) = zone
+            if (payloads.any { it is LocAddChangeV2 || it is LocDel }) changedZones += Triple(sceneX + zoneX, sceneZ + zoneZ, level)
+        }
         flush(pending)
     }
 
@@ -87,11 +95,24 @@ class World(
         zoneBuffers.releaseBuffers()
     }
 
-    fun rebuild(zoneX: Int, zoneZ: Int) {
+    /**
+     * A new scene centred on zone [zoneX], [zoneZ]. With [replayed] (an instance's REBUILD_REGION),
+     * tsps sends every loc change the new scene still has again, as the browser client forgets
+     * them all. The official client keeps the ones still inside the scene and puts them back
+     * after it loads, so a loc tsps no longer sends would stay: a removed POH chair stood until
+     * the player left the house. UPDATE_ZONE_FULL_FOLLOWS reverts a zone's loc changes to the
+     * scene's own locs (and clears its objs: the ground items are sent again after this).
+     */
+    fun rebuild(zoneX: Int, zoneZ: Int, replayed: Boolean = false) {
         // Updates for the old scene would land on the wrong zones of the new one.
         pending.clear()
         sceneX = (zoneX - SCENE_RADIUS_ZONES) shl 3
         sceneZ = (zoneZ - SCENE_RADIUS_ZONES) shl 3
+        // The client drops the loc changes the new scene doesn't cover.
+        changedZones.removeIf { (x, z) -> !inScene(x, z) }
+        if (!replayed) return
+        for ((x, z, level) in changedZones) send(UpdateZoneFullFollows(x - sceneX, z - sceneZ, level))
+        changedZones.clear()
     }
 
     fun handle(packet: TspsPacket): Boolean {

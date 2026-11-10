@@ -48,6 +48,8 @@ module.exports = function registerGrandTreeQuest(api) {
   const HAZELMERE_SCROLL_ACTION_ID = "2lKQYT";
   /** Transcript action that hands over the shipyard foreman's lumber order. */
   const LUMBER_ORDER_ACTION_ID = "TXgXt3";
+  const FOREMAN_OFFICE_ACTION_ID = "eQHe7h";
+  const FOREMAN_QUIZ = "treachery-revealed-the-shipyard-foreman";
   /** Transcript action that hands over the four twigs. */
   const TWIGS_ACTION_ID = "QV47Iy";
   const TWIGS_REPLACEMENT_ACTION_ID = "xC2-c6";
@@ -132,9 +134,11 @@ module.exports = function registerGrandTreeQuest(api) {
   const WATCHTOWER_DESTINATION = { x: 2485, y: 3465, z: 2 };
   /** The cave's entrance ladder is at 2492, 9864. Land on the open tile directly south. */
   const CAVE_DESTINATION = { x: 2492, y: 9863, z: 0 };
-  const CELL_DESTINATION = { x: 2464, y: 3495, z: 3 };
-  /** The cell's door has no cached Open option, so release moves the player out. */
-  const RELEASE_DESTINATION = { x: 2467, y: 3500, z: 3 };
+  const BROKEN_CAVE_LADDER_ID = ObjectIdentifiers.LADDER_206;
+  const CELL_DESTINATION = { x: 2464, y: 3496, z: 3 };
+  const RELEASE_DESTINATION = { x: 2465, y: 3496, z: 3 };
+  const SHIPYARD_OFFICE = { x: 2954, y: 3025, z: 0 };
+  const OFFICE_FOREMAN = { x: 2954, y: 3024, z: 0 };
   const SHIPYARD_CRASH_DESTINATION = { x: 2924, y: 3055, z: 0 };
   /** The far side of the shipyard gate the worker opens. */
   const SHIPYARD_INSIDE_DESTINATION = { x: 2947, y: 3042, z: 0 };
@@ -172,6 +176,7 @@ module.exports = function registerGrandTreeQuest(api) {
 
   let quest;
   const demonEncounters = new Map();
+  const officeForemen = new Map();
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -327,7 +332,7 @@ module.exports = function registerGrandTreeQuest(api) {
       if (stage < STAGE_RELEASED || stage >= STAGE_INVASION_PLANS) return null;
       return page(stage >= STAGE_LUMBER_ORDER
         ? "treachery-revealed-the-shipyard-talking-to-foreman-after-obtaining-the-lumber-order"
-        : "treachery-revealed-the-shipyard-foreman");
+        : FOREMAN_QUIZ);
     }
     if (npcId === SHIPYARD_WORKER_ID) {
       if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return null;
@@ -362,6 +367,29 @@ module.exports = function registerGrandTreeQuest(api) {
       return page("treachery-revealed-arrival-upon-ending-the-conversation-with-errdo");
     }
     return null;
+  }
+
+  function ensureOfficeForeman(player) {
+    if (officeForemen.get(player)?.isRegistered()) return;
+    const npc = api.spawnNpc({
+      id: NpcIdentifiers.FOREMAN, ...OFFICE_FOREMAN, wanderRadius: 0, owner: player, ownerOnly: true,
+    });
+    if (npc) officeForemen.set(player, npc);
+  }
+
+  function removeOfficeForeman(player) {
+    const npc = officeForemen.get(player);
+    if (!npc) return;
+    officeForemen.delete(player);
+    api.removeNpc(npc);
+  }
+
+  function resumeOfficeQuiz({ player, npc, npcId }) {
+    if (npc !== officeForemen.get(player) || quest.getStage(player) !== STAGE_RELEASED) return false;
+    return startTranscript(api, player, npcId, PAGE, FOREMAN_QUIZ, (steps) => {
+      const entry = steps.findIndex((step) => step.id === FOREMAN_OFFICE_ACTION_ID);
+      return entry < 0 ? [] : steps.slice(entry + 1);
+    }, npc);
   }
 
   /** Answer the page's prose conditions. */
@@ -529,6 +557,17 @@ module.exports = function registerGrandTreeQuest(api) {
       grant(player, GLOUGHS_KEY_ITEM_ID);
       return;
     }
+    if (npcId === NpcIdentifiers.FOREMAN && stage === STAGE_RELEASED) {
+      if (stepId === FOREMAN_OFFICE_ACTION_ID) {
+        ensureOfficeForeman(player);
+        teleport(player, SHIPYARD_OFFICE);
+        return;
+      }
+      if (event.text === "The player is attacked by the Foreman.") {
+        officeForemen.get(player)?.getCombat().attack(player);
+        return;
+      }
+    }
     if (stepId === LUMBER_ORDER_ACTION_ID) {
       if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return;
       if (!has(player, LUMBER_ORDER_ITEM_ID)) {
@@ -539,6 +578,7 @@ module.exports = function registerGrandTreeQuest(api) {
         player.getInventory().adds(LUMBER_ORDER_ITEM_ID, 1);
       }
       advance(player, STAGE_LUMBER_ORDER);
+      removeOfficeForeman(player);
       return;
     }
     if (stepId === TWIGS_ACTION_ID || stepId === TWIGS_REPLACEMENT_ACTION_ID) {
@@ -720,6 +760,13 @@ module.exports = function registerGrandTreeQuest(api) {
     if (npc) demonEncounters.set(player, npc);
   }
 
+  function blockBrokenCaveLadder(event) {
+    const { x, y, z } = event.location;
+    if (event.objectId !== BROKEN_CAVE_LADDER_ID || x !== 2492 || y !== 9864 || z !== 0 || event.option !== "climb-up") return;
+    event.handled = true;
+    event.player.sendMessage("The ladder is broken. You can't climb it.");
+  }
+
   function climbDownTrapdoor(event) {
     if (event.objectId !== GLOUGHS_TRAPDOOR_ID) return false;
     if (quest.getStage(event.player) < STAGE_TRAPDOOR) return false;
@@ -763,6 +810,7 @@ module.exports = function registerGrandTreeQuest(api) {
     }
     // The foreman can be killed for the lumber order instead of quizzed.
     if (npcId === NpcIdentifiers.FOREMAN && killer) {
+      if (officeForemen.get(killer) === npc) officeForemen.delete(killer);
       const stage = quest.getStage(killer);
       if (stage >= STAGE_RELEASED && stage < STAGE_LUMBER_ORDER) {
         if (!has(killer, LUMBER_ORDER_ITEM_ID) && freeSlots(killer) < 1) {
@@ -776,6 +824,7 @@ module.exports = function registerGrandTreeQuest(api) {
   }
 
   function handleLogout({ player }) {
+    removeOfficeForeman(player);
     const npc = demonEncounters.get(player);
     if (npc) {
       api.removeNpc(npc);
@@ -785,6 +834,9 @@ module.exports = function registerGrandTreeQuest(api) {
 
   function handleLogin({ player }) {
     refreshQuestList(player);
+    if (quest.getStage(player) === STAGE_RELEASED && player.getLocation().isWithinDistance(at(SHIPYARD_OFFICE), 3)) {
+      ensureOfficeForeman(player);
+    }
   }
 
   quest = registerQuest(api, {
@@ -811,6 +863,7 @@ module.exports = function registerGrandTreeQuest(api) {
   api.persistAttribute(ROOT_SEARCH_ATTRIBUTE);
   api.persistAttribute(FEMI_HELPED_ATTRIBUTE, false);
 
+  api.onNpcInteraction("Foreman", { "Talk-to": resumeOfficeQuiz });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
@@ -824,6 +877,7 @@ module.exports = function registerGrandTreeQuest(api) {
   api.onItemOnObject(placeTwig);
   api.onObjectInteraction("Tree", { "Climb-up": climbWatchtower });
   api.onObjectInteraction("Trapdoor", { "Climb-down": climbDownTrapdoor });
+  api.onBeforeObjectInteraction(blockBrokenCaveLadder);
   api.onObjectInteraction("Root", { Search: searchRoot });
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);

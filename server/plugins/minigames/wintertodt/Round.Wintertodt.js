@@ -17,6 +17,7 @@ const Warmth = require("./Warmth.Wintertodt");
 const CombatAchievements = require("./CombatAchievements.Wintertodt");
 
 const ATTR_KILLS = "wintertodt:kills";
+const ATTR_BEST = "wintertodt:best-points";
 const ATTR_REWARDS = "wintertodt:rewards-owed";
 
 const round = {
@@ -183,6 +184,14 @@ function reward(player, points) {
   player.sendMessage(`Your subdued Wintertodt count is: <col=ff0000>${kills}</col>.`);
   CombatAchievements.subdued(player, points, kills);
 
+  // rsprox_transcripts/233/03262.txt (tick 2580): after the count, before the cart line, "You have a new high score!
+  // 8530" (the number plain) when the round's points beat the player's best.
+  const best = Math.max(0, Math.trunc(Number(player.getAttribute(ATTR_BEST)) || 0));
+  if (points > best) {
+    player.setAttribute(ATTR_BEST, points);
+    player.sendMessage(`You have a new high score! ${points}`);
+  }
+
   const earned = rewardsFor(points);
   const owed = Math.min(Shared.MAX_REWARDS, rewardsOwed(player) + earned);
   player.setAttribute(ATTR_REWARDS, owed);
@@ -273,7 +282,7 @@ function setEnergy(value) {
 }
 
 module.exports = {
-  ATTR_KILLS, ATTR_REWARDS,
+  ATTR_KILLS, ATTR_BEST, ATTR_REWARDS,
   isActive, energy, energyPercent, corner, inPrison, playersInPrison,
   pointsOf, addPoints, forgetPlayer,
   openHud, closeHud, sendHud, broadcast,

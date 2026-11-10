@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const Progress = require("./Progress.Music");
 const QuestUnlocks = require("./QuestUnlocks.Music");
+const Playlists = require("./Playlists.Music");
 
 const COINS = 995;
 const CAPE_PRICE = 99000;
@@ -18,6 +19,18 @@ const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
 /** The Music tab's Area, Shuffle and Single mode buttons and Skip Track, by the mode each sets. */
 const MODE_BUTTONS = new Map([[14, 0], [15, 1], [16, 2]].map(([child, mode]) => [(MUSIC_GROUP_ID << 16) | child, mode]));
 const SKIP_BUTTON_UID = (MUSIC_GROUP_ID << 16) | 17;
+/** The playlist dropdown's rows: All music, then playlists 1-3, each at slot 2 * index + 1. */
+const PLAYLIST_DROPDOWN_UID = (MUSIC_GROUP_ID << 16) | 21;
+/** A list row's ops 3, 4 and 5 add the track to, or remove it from, playlist 1, 2 or 3. */
+const FIRST_PLAYLIST_OP = 3;
+/** music_current_playlist, bits 14-17 of varp 19: 0 All music, 1-3 a playlist. */
+const PLAYLIST_SHIFT = 14;
+/** dont_update_music_on_playlist_change, varp 19 bit 23. */
+const KEEP_MUSIC_ON_PLAYLIST_BIT = 23;
+/** All Settings' "Wipe custom music playlist 1" to 3 buttons, by setting id. */
+const WIPE_PLAYLIST_SETTINGS = new Map([[490, 1], [491, 2], [492, 3]]);
+/** An emptied playlist stops the music: silence, faded out at speed 50. */
+const PLAYLIST_STOP_FADES = { fadeOutDelay: 0, fadeOutSpeed: 50, fadeInDelay: 0, fadeInSpeed: 0 };
 const MODE_NAMES = ["area", "shuffle", "single"];
 /** All Settings' "Music mode" dropdown (setting id, cache struct param 1077). */
 const MUSIC_MODE_SETTING = 477;
@@ -281,8 +294,13 @@ function onTrackPlayed(event) {
 
 /** music_list_setup indexes db_find(music:hidden, false), not the sorted display names. */
 function selectMusicTrack(event) {
-  if (event.groupId !== MUSIC_GROUP_ID || event.childId !== MUSIC_JUKEBOX_CHILD_ID
-      || (event.opId ?? event.action) !== 1) return;
+  const op = event.opId ?? event.action;
+  if (event.groupId !== MUSIC_GROUP_ID || event.childId !== MUSIC_JUKEBOX_CHILD_ID) return;
+  if (op >= FIRST_PLAYLIST_OP && op < FIRST_PLAYLIST_OP + Playlists.PLAYLIST_COUNT) {
+    togglePlaylistTrack(event.player, event.slot, op - FIRST_PLAYLIST_OP + 1);
+    return;
+  }
+  if (op !== 1) return;
   event.handled = true;
   if (!Number.isInteger(event.slot) || event.slot < 0) return;
   const track = selectableTracks[event.slot];
@@ -312,6 +330,7 @@ function selectMusicTrack(event) {
 function onMusicLogin({ player }) {
   unlockCompletedQuestTracks(player);
   syncMusicVarps(player);
+  Playlists.send(player);
   // "Default to area music mode on login", on unless the player turned it off.
   if (core.Music.setting(player.getAudioSettings?.(), core.Music.KEEP_MODE_ON_LOGIN_BIT) === 0
       && (player.getAudioSettings?.()[MUSIC_MODE_VARP] ?? 0) !== 0) {
@@ -356,20 +375,113 @@ function onMusicSettingsTransmitted({ player, varpId }) {
   if (varpId === core.Music.SETTINGS_VARP) sendMusicSettings(player);
 }
 
-/** Every released track the player has unlocked, as the Music tab lists them. */
-function unlockedPlayableTracks(player) {
+/** The playlist in use: 0 for All music, else 1-3. */
+function currentPlaylist(player) {
+  return core.Music.setting(player.getAudioSettings?.(), PLAYLIST_SHIFT, 4);
+}
+
+/**
+ * The tracks Shuffle plays from: every released track the player has unlocked, as the Music tab
+ * lists them, or those of the playlist (1-3) when one is in use.
+ */
+function shuffleTracks(player, playlist = currentPlaylist(player)) {
+  const inPlaylist = playlist > 0 ? new Set(Playlists.values(player, playlist)) : null;
   const ids = new Set();
   for (const track of selectableTracks) {
     const slot = slotByTrackId[track.id];
-    if (track.released && slot && Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) ids.add(track.id);
+    if (!track.released || !slot || !Progress.isUnlocked(player, canonicalTrackBySlot[slot.key])) continue;
+    if (inPlaylist && !inPlaylist.has(Playlists.valueOf(track))) continue;
+    ids.add(track.id);
   }
   return [...ids];
 }
 
-/** Shuffle's pick: a random unlocked track, never the one that just ended. */
+/**
+ * Shuffle's pick: a random track of those, never the one that just ended; an empty playlist plays
+ * nothing (`silent`), not even the last track again.
+ */
 function pickShuffleTrack(request) {
-  const choices = unlockedPlayableTracks(request.player).filter((id) => id !== request.previous);
+  const tracks = shuffleTracks(request.player);
+  const choices = tracks.filter((id) => id !== request.previous);
   if (choices.length > 0) request.track = choices[Math.floor(Math.random() * choices.length) % choices.length];
+  else if (!tracks.includes(request.previous)) request.silent = true;
+}
+
+/** Starts a track now: with no fades from silence, else with the default ones. */
+function playNow(player, track) {
+  const session = player.getSession();
+  const fromSilence = session.getCurrentMusicTrack() < 0;
+  session.setCurrentMusicTrack(track);
+  player.getPacketSender().sendSong(track, fromSilence ? NO_FADES : undefined);
+}
+
+function stopMusic(player) {
+  player.getSession().setCurrentMusicTrack(-1);
+  player.getPacketSender().sendSong(SILENCE_TRACK, PLAYLIST_STOP_FADES);
+  player.getPacketSender().sendConfig(CURRENT_MUSIC_TRACK_VARP, -1);
+}
+
+/** A random track of the list now, or silence when it is empty. */
+function shuffleNow(player, tracks) {
+  if (tracks.length === 0) stopMusic(player);
+  else playNow(player, tracks[Math.floor(Math.random() * tracks.length) % tracks.length]);
+}
+
+function setMode(player, mode, previous) {
+  player.setAudioSetting(MUSIC_MODE_VARP, mode);
+  player.getPacketSender().sendConfig(MUSIC_MODE_VARP, mode);
+  if (mode !== previous) player.sendMessage(`You are now using the ${MODE_NAMES[mode]} music mode.`);
+}
+
+/**
+ * The playlist dropdown. A playlist switches Area mode to Shuffle, and Single mode too unless its
+ * track is in the playlist, then plays one of the playlist's tracks (silence when it is empty);
+ * All music in Shuffle mode plays one of every unlocked track. With "Update music when changing
+ * playlists" off, only the playlist changes. The client sets the playlist and mode itself first,
+ * so the mode it had is the one the server last sent.
+ */
+function choosePlaylist({ player, slot, opId, action }) {
+  const playlist = (slot - 1) / 2;
+  if ((opId ?? action ?? 1) !== 1 || !Number.isInteger(playlist) || playlist < 0 || playlist > Playlists.PLAYLIST_COUNT) return;
+  const { SETTINGS_VARP } = core.Music;
+  const settings = player.getAudioSettings?.()[SETTINGS_VARP] ?? core.Music.DEFAULT_SETTINGS;
+  player.setAudioSetting(SETTINGS_VARP, (settings & ~(0xf << PLAYLIST_SHIFT)) | (playlist << PLAYLIST_SHIFT));
+  const previous = player.getPacketSender().getVarp(MUSIC_MODE_VARP);
+  sendMusicSettings(player);
+  if (core.Music.setting(player.getAudioSettings(), KEEP_MUSIC_ON_PLAYLIST_BIT) === 1) {
+    setMode(player, previous, previous);
+    return;
+  }
+  const tracks = shuffleTracks(player, playlist);
+  if (playlist === 0) {
+    setMode(player, previous, previous);
+    if (previous === 1) shuffleNow(player, tracks);
+    return;
+  }
+  const keepSingle = previous === 2 && tracks.includes(player.getSession().getCurrentMusicTrack());
+  setMode(player, keepSingle ? 2 : 1, previous);
+  if (!keepSingle) shuffleNow(player, tracks);
+}
+
+/** A list row's "Add to playlist" op: adds the unlocked track, or removes it when it is there. */
+function togglePlaylistTrack(player, slot, playlist) {
+  const track = Number.isInteger(slot) && slot >= 0 ? selectableTracks[slot] : undefined;
+  const value = Playlists.valueOf(track);
+  const unlockSlot = track && slotByTrackId[track.id];
+  if (value === undefined || !unlockSlot || !Progress.isUnlocked(player, canonicalTrackBySlot[unlockSlot.key])) return;
+  // Ours: a full playlist (100 tracks) takes no more, without a message.
+  const result = Playlists.toggle(player, playlist, value);
+  if (result === "full") return;
+  const change = result === "added" ? "added a track to" : "removed a track from";
+  player.sendMessage(`You've ${change} playlist ${playlist}: <col=${unlockNameColour(player)}>${trackNames[track.id]}`);
+}
+
+/** All Settings' "Wipe custom music playlist" buttons. */
+function wipePlaylistSetting(request) {
+  const playlist = WIPE_PLAYLIST_SETTINGS.get(request.settingId);
+  if (playlist === undefined) return;
+  Playlists.wipe(request.player, playlist);
+  request.handled = true;
 }
 
 /** The Area, Shuffle and Single buttons: the mode, and the line live sends for each. */
@@ -379,6 +491,13 @@ function chooseMusicMode({ player, buttonId, opId, action }) {
   player.setAudioSetting(MUSIC_MODE_VARP, mode);
   player.getPacketSender().sendConfig(MUSIC_MODE_VARP, mode);
   player.sendMessage(`You are now using the ${MODE_NAMES[mode]} music mode.`);
+  // Area mode leaves the playlist for All music, unless playlist changes keep the music.
+  if (mode === 0 && currentPlaylist(player) !== 0
+      && core.Music.setting(player.getAudioSettings(), KEEP_MUSIC_ON_PLAYLIST_BIT) === 0) {
+    const settings = player.getAudioSettings()[core.Music.SETTINGS_VARP];
+    player.setAudioSetting(core.Music.SETTINGS_VARP, settings & ~(0xf << PLAYLIST_SHIFT));
+    sendMusicSettings(player);
+  }
 }
 
 /** A music dropdown in All Settings: its varbit of varp 19, or the mode. */
@@ -513,6 +632,7 @@ module.exports = {
     api.persistAttribute(Progress.CAPE_OWNED_ATTRIBUTE);
     api.persistAttribute(Progress.AIR_GUITAR_UNLOCKED_ATTRIBUTE, false);
     api.persistAttribute(SELECTED_TRACK_ATTRIBUTE, -1);
+    api.persistAttribute(Playlists.PLAYLISTS_ATTRIBUTE, []);
     api.onPlayerLogin(onMusicLogin);
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
     api.onCustomEvent("gameframe:ready", onMusicWelcomeAction);
@@ -527,6 +647,8 @@ module.exports = {
     api.onCustomEvent("settings:option-chosen", chooseMusicSettingOption);
     api.onInterfaceActionButton([...MODE_BUTTONS.keys()], chooseMusicMode);
     api.onInterfaceActionButton(SKIP_BUTTON_UID, skipTrack);
+    api.onInterfaceActionButton(PLAYLIST_DROPDOWN_UID, choosePlaylist);
+    api.onCustomEvent("settings:setting-clicked", wipePlaylistSetting);
     api.onCustomEvent("audio:play-song", onTrackPlayed);
     api.onCustomEvent("music:unlock-track", unlockTrack);
     api.onCustomEvent("quest:completed", onQuestCompleted);
@@ -542,5 +664,6 @@ module.exports = {
     canEquipMusicCape, onMusicLogin, onMusicWelcomeAction, answerAirGuitarUnlock,
     onTrackPlayed, questComplete, unlockQuestTracks, onQuestCompleted, unlockCompletedQuestTracks,
     musicSettingsVarp, pickShuffleTrack, chooseMusicMode, skipTrack, selectMusicTrack, chooseMusicSettingOption,
+    choosePlaylist, togglePlaylistTrack, wipePlaylistSetting, shuffleTracks,
   },
 };

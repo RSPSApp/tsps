@@ -168,13 +168,13 @@ export class PlayerSession {
 
   /**
    * Shuffle's next track: a random unlocked track other than the one that ended, which the Music
-   * plugin picks ("music:shuffle-track" { player, previous, track }); with no other, the ended one
-   * again only when the loop setting is on.
+   * plugin picks ("music:shuffle-track" { player, previous, track, silent }); with no other, the
+   * ended one again only when the loop setting is on, and nothing when the plugin says `silent`.
    */
   private startShuffleTrack(player: Player, previous: number, replay: boolean, fades?: SongFades): void {
-    const request: { player: Player; previous: number; track?: number } = { player, previous };
+    const request: { player: Player; previous: number; track?: number; silent?: boolean } = { player, previous };
     PluginManager.emitCustomEvent("music:shuffle-track", request);
-    const track = request.track ?? (replay && previous >= 0 ? previous : undefined);
+    const track = request.silent ? undefined : request.track ?? (replay && previous >= 0 ? previous : undefined);
     if (track === undefined) {
       this.musicNextTrackAt = -1;
       this.musicEndedTrack = -1;

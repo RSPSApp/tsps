@@ -113,6 +113,8 @@ cape flags 4670-4672 and 8371, the farming tab 4776, the Trawler camera 4814, a 
 | 12233 `music_area_mode` | "Music area type": Modern, Classic | Above. |
 | 19734 `use_previous_music_mode_on_login` | "Default to area music mode on login", on when 0 | Login resets Shuffle or Single to Area unless the player turned it off. |
 | 19737 `use_shuffle_mode_on_manual_music_selection` | "Music mode to use when manually selecting music tracks": Single, Shuffle | A track picked from the list in Area mode switches to that mode; Shuffle and Single stay. |
+| 19731 `music_current_playlist` | The playlist in use, 0 All music | Below. |
+| 19736 `dont_update_music_on_playlist_change` | "Update music when changing playlists", on when 0 | Below. |
 | 19732, 19733 | Text shadow, which tracks the list shows | The client's own; saved only. |
 
 The client's scripts write the checkboxes (and the playlist, bits 14-17) into varp 19 themselves
@@ -131,9 +133,33 @@ released track other than the one that ended (`music:shuffle-track`). Shuffle ig
 though entering one still unlocks its tracks. Ours: a Single track switched to Shuffle gets its
 full length from then, and Shuffle with nothing playing (at login) starts a track at once.
 
-Not covered yet: playlists (the dropdown, adding and removing tracks, the playlist varps from
-5239), "Play the default track when entering an area" (the Wiki's areas name no default track) and
-"Update music when changing playlists".
+## Playlists
+
+Three playlists of up to 100 unlocked tracks ("Up to 100 unlocked music tracks can be added to each
+of the three playlists", Wiki: Music Player), kept in `Playlists.Music.js` and the varbits
+`music_playlist_<1-3>_track_<1-100>` (varps 5239-5388, sent at login). As captured (rsprox
+236/03934, 236/03935, 236/03925):
+
+- A list row's ops 3, 4 and 5 add the track to playlist 1, 2 or 3, or remove it when it is there:
+  "You've added a track to playlist 1: <col=ff3045>Adventure" ("removed a track from"), in the
+  unlock message's chatbox colour. A place holds the track's unlock slot as bank * 100 + bit
+  (Adventure, bank 1 bit 0, is 100; 7th Realm, bank 9 bit 29, is 929). Removing leaves the place
+  empty, and the next track added takes the first empty place. Ours: a locked track or a full
+  playlist is refused without a message.
+- The dropdown (slots 1, 3, 5, 7: All music, playlists 1-3) sets `music_current_playlist`. With
+  "Update music when changing playlists" on (the default): a playlist switches Area mode to
+  Shuffle, and Single mode too unless its track is in the playlist, with the mode's line, then
+  starts one of the playlist's tracks (default fades, or none from silence); an empty playlist
+  stops the music (track 147, fade-out speed 50, no current track). All music in Shuffle mode
+  starts one of every unlocked track and changes nothing in the other modes. With the setting off,
+  only the playlist changes.
+- Shuffle and Skip Track play from the playlist in use; a one-track playlist plays its track again
+  (as the loop setting allows), an empty one plays nothing.
+- The Area button returns to All music, unless "Update music when changing playlists" is off.
+- All Settings' "Wipe custom music playlist" 1-3 empty that playlist (ours: no message).
+
+Not covered: "Play the default track when entering an area" (19735): neither the cache nor the Wiki
+says which of an area's tracks is its default.
 
 ## Jingles and fades
 

@@ -1440,3 +1440,131 @@ test('with the loop off, entering a one-track area whose track just ended still 
   assert.deepEqual(await songs(10 + length + 2), [], 'nothing to play');
   assert.equal(Progress.isUnlocked(player, TITLE_FIGHT), true, 'but the area still unlocks its track');
 });
+
+/** A list row (its Music tab slot) and the track it plays, by name. */
+function listTrack(core, name) {
+  const rows = core.CacheDefinitions.getDbTableRows(44).filter(row => row.int(9, 0) === 0);
+  const row = rows.find(row => row.string(1) === name);
+  return { slot: rows.indexOf(row), track: core.Music.tracks().find(track => track.rowId === row.id) };
+}
+
+test('playlists: a row op adds the unlocked track to the playlist, or removes it, with the live lines', async t => {
+  const { core, player, messages } = await musicSession(t, 'musicplaylistadd', new Location(3222, 3218, 0));
+  const Playlists = require('../plugins/world/Playlists.Music');
+  const varbits = [];
+  const sender = player.getPacketSender();
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  sender.sendVarbit = (id, value) => { varbits.push([id, value]); return sendVarbit(id, value); };
+  const adventure = listTrack(core, 'Adventure');
+  const alKharid = listTrack(core, 'Al Kharid');
+  const op = (slot, opId) => MusicPlugin._test.selectMusicTrack({ player, groupId: 239, childId: 11, opId, slot });
+  op(adventure.slot, 3);
+  assert.deepEqual(varbits, [], 'a locked track cannot be added');
+  assert.deepEqual(messages, []);
+  Progress.unlock(player, adventure.track.id);
+  Progress.unlock(player, alKharid.track.id);
+  op(adventure.slot, 3);
+  op(alKharid.slot, 3);
+  op(adventure.slot, 3);
+  op(alKharid.slot, 5);
+  assert.deepEqual(varbits, [[19738, 100], [19739, 101], [19738, 0], [19938, 101]],
+    'Adventure (bank 1, bit 0) is 100, Al Kharid 101; removing leaves the place empty; op 5 is playlist 3');
+  assert.deepEqual(messages, [
+    "You've added a track to playlist 1: <col=e00a19>Adventure",
+    "You've added a track to playlist 1: <col=e00a19>Al Kharid",
+    "You've removed a track from playlist 1: <col=e00a19>Adventure",
+    "You've added a track to playlist 3: <col=e00a19>Al Kharid",
+  ]);
+  op(adventure.slot, 3);
+  assert.deepEqual(varbits.at(-1), [19738, 100], 'the next track takes the first empty place');
+  assert.deepEqual(Playlists.values(player, 1), [100, 101]);
+  player.setAttribute(Playlists.PLAYLISTS_ATTRIBUTE, [Array.from({ length: 100 }, (_, i) => 200 + i)]);
+  messages.length = 0;
+  op(alKharid.slot, 3);
+  assert.deepEqual(messages, [], 'a full playlist takes no more');
+  varbits.length = 0;
+  player.setAttribute(Playlists.PLAYLISTS_ATTRIBUTE, [[100, 0, 101], [], [101]]);
+  Playlists.send(player);
+  assert.deepEqual(varbits, [[19738, 100], [19740, 101], [19938, 101]], 'login sends every filled place');
+  varbits.length = 0;
+  const wipe = { player, settingId: 490, handled: false };
+  MusicPlugin._test.wipePlaylistSetting(wipe);
+  assert.equal(wipe.handled, true);
+  assert.deepEqual(varbits, [[19738, 0], [19740, 0]], 'Wipe custom music playlist 1');
+  assert.deepEqual(player.getAttribute(Playlists.PLAYLISTS_ATTRIBUTE), [[], [], [101]]);
+});
+
+test('playlists: choosing one switches to Shuffle and plays from it; an empty one stops the music', async t => {
+  const { core, session, player, messages, songs } = await musicSession(t, 'musicplaylistpick', new Location(3222, 3218, 0));
+  const Playlists = require('../plugins/world/Playlists.Music');
+  t.mock.method(Math, 'random', () => 0);
+  await songs(10);
+  const alKharid = listTrack(core, 'Al Kharid');
+  Progress.unlock(player, alKharid.track.id);
+  player.setAttribute(Playlists.PLAYLISTS_ATTRIBUTE, [[101]]);
+  const choose = playlist => MusicPlugin._test.choosePlaylist({ player, slot: 2 * playlist + 1, opId: 1 });
+  messages.length = 0;
+  choose(1);
+  assert.equal(player.getAudioSettings()[18], 1, 'Area mode becomes Shuffle');
+  assert.deepEqual(messages, ['You are now using the shuffle music mode.']);
+  assert.equal(player.getPacketSender().getVarbit(19731), 1);
+  assert.equal(session.getCurrentMusicTrack(), alKharid.track.id, "the playlist's track starts");
+  assert.deepEqual(await songs(11), [alKharid.track.id]);
+  const end = 10 + core.Music.lengthTicks(alKharid.track.id) + 1;
+  assert.deepEqual(await songs(end), [147]);
+  assert.deepEqual(await songs(end + 2), [alKharid.track.id], 'a one-track playlist plays its track again');
+  choose(2);
+  assert.equal(messages.length, 1, 'already Shuffle: no line');
+  assert.equal(session.getCurrentMusicTrack(), -1);
+  assert.deepEqual(await songs(end + 3), [147], 'an empty playlist stops the music');
+  assert.equal(player.getPacketSender().getVarp(3883), -1);
+  assert.deepEqual(await songs(end + 500), [], 'and nothing starts');
+  choose(0);
+  assert.equal(player.getAudioSettings()[18], 1, 'All music keeps Shuffle');
+  assert.notEqual(session.getCurrentMusicTrack(), -1, 'and starts one of every unlocked track');
+  assert.ok(Progress.isUnlocked(player, session.getCurrentMusicTrack()));
+});
+
+test('playlists: Single keeps a track the playlist has; the playlist setting off changes only the playlist', async t => {
+  const { core, session, player, messages } = await musicSession(t, 'musicplaylistsingle', new Location(3222, 3218, 0));
+  const Playlists = require('../plugins/world/Playlists.Music');
+  const alKharid = listTrack(core, 'Al Kharid');
+  const adventure = listTrack(core, 'Adventure');
+  Progress.unlock(player, alKharid.track.id);
+  Progress.unlock(player, adventure.track.id);
+  player.setAttribute(Playlists.PLAYLISTS_ATTRIBUTE, [[101], [100]]);
+  MusicPlugin._test.selectMusicTrack({ player, groupId: 239, childId: 11, opId: 1, slot: alKharid.slot });
+  assert.equal(player.getAudioSettings()[18], 2);
+  const choose = playlist => MusicPlugin._test.choosePlaylist({ player, slot: 2 * playlist + 1, opId: 1 });
+  choose(1);
+  assert.equal(player.getAudioSettings()[18], 2, "Single stays: the playlist has its track");
+  assert.equal(session.getCurrentMusicTrack(), alKharid.track.id);
+  choose(2);
+  assert.equal(player.getAudioSettings()[18], 1, "Single becomes Shuffle: the playlist hasn't its track");
+  assert.equal(session.getCurrentMusicTrack(), adventure.track.id);
+  messages.length = 0;
+  player.setAudioSetting(19, player.getAudioSettings()[19] | (1 << 23));
+  choose(1);
+  assert.equal(player.getPacketSender().getVarbit(19731), 1);
+  assert.equal(session.getCurrentMusicTrack(), adventure.track.id, 'with "Update music when changing playlists" off the track stays');
+  assert.deepEqual(messages, []);
+  player.setAudioSetting(19, player.getAudioSettings()[19] & ~(1 << 23));
+  MusicPlugin._test.chooseMusicMode({ player, buttonId: (239 << 16) | 14, opId: 1 });
+  assert.equal(player.getPacketSender().getVarbit(19731), 0, 'Area mode leaves the playlist for All music');
+});
+
+test('Shuffle and Skip play only from the playlist in use', async t => {
+  const { core, player } = await musicSession(t, 'musicplaylistshuffle', new Location(3222, 3218, 0));
+  const Playlists = require('../plugins/world/Playlists.Music');
+  const alKharid = listTrack(core, 'Al Kharid');
+  const adventure = listTrack(core, 'Adventure');
+  Progress.unlock(player, alKharid.track.id);
+  Progress.unlock(player, adventure.track.id);
+  player.setAttribute(Playlists.PLAYLISTS_ATTRIBUTE, [[101, 100], []]);
+  player.setAudioSetting(19, 1 | (1 << 14));
+  assert.deepEqual(MusicPlugin._test.shuffleTracks(player).sort(), [alKharid.track.id, adventure.track.id].sort());
+  const pick = previous => { const request = { player, previous }; MusicPlugin._test.pickShuffleTrack(request); return request; };
+  assert.equal(pick(alKharid.track.id).track, adventure.track.id, 'never the one that ended');
+  player.setAudioSetting(19, 1 | (2 << 14));
+  assert.equal(pick(alKharid.track.id).silent, true, 'an empty playlist plays nothing, not even the last track');
+});

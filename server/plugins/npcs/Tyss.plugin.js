@@ -1,6 +1,7 @@
 /**
  * Tyss at the Dark Altar: the Spellbook option toggles the Arceuus spellbook, and the two
  * transcript choices that are conditioned on the current book do the same.
+ * His ash sanctifier branch is answered by plugins/items/AshSanctifier.plugin.js.
  *
  * Source: Wiki Tyss ("Players can access the Arceuus spellbook by speaking to him") and
  * Transcript:Tyss step ids O63wRq (not on Arceuus) and AQEl1l (on Arceuus).

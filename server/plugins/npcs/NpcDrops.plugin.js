@@ -338,6 +338,7 @@ function applyWikiCorrections(tableById) {
   correctMadAngel(tableById.mad_angel);
   correctSkotizo(tableById.skotizo);
   correctAmoxliatl(tableById.amoxliatl);
+  correctAlchemicalHydra(tableById.alchemical_hydra);
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -409,6 +410,15 @@ function correctAmoxliatl(table) {
   table.rolls = 2;
   for (const entry of table.entries || []) {
     if (entry.section === "Frozen tears") Object.assign(entry, { roll_group: "amoxliatl_tears", once_per_kill: true });
+  }
+}
+
+/** Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard table (Wiki, Drops). */
+function correctAlchemicalHydra(table) {
+  if (!table) return;
+  table.rolls = 2;
+  for (const entry of table.entries || []) {
+    if (entry.pre_roll) entry.once_per_kill = true;
   }
 }
 
@@ -799,9 +809,9 @@ function rollWeighted(entries, outOf, rules) {
 }
 
 /**
- * One roll on a table: its pre-roll, main roll and separate rolls. Separate rolls marked
- * `once_per_kill` are made on the first of a table's `rolls` only. `rules` are the kill's chance
- * rules (chanceRules), applied to every entry.
+ * One roll on a table: its pre-roll, main roll and separate rolls. Pre-roll and separate rolls
+ * marked `once_per_kill` are made on the first of a table's `rolls` only. `rules` are the kill's
+ * chance rules (chanceRules), applied to every entry.
  */
 function rollOnce(table, entries, player, first = true, context = null, rules = []) {
   const drops = [];
@@ -815,6 +825,7 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
     if (entry.always) {
       continue;
     } else if (entry.pre_roll) {
+      if (entry.once_per_kill && !first) continue;
       if (entry.roll_group) {
         const group = preRollGroups.get(entry.roll_group) || [];
         group.push(entry);

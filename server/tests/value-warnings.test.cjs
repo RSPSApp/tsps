@@ -24,6 +24,7 @@ const { ItemStatementDialogue } = require('../dist/game/model/dialogues/entries/
 const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
 const Value = require('../plugins/interface/ValueWarning');
 const Warnings = require('../plugins/interface/ValueWarnings.plugin');
+const GrandExchange = require('../plugins/interface/GrandExchange.plugin');
 const Settings = require('../plugins/interface/Settings.plugin');
 const settingsJson = require('../plugins/interface/data/settings.json').settings;
 
@@ -353,5 +354,36 @@ test('loot notifications follow rows 38-40, for an NPC drop, once the roll has b
   Warnings._test.lootNotifications({ player: noNpc, drops: [{ itemId: RUNE_PLATELEGS, amount: 1 }] });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(noNpc.log.messages, [], 'a reward that is not an NPC drop says nothing');
+});
+
+// ------------------------------------------------------------------ Grand Exchange
+
+test('Grand Exchange: buy over 10x the guide and sell under 10% warn while their rows are on', () => {
+  const { priceWarning, price: guide, sellPrice } = GrandExchange._test;
+  const buy = { itemId: RUNE_PLATELEGS, sell: false };
+  const sell = { itemId: RUNE_PLATELEGS, sell: true };
+  const g = guide(RUNE_PLATELEGS);
+  const s = sellPrice(RUNE_PLATELEGS);
+  const on = player({ 14700: 0, 14701: 0 });
+  assert.equal(priceWarning(on, buy, g * 10), null, 'exactly 10x is allowed');
+  assert.equal(priceWarning(on, buy, g * 10 + 1), 'Your offer is more than 10 times the guide price.');
+  assert.equal(priceWarning(on, sell, Math.ceil(s / 10)), null);
+  assert.equal(priceWarning(on, sell, Math.ceil(s / 10) - 1), 'Your offer is less than 10% of the guide price.');
+  const disabled = player({ 14700: 1, 14701: 1 });
+  assert.equal(priceWarning(disabled, buy, g * 100), null, '14700 set disables the buy warning');
+  assert.equal(priceWarning(disabled, sell, 1), null, '14701 set disables the sell warning');
+});
+
+// ------------------------------------------------------------------ birdhouse seeds
+
+test('birdhouse seeds worth at least row 449 ask first while row 448 is on', () => {
+  const Context = require('../plugins/skills/hunter/Context.Hunter');
+  Context.H.core = core;
+  const Birdhouses = require('../plugins/skills/hunter/Birdhouses.Hunter');
+  const ranarr = core.ItemIdentifiers.RANARR_SEED;
+  const each = price(ranarr);
+  assert.equal(Birdhouses.valuableSeeds(player({ 17869: 1, p4850: each * 5 }), ranarr, 5), true, '5 seeds at the threshold');
+  assert.equal(Birdhouses.valuableSeeds(player({ 17869: 1, p4850: each * 5 + 1 }), ranarr, 5), false);
+  assert.equal(Birdhouses.valuableSeeds(player({ 17869: 0, p4850: 1 }), ranarr, 5), false, 'row 448 off');
 });
 

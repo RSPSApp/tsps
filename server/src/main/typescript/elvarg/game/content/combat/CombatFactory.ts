@@ -257,8 +257,7 @@ export class CombatFactory {
         // We've got our damage. We can now create a HitDamage
         // instance.
         let hitDamage = new HitDamage(damage, damage == 0 ? HitMask.BLUE : HitMask.RED);
-        // A range with no spread is fixed damage (a PendingHit { damage }): nothing was rolled, so it is never a max hit.
-        if (rolls && entity.isPlayer() && range.maximum > range.minimum) hitDamage.setRolledMaximum(range.maximum);
+        if (rolls && entity.isPlayer()) hitDamage.setRolledMaximum(range.maximum);
 
         /**
          * Prayers decreasing damage.

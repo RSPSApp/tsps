@@ -1,7 +1,7 @@
 import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
-import { ShopCurrency, ShopDefinition } from "../../../definition/ShopDefinition";
+import { ShopCurrency, ShopDefinition, ShopSalesPolicy } from "../../../definition/ShopDefinition";
 import { Item } from "../../Item";
 import { PlayerStatus } from "../../PlayerStatus";
 import { Task } from "../../../task/Task";
@@ -76,6 +76,7 @@ export class ShopManager {
     private static readonly SCROLL_INTERFACE_ID = 29995;
     private static readonly MAX_SHOP_ITEMS = 1000;
     private static readonly MAX_ACTION_AMOUNT = 5000;
+    /** What a shop without the Wiki's rates pays, of the item's price (the legacy core shops). */
     private static readonly SALES_TAX = 0.85;
     private static readonly BLOOD_MONEY_SHOP_IDS = [13, 14, 27];
     /**
@@ -668,11 +669,9 @@ export class ShopManager {
                 return;
             }
         }
-        quantity = Math.min(
-            quantity,
-            price > 0 ? Math.floor(this.currencyAmount(player, shop.definition.getCurrency()) / price) : quantity,
-            available
-        );
+        quantity = Math.min(quantity, available);
+        const unitPrices = this.affordablePrices(player, shop, definition, price, quantity);
+        quantity = unitPrices.length;
         if (quantity <= 0) {
             const unit = this.currencyUnit(shop.definition.getCurrency());
             player.sendMessage(unit ? `You don't have enough ${unit}.` : "You can't afford that.");
@@ -708,7 +707,7 @@ export class ShopManager {
         this.removeCurrency(
             player,
             shop.definition.getCurrency(),
-            removed * price
+            unitPrices.slice(0, removed).reduce((total, each) => total + each, 0)
         );
         inventory.adds(deliverId, removed * perPurchase);
         PluginManager.emitCustomEvent("shop:purchase", {
@@ -719,6 +718,29 @@ export class ShopManager {
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
         this.refresh(shop.definition.getId());
         this.ensureRestockTask();
+    }
+
+    /**
+     * The price of each of up to `quantity` the player can pay for, in order. A shop whose price follows its
+     * stock charges each one at the stock it is taken from, so a large purchase costs more per item.
+     */
+    private static affordablePrices(player: any, shop: RuntimeShop, definition: ItemDefinition, first: number, quantity: number): number[] {
+        const funds = this.currencyAmount(player, shop.definition.getCurrency());
+        const varies = this.ratedBuyPrice(shop, definition, 0) !== null
+            && (shop.definition.getSalesPolicy().changePer ?? 0) > 0;
+        if (!varies) {
+            const count = first > 0 ? Math.min(quantity, Math.floor(funds / first)) : quantity;
+            return new Array(Math.max(0, count)).fill(first);
+        }
+        const prices: number[] = [];
+        let total = 0;
+        for (let bought = 0; bought < quantity; bought++) {
+            const each = bought === 0 ? first : this.buyPrice(player, shop, definition, bought);
+            if (total + each > funds) break;
+            total += each;
+            prices.push(each);
+        }
+        return prices;
     }
 
     private static sellItem(
@@ -768,7 +790,7 @@ export class ShopManager {
         }
         const price = this.sellPrice(shop, definition, player);
         // Wiki (Lumbridge General Store, Bandit Duty Free): a stocked pot, jug or chisel is "bought at" 0 coins. A
-        // stock-priced general store refuses only an item of no value, not one its formula rounds down to 0.
+        // stock-priced shop refuses only an item of no value, not one its formula rounds down to 0.
         if (this.isOwnCurrency(shop, stockId) || (this.stockPriced(shop) ? this.itemPrice(shop, definition) <= 0 : price <= 0)) {
             player.sendMessage("This item has no value.");
             return;
@@ -960,7 +982,7 @@ export class ShopManager {
      * The Wiki's "Buys at" (per mille) for a shop paying in its own reward currency, 0 where it has none. Wiki
      * StoreTableHead: Grace's Graceful Clothing, Prospector Percy's Nugget Shop, the Mining Guild Mineral Exchange
      * and Dusuri's Star Shop buy their stock back at 80% (a graceful hood bought for 35 marks sells for 28); Petrified
-     * Pete's Ore Shop buys at 0%. The TzHaar and Tai Bwo Wannai shops keep the standard refund.
+     * Pete's Ore Shop buys at 0%. The TzHaar and Tai Bwo Wannai shops are priced by value (`valueRates`).
      */
     private static specialistBuyback(shop: RuntimeShop): number {
         if (this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())) return 0;
@@ -1015,10 +1037,11 @@ export class ShopManager {
 
     /**
      * What this player pays for one: the item's price, as content may change it ("shop:buy-price",
-     * a league relic's free coin shops). Never below 0.
+     * a league relic's free coin shops). Never below 0. `bought` is how many of it this purchase has
+     * already taken, for a shop whose price follows its stock.
      */
-    private static buyPrice(player: any, shop: RuntimeShop, definition: ItemDefinition): number {
-        const price = this.itemPrice(shop, definition);
+    private static buyPrice(player: any, shop: RuntimeShop, definition: ItemDefinition, bought = 0): number {
+        const price = this.ratedBuyPrice(shop, definition, bought) ?? this.itemPrice(shop, definition);
         const request = {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(), currency: shop.definition.getCurrency(),
             itemId: definition.getId(), price,
@@ -1034,26 +1057,70 @@ export class ShopManager {
         return currencyId > 0 && ItemDefinition.forId(itemId).unNote() === currencyId;
     }
 
-    /** A coin general store with the Wiki's buy percentage and change per item: its price follows its stock. */
-    private static stockPriced(shop: RuntimeShop): boolean {
-        const policy = shop.definition.getSalesPolicy();
-        return policy.generalStore === true && shop.definition.getCurrency() === "COINS"
-            && policy.buysAt != null && policy.changePer != null;
+    /**
+     * Currencies a shop prices from the item's value: coins, the TzHaar shops' tokkul and Tai Bwo Wannai's
+     * trading sticks. Their Wiki rates set both prices. Reward currencies are priced per item instead.
+     */
+    private static readonly VALUE_PRICED_CURRENCIES = new Set(["COINS", "TOKKUL", "TRADING STICKS"]);
+
+    /** The Wiki rates that price this shop, or null where it has none (the legacy core shops, reward currencies). */
+    private static valueRates(shop: RuntimeShop): Readonly<ShopSalesPolicy> | null {
+        return this.VALUE_PRICED_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())
+            ? shop.definition.getSalesPolicy()
+            : null;
     }
 
+    /** How far the shop's stock of an item is above (positive) or below (negative) its normal stock, 0 for items it doesn't list. */
+    private static stockOffset(shop: RuntimeShop, itemId: number, change: number): number {
+        return (shop.stock.get(itemId) ?? 0) + change - (shop.originalAmounts.get(itemId) ?? 0);
+    }
+
+    /**
+     * Wiki (Shop § Pricing, Shop calculator): buying one costs value × (sells at − change per × items above the
+     * normal stock), rising the same way for each item below it, rounded down. It never costs more than
+     * value × (sells at + 500%), nor less than 1 coin, 10% of value, or value × (sells at − 100%).
+     * A per-item price is the price as it stands. Null where the shop's rates don't price it.
+     */
+    private static ratedBuyPrice(shop: RuntimeShop, definition: ItemDefinition, bought: number): number | null {
+        const sellsAt = this.valueRates(shop)?.sellsAt;
+        if (sellsAt == null || (shop.itemPrices.get(definition.getId()) ?? 0) > 0) return null;
+        const value = Number(definition.getValue?.() ?? 0);
+        if (!(value > 0)) return 0;
+        const changePer = shop.definition.getSalesPolicy().changePer ?? 0;
+        const rate = sellsAt - changePer * this.stockOffset(shop, definition.getId(), -bought);
+        const highest = Math.floor(value * (sellsAt + 5000) / 1000);
+        const lowest = Math.max(1, Math.floor(value / 10), Math.floor(value * (sellsAt - 1000) / 1000));
+        return Math.min(highest, Math.max(lowest, Math.floor(value * rate / 1000)));
+    }
+
+    /**
+     * Wiki (Shop § Pricing, Shop calculator): selling one pays value × (buys at − change per × items above the
+     * normal stock), rising the same way for each item below it, rounded down. Never more than value plus the buy
+     * rate, nor less than 10% of value. Null where the shop's rates don't price it.
+     */
+    private static ratedSellPrice(shop: RuntimeShop, definition: ItemDefinition, sold: number): number | null {
+        const buysAt = this.valueRates(shop)?.buysAt;
+        if (buysAt == null) return null;
+        const value = Number(definition.getValue?.() ?? 0);
+        if (!(value > 0)) return 0;
+        const changePer = shop.definition.getSalesPolicy().changePer ?? 0;
+        const rate = buysAt - changePer * this.stockOffset(shop, definition.getId(), sold);
+        const highest = Math.floor(value * (1000 + buysAt) / 1000);
+        return Math.max(Math.floor(value / 10), Math.min(highest, Math.floor(value * rate / 1000)));
+    }
+
+    /** A shop whose sale price follows its stock: it refuses only an item of no value, not one its formula rounds down to 0. */
+    private static stockPriced(shop: RuntimeShop): boolean {
+        return this.valueRates(shop)?.buysAt != null;
+    }
+
+    /** What this player is paid for one; `additionalStock` is how many of it this sale has already handed over. */
     private static sellPrice(shop: RuntimeShop, definition: ItemDefinition, player: any = null, additionalStock = 0): number {
         const buyPrice = this.itemPrice(shop, definition);
         const buyback = this.specialistBuyback(shop);
-        let price = buyback > 0
+        const price = this.ratedSellPrice(shop, definition, additionalStock) ?? (buyback > 0
             ? Math.floor(buyPrice * buyback / 1000)
-            : buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice;
-        const policy = shop.definition.getSalesPolicy();
-        if (this.stockPriced(shop)) {
-            const overstock = Math.max(0, (shop.stock.get(definition.getId()) ?? 0)
-                - (shop.originalAmounts.get(definition.getId()) ?? 0) + additionalStock);
-            // Wiki StoreTableHead multipliers use per mille; the general-store floor is 10%.
-            price = Math.floor(Number(definition.getValue()) * Math.max(100, policy.buysAt - overstock * policy.changePer) / 1000);
-        }
+            : buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice);
         const request = {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(), currency: shop.definition.getCurrency(),
             itemId: definition.getId(), buyPrice, price,

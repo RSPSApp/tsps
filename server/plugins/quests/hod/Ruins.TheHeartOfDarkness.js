@@ -1,4 +1,6 @@
 /** Tapoyauik's route, icon puzzle and quest Amoxliatl; RSProx 1695 / OSRS Wiki. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function ruins(shared) {
   const { api, S, NPC, Scenes, play, after, advance, held, stage, stopFollowing } = shared;
   const { Animation, Graphic, HitDamage, HitMask, Location, Skill, TimerKey } = api.core;
@@ -163,7 +165,7 @@ module.exports = function ruins(shared) {
     if (stepId === 'hod-ruins-box') { event.handled = true; event.box = event.step.items.length ? { items: event.step.items } : { statement: true }; return; }
     const scene = Scenes.get(player);
     if (scene?.name === 'nagua') {
-      if (stepId === 'viWDPg') { event.handled = true; player.getPacketSender().sendCameraShake(0, 2, 0, 0); }
+      if (stepId === 'viWDPg') { event.handled = true; CameraShake.send(player.getPacketSender(), "atmospheric", 0, 2, 0, 0); }
       if (stepId === 'ncfvjP') {
         event.handled = true; player.getPacketSender().sendCameraReset();
         scene.naguas = [Scenes.actor(scene, FROST_NAGUA_ACTOR, [1676, 9634, 2]), Scenes.actor(scene, FROST_NAGUA_ACTOR, [1680, 9636, 2])];

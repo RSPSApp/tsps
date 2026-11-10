@@ -134,6 +134,36 @@ own switch and the row stay in step both ways, and the state comes back at login
 
 Ours: a row click that changes the setting sends no chat message (only the locked rows and the Ironman refusal say something); the feature's own switch keeps its messages.
 
+## Camera shake rows
+
+Every camera shake the server sends goes through `CameraShake.send(sender, effect, ...)`
+(`plugins/interface/CameraShake.plugin.js`), which names the effect and sends it only when the
+player's settings allow it. Each var is an `option_camera_effect_*_disabled` flag (1 = off), saved
+and resent at login like any `settings.json` toggle; all start at 0 (on). A shake with no amplitude
+(one that stops a shake) is always sent.
+
+| Setting | Id | Varbit | Effect | Shakes today |
+| --- | --- | --- | --- | --- |
+| Toggle all combat camera shake effects | 425 | 16106 `option_camera_effect_combat_disabled` | `combat`, and every combat sub-row | Hueycoatl, Phantom Muspah, Zebak, Nylocas, Obor, the Fractured Archive batteries, Meat and Greet's minotaur |
+| Doom of Mokhaiotl | 445 | 17776 `option_camera_effect_dom_disabled` | `doom` | the burrow |
+| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | none yet |
+| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | none yet |
+| Ape Atoll tunnel rock fall | 429 | 16109 `option_camera_effect_monkey_madness_disabled` | `apeAtollRockfall` | none yet |
+| Toggle all atmospheric camera shake effects | 426 | 16110 `option_camera_effect_atmospherics_disabled` | `atmospheric`, and every atmospheric sub-row | Guardians of the Rift's surge, quest scenes |
+| Baba Yaga's house | 281 | 14197 `option_camera_effect_baba_yaga_disabled` | `babaYaga` | none yet |
+| Fishing Trawler | 282 | 4814 `trawler_camera_static` | `trawler` | none yet |
+| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | none yet |
+
+- **Groups.** A sub-row's struct param 1080 names its group (3335 combat, 5198 atmospheric).
+  Script 7825 counts a sub-row as off while its master is off, and the settings scripts lock it;
+  the sub-row keeps its own value for when the master comes back on. Ours: a click on a locked
+  sub-row changes nothing on the server either.
+- **Fishing Trawler.** Script 1134 (the trawler's own camera button) also sets 4814, in the client
+  alone, and says "You have disabled all atmospheric camera effects in your settings. Turn them on
+  to enable this button." while the atmospheric master is off.
+- **Not done**: the shamans' jump, the Great Olm, the Ape Atoll rock falls, Baba Yaga's house, the
+  Fishing Trawler and the Barrows chest send no camera shake yet; their rows only save.
+
 ## Level-ups
 
 All on the tick the level is gained:

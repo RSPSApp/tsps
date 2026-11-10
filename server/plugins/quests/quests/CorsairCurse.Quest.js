@@ -1,4 +1,6 @@
 /** The Corsair Curse. Capture evidence: docs/f2p-coastal-parity.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerCorsairCurseQuest(api) {
   const {
     GameObject, Area, PrivateArea, Boundary, Animation, Graphic, Task, TaskManager, DialogueChainBuilder, ActionDialogue, MagicCombatMethod, CombatSpells, Projectile, StatementDialogue,
@@ -728,7 +730,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (model !== undefined) player.setNpcTransformationId(model);
     player.getMovementQueue().setBlockMovement(true); player.setUntargetable(true);
     player.getPacketSender().sendVarbit(6719, 2); player.getPacketSender().sendVarbit(12393, 1);
-    for(let axis=0;axis<5;axis++)player.getPacketSender().sendCameraShake(axis,0,0,0);
+    for(let axis=0;axis<5;axis++)CameraShake.send(player.getPacketSender(), "atmospheric", axis,0,0,0);
     return scene;
   }
 

@@ -590,6 +590,11 @@ export class SkillManager {
             if (restore.amount !== amount && Number.isFinite(restore.amount) && restore.amount >= 0) amount = Math.floor(restore.amount);
         }
         const curr = this.getCurrentLevel(skill);
+        // An increase never lowers a level: one already at or past the cap (Prayer over base from an ancient brew,
+        // then a restore capped at base) stays where it is.
+        if (curr >= max) {
+            return;
+        }
         if ((curr + amount) > max) {
             this.setCurrentLevels(skill, max);
             return;

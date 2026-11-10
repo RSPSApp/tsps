@@ -130,6 +130,10 @@ function closeMenu({ player }) {
   openMenus.delete(player);
 }
 
+function restoreChatInput({ player, interfaceId }) {
+  if (interfaceId === JEWELLERY_BOX_INTERFACE) Menu.restoreChatInput(player);
+}
+
 function restoreLastDestination({ player }) {
   const last = player.getAttribute(LAST_DESTINATION_ATTRIBUTE) ?? 0;
   if (last) player.getPacketSender().sendVarbit(LAST_DESTINATION_VARBIT, last);
@@ -158,6 +162,7 @@ function attachJewelleryBoxes(api) {
   for (const name of Object.keys(BOX_DATA.boxes)) api.onObjectInteraction(name, BOX_OPTIONS);
   api.onInterfaceActionClick(chooseDestination);
   api.onCustomEvent("interface:close", closeMenu);
+  api.onCustomEvent("interface:closed", restoreChatInput);
   api.onPlayerLogin(restoreLastDestination);
 }
 

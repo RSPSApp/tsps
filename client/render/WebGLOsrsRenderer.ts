@@ -1,5 +1,6 @@
 import { sceneTileHeight } from "../game/scene/SceneGeometry";
 import { LocAnimated } from "./loc/LocAnimated";
+import type { MultiLocReloadGroup } from "./loc/MultiLocVarps";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -2565,9 +2566,9 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.onLocChange(this, oldId, newId, tile, level, opts);
     }
 
-    protected override reloadMultiLocSquare(mapX: number, mapY: number): void {
+    protected override reloadMultiLocSquare(mapX: number, mapY: number, group: MultiLocReloadGroup): void {
         if (this.instanceActive) this.scheduleInstanceLocRebuild();
-        else this.scheduleLocGeometryUpdate(mapX, mapY, "full");
+        else this.scheduleLocGeometryUpdate(mapX, mapY, group);
     }
 
     onRegionReplacement(payload: {

@@ -86,7 +86,7 @@ import { CombatSpells } from "../game/content/combat/magic/CombatSpells";
 import { TeleportHandler } from "../game/model/teleportation/TeleportHandler";
 import { ArceuusSpells } from "../game/content/combat/magic/ArceuusSpells";
 import { SpellTeleports } from "../game/content/combat/magic/SpellTeleports";
-import { LEAGUE_PROFILE, MAIN_PROFILE, type PlayerProfile } from "../game/entity/impl/player/persistence/PlayerProfile";
+import { MAIN_PROFILE, otherProfiles, type PlayerProfile } from "../game/entity/impl/player/persistence/PlayerProfile";
 import { Accounts } from "../game/entity/impl/player/Accounts";
 import type { PluginLoginExtension, PluginLoginPending } from "../plugins/PluginTypes";
 import {
@@ -1391,15 +1391,21 @@ export class ClientConnection {
 
     // `save` is the primary character's save for this world: it holds the remembered logins.
     let save: any | null = null;
-    // The account's credential is its main character's save; a league character's own hash only
-    // stands in while no main character exists (an account first made on a league world), on
-    // either world. So a name can't be claimed on either world with a password of one's own, and
-    // a password change (PlayerPersistence.changePassword) reaches both characters.
+    // The account's credential is its main character's save; another character's own hash (a
+    // league or hardcore one) only stands in while no main character exists (an account first
+    // made on such a world), on every world. So a name can't be claimed on any world with a
+    // password of one's own, and a password change (PlayerPersistence.changePassword) reaches
+    // every character.
     let credentials: any | null = null;
     try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(primaryName, profile);
-      const main = profile === MAIN_PROFILE ? save : GameConstants.PLAYER_PERSISTENCE.load(primaryName, MAIN_PROFILE);
-      credentials = main ?? save ?? (profile === MAIN_PROFILE ? GameConstants.PLAYER_PERSISTENCE.load(primaryName, LEAGUE_PROFILE) : null);
+      const persistence = GameConstants.PLAYER_PERSISTENCE;
+      save = persistence.load(primaryName, profile);
+      const main = profile === MAIN_PROFILE ? save : persistence.load(primaryName, MAIN_PROFILE);
+      credentials = main ?? save;
+      for (const other of otherProfiles(profile)) {
+        if (credentials) break;
+        if (other !== MAIN_PROFILE) credentials = persistence.load(primaryName, other);
+      }
     } catch (error) {
       console.error(`[login] failed to load ${typedName}`, error);
       this.releasePendingName();
@@ -1482,6 +1488,11 @@ export class ClientConnection {
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now));
         if (save) await this.saveLoginTokens(primaryName, profile, save, loginTokens);
       }
+      // An unmade save (PlayerSave.unmake) enters as a new character, without the save's
+      // attributes: its remembered logins go across here, or the first save would drop them.
+      if (!loginTokens && save?.isUnmade?.() === true) {
+        loginTokens = readLoginTokens(save.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now());
+      }
     } catch (error) {
       console.error(`[login] failed to authenticate ${typedName}`, error);
       this.releasePendingName();
@@ -1497,9 +1508,13 @@ export class ClientConnection {
     }
     let username = primaryName;
     if (!this.loginExtension && account && Accounts.key(typedName) !== Accounts.key(primaryName)) username = typedName;
-    let characterSave = save;
+    // An unmade save (PlayerSave.unmake) vouched for the login above; its character is a new one.
+    let characterSave = save?.isUnmade?.() === true ? null : save;
     if (username !== primaryName) {
-      try { characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null; }
+      try {
+        characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null;
+        if (characterSave?.isUnmade?.() === true) characterSave = null;
+      }
       catch (error) { this.releasePendingName(); this.failLogin(8, "The login server is busy."); return; }
       // The alt enters with the capitals its save was made with, not the typed ones (PlayerSave
       // writes the entered name back as the display name).
@@ -1625,7 +1640,7 @@ export class ClientConnection {
     // stores; the client maps the standard mounts onto the chosen layout.
     // Mobile clients resolve to the stock mobile toplevel (601) instead.
     const layoutRoot = resolveGameframeRoot(player);
-    for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true)) this.send(packet);
+    for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true, GameConstants.WORLD_TYPE.label)) this.send(packet);
     player.getPacketSender()
       // Publish the saved spellbook before the remaining login state and quest recovery.
       .sendTabInterface(6, player.getSpellbook().getInterfaceId())

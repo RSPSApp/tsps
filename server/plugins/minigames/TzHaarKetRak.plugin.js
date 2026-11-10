@@ -8,6 +8,7 @@ const Dialogue = require("./tzhaarketrak/Dialogue.TzHaarKetRak");
 const Challenge = require("./tzhaarketrak/Challenge.TzHaarKetRak");
 const Rewards = require("./tzhaarketrak/Rewards.TzHaarKetRak");
 const Scoreboard = require("./tzhaarketrak/Scoreboard.TzHaarKetRak");
+const EscapeCrystal = require("./tzhaarketrak/EscapeCrystal.TzHaarKetRak");
 
 module.exports = {
   name: "TzHaarKetRak",
@@ -19,5 +20,6 @@ module.exports = {
     Challenge.attach(api, { lastJadDown: Rewards.lastJadDown, completed: Rewards.completed, failed: Rewards.failed, refused: Rewards.refused });
     Rewards.attach(api);
     Scoreboard.attach(api);
+    EscapeCrystal.attach(api);
   },
 };

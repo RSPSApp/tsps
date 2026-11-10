@@ -1105,7 +1105,29 @@ export const ChatType = {
   NPC_SAY: 116,
   /** A message box's text, logged in the chatbox as live does when one opens (rsprox `type=mesbox`). */
   MESBOX: 115,
+  /** The login greeting, "Welcome to Old School RuneScape." (rsprox `type=108`). */
+  WELCOME: 108,
 } as const;
+
+/**
+ * Live's highlight tags (`@mes_hl_gre@...</col>`): the official client colours them by the
+ * chatbox's transparency (varbit chatbox_transparency 4608), this client does not, so content
+ * resolves them before sending. gre and red are from captures (GotR); ora (Hardcore Worlds' death
+ * broadcasts) is UNVERIFIED: the classic orange, for both backgrounds.
+ */
+export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: string }> = {
+  gre: { opaque: "06600c", transparent: "229628" },
+  red: { opaque: "ef1020", transparent: "ef1020" },
+  ora: { opaque: "ff9040", transparent: "ff9040" },
+};
+
+/** `text` with each known `@mes_hl_<colour>@` tag as a `<col=...>` for that chatbox background. */
+export function resolveChatHighlights(text: string, transparent = false): string {
+  return String(text ?? "").replace(/@mes_hl_([a-z]+)@/g, (tag, colour: string) => {
+    const highlight = CHAT_HIGHLIGHTS[colour];
+    return highlight ? `<col=${transparent ? highlight.transparent : highlight.opaque}>` : tag;
+  });
+}
 
 /**
  * Public chat's colour and effect, as typed with prefixes like "red:wave:" (OSRS chat colours 0-20,
@@ -2650,7 +2672,12 @@ export function orbsGroupFor(root: number): number {
   return root === MOBILE_GAMEFRAME_ROOT ? MOBILE_ORBS_GROUP_ID : ORBS_GROUP_ID;
 }
 
-export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false): Buffer[] {
+/**
+ * The gameframe a login (or the welcome screen's Play) opens. Script 876 ends it: its name and
+ * world-type strings go to script 5450, which keeps them in varc strings 564 and 944 (live sends
+ * "REGULAR", or "HARDCORE WORLD" on a Hardcore world).
+ */
+export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false, worldTypeLabel = "REGULAR"): Buffer[] {
   const mounts = [
     // pm_chat -> toplevel_osrs_stretch:pm_container (93), xp_drops -> :xp_drops (9).
     // 161:7 (hud_container_back) has no fixed-layout pane, so XP drops mounted there vanished.
@@ -2665,7 +2692,7 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
   cameraScript.writeUInt16BE(626, 0);
   const rootPayload = Buffer.alloc(2);
   rootPayload.writeUInt16BE(root);
-  const loginScript = Buffer.concat([Buffer.alloc(4), scriptArgs([0, 0, playerName, playerName]), Buffer.alloc(4)]);
+  const loginScript = Buffer.concat([Buffer.alloc(4), scriptArgs([0, 0, playerName, worldTypeLabel]), Buffer.alloc(4)]);
   loginScript.writeInt32BE(876, 0);
   return [
     packet(ServerPacket.RUN_CLIENT_SCRIPT, cameraScript, 2),

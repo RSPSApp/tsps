@@ -114,10 +114,6 @@ const OVERLAY_HUD_UID = (161 << 16) | 8;
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 /** chatbox_transparency: live colours highlighted messages by it (@mes_hl_gre@ and so on). */
 const CHATBOX_TRANSPARENCY = 4608;
-const HIGHLIGHT = {
-  gre: { opaque: "06600c", transparent: "229628" },
-  red: { opaque: "ef1020", transparent: "ef1020" },
-};
 
 function idOf(kind, name) {
   const key = `${kind}:${name}`;
@@ -294,7 +290,7 @@ function spam(player, text) {
 /** Live's @mes_hl_gre@ / @mes_hl_red@: the colour follows the chatbox's transparency. */
 function highlight(player, colour, text) {
   const transparent = player.getPacketSender().getVarbit(CHATBOX_TRANSPARENCY) === 1;
-  return `<col=${HIGHLIGHT[colour][transparent ? "transparent" : "opaque"]}>${text}</col>`;
+  return core().resolveChatHighlights(`@mes_hl_${colour}@${text}</col>`, transparent);
 }
 
 function animate(player, name) {

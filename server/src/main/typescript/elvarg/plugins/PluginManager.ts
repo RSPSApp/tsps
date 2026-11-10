@@ -2587,6 +2587,7 @@ export class PluginManager {
         return listener.castOnItem(player, typeof spellId === "string" ? listener.resolveSpellId(spellId) : spellId, itemId, slot, source);
       },
       ChatType: require("../net/protocol/ClientProtocol").ChatType,
+      resolveChatHighlights: require("../net/protocol/ClientProtocol").resolveChatHighlights,
       DuelRule: require("../game/content/Duelling").DuelRule,
       RegionManager: require("../game/collision/RegionManager").RegionManager,
       Animation: require(`${model}/Animation`).Animation,
@@ -2652,6 +2653,8 @@ export class PluginManager {
       LOGIN_FLAG_CHARACTER_SELECT: require("../net/login/LoginTokens").LOGIN_FLAG_CHARACTER_SELECT,
       MAIN_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").MAIN_PROFILE,
       LEAGUE_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").LEAGUE_PROFILE,
+      HARDCORE_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").HARDCORE_PROFILE,
+      PLAYER_PROFILES: require("../game/entity/impl/player/persistence/PlayerProfile").PLAYER_PROFILES,
       Skills: require("../game/content/skill/SkillManager").Skills,
       Accounts: require("../game/entity/impl/player/Accounts").Accounts,
       BoatManager: require("../game/content/sailing/BoatManager").BoatManager,
@@ -4553,6 +4556,7 @@ export class PluginManager {
       },
       setExperienceRate: (rate) => GameConstants.setExperienceRate(rate),
       setWorldProfile: (profile) => GameConstants.setWorldProfile(profile),
+      setWorldType: (type) => GameConstants.setWorldType(type),
       getActiveRegionSnapshot: () => {
         try {
           const worldModule = require("../game/World");

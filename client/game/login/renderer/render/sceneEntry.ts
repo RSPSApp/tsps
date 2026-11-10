@@ -36,7 +36,7 @@ export function drawDownload(host: LoginRendererHost, state: LoginState, width: 
         withRenderTransform(host, ctx, () => {
             // Draw title background if available (may not be during early download)
             drawTitleBackgroundToCtx(host, ctx);
-            drawLogoToCtx(host, ctx);
+            drawLogoToCtx(host, ctx, state.serverWorldFlags);
 
             // Draw download progress bar
             drawDownloadBarToCtx(host, ctx, state);
@@ -63,7 +63,7 @@ export function drawInitial(host: LoginRendererHost, state: LoginState, width: n
         withRenderTransform(host, ctx, () => {
             // Draw title background
             drawTitleBackgroundToCtx(host, ctx);
-            drawLogoToCtx(host, ctx);
+            drawLogoToCtx(host, ctx, state.serverWorldFlags);
 
             // Draw loading bar
             drawLoadingBarToCtx(host, ctx, state);

@@ -174,8 +174,13 @@ test("the TzHaar shops sell for tokkul at 150% and buy at 15% (an uncut onyx cos
 });
 
 test("a per-item price stays the price, and the price hooks still have the last word", (t) => {
+  const lostProperty = shopper("Lost Property shop", [[I.COINS, 100_000]]);
+  assert.notEqual(valueOf(4252), 4_600, "a price of its own, not the item's value");
+  assert.equal(cost(lostProperty, 4252), 4_600, "the shop's own price for the item");
+  // Revision 242 values the escape crystal at 10,000, and the Mysterious Stranger sells at his
+  // sellsAt (1000): 10,000, as Death's shop does. The old 75,000 override is gone.
   const stranger = shopper("Mysterious Stranger (shop)", [[I.COINS, 100_000]]);
-  assert.equal(cost(stranger, 22517), 75_000, "the escape crystal's own price");
+  assert.equal(cost(stranger, 22517), 10_000, "the escape crystal at its 242 value");
 
   const original = PluginManager.emitCustomEvent;
   t.mock.method(PluginManager, "emitCustomEvent", (name, request) => {

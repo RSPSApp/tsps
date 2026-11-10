@@ -153,3 +153,11 @@ test('a shop-wide stockAmount of 0 keeps rows that omit their own amount', () =>
     'the inherited zero stays listed, an explicit amount wins and an invalid amount is still dropped'
   );
 });
+
+test("Death sells escape crystals from his Shop option (Death's Office, rev 242)", () => {
+  const death = shops.find((shop) => shop.name === 'Death (shop)');
+  assert.ok(death, 'imported from osrsreboxed-db');
+  assert.deepEqual(death.npcInteractions, [{ npcIds: [9855], optionSlot: 4 }], 'op4 Shop, not op3 Collect');
+  assert.deepEqual(death.originalStock, [{ id: 22517, amount: 9500, restockTicks: 1 }]);
+  assert.equal(death.originalStock[0].price, undefined, 'priced at the crystal\'s 10,000 cache value');
+});

@@ -217,12 +217,18 @@ function answerAreas(query) {
 /** world.json pluginConfig key naming the world's league (LeagueMode reads the same one). */
 const LEAGUE_TYPE_CONFIG = "league:type";
 
-/** `league:area-at` { x, y, player | league } -> area (id or null when open), name. The world's league when neither is given. */
+/**
+ * `league:area-at` { x, y, player | league | base } -> area (id or null when open), name. The
+ * world's league when none is given; `base: true` asks for the areas as the cache's region table
+ * and the data place them, with no league's overrides (a death broadcast's "in Misthalin" on any
+ * world).
+ */
 function answerAreaAt(query) {
   if (!query) return;
   let type = query.player ? Common.leagueOf(query.player) : Number(query.league ?? Common.api.getPluginConfig(LEAGUE_TYPE_CONFIG, 0));
   if (!Common.league(type)) type = null;
-  query.area = type === null ? null : Regions.areaAt(type, query.x | 0, query.y | 0);
+  if (query.base === true) query.area = Regions.areaAt(null, query.x | 0, query.y | 0);
+  else query.area = type === null ? null : Regions.areaAt(type, query.x | 0, query.y | 0);
   query.name = query.area === null ? null : Common.area(query.area).name;
 }
 

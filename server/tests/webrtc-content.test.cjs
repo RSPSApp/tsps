@@ -118,7 +118,7 @@ test('malformed, duplicate, unreliable and congested auxiliary channels leave ga
 test('public world metadata exposes only the configured name over HTTP and the content channel', t => {
   const world = require('../dist/game/definition/WorldDefinition');
   t.mock.method(world, 'getWorldDefinition', () => ({ name: 'Solaris RSPS', pluginConfig: { secret: 'private' } }));
-  assert.deepEqual(JSON.parse(ContentApi.resolve('GET', '/api/world-info').body), { name: 'Solaris RSPS' });
+  assert.deepEqual(JSON.parse(ContentApi.resolve('GET', '/api/world-info').body), { name: 'Solaris RSPS', flags: 0 }, 'a plain world: no type bits');
   assert.equal(ContentApi.resolve('POST', '/api/world-info').status, 405);
   const h = connect();
   const frames = response(h.channel, { type: 'content-request', id: 100, path: '/api/world-info' });

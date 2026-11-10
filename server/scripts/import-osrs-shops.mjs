@@ -103,10 +103,7 @@ const EXTRA_STOCK = {
 // Per-item prices for currencies the shop's multipliers cannot price.
 // ITEM_PRICES sets an item row's "price"; SHOP_PRICES writes a shop-level
 // "prices" map, kept in the listed order.
-const ITEM_PRICES = {
-  // Theatre of Blood escape crystal (Night at the Theatre).
-  "Mysterious Stranger (shop)": { 22517: 75000 },
-};
+const ITEM_PRICES = {};
 const SHOP_PRICES = {
   // Stardust costs (Shooting Stars).
   "Dusuri's Star Shop": [

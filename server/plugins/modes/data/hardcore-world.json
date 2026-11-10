@@ -1,0 +1,138 @@
+{
+  "_source": "Hardcore Worlds (OSRS, 4 November 2026; docs/hardcore-worlds.md). Captured: live rsprox sessions of revision 242.1 on Hardcore worlds 634-670 (world flags 2049) and a Hardcore character at Death's Office on world 335, 2026-11-04/05 (20261104T112753, 20261104T120418 and the death broadcasts of every session). The death choice's texts are the cache's (hc_death_choice 982, scripts 10240-10249). Entries under `ours` were not captured and replace nothing live says.",
+  "config": "HardcoreWorld:enabled",
+  "worldType": {
+    "label": "HARDCORE WORLD",
+    "flags": 2048,
+    "activity": "Hardcore World"
+  },
+  "varbits": {
+    "main": "hc_main",
+    "arrival": "hc_first_time_leaving_tutorial_island",
+    "diedDate": "hc_died_date",
+    "deathOption": "hc_death_option",
+    "resetCount": "hc_reset_count"
+  },
+  "deathChoice": {
+    "interface": "hc_death_choice",
+    "reset": "hc_death_choice:reset_button",
+    "transfer": "hc_death_choice:transfer_button"
+  },
+  "deathOption": {
+    "reset": 1,
+    "transfer": 2
+  },
+  "objs": {
+    "escapeCrystal": "tob_teleport",
+    "guideIcon": "main_tutor_icon_dummy"
+  },
+  "lumbridge": [
+    3221,
+    3219,
+    0
+  ],
+  "leaveLumbridgeDelayTicks": 2,
+  "messages": {
+    "welcome": "Welcome to Hardcore {world}.",
+    "escapeCrystal": "<img=56><col=ef1020>You have been given a complimentary Escape crystal from Death.</col>",
+    "arrivalGuide": "If you have a question or are stuck on something, try talking to the Lumbridge Guide. Look for the question mark symbol on the map if you can't find him.",
+    "welcomeLumbridge": "Welcome to Lumbridge! If you need some help, simply talk to the Lumbridge Guide. Look for the question mark icon on your minimap to find him.",
+    "deathByNpc": "@mes_hl_ora@{npc} killed {name}({level}) with a {damage} damage hit{where}.</col>",
+    "death": "@mes_hl_ora@{name}({level}) was killed by a {damage} damage hit{where}.</col>",
+    "deathWhere": " in {region}"
+  },
+  "death": {
+    "greeting": {
+      "npc": "Greetings, mortal. I've been expecting you.",
+      "mood": "neutral"
+    },
+    "reply": {
+      "player": "You have?",
+      "mood": "quiz"
+    },
+    "newSoul": {
+      "npc": "Indeed... A new soul to partake in my challenge.",
+      "mood": "neutral"
+    },
+    "menuTitle": "Select an option",
+    "options": {
+      "continue": "I would like to play Hardcore Mode. How do I continue?",
+      "leave": "I no longer want to play Hardcore Mode. How do I leave?",
+      "who": "Who are you?",
+      "where": "Where am I?",
+      "more": "Could you tell me more about Hardcore Mode?"
+    },
+    "more": [
+      {
+        "npc": "It is a challenge of my creation. I have created special worlds for Hardcore players where death is a greater threat.",
+        "mood": "neutral"
+      },
+      {
+        "npc": "These worlds have their own economy, separate from other worlds. Hardcore players may freely trade others.",
+        "mood": "neutral"
+      },
+      {
+        "npc": "Most important to me is that Hardcore players only have one life. Once you lose it, you have a choice to make.",
+        "mood": "neutral"
+      },
+      {
+        "npc": "If you are undaunted by large setbacks, you can try again. A completely fresh start, as if you had only just arrived here for the first time.",
+        "mood": "neutral"
+      },
+      {
+        "npc": "Or you could choose to continue where you left off, but do so on Non-Hardcore worlds. You will lose all the items on your person, except any protected items, but otherwise your items and progress are retained.",
+        "mood": "neutral"
+      },
+      {
+        "player": "Speaking of progress, is there an easy way for me to keep track of that?",
+        "mood": "quiz"
+      },
+      {
+        "npc": "If you wish to see how you're doing, you simply need to look upon yourself. I have a mirror here that you can use to do just that.",
+        "mood": "neutral"
+      },
+      {
+        "npc": "Now, did you have any other questions?",
+        "mood": "neutral"
+      }
+    ],
+    "cannotReclaim": {
+      "npc": "You cannot reclaim anything from me.",
+      "mood": "neutral"
+    }
+  },
+  "ours": {
+    "_note": "Not captured: the live answers on a Hardcore world to these options, and the choice's confirmation. Replace them from a capture.",
+    "continue": [
+      {
+        "npc": "Step through the portal behind you, and my challenge begins.",
+        "mood": "neutral"
+      }
+    ],
+    "leave": [
+      {
+        "npc": "On these worlds there is no leaving my challenge, mortal. When your life ends, you will choose how to go on.",
+        "mood": "neutral"
+      }
+    ],
+    "who": [
+      {
+        "npc": "I am Death. Here, I keep the rules of my challenge.",
+        "mood": "neutral"
+      }
+    ],
+    "where": [
+      {
+        "npc": "My office. Every Hardcore soul begins its journey here.",
+        "mood": "neutral"
+      }
+    ],
+    "confirmTitle": "Are you sure?",
+    "confirmReset": "Yes, reset my character.",
+    "confirmTransfer": "Yes, transfer my character.",
+    "chooseAgain": "No, let me choose again.",
+    "transferTaken": "You already have a character on the Non-Hardcore worlds, so this one cannot be transferred.",
+    "noIronmen": "There are no Ironmen on Hardcore worlds.",
+    "noPresets": "Presets are not available on Hardcore worlds."
+  }
+}

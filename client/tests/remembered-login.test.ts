@@ -187,12 +187,13 @@ async function worldNameMetadata() {
         let requested = "";
         globalThis.fetch = (async url => {
             requested = String(url);
-            return { ok: true, json: async () => ({ name: "Solaris RSPS" }) } as Response;
+            return { ok: true, json: async () => ({ name: "Solaris RSPS", flags: 0x801 }) } as Response;
         }) as typeof fetch;
         updateClientPreferences({ lastServer: undefined });
         await state.refreshServerName();
         assert.equal(requested, "https://solar.example:43594/api/world-info");
         assert.equal(state.serverName, "Solaris RSPS");
+        assert.equal(state.serverWorldFlags, 0x801, "the world type picks the title logo (0x800: logo_hcmain)");
         assert.equal(getClientPreference("lastServer"), undefined, "a refreshed default world is not saved as a choice");
         state.saveLastServer();
         state.serverTransport = "webrtc";

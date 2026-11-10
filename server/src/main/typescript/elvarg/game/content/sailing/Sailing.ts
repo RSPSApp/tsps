@@ -206,7 +206,11 @@ export class Sailing {
     public static disembarkGuest(guest: Player, dockId: string): string | null {
         const dock = Sailing.docks.get(dockId);
         const instance = Sailing.guestBoat(guest);
-        if (!dock || !instance || !Sailing.mooredAt(instance, dock)) return "You can't disembark here.";
+        const owned = instance && Sailing.instances.get(instance)?.owned;
+        // Only at the port the boat last docked at, as boarding is: a port the owner would need
+        // the Sailing level to dock at can't be stepped onto from a boat that sailed past it.
+        if (!dock || !instance || !owned || Sailing.lastPortOf(owned) !== dockId
+            || !Sailing.mooredAt(instance, dock)) return "You can't disembark here.";
         guest.getSailing().returnPoint = { ...dock.landing };
         Sailing.removeGuest(guest, instance, "disembark");
         Sailing.moveExpected(guest, new Location(dock.landing.x, dock.landing.y, dock.landing.z));

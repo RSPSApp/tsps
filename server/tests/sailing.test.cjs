@@ -740,6 +740,13 @@ test("a guest boards a friend's boat only while its owner is aboard it at that d
     assert.equal(Sailing.disembarkGuest(guest, DOCK.id), "You can't disembark here.");
     instance.fineX = fineX;
 
+    // Next to a port the boat never docked at (a level-gated one, say), a guest can't step off.
+    const NEARBY = { id: "guest_test_nearby", mooring: DOCK.mooring, landing: { x: DOCK.landing.x + 3, y: DOCK.landing.y, z: 0 } };
+    Sailing.registerDock(NEARBY);
+    assert.equal(Sailing.disembarkGuest(guest, NEARBY.id), "You can't disembark here.");
+    assert.equal(Sailing.guestBoat(guest), instance, "still aboard");
+    assert.deepEqual(guest.getSailing().returnPoint, DOCK.landing, "and nothing was recorded");
+
     withSailingEvents((emitted) => {
       assert.equal(Sailing.disembarkGuest(guest, DOCK.id), null);
       assert.deepEqual(emitted.map(([name, payload]) => [name, payload.reason]), [["sailing:guest-left", "disembark"]]);

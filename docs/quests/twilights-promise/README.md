@@ -44,8 +44,10 @@ were checked: the capture's (below The Heart of Darkness's requirements) nativel
 
 ## Findings
 
-- **open** No Regulus Cento stands outside Varrock's east gate (live has `vmq2_quetzal_keeper_varrock`
-  13370 at 3281,3413, Quest Helper's first step); Primio's Travel there does the same trip.
+- **fixed** No Regulus Cento stood outside Varrock's east gate (Quest Helper's first step), and
+  Primio had Travel before the first trip was agreed. Both now spawn as live's multi-NPCs (13370 at
+  3281,3413 and 13371 at 3277,3411, on `vmq2_first_travel`); Regulus's Talk-to plays the first trip
+  and "Sounds good." moves it 1 to 2 (rec 1695 tick 450), giving both Travel.
 - **open** The twins' "Where can I find..." menu keeps every option after one is asked; live drops
   the one just asked (ticks 1371-1383). The Wiki writes it as `{{tact|previous}}`.
 - **open** A level-up from the 3,000 Thieving XP closes the conversation, so a player meeting The

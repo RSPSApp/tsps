@@ -77,7 +77,9 @@ function playerWith(itemId) {
         sendMessage: (message) => messages.push(message),
         getAttribute: (key) => attributes.get(key),
         setAttribute: (key, value) => attributes.set(key, value),
-        getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]) }),
+        // Every varbit 1: the Wilderness tablets' warnings off, so they break at once
+        // (wilderness-teleport-warnings.test.cjs covers the warnings).
+        getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]), getVarbit: () => 1 }),
         getInventory: () => ({
             contains: (id) => (inventory.get(id) ?? 0) > 0,
             getAmount: (id) => inventory.get(id) ?? 0,

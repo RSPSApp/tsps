@@ -68,6 +68,8 @@
  * Source: OSRS Wiki "The Final Dawn", its quick guide, transcript and journal;
  * every id via scripts/lookup-gameval.ts and the cache definitions.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTheFinalDawnQuest(api) {
   const {
     ActionDialogue,
@@ -2034,8 +2036,8 @@ module.exports = function registerTheFinalDawnQuest(api) {
       setBit(player, BIT_TABLET_ONE);
       setBit(player, BIT_TABLET_TWO);
       syncQuestVarbits(player);
-      for (const axis of [0, 1]) player.getPacketSender().sendCameraShake(axis, 4);
-      player.getPacketSender().sendCameraShake(2, 2);
+      for (const axis of [0, 1]) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 4);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 2, 2);
       Scenes.later(player, 2, () => player.getPacketSender().sendCameraReset());
       checkRuinsExplored(player);
       return;
@@ -2327,7 +2329,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
     }
     if (checkpoint === 2 && locateTileMatches(player, 1373, 9539)) {
       player.sendMessage("The fragment crumbles in your hand and the dust blows towards a nearby wall, causing a symbol to appear.");
-      for (const axis of [0, 1, 2]) player.getPacketSender().sendCameraShake(axis, 5);
+      for (const axis of [0, 1, 2]) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 5);
       Scenes.later(player, 2, () => player.getPacketSender().sendCameraReset());
       player.getInventory().deleteNumber(KEYSTONE_FRAGMENT_ITEM, 1);
       setStage(player, STAGE_SYMBOL);

@@ -1,4 +1,6 @@
 /** Misthalin Mystery: OSRS Wiki and supplied live capture. See docs/misthalin-mystery.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerMisthalinMysteryQuest(api) {
   const { Skill, Location, Direction, ObjectDefinition, PrivateArea, Boundary, Animation, ForceMovement, Graphic, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, GameObject, ObjectManager, Item, ItemOnGroundManager, Equipment, HitDamage, HitMask, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
@@ -266,11 +268,11 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   function explodeWall(area){
     area.exploding=true;const player=area.owner;
     later(area,1,()=>player.getPacketSender().sendSubInterface((161<<16)|1,174,1,{postScripts:[{scriptId:948,args:[0,255,0,0,50]}]}));
-    later(area,2,()=>{controls(player,true);player.getPacketSender().sendCameraShake(4,4,0,1);});
+    later(area,2,()=>{controls(player,true);CameraShake.send(player.getPacketSender(), "atmospheric", 4,4,0,1);});
     later(area,4,()=>{
       quest.setStage(player,STAGE_WALL_BLOWN);player.getPacketSender().sendSoundEffect(1487,1,0).sendSubInterface((161<<16)|1,174,1,{postScripts:[{scriptId:948,args:[0,0,0,255,50]}]});
     });
-    later(area,5,()=>{controls(player,false);player.getPacketSender().sendCameraShake(4,0).closeSubInterface((161<<16)|1);});
+    later(area,5,()=>{controls(player,false);CameraShake.send(player.getPacketSender(), "atmospheric", 4,0).closeSubInterface((161<<16)|1);});
   }
   function island(player){return islands.get(player)??null;}
   function spawnActor(area,key,id,x,y){
@@ -312,7 +314,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     const area=enterIsland(player);if(area.scene)return;
     if(area.resetKey)TaskManager.cancelTasks(area.resetKey);
     area.scene=name;area.cameraKey={};controls(player,true);const scene=SCENES[name];
-    for(let axis=0;axis<5;axis++)player.getPacketSender().sendCameraShake(axis,0,0,0);
+    for(let axis=0;axis<5;axis++)CameraShake.send(player.getPacketSender(), "atmospheric", axis,0,0,0);
     player.moveTo(new Location(...scene.tile,0));camera(player,scene.camera,scene.look);
     if(name==="sid")spawnActor(area,NpcIdentifiers.KILLER,NpcIdentifiers.KILLER_2,1619,4835);
     if(name==="tayten"){

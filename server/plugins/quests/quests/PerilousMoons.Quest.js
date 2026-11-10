@@ -75,6 +75,8 @@
  *  - The finishing route follows Quest Helper: Jessamine and Zuma, then
  *    Eyatlalli completes the quest. Attala's finishing line is optional.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerPerilousMoonsQuest(api) {
   const {
     GameObject,
@@ -1130,7 +1132,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
 
   function shakeCamera(player) {
     const sender = player.getPacketSender();
-    sender.sendCameraShake(0, 8).sendCameraShake(1, 8).sendCameraShake(2, 8);
+    for (const axis of [0, 1, 2]) CameraShake.send(sender, "atmospheric", axis, 8);
     Scenes.later(player, 4, () => player.isRegistered() && player.getPacketSender().sendCameraReset());
   }
 

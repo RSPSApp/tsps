@@ -1,5 +1,6 @@
 "use strict";
 
+const ValueWarning = require("../../interface/ValueWarning");
 const { H, ANIM, level, requireLevel, hasTool, nearby, roll, exchange, drop, xp, begin } = require("./Context.Hunter");
 const ATTRIBUTE = "hunter.birdhouses";
 const DURATION = 50 * 60 * 1000;
@@ -97,13 +98,35 @@ function seedValue(itemId) {
   return high.includes(itemId) ? 2 : low.includes(itemId) ? 1 : 0;
 }
 
-function seed(player, object, itemId) {
+// All Settings 448 (on/off) and 449 (the value): seeds worth at least the value ask first.
+const SEED_WARNING_VARBIT = 17869;
+const SEED_WARNING_VALUE_VARP = 4850;
+
+/** Ours: the warning's wording, after the drop warning's. */
+function valuableSeeds(player, itemId, amount) {
+  const sender = player.getPacketSender();
+  if (!sender.getVarbit(SEED_WARNING_VARBIT)) return false;
+  return ValueWarning.reaches(ValueWarning.itemValue(H.core, itemId, amount), sender.getVarp(SEED_WARNING_VALUE_VARP));
+}
+
+function seed(player, object, itemId, confirmed = false) {
   const state = houses(player)[object.getId()];
   const value = seedValue(itemId);
   if (!valid(state)) { player.sendMessage("Build a birdhouse here first."); return; }
   if (!value) { player.sendMessage("You need suitable hop, herb, allotment, flower or bush seeds."); return; }
   if (state.seeds >= SEEDS) { player.sendMessage("This birdhouse is already full of seeds."); return; }
   const amount = Math.min(Math.ceil((SEEDS - state.seeds) / value), player.getInventory().getAmount(itemId));
+  if (amount && !confirmed && valuableSeeds(player, itemId, amount)) {
+    ValueWarning.confirm(H.core, player, {
+      itemId,
+      text: "The seeds you are trying to use are considered<br><col=7f0000>valuable</col>. Are you sure you want to use them?",
+      title: `${H.core.ItemDefinition.forId(itemId).getName()}: Really use them?`,
+      yes: "Use them.",
+      no: "No, don't use them.",
+      proceed: () => { if (nearby(player, object)) seed(player, object, itemId, true); },
+    });
+    return;
+  }
   if (!amount || !exchange(player, [[itemId, amount]], [])) return;
   state.seeds = Math.min(SEEDS, state.seeds + amount * value);
   if (state.seeds === SEEDS) state.filled = Date.now();
@@ -327,4 +350,4 @@ function advanceTime(event) {
   event.handledBy.push("Hunter");
 }
 
-module.exports = { initialize, login, sync, use, build, craft, interact, empty, reset, dismantle, seeds, advanceTime, ATTRIBUTE, DURATION, bases, status, ready, seedLevel, seedValue, loot };
+module.exports = { valuableSeeds, initialize, login, sync, use, build, craft, interact, empty, reset, dismantle, seeds, advanceTime, ATTRIBUTE, DURATION, bases, status, ready, seedLevel, seedValue, loot };

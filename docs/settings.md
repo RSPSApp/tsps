@@ -111,6 +111,36 @@ These rows only needed wiring: the cache's own scripts (or our client and server
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
   - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
 
+## Buff Bar
+
+The buff bar (interface 651) is mounted at login and drawn by the cache scripts. Every row of Interfaces > Buff Bar is in `settings.json` on the varbit script 6716 (3962 for the dropdown) reads for it, so the scripts hide the whole bar (124, varbit 9528 `buff_bar_hidden`), its tooltips (128, 9529 `buff_bar_tooltips_hidden`) or one buff. Every buff row starts shown, as live. `tests/buff-bar-settings.test.cjs` checks that every row of the section is wired, against both scripts, and that a click hides only its own buff and comes back at login.
+
+| Rows | Varbits |
+| --- | --- |
+| Home and minigame teleport, Tele Block, charge, God Wars altar, dragonfire shield, imbued heart, Vengeance cooldown and active, stamina, prayer enhance, overload, magic imbue, Sire stun, freeze, Staff of the dead, divine, antifire, antipoison (125, 126, 129-145) | 12353-12371 `buff_*_disabled` |
+| Corruption, Mark of Darkness, Shadow Veil, Death Charge, Ward of Arceuus, Resurrection (152-157) | 12405-12410 |
+| Remaining ammo (170), poison damage (186), desert heat (208), cannon ammo (213), desert water (244), cannon decay (246) | 12985, 13084, 13134, 13667, 14166, 14173 |
+| Menaphite remedy and the Tombs of Amascut effects (284-293) | 14287-14296 |
+| Wilderness cave decay (307), Group Woodcutting Bonus (363), Scurrius food pile (369), Deadman blighted overload (385), prayer regeneration (388), goading potion (390), surge potion (437), bowstring spool (443), Vale totem trail (444) | 14691, 15349, 4139, 10946, 11032, 10068, 16239, 17773, 17774 |
+| Woodcutting Leprechaun's Luck (364, dropdown) | 15350 = option |
+
+**Timers.** The bar shows a buff only while the server sends its timer var. `BuffTimers.plugin.js` sends these from the effect's own state each tick, next to the custom varps 7990-7993 the client's infobox timers read:
+
+| Effect | Varbit | Value |
+| --- | --- | --- |
+| Antifire, extended antifire | 3981 `antifire_potion` | time left in steps of 30 ticks |
+| Super antifire, extended super antifire | 6101 `super_antifire_potion` | time left in steps of 20 ticks |
+| Tele Block | 4163 `teleblock_cycles` | ticks left |
+| Stamina potion | 24 `stamina_duration`, 25 `stamina_active` | time left in steps of 10 ticks; 1 while it lasts |
+
+Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too.
+
+- **Not done**:
+  - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
+  - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
+  - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
+  - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
+
 ## Rows owned by other plugins
 
 These features keep their own state and had their own switch before All Settings could change
@@ -133,6 +163,36 @@ own switch and the row stay in step both ways, and the state comes back at login
 | Farming protection payment confirmation | 295 | varbit 98 `settings_warning_confirmation_farming_protection`, an ordinary `settings.json` row | The gardener's "Yes and don't ask again." turns the row on through `settings:set`. A save's old per-player `gardenerNoAsk` farm flag moves onto the row once at login and is removed. |
 
 Ours: a row click that changes the setting sends no chat message (only the locked rows and the Ironman refusal say something); the feature's own switch keeps its messages.
+
+## Camera shake rows
+
+Every camera shake the server sends goes through `CameraShake.send(sender, effect, ...)`
+(`plugins/interface/CameraShake.plugin.js`), which names the effect and sends it only when the
+player's settings allow it. Each var is an `option_camera_effect_*_disabled` flag (1 = off), saved
+and resent at login like any `settings.json` toggle; all start at 0 (on). A shake with no amplitude
+(one that stops a shake) is always sent.
+
+| Setting | Id | Varbit | Effect | Shakes today |
+| --- | --- | --- | --- | --- |
+| Toggle all combat camera shake effects | 425 | 16106 `option_camera_effect_combat_disabled` | `combat`, and every combat sub-row | Hueycoatl, Phantom Muspah, Zebak, Nylocas, Obor, the Fractured Archive batteries, Meat and Greet's minotaur |
+| Doom of Mokhaiotl | 445 | 17776 `option_camera_effect_dom_disabled` | `doom` | the burrow |
+| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | none yet |
+| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | none yet |
+| Ape Atoll tunnel rock fall | 429 | 16109 `option_camera_effect_monkey_madness_disabled` | `apeAtollRockfall` | none yet |
+| Toggle all atmospheric camera shake effects | 426 | 16110 `option_camera_effect_atmospherics_disabled` | `atmospheric`, and every atmospheric sub-row | Guardians of the Rift's surge, quest scenes |
+| Baba Yaga's house | 281 | 14197 `option_camera_effect_baba_yaga_disabled` | `babaYaga` | none yet |
+| Fishing Trawler | 282 | 4814 `trawler_camera_static` | `trawler` | none yet |
+| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | none yet |
+
+- **Groups.** A sub-row's struct param 1080 names its group (3335 combat, 5198 atmospheric).
+  Script 7825 counts a sub-row as off while its master is off, and the settings scripts lock it;
+  the sub-row keeps its own value for when the master comes back on. Ours: a click on a locked
+  sub-row changes nothing on the server either.
+- **Fishing Trawler.** Script 1134 (the trawler's own camera button) also sets 4814, in the client
+  alone, and says "You have disabled all atmospheric camera effects in your settings. Turn them on
+  to enable this button." while the atmospheric master is off.
+- **Not done**: the shamans' jump, the Great Olm, the Ape Atoll rock falls, Baba Yaga's house, the
+  Fishing Trawler and the Barrows chest send no camera shake yet; their rows only save.
 
 ## Level-ups
 
@@ -223,10 +283,16 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 
 - **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), High Risk lever / Ferox / canoe warnings (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471) and the Leagues stepping-stones teleport (500).
 - **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
-- **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`. Nothing reads it yet: `castAlchemy` only confirms untradeable items.
+- **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`.
+- **Value warnings** (`ValueWarnings.plugin.js`, shared pieces in `ValueWarning.js`). An item's worth is the Grand Exchange guide price of the unnoted item times the quantity; an untradeable item is worth nothing. A warning shows when the worth is at least the threshold.
+  - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning`, so another drop warning (the boat row 465) can use the same check.
+  - Alchemy (65, 66): "That item is considered valuable. Really cast High Level Alchemy on it?" (rsprox 338), with the untradeable confirm's options. Untradeable items warn while 65 is on (varbit 6092 `alchemy_warning_untradeables`, 1 in 2,664 of 3,978 captured logins). Core emits `magic:alchemy-warning`.
+  - Loot drop notifications (38-40): each stack an NPC drops for the player, from `npc-drops:roll`: `<col=ef1020>Valuable drop: 3 x Spider cave teleport (108,567 coins)</col>` and `<col=ef1020>Untradeable drop: Brimstone key</col>` (rsprox 788, 806 and others). Clicking 40 while 38 is off gives the row's own cache line instead.
+  - Grand Exchange (297, 298): a buy offer more than 10 times the guide price, or a sell offer under 10% of it (the rows' cache text), asks before it is placed. The varbits are `option_ge_price_buy/sell_warning_disabled` (14700/14701): 1 turns the warning off (the rows' structs have param 1084, ticked while the varbit is 0), so the captured default leaves the buy warning off and the sell warning on.
+  - Birdhouse seeds (448, 449): seeds worth at least the value (varp 4850 `settings_birdhouse_seed_warning_value`, 1000 in 1,263 captured logins) ask before they go in.
+  - Cannon (248-250): a popup when the cannon is down to the amount (varbit 14176) or empty; the red "Your cannon is out of ammo." chat line is always sent.
+  - Ours, with no capture: the number prompts for 39, 43, 249 and 449 (worded after the Alchemy one), the Grand Exchange, birdhouse and cannon wording, and that a threshold of 0 never warns.
 - **Not done**:
-  - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
-  - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
   - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
   - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
 
@@ -277,7 +343,6 @@ Not done yet:
 - **Level-up chatbox list** (493): no capture shows what it writes.
 - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
 - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
-- **Alchemy on untradeables warning** (65): its own change with the alchemy value warning.
 
 ## Containers on death
 

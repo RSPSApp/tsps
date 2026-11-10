@@ -4,6 +4,8 @@
  * The five saved story stages remain compatible with existing characters; the
  * cache receives OSRS's separate main, recruitment, reward and emote varbits.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerBelowIceMountainQuest(api) {
   const {
     Animation,
@@ -940,7 +942,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
       player.forceChat?.("Aaah!");
       sceneLater(player, scene, 2, () => sceneCamera(player, scene, [2991, 3500, 800, 1, 1], [2997, 3494, 400]));
       sceneLater(player, scene, 6, () => {
-        player.getPacketSender().sendCameraShake(0, 75);
+        CameraShake.send(player.getPacketSender(), "atmospheric", 0, 75);
         if (scene.fuse) api.removeNpc(scene.fuse);
         scene.fuse = null;
         scene.explosion = sourceObject(player, scene, EXPLOSION_OBJECT_ID, 2998, 3493);
@@ -1001,15 +1003,15 @@ module.exports = function registerBelowIceMountainQuest(api) {
       burntof?.getMovementQueue?.().addFirstStep(scene.sourceTile(2953, 5775));
       player.getPacketSender().sendSound(2400, 1, 0);
     } else if (stepId === "yEp2qP") {
-      player.getPacketSender().sendCameraShake(0, 50);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 0, 50);
       player.getPacketSender().sendSound(4988, 1, 0);
       for (const [x, y, delay] of [[2950, 5775, 50], [2950, 5772, 90], [2957, 5772, 160], [2956, 5776, 0], [2953, 5777, 180]]) {
         const graphic = new Graphic(ROCK_FALL_GRAPHIC_ID);
         graphic.delay = delay;
         player.getPacketSender().sendGraphic(graphic, scene.sourceTile(x, y));
       }
-      sceneLater(player, scene, 4, () => player.getPacketSender().sendCameraShake(0, 20));
-      sceneLater(player, scene, 9, () => player.getPacketSender().sendCameraShake(0, 5));
+      sceneLater(player, scene, 4, () => CameraShake.send(player.getPacketSender(), "atmospheric", 0, 20));
+      sceneLater(player, scene, 9, () => CameraShake.send(player.getPacketSender(), "atmospheric", 0, 5));
       pauseSceneAction(event, ENTRANCE_VARIANT, 8);
     } else if (stepId === "bxSVrN") {
       player.getPacketSender().sendCameraReset();
@@ -1518,7 +1520,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
         area.awakening?.performAnimation?.(new Animation(8944));
         area.awakening?.faceTile(area.sourceTile(2953, 5769));
         sceneCamera(player, area, [2948, 5771, 700, 1, 1], [2953, 5778, 100, 1, 1]);
-        player.getPacketSender().sendCameraShake(0, 5);
+        CameraShake.send(player.getPacketSender(), "atmospheric", 0, 5);
         sceneLater(player, area, 2, () => {
           player.getPacketSender().sendCameraReset();
           sceneCamera(player, area, [2948, 5771, 700], [2952, 5778, 150, 2, 2]);
@@ -1557,7 +1559,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
         const ramarno = sceneActor(player, area, NpcIdentifiers.RAMARNO, 2952, 5778);
         sceneLater(player, area, 1, () => ramarno?.faceTile(area.sourceTile(2951, 5769)));
       }
-      player.getPacketSender().sendCameraShake(0, 15);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 0, 15);
       sceneLater(player, area, 3, () => {
         player.getPacketSender().sendCameraReset();
         sceneCamera(player, area, [2955, 5772, 450], [2951, 5769, 300]);

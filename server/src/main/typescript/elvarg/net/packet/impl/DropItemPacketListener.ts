@@ -29,7 +29,12 @@ export class DropItemPacketListener {
       .sendInterfaceFlags(DESTROY_ITEM_NO_COMPONENT, FIRST_OPTION_FLAG);
   }
 
-  public static drop(player: any, id: number, interfaceId: number, itemSlot: number): void {
+  /**
+   * `confirmed`: the player already answered the drop warning for this item. Before an item lands
+   * on the floor, "item:drop-warning" { player, item, itemId, slot, warned, proceed } lets a plugin
+   * ask first: it sets `warned` and calls `proceed()` on the player's yes.
+   */
+  public static drop(player: any, id: number, interfaceId: number, itemSlot: number, confirmed = false): void {
     if (player == null || player.getHitpoints() <= 0) {
       return;
     }
@@ -82,6 +87,14 @@ export class DropItemPacketListener {
     }
 
     if (item.isDropable()) {
+      if (!confirmed && dropEvent.dropToGround !== false) {
+        const warning = { player, item, itemId: id, slot: itemSlot, warned: false,
+          proceed: () => {
+            if (player.getInventory().getItems()[itemSlot] === item) DropItemPacketListener.drop(player, id, interfaceId, itemSlot, true);
+          } };
+        PluginManager.emitCustomEvent("item:drop-warning", warning);
+        if (warning.warned) return;
+      }
       if (dropEvent.dropToGround !== false) {
         const toFloor = item.clone();
         if (Wilderness.isIn(player)) {

@@ -427,6 +427,24 @@ function login({ player }) {
   for (const pouch of POUCHES) sync(player, pouch, stateOf(player, pouch));
 }
 
+/**
+ * A death that empties the pouches (the storage items' death hook decides when) takes the
+ * essence out of each carried pouch.
+ */
+const deathContainer = {
+  holds: (item) => pouchFor(item.getId()) !== null,
+  varbit: "emptyondeath_essencepouch",
+  empty(player, item) {
+    const pouch = pouchFor(item.getId());
+    const state = stateOf(player, pouch);
+    const essence = essenceOfType(state.type);
+    if (!essence || state.amount <= 0) return [];
+    const contents = [{ id: objId(essence.item), amount: state.amount }];
+    save(player, pouch, { ...state, amount: 0 });
+    return contents;
+  },
+};
+
 function attach(api) {
   core = api.core;
   pluginApi = api;
@@ -443,6 +461,7 @@ function attach(api) {
   api.onItemOnItem("Abyssal needle", "Large pouch", stitch);
   api.onItemOnItem("Abyssal needle", "Giant pouch", stitch);
   api.onCustomEvent("runecrafting:repair-pouches", repairPouches);
+  api.onCustomEvent("storage:death-containers", (query) => query.containers.push(deathContainer));
   api.onNpcInteraction("Dark Mage", { Repairs: darkMageRepairs });
   api.onNpcDialogueCondition(darkMageCondition);
   api.onCustomEvent("npc-dialogue:action", darkMageAction);

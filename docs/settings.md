@@ -364,3 +364,18 @@ Not done yet:
 - **Level-up chatbox list** (493): no capture shows what it writes.
 - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
 - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Containers on death
+
+Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).
+
+| Setting | Id | Variable | Container |
+| --- | --- | --- | --- |
+| Always empty rune pouches on death | 354 | varbit 15311 `emptyondeath_runepouch` | rune pouch and divine rune pouch (`items/runepouch/Death.RunePouch.js`) |
+| Always empty tackle boxes on death | 355 | varbit 15312 `emptyondeath_tacklebox` | tackle box |
+| Always empty bolt pouches on death | 356 | varbit 15313 `emptyondeath_boltpouch` | none: there is no bolt pouch yet, so the row only saves |
+| Always empty seed boxes on death | 357 | varbit 15314 `emptyondeath_seedbox` | seed box (`skills/farming/Guild.Farming.js`) |
+| Always empty essence pouches on death | 358 | varbit 15315 `emptyondeath_essencepouch` | small to colossal pouches (`skills/runecrafting/Pouches.Runecrafting.js`) |
+| Always empty herb sacks on death | 359 | varbit 15316 `emptyondeath_herbsack` | herb sack and silklined herb sack |
+
+- **Not done:** a seed box lost above level 20 Wilderness is destroyed on live with its seeds kept for the next box (Wiki: Seed box, 14 April 2021); here its seeds go to the bank and the killer like any other PvP death.

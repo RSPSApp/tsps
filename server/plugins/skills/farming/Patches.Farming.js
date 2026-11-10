@@ -1302,6 +1302,7 @@ function attach(api) {
     api.onPlayerLogout(SeedBox.logout);
     api.onInterfaceActionClick(SeedBox.click);
     api.onCustomEvent("interface:closed", SeedBox.closed);
+    api.onCustomEvent("storage:death-containers", Guild.deathContainers);
     api.onInterfaceActionClick(Vault.click);
     api.onCustomEvent("player:widget-action", Vault.drag);
     api.onPlayerLogout(Geomancy.logout);

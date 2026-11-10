@@ -120,6 +120,12 @@
       ]
     },
     "316": { "name": "Make-X for darts and bolts", "varbit": 10971, "default": 1 },
+    "354": { "name": "Always empty rune pouches on death", "varbit": 15311 },
+    "355": { "name": "Always empty tackle boxes on death", "varbit": 15312 },
+    "356": { "name": "Always empty bolt pouches on death", "varbit": 15313 },
+    "357": { "name": "Always empty seed boxes on death", "varbit": 15314 },
+    "358": { "name": "Always empty essence pouches on death", "varbit": 15315 },
+    "359": { "name": "Always empty herb sacks on death", "varbit": 15316 },
     "362": { "name": "Options on the compass for orienting the camera also set its vertical angle", "varbit": 15323 },
     "371": { "name": "Auto-equip & sort items from gravestone", "varbit": 9776 },
     "372": { "name": "Player Report options", "varbit": 1334 },

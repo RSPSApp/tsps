@@ -138,8 +138,22 @@ with the clothes or cape pouch installed (Wiki); tsps has no pouches, so they st
 
 ## Death
 
-The fish barrel's and the tackle box's contents follow the container: when it falls to the floor,
-so do they. When it is kept, they stay. Every other container keeps its contents on the player.
+`deathDrops` in `Events.StorageItems.js` decides, once per death, what happens to the contents of
+the fish barrel and tackle box, and of the containers other plugins add through
+`storage:death-containers`: the rune pouch, the essence pouches, the herb sack and the seed box
+(`tests/container-death.test.cjs`).
+
+- **PvM deaths:** the contents stay in the container, kept or lost; a lost one goes to the grave
+  with them. With its "Always empty ... on death" setting on (All Settings 354-359), the contents
+  go to the grave as items, and the container, kept or lost, is left empty. A fish barrel or
+  tackle box that falls to the floor (no grave) takes its contents along.
+- **PvP deaths** always empty them, kept or lost, and the contents drop for the killer with the
+  rest of the loot ("The pouch is always emptied ... if the death is in PvP", the setting's own
+  text). A seed box's seeds go to the bank first, where it has room (Wiki: Seed box, 7 March 2019).
+  A fish barrel the death keeps keeps its fish.
+- **Safe deaths** change nothing.
+- Every other container (coal bag, gem bag, log basket, plank sack, ...) keeps its contents on the
+  player.
 
 ## Superheat Item
 

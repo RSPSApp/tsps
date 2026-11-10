@@ -203,20 +203,14 @@ function currencyFor(name, info) {
 }
 
 /**
- * The Wiki's "Buys at" (StoreTableHead buymultiplier, per mille) and change per item. A coin general store's
- * price follows its stock; a shop with its own currency keeps the figure so the server knows which ones buy
- * their stock back and for how much (Grace's Graceful Clothing buys at 80%, Petrified Pete's Ore Shop at 0%).
- * Coin specialist shops keep the server's standard refund, so the figure is left out for them.
+ * The Wiki's StoreTableHead figures, per mille of the item's value: "Sells at" (sellmultiplier, what a player
+ * pays), "Buys at" (buymultiplier, what a player is paid) and "Change per" (delta, how far either price moves for
+ * each item above or below the shop's normal stock). Every shop keeps the figures its page gives; the server
+ * decides which currencies they price.
  */
-function sellPolicy(currency, info) {
-  const buysAt = info?.buys_at;
-  const changePer = info?.change_per;
-  if (!Number.isSafeInteger(buysAt)) return {};
-  if (info?.general_store === true) {
-    return Number.isSafeInteger(changePer) ? { sellMultiplier: buysAt, priceChangePer: changePer } : {};
-  }
-  if (currency === "COINS") return {};
-  return { sellMultiplier: buysAt, ...(Number.isSafeInteger(changePer) ? { priceChangePer: changePer } : {}) };
+function salesPolicy(info) {
+  const rate = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : undefined);
+  return { sellsAt: rate(info?.sells_at), buysAt: rate(info?.buys_at), changePer: rate(info?.change_per) };
 }
 
 function originalStock(name, items) {
@@ -324,7 +318,7 @@ function main() {
       name,
       currency,
       ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
-      ...sellPolicy(currency, record.shop_info),
+      ...salesPolicy(record.shop_info),
       originalStock: originalStock(name, record.items),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
       npcInteractions: npcInteractions(name, record.owners, shopsByNpc),

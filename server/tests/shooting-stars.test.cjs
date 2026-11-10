@@ -439,7 +439,7 @@ test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all
   const data = require("../data/definitions/shops.json").find((shop) => shop.name === "Dusuri's Star Shop");
   ShopDefinition.replace([new ShopDefinition(data.id, data.name, data.currency,
     data.originalStock.map((stock) => ({ ...stock, price: data.prices[stock.id] })), 1, 1, 1, "test",
-    { generalStore: data.generalStore, buysAt: data.buysAt ?? data.sellMultiplier, changePer: data.changePer ?? data.priceChangePer })]);
+    { generalStore: data.generalStore, buysAt: data.buysAt, changePer: data.changePer })]);
   ShopManager.initialize();
   ShopManager.registerItemCurrency(core.ItemIdentifiers.STARDUST);
   t.mock.method(PluginManager, "emitCustomEvent", () => {});

@@ -22,9 +22,6 @@ interface RawShopDefinition {
     sellsAt?: unknown;
     buysAt?: unknown;
     changePer?: unknown;
-    /** Older names for `buysAt` and `changePer`. */
-    sellMultiplier?: unknown;
-    priceChangePer?: unknown;
     id?: unknown;
     name?: unknown;
     currency?: unknown;
@@ -207,8 +204,8 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             {
                 generalStore: typeof raw.generalStore === "boolean" ? raw.generalStore : undefined,
                 sellsAt: this.perMille(raw.sellsAt),
-                buysAt: this.perMille(raw.buysAt) ?? this.perMille(raw.sellMultiplier),
-                changePer: this.perMille(raw.changePer) ?? this.perMille(raw.priceChangePer),
+                buysAt: this.perMille(raw.buysAt),
+                changePer: this.perMille(raw.changePer),
             }
         );
     }

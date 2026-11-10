@@ -91,7 +91,7 @@ function intoBank(player, { id, amount }) {
 /**
  * What a death does with a container's contents (Wiki: Settings, "Always empty ... on death"):
  * - a PvP death always empties it, and the contents go to the killer with the rest of the loot;
- *   a fish barrel the death keeps keeps them;
+ *   a fish barrel the death keeps, or gives back as an untradeable, keeps them;
  * - otherwise the contents stay in the container, kept or lost (a lost one goes to the grave
  *   with them), unless its "Always empty" setting is on: then they go to the grave as they are,
  *   even when the container is kept. A fish barrel or tackle box heading for the floor takes them
@@ -111,7 +111,8 @@ function deathDrops(event) {
   for (const container of deathContainers()) {
     const held = carried.filter((item) => container.holds(item));
     if (held.length === 0) continue;
-    const kept = held.some((item) => !lost.has(item));
+    // A PvP death gives an untradeable back to the player, so that one is kept too.
+    const kept = held.some((item) => !event.items.includes(item));
     let empty;
     if (pvp) empty = !(container.keptInPvp && kept);
     else empty = settingOn(player, container.varbit) || container.follows?.(event) === true;

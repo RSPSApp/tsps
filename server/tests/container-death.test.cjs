@@ -253,7 +253,7 @@ test("an Ultimate Ironman's seed box seeds drop for the killer, not into the ban
   assert.equal(amount(tally(new Map(), floor), RANARR_SEED), 10);
 });
 
-test("a fish barrel the PvP death keeps keeps its fish; a lost one's fish go to the killer", (t) => {
+test("a fish barrel keeps its fish on a PvP death, protected or given back as an untradeable", (t) => {
   const barrel = Storage.FAMILIES.get("fish-barrel");
   for (const kept of [true, false]) {
     const player = actor(t, "barrel");
@@ -262,9 +262,10 @@ test("a fish barrel the PvP death keeps keeps its fish; a lost one's fish go to 
     if (!kept) player.setSkullTimer(100);
     const floor = [];
     t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item) => floor.push(item));
-    PlayerDeathTask.dropItems(player, actor(t, "killer"), player.getLocation());
-    assert.equal(Storage.total(player, barrel), kept ? 5 : 0);
-    assert.equal(amount(tally(new Map(), floor), 383), kept ? 0 : 5);
+    PlayerDeathTask.returnKeptItems(player, PlayerDeathTask.dropItems(player, actor(t, "killer"), player.getLocation()));
+    assert.equal(amount(tally(new Map(), player.getInventory().getValidItems()), 25582), 1, "the barrel comes back");
+    assert.equal(Storage.total(player, barrel), 5);
+    assert.equal(amount(tally(new Map(), floor), 383), 0);
     t.mock.restoreAll();
   }
 });

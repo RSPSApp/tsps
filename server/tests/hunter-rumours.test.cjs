@@ -6,7 +6,7 @@ const C = require("../plugins/skills/hunter/Context.Hunter");
 const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
 
 const NPC = { GILMAN: 1, CERVUS: 2, ORNUS: 3, ACO: 4, TECO: 5, WOLF: 6 };
-const ITEM = { PART: 100, SACK_ADEPT: 101, SACK_EXPERT: 102, SACK_BASIC: 103, SACK_MASTER: 104 };
+const ITEM = { JERBOA_TAIL: 110, PART: 100, SACK_ADEPT: 101, SACK_EXPERT: 102, SACK_BASIC: 103, SACK_MASTER: 104 };
 let sent;
 let events;
 
@@ -19,7 +19,7 @@ function setup() {
   const identifiers = {
     GUILD_HUNTER_CERVUS_ADEPT_: NPC.CERVUS, GUILD_HUNTER_ORNUS_ADEPT_: NPC.ORNUS, GUILD_HUNTER_ACO_EXPERT_: NPC.ACO,
     GUILD_HUNTER_TECO_EXPERT_: NPC.TECO, GUILD_HUNTER_WOLF_MASTER_: NPC.WOLF, HUNTMASTER_GILMAN_NOVICE_: NPC.GILMAN,
-    RED_CHINCHOMPA: 9001, RED_CHINCHOMPA_TUFT: ITEM.PART,
+    RED_CHINCHOMPA: 9001, RED_CHINCHOMPA_TUFT: ITEM.PART, LARGE_JERBOA_TAIL: ITEM.JERBOA_TAIL,
     HUNTERS_LOOT_SACK_BASIC_: ITEM.SACK_BASIC, HUNTERS_LOOT_SACK_ADEPT_: ITEM.SACK_ADEPT,
     HUNTERS_LOOT_SACK_EXPERT_: ITEM.SACK_EXPERT, HUNTERS_LOOT_SACK_MASTER_: ITEM.SACK_MASTER,
   };
@@ -28,9 +28,13 @@ function setup() {
     NpcIdentifiers: new Proxy(identifiers, { get: (t, k) => t[k] ?? 5000 }),
     ItemIdentifiers: new Proxy(identifiers, { get: (t, k) => t[k] }),
     Skill: { HUNTER: "hunter", HERBLORE: "herblore" },
-    ItemDefinition: { forId: (id) => ({ getName: () => (id === ITEM.PART ? "Red chinchompa tuft" : "item"), isStackable: () => false, getNoteId: () => id }) },
+    ItemDefinition: { forId: (id) => ({ getName: () => ({ [ITEM.PART]: "Red chinchompa tuft", [ITEM.JERBOA_TAIL]: "Large jerboa tail" })[id] ?? "item", isStackable: () => false, getNoteId: () => id }) },
+    GameObject: class {},
     DialogueChainBuilder: Chain,
     NpcDialogue: class extends Dialogue { get text() { return this.args[1]; } get npc() { return this.args[0]; } },
+    PlayerDialogue: class extends Dialogue { get text() { return this.args[0]; } },
+    ActionDialogue: class extends Dialogue { run() { this.args[0].execute(); } },
+    OptionDialogue: class extends Dialogue { get options() { return this.args.slice(1); } pick(n) { this.args[0].executeOption(n); } },
     EndDialogue: Dialogue,
   };
   C.H.api = { emitCustomEvent: (name, payload) => { events.push([name, payload]); if (name === "quest:is-complete") payload.complete = true; } };
@@ -43,6 +47,7 @@ function player({ hunter = 99, unlocked = true, held = [] } = {}) {
     getAttribute: (k) => attributes.get(k),
     setAttribute: (k, v) => attributes.set(k, v),
     sendMessage: (m) => sent.messages.push(m),
+    getPacketSender: () => ({ sendInterfaceRemoval: () => {} }),
     getSkillManager: () => ({ getMaxLevel: () => hunter, getCurrentLevel: () => hunter, addExperiences: (skill, xp) => { p.xp = (p.xp ?? 0) + xp; } }),
     getDialogueManager: () => ({ startDialogues: (chain) => sent.dialogues.push(chain) }),
     getInventory: () => ({
@@ -123,4 +128,34 @@ test("handing in the part counts the rumour and does not offer another until the
   assert.deepEqual(state.assignments, {});
   assert.equal(p.items.get(ITEM.SACK_EXPERT), 1);
   assert.ok(events.some(([name]) => name === "hunter:rumour-completed"));
+});
+
+const verityEvent = (p) => ({ player: p, npcId: 7, npc: { getPrivateArea: () => null, getLocation: () => ({ getZ: () => 0, getX: () => 0, getY: () => 0 }) } });
+
+test("Verity's Talk-to gives her introduction to a newcomer and unlocks rumours after it", () => {
+  const p = Object.assign(player({ unlocked: false }), {
+    getPrivateArea: () => null,
+    getLocation: () => ({ getZ: () => 0, getX: () => 0, getY: () => 0, clone: () => ({}) }),
+  });
+  Rumours.verity(verityEvent(p));
+  const [greeting, options] = sent.dialogues.at(-1).entries;
+  assert.equal(greeting.text, "Oh, hello there newcomer. I'm Guild Scribe Verity. Do you need me to explain the work we do here?");
+  assert.deepEqual(options.options, ["Yes please.", "No thanks."]);
+  assert.ok(!Rumours.state(p).unlocked, "nothing unlocks before the introduction is heard");
+  options.pick(1);
+  const chain = sent.dialogues.at(-1).entries;
+  assert.equal(chain.length, Rumours.VERITY_TUTORIAL.length + 1);
+  assert.equal(chain[0].text, "Yes please.");
+  assert.match(chain[1].text, /^So it's nice and simple./);
+  assert.ok(!Rumours.state(p).unlocked);
+  chain.at(-1).run();
+  assert.ok(Rumours.state(p).unlocked);
+});
+
+test("a hunter reminds a player with an unfinished rumour with the captured wording", () => {
+  const p = player();
+  const state = Rumours.state(p);
+  state.assignments[0] = { task: Rumours.tasks.findIndex((t) => t.name === "Embertailed jerboa"), count: 0, found: false };
+  Rumours.assign(p, 0, NPC.GILMAN);
+  assert.equal(said(), "You're hunting for me at the moment. This rumour was about a embertailed jerboa. You'll need to bring back its tail.");
 });

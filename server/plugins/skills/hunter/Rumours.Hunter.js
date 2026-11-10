@@ -63,7 +63,12 @@ function assign(player, index, npcId = masters()[index][0]) {
   if (current) {
     const task = tasks[current.task], part = H.core.ItemIdentifiers[task.part];
     s.active = index;
-    if (!(current.found && player.getInventory().contains(part))) { check({ player }); return; }
+    if (!(current.found && player.getInventory().contains(part))) {
+      // Captured wording (rsprox 1104, Gilman), including its "a" before a vowel.
+      const { creature, part: phrase } = target(task);
+      say(player, npcId, `You're hunting for me at the moment. This rumour was about a ${creature}. You'll need to bring back ${phrase}.`);
+      return;
+    }
     const I = H.core.ItemIdentifiers, sack = I[`HUNTERS_LOOT_SACK_${master[2].toUpperCase()}_`];
     if (!C.exchange(player, [[part,1]], [[sack,1]])) { player.getInventory().full(); return; }
     // Content may change the rumour's XP ("hunter:rumour-reward" { player, tier, xp }, a league relic's double).
@@ -102,12 +107,50 @@ function rumour({player,npcId,npc}) {
   if(C.nearby(player,npc))assign(player,index,npcId);
   return true;
 }
-function verity({player,npc}) {
+// Guild Scribe Verity's introduction (rsprox 1104 and 1695). The "Yes please." / "No thanks." menu's wording is a guess: only "Yes please." was captured.
+const VERITY_GREETING = "Oh, hello there newcomer. I'm Guild Scribe Verity. Do you need me to explain the work we do here?";
+const VERITY_TUTORIAL = [
+  ["player", "Yes please."],
+  ["npc", "So it's nice and simple. Just chat to any of the hunters in here to help them out. They're all following reports that I've split up amongst them."],
+  ["player", "Reports?"],
+  ["npc", "Indeed. There are all sorts of interesting creatures to hunt out there. Sometimes we get reports of a particularly unique example. When that happens, one of the hunters will set out to find it."],
+  ["npc", "If you do decide to take a job from any of the hunters, they'll tell you what type of creature they're looking into. Hunt that creature until you encounter the unique specimen."],
+  ["npc", "Once you've caught it, bring some proof back to the hunter that sent you out in the first place. I'm sure they'll reward you for your time."],
+  ["player", "I see. Thanks for the information."],
+];
+/** One chain of NPC and player pages; "then" runs after the last page is dismissed. */
+function converse(player, npcId, lines, then) {
+  const { DialogueChainBuilder, NpcDialogue, PlayerDialogue, ActionDialogue, EndDialogue } = H.core;
+  const chain = new DialogueChainBuilder();
+  lines.forEach(([who, text], i) => chain.add(who === "npc" ? new NpcDialogue(i, npcId, text) : new PlayerDialogue(i, text)));
+  chain.add(then ? new ActionDialogue(lines.length, { execute: then }) : new EndDialogue(lines.length));
+  player.getDialogueManager().startDialogues(chain);
+}
+function explain(player, npcId) {
+  converse(player, npcId, VERITY_TUTORIAL, () => { state(player).unlocked = true; });
+}
+function introduce(player, npcId) {
+  const { DialogueChainBuilder, NpcDialogue, OptionDialogue } = H.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new NpcDialogue(0, npcId, VERITY_GREETING),
+    new OptionDialogue(1, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        if (Number(option) === 1) explain(player, npcId);
+        else state(player).unlocked = true;
+      },
+    }, "Yes please.", "No thanks."),
+  ));
+}
+/** Talk-to or Rumour-settings: the introduction until she has given it, then the consecutive-rumours menu. */
+function verity({player,npc,npcId}) {
   if(!C.nearby(player,npc))return true;
-  const s=state(player);s.unlocked=true;
+  const s=state(player);
+  if(!s.unlocked){introduce(player,npcId);return true;}
   C.choose(player,[["Allow consecutive rumours",()=>{s.repeat=true;player.sendMessage("Consecutive rumours enabled.");}],
     ["Avoid consecutive rumours",()=>{s.repeat=false;player.sendMessage("Consecutive rumours disabled.");}],
-    ["Check my rumour",()=>check({player})]],npc);
+    ["Check my rumour",()=>check({player})],
+    ["Explain Hunters' Rumours again",()=>explain(player,npcId)]],npc);
   return true;
 }
 function check({player}) {
@@ -186,4 +229,4 @@ function open({player,itemId}) {
 }
 /** `hunter:rumours-completed` { player, completed }: how many rumours the player has finished. */
 function completedCount(request){if(request?.player)request.completed=state(request.player).completed|0;}
-module.exports={ATTRIBUTE,state,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount};
+module.exports={ATTRIBUTE,state,VERITY_TUTORIAL,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount};

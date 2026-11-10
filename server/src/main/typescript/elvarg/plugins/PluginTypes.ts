@@ -1209,9 +1209,9 @@ export interface PluginApi {
     >
   ): boolean;
   /**
-   * Reads an entry from world.json `pluginConfig` by key, e.g.
-   * `getPluginConfig("TutorialIsland:allowSkip", true)`. Returns `defaultValue`
-   * when the key is not set.
+   * Reads an option from this plugin, e.g. `getPluginConfig("allowSkip", true)`.
+   * Full legacy keys such as `TutorialIsland:allowSkip` also work. Returns
+   * `defaultValue` when the key is not set.
    */
   getPluginConfig<T = unknown>(key: string, defaultValue?: T): T;
   onButton(

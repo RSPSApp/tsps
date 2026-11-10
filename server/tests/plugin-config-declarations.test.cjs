@@ -120,3 +120,13 @@ test('getConfigDeclarations lists loaded plugin keys with their owner plus the c
     assert.equal(all.get(key).owner, 'core');
   }
 });
+
+test('a plugin can read its scoped option using the short name and the legacy full key', () => {
+  const { normalizeWorldPluginConfig } = require('../dist/game/definition/WorldPluginConfig');
+  const settings = normalizeWorldPluginConfig({ plugins: { Characters: { maxPerAccount: 4 } } }).pluginConfig;
+  PluginManager.pluginConfigCache = settings;
+  const api = PluginManager.createApi('Characters');
+  assert.equal(api.getPluginConfig('maxPerAccount', 6), 4);
+  assert.equal(api.getPluginConfig('characters:maxPerAccount', 6), 4);
+  assert.equal(api.getPluginConfig('missing', 6), 6);
+});

@@ -1,3 +1,4 @@
+import { pluginConfigKey } from "../game/definition/WorldPluginConfig";
 import { CacheDefinitions } from "../game/cache/CacheDefinitions";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
 import { ObjectDefinition } from "../game/definition/ObjectDefinition";
@@ -4294,7 +4295,7 @@ export class PluginManager {
         );
       },
       getPluginConfig: <T>(key: string, defaultValue?: T) =>
-        PluginManager.getPluginConfig<T>(key, defaultValue),
+        PluginManager.getPluginConfig<T>(typeof key === "string" && key.length > 0 && !key.includes(":") ? pluginConfigKey(pluginName, key) : key, defaultValue),
       onButton: (buttonIds, handler) => {
         registerButtonHook(buttonIds, handler, "button");
       },

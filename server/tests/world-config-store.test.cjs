@@ -158,3 +158,32 @@ test('changes.world only takes declared world settings; others are errors and le
   const { WORLD_SETTING_DECLARATIONS } = require('../dist/game/definition/WorldSettingDeclarations');
   assert.deepEqual(WorldConfigStore.worldSettingKeys(), Object.keys(WORLD_SETTING_DECLARATIONS));
 });
+
+test('structured settings normalize before mixed-format layering and editor writes', () => {
+  const { mergeWorldConfig } = require('../dist/game/definition/WorldDefinition');
+  const shipped = {
+    ...SHIPPED,
+    plugins: { Base: true, Prayer: { enabled: false, sequentialBurying: true },
+      Characters: { maxPerAccount: 6 }, PlayerBots: { ai: { enabled: true, count: 3 } },
+      LeagueMode: { type: 6 } },
+    pluginConfig: { 'Prayer:sequentialBurying': false, 'CrossFloor:visibility': true },
+  };
+  const local = {
+    plugins: { Prayer: { enabled: true }, PlayerBots: { ai: { enabled: false } } },
+    pluginConfig: { 'Prayer:sequentialBurying': false },
+  };
+  const effective = mergeWorldConfig(shipped, local);
+  assert.deepEqual(effective.plugins, { Base: true, Prayer: true }, 'settings alone do not enable a plugin');
+  assert.equal(mergeWorldConfig(shipped, {}).pluginConfig['Prayer:sequentialBurying'], true);
+  assert.deepEqual(effective.pluginConfig, {
+    'Prayer:sequentialBurying': false,
+    'CrossFloor:visibility': true,
+    'characters:maxPerAccount': 6,
+    'PlayerBots:ai': { enabled: false },
+    'league:type': 6,
+  });
+  const { plan } = run(local, { pluginConfig: { 'Prayer:sequentialBurying': null } }, shipped);
+  assert.deepEqual(plan.errors, []);
+  assert.equal(mergeWorldConfig(shipped, plan.nextLocal).pluginConfig['Prayer:sequentialBurying'], true);
+  assert.throws(() => mergeWorldConfig(shipped, { plugins: { Prayer: { enabled: 1 } } }), /plugins.Prayer.enabled/);
+});

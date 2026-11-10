@@ -4,6 +4,36 @@ World settings live in `server/data/definitions/world.json`. A deployment can ov
 `server/data/definitions/world.local.json`; ordinary top-level values in the local file
 replace the shipped values, while `plugins` entries merge by key.
 
+## Plugin settings
+
+A `plugins` entry accepts a boolean or an object. A setting alone keeps the plugin's default
+enabled state. The `enabled` field, when present, must be a boolean.
+
+```json
+{
+  "plugins": {
+    "Characters": { "maxPerAccount": 6 },
+    "Prayer": { "enabled": true, "sequentialBurying": true },
+    "PlayerBots": { "ai": { "enabled": false } }
+  }
+}
+```
+
+Use the plugin's exported name. Within each file, scoped settings override the equivalent
+`pluginConfig` keys. Then the local file overrides the shipped file. This merges the individual
+switches and settings, with nested values replaced in full. For example, a local
+`"Prayer": false` disables the plugin and keeps its shipped settings. Plugins can read
+their options by short name, such as `api.getPluginConfig("sequentialBurying", false)`.
+
+The existing `pluginConfig` form still works. The Characters, LeagueMode, Quests and
+RandomEvents entries map to the existing `characters`, `league`, `quests` and `random-events`
+namespaces. Shared league readers keep using `league:*`. Core settings such as
+`CrossFloor:visibility` and `commands:permissions` stay in `pluginConfig`.
+Settings literally named `enabled`, such as `Gravestones:enabled`, also stay there so they
+remain distinct from the plugin switch. A legacy `disabledPlugins` list still takes priority
+over the switches. The world config page saves its editable layer in the equivalent flat
+format for compatibility.
+
 ## World config page
 
 **Early version (v0.1).** This is a basic framework that does the basics: list the settings, edit

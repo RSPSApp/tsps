@@ -239,6 +239,36 @@ test("the six Always empty rows are toggles on their emptyondeath varbits, off b
   }
 });
 
+test("an Ultimate Ironman's seed box seeds drop for the killer, not into the bank", (t) => {
+  const container = CONTAINERS.find((entry) => entry.name === "seed box");
+  const player = loadout(t, container, false);
+  PluginManager.emitCustomEvent("ironman:set-mode", { player, mode: "ultimate" });
+  const query = { player, mode: null };
+  PluginManager.emitCustomEvent("ironman:mode", query);
+  assert.equal(query.mode, "ultimate");
+  const floor = [];
+  t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item) => floor.push(item));
+  PlayerDeathTask.dropItems(player, actor(t, "killer"), player.getLocation());
+  assert.equal(amount(tally(new Map(), bankItems(player)), RANARR_SEED), 0);
+  assert.equal(amount(tally(new Map(), floor), RANARR_SEED), 10);
+});
+
+test("a fish barrel the PvP death keeps keeps its fish; a lost one's fish go to the killer", (t) => {
+  const barrel = Storage.FAMILIES.get("fish-barrel");
+  for (const kept of [true, false]) {
+    const player = actor(t, "barrel");
+    player.getInventory().addItem(new core.Item(25582, 1));
+    Storage.store(player, barrel, 383, 5); // raw shark
+    if (!kept) player.setSkullTimer(100);
+    const floor = [];
+    t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item) => floor.push(item));
+    PlayerDeathTask.dropItems(player, actor(t, "killer"), player.getLocation());
+    assert.equal(Storage.total(player, barrel), kept ? 5 : 0);
+    assert.equal(amount(tally(new Map(), floor), 383), kept ? 0 : 5);
+    t.mock.restoreAll();
+  }
+});
+
 test("a seed box's seeds the bank has no room for go to the killer", (t) => {
   const container = CONTAINERS.find((entry) => entry.name === "seed box");
   const player = loadout(t, container, false);

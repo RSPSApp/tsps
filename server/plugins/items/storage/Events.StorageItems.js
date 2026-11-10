@@ -73,8 +73,14 @@ function settingOn(player, varbit) {
   return player.getPacketSender?.()?.getVarbit?.(Storage.core.CacheDefinitions.getVarbitId(varbit)) === 1;
 }
 
-/** The seed box's PvP death puts what the bank has room for there first. */
+/**
+ * The seed box's PvP death puts what the bank has room for there first; an Ultimate Ironman has
+ * no bank, so theirs drop with the rest.
+ */
 function intoBank(player, { id, amount }) {
+  const mode = { player, mode: null };
+  pluginApi?.emitCustomEvent("ironman:mode", mode);
+  if (mode.mode === "ultimate") return amount;
   const { Bank, Item } = Storage.core;
   const bank = player.getBank(Bank.getTabForItem(player, id));
   const moved = Math.min(amount, bank.getAddableAmount(new Item(id, amount)));

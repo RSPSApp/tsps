@@ -113,6 +113,17 @@ function warnMissedClue(player, tier, box) {
   player.sendMessage(`You have a sneaking suspicion that you would have received ${article} ${tier} ${box ? "scroll box" : "clue scroll"}.`);
 }
 
+/**
+ * `treasure-trails:missed-clue` {player, tier}: a skilling source (nest, geode, bottle, Agility,
+ * salvage) rolled a clue the player could not take; the tier's warning says so.
+ */
+function missedClue(request) {
+  const tier = String(request?.tier).toLowerCase();
+  if (!request?.player || !TIERS.includes(tier)) return;
+  if (tier !== "beginner" && !core.WorldDefinition.isMembersWorld()) return;
+  warnMissedClue(request.player, tier, boxUnlocked(request.player));
+}
+
 function filterDrops(request) {
   if (!request?.player || !Array.isArray(request.drops)) return;
   const unlocked = boxUnlocked(request.player);
@@ -288,7 +299,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("ground-items:take", prepareTake);
   api.onCustomEvent("ground-items:taken", taken);
   api.onCustomEvent("npc-drops:roll", filterDrops);
+  api.onCustomEvent("treasure-trails:missed-clue", missedClue);
   api.onPlayerLogin(sync);
 };
 Object.assign(module.exports, {MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, MIMIC_ATTRIBUTE, CASE_ATTRIBUTES, WARNING_VARBITS,
-  capacity, count, canReceive, filterDrops, openBox, openCase, milestoneRewards, sync});
+  capacity, count, canReceive, filterDrops, missedClue, openBox, openCase, milestoneRewards, sync});

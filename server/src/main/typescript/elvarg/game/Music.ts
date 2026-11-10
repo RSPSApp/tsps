@@ -17,6 +17,8 @@ type CachedTrack = {
     parentRowId?: number;
     /** The in-game unlock hint, column 2: "in Varrock.", "during the Dragon Slayer II quest.". */
     unlockHint?: string;
+    /** How long the track plays, in game ticks (column 3). */
+    lengthTicks?: number;
 };
 
 const MUSIC_DATA: MusicData = (() => {
@@ -29,6 +31,10 @@ const MUSIC_DATA: MusicData = (() => {
 })();
 
 export class Music {
+    /** The silent track. */
+    public static readonly SILENCE_TRACK = 147;
+    /** Native varp holding the playing track's DB row, -1 between tracks. */
+    public static readonly CURRENT_TRACK_VARP = 3883;
     private static tracksCache?: CachedTrack[];
 
     private static cachedTracks(): CachedTrack[] {
@@ -46,6 +52,7 @@ export class Music {
                 slot = rowsById.get(parentRowId)?.column(5) ?? [];
             }
             const unlockHint = row.string(2);
+            const lengthTicks = row.int(3, -1);
             return [{
                 rowId: row.id,
                 id,
@@ -54,6 +61,7 @@ export class Music {
                 autoUnlock: row.int(6) === 1,
                 ...(parentRowId >= 0 ? { parentRowId } : {}),
                 ...(unlockHint ? { unlockHint } : {}),
+                ...(lengthTicks > 0 ? { lengthTicks } : {}),
             }];
         });
     }
@@ -70,8 +78,28 @@ export class Music {
         return MUSIC_DATA.trackNames;
     }
 
+    /** The first of the region's area tracks. */
     public static forRegion(regionId: number): number | undefined {
         return MUSIC_DATA.regions[regionId]?.[0];
+    }
+
+    /** Every track that plays in the region's music area; the area shuffles between them. */
+    public static tracksForRegion(regionId: number): number[] {
+        return [...(MUSIC_DATA.regions[regionId] ?? [])];
+    }
+
+    /** How many ticks the track plays for, or undefined when the cache has no length. */
+    public static lengthTicks(trackId: number): number | undefined {
+        return this.cachedTracks().find(({ id }) => id === trackId)?.lengthTicks;
+    }
+
+    /**
+     * A random track of the area. When one has just finished, the next is another of the area's
+     * tracks; an area with one track plays it again.
+     */
+    public static pickAreaTrack(tracks: readonly number[], previous = -1, random: () => number = Math.random): number | undefined {
+        const choices = tracks.length > 1 ? tracks.filter((track) => track !== previous) : tracks;
+        return choices.length === 0 ? undefined : choices[Math.floor(random() * choices.length) % choices.length];
     }
 
     public static forInstanceLocation(area: any, x: number, y: number, plane: number): number | undefined {

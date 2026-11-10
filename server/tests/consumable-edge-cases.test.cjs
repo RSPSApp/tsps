@@ -645,6 +645,17 @@ test("a Zamorak mix deals floor((HP - 1) / 8) then heals 6, keeping the brew's b
   }
 });
 
+// Wiki (Zamorak brew): "current Hitpoints by 12%, rounded down, though it will not lower a player's Hitpoints below
+// the minimum of 1"; its table: 9-16 Hitpoints lose 1, 34-41 lose 4, 59-66 lose 7, 92-99 lose 11, and 1-8 lose none.
+test("a Zamorak brew takes 12% of current Hitpoints, rounded down, with no flat part", () => {
+  for (const [hp, lost] of [[99, 11], [60, 7], [50, 6], [40, 4], [10, 1], [8, 0], [1, 0]]) {
+    const player = createPlayer({ base: 99, current: 99 });
+    player.levels.set(Skill.HITPOINTS, hp);
+    Potions._test.findPotionEntry(ItemIdentifiers.ZAMORAK_BREW_4_).potion.effect(player);
+    assert.equal(player.levels.get(Skill.HITPOINTS), hp - lost, `at ${hp} Hitpoints`);
+  }
+});
+
 test("a weaker antipoison never shortens an active poison immunity", () => {
   const player = createPlayer({ base: 99, current: 99 });
   Potions._test.findPotionEntry(ItemIdentifiers.ANTI_VENOM_4_).potion.effect(player);

@@ -635,6 +635,7 @@ function attemptObstacle(player, context, entry) {
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
     busyVarbit: obstacle.course != null,
+    keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {

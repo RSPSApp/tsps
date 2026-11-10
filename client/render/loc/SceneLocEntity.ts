@@ -6,4 +6,5 @@ export type SceneLocEntity = {
     entity: LocEntity;
     sceneLoc: SceneLoc;
     lowDetail: boolean;
+    preparedOrigin?: { tileX: number; tileY: number; shape: number };
 } & ModelInfo;

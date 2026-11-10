@@ -343,12 +343,15 @@ course's `marks` block:
 - **Gnome Stronghold:** XP since 2024 is 10/10/6.5/10/6.5/10/7.5 and a 50 bonus (110.5); the pipe's
   own page says 10, which the course table doesn't add up to. The second climb-down branch and the
   rope's middle tiles are clickable too. OSRS has no advanced section (that is RuneScape's).
-  Capture 3225 only shows other players in the pipes. The gnome trainers' lines aren't done.
+  Capture 3225 shows other players' pipe merges on cycles 30–126. The second squeeze finishes
+  at the existing exit tile, matching the continuous emergence in [live footage](https://www.youtube.com/watch?v=L-yCRcCFgkk&t=58s).
+  The gnome trainers' lines aren't done.
 - **Barbarian Outpost:** the lap is 153.3 Agility (the obstacles' 107 and 46.3) and 41.3 Strength
   (Wiki). The log follows 2875 (spam start line, the creak on the 2nd and 7th tiles). The ropeswing,
   log and ledge can fail until 93 (the Wiki's charts), but no damage, landing or line is known,
-  so they don't. The entry pipe's 10 XP and Barcrawl requirement and the ladder's level 35 are in
-  `agility-shortcuts.json` and aren't done.
+  so they don't. The entry pipe uses sequence 749 delayed to cycle 30 and exact movement from
+  cycles 30–126 in both directions, as recorded in RSProx 1060, 1061 and 2875. The 10 XP, level
+  requirement and ladder route are in `agility-shortcuts.json`.
 
 ## Wilderness Agility Course
 

@@ -811,6 +811,7 @@ export class WebGLMapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
             );
         }
@@ -1965,6 +1966,7 @@ export class WebGLMapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
             );
         }
@@ -2429,6 +2431,7 @@ export class WebGLMapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
             );
         }

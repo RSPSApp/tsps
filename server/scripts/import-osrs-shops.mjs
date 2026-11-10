@@ -33,7 +33,6 @@ const CURRENCY_OVERRIDES = {
   "Justine's stuff for the Last Shopper Standing": "LAST MAN STANDING POINTS",
   "Mahogany Homes Reward Shop": "MAHOGANY HOMES POINTS",
   "PvP Arena Rewards": "PVP ARENA POINTS",
-  "Vale Research Exchange": "VALE RESEARCH POINTS",
 };
 
 // Wiki page parse artefacts, not real shops.
@@ -61,6 +60,7 @@ const REPLACED_BY_PLUGIN = {
   "Useful Supplies": "The Blood Moon Rises Castle Drakan chest (omnishop row 16873)",
   // Priced in termites by the cache's omnishop rows; the graceful kit also takes a graceful set.
   "Worm Tongue's Wares": "Worm Tongue's Omnishop (omnishop row wyrm_agility_rewards_shop, ColossalWyrmAgility)",
+  "Vale Research Exchange": "Ranulph's Omnishop (omnishop row ent_totems_shop, Shop.ValeTotems.js)",
 };
 
 // Karamja gloves variants share their default store's NPC and option; bound

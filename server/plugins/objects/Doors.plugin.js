@@ -65,6 +65,11 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
   PIP_MAUSOLEUM_GATE_OPEN: 3446, // inacpip_underground_door; Priest in Peril capture 2026-11-02
+  // inactivetempledoorl/r: Paterdomus' large doors open onto them (Priest in Peril capture 2026-11-02
+  // ticks 10845, 10980); inactive_pipprisondoor: Drezel's cell gate (capture 2026-10-17 ticks 1312, 1315).
+  PIP_TEMPLE_DOOR_LEFT_OPEN: 3491,
+  PIP_TEMPLE_DOOR_RIGHT_OPEN: 3492,
+  PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
   // inactivepoordoor: Melzar's front door opens onto it (Dragon Slayer I capture 20261106T101002 tick
@@ -287,7 +292,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     Object.freeze([O.LARGE_DOOR_98, O.LARGE_DOOR_99, O.LARGE_DOOR_16, O.LARGE_DOOR_18]),
     // Paterdomus' two-leaf chapel entrance. Closed leaves 3489/3490 swing into
     // the nameless cache locs 3491/3492; all four use model 3544.
-    Object.freeze([O.LARGE_DOOR_21, O.LARGE_DOOR_22, 3491, 3492]),
+    Object.freeze([O.LARGE_DOOR_21, O.LARGE_DOOR_22,
+      NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN]),
     // Sophanem's north entrance: closed leaves 44036/44038, nameless open leaves 44037/44039.
     Object.freeze([O.GATE_232, O.GATE_233, 44037, 44039]),
     // Lassar residential shadow gate: 48278/48279 open into the paired
@@ -372,8 +378,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_29, O.LARGE_DOOR_31],
     [O.LARGE_DOOR_28, O.LARGE_DOOR_30],
     [O.LARGE_DOOR_98, O.LARGE_DOOR_16],
-    [O.LARGE_DOOR_21, 3491],
-    [O.LARGE_DOOR_22, 3492],
+    [O.LARGE_DOOR_21, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN],
+    [O.LARGE_DOOR_22, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN],
     [O.GATE_232, 44037],
     [O.GATE_233, 44039],
     [O.DOORS_21, O.DOORS_25],
@@ -549,6 +555,37 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 69,
+    }),
+    // Paterdomus' large doors (Priest in Peril capture 2026-11-02, in at ticks 10840-10847, out at
+    // 10980-10982; issue 4130): Open puts INVISWALL on both doorway tiles and the open leaves on the
+    // tiles east, sound 62, the player steps across in the same tick and the doors are back two
+    // ticks later. The quest decides who may open them (door:toggle).
+    Object.freeze({
+      closed: [[O.LARGE_DOOR_22, 3408, 3488, 0, 2], [O.LARGE_DOOR_21, 3408, 3489, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3408, 3488, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN, 3409, 3488, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3408, 3489, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN, 3409, 3489, 0, 1],
+      ],
+      crossX: 3409,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Drezel's cell gate once unlocked (capture 2026-10-17 ticks 1311-1314 in, 1315-1317 out; rsprox 365): INVISWALL on
+    // the gate's tile and inactive_pipprisondoor on the tile east, sound 71, the player walks across
+    // and the gate is back two ticks later. The quest opens it through door:open.
+    Object.freeze({
+      closed: [[O.CELL_GATE_7, 3415, 3489, 2, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3415, 3489, 2, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_CELL_GATE_OPEN, 3416, 3489, 2, 3],
+      ],
+      crossX: 3416,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
     }),
     // Dragon Slayer's secret wall into Crandor's dungeon (capture 2951 ticks 85-89): the quest opens it
     // through door:open once the shortcut is unlocked. The player walks 2836,9598 -> 9599 -> 9600 while

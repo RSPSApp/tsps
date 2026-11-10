@@ -29,7 +29,7 @@ export function computeTitleStateHash(
             state.password.length
         }|${state.otp.length}|${state.currentLoginField}|${state.onMobile}|${
             state.virtualKeyboardVisible
-        }|${state.serverListOpen}|${state.hoveredServerIndex}|${state.serverName}|${host.probing}|${
+        }|${state.serverListOpen}|${state.hoveredServerIndex}|${state.serverName}|${state.serverWorldFlags}|${host.probing}|${
             host.probed
         }|${host.serverList.map((s) => s.playerCount).join(",")}|${state.worldSelectOpen}|${
             state.worldSelectPage
@@ -151,7 +151,7 @@ export function drawTitle(host: LoginRendererHost, state: LoginState, gameState:
 
                     if (!state.serverListOpen) {
                         // Logo
-                        drawLogoToCtx(host, cacheCtx);
+                        drawLogoToCtx(host, cacheCtx, state.serverWorldFlags);
 
                         // Mute button (only when gameState >= 10)
                         if (gameState >= GameState.LOGIN_SCREEN) {

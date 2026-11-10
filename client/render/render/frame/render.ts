@@ -512,6 +512,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
         profiler.startPhase("input");
         host.handleInput(deltaTime);
+        host.osrsClient.updateGroundItemMeshHandoffs();
 
         // Tick mouse cross animation (OSRS-style visual feedback)
         ClientState.tickMouseCross();

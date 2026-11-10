@@ -318,12 +318,12 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
 
     // Patch and waterproof all three hull holes.
     for (const hole of HOLES) {
-      h.itemOnObject(I.REPAIR_PLANK, hole);
+      h.itemOnObject(I.REPAIR_PLANK_2, hole);
       h.itemOnObject(I.SWAMP_PASTE, hole);
     }
     assert.equal(h.varbit(1759), 3);
     assert.equal(h.varbit(1760), 3);
-    assert.equal(h.count(I.REPAIR_PLANK), 0);
+    assert.equal(h.count(I.REPAIR_PLANK_2), 0);
     assert.equal(h.count(I.TACKS), 0);
     assert.equal(h.count(I.SWAMP_PASTE), 0);
     h.variant(N.BILL_TEACH_3);
@@ -657,6 +657,10 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   const locker = h.namedObject('Repair Locker', O.REPAIR_LOCKER, 'Open');
   assert.equal(locker.handled, true);
   assert.equal(h.count(I.ROPE), 4);
+  // 7148 is the quest plank the Repair Locker gives in live; 7121 is the animation dummy
+  // the client wields while repairing, and Quest Helper's requirement is 7148 x6.
+  assert.equal(h.count(I.REPAIR_PLANK_2), 6, 'the locker hands out the real quest plank');
+  assert.equal(h.count(I.REPAIR_PLANK), 0, 'the animation dummy is never handed out');
   h.player.getInventory().adds(I.FUSE, 1);
   const fuse = h.namedItemOnObject('Fuse', 'Powder Barrel', I.FUSE, 11237);
   assert.equal(fuse.handled, true);

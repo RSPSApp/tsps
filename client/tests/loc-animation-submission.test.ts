@@ -108,6 +108,46 @@ test("native Brimhaven blades bake and expire once; their default maxLoops99 doe
     }
 });
 
+test("prepared course ropes submit the unanimated cache model before and after the swing", () => {
+    const { info, cache } = createCacheVm();
+    const factory = getCacheLoaderFactory(info, cache);
+    const loader = new LocModelLoader(factory.getLocTypeLoader(), factory.getModelLoader(), factory.getTextureLoader(),
+        factory.getSeqTypeLoader(), factory.getSeqFrameLoader(), factory.getSkeletalSeqLoader());
+    for (const [id, rotation] of [[23131, 0], [23132, 2]]) {
+        const type = loader.locTypeLoader.load(id);
+        const sequence = loader.seqTypeLoader.load(497);
+        const scene = { levels: 1, isInside: () => false,
+            tileHeights: [Array.from({ length: 10 }, () => new Int32Array(10))],
+            tiles: [Array.from({ length: 10 }, () => Array(10))] };
+        const baked: ReturnType<LocModelLoader["getModelAnimated"]>[] = [];
+        const buffer = { addModelAnimFrame(model: typeof baked[number]) {
+            baked.push(model);
+            return newDrawRange(baked.length * 3, 3);
+        }};
+        const [group] = [...addLocEntities(false, loader, {}, scene, [], [], buffer,
+            [{ entity: { id, type: 10, rotation, tileX: 1, tileY: 1, level: 0, seqId: -1 },
+                level: 0, sceneX: 192, sceneZ: 512 }])];
+        const origin = group.locs[0].preparedOrigin!;
+        const rest = group.anim.baseFrame!;
+        const loc = new LocAnimated(0, 0, 0, 0, -1, -1, -1, -1, group.anim, sequence, 0, false,
+            id, 192, 512, 0, rotation, origin);
+        const cacheRest = loader.getModelAnimated(type, 10, rotation, -1, 0)!;
+        const bakedRest = baked[rest * 2]!;
+        assert.deepEqual(bakedRest.verticesX, cacheRest.verticesX);
+        assert.deepEqual(bakedRest.verticesY, cacheRest.verticesY);
+        assert.deepEqual(bakedRest.verticesZ, cacheRest.verticesZ);
+        const batches = geometry(), updater = new LocAnimationUpdater();
+        updater.update([loc], batches, loader.seqFrameLoader, 100);
+        assert.deepEqual(batches.drawCall!.drawRanges[0].slice(), group.anim.frames[rest].slice());
+        assert.ok(LocAnimated.playPrepared([loc], { x: origin.tileX, y: origin.tileY }, id, 0, 10, rotation, 497, 101));
+        updater.update([loc], batches, loader.seqFrameLoader, 101);
+        assert.deepEqual(batches.drawCall!.drawRanges[0].slice(), group.anim.frames[0].slice());
+        const duration = sequence.frameLengths.reduce((a, b) => a + b, 0);
+        updater.update([loc], batches, loader.seqFrameLoader, 102 + duration);
+        assert.deepEqual(batches.drawCall!.drawRanges[0].slice(), group.anim.frames[rest].slice());
+    }
+});
+
 test("WebGL shares opaque/alpha/full/far poses across 240 FPS, HD and sunken passes", () => {
     const animated = loc();
     const batches = geometry();

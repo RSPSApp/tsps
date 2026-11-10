@@ -9,7 +9,8 @@ const { pipe } = require("../shortcuts/Builders.Agility");
  */
 function obstaclePipe({ pos }) {
   const { x, y } = pos;
-  return [...pipe([x, y + 3], [x, y + 6]), { tele: [x, y + 7, 0] }];
+  // Finish the last squeeze outside the pipe, so exiting does not interrupt it with a teleport.
+  return pipe([x, y + 3], [x, y + 7]);
 }
 
 /**

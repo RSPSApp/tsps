@@ -931,12 +931,25 @@ module.exports = function registerCabinFeverQuest(api) {
   // Objects
   // ==========================================================================
 
+  /**
+   * The locker hands out the real quest plank (7148). 7121 is the animation dummy the
+   * client wields during the repair animation, and older saves still hold it, so both
+   * count towards the six and only the shortfall is topped up.
+   */
+  function givePlanks(player, amount) {
+    const have =
+      player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT);
+    if (have >= amount) return false;
+    player.getInventory().adds(REPAIR_PLANK_ALT, amount - have);
+    return true;
+  }
+
   function openRepairLocker(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
     giveSupply(player, ROPE, 4);
     giveSupply(player, HAMMER, 1);
-    giveSupply(player, REPAIR_PLANK, 6);
+    givePlanks(player, 6);
     giveSupply(player, TACKS, 30);
     giveSupply(player, SWAMP_PASTE, 3);
   }

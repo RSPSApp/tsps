@@ -22,7 +22,9 @@ Every save records why it happened (`PlayerPersistence.save(player, reason)`):
 | `doom`, `colosseum`, `gauntlet` | Starting (and for the Gauntlet, ending) a run, so the fee and items are on disk |
 | `saveall`, `save` | `::saveall`, `::save` and other plugin saves |
 | `quest-completion`, `diary-tier-completion`, `diary-tier-reward` | Final quest rewards, diary tiers and diary reward claims |
-| `death`, `respawn`, `hardcore-death` | Item loss, respawn state and Hardcore downgrade, after the death operation finishes |
+| `death`, `respawn`, `hardcore-death` | Item loss, respawn state and Hardcore downgrade (or, on a [Hardcore World](hardcore-worlds.md), the death that ends the life), after the death operation finishes |
+| `hardcore-transfer` | A Hardcore World character transferring: its save copied into the account's main profile (`PlayerPersistence.copyProfile`) |
+| `hardcore-reset` | A Hardcore World life ending (Reset, or after a Transfer): the Hardcore save unmade (`PlayerSave.unmake`) to the account's name, password and remembered logins, so the next login is a new character |
 | `duel-settlement` | Both duelists after stakes, inventory and respawn changes |
 | `character-delete` | The history copy taken just before a character is deleted ([character slots](./character-slots.md)) |
 | `reward-shop`, `slayer-points` | Non-coin shop purchases and Slayer points spent or earned |
@@ -132,7 +134,7 @@ yarn saves:rollback --before ... --player "Some name"        # one player
 
 ## What a rollback doesn't cover
 
-- **World files:** `doom-scoreboard.json`, `gauntlet-scoreboard.json`, `accounts.json`, `display-names.json`, the ban and mute lists.
+- **World files:** `doom-scoreboard.json`, `gauntlet-scoreboard.json`, `accounts.json`, `display-names.json`, `hardcore-world.json` (Hardcore World reset counts), the ban and mute lists.
 - **The other side of a trade:** rolling back one player of a trade leaves the other as they are, so items can be duplicated or lost. A whole-server rollback to one time doesn't have this problem.
 
 ## Testing

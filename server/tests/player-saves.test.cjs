@@ -313,6 +313,24 @@ test("offline purchases write the updated account and keep a history entry", asy
   assert.deepEqual(await historyRows("kara"), ["logout", "offline-purchase"]);
 });
 
+test("an unmade save (a Hardcore World Reset) is written, and loads back holding only the account", async () => {
+  const p = player("Ruth");
+  p.setPasswordHashWithSalt("salt:hash");
+  setGold(p, 50);
+  p.setAttribute("login:tokens", [{ hash: "t", expires: Date.now() + DAY }]);
+  persistence.save(p, "logout");
+  await persistence.flush();
+  assert.equal(await persistence.updateOffline("Ruth", (save) => save.unmake(), "hardcore-reset"), true);
+  const save = persistence.load("Ruth");
+  assert.equal(save.isUnmade(), true, "the writer's validation accepted it");
+  assert.equal(save.getPasswordHashWithSalt(), "salt:hash", "the name stays guarded by its password");
+  assert.deepEqual(Object.keys(save.attributes), ["login:tokens"]);
+  assert.equal(save.getInventory().every((item) => item.getId() === -1), true);
+  const { Skills } = require("../dist/game/content/skill/SkillManager");
+  assert.deepEqual(save.getSkills().maxLevel, new Skills().maxLevel, "a new character's levels");
+  assert.equal(persistence.exists("Ruth"), true, "never no save");
+});
+
 test("offline delivery refuses an online account without applying the purchase", async () => {
   const { World } = require("../dist/game/World");
   const lookup = World.getPlayerByName;

@@ -311,11 +311,14 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.equal(h.quest.getStage(p), 0, 'fresh stage 0');
 
   // 0 -> 2: the twins' start hook (Children of the Sun fixture above).
+  const welcomed = [];
+  h.api.onCustomEvent('quetzal:first-trip-welcomed', event => welcomed.push(event.player));
   for (const handler of h.events.get('npc-dialogue:hook') ?? []) {
     handler({ player: p, npcId: 12892, hook: 'quest:twilight-s-promise:start' });
   }
   assert.equal(h.quest.getStage(p), 2);
   assert.equal(p.varbits.get(STAGE_VARBIT), 2);
+  assert.deepEqual(welcomed, [p], "starting the quest ends the first trip's welcome (vmq2_first_travel 3 -> 4, capture tick 1117)");
   assert.ok(p.messages.some(message => message.includes("You've started a new quest")));
   assert.equal(h.variants[0]({ player: p, npcId: 12892 }), 'with-friends-like-these-talking-to-either-ennius-or-furia-tullus-talking-to-either-again-after-starting-the-quest');
 
@@ -340,7 +343,7 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.equal(p.items.get(I.VARLAMORE_CREST), 1);
 
   // 14 -> 16: bazaar amulet errand (registered Talk-to after the citizen pickpocket).
-  h.line(p, "Well this doesn't sound totally orthodox, but fair enough. I'll be back soon.", ARRUN).before();
+  h.line(p, "Well, this doesn't sound totally orthodox, but fair enough. I'll be back soon.", ARRUN).before();
   const pickpocket = h.namedNpcs.get('Citizen')?.Pickpocket;
   assert.equal(typeof pickpocket, 'function');
   assert.equal(pickpocket({ player: p, npcId: 12929, npc: { getId: () => 12929, getContentId: () => 12929 } }), true);
@@ -371,7 +374,7 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.equal(h.quest.getStage(p), 20);
 
   // Fixture: the pub escort's fountain result (scene not run here). Start and finish lines are real.
-  h.line(p, "Well there's nothing like a little dunk to sober you up a bit. Azali, come with me.", VELAM).before();
+  h.line(p, "Well, there's nothing like a little dunk to sober you up a bit. Azali, come with me.", VELAM).before();
   assert.equal(h.quest.getStage(p), 20, 'starting the escort does not advance the stage');
   h.line(p, 'Ohh... We\'re going somewhere new? How exciting!', 12912).before();
   assert.equal(h.spawned.at(-1).def.id, 13393, 'Azali follows from the pub');
@@ -384,14 +387,15 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.equal(h.quest.getStage(p), 24);
   assert.equal(p.items.get(I.VARLAMORE_CREST) ?? 0, 0);
 
-  // 24 -> 26 -> 28: the correct chest's letter, then reading it.
+  // 24 -> 26 -> 28: Velam's chest (50866, both live recordings) has the letter; its neighbour doesn't.
   const chests = [50865, 50866];
   const openChest = h.objects.get('Chest')?.Open;
   assert.equal(typeof openChest, 'function');
   const object = { getId: () => chests[0], getLocation: () => new core.Location(1648, 3142, 0), getType: () => 10, getFace: () => 0 };
   assert.equal(openChest({ player: p, objectId: chests[0], definition: { id: chests[0] }, object }), true);
-  const correctChest = p.attrs.get('quest.twilights_promise.letter-chest');
-  assert.ok(chests.includes(correctChest));
+  assert.equal(transcriptCalls.at(-1).variant, 'oh-brother-judgement-searching-a-wrong-chest-or-the-correct-chest-before-and-after-the-quest');
+  assert.equal(h.quest.getStage(p), 24, 'the neighbouring chest has nothing');
+  const correctChest = 50866;
   transcriptCalls = [];
   assert.equal(openChest({ player: p, objectId: correctChest, definition: { id: correctChest }, object }), true);
   assert.equal(transcriptCalls.at(-1).variant, 'oh-brother-judgement-searching-the-correct-chest');
@@ -444,16 +448,20 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   h.quest.setStage(p, 46);
   h.action(p, 'rp2e-K');
   assert.equal(h.quest.getStage(p), 48);
-  h.line(p, "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.", ITZLA).before();
-  assert.equal(h.quest.getStage(p), 50, 'the final transcript line completes the quest');
+  const unmetEnding = h.line(p, "Thank you, iknami. Timoiva for now, and may the sun light your way.", ITZLA);
+  unmetEnding.before?.();
+  assert.equal(h.quest.getStage(p), 48, 'the last line shows before the quest completes');
+  unmetEnding.after();
+  assert.equal(h.quest.getStage(p), 50, 'continuing past the final line completes the quest (capture tick 2794)');
   assert.equal(p.varbits.get(STAGE_VARBIT), 50, 'the canonical completion wire is varbit 9649 = 50');
   assert.equal(h.quest.isComplete(p), true);
   assert.equal(p.attrs.get('quest.points'), 1);
   assert.deepEqual(p.xp, [{ skill: core.Skill.THIEVING, amount: 3000 }]);
   assert.ok(p.messages.some(message => message.includes("Congratulations, you've completed a quest")));
 
-  // Replaying the final line must not pay twice.
+  // Replaying either ending's final line must not pay twice.
   h.line(p, "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.", ITZLA).before();
+  h.line(p, "Thank you, iknami. Timoiva for now, and may the sun light your way.", ITZLA).after();
   assert.equal(p.attrs.get('quest.points'), 1);
   assert.deepEqual(p.xp, [{ skill: core.Skill.THIEVING, amount: 3000 }]);
 
@@ -463,12 +471,20 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.equal(p.varbits.get(STAGE_VARBIT), 50);
 });
 
+test("the Wiki's ending (meeting The Heart of Darkness's requirements) completes as its last line shows, as rec 1695 does", () => {
+  const h = harness();
+  const p = h.player = makePlayer();
+  h.quest.setStage(p, 48);
+  h.line(p, "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.", 12896).before();
+  assert.equal(h.quest.getStage(p), 50, 'rec 1695 tick 2411: the varbit, the line and the scroll together');
+});
+
 test('the bazaar amulet handout stays retryable when full or after the item is destroyed', () => {
   const h = harness();
   const p = makePlayer();
   const bazaarState = () => (Number(p.attrs.get(RECRUITS_ATTRIBUTE)) || 0) & 3;
   h.quest.setStage(p, 14);
-  h.line(p, "Well this doesn't sound totally orthodox, but fair enough. I'll be back soon.", 12902).before();
+  h.line(p, "Well, this doesn't sound totally orthodox, but fair enough. I'll be back soon.", 12902).before();
   assert.equal(bazaarState(), 1);
   const pickpocket = h.namedNpcs.get('Citizen').Pickpocket;
   p.setInventoryFull(true);

@@ -30,6 +30,14 @@ import {
 import { clamp } from "../common/utils/MathUtil";
 import { MINIMAP_STATE } from "../runelite/api/gameval/VarbitID";
 import {
+    BLUE_FIRE,
+    FIRE,
+    GREEN_FIRE,
+    RED_FIRE,
+    TRAIL_PURPLE_FIRE,
+    TRAIL_WHITE_FIRE,
+} from "../runelite/api/gameval/ObjectID";
+import {
     TRANSMIT_VARPS,
     VARBIT_COMBATLEVEL_TRANSMIT,
     VARBIT_LEAGUE_MAGIC_MASTERY,
@@ -481,6 +489,24 @@ const ACCOUNT_TYPE_ICON_ENUM = 1894;
 const LOGOUT_WORLD_SWITCHER_UID = (182 << 16) | 3;
 /** The logout tab's stone (stone10) in the modern, classic and fixed layouts (rsprox captures). */
 const LOGOUT_STONE_UIDS = new Set([(161 << 16) | 46, (164 << 16) | 34, (548 << 16) | 51]);
+
+const PLAYER_MADE_FIRES = new Set([
+    FIRE,
+    RED_FIRE,
+    GREEN_FIRE,
+    BLUE_FIRE,
+    TRAIL_WHITE_FIRE,
+    TRAIL_PURPLE_FIRE,
+]);
+const BURNING_LOG_MESH_TIMEOUT_MS = 2000;
+
+type BurningLogMesh = {
+    stack: ClientGroundItemStack;
+    locId: number;
+    shape: number;
+    rotation: number;
+    expiresAt: number;
+};
 
 export class OsrsClient {
     private static readonly CLIENT_TICK_MS = 20;
@@ -1092,6 +1118,8 @@ export class OsrsClient {
     private unsubscribePathDebug?: () => void;
     private unsubscribeGroundItems?: () => void;
     private groundItemMeshesPending = false;
+    private removedLogs?: ClientGroundItemStack[];
+    private readonly burningLogMeshes = new Map<number, BurningLogMesh>();
     private unsubscribeChatMessages?: () => void;
     private unsubscribeFriendsChat?: () => void;
     private readonly friendLoginUpdates = new FriendLoginUpdates();
@@ -1107,7 +1135,66 @@ export class OsrsClient {
 
     private refreshGroundItemMeshes(): void {
         this.groundItemMeshesPending =
-            (this.renderer as any)?.updateGroundItemMeshes?.(this.groundItems.getAllStacks()) === true;
+            (this.renderer as any)?.updateGroundItemMeshes?.(this.getGroundItemMeshStacks()) === true;
+    }
+
+    private pruneBurningLogMeshes(): boolean {
+        if (this.burningLogMeshes.size === 0) return false;
+        const now = performance.now();
+        let changed = false;
+        for (const [stackId, { stack, locId, shape, rotation, expiresAt }] of this.burningLogMeshes) {
+            const { x, y, level } = stack.tile;
+            const fireReady = this.sceneGeometry?.locsAtTile(x, y, level).some(
+                (loc) => loc.id === locId && loc.shape === shape && loc.rotation === rotation,
+            );
+            if (fireReady || now >= expiresAt || this.groundItems.getStackById(stackId)) {
+                this.burningLogMeshes.delete(stackId);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** Before WebGL draws, drop any held log whose replacement is in the built scene. */
+    updateGroundItemMeshHandoffs(): void {
+        if (this.pruneBurningLogMeshes()) this.refreshGroundItemMeshes();
+    }
+
+    /** Mesh input only. Menus, labels and plugins continue to read the ground item store. */
+    getGroundItemMeshStacks(): ClientGroundItemStack[] {
+        this.pruneBurningLogMeshes();
+        const stacks = this.groundItems.getAllStacks();
+        for (const { stack } of this.burningLogMeshes.values()) stacks.push(stack);
+        return stacks;
+    }
+
+    private updateBurningLogMesh(
+        tile: { x: number; y: number },
+        level: number,
+        shape: number,
+        locId?: number,
+        rotation?: number,
+    ): void {
+        for (const mesh of this.burningLogMeshes.values()) {
+            const { x, y, level: logLevel } = mesh.stack.tile;
+            if (x !== tile.x || y !== tile.y || logLevel !== level || mesh.shape !== shape) continue;
+            if (mesh.locId !== locId || mesh.rotation !== rotation) mesh.expiresAt = 0;
+        }
+        const logs = this.removedLogs;
+        if (!logs || locId === undefined || rotation === undefined || !PLAYER_MADE_FIRES.has(locId)) return;
+        const index = logs.findIndex(
+            ({ tile: log }) => log.x === tile.x && log.y === tile.y && log.level === level,
+        );
+        if (index < 0) return;
+        const [stack] = logs.splice(index, 1);
+        this.burningLogMeshes.set(stack.id, {
+            stack,
+            locId,
+            shape,
+            rotation,
+            // A stalled map rebuild must not leave a stale item mesh indefinitely.
+            expiresAt: performance.now() + BURNING_LOG_MESH_TIMEOUT_MS,
+        });
     }
     // Skills data from server - maps skill ID to {currentLevel, baseLevel, xp}
     private skillsMap: Map<number, { currentLevel: number; baseLevel: number; xp: number }> =
@@ -4019,8 +4106,27 @@ export class OsrsClient {
             );
             this.unsubscribeGroundItems = subscribeGroundItems((payload) => {
                 try {
+                    if (payload?.kind === "delta") {
+                        for (const stackId of payload.removes ?? []) {
+                            const stack = this.groundItems.getStackById(stackId);
+                            if (!stack || !this.objTypeLoader?.load(stack.itemId)?.groundActions?.includes("Light")) continue;
+                            if (!this.removedLogs) {
+                                this.removedLogs = [];
+                                // The server sends the consumed log and its fire in one socket message.
+                                // Pair them before changing the mesh, while applying store mutations immediately.
+                                queueMicrotask(() => {
+                                    this.removedLogs = undefined;
+                                    this.refreshGroundItemMeshes();
+                                });
+                            }
+                            this.removedLogs.push(stack);
+                        }
+                    } else {
+                        if (this.removedLogs) this.removedLogs.length = 0;
+                        this.burningLogMeshes.clear();
+                    }
                     this.groundItems.update(payload);
-                    this.refreshGroundItemMeshes();
+                    if (!this.removedLogs) this.refreshGroundItemMeshes();
                 } catch (err) {
                     console.warn("ground item update failed", err);
                 }
@@ -6170,6 +6276,7 @@ export class OsrsClient {
                     this.loginState.serverSignalUrl = server.signalUrl;
                     this.loginState.serverWorldId = server.worldId;
                     this.loginState.serverIceServers = server.iceServers ?? [];
+                    this.loginState.serverWorldFlags = 0;
                     this.loginState.serverListOpen = false;
                     this.loginState.hoveredServerIndex = -1;
                     setServerUrl(
@@ -7529,6 +7636,7 @@ export class OsrsClient {
             if (key.startsWith(prefix)) this.locOpFlags.delete(key);
         }
         if (opFlags !== undefined) this.locOpFlags.set(`${prefix}${locId | 0}`, opFlags);
+        this.updateBurningLogMesh(tile, level, shape, locId, rotation);
         try {
             console.log(
                 `[OsrsClient] Loc add: ${locId} at (${tile.x}, ${tile.y}, ${level}) shape=${shape} rot=${rotation}`,
@@ -7546,6 +7654,7 @@ export class OsrsClient {
         for (const key of this.locOpFlags.keys()) {
             if (key.startsWith(prefix)) this.locOpFlags.delete(key);
         }
+        this.updateBurningLogMesh(tile, level, shape);
         try {
             console.log(
                 `[OsrsClient] Loc del at (${tile.x}, ${tile.y}, ${level}) shape=${shape} rot=${rotation}`,
@@ -8675,6 +8784,8 @@ export class OsrsClient {
         this.forgetSentInventories();
 
         // Clear ground items
+        if (this.removedLogs) this.removedLogs.length = 0;
+        this.burningLogMeshes.clear();
         try {
             this.groundItems?.clear?.();
         } catch (err) {

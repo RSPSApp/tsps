@@ -323,15 +323,19 @@ test('the route sends live varp 302 values from start to completion', () => {
 
   assert.equal(h.talk(N.KING_ROALD), 'you-killed-a-dog-talking-to-king-roald-about-the-now-dead-dog');
   assert.equal(h.wire(), 4);
-  assert.equal(h.talk(N.DREZEL), 'saving-drezel-and-the-world-meeting-drezel');
+  // Live meets Drezel through the cell gate's Open (capture 2026-11-02 tick 11162).
+  assert.ok(h.object('Cell gate', 'Open', ...CELL_GATE));
+  assert.equal(lastPlayed().variant, 'saving-drezel-and-the-world-meeting-drezel');
   assert.equal(h.wire(), 5);
+  assert.equal(h.talk(N.DREZEL), 'saving-drezel-and-the-world-talking-to-drezel-again');
 
   // The monk's golden key opens nothing; the north-east monument swaps it for the iron key.
   player.inventory.adds(I.GOLDEN_KEY);
   assert.ok(h.useOn(I.GOLDEN_KEY, ...CELL_GATE));
   assert.equal(lastPlayed().variant, 'saving-drezel-and-the-world-using-the-golden-key-on-the-lock');
   assert.ok(h.object('Cell gate', 'Open', ...CELL_GATE));
-  assert.equal(lastPlayed().variant, 'pre-quest-attempting-to-open-the-gate');
+  assert.equal(lastPlayed().variant, 'saving-drezel-and-the-world-talking-to-drezel-with-the-golden-key',
+    'the locked gate\'s Open talks to Drezel through it');
   assert.equal(h.useOn(I.GOLDEN_KEY, O.MONUMENT_4, 3423, 9884, 0), false, 'the south monument holds the needle');
   assert.ok(h.useOn(I.GOLDEN_KEY, O.MONUMENT_5, 3427, 9894, 0));
   assert.equal(player.inventory.getAmount(I.GOLDEN_KEY), 0);
@@ -346,7 +350,7 @@ test('the route sends live varp 302 values from start to completion', () => {
   assert.ok(h.object('Cell gate', 'Open', ...CELL_GATE));
   assert.equal(h.wire(), 6);
   assert.equal(lastPlayed().variant, 'talking-to-drezel-with-the-iron-key-unlocking-drezel-s-cell');
-  assert.equal(player.getLocation().getX(), 3416, 'the player walks into the cell');
+  assert.equal(player.getLocation().getX(), 3415, 'unlocking leaves the player outside the cell, as captured');
   assert.equal(h.condition('If the player has murky water:'), true);
   assert.equal(h.condition("If the player doesn't have murky water:"), false);
   // The condition follows the blessing message: the first blessing still plays his lines.
@@ -593,22 +597,19 @@ test('the guardian refuses attacks before the quest and every spell', () => {
   assert.equal(area.canAttack(attacker, { getId: () => N.MONK_OF_ZAMORAK_17 }), null);
 });
 
-test('the temple doors walk the player through instead of standing open', () => {
+test('the temple doors are left to Doors once the King is told, and for anyone inside', () => {
   const h = harness();
   const door = () => h.emit('door:toggle', { objectId: O.LARGE_DOOR_22 });
   h.player.setAttribute(STAGE, 10);
   h.player.moveTo(new core.Location(3408, 3488, 0));
-  door();
-  assert.equal(h.player.getLocation().getX(), 3408, 'before the King is told the monks only answer');
+  assert.ok(door().handled, 'before the King is told the monks only answer');
+  assert.equal(h.player.getLocation().getX(), 3408, 'and nobody is moved');
   h.player.setAttribute(STAGE, 30);
-  assert.ok(door().handled);
-  assert.equal(h.player.getLocation().getX(), 3409);
-  assert.ok(door().handled);
-  assert.equal(h.player.getLocation().getX(), 3408);
+  assert.equal(door().handled, false, 'Doors opens them and walks the player through');
+  assert.equal(h.player.getLocation().getX(), 3408, 'the quest never teleports the player');
   h.player.setAttribute(STAGE, 0);
   h.player.moveTo(new core.Location(3409, 3489, 0));
-  assert.ok(door().handled);
-  assert.equal(h.player.getLocation().getX(), 3408, 'anyone inside can leave');
+  assert.equal(door().handled, false, 'anyone inside can leave');
 });
 
 test('the temple monks punch, and now and then cast the spells the captures show', () => {

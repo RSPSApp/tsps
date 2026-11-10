@@ -59,13 +59,21 @@ function setup() {
   const hooks = {
     variants: [], conditions: [], custom: new Map(), login: [], logout: [], death: [],
     npcInteractions: [], npcActions: new Map(), objectActions: new Map(), itemActions: [],
-    itemOnItem: [], itemOnObject: [], itemOnNpc: [], npcDeaths: [], zones: [], areas: [], playerProcess: [],
+    itemOnItem: [], itemOnObject: [], itemOnNpc: [], npcDeaths: [], zones: [], zoneExits: [], areas: [], playerProcess: [],
   };
   const spawned = [], removed = [], messages = [], xp = [], varbits = new Map(), drops = [];
+  const tasks = [], camera = [];
+  const movement = {
+    blocked: false,
+    reset() { return this; },
+    isMovementBlocked() { return this.blocked; },
+    setBlockMovement(value) { this.blocked = value; return this; },
+  };
   const core = {
     ...realCore,
     Misc: { ...realCore.Misc, randomInclusive: () => 1 },
     Item: realCore.Item,
+    TaskManager: { submit(task) { tasks.push(task); } },
   };
   const api = new Proxy({
     core,
@@ -89,6 +97,7 @@ function setup() {
     onNpcDeath(fn) { hooks.npcDeaths.push(fn); },
     registerArea(area) { hooks.areas.push(area); },
     onZoneEnter(zone, fn) { hooks.zones.push({ zone, fn }); },
+    onZoneExit(zone, fn) { hooks.zoneExits.push({ zone, fn }); },
     onPlayerProcess(fn) { hooks.playerProcess.push(fn); },
     onPlayerLogin(fn) { hooks.login.push(fn); },
     onPlayerLogout(fn) { hooks.logout.push(fn); },
@@ -135,6 +144,8 @@ function setup() {
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     getVarbit(id) { return varbits.get(id) ?? 0; },
     sendConfig() { return sender; },
+    sendCameraMoveTo(...args) { camera.push(args); return sender; },
+    sendCameraReset() { camera.push("reset"); return sender; },
     sendJingle() { return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const inventoryApi = {
@@ -174,6 +185,7 @@ function setup() {
     getPacketSender: () => sender,
     getDialogueManager: () => ({ startDialogues() {}, getCurrent: () => null, reset() {}, isActive: () => false, advance() {} }),
     getLocation: () => location,
+    getMovementQueue: () => movement,
     moveTo: (value) => { location = value; },
     sendMessage: (text) => messages.push(text),
     getUsername: () => 'qh728-q037',
@@ -260,7 +272,7 @@ function setup() {
   const login = () => { for (const fn of hooks.login) fn({ player }); };
   return {
     core: realCore, player, quest, attrs, inventory, slots, equipment, messages, xp, varbits,
-    api, spawned, removed, drops, hooks, variant, condition, choice, action, conditionEvent, hook,
+    api, spawned, removed, drops, hooks, tasks, camera, movement, variant, condition, choice, action, conditionEvent, hook,
     npcEvent, npcAction, objectAction, itemAction, itemOnItem, itemOnObject, npcDeath, zoneEnter, login,
     fire,
     setLocation(x, y, z = 0) { location = new realCore.Location(x, y, z); },
@@ -575,4 +587,34 @@ test('canonical runner: Nuff intro message and pickpocket guard branches', () =>
   } finally {
     conditionHooks.length = conditionCount;
   }
+});
+
+test('the first room entry owns the pan until completion and retries after an exit', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 20);
+  h.login();
+  assert.equal(h.varbits.get(2339), 0);
+  h.setLocation(2388, 4469);
+  h.zoneEnter();
+  assert.equal(h.tasks.length, 0, 'the approach corridor does not trigger the pan');
+
+  h.setLocation(2388, 4470);
+  h.zoneEnter();
+  assert.equal(h.tasks.length, 1);
+  assert.equal(h.movement.blocked, true);
+  h.hooks.zoneExits[0].fn({ player: h.player });
+  assert.equal(h.camera.at(-1), 'reset');
+  assert.equal(h.movement.blocked, false);
+  assert.equal(h.varbits.get(2339), 0);
+
+  h.zoneEnter();
+  assert.equal(h.tasks.length, 2);
+  for (let tick = 0; tick < 9; tick++) h.tasks[1].execute();
+  assert.equal(h.varbits.get(2339), 1);
+  assert.equal(h.camera.at(-1), 'reset');
+  assert.equal(h.movement.blocked, false);
+  h.login();
+  h.zoneEnter();
+  assert.equal(h.varbits.get(2339), 1);
+  assert.equal(h.tasks.length, 2, 'the completed pan does not replay');
 });

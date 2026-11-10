@@ -223,6 +223,17 @@ test("a second death adds to the grave and sends its resources to Death's Office
 });
 
 
+test("a forfeit (a Hardcore World's death choice) destroys the grave and Death's Office's items", () => {
+  const player = account("grave-forfeit");
+  death(player, [[ABYSSAL_WHIP, 1], [IRON_ORE, 5]]);
+  death(player, [[RUNE_SCIMITAR, 1]]);
+  assert.ok(graveOf(player));
+  custom["gravestones:forfeit"]({ player });
+  assert.equal(graveOf(player), null, "nothing for a Transfer's main character to find");
+  assert.equal(player.getAttribute("gravestones:grave") ?? null, null);
+  assert.equal(player.getAttribute("gravestones:office") ?? null, null);
+});
+
 test("grave and Office fees use loaded GE quotes while preserving grave contents and slots", t => {
   const definitions = core.ItemDefinition.definitions;
   const previous = new Map([...definitions.values()].map(def => [def, [def.grandExchangeValue, def.grandExchangeSellValue]]));

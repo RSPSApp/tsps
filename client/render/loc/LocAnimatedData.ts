@@ -17,6 +17,7 @@ export type LocAnimatedData = {
 
     seqId: number;
     randomStart: boolean;
+    preparedOrigin?: { tileX: number; tileY: number; shape: number };
 
     // Position and ID for ambient sounds
     locId: number;

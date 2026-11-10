@@ -81,6 +81,8 @@ function emptyHands(player) {
 
 function selectVariant({ npcId, player }) {
   if (npcId !== junaNpcId) return null;
+  // Death to the Dorgeshuun's own collecting run has its own words for Juna.
+  if (Cave.isQuestRun(player)) return null;
   return Cave.isPlaying(player) ? IN_CAVE : null;
 }
 

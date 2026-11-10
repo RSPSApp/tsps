@@ -1121,7 +1121,9 @@ test('Castle Wars large doors swing both leaves to the open ids and back', () =>
   }
 });
 
-test('Paterdomus chapel entrance swings both cached leaves into its nameless open locs', () => {
+// Issue 4130: a pass-through door, as captured (Priest in Peril 2026-11-02 ticks 10845-10847): blockers on
+// both doorway tiles, the nameless open leaves on the tiles east, and the doors back two ticks later.
+test('Paterdomus chapel entrance swings both cached leaves into its nameless open locs, over blockers', () => {
   const ids = require('../dist/util/ObjectIdentifiers').ObjectIdentifiers;
   const cacheObjects = new Map([
     [ids.LARGE_DOOR_21, { name: 'Large door', actions: ['Open'], models: [[3544]] }],
@@ -1134,10 +1136,12 @@ test('Paterdomus chapel entrance swings both cached leaves into its nameless ope
     h.place(3490, 3408, 3488, 2);
     h.place(3489, 3408, 3489, 2);
     assert.deepEqual(h.click(3490, 3408, 3488, 2, 'Open', 'Large door'), [
-      ['deregister', 3489, 3408, 3489, 2],
       ['deregister', 3490, 3408, 3488, 2],
-      ['register', 3491, 3409, 3489, 1],
+      ['deregister', 3489, 3408, 3489, 2],
+      ['register', 38848, 3408, 3488, 2],
       ['register', 3492, 3409, 3488, 3],
+      ['register', 38848, 3408, 3489, 2],
+      ['register', 3491, 3409, 3489, 1],
     ], 'the north and south leaves swing east into their real cache open variants');
   } finally {
     h.restore();

@@ -69,11 +69,17 @@ function raidIn(player) {
   return raid && Shared.inTheatre(player.getLocation()) ? raid : null;
 }
 
-/** Out of the theatre; the jailed stay until the room ends. */
+/** Out of the theatre; the jailed stay until the room ends. The line is live's (recorded by the user). */
 function escape(player, raid) {
   if (raid.member(player).jailed || !usesUp(player)) return false;
   raid.leave(player, "");
+  player.sendMessage("Your escape crystal saves you and is destroyed in the process.");
   return true;
+}
+
+/** `escape-crystal:claimed`: a crystal in the theatre is this unit's (the shared EscapeCrystal plugin leaves it). */
+function claimed(query) {
+  if (query?.player && raidIn(query.player)) query.claimed = true;
 }
 
 function teleport(event) {
@@ -206,6 +212,7 @@ module.exports = function registerTheatreEscapeCrystal(api) {
   api.onItemOnPlayer(useOnPlayer);
   api.onCustomEvent("combat:damage-apply", damageApplied);
   api.onCustomEvent("escape-crystal:settings", settingsOf);
+  api.onCustomEvent("escape-crystal:claimed", claimed);
 };
 
 Object.assign(module.exports, { ATTR, teleport, toggleAfk, configure, useOnPlayer, damageApplied, settingsOf, afkFires, ringFires, usedOnLogin, wears, usesUp, delayOf });

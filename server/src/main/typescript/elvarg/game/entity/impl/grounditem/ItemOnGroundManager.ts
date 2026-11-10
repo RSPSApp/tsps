@@ -303,7 +303,8 @@ export class ItemOnGroundManager {
         const inventory = player.getInventory(), item = groundItem.getItem();
         const groundAmount = item.getAmount();
         if (!Number.isSafeInteger(groundAmount) || groundAmount <= 0) return 0;
-        const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, item));
+        const reward = groundItem.getPickupItem();
+        const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, reward));
         if (pickedUpAmount <= 0) {
             inventory.full();
             return 0;
@@ -322,15 +323,15 @@ export class ItemOnGroundManager {
             || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== groundAmount
             || JSON.stringify(item.getMeta() ?? null) !== metadata || !groundItem.getPosition().equals(position)
             || groundItem.getPrivateArea() !== privateArea || groundItem.getOwner() !== owner || groundItem.getState() !== state) return 0;
-        const amount = Math.min(request.amount, this.inventoryCapacity(player, item));
+        const amount = Math.min(request.amount, this.inventoryCapacity(player, reward));
         if (amount <= 0) {
             inventory.full();
             return 0;
         }
         const matchingAmount = () => inventory.getItems().reduce((total, entry) => total +
-            (entry.getId() === itemId && JSON.stringify(entry.getMeta() ?? null) === metadata ? entry.getAmount() : 0), 0);
+            (entry.getId() === reward.getId() && JSON.stringify(entry.getMeta() ?? null) === metadata ? entry.getAmount() : 0), 0);
         const before = matchingAmount();
-        const pickedUpItem = item.clone().setAmount(amount);
+        const pickedUpItem = reward.clone().setAmount(amount);
         inventory.addItem(pickedUpItem);
         const credited = Math.min(amount, Math.max(0, matchingAmount() - before));
         if (credited <= 0) return 0;
@@ -342,7 +343,7 @@ export class ItemOnGroundManager {
             item.decrementAmountBy(removed);
             ItemOnGroundManager.perform(groundItem, OperationType.ALTER);
         }
-        PluginManager.emitCustomEvent("ground-items:taken", {player, groundItem, source, itemId, amount: credited, discarded: request.discard});
+        PluginManager.emitCustomEvent("ground-items:taken", {player, groundItem, source, itemId: reward.getId(), amount: credited, discarded: request.discard});
         return credited;
     }
 
@@ -443,7 +444,7 @@ export class ItemOnGroundManager {
 
     /** Picking up stays same-floor; telegrab may reach visible lower floors within its 10-tile range. */
     public static canInteract(player: Player, item: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): boolean {
-        if (!item) return false;
+        if (!item || (source === "telegrab" && item.pickupReplacement?.telegrabDenial)) return false;
         if (source === "pickup" && (item.getPosition().getZ() !== player.getLocation().getZ()
             || !item.isOperationEnabled(player, this.takeOperation(item.getItem().getId())))) return false;
         const reach = source === "telegrab" && item.getPosition().getZ() !== player.getLocation().getZ() ? 10 : 64;

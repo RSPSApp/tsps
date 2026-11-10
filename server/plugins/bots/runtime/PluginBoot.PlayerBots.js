@@ -194,6 +194,13 @@ function bootPlayerBotsRuntime(options = {}) {
     wildernessActiveRegionBotsPerRegion: config.wildernessActiveRegionBotsPerRegion,
     wildernessActiveRegionBotsByRegion: config.wildernessActiveRegionBotsByRegion,
     wildernessActiveRegionInset: config.wildernessActiveRegionInset,
+    // Asked as PvP bots come and go, once every plugin has registered: a world that has no place
+    // for them (a Hardcore World) answers `bots:pvp-allowed` { allowed: false }.
+    pvpAllowed: () => {
+      const query = { allowed: true };
+      api.emitCustomEvent("bots:pvp-allowed", query);
+      return query.allowed !== false;
+    },
     botBaseCooldownMs: config.botBaseCooldownMs,
     spawn,
     spawnOffsets,

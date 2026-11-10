@@ -37,6 +37,7 @@ module.exports = function registerWatchtowerQuest(api) {
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  const Darkness = require("../../world/Darkness.plugin");
   ObstacleRunner.init(api);
 
   const ROPE_THROW_ANIMATION = 775;
@@ -227,17 +228,6 @@ module.exports = function registerWatchtowerQuest(api) {
   const GOLD_BAR = ItemIdentifiers.GOLD_BAR;
   const VIAL = ItemIdentifiers.VIAL;
 
-  const LIGHT_SOURCES = new Set([
-    ItemIdentifiers.LIT_CANDLE,
-    ItemIdentifiers.LIT_TORCH,
-    ItemIdentifiers.CANDLE_LANTERN,
-    ItemIdentifiers.OIL_LANTERN,
-    ItemIdentifiers.BULLSEYE_LANTERN,
-    ItemIdentifiers.SAPPHIRE_LANTERN,
-    ItemIdentifiers.LIT_BUG_LANTERN,
-    ItemIdentifiers.BRUMA_TORCH,
-  ]);
-
   const BUSH_IDS = new Set([
     ObjectIdentifiers.BUSH_11,
     ObjectIdentifiers.BUSH_12,
@@ -405,8 +395,7 @@ module.exports = function registerWatchtowerQuest(api) {
   }
 
   function hasLightSource(player) {
-    for (const itemId of LIGHT_SOURCES) if (held(player, itemId)) return true;
-    return false;
+    return Darkness.hasLightSource(player);
   }
 
   function bushObject(player) {

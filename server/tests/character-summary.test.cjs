@@ -63,6 +63,7 @@ function player(attributes = {}, bot = false) {
     sendVarbit(id, value) { varbits.set(id, value); return this; },
     getVarbit: id => varbits.get(id) ?? 0,
     sendMessage(message) { messages.push(message); return this; },
+    sendTypedMessage(_type, message) { messages.push(message); return this; },
     sendInterfaceScript() {}, sendInterfaceFlagsRange() {},
     sendInterfaceDisplayState(uid, hide) { hidden.set(uid, hide); controls.push([uid, hide]); return this; },
     sendInterfacePosition(uid, x, y) { positions.set(uid, { x, y }); controls.push([uid, x, y]); return this; },
@@ -122,6 +123,8 @@ test("dismissing the real welcome screen restores the custom summary after its s
     ...f.api,
     core: {
       ...f.api.core,
+      ChatType: { WELCOME: 108 },
+      GameConstants: { WORLD_TYPE: { label: "REGULAR" } },
       Wilderness: { isInLocation: () => false },
       resolveGameframeRoot: () => 161,
       encodeGameframeBootstrap: () => [{ targetUid: contentUid, groupId: 712 }],

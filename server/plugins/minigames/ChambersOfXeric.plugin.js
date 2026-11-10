@@ -12,6 +12,7 @@ module.exports = {
   register(api) {
     require("./cox/Lobby.ChambersOfXeric")(api);
     require("./cox/Raid.ChambersOfXeric")(api);
+    require("./cox/EscapeCrystal.ChambersOfXeric")(api);
     require("./cox/Storage.ChambersOfXeric")(api);
     require("./cox/Resources.ChambersOfXeric")(api);
     require("./cox/Herblore.ChambersOfXeric")(api);

@@ -5,7 +5,8 @@
  * captured (rsprox recordings 4266 and 1106): Enter kneels into the portal (human_pickupfloor,
  * delay 20) as it opens; the exit portal opens it without the kneel, and puts the player outside
  * the entrance they came in by (Civitas illa Fortis: 1653, 3135). `deaths-office:exit`
- * { player, destination } lets a game mode answer with another tile before the portal opens.
+ * { player, destination } lets a game mode answer with another tile before the portal opens, and
+ * `deaths-office:left` { player, destination } follows once the portal has moved them.
  */
 const Common = require("./Common.DeathsOffice");
 const Instance = require("./Instance.DeathsOffice");
@@ -65,6 +66,7 @@ function useExitPortal({ player }) {
   Instance.throughPortal(player, () => {
     Instance.leave(player, destination);
     player.setAttribute(ENTRANCE_ATTRIBUTE, null);
+    Common.api().emitCustomEvent("deaths-office:left", { player, destination });
   });
   return true;
 }

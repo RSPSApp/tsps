@@ -13,6 +13,7 @@ const { CacheIndexDat2 } = require('../dist/game/cache/codec/rs/cache/CacheIndex
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const Settings = require('../plugins/interface/Settings.plugin');
 const settingsJson = require('../plugins/interface/data/settings.json').settings;
+const barracuda = require('../plugins/skills/sailing/barracudatrials/Common.BarracudaTrials');
 
 const TOGGLE = 0;
 const DROPDOWN = 2;
@@ -20,8 +21,9 @@ const DROPDOWN = 2;
 const TOGGLES = {
   2: 4609, 3: 4181, 4: 5711, 6: 5712, 9: 10113, 265: 14179, 442: 17772, 472: 19615, 473: 19646, 474: 19647,
   36: 4089, 83: 11890, 195: 13120, 430: 16116,
+  123: 12352, 127: 12383, 164: 12380, 311: 14806, 362: 15323, 418: 11562, 460: 18132, 476: 19681,
 };
-const DROPDOWNS = { 1: 6374 };
+const DROPDOWNS = { 1: 6374, 86: 12135 };
 // Live defaults that are not zero: the fresh-account (Tutorial Island) logins in the rsprox captures.
 const LIVE_DEFAULTS = { 2: 1 };
 
@@ -213,4 +215,21 @@ test('Enable separating hours changes only its bit of the varp it shares with pr
   const next = player(p.attributes);
   handlers.restoreSettings({ player: next });
   assert.equal(next.getPacketSender().getVarbit(11890), 0);
+});
+
+test('a Barracuda Trials "effects off" choice saved before the row existed moves into the setting once', () => {
+  const emitted = [];
+  barracuda.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => emitted.push([name, event.settingId, event.value]) });
+  const p = player();
+  const [first, second] = barracuda.trials;
+  p.setAttribute(barracuda.PROGRESS_ATTRIBUTE, {
+    [first.key]: { extra: { effectsOff: true, dontAskEffects: true } },
+    [second.key]: { extra: { effectsOff: true } },
+  });
+  barracuda.sendProgress(p);
+  assert.deepEqual(emitted, [['settings:set', 460, 1]]);
+  assert.deepEqual(barracuda.trialProgress(p, first).extra, { dontAskEffects: true });
+  assert.deepEqual(barracuda.trialProgress(p, second).extra, {});
+  barracuda.sendProgress(p);
+  assert.equal(emitted.length, 1, 'later progress updates leave the setting to the player');
 });

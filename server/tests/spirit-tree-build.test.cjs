@@ -52,17 +52,33 @@ function actor(t,index,base,current,{key='SPIRIT_TREE',can='WATERING_CAN_8_',too
   return {p,conn,house,inv,sapling,tile,target,buildable,canId,materials};
 }
 function turn(f){f.p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();f.conn.processTurnPackets();const q=f.p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(f.p.getIndex());}
-async function build(f,t,allowed){
+async function openBuildMenu(f,t){
   const scripts=[],sender=f.p.getPacketSender(),original=sender.sendClientScript.bind(sender);
   t.mock.method(sender,'sendClientScript',(id,...args)=>{scripts.push([id,...args]);return original(id,...args);});
   await f.conn.dispatch([{type:'object_option',id:f.tile.id,x:f.tile.x,y:f.tile.y,action:'Build'}]);
   const group=core.CacheDefinitions.getInterfaceId('poh_furniture_creation');
   let row;for(let i=0;i<30;i++){turn(f);row=scripts.find(s=>s[0]===1404&&s[2]===f.buildable.menuRowId);if(row&&f.p.getInterfaceId()===group&&!f.p.getMovementQueue().hasPendingWork())break;}
-  assert.equal(f.p.getInterfaceId(),group);assert.ok(row,'actual visible Spirit Tree menu row');assert.equal(f.p.getMovementQueue().hasPendingWork(),false,'movement settled before selection');if(allowed)assert.equal(row[5],1);
+  assert.equal(f.p.getInterfaceId(),group);assert.ok(row,'actual visible Spirit Tree menu row');assert.equal(f.p.getMovementQueue().hasPendingWork(),false,'movement settled before selection');
+  assert.ok(scripts.some(s=>s[0]===1406&&s[2]===0),'the numbered build menu suspends chat');
+  return {scripts,group,row};
+}
+async function build(f,t,allowed){
+  const {scripts,group,row}=await openBuildMenu(f,t);
+  if(allowed)assert.equal(row[5],1);
   const action=row[1];assert.ok(Number.isInteger(action)&&action>0);const widgetId=(group<<16)|2;
   const seen=[],emit=PM.emitInterfaceActionClick.bind(PM);t.mock.method(PM,'emitInterfaceActionClick',event=>{const result=emit(event);if(event.player===f.p&&event.groupId===group&&event.childId===2&&event.action===action)seen.push({handled:event.handled,result});return result;});
   await f.conn.dispatch([{type:'dialogue_continue',widgetId,childIndex:action}]);for(let i=0;i<30&&!seen.length;i++)turn(f);assert.equal(seen.length,1);assert.equal(seen[0].handled,true);
+  assert.equal(scripts.filter(s=>s[0]===2158).length,1,'selecting furniture restores chat input');
 }
+test('closing the furniture menu restores chat input',async t=>{
+  const f=actor(t,1300,83,83);
+  const {scripts}=await openBuildMenu(f,t);
+  assert.equal(scripts.some(s=>s[0]===2158),false);
+  await f.conn.dispatch([{type:'interface_close'}]);
+  turn(f);
+  assert.equal(f.p.getInterfaceId(),-1);
+  assert.equal(scripts.filter(s=>s[0]===2158).length,1);
+});
 test('Spirit Tree build requires Farming 83 and accepts boosts',async t=>{
   for(const [name,index,base,current,allowed] of [['level 83',1301,83,83,true],['level 82',1302,82,82,false],['boosted 82',1303,82,83,true]]) await t.test(name,async t=>{
     const f=actor(t,index,base,current),skills=f.p.getSkillManager();

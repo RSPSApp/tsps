@@ -31,6 +31,9 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   const VARBIT_AUTO_SMASH = 5668; // auto_smash_vials
   const BARS_ATTRIBUTE = "alfred-grimhands-barcrawl:bars";
   const AUTO_SMASH_ATTRIBUTE = "alfred-grimhands-barcrawl:auto-smash";
+  // All Settings "Automatically smash empty vials" (cache struct 956, setting id 380). The cache's
+  // settings_custom_dependency greys it out until the barcrawl is handed in (varp 77 = 2).
+  const AUTO_SMASH_SETTING = 380;
   const BARBARIAN_GATE_IDS = new Set([2115, 2116]); // barbariangatel/r, 2545,3569-3570
 
   const ACTION_START = "barcrawl:start";
@@ -257,6 +260,14 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   function setAutoSmash(player, on) {
     player.setAttribute(AUTO_SMASH_ATTRIBUTE, on === true);
     player.getPacketSender().sendVarbit(VARBIT_AUTO_SMASH, on === true ? 1 : 0);
+  }
+
+  /** The All Settings row toggles the guard's saved flag; before the miniquest it stays off (resent as 0). */
+  function handleSettingClicked(request) {
+    if (request?.handled || Number(request?.settingId) !== AUTO_SMASH_SETTING || !request.player) return;
+    request.handled = true;
+    const player = request.player;
+    setAutoSmash(player, quest.getStage(player) >= 2 && player.getAttribute(AUTO_SMASH_ATTRIBUTE) !== true);
   }
 
   function completeCrawl(player) {
@@ -548,6 +559,7 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemAction("Barcrawl card", { Read: readCard });
   api.onCustomEvent("door:toggle", handleGateToggle);
+  api.onCustomEvent("settings:setting-clicked", handleSettingClicked);
   api.onPlayerLogin(syncVars);
   api.onCustomEvent("player:bootstrap-complete", syncVars);
 
@@ -562,6 +574,7 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     drinkAt,
     completeCrawl,
     setAutoSmash,
+    handleSettingClicked,
     handleAction,
     handleGateToggle,
     syncVars,

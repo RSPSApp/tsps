@@ -30,12 +30,15 @@ const MUSIC_DATA: MusicData = (() => {
     }
 })();
 
+const NO_TRACKS: readonly number[] = [];
+
 export class Music {
     /** The silent track. */
     public static readonly SILENCE_TRACK = 147;
     /** Native varp holding the playing track's DB row, -1 between tracks. */
     public static readonly CURRENT_TRACK_VARP = 3883;
     private static tracksCache?: CachedTrack[];
+    private static lengthsById?: Map<number, number>;
 
     private static cachedTracks(): CachedTrack[] {
         if (this.tracksCache) return this.tracksCache;
@@ -84,13 +87,19 @@ export class Music {
     }
 
     /** Every track that plays in the region's music area; the area shuffles between them. */
-    public static tracksForRegion(regionId: number): number[] {
-        return [...(MUSIC_DATA.regions[regionId] ?? [])];
+    public static tracksForRegion(regionId: number): readonly number[] {
+        return MUSIC_DATA.regions[regionId] ?? NO_TRACKS;
     }
 
     /** How many ticks the track plays for, or undefined when the cache has no length. */
     public static lengthTicks(trackId: number): number | undefined {
-        return this.cachedTracks().find(({ id }) => id === trackId)?.lengthTicks;
+        if (!this.lengthsById) {
+            this.lengthsById = new Map();
+            for (const { id, lengthTicks } of this.cachedTracks()) {
+                if (lengthTicks !== undefined && !this.lengthsById.has(id)) this.lengthsById.set(id, lengthTicks);
+            }
+        }
+        return this.lengthsById.get(trackId);
     }
 
     /**

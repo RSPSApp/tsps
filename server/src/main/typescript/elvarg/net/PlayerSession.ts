@@ -49,6 +49,11 @@ import type { PrivateArea } from "../game/model/areas/impl/PrivateArea";
 
 /** A finished area track fades out into silence. */
 const MUSIC_END_FADES: SongFades = { fadeOutDelay: 0, fadeOutSpeed: 20, fadeInDelay: 0, fadeInSpeed: 0 };
+const NO_TRACKS: readonly number[] = [];
+
+function sameTracks(a: readonly number[], b: readonly number[] | undefined): boolean {
+  return b !== undefined && a.length === b.length && a.every((track, i) => track === b[i]);
+}
 
 type SessionChannel = {
   kind?: string;
@@ -122,11 +127,15 @@ export class PlayerSession {
   private lastMusicRegion = -1;
   private lastMusicTrack = -1;
   private lastMusicMode = -1;
-  private lastResolvedMusicTracks?: string;
+  private lastResolvedMusicTracks?: readonly number[];
   /** The tick the playing area track ends on, or -1. */
   private musicTrackEndsAt = -1;
   /** The tick the next area track starts on, after the one that ended, or -1. */
   private musicNextTrackAt = -1;
+  /** The area track that just ended, which the next pick skips; -1 otherwise. */
+  private musicEndedTrack = -1;
+  private musicTick = 0;
+  private startingAreaTrack = false;
 
   /** The selected track last started, or -1: what a jingle resumes. */
   public getCurrentMusicTrack(): number {
@@ -138,12 +147,33 @@ export class PlayerSession {
   }
 
   /** Starts an area track; it plays for its cache length plus a tick, then the area moves on. */
-  private startAreaTrack(player: Player, track: number, tick: number, fades?: SongFades): void {
+  private startAreaTrack(player: Player, track: number, fades?: SongFades): void {
     this.lastMusicTrack = track;
     this.musicNextTrackAt = -1;
+    this.musicEndedTrack = -1;
+    this.musicTrackEndsAt = this.areaTrackEnd(track);
+    this.startingAreaTrack = true;
+    try {
+      player.getPacketSender().sendSong(track, fades);
+    } finally {
+      this.startingAreaTrack = false;
+    }
+  }
+
+  private areaTrackEnd(track: number): number {
     const length = Music.lengthTicks(track);
-    this.musicTrackEndsAt = length === undefined ? -1 : tick + length + 1;
-    player.getPacketSender().sendSong(track, fades);
+    return length === undefined ? -1 : this.musicTick + length + 1;
+  }
+
+  /**
+   * Any other song sent to the client (a boss fight, a minigame) takes over from the area until the
+   * next area change; the area track sent again from its start (the volume restart) runs anew.
+   */
+  public noteSongSent(track: number): void {
+    if (this.startingAreaTrack) return;
+    this.musicNextTrackAt = -1;
+    this.musicEndedTrack = -1;
+    this.musicTrackEndsAt = track === this.lastMusicTrack ? this.areaTrackEnd(track) : -1;
   }
   private lastGroundItemRegion = -1;
   private lastGroundItemLevel = -1;
@@ -335,38 +365,41 @@ export class PlayerSession {
       const areaTrack = typeof privateArea?.getMusicTrack === "function"
         ? PluginManager.callArea(privateArea, "getMusicTrack", player)
         : null;
-      const tracks = Number.isInteger(areaTrack) && areaTrack >= 0 && areaTrack < 0xffff
+      this.musicTick = tick;
+      const tracks: readonly number[] = Number.isInteger(areaTrack) && areaTrack >= 0 && areaTrack < 0xffff
         ? [areaTrack as number]
-        : musicRegion < 0 ? [] : Music.tracksForRegion(musicRegion);
-      const tracksKey = tracks.join(",");
-      const selectionChanged = tracksKey !== this.lastResolvedMusicTracks;
+        : musicRegion < 0 ? NO_TRACKS : Music.tracksForRegion(musicRegion);
+      const selectionChanged = !sameTracks(tracks, this.lastResolvedMusicTracks);
       if (musicRegion !== this.lastMusicRegion || musicMode !== this.lastMusicMode || selectionChanged) {
         const regionChanged = musicRegion !== this.lastMusicRegion;
         const previousMusicMode = this.lastMusicMode;
         this.lastMusicRegion = musicRegion;
         this.lastMusicMode = musicMode;
-        this.lastResolvedMusicTracks = tracksKey;
+        this.lastResolvedMusicTracks = tracks;
         // A track that also belongs to the new area plays on; otherwise one of the area's starts.
-        const keep = musicMode === 0 && previousMusicMode === 0 && this.musicNextTrackAt < 0
-          && tracks.includes(this.lastMusicTrack);
-        const track = keep ? this.lastMusicTrack : musicMode === 0 ? Music.pickAreaTrack(tracks) : tracks[0];
+        const keep = musicMode === 0 && previousMusicMode === 0 && tracks.includes(this.lastMusicTrack);
+        const track = keep ? this.lastMusicTrack
+          : musicMode === 0 ? Music.pickAreaTrack(tracks, this.musicEndedTrack) : tracks[0];
         if ((regionChanged || selectionChanged) && track !== undefined) {
           PluginManager.emitCustomEvent("music:unlock-track", { player, trackId: track });
         }
         if (musicMode !== 0 || track === undefined) {
           this.musicTrackEndsAt = -1;
           this.musicNextTrackAt = -1;
+          this.musicEndedTrack = -1;
         } else if (!keep) {
-          this.startAreaTrack(player, track, tick);
+          this.startAreaTrack(player, track);
         }
       } else if (musicMode === 0 && this.musicNextTrackAt >= 0 && tick >= this.musicNextTrackAt) {
-        const track = Music.pickAreaTrack(tracks, this.lastMusicTrack);
+        const track = Music.pickAreaTrack(tracks, this.musicEndedTrack);
         if (track === undefined) this.musicNextTrackAt = -1;
-        else this.startAreaTrack(player, track, tick, SONG_NO_FADES);
+        else this.startAreaTrack(player, track, SONG_NO_FADES);
       } else if (musicMode === 0 && this.musicTrackEndsAt >= 0 && tick >= this.musicTrackEndsAt) {
         // The track has finished: silence, no current track, and the next one two ticks later.
         this.musicTrackEndsAt = -1;
         this.musicNextTrackAt = tick + 2;
+        this.musicEndedTrack = this.lastMusicTrack;
+        this.lastMusicTrack = -1;
         this.sendClientPacket(encodePlaySong(Music.SILENCE_TRACK, MUSIC_END_FADES));
         player.getPacketSender().sendConfig(Music.CURRENT_TRACK_VARP, -1);
       }

@@ -870,3 +870,42 @@ test('an area track plays out, falls silent for two ticks, then another of the a
   assert.deepEqual(await songs(100 + 556 + 649), [WYRM]);
   assert.notEqual(session.getCurrentMusicTrack(), FUL);
 });
+
+test('another song takes over from the area track, and the area track sent again starts its time anew', async t => {
+  await setup();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  const session = new PlayerSession({ isOpen: () => true, send: () => true });
+  const player = new Player(session);
+  session.setPlayer(player);
+  player.setUsername('musictakeover');
+  assert.equal(core.World.getPlayers().add(player), true);
+  t.after(() => core.World.getPlayers().remove(player));
+  player.setLocation(new Location(1310, 10205, 0));
+  player.setNeedsPlacement(false);
+  t.mock.method(Math, 'random', () => 0);
+  const songs = async tick => {
+    session.flush(tick);
+    const frames = [...session.pendingPackets];
+    await Promise.resolve();
+    return frames.filter(frame => frame[0] === 133).map(frame => frame.readUInt16BE(frame.length - 10));
+  };
+  const WYRM = 595, FUL = 635, BOSS = 549;
+  assert.deepEqual(await songs(10), [WYRM]);
+  player.getPacketSender().sendSong(BOSS);
+  await Promise.resolve();
+  assert.deepEqual(await songs(10 + 554), [], "a plugin's song is not cut off when the area track's time is up");
+  player.setLocation(new Location(3222, 3218, 0));
+  assert.deepEqual(await songs(600), [core.Music.forRegion(12850)], 'a new area takes the music back');
+  player.setLocation(new Location(1310, 10205, 0));
+  assert.deepEqual(await songs(700), [WYRM]);
+  assert.deepEqual(await songs(800), []);
+  player.getPacketSender().sendSong(WYRM);
+  await Promise.resolve();
+  assert.deepEqual(await songs(700 + 554), [], 'the same track sent again (the volume restart) plays its full length from then');
+  assert.deepEqual(await songs(800 + 554), [147]);
+  assert.equal(session.getCurrentMusicTrack(), -1, 'between tracks there is none for a jingle to resume');
+  player.setLocation(new Location(1240, 10150, 0));
+  assert.deepEqual(await songs(800 + 555), [FUL], 'an area change in the gap still skips the track that ended');
+});

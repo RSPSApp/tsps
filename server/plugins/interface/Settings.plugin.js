@@ -173,6 +173,9 @@ const ALL_SETTINGS_VOLUME_VARPS = new Map([
   [31, 169], // sound effects
   [32, 872], // area sounds
 ]);
+// "Reset volume sliders to default" (a button row): every slider back to a new account's 100.
+const RESET_VOLUME_SETTING = 468;
+const DEFAULT_VOLUME = 100;
 
 const KEYBINDINGS_INTERFACE_ID = 121;
 const KEYBINDINGS_RESTORE_DEFAULTS = (KEYBINDINGS_INTERFACE_ID << 16) | 104;
@@ -682,6 +685,17 @@ function releaseAllSettingsVolume(player, argsData) {
   return true;
 }
 
+/** The volume reset row clicked: each slider's varp set and sent as if the player had dragged it. */
+function resetVolumeSliders(request) {
+  if (request.handled || request.settingId !== RESET_VOLUME_SETTING) return;
+  request.handled = true;
+  const sender = request.player.getPacketSender();
+  for (const varpId of ALL_SETTINGS_VOLUME_VARPS.values()) {
+    request.player.applyAudioSettingFromClient?.(varpId, DEFAULT_VOLUME);
+    sender.sendConfig(varpId, DEFAULT_VOLUME);
+  }
+}
+
 function enableVolumeSliders(player) {
   for (const slider of VOLUME_SLIDER_VARPS.keys()) player.getPacketSender?.()?.sendInterfaceFlagsRange?.(slider, -1, -1, TRANSMIT_TRIGGER);
 }
@@ -868,6 +882,7 @@ module.exports = {
     api.onInterfaceActionButton(QUEST_LIST_SETTINGS_BUTTON, openQuestSettings);
     api.onCustomEvent("interface:closed", endSettingsSearch);
     api.onCustomEvent("settings:set", setSettingValue);
+    api.onCustomEvent("settings:setting-clicked", resetVolumeSliders);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);

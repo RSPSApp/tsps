@@ -26,6 +26,20 @@ records the 2026-11-01 run; the quest needs a whole run on the merged code.
 
 Newest first.
 
+- **fixed (live capture, issue 4130)** The temple's large doors and Drezel's cell gate teleported
+  the player across. Live opens them like doors (rev 242 recording 2026-11-02 ticks 10840-10847 in
+  and 10980-10982 out; rsprox.net #365 ticks 1589-1593 and 1658-1661 for the cell): `inviswall`
+  (38848) goes on the doorway tile(s), the open leaves (3491/3492 east of the large doors, 3464
+  east of the cell gate) on the tiles beyond, sound 62 (doors) or 71 (gate), the player walks one
+  tile across in the same tick and the closed locs are back two ticks later. Both are now Doors
+  `PASS_THROUGH_GATES`; the quest still decides who may open the large doors. The locked cell gate's
+  Open is how the player talks to Drezel (tick 11162-11168: "Hello." and his first line, no Talk-to),
+  so it now plays Drezel's conversation for the stage. With the iron key held, Open unlocks it with
+  sound 2419 and the player stays outside (tick 11429). Using the iron key on the unlocked gate opens
+  it like Open (ours: not captured). The issue asked for a "Talk-through" option; the rev 242 cache's
+  only option on the gate is Open, and live talks through it. Covered by
+  `tests/priest-in-peril-doors.test.cjs`; checked in-game on a headless account (both doors, the
+  meeting, the unlock and the cell both ways).
 - **fixed (live capture)** The temple's Monks of Zamorak only punched. Two rev 241 RSProx
   recordings (2026-10-17 and 2026-11-02) show them casting too: 3484 Weaken and Curse, 3485
   Weaken and Confuse, 3486 Fire Bolt (a small sample: 3, 5 and 2 casts), with casts
@@ -82,8 +96,9 @@ Newest first.
   remain unverified. References #2207.
 - **fixed** The temple's large doors stayed open after a quester used them (Doors keeps
   them open), so a player who hadn't started the quest could walk in. Live swings them shut
-  two ticks later (rsprox.net #365). The quest walks the player through instead: from stage 30, or
-  from inside at any stage. Fixed in #1817.
+  two ticks later (rsprox.net #365). The quest walked the player through instead: from stage 30, or
+  from inside at any stage. Fixed in #1817; the walk-through became a teleport, replaced for
+  issue 4130 (above).
 - **fixed** The guardian could be attacked before the quest and was not immune to magic.
   An Area over the ladder room refuses both with the transcript's "You have no reason to do
   that!" and "Your spells do not seem to affect it.". Fixed in #1817.

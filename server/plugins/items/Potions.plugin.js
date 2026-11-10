@@ -544,7 +544,8 @@ function applyOverloadBoost(player, flat, percent) {
   }
 }
 
-function applyOverload(player, flat = 5, percent = 0.15) {
+/** `area`: where the effect lives (the raid's potions): it ends, silently, once the player is no longer there. */
+function applyOverload(player, flat = 5, percent = 0.15, area = null) {
   const now = Date.now();
   applyOverloadBoost(player, flat, percent);
   player.setAttribute(ATTR_OVERLOAD_STATE, {
@@ -554,6 +555,7 @@ function applyOverload(player, flat = 5, percent = 0.15) {
     damageHitsRemaining: 5,
     flat,
     percent,
+    ...(area ? { area } : {}),
   });
 }
 
@@ -1350,13 +1352,13 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
   });
   registerGourd(`Prayer enhance${suffix}`, GOURD_FIRST_DOSE.prayerEnhance[tier], (player) => {
     const now = Date.now();
-    player.setAttribute(ATTR_PRAYER_ENHANCE, { endsAt: now + strength.enhanceTicks * 600, nextAt: now + PRAYER_ENHANCE_INTERVAL_MS });
+    player.setAttribute(ATTR_PRAYER_ENHANCE, { endsAt: now + strength.enhanceTicks * 600, nextAt: now + PRAYER_ENHANCE_INTERVAL_MS, area: RAID_AREA });
   });
   registerGourd(`Xeric's aid${suffix}`, GOURD_FIRST_DOSE.xericsAid[tier], (player) => applyXericsAid(player, strength.aid));
   const antipoison = suffix ? `Antipoison${suffix}` : "Antipoison potion";
   registerGourd(antipoison, GOURD_FIRST_DOSE.antipoison[tier], (player) => applyPoisonImmunity(player, GOURD_ANTIPOISON_SECONDS[tier]));
   registerGourd(`Overload${suffix} (Chambers of Xeric)`, GOURD_FIRST_DOSE.overload[tier],
-    (player) => applyOverload(player, strength.overload[0], strength.overload[1]),
+    (player) => applyOverload(player, strength.overload[0], strength.overload[1], RAID_AREA),
     // Wiki (Overload (Chambers of Xeric)): more than 50 Hitpoints, as Overload (+) and the refusal text say.
     (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
@@ -1475,13 +1477,28 @@ function inArea(player, area) {
   return request.inside === true;
 }
 
+/**
+ * The raid's timed potions end when the player leaves it: both timers go to 0 with no line as raids_client_indungeon
+ * does (rsprox_transcripts/234/03285.txt:288134, 234/00820.txt:321992).
+ */
+const RAID_AREA = "chambers-of-xeric";
+
+function leftItsArea(player, state) {
+  return typeof state.area === "string" && !inArea(player, state.area);
+}
+
 function processPrayerEnhance(player) {
   const state = player.getAttribute(ATTR_PRAYER_ENHANCE);
   if (!state) return;
+  if (leftItsArea(player, state)) {
+    player.setAttribute(ATTR_PRAYER_ENHANCE, null);
+    return;
+  }
   const now = Date.now();
   if (now >= state.endsAt) {
     player.setAttribute(ATTR_PRAYER_ENHANCE, null);
-    player.sendMessage("<col=ef1020>Your prayer enhance effect has worn off.</col>");
+    // rsprox_transcripts/234/03285.txt:265414.
+    player.sendMessage("<col=ff0000>Your prayer enhance effect has worn off.</col>");
     return;
   }
   if (now < state.nextAt) return;
@@ -1496,6 +1513,11 @@ function processOverload(player) {
     return;
   }
 
+  if (leftItsArea(player, state)) {
+    player.setAttribute(ATTR_OVERLOAD_STATE, null);
+    return;
+  }
+
   const now = Date.now();
   if (now >= state.endsAt) {
     player.setAttribute(ATTR_OVERLOAD_STATE, null);
@@ -1503,7 +1525,8 @@ function processOverload(player) {
       setCurrentLevel(player, skill, getMaxLevel(player, skill));
     }
     heal(player, 50);
-    player.sendMessage("The effects of the overload have worn off, and you feel normal again.");
+    // rsprox_transcripts/234/00820.txt:199330 (four times in revision 234; no closing tag).
+    player.sendMessage("<col=ef1020>The effects of overload have worn off, and you feel normal again.");
     return;
   }
 

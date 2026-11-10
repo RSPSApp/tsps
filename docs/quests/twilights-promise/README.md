@@ -55,6 +55,8 @@ were checked: the capture's (below The Heart of Darkness's requirements) nativel
   gives it). Not captured.
 - **open** The scenes' secondary tracks (774 under 810, 810 under 774) aren't sent: the server has
   no `midi_song_withsecondary`.
+- **fixed** The letter was in one of two south-eastern chests at random; both recordings and Quest
+  Helper have it in Velam's chest, `vmq2_knight_4_chest` 50866 at 1648,3142, every time.
 - **fixed** The ending always offered The Heart of Darkness, even below its requirements; Beneath
   Cursed Sands also answered that condition for every quest that uses its words.
 - **fixed** The scenes played as private areas on the real map; they are instances.

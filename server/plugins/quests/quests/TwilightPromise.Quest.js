@@ -152,7 +152,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const CRATES_OBJECT_ID = 50871; // vmq2_cothon_crates
   const WEAPON_CRATE_TILE = { x: 1778, y: 3149 };
   const CHEST_OBJECT_IDS = [50863, 50864, 50865, 50866, 50867, 50868]; // vmq2_knight_1..6_chest
-  const LETTER_CHEST_IDS = [50865, 50866]; // the south-eastern room's two chests
+  // The letter is always in Velam's chest, vmq2_knight_4_chest at 1648,3142 on the south wall of the
+  // south-east room (both live recordings: rev 226 rec 1695 and the rev 242 capture; Quest Helper's
+  // step). An older version of this plugin picked one of two chests at random, which no source has.
+  const LETTER_CHEST_ID = 50866;
   const OPEN_CHEST_OBJECT_ID = 50869;
   const CHEST_OPEN_TICKS = 2;
 
@@ -356,7 +359,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
 
   const RECRUITS_ATTRIBUTE = "quest.twilights_promise.recruits";
   const FLAGS_ATTRIBUTE = "quest.twilights_promise.flags";
-  const LETTER_CHEST_ATTRIBUTE = "quest.twilights_promise.letter-chest";
   const STAGE_VERSION_ATTRIBUTE = "twilights-promise:stage-version";
   const STAGE_VERSION = 1;
   const OLD_FLAG_MESSAGE_READ = 1 << 0;
@@ -827,23 +829,14 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
-  function letterChest(player) {
-    let chest = player.getAttribute(LETTER_CHEST_ATTRIBUTE);
-    if (!LETTER_CHEST_IDS.includes(chest)) {
-      chest = LETTER_CHEST_IDS[Math.floor(Math.random() * LETTER_CHEST_IDS.length)];
-      player.setAttribute(LETTER_CHEST_ATTRIBUTE, chest);
-    }
-    return chest;
-  }
-
-  /** The letter's chest opens for two ticks as it is searched (equal odds of either south-eastern chest). */
+  /** Velam's chest opens for two ticks as the letter is found; every other chest has nothing. */
   function openChest(event) {
     const id = event.definition?.id ?? event.objectId;
     if (!CHEST_OBJECT_IDS.includes(id)) return false;
     event.handled = true;
     const { player } = event;
     const current = stage(player);
-    if (current !== STAGE_HQ && !(current >= STAGE_LETTER && current < STAGE_VERDICT_DONE) || id !== letterChest(player)) {
+    if (current !== STAGE_HQ && !(current >= STAGE_LETTER && current < STAGE_VERDICT_DONE) || id !== LETTER_CHEST_ID) {
       play(player, ENNIUS_NPC_ID, V.CHEST_WRONG);
       return true;
     }
@@ -1667,7 +1660,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
 
   api.persistAttribute(RECRUITS_ATTRIBUTE, 0);
   api.persistAttribute(FLAGS_ATTRIBUTE);
-  api.persistAttribute(LETTER_CHEST_ATTRIBUTE);
   api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {

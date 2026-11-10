@@ -894,7 +894,7 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   const { h, p } = tp(); h.quest.setStage(p, 22); p.items.set(I.VARLAMORE_CREST, 1);
   tpTalk(h, p, N.FURIA_TULLUS_2); h.continueUntil(p, () => p.text === "We'll keep the knights busy until you're done.");
   assert.equal(h.quest.getStage(p), 24); assert.equal(p.items.get(I.VARLAMORE_CREST), 0); assert.equal(p.varbits.get(11123), 1); assert.equal(p.varbits.get(9834), 0);
-  finish(h, p); p.attrs.set('quest.twilights_promise.letter-chest', 50866);
+  finish(h, p);
   const chest = (id) => ({ getLocation: () => new core.Location(1648, 3142, 2), getType: () => 10, getFace: () => 0, getId: () => id });
   h.namedObjects.get('Chest').Open({ player: p, definition: { id: 50865 }, objectId: 50865, object: chest(50865) });
   assert.equal(p.messages.at(-1), 'You search the chest, but find nothing of interest.');
@@ -1474,10 +1474,13 @@ test('Primio opens the canonical first-trip menu and flies both ways only after 
   h.quest.complete(p);
   const baselineTasks = h.tasks.length;
   primio({ player: p, npcId: N.PRIMIO_2 });
-  assert.equal(p.varbits.get(9652), 2, 'opening the first-journey conversation advances the captured menu state');
+  assert.notEqual(p.varbits.get(9652), 2, 'opening the conversation alone does not agree to the trip');
   assert.equal(starts.at(-1).npcId, N.REGULUS_CENTO_2);
   assert.equal(starts.at(-1).variant, 'talking-in-varrock-talking-to-take-the-first-trip');
   assert.equal(p.getLocation().getX(), 3210, 'opening the menu does not move the player');
+  // "Sounds good." agrees to it (rec 1695 tick 450): 1 -> 2, and both of them gain Travel.
+  h.line(p, N.REGULUS_CENTO_2, 'Sounds good.').after();
+  assert.equal(p.varbits.get(9652), 2, 'agreeing to the trip advances the captured menu state');
 
   // Closing/reopening before accepting uses the source's shorter retry menu.
   keeper({ player: p, npcId: N.REGULUS_CENTO_2 });

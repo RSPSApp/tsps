@@ -387,14 +387,15 @@ test('fresh stage 0 follows the registered mandatory edges to the completion wir
   assert.equal(h.quest.getStage(p), 24);
   assert.equal(p.items.get(I.VARLAMORE_CREST) ?? 0, 0);
 
-  // 24 -> 26 -> 28: the correct chest's letter, then reading it.
+  // 24 -> 26 -> 28: Velam's chest (50866, both live recordings) has the letter; its neighbour doesn't.
   const chests = [50865, 50866];
   const openChest = h.objects.get('Chest')?.Open;
   assert.equal(typeof openChest, 'function');
   const object = { getId: () => chests[0], getLocation: () => new core.Location(1648, 3142, 0), getType: () => 10, getFace: () => 0 };
   assert.equal(openChest({ player: p, objectId: chests[0], definition: { id: chests[0] }, object }), true);
-  const correctChest = p.attrs.get('quest.twilights_promise.letter-chest');
-  assert.ok(chests.includes(correctChest));
+  assert.equal(transcriptCalls.at(-1).variant, 'oh-brother-judgement-searching-a-wrong-chest-or-the-correct-chest-before-and-after-the-quest');
+  assert.equal(h.quest.getStage(p), 24, 'the neighbouring chest has nothing');
+  const correctChest = 50866;
   transcriptCalls = [];
   assert.equal(openChest({ player: p, objectId: correctChest, definition: { id: correctChest }, object }), true);
   assert.equal(transcriptCalls.at(-1).variant, 'oh-brother-judgement-searching-the-correct-chest');

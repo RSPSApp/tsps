@@ -1292,6 +1292,8 @@ function attach(api) {
     api.onPlayerLogin(login);
     api.onPlayerLogin(Tithe.titheLogin);
     api.onPlayerLogin(Rewards.login);
+    api.onPlayerLogin(Services.settingsLogin);
+    api.onCustomEvent("settings:setting-clicked", Services.settingClicked);
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);

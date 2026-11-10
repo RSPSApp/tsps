@@ -111,6 +111,29 @@ These rows only needed wiring: the cache's own scripts (or our client and server
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
   - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
 
+## Rows owned by other plugins
+
+These features keep their own state and had their own switch before All Settings could change
+them. Each owning plugin listens for `settings:setting-clicked`, flips that same state through its
+own code path, sends the row's varbit and sets `handled`, so a click flips it once. The feature's
+own switch and the row stay in step both ways, and the state comes back at login.
+
+| Setting | Id | State and variable | The feature's own switch |
+| --- | --- | --- | --- |
+| Accept aid | 59 | `accept-aid` attribute, varbit 4180 `option_acceptaid` | The Controls side panel button (116:29). An Ironman is refused ("Ironmen do not accept aid.") from both. |
+| Load-x value for the Dwarf multicannon (number) | 450 | `dwarf-cannon:load-x`, varbit 17870 `option_cannonballs_load_x` | The row asks the cannon's own "Set load-x cannonballs (1 - N):" |
+| Looting bag - Store all | 352 | `looting-bag:store-everything`, varbit 6068 `lootingbag_useallitems` | The bag's Settings menu |
+| Looting bag - Ignore supplies | 353 | `looting-bag:skip-supplies`, varbit 15310 `lootingbag_ignore_food` | The bag's Settings menu |
+| Automatically smash empty vials | 380 | `alfred-grimhands-barcrawl:auto-smash`, varbit 5668 `auto_smash_vials` | The barbarian guard after the Barcrawl. Until it is done the row says the cache's locked text: "You must have completed the Alfred Grimhand's Barcrawl miniquest to access this setting." |
+| Automatically smash empty plant pots | 381 | farm state `barbarian.autoSmash`, varbit 9614 `brut_smash_pots_automatically` (now also sent at login) | Otto's "Toggle automatic pot-smashing". Until his Farming training is done the row says "You must complete the Farming portion of Barbarian Training to access this setting." |
+| Show warning on Wilderness teleport levers | 253 | `levers:skip-wilderness-warning`, varbit 13985 `wilderness_lever_blockwarning_standard` | The warning's "don't ask again" |
+| Show warning on exiting Ferox Enclave | 255 | `ferox:barrier-dont-ask`, varbit 10532 `wildy_hub_warning` | The barrier's "Yes, and don't ask again." |
+| Charter Ships confirmation | 294 | `charter-ships:skip-confirmation`, varbit 75 `settings_warning_confirmation_charter_ships` | The fare question's "don't ask again" |
+| Forgotten drink crate warning | 455 | `charting:drink-no-warning`, varbit 19609 `sailing_charting_drink_crate_warning` | The warning's "Yes, and don't ask again." |
+| Farming protection payment confirmation | 295 | varbit 98 `settings_warning_confirmation_farming_protection`, an ordinary `settings.json` row | The gardener's "Yes and don't ask again." turns the row on through `settings:set`. A save's old per-player `gardenerNoAsk` farm flag moves onto the row once at login and is removed. |
+
+Ours: a row click that changes the setting sends no chat message (only the locked rows and the Ironman refusal say something); the feature's own switch keeps its messages.
+
 ## Level-ups
 
 All on the tick the level is gained:
@@ -135,7 +158,29 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 - **Jingles.** Done: each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
 - **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
 - **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.
-- **Other colour pickers** (type 9, for example Public chat colour) are not handled; quest-list colours are supported below.
+- **Other colour pickers** (type 9): the Activities overlay colours (113, 174, 177, 180, 262, 263, 266, 504) are not handled; the chat, quest-list and music player colours are supported below.
+
+## Chat colours
+
+The chat colour rows (type 9) open the colour picker as the quest-list rows do (modal 288, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
+
+| Chat type | Opaque | Transparent |
+| --- | --- | --- |
+| Public | 87 → varp 2992 | 88 → 3000 |
+| Private | 89 → 2993 | 90 → 3001 |
+| Auto chat | 92 → 2994 | 93 → 3002 |
+| Broadcast | 94 → 2995 | 95 → 3003 |
+| Friends chat | 97 → 2996 | 98 → 3004 |
+| Clan chat | 99 → 2997 | 100 → 3005 |
+| Incoming trade request | 101 → 2998 | 102 → 3006 |
+| Incoming challenge request | 103 → 2999 | 104 → 3007 |
+| Guest clan chat | 105 → 3060 | 106 → 3061 |
+| Ironman Group chat | 193 → 3191 | 194 → 3194 |
+| Clan broadcasts | 196 → 3192 | 197 → 3195 |
+| Ironman Group broadcasts | 198 → 3193 | 199 → 3196 |
+| 'Did you know?' | 434 → 4697 | 435 → 4698 |
+
+Split private chat: Private 91 → varp 3008, Broadcast 96 → 3009. The reset rows clear their group's varps: 107 opaque, 108 transparent, 109 split. `server/tests/settings-chat-colours.test.cjs` checks every row against script 4181 and its struct.
 
 ## Quest list preferences (cache 241)
 
@@ -183,7 +228,7 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
   - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
   - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
   - The respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77) and the Sailing drop-item warning (465, default differs between captures).
-  - Rows already handled elsewhere: teleport spells 60-64, levers 253, Ferox 255, drink crate 455.
+  - Rows already handled elsewhere: teleport spells 60-64; levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
 
 ## Rows that switch existing behaviour
 

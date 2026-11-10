@@ -1193919,7 +1193919,7 @@
               "text": "Yes.",
               "steps": [
                 {
-                  "player": "Hey I recognise you two! You were part of the delegation to Varrock!"
+                  "player": "Hey, I recognise you two! You were part of the delegation to Varrock!"
                 },
                 {
                   "type": "line",
@@ -1193989,7 +1193989,7 @@
       ],
       "with-friends-like-these-talking-to-either-ennius-or-furia-tullus-talking-to-either-again-after-starting-the-quest": [
         {
-          "player": "Hey I recognise you two! You were part of the delegation to Varrock!"
+          "player": "Hey, I recognise you two! You were part of the delegation to Varrock!"
         },
         {
           "type": "jump",
@@ -1194042,7 +1194042,7 @@
           "text": "You jest, as your kind often do. Is that how you drown out their screams, I wonder? Is that how you hide your pain?"
         },
         {
-          "player": "Well things got deep very quickly. Is this how you normally introduce yourself to someone?"
+          "player": "Well, things got deep very quickly. Is this how you normally introduce yourself to someone?"
         },
         {
           "type": "line",
@@ -1194350,7 +1194350,7 @@
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
-          "text": "Well let's not start celebrating just yet. There's a reason why we're lurking in this crypt."
+          "text": "Well, let's not start celebrating just yet. There's a reason why we're lurking in this crypt."
         },
         {
           "type": "line",
@@ -1194455,7 +1194455,7 @@
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
-          "text": "Well this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
+          "text": "Well, this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
         },
         {
           "type": "line",
@@ -1194504,7 +1194504,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-73fc2918fba02c65"
+              "branch": "jump-be117e4f5e13e03d"
             }
           ]
         }
@@ -1194551,7 +1194551,7 @@
         {
           "type": "line",
           "speaker": "Ennius Tullus",
-          "text": "Oh... Well let's get to it then. What does the Prince need now?"
+          "text": "Oh... Well, let's get to it then. What does the Prince need now?"
         },
         {
           "player": "He's asked me to investigate the knights who were part of the delegation to Varrock. He suspects one of them may have been involved in the plot to kill the Teokan."
@@ -1194582,7 +1194582,7 @@
         {
           "type": "line",
           "speaker": "Furia Tullus",
-          "text": "Arrun and Claudia should be at the bazaar. Nel will be at the cothon. Velam and Azali are somewhere in Outer Fortis, likely at the pub. Mezan will be at the colosseum."
+          "text": "Arrun and Claudia should be at the bazaar. Nel will be at the cothon. Velam and Azali are somewhere in Outer Fortis, likely at the pub. Mezan will be at the Colosseum."
         },
         {
           "player": "What if any refuse to come?"
@@ -1194680,10 +1194680,10 @@
               ]
             },
             {
-              "text": "Where can I find the colosseum?",
+              "text": "Where can I find the Colosseum?",
               "steps": [
                 {
-                  "player": "Where can I find the colosseum?"
+                  "player": "Where can I find the Colosseum?"
                 },
                 {
                   "type": "line",
@@ -1194698,7 +1194698,7 @@
                 {
                   "type": "jump",
                   "reference": "previous",
-                  "id": "4LiWgB"
+                  "id": "-K4De_"
                 }
               ]
             },
@@ -1194825,12 +1194825,12 @@
               ]
             },
             {
-              "text": "Where can I find the colosseum?",
+              "text": "Where can I find the Colosseum?",
               "steps": [
                 {
                   "type": "jump",
                   "reference": "above",
-                  "id": "Jne-GR"
+                  "id": "q8xRV9"
                 }
               ]
             },
@@ -1194887,7 +1194887,7 @@
           "text": "If the player has the Varlamore crest:",
           "steps": [
             {
-              "player": "Well it just so happens I have this."
+              "player": "Well, it just so happens I have this."
             },
             {
               "type": "message",
@@ -1194897,7 +1194897,7 @@
             {
               "type": "line",
               "speaker": "Knight of Varlamore",
-              "text": "Hmm... Well we're not going anywhere until our work here is done. If you want us back at the palace, you'd best help."
+              "text": "Hmm... Well, we're not going anywhere until our work here is done. If you want us back at the palace, you'd best help."
             },
             {
               "player": "I can do that. What do you need?"
@@ -1194921,7 +1194921,7 @@
               "text": "Beat them at their own game. Go looking through a few pockets."
             },
             {
-              "player": "Well this doesn't sound totally orthodox, but fair enough. I'll be back soon."
+              "player": "Well, this doesn't sound totally orthodox, but fair enough. I'll be back soon."
             }
           ],
           "id": "dzUYzM"
@@ -1194985,7 +1194985,7 @@
           "text": "We'll be there once the thieves are dealt with. It won't take us long."
         },
         {
-          "player": "Well good luck then."
+          "player": "Well, good luck then."
         },
         {
           "type": "message",
@@ -1195145,7 +1195145,7 @@
           "text": "If the player found the weapons crate:",
           "steps": [
             {
-              "player": "Yes, I found it. The ship it's from is called The Fortis Spark."
+              "player": "Yes, I found it. The ship it's from is called the Fortis Spark."
             },
             {
               "type": "line",
@@ -1195193,7 +1195193,7 @@
           "text": "Sorry, but I'm waiting for someone."
         },
         {
-          "player": "Well you might need to meet with them some other time. You're needed back at the palace."
+          "player": "Well, you might need to meet with them some other time. You're needed back at the palace."
         },
         {
           "type": "line",
@@ -1195259,7 +1195259,7 @@
             {
               "type": "line",
               "speaker": "Knight of Varlamore",
-              "text": "Yes! Join me in the colosseum for some training. Once we're done, I'll return to the palace."
+              "text": "Yes! Join me in the Colosseum for some training. Once we're done, I'll return to the palace."
             },
             {
               "type": "line",
@@ -1195411,7 +1195411,7 @@
         {
           "type": "line",
           "speaker": "Knight of Varlamore",
-          "text": "Well look who it is!"
+          "text": "Well, look who it is!"
         },
         {
           "player": "Er... I don't know you."
@@ -1195491,7 +1195491,7 @@
               "text": "There's one outside the gates just to the east of here... But how does a fountain help?"
             },
             {
-              "player": "Well there's nothing like a little dunk to sober you up a bit. Azali, come with me."
+              "player": "Well, there's nothing like a little dunk to sober you up a bit. Azali, come with me."
             },
             {
               "type": "condition",
@@ -1195659,7 +1195659,7 @@
           "text": "Not exactly."
         },
         {
-          "player": "Well it will have to do. You're needed over at the palace."
+          "player": "Well, it will have to do. You're needed over at the palace."
         },
         {
           "type": "line",
@@ -1195707,7 +1195707,7 @@
           "text": "Six knights, but likely only one traitor. How do you intend to work out who it is?"
         },
         {
-          "player": "Well I'm going to guess asking nicely won't work."
+          "player": "Well, I'm going to guess asking nicely won't work."
         },
         {
           "type": "line",
@@ -1195901,7 +1195901,7 @@
         {
           "type": "line",
           "speaker": "Ennius Tullus",
-          "text": "Well it's done now, so little point dwelling on it."
+          "text": "Well, it's done now, so little point dwelling on it."
         },
         {
           "player": "Little point..."
@@ -1195958,7 +1195958,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-eed2b695ab6bff72"
+              "branch": "jump-59e31952bb5e2b97"
             }
           ]
         }
@@ -1196000,7 +1196000,7 @@
                 {
                   "type": "line",
                   "speaker": "Regulus Cento",
-                  "text": "Ah, kuani! Well you'll be pleased to know that Prince Itzla has already granted me permission to give you your very own quetzal, free of charge!"
+                  "text": "Ah, kuani! Well, you'll be pleased to know that Prince Itzla has already granted me permission to give you your very own quetzal, free of charge!"
                 },
                 {
                   "player": "My own quetzal?"
@@ -1196304,7 +1196304,7 @@
           "text": "Tetamo! One of my own knights! I will need to swiftly deal with this."
         },
         {
-          "player": "Well there's actually no need. Ennius killed him as soon as we found out."
+          "player": "Well, there's actually no need. Ennius killed him as soon as we found out."
         },
         {
           "type": "line",
@@ -1196483,7 +1196483,7 @@
           "text": "Think of all that we believe to know. All those words we have read. How many were the truth, I wonder."
         },
         {
-          "player": "Okay, well before we go down another rabbit hole, I'm looking for information on the Final Dawn."
+          "player": "Okay, well, before we go down another rabbit hole, I'm looking for information on the Final Dawn."
         },
         {
           "type": "line",
@@ -1196651,57 +1196651,92 @@
           "player": "What do we do now?"
         },
         {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
-        },
-        {
-          "type": "action",
-          "text": "Congratulations! Quest complete!",
-          "id": "NyygQH"
-        },
-        {
-          "player": "So what's this plan you mentioned?"
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
-        },
-        {
-          "type": "choice",
-          "prompt": "Start The Heart of Darkness quest?",
-          "options": [
+          "type": "condition",
+          "text": "If the player does not meet all of the requirements to start The Heart of Darkness:",
+          "steps": [
             {
-              "text": "Yes.",
-              "steps": [
-                {
-                  "type": "missing",
-                  "id": "IWaxPM"
-                }
-              ],
-              "hook": "quest:the-heart-of-darkness:start",
-              "quest": "The Heart of Darkness"
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "I'm not sure... yet. No doubt mother will quickly learn about what happened here. While we wait to hear from her, I'll get thinking about what our next move should be."
             },
             {
-              "text": "No.",
-              "steps": [
+              "player": "In that case, I'll make sure to keep checking in."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Thank you, iknami. Timoiva for now, and may the sun light your way."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "eBNzWh"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Yuos3g"
+        },
+        {
+          "type": "condition",
+          "text": "If the player meets all of the requirements to start The Heart of Darkness:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "cTofpK"
+            },
+            {
+              "player": "So what's this plan you mentioned?"
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
+            },
+            {
+              "type": "choice",
+              "prompt": "Start The Heart of Darkness quest?",
+              "options": [
                 {
-                  "player": "Fair point. I'll be back once I'm ready."
+                  "text": "Yes.",
+                  "steps": [
+                    {
+                      "type": "missing",
+                      "id": "8rD5En"
+                    }
+                  ],
+                  "hook": "quest:the-heart-of-darkness:start",
+                  "quest": "The Heart of Darkness"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Prince Itzla Arkan",
-                  "text": "I'll be here, [player name]."
+                  "text": "No.",
+                  "steps": [
+                    {
+                      "player": "Fair point. I'll be back once I'm ready."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Prince Itzla Arkan",
+                      "text": "I'll be here, [player name]."
+                    }
+                  ]
                 }
               ]
             }
-          ]
+          ],
+          "id": "Qrc8Tz"
         }
       ],
       "the-twilight-emissaries-talking-to-prince-itzla-arkan-after-the-guard-leaves": [
@@ -1196716,7 +1196751,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-3963cb85f3fc02d6"
+              "branch": "jump-0eb5de3f05bb7cd2"
             }
           ]
         }
@@ -1196939,7 +1196974,7 @@
           "type": "end"
         }
       ],
-      "jump-73fc2918fba02c65": [
+      "jump-be117e4f5e13e03d": [
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
@@ -1197009,7 +1197044,7 @@
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
-          "text": "Well this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
+          "text": "Well, this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
         },
         {
           "type": "line",
@@ -1197069,7 +1197104,7 @@
           "type": "end"
         }
       ],
-      "jump-eed2b695ab6bff72": [
+      "jump-59e31952bb5e2b97": [
         {
           "type": "line",
           "speaker": "Ennius Tullus",
@@ -1197081,7 +1197116,7 @@
         {
           "type": "line",
           "speaker": "Ennius Tullus",
-          "text": "Well it's done now, so little point dwelling on it."
+          "text": "Well, it's done now, so little point dwelling on it."
         },
         {
           "player": "Little point..."
@@ -1197119,62 +1197154,97 @@
           "type": "end"
         }
       ],
-      "jump-3963cb85f3fc02d6": [
+      "jump-0eb5de3f05bb7cd2": [
         {
           "player": "What do we do now?"
         },
         {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
-        },
-        {
-          "type": "action",
-          "text": "Congratulations! Quest complete!",
-          "id": "NyygQH"
-        },
-        {
-          "player": "So what's this plan you mentioned?"
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
-        },
-        {
-          "type": "choice",
-          "prompt": "Start The Heart of Darkness quest?",
-          "options": [
+          "type": "condition",
+          "text": "If the player does not meet all of the requirements to start The Heart of Darkness:",
+          "steps": [
             {
-              "text": "Yes.",
-              "steps": [
-                {
-                  "type": "missing",
-                  "id": "IWaxPM"
-                }
-              ],
-              "hook": "quest:the-heart-of-darkness:start",
-              "quest": "The Heart of Darkness"
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "I'm not sure... yet. No doubt mother will quickly learn about what happened here. While we wait to hear from her, I'll get thinking about what our next move should be."
             },
             {
-              "text": "No.",
-              "steps": [
+              "player": "In that case, I'll make sure to keep checking in."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Thank you, iknami. Timoiva for now, and may the sun light your way."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "eBNzWh"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Yuos3g"
+        },
+        {
+          "type": "condition",
+          "text": "If the player meets all of the requirements to start The Heart of Darkness:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "cTofpK"
+            },
+            {
+              "player": "So what's this plan you mentioned?"
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
+            },
+            {
+              "type": "choice",
+              "prompt": "Start The Heart of Darkness quest?",
+              "options": [
                 {
-                  "player": "Fair point. I'll be back once I'm ready."
+                  "text": "Yes.",
+                  "steps": [
+                    {
+                      "type": "missing",
+                      "id": "8rD5En"
+                    }
+                  ],
+                  "hook": "quest:the-heart-of-darkness:start",
+                  "quest": "The Heart of Darkness"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Prince Itzla Arkan",
-                  "text": "I'll be here, [player name]."
+                  "text": "No.",
+                  "steps": [
+                    {
+                      "player": "Fair point. I'll be back once I'm ready."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Prince Itzla Arkan",
+                      "text": "I'll be here, [player name]."
+                    }
+                  ]
                 }
               ]
             }
-          ]
+          ],
+          "id": "Qrc8Tz"
         }
       ],
       "e5GbYF": [

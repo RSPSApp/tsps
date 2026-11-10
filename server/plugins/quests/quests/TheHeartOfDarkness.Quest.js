@@ -209,11 +209,19 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     return request.complete === true;
   }
 
-  function meetsRequirements(player) {
+  function meetsSkillRequirements(player) {
     const skills = player.getSkillManager();
     return skills.getMaxLevel(Skill.MINING) >= 55 && skills.getMaxLevel(Skill.THIEVING) >= 48
-      && skills.getMaxLevel(Skill.SLAYER) >= 48 && skills.getMaxLevel(Skill.AGILITY) >= 46
-      && isQuestComplete(player, TWILIGHTS_PROMISE_KEY);
+      && skills.getMaxLevel(Skill.SLAYER) >= 48 && skills.getMaxLevel(Skill.AGILITY) >= 46;
+  }
+
+  function meetsRequirements(player) {
+    return meetsSkillRequirements(player) && isQuestComplete(player, TWILIGHTS_PROMISE_KEY);
+  }
+
+  /** Twilight's Promise picks its ending as it finishes, so it asks for everything but itself. */
+  function answerRequirements(request) {
+    if (request?.player) request.met = meetsSkillRequirements(request.player);
   }
 
   function recruitBits(player) {
@@ -1037,6 +1045,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("heart-of-darkness:requirements", answerRequirements);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:line", handleInitiationEnd);

@@ -139,14 +139,23 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const GATE_OBJECT_ID = ObjectIdentifiers.GATE_295; // 50861, vmq2_temple_gate
   const GATE_OPEN_OBJECT_ID = ObjectIdentifiers.GATE_296; // 50862
   const GATEWAY_OBJECT_ID = 38848; // the nameless loc the capture swaps onto the gate
-  /** "A Matter of Intrigue" (archive track 810), unlocked and played in the temple during the quest. */
-  const TEMPLE_QUEST_TRACK = 810;
+  /**
+   * Each scene's own track as its instance loads (rev 242 capture): Mezan's spar vmq1_cs3_01 775
+   * (tick 1984), the judgement "A Matter of Intrigue" 810 (2290, where it unlocks; the crypt gate
+   * plays nothing of its own), the battle and aftermath vmq1_cs2_01 774 (2539, 2764). The area's own
+   * music comes back as each ends (787 at tick 2352). Ours: the captured secondary tracks (774 under
+   * 810, 810 under 774) aren't sent, as the server has no midi_song_withsecondary.
+   */
+  const SCENE_MUSIC = { mezan: 775, verdict: 810, battle: 774, aftermath: 774 };
   const GATE_TILE = { x: 1698, y: 9496 };
   const CRATE_OBJECT_ID = 50870; // vmq2_cothon_crate
   const CRATES_OBJECT_ID = 50871; // vmq2_cothon_crates
   const WEAPON_CRATE_TILE = { x: 1778, y: 3149 };
   const CHEST_OBJECT_IDS = [50863, 50864, 50865, 50866, 50867, 50868]; // vmq2_knight_1..6_chest
-  const LETTER_CHEST_IDS = [50865, 50866]; // the south-eastern room's two chests
+  // The letter is always in Velam's chest, vmq2_knight_4_chest at 1648,3142 on the south wall of the
+  // south-east room (both live recordings: rev 226 rec 1695 and the rev 242 capture; Quest Helper's
+  // step). An older version of this plugin picked one of two chests at random, which no source has.
+  const LETTER_CHEST_ID = 50866;
   const OPEN_CHEST_OBJECT_ID = 50869;
   const CHEST_OPEN_TICKS = 2;
 
@@ -188,12 +197,24 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const MEZAN_PRAYER_STREAK = 4;
   const MEZAN_PRAYER_LINES = ["Ralos will defend me!", "Ralos' light protects me!", "Shield me, Ralos!"];
 
-  // Scenes, at the capture's tiles (the live game plays them in instances).
+  // Scenes, at the capture's tiles: their playable boxes, in source coordinates.
   const PALACE_BOUNDS = [[1665, 1700, 3145, 3170, 0]];
   const FOUNTAIN_BOUNDS = [[1745, 1770, 3058, 3080, 0]];
   const ARENA_BOUNDS = [[1806, 1842, 3088, 3128, 0]];
   const TEOMAT_BOUNDS = [[1425, 1465, 3140, 3205, 0]];
   const COLOSSEUM_LOBBY_TILE = [1803, 9521, 0];
+  // Live plays each scene in an instance (rev 242 capture rebuild_region): 13 x 13 chunks of every
+  // plane, unturned, from these source chunks (ticks 1855, 1984, 2290, 2539 and 2764). The aftermath
+  // copies the Teomat again, a chunk further south.
+  const SCENE_SOURCE_CHUNKS = {
+    fountain: [213, 377], mezan: [222, 381], verdict: [204, 388], battle: [174, 391], aftermath: [174, 390],
+  };
+  // Where a logout, a death or a server stop inside each scene comes back to.
+  const SCENE_EXITS = {
+    fountain: [1756, 3070, 0], mezan: COLOSSEUM_LOBBY_TILE, verdict: [1683, 3156, 0], battle: [1441, 3179, 0],
+    aftermath: [1453, 3173, 0],
+  };
+  const SCENE_EXIT_ATTRIBUTE = "twilights-promise:scene-exit";
   const BATTLE_CULTISTS = [
     { id: 12921, tile: [1434, 3167], face: [1440, 3172], partner: 1 },
     { id: 12923, tile: [1438, 3172], face: [1440, 3172], partner: 1 },
@@ -287,10 +308,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
     CRYPT: "Yes you are. He is speaking with Servius, down in the crypt. Not a place you'd normally find the Teokan of Ralos, but the Prince desired the privacy only Ranul can offer.",
     MET_PRINCE: "You're quite right, of course. But anyway, shall we get down to business?",
     TWINS: "Then it sounds like we're all set. Timoiva, and may the sun light your way!",
-    BAZAAR_ASKED: "Well this doesn't sound totally orthodox, but fair enough. I'll be back soon.",
+    BAZAAR_ASKED: "Well, this doesn't sound totally orthodox, but fair enough. I'll be back soon.",
     COTHON_ASKED: "Good to know. I'll get to it and let you know what I find.",
     COTHON_DONE: "Perfect! That's my work here done then. I'll return to the palace shortly. Timoiva!",
-    PUB_ASKED: "Well there's nothing like a little dunk to sober you up a bit. Azali, come with me.",
+    PUB_ASKED: "Well, there's nothing like a little dunk to sober you up a bit. Azali, come with me.",
     AZALI_COMES: "Ohh... We're going somewhere new? How exciting!",
     PUB_DONE: "This day is the worst. Fine, I'll head over there soon.",
     MEZAN_ASKED: "Oh, and bring two attack styles in with you. I want some variety, and it will help me test my faith in Ralos.",
@@ -303,7 +324,12 @@ module.exports = function registerTwilightPromiseQuest(api) {
     LIBRARY: "Right, I'll go and see if she can help me.",
     BATTLE: "I guess I'd better...",
     CALL_OUT: "[player name]! I need you outside, now! We have a little bit of an issue!",
+    // The two endings complete at different moments, both captured. Meeting The Heart of
+    // Darkness's requirements, as this line shows (rec 1695 tick 2411: varbit, line and scroll
+    // together; the offer follows once the scroll is closed). Below them, as the player continues
+    // past "Timoiva for now" (rev 242 capture tick 2794).
     COMPLETE: "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami.",
+    COMPLETE_UNMET: "Thank you, iknami. Timoiva for now, and may the sun light your way.",
   };
 
   // Transcript steps the plugin plays itself.
@@ -327,13 +353,12 @@ module.exports = function registerTwilightPromiseQuest(api) {
     OPEN_MAP: "0GSFPb",
     AFTERMATH: "Nmr-Yg",
     GUARD_LEAVES: "rp2e-K",
-    COMPLETE: "NyygQH",
+    COMPLETE: new Set(["eBNzWh", "cTofpK"]), // the two endings' "Quest complete!" actions
     FEED_TAIL: "BN2pDG",
   };
 
   const RECRUITS_ATTRIBUTE = "quest.twilights_promise.recruits";
   const FLAGS_ATTRIBUTE = "quest.twilights_promise.flags";
-  const LETTER_CHEST_ATTRIBUTE = "quest.twilights_promise.letter-chest";
   const STAGE_VERSION_ATTRIBUTE = "twilights-promise:stage-version";
   const STAGE_VERSION = 1;
   const OLD_FLAG_MESSAGE_READ = 1 << 0;
@@ -346,7 +371,14 @@ module.exports = function registerTwilightPromiseQuest(api) {
   let quest;
   const followers = new Map();
   const mezanStreaks = new WeakMap();
-  const Scenes = createQuestScenes(api, { onEnd: sceneEnded });
+  const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
+
+  /** One of the quest's scenes, in its captured instance, with the player placed at `at`. */
+  function openScene(player, name, bounds, rules, at) {
+    return Scenes.open(player, name, bounds, { ...rules, musicTrack: SCENE_MUSIC[name] }, {
+      instance: { sourceChunk: SCENE_SOURCE_CHUNKS[name] }, at, exit: SCENE_EXITS[name],
+    });
+  }
 
   // ==========================================================================
   // State
@@ -381,6 +413,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
     if (current < STAGE_RECRUIT || current >= STAGE_HQ) return 0;
     if (recruit(player, PUB) >= 2) return 3;
     return following(player) ? 2 : 1;
+  }
+
+  /** The Heart of Darkness's other requirements; this quest, the last one, is finishing as it's asked. */
+  function meetsHeartOfDarknessRequirements(player) {
+    const request = { player, met: null };
+    api.emitCustomEvent("heart-of-darkness:requirements", request);
+    return request.met === true;
   }
 
   function isQuestComplete(player, key) {
@@ -490,8 +529,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return V.TWINS_REGULUS;
   }
 
+  /** The Teomat's actors are judged where they stand in the real world, inside a scene's copy too. */
   function atTeomat(npc) {
-    return (npc?.getLocation?.()?.getX?.() ?? 9999) < 1600;
+    const at = npc?.getLocation?.() ? Scenes.toSource(npc) : null;
+    return (at?.getX?.() ?? 9999) < 1600;
   }
 
   function selectMetzliVariant(player, npc) {
@@ -561,6 +602,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
         return !isQuestComplete(player, GARDEN_OF_DEATH_KEY);
       case "kmDUvy":
         return isQuestComplete(player, GARDEN_OF_DEATH_KEY);
+      // The ending: whether The Heart of Darkness could start once this quest is done.
+      case "Yuos3g":
+        return !meetsHeartOfDarknessRequirements(player);
+      case "Qrc8Tz":
+        return meetsHeartOfDarknessRequirements(player);
       default:
         return null;
     }
@@ -579,6 +625,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     player.setAttribute(RECRUITS_ATTRIBUTE, 0);
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
     quest.setStage(player, STAGE_STARTED);
+    // Starting the quest also ends the first trip's welcome (vmq2_first_travel 3 -> 4, capture tick 1117).
+    api.emitCustomEvent("quetzal:first-trip-welcomed", { player });
     player.sendMessage("You've started a new quest: <col=081190>Twilight's Promise</col>");
   }
 
@@ -634,6 +682,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
     at(LINES.BATTLE, STAGE_LIBRARY, STAGE_LIBRARY, () => advance(player, STAGE_BATTLE));
     if (text === LINES.CALL_OUT) event.after = () => stage(player) === STAGE_BATTLE && beginBattle(player);
     at(LINES.COMPLETE, STAGE_GUARD_LEFT, STAGE_GUARD_LEFT, () => quest.complete(player));
+    if (text === LINES.COMPLETE_UNMET) {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        if (stage(player) === STAGE_GUARD_LEFT) quest.complete(player);
+      };
+    }
   }
 
   const MESSAGE_BOXES = {
@@ -704,11 +759,12 @@ module.exports = function registerTwilightPromiseQuest(api) {
         event.end = true;
         api.emitCustomEvent("quetzal:open", { player });
         return;
-      case STEP.COMPLETE:
-        event.handled = true;
-        return;
       default:
         break;
+    }
+    if (STEP.COMPLETE.has(stepId)) {
+      event.handled = true;
+      return;
     }
     if (STEP.FEED.has(stepId)) {
       if (!held(player, FEED_ITEM_ID)) player.getInventory().adds(FEED_ITEM_ID, 1);
@@ -773,23 +829,14 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
-  function letterChest(player) {
-    let chest = player.getAttribute(LETTER_CHEST_ATTRIBUTE);
-    if (!LETTER_CHEST_IDS.includes(chest)) {
-      chest = LETTER_CHEST_IDS[Math.floor(Math.random() * LETTER_CHEST_IDS.length)];
-      player.setAttribute(LETTER_CHEST_ATTRIBUTE, chest);
-    }
-    return chest;
-  }
-
-  /** The letter's chest opens for two ticks as it is searched (equal odds of either south-eastern chest). */
+  /** Velam's chest opens for two ticks as the letter is found; every other chest has nothing. */
   function openChest(event) {
     const id = event.definition?.id ?? event.objectId;
     if (!CHEST_OBJECT_IDS.includes(id)) return false;
     event.handled = true;
     const { player } = event;
     const current = stage(player);
-    if (current !== STAGE_HQ && !(current >= STAGE_LETTER && current < STAGE_VERDICT_DONE) || id !== letterChest(player)) {
+    if (current !== STAGE_HQ && !(current >= STAGE_LETTER && current < STAGE_VERDICT_DONE) || id !== LETTER_CHEST_ID) {
       play(player, ENNIUS_NPC_ID, V.CHEST_WRONG);
       return true;
     }
@@ -822,12 +869,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return loc;
   }
 
-  /** The quest's own track, first heard as the crypt gate opens; completion unlocks it as well. */
-  function playTempleTrack(player) {
-    api.emitCustomEvent("music:unlock-track", { player, trackId: TEMPLE_QUEST_TRACK });
-    player.getPacketSender().sendSong(TEMPLE_QUEST_TRACK);
-  }
-
   /** The crypt gate lets the player through and shuts two ticks after they cross, as captured. */
   function handleGate(request) {
     if (request.handled || request.objectId !== GATE_OBJECT_ID) return;
@@ -845,7 +886,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
     const [dx, dy] = [[-1, 0], [0, 1], [1, 0], [0, -1]][face];
     const gateway = placeGateLoc(GATEWAY_OBJECT_ID, location.getX(), location.getY(), location.getZ(), face);
     const open = placeGateLoc(GATE_OPEN_OBJECT_ID, location.getX() + dx, location.getY() + dy, location.getZ(), (face + 1) & 3);
-    if (stage(player) < STAGE_COMPLETE) playTempleTrack(player);
     ObstacleRunner.run({ player, object }, [{ walk: [[crossing.destination.x, crossing.destination.y]] }], {
       // The gate shut two ticks after the player crossed, never two ticks after the click: a
       // route to the gate from a distance must not finish with it already closed.
@@ -999,9 +1039,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
     Scenes.later(player, 2, () => {
-      const scene = Scenes.open(player, "fountain", FOUNTAIN_BOUNDS);
+      const scene = openScene(player, "fountain", FOUNTAIN_BOUNDS, {}, [1756, 3070, 0]);
       Scenes.controls(player, true, true);
-      player.moveTo(new Location(1756, 3070, 0));
       Scenes.face(player, [1757, 3069]);
       syncSideVarbits(player);
       const azali = Scenes.actor(scene, AZALI_ACTOR_ID, [1753, 3068], [1755, 3068]);
@@ -1011,14 +1050,14 @@ module.exports = function registerTwilightPromiseQuest(api) {
       Scenes.later(scene, 1, () => Scenes.camera(player, [1760, 3060, 650], [1757, 3072, 350]));
       Scenes.later(scene, 3, () => {
         Scenes.fade(player, false);
-        azali?.getMovementQueue().addSteps(new Location(1755, 3068, 0));
+        Scenes.walk(azali, [1755, 3068, 0]);
       });
       Scenes.later(scene, 5, () => {
         // The last two tiles walk into the fountain's own tile. The cache clips it and the
         // fountain actor stands on it, so the walk takes the scripted clipping exemption;
         // the earlier approach stays ordinary. The flag goes before the splash.
         azali?.setFlag?.(IGNORE_CLIPPING_FLAG);
-        azali?.getMovementQueue().addSteps(new Location(1757, 3068, 0));
+        Scenes.walk(azali, [1757, 3068, 0]);
       });
       Scenes.later(scene, 9, () => {
         azali?.removeFlag?.(IGNORE_CLIPPING_FLAG);
@@ -1055,8 +1094,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.controls(player, true);
     Scenes.later(player, 2, () => {
       player.getDialogueManager().reset();
-      const scene = Scenes.open(player, "mezan", ARENA_BOUNDS, { canAttack: canAttackInArena });
-      player.moveTo(new Location(1824, 3102, 0));
+      const scene = openScene(player, "mezan", ARENA_BOUNDS, { canAttack: canAttackInArena }, [1824, 3102, 0]);
       Scenes.face(player, [1824, 3103]);
       scene.mezan = Scenes.actor(scene, MEZAN_FIGHTER_ID, [1824, 3108], [1824, 3102]);
       Scenes.loc(scene, { id: 50872, x: 1823, y: 3091, face: 1 });
@@ -1172,9 +1210,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
     Scenes.later(player, 2, () => {
-      const scene = Scenes.open(player, "verdict", PALACE_BOUNDS);
+      const scene = openScene(player, "verdict", PALACE_BOUNDS, {}, [1684, 3157, 0]);
       Scenes.controls(player, true, true);
-      player.moveTo(new Location(1684, 3157, 0));
       Scenes.face(player, [1680, 3159]);
       scene.knights = KNIGHT_ACTORS.map((id, index) =>
         Scenes.actor(scene, id, [1677, 3156 + index], [1679, 3156 + index]));
@@ -1185,7 +1222,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       Scenes.later(scene, 2, () => Scenes.fade(player, false));
       Scenes.later(scene, 3, () => {
         scene.ennius?.setPositionToFace(null);
-        scene.ennius?.getMovementQueue().addSteps(new Location(1679, 3156, 0));
+        Scenes.walk(scene.ennius, [1679, 3156, 0]);
       });
       Scenes.later(scene, 6, () => scene.ennius && Scenes.face(scene.ennius, [1676, 3158]));
       Scenes.later(scene, 7, () => play(player, ENNIUS_NPC_ID, V.TWINS_LETTER, after("yqVhSV")));
@@ -1206,8 +1243,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.hold(player);
     if (stepId === STEP.VELAM_STEPS) {
       scene.ennius?.setPositionToFace(null);
-      scene.ennius?.getMovementQueue().addSteps(new Location(1679, 3158, 0));
-      scene.velam?.getMovementQueue().addSteps(new Location(1679, 3159, 0));
+      Scenes.walk(scene.ennius, [1679, 3158, 0]);
+      Scenes.walk(scene.velam, [1679, 3159, 0]);
       Scenes.later(scene, 2, () => scene.velam && Scenes.face(scene.velam, [1679, 3149]));
       Scenes.later(scene, 3, () => play(player, ENNIUS_NPC_ID, V.TWINS_LETTER, after(STEP.VELAM_STEPS)));
       return;
@@ -1226,7 +1263,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     if (stepId === STEP.KNIGHTS_LEAVE) {
       // As captured: up the line to its first knight's tile, east, then out to the south.
       for (const knight of scene.knights.filter((npc) => npc && npc !== scene.velam)) {
-        for (const [x, y] of [[1677, 3156], [1680, 3156], [1681, 3150]]) knight.getMovementQueue().addSteps(new Location(x, y, 0));
+        for (const [x, y] of [[1677, 3156], [1680, 3156], [1681, 3150]]) Scenes.walk(knight, [x, y, 0]);
       }
       Scenes.later(scene, 3, () => {
         advance(player, STAGE_VERDICT_DONE);
@@ -1387,9 +1424,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.controls(player, true);
     Scenes.later(player, 2, () => {
       player.getDialogueManager().reset();
-      const scene = Scenes.open(player, "battle", TEOMAT_BOUNDS, { multi: true, canAttack: canAttackInBattle });
+      const scene = openScene(player, "battle", TEOMAT_BOUNDS, { multi: true, canAttack: canAttackInBattle }, [1441, 3179, 0]);
       scene.kills = 0;
-      player.moveTo(new Location(1441, 3179, 0));
       Scenes.face(player, [1441, 3178]);
       scene.guards = BATTLE_GUARDS.map(({ id, tile, face }) => Scenes.actor(scene, id, tile, face));
       scene.itzla = Scenes.actor(scene, ITZLA_FIGHTER_ID, [1444, 3174], [1444, 3172]);
@@ -1437,7 +1473,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     const partner = cultist?.__tpPartner;
     if (!cultist?.isRegistered?.() || !partner?.isRegistered?.()) return;
     const at = partner.getLocation(), from = cultist.getLocation();
-    Scenes.face(cultist, [at.getX(), at.getY()]);
+    Scenes.face(cultist, at);
     const tile = meleeTile(cultist, partner);
     if (from.getX() !== tile.getX() || from.getY() !== tile.getY()) cultist.getMovementQueue().addSteps(tile);
   }
@@ -1445,8 +1481,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   /** One exchange: the attacker swings, the defender blocks, and the blow takes real hitpoints. */
   function sparHit(attacker, defender, swing, block) {
     const at = attacker.getLocation(), to = defender.getLocation();
-    Scenes.face(attacker, [to.getX(), to.getY()]);
-    Scenes.face(defender, [at.getX(), at.getY()]);
+    Scenes.face(attacker, to);
+    Scenes.face(defender, at);
     attacker.performAnimation(new Animation(swing));
     defender.performAnimation(new Animation(block));
     // These are scripted blows, so neither fighter has a combat target. Refresh the combat
@@ -1511,9 +1547,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
     Scenes.later(current ?? player, 2, () => {
-      const scene = Scenes.open(player, "aftermath", TEOMAT_BOUNDS);
+      const scene = openScene(player, "aftermath", TEOMAT_BOUNDS, {}, [1447, 3173, 0]);
       Scenes.controls(player, true, true);
-      player.moveTo(new Location(1447, 3173, 0));
       Scenes.face(player, [1448, 3173]);
       Scenes.actor(scene, SERVIUS_INJURED_ID, [1453, 3171], [1453, 3175]);
       scene.guard = Scenes.actor(scene, GUARD_ACTOR_ID, [1455, 3172], [1453, 3172]);
@@ -1533,10 +1568,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       player.sendMessage("You leave the battle.");
     }
     if (scene.name === "mezan") player.__tpMezanReady = false;
-    if (logout) {
-      const back = { fountain: [1756, 3070, 0], mezan: COLOSSEUM_LOBBY_TILE, verdict: [1683, 3156, 0], battle: [1441, 3179, 0], aftermath: [1453, 3173, 0] }[scene.name];
-      if (back) player.moveTo(new Location(...back));
-    }
+    // A logout inside is saved at the scene's exit (SCENE_EXITS) by QuestScenes.
   }
 
   // ==========================================================================
@@ -1628,7 +1660,6 @@ module.exports = function registerTwilightPromiseQuest(api) {
 
   api.persistAttribute(RECRUITS_ATTRIBUTE, 0);
   api.persistAttribute(FLAGS_ATTRIBUTE);
-  api.persistAttribute(LETTER_CHEST_ATTRIBUTE);
   api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {

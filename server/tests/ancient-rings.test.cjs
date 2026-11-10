@@ -26,12 +26,14 @@ const RINGS = [
   [33180, "Duke Sucellus"],
 ];
 let kills;
+let equipmentRequirements = true;
 
 before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const api = PluginManager.createApi("AncientRingsRegression");
   AncientRings.register({
     ...api,
+    getPluginConfig: (key, fallback) => key === "quests:equipment-requirements" ? equipmentRequirements : fallback,
     emitCustomEvent(name, request) {
       if (name === "combat-achievements:count") request.total = kills[request.monster] ?? 0;
     },
@@ -82,4 +84,18 @@ test("other items and player bots are not gated", () => {
   kills = {};
   assert.equal(equip(ItemIdentifiers.BERSERKER_RING).event.allow, null);
   assert.equal(equip(ItemIdentifiers.ULTOR_RING, { bot: true }).event.allow, null);
+});
+
+test("disabling quest equipment requirements bypasses every ancient ring boss gate", () => {
+  equipmentRequirements = false;
+  kills = {};
+  try {
+    for (const [ring] of RINGS) {
+      const { event, messages } = equip(ring);
+      assert.equal(event.allow, null);
+      assert.deepEqual(messages, []);
+    }
+  } finally {
+    equipmentRequirements = true;
+  }
 });

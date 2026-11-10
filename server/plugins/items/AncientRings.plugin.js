@@ -35,6 +35,7 @@ function killedBoss(player, monster) {
 }
 
 function canWearRing(event) {
+  if (pluginApi.getPluginConfig("quests:equipment-requirements", true) === false) return;
   const monster = requirements().get(event.item.getId());
   if (!monster || event.player.isPlayerBot?.()) return;
   if (killedBoss(event.player, monster)) return;

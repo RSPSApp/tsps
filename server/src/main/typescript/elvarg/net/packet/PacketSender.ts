@@ -251,7 +251,9 @@ export class PacketSender {
   }
 
   sendSong(id: number, fades?: SongFades): this {
-    if (this.player.getSession().sendClientPacket(encodePlaySong(id, fades))) {
+    const session = this.player.getSession();
+    if (session.sendClientPacket(encodePlaySong(id, fades))) {
+      session.noteSongSent?.(id);
       const { PluginManager } = require("../../plugins/PluginManager") as typeof import("../../plugins/PluginManager");
       PluginManager.emitCustomEvent("audio:play-song", { player: this.player, trackId: id });
     }

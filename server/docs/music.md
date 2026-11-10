@@ -21,6 +21,34 @@ areas), rasterised onto the 64x64 map regions the server selects by. The smalles
 a region's centre wins, so the Colosseum (782), the Twilight Temple (809) and the other small
 areas keep their own track instead of the surrounding one.
 
+## Area shuffle
+
+`data/definitions/music-shuffle-areas.json` lists the music areas that shuffle, each with its
+regions and tracks, from the Wiki's music maps. Any other region plays only the first track of its
+`music-data.json` list: those lists also hold other areas and events that share the 64x64 region
+(Burthorpe and the Warriors' Guild, Title Fight and its win track Victory is Mine), so the later
+entries neither play nor unlock from the region. In Area mode the session starts a random track of
+the area on entering it, and keeps the playing track when the player moves on to another region
+that plays it too. A track plays for its cache length (DB table 44,
+column 3, in ticks) plus one tick. Then the server sends track 147 (silence) with fade-out speed 20
+and sets the current-track varp 3883 to -1; two ticks later it starts another of the area's
+tracks, picked at random but never the one that just ended, with zero fades. An area with one
+track plays it again. Every track started this way unlocks. Ours: a song a plugin sends (a boss
+fight, a minigame) takes over until the next area change, and the area track sent again from its
+start, as the volume restart does, plays its full length from then.
+
+As captured (rsprox, 1,857 track ends in Area mode): the gap is two ticks in all but a few that
+an area change cut short. Tracks started after a gap end exactly length + 1 ticks later (1,482 of
+1,551); tracks started by an area change (with the 60-cycle fade-in) end at length + 1 or length + 3
+about equally, and the server uses + 1. In the 33 multi-track areas seen, none of 247 picks
+repeated the track that had just ended (e.g. 237/04001, Yanille's Big Chords and Magic Dance
+alternating).
+
+The Karuulm Slayer Dungeon (regions 5022-5024 and 5278-5280) is the first shuffle area, from the
+Wiki's music map: Way of the Wyrm, Ful to the Brim and Kanon of Kahlith. The other regions still
+play the single track of the pre-2021 map. `tests/fixtures/music-unbound-area-tracks.json` lists the cache tracks whose hint
+names a place but that no region plays; `tests/music.test.cjs` fails when that list changes.
+
 Quest tracks are the live floor: live unlocks each the first time it plays, somewhere inside the
 quest, and a quest plugin that knows the moment emits `music:unlock-track` there (Below Ice Mountain,
 Meat and Greet). `QuestUnlocks.Music.js` reads every quest-naming hint, and on `quest:completed` the

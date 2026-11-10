@@ -17,6 +17,8 @@ type CachedTrack = {
     parentRowId?: number;
     /** The in-game unlock hint, column 2: "in Varrock.", "during the Dragon Slayer II quest.". */
     unlockHint?: string;
+    /** How long the track plays, in game ticks (column 3). */
+    lengthTicks?: number;
 };
 
 const MUSIC_DATA: MusicData = (() => {
@@ -28,8 +30,35 @@ const MUSIC_DATA: MusicData = (() => {
     }
 })();
 
+const NO_TRACKS: readonly number[] = [];
+
+/**
+ * Music areas that shuffle between several tracks, from the Wiki's music maps. A region outside
+ * them plays only the first track of its `music-data.json` list: those lists also hold other
+ * areas and events that share the 64x64 region.
+ */
+const SHUFFLE_TRACKS_BY_REGION: ReadonlyMap<number, readonly number[]> = (() => {
+    const byRegion = new Map<number, readonly number[]>();
+    try {
+        const data = JSON.parse(fs.readFileSync(path.resolve("data/definitions/music-shuffle-areas.json"), "utf8"));
+        for (const { regions, tracks } of data.areas ?? []) {
+            const list = Object.freeze([...tracks]);
+            for (const region of regions) byRegion.set(region, list);
+        }
+    } catch (error) {
+        console.warn("[music] failed to load music shuffle areas", error);
+    }
+    return byRegion;
+})();
+
 export class Music {
+    /** The silent track. */
+    public static readonly SILENCE_TRACK = 147;
+    /** Native varp holding the playing track's DB row, -1 between tracks. */
+    public static readonly CURRENT_TRACK_VARP = 3883;
     private static tracksCache?: CachedTrack[];
+    private static firstTrackLists = new Map<number, readonly number[]>();
+    private static lengthsById?: Map<number, number>;
 
     private static cachedTracks(): CachedTrack[] {
         if (this.tracksCache) return this.tracksCache;
@@ -46,6 +75,7 @@ export class Music {
                 slot = rowsById.get(parentRowId)?.column(5) ?? [];
             }
             const unlockHint = row.string(2);
+            const lengthTicks = row.int(3, -1);
             return [{
                 rowId: row.id,
                 id,
@@ -54,6 +84,7 @@ export class Music {
                 autoUnlock: row.int(6) === 1,
                 ...(parentRowId >= 0 ? { parentRowId } : {}),
                 ...(unlockHint ? { unlockHint } : {}),
+                ...(lengthTicks > 0 ? { lengthTicks } : {}),
             }];
         });
     }
@@ -70,8 +101,40 @@ export class Music {
         return MUSIC_DATA.trackNames;
     }
 
+    /** The first of the region's area tracks. */
     public static forRegion(regionId: number): number | undefined {
         return MUSIC_DATA.regions[regionId]?.[0];
+    }
+
+    /** The tracks the region's music area plays: a shuffle area's list, else the region's first track. */
+    public static tracksForRegion(regionId: number): readonly number[] {
+        const shuffle = SHUFFLE_TRACKS_BY_REGION.get(regionId);
+        if (shuffle) return shuffle;
+        const first = MUSIC_DATA.regions[regionId]?.[0];
+        if (first === undefined) return NO_TRACKS;
+        let list = this.firstTrackLists.get(regionId);
+        if (!list) this.firstTrackLists.set(regionId, list = Object.freeze([first]));
+        return list;
+    }
+
+    /** How many ticks the track plays for, or undefined when the cache has no length. */
+    public static lengthTicks(trackId: number): number | undefined {
+        if (!this.lengthsById) {
+            this.lengthsById = new Map();
+            for (const { id, lengthTicks } of this.cachedTracks()) {
+                if (lengthTicks !== undefined && !this.lengthsById.has(id)) this.lengthsById.set(id, lengthTicks);
+            }
+        }
+        return this.lengthsById.get(trackId);
+    }
+
+    /**
+     * A random track of the area. When one has just finished, the next is another of the area's
+     * tracks; an area with one track plays it again.
+     */
+    public static pickAreaTrack(tracks: readonly number[], previous = -1, random: () => number = Math.random): number | undefined {
+        const choices = tracks.length > 1 ? tracks.filter((track) => track !== previous) : tracks;
+        return choices.length === 0 ? undefined : choices[Math.floor(random() * choices.length) % choices.length];
     }
 
     public static forInstanceLocation(area: any, x: number, y: number, plane: number): number | undefined {

@@ -307,3 +307,22 @@ test("Fortis items and Corsair Cove coins keep their source floor, membership an
     && d.members === expected.members).length, 1);
   assert.deepEqual(importSpawns(source([glass, coin]), result.definitions).definitions, result.definitions);
 });
+
+test("a source-proven reward projection leaves only the display spawn at that tile", () => {
+ const location = "Gerrant's Fishy Business";
+ const reward = row({page:"White apron", name:"White apron", id:1005, x:3016, y:3229, quantity:1, location});
+ const display = {...reward, page:"Hanging White apron", id:7957, infobox_respawn_ticks:10,
+  pickup_replacement:{id:1005, telegrab_denial:"The apron is on a hook."}};
+ const legacy = [
+  {id:1005, location:{x:3016,y:3229,z:0}, amt:1, respawn:100},
+  {id:1005, location:{x:3009,y:3204,z:0}, amt:1, respawn:100},
+  {id:7957, location:{x:3016,y:3229,z:0}, amt:1, respawn:10},
+ ];
+ const pinned = source([reward, display]);
+ const first = importSpawns(pinned, legacy);
+ assert.deepEqual(first.definitions, [legacy[1], {...legacy[2],
+  pickupReplacement:{id:1005, telegrabDenial:"The apron is on a hook."}}]);
+ assert.equal(first.report.counts["pickup-reward-projection"],1);
+ assert.deepEqual(importSpawns(pinned, first.definitions).definitions, first.definitions);
+ assert.deepEqual(importSpawns(source([reward, {...display, location:"Different source"}]), legacy).definitions, legacy);
+});

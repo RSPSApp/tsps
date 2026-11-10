@@ -163,7 +163,7 @@ export class MagicOnItemPacketListener {
     }
 
     if (!this.canGrabGroundItem(player, groundItem)) return;
-    if (!this.canReceiveGroundItem(player, groundItem.getItem())) {
+    if (!this.canReceiveGroundItem(player, groundItem.getPickupItem())) {
       player.getInventory().full();
       return;
     }
@@ -209,6 +209,11 @@ export class MagicOnItemPacketListener {
 
   /** Generic permission query shared by cast and arrival checks. */
   private canGrabGroundItem(player: any, groundItem: any): boolean {
+    const denial = groundItem.pickupReplacement?.telegrabDenial;
+    if (denial) {
+      player.sendMessage(denial);
+      return false;
+    }
     const request = { player, groundItem, allow: true };
     PluginManager.emitCustomEvent("magic:can-telekinetic-grab", request);
     return request.allow !== false;

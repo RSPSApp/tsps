@@ -111,6 +111,36 @@ These rows only needed wiring: the cache's own scripts (or our client and server
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
   - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
 
+## Buff Bar
+
+The buff bar (interface 651) is mounted at login and drawn by the cache scripts. Every row of Interfaces > Buff Bar is in `settings.json` on the varbit script 6716 (3962 for the dropdown) reads for it, so the scripts hide the whole bar (124, varbit 9528 `buff_bar_hidden`), its tooltips (128, 9529 `buff_bar_tooltips_hidden`) or one buff. Every buff row starts shown, as live. `tests/buff-bar-settings.test.cjs` checks that every row of the section is wired, against both scripts, and that a click hides only its own buff and comes back at login.
+
+| Rows | Varbits |
+| --- | --- |
+| Home and minigame teleport, Tele Block, charge, God Wars altar, dragonfire shield, imbued heart, Vengeance cooldown and active, stamina, prayer enhance, overload, magic imbue, Sire stun, freeze, Staff of the dead, divine, antifire, antipoison (125, 126, 129-145) | 12353-12371 `buff_*_disabled` |
+| Corruption, Mark of Darkness, Shadow Veil, Death Charge, Ward of Arceuus, Resurrection (152-157) | 12405-12410 |
+| Remaining ammo (170), poison damage (186), desert heat (208), cannon ammo (213), desert water (244), cannon decay (246) | 12985, 13084, 13134, 13667, 14166, 14173 |
+| Menaphite remedy and the Tombs of Amascut effects (284-293) | 14287-14296 |
+| Wilderness cave decay (307), Group Woodcutting Bonus (363), Scurrius food pile (369), Deadman blighted overload (385), prayer regeneration (388), goading potion (390), surge potion (437), bowstring spool (443), Vale totem trail (444) | 14691, 15349, 4139, 10946, 11032, 10068, 16239, 17773, 17774 |
+| Woodcutting Leprechaun's Luck (364, dropdown) | 15350 = option |
+
+**Timers.** The bar shows a buff only while the server sends its timer var. `BuffTimers.plugin.js` sends these from the effect's own state each tick, next to the custom varps 7990-7993 the client's infobox timers read:
+
+| Effect | Varbit | Value |
+| --- | --- | --- |
+| Antifire, extended antifire | 3981 `antifire_potion` | time left in steps of 30 ticks |
+| Super antifire, extended super antifire | 6101 `super_antifire_potion` | time left in steps of 20 ticks |
+| Tele Block | 4163 `teleblock_cycles` | ticks left |
+| Stamina potion | 24 `stamina_duration`, 25 `stamina_active` | time left in steps of 10 ticks; 1 while it lasts |
+
+Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too.
+
+- **Not done**:
+  - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
+  - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
+  - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
+  - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
+
 ## Rows owned by other plugins
 
 These features keep their own state and had their own switch before All Settings could change

@@ -63,6 +63,15 @@ export class SecondsTimer {
         return remaining;
     }
 
+    /** Milliseconds left, for countdowns kept in ticks (secondsRemaining() counts whole seconds). */
+    millisRemaining(): number {
+        if (this.seconds === 0) {
+            return 0;
+        }
+        const elapsed = this.running ? (this.pausedAt ?? performance.now()) - this.startTime : 0;
+        return Math.max(0, this.seconds * 1000 - elapsed);
+    }
+
     finished(): boolean {
         if (this.secondsRemaining() === 0) {
             this.stop();

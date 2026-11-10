@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Regenerate server/data/definitions/music-areas.json from the OSRS Wiki's music maps.
+ * Regenerate server/data/definitions/music-areas.json (Modern areas) and music-areas-classic.json
+ * (Classic areas) from the OSRS Wiki's music maps.
  *
  * Input: the Wiki's `music` and `map` buckets, which hold every music track's map polygons
  * (the data behind Template:Music track map and Module:Map polygon). One paged query returns
@@ -13,7 +14,11 @@
  * lists the areas and, per plane and 64x64 region, the area of each tile, run-length encoded.
  * `MAP_PAGES` adds the maps of music map pages whose tracks the buckets hold no map for (one more
  * request, cached too), and `UNMAPPED_AREAS` the few music areas the Wiki's maps don't draw.
- * `--check` reports whether music-areas.json matches what the Wiki data gives, without writing it.
+ * `--check` reports whether both files match what the Wiki data gives, without writing them.
+ *
+ * Classic mode plays a track where the Wiki's historic maps for it ("Location before 2026 and in
+ * Classic mode") put it, and where its current maps put it when those overlap none of its historic
+ * ones (areas added since); a track with no historic map plays as in Modern mode.
  *
  * Needs a built server (`yarn build`) for the cache's track list (DB table 44).
  *
@@ -31,6 +36,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const serverDir = path.resolve(here, "..");
 const outFile = path.join(serverDir, "data", "definitions", "music-areas.json");
+const classicOutFile = path.join(serverDir, "data", "definitions", "music-areas-classic.json");
 
 const WIKI_API = "https://oldschool.runescape.wiki/api.php";
 const USER_AGENT = "tsps-music-import/1.0 (https://github.com/RSPSApp/tsps)";
@@ -197,12 +203,48 @@ function ringArea(ring) {
   return Math.abs(sum) / 2;
 }
 
-/** The Wiki's current music polygons, each with every track whose map holds it. */
+/** The polygons of a map row that the import paints: those of the main map. */
+function rowPolygons(row) {
+  return JSON.parse(row["map.features"])
+    .filter((feature) => feature.geometry?.type === "Polygon" && [-1, 0].includes(feature.properties?.mapID ?? -1))
+    .map((feature) => ({ plane: feature.properties?.plane ?? 0, rings: feature.geometry.coordinates }));
+}
+
+function segmentsCross([[ax, ay], [bx, by]], [[cx, cy], [dx, dy]]) {
+  const side = (px, py, qx, qy, rx, ry) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
+  return side(ax, ay, bx, by, cx, cy) * side(ax, ay, bx, by, dx, dy) < 0
+    && side(cx, cy, dx, dy, ax, ay) * side(cx, cy, dx, dy, bx, by) < 0;
+}
+
+/** Whether two polygons on one plane share ground: a corner of one inside the other, or crossing edges. */
+export function polygonsOverlap(a, b) {
+  if (a.plane !== b.plane) return false;
+  const inside = (point, polygon) => polygon.rings.filter((ring) => insideRing(point, ring)).length % 2 === 1;
+  if (a.rings[0].some((point) => inside(point, b)) || b.rings[0].some((point) => inside(point, a))) return true;
+  const edges = (ring) => ring.map((point, i) => [point, ring[(i + 1) % ring.length]]);
+  return edges(a.rings[0]).some((edge) => edges(b.rings[0]).some((other) => segmentsCross(edge, other)));
+}
+
+/**
+ * The map rows a mode paints. Modern: every current map (`map.is_historic` is absent for those).
+ * Classic: each track's historic maps, plus its current maps that overlap none of them.
+ */
+export function modeRows(rows, classic) {
+  const current = rows.filter((row) => row["map.features"] && row["map.is_historic"] === undefined);
+  if (!classic) return current;
+  const historic = rows.filter((row) => row["map.features"] && row["map.is_historic"] !== undefined);
+  const historicByTitle = new Map();
+  for (const row of historic) historicByTitle.set(row.title, [...(historicByTitle.get(row.title) ?? []), ...rowPolygons(row)]);
+  const added = current.filter((row) => !rowPolygons(row).some((polygon) =>
+    (historicByTitle.get(row.title) ?? []).some((old) => polygonsOverlap(polygon, old))));
+  return [...historic, ...added];
+}
+
+/** The music polygons of the given map rows, each with every track whose map holds it. */
 export function wikiPolygons(rows) {
   const byKey = new Map();
   for (const row of rows) {
-    // `map.is_historic` is absent for current maps.
-    if (!row["map.features"] || row["map.is_historic"] !== undefined) continue;
+    if (!row["map.features"]) continue;
     for (const feature of JSON.parse(row["map.features"])) {
       const { plane = 0, mapID = -1 } = feature.properties ?? {};
       if (feature.geometry?.type !== "Polygon" || (mapID !== -1 && mapID !== 0)) continue;
@@ -262,7 +304,7 @@ export function encodeRuns(grid) {
 
 const byText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS, mapPages = {} }) {
+export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS, mapPages = {}, classic = false }) {
   const byName = new Map();
   for (const track of tracks) {
     const known = byName.get(nameKey(track.name));
@@ -271,7 +313,7 @@ export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS, mapPa
   const unknown = new Set();
   const areas = new Map();
   const polygons = [];
-  const wiki = wikiPolygons(rows);
+  const wiki = wikiPolygons(modeRows(rows, classic));
   // A map page's polygon, for the songs on it that have no map of their own in the buckets.
   const mapped = new Set(wiki.flatMap(({ titles }) => titles));
   for (const text of Object.values(mapPages)) {
@@ -357,24 +399,29 @@ async function main() {
   const rows = await fetchMaps(cache, refresh);
   const mapPages = await fetchMapPages(cache, refresh);
   const tracks = await cacheTracks();
-  const result = buildMusicAreas({ rows, tracks, mapPages });
-  const text = render(result);
-  const regions = Object.values(result.tiles).reduce((sum, plane) => sum + Object.keys(plane).length, 0);
-  console.log(`${result.areas.length} music areas over ${regions} region grids`);
-  if (result.unknown.length) console.log(`Wiki tracks not in the cache: ${result.unknown.join(", ")}`);
-  if (check) {
-    // A checkout may have CRLF line endings.
-    const current = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8").replace(/\r\n/g, "\n") : "";
-    if (current !== text) {
-      console.error("music-areas.json is out of date: run scripts/import-music-areas.mjs");
-      process.exit(1);
+  let stale = false;
+  for (const [file, classic] of [[outFile, false], [classicOutFile, true]]) {
+    const name = path.basename(file);
+    const result = buildMusicAreas({ rows, tracks, mapPages, classic });
+    const text = render(result);
+    const regions = Object.values(result.tiles).reduce((sum, plane) => sum + Object.keys(plane).length, 0);
+    console.log(`${name}: ${result.areas.length} music areas over ${regions} region grids`);
+    if (result.unknown.length) console.log(`Wiki tracks not in the cache: ${result.unknown.join(", ")}`);
+    if (check) {
+      // A checkout may have CRLF line endings.
+      const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n") : "";
+      if (current !== text) {
+        console.error(`${name} is out of date: run scripts/import-music-areas.mjs`);
+        stale = true;
+      } else {
+        console.log(`${name} is up to date`);
+      }
+    } else {
+      fs.writeFileSync(file, text);
+      console.log(`wrote ${path.relative(serverDir, file)}`);
     }
-    console.log("music-areas.json is up to date");
-  } else {
-    fs.writeFileSync(outFile, text);
-    console.log(`wrote ${path.relative(serverDir, outFile)}`);
   }
-  process.exit(0);
+  process.exit(stale ? 1 : 0);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

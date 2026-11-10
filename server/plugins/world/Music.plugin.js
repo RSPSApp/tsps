@@ -21,6 +21,8 @@ const MODE_BUTTONS = new Map([[14, 0], [15, 1], [16, 2]].map(([child, mode]) => 
 const SKIP_BUTTON_UID = (MUSIC_GROUP_ID << 16) | 17;
 /** The playlist dropdown's rows: All music, then playlists 1-3, each at slot 2 * index + 1. */
 const PLAYLIST_DROPDOWN_UID = (MUSIC_GROUP_ID << 16) | 21;
+const PLAYLIST_DROPDOWN_LAST_SLOT = 7;
+const PLAYLIST_DROPDOWN_FLAGS = 2;
 /** A list row's ops 3, 4 and 5 add the track to, or remove it from, playlist 1, 2 or 3. */
 const FIRST_PLAYLIST_OP = 3;
 /** music_current_playlist, bits 14-17 of varp 19: 0 All music, 1-3 a playlist. */
@@ -76,6 +78,8 @@ function enableMusicActions(player) {
     -1,
     MUSIC_NOW_PLAYING_FLAGS,
   );
+  // The playlist dropdown's rows (All music and playlists 1-3, with their spacers), op1.
+  sender.sendInterfaceFlagsRange(PLAYLIST_DROPDOWN_UID, 0, PLAYLIST_DROPDOWN_LAST_SLOT, PLAYLIST_DROPDOWN_FLAGS);
   sender.sendClientScript(MUSIC_NOW_PLAYING_REFRESH_SCRIPT);
 }
 
@@ -419,6 +423,7 @@ function stopMusic(player) {
   player.getSession().setCurrentMusicTrack(-1);
   player.getPacketSender().sendSong(SILENCE_TRACK, PLAYLIST_STOP_FADES);
   player.getPacketSender().sendConfig(CURRENT_MUSIC_TRACK_VARP, -1);
+  player.getPacketSender().sendClientScript(MUSIC_NOW_PLAYING_REFRESH_SCRIPT);
 }
 
 /** A random track of the list now, or silence when it is empty. */

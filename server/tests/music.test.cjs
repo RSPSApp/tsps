@@ -462,6 +462,7 @@ test('music tab restores native jukebox row and now-playing actions after root m
   assert.deepEqual(player.flags, [
     [(239 << 16) | 11, 0, api.core.CacheDefinitions.getDbTableRows(44).length - 1, 62],
     [(239 << 16) | 4, -1, -1, 60],
+    [(239 << 16) | 21, 0, 7, 2], // the playlist dropdown's rows, op1, as live sends at login
   ]);
   assert.deepEqual(player.scripts, [[3936]]);
   const mountedFlags = player.flags.slice();

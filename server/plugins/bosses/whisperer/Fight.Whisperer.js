@@ -1,6 +1,7 @@
 const Common = require('./Common.Whisperer');
 const Specials = require('./Specials.Whisperer');
 const Rewards = require('./Rewards.Whisperer');
+const { sendBossKillCount } = require('../../interface/BossKillCount.plugin');
 const BOSS_NAME = 'Whisperer';
 class Fight {
   constructor(session, boss) {
@@ -484,7 +485,7 @@ function onDeath({ npc }) {
   const count = Math.max((Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1, Number(known.total) || 0);
   player.setAttribute(Common.KILLS_ATTRIBUTE, count);
   player.getPacketSender().sendConfig(Common.data.killCountVarp, count);
-  player.sendMessage(`Your Whisperer kill count is: <col=ff0000>${count}</col>.`);
+  sendBossKillCount(player, `Your Whisperer kill count is: <col=ff0000>${count}</col>.`);
   const ticks = fight.elapsedTicks;
   const best = Number(player.getAttribute(Common.BEST_ATTRIBUTE)) || 0;
   if (!best || ticks < best)

@@ -21,6 +21,7 @@ const Flares = require("./Flares.Yama");
 const Judge = require("./Judge.Yama");
 const PhaseThree = require("./PhaseThree.Yama");
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const SUCCESS_VARP = 4701;
 const BEST_TICKS_ATTRIBUTE = "yama:best-ticks";
@@ -275,7 +276,7 @@ class Fight {
     player.setAttribute(Common.SUCCESS_COUNT_ATTRIBUTE, successes);
     player.setAttribute(Common.LAST_RESULT_ATTRIBUTE, "victorious");
     player.getPacketSender().sendConfig(SUCCESS_VARP, successes);
-    player.sendMessage(`Your Yama success count is: <col=ff0000>${successes}</col>.`);
+    sendBossKillCount(player, `Your Yama success count is: <col=ff0000>${successes}</col>.`);
     const best = Common.count(player, BEST_TICKS_ATTRIBUTE);
     if (!best || ticks < best) {
       player.setAttribute(BEST_TICKS_ATTRIBUTE, ticks);

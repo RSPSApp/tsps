@@ -19,6 +19,7 @@
  */
 const Shared = require("./Shared.RoyalTitans");
 const CombatAchievements = require("./CombatAchievements.RoyalTitans");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 /** Desiccated pages (both tables roll this id). */
 const PAGES_ITEM_ID = 30640;
@@ -161,7 +162,7 @@ function recordKill(player, session, ticks) {
 }
 
 function announceKill(player, kills, ticks) {
-  player.sendMessage(`Your Royal Titans kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Royal Titans kill count is: <col=ff0000>${kills}</col>.`);
   const best = player.getAttribute(Shared.BEST_TICKS_ATTRIBUTE);
   if (!best || ticks < best) {
     player.setAttribute(Shared.BEST_TICKS_ATTRIBUTE, ticks);

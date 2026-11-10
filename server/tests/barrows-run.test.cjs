@@ -146,6 +146,38 @@ test("Barrows: the chest's diary rune line (spam), then 'Your Barrows chest coun
   assert.ok(looter.sent.messages.some((m) => /^Your Barrows chest count is: <col=ff0000>\d+<\/col>\.$/.test(m)), looter.sent.messages.join(" | "));
 });
 
+// rsprox_transcripts/227/00086.txt:233214-233215 (546 times over the recordings): the tunnel's brother rising at the
+// chest says "You dare steal from us!"; a brother woken in his crypt, "You dare disturb my rest!" (226/01694:165530).
+test("Barrows: the brother at the chest says 'You dare steal from us!', one in his crypt 'You dare disturb my rest!'", () => {
+  const shoutOf = (queued) => {
+    const npc = queued.at(-1);
+    const said = [];
+    npc.forceChat = (text) => { said.push(text); return npc; };
+    try { npc.onAdd(); } catch { /* the fixture world has no combat target wiring; the shout comes first */ }
+    return said;
+  };
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  try {
+    const subject = player();
+    arrive(subject, CHEST_ROOM);
+    Object.assign(subject.getAttribute("barrows"), { killed: [], kills: 0, chestOpen: false });
+    Barrows._test.searchChest(subject, 1);
+    assert.equal(queue.length, before + 1, "the tunnel's brother rises");
+    assert.deepEqual(shoutOf(queue), ["You dare steal from us!"]);
+
+    const digger = player();
+    arrive(digger, AHRIM_MOUND);
+    Barrows._test.dig({ player: digger });
+    for (let i = 0; i < 5 && digger.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: digger });
+    const run = digger.getAttribute("barrows");
+    Barrows._test.searchCrypt(digger, [0, 1, 2, 3, 4, 5].find((i) => i !== run.tunnel));
+    assert.deepEqual(shoutOf(queue), ["You dare disturb my rest!"]);
+  } finally {
+    queue.length = before;
+  }
+});
+
 function rewardDraw() {
   const frames = new Error().stack.split("\n");
   return frames[3]?.includes("at randomInt ") && frames[4]?.includes("at rollRewards ");

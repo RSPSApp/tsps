@@ -23785,3 +23785,45 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
   assert.equal(condition(legacyAgain, blue, 'jzxdAM'), true, 'Blue delivery survives another save');
 
 });
+
+test('Giant Dwarf machine accepts coal or logs as the first used item without consuming repeats', t => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/GiantDwarf.Quest')(api);
+  const core = api.core;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'giant_dwarf');
+  const player = new (require('../dist/game/entity/impl/player/Player').Player)(null);
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  quest.setStage(player, 20); player.setAttribute('quest.giant_dwarf.clothes', 2);
+  const handler = handlers.itemOnObject.find(h => h.name === 'handleItemOnObject');
+  const use = itemId => {
+    const event = { player, itemId, objectId: core.ObjectIdentifiers.SPINNING_MACHINE, handled: false };
+    handler(event); return event;
+  };
+  for (const first of [core.ItemIdentifiers.LOGS, core.ItemIdentifiers.COAL]) {
+    player.setAttribute('quest.giant_dwarf.machine', 0);
+    player.getInventory().resetItems();
+    player.getInventory().adds(core.ItemIdentifiers.LOGS, 2);
+    assert.equal(use(first).handled, true);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOGS), 2);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 0);
+    assert.equal(use(core.ItemIdentifiers.TINDERBOX).handled, true);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 0);
+    player.getInventory().adds(core.ItemIdentifiers.COAL, 2);
+    assert.equal(use(first).handled, true);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 1);
+    use(first);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COAL), 1);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOGS), 1);
+  }
+});
+
+test('RFD Murphy leaves at-sea and wreck copies to their own dialogue handlers', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const core = api.core, attrs = new Map([['quest.recipe_for_disaster.stage', 4]]);
+  const player = { getAttribute: key => attrs.get(key), getInventory: () => ({ getAmount: () => 0 }) };
+  const variant = handlers.variant.at(-1);
+  for (const npcId of [core.NpcIdentifiers.MURPHY_2, core.NpcIdentifiers.MURPHY_3, core.NpcIdentifiers.MURPHY_4]) {
+    assert.equal(variant({ player, npcId, pages: [{ page: 'Recipe for Disaster/Freeing Pirate Pete' }] }), null);
+  }
+});

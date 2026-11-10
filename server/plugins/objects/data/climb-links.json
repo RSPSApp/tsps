@@ -23,6 +23,13 @@
       "up": { "id": 17385, "x": 2463, "y": 9897, "z": 0 },
       "down": { "id": 2446, "x": 2463, "y": 3497, "z": 0 },
       "landing": { "x": 2463, "y": 3498, "z": 0 }
+    },
+    {
+      "name": "Ardougne Castle main staircase (the upper flight is walled on its west, north and east sides, so it is only usable from the south; landings match the RuneLite shortest-path transports 2571,3298,0 <-> 2571,3294,1)",
+      "up": { "id": 15645, "x": 2571, "y": 3295, "z": 0 },
+      "down": { "id": 15648, "x": 2571, "y": 3295, "z": 1 },
+      "landing": { "x": 2571, "y": 3294, "z": 1 },
+      "downLanding": { "x": 2571, "y": 3298, "z": 0 }
     }
   ]
 }

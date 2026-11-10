@@ -471,3 +471,33 @@ test('an angler piece is credited to the collection log when it reaches the bank
   assert.deepEqual(obtains.map((event) => [event.itemId, event.amount]), [[ids.items.anglerHat, 1]]);
   Shared.bind({ core, emitCustomEvent: () => {} });
 });
+
+test('the shore a sunk crew swims to is land, not open sea', () => {
+  const [x, y, z] = Shared.DATA.shore;
+  assert.deepEqual([x, y, z], [2658, 3210, 0]);
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(x, y);
+  assert.equal(core.RegionManager.isWater(new core.Location(2672, 3209, 0)), true, 'the old landing was open sea');
+  assert.equal(core.RegionManager.isWater(new core.Location(x, y, z)), false, 'the landing is not a water tile');
+  assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, 'the landing is walkable');
+});
+
+test("Murphy at sea answers with his take-me-back talk, and its wreck action sinks the trip", () => {
+  const Murphy = require('../plugins/minigames/fishingtrawler/Murphy.FishingTrawler');
+  const aboard = fakePlayer({ location: [1887, 4825, 1] });
+  const ashore = fakePlayer({ location: [2668, 3162, 0] });
+  const voyage = new Voyage([aboard], sequence([], 0.99));
+  Sea.sea.voyage = voyage;
+  try {
+    const seaMurphy = core.NpcIdentifiers.MURPHY_2;
+    assert.deepEqual(Murphy.selectVariant({ npcId: seaMurphy, player: aboard }), { page: 'Murphy', variant: 'standard-dialogue-when-at-sea' });
+    assert.equal(Murphy.selectVariant({ npcId: seaMurphy, player: ashore }), null, 'only for the crew aboard');
+    assert.equal(Murphy.selectVariant({ npcId: core.NpcIdentifiers.MURPHY, player: aboard }), null, 'the port Murphy keeps his own talk');
+    Murphy.wreck({ player: aboard, npcId: seaMurphy, stepId: 'nqzBKN' });
+    assert.equal(voyage.ended, true);
+    assert.equal(voyage.result, 'sunk');
+  } finally {
+    Sea.sea.voyage = null;
+  }
+});

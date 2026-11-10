@@ -11,6 +11,7 @@ const { attachLobby } = require("./fishingtrawler/Lobby.FishingTrawler");
 const { attachSea } = require("./fishingtrawler/Sea.FishingTrawler");
 const { attachActions } = require("./fishingtrawler/Actions.FishingTrawler");
 const { attachRewards } = require("./fishingtrawler/Rewards.FishingTrawler");
+const { attachMurphy } = require("./fishingtrawler/Murphy.FishingTrawler");
 
 module.exports = {
   name: "FishingTrawler",
@@ -21,5 +22,6 @@ module.exports = {
     attachLobby(api);
     attachActions(api);
     attachRewards(api);
+    attachMurphy(api);
   },
 };

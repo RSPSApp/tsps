@@ -1,3 +1,4 @@
+import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
 import { applyNpcSpecificEffect } from "./sync/NpcSpecificEffects";
@@ -290,6 +291,7 @@ import { HitsplatFlushController } from "./combat/HitsplatFlushController";
 import { ClientScriptLoader } from "./cs2/ClientScriptLoader";
 import { ClientGroundItemStack, GroundItemStore } from "./data/ground/GroundItemStore";
 import { PlayerEcs } from "./ecs/PlayerEcs";
+import { ModelHighlightManager } from "./highlights/ModelHighlightManager";
 import { TileHighlightManager } from "./highlights/TileHighlightManager";
 import { PlayerInteractionSystem } from "./interactions/PlayerInteractionSystem";
 import { IProjectileManager } from "./interfaces/IProjectileManager";
@@ -409,6 +411,7 @@ const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
 
 // Enum IDs consumed by the stock tab-switch script (914), per game-frame layout.
 const TAB_SWITCH_SCRIPT = 914;
+const AGILITY_OBSTACLE_HIGHLIGHTS_SCRIPT = 5167;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
     "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
@@ -620,6 +623,8 @@ export class OsrsClient {
     readonly sidebar: SidebarStore;
     readonly runeLite: RuneLite;
     readonly clientPlugins: ClientPluginManager = new ClientPluginManager();
+    readonly modelHighlightManager = new ModelHighlightManager();
+    private highlightedAgilityCourse: number | undefined;
     readonly tileHighlightManager: TileHighlightManager = new TileHighlightManager();
 
     /** Current game state (getter for backwards compatibility) */
@@ -4446,6 +4451,13 @@ export class OsrsClient {
 
     private processWidgetTransmits(): void {
         this.widgetTransmitProcessor.processWidgetTransmits();
+        if (!this.isLoggedIn() || !this.cs2Vm) return;
+        const course = this.varManager.getVarbit(AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED) === 1
+            ? this.varManager.getVarbit(HELPER_AGILITY_HIGHLIGHTED_COURSE)
+            : undefined;
+        if (course === this.highlightedAgilityCourse) return;
+        this.highlightedAgilityCourse = course;
+        if (course !== undefined) this.runClientScriptWithInts(AGILITY_OBSTACLE_HIGHLIGHTS_SCRIPT, [course]);
     }
 
     /** Per frame: moves the cursor mouseover box to where the mouse is now (see WidgetTransmitProcessor). */
@@ -8625,6 +8637,10 @@ export class OsrsClient {
      */
     resetWorld(fullReset: boolean = false): void {
         this.continuousMovement?.reset();
+        if (fullReset) {
+            this.modelHighlightManager.reset();
+            this.highlightedAgilityCourse = undefined;
+        }
         this.mobileChatKeyboard?.hide();
         console.log(`[OsrsClient] Resetting world state (fullReset=${fullReset})...`);
 

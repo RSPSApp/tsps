@@ -51,7 +51,7 @@ const SOURCES = {
   "a clue nest": (p) => ClueNests.rollClueNests(p, { petBase: 317647 }),
   "a clue geode": (p) => ClueGeodes.rollClueGeodes({ player: p, skill: core.Skill.MINING, petBase: 211886 }, () => 0),
   "a clue bottle": (p) => ClueBottles.rollClueBottles(p, 1000000, () => 0),
-  "an Agility dispenser clue": (p) => AgilityDispenser.rollClue(p),
+  "an Agility dispenser clue": (p) => AgilityDispenser._test.rollClue(p),
   "a salvage clue": (p) => Salvaging.rollClue(p, { tier: "medium", oneIn: 300 }, () => 0),
 };
 

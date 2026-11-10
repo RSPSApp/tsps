@@ -286,8 +286,8 @@ module.exports = {
   ATTRIBUTES,
   isWatching,
   rollReward,
-  rollClue,
   redeemXp,
+  _test: { rollClue },
   register(pluginApi) {
     api = pluginApi;
     api.persistAttribute(DEPOSIT_ATTRIBUTE, 0);

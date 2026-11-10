@@ -261,6 +261,7 @@ async function main() {
   const deadline = Date.now() + timeoutMs;
   const viewport = (arg("viewport", "1280x800") || "1280x800").split("x").map(Number);
   let proc = null;
+  let cdp = null;
   try {
     const target = new URL(arg("url", defaultUrl()));
     if (arg("user", null)) {
@@ -275,7 +276,6 @@ async function main() {
     // Reap only this invocation's prior browser candidates before probing.
     killOurBrowserProcesses();
     const tried = [];
-    let cdp = null;
     for (const bin of candidates) {
       if (Date.now() > deadline) throw new Error("deadline passed before a browser was ready");
       const attempt = await tryBrowser(bin, viewport, Math.min(deadline - Date.now(), 45000), target.href);
@@ -856,6 +856,17 @@ async function main() {
   } catch (error) {
     summary.error = String(error?.message ?? error);
   } finally {
+    // Config types that threw while decoding (BaseTypeLoader keeps them half-decoded, so they
+    // show as missing locs, NPCs or items rather than a crash). Read on failed runs too.
+    if (cdp) {
+      try {
+        const failures = await Promise.race([
+          cdp.evaluate("Object.fromEntries(globalThis.__typeDecodeFailures ?? [])"),
+          sleep(3000).then(() => null),
+        ]);
+        if (failures && Object.keys(failures).length) summary.typeDecodeFailures = failures;
+      } catch {}
+    }
     if (proc) killBrowser(proc);
   }
   summary.ms = Date.now() - started;

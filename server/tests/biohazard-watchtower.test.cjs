@@ -85,14 +85,17 @@ test("feed use preserves items outside the quest stage, place or plane", () => {
   }
 });
 
-test("missing supplies and unrelated objects cannot advance or consume feed", () => {
-  for (const [feed, cages] of [[0, 1], [2, 0]]) {
-    const player = actor();
-    supplies(player, feed, cages);
-    useFeed(player);
-    assert.equal(quest.getStage(player), 2);
-    assert.equal(amount(player, core.ItemIdentifiers.BIRD_FEED), feed);
-  }
+test("missing feed and unrelated objects cannot advance or consume feed", () => {
+  const empty = actor();
+  supplies(empty, 0, 1);
+  useFeed(empty);
+  assert.equal(quest.getStage(empty), 2);
+  // Live throws the feed with the cage on the ground (rsprox 20261110T121228-5ab63b4, tick 181).
+  const caged = actor();
+  supplies(caged, 2, 0);
+  useFeed(caged);
+  assert.equal(quest.getStage(caged), 3);
+  assert.equal(amount(caged, core.ItemIdentifiers.BIRD_FEED), 1);
   const player = actor();
   supplies(player);
   assert.equal(useFeed(player, 2068).handled, false);

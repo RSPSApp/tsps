@@ -360,8 +360,16 @@ function searchCrypt(player, index) {
   const state = session(player);
   const brother = BROTHERS[index];
   if (index === run.tunnel) {
-    pluginApi.sendMultiChatboxPrompt(player, "You've found a hidden tunnel. Enter?",
-      "Enter", () => enterTunnel(player, run, brother), "Cancel", () => player.getPacketSender().sendInterfaceRemoval());
+    // rsprox_transcripts/226/01694.txt:169415-169442: a message box (and its mesbox chat line), then on continue the
+    // menu "Select an option": "Yeah I'm fearless!" / "No way, that looks scary!".
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, ChatType } = pluginApi.core;
+    const text = "You've found a hidden tunnel, do you want to enter?";
+    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new StatementDialogue(0, text))
+      .add(new ActionDialogue(1, { execute: () => pluginApi.sendMultiChatboxPrompt(player, "Select an option",
+        "Yeah I'm fearless!", () => enterTunnel(player, run, brother),
+        "No way, that looks scary!", () => player.getPacketSender().sendInterfaceRemoval()) })));
   } else if (state.brother || run.killed.includes(index)) {
     player.sendMessage("The sarcophagus appears to be empty.");
   } else {

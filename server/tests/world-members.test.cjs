@@ -58,6 +58,21 @@ test('shipped Rellekka and Hosidius crab coasts allow multicombat without PvP', 
   }
 });
 
+test('Fossil Island mapped multicombat coasts retain their boundaries and plane', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+  const { Location } = require('../dist/game/model/Location');
+  // Wiki map polygons use integer vertices; each tile is sampled at its centre.
+  for (const [y, first, last] of [[3760, 3801, 3825], [3875, 3655, 3663], [3880, 3712, 3720]]) {
+    for (const [x, multi] of [[first - 1, false], [first, true], [last, true], [last + 1, false]]) {
+      const location = new Location(x, y, 0);
+      assert.equal(AreaManager.inMulti({ getArea: () => null, getLocation: () => location }), multi, `${x},${y}`);
+      assert.equal(Wilderness.isPvpArea(location), false, `${x},${y} is not PvP`);
+      assert.equal(Wilderness.isMulti(x, y, 1), false, `${x},${y} on plane 1`);
+    }
+  }
+});
+
 test('allow hooks: first answer wins, no answer is null', () => {
   const api = PluginManager.createApi('MembersHookTest');
   // Experience gains also carry a multiplier (a league profile's rate), so the answer is a pair.

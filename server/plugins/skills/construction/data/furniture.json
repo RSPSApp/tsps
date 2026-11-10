@@ -112,6 +112,7 @@
   {"key": "WOODEN_KITCHEN_TABLE", "experience": 87, "menuRowId": 5569, "buildAnimationId": 3676, "objectIds": [13577], "materials": []},
   {"key": "OAK_KITCHEN_TABLE", "experience": 180, "menuRowId": 5570, "buildAnimationId": 3676, "objectIds": [13578], "materials": []},
   {"key": "TEAK_KITCHEN_TABLE", "experience": 270, "menuRowId": 5571, "buildAnimationId": 3676, "objectIds": [13579], "materials": []},
+  {"key": "SPICE_RACK", "experience": 374, "menuRowId": 5572, "buildAnimationId": 3684, "objectIds": [37621], "materials": []},
   {"key": "WOOD_DINING_TABLE", "experience": 115, "menuRowId": 5573, "buildAnimationId": 3676, "objectIds": [13293], "materials": []},
   {"key": "OAK_DINING_TABLE", "experience": 240, "menuRowId": 5574, "buildAnimationId": 3676, "objectIds": [13294], "materials": []},
   {"key": "CARVED_OAK_TABLE", "experience": 360, "menuRowId": 5575, "buildAnimationId": 3676, "objectIds": [13295], "materials": []},

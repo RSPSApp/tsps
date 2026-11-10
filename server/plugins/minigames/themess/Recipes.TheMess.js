@@ -13,6 +13,7 @@
  */
 
 const Shared = require("./Shared.TheMess");
+const Cooking = require("../../skills/cooking/Common.Cooking");
 const { ITEM } = Shared;
 
 /** Pairs, either order, both consumed; `product` replaces them. */
@@ -48,10 +49,10 @@ const PINEAPPLE_PIZZA = Object.freeze({
  * xp and levels the recipe infoboxes; cooked meat burns until 34 like ordinary meat.
  */
 const COOKS = Object.freeze([
-  { raw: ITEM.RAW_MEAT, cooked: ITEM.COOKED_MEAT, burnt: ITEM.BURNT_MEAT, level: 1, xp: 1, low: 128, high: 512, stopBurn: 34, name: "servery raw meat" },
-  { raw: ITEM.UNCOOKED_PIE, cooked: ITEM.MEAT_PIE, burnt: ITEM.BURNT_PIE, level: 20, xp: 3, low: 78, high: 412, stopBurn: 53, name: "servery uncooked pie" },
-  { raw: ITEM.UNCOOKED_STEW, cooked: ITEM.STEW, burnt: ITEM.BURNT_STEW, level: 25, xp: 4, low: 68, high: 392, stopBurn: 58, name: "servery uncooked stew" },
-  { raw: ITEM.UNCOOKED_PIZZA, cooked: ITEM.PLAIN_PIZZA, burnt: ITEM.BURNT_PIZZA, level: 65, xp: 5, low: 48, high: 352, stopBurn: 68, name: "servery uncooked pizza" },
+  { raw: ITEM.RAW_MEAT, cooked: ITEM.COOKED_MEAT, burnt: ITEM.BURNT_MEAT, level: 1, xp: 1, low: 128, high: 512, name: "servery raw meat" },
+  { raw: ITEM.UNCOOKED_PIE, cooked: ITEM.MEAT_PIE, burnt: ITEM.BURNT_PIE, level: 20, xp: 3, low: 78, high: 412, name: "servery uncooked pie" },
+  { raw: ITEM.UNCOOKED_STEW, cooked: ITEM.STEW, burnt: ITEM.BURNT_STEW, level: 25, xp: 4, low: 68, high: 392, name: "servery uncooked stew" },
+  { raw: ITEM.UNCOOKED_PIZZA, cooked: ITEM.PLAIN_PIZZA, burnt: ITEM.BURNT_PIZZA, level: 65, xp: 5, low: 48, high: 352, name: "servery uncooked pizza" },
 ]);
 const COOK_BY_RAW = new Map(COOKS.map((cook) => [cook.raw, cook]));
 
@@ -118,13 +119,9 @@ function assemblePineapplePizza(player) {
   return true;
 }
 
-/** The Wiki's skilling success roll; stopBurn is a guaranteed success. */
+/** The Wiki's skilling success roll, as every other cooker uses it (it keeps rising past 99). */
 function cookSuccess(recipe, level, random = Math.random) {
-  if (level >= recipe.stopBurn) return true;
-  const successes = 1
-    + Math.floor((recipe.low * (99 - level)) / 98)
-    + Math.floor((recipe.high * (level - 1)) / 98);
-  return random() * 256 < successes;
+  return random() < Cooking.successChance(recipe.low, recipe.high, level);
 }
 
 /** Cooks one item; returns false (with a message) when the level is too low. */

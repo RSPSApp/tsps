@@ -10,13 +10,43 @@
 
 Every food, dough, recipe and wine is in `server/plugins/skills/data/cooking.json`, by cache
 gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntlet.js`. Tests:
-`server/tests/cooking.test.cjs`, `server/tests/cooking-gauntlets.test.cjs`.
+`server/tests/cooking.test.cjs`, `server/tests/cooking-gauntlets.test.cjs`,
+`server/tests/cooking-burn-chances.test.cjs`.
+
+## Burn chances
+
+Each food's `chance` is the Wiki's cooking chart from its page: a low and a high value out of 256
+for each cooker (`fire`, `range`, `lumbridge` for the Lumbridge Castle range, `gauntlets` for
+worn cooking gauntlets at a fire or range). The chance of cooking it at level L is the Wiki's
+skilling success function (Module:Skilling success chart, `interp`):
+
+    (floor(low * (99 - L) / 98 + high * (L - 1) / 98 + 0.5) + 1) / 256, between 0 and 1
+
+`Common.successChance` computes it, for the cookers, the Gauntlet's range (paddlefish, low 155,
+high 368) and the Mess's clay oven. L is the current Cooking level with any boost, and the line
+keeps rising past 99: a food that still burns at 99, such as a shark on a fire, stops burning at
+a higher level (shark: 109 on a range, 125 on a fire; moonlight antelope: 126 and 137, the
+highest). Every charted food stops burning by 150 on every cooker.
+
+- **Hosidius Kitchen.** Its two ranges (clay ovens, object 21302, at 1677,3622 and 1680,3622)
+  add 12 to both values, 25 with the elite Kourend & Kebos Diary (Wiki: Hosidius Kitchen). The
+  clay oven in the mess next door, and the ones at Neitiznot and Nardah, add nothing. The easy
+  diary the Wiki requires to use the kitchen's ranges is not checked.
+- **A roll of 0 burns** anything that can still burn, and a roll at or above the burn chance
+  cooks it, as before.
+- **Foods without a chart** (seaweed and swamp weed, which never fail; the Ruins of Camdozaal
+  fish; the lava eel; the Chambers of Xeric fish and bats except the kyren fish; raw karambwanji)
+  keep a `stopBurn` level and the old straight line from a 42% burn chance at their level to none
+  at `stopBurn`.
+- **Hunters' Rumours.** Graahk, kyatt and pyre fox need 25 rumours, the sunlight and moonlight
+  antelope and the dashing kebbit 50 (Wiki: Hunter meat). The refusal line is ours; the Wiki gives
+  none.
 
 ## Sources
 
-- **The OSRS Wiki:** levels, XP and burn levels from each food's page and
-  [Cooking/Burn level](https://oldschool.runescape.wiki/w/Cooking/Burn_level) (the fire column;
-  a food that never stops burning there is 99). The burnt items come from the
+- **The OSRS Wiki:** levels, XP and cooking charts from each food's page; the stop-burn levels
+  they give agree with [Cooking/Burn level](https://oldschool.runescape.wiki/w/Cooking/Burn_level)
+  to within a level (the Wiki notes that page predates a change to the success roll). The burnt items come from the
   [Burnt fish](https://oldschool.runescape.wiki/w/Burnt_fish) pages (herring and mackerel burn
   to 357, trout, cod, pike and salmon to 343, tuna and bass to 367, sardine to 369, anchovies to
   323), [Cooked rabbit](https://oldschool.runescape.wiki/w/Cooked_rabbit) (burnt meat), and
@@ -139,8 +169,16 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
 
 ## Not covered
 
-Sinew on the Lumbridge range ("What would you like to cook?|Cooked meat|Sinew"), potatoes, stew,
-cakes and the Hosidius Kitchen's lower burn chance.
+- Sinew on a range ("What would you like to cook?|Cooked meat|Sinew"): one raw item with two
+  products needs a menu the cookers do not have.
+- Making chopped onions and sliced mushrooms (a knife and a bowl): the recipes have no tools, so
+  only the cooking of them is here.
+- Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.
+- Roast rabbit and the skewered chompy (iron spit); the Ogre spit-roast for jubbly and chompy,
+  which cook on a fire here.
+- Gnome cuisine beyond the tutorial products (worm hole, veg ball, tangled toad's legs, the other
+  battas and crunchies, the cocktails' drunk dragon), the stuffed snake, fresh monkfish, undead
+  meat and chicken, giant seaweed's six soda ash, and the easy diary for the Hosidius Kitchen.
 
 ## Pending wine limit regression coverage
 

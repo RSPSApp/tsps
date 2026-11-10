@@ -70,7 +70,11 @@ function index() {
   }));
 }
 
-/** Every food a fire or range cooks, by its raw item ({ raw, cooked, burnt, level, xp, stopBurn, ... }); none before init. */
+/**
+ * Every food a fire or range cooks, by its raw item ({ raw, cooked, burnt, level, xp, chance, ... });
+ * none before init. `chance` is the Wiki's low and high values by cooker ({ fire, range,
+ * lumbridge, gauntlets }); a food without a Wiki chart has `stopBurn` instead.
+ */
 function cookables() {
   if (!core) return new Map();
   index();
@@ -100,6 +104,17 @@ function doughData() {
 function wineData() {
   index();
   return wines;
+}
+
+/**
+ * The chance of cooking a food at `level`, from its low and high values out of 256
+ * (Wiki: Module:Skilling success chart, `interp`): a straight line from `low` at level 1 to
+ * `high` at 99. It keeps rising past 99, so levels up to 150 keep lowering the burn chance,
+ * and a food that still burns at 99 stops at a higher level.
+ */
+function successChance(low, high, level) {
+  const value = Math.floor((low * (99 - level)) / 98 + (high * (level - 1)) / 98 + 0.5) + 1;
+  return Math.min(Math.max(value / 256, 0), 1);
 }
 
 /** The Cooking level the skill checks: the current level, raised by content ("skills:level-boost", a league relic's invisible +12). */
@@ -170,7 +185,7 @@ function run(player, step) {
 }
 
 module.exports = {
-  init, gameval, cookables, recipeWith, recipeForProduct, doughData, wineData, level, actionsPerCycle, wearsCookingCape, withArticle,
+  init, gameval, cookables, recipeWith, recipeForProduct, doughData, wineData, successChance, level, actionsPerCycle, wearsCookingCape, withArticle,
   spam, mesbox, sendVarbit, knives, addXp, run,
   get api() { return api; },
   get core() { return core; },

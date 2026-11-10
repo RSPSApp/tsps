@@ -687,6 +687,144 @@ test("owned-boat disposal preserves its owner's replacement private area when th
   replacement.leave(player, false);
 });
 
+/** Runs `run` with every custom event Sailing emits collected as [name, payload]. */
+function withSailingEvents(run) {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const original = PluginManager.emitCustomEvent;
+  const emitted = [];
+  PluginManager.emitCustomEvent = (name, payload) => { emitted.push([name, payload]); };
+  try {
+    return run(emitted);
+  } finally {
+    PluginManager.emitCustomEvent = original;
+  }
+}
+
+test("a guest boards a friend's boat only while its owner is aboard it at that dock, with room", () => {
+  const owner = sailor(), guest = sailor(), second = sailor();
+  Sailing.giveBoat(owner, "raft", DOCK.id);
+  try {
+    assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), "not-aboard", "the owner is ashore");
+    assert.equal(Sailing.boardAsGuest(owner, owner, DOCK.id, 2), "not-aboard", "nobody is their own guest");
+    Sailing.board(owner, DOCK.id);
+    const instance = Sailing.instanceAboard(owner);
+    assert.equal(Sailing.boardAsGuest(owner, owner, DOCK.id, 2), "aboard");
+    assert.equal(Sailing.boardAsGuest(guest, owner, "nowhere", 2), "not-here", "another dock");
+    assert.equal(Sailing.guestRefusal(guest, owner, DOCK.id, 2), null);
+    assert.equal(guest.getArea() ?? null, null, "asking doesn't board");
+
+    withSailingEvents((emitted) => {
+      assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), null);
+      assert.deepEqual(emitted.map(([name]) => name), ["sailing:guest-boarded"], "not an owner's boarding");
+      assert.equal(emitted[0][1].player, guest);
+      assert.equal(emitted[0][1].owner, owner);
+      assert.equal(emitted[0][1].owned, Sailing.activeBoat(owner));
+    });
+    assert.equal(BoatManager.getBoatAboard(guest), instance);
+    assert.equal(Sailing.guestBoat(guest), instance);
+    assert.equal(Sailing.guestBoat(owner), undefined);
+    assert.equal(Sailing.instanceAboard(guest), undefined, "a guest is never the boat's captain");
+    assert.equal(Sailing.ownerOf(instance), owner);
+    assert.deepEqual(Sailing.guestsOf(instance), [guest]);
+    assert.deepEqual(tileOf(guest), tileOf(owner), "both stand on the boarding tile");
+    assert.deepEqual(guest.getSailing().returnPoint, DOCK.landing);
+    assert.equal(guest.getSailing().activeBoatSlot, null, "their own boats are untouched");
+
+    assert.equal(Sailing.boardAsGuest(second, owner, DOCK.id, 2), "full", "a raft holds two players");
+    assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 5), "aboard");
+
+    // Sailed away from the dock, the boat can't be boarded or stepped off there.
+    const { fineX } = instance;
+    instance.fineX += 40 * 128;
+    assert.equal(Sailing.boardAsGuest(second, owner, DOCK.id, 5), "not-here");
+    assert.equal(Sailing.disembarkGuest(guest, DOCK.id), "You can't disembark here.");
+    instance.fineX = fineX;
+
+    // Next to a port the boat never docked at (a level-gated one, say), a guest can't step off.
+    const NEARBY = { id: "guest_test_nearby", mooring: DOCK.mooring, landing: { x: DOCK.landing.x + 3, y: DOCK.landing.y, z: 0 } };
+    Sailing.registerDock(NEARBY);
+    assert.equal(Sailing.disembarkGuest(guest, NEARBY.id), "You can't disembark here.");
+    assert.equal(Sailing.guestBoat(guest), instance, "still aboard");
+    assert.deepEqual(guest.getSailing().returnPoint, DOCK.landing, "and nothing was recorded");
+
+    withSailingEvents((emitted) => {
+      assert.equal(Sailing.disembarkGuest(guest, DOCK.id), null);
+      assert.deepEqual(emitted.map(([name, payload]) => [name, payload.reason]), [["sailing:guest-left", "disembark"]]);
+    });
+    assert.equal(guest.getArea() ?? null, null);
+    assert.deepEqual(tileOf(guest), [DOCK.landing.x, DOCK.landing.y, DOCK.landing.z]);
+    assert.equal(Sailing.instanceAboard(owner), instance, "the boat stays with its owner");
+    assert.equal(Sailing.activeBoat(owner).location.kind, "at_sea");
+  } finally {
+    Sailing.onLogout(owner);
+  }
+});
+
+test("a guest who teleports or logs out leaves the boat without sinking it", () => {
+  const owner = sailor(), guest = sailor();
+  Sailing.giveBoat(owner, "raft", DOCK.id);
+  Sailing.board(owner, DOCK.id);
+  const instance = Sailing.instanceAboard(owner);
+  try {
+    assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), null);
+    instance.helmPlayerId = guest.getIndex();
+    withSailingEvents((emitted) => {
+      guest.moveTo(new Location(3222, 3218, 0));
+      assert.deepEqual(emitted.map(([name, payload]) => [name, payload.reason, payload.atHelm]),
+        [["sailing:guest-left", "teleport", true]]);
+    });
+    assert.equal(instance.helmPlayerId, undefined);
+    assert.equal(guest.getArea() ?? null, null);
+    assert.deepEqual(tileOf(guest), [3222, 3218, 0]);
+    assert.equal(Sailing.instanceAboard(owner), instance);
+    assert.equal(Sailing.activeBoat(owner).location.kind, "at_sea");
+
+    guest.setLocation(new Location(DOCK.landing.x, DOCK.landing.y, 0));
+    assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), null);
+    withSailingEvents((emitted) => {
+      Sailing.onLogout(guest);
+      assert.deepEqual(emitted.map(([name, payload]) => [name, payload.reason]), [["sailing:guest-left", "logout"]]);
+    });
+    assert.deepEqual(tileOf(guest), [DOCK.landing.x, DOCK.landing.y, DOCK.landing.z], "saved ashore, not on a deck");
+    assert.deepEqual(Sailing.guestsOf(instance), []);
+    assert.equal(BoatManager.getBoat(instance.entityIndex), instance);
+  } finally {
+    Sailing.onLogout(owner);
+  }
+});
+
+test("a boat leaving the sea puts its guests ashore where it last docked", () => {
+  const ELSEWHERE = { id: "guest_test_port", mooring: DOCK.mooring, landing: { x: 3071, y: 2990, z: 0 } };
+  Sailing.registerDock(ELSEWHERE);
+  for (const leave of ["disembark", "escape", "logout"]) {
+    const owner = sailor(), guest = sailor();
+    Sailing.giveBoat(owner, "raft", DOCK.id);
+    Sailing.board(owner, DOCK.id);
+    const instance = Sailing.instanceAboard(owner);
+    try {
+      assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), null);
+      // The owner docks at another port's buoy: that is now where everyone aboard returns to.
+      assert.equal(Sailing.dock(owner, ELSEWHERE.id), null);
+      assert.deepEqual(guest.getSailing().returnPoint, ELSEWHERE.landing);
+      withSailingEvents((emitted) => {
+        if (leave === "disembark") assert.equal(Sailing.disembark(owner, ELSEWHERE.id), null);
+        else if (leave === "escape") Sailing.escape(owner);
+        else Sailing.onLogout(owner);
+        assert.deepEqual(emitted.map(([name, payload]) => [name, payload.player, payload.reason]), [
+          ["sailing:guest-left", guest, "evicted"],
+          ["sailing:left", owner, leave === "escape" ? "sunk" : leave],
+        ], leave);
+      });
+      assert.equal(BoatManager.getBoat(instance.entityIndex), undefined, leave);
+      assert.equal(guest.getArea() ?? null, null, leave);
+      assert.deepEqual(tileOf(guest), [ELSEWHERE.landing.x, ELSEWHERE.landing.y, ELSEWHERE.landing.z], leave);
+      assert.equal(Sailing.guestBoat(guest), undefined, leave);
+    } finally {
+      Sailing.onLogout(owner);
+    }
+  }
+});
+
 test("disposing a live owned boat releases its real deck, helm and all passengers without sinking another boat", () => {
   assert.equal(typeof Sailing.removeOwnedBoat, "function");
   const owner = sailor(), guest = sailor(), other = sailor();
@@ -942,8 +1080,8 @@ function registerPlugin(file) {
 
 test("the sailing plugins register their hooks and load the boat and dock data", () => {
   const gangplank = registerPlugin("Gangplank.plugin").objects;
-  assert.deepEqual(Object.keys(gangplank.Gangplank), ["Board", "Disembark"]);
-  assert.deepEqual(Object.keys(gangplank["Mooring point"]), ["Board", "Disembark"],
+  assert.deepEqual(Object.keys(gangplank.Gangplank), ["Board", "Board-friend", "Disembark"]);
+  assert.deepEqual(Object.keys(gangplank["Mooring point"]), ["Board", "Board-friend", "Disembark"],
     "island mooring points share the gangplank handlers");
   assert.equal(typeof gangplank["Mooring point"].Board, "function");
   assert.equal(gangplank["Mooring point"].Board.name, gangplank.Gangplank.Board.name, "both use the registered board handler");
@@ -952,7 +1090,8 @@ test("the sailing plugins register their hooks and load the boat and dock data",
   assert.deepEqual(Object.keys(helm.objects.Helm), ["Navigate", "Stop-navigating", "Escape"]);
   assert.equal(helm.interfaceClicks.length, 2, "the sail buttons and the wind catcher's release");
   assert.deepEqual(Object.keys(registerPlugin("Sailing.plugin").events).sort(),
-    ["sailing:board-supplied-panel", "sailing:boarded", "sailing:leave-supplied-panel", "sailing:left"]);
+    ["sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
+     "sailing:leave-supplied-panel", "sailing:left"]);
   assert.deepEqual(Object.keys(registerPlugin("Shipwright.plugin").npcs).sort(),
     ["Junior Jim", "Shipwright Sam"]);
   assert.ok(Sailing.getDock("the_pandemonium"));
@@ -2309,6 +2448,131 @@ test("Dock on a port's buoy docks the boat there; Disembark at any port docks it
     if (Sailing.instanceAboard(player)) Sailing.disembark(player, "the_pandemonium");
     clearTasks();
   }
+});
+
+test("Board-friend asks for a name and boards that player's boat, or says why not (rsprox 697)", () => {
+  clearTasks();
+  const { World } = require("../dist/game/World");
+  const plugin = registerPlugin("Gangplank.plugin");
+  const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
+  const online = new Map();
+  const originalLookup = World.getPlayerByName;
+  World.getPlayerByName = (name) => online.get(String(name).toLowerCase());
+  /** A player with a chatbox: the name prompt's script, its pending answer and any message box. */
+  const person = (name, visible = true) => {
+    const player = sailor();
+    Object.assign(player, {
+      scripts: [], boxes: [], answer: null, visible,
+      getUsername: () => name,
+      isRegistered: () => true,
+      getRelations: () => ({ isVisibleTo: () => player.visible }),
+      setEnteredSyntaxAction: (action) => { player.answer = action; },
+      getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+    });
+    const sender = new Proxy({}, {
+      get: (_t, key) => (...args) => {
+        if (key === "sendClientScript") player.scripts.push(args);
+        if (key === "sendTypedMessage") player.messages.push(`spam: ${args[1]}`);
+        return sender;
+      },
+    });
+    player.getPacketSender = () => sender;
+    player.setLocation(new Location(pandemonium.landing.x, pandemonium.landing.y, 0));
+    online.set(name, player);
+    return player;
+  };
+  const owner = person("condor"), guest = person("guest"), third = person("third");
+  const ask = (player, name) => {
+    player.answer = null;
+    plugin.objects.Gangplank["Board-friend"]({ player, location: pandemonium.gangplank });
+    assert.deepEqual(player.scripts.at(-1), [109, "Enter name:"]);
+    player.answer.execute(name);
+    TaskManager.process();
+    TaskManager.process();
+  };
+  Sailing.giveBoat(owner, "raft", "the_pandemonium");
+  try {
+    ask(guest, "nobody");
+    assert.equal(guest.messages.at(-1), "That player is offline, or has privacy mode enabled.");
+    owner.visible = false;
+    ask(guest, "condor");
+    assert.equal(guest.messages.at(-1), "That player is offline, or has privacy mode enabled.");
+    assert.equal(guest.boxes.length, 0, "a plain game message, not a message box");
+    owner.visible = true;
+
+    ask(guest, "Condor");
+    assert.equal(guest.messages.at(-1), "The player is not on their own boat, so you cannot join them.");
+    assert.equal(guest.boxes.length, 1, "shown as a message box too");
+
+    Sailing.board(owner, "the_pandemonium");
+    const instance = Sailing.instanceAboard(owner);
+    const { fineX } = instance;
+    instance.fineX += 40 * 128;
+    ask(guest, "condor");
+    assert.equal(guest.messages.at(-1), "That player does not have a boat for you to board right now.");
+    instance.fineX = fineX;
+
+    const before = guest.messages.length;
+    ask(guest, "condor");
+    assert.equal(Sailing.guestBoat(guest), instance);
+    assert.equal(guest.messages.length, before, "boarding somebody else's boat says nothing");
+
+    ask(third, "condor");
+    assert.equal(third.messages.at(-1), "There's no space for you on that boat.", "a raft holds two players");
+    assert.equal(BoatManager.getBoatAboard(third), undefined);
+
+    // The guest's gangplank reads Disembark, and puts them on this port's landing.
+    plugin.objects.Gangplank.Disembark({ player: guest, location: pandemonium.gangplank });
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(guest.messages.at(-1), "spam: You disembark at the Pandemonium.");
+    assert.equal(Sailing.guestBoat(guest), undefined);
+    assert.deepEqual(tileOf(guest), [pandemonium.landing.x, pandemonium.landing.y, pandemonium.landing.z]);
+    assert.equal(Sailing.instanceAboard(owner), instance, "the owner sails on");
+  } finally {
+    World.getPlayerByName = originalLookup;
+    Sailing.onLogout(owner);
+    clearTasks();
+  }
+});
+
+test("the boat list's Board friend's boat button (934:8) hands over to the name prompt", () => {
+  const selection = registerPlugin("BoatSelection.plugin");
+  const [chooseBoat] = selection.interfaceClicks;
+  const { MODE, openBoatSelection } = require("../plugins/skills/sailing/BoatSelection.plugin");
+  const open = (onBoardFriend) => {
+    const player = sailor();
+    let interfaceId = -1;
+    player.getInterfaceId = () => interfaceId;
+    player.setInterfaceId = (id) => { interfaceId = id; return player; };
+    const events = [];
+    const sender = new Proxy({}, {
+      get: (_t, key) => (...args) => {
+        if (key === "sendInterfaceFlagsRange") events.push(args);
+        if (key === "sendInterfaceRemoval") interfaceId = -1;
+        return sender;
+      },
+    });
+    player.getPacketSender = () => sender;
+    const chosen = [];
+    openBoatSelection(player, MODE.BOARD, { selectionDbrow: 8588 }, (slot) => chosen.push(slot), onBoardFriend);
+    return { player, events, chosen, interfaceId: () => interfaceId };
+  };
+  const asked = [];
+  const withButton = open(() => asked.push("friend"));
+  assert.deepEqual(withButton.events.at(-1), [(934 << 16) | 8, -1, -1, 1 << 1], "op 1 on the button transmits");
+  chooseBoat({ player: withButton.player, groupId: 934, childId: 8, slot: -1, action: 1, handled: false });
+  assert.deepEqual(asked, ["friend"]);
+  assert.deepEqual(withButton.chosen, [], "no boat of their own is boarded");
+  assert.equal(withButton.interfaceId(), -1, "the list closes");
+
+  // Other modes (recovering, summoning) don't enable it, and a stray click does nothing.
+  const without = open(undefined);
+  assert.equal(without.events.some(([uid]) => uid === ((934 << 16) | 8)), false);
+  chooseBoat({ player: without.player, groupId: 934, childId: 8, slot: -1, action: 1, handled: false });
+  assert.equal(without.interfaceId(), 934);
+  chooseBoat({ player: without.player, groupId: 934, childId: 5, action: 1, handled: false });
+  assert.deepEqual(without.chosen, [0]);
 });
 
 test("Last Light docks at Sailing 52 and disembarks on its captured landing", () => {

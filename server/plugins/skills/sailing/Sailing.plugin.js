@@ -59,6 +59,17 @@ function boardedVarbits(type, owned) {
   };
 }
 
+/** The boarded varbits that describe the player's own boats, which a guest keeps as they were. */
+const OWN_BOAT_VARBITS = [
+  VARBIT.BOAT_SPAWNED,
+  VARBIT.LAST_PERSONAL_BOAT_BOARDED,
+  VARBIT.PREVIOUS_BOAT_DATA_SLOT,
+  VARBIT.PREVIOUS_BOAT_TYPE_ID,
+];
+
+/** Sent to a player who was on somebody else's boat when it left the sea (rsprox 698, on login). */
+const BACK_ON_SHORE = "You find yourself back on shore.";
+
 const COMBAT_OPTIONS_GROUP = 593;
 const VIEW_SAILING_OPTIONS_CHILD = 48;
 /** The sidepanel's "View Combat Options" (see Sidepanel.Sailing.js). */
@@ -80,15 +91,60 @@ const LEFT_VARBITS = [
   ...DESCRIPTION_VARBITS,
 ];
 
-function applyBoarded(player, owned) {
+/**
+ * A guest on somebody else's boat sees that boat in the sidepanel, but none of the varbits that
+ * are about a boat of their own (which slot is out, the last one boarded), and isn't its captain.
+ * The role and head count are not captured for a guest.
+ */
+function guestVarbits(type, owned, aboard) {
+  const varbits = boardedVarbits(type, owned);
+  for (const id of OWN_BOAT_VARBITS) delete varbits[id];
+  varbits[VARBIT.SIDEPANEL_PLAYER_ROLE] = 0;
+  varbits[VARBIT.SIDEPANEL_PLAYERS_ON_BOARD_TOTAL] = aboard;
+  return varbits;
+}
+
+function applyBoarded(player, owned, guestAmong) {
   const type = boatType(owned.type);
   if (!type) return;
-  const varbits = boardedVarbits(type, owned);
+  const varbits = guestAmong ? guestVarbits(type, owned, guestAmong) : boardedVarbits(type, owned);
   const varps = boatVarps(type, owned);
   for (const [id, value] of Object.entries(varbits)) setVarbit(player, Number(id), value);
   const sender = player.getPacketSender();
   for (const [id, value] of Object.entries(varps)) sender.sendConfig(Number(id), value);
   openSidepanel(player, type, varbits, varps);
+}
+
+/** How many players stand on a boat's deck. */
+function playersAboard(boat) {
+  return core.BoatManager.getDeck(boat)?.getPlayers().length ?? 1;
+}
+
+/** The captain's count of people aboard follows guests coming and going. */
+function updateHeadCount(boat) {
+  const owner = Sailing.ownerOf(boat);
+  if (owner && Sailing.instanceAboard(owner) === boat) {
+    setVarbit(owner, VARBIT.SIDEPANEL_PLAYERS_ON_BOARD_TOTAL, playersAboard(boat));
+  }
+}
+
+/** A tick after a guest boards, once their client has the deck scene. */
+function onGuestBoarded({ player, boat, owned }) {
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player); }
+    execute() {
+      this.stop();
+      if (Sailing.guestBoat(player) !== boat) return;
+      applyBoarded(player, owned, playersAboard(boat));
+      updateHeadCount(boat);
+    }
+  })());
+}
+
+function onGuestLeft({ player, boat, reason }) {
+  onLeft({ player, boat, reason });
+  if (reason === "evicted") player.sendMessage(BACK_ON_SHORE);
+  else updateHeadCount(boat);
 }
 
 /** A tick after boarding, once the deck scene (or, on login, the gameframe) is in place. */
@@ -216,7 +272,10 @@ function switchCombatTab(event) {
     const supplied = suppliedPanels.get(player);
     if (supplied && applySuppliedPanel(player, supplied)) return;
     const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
-    if (owned) applyBoarded(player, owned);
+    if (owned) return applyBoarded(player, owned);
+    const visited = Sailing.guestBoat(player);
+    const visitedOwned = visited && Sailing.ownedOf(visited);
+    if (visitedOwned) applyBoarded(player, visitedOwned, playersAboard(visited));
   } else if (event.groupId === SIDEPANEL_GROUP && event.childId === VIEW_COMBAT_OPTIONS_CHILD) {
     event.handled = true;
     WeaponInterfaceManager.assign(player);
@@ -245,6 +304,8 @@ module.exports = {
     api.onCustomEvent("sailing:board-supplied-panel", boardSuppliedPanel);
     api.onCustomEvent("sailing:leave-supplied-panel", leaveSuppliedPanel);
     api.onCustomEvent("sailing:left", onLeft);
+    api.onCustomEvent("sailing:guest-boarded", onGuestBoarded);
+    api.onCustomEvent("sailing:guest-left", onGuestLeft);
     api.onPlayerLogin(describeBoatsOnLogin);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);

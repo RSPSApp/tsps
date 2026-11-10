@@ -2238,6 +2238,13 @@ test('RFD kitchen door enters and leaves the same dining dimension as the large 
   player.setLocation(new core.Location(3207, 3218));
   await f.click(core.CacheDefinitions.getLocId('hundred_lumbridge_door'), 3207, 3217);
   assert.ok(player.getLocation().getX() > 3000, 'from the real dining room the kitchen door still leads to the kitchen');
+  // From that side it is an ordinary door, so it swung open (its open leaf is 1544): shut it again so
+  // the next test finds the closed door.
+  const open = [[3207, 3218], [3206, 3217], [3208, 3217], [3207, 3216]]
+    .map(([x, y]) => core.MapObjects.get(core.ObjectIdentifiers.DOOR_31, new core.Location(x, y), null)).find(Boolean);
+  assert.ok(open, 'the kitchen door opened');
+  await f.click(open.getId(), open.getLocation().getX(), open.getLocation().getY());
+  assert.ok(core.MapObjects.get(core.ObjectIdentifiers.DOOR_302, new core.Location(3207, 3217), null), 'and shut again');
 });
 
 test('RFD kitchen door is an ordinary door again once the quest is complete', async t => {

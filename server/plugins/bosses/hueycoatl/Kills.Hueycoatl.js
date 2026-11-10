@@ -20,6 +20,7 @@ const Shared = require("./Shared.Hueycoatl");
 const Pillars = require("./Pillars.Hueycoatl");
 const Hud = require("./Hud.Hueycoatl");
 const CombatAchievements = require("./CombatAchievements.Hueycoatl");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const BODY_QUALIFY = 25;
 const BOSS_NAME = "Hueycoatl";
@@ -161,7 +162,7 @@ function placeDrops(player, session, drops, location) {
 }
 
 function announceKill(player, kills, ticks) {
-  player.sendMessage(`Your Hueycoatl kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Hueycoatl kill count is: <col=ff0000>${kills}</col>.`);
   const best = Shared.counter(player, Shared.BEST_TICKS_ATTRIBUTE);
   if (!best || ticks < best) {
     player.setAttribute(Shared.BEST_TICKS_ATTRIBUTE, ticks);

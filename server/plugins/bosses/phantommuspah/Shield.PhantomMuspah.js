@@ -24,7 +24,7 @@ function shockwave(fight) {
   const { muspah, player } = fight;
   fight.shockwaveStarted = true;
   fight.hold(true);
-  player.sendMessage(specials.message);
+  Common.fightMessage(player, specials.message);
   Common.animate(muspah, clouds.disappearAnim);
   muspah.performGraphic(Common.graphic(clouds.disappearSpot));
   Common.sounds(player, clouds.disappearSounds);
@@ -115,7 +115,7 @@ function hitShield(fight, hit) {
   }
   if (fight.tick - (fight.lastShieldMessage ?? -Infinity) >= MESSAGE_GAP_TICKS) {
     fight.lastShieldMessage = fight.tick;
-    player.sendMessage(shield.message);
+    Common.fightMessage(player, shield.message);
   }
 }
 

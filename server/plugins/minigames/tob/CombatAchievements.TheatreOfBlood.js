@@ -10,7 +10,7 @@
  *
  * Captured:
  * - "You have failed <col=0cc919>Task</col>: reason." to the whole party, for those who haven't the
- *   task. A Perfect room's failure also fails Perfect Theatre, with the same reason.
+ *   task (Combat Achievements sends it, as each player's failure settings allow). A Perfect room's failure also fails Perfect Theatre, with the same reason.
  * - The speed tasks run on the challenge time: Trio Speed-Runner (17:30) at challenge 15:25.80,
  *   overall 17:36.00 (227/01758 tick 2122); 4-Scale Speed-Chaser (17:00) at 16:49.80, 18:52.20
  *   (227/01758 tick 166). Hard Mode's say "overall time" (Wiki).
@@ -23,7 +23,6 @@ const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 
 const MONSTER = { entry: "EM: Theatre of Blood", normal: "Theatre of Blood", hard: "HM: Theatre of Blood" };
-const FAIL_COLOUR = "0cc919";
 const ENTRY_TASKS = ["Don't Look at Me!", "Just To Be Safe", "They Won't Expect This", "Chally Time", "Anticoagulants", "No-Pillar",
   "Attack, Step, Wait", "Pass It On", "Appropriate Tools", "Nylocas, On the Rocks", "Theatre of Blood: SM Speed-Chaser", "Theatre of Blood: SM Adept"];
 const NORMAL_TASKS = ["Perfect Nylocas", "Perfect Bloat", "Pop It", "Perfect Sotetseg", "Back in My Day...", "A Timely Snack", "Can You Dance?",
@@ -67,17 +66,9 @@ function appliesTo(raid, task) {
   return mode === undefined || mode === raid.mode;
 }
 
-function hasTask(player, task) {
-  const request = { player, task, done: false };
-  Shared.api().emitCustomEvent("combat-achievements:has-task", request);
-  return request.done;
-}
-
+/** Combat Achievements sends it to each, as their failure settings allow. */
 function announceFailure(raid, task, reason) {
-  for (const player of raid.players) {
-    if (hasTask(player, task)) continue;
-    player.sendMessage(`You have failed <col=${FAIL_COLOUR}>${task}</col>: ${reason}`);
-  }
+  for (const player of raid.players) Shared.api().emitCustomEvent("combat-achievements:failed", { player, task, reason });
 }
 
 function failed({ raid, task, reason }) {

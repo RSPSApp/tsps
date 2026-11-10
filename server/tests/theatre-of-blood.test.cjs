@@ -1079,6 +1079,8 @@ test('Hard Mode states its target as the first fight starts', () => {
 
 test('Combat Achievements: only the raid\'s mode counts, failures say so, Perfect rooms fail Perfect Theatre', () => {
   const { raid, players: [solo] } = startRaid(['Tasks1']);
+  // Combat Achievements sends the failure line, as with its settings on.
+  (hooks.customHandlers ??= {})['combat-achievements:failed'] = [({ player, task, reason }) => player.sendMessage(`You have failed <col=0cc919>${task}</col>: ${reason}`)];
   raid.failTask('Perfect Maiden', 'A Nylocas Matomenos healed The Maiden.');
   assert.ok(solo.messages.includes('You have failed <col=0cc919>Perfect Maiden</col>: A Nylocas Matomenos healed The Maiden.'));
   assert.ok(solo.messages.includes('You have failed <col=0cc919>Perfect Theatre</col>: A Nylocas Matomenos healed The Maiden.'));

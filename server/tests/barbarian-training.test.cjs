@@ -329,3 +329,18 @@ test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the An
   assert.match(gate, /"varbit": ?3759, ?"atLeast": ?3/);
   assert.match(gate, /"varbit": ?3764, ?"atLeast": ?1/);
 });
+
+test("All Settings' Make-X barbarian potions: off mixes one at a time, on offers the Make-X menu", () => {
+  for (const on of [0, 1]) {
+    const who = player(["2doserangerspotion", "brut_caviar", "2doserangerspotion", "brut_caviar"], 99);
+    T.setStage(who, "herblore", 3);
+    const sender = who.getPacketSender();
+    const menus = [];
+    sender.getVarbit = (id) => who.sent.varbits.get(id) ?? 0;
+    sender.sendCreationMenu = (menu) => { menus.push(menu); return sender; };
+    sender.sendVarbit(core.CacheDefinitions.getVarbitId("settings_barbarian_potion_makex"), on);
+    assert.equal(use(who, "brut_caviar", "2doserangerspotion"), true);
+    assert.equal(menus.length, on, on ? "the Make-X menu" : "no menu");
+    assert.equal(who.inv.count("brutal_2doserangerspotion"), on ? 0 : 1, on ? "nothing made until the menu is answered" : "one made at once");
+  }
+});

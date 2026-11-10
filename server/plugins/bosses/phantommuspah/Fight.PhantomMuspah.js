@@ -180,7 +180,7 @@ class Fight {
     const { homing, specials, overlay } = Common.data;
     Common.animate(this.muspah, homing.anim);
     this.muspah.performGraphic(Common.graphic(homing.spot));
-    this.player.sendMessage(specials.message);
+    Common.fightMessage(this.player, specials.message);
     Common.overlayFade(this.player, overlay.dark);
     this.at(HOMING_DARK_TICKS, () => Common.overlayFade(this.player, overlay.clear));
     this.spikes.startHoming();

@@ -19,6 +19,7 @@ const Totems = require("./Totems.Nightmare");
 const Sleepwalkers = require("./Sleepwalkers.Nightmare");
 const Loot = require("./Loot.Nightmare");
 const CombatAchievements = require("./CombatAchievements.Nightmare");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 /** Who she has in her sights: the highest of each player's five defence bonuses, then level (Wiki). */
 function defenceScore(player) {
@@ -447,7 +448,7 @@ class Fight {
     const kills = Common.count(player, key) + 1;
     player.setAttribute(key, kills);
     player.getPacketSender().sendConfig(this.phosani ? varps.phosaniKills : varps.kills, kills);
-    player.sendMessage((this.phosani ? kill.phosaniCount : kill.count).replace("[n]", kills));
+    sendBossKillCount(player, (this.phosani ? kill.phosaniCount : kill.count).replace("[n]", kills));
     const best = Common.count(player, bestKey);
     const duration = kill.duration.replace("[team]", team === 1 ? "Solo" : String(team)).replace("[time]", Common.formatTicks(ticks));
     if (!best || ticks < best) {

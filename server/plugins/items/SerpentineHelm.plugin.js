@@ -88,7 +88,9 @@ function venomChance(player, combatType) {
     return /\(p(?:\+\+?)?\)$/.test(ammoName) ? 0.5 : 0;
   }
   if (combatType !== core.CombatType.MELEE) return 0;
-  if (name === "noxious halberd" || /^abyssal tentacle(?: \(or\))?$/.test(name) || /\(p(?:\+\+?)?\)$/.test(name)) return 0.5;
+  // The halberd's own 1/3 roll (CombatPoisonData) follows this one, so 1/4 here makes the Wiki's 1/2.
+  if (name === "noxious halberd") return 0.25;
+  if (/^abyssal tentacle(?: \(or\))?$/.test(name) || /\(p(?:\+\+?)?\)$/.test(name)) return 0.5;
   return 1 / 6;
 }
 

@@ -27,9 +27,9 @@ With `n` = the shop's stock minus its normal stock (the listed stock; 0 for an i
 
 The rounding and bounds are those of the Wiki's
 [Shop calculator](https://oldschool.runescape.wiki/w/Calculator:Shop_calculator)
-(`Module:Shop calculator`). Its overstocked purchase price divides by the rate instead of
-subtracting from it; the Shop page's worked example (a steel axe at 4 in stock costs 196,
-"98%") and its text describe the linear rule used here. The two agree at a 100% sell rate.
+(`Module:Shop calculator`). For an overstocked purchase the calculator divides instead
+(value ÷ (sell rate + change per × extra items)); live OSRS subtracts, as the Shop page's text
+says (see Evidence).
 
 ## Which shops
 
@@ -56,6 +56,10 @@ its Default version's stock, and a purchase at either moves both prices.
 
 ## Evidence
 
+- Checked on live OSRS: Bob's Brilliant Axes sells steel axes (value 200) for 200, 204 and 208
+  as his stock falls from 3 to 1. The Lumbridge General Store buys them for 80, 74 and 68 as
+  its stock rises from 0 to 2, then sells them for 242, 248 and 254 at 3, 2 and 1 in stock
+  (130% − 3% per item; the calculator's division would give 143, 147 and 150).
 - rsprox captures: an uncut onyx costs 300,000 tokkul at the Mor Ul Rek gem stores (150%,
   recordings 83 and 3276) and 260,000 wearing the gloves (130%, recording 73). In the same
   recording a chaos rune sells for 31 tokkul (35% of 90). Uncut gems cost 1.5× their value

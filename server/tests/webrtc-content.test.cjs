@@ -142,3 +142,24 @@ test('native world registration uses the world definition name, not the legacy e
     keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index]; });
   }
 });
+
+test('native world registration lists settings-derived tags in the manifest', t => {
+  const world = require('../dist/game/definition/WorldDefinition');
+  const definition = { description: 'World description', spawn: { x: 3089, y: 3524, z: 0 }, membersWorld: false, experienceMultiplier: 10 };
+  t.mock.method(world, 'getWorldDefinition', () => definition);
+  let globalPvp = true;
+  t.mock.method(world, 'hasGlobalWorldTag', tag => tag === 'pvp' && globalPvp);
+  const connector = new WebRtcGameConnector('ws://unused.invalid', 'test', 'test', 'unused', [], () => {});
+  const send = t.mock.method(connector, 'send', () => {});
+
+  connector.handle({ type: 'registered' });
+  assert.deepEqual(send.mock.calls[0].arguments[0], {
+    type: 'world-manifest',
+    manifest: { description: definition.description, spawn: definition.spawn, maxPlayers: null, tags: ['F2P', 'PvP', 'Boosted XP'] },
+  });
+
+  Object.assign(definition, { membersWorld: true, experienceMultiplier: 1 });
+  globalPvp = false;
+  connector.handle({ type: 'registered' });
+  assert.deepEqual(send.mock.calls[1].arguments[0].manifest.tags, ['Members']);
+});

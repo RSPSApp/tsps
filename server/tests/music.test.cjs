@@ -245,6 +245,22 @@ test('music areas follow the Wiki tile by tile, not by map region', async () => 
   assert.equal(Music.tracksAt(3222, 3218, 0), Music.tracksAt(3200, 3210, 0), 'one list for the whole area');
 });
 
+test('the music areas the Wiki maps draw no polygon for', async () => {
+  await setup();
+  const { Music } = api.core;
+  const names = (x, y) => Music.tracksAt(x, y, 0).map(id => trackNames[id]);
+  // All Aboard and Set Sail share the Ardent Ocean's map page.
+  assert.deepEqual(names(2600, 2763), ['All Aboard', 'Set Sail']);
+  // Each Tombs of Amascut path's puzzle room plays its test.
+  assert.deepEqual(names(3680, 5280), ['Test of Strength'], 'the Path of Het');
+  assert.deepEqual(names(3808, 5280), ['Test of Companionship'], 'the Path of Apmeken');
+  assert.deepEqual(names(3550, 5280), ['Test of Isolation'], 'the Path of Scabaras');
+  assert.deepEqual(names(3936, 5280), ['Test of Resourcefulness'], 'the Path of Crondis');
+  assert.deepEqual(names(2911, 5470), ["Sorceress's Garden"], "the garden's centre, by the fountain");
+  assert.deepEqual(names(2427, 4446), ['Impulses'], "beside Zanaris' crop circle, over Zanaris' own music");
+  assert.deepEqual(names(2423, 4443), ['Crystal Cave', 'Faerie'], 'and Zanaris a few steps away');
+});
+
 test('an instance tile plays the music of the cache-map tile its chunk copies', async () => {
   await setup();
   const { Music } = api.core;
@@ -267,6 +283,38 @@ test('the Karuulm Slayer Dungeon shuffles Way of the Wyrm, Ful to the Brim and K
   assert.equal(Music.pickAreaTrack([595, 635, 608], 595, () => 0), 635, 'the next track is never the one that ended');
   assert.equal(Music.pickAreaTrack([595], 595), 595, 'a one-track area plays it again');
   assert.equal(Music.pickAreaTrack([]), undefined);
+});
+
+test('import-music-areas: rectangles under or over the Wiki, and a map page with Map polygon holes', async () => {
+  const { buildMusicAreas, mapPagePolygon } = await import('../scripts/import-music-areas.mjs');
+  const square = (x, y, size) => [[x, y], [x + size, y], [x + size, y + size], [x, y + size]];
+  const map = (title, rings) => ({ title, page_name: title, 'map.features': JSON.stringify([{ type: 'Feature', properties: { mapID: -1, plane: 0 }, geometry: { type: 'Polygon', coordinates: [rings[0], ...rings.slice(1)] } }]) });
+  const rows = [map('Town', [square(0, 0, 20)]), map('Isle', [square(40, 40, 4), square(41, 41, 1)])];
+  const page = `{{Music track map|[
+[ [30,30],[60,30],[60,60],[30,60] ], <!-- the sea -->
+{{Map polygon|Isle}}
+]|plane=0|mapID=-1
+|songs = Sea One, Sea Two
+}}`;
+  const polygon = mapPagePolygon(page, rows);
+  assert.deepEqual(polygon.songs, ['Sea One', 'Sea Two']);
+  assert.deepEqual(polygon.rings, [square(30, 30, 30), square(40, 40, 4)], "the island's outer ring only, as a hole");
+  const tracks = [{ id: 1, name: 'Town' }, { id: 2, name: 'Isle' }, { id: 3, name: 'Sea One' }, { id: 4, name: 'Sea Two' }, { id: 5, name: 'Under' }, { id: 6, name: 'Over' }];
+  const unmapped = [{ tracks: ['Under'], rects: [[0, 0, 30, 5]] }, { tracks: ['Over'], rects: [[2, 2, 3, 3]], over: true }];
+  const { areas, tiles } = buildMusicAreas({ rows, tracks, unmapped, mapPages: { 'Map:Sea': page } });
+  const at = (x, y) => {
+    let tile = ((y & 63) << 6) | (x & 63);
+    for (const run of tiles[0][0].split(',')) {
+      const [id, count = 1] = run.split('*');
+      if (tile < Number(count)) return id === '-' ? undefined : areas[Number(id)].names.join('/');
+      tile -= Number(count);
+    }
+  };
+  assert.equal(at(45, 45), 'Sea One/Sea Two', "the map page's songs share its polygon");
+  assert.equal(at(42, 42), 'Isle', 'the island cut out of the sea keeps its own area');
+  assert.equal(at(5, 1), 'Town', 'a Wiki polygon wins over a rectangle under it');
+  assert.equal(at(25, 1), 'Under', 'which fills where the Wiki has nothing');
+  assert.equal(at(2, 2), 'Over', 'a rectangle over the Wiki wins');
 });
 
 test('import-music-areas: the smallest Wiki polygon on a tile wins, holes and history left out', async () => {

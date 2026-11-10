@@ -11,7 +11,8 @@
  * the same polygon. The polygons are rasterised onto tiles, one grid per plane: a tile belongs to
  * the smallest polygon covering its centre. Polygons with the same tracks are one area. The file
  * lists the areas and, per plane and 64x64 region, the area of each tile, run-length encoded.
- * `UNMAPPED_AREAS` adds the few captured music areas the Wiki's maps miss, under the Wiki's own.
+ * `MAP_PAGES` adds the maps of music map pages whose tracks the buckets hold no map for (one more
+ * request, cached too), and `UNMAPPED_AREAS` the few music areas the Wiki's maps don't draw.
  * `--check` reports whether music-areas.json matches what the Wiki data gives, without writing it.
  *
  * Needs a built server (`yarn build`) for the cache's track list (DB table 44).
@@ -37,13 +38,28 @@ const PAGE = 500;
 const REGION_TILES = 64 * 64;
 
 /**
- * Music areas the Wiki's maps don't draw, as captured: whole 64x64 regions on plane 0, painted
- * under the Wiki's polygons. Their tracks still need the Wiki's name for them.
+ * Music areas the Wiki's maps don't draw: whole 64x64 regions or tile rectangles
+ * ([minX, minY, maxX, maxY], inclusive) on plane 0, painted under the Wiki's polygons, or over
+ * them with `over`. Their tracks still need the Wiki's name for them.
  */
 export const UNMAPPED_AREAS = [
   // The reworked Wilderness bosses' lairs and the Escape Caves (docs/wilderness-bosses.md).
   { tracks: ["A Dangerous Game"], regions: [6580, 7092, 7604, 13215, 13472, 13473, 13727] },
+  // The Tombs of Amascut: each path's puzzle room plays its own test (the rooms' bounds in
+  // plugins/minigames/toa/Shared.TombsOfAmascut.js).
+  { tracks: ["Test of Strength"], rects: [[3670, 5267, 3690, 5293]] }, // Path of Het
+  { tracks: ["Test of Companionship"], rects: [[3797, 5267, 3819, 5293]] }, // Path of Apmeken
+  { tracks: ["Test of Isolation"], rects: [[3533, 5268, 3574, 5292]] }, // Path of Scabaras
+  { tracks: ["Test of Resourcefulness"], rects: [[3923, 5250, 3949, 5311]] }, // Path of Crondis
+  // The Sorceress's Garden: its centre, with the fountain, between the four seasonal gardens.
+  { tracks: ["Sorceress's Garden"], rects: [[2903, 5463, 2920, 5481]] },
+  // Impulses plays beside an active crop circle; the server has only Zanaris' fixed one.
+  // Ours: within 3 tiles of its centre.
+  { tracks: ["Impulses"], rects: [[2424, 4443, 2430, 4449]], over: true },
 ];
+
+/** Music map pages whose tracks' own maps the buckets don't hold (the tracks embed the page). */
+export const MAP_PAGES = ["Map:Ardent Ocean music"];
 
 function parseArgs(argv) {
   const args = { cache: path.join(os.tmpdir(), "tsps-wiki-music"), refresh: false, check: false };
@@ -76,6 +92,70 @@ async function fetchMaps(cacheDir, refresh) {
   fs.mkdirSync(cacheDir, { recursive: true });
   fs.writeFileSync(file, JSON.stringify(rows));
   return rows;
+}
+
+/** MAP_PAGES' wikitext, one request, cached beside the bucket rows. */
+async function fetchMapPages(cacheDir, refresh) {
+  const file = path.join(cacheDir, "music-map-pages.json");
+  if (!refresh && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
+  const query = { action: "query", prop: "revisions", rvprop: "content", rvslots: "main", format: "json", formatversion: "2", titles: MAP_PAGES.join("|") };
+  const response = await fetch(`${WIKI_API}?${new URLSearchParams(query)}`, { headers: { "User-Agent": USER_AGENT } });
+  if (!response.ok) throw new Error(`Wiki page query failed: HTTP ${response.status}`);
+  const pages = Object.fromEntries((await response.json()).query.pages
+    .filter((page) => page.revisions)
+    .map((page) => [page.title, page.revisions[0].slots.main.content]));
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(pages));
+  return pages;
+}
+
+/** The top-level arguments of the first `{{name|...}}` in `text`: positional, and named. */
+function templateArgs(text, name) {
+  const start = text.indexOf(`{{${name}`);
+  if (start < 0) return null;
+  const parts = [];
+  let depth = 0;
+  let from = start + 2 + name.length;
+  for (let i = from; i < text.length; i++) {
+    if (text.startsWith("{{", i)) { depth++; i++; continue; }
+    if (text.startsWith("}}", i)) {
+      if (depth === 0) { parts.push(text.slice(from, i)); break; }
+      depth--; i++; continue;
+    }
+    if (text[i] === "|" && depth === 0) { parts.push(text.slice(from, i)); from = i + 1; }
+  }
+  const positional = [];
+  const named = {};
+  for (const part of parts.slice(1)) {
+    const match = /^\s*([A-Za-z_][\w ]*?)\s*=([\s\S]*)$/.exec(part);
+    if (match && !part.trim().startsWith("[")) named[match[1]] = match[2].trim();
+    else positional.push(part.trim());
+  }
+  return { positional, named };
+}
+
+/**
+ * A music map page's polygon, as Template:Music track map draws it. A `{{Map polygon|Title|i,j}}`
+ * in it stands for that track's current polygons (Module:Map polygon), outer rings only unless
+ * `fillholes=no`; as further rings of the page's polygon they cut its islands out.
+ */
+export function mapPagePolygon(text, rows) {
+  const args = templateArgs(text.replace(/<noinclude>[\s\S]*?<\/noinclude>/g, ""), "Music track map");
+  if (!args) return null;
+  const json = args.positional.find((arg) => arg.startsWith("["));
+  if (!json) return null;
+  const resolved = json.replace(/<!--[\s\S]*?-->/g, "").replace(/\{\{\s*Map polygon\s*\|([^{}]*)\}\}/g, (_, inner) => {
+    const [title, indices = "1", ...rest] = inner.split("|").map((part) => part.trim());
+    const fillHoles = !rest.some((part) => /^fillholes\s*=\s*no$/i.test(part));
+    const current = rows.filter((row) => row.title === title && row["map.features"] && row["map.is_historic"] === undefined);
+    return indices.split(",").map(Number).flatMap((index) => {
+      const coordinates = current[index - 1] ? JSON.parse(current[index - 1]["map.features"])[0].geometry.coordinates : [];
+      return (fillHoles ? coordinates.slice(0, 1) : coordinates).map((ring) => JSON.stringify(ring));
+    }).join(",");
+  });
+  const rings = JSON.parse(resolved.replace(/,\s*(?=[\],])/g, "").replace(/\[\s*,/g, "["));
+  const songs = (args.named.songs ?? "").split(",").map((song) => song.trim()).filter(Boolean);
+  return { plane: Number(args.named.plane ?? 0), rings, songs };
 }
 
 async function cacheTracks() {
@@ -182,7 +262,7 @@ export function encodeRuns(grid) {
 
 const byText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS }) {
+export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS, mapPages = {} }) {
   const byName = new Map();
   for (const track of tracks) {
     const known = byName.get(nameKey(track.name));
@@ -191,7 +271,16 @@ export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS }) {
   const unknown = new Set();
   const areas = new Map();
   const polygons = [];
-  for (const polygon of wikiPolygons(rows)) {
+  const wiki = wikiPolygons(rows);
+  // A map page's polygon, for the songs on it that have no map of their own in the buckets.
+  const mapped = new Set(wiki.flatMap(({ titles }) => titles));
+  for (const text of Object.values(mapPages)) {
+    const page = mapPagePolygon(text, rows);
+    const songs = page?.songs.filter((song) => !mapped.has(song)) ?? [];
+    if (songs.length === 0) continue;
+    wiki.push({ key: `page:${songs.join("|")}`, plane: page.plane, rings: page.rings, size: polygonSize(page.rings), titles: songs, pages: songs });
+  }
+  for (const polygon of wiki) {
     const entries = [];
     polygon.titles.forEach((title, index) => {
       const track = byName.get(nameKey(title));
@@ -210,17 +299,23 @@ export function buildMusicAreas({ rows, tracks, unmapped = UNMAPPED_AREAS }) {
     }
     polygons.push({ ...polygon, area: areas.get(key) });
   }
-  // Each unmapped region as a square painted before every Wiki polygon, so a Wiki area on it wins.
-  for (const { tracks: names, regions } of unmapped) {
+  // Each unmapped region or rectangle as a square painted before every Wiki polygon, so a Wiki
+  // area on it wins, or after them all when it is `over` them.
+  for (const { tracks: names, regions = [], rects = [], over = false } of unmapped) {
     const entries = names.map((name) => ({ name, page: name, id: byName.get(nameKey(name))?.id }));
     if (entries.some(({ id }) => id === undefined)) throw new Error(`unmapped area track not in the cache: ${names.join(", ")}`);
     entries.sort((a, b) => byText(a.name, b.name));
     const key = entries.map(({ id }) => id).join(",");
-    for (const region of regions) {
-      const x = (region >> 8) * 64;
-      const y = (region & 0xff) * 64;
-      if (!areas.has(key)) areas.set(key, { names: entries.map(({ name }) => name), wiki: `https://oldschool.runescape.wiki/w/${encodeURIComponent(names[0].replace(/ /g, "_"))}`, tracks: entries.map(({ id }) => id) });
-      polygons.push({ key: `unmapped:${region}`, plane: 0, size: Infinity, rings: [[[x, y], [x + 64, y], [x + 64, y + 64], [x, y + 64]]], area: areas.get(key) });
+    if (!areas.has(key)) areas.set(key, { names: entries.map(({ name }) => name), wiki: `https://oldschool.runescape.wiki/w/${encodeURIComponent(names[0].replace(/ /g, "_"))}`, tracks: entries.map(({ id }) => id) });
+    const squares = [
+      ...regions.map((region) => [(region >> 8) * 64, (region & 0xff) * 64, (region >> 8) * 64 + 63, (region & 0xff) * 64 + 63]),
+      ...rects,
+    ];
+    for (const [minX, minY, maxX, maxY] of squares) {
+      polygons.push({
+        key: `unmapped:${minX},${minY}`, plane: 0, size: over ? -Infinity : Infinity,
+        rings: [[[minX, minY], [maxX + 1, minY], [maxX + 1, maxY + 1], [minX, maxY + 1]]], area: areas.get(key),
+      });
     }
   }
   const sorted = [...areas.values()].sort((a, b) => byText(a.names.join("|"), b.names.join("|")));
@@ -260,8 +355,9 @@ function render({ areas, tiles }) {
 async function main() {
   const { cache, refresh, check } = parseArgs(process.argv.slice(2));
   const rows = await fetchMaps(cache, refresh);
+  const mapPages = await fetchMapPages(cache, refresh);
   const tracks = await cacheTracks();
-  const result = buildMusicAreas({ rows, tracks });
+  const result = buildMusicAreas({ rows, tracks, mapPages });
   const text = render(result);
   const regions = Object.values(result.tiles).reduce((sum, plane) => sum + Object.keys(plane).length, 0);
   console.log(`${result.areas.length} music areas over ${regions} region grids`);

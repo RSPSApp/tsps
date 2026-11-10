@@ -63,22 +63,12 @@ const REPLACED_BY_PLUGIN = {
   "Vale Research Exchange": "Ranulph's Omnishop (omnishop row ent_totems_shop, Shop.ValeTotems.js)",
 };
 
-// Karamja gloves variants share their default store's NPC and option; bound
-// as well, the two shops cancel each other out, so only the default is bound.
+// Shop versions a plugin opens from its own NPC options, so they take no binding here: Gabooty's
+// Karamja gloves versions (Tai Bwo Wannai Cleanup). The other Karamja gloves versions share their
+// Default store's NPC option, and the DiaryRewards plugin picks one by the gloves worn.
 const UNBOUND = new Set([
-  "Davon's Amulet Store. (Karamja gloves)",
-  "Fernahei's Fishing Hut. (Karamja gloves)",
   "Gabooty's Tai Bwo Wannai Cooperative. (Karamja gloves)",
   "Gabooty's Tai Bwo Wannai Drinky Store. (Karamja gloves)",
-  "Jiminua's Jungle Store. (Karamja gloves 3+)",
-  "Karamja General Store (Karamja gloves 3)",
-  "Obli's General Store. (Karamja gloves)",
-  "Tamayu's Spear Stall (Karamja gloves)",
-  "TzHaar-Hur-Lek's Ore and Gem Store (Karamja gloves)",
-  "TzHaar-Hur-Rin's Ore and Gem Store (Karamja gloves)",
-  "TzHaar-Hur-Tel's Equipment Store (Karamja gloves)",
-  "TzHaar-Hur-Zal's Equipment Store (Karamja gloves)",
-  "TzHaar-Mej-Roh's Rune Store (Karamja gloves)",
 ]);
 
 // NPC bindings that differ from the Wiki's shop owners: { optionSlot: [ids] }
@@ -203,20 +193,14 @@ function currencyFor(name, info) {
 }
 
 /**
- * The Wiki's "Buys at" (StoreTableHead buymultiplier, per mille) and change per item. A coin general store's
- * price follows its stock; a shop with its own currency keeps the figure so the server knows which ones buy
- * their stock back and for how much (Grace's Graceful Clothing buys at 80%, Petrified Pete's Ore Shop at 0%).
- * Coin specialist shops keep the server's standard refund, so the figure is left out for them.
+ * The Wiki's StoreTableHead figures, per mille of the item's value: "Sells at" (sellmultiplier, what a player
+ * pays), "Buys at" (buymultiplier, what a player is paid) and "Change per" (delta, how far either price moves for
+ * each item above or below the shop's normal stock). Every shop keeps the figures its page gives; the server
+ * decides which currencies they price.
  */
-function sellPolicy(currency, info) {
-  const buysAt = info?.buys_at;
-  const changePer = info?.change_per;
-  if (!Number.isSafeInteger(buysAt)) return {};
-  if (info?.general_store === true) {
-    return Number.isSafeInteger(changePer) ? { sellMultiplier: buysAt, priceChangePer: changePer } : {};
-  }
-  if (currency === "COINS") return {};
-  return { sellMultiplier: buysAt, ...(Number.isSafeInteger(changePer) ? { priceChangePer: changePer } : {}) };
+function salesPolicy(info) {
+  const rate = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : undefined);
+  return { sellsAt: rate(info?.sells_at), buysAt: rate(info?.buys_at), changePer: rate(info?.change_per) };
 }
 
 function originalStock(name, items) {
@@ -324,7 +308,7 @@ function main() {
       name,
       currency,
       ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
-      ...sellPolicy(currency, record.shop_info),
+      ...salesPolicy(record.shop_info),
       originalStock: originalStock(name, record.items),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
       npcInteractions: npcInteractions(name, record.owners, shopsByNpc),

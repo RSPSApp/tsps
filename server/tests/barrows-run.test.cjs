@@ -146,6 +146,36 @@ test("Barrows: the chest's diary rune line (spam), then 'Your Barrows chest coun
   assert.ok(looter.sent.messages.some((m) => /^Your Barrows chest count is: <col=ff0000>\d+<\/col>\.$/.test(m)), looter.sent.messages.join(" | "));
 });
 
+// rsprox_transcripts/226/01694.txt: into crypts at ticks 8801, 8868, 8916, 8966 and 9046, drained at 8831, 8898, 8946,
+// 8996 and 9076: 30 ticks after each entry, however long the last crypt's countdown had run. No chat line (tick 8831).
+test("Barrows: the Prayer drain lands 30 ticks after each entry into a crypt, with no chat line", () => {
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  const prayer = () => skills.getCurrentLevel(core.Skill.PRAYER);
+  const ticksToDrain = () => {
+    const from = prayer();
+    for (let n = 1; n <= 40; n++) {
+      Barrows._test.processPlayer({ player: subject });
+      if (prayer() < from) return n;
+    }
+    return -1;
+  };
+  arrive(subject, AHRIM_MOUND);
+  Barrows._test.dig({ player: subject });
+  for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
+  const crypt = subject.getLocation().clone();
+  assert.equal(crypt.getZ(), 3);
+  assert.equal(ticksToDrain(), 30, "the first crypt");
+  assert.equal(prayer(), 99 - 8, "8 with no brother killed");
+  for (let i = 0; i < 12; i++) Barrows._test.processPlayer({ player: subject });
+  arrive(subject, SURFACE);
+  for (let i = 0; i < 5; i++) Barrows._test.processPlayer({ player: subject });
+  arrive(subject, crypt);
+  assert.equal(ticksToDrain(), 30, "back in: a fresh 30 ticks, not the 18 that were left");
+  assert.ok(!subject.sent.messages.some((m) => /drains your Prayer/.test(m)), subject.sent.messages.join(" | "));
+});
+
 function rewardDraw() {
   const frames = new Error().stack.split("\n");
   return frames[3]?.includes("at randomInt ") && frames[4]?.includes("at rollRewards ");

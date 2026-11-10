@@ -48,6 +48,22 @@ async function buy(f, entry, op=2) {
   await send(f,{type:'widget_action',widgetId:uid,groupId:uid>>>16,childId:uid&65535,slot:entry*12,buttonNum:op});
 }
 function balance(f) { return f.p.getAttribute(Common.PIECES_ATTRIBUTE) ?? 0; }
+test('the waiting-room spawn is inside the room, north of its door and outside the arena', () => {
+  // Talking to San Fan / Fancy Dan / Honest Jimmy is what enters the waiting room (Wiki), so the
+  // spawn must be inside it. Landing south of the door put the player outside, where the only
+  // visible way in was the door - and opening it leaves the queue, so the player bounced.
+  for (const team of Common.TEAMS) {
+    const { spawn, door } = Common.WAITING[team];
+    const [x, y, z] = spawn;
+    const doorY = Number(door.split(',')[1]);
+    assert.equal(z, 0, `${team} spawn is on the ground floor`);
+    assert.ok(y < doorY, `${team} spawn must be north of its door, inside the room`);
+    assert.ok(y > Common.ARENA.maxY, `${team} spawn must be outside the arena area`);
+    assert.ok(x >= Common.WAITING[team].bounds.minX && x <= Common.WAITING[team].bounds.maxX,
+      `${team} spawn is within the waiting room's x bounds`);
+  }
+});
+
 test('round award and old saved balance buy a cache-priced reward through native Trade', async t => {
   const f=actor(t); f.p.setAttribute(Common.PIECES_ATTRIBUTE,455);
   const game=new Game({red:[f.p],blue:[]}); game.stateOf('red').score=1; game.addContribution(f.p,55);

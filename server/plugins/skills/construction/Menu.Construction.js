@@ -11,8 +11,9 @@ const MENU_SCRIPT = 217;
 const PAUSE_BUTTON_EVENTS = 1;
 // chatdefault_restoreinput. Opening the menu with numbers shown, the nexus Teleport Menu, the
 // jewellery box or the furniture list runs chatdefault_stopinput, so typing goes to their number
-// keys instead of the chat. Live sends this right after their if_closesub, by every close route
-// (rsprox captures: menu 187, telenexus_teleport 17, poh_jewellery_box 590, rev 224-239).
+// keys instead of the chat. Live sends this with their if_closesub on every close route: after it
+// when the player closes them, just before it on a pick, in the same tick (rsprox captures: menu
+// 187, telenexus_teleport 17, poh_jewellery_box 590, rev 224-239). We always send it after.
 const RESTORE_CHAT_INPUT_SCRIPT = 2158;
 
 const pendingMenus = new WeakMap();

@@ -247,6 +247,18 @@ The player stays aboard and the boat stays where it is. At sea, the `port` varbi
 
 The boat stays where it was docked.
 
+## Boarding somebody else's boat
+
+From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind of boat would you like to board?" with "Board my own boat." and "Board somebody else's boat."; the release cache has Board-friend as the gangplank's third op instead, and script 8624 adds "Board friend's boat" to the boat list at 934:8 in Board mode once script 9022 passes).
+
+- The choice is answered with `runclientscript` 109 "Enter name:"; the client replies `resume_p_namedialog`.
+- Refusals, on the reply's tick or the next:
+  - "That player is offline, or has privacy mode enabled." as a game message (type 4), no box;
+  - "The player is not on their own boat, so you cannot join them.", "There's no space for you on that boat." and "That player does not have a boat for you to board right now." as a message box (229), each also a game message (type 115).
+- Success: the fade (174 on 164:1, minimap state 2) on the reply's tick, and the boat's varps, camera target and world entity on the next. No game message.
+- 698 opens with "You find yourself back on shore." (type 0) at login, after a session on another player's boat.
+- 698 ends with the guest hopping worlds, which is what sends a player to Limbo (Wiki).
+
 ## Recovery (Junior Jim)
 
 - **The fee is taken from the bank**, with the message "Payment has been taken from your bank." Recovery also brings back boats docked at other ports, not only sunk ones.

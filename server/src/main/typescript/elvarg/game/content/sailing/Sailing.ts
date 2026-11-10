@@ -26,8 +26,22 @@ export interface SailingDock {
 /** Why a player left their boat, sent with the `sailing:left` event. */
 export type LeaveReason = "disembark" | "sunk" | "logout" | "removed";
 
+/**
+ * Why a guest left another player's boat, sent with `sailing:guest-left`: they disembarked,
+ * teleported (or died) off it, logged out, or the boat went with its owner ("evicted").
+ */
+export type GuestLeaveReason = "disembark" | "teleport" | "logout" | "evicted";
+
+/** Why a player can't board another player's boat (content has the wording). */
+export type GuestRefusal = "aboard" | "not-aboard" | "not-here" | "full";
+
+/** How far from a dock's landing a boat still counts as moored there, in tiles. */
+const MOORED_RANGE = 15;
+
+type SailingEvent = "sailing:boarded" | "sailing:left" | "sailing:guest-boarded" | "sailing:guest-left";
+
 /** Lets content (the sidepanel, varbits) follow boarding and leaving without core knowing it. */
-function emit(event: "sailing:boarded" | "sailing:left", payload: object): void {
+function emit(event: SailingEvent, payload: object): void {
     (require("../../../plugins/PluginManager") as typeof import("../../../plugins/PluginManager"))
         .PluginManager.emitCustomEvent(event, payload);
 }
@@ -111,18 +125,10 @@ export class Sailing {
         boat.cargo.length = 0;
         for (const [instance, active] of Sailing.instances) {
             if (active.player !== player || active.owned !== boat) continue;
-            const deck = BoatManager.getDeck(instance);
-            const ownerAboard = deck?.hasMember(player) === true;
-            const guests = (deck?.getPlayers() ?? []).filter(guest => guest !== player);
+            const ownerAboard = BoatManager.getDeck(instance)?.hasMember(player) === true;
+            // Leaving puts any guests ashore first.
             Sailing.leave(player, instance, "removed");
             if (ownerAboard) Sailing.moveExpected(player, Sailing.returnLocation(player));
-            for (const guest of guests) {
-                const atHelm = instance.helmPlayerId === guest.getIndex();
-                if (atHelm) instance.helmPlayerId = undefined;
-                deck!.leave(guest, false);
-                Sailing.moveExpected(guest, Sailing.returnLocation(guest));
-                emit("sailing:left", { player: guest, boat: instance, reason: "removed", atHelm });
-            }
         }
         return true;
     }
@@ -137,6 +143,74 @@ export class Sailing {
     public static instanceFor(player: Player): Boat | undefined {
         return Sailing.instanceAboard(player)
             ?? Array.from(Sailing.instances).find(([, active]) => active.player === player)?.[0];
+    }
+
+    /** The player whose boat a live instance is. */
+    public static ownerOf(instance: Boat): Player | undefined {
+        return Sailing.instances.get(instance)?.player;
+    }
+
+    /** The owned record a live instance was built from. */
+    public static ownedOf(instance: Boat): OwnedBoat | undefined {
+        return Sailing.instances.get(instance)?.owned;
+    }
+
+    /** Another player's boat the player is aboard as a guest, if any. */
+    public static guestBoat(player: Player): Boat | undefined {
+        const boat = BoatManager.getBoatAboard(player);
+        const owner = boat && Sailing.instances.get(boat)?.player;
+        return owner && owner !== player ? boat : undefined;
+    }
+
+    /** The players aboard a boat who aren't its owner. */
+    public static guestsOf(instance: Boat): Player[] {
+        const owner = Sailing.instances.get(instance)?.player;
+        return (BoatManager.getDeck(instance)?.getPlayers() ?? []).filter((aboard) => aboard !== owner);
+    }
+
+    /**
+     * Why `guest` can't board `owner`'s boat at `dockId`, or null: the boat has to be moored
+     * there with its owner aboard (a boat is only in the world while its owner is on it) and
+     * hold fewer than `capacity` players, its owner included.
+     */
+    public static guestRefusal(guest: Player, owner: Player, dockId: string, capacity: number): GuestRefusal | null {
+        if (BoatManager.getBoatAboard(guest) || Sailing.instanceFor(guest)) return "aboard";
+        const instance = guest === owner ? undefined : Sailing.instanceAboard(owner);
+        const active = instance && Sailing.instances.get(instance);
+        if (!instance || !active) return "not-aboard";
+        const dock = Sailing.docks.get(dockId);
+        const deck = BoatManager.getDeck(instance);
+        if (!dock || !deck || !BoatManager.getSpec(instance) || Sailing.lastPortOf(active.owned) !== dockId
+            || !Sailing.mooredAt(instance, dock)) return "not-here";
+        return deck.getPlayers().length >= capacity ? "full" : null;
+    }
+
+    /** Puts `guest` aboard `owner`'s boat at `dockId`. Returns why they can't, otherwise null. */
+    public static boardAsGuest(guest: Player, owner: Player, dockId: string, capacity: number): GuestRefusal | null {
+        const refusal = Sailing.guestRefusal(guest, owner, dockId, capacity);
+        if (refusal) return refusal;
+        const instance = Sailing.instanceAboard(owner)!;
+        const active = Sailing.instances.get(instance)!;
+        const dock = Sailing.docks.get(dockId)!;
+        const deck = BoatManager.getDeck(instance)!;
+        const spec = BoatManager.getSpec(instance)!;
+        guest.getSailing().returnPoint = { ...dock.landing };
+        deck.enter(guest);
+        Sailing.moveExpected(guest, new Location(
+            instance.deckBaseX + spec.boardingTile.x, instance.deckBaseY + spec.boardingTile.y, 0));
+        emit("sailing:guest-boarded", { player: guest, boat: instance, owner, owned: active.owned });
+        return null;
+    }
+
+    /** Takes a guest off the boat they are visiting, onto `dockId`'s landing. */
+    public static disembarkGuest(guest: Player, dockId: string): string | null {
+        const dock = Sailing.docks.get(dockId);
+        const instance = Sailing.guestBoat(guest);
+        if (!dock || !instance || !Sailing.mooredAt(instance, dock)) return "You can't disembark here.";
+        guest.getSailing().returnPoint = { ...dock.landing };
+        Sailing.removeGuest(guest, instance, "disembark");
+        Sailing.moveExpected(guest, new Location(dock.landing.x, dock.landing.y, dock.landing.z));
+        return null;
     }
 
     /**
@@ -180,6 +254,7 @@ export class Sailing {
         if (!dock || !instance || !boat) return "You can't dock here.";
         boat.location = Sailing.atSea(instance, dockId);
         Sailing.dockedAt(player, dock, true);
+        Sailing.returnGuestsTo(instance, dock);
         return null;
     }
 
@@ -195,6 +270,7 @@ export class Sailing {
         const { fineX, fineY, level, angle } = instance;
         boat.location = { kind: "docked", dock: dockId, at: { fineX, fineY, level, angle } };
         Sailing.dockedAt(player, dock, true);
+        Sailing.returnGuestsTo(instance, dock);
         Sailing.leave(player, instance, "disembark");
         Sailing.moveExpected(player, new Location(dock.landing.x, dock.landing.y, dock.landing.z));
         return null;
@@ -250,6 +326,12 @@ export class Sailing {
      * position becomes their return point, in case the boat can't be restored.
      */
     public static onLogout(player: Player): void {
+        // A guest leaves the deck they were visiting and logs out ashore.
+        const visited = Sailing.guestBoat(player);
+        if (visited) {
+            Sailing.removeGuest(player, visited, "logout");
+            player.setLocation(Sailing.returnLocation(player));
+        }
         // A player visiting a static ship has stepped off their own boat's deck without
         // disposing it; log that boat out too so it cannot leak an instance.
         const instance = Sailing.instanceFor(player);
@@ -321,8 +403,35 @@ export class Sailing {
         Sailing.leave(player, instance, "sunk");
     }
 
-    /** Takes the player off the deck and removes the boat from the sea. */
+    /** Whether a boat is close enough to a dock's landing to step between them. */
+    private static mooredAt(instance: Boat, dock: SailingDock): boolean {
+        const tile = instance.worldTile();
+        return Math.max(Math.abs(tile.x - dock.landing.x), Math.abs(tile.y - dock.landing.y)) <= MOORED_RANGE;
+    }
+
+    /** Docking moves where the boat's guests go back to, as it does for its owner. */
+    private static returnGuestsTo(instance: Boat, dock: SailingDock): void {
+        for (const guest of Sailing.guestsOf(instance)) guest.getSailing().returnPoint = { ...dock.landing };
+    }
+
+    /** Takes a guest off a deck; the caller moves them (they may already be on their way). */
+    private static removeGuest(guest: Player, instance: Boat, reason: GuestLeaveReason): void {
+        const atHelm = instance.helmPlayerId === guest.getIndex();
+        if (atHelm) instance.helmPlayerId = undefined;
+        const deck = BoatManager.getDeck(instance);
+        if (deck?.hasMember(guest)) deck.leave(guest, false);
+        emit("sailing:guest-left", { player: guest, boat: instance, reason, atHelm });
+    }
+
+    /**
+     * Takes the player off the deck and removes the boat from the sea. A boat doesn't outlive
+     * its owner being aboard, so anyone visiting is put ashore at their return point first.
+     */
     private static leave(player: Player, instance: Boat, reason: LeaveReason): void {
+        for (const guest of Sailing.guestsOf(instance)) {
+            Sailing.removeGuest(guest, instance, "evicted");
+            Sailing.moveExpected(guest, Sailing.returnLocation(guest));
+        }
         Sailing.instances.delete(instance);
         const atHelm = instance.helmPlayerId === player.getIndex();
         if (atHelm) instance.helmPlayerId = undefined;
@@ -335,6 +444,12 @@ export class Sailing {
     private static onTeleport(mobile: Mobile, target: Location): void {
         if (mobile === Sailing.expectedMove || !mobile.isPlayer()) return;
         const player = mobile.getAsPlayer() as Player;
+        // A guest teleporting off someone's boat just leaves it.
+        const visited = Sailing.guestBoat(player);
+        if (visited) {
+            if (!visited.containsDeckTile(target.getX(), target.getY())) Sailing.removeGuest(player, visited, "teleport");
+            return;
+        }
         const instance = Sailing.instanceAboard(player);
         if (!instance || instance.containsDeckTile(target.getX(), target.getY())) return;
         // Teleporting off the boat at sea sinks it.

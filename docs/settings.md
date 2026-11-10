@@ -128,3 +128,12 @@ Native acceptance: at the isolated worktree URL open Quests →Settings, scroll
 Interfaces to Quest List, change sorting/filter, close and open row journals. Choose
 Large, disable shadows, choose a colour (including black), reset and relog. Use the
 worktree ports; leave the main play world running.
+
+## Notification and warning rows
+
+Most warnings and notifications are the client's own scripts reading a varbit; the server only has to flip it, save it and send it at login. Rows are in `data/settings.json`; the cache check is `tests/builtin-warning-settings.test.cjs`.
+
+- **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), Wilderness lever / Ferox / canoe warnings on High Risk worlds (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471) and the Leagues stepping-stones teleport (500).
+- **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
+- **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`.
+- **Not done**: the drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text), the respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77), Sailing drop-item warning (465, default differs between captures), and rows already handled elsewhere (teleport spells 60-64, levers 253, Ferox 255, drink crate 455). The server does not itself send the drop, GE, cannon, bird nest or logout messages; those depend on the client scripts and, for the cannon and bird nest, server messages that were not checked.

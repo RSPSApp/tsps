@@ -55,6 +55,25 @@ const bob = (p, doses) => {
   click({ player: p, groupId: 582, childId: doses + 2, handled: false });
 };
 
+test('Bob replaces an expanded options prompt with a centered chatbox', (t) => {
+  const p = player(t);
+  const sender = p.getPacketSender();
+  const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  OptionDialogue.send(p, 'A choice', ['Yes', 'No']);
+  assert.equal(sender.getVarbit(10670), 1);
+  npcs['Bob Barter (herbs)'].Decant({ player: p });
+  assert.ok(sender.isChatboxInterface(582));
+  assert.equal(sender.getVarbit(10670), 0);
+});
+
+test('closing a creation menu clears the expanded chatbox layout', (t) => {
+  const sender = player(t).getPacketSender();
+  sender.sendCreationMenu({ getItems: () => [obj('vial_empty')], getTitle: () => 'Make' });
+  assert.equal(sender.getVarbit(10670), 1);
+  sender.closeCreationMenu();
+  assert.equal(sender.getVarbit(10670), 0);
+});
+
 test('Bob, unnoted (226/01637): 4 x 2-dose and 11 x 1-dose staminas into 4 x 4-dose and a 3-dose, with 10 vials', (t) => {
   const p = player(t);
   give(p, obj('2dosestamina'), 4);

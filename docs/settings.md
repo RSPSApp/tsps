@@ -69,6 +69,29 @@ The Controls tab's `settings_side:skull_prevention` toggle (116:5) flips the sam
 
 The attack options are also dropdowns on the side panel's Controls tab (`settings_side:attack_priority_player_buttons` 116:38 and `attack_priority_npc_buttons` 116:39). Live sends op1 on their option rows 1–5 and 1–4 at login, and a click sets the varp straight to the option (slot − 1) on the same tick, as the All Settings rows do. Options from enums 3993 and 3991: 0 depends on combat levels, 1 always right-click, 2 left-click where available, 3 hidden, and for players 4 right-click for clanmates.
 
+## Rows owned by other plugins
+
+These features keep their own state and had their own switch before All Settings could change
+them. Each owning plugin listens for `settings:setting-clicked`, flips that same state through its
+own code path, sends the row's varbit and sets `handled`, so a click flips it once. The feature's
+own switch and the row stay in step both ways, and the state comes back at login.
+
+| Setting | Id | State and variable | The feature's own switch |
+| --- | --- | --- | --- |
+| Accept aid | 59 | `accept-aid` attribute, varbit 4180 `option_acceptaid` | The Controls side panel button (116:29). An Ironman is refused ("Ironmen do not accept aid.") from both. |
+| Load-x value for the Dwarf multicannon (number) | 450 | `dwarf-cannon:load-x`, varbit 17870 `option_cannonballs_load_x` | The row asks the cannon's own "Set load-x cannonballs (1 - N):" |
+| Looting bag - Store all | 352 | `looting-bag:store-everything`, varbit 6068 `lootingbag_useallitems` | The bag's Settings menu |
+| Looting bag - Ignore supplies | 353 | `looting-bag:skip-supplies`, varbit 15310 `lootingbag_ignore_food` | The bag's Settings menu |
+| Automatically smash empty vials | 380 | `alfred-grimhands-barcrawl:auto-smash`, varbit 5668 `auto_smash_vials` | The barbarian guard after the Barcrawl. Until it is done the row says the cache's locked text: "You must have completed the Alfred Grimhand's Barcrawl miniquest to access this setting." |
+| Automatically smash empty plant pots | 381 | farm state `barbarian.autoSmash`, varbit 9614 `brut_smash_pots_automatically` (now also sent at login) | Otto's "Toggle automatic pot-smashing". Until his Farming training is done the row says "You must complete the Farming portion of Barbarian Training to access this setting." |
+| Show warning on Wilderness teleport levers | 253 | `levers:skip-wilderness-warning`, varbit 13985 `wilderness_lever_blockwarning_standard` | The warning's "don't ask again" |
+| Show warning on exiting Ferox Enclave | 255 | `ferox:barrier-dont-ask`, varbit 10532 `wildy_hub_warning` | The barrier's "Yes, and don't ask again." |
+| Charter Ships confirmation | 294 | `charter-ships:skip-confirmation`, varbit 75 `settings_warning_confirmation_charter_ships` | The fare question's "don't ask again" |
+| Forgotten drink crate warning | 455 | `charting:drink-no-warning`, varbit 19609 `sailing_charting_drink_crate_warning` | The warning's "Yes, and don't ask again." |
+| Farming protection payment confirmation | 295 | varbit 98 `settings_warning_confirmation_farming_protection`, an ordinary `settings.json` row | The gardener's "Yes and don't ask again." turns the row on through `settings:set`. A save's old per-player `gardenerNoAsk` farm flag moves onto the row once at login and is removed. |
+
+Ours: a row click that changes the setting sends no chat message (only the locked rows and the Ironman refusal say something); the feature's own switch keeps its messages.
+
 ## Level-ups
 
 All on the tick the level is gained:
@@ -141,4 +164,4 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
   - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
   - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
   - The respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77) and the Sailing drop-item warning (465, default differs between captures).
-  - Rows already handled elsewhere: teleport spells 60-64, levers 253, Ferox 255, drink crate 455.
+  - Rows already handled elsewhere: teleport spells 60-64; levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".

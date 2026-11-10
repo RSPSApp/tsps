@@ -63,22 +63,12 @@ const REPLACED_BY_PLUGIN = {
   "Vale Research Exchange": "Ranulph's Omnishop (omnishop row ent_totems_shop, Shop.ValeTotems.js)",
 };
 
-// Karamja gloves variants share their default store's NPC and option; bound
-// as well, the two shops cancel each other out, so only the default is bound.
+// Shop versions a plugin opens from its own NPC options, so they take no binding here: Gabooty's
+// Karamja gloves versions (Tai Bwo Wannai Cleanup). The other Karamja gloves versions share their
+// Default store's NPC option, and the DiaryRewards plugin picks one by the gloves worn.
 const UNBOUND = new Set([
-  "Davon's Amulet Store. (Karamja gloves)",
-  "Fernahei's Fishing Hut. (Karamja gloves)",
   "Gabooty's Tai Bwo Wannai Cooperative. (Karamja gloves)",
   "Gabooty's Tai Bwo Wannai Drinky Store. (Karamja gloves)",
-  "Jiminua's Jungle Store. (Karamja gloves 3+)",
-  "Karamja General Store (Karamja gloves 3)",
-  "Obli's General Store. (Karamja gloves)",
-  "Tamayu's Spear Stall (Karamja gloves)",
-  "TzHaar-Hur-Lek's Ore and Gem Store (Karamja gloves)",
-  "TzHaar-Hur-Rin's Ore and Gem Store (Karamja gloves)",
-  "TzHaar-Hur-Tel's Equipment Store (Karamja gloves)",
-  "TzHaar-Hur-Zal's Equipment Store (Karamja gloves)",
-  "TzHaar-Mej-Roh's Rune Store (Karamja gloves)",
 ]);
 
 // NPC bindings that differ from the Wiki's shop owners: { optionSlot: [ids] }

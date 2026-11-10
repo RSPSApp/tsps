@@ -383,7 +383,17 @@ export class CombatPoisonData {
     CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_DART_P_PLUS_PLUS_, PoisonType.MILD);
 
     CombatPoisonData.types.set(ItemIdentifiers.TOXIC_BLOWPIPE, PoisonType.VENOM);
+    // Wiki (Noxious halberd, Venom): melee attacks envenom 33% of the time. The wieldable halberd and
+    // its br_ copy; 29797/29798 are its note and placeholder.
+    CombatPoisonData.types.set(ItemIdentifiers.NOXIOUS_HALBERD, PoisonType.VENOM);
+    CombatPoisonData.types.set(ItemIdentifiers.NOXIOUS_HALBERD_4, PoisonType.VENOM);
     // Note: Abyssal tentacle has no poison/venom effect in OSRS - do not add it here.
+  }
+
+  /** Melee hits poison on Misc.getRandom(range) === 0: 1 in 4, or 1 in 3 for the noxious halberd. */
+  public static getMeleeRollRange(item?: Item): number {
+    const id = item?.getId();
+    return id === ItemIdentifiers.NOXIOUS_HALBERD || id === ItemIdentifiers.NOXIOUS_HALBERD_4 ? 2 : 3;
   }
 
   public static getPoisonType(item?: Item): PoisonType | undefined {

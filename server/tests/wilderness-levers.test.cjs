@@ -328,3 +328,17 @@ test("lever:teleport hands its onArrival callback to the teleport, to run on lan
   assert.equal(calls.length, 1);
   assert.equal(calls[0][4], onArrival, "TeleportHandler.teleport's arrival callback");
 });
+
+test("All Settings' Deep Wilderness lever default option puts the Keep lever's Edgeville first", () => {
+  for (const [first, look] of [[0, 1], [1, 2]]) {
+    const h = harness({ diaryComplete: true });
+    const who = player({ [varbit("wilderness_lever_first_op")]: first });
+    who.sent.set(varbit("wilderness_lever_blockwarning_standard"), 1);
+    who.setAttribute("levers:skip-wilderness-warning", true);
+    use(h, who, "edgeville_wildy_lever", "Pull", 3090, 3475);
+    runTicks(h, who, 8);
+    assert.equal(who.sent.get(varbit("wildoutlever_vis")), look, first ? "Edgeville first, as recording 4155's player had it" : "Ardougne first");
+    const ops = ObjectDefinition.forPlayer(loc("wildoutlever"), who).getInteractions().slice(0, 2);
+    assert.deepEqual(ops, first ? ["Edgeville", "Ardougne"] : ["Ardougne", "Edgeville"]);
+  }
+});

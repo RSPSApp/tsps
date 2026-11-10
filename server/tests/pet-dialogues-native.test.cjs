@@ -303,3 +303,11 @@ test('an invalid explicit ordinary selector cannot fall back to another form or 
   row.dialogueVariant=previous;await talk(f,n);
   assert.equal(text(f),'How much wood would a woodchuck chuck if a woodchuck could chuck wood?');
 });
+
+// Transcript:Rocky also has tanuki and red panda sections; the Rocky follower opens its own (issue #4183).
+test('Rocky native Talk-to opens its standard conversation rather than nothing',async t=>{
+  const f=actor(t),n=await summon(f,core.ItemIdentifiers.ROCKY);t.mock.method(Math,'random',()=>0.3);
+  await talk(f,n);assert.equal(text(f),'Is there much competition between you raccoons and the magpies?');
+  await input(f,{type:'dialogue_continue',widgetId:(217<<16)|5,childIndex:-1});
+  assert.equal(text(f),"Magpies have nothing on us! They're just interested in shinies.");
+});

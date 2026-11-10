@@ -100,28 +100,11 @@ export class TeleportHandler {
      *            The location to teleport to.
      * @param teleportType
      *            The type of teleport.
+     * @param _wildernessWarning
+     *            Unused. A Wilderness teleport's warning is asked before the teleport starts, by the spell or
+     *            tablet that has one (the SpellTeleports plugin), so nothing is used up if the player says no.
      */
-    public static teleport(player: Player, targetLocation: Location, teleportType: TeleportType, wildernessWarning: boolean, onArrival?: () => void, onMiddle?: () => void): void {
-        if (wildernessWarning) {
-            let warning = "";
-            const wilderness = Wilderness.isInLocation(targetLocation);
-            const wildernessLevel = Wilderness.levelAt(targetLocation.getX(), targetLocation.getY());
-            if (wilderness) {
-                warning += "Are you sure you want to teleport there? ";
-                if (wildernessLevel > 0) {
-                    warning += "It's in level @red@" + wildernessLevel + "@bla@ wilderness! ";
-                    if (Wilderness.isMulti(targetLocation.getX(), targetLocation.getY(), targetLocation.getZ())) {
-                        warning += "Additionally, @red@it's a multi zone@bla@. Other players may attack you simultaneously.";
-                    } else {
-                        warning += "Other players will be able to attack you.";
-                    }
-                } else {
-                    warning += "Other players will be able to attack you.";
-                }
-                return;
-            }
-        }
-
+    public static teleport(player: Player, targetLocation: Location, teleportType: TeleportType, _wildernessWarning: boolean, onArrival?: () => void, onMiddle?: () => void): void {
         player.getMovementQueue().setBlockMovement(true).reset();
         this.onTeleporting(player);
         player.performAnimation(teleportType.getStartAnimation());

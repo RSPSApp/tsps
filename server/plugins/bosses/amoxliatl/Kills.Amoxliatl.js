@@ -9,6 +9,7 @@
 const Common = require("./Common.Amoxliatl");
 const CombatAchievements = require("./CombatAchievements.Amoxliatl");
 const Scoreboard = require("./Scoreboard.Amoxliatl");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const HUD_FADE_AFTER_REMOVAL_TICKS = 4;
 const BOSS_NAME = "Amoxliatl";
@@ -39,7 +40,7 @@ function bossDeath(event) {
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   // As captured, both lines come before any Combat Achievement the kill finishes.
   const total = CombatAchievements.killed(player, own, (kills) => {
-    player.sendMessage(`Your Amoxliatl kill count is: <col=ff0000>${kills}</col>.`);
+    sendBossKillCount(player, `Your Amoxliatl kill count is: <col=ff0000>${kills}</col>.`);
     player.sendMessage(duration);
   });
   player.setAttribute(Common.KILLS_ATTRIBUTE, Math.max(own, total ?? 0));

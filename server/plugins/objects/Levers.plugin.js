@@ -99,6 +99,8 @@ function resolve() {
     skipWarning: need(cache.getVarbitId("wilderness_lever_blockwarning_standard"), "wilderness_lever_blockwarning_standard"),
     // The Keep lever's multiloc: 0 "Pull", 1 Ardougne first, 2 Edgeville first.
     keepLever: need(cache.getVarbitId("wildoutlever_vis"), "wildoutlever_vis"),
+    // All Settings "Deep Wilderness lever default option": 1 puts Edgeville first.
+    edgevilleFirst: need(cache.getVarbitId("wilderness_lever_first_op"), "wilderness_lever_first_op"),
   };
 }
 
@@ -163,7 +165,9 @@ function hasEasyWildernessDiary(player) {
  * Edgeville first, got 2).
  */
 function landedInKeep(player) {
-  if (hasEasyWildernessDiary(player)) player.getPacketSender().sendVarbit(ids.keepLever, 1);
+  if (!hasEasyWildernessDiary(player)) return;
+  const sender = player.getPacketSender();
+  sender.sendVarbit(ids.keepLever, sender.getVarbit(ids.edgevilleFirst) === 1 ? 2 : 1);
 }
 
 function landed(player, destination) {

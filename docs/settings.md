@@ -257,5 +257,54 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Not done**:
   - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
   - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
-  - The respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77) and the Sailing drop-item warning (465, default differs between captures).
-  - Rows already handled elsewhere: teleport spells 60-64; levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+  - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
+  - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+
+## Wilderness teleport warnings
+
+`server/plugins/combat/SpellTeleports.plugin.js` warns before a Wilderness teleport spell is cast or a Wilderness tablet is broken, while the spell's or tablet's row is on (cache check and every case in `tests/wilderness-teleport-warnings.test.cjs`).
+
+| Setting | Id | Variable | Warns while |
+| --- | --- | --- | --- |
+| Show warning when casting: Teleport to Target, Dareeyak, Carrallanger, Annakarl, Ghorrock Teleport | 60-64 | varbits 236 `bounty_teleport_warning`, 6284-6287 `*_teleport_warning` | 1 (default, sent at login) |
+| Show warning when using tablet: Ice Plateau, Cemetery, Wilderness Crabs, Dareeyak, Carrallanger, Annakarl, Ghorrock | 67-73 | varbits 2323, 2322, 3932, 3930, 2325, 2324, 3931 `teletab_*_warning` | 0 (default; the row's struct reads it inverted, param 1084) |
+| Enable / Disable Wilderness teleport warnings (buttons) | 77 / 76 | sets 60-64 | |
+| Enable / Disable tablet warnings (buttons) | 75 / 74 | sets 67-73 | |
+
+- **Defaults.** Live sends 1 for the four Ancient spells' varbits at login in 3,238 rsprox recordings (and `bounty_teleport_warning` in 2,966), and never changes the tablets' varbits, whose warning shows: both are on by default.
+- **One value.** The rows are in `data/settings.json`, so they are saved in `settings:values`. The spellbook's op10 ("Disable warning" / "Enable warning") sets the same row through `settings:set`. The `spell-teleports:wilderness-warnings` attribute that op10 used to save (off by default, and read by nothing) is cleared at login.
+- **Spells** (rsprox 3330, an event world, Annakarl Teleport): "Are you sure you wish to teleport to the Wilderness?", "Yes, teleport me now." / "No, I want to stay here."; Yes casts on that tick. The spell's level, rune and Wilderness checks run before the warning, and again on Yes, when the runes are taken. Ours: the same line for the other spells, Teleport to Target included (it asks after its own Bounty Hunter checks).
+- **Tablets** (rsprox 3931 Annakarl and Ghorrock, 1463 Dareeyak): "Teleport into the DEEP wilderness?" or "Teleport into the wilderness?", "Yes" / "No"; Yes breaks the tablet then, which is used up as it is absorbed. Ours: the deep line for Ice Plateau, Cemetery and Wilderness crabs (past level 30), the other for Carrallanger.
+- **Buttons.** No capture; each sets every row of its group on or off, with no message.
+- **Not done:** the tablets' own Configure option (no capture).
+
+## Rows that switch existing behaviour
+
+Each of these rows is a plain toggle (`data/settings.json`). The plugin that owns the behaviour reads the varbit when it acts, so a change applies from the next time. A row whose cache struct has param 1084 is ticked while its varbit is 0. New accounts start with every one at 0, as live sends none of them at login (161 aside, which is on). Tests: `tests/settings-gates.test.cjs`, plus the area suites named below.
+
+| Setting | Id | Varbit | With the varbit at 1 |
+| --- | --- | --- | --- |
+| Warning on digging up a farming patch | 446 | 17797 `settings_farming_dig_disable_warning` | Dig-up clears the patch without "Are you sure you want to dig up this patch?" |
+| Show warning on taking a canoe to the Wilderness | 256 | 13988 `wildy_canoe_warning` | The waka goes into the Wilderness without the one-way-trip question |
+| Bank Deposit Box item quantity check | 424 | 15958 `bank_depositbox_oplocu_askquantity` | An item used on a deposit box deposits all of it, without "How many would you like to deposit?" (a full bank keeps them, as Bank.deposit does) |
+| Disable Phantom Muspah messages | 302 | 14711 `settings_muspah_messages` | No darkness, prayer shield or corruption lines in the fight (`Common.PhantomMuspah.fightMessage`) |
+| Iron loot restriction messages | 183 | 13040 `iron_noloot_message_disabled` | No "you might not receive kill-credit" or shared-kill loot line for an Ironman |
+| Filter out boss kill-count with spam-filter | 41 | 4930 `boss_killcount_filtered` | Boss kill-count lines go to the spam channel, which the chatbox's Game filter hides (ours: no capture shows the setting on). Every boss sends them through `interface/BossKillCount.plugin.js`; a test fails on one sent any other way |
+| Combat Achievement Tasks - Failure | 161 | 12454 `ca_failure_notifications_enabled` | (on by default) "You have failed <task>: <reason>" for tasks not yet done; at 0, no failure lines. Content reports failures with `combat-achievements:failed` { player, task, reason } |
+| Combat Achievement Tasks - Repeat failure | 162 | 12457 `ca_refailure_notifications_enabled` | Failure lines for tasks already done too, while 161 is on |
+| Charting popups | 456 | 18142 `settings_sailing_charting_popup` | Charting is told in chat only, with no "Charting Complete!" popup |
+| Make-X barbarian potions | 373 | 5983 `settings_barbarian_potion_makex` | A barbarian mix offers the Make-X menu; at 0 (default) it is made one at a time |
+| Deep Wilderness lever default option | 296 | 14674 `wilderness_lever_first_op` | Landing in the Deserted Keep with the easy Wilderness Diary sets `wildoutlever_vis` to 2: Edgeville first (rsprox 4155) |
+| Current duck hint arrow | 458 | 18133 `sailing_current_duck_hintarrow_disabled` | No hint arrow (or `current_hint_arrow`) over a released current duck |
+| Barracuda trials hint arrow | 459 | 18134 `sailing_barracuda_trials_hintarrow_disabled` | No hint arrow over the trial's rum or toad boat. The intro tour's arrows stay |
+| Combat task interface remembers last interface opened | 452 | 17939 `settings_ca_open_last_interface_disabled` | The account summary's row opens the overview instead of the screen used last |
+
+**Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
+
+Not done yet:
+
+- **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
+- **Level-up chatbox list** (493): no capture shows what it writes.
+- **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
+- **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+- **Alchemy on untradeables warning** (65): its own change with the alchemy value warning.

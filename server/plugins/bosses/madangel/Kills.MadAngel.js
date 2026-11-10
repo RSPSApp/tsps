@@ -6,6 +6,7 @@
  * (Wiki: 26 ticks), then the angel is back on its spot, dormant, to be woken again.
  */
 const Common = require("./Common.MadAngel");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const BOSS_NAME = "Mad Angel";
 
 function onAngelDeath(event) {
@@ -22,7 +23,7 @@ function onAngelDeath(event) {
   const kills = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, kills);
   player.getPacketSender().sendConfig(killCountVarp, kills);
-  player.sendMessage(`Your Mad Angel kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Mad Angel kill count is: <col=ff0000>${kills}</col>.`);
   const ticks = fight.tick - fight.startTick;
   const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
   if (!best || ticks < best) {

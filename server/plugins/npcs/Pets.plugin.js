@@ -325,6 +325,8 @@ const PETS = [
   {
     enumName: "ROCKY",
     petId: 7336,
+    // Transcript:Rocky also has tanuki (Ziggy) and red panda (Red) sections; this follower is Rocky.
+    dialogueVariant: "standard-dialogue",
     morphId: 0,
     itemId: 20663,
     dialogue: -1,

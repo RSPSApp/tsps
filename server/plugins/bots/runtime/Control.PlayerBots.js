@@ -41,9 +41,15 @@ function copyStatsToBot({ player, parts }) {
     return true;
   }
   const bot = entry.player;
-  // While driving a bot (::botcontrol) the command runs as that bot; "me" is still the parked owner.
-  const source = controls.get(player) ?? player;
-  const from = source.getSkillManager();
+  for (const item of bot.getEquipment().getItems()) {
+    if (!item || item.getId() <= 0) continue;
+    const definition = item.getDefinition();
+    if (!api.core.EquipmentRequirements.meets(player, definition)) {
+      player.sendMessage(`Have ${bot.getDisplayName()} unequip ${definition.getName()} before copying your stats.`);
+      return true;
+    }
+  }
+  const from = player.getSkillManager();
   const to = bot.getSkillManager();
   for (const skill of api.core.Skill.values()) {
     const level = from.getMaxLevel(skill);
@@ -51,6 +57,8 @@ function copyStatsToBot({ player, parts }) {
       .setCurrentLevel(skill, level, false)
       .setExperiences(skill, from.getExperience(skill), false);
   }
+  api.core.BonusManager.update(bot);
+  api.core.WeaponInterfaceManager.assign(bot);
   bot.getPacketSender().sendSkillsSnapshot();
   bot.getUpdateFlag().flag(api.core.Flag.APPEARANCE);
   player.sendMessage(`Copied your stats to ${bot.getDisplayName()}.`);

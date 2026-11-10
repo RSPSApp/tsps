@@ -503,6 +503,11 @@ module.exports = function registerBiohazardQuest(api) {
     if (scene.shown && --ladderCrossings === 0) showRopeLadder(false);
   }
 
+  /** Logging out cancels the player's scene timers, so the scene ends here instead. */
+  function endLadderSceneOnLogout({ player }) {
+    endLadderScene(player);
+  }
+
   /** "... throws a rope ladder over the wall.": the ladder goes up and the player looks at it. */
   function throwRopeLadder(player, westbound) {
     endLadderScene(player);
@@ -1504,4 +1509,5 @@ module.exports = function registerBiohazardQuest(api) {
   api.onCanUnequip(refuseUnequip);
   api.onCanEquip(refuseEquipOver);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(endLadderSceneOnLogout);
 };

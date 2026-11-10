@@ -197,6 +197,21 @@ test("Omart without a gas mask stops before the ladder", () => {
   assert.equal(quest.getStage(player), 4);
 });
 
+test("logging out mid-crossing still puts the walls back", () => {
+  const player = actor(4, 2559, 3267);
+  wear(player, core.Equipment.HEAD_SLOT, core.ItemIdentifiers.GAS_MASK);
+  QuestRuntime.startTranscript(api, player, core.NpcIdentifiers.OMART, "Biohazard",
+    "getting-started-talking-to-omart-after-freeing-the-birds", omartYes);
+  next(player);
+  tick(player);
+  assert.ok(objectAt(2065, 2558, 3267));
+  PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+  core.TaskManager.cancelTasks(player);
+  const other = actor(1, 2600, 3300);
+  tick(other, 8);
+  assert.ok(objectAt(2066, 2558, 3267) && objectAt(2066, 2557, 3267));
+});
+
 test("Jerico's cupboard: open message, reach a tick later, open loc after; feed with the player's line", () => {
   const player = actor(2, 2611, 3325);
   objectOption(player, 2056, 2611, 3326, 0, "Open");

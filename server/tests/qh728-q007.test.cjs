@@ -187,6 +187,7 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
     onPlayerLogin(handler) {
       handlers.login.push(handler);
     },
+    onPlayerLogout() {},
     onNpcDeath(handler) {
       handlers.npcDeath = handler;
     },

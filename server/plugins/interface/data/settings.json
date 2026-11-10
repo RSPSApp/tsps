@@ -98,6 +98,7 @@
     "189": { "name": "Bird nest notification", "varbit": 13087 },
     "192": { "name": "Show confirmation when paying for items from gravestone", "varbit": 13113, "default": 1 },
     "195": { "name": "Chatbox Mode - Set Automatically", "varbit": 13120 },
+    "205": { "name": "Accept trade delay", "varbit": 13130, "default": 1 },
     "248": { "name": "Cannon low on ammo notification", "varbit": 14175 },
     "250": { "name": "Cannon out of ammo notification", "varbit": 14177 },
     "254": { "name": "Show warning on Wilderness teleport levers on High Risk worlds", "varbit": 13986 },

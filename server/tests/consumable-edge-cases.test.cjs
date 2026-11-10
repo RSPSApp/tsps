@@ -639,6 +639,38 @@ test("prayer regeneration restores a point every 12 ticks, never above max, and 
   assert.equal(player.getAttribute("potions:prayer-regen:state"), null, "death clears the effect");
 });
 
+// rsprox_transcripts/239/04269.txt, 239/04288.txt and 231/02990.txt (normal worlds): the timer steps 66 down to 0 every
+// 12 ticks; "...has almost run out!" at 3 left, "...have worn off." at 0, and the worn-off line on death too (239/04272).
+test("prayer regeneration: 66 steps, the warning at 3 left, the worn-off line at the end and on death", () => {
+  const WARNING = "<col=ff3045>Your Prayer Regeneration potion has almost run out!";
+  const WORN_OFF = "<col=ff3045>The effects of your Prayer Regeneration potion have worn off.";
+  const player = createPlayer({ base: 99, current: 1 });
+  const lines = [];
+  player.sendMessage = (text) => lines.push(text);
+  applyPrayerRegeneration(player);
+  const step = () => { player.getAttribute("potions:prayer-regen:state").nextRestoreAt = Date.now() - 1; processPrayerRegeneration(player); };
+  for (let i = 0; i < 62; i++) step();
+  assert.deepEqual(lines, [], "nothing said for the first 62 steps");
+  step();
+  assert.deepEqual(lines, [WARNING], "3 steps left");
+  step(); step();
+  assert.deepEqual(lines, [WARNING]);
+  step();
+  assert.deepEqual(lines, [WARNING, WORN_OFF], "the 66th step ends it");
+  assert.equal(player.getAttribute("potions:prayer-regen:state"), null);
+  assert.equal(player.levels.get(Skill.PRAYER), 1 + 66, "a point each step");
+
+  lines.length = 0;
+  applyPrayerRegeneration(player);
+  for (let i = 0; i < 10; i++) step();
+  applyPrayerRegeneration(player);
+  assert.equal(player.getAttribute("potions:prayer-regen:state").left, 66, "a drink while it runs starts it again");
+  clearPrayerRegeneration({ player });
+  assert.deepEqual(lines, [WORN_OFF], "dying ends it with the worn-off line");
+  clearPrayerRegeneration({ player });
+  assert.deepEqual(lines, [WORN_OFF], "and says nothing with no potion running");
+});
+
 test("the Drunken Dwarf's beer is drinkable and leaves a beer glass", () => {
   const entry = Potions._test.findPotionEntry(ItemIdentifiers.BEER);
   assert.equal(entry.replacementId, ItemIdentifiers.BEER_GLASS);

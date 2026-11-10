@@ -70,7 +70,6 @@ const PRESERVE_EXTENSION_MS = 30 * 1000;
 const PRESERVE_WARMUP_MS = 15 * 1000;
 const MENAPHITE_DURATION_MS = 5 * 60 * 1000;
 const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
-const PRAYER_REGEN_DURATION_MS = 8 * 60 * 1000;
 /** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
 const PRAYER_REGEN_INTERVAL_MS = 12 * 600;
 
@@ -324,17 +323,36 @@ function processMenaphite(player) {
   }
 }
 
-/** Wiki: restores one Prayer point every 12 ticks for 8 minutes; never over max. */
+/**
+ * The potion's timer, as recorded (rsprox_transcripts/239/04269.txt, 239/04288.txt, 231/02990.txt, normal worlds):
+ * prayer_regeneration_potion_timer starts at 66 and steps down every 12 ticks, a Prayer point each step. At 3 steps
+ * left, "Your Prayer Regeneration potion has almost run out!"; at 0, "The effects of your Prayer Regeneration potion
+ * have worn off." A drink while it runs starts it again at 66. Dying zeroes it with the same worn-off line
+ * (239/04272.txt, 239/04288.txt).
+ */
+const PRAYER_REGEN_STEPS = 66;
+const PRAYER_REGEN_WARNING_STEPS = 3;
+const PRAYER_REGEN_WARNING = "<col=ff3045>Your Prayer Regeneration potion has almost run out!";
+const PRAYER_REGEN_WORN_OFF = "<col=ff3045>The effects of your Prayer Regeneration potion have worn off.";
+
+/** Wiki: restores one Prayer point every 12 ticks; never over max. */
 function applyPrayerRegeneration(player) {
   const now = Date.now();
   player.setAttribute(ATTR_PRAYER_REGEN_STATE, {
-    endsAt: now + PRAYER_REGEN_DURATION_MS,
+    left: PRAYER_REGEN_STEPS,
+    endsAt: now + PRAYER_REGEN_STEPS * PRAYER_REGEN_INTERVAL_MS,
     nextRestoreAt: now + PRAYER_REGEN_INTERVAL_MS,
   });
 }
 
-function clearPrayerRegeneration({ player }) {
+function endPrayerRegeneration(player) {
+  if (!player.getAttribute(ATTR_PRAYER_REGEN_STATE)) return;
   player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+  player.sendMessage(PRAYER_REGEN_WORN_OFF);
+}
+
+function clearPrayerRegeneration({ player }) {
+  endPrayerRegeneration(player);
 }
 
 function processPrayerRegeneration(player) {
@@ -343,8 +361,10 @@ function processPrayerRegeneration(player) {
     return;
   }
   const now = Date.now();
-  if (now >= state.endsAt) {
-    player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+  // A state saved before the step count existed has only its end time: the steps that still allows.
+  const steps = Number.isInteger(state.left) ? state.left : Math.ceil((state.endsAt - now) / PRAYER_REGEN_INTERVAL_MS);
+  if (steps <= 0) {
+    endPrayerRegeneration(player);
     return;
   }
   if (now < state.nextRestoreAt) {
@@ -352,6 +372,13 @@ function processPrayerRegeneration(player) {
   }
   const max = getMaxLevel(player, Skill.PRAYER);
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, 1, max);
+  const left = steps - 1;
+  if (left <= 0) {
+    endPrayerRegeneration(player);
+    return;
+  }
+  if (left === PRAYER_REGEN_WARNING_STEPS) player.sendMessage(PRAYER_REGEN_WARNING);
+  state.left = left;
   state.nextRestoreAt = now + PRAYER_REGEN_INTERVAL_MS;
   player.setAttribute(ATTR_PRAYER_REGEN_STATE, state);
 }

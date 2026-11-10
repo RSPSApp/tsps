@@ -181,8 +181,8 @@ function emptyStored(player, container) {
     return contents;
 }
 const DEATH_CONTAINERS = [
-    { holds: item => containerKind(item) === "herb", empty: emptyStored },
-    { holds: item => containerKind(item) === "seed", empty: emptyStored, toBankInPvp: true },
+    { holds: item => containerKind(item) === "herb", empty: emptyStored, varbit: "emptyondeath_herbsack" },
+    { holds: item => containerKind(item) === "seed", empty: emptyStored, varbit: "emptyondeath_seedbox", toBankInPvp: true },
 ];
 function deathContainers(query) {
     query.containers.push(...DEATH_CONTAINERS);

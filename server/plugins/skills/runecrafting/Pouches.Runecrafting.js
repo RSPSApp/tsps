@@ -433,6 +433,7 @@ function login({ player }) {
  */
 const deathContainer = {
   holds: (item) => pouchFor(item.getId()) !== null,
+  varbit: "emptyondeath_essencepouch",
   empty(player, item) {
     const pouch = pouchFor(item.getId());
     const state = stateOf(player, pouch);

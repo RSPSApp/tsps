@@ -6,6 +6,7 @@ const Pouch = require("./Common.RunePouch");
 
 const container = {
   holds: Pouch.isPouch,
+  varbit: "emptyondeath_runepouch",
   empty(player) {
     const runes = Pouch.slots(player).filter(Boolean);
     if (runes.length > 0) Pouch.setSlots(player, Array.from({ length: Pouch.SLOTS }, () => null));

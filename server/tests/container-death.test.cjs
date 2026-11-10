@@ -29,12 +29,12 @@ const BONES = 526;
 /** Each container, how to fill it, and where its contents live while it holds them. */
 const CONTAINERS = [
   {
-    name: "rune pouch", id: 12791, contents: [[AIR_RUNE, 100], [LAW_RUNE, 50]],
+    name: "rune pouch", setting: 354, id: 12791, contents: [[AIR_RUNE, 100], [LAW_RUNE, 50]],
     fill: (player) => player.setAttribute("rune-pouch:runes", [[AIR_RUNE, 100], [LAW_RUNE, 50], null, null]),
     stored: (player) => (player.getAttribute("rune-pouch:runes") ?? []).filter(Boolean),
   },
   {
-    name: "small pouch", id: 5509, contents: [[PURE_ESSENCE, 3]],
+    name: "small pouch", setting: 358, id: 5509, contents: [[PURE_ESSENCE, 3]],
     fill: (player) => player.setAttribute("runecrafting:pouches", { small: { amount: 3, type: 2, decay: 0 } }),
     stored: (player) => {
       const small = player.getAttribute("runecrafting:pouches")?.small;
@@ -42,14 +42,14 @@ const CONTAINERS = [
     },
   },
   {
-    name: "herb sack", id: 13226, contents: [[GRIMY_RANARR, 20]], meta: { "farming:stored": { [GRIMY_RANARR]: 20 } },
+    name: "herb sack", setting: 359, id: 13226, contents: [[GRIMY_RANARR, 20]], meta: { "farming:stored": { [GRIMY_RANARR]: 20 } },
   },
   {
-    name: "seed box", id: 13639, contents: [[RANARR_SEED, 10]], meta: { "farming:stored": { [RANARR_SEED]: 10 } },
+    name: "seed box", setting: 357, id: 13639, contents: [[RANARR_SEED, 10]], meta: { "farming:stored": { [RANARR_SEED]: 10 } },
     toBankInPvp: true,
   },
   {
-    name: "tackle box", id: 25580, contents: [[FISHING_BAIT, 40]],
+    name: "tackle box", setting: 355, id: 25580, contents: [[FISHING_BAIT, 40]],
     fill: (player) => Storage.store(player, Storage.FAMILIES.get("tackle-box"), FISHING_BAIT, 40),
     stored: (player) => Storage.contents(player, Storage.FAMILIES.get("tackle-box")).map(({ id, amount }) => [id, amount]),
   },
@@ -79,11 +79,12 @@ function actor(t, name) {
 }
 
 /** A player carrying `container`, full, plus coins; `kept` decides whether the death keeps it. */
-function loadout(t, container, kept) {
+function loadout(t, container, kept, setting = false) {
   const player = actor(t, "cdeath");
   player.getInventory().addItem(new core.Item(container.id, 1, container.meta && JSON.parse(JSON.stringify(container.meta))));
   player.getInventory().addItem(new core.Item(COINS, 1000));
   container.fill?.(player);
+  if (setting) PluginManager.emitCustomEvent("settings:set", { player, settingId: container.setting, value: 1 });
   // Unskulled the death keeps three items; skulled, none.
   if (!kept) player.setSkullTimer(100);
   return player;
@@ -121,8 +122,8 @@ function owned(player, container, floor) {
 }
 
 /** Dies as `kind` ("pve", "pvp" or "safe") and returns where everything went. */
-function die(t, container, { kept, kind }) {
-  const player = loadout(t, container, kept);
+function die(t, container, { kept, kind, setting = false }) {
+  const player = loadout(t, container, kept, setting);
   const floor = [];
   t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item) => floor.push(item));
   const before = owned(player, container, floor).all;
@@ -151,46 +152,92 @@ for (const container of CONTAINERS) {
   const all = total(container.contents);
   // Herb sacks and seed boxes keep their contents on the item; the rest keep them on the player.
   const insideItem = !!container.meta;
+  /** The grave's copy of the container holds nothing. */
+  const emptyInGrave = (player) => (player.getAttribute("gravestones:grave")?.items ?? [])
+    .filter((entry) => entry.id === container.id)
+    .every((entry) => Object.keys(entry.meta?.["farming:stored"] ?? {}).length === 0);
 
-  test(`${container.name}: a safe death changes nothing`, (t) => {
-    for (const kept of [true, false]) {
-      const { after } = die(t, container, { kept, kind: "safe" });
+  for (const setting of [false, true]) {
+    const named = (text) => `${container.name}, setting ${setting ? "on" : "off"}: ${text}`;
+
+    test(named("a safe death changes nothing"), (t) => {
+      for (const kept of [true, false]) {
+        const { after } = die(t, container, { kept, kind: "safe", setting });
+        assert.equal(amount(after.carried, container.id), 1);
+        assert.equal(held(insideItem ? after.carried : after.stored, container), all);
+      }
+    });
+
+    test(named(setting ? "kept on a PvM death, its contents go to the grave and it stays empty" : "kept on a PvM death, it keeps its contents"), (t) => {
+      const { player, after } = die(t, container, { kept: true, kind: "pve", setting });
       assert.equal(amount(after.carried, container.id), 1);
-      assert.equal(held(insideItem ? after.carried : after.stored, container), all);
-    }
-  });
+      assert.equal(amount(after.grave, container.id), 0);
+      if (!setting) {
+        assert.equal(held(insideItem ? after.carried : after.stored, container), all);
+        assert.equal(held(after.grave, container), 0);
+        return;
+      }
+      assert.equal(held(after.carried, container) + held(after.stored, container), 0, "the container is empty");
+      assert.equal(held(after.grave, container), all);
+      assert.ok(player.getAttribute("gravestones:grave"), "a grave holds them");
+    });
 
-  test(`${container.name}: kept on a PvM death, it keeps its contents`, (t) => {
-    const { after } = die(t, container, { kept: true, kind: "pve" });
-    assert.equal(amount(after.carried, container.id), 1);
-    assert.equal(held(insideItem ? after.carried : after.stored, container), all);
-    assert.equal(held(after.grave, container), 0);
-  });
-
-  test(`${container.name}: lost on a PvM death, it goes to the grave with its contents still in it`, (t) => {
-    const { after } = die(t, container, { kept: false, kind: "pve" });
-    assert.equal(amount(after.grave, container.id), 1);
-    assert.equal(amount(after.carried, container.id), 0);
-    // Reclaimed, the container still holds them (Wiki: Rune pouch, 21 June 2023; Herb sack).
-    assert.equal(held(insideItem ? after.grave : after.stored, container), all);
-  });
-
-  for (const kept of [true, false]) {
-    test(`${container.name}: ${kept ? "kept" : "lost"} on a PvP death, ${container.keptInPvp && kept ? "it keeps its contents" : "its contents go to the killer"}`, (t) => {
-      const { after } = die(t, container, { kept, kind: "pvp" });
-      // Untradeable, the container stays with the player either way.
-      assert.equal(amount(after.carried, container.id), 1);
-      assert.equal(after.grave.size, 0, "a PvP death makes no grave");
-      if (container.keptInPvp && kept) {
-        assert.equal(held(after.stored, container), all);
+    test(named(setting ? "lost on a PvM death, it and its contents go to the grave apart" : "lost on a PvM death, it goes to the grave with its contents still in it"), (t) => {
+      const { player, after } = die(t, container, { kept: false, kind: "pve", setting });
+      assert.equal(amount(after.grave, container.id), 1);
+      assert.equal(amount(after.carried, container.id), 0);
+      if (!setting) {
+        // Reclaimed, the container still holds them (Wiki: Rune pouch, 21 June 2023; Herb sack).
+        assert.equal(held(insideItem ? after.grave : after.stored, container), all);
         return;
       }
       assert.equal(held(after.stored, container), 0);
-      assert.equal(held(after.carried, container), 0, "the container is empty");
-      assert.equal(held(container.toBankInPvp ? after.bank : after.floor, container), all);
+      assert.ok(emptyInGrave(player), "the grave's container is empty");
+      assert.equal(held(after.grave, container), all);
     });
+
+    for (const kept of [true, false]) {
+      test(named(`${kept ? "kept" : "lost"} on a PvP death, its contents go to the killer`), (t) => {
+        const { after } = die(t, container, { kept, kind: "pvp", setting });
+        // Untradeable, the container stays with the player either way.
+        assert.equal(amount(after.carried, container.id), 1);
+        assert.equal(after.grave.size, 0, "a PvP death makes no grave");
+        assert.equal(held(after.stored, container), 0);
+        assert.equal(held(after.carried, container), 0, "the container is empty");
+        assert.equal(held(container.toBankInPvp ? after.bank : after.floor, container), all);
+      });
+    }
   }
 }
+
+test("the six Always empty rows are toggles on their emptyondeath varbits, off by default, saved and sent back at login", (t) => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const settings = require("../plugins/interface/data/settings.json").settings;
+  const rows = { 354: "runepouch", 355: "tacklebox", 356: "boltpouch", 357: "seedbox", 358: "essencepouch", 359: "herbsack" };
+  const types = new Map();
+  for (const [, structId] of CacheDefinitions.getEnumValues(422)) {
+    const category = CacheDefinitions.getStructParams(Number(structId));
+    for (const [, s] of CacheDefinitions.getEnumValues(Number(category.get(745)))) {
+      const params = CacheDefinitions.getStructParams(Number(s));
+      types.set(Number(params.get(1077)), [Number(params.get(1078) ?? 0), params.get(1086)]);
+    }
+  }
+  const player = actor(t, "rows");
+  for (const [id, name] of Object.entries(rows)) {
+    const varbit = CacheDefinitions.getVarbitId(`emptyondeath_${name}`);
+    assert.equal(settings[id]?.varbit, varbit, `row ${id} sets emptyondeath_${name}`);
+    assert.equal(settings[id].default, undefined, `row ${id} is off by default`);
+    assert.deepEqual(types.get(Number(id)), [0, settings[id].name], `row ${id} is the cache's toggle of that name`);
+    PluginManager.emitCustomEvent("settings:set", { player, settingId: Number(id), value: 1 });
+    assert.equal(player.getAttribute("settings:values")?.[`varbit:${varbit}`], 1, `row ${id} is saved`);
+  }
+  const relogged = actor(t, "rows");
+  relogged.setAttribute("settings:values", JSON.parse(JSON.stringify(player.getAttribute("settings:values"))));
+  PluginManager.emitPlayerLogin({ player: relogged, username: relogged.getUsername() });
+  for (const name of Object.values(rows)) {
+    assert.equal(relogged.getPacketSender().getVarbit(CacheDefinitions.getVarbitId(`emptyondeath_${name}`)), 1, `${name} comes back at login`);
+  }
+});
 
 test("a seed box's seeds the bank has no room for go to the killer", (t) => {
   const container = CONTAINERS.find((entry) => entry.name === "seed box");

@@ -35,8 +35,9 @@ function bankOp(event) {
 
 /**
  * Containers other plugins hold (rune pouch, essence pouches, herb sack, seed box) answer this
- * with `containers.push({ holds(item), empty(player, item) -> [{ id, amount }], keptInPvp?,
- * toBankInPvp? })`. `empty` takes the contents out of the container and returns them.
+ * with `containers.push({ holds(item), empty(player, item) -> [{ id, amount }], varbit?,
+ * keptInPvp?, toBankInPvp? })`. `empty` takes the contents out of the container and returns them;
+ * `varbit` is its "Always empty ... on death" setting.
  */
 const DEATH_CONTAINERS_EVENT = "storage:death-containers";
 
@@ -53,6 +54,7 @@ function familyContainer(family) {
       Storage.setContents(player, family, []);
       return contents;
     },
+    varbit: family.emptyOnDeathVarbit,
     keptInPvp: !family.emptiedOnPvpDeath,
     // A family's contents follow the last one carried when it heads for the floor (or a grave).
     follows: (event) => event.items.some(isOurs) && !event.untradeables.some(isOurs),
@@ -64,6 +66,11 @@ function deathContainers() {
   const query = { containers: [] };
   pluginApi?.emitCustomEvent(DEATH_CONTAINERS_EVENT, query);
   return [...families, ...query.containers];
+}
+
+function settingOn(player, varbit) {
+  if (!varbit) return false;
+  return player.getPacketSender?.()?.getVarbit?.(Storage.core.CacheDefinitions.getVarbitId(varbit)) === 1;
 }
 
 /** The seed box's PvP death puts what the bank has room for there first. */
@@ -80,7 +87,9 @@ function intoBank(player, { id, amount }) {
  * - a PvP death always empties it, and the contents go to the killer with the rest of the loot;
  *   a fish barrel the death keeps keeps them;
  * - otherwise the contents stay in the container, kept or lost (a lost one goes to the grave
- *   with them). A fish barrel or tackle box heading for the floor takes them along.
+ *   with them), unless its "Always empty" setting is on: then they go to the grave as they are,
+ *   even when the container is kept. A fish barrel or tackle box heading for the floor takes them
+ *   along.
  */
 function deathDrops(event) {
   if (handledDeaths.has(event)) return;
@@ -99,7 +108,7 @@ function deathDrops(event) {
     const kept = held.some((item) => !lost.has(item));
     let empty;
     if (pvp) empty = !(container.keptInPvp && kept);
-    else empty = container.follows?.(event) === true;
+    else empty = settingOn(player, container.varbit) || container.follows?.(event) === true;
     if (!empty) continue;
     for (const item of held) {
       for (const entry of container.empty(player, item)) {

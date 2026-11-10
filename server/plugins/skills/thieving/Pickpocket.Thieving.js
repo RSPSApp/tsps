@@ -312,8 +312,9 @@ function succeed(player, npc, target, name) {
   // or multiply it as the rogue outfit does (`multiplier`, a league fragment's double loot).
   const loot = { player, npc, target: target.name, loot: rollLoot(player, target), multiplier: 1 };
   pluginApi.emitCustomEvent("thieving:loot", loot);
-  const given = giveLoot(player, target, loot.loot, Math.random, loot.multiplier);
+  // RuneLite snapshots the inventory when it sees the success message.
   say(player, target, target.successLine ?? `You pick ${name}'s pocket.`);
+  const given = giveLoot(player, target, loot.loot, Math.random, loot.multiplier);
   for (const item of given) {
     const line = lootLine(target, item);
     if (line) say(player, target, line);

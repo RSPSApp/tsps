@@ -261,10 +261,16 @@ test('the interpolation rounds as the Wiki module does, at a level where the sum
     assert.equal(at('gnome', 99), 141 / 256);
 });
 
-test('a success: the attempt message, then the animation, a coin pouch and the experience a tick later', (t) => {
+test('a success announces the pickpocket before adding loot so RuneLite can snapshot the old inventory', (t) => {
     const { click, ticks } = attempt(t);
     assert.deepEqual(click, ["spam: You attempt to pick the man's pocket."]);
-    assert.deepEqual(ticks, [['anim 881', 'add Coin pouch x1', "spam: You pick the man's pocket.", 'xp 8', 'thieving:success'], [], []]);
+    assert.deepEqual(ticks, [['anim 881', "spam: You pick the man's pocket.", 'add Coin pouch x1', 'xp 8', 'thieving:success'], [], []]);
+});
+
+test('Master Farmer loot also follows the success message', (t) => {
+    const { next } = attempt(t, { name: 'Master Farmer', who: player() });
+    assert.equal(next[1], "spam: You pick the Master Farmer's pocket.");
+    assert.match(next[2], /^add .* seed x[0-9]+$/);
 });
 
 test('a failure, as captured on a hero: the message and line, then the strike and stun, then the stun message and damage', (t) => {

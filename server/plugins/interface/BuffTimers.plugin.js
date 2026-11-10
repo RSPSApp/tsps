@@ -187,15 +187,17 @@ function spellTimers(player, now, cycle) {
 
 function divineTimers(player, now) {
   const state = player.getAttribute?.(ATTR_DIVINE_STATE);
-  const left = new Map();
+  const ends = new Map();
   for (const entry of Array.isArray(state?.targets) ? state.targets : []) {
     const endsAt = Number.isFinite(entry?.endsAt) ? entry.endsAt : state.endsAt;
-    left.set(entry?.skillIndex, ticks(millisUntil(endsAt, now)));
+    if (millisUntil(endsAt, now) > 0) ends.set(entry?.skillIndex, endsAt);
   }
-  const leftOf = (skill) => left.get(skill) ?? 0;
+  const leftOf = (skill) => (ends.has(skill) ? ticks(ends.get(skill) - now) : 0);
+  // A combined potion locks its skills with one deadline: two other potions that happen to cover them don't count.
+  const combined = (skills) => (new Set(skills.map((skill) => ends.get(skill))).size === 1 ? leftOf(skills[0]) : 0);
   return [
     ...DIVINE_SKILL_VARBITS.map(([skill, varbit]) => ["varbit", varbit, leftOf(skill)]),
-    ...DIVINE_COMBINED_VARBITS.map(([varbit, skills]) => ["varbit", varbit, Math.min(...skills.map(leftOf))]),
+    ...DIVINE_COMBINED_VARBITS.map(([varbit, skills]) => ["varbit", varbit, combined(skills)]),
   ];
 }
 

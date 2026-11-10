@@ -136,6 +136,22 @@ test('a divine bastion sets ranged, defence and bastion, not combat', t => {
   assert.deepEqual(f.sent(), { 'varbit 8431': 500, 'varbit 8432': 500, 'varbit 13664': 500 });
 });
 
+test('a divine ranging after a divine super combat does not show divine bastion', t => {
+  const now = 9_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const f = loggedIn();
+  const combat = now + 200_000, ranging = now + 300_000;
+  f.attributes.set('potions:divine:state', {
+    endsAt: ranging,
+    targets: [[0, combat], [2, combat], [1, combat], [4, ranging]].map(([skillIndex, endsAt]) => ({ skillIndex, target: 110, endsAt })),
+  });
+  f.tick();
+  const sent = f.sent();
+  assert.equal(sent['varbit 13663'], 334, 'the combat potion');
+  assert.equal(sent['varbit 8432'], 500, 'the ranging potion');
+  assert.equal(sent['varbit 13664'], undefined, 'no bastion was drunk');
+});
+
 test('the Menaphite remedy counts steps of 25 ticks on statrenewal_potion_timer', t => {
   const now = 9_000_000;
   t.mock.method(Date, 'now', () => now);

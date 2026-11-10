@@ -158,15 +158,28 @@ function cast(event) {
   if (event.spellName !== SPELL_NAME || event.opId === WARNING_OP) return;
   event.handled = true;
   const { player } = event;
-  if (player.busy() || player.getMovementQueue().isMovementBlocked()) return;
-  const target = targetOf(player);
-  const refused = refusal(player, target);
+  if (!castable(player)) return;
+  // The spell's Wilderness warning (SpellTeleports.plugin.js) asks first; nothing is used until the player confirms.
+  const request = { player, name: SPELL_NAME.toLowerCase(), proceed: () => castable(player) && teleportToTarget(player), handled: false };
+  pluginApi.emitCustomEvent("spell:teleport-confirm", request);
+  if (!request.handled) request.proceed();
+}
+
+/** Whether the spell can be cast now, with the refusal's message when it can't. Takes nothing. */
+function castable(player) {
+  if (player.busy() || player.getMovementQueue().isMovementBlocked()) return false;
+  const refused = refusal(player, targetOf(player));
   if (refused) {
     player.sendMessage(refused);
-    return;
+    return false;
   }
+  return spellFor(player).canCast(player, false);
+}
+
+function teleportToTarget(player) {
+  const target = targetOf(player);
   const spell = spellFor(player);
-  if (!spell.canCast(player, false) || !spell.canCast(player, true)) return;
+  if (!spell.canCast(player, true)) return;
   usesByPlayer.set(player, { target, count: usesOf(player, target) + 1 });
   core.TeleportHandler.teleport(player, landingNear(target), player.getSpellbook().getTeleportType(), false);
   player.getSkillManager().addExperiences(core.Skill.MAGIC, EXPERIENCE);

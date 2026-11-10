@@ -93,7 +93,29 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 - **Jingles.** Done: each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
 - **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
 - **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.
-- **Other colour pickers** (type 9, for example Public chat colour) are not handled; quest-list colours are supported below.
+- **Other colour pickers** (type 9): the Activities overlay colours (113, 174, 177, 180, 262, 263, 266, 504) are not handled; the chat, quest-list and music player colours are supported below.
+
+## Chat colours
+
+The chat colour rows (type 9) open the colour picker as the quest-list rows do (modal 288, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
+
+| Chat type | Opaque | Transparent |
+| --- | --- | --- |
+| Public | 87 → varp 2992 | 88 → 3000 |
+| Private | 89 → 2993 | 90 → 3001 |
+| Auto chat | 92 → 2994 | 93 → 3002 |
+| Broadcast | 94 → 2995 | 95 → 3003 |
+| Friends chat | 97 → 2996 | 98 → 3004 |
+| Clan chat | 99 → 2997 | 100 → 3005 |
+| Incoming trade request | 101 → 2998 | 102 → 3006 |
+| Incoming challenge request | 103 → 2999 | 104 → 3007 |
+| Guest clan chat | 105 → 3060 | 106 → 3061 |
+| Ironman Group chat | 193 → 3191 | 194 → 3194 |
+| Clan broadcasts | 196 → 3192 | 197 → 3195 |
+| Ironman Group broadcasts | 198 → 3193 | 199 → 3196 |
+| 'Did you know?' | 434 → 4697 | 435 → 4698 |
+
+Split private chat: Private 91 → varp 3008, Broadcast 96 → 3009. The reset rows clear their group's varps: 107 opaque, 108 transparent, 109 split. `server/tests/settings-chat-colours.test.cjs` checks every row against script 4181 and its struct.
 
 ## Quest list preferences (cache 241)
 

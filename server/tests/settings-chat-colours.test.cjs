@@ -120,7 +120,7 @@ function allSettings() {
   return { player, varps, click, restore };
 }
 
-const colourRows = [...OPAQUE, ...TRANSPARENT, ...SPLIT];
+const colourRows = [...OPAQUE, ...TRANSPARENT];
 
 test('each chat colour row is a colour picker in the cache, in its chatbox mode\'s group', () => {
   for (const [group, ids] of [['opaque', OPAQUE], ['transparent', TRANSPARENT], ['split', SPLIT]]) {
@@ -141,4 +141,33 @@ test('the struct defaults are the Wiki\'s', () => {
   for (const [id, colour] of Object.entries(WIKI_DEFAULTS)) {
     assert.equal(rows.get(Number(id)).params.get(1230), colour, `setting ${id}`);
   }
+});
+
+test('each row opens the picker on its default, saves RGB+1 in the varp the cache reads, and Cancel keeps it', () => {
+  const { varps, click } = allSettings();
+  colourRows.forEach((id, n) => {
+    const varp = readerVarps.get(id);
+    let { amount, picker } = click(id);
+    assert.ok(amount, `setting ${id} opens the colour picker`);
+    assert.equal(picker?.[2], rows.get(id).params.get(1230), `setting ${id}'s picker starts on its struct default`);
+    const colour = 0x010101 * (n + 1);
+    amount.execute(colour);
+    assert.equal(varps.get(varp), colour + 1, `setting ${id} saves into varp ${varp}`);
+    ({ amount, picker } = click(id));
+    assert.equal(picker?.[2], colour, 'and starts on the chosen colour next time');
+    amount.execute(CANCEL);
+    assert.equal(varps.get(varp), colour + 1, 'Cancel keeps the colour');
+  });
+  const { amount } = click(87);
+  amount.execute(-1);
+  assert.equal(varps.get(readerVarps.get(87)), 0, 'Default selects the struct default');
+});
+
+test('chosen colours come back at login', () => {
+  const first = allSettings();
+  for (const id of colourRows) first.click(id).amount.execute(0x123456);
+  const next = allSettings();
+  next.player.setAttribute('settings:values', first.player.getAttribute('settings:values'));
+  next.restore({ player: next.player });
+  for (const id of colourRows) assert.equal(next.varps.get(readerVarps.get(id)), 0x123457, `setting ${id} restored`);
 });

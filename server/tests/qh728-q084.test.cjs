@@ -62,6 +62,7 @@ function setup({ realWire = false, realTranscript = false } = {}) {
   const xp = [];
   const transforms = [];
   const animations = [];
+  const modals = [];
   const overheads = [];
   const dialogues = [];
   const spawned = [];
@@ -116,6 +117,9 @@ function setup({ realWire = false, realTranscript = false } = {}) {
     getVarbit(id) { return wire ? wire.getVarbit(id) : varbits.get(id) ?? 0; },
     getVarp(id) { return wire ? wire.getVarp(id) : varbits.get(id) ?? 0; },
     sendInterfaceRemoval() { player.manager?.reset();player.prompt = null;return sender; },
+    // Recorded only: the fixture player lacks what the real sender's modal bookkeeping reads.
+    sendInterfaceScript(id, args) { modals.push(['script', id, ...(args ?? [])]); return sender; },
+    sendInterface(id) { modals.push(['open', id]); return sender; },
   }, { get(target, prop) { return prop in target ? target[prop] : () => sender; } });
 
   const player = {
@@ -317,7 +321,7 @@ function setup({ realWire = false, realTranscript = false } = {}) {
 
   return {
     api, custom, deathHooks, player, quest, items, bankItems, attributes, varbits, messages, ground, xp, transforms, transcripts,
-    animations, overheads, dialogues, spawned, locs, sleeper, ticks, gate, killGuard, button,
+    animations, modals, overheads, dialogues, spawned, locs, sleeper, ticks, gate, killGuard, button,
     reconnect() { wire = new PacketSender(player);login();runtime.sendQuestVarps({player});api.emitCustomEvent('player:bootstrap-complete', { player }); },
     talk(npcId) {
       const choice = variantHooks.map(fn => fn({ player,npcId })).find(Boolean);
@@ -481,6 +485,12 @@ test('registered route: stage 0 through the canonical completion wire and wine c
   assert.equal(h.varbits.get(VARP), 7, 'completion writes the canonical varp 112 = 7');
   assert.equal(h.items.get(I.UNCUT_SAPPHIRE), 1);
   assert.equal(h.items.get(I.WATER_RUNE), 25);
+  // The telescope left the main modal's backdrop black ([0, 0]); the scroll, a tick later, clears it first (tick 1644).
+  h.ticks(1);
+  const scroll = h.modals.findIndex(([kind, id]) => kind === 'open' && id === 153);
+  assert.ok(scroll > 0, 'the quest scroll opens');
+  assert.ok(h.modals.findIndex(([kind, id]) => kind === 'open' && id === 552) < scroll, 'after the telescope');
+  assert.deepEqual(h.modals[scroll - 1], ['script', 2524, -1, -1], 'with toplevel_mainmodal_open [-1, -1] just before it');
   assert.equal(h.attributes.get('quest.points'), 2);
   assert.ok(h.xp.some((entry) => entry.amount === 2250));
 

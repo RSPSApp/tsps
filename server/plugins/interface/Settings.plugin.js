@@ -102,11 +102,11 @@ const NPC_ATTACK_OPTIONS_SETTING = 56;
 // Cache script 3962 reads this to pick the selected dropdown row; 4607 is only
 // a display mirror of the layout (no rendering effect in this revision).
 const GAMEFRAME_STONE_VARBIT = 4607;
-// The enhanced client's mouseover text setting (cache script 4582 toggles it), from rev 241
-// mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client reports itself as
-// enhanced (clienttype 10) and draws the top-left text, so this must be 0 (shown): then HUD
-// overlays laid out by script 4731 (Wintertodt, the Gauntlet, ToA...) drop 23px below the
-// text instead of sitting under it, as on live.
+// The enhanced client's mouseover text setting (All Settings row 147; cache script 4582 toggles
+// it), from rev 241 mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client
+// reports itself as enhanced (clienttype 10) and draws the top-left text while this is 0; HUD
+// overlays laid out by script 4731 (Wintertodt, the Gauntlet, ToA...) then drop 23px below the
+// text, as on live, and move back up when the player hides it.
 const MOUSEOVER_TEXT_DISABLED_VARBIT = 10035;
 // Opaque player attribute; NetworkBuilder/WelcomeScreen read it to boot the
 // saved gameframe.
@@ -404,6 +404,12 @@ function restoreSettings({ player }) {
   for (const row of Object.values(SETTINGS)) {
     if (row.default !== undefined && saved[varKey(row)] === undefined) sendSettingVar(player, varKey(row), row.default);
   }
+}
+
+/** Login: the client may start with the text hidden, so send the player's choice (shown by default). */
+function sendMouseoverText({ player }) {
+  const key = `varbit:${MOUSEOVER_TEXT_DISABLED_VARBIT}`;
+  sendSettingVar(player, key, savedSettings(player)[key] ?? 0);
 }
 
 /**
@@ -876,6 +882,7 @@ module.exports = {
     api.persistAttribute(SETTINGS_VALUES_ATTRIBUTE);
     api.persistAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, false);
     api.onPlayerLogin(restoreSettings);
+    api.onPlayerLogin(sendMouseoverText);
     // Changing category, or searching, changes what a row's slot means.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
@@ -938,7 +945,6 @@ module.exports = {
       syncPlayerKeybindings(player);
       if (worldGameframeOption !== undefined) selectGameframeOption(player, worldGameframeOption);
       syncGameframeVarbit(player);
-      player.getPacketSender().sendVarbit(MOUSEOVER_TEXT_DISABLED_VARBIT, 0);
     });
 
     api.registerCommand("keybinds", ({ player }) => openKeybindings(player), undefined, "Open keybindings");

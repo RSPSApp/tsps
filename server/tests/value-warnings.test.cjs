@@ -374,6 +374,33 @@ test('Grand Exchange: buy over 10x the guide and sell under 10% warn while their
   assert.equal(priceWarning(disabled, sell, 1), null, '14701 set disables the sell warning');
 });
 
+test('Grand Exchange: an offer edited behind the warning is checked again when the warning is accepted', () => {
+  const { confirm, setApi, setOffer, sellPrice } = GrandExchange._test;
+  const placed = [];
+  setApi({ core, emitCanBank: () => true,
+    emitCustomEvent: (name, e) => { if (name === 'ge:offer-confirmed') { placed.push(e.quantity); e.accepted = false; } } });
+  const p = player({ 14701: 0 }, [new Item(RUNE_PLATELEGS, 1)]);
+  p.getInterfaceId = () => 465;
+  const low = Math.ceil(sellPrice(RUNE_PLATELEGS) / 10) - 1;
+  const offer = { itemId: RUNE_PLATELEGS, sell: true, quantity: 1, price: low, slot: 0 };
+  setOffer(p, offer);
+
+  confirm(p, offer);
+  assert.equal(p.log.dialogues.length, 1, 'warned');
+  offer.price = low - 1; // the -5% button, with the warning still up
+  p.log.dialogues[0][1].execute(1);
+  assert.equal(p.log.dialogues.length, 2, 'the lower price warns again');
+  assert.deepEqual(placed, []);
+  p.log.dialogues[1][1].execute(1);
+  assert.deepEqual(placed, [1], 'accepted as warned, the offer goes ahead');
+
+  confirm(p, offer);
+  offer.price = sellPrice(RUNE_PLATELEGS); // edited back into bounds
+  p.log.dialogues[2][1].execute(1);
+  assert.equal(p.log.dialogues.length, 3, 'a fair price needs no warning');
+  assert.deepEqual(placed, [1, 1]);
+});
+
 // ------------------------------------------------------------------ birdhouse seeds
 
 test('birdhouse seeds worth at least row 449 ask first while row 448 is on', () => {

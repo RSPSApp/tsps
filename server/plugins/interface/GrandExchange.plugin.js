@@ -731,7 +731,11 @@ function priceWarning(player, offer, unitPrice) {
   return null;
 }
 
-function confirm(player, offer, warned = false) {
+/**
+ * `warned`: the offer as the player accepted its price warning ({ itemId, price, quantity }). The
+ * Exchange stays open behind the warning, so an offer edited since is checked again.
+ */
+function confirm(player, offer, warned = null) {
   if (!active(player, offer) || !exchangeable(offer.itemId)) return;
   if (freeWorldBuyRefused(player, offer)) return;
   const amount = offer.quantity;
@@ -769,7 +773,8 @@ function confirm(player, offer, warned = false) {
     return;
   }
   if (fromBank && pluginApi.emitCanBank(player, "grand-exchange-buy") === false) return;
-  const warning = warned ? null : priceWarning(player, offer, unitPrice);
+  const accepted = warned?.itemId === offer.itemId && warned.price === unitPrice && warned.quantity === amount;
+  const warning = accepted ? null : priceWarning(player, offer, unitPrice);
   if (warning) {
     ValueWarning.confirm(pluginApi.core, player, {
       itemId: offer.itemId,
@@ -777,7 +782,7 @@ function confirm(player, offer, warned = false) {
       title: "Place this offer?",
       yes: "Yes, place the offer.",
       no: "No, don't place the offer.",
-      proceed: () => confirm(player, offer, true),
+      proceed: () => confirm(player, offer, { itemId: offer.itemId, price: unitPrice, quantity: amount }),
     });
     return;
   }
@@ -1210,6 +1215,9 @@ module.exports = {
   },
   _test: {
     priceWarning,
+    confirm,
+    setApi: (api) => { pluginApi = api; },
+    setOffer: (player, offer) => offers.set(player, offer),
     price,
     sellPrice,
     changePrice,

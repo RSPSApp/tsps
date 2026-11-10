@@ -78,6 +78,19 @@ placement of it in the room (all tiles of a rug, every window's curtains); Remov
 
 ## Furniture with behaviour
 
+### Chat input
+
+The menu (interface 187, script 217 with numbers shown), the nexus Teleport Menu
+(`telenexus_teleport`), the jewellery box (590) and the furniture list (`poh_furniture_creation`)
+run `chatdefault_stopinput` as they open, so typing goes to their number keys and not the chat.
+Live sends `chatdefault_restoreinput` (2158) straight after their `if_closesub`, whether the
+player closes them, picks a row, or walks away (rsprox captures, rev 224-239: menu in recordings
+312 and 2909, the Teleport Menu in 2890, 2900 and 2966, the jewellery box closed in 2913, 3198
+and 3209, and after a pick in 57 of 57 recordings). The nexus configuration (`telenexus`) doesn't
+stop input, and live sends nothing when it closes. `Menu.restoreChatInput` sends it on
+`interface:closed`, for these menus only: other content opens interface 187 too and restores
+input itself.
+
 ### Teleports
 
 - **Jewellery boxes:** Teleport Menu opens interface 590 through its init script (1685: tier,

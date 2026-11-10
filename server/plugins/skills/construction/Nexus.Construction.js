@@ -4,6 +4,7 @@ const { api, CacheDefinitions, CountdownTask, Location, Skill, TaskManager, Tele
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const Portals = require("./Portals.Construction");
+const Menu = require("./Menu.Construction");
 
 // The portal nexus (rsprox captures, cache enums 1375/1377 and their structs, Wiki):
 // - Destinations are enum 1377 (id -> struct: name 660, runes 664-671 already x1000, Magic level
@@ -300,6 +301,11 @@ function forgetDestinations({ player, furniture, room }) {
   sendState(player, [], 0, SLOT_VARBITS, LEFT);
 }
 
+/** The Teleport Menu stops chat input (its key listeners); the configuration doesn't (rsprox captures). */
+function restoreChatInput({ player, interfaceId }) {
+  if (interfaceId === MENU) Menu.restoreChatInput(player);
+}
+
 function attachNexus(api) {
   api.persistAttribute(STATE_ATTRIBUTE, null);
   api.onCustomEvent("construction:furniture-removing", warnOfRemoval);
@@ -308,6 +314,7 @@ function attachNexus(api) {
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("player:widget-action", drag);
   api.onCustomEvent("interface:close", ({ player }) => open.delete(player));
+  api.onCustomEvent("interface:closed", restoreChatInput);
   api.onPlayerLogin(({ player }) => {
     const state = player.getAttribute(STATE_ATTRIBUTE);
     if (state) sendState(player, state.slots, state.left, SLOT_VARBITS, LEFT);

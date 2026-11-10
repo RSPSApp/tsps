@@ -73,7 +73,6 @@ const FURNITURE_BUILD_LIST_UID = (FURNITURE_BUILD_INTERFACE << 16) | 2;
 // poh_furniture_creation's scripts: one furniture entry, then the list (no gamevals for scripts).
 const FURNITURE_ENTRY_SCRIPT = 1404;
 const FURNITURE_LIST_SCRIPT = 1406;
-const RESTORE_CHAT_INPUT_SCRIPT = 2158;
 const REMOVE_ANIMATION = Ids.seq("human_throw_away");
 const HOUSE_BOARD_INTERFACE = Ids.iface("poh_board");
 const HOUSE_BOARD_ROW_SCRIPT = 3110;
@@ -1092,7 +1091,7 @@ function chooseFurniture(player, house, target) {
 function closeFurnitureMenu({ player, interfaceId }) {
   if (interfaceId !== FURNITURE_BUILD_INTERFACE || !pendingFurnitureMenus.delete(player)) return;
   // The furniture list script suspends normal chat input while the number shortcuts are active.
-  player.getPacketSender().sendClientScript(RESTORE_CHAT_INPUT_SCRIPT);
+  Menu.restoreChatInput(player);
 }
 
 function selectFurnitureFromInterface(event) {

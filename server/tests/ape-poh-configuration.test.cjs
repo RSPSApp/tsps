@@ -455,3 +455,50 @@ test('nexus: removing its room discards the paid destinations', async t => {
   assert.equal(f.house.getRoom({ plane: 1, x: 4, y: 6 }), null);
   assert.deepEqual(f.p.getAttribute('construction:nexus'), { slots: [], left: 0 });
 });
+
+// rsprox captures (close_modal and picks on telenexus_teleport, rev 224-239): the Teleport Menu's key
+// listeners stop chat input (script2674 runs chatdefault_stopinput), so live sends
+// chatdefault_restoreinput (2158) right after its if_closesub. The configuration (telenexus) doesn't.
+const RESTORE_INPUT = 2158;
+function recordClose(t, f) {
+  const sender = f.p.getPacketSender(), log = [];
+  const closeSub = sender.closeSubInterface.bind(sender), script = sender.sendClientScript.bind(sender);
+  t.mock.method(sender, 'closeSubInterface', (...args) => { log.push('closesub'); return closeSub(...args); });
+  t.mock.method(sender, 'sendClientScript', (id, ...args) => { log.push(`script ${id}`); return script(id, ...args); });
+  return log;
+}
+
+test('nexus: closing the Teleport Menu gives the chat its typing back', async t => {
+  const f = actor(t, 'nexus', { rescued: true });
+  objectAction(f, 'teleport menu');
+  assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId('telenexus_teleport'));
+  const log = recordClose(t, f);
+  await f.conn.dispatch([{ type: 'interface_close' }]);
+  f.conn.processTurnPackets();
+  assert.equal(f.p.getInterfaceId(), -1);
+  assert.deepEqual(log.filter(entry => entry === 'closesub' || entry === `script ${RESTORE_INPUT}`).slice(-2), ['closesub', `script ${RESTORE_INPUT}`]);
+  assert.equal(log.filter(entry => entry === `script ${RESTORE_INPUT}`).length, 1);
+});
+
+test('nexus: a Teleport Menu pick restores chat input as it closes', async t => {
+  const f = actor(t, 'nexus', { rescued: true });
+  const varrock = [...Nexus.destinations().values()].find(d => d.spellName === 'varrock teleport');
+  f.p.setAttribute('construction:nexus', { slots: [varrock.id], left: 0 });
+  objectAction(f, 'teleport menu');
+  const log = recordClose(t, f);
+  const rows = core.CacheDefinitions.getComponentId('telenexus_teleport:rows1');
+  await f.conn.dispatch([{ type: 'dialogue_continue', widgetId: rows, childIndex: 0 }]);
+  f.conn.processTurnPackets();
+  assert.equal(House.houseFor(f.p), null, 'the pick left the house');
+  assert.equal(log.filter(entry => entry === `script ${RESTORE_INPUT}`).length, 1);
+});
+
+test('nexus: closing the configuration sends no restore (it never stopped input)', async t => {
+  const f = actor(t, 'nexus', { rescued: true });
+  nexusOpen(f);
+  const log = recordClose(t, f);
+  await f.conn.dispatch([{ type: 'interface_close' }]);
+  f.conn.processTurnPackets();
+  assert.equal(f.p.getInterfaceId(), -1);
+  assert.equal(log.includes(`script ${RESTORE_INPUT}`), false);
+});

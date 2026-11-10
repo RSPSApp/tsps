@@ -82,6 +82,11 @@ const PLANKS = new Map<number, [number, number]>([
     [1511, [960, 70]], [1521, [8778, 175]], [6333, [8780, 350]], [6332, [8782, 1050]],
     [32904, [31432, 1750]], [32907, [31435, 3500]], [32910, [31438, 5250]],
 ]);
+/**
+ * All Settings' Plank Make confirmations (420-423), by log: basic, oak, teak and mahogany. With one
+ * on, the spell asks before it takes coins for that log.
+ */
+const PLANK_CONFIRM_VARBITS = new Map<number, number>([[1511, 624], [1521, 2319], [6333, 2320], [6332, 3939]]);
 const HUNTER_KIT = 11159;
 /** Hunter kit's contents; a player holding all of them is refused (Wiki: Hunter Kit). */
 const HUNTER_KIT_CONTENTS = [10150, 10010, 10006, 10031, 10029, 596, 11260, 10008, 34631];
@@ -675,13 +680,27 @@ export class LunarSpells {
             PluginManager.emitCustomEvent("magic:plank-make", { player, logId, plankId: plank[0] });
             return inventory.contains(logId);
         };
-        if (make()) {
-            this.repeat(player, PLANK_TICKS, make,
-                () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
-                PLANK_FIRST_REPEAT_TICKS);
-        } else {
-            PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+        const start = (): void => {
+            if (make()) {
+                this.repeat(player, PLANK_TICKS, make,
+                    () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
+                    PLANK_FIRST_REPEAT_TICKS);
+            } else {
+                PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+            }
+        };
+        const confirm = PLANK_CONFIRM_VARBITS.get(logId);
+        if (confirm === undefined || player.getPacketSender().getVarbit?.(confirm) !== 1
+            || !inventory.contains(logId) || inventory.getAmount(COINS) < plank[1]) {
+            start();
+            return true;
         }
+        // Ours: the question and its options (no capture of the confirmation).
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
+                player.getPacketSender().sendInterfaceRemoval();
+                if ((option as number) === 1) start();
+            } }, "Yes", "No").setTitle(`Pay ${plank[1]} coins for each plank?`)));
         return true;
     }
 

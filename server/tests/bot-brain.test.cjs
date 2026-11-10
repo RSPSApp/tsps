@@ -3143,6 +3143,99 @@ test('bh manual stops AI and movement without logging out; another bh assignment
   entry.brain.reset();
 });
 
+test('::botstatsme requires the active character to be an administrator and copies valid stats', (t) => {
+  const { registerBotControlCommands } = require('../plugins/bots/runtime/Control.PlayerBots');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { CommandPacketListener } = require('../dist/net/packet/impl/CommandPacketListener');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const api = PluginManager.createApi('BotStatsMeTest');
+  const { Equipment, Flag, Item, ItemIdentifiers, PlayerRights, Skill, World } = api.core;
+  const admin = nativeFollowCombatPlayer(t, 'admin', new Location(3200, 3200));
+  admin.setPlayerBot(false);
+  admin.setRights(PlayerRights.ADMINISTRATOR);
+  const bot = nativeFollowCombatPlayer(t, 'devbot1', new Location(3200, 3200));
+  bot.setDisplayName('Dev Bot1');
+  bot.setSession(new BotPlayerSession());
+  const connection = new ClientConnection(new HeadlessBinaryChannel());
+  t.mock.method(connection, 'sendPlayerBootstrap', () => {});
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+  connection.bindControlledPlayer(admin);
+  admin.setNeedsPlacement(false);
+  t.after(() => {
+    if (connection.player === bot) connection.releasePlayerControl();
+  });
+
+  const messages = [];
+  t.mock.method(admin, 'sendMessage', (message) => messages.push(message));
+  t.mock.method(bot, 'sendMessage', (message) => messages.push(message));
+  let snapshots = 0;
+  const sender = new Proxy({
+    sendSkillsSnapshot() { snapshots++; },
+  }, { get: (target, key) => target[key] ?? (() => sender) });
+  t.mock.method(bot, 'getPacketSender', () => sender);
+  const source = admin.getSkillManager();
+  const target = bot.getSkillManager();
+  for (const skill of Skill.values()) {
+    const index = skill.getIndex();
+    source.setMaxLevels(skill, 40 + index, false)
+      .setCurrentLevel(skill, 10, false)
+      .setExperiences(skill, 100000 + index, false);
+  }
+
+  registerBotControlCommands({
+    api,
+    runtime: {
+      entriesByUsername: new Map([[bot.getUsername(), { player: bot }]]),
+      playerBotUsernames: new Set([bot.getUsername()]),
+    },
+    resetMovementState() {},
+  });
+  const command = (raw) => CommandPacketListener.execute(connection.player, raw);
+  const copy = '::botstatsme dev_bot1';
+  const denied = 'You do not have permission to use this command.';
+
+  admin.setRights(PlayerRights.NONE);
+  command(copy);
+  assert.equal(messages.at(-1), denied, 'a nonadministrator cannot copy stats');
+  admin.setRights(PlayerRights.ADMINISTRATOR);
+  command('::botcontrol dev_bot1');
+  assert.equal(connection.player, bot);
+  assert.equal(bot.getRights(), PlayerRights.NONE);
+  command(copy);
+  assert.equal(messages.at(-1), denied, 'the driven bot cannot use its parked owner’s rights');
+  command('::botback');
+  assert.equal(connection.player, admin);
+
+  const whip = new Item(ItemIdentifiers.ABYSSAL_WHIP);
+  bot.getEquipment().set(Equipment.WEAPON_SLOT, whip);
+  command(copy);
+  assert.match(messages.at(-1), /unequip Abyssal whip/i);
+  for (const skill of Skill.values()) {
+    assert.equal(target.getMaxLevel(skill), 99, 'an equipment rejection leaves the stats intact');
+  }
+  assert.equal(snapshots, 0, 'denied and rejected copies do not send a skills snapshot');
+
+  const scimitar = new Item(ItemIdentifiers.RUNE_SCIMITAR);
+  bot.getEquipment().set(Equipment.WEAPON_SLOT, scimitar);
+  bot.getUpdateFlag().reset();
+  command(copy);
+  for (const skill of Skill.values()) {
+    assert.equal(target.getMaxLevel(skill), source.getMaxLevel(skill), skill.getName());
+    assert.equal(target.getCurrentLevel(skill), source.getMaxLevel(skill), skill.getName());
+    assert.equal(target.getExperience(skill), source.getExperience(skill), skill.getName());
+  }
+  assert.equal(snapshots, 1, 'one skills snapshot refresh');
+  assert.ok(bot.getUpdateFlag().flagged(Flag.APPEARANCE), 'the visible combat level is refreshed');
+  assert.equal(bot.getWeapon(), scimitar.getDefinition().getWeaponInterface());
+  assert.equal(bot.getBonusManager().getAttackBonus()[1], scimitar.getDefinition().getBonuses()[1]);
+  assert.equal(messages.at(-1), 'Copied your stats to Dev Bot1.');
+
+  command('::botstatsme missing');
+  assert.match(messages.at(-1), /Usage: ::botstatsme/);
+});
+
 // Review fixes (#3676): a bot an administrator drives has a real client, so it gets what a player gets.
 function watchedBot(t, name, location, watched) {
   const { Player } = require('../dist/game/entity/impl/player/Player');

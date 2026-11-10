@@ -698,12 +698,16 @@ module.exports = function registerSongOfTheElves(api) {
     }
   }
 
-  /** Plague City done but the scroll unread (stage 30, Plague City's) and none carried: Edmond's own dialogue first. */
+  /**
+   * Plague City done but the scroll unread (stage 30 is Plague City's): Edmond's own dialogue first,
+   * a new scroll when none is carried and his thanks when one is (Plague City capture
+   * 20261110T113734-5ab63b4 tick 889, scroll carried).
+   */
   function needsEdmondScroll(player) {
     const request = { player, key: PLAGUE_CITY_KEY, stage: null };
     api.emitCustomEvent("quest:get-stage", request);
     const READ_SCROLL_STAGE = 30;
-    return Number(request.stage) < READ_SCROLL_STAGE && player.getInventory().getAmount(api.core.ItemIdentifiers.ARDOUGNE_TELEPORT_SCROLL) === 0;
+    return Number(request.stage) < READ_SCROLL_STAGE;
   }
 
   function hasQuest(player, key) {
@@ -3860,9 +3864,8 @@ module.exports = function registerSongOfTheElves(api) {
       event.handled = true;
       return;
     }
-    // The castle's main staircase (15645/15648 at 2571,3295) is the shared climb link's
-    // (objects/data/climb-links.json): walked to from the south, landing on 2571,3294,1 as live
-    // does (Biohazard capture 20261110T121228-5ab63b4 tick 1214) and back on 2571,3298,0.
+    // The castle's main staircase (15645/15648 at 2571,3295) is the shared climb-links pair:
+    // used from 2571,3298 and landing on 2571,3294 upstairs, as for everyone else.
   }
 
   function handleItemOnItem(event) {

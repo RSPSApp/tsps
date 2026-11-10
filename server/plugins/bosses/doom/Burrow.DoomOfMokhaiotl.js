@@ -33,6 +33,7 @@
  * the slam's damage (as a shockwave, 26-42); an orb per 5 tiles travelled, 2 ticks apart.
  */
 
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.DoomOfMokhaiotl");
 
 const ANIM = { MOVE: 12417, EMERGE: 12418, SLAM: 12419, BURROW: 12420, IDLE: 12421 };
@@ -111,7 +112,7 @@ class BurrowPhase {
     this.firesAt = Infinity;
     this.step = null;
     const sender = run.player.getPacketSender();
-    for (const axis of [0, 1, 2]) sender.sendCameraShake?.(axis, BURROW.shake, 0, 0);
+    for (const axis of [0, 1, 2]) CameraShake.send(sender, "doom", axis, BURROW.shake, 0, 0);
     run.attacks.after(BURROW.transform, () => {
       sender.sendCameraReset?.();
       boss.setNpcTransformationId(Shared.NPC.DOOM_BURROWED);

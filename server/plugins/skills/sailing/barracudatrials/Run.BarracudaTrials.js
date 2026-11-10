@@ -63,11 +63,14 @@ function message(player, text) {
   player.sendMessage(text);
 }
 
-/** The trial's arrow over its boat (the rum or toad boat), or none (the Gwenith Glide). */
+/**
+ * The trial's arrow over its boat (the rum or toad boat), or none (the Gwenith Glide, or with All
+ * Settings' "Barracuda trials hint arrow" off).
+ */
 function sendHint(player, run) {
   const hint = run.trial.hint;
   const index = hint && ships.entityIndex(hint.ship);
-  if (index === undefined) return;
+  if (index === undefined || sender(player).getVarbit(common.varbit("sailing_barracuda_trials_hintarrow_disabled")) === 1) return;
   sender(player).sendVarbit(common.varbit("current_hint_arrow"), HINT_SLOT);
   sender(player).sendWorldEntityHint(index, hint.height);
 }

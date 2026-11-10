@@ -6,6 +6,7 @@
  * walls, grill, main door) follows rsprox 469; the completed journal follows rsprox 1581 and 2977.
  * The stage 1 journal and the black-armour and not-disguised branches have no capture.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 module.exports = function registerBlackKnightsFortressQuest(api) {
@@ -523,7 +524,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     scenes.set(player, state);
     player.setAttribute(SCENE_ATTRIBUTE, 1);
     controls(player, true);
-    for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
+    for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
     later(player, state, THROW_DELAY, () => throwCabbage(player));
     later(player, state, 6, () => fade(player, true));
     later(player, state, 8, () => {

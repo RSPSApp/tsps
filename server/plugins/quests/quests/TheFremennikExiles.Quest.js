@@ -54,6 +54,8 @@
  *  - The Dräpare honorific has no title system here. Varbit 9472 (Neitiznot faceguard story) belongs
  *    to the NeitiznotFaceguard plugin, not to this quest.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTheFremennikExilesQuest(api) {
   const {
     Bank,
@@ -1986,7 +1988,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     }
     if (stage < STAGE_ISLAND) setStage(player, STAGE_ISLAND);
     player.moveTo(ISLAND_LANDING);
-    player.getPacketSender().sendCameraShake(1, 10, 0, 25); // captured Island of Stone arrival
+    CameraShake.send(player.getPacketSender(), "atmospheric", 1, 10, 0, 25); // captured Island of Stone arrival
   }
 
   function enterIslandCave(player) {

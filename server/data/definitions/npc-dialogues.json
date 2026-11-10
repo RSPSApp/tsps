@@ -733615,8 +733615,8 @@
       "inspecting-the-goblin-stove": [
         {
           "type": "message",
-          "text": "Just a plain stove. Nothing here.",
-          "id": "1J3qkz"
+          "text": "Just a plain stove. Nothing there.",
+          "id": "kxDt7S"
         }
       ],
       "starting-off": [
@@ -735557,14 +735557,6 @@
                 {
                   "type": "line",
                   "speaker": "Observatory professor",
-                  "text": "How are you getting on finding me some molten glass?"
-                },
-                {
-                  "player": "Here it is."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Observatory professor",
                   "text": "Did you bring me the mould?"
                 },
                 {
@@ -735898,54 +735890,56 @@
           "type": "choice",
           "options": [
             {
-              "text": "Talk about the Observatory quest."
-            }
-          ]
-        },
-        {
-          "player": "Yes, here it is. You may as well take this mould too.",
-          "steps": [
-            {
-              "type": "action",
-              "text": "The player hands the observatory professor the observatory lens.",
-              "id": "p1dzXH"
-            }
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Wonderful, at last I can fix the telescope."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
-        },
-        {
-          "player": "Sounds interesting. Count me in."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
-        },
-        {
-          "player": "Okay. See you there."
-        },
-        {
-          "type": "message",
-          "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
-          "steps": [
-            {
-              "type": "end"
-            }
-          ],
-          "id": "57NA_7"
-        },
-        {
-          "type": "choice",
-          "options": [
+              "text": "Talk about the Observatory quest.",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Is the lens finished?"
+                },
+                {
+                  "player": "Yes, here it is. You may as well take this mould too.",
+                  "steps": [
+                    {
+                      "type": "action",
+                      "text": "The player hands the observatory professor the observatory lens.",
+                      "id": "HgpGGr"
+                    }
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Wonderful, at last I can fix the telescope."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
+                },
+                {
+                  "player": "Sounds interesting. Count me in."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
+                },
+                {
+                  "player": "Okay. See you there."
+                },
+                {
+                  "type": "message",
+                  "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
+                  "steps": [
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "vj7Nry"
+                }
+              ]
+            },
             {
               "text": "Talk about Treasure Trails."
             }
@@ -784434,6 +784428,50 @@
               "type": "line",
               "speaker": "Jethick",
               "text": "Hello, I don't recognise you. We don't get many newcomers around here."
+            },
+            {
+              "player": "How come?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague of course. Not many people want to come to a place like this and the few that do normally get stopped by the mourners."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "All you'll find here now are the dead and the dying. Even our own king has abandoned us."
+            },
+            {
+              "player": "Your king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Yes, King Tyras of West Ardougne. He's the brother of King Lathas, the ruler of East Ardougne."
+            },
+            {
+              "player": "So where is the king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Well he's always been a bit of an explorer. He's led multiple expeditions into the uncharted lands to the west."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague first started when he came back from one of these expeditions. More than a few suspect that some of his men caught it out there and brought it back with them."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The king didn't care though. He just left on another expedition to the west. He hasn't been seen since. He left the city warder Bravek in charge but he's no better."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Anyway, you clearly didn't come here to talk about kings. So tell me, what brings you to West Ardougne?"
             }
           ],
           "id": "gYdBsh"
@@ -784538,6 +784576,52 @@
           "type": "line",
           "speaker": "Jethick",
           "text": "They live in the small timbered building at the far north side of town. I've not seen her around here in a while, mind."
+        },
+        {
+          "type": "line",
+          "speaker": "Jethick",
+          "text": "I don't suppose you could run me a little errand while you're over there? I borrowed this book from them, can you return it?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes, I'll return it for you.",
+              "steps": [
+                {
+                  "player": "Yes, I'll return it for you."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no inventory space:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Jethick shows you the book, but you don't have room to take it.",
+                      "id": "iU5foK"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "w5QLTg"
+                },
+                {
+                  "type": "message",
+                  "text": "Jethick gives you a book.",
+                  "id": "j0IeQT"
+                }
+              ]
+            },
+            {
+              "text": "No, I don't have time for that.",
+              "steps": [
+                {
+                  "player": "No, I don't have time for that."
+                }
+              ]
+            }
+          ]
         }
       ],
       "finding-elena-returning-the-book-to-ted-rehnison": [
@@ -785041,6 +785125,21 @@
                                   ]
                                 }
                               ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "This is urgent though! Someone's been kidnapped!",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "C6ctb6",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-a431ec56a3a4bb0c"
                             }
                           ]
                         }
@@ -883108,6 +883207,11 @@
           "text": "If the player has one free space in their in their inventory:",
           "steps": [
             {
+              "type": "message",
+              "text": "Bailey gives you a torch.",
+              "id": "05RBJj"
+            },
+            {
               "type": "action",
               "action": "receive",
               "text": "an unlit torch",
@@ -883512,17 +883616,6 @@
               "player": "Not one."
             },
             {
-              "player": "Kennith, I've made an opening in the wall. You can come out through there."
-            },
-            {
-              "type": "line",
-              "speaker": "Kennith",
-              "text": "Are there any sea slugs on the other side?"
-            },
-            {
-              "player": "Not one."
-            },
-            {
               "type": "line",
               "speaker": "Kennith",
               "text": "How will I get downstairs?"
@@ -883553,8 +883646,8 @@
           "steps": [
             {
               "type": "message",
-              "text": "I need to get closer to that.",
-              "id": "j1zwz0"
+              "text": "I need to get closer to use that.",
+              "id": "b2e13Y"
             },
             {
               "type": "end"

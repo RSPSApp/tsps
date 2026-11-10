@@ -4,6 +4,8 @@
 
 The behaviour comes from rsprox captures of live OSRS: a capture of All Settings (every row below clicked through), and level-ups from the shared capture index (`levelup_display` in 70 recordings, revisions 223–235, for example recordings 907, 908, 944 and 379; pop-ups disabled in 23 rev 237 recordings, for example 1098, 1102, 1104, 4055). Ids are checked against the rev 241 cache.
 
+Each group of rows has its own section below, ending with a **Not done** line for what is still missing in it. A new group of rows gets its own section, above "Containers on death".
+
 ## All Settings
 
 The client only reports the click. The server sets the variable and sends it back.
@@ -50,7 +52,7 @@ The client only reports the click. The server sets the variable and sends it bac
 | Enable profanity filter | 37 | varp 1074 `option_chatfilter_disabled` |
 | Shift click to drop items | 51 | varbit 11556 `desktop_shiftclickdrop_enabled`; a fresh account starts with it on (live sent 1 at login in all 8 transcribed rsprox recordings). The login script (876, via 7431) passes it to `setshiftclickdrop` on desktop; with Shift held the inventory item's shift-click op is its top entry |
 | Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle`; the Ranged combat tutor's toggle writes the same setting, which is authoritative. A pre-Settings tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into this row at login unless a setting is already saved |
-| Sailing side panel (dropdown) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option |
+| Sailing side panel (dropdown: Always show, Only show on boat) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option; off a boat, Sailing sets 19153 `sailing_sidepanel_visible_from_combat_tab` from it (see below) |
 | Level-up pop-up notifications (dropdown) | 315 | see below |
 | Level-up chatbox list | 493 | varbit 20158 `option_level_up_chatbox_list` |
 | Level-up guide list | 494 | varbit 20159 `option_level_up_guide_list_disabled` |
@@ -69,6 +71,148 @@ The Controls tab's `settings_side:skull_prevention` toggle (116:5) flips the sam
 
 The attack options are also dropdowns on the side panel's Controls tab (`settings_side:attack_priority_player_buttons` 116:38 and `attack_priority_npc_buttons` 116:39). Live sends op1 on their option rows 1–5 and 1–4 at login, and a click sets the varp straight to the option (slot − 1) on the same tick, as the All Settings rows do. Options from enums 3993 and 3991: 0 depends on combat levels, 1 always right-click, 2 left-click where available, 3 hidden, and for players 4 right-click for clanmates.
 
+**Sailing side panel.** The combat tab's "View" button for the sailing sidepanel (593:48) shows while 19153 is 1 (script 7593, run as the tab is built); script 8583 also shows it while the option is Always show and The Pandemonium (`sailing_intro`, 18314) is at stage 6 or later. Off a boat, Sailing sets 19153 to 1 for Always show from that stage and to 0 otherwise, at login, on leaving a boat, when the option changes and when The Pandemonium changes stage; boarding sets it to 1. Live sends 1 at login in 352 of the 356 default-state logins off a boat past that stage in the rsprox captures (rev 235+), and 0 before it.
+
+- **Not done**:
+  - Player Trade and Report options: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
+
+## Rows the client scripts already apply
+
+These rows only needed wiring: the cache's own scripts (or our client and server code) already act on their variable. Each variable is the one the cache's setting reader returns for the row: script 6716 for toggles and 3962 for dropdowns, each a switch on the setting id. `tests/settings-wired-rows.test.cjs` reads both scripts from the cache and checks every row against them, then that a click flips or sets it and a login brings it back.
+
+| Setting | Id | Variable | What acts on it |
+| --- | --- | --- | --- |
+| Chat box scrollbar position (dropdown: Right, Left) | 1 | varbit 6374 `chatbox_scrollbarside` = option | chatbox scripts |
+| Transparent side panel | 2 | varbit 4609 `side_transparency`; a fresh account starts with 1 (all 9 Tutorial Island logins in the rsprox captures send it) | side panel scripts |
+| Show the remaining XP for a level in the stats panel | 3 | varbit 4181 `option_hidexptolevel` | stats tooltip |
+| Show prayer tooltips | 4 | varbit 5711 `option_prayertooltips` | prayer book |
+| Show special attack tooltip | 6 | varbit 5712 `option_satooltips` | special attack bar |
+| Show Wiki entity lookup | 9 | varbit 10113 `wiki_icon_disabled` | orbs' Wiki button, our client's wiki plugin |
+| Hide private chat when the chatbox is hidden | 36 | varbit 4089 `hide_pm_alongside_chatbox` | chat scripts |
+| Friend Login/Logout messages (dropdown: Timeout, On, Off) | 44 | varbits 12274 `loginlogout_setting` and 1627 `loginlogout_permanent`, see below | chat scripts |
+| Enable separating hours | 83 | varbit 11890 `option_separate_hours`, on varp 2856 with precise timing (82) and the collection log rows (85, 171): the click is matched with the client's varp transmission as for those | timer scripts |
+| Modern Layout - Side panel visual appearance (dropdown: Stone Border, Steel Border) | 86 | varbit 12135 `side_container_steel` = option | side panel border (script 4127) |
+| Show mouseover tooltips | 114 | varbit 12344 `mouseover_tooltips_disabled` | mouseover tooltips (scripts 4581, 4728) |
+| Show attack style | 123 | varbit 12352 `attack_style_enabled` | HUD layout (4731) |
+| Leagues: Display Relics | 127 | varbit 12383 `buff_league_relics_hidden` (1 hides them) | buff bar |
+| Show mouseover text | 147 | varbit 10035 `mouseover_text_disabled`, see below | our client's top-left text, HUD layout (4731) |
+| Agility helper | 163 | varbit 12379 `agility_helper_disabled` | Agility helper (script 5184), from the course data `Agility.plugin.js` sends |
+| Highlight Agility obstacles | 164 | varbit 12380 `agility_helper_highlight_obstacles_enabled` | our client's obstacle highlight |
+| Enable Minimap zoom | 166 | varbit 12983 `minimap_zoom_lock_disabled` | minimap scroll zoom (scripts 876, 5190, 7025, 7028) |
+| Show the Store button on desktop | 181 | varbit 13037 `tli_storebutton_toggle_desktop` | the minimap's Store button (scripts 389, 920, 2414) |
+| Chatbox Mode - Set Automatically | 195 | varbit 13120 `option_chatbox_mode_autoset` | chat input (script 73) |
+| Show number of options in mouseover tooltips | 209 | varbit 13133 `mouseover_tooltips_hide_opcount` | mouseover tooltips (script 4728) |
+| Show Activity Adviser | 257 | varbit 5368 `option_content_recommender_hide`; a fresh account starts with 1, the button hidden (sent as 1 by 5 of the 6 Tutorial Island logins in the rsprox captures, and by 4,265 logins in all) | the minimap's Activity Adviser button (scripts 636, 2481); the Adviser itself is not in tsps |
+| Hide minimap icons when zoomed out | 265 | varbit 14179 `option_minimap_icons_max_zoom_disabled` | `minimap_seticonzoomlimit` (6463, 6465) |
+| Precise combat level | 311 | varbit 14806 `combat_level_decimal_enabled` | combat tab |
+| Ignore List - Remove permanently banned / muted accounts daily | 313, 314 | varbits 8059 `purgeignored_permbanned_disabled`, 8060 `purgeignored_permmuted_enabled` | nothing: there are no permanent bans or mutes |
+| Options on the compass for orienting the camera also set its vertical angle | 362 | varbit 15323 `compass_reorientation_setheight` | compass (script 1050) |
+| Block spontaneous pop-up promotional messages | 365 | varbit 9597 `crm_surprisepopup_blocked` | nothing: there are no promotional pop-ups |
+| Leagues: Display Combat Masteries | 418 | varbit 11562 `buff_league_masteries_hidden` (1 hides them) | buff bar |
+| Always show chat filters | 430 | varbit 16116 `settings_mobile_show_filter_stones_enabled` | chat filter buttons (scripts 113, 178, 3179) |
+| Enable interface resizing and repositioning | 442 | varbit 17772 `settings_interface_resizing` | resizable interfaces |
+| Disable colourful fade effects | 460 | varbit 18132 `settings_colourful_fade_disabled` | Barracuda Trials |
+| Show charting hints | 464 | varbit 18138 `sailing_show_charting_hints` | the captain's log (scripts 8702, 8706) |
+| Show boat customisation material messages | 466 | varbit 18140 `sailing_show_customisation_material_messages`; a fresh account starts with 1 (sent in all 501 default-state logins since rev 235 that carry it) | the boat customisation materials list (script 8828) |
+| Modern menu interface, and its transparent background | 472, 473 | varbits 19615 `settings_new_menu_interface`, 19646 `settings_new_menu_transparent_interface_disabled` | menu scripts |
+| Rune pouch loadout name tags | 474 | varbit 19647 `settings_runepouch_loadout_names_disabled` | rune pouch |
+| Quetzal whistle - Default to hunter guild | 476 | varbit 19681 `settings_quetzalwhistle_default_tp` | the whistle's Signal (`Whistle.Quetzals.js`) |
+| Show quest rating prompts | 505 | varbit 16774 | nothing: there are no quest rating prompts |
+
+- **Friend Login/Logout messages.** Script 4487 shows `loginlogout_permanent` when it is set, else `loginlogout_setting`; the chat script (84) reads only `loginlogout_permanent`, for the message timeout. Timeout sets both to 0, Off sets the setting to 2. Ours: On sets both to 1, so the chat script sees it too (no capture has On; live logins send `loginlogout_setting` 2, Off, in 3225 of 4281 recordings).
+- **Show mouseover text.** Login sends the saved value, 0 for a fresh account (it used to force 0). The top-left text and HUD overlays laid out by script 4731 (Wintertodt, ToA...) follow it when they are laid out: with the text on they sit 23px lower, with it off at the top.
+- **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
+- **Not done**:
+  - Show data orbs (8, varbit 4084 `orbs_disabled`): live also leaves the orbs interface (160) closed while it is set and opens it when the player turns them back on (rsprox 229/2375 tick 8), which needs server work.
+  - Friend Login/Logout messages: the server sends no friend login or logout messages yet, so Off has nothing to stop.
+  - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
+  - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
+
+## Buff Bar
+
+The buff bar (interface 651) is mounted at login and drawn by the cache scripts. Every row of Interfaces > Buff Bar is in `settings.json` on the varbit script 6716 (3962 for the dropdown) reads for it, so the scripts hide the whole bar (124, varbit 9528 `buff_bar_hidden`), its tooltips (128, 9529 `buff_bar_tooltips_hidden`) or one buff. Every buff row starts shown, as live. `tests/buff-bar-settings.test.cjs` checks that every row of the section is wired, against both scripts, and that a click hides only its own buff and comes back at login.
+
+| Rows | Varbits |
+| --- | --- |
+| Home and minigame teleport, Tele Block, charge, God Wars altar, dragonfire shield, imbued heart, Vengeance cooldown and active, stamina, prayer enhance, overload, magic imbue, Sire stun, freeze, Staff of the dead, divine, antifire, antipoison (125, 126, 129-145) | 12353-12371 `buff_*_disabled` |
+| Corruption, Mark of Darkness, Shadow Veil, Death Charge, Ward of Arceuus, Resurrection (152-157) | 12405-12410 |
+| Remaining ammo (170), poison damage (186), desert heat (208), cannon ammo (213), desert water (244), cannon decay (246) | 12985, 13084, 13134, 13667, 14166, 14173 |
+| Menaphite remedy and the Tombs of Amascut effects (284-293) | 14287-14296 |
+| Wilderness cave decay (307), Group Woodcutting Bonus (363), Scurrius food pile (369), Deadman blighted overload (385), prayer regeneration (388), goading potion (390), surge potion (437), bowstring spool (443), Vale totem trail (444) | 14691, 15349, 4139, 10946, 11032, 10068, 16239, 17773, 17774 |
+| Woodcutting Leprechaun's Luck (364, dropdown) | 15350 = option |
+
+**Timers.** The bar shows a buff only while the server sends its timer var. `BuffTimers.plugin.js` sends these from the effect's own state each tick, next to the custom varps 7990-7993 the client's infobox timers read:
+
+| Effect | Varbit | Value |
+| --- | --- | --- |
+| Antifire, extended antifire | 3981 `antifire_potion` | time left in steps of 30 ticks |
+| Super antifire, extended super antifire | 6101 `super_antifire_potion` | time left in steps of 20 ticks |
+| Tele Block | 4163 `teleblock_cycles` | ticks left |
+| Stamina potion | 24 `stamina_duration`, 25 `stamina_active` | time left in steps of 10 ticks; 1 while it lasts |
+
+Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too.
+
+- **Not done**:
+  - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
+  - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
+  - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
+  - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
+
+## Rows owned by other plugins
+
+These features keep their own state and had their own switch before All Settings could change
+them. Each owning plugin listens for `settings:setting-clicked`, flips that same state through its
+own code path, sends the row's varbit and sets `handled`, so a click flips it once. The feature's
+own switch and the row stay in step both ways, and the state comes back at login.
+
+| Setting | Id | State and variable | The feature's own switch |
+| --- | --- | --- | --- |
+| Accept aid | 59 | `accept-aid` attribute, varbit 4180 `option_acceptaid` | The Controls side panel button (116:29). An Ironman is refused ("Ironmen do not accept aid.") from both. |
+| Load-x value for the Dwarf multicannon (number) | 450 | `dwarf-cannon:load-x`, varbit 17870 `option_cannonballs_load_x` | The row asks the cannon's own "Set load-x cannonballs (1 - N):" |
+| Looting bag - Store all | 352 | `looting-bag:store-everything`, varbit 6068 `lootingbag_useallitems` | The bag's Settings menu |
+| Looting bag - Ignore supplies | 353 | `looting-bag:skip-supplies`, varbit 15310 `lootingbag_ignore_food` | The bag's Settings menu |
+| Automatically smash empty vials | 380 | `alfred-grimhands-barcrawl:auto-smash`, varbit 5668 `auto_smash_vials` | The barbarian guard after the Barcrawl. Until it is done the row says the cache's locked text: "You must have completed the Alfred Grimhand's Barcrawl miniquest to access this setting." |
+| Automatically smash empty plant pots | 381 | farm state `barbarian.autoSmash`, varbit 9614 `brut_smash_pots_automatically` (now also sent at login) | Otto's "Toggle automatic pot-smashing". Until his Farming training is done the row says "You must complete the Farming portion of Barbarian Training to access this setting." |
+| Show warning on Wilderness teleport levers | 253 | `levers:skip-wilderness-warning`, varbit 13985 `wilderness_lever_blockwarning_standard` | The warning's "don't ask again" |
+| Show warning on exiting Ferox Enclave | 255 | `ferox:barrier-dont-ask`, varbit 10532 `wildy_hub_warning` | The barrier's "Yes, and don't ask again." |
+| Charter Ships confirmation | 294 | `charter-ships:skip-confirmation`, varbit 75 `settings_warning_confirmation_charter_ships` | The fare question's "don't ask again" |
+| Forgotten drink crate warning | 455 | `charting:drink-no-warning`, varbit 19609 `sailing_charting_drink_crate_warning` | The warning's "Yes, and don't ask again." |
+| Farming protection payment confirmation | 295 | varbit 98 `settings_warning_confirmation_farming_protection`, an ordinary `settings.json` row | The gardener's "Yes and don't ask again." turns the row on through `settings:set`. A save's old per-player `gardenerNoAsk` farm flag moves onto the row once at login and is removed. |
+
+Ours: a row click that changes the setting sends no chat message (only the locked rows and the Ironman refusal say something); the feature's own switch keeps its messages.
+
+- **Not done**: nothing known.
+
+## Camera shake rows
+
+Every camera shake the server sends goes through `CameraShake.send(sender, effect, ...)`
+(`plugins/interface/CameraShake.plugin.js`), which names the effect and sends it only when the
+player's settings allow it. Each var is an `option_camera_effect_*_disabled` flag (1 = off), saved
+and resent at login like any `settings.json` toggle; all start at 0 (on). A shake with no amplitude
+(one that stops a shake) is always sent.
+
+| Setting | Id | Varbit | Effect | Shakes today |
+| --- | --- | --- | --- | --- |
+| Toggle all combat camera shake effects | 425 | 16106 `option_camera_effect_combat_disabled` | `combat`, and every combat sub-row | Hueycoatl, Phantom Muspah, Zebak, Nylocas, Obor, the Fractured Archive batteries, Meat and Greet's minotaur |
+| Doom of Mokhaiotl | 445 | 17776 `option_camera_effect_dom_disabled` | `doom` | the burrow |
+| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | none yet |
+| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | none yet |
+| Ape Atoll tunnel rock fall | 429 | 16109 `option_camera_effect_monkey_madness_disabled` | `apeAtollRockfall` | none yet |
+| Toggle all atmospheric camera shake effects | 426 | 16110 `option_camera_effect_atmospherics_disabled` | `atmospheric`, and every atmospheric sub-row | Guardians of the Rift's surge, quest scenes |
+| Baba Yaga's house | 281 | 14197 `option_camera_effect_baba_yaga_disabled` | `babaYaga` | none yet |
+| Fishing Trawler | 282 | 4814 `trawler_camera_static` | `trawler` | none yet |
+| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | none yet |
+
+- **Groups.** A sub-row's struct param 1080 names its group (3335 combat, 5198 atmospheric).
+  Script 7825 counts a sub-row as off while its master is off, and the settings scripts lock it;
+  the sub-row keeps its own value for when the master comes back on. Ours: a click on a locked
+  sub-row changes nothing on the server either.
+- **Fishing Trawler.** Script 1134 (the trawler's own camera button) also sets 4814, in the client
+  alone, and says "You have disabled all atmospheric camera effects in your settings. Turn them on
+  to enable this button." while the atmospheric master is off.
+- **Not done**: the shamans' jump, the Great Olm, the Ape Atoll rock falls, Baba Yaga's house, the
+  Fishing Trawler and the Barrows chest send no camera shake yet; their rows only save.
+
 ## Level-ups
 
 All on the tick the level is gained:
@@ -85,15 +229,36 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 
 **Combat level.** A tick after the skill's level-up: `Congratulations, you've just advanced your Combat level. You are now level <n>.` with the same graphic and sounds. With pop-ups on, its pop-up comes when the skill's is continued: `<col=000080>Congratulations, you just advanced a combat level.` (or `<n> combat levels.`), `Your combat level is now <n>.`, with the combat icon (233:55 in rev 241).
 
-## Not done yet
-
-- **"Show level & unlocks"**: continuing opens a box per level with what it unlocked, straight after that skill's pop-up and before a queued skill's or a combat level's (rsprox 223/00014: Attack's box, then the combat pop-up). As live sends it: a `mesbox` chat line with the box text, the pop-up's skill icon hidden, `toplevel_chatbox_resetbackground` (2379), then `objectbox` (193, one picture: `ItemStatementDialogue`) or `objectbox_double` (11, two: `DoubleItemStatementDialogue`) at zoom 400. The text is server-side and comes from the Wiki's level-up transcripts (`plugins/interface/data/level-up-messages.json`), generated by `server/scripts/dump-level-up-messages.cjs` (`--check` fails if the committed file is stale). The pictures are obj gamevals in `plugins/interface/data/level-up-pictures.json`; Sailing has all 80 levels there (71 from rsprox captures, the rest the skill guide icon of each picture the transcript shows). Other skills' levels use the generated `items` ids instead: a level with a single unlock whose transcript picture names a cache item (resolved by exact cache item name); pictures that are not items, or whose wiki name the cache renamed, keep the plain message box (229). Not done: the box text's `<col=000080>` highlights (the dumper strips the Wiki's `{{Colour}}` spans), and the box's `mesbox` lines for a lamp's several levels go out together when the first box opens.
+- **"Show level & unlocks"**: continuing opens a box per level with what it unlocked, straight after that skill's pop-up and before a queued skill's or a combat level's (rsprox 223/00014: Attack's box, then the combat pop-up). As live sends it: a `mesbox` chat line with the box text, the pop-up's skill icon hidden, `toplevel_chatbox_resetbackground` (2379), then `objectbox` (193, one picture: `ItemStatementDialogue`) or `objectbox_double` (11, two: `DoubleItemStatementDialogue`) at zoom 400. The text is server-side and comes from the Wiki's level-up transcripts (`plugins/interface/data/level-up-messages.json`), generated by `server/scripts/dump-level-up-messages.cjs` (`--check` fails if the committed file is stale). The pictures are obj gamevals in `plugins/interface/data/level-up-pictures.json`; Sailing has all 80 levels there (71 from rsprox captures, the rest the skill guide icon of each picture the transcript shows). Other skills' levels use the generated `items` ids instead: a level with a single unlock whose transcript picture names a cache item (resolved by exact cache item name); pictures that are not items, or whose wiki name the cache renamed, keep the plain message box (229).
 - **Level-up chatbox list**: with "Show level & unlocks" on (and pop-ups shown), the unlock text goes to the chat only as the box's `mesbox` line, as live (no capture has a plain "You can now..." game message on a level-up). A level-up given up before its box opens (walking, using an item, logging out, dying) sends the lines as chat messages instead, for the open pop-up's skill and any queued ones (ours), so they are never lost. Otherwise the same lines go to the chatbox on the level-up tick. Varbit 20158 is stored but does not gate them: no capture shows what it sends, so this is our reading of the setting, not a recording.
-- **Level-up guide list**: still not done; nothing lists unlocks in the skill guide.
-- **Jingles.** Done: each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
-- **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
-- **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.
-- **Other colour pickers** (type 9, for example Public chat colour) are not handled; quest-list colours are supported below.
+- **Jingles.** Each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
+- **Not done**:
+  - Level-up guide list: nothing lists unlocks in the skill guide.
+  - "Show level & unlocks": the box text's `<col=000080>` highlights (the dumper strips the Wiki's `{{Colour}}` spans), and the box's `mesbox` lines for a lamp's several levels go out together when the first box opens.
+
+## Chat colours
+
+The chat colour rows (type 9) open the colour picker as the quest-list rows do (modal 288, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
+
+| Chat type | Opaque | Transparent |
+| --- | --- | --- |
+| Public | 87 → varp 2992 | 88 → 3000 |
+| Private | 89 → 2993 | 90 → 3001 |
+| Auto chat | 92 → 2994 | 93 → 3002 |
+| Broadcast | 94 → 2995 | 95 → 3003 |
+| Friends chat | 97 → 2996 | 98 → 3004 |
+| Clan chat | 99 → 2997 | 100 → 3005 |
+| Incoming trade request | 101 → 2998 | 102 → 3006 |
+| Incoming challenge request | 103 → 2999 | 104 → 3007 |
+| Guest clan chat | 105 → 3060 | 106 → 3061 |
+| Ironman Group chat | 193 → 3191 | 194 → 3194 |
+| Clan broadcasts | 196 → 3192 | 197 → 3195 |
+| Ironman Group broadcasts | 198 → 3193 | 199 → 3196 |
+| 'Did you know?' | 434 → 4697 | 435 → 4698 |
+
+Split private chat: Private 91 → varp 3008, Broadcast 96 → 3009. The reset rows clear their group's varps: 107 opaque, 108 transparent, 109 split. `server/tests/settings-chat-colours.test.cjs` checks every row against script 4181 and its struct.
+
+- **Not done**: the other colour pickers (type 9), the Activities overlay colours (113, 174, 177, 180, 262, 263, 266, 504).
 
 ## Quest list preferences (cache 241)
 
@@ -130,15 +295,106 @@ Interfaces to Quest List, change sorting/filter, close and open row journals. Ch
 Large, disable shadows, choose a colour (including black), reset and relog. Use the
 worktree ports; leave the main play world running.
 
+- **Not done**: nothing known.
+
 ## Notification and warning rows
 
 These rows show, save and resend the player's choice (`data/settings.json`; cache check in `tests/builtin-warning-settings.test.cjs`). **Most do not change anything in game yet.** In the osrs-dumps client scripts, the drop warning (5411/5412), loot notification (5399/5400/5402), Grand Exchange price warning (14700/14701) and Alchemy value (6091) varbits are read only by the settings scripts themselves; on live the server shows those warnings, and tsps does not read the varbits yet. The other rows below were not traced to a reader either.
 
-- **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), High Risk lever / Ferox / canoe warnings (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471) and the Leagues stepping-stones teleport (500).
+- **Toggles** (flip 0/1): loot drop notifications (38, 40), spam-filter boss kill counts (41), drop item warning (42), Combat Achievement popup and failure notifications (159, 161, 162), logout notifier (185), bird nest (189), cannon low/out of ammo (248, 250), High Risk lever / Ferox / canoe warnings (254, 308, 309) and the canoe warning (256), Grand Exchange buy/sell price warnings (297, 298), Poison Karambwan (370), Plank Make confirmations (420-423, see "Confirmations and messages"), farming patch digging (446), birdhouse seeds (448), Sailing charting popups, cargo and boat teleport warnings (456, 463, 467, 469, 471; 471 is under "Confirmations and messages") and the Leagues stepping-stones teleport (500).
 - **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
-- **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`. Nothing reads it yet: `castAlchemy` only confirms untradeable items.
+- **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`.
+- **Value warnings** (`ValueWarnings.plugin.js`, shared pieces in `ValueWarning.js`). An item's worth is the Grand Exchange guide price of the unnoted item times the quantity; an untradeable item is worth nothing. A warning shows when the worth is at least the threshold.
+  - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning`, so another drop warning (the boat row 465) can use the same check.
+  - Alchemy (65, 66): "That item is considered valuable. Really cast High Level Alchemy on it?" (rsprox 338), with the untradeable confirm's options. Untradeable items warn while 65 is on (varbit 6092 `alchemy_warning_untradeables`, 1 in 2,664 of 3,978 captured logins). Core emits `magic:alchemy-warning`.
+  - Loot drop notifications (38-40): each stack an NPC drops for the player, from `npc-drops:roll`: `<col=ef1020>Valuable drop: 3 x Spider cave teleport (108,567 coins)</col>` and `<col=ef1020>Untradeable drop: Brimstone key</col>` (rsprox 788, 806 and others). Clicking 40 while 38 is off gives the row's own cache line instead.
+  - Grand Exchange (297, 298): a buy offer more than 10 times the guide price, or a sell offer under 10% of it (the rows' cache text), asks before it is placed. The varbits are `option_ge_price_buy/sell_warning_disabled` (14700/14701): 1 turns the warning off (the rows' structs have param 1084, ticked while the varbit is 0), so the captured default leaves the buy warning off and the sell warning on.
+  - Birdhouse seeds (448, 449): seeds worth at least the value (varp 4850 `settings_birdhouse_seed_warning_value`, 1000 in 1,263 captured logins) ask before they go in.
+  - Cannon (248-250): a popup when the cannon is down to the amount (varbit 14176) or empty; the red "Your cannon is out of ammo." chat line is always sent.
+  - Ours, with no capture: the number prompts for 39, 43, 249 and 449 (worded after the Alchemy one), the Grand Exchange, birdhouse and cannon wording, and that a threshold of 0 never warns.
 - **Not done**:
-  - Using the values: the drop warning (nothing checks 5411/5412 when an item is dropped), the loot drop notifications, the Grand Exchange price warnings and the Alchemy value check before the untradeable confirm.
-  - The drop-warning (43) and loot-notification (39) threshold prompts (no capture of their text).
-  - The respawn timer dropdowns (187, 188), the "enable/disable all" tablet and Wilderness teleport buttons (74-77) and the Sailing drop-item warning (465, default differs between captures).
-  - Rows already handled elsewhere: teleport spells 60-64, levers 253, Ferox 255, drink crate 455.
+  - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
+  - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+
+## Wilderness teleport warnings
+
+`server/plugins/combat/SpellTeleports.plugin.js` warns before a Wilderness teleport spell is cast or a Wilderness tablet is broken, while the spell's or tablet's row is on (cache check and every case in `tests/wilderness-teleport-warnings.test.cjs`).
+
+| Setting | Id | Variable | Warns while |
+| --- | --- | --- | --- |
+| Show warning when casting: Teleport to Target, Dareeyak, Carrallanger, Annakarl, Ghorrock Teleport | 60-64 | varbits 236 `bounty_teleport_warning`, 6284-6287 `*_teleport_warning` | 1 (default, sent at login) |
+| Show warning when using tablet: Ice Plateau, Cemetery, Wilderness Crabs, Dareeyak, Carrallanger, Annakarl, Ghorrock | 67-73 | varbits 2323, 2322, 3932, 3930, 2325, 2324, 3931 `teletab_*_warning` | 0 (default; the row's struct reads it inverted, param 1084) |
+| Enable / Disable Wilderness teleport warnings (buttons) | 77 / 76 | sets 60-64 | |
+| Enable / Disable tablet warnings (buttons) | 75 / 74 | sets 67-73 | |
+
+- **Defaults.** Live sends 1 for the four Ancient spells' varbits at login in 3,238 rsprox recordings (and `bounty_teleport_warning` in 2,966), and never changes the tablets' varbits, whose warning shows: both are on by default.
+- **One value.** The rows are in `data/settings.json`, so they are saved in `settings:values`. The spellbook's op10 ("Disable warning" / "Enable warning") sets the same row through `settings:set`. The `spell-teleports:wilderness-warnings` attribute that op10 used to save (off by default, and read by nothing) is cleared at login.
+- **Spells** (rsprox 3330, an event world, Annakarl Teleport): "Are you sure you wish to teleport to the Wilderness?", "Yes, teleport me now." / "No, I want to stay here."; Yes casts on that tick. The spell's level, rune and Wilderness checks run before the warning, and again on Yes, when the runes are taken. Ours: the same line for the other spells, Teleport to Target included (it asks after its own Bounty Hunter checks).
+- **Tablets** (rsprox 3931 Annakarl and Ghorrock, 1463 Dareeyak): "Teleport into the DEEP wilderness?" or "Teleport into the wilderness?", "Yes" / "No"; Yes breaks the tablet then, which is used up as it is absorbed. Ours: the deep line for Ice Plateau, Cemetery and Wilderness crabs (past level 30), the other for Carrallanger.
+- **Buttons.** No capture; each sets every row of its group on or off, with no message.
+- **Not done:** the tablets' own Configure option (no capture).
+
+## Confirmations and messages
+
+Each row is a toggle in `data/settings.json`, read when its dialogue or message would show. Tests: `tests/settings-confirmations.test.cjs` (which also checks each row's varbit against the cache's toggle reader, script 6716) and `tests/settings-trade-delay.test.cjs`.
+
+| Setting | Id | Varbit (live default) | While on |
+| --- | --- | --- | --- |
+| Clue scroll warnings, Beginner to Master | 374–379 | 10693, 10694, 10695, 10723, 10724, 10725 `option_trail_reminder_*` (off) | A clue an NPC drops for a player already holding that tier says "You have a sneaking suspicion that you would have received a medium clue scroll." ("scroll box" once boxes are unlocked; "an" before easy and elite; rsprox 224/1445, 231/391, 235/941, 236/3932) |
+| STASH units take equipped items | 451 | 17938 `option_hidey_holes_equipped` (off) | Filling a STASH takes each outfit item from the inventory first, then from what the player wears |
+| Plank Make confirmation: basic, oak, teak, mahogany | 420–423 | 624, 2319, 2320, 3939 `dream_plankspell_*` (on, off, off, on) | Plank Make on that log asks "Pay 70 coins for each plank?" (the log's price), Yes / No, before it takes coins, runes or the log; the other logs never ask |
+| Show confirmation when paying for items from gravestone | 192 | 13113 `gravestone_disable_warning`, read as is (on) | The grave's pay button asks "Pay 15,000 coins to retrieve your items?", Yes / No; either answer reopens the grave's interface while the player is within reach, and Yes pays only if the fee is unchanged |
+| Accept trade delay | 205 | 13130 `trade_delay_disabled`, read as is (on) | Accept on the first trade screen does nothing for 3 seconds after either player changes an offer; each player's own setting decides their wait |
+| Show warning when teleporting from your boat at sea | 471 | 16620 `sailing_warning_teleportoffboat` (off) | A teleport spell cast aboard your own boat (which would leave it lost at sea) asks "Accept that your boat may be lost at sea?", "Yes, teleport away." / "No, stay on the boat.", after any Wilderness warning the spell has (`skills/sailing/TeleportWarning.plugin.js`) |
+
+- **Defaults** for 192 and 205: all 918 default-state logins (rev 235+) in the rsprox captures send both varbits as 1. Row 278 ("Display a warning on login if there are items stored in an item retrieval service") is shown by the toggle reader as 1 − varbit 14194 `option_item_retrieval_warning_disabled`, so it now flips 14194 instead of sharing 192's 13113. The gravestone login warning reads 14194 too, so it shows by default.
+- **Ours** (no capture or Wiki text): the Plank Make, gravestone and boat teleport questions and options (the boat one follows live's Escape prompt), and that a click on Accept during the trade delay does nothing and says nothing.
+- **Not done**:
+  - The clue warning for clues from skilling (nests, geodes, bottles, salvage, Agility): those sources skip the roll at capacity, so there is nothing to mention yet.
+  - The boat teleport warning for tablets, jewellery and other non-spell teleports; the row's description names teleport spells.
+  - Port task cargo deposit (463), port task cargo in hold (467) and Ironman cargo hold (469) warnings: no capture or Wiki text of any of them. 469's varbit (10385) is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
+  - The Sailing drop-item warning (465), which builds on the drop warning (42/43).
+
+## Rows that switch existing behaviour
+
+Each of these rows is a plain toggle (`data/settings.json`). The plugin that owns the behaviour reads the varbit when it acts, so a change applies from the next time. A row whose cache struct has param 1084 is ticked while its varbit is 0. New accounts start with every one at 0, as live sends none of them at login (161 aside, which is on). Tests: `tests/settings-gates.test.cjs`, plus the area suites named below.
+
+| Setting | Id | Varbit | With the varbit at 1 |
+| --- | --- | --- | --- |
+| Warning on digging up a farming patch | 446 | 17797 `settings_farming_dig_disable_warning` | Dig-up clears the patch without "Are you sure you want to dig up this patch?" |
+| Show warning on taking a canoe to the Wilderness | 256 | 13988 `wildy_canoe_warning` | The waka goes into the Wilderness without the one-way-trip question |
+| Bank Deposit Box item quantity check | 424 | 15958 `bank_depositbox_oplocu_askquantity` | An item used on a deposit box deposits all of it, without "How many would you like to deposit?" (a full bank keeps them, as Bank.deposit does) |
+| Disable Phantom Muspah messages | 302 | 14711 `settings_muspah_messages` | No darkness, prayer shield or corruption lines in the fight (`Common.PhantomMuspah.fightMessage`) |
+| Iron loot restriction messages | 183 | 13040 `iron_noloot_message_disabled` | No "you might not receive kill-credit" or shared-kill loot line for an Ironman |
+| Filter out boss kill-count with spam-filter | 41 | 4930 `boss_killcount_filtered` | Boss kill-count lines go to the spam channel, which the chatbox's Game filter hides (ours: no capture shows the setting on). Every boss sends them through `interface/BossKillCount.plugin.js`; a test fails on one sent any other way |
+| Combat Achievement Tasks - Failure | 161 | 12454 `ca_failure_notifications_enabled` | (on by default) "You have failed <task>: <reason>" for tasks not yet done; at 0, no failure lines. Content reports failures with `combat-achievements:failed` { player, task, reason } |
+| Combat Achievement Tasks - Repeat failure | 162 | 12457 `ca_refailure_notifications_enabled` | Failure lines for tasks already done too, while 161 is on |
+| Charting popups | 456 | 18142 `settings_sailing_charting_popup` | Charting is told in chat only, with no "Charting Complete!" popup |
+| Make-X barbarian potions | 373 | 5983 `settings_barbarian_potion_makex` | A barbarian mix offers the Make-X menu; at 0 (default) it is made one at a time |
+| Deep Wilderness lever default option | 296 | 14674 `wilderness_lever_first_op` | Landing in the Deserted Keep with the easy Wilderness Diary sets `wildoutlever_vis` to 2: Edgeville first (rsprox 4155) |
+| Current duck hint arrow | 458 | 18133 `sailing_current_duck_hintarrow_disabled` | No hint arrow (or `current_hint_arrow`) over a released current duck |
+| Barracuda trials hint arrow | 459 | 18134 `sailing_barracuda_trials_hintarrow_disabled` | No hint arrow over the trial's rum or toad boat. The intro tour's arrows stay |
+| Combat task interface remembers last interface opened | 452 | 17939 `settings_ca_open_last_interface_disabled` | The account summary's row opens the overview instead of the screen used last |
+
+**Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
+
+- **Not done**:
+  - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
+  - **Level-up chatbox list** (493): no capture shows what it writes.
+  - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
+  - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Containers on death
+
+Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).
+
+| Setting | Id | Variable | Container |
+| --- | --- | --- | --- |
+| Always empty rune pouches on death | 354 | varbit 15311 `emptyondeath_runepouch` | rune pouch and divine rune pouch (`items/runepouch/Death.RunePouch.js`) |
+| Always empty tackle boxes on death | 355 | varbit 15312 `emptyondeath_tacklebox` | tackle box |
+| Always empty bolt pouches on death | 356 | varbit 15313 `emptyondeath_boltpouch` | none: there is no bolt pouch yet, so the row only saves |
+| Always empty seed boxes on death | 357 | varbit 15314 `emptyondeath_seedbox` | seed box (`skills/farming/Guild.Farming.js`) |
+| Always empty essence pouches on death | 358 | varbit 15315 `emptyondeath_essencepouch` | small to colossal pouches (`skills/runecrafting/Pouches.Runecrafting.js`) |
+| Always empty herb sacks on death | 359 | varbit 15316 `emptyondeath_herbsack` | herb sack and silklined herb sack |
+
+- **Not done:** a seed box lost above level 20 Wilderness is destroyed on live with its seeds kept for the next box (Wiki: Seed box, 14 April 2021); here its seeds go to the bank and the killer like any other PvP death.

@@ -38,6 +38,8 @@
  * respawns Agrith-Naar. The room is the existing QuestScenes private area at the
  * source coordinates rather than a client REBUILD_REGION instance.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerShadowOfTheStormQuest(api) {
   const {
     Animation,
@@ -1100,7 +1102,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   function shake(player, random) {
-    player.getPacketSender().sendCameraShake(1, random, 0, 0);
+    CameraShake.send(player.getPacketSender(), "atmospheric", 1, random, 0, 0);
   }
 
   function cameraBeat(scene, tick, move, look, rates = Scenes.CAMERA_RATES) {

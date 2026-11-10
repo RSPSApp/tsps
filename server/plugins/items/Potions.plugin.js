@@ -70,7 +70,6 @@ const PRESERVE_EXTENSION_MS = 30 * 1000;
 const PRESERVE_WARMUP_MS = 15 * 1000;
 const MENAPHITE_DURATION_MS = 5 * 60 * 1000;
 const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
-const PRAYER_REGEN_DURATION_MS = 8 * 60 * 1000;
 /** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
 const PRAYER_REGEN_INTERVAL_MS = 12 * 600;
 
@@ -242,8 +241,12 @@ function applyJarOfCongealedBlood(player) {
   restoreRunEnergy(player, 100);
 }
 
-/** `hpDamage(currentHp)` is the brew's Hitpoints cost; the Zamorak mix passes its own (Wiki). */
-function applyZamorakBrew(player, hpDamage = (hp) => Math.floor(2 + hp * 0.1)) {
+/**
+ * `hpDamage(currentHp)` is the brew's Hitpoints cost; the Zamorak mix passes its own (Wiki). The brew's (Wiki, Zamorak
+ * brew): it lowers "current Hitpoints by 12%, rounded down, though it will not lower a player's Hitpoints below the
+ * minimum of 1"; the page's formula and table give floor(Hitpoints x 12/100), with no flat part.
+ */
+function applyZamorakBrew(player, hpDamage = (hp) => Math.floor(hp * 0.12)) {
   boostSkill(player, Skill.ATTACK, 2, 0.2);
   boostSkill(player, Skill.STRENGTH, 2, 0.12);
 
@@ -324,17 +327,56 @@ function processMenaphite(player) {
   }
 }
 
-/** Wiki: restores one Prayer point every 12 ticks for 8 minutes; never over max. */
+/**
+ * The potion's timer, as recorded (rsprox_transcripts/239/04269.txt, 239/04288.txt, 231/02990.txt, normal worlds):
+ * prayer_regeneration_potion_timer starts at 66 and steps down every 12 ticks, a Prayer point each step. At 3 steps
+ * left, "Your Prayer Regeneration potion has almost run out!"; at 0, "The effects of your Prayer Regeneration potion
+ * have worn off." A drink while it runs starts it again at 66. Dying zeroes it with the same worn-off line
+ * (239/04272.txt, 239/04288.txt).
+ */
+const PRAYER_REGEN_STEPS = 66;
+const PRAYER_REGEN_WARNING_STEPS = 3;
+const PRAYER_REGEN_WARNING = "<col=ff3045>Your Prayer Regeneration potion has almost run out!";
+const PRAYER_REGEN_WORN_OFF = "<col=ff3045>The effects of your Prayer Regeneration potion have worn off.";
+
+/**
+ * The client's timer for the potion: prayer_regeneration_potion_timer (11361) holds the steps left. Live sends it on
+ * every change: 0 -> 66 on a drink (rsprox_transcripts/231/02990.txt:8541), a step down every 12 ticks, 57 -> 66 on a
+ * re-drink (239/04272.txt:13136) and -> 0 on expiry or death (239/04272.txt:65174-65180), before the line.
+ */
+const PRAYER_REGEN_TIMER_VARBIT = "prayer_regeneration_potion_timer";
+
+function sendPrayerRegenerationTimer(player, steps) {
+  const id = pluginApi?.core?.CacheDefinitions?.getVarbitId?.(PRAYER_REGEN_TIMER_VARBIT);
+  if (Number.isInteger(id)) player.getPacketSender().sendVarbit(id, steps);
+}
+
+/** Wiki: restores one Prayer point every 12 ticks; never over max. */
 function applyPrayerRegeneration(player) {
   const now = Date.now();
   player.setAttribute(ATTR_PRAYER_REGEN_STATE, {
-    endsAt: now + PRAYER_REGEN_DURATION_MS,
+    left: PRAYER_REGEN_STEPS,
+    endsAt: now + PRAYER_REGEN_STEPS * PRAYER_REGEN_INTERVAL_MS,
     nextRestoreAt: now + PRAYER_REGEN_INTERVAL_MS,
   });
+  sendPrayerRegenerationTimer(player, PRAYER_REGEN_STEPS);
+}
+
+function endPrayerRegeneration(player) {
+  if (!player.getAttribute(ATTR_PRAYER_REGEN_STATE)) return;
+  player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+  sendPrayerRegenerationTimer(player, 0);
+  player.sendMessage(PRAYER_REGEN_WORN_OFF);
+}
+
+/** On login the client's timer starts at 0: a potion still running shows its steps again. */
+function resumePrayerRegenerationTimer({ player }) {
+  const left = player.getAttribute(ATTR_PRAYER_REGEN_STATE)?.left;
+  if (Number.isInteger(left) && left > 0) sendPrayerRegenerationTimer(player, left);
 }
 
 function clearPrayerRegeneration({ player }) {
-  player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+  endPrayerRegeneration(player);
 }
 
 function processPrayerRegeneration(player) {
@@ -343,8 +385,10 @@ function processPrayerRegeneration(player) {
     return;
   }
   const now = Date.now();
-  if (now >= state.endsAt) {
-    player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+  // A state saved before the step count existed has only its end time: the steps that still allows.
+  const steps = Number.isInteger(state.left) ? state.left : Math.ceil((state.endsAt - now) / PRAYER_REGEN_INTERVAL_MS);
+  if (steps <= 0) {
+    endPrayerRegeneration(player);
     return;
   }
   if (now < state.nextRestoreAt) {
@@ -352,6 +396,14 @@ function processPrayerRegeneration(player) {
   }
   const max = getMaxLevel(player, Skill.PRAYER);
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, 1, max);
+  const left = steps - 1;
+  if (left <= 0) {
+    endPrayerRegeneration(player);
+    return;
+  }
+  sendPrayerRegenerationTimer(player, left);
+  if (left === PRAYER_REGEN_WARNING_STEPS) player.sendMessage(PRAYER_REGEN_WARNING);
+  state.left = left;
   state.nextRestoreAt = now + PRAYER_REGEN_INTERVAL_MS;
   player.setAttribute(ATTR_PRAYER_REGEN_STATE, state);
 }
@@ -496,7 +548,8 @@ function applyOverloadBoost(player, flat, percent) {
   }
 }
 
-function applyOverload(player, flat = 5, percent = 0.15) {
+/** `area`: where the effect lives (the raid's potions): it ends, silently, once the player is no longer there. */
+function applyOverload(player, flat = 5, percent = 0.15, area = null) {
   const now = Date.now();
   applyOverloadBoost(player, flat, percent);
   player.setAttribute(ATTR_OVERLOAD_STATE, {
@@ -506,6 +559,7 @@ function applyOverload(player, flat = 5, percent = 0.15) {
     damageHitsRemaining: 5,
     flat,
     percent,
+    ...(area ? { area } : {}),
   });
 }
 
@@ -1302,13 +1356,13 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
   });
   registerGourd(`Prayer enhance${suffix}`, GOURD_FIRST_DOSE.prayerEnhance[tier], (player) => {
     const now = Date.now();
-    player.setAttribute(ATTR_PRAYER_ENHANCE, { endsAt: now + strength.enhanceTicks * 600, nextAt: now + PRAYER_ENHANCE_INTERVAL_MS });
+    player.setAttribute(ATTR_PRAYER_ENHANCE, { endsAt: now + strength.enhanceTicks * 600, nextAt: now + PRAYER_ENHANCE_INTERVAL_MS, area: RAID_AREA });
   });
   registerGourd(`Xeric's aid${suffix}`, GOURD_FIRST_DOSE.xericsAid[tier], (player) => applyXericsAid(player, strength.aid));
   const antipoison = suffix ? `Antipoison${suffix}` : "Antipoison potion";
   registerGourd(antipoison, GOURD_FIRST_DOSE.antipoison[tier], (player) => applyPoisonImmunity(player, GOURD_ANTIPOISON_SECONDS[tier]));
   registerGourd(`Overload${suffix} (Chambers of Xeric)`, GOURD_FIRST_DOSE.overload[tier],
-    (player) => applyOverload(player, strength.overload[0], strength.overload[1]),
+    (player) => applyOverload(player, strength.overload[0], strength.overload[1], RAID_AREA),
     // Wiki (Overload (Chambers of Xeric)): more than 50 Hitpoints, as Overload (+) and the refusal text say.
     (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
@@ -1358,6 +1412,22 @@ function noteDivineDrain({ player, skill, previous, current }) {
   if (entry && current < entry.target) entry.target = current;
 }
 
+/**
+ * The divine potions' lines, as recorded from revision 230 on (rsprox_transcripts/239/04263.txt, a normal world; 800
+ * times over the recordings): at 30 ticks left "Your divine potion effect is about to expire." (a divine ranging
+ * potion: "Your divine ranging potion is about to expire."), and at the end "The effects of the divine potion have worn
+ * off." (no closing tag). One line for a potion's skills together. Dying clears the effect with no line
+ * (237/01148.txt and seven more: the timers go to 0 after "Oh dear, you are dead!").
+ */
+const DIVINE_WARNING_MS = 30 * 600;
+const DIVINE_WARNING = "<col=ff3045>Your divine potion effect is about to expire.</col>";
+const DIVINE_RANGING_WARNING = "<col=ff3045>Your divine ranging potion is about to expire.</col>";
+const DIVINE_WORN_OFF = "<col=ff3045>The effects of the divine potion have worn off.";
+
+function clearDivineOnDeath({ player }) {
+  if (player?.getAttribute(ATTR_DIVINE_STATE)) player.setAttribute(ATTR_DIVINE_STATE, null);
+}
+
 function processDivine(player) {
   const state = player.getAttribute(ATTR_DIVINE_STATE);
   if (!state || !Array.isArray(state.targets)) {
@@ -1378,8 +1448,15 @@ function processDivine(player) {
     state.targets = state.targets.filter((entry) => now < endOf(entry));
     if (state.targets.length === 0) player.setAttribute(ATTR_DIVINE_STATE, null);
     else player.setAttribute(ATTR_DIVINE_STATE, { ...state, endsAt: Math.max(...state.targets.map(endOf)) });
-    player.sendMessage("Your divine potion effect has worn off.");
+    player.sendMessage(DIVINE_WORN_OFF);
     if (state.targets.length === 0) return;
+  }
+
+  const warned = state.targets.filter((entry) => !entry.warned && now >= endOf(entry) - DIVINE_WARNING_MS);
+  if (warned.length > 0) {
+    for (const entry of warned) entry.warned = true;
+    const rangingOnly = warned.every((entry) => entry.skillIndex === Skill.RANGED.getIndex());
+    player.sendMessage(rangingOnly ? DIVINE_RANGING_WARNING : DIVINE_WARNING);
   }
 
   for (const entry of state.targets) {
@@ -1404,13 +1481,28 @@ function inArea(player, area) {
   return request.inside === true;
 }
 
+/**
+ * The raid's timed potions end when the player leaves it: both timers go to 0 with no line as raids_client_indungeon
+ * does (rsprox_transcripts/234/03285.txt:288134, 234/00820.txt:321992).
+ */
+const RAID_AREA = "chambers-of-xeric";
+
+function leftItsArea(player, state) {
+  return typeof state.area === "string" && !inArea(player, state.area);
+}
+
 function processPrayerEnhance(player) {
   const state = player.getAttribute(ATTR_PRAYER_ENHANCE);
   if (!state) return;
+  if (leftItsArea(player, state)) {
+    player.setAttribute(ATTR_PRAYER_ENHANCE, null);
+    return;
+  }
   const now = Date.now();
   if (now >= state.endsAt) {
     player.setAttribute(ATTR_PRAYER_ENHANCE, null);
-    player.sendMessage("<col=ef1020>Your prayer enhance effect has worn off.</col>");
+    // rsprox_transcripts/234/03285.txt:265414.
+    player.sendMessage("<col=ff0000>Your prayer enhance effect has worn off.</col>");
     return;
   }
   if (now < state.nextAt) return;
@@ -1425,6 +1517,11 @@ function processOverload(player) {
     return;
   }
 
+  if (leftItsArea(player, state)) {
+    player.setAttribute(ATTR_OVERLOAD_STATE, null);
+    return;
+  }
+
   const now = Date.now();
   if (now >= state.endsAt) {
     player.setAttribute(ATTR_OVERLOAD_STATE, null);
@@ -1432,7 +1529,8 @@ function processOverload(player) {
       setCurrentLevel(player, skill, getMaxLevel(player, skill));
     }
     heal(player, 50);
-    player.sendMessage("The effects of the overload have worn off, and you feel normal again.");
+    // rsprox_transcripts/234/00820.txt:199330 (four times in revision 234; no closing tag).
+    player.sendMessage("<col=ef1020>The effects of overload have worn off, and you feel normal again.");
     return;
   }
 
@@ -1794,6 +1892,8 @@ module.exports = {
   _test: {
     applyPrayerRestore, applySanfewRestore, applyAncientBrew, restorePrayerOverheal, applyDivine, processDivine,
     applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration, clearPrayerRegeneration,
+    resumePrayerRegenerationTimer,
+    clearDivineOnDeath,
     applyRankFrothyPotion, applyFoulChunkyPotion, applyRancidSlimyPotion, applyJarOfCongealedBlood,
     processBoostDecay, notePreserveActivated, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
     processStamina, staminaDrainModifier, staminaStatus,
@@ -1835,7 +1935,9 @@ module.exports = {
     api.persistAttribute(ATTR_PRAYER_REGEN_STATE, null);
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogin(resumeTimedEffects);
+    api.onPlayerLogin(resumePrayerRegenerationTimer);
     api.onPlayerDeath(clearPrayerRegeneration);
+    api.onPlayerDeath(clearDivineOnDeath);
     api.onItemOnItem(pourPotion, { noted: false });
     api.onItemAction(emptyVessel);
     api.onItemFirstAction((event) => {

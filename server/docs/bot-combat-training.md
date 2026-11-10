@@ -527,6 +527,11 @@ the bot's existing brain. Disconnecting releases the bot and logs out the origin
 character. `::botback` needs no rank because it only returns the controlling connection
 to its own character; it grants no access to another account.
 
+Administrators can use `::botstatsme <bot name>` from their own character to copy their
+base skill levels and experience onto an active bot, with current levels set to those
+bases (full hitpoints and prayer). Use `::botback` first if you are driving a bot.
+The bot must unequip any gear whose requirements the copied levels would fail.
+
 Use `::bh <bot username> manual` to keep a bot logged in with its AI stopped.
 Manual mode survives `::botback`; normal walking or Follow performed while driving
 the bot can continue. Assign `follow`, `pvp` or `auto` with `::bh` to resume its AI.

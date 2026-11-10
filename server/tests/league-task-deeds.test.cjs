@@ -1252,7 +1252,7 @@ test("rumours: a Hunter rumour handed in to the real guild hunter (Complete a Hu
   s.assignments[0] = { task: taskKey, found: true };
   f.player.getInventory().add(new core.Item(core.ItemIdentifiers[task.part]), true);
   Rumours.assign(f.player, 0);
-  assert.ok(f.messages.some((text) => /Rumour completed/.test(text)), `the real rumour: ${f.messages}`);
+  assert.ok(f.messages.some((text) => text === "You have completed <col=ff3045>1</col> rumours for the Hunter Guild."), `the real rumour: ${f.messages}`);
   assert.ok(done(f, "complete-a-hunter-rumour"));
   assert.equal(f.player.getAttribute("league:task-progress")["complete-10-hunter-rumours"], 1);
 });

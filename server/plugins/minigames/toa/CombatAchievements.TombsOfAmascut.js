@@ -33,7 +33,6 @@
 const Shared = require("./Shared.TombsOfAmascut");
 
 const MONSTER = { entry: "EM: Tombs of Amascut", normal: "Tombs of Amascut", expert: "XM: Tombs of Amascut" };
-const FAIL_COLOUR = "0cc919";
 const NORMAL_LEVEL = 150;
 const EXPERT_LEVEL = 300;
 const FULL_PARTY = 8;
@@ -70,14 +69,9 @@ function neededLevel(task) {
   return NORMAL_TASKS.has(task) ? NORMAL_LEVEL : 0;
 }
 
-function hasTask(player, task) {
-  const request = { player, task, done: false };
-  Shared.api().emitCustomEvent("combat-achievements:has-task", request);
-  return request.done;
-}
-
+/** Combat Achievements sends it, as the player's failure settings allow. */
 function announce(player, task, reason) {
-  if (!hasTask(player, task)) player.sendMessage(`You have failed <col=${FAIL_COLOUR}>${task}</col>: ${reason}`);
+  Shared.api().emitCustomEvent("combat-achievements:failed", { player, task, reason });
 }
 
 /** A task's chance is gone: for the party, or for one `player`. Each is announced once. */

@@ -1,6 +1,7 @@
 // The client side of being on a boat: the boarded varbits and the sailing sidepanel on the
 // combat tab, applied whenever Sailing puts a player aboard and cleared whenever they leave
-// (disembarking, sinking or logging out). Values follow xrsps's raft port, taken from rsmod's
+// (disembarking, sinking or logging out). Off a boat, the combat tab offers the sidepanel as the
+// Sailing side panel setting says. Values follow xrsps's raft port, taken from rsmod's
 // `applyBoardedState` (https://github.com/rsmod/rsmod, ISC).
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
@@ -33,6 +34,38 @@ let core;
 
 function attachCore(api) {
   core = api.core;
+}
+
+/** All Settings' "Sailing side panel" row. */
+const SIDE_PANEL_SETTING = 454;
+const SIDE_PANEL_ONLY_ON_BOAT = 1;
+/** The Pandemonium stage from which the combat tab offers the sidepanel off a boat (script 8583). */
+const OFF_BOAT_SIDEPANEL_STAGE = 6;
+
+/**
+ * sailing_sidepanel_visible_from_combat_tab off a boat. The combat tab shows its "View" button
+ * for the sidepanel while it is 1. Live keeps it at 1 while the Sailing side panel setting is
+ * "Always show", once The Pandemonium has reached the stage the cache offers the panel from;
+ * with "Only show on boat" it is 1 only while aboard.
+ */
+function offBoatCombatTabSidepanel(player, onlyOnBoat = getVarbit(player, VARBIT.SIDE_PANEL_ONLY_ON_BOAT)) {
+  return onlyOnBoat !== SIDE_PANEL_ONLY_ON_BOAT && getVarbit(player, VARBIT.SAILING_INTRO) >= OFF_BOAT_SIDEPANEL_STAGE ? 1 : 0;
+}
+
+/** Off a boat, the combat tab follows a change at once; aboard, it keeps offering the panel. */
+function refreshOffBoatCombatTab(player, onlyOnBoat) {
+  if (getVarbit(player, VARBIT.BOARDED_BOAT) === 1) return;
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player, onlyOnBoat));
+}
+
+/** The Sailing side panel row changed (its varbit is set after this event). */
+function sidePanelSettingChosen({ player, settingId, option }) {
+  if (settingId === SIDE_PANEL_SETTING) refreshOffBoatCombatTab(player, option);
+}
+
+/** The Pandemonium reaching the stage the panel is offered from. */
+function pandemoniumStageChanged({ player, key }) {
+  if (key === "pandemonium") refreshOffBoatCombatTab(player);
 }
 
 /** Values from live OSRS boarding traces (docs/sailing-osrs-reference.md). */
@@ -255,6 +288,7 @@ function onLeft({ player, boat, reason }) {
   // Disembarking docks the boat; a teleport or Escape sinks it.
   sendBoatVarbits(player);
   for (const id of LEFT_VARBITS) setVarbit(player, id, 0);
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player));
   clearBoatVarps(player);
   player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   player.getPacketSender().sendTabInterface(0, 0);
@@ -291,11 +325,13 @@ function builtSpec(boat, base) {
 /** Describes owned boats; Schematics restores only recipes the player has learned. */
 function describeBoatsOnLogin({ player }) {
   sendBoatVarbits(player);
+  // A player logging in aboard gets the boarded varbits a tick later.
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player));
 }
 
 module.exports = {
   name: "Sailing",
-  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving.",
+  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving; off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says.",
   members: true,
   register(api) {
     attachCore(api);
@@ -307,6 +343,8 @@ module.exports = {
     api.onCustomEvent("sailing:guest-boarded", onGuestBoarded);
     api.onCustomEvent("sailing:guest-left", onGuestLeft);
     api.onPlayerLogin(describeBoatsOnLogin);
+    api.onCustomEvent("settings:option-chosen", sidePanelSettingChosen);
+    api.onCustomEvent("quest:stage-changed", pandemoniumStageChanged);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);
   },

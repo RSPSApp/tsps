@@ -15,6 +15,8 @@ const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
 // "Yes, and don't show this warning again." on the levers' warning.
 const SKIP_WARNING_ATTRIBUTE = "levers:skip-wilderness-warning";
+/** All Settings > Warnings: "Show warning on Wilderness teleport levers", the warning's own "don't ask again". */
+const SKIP_WARNING_SETTING = 253;
 
 const PULL_MESSAGE = "You pull the lever...";
 const WARNING =
@@ -97,6 +99,8 @@ function resolve() {
     skipWarning: need(cache.getVarbitId("wilderness_lever_blockwarning_standard"), "wilderness_lever_blockwarning_standard"),
     // The Keep lever's multiloc: 0 "Pull", 1 Ardougne first, 2 Edgeville first.
     keepLever: need(cache.getVarbitId("wildoutlever_vis"), "wildoutlever_vis"),
+    // All Settings "Deep Wilderness lever default option": 1 puts Edgeville first.
+    edgevilleFirst: need(cache.getVarbitId("wilderness_lever_first_op"), "wilderness_lever_first_op"),
   };
 }
 
@@ -161,7 +165,9 @@ function hasEasyWildernessDiary(player) {
  * Edgeville first, got 2).
  */
 function landedInKeep(player) {
-  if (hasEasyWildernessDiary(player)) player.getPacketSender().sendVarbit(ids.keepLever, 1);
+  if (!hasEasyWildernessDiary(player)) return;
+  const sender = player.getPacketSender();
+  sender.sendVarbit(ids.keepLever, sender.getVarbit(ids.edgevilleFirst) === 1 ? 2 : 1);
 }
 
 function landed(player, destination) {
@@ -185,6 +191,18 @@ function skipsWarning(player) {
   return player.getAttribute(SKIP_WARNING_ATTRIBUTE) === true;
 }
 
+function setSkipWarning(player, skip) {
+  resolve();
+  player.setAttribute(SKIP_WARNING_ATTRIBUTE, skip);
+  player.getPacketSender().sendVarbit(ids.skipWarning, skip ? 1 : 0);
+}
+
+function skipWarningSettingClicked(request) {
+  if (request.settingId !== SKIP_WARNING_SETTING) return;
+  request.handled = true;
+  setSkipWarning(request.player, !skipsWarning(request.player));
+}
+
 /** The captured warning: a message box, then the three choices. */
 function warn(player, object, lever, destination) {
   const { DialogueChainBuilder, StatementDialogue, OptionDialogue } = core;
@@ -193,10 +211,7 @@ function warn(player, object, lever, destination) {
     new OptionDialogue(1, {
       executeOption(option) {
         player.getPacketSender().sendInterfaceRemoval();
-        if (Number(option) === 3) {
-          player.setAttribute(SKIP_WARNING_ATTRIBUTE, true);
-          player.getPacketSender().sendVarbit(ids.skipWarning, 1);
-        }
+        if (Number(option) === 3) setSkipWarning(player, true);
         if (Number(option) === 1 || Number(option) === 3) pull(player, object, lever, destination);
       },
     }, ...WARNING_OPTIONS).setTitle(WARNING_TITLE),
@@ -241,6 +256,7 @@ module.exports = {
     api.persistAttribute(SKIP_WARNING_ATTRIBUTE, false);
     api.onObjectInteraction("Lever", { Pull: useLever, Ardougne: useLever, Edgeville: useLever });
     api.onPlayerLogin(sendSkipWarning);
+    api.onCustomEvent("settings:setting-clicked", skipWarningSettingClicked);
     api.onCustomEvent("lever:teleport", teleport);
   },
 };

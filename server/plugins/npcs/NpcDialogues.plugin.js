@@ -540,6 +540,14 @@ function flatten(steps, opts = {}) {
  * `step.shops` ("Ned's Handmade Rope (100% Wool) (Default)", "... (Fremennik Isles)");
  * "npc-dialogue:shop" lets a plugin pick one by game state, else the Default version opens.
  */
+/** Four 53-character lines a page: the layout before ChatTextLayout, for a core without it. */
+function characterPages(text) {
+  const lines = Misc.wrapText(text, 53);
+  const pages = [];
+  for (let start = 0; start < lines.length; start += 4) pages.push(lines.slice(start, start + 4).join(" "));
+  return pages;
+}
+
 function shopName(api, player, npcId, step) {
   if (!Array.isArray(step.shops)) return step.target;
   const request = { player, npcId, target: step.target, shops: step.shops, shop: null };
@@ -970,7 +978,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return;
         }
         playedAny = true;
-        const lines = Misc.wrapText(formatted, 53);
+        // Pages as the chatbox holds them: four lines of font 497 in 380 pixels (ChatTextLayout).
+        const pages = api.core?.ChatTextLayout?.pages(formatted) ?? characterPages(formatted);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         // An item's own transcript has no NPC; a named speaker still gets their head.
@@ -1000,8 +1009,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           : undefined;
         if (hold) chain.add(hold);
         let held;
-        for (let start = 0; start < lines.length; start += 4) {
-          const text = lines.slice(start, start + 4).join(" ");
+        for (const text of pages) {
           const dialogue = isPlayer
             ? new PlayerDialogue(index++, text, expression)
             : new NpcDialogue(index++, speakerId, text, speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);

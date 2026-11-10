@@ -9,6 +9,7 @@
  *   medium clues (the Ironman plugin's shared-kill rule, which keeps what this answers).
  */
 const Common = require("./Common.Scurrius");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const MONSTER = "Scurrius";
 /** data/definitions/npc-drops.json: the MVP (solo) and non-MVP tables, by the NPC whose first table they are. */
@@ -32,7 +33,7 @@ function countKill(player) {
   api.emitCustomEvent("combat-achievements:kill", {
     player,
     monster: MONSTER,
-    announce: (total) => player.sendMessage(`Your Scurrius kill count is: <col=ff0000>${total}</col>.`),
+    announce: (total) => sendBossKillCount(player, `Your Scurrius kill count is: <col=ff0000>${total}</col>.`),
   });
 }
 

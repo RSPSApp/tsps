@@ -41,6 +41,8 @@ const DOOR_NAMES = new Set([
   // Tower of Life's entrance (21814): tol_tower_wall_door -> tol_tower_wall_door_open (21815).
   // TowerOfLife.Quest.js checks the builder's outfit first (door:toggle).
   "Tower door",
+  // Observatory Quest's kitchen gate (keepgate_closed/_left): a pass-through gate below.
+  "Kitchen gate",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
@@ -54,6 +56,8 @@ const DOOR_NAMES = new Set([
 const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
+  PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
+  PLAGUE_HOUSE_DOOR_OPEN: 37322, // plagueelenadooropen
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
   LARGE_DOOR_101_OPEN: 39254,
   GUIDOR_GATE_LEFT_OPEN: 2052, // guidorgatelopen
@@ -137,7 +141,10 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
     O.DOOR_3, O.DOOR_4,
     // Khazard stronghold: Open-only ordinary door models, no distinct open loc.
-    O.DOOR_67]);
+    O.DOOR_67,
+    // Ross's house in East Ardougne (40178 at 2610,3316), a Mahogany Homes client: Open/Pick-lock with
+    // the models of Ardougne's picklock doors (11719/11720); its id neighbours are a hotspot and a mirror.
+    O.DOOR_624]);
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
   // the way to the Blast Furnace, shares DOOR_180's model but offers no option). Witch's House's
@@ -150,6 +157,11 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
+    // Witchaven's and the fishing platform's slug2_village_poordoor opens as fai_barbarian_poordooropen,
+    // turned a quarter onto the next tile (Sea Slug capture 20261110T112750 ticks 122, 240): the cache
+    // names differ, so the scan can't pair them. 11617 stays Barbarian Village's 11616's open leaf for
+    // the reverse lookup (a shared leaf keeps the scan's pair, below); an opened 18168 closes from its tracked state.
+    [O.DOOR_389, O.DOOR_279],
     // Games Room experienced variants share the ordinary elf door's reverse
     // open leaf (active rev241 cache; pinned Games Room reference next_loc_stage).
     [O.DOOR_129, O.DOOR_132],
@@ -184,6 +196,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // 11621->11625); 11622/11623 are unused actionless locs.
     [O.LONGHALL_DOOR, O.LONGHALL_DOOR_3],
     [O.LONGHALL_DOOR_2, O.LONGHALL_DOOR_4],
+    // Lumbridge Castle's kitchen door (hundred_lumbridge_door 12348 at 3207,3217): its id+1 is a Large
+    // door, so the scan never pairs it. 1544, the castle door's open leaf, is the same model with Close.
+    [O.DOOR_302, O.DOOR_31],
   ]);
 
   // Curtains do not swing: the open loc is a drawn-back curtain model (1534: 879/880 vs the
@@ -435,6 +450,24 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // Observatory Quest's kitchen gate (keepgate_closed/_left), RSProx 20261110T110141-5ab63b4
+    // ticks 856-858, 888-890 and 914-920 (rev 242): Open puts inviswall 38848 on both doorway
+    // tiles and the open leaves (inacmetalgateopenr/l) on the tiles north, sound 71, the player
+    // steps across in the same tick both ways and the gate is back two ticks later. The key and
+    // guard rules are ObservatoryQuest.Quest's (door:toggle).
+    Object.freeze({
+      closed: [[O.KITCHEN_GATE, 2327, 9393, 0, 1], [O.KITCHEN_GATE_2, 2326, 9393, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2327, 9393, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 2327, 9394, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2326, 9393, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 2326, 9394, 0, 0],
+      ],
+      crossY: 9394,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
     }),
     // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
     // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
@@ -735,6 +768,13 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Its upstairs door to the sickest mourner (mournerstewdoorup 2034 -> 2035 at 2547,3325,1),
     // the same capture's ticks 499 (in) and 586 (out).
     [O.DOOR_49, { open: O.DOOR_50 }],
+    // Plague City (revision 242 capture 20261110T113734-5ab63b4): the Rehnisons' door (ticks 424-426,
+    // 480-482), Bravek's door (614-616, 695-697), the plague house's two doors (734-736, 838-840) and
+    // Elena's cell door (752-754, 757-759, 788-790). PlagueCity.Quest decides who may pass (door:toggle).
+    [O.DOOR_85, { open: O.DOOR_86 }],
+    [O.DOOR_80, { open: O.DOOR_81 }],
+    [NAMELESS_DOOR_LEAF_IDS.PLAGUE_HOUSE_DOOR, { open: NAMELESS_DOOR_LEAF_IDS.PLAGUE_HOUSE_DOOR_OPEN, openSoundId: 81 }],
+    [O.DOOR_78, { open: O.DOOR_79, openSoundId: 67 }],
   ].map(([closed, family]) => [closed, Object.freeze({ openSoundId: 62, closeTicks: 2, ...family })]));
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
     DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>
@@ -903,7 +943,9 @@ function buildDoorCatalog() {
   }
   for (const [closedId, openId] of SINGLE_DOOR_OPEN_IDS) {
     closedToOpen.set(closedId, openId);
-    openToClosed.set(openId, closedId);
+    // A shared open leaf keeps the door the scan already paired it with (1544 stays 1543's); an
+    // opened door closes by its own state (currentSingleDoorState).
+    if (!openToClosed.has(openId)) openToClosed.set(openId, closedId);
   }
   for (const left of sameModelPairs) {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);

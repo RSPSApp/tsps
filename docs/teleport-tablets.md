@@ -65,7 +65,7 @@ Jewellery charge messages are all `7f007f` and spell the count out ("Your ring o
 
 ## Not yet done
 
-- The Ancient, Cemetery, Ice plateau and Wilderness crabs tablets' Configure option (the Wilderness warning).
+- The Ancient, Cemetery, Ice plateau and Wilderness crabs tablets' Configure option (no capture). Their Wilderness warning itself is done, set in All Settings ([settings.md](settings.md#wilderness-teleport-warnings)).
 - Volcanic mine and Guthixian temple teleports: no capture or RuneLite tile for their landing.
 - Quest requirements for using a tablet (Desert Treasure for Ancient tablets, Lunar Diplomacy, Watchtower).
 - The tablets' Toggle message isn't captured; the text is ours. So are Camelot's Configure lines and Watchtower's beyond its menu.

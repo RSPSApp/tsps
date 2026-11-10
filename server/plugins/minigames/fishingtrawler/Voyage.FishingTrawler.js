@@ -22,6 +22,8 @@ const Shared = require("./Shared.FishingTrawler");
 
 const SIDES = ["port", "starboard"];
 
+const ELITE_DIARY_FISH = 1.5;
+
 class Voyage {
   constructor(players, random = Math.random) {
     this.random = random;
@@ -200,12 +202,19 @@ class Voyage {
 
   // --- The end
 
-  /** A player's fish from the catch: x1 at 100 contribution, rising to x1.5 at 255. */
+  /**
+   * A player's fish from the catch: x1 at 100 contribution, rising to x1.5 at 255, and half as many again with the elite
+   * Ardougne Diary (Wiki, Fishing Trawler: "Completing the elite Ardougne Diary yields 50% more fish, and a full
+   * contribution meter also yields an additional 50% more fish"). The Wiki doesn't say how the two combine: multiplied
+   * here, rounded down once.
+   */
   shareFor(player) {
     const c = Shared.DATA.catch;
     const points = this.contribution.get(player) ?? 0;
     const meter = Math.min(1, Math.max(0, (points - c.meterLow) / (c.meterHigh - c.meterLow)));
-    return Math.floor(this.catch * (1 + c.meterBonus * meter));
+    const diary = { player, diary: "ardougne", tier: "elite", complete: false };
+    Shared.api().emitCustomEvent?.("diary:is-complete", diary);
+    return Math.floor(this.catch * (1 + c.meterBonus * meter) * (diary.complete === true ? ELITE_DIARY_FISH : 1));
   }
 
   /** The captured end-of-trip lines: the contribution, then what the player did. */

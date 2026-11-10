@@ -59,6 +59,8 @@ const PICKS = {
 const PICK_PERIOD = 3;
 const RAKE_PERIOD = 4;
 const CLEAR_TICKS = 5;
+/** settings_farming_dig_disable_warning: All Settings "Warning on digging up a farming patch" off. */
+const DIG_WARNING_DISABLED_VARBIT = 17797;
 const COMPOST_NAMES = ["", "compost", "supercompost", "ultracompost"];
 const RENDERED = new WeakMap();
 const LLETYA_FRUIT_PATCH = Data.CACHE.patches.find(p => p.type === "FRUIT_TREE" && p.x === 2346 && p.y === 3161 && p.z === 0);
@@ -743,6 +745,7 @@ function dig(player, patch) {
         player.sendMessage("Chop the tree down before digging out the stump, or pay a gardener to remove it."); return;
     }
     if (!requireTool(player, "Spade", "You need a spade to clear a farming patch.")) return;
+    if (player.getPacketSender().getVarbit(DIG_WARNING_DISABLED_VARBIT) === 1) { clearCrop(player, patch, state, crop); return; }
     choose(player, [["Yes, I want to clear it for new crops.", () => {
         if (nearPatch(player, patch) && stateFor(player, patch) === state) clearCrop(player, patch, state, crop);
     }], ["No, I want to leave it as it is.", () => {}]], 0, "Are you sure you want to dig up this patch?");
@@ -1289,6 +1292,8 @@ function attach(api) {
     api.onPlayerLogin(login);
     api.onPlayerLogin(Tithe.titheLogin);
     api.onPlayerLogin(Rewards.login);
+    api.onPlayerLogin(Services.settingsLogin);
+    api.onCustomEvent("settings:setting-clicked", Services.settingClicked);
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
@@ -1297,6 +1302,7 @@ function attach(api) {
     api.onPlayerLogout(SeedBox.logout);
     api.onInterfaceActionClick(SeedBox.click);
     api.onCustomEvent("interface:closed", SeedBox.closed);
+    api.onCustomEvent("storage:death-containers", Guild.deathContainers);
     api.onInterfaceActionClick(Vault.click);
     api.onCustomEvent("player:widget-action", Vault.drag);
     api.onPlayerLogout(Geomancy.logout);

@@ -168,14 +168,19 @@ function start(player, recipe, amount) {
  * argument 0) showing the product, or for a recipe with `"menu": "upgrade"` (amylase, crushed
  * crystal) "How many would you like to upgrade?" (15) showing the potion it upgrades; the most
  * the inventory makes is both the limit and the amount it opens on. With only one to make, or a
- * manual recipe such as a Sanfew step, it is made at once.
+ * manual recipe such as a Sanfew step or a barbarian mix, it is made at once; a barbarian mix
+ * gets the menu when the player's "Make-X barbarian potions" setting is on.
  */
 const MAKE_MENU = { title: "How many do you wish to make?", mode: 0 };
+/** settings_barbarian_potion_makex: All Settings "Make-X barbarian potions" (off: one at a time). */
+const BARBARIAN_MAKEX_VARBIT = 5983;
+const isBarbarianMix = (recipe) => typeof recipe.unlock === "string" && recipe.unlock.startsWith("barbarian_herblore");
 const UPGRADE_MENU = { title: "How many would you like to upgrade?", mode: 15 };
 
 function offer(player, recipe) {
   const most = makeable(player.getInventory(), recipe);
-  if (recipe.manual || most <= 1) {
+  const barbarianMakeX = isBarbarianMix(recipe) && player.getPacketSender().getVarbit(BARBARIAN_MAKEX_VARBIT) === 1;
+  if ((recipe.manual && !barbarianMakeX) || most <= 1) {
     makeOne(player, recipe);
     return;
   }

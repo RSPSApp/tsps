@@ -63,10 +63,13 @@ import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 import type { GameObject } from "../object/GameObject";
 import { type LocMergeBounds, validateLocMerge } from "../../../../net/protocol/LocMerge";
+import { Music } from "../../../Music";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
     18: 0,
+    // The music settings the client sets: only their bits of varp 19 (Music.SETTINGS_MASK).
+    [Music.SETTINGS_VARP]: Music.DEFAULT_SETTINGS,
     168: 100,
     169: 100,
     872: 100,
@@ -738,7 +741,12 @@ export class Player extends Mobile {
         }
         CombatPoisonEffect.resume(this);
         for (const [varpId, value] of Object.entries(this.audioSettings)) {
-            this.getPacketSender().sendConfig(Number(varpId), value);
+            const id = Number(varpId);
+            // The music settings share varp 19 with bits the server owns.
+            const sent = id === Music.SETTINGS_VARP
+                ? (this.getPacketSender().getVarp(id) & ~Music.SETTINGS_MASK) | value
+                : value;
+            this.getPacketSender().sendConfig(id, sent);
         }
     }
 
@@ -826,6 +834,10 @@ export class Player extends Mobile {
 
     public setAudioSetting(varpId: number, value: number): boolean {
         if (!(varpId in DEFAULT_AUDIO_SETTINGS) || !Number.isFinite(value)) return false;
+        if (varpId === Music.SETTINGS_VARP) {
+            this.audioSettings[varpId] = Math.trunc(value) & Music.SETTINGS_MASK;
+            return true;
+        }
         const maximum = varpId === 18 ? 2 : PACKED_AUDIO_VARPS.has(varpId) ? 0x7fffffff : 100;
         this.audioSettings[varpId] = Math.max(0, Math.min(maximum, Math.trunc(value)));
         return true;

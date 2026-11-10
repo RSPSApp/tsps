@@ -38,7 +38,7 @@ A private area's `getMusicTrack` hook names its track instead: a player-owned ho
 sit at allocated tiles outside every map area, plays Home Sweet Home ("inside a Player-owned house.").
 
 Regenerate with `yarn build` then `node scripts/import-music-areas.mjs`; `--check` reports whether
-the file still matches. Both read the Wiki response cached outside the repo
+both files (Modern and Classic) still match. Both read the Wiki response cached outside the repo
 (`<tmpdir>/tsps-wiki-music`, or `--cache <dir>`) and fetch it, in four paged requests, only when
 the cache is missing or with `--refresh`, so neither runs in CI. The tests cover the import's rules
 on small made-up maps and the generated file's own consistency.
@@ -86,6 +86,84 @@ stay locked until those arrive.
 
 Holiday-event tracks ("during a Christmas event.", 15 slots) have no event plugins to unlock them yet;
 `data/music-holiday-tracks.json` keeps them out of the music cape requirement.
+
+## Classic areas
+
+All Settings' "Music area type" (varbit 12233, 0 Modern, 1 Classic) picks the map. Modern is
+`music-areas.json`; Classic is `music-areas-classic.json`, built by the same import from the Wiki's
+historic music maps, the ones a track page captions "Location before 2026 and in Classic mode"
+(`map.is_historic` in the `map` bucket, `bucket=hist` on the page). A track plays in Classic mode
+where its historic maps put it, and where its current maps put it when those overlap none of its
+historic ones: areas added since, which Classic mode plays too (ours: the Wiki keeps only the
+historic maps of reworked areas). A track with no historic map plays as in Modern mode. Classic
+areas are mostly 64x64 squares with one track each, as the setting's own text says. There is no
+capture of Classic mode; the Wiki is the only source. `Music.tracksAt(x, y, plane, classic)`
+reads either map; plugins that hand the music back (`Music.areaTrackAt`) use Modern.
+
+## Music settings
+
+The settings are varbits of varp 19 (`musicloop`), which also holds bits the server owns (Music
+cape flags 4670-4672 and 8371, the farming tab 4776, the Trawler camera 4814, a Zeah fairy ring
+4885). The cache's All Settings structs give each one's text and default:
+
+| Varbit | Setting | Server |
+| --- | --- | --- |
+| 4137 `music_enableloop` | "Play the last track if no other is available", on by default (live sends 1 at every login) | When a track ends and the area (or Shuffle) has no other track to play, it restarts only when on; off, the music stops. |
+| 10078 `music_unlock_text_toggle` | "Music unlock message", shown when 0 | The unlock still happens, without the chat line. |
+| 12233 `music_area_mode` | "Music area type": Modern, Classic | Above. |
+| 19734 `use_previous_music_mode_on_login` | "Default to area music mode on login", on when 0 | Login resets Shuffle or Single to Area unless the player turned it off. |
+| 19737 `use_shuffle_mode_on_manual_music_selection` | "Music mode to use when manually selecting music tracks": Single, Shuffle | A track picked from the list in Area mode switches to that mode; Shuffle and Single stay. |
+| 19731 `music_current_playlist` | The playlist in use, 0 All music; the tab's dropdown or All Settings' "Music playlist" | Below. |
+| 19736 `dont_update_music_on_playlist_change` | "Update music when changing playlists", on when 0 | Below. |
+| 19732, 19733 | Text shadow, which tracks the list shows | The client's own; saved only. |
+
+The client's scripts write the checkboxes (and the playlist, bits 14-17) into varp 19 themselves
+and transmit it; `Player.setAudioSetting` saves only the setting bits (`Music.SETTINGS_MASK`), and
+the Music plugin sends the varp back with the server's bits as last sent. All Settings' dropdowns
+reach the server instead (`settings:option-chosen`), and the Music plugin sets the varbit.
+
+All Settings' music player track colours (locked, unlocked, playing, unavailable: varps 5235,
+5236, 5401, 5237) open the colour picker as the quest list colours do, and hold the colour + 1
+(0 for the default). "Reset music player text colours" sets all four back to 0.
+
+## Shuffle mode
+
+As captured (rsprox 236/03934, 236/03935): the Area, Shuffle and Single buttons send "You are now
+using the area music mode." (shuffle, single) and the mode; switching to Shuffle lets the playing
+track finish. Skip Track, in Shuffle mode only, starts another track at once with the default
+fades. A Shuffle track ends as an area track does (silence with fade-out speed 20, then the next
+two ticks later with zero fades, as captured on a playlist), and the next is a random unlocked,
+released track other than the one that ended (`music:shuffle-track`). Shuffle ignores music areas,
+though entering one still unlocks its tracks. Ours: a Single track switched to Shuffle gets its
+full length from then, and Shuffle with nothing playing (at login) starts a track at once.
+
+## Playlists
+
+Three playlists of up to 100 unlocked tracks ("Up to 100 unlocked music tracks can be added to each
+of the three playlists", Wiki: Music Player), kept in `Playlists.Music.js` and the varbits
+`music_playlist_<1-3>_track_<1-100>` (varps 5239-5388, sent at login). As captured (rsprox
+236/03934, 236/03935, 236/03925):
+
+- A list row's ops 3, 4 and 5 add the track to playlist 1, 2 or 3, or remove it when it is there:
+  "You've added a track to playlist 1: <col=ff3045>Adventure" ("removed a track from"), in the
+  unlock message's chatbox colour. A place holds the track's unlock slot as bank * 100 + bit
+  (Adventure, bank 1 bit 0, is 100; 7th Realm, bank 9 bit 29, is 929). Removing leaves the place
+  empty, and the next track added takes the first empty place. Ours: a locked track or a full
+  playlist is refused without a message.
+- The dropdown (slots 1, 3, 5, 7: All music, playlists 1-3) sets `music_current_playlist`. With
+  "Update music when changing playlists" on (the default): a playlist switches Area mode to
+  Shuffle, and Single mode too unless its track is in the playlist, with the mode's line, then
+  starts one of the playlist's tracks (default fades, or none from silence); an empty playlist
+  stops the music (track 147, fade-out speed 50, no current track). All music in Shuffle mode
+  starts one of every unlocked track and changes nothing in the other modes. With the setting off,
+  only the playlist changes.
+- Shuffle and Skip Track play from the playlist in use; a one-track playlist plays its track again
+  (as the loop setting allows), an empty one plays nothing.
+- The Area button returns to All music, unless "Update music when changing playlists" is off.
+- All Settings' "Wipe custom music playlist" 1-3 empty that playlist (ours: no message).
+
+Not covered: "Play the default track when entering an area" (19735): neither the cache nor the Wiki
+says which of an area's tracks is its default.
 
 ## Jingles and fades
 

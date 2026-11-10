@@ -102,11 +102,11 @@ const NPC_ATTACK_OPTIONS_SETTING = 56;
 // Cache script 3962 reads this to pick the selected dropdown row; 4607 is only
 // a display mirror of the layout (no rendering effect in this revision).
 const GAMEFRAME_STONE_VARBIT = 4607;
-// The enhanced client's mouseover text setting (cache script 4582 toggles it), from rev 241
-// mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client reports itself as
-// enhanced (clienttype 10) and draws the top-left text, so this must be 0 (shown): then HUD
-// overlays laid out by script 4731 (Wintertodt, the Gauntlet, ToA...) drop 23px below the
-// text instead of sitting under it, as on live.
+// The enhanced client's mouseover text setting (All Settings row 147; cache script 4582 toggles
+// it), from rev 241 mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client
+// reports itself as enhanced (clienttype 10) and draws the top-left text while this is 0; HUD
+// overlays laid out by script 4731 (Wintertodt, the Gauntlet, ToA...) then drop 23px below the
+// text, as on live, and move back up when the player hides it.
 const MOUSEOVER_TEXT_DISABLED_VARBIT = 10035;
 // Opaque player attribute; NetworkBuilder/WelcomeScreen read it to boot the
 // saved gameframe.
@@ -144,16 +144,48 @@ const COLLECTION_LOG_NOTIFY_VARP = 2856;
 /** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
 const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
 const QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE = "settings:quest-list-show-242";
+/**
+ * Row 278 used to flip varbit 13113, which is row 192's (gravestone payment confirmation); 278 is
+ * 14194. A 13113 saved before is 278's, so it is dropped once and 192 starts at its default.
+ */
+const GRAVESTONE_CONFIRM_KEY = "varbit:13113";
+const GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE = "settings:gravestone-confirm-192";
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
 const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
-const QUEST_COLOUR_VARPS = new Set([3409,3410,3411,3412]);
-const QUEST_COLOUR_SETTINGS = {224:3410,225:3409,226:3411,227:3412};
+// Colour rows: the varp holding the colour + 1 (0 for the default) and the default colour.
+// The varps are cache script 4181's, the defaults each row's struct (param 1230).
+// Chat colours by chatbox mode (opaque, transparent, split private chat), quest list (224-227)
+// and music player track colours (485-488).
+const OPAQUE_CHAT_COLOURS = {
+  87: [2992, 0x0000ff], 89: [2993, 0x7f0000], 92: [2994, 0x2020ef], 94: [2995, 0x000000],
+  97: [2996, 0x7f0000], 99: [2997, 0x7f0000], 101: [2998, 0x7f007f], 103: [2999, 0x7e3200],
+  105: [3060, 0x007a00], 193: [3191, 0x7f0000], 196: [3192, 0x000000], 198: [3193, 0x000000],
+  434: [4697, 0x006600],
+};
+const TRANSPARENT_CHAT_COLOURS = {
+  88: [3000, 0x9090ff], 90: [3001, 0xbf2020], 93: [3002, 0x4040ff], 95: [3003, 0xffffff],
+  98: [3004, 0xef5050], 100: [3005, 0x7f0000], 102: [3006, 0xdf20ff], 104: [3007, 0xff20df],
+  106: [3061, 0x00d300], 194: [3194, 0x7f0000], 197: [3195, 0xffffff], 199: [3196, 0xffffff],
+  435: [4698, 0xffff00],
+};
+const SPLIT_CHAT_COLOURS = { 91: [3008, 0x00ffff], 96: [3009, 0xffff00] };
+const COLOUR_SETTINGS = {
+  ...OPAQUE_CHAT_COLOURS, ...TRANSPARENT_CHAT_COLOURS, ...SPLIT_CHAT_COLOURS,
+  224: [3410, 0xff0000], 225: [3409, 0xffff00], 226: [3411, 901389], 227: [3412, 10461087],
+  485: [5235, 0xff0000], 486: [5236, 901389], 487: [5401, 3991270], 488: [5237, 10461087],
+};
+const varpsOf = (rows) => Object.values(rows).map(([varp]) => varp);
+// "Reset ... colours" rows and the colour varps each one clears.
+const COLOUR_RESETS = {
+  107: varpsOf(OPAQUE_CHAT_COLOURS), 108: varpsOf(TRANSPARENT_CHAT_COLOURS), 109: varpsOf(SPLIT_CHAT_COLOURS),
+  228: [3409, 3410, 3411, 3412], 489: [5235, 5236, 5401, 5237],
+};
 const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 2;
 const SETTINGS_COLOUR_INTERFACE = 288;
 const SETTINGS_COLOUR_SCRIPT = 4185;
 const CANCEL_COLOUR = 2147483647;
-const pendingQuestColours = new WeakMap();
+const pendingColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
@@ -167,6 +199,9 @@ const ALL_SETTINGS_VOLUME_VARPS = new Map([
   [31, 169], // sound effects
   [32, 872], // area sounds
 ]);
+// "Reset volume sliders to default" (a button row): every slider back to a new account's 100.
+const RESET_VOLUME_SETTING = 468;
+const DEFAULT_VOLUME = 100;
 
 const KEYBINDINGS_INTERFACE_ID = 121;
 const KEYBINDINGS_RESTORE_DEFAULTS = (KEYBINDINGS_INTERFACE_ID << 16) | 104;
@@ -317,6 +352,16 @@ function migrateQuestListShowSettings(player) {
   player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, next);
 }
 
+function migrateGravestoneConfirmSetting(player) {
+  if (player.getAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE) === true) return;
+  player.setAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, true);
+  const saved = savedSettings(player);
+  if (!Object.hasOwn(saved, GRAVESTONE_CONFIRM_KEY)) return;
+  const next = { ...saved };
+  delete next[GRAVESTONE_CONFIRM_KEY];
+  player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, next);
+}
+
 function savedSettings(player) {
   const saved = player.getAttribute(SETTINGS_VALUES_ATTRIBUTE);
   return saved && typeof saved === "object" ? saved : {};
@@ -388,6 +433,7 @@ function chooseSettingOption(player, settingId, option) {
  */
 function restoreSettings({ player }) {
   migrateQuestListShowSettings(player);
+  migrateGravestoneConfirmSetting(player);
   const saved = savedSettings(player);
   for (const [key, value] of Object.entries(saved)) {
     if (Number.isInteger(value)) setSettingVar(player, key, value);
@@ -395,6 +441,12 @@ function restoreSettings({ player }) {
   for (const row of Object.values(SETTINGS)) {
     if (row.default !== undefined && saved[varKey(row)] === undefined) sendSettingVar(player, varKey(row), row.default);
   }
+}
+
+/** Login: the client may start with the text hidden, so send the player's choice (shown by default). */
+function sendMouseoverText({ player }) {
+  const key = `varbit:${MOUSEOVER_TEXT_DISABLED_VARBIT}`;
+  sendSettingVar(player, key, savedSettings(player)[key] ?? 0);
 }
 
 /**
@@ -407,9 +459,9 @@ function clickSetting({ player, slot, argsData, scriptTrigger }) {
   const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
   if (settingId < 0) return false;
   selectSetting(player, settingId);
-  if (QUEST_COLOUR_SETTINGS[settingId] !== undefined) return openQuestColour(player, settingId);
-  if (settingId === 228) {
-    for (const id of QUEST_COLOUR_VARPS) setSettingVar(player, `varp:${id}`, 0);
+  if (COLOUR_SETTINGS[settingId] !== undefined) return openColour(player, settingId);
+  if (COLOUR_RESETS[settingId] !== undefined) {
+    for (const id of COLOUR_RESETS[settingId]) setSettingVar(player, `varp:${id}`, 0);
     return true;
   }
   if (player.getAttribute("settings-view") === SEARCH_VIEW) {
@@ -591,24 +643,23 @@ function openQuestSettings({ player }) {
   return openAllSettings(player);
 }
 
-function openQuestColour(player, settingId) {
+function openColour(player, settingId) {
   const sender = player.getPacketSender();
-  const varp = QUEST_COLOUR_SETTINGS[settingId];
-  const defaults = {224:0xff0000,225:0xffff00,226:901389,227:10461087};
+  const [varp, defaultColour] = COLOUR_SETTINGS[settingId];
   const stored = sender.getVarp(varp);
   sender.sendSubInterface(SETTINGS_COLOUR_MODAL_UID, SETTINGS_COLOUR_INTERFACE, 0);
-  sender.sendClientScript(SETTINGS_COLOUR_SCRIPT, SETTINGS_COLOUR_MODAL_UID, stored > 0 ? stored - 1 : defaults[settingId]);
+  sender.sendClientScript(SETTINGS_COLOUR_SCRIPT, SETTINGS_COLOUR_MODAL_UID, stored > 0 ? stored - 1 : defaultColour);
   const action = { acceptsZero: true, acceptsNegative: true, execute(value) {
-    if (pendingQuestColours.get(player) !== action) return;
+    if (pendingColours.get(player) !== action) return;
     if (player.getEnteredAmountAction && player.getEnteredAmountAction() !== action) return;
-    pendingQuestColours.delete(player);
+    pendingColours.delete(player);
     sender.closeSubInterface(SETTINGS_COLOUR_MODAL_UID);
     if (value === CANCEL_COLOUR) return;
     if (!Number.isInteger(value) || value < -1 || value > 0xffffff) return;
     setSettingVar(player, `varp:${varp}`, value + 1);
     selectSetting(player, 0);
   } };
-  pendingQuestColours.set(player, action);
+  pendingColours.set(player, action);
   player.setEnteredAmountAction(action);
   return true;
 }
@@ -625,8 +676,8 @@ function startSettingsSearch({ player }) {
 /** All Settings closed, by any route: its search lets go of the keyboard and chat takes it back. */
 function endSettingsSearch({ player, interfaceId }) {
   if (interfaceId === ALL_SETTINGS_INTERFACE_ID || interfaceId === SETTINGS_COLOUR_INTERFACE) {
-    const action = pendingQuestColours.get(player);
-    pendingQuestColours.delete(player);
+    const action = pendingColours.get(player);
+    pendingColours.delete(player);
     if (action && player.getEnteredAmountAction?.() === action) player.setEnteredAmountAction(null);
   }
   if (interfaceId !== ALL_SETTINGS_INTERFACE_ID) return;
@@ -675,6 +726,17 @@ function releaseAllSettingsVolume(player, argsData) {
   if (varpId === undefined || volume === undefined) return false;
   player.applyAudioSettingFromClient?.(varpId, volume);
   return true;
+}
+
+/** The volume reset row clicked: each slider's varp set and sent as if the player had dragged it. */
+function resetVolumeSliders(request) {
+  if (request.handled || request.settingId !== RESET_VOLUME_SETTING) return;
+  request.handled = true;
+  const sender = request.player.getPacketSender();
+  for (const varpId of ALL_SETTINGS_VOLUME_VARPS.values()) {
+    request.player.applyAudioSettingFromClient?.(varpId, DEFAULT_VOLUME);
+    sender.sendConfig(varpId, DEFAULT_VOLUME);
+  }
 }
 
 function enableVolumeSliders(player) {
@@ -856,13 +918,16 @@ module.exports = {
     pluginApi = api;
     api.persistAttribute(SETTINGS_VALUES_ATTRIBUTE);
     api.persistAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, false);
+    api.persistAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, false);
     api.onPlayerLogin(restoreSettings);
+    api.onPlayerLogin(sendMouseoverText);
     // Changing category, or searching, changes what a row's slot means.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
     api.onInterfaceActionButton(QUEST_LIST_SETTINGS_BUTTON, openQuestSettings);
     api.onCustomEvent("interface:closed", endSettingsSearch);
     api.onCustomEvent("settings:set", setSettingValue);
+    api.onCustomEvent("settings:setting-clicked", resetVolumeSliders);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);
@@ -918,7 +983,6 @@ module.exports = {
       syncPlayerKeybindings(player);
       if (worldGameframeOption !== undefined) selectGameframeOption(player, worldGameframeOption);
       syncGameframeVarbit(player);
-      player.getPacketSender().sendVarbit(MOUSEOVER_TEXT_DISABLED_VARBIT, 0);
     });
 
     api.registerCommand("keybinds", ({ player }) => openKeybindings(player), undefined, "Open keybindings");

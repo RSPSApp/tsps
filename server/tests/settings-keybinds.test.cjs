@@ -346,6 +346,38 @@ test('quest colour picker saves RGB+1, accepts black, rejects invalid amounts an
   assert.equal(sender.getVarp(3410), 0, 'zero selects cache default');
 });
 
+test('music player track colours: each picker saves its varp as RGB+1 with its default, and the reset row clears all four', () => {
+  const { buttons } = registered();
+  const player = recordingPlayer();
+  player.setAttribute('settings-view', 6);
+  let amount;
+  player.setEnteredAmountAction = action => { amount = action; };
+  const sender = player.getPacketSender();
+  sender.sendSubInterface = () => sender;
+  sender.closeSubInterface = () => sender;
+  const scripts = [];
+  const sendClientScript = sender.sendClientScript.bind(sender);
+  sender.sendClientScript = (id, ...args) => { scripts.push([id, ...args]); return sendClientScript(id, ...args); };
+  const row = buttons.get((134 << 16) | 20);
+  // Locked, unlocked, playing, unavailable: the music player's colour varps and cache defaults.
+  const colours = [[485, 5235, 0xff0000], [486, 5236, 901389], [487, 5401, 3991270], [488, 5237, 10461087]];
+  for (const [settingId, varp, defaultColour] of colours) {
+    scripts.length = 0;
+    row({ player, slot: interfacesRowOf(settingId) });
+    assert.ok(amount, `setting ${settingId} opens the colour picker`);
+    assert.deepEqual(scripts.find(([id]) => id === 4185)?.[2], defaultColour, 'the picker starts on the default colour');
+    amount.execute(0x123456);
+    assert.equal(sender.getVarp(varp), 0x123457);
+    scripts.length = 0;
+    row({ player, slot: interfacesRowOf(settingId) });
+    assert.equal(scripts.find(([id]) => id === 4185)?.[2], 0x123456, 'and on the chosen one next time');
+    amount.execute(2147483647);
+    assert.equal(sender.getVarp(varp), 0x123457, 'Cancel keeps the colour');
+  }
+  row({ player, slot: interfacesRowOf(489) });
+  for (const [, varp] of colours) assert.equal(sender.getVarp(varp), 0, 'Reset music player text colours');
+});
+
 test('all native quest preferences are mapped, constrained and restored including colours', () => {
   const { buttons, logins } = registered();
   const player = recordingPlayer();

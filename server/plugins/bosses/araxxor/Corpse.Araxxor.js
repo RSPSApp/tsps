@@ -20,6 +20,7 @@ const Minions = require("./Minions.Araxxor");
 const Specials = require("./Specials.Araxxor");
 const CombatAchievements = require("./CombatAchievements.Araxxor");
 const Scoreboard = require("./Scoreboard.Araxxor");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const BOSS_NAME = "Araxxor";
 
 /** Cache varp total_araxxor_kills: the kill count the boss log reads. Combat Achievements sends
@@ -103,7 +104,7 @@ function recordKill(player, ticks) {
 
 /** The kill count and the fight's length against the personal best (captured messages). */
 function announceKill(player, kills, ticks) {
-  player.sendMessage(`Your Araxxor kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Araxxor kill count is: <col=ff0000>${kills}</col>.`);
   const best = Number(player.getAttribute(Shared.ATTR_BEST_TICKS)) || 0;
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR_BEST_TICKS, ticks);

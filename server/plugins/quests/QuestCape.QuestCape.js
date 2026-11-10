@@ -152,14 +152,19 @@ function teleport({ player, itemId }) {
   }
 }
 
+function equipmentRequirementsApply(player) {
+  return pluginApi.getPluginConfig("quests:equipment-requirements", true) !== false && !player.isPlayerBot?.();
+}
+
 function canEquip(event) {
   const { player, item } = event;
-  if (!isCape(item?.getId?.()) || allQuestsComplete(player)) return;
+  if (!isCape(item?.getId?.()) || !equipmentRequirementsApply(player) || allQuestsComplete(player)) return;
   event.allow = false;
   player.sendMessage("You need to complete every quest before you can wear your Quest point cape.");
 }
 
 function removeInvalidCape({ player }) {
+  if (!equipmentRequirementsApply(player)) return;
   const { Equipment, EquipPacketListener } = pluginApi.core;
   const equipment = player.getEquipment();
   const cape = equipment.getItems()[Equipment.CAPE_SLOT];

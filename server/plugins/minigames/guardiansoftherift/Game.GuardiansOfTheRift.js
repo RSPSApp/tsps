@@ -25,6 +25,7 @@
  * captured maximums are all multiples of 200 that fit it); the game is lost at 0%.
  */
 
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.GuardiansOfTheRift");
 
 const PHASE = {
@@ -380,7 +381,8 @@ function surge() {
   const shaken = players();
   for (const player of shaken) {
     player.sendMessage("<col=ef1020>The rift burns intensely... More creatures from the Abyss are emerging!</col>");
-    player.getPacketSender().sendSound(SURGE_SOUND, 1, 0).sendCameraShake(0, 5, 15, 10);
+    player.getPacketSender().sendSound(SURGE_SOUND, 1, 0);
+    CameraShake.send(player.getPacketSender(), "atmospheric", 0, 5, 15, 10);
   }
   Shared.later(SURGE_SHAKE_TICKS, () => {
     for (const player of shaken) if (player.isRegistered()) player.getPacketSender().sendCameraReset();

@@ -156,9 +156,11 @@ test('Castlewars brew uses normal potion cooldowns and restores stats, prayer an
   p.getInventory().setItem(0, new core.Item(data.BREW_DOSES[0], 1));
   assert.equal(drink(p, data.BREW_DOSES[0]), true);
   assert.equal(p.getInventory().getItems()[0].getId(), data.BREW_DOSES[1]);
-  for (const skill of [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE]) assert.equal(p.getSkillManager().getCurrentLevel(skill), 118);
-  assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.RANGED), 112);
-  assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.MAGIC), 109);
+  // From 50/99: the super restore part first (to 82), then each boost added to that (rsprox 226/01702: a boost adds
+  // to the current level; base + boost is only its cap).
+  for (const skill of [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE]) assert.equal(p.getSkillManager().getCurrentLevel(skill), 82 + 19);
+  assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.RANGED), 82 + 13);
+  assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.MAGIC), 82 + 10);
   assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 82);
   assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), 50);
   assert.equal(p.getRunEnergy(), 30);

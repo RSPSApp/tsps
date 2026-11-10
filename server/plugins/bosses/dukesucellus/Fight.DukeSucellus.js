@@ -4,6 +4,7 @@ const Model = require('./Model.DukeSucellus');
 const Records = require('./Records.DukeSucellus');
 const Hazards = require('./Hazards.DukeSucellus');
 const Preparation = require('./Preparation.DukeSucellus');
+const { sendBossKillCount } = require('../../interface/BossKillCount.plugin');
 class Fight {
   constructor(session, boss) {
     this.session = session;
@@ -236,7 +237,7 @@ class Fight {
     const count = Math.max(this.baselineKills + 1, Common.count(this.player, Common.KILLS) + 1, Common.kills(this.player)), ticks = this.finishedTicks;
     this.player.setAttribute(Common.KILLS, count);
     this.player.getPacketSender().sendConfig(Common.data.killCountVarp, count);
-    this.player.sendMessage(`Your Duke Sucellus kill count is: ${count}.`);
+    sendBossKillCount(this.player, `Your Duke Sucellus kill count is: ${count}.`);
     const previous = Common.count(this.player, Common.BEST);
     if (!previous || ticks < previous)
       this.player.setAttribute(Common.BEST, ticks);

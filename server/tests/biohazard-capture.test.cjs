@@ -423,12 +423,13 @@ test("Elena keeps the distillator until she hands out the sample and vials (tick
   const player = actor(7, 2591, 3336);
   player.getInventory().adds(core.ItemIdentifiers.DISTILLATOR, 1);
   QuestRuntime.startTranscript(api, player, core.NpcIdentifiers.ELENA, "Biohazard", "delivering-the-samples-talking-to-elena-with-the-distillator");
-  for (let i = 0; i < 12 && shown(player) !== "touch paper."; i++) next(player);
-  assert.equal(shown(player), "touch paper.", "the end of Elena's long line, its second page");
-  assert.equal(amount(player, core.ItemIdentifiers.DISTILLATOR), 1);
-  assert.equal(quest.getStage(player), 7);
-  next(player);
-  assert.equal(shown(player), "Elena gives you a plague sample along with three vials.");
+  const handout = "Elena gives you a plague sample along with three vials.";
+  for (let i = 0; i < 20 && shown(player) !== handout; i++) {
+    assert.equal(amount(player, core.ItemIdentifiers.DISTILLATOR), 1, "she keeps it until the hand-out");
+    assert.equal(quest.getStage(player), 7);
+    next(player);
+  }
+  assert.equal(shown(player), handout);
   assert.equal(amount(player, core.ItemIdentifiers.DISTILLATOR), 0);
   assert.equal(amount(player, core.ItemIdentifiers.PLAGUE_SAMPLE), 1);
   assert.equal(quest.getStage(player), 10);

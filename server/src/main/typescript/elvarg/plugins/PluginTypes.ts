@@ -1534,6 +1534,7 @@ export interface PluginCoreApi {
   CombatSpecial: any;
   CombatFactory: any;
   BonusManager: any;
+  EquipmentRequirements: typeof import("../game/model/equipment/EquipmentRequirements").EquipmentRequirements;
   WeaponInterfaces: any;
   Barrows: any;
   applyPrayerDrainModifiers(entity: any, amount: number, context?: any): number;
@@ -1592,6 +1593,7 @@ export interface PluginCoreApi {
   ObjectIdentifiers: any;
   ShopIdentifiers: any;
   Misc: any;
+  ChatTextLayout: any;
   TimerKey: any;
   Sound: any;
   Sounds: any;

@@ -18,5 +18,6 @@ module.exports = {
     require("./runepouch/Interface.RunePouch")(api);
     require("./runepouch/Bank.RunePouch")(api);
     require("./runepouch/Loadouts.RunePouch")(api);
+    require("./runepouch/Death.RunePouch")(api);
   },
 };

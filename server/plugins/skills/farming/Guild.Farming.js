@@ -165,6 +165,28 @@ function bankStorageOp(event) {
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
 }
+/**
+ * A death that empties the herb sack or seed box (the storage items' death hook decides when)
+ * takes what it stores out of it. A PvP death moves a seed box's seeds to the bank where there is
+ * room (Wiki: Seed box, 7 March 2019).
+ */
+function emptyStored(player, container) {
+    const stored = container.getMetaValue("farming:stored") ?? {}, contents = [];
+    for (const [key, count] of Object.entries(stored)) {
+        const id = Number(key);
+        if (!Number.isInteger(id) || id <= 0 || id >= core.CacheDefinitions.getCounts().items || !Number.isSafeInteger(count) || count <= 0) continue;
+        contents.push({ id, amount: count });
+    }
+    if (Object.keys(stored).length) container.setMetaValue("farming:stored", {});
+    return contents;
+}
+const DEATH_CONTAINERS = [
+    { holds: item => containerKind(item) === "herb", empty: emptyStored },
+    { holds: item => containerKind(item) === "seed", empty: emptyStored, toBankInPvp: true },
+];
+function deathContainers(query) {
+    query.containers.push(...DEATH_CONTAINERS);
+}
 /** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
 function storeRoom(player, container, id) {
     const kind = containerKind(container);
@@ -418,4 +440,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });
+Object.assign(module.exports, { deathContainers, seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });

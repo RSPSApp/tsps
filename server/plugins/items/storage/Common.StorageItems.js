@@ -76,7 +76,8 @@ function isNoted(id) {
  * (closed/open gamevals), `accepts(id)`,
  * `room(player, id, contents)` (how many more of `id` fit), `announced(player, id)` (its line for a
  * gather that asks with `announce`, room or not), `usable(id)` (whether consumers may
- * take `id` from it while it is carried) and `followsOnDeath` (contents go where the item goes on death).
+ * take `id` from it while it is carried), `followsOnDeath` (contents go where the item goes on death) and
+ * `emptiedOnPvpDeath` (a PvP death empties it even when it is kept).
  */
 function register(family) {
   FAMILIES.set(family.key, { usable: () => false, followsOnDeath: false, openNames: [], worn: false, ...family });

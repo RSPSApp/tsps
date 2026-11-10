@@ -4,7 +4,7 @@
  * 10 charges each. Carried in the inventory with charges and active, it scatters the demonic ashes
  * a demonic creature other than Skotizo drops, one charge each, for half their scattering
  * experience (all of it with the elite Kourend & Kebos diary). Uncharge and Destroy give back the
- * death runes; in the bank, Configure-Charges sets the charges from the banked death runes.
+ * death runes; in the bank, Configure-Charges sets the charges it is topped up to on withdrawal.
  *
  * Ours: the Wiki quotes none of its messages or prompts, so they follow the bonecrusher's.
  * Not modelled: its death rules (always kept on a PvM death).
@@ -106,62 +106,54 @@ function destroyed({ player, itemId }) {
 
 // ------------------------------------------------------------------ bank
 
-const bankRunes = (player) => player.getBank(core.Bank.getTabForItem(player, deathRuneId())).getAmount(deathRuneId());
-
-function refreshBank(player) {
-  const { Bank } = core;
-  if (!Bank.isOpen(player)) return;
-  const tab = player.isSearchingBank() ? Bank.BANK_SEARCH_TAB_INDEX : player.getCurrentBankTab();
-  player.getBank(tab).refreshItems();
-}
-
 /**
- * Moves the charges towards `wanted`, a death rune per 10 charges from or back to the bank. As
- * with Uncharge, charges short of a whole rune stay; the status line shows where it ended.
+ * Configure-Charges in the bank sets a target; withdrawing the sanctifier tops its charges up to
+ * it from the banked death runes, 10 charges each. 0 turns it off.
  */
-function configureCharges(player, wanted) {
-  const current = charges(player);
-  const target = Math.min(Math.floor(Number(wanted)), MAX_CHARGES);
-  if (!(target >= 0) || target === current) return;
-  const bank = player.getBank(core.Bank.getTabForItem(player, deathRuneId()));
-  if (target > current) {
-    const runes = Math.min(Math.ceil((target - current) / CHARGES_PER_RUNE), bankRunes(player));
-    if (runes > 0) {
-      bank.delete(deathRuneId(), runes);
-      setCharges(player, Math.min(MAX_CHARGES, current + runes * CHARGES_PER_RUNE));
-    }
-  } else {
-    const runes = Math.floor((current - target) / CHARGES_PER_RUNE);
-    const refund = new core.Item(deathRuneId(), runes);
-    if (runes > 0 && bank.getAddableAmount(refund) < runes) {
-      bank.full();
-      return;
-    }
-    if (runes > 0) {
-      bank.add(refund, false);
-      setCharges(player, current - runes * CHARGES_PER_RUNE);
-    }
-  }
-  refreshBank(player);
-  player.sendMessage(status(player));
+const WITHDRAWAL_CHARGES_ATTRIBUTE = "ash-sanctifier:withdrawal-charges";
+const bankInteractions = new WeakMap();
+
+function currentBankInteraction(saved) {
+  return bankInteractions.get(saved.player) === saved && core.Bank.isOpen(saved.player) &&
+    saved.player.getBank(saved.tab).getItems()[saved.slot] === saved.item &&
+    saved.item.getId() === sanctifierId() && saved.item.getAmount() > 0;
 }
 
 function bankItemOp(event) {
-  const { player, item } = event;
-  if (event.op !== CONFIGURE_CHARGES_OP || item?.getId?.() !== sanctifierId()) return;
+  const { player, item, tab, slot, op } = event;
+  if (op !== CONFIGURE_CHARGES_OP || item?.getId?.() !== sanctifierId()) return;
   event.handled = true;
-  const most = Math.min(MAX_CHARGES, charges(player) + bankRunes(player) * CHARGES_PER_RUNE);
+  if (!Number.isInteger(tab) || tab < 0 || tab >= core.Bank.BANK_SEARCH_TAB_INDEX || !Number.isInteger(slot) || slot < 0) return;
+  const saved = { player, item, tab, slot };
+  bankInteractions.set(player, saved);
+  if (!currentBankInteraction(saved)) return;
   player.setEnteredAmountAction({
     acceptsZero: true,
     execute(amount) {
-      const { Bank } = core;
-      if (!Bank.isOpen(player) || item.getId() !== sanctifierId() || item.getAmount() <= 0) return;
-      const stillBanked = player.getBanks().some((bank, tab) =>
-        tab !== Bank.BANK_SEARCH_TAB_INDEX && bank?.getItems().includes(item));
-      if (stillBanked) configureCharges(player, amount);
+      if (!currentBankInteraction(saved) || !Number.isInteger(amount) || amount < 0 || amount > MAX_CHARGES) return;
+      player.setAttribute(WITHDRAWAL_CHARGES_ATTRIBUTE, amount);
+      bankInteractions.delete(player);
     },
   });
-  player.getPacketSender().sendEnterAmountPrompt(`How many charges do you want your ash sanctifier to have? (0 - ${format(most)})`);
+  player.getPacketSender().sendEnterAmountPrompt(`Set withdrawal charges (0 - ${format(MAX_CHARGES)}; 0 disables):`);
+}
+
+function withdrawn({ player, items }) {
+  if (!core.Bank.isOpen(player) || !Array.isArray(items) ||
+      !items.some(item => item?.getId() === sanctifierId() && player.getInventory().getItems().includes(item))) return;
+  const wanted = player.getAttribute(WITHDRAWAL_CHARGES_ATTRIBUTE);
+  if (!Number.isInteger(wanted) || wanted <= charges(player) || wanted > MAX_CHARGES) return;
+  let needed = Math.ceil((wanted - charges(player)) / CHARGES_PER_RUNE);
+  let consumed = 0;
+  for (let tab = 0; tab < core.Bank.BANK_SEARCH_TAB_INDEX && needed > 0; tab++) {
+    const bank = player.getBank(tab);
+    const available = Math.min(needed, bank.getAmount(deathRuneId()));
+    if (available <= 0) continue;
+    bank.delete(deathRuneId(), available);
+    needed -= available;
+    consumed += available;
+  }
+  if (consumed > 0) setCharges(player, Math.min(MAX_CHARGES, charges(player) + consumed * CHARGES_PER_RUNE));
 }
 
 // ------------------------------------------------------------------ scattering
@@ -226,10 +218,12 @@ module.exports = {
     core = pluginApi.core;
     api.persistAttribute(CHARGES_ATTRIBUTE, 0);
     api.persistAttribute(INACTIVE_ATTRIBUTE, 0);
+    api.persistAttribute(WITHDRAWAL_CHARGES_ATTRIBUTE, 0);
     api.onItemAction("Ash sanctifier", { Check: check, Activity: toggleActivity, Uncharge: uncharge });
     api.onItemOnItem("Death rune", "Ash sanctifier", charge);
     api.onCustomEvent("destroy-item:destroyed", destroyed);
     api.onCustomEvent(core.Bank.ITEM_OP_EVENT, bankItemOp);
+    api.onCustomEvent(core.Bank.WITHDRAWN_ITEMS_EVENT, withdrawn);
     api.onCustomEvent("npc-drops:generated", scatterDrops);
     api.onNpcDialogueCondition(claimCondition);
     api.onCustomEvent("npc-dialogue:line", handOver);

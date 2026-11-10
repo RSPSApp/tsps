@@ -144,25 +144,69 @@ test("Skotizo's ashes, a non-demon's drops, bones and Activity off are left alon
   assert.equal(kill(p, npc('Lesser demon'), [[I.VILE_ASHES, 1]]).length, 0);
 });
 
-test('Configure-Charges sets the charges from the banked death runes and refunds them', t => {
-  const p = player(t, 0);
+function configure(t, p, target) {
   t.mock.method(Bank, 'isOpen', () => true);
   p.getBank(0).add(new Item(I.ASH_SANCTIFIER, 1), false);
-  p.getBank(0).add(new Item(I.DEATH_RUNE, 20), false);
   const item = p.getBank(0).getItems().find(i => i.getId() === I.ASH_SANCTIFIER);
-  const event = { player: p, item, tab: 0, slot: 0, op: 9, handled: false };
+  const event = { player: p, item, tab: 0, slot: p.getBank(0).getItems().indexOf(item), op: 9, handled: false };
   api.emitCustomEvent(Bank.ITEM_OP_EVENT, event);
-  assert.equal(event.handled, true);
-  p.getEnteredAmountAction().execute(150);
+  assert.equal(event.handled, true, 'Configure-Charges is not a withdrawal');
+  p.getEnteredAmountAction().execute(target);
+}
+function withdraw(p) {
+  p.getBank(0).delete(I.ASH_SANCTIFIER, 1);
+  p.getInventory().add(new Item(I.ASH_SANCTIFIER, 1));
+  const received = p.getInventory().getItems().find(i => i.getId() === I.ASH_SANCTIFIER);
+  api.emitCustomEvent(Bank.WITHDRAWN_ITEMS_EVENT, { player: p, items: [received] });
+}
+
+test('Configure-Charges sets a withdrawal target, filled from banked death runes on withdrawal', t => {
+  const p = player(t, 20);
+  p.getBank(1).add(new Item(I.DEATH_RUNE, 20), false);
+  configure(t, p, 150);
+  assert.equal(charges(p), 20, 'configuring takes no runes');
+  assert.equal(p.getBank(1).getAmount(I.DEATH_RUNE), 20);
+  withdraw(p);
   assert.equal(charges(p), 150);
-  assert.equal(p.getBank(0).getAmount(I.DEATH_RUNE), 5);
-  api.emitCustomEvent(Bank.ITEM_OP_EVENT, { ...event });
-  p.getEnteredAmountAction().execute(0);
-  assert.equal(charges(p), 0);
-  assert.equal(p.getBank(0).getAmount(I.DEATH_RUNE), 20);
-  p.messages.length = 0;
-  api.emitCustomEvent(Bank.ITEM_OP_EVENT, { ...event });
-  p.getEnteredAmountAction().execute(500);
-  assert.equal(charges(p), 200, 'bounded by the banked runes');
-  assert.match(p.messages.at(-1), /has 200 charges/);
+  assert.equal(p.getBank(1).getAmount(I.DEATH_RUNE), 7);
+});
+
+test('the top-up is bounded by the banked runes, and 0 turns it off', t => {
+  const p = player(t, 0);
+  p.getBank(1).add(new Item(I.DEATH_RUNE, 3), false);
+  configure(t, p, 500);
+  withdraw(p);
+  assert.equal(charges(p), 30);
+  assert.equal(p.getBank(1).getAmount(I.DEATH_RUNE), 0);
+  const q = player(t, 0);
+  q.getBank(1).add(new Item(I.DEATH_RUNE, 5), false);
+  configure(t, q, 0);
+  withdraw(q);
+  assert.equal(charges(q), 0);
+  assert.equal(q.getBank(1).getAmount(I.DEATH_RUNE), 5);
+});
+
+/** Opens Configure-Charges without answering the prompt. */
+function openPrompt(t, p) {
+  t.mock.method(Bank, 'isOpen', () => true);
+  p.getBank(0).add(new Item(I.ASH_SANCTIFIER, 1), false);
+  const item = p.getBank(0).getItems().find(i => i.getId() === I.ASH_SANCTIFIER);
+  api.emitCustomEvent(Bank.ITEM_OP_EVENT, { player: p, item, tab: 0, slot: p.getBank(0).getItems().indexOf(item), op: 9, handled: false });
+  return p.getEnteredAmountAction();
+}
+
+test('a prompt left open after the sanctifier moves or the bank closes changes nothing', t => {
+  const p = player(t, 0);
+  const moved = openPrompt(t, p);
+  p.getBank(0).delete(I.ASH_SANCTIFIER, 1);
+  moved.execute(100);
+  assert.equal(p.getAttribute('ash-sanctifier:withdrawal-charges'), undefined);
+  const q = player(t, 0);
+  const closed = openPrompt(t, q);
+  t.mock.method(Bank, 'isOpen', () => false);
+  closed.execute(100);
+  assert.equal(q.getAttribute('ash-sanctifier:withdrawal-charges'), undefined);
+  const r = player(t, 0);
+  openPrompt(t, r).execute(100);
+  assert.equal(r.getAttribute('ash-sanctifier:withdrawal-charges'), 100, 'an answered prompt does set it');
 });

@@ -34,6 +34,7 @@ import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacem
 import {
   decodeClientPackets,
   MAIN_INVENTORY_GROUP_ID,
+  MAIN_INVENTORY_WIDGET_UID,
   MOBILE_CLIENT_ATTRIBUTE,
   NATIVE_CLIENT_ATTRIBUTE,
   HANDSHAKE_CAPABILITY_NATIVE_CLIENT,
@@ -487,6 +488,7 @@ export class ClientConnection {
 
   private pluginMessageWindow = 0;
   private pluginMessageCount = 0;
+  private warnedUnresolvedInventoryAction = false;
   private closed = false;
   private loginFailure?: string;
   private input = Promise.resolve();
@@ -1019,10 +1021,17 @@ export class ClientConnection {
               // Arceuus self-cast spells are identified by their cache spell name.
             } else if (actionPacket.groupId === MAIN_INVENTORY_GROUP_ID && actionPacket.itemId != null && actionPacket.slot != null &&
                 this.player.getInventory().getItems()[actionPacket.slot]?.getId() === actionPacket.itemId) {
-              const inventoryAction = actionPacket.groupId === MAIN_INVENTORY_GROUP_ID
-                ? ItemActionPacketListener.resolveInventoryWidgetAction(actionPacket.itemId, actionPacket.buttonNum)
-                : { optionIndex: actionPacket.buttonNum, option: actionPacket.option };
-              if (!inventoryAction) continue;
+              const inventoryAction = ItemActionPacketListener.resolveInventoryWidgetAction(actionPacket.itemId, actionPacket.buttonNum);
+              if (!inventoryAction) {
+                if (actionPacket.widgetId === MAIN_INVENTORY_WIDGET_UID && !this.warnedUnresolvedInventoryAction) {
+                  this.warnedUnresolvedInventoryAction = true;
+                  console.warn("[network] unresolved inventory widget action", {
+                    itemId: actionPacket.itemId, slot: actionPacket.slot, op: actionPacket.buttonNum,
+                  });
+                  this.player.sendMessage("That backpack action is unavailable. If your client was open during an update, reload and try again.");
+                }
+                continue;
+              }
               if (actionPacket.subOpId && PluginManager.emitItemAction({
                 player: this.player,
                 interfaceId: actionPacket.widgetId,

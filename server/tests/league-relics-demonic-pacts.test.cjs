@@ -647,6 +647,83 @@ test("Soul Harvest: soul shards bind as pure essence at the altars that take it 
   }
 });
 
+/** The Runecrafting plugin on a stub api: its altars' object options and its item-on-object hooks. */
+function runecrafting() {
+  const altars = {}, itemOnObject = [];
+  const api = new Proxy({
+    core,
+    onObjectInteraction: (name, actions) => (altars[name] = { ...altars[name], ...actions }),
+    onItemOnObject: (hook) => itemOnObject.push(hook),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require("../plugins/skills/Runecrafting.plugin").register(api);
+  const ready = (player, ...items) => {
+    player.getSkillManager().setCurrentLevel(Skill.RUNECRAFTING, 99, false);
+    player.getInventory().resetItems();
+    for (const [id, amount] of items) player.getInventory().adds(id, amount);
+    return player.getInventory();
+  };
+  return { altars, itemOnObject, ready };
+}
+
+test("Soul Harvest: soul shards bind as dark essence fragments at Kourend's Blood Altar", () => {
+  const { altars, ready } = runecrafting();
+  const who = cases(SOUL_HARVEST);
+  const bind = (player) => {
+    const inventory = ready(player, [I.SOUL_SHARD, 20]);
+    const event = { player, objectId: core.ObjectIdentifiers.BLOOD_ALTAR, handled: false };
+    altars["Blood Altar"].Bind(event);
+    assert.equal(event.handled, true);
+    return inventory;
+  };
+  const relic = bind(who.relic);
+  assert.deepEqual([relic.getAmount(I.SOUL_SHARD), relic.getAmount(I.BLOOD_RUNE)], [0, 20], "a blood rune a shard");
+  for (const player of others(who)) {
+    const kept = bind(player);
+    assert.deepEqual([kept.getAmount(I.SOUL_SHARD), kept.getAmount(I.BLOOD_RUNE)], [20, 0]);
+  }
+});
+
+test("Soul Harvest: soul shards bind at the Ourania Altar as pure essence does", () => {
+  const { altars, ready } = runecrafting();
+  const who = cases(SOUL_HARVEST);
+  const ourania = core.ObjectIdentifiers.ALTAR_31;
+  const craft = (player) => {
+    const inventory = ready(player, [I.SOUL_SHARD, 10], [I.PURE_ESSENCE, 2]);
+    const event = { player, objectId: ourania, handled: false };
+    altars.Altar["Craft-rune"](event);
+    assert.equal(event.handled, true);
+    return inventory;
+  };
+  const relic = craft(who.relic);
+  assert.deepEqual([relic.getAmount(I.SOUL_SHARD), relic.getAmount(I.PURE_ESSENCE)], [0, 0], "all 12 bound");
+  for (const player of others(who)) {
+    const kept = craft(player);
+    assert.deepEqual([kept.getAmount(I.SOUL_SHARD), kept.getAmount(I.PURE_ESSENCE)], [10, 0], "only the pure essence");
+  }
+});
+
+test("Soul Harvest: soul shards make combination runes as pure essence does", () => {
+  const { itemOnObject, ready } = runecrafting();
+  const who = cases(SOUL_HARVEST);
+  Math.random = () => 0; // every rune binds
+  const combine = (player) => {
+    const inventory = ready(player, [I.SOUL_SHARD, 5], [I.PURE_ESSENCE, 1], [I.WATER_RUNE, 10], [I.WATER_TALISMAN, 1]);
+    // Water runes on the air altar make mist runes.
+    const event = { player, objectId: core.ObjectIdentifiers.ALTAR_33, itemId: I.WATER_RUNE, handled: false };
+    for (const hook of itemOnObject) hook(event);
+    assert.equal(event.handled, true);
+    return inventory;
+  };
+  const relic = combine(who.relic);
+  assert.deepEqual([relic.getAmount(I.PURE_ESSENCE), relic.getAmount(I.SOUL_SHARD), relic.getAmount(I.WATER_RUNE), relic.getAmount(I.MIST_RUNE)],
+    [0, 0, 4, 6], "the pure essence and the shards, a water rune each");
+  for (const player of others(who)) {
+    const kept = combine(player);
+    assert.deepEqual([kept.getAmount(I.SOUL_SHARD), kept.getAmount(I.MIST_RUNE)], [5, 1], "only the pure essence");
+  }
+});
+
 test("Eternal Sustenance: the food eaten is back in its slot", () => {
   const who = cases(ETERNAL_SUSTENANCE);
   for (const player of [who.relic, ...others(who)]) {

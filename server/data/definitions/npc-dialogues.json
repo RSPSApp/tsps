@@ -883087,6 +883087,11 @@
           "text": "If the player has one free space in their in their inventory:",
           "steps": [
             {
+              "type": "message",
+              "text": "Bailey gives you a torch.",
+              "id": "05RBJj"
+            },
+            {
               "type": "action",
               "action": "receive",
               "text": "an unlit torch",
@@ -883491,17 +883496,6 @@
               "player": "Not one."
             },
             {
-              "player": "Kennith, I've made an opening in the wall. You can come out through there."
-            },
-            {
-              "type": "line",
-              "speaker": "Kennith",
-              "text": "Are there any sea slugs on the other side?"
-            },
-            {
-              "player": "Not one."
-            },
-            {
               "type": "line",
               "speaker": "Kennith",
               "text": "How will I get downstairs?"
@@ -883532,8 +883526,8 @@
           "steps": [
             {
               "type": "message",
-              "text": "I need to get closer to that.",
-              "id": "j1zwz0"
+              "text": "I need to get closer to use that.",
+              "id": "b2e13Y"
             },
             {
               "type": "end"

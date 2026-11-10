@@ -13,8 +13,10 @@
  *   animation and jingle 171 while the player waits on deck, then Lunar Isle 11 ticks later.
  * - fade (Veos's ship 224/1434, Lokar and Bentley's return 231/3024, Torfinn 238/4136, the
  *   barge's Quick-Travel 239/4263): fade_overlay out, the move a few ticks later, back in.
- * - rowing (Jeb, 224/1434): fade out, then seaslug_boat_travel (461) over the platform with the
- *   route's layer, jingle 172 and the minimap off; six ticks later the message box and fade in.
+ * - rowing (Jeb, 224/1434; Holgart in Sea Slug, 20261110T112750): fade out, then seaslug_boat_travel
+ *   (461) over the platform with the route's layer, jingle 172 and the minimap off; six ticks later
+ *   (the route's `arriveTick` from the click, when its leg is longer) the message box and fade in.
+ *   A route with `song` plays it first (Sea Slug's legs send song 147, silence, before the jingle).
  *
  * The player is held still for the trip; a logout or a server shutdown lands them.
  */
@@ -268,22 +270,24 @@ function rowing(player, trip) {
     setMinimap(player, false);
   };
   Common.begin(player, { land: () => { land(); finish(); } });
+  const arrive = trip.arriveTick ?? ROWING.arrive;
   runTicks(player, {
     [ROWING.travel]: () => {
       setMinimap(player, true);
       land();
+      if (trip.song != null) out.sendSong(trip.song);
       out.sendJingle(ROWING.jingle, 0);
       out.sendInterfaceScript(MAIN_MODAL_OPEN, ROWING.open);
       out.sendInterface(CacheDefinitions.getInterfaceId(ROWING.interface));
       out.sendInterfaceDisplayState(CacheDefinitions.getComponentId(trip.layer), false);
     },
-    [ROWING.arrive]: () => {
+    [arrive]: () => {
       out.sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
       finish();
       fade(player, false);
       messageBox(player, trip.arrive);
     },
-    [ROWING.closeOverlay]: () => out.closeSubInterface(OVERLAY_ATMOSPHERE_UID),
+    [arrive + ROWING.closeOverlay - ROWING.arrive]: () => out.closeSubInterface(OVERLAY_ATMOSPHERE_UID),
   });
 }
 

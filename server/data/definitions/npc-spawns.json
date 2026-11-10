@@ -16286,7 +16286,7 @@
   {"level":0,"name":"Sea slug","x":2793,"y":3275,"id":5061},
   {"level":0,"name":"Sea slug","x":2793,"y":3280,"id":5061,"wanderRadius":1},
   {"level":0,"name":"Fisherman","x":2794,"y":3279,"id":5076,"wanderRadius":4},
-  {"level":1,"name":"Kennith","x":2766,"y":3288,"id":5065},
+  {"level":1,"name":"Kennith","x":2766,"y":3288,"id":5065,"wanderRadius":0},
   {"level":1,"name":"Sea slug","x":2768,"y":3282,"id":5061},
   {"level":1,"name":"Fisherman","x":2768,"y":3285,"id":5076},
   {"level":1,"name":"Giant lobster","x":2768,"y":3289,"id":6251},

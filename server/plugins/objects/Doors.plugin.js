@@ -151,6 +151,11 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
+    // Witchaven's and the fishing platform's slug2_village_poordoor opens as fai_barbarian_poordooropen,
+    // turned a quarter onto the next tile (Sea Slug capture 20261110T112750 ticks 122, 240): the cache
+    // names differ, so the scan can't pair them. 11617 stays Barbarian Village's 11616's open leaf for
+    // the reverse lookup (a shared leaf keeps the scan's pair, below); an opened 18168 closes from its tracked state.
+    [O.DOOR_389, O.DOOR_279],
     // Games Room experienced variants share the ordinary elf door's reverse
     // open leaf (active rev241 cache; pinned Games Room reference next_loc_stage).
     [O.DOOR_129, O.DOOR_132],

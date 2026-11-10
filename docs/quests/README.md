@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 26 · ⚠️ passed with issues: 18 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 103
+193 quests · ✅ passed: 27 · ⚠️ passed with issues: 18 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 102
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -67,7 +67,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Ernest the Chicken](ernest-the-chicken/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | DeepSeek V4.1 Flash | 1 |
 | [Ethically Acquired Antiquities](ethically-acquired-antiquities/README.md) | untested |  |  |  |  |
 | [Fairytale I - Growing Pains](fairytale-i-growing-pains/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 1 |
-| [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 2 |
+| [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 1 |
 | [Fallen From Grace](fallen-from-grace/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 8 |
 | Family Crest | untested |  |  |  |  |
 | [Fight Arena](fight-arena/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -134,7 +134,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Rune Mysteries](rune-mysteries/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 4 |
 | [Scorpion Catcher](scorpion-catcher/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 5 |
 | [Scrambled!](scrambled/README.md) | untested |  |  |  |  |
-| [Sea Slug](sea-slug/README.md) | untested |  |  |  |  |
+| [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 1 |
 | [Secrets of the North](secrets-of-the-north/README.md) | untested |  |  |  |  |
 | Shades of Mort'ton | untested |  |  |  |  |
 | Shadow of the Storm | untested |  |  |  |  |
@@ -191,7 +191,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Troll Romance | untested |  |  |  |  |
 | [Troll Stronghold](troll-stronghold/README.md) | untested |  |  |  |  |
 | [Troubled Tortugans](troubled-tortugans/README.md) | 🔁 needs recheck | 2026-11-03 | agent | deepseek-v4.1-flash | 1 |
-| [Twilight's Promise](twilights-promise/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 4 |
+| [Twilight's Promise](twilights-promise/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 3 |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |

@@ -132,6 +132,8 @@ test("setting up: the captured ticks, messages, sounds, locs and vars, then 30 b
     assert.ok(at(2).includes("varbit 12393=0") && at(2).includes("spam You place the cannon base on the ground."));
     assert.ok(at(2).includes("anim 827") && at(2).includes("sound 2876"));
     assert.ok(at(2).includes(`varp 4=${Cannon.packCoord(sw)}`) && at(2).includes("varp 2=1"));
+    // The buff bar shows the cannon's ammo only while mcannon_world is the client's world (301) modulo 128.
+    assert.ok(at(2).includes("varbit 1968=45"), "mcannon_world matches the client's world");
     assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [sw.getX(), sw.getY() - 1]);
     assert.ok(at(4).includes("spam You add the stand.") && at(4).includes("varp 2=2"), "the stand 2 ticks later");
     assert.ok(at(7).includes("spam You add the barrels."), "the barrels 3 ticks later");

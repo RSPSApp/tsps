@@ -74,3 +74,16 @@ test("an unpaired or cancelled fire never leaves a stale log mesh", async () => 
     client.updateGroundItemMeshHandoffs();
     assert.deepEqual(meshes.at(-1), []);
 });
+
+test("a full ground item snapshot clears an active log mesh handoff", async () => {
+    const { client, apply, meshes } = await setup();
+    apply(remove);
+    client.onLocAddChange(FIRE, tile, 0, 10, 0);
+    await Promise.resolve();
+    assert.deepEqual(meshes.at(-1), [log.id]);
+
+    const replacement = { ...log, id: log.id + 1 };
+    apply({ kind: "snapshot", serial: 3, stacks: [replacement] });
+    assert.deepEqual(meshes.at(-1), [replacement.id]);
+    assert.deepEqual(client.getGroundItemMeshStacks().map((stack) => stack.id), [replacement.id]);
+});

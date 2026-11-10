@@ -768,6 +768,43 @@ test('the falling crystals shake the Olm chamber every volley, and the rise stil
   Parties.clear();
 });
 
+// rsprox 234/03276 (the Molch shamans): a jump landing on the player shakes their camera the tick
+// after (cam_shake slot 0, random 10, sine 5); one landing beside them does not.
+test('a shaman jump shakes the camera of the raiders it lands on, a tick later', () => {
+  const { ShamansRoom } = require('../plugins/minigames/cox/Shamans.ChambersOfXeric');
+  const blocked = RegionManager.blocked;
+  RegionManager.blocked = () => false;
+  try {
+    const target = fakePlayer('Crushed', new Location(3300, 5260, 0));
+    const beside = fakePlayer('Beside', new Location(3302, 5260, 0));
+    const off = fakePlayer('Off', new Location(3301, 5261, 0));
+    off.varbits.set(16107, 1); // option_camera_effect_shamans_disabled
+    const room = Object.create(ShamansRoom.prototype);
+    Object.assign(room, { raid: { map: {} }, hurt: new Set() });
+    room.raiders = () => [target, beside, off];
+    room.hurtBy = () => {};
+    room.engage = () => {};
+    const npc = {
+      location: new Location(3295, 5265, 0),
+      getLocation() { return this.location; },
+      moveTo(location) { this.location = location; },
+      isRegistered: () => true,
+      performAnimation() {},
+      getCombat: () => ({ reset() {}, attack() {} }),
+    };
+    assert.equal(room.jump(npc, target), true);
+    ticks(6);
+    assert.equal(target.camera, undefined, 'nothing on the landing tick');
+    ticks(1);
+    assert.deepEqual(target.camera, [[0, 10, 5, 0]]);
+    assert.equal(beside.camera, undefined, 'two tiles off the landing');
+    assert.equal(off.camera, undefined, 'the row off');
+    ticks(2);
+  } finally {
+    RegionManager.blocked = blocked;
+  }
+});
+
 // ------------------------------------------------------------------ phase 7: rewards
 
 test('rewards follow the Wiki: unique odds, common amounts, target times', () => {

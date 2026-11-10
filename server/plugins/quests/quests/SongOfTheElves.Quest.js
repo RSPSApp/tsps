@@ -3846,23 +3846,6 @@ module.exports = function registerSongOfTheElves(api) {
     }
   }
 
-  // The castle's two throne staircases are partly blocked by the collision map.
-  // Keep the click at the player's current tile; `ladders:climb` performs the
-  // same paired-floor transition as the cache staircase action. The prison stair
-  // below has a walkable foot, so it keeps the normal walk-to-object route.
-  function routeCastleThroneStairs(event) {
-    const object = event?.object;
-    const tile = object?.getLocation?.();
-    const x = tile?.getX?.();
-    const y = tile?.getY?.();
-    const z = event?.sourceLocation?.z;
-    const up = event?.objectId === 15645 && x === 2571 && y === 3295 && z === 0;
-    const down = event?.objectId === 15648 && x === 2571 && y === 3295 && z === 1;
-    if (!up && !down) return;
-    // There is no walkable interaction tile beside the colliding staircase.
-    event.destination = { ...event.sourceLocation };
-  }
-
   function claimCastleThroneStairs(event) {
     const tile = event?.object?.getLocation?.();
     const x = tile?.getX?.();
@@ -3877,14 +3860,9 @@ module.exports = function registerSongOfTheElves(api) {
       event.handled = true;
       return;
     }
-    if (x !== 2571 || y !== 3295) return;
-    if (event.objectId === 15645 && z === 0) {
-      api.emitCustomEvent("ladders:climbUp", { player: event.player, destination: new Location(2575, 3293, 1) });
-      event.handled = true;
-    } else if (event.objectId === 15648 && z === 1) {
-      api.emitCustomEvent("ladders:climbDown", { player: event.player, destination: new Location(2575, 3293, 0) });
-      event.handled = true;
-    }
+    // The castle's main staircase (15645/15648 at 2571,3295) is the shared climb link's
+    // (objects/data/climb-links.json): walked to from the south, landing on 2571,3294,1 as live
+    // does (Biohazard capture 20261110T121228-5ab63b4 tick 1214) and back on 2571,3298,0.
   }
 
   function handleItemOnItem(event) {
@@ -4292,7 +4270,6 @@ module.exports = function registerSongOfTheElves(api) {
   api.onObjectInteraction("Trapdoor", { Open: enterArdougneBattleBasement, "Climb-down": enterArdougneBattleBasement });
   api.onCustomEvent("ladders:climb", enterArdougneBattleBasement);
   api.onObjectInteraction("Staircase", { "Climb-down": enterPrison });
-  api.onObjectRoute(routeCastleThroneStairs);
   api.onWalkRoute(routeToLadyHefin);
   api.onObjectRoute(routeYsgawynLeafTrap);
   api.onCustomEvent("ladders:climb", claimCastleThroneStairs);

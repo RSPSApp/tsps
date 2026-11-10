@@ -1385,6 +1385,22 @@ function noteDivineDrain({ player, skill, previous, current }) {
   if (entry && current < entry.target) entry.target = current;
 }
 
+/**
+ * The divine potions' lines, as recorded from revision 230 on (rsprox_transcripts/239/04263.txt, a normal world; 800
+ * times over the recordings): at 30 ticks left "Your divine potion effect is about to expire." (a divine ranging
+ * potion: "Your divine ranging potion is about to expire."), and at the end "The effects of the divine potion have worn
+ * off." (no closing tag). One line for a potion's skills together. Dying clears the effect with no line
+ * (237/01148.txt and seven more: the timers go to 0 after "Oh dear, you are dead!").
+ */
+const DIVINE_WARNING_MS = 30 * 600;
+const DIVINE_WARNING = "<col=ff3045>Your divine potion effect is about to expire.</col>";
+const DIVINE_RANGING_WARNING = "<col=ff3045>Your divine ranging potion is about to expire.</col>";
+const DIVINE_WORN_OFF = "<col=ff3045>The effects of the divine potion have worn off.";
+
+function clearDivineOnDeath({ player }) {
+  if (player?.getAttribute(ATTR_DIVINE_STATE)) player.setAttribute(ATTR_DIVINE_STATE, null);
+}
+
 function processDivine(player) {
   const state = player.getAttribute(ATTR_DIVINE_STATE);
   if (!state || !Array.isArray(state.targets)) {
@@ -1405,8 +1421,15 @@ function processDivine(player) {
     state.targets = state.targets.filter((entry) => now < endOf(entry));
     if (state.targets.length === 0) player.setAttribute(ATTR_DIVINE_STATE, null);
     else player.setAttribute(ATTR_DIVINE_STATE, { ...state, endsAt: Math.max(...state.targets.map(endOf)) });
-    player.sendMessage("Your divine potion effect has worn off.");
+    player.sendMessage(DIVINE_WORN_OFF);
     if (state.targets.length === 0) return;
+  }
+
+  const warned = state.targets.filter((entry) => !entry.warned && now >= endOf(entry) - DIVINE_WARNING_MS);
+  if (warned.length > 0) {
+    for (const entry of warned) entry.warned = true;
+    const rangingOnly = warned.every((entry) => entry.skillIndex === Skill.RANGED.getIndex());
+    player.sendMessage(rangingOnly ? DIVINE_RANGING_WARNING : DIVINE_WARNING);
   }
 
   for (const entry of state.targets) {
@@ -1821,6 +1844,7 @@ module.exports = {
   _test: {
     applyPrayerRestore, applySanfewRestore, applyAncientBrew, restorePrayerOverheal, applyDivine, processDivine,
     applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration, clearPrayerRegeneration,
+    clearDivineOnDeath,
     applyRankFrothyPotion, applyFoulChunkyPotion, applyRancidSlimyPotion, applyJarOfCongealedBlood,
     processBoostDecay, notePreserveActivated, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
     processStamina, staminaDrainModifier, staminaStatus,
@@ -1863,6 +1887,7 @@ module.exports = {
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogin(resumeTimedEffects);
     api.onPlayerDeath(clearPrayerRegeneration);
+    api.onPlayerDeath(clearDivineOnDeath);
     api.onItemOnItem(pourPotion, { noted: false });
     api.onItemAction(emptyVessel);
     api.onItemFirstAction((event) => {

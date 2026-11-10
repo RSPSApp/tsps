@@ -358,9 +358,8 @@ export class CombatSpecial {
                     }
                     return;
                 } else {
-                    // Uninformed player activating a queued-attack special outside combat.
-                    player.sendMessage("Although not required, this special attack should be used during combat");
-                    player.sendMessage("for maximum effect.");
+                    // Pressed with no target (rsprox_transcripts/232/03142.txt:83476 and :84215, a normal world): one line.
+                    player.sendMessage("Warning: Since the maul's special is an instant attack, it will be wasted when used on a first strike.");
                 }
             }
         }

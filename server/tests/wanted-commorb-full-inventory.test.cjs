@@ -84,3 +84,57 @@ test("taking off a ring between Tiffy's room check and the last Yes keeps the co
   assert.equal(f.inv.getAmount(I.COINS), 40_000);
   assert.equal(f.quest.getStage(f.p), COMMORB);
 });
+
+test("the Varrock mage offers Solus and his other topics when Temple of the Eye is complete", async (t) => {
+  const f = actor(t);
+  const FUR_CLUE = 8;
+  const MAGE_DEAL = 9;
+  const EAST = 10;
+  f.quest.setStage(f.p, FUR_CLUE);
+  const abyss = QuestRuntime.questNamed("Enter the Abyss");
+  const temple = QuestRuntime.questNamed("Temple of the Eye");
+  abyss.setStage(f.p, abyss.completionValue);
+  temple.setStage(f.p, temple.completionValue);
+  const chapel = new core.Location(3260, 3383, 0);
+  f.p.setLocation(chapel);
+  const VARROCK_MAGE_PARENT = 3229;
+  const npc = core.NPC.create(VARROCK_MAGE_PARENT, chapel);
+  const definition = npc.getCurrentDefinition(f.p);
+  assert.equal(definition.getId(), N.MAGE_OF_ZAMORAK_3);
+  function talk() {
+    assert.equal(PM.emitNpcInteraction({
+      player: f.p, npc, definition, npcId: npc.getContentId(f.p), npcIndex: npc.getIndex(),
+      clickType: 1, location: { x: chapel.getX(), y: chapel.getY(), z: chapel.getZ() }, handled: false,
+    }), true);
+  }
+  function options() {
+    return core.MultiChatboxPrompt.getPending(f.p)?.options;
+  }
+  async function reply(choice) {
+    const widgetId = choice === undefined ? f.p.getPacketSender().getChatboxGroupId() << 16
+      : core.MultiChatboxPrompt.OPTIONS_WIDGET_ID;
+    await f.c.dispatch([{ type: "dialogue_continue", widgetId, childIndex: choice ?? -1 }]);
+    f.c.processTurnPackets();
+  }
+
+  talk();
+  assert.deepEqual(options(), ["Solus Dellagar.", "Something else."]);
+  await reply(2);
+  assert.match(f.p.getDialogueManager().getCurrent().getText(), /What do you want/);
+  await reply();
+  assert.ok(options().includes("Can you tell me more about the Abyss?"));
+  assert.equal(f.quest.getStage(f.p), FUR_CLUE);
+
+  f.p.closeInterruptibleInterfaces();
+  talk();
+  await reply(1);
+  assert.equal(f.quest.getStage(f.p), MAGE_DEAL);
+  f.p.closeInterruptibleInterfaces();
+  for (let slot = 0; slot < 20; slot++) f.inv.setItem(slot, new core.Item(I.RUNE_ESSENCE, 1));
+  talk();
+  assert.deepEqual(options(), ["Solus Dellagar.", "Something else."]);
+  await reply(1);
+  for (let i = 0; i < 8 && f.quest.getStage(f.p) !== EAST; i++) await reply();
+  assert.equal(f.quest.getStage(f.p), EAST);
+  assert.equal(f.inv.getAmount(I.RUNE_ESSENCE), 0);
+});

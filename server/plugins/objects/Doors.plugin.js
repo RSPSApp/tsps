@@ -84,10 +84,6 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // tick 940, 239 tick 1649); nameless in the cache, so ObjectIdentifiers has no property for them.
   FARMING_GUILD_DOOR_LEFT_OPEN: 34465,
   FARMING_GUILD_DOOR_RIGHT_OPEN: 34466,
-  // mournerquaters_gatelopen/_gateropen: the open leaves of the Mourner Headquarters' upstairs cage
-  // gate (Biohazard); nameless in the cache, so ObjectIdentifiers has no property for them.
-  MOURNER_CAGE_GATE_LEFT_OPEN: 2059,
-  MOURNER_CAGE_GATE_RIGHT_OPEN: 2061,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -698,26 +694,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 62,
     }),
-    // The Mourner Headquarters' upstairs cage gate, West Ardougne (Biohazard): mournerquaters_gatel
-    // (north leaf) and _gater (south leaf) on the east edge of 2551,3326/3325, with actionless open
-    // leaves mournerquaters_gatelopen/_gateropen (2059/2061) and no Close. Biohazard.Quest's key check
-    // runs before this (door:toggle) and the key opens it through door:open.
-    // Ours: no capture of this gate. The swap (INVISWALL on both doorway tiles, the open leaves on the
-    // tiles inside turned out from the hinges, sound 71, back two ticks later) copies the captured
-    // Mort Myre gate above, a two-leaf gate on the same east edge.
-    Object.freeze({
-      closed: [[O.GATE_44, 2551, 3326, 1, 2], [O.GATE_45, 2551, 3325, 1, 2]],
-      opened: [
-        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2551, 3326, 1, 2],
-        [NAMELESS_DOOR_LEAF_IDS.MOURNER_CAGE_GATE_LEFT_OPEN, 2552, 3326, 1, 1],
-        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2551, 3325, 1, 2],
-        [NAMELESS_DOOR_LEAF_IDS.MOURNER_CAGE_GATE_RIGHT_OPEN, 2552, 3325, 1, 3],
-      ],
-      crossX: 2552,
-      walkOver: true,
-      closeTicks: 2,
-      openSoundId: 71,
-    }),
     Object.freeze({
       closed: [[O.WALL_9, 2836, 9600, 0, 3]],
       opened: [
@@ -743,14 +719,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Same guide 7:15.37-7:16.50: the Baxtorian doors close behind the walking player.
     [O.DOOR_48, { open: NAMELESS_DOOR_LEAF_IDS.DOOR_48_OPEN }],
     [O.DOOR_91, { open: NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN }],
-    // The Mourner Headquarters' doors, West Ardougne (Biohazard): mournerstewdoor (front and back,
-    // DOOR_51) and the upstairs mournerstewdoorup (DOOR_49) are Open-only with actionless open leaves
-    // that the cache names without the underscore (mournerstewdooropen, mournerstewdoorupopen).
-    // Same models and naming as Wydin's door, whose capture (rsprox 465 ticks 6468, 7182) shows this
-    // family's swap: INVISWALL on 3012,3204 rot 0, wydindooropen on 3011,3204 rot 1, sound 62, back two
-    // ticks later. Biohazard.Quest's gown and back-door rules run before this (door:toggle).
-    [O.DOOR_51, { open: O.DOOR_52 }],
-    [O.DOOR_49, { open: O.DOOR_50 }],
     [O.RED_DOOR, {}], [O.ORANGE_DOOR, {}], [O.YELLOW_DOOR, {}], [O.BLUE_DOOR, {}],
     [O.MAGENTA_DOOR, {}], [O.GREEN_DOOR, {}], [O.EXIT_DOOR, {}],
     // Plague City (revision 242 capture 20261110T113734-5ab63b4): the Rehnisons' door (ticks 424-426,

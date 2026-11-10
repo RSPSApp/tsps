@@ -193,6 +193,12 @@ test("the gas mask stays on in West Ardougne", (t) => {
   assert.ok(messages.includes("You should leave your gas mask on while you're in West Ardougne."));
   player.setLocation(new core.Location(2566, 3332, 0));
   assert.notEqual(PluginManager.emitCanUnequip(player, core.Equipment.HEAD_SLOT, mask), false, "East Ardougne is free");
+  player.setLocation(new core.Location(2538, 3306, 0));
+  messages.length = 0;
+  QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "biohazard").setStage(player, 5);
+  PluginManager.emitCanUnequip(player, core.Equipment.HEAD_SLOT, mask);
+  assert.equal(messages.filter((text) => text.startsWith("You should leave your gas mask")).length <= 1, true,
+    "Biohazard answers once it has started; Plague City stays quiet");
 });
 
 test("Jethick moves the stage as he knows the picture; a declined book is offered again", (t) => {

@@ -235,10 +235,10 @@ module.exports = function registerPlagueCityQuest(api) {
   const fadeOut = (player) => Scenes.fade(player, true);
   const fadeIn = (player) => Scenes.fade(player, false);
 
-  function biohazardComplete(player) {
-    const request = { player, key: "biohazard", complete: false };
-    api.emitCustomEvent("quest:is-complete", request);
-    return request.complete === true;
+  function biohazardStarted(player) {
+    const request = { player, key: "biohazard", started: false };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
   }
 
   function inWestArdougne(location) {
@@ -1101,9 +1101,12 @@ module.exports = function registerPlagueCityQuest(api) {
     }
   }
 
-  /** The gas mask stays on in West Ardougne until Biohazard is done (Wiki Gas mask; ticks 392-393, 562-563). */
+  /**
+   * The gas mask stays on in West Ardougne (Wiki Gas mask; ticks 392-393, 562-563). Once Biohazard
+   * has started its own rule keeps it on, to that quest's end, so only one quest answers.
+   */
   function maskMustStay(player) {
-    return wearingGasMask(player) && inWestArdougne(player.getLocation()) && !biohazardComplete(player);
+    return wearingGasMask(player) && inWestArdougne(player.getLocation()) && !biohazardStarted(player);
   }
 
   function keepMaskOn(event) {

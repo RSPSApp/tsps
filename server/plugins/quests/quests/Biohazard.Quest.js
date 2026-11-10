@@ -19,8 +19,7 @@
  */
 module.exports = function registerBiohazardQuest(api) {
   const {
-    Skill, Equipment, Location, GameObject, ObjectManager, Projectile,
-    ForceMovement, ForceMovementTask, TaskManager,
+    Skill, Equipment, Location, GameObject, ObjectManager,
     ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
@@ -105,11 +104,7 @@ module.exports = function registerBiohazardQuest(api) {
   const HQ_TRAPDOOR = { x: 2542, y: 3327, z: 0 };
   const SICKEST_MOURNER_ATTACK_IDS = new Set(["DQWtoR", "MoUbVk", "PmbGHX"]);
 
-  const MOURNER_CAGE_GATE_IDS = new Set([ObjectIdentifiers.GATE_44, ObjectIdentifiers.GATE_45]);
-  /** The cage gate's leaves block the east edge of x 2551 upstairs; the cage is east of it. */
-  const MOURNER_CAGE_GATE_X = 2551;
-  // Imported Biohazard message KKqqBk ("opening the gate when entering", player has the key).
-  const CAGE_GATE_KEY_MESSAGE = "You use the key to open the gate.";
+  const MOURNER_CAGE_GATE_IDS = new Set([2058, 2060]);
   const MOURNER_CRATE_ID = 2064;
   const BEDROOM_DOOR_CLOSED_ID = 2032;
   const BEDROOM_DOOR_OPEN_ID = 2033;
@@ -123,33 +118,9 @@ module.exports = function registerBiohazardQuest(api) {
   // Imported Biohazard message EYYSjv from Elena's lost-items capacity branch.
   const ELENA_CAPACITY_MESSAGE = "Elena tries to give you some items but you don't have enough room for them.";
 
-  // The rope ladder drops the player on the tile beside the wall (2557-2558) on the other side:
-  // Kilron's own tile on the Wiki's Kilron map (2556,3267), and LostCity Content's
-  // biohazard_climb_ladder destinations 0_39_51_60_3 / 0_39_51_63_3. No capture of the climb.
-  const WEST_ARDOUGNE_LANDING = new Location(2556, 3267, 0);
-  const EAST_ARDOUGNE_LANDING = new Location(2559, 3267, 0);
+  const WEST_ARDOUGNE_LANDING = new Location(2554, 3266, 0);
+  const EAST_ARDOUGNE_LANDING = new Location(2560, 3266, 0);
   const WATCHTOWER_TILE = { x: 2562, y: 3301 };
-  /**
-   * The released pigeons: three biopigeon_launch (spotanim 72) projectiles from the player to the
-   * watchtower. Targets, heights, delays and flight lengths are LostCity Content's
-   * quest_biohazard.rs2 (~coord_projectile: flight = length + 20 per tile); no OSRS capture.
-   */
-  const PIGEON_PROJECTILE_ID = 72;
-  const PIGEON_FLIGHTS = [
-    { x: 2559, y: 3303, delay: 25, length: 21 },
-    { x: 2560, y: 3304, delay: 15, length: 31 },
-    { x: 2561, y: 3305, delay: 5, length: 41 },
-  ];
-  const PIGEON_START_HEIGHT = 16;
-  const PIGEON_END_HEIGHT = 130;
-  const PIGEON_ANGLE = 20;
-  const PIGEON_PROGRESS = 10;
-  const PIGEON_CYCLES_PER_TILE = 20;
-  /** The squeeze is a walk across the fence edge (human_walk_f), over 76 client cycles. */
-  const FENCE_WALK_ANIMATION = 819;
-  const FENCE_CROSS_CYCLES = 76;
-  /** LostCity's agility_exactmove movement delay: the player lands two ticks later. */
-  const FENCE_CROSS_TICKS = 2;
   const MOURNER_YARD = { minX: 2542, maxX: 2555, minY: 3328, maxY: 3333 };
   const VARROCK_SOUTH_EAST_ZONE = { minX: 3265, maxX: 3287, minY: 3376, maxY: 3407 };
 
@@ -889,21 +860,8 @@ module.exports = function registerBiohazardQuest(api) {
       player.getInventory().adds(PIGEON_CAGE_EMPTY_ITEM_ID, 1);
     }
     quest.setStage(player, STAGE_RELEASED_PIGEONS);
-    releasePigeons(player);
     player.sendMessage("The pigeons fly towards the watchtower. The mourners frantically try to scare them away.");
     return true;
-  }
-
-  function releasePigeons(player) {
-    const from = player.getLocation();
-    for (const flight of PIGEON_FLIGHTS) {
-      const to = new Location(flight.x, flight.y, from.getZ());
-      const tiles = Math.max(Math.abs(to.getX() - from.getX()), Math.abs(to.getY() - from.getY()));
-      const end = flight.delay + flight.length + tiles * PIGEON_CYCLES_PER_TILE;
-      new Projectile(from, to, null, PIGEON_PROJECTILE_ID, flight.delay, end,
-        PIGEON_START_HEIGHT, PIGEON_END_HEIGHT, player.getPrivateArea?.() ?? null)
-        .withAngle(PIGEON_ANGLE).withProgress(PIGEON_PROGRESS).sendProjectile();
-    }
   }
 
   function squeezeFence(event) {
@@ -918,16 +876,8 @@ module.exports = function registerBiohazardQuest(api) {
       player.sendMessage("You have no reason to enter the Mourner HQ yard yet.");
       return true;
     }
-    // The fence (2541,3331, face 2) blocks the east edge of its own tile, so the squeeze runs
-    // between that tile and 2542 inside. Captured fence squeezes (deepdungeonlooserailing, rsprox
-    // 362 ticks 2794/2962) put the player on the start tile and exactmove across in the same tick
-    // (delay2 76); LostCity Content's mournerstewfence does the same with the walk animation.
     const inside = inMournerYard(player.getLocation?.());
-    const start = new Location(inside ? x + 1 : x, y, 0);
-    const delta = inside ? -1 : 1;
-    if (!player.getLocation().equals(start)) player.moveTo(start.clone());
-    TaskManager.submit(new ForceMovementTask(player, FENCE_CROSS_TICKS, new ForceMovement(start.clone(), new Location(delta, 0, 0),
-      0, FENCE_CROSS_CYCLES, inside ? 3 : 1, FENCE_WALK_ANIMATION)));
+    player.moveTo(new Location(inside ? 2540 : 2542, 3331, 0));
     return true;
   }
 
@@ -937,10 +887,6 @@ module.exports = function registerBiohazardQuest(api) {
     // on the same transaction so either route consumes feed only once.
     if (itemId === BIRD_FEED_ITEM_ID && objectId === WATCHTOWER_OBJECT_ID) {
       investigateWatchtower(event);
-      return;
-    }
-    if (itemId === MOURNER_KEY_ITEM_ID && MOURNER_CAGE_GATE_IDS.has(objectId)) {
-      useKeyOnCageGate(event);
       return;
     }
     if (itemId !== ROTTEN_APPLE_ITEM_ID || objectId !== CAULDRON_OBJECT_ID) return;
@@ -982,8 +928,6 @@ module.exports = function registerBiohazardQuest(api) {
   function openCageGate(event) {
     if (!MOURNER_CAGE_GATE_IDS.has(event.objectId)) return false;
     const { player } = event;
-    // Leaving the cage is always allowed: only the way in needs the key.
-    if (player.getLocation().getX() > MOURNER_CAGE_GATE_X) return false;
     if (quest.getStage(player) < STAGE_POISONED_STEW) {
       event.handled = true;
       player.sendMessage("The gate is locked.");
@@ -994,17 +938,7 @@ module.exports = function registerBiohazardQuest(api) {
       player.sendMessage("The gate is locked. You need a key.");
       return true;
     }
-    // Doors.plugin opens the gate once this check leaves the toggle unhandled.
-    player.sendMessage(CAGE_GATE_KEY_MESSAGE);
     return false;
-  }
-
-  /** Using the key on the gate opens it as Open does with the key carried. */
-  function useKeyOnCageGate(event) {
-    const { player, object } = event;
-    event.handled = true;
-    if (!object || openCageGate({ ...event, handled: false })) return;
-    api.emitCustomEvent("door:open", { player, object, handled: false });
   }
 
   function searchMournerCrate(event) {
@@ -1165,6 +1099,7 @@ module.exports = function registerBiohazardQuest(api) {
   api.onObjectInteraction("Watchtower", { Investigate: investigateWatchtower });
   api.onObjectInteraction("Fence", { "Squeeze-through": squeezeFence });
   api.onObjectInteraction("Door", { Open: openMournerDoor });
+  api.onObjectInteraction("Gate", { Open: openCageGate });
   api.onObjectInteraction("Crate", { Search: searchMournerCrate });
   api.onObjectInteraction("Bedroom door", { Open: openBedroomDoor });
   api.onObjectInteraction("Trapdoor", { Open: openHqTrapdoor });

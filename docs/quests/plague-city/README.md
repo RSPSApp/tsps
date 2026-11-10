@@ -89,7 +89,8 @@ XP", "An Ardougne Teleport Scroll"; Edmond takes the warrant, the key, the note 
 worn mask stays). Asked again with the scroll carried he only thanks the player (889-891).
 
 **West Ardougne.** Taking the gas mask off, or wearing another hat, there: "You should leave your
-gas mask on while you're in West Ardougne." (393, 563).
+gas mask on while you're in West Ardougne." (393, 563). Plague City keeps it on until Biohazard starts; from then
+Biohazard's own rule does (RSPSApp/tsps#4169).
 
 **Chatbox pages.** Lines break in font 497 at 380 pixels (`ChatTextLayout`): every one of the
 recording's 151 chat and item box lines breaks where live's does, and four lines are one box

@@ -35,6 +35,28 @@ function attachCore(api) {
   core = api.core;
 }
 
+/** All Settings' "Sailing side panel" row. */
+const SIDE_PANEL_SETTING = 454;
+const SIDE_PANEL_ONLY_ON_BOAT = 1;
+/** The Pandemonium stage from which the combat tab offers the sidepanel off a boat (script 8583). */
+const OFF_BOAT_SIDEPANEL_STAGE = 6;
+
+/**
+ * sailing_sidepanel_visible_from_combat_tab off a boat. The combat tab shows its "View" button
+ * for the sidepanel while it is 1. Live keeps it at 1 while the Sailing side panel setting is
+ * "Always show", once The Pandemonium has reached the stage the cache offers the panel from;
+ * with "Only show on boat" it is 1 only while aboard.
+ */
+function offBoatCombatTabSidepanel(player, onlyOnBoat = getVarbit(player, VARBIT.SIDE_PANEL_ONLY_ON_BOAT)) {
+  return onlyOnBoat !== SIDE_PANEL_ONLY_ON_BOAT && getVarbit(player, VARBIT.SAILING_INTRO) >= OFF_BOAT_SIDEPANEL_STAGE ? 1 : 0;
+}
+
+/** The Sailing side panel row changed: the combat tab follows it at once, unless aboard. */
+function sidePanelSettingChosen({ player, settingId, option }) {
+  if (settingId !== SIDE_PANEL_SETTING || getVarbit(player, VARBIT.BOARDED_BOAT) === 1) return;
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player, option));
+}
+
 /** Values from live OSRS boarding traces (docs/sailing-osrs-reference.md). */
 function boardedVarbits(type, owned) {
   const slot = owned.slot + 1;
@@ -255,6 +277,7 @@ function onLeft({ player, boat, reason }) {
   // Disembarking docks the boat; a teleport or Escape sinks it.
   sendBoatVarbits(player);
   for (const id of LEFT_VARBITS) setVarbit(player, id, 0);
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player));
   clearBoatVarps(player);
   player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   player.getPacketSender().sendTabInterface(0, 0);
@@ -291,6 +314,8 @@ function builtSpec(boat, base) {
 /** Describes owned boats; Schematics restores only recipes the player has learned. */
 function describeBoatsOnLogin({ player }) {
   sendBoatVarbits(player);
+  // A player logging in aboard gets the boarded varbits a tick later.
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player));
 }
 
 module.exports = {
@@ -307,6 +332,7 @@ module.exports = {
     api.onCustomEvent("sailing:guest-boarded", onGuestBoarded);
     api.onCustomEvent("sailing:guest-left", onGuestLeft);
     api.onPlayerLogin(describeBoatsOnLogin);
+    api.onCustomEvent("settings:option-chosen", sidePanelSettingChosen);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);
   },

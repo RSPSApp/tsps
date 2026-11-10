@@ -131,6 +131,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendEnterAmountPrompt: () => sender,
         sendObjectAnimation: () => sender,
         sendGlobalGraphic: () => sender,
+        sendCameraShake: (...shake) => { (p.camera ??= []).push(shake); return sender; },
+        sendCameraReset: () => { (p.camera ??= []).push('reset'); return sender; },
       };
       return sender;
     },
@@ -723,6 +725,45 @@ test('the Great Olm rises when the barrier is passed: head, claws and a power', 
   assert.equal(olm.head.getMaxHitpoints(), Monsters.scale(7554, raid.scaling).hitpoints);
   assert.ok(olm.inChamber(leader.location));
   assert.equal(olm.zoneWithMostPlayers(), 1, 'the middle');
+  raid.destroy();
+  Parties.clear();
+});
+
+// rsprox 234/00820 and 234/03282: every volley of falling crystals, between sides and in the final
+// stand, sends cam_shake on slots 0-2 with random 2-5 each; the camera resets as the Olm rises.
+test('the falling crystals shake the Olm chamber every volley, and the rise stills it', () => {
+  Parties.clear();
+  spawned.length = 0;
+  const leader = fakePlayer('Shaken');
+  channelWith('Shaken', leader);
+  Lobby.makeParty(leader);
+  leader.setAttribute(Shared.ATTR.WARNED, true);
+  Lobby.enterChambers({ player: leader });
+  const raid = Parties.partyOf(leader).raid;
+  ticks(5);
+  RaidUnit.startRaid({ player: leader });
+  leader.prompts.at(-1).args[1]();
+  const olm = raid.olmRoom;
+  leader.location = raid.map.olmTile(3232, 5740);
+  leader.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage() {} }) });
+  olm.transitionCrystals(28, false);
+  ticks(32);
+  const camera = leader.camera ?? [];
+  const shakes = camera.filter((entry) => entry !== 'reset');
+  assert.equal(shakes.length, 15 * 3, '15 volleys, three slots each');
+  for (const [i, [slot, random, sine, frequency]] of shakes.entries()) {
+    assert.equal(slot, i % 3);
+    assert.ok(random >= 2 && random <= 5, `random ${random}`);
+    assert.deepEqual([sine, frequency], [0, 0]);
+  }
+  assert.equal(camera.at(-1), 'reset', 'stilled after the last volley');
+  assert.equal(camera.indexOf('reset'), camera.length - 1);
+
+  leader.camera = [];
+  leader.varbits.set(16108, 1); // option_camera_effect_olm_disabled
+  olm.transitionCrystals(4, false);
+  ticks(6);
+  assert.deepEqual(leader.camera, ['reset'], 'no shake with the row off');
   raid.destroy();
   Parties.clear();
 });

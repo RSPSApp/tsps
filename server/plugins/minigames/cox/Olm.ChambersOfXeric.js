@@ -112,6 +112,7 @@ const Raid = require("./RaidState.ChambersOfXeric");
 const Monsters = require("./Monsters.ChambersOfXeric");
 
 const Achievements = require("./CombatAchievements.ChambersOfXeric");
+const CameraShake = require("../../interface/CameraShake.plugin");
 
 const NPC = { HEAD: 7554, RIGHT_CLAW: 7553, LEFT_CLAW: 7555, RIGHT_CLAW_DOWN: 7556, LEFT_CLAW_DOWN: 7557, FIRE: 7558 };
 /**
@@ -1486,6 +1487,7 @@ class OlmRoom extends Raid.Room {
     const volley = () => {
       if (this.raid.destroyed || state.stopped || this.dead || ticks > duration) return false;
       ticks += 2;
+      this.shakeCamera(ticks > duration);
       if (!finalStand) Shared.areaSound(this.viewers(), 3834, centre, { range: 15 });
       if (atRaider) {
         const raider = Shared.randomOf(this.raiders());
@@ -1506,6 +1508,18 @@ class OlmRoom extends Raid.Room {
   }
 
   /**
+   * Each volley of falling crystals shakes the chamber (random 2-5 on each of the first three
+   * slots); the last one before the Olm rises again stills it.
+   */
+  shakeCamera(last) {
+    for (const player of this.viewers()) {
+      const sender = player.getPacketSender();
+      for (const slot of [0, 1, 2]) CameraShake.send(sender, "olm", slot, Shared.random(2, 5), 0, 0);
+      if (last) sender.sendCameraReset?.();
+    }
+  }
+
+  /**
    * `::coxclear` in the chamber: it dies as the other rooms' encounters do, so a scripted run can
    * reach the chest (the room has no exit crystal for the base cleanup to open).
    */
@@ -1519,6 +1533,7 @@ class OlmRoom extends Raid.Room {
     this.dead = true;
     if (this.fallingCrystals$) this.fallingCrystals$.stopped = true;
     this.animate(this.objects.head, ANIM.HEAD_FALL);
+    for (const player of this.viewers()) player.getPacketSender().sendCameraReset?.();
     Shared.areaSound(this.viewers(), 3405, this.headSoundTile(), { range: 15 });
     this.completeAchievements();
     const { Animation, GameObject, Location, ObjectManager } = Shared.core();

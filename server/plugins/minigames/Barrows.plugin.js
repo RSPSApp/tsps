@@ -300,7 +300,9 @@ function onNpcAdded() {
   NPC.prototype.onAdd.call(this);
   const player = this.getOwner();
   if (session(player).brother === this) {
-    this.forceChat("You dare disturb my rest!");
+    // A brother woken in his crypt, or the tunnel's brother rising at the chest (rsprox_transcripts/227/00086.txt:233215,
+    // and 546 times over the recordings).
+    this.forceChat(this.__barrowsChest ? "You dare steal from us!" : "You dare disturb my rest!");
     this.getTimers().extendOrRegister(TimerKey.COMBAT_ATTACK, 3);
     player.getPacketSender().sendEntityHint(this);
   }
@@ -360,8 +362,16 @@ function searchCrypt(player, index) {
   const state = session(player);
   const brother = BROTHERS[index];
   if (index === run.tunnel) {
-    pluginApi.sendMultiChatboxPrompt(player, "You've found a hidden tunnel. Enter?",
-      "Enter", () => enterTunnel(player, run, brother), "Cancel", () => player.getPacketSender().sendInterfaceRemoval());
+    // rsprox_transcripts/226/01694.txt:169415-169442: a message box (and its mesbox chat line), then on continue the
+    // menu "Select an option": "Yeah I'm fearless!" / "No way, that looks scary!".
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, ChatType } = pluginApi.core;
+    const text = "You've found a hidden tunnel, do you want to enter?";
+    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new StatementDialogue(0, text))
+      .add(new ActionDialogue(1, { execute: () => pluginApi.sendMultiChatboxPrompt(player, "Select an option",
+        "Yeah I'm fearless!", () => enterTunnel(player, run, brother),
+        "No way, that looks scary!", () => player.getPacketSender().sendInterfaceRemoval()) })));
   } else if (state.brother || run.killed.includes(index)) {
     player.sendMessage("The sarcophagus appears to be empty.");
   } else {
@@ -594,7 +604,7 @@ function searchChest(player, clickType) {
     run.chestOpen = true;
     sender.sendVarbit(CHEST_OPEN_VARBIT, 1);
     if (!run.killed.includes(run.tunnel) && !state.brother) {
-      spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true);
+      spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true).__barrowsChest = true;
     }
     return;
   }

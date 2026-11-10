@@ -1,4 +1,5 @@
 import { LocAnimated, type LocFrameSoundHandler } from "../loc/LocAnimated";
+import type { MultiLocReloadGroup } from "../loc/MultiLocVarps";
 import Denque from "denque";
 import { mat4, vec3 } from "gl-matrix";
 
@@ -1369,9 +1370,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.locUpdates.refreshGamemodeWorldLocs();
     }
 
-    protected override reloadMultiLocSquare(mapX: number, mapY: number): void {
+    protected override reloadMultiLocSquare(mapX: number, mapY: number, group: MultiLocReloadGroup): void {
         if (this.instanceActive) this.scheduleInstanceLocRebuild();
-        else this.locUpdates.scheduleReload(mapX, mapY, "full");
+        else this.locUpdates.scheduleReload(mapX, mapY, group);
     }
 
     override onRegionReplacement(payload: RegionReplacementEvent): void {

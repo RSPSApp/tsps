@@ -234,6 +234,10 @@ test('mandatory route: eight drops, vinegar, boiler cleaning, hand-in and comple
     assert.equal(p.items.get(bone.cleaned), 1);
   }
   assert.equal(p.items.get(core.ItemIdentifiers.LOGS) ?? 0, 0);
+  assert.deepEqual(p.calls.filter(([packet, id]) => packet === 'sendVarbit' && id === 2046)
+    .map(([, , value]) => value), BONES.flatMap(() => [1, 2, 3, 4, 0]));
+  assert.equal(p.calls.some(([packet]) => packet === 'sendObject'), false,
+    'the cache loc morphs through its varbit without a replacement packet');
 
   assert.equal(h.variant(p), 'finishing-up');
   h.line(p, "That's the last of them!");

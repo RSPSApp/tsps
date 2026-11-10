@@ -54,10 +54,8 @@ module.exports = function registerRagAndBoneManIQuest(api) {
     CountdownTask,
     DialogueChainBuilder,
     EndDialogue,
-    GameObject,
     ItemDefinition,
     ItemIdentifiers,
-    Location,
     NpcIdentifiers,
     ObjectDefinition,
     ObjectIdentifiers,
@@ -88,7 +86,6 @@ module.exports = function registerRagAndBoneManIQuest(api) {
 
   // The map places the neutral transform object; its states carry the options.
   const POT_BOILER_BASE_OBJECT_ID = 14004; // map object "null" at 3360,3505
-  const POT_BOILER_TILE = new Location(3360, 3505, 0);
   const POT_BOILER_VARBIT = 2046; // "rag_boiler", varp 716 bits 21-28
   const POT_BOILER_STATE_OBJECT_IDS = new Set([
     ObjectIdentifiers.POT_BOILER, // 14005 logs
@@ -386,9 +383,6 @@ module.exports = function registerRagAndBoneManIQuest(api) {
   function showBoiler(player, state) {
     getBoiler(player).state = state;
     player.getPacketSender().sendVarbit(POT_BOILER_VARBIT, state);
-    player
-      .getPacketSender()
-      .sendObject(new GameObject(POT_BOILER_BASE_OBJECT_ID, POT_BOILER_TILE, 10, 0, null));
   }
 
   function finishBoil(player) {

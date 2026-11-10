@@ -18,6 +18,7 @@ import { TickCounterPlugin } from "../../../game/plugins/tickcounter/TickCounter
 import { WikiPlugin } from "../../../game/plugins/wiki/WikiPlugin";
 import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
+import { IsometricCameraPlugin } from "../../../game/plugins/isometric/IsometricCameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { TouchControlsPlugin } from "../../../game/plugins/touchcontrols/TouchControlsPlugin";
@@ -133,6 +134,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ShaderFxPlugin,
     LowEndDevicePlugin,
     CameraPlugin,
+    IsometricCameraPlugin,
     QuestHelperPlugin,
     XpTrackerPlugin,
     XpGlobesPlugin,

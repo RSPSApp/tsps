@@ -335,7 +335,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `quests:equipment-requirements` | boolean | `true` | **Quest equipment requirements.** Items tied to a quest cannot be worn until it is finished. Turn off to remove the restriction. Player bots are never held to it. |
+| `quests:equipment-requirements` | boolean | `true` | **Quest equipment and spellbook requirements.** Require quest completion for equipment and spellbook access, and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements. |
 
 #### Plugin area `skills` (`pluginConfig`)
 

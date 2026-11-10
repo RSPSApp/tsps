@@ -30,6 +30,9 @@ test("a Shield Slam counts as a special attack performed, and spends no energy",
   p.setLocation(new core.Location(3200, 3200, 0));
   p.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(core.ItemIdentifiers.RONDACHE, 1));
   p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.DRAGON_AXE, 1));
+  core.CombatSpecial.assign(p);
+  const weaponSpecial = p.getCombatSpecial();
+  p.setSpecialActivated(true);
   Effects.setCharges(p, 20);
   const target = new NPC(core.NpcIdentifiers.MAN ?? 3106, new core.Location(3201, 3200, 0));
   target.setRegistered(true);
@@ -48,9 +51,11 @@ test("a Shield Slam counts as a special attack performed, and spends no energy",
   const special = core.CombatSpecial.getForWeaponId(core.ItemIdentifiers.RONDACHE);
   assert.ok(special, "the shield's special");
   const energy = p.getSpecialPercentage();
-  special.getCombatMethod().start(p, target);
+  core.CombatSpecial.activate(p, core.Equipment.SHIELD_SLOT);
   assert.equal(Effects.charges(p), 0, "the slam spent the charges");
   assert.equal(performed.length, 1, "one combat-special:performed");
   assert.equal(performed[0].itemId, core.ItemIdentifiers.RONDACHE, "the rondache's special, not the wielded weapon's");
   assert.equal(p.getSpecialPercentage(), energy, "no energy spent");
+  assert.equal(p.getCombatSpecial(), weaponSpecial, "mainhand special retained through drain and bar update");
+  assert.equal(p.isSpecialActivated(), true, "mainhand special stays armed");
 });

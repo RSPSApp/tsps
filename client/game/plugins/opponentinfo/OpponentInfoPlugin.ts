@@ -1,5 +1,5 @@
 import { HPBAR_HUD_NPC } from "@runelite/api/gameval/VarPlayerID";
-import { HPBAR_HUD_BASEHP, HPBAR_HUD_BOSS_DISABLED, HPBAR_HUD_HP } from "@runelite/api/gameval/VarbitID";
+import { HPBAR_HUD_BASEHP, HPBAR_HUD_BOSS, HPBAR_HUD_BOSS_DISABLED, HPBAR_HUD_HP, HPBAR_HUD_STANDARD_DISABLED } from "@runelite/api/gameval/VarbitID";
 import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
@@ -266,10 +266,15 @@ export class OpponentInfoPlugin extends Plugin implements ClientPlugin {
         return ecsId === undefined ? undefined : toActorRef(ecs.getInteractionIndex(ecsId));
     }
 
-    /** The boss health bar shows this NPC: it says more than the panel would, so the panel steps aside. */
+    /**
+     * The health overlay (boss or normal) shows this NPC: it says more than the panel would, so the
+     * panel steps aside. Each mode has its own setting.
+     */
     private hasHpHud(opponent: ActorRef): boolean {
         const vars = this.osrsClient.varManager;
-        if (opponent.type !== "npc" || !vars || vars.getVarbit(HPBAR_HUD_BOSS_DISABLED) !== 0) return false;
+        if (opponent.type !== "npc" || !vars) return false;
+        const disabled = vars.getVarbit(HPBAR_HUD_BOSS) === 1 ? HPBAR_HUD_BOSS_DISABLED : HPBAR_HUD_STANDARD_DISABLED;
+        if (vars.getVarbit(disabled) !== 0) return false;
         const hudNpc = vars.getVarp(HPBAR_HUD_NPC);
         const type = this.npcType(opponent.serverId);
         return hudNpc !== -1 && !!type && (hudNpc === type.base.id || hudNpc === type.transformed?.id);

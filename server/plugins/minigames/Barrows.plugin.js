@@ -720,6 +720,8 @@ function handleNpcDeath({ npc, killer }) {
   updateOverlay(killer, run);
 }
 
+const PRAYER_DRAINED = "<col=ff3045>Your prayers have been drained!</col>";
+
 function drainPrayer(player, run) {
   if (--run.prayerTicks > 0) return;
   run.prayerTicks = PRAYER_DRAIN_TICKS;
@@ -728,8 +730,11 @@ function drainPrayer(player, run) {
   const amount = 8 + run.killed.length;
   const apply = pluginApi.core.applyPrayerDrainModifiers;
   const drain = typeof apply === "function" ? apply(player, amount, { source: "barrows" }) : amount;
+  // The drain's chat line, since the 24 September 2025 Interface Uplift (Wiki: Barrows): sent on the drain's tick,
+  // before the Prayer drop (rsprox_transcripts/236/03929.txt tick 388, 237/01107.txt:93512). Older recordings
+  // (226/01694.txt) have no line.
+  player.sendMessage(PRAYER_DRAINED);
   skills.setCurrentLevelCombat(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - drain));
-  // No chat line: the drain's tick has none (rsprox_transcripts/226/01694.txt:165843, tick 8831).
   skills.updateSkill(Skill.PRAYER);
 }
 

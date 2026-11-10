@@ -146,7 +146,7 @@ function pluginSources(dir, out = []) {
   return out;
 }
 
-test('every camera shake in the plugins names a known effect', () => {
+test('every camera shake in the plugins names a known effect, and none goes around them', () => {
   const root = path.join(__dirname, '..', 'plugins');
   const helper = path.join(root, 'interface', 'CameraShake.plugin.js');
   const calls = [];
@@ -161,6 +161,12 @@ test('every camera shake in the plugins names a known effect', () => {
       assert.ok(effect && CameraShake.EFFECTS[effect], `${rel}: CameraShake.send names a known effect (${rest.slice(0, 60)})`);
       calls.push(effect);
     }
+  }
+  const src = path.join(__dirname, '..', 'src', 'main', 'typescript');
+  const packetSender = path.join(src, 'elvarg', 'net', 'packet', 'PacketSender.ts');
+  for (const file of pluginSources(src)) {
+    if (file === packetSender) continue;
+    assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /\.sendCameraShake\b/, `${path.relative(src, file)} sends a camera shake around the settings`);
   }
   assert.ok(calls.length >= 50, `found ${calls.length} camera shakes`);
   assert.ok(calls.includes('doom') && calls.includes('combat') && calls.includes('atmospheric'));

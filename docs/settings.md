@@ -133,7 +133,7 @@ The buff bar (interface 651) is mounted at login and drawn by the cache scripts.
 | Tele Block | 4163 `teleblock_cycles` | ticks left |
 | Stamina potion | 24 `stamina_duration`, 25 `stamina_active` | time left in steps of 10 ticks; 1 while it lasts |
 
-Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too. Home and minigame teleports, Vengeance, the imbued heart, the dragonfire shield, overloads, desert heat, the goading and prayer regeneration potions, Death Charge and the bowstring spool also send their own vars.
+Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too.
 
 - **Not done**:
   - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.

@@ -199,10 +199,10 @@ test('the Leprechaun\'s Luck dropdown sets its varbit to the option chosen and k
 
 // The timer varbits BuffTimers.plugin.js sends, and the most each one holds: an extended antifire
 // (1,200 ticks in steps of 30), an extended super antifire (600 in steps of 20), a full Tele Block
-// (500 ticks) and a stamina dose (200 ticks in steps of 10).
+// (500 ticks) and an extended stamina potion doubled by the ring of endurance (800 ticks in steps of 10).
 const TIMER_VARBITS = [
   ['antifire_potion', 3981, 40], ['super_antifire_potion', 6101, 30], ['teleblock_cycles', 4163, 500],
-  ['stamina_duration', 24, 20], ['stamina_active', 25, 1],
+  ['stamina_duration', 24, 80], ['stamina_active', 25, 1],
 ];
 
 test('the buff bar timer varbits are the cache\'s own and hold the longest timers', () => {

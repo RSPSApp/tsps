@@ -53,10 +53,12 @@ function getAntifire(player, now) {
     if (ms === 0) return [0, 0];
     return [ms, state.tier >= DragonfireProtectionTier.SUPER_ANTIFIRE ? SUPER_ANTIFIRE_TYPE : ANTIFIRE_TYPE];
   }
-  const secondsLeft = Math.max(0, Number(player.getCombat?.()?.getFireImmunityTimer?.()?.secondsRemaining?.() ?? 0));
+  const timer = player.getCombat?.()?.getFireImmunityTimer?.();
+  const secondsLeft = Math.max(0, Number(timer?.secondsRemaining?.() ?? 0));
   if (secondsLeft === 0) return [0, 0];
   const savedTier = player.getAttribute?.(ATTR_DRAGONFIRE_TIER)?.tier;
-  return [secondsLeft * 1000, savedTier >= DragonfireProtectionTier.SUPER_ANTIFIRE ? SUPER_ANTIFIRE_TYPE : ANTIFIRE_TYPE];
+  const ms = Math.max(0, Number(timer.millisRemaining?.() ?? secondsLeft * 1000));
+  return [ms, savedTier >= DragonfireProtectionTier.SUPER_ANTIFIRE ? SUPER_ANTIFIRE_TYPE : ANTIFIRE_TYPE];
 }
 
 /**

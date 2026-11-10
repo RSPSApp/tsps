@@ -38,24 +38,19 @@ const ALL_HOUSES = [...HOUSES.map(({ house }) => house), KOUREND];
 let api = null;
 let core = null;
 /** Plain piece id -> { house -> coloured id }. */
-let colouredByBase = new Map();
+const colouredByBase = new Map();
 /** Coloured id (inventory or worn form) -> { base, house }. */
-let pieceByColoured = new Map();
+const pieceByColoured = new Map();
 const pending = new WeakMap();
 
-function buildColours() {
-  colouredByBase = new Map();
-  pieceByColoured = new Map();
-  for (const row of KITS.kits ?? []) {
-    if (Number(row.kit) !== 0) continue;
-    const house = ALL_HOUSES.find((name) => String(row.name).startsWith(`${name} graceful `));
-    if (!house) continue;
-    const base = Number(row.base);
-    if (!colouredByBase.has(base)) colouredByBase.set(base, new Map());
-    colouredByBase.get(base).set(house, Number(row.result));
-    pieceByColoured.set(Number(row.result), { base, house });
-    if (Number(row.worn) > 0) pieceByColoured.set(Number(row.worn), { base, house });
-  }
+for (const row of KITS.kits ?? []) {
+  const house = Number(row.kit) === 0 && ALL_HOUSES.find((name) => String(row.name).startsWith(`${name} graceful `));
+  if (!house) continue;
+  const base = Number(row.base);
+  if (!colouredByBase.has(base)) colouredByBase.set(base, new Map());
+  colouredByBase.get(base).set(house, Number(row.result));
+  pieceByColoured.set(Number(row.result), { base, house });
+  if (Number(row.worn) > 0) pieceByColoured.set(Number(row.worn), { base, house });
 }
 
 function questComplete(player, name) {
@@ -109,7 +104,7 @@ function fillChoices(steps, player, current) {
     });
     return [{ ...step, options }];
   });
-  return visit(JSON.parse(JSON.stringify(steps)));
+  return visit(steps);
 }
 
 function slotOf(player, item, slot) {
@@ -176,11 +171,9 @@ module.exports = {
   name: "Osten",
   description: "Lets Osten recolour graceful pieces to the Kourend house colours for 15 marks of grace each, after each house's quest, and revert them for free.",
   members: true,
-  _test: { fillChoices, COST, KOUREND, HOUSES },
   register(pluginApi) {
     api = pluginApi;
     core = api.core;
-    buildColours();
     api.onNpcDialogueCondition(condition);
     api.onItemOnNpc(useOnOsten, { noted: false });
     api.onCustomEvent("npc-dialogue:action", recolour);

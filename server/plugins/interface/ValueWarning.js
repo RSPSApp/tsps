@@ -4,7 +4,7 @@
  * and the item box plus two options that every warning asks with.
  *
  * Worth is the Grand Exchange guide price of the unnoted item, times the quantity; an untradeable
- * item is worth nothing here (live names no value for one: "Untradeable drop: Brimstone key").
+ * item has no worth (its loot line names no value).
  */
 const FLOATER_CHATBOX_VARBIT = 16075;
 const BUSY_VARBIT = 12393;

@@ -183,7 +183,7 @@ test('the new rows are the cache type their handler expects and start at the liv
   for (const id of [39, 43]) assert.equal(catalog.get(id), 4);
   const p = player();
   restoreSettings({ player: p });
-  assert.equal(p.vars[6092], 1, 'untradeable alchemy warns, as 2,664 of 3,978 captured logins');
+  assert.equal(p.vars[6092], 1, 'untradeable alchemy warns by default');
   assert.equal(p.vars.p4850, 1000, 'birdhouse threshold');
   assert.equal(p.vars[14176] ?? 0, 0);
 });

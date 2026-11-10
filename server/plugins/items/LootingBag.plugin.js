@@ -19,6 +19,11 @@ const BAG_DATA = "lootingBag";
 /** Settings: store everything used on the bag without asking; keep picked-up supplies out of it. */
 const STORE_ALL_ATTRIBUTE = "looting-bag:store-everything";
 const SKIP_SUPPLIES_ATTRIBUTE = "looting-bag:skip-supplies";
+/** The bag's settings as All Settings rows, with the varbits those rows show. */
+const SETTING_ROWS = new Map([
+  [352, { key: STORE_ALL_ATTRIBUTE, varbit: 6068 }], // lootingbag_useallitems
+  [353, { key: SKIP_SUPPLIES_ATTRIBUTE, varbit: 15310 }], // lootingbag_ignore_food
+]);
 const CLOSED_BAG_ID = 11941;
 const OPEN_BAG_ID = 22586;
 /** inv looting_bag, which the bag's interface and the bank's looting bag view draw. */
@@ -296,10 +301,31 @@ function depositOption({ player, item }) {
   return sendBag(player, true);
 }
 
+function setSetting(player, key, value) {
+  player.setAttribute(key, value);
+  for (const row of SETTING_ROWS.values()) {
+    if (row.key === key) player.getPacketSender().sendVarbit(row.varbit, value ? 1 : 0);
+  }
+}
+
 function toggle(player, key, on, off) {
   const value = !setting(player, key);
-  player.setAttribute(key, value);
+  setSetting(player, key, value);
   player.sendMessage(value ? on : off);
+}
+
+/** All Settings rows 352 and 353 flip the same choices as the bag's own settings menu. */
+function settingClicked(request) {
+  const row = SETTING_ROWS.get(request.settingId);
+  if (!row) return;
+  request.handled = true;
+  setSetting(request.player, row.key, !setting(request.player, row.key));
+}
+
+function sendSettings({ player }) {
+  for (const row of SETTING_ROWS.values()) {
+    if (setting(player, row.key)) player.getPacketSender().sendVarbit(row.varbit, 1);
+  }
 }
 
 /** The captured two-line settings menu: each line names the opposite of the current choice. */
@@ -548,6 +574,8 @@ module.exports = {
     core = pluginApi.core;
     api.persistAttribute(STORE_ALL_ATTRIBUTE, false);
     api.persistAttribute(SKIP_SUPPLIES_ATTRIBUTE, false);
+    api.onCustomEvent("settings:setting-clicked", settingClicked);
+    api.onPlayerLogin(sendSettings);
     api.onCustomEvent("storage:contents", answerContents);
     api.onCustomEvent("looting-bag:store", storeLoot);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
@@ -563,5 +591,5 @@ module.exports = {
     api.onPlayerDeathItemDrop(dropOnDeath);
     api.onPlayerDefeated(giveToKiller);
   },
-  _test: { bagItems, canStore, isBag, store, storeLoot, depositChoices, room, valueText },
+  _test: { bagItems, canStore, isBag, store, storeLoot, depositChoices, room, valueText, settings, settingClicked, sendSettings, STORE_ALL_ATTRIBUTE, SKIP_SUPPLIES_ATTRIBUTE },
 };

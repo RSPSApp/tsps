@@ -1,3 +1,9 @@
+/*
+ * Ported from l2-'s Customizable XP drops (upstream commit 3835071).
+ * Copyright (c) 2021, l2-
+ * SPDX-License-Identifier: BSD-2-Clause
+ * See LICENSE in this directory.
+ */
 import { SkillId } from "../../../rs/skill/skills";
 import { HorizontalDirection, PredictedHitIconStyle, VerticalDirection, XpTrackerSkill } from "./CustomXpDropsConfig";
 

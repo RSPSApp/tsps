@@ -1,3 +1,9 @@
+/*
+ * Ported from l2-'s Customizable XP drops (upstream commit 3835071).
+ * Copyright (c) 2021, l2-
+ * SPDX-License-Identifier: BSD-2-Clause
+ * See LICENSE in this directory.
+ */
 import { resolveFontType, type OverlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import type { FontType } from "@runelite/client/config/FontType";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";

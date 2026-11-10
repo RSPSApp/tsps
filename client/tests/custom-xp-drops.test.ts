@@ -170,8 +170,11 @@ async function main(): Promise<void> {
         getInteractionIndex: () => interacting,
         getX: () => 3201 * 128, getY: () => 3200 * 128, getLevel: () => 0,
     };
+    const skillXp = new Map<SkillId, number>([[SkillId.Strength, 123]]);
     const osrsClient: any = {
-        gameState: 30, controlledPlayerServerId: 1, hitpointsXpRate: 10, widgetManager, npcEcs, playerEcs,
+        gameState: GameState.LOGIN_SCREEN, controlledPlayerServerId: 1, hitpointsXpRate: 10,
+        widgetManager, npcEcs, playerEcs,
+        cs2Vm: { context: { getStatXp: (skill: SkillId) => skillXp.get(skill) ?? 0 } },
         sceneGeometry: { tileHeight: () => 0, worldToScreen: (x: number) => [x - 3000, 300], npcHeight: () => 100 },
     };
     const client: any = {
@@ -183,6 +186,8 @@ async function main(): Promise<void> {
     let clock = 1000;
     plugin.now = () => clock;
     await plugin.start();
+    assert.equal(plugin.trackerXp(OVERALL), 0, "login-screen startup ignores cached stats");
+    osrsClient.gameState = GameState.LOGGED_IN;
     config.setConfigValue(CustomXpDropsConfig, "showPredictedHit", true);
     config.setConfigValue(CustomXpDropsConfig, "predictedHitModifiers", "14779:0.875");
     plugin.onConfigChanged({ getGroup: () => "CustomizableXPDrops", getKey: () => "predictedHitModifiers" } as any);
@@ -254,6 +259,31 @@ async function main(): Promise<void> {
     await plugin.stop();
     assert.equal(widgets.get((122 << 16) | 4).isHidden, false, "stopping shows the vanilla tracker again");
     clock += 1;
+    skillXp.set(SkillId.Hitpoints, 100_000);
+    skillXp.set(SkillId.Strength, 200_000);
+    skillXp.set(SkillId.Fishing, 1_000);
+    await plugin.start();
+    assert.equal(plugin.trackerXp(SkillId.Strength), 200_000, "the tracker is seeded on enable");
+    assert.equal(plugin.trackerXp(OVERALL), 301_000, "Overall includes the other skills before their first event");
+    plugin.onClientTick();
+    assert.equal(plugin.state.inFlight.length, 0, "seeding produces no drops");
+
+    interacting = -1;
+    stat(SkillId.Hitpoints, 100_350);
+    stat(SkillId.Strength, 201_050);
+    interacting = 55;
+    plugin.onClientTick();
+    assert.equal(plugin.state.inFlight.length, 1, "the first gains after enable produce a drop");
+    assert.equal(plugin.state.inFlight[0].amount, 1400);
+    assert.equal(plugin.state.inFlight[0].hit, 30, "the first Hitpoints gain predicts the hit");
+
+    plugin.onGameStateChanged(new GameStateChanged(GameState.HOPPING));
+    assert.equal(plugin.trackerXp(OVERALL), 0, "hopping clears the old account's baselines");
+    stat(SkillId.Hitpoints, 300_000);
+    stat(SkillId.Strength, 500_000);
+    plugin.onClientTick();
+    assert.equal(plugin.state.inFlight.length, 0, "the first stat reports after a hop produce no drops");
+    await plugin.stop();
     console.log("custom-xp-drops tests passed");
 }
 

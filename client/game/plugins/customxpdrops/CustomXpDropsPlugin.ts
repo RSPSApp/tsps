@@ -1,3 +1,9 @@
+/*
+ * Ported from l2-'s Customizable XP drops (upstream commit 3835071).
+ * Copyright (c) 2021, l2-
+ * SPDX-License-Identifier: BSD-2-Clause
+ * See LICENSE in this directory.
+ */
 import type { Client } from "@runelite/api/Client";
 import { GameState } from "@runelite/api/GameState";
 import type { ConfigChanged, GameStateChanged, StatChanged } from "@runelite/api/events";
@@ -106,7 +112,7 @@ export class CustomXpDropsPlugin extends Plugin {
     readonly state = new XpDropState();
     readonly dropOverlay: XpDropOverlay;
     readonly trackerOverlay: XpTrackerOverlay;
-    /** Each skill's XP as last reported; 0 until the first report (that one is no drop). */
+    /** Current XP by skill, seeded on mid-session enable and reset on login or hop. */
     readonly skillXp: number[] = new Array(SKILL_IDS.length).fill(0);
     private filteredSkills = new Set<string>();
     private filteredSkillsPredictedHits = new Set<string>();
@@ -140,6 +146,15 @@ export class CustomXpDropsPlugin extends Plugin {
     protected async startUp(): Promise<void> {
         this.state.reset();
         this.gains.length = 0;
+        this.lastTarget = undefined;
+        this.skillXp.fill(0);
+        const getStatXp = this.osrsClient.cs2Vm?.context?.getStatXp;
+        if (this.isLoggedIn() && getStatXp) {
+            for (const skill of SKILL_IDS) {
+                const xp = getStatXp(skill);
+                if (Number.isFinite(xp) && xp >= 0) this.skillXp[skill] = xp;
+            }
+        }
         this.readFilters();
         this.setXpTrackerHidden(this.config.useXpTracker() === true && this.config.xpTrackerHideVanilla() === true);
     }

@@ -1,8 +1,7 @@
 # Customizable XP drops
 
-A port of l2-'s Plugin Hub plugin [Customizable XP drops](https://github.com/l2-/template-plugin)
-(BSD 2-Clause, the hub's commit `3835071`). Turn it on in the plugin list; it is off on fresh
-installs.
+A port of l2-'s Plugin Hub plugin [Customizable XP drops](https://github.com/l2-/template-plugin/tree/383507166a430b5e71848393519cb14c499d5242)
+under the [BSD 2-Clause license](./LICENSE). The plugin is off by default. Enable it from the plugin list.
 
 The client draws its own XP drops in place of the game's: a box in the top right (Alt-drag moves
 it), or over your character or the target you hit. Grouped or one per skill, their speed,

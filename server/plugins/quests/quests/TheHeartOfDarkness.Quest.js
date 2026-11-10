@@ -146,6 +146,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     TO_GORGE: "One of the only people left that I can trust. They'll fill you in on the details of how you'll infiltrate the Emissaries. Good luck, [player name]. May the sun light your way.",
     BASEMENT: "We don't have a basement room... but I do have a nice big one here on the ground floor that's available. It's 30 coins for the night.",
     BASEMENT_AGAIN: "Like I said, we don't have a basement room. However, I do have a nice big one here on the ground floor that's available. It's 30 coins for the night.",
+    RECOGNIZE_ITZLA: "Itzla? Is that you? What are you doing here?",
     REASONS: "Okay, I'm still not sure if I like this plan, but I see your point. What's our next move?",
     TO_SHOP: "Exactly! Return to me here once you've hopefully been successful and we can discuss the next steps.",
     SHOP_AGREED: "Well... if you're sure, fetch your friend and then head east to the Twilight Temple. I will send word for them to expect you both.",
@@ -391,12 +392,11 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
 
   function resumeWindbreaker(current) {
     return (steps) => {
-      // Reopen the unfinished briefing without replaying the sleep action.
-      if (current === S.REASONS) {
-        const index = steps.findIndex((step) => step.player === LINE.REASONS);
-        if (index >= 0) return steps.slice(index + 1);
-      }
-      return after(STEP.SLEEP)(steps);
+      const heardReasons = current === S.REASONS;
+      const checkpoint = heardReasons ? LINE.REASONS : LINE.RECOGNIZE_ITZLA;
+      const index = steps.findIndex((step) => step.player === checkpoint);
+      if (index < 0) return after(STEP.SLEEP)(steps);
+      return steps.slice(heardReasons ? index + 1 : index);
     };
   }
 

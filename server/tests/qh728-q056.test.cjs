@@ -310,12 +310,15 @@ test('the Windbreaker resumes Itzla’s briefing before it unlocks the shopkeepe
   const briefing = 'visiting-the-windbreaker-bar-resting-in-the-bed';
   const shopDialogue = 'talking-to-the-quetzacalli-gorge-shopkeeper';
 
-  for (const [interruptedStage, firstLine] of [[14, /^Rise and shine/], [16, /^We need to infiltrate/]]) {
+  for (const [interruptedStage, speakerField, firstLine] of [
+    [14, 'player', /^Itzla\? Is that you\? What are you doing here\?$/],
+    [16, 'text', /^We need to infiltrate/],
+  ]) {
     h.setStage(interruptedStage);
     assert.equal(h.variant(shopkeeper), null, 'the shopkeeper still needs the briefing');
     assert.equal(h.npcOption('Prince Itzla Arkan', 'Talk-to', itzla), true);
     assert.equal(h.transcripts.at(-1).variant, briefing);
-    assert.match(resumedSteps.get(briefing)[0].text, firstLine);
+    assert.match(resumedSteps.get(briefing)[0][speakerField], firstLine);
   }
 
   h.line("Exactly! Return to me here once you've hopefully been successful and we can discuss the next steps.", itzla);

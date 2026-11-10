@@ -1377,3 +1377,108 @@ test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand 
   const none = player({ getBanks: () => new Player(null).getBanks() }); // an empty real bank
   assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
 });
+
+test('Eyes machine object opens native panel and validates disc slots through cancel and activation', () => {
+  const h = harness('EyesOfGlouphrie');
+  const ids = [I.RED_SQUARE, I.YELLOW_TRIANGLE, I.GREEN_SQUARE, I.BLUE_TRIANGLE, I.YELLOW_PENTAGON, I.VIOLET_PENTAGON];
+  let slots = Array.from({ length: 28 }, (_, i) => new core.Item(ids[i] ?? -1, i === 0 ? 2 : i < ids.length ? 1 : 0));
+  const packets = [], inventory = {
+    getItems: () => slots,
+    getAmount: (id) => slots.filter((item) => item.getId() === id).reduce((n, item) => n + item.getAmount(), 0),
+    setItems: (items) => { slots = items; },
+    refreshItems: noop,
+  };
+  let opened = -1;
+  const sender = new Proxy({
+    sendInterface: (id) => { opened = id; packets.push(['open', id]); return sender; },
+    sendInterfaceRemoval: () => { opened = -1; return sender; },
+    sendSubInterface: (...args) => { packets.push(['sub', ...args]); return sender; },
+    sendInventory: (...args) => { packets.push(['inventory', ...args]); return sender; },
+    sendClientScript: (...args) => { packets.push(['script', ...args]); return sender; },
+  }, { get: (target, key) => target[key] ?? (() => sender) });
+  const p = player({ getInventory: () => inventory, getPacketSender: () => sender, getInterfaceId: () => opened });
+  h.quest.setStage(p, 8);
+  const objectAction = (name, id) => h.hooks.onObjectInteraction.find((fn) => fn.name === name)({ player: p, objectId: id });
+  const button = (uid, slot, itemId) => {
+    const event = { player: p, buttonId: uid, action: 1, slot, itemId, handled: false };
+    h.hooks.onInterfaceActionButton.find((fn) => fn.name === 'machineButton')(event);
+    return event;
+  };
+  const select = (slot) => button(185 << 16, slot, ids[slot]);
+  objectAction('unlockMachine', 17247);
+  assert.equal(opened, 145);
+  assert.ok(packets.some((p) => p[0] === 'sub' && p[2] === 185));
+  assert.ok(packets.some((p) => p[0] === 'inventory' && p[1] === 440));
+  assert.ok(packets.some((p) => p[0] === 'script' && p[1] === 149));
+  button((145 << 16) | 13);
+  assert.equal(opened, -1, 'explicit lock close removes the interface');
+  objectAction('unlockMachine', 17247);
+  h.emit('interface:closed', { player: p, interfaceId: 185 });
+  select(0); button((145 << 16) | 8); button((145 << 16) | 12);
+  assert.equal(h.quest.getStage(p), 8, 'closing the side invalidates subsequent actions');
+  objectAction('unlockMachine', 17247);
+  button(185 << 16, 27, undefined); // malformed empty slot must not throw
+  button(185 << 16, 0, I.BLUE_TRIANGLE); // stale packet must not select the red square
+  button((145 << 16) | 8);
+  button((145 << 16) | 12);
+  assert.equal(h.quest.getStage(p), 8);
+  objectAction('unlockMachine', 17247);
+  select(0); button((145 << 16) | 8); button((145 << 16) | 12);
+  assert.equal(h.quest.getStage(p), 9);
+  assert.equal(inventory.getAmount(I.RED_SQUARE), 2, 'unlock retains the existing quest approximation');
+  objectAction('operateMachine', 17245);
+  assert.equal(opened, 189);
+  button((189 << 16) | 42);
+  assert.equal(opened, -1, 'explicit machine close removes the interface');
+  objectAction('operateMachine', 17245);
+  select(2); button((189 << 16) | 24);
+  button((189 << 16) | 38);
+  assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'cancel leaves inventory intact');
+  select(2); button((189 << 16) | 24);
+  select(2); button((189 << 16) | 25); // one slot cannot fill two positions
+  button((189 << 16) | 27);
+  assert.equal(h.quest.getStage(p), 9);
+  assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'incomplete row activation consumes nothing');
+  objectAction('operateMachine', 17245);
+  h.hooks.onPlayerLogout[0]({ player: p });
+  button((189 << 16) | 39);
+  assert.equal(h.quest.getStage(p), 9, 'a stale click after logout cannot activate');
+  const fillPanel = () => {
+    for (const [slot, child] of [[2,24], [3,25], [4,25], [0,26], [1,26], [5,26]]) {
+      select(slot); button((189 << 16) | child);
+    }
+  };
+  objectAction('operateMachine', 17245);
+  fillPanel();
+  h.quest.setStage(p, 8);
+  button((189 << 16) | 39);
+  assert.equal(opened, -1, 'stage regression closes the stale panel');
+  for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'stage regression consumes nothing');
+  h.quest.setStage(p, 9);
+  objectAction('operateMachine', 17245);
+  fillPanel();
+  h.quest.setStage(p, 10);
+  button((189 << 16) | 39);
+  assert.equal(opened, -1, 'completed stage closes the stale panel');
+  for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'completed stage consumes nothing');
+  h.quest.setStage(p, 9);
+  objectAction('operateMachine', 17245);
+  fillPanel();
+  const setStage = h.quest.setStage;
+  h.quest.setStage = () => { throw new Error('stage failure'); };
+  assert.throws(() => button((189 << 16) | 39), /stage failure/);
+  for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'stage failure restores inventory');
+  h.quest.setStage = setStage;
+  button((189 << 16) | 28);
+  assert.equal(h.quest.getStage(p), 10);
+  for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 1 : 0, `disc ${id} consumed once`);
+  button((189 << 16) | 28);
+  assert.equal(inventory.getAmount(I.RED_SQUARE), 1, 'a repeated activation cannot consume another disc');
+  slots = Array.from({ length: 28 }, (_, i) => new core.Item(ids[i] ?? -1, i < ids.length ? 1 : 0));
+  h.quest.setStage(p, 9);
+  objectAction('operateMachine', 17245);
+  fillPanel();
+  button((189 << 16) | 39);
+  assert.equal(h.quest.getStage(p), 10, 'final activation control also advances the quest');
+  for (const id of ids) assert.equal(inventory.getAmount(id), 0, `final control consumes disc ${id} once`);
+});

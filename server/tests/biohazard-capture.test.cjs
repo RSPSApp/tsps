@@ -375,10 +375,17 @@ test("the HQ's upstairs door is a pass-through door both ways (ticks 499, 586)",
 test("the cage gate with the key shows its box going in, none coming out (ticks 557, 580)", () => {
   const entering = actor(6, 2550, 3325, 1);
   entering.getInventory().adds(core.ItemIdentifiers.KEY_2, 1);
-  const event = { player: entering, objectId: 2060, location: new core.Location(2551, 3325, 1), handled: false };
-  PluginManager.emitCustomEvent("door:toggle", event);
-  assert.equal(event.handled, false, "Doors opens it");
+  objectOption(entering, 2060, 2551, 3325, 1, "Open");
   assert.equal(shown(entering), "You use the key to open the gate.");
+  assert.ok(objectAt(2059, 2552, 3325, 1) && objectAt(2061, 2552, 3326, 1), "the leaves swing east");
+  tick(entering, 2);
+  assert.deepEqual(at(entering), [2552, 3325, 1], "the player walks through");
+  tick(entering, 2);
+  assert.ok(objectAt(2060, 2551, 3325, 1) && objectAt(2058, 2551, 3326, 1), "and it shuts behind");
+  objectOption(entering, 2058, 2551, 3326, 1, "Open");
+  tick(entering, 3);
+  assert.equal(at(entering)[0], 2551, "and back out (tick 580)");
+  tick(entering, 2);
   const leaving = actor(7, 2552, 3325, 1);
   leaving.getInventory().adds(core.ItemIdentifiers.KEY_2, 1);
   PluginManager.emitCustomEvent("door:toggle", { player: leaving, objectId: 2060, location: new core.Location(2551, 3325, 1), handled: false });

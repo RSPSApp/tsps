@@ -156,7 +156,7 @@ Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), whic
   - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
   - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
   - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
-  - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
+  - Modified stats overlay (148-151): now wired, see "Health and modified stats overlays" below.
 
 ## Rows owned by other plugins
 
@@ -383,6 +383,20 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
   - **Level-up chatbox list** (493): no capture shows what it writes.
   - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
   - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Modified stats overlay
+
+**Modified stats overlay** (`stat_boosts_hud`, 708). The login gameframe opens it at `toplevel_osrs_stretch:stat_boosts_hud` (161:5), next to the buff bar, as live does on every layout. Its own scripts draw the boosted and drained stats from the stat updates. Its four rows are `data/settings.json` rows, saved and sent back at login:
+
+| Setting | Id | Variable |
+| --- | --- | --- |
+| Display modified stats overlay | 148 | varbit 12373 `stat_boosts_hud_hidden` |
+| Show tooltips for modified stat overlays | 149 | varbit 12374 `stat_boosts_hud_tooltips_hidden` |
+| Number of modified stats to show (dropdown) | 150 | varbit 12375 `stat_boosts_hud_num_displays` = option; a fresh account gets 5, which live sends at login in every rsprox recording |
+| Display relative stat value | 151 | varbit 12376 `stat_boosts_hud_display_relative` |
+
+- **Not done**:
+  - The overlay's stat restore timers (scripts 4517 and 4518, which live sends every 25 ticks) aren't sent, so its restore countdown doesn't run.
 
 ## Containers on death
 

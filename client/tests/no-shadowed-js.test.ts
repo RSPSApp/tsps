@@ -3,10 +3,10 @@ import { readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { test } from "node:test";
 
-// Webpack resolves `import "./Foo"` to Foo.js before Foo.ts, while the tests (tsx) and the server
-// use the .ts. A .js left beside a .ts is therefore what the browser runs, untested: after cache
-// 242, readSignedMedium() went into rs/io/ByteBuffer.ts only, the browser's ByteBuffer.js lacked
-// it, and every multiloc stopped drawing (#4007).
+// Webpack resolves `import "./Foo"` to Foo.js (or Foo.mjs) before Foo.ts, while the tests (tsx)
+// and the server use the .ts. A .js left beside a .ts is therefore what the browser runs,
+// untested: after cache 242, readSignedMedium() went into rs/io/ByteBuffer.ts only, the browser's
+// ByteBuffer.js lacked it, and every multiloc stopped drawing (#4007).
 
 const clientDir = join(__dirname, "..");
 const SKIP_DIRS = new Set(["node_modules", "build", "public"]);
@@ -21,7 +21,8 @@ function shadowedPairs(dir: string, found: string[]): void {
             }
             continue;
         }
-        const match = /^(.*)\.(js|jsx)$/.exec(entry.name);
+        // Webpack tries .web.mjs, .mjs, .web.js and .js before .ts (and .jsx after .tsx).
+        const match = /^(.*?)(?:\.web)?\.(?:m?js|jsx)$/.exec(entry.name);
         if (!match) continue;
         for (const ext of ["ts", "tsx"]) {
             if (names.has(`${match[1]}.${ext}`)) {
@@ -31,7 +32,7 @@ function shadowedPairs(dir: string, found: string[]): void {
     }
 }
 
-test("no .js or .jsx sits beside a .ts or .tsx of the same name", () => {
+test("no .js, .mjs or .jsx sits beside a .ts or .tsx of the same name", () => {
     const found: string[] = [];
     shadowedPairs(clientDir, found);
     assert.deepEqual(

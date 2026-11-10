@@ -50,11 +50,13 @@ function configArchiveLabel(id: number): string {
 export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
     static readonly typeDecodedListeners = new Set<(type: Type) => void>();
     /**
-     * Types that threw while decoding, by loader label ("locs", "objs", ...). A failed type is
-     * still cached half-decoded, so a broken decoder shows in game as missing locs, NPCs or items
-     * rather than a crash; this count and its summary line make that visible.
+     * How many distinct types threw while decoding, by loader label ("locs", "objs", ...). A
+     * failed type is still cached half-decoded, so a broken decoder shows in game as missing locs,
+     * NPCs or items rather than a crash; this count and its summary line make that visible.
      */
     static readonly decodeFailures = new Map<string, number>();
+    // The ids behind decodeFailures, so a type decoded again (cache cleared, evicted) counts once.
+    private static readonly decodeFailureIds = new Map<string, Set<number>>();
     private static decodeFailureSummaryTimer: ReturnType<typeof setTimeout> | undefined;
 
     static decodeFailureSummary(): string {
@@ -62,8 +64,17 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
         return "type decode failures: " + parts.join(", ");
     }
 
-    private static recordDecodeFailure(label: string): void {
-        BaseTypeLoader.decodeFailures.set(label, (BaseTypeLoader.decodeFailures.get(label) ?? 0) + 1);
+    static clearDecodeFailures(): void {
+        BaseTypeLoader.decodeFailures.clear();
+        BaseTypeLoader.decodeFailureIds.clear();
+    }
+
+    private static recordDecodeFailure(label: string, id: number): void {
+        let ids = BaseTypeLoader.decodeFailureIds.get(label);
+        if (!ids) BaseTypeLoader.decodeFailureIds.set(label, (ids = new Set()));
+        if (ids.has(id)) return;
+        ids.add(id);
+        BaseTypeLoader.decodeFailures.set(label, ids.size);
         if (BaseTypeLoader.decodeFailureSummaryTimer !== undefined) {
             clearTimeout(BaseTypeLoader.decodeFailureSummaryTimer);
         }
@@ -105,7 +116,7 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
             // Do not poison the definition cache with an empty type while JS5 is streaming.
             if (isGroupMissingError(e)) throw e;
             console.error("Failed loading type " + id, e);
-            BaseTypeLoader.recordDecodeFailure(this.decodeFailureLabel());
+            BaseTypeLoader.recordDecodeFailure(this.decodeFailureLabel(), id);
         }
         this.cache.set(id, type);
         for (const listener of BaseTypeLoader.typeDecodedListeners) listener(type);

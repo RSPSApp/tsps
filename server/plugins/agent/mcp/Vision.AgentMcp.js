@@ -152,7 +152,9 @@ function runHarness(args, timeoutMs) {
       }
       summary.wallMs = Date.now() - started;
       if (!summary.ok) {
-        reject(new Error(`vision capture failed: ${summary.error ?? "unknown"}`));
+        const failures = summary.typeDecodeFailures
+          ? ` (typeDecodeFailures ${JSON.stringify(summary.typeDecodeFailures)})` : "";
+        reject(new Error(`vision capture failed: ${summary.error ?? "unknown"}${failures}`));
         return;
       }
       resolve(summary);

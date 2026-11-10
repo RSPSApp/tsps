@@ -50,8 +50,8 @@ function silenced<T>(fn: () => T): T {
     }
 }
 
-test("a type that throws while decoding is counted under its config archive's name and still cached", () => {
-    BaseTypeLoader.decodeFailures.clear();
+test("a type that throws while decoding is counted once under its config archive's name and still cached", () => {
+    BaseTypeLoader.clearDecodeFailures();
     const loader = loaderFor(ConfigType.DAT2.locs, { 0: [1, 0], 1: [2, 0], 2: [1, 2, 0] });
 
     assert.equal(loader.load(0).decoded, true);
@@ -66,6 +66,12 @@ test("a type that throws while decoding is counted under its config archive's na
 
     assert.deepEqual([...BaseTypeLoader.decodeFailures], [["locs", 2]]);
     assert.equal(BaseTypeLoader.decodeFailureSummary(), "type decode failures: locs=2");
+
+    // Decoding the same types again (cache cleared, or evicted) doesn't count them twice.
+    loader.clearCache();
+    silenced(() => loader.load(1));
+    silenced(() => loader.load(2));
+    assert.deepEqual([...BaseTypeLoader.decodeFailures], [["locs", 2]]);
     assert.equal(
         (globalThis as { __typeDecodeFailures?: Map<string, number> }).__typeDecodeFailures,
         BaseTypeLoader.decodeFailures,
@@ -73,13 +79,13 @@ test("a type that throws while decoding is counted under its config archive's na
 });
 
 test("an archive id with no config name is labelled by its number", () => {
-    BaseTypeLoader.decodeFailures.clear();
+    BaseTypeLoader.clearDecodeFailures();
     silenced(() => loaderFor(250, { 0: [2, 0] }).load(0));
     assert.deepEqual([...BaseTypeLoader.decodeFailures], [["config-250", 1]]);
 });
 
 test("a JS5 group miss is rethrown and not counted", () => {
-    BaseTypeLoader.decodeFailures.clear();
+    BaseTypeLoader.clearDecodeFailures();
     const loader = loaderFor(ConfigType.DAT2.npcs, { 0: [3, 0] });
     assert.throws(() => loader.load(0), GroupMissingError);
     assert.equal(BaseTypeLoader.decodeFailures.size, 0);

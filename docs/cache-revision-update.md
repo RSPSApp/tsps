@@ -77,8 +77,8 @@ while every test passed (#4007). The `no-shadowed-js` test now keeps a `.js` fro
 `.ts`.
 
 So load the client on the new cache, walk a few regions, and read the console: about two seconds
-after the last failure the loader logs one line, `type decode failures: locs=120, objs=3`, named
-by config archive. The vision tools report the same counts as `typeDecodeFailures` in their
+after the last failure the loader logs one line, `type decode failures: locs=120, objs=3`: how many
+distinct types failed, by config archive. The vision tools report the same counts as `typeDecodeFailures` in their
 summary (`server/docs/agents/testing.md`). That count is the page's: the map-building workers keep
 their own and log their own line in the same console.
 

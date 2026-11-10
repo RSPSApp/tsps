@@ -1,9 +1,11 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const plugin = require('../plugins/interface/BuffTimers.plugin');
-const { ATTR_DRAGONFIRE_STATE, DragonfireProtectionTier } = require('../plugins/combat/DragonfireProtection');
+const { ATTR_DRAGONFIRE_STATE, ATTR_DRAGONFIRE_TIER, DragonfireProtectionTier } = require('../plugins/combat/DragonfireProtection');
 
 const ANTIFIRE_SECONDS = 7990, ANTIFIRE_TYPE = 7991, TELEBLOCK_SECONDS = 7992, STAMINA_SECONDS = 7993;
+// The buff bar's own varbits: antifire_potion and super_antifire_potion.
+const ANTIFIRE = 3981, SUPER_ANTIFIRE = 6101;
 
 function timer(seconds = 0) {
   return { seconds, secondsRemaining() { return this.seconds; }, finished() { throw new Error('finished() stops the timer'); } };
@@ -16,24 +18,59 @@ function fixture() {
     onPlayerProcess: fn => { hooks.process = fn; },
     onPlayerLogout: fn => { hooks.logout = fn; },
   });
-  const attributes = new Map(), configs = [];
+  const attributes = new Map(), configs = [], varbits = [];
   const fire = timer(), teleblock = timer();
   const player = {
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getCombat: () => ({ getFireImmunityTimer: () => fire, getTeleblockTimer: () => teleblock }),
-    getPacketSender: () => ({ sendConfig: (id, value) => configs.push([id, value]) }),
+    getPacketSender: () => ({ sendConfig: (id, value) => configs.push([id, value]), sendVarbit: (id, value) => varbits.push([id, value]) }),
   };
   const sent = () => Object.fromEntries(configs.splice(0));
-  return { hooks, player, attributes, fire, teleblock, sent };
+  const bits = () => Object.fromEntries(varbits.splice(0));
+  return { hooks, player, attributes, fire, teleblock, sent, bits };
 }
 
 test('login sends every timer varp, cleared when nothing is active', t => {
   const f = fixture();
   f.hooks.login({ player: f.player });
   assert.deepEqual(f.sent(), { [ANTIFIRE_SECONDS]: 0, [ANTIFIRE_TYPE]: 0, [TELEBLOCK_SECONDS]: 0, [STAMINA_SECONDS]: 0 });
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 0, [SUPER_ANTIFIRE]: 0 });
   f.hooks.process({ player: f.player });
   assert.deepEqual(f.sent(), {}, 'unchanged values are not resent each tick');
+  assert.deepEqual(f.bits(), {});
+});
+
+test('the buff bar gets antifire in steps of 30 ticks and super antifire in steps of 20', t => {
+  let now = 1_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const f = fixture();
+  f.hooks.login({ player: f.player });
+  f.bits();
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, { tier: DragonfireProtectionTier.ANTIFIRE, endsAt: now + 360_000 });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 20 }, 'a fresh antifire: 600 ticks');
+  now += 600;
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.bits(), {}, 'a step stays until its last tick has passed');
+  now += 29 * 600;
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 19 });
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, { tier: DragonfireProtectionTier.SUPER_ANTIFIRE, endsAt: now + 180_000 });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 0, [SUPER_ANTIFIRE]: 15 }, 'a super antifire replaces it: 300 ticks');
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, null); // cleared by death or a duel's no-potions rule
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.bits(), { [SUPER_ANTIFIRE]: 0 });
+});
+
+test('after a relog a super antifire stays on the super antifire varbit', t => {
+  const f = fixture();
+  f.fire.seconds = 120;
+  f.attributes.set(ATTR_DRAGONFIRE_TIER, { tier: DragonfireProtectionTier.SUPER_ANTIFIRE, label: 'super antifire potion' });
+  f.hooks.login({ player: f.player });
+  assert.equal(f.sent()[ANTIFIRE_TYPE], 2);
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 0, [SUPER_ANTIFIRE]: 10 });
 });
 
 test('antifire reads the dragonfire protection deadline and tier', t => {
@@ -62,6 +99,7 @@ test('after a relog antifire falls back to the saved fire immunity timer', t => 
   f.fire.seconds = 300;
   f.hooks.login({ player: f.player });
   assert.deepEqual(f.sent(), { [ANTIFIRE_SECONDS]: 300, [ANTIFIRE_TYPE]: 1, [TELEBLOCK_SECONDS]: 0, [STAMINA_SECONDS]: 0 });
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 17, [SUPER_ANTIFIRE]: 0 }, '500 ticks left');
 });
 
 test('teleblock follows the combat teleblock timer, which survives relog', t => {
@@ -99,6 +137,7 @@ test('logout forgets the player, so the next login resends everything', t => {
   f.hooks.logout({ player: f.player });
   f.hooks.process({ player: f.player });
   assert.equal(Object.keys(f.sent()).length, 4);
+  assert.equal(Object.keys(f.bits()).length, 2);
 });
 
 test('player bots get no timer varps', t => {
@@ -107,4 +146,5 @@ test('player bots get no timer varps', t => {
   f.hooks.login({ player: f.player });
   f.hooks.process({ player: f.player });
   assert.deepEqual(f.sent(), {});
+  assert.deepEqual(f.bits(), {});
 });

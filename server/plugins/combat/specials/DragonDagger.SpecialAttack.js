@@ -5,6 +5,8 @@ module.exports = function registerDragonDaggerSpecialAttack(api) {
   const DRAIN = 25;
   const ACCURACY_MULTIPLIER = 1.15;
   const DAMAGE_MULTIPLIER = 1.15;
+  // Wiki (Dragon dagger): "Puncture rolls against opponent's slash defence roll."
+  const SLASH_DEFENCE_BONUS_INDEX = 1;
   const ANIMATION = new Animation(1062);
   const GRAPHIC = new Graphic(252, GraphicHeight.HIGH);
 
@@ -32,6 +34,7 @@ module.exports = function registerDragonDaggerSpecialAttack(api) {
       hitCount: 2,
       accuracyMultiplier: ACCURACY_MULTIPLIER,
       damageMultiplier: DAMAGE_MULTIPLIER,
+      meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
     },
     combatMethod: new DragonDaggerCombatMethod(),
     metadata: { finisherDamageMultiplier: 2 },

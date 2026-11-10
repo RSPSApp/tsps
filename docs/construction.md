@@ -170,6 +170,18 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
 - **Larders, shelves:** "Select an option", four at a time with More... (captures; contents
   from the Wiki). The shelves' cup is from captures (the Wiki's table leaves it out).
 - **Barrels:** a beer glass on a barrel fills it, with the barrel's pour animation.
+- **Spice rack** (the kitchen's wall space, `poh_kitchen_8`): 60 Construction, 374 experience
+  (Wiki), materials from the cache. It keeps the owner's red, brown, yellow and orange doses in
+  saved attributes, so they outlast the rack and the kitchen (Wiki). From rsprox captures (rev 229
+  recordings 271 and 272) and the Wiki's Transcript:Spice rack:
+  - Store: "Which Spice would you like to store?" (Red./Brown./Yellow./Orange./All.) takes every
+    shaker of the colour; a spice used on the rack does the same for its colour. Other items:
+    "You can't store this in the spice rack."
+  - Take: "Which Spice would you like to take?", then "How much spice would you like to take?:".
+    It gives full (4) shakers and one smaller shaker with the rest, one per free slot. A full
+    inventory gets nothing, with no message.
+  - Check: "N x Red Spice.<br>N x Brown Spice.<br>N x Yellow Spice.<br>N x Orange Spice."
+  - Visitors get "You can only use this in your own house." on every option.
 - **Stoves:** the firepits cook as fires, the ovens and ranges as ranges (Cooking). Kettles
   fill at sinks (WaterSources).
 - **Tea:** a full kettle on any stove but the plain firepit shows the stove's kettle loc ("You
@@ -385,6 +397,8 @@ the estate agent also accepts either varbit if a quest ever sets it.
 
 - The League hall (a Leagues-only room; the cache has its rows, `rooms.json` leaves it out).
 - Hosidius blueprints from the reward shop do nothing yet; Amy's saw works as a saw only.
+- The spice rack's build menu text: live shows "Spice rack|Teak plank: 3<br>Soft clay: 6<br>4 dose
+  spice shaker<br>of each colour" (captures). Ours lists the cache name and its first four materials.
 - Fish trophy experience the Wiki doesn't list (haddock and orangefin on teak use the
   mahogany values), and the Alchemical Hydra head's.
 

@@ -26,6 +26,7 @@ const CRATES = 'quest.elemental_workshop_ii.crates';
 const HATCH_OPEN = 1 << 1;
 const SCHEMATIC_TAKEN = (1 << 5) | (1 << 6);
 const noop = () => {};
+const ticks = count => { for (let i = 0; i < count; i++) core.TaskManager.process(); };
 let h;
 
 before(async () => {
@@ -133,7 +134,7 @@ function container(size) {
 }
 
 function player() {
-  const attrs = new Map(), varbits = new Map(), configs = new Map(), xp = [], messages = [];
+  const attrs = new Map(), varbits = new Map(), configs = new Map(), xp = [], messages = [], animations = [], sounds = [];
   let location = new core.Location(1954, 5147, 2);
   const inventory = container(28);
   let manager;
@@ -142,10 +143,11 @@ function player() {
     sendConfig(id, value) { configs.set(id, value); return packet; },
     sendVarbit(id, value) { varbits.set(id, value); return packet; },
     sendString() { return packet; },
+    sendSoundEffect(id) { sounds.push(id); return packet; },
     sendInterfaceRemoval() { manager.reset(); return packet; },
   }, { get: (target, key) => target[key] ?? (() => packet) });
   const p = {
-    attrs, varbits, configs, xp, messages, inventory, smithingLevel: 99,
+    attrs, varbits, configs, xp, messages, animations, sounds, inventory, smithingLevel: 99,
     getAttribute: key => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
@@ -158,6 +160,11 @@ function player() {
       addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]),
     }),
     getLocation: () => location,
+    getTeleportSerial: () => 0,
+    getMovementQueue: () => ({ size: () => 0 }),
+    getForceMovement: () => null,
+    getHitpoints: () => 10,
+    performAnimation: animation => animations.push(animation.getId()),
     moveTo: to => { location = to; },
     isRegistered: () => true,
     isPlayer: () => true,
@@ -408,8 +415,16 @@ test('completed slashed-book-only item use crafts a shield without repeating que
   p.inventory.adds(I.PRIMED_MIND_BAR, 1);
   while (p.inventory.getFreeSlots()) p.inventory.adds(I.COINS, 1);
   h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  assert.deepEqual(p.animations, [898], 'hammering starts on the click');
+  assert.deepEqual(p.sounds, [core.Sound.SMITHING.getId()]);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0);
+  assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 1);
+  ticks(3);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0, 'no reward on tick three');
+  ticks(1);
   assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 1);
   assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 0);
+  assert.match(p.messages.at(-1), /make a mind shield/);
   assert.equal(p.inventory.getFreeSlots(), 0);
   assert.deepEqual(p.xp, [[core.Skill.SMITHING.getIndex(), 30]]);
   assert.equal(h.quest.getStage(p), 12);
@@ -417,21 +432,28 @@ test('completed slashed-book-only item use crafts a shield without repeating que
   p.inventory.deleteNumber(I.MIND_SHIELD, 1);
   p.inventory.adds(I.PRIMED_MIND_BAR, 1);
   h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  ticks(4);
   assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 1);
   assert.equal(p.xp.length, 2);
 });
 
 test('shield item use conserves the bar without level, hammer or plain metadata', () => {
-  for (const mode of ['level', 'hammer', 'metadata']) {
+  for (const mode of ['level', 'hammer', 'metadata', 'stack']) {
     const p = player();
     h.quest.setStage(p, 12);
     p.inventory.adds(I.SLASHED_BOOK, 1);
     if (mode !== 'hammer') p.inventory.adds(I.HAMMER, 1);
     p.inventory.adds(I.PRIMED_MIND_BAR, 1);
     if (mode === 'level') p.smithingLevel = 29;
-    if (mode === 'metadata') p.inventory.getItems().find(item => item.getId() === I.PRIMED_MIND_BAR).setMeta({ preset: true });
+    const bar = p.inventory.getItems().find(item => item.getId() === I.PRIMED_MIND_BAR);
+    if (mode === 'metadata') bar.setMeta({ preset: true });
+    if (mode === 'stack') bar.setAmount(2);
     h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
-    assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 1, mode);
+    if (mode === 'level') assert.ok(p.messages.includes('You need level 30 Smithing to work this metal.'));
+    if (mode === 'hammer') assert.ok(p.messages.includes('You need a hammer to work the metal with.'));
+    assert.deepEqual(p.animations, [], mode);
+    ticks(4);
+    assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), mode === 'stack' ? 2 : 1, mode);
     assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0, mode);
     assert.deepEqual(p.xp, [], mode);
   }
@@ -453,6 +475,49 @@ test('shield item use rejects a stale clicked slot', () => {
   assert.deepEqual(p.xp, []);
 });
 
+test('shield completion rechecks its bar and requirements, and cancels on walking away', () => {
+  for (const [name, change] of [
+    ['bar replaced', p => p.inventory.setItem(2, new core.Item(I.PRIMED_MIND_BAR, 1))],
+    ['level drained', p => { p.smithingLevel = 29; }],
+    ['hammer removed', p => p.inventory.deleteNumber(I.HAMMER, 1)],
+    ['slashed book removed', p => p.inventory.deleteNumber(I.SLASHED_BOOK, 1)],
+    ['beaten book added', p => p.inventory.adds(I.BEATEN_BOOK, 1)],
+    ['quest no longer complete', p => h.quest.setStage(p, 11)],
+    ['moved and returned', p => {
+      const at = p.getLocation();
+      p.moveTo(new core.Location(at.getX() + 1, at.getY(), at.getZ()));
+      ticks(1);
+      p.moveTo(at);
+    }],
+  ]) {
+    const p = player();
+    h.quest.setStage(p, 12);
+    for (const id of [I.SLASHED_BOOK, I.HAMMER, I.PRIMED_MIND_BAR]) p.inventory.adds(id, 1);
+    h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+    ticks(1);
+    change(p);
+    ticks(4);
+    assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 1, name);
+    assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 0, name);
+    assert.deepEqual(p.xp, [], name);
+  }
+});
+
+test('rapid shield clicks cannot start a second job or consume another bar', () => {
+  const p = player();
+  h.quest.setStage(p, 12);
+  for (const id of [I.SLASHED_BOOK, I.HAMMER, I.PRIMED_MIND_BAR, I.PRIMED_MIND_BAR]) p.inventory.adds(id, 1);
+  h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  h.itemOnObject(p, I.PRIMED_MIND_BAR, O.WORKBENCH_5);
+  h.itemOnObjectEvent({ player: p, itemId: I.PRIMED_MIND_BAR, objectId: O.WORKBENCH_5,
+    itemSlot: 3, item: p.inventory.getItems()[3], handled: false });
+  assert.deepEqual(p.animations, [898]);
+  ticks(8);
+  assert.equal(p.inventory.getAmount(I.MIND_SHIELD), 1);
+  assert.equal(p.inventory.getAmount(I.PRIMED_MIND_BAR), 1);
+  assert.deepEqual(p.xp, [[core.Skill.SMITHING.getIndex(), 30]]);
+});
+
 test('both books retain the existing helm path after completion', () => {
   const p = player();
   h.quest.setStage(p, 12);
@@ -472,6 +537,7 @@ test('real inventory: cached items, full bag, stale removal and metadata conserv
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
     send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
+  p.setRegistered(true);
   p.setAttribute('quest.elemental_workshop_ii.stage', 12);
   p.getSkillManager().setCurrentLevel(core.Skill.SMITHING, 30, false);
   const inv = p.getInventory();
@@ -502,6 +568,7 @@ test('real inventory: cached items, full bag, stale removal and metadata conserv
   assert.notEqual(gate.allow, false);
   assert.ok(Number.isFinite(GameConstants.EXPERIENCE_MULTIPLIER) && GameConstants.EXPERIENCE_MULTIPLIER > 0);
   h.itemOnObjectEvent({ ...event, item: plain, handled: false });
+  ticks(4);
   assert.equal(refreshes, 1, 'only the successful exchange refreshes the real inventory');
   const expectedXp = Math.floor(30 * GameConstants.EXPERIENCE_MULTIPLIER * gate.multiplier * 10 + 1e-6) / 10;
   assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - xpBefore, expectedXp);

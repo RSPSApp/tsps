@@ -49,7 +49,10 @@
  *   - Mind shield smithing is supported only for item use after completion with the slashed book alone.
  */
 module.exports = function registerElementalWorkshopIIQuest(api) {
-  const { Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
+  const {
+    Animation, CacheDefinitions, CountdownTask, Item, ItemIdentifiers, Location, NpcIdentifiers,
+    ObjectIdentifiers, Skill, Sound, Sounds, TaskManager,
+  } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Elemental Workshop II";
@@ -116,6 +119,9 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   const PRIMED_MIND_BAR = ItemIdentifiers.PRIMED_MIND_BAR; // 9728
   const SLASHED_BOOK = ItemIdentifiers.SLASHED_BOOK;
   const MIND_SHIELD = ItemIdentifiers.MIND_SHIELD;
+  const MIND_SHIELD_SMITH_TICKS = 4;
+  const MIND_SMITHING_LEVEL = 30;
+  const shieldSmithing = new WeakMap();
   const MIND_HELMET = ItemIdentifiers.MIND_HELMET; // 9733
   const ELEMENTAL_METAL = ItemIdentifiers.ELEMENTAL_METAL; // 2893
   const HAMMER = ItemIdentifiers.HAMMER; // 2347
@@ -875,15 +881,20 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     play(player, "into-the-workshop-taking-the-mind-bar");
   }
 
-  function makeMindHelm(player) {
-    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 30) {
-      player.sendMessage("You need level 30 Smithing to work this metal.");
-      return;
+  function canWorkMindMetal(player) {
+    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < MIND_SMITHING_LEVEL) {
+      player.sendMessage(`You need level ${MIND_SMITHING_LEVEL} Smithing to work this metal.`);
+      return false;
     }
     if (!has(player, HAMMER)) {
       play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-a-hammer");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function makeMindHelm(player) {
+    if (!canWorkMindMetal(player)) return;
     if (!has(player, BEATEN_BOOK)) {
       play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-the-beaten-book");
       return;
@@ -896,17 +907,38 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     quest.complete(player);
   }
 
-  function makeMindShield(event) {
-    const { player, itemSlot, item } = event;
+  function makeMindShield({ player, itemSlot, item }) {
     const inventory = player.getInventory();
-    const held = inventory.getItems()[itemSlot];
-    // The packet can be delayed by walking. Only replace the original plain, unstacked bar.
-    if (!Number.isInteger(itemSlot) || held !== item || held?.getId() !== PRIMED_MIND_BAR
-      || held.getAmount() !== 1 || held.getMeta() != null) return;
-    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 30 || !has(player, HAMMER)) return;
-    inventory.setItem(itemSlot, new Item(MIND_SHIELD, 1));
-    inventory.refreshItems();
-    player.getSkillManager().addExperiences(Skill.SMITHING, 30);
+    // Walking to the bench and smithing both defer the click. Only replace the original plain bar.
+    const holdsSelectedBar = () => Number.isInteger(itemSlot) && inventory.getItems()[itemSlot] === item
+      && item?.getId() === PRIMED_MIND_BAR && item.getAmount() === 1 && item.getMeta() == null;
+    if (!holdsSelectedBar() || !canWorkMindMetal(player)) return;
+
+    const start = player.getLocation().clone();
+    const teleportSerial = player.getTeleportSerial();
+    const staysAtWorkbench = () => player.isRegistered() && player.getHitpoints() > 0
+      && player.getTeleportSerial() === teleportSerial && player.getLocation().equals(start)
+      && player.getMovementQueue().size() === 0 && player.getForceMovement() == null;
+
+    const task = new CountdownTask(player, MIND_SHIELD_SMITH_TICKS, () => {
+      shieldSmithing.delete(player);
+      if (!staysAtWorkbench() || !holdsSelectedBar() || !quest.isComplete(player)
+        || !has(player, SLASHED_BOOK) || has(player, BEATEN_BOOK) || !canWorkMindMetal(player)) return;
+      inventory.setItem(itemSlot, new Item(MIND_SHIELD, 1));
+      inventory.refreshItems();
+      player.getSkillManager().addExperiences(Skill.SMITHING, 30);
+      player.sendMessage("Following the instructions in the book, you make a mind shield.");
+    });
+    task.onTick = () => {
+      if (task.isRunning() && !staysAtWorkbench()) {
+        task.stop();
+        shieldSmithing.delete(player);
+      }
+    };
+    shieldSmithing.set(player, task);
+    player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_smithing")));
+    Sounds.sendSound(player, Sound.SMITHING);
+    TaskManager.submit(task);
   }
 
   function smithWorkbench(player) {
@@ -1115,6 +1147,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       }
       if (itemId === PRIMED_MIND_BAR) {
         event.handled = true;
+        if (shieldSmithing.get(player)?.isRunning()) return;
         if (quest.isComplete(player) && has(player, SLASHED_BOOK) && !has(player, BEATEN_BOOK)) {
           makeMindShield(event);
         } else {

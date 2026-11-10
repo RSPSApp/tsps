@@ -21497,12 +21497,8 @@ test('Song of the Elves prison entry keeps Elena visible and cannot release her 
 test('Song of the Elves prison stair routes to its open foot, not the exit landing behind the wall', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
-  const route = handlers.routes.find(handler => handler.name === 'routeCastleThroneStairs');
-  const event = { player: { getLocation: () => new api.core.Location(2569, 3298, 0) },
-    object: { getLocation: () => new api.core.Location(2569, 3295, 0) },
-    objectId: 35791, sourceLocation: { x: 2569, y: 3298, z: 0 }, destination: null };
-  route(event);
-  assert.equal(event.destination, null, 'the prison stair keeps the normal walk-to-object route');
+  // No route override: the prison stair (and the castle's main staircase) keep the normal walk-to-object route.
+  assert.equal(handlers.routes.find(handler => handler.name === 'routeCastleThroneStairs'), undefined);
 
   const finder = new api.core.RsmodRouteFinding();
   const spec = { level: 0, srcSize: 1, moveNear: true, maxWaypoints: 25, privateArea: null,

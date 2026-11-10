@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 27 · ⚠️ passed with issues: 18 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 102
+193 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 101
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -27,7 +27,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Beneath Cursed Sands](beneath-cursed-sands/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash | 1 |
 | Between a Rock... | untested |  |  |  |  |
 | [Big Chompy Bird Hunting](big-chompy-bird-hunting/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
-| [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 2 |
+| [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 3 |
 | [Black Knights' Fortress](black-knights-fortress/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 7 |
 | [Bone Voyage](bone-voyage/README.md) | ✅ passed |  | agent |  |  |
 | [Cabin Fever](cabin-fever/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash | 1 |
@@ -117,7 +117,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Pandemonium | untested |  |  |  |  |
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
-| [Plague City](plague-city/README.md) | untested |  |  |  |  |
+| [Plague City](plague-city/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 1 |
 | [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-11-07 | agent | claude-opus-5-5 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |

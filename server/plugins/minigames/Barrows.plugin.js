@@ -720,6 +720,8 @@ function handleNpcDeath({ npc, killer }) {
   updateOverlay(killer, run);
 }
 
+const PRAYER_DRAINED = "<col=ff3045>Your prayers have been drained!</col>";
+
 function drainPrayer(player, run) {
   if (--run.prayerTicks > 0) return;
   run.prayerTicks = PRAYER_DRAIN_TICKS;
@@ -728,9 +730,12 @@ function drainPrayer(player, run) {
   const amount = 8 + run.killed.length;
   const apply = pluginApi.core.applyPrayerDrainModifiers;
   const drain = typeof apply === "function" ? apply(player, amount, { source: "barrows" }) : amount;
+  // The drain's chat line, since the 24 September 2025 Interface Uplift (Wiki: Barrows): sent on the drain's tick,
+  // before the Prayer drop (rsprox_transcripts/236/03929.txt tick 388, 237/01107.txt:93512). Older recordings
+  // (226/01694.txt) have no line.
+  player.sendMessage(PRAYER_DRAINED);
   skills.setCurrentLevelCombat(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - drain));
   skills.updateSkill(Skill.PRAYER);
-  player.sendMessage("A strange force drains your Prayer.");
 }
 
 function processPlayer({ player }) {
@@ -759,6 +764,10 @@ function processPlayer({ player }) {
     // teleport out and back into the chest room (league Evil eye) finds it empty (237/04057).
     if (state.phase === "tunnels" && phase !== "tunnels") cleanupNpcs(player, true);
     state.puzzle = null;
+    // Each entry into a crypt restarts the drain's 30 ticks (rsprox_transcripts/226/01694.txt: in at ticks 8801, 8868,
+    // 8916, 8966 and 9046, drained at 8831, 8898, 8946, 8996 and 9076).
+    // One more than the interval: this same tick's drainPrayer call below counts the first one down.
+    if (phase === "crypt" && run) run.prayerTicks = PRAYER_DRAIN_TICKS + 1;
     state.phase = phase;
     syncMinimap(player, phase);
     if (phase === "outside") player.getPacketSender().closeInterface(OVERLAY_ID);

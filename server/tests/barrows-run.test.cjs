@@ -146,6 +146,45 @@ test("Barrows: the chest's diary rune line (spam), then 'Your Barrows chest coun
   assert.ok(looter.sent.messages.some((m) => /^Your Barrows chest count is: <col=ff0000>\d+<\/col>\.$/.test(m)), looter.sent.messages.join(" | "));
 });
 
+// rsprox_transcripts/226/01694.txt: into crypts at ticks 8801, 8868, 8916, 8966 and 9046, drained at 8831, 8898, 8946,
+// 8996 and 9076: 30 ticks after each entry, however long the last crypt's countdown had run. Since the 24 September
+// 2025 update each drain tick also sends "<col=ff3045>Your prayers have been drained!</col>"
+// (rsprox_transcripts/236/03929.txt tick 388, 237/01107.txt:93512, 94565 and 98836); 226/01694.txt predates it.
+test("Barrows: the Prayer drain lands 30 ticks after each entry into a crypt, with its chat line on that tick only", () => {
+  const DRAINED = "<col=ff3045>Your prayers have been drained!</col>";
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  const prayer = () => skills.getCurrentLevel(core.Skill.PRAYER);
+  const drainLines = () => subject.sent.messages.filter((m) => m === DRAINED).length;
+  const ticksToDrain = () => {
+    const from = prayer();
+    for (let n = 1; n <= 40; n++) {
+      const lines = drainLines();
+      Barrows._test.processPlayer({ player: subject });
+      // The line is sent on the drain's tick and on no other.
+      assert.equal(drainLines() - lines, prayer() < from ? 1 : 0, `tick ${n}`);
+      if (prayer() < from) return n;
+    }
+    return -1;
+  };
+  arrive(subject, AHRIM_MOUND);
+  Barrows._test.dig({ player: subject });
+  for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
+  const crypt = subject.getLocation().clone();
+  assert.equal(crypt.getZ(), 3);
+  assert.equal(ticksToDrain(), 30, "the first crypt");
+  assert.equal(prayer(), 99 - 8, "8 with no brother killed");
+  for (let i = 0; i < 12; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(drainLines(), 1, "no line on the ticks between drains");
+  arrive(subject, SURFACE);
+  for (let i = 0; i < 5; i++) Barrows._test.processPlayer({ player: subject });
+  arrive(subject, crypt);
+  assert.equal(ticksToDrain(), 30, "back in: a fresh 30 ticks, not the 18 that were left");
+  assert.equal(drainLines(), 2, "one line per drain");
+  assert.ok(!subject.sent.messages.some((m) => /drains your Prayer/.test(m)), "the old text is gone");
+});
+
 // rsprox_transcripts/227/00086.txt:233214-233215 (546 times over the recordings): the tunnel's brother rising at the
 // chest says "You dare steal from us!"; a brother woken in his crypt, "You dare disturb my rest!" (226/01694:165530).
 test("Barrows: the brother at the chest says 'You dare steal from us!', one in his crypt 'You dare disturb my rest!'", () => {

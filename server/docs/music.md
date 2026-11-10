@@ -29,7 +29,9 @@ moves on to another region that lists it too. A track plays for its cache length
 column 3, in ticks) plus one tick. Then the server sends track 147 (silence) with fade-out speed 20
 and sets the current-track varp 3883 to -1; two ticks later it starts another of the area's
 tracks, picked at random but never the one that just ended, with zero fades. An area with one
-track plays it again. Every track started this way unlocks.
+track plays it again. Every track started this way unlocks. Ours: a song a plugin sends (a boss
+fight, a minigame) takes over until the next area change, and the area track sent again from its
+start, as the volume restart does, plays its full length from then.
 
 As captured (rsprox, 1,857 track ends in Area mode): the gap is two ticks in all but a few that
 an area change cut short. Tracks started after a gap end exactly length + 1 ticks later (1,482 of

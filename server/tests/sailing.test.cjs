@@ -2888,6 +2888,53 @@ test("clicking another loc from the helm leaves it and stops the boat; the sail 
   }
 });
 
+const { VARBIT, MOVE_MODE, HELM_STATUS } = require("../plugins/skills/sailing/SailingContent.Sailing");
+
+test("All Settings 461: leaving the helm stops the boat unless the row is unticked (18135 = 1)", () => {
+  for (const [disabled, mode] of [[0, BoatMoveMode.Stopped], [1, BoatMoveMode.Full]]) {
+    const h = facilityAtSea("skiff", "Wind catcher");
+    const helm = registerPlugin("Helm.plugin");
+    try {
+      h.log.varbits.set(18135, disabled);
+      helm.objects.Helm.Navigate({ player: h.player });
+      h.player.getPacketSender().sendVarbit(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.FULL);
+      h.boat.moveMode = BoatMoveMode.Full;
+      helm.objects.Helm["Stop-navigating"]({ player: h.player });
+      assert.equal(h.boat.helmPlayerId, undefined, `the helm is free (${disabled})`);
+      assert.equal(h.boat.moveMode, mode, `the boat's move mode (${disabled})`);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), disabled ? MOVE_MODE.FULL : MOVE_MODE.STOPPED);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+      assert.equal(h.log.varbits.get(VARBIT.FACILITY_LOCKEDIN), 0);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_HELM_STATUS), HELM_STATUS.FREE);
+    } finally {
+      h.done();
+    }
+  }
+});
+
+test("All Settings 462: a heading starts the boat the first time only, always, or never (18136)", () => {
+  const { raiseSailForHeading } = require("../plugins/skills/sailing/Helm.plugin");
+  const cases = [
+    // option, move mode before -> raised to full sail?
+    [0, MOVE_MODE.MOORED, true], [0, MOVE_MODE.STOPPED, false],
+    [1, MOVE_MODE.MOORED, true], [1, MOVE_MODE.STOPPED, true],
+    [2, MOVE_MODE.MOORED, false], [2, MOVE_MODE.STOPPED, false],
+  ];
+  for (const [option, before, raised] of cases) {
+    const h = facilityAtSea("skiff", "Wind catcher");
+    registerPlugin("Helm.plugin");
+    try {
+      h.log.varbits.set(18136, option);
+      h.log.varbits.set(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, before);
+      raiseSailForHeading(h.player, h.boat);
+      assert.equal(h.boat.moveMode, raised ? BoatMoveMode.Full : BoatMoveMode.Stopped, `option ${option} from ${before}`);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), raised ? MOVE_MODE.FULL : before);
+    } finally {
+      h.done();
+    }
+  }
+});
+
 test("::maxboat presets fill every hotspot with a facility it allows, the best parts, and their caps", () => {
   const { _test } = require("../plugins/skills/sailing/SailingCommands.plugin");
   const { hotspotsOf } = require("../plugins/skills/sailing/BoatFacilities.Sailing");

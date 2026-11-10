@@ -65,6 +65,8 @@
  *    implemented; the owed partisan comes from the camp tent and the owed
  *    circlet from the Sophanem High Priest.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerBeneathCursedSandsQuest(api) {
   const {
     GameObject,
@@ -989,7 +991,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (options.shake) {
       for (const [ticks, axis, random] of options.shake) {
         Scenes.later(player, ticks, () => {
-          if (cameraWatch.get(player) === token) player.getPacketSender().sendCameraShake(axis, random, 0, 0);
+          if (cameraWatch.get(player) === token) CameraShake.send(player.getPacketSender(), "atmospheric", axis, random, 0, 0);
         });
       }
     }

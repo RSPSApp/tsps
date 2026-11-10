@@ -97,6 +97,8 @@
  *   destroyed on hand-in, on completion, and on the next login of a completed
  *   save; the tutorial's buckets, tea and cells are consumed by their steps.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTempleOfTheEyeQuest(api) {
   const {
     Animation,
@@ -2147,16 +2149,16 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   function shakeRift(player) {
     const sender = player.getPacketSender();
-    sender.sendCameraShake(0, 5);
-    Scenes.later(player, 1, () => player.isRegistered() && sender.sendCameraShake(0, 4));
-    Scenes.later(player, 2, () => player.isRegistered() && sender.sendCameraShake(0, 3));
+    CameraShake.send(sender, "atmospheric", 0, 5);
+    Scenes.later(player, 1, () => player.isRegistered() && CameraShake.send(sender, "atmospheric", 0, 4));
+    Scenes.later(player, 2, () => player.isRegistered() && CameraShake.send(sender, "atmospheric", 0, 3));
     Scenes.later(player, 3, () => {
       if (!player.isRegistered()) return;
-      sender.sendCameraShake(0, 2);
+      CameraShake.send(sender, "atmospheric", 0, 2);
       camera(player, [2399, 5667, 470], [2399, 5684, 270], { rate: 3, rate2: 1 });
     });
-    Scenes.later(player, 4, () => player.isRegistered() && sender.sendCameraShake(0, 1));
-    Scenes.later(player, 5, () => player.isRegistered() && sender.sendCameraShake(0, 0));
+    Scenes.later(player, 4, () => player.isRegistered() && CameraShake.send(sender, "atmospheric", 0, 1));
+    Scenes.later(player, 5, () => player.isRegistered() && CameraShake.send(sender, "atmospheric", 0, 0));
     Scenes.later(player, 6, () => {
       if (!player.isRegistered()) return;
       camera(player, [2399, 5667, 710], [2399, 5684, 270], { rate: 3, rate2: 1 });

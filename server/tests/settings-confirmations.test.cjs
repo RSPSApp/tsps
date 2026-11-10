@@ -109,7 +109,7 @@ test("a clue dropped at capacity is mentioned only with its tier's warning on", 
     const clue = I[`CLUE_SCROLL_${tier.toUpperCase()}_`];
     f.inv.adds(clue, 1);
     const drop = () => {
-      const request = { player: f.p, drops: [{ itemId: clue, amount: 1 }, { itemId: I.COINS, amount: 5 }] };
+      const request = { player: f.p, drops: [{ itemId: clue, amount: 1 }, { itemId: I.COINS, amount: 5 }, { itemId: clue, amount: 1 }] };
       Capacity.filterDrops(request);
       assert.deepEqual(request.drops.map((d) => d.itemId), [I.COINS], "the clue is never dropped");
     };
@@ -117,7 +117,7 @@ test("a clue dropped at capacity is mentioned only with its tier's warning on", 
     assert.deepEqual(f.messages, [], `${tier}: off by default`);
     f.varbit(Capacity.WARNING_VARBITS[tier], 1);
     drop();
-    assert.deepEqual(f.messages, [`You have a sneaking suspicion that you would have received ${line}.`]);
+    assert.deepEqual(f.messages, [`You have a sneaking suspicion that you would have received ${line}.`], "once per roll");
   }
 });
 
@@ -151,6 +151,8 @@ test("a STASH unit takes worn items only with 'STASH units take equipped items' 
   const f = actor(t);
   const unit = stashUnit(f);
   const equipment = f.p.getEquipment();
+  const bonusUpdates = [];
+  t.mock.method(core.BonusManager, "update", (player) => { bonusUpdates.push(player); });
   // The first item is worn and also held; the rest are worn only.
   unit.ids.forEach((id, i) => equipment.setItem(unit.slots[i], new core.Item(id, 1)));
   f.inv.adds(unit.ids[0], 1);
@@ -165,6 +167,7 @@ test("a STASH unit takes worn items only with 'STASH units take equipped items' 
   assert.equal(f.inv.getAmount(unit.ids[0]), 0, "the held copy went in");
   assert.equal(equipment.getItems()[unit.slots[0]]?.getId(), unit.ids[0], "and the worn copy stayed on");
   unit.slots.slice(1).forEach((slot) => assert.ok(!(equipment.getItems()[slot]?.getAmount() > 0), "the worn-only items went in"));
+  assert.equal(bonusUpdates.length, 1, "the worn items' bonuses are recomputed");
 });
 
 // ---------------------------------------------------------------- 10b: Plank Make and the gravestone fee

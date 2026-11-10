@@ -121,6 +121,7 @@ function deposit(player, unit) {
   inventory.refreshItems();
   if (taken.some(entry => entry.container === equipment)) {
     equipment.refreshItems();
+    core.BonusManager.update(player);
     core.WeaponInterfaceManager.assign(player);
     player.getUpdateFlag().flag(core.Flag.APPEARANCE);
     api.emitCustomEvent("equipment:changed", { player });

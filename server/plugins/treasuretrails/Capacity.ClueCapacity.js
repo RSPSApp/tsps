@@ -117,6 +117,7 @@ function filterDrops(request) {
   if (!request?.player || !Array.isArray(request.drops)) return;
   const unlocked = boxUnlocked(request.player);
   const remaining = new Map(TIERS.map(tier => [tier, Math.max(0, capacity(request.player, tier) - count(request.player, tier))]));
+  const warned = new Set();
   for (let index = 0; index < request.drops.length; index++) {
     const drop = request.drops[index], type = classify(drop.itemId);
     if (!type) continue;
@@ -124,7 +125,8 @@ function filterDrops(request) {
     const room = remaining.get(type.tier);
     if (room < 1) {
       request.drops.splice(index--, 1);
-      warnMissedClue(request.player, type.tier, unlocked);
+      if (!warned.has(type.tier)) warnMissedClue(request.player, type.tier, unlocked);
+      warned.add(type.tier);
       continue;
     }
     drop.amount = Math.min(drop.amount, room);

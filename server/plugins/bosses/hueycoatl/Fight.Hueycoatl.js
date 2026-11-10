@@ -21,6 +21,7 @@
  * Every session runs on one task: each tick it plays the session's due events, its attack
  * timers and its pillars. A session with nobody in its arena only keeps its respawn going.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.Hueycoatl");
 const Attacks = require("./Attacks.Hueycoatl");
 const Pillars = require("./Pillars.Hueycoatl");
@@ -174,7 +175,7 @@ function openPath(session) {
   session.animateLoc(Shared.BARRIER_TILE, Shared.SCENERY_SHAPE, Shared.SEQ.BARRIER_TRANSITION);
   for (const player of session.arenaPlayers()) {
     player.sendMessage(Shared.MESSAGE.PATH);
-    for (const [slot, random] of CAMERA_SHAKE) player.getPacketSender().sendCameraShake(slot, random, 0, 0);
+    for (const [slot, random] of CAMERA_SHAKE) CameraShake.send(player.getPacketSender(), "combat", slot, random, 0, 0);
   }
   setPhase(session, "head");
   schedule(session, BARRIER_RETRACT_TICKS, () => {

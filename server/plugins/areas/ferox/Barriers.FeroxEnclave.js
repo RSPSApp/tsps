@@ -13,6 +13,8 @@ const INSIDE_VARBIT = 6549; // pvp_adjacent_area_client
 const BUFFER_VARBIT = 10530; // wildy_hub_buffer
 const WARNING_VARBIT = 10532; // wildy_hub_warning
 const DONT_ASK_ATTRIBUTE = "ferox:barrier-dont-ask";
+/** All Settings > Warnings: "Show warning on exiting Ferox Enclave", the barrier's own "don't ask again". */
+const WARNING_SETTING = 255;
 
 const CROSS_ANIMATION = 4282; // sos_security_door_drag
 const CROSS_SOUND = 4193;
@@ -50,8 +52,7 @@ function warnThenCross(player, crossing) {
       execute: () => Ferox.api.sendMultiChatboxPrompt(player, "Continue through the Barrier?",
         "Yes.", () => cross(player, crossing),
         "Yes, and don't ask again.", () => {
-          player.setAttribute(DONT_ASK_ATTRIBUTE, true);
-          player.getPacketSender().sendVarbit(WARNING_VARBIT, 1);
+          setDontAsk(player, true);
           cross(player, crossing);
         },
         "No.", () => player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 0)),
@@ -148,6 +149,17 @@ function registerEnclave(api) {
   api.registerArea(new Enclave([new api.core.Boundary(minX, maxX, minY, maxY, 0)]));
 }
 
+function setDontAsk(player, dontAsk) {
+  player.setAttribute(DONT_ASK_ATTRIBUTE, dontAsk);
+  player.getPacketSender().sendVarbit(WARNING_VARBIT, dontAsk ? 1 : 0);
+}
+
+function warningSettingClicked(request) {
+  if (request.settingId !== WARNING_SETTING) return;
+  request.handled = true;
+  setDontAsk(request.player, request.player.getAttribute(DONT_ASK_ATTRIBUTE) !== true);
+}
+
 function sendWarningVarbit({ player }) {
   if (player.getAttribute(DONT_ASK_ATTRIBUTE) === true) player.getPacketSender().sendVarbit(WARNING_VARBIT, 1);
 }
@@ -157,6 +169,7 @@ module.exports = function attachBarriers(api) {
   api.onObjectFirstClick(Bounds.BARRIER_IDS, passThrough);
   registerEnclave(api);
   api.onPlayerLogin(sendWarningVarbit);
+  api.onCustomEvent("settings:setting-clicked", warningSettingClicked);
 };
 
-Object.assign(module.exports, { passThrough, cross, denySafeZoneAttack, syncState, DONT_ASK_ATTRIBUTE, BARRIER_WARNING });
+Object.assign(module.exports, { passThrough, cross, denySafeZoneAttack, syncState, warningSettingClicked, DONT_ASK_ATTRIBUTE, BARRIER_WARNING });

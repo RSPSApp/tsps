@@ -196,3 +196,42 @@ test('the Leprechaun\'s Luck dropdown sets its varbit to the option chosen and k
     assert.equal(next.getPacketSender().getVarbit(varbit), 1);
   }
 });
+
+// The timer varbits BuffTimers.plugin.js sends, and the most each one holds: an extended antifire
+// (1,200 ticks in steps of 30), an extended super antifire (600 in steps of 20), a full Tele Block
+// (500 ticks) and a stamina dose (200 ticks in steps of 10).
+const TIMER_VARBITS = [
+  ['antifire_potion', 3981, 40], ['super_antifire_potion', 6101, 30], ['teleblock_cycles', 4163, 500],
+  ['stamina_duration', 24, 20], ['stamina_active', 25, 1],
+];
+
+test('the buff bar timer varbits are the cache\'s own and hold the longest timers', () => {
+  for (const [name, id, most] of TIMER_VARBITS) {
+    assert.equal(CacheDefinitions.getVarbitId(name), id, `${name} is varbit ${id}`);
+    const { startBit, endBit } = CacheDefinitions.getVarbit(id);
+    assert.ok(2 ** (endBit - startBit + 1) - 1 >= most, `${name} holds ${most}`);
+  }
+});
+
+test('a seconds timer counts down its milliseconds, so a tick count needs no whole seconds', (t) => {
+  const { SecondsTimer } = require('../dist/game/model/SecondsTimer');
+  let now = 10_000;
+  t.mock.method(performance, 'now', () => now);
+  const timer = new SecondsTimer();
+  assert.equal(timer.millisRemaining(), 0);
+  timer.start(300);
+  assert.equal(timer.millisRemaining(), 300_000);
+  now += 600;
+  assert.equal(timer.millisRemaining(), 299_400);
+  assert.equal(timer.secondsRemaining(), 300, 'whole seconds still read 300');
+  timer.pause();
+  now += 60_000;
+  assert.equal(timer.millisRemaining(), 299_400, 'paused offline');
+  timer.resume();
+  now += 299_400;
+  assert.equal(timer.millisRemaining(), 0);
+  assert.equal(timer.secondsRemaining(), 0);
+  timer.start(10);
+  timer.stop();
+  assert.equal(timer.millisRemaining(), 0);
+});

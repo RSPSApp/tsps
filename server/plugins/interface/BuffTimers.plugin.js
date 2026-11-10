@@ -17,6 +17,12 @@ const ANTIFIRE_STEP_TICKS = 30;
 /** super_antifire_potion: a super or extended super antifire's time left, in steps of 20 ticks. */
 const SUPER_ANTIFIRE_VARBIT = 6101;
 const SUPER_ANTIFIRE_STEP_TICKS = 20;
+/** teleblock_cycles: the Tele Block's time left, in ticks. */
+const TELEBLOCK_VARBIT = 4163;
+/** stamina_duration: a stamina potion's time left, in steps of 10 ticks; stamina_active is 1 while it lasts. */
+const STAMINA_DURATION_VARBIT = 24;
+const STAMINA_STEP_TICKS = 10;
+const STAMINA_ACTIVE_VARBIT = 25;
 
 const ANTIFIRE_TYPE = 1;
 const SUPER_ANTIFIRE_TYPE = 2;
@@ -53,25 +59,36 @@ function getAntifire(player, now) {
   return [secondsLeft * 1000, savedTier >= DragonfireProtectionTier.SUPER_ANTIFIRE ? SUPER_ANTIFIRE_TYPE : ANTIFIRE_TYPE];
 }
 
-/** secondsRemaining(), not finished(): finished() stops the timer as a side effect. */
-function getTeleblockSeconds(player) {
-  return Math.max(0, Number(player.getCombat?.()?.getTeleblockTimer?.()?.secondsRemaining?.() ?? 0));
+/**
+ * [whole seconds, milliseconds] left. secondsRemaining(), not finished(): finished() stops the
+ * timer as a side effect.
+ */
+function getTeleblock(player) {
+  const timer = player.getCombat?.()?.getTeleblockTimer?.();
+  const secondsLeft = Math.max(0, Number(timer?.secondsRemaining?.() ?? 0));
+  if (secondsLeft === 0) return [0, 0];
+  return [secondsLeft, Math.max(0, Number(timer.millisRemaining?.() ?? secondsLeft * 1000))];
 }
 
-function getStaminaSeconds(player, now) {
-  return seconds(millisUntil(Number(player.getAttribute?.(ATTR_STAMINA_END)), now));
+function getStaminaMillis(player, now) {
+  return millisUntil(Number(player.getAttribute?.(ATTR_STAMINA_END)), now);
 }
 
 /** [kind, id, value]: "varp" for the infobox timers, "varbit" for the buff bar. */
 function getState(player, now = Date.now()) {
   const [antifireMs, antifireType] = getAntifire(player, now);
+  const [teleblockSeconds, teleblockMs] = getTeleblock(player);
+  const staminaMs = getStaminaMillis(player, now);
   return [
     ["varp", ANTIFIRE_TIMER_SECONDS_VARP, seconds(antifireMs)],
     ["varp", ANTIFIRE_TIMER_TYPE_VARP, antifireType],
-    ["varp", TELEBLOCK_TIMER_SECONDS_VARP, getTeleblockSeconds(player)],
-    ["varp", STAMINA_TIMER_SECONDS_VARP, getStaminaSeconds(player, now)],
+    ["varp", TELEBLOCK_TIMER_SECONDS_VARP, teleblockSeconds],
+    ["varp", STAMINA_TIMER_SECONDS_VARP, seconds(staminaMs)],
     ["varbit", ANTIFIRE_VARBIT, antifireType === ANTIFIRE_TYPE ? steps(antifireMs, ANTIFIRE_STEP_TICKS) : 0],
     ["varbit", SUPER_ANTIFIRE_VARBIT, antifireType === SUPER_ANTIFIRE_TYPE ? steps(antifireMs, SUPER_ANTIFIRE_STEP_TICKS) : 0],
+    ["varbit", TELEBLOCK_VARBIT, steps(teleblockMs, 1)],
+    ["varbit", STAMINA_DURATION_VARBIT, steps(staminaMs, STAMINA_STEP_TICKS)],
+    ["varbit", STAMINA_ACTIVE_VARBIT, staminaMs > 0 ? 1 : 0],
   ];
 }
 

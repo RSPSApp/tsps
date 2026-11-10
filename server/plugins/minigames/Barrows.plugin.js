@@ -300,7 +300,9 @@ function onNpcAdded() {
   NPC.prototype.onAdd.call(this);
   const player = this.getOwner();
   if (session(player).brother === this) {
-    this.forceChat("You dare disturb my rest!");
+    // A brother woken in his crypt, or the tunnel's brother rising at the chest (rsprox_transcripts/227/00086.txt:233215,
+    // and 546 times over the recordings).
+    this.forceChat(this.__barrowsChest ? "You dare steal from us!" : "You dare disturb my rest!");
     this.getTimers().extendOrRegister(TimerKey.COMBAT_ATTACK, 3);
     player.getPacketSender().sendEntityHint(this);
   }
@@ -602,7 +604,7 @@ function searchChest(player, clickType) {
     run.chestOpen = true;
     sender.sendVarbit(CHEST_OPEN_VARBIT, 1);
     if (!run.killed.includes(run.tunnel) && !state.brother) {
-      spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true);
+      spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true).__barrowsChest = true;
     }
     return;
   }

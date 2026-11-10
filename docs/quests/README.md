@@ -111,7 +111,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |
-| [Observatory Quest](observatory-quest/README.md) | ⚠️ passed with issues | 2026-10-25 | agent |  | 1 |
+| [Observatory Quest](observatory-quest/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 2 |
 | [Olaf's Quest](olafs-quest/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | One Small Favour | untested |  |  |  |  |
 | Pandemonium | untested |  |  |  |  |

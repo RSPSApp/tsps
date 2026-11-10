@@ -32,6 +32,7 @@ function setup(completed = []) {
     variants: [],
     npcActions: new Map(),
     object: [],
+    objectRoute: [],
     namedObjects: new Map(),
     itemOnObject: [],
     namedItemOnObject: [],
@@ -72,6 +73,7 @@ function setup(completed = []) {
     onNpcInteraction(names, actions) {
       for (const name of [].concat(names)) hooks.npcActions.set(name, actions);
     },
+    onObjectRoute(handler) { hooks.objectRoute.push(handler); },
     onObjectInteraction(nameOrHandler, actions) {
       if (typeof nameOrHandler === 'function') hooks.object.push(nameOrHandler);
       else hooks.namedObjects.set(nameOrHandler, actions);
@@ -613,6 +615,51 @@ test('Cabin Fever objectives cannot advance out of order', () => {
   h.action('V-4Bls');
   assert.equal(h.stage(), 9);
   assert.equal(h.quest.isComplete(h.player), true);
+});
+
+test('only ordinary plunder in the enemy hold routes to the reachable side of its chest', () => {
+  const h = setup();
+  let mobile = true;
+  let privateArea = null;
+  h.player.getMovementQueue = () => ({ getMobility: () => ({ canMove: () => mobile }) });
+  h.player.getPrivateArea = () => privateArea;
+  const location = new core.Location(1823, 4840, 0);
+  const chest = { getLocation: () => location, getPrivateArea: () => null };
+  const atChest = { x: 1824, y: 4840, z: 0 };
+  const route = (extra = {}) => {
+    const event = {
+      player: h.player,
+      object: chest,
+      objectId: 11230,
+      clickType: 1,
+      definition: { getInteractions: () => ['Plunder', 'Inspect'] },
+      sourceLocation: atChest,
+      destination: null,
+      ...extra,
+    };
+    for (const handler of h.hooks.objectRoute) handler(event);
+    return event.destination;
+  };
+
+  h.quest.setStage(h.player, 4);
+  assert.equal(route(), null);
+  h.quest.setStage(h.player, 5);
+  assert.deepEqual(route(), atChest);
+  assert.deepEqual(route({ sourceLocation: { x: 1824, y: 4838, z: 0 } }), atChest);
+  assert.equal(route({ clickType: 0 }), null, 'item use stays on its normal route');
+  assert.equal(route({ clickType: 2 }), null, 'other object actions stay on their normal route');
+  assert.equal(route({ objectId: 11227 }), null, 'other containers stay on their normal route');
+  assert.equal(route({ object: { ...chest, getLocation: () => new core.Location(1823, 4839, 0) } }), null);
+  assert.equal(route({ sourceLocation: { ...atChest, z: 1 } }), null, 'deck clicks stay on their normal route');
+  assert.equal(route({ sourceLocation: { ...atChest, x: 1818 } }), null);
+  privateArea = {};
+  assert.equal(route(), null, 'a player in a private area keeps normal routing');
+  privateArea = null;
+  mobile = false;
+  assert.equal(route(), null, 'movement locks keep normal routing');
+  mobile = true;
+  h.quest.setStage(h.player, 6);
+  assert.equal(route(), null);
 });
 
 test('Cabin Fever named NPC, object, item and death handlers are wired', () => {

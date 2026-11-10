@@ -250,6 +250,7 @@ module.exports = function registerCabinFeverQuest(api) {
   // The canister round kills the level 57 pirate it hits (52 hitpoints).
   const CANISTER_DAMAGE = 52;
   const ENEMY_SHIP_BOUNDS = { minX: 1819, maxX: 1827, minY: 4824, maxY: 4843 };
+  const ENEMY_HOLD_CHEST_TILE = new Location(1823, 4840, 0);
 
   // Cache DB (table 0, column 19) completes Cabin Fever at varp 655 value 140.
   // Internal stages stay 0-9; this is the durable stage -> wire mapping.
@@ -1051,6 +1052,19 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, VARBIT_FUSE_2, 1);
     playVariant(player, "dealing-with-the-cannon-the-fuse-is-lit");
     return true;
+  }
+
+  function routePlunderChest(event) {
+    const { player, object, objectId, sourceLocation } = event;
+    if (objectId !== ENEMY_CHEST || quest.getStage(player) !== STAGE_PLUNDER
+      || optionOf(event) !== "plunder" || !object.getLocation().equals(ENEMY_HOLD_CHEST_TILE)) return;
+
+    // The transformed chest masks its only reachable side, on the east of the hold.
+    const { x, y, z } = sourceLocation;
+    if (z !== 0 || x < 1824 || x > 1825 || y < 4838 || y > 4840
+      || player.getPrivateArea() || object.getPrivateArea()
+      || !player.getMovementQueue().getMobility().canMove()) return;
+    event.destination = { x: 1824, y: 4840, z: 0 };
   }
 
   function lootPlunder(player, source) {
@@ -1878,6 +1892,7 @@ module.exports = function registerCabinFeverQuest(api) {
   });
   api.onObjectInteraction("Broken Cannon", { Repair: delegateObjectInteraction });
   api.onObjectInteraction("Crate", { Loot: delegateObjectInteraction });
+  api.onObjectRoute(routePlunderChest);
   api.onObjectInteraction("Closed chest", { Plunder: delegateObjectInteraction });
   api.onObjectInteraction("Open chest", { Plunder: delegateObjectInteraction });
   api.onObjectInteraction("Plunder Storage", {

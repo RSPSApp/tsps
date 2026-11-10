@@ -999,7 +999,9 @@ export class ShopManager {
         if (remaining <= 0) {
             shop.stock.delete(itemId);
             if (!shop.originalAmounts.has(itemId)) {
-                shop.order = shop.order.filter((id) => id !== itemId);
+                // In place: versions sharing a stock (shareStock) hold this same array.
+                const slot = shop.order.indexOf(itemId);
+                if (slot >= 0) shop.order.splice(slot, 1);
             }
         } else {
             shop.stock.set(itemId, remaining);

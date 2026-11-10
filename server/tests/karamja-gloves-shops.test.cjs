@@ -162,3 +162,36 @@ test("a gloves version is the same shop as its Default one: one stock, its own p
   assert.equal(stock(plain, I.UNCUT_ONYX), 0, "the Default version's stock went with it");
   assert.equal(cost(plain, I.UNCUT_ONYX), 304_000, "at its own rate: 150% + 2% for the one below its normal stock");
 });
+
+test("an item sold to either version shows in both, and a destock to 0 keeps them one stock", () => {
+  ShopManager.shareStock(KaramjaGloves.defaultVersion);
+  ShopManager.initialize();
+  const [base, gloves] = STORES[2]; // Obli's General Store: buys anything, destocks what players sold.
+  assert.equal(ShopDefinition.forId(shopId(base)).getOriginalStock().some((entry) => entry.id === I.STEEL_AXE), false);
+  const plain = shopper();
+  const gloved = shopper(I.KARAMJA_GLOVES_1);
+  plain.getInventory().add(new Item(I.STEEL_AXE, 1), false);
+  gloved.getInventory().add(new Item(I.STEEL_AXE, 2), false);
+  ShopManager.open(plain, shopId(base));
+  ShopManager.open(gloved, shopId(gloves));
+  const shows = (p) => ShopManager.getOpenShop(p).stock.find((entry) => entry.itemId === I.STEEL_AXE)?.amount ?? 0;
+  const sell = (p) => ShopManager.handleWidgetAction(p, {
+    groupId: ShopManager.SIDE_INTERFACE_ID, childId: 0, buttonNum: 0, option: "Sell 1",
+    slot: p.getInventory().getItems().findIndex((item) => item?.getId() === I.STEEL_AXE), itemId: I.STEEL_AXE,
+  });
+  const destock = () => {
+    for (let tick = 0; tick < 10_000 && (shows(plain) > 0 || shows(gloved) > 0); tick++) ShopManager.restockAll();
+  };
+
+  sell(gloved);
+  assert.deepEqual([shows(plain), shows(gloved)], [1, 1], "sold at the gloves version");
+  destock();
+  assert.deepEqual([shows(plain), shows(gloved)], [0, 0], "destocked from both");
+
+  sell(gloved);
+  assert.deepEqual([shows(plain), shows(gloved)], [1, 1], "sold again after the destock");
+  sell(plain);
+  assert.deepEqual([shows(plain), shows(gloved)], [2, 2], "and at the Default version");
+  destock();
+  assert.deepEqual([shows(plain), shows(gloved)], [0, 0], "destocked from both again");
+});

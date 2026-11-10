@@ -424,6 +424,39 @@ test("Jeb rows across under seaslug_boat_travel and lands on the platform with i
   assert.equal(player.blocked, false);
 });
 
+test("Holgart's Sea Slug legs row under their own layers, play the silence song and land on the captured ticks", () => {
+  // Capture 20261110T112750 (rev 242): the platform -> Witchaven leg fades at 427, lands at 429 with
+  // song 147 and jingle 172 under layer 11, and shows its message box at 438 (eleven ticks on).
+  const player = createPlayer({ at: new Location(2782, 3274, 0) });
+  const request = { player, route: "sea-slug-witchaven", handled: false };
+  for (const handler of hooks.events.get("ferries:travel")) handler(request);
+  assert.equal(request.handled, true);
+  tick(2);
+  assert.deepEqual(at(player), [2722, 3305, 0]);
+  assert.deepEqual(player.sent.songs, [147]);
+  assert.deepEqual(player.sent.jingles, [172]);
+  assert.deepEqual(player.sent.shown, [CacheDefinitions.getComponentId("seaslug_boat_travel:seaslug_fishpier_to_witchhaven_layer")]);
+  tick(8);
+  assert.deepEqual(player.sent.boxes, [], "not yet at tick 10");
+  tick(1);
+  assert.deepEqual(player.sent.boxes, ["The boat arrives at Witchaven."]);
+  assert.equal(player.blocked, false);
+
+  // The island legs (ticks 172 and 220): layers 12 and 13.
+  for (const [route, layer, to] of [
+    ["sea-slug-island", "seaslug_fishpier_to_isle_layer", [2800, 3320, 0]],
+    ["sea-slug-island-return", "seaslug_isle_to_fishpier_layer", [2782, 3273, 0]],
+    ["sea-slug-platform", "seaslug_witchhaven_to_fishingpier_layer", [2782, 3273, 0]],
+  ]) {
+    const rower = createPlayer({ at: new Location(2782, 3274, 0) });
+    for (const handler of hooks.events.get("ferries:travel")) handler({ player: rower, route });
+    tick(2);
+    assert.deepEqual(at(rower), to, route);
+    assert.deepEqual(rower.sent.shown, [CacheDefinitions.getComponentId(`seaslug_boat_travel:${layer}`)], route);
+    tick(10);
+  }
+});
+
 test("a logout at sea lands the player at the destination; a shutdown lands everyone", () => {
   const player = createPlayer();
   click(player, "Squire", "Travel", { gameval: "pest_squire_ship_portsarim" });

@@ -1,8 +1,8 @@
 /**
  * A boss's kill-count line ("Your Zulrah kill count is: N."), sent through one place so it follows
- * All Settings' "Filter out boss kill-count with spam-filter" (boss_killcount_filtered): with it on
- * the line goes to the spam channel, which the chatbox's Game filter hides; with it off it is an
- * ordinary game message.
+ * All Settings' "Filter out boss kill-count with spam-filter" (boss_killcount_filtered): with it off
+ * it is an ordinary game message. Ours: with it on the line goes to the spam channel, which the
+ * chatbox's Game filter hides (no capture shows the setting on).
  *
  *   const { sendBossKillCount } = require("<path>/interface/BossKillCount.plugin");
  *   sendBossKillCount(player, `Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
@@ -27,6 +27,6 @@ module.exports = {
   sendBossKillCount,
   FILTERED_VARBIT,
   register(api) {
-    initialize(api.core);
+    api.onServerStartup(initialize.bind(null, api.core));
   },
 };

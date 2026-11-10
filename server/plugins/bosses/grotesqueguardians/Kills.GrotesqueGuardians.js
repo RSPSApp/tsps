@@ -46,7 +46,8 @@ function guardianDeath({ npc, killer }) {
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, own);
   rollDrops(player, npc);
-  const lines = [Common.message("killCount", { kills: Math.max(own, countedKills(player) ?? 0) })];
+  const killLine = Common.message("killCount", { kills: Math.max(own, countedKills(player) ?? 0) });
+  const lines = [];
   if (startedAt >= 0) {
     const ticks = Common.core.World.getProcessCycle() - startedAt;
     const previous = Number(player.getAttribute(Common.BEST_ATTRIBUTE)) || 0;
@@ -55,7 +56,10 @@ function guardianDeath({ npc, killer }) {
     if (!previous || ticks < previous) Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     lines.push(Common.message("duration", { time: Common.formatTicks(ticks), best: Common.formatTicks(best) }));
   }
-  Common.later(1, () => lines.forEach((line, index) => (index === 0 ? sendBossKillCount(player, line) : player.sendMessage(line))));
+  Common.later(1, () => {
+    sendBossKillCount(player, killLine);
+    lines.forEach((line) => player.sendMessage(line));
+  });
 }
 
 /** "slayer:task-kill": Dusk's Slayer experience is the pair's (Wiki). */

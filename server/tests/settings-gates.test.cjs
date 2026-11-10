@@ -114,7 +114,7 @@ test('Reset volume sliders to default sets every slider back to 100, sent and sa
 
 test('a boss kill count is an ordinary game message, or filterable spam with the row on', () => {
   const KillCount = require('../plugins/interface/BossKillCount.plugin');
-  KillCount.register({ core });
+  KillCount.register({ core, onServerStartup: (start) => start() });
   const line = 'Your Zulrah kill count is: <col=ff0000>5</col>.';
   const off = player();
   KillCount.sendBossKillCount(off, line);

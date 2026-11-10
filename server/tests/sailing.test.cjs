@@ -2906,6 +2906,12 @@ test("All Settings 461: leaving the helm stops the boat unless the row is untick
       assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
       assert.equal(h.log.varbits.get(VARBIT.FACILITY_LOCKEDIN), 0);
       assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_HELM_STATUS), HELM_STATUS.FREE);
+      // Taking the helm and letting go without setting sail still stops (moored -> stopped).
+      helm.objects.Helm.Navigate({ player: h.player });
+      h.boat.moveMode = BoatMoveMode.Stopped;
+      h.player.getPacketSender().sendVarbit(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.MOORED);
+      helm.objects.Helm["Stop-navigating"]({ player: h.player });
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), MOVE_MODE.STOPPED, `at rest (${disabled})`);
     } finally {
       h.done();
     }

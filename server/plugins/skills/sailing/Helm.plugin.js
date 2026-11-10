@@ -265,8 +265,10 @@ function leaveHelm(player, boat) {
   boat.helmPlayerId = undefined;
   setVarbit(player, VARBIT.FACILITY_LOCKEDIN, 0);
   // All Settings "Stop the boat when leaving the helm" (ticked while 0): unticked, the boat sails
-  // on as it was set. A content scene's ship always stops.
-  if (!supplied && getVarbit(player, VARBIT_STOP_WHEN_LEAVING_HELM_DISABLED) === 1) releaseHelmUnderSail(player, boat);
+  // on as it was set. A boat already at rest, or a content scene's ship, stops as before.
+  const sailsOn = !supplied && boat.moveMode !== BoatMoveMode.Stopped
+    && getVarbit(player, VARBIT_STOP_WHEN_LEAVING_HELM_DISABLED) === 1;
+  if (sailsOn) releaseHelmUnderSail(player, boat);
   else stopNavigating(player, boat);
   player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   playHelmSound(player, boat, "exit");

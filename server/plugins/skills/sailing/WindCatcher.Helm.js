@@ -216,7 +216,9 @@ function onPanelClick(event) {
 }
 
 function isSpecialAttackOrb(widgetId) {
-  specialAttackOrbIds ??= new Set(SPECIAL_ATTACK_ORBS.map((name) => CacheDefinitions.getComponentId(name)).filter(Number.isInteger));
+  if (!specialAttackOrbIds?.size) {
+    specialAttackOrbIds = new Set(SPECIAL_ATTACK_ORBS.map((name) => CacheDefinitions.getComponentId(name)).filter(Number.isInteger));
+  }
   return specialAttackOrbIds.has(widgetId);
 }
 

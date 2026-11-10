@@ -54,6 +54,7 @@
     "83": { "name": "Enable separating hours", "varbit": 11890 },
     "84": { "name": "Food/Potions can form supply piles on death", "varbit": 11893 },
     "86": { "name": "Modern Layout - Side panel visual appearance", "varbit": 12135 },
+    "111": { "name": "Show normal health overlay", "varbit": 12390 },
     "114": { "name": "Show mouseover tooltips", "varbit": 12344 },
     "119": { "name": "Chat timestamps", "varbit": 12384, "script": 4586 },
     "123": { "name": "Show attack style", "varbit": 12352 },

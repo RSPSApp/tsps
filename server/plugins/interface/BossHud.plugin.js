@@ -18,6 +18,14 @@
  *   first (rev 241, hpbar_hud_show_extra_bar): the Smorks under Bork, Ocellus' first phase. Live
  *   sets varp 5991, varbits 16570/16571 (current, maximum), colours on 303:24-26 and runs 10152
  *   (false); `hidden` takes it away again.
+ *
+ * The same HUD in standard mode (hpbar_hud_boss 0) is the normal health overlay: with "Show normal
+ * health overlay" on (hpbar_hud_standard_disabled, varbit 12390, 0), a player's attack on any NPC
+ * a boss doesn't drive shows that NPC (its id, hitpoints and maximum, the usual colours, the open
+ * script and a fade in), each hit on it updates the hitpoints, and 8 ticks after the player's last
+ * attack it fades out and clears 4 ticks later, as captured. A boss's own HUD always wins: an NPC
+ * any boss event has named never gets the standard one, and a boss show replaces it.
+ * Ours: the HUD follows the player's own combat target when a multi-target attack rolls several.
  */
 const GROUP = 303;
 const uid = (child) => (GROUP << 16) | child;
@@ -61,14 +69,21 @@ const EXTRA_REDRAW_SCRIPT = 10152;
 /** health_bar_back_extra, _sliding_extra and _remaining_extra. */
 const EXTRA_COLOUR_COMPONENTS = [24, 25, 26].map(uid);
 
+const STANDARD_DISABLED_VARBIT = 12390;
+const STANDARD_FADE_AFTER_TICKS = 8;
+
 let core = null;
 /** Per player: what their HUD shows, and a counter that cancels a pending hide. */
 const shown = new WeakMap();
+/** NPC ids a boss drives the HUD for; the standard HUD leaves them alone. */
+const bossNpcIds = new Set();
+/** Per NPC: the players whose standard HUD shows it, for its hitpoint updates. */
+const watchers = new WeakMap();
 
 function stateOf(player) {
   let state = shown.get(player);
   if (!state) {
-    state = { npcId: -1, current: -1, maximum: -1, colours: null, generation: 0 };
+    state = { npcId: -1, current: -1, maximum: -1, colours: null, generation: 0, mode: null, npc: null, idleTicks: 0 };
     shown.set(player, state);
   }
   return state;
@@ -89,7 +104,10 @@ function sendValues(player, state, { npcId, current, maximum }, force) {
 
 function showHud({ player, npcId, current, maximum, colours = COLOURS }) {
   if (!player) return;
+  if (npcId != null) bossNpcIds.add(npcId);
   const state = stateOf(player);
+  unwatch(player, state);
+  state.mode = "boss";
   state.generation++;
   const sender = player.getPacketSender();
   sendValues(player, state, { npcId, current, maximum }, true);
@@ -102,6 +120,7 @@ function showHud({ player, npcId, current, maximum, colours = COLOURS }) {
 
 function updateHud({ player, npcId, current, maximum, colours, force = false }) {
   if (!player) return;
+  if (npcId != null) bossNpcIds.add(npcId);
   const state = stateOf(player);
   sendValues(player, state, { npcId, current, maximum }, force);
   if (colours && (force || colours.join() !== state.colours?.join())) {
@@ -118,7 +137,8 @@ function fadeHud({ player, fadeIn }) {
 
 function clear(player, hideHp = true) {
   const state = stateOf(player);
-  Object.assign(state, { npcId: -1, current: -1, maximum: -1, colours: null });
+  unwatch(player, state);
+  Object.assign(state, { npcId: -1, current: -1, maximum: -1, colours: null, mode: null });
   const sender = player.getPacketSender()
     .sendConfig(NPC_VARP, -1)
     .sendVarbit(CURRENT_VARBIT, 0)
@@ -135,6 +155,7 @@ function hideHud({ player, fade = true, afterTicks = HIDE_AFTER_TICKS }) {
   if (!player) return;
   const state = stateOf(player);
   const generation = ++state.generation;
+  state.hiding = true;
   if (fade) fadeHud({ player, fadeIn: false });
   if (afterTicks <= 0) {
     clear(player, !fade);
@@ -154,6 +175,9 @@ function hideHud({ player, fade = true, afterTicks = HIDE_AFTER_TICKS }) {
 
 function resetHud({ player }) {
   if (!player) return;
+  const state = stateOf(player);
+  unwatch(player, state);
+  state.mode = null;
   const sender = player.getPacketSender();
   sender.sendInterfaceDisplayState(HP, true);
   sender.sendInterfaceScript(CLEAR_SCRIPT, [CONTAINER]);
@@ -181,13 +205,92 @@ function extraHud({ player, current, maximum, colours, hidden = false }) {
   sender.sendClientScript(EXTRA_REDRAW_SCRIPT, 0);
 }
 
+/** Stops the standard HUD's hitpoint updates for the NPC it showed. */
+function unwatch(player, state) {
+  if (state.npc) watchers.get(state.npc)?.delete(player);
+  state.npc = null;
+  state.hiding = false;
+}
+
+function standardEnabled(player) {
+  return player.getPacketSender().getVarbit(STANDARD_DISABLED_VARBIT) === 0;
+}
+
+/** A player's attack roll on an NPC shows it on their standard HUD, or keeps it there. */
+function onHitRolled({ attacker, target }) {
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.()) return;
+  const player = attacker.getAsPlayer?.() ?? attacker;
+  const state = stateOf(player);
+  if (state.mode === "boss") return;
+  if (state.mode === "standard" && state.npc === target && !state.hiding) {
+    state.idleTicks = 0;
+    return;
+  }
+  if (bossNpcIds.has(target.getId()) || !standardEnabled(player)) return;
+  if (state.mode === "standard" && state.npc !== target && player.getCombat?.().getTarget?.() !== target) return;
+  showStandard(player, state, target);
+}
+
+function showStandard(player, state, npc) {
+  unwatch(player, state);
+  state.generation++;
+  state.mode = "standard";
+  state.npc = npc;
+  state.idleTicks = 0;
+  let set = watchers.get(npc);
+  if (!set) watchers.set(npc, (set = new Set()));
+  set.add(player);
+  const sender = player.getPacketSender();
+  sendValues(player, state, { npcId: npc.getId(), current: npc.getHitpoints(), maximum: npc.getMaxHitpoints() }, true);
+  sender.sendVarbit(BOSS_VARBIT, 0);
+  sendColours(player, COLOURS);
+  state.colours = COLOURS;
+  sender.sendInterfaceScript(OPEN_SCRIPT, OPEN_COMPONENTS);
+  sender.sendInterfaceScript(FADE_IN_SCRIPT, [...FADE_COMPONENTS, SHOW_FADE_FROM]);
+  if (!state.idleTask) startIdleTask(player, state);
+}
+
+/** Counts the ticks since the player's last attack and fades the standard HUD out after 8. */
+function startIdleTask(player, state) {
+  const { Task, TaskManager } = core;
+  state.idleTask = true;
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(1, player, false);
+    }
+    execute() {
+      const live = player.isRegistered?.() !== false;
+      if (!live || state.mode !== "standard" || state.hiding) {
+        state.idleTask = false;
+        this.stop();
+        return;
+      }
+      if (++state.idleTicks < STANDARD_FADE_AFTER_TICKS) return;
+      state.idleTask = false;
+      this.stop();
+      hideHud({ player });
+    }
+  })());
+}
+
+/** A hit on an NPC updates the hitpoints of every standard HUD showing it. */
+function onDamageApplied({ target }) {
+  const set = target && watchers.get(target);
+  if (!set) return;
+  const current = target.getHitpoints();
+  for (const player of set) {
+    const state = stateOf(player);
+    if (state.mode === "standard" && state.npc === target) sendValues(player, state, { current }, false);
+  }
+}
+
 function bind(api) {
   core = api.core;
 }
 
 module.exports = {
   name: "BossHud",
-  description: "The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide.",
+  description: "The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide, and the normal health overlay for any other NPC a player attacks.",
   register(api) {
     bind(api);
     api.onCustomEvent("boss-hud:show", showHud);
@@ -196,5 +299,7 @@ module.exports = {
     api.onCustomEvent("boss-hud:hide", hideHud);
     api.onCustomEvent("boss-hud:reset", resetHud);
     api.onCustomEvent("boss-hud:extra", extraHud);
+    api.onCustomEvent("combat:hit-rolled", onHitRolled);
+    api.onCustomEvent("combat:damage-applied", onDamageApplied);
   },
 };

@@ -144,6 +144,7 @@ test("Empty leaves the vial: potions, unfinished potions and a vial of water", (
 function createPlayer({ base = 99, current = 1, inventory = [], equipment = [] } = {}) {
   const levels = new Map(Skill.values().map((skill) => [skill, current]));
   const attributes = new Map();
+  const varbits = [];
   let runEnergy = 0;
   const poisonImmunity = {
     seconds: 0,
@@ -155,6 +156,7 @@ function createPlayer({ base = 99, current = 1, inventory = [], equipment = [] }
   };
   const player = {
     levels,
+    varbits,
     attributes,
     prayerActive: [],
     poisonImmunity,
@@ -166,7 +168,7 @@ function createPlayer({ base = 99, current = 1, inventory = [], equipment = [] }
     getPrayerActive: () => player.prayerActive,
     getInventory: () => ({ contains: (id) => inventory.includes(id) }),
     getEquipment: () => ({ contains: (id) => equipment.includes(id) }),
-    getPacketSender: () => ({ sendSound() { return this; }, sendPoisonType() {}, sendRunEnergy() {} }),
+    getPacketSender: () => ({ sendSound() { return this; }, sendPoisonType() {}, sendRunEnergy() {}, sendVarbit(id, value) { varbits.push([id, value]); return this; } }),
     getSession: () => ({ sendClientPacket() {} }),
     setHitpoints(value) { levels.set(Skill.HITPOINTS, value); },
     setPoisonDamage(value) { player.poisonDamage = value; },
@@ -684,6 +686,41 @@ test("prayer regeneration restores a point every 12 ticks, never above max, and 
 
 // rsprox_transcripts/239/04269.txt, 239/04288.txt and 231/02990.txt (normal worlds): the timer steps 66 down to 0 every
 // 12 ticks; "...has almost run out!" at 3 left, "...have worn off." at 0, and the worn-off line on death too (239/04272).
+// The client's timer, as recorded: prayer_regeneration_potion_timer (11361) 0 -> 66 on a drink (231/02990.txt:8541), a
+// step down every 12 ticks, 57 -> 66 on a re-drink (239/04272.txt:13136), -> 0 on expiry or death (239/04272:65174).
+test("prayer regeneration sends its timer varbit: 66 on a drink, each step, 0 at the end, and again on login", () => {
+  const TIMER = 11361;
+  const { resumePrayerRegenerationTimer } = Potions._test;
+  const player = createPlayer({ base: 99, current: 1 });
+  const values = () => player.varbits.filter(([id]) => id === TIMER).map(([, value]) => value);
+  const step = () => { player.getAttribute("potions:prayer-regen:state").nextRestoreAt = Date.now() - 1; processPrayerRegeneration(player); };
+  applyPrayerRegeneration(player);
+  assert.deepEqual(values(), [66], "a drink");
+  step(); step(); step();
+  assert.deepEqual(values(), [66, 65, 64, 63], "a step each interval");
+  applyPrayerRegeneration(player);
+  assert.equal(values().at(-1), 66, "a re-drink starts it again");
+  player.varbits.length = 0;
+  resumePrayerRegenerationTimer({ player });
+  assert.deepEqual(values(), [66], "login shows a running potion's steps");
+  clearPrayerRegeneration({ player });
+  assert.equal(values().at(-1), 0, "death zeroes it");
+  player.varbits.length = 0;
+  resumePrayerRegenerationTimer({ player });
+  assert.deepEqual(values(), [], "nothing to show with no potion running");
+
+  const expiring = createPlayer({ base: 99, current: 1 });
+  const lines = [];
+  expiring.sendMessage = (text) => lines.push(`line`);
+  applyPrayerRegeneration(expiring);
+  expiring.getAttribute("potions:prayer-regen:state").left = 1;
+  expiring.varbits.length = 0;
+  expiring.getAttribute("potions:prayer-regen:state").nextRestoreAt = Date.now() - 1;
+  processPrayerRegeneration(expiring);
+  assert.deepEqual(expiring.varbits, [[TIMER, 0]], "the last step sends 0");
+  assert.equal(lines.length, 1, "with the worn-off line");
+});
+
 test("prayer regeneration: 66 steps, the warning at 3 left, the worn-off line at the end and on death", () => {
   const WARNING = "<col=ff3045>Your Prayer Regeneration potion has almost run out!";
   const WORN_OFF = "<col=ff3045>The effects of your Prayer Regeneration potion have worn off.";

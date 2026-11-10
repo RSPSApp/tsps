@@ -443,6 +443,16 @@ function nestOrphanConditions(steps) {
   });
 }
 
+/**
+ * The quest start warning ("Before starting this quest, be aware that your combat level is
+ * lower than the recommended level of N") sits under this exact wiki condition. Plugins that
+ * need other wording answer their own conditions first; this only settles the bare form.
+ */
+function combatLevelCondition(player, text) {
+  const match = /^If the player's combat level is lower than (\d+):$/.exec(String(text ?? ""));
+  return match ? player.getSkillManager().getCombatLevel() < Number(match[1]) : null;
+}
+
 /** First-true (else first-unknown, else none) pick for a run of sibling conditions. */
 function chooseCondition(run, resolveCondition) {
   const answers = run.map((condition) => resolveCondition(condition));
@@ -595,7 +605,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     PluginManager.emitNpcDialogueCondition({
       player, npc: event.npc, npcId, definition, pages: context.pages,
       text: step.text, stepId: step.id,
-    });
+    }) ?? combatLevelCondition(player, step.text);
 
   // "shows other/previous/initial options" ({{tact|other}} etc.) replays a menu
   // that has already been shown. "previous2/3" walk further back, "initial" is
@@ -1141,6 +1151,7 @@ module.exports = {
   pickVariant,
   aliasKeys,
   flatten,
+  combatLevelCondition,
   formatPlayerText,
   startDialogue,
   collectPageLines,

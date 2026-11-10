@@ -104,7 +104,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   /** Bit per monument (MONUMENTS index) whose golden souvenir has been swapped out. */
   const SOUVENIRS_ATTRIBUTE = "priest-in-peril:souvenirs";
   /** Transcript message shown only below the recommended combat level. */
-  const COMBAT_WARNING_STEP_ID = "0cBLcT";
+  const COMBAT_WARNING_STEP_ID = "gtY6Dq";
   const RECOMMENDED_COMBAT_LEVEL = 15;
 
   // The mausoleum trapdoors, closed and open: 1579/1581 north of the temple (over the

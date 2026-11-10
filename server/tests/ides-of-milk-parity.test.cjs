@@ -119,7 +119,7 @@ test('the low-combat recommendation is a start-menu warning, not a transcript bo
   const lowMenu = { player: low, prompt: 'Start The Ides of Milk quest?', warning: null };
   h.emit('npc-dialogue:menu', lowMenu);
   assert.equal(lowMenu.warning, 'Before starting this quest, be aware that your combat level is lower than the recommended level of 15.');
-  assert.equal(h.action(low, N.CASSIUS_2, 'bkgpn5').handled, true);
+  assert.equal(h.action(low, N.CASSIUS_2, 'kbEA-p').handled, true);
 
   const high = player();
   const highMenu = { player: high, prompt: 'Start The Ides of Milk quest?', warning: null };

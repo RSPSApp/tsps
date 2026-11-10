@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
-const { pickVariant, aliasKeys, flatten, startDialogue, speakerIdIndex, collectMenuBefore } = require('../plugins/npcs/NpcDialogues.plugin');
+const { pickVariant, aliasKeys, flatten, combatLevelCondition, startDialogue, speakerIdIndex, collectMenuBefore } = require('../plugins/npcs/NpcDialogues.plugin');
 
 const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogues.json'), 'utf8'));
 const aliases = aliasKeys(data);
@@ -1692,4 +1692,27 @@ test('production below uses an adjacent menu but retains historical above and no
   const above = belowContinuationPlayback(tree('above', true), {}, 'Second');
   assert.deepEqual(above.said, ['Second topic.', 'First topic.']);
   assert.deepEqual(above.prompts, ['Topics', 'Follow-up']);
+});
+
+test('the recommended-level warning shows only below the recommended combat level (issue 4110)', () => {
+  const at = (level) => ({ getSkillManager: () => ({ getCombatLevel: () => level }) });
+  const guard = "If the player's combat level is lower than 10:";
+  assert.equal(combatLevelCondition(at(126), guard), false);
+  assert.equal(combatLevelCondition(at(10), guard), false);
+  assert.equal(combatLevelCondition(at(9), guard), true);
+  assert.equal(combatLevelCondition(at(3), "If the player's combat level is lower than 50:"), true);
+  assert.equal(combatLevelCondition(at(3), 'If the player has a combat level less than 20:'), null, 'other wording stays with its plugin');
+  // Every start warning in the dump sits under a condition, and the combat ones are the bare form.
+  for (const quest of ['Druidic Ritual', 'Fairytale I - Growing Pains', 'Fight Arena', 'Priest in Peril', 'The Ides of Milk', 'Tree Gnome Village']) {
+    const warnings = [];
+    const walk = (node, guarded) => {
+      if (Array.isArray(node)) return node.forEach((child) => walk(child, guarded));
+      if (!node || typeof node !== 'object') return;
+      if (typeof node.text === 'string' && node.text.startsWith('Before starting this quest, be aware that your combat level')) warnings.push(guarded);
+      const inner = guarded || node.type === 'condition';
+      for (const value of Object.values(node)) walk(value, inner);
+    };
+    walk(data[quest], false);
+    assert.ok(warnings.length > 0 && warnings.every(Boolean), quest);
+  }
 });

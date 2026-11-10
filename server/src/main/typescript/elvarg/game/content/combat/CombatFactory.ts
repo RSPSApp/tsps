@@ -257,6 +257,7 @@ export class CombatFactory {
         // We've got our damage. We can now create a HitDamage
         // instance.
         let hitDamage = new HitDamage(damage, damage == 0 ? HitMask.BLUE : HitMask.RED);
+        if (rolls && entity.isPlayer()) hitDamage.setRolledMaximum(range.maximum);
 
         /**
          * Prayers decreasing damage.

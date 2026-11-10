@@ -22,6 +22,7 @@
     "119": { "name": "Chat timestamps", "varbit": 12384, "script": 4586 },
     "123": { "name": "Show attack style", "varbit": 12352 },
     "127": { "name": "Leagues: Display Relics", "varbit": 12383 },
+    "147": { "name": "Show mouseover text", "varbit": 10035 },
     "54": { "name": "Modern Layout - Side panel can be closed by the hotkeys", "varbit": 4611 },
     "55": { "name": "Player Attack options", "varp": 1107 },
     "56": { "name": "NPC Attack options", "varp": 1306 },

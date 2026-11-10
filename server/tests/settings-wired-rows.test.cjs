@@ -21,7 +21,7 @@ const DROPDOWN = 2;
 const TOGGLES = {
   2: 4609, 3: 4181, 4: 5711, 6: 5712, 9: 10113, 265: 14179, 442: 17772, 472: 19615, 473: 19646, 474: 19647,
   36: 4089, 83: 11890, 195: 13120, 430: 16116,
-  123: 12352, 127: 12383, 164: 12380, 311: 14806, 362: 15323, 418: 11562, 460: 18132, 476: 19681,
+  123: 12352, 127: 12383, 147: 10035, 164: 12380, 311: 14806, 362: 15323, 418: 11562, 460: 18132, 476: 19681,
 };
 const DROPDOWNS = { 1: 6374, 86: 12135 };
 // Live defaults that are not zero: the fresh-account (Tutorial Island) logins in the rsprox captures.
@@ -232,4 +232,17 @@ test('a Barracuda Trials "effects off" choice saved before the row existed moves
   assert.deepEqual(barracuda.trialProgress(p, second).extra, {});
   barracuda.sendProgress(p);
   assert.equal(emitted.length, 1, 'later progress updates leave the setting to the player');
+});
+
+test('Show mouseover text is sent at login as the player left it, shown by default', () => {
+  const login = (p) => { handlers.restoreSettings({ player: p }); handlers.sendMouseoverText({ player: p }); };
+  const fresh = player();
+  fresh.getPacketSender().sendVarbit(10035, 1);
+  login(fresh);
+  assert.equal(fresh.getPacketSender().getVarbit(10035), 0, 'a fresh account sees the text');
+  click(fresh, 147);
+  assert.equal(fresh.getPacketSender().getVarbit(10035), 1, 'the row hides it');
+  const next = player(fresh.attributes);
+  login(next);
+  assert.equal(next.getPacketSender().getVarbit(10035), 1, 'and it stays hidden after a relog');
 });

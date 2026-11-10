@@ -150,7 +150,8 @@ module.exports = function registerCabinFeverQuest(api) {
 
   const FUSE = ItemIdentifiers.FUSE; // 7109
   const GUNPOWDER = ItemIdentifiers.GUNPOWDER; // 7108
-  const CANISTER = ItemIdentifiers.CANISTER; // 7118
+  const CANISTER = ItemIdentifiers.CANISTER; // 7118, "Canister (animation item)"
+  const CANISTER_ALT = ItemIdentifiers.CANISTER_2; // 7149, the quest canister the locker gives in live
   const CF_CANNON_BALL = ItemIdentifiers.CANNON_BALL_2; // 7119
   const RAMROD = ItemIdentifiers.RAMROD; // 7120
   const REPAIR_PLANK = ItemIdentifiers.REPAIR_PLANK; // 7121
@@ -174,6 +175,7 @@ module.exports = function registerCabinFeverQuest(api) {
     GUNPOWDER,
     RAMROD,
     CANISTER,
+    CANISTER_ALT,
     CF_CANNON_BALL,
     STEEL_CANNONBALL,
     FUSE,
@@ -944,6 +946,26 @@ module.exports = function registerCabinFeverQuest(api) {
     return true;
   }
 
+  /**
+   * The locker hands out the real quest canister (7149). 7118 is the animation dummy the client
+   * wields while loading the cannon, and older saves still hold it, so both count towards the one.
+   */
+  function giveCanister(player) {
+    const inventory = player.getInventory();
+    const dummy = inventory.getAmount(CANISTER);
+    const real = inventory.getAmount(CANISTER_ALT);
+    // A save from before this fix holds the animation dummy: swap it for the real canister so
+    // Quest Helper's requirement passes.
+    if (dummy > 0 && real === 0) {
+      inventory.deleteNumber(CANISTER, dummy);
+      inventory.adds(CANISTER_ALT, dummy);
+      return true;
+    }
+    if (dummy + real >= 1) return false;
+    inventory.adds(CANISTER_ALT, 1);
+    return true;
+  }
+
   function openRepairLocker(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
@@ -982,7 +1004,7 @@ module.exports = function registerCabinFeverQuest(api) {
     }
     if (stage === STAGE_FIRE) {
       giveSupply(player, RAMROD, 1);
-      giveSupply(player, CANISTER, 1);
+      giveCanister(player);
       giveSupply(player, FUSE, 4);
       return;
     }
@@ -1266,10 +1288,10 @@ module.exports = function registerCabinFeverQuest(api) {
       }
       return false;
     }
-    if (itemId === CANISTER) {
+    if (itemId === CANISTER || itemId === CANISTER_ALT) {
       if (stage !== STAGE_FIRE) return false;
       if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return false;
-      player.getInventory().deleteNumber(CANISTER, 1);
+      player.getInventory().deleteNumber(itemId, 1);
       setVarbitValue(player, VARBIT_CANNON_AMMO, CANNON_AMMO_CANISTER);
       player.sendMessage("You roll the canister round into the cannon.");
       return true;
@@ -1662,6 +1684,7 @@ module.exports = function registerCabinFeverQuest(api) {
       GUNPOWDER,
       RAMROD,
       CANISTER,
+      CANISTER_ALT,
       CF_CANNON_BALL,
       CANNON_BARREL,
       REPAIR_PLANK,

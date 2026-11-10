@@ -175,3 +175,18 @@ test("the bone staff reaches 8 tiles, 10 on Longrange (Wiki: Attack range)", () 
   assert.equal(style(accurate), 8);
   assert.equal(style(longrange), 10);
 });
+
+test("the bone shortbow is a ranged weapon: shortbow speed and range, arrows up to amethyst (issue #4060)", () => {
+  const { Ammunition, RangedWeapon } = require("../dist/game/content/combat/ranged/RangedData");
+  const bow = RangedWeapon.BONE_SHORTBOW;
+  assert.deepEqual(bow.getWeaponIds(), [I.BONE_SHORTBOW]);
+  // Wiki: identical offensive stats to the magic shortbow, so the same speed, range and fight styles.
+  assert.equal(bow.getType().getDefaultDistance(), 7, "Wiki: 7 tiles");
+  assert.equal(bow.getType().getLongRangeDistance(), 9, "Wiki: 9 tiles on Longrange");
+  assert.equal(bow.getType().getLongRangeFightType(), RangedWeapon.MAGIC_SHORTBOW.getType().getLongRangeFightType());
+  const ammo = bow.getAmmunitionData();
+  assert.ok(ammo.includes(Ammunition.AMETHYST_ARROW), "fires up to amethyst arrows");
+  assert.ok(!ammo.includes(Ammunition.DRAGON_ARROW), "no dragon arrows");
+  const player = { getEquipment: () => ({ getItems: () => ({ 3: { getId: () => I.BONE_SHORTBOW } }) }) };
+  assert.equal(RangedWeapon.getFor(player), bow, "wielding it picks ranged combat, not melee");
+});

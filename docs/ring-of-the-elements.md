@@ -15,11 +15,16 @@ item (26815 uncharged, 26818 charged) and the varbits/spotanims named below.
   and lands on the third tick after the click. The charge is spent on that tick:
   `ring_of_the_elements_charges` drops by one and `ring_of_elements_last_destination` becomes
   1 (air), 2 (water), 3 (earth) or 4 (fire).
+- **Rub submenu.** The charged ring's Rub has the cache subops Air, Water, Earth and Fire
+  Altar. The client sends the entry's 0-based index (recording 364: subop 0 lands at the air
+  altar, 1 water, 2 earth, 3 fire); the server's `subOpId` is that plus one, and the plugin
+  takes the destination from the subop's cache label. Last Destination is its own inventory
+  option and the first worn option, never a Rub entry.
 - **Landing tiles.** Air (2980, 3278); earth (3286, 3467-3468); fire (3314, 3276); water
   (3165-3167, 3156-3160). The server uses one recorded tile for each altar (water 3165, 3160),
   the live ring's small spread is not reproduced.
 - **Low charges.** On landing with 5, 4, 3, 2 or 1 charges left the player receives
-  `<col=ef1c1c>Your ring of elements has N charges remaining.` ("1 charge remaining" for one).
+  `<col=ef1020>Your ring of elements has N charges remaining.` ("1 charge remaining" for one).
   No message is sent at 99-96 charges. Recordings show nothing between 6 and 95 remaining, so
   the server warns from five down.
 - **Uncharged ring.** Rub shows an item box with the ring: "Your ring of the elements has no

@@ -137,3 +137,28 @@ test("Davon sells at 110% and buys at 100% in his gloves version", () => {
   ShopManager.open(p, shopId("Davon's Amulet Store. (Karamja gloves)"));
   assert.equal(offer(p, I.AMULET_OF_POWER), 3525);
 });
+
+test("a gloves version is the same shop as its Default one: one stock, its own prices", () => {
+  ShopManager.shareStock(KaramjaGloves.defaultVersion);
+  ShopManager.initialize();
+  ShopManager.registerItemCurrency(I.TOKKUL);
+  assert.equal(KaramjaGloves.defaultVersion(ShopDefinition.forId(shopId(STORES[6][1]))), STORES[6][0]);
+  assert.equal(KaramjaGloves.defaultVersion(ShopDefinition.forId(shopId(STORES[6][0]))), null);
+
+  const plain = shopper();
+  ShopManager.open(plain, shopId(STORES[6][0]));
+  const gloved = shopper(I.KARAMJA_GLOVES_1);
+  gloved.getInventory().add(new Item(I.TOKKUL, 300_000), false);
+  ShopManager.open(gloved, shopId(STORES[6][1]));
+  const stock = (p, id) => ShopManager.getOpenShop(p).stock.find((entry) => entry.itemId === id)?.amount ?? 0;
+  assert.equal(stock(plain, I.UNCUT_ONYX), 1);
+
+  ShopManager.handleWidgetAction(gloved, {
+    groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 0, option: "Buy 1",
+    slot: ShopManager.getOpenShop(gloved).stock.findIndex((entry) => entry.itemId === I.UNCUT_ONYX) + 1, itemId: I.UNCUT_ONYX,
+  });
+  assert.equal(gloved.getInventory().getAmount(I.TOKKUL), 40_000, "bought at the gloves price, 260,000");
+  assert.equal(stock(gloved, I.UNCUT_ONYX), 0);
+  assert.equal(stock(plain, I.UNCUT_ONYX), 0, "the Default version's stock went with it");
+  assert.equal(cost(plain, I.UNCUT_ONYX), 304_000, "at its own rate: 150% + 2% for the one below its normal stock");
+});

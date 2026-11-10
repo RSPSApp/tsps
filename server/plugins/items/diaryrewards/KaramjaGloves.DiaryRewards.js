@@ -7,7 +7,8 @@
  * The generated shops.json gives each of these shops a Default and a gloves version on the same NPC option;
  * Trade and the shopkeepers' open_shop dialogue steps ask "npc-dialogue:shop" which one opens, and this unit
  * answers it from the gloves in the hands slot. Gloves taken off or put on while the shop is open change
- * nothing until it is opened again (ours).
+ * nothing until it is opened again (ours). Both versions are one shop with one stock: the gloves only
+ * change its prices, so the gloves version shows and trades its Default version's stock.
  */
 const Rewards = require("./Common.DiaryRewards");
 
@@ -40,9 +41,17 @@ function pickGlovesVersion(request) {
   if (version) request.shop = version;
 }
 
+/** The Default version whose stock a gloves version shares: "Davon's Amulet Store. (Karamja gloves)" -> "... (Default)". */
+function defaultVersion(definition) {
+  const name = String(definition?.getName?.() ?? "");
+  return GLOVES_VERSION.test(name) ? name.replace(GLOVES_VERSION, "(Default)") : null;
+}
+
 module.exports = function attach(api) {
   api.onCustomEvent("npc-dialogue:shop", pickGlovesVersion);
+  Rewards.core.ShopManager.shareStock(defaultVersion);
 };
+module.exports.defaultVersion = defaultVersion;
 module.exports.wornTier = wornTier;
 module.exports.requiredTier = requiredTier;
 module.exports.pickGlovesVersion = pickGlovesVersion;

@@ -50,11 +50,17 @@ gloves 3 or 4. Both versions are bound to the same NPC option. The DiaryRewards 
 `KaramjaGloves.DiaryRewards.js` picks the version through `npc-dialogue:shop`. Gabooty's two
 shops are picked by the Tai Bwo Wannai Cleanup plugin.
 
+The two versions are one shop with one stock; the gloves change only its prices. The same unit
+registers `ShopManager.shareStock`, so each gloves version (Gabooty's included) shows and trades
+its Default version's stock, and a purchase at either moves both prices.
+
 ## Evidence
 
 - rsprox captures: an uncut onyx costs 300,000 tokkul at the Mor Ul Rek gem stores (150%,
   recordings 83 and 3276) and 260,000 wearing the gloves (130%, recording 73). In the same
   recording a chaos rune sells for 31 tokkul (35% of 90). Uncut gems cost 1.5× their value
   rounded down (an uncut sapphire 37, recording 3276).
+- rsprox captures: Hur-Lek's, Hur-Rin's, Hur-Tel's and Mej-Roh's stores open the same shop
+  inventory with and without Karamja gloves worn (recordings 73, 91, 96, 1768, 1863, 3276).
 - rsprox captures: Gabooty's red topaz costs 240 trading sticks and sells for 120 (120% / 60%,
   recordings 1102 and 1858).

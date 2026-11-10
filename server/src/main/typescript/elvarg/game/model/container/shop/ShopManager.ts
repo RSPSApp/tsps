@@ -46,7 +46,12 @@ interface RuntimeShop {
     order: number[];
     originalSlotCount: number;
     changeTimers: Map<number, number>;
+    /** The shop whose stock this one shows and trades (see shareStock), or null when it keeps its own. */
+    stockOwner: number | null;
 }
+
+/** Names the shop version whose stock another version shares, or null (see ShopManager.shareStock). */
+export type ShopStockSource = (definition: ShopDefinition) => string | null | undefined;
 
 interface DisplayEntry {
     itemId: number;
@@ -94,6 +99,7 @@ export class ShopManager {
     private static readonly viewersByShopId = new Map<number, Set<any>>();
     private static restockTaskRunning = false;
     private static readonly currencyHandlers = new Map<string, ShopCurrencyHandler>();
+    private static readonly stockSources: ShopStockSource[] = [];
 
     public static registerCurrency(name: string, handler: ShopCurrencyHandler): void {
         if (!name || !handler || typeof handler.amount !== "function" || typeof handler.add !== "function" || typeof handler.remove !== "function") {
@@ -140,6 +146,7 @@ export class ShopManager {
         for (const definition of ShopDefinition.all()) {
             this.shopsById.set(definition.getId(), this.createRuntimeShop(definition));
         }
+        this.linkStock();
 
         for (const shopId of Array.from(this.viewersByShopId.keys())) {
             if (!this.shopsById.has(shopId)) {
@@ -160,6 +167,7 @@ export class ShopManager {
     public static registerShop(definition: ShopDefinition): void {
         ShopDefinition.register(definition);
         this.shopsById.set(definition.getId(), this.createRuntimeShop(definition));
+        this.linkStock();
     }
 
     /** Whether a shop is registered under this id (a plugin's per-player shop, see registerShop). */
@@ -176,6 +184,38 @@ export class ShopManager {
         this.refresh(shopId);
         this.ensureRestockTask();
         return true;
+    }
+
+    /**
+     * Lets versions of one store share a single stock: `source` names, for a shop definition, the version whose
+     * stock it shows and trades (null for none). Each version keeps its own name, currency and prices, so a
+     * player's trade at either version moves the stock both show. Applies now and after every reload.
+     */
+    public static shareStock(source: ShopStockSource): void {
+        this.stockSources.push(source);
+        this.linkStock();
+        for (const shopId of Array.from(this.viewersByShopId.keys())) this.refresh(shopId);
+    }
+
+    private static linkStock(): void {
+        if (this.stockSources.length === 0) return;
+        const byName = new Map<string, RuntimeShop>();
+        for (const shop of this.shopsById.values()) byName.set(shop.definition.getName(), shop);
+        for (const shop of this.shopsById.values()) {
+            if (shop.stockOwner !== null) continue;
+            for (const source of this.stockSources) {
+                const owner = byName.get(source(shop.definition) ?? "");
+                if (!owner || owner === shop || owner.stockOwner !== null) continue;
+                shop.originalAmounts = owner.originalAmounts;
+                shop.itemRestockTicks = owner.itemRestockTicks;
+                shop.stock = owner.stock;
+                shop.order = owner.order;
+                shop.originalSlotCount = owner.originalSlotCount;
+                shop.changeTimers = owner.changeTimers;
+                shop.stockOwner = owner.definition.getId();
+                break;
+            }
+        }
     }
 
     public static removeShop(shopId: number): void {
@@ -413,7 +453,8 @@ export class ShopManager {
     public static restockAll(): boolean {
         let pending = false;
         for (const shop of this.shopsById.values()) {
-            if (this.restockShop(shop)) {
+            // A shared stock restocks once, with its owner.
+            if (shop.stockOwner === null && this.restockShop(shop)) {
                 pending = true;
             }
         }
@@ -458,6 +499,7 @@ export class ShopManager {
             order,
             originalSlotCount: definition.getOriginalStock().length,
             changeTimers: new Map(),
+            stockOwner: null,
         };
     }
 
@@ -525,6 +567,18 @@ export class ShopManager {
     }
 
     private static refresh(shopId: number): void {
+        const changed = this.shopsById.get(shopId);
+        if (!changed) return;
+        if (this.stockSources.length === 0) {
+            this.refreshViewers(shopId);
+            return;
+        }
+        for (const [id, shop] of this.shopsById) {
+            if (id === shopId || shop.stock === changed.stock) this.refreshViewers(id);
+        }
+    }
+
+    private static refreshViewers(shopId: number): void {
         const shop = this.shopsById.get(shopId);
         const viewers = this.viewersByShopId.get(shopId);
         if (!shop || !viewers) {

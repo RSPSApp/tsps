@@ -26,6 +26,8 @@ const MANY_TYPES_TITLE = "What would you like to cook?";
 const COOK_MENU_MODE = 6;
 const NOTHING_TO_COOK_MESSAGE = "You haven't got anything to cook.";
 const CANNOT_COOK_MESSAGE = "You can't cook that.";
+/** Wiki (Karambwanji): a quest-only food outside its quest. */
+const NOT_USEFUL_MESSAGE = "You don't feel that would be useful now.";
 /** One more for each food cooked in a row; a burn sets it back to 0 (rsprox captures). */
 const SUCCESS_COUNT_VARBIT = "cooking_success_count";
 const SUCCESS_COUNT_ATTRIBUTE = "cooking:success-count";
@@ -86,7 +88,7 @@ function successMessage(cookable) {
 }
 
 function burnMessage(cookable) {
-  return `You accidentally burn the ${cookable.name}.`;
+  return cookable.burnMessage ?? `You accidentally burn the ${cookable.name}.`;
 }
 
 // Fires and a house's firepits cook with human_firecooking, and so do the house's ovens and
@@ -250,12 +252,26 @@ function canCook(player, object, cookable) {
     Common.mesbox(player, `You need a Cooking level of ${requiredLevel} to cook ${withArticle(cookable)}.`);
     return false;
   }
+  if (cookable.duringQuest && !questInProgress(player, cookable.duringQuest)) {
+    // Wiki (Karambwanji): raw karambwanji cook only during Tai Bwo Wannai Trio.
+    player.sendMessage(NOT_USEFUL_MESSAGE);
+    return false;
+  }
   if (cookable.rumours && rumoursCompleted(player) < cookable.rumours) {
     // Wiki (Hunter meat): the better meats need Hunters' Rumours; the line is ours, the Wiki has none.
     Common.mesbox(player, `You need to have completed ${cookable.rumours} Hunters' Rumours to cook ${withArticle(cookable)}.`);
     return false;
   }
   return true;
+}
+
+/** Whether the quest is started and not yet complete. */
+function questInProgress(player, key) {
+  const started = { player, key, started: false };
+  Common.api.emitCustomEvent("quest:is-started", started);
+  const complete = { player, key, complete: false };
+  Common.api.emitCustomEvent("quest:is-complete", complete);
+  return started.started === true && complete.complete !== true;
 }
 
 /** How many Hunters' Rumours the player has finished ("hunter:rumours-completed"). */

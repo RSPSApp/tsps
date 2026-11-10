@@ -9,7 +9,7 @@
     {"raw":"raw_shrimp","cooked":"shrimp","burnt":"burnt_shrimp","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"shrimps","article":"some"},
     {"raw":"raw_anchovies","cooked":"anchovies","burnt":"burntfish1","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"anchovies","article":"some"},
     {"raw":"raw_sardine","cooked":"sardine","burnt":"burntfish5","level":1,"xp":40,"chance":{"fire":[118,492],"range":[118,492],"lumbridge":[128,512]},"name":"sardine"},
-    {"raw":"tbwt_raw_karambwanji","cooked":"tbwt_poorly_cooked_karambwan","burnt":"tbwt_poorly_cooked_karambwan","level":1,"xp":80,"stopBurn":1,"name":"poison karambwan"},
+    {"raw":"tbwt_raw_karambwanji","cooked":"tbwt_quest_cooked_karambwanji","burnt":"ashes","level":1,"xp":10,"chance":{"fire":[200,400],"range":[200,400]},"name":"karambwanji","duringQuest":"tai_bwo_wannai_trio","burnMessage":"You accidentally burn the karambwanji to ashes."},
     {"raw":"raw_ugthanki_meat","cooked":"cooked_ugthanki_meat","burnt":"burnt_meat","level":1,"xp":40,"chance":{"fire":[40,252],"range":[30,253]},"name":"ugthanki meat"},
     {"raw":"raw_herring","cooked":"herring","burnt":"burntfish3","level":5,"xp":50,"chance":{"fire":[108,472],"range":[108,472],"lumbridge":[118,492]},"name":"herring"},
     {"raw":"raw_guppy","cooked":"guppy","burnt":"ruined_guppy","level":7,"xp":12,"stopBurn":34,"name":"guppy"},

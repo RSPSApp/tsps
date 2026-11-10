@@ -20,12 +20,14 @@ const DATA = require("../plugins/skills/data/cooking.json");
 before(() => CachePipeline.initialize());
 
 // Answers the diary and rumour questions the cookers ask; each test sets what they answer.
-const answers = { eliteKourend: false, rumours: 0 };
+const answers = { eliteKourend: false, rumours: 0, trio: "none" };
 Cooking._test.setApi({
   core: PluginManager.getCoreApi(),
   emitCustomEvent(name, request) {
     if (name === "diary:is-complete" && request.diary === "kourend" && request.tier === "elite") request.complete = answers.eliteKourend;
     if (name === "hunter:rumours-completed") request.completed = answers.rumours;
+    if (request.key === "tai_bwo_wannai_trio" && name === "quest:is-started") request.started = answers.trio !== "none";
+    if (request.key === "tai_bwo_wannai_trio" && name === "quest:is-complete") request.complete = answers.trio === "complete";
   },
 });
 
@@ -197,4 +199,30 @@ test("stew, curry, cake and egg recipes", () => {
   const cake = recipe("egg", "cake_tin");
   assert.equal(cake.productId, obj("uncooked_cake"));
   assert.deepEqual(cake.returns.map(({ id }) => id).sort(), [obj("pot_empty"), obj("bucket_empty")].sort());
+});
+
+test("raw karambwanji cook into karambwanji only during Tai Bwo Wannai Trio", () => {
+  const karambwanji = food("tbwt_raw_karambwanji");
+  assert.equal(karambwanji.cooked, obj("tbwt_quest_cooked_karambwanji"));
+  assert.equal(karambwanji.cooked, 21394);
+  assert.equal(karambwanji.burnt, obj("ashes"));
+  assert.equal(karambwanji.xp, 10);
+  assert.equal(Cooking._test.burnMessage(karambwanji), "You accidentally burn the karambwanji to ashes.");
+  // Wiki (Karambwanji): stops burning at 28.
+  assert.equal(Cooking._test.stopBurnLevel(player(1), karambwanji, RANGE, "range"), 28);
+
+  const messages = [];
+  const cook = {
+    getAttribute: () => undefined,
+    getSkillManager: () => ({ getCurrentLevel: () => 99 }),
+    getDialogueManager: () => ({ startDialogues: () => {} }),
+    sendMessage: (text) => messages.push(text),
+  };
+  const range = { getId: () => RANGE, getDefinition: () => ({ getName: () => "Range" }) };
+  for (const [state, allowed] of [["none", false], ["started", true], ["complete", false]]) {
+    answers.trio = state;
+    assert.equal(Cooking._test.canCook(cook, range, karambwanji), allowed, state);
+  }
+  assert.deepEqual(messages, ["You don't feel that would be useful now.", "You don't feel that would be useful now."]);
+  answers.trio = "none";
 });

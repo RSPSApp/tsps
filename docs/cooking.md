@@ -35,7 +35,7 @@ highest). Every charted food stops burning by 150 on every cooker.
 - **A roll of 0 burns** anything that can still burn, and a roll at or above the burn chance
   cooks it, as before.
 - **Foods without a chart** (seaweed and swamp weed, which never fail; the Ruins of Camdozaal
-  fish; the lava eel; the Chambers of Xeric fish and bats except the kyren fish; raw karambwanji)
+  fish; the lava eel; the Chambers of Xeric fish and bats except the kyren fish)
   keep a `stopBurn` level and the old straight line from a 42% burn chance at their level to none
   at `stopBurn`.
 - **Hunters' Rumours.** Graahk, kyatt and pyre fox need 25 rumours, the sunlight and moonlight

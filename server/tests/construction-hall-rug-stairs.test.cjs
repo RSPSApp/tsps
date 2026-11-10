@@ -36,13 +36,13 @@ before(async () => {
 after(() => PM.emitServerShutdown({}));
 
 let index = 0;
-function actor(t, roomKey) {
+function actor(t, roomKey, rotation = 0) {
   const ch = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(ch)), conn = new ClientConnection(ch); conn.player = p;
   p.setUsername(`hallrug${++index}`); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
   p.setAttribute('bot-skip-persistence', true);
   const save = Instance.createDefaultHouseSave(); save.location = 6;
-  save.rooms[POSITION.plane][POSITION.x][POSITION.y] = { roomKey, rotation: 0, furniture: {} };
+  save.rooms[POSITION.plane][POSITION.x][POSITION.y] = { roomKey, rotation, furniture: {} };
   p.setAttribute('construction:house', save);
   assert.equal(core.World.getPlayers().add(p), true);
   let house;
@@ -64,7 +64,7 @@ function actor(t, roomKey) {
   const tiles = house.hotspotTiles(POSITION);
   const tile = id => tiles.find(entry => entry.id === id);
   p.moveTo(new core.Location(tile(STAIR_SPACE[roomKey]).x - 2, tile(STAIR_SPACE[roomKey]).y - 2, POSITION.plane)); p.setNeedsPlacement(false);
-  return { p, conn, house, inv, packets, messages, tiles, tile, roomKey };
+  return { p, conn, house, inv, packets, messages, tiles, tile, roomKey, rotation };
 }
 
 function turn(f) {
@@ -101,16 +101,16 @@ async function build(f, t, tile, key) {
 
 const ghostRemoval = tile => Buffer.from(encodeLocDel(tile.x, tile.y, tile.plane, tile.type, tile.face)).toString('hex');
 function templatePlacements(f) {
-  // hotspotTiles gives world tiles; the template gives each one's shape and face.
+  // hotspotTiles gives world tiles (turned with the room); the template gives each one's shape and face.
   const template = Data.ROOM_BY_KEY.get(f.roomKey);
   const objects = Instance.PlayerHouseInstance.getTemplateObjects(0)
     .filter(o => o.sourceChunkX === template.sourceChunkX && o.sourceChunkY === template.sourceChunkY);
-  return f.tiles.map((tile, i) => ({ ...tile, type: objects[i].type, face: objects[i].face }));
+  return f.tiles.map((tile, i) => ({ ...tile, type: objects[i].type, face: (objects[i].face + f.rotation) & 3 }));
 }
 
-for (const roomKey of ['QUEST_HALL_UP', 'SKILL_HALL_UP']) {
-  test(`${roomKey}: a staircase takes the rug spaces, and their Build ghosts go`, async t => {
-    const f = actor(t, roomKey);
+for (const [roomKey, rotation] of [['QUEST_HALL_UP', 0], ['SKILL_HALL_UP', 0], ['QUEST_HALL_UP', 1]]) {
+  test(`${roomKey} turned ${rotation}: a staircase takes the rug spaces, and their Build ghosts go`, async t => {
+    const f = actor(t, roomKey, rotation);
     const placements = templatePlacements(f);
     const rugs = placements.filter(tile => RUG_SPACES[roomKey].includes(tile.id));
     assert.equal(rugs.length, 36);

@@ -197,6 +197,18 @@ test('the trip comes back after five minutes, and the share follows the HUD mete
   assert.equal(voyage.shareFor(player), 30);
   voyage.contribution.set(player, 178);
   assert.equal(voyage.shareFor(player), 25);
+
+  // Wiki (Fishing Trawler): "Completing the elite Ardougne Diary yields 50% more fish".
+  const api = Shared.api();
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => { if (name === 'diary:is-complete' && event.diary === 'ardougne' && event.tier === 'elite') event.complete = true; } });
+  try {
+    voyage.contribution.set(player, 80);
+    assert.equal(voyage.shareFor(player), 30, '20 fish, half as many again');
+    voyage.contribution.set(player, 255);
+    assert.equal(voyage.shareFor(player), 45, 'with a full meter too');
+  } finally {
+    Shared.bind(api);
+  }
 });
 
 test('a bigger crew catches less each, down to the floor', () => {

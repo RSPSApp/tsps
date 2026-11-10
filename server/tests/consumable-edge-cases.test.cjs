@@ -603,8 +603,14 @@ test("a ranging mix drinks as a ranging potion and heals 6; an attack mix heals 
   assert.equal(entry.replacementId, ItemIdentifiers.RANGING_MIX_1_);
   assert.equal(Potions._test.findPotionEntry(ItemIdentifiers.RANGING_MIX_1_).doses, 1);
   entry.potion.effect(ranger);
-  assert.equal(ranger.levels.get(Skill.RANGED), 99 + 13, "Wiki: +4 + 10%, 13 at 99");
+  // A drained stat gains the boost from where it stands (rsprox 226/01702: super combat at 97/99 gives 116).
+  assert.equal(ranger.levels.get(Skill.RANGED), 50 + 13, "Wiki: +4 + 10%, 13 at 99, added to the current 50");
   assert.equal(ranger.levels.get(Skill.HITPOINTS), 56);
+  const rested = createPlayer({ base: 99, current: 99 });
+  entry.potion.effect(rested);
+  assert.equal(rested.levels.get(Skill.RANGED), 99 + 13, "from base: the full boost");
+  entry.potion.effect(rested);
+  assert.equal(rested.levels.get(Skill.RANGED), 99 + 13, "and never past base + boost");
   const fighter = createPlayer({ base: 99, current: 50 });
   Potions._test.findPotionEntry(ItemIdentifiers.ATTACK_MIX_2_).potion.effect(fighter);
   assert.equal(fighter.levels.get(Skill.HITPOINTS), 53);
@@ -751,6 +757,18 @@ test("prayer regeneration: 66 steps, the warning at 3 left, the worn-off line at
   assert.deepEqual(lines, [WORN_OFF], "and says nothing with no potion running");
 });
 
+// rsprox_transcripts/226/01702.txt:105119-105678 (a normal world): Attack, Strength and Defence at 97/99, a super
+// combat potion, then 116 each: the boost (19) added to the current level. 226/01696.txt: 96 -> 115 and 98 -> 117.
+test("a boost adds to the current level, capped at base + boost (super combat, as recorded)", () => {
+  const superCombat = Potions._test.findPotionEntry(ItemIdentifiers.SUPER_COMBAT_POTION_4_);
+  assert.ok(superCombat, "the potion is registered");
+  for (const [current, after] of [[97, 116], [96, 115], [98, 117], [99, 118], [110, 118]]) {
+    const player = createPlayer({ base: 99, current });
+    superCombat.potion.effect(player);
+    for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) assert.equal(player.levels.get(skill), after, `${current} -> ${after}`);
+  }
+});
+
 test("the Drunken Dwarf's beer is drinkable and leaves a beer glass", () => {
   const entry = Potions._test.findPotionEntry(ItemIdentifiers.BEER);
   assert.equal(entry.replacementId, ItemIdentifiers.BEER_GLASS);
@@ -759,10 +777,14 @@ test("the Drunken Dwarf's beer is drinkable and leaves a beer glass", () => {
   const player = createPlayer({ base: 99, current: 50 });
   entry.potion.effect(player);
   assert.equal(player.levels.get(Skill.HITPOINTS), 51);
-  assert.equal(player.levels.get(Skill.STRENGTH), 101);
+  assert.equal(player.levels.get(Skill.STRENGTH), 52, "+2 on the current 50");
   assert.equal(player.levels.get(Skill.ATTACK), 46);
   entry.potion.effect(player);
-  assert.equal(player.levels.get(Skill.STRENGTH), 101, "the boost does not stack");
+  assert.equal(player.levels.get(Skill.STRENGTH), 54, "a drained stat gains the boost again");
+  const rested = createPlayer({ base: 99, current: 99 });
+  entry.potion.effect(rested);
+  entry.potion.effect(rested);
+  assert.equal(rested.levels.get(Skill.STRENGTH), 101, "from base the boost does not stack");
   assert.equal(player.levels.get(Skill.ATTACK), 43, "the drain uses the current level");
 });
 

@@ -23,6 +23,7 @@ const Access = require("./Access.Zulrah");
 const CombatAchievements = require("./CombatAchievements.Zulrah");
 const Fight = require("./Fight.Zulrah");
 const { MeleeSnakeling, MagicSnakeling } = require("./Hazards.Zulrah");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const DAMAGE_CAP = 50;
 const BOSS_NAME = "Zulrah";
@@ -179,7 +180,7 @@ function onZulrahDeath({ npc }) {
   const ticks = fight.duration();
   CombatAchievements.killed(player, fight, kills, ticks);
   const best = Number(player.getAttribute(Shared.ATTR.BEST_TIME)) || 0;
-  player.sendMessage(`Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR.BEST_TIME, ticks);
     Shared.api().emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });

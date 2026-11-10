@@ -13,6 +13,8 @@ const MAP_LUM = 953;
 const MAP_DOUGNE = 952;
 const MAIN_MODAL = (161 << 16) | 16;
 const OP1 = 1 << 1;
+/** wildy_canoe_warning: All Settings "Show warning on taking a canoe to the Wilderness" off. */
+const WILDERNESS_WARNING_DISABLED_VARBIT = 13988;
 const CANOE_ATTRIBUTE = "canoes:canoe";
 const MENU_ATTRIBUTE = "canoes:menu";
 const AXE_ATTRIBUTE = "canoes:stored-axe";
@@ -325,7 +327,7 @@ function select({ player, buttonId, groupId = buttonId >>> 16, childId = buttonI
   const type = TYPES.find((t) => state(player, menu.station) === t.id + 10);
   if (!to || !type || !canTravel(menu.station, to, type)) return;
   closeMenu(player);
-  if (to.id === 0) {
+  if (to.id === 0 && player.getPacketSender().getVarbit(WILDERNESS_WARNING_DISABLED_VARBIT) !== 1) {
     api.sendMultiChatboxPrompt(player, "Travel into the Wilderness? This is a one-way trip.", "Yes, take me into the Wilderness.", () => travel(player, menu.station, to, type), "No, stay here.", () => {});
   } else travel(player, menu.station, to, type);
 }

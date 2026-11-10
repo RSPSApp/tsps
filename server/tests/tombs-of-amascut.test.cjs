@@ -476,7 +476,12 @@ test("invocations: the Wiki's levels from the cache structs, its time penalties,
 
 test('combat achievements: a party failure names who, a personal one says You, each once, and tasks finish only in their mode', () => {
   const events = [];
-  toaApi(events);
+  const Shared = toaApi(events);
+  // Combat Achievements sends the failure line ("combat-achievements:failed"), as with its settings on.
+  Shared.bind({ core: Shared.api().core, emitCustomEvent: (name, event) => {
+    events.push({ name, ...event });
+    if (name === 'combat-achievements:failed') event.player.sendMessage(`You have failed <col=0cc919>${event.task}</col>: ${event.reason}`);
+  } });
   const CA = require('../plugins/minigames/toa/CombatAchievements.TombsOfAmascut');
   const a = playerStub('a');
   const b = playerStub('b');

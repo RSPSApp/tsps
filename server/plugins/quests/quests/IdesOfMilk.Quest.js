@@ -1,6 +1,7 @@
 /** The Ides of Milk: OSRS capture 4153 (revision 238); cache revision 241 ids.
  * Capture facts and verification: docs/ides-of-milk.md.
  */
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 module.exports = function registerIdesOfMilkQuest(api) {
   const {
     Animation,
@@ -762,7 +763,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
       player,
       monster: BRUTUS_MONSTER,
       announce: announced && ((kills) => {
-        player.sendMessage(`Your Brutus kill count is: <col=ff0000>${kills}</col>.`);
+        sendBossKillCount(player, `Your Brutus kill count is: <col=ff0000>${kills}</col>.`);
         const best = Number(player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
         if (!best || ticks < best) {
           player.setAttribute(BRUTUS_BEST_ATTRIBUTE, ticks);

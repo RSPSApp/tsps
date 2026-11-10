@@ -14,6 +14,7 @@
  * from NpcDrops through "npc-drops:claim".
  */
 const Common = require("./Common.WildernessBosses");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const MAX_RECIPIENTS = 10;
 const MIN_SHARE = 0.25;
@@ -108,7 +109,7 @@ function announce(lair, player, drop) {
 }
 
 function tellKillCount(player, lair, kills) {
-  player.sendMessage(`Your ${lair.boss} kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your ${lair.boss} kill count is: <col=ff0000>${kills}</col>.`);
 }
 
 /**

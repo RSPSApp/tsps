@@ -35,7 +35,7 @@ const OFFERS = [
 ];
 const TOO_LOW = "I don't think you'd be able to hunt the creatures on my list. Rumour has it you're not the most experienced hunter.";
 const NEEDS_VERITY = "Looks like you could do with talking to Verity first, given you're new to this whole business.";
-/** How the hunters word the part: fur, claws, hooves, wings and horn are captured; the others follow the same pattern (unverified). */
+/** How the hunters word the part: fur, claws, hooves, wings, horn and tail are captured; feathers, ear and tooth follow the same pattern (unverified). */
 function partPhrase(itemName) {
   const name = itemName.toLowerCase();
   if (/fur|fluff|tuft/.test(name)) return "some of its fur";
@@ -43,8 +43,12 @@ function partPhrase(itemName) {
   if (/hoof/.test(name)) return "one of its hooves";
   if (/wing/.test(name)) return "one of its wings";
   if (/horn/.test(name)) return "its horn";
+  // Feathers before tail: the wagtail's "Tailfeathers" is not a tail. The tail, ear and tooth phrases follow the pattern (tail is captured).
+  if (/feather/.test(name)) return "some of its feathers";
   if (/tail/.test(name)) return "its tail";
-  return `some of its ${name}`;
+  if (/ear/.test(name)) return "one of its ears";
+  if (/tooth|teeth/.test(name)) return "one of its teeth";
+  return `its ${name}`;
 }
 function say(player, npcId, text) {
   const { DialogueChainBuilder, NpcDialogue, EndDialogue } = H.core;

@@ -79,6 +79,11 @@ test("the part is worded like the hunters do", () => {
   assert.equal(Rumours.partPhrase("Antelope hoof shard"), "one of its hooves");
   assert.equal(Rumours.partPhrase("Sunlight moth wing"), "one of its wings");
   assert.equal(Rumours.partPhrase("Graahk horn spur"), "its horn");
+  assert.equal(Rumours.partPhrase("Large jerboa tail"), "its tail");
+  // Review: "Tailfeathers" must not read as a tail; ear and tooth get their own phrases.
+  assert.equal(Rumours.partPhrase("Tailfeathers"), "some of its feathers");
+  assert.equal(Rumours.partPhrase("Larupia ear"), "one of its ears");
+  assert.equal(Rumours.partPhrase("Kyatt tooth chip"), "one of its teeth");
 });
 
 test("a hunter who is too low-level refuses with Teco's captured line", () => {

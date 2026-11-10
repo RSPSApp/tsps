@@ -329,3 +329,27 @@ test("the boat warning follows a Wilderness warning the spell also has", (t) => 
   choose(f.p, 1);
   assert.equal(request.cast, 1);
 });
+
+// ---------------------------------------------------------------- row 278's old varbit
+
+test("a 13113 saved by row 278 before is dropped once at login, so 192 starts at its default", () => {
+  const Settings = require("../plugins/interface/Settings.plugin");
+  let restoreSettings;
+  const api = { core, onPlayerLogin: (fn) => { if (fn.name === "restoreSettings") restoreSettings = fn; }, emitCustomEvent: () => {} };
+  Settings.register(new Proxy(api, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const varbits = new Map();
+  const attributes = new Map([["settings:values", { "varbit:13113": 0, "varbit:10693": 1 }]]);
+  const sender = {
+    getVarbit: (id) => varbits.get(id) ?? 0,
+    sendVarbit(id, value) { varbits.set(id, value); return sender; },
+    getVarp: () => 0, sendConfig() { return sender; }, sendClientScript() { return sender; },
+  };
+  const player = { getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v), getPacketSender: () => sender };
+  restoreSettings({ player });
+  assert.equal(varbits.get(13113), 1, "192's default, not the old 278 value");
+  assert.deepEqual(attributes.get("settings:values"), { "varbit:10693": 1 }, "only the stale key goes");
+  // Once migrated, a 192 choice made since is kept.
+  attributes.set("settings:values", { "varbit:13113": 0 });
+  restoreSettings({ player });
+  assert.equal(varbits.get(13113), 0);
+});

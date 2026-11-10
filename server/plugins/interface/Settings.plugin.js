@@ -144,6 +144,12 @@ const COLLECTION_LOG_NOTIFY_VARP = 2856;
 /** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
 const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
 const QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE = "settings:quest-list-show-242";
+/**
+ * Row 278 used to flip varbit 13113, which is row 192's (gravestone payment confirmation); 278 is
+ * 14194. A 13113 saved before is 278's, so it is dropped once and 192 starts at its default.
+ */
+const GRAVESTONE_CONFIRM_KEY = "varbit:13113";
+const GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE = "settings:gravestone-confirm-192";
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
 const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
@@ -346,6 +352,16 @@ function migrateQuestListShowSettings(player) {
   player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, next);
 }
 
+function migrateGravestoneConfirmSetting(player) {
+  if (player.getAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE) === true) return;
+  player.setAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, true);
+  const saved = savedSettings(player);
+  if (!Object.hasOwn(saved, GRAVESTONE_CONFIRM_KEY)) return;
+  const next = { ...saved };
+  delete next[GRAVESTONE_CONFIRM_KEY];
+  player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, next);
+}
+
 function savedSettings(player) {
   const saved = player.getAttribute(SETTINGS_VALUES_ATTRIBUTE);
   return saved && typeof saved === "object" ? saved : {};
@@ -417,6 +433,7 @@ function chooseSettingOption(player, settingId, option) {
  */
 function restoreSettings({ player }) {
   migrateQuestListShowSettings(player);
+  migrateGravestoneConfirmSetting(player);
   const saved = savedSettings(player);
   for (const [key, value] of Object.entries(saved)) {
     if (Number.isInteger(value)) setSettingVar(player, key, value);
@@ -901,6 +918,7 @@ module.exports = {
     pluginApi = api;
     api.persistAttribute(SETTINGS_VALUES_ATTRIBUTE);
     api.persistAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, false);
+    api.persistAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, false);
     api.onPlayerLogin(restoreSettings);
     api.onPlayerLogin(sendMouseoverText);
     // Changing category, or searching, changes what a row's slot means.

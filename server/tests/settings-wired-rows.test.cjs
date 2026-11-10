@@ -17,15 +17,42 @@ const barracuda = require('../plugins/skills/sailing/barracudatrials/Common.Barr
 
 const TOGGLE = 0;
 const DROPDOWN = 2;
-// setting id -> the varbit its row sets. Toggles unless listed in DROPDOWNS.
+// setting id -> the varbit its row sets. Toggles unless listed in DROPDOWNS. One row per line, by id.
 const TOGGLES = {
-  2: 4609, 3: 4181, 4: 5711, 6: 5712, 9: 10113, 265: 14179, 442: 17772, 472: 19615, 473: 19646, 474: 19647,
-  36: 4089, 83: 11890, 195: 13120, 430: 16116,
-  123: 12352, 127: 12383, 147: 10035, 164: 12380, 311: 14806, 313: 8059, 314: 8060, 362: 15323, 418: 11562, 460: 18132, 476: 19681,
+  2: 4609,
+  3: 4181,
+  4: 5711,
+  6: 5712,
+  9: 10113,
+  36: 4089,
+  83: 11890,
+  123: 12352,
+  127: 12383,
+  147: 10035,
+  164: 12380,
+  195: 13120,
+  265: 14179,
+  311: 14806,
+  313: 8059,
+  314: 8060,
+  362: 15323,
+  418: 11562,
+  430: 16116,
+  442: 17772,
+  460: 18132,
+  472: 19615,
+  473: 19646,
+  474: 19647,
+  476: 19681,
 };
-const DROPDOWNS = { 1: 6374, 86: 12135 };
+const DROPDOWNS = {
+  1: 6374,
+  86: 12135,
+};
 // Live defaults that are not zero: the fresh-account (Tutorial Island) logins in the rsprox captures.
-const LIVE_DEFAULTS = { 2: 1 };
+const LIVE_DEFAULTS = {
+  2: 1,
+};
 
 const CLIENT_SCRIPTS = 12;
 const TOGGLE_READER = 6716;

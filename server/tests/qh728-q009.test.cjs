@@ -667,6 +667,34 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   assert.equal(h.varbit(1761), 1, 'named fuse use attaches to the barrel');
 });
 
+test('the hull\'s own Fill and Waterproof options repair the hole, as a plain click does in live', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const I = core.ItemIdentifiers;
+  const HOLES = [11221, 11222, 11223];
+  h.quest.setStage(h.player, 4);
+  h.player.getInventory().adds(I.REPAIR_PLANK_2, 6);
+  h.player.getInventory().adds(I.TACKS, 30);
+  h.player.getInventory().adds(I.HAMMER, 1);
+  h.player.getInventory().adds(I.SWAMP_PASTE, 3);
+
+  // Fill planks the hole with no item used on it: the visible transform's own option.
+  assert.equal(h.object(HOLES[0], 'Fill'), true, 'the Fill option is claimed');
+  assert.equal(h.varbit(1751), 1, 'the hole is planked');
+  assert.equal(h.count(I.REPAIR_PLANK_2), 4, 'two planks are used');
+  assert.equal(h.count(I.TACKS), 20, 'ten tacks are used');
+
+  // Waterproof pastes it.
+  assert.equal(h.object(HOLES[0], 'Waterproof'), true, 'the Waterproof option is claimed');
+  assert.equal(h.varbit(1751), 2, 'the hole is waterproofed');
+  assert.equal(h.count(I.SWAMP_PASTE), 2, 'one paste is used');
+  assert.equal(h.varbit(1759), 1, 'one hole patched');
+  assert.equal(h.varbit(1760), 1, 'one hole proofed');
+
+  // A second Fill on a finished hole answers instead of consuming anything.
+  assert.equal(h.object(HOLES[0], 'Fill'), true);
+  assert.equal(h.count(I.REPAIR_PLANK_2), 4, 'nothing is consumed on a finished hole');
+});
+
 test('the Book o\' Piracy is readable, recoverable once and cleaned up with the quest supplies', () => {
   const originalOpenBook = runtime.openBook;
   let opened = null;

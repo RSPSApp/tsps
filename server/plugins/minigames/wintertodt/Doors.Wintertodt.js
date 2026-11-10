@@ -96,6 +96,7 @@ function refuseAlchemy(event) {
 module.exports = function registerWintertodtDoors(api) {
   Shared.bind(api);
   api.persistAttribute(Round.ATTR_KILLS);
+  api.persistAttribute(Round.ATTR_BEST);
   api.persistAttribute(Round.ATTR_REWARDS);
   api.onServerStartup(Round.start);
   api.onObjectInteraction(Shared.OBJECT.DOORS, { Enter: enter, Peek: peek });

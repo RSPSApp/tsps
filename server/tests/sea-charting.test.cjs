@@ -800,3 +800,36 @@ test("a full inventory leaves the crab statue uncharted until its fragment fits 
     leave(player);
   }
 });
+
+test("All Settings' Charting popups off (settings_sailing_charting_popup): the charting is told in chat only", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("settings_sailing_charting_popup"), off);
+      chart(player, "generic_rock_bay_of_sarim");
+      tick();
+      assert.ok(player.messages().includes(`Charting complete: ${blue("Find a treacherous rock formation near Draynor Village.")}`));
+      const popup = player.sent.some(([key, script]) => key === "sendInterfaceScript" && script === 3343);
+      assert.equal(popup, off === 0, off ? "no popup" : "the popup, as by default");
+    } finally {
+      leave(player);
+    }
+  }
+});
+
+test("All Settings' Current duck hint arrow off: the released duck gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = duckCaptain();
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_current_duck_hintarrow_disabled"), off);
+      currentDuck.trackCurrent({ player });
+      tick(2);
+      assert.ok(currentDuck.ducks.get(player), "the duck is out either way");
+      assert.equal(player.sent.some(([key]) => key === "sendEntityHint"), off === 0);
+      assert.equal(player.varbits.get(14192), off ? undefined : 5, "current_hint_arrow");
+    } finally {
+      leave(player);
+    }
+  }
+});

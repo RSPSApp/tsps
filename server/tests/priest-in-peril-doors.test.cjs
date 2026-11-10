@@ -1,8 +1,8 @@
 // Run after `yarn build`: node --test tests/priest-in-peril-doors.test.cjs
 //
 // Issue 4130: Paterdomus' large doors and Drezel's cell gate teleported the player across. Live
-// (Priest in Peril capture 2026-11-02 ticks 10840-10847 and 10980-10982; rsprox 365 ticks 1589-1593
-// and 1658-1661) swings them open with an invisible blocker on the doorway, walks the opener one tile
+// (Priest in Peril capture 2026-11-02 ticks 10840-10847 and 10980-10982; capture 2026-10-17 ticks
+// 1311-1317 for the cell gate) swings them open with an invisible blocker on the doorway, walks the opener one tile
 // across and shuts them two ticks later. The locked cell gate's Open is how the player talks to Drezel
 // (tick 11162-11168), and the iron key only unlocks it: the player stays outside (tick 11429).
 //

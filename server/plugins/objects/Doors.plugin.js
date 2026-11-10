@@ -66,7 +66,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
   PIP_MAUSOLEUM_GATE_OPEN: 3446, // inacpip_underground_door; Priest in Peril capture 2026-11-02
   // inactivetempledoorl/r: Paterdomus' large doors open onto them (Priest in Peril capture 2026-11-02
-  // ticks 10845, 10980); inactive_pipprisondoor: Drezel's cell gate (rsprox 365 ticks 1591, 1659).
+  // ticks 10845, 10980); inactive_pipprisondoor: Drezel's cell gate (capture 2026-10-17 ticks 1312, 1315).
   PIP_TEMPLE_DOOR_LEFT_OPEN: 3491,
   PIP_TEMPLE_DOOR_RIGHT_OPEN: 3492,
   PIP_CELL_GATE_OPEN: 3464,
@@ -573,7 +573,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 62,
     }),
-    // Drezel's cell gate once unlocked (rsprox 365 ticks 1589-1593 in, 1658-1661 out): INVISWALL on
+    // Drezel's cell gate once unlocked (capture 2026-10-17 ticks 1311-1314 in, 1315-1317 out; rsprox 365): INVISWALL on
     // the gate's tile and inactive_pipprisondoor on the tile east, sound 71, the player walks across
     // and the gate is back two ticks later. The quest opens it through door:open.
     Object.freeze({

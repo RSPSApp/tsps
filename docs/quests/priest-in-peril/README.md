@@ -27,15 +27,16 @@ records the 2026-11-01 run; the quest needs a whole run on the merged code.
 Newest first.
 
 - **fixed (live capture, issue 4130)** The temple's large doors and Drezel's cell gate teleported
-  the player across. Live opens them like doors (rev 242 recording 2026-11-02 ticks 10840-10847 in
-  and 10980-10982 out; rsprox.net #365 ticks 1589-1593 and 1658-1661 for the cell): `inviswall`
+  the player across. Live opens them like doors (rev 241 recording 2026-11-02 ticks 10840-10847 in
+  and 10980-10982 out; for the cell, recording 2026-10-17 ticks 1311-1317 and rsprox.net #365):
+  `inviswall`
   (38848) goes on the doorway tile(s), the open leaves (3491/3492 east of the large doors, 3464
   east of the cell gate) on the tiles beyond, sound 62 (doors) or 71 (gate), the player walks one
   tile across in the same tick and the closed locs are back two ticks later. Both are now Doors
   `PASS_THROUGH_GATES`; the quest still decides who may open the large doors. The locked cell gate's
   Open is how the player talks to Drezel (tick 11162-11168: "Hello." and his first line, no Talk-to),
   so it now plays Drezel's conversation for the stage. With the iron key held, Open unlocks it with
-  sound 2419 and the player stays outside (tick 11429). Using the iron key on the unlocked gate opens
+  sound 2419 and the player stays outside (2026-11-02 tick 11429). Using the iron key on the unlocked gate opens
   it like Open (ours: not captured). The issue asked for a "Talk-through" option; the rev 242 cache's
   only option on the gate is Open, and live talks through it. Covered by
   `tests/priest-in-peril-doors.test.cjs`; checked in-game on a headless account (both doors, the

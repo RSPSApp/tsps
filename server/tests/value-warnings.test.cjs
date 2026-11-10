@@ -387,3 +387,18 @@ test('birdhouse seeds worth at least row 449 ask first while row 448 is on', () 
   assert.equal(Birdhouses.valuableSeeds(player({ 17869: 0, p4850: 1 }), ranarr, 5), false, 'row 448 off');
 });
 
+// ------------------------------------------------------------------ cannon
+
+test('cannon ammo popups: at the low amount and when empty, each only with its row on', () => {
+  const Cannon = require('../plugins/items/dwarfcannon/Common.DwarfCannon');
+  const Firing = require('../plugins/items/dwarfcannon/Firing.DwarfCannon');
+  const shown = [];
+  Cannon.init({ core, emitCustomEvent: (name, payload) => { if (name === 'notification:show') shown.push(payload.text); } });
+  Firing.ammoNotification(player({ 14175: 1, 14176: 10 }), 10);
+  Firing.ammoNotification(player({ 14175: 1, 14176: 10 }), 9);
+  Firing.ammoNotification(player({ 14175: 0, 14176: 10 }), 10);
+  Firing.ammoNotification(player({ 14177: 1 }), 0);
+  Firing.ammoNotification(player({ 14177: 0 }), 0);
+  Firing.ammoNotification(player({ 14175: 1, 14176: 0, 14177: 0 }), 0);
+  assert.deepEqual(shown, ['Your cannon is low on ammo.', 'Your cannon is out of ammo.']);
+});

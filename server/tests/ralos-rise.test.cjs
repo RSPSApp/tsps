@@ -24,6 +24,7 @@ const handlers = new Map();
 const objectActions = new Map();
 const itemActions = new Map();
 const itemOnItem = [];
+const itemOnObject = [];
 const persisted = [];
 const logins = [];
 let cycle = 1;
@@ -35,6 +36,7 @@ const api = {
   onObjectInteraction: (name, actions) => objectActions.set(name, actions),
   onItemAction: (name, actions) => itemActions.set(name, actions),
   onItemOnItem: (a, b, handler) => itemOnItem.push({ a, b, handler }),
+  onItemOnObject: (handler) => itemOnObject.push(handler),
   onPlayerLogin: (handler) => logins.push(handler),
 };
 const random = Math.random;
@@ -360,6 +362,68 @@ test("the Zealot's robes save shards one by one, but not the bowl's charges", ()
   // No robes, no rolls.
   Math.random = () => { throw new Error("rolled without robes"); };
   assert.equal(Bowl._test.savedShards(playerWith([]), 100), 0);
+});
+
+const SOUL_SHARD = "league_soul_shard";
+const soulXp = (player) => player.sent.xp.filter(([skill]) => skill === core.Skill.PRAYER).map(([, xp]) => xp);
+const NO_SOUL_SHARDS = "You don't have any soul shards to sacrifice into the libation bowl.";
+
+test("soul shards: Fill on the empty bowl, no wine, sacrifices 100 at a time for 5.5 XP each, no Prayer points", () => {
+  const player = playerWith([[SOUL_SHARD, 250]], { points: 1 });
+  bowl().Fill({ player });
+  assert.equal(player.amountOf(id(SOUL_SHARD)), 150);
+  assert.deepEqual(soulXp(player), [550]);
+  assert.equal(player.skills.points, 1, "no Prayer points");
+  assert.equal(charge(player) ?? 0, 0, "no wine");
+  assert.deepEqual(player.sent.animations, [CacheDefinitions.getSeqId("human_pray_blessed_bone_shards_01")]);
+  assert.deepEqual(player.sent.sounds, [958]);
+  runTicks(4);
+  assert.equal(player.amountOf(id(SOUL_SHARD)), 50);
+  runTicks(4);
+  assert.equal(player.amountOf(id(SOUL_SHARD)), 0);
+  assert.deepEqual(soulXp(player), [550, 550, 275], "the last 50 at 5.5 each");
+  assert.deepEqual(boxText(player), [NO_SOUL_SHARDS]);
+  runTicks(8);
+  assert.equal(player.sent.xp.length, 3, "stopped");
+});
+
+test("soul shards: Sacrifice takes one kind of shard until it runs out; the next Sacrifice takes the other", () => {
+  Math.random = () => 0.99;
+  const player = playerWith([["blessed_bone_shard", 150], [SOUL_SHARD, 120]], { points: 50, attributes: { [Bowl.CHARGE_ATTRIBUTE]: 400 } });
+  bowl().Sacrifice({ player });
+  runTicks(8);
+  assert.equal(player.amountOf(id("blessed_bone_shard")), 0);
+  assert.equal(player.amountOf(id(SOUL_SHARD)), 120, "the soul shards wait");
+  assert.deepEqual(boxText(player), ["You don't have any blessed bone shards to sacrifice into the libation<br>bowl."]);
+  assert.deepEqual(soulXp(player), [500, 250]);
+  cycle++;
+  bowl().Sacrifice({ player });
+  runTicks(8);
+  assert.equal(player.amountOf(id(SOUL_SHARD)), 0);
+  assert.equal(charge(player), 250, "the soul shards burn no wine");
+  assert.equal(player.skills.points, 46, "nor Prayer points");
+  assert.deepEqual(soulXp(player), [500, 250, 550, 110]);
+  assert.deepEqual(boxText(player).slice(1), [NO_SOUL_SHARDS]);
+});
+
+test("soul shards used on the bowl sacrifice them, at 30 Prayer, and leave other items and objects alone", () => {
+  const { soulShard, bowlLocs } = require("../plugins/skills/ralosrise/Common.RalosRise").resolved();
+  const use = (player, itemId, objectId) => {
+    const event = { player, itemId, objectId, handled: false };
+    for (const hook of itemOnObject) hook(event);
+    return event.handled;
+  };
+  const [bowlLoc] = bowlLocs;
+  const low = playerWith([[SOUL_SHARD, 100]], { prayer: 29 });
+  assert.equal(use(low, soulShard, bowlLoc), true);
+  assert.deepEqual(low.sent.messages, ["You need a Prayer level of 30 to sacrifice at the libation bowl."]);
+  assert.equal(low.amountOf(soulShard), 100);
+  const player = playerWith([[SOUL_SHARD, 100]], { prayer: 30 });
+  assert.equal(use(player, id("blessed_bone_shard"), bowlLoc), false);
+  assert.equal(use(player, soulShard, CacheDefinitions.getLocId("varlamore_exposed_altar") ?? -1), false);
+  assert.equal(use(player, soulShard, bowlLoc), true);
+  assert.equal(player.amountOf(soulShard), 0);
+  assert.deepEqual(soulXp(player), [550]);
 });
 
 test("Check tells the charges left; the bowl's state is saved and sent again at login", () => {

@@ -43,6 +43,8 @@ function resolved() {
     blessable,
     shards,
     shard: obj(DATA.breakdown.shard),
+    soulShard: obj(DATA.bowl.soulShards.obj),
+    bowlLocs: new Set(DATA.bowl.locs.map((name) => core.CacheDefinitions.getLocId(name))),
     chisel: obj(DATA.breakdown.tool),
     emptyJug: obj(DATA.bowl.emptyJug),
     bowlWines: DATA.bowl.wines.map((wine) => ({ ...wine, id: obj(wine.obj) })),

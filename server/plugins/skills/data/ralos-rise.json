@@ -32,6 +32,7 @@
     "chargeVarbit": "varlamore_prayer_winequant",
     "wineVarbit": "varlamore_prayer_winetype",
     "_varbits": "The bowl (multiloc varlamore_libation_bowl) shows varlamore_libation_bowl_empty (Fill) at charge 0 and varlamore_libation_bowl_full (Sacrifice, Check) at 1 and up: its transforms are [empty] with full as the default. winetype is 0 for blessed wine and 1 for blessed sunfire wine (recording 4054 tick 4072).",
+    "locs": ["varlamore_libation_bowl", "varlamore_libation_bowl_empty", "varlamore_libation_bowl_full"],
     "chargePerJug": 400,
     "shardsPerAction": 100,
     "prayerPerAction": 2,
@@ -44,7 +45,9 @@
     ],
     "fill": { "seq": "human_pickuptable", "sound": 2401 },
     "sacrifice": { "seq": "human_pray_blessed_bone_shards_01", "sound": 958 },
-    "refillSound": 2401
+    "refillSound": 2401,
+    "soulShards": { "obj": "league_soul_shard", "xpPerShard": 5.5 },
+    "_soulShards": "Wiki (Soul shard): 550 Prayer XP a 100 soul shards at the bowl, 30 Prayer, no wine. Ours (no recording): up to 100 an action at 5.5 XP each, as often as the blessed bone shards, with their animation and sound; no Prayer points, wine charges or Zealot's robes."
   },
   "messages": {
     "blessWine": "You bless {count} jugs of wine on the altar.",
@@ -61,7 +64,8 @@
     "outOfWine": "You don't have enough blessed wine to sacrifice any more shards<br>into the libation bowl.",
     "refill": "You pour some more blessed wine into the libation bowl.",
     "bowlLevel": "You need a Prayer level of {level} to sacrifice at the libation bowl.",
-    "check": "The libation bowl has enough {wine} left to sacrifice {count} more blessed bone shards."
+    "check": "The libation bowl has enough {wine} left to sacrifice {count} more blessed bone shards.",
+    "noSoulShards": "You don't have any soul shards to sacrifice into the libation bowl."
   },
-  "_messages": "Ours (no recording or Wiki text): altarLevel, superiorLevel, breakdownLevel, noChisel, bowlLevel and check. The recordings show the bless lines only for 7 to 24 items, so they are used for one too."
+  "_messages": "Ours (no recording or Wiki text): altarLevel, superiorLevel, breakdownLevel, noChisel, bowlLevel, check and noSoulShards. The recordings show the bless lines only for 7 to 24 items, so they are used for one too."
 }

@@ -1485,7 +1485,10 @@ class OlmRoom extends Raid.Room {
     let ticks = 0;
     let atRaider = finalStand;
     const volley = () => {
-      if (this.raid.destroyed || state.stopped || this.dead || ticks > duration) return false;
+      if (this.raid.destroyed || state.stopped || this.dead || ticks > duration) {
+        this.stillCamera();
+        return false;
+      }
       ticks += 2;
       this.shakeCamera(ticks > duration);
       if (!finalStand) Shared.areaSound(this.viewers(), 3834, centre, { range: 15 });
@@ -1512,11 +1515,27 @@ class OlmRoom extends Raid.Room {
    * slots); the last one before the Olm rises again stills it.
    */
   shakeCamera(last) {
-    for (const player of this.viewers()) {
-      const sender = player.getPacketSender();
-      for (const slot of [0, 1, 2]) CameraShake.send(sender, "olm", slot, Shared.random(2, 5), 0, 0);
-      if (last) sender.sendCameraReset?.();
+    this.shaken ??= new Set();
+    const viewers = this.viewers();
+    // Ours: a raider who has left the chamber (died, escaped) is stilled with the next volley.
+    for (const player of this.shaken) {
+      if (!viewers.includes(player)) this.stillPlayer(player);
     }
+    for (const player of viewers) {
+      for (const slot of [0, 1, 2]) CameraShake.send(player.getPacketSender(), "olm", slot, Shared.random(2, 5), 0, 0);
+      this.shaken.add(player);
+    }
+    if (last) this.stillCamera();
+  }
+
+  /** Stills the camera of everyone the falling crystals shook. */
+  stillCamera() {
+    for (const player of [...(this.shaken ?? [])]) this.stillPlayer(player);
+  }
+
+  stillPlayer(player) {
+    this.shaken.delete(player);
+    if (player.isRegistered()) player.getPacketSender().sendCameraReset?.();
   }
 
   /**
@@ -1533,7 +1552,7 @@ class OlmRoom extends Raid.Room {
     this.dead = true;
     if (this.fallingCrystals$) this.fallingCrystals$.stopped = true;
     this.animate(this.objects.head, ANIM.HEAD_FALL);
-    for (const player of this.viewers()) player.getPacketSender().sendCameraReset?.();
+    this.stillCamera();
     Shared.areaSound(this.viewers(), 3405, this.headSoundTile(), { range: 15 });
     this.completeAchievements();
     const { Animation, GameObject, Location, ObjectManager } = Shared.core();

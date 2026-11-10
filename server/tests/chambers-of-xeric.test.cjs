@@ -764,7 +764,22 @@ test('the falling crystals shake the Olm chamber every volley, and the rise stil
   olm.transitionCrystals(4, false);
   ticks(6);
   assert.deepEqual(leader.camera, ['reset'], 'no shake with the row off');
+
+  leader.varbits.set(16108, 0);
+  const inside = leader.location;
+  leader.camera = [];
+  olm.transitionCrystals(28, false);
+  ticks(1);
+  leader.location = new Location(1234, 3566, 0);
+  ticks(2);
+  assert.equal(leader.camera.at(-1), 'reset', 'a raider who leaves the chamber mid-volley is stilled');
+  leader.location = inside;
+  leader.camera = [];
+  olm.transitionCrystals(28, false);
+  ticks(1);
   raid.destroy();
+  ticks(2);
+  assert.equal(leader.camera.at(-1), 'reset', 'a raid ended mid-volley stills its raiders');
   Parties.clear();
 });
 

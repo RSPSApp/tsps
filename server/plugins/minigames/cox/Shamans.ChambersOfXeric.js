@@ -259,8 +259,9 @@ class ShamansRoom extends Raid.Room {
       const crushed = this.raiders().filter((raider) => raider.getLocation().getDistance(at) <= 1);
       for (const raider of crushed) this.hurtBy(raider, Shared.random(20, 25));
       Shared.later(this.raid, 1, () => {
+        const inRoom = this.raiders();
         for (const raider of crushed) {
-          if (raider.isRegistered()) CameraShake.send(raider.getPacketSender(), "shamans", ...JUMP_SHAKE);
+          if (raider.isRegistered() && inRoom.includes(raider)) CameraShake.send(raider.getPacketSender(), "shamans", ...JUMP_SHAKE);
         }
       });
     });

@@ -96,7 +96,9 @@ function burnMessage(cookable) {
 // oven, such as the main-game "Range" and "Oven", cooks with human_cooking.
 const FIRE_OBJECT_NAMES = new Set(["Fire", "Forester's Campfire", "Firepit", "Firepit with hook", "Firepit with pot"]);
 const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "Fancy range"]);
-const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay Oven"]);
+// The cache spells the clay ovens two ways: "Clay oven" in Hosidius (the kitchen and the mess) and
+// on Neitiznot, "Clay Oven" in Nardah.
+const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay oven", "Clay Oven"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
 
 function cookAnimationFor(name) {
@@ -629,6 +631,7 @@ function attachCookers(api) {
   api.onObjectInteraction("Cooking range", { Cook: handleCookClick });
   api.onObjectInteraction("Stove", { Cook: handleCookClick });
   api.onObjectInteraction("Oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Clay oven", { Cook: handleCookClick });
   api.onObjectInteraction("Clay Oven", { Cook: handleCookClick });
   api.onObjectInteraction("Small oven", { Cook: handleCookClick });
   api.onObjectInteraction("Large oven", { Cook: handleCookClick });

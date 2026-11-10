@@ -93,13 +93,15 @@ function deposit(player, objectId, itemId) {
 
 // --- The oven.
 
+/** Cook on a clay oven: servery food here; anything else falls through to ordinary Cooking. */
 function cookFromOven({ player }) {
   for (const recipe of Recipes.COOKS) {
     if (player.getInventory().contains(recipe.raw)) {
       Recipes.cook(player, recipe);
-      return;
+      return true;
     }
   }
+  return false;
 }
 
 // --- The buffet tables.

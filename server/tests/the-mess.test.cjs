@@ -29,6 +29,7 @@ const {
   takeMeat,
   searchFood,
   useOnObject,
+  cookFromOven,
   refuseEat,
   canEat,
   eweseyCondition,
@@ -228,6 +229,9 @@ test("the buffet only accepts the three dishes", () => {
 test("the oven only cooks servery food", () => {
   const p = player({ items: { [383]: 1 } });
   assert.equal(use(p, 383, OBJECT.CLAY_OVEN).handled, false);
+  assert.equal(p.xp, 0);
+  // Its Cook option falls through to ordinary Cooking (the Hosidius Kitchen's ovens are clay ovens too).
+  assert.equal(cookFromOven({ player: p }), false);
   assert.equal(p.xp, 0);
 });
 

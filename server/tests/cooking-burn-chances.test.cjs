@@ -82,6 +82,15 @@ test("cooking gauntlets: the Wiki burn table's default column", () => {
   }
 });
 
+test("every clay oven is a cooker: \"Clay oven\" in Hosidius and on Neitiznot, \"Clay Oven\" in Nardah", () => {
+  const core = PluginManager.getCoreApi();
+  core.ObjectDefinition.init();
+  for (const id of [ObjectIdentifiers.CLAY_OVEN_3, 10377]) {
+    const oven = new core.GameObject(id, new core.Location(1677, 3622), 10, 0);
+    assert.ok(Cooking.isCooker(oven.getDefinition()), `${id} (${oven.getDefinition().getName()}) cooks food`);
+  }
+});
+
 test("the Hosidius Kitchen ranges add 12, or 25 with the elite Kourend & Kebos Diary", () => {
   const shark = food("raw_shark");
   const kitchen = location(1677, 3622), mess = location(1648, 3627);

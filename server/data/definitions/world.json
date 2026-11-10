@@ -133,6 +133,7 @@
     { "_description": "Fossil Island multicombat (Wiki map revision 15119386)", "minX": 3695, "maxX": 3701, "minY": 3901, "maxY": 3901, "z": 0, "tags": ["multi-combat"] },
     { "_description": "Fossil Island multicombat (Wiki map revision 15119386)", "minX": 3717, "maxX": 3723, "minY": 3901, "maxY": 3901, "z": 0, "tags": ["multi-combat"] },
     { "_description": "Falador south approach", "minX": 2944, "maxX": 3015, "minY": 3304, "maxY": 3327, "z": 0, "tags": ["multi-combat"] },
+    { "_description": "Falador southeast approach (Multi Lines ground outline)", "minX": 3008, "maxX": 3015, "minY": 3303, "maxY": 3303, "z": 0, "tags": ["multi-combat"] },
     { "_description": "Falador west of the single-combat crypt", "minX": 2944, "maxX": 2959, "minY": 3328, "maxY": 3335, "z": 0, "tags": ["multi-combat"] },
     { "_description": "Falador east of the single-combat crypt", "minX": 2968, "maxX": 3007, "minY": 3328, "maxY": 3335, "z": 0, "tags": ["multi-combat"] },
     { "_description": "Falador north of the single-combat crypt", "minX": 2944, "maxX": 3007, "minY": 3336, "maxY": 3455, "z": 0, "tags": ["multi-combat"] },

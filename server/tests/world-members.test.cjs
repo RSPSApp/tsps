@@ -87,6 +87,8 @@ test('Falador multicombat follows the city boundary and excludes the ground-floo
   for (const z of [0, 1, 2, 3]) {
     const samples = [
       ...cityEdges,
+      [3007, 3303, false], [3008, 3302, false],
+      [3008, 3303, z === 0], [3015, 3303, z === 0],
       [2959, 3333, true], [2960, 3333, z !== 0],
       [2967, 3333, z !== 0], [2968, 3333, true],
       [2964, 3327, true], [2964, 3328, z !== 0],

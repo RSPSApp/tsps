@@ -40,6 +40,8 @@
     "301": { "name": "Health overlay display type", "varbit": 14708 },
     "305": { "name": "Ammo-picking behaviour", "varbit": 5697 },
     "312": { "name": "Player Trade options", "varbit": 6580 },
+    "313": { "name": "Ignore List - Remove permanently banned accounts daily", "varbit": 8059 },
+    "314": { "name": "Ignore List - Remove permanently muted accounts daily", "varbit": 8060 },
     "315": {
       "name": "Level-up pop-up notifications",
       "options": [

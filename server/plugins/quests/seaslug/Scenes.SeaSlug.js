@@ -38,7 +38,7 @@ const REPAIR = {
   exit: [2720, 3302, 0],
   holgartInWater: 5072, // holgartinwater
   holgartAfloat: 5068, // holgartnolegs
-  holgartFrom: [2718, 3300, 0],
+  holgartFrom: [2718, 3300, 0], // live's add tile; see openRepair
   holgartTo: [2719, 3300, 0],
   repairSeq: 4786, // seaslug_boat_repair, delay 45
   repairSound: 3026, // slug_smear_paste, delay 45
@@ -100,6 +100,7 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
   const Scenes = createQuestScenes(api, { recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
   /** Players the quest holds still between conversations (Kent's grab, the kick). */
   const held = new Map();
+  const SOUTH = api.core.Direction?.SOUTH ?? 6;
 
   function steps(variant) {
     return loadTranscripts(api)?.[PAGE]?.variants?.[variant] ?? [];
@@ -164,11 +165,14 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
       instance: { sourceChunk: REPAIR.sourceChunk, size: REPAIR.size }, at: REPAIR.at, exit: REPAIR.exit,
     });
     Scenes.controls(player, true, true);
-    const [x, y] = REPAIR.holgartFrom;
-    const holgart = Scenes.actor(scene, REPAIR.holgartInWater, REPAIR.holgartFrom, [x, y - 1]);
+    // Live adds him at 2718,3300 facing south and jumps him to 2719,3300 with the animation the
+    // next tick. Our NPC sync sends such a jump as a fresh add, which loses his facing and the
+    // animation's tick, so he stands on the work tile from the start (Ours: one tile, one tick).
+    const [x, y] = REPAIR.holgartTo;
+    const holgart = Scenes.actor(scene, REPAIR.holgartInWater, REPAIR.holgartTo, [x, y - 1]);
+    faceSouth(holgart);
     const at = REPAIR.start - REPAIR.open;
     Scenes.later(scene, at, () => {
-      holgart?.moveTo(sceneTile(scene, REPAIR.holgartTo));
       holgart?.performAnimation(new Animation(REPAIR.repairSeq, REPAIR.delay));
       overhead(holgart, "talking-to-holgart", 0);
       const { move, look, rates } = REPAIR.camera;
@@ -194,6 +198,11 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
     const list = stepById(variant, "u-qtrY")?.steps ?? [];
     const line = list.filter((step) => step?.presentation === "overhead")[index];
     if (npc && line?.text) npc.forceChat(line.text);
+  }
+
+  /** Live's `spawnangle=south`: kept when the client re-adds the actor after a jump. */
+  function faceSouth(npc) {
+    npc?.setFace?.(SOUTH);
   }
 
   function sceneTile(scene, [x, y, z = 0]) {
@@ -327,6 +336,7 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
     Scenes.later(scene, at(CRANE.actors), () => {
       const [x, y, z] = CRANE.kennithFrom;
       kennith = Scenes.actor(scene, CRANE.kennith, CRANE.kennithFrom, [x, y - 1, z]);
+      faceSouth(kennith);
       Scenes.camera(player, [2772, 3297, 900], [2768, 3288, 100], { rate: 100, rate2: 100 });
       Scenes.fade(player, false);
     });

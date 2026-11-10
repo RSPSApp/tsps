@@ -9,6 +9,10 @@ const Tools = require("./Tools.Farming");
 const GARDENER_RANGE = 10;
 // Cache OC_ITEM_OP1; equipment op1 removes, op2 starts the item's worn options.
 const WORN_OPTION_PARAM = 451;
+/** All Settings > Gameplay: "Automatically smash empty plant pots", the same switch Otto toggles. */
+const AUTO_SMASH_POTS_SETTING = 381;
+const AUTO_SMASH_POTS_VARBIT = 9614; // brut_smash_pots_automatically
+const AUTO_SMASH_POTS_LOCKED = "You must complete the Farming portion of Barbarian Training to access this setting.";
 const COMPOST_NAMES = ["", "Compost", "Supercompost", "Ultracompost", "Rotten tomato"];
 const ROTTEN_TOMATO_TIER = 4;
 // Rev 241 gamevals human_push and human_pickuptable, with the sounds captured on the bin (recording 1858).
@@ -474,8 +478,7 @@ function farmingNpc(event) {
             if (!player.getLocation().isWithinDistance(npc.getLocation(), 5)) return;
             const training = Patches.farmFor(player).barbarian;
             if (!training?.smashing) { player.sendMessage("Learn pot-smashing first."); return; }
-            training.autoSmash = !training.autoSmash;
-            player.getPacketSender().sendVarbit(9614, training.autoSmash ? 1 : 0);
+            setAutoSmashPots(player, training, !training.autoSmash);
             player.sendMessage(`Automatic pot-smashing is ${training.autoSmash ? "enabled" : "disabled"}.`);
         }]]);
         return;
@@ -589,6 +592,24 @@ function askGardener(player, npc, p) {
     Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { farm.gardenerNoAsk = true; accept(); }]],
         0, `Pay ${paymentText(crop.payment)}?`);
 }
+function setAutoSmashPots(player, training, on) {
+    training.autoSmash = on;
+    player.getPacketSender().sendVarbit(AUTO_SMASH_POTS_VARBIT, on ? 1 : 0);
+}
+function settingClicked(request) {
+    if (request.settingId !== AUTO_SMASH_POTS_SETTING) return;
+    request.handled = true;
+    const { player } = request;
+    const training = Patches.farmFor(player).barbarian;
+    if (training?.smashing !== 3) { player.sendMessage(AUTO_SMASH_POTS_LOCKED); return; }
+    setAutoSmashPots(player, training, !training.autoSmash);
+}
+/** Login: the pot-smashing switch. */
+function settingsLogin({ player }) {
+    if (player.isPlayerBot?.() === true) return;
+    const farm = Patches.farmFor(player);
+    if (farm.barbarian?.autoSmash) player.getPacketSender().sendVarbit(AUTO_SMASH_POTS_VARBIT, 1);
+}
 function canPay(player, payment) {
     const inventory = player.getInventory();
     return payment.every(([id, amount]) => {
@@ -673,4 +694,4 @@ function farmingItemAction(event) {
     }
 }
 
-Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep });
+Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep, settingClicked, settingsLogin });

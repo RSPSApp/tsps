@@ -16,6 +16,7 @@ const StaticShips = require("./StaticShips.Sailing");
 const VARBIT = {
   // The Pandemonium is done (50): the boat customisation refuses every build below it (9022).
   SAILING_INTRO: 18314,
+  SIDE_PANEL_ONLY_ON_BOAT: 18131, // All Settings' "Sailing side panel" (454): 0 Always show, 1 Only show on boat
   LAST_PERSONAL_BOAT_BOARDED: 18554, // boat slot, from 1
   PLAYER_IS_ON_PLAYER_BOAT: 19104, // gangplank: Board / Disembark
   FACILITY_LOCKEDIN: 19105, // helm: Navigate / Stop-navigating (3)

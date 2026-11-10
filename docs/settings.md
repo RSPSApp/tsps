@@ -4,6 +4,8 @@
 
 The behaviour comes from rsprox captures of live OSRS: a capture of All Settings (every row below clicked through), and level-ups from the shared capture index (`levelup_display` in 70 recordings, revisions 223–235, for example recordings 907, 908, 944 and 379; pop-ups disabled in 23 rev 237 recordings, for example 1098, 1102, 1104, 4055). Ids are checked against the rev 241 cache.
 
+Each group of rows has its own section below, ending with a **Not done** line for what is still missing in it. A new group of rows gets its own section, above "Containers on death".
+
 ## All Settings
 
 The client only reports the click. The server sets the variable and sends it back.
@@ -50,7 +52,7 @@ The client only reports the click. The server sets the variable and sends it bac
 | Enable profanity filter | 37 | varp 1074 `option_chatfilter_disabled` |
 | Shift click to drop items | 51 | varbit 11556 `desktop_shiftclickdrop_enabled`; a fresh account starts with it on (live sent 1 at login in all 8 transcribed rsprox recordings). The login script (876, via 7431) passes it to `setshiftclickdrop` on desktop; with Shift held the inventory item's shift-click op is its top entry |
 | Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle`; the Ranged combat tutor's toggle writes the same setting, which is authoritative. A pre-Settings tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into this row at login unless a setting is already saved |
-| Sailing side panel (dropdown) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option |
+| Sailing side panel (dropdown: Always show, Only show on boat) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option; off a boat, Sailing sets 19153 `sailing_sidepanel_visible_from_combat_tab` from it (see below) |
 | Level-up pop-up notifications (dropdown) | 315 | see below |
 | Level-up chatbox list | 493 | varbit 20158 `option_level_up_chatbox_list` |
 | Level-up guide list | 494 | varbit 20159 `option_level_up_guide_list_disabled` |
@@ -69,6 +71,11 @@ The Controls tab's `settings_side:skull_prevention` toggle (116:5) flips the sam
 
 The attack options are also dropdowns on the side panel's Controls tab (`settings_side:attack_priority_player_buttons` 116:38 and `attack_priority_npc_buttons` 116:39). Live sends op1 on their option rows 1–5 and 1–4 at login, and a click sets the varp straight to the option (slot − 1) on the same tick, as the All Settings rows do. Options from enums 3993 and 3991: 0 depends on combat levels, 1 always right-click, 2 left-click where available, 3 hidden, and for players 4 right-click for clanmates.
 
+**Sailing side panel.** The combat tab's "View" button for the sailing sidepanel (593:48) shows while 19153 is 1 (script 7593, run as the tab is built); script 8583 also shows it while the option is Always show and The Pandemonium (`sailing_intro`, 18314) is at stage 6 or later. Off a boat, Sailing sets 19153 to 1 for Always show from that stage and to 0 otherwise, at login, on leaving a boat, when the option changes and when The Pandemonium changes stage; boarding sets it to 1. Live sends 1 at login in 352 of the 356 default-state logins off a boat past that stage in the rsprox captures (rev 235+), and 0 before it.
+
+- **Not done**:
+  - Player Trade and Report options: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
+
 ## Rows the client scripts already apply
 
 These rows only needed wiring: the cache's own scripts (or our client and server code) already act on their variable. Each variable is the one the cache's setting reader returns for the row: script 6716 for toggles and 3962 for dropdowns, each a switch on the setting id. `tests/settings-wired-rows.test.cjs` reads both scripts from the cache and checks every row against them, then that a click flips or sets it and a login brings it back.
@@ -85,22 +92,32 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 | Friend Login/Logout messages (dropdown: Timeout, On, Off) | 44 | varbits 12274 `loginlogout_setting` and 1627 `loginlogout_permanent`, see below | chat scripts |
 | Enable separating hours | 83 | varbit 11890 `option_separate_hours`, on varp 2856 with precise timing (82) and the collection log rows (85, 171): the click is matched with the client's varp transmission as for those | timer scripts |
 | Modern Layout - Side panel visual appearance (dropdown: Stone Border, Steel Border) | 86 | varbit 12135 `side_container_steel` = option | side panel border (script 4127) |
+| Show mouseover tooltips | 114 | varbit 12344 `mouseover_tooltips_disabled` | mouseover tooltips (scripts 4581, 4728) |
 | Show attack style | 123 | varbit 12352 `attack_style_enabled` | HUD layout (4731) |
 | Leagues: Display Relics | 127 | varbit 12383 `buff_league_relics_hidden` (1 hides them) | buff bar |
 | Show mouseover text | 147 | varbit 10035 `mouseover_text_disabled`, see below | our client's top-left text, HUD layout (4731) |
+| Agility helper | 163 | varbit 12379 `agility_helper_disabled` | Agility helper (script 5184), from the course data `Agility.plugin.js` sends |
 | Highlight Agility obstacles | 164 | varbit 12380 `agility_helper_highlight_obstacles_enabled` | our client's obstacle highlight |
+| Enable Minimap zoom | 166 | varbit 12983 `minimap_zoom_lock_disabled` | minimap scroll zoom (scripts 876, 5190, 7025, 7028) |
+| Show the Store button on desktop | 181 | varbit 13037 `tli_storebutton_toggle_desktop` | the minimap's Store button (scripts 389, 920, 2414) |
 | Chatbox Mode - Set Automatically | 195 | varbit 13120 `option_chatbox_mode_autoset` | chat input (script 73) |
+| Show number of options in mouseover tooltips | 209 | varbit 13133 `mouseover_tooltips_hide_opcount` | mouseover tooltips (script 4728) |
+| Show Activity Adviser | 257 | varbit 5368 `option_content_recommender_hide`; a fresh account starts with 1, the button hidden (sent as 1 by 5 of the 6 Tutorial Island logins in the rsprox captures, and by 4,265 logins in all) | the minimap's Activity Adviser button (scripts 636, 2481); the Adviser itself is not in tsps |
 | Hide minimap icons when zoomed out | 265 | varbit 14179 `option_minimap_icons_max_zoom_disabled` | `minimap_seticonzoomlimit` (6463, 6465) |
 | Precise combat level | 311 | varbit 14806 `combat_level_decimal_enabled` | combat tab |
 | Ignore List - Remove permanently banned / muted accounts daily | 313, 314 | varbits 8059 `purgeignored_permbanned_disabled`, 8060 `purgeignored_permmuted_enabled` | nothing: there are no permanent bans or mutes |
 | Options on the compass for orienting the camera also set its vertical angle | 362 | varbit 15323 `compass_reorientation_setheight` | compass (script 1050) |
+| Block spontaneous pop-up promotional messages | 365 | varbit 9597 `crm_surprisepopup_blocked` | nothing: there are no promotional pop-ups |
 | Leagues: Display Combat Masteries | 418 | varbit 11562 `buff_league_masteries_hidden` (1 hides them) | buff bar |
 | Always show chat filters | 430 | varbit 16116 `settings_mobile_show_filter_stones_enabled` | chat filter buttons (scripts 113, 178, 3179) |
 | Enable interface resizing and repositioning | 442 | varbit 17772 `settings_interface_resizing` | resizable interfaces |
 | Disable colourful fade effects | 460 | varbit 18132 `settings_colourful_fade_disabled` | Barracuda Trials |
+| Show charting hints | 464 | varbit 18138 `sailing_show_charting_hints` | the captain's log (scripts 8702, 8706) |
+| Show boat customisation material messages | 466 | varbit 18140 `sailing_show_customisation_material_messages`; a fresh account starts with 1 (sent in all 501 default-state logins since rev 235 that carry it) | the boat customisation materials list (script 8828) |
 | Modern menu interface, and its transparent background | 472, 473 | varbits 19615 `settings_new_menu_interface`, 19646 `settings_new_menu_transparent_interface_disabled` | menu scripts |
 | Rune pouch loadout name tags | 474 | varbit 19647 `settings_runepouch_loadout_names_disabled` | rune pouch |
 | Quetzal whistle - Default to hunter guild | 476 | varbit 19681 `settings_quetzalwhistle_default_tp` | the whistle's Signal (`Whistle.Quetzals.js`) |
+| Show quest rating prompts | 505 | varbit 16774 | nothing: there are no quest rating prompts |
 
 - **Friend Login/Logout messages.** Script 4487 shows `loginlogout_permanent` when it is set, else `loginlogout_setting`; the chat script (84) reads only `loginlogout_permanent`, for the message timeout. Timeout sets both to 0, Off sets the setting to 2. Ours: On sets both to 1, so the chat script sees it too (no capture has On; live logins send `loginlogout_setting` 2, Off, in 3225 of 4281 recordings).
 - **Show mouseover text.** Login sends the saved value, 0 for a fresh account (it used to force 0). The top-left text and HUD overlays laid out by script 4731 (Wintertodt, ToA...) follow it when they are laid out: with the text on they sit 23px lower, with it off at the top.
@@ -164,6 +181,8 @@ own switch and the row stay in step both ways, and the state comes back at login
 
 Ours: a row click that changes the setting sends no chat message (only the locked rows and the Ironman refusal say something); the feature's own switch keeps its messages.
 
+- **Not done**: nothing known.
+
 ## Camera shake rows
 
 Every camera shake the server sends goes through `CameraShake.send(sender, effect, ...)`
@@ -210,15 +229,12 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 
 **Combat level.** A tick after the skill's level-up: `Congratulations, you've just advanced your Combat level. You are now level <n>.` with the same graphic and sounds. With pop-ups on, its pop-up comes when the skill's is continued: `<col=000080>Congratulations, you just advanced a combat level.` (or `<n> combat levels.`), `Your combat level is now <n>.`, with the combat icon (233:55 in rev 241).
 
-## Not done yet
-
-- **"Show level & unlocks"**: continuing opens a box per level with what it unlocked, straight after that skill's pop-up and before a queued skill's or a combat level's (rsprox 223/00014: Attack's box, then the combat pop-up). As live sends it: a `mesbox` chat line with the box text, the pop-up's skill icon hidden, `toplevel_chatbox_resetbackground` (2379), then `objectbox` (193, one picture: `ItemStatementDialogue`) or `objectbox_double` (11, two: `DoubleItemStatementDialogue`) at zoom 400. The text is server-side and comes from the Wiki's level-up transcripts (`plugins/interface/data/level-up-messages.json`), generated by `server/scripts/dump-level-up-messages.cjs` (`--check` fails if the committed file is stale). The pictures are obj gamevals in `plugins/interface/data/level-up-pictures.json`; Sailing has all 80 levels there (71 from rsprox captures, the rest the skill guide icon of each picture the transcript shows). Other skills' levels use the generated `items` ids instead: a level with a single unlock whose transcript picture names a cache item (resolved by exact cache item name); pictures that are not items, or whose wiki name the cache renamed, keep the plain message box (229). Not done: the box text's `<col=000080>` highlights (the dumper strips the Wiki's `{{Colour}}` spans), and the box's `mesbox` lines for a lamp's several levels go out together when the first box opens.
+- **"Show level & unlocks"**: continuing opens a box per level with what it unlocked, straight after that skill's pop-up and before a queued skill's or a combat level's (rsprox 223/00014: Attack's box, then the combat pop-up). As live sends it: a `mesbox` chat line with the box text, the pop-up's skill icon hidden, `toplevel_chatbox_resetbackground` (2379), then `objectbox` (193, one picture: `ItemStatementDialogue`) or `objectbox_double` (11, two: `DoubleItemStatementDialogue`) at zoom 400. The text is server-side and comes from the Wiki's level-up transcripts (`plugins/interface/data/level-up-messages.json`), generated by `server/scripts/dump-level-up-messages.cjs` (`--check` fails if the committed file is stale). The pictures are obj gamevals in `plugins/interface/data/level-up-pictures.json`; Sailing has all 80 levels there (71 from rsprox captures, the rest the skill guide icon of each picture the transcript shows). Other skills' levels use the generated `items` ids instead: a level with a single unlock whose transcript picture names a cache item (resolved by exact cache item name); pictures that are not items, or whose wiki name the cache renamed, keep the plain message box (229).
 - **Level-up chatbox list**: with "Show level & unlocks" on (and pop-ups shown), the unlock text goes to the chat only as the box's `mesbox` line, as live (no capture has a plain "You can now..." game message on a level-up). A level-up given up before its box opens (walking, using an item, logging out, dying) sends the lines as chat messages instead, for the open pop-up's skill and any queued ones (ours), so they are never lost. Otherwise the same lines go to the chatbox on the level-up tick. Varbit 20158 is stored but does not gate them: no capture shows what it sends, so this is our reading of the setting, not a recording.
-- **Level-up guide list**: still not done; nothing lists unlocks in the skill guide.
-- **Jingles.** Done: each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
-- **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
-- **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.
-- **Other colour pickers** (type 9): the Activities overlay colours (113, 174, 177, 180, 262, 263, 266, 504) are not handled; the chat, quest-list and music player colours are supported below.
+- **Jingles.** Each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
+- **Not done**:
+  - Level-up guide list: nothing lists unlocks in the skill guide.
+  - "Show level & unlocks": the box text's `<col=000080>` highlights (the dumper strips the Wiki's `{{Colour}}` spans), and the box's `mesbox` lines for a lamp's several levels go out together when the first box opens.
 
 ## Chat colours
 
@@ -241,6 +257,8 @@ The chat colour rows (type 9) open the colour picker as the quest-list rows do (
 | 'Did you know?' | 434 → 4697 | 435 → 4698 |
 
 Split private chat: Private 91 → varp 3008, Broadcast 96 → 3009. The reset rows clear their group's varps: 107 opaque, 108 transparent, 109 split. `server/tests/settings-chat-colours.test.cjs` checks every row against script 4181 and its struct.
+
+- **Not done**: the other colour pickers (type 9), the Activities overlay colours (113, 174, 177, 180, 262, 263, 266, 504).
 
 ## Quest list preferences (cache 241)
 
@@ -276,6 +294,8 @@ Native acceptance: at the isolated worktree URL open Quests →Settings, scroll
 Interfaces to Quest List, change sorting/filter, close and open row journals. Choose
 Large, disable shadows, choose a colour (including black), reset and relog. Use the
 worktree ports; leave the main play world running.
+
+- **Not done**: nothing known.
 
 ## Notification and warning rows
 
@@ -327,7 +347,7 @@ Each row is a toggle in `data/settings.json`, read when its dialogue or message 
 | Accept trade delay | 205 | 13130 `trade_delay_disabled`, read as is (on) | Accept on the first trade screen does nothing for 3 seconds after either player changes an offer; each player's own setting decides their wait |
 | Show warning when teleporting from your boat at sea | 471 | 16620 `sailing_warning_teleportoffboat` (off) | A teleport spell cast aboard your own boat (which would leave it lost at sea) asks "Accept that your boat may be lost at sea?", "Yes, teleport away." / "No, stay on the boat.", after any Wilderness warning the spell has (`skills/sailing/TeleportWarning.plugin.js`) |
 
-- **Defaults** for 192 and 205: all 918 default-state logins (rev 235+) in the rsprox captures send both varbits as 1. Row 278 ("Display a warning on login if there are items stored in an item retrieval service") is shown by the toggle reader as 1 − varbit 14194 `option_item_retrieval_warning_disabled`, so it now flips 14194 instead of sharing 192's 13113.
+- **Defaults** for 192 and 205: all 918 default-state logins (rev 235+) in the rsprox captures send both varbits as 1. Row 278 ("Display a warning on login if there are items stored in an item retrieval service") is shown by the toggle reader as 1 − varbit 14194 `option_item_retrieval_warning_disabled`, so it now flips 14194 instead of sharing 192's 13113. The gravestone login warning reads 14194 too, so it shows by default.
 - **Ours** (no capture or Wiki text): the Plank Make, gravestone and boat teleport questions and options (the boat one follows live's Escape prompt), and that a click on Accept during the trade delay does nothing and says nothing.
 - **Not done**:
   - The clue warning for clues from skilling (nests, geodes, bottles, salvage, Agility): those sources skip the roll at capacity, so there is nothing to mention yet.
@@ -358,12 +378,11 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 
 **Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
 
-Not done yet:
-
-- **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
-- **Level-up chatbox list** (493): no capture shows what it writes.
-- **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
-- **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+- **Not done**:
+  - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
+  - **Level-up chatbox list** (493): no capture shows what it writes.
+  - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
+  - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
 
 ## Containers on death
 

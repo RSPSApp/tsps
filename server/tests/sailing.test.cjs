@@ -1090,8 +1090,8 @@ test("the sailing plugins register their hooks and load the boat and dock data",
   assert.deepEqual(Object.keys(helm.objects.Helm), ["Navigate", "Stop-navigating", "Escape"]);
   assert.equal(helm.interfaceClicks.length, 2, "the sail buttons and the wind catcher's release");
   assert.deepEqual(Object.keys(registerPlugin("Sailing.plugin").events).sort(),
-    ["sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
-     "sailing:leave-supplied-panel", "sailing:left"]);
+    ["quest:stage-changed", "sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
+     "sailing:leave-supplied-panel", "sailing:left", "settings:option-chosen"]);
   assert.deepEqual(Object.keys(registerPlugin("Shipwright.plugin").npcs).sort(),
     ["Junior Jim", "Shipwright Sam"]);
   assert.ok(Sailing.getDock("the_pandemonium"));
@@ -1507,6 +1507,50 @@ test("boarding sends the raft's varbits and stats as live OSRS does", () => {
   } finally {
     Sailing.disembark(player, "the_pandemonium");
   }
+});
+
+test("off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says", () => {
+  const { events, login } = registerPlugin("Sailing.plugin");
+  const player = sailor();
+  player.performAnimation = () => {};
+  const varbits = new Map();
+  const sender = new Proxy({}, {
+    get: (_t, key) => key === "sendVarbit"
+      ? (id, value) => { varbits.set(id, value); return sender; }
+      : key === "getVarbit" ? (id) => varbits.get(id) ?? 0 : () => sender,
+  });
+  player.getPacketSender = () => sender;
+  const FROM_COMBAT_TAB = 19153; // sailing_sidepanel_visible_from_combat_tab
+  const ONLY_ON_BOAT = 18131; // settings_sailing_side_panel_onlyonboat, row 454
+  const SAILING_INTRO = 18314;
+  const BOARDED_BOAT = 19136;
+  const choose = (option) => events["settings:option-chosen"]({ player, settingId: 454, option, handled: false });
+
+  login({ player });
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 0, "not offered before The Pandemonium reaches stage 6");
+  varbits.set(SAILING_INTRO, 6);
+  events["quest:stage-changed"]({ player, key: "pandemonium", stage: 6 });
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "offered once it does");
+  varbits.set(FROM_COMBAT_TAB, 0);
+  login({ player });
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "Always show (the default) offers it at login");
+
+  choose(1);
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 0, "Only show on boat");
+  choose(0);
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "Always show");
+
+  varbits.set(BOARDED_BOAT, 1).set(FROM_COMBAT_TAB, 1);
+  choose(1);
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "aboard, the panel stays offered");
+  varbits.set(ONLY_ON_BOAT, 1);
+  events["sailing:left"]({ player, boat: null, reason: "disembark" });
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 0, "leaving with Only show on boat");
+
+  varbits.set(ONLY_ON_BOAT, 0).set(BOARDED_BOAT, 1).set(FROM_COMBAT_TAB, 1);
+  events["sailing:left"]({ player, boat: null, reason: "disembark" });
+  assert.equal(varbits.get(FROM_COMBAT_TAB), 1, "leaving with Always show keeps it");
+  assert.equal(varbits.get(BOARDED_BOAT), 0);
 });
 
 test("the combat tab's View button shows the sailing sidepanel aboard, and Combat Options switches back", () => {
@@ -2352,7 +2396,8 @@ test("Sailing login leaves schematic unlocks to their earned-state owner", () =>
   const player = sailor();
   const varbits = new Map([[19544, 0], [19553, 1], [20227, 0]]);
   const sender = new Proxy({}, {
-    get: (_t, key) => (...args) => { if (key === "sendVarbit") varbits.set(args[0], args[1]); return sender; },
+    get: (_t, key) => key === "getVarbit" ? (id) => varbits.get(id) ?? 0
+      : (...args) => { if (key === "sendVarbit") varbits.set(args[0], args[1]); return sender; },
   });
   player.getPacketSender = () => sender;
   login({ player });

@@ -22404,6 +22404,8 @@ test('Curator Haig belongs to the active Golem museum step, then The Dig Site, t
 
   attributes.set('quest.the_golem.stage', 0);
   attributes.set('quest.the_dig_site.stage', 1);
+  // The curator's approval belongs to the letter: stamped, and not yet back with the examiner.
+  attributes.set('quest.the_dig_site.letter_stamped', true);
   assert.equal(select().owner, 'The Dig Site', 'The Dig Site approval remains available through the curator');
 
   attributes.set('quest.the_dig_site.stage', 9);

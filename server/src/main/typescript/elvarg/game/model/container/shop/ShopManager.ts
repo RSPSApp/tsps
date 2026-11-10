@@ -964,7 +964,7 @@ export class ShopManager {
      */
     private static specialistBuyback(shop: RuntimeShop): number {
         if (this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())) return 0;
-        const multiplier = shop.definition.getSalesPolicy().sellMultiplier;
+        const multiplier = shop.definition.getSalesPolicy().buysAt;
         return Number.isSafeInteger(multiplier) && Number(multiplier) > 0 ? Number(multiplier) : 0;
     }
 
@@ -1038,7 +1038,7 @@ export class ShopManager {
     private static stockPriced(shop: RuntimeShop): boolean {
         const policy = shop.definition.getSalesPolicy();
         return policy.generalStore === true && shop.definition.getCurrency() === "COINS"
-            && policy.sellMultiplier != null && policy.priceChangePer != null;
+            && policy.buysAt != null && policy.changePer != null;
     }
 
     private static sellPrice(shop: RuntimeShop, definition: ItemDefinition, player: any = null, additionalStock = 0): number {
@@ -1052,7 +1052,7 @@ export class ShopManager {
             const overstock = Math.max(0, (shop.stock.get(definition.getId()) ?? 0)
                 - (shop.originalAmounts.get(definition.getId()) ?? 0) + additionalStock);
             // Wiki StoreTableHead multipliers use per mille; the general-store floor is 10%.
-            price = Math.floor(Number(definition.getValue()) * Math.max(100, policy.sellMultiplier - overstock * policy.priceChangePer) / 1000);
+            price = Math.floor(Number(definition.getValue()) * Math.max(100, policy.buysAt - overstock * policy.changePer) / 1000);
         }
         const request = {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(), currency: shop.definition.getCurrency(),

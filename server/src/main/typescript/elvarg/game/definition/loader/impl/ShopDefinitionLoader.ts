@@ -19,6 +19,10 @@ interface RawShopStockDefinition {
 
 interface RawShopDefinition {
     generalStore?: unknown;
+    sellsAt?: unknown;
+    buysAt?: unknown;
+    changePer?: unknown;
+    /** Older names for `buysAt` and `changePer`. */
     sellMultiplier?: unknown;
     priceChangePer?: unknown;
     id?: unknown;
@@ -202,10 +206,16 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             source,
             {
                 generalStore: typeof raw.generalStore === "boolean" ? raw.generalStore : undefined,
-                sellMultiplier: Number.isSafeInteger(raw.sellMultiplier) && Number(raw.sellMultiplier) >= 0 ? Number(raw.sellMultiplier) : undefined,
-                priceChangePer: Number.isSafeInteger(raw.priceChangePer) && Number(raw.priceChangePer) >= 0 ? Number(raw.priceChangePer) : undefined,
+                sellsAt: this.perMille(raw.sellsAt),
+                buysAt: this.perMille(raw.buysAt) ?? this.perMille(raw.sellMultiplier),
+                changePer: this.perMille(raw.changePer) ?? this.perMille(raw.priceChangePer),
             }
         );
+    }
+
+    /** A StoreTableHead rate (per mille of the item's value), or undefined when the shop has none. */
+    private perMille(value: unknown): number | undefined {
+        return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined;
     }
 
     private normalizeAmount(value: unknown): number {

@@ -43,8 +43,7 @@ export class OptionDialogue extends Dialogue {
     public static send(player: Player, title: string, options: string[]): void {
         const sender = player.getPacketSender();
         sender.sendInterfaceScript(2379);
-        sender.sendVarbit(10670, 1);
-        sender.sendChatboxInterface(219);
+        sender.sendChatboxInterface(219, true);
         sender.sendClientScript(58, title || "Select an Option", options.join("|"));
         sender.sendInterfaceFlagsRange(OptionDialogue.OPTIONS_WIDGET_ID, 1, options.length, 1);
     }

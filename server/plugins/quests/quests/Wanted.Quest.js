@@ -194,8 +194,7 @@ module.exports = function registerWantedQuest(api) {
   const LORD_DAQUARIUS_NPC_ID = NpcIdentifiers.LORD_DAQUARIUS; // 4929
   // Map parents 3228/3229 resolve to these wilderness/chapel dialogue actors.
   const WILDERNESS_MAGE_NPC_ID = NpcIdentifiers.MAGE_OF_ZAMORAK; // 2580
-  const MAGE_OF_ZAMORAK_NPC_ID = NpcIdentifiers.MAGE_OF_ZAMORAK_3; // 2582
-  const MAGE_OF_ZAMORAK_NPC_IDS = new Set([MAGE_OF_ZAMORAK_NPC_ID]);
+  const VARROCK_MAGE_NPC_ID = NpcIdentifiers.MAGE_OF_ZAMORAK_3; // 2582
   const SAVANT_NPC_ID = NpcIdentifiers.SAVANT; // 4931
   const SOLUS_DELLAGAR_NPC_ID = NpcIdentifiers.SOLUS_DELLAGAR; // 4930
   const SOLUS_DELLAGAR_FIGHT_NPC_ID = NpcIdentifiers.SOLUS_DELLAGAR_3; // 4962
@@ -398,6 +397,7 @@ module.exports = function registerWantedQuest(api) {
   const orbPathByPlayer = new Map();
   /** Players whose squireship entail branch still needs the Yes/No offer. */
   const squirePromptPlayers = new Set();
+  const otherMageTopics = new WeakSet();
   let clueTailCache = null;
 
   function wantedVariant(variant) {
@@ -837,13 +837,6 @@ module.exports = function registerWantedQuest(api) {
     return variant ? wantedVariant(variant) : null;
   }
 
-  function selectMage(player, stage) {
-    if (stage === STAGE_FUR) return wantedVariant(V_MAGE);
-    if (stage === STAGE_MAGE_DEAL) return wantedVariant(V_MAGE_DEAL);
-    if (stage >= STAGE_EAST) return wantedVariant(V_MAGE_AGAIN);
-    return null;
-  }
-
   /** Plays a claimed Talk-to; false leaves the NPC to the other plugins. */
   function playClaimedVariant(player, npcId, variant) {
     if (!variant) return false;
@@ -872,11 +865,46 @@ module.exports = function registerWantedQuest(api) {
   function talkToMage({ player, npcId }) {
     const stage = quest.getStage(player);
     if (stage < STAGE_FUR || stage > STAGE_MAGE_DEAL) return false;
-    if (npcId === WILDERNESS_MAGE_NPC_ID) {
-      return startTranscript(api, player, npcId, "Mage of Zamorak", "standard-dialogue-wilderness") ? undefined : false;
+    if (npcId !== WILDERNESS_MAGE_NPC_ID) return false;
+    return startTranscript(api, player, npcId, "Mage of Zamorak", "standard-dialogue-wilderness");
+  }
+
+  function mageDealMenu([menu]) {
+    const deal = loadTranscripts(api)[PAGE].variants[V_MAGE_DEAL];
+    return [{
+      ...menu,
+      options: menu.options.map((option) =>
+        option.text === "Solus Dellagar." ? { ...option, steps: deal } : option
+      ),
+    }];
+  }
+
+  function offerVarrockMageTopics(event) {
+    const { player, npc, npcId, definition, clickType } = event;
+    if (npcId !== VARROCK_MAGE_NPC_ID || otherMageTopics.has(player)) return;
+    if (definition.getActions()[clickType - 1] !== "Talk-to") return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_FUR || stage > STAGE_MAGE_DEAL) return;
+    // Temple of the Eye claims this same Talk-to, even after completion.
+    event.handled = startTranscript(api, player, npcId, PAGE, V_MAGE,
+      stage === STAGE_MAGE_DEAL ? mageDealMenu : undefined, npc);
+  }
+
+  function openOtherMageTopics(event) {
+    const { player, npc, npcId, definition } = event;
+    const location = npc.getLocation();
+    event.end = true;
+    otherMageTopics.add(player);
+    try {
+      api.core.PluginManager.emitNpcInteraction({
+        player, npc, npcId, definition, npcIndex: npc.getIndex(),
+        clickType: definition.getActions().indexOf("Talk-to") + 1,
+        location: { x: location.getX(), y: location.getY(), z: location.getZ() },
+        handled: false,
+      });
+    } finally {
+      otherMageTopics.delete(player);
     }
-    if (!MAGE_OF_ZAMORAK_NPC_IDS.has(npcId)) return false;
-    return playClaimedVariant(player, npcId, stage === STAGE_FUR ? V_MAGE : V_MAGE_DEAL);
   }
 
   function selectVariant({ npcId, player }) {
@@ -886,7 +914,7 @@ module.exports = function registerWantedQuest(api) {
     if (npcId === SIR_AMIK_VARZE_NPC_ID) return selectAmik(player);
     if (npcId === SIR_TIFFY_CASHIEN_NPC_ID) return selectTiffy(player);
     if (npcId === LORD_DAQUARIUS_NPC_ID) return selectDaquarius(player);
-    if (MAGE_OF_ZAMORAK_NPC_IDS.has(npcId)) return selectMage(player, stage);
+    if (npcId === VARROCK_MAGE_NPC_ID && stage >= STAGE_EAST) return wantedVariant(V_MAGE_AGAIN);
     return null;
   }
 
@@ -914,7 +942,7 @@ module.exports = function registerWantedQuest(api) {
       if (stepId === "bre0MU") return components > 0 && components < 3;
       return null;
     }
-    if (MAGE_OF_ZAMORAK_NPC_IDS.has(npcId)) {
+    if (npcId === VARROCK_MAGE_NPC_ID) {
       const essence = essenceAmount(player);
       if (stepId === "_jNeLm") return essence === 0;
       if (stepId === "7EAVsM") return essence > 0 && !hasEssenceStack(player);
@@ -1020,7 +1048,7 @@ module.exports = function registerWantedQuest(api) {
       if (text.startsWith("All I know is that he left behind some fur")
         || text.startsWith("I have already told you, I know nothing except that he left some fur")) earnInvestigation(player, EXPOSITION_ATTRIBUTE, VARBIT_EXPOSITION);
     }
-    if (MAGE_OF_ZAMORAK_NPC_IDS.has(npcId) && (text.startsWith("Twenty parts of rune essence is my price")
+    if (npcId === VARROCK_MAGE_NPC_ID && (text.startsWith("Twenty parts of rune essence is my price")
       || text === "I do indeed. My price for this information is 20 pieces of rune essence.")) earnInvestigation(player, MAGE_HINT_ATTRIBUTE, VARBIT_MAGE);
     if (
       npcId === SIR_TIFFY_CASHIEN_NPC_ID &&
@@ -1034,7 +1062,7 @@ module.exports = function registerWantedQuest(api) {
       grantLostHat(player);
       return;
     }
-    if (MAGE_OF_ZAMORAK_NPC_IDS.has(npcId) && text.includes("I have your essences right here")) {
+    if (npcId === VARROCK_MAGE_NPC_ID && text.includes("I have your essences right here")) {
       takeEssencePrice(player);
     }
   }
@@ -1139,9 +1167,11 @@ module.exports = function registerWantedQuest(api) {
       }
       return;
     }
-    if (MAGE_OF_ZAMORAK_NPC_IDS.has(npcId) && text.includes("solus dellagar") && quest.getStage(player) === STAGE_FUR) {
-      quest.setStage(player, STAGE_MAGE_DEAL);
-    }
+    if (npcId !== VARROCK_MAGE_NPC_ID || !event.pages?.some(({ page }) => page === PAGE)) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_FUR || stage > STAGE_MAGE_DEAL) return;
+    if (text === "solus dellagar." && stage === STAGE_FUR) quest.setStage(player, STAGE_MAGE_DEAL);
+    if (text === "something else." && event.npc) openOtherMageTopics(event);
   }
 
   function handleClueReference(event) {
@@ -1584,6 +1614,7 @@ module.exports = function registerWantedQuest(api) {
   api.onNpcInteraction("Sir Tiffy Cashien", { "Talk-to": talkToTiffy });
   api.onNpcInteraction("Sir Amik Varze", { "Talk-to": talkToAmik });
   api.onNpcInteraction("Lord Daquarius", { "Talk-to": talkToDaquarius });
+  api.onBeforeNpcInteraction(offerVarrockMageTopics);
   api.onNpcInteraction("Mage of Zamorak", { "Talk-to": talkToMage });
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);

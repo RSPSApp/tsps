@@ -13,6 +13,7 @@
 const BattleMages = require("./magearena/BattleMages.MageArena");
 const Followers = require("./magearena/Followers.MageArena");
 const Kolodion = require("./magearena/Kolodion.MageArena");
+const MageArenaI = require("./magearena/MageArenaI.MageArena");
 const MageArenaII = require("./magearena/MageArenaII.MageArena");
 const Levers = require("./magearena/Levers.MageArena");
 const Spells = require("./magearena/Spells.MageArena");
@@ -25,6 +26,7 @@ module.exports = {
   members: true,
   register(api) {
     BattleMages(api);
+    MageArenaI(api);
     MageArenaII(api);
     Followers(api);
     Kolodion(api);

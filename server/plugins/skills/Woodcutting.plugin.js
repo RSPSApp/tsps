@@ -765,6 +765,14 @@ function groupBonus(player, state, sessions = activeSessionsRef) {
   return Math.min(GROUP_BONUS_MAX, chopping);
 }
 
+/**
+ * "woodcutting:group-bonus" ({ player, players }): the players at the tree the player is chopping, for the
+ * buff bar's Group Woodcutting Bonus; 0 when they aren't chopping a tree that gives one.
+ */
+function answerGroupBonus(request) {
+  request.players = groupBonus(request.player, activeSessionsRef?.get?.(request.player) ?? null);
+}
+
 function rollLog(player, tree, axe, state = null) {
   const level = getWoodcuttingLevel(player) + Guild.invisibleBoost(player) + groupBonus(player, state);
   return Math.random() < calculateCutChance(level, tree, axe);
@@ -1445,6 +1453,7 @@ module.exports = {
     pluginApi = api;
     api.onCustomEvent("woodcutting:chop", requestedChop);
     api.onCustomEvent("woodcutting:axe", requestedAxe);
+    api.onCustomEvent("woodcutting:group-bonus", answerGroupBonus);
     TaskManager = api.getTaskManager();
     ObjectManager = api.getObjectManager();
     ItemOnGroundManager = api.getItemOnGroundManager();
@@ -1503,5 +1512,5 @@ module.exports = {
   calculateCutChance,
   /** Stops the player's chopping (a Forestry event spawning beside them). */
   stopWoodcutting: (player) => activeSessionsRef && stopWoodcutting(activeSessionsRef, player),
-  _test: { maybeDropBirdNest, groupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
+  _test: { maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
 };

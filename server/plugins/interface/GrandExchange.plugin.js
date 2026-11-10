@@ -135,6 +135,11 @@ const TAX_EXEMPT_NAMES = new Set([
 // Dose and charge counts make these names vary, but the whole item is exempt.
 const TAX_EXEMPT_PREFIXES = ["Energy potion", "Watering can"];
 const MARKET_DATA_FILE = path.join(__dirname, "data", "grand-exchange.json");
+const ValueWarning = require("./ValueWarning");
+// All Settings 297/298: set to 1, the price warning is off.
+const BUY_WARNING_DISABLED_VARBIT = 14700;
+const SELL_WARNING_DISABLED_VARBIT = 14701;
+const PRICE_WARNING_FACTOR = 10;
 // OSRS: members get all 8 offer slots, free-to-play worlds the first 3.
 const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 : 3);
 const offers = new WeakMap();
@@ -710,7 +715,27 @@ function freeWorldBuyRefused(player, offer) {
   return true;
 }
 
-function confirm(player, offer) {
+/**
+ * All Settings 297 and 298 (the rows' own text): a buy offer more than 10 times the guide price, or
+ * a sell offer under 10% of it, asks first. Ours: the warning's wording.
+ */
+function priceWarning(player, offer, unitPrice) {
+  const guide = guidePrice(offer);
+  const sender = player.getPacketSender();
+  if (!offer.sell && !sender.getVarbit(BUY_WARNING_DISABLED_VARBIT) && unitPrice > guide * PRICE_WARNING_FACTOR) {
+    return `Your offer is more than ${PRICE_WARNING_FACTOR} times the guide price.`;
+  }
+  if (offer.sell && !sender.getVarbit(SELL_WARNING_DISABLED_VARBIT) && unitPrice * PRICE_WARNING_FACTOR < guide) {
+    return `Your offer is less than ${100 / PRICE_WARNING_FACTOR}% of the guide price.`;
+  }
+  return null;
+}
+
+/**
+ * `warned`: the offer as the player accepted its price warning ({ itemId, price, quantity }). The
+ * Exchange stays open behind the warning, so an offer edited since is checked again.
+ */
+function confirm(player, offer, warned = null) {
   if (!active(player, offer) || !exchangeable(offer.itemId)) return;
   if (freeWorldBuyRefused(player, offer)) return;
   const amount = offer.quantity;
@@ -748,6 +773,19 @@ function confirm(player, offer) {
     return;
   }
   if (fromBank && pluginApi.emitCanBank(player, "grand-exchange-buy") === false) return;
+  const accepted = warned?.itemId === offer.itemId && warned.price === unitPrice && warned.quantity === amount;
+  const warning = accepted ? null : priceWarning(player, offer, unitPrice);
+  if (warning) {
+    ValueWarning.confirm(pluginApi.core, player, {
+      itemId: offer.itemId,
+      text: `${warning}<br>Are you sure you want to place this offer?`,
+      title: "Place this offer?",
+      yes: "Yes, place the offer.",
+      no: "No, don't place the offer.",
+      proceed: () => confirm(player, offer, { itemId: offer.itemId, price: unitPrice, quantity: amount }),
+    });
+    return;
+  }
   // Plugins may veto an offer (e.g. an untradeable item that cannot be listed).
   const confirmation = { player, itemId: offer.itemId, sell: offer.sell, quantity: amount, accepted: true };
   pluginApi.emitCustomEvent("ge:offer-confirmed", confirmation);
@@ -1176,6 +1214,10 @@ module.exports = {
     },
   },
   _test: {
+    priceWarning,
+    confirm,
+    setApi: (api) => { pluginApi = api; },
+    setOffer: (player, offer) => offers.set(player, offer),
     price,
     sellPrice,
     changePrice,

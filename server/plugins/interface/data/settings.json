@@ -144,6 +144,7 @@
         { "varbits": { "12274": 2, "1627": 0 } }
       ]
     },
+    "65": { "name": "Casting Alchemy spells on untradeable items always triggers a warning", "varbit": 6092, "default": 1 },
     "66": { "name": "Minimum item value needed for Alchemy spells warning", "varbit": 6091, "default": 20000 },
     "159": { "name": "Combat Achievement Tasks - Completion popup", "varbit": 12455 },
     "161": { "name": "Combat Achievement Tasks - Failure", "varbit": 12454, "default": 1 },
@@ -154,6 +155,7 @@
     "189": { "name": "Bird nest notification", "varbit": 13087 },
     "195": { "name": "Chatbox Mode - Set Automatically", "varbit": 13120 },
     "248": { "name": "Cannon low on ammo notification", "varbit": 14175 },
+    "249": { "name": "Cannon low on ammo amount", "varbit": 14176 },
     "250": { "name": "Cannon out of ammo notification", "varbit": 14177 },
     "254": { "name": "Show warning on Wilderness teleport levers on High Risk worlds", "varbit": 13986 },
     "256": { "name": "Show warning on taking a canoe to the Wilderness", "varbit": 13988 },
@@ -181,6 +183,7 @@
     "445": { "name": "Show the camera effect when fighting the Doom of Mokhaiotl", "varbit": 17776 },
     "446": { "name": "Warning on digging up a farming patch", "varbit": 17797 },
     "448": { "name": "Birdhouse valuable seed warning", "varbit": 17869 },
+    "449": { "name": "Minimum item value needed for birdhouse warning", "varp": 4850, "default": 1000 },
     "456": { "name": "Charting popups", "varbit": 18142 },
     "463": { "name": "Port task cargo deposit warning", "varbit": 18137 },
     "467": { "name": "Port task cargo in hold warning", "varbit": 18144 },

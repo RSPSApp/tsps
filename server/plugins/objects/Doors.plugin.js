@@ -56,6 +56,8 @@ const DOOR_NAMES = new Set([
 const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
+  PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
+  PLAGUE_HOUSE_DOOR_OPEN: 37322, // plagueelenadooropen
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
   LARGE_DOOR_101_OPEN: 39254,
   GUIDOR_GATE_LEFT_OPEN: 2052, // guidorgatelopen
@@ -739,6 +741,13 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.DOOR_91, { open: NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN }],
     [O.RED_DOOR, {}], [O.ORANGE_DOOR, {}], [O.YELLOW_DOOR, {}], [O.BLUE_DOOR, {}],
     [O.MAGENTA_DOOR, {}], [O.GREEN_DOOR, {}], [O.EXIT_DOOR, {}],
+    // Plague City (revision 242 capture 20261110T113734-5ab63b4): the Rehnisons' door (ticks 424-426,
+    // 480-482), Bravek's door (614-616, 695-697), the plague house's two doors (734-736, 838-840) and
+    // Elena's cell door (752-754, 757-759, 788-790). PlagueCity.Quest decides who may pass (door:toggle).
+    [O.DOOR_85, { open: O.DOOR_86 }],
+    [O.DOOR_80, { open: O.DOOR_81 }],
+    [NAMELESS_DOOR_LEAF_IDS.PLAGUE_HOUSE_DOOR, { open: NAMELESS_DOOR_LEAF_IDS.PLAGUE_HOUSE_DOOR_OPEN, openSoundId: 81 }],
+    [O.DOOR_78, { open: O.DOOR_79, openSoundId: 67 }],
   ].map(([closed, family]) => [closed, Object.freeze({ openSoundId: 62, closeTicks: 2, ...family })]));
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
     DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>

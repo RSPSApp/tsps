@@ -2628,6 +2628,7 @@ export class PluginManager {
       ObjectIdentifiers: require("../util/ObjectIdentifiers").ObjectIdentifiers,
       ShopIdentifiers: require("../util/ShopIdentifiers").ShopIdentifiers,
       Misc: require("../util/Misc").Misc,
+      ChatTextLayout: require("../game/model/dialogues/ChatTextLayout").ChatTextLayout,
       TimerKey: require("../util/timers/TimerKey").TimerKey,
       Sound: require("../game/Sound").Sound,
       Sounds: require("../game/Sounds").Sounds,

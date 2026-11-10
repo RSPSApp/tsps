@@ -28,7 +28,7 @@ const HARPOONS = [
 ];
 
 function player(weaponId, { base = 80, current = base, energy = 100 } = {}) {
-  const calls = { animations: [], graphics: [], chat: [], messages: [] };
+  const calls = { animations: [], graphics: [], chat: [], messages: [], sounds: [] };
   const p = {
     current, energy, calls, special: null, activated: false,
     isPlayer: () => true,
@@ -44,7 +44,7 @@ function player(weaponId, { base = 80, current = base, energy = 100 } = {}) {
     getSpecialPercentage() { return this.energy; },
     decrementSpecialPercentage(amount) { this.energy -= amount; },
     isRecoveringSpecialAttack: () => true,
-    getPacketSender: () => ({ updateSpecialAttackOrb() {}, sendSpecialAttackState() {} }),
+    getPacketSender: () => ({ updateSpecialAttackOrb() {}, sendSpecialAttackState() {}, sendSoundEffect: (id) => calls.sounds.push(id) }),
     getSkillManager: () => ({
       getMaxLevel: () => base,
       getCurrentLevel: () => p.current,
@@ -72,6 +72,7 @@ for (const [name, id, animation, graphic] of HARPOONS) {
     assert.deepEqual(p.calls.chat, ["Here fishy fishies!"]);
     assert.deepEqual(p.calls.animations, [animation]);
     assert.deepEqual(p.calls.graphics, [graphic]);
+    assert.deepEqual(p.calls.sounds, [2538], "the recorded synth sound (227/00075:77210)");
     assert.equal(p.special.getCombatMethod().hits(), null);
   });
 
@@ -84,6 +85,7 @@ for (const [name, id, animation, graphic] of HARPOONS) {
     assert.deepEqual(p.calls.chat, []);
     assert.deepEqual(p.calls.animations, []);
     assert.deepEqual(p.calls.graphics, []);
+    assert.deepEqual(p.calls.sounds, []);
   });
 }
 

@@ -1,5 +1,5 @@
 module.exports = function registerDragonHarpoonSpecialAttack(api) {
-  const { Animation, CombatMethod, CombatSpecial, CombatType, Equipment, Graphic, ItemIdentifiers, Skill } = api.core;
+  const { Animation, CombatMethod, CombatSpecial, CombatType, Equipment, Graphic, ItemIdentifiers, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 100;
   const FISHING_BOOST = 3;
@@ -48,6 +48,9 @@ module.exports = function registerDragonHarpoonSpecialAttack(api) {
       character.forceChat(FORCED_CHAT);
       character.performAnimation(HARPOON_ANIMATIONS.get(weaponId));
       character.performGraphic(crystal ? CRYSTAL_GLOW : GLOW);
+      // rsprox_transcripts/227/00075.txt:77210 (and every recorded Fishstabber): synth sound 2538, the dragon
+      // battleaxe special's.
+      Sounds.sendSound(character, Sound.DRAGON_BATTLEAXE_SPECIAL);
       const skillManager = character.getAsPlayer().getSkillManager();
       const base = skillManager.getMaxLevel(Skill.FISHING);
       const current = skillManager.getCurrentLevel(Skill.FISHING);

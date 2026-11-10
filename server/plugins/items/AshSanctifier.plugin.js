@@ -25,7 +25,7 @@ const FULL_INVENTORY_STEP = "-Gwngq";
 const NO_SANCTIFIER_STEP = "Qq8FOu";
 const HAS_SANCTIFIER_STEP = "JJzaV6";
 const HAND_OVER_LINE = "Thanks for your efforts throughout the tasks set. Here, you may have this.";
-const TYSS = "Tyss";
+const TYSS_NPC_ID = 7050;
 
 let api = null;
 let core = null;
@@ -115,7 +115,10 @@ function refreshBank(player) {
   player.getBank(tab).refreshItems();
 }
 
-/** Moves the charges towards `wanted`, a death rune per 10 charges from or back to the bank. */
+/**
+ * Moves the charges towards `wanted`, a death rune per 10 charges from or back to the bank. As
+ * with Uncharge, charges short of a whole rune stay; the status line shows where it ended.
+ */
 function configureCharges(player, wanted) {
   const current = charges(player);
   const target = Math.min(Math.floor(Number(wanted)), MAX_CHARGES);
@@ -123,19 +126,21 @@ function configureCharges(player, wanted) {
   const bank = player.getBank(core.Bank.getTabForItem(player, deathRuneId()));
   if (target > current) {
     const runes = Math.min(Math.ceil((target - current) / CHARGES_PER_RUNE), bankRunes(player));
-    if (runes <= 0) return;
-    bank.delete(deathRuneId(), runes);
-    setCharges(player, Math.min(MAX_CHARGES, current + runes * CHARGES_PER_RUNE));
+    if (runes > 0) {
+      bank.delete(deathRuneId(), runes);
+      setCharges(player, Math.min(MAX_CHARGES, current + runes * CHARGES_PER_RUNE));
+    }
   } else {
     const runes = Math.floor((current - target) / CHARGES_PER_RUNE);
-    if (runes <= 0) return;
     const refund = new core.Item(deathRuneId(), runes);
-    if (bank.getAddableAmount(refund) < runes) {
+    if (runes > 0 && bank.getAddableAmount(refund) < runes) {
       bank.full();
       return;
     }
-    bank.add(refund, false);
-    setCharges(player, current - runes * CHARGES_PER_RUNE);
+    if (runes > 0) {
+      bank.add(refund, false);
+      setCharges(player, current - runes * CHARGES_PER_RUNE);
+    }
   }
   refreshBank(player);
   player.sendMessage(status(player));
@@ -147,7 +152,6 @@ function bankItemOp(event) {
   event.handled = true;
   const most = Math.min(MAX_CHARGES, charges(player) + bankRunes(player) * CHARGES_PER_RUNE);
   player.setEnteredAmountAction({
-    // 0 uncharges it.
     acceptsZero: true,
     execute(amount) {
       const { Bank } = core;
@@ -185,7 +189,7 @@ function scatterDrops({ player, npc, drops }) {
 
 // ------------------------------------------------------------------ Tyss
 
-const isTyss = (event) => event?.definition?.getName?.() === TYSS;
+const isTyss = (event) => event?.npcId === TYSS_NPC_ID;
 
 function ownsSanctifier(player) {
   const id = sanctifierId();

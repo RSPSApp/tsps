@@ -48,7 +48,7 @@ function player(t, stored = 0, completed = []) {
   return p;
 }
 const charges = (p) => p.getAttribute(S._test.CHARGES_ATTRIBUTE);
-const tyss = { getName: () => 'Tyss' };
+const TYSS = 7050;
 const npc = (name, demon = true) => ({ getCurrentDefinition: () => ({ getName: () => name, hasAttribute: (a) => demon && a === 'demon' }) });
 const xp = (p) => p.getSkillManager().getSkills().getExperiences()[Skill.PRAYER.getIndex()];
 
@@ -56,9 +56,9 @@ const xp = (p) => p.getSkillManager().getSkills().getExperiences()[Skill.PRAYER.
 function claim(p) {
   const { NOT_HARD_STEP, FULL_INVENTORY_STEP, NO_SANCTIFIER_STEP, HAS_SANCTIFIER_STEP, HAND_OVER_LINE } = S._test;
   const step = [NOT_HARD_STEP, FULL_INVENTORY_STEP, NO_SANCTIFIER_STEP, HAS_SANCTIFIER_STEP]
-    .find((stepId) => condition({ player: p, definition: tyss, stepId, text: '' }) === true);
+    .find((stepId) => condition({ player: p, npcId: TYSS, stepId, text: '' }) === true);
   if (step === NO_SANCTIFIER_STEP) {
-    const line = { player: p, definition: tyss, text: HAND_OVER_LINE };
+    const line = { player: p, npcId: TYSS, text: HAND_OVER_LINE };
     api.emitCustomEvent('npc-dialogue:line', line);
     line.before();
   }
@@ -160,4 +160,9 @@ test('Configure-Charges sets the charges from the banked death runes and refunds
   p.getEnteredAmountAction().execute(0);
   assert.equal(charges(p), 0);
   assert.equal(p.getBank(0).getAmount(I.DEATH_RUNE), 20);
+  p.messages.length = 0;
+  api.emitCustomEvent(Bank.ITEM_OP_EVENT, { ...event });
+  p.getEnteredAmountAction().execute(500);
+  assert.equal(charges(p), 200, 'bounded by the banked runes');
+  assert.match(p.messages.at(-1), /has 200 charges/);
 });

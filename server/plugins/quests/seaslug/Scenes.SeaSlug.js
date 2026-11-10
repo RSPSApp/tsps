@@ -129,11 +129,12 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
     if (text) player.sendMessage(text);
   }
 
-  function hold(player, on) {
+  /** Holds the player still for one scene (`reason`); each scene only ever checks its own hold. */
+  function hold(player, on, reason) {
     const movement = player.getMovementQueue?.();
     if (on) {
       movement?.reset?.();
-      held.set(player, true);
+      held.set(player, reason);
     } else {
       held.delete(player);
     }
@@ -214,17 +215,38 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
   // ==========================================================================
 
   function kentGrab(player, npc, npcId, variant) {
-    hold(player, true);
+    hold(player, true, "kent");
     const wait = steps(variant).find((step) => step?.type === "line" && /\bwait!$/.test(step.text ?? ""));
     if (!wait) {
-      hold(player, false);
+      kentFinished(player);
       return;
     }
     Scenes.later(player, KENT.wait, () => {
-      if (!held.has(player)) return;
+      if (!kentScene.has(player)) return;
       player.setPositionToFace?.(npc?.getLocation?.());
-      play(player, npcId, variant, [wait, { type: "action", id: MARK.KENT_GRAB }], npc);
+      speak(player, "wait", () => play(player, npcId, variant, [wait, { type: "action", id: MARK.KENT_GRAB }], npc));
     });
+  }
+
+  /**
+   * Plays one of Kent's chat phases and watches it: a chatbox closed some other way than its
+   * marker (a teleport resets the dialogue) ends the grab there, so the hold never outlives it.
+   */
+  function speak(player, phase, start) {
+    const kent = kentScene.get(player);
+    if (!kent) return;
+    kent.phase = phase;
+    if (!start()) {
+      kentFinished(player);
+      return;
+    }
+    const watch = () => Scenes.later(player, 1, () => {
+      const current = kentScene.get(player);
+      if (!current || current.phase !== phase) return;
+      if (Scenes.chatOpen(player)) return watch();
+      kentFinished(player);
+    });
+    watch();
   }
 
   function kentSquash(player, npc, { npcId, variant }) {
@@ -240,14 +262,13 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
       const list = steps(variant);
       const from = list.findIndex((step) => step?.id === KENT.pullsStep);
       const rest = from < 0 ? [] : list.slice(from + 1);
-      if (!play(player, npcId, variant, [...rest, { type: "action", id: MARK.KENT_DONE }], npc)) {
-        kentFinished(player);
-      }
+      speak(player, "last", () => play(player, npcId, variant, [...rest, { type: "action", id: MARK.KENT_DONE }], npc));
     });
   }
 
   function kentFinished(player) {
-    hold(player, false);
+    kentScene.delete(player);
+    if (held.get(player) === "kent") hold(player, false);
     onKentDone?.(player);
   }
 
@@ -263,14 +284,16 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
       event.handled = true;
       event.end = true;
       const kent = kentScene.get(event.player);
-      if (kent) kentSquash(event.player, event.npc ?? kent.npc, kent);
+      if (kent) {
+        kent.phase = "squash";
+        kentSquash(event.player, event.npc ?? kent.npc, kent);
+      }
       return true;
     }
     if (event.stepId === MARK.KENT_DONE) {
       event.handled = true;
       event.end = true;
-      kentScene.delete(event.player);
-      kentFinished(event.player);
+      if (kentScene.has(event.player)) kentFinished(event.player);
       return true;
     }
     return false;
@@ -288,15 +311,15 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
   // ==========================================================================
 
   function kickPanel(player) {
-    if (held.has(player)) return;
-    hold(player, true);
+    if (held.get(player) === "kick") return;
+    hold(player, true, "kick");
     player.performAnimation(new Animation(PANEL.kickSeq));
     sound(player, PANEL.kickSound);
     PANEL.steps.forEach((id, index) => {
       const fire = () => {
         message(player, "freeing-kennith", id);
         if (index === PANEL.steps.length - 1) {
-          hold(player, false);
+          if (held.get(player) === "kick") hold(player, false);
           onPanelOpened?.(player);
         }
       };
@@ -311,13 +334,13 @@ module.exports = function createSeaSlugScenes(api, { onRepaired, onKentDone, onP
 
   /** Live turns to the crane, steps onto its controls the next tick and fades the tick after. */
   function crane(player) {
-    if (Scenes.get(player) || held.has(player)) return;
-    hold(player, true);
+    if (Scenes.get(player) || held.get(player) === "crane") return;
+    hold(player, true, "crane");
     const movement = player.getMovementQueue();
     movement.setBlockMovement(false);
     movement.addSteps?.(new Location(...CRANE.stand));
     Scenes.later(player, 2, () => {
-      if (!held.has(player)) return;
+      if (held.get(player) !== "crane") return;
       held.delete(player);
       Scenes.fade(player, true);
       Scenes.controls(player, true);

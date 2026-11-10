@@ -34,8 +34,9 @@ function makePlayer() {
   let blocked = false;
   const movement = { reset() { return movement; }, setBlockMovement(value) { blocked = value; return movement; }, addSteps: noop };
   const sender = new Proxy({}, { get: (_t, prop) => (...args) => { log.push([String(prop), ...args]); return sender; } });
-  return {
-    log, messages, blocked: () => blocked,
+  const player = {
+    log, messages, blocked: () => blocked, chat: false,
+    getDialogueManager: () => ({ isActive: () => player.chat }),
     isPlayer: () => true,
     getMovementQueue: () => movement,
     getPacketSender: () => sender,
@@ -46,6 +47,7 @@ function makePlayer() {
     performAnimation: animation => log.push(['anim', animation.getId()]),
     getUsername: () => 'sea-slug-scenes',
   };
+  return player;
 }
 
 function load() {
@@ -62,7 +64,8 @@ function load() {
     getItemOnGroundManager: () => ({ registerLocation: (player, item, at) => drops.push([item.getId(), at.getX(), at.getY()]) }),
   }, { get: (target, key) => target[key] ?? noop });
   const original = runtime.startTranscript;
-  runtime.startTranscript = (_api, _player, npcId, page, variant, select) => {
+  runtime.startTranscript = (_api, player, npcId, page, variant, select) => {
+    player.chat = true;
     transcripts.push({ npcId, page, variant, steps: select(runtime.loadTranscripts(api)[page].variants[variant]) });
     return true;
   };
@@ -102,6 +105,7 @@ test('Kent calls the player back three ticks after his talk, then squashes the s
   assert.equal(wait.steps[0].text, '[player name] wait!', 'tick 199: "wait!"');
   assert.equal(wait.steps[1].id, scenes.MARK.KENT_GRAB);
 
+  player.chat = false;
   const grab = { player, npc: kent, stepId: scenes.MARK.KENT_GRAB, handled: false };
   assert.equal(scenes.marker(grab), true);
   assert.deepEqual([grab.handled, grab.end], [true, true]);
@@ -120,6 +124,9 @@ test('Kent calls the player back three ticks after his talk, then squashes the s
   assert.equal(last.steps[1].player, 'Yuck! Thanks Kent.');
   assert.equal(last.steps.at(-1).id, scenes.MARK.KENT_DONE);
 
+  clock.tick(1);
+  assert.equal(player.blocked(), true, 'still held while his last lines are up');
+  player.chat = false;
   assert.equal(scenes.marker({ player, stepId: scenes.MARK.KENT_DONE, handled: false }), true);
   assert.equal(player.blocked(), false);
   assert.equal(hooks.kentDone, 1);
@@ -157,4 +164,24 @@ test('a logout mid-kick or before Kent calls back drops the pending steps', () =
   scenes.interrupted({ player: waiting });
   clock.tick(4);
   assert.equal(transcripts.length, 0, 'Kent does not call a logged-out player back');
+});
+
+test("Kent's line closed some other way (a teleport) releases the hold, and the stage-8 kick still works", () => {
+  const { clock, transcripts, hooks, scenes } = load();
+  const player = makePlayer();
+  scenes.startKent(player, kentNpc(), core.NpcIdentifiers.KENT, KENT_VARIANT);
+  clock.tick(3);
+  assert.equal(transcripts.length, 1, '"wait!" is up');
+  // TeleportHandler.onTeleporting -> sendInterfaceRemoval resets the dialogue: no marker runs.
+  player.chat = false;
+  clock.tick(1);
+  assert.equal(player.blocked(), false, 'the hold goes with the chatbox');
+  assert.equal(hooks.kentDone, 1);
+  clock.tick(10);
+  assert.equal(transcripts.length, 1, 'nothing more of the grab plays');
+
+  scenes.kickPanel(player);
+  clock.tick(6);
+  assert.equal(player.messages.at(-1), 'leaving an opening big enough for Kennith to climb through.');
+  assert.equal(hooks.panelOpened, 1, 'the kick is not blocked by a stale hold');
 });

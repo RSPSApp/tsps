@@ -1405,3 +1405,38 @@ test('All Settings music dropdowns: area type, manual selection mode, track list
   assert.deepEqual(messages, ['You are now using the shuffle music mode.']);
   assert.equal(choose(999, 0), false, "another plugin's setting is left alone");
 });
+
+test('Shuffle takes the music back from another song on the next area change, as Area mode does', async t => {
+  const { core, session, player, songs } = await musicSession(t, 'musicshuffleboss', new Location(3222, 3218, 0));
+  t.mock.method(Math, 'random', () => 0);
+  await songs(10);
+  player.applyAudioSettingFromClient(18, 1);
+  await songs(11);
+  const BOSS = 549;
+  player.getPacketSender().sendSong(BOSS);
+  await Promise.resolve();
+  assert.deepEqual(await songs(5000), [], 'the boss track plays on, long past any shuffled end');
+  player.setLocation(new Location(3293, 3180, 0));
+  const [next] = await songs(5001);
+  assert.ok(Progress.isUnlocked(player, next), 'leaving for another area starts a shuffled track');
+  assert.notEqual(next, BOSS);
+  assert.equal(session.getCurrentMusicTrack(), next);
+  assert.ok(core.Music.lengthTicks(next) > 0);
+});
+
+test('with the loop off, entering a one-track area whose track just ended still unlocks it', async t => {
+  const { core, songs, player } = await musicSession(t, 'musicloopunlock', new Location(3150, 9740, 0));
+  const TITLE_FIGHT = 525;
+  player.applyAudioSettingFromClient(19, 0);
+  const length = core.Music.lengthTicks(TITLE_FIGHT);
+  assert.deepEqual(await songs(10), [TITLE_FIGHT]);
+  assert.deepEqual(await songs(10 + length + 1), [147]);
+  // The arena plays Victory is Mine only; pretend it shares the basement's ended track.
+  const tracksAt = core.Music.tracksAt;
+  t.mock.method(core.Music, 'tracksAt', (x, y, plane, classic) => x === 3170 ? [TITLE_FIGHT] : tracksAt.call(core.Music, x, y, plane, classic));
+  Progress.unlock(player, TITLE_FIGHT);
+  player.setAttribute(Progress.UNLOCKED_TRACKS_ATTRIBUTE, Progress.unlockedTracks(player).filter(id => id !== TITLE_FIGHT));
+  player.setLocation(new Location(3170, 9758, 0));
+  assert.deepEqual(await songs(10 + length + 2), [], 'nothing to play');
+  assert.equal(Progress.isUnlocked(player, TITLE_FIGHT), true, 'but the area still unlocks its track');
+});

@@ -43,7 +43,7 @@ function loadMusicAreas(file: string): MusicAreas {
 }
 
 const MODERN_AREAS = loadMusicAreas("music-areas.json");
-let classicAreas: MusicAreas | undefined;
+const CLASSIC_AREAS = loadMusicAreas("music-areas-classic.json");
 
 /** Decoded region grids, by map, then plane << 16 | region: the area of each tile, or NO_AREA. */
 const DECODED_GRIDS = new Map<MusicAreas, Map<number, Int16Array | null>>();
@@ -147,7 +147,7 @@ export class Music {
      * with no area of its own plays the ground floor's.
      */
     public static tracksAt(x: number, y: number, plane: number, classic = false): readonly number[] {
-        const map = classic ? (classicAreas ??= loadMusicAreas("music-areas-classic.json")) : MODERN_AREAS;
+        const map = classic ? CLASSIC_AREAS : MODERN_AREAS;
         const region = ((x >> 6) << 8) | (y >> 6);
         const tile = ((y & 63) << 6) | (x & 63);
         let area = regionGrid(map, plane, region)?.[tile] ?? NO_AREA;

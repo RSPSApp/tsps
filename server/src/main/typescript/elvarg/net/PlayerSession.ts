@@ -412,17 +412,20 @@ export class PlayerSession {
         const track = keep ? this.lastMusicTrack
           : Music.pickAreaTrack(tracks, musicMode === 0 ? this.musicEndedTrack : -1, Math.random, replay);
         // Entering an area unlocks all its tracks, in every music mode: the picked one first, then the rest.
-        if ((areaChanged || selectionChanged) && track !== undefined) {
-          for (const trackId of [track, ...tracks.filter((other) => other !== track)]) {
+        if (areaChanged || selectionChanged) {
+          for (const trackId of track === undefined ? tracks : [track, ...tracks.filter((other) => other !== track)]) {
             PluginManager.emitCustomEvent("music:unlock-track", { player, trackId });
           }
         }
         if (musicMode === Music.SHUFFLE_MODE) {
           // Shuffle ignores areas. Switched to, it lets the playing track finish (one without an
-          // end time, a Single choice, gets its full length from now); with nothing playing it starts one.
-          if (musicMode !== previousMusicMode) {
-            if (this.lastMusicTrack < 0) this.startShuffleTrack(player, -1, replay);
-            else if (this.musicTrackEndsAt < 0 && this.musicNextTrackAt < 0) this.musicTrackEndsAt = this.areaTrackEnd(this.lastMusicTrack);
+          // end time, a Single choice, gets its full length from now); with nothing playing it starts
+          // one, as it does on an area change after another song (a boss fight's) took over.
+          const idle = this.musicTrackEndsAt < 0 && this.musicNextTrackAt < 0;
+          if (musicMode !== previousMusicMode && this.lastMusicTrack >= 0 && idle) {
+            this.musicTrackEndsAt = this.areaTrackEnd(this.lastMusicTrack);
+          } else if (idle && (musicMode !== previousMusicMode || areaChanged)) {
+            this.startShuffleTrack(player, -1, replay);
           }
         } else if (musicMode !== 0 || track === undefined) {
           this.musicTrackEndsAt = -1;

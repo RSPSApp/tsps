@@ -35,6 +35,8 @@ const VARBIT = {
   LAST_OPENED: 17940,
   REWARD_TIER: 17941,
 };
+/** settings_ca_open_last_interface_disabled: All Settings "Combat task interface remembers last interface opened" off. */
+const OPEN_LAST_DISABLED_VARBIT = 17939;
 const VIEW_VARBITS = Object.values(VARBIT);
 const PERSONAL_BEST_VARP = 261; // if1: the boss page reads it (script 4843), -1 shows "N/A"
 const NO_PERSONAL_BEST = -1;
@@ -119,7 +121,9 @@ function sendEvents(player, screen) {
   }
 }
 
+/** The screen the account summary's row opens: the last one, or the overview when the player's setting says not to remember. */
 function currentScreen(player) {
+  if (player.getPacketSender().getVarbit(OPEN_LAST_DISABLED_VARBIT) === 1) return SCREEN.OVERVIEW;
   const saved = Number(view(player)[VARBIT.LAST_OPENED]) || 0;
   return SCREEN_GROUP[saved] !== undefined ? saved : SCREEN.OVERVIEW;
 }

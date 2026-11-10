@@ -19,7 +19,7 @@ function teleport(fight, done) {
   Common.animate(muspah, clouds.disappearAnim);
   muspah.performGraphic(Common.graphic(clouds.disappearSpot));
   Common.sounds(player, clouds.disappearSounds);
-  player.sendMessage(specials.message);
+  Common.fightMessage(player, specials.message);
   Common.overlayFade(player, Common.data.overlay.dark);
   fight.hold(true);
   const returnForm = fight.form;

@@ -7,8 +7,9 @@ const PROGRESS_VARP = 267;
 const STARTED = 1;
 const DUEL_WON = 6;
 const CAPE_CHOSEN = 7;
+const COMPLETE = 8;
 const REQUIRED_MAGIC = 60;
-const STAFF_RECEIVED_ATTRIBUTE = "mage-arena-i:staff-received";
+const LEGACY_STAFF_RECEIVED_ATTRIBUTE = "mage-arena-i:staff-received";
 const ARENA = { minX: 3089, maxX: 3117, minY: 3921, maxY: 3946, levels: [0] };
 const ARENA_ARRIVAL = [3105, 3934, 0];
 const KOLODION_SPAWN = [3106, 3934, 0];
@@ -48,7 +49,13 @@ function canUseRewardChamber(player) {
 }
 
 function recordCapeChoice(player) {
-  if (!quest.isComplete(player)) quest.complete(player, { scroll: false, announce: false });
+  if (stageOf(player) < CAPE_CHOSEN) quest.setStage(player, CAPE_CHOSEN);
+}
+
+function restoreStaffCompletion({ player }) {
+  if (player.getAttribute(LEGACY_STAFF_RECEIVED_ATTRIBUTE) !== true) return;
+  if (!quest.isComplete(player)) quest.setStage(player, COMPLETE);
+  player.setAttribute(LEGACY_STAFF_RECEIVED_ATTRIBUTE, false);
 }
 
 function buildJournal(player) {
@@ -56,7 +63,8 @@ function buildJournal(player) {
   if (stage === 0) return ["I can start by talking to Kolodion in the Mage Arena bank. I need level 60 Magic."];
   if (stage < DUEL_WON) return ["Kolodion has challenged me to a duel in the Mage Arena."];
   if (stage < CAPE_CHOSEN) return ["I defeated Kolodion. I should enter the sparkling pool and choose a god to represent."];
-  return ["<str>I defeated Kolodion and chose a god to represent.</str>", "", "<col=ff0000>MINIQUEST COMPLETE!</col>"];
+  if (stage < COMPLETE) return ["I chose a god to represent. I should speak to the Chamber guardian for my staff."];
+  return ["<str>I defeated Kolodion, chose a god to represent, and received my staff.</str>", "", "<col=ff0000>MINIQUEST COMPLETE!</col>"];
 }
 
 /** RSProx 3344 t3801–3818 and t3877–3882; alternate responses are in Transcript:Mage Arena I. */
@@ -164,13 +172,13 @@ function chosenStaff(player) {
 
 function grantStaff(player) {
   const staff = chosenStaff(player);
-  if (!staff || player.getAttribute(STAFF_RECEIVED_ATTRIBUTE)) return;
+  if (!staff || quest.isComplete(player)) return;
   if (player.getInventory().getFreeSlots() < 1) {
     player.sendMessage("You don't have enough inventory space for the staff.");
     return;
   }
   player.getInventory().adds(staff, 1);
-  player.setAttribute(STAFF_RECEIVED_ATTRIBUTE, true);
+  quest.complete(player, { scroll: false, announce: false });
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.ItemStatementDialogue(0, staff, "The guardian hands you an ornate magic staff.")
   ));
@@ -178,7 +186,7 @@ function grantStaff(player) {
 
 /** First staff from the guardian, RSProx 3344 t3904–3908 and t3961–3965. */
 function talkToGuardian({ player, npcId }) {
-  if (!canUseRewardChamber(player) || player.getAttribute(STAFF_RECEIVED_ATTRIBUTE)) return false;
+  if (!canUseRewardChamber(player) || quest.isComplete(player)) return false;
   if (stageOf(player) === DUEL_WON) {
     show(player, [
       { player: "Hello my friend, Kolodion sent me down." },
@@ -305,13 +313,15 @@ module.exports = function registerMageArenaI(pluginApi) {
     name: "Mage Arena I",
     varpId: PROGRESS_VARP,
     startedValue: STARTED,
-    completionValue: CAPE_CHOSEN,
+    completionValue: COMPLETE,
     questPoints: 0,
     buildJournal,
-    otherRewards: ["God capes and access to the Mage Arena"],
+    otherRewards: ["God capes, a matching god staff, and access to the Mage Arena"],
   });
   ObstacleRunner.init(api);
-  api.persistAttribute(STAFF_RECEIVED_ATTRIBUTE, false);
+  // Keep reading saves from the first version, which recorded the staff separately at stage 7.
+  api.persistAttribute(LEGACY_STAFF_RECEIVED_ATTRIBUTE, false);
+  api.onPlayerLogin(restoreStaffCompletion);
   api.onNpcInteraction("Kolodion", { "Talk-to": talkToKolodion });
   api.onNpcInteraction("Chamber guardian", { "Talk-to": talkToGuardian });
   api.onZoneEnter(ARENA, startFight);

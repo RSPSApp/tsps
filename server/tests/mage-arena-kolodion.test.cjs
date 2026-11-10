@@ -15,6 +15,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 const { OptionDialogue } = require("../dist/game/model/dialogues/entries/impl/OptionDialogue");
+const QuestRuntime = require("../plugins/quests/QuestRuntime");
 
 const core = PluginManager.getCoreApi();
 const Items = core.ItemIdentifiers;
@@ -116,6 +117,8 @@ function talkInWorld(player, npcId, choices = []) {
 }
 
 const ARENA_STAGE = "quest.mage_arena_i.stage";
+const LEGACY_STAFF = "mage-arena-i:staff-received";
+const miniquestCount = player => player.getPacketSender().getVarbit(14162);
 
 test("Mage Arena I: base Magic gates the duel and a refusal keeps it unstarted", () => {
   const boosted = makePlayer({ magic: 59, cape: false });
@@ -183,22 +186,62 @@ test("Mage Arena I: the owner's magic-only fight resumes after reload and return
   assert.ok(said(play(restored), /^Well done, young adventurer/));
 });
 
-test("Mage Arena I: the guardian grants the matching first staff once, with room", () => {
+test("Mage Arena I: only the matching first staff completes the miniquest and updates the count", () => {
   const player = makePlayer({ inventory: [Items.GUTHIX_CAPE] });
-  player.setAttribute(ARENA_STAGE, 7);
+  const arena = QuestRuntime.questNamed("Mage Arena I");
+  arena.setStage(player, 6);
+  const count = miniquestCount(player);
+  require("../plugins/minigames/magearena/MageArenaI.MageArena").recordCapeChoice(player);
+  assert.equal(arena.getStage(player), 7);
+  assert.equal(arena.isComplete(player), false);
+  assert.match(arena.buildJournal(player).join(" "), /Chamber guardian.*staff/);
+  assert.equal(miniquestCount(player), count);
+
   const inventory = player.getInventory();
   for (let slot = 1; slot < 28; slot++) inventory.setItem(slot, new core.Item(Items.BONES, 1));
   const guardian = core.NpcIdentifiers.CHAMBER_GUARDIAN;
   assert.ok(said(talkInWorld(player, guardian), /present you with a magic staff/));
   assert.equal(inventory.getAmount(Items.GUTHIX_STAFF), 0);
-  assert.equal(player.getAttribute("mage-arena-i:staff-received"), undefined);
+  assert.equal(arena.getStage(player), 7);
+  assert.equal(miniquestCount(player), count);
 
   inventory.deleteNumber(Items.BONES, 1);
   assert.ok(said(talkInWorld(player, guardian), /hands you an ornate magic staff/));
   assert.equal(inventory.getAmount(Items.GUTHIX_STAFF), 1);
-  assert.equal(player.getAttribute("mage-arena-i:staff-received"), true);
+  assert.equal(player.getPacketSender().getVarp(267), 8);
+  assert.equal(arena.isComplete(player), true);
+  assert.match(arena.buildJournal(player).join(" "), /MINIQUEST COMPLETE/);
+  assert.equal(miniquestCount(player), count + 1);
+
   talkInWorld(player, guardian);
   assert.equal(inventory.getAmount(Items.GUTHIX_STAFF), 1);
+  assert.equal(miniquestCount(player), count + 1);
+});
+
+test("Mage Arena I: old cape and staff saves restore their separate reward stages", () => {
+  const arena = QuestRuntime.questNamed("Mage Arena I");
+  const guardian = core.NpcIdentifiers.CHAMBER_GUARDIAN;
+  for (const { staff, expected } of [{ staff: false, expected: 7 }, { staff: true, expected: 8 }]) {
+    const original = makePlayer({ inventory: [Items.GUTHIX_CAPE, ...(staff ? [Items.GUTHIX_STAFF] : [])] });
+    if (staff) {
+      original.setAttribute(ARENA_STAGE, 7);
+      original.setAttribute(LEGACY_STAFF, true);
+    }
+    const restored = makePlayer({ cape: false });
+    PlayerSave.fromPlayer(original).applyToPlayer(restored);
+    PluginManager.emitPlayerLogin({ player: restored, username: restored.getUsername(), isNewAccount: false });
+    PluginManager.emitCustomEvent("player:bootstrap-complete", { player: restored });
+    assert.equal(arena.getStage(restored), expected);
+    assert.equal(restored.getPacketSender().getVarp(267), expected);
+    assert.equal(miniquestCount(restored), staff ? 1 : 0);
+    assert.equal(PlayerSave.fromPlayer(restored).attributes[LEGACY_STAFF], undefined);
+
+    if (staff) {
+      talkInWorld(restored, guardian);
+      assert.equal(restored.getInventory().getAmount(Items.GUTHIX_STAFF), 1);
+      assert.equal(miniquestCount(restored), 1);
+    }
+  }
 });
 
 test("after Mage Arena I: one progress line per god spell from its arena casts", () => {

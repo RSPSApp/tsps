@@ -231,6 +231,48 @@ test("a teleport spends its charge on arrival, and a refused one spends nothing"
   assert.equal(player.attributes.get("ring-of-elements:last-destination"), "Air Altar");
 });
 
+test("each Rub submenu entry goes to its own altar (rsprox 364: subops 0-3 land at air, water, earth, fire)", (t) => {
+  const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+  const { started } = stubTeleports(t);
+  const player = createPlayer();
+  const ring = ringItem(ItemIdentifiers.RING_OF_THE_ELEMENTS_4);
+  player.inventory[0] = ring;
+  Ring._test.setCharges(player, 20);
+  // A different last destination, so falling back to it would show.
+  player.setAttribute("ring-of-elements:last-destination", "Fire Altar");
+  // Live Rub is inventory widget op 4; the client sends the entry's 0-based index and the
+  // server's subOpId is that plus one (ClientProtocol IF_BUTTON_SUB).
+  const rub = ItemActionPacketListener.resolveInventoryWidgetAction(ring.id, 4);
+  assert.equal(rub.option, "Rub");
+  const tiles = [];
+  for (const wireSubop of [0, 1, 2, 3]) {
+    handlers.action({
+      player, interfaceId: 9764864, item: ring, itemId: ring.id, slot: 0,
+      clickType: rub.optionIndex, option: rub.option, subOpId: wireSubop + 1, handled: false,
+    });
+    const { target } = started.pop();
+    tiles.push([target.getX(), target.getY()]);
+  }
+  assert.deepEqual(tiles, [[2980, 3278], [3165, 3160], [3286, 3468], [3314, 3276]]);
+  assert.equal(prompts.length, 0, "a submenu entry never opens the destination prompt");
+});
+
+test("worn options go to Last Destination, then Air, Water, Earth and Fire in cache order", (t) => {
+  const { started } = stubTeleports(t);
+  const player = createPlayer();
+  const ring = ringItem(ItemIdentifiers.RING_OF_THE_ELEMENTS_4);
+  player.equipment[12] = ring;
+  Ring._test.setCharges(player, 20);
+  player.setAttribute("ring-of-elements:last-destination", "Earth Altar");
+  const tiles = [];
+  for (const op of [2, 3, 4, 5, 6]) {
+    handlers.action({ player, interfaceId: 1688, item: ring, itemId: ring.id, slot: 12, clickType: op, handled: false });
+    const { target } = started.pop();
+    tiles.push([target.getX(), target.getY()]);
+  }
+  assert.deepEqual(tiles, [[3286, 3468], [2980, 3278], [3165, 3160], [3286, 3468], [3314, 3276]]);
+});
+
 test("the last charges are announced on landing and the last one leaves the uncharged ring", (t) => {
   const player = createPlayer();
   const ring = ringItem(ItemIdentifiers.RING_OF_THE_ELEMENTS_4);

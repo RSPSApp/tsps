@@ -71,3 +71,33 @@ test("the threshold row asks for a number, saves it (at most 511) and sends it a
   settingClicked(other);
   assert.equal(other.handled, false);
 });
+
+test("fixed damage (a PendingHit { damage } override) is never a max hit; a spread roll that tops out is", () => {
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { CombatType } = require("../dist/game/content/combat/CombatType");
+  const { DamageFormulas } = require("../dist/game/content/combat/formula/DamageFormulas");
+  const attacker = {
+    isPlayer: () => true,
+    isNpc: () => false,
+    isSpecialActivated: () => false,
+    getAsPlayer: () => attacker,
+  };
+  const victim = { isPlayer: () => false, isNpc: () => true };
+  const realMax = DamageFormulas.sourceMaxHit;
+  const realRandom = Math.random;
+  DamageFormulas.sourceMaxHit = () => 30;
+  try {
+    // PendingHit.prepareHits passes this bounds override for { damage }: min == max == the damage.
+    const fixed = { minimumMultiplier: 0, maximumMultiplier: 0, minimumBonus: 3, maximumBonus: 3 };
+    const hit = CombatFactory.rollHitDamage(attacker, victim, CombatType.MELEE, true, fixed, false, false);
+    assert.equal(hit.getDamage(), 3);
+    assert.equal(hit.isMaxHit(), false, "a fixed 3 is not a max hit");
+    Math.random = () => 0.999999;
+    const rolled = CombatFactory.rollHitDamage(attacker, victim, CombatType.MELEE, true, undefined, false, false);
+    assert.equal(rolled.getDamage(), 30);
+    assert.equal(rolled.isMaxHit(), true, "a roll that reaches the top of its spread is");
+  } finally {
+    DamageFormulas.sourceMaxHit = realMax;
+    Math.random = realRandom;
+  }
+});

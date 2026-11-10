@@ -80,6 +80,8 @@ module.exports = function registerLostTribeQuest(api) {
   const { registerQuest, refreshQuestList, startTranscript } = questRuntime;
   const mining = require("../../skills/Mining.plugin.js");
 
+  const treatyScene = require("../losttribe/Treaty.LostTribe")(api, completeTreaty);
+
   const PAGE = "The Lost Tribe";
 
   const VARP = 465; // "lost_tribe"
@@ -184,7 +186,6 @@ module.exports = function registerLostTribeQuest(api) {
   const SILVERWARE_FOUND_ACTION_ID = "EMSHq8";
   const TREATY_SIGNED_ACTION_ID = "N5kpDk";
   const CUTSCENE_START_ACTION_ID = "oIhMoa";
-  const CUTSCENE_COMPLETE_ACTION_ID = "_c-03w";
   const KAZGAR_ESCORT_ACTION_ID = "m471ps";
   const BROOCH_HELMET_ACTION_ID = "a-40GY";
 
@@ -625,6 +626,7 @@ module.exports = function registerLostTribeQuest(api) {
   }
 
   function handleDialogueLine(event) {
+    treatyScene.line(event);
     const { player, npcId, text } = event;
     const stage = quest.getStage(player);
     if (npcId === BOB_ID && stage === STAGE_ASK_PEOPLE && text.includes(BOB_RUMOUR_LINE)) {
@@ -655,8 +657,9 @@ module.exports = function registerLostTribeQuest(api) {
       quest.setStage(player, STAGE_MISTAG);
       return;
     }
-    if (stepId === NO_TREATY_CONDITION_ID && quest.getStage(player) === STAGE_TREATY) {
-      giveItem(player, ItemIdentifiers.PEACE_TREATY);
+    if (stepId === NO_TREATY_CONDITION_ID) {
+      const stage = quest.getStage(player);
+      if (stage === STAGE_TREATY || stage === STAGE_ESCORTED) giveItem(player, ItemIdentifiers.PEACE_TREATY);
     }
   }
 
@@ -724,21 +727,14 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === CUTSCENE_START_ACTION_ID) {
-      if (quest.getStage(player) < STAGE_TREATY) return;
-      if (held(player, ItemIdentifiers.PEACE_TREATY)) {
-        player.getInventory().deleteNumber(ItemIdentifiers.PEACE_TREATY, 1);
-      }
+      const stage = quest.getStage(player);
+      if ((stage !== STAGE_TREATY && stage !== STAGE_ESCORTED) || !held(player, ItemIdentifiers.PEACE_TREATY)) return;
       event.handled = true;
       event.end = true;
-      scheduleCutscene(player);
+      treatyScene.start(player);
       return;
     }
-    if (stepId === CUTSCENE_COMPLETE_ACTION_ID) {
-      event.handled = true;
-      event.end = true;
-      if (!quest.isComplete(player)) quest.complete(player);
-      return;
-    }
+    if (treatyScene.action(event)) return;
     if (stepId === BROOCH_HELMET_ACTION_ID) {
       setBit(player, BIT_RETURNED_BROOCH);
     }
@@ -750,18 +746,11 @@ module.exports = function registerLostTribeQuest(api) {
     });
   }
 
-  function scheduleCutscene(player) {
-    const { CountdownTask, TaskManager } = api.core;
-    if (!CountdownTask || !TaskManager) {
-      playVariant(player, DUKE_HORACIO_ID, "resolving-tensions-cut-scene-a-meeting-of-leaders");
-      return;
-    }
-    TaskManager.submit(
-      new CountdownTask(player, 1, () => {
-        if (player.isRegistered?.() === false) return;
-        playVariant(player, DUKE_HORACIO_ID, "resolving-tensions-cut-scene-a-meeting-of-leaders");
-      })
-    );
+  function completeTreaty(player) {
+    const stage = quest.getStage(player);
+    if ((stage !== STAGE_TREATY && stage !== STAGE_ESCORTED) || !held(player, ItemIdentifiers.PEACE_TREATY)) return;
+    player.getInventory().deleteNumber(ItemIdentifiers.PEACE_TREATY, 1);
+    quest.complete(player);
   }
 
   // ==========================================================================

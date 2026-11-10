@@ -381,8 +381,21 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 - **Not done**:
   - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
   - **Level-up chatbox list** (493): no capture shows what it writes.
-  - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
   - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Sailing helm and orb
+
+These rows are in `data/settings.json` and are read by the Sailing helm plugins when the player acts. Each struct has param 1084 apart from 462, so the toggles are ticked while their varbit is 0, which is also a new account's value. Tests: `tests/sailing.test.cjs` ("All Settings 461/462/501") and `tests/settings-wired-rows.test.cjs`.
+
+| Setting | Id | Varbit | Effect |
+| --- | --- | --- | --- |
+| Stop the boat when leaving the helm | 461 | 18135 | At 1, letting go of the helm (Stop-navigating, clicking another loc, a charting spot) frees the helm and walks again, but the sails, move mode and heading stay, so the boat sails on with nobody steering (`Helm.plugin.js` `leaveHelm`). A content scene's ship (the Pandemonium's supplied helm) always stops |
+| Start the boat when setting a heading (dropdown: First time only, Always, Never) | 462 | 18136 `sailing_start_boat_when_setting_heading` = option | First time only: a heading raises full sail only while moored (just after taking the helm). Always: from stopped too. Never: a heading only turns the boat (`raiseSailForHeading`) |
+| Special Attack orb releases wind motes | 501 | 11624 `settings_sailing_wind_on_orb_disabled` | The client's orb script (9482) shows "Release" on "Wind Mote" in place of the special attack while the player is on their own boat with a catcher (11629 set), locked in at the helm, and 11624 is 0. Op1 then releases a mote as the catcher's Release-mote does (rsprox 4151 and 4152, rev 238: "You release the wind mote for a burst of speed!" on the click's tick). 11629 `sailing_sidepanel_boat_max_wind_charges` is the catcher's capacity (2, or 3 for a gale catcher), sent on boarding your own boat and set back to 0 on leaving it, as live does (`WindCatcher.Helm.js`) |
+
+- **Not done**:
+  - **Cargo hold access privacy** (470, varbit 19614: Navigators, All players, No players): a guest can't open another player's cargo hold at all yet, and no capture or Wiki text gives the refusal line.
+  - Ours: with the catcher switched off, the orb's Release does nothing, as Release-mote does.
 
 ## Containers on death
 

@@ -1,5 +1,6 @@
 const Common = require("./Common.DiaryRewards");
 const Daily = require("./DailyRing.DiaryRewards");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const SELECTION_ATTRIBUTE = "diary-rewards:alchemy-high";
 const SESSIONS = new WeakMap();
 const GENERATIONS = new WeakMap();
@@ -87,7 +88,7 @@ function click(event) {
     if (action === 1) cast(player, session, slot, itemId);
     else if (action === 10 && Number.isInteger(slot) && slot >= 0 && slot < 28) {
       const item = player.getInventory().forSlot(slot);
-      if (item?.getId() === itemId) player.sendMessage(item.getDefinition().getExamine());
+      if (item?.getId() === itemId) examineItem(player, itemId, item.getAmount());
     }
   }
 }

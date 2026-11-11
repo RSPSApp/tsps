@@ -381,13 +381,21 @@ test("the pouch upgrades use 3 fur and the closed pouch below, with the Wiki's l
   }
 });
 
-test("an upgrade without the closed pouch below says so and uses nothing", t => {
+test("an upgrade needs the closed pouch below: none says so, an open one asks to close it", t => {
+  membersWorld(t, true);
+  const none = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.KYATT_FUR, 3]], { level: 99 });
+  useNeedle(none.player, ItemIds.KYATT_FUR);
+  assert.deepEqual(messages(craft(none.player, none.getMenu(), ItemIds.LARGE_FUR_POUCH, 1, 3).flat()),
+    ["You need a medium fur pouch to make a large fur pouch."]);
+});
+
+test("an upgrade with only the open pouch below uses nothing", t => {
   membersWorld(t, true);
   const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.SUNLIGHT_ANTELOPE_FUR, 3],
     [ItemIds.SMALL_MEAT_POUCH_OPEN_, 1]], { level: 99 });
   useNeedle(player, ItemIds.SUNLIGHT_ANTELOPE_FUR);
   const byTick = craft(player, getMenu(), ItemIds.LARGE_MEAT_POUCH, 1, 3);
-  assert.deepEqual(messages(byTick.flat()), ["You need a small meat pouch to make a large meat pouch."]);
+  assert.deepEqual(messages(byTick.flat()), ["You need to close your small meat pouch first."], "the Wiki's closed-pouch rule");
   assert.equal(player.amounts.get(ItemIds.SUNLIGHT_ANTELOPE_FUR), 3);
   assert.equal(player.amounts.get(ItemIds.LARGE_MEAT_POUCH) ?? 0, 0);
 });

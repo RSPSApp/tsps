@@ -100,8 +100,12 @@ function startLeatherCrafting(player, materialId, recipe, amount, needleId) {
     return;
   }
   if (recipe.withId !== null && !player.getInventory().contains(recipe.withId)) {
-    // Ours: no capture or transcript of an upgrade without its (closed) pouch.
-    player.sendMessage(`You need ${Shared.withArticle(Shared.itemName(recipe.withId).toLowerCase())} to make ${recipe.made}.`);
+    // Wiki (Large meat pouch): "The small meat pouch must be closed before the player can upgrade it."
+    // Ours: both lines; no capture or transcript of either refusal.
+    const name = Shared.itemName(recipe.withId);
+    const open = player.getInventory().getItems().some((item) => item && item.getId() >= 0 && Shared.itemName(item.getId()) === `${name} (open)`);
+    player.sendMessage(open ? `You need to close your ${name.toLowerCase()} first.`
+      : `You need ${Shared.withArticle(name.toLowerCase())} to make ${recipe.made}.`);
     return;
   }
   // Items on ticks 2, 5, 8 ... after the choice; the animation restarts with each one.

@@ -77,8 +77,9 @@ Hunter meat); no capture of them exists (the user's captures and the rsprox.net 
   meat pouch also empties into the inventory near a bank (LeagueMode's `league:near-bank`, as the chugging
   barrel asks it) or on the Hunters' Guild's top floor (plane 2 inside the guild's walls, x 1552-1564,
   y 3033-3053 in the cache map); elsewhere "You can't empty your meat pouch here." (Wiki, Bank-use item).
-- Every other line (full, empty, Check's count, the fur pouch's bank-only refusal, a missing pouch for an
-  upgrade) is ours.
+- The upgrade wants the closed pouch (Wiki: "must be closed before the player can upgrade it").
+  Every other line (full, empty, Check's count, the fur pouch's bank-only refusal, a missing or open pouch
+  for an upgrade) is ours.
 
 ## Events
 

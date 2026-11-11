@@ -180,14 +180,16 @@ test("Endless Harvest: twice the ore, log or fish, banked, with the second resou
   const bagged = gather(who.relic, I.COAL, 2, Skill.MINING, 50, 1);
   assert.deepEqual([bagged.stored, banked(who.relic, I.COAL)], [2, 3], "a coal bag kept one; the other and the two extra are banked");
   assert.equal(gather(who.relic, I.IRON_ORE, 1, undefined, 0).stored, 0, "a stall's take is not a harvest");
-  assert.equal(emit("storage:room", { player: who.relic, itemId: I.IRON_ORE, room: false }).room, true, "the bank's room counts");
+  assert.equal(emit("storage:room", { player: who.relic, itemId: I.IRON_ORE, skill: Skill.MINING, room: false }).room, true, "the bank's room counts");
+  // Not for another skill's catch: Hunter's catchExchange then still asks the inventory.
+  assert.equal(emit("storage:room", { player: who.relic, itemId: I.RAW_PYRE_FOX, skill: Skill.HUNTER, room: false }).room, false);
   for (const player of others(who)) {
     assert.equal(gather(player, I.LOGS, 1, Skill.WOODCUTTING, 25).stored, 0, `${player.getUsername()} keeps the log`);
     assert.equal(banked(player, I.LOGS), 0);
   }
   for (const player of [who.without, who.main]) {
     assert.equal(gather(player, I.IRON_ORE, 1, Skill.MINING, 35).stored, 0, `${player.getUsername()} keeps the ore`);
-    assert.equal(emit("storage:room", { player, itemId: I.IRON_ORE, room: false }).room, false);
+    assert.equal(emit("storage:room", { player, itemId: I.IRON_ORE, skill: Skill.MINING, room: false }).room, false);
   }
 });
 

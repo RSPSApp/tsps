@@ -193,7 +193,7 @@ test('a catch falls in 8 ticks after the jump and shows full at 11; the same pit
   }
 });
 
-test('a miss leaps over the pit with no projectile, follows on, and only refuses that pit next (#4442, #4433)', t => {
+test('a miss leaps over the pit in view with its two leap projectiles, follows on, and only refuses that pit next (#4442, #4433)', t => {
   const { p, sent } = hunter(t, NORTH);
   const trap = layPit(p);
   const { npc, seen } = larupia(t, [2543, 2911]);
@@ -221,6 +221,18 @@ test('a miss leaps over the pit with no projectile, follows on, and only refuses
   p.setLocation(new core.Location(...SOUTH, 0));
   Pitfalls.jump({ player: p, object: pit });
   assert.equal(sent.messages.at(-1), 'Lure this creature across a different pit.');
+});
+
+test('a creature off the crossing line goes to its edge at +3, steps in at +5 and +6 and falls on the loc coord', t => {
+  const { p } = hunter(t, [2544, 2910]);
+  layPit(p);
+  const { npc } = larupia(t, [2545, 2912]);
+  tease(p, npc);
+  const at = jump(p, true);
+  const seen = {};
+  for (const n of [3, 5, 6, 8]) { tick(at + n - H.tick); seen[n] = [npc.getLocation().getX(), npc.getLocation().getY()]; }
+  // 1108 and 1757: the edge on the loc's column, then one tile a tick into the pit (south jump, rotation 2).
+  assert.deepEqual(seen, { 3: [2543, 2910], 5: [2543, 2909], 6: [2543, 2908], 8: [2543, 2908] });
 });
 
 test('the full pit value follows the jump direction and the loc rotation (captures 1108, 1757, 1858)', () => {

@@ -24,6 +24,8 @@ const runs = new Map();
 const JUMP_SOUND = 2635;
 const COLLAPSE_SOUND = 2638;
 const LEAP_SOUND = 2619;
+// Live sends the pit's area sounds with range 5; the jump sound plays on the player's start tile (1108 tick 21563).
+const SOUND_RANGE = 5;
 const KNOCKBACK = { animation: 5206, sound: 513, delay: 14, start: 10, end: 36, tiles: 2 };
 // RuneLite SpotanimID (hunter_<creature>_leaptrap_proj1/2), validated with dump:spotanim; graahk captured (1108).
 const LEAP_GRAPHICS = { SABRE_TOOTHED_KYATT: [937, 938], SPINED_LARUPIA: [939, 940], HORNED_GRAAHK: [941, 942],
@@ -32,7 +34,10 @@ const LEAP_GRAPHICS = { SABRE_TOOTHED_KYATT: [937, 938], SPINED_LARUPIA: [939, 9
 // No larupia or moonlight antelope catch is captured.
 const FULL_SOUNDS = { SABRE_TOOTHED_KYATT: 836, HORNED_GRAAHK: 667, SUNLIGHT_ANTELOPE: 7890 };
 const TEASE_SOUND = 2524;
-const STEP_TICKS = { catch: [3, 5, 6], leap: [3] };
+// +3 puts the creature on the crossing's edge (live teleports it there, however far; nothing if it's there);
+// a catch then steps one tile into the pit at +5 and +6, ending on the loc coord.
+const EDGE_TICK = 3;
+const IN_TICKS = [5, 6];
 const FALL_TICK = 8;
 const FULL_TICK = 11;
 const LEAP_TICK = 5;
@@ -157,7 +162,7 @@ function jump({ player, object }) {
     run(state, trap, dir, success, jumpedAt);
   }, () => player.setForceMovement(null));
   if (started) {
-    pitSound(trap, JUMP_SOUND);
+    pitSound(trap, JUMP_SOUND, from);
     const delta = new H.core.Location(destination.getX() - from.getX(), destination.getY() - from.getY());
     player.getMovementQueue().reset();
     player.setForceMovement(new H.core.ForceMovement(from.clone(), delta, 0, 60, dir, ANIM.JUMP));
@@ -172,7 +177,7 @@ function run(state, trap, dir, success, jumpedAt) {
   queue.reset();
   const size = npc.getSize?.() ?? 1, line = crossing(trap.base, dir, size);
   runs.set(npc, { kind: success ? "catch" : "leap", state, trap, dir, at: jumpedAt, size,
-    path: success ? [line.edge, line.base] : [line.edge], blocked: queue.isMovementBlocked(),
+    edge: line.edge, base: line.base, blocked: queue.isMovementBlocked(),
     landing: line.landing, value: fullValue(trap.base, dir), fallen: false });
   queue.setBlockMovement(true);
   if (success) {
@@ -185,20 +190,26 @@ function run(state, trap, dir, success, jumpedAt) {
 }
 
 /**
- * One tile towards the next tile of the crossing the creature hasn't reached. An exact move keeps it in view:
- * a plain moveTo drops an NPC from every client for a tick (World.staysInViewWhenPlaced).
+ * Moves the creature to `to`, or with `oneTile` a single tile towards it. An exact move keeps it in view: a
+ * plain moveTo drops an NPC from every client for a tick (World.staysInViewWhenPlaced).
  */
-function step(npc, path) {
+function moveTowards(npc, to, oneTile = false) {
   const at = npc.getLocation();
-  while (path.length && path[0].equals(at)) path.shift();
-  const next = path[0];
-  if (!next) return;
-  npc.exactMove(new H.core.Location(at.getX() + Math.sign(next.getX() - at.getX()), at.getY() + Math.sign(next.getY() - at.getY()), at.getZ()));
+  if (at.equals(to)) return;
+  npc.exactMove(oneTile ? new H.core.Location(at.getX() + Math.sign(to.getX() - at.getX()),
+    at.getY() + Math.sign(to.getY() - at.getY()), at.getZ()) : to.clone());
 }
 
 function advance(npc, r) {
   const elapsed = H.tick - r.at;
-  if (!npc.isRegistered()) { runs.delete(npc); return; }
+  if (!npc.isRegistered()) {
+    // Gone before it fell (an NPC reload): free the pit for another creature.
+    if (r.kind === "catch" && !r.fallen) {
+      abort(npc, r);
+      if (H.traps.has(r.trap) && r.trap.state === "closing") Traps.setPitState(r.trap, "idle");
+    } else runs.delete(npc);
+    return;
+  }
   if (r.kind === "catch") {
     // Live re-adds the creature at its spawn with its animation cleared (sequence -1).
     if (elapsed > FULL_TICK) { runs.delete(npc); npc.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION); return; }
@@ -207,8 +218,9 @@ function advance(npc, r) {
       if (r.fallen) runs.delete(npc); else abort(npc, r);
       return;
     }
-    if (STEP_TICKS.catch.includes(elapsed)) step(npc, r.path);
-    if (elapsed === FALL_TICK) fall(npc, r);
+    if (elapsed === EDGE_TICK) moveTowards(npc, r.edge);
+    if (IN_TICKS.includes(elapsed)) moveTowards(npc, r.base, true);
+    if (elapsed === FALL_TICK) { moveTowards(npc, r.base); fall(npc, r); }
     if (elapsed === FULL_TICK) {
       Traps.setPitState(r.trap, "caught", r.state.creature, r.value);
       const sound = Object.entries(FULL_SOUNDS).find(([key]) => H.core.NpcIdentifiers[key] === r.state.creature.npc)?.[1];
@@ -216,7 +228,7 @@ function advance(npc, r) {
     }
     return;
   }
-  if (STEP_TICKS.leap.includes(elapsed)) step(npc, r.path);
+  if (elapsed === EDGE_TICK) moveTowards(npc, r.edge);
   if (elapsed === LEAP_TICK) leap(npc, r);
   if (elapsed >= LAND_TICK) land(npc, r);
 }
@@ -232,7 +244,7 @@ function leap(npc, r) {
     graphics.forEach((graphic, i) => viewer.getPacketSender().sendProjectile(starts[i], starts[i].clone().add(dx * 4, dy * 4),
       0, 90, graphic, 0, 0, null, 53, 0, 0));
   }
-  H.core.Sounds.playAreaSound({ soundId: LEAP_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 5 });
+  H.core.Sounds.playAreaSound({ soundId: LEAP_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), radius: SOUND_RANGE });
 }
 
 function viewers(player, trap) {
@@ -285,7 +297,7 @@ function land(npc, r) {
 }
 
 function pitSound(trap, soundId, at = center(trap)) {
-  H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 10 });
+  H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: SOUND_RANGE });
 }
 
 function process() {

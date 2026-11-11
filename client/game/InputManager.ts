@@ -287,6 +287,10 @@ export class InputManager {
     keys: Map<string, boolean> = new Map();
     /** Key events queued this frame (for widget onKey handlers) */
     keyEvents: { keyTyped: number; keyPressed: number; code: string }[] = [];
+    /** OSRS key codes pressed this frame, for widget key-down listeners (if_setonkeydown). */
+    keyDownCodes: number[] = [];
+    /** OSRS key codes released this frame, for widget key-up listeners (if_setonkeyup). */
+    keyUpCodes: number[] = [];
     /** Shift key state (also OSRS keybind 81, ClientState.isShiftPressed; see setShiftHeld) */
     shiftDown: boolean = false;
     /** Shift went down or up: menus that follow it (shift-click drop) must be rebuilt. */
@@ -619,6 +623,8 @@ export class InputManager {
     flushInput(): void {
         this.readIndex = this.writeIndex;
         this.keyEvents.length = 0;
+        this.keyDownCodes.length = 0;
+        this.keyUpCodes.length = 0;
     }
 
     /**
@@ -1179,6 +1185,7 @@ export class InputManager {
             }
             this.osrsKeyState[osrsKeyCode] = 1;
             this.osrsKeyPressedThisFrame.add(osrsKeyCode);
+            this.keyDownCodes.push(osrsKeyCode);
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, true);
             }
@@ -1237,6 +1244,7 @@ export class InputManager {
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, false);
             }
+            this.keyUpCodes.push(osrsKeyCode);
         }
 
         this.keys.delete(event.code);
@@ -1347,6 +1355,8 @@ export class InputManager {
 
         // Clear key events queue
         this.keyEvents.length = 0;
+        this.keyDownCodes.length = 0;
+        this.keyUpCodes.length = 0;
 
         // Clear per-frame OSRS key pressed tracking (for wasKeyPressed)
         this.osrsKeyPressedThisFrame.clear();

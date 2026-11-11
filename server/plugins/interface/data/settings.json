@@ -222,6 +222,7 @@
     "432": { "name": "Casting Alchemy spells by using items together always triggers a warning", "varbit": 2179 },
     "433": { "name": "'Did you know?' tips", "varbit": 16235 },
     "437": { "name": "Surge Potion cooldown", "varbit": 16239 },
+    "441": { "name": "World Map Hotkey", "varbit": 16621 },
     "442": { "name": "Enable interface resizing and repositioning", "varbit": 17772 },
     "443": { "name": "Bowstring spool charges", "varbit": 17773 },
     "444": { "name": "Vale totem trail buff", "varbit": 17774 },

@@ -82,8 +82,8 @@ before(async () => {
     onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
     emitCustomEvent: (name, payload) => emit(name, payload),
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
   Fragments = require("../plugins/modes/league/Fragments.LeagueMode");
   Gathering = require("../plugins/modes/league/FragmentGathering.LeagueMode")._test;
   // The real answers: Smelting's bar for an ore, Cooking's cooked fish, Firemaking's log XP, NpcDrops' tables.

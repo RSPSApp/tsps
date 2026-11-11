@@ -362,7 +362,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CombatAchievements` | CombatAchievements | achievements | yes | Combat Achievements: 655 tasks in six tiers with points, Ghommal's tier rewards, the five interfaces and boss kill counts. |
 | `AgentMcp` | AgentMcp | agent | yes | Runs an MCP server that lets a tool such as Claude Code drive an online player for testing. Active only when AGENT_MCP=1 is set. |
 | `AgilityPyramid` | AgilityPyramid | areas | yes | Moves the Agility Pyramid's sliding blocks on floors 1 and 3, which push players down a floor for 8 damage. The course itself is a separate plugin. (members only) |
-| `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy fire and water spell transformations. (members only) |
+| `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy transformations: fire spells and lit fire arrows set them alight, water spells douse them. (members only) |
 | `BrimhavenDungeon` | BrimhavenDungeon | areas | yes | Brimhaven Dungeon access: Saniboch's entry fee, the dungeon entrance and the vines that need an axe to go deeper. (members only) |
 | `Burthorpe` | Burthorpe | areas | yes | Animates the soldiers drilling, sparring and eating in Burthorpe's square, as captured. (members only) |
 | `CatacombsOfKourend` | CatacombsOfKourend | areas | yes | Catacombs of Kourend access: King Rada's statue, the vine ladder back up, the corner vines and the surface holes they open, and bones restoring Prayer points while buried or crushed there. (members only) |
@@ -563,6 +563,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BarrowsEquipment` | BarrowsEquipment | items | yes | Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers. (members only) |
 | `BladeOfSaeldor` | BladeOfSaeldor | items | yes | Blade of Saeldor: uses one charge per swing and handles the inactive form, built on the shared crystal-weapon charge code. (members only) |
 | `BlightedSpellSacks` | BlightedSpellSacks | items | yes | Blighted spell sacks (ice, entangle, teleblock, surge, vengeance): each supplies a spell's entire rune cost where blighted items are allowed. (members only) |
+| `BoltPouch` | BoltPouch | items | yes | Adds the bolt pouch: four slots of up to 10,000 bolts, stored with Use, the Open interface's Remove and Unwield, and Hirko's sale. (members only) |
 | `Bonds` | Bonds | items | yes | Old school bonds: tradeable and untradeable forms, bond pouch interface, redeeming for membership days, converting and gifting bonds. |
 | `Bonecrusher` | Bonecrusher | items | yes | Bonecrusher: while charged and active in the inventory, crushes the bones a kill drops for Prayer XP, in full with the elite Morytania diary. (members only) |
 | `BountyHunterWeapons` | BountyHunterWeapons | items | yes | Restricts imbued Bounty Hunter weapons, like the dark bow (BH) and abyssal daggers (BH), to permitted PvP minigames and combat rings. (members only) |
@@ -613,6 +614,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
 | `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges. (members only) |
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |
+| `NeverKeptOnDeath` | NeverKeptOnDeath | items | yes | Destroys the untradeables that are never kept on death (League trophies, the Chronicle, items with no ground state) on a PvP death, instead of giving them back. (members only) |
 | `Obligator` | Obligator | items | yes | Adds the Obligator chain mace's multi-roll Thrust with reach behind the target and single-target Smash, plus charging with shards and runes. (members only) |
 | `OilLights` | OilLights | items | yes | Handles oil lamps and lanterns: assembling them, distilling lamp oil at the Rimmington still, lighting with a tinderbox and extinguishing them. (members only) |
 | `OpenableItems` | OpenableItems | items | yes | Gives the Open option on item packs, caskets, oysters, gem bags, sacks and similar items that hand over fixed or random contents. |
@@ -720,13 +722,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Wintertodt` | Wintertodt | minigames | yes | Adds Wintertodt: the world-wide round behind the Doors of Dinh, the camp outside and its reward cart. (members only) |
 | `FreeToPlay` | FreeToPlay | modes | no | Switches this world to free-to-play. The spawn must be inside a free-to-play area. |
 | `Ironman` | Ironman | modes | yes | Adds Ironman, Ultimate and Hardcore Ironman accounts, chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command. |
-| `LeagueAreaUnlocks` | LeagueAreaUnlocks | modes | yes | Locks a league character to its unlocked areas, starting in Misthalin and Karamja and opening more as tasks reach each league's thresholds. (members only) |
-| `LeagueCombatMasteries` | LeagueCombatMasteries | modes | yes | Adds Raging Echoes combat masteries: three styles of six tiers bought with points from combat challenges, and the passives they grant. (members only) |
-| `LeagueMode` | LeagueMode | modes | yes | Runs a world as a league: gives each account a league character, the Leagues tab, rank and statistics panels, XP rate and the reward shop. (members only) |
-| `LeaguePacts` | LeaguePacts | modes | yes | Adds the Demonic Pacts tree of over 130 combat-boost nodes bought with pact points earned from pact tasks, with resets. (members only) |
-| `LeaguePoints` | LeaguePoints | modes | yes | Tracks League Points as the total of a league character's completed tasks, and announces awards and changes to the other league plugins. (members only) |
-| `LeagueRelics` | LeagueRelics | modes | yes | Adds league relics: eight tiers unlocked with League Points, three relics per tier, chosen permanently through the relic interface. (members only) |
-| `LeagueTasks` | LeagueTasks | modes | yes | Adds the league task lists, awarding League Points from kills, levels, quests and deeds, with the task interface opened from the side panel. (members only) |
+| `LeagueMode` | LeagueMode | modes | yes | Leagues characters, progression, tasks, relics, region unlocks, combat masteries, Demonic Pacts and rewards. (members only) |
 | `PvpMode` | PvpMode | modes | yes | Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests. |
 | `AggressionToggle` | AggressionToggle | npcs | yes | Adds the ::aggro command, an administrator cheat that keeps monsters aggressive after the ten-minute tolerance, usable by all if commands allow. |
 | `Apothecary` | Apothecary | npcs | yes | Gives the Varrock Apothecary's strength-potion service: 5 coins, a limpwurt root and red spiders' eggs per potion, feeding the Varrock diary. |

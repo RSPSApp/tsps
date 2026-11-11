@@ -22,7 +22,7 @@ const api = {
   },
 };
 Common.init(api);
-require("../plugins/modes/LeaguePoints.plugin").register(api);
+require("../plugins/modes/Points.LeagueMode").register(api);
 Complete(api);
 plugin.register(api);
 const [hitResolved] = handlers;

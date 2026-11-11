@@ -92,10 +92,10 @@ before(async () => {
     emitCustomEvent: (name, payload) => { for (const handler of custom[name] ?? []) handler(payload); },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
   custom["quest:is-complete"] = [(request) => { request.complete = false; }];
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueTasks.plugin").register(api);
-  require("../plugins/modes/LeaguePacts.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Tasks.LeagueMode").register(api);
+  require("../plugins/modes/Pacts.LeagueMode").register(api);
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
   // The modifiers this unit registers, captured from a second attach of it alone (its event
   // handlers are attached once, by the plugin above).

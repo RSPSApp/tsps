@@ -2,11 +2,12 @@
 
 The Leagues game mode (https://oldschool.runescape.wiki/w/Leagues) on this server: a league
 character per account, League Points, tasks, ranks, relic tiers and relics, area unlocks, combat
-masteries and the league screens. Plugins: `plugins/modes/LeagueMode.plugin.js` (the profile,
+masteries and the league screens. The `LeagueMode` plugin switch controls all of these.
+`plugins/modes/LeagueMode.plugin.js` attaches the base module (the profile,
 its league, XP rate, the tiers' passives, journal tab, Summary / Info / Rank, ranks, statistics
-and shared content), `LeaguePoints.plugin.js` (points), `LeagueTasks.plugin.js` (the task catalog, triggers and list), `LeagueRelics.plugin.js` (tiers and
-relics), `LeagueAreaUnlocks.plugin.js` (areas), `LeagueCombatMasteries.plugin.js` (Raging
-Echoes' combat masteries) and `LeaguePacts.plugin.js` (Demonic Pacts' pact tree); data in `plugins/modes/data/leagues.json`, `league-ranks.json`,
+and shared content), `Points.LeagueMode.js` (points), `Tasks.LeagueMode.js` (the task catalog, triggers and list), `Relics.LeagueMode.js` (tiers and
+relics), `AreaUnlocks.LeagueMode.js` (areas), `CombatMasteries.LeagueMode.js` (Raging
+Echoes' combat masteries) and `Pacts.LeagueMode.js` (Demonic Pacts' pact tree); data in `plugins/modes/data/leagues.json`, `league-ranks.json`,
 `league-relics.json`, `league-areas.json`, `league-boosted-drops.json` and
 `league-combat-masteries.json`, `league-tasks.json` (generated), `league-task-list.json` and
 `league-task-triggers.json`.
@@ -687,7 +688,7 @@ A quest the character had started keeps its quest items when a pack completes it
 
 ## Relics
 
-`LeagueRelics.plugin.js`, data `plugins/modes/data/league-relics.json`: eight tiers a league,
+`Relics.LeagueMode.js`, data `plugins/modes/data/league-relics.json`: eight tiers a league,
 each with a point cost, a passive and three relics (Wiki); a tier's pick is permanent. A
 character's picks live in `league:relics` (tier index -> slot 1-3).
 
@@ -1275,7 +1276,7 @@ above: every league character is a standard Ironman.
 
 ## Combat masteries (Raging Echoes)
 
-`LeagueCombatMasteries.plugin.js`, data `plugins/modes/data/league-combat-masteries.json`
+`CombatMasteries.LeagueMode.js`, data `plugins/modes/data/league-combat-masteries.json`
 (https://oldschool.runescape.wiki/w/Raging_Echoes_League/Combat_Masteries): three styles of six
 tiers, each needing the previous tier of its style (`requires` in the data), paid with Combat
 Mastery points; the first time any style reaches a tier, a passive for every style comes with it.
@@ -1363,7 +1364,7 @@ not recorded, so there are none.
 
 ## Demonic Pacts
 
-`LeaguePacts.plugin.js` (units in `leaguepacts/`), data `plugins/modes/data/league-pacts.json`:
+`Pacts.LeagueMode.js` (units in `leaguepacts/`), data `plugins/modes/data/league-pacts.json`:
 Demonic Pacts' pact tree (Wiki Demonic_Pacts_League/Demonic_Pacts). Only a Demonic Pacts
 character has it; other plugins ask `league:pacts` { player } (pacts, earned, spendable, resets)
 and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> value).
@@ -1452,7 +1453,7 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
 
 ## Areas
 
-`LeagueAreaUnlocks.plugin.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.
+`AreaUnlocks.LeagueMode.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.
 A league character starts in Misthalin and Karamja (the Wiki's start; live unlocks Karamja free
 during its tutorial, which this server has none of) and picks up to three more areas as its
 completed tasks reach the league's thresholds: Trailblazer Reloaded 60, 140 and 300 tasks from
@@ -1593,7 +1594,7 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
 
 ## Tasks
 
-`LeagueTasks.plugin.js` with its units in `plugins/modes/leaguetasks/`: the catalog of each league's
+`Tasks.LeagueMode.js` with its units in `plugins/modes/leaguetasks/`: the catalog of each league's
 tasks, the triggers that award them and the cache's task list interface. A completed task is a key
 of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's.
 

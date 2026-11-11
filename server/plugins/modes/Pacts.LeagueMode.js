@@ -10,10 +10,6 @@
 const Common = require("./leaguepacts/Common.LeaguePacts");
 
 module.exports = {
-  name: "LeaguePacts",
-  description: "Adds the Demonic Pacts tree of over 130 combat-boost nodes bought with pact points earned from pact tasks, with resets.",
-  members: true,
-  dependsOn: ["LeagueMode", "LeagueTasks"],
   register(api) {
     Common.init(api);
     require("./leaguepacts/Points.LeaguePacts")(api);

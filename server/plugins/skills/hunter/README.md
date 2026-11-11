@@ -140,7 +140,7 @@ Roaming spawns ([Implings](https://oldschool.runescape.wiki/w/Implings)):
   wander radius remains eight, capped by each point's distance to the existing Hunter realm
   rectangle (2560..2623, 4288..4351) to contain ordinary spawn-centered wandering. This cap is a
   server containment choice, not evidence for retail radius or a forced-displacement boundary.
-  Fixed implings and overworld movement are outside this change. The Wiki's two-minute
+  Overworld movement remains outside this change. The Wiki's two-minute
   invisibility claim carries a confirmation-needed qualification; this change preserves the
   server's timers rather than establishing retail timing.
 - Overworld (`Overworld.Hunter.js`, driven by the shared tick): every 30 minutes the previous
@@ -149,6 +149,19 @@ Roaming spawns ([Implings](https://oldschool.runescape.wiki/w/Implings)):
   one is gone until the next cycle. Not in: the Wiki's fixed low-tier points (ten, and Zanaris
   marketplace) have no coordinates here, and the wander radius (8) is an estimate. The imp
   defenders (npc 5738) freeing jarred implings are not in.
+
+The same flight rule also applies to the 51 fixed Puro-Puro implings loaded by the world spawn
+definitions. The existing `npc:added` event applies it after the loader has set each NPC's
+position and radius, covering deferred activation on ordinary entry. Radius never grows:
+the fixed default of five is capped by the same realm rectangle (edge points at 2563 or 2620
+can otherwise target outside it). This is the same server containment inference as for roaming.
+The Hunter-owned fixed return path is preserved: two ticks of the caught animation, then seven
+hidden ticks for baby/young/gourmet/eclectic or 50 for earth/essence before returning visibly
+to the original spawn. The existing native suite now also loads the actual world definitions,
+activates the fixed population, checks real wheat collision and NPC/realm controls, dispatches
+Catch, and completes both seven- and 50-tick return paths through another ordinary Catch.
+Actor placement/equipment/levels/approach and successful RNG are supplied. Natural random
+wandering, client rendering and generic impling teleport/expiry timing remain unverified.
 
 The existing `impetuous-impulses.test.cjs` suite includes a native roaming route: real plugin
 startup, cache-backed Puro-Puro magical wheat, movement queues with player/ordinary-NPC collision

@@ -28,6 +28,7 @@ const PLANE = 0;
 let core;
 let api;
 let task;
+let implingIds;
 let tick = 0;
 /** npc -> { tier, point, visibleAt, removeAt } */
 const live = new Map();
@@ -35,6 +36,20 @@ const live = new Map();
 function init(pluginApi) {
   api = pluginApi;
   core = api.core;
+  implingIds = new Set(Object.values(data.tables).flatMap(table =>
+    Object.keys(table).map(key => core.NpcIdentifiers[`${key}_IMPLING_2`])));
+}
+
+/** Every Puro-Puro impling flies, including the fixed population loaded from world definitions. */
+function configureFlight({ npc }) {
+  if (!implingIds.has(npc.getId())) return;
+  const at = npc.getSpawnPosition(), x = at.getX(), y = at.getY();
+  if (at.getZ() !== PLANE || x < MAZE_BOUNDS[0] || x > MAZE_BOUNDS[1]
+    || y < MAZE_BOUNDS[2] || y > MAZE_BOUNDS[3]) return;
+  // The Wiki's scenery-crossing rule applies to implings; ordinary actors keep collision.
+  npc.setFlag(IGNORE_CLIPPING_FLAG, true);
+  const movement = npc.getMovementCoordinator();
+  movement.setRadius(Math.min(movement.getRadius(), wanderRadius([x, y])));
 }
 
 function weighted(table) {
@@ -46,8 +61,6 @@ function spawn(tier, point) {
   const key = weighted(data.tables[tier]);
   const npc = api.spawnNpc({ id: core.NpcIdentifiers[`${key}_IMPLING_2`], x: point[0], y: point[1], z: PLANE, wanderRadius: wanderRadius(point) });
   if (!npc) return;
-  // Implings cross scenery, including water and magical wheat (Wiki Impling, revision 15360701).
-  npc.setFlag(IGNORE_CLIPPING_FLAG, true);
   npc.setVisible(false);
   live.set(npc, { tier, point, visibleAt: tick + MANIFEST_TICKS, removeAt: 0 });
 }
@@ -89,10 +102,11 @@ function shutdown() {
 
 function register(pluginApi) {
   init(pluginApi);
+  pluginApi.onCustomEvent("npc:added", configureFlight);
   pluginApi.onServerStartup(start);
   pluginApi.onServerShutdown(shutdown);
   pluginApi.onCustomEvent("hunter:impling-caught", caught);
 }
 
 module.exports = register;
-Object.assign(module.exports, { init, start, process, caught, shutdown, live, MANIFEST_TICKS, CAUGHT_TICKS, MAZE_BOUNDS, wanderRadius });
+Object.assign(module.exports, { init, start, process, caught, shutdown, live, MANIFEST_TICKS, CAUGHT_TICKS, MAZE_BOUNDS, wanderRadius, configureFlight });

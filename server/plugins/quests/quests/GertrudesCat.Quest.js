@@ -95,6 +95,8 @@ module.exports = function registerGertrudesCatQuest(api) {
   const COINS_ACTION_ID = "YQId7G";
   const COMPLETE_ACTION_ID = "Rf4BAK";
   const REPLACEMENT_KITTEN_ACTION_ID = "Q44J0B";
+  /** The statement step each Fluffs hint becomes (never a dump id). */
+  const HINT_BOX_PREFIX = "fluffs-hint-box:";
   const FLUFFS_HINT_STAGES = {
     "0lp0da": STAGE_PAID_BOY,
     "hvqx21": STAGE_PAID_BOY, // Stroke at stage 2; stroke at 3/4 replays the pick-up variants
@@ -238,8 +240,18 @@ module.exports = function registerGertrudesCatQuest(api) {
       event.end = false;
       return;
     }
+    // Fluffs' hints are a message box (messagebox, 229) with its chat line: rsprox 232/03222.txt
+    // tick 12370, Stroke at stage 2, "Perhaps the cat wants something?" as type=mesbox and the box on
+    // the same tick. The dump has them as action steps, so each one is handed back as a statement step.
     if (event.npcId === FLUFFS_NPC_ID && FLUFFS_HINT_STAGES[stepId] === stage) {
-      player.sendMessage(String(event.text ?? ""));
+      event.steps = [{ type: "message", id: HINT_BOX_PREFIX + stepId, text: String(event.text ?? "") }];
+      event.handled = true;
+      return;
+    }
+    if (event.kind === "message" && String(stepId ?? "").startsWith(HINT_BOX_PREFIX)) {
+      // The mesbox chat line goes with the box, as the repo's other message boxes (Barrows, Mining Guild).
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, String(event.text ?? ""));
+      event.box = { statement: true };
       event.handled = true;
       return;
     }

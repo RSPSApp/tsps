@@ -227,23 +227,17 @@ function drag(event) {
     else if (quiverOnPerson(player)) player.sendMessage(MESSAGE.QUIVER);
     else swapWithAmmo(player, fromSlot >= 0 ? fromSlot : toSlot, fromSlot >= 0);
   }
-  // The client moved the icons already; this puts them where the server has them.
+  // The client's script 4043 has already redrawn both slots as it expects the move to go; the
+  // pouch's slots and the worn ammo are sent again so a refused move shows as it is.
   sendSlots(player, true);
+  player.getEquipment().refreshItems();
 }
 
-/** Bolts of one type merge up to 10,000; anything else swaps places. */
+/** Two pouch slots swap places (cache script 4043). */
 function moveBetweenSlots(player, fromSlot, toSlot) {
   const current = slots(player);
-  const source = current[fromSlot], target = current[toSlot];
-  if (!source) return;
-  if (target?.id === source.id) {
-    const moved = Math.min(source.amount, capOf(source.id) - target.amount);
-    target.amount += moved;
-    source.amount -= moved;
-    if (source.amount <= 0) current[fromSlot] = null;
-  } else {
-    [current[fromSlot], current[toSlot]] = [target, source];
-  }
+  if (!current[fromSlot]) return;
+  [current[fromSlot], current[toSlot]] = [current[toSlot], current[fromSlot]];
   setSlots(player, current);
 }
 
@@ -261,8 +255,8 @@ function canWear(player, ammoId) {
 /**
  * Moves bolts between pouch `slot` and the worn ammo slot; `wield` is the pouch -> ammo direction.
  * The same bolts merge (the pouch side up to 10,000); otherwise the two swap. Worn ammo the pouch
- * can't hold (Rada's blessing, arrows) comes off into the inventory when bolts are wielded over
- * it (Wiki); Ours: dragging it into the pouch does nothing.
+ * can't take - Rada's blessing or arrows (Wiki), or a stack over 10,000 (script 4043) - comes off
+ * into the inventory when bolts are wielded over it, and is never moved into the pouch.
  */
 function swapWithAmmo(player, slot, wield) {
   const { Item, Equipment } = core;
@@ -287,12 +281,11 @@ function swapWithAmmo(player, slot, wield) {
     if (entry.amount <= 0) current[slot] = null;
   } else {
     if (entry && !canWear(player, entry.id)) return;
-    if (worn && !isStorable(worn)) {
+    if (worn && (!isStorable(worn) || worn.getAmount() > capOf(worn.getId()))) {
       if (!wield || !entry) return player.sendMessage(MESSAGE.CANT_HOLD);
       if (!core.EquipPacketListener.unequip(player, Equipment.AMMUNITION_SLOT)) return;
       worn = null;
     }
-    if (worn && worn.getAmount() > capOf(worn.getId())) return player.sendMessage(MESSAGE.CANT_HOLD);
     current[slot] = worn ? { id: worn.getId(), amount: worn.getAmount() } : null;
     equipment.setItem(Equipment.AMMUNITION_SLOT, entry ? new Item(entry.id, entry.amount) : new Item(-1, 0));
   }

@@ -245,14 +245,54 @@ function wear(f) {
   return event.handled;
 }
 
-test("drags between slots swap, or merge the same bolts up to 10,000", (t) => {
+test("drags between slots swap them, onto an empty slot too (script 4043)", (t) => {
   const f = actor(t);
-  withPouch(f, [[I.RUNITE_BOLTS, 6000], [I.RUNITE_BOLTS, 6000], [I.BROAD_BOLTS, 5], null]);
+  withPouch(f, [[I.RUNITE_BOLTS, 6000], [I.BROAD_BOLTS, 5], null, null]);
   opened(f);
   assert.equal(dragged(f, "bolt_1", "bolt_2"), true);
-  assert.deepEqual(BoltPouch.slots(f.p).slice(0, 2), [{ id: I.RUNITE_BOLTS, amount: 2000 }, { id: I.RUNITE_BOLTS, amount: 10000 }]);
-  dragged(f, "bolt_3", "bolt_1");
-  assert.deepEqual(BoltPouch.slots(f.p).map((s) => s?.id ?? null), [I.BROAD_BOLTS, I.RUNITE_BOLTS, I.RUNITE_BOLTS, null]);
+  assert.deepEqual(BoltPouch.slots(f.p).slice(0, 2), [{ id: I.BROAD_BOLTS, amount: 5 }, { id: I.RUNITE_BOLTS, amount: 6000 }]);
+  dragged(f, "bolt_2", "bolt_4");
+  assert.deepEqual(BoltPouch.slots(f.p).map((s) => s?.id ?? null), [I.BROAD_BOLTS, null, null, I.RUNITE_BOLTS]);
+});
+
+test("a refused drag onto Current Ammo sends the worn ammo again, so the client shows it as it is", (t) => {
+  const f = actor(t);
+  ranged(f, 1);
+  withPouch(f, [[I.DRAGON_BOLTS_2, 250], null, null, null]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.BRONZE_BOLTS, 20));
+  opened(f);
+  const refreshed = t.mock.method(f.p.getEquipment(), "refreshItems");
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(worn(f).getId(), I.BRONZE_BOLTS, "Dragon bolts need Ranged 64");
+  assert.equal(refreshed.mock.callCount() > 0, true, "the worn ammo is sent again");
+});
+
+test("wielding over a worn stack over 10,000 takes that stack off into the inventory (script 4043)", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [[I.STEEL_BOLTS, 100], null, null, null]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.RUNITE_BOLTS, 15000));
+  opened(f);
+  dragged(f, "current_bolt", "bolt_2");
+  assert.equal(worn(f).getAmount(), 15000, "a stack over 10,000 never goes into the pouch");
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(worn(f).getId(), I.STEEL_BOLTS);
+  assert.equal(worn(f).getAmount(), 100);
+  assert.equal(f.inv.getAmount(I.RUNITE_BOLTS), 15000);
+  assert.equal(BoltPouch.slots(f.p)[0], null);
+});
+
+test("with no inventory room for a worn stack over 10,000, wielding over it changes nothing", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [[I.STEEL_BOLTS, 100], null, null, null]);
+  for (let i = 0; i < 27; i++) f.inv.add(new core.Item(I.BRONZE_DAGGER, 1), false);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.RUNITE_BOLTS, 15000));
+  opened(f);
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(worn(f).getId(), I.RUNITE_BOLTS);
+  assert.equal(worn(f).getAmount(), 15000);
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.STEEL_BOLTS, amount: 100 });
 });
 
 test("dragging a slot onto the ammo slot wields it, swapping the worn bolts into the pouch", (t) => {

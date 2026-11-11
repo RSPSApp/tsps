@@ -90,26 +90,60 @@ test('Show riddle runs the toggle script again and chooses nothing', t => {
   assert.equal(f.sent.filter(row => row[0] === 'sendInterfaceRemoval').length, 0);
 });
 
-test('the eighth box from the left (component 16) is the grail: the interface closes and the grail talk plays', t => {
+const GRAIL = 19;
+const have = (f, id) => f.p.getInventory().getAmount(id);
+
+/** Plays the open conversation through (the grail's box transcript ends in "Sxgy3n": the grail drops into the pack). */
+function playOut(f) {
+  for (let guard = 0; guard < 60 && f.p.getDialogueManager().getCurrent(); guard++) {
+    const current = f.p.getDialogueManager().getCurrent();
+    if (current.constructor.name === 'OptionDialogue') break;
+    f.p.getDialogueManager().advance();
+  }
+}
+
+test('the eighth box from the left (component 16) is the grail: the interface closes, the talk plays and the grail arrives', t => {
   const f = actor(t, 'krgrail');
   quest().setStage(f.p, STAGE_CELL_OPEN);
   searchTable(f);
+  assert.equal(have(f, GRAIL), 0);
   click(f, 16);
   assert.ok(names(f).includes('sendInterfaceRemoval'), 'the interface closes');
+  playOut(f);
+  assert.equal(have(f, GRAIL), 1, 'the Holy Grail dropped into the pack');
+  assert.equal(quest().getStage(f.p), STAGE_GRAIL);
   assert.equal(f.p.getLocation().getX(), 1900, 'not sent to the Ardougne cave');
 });
 
-test('a wrong box (each of the other eight) is the trap: the Ardougne cave (the 5 damage is the existing hit-queue code)', t => {
+test('a player who lost the grail (stage 70, none held) goes through the riddle again and the eighth box gives it back', t => {
+  const f = actor(t, 'krlost');
+  quest().setStage(f.p, STAGE_GRAIL);
+  assert.equal(have(f, GRAIL), 0);
+  searchTable(f);
+  assert.ok(f.sent.some(row => row[0] === 'sendInterface' && row[1] === GROUP), 'the table still opens the interface');
+  click(f, 16);
+  playOut(f);
+  assert.equal(have(f, GRAIL), 1, 'the grail is given again');
+  assert.equal(quest().getStage(f.p), STAGE_GRAIL, 'the stage does not move back');
+});
+
+test('a wrong box (each of the other eight) is the trap: 5 damage is queued and the player is sent to the Ardougne cave', t => {
   for (const child of [9, 10, 11, 12, 13, 14, 15, 17]) {
     const f = actor(t, `krwrong${child}`);
     quest().setStage(f.p, STAGE_CELL_OPEN);
     searchTable(f);
+    const damage = [];
+    const queue = f.p.getCombat().getHitQueue();
+    const original = queue.addPendingDamage.bind(queue);
+    queue.addPendingDamage = hits => { damage.push(...hits.map(hit => hit.getDamage())); return original(hits); };
     click(f, child);
+    assert.ok(damage.includes(5), `box at component ${child}: 5 damage queued (${damage})`);
     assert.equal(f.p.getLocation().getX(), 2611, `box at component ${child}: the cave north of the monastery`);
+    assert.equal(have(f, GRAIL), 0);
   }
 });
 
-test('controls: another player, no search first, and a click after the quest moved on do nothing', t => {
+test('controls: another player, no search first, and a click once the grail is held do nothing', t => {
   const a = actor(t, 'kropen'), b = actor(t, 'krother');
   quest().setStage(a.p, STAGE_CELL_OPEN);
   quest().setStage(b.p, STAGE_CELL_OPEN);
@@ -117,7 +151,9 @@ test('controls: another player, no search first, and a click after the quest mov
   click(b, 17);
   assert.equal(b.p.getLocation().getX(), 1900, 'a player who never opened it is not trapped');
   assert.equal(b.sent.length, 0);
-  quest().setStage(a.p, STAGE_GRAIL);
+  // A claim that outlives the table search: the grail arrived another way, so the riddle is no longer asked.
+  a.p.getInventory().adds(GRAIL, 1);
   click(a, 17);
-  assert.equal(a.p.getLocation().getX(), 1900, 'past the grail stage a stale click does nothing');
+  assert.equal(a.p.getLocation().getX(), 1900, 'with the grail held a stale click does not trap');
+  assert.equal(have(a, GRAIL), 1);
 });

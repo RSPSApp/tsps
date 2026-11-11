@@ -1443,6 +1443,12 @@ module.exports = function registerKingsRansomQuest(api) {
     onReward: grantReward,
   });
 
+  const grailBoxes = require("./Riddle.KingsRansom")(api, {
+    onChoose: chooseBox,
+    // The table's own rule (handleGrailTable): the riddle is for a player in the cell-open..complete stages who does
+    // not hold the grail, so a lost grail (stage 70+) goes through it again.
+    isActive: (player) => stageOf(player) >= STAGE_CELL_OPEN && stageOf(player) < STAGE_COMPLETE && !hasItem(player, HOLY_GRAIL_ITEM),
+  });
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onNpcDialogueCondition(answerCondition);
@@ -1457,10 +1463,5 @@ module.exports = function registerKingsRansomQuest(api) {
   api.onCustomEvent("door:toggle", handleGateToggleClaim);
   api.onCustomEvent("door:toggle", handleCellDoorToggle);
   api.onPlayerLogin(handleLogin);
-  const grailBoxes = require("./Riddle.KingsRansom")(api, {
-    onChoose: chooseBox,
-    // Only until the grail is held: from then on the table opens the grail box instead.
-    isActive: (player) => stageOf(player) >= STAGE_CELL_OPEN && stageOf(player) < STAGE_GRAIL,
-  });
   api.onPlayerLogout(handleLogout);
 };

@@ -1622,6 +1622,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
       { skillId: Skill.SLAYER.getIndex(), amount: SLAYER_REWARD_XP, label: "Slayer" },
     ],
     otherRewards: ["Great Conch Access"],
+    rewardOrder: ["other", "xp"], // rsprox 235/03456.txt (the completion scroll near :52850)
     buildJournal,
     onReward: grantReward,
   });

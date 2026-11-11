@@ -61,6 +61,7 @@ function createPlayer({ helm = null, weapon = 0, inCombat = true, scales = 0, am
   const equipment = new Array(14).fill(null).map(() => item(0));
   if (helm) equipment[Equipment.HEAD_SLOT] = helm;
   if (weapon) equipment[Equipment.WEAPON_SLOT] = item(weapon);
+  if (ammo) equipment[Equipment.AMMUNITION_SLOT] = item(ammo);
   const attributes = new Map();
   const immunity = { starts: 0, protectBriefly(seconds, venom) { assert.equal(seconds, 2); assert.equal(venom, true); this.starts++; } };
   const messages = [];
@@ -77,7 +78,7 @@ function createPlayer({ helm = null, weapon = 0, inCombat = true, scales = 0, am
       addItem: () => {},
       refreshItems: () => {},
     }),
-    getCombat: () => ({ getTarget: () => (inCombat ? {} : null), getAttacker: () => defending ? {} : null, getAmmunition: () => ammo == null ? null : { getItemId: () => ammo }, getPoisonImmunityTimer: () => immunity }),
+    getCombat: () => ({ getTarget: () => (inCombat ? {} : null), getAttacker: () => defending ? {} : null, getPoisonImmunityTimer: () => immunity }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (message) => messages.push(message),

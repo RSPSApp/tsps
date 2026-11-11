@@ -81,11 +81,17 @@ function venomChance(player, combatType) {
   const weaponId = Number(player.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId?.() ?? -1);
   const name = String(core.ItemDefinition.forId(weaponId)?.getName?.() ?? "").toLowerCase();
   if (GUARANTEED_WEAPON_NAMES.has(name)) return 1;
-  // Read the selected projectile, including quiver and self-ammo weapons.
+  // The worn projectile, as CombatFactory reads a ranged hit's poison: the weapon for thrown
+  // weapons, else the ammunition slot. Combat.getAmmunition() reports a (p) arrow or bolt as its
+  // plain entry (RangedData's variants), so its id never names the poison.
   if (combatType === core.CombatType.RANGED) {
-    const ammoId = player.getCombat().getAmmunition()?.getItemId();
-    const ammoName = String(core.ItemDefinition.forId(ammoId ?? -1)?.getName?.() ?? "").toLowerCase();
-    return /\(p(?:\+\+?)?\)$/.test(ammoName) ? 0.5 : 0;
+    const { WeaponInterfaces } = core;
+    const style = player.getWeapon?.();
+    const thrown = [WeaponInterfaces?.DART, WeaponInterfaces?.KNIFE, WeaponInterfaces?.THROWNAXE, WeaponInterfaces?.JAVELIN]
+      .some((type) => type != null && type === style);
+    const shotId = thrown ? weaponId : Number(player.getEquipment().get(core.Equipment.AMMUNITION_SLOT)?.getId?.() ?? -1);
+    const shotName = String(core.ItemDefinition.forId(shotId)?.getName?.() ?? "").toLowerCase();
+    return /\(p(?:\+\+?)?\)$/.test(shotName) ? 0.5 : 0;
   }
   if (combatType !== core.CombatType.MELEE) return 0;
   // The halberd's own 1/3 roll (CombatPoisonData) follows this one, so 1/4 here makes the Wiki's 1/2.

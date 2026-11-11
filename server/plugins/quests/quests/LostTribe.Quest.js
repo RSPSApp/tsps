@@ -197,18 +197,27 @@ module.exports = function registerLostTribeQuest(api) {
   const RELDO_BOOK_LINE = "book about ancient goblin tribes";
   const DUKE_SILVERWARE_LINE = "Unless it is returned";
 
-  const SYMBOL_BOOK_PAGES = [{
-    44: "<col=800000>A History of the Goblin Race</col>",
-    46: "Ancient goblin equipment bears symbols that identify",
-    47: "the tribes. The surviving records name twelve tribes.",
-    48: "",
-    49: "The four directions are recorded as:",
-    50: "Rekeshuun — north; Idithuun — south;",
-    51: "Ekeleshuun — east; Narogoshuun — west.",
-    60: "The Dorgeshuun are the goblins of the strong spears.",
-    62: "Compare the symbols in this book with the marks in",
-    63: "the cellar tunnels to find the safe route.",
-  }];
+  // The goblin symbol book is its own cache interface, lost_tribe_symbol_book (183), with all its
+  // text in the cache (Wiki, Transcript:Goblin symbol book): six spreads, each a layer the server
+  // shows in turn, and two "Turn page" arrows (transmitop) the server answers. No recording shows
+  // the book being read, so the arrows' ends are inferred: no left arrow on the title spread, no
+  // right arrow on the last.
+  const SYMBOL_BOOK = 183;
+  const SYMBOL_BOOK_SPREADS = [
+    33, // lost_tribe_titles: "A History of the Goblin Race" (shown by default)
+    38, // lost_tribe_page_1
+    42, // lost_tribe_page_2
+    46, // lost_tribe_page_3: "In the following pages I present a list of the tribes and their symbols."
+    14, // lost_tribe_symbols: Drogokishuun ... Yurkolgokh
+    15, // lost_tribe_directions: Thorobshuun ... Narogoshuun
+  ];
+  const SYMBOL_BOOK_RIGHT_ARROW = 16;
+  const SYMBOL_BOOK_LEFT_ARROW = 17;
+  const SYMBOL_BOOK_RIGHT_ARROW_LAYER = 18;
+  const SYMBOL_BOOK_LEFT_ARROW_LAYER = 19;
+  const SCRIPT_MAINMODAL_OPEN = 2524;
+  /** The spread each reader has open (never persisted). */
+  const symbolBookSpread = new WeakMap();
 
   let quest;
 
@@ -740,10 +749,42 @@ module.exports = function registerLostTribeQuest(api) {
     }
   }
 
+  function showSymbolBookSpread(player, spread) {
+    const sender = player.getPacketSender();
+    const uid = (child) => (SYMBOL_BOOK << 16) | child;
+    SYMBOL_BOOK_SPREADS.forEach((layer, index) => sender.sendInterfaceDisplayState(uid(layer), index !== spread));
+    sender.sendInterfaceDisplayState(uid(SYMBOL_BOOK_LEFT_ARROW_LAYER), spread === 0);
+    sender.sendInterfaceDisplayState(uid(SYMBOL_BOOK_RIGHT_ARROW_LAYER), spread === SYMBOL_BOOK_SPREADS.length - 1);
+  }
+
   function readSymbolBook({ player }) {
-    questRuntime.openBook(player, "A History of the Goblin Race", SYMBOL_BOOK_PAGES, () => {
-      if (quest.getStage(player) === STAGE_FIND_BOOK) quest.setStage(player, STAGE_FIND_GENERALS);
-    });
+    symbolBookSpread.set(player, 0);
+    showSymbolBookSpread(player, 0);
+    const sender = player.getPacketSender();
+    sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+    sender.sendInterface(SYMBOL_BOOK);
+  }
+
+  function turnSymbolBookPage(event) {
+    const buttonId = Number(event.buttonId ?? 0);
+    if ((event.groupId ?? (buttonId >>> 16)) !== SYMBOL_BOOK) return;
+    const child = event.childId ?? (buttonId & 0xffff);
+    if (child !== SYMBOL_BOOK_RIGHT_ARROW && child !== SYMBOL_BOOK_LEFT_ARROW) return;
+    const { player } = event;
+    const current = symbolBookSpread.get(player);
+    if (current === undefined) return;
+    event.handled = true;
+    const spread = current + (child === SYMBOL_BOOK_RIGHT_ARROW ? 1 : -1);
+    if (spread < 0 || spread >= SYMBOL_BOOK_SPREADS.length) return;
+    symbolBookSpread.set(player, spread);
+    showSymbolBookSpread(player, spread);
+  }
+
+  /** Closing the book after reading it is what moves the quest on, as the old book did. */
+  function closeSymbolBook({ player, interfaceId }) {
+    if (interfaceId !== SYMBOL_BOOK || !symbolBookSpread.has(player)) return;
+    symbolBookSpread.delete(player);
+    if (quest.getStage(player) === STAGE_FIND_BOOK) quest.setStage(player, STAGE_FIND_GENERALS);
   }
 
   function completeTreaty(player) {
@@ -1056,6 +1097,8 @@ module.exports = function registerLostTribeQuest(api) {
   api.onNpcInteraction("Mistag", { "Talk-to": talkMistag });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction("Goblin symbol book", { Read: readSymbolBook });
+  api.onInterfaceActionClick(turnSymbolBookPage);
+  api.onCustomEvent("interface:closed", closeSymbolBook);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);

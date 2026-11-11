@@ -61,6 +61,7 @@ function mockApi() {
   const handlers = {
     variant: [],
     condition: [],
+    interfaceClicks: [],
     custom: new Map(),
     namedObjects: [],
     npcInteractions,
@@ -117,6 +118,7 @@ function mockApi() {
     onCanBankItem: h => handlers.canBankItem.push(h),
     onCanEquip: h => handlers.canEquip.push(h),
     getPluginConfig: (_key, fallback) => fallback,
+    onInterfaceActionClick: (h) => handlers.interfaceClicks.push(h),
     onItemOnItem: (h) => handlers.itemOnItem.push(h),
     onItemOnNpc: (h) => handlers.itemOnNpc.push(h),
     onItemOnObject: (...args) => handlers.itemOnObject.push(typeof args[0] === 'function' ? args[0] : args[2]),
@@ -21829,29 +21831,18 @@ test('Song of the Elves remembers Elena’s earlier answer and fills the cave di
   assert.equal(line.text, 'Is Sam here, Sam?', 'the player gives the transcript fake identity instead of their actual name');
 });
 
-test('The Lost Tribe reads its symbol book and advances only when the reader closes', t => {
+test('The Lost Tribe reads its symbol book and advances only when the reader closes', () => {
+  // Real-engine coverage, arrows included: lost-tribe-symbol-book.test.cjs.
   const { api, handlers } = mockApi();
-  const runtimePath = require.resolve('../plugins/quests/QuestRuntime');
-  const previousRuntime = require.cache[runtimePath];
-  delete require.cache[runtimePath];
-  const runtime = require(runtimePath);
-  t.after(() => {
-    if (previousRuntime) require.cache[runtimePath] = previousRuntime;
-    else delete require.cache[runtimePath];
-  });
-  const buttons = new Map(), texts = new Map(), varbits = new Map();
-  let openInterface = -1;
-  api.onInterfaceActionButton = (ids, handler) => {
-    for (const id of Array.isArray(ids) ? ids : [ids]) buttons.set(id, handler);
-  };
   require('../plugins/quests/quests/LostTribe.Quest')(api);
-  const quest = runtime.getRegisteredQuests().find(entry => entry.key === 'the_lost_tribe');
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().filter(entry => entry.key === 'the_lost_tribe').at(-1);
   const attrs = new Map([['quest.the_lost_tribe.stage', 7]]);
+  const hidden = new Map(), varbits = new Map();
+  let openInterface = -1;
   const sender = new Proxy({
-    sendString: (text, uid) => texts.set(uid, text),
     sendVarbit: (id, value) => varbits.set(id, value),
     sendInterface: group => { openInterface = group; },
-    sendInterfaceRemoval: () => { openInterface = -1; },
+    sendInterfaceDisplayState: (uid, hide) => hidden.set(uid, hide),
   }, { get: (target, key) => target[key] ?? (() => {}) });
   const player = {
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
@@ -21859,12 +21850,10 @@ test('The Lost Tribe reads its symbol book and advances only when the reader clo
   };
   handlers.playerLogin.find((handler) => handler.name === "handleLogin")({ player });
   handlers.namedItemActions.get('Goblin symbol book').Read({ player });
-  assert.equal(openInterface, 392, 'Read opens the shared book interface');
-  assert.equal(texts.get((392 << 16) | 6), 'A History of the Goblin Race');
-  assert.match(texts.get((392 << 16) | 50), /Rekeshuun.*Idithuun/);
+  assert.equal(openInterface, 183, 'Read opens lost_tribe_symbol_book');
+  assert.equal(hidden.get((183 << 16) | 33), false, 'on its title spread');
   assert.equal(quest.getStage(player), 7, 'reading begins without skipping the book');
-  buttons.get((392 << 16) | 7)({ player, buttonId: (392 << 16) | 7 });
-  assert.equal(openInterface, -1);
+  for (const handler of handlers.custom.get('interface:closed')) handler({ player, interfaceId: 183 });
   assert.equal(quest.getStage(player), 8, 'closing the book completes the reading step');
   assert.equal(varbits.get(532), 6);
 });

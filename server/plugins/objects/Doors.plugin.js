@@ -76,6 +76,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
+  MOURNER_CAGE_GATE_LEFT_OPEN: 2059, // mournerquaters_gatelopen; Biohazard capture tick 557
+  MOURNER_CAGE_GATE_RIGHT_OPEN: 2061, // mournerquaters_gateropen
   // inactivepoordoor: Melzar's front door opens onto it (Dragon Slayer I capture 20261106T101002 tick
   // 2070), which the cache doesn't pair by name; ObjectIdentifiers has no property for it.
   MELZAR_DOOR_OPEN: 1539,
@@ -413,6 +415,24 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
+    // The Mourner HQ's upstairs cage (mournerquaters_gater/gatel 2060/2058), Biohazard capture
+    // 20261110T121228-5ab63b4 ticks 557 (in) and 580 (out): inviswall on both gate tiles, the open
+    // leaves on the tiles east, grate_open (69), the player steps across and the gate is back two
+    // ticks later. Biohazard's key check runs first (door:toggle). Live puts the two open leaves on
+    // swapped tiles when the left leaf is clicked (tick 580); one layout is used here.
+    Object.freeze({
+      closed: [[O.GATE_45, 2551, 3325, 1, 2], [O.GATE_44, 2551, 3326, 1, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2551, 3325, 1, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2551, 3326, 1, 2],
+        [NAMELESS_DOOR_LEAF_IDS.MOURNER_CAGE_GATE_LEFT_OPEN, 2552, 3325, 1, 3],
+        [NAMELESS_DOOR_LEAF_IDS.MOURNER_CAGE_GATE_RIGHT_OPEN, 2552, 3326, 1, 1],
+      ],
+      crossX: 2552,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
     // Farming Guild entrance (kebos_farming_guild_door_left/right_closed), crossed both ways in rsprox
     // 239 ticks 1648-1651 (in) and 1692 ticks 939-942 (out): Open puts inviswall 38848 on both doorway
     // tiles and the open leaves on the tiles south, sound 62, the player steps across in the same tick
@@ -741,6 +761,13 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.DOOR_91, { open: NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN }],
     [O.RED_DOOR, {}], [O.ORANGE_DOOR, {}], [O.YELLOW_DOOR, {}], [O.BLUE_DOOR, {}],
     [O.MAGENTA_DOOR, {}], [O.GREEN_DOOR, {}], [O.EXIT_DOOR, {}],
+    // The Mourner Headquarters' front door (mournerstewdoor 2036 -> mournerstewdooropen 2037),
+    // Biohazard capture 20261110T121228-5ab63b4 ticks 483 (in) and 598 (out). Biohazard decides
+    // who may pass (door:toggle); its back door stays locked by the quest.
+    [O.DOOR_51, { open: O.DOOR_52 }],
+    // Its upstairs door to the sickest mourner (mournerstewdoorup 2034 -> 2035 at 2547,3325,1),
+    // the same capture's ticks 499 (in) and 586 (out).
+    [O.DOOR_49, { open: O.DOOR_50 }],
     // Plague City (revision 242 capture 20261110T113734-5ab63b4): the Rehnisons' door (ticks 424-426,
     // 480-482), Bravek's door (614-616, 695-697), the plague house's two doors (734-736, 838-840) and
     // Elena's cell door (752-754, 757-759, 788-790). PlagueCity.Quest decides who may pass (door:toggle).

@@ -23,6 +23,22 @@ const ENTRY_FEE = 200;
 
 const NPC = { IZZY: "Cap'n Izzy No-Beard" };
 
+/**
+ * The Agility helper's "highlighted course" varbit (`helper_agility_highlighted_course`, the one
+ * Agility.plugin.js writes for courses) and the arena's id in the cache's course enum 3507
+ * ("Brimhaven Agility Arena"). Script 5167 runs 5169 with that id, which clears the outline slots
+ * and turns on every loc type of enum 3997's entry (4000 for the arena), so the arena highlights
+ * exactly like a course while the varbit holds 2. rsprox 1735, 1738, 1863 and 4308 set it on
+ * entering the arena and after an obstacle, and clear it on the way out.
+ */
+const HIGHLIGHTED_COURSE_VARBIT = 13140;
+const HELPER_COURSE = 2;
+
+/** The arena's obstacle highlights: the same varbit and course id courses use while in them. */
+function setObstacleHighlights(player, on) {
+  player.getPacketSender().sendVarbit(HIGHLIGHTED_COURSE_VARBIT, on ? HELPER_COURSE : 0);
+}
+
 /** The arena's cache block; variants of one obstacle share a name. */
 const OBSTACLE_IDS = {
   BALANCING_ROPE: [3551, 3552],
@@ -344,6 +360,7 @@ module.exports = {
   OBSTACLE_IDS, OBJECTS, DISPENSER_TILES, TRAP_SPANS, OBSTACLE_XP, OBSTACLE_LEVEL,
   DARTS_SUCCESS, BLADES_SUCCESS, FLOOR_SPIKES_NEVER_FAIL, GLOVES_XP_BONUS,
   PRESSURE_PAD_COOLDOWN_TICKS, PRESSURE_PAD_USES, LAPS_ATTRIBUTE, LAP_MESSAGE,
+  HIGHLIGHTED_COURSE_VARBIT, HELPER_COURSE, setObstacleHighlights,
   RECEIVED_MESSAGE, REPEAT_MESSAGE, INACTIVE_MESSAGE, BLADES_FAIL_MESSAGE,
   DARTS_FAIL_MESSAGE, FEE_MESSAGE,
   cycle, sessions, tileKey, stateOf, hasSession, clearState, agilityLevel, tagXp, addXp,

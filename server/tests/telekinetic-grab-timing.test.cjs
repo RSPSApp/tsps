@@ -20,7 +20,8 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     const listener = new MagicOnItemPacketListener();
     let onGround = true;
     let targetLocation = new Location(3205, 3200, 0);
-    const groundItem = { getItem: () => ({ clone: () => ({ id: 995 }) }), getPosition: () => targetLocation };
+    const item = { clone: () => ({ id: 995 }) };
+    const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => targetLocation };
     const tasks = [];
     t.mock.method(TaskManager, 'submit', (task) => tasks.push(task));
     t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
@@ -73,14 +74,8 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     assert.deepEqual(messages.slice(-1), ["Too late - it's gone!"]);
     assert.equal(experiences.length, 2, 'the cast still grants XP when the item is gone on arrival');
 
-    const visibility = process.env.CROSS_FLOOR_VISIBILITY;
-    const legacy = process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT;
-    t.after(() => {
-        if (visibility === undefined) delete process.env.CROSS_FLOOR_VISIBILITY; else process.env.CROSS_FLOOR_VISIBILITY = visibility;
-        if (legacy === undefined) delete process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT; else process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT = legacy;
-    });
-    delete process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT;
-    process.env.CROSS_FLOOR_VISIBILITY = '1';
+    const { CrossFloor } = require('../dist/game/CrossFloor');
+    t.mock.method(CrossFloor, 'visibleOnPlane', (viewer, target) => target <= viewer);
     currentLocation = new Location(3200, 3200, 1);
     targetLocation = new Location(3205, 3200, 0);
     onGround = true;
@@ -101,16 +96,14 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
 
 test('Telekinetic Grab takes the stack from its captured floor when another floor matches', (t) => {
     const listener = new MagicOnItemPacketListener();
-    const previous = Object.fromEntries(['CROSS_FLOOR_VISIBILITY_AND_COMBAT', 'CROSS_FLOOR_VISIBILITY', 'CROSS_FLOOR_COMBAT'].map(key => [key, process.env[key]]));
-    t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-    delete process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT;
-    process.env.CROSS_FLOOR_VISIBILITY = '1';
-    process.env.CROSS_FLOOR_COMBAT = '0';
+    const { CrossFloor } = require('../dist/game/CrossFloor');
+    t.mock.method(CrossFloor, 'visibleOnPlane', (viewer, target) => target <= viewer);
     t.mock.method(PluginManager, 'getPluginConfig', () => undefined);
     t.mock.method(PluginManager, 'emitCustomEvent', () => {});
 
     const makePile = (position) => ({
         getItem: () => ({ getId: () => 995, getAmount: () => 10 }),
+        getPickupItem() { return this.getItem(); },
         getPosition: () => position,
         getPrivateArea: () => null,
         getState: () => undefined,

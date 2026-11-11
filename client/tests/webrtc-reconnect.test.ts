@@ -40,7 +40,44 @@ async function reconnects(code: number, responses: object[]): Promise<{ schedule
 const ok = { success: true, loginToken: "token" };
 const refused = { success: false, error: "Your account is already logged in.", errorCode: 5 };
 
+/** Closes a socket that never opened, as a retry against an unreachable server does (code 1006). */
+function failedRetry(): { scheduled: boolean; failed: boolean } {
+    const ws = new EventTarget() as any;
+    ws.readyState = WebSocket.CLOSED;
+    ws.send = () => {};
+    ws.close = () => {};
+    state.socket = ws;
+    state.reconnectTimer = null;
+    let failed = false;
+    const onFailed = () => { failed = true; };
+    state.reconnectFailedListeners.add(onFailed);
+    initSocketCloseHandler(ws, () => {});
+    ws.dispatchEvent(Object.assign(new Event("close"), { code: 1006, reason: "", wasClean: false }));
+    const scheduled = state.reconnectTimer !== null;
+    if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+    state.reconnectFailedListeners.delete(onFailed);
+    return { scheduled, failed };
+}
+
 async function main(): Promise<void> {
+    // Issue 4241: a drop (1006) retries three times, even when the retries never open.
+    await reconnects(1006, [ok]);
+    state.reconnectAttempts = 0;
+    state.hasLoggedIn = true;
+    state.isReconnecting = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        const retry = failedRetry();
+        assert.equal(retry.scheduled, true, `drop ${attempt} schedules a retry`);
+        assert.equal(retry.failed, false, `drop ${attempt} keeps the player in game`);
+    }
+    const exhausted = failedRetry();
+    assert.equal(exhausted.scheduled, false, "after three retries it gives up");
+    assert.equal(exhausted.failed, true, "and returns to the login screen");
+    state.reconnectAttempts = 0;
+    state.isReconnecting = false;
+
+
     const firstLogin = await reconnects(4000, []);
     assert.equal(firstLogin.sent, 1, "the login went out on the open socket");
     assert.equal(firstLogin.scheduled, false, "a first login that fails to connect stays on the login screen");

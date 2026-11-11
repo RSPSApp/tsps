@@ -223,7 +223,7 @@ const declared = declarations();
 
 test('the scanner finds the reads it should (guards against matching nothing)', () => {
   const keys = new Set(reads.filter((r) => r.key).map((r) => r.key));
-  for (const key of ['Prayer:sequentialBurying', 'league:type', 'commands:permissions', 'CrossFloor:visibility', 'DisplayName:holdDays']) {
+  for (const key of ['Prayer:sequentialBurying', 'league:type', 'commands:permissions', 'CrossFloor:combat', 'DisplayName:holdDays']) {
     assert.ok(keys.has(key), `scanner missed ${key}`);
   }
   assert.ok(keys.size >= 25, `only ${keys.size} keys found`);

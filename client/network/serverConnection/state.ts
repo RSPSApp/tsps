@@ -6,7 +6,7 @@ import type { PlayerSyncFrame } from "../../game/sync/PlayerSyncTypes";
 import type { ProjectileLaunch } from "../../common/projectiles/ProjectileLaunch";
 import { CombatStateStore } from "../combat/CombatStateStore";
 import type { GameSocket, WebRtcConnectionConfig } from "./connection/GameSocket";
-import { DEFAULT_URL } from "./constants";
+import { DEFAULT_URL, RECONNECT_DELAY_INITIAL_MS } from "./constants";
 import {
     createDefaultShopState,
     createDefaultSmithingState,
@@ -74,7 +74,7 @@ export const state = {
     webRtcConfig: undefined as WebRtcConnectionConfig | undefined,
     reconnectTimer: null as ReturnType<typeof setTimeout> | null,
     lastKeepaliveAt: 0,
-    reconnectDelayMs: 250,
+    reconnectDelayMs: RECONNECT_DELAY_INITIAL_MS,
     reconnectAttempts: 0,
     isReconnecting: false,
     loginConnectRetryTimer: null as ReturnType<typeof setTimeout> | null,

@@ -2888,6 +2888,91 @@ test("clicking another loc from the helm leaves it and stops the boat; the sail 
   }
 });
 
+const { VARBIT, MOVE_MODE, HELM_STATUS } = require("../plugins/skills/sailing/SailingContent.Sailing");
+
+test("All Settings 461: leaving the helm stops the boat unless the row is unticked (18135 = 1)", () => {
+  for (const [disabled, mode] of [[0, BoatMoveMode.Stopped], [1, BoatMoveMode.Full]]) {
+    const h = facilityAtSea("skiff", "Wind catcher");
+    const helm = registerPlugin("Helm.plugin");
+    try {
+      h.log.varbits.set(18135, disabled);
+      helm.objects.Helm.Navigate({ player: h.player });
+      h.player.getPacketSender().sendVarbit(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.FULL);
+      h.boat.moveMode = BoatMoveMode.Full;
+      helm.objects.Helm["Stop-navigating"]({ player: h.player });
+      assert.equal(h.boat.helmPlayerId, undefined, `the helm is free (${disabled})`);
+      assert.equal(h.boat.moveMode, mode, `the boat's move mode (${disabled})`);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), disabled ? MOVE_MODE.FULL : MOVE_MODE.STOPPED);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+      assert.equal(h.log.varbits.get(VARBIT.FACILITY_LOCKEDIN), 0);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_HELM_STATUS), HELM_STATUS.FREE);
+      // Taking the helm and letting go without setting sail still stops (moored -> stopped).
+      helm.objects.Helm.Navigate({ player: h.player });
+      h.boat.moveMode = BoatMoveMode.Stopped;
+      h.player.getPacketSender().sendVarbit(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.MOORED);
+      helm.objects.Helm["Stop-navigating"]({ player: h.player });
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), MOVE_MODE.STOPPED, `at rest (${disabled})`);
+    } finally {
+      h.done();
+    }
+  }
+});
+
+test("All Settings 462: a heading starts the boat the first time only, always, or never (18136)", () => {
+  const { raiseSailForHeading } = require("../plugins/skills/sailing/Helm.plugin");
+  const cases = [
+    // option, move mode before -> raised to full sail?
+    [0, MOVE_MODE.MOORED, true], [0, MOVE_MODE.STOPPED, false],
+    [1, MOVE_MODE.MOORED, true], [1, MOVE_MODE.STOPPED, true],
+    [2, MOVE_MODE.MOORED, false], [2, MOVE_MODE.STOPPED, false],
+  ];
+  for (const [option, before, raised] of cases) {
+    const h = facilityAtSea("skiff", "Wind catcher");
+    registerPlugin("Helm.plugin");
+    try {
+      h.log.varbits.set(18136, option);
+      h.log.varbits.set(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, before);
+      raiseSailForHeading(h.player, h.boat);
+      assert.equal(h.boat.moveMode, raised ? BoatMoveMode.Full : BoatMoveMode.Stopped, `option ${option} from ${before}`);
+      assert.equal(h.log.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), raised ? MOVE_MODE.FULL : before);
+    } finally {
+      h.done();
+    }
+  }
+});
+
+test("All Settings 501: the Special Attack orb releases a wind mote at the helm (rsprox), unless unticked (11624 = 1)", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const orb = CacheDefinitions.getComponentId("orbs:specbutton");
+  for (const disabled of [0, 1]) {
+    const h = facilityAtSea("skiff", "Wind catcher", (owned) => {
+      owned.windCatcherOn = true;
+      owned.windMotes = 2;
+    });
+    const helm = registerPlugin("Helm.plugin");
+    const orbClick = (buttonNum = 1) => {
+      const event = { player: h.player, packet: { widgetId: orb, buttonNum }, handled: false };
+      helm.events["player:widget-action"](event);
+      return event.handled;
+    };
+    try {
+      helm.events["sailing:boarded"]({ player: h.player, boat: h.boat, owned: h.owned });
+      assert.equal(h.log.varbits.get(11629), 2, "the wind catcher's capacity goes out on boarding");
+      h.log.varbits.set(11624, disabled);
+      assert.equal(orbClick(), false, "away from the helm the orb is the special attack");
+      helm.objects.Helm.Navigate({ player: h.player });
+      assert.equal(orbClick(2), false, "op2 is the offhand special attack");
+      assert.equal(orbClick(), disabled === 0, `at the helm (${disabled})`);
+      assert.equal(h.owned.windMotes, disabled ? 2 : 1);
+      if (!disabled) assert.equal(h.player.messages.at(-1), "You release the wind mote for a burst of speed!");
+      helm.events["sailing:left"]({ player: h.player, boat: h.boat, reason: "disembark" });
+      assert.equal(h.log.varbits.get(11629), 0, "and back to 0 on leaving");
+    } finally {
+      h.done();
+    }
+  }
+});
+
 test("::maxboat presets fill every hotspot with a facility it allows, the best parts, and their caps", () => {
   const { _test } = require("../plugins/skills/sailing/SailingCommands.plugin");
   const { hotspotsOf } = require("../plugins/skills/sailing/BoatFacilities.Sailing");

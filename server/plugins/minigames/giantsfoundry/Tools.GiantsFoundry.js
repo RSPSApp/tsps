@@ -4,9 +4,14 @@
  * Working the preform on the trip hammer, grindstone and polishing wheel.
  *
  * rsprox captures (all four recordings), per machine tick:
- * - Trip hammer: every 5th tick, completion +20 and temperature -25, synth 5601.
+ * - Trip hammer: every 5th tick, completion +20 and temperature -25, synth 5601. Its ticks are the
+ *   room's own hammer cycle (every tick whose count is a multiple of 5), not five ticks from the
+ *   click: recording 101's hits all land on ticks 94, 99, 104, 109, 114, 209, 214, 354, 359, 364
+ *   (every one a multiple of 5 plus 4) however long the player had been swinging.
  * - Grindstone: every 2nd tick, completion +10 and temperature +15, synth 5604.
  * - Polishing wheel: every 2nd tick, completion +10 and temperature -17, synth 5608.
+ *   These two count from the click instead (recording 101: the grindstone works on even ticks in
+ *   one stretch and odd ticks in the next, so the phase follows the player, not the room).
  * - The player lifts the preform (human_preform_lift_start/_start02, then the loop every tick).
  * - A tick that damages the preform (the stage needs another tool, or the preform is outside
  *   the tool's heat zone) makes no progress, costs 5 quality and plays synth 2724.
@@ -29,7 +34,7 @@ const TOOL = { HAMMER: 0, GRIND: 1, POLISH: 2 };
 
 const TOOLS = [
   {
-    tool: TOOL.HAMMER, object: Shared.OBJECT.TRIP_HAMMER, period: 5, progress: 20, heat: -25,
+    tool: TOOL.HAMMER, object: Shared.OBJECT.TRIP_HAMMER, cycle: Shared.HAMMER_PERIOD, progress: 20, heat: -25,
     sound: 5601, animStart: 9453, animLoop: 9455, xp: 4.5, uniformBonus: 1, step: "hammered",
   },
   {
@@ -274,7 +279,17 @@ function usePolishingWheel({ player }) {
   return useTool(player, TOOL.POLISH);
 }
 
-function tick(player) {
+/**
+ * Whether the machine works this tick: the trip hammer with the room's hammer, so its progress
+ * and XP land on the tick the hammer comes down, the grindstone and polishing wheel every
+ * `period` ticks from the click.
+ */
+function due(state, now) {
+  const spec = TOOLS[state.tool];
+  return spec.cycle ? now % spec.cycle === 0 : state.sinceAction >= spec.period;
+}
+
+function tick(player, now) {
   const state = Shared.workOf(player);
   if (!state || state.kind !== "tool") return;
   if (!Shared.wornPreform(player) || !player.getLocation().equals(state.origin)) {
@@ -286,7 +301,7 @@ function tick(player) {
   state.sinceAction++;
   Shared.animate(player, spec.animLoop);
   if (state.sweet && state.ticks - state.sweet.openedAt >= SWEET_SPOT_TICKS) closeSweetSpot(player, state);
-  if (state.sinceAction >= spec.period) {
+  if (due(state, now)) {
     state.sinceAction = 0;
     machineTick(player, state);
   }
@@ -308,5 +323,5 @@ module.exports = function attachTools(api) {
 
 Object.assign(module.exports, {
   TOOL, TOOLS, stageCount, stageOf, stageTool, heatZone, inZone, sweetSpotCount, planSweetSpots,
-  resetPreform, MESSAGE, DAMAGE,
+  resetPreform, due, MESSAGE, DAMAGE,
 });

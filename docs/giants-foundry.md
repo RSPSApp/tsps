@@ -24,6 +24,7 @@ All four recordings with foundry play were made on Leagues V worlds (rev 227): 9
 
 **Changes outside the plugin:**
 - **Kovac** is `kovac_multi` (11560) in `npc-spawns.json`, at the captured tile (3369, 11486) facing north-west. The cache resolves it from varbit 13902: 11470 (Talk-to only) until the quest reads 30, then 11472 with Hand-in, Commission and Shop.
+- **The surface Hill Giant** (11467, Kovac in disguise, "Strike") is no longer a world spawn: he is the player's own (owner-only) copy while their quest is unstarted, and he is gone once the intro walks him into the foundry with the player (the cutscene step), never restored for a started quest. `npc-spawn-sync.json` records the skip so a sync run does not put him back.
 - **`npc-dialogues.json`**: "Transcript:Kovac"'s plain "I'm not sure what something does." option is now conditioned on having no commission (id `Gf7nCm`). The live menu with a commission shows only the ", can you help me?" form (recording 565).
 - **Sleeping Giants** makes its tutorial sword on this plugin's crucible, jig, tools and HUD.
   - It hands out the Flat Broad commission through `giants-foundry:start-commission` (`{ player, words, tutorial }`); a tutorial preform's stages are trip hammer, grindstone, polishing wheel.
@@ -167,9 +168,15 @@ The client draws everything from varbits; the server keeps them right.
 
 | Machine | Every | Completion | Temperature | Sound | Animation |
 | --- | --- | --- | --- | --- | --- |
-| Trip hammer | 5th tick | +20 | −25 | 5601 | `human_preform_lift_start02`, then `_loop02` every tick |
+| Trip hammer | the room's hammer (5th tick) | +20 | −25 | 5601 | `human_preform_lift_start02`, then `_loop02` every tick |
 | Grindstone | 2nd tick | +10 | +15 | 5604 | `human_preform_lift_start`, then `_loop` |
 | Polishing wheel | 2nd tick | +10 | −17 | 5608 | the same |
+
+- The trip hammer works on the room's own hammer cycle, not five ticks from the click, so the
+  progress and XP land on the tick the hammer comes down (recording 101: hits on ticks 94, 99,
+  104, 109, 114, 209, 214, 354, 359, 364, all the same tick of the cycle, whichever tick the
+  player started on). The grindstone and polishing wheel count from the click instead: recording
+  101 has them on even ticks in one stretch and odd ticks in the next.
 
 - The stage is script 6120's: completion × stages / 1000.
 - A machine tick damages the preform when the stage needs another tool, or when the temperature is outside the tool's 6121 zone. A damaging tick:

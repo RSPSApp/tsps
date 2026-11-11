@@ -12,6 +12,7 @@
     "6609": {"label": "Wilderness boss", "skip": true, "why": "Callisto spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6610": {"label": "Wilderness boss", "skip": true, "why": "Venenatis spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6611": {"label": "Wilderness boss", "skip": true, "why": "Vet'ion spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
+    "11467": {"label": "Spawned by a plugin", "skip": true, "why": "Kovac disguised as a Hill Giant on the Giants' Plateau: SleepingGiants.Quest.js spawns him per player while the quest is unstarted, then the intro takes him into the foundry with the player (issue 4270)."},
     "11992": {"label": "Wilderness boss", "skip": true, "why": "Artio spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "11993": {"label": "Wilderness boss", "skip": true, "why": "Calvar'ion spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "11998": {"label": "Wilderness boss", "skip": true, "why": "Spindel spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},

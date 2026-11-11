@@ -143,6 +143,12 @@ const ITEM = {
   BUCKET: 1925,
 };
 
+/**
+ * The trip hammer's fall, every fifth tick. The room plays it (Area) and the hammer's work tick
+ * rides the same cycle (Tools), so progress lands on the tick the hammer comes down.
+ */
+const HAMMER_PERIOD = 5;
+
 /** The room's machinery, heard and seen by everyone inside (rsprox captures). */
 const AMBIENT = {
   /** Every second tick. */
@@ -366,7 +372,7 @@ function wornPreform(player) {
 module.exports = {
   bind, core, api,
   STATE_ATTRIBUTE, REPUTATION_ATTRIBUTE, QUEST_KEY, ROOM, VARP, VARBIT, SYNCED_VARBITS,
-  INTERFACE, OVERLAY_HUD_UID, OBJECT, NPC, ITEM, AMBIENT,
+  INTERFACE, OVERLAY_HUD_UID, OBJECT, NPC, ITEM, AMBIENT, HAMMER_PERIOD,
   stateOf, get, set, field, setField, reputation, setReputation, sync,
   workOf, setWork, onTick, onStopWork, runTick, stopWork,
   questComplete, step, inRoom, tick, level, currentLevel, addXp, animate, sound, areaSound,

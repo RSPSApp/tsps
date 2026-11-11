@@ -12,6 +12,8 @@ const SpiritShields = require('../plugins/combat/effects/SpiritShields.Equipment
 const core = { ...PluginManager.getCoreApi() };
 let Method, spectralDrain;
 const namedHooks = new Map();
+const itemOnObject = [];
+const firstClicks = new Map();
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core.RegionManager.init();
@@ -20,6 +22,8 @@ before(async () => {
   Queen.register(new Proxy({ core, getTaskManager: () => core.TaskManager, getWorld: () => core.World,
     registerNpcCombatMethodProvider: (_ids, method) => { Method = method; },
     onObjectInteraction: (name, actions) => namedHooks.set(name, actions),
+    onItemOnObject: (handler) => itemOnObject.push(handler),
+    onObjectFirstClick: (id, handler) => firstClicks.set(id, handler),
   }, { get: (obj, key) => obj[key] ?? (() => {}) }));
 });
 function scene(t, { protect = true, roll = 31, prayer = 50, spectral = false, form = core.NpcIdentifiers.KALPHITE_QUEEN_2 } = {}) {
@@ -104,7 +108,8 @@ test('name-based rope handlers preserve destinations and yield unrelated ropes',
   climb({ player, object: { getId: () => 3829 } });
   climb({ player, object: { getId: () => 3832 } });
   assert.equal(climb({ player, object: { getId: () => -1 } }), false);
-  assert.deepEqual(destinations, [[3227, 3108, 0], [3508, 9494, 2]]);
+  // Live (rsprox 95, 545, 1757): the Queen's rope climbs to (3508, 9497, 2).
+  assert.deepEqual(destinations, [[3227, 3108, 0], [3508, 9497, 2]]);
   assert.equal(typeof core.TimedObjectReplacementTask, 'function');
 });
 
@@ -138,4 +143,57 @@ for (const type of ['RANGED', 'MAGIC']) test(`${type.toLowerCase()} hits land wi
   assert.equal(sent.length, 1);
   assert.equal(hit.getDelay(), Math.ceil(sent[0].speed / 30));
   assert.equal(hit.getDelay(), 3);
+});
+
+function ropeScene(t, objectId, { rope = true } = {}) {
+  const submitted = [];
+  t.mock.method(core.TaskManager, 'submit', task => submitted.push(task));
+  const moves = [];
+  const inventory = rope ? [core.ItemIdentifiers.ROPE] : [];
+  const player = {
+    moveTo: tile => moves.push([tile.getX(), tile.getY(), tile.getZ()]),
+    getInventory: () => ({
+      contains: id => inventory.includes(id),
+      delete: (id) => { const i = inventory.indexOf(id); if (i >= 0) inventory.splice(i, 1); },
+    }),
+  };
+  const tile = objectId === 3827 ? new core.Location(3227, 3108, 0) : new core.Location(3509, 9497, 2);
+  const object = new core.GameObject(objectId, tile, 10, objectId === 3827 ? 0 : 3, null);
+  const event = { player, object, item: new core.Item(core.ItemIdentifiers.ROPE) };
+  for (const handler of itemOnObject) handler(event);
+  return { event, moves, inventory, submitted };
+}
+
+// Live (rsprox 95, 96, 1757, 1864, 3276): a rope used on the Queen's tunnel, as the map places it
+// (multiloc 23609), is used up and ties on kalphite_chamber_entrance_withrope; nobody moves.
+for (const objectId of [23609, 19053]) test(`a rope on the Queen's tunnel ${objectId} ties on without moving the player`, t => {
+  const f = ropeScene(t, objectId);
+  assert.equal(f.event.handled, true);
+  assert.deepEqual(f.inventory, [], 'the rope is used up');
+  assert.deepEqual(f.moves, []);
+  assert.equal(f.submitted.length, 1);
+  const task = f.submitted[0];
+  assert.ok(task instanceof core.TimedObjectReplacementTask);
+  assert.equal(task.temp.getId(), 10230);
+  assert.ok(task.temp.getLocation().equals(new core.Location(3509, 9497, 2)));
+});
+
+test('the Queen\'s tunnel without a rope in the inventory is left alone', t => {
+  const f = ropeScene(t, 23609, { rope: false });
+  assert.notEqual(f.event.handled, true);
+  assert.deepEqual(f.submitted, []);
+});
+
+test('a rope on the surface tunnel still takes the player down to the lair', t => {
+  const f = ropeScene(t, 3827);
+  assert.equal(f.event.handled, true);
+  assert.deepEqual(f.moves, [[3483, 9510, 2]]);
+  assert.equal(f.submitted[0].temp.getId(), 3828);
+});
+
+test('climbing down the roped Queen\'s tunnel lands where live does', () => {
+  // Live (rsprox 95, 96, 545, 1757, 1864, 3276): Climb-down lands on (3508, 9493, 0).
+  const moves = [];
+  firstClicks.get(10230)({ player: { moveTo: tile => moves.push([tile.getX(), tile.getY(), tile.getZ()]) } });
+  assert.deepEqual(moves, [[3508, 9493, 0]]);
 });

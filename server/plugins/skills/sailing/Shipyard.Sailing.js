@@ -48,6 +48,12 @@ const MAIN_MODAL = (161 << 16) | 16;
 const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_CUSTOMISATION_INIT = 8809;
 const IF_EVENT_OP1 = 1 << 1;
+/**
+ * if_setevents IF_SCRIPT_TRIGGER (bit 23, as RSProx names it). The options get it with op 1, as
+ * captured: Build (script 8834) shows the loading spinner, then sends its if_triggeroplocal only
+ * if the option has this event, so without it the official client waits on the spinner forever.
+ */
+const IF_EVENT_SCRIPT_TRIGGER = 1 << 23;
 /** Ticks from a build's fade out to its fade in, as captured. */
 const REBUILD_FADE_TICKS = 4;
 /** How each part is named when swapped ("…you swap out the hull of your boat."). */
@@ -187,6 +193,9 @@ function openCustomisation(player, visit, hotspot, optionSlots) {
   if (!type) return;
   visit.hotspot = hotspot;
   const sender = player.getPacketSender();
+  // The parts open sets no mode (live leaves it at 0), so a facility mode still set would show
+  // the hotspot's options instead of the parts.
+  if (hotspot === undefined) clearFacilityMode(player);
   if (hotspot !== undefined) setVarbit(player, VARBIT_CUSTOMISATION_HOTSPOT, hotspot);
   sender.sendConfig(VARP_CUSTOMISATION_BOAT, type.sidepanelBoatType);
   if (hotspot !== undefined) setVarbit(player, VARBIT_CUSTOMISATION_TYPE, CUSTOMISATION_TYPE_FACILITY);
@@ -195,21 +204,34 @@ function openCustomisation(player, visit, hotspot, optionSlots) {
   player.setInterfaceId(CUSTOMISATION);
   sender.sendSubInterface(MAIN_MODAL, CUSTOMISATION, 0);
   sender.sendInterfaceScript(SCRIPT_CUSTOMISATION_INIT);
-  sender.sendInterfaceFlagsRange((CUSTOMISATION << 16) | CUSTOMISATION_OPTIONS, 0, optionSlots, IF_EVENT_OP1);
+  sender.sendInterfaceFlagsRange((CUSTOMISATION << 16) | CUSTOMISATION_OPTIONS, 0, optionSlots,
+    IF_EVENT_OP1 | IF_EVENT_SCRIPT_TRIGGER);
   sender.sendInterfaceScript(SCRIPT_CUSTOMISATION_INIT);
 }
 
-/** Closes the customisation interface, resetting what opening it set. */
-function closeCustomisation(player, visit) {
-  const sender = player.getPacketSender();
-  if (visit.hotspot !== undefined) {
-    setVarbit(player, VARBIT_CUSTOMISATION_TYPE, 0);
-    setVarbit(player, VARBIT_CUSTOMISATION_HOTSPOT, 0);
-  }
+/** Closes the customisation interface; `customisationClosed` resets what opening it set. */
+function closeCustomisation(player) {
+  player.getPacketSender().sendInterfaceRemoval();
+}
+
+/**
+ * The customisation interface gone by any route (a build, its close button, walking away): as
+ * captured, closing it resets 19523, 19524, 19525 and 5190.
+ */
+function customisationClosed({ player, interfaceId }) {
+  if (interfaceId !== CUSTOMISATION) return;
+  clearFacilityMode(player);
   setVarbit(player, VARBIT_CUSTOMISATION_SLOT, 0);
-  sender.sendConfig(VARP_CUSTOMISATION_BOAT, -1);
-  sender.sendInterfaceRemoval();
-  visit.hotspot = undefined;
+  player.getPacketSender().sendConfig(VARP_CUSTOMISATION_BOAT, -1);
+  const visit = visits.get(player);
+  if (visit) visit.hotspot = undefined;
+}
+
+/** Takes the customisation out of facility mode (19523 and 19524), if a hotspot's open set it. */
+function clearFacilityMode(player) {
+  if (player.getPacketSender().getVarbit(VARBIT_CUSTOMISATION_TYPE) === 0) return;
+  setVarbit(player, VARBIT_CUSTOMISATION_TYPE, 0);
+  setVarbit(player, VARBIT_CUSTOMISATION_HOTSPOT, 0);
 }
 
 /** The Build trigger's argument: the option's db row, as our client sends an int (zigzag varint). */
@@ -238,29 +260,29 @@ function refusal(player, requirements) {
   return null;
 }
 
-/** Builds the chosen option on the boat: its part becomes that tier. */
+/** Builds the chosen option on the boat: its part becomes that tier. False if it's refused. */
 function build(player, optionRow) {
   const visit = visits.get(player);
   const boat = visit && ownedBoat(player, visit.slot);
   const option = boat && parts.optionFor(boat, optionRow);
-  if (!option) return;
+  if (!option) return false;
   const schematic = { player, row: optionRow, allow: null };
   pluginApi.emitCustomEvent("sailing:schematic-can-build", schematic);
-  if (schematic.allow === false) return;
+  if (schematic.allow === false) return false;
   if ((boat.parts?.[option.part] ?? 0) === option.tier) {
     player.sendMessage("Your boat already has that.");
-    return;
+    return false;
   }
   const requirements = parts.requirementsOf(option.part, optionRow);
   const refused = refusal(player, requirements);
   if (refused) {
     player.sendMessage(refused);
-    return;
+    return false;
   }
   for (const [item, count] of requirements.materials) player.getInventory().delete(item, count);
   boat.parts = { ...boat.parts, [option.part]: option.tier };
   player.getSkillManager().addExperience(Skill.CONSTRUCTION, parts.constructionXp(boat.type, option.part, option.tier), true);
-  closeCustomisation(player, visit);
+  closeCustomisation(player);
   // As captured: the message shows while the screen fades and the boat is rebuilt, and can be
   // continued once it fades back in.
   const message = `With the help of some workers, you swap out the ${PART_NAMES[option.part]} of your boat.`;
@@ -274,6 +296,7 @@ function build(player, optionRow) {
       new EndDialogue(1),
     ));
   });
+  return true;
 }
 
 /** A Build in the parts customisation (facility builds are ShipyardFacilities.Sailing.js's). */
@@ -281,11 +304,24 @@ function clickCustomisation(event) {
   if (!isBuildTrigger(event) || visits.get(event.player)?.hotspot !== undefined) return;
   event.handled = true;
   const optionRow = readOptionRow(event.argsData);
-  if (optionRow !== undefined) build(event.player, optionRow);
+  if (optionRow === undefined || !build(event.player, optionRow)) refreshCustomisation(event.player);
 }
 
+/**
+ * Script 8834's Build trigger, while the customisation is still open. One that arrives after 939
+ * closed (Build clicked, then walking off) builds nothing.
+ */
 function isBuildTrigger(event) {
-  return event.groupId === CUSTOMISATION && event.childId === CUSTOMISATION_OPTIONS && event.scriptTrigger === true;
+  return event.groupId === CUSTOMISATION && event.childId === CUSTOMISATION_OPTIONS && event.scriptTrigger === true
+    && event.player.getInterfaceId() === CUSTOMISATION;
+}
+
+/**
+ * Redraws the open customisation after a refused Build: Build's spinner (939:23) stays up until
+ * 939 closes or 8811 redraws it, and the init (8809) runs 8811, keeping the selected tab.
+ */
+function refreshCustomisation(player) {
+  player.getPacketSender().sendInterfaceScript(SCRIPT_CUSTOMISATION_INIT);
 }
 
 function atGangplank(location) {
@@ -384,6 +420,7 @@ module.exports = {
   ownedBoat,
   openCustomisation,
   closeCustomisation,
+  refreshCustomisation,
   isBuildTrigger,
   refusal,
   register(api) {
@@ -397,6 +434,7 @@ module.exports = {
     api.onObjectInteraction("Shipyard Portal", { Exit: exitShipyard });
     api.onObjectInteraction("Gangplank", { Board: boardShipyardBoat, Disembark: disembarkShipyardBoat });
     api.onInterfaceActionClick(clickCustomisation);
+    api.onCustomEvent("interface:closed", customisationClosed);
     api.onPlayerLogout(forgetVisit);
     api.onPlayerLogin(returnFromShipyard);
     Mobile.onBeforeTeleport(leaveOnMove);

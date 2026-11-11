@@ -17,6 +17,7 @@ const {
   ownedBoat,
   openCustomisation,
   closeCustomisation,
+  refreshCustomisation,
   isBuildTrigger,
   refusal,
   readOptionRow,
@@ -77,35 +78,39 @@ function buildFacility(event) {
   const visit = aboardVisit(event.player);
   if (!isBuildTrigger(event) || visit?.hotspot === undefined) return;
   event.handled = true;
-  const { player } = event;
+  if (!buildOnHotspot(event.player, visit, readOptionRow(event.argsData))) refreshCustomisation(event.player);
+}
+
+/** Builds `facility` on the hotspot the customisation is open on. False if it's refused. */
+function buildOnHotspot(player, visit, facility) {
   const boat = ownedBoat(player, visit.slot);
-  const facility = readOptionRow(event.argsData);
   const hotspot = visit.hotspot;
-  if (!boat || facility === undefined || !facilities.allows(boat, hotspot, facility)) return;
+  if (!boat || facility === undefined || !facilities.allows(boat, hotspot, facility)) return false;
   const schematic = { player, row: facility, allow: null };
   pluginApi.emitCustomEvent("sailing:schematic-can-build", schematic);
-  if (schematic.allow === false) return;
+  if (schematic.allow === false) return false;
   if (facilities.facilityAt(boat, hotspot) === facility) {
     player.sendMessage("Your boat already has that.");
-    return;
+    return false;
   }
   const requirements = facilities.facilityRequirements(facility);
   const refused = refusal(player, requirements);
   if (refused) {
     player.sendMessage(refused);
-    return;
+    return false;
   }
-  if (!cargoFitsAfter(player, boat, hotspot, facility)) return;
+  if (!cargoFitsAfter(player, boat, hotspot, facility)) return false;
   // A catcher's captured wind mote is needed, not used up (Wiki).
   for (const [item, count] of requirements.materials) {
     if (item !== CAPTURED_WIND_MOTE) player.getInventory().delete(item, count);
   }
   facilities.setFacility(boat, hotspot, facility);
-  closeCustomisation(player, visit);
+  closeCustomisation(player);
   player.performAnimation(new Animation(SEQ_BUILD));
   playSound(player, SOUND_BUILD);
   showHotspot(player, visit, boat, hotspot);
   pluginApi.emitCustomEvent("sailing:facility-built", { player, boat, hotspot, facility });
+  return true;
 }
 
 /** A built facility's Modify, aboard in the shipyard: remove it, replace it, or leave it. */

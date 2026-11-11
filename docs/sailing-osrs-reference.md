@@ -288,12 +288,14 @@ From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind
 **Boat schematics (59718) "Modify":**
 1. Varp 5190 is set to the boat type's row (8110-8112), and varbit 19525 to the boat's slot + 1.
 2. Script 2524 `[-1, -3]`, then interface **939** opens as the main modal. Script 8809 initialises it.
-3. 939:17 gets slots 0-50 with op 1 and script triggers.
+3. 939:17 gets slots 0-50 with op 1 and script triggers (`IF_SCRIPT_TRIGGER`, bit 23). The official client needs that event: without it, Build shows its spinner and never sends the trigger (see Build).
 4. Each option's preview is the part's **loc**. Script 8825 takes the loc id from the option's db row (script 9075, default 59660), its animation (9077) and its angle (9076), and passes the loc id to opcode 1214 (`cc_setmodel_loc`, model type 8). The client draws that loc's centrepiece model (shape 10) and never treats the id as a model id.
    - The angles come from table 188: the part's angles row (column 4 of its hull/keel/… row) holds `[boat size, offsetX, offsetY, xan, yan, zan, zoom]` tuples, and 9076 picks the one for the boat type's size (table 166 column 0). The skiff's hull is (-10, 0, 130, 1950, 0, 5000).
    - 9076 reads those tuples one value at a time: a packed db field's low 4 bits select one tuple element (1-based; 0 is the whole tuple).
 
-**Build:** script 8834 calls `if_triggeroplocal` on 939:17 with the option row as one int argument.
+**Build:** script 8834 shows the loading spinner (939:23, script 7137), then calls `if_triggeroplocal` on 939:17 with the option row as one int argument.
+- Only script 8811 (939's init and refresh) hides the spinner again, so the server closes or refreshes 939 after every Build.
+- The official client (RuneLite) sends the trigger (`IF_SCRIPT_TRIGGER`) only if the option has the script-trigger event. With op 1 alone, the spinner stayed up and nothing reached the server. The tsps browser client sends the trigger without checking the event.
 - The live packet carried `A6 81 01 00`: a zigzag varint of row **8275**, the skiff's camphor hull.
 - The server:
   1. takes the materials from the inventory;
@@ -556,7 +558,9 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
     - the raft's placeholder id (59661).
   - Guessed rather than captured:
     - the part names in the swap message ("mast and sails");
-    - the level, materials and "already has that" messages.
+    - the level, materials and "already has that" messages;
+    - after a refused Build (parts or a facility), the init (8809) runs again so Build's spinner goes, and 939 stays open. No capture has a refused Build;
+    - a Build that arrives after 939 has closed builds nothing.
   - Materials come from the inventory only.
 - **Ports**, guessed rather than captured:
   - Disembarking at a port's gangplank docks the boat there if it wasn't (the capture docked at the buoy first). It needs the port's level unless the boat is already docked there.

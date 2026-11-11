@@ -101,14 +101,17 @@ function restrictedItems(player) {
   return null;
 }
 
-/** The waiting-area barrier: in from the east, out (after asking) from the west. */
+/**
+ * The waiting-area barrier, in the east wall of the area: in from the east, and out (after asking)
+ * from inside, through the barrier's tile to the lobby side (227/00078: (2199,2841) to (2200,2842)).
+ */
 function barrier({ player, object }) {
   if (object?.getId() !== locId(WAITING_BARRIER)) return false;
   const [bx, by] = Common.data.lobby.barrier;
   if (waiting(player)) {
     Common.api.sendMultiChatboxPrompt(player, Common.message("leaveWaiting"),
       // The game can start while the question is open; Yes then must not walk them out of it.
-      "Yes.", () => { if (waiting(player)) player.moveTo(new Common.core.Location(bx, by, 0)); },
+      "Yes.", () => { if (waiting(player)) player.moveTo(new Common.core.Location(bx + 1, by, 0)); },
       "No.", () => {});
     return true;
   }

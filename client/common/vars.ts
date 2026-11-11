@@ -357,6 +357,9 @@ export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     // buff_league_relics_hidden (varbit 12383): the buff bar's relic op flips it here, and the
     // settings rows on this varp (the buff bar's) are flipped here before their click is sent.
     1734,
+    // The Minimenu settings (varbits 71, 11520-11533): the cache's scripts flip the rows and the
+    // spacing slider here, so the server saves them from the transmitted varp.
+    4503,
 ]);
 
 // ========== VARC (Client variables - not persisted) ==========

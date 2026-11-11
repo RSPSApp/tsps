@@ -141,9 +141,10 @@ const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 // The varps the browser client transmits whole when a row changes its varbit in the client: the
 // cache's toggle script (3965) flips Anti Drag (115), precise timing (82) and Esc closes (57)
 // there before the click is sent, and the buff bar's relic op (script 3231) flips Display Relics
-// (127) with no click at all. The rows saved from them are the settings.json rows on these varps;
-// other bits (the collection-log notifications on 2856) belong to their own plugins.
-const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856]);
+// (127) with no click at all. The Minimenu rows (4503) flip there too, and the spacing slider
+// changes its varbit with no click at all. The rows saved from them are the settings.json rows on
+// these varps; other bits (the collection-log notifications on 2856) belong to their own plugins.
+const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856, 4503]);
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
 /** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
 const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
@@ -206,6 +207,18 @@ const ALL_SETTINGS_VOLUME_VARPS = new Map([
 // "Reset volume sliders to default" (a button row): every slider back to a new account's 100.
 const RESET_VOLUME_SETTING = 468;
 const DEFAULT_VOLUME = 100;
+// Interfaces > Minimenu options: "Minimenu spacing value" (a number row) and "Reset minimenu
+// spacing" (a button row) set the spacing the slider row (393, varbit 11523) keeps, then run
+// script 7460, which clamps it to 0-100 and applies it in the client as the slider does.
+// Ours: the prompt's wording (no capture of it).
+const MINIMENU_SPACING_SETTING = 393;
+const MINIMENU_SPACING_VALUE_SETTING = 394;
+const RESET_MINIMENU_SPACING_SETTING = 395;
+const MINIMENU_SPACING_SCRIPT = 7460;
+const MAX_MINIMENU_SPACING = 100;
+const MINIMENU_SPACING_PROMPT = "Enter the minimenu spacing (0-100):";
+const FLOATER_CHATBOX_VARBIT = 16075;
+const CHATBOX_BUSY_VARBIT = 12393;
 
 const KEYBINDINGS_INTERFACE_ID = 121;
 const KEYBINDINGS_RESTORE_DEFAULTS = (KEYBINDINGS_INTERFACE_ID << 16) | 104;
@@ -810,6 +823,43 @@ function resetVolumeSliders(request) {
   }
 }
 
+/** The minimenu spacing set, saved with its slider row and applied in the client. */
+function setMinimenuSpacing(player, value) {
+  const spacing = Math.max(0, Math.min(MAX_MINIMENU_SPACING, Math.trunc(Number(value) || 0)));
+  setSettingVar(player, varKey(SETTINGS[MINIMENU_SPACING_SETTING]), spacing);
+  player.getPacketSender().sendClientScript(MINIMENU_SPACING_SCRIPT, spacing);
+}
+
+/** "Reset minimenu spacing" clicked: no spacing, as a new account starts. */
+function resetMinimenuSpacing(request) {
+  if (request.handled || request.settingId !== RESET_MINIMENU_SPACING_SETTING) return;
+  request.handled = true;
+  setMinimenuSpacing(request.player, 0);
+}
+
+/** "Minimenu spacing value" clicked: the spacing is asked for as a number. */
+function askMinimenuSpacing(request) {
+  if (request.handled || request.settingId !== MINIMENU_SPACING_VALUE_SETTING) return;
+  request.handled = true;
+  const { player } = request;
+  const sender = player.getPacketSender();
+  sender.sendVarbit(FLOATER_CHATBOX_VARBIT, 1);
+  sender.sendVarbit(CHATBOX_BUSY_VARBIT, 1);
+  const closed = () => {
+    sender.sendVarbit(FLOATER_CHATBOX_VARBIT, 0);
+    sender.sendVarbit(CHATBOX_BUSY_VARBIT, 0);
+  };
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute: (amount) => {
+      setMinimenuSpacing(player, amount);
+      closed();
+    },
+    cancel: closed,
+  });
+  sender.sendEnterAmountPrompt(MINIMENU_SPACING_PROMPT);
+}
+
 function enableVolumeSliders(player) {
   for (const slider of VOLUME_SLIDER_VARPS.keys()) player.getPacketSender?.()?.sendInterfaceFlagsRange?.(slider, -1, -1, TRANSMIT_TRIGGER);
 }
@@ -1035,6 +1085,8 @@ module.exports = {
     api.onCustomEvent("interface:closed", endSettingsSearch);
     api.onCustomEvent("settings:set", setSettingValue);
     api.onCustomEvent("settings:setting-clicked", resetVolumeSliders);
+    api.onCustomEvent("settings:setting-clicked", resetMinimenuSpacing);
+    api.onCustomEvent("settings:setting-clicked", askMinimenuSpacing);
     api.onCustomEvent("settings:setting-clicked", clickEscCloses);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);

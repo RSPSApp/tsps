@@ -255,6 +255,7 @@
     "462": { "name": "Start the boat when setting a heading", "varbit": 18136 },
     "463": { "name": "Port task cargo deposit warning", "varbit": 18137 },
     "464": { "name": "Show charting hints", "varbit": 18138 },
+    "465": { "name": "Drop item warnings on boats", "varbit": 18143 },
     "466": { "name": "Show boat customisation material messages", "varbit": 18140, "default": 1 },
     "467": { "name": "Port task cargo in hold warning", "varbit": 18144 },
     "469": { "name": "Ironman cargo hold warning", "varbit": 10385 },

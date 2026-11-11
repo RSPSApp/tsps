@@ -303,7 +303,8 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
 - **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`.
 - **Value warnings** (`ValueWarnings.plugin.js`, shared pieces in `ValueWarning.js`). An item's worth is the Grand Exchange guide price of the unnoted item times the quantity; an untradeable item is worth nothing. A warning shows when the worth is at least the threshold.
-  - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning`, so another drop warning (the boat row 465) can use the same check.
+  - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning` with the warnings already `answered`, so it and the boat warning (465) ask in turn.
+  - Drop item warnings on boats (465, `skills/sailing/DropWarning.plugin.js`): any item dropped on a boat's deck asks first, the captured message box "Are you sure you want to put that down? If you leave the boat, you may not be able to retrieve it." (also a mesbox chat line), then "Select an option": "Put it down.", "Put it down, and don't ask again." (sets varbit 18143 `settings_sailing_dropitem_warning` to 1, saved as the row), "Put it down, and don't ask again this session." (varbit 19114 `sailing_dropitem_warning_temp`, until logout) and "Don't drop it." (rsprox 901, 3792). The row is ticked while 18143 is 0 (struct param 1084), the default; captured logins that send 1 are players who turned it off.
   - Alchemy (65, 66): "That item is considered valuable. Really cast High Level Alchemy on it?" (rsprox 338), with the untradeable confirm's options. Untradeable items warn while 65 is on (varbit 6092 `alchemy_warning_untradeables`, 1 in 2,664 of 3,978 captured logins). Core emits `magic:alchemy-warning`.
   - Loot drop notifications (38-40): each stack an NPC drops for the player, from `npc-drops:roll`: `<col=ef1020>Valuable drop: 3 x Spider cave teleport (108,567 coins)</col>` and `<col=ef1020>Untradeable drop: Brimstone key</col>` (rsprox 788, 806 and others). Clicking 40 while 38 is off gives the row's own cache line instead.
   - Grand Exchange (297, 298): a buy offer more than 10 times the guide price, or a sell offer under 10% of it (the rows' cache text), asks before it is placed. The varbits are `option_ge_price_buy/sell_warning_disabled` (14700/14701): 1 turns the warning off (the rows' structs have param 1084, ticked while the varbit is 0), so the captured default leaves the buy warning off and the sell warning on.
@@ -311,7 +312,7 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
   - Cannon (248-250): a popup when the cannon is down to the amount (varbit 14176) or empty; the red "Your cannon is out of ammo." chat line is always sent.
   - Ours, with no capture: the number prompts for 39, 43, 249 and 449 (worded after the Alchemy one), the Grand Exchange, birdhouse and cannon wording, and that a threshold of 0 never warns.
 - **Not done**:
-  - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
+  - The respawn timer dropdowns (187, 188).
   - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
 
 ## Wilderness teleport warnings
@@ -350,7 +351,6 @@ Each row is a toggle in `data/settings.json`, read when its dialogue or message 
 - **Not done**:
   - The boat teleport warning for tablets, jewellery and other non-spell teleports; the row's description names teleport spells.
   - Port task cargo deposit (463), port task cargo in hold (467) and Ironman cargo hold (469) warnings: no capture or Wiki text of any of them. 469's varbit (10385) is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
-  - The Sailing drop-item warning (465), which builds on the drop warning (42/43).
 
 ## Rows that switch existing behaviour
 

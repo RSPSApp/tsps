@@ -47,7 +47,7 @@ jobs:
             - name: Test cache publishing
               run: |
                   node --test tsps/server/tests/ensure-cache.test.cjs
-                  node --test tsps/.github/scripts/ftp-upload.test.mjs tsps/.github/scripts/web-deploy.test.mjs
+                  node --test tsps/.github/scripts/ftp-upload.test.mjs tsps/.github/scripts/web-deploy.test.mjs tsps/.github/scripts/prune-web-deploy.test.mjs
             - name: Build host
               working-directory: rsps-website/host
               run: |

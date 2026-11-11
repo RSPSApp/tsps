@@ -11,9 +11,15 @@ const ITEMS_KEPT_SETTINGS_COMPONENT = (ITEMS_KEPT_ON_DEATH_INTERFACE_ID << 16) |
 const DEATH_ITEMS_INVENTORY_ID = 584;
 const DEATH_ITEM_STATE_INVENTORY_ID = 468;
 const DEATH_INVENTORY_CAPACITY = 50;
-// Clientscript 974 uses these otherwise unrelated object IDs as item-state markers.
+// Clientscript 974 uses these otherwise unrelated object IDs as item-state markers: kept;
+// to the gravestone, with the item's grave fee plus one as the count; lost to the killer, or
+// dropped where the player dies; and deleted (any other marker).
 const KEPT_ITEM_STATE = 323;
+const GRAVE_ITEM_STATE = 367;
 const LOST_ITEM_STATE = 1991;
+const DELETED_ITEM_STATE = 368;
+// Wiki: Items Kept on Death: the looting bag "disappears completely"; its contents drop.
+const LOOTING_BAG = "Looting bag";
 const previewSettings = new WeakMap();
 
 function getSettings(player) {
@@ -48,6 +54,19 @@ function getKeptItems(player, settings) {
   return core.PlayerDeathTask.getKeptItems(player, getAmountToKeep(player, settings), cosmetics);
 }
 
+function graveFee(player, item) {
+  const query = { player, items: [{ id: item.getId(), amount: item.getAmount() }], fee: 0 };
+  pluginApi.emitCustomEvent("gravestones:fee", query);
+  return Math.max(0, Number(query.fee) || 0);
+}
+
+function itemState(player, item, lostOnDeath, makesGrave) {
+  if (item.getDefinition().getName() === LOOTING_BAG) return { itemId: DELETED_ITEM_STATE, quantity: 1 };
+  if (!lostOnDeath) return { itemId: KEPT_ITEM_STATE, quantity: 1 };
+  if (makesGrave) return { itemId: GRAVE_ITEM_STATE, quantity: 1 + graveFee(player, item) };
+  return { itemId: LOST_ITEM_STATE, quantity: 1 };
+}
+
 function getDeathItems(player, toKeep, settings, cosmetic = []) {
   const kept = new Set(toKeep);
   const protectedItems = new Set(cosmetic);
@@ -72,11 +91,7 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
       itemId: item.getId(),
       quantity: item.getAmount(),
     });
-    states.push({
-      slot: states.length,
-      itemId: lostOnDeath ? LOST_ITEM_STATE : KEPT_ITEM_STATE,
-      quantity: 1,
-    });
+    states.push({ slot: states.length, ...itemState(player, item, lostOnDeath, grave.makesGrave) });
 
     if (tradeable && lostOnDeath) {
       const value = Math.max(0, Number(core.PlayerDeathTask.keepValue(item)) || 0);

@@ -198,6 +198,21 @@ const CASES = [
     give: (f) => { questComplete(["while_guthix_sleeps"]); return give(f, 29684, 2); }, start: (f, id) => use(f, id, "Teleport"),
   },
   {
+    name: "the escape crystal's Teleport (where it works: a Hardcore World)", give: (f) => {
+      escapeAnywhere();
+      return give(f, require("../plugins/items/escapecrystal/Common.EscapeCrystal").crystalId());
+    },
+    start: (f, id) => use(f, id, "Teleport"),
+    went: (f) => f.p.getLocation().getX() !== START[0],
+  },
+  {
+    name: "a league relic's teleport item (the relics' shared teleport, using up what it spends as it starts)",
+    give: (f) => give(f, I.COINS, 1),
+    start: (f) => require("../plugins/modes/leaguerelics/Teleports.LeagueRelics").go(f.p, "boat-warning",
+      { label: "Lumbridge", location: new core.Location(3222, 3218, 0), remember: false },
+      { onStart: () => f.p.getInventory().deleteNumber(I.COINS, 1) }),
+  },
+  {
     name: "a Lunar teleport spell", give: (f) => {
       questComplete(["lunar_diplomacy", "dream_mentor"]);
       return caster(f, core.MagicSpellbook.LUNAR, [[9075, 10], [563, 10], [557, 10], [555, 10], [554, 10]]);
@@ -213,6 +228,14 @@ const CASES = [
     went: (f) => { settle(40); return f.p.getLocation().getX() !== START[0]; },
   },
 ];
+
+let anywhere = false;
+/** The escape crystal works anywhere a teleport is allowed, as on a Hardcore World. */
+function escapeAnywhere() {
+  if (anywhere) return;
+  anywhere = true;
+  PM.createApi("BoatTeleportWarningEscape").onCustomEvent("escape-crystal:anywhere", (query) => { query.allowed = true; });
+}
 
 function give(f, itemId, amount = 1) {
   f.p.getInventory().add(new core.Item(itemId, amount), false);
@@ -308,4 +331,14 @@ test("a Lunar group teleport asks a passenger aboard their own boat before takin
   assert.equal(pending(passenger)?.title, TeleportWarning.QUESTION);
   choose(passenger, 1);
   assert.equal(passenger.teleports.length, 1);
+});
+
+test("the escape crystal's Auto-afk and ring of life still save the player at once, aboard with the warning on", (t) => {
+  const f = actor(t);
+  escapeAnywhere();
+  const Activation = require("../plugins/items/escapecrystal/Activation.EscapeCrystal");
+  give(f, require("../plugins/items/escapecrystal/Common.EscapeCrystal").crystalId());
+  assert.equal(Activation.activate(f.p, "ring", 10), true);
+  assert.notEqual(pending(f)?.title, TeleportWarning.QUESTION);
+  assert.notEqual(f.p.getLocation().getX(), START[0], "saved at once");
 });

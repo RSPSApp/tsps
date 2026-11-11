@@ -107,8 +107,10 @@ function leagueCast(player) {
  * destination that needs its own arrival, the house). `onArrival` runs after. With `cast` true, the
  * league's area-teleport cast plays (interrupted as a home teleport is) where the league has one; a
  * cast definition ({ steps, lockTick, landTick }, an item's own recorded cast) plays instead.
+ * Content may ask first (TeleportHandler.confirm: the boat-at-sea warning): `onStart` runs as the
+ * teleport starts (an item used up), not when it is only asked. True once the checks pass.
  */
-function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null, cast = false } = {}) {
+function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null, cast = false, onStart = null } = {}) {
   const { TeleportHandler, TeleportType } = Common.core;
   const location = landing(destination.location);
   if (!areaOpen(player, location)) {
@@ -126,8 +128,11 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
     onArrival?.();
   };
   const definition = cast === true ? leagueCast(player) : cast || null;
-  if (definition) startHomeTeleport(Common.core, player, location, arrived, castOf(definition));
-  else TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, arrived);
+  TeleportHandler.confirm(player, location, () => {
+    onStart?.();
+    if (definition) startHomeTeleport(Common.core, player, location, arrived, castOf(definition));
+    else TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, arrived);
+  }, limit);
   return true;
 }
 
@@ -347,10 +352,10 @@ function areaTeleports({ key, title, areaTitle = (name) => name, areas, cast = t
       return false;
     }
     const location = new Common.core.Location(destination.x, destination.y, destination.z ?? 0);
-    const went = go(player, key, { label: destination.name, location }, { cast });
     // The varp holds the tile as live packs one: plane << 28 | x << 14 | y.
-    if (went && lastVarp !== null) player.getPacketSender().sendConfig(lastVarp, ((location.getZ() << 28) | (location.getX() << 14) | location.getY()) >>> 0);
-    return went;
+    const remember = () => lastVarp !== null
+      && player.getPacketSender().sendConfig(lastVarp, ((location.getZ() << 28) | (location.getX() << 14) | location.getY()) >>> 0);
+    return go(player, key, { label: destination.name, location }, { cast, onStart: remember });
   }
 
   function regionMenu(player) {

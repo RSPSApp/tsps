@@ -65,11 +65,21 @@ function saved(player, cause) {
   Common.api().emitCustomEvent("escape-crystal:escaped", { player, cause });
 }
 
-/** To the player's respawn point, as a death would put them, then the crystal's gone. */
+/**
+ * To the player's respawn point, as a death would put them, then the crystal's gone. The Teleport
+ * option asks first where content does (the boat-at-sea warning); Auto-afk and the ring of life
+ * don't wait.
+ */
 function toRespawnPoint(player, cause) {
   const { TeleportHandler, GameConstants } = Common.core();
   const destination = GameConstants.DEFAULT_LOCATION.clone();
   if (!TeleportHandler.checkReqs(player, destination, Common.WILDERNESS_LIMIT)) return false;
+  if (cause !== "teleport") return escapeTo(player, destination, cause);
+  TeleportHandler.confirm(player, destination, () => escapeTo(player, destination, cause), Common.WILDERNESS_LIMIT);
+  return true;
+}
+
+function escapeTo(player, destination, cause) {
   if (!Common.useUp(player)) return false;
   player.getMovementQueue().reset();
   const respawn = { player, killer: null, escape: true, handled: false };

@@ -30,7 +30,7 @@ function cast(player, type, area) {
   const target = destination(area);
   player.getPacketSender().sendInterfaceRemoval();
   if (!TeleportHandler.checkReqs(player, target)) return false;
-  startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast));
+  TeleportHandler.confirm(player, target, () => startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast)));
   return true;
 }
 

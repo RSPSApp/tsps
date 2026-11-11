@@ -32,13 +32,17 @@ function allowed(player, target) {
 function civitas(player, type, home) {
   const target = near(home.civitas);
   if (!allowed(player, target)) return;
-  startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast));
+  Common.core.TeleportHandler.confirm(player, target, () => startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast)));
 }
 
 /** Through Yama's portal: the portal on the tile, the fall two ticks on, the landing at +4. */
 function yama(player, home) {
   const target = near(home.yama);
   if (!allowed(player, target)) return;
+  Common.core.TeleportHandler.confirm(player, target, () => throughPortal(player, home, target));
+}
+
+function throughPortal(player, home, target) {
   const { core } = Common;
   const { portal, fall, fallTick, landTick, land, landGraphic, landGraphicHeight } = home.yama;
   const start = player.getLocation().clone();

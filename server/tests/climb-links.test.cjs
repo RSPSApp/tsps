@@ -82,6 +82,15 @@ test('declared Wizards Tower pair links both ways from plugin data', () => {
     assert.deepEqual(lands(down, ClimbLinks.DOWN, new Location(3105, 3162, 0)), [3104, 9576, 0]);
 });
 
+test('the Forthos Ruin staircase returns to the surface across the offset between regions', () => {
+    const upstairs = new Location(1670, 3569, 0);
+    const downstairs = new Location(1800, 9968, 0);
+    const up = mapObject(1798, 9967, 0, 34864);
+    const down = mapObject(1669, 3567, 0, 34865);
+    assert.deepEqual(lands(up, ClimbLinks.UP, downstairs), [1670, 3569, 0]);
+    assert.deepEqual(lands(down, ClimbLinks.DOWN, upstairs), [1800, 9968, 0]);
+});
+
 test("a declared landing overrides the nearest tile (Grand Tree base staircase, Anita's floor)", () => {
     // The nearest tile above the stairs is 2389,3512 and blocks the way to Anita; the captured
     // climb lands on 2388,3513 instead.

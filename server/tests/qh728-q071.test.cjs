@@ -34,9 +34,15 @@ const SLUG_MENACE_STAGE = 'quest.the_slug_menace.stage';
 // The plugin captures startTranscript at module load. Record variants instead of
 // replaying them; the tests dispatch the transcript actions those variants carry.
 const transcripts = [];
+// What a `select` handed back (the plugin's own cut of a variant), last first.
+const selections = [];
 const realStartTranscript = runtime.startTranscript;
-runtime.startTranscript = (_api, _player, _npcId, _page, variant) => {
+runtime.startTranscript = (_api, _player, _npcId, page, variant, select) => {
   transcripts.push(variant);
+  if (typeof select === 'function') {
+    const raw = runtime.loadTranscripts({ core })?.[page]?.variants?.[variant] ?? [];
+    selections.unshift(select(raw));
+  }
   return true;
 };
 const MakingHistory = require(QUEST_FILE);
@@ -267,6 +273,12 @@ const action = (player, npcId, stepId, kind) => {
   PluginManager.emitCustomEvent('npc-dialogue:action', event);
   return event;
 };
+// Live moves progress on the continue past a line or message box (RSProx capture
+// 20261111T015053-5ab63b4): run the `after` the plugin set, as NpcDialogues does on continue.
+const continued = (event) => { event.after?.(); return event; };
+const ERIN_LENDS_KEY = "Why not. I can't use it anyway. Try feeling its change in temperature as you walk around.";
+const LETTER_LINE = "You've got that right!";
+const giveLetter = (player) => continued(line(player, N.JORRAL, LETTER_LINE));
 const choice = (player, npcId, option) => PluginManager.emitCustomEvent('npc-dialogue:choice', { player, npcId, option, handled: false });
 const variant = (player, npcId) => PluginManager.emitNpcDialogueVariant({ player, npcId });
 
@@ -288,37 +300,48 @@ test('canonical wire: stage 0 start, letter steps 2/3 and cache completion 4', (
     assert.equal(ctx.quest.getStage(player), 1);
     assert.equal(player.varbits.get(WIRE), 1, 'makinghistory_prog 1 at start');
 
-    // Erin hands over the key.
+    // Erin lends the key on the continue past her last line, not on the menu pick (tick 239).
     choice(player, N.SILVER_MERCHANT, 'Ask about the outpost.');
+    assert.equal(player.inventory.getAmount(I.ENCHANTED_KEY), 0, 'no key from the menu pick');
+    continued(line(player, N.SILVER_MERCHANT, ERIN_LENDS_KEY));
     assert.equal(player.inventory.getAmount(I.ENCHANTED_KEY), 1);
     assert.equal(player.varbits.get(TRADER_WIRE), 1, 'native trader_prog 1 = key');
 
-    // Dig at the chest tile, then the transcript's chest message.
-    player.setLocation(new core.Location(2442, 3139, 0));
+    // Dig one tile north of the spot (live dug it up from 2442,3141, tick 305): a message box
+    // whose continue hands over the chest.
+    player.setLocation(new core.Location(2442, 3141, 0));
     assert.equal(PluginManager.emitItemAction({ player, itemId: I.SPADE, option: 'Dig', handled: false }), true);
     assert.ok(transcripts.includes('navigating-with-the-enchanted-key-finding-the-chest'));
-    action(player, N.JORRAL, 'qDSqmk', 'message');
+    const dug = action(player, N.JORRAL, 'qDSqmk', 'message');
+    assert.deepEqual(dug.box, { statement: true }, 'the dig message is a message box');
+    assert.equal(player.inventory.getAmount(I.CHEST), 0, 'no chest before the continue');
+    continued(dug);
     assert.equal(player.inventory.getAmount(I.CHEST), 1);
     assert.equal(player.varbits.get(TRADER_WIRE), 2, 'native trader_prog 2 = chest');
 
-    // Open the chest with the key and take the journal.
+    // Open the chest with the key: a message box, the journal on its continue.
     assert.equal(PluginManager.emitItemOnItem({
       player, usedItemId: I.ENCHANTED_KEY, usedWithItemId: I.CHEST, handled: false,
     }), true);
-    action(player, N.JORRAL, 'CpO-Pc', 'message');
+    const opened = action(player, N.JORRAL, 'CpO-Pc', 'message');
+    assert.deepEqual(opened.box, { statement: true });
+    assert.equal(player.inventory.getAmount(I.CHEST), 1, 'the chest stays until the continue');
+    continued(opened);
     assert.equal(player.inventory.getAmount(I.CHEST), 0);
     action(player, N.JORRAL, 'RgX_fS');
     assert.equal(player.inventory.getAmount(I.JOURNAL_4), 1);
-    assert.equal(player.varbits.get(TRADER_WIRE), 3, 'native trader_prog 3 = journal found');
+    assert.equal(player.varbits.get(TRADER_WIRE), 2, 'live never sends trader_prog 3 (ticks 340-1393)');
 
-    // Show the journal to Jorral.
-    assert.equal(variant(player, N.JORRAL), 'navigating-with-the-enchanted-key-finding-the-chest');
-    action(player, N.JORRAL, 'o3ZNzz', 'message');
+    // Show the journal to Jorral: the wire moves past "Interesting." and the journal goes (tick 1393).
+    assert.deepEqual(action(player, N.JORRAL, 'o3ZNzz', 'message').box, { statement: true });
+    assert.equal(player.varbits.get(TRADER_WIRE), 2, 'not on the reading box');
+    continued(line(player, N.JORRAL, 'Interesting.'));
+    assert.equal(player.inventory.getAmount(I.JOURNAL_4), 0, 'Jorral keeps the journal');
     assert.equal(player.varbits.get(WIRE), 1, 'journal alone is still stage 1');
     assert.equal(player.varbits.get(TRADER_WIRE), 4, 'native trader_prog 4 = journal handed to Jorral');
 
     // Droalak -> Melina's sapphire amulet -> scroll -> Jorral.
-    line(player, N.DROALAK_2, 'OK, well perhaps you could give her a strung sapphire amulet');
+    continued(line(player, N.DROALAK_2, 'OK, well perhaps you could give her a strung sapphire amulet'));
     assert.equal(player.varbits.get(GHOST_WIRE), 2, 'native ghost_prog 2 = Droalak');
     assert.equal(PluginManager.emitItemOnNpc({
       player, itemId: I.SAPPHIRE_AMULET, npcId: N.MELINA_2, handled: false,
@@ -329,15 +352,21 @@ test('canonical wire: stage 0 start, letter steps 2/3 and cache completion 4', (
     action(player, N.DROALAK_2, 'RNo3Eh');
     assert.equal(player.inventory.getAmount(I.SCROLL), 1);
     assert.equal(player.varbits.get(GHOST_WIRE), 5, 'native ghost_prog 5 = scroll obtained');
-    action(player, N.JORRAL, '-yT7qi', 'message');
+    assert.deepEqual(action(player, N.JORRAL, '-yT7qi', 'message').box, { statement: true });
+    continued(line(player, N.JORRAL, 'Very interesting. So there was a great battle at the outpost. Then one of the survivors became king, and the other started the market place. Good work.'));
+    assert.equal(player.inventory.getAmount(I.SCROLL), 0, 'Jorral keeps the scroll');
     assert.equal(player.varbits.get(GHOST_WIRE), 6, 'native ghost_prog 6 = scroll handed to Jorral');
 
     // Blanin -> Dron -> report to Jorral.
-    line(player, N.BLANIN, 'I know this sounds strange but Dron won\'t talk to anyone unless they know him well - he\'s a secretive guy.');
+    continued(line(player, N.BLANIN, 'I know this sounds strange but Dron won\'t talk to anyone unless they know him well - he\'s a secretive guy.'));
     assert.equal(player.varbits.get(WARR_WIRE), 2, 'native warr_prog 2 = Blanin');
-    line(player, N.DRON, 'Very well, you seem to know me quite well, I\'ll answer your questions best I can.');
+    continued(line(player, N.DRON, 'Very well, you seem to know me quite well, I\'ll answer your questions best I can.'));
+    assert.equal(player.varbits.get(WARR_WIRE), 2, 'not yet: live sends 3 after "You would." (tick 864)');
+    continued(line(player, N.DRON, 'You would.'));
     assert.equal(player.varbits.get(WARR_WIRE), 3, 'native warr_prog 3 = Dron');
-    line(player, N.JORRAL, "I've talked to the warrior.");
+    continued(line(player, N.JORRAL, "I've talked to the warrior."));
+    assert.equal(player.varbits.get(WARR_WIRE), 3, 'not on the opening line');
+    continued(line(player, N.JORRAL, "It seems you're lucky he didn't beat you up! Well done, that's another piece of the puzzle."));
     assert.equal(player.varbits.get(WARR_WIRE), 4, 'native warr_prog 4 = Jorral told about Dron');
     line(player, N.JORRAL, 'It all makes sense now, I never realised there was quite so much history to this place, it was more than I could have hoped.');
     assert.equal(player.varbits.get(WIRE), 1, 'all information done still reads stage 1 until the letter');
@@ -345,6 +374,8 @@ test('canonical wire: stage 0 start, letter steps 2/3 and cache completion 4', (
     // Jorral's letter: canonical wire 2, and King Lathas spawns for the window.
     assert.equal(variant(player, N.JORRAL), 'after-talking-to-the-last-person');
     action(player, N.JORRAL, 'pmH3ww');
+    assert.equal(player.inventory.getAmount(I.LETTER_4), 0, 'not on the receive action ahead of the lines');
+    giveLetter(player);
     assert.equal(player.inventory.getAmount(I.LETTER_4), 1);
     assert.equal(player.varbits.get(WIRE), 2, 'makinghistory_prog 2 with Jorral\'s letter');
     assert.ok(ctx.spawned.some((npc) => npc.id === N.KING_LATHAS), 'King Lathas is present for the hand-in');
@@ -463,7 +494,7 @@ test('login replays the canonical letter/completion wire and keeps legacy saves'
     assert.equal(player.varbits.get(WIRE), 1, 'full story without the letter is still 1');
 
     // Jorral's letter received -> 2, replayed on login even after losing it.
-    action(player, N.JORRAL, 'pmH3ww');
+    giveLetter(player);
     player.varbits.delete(WIRE);
     ctx.localHooks.login.forEach((handler) => handler({ player }));
     assert.equal(player.varbits.get(WIRE), 2);
@@ -604,7 +635,7 @@ test('recovery: full bag dig, lost/full scroll, and letter guards', () => {
     // Erin replaces the key after it is lost while the quest still needs it.
     const withoutKey = playerFixture(inventoryFixture(new Map(), 4));
     ctx.quest.setStage(withoutKey, 1);
-    choice(withoutKey, N.SILVER_MERCHANT, 'Ask about the outpost.');
+    continued(line(withoutKey, N.SILVER_MERCHANT, ERIN_LENDS_KEY));
     assert.equal(withoutKey.inventory.getAmount(I.ENCHANTED_KEY), 1);
     withoutKey.inventory.deleteNumber(I.ENCHANTED_KEY, 1);
     choice(withoutKey, N.SILVER_MERCHANT, 'Ask about the outpost.');
@@ -612,7 +643,7 @@ test('recovery: full bag dig, lost/full scroll, and letter guards', () => {
     const fullForKey = inventoryFixture(new Map(), 0);
     const noRoom = playerFixture(fullForKey);
     ctx.quest.setStage(noRoom, 1);
-    choice(noRoom, N.SILVER_MERCHANT, 'Ask about the outpost.');
+    continued(line(noRoom, N.SILVER_MERCHANT, ERIN_LENDS_KEY));
     assert.equal(noRoom.inventory.getAmount(I.ENCHANTED_KEY), 0);
     assert.ok(noRoom.messages.some((message) => /inventory space/.test(message)));
 
@@ -646,7 +677,7 @@ test('bootstrap resend keeps the canonical letter progress', () => {
     ctx.quest.setStage(player, 1);
 
     // Jorral's letter held: the canonical wire is 2.
-    action(player, N.JORRAL, 'pmH3ww');
+    giveLetter(player);
     assert.equal(player.varbits.get(WIRE), 2);
 
     // The login bootstrap re-sends every quest's wire value after the login
@@ -700,7 +731,7 @@ test('no duplicate King Lathas while the cache spawn is in the throne room', () 
     const player = playerFixture();
     ctx.quest.setStage(player, 1);
     line(player, N.JORRAL, lastPerson);
-    action(player, N.JORRAL, 'pmH3ww');
+    giveLetter(player);
     assert.equal(ctx.spawned.length, 0, 'no owner-only copy next to the canonical King Lathas');
 
     World.getNpcsNear = () => [{
@@ -713,7 +744,7 @@ test('no duplicate King Lathas while the cache spawn is in the throne room', () 
     const thoros = playerFixture();
     ctx.quest.setStage(thoros, 1);
     line(thoros, N.JORRAL, lastPerson);
-    action(thoros, N.JORRAL, 'pmH3ww');
+    giveLetter(thoros);
     assert.ok(ctx.spawned.some((npc) => npc.id === N.KING_LATHAS),
       'the raw throne-room spawn resolving to King Thoros does not suppress King Lathas');
 
@@ -722,7 +753,7 @@ test('no duplicate King Lathas while the cache spawn is in the throne room', () 
     const other = playerFixture();
     ctx.quest.setStage(other, 1);
     line(other, N.JORRAL, lastPerson);
-    action(other, N.JORRAL, 'pmH3ww');
+    giveLetter(other);
     assert.ok(ctx.spawned.some((npc) => npc.id === N.KING_LATHAS),
       'the owner-only copy is the fallback');
   } finally {
@@ -931,4 +962,122 @@ test('the real Silver merchant runner preserves cancel, banked-key and full-bag 
     assert.equal(banked.inventory.getAmount(I.COINS), 1000);
     assert.equal(banked.inventory.getAmount(I.ENCHANTED_KEY), 0);
   } finally { ctx.cleanup(); }
+});
+
+const spoken = (steps) => (steps ?? []).map((step) => step.player ?? step.text ?? step.npc);
+
+test('Jorral takes the journal, Dron\'s story and the scroll in one talk, then the whole story', () => {
+  const ctx = setup();
+  try {
+    const player = playerFixture(inventoryFixture(new Map([[I.JOURNAL_4, 1], [I.SCROLL, 1]])));
+    ctx.quest.setStage(player, 1);
+    player.setAttribute('quest.making_history.trader', 3);
+    player.setAttribute('quest.making_history.warr', 2);
+    player.setAttribute('quest.making_history.ghost', 3);
+    const talk = () => PluginManager.emitNpcInteraction({
+      player, npcId: N.JORRAL, npc: { getId: () => N.JORRAL }, clickType: 1,
+      definition: { getActions: () => ['Talk-to'] }, handled: false,
+    });
+    selections.length = 0;
+    talk();
+    const head = spoken(selections[0]);
+    // Capture ticks 1384-1394: one greeting, the journal, then Dron's story up to "Well...".
+    assert.deepEqual(head.slice(0, 4), ['Hi there.', "How's it going?", 'I found a journal!', "Good work. Let's see what it says."]);
+    assert.equal(head.filter((text) => text === 'Hi there.').length, 1, 'one greeting for every hand-in');
+    assert.ok(head.indexOf('Interesting.') < head.indexOf("I've talked to the warrior."));
+    assert.equal(head.at(-1), 'Well...', 'the talk pauses for the fade after "Well..."');
+
+    // Without Dron's story the scroll follows the journal and the whole story ends the talk.
+    const both = playerFixture(inventoryFixture(new Map([[I.JOURNAL_4, 1], [I.SCROLL, 1]])));
+    ctx.quest.setStage(both, 1);
+    both.setAttribute('quest.making_history.trader', 3);
+    both.setAttribute('quest.making_history.ghost', 3);
+    both.setAttribute('quest.making_history.warr', 2);
+    both.setAttribute('quest.making_history.bits', 1 << 2); // Dron's story told on an earlier talk
+    selections.length = 0;
+    PluginManager.emitNpcInteraction({
+      player: both, npcId: N.JORRAL, npc: { getId: () => N.JORRAL }, clickType: 1,
+      definition: { getActions: () => ['Talk-to'] }, handled: false,
+    });
+    const steps = selections[0];
+    const words = spoken(steps);
+    assert.ok(words.indexOf('Interesting.') < words.indexOf("I have been in contact with the ghost you suggested, and I've recovered this:"));
+    assert.ok(words.includes('It all makes sense now, I never realised there was quite so much history to this place, it was more than I could have hoped.'));
+    assert.equal(steps.filter((step) => step.type === 'end').length, 0, 'the scroll section\'s own end is dropped');
+    assert.ok(!words.includes("I've talked to the warrior."), 'nothing already handed in comes back');
+
+    // Nothing to hand in: the transcript's own variant plays.
+    const idle = playerFixture();
+    ctx.quest.setStage(idle, 1);
+    const event = { player: idle, npcId: N.JORRAL, npc: { getId: () => N.JORRAL }, clickType: 1,
+      definition: { getActions: () => ['Talk-to'] }, handled: false };
+    PluginManager.emitNpcInteraction(event);
+    assert.equal(event.handled, false);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('the chest digs up within one tile of 2442,3140 (Quest Helper\'s dig step)', () => {
+  const ctx = setup();
+  try {
+    const dig = (x, y) => {
+      const player = playerFixture(inventoryFixture(new Map([[I.SPADE, 1], [I.ENCHANTED_KEY, 1]])), new core.Location(x, y, 0));
+      ctx.quest.setStage(player, 1);
+      const event = { player, itemId: I.SPADE, option: 'Dig', handled: false };
+      PluginManager.emitItemAction(event);
+      return event.handled;
+    };
+    // Every tile the capture dug it up from (ticks 294-313).
+    for (const [x, y] of [[2441, 3140], [2442, 3140], [2442, 3141], [2443, 3140], [2442, 3139]]) {
+      assert.equal(dig(x, y), true, `${x},${y}`);
+    }
+    assert.equal(dig(2442, 3142), false, 'two tiles north is not the spot');
+    assert.equal(dig(2442, 3138), false, 'two tiles south is not the spot');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('the reward scroll lists Prayer before Crafting and shows the enchanted key', () => {
+  const ctx = setup();
+  try {
+    assert.deepEqual(ctx.quest.xpRewards.map((reward) => reward.label), ['Prayer', 'Crafting']);
+    assert.equal(ctx.quest.rewardItemLabel, '750 Coins');
+    assert.deepEqual(ctx.quest.otherRewards, ['The Enchanted Key']);
+    assert.equal(ctx.quest.scrollItemId, I.ENCHANTED_KEY);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('the imported start talk returns to the menu after each of the three people', () => {
+  const data = require('../data/definitions/npc-dialogues.json');
+  for (const [page, variant] of [['Jorral', 'before-making-history'], [PAGE, 'starting-off-talking-to-jorral']]) {
+    const record = data[page];
+    const find = (steps, test) => {
+      for (const step of steps ?? []) {
+        if (test(step)) return step;
+        const inner = find(step.steps, test) ?? (step.options ?? []).reduce((hit, option) => hit ?? find(option.steps, test), null);
+        if (inner) return inner;
+      }
+      return null;
+    };
+    const steps = record.variants[variant];
+    const menu = find(steps, (step) => step.type === 'choice' && step.options?.[0]?.text === 'A trader in Ardougne');
+    for (const option of menu.options) {
+      const calls = find(option.steps, (step) => step.type === 'call');
+      assert.equal(calls, null, `${page}: "${option.text}" does not run on into another answer`);
+    }
+    const more = find(steps, (step) => step.type === 'choice' && step.options?.[0]?.text === 'Tell me more.').options[0].steps;
+    // Capture ticks 29-44: Jorral's line before the cutscene, and the captions as live shows them.
+    assert.equal(more[1].text ?? more[1].npc, "That's what I like to hear. Let me tell you about the outpost...");
+    assert.deepEqual(more.filter((step) => step.speaker === 'Narration').map((step) => step.text), [
+      'With many occupants over the years...',
+      '... the building has seen much action.',
+      'It started life as an outpost...',
+      '... its sole purpose being to see invading armies...',
+      '... before they saw the city of Ardougne.',
+    ]);
+  }
 });

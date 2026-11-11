@@ -3014,10 +3014,17 @@ function jorralFixture(t, eligible = true) {
     if (text) f.trace.push(text.replace(/\s+/g, ' '));
     await nextLine(f);
   };
+  // "Tell me more." plays the outpost cutscene: an empty held box while its ticks run.
   f.untilMenu = async () => {
-    for (let n = 0; n < 60 && !f.menu(); n++) {
+    for (let n = 0, ticks = 0; n < 60 && ticks < 80 && !f.menu();) {
       assert.ok(f.player.getDialogueManager().getCurrent(), `conversation closed before menu: ${JSON.stringify(f.trace)}`);
-      await f.advance();
+      if (f.player.getDialogueManager().getCurrent()?.getText?.()) {
+        await f.advance();
+        n++;
+      } else {
+        core.TaskManager.process();
+        ticks++;
+      }
     }
     assert.ok(f.menu(), `no menu within 60 continuations: ${JSON.stringify(f.trace)}`);
   };

@@ -536226,6 +536226,9 @@
                       "player": "Tell me more."
                     },
                     {
+                      "npc": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "QNbrzb"
@@ -536238,7 +536241,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -536305,13 +536308,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "9fHaCZ",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-7cd35e89205a4500"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "9fHaCZ"
                                     }
                                   ]
                                 },
@@ -536338,13 +536336,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "CySmbo",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-5a526e163aa93237"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "CySmbo"
                                     }
                                   ]
                                 },
@@ -536560,60 +536553,6 @@
         },
         {
           "npc": "That strange device will guide you in the same way the key did. Feel it, but be careful as it is very powerful. Good luck."
-        }
-      ]
-    },
-    "branches": {
-      "jump-7cd35e89205a4500": [
-        {
-          "npc": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "npc": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "npc": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "CySmbo",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-5a526e163aa93237"
-            }
-          ]
-        }
-      ],
-      "jump-5a526e163aa93237": [
-        {
-          "npc": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "npc": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "npc": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "l9j7rY"
         }
       ]
     }
@@ -647811,6 +647750,11 @@
                       "player": "Tell me more."
                     },
                     {
+                      "type": "line",
+                      "speaker": "Jorral",
+                      "text": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "kXluF_"
@@ -647823,7 +647767,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -647895,13 +647839,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "iZayEM",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-79bf75cd79a02093"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "iZayEM"
                                     }
                                   ]
                                 },
@@ -647934,13 +647873,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "BzGWef",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-df1ff5d3385709dd"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "BzGWef"
                                     }
                                   ]
                                 },
@@ -650169,70 +650103,6 @@
       ]
     },
     "branches": {
-      "jump-79bf75cd79a02093": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "BzGWef",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-df1ff5d3385709dd"
-            }
-          ]
-        }
-      ],
-      "jump-df1ff5d3385709dd": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "ZkS_lE"
-        }
-      ],
       "jump-e0c8ede1de79cc3c": [
         {
           "player": "I don't care about some dusty building."

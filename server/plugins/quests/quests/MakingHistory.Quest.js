@@ -18,30 +18,37 @@
  * with sendVarbit as it advances; all of them are bit fields of varp 604
  * (cache: 1383 bits 0-2, 1384 bits 3-5, 1385 bits 6-8, 1386 bits 9-12,
  * 1387 bit 13, 1388 bit 14, 1390 objloc bit 20), so the server keeps the
- * sibling bits when one of them is written. The wire values are the native
- * ones Quest Helper reads: 1384 trader 1 key / 2 chest / 3 journal found /
- * 4 journal handed to Jorral, 1385 warr 2 Blanin / 3 Dron / 4 told to Jorral,
- * 1386 ghost 2 Droalak / 4 Melina / 5 scroll / 6 scroll handed to Jorral.
- * Melina/Droalak presence is driven through their multi-NPC transform varbits
- * (1387/1388), so they vanish for the player without touching the shared
- * spawn. 1390 objloc is set to 1 on completion (the outpost becomes the
- * museum); 1391 locstatus stays unset (the enchanted-key digs are post-quest).
+ * sibling bits when one of them is written. The wire values are live's
+ * (RSProx capture 20261111T015053-5ab63b4, rev 242, start to reward; facts by tick in
+ * docs/quests/making-history/README.md): 1384 trader 1 key / 2 chest (opening it
+ * keeps 2) / 4 journal read by Jorral, 1385 warr 2 Blanin / 3 Dron / 4 told to
+ * Jorral, 1386 ghost 2 Droalak / 4 Melina / 5 scroll / 6 scroll read by Jorral.
+ * Each moves on the continue past its line, as live sends it. Melina/Droalak
+ * presence is driven through their multi-NPC transform varbits (1387/1388), so
+ * they vanish for the player without touching the shared spawn. 1390 objloc
+ * turns the outpost into the museum at the finale's fade in, and enchantedkey
+ * (13717) is set on completion.
  *
- * Rewards per the OSRS Wiki: 3 Quest points, 1,000 Crafting XP, 1,000 Prayer XP,
- * 750 coins, the enchanted key and access to the outpost museum. The key is
- * Erin's, so it is only handed over when the player does not hold one; a lost
- * key is bought back from the silver merchant for 500 coins (the wiki's own
- * post-quest conversation).
+ * From the capture: Jorral's "Tell me more." plays the camera tour with the
+ * transcript's Narration lines as fade-overlay captions
+ * (makinghistory/Cutscene.MakingHistory.js); the dig and the key on the chest
+ * are message boxes whose continue hands the chest / journal over; Dron's wrong
+ * answers end the talk with one of his insults; Jorral takes every piece the
+ * player brings in one talk (journal, Dron's story, scroll, then the whole
+ * story and the letter), with a fade after "Well..." and before the museum.
+ *
+ * Rewards: 3 Quest points, 1,000 Prayer XP, 1,000 Crafting XP, 750 coins and
+ * the enchanted key (the scroll shows the key). The key is Erin's, so it is
+ * only handed over when the player does not hold one; a lost key is bought back
+ * from the silver merchant for 500 coins (the wiki's own post-quest conversation).
  *
  * Gaps: the requirements (Priest in Peril and The Restless Ghost) are checked
- * through public quest queries; the outpost museum swap itself (the objects
- * behind objloc 1390) is not simulated, but the native 1390 switch is set on
- * completion; the key's
- * post-quest treasure digs (The Enchanted Key miniquest) are not implemented;
- * the master-clue condition is answered false; Dron's "North West side of town"
- * wrong answer is a transcript "unavailable" marker and closes silently;
- * the dig spot tolerates one tile around
- * (2442,3139); King Lathas is already in the throne room - the cache spawns
+ * through public quest queries; the key's post-quest treasure digs (The
+ * Enchanted Key miniquest) are not implemented; the master-clue condition is
+ * answered false; Dron's "North West side of town" wrong answer is a transcript
+ * "unavailable" marker and closes silently; the hot/cold Feel messages and a key
+ * lost before the journal are not in the capture (transcript and Quest Helper);
+ * King Lathas is already in the throne room - the cache spawns
  * npc 9228 there and the client transforms it to 9005 - so the owner-only copy
  * is only spawned when that canonical NPC is missing; the Droalak/Melina
  * variants are replayed with their conditions inlined
@@ -53,8 +60,9 @@
  */
 module.exports = function registerMakingHistoryQuest(api) {
   const { Equipment, Item, ItemIdentifiers, Location, NpcIdentifiers, Skill, World } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } =
+  const { loadTranscripts, registerQuest, refreshQuestList, startTranscript } =
     require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Making History";
   const JORRAL_PAGE = "Jorral";
@@ -120,9 +128,12 @@ module.exports = function registerMakingHistoryQuest(api) {
   const SAPPHIRE_AMULET_U = ItemIdentifiers.SAPPHIRE_AMULET_U_; // 1675
   const COINS = ItemIdentifiers.COINS; // 995
 
+  // The chest's spot north of Castle Wars: Quest Helper's dig step (2442,3140); the capture
+  // (20261111T015053-5ab63b4 ticks 294-313) dug it up from 2441,3140, 2442,3140, 2442,3141,
+  // 2443,3140 and 2442,3139, every tile within one of it.
   const DIG_X = 2442;
-  const DIG_Y = 3139;
-  const DIG_RADIUS = 1; // ponytail: one-tile tolerance, the wiki marks the spot with r=4
+  const DIG_Y = 3140;
+  const DIG_RADIUS = 1;
 
   const KING_LATHAS_SPAWN = { x: 2579, y: 3294, z: 1 }; // Ardougne Castle throne room
   const KING_LATHAS_NATIVE_SPAWN = { x: 2578, y: 3293, z: 1 }; // the cache's own King Lathas
@@ -171,11 +182,32 @@ module.exports = function registerMakingHistoryQuest(api) {
   const DROP_SCROLL_STEP = "zc9Rw_";
   const JOURNAL_READ_STEP = "o3ZNzz";
   const SCROLL_READ_STEP = "-yT7qi";
-  const RECEIVE_JORRAL_LETTER_STEPS = new Set(["pmH3ww", "FvpA_Y"]);
+  const FIRST_JORRAL_LETTER_STEP = "pmH3ww";
+  const RECEIVE_JORRAL_LETTER_STEPS = new Set(["FvpA_Y"]);
   const RECEIVE_KING_LETTER_STEP = "bbreqL";
   const MELINA_TAKES_AMULET_STEP = "Uu67E-";
   const DROALAK_FADES_STEP = "tsNvdU";
   const COMPLETE_STEP = "pMj4WQ";
+  // Message steps live shows as a message box (capture ticks 1388, 1406, 1485, 1517).
+  const KING_READS_LETTER_STEP = "kP8BlW";
+  const JORRAL_READS_LETTER_STEP = "D-blpi";
+  // "A cutscene appears." on the Jorral page (the start talk) and on the quest page.
+  const CUTSCENE_STEPS = new Set(["QNbrzb", "kXluF_"]);
+  const JORRAL_START_PAGE = "Jorral";
+  const JORRAL_START_VARIANT = "before-making-history";
+  const JOURNAL_HAND_IN_CONDITION = "NMqy3p";
+  const WARRIOR_HAND_IN_VARIANT = "talking-to-dron-talking-to-jorral-after-receiving-information-from-dron";
+  const SCROLL_HAND_IN_VARIANT = "talking-to-droalak-talking-to-jorral";
+  const LAST_PERSON_VARIANT = "after-talking-to-the-last-person";
+  const DELIVERING_VARIANT = "delivering-the-letter-to-jorral";
+  const KING_LETTER_CONDITION = "Dr9Mvh";
+  /** The fade around a pause in Jorral's talk: out on the continue, in 3 ticks on, the next line 3 after. */
+  const PAUSE_FADE_IN_TICKS = 3;
+  const PAUSE_RESUME_TICKS = 6;
+  const VARBIT_ENCHANTED_KEY = 13717; // enchantedkey, set on completion (capture tick 1529)
+  const MESSAGE_BOX_STEPS = new Set([
+    JOURNAL_READ_STEP, SCROLL_READ_STEP, KING_READS_LETTER_STEP, JORRAL_READS_LETTER_STEP,
+  ]);
   // The silver merchant's post-quest conversation: he sells the key back for
   // 500 coins (give) and hands it over (receive).
   const GIVE_KEY_PRICE_STEP = "57gscX";
@@ -189,13 +221,20 @@ module.exports = function registerMakingHistoryQuest(api) {
   const KEY_ABSOLUTE_VARIANT = "navigating-with-the-enchanted-key-interacting-with-the-key-for-the-first-time";
   const KEY_RELATIVE_VARIANT = "navigating-with-the-enchanted-key-after-interacting-with-the-key";
   const KEY_FINDING_VARIANT = "navigating-with-the-enchanted-key-finding-the-chest";
+  const KEY_DETAIL_CONDITIONS = { dig: "7eJupI", chest: "mNP0yr", delivered: "CKCM76", journal: "LWdlYa", open: "AFvMTo" };
 
   // Transient context for conditions the runtime cannot tell apart by stepId alone.
   const dialogueModes = new WeakMap();
   // Owner-only King Lathas, spawned while the player has business with him.
   const kingLathasByPlayer = new Map();
-  // Players with the last-person conversation already queued after a hand-in.
-  const lastPersonQueued = new WeakSet();
+  // What follows a pause line in Jorral's talk, played after its fade.
+  const pausedTails = new WeakMap();
+  // Where the start talk resumes once the opening cutscene ends.
+  const pendingCutsceneTails = new WeakMap();
+  const PAUSE_LINE = "Well...";
+  const FINALE_PAUSE_LINE = "I can now continue with my plans for this place. Thank you.";
+  const QuestFade = createQuestScenes(api);
+  const Cutscene = require("../makinghistory/Cutscene.MakingHistory")(api, { onEnd: cutsceneEnded });
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -263,9 +302,10 @@ module.exports = function registerMakingHistoryQuest(api) {
    * The durable attributes keep their own 0..3 scale; only the wire is mapped.
    */
   function traderWire(player) {
-    const value = trader(player);
-    if (value >= TRADER_JOURNAL && hasBit(player, BIT_JOURNAL_DONE)) return 4;
-    return value;
+    // Opening the chest leaves the wire on 2; Jorral reading the journal takes it to 4
+    // (capture ticks 315, 340, 1393: 3 is never sent).
+    if (hasBit(player, BIT_JOURNAL_DONE)) return 4;
+    return Math.min(trader(player), TRADER_CHEST);
   }
 
   function warrWire(player) {
@@ -299,6 +339,7 @@ module.exports = function registerMakingHistoryQuest(api) {
     packet.sendVarbit(VARBIT_MELINA_PRESENT, ghost(player) >= GHOST_AMULET ? 1 : 0);
     packet.sendVarbit(VARBIT_DROALAK_PRESENT, hasBit(player, BIT_DROALAK_GONE) ? 1 : 0);
     packet.sendVarbit(VARBIT_MUSEUM, quest.isComplete(player) ? 1 : 0);
+    if (quest.isComplete(player)) packet.sendVarbit(VARBIT_ENCHANTED_KEY, 1);
   }
 
   function wearingGhostspeak(player) {
@@ -692,24 +733,7 @@ module.exports = function registerMakingHistoryQuest(api) {
       const ids = mode.distance <= mode.last ? RELATIVE_CLOSER_STEP_IDS : RELATIVE_FURTHER_STEP_IDS;
       return stepId === ids[tier - 1];
     }
-    switch (stepId) {
-      case "7eJupI":
-        return mode.why === "dig";
-      case "mNP0yr":
-        return mode.why === "chest";
-      case "CKCM76":
-        return mode.why === "delivered";
-      case "LWdlYa":
-        return mode.why === "journal";
-      case "AFvMTo":
-        return mode.why === "open";
-      case "jH2gBM":
-      case "m0t7Hg":
-      case "NMqy3p":
-        return false;
-      default:
-        return null;
-    }
+    return null;
   }
 
   function answerCondition(event) {
@@ -741,15 +765,159 @@ module.exports = function registerMakingHistoryQuest(api) {
     quest.setStage(player, STAGE_STARTED);
   }
 
-  function maybeQueueLastPerson(player) {
-    if (hasBit(player, BIT_FULL_STORY) || lastPersonQueued.has(player)) return;
-    if (!allInformationDone(player)) return;
-    lastPersonQueued.add(player);
-    afterDialogue(player, () => {
-      lastPersonQueued.delete(player);
-      if (quest.isComplete(player) || hasBit(player, BIT_FULL_STORY)) return;
-      playVariant(player, JORRAL_NPC_ID, "after-talking-to-the-last-person");
+  function giveJorralLetter(player) {
+    if (!held(player, JORRAL_LETTER)) player.getInventory().adds(JORRAL_LETTER, 1);
+    setBit(player, BIT_JORRAL_LETTER_SEEN);
+    ensureKingLathas(player);
+    sendCanonicalProgress(player);
+  }
+
+  // ==========================================================================
+  // Jorral's hand-ins: one talk, as live plays it
+  // ==========================================================================
+
+  function variantSteps(variant) {
+    const steps = loadTranscripts(api)?.[PAGE]?.variants?.[variant];
+    return Array.isArray(steps) ? steps : [];
+  }
+
+  /** A hand-in's own lines: its greeting and its "if he was the last person" cross-reference go. */
+  function handInBody(steps) {
+    return steps.slice(2).filter((step) => step?.type !== "condition" && step?.type !== "end");
+  }
+
+  function journalHandIn() {
+    const condition = variantSteps(KEY_FINDING_VARIANT).find((step) => step?.id === JOURNAL_HAND_IN_CONDITION);
+    return handInBody(condition?.steps ?? []);
+  }
+
+  function journalDue(player) {
+    return held(player, JOURNAL) && !hasBit(player, BIT_JOURNAL_DONE);
+  }
+
+  function warriorDue(player) {
+    return warr(player) >= WARR_QUIZ && !hasBit(player, BIT_WARR_DONE);
+  }
+
+  function scrollDue(player) {
+    return held(player, SCROLL) && !hasBit(player, BIT_SCROLL_DONE);
+  }
+
+  function handInDue(player) {
+    return journalDue(player) || warriorDue(player) || scrollDue(player);
+  }
+
+  /**
+   * Every piece the player has brought, in one talk: the journal, Dron's story and the scroll,
+   * in that order, then the last-person story once all three are in (capture ticks 1384-1415).
+   * Each hand-in's words are its own transcript section's, after one shared greeting.
+   */
+  function handInSteps(player) {
+    const greeting = variantSteps(WARRIOR_HAND_IN_VARIANT).slice(0, 2);
+    const steps = [...greeting];
+    const journal = journalDue(player), warrior = warriorDue(player), scroll = scrollDue(player);
+    if (journal) steps.push(...journalHandIn());
+    if (warrior) steps.push(...handInBody(variantSteps(WARRIOR_HAND_IN_VARIANT)));
+    if (scroll) steps.push(...handInBody(variantSteps(SCROLL_HAND_IN_VARIANT)));
+    const all = (journal || hasBit(player, BIT_JOURNAL_DONE)) && (warrior || hasBit(player, BIT_WARR_DONE))
+      && (scroll || hasBit(player, BIT_SCROLL_DONE));
+    if (all) steps.push(...variantSteps(LAST_PERSON_VARIANT));
+    return steps;
+  }
+
+  /** Plays `steps` as Jorral, holding what follows a pause line for after its fade. */
+  function playJorralSteps(player, steps) {
+    const pause = steps.findIndex((step) => step?.player === PAUSE_LINE);
+    const head = pause >= 0 ? steps.slice(0, pause + 1) : steps;
+    if (pause >= 0) pausedTails.set(player, steps.slice(pause + 1));
+    else pausedTails.delete(player);
+    startTranscript(api, player, JORRAL_NPC_ID, PAGE, LAST_PERSON_VARIANT, () => head);
+  }
+
+  function playHandIn(player) {
+    playJorralSteps(player, handInSteps(player));
+  }
+
+  /**
+   * "Well..." (Dron's story) and "I can now continue with my plans..." (the finale): live closes the
+   * chat and fades the screen out on the continue, fades back in 3 ticks later and goes on 3 after
+   * that (capture ticks 1395-1401, 1521-1527).
+   */
+  function pauseThenPlay(player, atFadeIn, steps) {
+    player.getDialogueManager().reset();
+    QuestFade.fade(player, true);
+    QuestFade.later(player, PAUSE_FADE_IN_TICKS, () => {
+      if (player.isRegistered?.() === false) return;
+      atFadeIn?.();
+      QuestFade.fade(player, false);
     });
+    QuestFade.later(player, PAUSE_RESUME_TICKS, () => {
+      if (player.isRegistered?.() === false || !steps.length) return;
+      playJorralSteps(player, steps);
+    });
+  }
+
+  /** The finale's line after the fade: "Take a look at the artefacts...", then the completion. */
+  function finaleTail() {
+    const condition = variantSteps(DELIVERING_VARIANT).find((step) => step?.id === KING_LETTER_CONDITION);
+    const steps = condition?.steps ?? [];
+    const at = steps.findIndex((step) => step?.type === "line" && step.text === FINALE_PAUSE_LINE);
+    return at >= 0 ? steps.slice(at + 1) : [];
+  }
+
+  // ==========================================================================
+  // The opening cutscene
+  // ==========================================================================
+
+  /** The list holding the step with this id, and its index, anywhere in a variant's tree. */
+  function findStep(steps, id) {
+    if (!Array.isArray(steps)) return null;
+    for (let index = 0; index < steps.length; index++) {
+      const step = steps[index];
+      if (step?.id === id) return { list: steps, index };
+      const inner = findStep(step?.steps, id)
+        ?? (step?.options ?? []).reduce((found, option) => found ?? findStep(option?.steps, id), null);
+      if (inner) return inner;
+    }
+    return null;
+  }
+
+  function cutsceneSource(stepId) {
+    const data = loadTranscripts(api);
+    for (const page of [JORRAL_START_PAGE, PAGE]) {
+      for (const [variant, steps] of Object.entries(data?.[page]?.variants ?? {})) {
+        const found = findStep(steps, stepId);
+        if (found) return { page, variant, ...found };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The captions are the Narration lines after the action; the talk resumes at the first line
+   * after them (the Jorral page's "The cutscene disappears." action is the scene's end, so it goes).
+   */
+  function playOpeningCutscene(player, stepId) {
+    const source = cutsceneSource(stepId);
+    if (!source) return;
+    const after = source.list.slice(source.index + 1);
+    const captions = [];
+    let resume = 0;
+    while (resume < after.length && after[resume]?.type === "line" && after[resume].speaker === "Narration") {
+      captions.push(after[resume].text);
+      resume++;
+    }
+    if (after[resume]?.type === "action") resume++;
+    const tail = after.slice(resume);
+    pendingCutsceneTails.set(player, { page: source.page, variant: source.variant, tail });
+    if (!Cutscene.play(player, captions)) pendingCutsceneTails.delete(player);
+  }
+
+  function cutsceneEnded(player) {
+    const pending = pendingCutsceneTails.get(player);
+    pendingCutsceneTails.delete(player);
+    if (!pending?.tail.length) return;
+    startTranscript(api, player, JORRAL_NPC_ID, pending.page, pending.variant, () => pending.tail);
   }
 
   /**
@@ -806,22 +974,39 @@ module.exports = function registerMakingHistoryQuest(api) {
   function handleAction(event) {
     const { player, stepId } = event;
     if (stepId === null || stepId === undefined) return;
-    if (event.kind === "message" && stepId === DIG_MESSAGE_STEP) {
-      if (!held(player, CHEST) && !held(player, JOURNAL) && !hasBit(player, BIT_JOURNAL_DONE)) {
-        player.getInventory().adds(CHEST, 1);
-        setTrader(player, TRADER_CHEST);
-      }
+    if (event.kind !== "message" && CUTSCENE_STEPS.has(stepId)) {
+      event.handled = true;
+      playOpeningCutscene(player, stepId);
       return;
     }
+    // A message box; the chest comes on its continue (capture ticks 294-315).
+    if (event.kind === "message" && stepId === DIG_MESSAGE_STEP) {
+      event.box = { statement: true };
+      event.after = () => {
+        if (held(player, CHEST) || held(player, JOURNAL) || hasBit(player, BIT_JOURNAL_DONE)) return;
+        player.getInventory().adds(CHEST, 1);
+        setTrader(player, TRADER_CHEST);
+      };
+      return;
+    }
+    // A message box; its continue adds the journal, then throws the chest away (tick 340).
     if (event.kind === "message" && stepId === CHEST_OPENED_MESSAGE_STEP) {
-      player.getInventory().deleteNumber(CHEST, 1);
+      event.box = { statement: true };
+      event.after = () => {
+        if (!held(player, CHEST)) return;
+        if (!held(player, JOURNAL)) player.getInventory().adds(JOURNAL, 1);
+        player.getInventory().deleteNumber(CHEST, 1);
+        setTrader(player, TRADER_JOURNAL);
+      };
       return;
     }
     if (stepId === RECEIVE_JOURNAL_STEP) {
+      // The message box's continue above already swapped the chest for the journal.
       event.handled = true;
-      player.getInventory().deleteNumber(CHEST, 1);
-      if (!held(player, JOURNAL)) player.getInventory().adds(JOURNAL, 1);
-      setTrader(player, TRADER_JOURNAL);
+      return;
+    }
+    if (event.kind === "message" && MESSAGE_BOX_STEPS.has(stepId)) {
+      event.box = { statement: true };
       return;
     }
     if (RECEIVE_SCROLL_STEPS.has(stepId)) {
@@ -841,24 +1026,14 @@ module.exports = function registerMakingHistoryQuest(api) {
       setGhost(player, GHOST_SCROLL);
       return;
     }
-    if (event.kind === "message" && stepId === JOURNAL_READ_STEP) {
-      setBit(player, BIT_JOURNAL_DONE);
-      sendPathVarbits(player);
-      maybeQueueLastPerson(player);
-      return;
-    }
-    if (event.kind === "message" && stepId === SCROLL_READ_STEP) {
-      setBit(player, BIT_SCROLL_DONE);
-      sendPathVarbits(player);
-      maybeQueueLastPerson(player);
+    if (stepId === FIRST_JORRAL_LETTER_STEP) {
+      // Live hands the letter over on the continue past "You've got that right!" (tick 1415).
+      event.handled = true;
       return;
     }
     if (RECEIVE_JORRAL_LETTER_STEPS.has(stepId)) {
       event.handled = true;
-      if (!held(player, JORRAL_LETTER)) player.getInventory().adds(JORRAL_LETTER, 1);
-      setBit(player, BIT_JORRAL_LETTER_SEEN);
-      ensureKingLathas(player);
-      sendCanonicalProgress(player);
+      giveJorralLetter(player);
       return;
     }
     if (stepId === RECEIVE_KING_LETTER_STEP) {
@@ -908,71 +1083,103 @@ module.exports = function registerMakingHistoryQuest(api) {
       player.getInventory().deleteNumber(KING_LETTER, 1);
       removeKingLathas(player);
       if (!quest.isComplete(player)) quest.complete(player);
-      // The outpost becomes the museum (native objloc switch).
-      player.getPacketSender().sendVarbit(VARBIT_MUSEUM, 1);
+      // The outpost becomes the museum (native objloc switch, set at the finale's fade in).
+      player.getPacketSender().sendVarbit(VARBIT_MUSEUM, 1).sendVarbit(VARBIT_ENCHANTED_KEY, 1);
       return;
     }
     if (WRONG_ANSWER_STEP_IDS.has(stepId)) {
       event.handled = true;
       event.end = true;
-      // Play Dron's insult, then reopen the quiz so a wrong answer does not
-      // strand the player outside the conversation.
+      // Dron's insult straight after the pick, and the talk ends there: the player talks to
+      // him again for another go (capture ticks 738-742, 791-794).
       afterDialogue(player, () => {
-        if (quest.isComplete(player)) return;
-        playVariant(player, DRON_NPC_ID, "talking-to-dron-if-the-player-chooses-the-wrong-option");
-        afterDialogue(player, () => {
-          if (!quest.isComplete(player)) playDronQuiz(player);
-        });
+        if (!quest.isComplete(player)) playVariant(player, DRON_NPC_ID, "talking-to-dron-if-the-player-chooses-the-wrong-option");
       });
     }
   }
 
   /**
-   * Erin's "Ask about the outpost" hands over the enchanted key, and hands
-   * another if the player lost it (Quest Helper's key tooltip).
+   * Erin lends the key on the continue past "Why not. I can't use it anyway." (capture tick 239).
+   * A key lost before the journal is handed in comes back from "Ask about the outpost" on a later
+   * talk (Quest Helper's key tooltip; no capture shows it).
    */
-  function handleDialogueChoice(event) {
-    const { player, npcId, option } = event;
-    if (!SILVER_MERCHANT_NPC_IDS.has(npcId)) return;
-    if (!/ask about the outpost/i.test(String(option ?? ""))) return;
-    if (quest.isComplete(player)) return;
+  function lendKey(player) {
+    if (quest.isComplete(player) || hasBit(player, BIT_JOURNAL_DONE)) return;
     if (ownsKey(player)) {
       setTrader(player, TRADER_KEY);
       return;
     }
-    // Once the journal is delivered the key has done its job.
-    if (hasBit(player, BIT_JOURNAL_DONE)) return;
     if (freeSlots(player) < 1) {
-      player.sendMessage("You need more inventory space to take the key.");
+      player.sendMessage("You need more inventory space to take the key."); // Ours: no source has it
       return;
     }
     player.getInventory().adds(ENCHANTED_KEY, 1);
     setTrader(player, TRADER_KEY);
   }
 
+  function handleDialogueChoice(event) {
+    const { player, npcId, option } = event;
+    if (!SILVER_MERCHANT_NPC_IDS.has(npcId)) return;
+    if (!/ask about the outpost/i.test(String(option ?? ""))) return;
+    if (trader(player) < TRADER_KEY || ownsKey(player)) return;
+    lendKey(player);
+  }
+
+  /**
+   * Progress moves on the continue past its line, as live sends it: Blanin's last line (tick 611),
+   * Dron's "You would." (864), Droalak's amulet request (1305), Jorral's journal, Dron and scroll
+   * hand-ins (1393, 1405, 1408) and the letter after "You've got that right!" (1415).
+   */
   function handleDialogueLine(event) {
     const { player, npcId, text } = event;
     if (typeof text !== "string") return;
     if (npcId === JORRAL_NPC_ID) {
-      if (text.startsWith("I've talked to the warrior.")) {
-        setBit(player, BIT_WARR_DONE);
-        sendPathVarbits(player);
-        maybeQueueLastPerson(player);
+      if (text === "Interesting." && journalDue(player)) {
+        event.after = () => {
+          player.getInventory().deleteNumber(JOURNAL, 1);
+          setBit(player, BIT_JOURNAL_DONE);
+          sendPathVarbits(player);
+        };
+      } else if (text === PAUSE_LINE && pausedTails.has(player)) {
+        event.after = () => {
+          const tail = pausedTails.get(player) ?? [];
+          pausedTails.delete(player);
+          pauseThenPlay(player, null, tail);
+        };
+      } else if (text.startsWith("It seems you're lucky he didn't beat you up!") && warriorDue(player)) {
+        event.after = () => {
+          setBit(player, BIT_WARR_DONE);
+          sendPathVarbits(player);
+        };
+      } else if (text.startsWith("Very interesting. So there was a great battle") && scrollDue(player)) {
+        event.after = () => {
+          player.getInventory().deleteNumber(SCROLL, 1);
+          setBit(player, BIT_SCROLL_DONE);
+          sendPathVarbits(player);
+        };
       } else if (text.startsWith("It all makes sense now")) {
         setBit(player, BIT_FULL_STORY);
+      } else if (text === "You've got that right!") {
+        event.after = () => giveJorralLetter(player);
+      } else if (text === FINALE_PAUSE_LINE && held(player, KING_LETTER) && !quest.isComplete(player)) {
+        event.after = () => pauseThenPlay(player, () => player.getPacketSender().sendVarbit(VARBIT_MUSEUM, 1), finaleTail());
       }
       return;
     }
-    if (npcId === DRON_NPC_ID && text.startsWith("Very well, you seem to know me")) {
-      setWarr(player, WARR_QUIZ);
+    if (SILVER_MERCHANT_NPC_IDS.has(npcId) && text.startsWith("Why not. I can't use it anyway.")) {
+      event.after = () => lendKey(player);
+      return;
+    }
+    if (npcId === DRON_NPC_ID && text === "You would.") {
+      event.after = () => setWarr(player, WARR_QUIZ);
       return;
     }
     if (npcId === BLANIN_NPC_ID && text.startsWith("I know this sounds strange")) {
-      setWarr(player, WARR_BRIEFED);
+      event.after = () => setWarr(player, WARR_BRIEFED);
       return;
     }
     if (DROALAK_NPC_IDS.has(npcId) && text.startsWith("OK, well perhaps you could give her a strung sapphire amulet")) {
-      setGhost(player, GHOST_ASKED);
+      event.after = () => setGhost(player, GHOST_ASKED);
       return;
     }
     if (KING_LATHAS_NPC_IDS.has(npcId) && text.startsWith("Very well, take another.")) {
@@ -1018,8 +1225,15 @@ module.exports = function registerMakingHistoryQuest(api) {
     }
   }
 
+  /**
+   * One of the "finding the chest" conditions on its own: the chest and journal boxes continue
+   * after a click, and the variant's later conditions (talking to Jorral or Erin with the journal)
+   * must not run on from them.
+   */
   function playKeyDetail(player, why) {
-    playKeyVariant(player, { kind: "finding", why }, KEY_FINDING_VARIANT);
+    const id = KEY_DETAIL_CONDITIONS[why];
+    startTranscript(api, player, JORRAL_NPC_ID, PAGE, KEY_FINDING_VARIANT,
+      (steps) => steps.find((step) => step?.id === id)?.steps ?? []);
   }
 
   function handleFeel(event) {
@@ -1126,6 +1340,12 @@ module.exports = function registerMakingHistoryQuest(api) {
       return;
     }
     if (quest.getStage(player) < STAGE_STARTED) return;
+    if (npcId === JORRAL_NPC_ID) {
+      if (quest.isComplete(player) || otherQuestNeedsJorral(player) || !handInDue(player)) return;
+      event.handled = true;
+      playHandIn(player);
+      return;
+    }
     if (npcId === DRON_NPC_ID) {
       event.handled = true;
       if (quest.isComplete(player)) {
@@ -1252,6 +1472,9 @@ module.exports = function registerMakingHistoryQuest(api) {
 
   function handleLogout({ player }) {
     removeKingLathas(player);
+    Cutscene.end(player, true);
+    pendingCutsceneTails.delete(player);
+    pausedTails.delete(player);
   }
 
   api.persistAttribute(TRADER_ATTRIBUTE);
@@ -1277,13 +1500,15 @@ module.exports = function registerMakingHistoryQuest(api) {
       return stage >= STAGE_STARTED ? WIRE_STARTED : 0;
     },
     questPoints: 3,
+    // The scroll's lines and model as live shows them (capture tick 1529).
     xpRewards: [
-      { skillId: Skill.CRAFTING.getIndex(), amount: 1000, label: "Crafting" },
       { skillId: Skill.PRAYER.getIndex(), amount: 1000, label: "Prayer" },
+      { skillId: Skill.CRAFTING.getIndex(), amount: 1000, label: "Crafting" },
     ],
     rewardItemId: COINS,
     rewardItemLabel: "750 Coins",
-    otherRewards: ["The enchanted key", "Access to the outpost museum"],
+    otherRewards: ["The Enchanted Key"],
+    scrollItemId: ENCHANTED_KEY,
     buildJournal,
     onReward: grantReward,
   });

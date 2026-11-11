@@ -78,6 +78,13 @@ test("the captured success and burn lines", () => {
   assert.equal(line(ItemIds.RAW_TUNA), "You manage to cook a tuna.");
   assert.equal(line(ItemIds.RAW_RABBIT), "You cook the rabbit.");
   assert.equal(line(ItemIds.BREAD_DOUGH), "You successfully bake some bread.");
+  // rsprox 227/01858.txt:370990 (stick; the shaft is assumed the same), and the Wiki's "stop burning
+  // entirely at Cooking level 48" on both pages.
+  for (const name of ["spider on stick", "spider on shaft"]) {
+    const spider = [...Cooking.COOKABLE_BY_RAW.values()].find((cookable) => cookable.name === name);
+    assert.equal(Cooking._test.successMessage(spider), "You cook a spider.", name);
+    assert.equal(spider.stopBurn, 48, name);
+  }
   assert.equal(Cooking._test.burnMessage(Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_HERRING)), "You accidentally burn the herring.");
   assert.equal(Cooking._test.burnMessage(Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_KARAMBWAN)), "You accidentally burn the karambwan.");
 });

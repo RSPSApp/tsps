@@ -25,6 +25,8 @@ export interface CombatNormalSpellOptions {
     castSound?: () => number
     /** Its own impact sound id, for a built-in staff spell with no spellbook id in the impact table. */
     impactSound?: () => number
+    /** Its own line for a cast without the required equipment (the god spells name their staves). */
+    missingEquipmentMessage?: string
   }
 
 export class CombatNormalSpell extends CombatSpell {
@@ -34,6 +36,10 @@ export class CombatNormalSpell extends CombatSpell {
     constructor(private readonly options: CombatNormalSpellOptions){
         super();
         this.members = options.members === true;
+    }
+
+    public missingEquipmentMessage(player: Player): string {
+        return this.options.missingEquipmentMessage ?? super.missingEquipmentMessage(player);
     }
 
     spellId(): number {

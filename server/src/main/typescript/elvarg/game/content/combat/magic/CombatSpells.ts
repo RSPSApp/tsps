@@ -1060,6 +1060,8 @@ export class CombatSpells {
         baseExperience: () => {
             return 35;
         },
+        // rsprox_transcripts/235/03344.txt tick 4503.
+        missingEquipmentMessage: "You must be wielding the Staff of Saradomin or the Staff of Light to cast this spell.",
         equipmentRequired: (player: Player) => godStaffRequired(player, SARADOMIN_STRIKE_STAVES),
         itemsRequired: (player: Player) => {
             return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
@@ -1124,6 +1126,8 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
+        // rsprox_transcripts/235/03344.txt tick 5691.
+        missingEquipmentMessage: "You must be wielding the Staff of Zamorak, Staff of the Dead, Thammaron's Sceptre, or the Accursed Sceptre to cast this spell.",
         equipmentRequired: (player: Player): Item[] => godStaffRequired(player, FLAMES_OF_ZAMORAK_STAVES),
         itemsRequired: (player: Player): Item[] => {
             return [new Item(556, 1), new Item(565, 2), new Item(554, 4)];

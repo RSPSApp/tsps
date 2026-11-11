@@ -28,10 +28,22 @@ function requirements() {
   return monsterByRing;
 }
 
+/** The Desert Treasure II chapter whose boss each ring's monster is. */
+const QUEST_CHAPTER = new Map([
+  ["Vardorvis", "vardorvis"], ["Whisperer, The", "whisperer"], ["Duke Sucellus", "sucellus"], ["Leviathan, The", "leviathan"],
+]);
+
+/**
+ * A kill counted by Combat Achievements, or the quest's own fight: the Wiki (Ultor ring) has the
+ * kill "done during Desert Treasure II", and the quest's Vardorvis is not an ordinary NPC death.
+ */
 function killedBoss(player, monster) {
   const request = { player, monster, total: 0 };
   pluginApi.emitCustomEvent("combat-achievements:count", request);
-  return Number(request.total) > 0;
+  if (Number(request.total) > 0) return true;
+  const quest = { player, boss: QUEST_CHAPTER.get(monster), defeated: false };
+  pluginApi.emitCustomEvent("desert-treasure-ii:boss-defeated", quest);
+  return quest.defeated === true;
 }
 
 function canWearRing(event) {

@@ -154,6 +154,7 @@ The client draws everything from varbits; the server keeps them right.
 
 **Picking up the preform** (recording 565)
 - The jig goes 1→2 on pouring and 2→3 two ticks later.
+- Without ice gloves the poured metal is still molten: Pick-up says "The preform is still molten! You need to cool it down." (quest transcript). Using a bucket of water on the jig empties the bucket and cools it (3), and Pick-up then takes the preform. Having a bucket of water in the inventory is enough for Pick-up too (Wiki).
 - On pickup:
   - "Your Ice gloves cool the preform as you reach for it." on the spam channel (recordings 96, 100, 101, 565);
   - preform difficulty, quality and start quality are set;
@@ -251,7 +252,7 @@ The client draws everything from varbits; the server keeps them right.
 - The crucible's Check and Empty: Check reports its contents, and Empty asks before destroying them (Wiki: emptying loses the metal).
 - Pouring while a preform is still to be handed in (the Wiki says it can't be done): a placeholder message.
 - The level check for adding a metal (the Wiki says it needs the smelting level, boostable): a placeholder message.
-- Picking the preform up with a bucket of water (every capture used ice gloves): the bucket is emptied, with a placeholder message.
+- Picking the preform up with a bucket of water, and pouring the bucket over the poured mould (every capture used ice gloves): the bucket is emptied, with a placeholder message. Pouring cools the jig first; Pick-up then takes the preform without another bucket.
 - Heat-preform and Cool-preform (every capture went straight to the fast options): steps a third of the fast ones.
 - The temperature at pickup is 1000 minus a degree per tick since the pour (captured: 980-998).
 

@@ -102,6 +102,8 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const VARBIT_METAL_FIRST = 13931; // bronze..rune counts, 13931-13936
   const VARBIT_PREFORM_QUALITY = 13939;
   const VARBIT_COMPLETION = 13949;
+  const VARBIT_MOULD_STATE = 13914; // 2 poured, 3 cooled (Giants' Foundry)
+  const MOULD_COOLED = 3;
 
   const STAGE_STARTED = 1;
   const STAGE_TOOLS_REPAIRED = 2;
@@ -590,7 +592,11 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (stage === STAGE_MOULD_SET) {
       return "make-a-sword-talking-to-kovac-after-setting-the-mould";
     }
-    if (stage === STAGE_POURED) return "make-a-sword-before-picking-up-the-preform";
+    if (stage === STAGE_POURED) {
+      return foundryVarbit(player, VARBIT_MOULD_STATE) === MOULD_COOLED
+        ? "make-a-sword-talk-to-kovac-after-using-a-bucket-of-water"
+        : "make-a-sword-before-picking-up-the-preform";
+    }
     if (stage === STAGE_PREFORM_TAKEN) {
       return foundryVarbit(player, VARBIT_COMPLETION) > 0
         ? "make-a-sword-before-completing-the-use-of-the-trip-hammer"

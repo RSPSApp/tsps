@@ -56,9 +56,11 @@ function register(name, key, overrides = {}) {
 function player() {
   const attributes = new Map(), items = new Map(), bank = new Map(), vars = new Map(), packets = [], messages = [], equipment = new Map(), xp = [];
   let location = new core.Location(3158, 9713, 0), area = null, current = null, blocked = false, force = null, interfaceId = -1, chatboxGroupId = -1;
+  let renderAnimations = null;
   const id = index++;
   const inventory = { getAmount: id => items.get(id) || 0, contains: id => (items.get(id) || 0) > 0,
     adds: (id, amount) => items.set(id, (items.get(id) || 0) + amount),
+    delete: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),
     deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),
     getItems: () => [...items].map(([id, amount]) => new core.Item(id, amount)),
     getFreeSlots: () => 28 - [...items].reduce((sum, [id, amount]) => sum + (id === 995 ? Number(amount > 0) : amount), 0),
@@ -74,11 +76,12 @@ function player() {
     getInventory: () => inventory, getBank: () => ({ getAmount: id => bank.get(id) || 0 }), getBanks: () => [{ getAmount: id => bank.get(id) || 0 }],
     getEquipment: () => ({ get: id => equipment.has(id) ? new core.Item(equipment.get(id), 1) : null, setItem: (slot, item) => { if (item.getId() >= 0) equipment.set(slot, item.getId()); else equipment.delete(slot); }, refreshItems() {} }),
     getUpdateFlag: () => ({ flag() {} }), getInterfaceId: () => interfaceId,
+    setRenderAnimations: value => { renderAnimations = value; }, getRenderAnimations: () => renderAnimations,
     getLocation: () => location, moveTo: to => { location = to; }, getArea: () => area, setArea: a => { area = a; },
     getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getIndex: () => id,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, getUsername: () => 'ParityTester', getPacketSender: () => packet,
     getFrameUpdater: () => ({ clear() {} }), getDialogueManager: () => ({ reset: () => { current = null; }, getCurrent: () => current, isActive: () => !!current, startDialogues: chain => { current = chain; } }),
-    getMovementQueue: () => ({ setBlockMovement: value => { blocked = value; }, reset() {} }), isBlocked: () => blocked,
+    getMovementQueue: () => ({ setBlockMovement: value => { blocked = value; }, reset() {}, requestWalk: to => { location = to; } }), isBlocked: () => blocked,
     getSkillManager: () => ({ getMaxLevel: () => 50, getCurrentLevel: () => 50, addExperiences: (skill, amount) => xp.push([skill, amount]) }),
     forcePositionToFace: to => { p.facing = to; },
     sendMessage: text => messages.push(text), setUntargetable() {}, performAnimation() {}, performGraphic() {},
@@ -344,4 +347,36 @@ test('Sleeping Giants tutorial pickup gives the captured three-stage preform qua
   assert.equal(p.vars.get(13938),5);assert.equal(p.vars.get(13939),41);assert.equal(p.vars.get(13950),41);assert.equal(p.vars.get(13948),981);
   assert.deepEqual(Array.from({length:6},(_,index)=>Foundry.get(p,13940+index)),[1,2,0,0,0,0]);
   assert.equal(p.vars.get(13903),50);assert.equal(p.vars.get(13914),0);
+});
+
+test('Sleeping Giants bucket of water cools the poured mould before the preform can be taken', () => {
+  const q=foundryQuest(),p=player();q.quest.setStage(p,7);q.emit('giants-foundry:start-commission',{player:p,words:[3,4],tutorial:true});
+  require('../plugins/minigames/giantsfoundry/Preform.GiantsFoundry')(q.api);
+  for(const[id,value]of[[13913,5],[13914,2],[13910,8],[13911,8],[13912,6]])Foundry.set(p,id,value);
+  Foundry.setField(p,'pouredAt',Foundry.tick()-19);
+  // Hot metal cannot be taken out.
+  q.namedObjects.get('Mould jig (Poured metal):Pick-up')({player:p});
+  assert.equal(p.equipment.get(core.Equipment.WEAPON_SLOT),undefined);
+  assert.equal([...p.getDialogueManager().getCurrent().getDialogues().values()][0].getText(),'The preform is still molten! You need to cool it down.');
+  // Using the bucket on the jig cools the metal, empties the bucket and leaves the preform in it.
+  p.getInventory().adds(1929,1);
+  const use={player:p,itemId:1929,objectId:44777,handled:false};
+  q.call('onItemOnObject',use);
+  assert.equal(use.handled,true);
+  assert.equal(Foundry.get(p,13914),3);
+  assert.equal(p.getInventory().getAmount(1929),0);
+  assert.equal(p.getInventory().getAmount(1925),1);
+  assert.equal(p.equipment.get(core.Equipment.WEAPON_SLOT),undefined);
+  // The cooled preform comes out without needing a second bucket.
+  q.namedObjects.get('Mould jig (Cooled metal):Pick-up')({player:p});
+  assert.equal(p.equipment.get(core.Equipment.WEAPON_SLOT),27010);
+  assert.equal(p.vars.get(13903),50);assert.equal(p.vars.get(13914),0);
+});
+
+test('Sleeping Giants Kovac follows up once the water has been poured on the mould', () => {
+  const q=foundryQuest(),p=player();q.quest.setStage(p,7);
+  Foundry.set(p,13914,2);
+  assert.equal(q.resolve('onNpcDialogueVariant',{npcId:11468,player:p}),'make-a-sword-before-picking-up-the-preform');
+  Foundry.set(p,13914,3);
+  assert.equal(q.resolve('onNpcDialogueVariant',{npcId:11468,player:p}),'make-a-sword-talk-to-kovac-after-using-a-bucket-of-water');
 });

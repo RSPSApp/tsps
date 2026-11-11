@@ -67,6 +67,8 @@ import { SwitchItemSlotPacketListener } from "./packet/impl/SwitchItemSlotPacket
 import { PickupItemPacketListener } from "./packet/impl/PickupItemPacketListener";
 import { SecondGroundItemOptionPacketListener } from "./packet/impl/SecondGroundItemOptionPacketListener";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
+import { examineItem } from "../game/content/ExaminePrice";
+import { ItemOnGroundManager } from "../game/entity/impl/grounditem/ItemOnGroundManager";
 import { BoatManager } from "../game/content/sailing/BoatManager";
 import { Sailing } from "../game/content/sailing/Sailing";
 import { Bank } from "../game/model/container/impl/Bank";
@@ -951,6 +953,8 @@ export class ClientConnection {
                 if (!this.player.isTeleportingReturn() && this.player.getStatus() !== PlayerStatus.TRADING) {
                   EquipPacketListener.unequip(this.player, equipmentSlot);
                 }
+              } else if (!itemActionHandled && item?.getId?.() > 0 && actionPacket.buttonNum === 10) {
+                examineItem(this.player, item.getId(), item.getAmount());
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }
@@ -1706,8 +1710,7 @@ export class ClientConnection {
         DropItemPacketListener.drop(player, packet.itemId, 3214, packet.slot);
       }
     } else if (option === "examine") {
-      const definition = ItemDefinition.forId(packet.itemId);
-      player.sendMessage(definition.getExamine() || definition.getName());
+      examineItem(player, packet.itemId, item.getAmount());
     } else {
       ItemActionPacketListener.handleAction(player, packet.widgetId, packet.itemId, packet.slot, optionIndex ?? 1, packet.option);
     }
@@ -1747,13 +1750,24 @@ export class ClientConnection {
       CacheDefinitions.getSpellName(childId, itemId ?? -1);
   }
 
+  /** The size of the ground stack being examined: the one the click names, else one the player sees on that tile. */
+  private examinedGroundStackAmount(packet: { itemId: number; x: number; y: number; stackId?: number }): number {
+    const player = this.player!;
+    const z = player.getLocation().getZ();
+    const stack = packet.stackId != null
+      ? ItemOnGroundManager.getGroundItemById(packet.stackId, player)
+      : World.getItems().find((ground) => ground.getItem().getId() === packet.itemId
+        && ground.getPosition().getX() === packet.x && ground.getPosition().getY() === packet.y
+        && ground.getPosition().getZ() === z && ItemOnGroundManager.canSee(player, ground));
+    return stack && stack.getItem().getId() === packet.itemId ? stack.getItem().getAmount() : 1;
+  }
+
   private groundItemAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "ground_item_action" }>): void {
     const player = this.player!;
     const option = packet.option?.toLowerCase() ?? "";
     const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
-      const definition = ItemDefinition.forId(packet.itemId);
-      player.sendMessage(definition.getExamine() || definition.getName());
+      examineItem(player, packet.itemId, this.examinedGroundStackAmount(packet));
       return;
     }
     if (option === "take") {

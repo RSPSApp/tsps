@@ -531,6 +531,19 @@ Scripts 518, 2518, 4607 and 4611 are only called by the toggle script for their 
 
 - **Not done**: the official client transmits no varps, so a relic change made on its buff bar is still not saved. Ours: the delay prompt's wording (no capture of it).
 
+## Examine price info
+
+Rows 234 (Grand Exchange, varbit 13826 `examine_price_ge_enabled`) and 235 (Alchemy, varbit 13827 `examine_price_alch_enabled`) are `data/settings.json` toggles, on by default. Examining an item adds a line after its examine text:
+
+- `Price of Steel scimitar: GE 67  HA 240  LA 160` for one item, `Price of 100 x Feather: GE 300 (3ea)  HA 100 (1ea)` for a stack, with the numbers in red. Grand Exchange adds the GE part, Alchemy the HA and LA parts.
+- A part whose value is 0 is left out, and so is the whole line when nothing is left. Untradeable items have no line. A note is priced and named as the item it notes.
+- The GE part is the world's guide price (the one `/api/item-prices` serves); HA and LA are what the alchemy spells pay (none for an item they refuse, such as a bond).
+
+The server's item examines all go through `examineItem` (`game/content/ExaminePrice.ts`): the inventory and ground items (`net/NetworkBuilder.ts`), the worn equipment tab, the bank and its worn-items view (`Bank.ts`), the shop's stock and side inventory (`ShopManager.ts`) and the equipment stats screen (`EquipmentStats.plugin.js`). The trade window's items are examined in the client (`OsrsClient.examineWidgetItem`, `client/game/examinePrice.ts`), with the guide prices from `/api/item-prices` and the alchemy values from `/api/item-alchemy` (`ItemDefinitionLoader.plugin.js`), so both sides show the same values. A shop prices its whole stock, as the bank prices the banked stack (ours). The format is from screenshots of the official client. Defaults: the Alchemy varbit is 1 in all 3,239 rsprox logins that send it, and the Grand Exchange one in all 2,244 non-Ironman ones. Tests: `tests/examine-price.test.cjs`, `tests/examine-price-routes.test.cjs` (each server route), `client/tests/examine-price.test.ts`.
+
+- **Ours**: the exact red (`<col=ff0000>`) and the two spaces between parts, read off the screenshots.
+- **Not done**: item examines that plugins send themselves (the looting bag, death and boss retrieval chests, the farming vault and similar) have no price line yet. Live sends the Grand Exchange varbit as 0 in 777 of the 995 Ironman logins, so Ironman accounts probably start with it off. Here every account starts with it on.
+
 ## Containers on death
 
 Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).

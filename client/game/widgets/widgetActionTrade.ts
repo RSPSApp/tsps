@@ -18,7 +18,7 @@ export type WidgetActionTradeDeps = {
     getTradeOfferInventory: () => Inventory;
     getCs2Vm: () => Cs2Vm | undefined;
     getVarManager: () => VarManager | undefined;
-    examineWidgetItem: (widget: { itemId?: number } | null | undefined) => boolean;
+    examineWidgetItem: (widget: { itemId?: number; itemQuantity?: number } | null | undefined) => boolean;
     setPendingTradeQuantityAction: (
         action: {
             action: "offer" | "remove";
@@ -64,6 +64,7 @@ export function handleTradeWidgetAction(
     if (optionKey === "examine") {
         deps.examineWidgetItem({
             itemId: event.itemId ?? widget?.itemId,
+            itemQuantity: (event.itemId ?? widget?.itemId) === widget?.itemId ? widget?.itemQuantity : undefined,
         });
         return true;
     }

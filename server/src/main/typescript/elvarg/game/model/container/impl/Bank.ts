@@ -15,6 +15,7 @@ import { EnteredSyntaxAction } from "../../EnteredSyntaxAction";
 import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { ChatType } from "../../../../net/protocol/ClientProtocol";
+import { examineItem } from "../../../content/ExaminePrice";
 const getPluginManager = () =>
     require("../../../../plugins/PluginManager").PluginManager as typeof import("../../../../plugins/PluginManager").PluginManager;
 
@@ -870,8 +871,7 @@ export class Bank extends ItemContainer {
             const entry = Bank.resolveDisplaySlot(player, packet.slot);
             if (!entry || (packet.itemId != null && packet.itemId !== Bank.displayItemId(entry.item))) return true;
             if (packet.buttonNum === Bank.EXAMINE_OP) {
-                const definition = ItemDefinition.forId(entry.item.getId());
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, entry.item.getId(), entry.item.getAmount());
                 return true;
             }
             if (entry.item.getAmount() === 0) {
@@ -909,8 +909,7 @@ export class Bank extends ItemContainer {
             } else if (packet.buttonNum === 9) {
                 Bank.deposits(player, item.getId(), packet.slot, item.getAmount());
             } else if (packet.buttonNum === 10) {
-                const definition = ItemDefinition.forId(item.getId());
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, item.getId(), item.getAmount());
             }
             return true;
         }

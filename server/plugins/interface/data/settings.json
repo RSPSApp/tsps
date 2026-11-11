@@ -112,6 +112,8 @@
     "208": { "name": "Desert - Heat damage", "varbit": 13134 },
     "209": { "name": "Show number of options in mouseover tooltips", "varbit": 13133 },
     "213": { "name": "Cannon ammo", "varbit": 13667 },
+    "234": { "name": "Examine price info - Grand Exchange", "varbit": 13826, "default": 1 },
+    "235": { "name": "Examine price info - Alchemy", "varbit": 13827, "default": 1 },
     "236": { "name": "Anti Drag - Delay", "varbit": 13830 },
     "237": {
       "name": "Anti Drag - Enable Key",

@@ -19,6 +19,7 @@ async function main() {
     const client: any = {
         widgetManager: { getDynamicChildrenByParent: (w: any) => (w === slot ? children : []) },
         objTypeLoader: { load: (id: number) => ({ examine: id === 1163 ? "A full face helmet." : "null" }) },
+        varManager: { getVarbit: () => 0 },
     };
     const messages: string[] = [];
     const addMessage = chatHistory.addMessage.bind(chatHistory);

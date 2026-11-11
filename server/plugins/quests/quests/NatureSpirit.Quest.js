@@ -165,7 +165,8 @@ module.exports = function registerNatureSpiritQuest(api) {
   const POUCH_DELAY_TICKS = 1; // the cache effect lasts 18 client cycles
 
   const GROTTO_INTERIOR = { x: 3441, y: 9736, z: 0 };
-  const GROTTO_SURFACE = { x: 3443, y: 3338, z: 0 };
+  // rsprox 227/01846.txt tick 4478 (also 226/01638, 226/01695, 227/00101): the exit lands here.
+  const GROTTO_SURFACE = { x: 3440, y: 3337, z: 0 };
   const FILLIMAN_CAMP = { x: 3440, y: 3336, z: 0 };
   const NATURE_SPIRIT_CAMP = { x: 3441, y: 9738, z: 0 };
   const WASHING_BOWL_TILE = { x: 3437, y: 3337, z: 0 };
@@ -1191,7 +1192,13 @@ module.exports = function registerNatureSpiritQuest(api) {
     }
     if ((objectId === GROTTO_EXIT_ID || objectId === ObjectIdentifiers.GROTTO_4) && (option.includes("exit") || option.includes("leave"))) {
       event.handled = true;
-      player.moveTo(new Location(GROTTO_SURFACE.x, GROTTO_SURFACE.y, GROTTO_SURFACE.z));
+      // rsprox 227/01846.txt ticks 4477-4478: the prepare line, then a tick later the crawl line and the move.
+      player.sendMessage("You prepare to exit the Druid's grotto.");
+      const { TaskManager, CountdownTask } = api.core;
+      TaskManager.submit(new CountdownTask(player, 1, () => {
+        player.sendMessage("You crawl back out of the grotto.");
+        player.moveTo(new Location(GROTTO_SURFACE.x, GROTTO_SURFACE.y, GROTTO_SURFACE.z));
+      }));
       return;
     }
     if (objectId === ObjectIdentifiers.GROTTO_2 && option.includes("search")) {
@@ -1232,7 +1239,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     skills.updateSkill(Skill.PRAYER);
     player.setPrayerPointDrain(0);
     player.getPacketSender().sendSoundEffect(api.core.Sound.PRAYER_RECHARGE.getId(), 1, 0, 0);
-    player.sendMessage("You recharge your Prayer points.");
+    player.sendMessage("You recharge your prayer points at the altar of nature."); // rsprox 227/01846.txt tick 4473
     return true;
   }
 

@@ -175,7 +175,8 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
 
   const fakeCore = {
     ...core,
-    TaskManager: { submit: noop, cancelTasks: noop },
+    // Native actors run the real ticks (the grotto exit waits one).
+    TaskManager: nativeActors ? core.TaskManager : { submit: noop, cancelTasks: noop },
     World: { getObjects: () => worldObjects, getProcessCycle: () => clock.tick },
     MapObjects: { mapObjects: new Map(), getHash: (x, y, z) => `${x},${y},${z}` },
     RegionManager: { loadMapFiles: noop },
@@ -1050,7 +1051,7 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   // Players saved underground by the old handler can leave and resume at the entrance.
   player.moveTo(new core.Location(3441, 9736, 0)); player.needsPlacement = false;
   await click(O.GROTTO_3, 3442, 9733);
-  assert.deepEqual(position(), [3443, 3338, 0]);
+  assert.deepEqual(position(), [3440, 3337, 0], 'rsprox 227/01846.txt tick 4478 landing');
   await click(O.GROTTO, 3440, 3337);
   assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK]);
   for (const handler of h.logouts) handler({ player });
@@ -1070,11 +1071,16 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   assert.deepEqual(position(), [3441, 9736, 1]);
   assert.equal(h.quest.getStage(player), 110, 'post-quest entry cannot lower progress');
   player.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
+  const said = [], sendMessage = player.sendMessage.bind(player);
+  player.sendMessage = (message) => { said.push(message); return sendMessage(message); };
   await click(O.ALTAR_OF_NATURE, 3441, 9740);
+  assert.deepEqual(said, ['You recharge your prayer points at the altar of nature.'], 'rsprox 227/01846.txt tick 4473');
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER),
     player.getSkillManager().getMaxLevel(core.Skill.PRAYER) + 2, 'the actual plane-1 altar restores and boosts Prayer');
   await click(O.GROTTO_4, 3442, 9733);
   assert.equal(player.getLocation().z, 0, 'the finished grotto has a working native exit');
+  assert.deepEqual(position(), [3440, 3337, 0]);
+  assert.deepEqual(said.slice(1), ["You prepare to exit the Druid's grotto.", 'You crawl back out of the grotto.'], 'rsprox 227/01846.txt ticks 4477-4478');
 });
 
 

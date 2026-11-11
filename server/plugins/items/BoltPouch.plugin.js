@@ -234,7 +234,7 @@ function dialogueAction(event) {
     return;
   }
   inventory.deleteNumber(core.ItemIdentifiers.COINS, PRICE);
-  inventory.add(new core.Item(core.ItemIdentifiers.BOLT_POUCH, 1));
+  inventory.add(new core.Item(core.ItemIdentifiers.BOLT_POUCH, 1), true);
 }
 
 function login({ player }) {

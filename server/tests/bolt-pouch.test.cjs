@@ -122,10 +122,14 @@ const BUY = ["What about ammo?", "Yes I'll pay the 1500gp."];
 test("Hirko sells a bolt pouch for 1,500 coins", (t) => {
   const f = actor(t);
   f.inv.add(new core.Item(I.COINS, 2000), false);
+  const refresh = f.inv.refreshItems.bind(f.inv);
+  const shown = [];
+  t.mock.method(f.inv, "refreshItems", () => { shown.push(f.inv.getAmount(I.BOLT_POUCH)); return refresh(); });
   const lines = talk(f, BUY);
   assert.ok(lines.includes("Well let's see now... for you? 1500 gold pieces should do the trick."), lines.join("\n"));
   assert.equal(f.inv.getAmount(I.BOLT_POUCH), 1);
   assert.equal(f.inv.getAmount(I.COINS), 500);
+  assert.equal(shown.at(-1), 1, "the client is sent the inventory with the pouch in it");
 });
 
 test("Hirko: short of 1,500 coins, nothing is sold", (t) => {

@@ -104,14 +104,24 @@ class TeleportTask extends Task {
  *   3. Inside `go`: use the item up (a charge, the tablet, the runes), then `teleport` (or the teleport's own
  *      movement, such as the home-teleport cast or the ectophial's pour).
  *
- * Never spend before `confirm`, and give it the same Wilderness level as `checkReqs`. Pass `item` when the teleport
- * spends one (its id, or the Item itself for one with charges: `go` then gets the Item the player carries at the yes).
- * Spells cast through the spell engine ask the same way through "spell:teleport-confirm" (SpellTeleports).
+ *   if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return;
+ *   TeleportHandler.confirm(player, target, (carried) => {
+ *       if (charges(carried) <= 0) return;
+ *       setCharges(player, carried, charges(carried) - 1);
+ *       TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+ *   }, WILDERNESS_LEVEL, { item });
+ *
+ * - Never spend before `confirm`, and give it the same Wilderness level as `checkReqs` (a yes runs it again).
+ * - Pass `item` when the teleport spends one: its id, or the Item itself for one with charges. `go` then gets the Item
+ *   the player carries at the yes (a copy if they wore or removed it meanwhile): charge that one.
+ * - Pass `refused` to clear what the teleport set before asking (varbit busy) on a no or a failed recheck.
+ * - A spell runs its own checks (level, runes) before `confirm`, so it never asks about a cast that can't happen.
+ *   Spells cast through the spell engine ask the same way through "spell:teleport-confirm" (SpellTeleports).
  *
  * A move the player doesn't choose as a teleport (a ladder, a lever, an NPC's teleport, a quest's own move, the ring
  * of life's save) calls `teleport` directly. tests/teleport-confirm-coverage.test.cjs lists every file that starts a
- * teleport: a new one either asks, or is listed there with why it needn't. server/docs/agents/plugins.md
- * ("Teleports the player chooses") has an example.
+ * teleport: a new one either asks, or is listed there with why it needn't; tests/boat-teleport-warning-items.test.cjs
+ * holds a case for each that asks.
  */
 export class TeleportHandler {
 

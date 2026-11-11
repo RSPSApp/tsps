@@ -51,11 +51,6 @@ against live OSRS, never against another private server.
     relevant regression check, regenerate, and import the output. Repeat dumps from the
     same inputs must match. Resolve conflicts through regeneration and disclose any
     remaining difference; never hide it with a local override.
-17. **A teleport the player chooses asks first.** Check with `TeleportHandler.checkReqs`, then
-    hand the spend and the teleport to `TeleportHandler.confirm` (content may ask: the
-    boat-at-sea warning); never spend before it. Moves the player doesn't choose (ladders,
-    levers, NPC teleports) call `teleport` directly. See docs/agents/plugins.md, "Teleports the
-    player chooses".
 
 ## A plugin that follows them
 
@@ -79,7 +74,7 @@ module.exports = {
 
 | Topic | File |
 | --- | --- |
-| Plugin structure, splitting large plugins, events, members, commands, teleports the player chooses | [docs/agents/plugins.md](docs/agents/plugins.md) |
+| Plugin structure, splitting large plugins, events, members, commands | [docs/agents/plugins.md](docs/agents/plugins.md) |
 | Area-scoped content (wilderness, minigames, boss rooms) | [docs/agents/areas.md](docs/agents/areas.md) |
 | Finding ids: cache dump scripts, generated identifiers | [docs/agents/cache.md](docs/agents/cache.md) |
 | Interfaces that don't exist in the cache | [docs/agents/interfaces.md](docs/agents/interfaces.md) |

@@ -80,10 +80,12 @@ function colourReaderVarps() {
 function allSettings() {
   const buttons = new Map();
   const logins = [];
+  const events = new Map();
   const ids = (id) => (Array.isArray(id) ? id : [id]);
   const api = {
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onPlayerLogin: (handler) => logins.push(handler),
+    onCustomEvent: (name, handler) => events.set(name, handler),
     core: { CacheDefinitions, orbsGroupFor: require('../dist/net/protocol/ClientProtocol').orbsGroupFor },
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
@@ -123,7 +125,8 @@ function allSettings() {
     return { amount, picker: scripts.find(([id]) => id === COLOUR_PICKER_SCRIPT) };
   };
   const restore = logins.find((login) => login.name === 'restoreSettings');
-  return { player, varps, varbits, opened, flags, click, restore };
+  const closed = (interfaceId) => events.get('interface:closed')({ player, interfaceId });
+  return { player, varps, varbits, opened, flags, click, restore, closed };
 }
 
 const colourRows = [...OPAQUE, ...TRANSPARENT, ...SPLIT];
@@ -172,7 +175,7 @@ test('each row opens the picker on its default, saves RGB+1 in the varp the cach
 test('the picker opens as live opens it: an overlay in the settings popup layer, its buttons clickable', () => {
   const POPUP = (134 << 16) | 9;
   const OP1 = 1 << 1;
-  const { varbits, opened, flags, click } = allSettings();
+  const { varbits, opened, flags, click, closed } = allSettings();
   const { amount, picker } = click(87);
   assert.deepEqual(opened, [[POPUP, 288, 1]], 'colour_pallet (288) opens as an overlay in settings:popup (134:9)');
   assert.equal(picker[1], POPUP, 'script 4185 lays the picker out in that layer');
@@ -182,6 +185,9 @@ test('the picker opens as live opens it: an overlay in the settings popup layer,
   assert.equal(varbits.get(12284), 0, 'and cleared once a colour is chosen');
   click(87).amount.execute(CANCEL);
   assert.equal(varbits.get(12284), 0, 'or on Cancel');
+  click(87);
+  closed(134);
+  assert.equal(varbits.get(12284), 0, 'or when All Settings closes under it');
 });
 
 test('chosen colours come back at login', () => {

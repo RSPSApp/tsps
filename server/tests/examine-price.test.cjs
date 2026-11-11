@@ -17,6 +17,7 @@ const TROUT = 333;
 const NOTED_TROUT = 334;
 const COINS = 995;
 const BARCRAWL_CARD = 455; // untradeable quest item
+const OLD_SCHOOL_BOND = 13190; // tradeable, but the alchemy spells refuse it
 
 const r = (n) => `<col=ff0000>${n}</col>`;
 const BOTH = { ge: true, alch: true };
@@ -60,6 +61,9 @@ test('prices come from the item a note stands for; untradeable items and coins h
   const coins = examinePrices(COINS);
   assert.equal(coins === null || formatExaminePrice(coins.name, 100, coins.prices, BOTH) === null, true, 'coins: no line');
   assert.equal(ItemDefinition.forId(STEEL_SCIMITAR).isTradeable(), true);
+  const bond = examinePrices(OLD_SCHOOL_BOND);
+  assert.equal(bond.prices.ha, 0, 'no alchemy value for an item High Alchemy refuses');
+  assert.equal(bond.prices.la, 0);
 });
 
 test('sendExaminePrice follows the two settings', () => {

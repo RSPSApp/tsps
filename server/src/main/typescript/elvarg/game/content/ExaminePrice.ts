@@ -40,13 +40,15 @@ export function formatExaminePrice(
 export function examinePrices(itemId: number): { name: string; prices: ExaminePrices } | null {
     const definition = ItemDefinition.forId(ItemDefinition.forId(itemId).unNote());
     if (!definition.isTradeable()) return null;
+    // The values the alchemy spells pay: 0 for an item they refuse, such as a bond.
     const value = definition.getValue();
+    const alch = (own: number, share: number) => (Number.isFinite(own) ? own : Math.floor(value * share));
     return {
         name: definition.getName(),
         prices: {
             ge: definition.hasGrandExchangeValue() ? Math.floor(definition.getGrandExchangeValue()) : 0,
-            ha: Math.floor(value * 0.6),
-            la: Math.floor(value * 0.4),
+            ha: alch(definition.getHighAlchValue(), 0.6),
+            la: alch(definition.getLowAlchValue(), 0.4),
         },
     };
 }

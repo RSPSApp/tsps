@@ -19,7 +19,11 @@
     },
     { "quest": "Heroes' Quest", "items": ["DRAGON_BATTLEAXE", "DRAGON_MACE"] },
     { "quest": "Monkey Madness I", "items": ["DRAGON_SCIMITAR", "DRAGON_SCIMITAR_OR_"] },
-    { "quest": "Monkey Madness II", "items": ["HEAVY_BALLISTA", "HEAVY_BALLISTA_OR_"] },
+    {
+      "quest": "Monkey Madness II",
+      "items": ["HEAVY_BALLISTA", "HEAVY_BALLISTA_OR_"],
+      "message": "You must have completed Monkey Madness II and the advanced combat training from Duke to be able to wield this weapon."
+    },
     { "quest": "Regicide", "items": ["DRAGON_HALBERD"] },
     { "quest": "Legends' Quest", "items": ["DRAGON_SQ_SHIELD", "DRAGON_SQ_SHIELD_G_"] },
     { "quest": "Desert Treasure I", "items": ["ANCIENT_STAFF"] },

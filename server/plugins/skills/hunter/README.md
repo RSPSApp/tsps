@@ -137,10 +137,10 @@ Roaming spawns ([Implings](https://oldschool.runescape.wiki/w/Implings)):
   NPC-definition export.
 - The same Wiki revision explicitly says implings cross obstacles including water and magical
   wheat. Roaming Puro-Puro implings use the existing movement clipping opt-out. The estimated
-  wander radius remains eight, capped by each point's distance to the existing Hunter realm
-  rectangle (2560..2623, 4288..4351) to contain ordinary spawn-centered wandering. This cap is a
+  wander radius remains eight, capped by each point's distance to the cache-backed interior
+  rectangle (2562..2621, 4290..4349) to contain ordinary spawn-centered wandering. This cap is a
   server containment choice, not evidence for retail radius or a forced-displacement boundary.
-  Fixed implings and overworld movement are outside this change. The Wiki's two-minute
+  Overworld movement remains outside this change. The Wiki's two-minute
   invisibility claim carries a confirmation-needed qualification; this change preserves the
   server's timers rather than establishing retail timing.
 - Overworld (`Overworld.Hunter.js`, driven by the shared tick): every 30 minutes the previous
@@ -149,6 +149,27 @@ Roaming spawns ([Implings](https://oldschool.runescape.wiki/w/Implings)):
   one is gone until the next cycle. Not in: the Wiki's fixed low-tier points (ten, and Zanaris
   marketplace) have no coordinates here, and the wander radius (8) is an estimate. The imp
   defenders (npc 5738) freeing jarred implings are not in.
+
+The same flight rule also applies to the 51 fixed Puro-Puro implings loaded by the world spawn
+definitions. The existing `npc:added` event applies it after the loader has set each NPC's
+position and radius, covering deferred activation on ordinary entry. Radius never grows:
+the fixed default of five is capped by the same interior rectangle (edge points at 2563 or 2620
+can otherwise target across the enclosing walls). The broader Hunter realm rectangle remains
+2560..2623, 4288..4351. This is the same server containment inference as for roaming.
+The Hunter-owned fixed return path is preserved: two ticks of the caught animation, then seven
+hidden ticks for baby/young/gourmet/eclectic or 50 for earth/essence before returning visibly
+to the original spawn. The existing native suite now also loads the actual world definitions,
+activates the fixed population, checks real wheat collision and NPC/realm controls, dispatches
+Catch, and completes both seven- and 50-tick return paths through another ordinary Catch.
+Actor placement/equipment/levels/approach and successful RNG are supplied. Natural random
+wandering, client rendering and generic impling teleport/expiry timing remain unverified.
+The Wiki also distinguishes obstacles drawn as minimap lines. Cache242 supplies 244 unique
+wall-type placements, all on the enclosing edges x2561/2622 or y4289/4350 (raw records can
+repeat when preceding cases load the same map). The native fixture checks actual
+wall orientations and player collision on all four edges, every fixed/roaming destination
+square's interior containment, and the real coordinator/queue with supplied extreme rolls.
+The interior cap prevents ordinary spawn-centered wandering across those walls; it does not
+provide generic wall collision after forced displacement or establish overworld wall parity.
 
 The existing `impetuous-impulses.test.cjs` suite includes a native roaming route: real plugin
 startup, cache-backed Puro-Puro magical wheat, movement queues with player/ordinary-NPC collision

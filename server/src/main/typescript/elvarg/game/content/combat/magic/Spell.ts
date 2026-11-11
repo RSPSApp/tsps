@@ -65,6 +65,11 @@ export abstract class Spell {
         return true;
     }
 
+    /** The line for a cast without the required equipment; the god spells name their own staves. */
+    public missingEquipmentMessage(player: Player): string {
+        return "You do not have the required equipment to cast this spell.";
+    }
+
     /** The sound played on an accepted scripted cast; combat spells override it. */
     public castSound(): any {
         return null;
@@ -231,7 +236,7 @@ export abstract class Spell {
 
             const equipment = this.equipmentRequired(player);
             if (Array.isArray(equipment) && equipment.length > 0 && !player.getEquipment().containsAllItem(equipment)) {
-                player.sendMessage("You do not have the required equipment to cast this spell.");
+                player.sendMessage(this.missingEquipmentMessage(player));
                 player.getCombat().setCastSpell(null);
                 player.getCombat().reset();
                 return false;

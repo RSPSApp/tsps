@@ -352,8 +352,9 @@ finished value, 12 (every Raging Echoes capture's login) or Leagues VI's 14 (243
   client draws the new page. `orbs_disabled` (4084) and `chatoverlay_allowmesoverlap` (10690) are 1
   while it runs. It opens once the welcome screen's Play is clicked, or the new character's design
   closes. Not sent, though captured: `minimap_toggle` (no such packet here), `side_journal_tab` = 1
-  with the quest list mounted on Get Started (this client mounts journal tabs on their click), and
-  the orbs interface reopened at the end (this client keeps it).
+  with the quest list mounted on Get Started (this client mounts journal tabs on their click).
+  As captured, a login while it runs leaves the orbs (160) closed, and the end opens them again
+  (`settings:restore-data-orbs`, which keeps them closed for a player who hid them).
 - **Stages** (Raging Echoes; Demonic Pacts adds 11-13 and finishes at 14): 0 the welcome page, Get
   Started (677:9) sets `league_3_has_seen_cutscene` and jumps to 3; 3 flashes the journal stone
   (`flashside` 3, OP1 armed on stone2 of every gameframe layout: 161:61, 164:54, 548:66) until it is

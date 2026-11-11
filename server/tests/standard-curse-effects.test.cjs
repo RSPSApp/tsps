@@ -65,7 +65,9 @@ test('all six curses refuse lowered NPC/player stats before rune payment, until 
     assert.equal(f.method.canAttack(f.p,target),false,name+' paid cast');
     assert.equal(JSON.stringify(f.p.getInventory().getItems()),inventory,name+' preserves runes');
     assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()],xp,name+' preserves XP');
-    assert.ok(f.p.messages.some(message=>message.includes('already weakened.')));
+    // Attack curses: the recorded line (rsprox_transcripts/228/02224.txt); the others keep the older one.
+    const weakened=stat==='ATTACK'?"Your foe's attack has already been weakened.":'already weakened.';
+    assert.ok(f.p.messages.some(message=>message.includes(weakened)),name);
     if(pvp)levels.setCurrentLevels(skill,maximum-1,false);else levels.setCurrentLevels(skill,maximum-1);
     f.select();assert.equal(f.spell.canCast(f.p,false),false,'partial recovery is not enough');
     if(pvp)levels.setCurrentLevels(skill,maximum,false);else levels.setCurrentLevels(skill,maximum);

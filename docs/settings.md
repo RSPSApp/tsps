@@ -123,7 +123,6 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 - **Show mouseover text.** Login sends the saved value, 0 for a fresh account (it used to force 0). The top-left text and HUD overlays laid out by script 4731 (Wintertodt, ToA...) follow it when they are laid out: with the text on they sit 23px lower, with it off at the top.
 - **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
 - **Not done**:
-  - Show data orbs (8, varbit 4084 `orbs_disabled`): live also leaves the orbs interface (160) closed while it is set and opens it when the player turns them back on (rsprox 229/2375 tick 8), which needs server work.
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
 
 ## Buff Bar
@@ -572,6 +571,19 @@ These rows are `data/settings.json` toggles, off for a new account; the browser 
 Opcodes 1430/2430 and 1431/2431 set a component's key-down and key-up listeners (`if_setonkeydown`, `if_setonkeyup`; the client had them as item-on-item and clan settings). They run for every key pressed or released, with the key's code as `event_keycode`. Live's confirmation is the server's objectbox (193) with "Cancel|Switch world" and the world's number (rsprox 235/3313); here the World Switcher lists servers, not worlds, so the client asks in the list itself and names the server (ours). Tests: `tests/settings-wired-rows.test.cjs`, `client/tests/control-settings.test.ts`.
 
 - **Not done**: with the middle-mouse camera off, a middle click does nothing; whether live then treats it as a left click isn't documented.
+
+## Game client layout and data orbs
+
+Two Interfaces rows that change the gameframe itself, handled in `Settings.plugin.js`.
+
+| Setting | Id | Variable | What it does |
+| --- | --- | --- | --- |
+| Game client layout (dropdown: Fixed - Classic, Resizable - Classic, Resizable - Modern, Resizable - 317, Fixed - 317) | 12 | the saved layout (`client-layout-root`), as the side panel's dropdown | the same switch as the side panel's dropdown (116:40): the root interface becomes 548, 164 or 161, the open interfaces move onto it and the orbs are reopened for it |
+| Show data orbs | 8 | varbit 4084 `orbs_disabled` (1 hides them) | the orbs interface (160, or 897 on the mobile layout) closes while it is set and opens again when it is cleared |
+
+- **Game client layout.** Both dropdowns are on enum 3509. The cache has its first three options; our client adds the two 317 layouts to it, so both list all five, and the server takes all five (the official client shows only the three). On the mobile client the layout stays mobile and the choice isn't saved, as with the side panel.
+- **Show data orbs.** A login, the welcome screen's Play and a layout change open the orbs only while the row is on, as live logs in with `orbs_disabled` set (the speedrunning and Leagues tutorial logins in the rsprox captures leave 160 closed and open it at `toplevel:orbs` when the var goes back to 0). The Leagues tutorial hides them while it runs, and its end puts the player's own choice back (`settings:restore-data-orbs`). Tests: `tests/settings-gameframe-orbs.test.cjs`, `tests/settings-wired-rows.test.cjs`.
+- **Not done**: no capture shows the row itself being clicked; ours: a click closes or opens 160 at once, as the tutorial captures do when the var changes.
 
 ## Containers on death
 

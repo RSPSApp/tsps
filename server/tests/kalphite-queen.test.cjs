@@ -197,3 +197,11 @@ test('climbing down the roped Queen\'s tunnel lands where live does', () => {
   firstClicks.get(10230)({ player: { moveTo: tile => moves.push([tile.getX(), tile.getY(), tile.getZ()]) } });
   assert.deepEqual(moves, [[3508, 9493, 0]]);
 });
+
+test('the lair is multi-combat on both levels (rsprox: the multi icon on climbing down)', () => {
+  const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+  for (const [x, y, z] of [[3483, 9510, 2], [3508, 9497, 2], [3508, 9493, 0]]) {
+    assert.equal(Wilderness.isMulti(x, y, z), true, `${x},${y},${z}`);
+  }
+  assert.equal(Wilderness.isMulti(3227, 3108, 0), false, 'the surface tunnel');
+});

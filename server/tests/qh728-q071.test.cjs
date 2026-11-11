@@ -285,7 +285,7 @@ const variant = (player, npcId) => PluginManager.emitNpcDialogueVariant({ player
 test('canonical wire: stage 0 start, letter steps 2/3 and cache completion 4', () => {
   const ctx = setup();
   try {
-    const player = playerFixture(inventoryFixture(new Map([[I.SPADE, 1], [I.SAPPHIRE_AMULET, 1]])));
+    const player = playerFixture(inventoryFixture(new Map([[I.SPADE, 1], [I.SAPPHIRE_AMULET, 1]]), 2));
     ctx.restless.setStage(player, 1); // started, deliberately not complete
     ctx.priest.setStage(player, 2);
 
@@ -317,6 +317,7 @@ test('canonical wire: stage 0 start, letter steps 2/3 and cache completion 4', (
     assert.equal(player.inventory.getAmount(I.CHEST), 0, 'no chest before the continue');
     continued(dug);
     assert.equal(player.inventory.getAmount(I.CHEST), 1);
+    assert.equal(player.inventory.getFreeSlots(), 0, 'the chest fills the last inventory slot');
     assert.equal(player.varbits.get(TRADER_WIRE), 2, 'native trader_prog 2 = chest');
 
     // Open the chest with the key: a message box, the journal on its continue.
@@ -329,7 +330,7 @@ test('canonical wire: stage 0 start, letter steps 2/3 and cache completion 4', (
     continued(opened);
     assert.equal(player.inventory.getAmount(I.CHEST), 0);
     action(player, N.JORRAL, 'RgX_fS');
-    assert.equal(player.inventory.getAmount(I.JOURNAL_4), 1);
+    assert.equal(player.inventory.getAmount(I.JOURNAL_4), 1, 'the journal replaces the chest in a full inventory');
     assert.equal(player.varbits.get(TRADER_WIRE), 2, 'live never sends trader_prog 3 (ticks 340-1393)');
 
     // Show the journal to Jorral: the wire moves past "Interesting." and the journal goes (tick 1393).

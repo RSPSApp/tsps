@@ -996,13 +996,13 @@ module.exports = function registerMakingHistoryQuest(api) {
       };
       return;
     }
-    // A message box; its continue adds the journal, then throws the chest away (tick 340).
+    // A message box; its continue swaps the chest for the journal (tick 340).
     if (event.kind === "message" && stepId === CHEST_OPENED_MESSAGE_STEP) {
       event.box = { statement: true };
       event.after = () => {
         if (!held(player, CHEST)) return;
-        if (!held(player, JOURNAL)) player.getInventory().adds(JOURNAL, 1);
         player.getInventory().deleteNumber(CHEST, 1);
+        if (!held(player, JOURNAL)) player.getInventory().adds(JOURNAL, 1);
         setTrader(player, TRADER_JOURNAL);
       };
       return;

@@ -266,7 +266,7 @@ test('the Emotes and Account keybind rows (21, 26) save their keys for the next 
   const next = login(p.attributes);
   assert.equal(next.getPacketSender().getVarbit(4687), 7, 'Emotes key restored at login');
   assert.equal(next.getPacketSender().getVarbit(6517), 11, 'Account key restored at login');
-  assert.equal(next.getPacketSender().getVarbit(4682), 0, 'Magic gave up F7');
+  assert.equal(next.getPacketSender().getVarbit(4683), 0, 'Clan chat gave up F7');
 });
 
 test('Restore default keybinds (row 58) resets every key and saves it, as the panel button does', () => {
@@ -291,4 +291,11 @@ test('Restore default keybinds (row 58) resets every key and saves it, as the pa
     assert.equal(fromPanel.getPacketSender().getVarbit(varbit), expected, `varbit ${varbit} after the panel button`);
   }
   assert.equal(fresh.getPacketSender().getVarbit(4675), 1, 'Combat is F1 by default');
+});
+
+test('a new account starts with the keys live gives one', () => {
+  const sender = login().getPacketSender();
+  const keys = { 4675: 1, 4676: 2, 4677: 3, 4678: 13, 4679: 4, 4680: 5, 4682: 6, 4683: 7, 4684: 8, 6517: 9, 4689: 0, 4686: 10, 4687: 11, 4688: 12 };
+  for (const [varbit, key] of Object.entries(keys)) assert.equal(sender.getVarbit(Number(varbit)), key, `varbit ${varbit}`);
+  assert.equal(sender.getVarbit(ESC_CLOSES), 1, 'Esc closes the current interface is on');
 });

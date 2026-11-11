@@ -260,22 +260,22 @@ const KEY_NONE = 0;
 const MAX_KEY_VALUE = 13;
 
 // One row per keybind in interface 121, in cache order (the client's CS2 984
-// binds each varbit to button child buttonChild). defaultKey mirrors the OSRS
-// defaults and seeds a fresh account.
+// binds each varbit to button child buttonChild). defaultKey is the key a new account starts
+// with, which Restore default keybinds puts back (Inventory on Esc, Logout unbound).
 const TAB_VARBIT_MAP = [
   { slot: 1, varbit: 4675, defaultKey: 1, buttonChild: 9 }, // Combat
   { slot: 2, varbit: 4676, defaultKey: 2, buttonChild: 16 }, // Stats
   { slot: 3, varbit: 4677, defaultKey: 3, buttonChild: 23 }, // Journal/Quests
-  { slot: 4, varbit: 4678, defaultKey: 4, buttonChild: 30 }, // Inventory
-  { slot: 5, varbit: 4679, defaultKey: 5, buttonChild: 37 }, // Worn equipment
-  { slot: 6, varbit: 4680, defaultKey: 6, buttonChild: 44 }, // Prayer
-  { slot: 7, varbit: 4682, defaultKey: 7, buttonChild: 51 }, // Magic
-  { slot: 8, varbit: 4684, defaultKey: 9, buttonChild: 58 }, // Friends
-  { slot: 9, varbit: 6517, defaultKey: 0, buttonChild: 65 }, // Account
-  { slot: 10, varbit: 4689, defaultKey: 10, buttonChild: 72 }, // Logout
-  { slot: 11, varbit: 4686, defaultKey: 11, buttonChild: 79 }, // Options (settings)
-  { slot: 12, varbit: 4687, defaultKey: 0, buttonChild: 86 }, // Emotes
-  { slot: 13, varbit: 4683, defaultKey: 8, buttonChild: 93 }, // Clan chat
+  { slot: 4, varbit: 4678, defaultKey: 13, buttonChild: 30 }, // Inventory
+  { slot: 5, varbit: 4679, defaultKey: 4, buttonChild: 37 }, // Worn equipment
+  { slot: 6, varbit: 4680, defaultKey: 5, buttonChild: 44 }, // Prayer
+  { slot: 7, varbit: 4682, defaultKey: 6, buttonChild: 51 }, // Magic
+  { slot: 8, varbit: 4684, defaultKey: 8, buttonChild: 58 }, // Friends
+  { slot: 9, varbit: 6517, defaultKey: 9, buttonChild: 65 }, // Account
+  { slot: 10, varbit: 4689, defaultKey: 0, buttonChild: 72 }, // Logout
+  { slot: 11, varbit: 4686, defaultKey: 10, buttonChild: 79 }, // Options (settings)
+  { slot: 12, varbit: 4687, defaultKey: 11, buttonChild: 86 }, // Emotes
+  { slot: 13, varbit: 4683, defaultKey: 7, buttonChild: 93 }, // Clan chat
   { slot: 14, varbit: 4688, defaultKey: 12, buttonChild: 100 }, // Music
 ];
 

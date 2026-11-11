@@ -197,3 +197,17 @@ test('Anti Drag enable and disable keys store the key code the cache reads back 
   choose(p, 238, 2);
   assert.equal(p.getPacketSender().getVarbit(ENABLE_KEY), 81, 'the two keys share a varp without clearing each other');
 });
+
+const RELICS_HIDDEN = 12383;
+const BUFF_BAR_HIDDEN = 9528;
+
+test('relics hidden from the buff bar itself, with no row click, stay hidden at the next login', () => {
+  const p = login();
+  flipInClient(p, RELICS_HIDDEN, 1);
+  const next = login(p.attributes);
+  assert.equal(next.getPacketSender().getVarbit(RELICS_HIDDEN), 1);
+  assert.equal(next.getPacketSender().getVarbit(BUFF_BAR_HIDDEN), 0, 'the other buff bar rows on the varp are left alone');
+  flipInClient(next, RELICS_HIDDEN, 0);
+  assert.equal(click(next, 127), true, 'the Display Relics row click after the client flipped it');
+  assert.equal(login(next.attributes).getPacketSender().getVarbit(RELICS_HIDDEN), 0);
+});

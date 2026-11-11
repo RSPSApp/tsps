@@ -351,6 +351,9 @@ export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     VARP_OPTION_ATTACK_PRIORITY_PLAYER, // Player attack options (0-4)
     VARP_OPTION_ATTACK_PRIORITY_NPC, // NPC attack options (0-3)
     2856, // option_collection_new_item (varbit 11959) shares this varp with other settings
+    // buff_league_relics_hidden (varbit 12383): the buff bar's relic op flips it here, and the
+    // settings rows on this varp (the buff bar's) are flipped here before their click is sent.
+    1734,
 ]);
 
 // ========== VARC (Client variables - not persisted) ==========

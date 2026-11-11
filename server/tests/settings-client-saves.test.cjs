@@ -180,6 +180,43 @@ test('Anti Drag - Delay asks for milliseconds and keeps them in 20 ms steps, up 
   }
 });
 
+test('Anti Drag - Delay closed without an answer clears the chatbox flags and keeps the delay; 0 still sets it', () => {
+  const { PacketSender } = require('../dist/net/packet/PacketSender');
+  const FLOATER = 16075;
+  const BUSY = 12393;
+  AntiDragDelay.setApi({ emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); } });
+  const p = login();
+  let action = null;
+  const sent = [];
+  p.getEnteredAmountAction = () => action;
+  p.setEnteredAmountAction = (a) => { action = a; };
+  p.getEnteredSyntaxAction = () => null;
+  p.setEnteredSyntaxAction = () => {};
+  p.getSession = () => ({ sendClientPacket: (packet) => sent.push(packet) });
+  p.getPacketSender().sendEnterAmountPrompt = () => {};
+  const abort = () => PacketSender.prototype.abortInputPrompt.call(Object.assign(Object.create(PacketSender.prototype), { player: p }));
+  const ask = () => AntiDragDelay.settingClicked({ player: p, settingId: 236, handled: false });
+
+  ask();
+  action.execute(100);
+  assert.equal(p.getPacketSender().getVarbit(DELAY), 5);
+  ask();
+  assert.equal(p.getPacketSender().getVarbit(FLOATER), 1);
+  assert.equal(p.getPacketSender().getVarbit(BUSY), 1);
+  abort();
+  assert.equal(action, null, 'the abort drops the action');
+  assert.equal(sent.length, 1, 'the client is told to close the prompt');
+  assert.equal(p.getPacketSender().getVarbit(FLOATER), 0, 'floater flag cleared');
+  assert.equal(p.getPacketSender().getVarbit(BUSY), 0, 'busy flag cleared');
+  assert.equal(login(p.attributes).getPacketSender().getVarbit(DELAY), 5, 'the delay is kept');
+
+  ask();
+  action.execute(0);
+  assert.equal(p.getPacketSender().getVarbit(DELAY), 0, 'answering 0 sets no delay');
+  assert.equal(p.getPacketSender().getVarbit(FLOATER), 0);
+  assert.equal(login(p.attributes).getPacketSender().getVarbit(DELAY), 0);
+});
+
 test('Anti Drag enable and disable keys store the key code the cache reads back as the option', () => {
   // Script 3962 shows the option enum 4302 maps the varbit's key code to.
   const optionOf = new Map([...CacheDefinitions.getEnumValues(KEY_OPTIONS_ENUM)].map(([key, option]) => [Number(option), Number(key)]));

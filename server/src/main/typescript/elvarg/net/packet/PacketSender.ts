@@ -447,11 +447,13 @@ export class PacketSender {
    * would resume a count prompt with 0.
    */
   public abortInputPrompt(): this {
+    const amountAction = this.player.getEnteredAmountAction?.();
     if (this.hasInputPrompt()) {
       this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
     }
     this.player.setEnteredAmountAction?.(null);
     this.player.setEnteredSyntaxAction?.(null);
+    amountAction?.cancel?.();
     return this;
   }
 

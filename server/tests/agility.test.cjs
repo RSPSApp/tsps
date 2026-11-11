@@ -635,7 +635,8 @@ test("the native Draynor River Lum stone routes to this shore and finishes acros
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
   const DRAYNOR_STONE = 16533;
   const stoneTile = [3151, 3363, 0];
-  const west = [3149, 3363, 0], east = [3154, 3363, 0];
+  // rsprox 237/04001.txt:45675: the east crossing starts from 3155.
+  const west = [3149, 3363, 0], east = [3155, 3363, 0];
   RegionManager.init();
   RegionManager.loadMapFiles(...stoneTile);
   const object = MapObjects.get(DRAYNOR_STONE, new Location(...stoneTile), null);
@@ -659,6 +660,8 @@ test("the native Draynor River Lum stone routes to this shore and finishes acros
     assert.deepEqual(landings, [stoneTile, to], "the crossing uses the actual stone before reaching shore");
     assert.deepEqual(tileOf(player), to, "one click completes the crossing");
     assert.equal(player.state.xp, 3);
+    // rsprox 237/04001.txt:45813 (the newest crossing).
+    assert.equal(player.state.messages.at(-1), "You manage to make it to the other side of the river.");
     assert.equal(player.state.blocked, false);
     assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
   }

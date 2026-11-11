@@ -699,7 +699,7 @@ function showDataOrbs(player) {
 function clickShowDataOrbs(request) {
   if (request.handled || request.settingId !== SHOW_DATA_ORBS_SETTING) return;
   request.handled = toggleSetting(request.player, SHOW_DATA_ORBS_SETTING);
-  showDataOrbs(request.player);
+  if (request.handled) showDataOrbs(request.player);
 }
 
 /**
@@ -707,8 +707,9 @@ function clickShowDataOrbs(request) {
  * player's own choice comes back, and the orbs open or stay closed to match.
  */
 function restoreDataOrbs({ player }) {
-  const key = `varbit:${SETTINGS[SHOW_DATA_ORBS_SETTING].varbit}`;
-  sendSettingVar(player, key, savedSettings(player)[key] ?? 0);
+  const row = SETTINGS[SHOW_DATA_ORBS_SETTING];
+  const key = varKey(row);
+  sendSettingVar(player, key, savedSettings(player)[key] ?? row.default ?? 0);
   showDataOrbs(player);
 }
 

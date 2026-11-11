@@ -96,7 +96,9 @@ test('welcome screen Play leaves the orbs closed while Show data orbs is off', a
   const h = welcomeHarness({ orbsHidden: true });
   await Promise.resolve();
   h.hooks.play({ player: h.player });
-  assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', 161, false, 'REGULAR', false));
+  const sent = h.packets.slice(3).map(row => row[1]);
+  assert.deepEqual(sent, encodeGameframeBootstrap('WelcomeTester', 161, false, 'REGULAR', false));
+  assert.equal(sent.length, encodeGameframeBootstrap('WelcomeTester', 161).length - 1, 'one mount fewer: the orbs');
 });
 
 test('welcome screen waits for synchronous login initialization and restores the saved frame once', async () => {

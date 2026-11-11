@@ -150,10 +150,18 @@ export class WidgetManager {
      */
     isMobileChatDisabled: (() => boolean) | null = null;
 
-    /** Lay an open interface group out again, e.g. after something it sizes itself by changed. */
-    relayoutGroup(groupId: number, source = "relayout"): void {
-        const root = this.groups.get(groupId)?.root;
-        if (root) this.invalidateWidget(root, source);
+    private lastMobileChatDisabled = false;
+
+    /**
+     * Lay the All Settings window (group 134) out again when the mobile chat is toggled, so it
+     * grows into or gives back the chat's space (MobileHudLayout). Call between frames.
+     */
+    syncMobileChatToggle(): void {
+        const disabled = this.isMobileChatDisabled?.() ?? false;
+        if (disabled === this.lastMobileChatDisabled) return;
+        this.lastMobileChatDisabled = disabled;
+        const root = this.groups.get(134)?.root;
+        if (root) this.invalidateWidget(root, "chat-toggle");
     }
 
     /** The widget with contentType 1339 - compass (rotates with camera yaw) */

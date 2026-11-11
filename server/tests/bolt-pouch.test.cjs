@@ -153,6 +153,23 @@ test("Hirko: one pouch at a time, a banked one included", (t) => {
   assert.equal(f.inv.getAmount(I.BOLT_POUCH), 0);
 });
 
+test("Destroy warns how to get another pouch; the bolts come back with the next one from Hirko", (t) => {
+  const f = actor(t);
+  withPouch(f, [[I.RUNITE_BOLTS, 400], null, null, null]);
+  const pouch = f.inv.getItems().find((item) => item?.getId() === I.BOLT_POUCH);
+  const prompt = { player: f.p, item: pouch, question: "Are you sure you want to destroy this item?", warning: "This item will be destroyed permanently." };
+  PM.emitCustomEvent("destroy-item:prompt", prompt);
+  assert.equal(prompt.warning, "You can get another pouch from Hirko in Keldagrim.");
+  f.inv.delete(I.BOLT_POUCH, 1);
+  assert.equal(f.inv.getAmount(I.BOLT_POUCH), 0);
+  PM.emitCustomEvent("destroy-item:destroyed", { player: f.p, itemId: I.BOLT_POUCH, amount: 1 });
+  f.inv.add(new core.Item(I.COINS, 1500), false);
+  talk(f, BUY);
+  assert.equal(f.inv.getAmount(I.BOLT_POUCH), 1);
+  assert.equal(f.inv.getAmount(I.COINS), 0, "a new pouch was bought");
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.RUNITE_BOLTS, amount: 400 });
+});
+
 test("bolts used on the pouch go into a slot, up to 10,000, and the varbits show them", (t) => {
   const f = actor(t);
   withPouch(f, [[I.RUNITE_BOLTS, 9000], null, null, null]);

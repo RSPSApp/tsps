@@ -22,6 +22,7 @@ const MESSAGE = {
   CANT_HOLD: "The pouch can't hold that.",
   PRESET: "Preset items cannot be used for this.",
   NO_SPACE: "You don't have enough inventory space.",
+  DESTROY: "You can get another pouch from Hirko in Keldagrim.",
 };
 
 let api = null;
@@ -245,6 +246,14 @@ function dialogueAction(event) {
   inventory.add(new core.Item(core.ItemIdentifiers.BOLT_POUCH, 1), true);
 }
 
+/**
+ * Destroy warns only how to get another pouch. Ours: the bolts stay with the player, as for an
+ * Ultimate Ironman's lost pouch (Wiki), and show again in the next pouch bought from Hirko.
+ */
+function destroyPrompt(event) {
+  if (isPouch(event.item)) event.warning = MESSAGE.DESTROY;
+}
+
 function login({ player }) {
   sendSlots(player);
 }
@@ -264,6 +273,7 @@ module.exports = {
     api.onCustomEvent("player:widget-action", drag);
     api.onNpcDialogueCondition(dialogueCondition);
     api.onCustomEvent("npc-dialogue:action", dialogueAction);
+    api.onCustomEvent("destroy-item:prompt", destroyPrompt);
   },
   BOLTS_ATTRIBUTE,
   slots,

@@ -233,8 +233,10 @@ function fill(player, item, slot) {
     return;
   }
   const current = stored[key]?.doses ?? 0;
+  // A sixth kind: the full line with the potion's own name, as captured (238/04236.txt:44376-44391,
+  // "Your chugging barrel doesn't have space to store any more Extreme energy potion(4).").
   if (!stored[key] && Object.keys(stored).length >= POTION_TYPES) {
-    player.sendMessage(MESSAGE.CANNOT_STORE);
+    player.sendMessage(MESSAGE.FULL(core.CacheDefinitions.getItem(item.getId()).name));
     return;
   }
   if (current + dose.doses > DOSES_PER_POTION) {

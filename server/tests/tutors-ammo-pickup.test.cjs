@@ -7,6 +7,7 @@ Server.installProductionPathResolver();
 const plugin = require('../plugins/npcs/Tutors.plugin');
 
 const RANGED_TUTOR = 3217;
+const MAGIC_TUTOR = 3218;
 const AMMO_PICKUP_ATTRIBUTE = 'ranged:equip-ammo-on-pickup';
 const AMMO_PICKUP_VARBIT = 5697;
 const AMMO_SLOT = 13;
@@ -50,7 +51,7 @@ function harness({ varbit = 0 } = {}) {
   let pickup;
   const api = {
     core: {
-      NpcIdentifiers: { RANGED_COMBAT_TUTOR: RANGED_TUTOR },
+      NpcIdentifiers: { RANGED_COMBAT_TUTOR: RANGED_TUTOR, MAGIC_COMBAT_TUTOR: MAGIC_TUTOR },
       ItemIdentifiers: {},
       Equipment: { AMMUNITION_SLOT: AMMO_SLOT },
       ItemDefinition: { forId: () => ({ getName: () => 'Iron arrow' }) },
@@ -79,7 +80,7 @@ function harness({ varbit = 0 } = {}) {
   plugin.register(api);
   return {
     player, worn, varbits, attributes, deregistered, events, emitted,
-    choose(option) { for (const handler of events['npc-dialogue:choice'] ?? []) handler({ player, npcId: RANGED_TUTOR, option }); },
+    choose(option, npcId = RANGED_TUTOR) { for (const handler of events['npc-dialogue:choice'] ?? []) handler({ player, npcId, option }); },
     login() { for (const handler of logins) handler({ player }); },
     pickup(groundItemId = 884, amount = 5) {
       const stack = item(groundItemId, amount);
@@ -177,6 +178,18 @@ test('only matching ammunition is diverted to the quiver', () => {
   const event = h.pickup(882, 5);
   assert.equal(event.handled, false);
   assert.equal(h.worn.getAmount(), 100);
+});
+
+test('the Magic combat tutor toggle sets Settings > Rune-picking behaviour', () => {
+  const h = harness();
+  h.choose('Automatically send to rune pouch.', MAGIC_TUTOR);
+  let setting = h.emitted.filter((entry) => entry.type === 'settings:set').at(-1).payload;
+  assert.deepEqual([setting.settingId, setting.value], [306, 1]);
+  h.choose('Place them in my inventory.', MAGIC_TUTOR);
+  setting = h.emitted.filter((entry) => entry.type === 'settings:set').at(-1).payload;
+  assert.deepEqual([setting.settingId, setting.value], [306, 0]);
+  h.choose('Place them in my inventory.');
+  assert.equal(h.emitted.filter((entry) => entry.type === 'settings:set').length, 2, 'the Ranged tutor has no rune toggle');
 });
 
 test('a take policy that refuses the stack leaves the worn ammo alone', () => {

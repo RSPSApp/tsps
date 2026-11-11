@@ -92,10 +92,32 @@ class TeleportTask extends Task {
     }
 }
 
+/**
+ * Teleports, and the rules every teleport passes.
+ *
+ * A teleport the player chooses (a spell, a tablet or scroll, jewellery, a charged item, a cape, a quest item, a league
+ * relic) goes in this order, so content can ask first and nothing is used up on a no:
+ *
+ *   1. `checkReqs(player, destination, wildernessLevel)`: refuse (with its message) and stop.
+ *   2. `confirm(player, destination, go, wildernessLevel, { item, refused })`: content may ask first (the boat-at-sea
+ *      warning, All Settings 471); `go` runs at once when nothing asks, else on the player's yes.
+ *   3. Inside `go`: use the item up (a charge, the tablet, the runes), then `teleport` (or the teleport's own
+ *      movement, such as the home-teleport cast or the ectophial's pour).
+ *
+ * Never spend before `confirm`, and give it the same Wilderness level as `checkReqs`. Pass `item` when the teleport
+ * spends one (its id, or the Item itself for one with charges: `go` then gets the Item the player carries at the yes).
+ * Spells cast through the spell engine ask the same way through "spell:teleport-confirm" (SpellTeleports).
+ *
+ * A move the player doesn't choose as a teleport (a ladder, a lever, an NPC's teleport, a quest's own move, the ring
+ * of life's save) calls `teleport` directly. tests/teleport-confirm-coverage.test.cjs lists every file that starts a
+ * teleport: a new one either asks, or is listed there with why it needn't. server/docs/agents/plugins.md
+ * ("Teleports the player chooses") has an example.
+ */
 export class TeleportHandler {
 
     /**
-     * Teleports a player to the target location.
+     * Teleports a player to the target location. A teleport the player chose has been through `checkReqs` and
+     * `confirm` first (see the class comment); this only moves them.
      *
      * @param player
      *            The player teleporting.

@@ -193,6 +193,50 @@ api.onCustomEvent("slayer:assignment", (request) => {
 - The emitter owns the event name and payload shape; the listener owns the handler. Adding
   a new cross-plugin interaction means a new event name, not new `PluginManager` surface.
 
+## Teleports the player chooses
+
+A teleport the player picks (a spell, tablet, scroll, jewellery, charged item, cape, quest item
+or league relic) goes through `TeleportHandler.confirm` between its checks and anything it uses
+up, so other content can ask first. The boat-at-sea warning (All Settings 471,
+`skills/sailing/TeleportWarning.Sailing.js`) asks this way, and nothing is spent on a no.
+
+```js
+function rub({ player, item }) {
+  const { TeleportHandler, TeleportType, Location } = api.core;
+  const target = new Location(3087, 3496, 0);
+  // 1. The teleport rules: refused here, nothing is used up.
+  if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return;
+  // 2. Content may ask first. 3. Inside go: spend, then teleport.
+  TeleportHandler.confirm(player, target, (carried) => {
+    if (charges(carried) <= 0) return;
+    setCharges(player, carried, charges(carried) - 1);
+    TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  }, WILDERNESS_LEVEL, { item });
+}
+```
+
+- **Spend inside `go`, never before `confirm`:** a charge, the tablet, the scroll, runes, a
+  contract. `go` runs at once when nothing asks, so nothing changes for a player who isn't asked.
+- **The same Wilderness level** for `confirm` as for `checkReqs`: a yes runs `checkReqs` again.
+- **`item`** is what the teleport spends. An id: the player must still carry one at the yes. The
+  Item itself, for one with charges: `go` gets the Item the player carries at the yes, which is
+  a copy if they wore or removed it meanwhile, so charge that one, and check it still has a
+  charge. Without `item`, a yes can't tell that the item has gone.
+- **`refused`** runs on a no or a failed recheck: clear what the teleport set before asking
+  (varbit busy, a pending menu).
+- **Its own movement** (a home-teleport cast, a pour, a flight) goes inside `go`, as `teleport`
+  does. Never move a player with `moveTo` for a teleport they chose without `confirm`.
+- **Spells** cast through the spell engine (`SpellTeleports`) already ask through
+  `spell:teleport-confirm`; the others (Lunar, Arceuus, home, minigame) use `confirm`. Run the
+  spell's own checks (level, runes) before `confirm`, so it never asks about a cast that can't
+  happen.
+- **Moves the player doesn't choose as a teleport** (ladders, levers, NPC teleports, a quest's
+  own moves, the ring of life's save) call `TeleportHandler.teleport` directly.
+- **tests/teleport-confirm-coverage.test.cjs** lists every file that starts a teleport, and fails
+  for one that neither asks nor is listed in its `NOT_ASKED` with a reason. Add a new teleport's
+  case to tests/boat-teleport-warning-items.test.cjs: aboard with the row on it asks, a no uses
+  nothing up, and with the row off it goes at once.
+
 ## Turning plugins on and off
 
 Every plugin is on unless it exports `enabled: false` (VoiceChat does). world.json

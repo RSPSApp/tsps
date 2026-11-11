@@ -57,8 +57,9 @@ interpolation in `Context.probability`. Where the Wiki publishes no numbers, the
   amounts, aerial pearl and clue rates, and rumour rare-part rates are estimates.
 - Drift-net shoals are scared into swimming to the nearest non-full net and caught on arrival;
   they cannot get stuck on rocks, each other or the player.
-- Pitfall prey follows the player and attacks on contact; leap graphics are validated against
-  rev237 (`dump:spotanim`). Sunlight/moonlight antelopes use the Wiki's flat 255/255 chart.
+- Pitfall prey follows the player (the engine's NPC follow) and attacks on contact. Ours: the chase
+  ends after 50 ticks or 16 tiles; no capture shows one ending. Sunlight/moonlight antelopes use the
+  Wiki's flat 255/255 chart.
 - Lucky jars only give one clue-table roll; another plugin may answer `hunter:lucky-loot`.
 - Wyrmscraig goats, Letvek and Stymphalak have no usable rev237 assets and are excluded. Aerial
   fishing uses king worms/fish offcuts because fish chunks and javelin heads are absent.
@@ -93,9 +94,32 @@ butterflies and moths 95, 1634, 3279, 4051; herbiboar 127, 552, 554, 1858; bird 
 - Herbiboar trails: the bush-search animation, then the object's line two ticks later; the harvest is
   `pruning_high` with the herbiboar waking, then sound 1641, the herbs and two game messages.
 
-Not in yet: live pitfalls are one varbit-driven loc per spot (`hunt_pitfall_state<n>`) with a coord
-timer, and the creature falls in about 8 ticks after the jump; here the pit is replaced by spawned
-locs and the catch lands on the jump.
+## Pitfalls
+
+From rsprox captures (graahk 1108, 1858; kyatt 1757; sunlight antelope 1108, 4046, 4051; all Leagues
+worlds, none of spined larupias) and the Wiki ([Pitfall trapping](https://oldschool.runescape.wiki/w/Pitfall_trapping)):
+
+- Each pit is the map's 2x2 multiloc (`hunting_pitfall_1..18`) on its own varbit
+  (`hunt_pitfall_state<n>`): 0 Pit, 1 Spiked pit, 2 collapsing, 3 or 4 full. The loc never changes,
+  so Trap, Jump and Dismantle route to the pit from either side.
+- Every state change sends script 6678 at the pit's coord; a set pit then gets the yellow
+  `add_overlaytimer_coord` timer (301 ticks) and a full one the green (143). An untouched set pit
+  collapses after 300 ticks: varbit 0 and `The pitfall trap that you constructed has collapsed.`
+- Tease: `hunting_teasing_animal` with sound 2524, no message. Without a teasing stick or spear:
+  `I don't want to lose a finger by poking it. Maybe I should get a professional teasing implement instead.`
+- The player lands three tiles from where they jumped, on the far side of the pit.
+- Catch, in ticks after the jump: the creature steps onto the pit at +3, +5 and +6. At +8 the varbit
+  goes to 2 and the creature plays its fall (5234, antelopes 10928) with graphic 933 or 935 and pit
+  sound 2638. At +11 the pit shows full: 3 when the jump runs the loc's own way
+  ((rotation + 2) % 4, north = 0), with graphic 933; 4 the other way, with 935. The creature goes
+  then and is back at its spawn a tick later. The same pit catches the next creature at once
+  (1757, ticks 19124 and 19143).
+- Miss (1108, tick 21487): a step towards the pit at +3, `hunter_bigcat_leap_npc` (5231) at +5, and
+  at +7 the creature is beyond the pit and follows on. It won't use that pit again until it is caught
+  or loses interest (Wiki: "will not jump the same pit twice in a row"). Ours: antelopes use the
+  cache's `unicorn_rework_leap_npc` (10929); no antelope miss is captured.
+- Not copied: live also sends the collapse message about 145 ticks after a catch, even once the pit
+  was dismantled.
 
 ## Impling catching
 

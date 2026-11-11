@@ -18,6 +18,14 @@ const DISMANTLE_SOUND = 2632;
 // rsprox captures play the net dismantle sound with the animation, 25 client cycles late.
 const NET_DISMANTLE_SOUND_DELAY = 25;
 const TRAP_SOUND_RADIUS = 10;
+// Pitfalls are the map's 2x2 multiloc, driven by its own varbit (hunt_pitfall_state<n>): 0 Pit, 1 Spiked pit,
+// 2 collapsing, 3 and 4 the full pit for either jump direction. Each state change clears the coord timer
+// (script 6678) and a set or full pit draws add_overlaytimer_coord (5478): coord, timer id, ticks, colour, 1.
+// A set pit lasts 300 ticks, a full one 142 (rsprox captures 1108, 1757, 1858, 4046, 4051).
+const PIT_VALUES = { idle: 1, closing: 2, caught: 3 };
+const PIT_TICKS = { idle: 300, caught: 142 };
+const COORD_TIMER_SCRIPT = 5478;
+const CLEAR_COORD_TIMER_SCRIPT = 6678;
 
 function find(object) {
   for (const trap of H.traps) {
@@ -96,7 +104,41 @@ function spawn(trap, id, location, type = 10, face = 0) {
   return object;
 }
 
+/** Whether the trap is a map pit whose state the player's varbit draws (every Hunter pitfall). */
+function varbitPit(trap) {
+  return trap.kind === "pit" && !!trap.base && (pitVarbit(trap.base) ?? -1) !== -1;
+}
+
+function pitVarbit(base) {
+  return H.core.CacheDefinitions.getObject(base.getId())?.transformVarbit;
+}
+
+function pitCoordinate(trap) {
+  const at = trap.base.getLocation();
+  return (at.getZ() << 28) | (at.getX() << 14) | at.getY();
+}
+
+/**
+ * Moves a pit to a state: the map loc stays and the owner's varbit picks what it shows. `value` overrides the
+ * state's varbit value (4, the full pit for the other jump direction). Only a set or full pit restarts its timer.
+ */
+function setPitState(trap, state, creature = null, value = PIT_VALUES[state]) {
+  trap.objects.length = 0;
+  trap.objects.push(trap.base);
+  trap.state = state;
+  trap.creature = creature;
+  if (PIT_TICKS[state]) trap.expires = H.tick + PIT_TICKS[state];
+  const sender = trap.player.getPacketSender();
+  sender.sendVarbit(pitVarbit(trap.base), value);
+  sender.sendClientScript(CLEAR_COORD_TIMER_SCRIPT, pitCoordinate(trap));
+  const colour = TIMER_COLOURS[state];
+  if (PIT_TICKS[state] && colour !== undefined) {
+    sender.sendClientScript(COORD_TIMER_SCRIPT, pitCoordinate(trap), TIMER_ID, trap.expires - H.tick + 1, colour, 1);
+  }
+}
+
 function setState(trap, state, creature = null, animatedId = null) {
+  if (varbitPit(trap)) { setPitState(trap, state, creature); return; }
   for (const object of trap.objects) removeObject(object);
   trap.objects.length = 0;
   trap.state = state;
@@ -118,7 +160,7 @@ function setState(trap, state, creature = null, animatedId = null) {
 
 function sendTimer(trap) {
   const colour = TIMER_COLOURS[trap.state];
-  if (colour === undefined || trap.kind === "pit") return;
+  if (colour === undefined) return;
   const object = trap.objects.at(-1), at = object.getLocation();
   const coordinate = (at.getZ() << 28) | (at.getX() << 14) | at.getY();
   trap.player.getPacketSender().sendClientScript(TIMER_SCRIPT, coordinate, object.getId(), object.getType(), TIMER_ID,
@@ -159,7 +201,7 @@ function lay(player, kind, location, base = null, ground = null) {
     if (!["rabbit","pit"].includes(kind) && !def.noSmoke && player.getInventory().contains(H.core.ItemIdentifiers.ANTI_ODOUR_SALT)
       && exchange(player, [[H.core.ItemIdentifiers.ANTI_ODOUR_SALT, 1]], [])) trap.smoked = true;
     H.traps.add(trap);
-    if (base) H.core.ObjectManager.deregister(base, true);
+    if (base && !varbitPit(trap)) H.core.ObjectManager.deregister(base, true);
     setState(trap, "idle");
     if (def.item) player.performAnimation(new H.core.Animation(def.animation));
     if (kind === "pit") player.getPacketSender().sendSound(def.laySound, 1, 0);
@@ -202,6 +244,13 @@ function releasePrey(trap) {
 function remove(trap) {
   releasePrey(trap);
   H.traps.delete(trap);
+  if (varbitPit(trap)) {
+    trap.objects.length = 0;
+    const sender = trap.player.getPacketSender();
+    sender.sendVarbit(pitVarbit(trap.base), 0);
+    sender.sendClientScript(CLEAR_COORD_TIMER_SCRIPT, pitCoordinate(trap));
+    return;
+  }
   for (const object of trap.objects) removeObject(object);
   trap.objects.length = 0;
   if (trap.base) H.core.ObjectManager.register(trap.base, true);
@@ -402,7 +451,8 @@ function process() {
       continue;
     }
     if (trap.state === "closing") {
-      if (H.tick >= trap.closing.due) {
+      // A pitfall's collapse is timed by Pitfalls, with the creature's fall.
+      if (trap.closing && H.tick >= trap.closing.due) {
         const { success, creature } = trap.closing;
         trap.closing = null;
         setState(trap, success ? "caught" : "failed", success ? creature : null);
@@ -471,4 +521,4 @@ function cleanup({ player }) {
 }
 
 module.exports = { activate, groundActivate, build, check, dismantle, reset, investigate, bait, process, cleanup,
-  find, owned, limit, materials, remove, lay, setState, returnedItems };
+  find, owned, limit, materials, remove, lay, setState, setPitState, returnedItems };

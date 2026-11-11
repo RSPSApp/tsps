@@ -26,7 +26,9 @@ function build(core) {
       failing: loc("hunting_deadfall_failing"), animation: 5212, knife: true, logs: true, max: 2, layTicks: 1,
       layMessage: "You begin setting up a trap.", laySound: 2645, dismantle: 5212, trappingSound: 2631 },
     pit: { level: 31, idle: O.SPIKED_PIT, fail: O.COLLAPSED_TRAP, animation: 5212, knife: true, logs: true, layTicks: 1, laySound: 2639,
-      dismantle: 5212, dismantleTicks: 1, dismantleSound: 2649, caughtSuffix: "!", refusal: "You need some logs and a knife to set a pitfall trap." },
+      dismantle: 5212, dismantleTicks: 1, dismantleSound: 2649, caughtSuffix: "!", refusal: "You need some logs and a knife to set a pitfall trap.",
+      // rsprox captures 1108, 4046, 4051: an untouched set pit collapses with this game message.
+      collapse: ["The pitfall trap that you constructed has collapsed.", core.ChatType.GAME] },
     orange: { level: 47, ...sapling("orange"), bait: I.MARRENTILL_TAR, animation: 5215, ...NET },
     red: { level: 59, ...sapling("red"), bait: I.TARROMIN_TAR, animation: 5215, ...NET },
     black: { level: 67, ...sapling("black"), bait: I.HARRALANDER_TAR, animation: 5215, ...NET },

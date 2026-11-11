@@ -21,6 +21,8 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const START_HOOK = "quest:sleeping-giants:start";
 
   const HILL_GIANT_NPC_ID = NpcIdentifiers.HILL_GIANT_12; // 11467, "Strike" surface Kovac
+  /** Where Kovac waits on the plateau before the quest (npc-spawns.json's old row). */
+  const SURFACE_KOVAC_TILE = { x: 3362, y: 3146, z: 0 };
   const KOVAC_NPC_ID = NpcIdentifiers.KOVAC; // 11468
   const KOVAC_NPC_IDS = new Set([
     NpcIdentifiers.KOVAC, // 11468
@@ -190,6 +192,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const repairHadMaterials = new WeakMap();
   const pendingRepair = new WeakMap();
   const workshops = new WeakMap();
+  const surfaceKovacs = new WeakMap();
 
   let quest;
 
@@ -353,6 +356,31 @@ module.exports = function registerSleepingGiantsQuest(api) {
   }
 
   /**
+   * Kovac waits on the plateau as a Hill Giant only until the quest starts: the intro walks him
+   * into the foundry with the player, so his copy belongs to the player and goes with the quest.
+   * A world spawn would stay outside for everyone after the quest was over (issue 4270).
+   */
+  function syncSurfaceKovac(player) {
+    if (!player || player.isPlayerBot?.() === true) return;
+    const waiting = quest.getStage(player) === 0;
+    const npc = surfaceKovacs.get(player);
+    if (waiting && !npc) {
+      const spawned = api.spawnNpc({ id: HILL_GIANT_NPC_ID, ...SURFACE_KOVAC_TILE, wanderRadius: 0, owner: player, ownerOnly: true });
+      if (spawned) surfaceKovacs.set(player, spawned);
+    } else if (!waiting && npc) {
+      api.removeNpc(npc);
+      surfaceKovacs.delete(player);
+    }
+  }
+
+  function clearSurfaceKovac(player) {
+    const npc = player ? surfaceKovacs.get(player) : null;
+    if (!npc) return;
+    api.removeNpc(npc);
+    surfaceKovacs.delete(player);
+  }
+
+  /**
    * The cutscene walks the player tile by tile at walking speed, as the server does in
    * rsprox recording 96 (one HighResolutionMovement step per tick). Every tick a task sends the
    * player one tile on, before the player's movement runs, so a click's interaction_stop (which
@@ -414,7 +442,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   function workshopIntroduction(player) {
     const workshop = enterWorkshop(player); workshop.scene = true; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC_2); player.getDialogueManager().reset(); controls(player, true);
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
-    player.setAttribute(INTRO_ATTRIBUTE, 10); quest.setStage(player, STAGE_STARTED);
+    player.setAttribute(INTRO_ATTRIBUTE, 10); quest.setStage(player, STAGE_STARTED); syncSurfaceKovac(player);
     later(workshop, 3, () => sceneWalk(player, 3367, 11484));
     later(workshop, 4, () => sceneWalk(player, 3367, 11489));
     later(workshop, 1, () => camera(player, [3367, 11487, 500, 232, 232], [3367, 11479, 300, 232, 232]));
@@ -488,7 +516,9 @@ module.exports = function registerSleepingGiantsQuest(api) {
     });
   }
 
-  function handlePlayerGone({ player }) { workshops.get(player)?.leave(player, true); }
+  function handlePlayerGone({ player }) { clearSurfaceKovac(player); workshops.get(player)?.leave(player, true); }
+  /** A death leaves the foundry, but Kovac waits on the plateau until the quest starts either way. */
+  function handlePlayerDeath({ player }) { workshops.get(player)?.leave(player, true); syncSurfaceKovac(player); }
 
   function answerToolCheck(event) {
     if (quest.getStage(event.player) < STAGE_PREFORM_TAKEN || quest.isComplete(event.player)) return;
@@ -662,6 +692,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (quest.getStage(player) !== 0) return;
     resetProgress(player);
     quest.setStage(player, STAGE_STARTED);
+    syncSurfaceKovac(player);
   }
 
   /** The wiki repair menus: "Yes." consumes the materials and repairs the tool. */
@@ -915,6 +946,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   function handleLogin({ player }) {
     sendTutorialVarbits(player);
     refreshQuestList(player);
+    syncSurfaceKovac(player);
     if (player.getLocation().getY() >= 11456 && player.getLocation().getY() <= 11519 && quest.isStarted(player) && quest.getStage(player) < STAGE_COMMISSION) enterWorkshop(player);
   }
 
@@ -955,5 +987,5 @@ module.exports = function registerSleepingGiantsQuest(api) {
   api.onCustomEvent("player:interaction-stop", resumeSceneWalk);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handlePlayerGone);
-  api.onPlayerDeath(handlePlayerGone);
+  api.onPlayerDeath(handlePlayerDeath);
 };

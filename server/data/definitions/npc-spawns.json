@@ -30587,7 +30587,6 @@
   {"id":11171,"name":"Vyrewatch","x":3687,"y":9643,"level":0,"wanderRadius":0},
   {"level":0,"name":"Barus","x":1460,"y":3780,"id":12255,"wanderRadius":4},
   {"id":6142,"name":"Ernest","x":3110,"y":3365,"level":2,"source":"rsprox:discord:f2p240"},
-  {"level":0,"name":"Hill Giant","x":3362,"y":3146,"id":11467,"wanderRadius":0},
   {"level":0,"name":"Callisto","x":3356,"y":10322,"id":6609,"direction":1},
   {"level":0,"name":"Artio","x":1756,"y":11538,"id":11992,"direction":1},
   {"level":1,"name":"Vet'ion","x":3294,"y":10201,"id":6611,"direction":1},

@@ -118,7 +118,10 @@ function rollClue(player) {
   if (Math.floor(Math.random() * clueChance(player)) !== 0) return null;
   const allowed = { player, tier: "medium", allowed: null };
   api.emitCustomEvent("treasure-trails:can-receive", allowed);
-  if (allowed.allowed === false) return null;
+  if (allowed.allowed === false) {
+    api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: "medium" });
+    return null;
+  }
   if (allowed.allowed !== true && player.getInventory().getAmount(DATA.clue) > 0) return null;
   const award = { player, itemId: DATA.clue, box: false };
   api.emitCustomEvent("treasure-trails:clue-item", award);
@@ -284,6 +287,7 @@ module.exports = {
   isWatching,
   rollReward,
   redeemXp,
+  _test: { rollClue },
   register(pluginApi) {
     api = pluginApi;
     api.persistAttribute(DEPOSIT_ATTRIBUTE, 0);

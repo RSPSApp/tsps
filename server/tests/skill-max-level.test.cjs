@@ -855,6 +855,7 @@ function levelledPlayer(core, { total = 101, combat = 3 } = {}) {
 }
 
 const POPUP_DISABLED = 20157;
+const CHATBOX_LIST = 20158;
 
 test("as captured: Disabled pop-ups keep the message and graphic, and interrupt nothing", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -933,6 +934,7 @@ test("as captured: every 25 total levels, and level 99, have their own message",
   assert.equal(between.messages.length, 1);
   const maxed = levelledPlayer(core);
   maxed.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+  maxed.getPacketSender().sendVarbit(CHATBOX_LIST, 1);
   hooks.onPlayerLevelUp({ player: maxed, skill: Skill.ATTACK, oldLevel: 98, newLevel: 99 });
   assert.equal(maxed.messages[0], "Congratulations, you've reached the highest possible Attack level of 99.");
   assert.match(maxed.messages[1], /^Congratulations! You are now a master of Attack\./, "the master line follows");
@@ -952,6 +954,7 @@ test("a level-up says what it unlocked, and only the variant the player's own st
   function at(levels = {}, done = []) {
     const p = levelledPlayer(core);
     p.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+    p.getPacketSender().sendVarbit(CHATBOX_LIST, 1);
     p.skills.getMaxLevel = (skill) => levels[skill.getName()] ?? 1;
     quests = new Set(done);
     return p;
@@ -964,6 +967,11 @@ test("a level-up says what it unlocked, and only the variant the player's own st
     "Congratulations, you've just advanced your Defence level. You are now level 40.",
     "You can now wear Rune Armour!",
   ]);
+  // With "Level-up chatbox list" off (the default) the chat gets only the level-up line.
+  const unlisted = at();
+  unlisted.getPacketSender().sendVarbit(CHATBOX_LIST, 0);
+  hooks.onPlayerLevelUp({ player: unlisted, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.deepEqual(unlisted.messages, ["Congratulations, you've just advanced your Defence level. You are now level 40."]);
   // And a level with nothing to unlock adds nothing.
   const quiet = at();
   hooks.onPlayerLevelUp({ player: quiet, skill: Skill.DEFENCE, oldLevel: 40, newLevel: 41 });
@@ -1218,6 +1226,7 @@ test("Show level & unlocks: the setting at level-up decides, even if it changes 
     const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
     const p = levelledPlayer(core);
     p.getPacketSender().sendVarbit(4371, atLevelUp);
+    p.getPacketSender().sendVarbit(CHATBOX_LIST, 1);
     hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
     p.getPacketSender().sendVarbit(4371, beforeContinue);
     if (end === "continue") assert.equal(hooks.onInterfaceActionButton({ player: p }), true);

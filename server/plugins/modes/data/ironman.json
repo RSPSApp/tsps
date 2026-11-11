@@ -18,7 +18,7 @@
   },
   "messages": {
     "tradeSelf": { "text": "You are an Ironman. You stand alone.", "source": "capture" },
-    "tradeOther": { "text": "{name} is an Ironman. {pronoun} stands alone.", "source": "capture (He/She; Wiki adds They)" },
+    "tradeOther": { "text": "{name} is an Ironman. {pronoun} {stands} alone.", "source": "capture (He/She; Wiki adds They)" },
     "pickup": { "text": "You're an Ironman, so you can't take items that other players have dropped.", "source": "capture" },
     "sharedKill": { "text": "As an Ironman, you don't get loot if other players helped you kill the monster.", "source": "capture" },
     "killCredit": { "text": "As an Ironman, you might not receive kill-credit for this monster.", "source": "capture" },

@@ -104,6 +104,7 @@
       "channel": "game",
       "attemptLine": "You attempt to pick the workman's pocket...",
       "successLine": "You pick the workman's pocket...",
+      "successTicks": 3,
       "level": 25,
       "xp": 10.4,
       "stunDamage": 1,

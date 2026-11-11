@@ -76,7 +76,11 @@ const api = {
     CacheDefinitions, Location, ItemDefinition, Equipment, ItemIdentifiers, Task, CountdownTask, TemplatedInstanceArea,
     ChatType: { SPAM: "spam" },
     TaskManager: { submit: (task) => tasks.push(task), cancelTasks: (key) => tasks.forEach((task) => task.key === key && task.stop()) },
-    StatementDialogue: { send: (player, text) => player.sent.boxes.push(text) },
+    StatementDialogue: class {
+      constructor(index, text) { this.text = text; }
+      static send(player, text) { player.sent.boxes.push(text); }
+    },
+    DialogueChainBuilder: class { add(entry) { this.entry = entry; return this; } },
     TeleportHandler: { checkReqs: () => true, destinationAllowed: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
     TeleportType: { NORMAL: "NORMAL" },
   },
@@ -117,13 +121,15 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
   if (coins) inventory[27] = new Item(ItemIdentifiers.COINS, coins);
   const equipment = Array.from({ length: 14 }, () => new Item(-1, 0));
   for (const id of worn) equipment[ItemDefinition.forId(id).getEquipmentType().getSlot()] = new Item(id, 1);
-  const sent = { messages: [], spam: [], boxes: [], interfaces: [], scripts: [], anims: [], subs: [], closed: [], songs: [], jingles: [], shown: [], varbits: new Map(), removals: 0 };
+  const sent = { messages: [], spam: [], boxes: [], interfaces: [], scripts: [], anims: [], subs: [], closed: [], songs: [], jingles: [], shown: [], varbits: new Map(), configs: new Map(), sounds: [], removals: 0 };
   let location = at;
   let blocked = false;
   let registered = true;
   const sender = {
     sendTypedMessage: (type, text) => { sent.spam.push(text); return sender; },
     sendSong: (id) => { sent.songs.push(id); return sender; },
+    sendSoundEffect: (id) => { sent.sounds.push(id); return sender; },
+    sendConfig: (id, value) => { sent.configs.set(id, value); return sender; },
     sendJingle: (id) => { sent.jingles.push(id); return sender; },
     sendInterface: (id) => { sent.interfaces.push(id); return sender; },
     sendClientScript: (id, ...args) => { sent.scripts.push([id, ...args]); return sender; },
@@ -154,7 +160,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     getEquipment: () => container(equipment),
     getPacketSender: () => sender,
     getMovementQueue: () => movement,
-    getDialogueManager: () => ({ reset() {} }),
+    getDialogueManager: () => ({ reset() {}, startDialogues(chain) { sent.boxes.push(chain.entry.text); } }),
     getSpellbook: () => ({ getInterfaceId: () => 218 }),
     setUntargetable() {},
     isRegistered: () => registered,
@@ -714,4 +720,72 @@ test("Entrana boarding credit follows only an accepted outward voyage", () => {
   const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SHORTSWORD] });
   click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
   assert.deepEqual(boarded, [outward]);
+});
+
+
+test("Larry's Weiss voyage holds the player, shows the sailing overlay and lands on the captured coast", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  assert.equal(Voyages.travel(player, "larry-weiss"), true);
+  assert.equal(player.blocked, true);
+  assert.deepEqual(player.sent.sounds, [717, 2841]);
+  assert.deepEqual(player.sent.boxes, []);
+  tick(1);
+  assert.deepEqual(player.sent.boxes, ["You navigate Larry's boat to the coast near Weiss..."]);
+  assert.deepEqual(player.sent.songs, [203]);
+  tick(1);
+  assert.equal(player.sent.subs.at(-1).id, CacheDefinitions.getInterfaceId("my2arm_boatride"));
+  assert.equal(player.sent.configs.get(CacheDefinitions.getVarpId("journey_number")), -1);
+  tick(8);
+  assert.notEqual(player.getLocation().getX(), 2849);
+  tick(1);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [2849, 3968, 0]);
+  assert.equal(player.sent.configs.get(CacheDefinitions.getVarpId("journey_number")), 0);
+  assert.equal(player.blocked, false);
+  tick(1);
+  assert.equal(player.sent.boxes.length, 2);
+});
+
+test("Larry's voyage lands safely on logout before boarding and cannot start later", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  Voyages.travel(player, "larry-weiss");
+  Voyages.landNow({ player });
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2849, 3968]);
+  assert.equal(player.blocked, false);
+  tick(15);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2849, 3968]);
+  assert.equal(Common.travelling(player), false);
+});
+
+test("an interrupted Larry departure cannot board a later voyage", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  assert.equal(Voyages.travel(player, "larry-weiss"), true);
+  Voyages.landNow({ player });
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), true);
+  tick(2);
+  assert.equal(player.sent.subs.some(({ id }) => id === CacheDefinitions.getInterfaceId("my2arm_boatride")), false);
+  assert.equal(Common.travelling(player), true);
+  Voyages.landNow({ player });
+});
+
+test("logging out on Larry's ship clears its journey varp", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  Voyages.travel(player, "larry-weiss");
+  tick(2);
+  Voyages.landNow({ player });
+  assert.equal(player.sent.configs.get(CacheDefinitions.getVarpId("journey_number")), 0);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2849, 3968]);
+  assert.equal(player.blocked, false);
+});
+
+
+test("Larry's iceberg voyage shows the captured ship interface before landing", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  assert.equal(Voyages.travel(player, "larry-iceberg"), true);
+  tick(2);
+  assert.equal(player.sent.interfaces.at(-1), CacheDefinitions.getInterfaceId("peng_ship_journey"));
+  tick(6);
+  assert.notEqual(player.getLocation().getX(), 2660);
+  tick(1);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [2660, 3989, 1]);
+  assert.equal(player.blocked, false);
 });

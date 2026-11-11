@@ -121,8 +121,7 @@ function suggestions(player) {
   const includeMembers = includesMembers(player);
   const candidates = rows.filter(({ row, quest }) => quest && first(row.cr_can_recommend) === 1
     && first(row.release_type) !== 0 && !row.parent_quest?.length
-    && (includeMembers || first(row.members) !== 1)
-    && hasQuestJournal(first(row.id)));
+    && (includeMembers || first(row.members) !== 1));
   const questsDone = (row) => (row.requirement_quests ?? []).every((id) => byId.has(id) && states.get(byId.get(id)) === "done");
   const order = (a, b) => (states.get(b) === "started") - (states.get(a) === "started")
     || first(a.row.starter_order, Infinity) - first(b.row.starter_order, Infinity)

@@ -58,13 +58,40 @@ function restoreStaffCompletion({ player }) {
   player.setAttribute(LEGACY_STAFF_RECEIVED_ATTRIBUTE, false);
 }
 
+// The journal as live sends it, one line widget per line (RSProx 3344 rev 235 t163172-163189, the
+// completed miniquest): each line is short enough for the journal's width. Lines for steps done are
+// struck; the next step's line is written the same way.
+const JOURNAL_SPOKE = [
+  "I spoke to Kolodion in the Mage Arena basement. He said I",
+  "could train in the Mage Arena if I dueled him.",
+];
+/** One entry per form, in FORMS order: the lines that form's defeat adds. */
+const JOURNAL_FORMS_KILLED = [
+  ["I have killed Kolodion's human form."],
+  ["I have killed Kolodion's ogre form."],
+  ["I have killed Kolodion's spider form."],
+  ["I have killed Kolodion's ethereal form."],
+  ["I have killed Kolodion's demonic form and finally defeated", "Kolodion."],
+];
+const JOURNAL_CAPE = [
+  "I travelled through the magical pool to find a chamber",
+  "containing statues of the gods. I chanted at the statue of my",
+  "chosen god and received a cape.",
+];
+const JOURNAL_STAFF = [
+  "The Chamber Guardian presented me with a staff of my",
+  "chosen god.",
+];
+const struck = (lines) => lines.map((line) => `<str>${line}`);
+
 function buildJournal(player) {
   const stage = stageOf(player);
-  if (stage === 0) return ["I can start by talking to Kolodion in the Mage Arena bank. I need level 60 Magic."];
-  if (stage < DUEL_WON) return ["Kolodion has challenged me to a duel in the Mage Arena."];
-  if (stage < CAPE_CHOSEN) return ["I defeated Kolodion. I should enter the sparkling pool and choose a god to represent."];
-  if (stage < COMPLETE) return ["I chose a god to represent. I should speak to the Chamber guardian for my staff."];
-  return ["<str>I defeated Kolodion, chose a god to represent, and received my staff.</str>", "", "<col=ff0000>MINIQUEST COMPLETE!</col>"];
+  if (stage === 0) return ["I can start by talking to Kolodion in the Mage Arena bank.", "I need level 60 Magic."];
+  const duel = [...JOURNAL_SPOKE, ...JOURNAL_FORMS_KILLED.slice(0, Math.min(stage, DUEL_WON) - STARTED).flat()];
+  if (stage < DUEL_WON) return duel;
+  if (stage < CAPE_CHOSEN) return [...struck(duel), "I should enter the sparkling pool and choose a god to", "represent."];
+  if (stage < COMPLETE) return [...struck([...duel, ...JOURNAL_CAPE]), "I should speak to the Chamber guardian for my staff."];
+  return [...struck([...duel, ...JOURNAL_CAPE, ...JOURNAL_STAFF]), "", "<col=ff0000>MINIQUEST COMPLETE!"];
 }
 
 /** RSProx 3344 t3801–3818 and t3877–3882; alternate responses are in Transcript:Mage Arena I. */

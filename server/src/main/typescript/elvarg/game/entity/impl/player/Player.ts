@@ -96,6 +96,10 @@ export class Player extends Mobile {
     public static readonly STAT_RESTORE_TICKS = 100;
     /** Wiki (Rapid Heal): Rapid Heal or a Hitpoints cape heal a point every 30 seconds. */
     public static readonly FAST_HITPOINTS_REGEN_TICKS = 50;
+    /** `stat_boosts_hud_update_restore_up_timer`: (0 restore | 1 Rapid Restore, period, ticks left). */
+    private static readonly RESTORE_UP_TIMER_SCRIPT = 4517;
+    /** The overlay's timers are resent every quarter of the restore cycle. */
+    private static readonly RESTORE_TIMER_SEND_TICKS = 25;
     /** Cycle the next drained-stat restore is due on (-1: not started). */
     private statRestoreDue = -1;
     /** Cycle Rapid Restore's own restore is due on; it starts when the prayer is switched on. */
@@ -579,10 +583,12 @@ export class Player extends Mobile {
         if (restoreDue) this.statRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
 
         const rapidRestore = PrayerHandler.isActivated(this, PrayerHandler.RAPID_RESTORE);
+        const rapidRestoreWasOn = this.rapidRestoreDue >= 0;
         if (!rapidRestore) this.rapidRestoreDue = -1;
         else if (this.rapidRestoreDue < 0) this.rapidRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
         const rapidRestoreDue = rapidRestore && cycle >= this.rapidRestoreDue;
         if (rapidRestoreDue) this.rapidRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
+        if (!this.isPlayerBot()) this.sendRestoreTimers(cycle, rapidRestore && (!rapidRestoreWasOn || rapidRestoreDue), rapidRestoreWasOn && !rapidRestore);
 
         if (restoreDue || rapidRestoreDue) {
             // An area can pause non-Hitpoints restoration (Rogues' Den holds a drained Agility/
@@ -622,6 +628,25 @@ export class Player extends Mobile {
             skills.decreaseCurrentLevel(Skill.HITPOINTS, 1, max);
         }
         this.restartHitpointsTimer(cycle);
+    }
+
+    /**
+     * The modified stats overlay's tooltip timers ("Stats restoring", "Boosts draining") count
+     * down on the client from what these scripts last set: the restore timer goes out every 25
+     * ticks of its cycle (with "stats:restore-timer-sent", for the boost drain timer), and Rapid
+     * Restore's own timer when it starts, restores and stops.
+     */
+    private sendRestoreTimers(cycle: number, rapidRestoreRestarted: boolean, rapidRestoreStopped: boolean): void {
+        const remaining = this.statRestoreDue - cycle;
+        if (remaining % Player.RESTORE_TIMER_SEND_TICKS === 0) {
+            this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 0, Player.STAT_RESTORE_TICKS, remaining);
+            PluginManager.emitCustomEvent("stats:restore-timer-sent", { player: this });
+        }
+        if (rapidRestoreRestarted) {
+            this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 1, Player.STAT_RESTORE_TICKS, Player.STAT_RESTORE_TICKS);
+        } else if (rapidRestoreStopped) {
+            this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 1, 0, 0);
+        }
     }
 
     /** Worn items changed: the next Hitpoints regen asks gear again, keeping the countdown. */

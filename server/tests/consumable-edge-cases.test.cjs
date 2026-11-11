@@ -38,7 +38,7 @@ before(async () => {
 const {
   applyPrayerRestore, applySanfewRestore, applyAncientBrew, applyDivine, processDivine,
   applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration,
-  clearPrayerRegeneration, processBoostDecay, notePreserveActivated, curePoisonAndVenom,
+  clearPrayerRegeneration, processBoostDecay, notePreserveActivated, sendBoostDrainTimer, curePoisonAndVenom,
   pauseTimedEffects, resumeTimedEffects,
 } = Potions._test;
 
@@ -472,6 +472,27 @@ test("Preserve stretches the boost cycle to 90 seconds once it has been on for 1
   player.setAttribute("potions:boost-cycle", Date.now() - 1);
   processBoostDecay(player);
   assert.equal(player.levels.get(Skill.ATTACK), 108, "Preserve switched on under 15 seconds ago does not stretch it");
+});
+
+test("the modified stats overlay's boost drain timer shows the ticks left in the boost cycle", () => {
+  const { PrayerHandler } = core;
+  const player = createPlayer({ base: 99, current: 99 });
+  const scripts = [];
+  player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+  player.setAttribute("potions:boost-cycle", Date.now() + 30_000 - 100);
+  sendBoostDrainTimer({ player });
+  assert.deepEqual(scripts.pop(), [4518, 100, 100], "nothing boosted: a full minute");
+  player.levels.set(Skill.ATTACK, 110);
+  sendBoostDrainTimer({ player });
+  assert.deepEqual(scripts.pop(), [4518, 100, 50], "a boost drains in 30 seconds");
+  player.prayerActive[PrayerHandler.PRESERVE] = true;
+  player.setAttribute("potions:preserve-since", Date.now() - 1_000);
+  sendBoostDrainTimer({ player });
+  assert.deepEqual(scripts.pop(), [4518, 150, 100], "Preserve, on for 15 seconds when the cycle ends, adds 30 seconds");
+  player.setAttribute("potions:preserve-since", Date.now());
+  player.setAttribute("potions:boost-cycle", Date.now() + 10_000 - 100);
+  sendBoostDrainTimer({ player });
+  assert.deepEqual(scripts.pop(), [4518, 150, 17], "on under 15 seconds when the cycle ends: no stretch");
 });
 
 test("a divine-timed skill is pinned and only decays after the divine state ends", () => {

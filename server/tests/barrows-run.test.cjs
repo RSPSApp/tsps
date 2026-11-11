@@ -356,3 +356,24 @@ test("Barrows: equipment, clue, coins, keys and racks keep their amounts in mixe
   assert.deepEqual(Object.values(subject.sent.rewards)[0].slots,
     expected.map(([itemId, quantity], slot) => ({ slot, itemId, quantity })));
 });
+
+// Issue #4343: a tunnel door is crossed by walking through the doorway, as live (236/03929.txt
+// ~11290-11420: walk/run steps across barrows_door_o_l at 3562,9678, no exact move), not a slide.
+test("Barrows: an open tunnel door is walked through, not slid across", () => {
+  const subject = player();
+  const { useDoor, doorSides, getTunnelMap, getRun, processPlayer, IGNORE_CLIPPING_FLAG } = Barrows._test;
+  arrive(subject, CHEST_ROOM);
+  const run = getRun(subject);
+  const door = getTunnelMap().doors.find((entry) => run.openDoors.includes(entry.varbit) && entry.varbit !== run.puzzleDoor);
+  assert.ok(door, "an open door this run");
+  const [from, to] = doorSides(door);
+  subject.setLocation(from.clone());
+  processPlayer({ player: subject });
+  useDoor(subject, door);
+  assert.ok(!subject.getForceMovement(), "no exact move");
+  assert.equal(subject.hasFlag(IGNORE_CLIPPING_FLAG), true, "the doorway's clipping is ignored for the step");
+  subject.getMovementQueue().process();
+  assert.ok(subject.getLocation().equals(to), `walked to the far side (${subject.getLocation()})`);
+  for (let i = 0; i < 3; i++) processPlayer({ player: subject });
+  assert.equal(subject.hasFlag(IGNORE_CLIPPING_FLAG), false, "clipping back once across");
+});

@@ -8,19 +8,25 @@
  * untradeable.
  */
 const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
+const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const DATA = require("./data/quest-reward-death-coins.json");
 
 const COINS = 995;
 
-/** Lower-case item name -> coins a PvP death turns it into. */
-const COINS_BY_NAME = new Map(DATA.items.map((entry) => [entry.name.toLowerCase(), entry.coins]));
+/**
+ * Item id -> coins a PvP death turns it into. By id, not name: the broken barrelchest anchor and other copies of
+ * these items share their names but are worth nothing.
+ */
+const COINS_BY_ID = new Map(DATA.items.map((entry) => {
+  const id = ItemIdentifiers[entry.item];
+  if (typeof id !== "number") throw new Error(`quest-reward-death-coins.json: unknown item ${entry.item}`);
+  return [id, entry.coins];
+}));
 
 /** The coins `item` becomes on a PvP death, or 0 when it is not one of these items. */
 function deathCoins(item) {
   if (!item || item.isTradeable()) return 0;
-  const definition = item.getDefinition?.();
-  if (!definition || definition.isNoted?.()) return 0;
-  return COINS_BY_NAME.get(String(definition.getName() ?? "").toLowerCase()) ?? 0;
+  return COINS_BY_ID.get(item.getId()) ?? 0;
 }
 
 function toCoinsOnPvpDeath(event, api) {
@@ -40,7 +46,7 @@ module.exports = {
   name: "QuestRewardDeathCoins",
   description: "Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death.",
   members: true,
-  _test: { deathCoins, COINS_BY_NAME },
+  _test: { deathCoins, COINS_BY_ID },
   register(api) {
     api.onPlayerDeathItemDrop((event) => toCoinsOnPvpDeath(event, api));
   },

@@ -70,6 +70,21 @@ test("the listed items are untradeable items in the cache", () => {
   assert.equal(Plugin._test.deathCoins(new core.Item(I.GHOSTSPEAK_AMULET, 1)), 0);
 });
 
+test("the broken barrelchest anchor and the other barrows gloves copy share the names but give no coins", () => {
+  for (const id of [I.BARRELCHEST_ANCHOR_2, I.BARROWS_GLOVES_2]) {
+    assert.equal(Plugin._test.deathCoins(new core.Item(id, 1)), 0, `${id}`);
+  }
+});
+
+test("a PvP death with a broken anchor gives the killer no coins and loses it as any other untradeable", (t) => {
+  const victim = actor(t);
+  const killer = actor(t);
+  victim.getInventory().setItem(0, new core.Item(I.BARRELCHEST_ANCHOR_2, 1));
+  const { floor, lost, kept } = die(t, victim, killer, WILDERNESS());
+  assert.deepEqual(coinsFor(floor, killer), []);
+  assert.ok(lost.includes(I.BARRELCHEST_ANCHOR_2) || kept.includes(I.BARRELCHEST_ANCHOR_2), `not destroyed: ${JSON.stringify({ lost, kept })}`);
+});
+
 test("a PvP death turns barrows gloves and the barrelchest anchor into coins for the killer", (t) => {
   const victim = actor(t);
   const killer = actor(t);

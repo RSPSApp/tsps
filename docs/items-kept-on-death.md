@@ -24,7 +24,7 @@ On a PvP death these untradeables are destroyed unless they are among the kept i
 
 Untradeable quest rewards with combat stats that are bought from an NPC turn into coins for the killer on a PvP death, unless they are among the kept items. The item is lost, and the coins drop for the killer as the rest of the loot does (an Ironman killer's go to the victim). A preset copy gives no coins.
 
-- **Items** (`QuestRewardDeathCoins.plugin.js`, names and amounts in `plugins/items/data/quest-reward-death-coins.json`): barrows gloves, 78,000 coins; the barrelchest anchor, 230,000 coins.
+- **Items** (`QuestRewardDeathCoins.plugin.js`, ids and amounts in `plugins/items/data/quest-reward-death-coins.json`): barrows gloves, 78,000 coins; the barrelchest anchor, 230,000 coins. They are matched by id: the broken barrelchest anchor and a second barrows gloves item share the names but give no coins.
 - **PvM deaths** leave them to the grave, as any other untradeable.
 - **Not covered:** the Wiki names no other items or amounts for this rule. It also says metal gloves become a cash drop, without an amount, so they are left as they were.
 

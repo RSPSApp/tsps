@@ -1,12 +1,12 @@
 {
-  "$comment": "Untradeable quest rewards with combat stats, bought from an NPC, that a PvP death turns into coins for the killer. coins: the amount the killer gets.",
+  "$comment": "Untradeable quest rewards with combat stats, bought from an NPC, that a PvP death turns into coins for the killer. item: the ItemIdentifiers name of the wearable item (the broken barrelchest anchor and other copies with the same name are not listed); coins: the amount the killer gets.",
   "source": [
     "https://oldschool.runescape.wiki/w/Items_Kept_on_Death",
     "https://oldschool.runescape.wiki/w/Barrows_gloves",
     "https://oldschool.runescape.wiki/w/Barrelchest_anchor"
   ],
   "items": [
-    { "name": "Barrows gloves", "coins": 78000 },
-    { "name": "Barrelchest anchor", "coins": 230000 }
+    { "item": "BARROWS_GLOVES", "coins": 78000 },
+    { "item": "BARRELCHEST_ANCHOR", "coins": 230000 }
   ]
 }

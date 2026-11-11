@@ -176,7 +176,8 @@ export class PlayerDeathTask extends Task {
      * are emptied. `returnKeptItems` gives the kept ones back.
      */
     public static dropItems(player: Player, killer: Player | null | undefined, position: Location): Item[] {
-        const kept = PlayerDeathTask.getItemsToKeep(player);
+        const kept = PlayerDeathTask.getItemsToKeep(player, PlayerDeathTask.getAmountToKeep(player),
+            PlayerDeathTask.protectsCosmetics(player, killer));
         const itemsToKeep: Item[] = Array.isArray(kept) ? kept : [];
         const playerItems = PlayerDeathTask.splitIntoComponents(player, killer, itemsToKeep,
             player.getInventory().getValidItems().concat(player.getEquipment().getValidItems()));
@@ -301,7 +302,7 @@ export class PlayerDeathTask extends Task {
         GameConstants.PLAYER_PERSISTENCE.requestSave(player, "death");
     }
 
-    private static getAmountToKeep(player: Player): number {
+    public static getAmountToKeep(player: Player): number {
         if (
             player.getSkullTimer() > 0 &&
             player.getSkullType() == SkullType.RED_SKULL
@@ -361,10 +362,40 @@ export class PlayerDeathTask extends Task {
     }
 
     /**
+     * Whether a death keeps ornamented items beyond the kept count (Wiki: Ornament kit): not when
+     * killed by another player or in the Wilderness, and not once the player turns "Death
+     * protection from cosmetics" (All Settings row 386) off.
+     */
+    public static protectsCosmetics(player: Player, killer: Player | null | undefined): boolean {
+        if (killer && killer !== player) return false;
+        if (Wilderness.isIn(player)) return false;
+        return PlayerDeathTask.cosmeticProtectionOn(player);
+    }
+
+    /** Row 386: varbit 10987 (death_waivecosmeticsprotection) is 1 when the player waived it. */
+    public static cosmeticProtectionOn(player: Player): boolean {
+        return (player.getPacketSender?.() as any)?.getVarbit?.(PlayerDeathTask.WAIVE_COSMETICS_PROTECTION_VARBIT) !== 1;
+    }
+
+    private static readonly WAIVE_COSMETICS_PROTECTION_VARBIT = 10987;
+
+    /**
      * The items a death lets the player keep: the three most valuable (four with Protect Item, none
      * skulled). The Items Kept on Death interface passes the count its own toggles give.
      */
-    public static getItemsToKeep(player: Player, amountToKeep = PlayerDeathTask.getAmountToKeep(player)): Item[] {
+    public static getItemsToKeep(player: Player, amountToKeep = PlayerDeathTask.getAmountToKeep(player), cosmetics = false): Item[] {
+        const { ranked, always, cosmetic } = PlayerDeathTask.getKeptItems(player, amountToKeep, cosmetics);
+        return [...ranked, ...always, ...cosmetic];
+    }
+
+    /**
+     * The kept items by why they are kept: `ranked` the most valuable up to the count, `always`
+     * those a plugin keeps beyond it, and `cosmetic` the ornamented items `cosmetics` protects that
+     * were not valuable enough for a ranked slot. An ornamented item valuable enough takes its slot
+     * as any other does (Wiki: Items Kept on Death).
+     */
+    public static getKeptItems(player: Player, amountToKeep = PlayerDeathTask.getAmountToKeep(player), cosmetics = false):
+        { ranked: Item[]; always: Item[]; cosmetic: Item[] } {
         const items: Item[] = [];
         const alwaysKept: Item[] = [];
         for (const item of [...player.getInventory().getItems(), ...player.getEquipment().getItems()]) {
@@ -391,6 +422,15 @@ export class PlayerDeathTask extends Task {
         }
 
         items.sort((a: Item, b: Item) => PlayerDeathTask.keepValue(b) - PlayerDeathTask.keepValue(a));
-        return [...items.slice(0, amountToKeep), ...alwaysKept];
+        const ranked = items.slice(0, amountToKeep);
+        const cosmetic = cosmetics ? items.slice(amountToKeep).filter((item) => PlayerDeathTask.isCosmetic(player, item)) : [];
+        return { ranked, always: alwaysKept, cosmetic };
+    }
+
+    /** An item a cosmetic upgrade protects (`player-death:cosmetic` { player, item, cosmetic }; OrnamentKits answers). */
+    private static isCosmetic(player: Player, item: Item): boolean {
+        const query = { player, item, cosmetic: false };
+        PluginManager.emitCustomEvent("player-death:cosmetic", query);
+        return query.cosmetic === true;
     }
 }

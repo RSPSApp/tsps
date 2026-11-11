@@ -37,13 +37,20 @@ function getAmountToKeep(player, settings) {
   return (settings.skullActive ? 0 : 3) + (settings.protectItemPrayer ? 1 : 0);
 }
 
-/** The death's own choice (PlayerDeathTask.getItemsToKeep), for the count the toggles give. */
-function getItemsToKeep(player, settings) {
-  return core.PlayerDeathTask.getItemsToKeep(player, getAmountToKeep(player, settings));
+/**
+ * The death's own choice (PlayerDeathTask.getKeptItems), for the count the toggles give. An
+ * ornamented item the death protects beyond the count is listed with the other items, marked
+ * kept; the PvP and Wilderness toggles show a death that does not protect it.
+ */
+function getKeptItems(player, settings) {
+  const cosmetics = !settings.playerKill && settings.wildernessLevel === 0
+    && core.PlayerDeathTask.protectsCosmetics(player, null);
+  return core.PlayerDeathTask.getKeptItems(player, getAmountToKeep(player, settings), cosmetics);
 }
 
-function getDeathItems(player, toKeep, settings) {
+function getDeathItems(player, toKeep, settings, cosmetic = []) {
   const kept = new Set(toKeep);
+  const protectedItems = new Set(cosmetic);
   const grave = { player, playerKill: settings.playerKill, makesGrave: false };
   pluginApi.emitCustomEvent("gravestones:makes-grave", grave);
   const items = [];
@@ -59,7 +66,7 @@ function getDeathItems(player, toKeep, settings) {
     }
 
     const tradeable = item.isTradeable();
-    const lostOnDeath = tradeable || item.isLostOnDeath() || grave.makesGrave;
+    const lostOnDeath = !protectedItems.has(item) && (tradeable || item.isLostOnDeath() || grave.makesGrave);
     items.push({
       slot: items.length,
       itemId: item.getId(),
@@ -71,7 +78,7 @@ function getDeathItems(player, toKeep, settings) {
       quantity: 1,
     });
 
-    if (tradeable) {
+    if (tradeable && lostOnDeath) {
       const value = Math.max(0, Number(core.PlayerDeathTask.keepValue(item)) || 0);
       risk = Math.min(
         Number.MAX_SAFE_INTEGER,
@@ -84,8 +91,9 @@ function getDeathItems(player, toKeep, settings) {
 }
 
 function open(player, settings = getSettings(player)) {
-  const toKeep = getItemsToKeep(player, settings);
-  const deathItems = getDeathItems(player, toKeep, settings);
+  const { ranked, always, cosmetic } = getKeptItems(player, settings);
+  const toKeep = [...ranked, ...always];
+  const deathItems = getDeathItems(player, toKeep, settings, cosmetic);
   const keptItemIds = toKeep.map((item) => item.getId());
   while (keptItemIds.length < 4) keptItemIds.push(-1);
   player.setInterfaceId(ITEMS_KEPT_ON_DEATH_INTERFACE_ID);

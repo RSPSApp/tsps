@@ -35,6 +35,8 @@ function target({ resistance = 0, size = 1, flag = false, npc = true } = {}) {
       registers: (key, ticks) => { timers.set(key, ticks); registered.push([key, ticks]); },
     }),
     getMovementQueue: () => ({ reset() {} }),
+    getPacketSender: () => ({ sendEffectTimer() {} }),
+    sendMessage() {},
     ticks: () => timers.get(TimerKey.FREEZE),
   };
 }

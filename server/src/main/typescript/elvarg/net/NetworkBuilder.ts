@@ -211,6 +211,21 @@ function isSpecialAttackOrb(widgetId: number): boolean {
   return specialAttackOrbIds.has(widgetId);
 }
 
+/**
+ * All Settings "Ctrl+click to invert run mode" (row 207), varbit 13132 `runinvert_mode` (enum
+ * 4074): 0 Never, 1 Walk -> Run Only, 2 Run -> Walk Only, 3 Always. Live starts it at Always.
+ */
+const RUN_INVERT_MODE_VARBIT = 13132;
+const RUN_INVERT_WALK_TO_RUN = 1;
+const RUN_INVERT_RUN_TO_WALK = 2;
+
+/** Whether a Ctrl-click may invert the player's run mode, walking or running as they are. */
+export function runInvertAllowed(player: Player, running: boolean): boolean {
+  if (!CachePipeline.isInitialized()) return true;
+  const mode = player.getPacketSender().getVarbit(RUN_INVERT_MODE_VARBIT);
+  return (mode & (running ? RUN_INVERT_RUN_TO_WALK : RUN_INVERT_WALK_TO_RUN)) !== 0;
+}
+
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -1674,9 +1689,10 @@ export class ClientConnection {
     player.getCombat().reset();
     // Ctrl (1) inverts the run toggle for this walk; Ctrl+Shift (2) is a staff teleport that
     // plugins take over, and walks like a Ctrl-click for everyone else.
-    const invert = modifierFlags === 2 || (modifierFlags & 1) !== 0;
+    const running = player.isRunningReturn();
+    const invert = (modifierFlags === 2 || (modifierFlags & 1) !== 0) && runInvertAllowed(player, running);
     // The inversion holds for this path only; the run setting and orb stay as they are.
-    const runOverride = forceRun ? true : invert ? !player.isRunningReturn() && player.getRunEnergy() > 0 : null;
+    const runOverride = forceRun ? true : invert ? !running && player.getRunEnergy() > 0 : null;
     // MovementQueue owns the destination flag and de-duplicates it; sending it
     // here as well double-posts the marker on every walk click.
     player.getMovementQueue().requestWalk(

@@ -109,6 +109,7 @@
     "195": { "name": "Chatbox Mode - Set Automatically", "varbit": 13120 },
     "205": { "name": "Accept trade delay", "varbit": 13130, "default": 1 },
     "206": { "name": "PK Skull Prevention", "varbit": 13131 },
+    "207": { "name": "Ctrl+click to invert run mode", "varbit": 13132, "default": 3 },
     "208": { "name": "Desert - Heat damage", "varbit": 13134 },
     "209": { "name": "Show number of options in mouseover tooltips", "varbit": 13133 },
     "213": { "name": "Cannon ammo", "varbit": 13667 },

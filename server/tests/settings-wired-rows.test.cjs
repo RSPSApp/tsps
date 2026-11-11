@@ -70,12 +70,14 @@ const DROPDOWNS = {
   1: 6374,
   86: 12135,
   150: 12375,
+  207: 13132,
   462: 18136,
 };
 // Live defaults that are not zero: the default-state logins in the rsprox captures.
 const LIVE_DEFAULTS = {
   2: 1,
   150: 5,
+  207: 3,
   234: 1,
   235: 1,
   257: 1,

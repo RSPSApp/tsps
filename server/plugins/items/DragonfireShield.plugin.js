@@ -12,10 +12,19 @@ const MAX_CHARGES = 50;
 // Cache gamevals: defence_stab, defence_slash, defence_crush, defence_ranged in the bonus array.
 const CHARGE_DEFENCE_BONUSES = [5, 6, 7, 9];
 const RECHARGE_ATTRIBUTE = "dragonfire-shield:recharge";
+/** The charged id of the shield whose blast the recharge is for: it picks the buff bar's cooldown. */
+const RECHARGE_SHIELD_ATTRIBUTE = "dragonfire-shield:recharge-shield";
 
 // Cache gamevals.
 const SA_ATTACK_VARP = 301; // sa_attack: 2 while the blast is armed
 const RECHARGE_VARBIT = 6539; // dragonfire_shield_recharge
+const WARD_RECHARGE_VARBIT = 6540; // dragonfire_ward_recharge
+/**
+ * The buff bar draws the wyvern shield's cooldown (struct 840) from the map_clock tick it ends on, which
+ * only buff_bar_start (script 5931: the struct and the tick) sets; it has no varbit. Ours: no capture.
+ */
+const BUFF_BAR_START_SCRIPT = 5931;
+const WYVERN_COOLDOWN_BUFF = 840;
 const UNLEASH_ANIMATION = 6696; // qip_dragon_slayer_player_unleashing_fire
 const UNLEASH_GRAPHIC = 1165; // qip_dragon_slayer_shield_attack_spotanim
 const BLAST_PROJECTILE = 1166; // qip_dragon_slayer_player_projanim
@@ -85,6 +94,7 @@ function createShields(ItemIdentifiers) {
       releaseAnimation: VENT_ANIMATION,
       releaseGraphic: VENT_GRAPHIC,
       attackGraphic: UNLEASH_GRAPHIC,
+      rechargeVarbit: RECHARGE_VARBIT,
     },
     {
       name: "Dragonfire ward",
@@ -96,6 +106,7 @@ function createShields(ItemIdentifiers) {
       releaseAnimation: WARD_RELEASE_ANIMATION,
       releaseGraphic: VENT_GRAPHIC,
       attackGraphic: UNLEASH_GRAPHIC,
+      rechargeVarbit: WARD_RECHARGE_VARBIT,
     },
     {
       name: "Ancient wyvern shield",
@@ -108,6 +119,7 @@ function createShields(ItemIdentifiers) {
       releaseAnimation: WYVERN_RELEASE_ANIMATION,
       releaseGraphic: WYVERN_RELEASE_GRAPHIC,
       attackGraphic: WYVERN_ATTACK_GRAPHIC,
+      rechargeBuff: WYVERN_COOLDOWN_BUFF,
     }
   );
   for (const shield of SHIELDS) {
@@ -158,9 +170,29 @@ function rechargeSteps(player) {
   return Math.max(0, Number(player.getAttribute(RECHARGE_ATTRIBUTE)) || 0);
 }
 
-function setRechargeSteps(player, steps) {
+/** The shield the running recharge is for; the Dragonfire shield when none was saved. */
+function rechargeShield(player) {
+  return shieldsById.get(Number(player.getAttribute(RECHARGE_SHIELD_ATTRIBUTE))) ?? SHIELDS[0];
+}
+
+/** The recharge on the buff bar: the shield's varbit in steps, or the wyvern shield's end tick (0 to clear it). */
+function sendRecharge(player, steps) {
+  const shield = rechargeShield(player);
+  const sender = player.getPacketSender();
+  if (shield.rechargeVarbit) {
+    sender.sendVarbit(shield.rechargeVarbit, steps);
+    return;
+  }
+  const endsOn = steps > 0 ? core.World.getProcessCycle() + steps * RECHARGE_STEP_TICKS : 0;
+  sender.sendClientScript(BUFF_BAR_START_SCRIPT, shield.rechargeBuff, endsOn);
+}
+
+function setRechargeSteps(player, steps, shield = null) {
+  const prior = rechargeSteps(player);
   player.setAttribute(RECHARGE_ATTRIBUTE, steps);
-  player.getPacketSender().sendVarbit(RECHARGE_VARBIT, steps);
+  if (shield) player.setAttribute(RECHARGE_SHIELD_ATTRIBUTE, shield.charged);
+  // The wyvern shield's buff counts down by itself: it is sent when the recharge starts and ends.
+  if (rechargeShield(player).rechargeVarbit || prior === 0 || steps === 0) sendRecharge(player, steps);
 }
 
 function startRecharge(player) {
@@ -306,7 +338,7 @@ function createBlastMethod() {
       const player = character.getAsPlayer();
       const shield = wornShield(player);
       setArmed(player, false);
-      setRechargeSteps(player, RECHARGE_STEPS);
+      setRechargeSteps(player, RECHARGE_STEPS, shield ? shieldOf(shield) : null);
       startRecharge(player);
       if (shield) {
         setCharges(shield, charges(shield) - 1);
@@ -405,10 +437,33 @@ function chargeDefence({ player, bonuses }) {
 
 function login({ player }) {
   const steps = rechargeSteps(player);
-  if (steps > 0) {
-    player.getPacketSender().sendVarbit(RECHARGE_VARBIT, steps);
-    startRecharge(player);
-  }
+  if (steps <= 0) return;
+  if (rechargeShield(player).rechargeVarbit) sendRecharge(player, steps);
+  else sendRechargeNextTick(player);
+  startRecharge(player);
+}
+
+/**
+ * buff_bar_start finds the buff bar before it starts a buff, and login hooks run before the gameframe goes out:
+ * the wyvern shield's goes a tick later, and again when the welcome screen's Play opens the gameframe.
+ */
+function sendRechargeNextTick(player) {
+  const { Task, TaskManager } = core;
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(1, player, false);
+    }
+
+    execute() {
+      this.stop();
+      const steps = rechargeSteps(player);
+      if (steps > 0 && player.isRegistered?.()) sendRecharge(player, steps);
+    }
+  })());
+}
+
+function gameframeReady({ player }) {
+  if (rechargeSteps(player) > 0 && !rechargeShield(player).rechargeVarbit) sendRecharge(player, rechargeSteps(player));
 }
 
 function attach(api) {
@@ -424,6 +479,7 @@ module.exports = {
   register(api) {
     attach(api);
     api.persistAttribute(RECHARGE_ATTRIBUTE, 0);
+    api.persistAttribute(RECHARGE_SHIELD_ATTRIBUTE);
     api.onPlayerLogin(login);
     api.onItemAction("Dragonfire shield", { Inspect: inspect, Check: inspect, Activate: activate, Empty: empty });
     api.onItemAction("Dragonfire ward", { Inspect: inspect, Check: inspect, Activate: activate, Empty: empty });
@@ -434,6 +490,7 @@ module.exports = {
     api.registerBonusProvider({ apply: chargeDefence });
     api.registerCombatMethodResolver({ resolve: resolveBlast, overridesWeapon: true });
     api.onCustomEvent(DRAGONFIRE_BREATH_EVENT, absorbDragonfire);
+    api.onCustomEvent("gameframe:ready", gameframeReady);
   },
-  _test: { blastMaxHit, charges, chargeWyvernShield, recharge, chargeDefence, fossilCharges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },
+  _test: { login, setRechargeSteps, shieldOf, blastMaxHit, charges, chargeWyvernShield, recharge, chargeDefence, fossilCharges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },
 };

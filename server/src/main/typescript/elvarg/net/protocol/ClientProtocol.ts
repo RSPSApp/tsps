@@ -2684,9 +2684,11 @@ export function dataOrbsHidden(player: { getPacketSender(): { getVarbit(id: numb
  * The gameframe a login (or the welcome screen's Play) opens. Script 876 ends it: its name and
  * world-type strings go to script 5450, which keeps them in varc strings 564 and 944 (live sends
  * "REGULAR", or "HARDCORE WORLD" on a Hardcore world). With `orbsShown` false the orbs are not
- * opened, as live logs in while `orbs_disabled` is set.
+ * opened, as live logs in while `orbs_disabled` is set. Its first argument is the tick (map_clock)
+ * the gameframe opens on, as live sends it: script 4687 stores it in the buff bar's varcs, and the
+ * cooldowns read from a varbit (the dragonfire shield's and ward's among them) draw only once it is set.
  */
-export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false, worldTypeLabel = "REGULAR", orbsShown = true): Buffer[] {
+export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false, worldTypeLabel = "REGULAR", orbsShown = true, mapClock = 0): Buffer[] {
   const mounts = [
     // pm_chat -> toplevel_osrs_stretch:pm_container (93), xp_drops -> :xp_drops (9).
     // 161:7 (hud_container_back) has no fixed-layout pane, so XP drops mounted there vanished.
@@ -2702,7 +2704,7 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
   cameraScript.writeUInt16BE(626, 0);
   const rootPayload = Buffer.alloc(2);
   rootPayload.writeUInt16BE(root);
-  const loginScript = Buffer.concat([Buffer.alloc(4), scriptArgs([0, 0, playerName, worldTypeLabel]), Buffer.alloc(4)]);
+  const loginScript = Buffer.concat([Buffer.alloc(4), scriptArgs([mapClock, 0, playerName, worldTypeLabel]), Buffer.alloc(4)]);
   loginScript.writeInt32BE(876, 0);
   return [
     packet(ServerPacket.RUN_CLIENT_SCRIPT, cameraScript, 2),

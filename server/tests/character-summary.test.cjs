@@ -125,6 +125,7 @@ test("dismissing the real welcome screen restores the custom summary after its s
       ...f.api.core,
       ChatType: { WELCOME: 108 },
       GameConstants: { WORLD_TYPE: { label: "REGULAR" } },
+      World: { getProcessCycle: () => 4321 },
       Wilderness: { isInLocation: () => false },
       resolveGameframeRoot: () => 161,
       dataOrbsHidden: () => false,

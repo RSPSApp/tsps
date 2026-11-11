@@ -12,6 +12,7 @@ const Elnock = require("./impetuousimpulses/Elnock.ImpetuousImpulses");
 const Wheat = require("./impetuousimpulses/Wheat.ImpetuousImpulses");
 const Roaming = require("./impetuousimpulses/Roaming.ImpetuousImpulses");
 const Area = require("./impetuousimpulses/Area.ImpetuousImpulses");
+const Supplies = require("./impetuousimpulses/Supplies.ImpetuousImpulses");
 
 module.exports = {
   name: "ImpetuousImpulses",
@@ -51,6 +52,7 @@ module.exports = {
   register(api) {
     Entry(api);
     Elnock(api);
+    Supplies(api);
     Wheat(api);
     Roaming(api);
     Area(api);

@@ -9,6 +9,7 @@ const {
 } = require("./ConsumableEffects");
 const { TimerKey } = require("../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
+const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
@@ -122,8 +123,18 @@ function damageButKeepAlive(player, amount) {
   player.setHitpoints(next);
 }
 
-function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false) {
-  if (player.isVenomed() && !fullVenomCure) {
+/**
+ * The anti-venoms' spam lines (none for the antipoisons: 473 recorded drinks send only "You drink some of
+ * your antipoison potion."). Anti-venom: "It cures your venom." when venomed (rsprox_transcripts/235/03340.txt),
+ * else "It grants you immunity from poison." (234/00799.txt); anti-venom+ and extended: "It grants you immunity
+ * from venom." (226/01637.txt, 224/01439.txt).
+ */
+const ANTI_VENOM_LINE = (wasVenomed) => (wasVenomed ? "It cures your venom." : "It grants you immunity from poison.");
+const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
+
+function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null) {
+  const wasVenomed = player.isVenomed();
+  if (wasVenomed && !fullVenomCure) {
     curePoison(player);
     if (message) player.sendMessage("The potion weakens the venom to poison.");
     return;
@@ -136,8 +147,8 @@ function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = fa
   if (remaining < seconds) {
     timer.start(seconds);
   }
-  if (message) {
-    player.sendMessage(`You are now immune to poison for another ${Math.max(remaining, seconds)} seconds.`);
+  if (message && line) {
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, line(wasVenomed));
   }
 }
 
@@ -1038,17 +1049,17 @@ registerPotion({
 registerPotion({
   name: "Anti-venom",
   chains: [doseChain("ANTI_VENOM_4_", "ANTI_VENOM_3_", "ANTI_VENOM_2_", "ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 738, true, true),
+  effect: (player) => applyPoisonImmunity(player, 738, true, true, ANTI_VENOM_LINE),
 });
 registerPotion({
   name: "Anti-venom+",
   chains: [doseChain("ANTI_VENOM_4__3", "ANTI_VENOM_3__3", "ANTI_VENOM_2__3", "ANTI_VENOM_1__3")],
-  effect: (player) => applyPoisonImmunity(player, 900, true, true),
+  effect: (player) => applyPoisonImmunity(player, 900, true, true, ANTI_VENOM_PLUS_LINE),
 });
 registerPotion({
   name: "Extended anti-venom+",
   chains: [doseChain("EXTENDED_ANTI_VENOM_4_", "EXTENDED_ANTI_VENOM_3_", "EXTENDED_ANTI_VENOM_2_", "EXTENDED_ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 1062, true, true),
+  effect: (player) => applyPoisonImmunity(player, 1062, true, true, ANTI_VENOM_PLUS_LINE),
 });
 
 registerPotion({

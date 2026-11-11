@@ -282,6 +282,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         Object.assign(definition, {
             immunePoison: source.immune_poison === true,
             immuneVenom: source.immune_venom === true,
+            // Additive field of the same export: a whole percentage, anything else is no resistance.
+            freezeResistance: Number.isInteger(source.freeze_resistance)
+                ? Math.min(100, Math.max(0, source.freeze_resistance)) : 0,
         });
     }
 

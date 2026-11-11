@@ -1594,13 +1594,27 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen).
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable")) {
+        // The Wiki's freeze resistance (the NPC's status record): a whole percentage that shortens the
+        // freeze, 100 meaning never frozen even when the spell lands (Wiki: Freeze).
+        const resistance = character.isNpc?.()
+            ? character.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
+        if (resistance >= 100) {
             return;
         }
 
-        const freeze = { target: character, source, ticks, kind };
+        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
+        // Wiki gives them a partial resistance, which says they can be frozen.
+        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
+            return;
+        }
+
+        // `resisted` is set by a listener that already models this NPC's resistance exactly (the
+        // Phantom Muspah's page states 33% as 66% of the duration), so it is not applied twice.
+        const freeze = { target: character, source, ticks, kind, resisted: false };
         PluginManager.emitCustomEvent("combat:freeze-duration", freeze);
+        if (resistance > 0 && freeze.resisted !== true) {
+            freeze.ticks = (freeze.ticks * (100 - resistance)) / 100;
+        }
         ticks = Math.max(1, Math.floor(freeze.ticks));
         character.getTimers().registers(TimerKey.FREEZE, ticks);
         character.getTimers().registers(TimerKey.FREEZE_IMMUNITY, ticks + Misc.getTicks(3));

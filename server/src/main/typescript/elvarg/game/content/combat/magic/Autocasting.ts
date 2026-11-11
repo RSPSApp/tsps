@@ -103,6 +103,8 @@ export class Autocasting {
         [12902, ItemIdentifiers.STAFF_OF_THE_DEAD], [ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_THE_DEAD],
         [ItemIdentifiers.STAFF_OF_LIGHT, ItemIdentifiers.STAFF_OF_LIGHT],
         [ItemIdentifiers.STAFF_OF_BALANCE, ItemIdentifiers.STAFF_OF_BALANCE],
+        // Cache autocast_spellpos (pest_void_knight_mace): Crumble Undead, Claws of Guthix, the waves and surges.
+        [ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.VOID_KNIGHT_MACE],
         [ItemIdentifiers.IBANS_STAFF, ItemIdentifiers.IBANS_STAFF], [ItemIdentifiers.IBANS_STAFF_U_, ItemIdentifiers.IBANS_STAFF],
     ]);
 
@@ -265,7 +267,8 @@ export class Autocasting {
 
     private static godSpell(weaponId: number): CombatSpell | null {
         if (weaponId === ItemIdentifiers.SARADOMIN_STAFF || weaponId === ItemIdentifiers.STAFF_OF_LIGHT) return CombatSpells.SARADOMIN_STRIKE;
-        if (weaponId === ItemIdentifiers.GUTHIX_STAFF || weaponId === ItemIdentifiers.STAFF_OF_BALANCE) return CombatSpells.CLAWS_OF_GUTHIX;
+        if (weaponId === ItemIdentifiers.GUTHIX_STAFF || weaponId === ItemIdentifiers.STAFF_OF_BALANCE
+            || weaponId === ItemIdentifiers.VOID_KNIGHT_MACE) return CombatSpells.CLAWS_OF_GUTHIX;
         if (weaponId === ItemIdentifiers.ZAMORAK_STAFF || weaponId === ItemIdentifiers.STAFF_OF_THE_DEAD
             || weaponId === 12902 || weaponId === ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD) return CombatSpells.FLAMES_OF_ZAMORAK;
         return null;

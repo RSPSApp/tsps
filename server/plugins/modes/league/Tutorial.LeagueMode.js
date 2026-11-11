@@ -318,6 +318,8 @@ function finish(player, flow) {
   const sender = player.getPacketSender();
   sender.sendVarbit(data.varbits.stage, flow.final);
   sender.sendVarbit(data.varbits.orbsDisabled, 0);
+  // The login left the orbs closed while it ran; they open again (or stay hidden by the player's setting).
+  Common.api.emitCustomEvent("settings:restore-data-orbs", { player });
   award(player, data.tasks.complete);
   closeScreens(player);
 }

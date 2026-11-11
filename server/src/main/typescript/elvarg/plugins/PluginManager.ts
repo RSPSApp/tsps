@@ -2677,6 +2677,7 @@ export class PluginManager {
       encodeGameframeBootstrap: require("../net/protocol/ClientProtocol").encodeGameframeBootstrap,
       resolveGameframeRoot: require("../net/protocol/ClientProtocol").resolveGameframeRoot,
       orbsGroupFor: require("../net/protocol/ClientProtocol").orbsGroupFor,
+      dataOrbsHidden: require("../net/protocol/ClientProtocol").dataOrbsHidden,
       encodeFinePosition: require("../net/protocol/ClientProtocol").encodeFinePosition,
       Boundary: require(`${model}/Boundary`).Boundary,
       PolygonalBoundary: require(`${model}/PolygonalBoundary`).PolygonalBoundary,

@@ -2,13 +2,11 @@
 //
 // The Charge spell (level 80 Magic, 3 fire, 3 blood, 3 air, 180 XP; Wiki: Charge). Wiki rules tested here:
 // it "can only be cast once every 60 seconds" (infobox cooldown 100 ticks), lasts 700 ticks, and
-// "Your magical charge fades away" appears when it expires; members only. The wording of the cast message
-// ("You feel charged with magic power") is the Wiki's. Evidence limits: NO live capture of the cast, the
-// fade or a refused cast was found. The RSProx text hits for "feel charged" (856, 3457; 3461 not decoded)
-// are the Wilderness slayer cave key's own message, and searches for the Charge wording find nothing.
-// So the refusal is silent (no wording is known), no animation or graphic is added, the red text colour
-// (Wiki, 2013) is not applied, the god staff claim gate is not built (the repo records no claim), and a
-// recast restarting the 700 ticks is inferred.
+// "Your magical charge fades away" appears when it expires; members only. Recorded since: the cast
+// (rsprox_transcripts/235/03344.txt tick 5704) sends the red "You feel charged with magic power.",
+// human_casting (811), teleport_casting (111) at delay 32 and height 128, and synth sound 1651; the fade
+// (rsprox_transcripts/235/03347.txt tick 260) is red with a full stop. No refused cast is recorded, so the
+// refusal is silent, the god staff claim gate is not built, and a recast restarting the 700 ticks is inferred.
 // Real engine: every plugin loaded, a real Player and Inventory, the entry point the spell packet uses
 // (CombatSpells.handleSelf), the real TaskManager for the fade.
 const assert = require("node:assert/strict");
@@ -28,8 +26,8 @@ const { Skill } = require("../dist/game/model/Skill");
 const FIRE = 554;
 const AIR = 556;
 const BLOOD = 565;
-const CAST_MESSAGE = "You feel charged with magic power.";
-const FADE_MESSAGE = "Your magical charge fades away";
+const CAST_MESSAGE = "<col=ef1020>You feel charged with magic power.</col>";
+const FADE_MESSAGE = "<col=ef1020>Your magical charge fades away.</col>";
 const COOLDOWN_TICKS = 100;
 const CHARGE_TICKS = 700;
 const SARADOMIN_STRIKE = 1190;
@@ -91,6 +89,19 @@ test("a cast pays 180 XP once, takes 3 of each rune and says the Wiki's message"
   assert.equal(amount(player, AIR), 3);
   assert.equal(count(messages, CAST_MESSAGE), 1);
   assert.equal(player.getAttribute(CombatSpells.CHARGE_UNTIL), clock.cycle + CHARGE_TICKS);
+  logout(player);
+});
+
+test("a cast plays the recorded animation, spotanim and sound", (t) => {
+  const { player } = caster(t);
+  const sounds = [];
+  t.mock.method(player.getPacketSender(), "sendSoundEffect", (id) => { sounds.push(id); return player.getPacketSender(); });
+  cast(player);
+  const animation = player.getAnimation();
+  const graphic = player.getGraphic();
+  assert.equal(animation.getId(), 811);
+  assert.deepEqual([graphic.getId(), graphic.getDelay(), graphic.getHeight()], [111, 32, 128]);
+  assert.deepEqual(sounds, [1651]);
   logout(player);
 });
 

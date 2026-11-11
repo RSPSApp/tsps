@@ -60,7 +60,12 @@ class ChargeSpell extends Spell {
         player.getSkillManager().addExperiences(Skill.MAGIC, this.baseExperience());
         const until = World.getProcessCycle() + CombatSpells.CHARGE_TICKS;
         player.setAttribute(CombatSpells.CHARGE_UNTIL, until);
-        player.sendMessage("You feel charged with magic power.");
+        // rsprox_transcripts/235/03344.txt tick 5704: the red line, human_casting (811), teleport_casting
+        // (111) at delay 32 and height 128, and synth sound 1651.
+        player.sendMessage("<col=ef1020>You feel charged with magic power.</col>");
+        player.performAnimation(new Animation(811));
+        player.performGraphic(new Graphic(111, 32, 128 as GraphicHeight));
+        player.getPacketSender().sendSoundEffect(1651, 1, 0, 255);
         // The plugin that says "Your magical charge fades away" schedules itself from this.
         PluginManager.emitCustomEvent("magic:charge-cast", { player, until });
         return true;
@@ -308,11 +313,44 @@ export class CombatAncientSpellExtend extends CombatSpell {
  * the bladed staff of the same god, and for Flames the charged revenant sceptres too.
  */
 const SARADOMIN_STRIKE_STAVES = new Set([ItemIdentifiers.SARADOMIN_STAFF, ItemIdentifiers.STAFF_OF_LIGHT]);
-const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.STAFF_OF_BALANCE]);
+/** Wiki (Claws of Guthix): a Guthix staff, the void knight mace or the staff of balance. */
+const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.STAFF_OF_BALANCE]);
 const FLAMES_OF_ZAMORAK_STAVES = new Set([
     ItemIdentifiers.ZAMORAK_STAFF, ItemIdentifiers.STAFF_OF_THE_DEAD, 12902, ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD,
     ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_,
 ]);
+
+/**
+ * Wiki (Claws of Guthix, Flames of Zamorak): a hit lowers Defence or Magic by 1 + 5%; it neither
+ * stacks nor reapplies until the stat is back to its base level (a boosted stat is drained too).
+ * A player's cast only: the Mage Arena's battle mages cast the same spells and drain nothing
+ * (rsprox_transcripts/238/04155.txt: a guthix_mage's Claws lands at ticks 1865, 1877 and 1889 with no
+ * Defence update).
+ */
+function godSpellDrain(cast: Mobile, castOn: Mobile, skill: Skill): void {
+    if (!cast.isPlayer()) return;
+    if (castOn.isNpc()) {
+        const npc = castOn.getAsNpc();
+        const current = npc.getCurrentLevel(skill);
+        if (current < npc.getMaxLevel(skill)) return;
+        npc.setCurrentLevels(skill, Math.max(0, current - (1 + Math.floor(current * 0.05))));
+    } else if (castOn.isPlayer()) {
+        const skills = castOn.getAsPlayer().getSkillManager();
+        const current = skills.getCurrentLevel(skill);
+        if (current < skills.getMaxLevel(skill)) return;
+        // setCurrentLevelCombat sends the stat itself.
+        skills.setCurrentLevelCombat(skill, Math.max(0, current - (1 + Math.floor(current * 0.05))));
+    }
+}
+
+/** Wiki (Saradomin Strike): a player's hit lowers the target's Prayer points by 1; most NPCs have none. */
+function saradominStrikeDrain(cast: Mobile, castOn: Mobile): void {
+    if (!cast.isPlayer() || !castOn.isPlayer()) return;
+    const skills = castOn.getAsPlayer().getSkillManager();
+    const current = skills.getCurrentLevel(Skill.PRAYER);
+    if (current <= 0) return;
+    skills.setCurrentLevelCombat(Skill.PRAYER, current - 1);
+}
 
 /** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
 function godStaffRequired(player: Player, staves: Set<number>): Item[] {
@@ -1072,6 +1110,7 @@ export class CombatSpells {
         baseExperience: () => {
             return 35;
         },
+        finishCast: (cast: Mobile, castOn: Mobile) => saradominStrikeDrain(cast, castOn),
         // rsprox_transcripts/235/03344.txt tick 4503.
         missingEquipmentMessage: "You must be wielding the Staff of Saradomin or the Staff of Light to cast this spell.",
         equipmentRequired: (player: Player) => godStaffRequired(player, SARADOMIN_STRIKE_STAVES),
@@ -1106,6 +1145,7 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
+        finishCast: (cast: Mobile, castOn: Mobile) => godSpellDrain(cast, castOn, Skill.DEFENCE),
         equipmentRequired: (player: Player): Item[] => godStaffRequired(player, CLAWS_OF_GUTHIX_STAVES),
         itemsRequired: (player: Player): Item[] => {
             return [new Item(556, 4), new Item(565, 2), new Item(554, 1)];
@@ -1138,6 +1178,7 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
+        finishCast: (cast: Mobile, castOn: Mobile) => godSpellDrain(cast, castOn, Skill.MAGIC),
         // rsprox_transcripts/235/03344.txt tick 5691.
         missingEquipmentMessage: "You must be wielding the Staff of Zamorak, Staff of the Dead, Thammaron's Sceptre, or the Accursed Sceptre to cast this spell.",
         equipmentRequired: (player: Player): Item[] => godStaffRequired(player, FLAMES_OF_ZAMORAK_STAVES),

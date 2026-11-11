@@ -410,11 +410,11 @@ test('shared gang NPCs keep Shield introductions before the book and preserve ac
   assert.equal(earlyStraven.player.attributes.get('shield-of-arrav:phoenix-task'), undefined);
 
   // Production order: Heroes' Quest answers first for its active stages.
-  for (const [npcId, expected, forbidden] of [
-    [STRAVEN, /Took me YEARS to get that rank\./, /What's through that door\?/],
-    [KATRINE, /Is there any way I can get the rank of master thief\?/, /It's a private business\./],
+  for (const [npcId, expected, forbidden, gang, heroesStage] of [
+    [STRAVEN, /Took me YEARS to get that rank./, /What's through that door?/, 1, 2],
+    [KATRINE, /Is there any way I can get the rank of master thief?/, /It's a private business./, 2, 1],
   ]) {
-    const h = realDispatchPlayer(1, undefined, 1);
+    const h = realDispatchPlayer(1, undefined, 1, { gang });
     const dispatch = dispatchNpc(h.player, npcId);
     assert.equal(dispatch.handled, true);
     const text = dispatchText(h);
@@ -422,7 +422,7 @@ test('shared gang NPCs keep Shield introductions before the book and preserve ac
     assert.doesNotMatch(text, forbidden, 'Shield must not hijack active Heroes');
     assert.doesNotMatch(text, /Welcome to the Heroes' Guild/);
     assert.equal(h.player.attributes.get('quest.shield_of_arrav.stage'), 1, 'Shield stage unchanged');
-    assert.equal(h.player.attributes.get('quest.heroes_quest.stage'), 1, 'Heroes stage unchanged');
+    assert.equal(h.player.attributes.get('quest.heroes_quest.stage'), heroesStage, 'Straven starts the Phoenix route; Katrine waits for her answer');
     assert.equal(h.player.attributes.get('shield-of-arrav:black-arm-task'), undefined);
     assert.equal(h.player.attributes.get('shield-of-arrav:phoenix-task'), undefined);
   }

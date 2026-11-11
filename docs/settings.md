@@ -65,7 +65,7 @@ The client only reports the click. The server sets the variable and sends it bac
 | Show level only | 0 | 0 |
 | Show level & unlocks | 0 | 1 |
 
-The keybind dropdowns (ids 16–29) set their key varbits as before, then clear the selection.
+The keybind dropdowns (ids 16–29) set their key varbits as before, then clear the selection. The client opens each key's side-panel tab from `client/game/keybindingTabs.ts` (tab = toplevel stone, 76 + tab: 8 Account, 9 Friends, 12 Emotes). Restore default keybinds (row 58) does what the keybindings panel's button (121:104) does: every key back to its default, Esc closes back on, saved, with the same message.
 
 The Controls tab's `settings_side:skull_prevention` toggle (116:5) flips the same varbit as its All Settings row 206, and is saved and restored with the other settings.
 

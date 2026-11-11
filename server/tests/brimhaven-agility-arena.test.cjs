@@ -41,7 +41,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
   if (coins > 0) inventory.set(COINS, coins);
   const attributes = new Map();
   const p = {
-    messages: [], xp: 0, hits: [], levels: {}, hints: [], hintCleared: false,
+    messages: [], typed: [], xp: 0, hits: [], levels: {}, hints: [], hintCleared: false,
     varbits: new Map(), dialogues: [], animations: [],
     x, y, z,
     getLocation: () => new Location(p.x, p.y, p.z),
@@ -73,7 +73,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     getPacketSender: () => ({
       sendGlobalGraphic() {},
       sendSoundEffect() {},
-      sendTypedMessage: (_type, message) => p.messages.push(message),
+      sendTypedMessage: (type, message) => { p.typed.push([type, message]); return p.messages.push(message); },
       sendPositionalHint: (loc) => p.hints.push(loc),
       clearHintArrow: () => { p.hintCleared = true; },
       sendVarbit: (id, value) => p.varbits.set(id, value),
@@ -117,6 +117,24 @@ test("the hut ladder needs the fee; unpaid, the Parrot speaks first", () => {
   payIzzy({ player: paid });
   climbDown(paid);
   assert.deepEqual(paid.animations, [827]);
+});
+
+test("within a minute of leaving, paying works and the ladder refuses in a message box (227/01738.txt)", () => {
+  const back = player({ coins: 500, x: 2808, y: 3193, z: 0 });
+  back.setAttribute("brimhaven-agility-arena:reenter-after", Date.now() + 30_000);
+  climbDown(back);
+  assert.equal(back.dialogues.length, 1, "unpaid: the Parrot, as at 227/01738.txt:2448-2454");
+  payIzzy({ player: back });
+  assert.equal(hasPaid(back), true, "Izzy takes the fee (227/01738.txt:2509-2514)");
+  assert.equal(back.inventory.get(COINS), 300);
+  const before = back.dialogues.length;
+  back.typed.length = 0;
+  climbDown(back);
+  assert.equal(back.animations.length, 0, "the ladder refuses");
+  assert.equal(back.dialogues.length, before + 1, "in a message box");
+  // 227/01738.txt:3031-3046: the box's mesbox chat line in the same tick, its <br> a space.
+  assert.deepEqual(back.typed, [[PluginManager.getCoreApi().ChatType.MESBOX,
+    "You've only just left the arena. You need a wait at least a minute after leaving before re-entering."]]);
 });
 
 test("Izzy's transcript takes the fee on its hand-over line", () => {

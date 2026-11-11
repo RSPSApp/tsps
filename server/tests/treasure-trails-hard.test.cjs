@@ -23,7 +23,7 @@ const play = Dialogue.play;
 Dialogue.play = (player, npcId, spoken, onEnd) => { played.push(...spoken); return play(player, npcId, spoken, onEnd); };
 
 function fixture() {
-  const actions = new Map(), events = new Map(), attributes = new Map(), sent = [], ground = [], spawned = [];
+  const actions = new Map(), events = new Map(), buttons = new Map(), attributes = new Map(), sent = [], ground = [], spawned = [];
   let position = new core.Location(3222, 3218, 0), chain, placed = 0;
   const items = Array(28).fill(null), worn = [];
   const inventory = {
@@ -42,7 +42,8 @@ function fixture() {
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     setEnteredAmountAction() {}, getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
   const api = { core, persistAttribute() {}, onItemAction: (name, handlers) => actions.set(name, { ...actions.get(name), ...handlers }),
-    onBeforeNpcInteraction() {}, onItemOnNpc() {}, onBeforeObjectInteraction() {}, onCanUseItem() {}, onInterfaceActionButton() {},
+    onBeforeNpcInteraction() {}, onItemOnNpc() {}, onBeforeObjectInteraction() {}, onCanUseItem() {},
+    onInterfaceActionButton: (id, fn) => { if (!buttons.has(id)) buttons.set(id, []); buttons.get(id).push(fn); },
     onCustomEvent: (name, fn) => { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
     emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); },
     onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath() {}, onNpcDeath() {},
@@ -70,7 +71,9 @@ function fixture() {
     return event;
   };
   const digHere = () => { const event = { player, itemId: I.SPADE, option: "Dig", allow: true }; Runtime.dig(event); return event.allow; };
-  return { player, items, worn, skills, attributes, actions, sent, spawned, place, talk, digHere,
+  /** A click on a piece of the sliding-puzzle interface, as every handler registered on it sees it. */
+  const press = slot => { for (const fn of buttons.get(C.getComponentId("trail_slidepuzzle:pieces")) ?? []) fn({ player, slot }); };
+  return { api, press, player, items, worn, skills, attributes, actions, sent, spawned, place, talk, digHere,
     event: (slot = 0) => ({ player, slot, item: items[slot], itemId: items[slot]?.getId() }),
     box: () => items.find(item => item && C.getItem(item.getId())?.name === "Puzzle box (hard)"),
     boxEvent: () => ({ player, slot: items.findIndex(item => item && C.getItem(item.getId())?.name === "Puzzle box (hard)") }),
@@ -366,4 +369,48 @@ test('Uri waits for the outfit and repeat emote after a double agent dies in com
   f.talk(step, f.spawned[1].def.id, f.spawned[1]);
   assert.equal(f.inventory.forSlot(0).getMetaValue(f.key).completed, 2);
   assert.equal(f.inventory.getFreeSlots(), 27);
+});
+
+test("the puzzle box and Monkey Madness I's reinitialisation panel share the interface: the one opened last answers", () => {
+  const f = fixture();
+  const step = steps().find(entry => entry.puzzle);
+  f.place(step); f.talk(step.npcIds[0]); f.finish();
+  let finished = 0;
+  const panel = require("../plugins/quests/quests/Puzzle.MonkeyMadnessI")(f.api, { onSolved: () => finished++, isActive: () => true });
+  const reinit = C.getInventoryId("reinitialisation_inv");
+  const pieces = ids => ids.map(item => item ? C.getObjNames().get(item.id) : null);
+  const panelBoard = () => pieces(f.sent.filter(([name, inv]) => name === "sendInventory" && inv === reinit).at(-1)[3]);
+  const panelSends = () => f.sent.filter(([name, inv]) => name === "sendInventory" && inv === reinit).length;
+
+  f.actions.get("Puzzle box (hard)").Open(f.boxEvent());
+  const box = [...Puzzle.boards().get(f.player).board];
+  panel.operate(f.player);
+  const opened = panelBoard();
+  assert.ok(f.sent.some(([name, varp, value]) => name === "sendConfig" && varp === C.getVarpId("if1") && value === 7), "if1 7 selects inventory 221");
+  assert.ok(f.sent.some(([name, inv]) => name === "sendInventoryStopTransmit" && inv === C.getInventoryId("trail_puzzleinv")), "the box's inventory is dropped on the client");
+
+  f.press(Puzzle.neighbours(opened.indexOf(null))[0]);
+  const moved = panelBoard();
+  assert.notDeepEqual(moved, opened, "the panel board answered");
+  assert.deepEqual(Puzzle.boards().get(f.player).board, box, "the box board did not");
+
+  panel.operate(f.player);
+  assert.deepEqual(panelBoard(), moved, "reopening keeps the panel board");
+
+  f.actions.get("Puzzle box (hard)").Open(f.boxEvent());
+  const sends = panelSends();
+  assert.ok(f.sent.some(([name, inv]) => name === "sendInventoryStopTransmit" && inv === reinit), "the panel's inventory is dropped on the client");
+  const boxBoard = Puzzle.boards().get(f.player).board;
+  const slot = Puzzle.neighbours(boxBoard.indexOf(Puzzle.BLANK))[0];
+  const before = [...boxBoard];
+  f.press(slot);
+  assert.notDeepEqual(boxBoard, before, "the box board answered");
+  assert.equal(panelSends(), sends, "the panel board did not");
+  assert.equal(finished, 0);
+
+  solveBox(f);
+  assert.equal(f.state().solved, true);
+  assert.equal(finished, 0, "solving the box never finishes the panel puzzle");
+  panel.operate(f.player);
+  assert.deepEqual(panelBoard(), moved, "the panel puzzle is where it was left");
 });

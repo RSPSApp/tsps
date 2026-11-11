@@ -82,6 +82,16 @@ distinct types failed, by config archive. The vision tools report the same count
 summary (`server/docs/agents/testing.md`). That count is the page's: the map-building workers keep
 their own and log their own line in the same console.
 
+The workers also store built map squares in IndexedDB (`game/worker/MapSquareCache.ts`). The key
+covers the cache and the build inputs, not the client code, so a square built while a decoder
+was broken keeps serving its missing locs after the fix. #4240 was this: WebGPU players who had
+visited Edgeville before #4135 still saw no poll booth or loot chest. Picking resolved them through
+the page's fixed loader, so they could still be hovered. Two guards cover it now:
+
+- A worker stores no squares once any type has failed to decode there (`shouldStore`).
+- A fix that changes what the loader builds bumps `CACHE_FORMAT`, so squares stored before the
+  fix are built again.
+
 ### 6. Client scripts
 
 ```bash

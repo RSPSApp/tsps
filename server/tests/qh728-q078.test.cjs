@@ -57,6 +57,7 @@ function makeHarness({ completed = ['roving_elves', 'big_chompy_bird_hunting', '
   const skillLevels = new Map(Object.entries(levels).map(([skill, level]) => [skill.toUpperCase(), level]));
   let location = new core.Location(2352, 3170, 0);
   let inventoryFull = false;
+  const persisted = new Map();
 
   const sender = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return sender; },
@@ -115,7 +116,7 @@ function makeHarness({ completed = ['roving_elves', 'big_chompy_bird_hunting', '
       ...core,
       TaskManager: { submit: (task) => task.execute(), cancelTasks: noop },
     },
-    persistAttribute: noop,
+    persistAttribute: (key, value) => persisted.set(key, value),
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
     onNpcInteraction(name, handlers) {
@@ -210,7 +211,7 @@ function makeHarness({ completed = ['roving_elves', 'big_chompy_bird_hunting', '
   };
 
   return {
-    api, player, quest, attributes, inventory, equipment, configs, varbits, messages, xp, jingles,
+    api, player, quest, persisted, attributes, inventory, equipment, configs, varbits, messages, xp, jingles,
     spawned, removed, fire, action, choice, hook, itemOnItem, itemOnObject, itemOnNpc, object,
     variant, condition, talk, die, login,
     setFull(value) { inventoryFull = value; },
@@ -420,4 +421,165 @@ test('lost device and key recovery actions restore the mandatory HQ items', () =
   h.action('OOPznE', N.ESSYLLT);
   assert.equal(h.inventory.get(I.TARNISHED_KEY), 1);
   assert.equal(h.quest.getStage(h.player), 6);
+});
+
+// Oronwen takes the silk and bear fur item by item (Wiki "Mourning's End Part I", "Using necessary items on Oronwen").
+// Handler-level, like the route above: the real registered item-on-NPC handler and condition answers, the transcript
+// start recorded. What the transcript leaves out (the fur's own message, refusals, the trousers coming back at the last
+// item) is this plugin's own, as its header says.
+const ORONWEN_VARIANT = 'the-mourner-s-disguise-trousers-talking-to-oronwen-before-giving-the-items-using-necessary-items-on-oronwen';
+const SILK_ATTR = 'quest.mournings_end_part_i.oronwen-silk';
+const FUR_ATTR = 'quest.mournings_end_part_i.oronwen-fur';
+
+function atTrousers() {
+  const h = makeHarness();
+  h.action('qEuEsp', N.ELUNED);
+  h.give(I.BLOODY_MOURNER_TOP, 1);
+  h.give(I.RIPPED_MOURNER_TROUSERS, 1);
+  h.die(9013);
+  assert.equal(h.quest.getStage(h.player), 2);
+  transcripts.length = 0;
+  return h;
+}
+const needs = (h) => ['FwAIoK', 'c_p6AK', 'TCt6hQ', 'bkuvDV'].filter((id) => h.condition(id, N.ORONWEN) === true);
+
+test('Oronwen takes one silk and says what she still needs: bear fur and one more piece of silk', () => {
+  const h = atTrousers();
+  h.give(I.SILK, 2);
+  const event = h.itemOnNpc(I.SILK, N.ORONWEN);
+  assert.equal(event.handled, true);
+  assert.equal(h.inventory.get(I.SILK), 1, 'one piece taken');
+  assert.equal(h.player.getAttribute(SILK_ATTR), 1);
+  const played = transcripts.filter((entry) => entry.variant === ORONWEN_VARIANT);
+  assert.equal(played.length, 1, "the transcript's item-on-Oronwen variant starts");
+  assert.equal(played[0].npcId, N.ORONWEN);
+  assert.deepEqual(needs(h), ['FwAIoK'], '"I need bear fur and one piece of silk"');
+  assert.equal(h.quest.getStage(h.player), 2, 'the stage does not move yet');
+  assert.equal(h.inventory.get(I.RIPPED_MOURNER_TROUSERS), 1);
+});
+
+test('bear fur first, then each silk: the remaining-need lines follow and the last item brings the trousers back', () => {
+  const h = atTrousers();
+  h.give(I.SILK, 2);
+  h.give(I.BEAR_FUR, 1);
+  assert.equal(h.itemOnNpc(I.BEAR_FUR, N.ORONWEN).handled, true);
+  assert.equal(h.inventory.get(I.BEAR_FUR) ?? 0, 0);
+  assert.ok(h.messages.includes('You give the bear fur to Oronwen.'));
+  assert.deepEqual(needs(h), ['TCt6hQ'], '"I need two pieces of silk"');
+  const fur = transcripts.at(-1);
+  assert.equal(fur.variant, ORONWEN_VARIANT);
+  assert.equal(typeof fur.select, 'function', "the transcript's silk box is skipped for the fur");
+  assert.equal(h.itemOnNpc(I.SILK, N.ORONWEN).handled, true);
+  assert.deepEqual(needs(h), ['bkuvDV'], '"I only need one piece of silk"');
+  assert.equal(h.itemOnNpc(I.SILK, N.ORONWEN).handled, true);
+  assert.equal(h.inventory.get(I.SILK) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MOURNER_TROUSERS), 1, 'the repaired trousers');
+  assert.equal(h.inventory.get(I.RIPPED_MOURNER_TROUSERS) ?? 0, 0);
+  assert.equal(h.quest.getStage(h.player), 4);
+  assert.ok(h.messages.includes('Oronwen hands you the mourner trousers, they look as good as new.'));
+  assert.equal(h.player.getAttribute(SILK_ATTR), 0, 'hand-in state cleared');
+  assert.equal(h.player.getAttribute(FUR_ATTR), 0);
+});
+
+test('two silk first leaves only bear fur needed', () => {
+  const h = atTrousers();
+  h.give(I.SILK, 2);
+  h.itemOnNpc(I.SILK, N.ORONWEN);
+  h.itemOnNpc(I.SILK, N.ORONWEN);
+  assert.deepEqual(needs(h), ['c_p6AK'], '"I only need bear fur now"');
+  assert.equal(h.quest.getStage(h.player), 2);
+});
+
+test('Oronwen keeps no more than she asked for: a third silk and a second fur are refused and kept', () => {
+  const h = atTrousers();
+  h.give(I.SILK, 3);
+  h.give(I.BEAR_FUR, 2);
+  h.itemOnNpc(I.SILK, N.ORONWEN);
+  h.itemOnNpc(I.SILK, N.ORONWEN);
+  h.itemOnNpc(I.BEAR_FUR, N.ORONWEN); // the last item: the trousers come back, state cleared
+  assert.equal(h.quest.getStage(h.player), 4);
+  assert.equal(h.inventory.get(I.SILK), 1);
+  assert.equal(h.inventory.get(I.BEAR_FUR), 1);
+  const again = atTrousers();
+  again.give(I.BEAR_FUR, 2);
+  again.itemOnNpc(I.BEAR_FUR, N.ORONWEN);
+  const second = again.itemOnNpc(I.BEAR_FUR, N.ORONWEN);
+  assert.equal(second.handled, true, 'answered, not left to the generic "nothing interesting happens"');
+  assert.equal(again.inventory.get(I.BEAR_FUR), 1, 'the second fur is kept');
+  assert.ok(again.messages.includes('Oronwen already has the bear fur.'));
+  const third = atTrousers();
+  third.give(I.SILK, 3);
+  third.itemOnNpc(I.SILK, N.ORONWEN);
+  third.itemOnNpc(I.SILK, N.ORONWEN);
+  const refused = third.itemOnNpc(I.SILK, N.ORONWEN);
+  assert.equal(refused.handled, true);
+  assert.equal(third.inventory.get(I.SILK), 1, 'the third silk is kept');
+  assert.ok(third.messages.includes('Oronwen has all the silk she needs.'));
+  assert.equal(third.quest.getStage(third.player), 2);
+});
+
+test('controls: no ripped trousers, before the disguise stage, another item or another NPC are not Oronwen\'s hand-in', () => {
+  const none = makeHarness();
+  none.give(I.SILK, 1);
+  assert.equal(none.itemOnNpc(I.SILK, N.ORONWEN).handled, false, 'stage 0');
+  const h = atTrousers();
+  h.give(I.SILK, 1);
+  h.give(I.BEAR_FUR, 1);
+  h.take(I.RIPPED_MOURNER_TROUSERS, 1);
+  assert.equal(h.itemOnNpc(I.SILK, N.ORONWEN).handled, false, 'no ripped trousers to mend');
+  h.give(I.RIPPED_MOURNER_TROUSERS, 1);
+  assert.equal(h.itemOnNpc(I.LEATHER, N.ORONWEN).handled, false, 'another item');
+  assert.equal(h.itemOnNpc(I.SILK, N.ARIANWYN).handled, false, 'another NPC');
+  assert.equal(h.inventory.get(I.SILK), 1, 'nothing was taken by the controls');
+  assert.equal(h.player.getAttribute(SILK_ATTR) ?? 0, 0, 'no hand-in state changed');
+  assert.equal(h.player.getAttribute(FUR_ATTR) ?? 0, 0);
+});
+
+test('Oronwen guard branches: trousers already mended, the reporting stage, the order of take and give, and what is saved', () => {
+  const mended = atTrousers();
+  mended.give(I.MOURNER_TROUSERS, 1);
+  mended.give(I.SILK, 1);
+  assert.equal(mended.itemOnNpc(I.SILK, N.ORONWEN).handled, false, 'already holding mended trousers');
+  assert.equal(mended.inventory.get(I.SILK), 1, 'nothing taken');
+
+  const reported = atTrousers();
+  reported.give(I.SILK, 1);
+  reported.quest.setStage(reported.player, 5);
+  assert.equal(reported.itemOnNpc(I.SILK, N.ORONWEN).handled, false, 'the reporting stage is past the hand-ins');
+  assert.equal(reported.inventory.get(I.SILK), 1);
+
+  // The harness inventory has no slot limit, so a full pack cannot be shown directly: the last hand-over frees two
+  // slots (the item and the ripped trousers) before the repaired trousers are added, which is what keeps a full pack safe.
+  const last = atTrousers();
+  last.give(I.SILK, 2);
+  last.give(I.BEAR_FUR, 1);
+  last.itemOnNpc(I.BEAR_FUR, N.ORONWEN);
+  last.itemOnNpc(I.SILK, N.ORONWEN);
+  const calls = [];
+  const inventory = last.player.getInventory();
+  const { deleteNumber, adds } = inventory;
+  inventory.deleteNumber = (id, amount) => { calls.push(['delete', id]); return deleteNumber(id, amount); };
+  inventory.adds = (id, amount) => { calls.push(['add', id]); return adds(id, amount); };
+  last.itemOnNpc(I.SILK, N.ORONWEN);
+  assert.deepEqual(calls, [['delete', I.SILK], ['delete', I.RIPPED_MOURNER_TROUSERS], ['add', I.MOURNER_TROUSERS]]);
+  assert.equal(last.inventory.get(I.MOURNER_TROUSERS), 1);
+
+  assert.equal(last.persisted.get(SILK_ATTR), 0, 'the silk count is saved, default 0');
+  assert.equal(last.persisted.get(FUR_ATTR), 0, 'the fur flag is saved, default 0');
+});
+
+test('Talk-to credits what Oronwen already has: the hand-over takes only what she still wants', () => {
+  const h = atTrousers();
+  h.give(I.SILK, 4);
+  h.give(I.BEAR_FUR, 1);
+  h.itemOnNpc(I.SILK, N.ORONWEN); // she keeps 1 silk; the pack holds 3 silk and the fur
+  assert.equal(h.inventory.get(I.SILK), 3);
+  assert.equal(h.condition('Wamzez', N.ORONWEN), true, 'one silk and the fur are all she still wants');
+  assert.equal(h.variant(N.ORONWEN).variant, 'the-mourner-s-disguise-trousers', 'the "I have all I need" hand-over is offered');
+  h.action('OVpPAl', N.ORONWEN);
+  assert.equal(h.inventory.get(I.SILK), 2, 'one silk taken, not two: she already kept one');
+  assert.equal(h.inventory.get(I.BEAR_FUR) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MOURNER_TROUSERS), 1);
+  assert.equal(h.quest.getStage(h.player), 4);
+  assert.equal(h.player.getAttribute(SILK_ATTR), 0, 'counters cleared');
 });

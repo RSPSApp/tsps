@@ -187,9 +187,10 @@ const COMBAT_AUTO_RETALIATE_CHILD = 32;
  * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
  */
 const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
+const COMBAT_OFFHAND_SPECIAL_ATTACK_CHILD = 67;
 /**
- * The special-attack orb on the desktop and mobile HUDs. It only sends its native Use button:
- * rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
+ * The special-attack orb on the desktop and mobile HUDs: op1 uses the weapon, op2 the offhand.
+ * Rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
  * decide, as live does.
  */
 const SPECIAL_ATTACK_ORB_COMPONENTS = [
@@ -981,8 +982,10 @@ export class ClientConnection {
               );
             } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
               CombatSpecial.activate(this.player);
-            } else if (actionPacket.buttonNum === 1 && isSpecialAttackOrb(actionPacket.widgetId)) {
-              CombatSpecial.activate(this.player);
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_OFFHAND_SPECIAL_ATTACK_CHILD && actionPacket.buttonNum === 1) {
+              CombatSpecial.activate(this.player, Equipment.SHIELD_SLOT);
+            } else if ((actionPacket.buttonNum === 1 || actionPacket.buttonNum === 2) && isSpecialAttackOrb(actionPacket.widgetId)) {
+              CombatSpecial.activate(this.player, actionPacket.buttonNum === 2 ? Equipment.SHIELD_SLOT : undefined);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
             } else if (Autocasting.handleWidgetAction(

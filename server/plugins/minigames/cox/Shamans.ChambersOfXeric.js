@@ -35,6 +35,7 @@ const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
 const Monsters = require("./Monsters.ChambersOfXeric");
 const Achievements = require("./CombatAchievements.ChambersOfXeric");
+const CameraShake = require("../../interface/CameraShake.plugin");
 
 const NPC = { SHAMANS: [7573, 7574], SPAWN: 7575 };
 const OBJECT = { TENDRIL: 29768 };
@@ -44,6 +45,8 @@ const SPAWN_BLAST = { RADIUS: 2, MIN: 5, MAX: 10, PER_TILE: 2.5 };
 const AGGRESSION_RANGE = 8;
 const ANIM = { RANGED: 7193, MELEE: 7158, JUMP: 7152, LAND: 6946, SPAWN_EXPLODE: 7159 };
 const JUMP_TICKS = 6;
+/** The camera shake of a raider the jump lands on (slot, random, sine amplitude, frequency), a tick after it lands. */
+const JUMP_SHAKE = [0, 10, 5, 0];
 /** Shayzien armour (5): gloves, boots, helm, greaves, body. */
 const SHAYZIEN = [13377, 13378, 13379, 13380, 13381];
 
@@ -253,9 +256,14 @@ class ShamansRoom extends Raid.Room {
       npc.moveTo(landing);
       Shared.animate(npc, ANIM.LAND);
       Shared.areaSound(this.raiders(), 1695, at, { range: 8 });
-      for (const raider of this.raiders()) {
-        if (raider.getLocation().getDistance(at) <= 1) this.hurtBy(raider, Shared.random(20, 25));
-      }
+      const crushed = this.raiders().filter((raider) => raider.getLocation().getDistance(at) <= 1);
+      for (const raider of crushed) this.hurtBy(raider, Shared.random(20, 25));
+      Shared.later(this.raid, 1, () => {
+        const inRoom = this.raiders();
+        for (const raider of crushed) {
+          if (raider.isRegistered() && inRoom.includes(raider)) CameraShake.send(raider.getPacketSender(), "shamans", ...JUMP_SHAKE);
+        }
+      });
     });
     Shared.later(this.raid, JUMP_TICKS + 2, () => {
       npc.__coxJumping = false;

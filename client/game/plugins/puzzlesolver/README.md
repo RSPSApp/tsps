@@ -21,8 +21,9 @@ A port of RuneLite's Puzzle Solver plugin (`runelite-client/.../plugins/puzzleso
 - RuneLite colours the museum answer when the quiz interface loads. Here the interface mounts before
   the server's question and answer text arrives, so the answer is checked on each game tick while the
   quiz is open (an answer already coloured is left alone).
-- The server does not run Monkey Madness I's puzzle yet (inventory `reinitialisation_inv`); that path
-  is ported and covered by RuneLite's MM boards in `client/tests/puzzle-solver.test.ts`.
+- Monkey Madness I's puzzle (inventory `reinitialisation_inv`, opened from the hangar's Reinitialisation
+  Panel) is run by the server (`server/plugins/quests/quests/Puzzle.MonkeyMadnessI.js`); the solver's
+  MM path is covered by RuneLite's MM boards in `client/tests/puzzle-solver.test.ts`, not on that board.
 
 Tests: `client/tests/puzzle-solver.test.ts` (RuneLite's PuzzleSolverTest boards and the budget
 fallback) and `client/tests/puzzle-solver-plugin.test.ts` (RuneLite's LightboxSolverTest, then the

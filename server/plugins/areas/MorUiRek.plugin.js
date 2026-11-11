@@ -14,6 +14,10 @@ const VOLCANO_DUNGEON_LANDING = [2862, 9572, 0];
 
 const ACCESS_ATTRIBUTE = "mor-ul-rek:access";
 const CAPE_SHOWN_STEP = "2-PLAV";
+const CAPE_BRANCH_ID = "qovHJi";
+const GUARD_PAGE = "TzHaar-Ket";
+const GUARD_VARIANT = "standard-dialogue";
+const { startTranscript } = require("../quests/QuestRuntime");
 const SHOW_CAPE_MESSAGE = "You hold out your fire cape and show it to TzHaar-Ket.";
 
 // The side facing the outer city: north on the three horizontal crossings, west on the other two.
@@ -29,6 +33,7 @@ const PASS_TICKS = 2;
 const passes = new WeakMap();
 
 let core;
+let pluginApi;
 
 function hasAccess(player) {
   return player.getAttribute(ACCESS_ATTRIBUTE) === true;
@@ -71,12 +76,33 @@ function showCapeInDialogue(event) {
   grantAccess(event);
 }
 
+/**
+ * A fire cape used on the guard plays the same exchange as choosing to show it in his dialogue:
+ * the player's line, "You hold out your fire cape and show it to TzHaar-Ket." in a box (its step
+ * grants access, showCapeInDialogue) and his two replies (rsprox 234/03276 tick 25553, 237/01141,
+ * 227/00083: the item use opens that conversation, not a chat line).
+ */
 function useCapeOnGuard(event) {
   if (!isGuard(event.npcId) || !fireCapes().includes(event.itemId)) return;
   event.handled = true;
   if (!event.player.getInventory().contains(event.itemId)) return;
-  grantAccess(event);
-  event.player.sendMessage(SHOW_CAPE_MESSAGE);
+  const shown = startTranscript(pluginApi, event.player, event.npcId, GUARD_PAGE, GUARD_VARIANT, capeBranch, event.npc ?? null);
+  if (!shown) {
+    grantAccess(event);
+    event.player.sendMessage(SHOW_CAPE_MESSAGE);
+  }
+}
+
+/** The standard dialogue's "I managed to defeat TzTok-Jad and obtain this firecape." option's steps. */
+function capeBranch(steps) {
+  const find = (node) => {
+    if (Array.isArray(node)) { for (const v of node) { const r = find(v); if (r) return r; } return null; }
+    if (!node || typeof node !== "object") return null;
+    if (node.id === CAPE_BRANCH_ID && Array.isArray(node.steps)) return node.steps;
+    for (const v of Object.values(node)) { const r = find(v); if (r) return r; }
+    return null;
+  };
+  return find(steps) ?? [];
 }
 
 /** Rotation 0 and 2 doors are passed north-south, 1 and 3 east-west (the cache's placements). */
@@ -141,6 +167,7 @@ module.exports = {
   passVentDoor,
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.persistAttribute(ACCESS_ATTRIBUTE, false);
     api.onNpcDialogueCondition(guardCondition);
     api.onItemOnNpc(useCapeOnGuard);

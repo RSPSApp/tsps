@@ -4408,12 +4408,16 @@ export class OsrsClient {
         if (!action) return;
 
         if (action.type === "cancel_server_switch") {
-            this.loginState.serverSwitchConfirmIndex = -1;
+            this.loginState.serverSwitchConfirm = null;
             return;
         }
         if (action.type === "confirm_server_switch") {
-            const index = this.loginState.serverSwitchConfirmIndex;
-            this.loginState.serverSwitchConfirmIndex = -1;
+            const asked = this.loginState.serverSwitchConfirm;
+            this.loginState.serverSwitchConfirm = null;
+            // The list may have been refreshed while it asked: switch to the server it named.
+            const index = asked ? this.loginRenderer.serverList.findIndex((server) =>
+                server.name === asked.name && server.address === asked.address &&
+                server.worldId === asked.worldId && server.signalUrl === asked.signalUrl) : -1;
             if (index >= 0) this.switchToServer(index, true);
             return;
         }
@@ -4444,7 +4448,7 @@ export class OsrsClient {
             return;
         }
         if (!confirmed && this.varManager?.getVarbit(VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION) !== 1) {
-            this.loginState.serverSwitchConfirmIndex = index;
+            this.loginState.serverSwitchConfirm = server ?? null;
             return;
         }
 
@@ -4657,13 +4661,15 @@ export class OsrsClient {
     }
 
     /**
-     * The middle-mouse camera and follower option rows apply as soon as their varbit changes,
-     * and again at login. Varbit changes arrive through their varp, so they are re-read on every
-     * varp update, as the roof varbit is.
+     * Single mouse button mode, the middle-mouse camera and follower options apply as soon as
+     * their var changes, and again at login (a logout resets the vars without a change, so a
+     * value left by the last account is replaced by the next login's varps). Varbit changes
+     * arrive through their varp, so they are re-read on every varp update, as the roof varbit is.
      */
-    private applyControlSettingVarbits(): void {
+    private applyControlSettingVars(): void {
         const varManager = this.varManager;
         if (!varManager) return;
+        this.settings.leftClickOpensMenu = varManager.getVarp(VARP_MOUSE_BUTTONS) === 1;
         const mouseCamEnabled = varManager.getVarbit(VARBIT_MOUSECAM_DISABLED) !== 1;
         if (this.mouseCamEnabled !== mouseCamEnabled) this.mouseCamEnabled = mouseCamEnabled;
         ClientState.followerOpsLowPriority = varManager.getVarbit(VARBIT_FOLLOWEROPS_DEPRIORITISED) === 1;
@@ -6322,7 +6328,7 @@ export class OsrsClient {
 
             case "open_server_list":
                 this.loginState.serverListOpen = true;
-                this.loginState.serverSwitchConfirmIndex = -1;
+                this.loginState.serverSwitchConfirm = null;
                 this.loginState.virtualKeyboardVisible = false;
                 this.loginRenderer
                     .fetchServerList()
@@ -6332,7 +6338,7 @@ export class OsrsClient {
             case "close_server_list":
                 this.loginState.serverListOpen = false;
                 this.loginState.hoveredServerIndex = -1;
-                this.loginState.serverSwitchConfirmIndex = -1;
+                this.loginState.serverSwitchConfirm = null;
                 return undefined;
 
             case "refresh_server_list":
@@ -7046,10 +7052,8 @@ export class OsrsClient {
                     ClientState.playerAttackOption = clamp(newValue | 0, 0, 4);
                 } else if (varpId === VARP_OPTION_ATTACK_PRIORITY_NPC) {
                     ClientState.npcAttackOption = clamp(newValue | 0, 0, 3);
-                } else if (varpId === VARP_MOUSE_BUTTONS) {
-                    this.settings.leftClickOpensMenu = newValue === 1;
                 }
-                this.applyControlSettingVarbits();
+                this.applyControlSettingVars();
                 // Varbit changes arrive through their underlying varp, so re-read the
                 // roof varbit on every varp update.
                 try {

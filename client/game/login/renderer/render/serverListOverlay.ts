@@ -67,7 +67,7 @@ export function drawServerListOverlay(host: LoginRendererHost, ctx: RenderContex
         ctx.fillStyle = "#6b5a3e";
         ctx.fillRect(panelX + 4, panelY + headerH, panelW - 8, 1);
 
-        const confirmServer = servers[state.serverSwitchConfirmIndex];
+        const confirmServer = state.serverSwitchConfirm;
         if (confirmServer) {
             // The World Switcher's confirmation, as live's chatbox asks it.
             drawCenteredText(host,

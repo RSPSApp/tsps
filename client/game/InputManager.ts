@@ -1188,7 +1188,9 @@ export class InputManager {
             }
             this.osrsKeyState[osrsKeyCode] = 1;
             this.osrsKeyPressedThisFrame.add(osrsKeyCode);
-            this.keyDownCodes.push(osrsKeyCode);
+            // Ours: a held key's auto-repeat doesn't run key-down listeners again, so holding
+            // Ctrl+M opens the World Map once.
+            if (!event.repeat) this.keyDownCodes.push(osrsKeyCode);
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, true);
             }
@@ -1265,8 +1267,9 @@ export class InputManager {
         for (let i = 0; i < 128; i++) {
             this.keyArray[i] = 0;
         }
-        // Clear OSRS internal key states
+        // Clear OSRS internal key states; key-up listeners see every held key released.
         for (let i = 0; i < this.osrsKeyState.length; i++) {
+            if (this.osrsKeyState[i] === 1) this.keyUpCodes.push(i);
             this.osrsKeyState[i] = 0;
         }
         this.osrsKeyPressedThisFrame.clear();

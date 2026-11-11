@@ -41,7 +41,7 @@ export function handleServerListClick(host: LoginRendererHost, state: LoginState
 
         const btnY = panelY + panelH + 30;
         // The switch confirmation: Cancel (left) or Switch world (right); a click outside cancels.
-        if (state.serverSwitchConfirmIndex >= 0) {
+        if (state.serverSwitchConfirm) {
             if (isButtonHit(host, x, y, panelX + panelW / 2 + 80, btnY)) return LoginActions.CONFIRM_SERVER_SWITCH;
             const inPanel = x >= panelX && x <= panelX + panelW && y >= panelY && y <= panelY + panelH;
             return inPanel ? undefined : LoginActions.CANCEL_SERVER_SWITCH;

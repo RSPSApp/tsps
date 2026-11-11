@@ -15,6 +15,7 @@ enabled state. The `enabled` field, when present, must be a boolean.
 ```json
 {
   "plugins": {
+    "BountyHunter": { "levelDifference": 10 },
     "Characters": { "maxPerAccount": 6 },
     "Prayer": { "enabled": true, "sequentialBurying": true },
     "PlayerBots": { "ai": { "enabled": false } }
@@ -304,6 +305,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
+| `BountyHunter:levelDifference` | number (integer, >= 0) | `5` | **Rogue combat level difference.** Maximum combat level difference for attacks on players who are not your assigned target. |
 | `CastleWars:seedBots` | boolean | `false` | **Seed Castle Wars with bots.** Development aid: fills the lobby with bots. Leave off so production lobbies are players only. |
 | `DuelArena:pvpArenaWorld` | boolean | `false` | **PvP Arena world.** Makes this a PvP Arena world: Challenge in the Emir's Arena always starts an unranked duel, with no Legacy Duel choice. |
 | `LastManStanding:highStakes` | boolean | `false` | **High Stakes mode.** Opens the High Stakes mode, which costs 500,000 from the coffer to start. Closed when off. |

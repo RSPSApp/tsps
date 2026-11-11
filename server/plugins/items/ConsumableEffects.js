@@ -19,14 +19,15 @@ function curePoisonAndVenom(player) {
 
 /** Cure/reduce poison damage without immunity; venom is only converted to poison. */
 function curePoison(player, damageReduction = Infinity) {
-  // Ordinary poison stores severity (its hit is floor((severity + 4) / 5)); venom stores its damage directly.
-  // A conversion keeps that hit at the lowest severity giving it, 5 x damage - 4, without also reducing it
-  // during the same treatment (rsprox_transcripts/223/00014.txt tick 3125: an antipoison turns 6-damage
-  // venom, poison varp 1000000, into 26).
+  // Ordinary poison stores severity (its hit is floor((severity + 4) / 5)); venom stores its next hit directly.
+  // A conversion turns the LAST venom hit dealt into poison at the lowest severity giving it, 5 x hit - 4,
+  // without also reducing it during the same treatment. The recordings step the venom back one hit, then convert:
+  // 1000003 (next 12) -> 1000002 (10) -> 46 (rsprox_transcripts/234/03280.txt:69820). Venom that hasn't hit yet
+  // converts from its first hit: 1000000 (6) -> 26 (223/00014.txt tick 3125). Read before setVenomed clears it.
   const stored = player.getPoisonDamage();
   const current = Number.isFinite(stored) ? Math.max(0, stored) : 0;
   const severity = player.isVenomed?.()
-    ? Math.max(0, current * 5 - 4)
+    ? Math.max(0, (player.getLastVenomDamage?.() ?? current) * 5 - 4)
     : Math.max(0, current - damageReduction * 5);
   player.setPoisonDamage(severity);
   player.setVenomed(false);

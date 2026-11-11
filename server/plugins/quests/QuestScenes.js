@@ -47,7 +47,7 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   const scenes = new Map();
   const playerKeys = new WeakMap();
 
-  /** A scene's `rules` ({ canTeleport, process, npcAggression, canAttack, multi }) answer for its area. */
+  /** A scene's `rules` ({ canTeleport, process, npcAggression, canAttack, multi, allowSummonPet, barsFollowers }) answer for its area. */
   function sceneRules(Base) {
     return class extends Base {
       canTeleport() { return scenes.get(this.owner)?.rules?.canTeleport?.() ?? false; }
@@ -55,8 +55,10 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
       npcAggression(player, npc) { return scenes.get(this.owner)?.rules?.npcAggression?.(player, npc) ?? false; }
       canAttack(attacker, target, method) { return scenes.get(this.owner)?.rules?.canAttack?.(attacker, target, method) ?? null; }
       isMulti() { return scenes.get(this.owner)?.rules?.multi === true; }
-      /** `rules.allowSummonPet: false` keeps the owner's follower out of the scene. */
+      /** `rules.allowSummonPet: false`: no pet is dropped in the scene. */
       allowSummonPet() { return scenes.get(this.owner)?.rules?.allowSummonPet ?? true; }
+      /** `rules.barsFollowers: true` keeps the owner's following pet out of the scene (it waits outside). */
+      barsFollowers() { return scenes.get(this.owner)?.rules?.barsFollowers === true; }
       /** `rules.musicTrack`: the scene's own track; the area's own music comes back when it ends. */
       getMusicTrack(player) { return scenes.get(this.owner)?.rules?.musicTrack ?? null; }
       postLeave(mobile, logout) {

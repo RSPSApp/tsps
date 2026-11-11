@@ -255,3 +255,40 @@ test('a transmit that changes none of the rows does not swallow the next row cli
   assert.equal(click(p, 115), true);
   assert.equal(p.getPacketSender().getVarbit(ANTI_DRAG), 1, 'the click still toggles it');
 });
+
+test('the Emotes and Account keybind rows (21, 26) save their keys for the next login', () => {
+  const p = login();
+  for (const [settingId, varbit, key] of [[21, 4687, 7], [26, 6517, 11]]) {
+    click(p, settingId);
+    assert.equal(handlers.clickDropdownOption({ player: p, slot: key * 3 }), true, `row ${settingId} takes F${key}`);
+    assert.equal(p.getPacketSender().getVarbit(varbit), key);
+  }
+  const next = login(p.attributes);
+  assert.equal(next.getPacketSender().getVarbit(4687), 7, 'Emotes key restored at login');
+  assert.equal(next.getPacketSender().getVarbit(6517), 11, 'Account key restored at login');
+  assert.equal(next.getPacketSender().getVarbit(4682), 0, 'Magic gave up F7');
+});
+
+test('Restore default keybinds (row 58) resets every key and saves it, as the panel button does', () => {
+  const restored = (via) => {
+    const p = login();
+    click(p, 21);
+    handlers.clickDropdownOption({ player: p, slot: 1 * 3 });
+    click(p, 57);
+    assert.equal(p.getPacketSender().getVarbit(4675), 0, 'Combat gave up F1');
+    const messages = [];
+    p.getPacketSender().sendMessage = (text) => { messages.push(text); return p.getPacketSender(); };
+    assert.equal(via(p), true);
+    assert.deepEqual(messages, ['Keybindings restored to default.']);
+    return login(p.attributes);
+  };
+  const fromRow = restored((p) => click(p, 58));
+  const fromPanel = restored((p) => buttons.get((121 << 16) | 104)[0]({ player: p }));
+  const fresh = login();
+  for (const varbit of [4675, 4676, 4677, 4678, 4679, 4680, 4682, 4683, 4684, 4686, 4687, 4688, 4689, 6517, ESC_CLOSES]) {
+    const expected = fresh.getPacketSender().getVarbit(varbit);
+    assert.equal(fromRow.getPacketSender().getVarbit(varbit), expected, `varbit ${varbit} after the row`);
+    assert.equal(fromPanel.getPacketSender().getVarbit(varbit), expected, `varbit ${varbit} after the panel button`);
+  }
+  assert.equal(fresh.getPacketSender().getVarbit(4675), 1, 'Combat is F1 by default');
+});

@@ -248,6 +248,8 @@ const KEYBINDINGS_POPUP_CONTAINER = (KEYBINDINGS_INTERFACE_ID << 16) | 111;
 const ESC_CLOSES_VARBIT = 4681;
 const ESC_CLOSES_SETTING = 57;
 const ESC_CLOSES_VARP = 1224;
+// "Restore default keybinds" (All Settings row 58, Controls), the panel's 121:104 button as a row.
+const RESTORE_KEYBINDS_SETTING = 58;
 const ACTIVE_KEYBIND_SLOT_VARBIT = 4690;
 
 // WidgetFlags.FLAG_TRANSMIT_OP1 - lets the client send a click to us.
@@ -272,9 +274,9 @@ const TAB_VARBIT_MAP = [
   { slot: 9, varbit: 6517, defaultKey: 0, buttonChild: 65 }, // Account
   { slot: 10, varbit: 4689, defaultKey: 10, buttonChild: 72 }, // Logout
   { slot: 11, varbit: 4686, defaultKey: 11, buttonChild: 79 }, // Options (settings)
-  { slot: 12, varbit: 4687, defaultKey: 0, buttonChild: 86 }, // Options (secondary)
+  { slot: 12, varbit: 4687, defaultKey: 0, buttonChild: 86 }, // Emotes
   { slot: 13, varbit: 4683, defaultKey: 8, buttonChild: 93 }, // Clan chat
-  { slot: 14, varbit: 4688, defaultKey: 12, buttonChild: 100 }, // Music/Emotes
+  { slot: 14, varbit: 4688, defaultKey: 12, buttonChild: 100 }, // Music
 ];
 
 // The settings catalog, from the cache: enum 422 lists
@@ -620,6 +622,18 @@ function applyDefaultKeybindings(player) {
     setKeybind(player, tab.varbit, tab.defaultKey);
   }
   setKeybind(player, ESC_CLOSES_VARBIT, 1);
+}
+
+/** Every key back to its default and saved, from the keybindings panel's button or its All Settings row. */
+function restoreDefaultKeybindings(player) {
+  applyDefaultKeybindings(player);
+  player.getPacketSender().sendMessage("Keybindings restored to default.");
+  return true;
+}
+
+function clickRestoreKeybinds(request) {
+  if (request.handled || request.settingId !== RESTORE_KEYBINDS_SETTING) return;
+  request.handled = restoreDefaultKeybindings(request.player);
 }
 
 function syncPlayerKeybindings(player) {
@@ -1145,6 +1159,7 @@ module.exports = {
     api.onCustomEvent("settings:setting-clicked", resetMinimenuSpacing);
     api.onCustomEvent("settings:setting-clicked", askMinimenuSpacing);
     api.onCustomEvent("settings:setting-clicked", clickEscCloses);
+    api.onCustomEvent("settings:setting-clicked", clickRestoreKeybinds);
     api.onCustomEvent("settings:setting-clicked", clickShowDataOrbs);
     api.onCustomEvent("settings:option-chosen", chooseGameClientLayout);
     api.onCustomEvent("settings:restore-data-orbs", restoreDataOrbs);
@@ -1181,11 +1196,7 @@ module.exports = {
 
     api.onInterfaceActionButton(KEYBINDINGS_ESC_TOGGLE, ({ player }) => toggleEscCloses(player));
 
-    api.onInterfaceActionButton(KEYBINDINGS_RESTORE_DEFAULTS, ({ player }) => {
-      applyDefaultKeybindings(player);
-      player.getPacketSender().sendMessage("Keybindings restored to default.");
-      return true;
-    });
+    api.onInterfaceActionButton(KEYBINDINGS_RESTORE_DEFAULTS, ({ player }) => restoreDefaultKeybindings(player));
 
     api.persistAttribute(CLIENT_LAYOUT_ATTRIBUTE, DEFAULT_GAMEFRAME_ROOT);
     api.persistAttribute(CLIENT_LAYOUT_317_ATTRIBUTE, false);

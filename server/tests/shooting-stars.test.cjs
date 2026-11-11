@@ -563,6 +563,22 @@ test("celestial signet: a celestial ring, elven signet, 1,000 stardust and 100 s
   assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
 });
 
+test("celestial signet: a noted elven signet (cert_elven_signet) is not one to sing", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 1000);
+  p.getInventory().adds(I.CRYSTAL_SHARD, 100);
+  p.getInventory().adds(I.ELVEN_SIGNET_2, 1); // 23944, cert_elven_signet
+  p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 99);
+  p.getSkillManager().setLevel(core.Skill.CRAFTING, 99);
+  assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.ELVEN_SIGNET_2), 1, "the noted signet is not used up");
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 0);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 1000);
+});
+
 test("celestial ring: equipping the ring while the stardust prompt is open spends no stardust", () => {
   const p = miner();
   const I = core.ItemIdentifiers;

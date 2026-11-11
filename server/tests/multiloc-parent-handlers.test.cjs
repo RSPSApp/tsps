@@ -29,6 +29,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  core.ObjectDefinition.init();
   core.RegionManager.init();
 });
 after(() => PM.emitServerShutdown({}));
@@ -219,4 +220,94 @@ test("report: where the plain locs these quests also rely on stand", (t) => {
   }
   for (const [id, name] of Object.entries(ids)) t.diagnostic(`${name} ${id}: ${JSON.stringify(placed[id] ?? "not on the map")}`);
   assert.ok(Object.keys(placed).length > 0, "the scan found the map");
+});
+
+test("Larry's transformed boat takes the Weiss option to the Weiss coast", async (t) => {
+  const tile = [2708, 3732, 0];
+  const seen = spy(t, "emitObjectInteraction");
+  const f = await fromASide(t, seen, {
+    tile, quest: "making_friends_with_my_arm", stage: 200, varbits: [[6528, 200]],
+    packet: { type: "object_option", id: 21176, x: tile[0], y: tile[1], clickType: 3, action: "Weiss" },
+  });
+  assert.equal(seen[0].handled, true, "the real Weiss option is handled");
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()], [2849, 3968, 0]);
+});
+
+test("Larry's transformed boat offers a voyage to the iceberg", async (t) => {
+  const tile = [2708, 3732, 0];
+  const seen = spy(t, "emitObjectInteraction");
+  const f = await fromASide(t, seen, {
+    tile, quest: "making_friends_with_my_arm", stage: 200, varbits: [[6528, 200]],
+    packet: { type: "object_option", id: 21176, x: tile[0], y: tile[1], clickType: 2, action: "Iceberg" },
+  });
+  assert.equal(seen[0].handled, true, "the real Iceberg option is handled");
+  assert.equal(f.p.getDialogueManager().isActive(), true, "Larry speaks before sailing");
+  await continueDialogue(f);
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()], [2660, 3989, 1]);
+});
+
+test("the boat at Weiss returns to the coast near Rellekka", async (t) => {
+  const tile = [2843, 3967, 0];
+  const seen = spy(t, "emitObjectInteraction");
+  const f = await fromASide(t, seen, {
+    tile, quest: "making_friends_with_my_arm", stage: 200,
+    packet: { type: "object_option", id: 21177, x: tile[0], y: tile[1], clickType: 1, action: "Travel" },
+  });
+  assert.equal(seen[0].handled, true);
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()], [2707, 3735, 0]);
+});
+
+test("the original Rellekka coastal boat still travels to the iceberg", async (t) => {
+  const tile = [2708, 3732, 0];
+  const seen = spy(t, "emitObjectInteraction");
+  const f = await fromASide(t, seen, {
+    tile, quest: "making_friends_with_my_arm", stage: 0, varbits: [[6528, 0]],
+    packet: { type: "object_option", id: 21176, x: tile[0], y: tile[1], clickType: 1, action: "Travel" },
+  });
+  assert.equal(seen[0].handled, true);
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()], [2660, 3989, 1]);
+});
+
+test("the Weiss option works as soon as the first coast arrival unlocks the boat", async (t) => {
+  const tile = [2708, 3732, 0];
+  const seen = spy(t, "emitObjectInteraction");
+  const f = await fromASide(t, seen, {
+    tile, quest: "making_friends_with_my_arm", stage: 35, varbits: [[6528, 35]],
+    packet: { type: "object_option", id: 21176, x: tile[0], y: tile[1], clickType: 3, action: "Weiss" },
+  });
+  assert.equal(seen[0].handled, true);
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()], [2849, 3968, 0]);
+});
+
+test("Larry's boat handlers yield an unrelated location with the same visible definition", (t) => {
+  const f = actor(t, new core.Location(3000, 3000, 0), "making_friends_with_my_arm", 200);
+  const definition = core.ObjectDefinition.forId(33182);
+  for (const clickType of [2, 3]) {
+    const event = { player: f.p, objectId: 33182, object: { getDefinition: () => definition },
+      definition, location: { x: 3001, y: 3000, z: 0 }, clickType, handled: false };
+    assert.equal(PM.emitObjectInteraction(event), false);
+    assert.equal(f.p.getDialogueManager().isActive(), false);
+  }
+});
+
+test("Larry's iceberg option can use each recorded opening line", async (t) => {
+  const cases = [
+    [0, "Did I ever tell you about this one time..."],
+    [0.5, "On the way I'll tell you how I got this great rucksack. I had this paper hat lying around..."],
+    [0.99, "On the way I'll tell you how I learned to teleport. Well, this one time I got stuck in a wall..."],
+  ];
+  const random = t.mock.method(Math, "random", () => 0);
+  const seen = spy(t, "emitObjectInteraction");
+  const tile = [2708, 3732, 0];
+  for (const [roll, line] of cases) {
+    random.mock.mockImplementation(() => roll);
+    seen.length = 0;
+    const f = await fromASide(t, seen, {
+      tile, quest: "making_friends_with_my_arm", stage: 200, varbits: [[6528, 200]],
+      packet: { type: "object_option", id: 21176, x: tile[0], y: tile[1], clickType: 2, action: "Iceberg" },
+    });
+    assert.equal(f.p.getDialogueManager().getCurrent()?.getText(), line);
+  }
 });

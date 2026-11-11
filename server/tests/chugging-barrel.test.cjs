@@ -12,6 +12,8 @@ const ATTRIBUTE = "chugging-barrel:potions";
 const BARREL_NAME = "Chugging barrel";
 const DISASSEMBLED_NAME = "Chugging barrel (disassembled)";
 let core;
+const AUTO_SMASH_VIALS = 5668;
+let smashVials = 0;
 let actions;
 let onItemOnItem;
 let rules;
@@ -80,7 +82,8 @@ function actor(t) {
     sendInterfaceFlagsRange(...args) { packets.push(["flags", ...args]); return sender; },
     sendInterfaceScript(...args) { packets.push(["script", ...args]); return sender; },
     sendEnterAmountPrompt(...args) { packets.push(["prompt", ...args]); return sender; },
-    getVarbit: () => 1, // Examine price info: both settings on
+    // Examine price info: both settings on; barbarian vial smashing (5668) as the test sets it.
+    getVarbit: (id) => (id === AUTO_SMASH_VIALS ? smashVials : 1),
     // Spam lines land in `messages` marked, so a test sees the type live sends.
     sendTypedMessage(type, message) { messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : message); return sender; },
   };
@@ -128,6 +131,24 @@ function itemAction(f, itemName, option, slot) {
 function seed(player, entries) {
   player.setAttribute(ATTRIBUTE, entries);
 }
+
+test("with vial smashing on, storing a potion's last dose leaves no vial (rsprox 238/04236)", (t) => {
+  smashVials = 1;
+  t.after(() => { smashVials = 0; });
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  put(f, I.PRAYER_POTION_3_, 0);
+  put(f, I.CHUGGING_BARREL, 1);
+  assert.equal(fill(f, 0, 1).handled, true);
+  assert.equal(f.inventory.getItems()[0]?.getId?.() ?? -1, -1, "the vial is smashed");
+  assert.equal(balance(f, "Prayer potion").doses, 3);
+  // The open barrel's store (op 1 on an inventory potion, as captured: prepot_device:inventory_contents).
+  openBarrel(f);
+  put(f, I.PRAYER_POTION_2_, 4);
+  ui(f, INVENTORY_WIDGET, 4, I.PRAYER_POTION_2_, 1);
+  assert.equal(f.inventory.getItems()[4]?.getId?.() ?? -1, -1, "stored from the barrel's screen, the vial is smashed too");
+  assert.equal(balance(f, "Prayer potion").doses, 5);
+});
 
 test("filling sums doses, persists contents and returns a marked empty vessel", (t) => {
   const f = actor(t);

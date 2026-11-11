@@ -101,7 +101,8 @@ function castOnce(player, recipe) {
   player.performAnimation(new core.Animation(CAST_ANIMATION));
   player.performGraphic(new core.Graphic(CAST_GRAPHIC));
   player.getPacketSender().sendSound(CAST_SOUND);
-  player.sendMessage(SUCCESS_MESSAGE);
+  // A spam (filterable) line, as live sends it (rsprox: type=spam, 118 times; e.g. 227/00089.txt:32033).
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, SUCCESS_MESSAGE);
   player.getSkillManager().addExperiences(core.Skill.MAGIC, recipe.spell.baseExperience());
   return true;
 }

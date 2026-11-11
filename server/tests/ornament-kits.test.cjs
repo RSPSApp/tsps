@@ -30,6 +30,7 @@ OrnamentKits.register({
   },
   onItemOnItem: (handler) => { itemOnItemHandlers.push(handler); },
   onItemAction: (handler) => { itemAction = handler; },
+  onCustomEvent() {},
   log() {},
 });
 

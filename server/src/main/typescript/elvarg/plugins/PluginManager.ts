@@ -1,4 +1,4 @@
-import { pluginConfigKey, type ScopedPluginSettings } from "../game/definition/WorldPluginConfig";
+import { isFreeToPlayWorld, normalizePluginName, pluginConfigKey, type ScopedPluginSettings } from "../game/definition/WorldPluginConfig";
 import { CacheDefinitions } from "../game/cache/CacheDefinitions";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
 import { ObjectDefinition } from "../game/definition/ObjectDefinition";
@@ -144,9 +144,7 @@ type PluginHook<T> = {
   handler: (event: T) => void;
 };
 
-export function normalizePluginName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+export { normalizePluginName } from "../game/definition/WorldPluginConfig";
 
 export function pluginNameFromFile(pluginPath: string): string {
   return path.basename(pluginPath).replace(/\.plugin\.js$/i, "");
@@ -2224,7 +2222,7 @@ export class PluginManager {
   /**
    * world.json `plugins` ({ "Name": true | false }) as normalized name -> on/off; a plugin
    * it leaves out keeps its own `enabled` default. The older `disabledPlugins` list is read
-   * as it always was: what it names is off and everything else on, defaults included.
+   * as it always was for other plugins. FreeToPlay always takes its explicit switch.
    */
   private static loadPluginSwitches(scopedSettings?: ScopedPluginSettings): { switches: Map<string, boolean>; defaultEnabled?: boolean } {
     return PluginManager.parsePluginSwitches(readWorldConfig(scopedSettings));
@@ -2245,13 +2243,12 @@ export class PluginManager {
         throw new Error("[plugins] world.json disabledPlugins must be a string[]");
       }
       console.warn(
-        '[plugins] world.json disabledPlugins is deprecated and overrides "plugins" and plugin defaults; ' +
+        '[plugins] world.json disabledPlugins is deprecated and overrides "plugins" and plugin defaults except FreeToPlay; ' +
           'replace it with "plugins": { "Name": false }'
       );
-      return {
-        switches: new Map(config.disabledPlugins.map((name) => [normalizePluginName(name), false])),
-        defaultEnabled: true,
-      };
+      const switches = new Map<string, boolean>(config.disabledPlugins.map((name) => [normalizePluginName(name), false]));
+      switches.set("freetoplay", isFreeToPlayWorld(config));
+      return { switches, defaultEnabled: true };
     }
     const plugins = config.plugins ?? {};
     if (
@@ -2680,6 +2677,7 @@ export class PluginManager {
       encodeGameframeBootstrap: require("../net/protocol/ClientProtocol").encodeGameframeBootstrap,
       resolveGameframeRoot: require("../net/protocol/ClientProtocol").resolveGameframeRoot,
       orbsGroupFor: require("../net/protocol/ClientProtocol").orbsGroupFor,
+      dataOrbsHidden: require("../net/protocol/ClientProtocol").dataOrbsHidden,
       encodeFinePosition: require("../net/protocol/ClientProtocol").encodeFinePosition,
       Boundary: require(`${model}/Boundary`).Boundary,
       PolygonalBoundary: require(`${model}/PolygonalBoundary`).PolygonalBoundary,

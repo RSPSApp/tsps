@@ -32,6 +32,12 @@ export function replaceCustomDefinitions(input: unknown): void {
     key = rows.length ? crc32(new TextEncoder().encode(JSON.stringify(rows))).toString(36) : "";
     revision++;
 }
+
+export function appendCustomDefinitions(input: unknown[]): void {
+    if (!Array.isArray(input)) throw new Error("Custom definitions must be a list");
+    replaceCustomDefinitions([...rows, ...input]);
+}
+
 export const getCustomDefinitions = (): CustomDefinitionRow[] => JSON.parse(JSON.stringify(rows));
 export const getCustomDefinitionKey = (): string => key;
 

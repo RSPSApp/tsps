@@ -60,7 +60,12 @@ class ChargeSpell extends Spell {
         player.getSkillManager().addExperiences(Skill.MAGIC, this.baseExperience());
         const until = World.getProcessCycle() + CombatSpells.CHARGE_TICKS;
         player.setAttribute(CombatSpells.CHARGE_UNTIL, until);
-        player.sendMessage("You feel charged with magic power.");
+        // rsprox_transcripts/235/03344.txt tick 5704: the red line, human_casting (811), teleport_casting
+        // (111) at delay 32 and height 128, and synth sound 1651.
+        player.sendMessage("<col=ef1020>You feel charged with magic power.</col>");
+        player.performAnimation(new Animation(811));
+        player.performGraphic(new Graphic(111, 32, 128 as GraphicHeight));
+        player.getPacketSender().sendSoundEffect(1651, 1, 0, 255);
         // The plugin that says "Your magical charge fades away" schedules itself from this.
         PluginManager.emitCustomEvent("magic:charge-cast", { player, until });
         return true;
@@ -767,6 +772,18 @@ export class CombatSpells {
     });
 
     public static CRUMBLE_UNDEAD = new CombatNormalSpell({
+        /**
+         * Wiki (Crumble Undead): it can only be cast on undead enemies; anything else gets this line.
+         * A scripted, unattackable target (Enakhra's Lament's boneguard) is left to its quest's handler.
+         */
+        canCastOnTarget(cast, target) {
+            const definition = target.isNpc() ? target.getAsNpc().getCurrentDefinition() : null;
+            if (definition && (definition.isUndead?.() || !definition.isAttackable?.())) return true;
+            if (cast.isPlayer()) {
+                cast.getAsPlayer().sendMessage("This spell only affects skeletons, zombies, ghosts and shades.");
+            }
+            return false;
+        },
         castAnimation() {
             return new Animation(724);
         },

@@ -123,7 +123,6 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 - **Show mouseover text.** Login sends the saved value, 0 for a fresh account (it used to force 0). The top-left text and HUD overlays laid out by script 4731 (Wintertodt, ToA...) follow it when they are laid out: with the text on they sit 23px lower, with it off at the top.
 - **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
 - **Not done**:
-  - Show data orbs (8, varbit 4084 `orbs_disabled`): live also leaves the orbs interface (160) closed while it is set and opens it when the player turns them back on (rsprox 229/2375 tick 8), which needs server work.
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
 
 ## Buff Bar
@@ -556,6 +555,19 @@ Live sends the player ops at login after the varbits: with 1334 at 1, `set_playe
 
 - **Not done**: Ctrl-clicks on NPCs, objects, ground items and players don't invert the run mode at all, whatever the option: their packets' Ctrl byte isn't read.
 
+## Game client layout and data orbs
+
+Two Interfaces rows that change the gameframe itself, handled in `Settings.plugin.js`.
+
+| Setting | Id | Variable | What it does |
+| --- | --- | --- | --- |
+| Game client layout (dropdown: Fixed - Classic, Resizable - Classic, Resizable - Modern, Resizable - 317, Fixed - 317) | 12 | the saved layout (`client-layout-root`), as the side panel's dropdown | the same switch as the side panel's dropdown (116:40): the root interface becomes 548, 164 or 161, the open interfaces move onto it and the orbs are reopened for it |
+| Show data orbs | 8 | varbit 4084 `orbs_disabled` (1 hides them) | the orbs interface (160, or 897 on the mobile layout) closes while it is set and opens again when it is cleared |
+
+- **Game client layout.** Both dropdowns are on enum 3509. The cache has its first three options; our client adds the two 317 layouts to it, so both list all five, and the server takes all five (the official client shows only the three). On the mobile client the layout stays mobile and the choice isn't saved, as with the side panel.
+- **Show data orbs.** A login, the welcome screen's Play and a layout change open the orbs only while the row is on, as live logs in with `orbs_disabled` set (the speedrunning and Leagues tutorial logins in the rsprox captures leave 160 closed and open it at `toplevel:orbs` when the var goes back to 0). The Leagues tutorial hides them while it runs, and its end puts the player's own choice back (`settings:restore-data-orbs`). Tests: `tests/settings-gameframe-orbs.test.cjs`, `tests/settings-wired-rows.test.cjs`.
+- **Not done**: no capture shows the row itself being clicked; ours: a click closes or opens 160 at once, as the tutorial captures do when the var changes.
+
 ## Minimenu options and filters
 
 The rows sit on varp 4503. The cache's own scripts apply them in the client: a click runs the row's script there (7458 start position toggle, 7459 start entry, 7460 spacing, 7461 a filter, 728 scrollbar), and the login script (876) runs 7468, which applies them all from the varbits. So the server only keeps them: varp 4503 is one the browser client transmits whole when a script changes it, and the settings.json rows on it are saved from that (the spacing slider sends nothing else), as from a row click.
@@ -590,3 +602,14 @@ Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Eac
 | Always empty herb sacks on death | 359 | varbit 15316 `emptyondeath_herbsack` | herb sack and silklined herb sack |
 
 - **Not done:** a seed box lost above level 20 Wilderness is destroyed on live with its seeds kept for the next box (Wiki: Seed box, 14 April 2021); here its seeds go to the bank and the killer like any other PvP death.
+
+### Death protection from cosmetics (row 386)
+
+Row 386 is a `data/settings.json` toggle on varbit 10987 `death_waivecosmeticsprotection`, saved and sent back at login. The varbit is 1 when the player turns protection off, so a fresh account (0) has it on; no rsprox capture ever sets it to 1. Its cache text: "When enabled, cosmetic upgrades such as ornament kits may cause certain items to be protected during a non-PvP death, rather than falling to a grave."
+
+- **What it protects** (Wiki: Items Kept on Death, the Mechanics table; Ornament kit; Bounty hunter ornament kit; Volcanic abyssal whip): an item in `items/data/ornament-kits.json` made with a tradeable ornament kit, mix or paint, or with the untradeable Bounty Hunter ornament kit (`OrnamentKits.plugin.js` answers `player-death:cosmetic`). Not protected: untradeable modifications (the Wiki's example is the twisted ancestral colour kit) and recolours made at an NPC (Deadman imbued capes), which go to the grave. Ours: the other untradeable kits (dark dye, the Theatre of Blood holy and sanguine kits, the cursed phalanx, Vorkath's head) are treated the same way; their Wiki pages give no PvM rule. The death ranks a protected item like any other. If it is among the kept ones it takes that slot; if not, it is kept on top of them, skulled or not (`PlayerDeathTask.getKeptItems`).
+- **When:** not on a death to another player, and not in the Wilderness (`PlayerDeathTask.protectsCosmetics`). With the row off the item ranks normally and, unkept, goes to the grave.
+- **Items Kept on Death** keeps its three (or four) kept slots for the ranked items and lists a protected item with the others, marked kept. Its PvP and Wilderness toggles show the death without the protection.
+- Tests: `tests/cosmetic-death-protection.test.cjs`.
+- **Evidence:** the cache has no per-item flag for this; only the settings scripts (3965, 6716) read the varbit. In the 24 Items Kept on Death opens with full item lists in the rsprox captures (recordings 430 to 4291, revisions 230-239), no ornamented item sits outside the kept slots, so none confirms the protection directly; none of the items live marks lost there is one this protects (tests/cosmetic-death-protection.test.cjs checks a sample).
+- **Not done:** the Tombs of Amascut retrieval chest and Bounty Hunter risk skulls still rank without the protection.

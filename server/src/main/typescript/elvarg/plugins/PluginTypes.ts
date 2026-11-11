@@ -1624,6 +1624,7 @@ export interface PluginCoreApi {
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;
   resolveGameframeRoot: typeof import("../net/protocol/ClientProtocol").resolveGameframeRoot;
   orbsGroupFor: typeof import("../net/protocol/ClientProtocol").orbsGroupFor;
+  dataOrbsHidden: typeof import("../net/protocol/ClientProtocol").dataOrbsHidden;
   encodeFinePosition: typeof import("../net/protocol/ClientProtocol").encodeFinePosition;
   Boundary: any;
   PolygonalBoundary: any;
@@ -1738,7 +1739,7 @@ export interface PluginModule {
   /** pluginConfig options this plugin reads, keyed "<namespace>:<key>". */
   config?: Record<string, import("../game/definition/WorldSettingDeclarations").ConfigOptionDeclaration>;
   dependsOn?: string[];
-  /** Members content: not loaded when world.json sets membersWorld false. */
+  /** Members content: skipped when the FreeToPlay plugin is enabled. */
   members?: boolean;
   /** False keeps the plugin off unless world.json `plugins` turns it on. */
   enabled?: boolean;

@@ -2,14 +2,15 @@
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, after, test } = require('node:test');
+const { before, after, test, mock } = require('node:test');
 const fs = require('node:fs'), os = require('node:os');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(),'enchant-world-'));
 process.env.PLAYER_SAVE_DATABASE_PATH = path.join(temp,'players.sqlite');
 process.env.PLAYER_SAVE_IMPORT_LEGACY_JSON = '0';
 const worldFile = path.join(temp,'data/definitions/world.json');
 fs.mkdirSync(path.dirname(worldFile),{recursive:true});
-fs.writeFileSync(worldFile,JSON.stringify({...require('../data/definitions/world.json'),membersWorld:false}));
+const shippedWorld = require('../data/definitions/world.json');
+fs.writeFileSync(worldFile, JSON.stringify({ ...shippedWorld, plugins: { ...shippedWorld.plugins, FreeToPlay: true } }));
 const previousCwd = process.cwd();
 let world;
 try { process.chdir(temp); world=require('../dist/game/definition/WorldDefinition'); }
@@ -23,11 +24,20 @@ const { ClientConnection } = require('../dist/net/NetworkBuilder');
 let core, savedPersistence, next = 9400;
 before(async () => {
   assert.equal(world.isMembersWorld(),false,'private configured world before plugin load');
-  assert.deepEqual({...world.readWorldConfig(),membersWorld:false},JSON.parse(fs.readFileSync(worldFile,'utf8')),'effective loader configuration matches private world');
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PM.getCoreApi();
-  try { PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); }
-  finally { savedPersistence = core.GameConstants.PLAYER_PERSISTENCE; }
+  const read = fs.readFileSync, exists = fs.existsSync;
+  const worldPath = path.resolve('data/definitions/world.json');
+  const localPath = path.resolve('data/definitions/world.local.json');
+  const worldRead = mock.method(fs, 'readFileSync', (file, ...args) => read(file === worldPath ? worldFile : file, ...args));
+  const localExists = mock.method(fs, 'existsSync', file => file !== localPath && exists(file));
+  try {
+    PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  } finally {
+    worldRead.mock.restore();
+    localExists.mock.restore();
+    savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
+  }
   assert.ok(PM.loadedPlugins.includes('EnchantJewellery'),'EnchantJewellery registered');
   assert.ok(PM.loadedPlugins.includes('FreeToPlay'),'FreeToPlay registered');
   core.GameConstants.PLAYER_PERSISTENCE = { requestSave() {}, flush: () => Promise.resolve() };

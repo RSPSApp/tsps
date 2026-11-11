@@ -6,7 +6,14 @@ const { hasToken, tokenMatches, hostAllowed, originAllowed, sessionCookie } = re
 // lives in WorldAdmin.plugin.js (`actions`); this file never touches world config itself.
 
 const MAX_BODY_BYTES = 1024 * 1024;
-const PAGE_FILE = path.join(__dirname, "page.html");
+const PANEL_DIRECTORY = path.join(__dirname, "panel");
+const PAGE_FILE = path.join(PANEL_DIRECTORY, "page.html");
+const PANEL_ASSETS = new Map([
+  ["panel.js", "application/javascript; charset=utf-8"],
+  ["panel.css", "text/css; charset=utf-8"],
+  ["skill-icons.json", "application/json; charset=utf-8"],
+  ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
+]);
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const CHANGE_SECTIONS = new Set(["world", "plugins", "pluginConfig"]);
 
@@ -82,7 +89,7 @@ function readBody(request) {
       chunks.push(chunk);
     });
     request.on("end", () => {
-      if (!tooLarge) resolve(Buffer.concat(chunks).toString("utf8"));
+      if (!tooLarge) resolve(Buffer.concat(chunks));
     });
     request.on("error", reject);
   });
@@ -91,7 +98,7 @@ function readBody(request) {
 async function readJson(request) {
   const contentType = String(request.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
   if (contentType !== "application/json") throw new HttpError(415, "Content-Type must be application/json");
-  const text = await readBody(request);
+  const text = (await readBody(request)).toString("utf8");
   if (text.trim() === "") return {};
   let body;
   try {
@@ -114,15 +121,15 @@ function send(response, status, body, headers = {}) {
   response.end(isText ? body : JSON.stringify(body));
 }
 
-function sendPage(response) {
+function sendPage(response, file = PAGE_FILE, contentType = "text/html; charset=utf-8") {
   let html;
   try {
-    html = fs.readFileSync(PAGE_FILE);
+    html = fs.readFileSync(file);
   } catch {
-    send(response, 404, "The world config page is not built yet.");
+    send(response, 404, file === PAGE_FILE ? "The world config page is not built yet." : "Panel asset not found.");
     return;
   }
-  response.writeHead(200, { ...BASE_HEADERS, "Content-Type": "text/html; charset=utf-8" });
+  response.writeHead(200, { ...BASE_HEADERS, "Content-Type": contentType });
   response.end(html);
 }
 
@@ -160,9 +167,33 @@ function createRequestHandler(access, actions, worldSettingKeys) {
       sendPage(response);
       return;
     }
+    if (method === "GET" && url.pathname.startsWith("/panel/")) {
+      const file = url.pathname.slice("/panel/".length);
+      const contentType = PANEL_ASSETS.get(file);
+      if (!contentType) throw new HttpError(404, "Panel asset not found");
+      sendPage(response, path.join(PANEL_DIRECTORY, file), contentType);
+      return;
+    }
+    if (actions.dispatch && await actions.dispatch(request, response, url)) return;
     if (url.pathname === "/api/catalog") {
       if (method !== "GET") throw new HttpError(405, "Method not allowed");
-      const result = actions.catalog();
+      const result = await actions.catalog();
+      send(response, result.status, result.body);
+      return;
+    }
+    if (url.pathname === "/api/plugins/import") {
+      if (method !== "POST") throw new HttpError(405, "Method not allowed");
+      if (!originAllowed(request)) throw new HttpError(403, "Cross-origin request refused");
+      if (request.headers["content-type"] !== "application/zip") throw new HttpError(415, "Select a plugin ZIP.");
+      const result = actions.importPlugin(await readBody(request));
+      send(response, result.status, result.body);
+      return;
+    }
+    if (url.pathname === "/api/plugins/install" || url.pathname === "/api/plugins/delete") {
+      if (method !== "POST") throw new HttpError(405, "Method not allowed");
+      if (!originAllowed(request)) throw new HttpError(403, "Cross-origin request refused");
+      const action = url.pathname.endsWith("/install") ? actions.installPlugin : actions.deletePlugin;
+      const result = await action(await readJson(request));
       send(response, result.status, result.body);
       return;
     }
@@ -206,4 +237,4 @@ function createRequestHandler(access, actions, worldSettingKeys) {
   };
 }
 
-module.exports = { createRequestHandler, HttpError, MAX_BODY_BYTES };
+module.exports = { createRequestHandler, HttpError, MAX_BODY_BYTES, send, readJson };

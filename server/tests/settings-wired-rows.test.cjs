@@ -23,6 +23,7 @@ const TOGGLES = {
   3: 4181,
   4: 5711,
   6: 5712,
+  8: 4084,
   9: 10113,
   36: 4089,
   83: 11890,
@@ -53,6 +54,7 @@ const TOGGLES = {
   362: 15323,
   365: 9597,
   372: 1334,
+  386: 10987,
   391: 11520,
   398: 11526,
   402: 11530,
@@ -182,6 +184,8 @@ function player(attributes = new Map()) {
       return sender;
     },
     sendClientScript() { return sender; },
+    sendSubInterface() { return sender; },
+    closeSubInterface() { return sender; },
   };
   return { varps, attributes, getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v), getPacketSender: () => sender };
 }

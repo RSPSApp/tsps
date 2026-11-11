@@ -494161,7 +494161,7 @@
               "npc": "We have gangs?"
             },
             {
-              "player": "Erm, yes...anyway, I managed to get half the shield back."
+              "player": "Erm, yes... Anyway, I managed to get half the Shield of Arrav back."
             },
             {
               "npc": "Only half?"
@@ -494170,7 +494170,7 @@
               "player": "Yes. The gangs had a bit of a tiff, you see. A friend helped me get the other half and I returned it here to get my reward."
             },
             {
-              "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 5th Age, year 700-800."
+              "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 4th Age, year 700-800."
             },
             {
               "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
@@ -494182,8 +494182,9 @@
               "npc": "You're welcome!"
             },
             {
-              "type": "unavailable",
-              "id": "BVuQV2"
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "APqx78"
             }
           ],
           "id": "QqHvp-"
@@ -494258,8 +494259,9 @@
               "npc": "You're welcome!"
             },
             {
-              "type": "unavailable",
-              "id": "3b-0_w"
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "Mf6ptc"
             }
           ],
           "id": "RaNFxc"
@@ -494294,16 +494296,16 @@
           "text": "If the player has Priest in Peril completed:",
           "steps": [
             {
-              "player": "Some disturbing and heroic news from Morytania, concerning the River Salve and the Temple Knights."
+              "player": "I discovered some disturbing yet heroic information about the vampyres of Morytania."
             },
             {
-              "npc": "Ahh, the Temple Knights...little is known of them."
+              "npc": "Oh?"
             },
             {
-              "player": "Yes, it seems that these seven knights drove back the nasty things coming out of Morytania, and Saradomin blessed the Salve to stop them getting back."
+              "player": "Yes, the vampyres once tried to invade Misthalin, but seven priestly warriors drove them back. They then blessed the Salve to stop the vampyres from ever invading again."
             },
             {
-              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information. I'll get a display put up. Number 23, 4th Age, year 1100-1200."
             }
           ],
           "id": "3q8-VQ"
@@ -494313,16 +494315,16 @@
           "text": "If the player has In Aid of the Myreque completed:",
           "steps": [
             {
-              "player": "Some disturbing and heroic news from Morytania concerning the River Salve and the seven priests."
+              "player": "I found out more about Ivandis Seergaze, one of the priestly warriors who drove back the vampyres of Morytania."
             },
             {
-              "npc": "Oh?"
+              "npc": "What is it?"
             },
             {
-              "player": "Yes, it seems that these seven priests were also warriors and drove back the nasty things coming out of Morytania. Then Saradomin blessed the Salve to stop them getting back."
+              "player": "It seems that he wasn't buried at Paterdomus with the others. His tomb is actually deep within Morytania!"
             },
             {
-              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+              "npc": "How fascinating. I'll have the display updated. Number 23, 4th Age, year 1100-1200."
             }
           ],
           "id": "dHMXRQ"
@@ -494382,6 +494384,20 @@
             },
             {
               "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
+            },
+            {
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "WIZR3H"
             }
           ],
           "id": "4Ij9Rt"
@@ -494447,6 +494463,15 @@
             },
             {
               "npc": "This is wonderful, I shall have a display made immediately to go with the staff model. Display number 28, end of the 2nd Age."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
             }
           ],
           "id": "0sSqOl"
@@ -494468,11 +494493,12 @@
               "npc": "And?"
             },
             {
-              "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorkian lord."
+              "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorakian lord."
             },
             {
-              "type": "unavailable",
-              "id": "z2xH5U"
+              "type": "message",
+              "text": "The historian pulls out his writing implements and listens while you explain the whole story....",
+              "id": "A6tdo0"
             },
             {
               "npc": "How exciting, I'll get a display put up immediately. Display number 7, 5th Age, year 7."
@@ -494491,7 +494517,7 @@
               "npc": "Oh! Whatever can we do!"
             },
             {
-              "player": "Calm down, I have arrested the ringleader."
+              "player": "Don't worry. I put a stop to their plots."
             },
             {
               "npc": "Oh, thank Saradomin for that. So, tell me the story!"
@@ -494871,7 +494897,7 @@
                     "npc": "We have gangs?"
                   },
                   {
-                    "player": "Erm, yes...anyway, I managed to get half the shield back."
+                    "player": "Erm, yes... Anyway, I managed to get half the Shield of Arrav back."
                   },
                   {
                     "npc": "Only half?"
@@ -494880,7 +494906,7 @@
                     "player": "Yes. The gangs had a bit of a tiff, you see. A friend helped me get the other half and I returned it here to get my reward."
                   },
                   {
-                    "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 5th Age, year 700-800."
+                    "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 4th Age, year 700-800."
                   },
                   {
                     "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
@@ -494892,8 +494918,9 @@
                     "npc": "You're welcome!"
                   },
                   {
-                    "type": "unavailable",
-                    "id": "BVuQV2"
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "APqx78"
                   }
                 ],
                 "id": "QqHvp-"
@@ -494968,8 +494995,9 @@
                     "npc": "You're welcome!"
                   },
                   {
-                    "type": "unavailable",
-                    "id": "3b-0_w"
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "Mf6ptc"
                   }
                 ],
                 "id": "RaNFxc"
@@ -495004,16 +495032,16 @@
                 "text": "If the player has Priest in Peril completed:",
                 "steps": [
                   {
-                    "player": "Some disturbing and heroic news from Morytania, concerning the River Salve and the Temple Knights."
+                    "player": "I discovered some disturbing yet heroic information about the vampyres of Morytania."
                   },
                   {
-                    "npc": "Ahh, the Temple Knights...little is known of them."
+                    "npc": "Oh?"
                   },
                   {
-                    "player": "Yes, it seems that these seven knights drove back the nasty things coming out of Morytania, and Saradomin blessed the Salve to stop them getting back."
+                    "player": "Yes, the vampyres once tried to invade Misthalin, but seven priestly warriors drove them back. They then blessed the Salve to stop the vampyres from ever invading again."
                   },
                   {
-                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information. I'll get a display put up. Number 23, 4th Age, year 1100-1200."
                   }
                 ],
                 "id": "3q8-VQ"
@@ -495023,16 +495051,16 @@
                 "text": "If the player has In Aid of the Myreque completed:",
                 "steps": [
                   {
-                    "player": "Some disturbing and heroic news from Morytania concerning the River Salve and the seven priests."
+                    "player": "I found out more about Ivandis Seergaze, one of the priestly warriors who drove back the vampyres of Morytania."
                   },
                   {
-                    "npc": "Oh?"
+                    "npc": "What is it?"
                   },
                   {
-                    "player": "Yes, it seems that these seven priests were also warriors and drove back the nasty things coming out of Morytania. Then Saradomin blessed the Salve to stop them getting back."
+                    "player": "It seems that he wasn't buried at Paterdomus with the others. His tomb is actually deep within Morytania!"
                   },
                   {
-                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+                    "npc": "How fascinating. I'll have the display updated. Number 23, 4th Age, year 1100-1200."
                   }
                 ],
                 "id": "dHMXRQ"
@@ -495092,6 +495120,20 @@
                   },
                   {
                     "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
+                  },
+                  {
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "WIZR3H"
                   }
                 ],
                 "id": "4Ij9Rt"
@@ -495157,6 +495199,15 @@
                   },
                   {
                     "npc": "This is wonderful, I shall have a display made immediately to go with the staff model. Display number 28, end of the 2nd Age."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
                   }
                 ],
                 "id": "0sSqOl"
@@ -495178,11 +495229,12 @@
                     "npc": "And?"
                   },
                   {
-                    "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorkian lord."
+                    "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorakian lord."
                   },
                   {
-                    "type": "unavailable",
-                    "id": "z2xH5U"
+                    "type": "message",
+                    "text": "The historian pulls out his writing implements and listens while you explain the whole story....",
+                    "id": "A6tdo0"
                   },
                   {
                     "npc": "How exciting, I'll get a display put up immediately. Display number 7, 5th Age, year 7."
@@ -495201,7 +495253,7 @@
                     "npc": "Oh! Whatever can we do!"
                   },
                   {
-                    "player": "Calm down, I have arrested the ringleader."
+                    "player": "Don't worry. I put a stop to their plots."
                   },
                   {
                     "npc": "Oh, thank Saradomin for that. So, tell me the story!"

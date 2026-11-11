@@ -67,6 +67,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   ARENA_ENTRANCE_OPEN: 3784, // troll_stronghold_arena_entrance_inactive
   ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
+  SHIPYARD_GATE_LEFT_OPEN: 1566, // same non-mirrored gate model as 2438, with no options
+  SHIPYARD_GATE_RIGHT_OPEN: 1565, // same mirrored gate model as 2439, with no options
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
   PIP_MAUSOLEUM_GATE_OPEN: 3446, // inacpip_underground_door; Priest in Peril capture 2026-11-02
   // inactivetempledoorl/r: Paterdomus' large doors open onto them (Priest in Peril capture 2026-11-02
@@ -415,6 +417,30 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
+    // Grand Tree footage at 6:58 and 7:48 shows the player walking through the opened leaves.
+    Object.freeze({
+      closed: [[O.PRISON_DOOR_8, 2465, 3496, 3, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2465, 3496, 3, 0],
+        [O.PRISON_DOOR_8, 2466, 3496, 3, 1],
+      ],
+      crossX: 2465,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    Object.freeze({
+      closed: [[O.GATE_55, 2945, 3041, 0, 0], [O.GATE_56, 2945, 3042, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2945, 3041, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2945, 3042, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_LEFT_OPEN, 2946, 3041, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_RIGHT_OPEN, 2946, 3042, 0, 1],
+      ],
+      crossX: 2945,
+      walkOver: true,
+      closeTicks: 2,
+    }),
     // The Mourner HQ's upstairs cage (mournerquaters_gater/gatel 2060/2058), Biohazard capture
     // 20261110T121228-5ab63b4 ticks 557 (in) and 580 (out): inviswall on both gate tiles, the open
     // leaves on the tiles east, grate_open (69), the player steps across and the gate is back two

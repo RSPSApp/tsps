@@ -47,7 +47,6 @@ const QUESTIONS_PER_CASE = 3;
 const KUDOS_PER_CASE = 2;
 const REWARD_XP = 1000;
 const SOUND_RIGHT_ANSWER = 3648;
-const SOUND_KUDOS = 3653;
 /**
  * IF_SETROTATESPEED in recording 1723 rotates exactly these vm_natural_history (533) model
  * components, one per single-model case. Components 4-6 (dragon) and 13-16 (seaslugs) got no
@@ -57,7 +56,6 @@ const ROTATED_QUIZ_COMPONENTS = new Set([2, 3, 7, 8, 9, 10, 11, 12, 17, 18, 19, 
 const ROTATE_SPEED_X = 0;
 const ROTATE_SPEED_Y = 5;
 const NOT_AGREED_MESSAGE = "This looks like some sort of quiz. I wonder if I can take part...";
-const KUDOS_MESSAGE = "You have earned Kudos with the Museum!";
 const REWARD_MESSAGE = "You have gained 1000xp in Slayer and Hunter.";
 
 let api = null;
@@ -213,9 +211,8 @@ function answer(player, choice) {
     orlandoSays(player, VARIANT.RIGHT, () => reopenCase(player, entry));
     return true;
   }
-  sender.sendSound(SOUND_KUDOS, 255, 0);
+  // The museum's award sends the Kudos message and sound 3653, as for every Kudos.
   api.emitCustomEvent(AWARD_KUDOS_EVENT, { player, amount: KUDOS_PER_CASE, source: `natural-history:${entry.varbit}` });
-  player.sendMessage(KUDOS_MESSAGE);
   orlandoSays(player, VARIANT.CASE_DONE, () => sender.sendInterfaceRemoval());
   return true;
 }

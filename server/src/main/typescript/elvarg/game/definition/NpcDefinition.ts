@@ -34,6 +34,8 @@ export class NpcDefinition {
     private venomous: boolean = false;
     private immunePoison: boolean = false;
     private immuneVenom: boolean = false;
+    /** Percentage a freeze is shortened by; 100 is never frozen (Wiki: Freeze). */
+    private freezeResistance: number = 0;
     private demon: boolean = false;
     /** The Wiki's monster attributes: undead, demon, dragon, kalphite, ... */
     private attributes: readonly string[] = [];
@@ -268,6 +270,10 @@ export class NpcDefinition {
 
     public isVenomImmune(): boolean {
         return this.immuneVenom;
+    }
+
+    public getFreezeResistance(): number {
+        return this.freezeResistance;
     }
 
     public isDemon(): boolean {

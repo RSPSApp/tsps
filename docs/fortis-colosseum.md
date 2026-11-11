@@ -271,9 +271,9 @@ Enraged (150 HP): 5 pools at once, then one more every 3 ticks, and the crystals
 - Left out: the Varlamore token on wave 3 (the Wiki gives its rate as "varies").
 - Values are the items' GE prices (`item-prices.json`). The capture's 80 splinters at 30,560 is 382 each.
 
-**The chest** (Wiki; rsprox captures 1227 and 4117; tiles **RSPS**):
+**The chest** (Wiki; rsprox captures 1193, 1227 and 4117; tiles **RSPS**):
 - Forfeiting between waves, or beating Sol Heredit (once his death animation has played and his hazards have gone), brings the Rewards Chest (loc 50741, appear anim 10825) out at (1829, 3105), with Minimus at (1830, 3103) to leave by.
-- Search opens interface 864 and sends inventory 843. Its reward list is component 17, and its Discard-all, Take-all and Bank-all buttons are components 13, 14 and 15. Capture 4117 shows taking one item, entering two with Take-X, both answers to the discard confirmation, and the empty-chest message. Capture 1227 shows Bank-all clearing the 80 splinters after wave 1.
+- Search opens interface 864 and sends inventory 843. Its reward list is component 17, and its Discard-all, Take-all and Bank-all buttons are components 13, 14 and 15. Capture 4117 shows taking one item, entering two with Take-X, both answers to the discard confirmation, and the empty-chest message. Capture 1193 shows Take-All on one item; capture 1227 shows Bank-all clearing the 80 splinters after wave 1.
 - The chest value uses script 4929, whose current cache definition takes a long. The older interface's value text and item setup are also sent as shown in the captures. Varbit 9802 marks loot opened and clears on leaving the arena.
 - Loot left in the chest is lost on leaving. Dying, teleporting or logging out loses all of it (the capture's death sent an empty preview and "Total Value: 0").
 

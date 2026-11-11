@@ -43,9 +43,9 @@
  *  - No Telekinetic Grab on the jail guard and no Mastermind interface 588:
  *    the knights' pocket hand-outs supply a lockpick (Kay's) and opening the
  *    cell door plays the transcript's success message directly.
- *  - The box-selection interface (390) is not driven; the grail table plays the
- *    wiki riddle then a Box 1..9 prompt (correct box 8). A wrong box teleports
- *    with 5 damage; the stat drain is skipped.
+ *  - The box-selection interface (390) is driven by Riddle.KingsRansom.js (correct
+ *    box 8, the eighth from the left). A wrong box teleports with 5 damage; the
+ *    stat drain is skipped.
  *  - Venting out lands at the Catherby docks instead of the keep's back dock.
  *  - Trial witnesses are not spawned: picking a name in the judge's menu starts
  *    that witness's testimony transcript once the chatbox clears.
@@ -269,25 +269,6 @@ module.exports = function registerKingsRansomQuest(api) {
 
   const LAMP_XP = 5000;
   const LAMP_MIN_LEVEL = 50;
-
-  const RIDDLE_LINES = [
-    "You seek the grail of old,",
-    "but no longer is it a goblet of gold.",
-    "Among these nine will you find what you seek,",
-    "but be careful and don't peek!",
-    "A wrong choice will expel you,",
-    "so consider carefully each clue.",
-    "Three boxes contain only air,",
-    "beware of three boxes, for danger lurks there.",
-    "Two hold only rubbish but would fool you with disguise,",
-    "only one box holds your prize.",
-    "Clues will give the information you need,",
-    "rubbish always sits to the right of danger, pay heed.",
-    "There is nothing helpful in boxes great in height,",
-    "and boxes on either end will not end your plight.",
-    "A tall or small box will only bring you anger,",
-    "but a square box will not put you in danger.",
-  ];
 
   let quest;
   const trialAnnas = new Map();
@@ -1158,49 +1139,9 @@ module.exports = function registerKingsRansomQuest(api) {
   // Grail riddle
   // ==========================================================================
 
+  /** The nine-box interface (Riddle.KingsRansom.js); a pick is answered by chooseBox. */
   function openGrailRiddle(player) {
-    const boxChoice = (box) => ({
-      text: `Box ${box}`,
-      echo: false,
-      next: [{ exec: () => chooseBox(player, box) }],
-    });
-    startDialogue(api, player, { npcId: NpcIdentifiers.MERLIN }, [
-      { npc: RIDDLE_LINES },
-      {
-        title: "Which box holds the Holy Grail?",
-        options: [
-          boxChoice(1),
-          boxChoice(2),
-          boxChoice(3),
-          boxChoice(4),
-          {
-            text: "More...",
-            echo: false,
-            next: [
-              {
-                title: "Which box holds the Holy Grail?",
-                options: [
-                  boxChoice(5),
-                  boxChoice(6),
-                  boxChoice(7),
-                  boxChoice(8),
-                  {
-                    text: "More...",
-                    echo: false,
-                    next: [
-                      {
-                        title: "Which box holds the Holy Grail?",
-                        options: [boxChoice(9), { text: "Never mind", echo: false, next: [] }],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ]);
+    grailBoxes.show(player);
   }
 
   function chooseBox(player, box) {
@@ -1516,5 +1457,9 @@ module.exports = function registerKingsRansomQuest(api) {
   api.onCustomEvent("door:toggle", handleGateToggleClaim);
   api.onCustomEvent("door:toggle", handleCellDoorToggle);
   api.onPlayerLogin(handleLogin);
+  const grailBoxes = require("./Riddle.KingsRansom")(api, {
+    onChoose: chooseBox,
+    isActive: (player) => stageOf(player) >= STAGE_CELL_OPEN && stageOf(player) < STAGE_COMPLETE,
+  });
   api.onPlayerLogout(handleLogout);
 };

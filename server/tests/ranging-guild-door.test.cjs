@@ -1,8 +1,10 @@
 // Run after `yarn build`: node --test tests/ranging-guild-door.test.cjs
 // Wiki (Ranging Guild): 40 Ranged to enter, boostable; the doorman turns the rest away. The door is
 // a pass-through gate, so the doorway keeps an inviswall while it stands open and nothing can walk
-// or follow through it — the opener is carried across. Real engine: every plugin loaded, the real
-// map door 11665 at 2658,3438 through PluginManager.emitObjectInteraction.
+// or follow through it — the opener is carried across. The crossing follows three captures (229/02601,
+// 230/02966, 232/03142): from 2657,3439 to 2659,3437, corner to corner, with inactivepoordoor (1539) as
+// the open leaf and gate_open (67). Real engine: every plugin loaded, the real map door 11665 at
+// 2658,3438 through PluginManager.emitObjectInteraction.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -19,7 +21,9 @@ const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition")
 
 const DOOR = { x: 2658, y: 3438, z: 0 };
 const OUTSIDE = [2657, 3438, 0];
-const INSIDE = [2659, 3438, 0];
+const CORNER_OUTSIDE = [2657, 3439, 0];
+const INSIDE = [2659, 3437, 0];
+const OPEN_LEAF = 1539; // inactivepoordoor
 const INVISWALL = 38848;
 
 let core, next = 9400;
@@ -46,16 +50,21 @@ function actor(t, at, ranged) {
   assert.equal(core.World.getPlayers().add(p), true);
   p.needsPlacement = false;
   p.getSkillManager().setCurrentLevel(core.Skill.RANGED, ranged, true);
-  const messages = [];
+  const messages = [], sounds = [];
   const sender = p.getPacketSender();
   t.mock.method(sender, "sendMessage", (message) => { messages.push(message); return sender; });
+  const sendSound = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (target, sound, ...rest) => {
+    if (target === p) sounds.push(sound?.getId?.() ?? sound?.id ?? sound);
+    return sendSound(target, sound, ...rest);
+  });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
     core.TaskManager.cancelTasks(p.getIndex());
     core.World.getPlayers().remove(p);
   });
-  return { p, c, messages };
+  return { p, c, messages, sounds };
 }
 
 const tick = (e, count = 1) => {
@@ -83,6 +92,7 @@ function openDoor(f) {
   return event;
 }
 
+const at = (e) => [e.p.getLocation().getX(), e.p.getLocation().getY()];
 const idsAt = (x, y) => MapObjects.getObjectsAt(new core.Location(x, y, 0), null).map((o) => o.getId());
 
 test("below 40 Ranged the door is refused and never opens", (t) => {
@@ -98,8 +108,17 @@ test("40 Ranged opens the gate and is carried across", (t) => {
   const event = openDoor(f);
   assert.equal(event.handled, true, "the pass-through gate takes the click");
   assert.ok(idsAt(DOOR.x, DOOR.y).includes(INVISWALL), "the doorway keeps a blocker while it stands open");
+  assert.ok(idsAt(2658, 3439).includes(OPEN_LEAF), "the open leaf is inactivepoordoor, as captured");
+  assert.ok(f.sounds.includes(67), `gate_open plays: ${f.sounds}`);
   tick(f, 4);
-  assert.equal(f.p.getLocation().getX(), INSIDE[0], "the opener is carried to the inside tile");
+  assert.deepEqual(at(f), INSIDE.slice(0, 2), "the opener crosses corner to corner, as captured");
+});
+
+test("from the captured corner tile the opener crosses the same way", (t) => {
+  const f = actor(t, CORNER_OUTSIDE, 40);
+  openDoor(f);
+  tick(f, 4);
+  assert.deepEqual(at(f), INSIDE.slice(0, 2));
 });
 
 test("the north approach enters too, not just the west one", (t) => {
@@ -108,27 +127,18 @@ test("the north approach enters too, not just the west one", (t) => {
   const f = actor(t, [2658, 3439, 0], 40);
   openDoor(f);
   tick(f, 4);
-  assert.equal(f.p.getLocation().getX(), INSIDE[0], "carried to the inside tile");
-  assert.equal(f.p.getLocation().getY(), INSIDE[1]);
+  assert.deepEqual(at(f), INSIDE.slice(0, 2), "carried to the inside tile");
 });
 
-test("a second opener on the north side crosses on the passage row", (t) => {
-  // Once the gate is open the leaf has swung to 2658,3439, off the passage row. Following the
-  // clicked leaf's y carried the second opener along the fence instead of through it.
+test("the open leaf has no action, so nobody else opens it while it stands", (t) => {
   const first = actor(t, OUTSIDE, 40);
-  const second = actor(t, [2657, 3439, 0], 40);
   openDoor(first);
-  const leaf = MapObjects.getObjectsAt(new core.Location(2658, 3439, 0), null).find((o) => o.getId() === 11665);
+  const leaf = MapObjects.getObjectsAt(new core.Location(2658, 3439, 0), null).find((o) => o.getId() === OPEN_LEAF);
   assert.ok(leaf, "the open leaf is on the map");
-  PM.emitObjectInteraction({
-    player: second.p, object: leaf, objectId: 11665, definition: ObjectDefinition.forId(11665), clickType: 1,
-    location: { x: 2658, y: 3439, z: 0 },
-    sourceLocation: { x: second.p.getLocation().getX(), y: second.p.getLocation().getY(), z: 0 },
-    handled: false,
-  });
-  tick(second, 4);
-  assert.equal(second.p.getLocation().getX(), INSIDE[0], "carried to the inside tile");
-  assert.equal(second.p.getLocation().getY(), INSIDE[1], "on the passage row, not the leaf's");
+  const actions = (ObjectDefinition.forId(OPEN_LEAF)?.getActions?.() ?? ObjectDefinition.forId(OPEN_LEAF)?.actions ?? []).filter(Boolean);
+  assert.deepEqual(actions, [], "inactivepoordoor has no menu option");
+  tick(first, 6);
+  assert.ok(idsAt(DOOR.x, DOOR.y).includes(11665), "the door is back two ticks later");
 });
 
 test("a low-level follower cannot cross the open gate", (t) => {
@@ -142,12 +152,12 @@ test("a low-level follower cannot cross the open gate", (t) => {
     `the follower stayed outside: ${follower.p.getLocation()}`);
 });
 
-test("inside the guild the door always lets the player out", (t) => {
-  const f = actor(t, INSIDE, 1);
+test("inside the guild the door always lets the player out, the captured crossing reversed", (t) => {
+  const f = actor(t, [2659, 3438, 0], 1);
   const event = openDoor(f);
   assert.equal(event.handled, true, "the pass-through gate takes the click");
   tick(f, 4);
-  assert.equal(f.p.getLocation().getX(), OUTSIDE[0], "a low-level player can still leave");
+  assert.deepEqual(at(f), CORNER_OUTSIDE.slice(0, 2), "a low-level player can still leave");
 });
 
 test("the diagonal splits the four clickable tiles the way the fence does", () => {

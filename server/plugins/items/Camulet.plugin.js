@@ -82,6 +82,8 @@ function chargedTeleport(player, destination) {
     return;
   }
   const { DialogueChainBuilder, ItemStatementDialogue } = core;
+  // The box's mesbox chat line goes first, its <br> a space (231/03021.txt:24821, tick 5260), as Arclight's.
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, OUT_OF_CHARGES_BOX.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new ItemStatementDialogue(0, core.ItemIdentifiers.CAMULET, OUT_OF_CHARGES_BOX)));
 }

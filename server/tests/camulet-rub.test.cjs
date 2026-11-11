@@ -63,8 +63,13 @@ test("a Rub submenu entry teleports straight there, even with the hard diary's m
 
 test('an empty Camulet: a submenu entry shows the item box at once; a bare Rub asks where first', (t) => {
   const { p, teleports } = actor(t, { charges: 0, hardDiary: true });
+  const mesbox = [];
+  const typed = p.getPacketSender().sendTypedMessage.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(), 'sendTypedMessage', (type, text) => { if (type === core.ChatType.MESBOX) mesbox.push(text); return typed(type, text); });
   rub(p, 1);
   assert.ok(p.getDialogueManager().getCurrent() instanceof core.ItemStatementDialogue, 'the out-of-charges item box');
+  // 231/03021.txt:24821: the box's mesbox line first, its <br> a space.
+  assert.deepEqual(mesbox, ['Your Camulet has run out of teleport charges. You can renew them by applying camel dung.']);
   assert.equal(teleports.length, 0);
   p.getDialogueManager().reset?.();
   rub(p, undefined);

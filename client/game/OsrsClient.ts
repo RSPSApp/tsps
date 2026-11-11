@@ -201,6 +201,8 @@ import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { chatHistory } from "../rs/cs2/ChatHistory";
+import { examinePriceLine } from "./examinePrice";
+import { guidePrice } from "../network/serverConnection/domain/itemPrices";
 import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
@@ -7470,14 +7472,17 @@ export class OsrsClient {
     }
 
     /** Display an item's cache-defined Examine text in game chat. */
-    examineWidgetItem(widget: { itemId?: number; fileId?: number } | null | undefined): boolean {
+    examineWidgetItem(
+        widget: { itemId?: number; itemQuantity?: number; fileId?: number } | null | undefined,
+    ): boolean {
         // A worn-equipment slot (387, 84) keeps its ops on a static layer and draws the item in a
         // CC_CREATE child (script 546), so a static widget without an item examines its child's.
         const own = widget?.itemId ?? -1;
-        const itemId = own >= 0 || widget?.fileId === -1
-            ? own
+        const item = own >= 0 || widget?.fileId === -1
+            ? widget
             : this.widgetManager?.getDynamicChildrenByParent(widget as any)
-                .find((child) => (child.itemId ?? -1) >= 0)?.itemId ?? -1;
+                .find((child) => (child.itemId ?? -1) >= 0);
+        const itemId = item?.itemId ?? -1;
         if (!(itemId >= 0)) return false;
         try {
             const examine = this.objTypeLoader?.load?.(itemId)?.examine;
@@ -7485,6 +7490,12 @@ export class OsrsClient {
                 return false;
             }
             chatHistory.addMessage("game", examine);
+            const price = examinePriceLine(itemId, item?.itemQuantity ?? 1, {
+                definition: (id) => this.objTypeLoader?.load?.(id),
+                guidePrice,
+                varbit: (id) => this.varManager.getVarbit(id) | 0,
+            });
+            if (price) chatHistory.addMessage("game", price);
             return true;
         } catch {
             return false;

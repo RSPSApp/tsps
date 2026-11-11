@@ -52,3 +52,18 @@ export function examinePriceLine(itemId: number, amount: number, deps: ExaminePr
     if (!parts.length) return null;
     return `Price of ${count > 1 ? `${number(count)} x ` : ""}${def.name}: ${parts.join("  ")}`;
 }
+
+/**
+ * Adds an examine's price line: at once when the world's prices are loaded (`pending` null), else
+ * when the loads under way finish, so the first examine after a login still gets its line.
+ */
+export function addExaminePriceLine(
+    itemId: number, amount: number, deps: ExaminePriceDeps, pending: Promise<void> | null, add: (line: string) => void,
+): Promise<void> | void {
+    const send = () => {
+        const line = examinePriceLine(itemId, amount, deps);
+        if (line) add(line);
+    };
+    if (!pending) return send();
+    return pending.then(send, send);
+}

@@ -1,10 +1,13 @@
 import { strict as assert } from "node:assert";
 import {
+    addExaminePriceLine,
     EXAMINE_PRICE_ALCH_VARBIT,
     EXAMINE_PRICE_GE_VARBIT,
     ExaminePriceDefinition,
     examinePriceLine,
 } from "../game/examinePrice";
+import { alchemyValues, guidePrice, itemPricesPending, loadItemPrices } from "../network/serverConnection/domain/itemPrices";
+import { state } from "../network/serverConnection/state";
 
 // Settings rows 234 and 235: the price line after a widget item's examine text.
 const r = (n: number | string) => `<col=ff0000>${n}</col>`;
@@ -55,4 +58,47 @@ assert.equal(line(1325, 1, 1, 1, undefined, () => undefined), `Price of Steel sc
     "no HA or LA while alchemy values load");
 assert.equal(line(1325, 1500, 1, 0), `Price of 1,500 x Steel scimitar: GE ${r("100,500")} (${r(67)}ea)`);
 
-console.log("examine-price tests passed");
+// The first trade examine after a login, with Alchemy on and GE off: the login asks for both tables,
+// and an examine made while they load gets its line when they arrive.
+const firstExamine = (async () => {
+    const originalConfig = state.webRtcConfig;
+    const originalSocket = state.socket;
+    const requested: string[] = [];
+    const replies: Array<() => void> = [];
+    try {
+        state.webRtcConfig = { signalUrl: "wss://worlds.test", worldId: "examine-test", iceServers: [] };
+        state.socket = { fetchContent: (path: string) => {
+            requested.push(path);
+            return new Promise((resolve) => replies.push(() =>
+                resolve(path === "/api/item-alchemy" ? { 1325: [240, 160] } : { 1325: 67 })));
+        } } as any;
+        loadItemPrices();
+        assert.deepEqual(requested.sort(), ["/api/item-alchemy", "/api/item-prices"], "a login asks for both tables");
+        const chat: string[] = [];
+        const deps = {
+            definition: (id: number) => DEFS[id],
+            guidePrice,
+            alchemy: alchemyValues,
+            varbit: (id: number) => (id === EXAMINE_PRICE_ALCH_VARBIT ? 1 : 0),
+        };
+        const pending = itemPricesPending();
+        assert.ok(pending, "still loading");
+        const done = addExaminePriceLine(1325, 1, deps, pending, (text) => chat.push(text));
+        assert.deepEqual(chat, [], "nothing yet");
+        replies.forEach((reply) => reply());
+        await done;
+        assert.deepEqual(chat, [`Price of Steel scimitar: HA ${r(240)}  LA ${r(160)}`], "the line arrives with the values");
+        assert.equal(itemPricesPending(), null, "loaded: later examines add the line at once");
+        addExaminePriceLine(1325, 1, deps, null, (text) => chat.push(text));
+        assert.equal(chat.length, 2);
+        assert.equal(requested.length, 2, "no second request");
+    } finally {
+        state.webRtcConfig = originalConfig;
+        state.socket = originalSocket;
+    }
+})();
+
+void firstExamine.then(
+    () => console.log("examine-price tests passed"),
+    (error) => { console.error(error); process.exitCode = 1; },
+);

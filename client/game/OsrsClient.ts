@@ -201,8 +201,8 @@ import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { chatHistory } from "../rs/cs2/ChatHistory";
-import { examinePriceLine } from "./examinePrice";
-import { alchemyValues, guidePrice } from "../network/serverConnection/domain/itemPrices";
+import { addExaminePriceLine } from "./examinePrice";
+import { alchemyValues, guidePrice, itemPricesPending } from "../network/serverConnection/domain/itemPrices";
 import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
@@ -7497,13 +7497,12 @@ export class OsrsClient {
                 return false;
             }
             chatHistory.addMessage("game", examine);
-            const price = examinePriceLine(itemId, item?.itemQuantity ?? 1, {
+            void addExaminePriceLine(itemId, item?.itemQuantity ?? 1, {
                 definition: (id) => this.objTypeLoader?.load?.(id),
                 guidePrice,
                 alchemy: alchemyValues,
                 varbit: (id) => this.varManager.getVarbit(id) | 0,
-            });
-            if (price) chatHistory.addMessage("game", price);
+            }, itemPricesPending(), (line) => chatHistory.addMessage("game", line));
             return true;
         } catch {
             return false;

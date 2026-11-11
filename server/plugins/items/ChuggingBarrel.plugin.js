@@ -194,7 +194,8 @@ function drink({ player }) {
       startDrinking(player);
     }
     dose.potion.effect(player);
-    player.sendMessage(MESSAGE.DRINK(store.name));
+    // A spam (filterable) line, as live sends it (rsprox 238/04242.txt:61023, :61026, :61030).
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, MESSAGE.DRINK(store.name));
     api.emitCustomEvent("potions:drunk", {
       player,
       itemId: store.itemId,

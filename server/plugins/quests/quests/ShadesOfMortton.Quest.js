@@ -1187,6 +1187,12 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     if (permanent) transformFor(npc, curedId, CURE_TICKS_208);
   }
 
+  function talkToAfflictedRazmire({ player }) {
+    if (player.getAttribute(PERM_RAZMIRE_ATTRIBUTE)) return false;
+    player.sendMessage("This person doesn't make any sense at all.");
+    return true;
+  }
+
   /** Razmire's two Trade options, each to its own store (the quest-shop gates still apply). */
   function tradeWithRazmire(shopId) {
     return (event) => {
@@ -1590,6 +1596,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   });
 
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Afflicted(Razmire)", { "Talk-to": talkToAfflictedRazmire });
   api.onNpcInteraction("Razmire Keelgan", {
     "Trade-General-Store": tradeWithRazmire(RAZMIRE_GENERAL_STORE),
     "Trade-Builders-Store": tradeWithRazmire(RAZMIRE_BUILDERS_STORE),

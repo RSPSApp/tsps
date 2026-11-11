@@ -471,6 +471,8 @@ const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
 const VARC_CHATBOX_SELECTED_TAB = 41;
 /** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
 const VARC_OSM_CHATBOX_DISABLED = 1220;
+/** The All Settings interface group. */
+const ALL_SETTINGS_GROUP_ID = 134;
 const ACCOUNT_TYPE_MAIN = 0;
 const SCRIPT_HIGHLIGHT_SCREEN_COMPONENT = 2463;
 const SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT = 2465;
@@ -7038,6 +7040,10 @@ export class OsrsClient {
             this.varManager.onVarcIntChange = (varcId) => {
                 if (this.varManager.isPersistentVarc(varcId)) {
                     this.markVarcsChanged();
+                }
+                // An open All Settings window follows the chat toggle (MobileHudLayout).
+                if (varcId === VARC_OSM_CHATBOX_DISABLED) {
+                    this.widgetManager?.relayoutGroup(ALL_SETTINGS_GROUP_ID, "chat-toggle");
                 }
                 if (this.cs2Vm?.isRunning()) {
                     this.cs2Vm.queueVarcChange(varcId);

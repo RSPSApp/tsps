@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { getCanvasCssSize } from "../../common/utils/DeviceUtil";
-import type { WidgetLike } from "../../widgets/layout/WidgetLayout";
+import { alignPosition, alignSize, type WidgetLike } from "../../widgets/layout/WidgetLayout";
 import type { OsrsClient } from "../OsrsClient";
 import { RENDER_CONSTANTS } from "../../render/render/constants";
 import { TimersPlugin } from "../plugins/statustimer/TimersPlugin";
@@ -91,17 +91,63 @@ const ALL_SETTINGS_WINDOW = (134 << 16) | 1;
 const HIDDEN_CHAT_WINDOW_TOP = 6;
 const HIDDEN_CHAT_WINDOW_BOTTOM = 15;
 
+/** The raw values a window had before it was stretched, and the ones the stretch wrote. */
+type StretchedWindow = {
+    rawY: number;
+    rawHeight: number;
+    stretchedRawY: number;
+    stretchedRawHeight: number;
+};
+const stretchedWindows = new WeakMap<WidgetLike, StretchedWindow>();
+
 /**
  * Windows that reserve the chatbox's height keep doing so after the chat is hidden, leaving
  * the top of the screen empty. With the chat hidden, stretch such a window over the whole
  * screen height, leaving a small gap at the top and bottom. Never shrinks it.
+ *
+ * The stretch is written into the raw size and position, not just the computed ones: later
+ * position-only layout passes re-centre the window from its raw values and would otherwise
+ * push the stretched window off the bottom of the screen.
  */
-export function extendWindowIntoHiddenChat(node: WidgetLike, screenH: number): void {
-    const height = node.height ?? 0;
+export function extendWindowIntoHiddenChat(
+    node: WidgetLike,
+    parentW: number,
+    parentH: number,
+    screenH: number,
+): void {
     const extended = screenH - HIDDEN_CHAT_WINDOW_TOP - HIDDEN_CHAT_WINDOW_BOTTOM;
-    if (extended <= height) return;
-    node.height = extended;
-    node.y = HIDDEN_CHAT_WINDOW_TOP;
+    if ((node.heightMode ?? 0) !== 0 || (node.yPositionMode ?? 0) !== 1) {
+        if (extended <= (node.height ?? 0)) return;
+        node.height = extended;
+        node.y = HIDDEN_CHAT_WINDOW_TOP;
+        return;
+    }
+    let stretched = stretchedWindows.get(node);
+    // A script that rewrote the raw values has laid the window out afresh.
+    if (stretched && (node.rawY !== stretched.stretchedRawY || node.rawHeight !== stretched.stretchedRawHeight)) {
+        stretched = undefined;
+    }
+    const rawY = stretched?.rawY ?? node.rawY ?? 0;
+    const rawHeight = stretched?.rawHeight ?? node.rawHeight ?? 0;
+    if (extended <= rawHeight) return;
+    const stretchedRawY = HIDDEN_CHAT_WINDOW_TOP - ((parentH - extended) >> 1);
+    node.rawHeight = extended;
+    node.rawY = stretchedRawY;
+    stretchedWindows.set(node, { rawY, rawHeight, stretchedRawY, stretchedRawHeight: extended });
+    alignSize(node, parentW, parentH);
+    alignPosition(node, parentW, parentH);
+}
+
+/** Undo extendWindowIntoHiddenChat once the chat is back, so the window returns to its own size. */
+export function restoreWindowFromHiddenChat(node: WidgetLike, parentW: number, parentH: number): void {
+    const stretched = stretchedWindows.get(node);
+    if (!stretched) return;
+    stretchedWindows.delete(node);
+    if (node.rawY !== stretched.stretchedRawY || node.rawHeight !== stretched.stretchedRawHeight) return;
+    node.rawY = stretched.rawY;
+    node.rawHeight = stretched.rawHeight;
+    alignSize(node, parentW, parentH);
+    alignPosition(node, parentW, parentH);
 }
 
 /** Post-cache alignment: keep the native skull, multi-combat icon, level and combat range. */
@@ -117,8 +163,12 @@ export function adjustMobileHudWidget(
 ): void {
     adjustMobilePortraitWidget(node, parentW, parentH);
     const uid = (node as WidgetLike & { uid?: number }).uid;
-    if (uid === ALL_SETTINGS_WINDOW && manager.isMobileChatDisabled?.()) {
-        extendWindowIntoHiddenChat(node, manager.canvasHeight || parentH);
+    if (uid === ALL_SETTINGS_WINDOW) {
+        if (manager.isMobileChatDisabled?.()) {
+            extendWindowIntoHiddenChat(node, parentW, parentH, manager.canvasHeight || parentH);
+        } else {
+            restoreWindowFromHiddenChat(node, parentW, parentH);
+        }
         return;
     }
     if (uid === undefined || uid >>> 16 !== PVP_GROUP) return;

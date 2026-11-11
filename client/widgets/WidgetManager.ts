@@ -150,6 +150,12 @@ export class WidgetManager {
      */
     isMobileChatDisabled: (() => boolean) | null = null;
 
+    /** Lay an open interface group out again, e.g. after something it sizes itself by changed. */
+    relayoutGroup(groupId: number, source = "relayout"): void {
+        const root = this.groups.get(groupId)?.root;
+        if (root) this.invalidateWidget(root, source);
+    }
+
     /** The widget with contentType 1339 - compass (rotates with camera yaw) */
     compassWidget: WidgetNode | null = null;
 

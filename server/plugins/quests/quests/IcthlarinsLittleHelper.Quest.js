@@ -577,34 +577,6 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
     return true;
   }
 
-  /**
-   * The dump nests the has-token hand-in inside the lost-token condition, so the
-   * transcript itself can never offer it. `eXmHe5` there is an empty condition and
-   * the hand-in steps (`6qP-S3` and friends) are its following siblings after the
-   * no-token `end`. Play the "Prove it!" lead-in plus that sibling tail; the
-   * 6qP-S3 action consumes the token and advances to stage 7.
-   */
-  function selectHighPriestToken(steps) {
-    const lead = [];
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-      if (step.type !== "condition") {
-        lead.push(step);
-        continue;
-      }
-      if (step.id === "eXmHe5") {
-        // Empty condition at this level: the hand-in steps follow it.
-        return [...lead, ...steps.slice(i + 1)];
-      }
-      if (step.id === "i6RE2X") {
-        const inner = step.steps ?? [];
-        const at = inner.findIndex((s) => s.type === "condition" && s.id === "eXmHe5");
-        if (at !== -1) return [...lead, ...inner.slice(at + 1)];
-      }
-    }
-    return steps;
-  }
-
   function highPriestTalkTo(event) {
     const { player } = event;
     if (!TOWN_HIGH_PRIEST_NPC_IDS.has(event.npcId)) return false;
@@ -616,8 +588,8 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
       player,
       event.npcId,
       PAGE,
-      "figuring-out-what-on-gielinor-is-going-on-talking-to-the-high-priest-after-receiving-the-sphinx-s-token",
-      selectHighPriestToken
+      // The regenerated dump puts the hand-in under its own has-token condition (Obm1lw), so it plays as is.
+      "figuring-out-what-on-gielinor-is-going-on-talking-to-the-high-priest-after-receiving-the-sphinx-s-token"
     );
     return true;
   }
@@ -864,7 +836,6 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
         return hasBit(player, BIT_RIDDLE_SEEN);
       case "i6RE2X":
         return !held(player, SPHINX_TOKEN_ITEM_ID);
-      case "eXmHe5":
       case "Obm1lw":
         return held(player, SPHINX_TOKEN_ITEM_ID);
       case "Q7PciU":
@@ -1046,13 +1017,13 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
         return;
 
       // Sphinx riddle.
-      case "qojI7N":
+      case "M40-5y": // "The player's cat runs away."
         if (quest.getStage(player) !== STAGE_TALK_SPHINX) return;
         event.handled = true;
         loseCat(player);
         return;
-      case "bnsTsz":
-      case "rmgkdX":
+      case "P6olZb": // answers 12 and 14: "Same as answering 7 (incorrect answer)"
+      case "CeMZe1":
         if (quest.getStage(player) !== STAGE_TALK_SPHINX) return;
         event.handled = true;
         loseCat(player);
@@ -1066,7 +1037,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
         if (quest.getStage(player) !== STAGE_TALK_HIGH_PRIEST) return;
         if (!held(player, SPHINX_TOKEN_ITEM_ID)) player.getInventory().adds(SPHINX_TOKEN_ITEM_ID, 1);
         return;
-      case "6qP-S3":
+      case "Z1e3FH": // "You hand the token to the High Priest."
         if (quest.getStage(player) !== STAGE_TALK_HIGH_PRIEST) return;
         if (held(player, SPHINX_TOKEN_ITEM_ID)) player.getInventory().deleteNumber(SPHINX_TOKEN_ITEM_ID, 1);
         setStage(player, STAGE_FLASHBACK_2);

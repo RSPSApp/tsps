@@ -27,9 +27,9 @@ and read by `NpcDefinitionLoader.applyStatusImmunities` (`NpcDefinition.getFreez
 - A `combat:freeze-duration` listener that already applies the NPC's resistance exactly sets
   `event.resisted = true` and the generic rule leaves it alone: the Phantom Muspah's page states "33% freeze
   resistance, meaning it will only stay frozen for 66% of the base freeze duration", which its hook keeps.
-- **Data pin.** `npc-status-immunities.json` is the unedited output of RSPSApp/osrsreboxed-db#71, commit
-  `da6799dc29bc529466ec894c31deb1e88447fa6c` (branch `freeze-resistance-export` of autismoyah-hub/osrsreboxed-db),
-  regenerated twice byte-identically from unchanged inputs: sha256
+- **Data pin.** `npc-status-immunities.json` is the unedited output of RSPSApp/osrsreboxed-db#71, merged as commit
+  `c6fedd9203ef92cee30a7a051f4a98dd040baafa` (PR head `da6799dc29bc529466ec894c31deb1e88447fa6c`; the merge adds only
+  dialogue files, so `docs/npc-status-immunities.json` is the same blob `061bdae2b6f2` at both), regenerated twice byte-identically from unchanged inputs: sha256
   `a648aad7da1a64715ee0cbaedf14cc74b1e3f45c4cafd3ed4cffb395f1e66553` (3,947 records). The previous file
   (`146a93b0...06e1`, producer master and `29cfa63287`) predates the producer's revision-242 inputs, so the same
   import also brings that unregenerated drift, independent of this change: 60 NPCs added (revision-242 ids such as

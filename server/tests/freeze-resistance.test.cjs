@@ -27,6 +27,7 @@ function target({ resistance = 0, size = 1, flag = false, npc = true } = {}) {
     isNpc: () => npc,
     isPlayer: () => !npc,
     getAsNpc() { return this; },
+    getAsPlayer() { return this; },
     getCurrentDefinition: () => definition,
     getSize: () => size,
     hasFlag: (name) => flag && name === "combat:freezable",

@@ -185,6 +185,7 @@
       ]
     },
     "316": { "name": "Make-X for darts and bolts", "varbit": 10971, "default": 1 },
+    "347": { "name": "World Switcher confirmation", "varbit": 4100 },
     "354": { "name": "Always empty rune pouches on death", "varbit": 15311 },
     "355": { "name": "Always empty tackle boxes on death", "varbit": 15312 },
     "356": { "name": "Always empty bolt pouches on death", "varbit": 15313 },

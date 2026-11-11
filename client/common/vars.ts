@@ -96,6 +96,8 @@ export const VARBIT_MOUSECAM_DISABLED = 4134;
 export const VARBIT_FOLLOWEROPS_DEPRIORITISED = 5599;
 /** "Side panel can be closed by the hotkeys": %hotkey_cannot_close_sidepanel, 1 keeps it open (row 54). */
 export const VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL = 4611;
+/** "World Switcher confirmation": %worldswitcher_disable_confirmation, 1 skips it (row 347). */
+export const VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION = 4100;
 
 /**
  * Active follower NPC server index.

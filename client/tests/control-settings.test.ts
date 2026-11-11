@@ -143,6 +143,45 @@ async function main() {
         assert.deepEqual([runs[1][1][1], runs[1][1][2]], [3, 0]);
         assert.equal(runs[1][1][0], runs[0][1][1], "both use the layout's display enum");
     }
+
+    // Row 347: the in-game server list asks before switching while the confirmation is on.
+    {
+        let disableConfirmation = 0;
+        const logouts: string[] = [];
+        const client: any = Object.create(OsrsClient.prototype);
+        client.loginRenderer = {
+            serverList: [
+                { name: "Here", address: "here", secure: true, transport: "websocket" },
+                { name: "There", address: "there", secure: true, transport: "websocket" },
+            ],
+        };
+        client.loginState = {
+            serverTransport: "websocket", serverAddress: "here", serverSecure: true,
+            serverListOpen: true, serverSwitchConfirmIndex: -1,
+        };
+        client.varManager = { getVarbit: (id: number) => (id === 4100 ? disableConfirmation : 0) };
+        client.performLogout = () => logouts.push("logout");
+        client.processLoginAction = (action: any) => logouts.push(action.type);
+        client.switchToServer(1, false);
+        assert.equal(client.loginState.serverSwitchConfirmIndex, 1, "the list asks first");
+        assert.deepEqual(logouts, []);
+        client.switchToServer(1, true);
+        assert.deepEqual(logouts, ["logout"], "Switch world logs out to switch");
+        assert.equal(client.loginState.serverListOpen, false);
+
+        logouts.length = 0;
+        client.loginState.serverListOpen = true;
+        client.loginState.serverSwitchConfirmIndex = -1;
+        disableConfirmation = 1;
+        client.switchToServer(1, false);
+        assert.equal(client.loginState.serverSwitchConfirmIndex, -1, "with the confirmation off it doesn't ask");
+        assert.deepEqual(logouts, ["logout"]);
+
+        logouts.length = 0;
+        disableConfirmation = 0;
+        client.switchToServer(0, false);
+        assert.deepEqual(logouts, ["close_server_list"], "the current server just closes the list");
+    }
 }
 
 main().then(

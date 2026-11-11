@@ -39,8 +39,15 @@ export function handleServerListClick(host: LoginRendererHost, state: LoginState
         const panelX = Math.floor((host.canvasWidth - panelW) / 2);
         const panelY = Math.floor((host.canvasHeight - panelH) / 2);
 
-        // Refresh button (below panel, left)
         const btnY = panelY + panelH + 30;
+        // The switch confirmation: Cancel (left) or Switch world (right); a click outside cancels.
+        if (state.serverSwitchConfirmIndex >= 0) {
+            if (isButtonHit(host, x, y, panelX + panelW / 2 + 80, btnY)) return LoginActions.CONFIRM_SERVER_SWITCH;
+            const inPanel = x >= panelX && x <= panelX + panelW && y >= panelY && y <= panelY + panelH;
+            return inPanel ? undefined : LoginActions.CANCEL_SERVER_SWITCH;
+        }
+
+        // Refresh button (below panel, left)
         if (isButtonHit(host, x, y, panelX + panelW / 2 - 80, btnY)) {
             return LoginActions.REFRESH_SERVER_LIST;
         }

@@ -56,6 +56,7 @@ import {
     VARBIT_FOLLOWEROPS_DEPRIORITISED,
     VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL,
     VARBIT_MOUSECAM_DISABLED,
+    VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION,
     VARBIT_STAMINA_ACTIVE,
     VARC_COMBAT_LEVEL,
     VARC_ACTIVE_TAB,
@@ -4406,27 +4407,49 @@ export class OsrsClient {
         input.saveClickY = -1;
         if (!action) return;
 
+        if (action.type === "cancel_server_switch") {
+            this.loginState.serverSwitchConfirmIndex = -1;
+            return;
+        }
+        if (action.type === "confirm_server_switch") {
+            const index = this.loginState.serverSwitchConfirmIndex;
+            this.loginState.serverSwitchConfirmIndex = -1;
+            if (index >= 0) this.switchToServer(index, true);
+            return;
+        }
         if (action.type === "select_server") {
-            const server = this.loginRenderer.serverList[action.index];
-            const transport = server?.transport ?? "websocket";
-            const isCurrent =
-                transport === this.loginState.serverTransport &&
-                (transport === "webrtc"
-                    ? server?.worldId === this.loginState.serverWorldId &&
-                      server?.signalUrl === this.loginState.serverSignalUrl
-                    : server?.address === this.loginState.serverAddress &&
-                      server?.secure === this.loginState.serverSecure);
-            if (isCurrent) {
-                this.processLoginAction({ type: "close_server_list" });
-                return;
-            }
-
-            this.loginState.serverListOpen = false;
-            this.performLogout(() => this.processLoginAction(action));
+            this.switchToServer(action.index, false);
             return;
         }
 
         this.processLoginAction(action);
+    }
+
+    /**
+     * The World Switcher's server chosen in game. While "World Switcher confirmation" is on
+     * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
+     */
+    private switchToServer(index: number, confirmed: boolean): void {
+        const server = this.loginRenderer.serverList[index];
+        const transport = server?.transport ?? "websocket";
+        const isCurrent =
+            transport === this.loginState.serverTransport &&
+            (transport === "webrtc"
+                ? server?.worldId === this.loginState.serverWorldId &&
+                  server?.signalUrl === this.loginState.serverSignalUrl
+                : server?.address === this.loginState.serverAddress &&
+                  server?.secure === this.loginState.serverSecure);
+        if (isCurrent) {
+            this.processLoginAction({ type: "close_server_list" });
+            return;
+        }
+        if (!confirmed && this.varManager?.getVarbit(VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION) !== 1) {
+            this.loginState.serverSwitchConfirmIndex = index;
+            return;
+        }
+
+        this.loginState.serverListOpen = false;
+        this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {
@@ -6299,6 +6322,7 @@ export class OsrsClient {
 
             case "open_server_list":
                 this.loginState.serverListOpen = true;
+                this.loginState.serverSwitchConfirmIndex = -1;
                 this.loginState.virtualKeyboardVisible = false;
                 this.loginRenderer
                     .fetchServerList()
@@ -6308,6 +6332,7 @@ export class OsrsClient {
             case "close_server_list":
                 this.loginState.serverListOpen = false;
                 this.loginState.hoveredServerIndex = -1;
+                this.loginState.serverSwitchConfirmIndex = -1;
                 return undefined;
 
             case "refresh_server_list":

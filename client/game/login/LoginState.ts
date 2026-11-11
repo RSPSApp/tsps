@@ -354,6 +354,9 @@ export class LoginState {
     /** Currently hovered server index (-1 = none) */
     hoveredServerIndex: number = -1;
 
+    /** In game, the server the World Switcher asks to confirm switching to (-1 = none) */
+    serverSwitchConfirmIndex: number = -1;
+
     /** Current server address displayed on the button */
     serverAddress: string = getDefaultServerAddress();
 
@@ -549,6 +552,7 @@ export class LoginState {
         this.currentLoginField = 0;
         this.serverListOpen = false;
         this.hoveredServerIndex = -1;
+        this.serverSwitchConfirmIndex = -1;
         this.worldSelectOpen = false;
         this.hoveredWorldId = -1;
         this.worldSelectPage = 0;

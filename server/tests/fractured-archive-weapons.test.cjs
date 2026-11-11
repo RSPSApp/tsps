@@ -41,6 +41,7 @@ const core = {
     CombatFactory: { multiCombatBetween: () => multiBetween(), canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
     Equipment, ItemIdentifiers, WeaponInterfaces, RangedCombatMethod, MeleeCombatMethod, PendingHit, Animation,
     Graphic: class { constructor(id) { this.id = id; } },
+    PrayerHandler: require("../dist/game/content/PrayerHandler").PrayerHandler,
     Flag: { APPEARANCE: 1 },
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } getId() { return this.id; } getAmount() { return this.amount; } getMeta() { return null; } },
 };
@@ -92,13 +93,15 @@ function player(worn, extra = {}) {
     return entity;
 }
 const npc = (size, defence = [0, 0, 0]) => ({
+    getPrayerActive: () => [],
     isNpc: () => true,
     getAsNpc: () => ({ getSize: () => size, getDefenceBonus: (i) => defence[i] }),
 });
 
 const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0, getDistance: (o) => Math.max(Math.abs(x - o.getX()), Math.abs(y - o.getY())) });
-const placed = (x, y, size = 1, npcMob = true, defence = [0, 0, 0]) => ({
+const placed = (x, y, size = 1, npcMob = true, defence = [0, 0, 0], prayers = []) => ({
     isNpc: () => npcMob,
+    getPrayerActive: () => prayers,
     getAsNpc: () => ({ getSize: () => size, getDefenceBonus: (i) => defence[i] }),
     getLocation: () => at(x, y),
 });
@@ -201,6 +204,12 @@ test('a thrust reaches up to two more targets on or behind the main one, charged
         const behindBoss = placed(11, 15), farBehind = placed(11, 17), onBoss = placed(12, 14, 1);
         world = [boss, behindBoss, farBehind, onBoss];
         assert.deepEqual(Obligator._test.reachedTargets(user, boss), [onBoss, behindBoss].sort((a, b) => a.getLocation().getDistance(boss.getLocation()) - b.getLocation().getDistance(boss.getLocation())));
+        // Wiki (Obligator): no extra reach while the main target prays Protect from Melee.
+        const { PrayerHandler } = core;
+        const praying = []; praying[PrayerHandler.PROTECT_FROM_MELEE] = true;
+        const shielded = placed(10, 12, 1, false, [0, 0, 0], praying);
+        world = [shielded, behind1, behind2];
+        assert.deepEqual(Obligator._test.reachedTargets(user, shielded), [], 'Protect from Melee on the main target stops the pierce');
         // Secondary-target rules (multicombat, attackable) still decide who is hit.
         world = [main, behind1];
         secondaryAllowed = () => false;

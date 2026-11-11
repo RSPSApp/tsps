@@ -273,7 +273,7 @@ test("the panel serves its bundled assets with authentication", async (t) => {
   assert.equal((await request(port, { path: "/panel/Access.WorldAdmin.js", headers: auth })).status, 404);
 });
 
-test("plugin ZIP import is authenticated, validates files, and never overwrites an installation", async (t) => {
+test("plugin ZIPs can be deleted and re-imported, with access and package checks", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-plugins-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const tools = path.join(directory, "plugins", "tools");
@@ -307,6 +307,63 @@ test("plugin ZIP import is authenticated, validates files, and never overwrites 
   const installed = path.join(directory, "plugins", "imported", "welcome");
   assert.equal(fs.readFileSync(path.join(installed, "Welcome.plugin.js"), "utf8"), source);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(installed, "plugin.json"), "utf8")), manifest);
+
+  const remove = (packageId, headers) => request(port, {
+    method: "POST", path: "/api/plugins/delete", headers, body: { packageId },
+  });
+  assert.equal((await remove("welcome")).status, 401);
+  assert.equal((await remove("welcome", { ...auth, Origin: "http://elsewhere.test" })).status, 403);
+  assert.equal((await remove("../tools", auth)).status, 400);
+  fs.symlinkSync(tools, path.join(path.dirname(installed), "linked"), "junction");
+  assert.equal((await remove("linked", auth)).status, 404);
+  assert.equal((await remove("tools", auth)).status, 404);
+  assert.ok(fs.existsSync(pluginFile));
+  assert.equal((await remove("welcome", auth)).status, 200);
+  assert.equal(fs.existsSync(installed), false);
+  assert.equal((await remove("welcome", auth)).status, 404);
+  assert.equal((await upload(makeZip("module.exports = { register() {} };"), auth)).status, 201);
+
+  const reinstalledEntry = require.resolve(path.join(installed, "Welcome.plugin.js"));
+  require(reinstalledEntry);
+  assert.ok(require.cache[reinstalledEntry]);
+  fs.writeFileSync(path.join(installed, "extra.txt"), "Created by the plugin");
+  assert.equal((await remove("welcome", auth)).status, 200);
+  assert.equal(fs.existsSync(installed), false);
+  assert.equal(require.cache[reinstalledEntry], undefined);
+  assert.equal((await upload(zip, auth)).status, 201);
+  assert.equal((await remove("welcome", auth)).status, 200);
+
+  const install = (packageId, version, headers) => request(port, {
+    method: "POST", path: "/api/plugins/install", headers, body: { packageId, version },
+  });
+  const releases = "https://github.com/RSPSApp/tsps-plugins/releases/download/";
+  const asset = "https://release-assets.githubusercontent.com/welcome.zip";
+  const downloads = [];
+  let redirect = asset;
+  let assetBody = zip;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    downloads.push(String(url));
+    assert.equal(options.redirect, "manual");
+    if (String(url).startsWith(releases)) return new Response(null, { status: 302, headers: { Location: redirect } });
+    assert.equal(String(url), asset);
+    return new Response(assetBody);
+  });
+  assert.equal((await install("welcome", "1.0.0")).status, 401);
+  assert.equal((await install("welcome", "1.0.0", { ...auth, Origin: "http://elsewhere.test" })).status, 403);
+  assert.equal((await install("../welcome", "1.0.0", auth)).status, 400);
+  assert.deepEqual(downloads, []);
+  assert.equal((await install("welcome", "1.0.0", auth)).status, 201);
+  assert.deepEqual(downloads, [releases + "welcome-v1.0.0/welcome-1.0.0.zip", asset]);
+  assert.equal(fs.readFileSync(path.join(installed, "Welcome.plugin.js"), "utf8"), source);
+  assert.equal((await install("welcome", "1.0.0", auth)).status, 409);
+  assert.equal((await remove("welcome", auth)).status, 200);
+  assert.equal((await install("welcome", "2.0.0", auth)).status, 502);
+  assetBody = Buffer.alloc(1024 * 1024 + 1);
+  assert.equal((await install("welcome", "1.0.0", auth)).status, 502);
+  redirect = "https://elsewhere.test/welcome.zip";
+  assert.equal((await install("welcome", "1.0.0", auth)).status, 502);
+  assert.equal(downloads.at(-1), releases + "welcome-v1.0.0/welcome-1.0.0.zip");
+  assert.equal(fs.existsSync(installed), false);
 });
 
 test("catalog reports layers, mode, online players and countdown", async (t) => {

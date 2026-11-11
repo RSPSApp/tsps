@@ -30,6 +30,8 @@ export interface CatalogPlugin {
     loaded: boolean;
     /** ZIP source has not been loaded by the runtime. */
     awaitingLoad?: boolean;
+    /** Package ID for an installed ZIP that the panel can remove. */
+    packageId?: string;
 }
 
 export interface CatalogOption {
@@ -104,17 +106,29 @@ export class WorldConfigCatalog {
             const fileName = pluginNameFromFile(file);
             const importedPackage = relative[0] === "imported";
             let awaitingLoad = false;
+            let packageId: string | undefined;
             let module: PluginModule;
             try {
                 const cached = importedPackage ? require.cache[require.resolve(file)] : undefined;
-                awaitingLoad = importedPackage && !cached?.loaded;
-                if (awaitingLoad) {
-                    // Only the server's startup loader may execute an imported ZIP's source.
-                    const { description } = JSON.parse(fs.readFileSync(path.join(path.dirname(file), "plugin.json"), "utf8"));
-                    module = { name: fileName, description, register() {} };
-                } else {
-                    const imported = importedPackage ? cached?.exports : require(file);
-                    module = (imported?.default ?? imported) as PluginModule;
+                const imported = importedPackage ? cached?.exports : require(file);
+                module = (imported?.default ?? imported) as PluginModule;
+                if (importedPackage) {
+                    const manifestPath = path.join(path.dirname(file), "plugin.json");
+                    const manifest = fs.lstatSync(manifestPath, { throwIfNoEntry: false })?.isFile()
+                        ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : undefined;
+                    if (relative.length === 3 && manifest?.format === 1 && manifest.id === relative[1] &&
+                        /^[a-z][a-z0-9-]{0,63}$/.test(manifest.id) && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(fileName) &&
+                        manifest.name === fileName && relative[2] === `${fileName}.plugin.js` &&
+                        typeof manifest.version === "string" && /^\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(manifest.version) &&
+                        typeof manifest.description === "string" && manifest.description.length <= 500 && fs.lstatSync(file).isFile()) {
+                        packageId = manifest.id;
+                    }
+                    if (!cached?.loaded || typeof module?.register !== "function") {
+                        if (!manifest) continue;
+                        // Only the server's startup loader may execute an imported ZIP's source.
+                        awaitingLoad = true;
+                        module = { name: fileName, description: manifest.description, register() {} };
+                    }
                 }
             } catch (err) {
                 console.warn(`[world-config] could not read ${path.basename(file)}: ${(err as Error).message}`);
@@ -139,6 +153,7 @@ export class WorldConfigCatalog {
                     enabled: resolvePluginEnabled(switches, defaultEnabled, name, fileName, module.enabled),
                     loaded: false,
                     ...(awaitingLoad ? { awaitingLoad: true } : {}),
+                    ...(packageId ? { packageId } : {}),
                 },
             });
         }

@@ -111,6 +111,8 @@ label.host-setting.host-switch-field { cursor: pointer; }
 .hub-tag { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px; background: #26272b; color: #b8b3a7; font-size: 10px; }
 .hub-tag-gold { background: #383120; color: #d8bc80; }
 .hub-card-actions { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.hub-release-actions { display: inline-flex; align-items: center; gap: 6px; }
+.hub-ui .hub-download { width: 34px; padding-inline: 0; justify-content: center; }
 .hub-card-version { color: #8f8a80; font-size: 11px; }
 .hub-search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
 .hub-ui input[type="search"], .hub-ui select, .hub-ui input[type="number"] {
@@ -146,11 +148,9 @@ label.host-setting.host-switch-field { cursor: pointer; }
 .plugin-view-tabs { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--hub-line); border-radius: 7px; background: #121315; }
 .plugin-view-tabs button { border: 0; min-height: 33px; background: transparent; color: var(--hub-muted); }
 .plugin-view-tabs button[aria-selected="true"] { background: #2a2c30; color: #fff; }
-.plugin-view-tabs .hub-tab-count { font-size: 11px; color: #aaa59a; margin-left: 6px; }
-.hub-bundled-heading { margin-top: 26px; border-top: 1px solid var(--hub-line); padding-top: 22px; }
-.plugin-upload { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-.hub-bundled-heading h2 { font-size: 15px; }
-.hub-bundled-heading p { color: var(--hub-muted); font-size: 12px; margin: 4px 0 0; }
+.hub-count { font-size: 11px; opacity: .85; margin-inline-start: 4px; }
+.hub-bundled-heading { margin: 0; font-size: 15px; font-weight: 600; }
+.plugin-upload { margin-inline-start: auto; }
 .hub-ui [hidden] { display: none !important; }
 @media(min-width:1500px) { .hub-catalogue { grid-template-columns: repeat(4,minmax(0,1fr)); } }
 @media(max-width:1100px) { .hub-catalogue { grid-template-columns: repeat(2,minmax(0,1fr)); } .hub-card-body { padding: 15px; } }

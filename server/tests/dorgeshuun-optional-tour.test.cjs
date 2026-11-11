@@ -89,6 +89,9 @@ function player(stage = 0) {
     getVarbit: id => varbits.get(id) ?? 0, getVarp: id => configs.get(id) ?? 0,
     sendString(value) { text = value; log.push(['text', value]); return packet; },
     sendInterfaceRemoval() { manager.reset(); prompt = null; return packet; },
+    // A conversation started by an explicit request owns its chatbox and presents its menus through this wrapper: run the
+    // presentation (the catch-all below would swallow the callback and no menu would ever open).
+    withChatboxOwner(owner, present) { return present(); },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
   const p = { attrs, configs, varbits, log, xp, messages, inventory, equipment, index: nextIndex++,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inventory,

@@ -438,15 +438,17 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         return !flag(player, ASKED_REMOVE_ATTRIBUTE);
       case "84F4T8":
         return flag(player, ASKED_REMOVE_ATTRIBUTE);
-      case "eBjGsE":
+      // Sithik's "How do I get rid of the undead ogres?" (first time, again) and "How do I get rid of the disease?"
+      // (first time, again as an ogre, again as a human): their ids in the regenerated npc-dialogues.json.
+      case "uKFksI":
         return !flag(player, MAKE_BRUTAL_ATTRIBUTE);
-      case "eKMr46":
+      case "7KzANk":
         return flag(player, MAKE_BRUTAL_ATTRIBUTE);
-      case "kNxjeI":
+      case "ZT09es":
         return !flag(player, MAKE_CURE_ATTRIBUTE);
-      case "jmK4Z0":
+      case "at84Cb":
         return flag(player, MAKE_CURE_ATTRIBUTE) && flag(player, TRANSFORMED_ATTRIBUTE);
-      case "LBwCwE":
+      case "9HAA4w":
         return flag(player, MAKE_CURE_ATTRIBUTE) && !flag(player, TRANSFORMED_ATTRIBUTE);
       case "VNrY6X":
         return has(player, OGRE_GATE_KEY) && !flag(player, DOOR_LEAVING_ATTRIBUTE);
@@ -543,13 +545,13 @@ module.exports = function registerZogreFleshEatersQuest(api) {
       case "84F4T8":
         setFlag(player, ASKED_REMOVE_ATTRIBUTE);
         break;
-      case "eBjGsE":
-      case "eKMr46":
+      case "uKFksI":
+      case "7KzANk":
         setFlag(player, MAKE_BRUTAL_ATTRIBUTE);
         break;
-      case "kNxjeI":
-      case "jmK4Z0":
-      case "LBwCwE":
+      case "ZT09es":
+      case "at84Cb":
+      case "9HAA4w":
         setFlag(player, MAKE_CURE_ATTRIBUTE);
         break;
       default:

@@ -26,6 +26,7 @@ const COINS = 995;
 const MAHOGANY_LOGS = 6332;
 const MAHOGANY_PLANK = 8782;
 const VOUCHER = 28628;
+const MAHOGANY_COUPON = 34070;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -39,10 +40,10 @@ beforeEach(() => {
 
 let nextMockIndex = 20000;
 
-/** 28 slots; coins and vouchers stack, everything else takes a slot each. */
+/** 28 slots; coins, vouchers and coupons stack, everything else takes a slot each. */
 function createPlayer(slots) {
   const inventory = Array.from({ length: 28 }, (_, slot) => slots[slot] ?? null);
-  const stacks = (id) => id === COINS || id === VOUCHER;
+  const stacks = (id) => id === COINS || id === VOUCHER || data().planks.some((plank) => plank.coupon === id);
   const said = [];
   let menu = null;
   const attributes = new Map();
@@ -247,6 +248,66 @@ test("Varrock diary: a normal plank, and 20 mahogany planks in one go", () => {
   convert(few, 3101, mahogany(), 19);
   const tasks = events.filter((event) => event.name === "diary:task").map((event) => event.task);
   assert.deepEqual(tasks, ["make-a-normal-plank-at-the-sawmill", "make-20-mahogany-planks-in-one-go"]);
+});
+
+test("coupons (Wiki): the data - one per plank but rosewood, as the cache names them", () => {
+  const named = Object.fromEntries(data().planks.map((plank) => [plank.name, plank.coupon && CacheDefinitions.getItem(plank.coupon).name]));
+  assert.deepEqual(named, {
+    Wood: "Sawmill coupon (wood plank)", Oak: "Sawmill coupon (oak plank)", Teak: "Sawmill coupon (teak plank)",
+    Mahogany: "Sawmill coupon (mahogany plank)", Camphor: "Sawmill coupon (camphor plank)",
+    Ironwood: "Sawmill coupon (ironwood plank)", Rosewood: undefined,
+  });
+  for (const plank of data().planks.filter((entry) => entry.coupon)) {
+    assert.equal(CacheDefinitions.getItem(plank.coupon).isMembers, true, `${plank.coupon} is the real coupon, not its placeholder`);
+  }
+});
+
+test("coupons (Wiki): each pays one log's fee - no coins needed, then coins once they run out", () => {
+  const player = createPlayer({ 0: { id: MAHOGANY_COUPON, amount: 2 }, 1: { id: COINS, amount: 1500 }, ...logs(4) });
+  assert.equal(convert(player, 3101, mahogany(), 4), 3);
+  assert.equal(player.getInventory().getAmount(MAHOGANY_PLANK), 3);
+  assert.equal(player.getInventory().getAmount(MAHOGANY_COUPON), 0);
+  assert.equal(player.getInventory().getAmount(COINS), 0, "the third plank is paid for");
+  assert.equal(player.getInventory().getAmount(MAHOGANY_LOGS), 1);
+  assert.deepEqual(player.said, ["Those planks cost 1500 coins. You don't have enough money for all of them."]);
+  assert.equal(sawdust.length, 1);
+
+  const broke = createPlayer({ 0: { id: MAHOGANY_COUPON, amount: 5 }, ...logs(2) });
+  assert.equal(convert(broke, 3101, mahogany(), 2), 2, "no coins carried at all");
+  assert.equal(broke.getInventory().getAmount(MAHOGANY_COUPON), 3);
+  assert.deepEqual(broke.said, []);
+});
+
+test("coupons (Wiki): only the log's own coupon counts; a coupon is used before a voucher, which is kept", () => {
+  const wrong = createPlayer({ 0: { id: 32085, amount: 5 }, ...logs(1) });
+  assert.equal(convert(wrong, 3101, mahogany(), 1), 0, "an oak coupon doesn't pay for mahogany");
+  assert.equal(wrong.getInventory().getAmount(32085), 5);
+
+  const both = createPlayer({ 0: { id: MAHOGANY_COUPON, amount: 1 }, 1: { id: VOUCHER, amount: 1 }, ...logs(2) });
+  assert.equal(convert(both, 3101, mahogany(), 1), 1, "no two free planks from one log");
+  assert.equal(both.getInventory().getAmount(MAHOGANY_COUPON), 0);
+  assert.equal(both.getInventory().getAmount(VOUCHER), 1);
+
+  const operator = { getId: () => 3101, getDefinition: () => ({ getName: () => "Sawmill operator" }) };
+  const used = createPlayer({ 0: { id: MAHOGANY_COUPON, amount: 1 }, ...logs(1) });
+  useLogOnOperator({ player: used, target: operator, itemId: MAHOGANY_LOGS, handled: false });
+  assert.equal(used.getInventory().getAmount(MAHOGANY_PLANK), 1, "a log used on the operator redeems it too");
+  assert.equal(used.getInventory().getAmount(MAHOGANY_COUPON), 0);
+});
+
+test("coupons: Buy-plank on a real player's inventory spends the coupons, not the coins", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const player = new Player(null, new core.Location(3302, 3491));
+  player.setUsername('sawmillcoupon'); player.getSession = () => ({ sendClientPacket: () => true });
+  player.getInventory().adds(1521, 3); player.getInventory().adds(32085, 25); player.getInventory().adds(COINS, 100);
+  let menu = null;
+  player.getPacketSender().sendCreationMenu = (value) => { menu = value; };
+  openPlankMenu(player, 3101);
+  menu.execute(1521, 3);
+  assert.equal(player.getInventory().getAmount(8778), 3);
+  assert.equal(player.getInventory().getAmount(1521), 0);
+  assert.equal(player.getInventory().getAmount(32085), 22);
+  assert.equal(player.getInventory().getAmount(COINS), 100);
 });
 
 test('a real paid conversion registers sawdust visible to its payer and another player', t => {

@@ -16,6 +16,7 @@ function item(id, amount) {
     id, amount,
     getId() { return this.id; },
     getAmount() { return this.amount; },
+    getMeta() { return null; },
     incrementAmountBy(delta) { this.amount += delta; },
   };
 }
@@ -25,6 +26,7 @@ function harness({ varbit = 0 } = {}) {
   const varbits = new Map([[AMMO_PICKUP_VARBIT, varbit]]);
   const worn = item(884, 100);
   const deregistered = [];
+  const grounds = [];
   const equipment = {
     get: (slot) => slot === AMMO_SLOT ? worn : item(-1, 0),
     refreshItems() {},
@@ -52,7 +54,8 @@ function harness({ varbit = 0 } = {}) {
       ItemIdentifiers: {},
       Equipment: { AMMUNITION_SLOT: AMMO_SLOT },
       ItemDefinition: { forId: () => ({ getName: () => 'Iron arrow' }) },
-      ItemOnGroundManager: { deregister: (ground) => deregistered.push(ground) },
+      ItemOnGroundManager: { deregister: (ground) => deregistered.push(ground), canSee: () => true },
+      World: { getItems: () => grounds },
       Sounds: { sendSound() {} },
       Sound: { PICK_UP_ITEM: 1 },
       Skill: { values: () => [] },
@@ -79,7 +82,13 @@ function harness({ varbit = 0 } = {}) {
     choose(option) { for (const handler of events['npc-dialogue:choice'] ?? []) handler({ player, npcId: RANGED_TUTOR, option }); },
     login() { for (const handler of logins) handler({ player }); },
     pickup(groundItemId = 884, amount = 5) {
-      const ground = { getItem: () => item(groundItemId, amount) };
+      const stack = item(groundItemId, amount);
+      const position = { clone: () => position, equals: (other) => other === position };
+      const ground = {
+        getItem: () => stack, getPosition: () => position, getOwner: () => 'owner',
+        getPrivateArea: () => null, getState: () => 0,
+      };
+      grounds.push(ground);
       const event = { player, groundItem: ground, groundItemId, handled: false };
       pickup(event);
       return event;
@@ -168,6 +177,23 @@ test('only matching ammunition is diverted to the quiver', () => {
   const event = h.pickup(882, 5);
   assert.equal(event.handled, false);
   assert.equal(h.worn.getAmount(), 100);
+});
+
+test('a take policy that refuses the stack leaves the worn ammo alone', () => {
+  const h = harness({ varbit: 1 });
+  h.events['ground-items:take'] = [(request) => { request.allow = false; }];
+  const event = h.pickup(884, 5);
+  assert.equal(event.handled, true);
+  assert.equal(h.worn.getAmount(), 100);
+  assert.deepEqual(h.deregistered, []);
+});
+
+test('a pickup that would overflow the worn stack goes to the inventory instead', () => {
+  const h = harness({ varbit: 1 });
+  h.worn.amount = 2147483647 - 2;
+  const event = h.pickup(884, 5);
+  assert.equal(event.handled, false);
+  assert.equal(h.worn.getAmount(), 2147483647 - 2);
 });
 
 test('the All Settings catalog maps Ammo-picking behaviour to varbit 5697', () => {

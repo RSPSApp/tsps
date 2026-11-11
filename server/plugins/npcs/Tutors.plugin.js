@@ -13,6 +13,7 @@
  * Skill-level menus ("If the player has level 1-28 Fishing:") are answered for every tutor.
  */
 const { getRegisteredQuests } = require("../quests/QuestRuntime");
+const { takeInto } = require("../items/TakeInto");
 
 const CLAIM_ATTRIBUTE = "tutors.combat_claim_at";
 // The pre-Settings save of the ammo toggle; migrated into the Setting at login.
@@ -20,6 +21,7 @@ const AUTO_EQUIP_ATTRIBUTE = "ranged:equip-ammo-on-pickup";
 // The same switch as Settings > Gameplay > "Ammo-picking behaviour" (setting id 305).
 const AMMO_PICKUP_SETTING_ID = 305;
 const AMMO_PICKUP_VARBIT = 5697;
+const MAX_STACK = 2147483647;
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
 const TRAINING_ARROW_COUNT = 25;
@@ -420,14 +422,14 @@ function autoEquipPickedUpAmmo(event) {
   const equipment = player.getEquipment();
   const worn = equipment.get(core.Equipment.AMMUNITION_SLOT);
   if (!worn || worn.getId() !== event.groundItemId) return;
-  const item = event.groundItem?.getItem?.();
-  if (!item || item.getAmount() <= 0) return;
-  core.ItemOnGroundManager.deregister(event.groundItem);
-  worn.incrementAmountBy(item.getAmount());
-  equipment.refreshItems();
-  core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
-  player.getLastItemPickup?.().reset?.();
-  event.handled = true;
+  takeInto(pluginApi, event, {
+    room: () => (equipment.get(core.Equipment.AMMUNITION_SLOT) === worn ? MAX_STACK - worn.getAmount() : 0),
+    store: (amount) => {
+      worn.incrementAmountBy(amount);
+      equipment.refreshItems();
+      return amount;
+    },
+  });
 }
 
 // --- Using items on the tutors.

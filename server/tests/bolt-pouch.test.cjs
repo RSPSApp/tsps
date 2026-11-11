@@ -250,3 +250,49 @@ test("with the interface closed or no pouch carried, clicks and drags change not
   assert.equal(f.inv.getAmount(I.DRAGON_BOLTS_2), 0);
   assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.DRAGON_BOLTS_2, amount: 250 });
 });
+
+// ------------------------------------------------------------------ death (Wiki: Bolt pouch, Items Kept on Death)
+
+/** Dies unskulled (three items kept) carrying the pouch with 400 Runite bolts and 1,000 coins. */
+function die(t, { pvp, setting = false }) {
+  const f = actor(t);
+  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  withPouch(f, [[I.RUNITE_BOLTS, 400], null, null, null]);
+  f.inv.add(new core.Item(I.COINS, 1000), false);
+  if (setting) PM.emitCustomEvent("settings:set", { player: f.p, settingId: 356, value: 1 });
+  const floor = [];
+  t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item) => floor.push(item));
+  const killer = pvp ? actor(t).p : null;
+  PlayerDeathTask.returnKeptItems(f.p, PlayerDeathTask.dropItems(f.p, killer, f.p.getLocation()));
+  t.mock.restoreAll();
+  const grave = f.p.getAttribute("gravestones:grave")?.items ?? [];
+  const sum = (entries, id) => entries.reduce((n, e) => n + ((e.id ?? e.getId()) === id ? (e.amount ?? e.getAmount()) : 0), 0);
+  return {
+    carried: (id) => f.inv.getAmount(id),
+    floor: (id) => sum(floor, id),
+    grave: (id) => sum(grave, id),
+    pouched: BoltPouch.slots(f.p).filter(Boolean),
+  };
+}
+
+test("a PvP death destroys the pouch, kept slots or not, and drops its bolts for the killer", (t) => {
+  const d = die(t, { pvp: true });
+  assert.equal(d.carried(I.BOLT_POUCH) + d.floor(I.BOLT_POUCH) + d.grave(I.BOLT_POUCH), 0, "the pouch is gone, not kept or dropped");
+  assert.equal(d.floor(I.RUNITE_BOLTS), 400);
+  assert.deepEqual(d.pouched, []);
+});
+
+test("a PvM death sends the pouch to the grave, never kept, with its bolts still in it", (t) => {
+  const d = die(t, { pvp: false });
+  assert.equal(d.carried(I.BOLT_POUCH), 0, "never one of the kept items");
+  assert.equal(d.grave(I.BOLT_POUCH), 1);
+  assert.equal(d.grave(I.RUNITE_BOLTS) + d.floor(I.RUNITE_BOLTS), 0);
+  assert.deepEqual(d.pouched, [{ id: I.RUNITE_BOLTS, amount: 400 }]);
+});
+
+test("Always empty bolt pouches on death (356): a PvM death empties the bolts into the grave", (t) => {
+  const d = die(t, { pvp: false, setting: true });
+  assert.equal(d.grave(I.BOLT_POUCH), 1);
+  assert.equal(d.grave(I.RUNITE_BOLTS), 400);
+  assert.deepEqual(d.pouched, []);
+});

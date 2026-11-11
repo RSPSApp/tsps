@@ -254,6 +254,37 @@ function destroyPrompt(event) {
   if (isPouch(event.item)) event.warning = MESSAGE.DESTROY;
 }
 
+// ------------------------------------------------------------------ death
+
+/**
+ * The bolts on a death (the storage items' death hook decides when): a PvP death empties them
+ * for the killer; otherwise they stay in the pouch, unless "Always empty bolt pouches on death"
+ * is on, and then they go to the grave as they are.
+ */
+const deathContainer = {
+  holds: isPouch,
+  varbit: "emptyondeath_boltpouch",
+  empty(player) {
+    const bolts = slots(player).filter(Boolean);
+    if (bolts.length > 0) setSlots(player, Array.from({ length: SLOTS }, () => null));
+    return bolts;
+  },
+};
+
+function isPvpDeath({ player, killer }) {
+  return !!killer && killer !== player;
+}
+
+/** The pouch is never one of the items kept on death (Wiki). */
+function shouldKeepPouch(event) {
+  if (isPouch(event.item)) event.keep = false;
+}
+
+/** A PvP death destroys the pouch: it is neither dropped nor given back (Wiki). */
+function deathItemDrop(event) {
+  if (isPouch(event.item) && isPvpDeath(event)) event.handled = true;
+}
+
 function login({ player }) {
   sendSlots(player);
 }
@@ -274,6 +305,9 @@ module.exports = {
     api.onNpcDialogueCondition(dialogueCondition);
     api.onCustomEvent("npc-dialogue:action", dialogueAction);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
+    api.onCustomEvent("storage:death-containers", (query) => query.containers.push(deathContainer));
+    api.onShouldKeepItemOnDeath(shouldKeepPouch);
+    api.onPlayerDeathItemDrop(deathItemDrop);
   },
   BOLTS_ATTRIBUTE,
   slots,

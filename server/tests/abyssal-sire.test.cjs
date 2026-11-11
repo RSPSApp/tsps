@@ -218,3 +218,14 @@ test("each chamber's Sire, lungs and tentacles are its own, not the world file's
     Lair.lairs.length = 0;
   }
 });
+
+test("a stun, and a restun, tell the buff bar to start the Sire stun for the player", () => {
+  const { fight, player } = fightWith();
+  delete fight.stun;
+  events.length = 0;
+  fight.stun();
+  fight.stun();
+  const stuns = events.filter((event) => event.name === "abyssal-sire:stunned");
+  assert.equal(stuns.length, 2);
+  assert.equal(stuns[0].payload.player, player);
+});

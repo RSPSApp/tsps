@@ -501,11 +501,17 @@ export class Combat {
         }
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
-        // Walking in on an NPC someone else is fighting: out of reach, it is an approach like
-        // any other, so a route that runs out still ends in "I can't reach that!" below.
-        if (permission !== CanAttackResponse.CAN_ATTACK && !this.walksInOnFoughtNpc(permission, target, method)) {
-            this.handleAttackDenied(permission, target, generation);
-            return;
+        if (permission !== CanAttackResponse.CAN_ATTACK) {
+            // Walking in on an NPC someone else is fighting: out of reach, it is an approach like
+            // any other, so a route that runs out still ends in "I can't reach that!" below. A step
+            // that arrived this cycle is answered on the next (live: the third line comes the
+            // tick after arrival, rsprox 83 t18213, 1098 t4926).
+            const stepped = this.character.getMovementQueue().didMoveThisCycle();
+            if (!this.walksInOnFoughtNpc(permission, target, method, stepped)) {
+                this.handleAttackDenied(permission, target, generation);
+                return;
+            }
+            if (CombatRange.canReach(this.character, method, target)) return;
         }
         if (state.attackBlocked && CombatRange.canReach(this.character, method, target)) {
             // Denied before movement but in range now; the next cycle re-evaluates.
@@ -1066,20 +1072,22 @@ export class Combat {
     /**
      * Single combat for a player attacking in melee an NPC someone else is fighting (live, and
      * LostCity player_combat.rs2): the player still walks in. The refusal is said by both
-     * checks of the click tick (before and after its step), and again on arrival, where the
+     * checks of the click tick (before and after its step), and again the tick after arrival, where the
      * attack ends. Ranged and magic are refused on the spot, as before (rsprox 2745 t4982).
      * True while the player keeps walking in.
      */
     private walksInOnFoughtNpc(
         permission: CanAttackResponse,
         target: Mobile,
-        method: CombatMethod
+        method: CombatMethod,
+        steppedThisCycle = false
     ): boolean {
         if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !this.character.isPlayer() || !target.isNpc()
             || method.type() !== CombatType.MELEE) {
             return false;
         }
-        if (CombatRange.canReach(this.character, method, target)) return false;
+        // In reach without having stepped there this cycle: the refusal ends it here.
+        if (!steppedThisCycle && CombatRange.canReach(this.character, method, target)) return false;
         const cycle = World.getProcessCycle();
         if (this.foughtNpcNoticeGeneration !== this.generation || this.foughtNpcNoticeCycle === cycle) {
             this.foughtNpcNoticeGeneration = this.generation;

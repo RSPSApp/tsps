@@ -155,9 +155,9 @@ export class Player extends Mobile {
     private isRunning = true;
     private playerBot = false;
     /**
-     * Whether the player's tile counts as occupied for NPC movement. Live (LostCity's
-     * PLAYER_OCC): a player who has not moved or teleported since logging in does not block
-     * NPCs yet - they walk through - so a login defers it until the first move.
+     * Whether the player's tile blocks NPC movement. Live (LostCity's PLAYER_OCC): a player who
+     * has not moved or teleported since logging in does not block NPCs yet - they walk through -
+     * so a login defers it until the first move. Only NPC movement reads it.
      */
     private occupiesTile = true;
 

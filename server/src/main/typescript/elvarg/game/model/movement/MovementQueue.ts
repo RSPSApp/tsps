@@ -694,7 +694,7 @@ export class MovementQueue {
             if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
                 return true;
             }
-            if (World.isPlayerOccupyingTile(next, null, size, privateArea)) {
+            if (World.isPlayerOccupyingTile(next, null, size, privateArea, true)) {
                 return true;
             }
         } else if (this.character.isPlayer() && World.isPlayerBlockingNpcOnTile(next, size, privateArea)) {
@@ -1607,8 +1607,8 @@ export class MovementQueue {
     /** The type an NPC shows now (its transform, else its own id); -1 for players. */
     private static npcType(entity: Mobile): number {
         if (!entity?.isNpc?.()) return -1;
-        const transform = entity.getNpcTransformationId();
-        return transform !== -1 ? transform : (entity as NPC).getId();
+        const transform = entity.getNpcTransformationId?.() ?? -1;
+        return transform !== -1 ? transform : (entity as NPC).getId?.() ?? -1;
     }
 
     private isInteractionTargetValid(entity: Mobile): boolean {

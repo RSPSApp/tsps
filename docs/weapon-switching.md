@@ -16,8 +16,12 @@ From rsprox captures (rsprox.net archive, revision 231, recording 00365, ticks 1
 | 12596 | Wield a Wolfbane dagger (`inventory:items` op 3), no other click | worn slot 3 becomes the dagger |
 | 12599 | nothing | the player steps in and stabs (`stab_wolbanedagger`), before any hit on them |
 
-The swing comes four ticks after the bow's shot, the bow's own cooldown, so the switch neither
-ended the attack nor reset its timer. In the other mid-fight Wields in the archive (and in local
+The switch did not end the attack: the new weapon swung with no new click. The swing lands
+four ticks after the bow's shot, the bow's cooldown, but the target's werewolf transformation
+also completes on 12599, so this capture cannot tell the timer apart from the transform. Live
+also stops facing the target on the Wield tick and stands for three ticks before stepping in;
+the target's state changes in the same ticks, so that is not attributed to the Wield here, and
+this server keeps facing and chasing at once. In the other mid-fight Wields in the archive (and in local
 Chambers of Xeric captures, `cox_cm_3man_run1`/`run2`), the player clicks the target again within a few ticks, or
 the target dies or turns immune (Vorkath's zombified spawn), so none of them contradicts this.
 

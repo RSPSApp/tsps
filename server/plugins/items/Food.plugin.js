@@ -378,7 +378,13 @@ function eat(event) {
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
   const foodEvent = { player, itemId, hitpointsBefore, meta };
   const after = applyFood(player, food, Math.random, foodEvent);
-  player.sendMessage(message);
+  // A food with `say` sends its eat line as a spam message and is spoken overhead on the same tick: the
+  // cup of tea's "You drink the tea." (type=spam) and "Aaah, nothing like a nice cuppa tea!" ([say]),
+  // rsprox_transcripts/237/01104.txt tick 1286 and 237/04101.txt:114871 (Wiki: the player exclaims it).
+  if (food.say) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, message);
+    player.forceChat(food.say);
+  } else player.sendMessage(message);
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;

@@ -797,7 +797,8 @@ for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_
   [Items.CUP_OF_TEA_11, Items.PORCELAIN_CUP_2, 2, 3703], [Items.CUP_OF_TEA_13, Items.PORCELAIN_CUP_3, 3, 3704]]) {
   registerPotion({ name: "Cup of tea", chains: [[id], [id + 1]], emptyItemId: cup,
     requiresFoodPermission: true, effect: player => boostSkill(player, Skill.CONSTRUCTION, boost, 0),
-    drink: { animation, messages: (itemId) => [itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", "You feel refreshed and ready for more building."] } });
+    // rsprox: the first line is a game message, the second spam.
+    drink: { animation, messages: (itemId) => [{ text: itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", game: true }, "You feel refreshed and ready for more building."] } });
 }
 for (const [id, effect, emptyItemId = Items.BEER_GLASS_4] of [
   [Items.BEER_3, player => { boostSkill(player, Skill.STRENGTH, 1, 0.02); lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06); }],
@@ -1666,14 +1667,22 @@ function handlePotionDrink(player, itemId, slot) {
   inventory.setItem(slot, new Item(replacement, replacement === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
   entry.potion.effect(player);
 
+  // Live sends the drink lines as spam (filterable): rsprox has "You drink some of your goading
+  // potion." and its doses-left lines, the beer and cider lines, "You have finished your potion."
+  // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
+  // (the house's "You drink the cup of tea.").
+  const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
   if (entry.potion.drink?.messages) {
-    for (const message of entry.potion.drink.messages(itemId)) player.sendMessage(message);
+    for (const message of entry.potion.drink.messages(itemId)) {
+      if (message?.game === true) player.sendMessage(message.text);
+      else spam(String(message?.text ?? message));
+    }
   } else if (smashVial) {
-    player.sendMessage("You quickly smash the empty vial using the trick a Barbarian taught you.");
+    spam("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
-    player.sendMessage(entry.potion.area === "chambers-of-xeric"
-      ? "You have finished your potion. The gourd vial disintegrates."
-      : "You have finished your potion.");
+    // The gourd line is not captured; it stays a game message.
+    if (entry.potion.area === "chambers-of-xeric") player.sendMessage("You have finished your potion. The gourd vial disintegrates.");
+    else spam("You have finished your potion.");
   }
   pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 

@@ -10,7 +10,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { TaskManager } = require("../dist/game/task/TaskManager");
-const Workbench = require("../plugins/skills/sailing/ShipwrightsWorkbench.plugin");
+const Workbench = require("../plugins/skills/sailing/ShipwrightsWorkbench.Sailing");
 const { start, DATA, makeable, hasRoom, openMenu, TASK_ATTRIBUTE } = Workbench._test;
 
 const core = PluginManager.getCoreApi();

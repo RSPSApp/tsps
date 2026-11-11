@@ -15,7 +15,7 @@ const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/ga
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
 const { content, boatType, dockAtGangplank, dockAtBuoy, fade, playSound, spam } = require("./SailingContent.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
-const { MODE, openBoatSelection } = require("./BoatSelection.plugin");
+const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
 
 const SOUND_BOARD_BOAT = 10754;
 const SOUND_DOCK = 1794;
@@ -226,9 +226,6 @@ function disembarkBoat({ player, location }) {
 }
 
 module.exports = {
-  name: "SailingGangplank",
-  description: "Boarding and disembarking boats at gangplanks and mooring points, and docking at a port's buoy, with fades and sounds.",
-  members: true,
   register(api) {
     content();
     api.onObjectInteraction("Gangplank", { Board: boardBoat.bind(api), "Board-friend": boardFriendsBoat.bind(api), Disembark: disembarkBoat });

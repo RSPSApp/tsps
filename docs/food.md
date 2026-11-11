@@ -97,6 +97,7 @@ separate audits; this correction does not establish complete food/potion parity.
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `wildernessOnly` | Can only be eaten in the Wilderness (blighted food). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
+| `say` | A line the player says overhead as they eat it. With it, the eat line is sent as a spam message (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |
 
 ## Ours, not live
@@ -128,8 +129,10 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
   half full jug's follows the full one's). The Wiki gives no messages; "You drink the wine." is
   ours.
 - A standard cup of tea (the two ids with only Drink and Drop; the ones with an Empty option are
-  other teas) heals 3, boosts Attack by 2 + 2% of the level and leaves an empty cup. The Wiki
-  quotes "Aaah, nothing like a nice cuppa tea!"; it is the only message.
+  other teas) heals 3, boosts Attack by 2 + 2% of the level and leaves an empty cup. Drinking it
+  sends "You drink the tea." as a spam message and the player says "Aaah, nothing like a nice
+  cuppa tea!" overhead, on the same tick (rsprox 237/01104.txt tick 1286, 237/04101.txt:114871;
+  the Wiki quotes the exclamation).
 - Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
   cocktail. It tastes great.".
 

@@ -6,7 +6,7 @@
 // 40/50/60/70% at H1-H4) with "You gain some experience by watching your crew work."
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
-const helm = require("../Helm.plugin");
+const helm = require("../Helm.Sailing");
 const { isTrimmed } = require("../Trim.Helm");
 const { VARBIT, MOVE_MODE, getVarbit, animateSails } = require("../SailingContent.Sailing");
 

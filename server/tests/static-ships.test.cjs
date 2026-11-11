@@ -311,7 +311,7 @@ test("quest-first logout disposal restores the original land return through the 
   early.onPlayerLogout(({ player }) => {
     if (player === owner) StaticShips.dispose(ship);
   });
-  require("../plugins/skills/sailing/StaticShips.plugin")
+  require("../plugins/skills/sailing/StaticShipHooks.Sailing")
     .register(PluginManager.createApi("SailingQuestFirstLogoutTest"));
   try {
     PluginManager.emitPlayerLogout({ player: owner, username: "QuestFirstOwner" });
@@ -592,7 +592,7 @@ test("a disposed static ship does not affect existing player boats", () => {
 });
 
 test("the static ship plugin attaches core and boards/disembarks on op1", () => {
-  const plugin = require("../plugins/skills/sailing/StaticShips.plugin");
+  const plugin = require("../plugins/skills/sailing/StaticShipHooks.Sailing");
   let handler;
   plugin.register({
     core,
@@ -618,7 +618,7 @@ test("the static ship plugin attaches core and boards/disembarks on op1", () => 
 });
 
 test("registered logout hooks receive {player} and preserve returns", () => {
-  const plugin = require("../plugins/skills/sailing/StaticShips.plugin");
+  const plugin = require("../plugins/skills/sailing/StaticShipHooks.Sailing");
   // Register through the real PluginManager api so onPlayerLogout uses the real hook contract.
   plugin.register(PluginManager.createApi("SailingLogoutTest"));
 

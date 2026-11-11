@@ -69,7 +69,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const { Sailing, BoatManager } = api.core;
   const StaticShips = require("../../skills/sailing/StaticShips.Sailing");
   const sailingContent = require("../../skills/sailing/SailingContent.Sailing");
-  const Shipyard = require("../../skills/sailing/Shipyard.plugin.js");
+  const Shipyard = require("../../skills/sailing/Shipyard.Sailing.js");
   const BoatFacilities = require("../../skills/sailing/BoatFacilities.Sailing");
   const PortTasks = require("../../skills/sailing/porttasks/Common.PortTasks");
 

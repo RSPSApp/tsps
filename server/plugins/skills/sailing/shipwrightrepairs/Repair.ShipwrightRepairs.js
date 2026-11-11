@@ -1,6 +1,6 @@
 // Wiki: Seb alone repairs for50coins/missing HP, inventory first then the bank.
 // Canonical dialogue supplies the menus/lines. No Repair-boat action exists in local captures.
-const yard = require('../Shipyard.plugin');
+const yard = require('../Shipyard.Sailing');
 const hp = require('../seacombat/BoatHp.SeaCombat');
 const QUESTION = 'Could you help me repair my boat?';
 const PAGE = 'Shipwright Seb';

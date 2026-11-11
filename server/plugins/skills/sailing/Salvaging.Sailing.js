@@ -392,9 +392,6 @@ function forgetSession({ player }) {
 }
 
 module.exports = {
-  name: "SailingSalvaging",
-  description: "Shipwreck salvaging: a boat's salvaging hook reels salvage from wrecks for Sailing XP, and a salvaging station sorts it into loot.",
-  members: true,
   hookTierOf,
   successChance,
   rollLoot,

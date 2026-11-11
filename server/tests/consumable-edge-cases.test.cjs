@@ -878,9 +878,12 @@ test("drinking beer sends its captured feedback instead of potion completion tex
   const { Player } = require("../dist/game/entity/impl/player/Player");
   const player = new Player(null);
   const messages = [];
-  const sender = new Proxy({}, { get: () => () => sender });
+  // The beer lines are spam, as live sends them (rsprox: type=spam).
+  const sender = new Proxy({}, { get: (_target, key) => key === "sendTypedMessage"
+    ? (type, message) => { if (type === core.ChatType.SPAM) messages.push(message); return sender; }
+    : () => sender });
   t.mock.method(player, "getPacketSender", () => sender);
-  t.mock.method(player, "sendMessage", message => messages.push(message));
+  t.mock.method(player, "sendMessage", message => messages.push(`game: ${message}`));
   const beer = core.CacheDefinitions.getObjId("beer");
   const glass = core.CacheDefinitions.getObjId("beer_glass");
   assert.equal(beer, ItemIdentifiers.BEER);

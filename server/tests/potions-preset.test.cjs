@@ -68,12 +68,19 @@ function actor(t) {
     messages.push(message);
     return p.getPacketSender();
   });
+  // The drink lines are spam, as live sends them (rsprox: type=spam).
+  const spam = [];
+  const sendTyped = p.getPacketSender().sendTypedMessage.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(), "sendTypedMessage", (type, message) => {
+    if (type === core.ChatType.SPAM) spam.push(message);
+    return sendTyped(type, message);
+  });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
     core.TaskManager.cancelTasks(p.getIndex());
   });
-  return { p, c, inv: p.getInventory(), eq: p.getEquipment(), messages };
+  return { p, c, inv: p.getInventory(), eq: p.getEquipment(), messages, spam };
 }
 
 async function send(f, packet) {
@@ -998,7 +1005,7 @@ test("ordinary cider restores health and boosts Farming while returning its glas
   assert.equal(skills.getCurrentLevel(core.Skill.ATTACK), 96);
   assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 96);
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
-  assert.deepEqual(f.messages.slice(-2), ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]);
+  assert.deepEqual(f.spam.slice(-2), ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]);
 });
 
 test("cider remains intact during a potion cooldown", async t => {
@@ -1578,5 +1585,5 @@ test("ordinary restore restores Defence without restoring Mining", async t => {
   }
   assert.equal(f.p.getHitpoints(), 99);
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
-  assert.ok(f.messages.some(message => typeof message === "string" && message.length > 0));
+  assert.ok(f.spam.some(message => typeof message === "string" && message.length > 0));
 });

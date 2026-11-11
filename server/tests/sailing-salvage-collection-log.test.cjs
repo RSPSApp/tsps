@@ -26,7 +26,7 @@ before(async () => {
     onPlayerLogout: () => {},
     emitCustomEvent: (name, event) => { if (name === "collection-log:obtain") obtains.push(event); },
   };
-  plugin = require("../plugins/skills/sailing/Salvaging.plugin");
+  plugin = require("../plugins/skills/sailing/Salvaging.Sailing");
   plugin.register(api);
 });
 

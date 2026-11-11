@@ -5,7 +5,7 @@ Sailing XP, with a bonus for every sea or group fully charted and one per ocean,
 Charles McAtless. Six kinds: **generic** spots (a loc with Chart), **spyglass** views, **current
 ducks**, **drink crates**, **weather trolls** and **mermaid guides**.
 
-Plugin: `server/plugins/skills/sailing/Charting.plugin.js`, with its units in `charting/` and its
+Plugin: `server/plugins/skills/sailing/Charting.Sailing.js`, with its units in `charting/` and its
 data in `data/charting.json`. Tests: `server/tests/sea-charting.test.cjs`.
 
 ## Sources
@@ -66,7 +66,7 @@ data in `data/charting.json`. Tests: `server/tests/sea-charting.test.cjs`.
   spyglass overlay's frame, 936:2, as wide as the screen) is cut to its widget around the
   widget's centre, where it is drawn; before, the cap kept its first 1024 pixels from the left
   and the frame showed only its left half (`client/tests/widget-model-oversize.test.ts`).
-- `Helm.plugin.js` listens to `sailing:leave-helm` (`{ player }`, answered with `left`) so
+- `Helm.Sailing.js` listens to `sailing:leave-helm` (`{ player }`, answered with `left`) so
   other plugins can let go of the helm the way the helm's own option does.
 
 ## Behaviour (rsprox)

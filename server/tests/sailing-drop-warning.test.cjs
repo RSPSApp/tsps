@@ -18,7 +18,7 @@ const { Sounds } = require('../dist/game/Sounds');
 const { StatementDialogue } = require('../dist/game/model/dialogues/entries/impl/StatementDialogue');
 const { ItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/ItemStatementDialogue');
 const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
-const BoatDrop = require('../plugins/skills/sailing/DropWarning.plugin');
+const BoatDrop = require('../plugins/skills/sailing/DropWarning.Sailing');
 const Warnings = require('../plugins/interface/ValueWarnings.plugin');
 
 const BRONZE_AXE = 1351;

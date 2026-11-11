@@ -1,5 +1,6 @@
 // Run after `yarn build`: node --test tests/sailing.test.cjs
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
@@ -8,6 +9,12 @@ Server.installProductionPathResolver();
 // Boat parts, stats and fees are read from the cache's sailing tables.
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 before(() => CachePipeline.initialize());
+
+test("Sailing task modules are discovered through one plugin", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const files = PluginManager.discoverPluginFiles(path.resolve(__dirname, "../plugins/skills/sailing"), 5);
+  assert.deepEqual(files.map(file => path.basename(file)), ["Sailing.plugin.js"]);
+});
 
 const { Boat, BoatMoveMode } = require("../dist/game/content/sailing/Boat");
 const { canOccupy, hullTiles } = require("../dist/game/content/sailing/BoatCollision");
@@ -1032,7 +1039,7 @@ test("saved sailing state drops anything malformed", () => {
 // --- Content plugins.
 
 test("the sail buttons follow their labels for each move mode", () => {
-  const { sailButtonTransition } = require("../plugins/skills/sailing/Helm.plugin");
+  const { sailButtonTransition } = require("../plugins/skills/sailing/Helm.Sailing");
   // mode: 0 stopped, 1 slow, 2 fast, 3 reversing, 4 moored
   const table = [0, 1, 2, 3, 4].map((mode) => [0, 1, 2].map((slot) => sailButtonTransition(slot, mode) ?? "-"));
   assert.deepEqual(table, [
@@ -1079,20 +1086,20 @@ function registerPlugin(file) {
 }
 
 test("the sailing plugins register their hooks and load the boat and dock data", () => {
-  const gangplank = registerPlugin("Gangplank.plugin").objects;
+  const gangplank = registerPlugin("Gangplank.Sailing").objects;
   assert.deepEqual(Object.keys(gangplank.Gangplank), ["Board", "Board-friend", "Disembark"]);
   assert.deepEqual(Object.keys(gangplank["Mooring point"]), ["Board", "Board-friend", "Disembark"],
     "island mooring points share the gangplank handlers");
   assert.equal(typeof gangplank["Mooring point"].Board, "function");
   assert.equal(gangplank["Mooring point"].Board.name, gangplank.Gangplank.Board.name, "both use the registered board handler");
   assert.equal(gangplank["Mooring point"].Disembark, gangplank.Gangplank.Disembark);
-  const helm = registerPlugin("Helm.plugin");
+  const helm = registerPlugin("Helm.Sailing");
   assert.deepEqual(Object.keys(helm.objects.Helm), ["Navigate", "Stop-navigating", "Escape"]);
   assert.equal(helm.interfaceClicks.length, 2, "the sail buttons and the wind catcher's release");
-  assert.deepEqual(Object.keys(registerPlugin("Sailing.plugin").events).sort(),
+  assert.deepEqual(Object.keys(registerPlugin("Panel.Sailing").events).sort(),
     ["quest:stage-changed", "sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
      "sailing:leave-supplied-panel", "sailing:left", "settings:option-chosen"]);
-  assert.deepEqual(Object.keys(registerPlugin("Shipwright.plugin").npcs).sort(),
+  assert.deepEqual(Object.keys(registerPlugin("Shipwright.Sailing").npcs).sort(),
     ["Junior Jim", "Shipwright Sam"]);
   assert.ok(Sailing.getDock("the_pandemonium"));
   assert.equal(Sailing.getDock("port_sarim").shipwright, "Shipwright Sam",
@@ -1100,7 +1107,7 @@ test("the sailing plugins register their hooks and load the boat and dock data",
 });
 
 test("Navigate walks the player onto the helm's tile first", () => {
-  const { route } = registerPlugin("Helm.plugin");
+  const { route } = registerPlugin("Helm.Sailing");
   const player = sailor();
   Sailing.giveBoat(player, "raft", DOCK.id);
   Sailing.board(player, DOCK.id);
@@ -1146,7 +1153,7 @@ test("Navigate walks the player onto the helm's tile first", () => {
 });
 
 test("the helm's Escape asks first and only sinks the boat on yes", () => {
-  const helm = registerPlugin("Helm.plugin");
+  const helm = registerPlugin("Helm.Sailing");
   const player = sailor();
   Sailing.giveBoat(player, "raft", DOCK.id);
   Sailing.board(player, DOCK.id);
@@ -1163,8 +1170,8 @@ test("the helm's Escape asks first and only sinks the boat on yes", () => {
 
 /** A player at Junior Jim with a bank, choosing through the boat selection interface. */
 function shipwrightHarness(bankCoins) {
-  const shipwright = registerPlugin("Shipwright.plugin");
-  const [chooseBoat] = registerPlugin("BoatSelection.plugin").interfaceClicks;
+  const shipwright = registerPlugin("Shipwright.Sailing");
+  const [chooseBoat] = registerPlugin("BoatSelection.Sailing").interfaceClicks;
   const player = sailor();
   let interfaceId = -1;
   player.getInterfaceId = () => interfaceId;
@@ -1217,9 +1224,9 @@ test("Junior Jim's Recover-boat asks which boat, takes the fee from the bank and
 });
 
 test("the shipwright's boat-service dialogue steps are claimed, so they do not fall through", () => {
-  const shipwright = registerPlugin("Shipwright.plugin");
+  const shipwright = registerPlugin("Shipwright.Sailing");
   const action = shipwright.events["npc-dialogue:action"];
-  assert.equal(typeof action, "function", "Shipwright.plugin handles dialogue actions");
+  assert.equal(typeof action, "function", "Shipwright.Sailing handles dialogue actions");
   const player = sailor();
   const sender = new Proxy({}, { get: () => () => sender });
   player.getPacketSender = () => sender;
@@ -1277,7 +1284,7 @@ function boatShopHarness({ sailingLevel = 1, coins = 0 } = {}) {
     removeNpc() {},
   };
   require("../plugins/interface/Omnishop.plugin").register(api);
-  require("../plugins/skills/sailing/Shipwright.plugin").register(api);
+  require("../plugins/skills/sailing/Shipwright.Sailing").register(api);
   const player = sailor();
   if (coins) player.getInventory().add(new Item(995, coins), false);
   let interfaceId = -1;
@@ -1395,7 +1402,7 @@ test("the Boat Emporium refuses a boat above the player's level, past their slot
 
 test("with more than one boat, the gangplank's Board asks which one", () => {
   const h = shipwrightHarness(0);
-  const board = registerPlugin("Gangplank.plugin").objects.Gangplank.Board;
+  const board = registerPlugin("Gangplank.Sailing").objects.Gangplank.Board;
   Sailing.giveBoat(h.player, "raft", "the_pandemonium");
   Sailing.giveBoat(h.player, "raft", "the_pandemonium");
   board({ player: h.player, location: { x: 3070, y: 2987, z: 0 } });
@@ -1430,7 +1437,7 @@ test("a boat's deck locs exist on the deck level people stand on, so clicks reso
 
 test("::raft gives a raft moored at The Pandemonium; ::boatinfo lists boats", () => {
   const commands = {};
-  require("../plugins/skills/sailing/SailingCommands.plugin").register({
+  require("../plugins/skills/sailing/Commands.Sailing").register({
     registerCommand: (name, handler) => { commands[name] = handler; },
     persistAttribute: () => {},
   });
@@ -1452,7 +1459,7 @@ test("::pandemonium is a developer command that teleports to the dock, sinking a
   const { PlayerRights } = require("../dist/game/model/rights/PlayerRights");
   const commands = {};
   const rights = {};
-  require("../plugins/skills/sailing/SailingCommands.plugin").register({
+  require("../plugins/skills/sailing/Commands.Sailing").register({
     registerCommand: (name, handler, minimum) => { commands[name] = handler; rights[name] = minimum; },
     persistAttribute: () => {},
   });
@@ -1468,7 +1475,7 @@ test("::pandemonium is a developer command that teleports to the dock, sinking a
 });
 
 test("leaving the boat by logging out sends nothing to the (closed) client", () => {
-  const { events } = registerPlugin("Sailing.plugin");
+  const { events } = registerPlugin("Panel.Sailing");
   let sent = 0;
   const player = { getPacketSender: () => { sent++; throw new Error("the socket is closed"); } };
   assert.doesNotThrow(() => events["sailing:left"]({ player, reason: "logout" }));
@@ -1476,7 +1483,7 @@ test("leaving the boat by logging out sends nothing to the (closed) client", () 
 });
 
 test("boarding sends the raft's varbits and stats as live OSRS does", () => {
-  const [switchTab] = registerPlugin("Sailing.plugin").interfaceClicks;
+  const [switchTab] = registerPlugin("Panel.Sailing").interfaceClicks;
   const player = sailor();
   const varbits = new Map();
   const varps = new Map();
@@ -1510,7 +1517,7 @@ test("boarding sends the raft's varbits and stats as live OSRS does", () => {
 });
 
 test("off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says", () => {
-  const { events, login } = registerPlugin("Sailing.plugin");
+  const { events, login } = registerPlugin("Panel.Sailing");
   const player = sailor();
   player.performAnimation = () => {};
   const varbits = new Map();
@@ -1555,7 +1562,7 @@ test("off a boat, the combat tab offers the sidepanel as the Sailing side panel 
 
 test("the combat tab's View button shows the sailing sidepanel aboard, and Combat Options switches back", () => {
   const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
-  const [switchTab] = registerPlugin("Sailing.plugin").interfaceClicks;
+  const [switchTab] = registerPlugin("Panel.Sailing").interfaceClicks;
   const player = sailor();
   const mounted = [];
   const events = [];
@@ -1598,7 +1605,7 @@ test("the combat tab's View button shows the sailing sidepanel aboard, and Comba
 
 test("off a boat, the combat tab's View button opens the sidepanel while the setting offers it", () => {
   const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
-  const [switchTab] = registerPlugin("Sailing.plugin").interfaceClicks;
+  const [switchTab] = registerPlugin("Panel.Sailing").interfaceClicks;
   const player = sailor();
   const mounted = [];
   const events = [];
@@ -1647,7 +1654,7 @@ test("off a boat, the combat tab's View button opens the sidepanel while the set
 // --- Cargo hold.
 
 function holdHarness() {
-  const hold = registerPlugin("CargoHold.plugin");
+  const hold = registerPlugin("CargoHold.Sailing");
   const player = sailor();
   player.attributes = new Map();
   let interfaceId = -1;
@@ -1872,7 +1879,7 @@ test("a shipwright's recovery loses courier crates, salvage and fish, and keeps 
 });
 
 test("the hold's item ops map to amounts as cache scripts 8873 and 8896 label them", () => {
-  const { opAmount } = require("../plugins/skills/sailing/CargoHold.plugin");
+  const { opAmount } = require("../plugins/skills/sailing/CargoHold.Sailing");
   const player = { getAttribute: () => 4 };
   assert.equal(opAmount(player, 1), 10, "op 1 is the selected quantity (mode 4 = 10)");
   assert.deepEqual([2, 3, 4, 6].map((op) => opAmount(player, op)), [1, 5, 10, Number.MAX_SAFE_INTEGER]);
@@ -1884,7 +1891,7 @@ test("::sailingtools shows every tool, and the hold keeps sending it after a rel
   const commands = {};
   const rights = {};
   const persisted = [];
-  require("../plugins/skills/sailing/SailingCommands.plugin").register({
+  require("../plugins/skills/sailing/Commands.Sailing").register({
     registerCommand: (name, handler, minimum) => { commands[name] = handler; rights[name] = minimum; },
     persistAttribute: (key) => persisted.push(key),
   });
@@ -1929,7 +1936,7 @@ test("the skiff and sloop moor at their own spot and board onto the captured dec
 });
 
 test("boarding a new skiff sends its base-tier stats and only its cargo hold", () => {
-  const [switchTab] = registerPlugin("Sailing.plugin").interfaceClicks;
+  const [switchTab] = registerPlugin("Panel.Sailing").interfaceClicks;
   const player = sailor();
   const varbits = new Map();
   const varps = new Map();
@@ -1963,7 +1970,7 @@ test("boarding a new skiff sends its base-tier stats and only its cargo hold", (
 
 test("::skiff and ::sloop moor new boats for testing", () => {
   const commands = {};
-  require("../plugins/skills/sailing/SailingCommands.plugin").register({
+  require("../plugins/skills/sailing/Commands.Sailing").register({
     registerCommand: (name, handler) => { commands[name] = handler; },
     persistAttribute: () => {},
   });
@@ -1976,7 +1983,7 @@ test("::skiff and ::sloop moor new boats for testing", () => {
 // --- Boat parts and the shipyard.
 
 test("the Build trigger's argument decodes as the live capture's option row", () => {
-  const { readOptionRow } = require("../plugins/skills/sailing/Shipyard.plugin");
+  const { readOptionRow } = require("../plugins/skills/sailing/Shipyard.Sailing");
   // Live OSRS sent [-90, -127, 1, 0] building a camphor skiff hull: row 8275.
   assert.equal(readOptionRow(Buffer.from([0xa6, 0x81, 0x01, 0x00])), 8275);
   assert.equal(readOptionRow(Buffer.alloc(0)), undefined);
@@ -2015,8 +2022,8 @@ function clearTasks() {
 function shipyardHarness() {
   clearTasks();
   const { Skill } = require("../dist/game/model/Skill");
-  const shipyard = registerPlugin("Shipyard.plugin");
-  registerPlugin("Sailing.plugin"); // the part-built spec resolver
+  const shipyard = registerPlugin("Shipyard.Sailing");
+  registerPlugin("Panel.Sailing"); // the part-built spec resolver
   const player = sailor();
   const levels = new Map([[Skill.SAILING, 1], [Skill.CONSTRUCTION, 1]]);
   const xp = [];
@@ -2043,7 +2050,7 @@ function shipyardHarness() {
   player.getAttribute = () => undefined;
   Sailing.giveBoat(player, "skiff", "the_pandemonium");
   const dock = Sailing.getDock("the_pandemonium");
-  require("../plugins/skills/sailing/Shipyard.plugin").beginVisit(player, dock, 0);
+  require("../plugins/skills/sailing/Shipyard.Sailing").beginVisit(player, dock, 0);
   const buildRow = (row) => {
     const zigzag = (row << 1) ^ (row >> 31);
     const bytes = [];
@@ -2094,7 +2101,7 @@ test("leaving the shipyard takes its boat away", () => {
 
 test("::boatmats spawns a part's materials from the cache, for the named or current boat", () => {
   const commands = {};
-  require("../plugins/skills/sailing/SailingCommands.plugin").register({
+  require("../plugins/skills/sailing/Commands.Sailing").register({
     registerCommand: (name, handler) => { commands[name] = handler; },
     persistAttribute: () => {},
   });
@@ -2184,7 +2191,7 @@ test("the hotspot varbits hold each facility's position in its hotspot's list", 
 
 test("aboard in the shipyard, a hotspot's Build builds a facility and Modify removes it", () => {
   const h = shipyardHarness();
-  const built = registerPlugin("ShipyardFacilities.plugin");
+  const built = registerPlugin("ShipyardFacilities.Sailing");
   h.player.performAnimation = (animation) => { h.player.animation = animation.getId(); };
   const boat = h.boat();
   const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
@@ -2250,7 +2257,7 @@ test("aboard in the shipyard, a hotspot's Build builds a facility and Modify rem
 
 test("::boatmats facility spawns a facility's materials", () => {
   const commands = {};
-  require("../plugins/skills/sailing/SailingCommands.plugin").register({
+  require("../plugins/skills/sailing/Commands.Sailing").register({
     registerCommand: (name, handler) => { commands[name] = handler; },
     persistAttribute: () => {},
   });
@@ -2266,7 +2273,7 @@ test("::boatmats facility spawns a facility's materials", () => {
 
 const shipwrecks = require("../plugins/skills/sailing/Shipwrecks.Salvaging");
 const { content, dockAtGangplank } = require("../plugins/skills/sailing/SailingContent.Sailing");
-const { hookTierOf, successChance, rollLoot, outwardFrom } = require("../plugins/skills/sailing/Salvaging.plugin");
+const { hookTierOf, successChance, rollLoot, outwardFrom } = require("../plugins/skills/sailing/Salvaging.Sailing");
 
 function withRandom(value, run) {
   const random = Math.random;
@@ -2366,7 +2373,7 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
   clearTasks();
   withRandom(0, () => shipwrecks.start());
   const wreck = shipwrecks.all().find((candidate) => candidate.type === "small" && candidate.raised);
-  const salvaging = registerPlugin("Salvaging.plugin");
+  const salvaging = registerPlugin("Salvaging.Sailing");
   const hookLoc = { id: 60490, x: 3, y: 4, level: 1, shape: 10, rotation: 1 };
   const boat = BoatManager.spawn(1, { ...RAFT, locs: [hookLoc] },
     { fineX: wreck.x * 128 + 64, fineY: wreck.y * 128 + 64 - 3 * 128, level: 0, angle: NORTH });
@@ -2414,7 +2421,7 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
 
 test("Sort-salvage sorts every salvage in the inventory, one each 3 ticks", () => {
   clearTasks();
-  const salvaging = registerPlugin("Salvaging.plugin");
+  const salvaging = registerPlugin("Salvaging.Sailing");
   const h = salvager();
   h.player.getInventory().add(new Item(32847, 1), false);
   h.player.getInventory().add(new Item(32847, 1), false);
@@ -2440,7 +2447,7 @@ test("Sort-salvage sorts every salvage in the inventory, one each 3 ticks", () =
 });
 
 test("Sailing login leaves schematic unlocks to their earned-state owner", () => {
-  const { login } = registerPlugin("Sailing.plugin");
+  const { login } = registerPlugin("Panel.Sailing");
   const player = sailor();
   const varbits = new Map([[19544, 0], [19553, 1], [20227, 0]]);
   const sender = new Proxy({}, {
@@ -2488,7 +2495,7 @@ test("every port comes from the cache, with its buoy, gangplank, landing and moo
 
 test("Dock on a port's buoy docks the boat there; Disembark at any port docks it if it wasn't", () => {
   clearTasks();
-  const plugin = registerPlugin("Gangplank.plugin");
+  const plugin = registerPlugin("Gangplank.Sailing");
   const musa = content().docks.find((dock) => dock.id === "musa_point");
   const catherby = content().docks.find((dock) => dock.id === "catherby");
   const player = sailor();
@@ -2546,7 +2553,7 @@ test("Dock on a port's buoy docks the boat there; Disembark at any port docks it
 test("Board-friend asks for a name and boards that player's boat, or says why not (rsprox 697)", () => {
   clearTasks();
   const { World } = require("../dist/game/World");
-  const plugin = registerPlugin("Gangplank.plugin");
+  const plugin = registerPlugin("Gangplank.Sailing");
   const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
   const online = new Map();
   const originalLookup = World.getPlayerByName;
@@ -2630,9 +2637,9 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
 });
 
 test("the boat list's Board friend's boat button (934:8) hands over to the name prompt", () => {
-  const selection = registerPlugin("BoatSelection.plugin");
+  const selection = registerPlugin("BoatSelection.Sailing");
   const [chooseBoat] = selection.interfaceClicks;
-  const { MODE, openBoatSelection } = require("../plugins/skills/sailing/BoatSelection.plugin");
+  const { MODE, openBoatSelection } = require("../plugins/skills/sailing/BoatSelection.Sailing");
   const open = (onBoardFriend) => {
     const player = sailor();
     let interfaceId = -1;
@@ -2670,7 +2677,7 @@ test("the boat list's Board friend's boat button (934:8) hands over to the name 
 
 test("Last Light docks at Sailing 52 and disembarks on its captured landing", () => {
   clearTasks();
-  const plugin = registerPlugin("Gangplank.plugin");
+  const plugin = registerPlugin("Gangplank.Sailing");
   const lastLight = content().docks.find((dock) => dock.id === "last_light");
   const player = sailor();
   const levels = new Map([[Skill.SAILING, 51]]);
@@ -2701,7 +2708,7 @@ test("sails play live's sequence on the mast and the sail cloth (rsprox: a skiff
   clearTasks();
   const { BoatManager } = require("../dist/game/content/sailing/BoatManager");
   const { animateSails, MOVE_MODE } = require("../plugins/skills/sailing/SailingContent.Sailing");
-  const { sailButtonTransition, sailState } = require("../plugins/skills/sailing/Helm.plugin");
+  const { sailButtonTransition, sailState } = require("../plugins/skills/sailing/Helm.Sailing");
   const getSpec = BoatManager.getSpec;
   const boat = { deckBaseX: 0, deckBaseY: 0 };
   BoatManager.getSpec = (b) => (b === boat ? { type: "skiff" } : getSpec.call(BoatManager, b));
@@ -2845,7 +2852,7 @@ test("gusts and trimming follow live's timing (rsprox): a gust, Trim, the boost 
 
 test("navigating plays each boat size's helm animations, looping every 10 ticks (rsprox: skiff and sloop)", () => {
   clearTasks();
-  const helm = registerPlugin("Helm.plugin");
+  const helm = registerPlugin("Helm.Sailing");
   const expected = {
     // Sounds: taking and leaving the helm (rsprox, rev 235: 10792/10793 on the raft, 10807/10808 on the others).
     raft: { player: [13340, 13341], loc: [13335, 13336, 13334], sounds: [10792, 10793] },
@@ -2906,7 +2913,7 @@ test("navigating plays each boat size's helm animations, looping every 10 ticks 
 
 test("clicking another loc from the helm leaves it and stops the boat; the sail cloth doesn't (rsprox)", () => {
   clearTasks();
-  const helm = registerPlugin("Helm.plugin");
+  const helm = registerPlugin("Helm.Sailing");
   const player = sailor();
   player.performAnimation = () => {};
   player.setPositionToFace = () => player;
@@ -2941,7 +2948,7 @@ const { VARBIT, MOVE_MODE, HELM_STATUS } = require("../plugins/skills/sailing/Sa
 test("All Settings 461: leaving the helm stops the boat unless the row is unticked (18135 = 1)", () => {
   for (const [disabled, mode] of [[0, BoatMoveMode.Stopped], [1, BoatMoveMode.Full]]) {
     const h = facilityAtSea("skiff", "Wind catcher");
-    const helm = registerPlugin("Helm.plugin");
+    const helm = registerPlugin("Helm.Sailing");
     try {
       h.log.varbits.set(18135, disabled);
       helm.objects.Helm.Navigate({ player: h.player });
@@ -2967,7 +2974,7 @@ test("All Settings 461: leaving the helm stops the boat unless the row is untick
 });
 
 test("All Settings 462: a heading starts the boat the first time only, always, or never (18136)", () => {
-  const { raiseSailForHeading } = require("../plugins/skills/sailing/Helm.plugin");
+  const { raiseSailForHeading } = require("../plugins/skills/sailing/Helm.Sailing");
   const cases = [
     // option, move mode before -> raised to full sail?
     [0, MOVE_MODE.MOORED, true], [0, MOVE_MODE.STOPPED, false],
@@ -2976,7 +2983,7 @@ test("All Settings 462: a heading starts the boat the first time only, always, o
   ];
   for (const [option, before, raised] of cases) {
     const h = facilityAtSea("skiff", "Wind catcher");
-    registerPlugin("Helm.plugin");
+    registerPlugin("Helm.Sailing");
     try {
       h.log.varbits.set(18136, option);
       h.log.varbits.set(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, before);
@@ -2997,7 +3004,7 @@ test("All Settings 501: the Special Attack orb releases a wind mote at the helm 
       owned.windCatcherOn = true;
       owned.windMotes = 2;
     });
-    const helm = registerPlugin("Helm.plugin");
+    const helm = registerPlugin("Helm.Sailing");
     const orbClick = (buttonNum = 1) => {
       const event = { player: h.player, packet: { widgetId: orb, buttonNum }, handled: false };
       helm.events["player:widget-action"](event);
@@ -3022,7 +3029,7 @@ test("All Settings 501: the Special Attack orb releases a wind mote at the helm 
 });
 
 test("::maxboat presets fill every hotspot with a facility it allows, the best parts, and their caps", () => {
-  const { _test } = require("../plugins/skills/sailing/SailingCommands.plugin");
+  const { _test } = require("../plugins/skills/sailing/Commands.Sailing");
   const { hotspotsOf } = require("../plugins/skills/sailing/BoatFacilities.Sailing");
   for (const name of Object.keys(_test.LOADOUTS)) {
     for (const type of ["raft", "skiff", "sloop"]) {
@@ -3042,7 +3049,7 @@ test("::maxboat presets fill every hotspot with a facility it allows, the best p
 });
 
 test("Navigate walks to each boat type's helm stand tile (rsprox: south of the skiff's wheel, south-east of the sloop's)", () => {
-  const { route } = registerPlugin("Helm.plugin");
+  const { route } = registerPlugin("Helm.Sailing");
   const { boatType } = require("../plugins/skills/sailing/SailingContent.Sailing");
   for (const [type, offset] of [["raft", [0, 0]], ["skiff", [0, -1]], ["sloop", [1, -1]]]) {
     const player = sailor();
@@ -3070,7 +3077,7 @@ test("Navigate walks to each boat type's helm stand tile (rsprox: south of the s
 test("the helmsman using the sail cloth from the helm keeps facing the bow (rsprox: Trim's face angle 0)", () => {
   clearTasks();
   const { World } = require("../dist/game/World");
-  const helm = registerPlugin("Helm.plugin");
+  const helm = registerPlugin("Helm.Sailing");
   const player = sailor();
   let facing;
   player.performAnimation = () => {};
@@ -3145,7 +3152,7 @@ test("a courier crate withdrawn from the hold goes into the player's hands, from
 
 test("the Sailing cape teleports a boat to the Pandemonium and renames it from the word lists", () => {
   const { content } = require("../plugins/skills/sailing/SailingContent.Sailing");
-  const BoatTeleport = require("../plugins/skills/sailing/BoatTeleport.plugin");
+  const BoatTeleport = require("../plugins/skills/sailing/BoatTeleport.Sailing");
   content();
 
   const messages = [];
@@ -3233,7 +3240,7 @@ test("a player on a boat deck keeps the sea under the boat active, as well as th
  */
 function facilityAtSea(type, facilityName, setup = () => {}) {
   clearTasks();
-  registerPlugin("Sailing.plugin"); // the built-spec resolver
+  registerPlugin("Panel.Sailing"); // the built-spec resolver
   const player = sailor();
   const log = { anims: [], sounds: [], xp: [], locAnims: [], varbits: new Map(), faces: [] };
   const attributes = new Map();
@@ -3284,7 +3291,7 @@ function facilityAtSea(type, facilityName, setup = () => {}) {
 }
 
 test("Drop stops the boat and holds it until Raise; the anchor's loc follows 4 and 3 ticks later (rsprox)", () => {
-  const anchor = registerPlugin("Anchor.plugin");
+  const anchor = registerPlugin("Anchor.Sailing");
   const h = facilityAtSea("skiff", "Anchor");
   try {
     assert.equal(h.locAt().id, 59687, "built raised, with Drop");
@@ -3341,7 +3348,7 @@ test("Drop stops the boat and holds it until Raise; the anchor's loc follows 4 a
 });
 
 test("an anchor clicked again before its loc changes is already in use; Drop and Raise turn the player to it (rsprox)", () => {
-  const anchor = registerPlugin("Anchor.plugin");
+  const anchor = registerPlugin("Anchor.Sailing");
   const h = facilityAtSea("skiff", "Anchor");
   try {
     const tile = [h.boat.deckBaseX + h.locAt().x, h.boat.deckBaseY + h.locAt().y];
@@ -3378,7 +3385,7 @@ test("an anchor clicked again before its loc changes is already in use; Drop and
 });
 
 test("a boat left at anchor comes back lowered and held; the sloop's anchor pulls with the large animations", () => {
-  const anchor = registerPlugin("Anchor.plugin");
+  const anchor = registerPlugin("Anchor.Sailing");
   const h = facilityAtSea("sloop", "Anchor", (owned) => { owned.anchorDown = true; });
   try {
     assert.equal(h.locAt().id, 59690, "the 3x8 anchor, lowered");
@@ -3394,7 +3401,7 @@ test("a boat left at anchor comes back lowered and held; the sloop's anchor pull
 });
 
 test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (rsprox, Wiki)", () => {
-  const extractor = registerPlugin("CrystalExtractor.plugin");
+  const extractor = registerPlugin("CrystalExtractor.Sailing");
   const h = facilityAtSea("sloop", "Crystal extractor");
   try {
     assert.equal(h.locAt().id, 59703, "built switched off, with Activate");
@@ -3453,7 +3460,7 @@ test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (r
 });
 
 test("a harvested crystal mote charges a wind catcher that's on, and Song of the Elves adds a shard 1 in 6", () => {
-  const extractor = registerPlugin("CrystalExtractor.plugin");
+  const extractor = registerPlugin("CrystalExtractor.Sailing");
   const catcherName = (row) => facilities.facilityRequirements(row).name === "Wind catcher";
   const h = facilityAtSea("sloop", "Crystal extractor", (owned) => {
     owned.crystalExtractorOn = true;
@@ -3531,7 +3538,7 @@ test("a boat's range is an ordinary Range on the deck, so cooking finds it and k
 /** Aboard a skiff in the shipyard with a hotspot's Modify and the customisation's Build to hand. */
 function shipyardModify() {
   const h = shipyardHarness();
-  const built = registerPlugin("ShipyardFacilities.plugin");
+  const built = registerPlugin("ShipyardFacilities.Sailing");
   h.player.performAnimation = () => {};
   // Every material to hand; what a build uses up is noted.
   const used = [];
@@ -3617,7 +3624,7 @@ test("a removed or replaced anchor takes its dropped state with it, and a boat w
   assert.deepEqual([sloop.crystalExtractorOn, sloop.crystalMote], [undefined, undefined], "and an extractor's");
 
   // A save from before: the anchor's gone but anchorDown stayed. Boarding lets the boat move.
-  const anchor = registerPlugin("Anchor.plugin");
+  const anchor = registerPlugin("Anchor.Sailing");
   const sea = facilityAtSea("skiff", "Range", (owned) => { owned.anchorDown = true; });
   try {
     sea.boat.speedLimits.set("anchor", 0);

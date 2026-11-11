@@ -4,9 +4,6 @@
 const common = require("./charting/Common.Charting");
 
 module.exports = {
-  name: "SailingCharting",
-  description: "Sailing sea charting: 358 tasks across the seas, logged once each in the Captain's log for Sailing XP and sea bonuses.",
-  members: true,
   register(api) {
     common.init(api);
     require("./charting/Progress.Charting")(api);

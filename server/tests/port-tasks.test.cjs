@@ -33,7 +33,7 @@ before(async () => {
     onCustomEvent: (name, handler) => { hooks.custom[name] = handler; },
     sendMultiChatboxPrompt: (player, title, ...pairs) => { hooks.prompt = { title, pairs }; },
   };
-  require("../plugins/skills/sailing/PortTasks.plugin").register(api);
+  require("../plugins/skills/sailing/PortTasks.Sailing").register(api);
   common = require("../plugins/skills/sailing/porttasks/Common.PortTasks");
   board = require("../plugins/skills/sailing/porttasks/Board.PortTasks");
   ledger = require("../plugins/skills/sailing/porttasks/Ledger.PortTasks");

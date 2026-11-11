@@ -24,7 +24,7 @@ const ships = require("./Ships.BarracudaTrials");
 const { fade, MOVE_MODE, VARBIT } = require("../SailingContent.Sailing");
 const { BoatMoveMode } = require("../../../../src/main/typescript/elvarg/game/content/sailing/Boat");
 const OVERLAY_ATMOSPHERE = (161 << 16) | 1;
-const helm = require("../Helm.plugin");
+const helm = require("../Helm.Sailing");
 
 const HUD_GROUP = 931;
 const HUD_RESET = 7;

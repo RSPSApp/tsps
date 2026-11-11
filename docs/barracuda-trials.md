@@ -6,7 +6,7 @@ the crystal-flecked waters, after Regicide). Each has Unranked, Swordfish, Shark
 lost supplies to collect, its own objective, hazards, XP, a reward for each rank's first time,
 personal bests and a scoreboard.
 
-Plugin: `server/plugins/skills/sailing/BarracudaTrials.plugin.js`, with its units in
+Plugin: `server/plugins/skills/sailing/BarracudaTrials.Sailing.js`, with its units in
 `barracudatrials/` and its data in `data/barracuda-trials.json`. Tests:
 `server/tests/barracuda-trials.test.cjs`.
 

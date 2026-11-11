@@ -84,7 +84,7 @@ function sailor() {
 
 function registerKegs() {
   const hooks = { objectHandlers: [], itemOnObject: [], xp: [], events: {} };
-  require("../plugins/skills/sailing/Kegs.plugin").register({
+  require("../plugins/skills/sailing/Kegs.Sailing").register({
     onObjectInteraction: (handler) => hooks.objectHandlers.push(handler),
     onItemOnObject: (handler) => hooks.itemOnObject.push(handler),
     onCanGainExperience: (handler) => hooks.xp.push(handler),
@@ -103,7 +103,7 @@ function lastBox(player) {
 let kegs;
 let kegRow;
 before(() => {
-  require("../plugins/skills/sailing/Sailing.plugin").register({
+  require("../plugins/skills/sailing/Panel.Sailing").register({
     core: {}, onCustomEvent: () => {}, onPlayerLogin: () => {}, onInterfaceActionClick: () => {},
   });
   Sailing.initialize();
@@ -241,7 +241,7 @@ test("while aboard, horizon's lure adds 2.5% Sailing XP and whirlpool surprise r
     kegs.xp.forEach((handler) => handler(event));
     return event.multiplier;
   };
-  const { crewStat, cannonMaxHitBonus } = require("../plugins/skills/sailing/Kegs.plugin");
+  const { crewStat, cannonMaxHitBonus } = require("../plugins/skills/sailing/Kegs.Sailing");
   try {
     assert.equal(gain(Skill.SAILING), 1);
     h.player.getInventory().add(new Item(HORIZONS_LURE, 25), false);
@@ -269,7 +269,7 @@ test("while aboard, horizon's lure adds 2.5% Sailing XP and whirlpool surprise r
 
 test("perildance bitter raises cannon max hits by one", () => {
   const h = atSeaWithKeg();
-  const { cannonMaxHitBonus } = require("../plugins/skills/sailing/Kegs.plugin");
+  const { cannonMaxHitBonus } = require("../plugins/skills/sailing/Kegs.Sailing");
   try {
     h.player.getInventory().add(new Item(31817, 25), false);
     h.use(31817);

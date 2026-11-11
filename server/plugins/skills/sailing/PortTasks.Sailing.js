@@ -16,9 +16,6 @@ function answerOpenSlot(request) {
 }
 
 module.exports = {
-  name: "SailingPortTasks",
-  description: "Sailing port tasks: courier and bounty tasks from notice boards and ledger tables, port masters and reward bags.",
-  members: true,
   register(api) {
     common.init(api);
     api.persistAttribute(common.SLOTS_ATTRIBUTE);

@@ -1936,7 +1936,8 @@ test('the Amulet of the Eye teleports to the Temple of the Eye from the inventor
     const player = fakePlayer('Eye', { x: 3222, y: 3218 });
     const click = (name, extra) => hooks.itemHandlers.forEach((handler) => handler({ player, itemId: Shared.obj(name), item: new Item(Shared.obj(name), 1), ...extra }));
     click('gotr_amulet_of_the_eye', { option: 'Teleport', interfaceId: 3214 });
-    assert.deepEqual(arrivals.splice(0), [[Shared.LOBBY_TILE.x, Shared.LOBBY_TILE.y]], 'the inventory Teleport lands in the temple');
+    // Wiki (Amulet of the Eye): just south of the portal, TeleportLocationLine 3615,9460.
+    assert.deepEqual(arrivals.splice(0), [[3615, 9460]], 'the inventory Teleport lands south of the portal');
     click('gotr_amulet_of_the_eye', { option: 'Wear', interfaceId: 3214 });
     assert.deepEqual(arrivals, [], 'Wear does not teleport');
     for (const colour of ['red', 'green', 'blue']) {

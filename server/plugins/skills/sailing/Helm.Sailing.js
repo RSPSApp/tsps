@@ -549,9 +549,6 @@ function raiseSailForHeading(player, boat) {
 }
 
 module.exports = {
-  name: "SailingHelm",
-  description: "Taking and leaving a boat's helm, the sidepanel sail buttons, trimming and setting sails, and steering the boat.",
-  members: true,
   sailButtonTransition,
   sailState,
   setSailMode,

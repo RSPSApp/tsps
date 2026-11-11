@@ -104,6 +104,7 @@ function createPlayer({ hp = 50, maxHp = 99, at = new Location(3222, 3222, 0) } 
     }),
     getPacketSender: () => ({
       sendInterfaceRemoval() {}, sendRunEnergy() {}, sendPoisonType() {}, sendSoundEffect() {},
+      sendTypedMessage: (type, text) => messages.push(type === core.ChatType.SPAM ? `spam: ${text}` : text),
       sendConfig: (varp, value) => varps.set(varp, value),
     }),
     getSkillManager: () => ({
@@ -491,9 +492,9 @@ test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki e
     assert.equal(cup.hp, 43, "a cup of tea heals 3 (Wiki: Cup of tea)");
     assert.equal(cup.level(core.Skill.ATTACK), 63, "and boosts Attack by 2 + 2% (3 from level 50)");
     assert.equal(cup.slots[0].getId(), id("EMPTY_CUP"));
-    // Wiki: the player exclaims it (rsprox 227/01863.txt tick 5031: [say]); no chat line.
+    // rsprox 237/01104.txt tick 1286: "You drink the tea." as type=spam, and the exclamation as [say].
     assert.deepEqual(cup.said, ["Aaah, nothing like a nice cuppa tea!"]);
-    assert.deepEqual(cup.messages, []);
+    assert.deepEqual(cup.messages, ["spam: You drink the tea."]);
   }
   assert.equal(Food.isFoodItem(id("CUP_OF_TEA_4")), false, "tea with an Empty option is another tea");
 

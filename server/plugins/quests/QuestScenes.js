@@ -55,6 +55,8 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
       npcAggression(player, npc) { return scenes.get(this.owner)?.rules?.npcAggression?.(player, npc) ?? false; }
       canAttack(attacker, target, method) { return scenes.get(this.owner)?.rules?.canAttack?.(attacker, target, method) ?? null; }
       isMulti() { return scenes.get(this.owner)?.rules?.multi === true; }
+      /** `rules.allowSummonPet: false` keeps the owner's follower out of the scene. */
+      allowSummonPet() { return scenes.get(this.owner)?.rules?.allowSummonPet ?? true; }
       /** `rules.musicTrack`: the scene's own track; the area's own music comes back when it ends. */
       getMusicTrack(player) { return scenes.get(this.owner)?.rules?.musicTrack ?? null; }
       postLeave(mobile, logout) {

@@ -19,6 +19,8 @@ const BOOK = 183;
 // As read in rsprox_transcripts/232/03222.txt: titles, page 1-3, directions (15), symbols (14).
 const SPREADS = [33, 38, 42, 46, 15, 14];
 const RIGHT = 16, LEFT = 17, RIGHT_LAYER = 18, LEFT_LAYER = 19;
+// lost_tribe_bookmark: each arrow click writes the new spread (5 -> 4 at 03222.txt:36009); Read reopens there.
+const BOOKMARK = 541;
 const uid = (child) => (BOOK << 16) | child;
 
 let core;
@@ -44,6 +46,9 @@ test('the goblin symbol book opens its own interface, turns through six spreads 
   const sender = p.getPacketSender();
   const display = sender.sendInterfaceDisplayState.bind(sender);
   t.mock.method(sender, 'sendInterfaceDisplayState', (id, hide) => { hidden.set(id, hide); return display(id, hide); });
+  const bookmarks = [];
+  const varbit = sender.sendVarbit.bind(sender);
+  t.mock.method(sender, 'sendVarbit', (id, value) => { if (id === BOOKMARK) bookmarks.push(value); return varbit(id, value); });
   const open = sender.sendInterface.bind(sender);
   t.mock.method(sender, 'sendInterface', (id) => { opened.push(id); return open(id); });
   const send = async (packet) => { await c.dispatch([packet]); c.processTurnPackets(); core.TaskManager.process(); };
@@ -65,7 +70,17 @@ test('the goblin symbol book opens its own interface, turns through six spreads 
   assert.equal(hidden.get(uid(LEFT_LAYER)), false);
   await send({ type: 'widget_action', widgetId: uid(LEFT), groupId: BOOK, childId: LEFT, slot: -1, buttonNum: 1 });
   assert.deepEqual(shown(), [15], 'the left arrow turns back from the symbols to the directions');
+  assert.deepEqual(bookmarks, [1, 2, 3, 4, 5, 4], 'every arrow click writes the spread to varbit 541');
 
   sender.sendInterfaceRemoval();
   assert.equal(quest.getStage(p), 8, 'closing the book completes the reading step');
+
+  // Read again: it opens on the saved spread, the directions, with both arrows.
+  await send({ type: 'inventory_action', widgetId: core.Inventory.INTERFACE_ID, slot: 0,
+    itemId: core.ItemIdentifiers.GOBLIN_SYMBOL_BOOK, option: 'Read', optionIndex: 1 });
+  assert.deepEqual(shown(), [15], 'reopened on the bookmark');
+  assert.equal(hidden.get(uid(LEFT_LAYER)), false);
+  assert.equal(hidden.get(uid(RIGHT_LAYER)), false);
+  assert.equal(quest.getStage(p), 8);
+  sender.sendInterfaceRemoval();
 });

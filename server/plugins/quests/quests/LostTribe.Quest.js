@@ -37,7 +37,7 @@
  *   varbit 537 contact (17-18): 1 met Mistag, 2 told the Duke about the cave goblins
  *   varbit 535 mistag_denial: first (panic) greeting seen
  *   varbit 538 hole_2_dug: deep hole at 3224,9601 squeezed through
- *   varbit 541 bookmark (22-24): goblin symbol book read
+ *   varbit 541 bookmark (22-24): the goblin symbol book's open spread, 0-5 (rsprox_transcripts/232/03222.txt)
  *   varbit 533 returned_brooch: brooch returned to Mistag for a mining helmet
  *   varbits 536 maze_warned, 539 sigmund_accused, 540 sigmund_leaving are unused by
  *   this server's map and left at 0.
@@ -111,9 +111,10 @@ module.exports = function registerLostTribeQuest(api) {
   const BITS_ATTRIBUTE = "quest.the_lost_tribe.bits";
   const HAM_ATTRIBUTE = "quest.the_lost_tribe.ham"; // 0..2
   const CONTACT_ATTRIBUTE = "quest.the_lost_tribe.contact"; // 0..2
+  const BOOKMARK_ATTRIBUTE = "quest.the_lost_tribe.bookmark"; // the symbol book's spread, 0..5
   const BIT_RETURNED_BROOCH = 1 << 0;
   const BIT_GREETED = 1 << 1;
-  const BIT_BOOKMARK = 1 << 2;
+  const BIT_BOOKMARK = 1 << 2; // the symbol book was given (its page is BOOKMARK_ATTRIBUTE)
   const BIT_HOLE2 = 1 << 3;
 
   const SIGMUND_ID = NpcIdentifiers.SIGMUND_13; // 5322, Lumbridge Castle
@@ -201,9 +202,9 @@ module.exports = function registerLostTribeQuest(api) {
   // text in the cache (Wiki, Transcript:Goblin symbol book): six spreads, each a layer the server
   // shows in turn, and two "Turn page" arrows (transmitop) the server answers. rsprox_transcripts/
   // 232/03222.txt reads it (lines 35971-35990, 36008-36040, 36738-36803, 38279): the spreads go
-  // titles, page 1-3, directions, symbols, and the last spread hides the right arrow. Live also
-  // reopens on the saved spread through varbit 541 (lost_tribe_bookmark, 0-5), which this quest
-  // still uses as its 0/1 "book obtained" flag; that isn't done here.
+  // titles, page 1-3, directions, symbols, and the last spread hides the right arrow. Each arrow
+  // click writes the new spread to varbit 541 (lost_tribe_bookmark, e.g. 5 -> 4 at line 36009), and
+  // the book reopens there (line 35979: bookmark 5, the symbols). Getting the book is a quest bit.
   const SYMBOL_BOOK = 183;
   const SYMBOL_BOOK_SPREADS = [
     33, // lost_tribe_titles: "A History of the Goblin Race" (shown by default)
@@ -248,6 +249,16 @@ module.exports = function registerLostTribeQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_HAM, value | 0);
   }
 
+  function getBookmark(player) {
+    const spread = Number(player.getAttribute(BOOKMARK_ATTRIBUTE)) || 0;
+    return Math.max(0, Math.min(SYMBOL_BOOK_SPREADS.length - 1, spread | 0));
+  }
+
+  function setBookmark(player, spread) {
+    player.setAttribute(BOOKMARK_ATTRIBUTE, spread);
+    player.getPacketSender().sendVarbit(VARBIT_BOOKMARK, spread);
+  }
+
   function getContact(player) {
     return Number(player.getAttribute(CONTACT_ATTRIBUTE)) || 0;
   }
@@ -280,7 +291,7 @@ module.exports = function registerLostTribeQuest(api) {
     packet.sendVarbit(VARBIT_GREETED, hasBit(player, BIT_GREETED) ? 1 : 0);
     packet.sendVarbit(VARBIT_CONTACT, getContact(player));
     packet.sendVarbit(VARBIT_HOLE2, hasBit(player, BIT_HOLE2) ? 1 : 0);
-    packet.sendVarbit(VARBIT_BOOKMARK, hasBit(player, BIT_BOOKMARK) ? 1 : 0);
+    packet.sendVarbit(VARBIT_BOOKMARK, getBookmark(player));
   }
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -760,8 +771,9 @@ module.exports = function registerLostTribeQuest(api) {
   }
 
   function readSymbolBook({ player }) {
-    symbolBookSpread.set(player, 0);
-    showSymbolBookSpread(player, 0);
+    const spread = getBookmark(player);
+    symbolBookSpread.set(player, spread);
+    showSymbolBookSpread(player, spread);
     const sender = player.getPacketSender();
     sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
     sender.sendInterface(SYMBOL_BOOK);
@@ -779,6 +791,7 @@ module.exports = function registerLostTribeQuest(api) {
     const spread = current + (child === SYMBOL_BOOK_RIGHT_ARROW ? 1 : -1);
     if (spread < 0 || spread >= SYMBOL_BOOK_SPREADS.length) return;
     symbolBookSpread.set(player, spread);
+    setBookmark(player, spread);
     showSymbolBookSpread(player, spread);
   }
 
@@ -1067,6 +1080,7 @@ module.exports = function registerLostTribeQuest(api) {
   api.persistAttribute(BITS_ATTRIBUTE);
   api.persistAttribute(HAM_ATTRIBUTE);
   api.persistAttribute(CONTACT_ATTRIBUTE);
+  api.persistAttribute(BOOKMARK_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "the_lost_tribe",

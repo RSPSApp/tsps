@@ -194,13 +194,13 @@ and resent at login like any `settings.json` toggle; all start at 0 (on). A shak
 | --- | --- | --- | --- | --- |
 | Toggle all combat camera shake effects | 425 | 16106 `option_camera_effect_combat_disabled` | `combat`, and every combat sub-row | Hueycoatl, Phantom Muspah, Zebak, Nylocas, Obor, the Fractured Archive batteries, Meat and Greet's minotaur |
 | Doom of Mokhaiotl | 445 | 17776 `option_camera_effect_dom_disabled` | `doom` | the burrow |
-| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | none yet |
-| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | none yet |
+| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | the Chambers of Xeric shamans' jump |
+| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | the falling crystals |
 | Ape Atoll tunnel rock fall | 429 | 16109 `option_camera_effect_monkey_madness_disabled` | `apeAtollRockfall` | none yet |
 | Toggle all atmospheric camera shake effects | 426 | 16110 `option_camera_effect_atmospherics_disabled` | `atmospheric`, and every atmospheric sub-row | Guardians of the Rift's surge, quest scenes |
 | Baba Yaga's house | 281 | 14197 `option_camera_effect_baba_yaga_disabled` | `babaYaga` | none yet |
 | Fishing Trawler | 282 | 4814 `trawler_camera_static` | `trawler` | none yet |
-| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | none yet |
+| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | the looted tunnels |
 
 - **Groups.** A sub-row's struct param 1080 names its group (3335 combat, 5198 atmospheric).
   Script 7825 counts a sub-row as off while its master is off, and the settings scripts lock it;
@@ -209,8 +209,8 @@ and resent at login like any `settings.json` toggle; all start at 0 (on). A shak
 - **Fishing Trawler.** Script 1134 (the trawler's own camera button) also sets 4814, in the client
   alone, and says "You have disabled all atmospheric camera effects in your settings. Turn them on
   to enable this button." while the atmospheric master is off.
-- **Not done**: the shamans' jump, the Great Olm, the Ape Atoll rock falls, Baba Yaga's house, the
-  Fishing Trawler and the Barrows chest send no camera shake yet; their rows only save.
+- **Not done**: the Ape Atoll rock falls, Baba Yaga's house and the Fishing Trawler send no camera
+  shake yet; their rows only save (see "Camera shake and visual effect content" below).
 
 ## Level-ups
 
@@ -421,6 +421,35 @@ Tests: `tests/settings-skilling-notices.test.cjs` and `tests/skill-max-level.tes
   - Hunter's clue sources (bird house clue nests, aerial fishing, implings, drift nets) still check capacity before the roll and stay silent.
   - Bird nest notification (189): on live this is a desktop (operating system) notification that the official client raises by itself; a nest drop sends only the red chat line and the ground item (rsprox 237/1108), and the web client has no desktop notifications.
   - Level-up guide list (494): see "Level-ups".
+
+## Camera shake and visual effect content
+
+What each content plugin sends for the camera shake rows above, and the visual effect rows still
+open. Every shake goes through `CameraShake.send`, so its row and its group's master turn it off.
+
+| Row | Content | What it sends |
+| --- | --- | --- |
+| Barrows chest (283) | `Barrows.plugin.js` | Slot 0, random 5 when the chest is looted, and again on each arrival in the tunnels while the run stays looted; the camera resets when the player leaves the tunnels. |
+| Great Olm (428) | `cox/Olm.ChambersOfXeric.js` | Slots 0-2, random 2-5 each, with every volley of falling crystals (between sides and in the final stand); the camera resets with the last volley before the Olm rises, and as it dies. |
+| Lizardman Shamans (427) | `cox/Shamans.ChambersOfXeric.js` | Slot 0, random 10, sine amplitude 5, a tick after a jump lands on the raider (the 3x3 it crushes). |
+
+- **Sources.** rsprox 237/04055 and 227/01885 (Barrows: the looting tick, a teleport back into a
+  looted run's chest room, the reset on leaving); 234/00820 and 234/03282 (the Olm's transitions and
+  final stand); 234/03276 (the Molch shamans: the jump landing on the player at tick 6309 shakes at
+  6310, landings beside them do not).
+- **Not done**:
+  - Lizardman Shamans: in 234/03276 two of the spawns' appearances also shake (slot 0, random 4,
+    sine 2) but most do not; which ones do is not settled, so spawns send none.
+  - Baba Yaga's house (281): live shakes slot 1 with sine amplitude 10, frequency 25 (and sound
+    1692) a tick after arriving inside the house (227/00086, 227/01754), but there is no way into
+    the house here yet (her chicken house is not enterable).
+  - Fishing Trawler (282): no capture has a trawler game.
+  - Show snow overlays (436, varbit 16236): live opens `snow_flakes` (167), `snow_verylight` (176),
+    `snow_medium` (177) and `snow_heavy` (204) in `overlay_atmosphere` in snowy areas (Trollweiss,
+    heavy to very light going down the slope, 227/00075, 227/00091, 234/00787), but the captures do
+    not pin down each area's edges, so the server opens none yet.
+  - Disable colourful fade effects (460): no capture shows a Guardians of the Rift fade with
+    varbit 18132 set, so the minigame still follows only its own `gotr_colourful_fade_disabled`.
 
 ## Containers on death
 

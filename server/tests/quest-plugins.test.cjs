@@ -14338,11 +14338,12 @@ test('Song of the Elves library mirrors must follow the previous beam direction'
 
 test('Regicide tripwires use the Agility success roll and apply the dart hit and poison on failure', () => {
   const { api: base } = mockApi();
-  const objectHooks = [];
+  const objectHooks = [], poisoned = [];
+  const core = { ...base.core, CombatFactory: { ...base.core.CombatFactory, poisonEntity: (target, severity) => poisoned.push([target, severity]) } };
   const api = new Proxy(base, {
     get: (target, prop) => prop === 'onObjectInteraction'
       ? (handler) => objectHooks.push(handler)
-      : target[prop],
+      : prop === 'core' ? core : target[prop],
   });
   require('../plugins/quests/quests/Regicide.Quest')(api);
   const interact = objectHooks[0];
@@ -14351,7 +14352,7 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
   const location = { x: 2285, y: 3187, z: 0 };
   const object = { getFace: () => 3 };
   const createPlayer = (agility) => {
-    const state = { moves: [], hits: [], poison: 0 };
+    const state = { moves: [], hits: [], poison: 0, said: [] };
     const position = { x: 2286, y: 3188, z: 0 };
     const player = {
       getLocation: () => ({ getX: () => position.x, getY: () => position.y, getZ: () => position.z }),
@@ -14362,6 +14363,7 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
       }),
       isPoisoned: () => false,
       setPoisonDamage: (amount) => { state.poison = amount; },
+      sendMessage: (text) => state.said.push(text),
       moveTo: (destination) => state.moves.push([destination.getX(), destination.getY(), destination.getZ()]),
     };
     return { player, state };
@@ -14392,8 +14394,10 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
     interact(failure);
     assert.equal(failure.handled, true);
     assert.equal(caught.state.hits[0][0].getDamage(), 10);
-    assert.equal(caught.state.poison, 2);
-    assert.deepEqual(caught.state.moves, [], 'a triggered tripwire leaves the player on the near side');
+    // rsprox_transcripts/230/02969.txt and 237/01105.txt: the snag line, real poison at 10, and the crossing.
+    assert.deepEqual(caught.state.said, ['You snag the trip wire as you step over it.']);
+    assert.deepEqual(poisoned, [[caught.player, 10]]);
+    assert.deepEqual(caught.state.moves, [[2284, 3188, 0]], 'a snag still steps over');
   } finally {
     Math.random = originalRandom;
   }

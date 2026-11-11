@@ -14,7 +14,8 @@ const Shared = require("./Shared.GiantsFoundry");
 const Preform = require("./Preform.GiantsFoundry");
 
 const SHORT_PERIOD = 2;
-const HAMMER_PERIOD = 5;
+/** The trip hammer's fall; its work tick rides the same cycle (Tools). */
+const HAMMER_PERIOD = Shared.HAMMER_PERIOD;
 /** The trip hammer and the belt system that drives it both play the hammer's fall. */
 const HAMMER_LOCS = [
   { id: 44619, x: 3363, y: 11496 },

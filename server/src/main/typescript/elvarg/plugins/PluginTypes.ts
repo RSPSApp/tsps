@@ -1527,6 +1527,7 @@ export interface PluginApi {
  * Typed as `any` on purpose: this is a deliberately thin, evolving surface.
  */
 export interface PluginCoreApi {
+  CrossFloor: typeof import("../game/CrossFloor").CrossFloor;
   WorldConfigCatalog: typeof import("./WorldConfigCatalog").WorldConfigCatalog;
   WorldConfigStore: typeof import("../game/definition/WorldConfigStore").WorldConfigStore;
   MeleeCombatMethod: any;

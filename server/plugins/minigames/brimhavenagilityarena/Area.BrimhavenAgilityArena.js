@@ -146,6 +146,7 @@ function createArea() {
       const state = Shared.stateOf(player);
       state.lastTile = null;
       state.lastAt = null;
+      Shared.setObstacleHighlights(player, true);
       Shared.sendArrow(player);
     }
 
@@ -156,6 +157,7 @@ function createArea() {
       const state = Shared.stateOf(player);
       state.lastTile = null;
       state.lastAt = null;
+      Shared.setObstacleHighlights(player, false);
       player.getPacketSender().clearHintArrow?.();
     }
   }

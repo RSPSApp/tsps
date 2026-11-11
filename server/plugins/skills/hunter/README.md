@@ -118,21 +118,55 @@ and the Wiki ([Implings](https://oldschool.runescape.wiki/w/Implings),
   ticks for the others (Wiki). Puro-Puro needs a jar for every catch; outside it a barehanded
   catch without a jar is looted at once.
 
+Impling jar supplies: [Anchovy oil, revision 15186565](https://oldschool.runescape.wiki/w/Anchovy_oil?oldid=15186565) describes eight anchovy paste used on an empty vial with a sieve; [Imp repellent, revision 15185078](https://oldschool.runescape.wiki/w/Imp_repellent?oldid=15185078) gives the flowers, unboostable Herblore 3 and 5 XP. [Impling jar, revision 15183926](https://oldschool.runescape.wiki/w/Impling_jar?oldid=15183926) describes one repellent followed by one butterfly jar at the Rimmington still. The existing Herblore plugin applies its Druidic Ritual gate to the flower mix; its applicability to this recipe is not established here. As a conservative server policy, either still refuses swamp tar while Rimmington holds repellent, and Rimmington refuses repellent while the player has stored lamp oil; retail collision behavior has not been captured.
+
 Not reproduced: the two main-game barehanded loot catches gave 14 (earth, 1510) and 16 (essence,
 2520) Hunter XP, against the Wiki's overworld 27 and 29; no source explains it, so the
 Wiki value stays. 
 Roaming spawns ([Implings](https://oldschool.runescape.wiki/w/Implings)):
 
 - Puro-Puro (`minigames/impetuousimpulses/Roaming.ImpetuousImpulses.js`): each point holds an
-  invisible impling that roams two minutes before it shows and is replaced as soon as it is
-  caught, rolling its tier's Wiki table. Points come from the cache's map data (10 low, 12 mid,
-  4 high); the Wiki counts 35 (21/12/2) without coordinates, so the low tier is short.
+  invisible impling that manifests after the existing 200 ticks and is replaced two ticks after
+  capture, rolling its tier's Wiki table. The embedded Puro-Puro map in
+  [Implings revision 15360701](https://oldschool.runescape.wiki/w/Implings?oldid=15360701)
+  supplies 10 low, 12 mid and two high precursor points. The high points are (2576, 4336) and
+  (2610, 4301); the previous extra points (2570, 4298) and (2610, 4338) are uncorroborated.
+  That revision's prose instead says 21 low/12 mid/two high, contradicting its map; eleven
+  additional low points are not invented. The map's integer X/Y descriptions match its marker
+  centers offset by half a tile. This is plugin-owned spawn configuration, not a generated
+  NPC-definition export.
+- The same Wiki revision explicitly says implings cross obstacles including water and magical
+  wheat. Roaming Puro-Puro implings use the existing movement clipping opt-out. The estimated
+  wander radius remains eight, capped by each point's distance to the existing Hunter realm
+  rectangle (2560..2623, 4288..4351) to contain ordinary spawn-centered wandering. This cap is a
+  server containment choice, not evidence for retail radius or a forced-displacement boundary.
+  Fixed implings and overworld movement are outside this change. The Wiki's two-minute
+  invisibility claim carries a confirmation-needed qualification; this change preserves the
+  server's timers rather than establishing retail timing.
 - Overworld (`Overworld.Hunter.js`, driven by the shared tick): every 30 minutes the previous
   implings are removed and 4 high, N (5-10) mid and 2N low implings appear at random points from
   the cache's map data, invisible for two minutes, plus a crystal impling in Prifddinas. A caught
   one is gone until the next cycle. Not in: the Wiki's fixed low-tier points (ten, and Zanaris
   marketplace) have no coordinates here, and the wander radius (8) is an estimate. The imp
   defenders (npc 5738) freeing jarred implings are not in.
+
+The existing `impetuous-impulses.test.cjs` suite includes a native roaming route: real plugin
+startup, cache-backed Puro-Puro magical wheat, movement queues with player/ordinary-NPC collision
+controls, packet-listener Catch dispatch, jar conversion, and real task-owned removal,
+replacement and manifestation. It supplies actor location/levels/equipment, approach and
+successful catch RNG. It does not prove natural random wandering, client rendering, travel,
+retail timing or imp-defender behavior. Run from `server/` after building:
+`node --test tests/impetuous-impulses.test.cjs`.
+
+On cache revision 242, immutable source `9ae5d54ff3a1312f3326bbd97977d20862c9b6dc` passed all
+22 suite tests plus three `movement-stopping.test.cjs` controls in HF. The identical roaming
+fixture on baseline `718926828fcb000dcd314641844f2f70ba7d6ac1` exposed 26 instead of 24 points,
+clipped flight and the missing replacement flag (four leaf failures plus a parent summary).
+At cached wheat 25026, (2579,4331) to (2580,4331), the player and ordinary NPC stayed blocked;
+the roaming impling was blocked before and crossed after. The fixed run also passed jar
+conservation on a repeated Catch and an invisible replacement, plus removal and manifestation
+completion. Source, compiled output and all 28 cache-file checks were unchanged. These results
+qualify that revision; later source integrations need their own relevant validation.
 
 ## Sources
 

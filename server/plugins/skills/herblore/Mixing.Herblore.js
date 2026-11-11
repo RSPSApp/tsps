@@ -113,7 +113,8 @@ function chooseRecipe(player, recipes) {
     return null;
   }
   const level = Common.level(player);
-  const able = known.filter((recipe) => level >= recipe.level);
+  const able = known.filter((recipe) => (recipe.nonBoostable
+    ? player.getSkillManager().getMaxLevel(Common.core.Skill.HERBLORE) : level) >= recipe.level);
   if (able.length === 0) {
     const lowest = known[0];
     player.sendMessage((lowest.upgrade ? UPGRADE_LEVEL_MESSAGE : COMBINE_LEVEL_MESSAGE)(lowest.level));

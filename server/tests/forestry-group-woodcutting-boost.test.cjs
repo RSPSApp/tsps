@@ -84,6 +84,17 @@ test('a tree chopped on another plugin\'s request (a farming patch) gives none',
   assert.equal(bonus(a, session(a)), 0);
 });
 
+test('"woodcutting:group-bonus" answers the players at the tree, for the buff bar; 0 when not chopping one', (t) => {
+  const willow = tree(t, core.ObjectIdentifiers.WILLOW_TREE_11, AT[0] + 7);
+  const a = chopper(t, 7, 0), b = chopper(t, 8, 0);
+  const players = (p) => { const request = { player: p, players: 0 }; PM.emitCustomEvent('woodcutting:group-bonus', request); return request.players; };
+  assert.equal(players(a), 0, 'not chopping');
+  chop(a, willow);
+  assert.equal(players(a), 1);
+  chop(b, willow);
+  assert.equal(players(a), 2);
+});
+
 test('the bonus stops at +10', () => {
   const state = { objectId: 1, location: new core.Location(1, 1, 0), privateArea: null, tree: { name: 'willow' } };
   const fake = new Map(Array.from({ length: 12 }, (_, i) => [{ isRegistered: () => true, i }, { ...state }]));

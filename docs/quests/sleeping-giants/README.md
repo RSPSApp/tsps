@@ -20,6 +20,7 @@ Run of 2026-11-08 played the quest live from the strike to the first preform pic
 - **fixed** The cutscene slid the player (force movement) instead of walking; recording 96 shows one walking step per tick. Reported in [#3674](https://github.com/RSPSApp/tsps/issues/3674).
 - **fixed** Hover on the mould jig (a 3x3 multiloc with 1x1 forms) was click-tested a tile away: the client's raycaster sized it by its form while the scene places it by the map's id. [#3674](https://github.com/RSPSApp/tsps/issues/3674).
 - **fixed** The worn preform used the one-handed default stance; it now uses the cache's human_weapon_giant01 ready/walk/run poses. [#3674](https://github.com/RSPSApp/tsps/issues/3674).
+- **fixed** Using a bucket of water on the poured mould did nothing, so the sword could not be cooled without ice gloves. It now empties the bucket and cools the jig, and Pick-up takes the preform. [#4249](https://github.com/RSPSApp/tsps/issues/4249).
 
 ## Runs
 

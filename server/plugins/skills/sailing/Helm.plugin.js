@@ -42,6 +42,12 @@ const HELM_STATUS_CREW = 3;
 const HELM_LOOP_TICKS = 10;
 const SOUND_SAIL_RAISE = 10831;
 const SOUND_SAIL_LOWER = 10833;
+/** All Settings 461 "Stop the boat when leaving the helm": ticked while 0. */
+const VARBIT_STOP_WHEN_LEAVING_HELM_DISABLED = 18135;
+/** All Settings 462 `sailing_start_boat_when_setting_heading`: First time only, Always, Never. */
+const VARBIT_START_BOAT_WHEN_SETTING_HEADING = 18136;
+const START_ALWAYS = 1;
+const START_NEVER = 2;
 
 let pluginApi = null;
 // Content may grant the helm of its owner-private physical ship without inventing
@@ -254,10 +260,16 @@ function releaseSuppliedHelm(player, control) {
 }
 
 function leaveHelm(player, boat) {
-  if (suppliedHelms.get(player)?.boat === boat) suppliedHelms.delete(player);
+  const supplied = suppliedHelms.get(player)?.boat === boat;
+  if (supplied) suppliedHelms.delete(player);
   boat.helmPlayerId = undefined;
   setVarbit(player, VARBIT.FACILITY_LOCKEDIN, 0);
-  stopNavigating(player, boat);
+  // All Settings "Stop the boat when leaving the helm" (ticked while 0): unticked, the boat sails
+  // on as it was set. A boat already at rest, or a content scene's ship, stops as before.
+  const sailsOn = !supplied && boat.moveMode !== BoatMoveMode.Stopped
+    && getVarbit(player, VARBIT_STOP_WHEN_LEAVING_HELM_DISABLED) === 1;
+  if (sailsOn) releaseHelmUnderSail(player, boat);
+  else stopNavigating(player, boat);
   player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   playHelmSound(player, boat, "exit");
   setVarbit(player, VARBIT.SIDEPANEL_PLAYER_AT_HELM, 0);
@@ -280,6 +292,18 @@ function stopNavigating(player, boat) {
   setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.STOPPED);
   setVarbit(player, VARBIT.SIDEPANEL_HELM_STATUS, HELM_STATUS.FREE);
   setVarbit(player, VARBIT.SIDEPANEL_SAIL_BUTTON_TOGGLED, 0);
+  player.getPacketSender().sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, "", 1]);
+}
+
+/**
+ * Letting go of the helm with the boat left under sail: the helm is free and clicks walk again,
+ * while the sails, the move mode and the heading stay as they were.
+ */
+function releaseHelmUnderSail(player, boat) {
+  walkByClicks(player, boat);
+  const inactive = boatAnim(boat, "helm")?.inactive;
+  if (inactive !== undefined) animateDeckLocs(player, boat, isHelm, inactive);
+  setVarbit(player, VARBIT.SIDEPANEL_HELM_STATUS, HELM_STATUS.FREE);
   player.getPacketSender().sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, "", 1]);
 }
 
@@ -509,13 +533,19 @@ function canUseHands(player) {
 }
 
 /**
- * The first heading after taking the helm (moored) raises full sail. Once the sails are lowered
- * at the helm (stopped), a heading only turns the boat (rsprox: crew-combat, the boat turning
- * twice with the sails down after the Stop button).
+ * All Settings "Start the boat when setting a heading". "First time only" (the default): the
+ * first heading after taking the helm (moored) raises full sail, and once the sails are lowered at
+ * the helm (stopped) a heading only turns the boat (rsprox: crew-combat, the boat turning twice
+ * with the sails down after the Stop button). "Always" raises full sail from stopped too; "Never"
+ * only turns the boat.
  */
 function raiseSailForHeading(player, boat) {
   const moveMode = getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE);
-  if (moveMode === MOVE_MODE.MOORED) setSailMode(player, boat, "full");
+  const option = getVarbit(player, VARBIT_START_BOAT_WHEN_SETTING_HEADING);
+  const start = option === START_ALWAYS
+    ? moveMode === MOVE_MODE.MOORED || moveMode === MOVE_MODE.STOPPED
+    : option !== START_NEVER && moveMode === MOVE_MODE.MOORED;
+  if (start) setSailMode(player, boat, "full");
 }
 
 module.exports = {
@@ -528,6 +558,7 @@ module.exports = {
   playHelm,
   faceBow,
   stopNavigating,
+  raiseSailForHeading,
   crewTakesHelm,
   HELM_LOOP_TICKS,
   register(api) {

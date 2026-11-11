@@ -99,3 +99,15 @@ test("a bladed staff's autocast god spell can be cast with it (Wiki), and a plai
     assert.equal(choose(wielding(t, staff).p, slot), null, `the plain ${staff} has no god slot`);
   }
 });
+
+// Wiki (Claws of Guthix, Void knight mace): the mace casts and autocasts Claws of Guthix; the cache's
+// autocast_spellpos gives pest_void_knight_mace its own list (17 Crumble Undead, 19 Claws, waves, surges).
+test("the void knight mace opens its own list, autocasts Claws of Guthix and meets its staff requirement", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  const f = wielding(t, I.VOID_KNIGHT_MACE);
+  assert.equal(choose(f.p, 19), S.CLAWS_OF_GUTHIX);
+  assert.equal(f.list(), I.VOID_KNIGHT_MACE, "varp 664");
+  assert.equal(choose(wielding(t, I.VOID_KNIGHT_MACE).p, 17), S.CRUMBLE_UNDEAD);
+  assert.equal(choose(wielding(t, I.VOID_KNIGHT_MACE).p, 20), null, "no Flames of Zamorak");
+  assert.ok(f.p.getEquipment().containsAllItem(S.CLAWS_OF_GUTHIX.equipmentRequired(f.p)), "it can cast Claws");
+});

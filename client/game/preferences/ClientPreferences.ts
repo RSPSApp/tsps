@@ -40,6 +40,8 @@ export type ClientPreferences = {
     lastServer?: LastServerPreference;
     /** The account kept signed in on each server, keyed by rememberedLoginKey. */
     rememberedLogins: Record<string, RememberedLoginPreference>;
+    /** Settings > Controls: W/A/S/D turn the camera, Enter to chat. */
+    wasdCamera: boolean;
 };
 
 const DEFAULTS: ClientPreferences = {
@@ -48,6 +50,7 @@ const DEFAULTS: ClientPreferences = {
     iosInstallHintDismissed: false,
     installPromptDismissed: false,
     rememberedLogins: {},
+    wasdCamera: false,
 };
 
 let cache: ClientPreferences | undefined;
@@ -99,6 +102,7 @@ function normalize(raw: Partial<ClientPreferences> | undefined): ClientPreferenc
         ),
         lastServer: normalizeLastServer(raw?.lastServer),
         rememberedLogins: normalizeRememberedLogins(raw?.rememberedLogins),
+        wasdCamera: raw?.wasdCamera === true,
     };
 }
 

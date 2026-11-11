@@ -551,6 +551,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ValueWarnings` | ValueWarnings | interface | yes | All Settings value warnings (drop, Alchemy) and loot drop notifications, and their thresholds. |
 | `VengeanceTimer` | Vengeance Timer | interface | yes | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown. |
 | `VoiceChat` | VoiceChat | interface | no | Proximity voice chat: signalling between nearby players on the same plane and private area. Voice also needs client support and browser microphone permission. |
+| `WasdCamera` | WasdCamera | interface | yes | Lets web client players turn on WASD camera in All Settings > Controls: W, A, S and D turn the camera like the arrow keys, and Enter opens chat. Off for each player until they turn it on; turn the plugin off to remove the option. |
 | `WelcomeScreen` | WelcomeScreen | interface | yes | Welcome screen at login with the message of the week and a Play button, with the text set by the world's plugin config. |
 | `WorldMapPlayers` | World Map Players | interface | yes | Gives admins a live dot on the world map for every online player, with bots marked differently, refreshed every few ticks. |
 | `WorldMapPosition` | WorldMapPosition | interface | yes | Keeps the world map's player marker up to date while the map is open, on land or aboard a boat. |

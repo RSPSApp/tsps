@@ -284,7 +284,8 @@ test('the Items Kept on Death markers: grave with its fee on PvM, lost on PvP or
   assert.deepEqual(pvm[I.TWISTED_BOW], [367, 100001]);
   assert.deepEqual(pvm[I.SHARK], [367, 1]);
   assert.deepEqual(pvm[I.COINS], [367, 1], 'a stack of coins is priced by one coin');
-  assert.deepEqual(new Set(Object.values(pvm).map(([, count]) => count)).size > 2, true, 'the fee bands differ');
+  const counts = new Set(Object.values(pvm).map(([, count]) => count));
+  assert.ok(counts.size > 2, `the fee bands differ: ${[...counts]}`);
   assert.deepEqual(pvm[I.LOOTING_BAG], [368, 1], 'the looting bag disappears completely');
 
   handlers.get((4 << 16) | 12)({ player, action: 2 });

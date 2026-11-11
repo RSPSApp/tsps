@@ -56,6 +56,11 @@ and the `gotr_perm_0` settings aren't in a var the server saves, so they are att
   - `[44090, 15855475]` for the huge-remains portals;
   - `[44091, 527582]` for water, body and law;
   - `[44092, 16293385]` for fire and chaos.
+- **All Settings' "Disable colourful fade effects"** (row 460, varbit 18132
+  `settings_colourful_fade_disabled`) swaps every portal's colour fade for a black one: `fade_overlay`
+  (174) with script 948 `[0, 255, 0, 0, 15]` on stepping in, `[0, 0, 0, 255, 15]` instead of 5985 on
+  arrival, closed with the overlay. Barracuda Trials' portals, which use the same `gotr_overlay`,
+  do the same with the row on (rsprox 936). The barrier's Visual-effects off still shows no fade at all.
 - **Script 5980 `gotr_hud_update`**, sent every 2 ticks while playing, takes 11 ints:
 
 | Arg | Meaning |
@@ -224,7 +229,8 @@ Ticks from the rift opening:
     the HUD comes back.
   - The way back (`gotr_agility_portal_bottom_parent`, a multiloc shown by that varbit) is the
     same with the varbit 0, to 3608,9500.
-  - With Visual-effects off, the plugin skips the overlay.
+  - With Visual-effects off, the plugin skips the overlay; with "Disable colourful fade effects"
+    on, a black fade replaces it (see "Interfaces and scripts").
 - **Deposit Pool:**
   - Deposit-runes: `human_leverdown_walkmerge`, every rune to the bank, "You deposit all of your
     runes into the pool." With none: "You have no runes to deposit into the pool."

@@ -58,6 +58,11 @@ export class WidgetInteractionController {
     lastDragHitY: number = -1;
 
     deferredWidgetAction: any = null;
+    /**
+     * The widget beneath a pressed script-draggable item that offers the menu op (the bolt pouch's
+     * slot under its bolts): a release without a drag runs this widget's op.
+     */
+    dragPassThroughWidget: any = null;
 
     dragRenderAreaAbsX?: number;
     dragRenderAreaAbsY?: number;
@@ -150,6 +155,7 @@ export class WidgetInteractionController {
         this.dragSourceWidget = null;
         this.draggedOnWidget = null;
         this.deferredWidgetAction = null;
+        this.dragPassThroughWidget = null;
         this.lastDragHitX = -1;
         this.lastDragHitY = -1;
         delete this.dragRenderAreaAbsX;

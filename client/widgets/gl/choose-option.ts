@@ -288,6 +288,8 @@ export function getChooseOptionMenuRect(
 
     const s = uiScale > 0 ? uiScale : 1;
     const size = computeMenuSize(fontLoader, CHOOSE_OPTION_HEADER(), menu.entries, s);
+    // The scrollbar gets its own column, so it never covers the widest entry's text.
+    if (menuLayout.scrollbar && size.h > (hostH | 0)) size.w += sp(MENU_SCROLLBAR_WIDTH_PX, s);
 
     let left = ((menu.x | 0) - ((size.w / 2) | 0)) | 0;
     if (left + size.w > (hostW | 0)) left = (hostW | 0) - size.w;

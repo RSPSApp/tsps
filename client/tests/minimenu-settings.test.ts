@@ -98,6 +98,12 @@ const drawTall = (scrollEnabled: boolean): number => {
 };
 assert.equal(drawTall(false), 0, "no scrollbar with the setting off");
 assert.equal(drawTall(true), 1, "the scrollbar shows on an oversized menu");
+const tall = { open: true, x: 100, y: 0, entries: Array.from({ length: 60 }, (_, i) => ({ option: `Option ${i}` })) };
+setChooseOptionMenuLayout({ startEntry: 0, spacing: 0, scrollbar: false });
+const narrow = getChooseOptionMenuRect(fontLoader, tall, 800, 600)!.w;
+setChooseOptionMenuLayout({ startEntry: 0, spacing: 0, scrollbar: true });
+assert.equal(getChooseOptionMenuRect(fontLoader, tall, 800, 600)!.w, narrow + 3, "the scrollbar gets its own column");
+assert.equal(getChooseOptionMenuRect(fontLoader, menu, 800, 600)!.w, plain.w, "a menu that fits needs none");
 setChooseOptionMenuLayout(undefined);
 
 console.log("minimenu settings tests passed");

@@ -574,7 +574,7 @@ The rows sit on varp 4503. The cache's own scripts apply them in the client: a c
 
 `minimenu_setblockmode(slot, 1 - varbit)` sets the filters, so mode 0 leaves an entry out (`client/ui/menu/minimenuFilters.ts`). Use and spell entries have filters of their own (slots 7 and 1, rows not in the desktop list, enum 422), so the entity and player filters leave them in. The menu's layout is drawn in `client/widgets/gl/choose-option.ts`. No capture shows these rows changed: the minimenu varbits appear only in rev 223-226 recordings, which predate this varp layout, so the start entry and spacing units, the scrollbar's look and the number row's prompt are ours. Tests: `tests/settings-minimenu.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/minimenu-settings.test.ts`.
 
-- **Not done**: Minimenu reordering (406, 407). The other filter rows on the same varp (396, 397, 399-401, 403, 404: visual feedback, target, interface, walk, global click, use, cancel), which the desktop list doesn't show, are not saved or obeyed.
+- **Not done**: Minimenu reordering (406, 407). The other filter rows on the same varp (396, 397, 399-401, 403, 404: visual feedback, target, interface, walk, global click, use, cancel), which the desktop list doesn't show, are not saved or obeyed. The touch controls' tap panel (`client/game/plugins/touchcontrols`) offers its own option list and ignores the filters.
 
 ## Containers on death
 

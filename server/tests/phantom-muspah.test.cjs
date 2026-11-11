@@ -168,6 +168,7 @@ test("the Muspah's attackable forms hold a freeze for 66% of its base duration",
     const freeze = { target: { getId: () => Common.data.npcs[form] }, ticks: 20 };
     fakeApi.emitCustomEvent("combat:freeze-duration", freeze);
     assert.equal(freeze.ticks, 20 * 0.66, form);
+    assert.equal(freeze.resisted, true, form + ": CombatFactory must not apply the 33% a second time");
   }
   const teleport = { target: { getId: () => Common.data.npcs.teleport }, ticks: 20 };
   fakeApi.emitCustomEvent("combat:freeze-duration", teleport);

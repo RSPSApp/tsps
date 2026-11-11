@@ -65,6 +65,34 @@ function copyStatsToBot({ player, parts }) {
   return true;
 }
 
+/** Copies the administrator's worn equipment onto an active bot, empty slots included. */
+function copyGearToBot({ player, parts }) {
+  const { api, runtime } = services;
+  const name = parts.slice(1).join(" ").replace(/_/g, " ").toLowerCase();
+  const entry = [...runtime.entriesByUsername.values()].find(({ player: bot }) =>
+    bot.getUsername().toLowerCase() === name || bot.getDisplayName().toLowerCase() === name);
+  if (!entry || !runtime.playerBotUsernames.has(entry.player.getUsername())) {
+    player.sendMessage("Usage: ::botgearme <bot name>. Choose an active bot.");
+    return true;
+  }
+  const bot = entry.player;
+  for (const item of player.getEquipment().getItems()) {
+    if (!item || item.getId() <= 0) continue;
+    const definition = item.getDefinition();
+    if (!api.core.EquipmentRequirements.meets(bot, definition)) {
+      player.sendMessage(`${bot.getDisplayName()} cannot wear ${definition.getName()}. Use ::botstatsme first.`);
+      return true;
+    }
+  }
+  bot.getEquipment().setItems(player.getEquipment().getCopiedItems());
+  bot.getEquipment().refreshItems();
+  api.core.BonusManager.update(bot);
+  api.core.WeaponInterfaceManager.assign(bot);
+  bot.getUpdateFlag().flag(api.core.Flag.APPEARANCE);
+  player.sendMessage(`Copied your gear to ${bot.getDisplayName()}.`);
+  return true;
+}
+
 function returnToMain({ player }) {
   if (!services.api.core.releasePlayerControl(player)) {
     player.sendMessage("You are already on your own character.");
@@ -88,6 +116,7 @@ function registerBotControlCommands(options) {
   const { api } = options;
   api.registerCommand("botcontrol", controlBot, api.core.PlayerRights.ADMINISTRATOR, "Manually control an active bot");
   api.registerCommand("botstatsme", copyStatsToBot, api.core.PlayerRights.ADMINISTRATOR, "Copy your stats onto a bot");
+  api.registerCommand("botgearme", copyGearToBot, api.core.PlayerRights.ADMINISTRATOR, "Copy your gear onto a bot");
   // A controlled bot keeps its own rank; returning only restores this connection's owner.
   api.registerCommand("botback", returnToMain, api.core.PlayerRights.NONE, "Return to your own character");
   api.onPlayerLogout(releaseRemovedPlayer);

@@ -708,8 +708,13 @@ function finishMinasReport(player, pending) {
   if (pending.key === WHAT_LIES_BELOW_KEY && !has(player, ITEM.DAGONHAI_HISTORY)) return;
   if (pending.key === EMPTY_LORD_KEY && !hasGhostlyRobes(player)) return;
   const lamp = grantReportLamp(player, pending.key);
+  if (lamp === LAMP.REFUSED) {
+    // Ours: a full bag ends the conversation here and the report stays open for a retry.
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
   lampOutcome.set(player, lamp);
-  if (lamp === LAMP.REFUSED) return;
   markReported(player, pending.key);
   reportedInConversation.add(player);
   sendReportVarbits(player, pending.key);
@@ -731,9 +736,8 @@ function grantReportLamp(player, questKey) {
 /**
  * Minas's transcript message steps are message boxes, as live sends them (rsprox 3278: the
  * Ikov, Hazeel Cult and What Lies Below narration and the lamp line are all messagebox 229).
- * The lamp line also goes to chat, and shows only when a lamp was handed over: a full bag ends
- * the conversation there (the report stays open), and a player still holding that report's lamp
- * gets no second one and no line, as rsprox 1843's Curse of the Empty Lord report.
+ * The lamp line also goes to chat, and shows only when a lamp was handed over (ours: a player
+ * still holding that report's lamp gets no second one and no line).
  */
 function showMinasMessage(message) {
   const { player, npcId, kind, text } = message;
@@ -741,10 +745,6 @@ function showMinasMessage(message) {
   if (String(text ?? "").trim() === LAMP_MESSAGE) {
     const outcome = lampOutcome.get(player);
     lampOutcome.delete(player);
-    if (outcome === LAMP.REFUSED) {
-      message.end = true;
-      return;
-    }
     message.handled = true;
     if (outcome !== LAMP.GIVEN) return;
     player.sendMessage(LAMP_MESSAGE);

@@ -494384,6 +494384,20 @@
             },
             {
               "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
+            },
+            {
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "WIZR3H"
             }
           ],
           "id": "4Ij9Rt"
@@ -495106,6 +495120,20 @@
                   },
                   {
                     "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
+                  },
+                  {
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "WIZR3H"
                   }
                 ],
                 "id": "4Ij9Rt"

@@ -37,7 +37,7 @@ const SOUND_KUDOS = 3653;
 // Timeline display varbits (cache gamevals).
 const VM = {
   staff: 3650, salveKnights: 3651, silverlight: 3653, excalibur: 3655, soa: 3656, ardy: 3659,
-  surok: 3660, soaVisible: 9679,
+  surok: 3660, soaVisible: 9679, lathas: 3654,
 };
 const VARBIT = { oldSymbol: 3646, ancientSymbol: 3645, pottery: 3649, ancientCoin: 3647, oldCoin: 3648 };
 
@@ -565,23 +565,45 @@ test("Museum: Hazeel Cult report plays its message box and pays before Minas's c
 // rsprox 3278: a lamp report pays after "You're welcome!", hands out the lamp with a game message and
 // a message box, and the conversation goes on to the next report.
 test("Museum: lamp reports show the lamp box and go on to the next report", () => {
-  const world = makeApi(new Set(["the_dig_site", "shield_of_arrav", "merlins_crystal", "demon_slayer"]));
+  const world = makeApi(new Set(["the_dig_site", "shield_of_arrav", "merlins_crystal", "making_history", "demon_slayer"]));
   const player = makePlayer({}, {}, []);
   const log = talkToMinasLogged(world, player);
   const lampBoxes = log.filter((entry) => entry.text === "You receive an old lamp.");
-  assert.deepEqual(lampBoxes.map((entry) => [entry.kind, entry.kudos]), [["StatementDialogue", 10], ["StatementDialogue", 15]]);
+  assert.deepEqual(lampBoxes.map((entry) => [entry.kind, entry.kudos]),
+    [["StatementDialogue", 10], ["StatementDialogue", 15], ["StatementDialogue", 20]]);
   const welcome = log.filter((entry) => entry.text === "You're welcome!");
-  assert.deepEqual(welcome.map((entry) => entry.kudos), [5, 10], "each lamp report pays once its last line is continued");
+  assert.deepEqual(welcome.map((entry) => entry.kudos), [5, 10, 15], "each lamp report pays once its last line is continued");
   // Demon Slayer (no lamp) pays before Minas's closing line shows.
   const delrith = log.find((entry) => entry.text.startsWith("Delrith! Incredible!"));
   assert.equal(delrith.kudos, 5);
+  assert.equal(getKudos(world, player), 20);
+  assert.deepEqual(new Set(player.getAttribute(STATE).minas),
+    new Set(["shield_of_arrav", "merlins_crystal", "making_history", "demon_slayer"]));
+  assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 3);
+  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 4);
+  for (const varbit of [VM.silverlight, VM.soa, VM.soaVisible, VM.excalibur, VM.lathas]) assert.equal(player.getVarbit(varbit), 1, `varbit ${varbit}`);
+  for (const lamp of [11185, 11186, 11187]) assert.equal(player.inventory.getAmount(lamp), 1, `lamp ${lamp}`);
+});
+
+// Curse of the Empty Lord's lamp has no lamp line after it, so the full bag must end the chat itself.
+test("Museum: a full bag at a lamp report ends the conversation before the next report", () => {
+  const robes = [I.GHOSTLY_ROBE, I.GHOSTLY_ROBE_2, I.GHOSTLY_BOOTS, I.GHOSTLY_HOOD, I.GHOSTLY_GLOVES, I.GHOSTLY_CLOAK];
+  const items = Object.fromEntries(robes.map((id) => [id, 1]));
+  for (let id = 1; Object.keys(items).length < 28; id++) items[id] = 1;
+  const world = makeApi(new Set(["the_dig_site", "curse_of_the_empty_lord", "hazeel_cult"]));
+  const player = makePlayer({}, items, []);
+  const log = talkToMinasLogged(world, player);
+  assert.equal(log.at(-1).text, "You're welcome!");
+  assert.equal(log.some((entry) => entry.text.startsWith("I discovered the truth behind the Carnillean")), false);
+  assert.equal(getKudos(world, player), 0);
+  assert.deepEqual(player.getAttribute(STATE)?.minas ?? [], []);
+  assert.equal(player.getVarbit(VM.staff), 0);
+  assert.ok(player.messages.some((message) => message.includes("free inventory space")));
+  // Room made: both reports pay in the next conversation.
+  player.inventory.delete(1, 1);
+  talkToMinas(world, player);
   assert.equal(getKudos(world, player), 15);
-  assert.deepEqual(new Set(player.getAttribute(STATE).minas), new Set(["shield_of_arrav", "merlins_crystal", "demon_slayer"]));
-  assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 2);
-  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 3);
-  for (const varbit of [VM.silverlight, VM.soa, VM.soaVisible, VM.excalibur]) assert.equal(player.getVarbit(varbit), 1, `varbit ${varbit}`);
-  assert.equal(player.inventory.getAmount(11186), 1);
-  assert.equal(player.inventory.getAmount(11185), 1);
+  assert.equal(player.getVarbit(VM.staff), 2);
 });
 
 test("Museum: a report whose lamp the player still holds pays without a second lamp or lamp line", () => {

@@ -52,10 +52,14 @@ and Kudos agree across the three and with the Wiki's Kudos page.
   Cult, What Lies Below, Rune Mysteries, Defender of Varrock. The transcript keeps the Wiki's order
   (Observatory Quest's place is not captured).
 
+- **Curse of the Empty Lord** (1843): after "You're welcome!" live sent `vm_staff_of_armadyl`
+  1 -> 2 and +10 Kudos only: no lamp, no lamp line and no box, and the player was not carrying
+  one. The Wiki's Kudos page gives this report a 10,000 XP lamp; we hand it out (silently, as
+  the transcript has no lamp line). Whether live skips it once claimed is not captured.
+
 ## Ours
 
 - A shared varbit shows the highest value any reported quest gives it, whatever the order.
 - A full bag on a lamp report says "You need at least 1 free inventory space to receive the
-  lamp." and ends the conversation; the report stays open.
-- A player still holding a report's lamp gets no second one and no lamp line (1843's Empty Lord
-  report handed out none).
+  lamp." and ends the conversation there; the report stays open for the next talk.
+- A player still holding a report's lamp gets no second one and no lamp line.

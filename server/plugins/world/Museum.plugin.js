@@ -363,7 +363,8 @@ function awardKudos(player, amount, source) {
   const next = kudosOf(player) + amount;
   player.setAttribute(KUDOS_ATTRIBUTE, next);
   sendKudosVarbit(player);
-  player.sendMessage(KUDOS_MESSAGE);
+  // rsprox 227/01723.txt:300257: the line is spam (filtered chat), not a game message.
+  player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, KUDOS_MESSAGE);
   player.getPacketSender().sendSound(SOUND_KUDOS, 255, 0);
   api.emitCustomEvent(KUDOS_CHANGED_EVENT, { player, kudos: next, amount, source });
   return next;

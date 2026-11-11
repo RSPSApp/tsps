@@ -1,5 +1,6 @@
 {
-  "$comment": "Monsters the ring of recoil (and the ring of suffering's recoil) does not damage: OSRS Wiki, Category:Monsters immune to recoil. Matched by NPC name. Left out because the name is shared with monsters that are not immune: Skeleton Hellhound and Greater Skeleton Hellhound (only Vet'ion's and Calvar'ion's), Evil Chicken, Ogre shaman, Bee Swarm, Husk, Parasite, Undead tree. Hespori sets its own immunity attribute.",
+  "$comment": "Monsters the ring of recoil (and the ring of suffering's recoil) does not damage: OSRS Wiki, Category:Monsters immune to recoil. Matched by NPC name. Left out because the name is shared with monsters that are not immune: Skeleton Hellhound and Greater Skeleton Hellhound (only Vet'ion's and Calvar'ion's), Evil Chicken, Ogre shaman, Bee Swarm, Husk, Parasite, Undead tree. Hespori sets its own immunity attribute. `ids` are immune by NPC id where the name is shared: the Judge of Yama in A Kingdom Divided (akd_judge_of_yama_combat, 10938) only, not the Yama fight's (yama_judge_of_yama, 14180), which the Wiki category leaves out.",
+  "ids": [10938],
   "names": [
     "Artio",
     "Callisto",
@@ -7,7 +8,6 @@
     "Champion of Scabaras",
     "Fragment of Seren",
     "Galvek",
-    "Judge of Yama",
     "King Roald",
     "Lowerniel Drakan",
     "Menaphite Akh",

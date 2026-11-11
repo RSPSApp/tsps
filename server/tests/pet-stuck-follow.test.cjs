@@ -94,3 +94,25 @@ test('a pet already following goes into an area that only refuses dropping a pet
   assert.ok(distance(f,n)<=2,`pet was left outside: ${n.getLocation()}`);
   assert.equal(n.getFollowing(),f.p);
 });
+
+// Wiki (Pet): no follower gets into Nex, the Nightmare (rsprox_transcripts/227/01757.txt:128888 refuses entry with a
+// pet), Barbarian Assault, Soul Wars or the Rogues' Den. The real Barbarian Assault match area keeps a following pet out.
+test('a pet stays out of the real Barbarian Assault arena and rejoins its owner after the match',async t=>{
+  const{MatchArea}=require('../plugins/minigames/barbarianassault/Match.BarbarianAssault');
+  const f=actor(t),n=await follower(f),home=n.getLocation().clone();
+  const match={onPlayerEnter(){},onPlayerLeave(){},processOnce(){},updateHud(){}};
+  const area=new MatchArea(match);
+  t.after(()=>area.destroy?.());
+  assert.equal(area.barsFollowers(),true);
+  area.enter(f.p);f.p.moveTo(new core.Location(1880,5470,0));cycles(n,30);
+  assert.ok(n.getLocation().equals(home),`pet followed into the arena to ${n.getLocation()}`);
+  assert.notEqual(n.getArea(),area);assert.equal(n.getFollowing(),f.p);
+  area.leave(f.p,false);f.p.moveTo(new core.Location(3245,3210,0));cycles(n,30);
+  assert.ok(distance(f,n)<=2,`pet did not catch up after the match: ${n.getLocation()}`);
+});
+
+test("the Rogues' Den maze bars followers as well as dropped pets",()=>{
+  const maze=require('../plugins/minigames/roguesden/Area.RoguesDen').createArea();
+  assert.equal(maze.allowSummonPet(),false);
+  assert.equal(maze.barsFollowers(),true);
+});

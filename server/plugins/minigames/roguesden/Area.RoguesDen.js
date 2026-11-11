@@ -26,6 +26,11 @@ function areaClass() {
       return false;
     }
 
+    /** No follower comes in either (Wiki: Rogues' Den): a following pet waits outside. */
+    barsFollowers() {
+      return true;
+    }
+
     process(mobile) {
       if (!mobile.isPlayer?.()) return;
       const player = mobile.getAsPlayer();

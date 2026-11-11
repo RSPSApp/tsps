@@ -393,6 +393,19 @@ Chat and social rows whose choice the game now follows.
 - **'Did you know?' tips** (433, varbit 16235 `settings_didyouknow_disabled`). `LoginTips.plugin.js` sends one tip at random, as chat type 117, straight after the login greeting (`welcome-screen:greeted`), unless the saved setting is 1; rows 434 and 435 colour it. The 40 tips in `data/login-tips.json` are live's own lines from rev 238 and 239. In the rsprox captures, live sends a tip right after "Welcome to Old School RuneScape." in 1,380 of 1,381 logins since rev 235 (for example 239/4251), none of them with the setting sent as 1. Live's navigator tip is cut short at "</col", and is kept as sent.
 - **Not done**: nothing known.
 
+## Examine price info
+
+Rows 234 (Grand Exchange, varbit 13826 `examine_price_ge_enabled`) and 235 (Alchemy, varbit 13827 `examine_price_alch_enabled`) are `data/settings.json` toggles, on by default. Examining an item adds a line after its examine text:
+
+- `Price of Steel scimitar: GE 67  HA 240  LA 160` for one item, `Price of 100 x Feather: GE 300 (3ea)  HA 100 (1ea)` for a stack, with the numbers in red. Grand Exchange adds the GE part, Alchemy the HA and LA parts.
+- A part whose value is 0 is left out, and so is the whole line when nothing is left. Untradeable items have no line. A note is priced and named as the item it notes.
+- The GE part is the world's guide price (the one `/api/item-prices` serves); HA and LA are 60% and 40% of the item's store value.
+
+Inventory and ground items are examined on the server (`net/NetworkBuilder.ts`, `game/content/ExaminePrice.ts`), and other widget items (bank, worn equipment, shops, trade) in the client (`OsrsClient.examineWidgetItem`, `client/game/examinePrice.ts`). The format is from screenshots of the official client. Defaults: the Alchemy varbit is 1 in all 3,239 rsprox logins that send it, and the Grand Exchange one in all 2,244 non-Ironman ones. Tests: `tests/examine-price.test.cjs`, `client/tests/examine-price.test.ts`.
+
+- **Ours**: the exact red (`<col=ff0000>`) and the two spaces between parts, read off the screenshots.
+- **Not done**: live sends the Grand Exchange varbit as 0 in 777 of the 995 Ironman logins, so Ironman accounts probably start with it off. Here every account starts with it on.
+
 ## Containers on death
 
 Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).

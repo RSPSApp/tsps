@@ -651,8 +651,8 @@ function deathItemDrop(event) {
 }
 
 /**
- * With Ammo-picking behaviour on, ground ammo matching the worn quiver's goes into it. Ammo
- * that matches the worn ammo slot goes there instead (the Ranged combat tutor's pickup).
+ * With Ammo-picking behaviour on, ground ammo matching the worn quiver's goes into it. Ours:
+ * ammo that matches the worn ammo slot too goes there first (the Ranged combat tutor's pickup).
  */
 function pickupIntoQuiver(event) {
   const { player, groundItemId } = event;

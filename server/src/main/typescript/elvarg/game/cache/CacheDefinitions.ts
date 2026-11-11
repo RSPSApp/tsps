@@ -69,6 +69,8 @@ export class CacheDefinitions {
      * loc or npc overlay needs no encoder and no cache repack.
      */
     private static customDefinitions = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    /** Each source's rows (the cache editor's document, the custom pets); customDefinitions is all of them. */
+    private static customDefinitionSources = new Map<string, Map<string, { baseId: number; fields: Record<string, unknown> }>>();
     private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
@@ -667,22 +669,34 @@ export class CacheDefinitions {
         return this.customModels ?? [];
     }
 
-    /** Registers overlay rows (`{ kind, id, baseId, fields }`); replaces any previous set. */
-    static registerCustomDefinitions(rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[]): number {
+    /**
+     * Registers overlay rows (`{ kind, id, baseId, fields }`) for one source, replacing that
+     * source's previous rows only: the cache editor's document (the default) and generated rows
+     * such as the custom pets' followers live side by side. An id another source already has is
+     * refused.
+     */
+    static registerCustomDefinitions(
+        rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[],
+        source = "cache-editor",
+    ): number {
         const next = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+        const others = [...this.customDefinitionSources].filter(([name]) => name !== source);
         const counts = this.getBaseCounts();
         for (const row of rows) {
             const count = row?.kind === "loc" ? counts.objects : row?.kind === "npc" ? counts.npcs : counts.items;
             if (!row || !["loc", "npc", "item"].includes(row.kind) || !Number.isInteger(row.id) || row.id < Math.max(50000, count) || row.id >= 65535 ||
                 !Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= count || next.has(`${row.kind}:${row.id}`)) throw new Error("Invalid custom definition identity");
             if (row.kind === "item" && this.customItems.has(row.id)) throw new Error("Item ID already belongs to custom-items");
+            const owner = others.find(([, defined]) => defined.has(`${row.kind}:${row.id}`));
+            if (owner) throw new Error(`Custom ${row.kind} ${row.id} already belongs to ${owner[0]}`);
             const fields = structuredClone(row.fields ?? {});
             if (Object.keys(fields).some(key => ["id", "cacheInfo", "cacheType", "__proto__", "constructor", "prototype"].includes(key))) throw new Error("Invalid custom definition field");
             next.set(`${row.kind}:${row.id}`, { baseId: row.baseId, fields });
         }
-        this.customDefinitions = next;
+        this.customDefinitionSources.set(source, next);
+        this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
         this.customDefinitionCache = new Map();
-        return this.customDefinitions.size;
+        return next.size;
     }
 
     static getCustomDefinitions(): Array<{ kind: string; id: number; baseId: number; fields: Record<string, unknown> }> {

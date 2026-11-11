@@ -183,6 +183,54 @@ async function clickLoc(t, f, id) {
 
 // ------------------------------------------------------------------ The Dig Site
 
+test("Dig Site: the teddy bush works and giving the guide tea unlocks the native panning route", async (t) => {
+  const f = actor(t, DIG, 1);
+  core.RegionManager.loadMapFiles(3357, 3372);
+  f.p.setLocation(new core.Location(3357, 3371, 0));
+  await send(f, { type: "object_option", id: O.BUSH_10, x: 3357, y: 3372, action: "Search" });
+  ticks(f, 5);
+  assert.equal(f.inv.getAmount(I.TEDDY), 1);
+  f.p.getDialogueManager().reset();
+  await send(f, { type: "object_option", id: O.BUSH_10, x: 3357, y: 3372, action: "Search" });
+  ticks(f, 5);
+  assert.equal(f.inv.getAmount(I.TEDDY), 1, "the same player cannot collect a second teddy while holding one");
+
+  f.p.setLocation(new core.Location(3378, 3377, 0));
+  const guide = core.NPC.create(N.PANNING_GUIDE, new core.Location(3377, 3377, 0));
+  core.World.getNpcs().add(guide);
+  t.after(() => core.World.getNpcs().remove(guide));
+  put(f, I.PANNING_TRAY, 1);
+  const pan = async () => {
+    await send(f, { type: "object_option", id: O.PANNING_POINT, x: 3379, y: 3377, action: "Pan" });
+    ticks(f, 8);
+  };
+  await pan();
+  assert.equal(f.inv.getAmount(I.PANNING_TRAY), 1, "the unpaid guide stops the pan");
+  f.p.getDialogueManager().reset();
+
+  put(f, I.CUP_OF_TEA_2, 2);
+  put(f, I.CUP_OF_TEA_2, 3);
+  const tea = async (slot) => {
+    await send(f, { type: "item_on_npc", targetIndex: guide.getIndex(), itemId: I.CUP_OF_TEA_2, slot, widgetId: 3214 });
+    ticks(f, 5);
+    f.p.getDialogueManager().reset();
+  };
+  await tea(2);
+  assert.equal(f.inv.forSlot(2).getId(), -1);
+  assert.equal(f.inv.getAmount(I.CUP_OF_TEA_2), 1, "the clicked cup is handed over");
+  assert.equal(f.p.getPacketSender().getVarbit(2544), 1);
+  await tea(3);
+  assert.equal(f.inv.getAmount(I.CUP_OF_TEA_2), 1, "one tea permanently buys access");
+  await pan();
+  assert.equal(f.inv.getAmount(I.PANNING_TRAY_3), 1, "the real panning point fills the tray");
+  f.p.getDialogueManager().reset();
+
+  t.mock.method(Math, "random", () => 17 / 40);
+  await send(f, { type: "inventory_action", slot: 1, itemId: I.PANNING_TRAY_3, widgetId: 3214, option: "Search" });
+  assert.equal(f.inv.getAmount(I.PANNING_TRAY), 1, "searching empties the tray");
+  assert.equal(f.inv.getAmount(I.SPECIAL_CUP), 1, "the quest cup can be found");
+});
+
 async function reloadDigSite(t, original) {
   const directory = mkdtempSync(path.join(tmpdir(), "tsps-digsite-"));
   const previousDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;

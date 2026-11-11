@@ -66,6 +66,16 @@ test('prices come from the item a note stands for; untradeable items and coins h
   assert.equal(bond.prices.la, 0);
 });
 
+test('/api/item-alchemy gives the client the same alchemy values', () => {
+  const { itemAlchemyResource } = require('../plugins/items/ItemDefinitionLoader.plugin')._test;
+  const table = itemAlchemyResource();
+  assert.deepEqual(table[STEEL_SCIMITAR], [240, 160]);
+  assert.deepEqual(table[FEATHER], [1, 0]);
+  assert.equal(table[OLD_SCHOOL_BOND], undefined, 'nothing for an item the spells refuse');
+  assert.equal(table[BARCRAWL_CARD], undefined, 'untradeable');
+  assert.equal(table[NOTED_TROUT], undefined, 'notes are priced as their item');
+});
+
 test('sendExaminePrice follows the two settings', () => {
   const varbits = new Map();
   const messages = [];

@@ -6,7 +6,6 @@ export const EXAMINE_PRICE_ALCH_VARBIT = 13827; // examine_price_alch_enabled
 /** The item definition fields the price line reads. */
 export type ExaminePriceDefinition = {
     name?: string;
-    price?: number;
     isTradable?: boolean;
     noteTemplate?: number;
     note?: number;
@@ -16,6 +15,8 @@ export type ExaminePriceDeps = {
     definition: (itemId: number) => ExaminePriceDefinition | undefined;
     /** The connected world's guide price: 0 without a quote, undefined while prices load. */
     guidePrice: (itemId: number) => number | undefined;
+    /** What the world's alchemy spells pay: 0 for an item they refuse, undefined while values load. */
+    alchemy: (itemId: number) => { ha: number; la: number } | undefined;
     varbit: (id: number) => number;
 };
 
@@ -37,7 +38,6 @@ export function examinePriceLine(itemId: number, amount: number, deps: ExaminePr
     const def = pricedId === itemId ? own : deps.definition(pricedId);
     if (!def?.isTradable || !def.name || def.name === "null") return null;
     const count = Math.max(1, Math.floor(amount) || 1);
-    const value = Math.max(0, def.price ?? 0);
     const parts: string[] = [];
     const add = (label: string, each: number) => {
         if (!(each > 0)) return;
@@ -45,8 +45,9 @@ export function examinePriceLine(itemId: number, amount: number, deps: ExaminePr
     };
     if (showGe) add("GE", Math.floor(deps.guidePrice(pricedId) ?? 0));
     if (showAlch) {
-        add("HA", Math.floor(value * 0.6));
-        add("LA", Math.floor(value * 0.4));
+        const alchemy = deps.alchemy(pricedId);
+        add("HA", Math.floor(alchemy?.ha ?? 0));
+        add("LA", Math.floor(alchemy?.la ?? 0));
     }
     if (!parts.length) return null;
     return `Price of ${count > 1 ? `${number(count)} x ` : ""}${def.name}: ${parts.join("  ")}`;

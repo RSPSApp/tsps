@@ -7,10 +7,14 @@ export const PRICE_READY = 2;
 let prices: Map<number, number> | undefined;
 let loading: Promise<void> | undefined;
 let revision = 0;
+let alchemy: Map<number, [number, number]> | undefined;
+let alchemyLoading: Promise<void> | undefined;
 
 /** Loads the connected world's guide prices (/api/item-prices); a new login loads them again. */
 export function loadItemPrices(): Promise<void> {
     prices = undefined;
+    alchemy = undefined;
+    alchemyLoading = undefined;
     revision++;
     const request = fetchContent("/api/item-prices")
         .then((table: Record<string, number>) => {
@@ -40,4 +44,27 @@ export function guidePrice(itemId: number): number | undefined {
         return undefined;
     }
     return prices.get(itemId) ?? 0;
+}
+
+/** What High and Low Alchemy pay for an (unnoted) item, as the world's spells do: 0 for an item they
+ * refuse, such as a bond. Undefined while the table (/api/item-alchemy) loads. */
+export function alchemyValues(itemId: number): { ha: number; la: number } | undefined {
+    if (!alchemy) {
+        if (!alchemyLoading) {
+            const request = fetchContent("/api/item-alchemy")
+                .then((table: Record<string, [number, number]>) => {
+                    if (alchemyLoading !== request) return;
+                    alchemy = new Map(Object.entries(table ?? {}).map(([id, [ha, la]]) => [Number(id), [Number(ha), Number(la)]]));
+                })
+                .catch((error) => {
+                    if (alchemyLoading !== request) return;
+                    console.warn("[item-alchemy] alchemy values unavailable", error);
+                    alchemy = new Map();
+                });
+            alchemyLoading = request;
+        }
+        return undefined;
+    }
+    const [ha, la] = alchemy.get(itemId) ?? [0, 0];
+    return { ha, la };
 }

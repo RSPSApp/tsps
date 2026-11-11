@@ -512,10 +512,10 @@ Rows 234 (Grand Exchange, varbit 13826 `examine_price_ge_enabled`) and 235 (Alch
 - A part whose value is 0 is left out, and so is the whole line when nothing is left. Untradeable items have no line. A note is priced and named as the item it notes.
 - The GE part is the world's guide price (the one `/api/item-prices` serves); HA and LA are what the alchemy spells pay (none for an item they refuse, such as a bond).
 
-Inventory and ground items are examined on the server (`net/NetworkBuilder.ts`, `game/content/ExaminePrice.ts`), and other widget items (bank, worn equipment, shops, trade) in the client (`OsrsClient.examineWidgetItem`, `client/game/examinePrice.ts`). The format is from screenshots of the official client. Defaults: the Alchemy varbit is 1 in all 3,239 rsprox logins that send it, and the Grand Exchange one in all 2,244 non-Ironman ones. Tests: `tests/examine-price.test.cjs`, `client/tests/examine-price.test.ts`.
+Inventory and ground items are examined on the server (`net/NetworkBuilder.ts`, `game/content/ExaminePrice.ts`), and other widget items (bank, worn equipment, shops, trade) in the client (`OsrsClient.examineWidgetItem`, `client/game/examinePrice.ts`), with the guide prices from `/api/item-prices` and the alchemy values from `/api/item-alchemy` (`ItemDefinitionLoader.plugin.js`), so both sides show the same values. The format is from screenshots of the official client. Defaults: the Alchemy varbit is 1 in all 3,239 rsprox logins that send it, and the Grand Exchange one in all 2,244 non-Ironman ones. Tests: `tests/examine-price.test.cjs`, `client/tests/examine-price.test.ts`.
 
 - **Ours**: the exact red (`<col=ff0000>`) and the two spaces between parts, read off the screenshots.
-- **Not done**: the client's widget examine (bank, worn, shops) can only take HA and LA as 60% and 40% of the cache's store value, so it still shows them for the few tradeable items High Alchemy refuses. Live sends the Grand Exchange varbit as 0 in 777 of the 995 Ironman logins, so Ironman accounts probably start with it off. Here every account starts with it on.
+- **Not done**: Live sends the Grand Exchange varbit as 0 in 777 of the 995 Ironman logins, so Ironman accounts probably start with it off. Here every account starts with it on.
 
 ## Containers on death
 

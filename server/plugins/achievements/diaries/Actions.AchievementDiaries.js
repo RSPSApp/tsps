@@ -5,7 +5,8 @@ const ARDOUGNE_MARKET_SQUARE = [41, 51];
 const CAKE_ITEM_ID = 1891;
 const VARROCK_TEA_SQUARE = [51, 53];
 const LUMBRIDGE_SQUARE = [50, 50];
-const DRAYNOR_SEWERS_SQUARE = [48, 151];
+// The Wiki's seven Draynor Sewers zombies: three in the west square, four in the east one below it.
+const DRAYNOR_SEWERS_SQUARES = [[48, 151], [48, 150]];
 const LUMBRIDGE_SWAMP_CAVES = { minX: 3140, maxX: 3235, minY: 9535, maxY: 9595, z: 0 };
 const HAM_TRAPDOOR_ID = 5492; // ham_multi_trapdoor, nameless in the cache
 
@@ -38,7 +39,7 @@ function killed({ killer, npc }) {
   if (!killer?.isPlayer?.() || npc.getPrivateArea() !== null) return;
   const at = npc.getLocation();
   const name = npc.getCurrentDefinition(killer)?.getName();
-  if (name === "Zombie" && at.getZ() === 0 && inSquare(at, DRAYNOR_SEWERS_SQUARE)) {
+  if (name === "Zombie" && at.getZ() === 0 && DRAYNOR_SEWERS_SQUARES.some((square) => inSquare(at, square))) {
     api.emitCustomEvent("diary:task", { player: killer, diary: "lumbridge", task: "kill-a-zombie-in-draynor-sewers" });
   } else if ([api.core.NpcIdentifiers.CAVE_BUG, api.core.NpcIdentifiers.CAVE_BUG_2].includes(npc.getId?.())
     && at.getZ() === LUMBRIDGE_SWAMP_CAVES.z

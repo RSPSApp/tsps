@@ -70,10 +70,10 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
-  require("../plugins/modes/LeagueAreaUnlocks.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
   require("../plugins/areas/DeathsOffice.plugin").register(api);
   // The Gravestones plugin's answer, as far as Death's Office asks it here.
   api.onCustomEvent("gravestones:state", (state) => (state.inTutorial = inDeathTutorial.has(state.player)));

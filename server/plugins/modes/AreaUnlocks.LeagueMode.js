@@ -10,10 +10,6 @@
 const Common = require("./leagueareas/Common.LeagueAreaUnlocks");
 
 module.exports = {
-  name: "LeagueAreaUnlocks",
-  description: "Locks a league character to its unlocked areas, starting in Misthalin and Karamja and opening more as tasks reach each league's thresholds.",
-  members: true,
-  dependsOn: ["LeagueMode", "LeaguePoints"],
   register(api) {
     Common.init(api);
     require("./leagueareas/Unlock.LeagueAreaUnlocks")(api);

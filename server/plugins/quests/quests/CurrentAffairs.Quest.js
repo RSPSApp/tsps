@@ -790,7 +790,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
   /**
    * The aquariums are tanks in the floor; a Fish-in click sometimes failed the
    * walk-to-object reach check from a tile that item-on-object accepts
-   * ("You can't reach that!"). From beside a tank, route the click to the
+   * ("I can't reach that!"). From beside a tank, route the click to the
    * player's own tile so the handler runs, as Underground Pass' guide rope does.
    */
   function routeAquariumClick(event) {

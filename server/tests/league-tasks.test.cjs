@@ -76,9 +76,9 @@ before(async () => {
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
   // Stands in for QuestRuntime's answer.
   custom["quest:is-complete"] = [(request) => { request.complete = completedQuests.has(request.name); }];
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueTasks.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Tasks.LeagueMode").register(api);
 });
 
 /** A real player whose packets are recorded in order; logged in as a new character of `profile`. */

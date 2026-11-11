@@ -16,6 +16,11 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
 const { GameConstants } = require("../dist/game/GameConstants");
 
+test("League task modules are discovered through one plugin", () => {
+  const files = PluginManager.discoverPluginFiles(path.resolve(__dirname, "../plugins/modes"), 5);
+  assert.deepEqual(files.map(file => path.basename(file)).filter(name => name.startsWith("League")), ["LeagueMode.plugin.js"]);
+});
+
 let core;
 let worldLeague = 4; // the world's pluginConfig league:type (Trailblazer Reloaded)
 const hooks = {};
@@ -55,8 +60,8 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
 });
 
 /** A real player whose messages, varbits, varps and scripts are recorded. */

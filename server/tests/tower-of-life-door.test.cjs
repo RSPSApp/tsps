@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/tower-of-life-door.test.cjs
 //
 // Tower of Life (#3980): the tower door (21814, open leaf 21815) used to teleport the player through
-// instead of opening. The quest's door:toggle check runs first; a pass leaves the door to the Doors plugin.
+// instead of opening. The quest's door:toggle check runs first; a pass leaves the door to the Doors plugin,
+// which lets that player through and shuts it (tower-of-life-door-pass-through.test.cjs).
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -72,10 +73,12 @@ test("a player who is not admitted is turned away and the door stays shut", (t) 
   assert.ok(locAt(DOOR) && !locAt(OPEN_LEAF), "the door never opened");
 });
 
-test("after the quest the door swings open on its own tile instead of teleporting", (t) => {
+test("after the quest the door lets the player out through the doorway and shuts, instead of teleporting", (t) => {
   const { player } = actor(t, 16);
   new ObjectActionPacketListener().executeAction(player, DOOR, X, Y, 1);
-  tick(4);
-  assert.ok(locAt(OPEN_LEAF) && !locAt(DOOR), "the open leaf replaces the closed door");
-  assert.notDeepEqual([player.getLocation().getX(), player.getLocation().getY()], [X, Y + 1], "the player is not teleported through");
+  tick(1);
+  for (let i = 0; i < 6 && player.getLocation().getY() !== Y; i++) tick(1);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [X, Y], "the player walks one tile out, onto the doorway");
+  tick(6);
+  assert.ok(locAt(DOOR) && !locAt(OPEN_LEAF), "the door is shut again (a pass-through gate in Doors.plugin.js)");
 });

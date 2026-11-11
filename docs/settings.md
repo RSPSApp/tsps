@@ -102,7 +102,7 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 | Show the Store button on desktop | 181 | varbit 13037 `tli_storebutton_toggle_desktop` | the minimap's Store button (scripts 389, 920, 2414) |
 | Chatbox Mode - Set Automatically | 195 | varbit 13120 `option_chatbox_mode_autoset` | chat input (script 73) |
 | Show number of options in mouseover tooltips | 209 | varbit 13133 `mouseover_tooltips_hide_opcount` | mouseover tooltips (script 4728) |
-| Show Activity Adviser | 257 | varbit 5368 `option_content_recommender_hide`; a fresh account starts with 1, the button hidden (sent as 1 by 5 of the 6 Tutorial Island logins in the rsprox captures, and by 4,265 logins in all) | the minimap's Activity Adviser button (scripts 636, 2481); the Adviser itself is not in tsps |
+| Show Activity Adviser | 257 | varbit 5368 `option_content_recommender_hide`; a fresh account starts with 1, the button hidden (sent as 1 by 5 of the 6 Tutorial Island logins in the rsprox captures, and by 4,265 logins in all) | the minimap's Activity Adviser button (scripts 636, 2481), which opens the Adviser (`ActivityAdviser.plugin.js`) |
 | Hide minimap icons when zoomed out | 265 | varbit 14179 `option_minimap_icons_max_zoom_disabled` | `minimap_seticonzoomlimit` (6463, 6465) |
 | Precise combat level | 311 | varbit 14806 `combat_level_decimal_enabled` | combat tab |
 | Ignore List - Remove permanently banned / muted accounts daily | 313, 314 | varbits 8059 `purgeignored_permbanned_disabled`, 8060 `purgeignored_permmuted_enabled` | nothing: there are no permanent bans or mutes |
@@ -303,7 +303,8 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Defaults** are what the 703 default-state logins in the rsprox captures (rev 235+, drop-warning value 150000) have: on for 38, 40, 42, 161, 297, 420, 423; off for the rest. Thresholds: drop warning 150000 (43), loot notification 10000 (39), Alchemy warning 20000 (66).
 - **Alchemy threshold** (66) asks "Set value threshold for alchemy warnings:" (rsprox 338, 3275); `AlchemyWarningThreshold.plugin.js` saves the answer through `settings:set`.
 - **Value warnings** (`ValueWarnings.plugin.js`, shared pieces in `ValueWarning.js`). An item's worth is the Grand Exchange guide price of the unnoted item times the quantity; an untradeable item is worth nothing. A warning shows when the worth is at least the threshold.
-  - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning`, so another drop warning (the boat row 465) can use the same check.
+  - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning` with the warnings already `answered`, so it and the boat warning (465) ask in turn.
+  - Drop item warnings on boats (465, `skills/sailing/DropWarning.Sailing.js`): any item dropped on a boat's deck asks first, the captured message box "Are you sure you want to put that down? If you leave the boat, you may not be able to retrieve it." (also a mesbox chat line), then "Select an option": "Put it down.", "Put it down, and don't ask again." (sets varbit 18143 `settings_sailing_dropitem_warning` to 1, saved as the row), "Put it down, and don't ask again this session." (varbit 19114 `sailing_dropitem_warning_temp`, until logout) and "Don't drop it." (rsprox 901, 3792). The row is ticked while 18143 is 0 (struct param 1084), the default; captured logins that send 1 are players who turned it off.
   - Alchemy (65, 66): "That item is considered valuable. Really cast High Level Alchemy on it?" (rsprox 338), with the untradeable confirm's options. Untradeable items warn while 65 is on (varbit 6092 `alchemy_warning_untradeables`, 1 in 2,664 of 3,978 captured logins). Core emits `magic:alchemy-warning`.
   - Loot drop notifications (38-40): each stack an NPC drops for the player, from `npc-drops:roll`: `<col=ef1020>Valuable drop: 3 x Spider cave teleport (108,567 coins)</col>` and `<col=ef1020>Untradeable drop: Brimstone key</col>` (rsprox 788, 806 and others). Clicking 40 while 38 is off gives the row's own cache line instead.
   - Grand Exchange (297, 298): a buy offer more than 10 times the guide price, or a sell offer under 10% of it (the rows' cache text), asks before it is placed. The varbits are `option_ge_price_buy/sell_warning_disabled` (14700/14701): 1 turns the warning off (the rows' structs have param 1084, ticked while the varbit is 0), so the captured default leaves the buy warning off and the sell warning on.
@@ -311,8 +312,9 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
   - Cannon (248-250): a popup when the cannon is down to the amount (varbit 14176) or empty; the red "Your cannon is out of ammo." chat line is always sent.
   - Ours, with no capture: the number prompts for 39, 43, 249 and 449 (worded after the Alchemy one), the Grand Exchange, birdhouse and cannon wording, and that a threshold of 0 never warns.
 - **Not done**:
-  - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
+  - The respawn timer dropdowns (187, 188).
   - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+  - The Leagues stepping-stones teleport warning (500, varbit 20362 `league_teleport_dragons_stepping_stones_warning`) is saved, and the settings reader (script 6716) reads it, but nothing asks before a teleport: its destination, the Map of Alacrity's "Catacombs: Dragons stepping stones", is left out of `server/plugins/modes/data/league-map-of-alacrity.json` (no landing side the shortcut data and the Wiki's pin agree on), and there is no capture or Wiki line for the warning's wording. The Leagues category's own rows, Display Relics (127) and Display Combat Masteries (418), are done (see "Rows the client scripts already apply").
 
 ## Wilderness teleport warnings
 
@@ -350,7 +352,6 @@ Each row is a toggle in `data/settings.json`, read when its dialogue or message 
 - **Not done**:
   - The boat teleport warning for tablets, jewellery and other non-spell teleports; the row's description names teleport spells.
   - Port task cargo deposit (463), port task cargo in hold (467) and Ironman cargo hold (469) warnings: no capture or Wiki text of any of them. 469's varbit (10385) is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
-  - The Sailing drop-item warning (465), which builds on the drop warning (42/43).
 
 ## Rows that switch existing behaviour
 
@@ -459,10 +460,14 @@ open. Every shake goes through `CameraShake.send`, so its row and its group's ma
 | Number of modified stats to show (dropdown) | 150 | varbit 12375 `stat_boosts_hud_num_displays` = option; a fresh account gets 5, which live sends at login in every rsprox recording |
 | Display relative stat value | 151 | varbit 12376 `stat_boosts_hud_display_relative` |
 
+Its tooltip's "Stats restoring" and "Boosts draining" countdowns run on the client from two scripts, sent at login and every 25 ticks of the stat restore cycle, as live does:
+
+- `stat_boosts_hud_update_restore_up_timer` (4517): `(0, 100, ticks to the next restore)` from the core's restore timer (`Player.processStatRestoration`). Rapid Restore's own timer goes out as `(1, 100, 100)` when the prayer starts and at each of its restores, and `(1, 0, 0)` when it stops.
+- `stat_boosts_hud_update_restore_down_timer` (4518): `(period, ticks to the next boost drain)` from the Potions plugin's boost cycle. The period is 150 while Preserve is on, and a player with nothing boosted gets a full period.
+
 **Normal health overlay** (row 111, varbit 12390 `hpbar_hud_standard_disabled`, on by default: no capture sets it). It is the boss health HUD (303) in standard mode (`hpbar_hud_boss` 0), driven by `BossHud.plugin.js` for any NPC no boss plugin drives. A player's attack roll on an NPC shows it: `hpbar_hud_npc`, its hitpoints and maximum, the usual colours, open script 2376 and fade-in 2887. Each hit on it updates the hitpoints. 8 ticks after the player's last attack the HUD fades out (2889) and clears 4 ticks later. This matches rsprox recordings 1382, 2148 and 3979 (a Falador guard, a Canifis man, a calf). The Wiki gives the option to the mobile and Steam clients only, which is why desktop recordings never show it. A boss HUD always wins: an NPC id any boss event has named never gets the standard HUD, and a boss show replaces it. The client's opponent information panel steps aside for either mode while that mode's setting is on.
 
 - **Not done**:
-  - The overlay's stat restore timers (scripts 4517 and 4518, which live sends every 25 ticks) aren't sent, so its restore countdown doesn't run.
   - The normal health overlay fades in once when it opens. Live runs the fade-in again on the ticks after each hit.
 
 ## Buff timers read from a var
@@ -549,11 +554,13 @@ The server's item examines all go through `examineItem` (`game/content/ExaminePr
 | --- | --- | --- | --- |
 | Player Trade options | 312 | varbit 6580 `tradeoption_disabled` | while 1, the browser client leaves "Trade with" off the player menu (`client/render/render/interact/playerMenu.ts`) |
 | Player Report options | 372 | varbit 1334 `rightclick_report_abuse_disabled` | while 1, `ReportAbuse.plugin.js` sends player option 8 empty instead of "Report", at login and on the row's click; a slot 8 click is then not a report |
-| Ctrl+click to invert run mode (dropdown) | 207 | varbit 13132 `runinvert_mode` = option | options from enum 4074: 0 Never, 1 Walk -> Run Only, 2 Run -> Walk Only, 3 Always. A Ctrl-click walk (`walk` in `net/NetworkBuilder.ts`) inverts the run mode only in the directions the option allows |
+| Ctrl+click to invert run mode (dropdown) | 207 | varbit 13132 `runinvert_mode` = option | options from enum 4074: 0 Never, 1 Walk -> Run Only, 2 Run -> Walk Only, 3 Always. A Ctrl-click walk, or a Ctrl-click on an NPC, object, ground item or player (their op, use-on and spell-on packets), inverts the run mode only in the directions the option allows (`clickRunOverride` in `net/NetworkBuilder.ts`) |
 
-Live sends the player ops at login after the varbits: with 1334 at 1, `set_player_op` 8 is null, otherwise "Report" (rsprox 238/4238, 229/2375); 1334 is 1 at login in 1,813 recordings. `runinvert_mode` is 3 (Always) at login in all 4,281 recordings that send it, so a fresh account starts at Always (`default` in settings.json). No capture changes `tradeoption_disabled`, and none shows the option toggled in game, so sending the option on the click is ours. Tests: `tests/report-abuse.test.cjs`, `tests/run-invert-mode.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/player-follow-menu.test.ts`.
+Live sends the player ops at login after the varbits: with 1334 at 1, `set_player_op` 8 is null, otherwise "Report" (rsprox 238/4238, 229/2375); 1334 is 1 at login in 1,813 recordings. `runinvert_mode` is 3 (Always) at login in all 4,281 recordings that send it, so a fresh account starts at Always (`default` in settings.json). No capture changes `tradeoption_disabled`, and none shows the option toggled in game, so sending the option on the click is ours. Tests: `tests/report-abuse.test.cjs`, `tests/run-invert-mode.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/player-follow-menu.test.ts`, `tests/ctrl-click-interaction-run.test.cjs`.
 
-- **Not done**: Ctrl-clicks on NPCs, objects, ground items and players don't invert the run mode at all, whatever the option: their packets' Ctrl byte isn't read.
+The row's text (struct param 1096) covers both: holding Ctrl "when clicking to walk or interact" temporarily inverts the run mode. A walk click's inversion is `MovementQueue`'s run override for that path only. An interaction click's is its click run override: it takes effect when the click starts its walk, lasts through the interaction's re-paths (a walking NPC, a followed player, a fight's chase), and ends at the end of the first turn the player is idle (no route, follow, fight or walk-to left), or at the next click. A retaliation chase isn't a click, so it always follows the run setting. The captures carry the Ctrl byte (`ctrl=true` on `opnpc2` and `oploc1`, rsprox 227/1851 and 227/572) only on clicks that walk nowhere, so how long the inversion lasts while chasing is ours.
+
+- **Not done**: the browser client's own loc, ground item and use-on packets (`LOC_INTERACT`, `GROUND_ITEM_ACTION`, `INVENTORY_USE_ON`) and boat clicks carry no Ctrl byte, so they always follow the run setting. Menu clicks in both clients send the op packets above.
 
 ## Mouse, hotkeys and the World Switcher
 

@@ -2,11 +2,12 @@
 
 The Leagues game mode (https://oldschool.runescape.wiki/w/Leagues) on this server: a league
 character per account, League Points, tasks, ranks, relic tiers and relics, area unlocks, combat
-masteries and the league screens. Plugins: `plugins/modes/LeagueMode.plugin.js` (the profile,
+masteries and the league screens. The `LeagueMode` plugin switch controls all of these.
+`plugins/modes/LeagueMode.plugin.js` attaches the base module (the profile,
 its league, XP rate, the tiers' passives, journal tab, Summary / Info / Rank, ranks, statistics
-and shared content), `LeaguePoints.plugin.js` (points), `LeagueTasks.plugin.js` (the task catalog, triggers and list), `LeagueRelics.plugin.js` (tiers and
-relics), `LeagueAreaUnlocks.plugin.js` (areas), `LeagueCombatMasteries.plugin.js` (Raging
-Echoes' combat masteries) and `LeaguePacts.plugin.js` (Demonic Pacts' pact tree); data in `plugins/modes/data/leagues.json`, `league-ranks.json`,
+and shared content), `Points.LeagueMode.js` (points), `Tasks.LeagueMode.js` (the task catalog, triggers and list), `Relics.LeagueMode.js` (tiers and
+relics), `AreaUnlocks.LeagueMode.js` (areas), `CombatMasteries.LeagueMode.js` (Raging
+Echoes' combat masteries) and `Pacts.LeagueMode.js` (Demonic Pacts' pact tree); data in `plugins/modes/data/leagues.json`, `league-ranks.json`,
 `league-relics.json`, `league-areas.json`, `league-boosted-drops.json` and
 `league-combat-masteries.json`, `league-tasks.json` (generated), `league-task-list.json` and
 `league-task-triggers.json`.
@@ -82,44 +83,44 @@ An account can own several characters ([character slots](../../docs/character-sl
 | --- | --- | --- |
 | `journal:tab-mounted` | `{ player, groupId, tabIndex }` (SideJournalDefaults) | LeagueMode listens |
 | `league:profile` | `{ player } -> { league: type \| null }` | LeagueMode |
-| `league:login` | `{ player, league }` after a league profile's login | LeaguePoints, LeagueRelics listen |
-| `league:highest-tier` | `{ player } -> { tier }` (0-based, -1 none) | LeagueRelics |
-| `league:award-task` | `{ player, id, points, name } -> { awarded }` | LeaguePoints (once per id) |
-| `league:points` | `{ player } -> { points, tasks }` | LeaguePoints |
-| `league:saved-points` | `{ save } -> { points, tasks }` (an offline league character's save) | LeaguePoints |
+| `league:login` | `{ player, league }` after a league profile's login | Points, Relics listen |
+| `league:highest-tier` | `{ player } -> { tier }` (0-based, -1 none) | Relics |
+| `league:award-task` | `{ player, id, points, name } -> { awarded }` | Points (once per id) |
+| `league:points` | `{ player } -> { points, tasks }` | Points |
+| `league:saved-points` | `{ save } -> { points, tasks }` (an offline league character's save) | Points |
 | `league:account-points` | `{ player } -> { leagues, total }` (a main character's league points, by type) | LeagueMode (Records) |
 | `league:award-renown` / `league:spend-renown` | `{ player, amount } -> { awarded }` / `{ spent }` (Shattered Relics' Sage's Renown) | LeagueMode (Shattered) |
 | `league:renown` | `{ player } -> { renown }` | LeagueMode (Shattered) |
 | `league:grant-fragment` | `{ player, id, xp? }` owns a Shattered Relics fragment | LeagueMode (Fragments) |
 | `league:unlock-skill` | `{ player, skill }` unlocks a Shattered Relics skill for free | LeagueMode (Unlocks) |
 | `league:unlocks` | `{ player } -> { skills, bosses, quests }` | LeagueMode (Unlocks) |
-| `league:open-tasks` / `league:open-fragments` / `league:open-unlocks` | `{ player }` from Shattered Relics' side panel | LeagueTasks (#1358) / Fragments / Unlocks |
-| `league:completed-tasks` | `{ player } -> { ids }` | LeaguePoints |
-| `league:complete-task` | `{ player, id } -> { found, completed }` (a catalog task, by id) | LeagueTasks |
-| `league:points-changed` | `{ player, points, previous, tasks, previousTasks }` | LeagueMode (journal), LeagueTasks, LeagueRelics, LeagueAreaUnlocks listen |
-| `league:has-relic` | `{ player, relic } -> { active }` | LeagueRelics |
-| `league:masteries` | `{ player } -> { league, masteries: { melee, ranged, magic }, passiveTier, points: { earned, spent, available }, challenges }` | LeagueCombatMasteries |
+| `league:open-tasks` / `league:open-fragments` / `league:open-unlocks` | `{ player }` from Shattered Relics' side panel | Tasks (#1358) / Fragments / Unlocks |
+| `league:completed-tasks` | `{ player } -> { ids }` | Points |
+| `league:complete-task` | `{ player, id } -> { found, completed }` (a catalog task, by id) | Tasks |
+| `league:points-changed` | `{ player, points, previous, tasks, previousTasks }` | LeagueMode (journal), Tasks, Relics, Area unlocks listen |
+| `league:has-relic` | `{ player, relic } -> { active }` | Relics |
+| `league:masteries` | `{ player } -> { league, masteries: { melee, ranged, magic }, passiveTier, points: { earned, spent, available }, challenges }` | Combat masteries |
 | `league:mastery-point` | `{ player, challenge, earned }` after a Combat Mastery point | - |
 | `league:mastery-unlocked` | `{ player, style, tier, key, passiveUnlocked }` after an unlock | - |
-| `stats:heal` | `{ player, previous, amount, hitpoints }` before any heal (core); `amount` may change | LeagueCombatMasteries |
-| `skills:restore` | `{ player, skill, amount, max }` before a stat restore or boost (core); `amount` may change | LeagueCombatMasteries |
-| `combat:hit-rolled` | `{ attacker, target, combatType, damage, minimum, maximum }` after a hit's damage roll, before defences (core); `damage` may change | LeagueCombatMasteries |
-| `league:relics` | `{ player } -> { league, chosen }` (tier index -> slot) | LeagueRelics |
-| `league:content-rows` | `{ player, league, base, structs, enums, dbRows }`: units push the rows the client lacks | LeagueRelics (Catalog), LeagueTasks (Catalog), LeagueMode (Rank), LeagueAreaUnlocks answer |
+| `stats:heal` | `{ player, previous, amount, hitpoints }` before any heal (core); `amount` may change | Combat masteries |
+| `skills:restore` | `{ player, skill, amount, max }` before a stat restore or boost (core); `amount` may change | Combat masteries |
+| `combat:hit-rolled` | `{ attacker, target, combatType, damage, minimum, maximum }` after a hit's damage roll, before defences (core); `damage` may change | Combat masteries |
+| `league:relics` | `{ player } -> { league, chosen }` (tier index -> slot) | Relics |
+| `league:content-rows` | `{ player, league, base, structs, enums, dbRows }`: units push the rows the client lacks | Relics (Catalog), Tasks (Catalog), LeagueMode (Rank), Area unlocks answer |
 | `league:send-content` | `{ player }`: send the content payload again (before an interface opens) | LeagueMode (Content) |
 | `league:rank` | `{ player } -> { rank, name, next }` (ranks reached 0-7, the next threshold) | LeagueMode (Rank) |
 | `league:statistics` | `{ player } -> { counters }` (the summary's rows by name) | LeagueMode (Statistics) |
 | `league:joined` | `{ player, league }` the first time a character joins its league | LeagueMode (Tutorial) listens |
-| `league:area-unlocked` | `{ player, league, area, slot }` when an area is unlocked | LeagueAreaUnlocks (#1352) emits; Tutorial listens |
+| `league:area-unlocked` | `{ player, league, area, slot }` when an area is unlocked | Area unlocks (#1352) emits; Tutorial listens |
 | `league:tutorial-stage` | `{ player } -> { stage }` (league_tutorial_completed while a tutorial runs) | LeagueMode (Tutorial) |
 | `screen-highlight:show` / `:close` / `:finished` | a walkthrough in an interface (see Tutorial) | ScreenHighlight |
 | `interface:opened` | `{ player, groupId, targetUid, type }` whenever a group is mounted (core, PacketSender) | Tutorial listens |
 | `welcome-screen:shown` | `{ player }` when the welcome screen is up | Tutorial, Welcome listen |
-| `league:areas` | `{ player } -> { league, unlocked: [area ids], next: { slot, tasks } \| null, available }` | LeagueAreaUnlocks |
-| `league:area-at` | `{ x, y, player \| league } -> { area: id \| null, name }` | LeagueAreaUnlocks |
+| `league:areas` | `{ player } -> { league, unlocked: [area ids], next: { slot, tasks } \| null, available }` | Area unlocks |
+| `league:area-at` | `{ x, y, player \| league } -> { area: id \| null, name }` | Area unlocks |
 | `league:near-bank` | `{ player, distance? } -> { near }` (a bank loc or banker within `distance`, Shattered Relics' `bank.distance` unless given) | LeagueMode (NearBank) |
-| `league:teleport-cast` | `{ player } -> { cast: { steps, lockTick, landTick } \| null }` (the league's area-teleport cast, `teleportCast`) | LeagueAreaUnlocks |
-| `league:relic-triggered` | `{ player, relic }` when a once-in-a-while relic fires (Undying Retribution, Last Stand) | LeagueRelics emits |
+| `league:teleport-cast` | `{ player } -> { cast: { steps, lockTick, landTick } \| null }` (the league's area-teleport cast, `teleportCast`) | Area unlocks |
+| `league:relic-triggered` | `{ player, relic }` when a once-in-a-while relic fires (Undying Retribution, Last Stand) | Relics emits |
 | `ironman:set-mode` | `{ player, mode } -> { handled }` (the Ironman plugin's) | LeagueMode emits at a league login |
 | `ironman:change-mode` | `{ player, from, to, allowed, reason }` (the Ironman plugin asks before a setup choice) | LeagueMode refuses for a league character |
 
@@ -687,7 +688,7 @@ A quest the character had started keeps its quest items when a pack completes it
 
 ## Relics
 
-`LeagueRelics.plugin.js`, data `plugins/modes/data/league-relics.json`: eight tiers a league,
+`Relics.LeagueMode.js`, data `plugins/modes/data/league-relics.json`: eight tiers a league,
 each with a point cost, a passive and three relics (Wiki); a tier's pick is permanent. A
 character's picks live in `league:relics` (tier index -> slot 1-3).
 
@@ -1275,7 +1276,7 @@ above: every league character is a standard Ironman.
 
 ## Combat masteries (Raging Echoes)
 
-`LeagueCombatMasteries.plugin.js`, data `plugins/modes/data/league-combat-masteries.json`
+`CombatMasteries.LeagueMode.js`, data `plugins/modes/data/league-combat-masteries.json`
 (https://oldschool.runescape.wiki/w/Raging_Echoes_League/Combat_Masteries): three styles of six
 tiers, each needing the previous tier of its style (`requires` in the data), paid with Combat
 Mastery points; the first time any style reaches a tier, a passive for every style comes with it.
@@ -1363,7 +1364,7 @@ not recorded, so there are none.
 
 ## Demonic Pacts
 
-`LeaguePacts.plugin.js` (units in `leaguepacts/`), data `plugins/modes/data/league-pacts.json`:
+`Pacts.LeagueMode.js` (units in `leaguepacts/`), data `plugins/modes/data/league-pacts.json`:
 Demonic Pacts' pact tree (Wiki Demonic_Pacts_League/Demonic_Pacts). Only a Demonic Pacts
 character has it; other plugins ask `league:pacts` { player } (pacts, earned, spendable, resets)
 and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> value).
@@ -1452,7 +1453,7 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
 
 ## Areas
 
-`LeagueAreaUnlocks.plugin.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.
+`AreaUnlocks.LeagueMode.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.
 A league character starts in Misthalin and Karamja (the Wiki's start; live unlocks Karamja free
 during its tutorial, which this server has none of) and picks up to three more areas as its
 completed tasks reach the league's thresholds: Trailblazer Reloaded 60, 140 and 300 tasks from
@@ -1593,7 +1594,7 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
 
 ## Tasks
 
-`LeagueTasks.plugin.js` with its units in `plugins/modes/leaguetasks/`: the catalog of each league's
+`Tasks.LeagueMode.js` with its units in `plugins/modes/leaguetasks/`: the catalog of each league's
 tasks, the triggers that award them and the cache's task list interface. A completed task is a key
 of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's.
 

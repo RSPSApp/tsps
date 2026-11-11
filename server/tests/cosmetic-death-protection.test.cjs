@@ -23,7 +23,8 @@ const ARMADYL_GODSWORD_OR = 20368;
 const VOLCANIC_ABYSSAL_WHIP = 12773;
 const ARCEUUS_GRACEFUL_HOOD = 13579;
 const KEPT_STATE = 323;
-const LOST_STATE = 1991;
+// A PvM death sends what it does not keep to the grave.
+const GRAVE_STATE = 367;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -177,19 +178,19 @@ test('the Items Kept on Death screen marks the protected item kept, and the PvP 
   assert.equal(sent.args[5], 3, 'the three kept slots stay the three most valuable');
   assert.deepEqual(sent.args.slice(6, 9).map((id) => new Item(id, 1).getDefinition().getName()), TOP_THREE);
   assert.equal(stateOf(RUNE_DEFENDER_T), KEPT_STATE);
-  assert.equal(stateOf(I.RUNE_PLATEBODY), LOST_STATE);
+  assert.equal(stateOf(I.RUNE_PLATEBODY), GRAVE_STATE);
 
   handlers.get((4 << 16) | 12)({ player, action: 3 }); // Wilderness level 21
-  assert.equal(stateOf(RUNE_DEFENDER_T), LOST_STATE, 'a Wilderness death does not protect it');
+  assert.equal(stateOf(RUNE_DEFENDER_T), GRAVE_STATE, 'a Wilderness death does not protect it');
   handlers.get((4 << 16) | 12)({ player, action: 3 }); // back to 0
   assert.equal(stateOf(RUNE_DEFENDER_T), KEPT_STATE);
 
   screen(true);
-  assert.equal(stateOf(RUNE_DEFENDER_T), LOST_STATE, 'waived, it falls to the grave');
+  assert.equal(stateOf(RUNE_DEFENDER_T), GRAVE_STATE, 'waived, it falls to the grave');
 
   const inWilderness = { ...fakePlayer({ items: loadout(), location: WILDERNESS, sender }), busy: () => false, setInterfaceId() {}, getInterfaceId: () => 4 };
   handlers.get((387 << 16) | 5)({ player: inWilderness });
-  assert.equal(stateOf(RUNE_DEFENDER_T), LOST_STATE, 'opened in the Wilderness, the screen shows the death there');
+  assert.equal(stateOf(RUNE_DEFENDER_T), GRAVE_STATE, 'opened in the Wilderness, the screen shows the death there');
   assert.equal(sent.args[5], 3);
 });
 

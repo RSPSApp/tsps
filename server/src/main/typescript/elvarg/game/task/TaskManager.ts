@@ -178,7 +178,13 @@ export class TaskManager {
             }
         }
     }
-        
+
+    /** Whether a key still has a running WALK_TO interaction task (walking to an NPC, a loc, ...). */
+    public static hasWalkToTask(key: Object): boolean {
+        const matches = (task: Task) => task.isRunning() && task.key === key && task.type === TaskType.WALK_TO;
+        return TaskManager.pendingTasks.toArray().some(matches) || TaskManager.activeTasks.some(matches);
+    }
+
     public static getTaskAmount(): number {
             return (TaskManager.pendingTasks.length + TaskManager.activeTasks.length);
     }

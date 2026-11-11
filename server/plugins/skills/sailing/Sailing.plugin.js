@@ -5,6 +5,7 @@ module.exports = {
   description: "Sailing boats, travel, shipyards, crews, port tasks, sea charting and combat.",
   members: true,
   register(api) {
+    require("./DropWarning.Sailing").register(api);
     require("./Anchor.Sailing").register(api);
     require("./BarracudaTrials.Sailing").register(api);
     require("./BoatSelection.Sailing").register(api);

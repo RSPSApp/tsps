@@ -15,7 +15,7 @@
  * plugin). Ours: the prompts' wording, from the Alchemy row's "Set value threshold for alchemy
  * warnings:".
  *
- *   hear "item:drop-warning" { player, item, itemId, slot, warned, proceed }
+ *   hear "item:drop-warning" { player, item, itemId, slot, answered, warned, proceed(name) }
  *   hear "magic:alchemy-warning" { player, item, itemId, spellId, high, text }
  *   hear "npc-drops:roll" { player, npc, drops }
  */
@@ -26,6 +26,8 @@ const LOOT_VALUE = 5400;
 const LOOT_UNTRADEABLES = 5402;
 const DROP_WARNING_ON = 5411;
 const DROP_WARNING_VALUE = 5412;
+/** This warning's name in "item:drop-warning"'s `answered`. */
+const DROP_WARNING = "value";
 const ALCHEMY_VALUE = 6091;
 const ALCHEMY_UNTRADEABLES = 6092;
 
@@ -65,7 +67,7 @@ function settingClicked(request) {
 
 function dropWarning(request) {
   const { player, item } = request;
-  if (request.warned || varbit(player, DROP_WARNING_ON) === 0) return;
+  if (request.warned || request.answered?.includes(DROP_WARNING) || varbit(player, DROP_WARNING_ON) === 0) return;
   const value = Value.itemValue(pluginApi.core, item.getId(), item.getAmount());
   if (!Value.reaches(value, varbit(player, DROP_WARNING_VALUE))) return;
   request.warned = true;
@@ -75,7 +77,7 @@ function dropWarning(request) {
     title: `${item.getDefinition().getName()}: Really put it down?`,
     yes: "Put it down.",
     no: "No, don't put it down.",
-    proceed: request.proceed,
+    proceed: () => request.proceed(DROP_WARNING),
   });
 }
 

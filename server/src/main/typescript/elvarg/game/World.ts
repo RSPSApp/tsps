@@ -309,6 +309,7 @@ export class World {
         nextLocation: Location | null | undefined
     ): void {
         if (!player || !previousLocation || !nextLocation || previousLocation.equals(nextLocation)) return;
+        player.claimTileOccupancy?.();
         World.removePlayerFromTileOccupants(player, previousLocation);
         World.addPlayerToTileOccupants(player, nextLocation);
         if ((previousLocation.getX() >> 6) !== (nextLocation.getX() >> 6)
@@ -328,14 +329,19 @@ export class World {
         location: Location | null | undefined,
         ignoredPlayer: Player | null = null,
         size = 1,
-        privateArea?: any
+        privateArea?: any,
+        // NPC movement only: a player who has not moved since logging in does not block NPCs yet
+        // (live; LostCity PLAYER_OCC). Other callers (a rolling block, arena placement) still
+        // see every player standing there.
+        blockingNpcsOnly = false
     ): boolean {
         if (!location) return false;
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 if (World.playerTileOccupants.get(key)?.some((player) => player && player !== ignoredPlayer &&
-                    (privateArea === undefined || player.getPrivateArea() === privateArea))) {
+                    (privateArea === undefined || player.getPrivateArea() === privateArea) &&
+                    (!blockingNpcsOnly || player.isOccupyingTile?.() !== false))) {
                     return true;
                 }
             }
@@ -1209,6 +1215,8 @@ export class World {
                 // Bots must not be dropped by a host-imposed human player cap: they
                 // share the list but never take a human slot.
                 NpcSpawnDefinitionLoader.activateNear(player.getLocation(), player.getNpcViewDistance());
+                // NPCs walk through a player who has not moved since logging in.
+                player.deferTileOccupancy?.();
                 World.players.add(player, player.isPlayerBot?.() === true);
                 if (
                     (player.isUnwatchedBot?.() ?? player.isPlayerBot?.()) !== true &&

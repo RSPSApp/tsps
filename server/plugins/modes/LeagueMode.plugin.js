@@ -1,15 +1,4 @@
-/**
- * Leagues (https://oldschool.runescape.wiki/w/Leagues): a world that runs a league (world.json
- * `"pluginConfig": { "league:type": 4 }`) logs every account into its league character, a save
- * of its own (docs/leagues.md). This plugin gives that character its league (data/leagues.json), its XP
- * rate, the journal's Leagues tab and its Summary / Info / Rank panels, its rank and the
- * summary's statistics, the relic tiers' passives, and sends the structs and enums its screens need (Content). A main
- * character gets the main game's records (trophies, statistics, rankings and firsts) and the
- * Leagues Reward Shop. Points are LeaguePoints.plugin.js, relics LeagueRelics.plugin.js; they
- * talk over the `league:*` events listed in the docs. Apart from the records and the shop, a plain
- * world's characters see none of it.
- */
-const Common = require("./league/Common.LeagueMode");
+"use strict";
 
 // The leagues the data file names, so the option's list follows the data.
 const LEAGUE_OPTIONS = [
@@ -17,13 +6,20 @@ const LEAGUE_OPTIONS = [
   ...Object.entries(require("./data/leagues.json").leagues).map(([type, league]) => ({ value: Number(type), label: league.name })),
 ];
 
+function registerLateModules(api) {
+  // Preserve the old second dependency pass so activity handlers keep priority.
+  require("./AreaUnlocks.LeagueMode").register(api);
+  require("./CombatMasteries.LeagueMode").register(api);
+  require("./Pacts.LeagueMode").register(api);
+}
+
 module.exports = {
   name: "LeagueMode",
-  description: "Runs a world as a league: gives each account a league character, the Leagues tab, rank and statistics panels, XP rate and the reward shop.",
+  description: "Leagues characters, progression, tasks, relics, region unlocks, combat masteries, Demonic Pacts and rewards.",
   config: {
     "league:type": {
       type: "enum", label: "League", default: 0, values: LEAGUE_OPTIONS,
-      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change.",
+      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Restart to change.",
     },
     "league:start": {
       type: "date", label: "League start date", defaultText: "Not set",
@@ -36,33 +32,10 @@ module.exports = {
   },
   members: true,
   register(api) {
-    Common.init(api);
-    require("./league/Account.LeagueMode")(api);
-    require("./league/Content.LeagueMode")(api);
-    require("./league/Journal.LeagueMode")(api);
-    require("./league/Modals.LeagueMode")(api);
-    require("./league/Panels.LeagueMode")(api);
-    require("./league/Rank.LeagueMode")(api);
-    require("./league/Statistics.LeagueMode")(api);
-    require("./league/Tutorial.LeagueMode")(api);
-    require("./league/Welcome.LeagueMode")(api);
-    require("./league/Records.LeagueMode")(api);
-    require("./league/Rewards.LeagueMode")(api);
-    require("./league/Passives.LeagueMode")(api);
-    require("./league/BoostedDrops.LeagueMode")(api);
-    require("./league/ShopStock.LeagueMode")(api);
-    require("./league/Shattered.LeagueMode")(api);
-    require("./league/Fragments.LeagueMode")(api);
-    require("./league/FragmentDrops.LeagueMode")(api);
-    require("./league/FragmentEffects.LeagueMode")(api);
-    require("./league/FragmentGathering.LeagueMode")(api);
-    require("./league/FragmentProduction.LeagueMode")(api);
-    require("./league/FragmentSkilling.LeagueMode")(api);
-    require("./league/FragmentMinigames.LeagueMode")(api);
-    require("./league/FragmentSage.LeagueMode")(api);
-    require("./league/NearBank.LeagueMode")(api);
-    require("./league/Unlocks.LeagueMode")(api);
-    require("./league/Sage.LeagueMode")(api);
-    require("./league/Commands.LeagueMode")(api);
+    require("./Base.LeagueMode").register(api);
+    require("./Points.LeagueMode").register(api);
+    require("./Relics.LeagueMode").register(api);
+    require("./Tasks.LeagueMode").register(api);
   },
+  registerDeferred: registerLateModules,
 };

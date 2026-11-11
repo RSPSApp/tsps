@@ -484,6 +484,61 @@ function processBoostDecay(player) {
   }
 }
 
+/** `stat_boosts_hud_update_restore_down_timer`: (period, ticks left) of the boost drain cycle. */
+const RESTORE_DOWN_TIMER_SCRIPT = 4518;
+const BOOST_DECAY_TICKS = BOOST_DECAY_MS / 600;
+const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / 600;
+
+/**
+ * The modified stats overlay's "Boosts draining" timer, sent alongside the restore timer: the ticks
+ * left in the boost cycle, over a 150-tick period while Preserve is on. With nothing boosted it
+ * shows a full period.
+ */
+function sendBoostDrainTimer({ player }) {
+  if (player?.isPlayerBot?.()) return;
+  const { PrayerHandler } = pluginApi.core;
+  const preserve = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE);
+  const stretched = Boolean(player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED));
+  const period = preserve || stretched ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
+  const now = Date.now();
+  const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  // An area holding boosts (Rogues' Den) pauses the cycle: nothing is draining there.
+  const pause = { player, allowed: true };
+  pluginApi.emitCustomEvent("stats:boost-decay", pause);
+  let remaining = period;
+  if (pause.allowed && hasDecayingBoost(player) && Number.isFinite(nextDecayAt) && nextDecayAt > 0) {
+    let decayAt = nextDecayAt;
+    let cycleStretched = stretched;
+    // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
+    if (decayAt <= now) {
+      if (preserveStretchesCycle(player, now)) {
+        decayAt += PRESERVE_EXTENSION_MS;
+        cycleStretched = true;
+      } else {
+        decayAt += BOOST_DECAY_MS * (Math.floor((now - decayAt) / BOOST_DECAY_MS) + 1);
+        cycleStretched = false;
+      }
+    }
+    // A cycle Preserve is going to stretch ends 30 seconds later.
+    if (!cycleStretched && preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
+      decayAt += PRESERVE_EXTENSION_MS;
+    }
+    remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);
+  }
+  player.getPacketSender().sendClientScript(RESTORE_DOWN_TIMER_SCRIPT, period, remaining);
+}
+
+/** Whether a stat sits above its resting level on the boost cycle (not Hitpoints, Prayer or a held boost). */
+function hasDecayingBoost(player) {
+  const pinned = timedEffectSkillIndexes(player);
+  for (const skill of Skill.values()) {
+    const index = skill.getIndex();
+    if (index === Skill.HITPOINTS.getIndex() || index === Skill.PRAYER.getIndex() || pinned.has(index)) continue;
+    if (getCurrentLevel(player, skill) > getSkillManager(player).getRestingLevel(skill)) return true;
+  }
+  return false;
+}
+
 /** Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends. */
 function preserveStretchesCycle(player, now) {
   if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
@@ -1910,7 +1965,7 @@ module.exports = {
     resumePrayerRegenerationTimer,
     clearDivineOnDeath,
     applyRankFrothyPotion, applyFoulChunkyPotion, applyRancidSlimyPotion, applyJarOfCongealedBlood,
-    processBoostDecay, notePreserveActivated, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
+    processBoostDecay, notePreserveActivated, sendBoostDrainTimer, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
     processStamina, staminaDrainModifier, staminaStatus,
     findPotionEntry: (itemId) => POTION_BY_ITEM_ID.get(itemId) ?? null,
     registerCopy,
@@ -1944,6 +1999,7 @@ module.exports = {
     api.onCustomEvent("potions:register", registerContentPotion);
     api.onCustomEvent("potions:share", sharePotion);
     api.onCustomEvent("prayer:activated", notePreserveActivated);
+    api.onCustomEvent("stats:restore-timer-sent", sendBoostDrainTimer);
     pluginApi = api;
     initDragonfireProtectionCoreAccess(api);
     PERSISTED_ATTRIBUTES.forEach((key) => api.persistAttribute(key));

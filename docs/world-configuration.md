@@ -318,7 +318,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | --- | --- | --- | --- |
 | `league:end` | date | *Not set* | **League end date.** When the league ends, as YYYY-MM-DD. The welcome message then shows how many days remain. |
 | `league:start` | date | *Not set* | **League start date.** When the league began, as YYYY-MM-DD. Sets the client's league clock. |
-| `league:type` | enum: `0` (Not a league world), `1` (Leagues I - Twisted), `2` (Leagues II - Trailblazer), `3` (Leagues III - Shattered Relics), `4` (Leagues IV - Trailblazer Reloaded), `5` (Leagues V - Raging Echoes), `6` (Leagues VI - Demonic Pacts) | `0` | **League.** Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change. |
+| `league:type` | enum: `0` (Not a league world), `1` (Leagues I - Twisted), `2` (Leagues II - Trailblazer), `3` (Leagues III - Shattered Relics), `4` (Leagues IV - Trailblazer Reloaded), `5` (Leagues V - Raging Echoes), `6` (Leagues VI - Demonic Pacts) | `0` | **League.** Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Restart to change. |
 
 #### Plugin area `npcs` (`pluginConfig`)
 
@@ -496,6 +496,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SaveHistory` | SaveHistory | commands | yes | Owner commands ::snapshots and ::rollback, which list a player's saved copies and restore an earlier one. |
 | `SeasonalRares` | SeasonalRares | events | yes | Hands out discontinued seasonal rares during the world's own event windows, with ::rares to list what a player can claim. |
 | `AcceptAid` | AcceptAid | interface | yes | The Accept Aid setting that controls whether Lunar spells, cures and shared boosts can affect the player, refused for Ironmen. |
+| `ActivityAdviser` | ActivityAdviser | interface | yes | The Activity Adviser: the minimap button opens its quest suggestions, built from the cache quest table. |
 | `AlchemyWarningThreshold` | AlchemyWarningThreshold | interface | yes | Settings option for the item value above which casting Alchemy asks first. |
 | `AntiDragDelay` | AntiDragDelay | interface | yes | Settings option for the Anti Drag delay, asked as a number of milliseconds. |
 | `BankPin` | BankPin | interface | yes | The Bank PIN: the Banker settings, the keypad, the bank lock, and the guard on other PIN-protected actions. |
@@ -625,6 +626,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PharaohsSceptre` | PharaohsSceptre | items | yes | Adds the Pharaoh's sceptre: teleports to the great pyramids, charges, Desert Diary capacity and recharging at the guardian mummy. (members only) |
 | `PhoenixNecklace` | PhoenixNecklace | items | yes | Makes a worn Phoenix necklace heal 30% of Hitpoints and break when a hit leaves the wearer at 20% or less, except where food is banned. (members only) |
 | `Potions` | Potions | items | yes | Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers. |
+| `QuestRewardDeathCoins` | QuestRewardDeathCoins | items | yes | Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death. (members only) |
 | `RatBoneWeapons` | RatBoneWeapons | items | yes | Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus. (members only) |
 | `RevenantWeapons` | RevenantWeapons | items | yes | Adds Viggora's chainmace, the Ursine chainmace and Craw's bow: revenant ether charging, Wilderness damage bonus, uncharging and dismantling. (members only) |
 | `RingOfElements` | RingOfElements | items | yes | Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option. (members only) |
@@ -722,13 +724,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Wintertodt` | Wintertodt | minigames | yes | Adds Wintertodt: the world-wide round behind the Doors of Dinh, the camp outside and its reward cart. (members only) |
 | `FreeToPlay` | FreeToPlay | modes | no | Switches this world to free-to-play. The spawn must be inside a free-to-play area. |
 | `Ironman` | Ironman | modes | yes | Adds Ironman, Ultimate and Hardcore Ironman accounts, chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command. |
-| `LeagueAreaUnlocks` | LeagueAreaUnlocks | modes | yes | Locks a league character to its unlocked areas, starting in Misthalin and Karamja and opening more as tasks reach each league's thresholds. (members only) |
-| `LeagueCombatMasteries` | LeagueCombatMasteries | modes | yes | Adds Raging Echoes combat masteries: three styles of six tiers bought with points from combat challenges, and the passives they grant. (members only) |
-| `LeagueMode` | LeagueMode | modes | yes | Runs a world as a league: gives each account a league character, the Leagues tab, rank and statistics panels, XP rate and the reward shop. (members only) |
-| `LeaguePacts` | LeaguePacts | modes | yes | Adds the Demonic Pacts tree of over 130 combat-boost nodes bought with pact points earned from pact tasks, with resets. (members only) |
-| `LeaguePoints` | LeaguePoints | modes | yes | Tracks League Points as the total of a league character's completed tasks, and announces awards and changes to the other league plugins. (members only) |
-| `LeagueRelics` | LeagueRelics | modes | yes | Adds league relics: eight tiers unlocked with League Points, three relics per tier, chosen permanently through the relic interface. (members only) |
-| `LeagueTasks` | LeagueTasks | modes | yes | Adds the league task lists, awarding League Points from kills, levels, quests and deeds, with the task interface opened from the side panel. (members only) |
+| `LeagueMode` | LeagueMode | modes | yes | Leagues characters, progression, tasks, relics, region unlocks, combat masteries, Demonic Pacts and rewards. (members only) |
 | `PvpMode` | PvpMode | modes | yes | Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests. |
 | `AggressionToggle` | AggressionToggle | npcs | yes | Adds the ::aggro command, an administrator cheat that keeps monsters aggressive after the ten-minute tolerance, usable by all if commands allow. |
 | `Apothecary` | Apothecary | npcs | yes | Gives the Varrock Apothecary's strength-potion service: 5 coins, a limpwurt root and red spiders' eggs per potion, feeding the Varrock diary. |

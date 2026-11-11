@@ -302,11 +302,12 @@ export type FriendsChatSnapshot = {
 
 export type ClientMessage =
   | { type: "plugin_message"; channel: string; data: Record<string, unknown> }
-  /** modifierFlags is the click's key byte (OSRS: 1 Ctrl, 2 Ctrl+Shift); run forces running. */
   | { type: "movement_input"; seq: number; dx: number; dy: number; rotation: number; duration: number; active: boolean; running: boolean }
+  /** modifierFlags is the click's key byte (OSRS: 1 Ctrl, 2 Ctrl+Shift); run forces running. */
   | { type: "move"; worldX: number; worldY: number; modifierFlags: number; run?: boolean }
-  | { type: "npc_option"; index: number; clickType: number }
-  | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string }
+  /** On the interaction clicks below, modifierFlags is the packet's Ctrl byte (1 while Ctrl is held), left out when 0. */
+  | { type: "npc_option"; index: number; clickType: number; modifierFlags?: number }
+  | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string; modifierFlags?: number }
   | { type: "world_entity_option"; index: number; clickType: number }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat"; autoChat?: boolean; style?: ChatStyle }
   | { type: "clan_chat"; clanType: number; text: string }
@@ -322,21 +323,21 @@ export type ClientMessage =
   | { type: "set_heading"; heading: number }
   | { type: "interface_close" }
   | { type: "local_trigger"; widgetId: number; childIndex: number; itemId: number; opcodeParam: number; argsData: Buffer }
-  | { type: "player_option"; index: number; option: number }
-  | { type: "item_on_player"; targetIndex: number; itemId: number; slot: number; widgetId: number }
-  | { type: "item_on_npc"; targetIndex: number; itemId: number; slot: number; widgetId: number }
-  | { type: "item_on_object"; objectId: number; x: number; y: number; itemId: number; slot: number; widgetId: number }
-  | { type: "spell_on_player"; targetIndex: number; spellWidget: number; spellChild: number; spellItemId: number }
-  | { type: "spell_on_npc"; targetIndex: number; spellWidget: number; spellChild: number; spellItemId: number }
-  | { type: "spell_on_object"; objectId: number; x: number; y: number; spellWidget: number; spellChild: number; spellItemId: number }
+  | { type: "player_option"; index: number; option: number; modifierFlags?: number }
+  | { type: "item_on_player"; targetIndex: number; itemId: number; slot: number; widgetId: number; modifierFlags?: number }
+  | { type: "item_on_npc"; targetIndex: number; itemId: number; slot: number; widgetId: number; modifierFlags?: number }
+  | { type: "item_on_object"; objectId: number; x: number; y: number; itemId: number; slot: number; widgetId: number; modifierFlags?: number }
+  | { type: "spell_on_player"; targetIndex: number; spellWidget: number; spellChild: number; spellItemId: number; modifierFlags?: number }
+  | { type: "spell_on_npc"; targetIndex: number; spellWidget: number; spellChild: number; spellItemId: number; modifierFlags?: number }
+  | { type: "spell_on_object"; objectId: number; x: number; y: number; spellWidget: number; spellChild: number; spellItemId: number; modifierFlags?: number }
   | { type: "inventory_action"; slot: number; itemId: number; widgetId: number; option?: string; optionIndex?: number }
   | { type: "inventory_use_on"; slot: number; itemId: number; target: { kind: "npc" | "loc" | "ground" | "player"; id: number; x?: number; y?: number; level?: number } | { kind: "inventory"; slot: number; itemId: number } }
   | { type: "inventory_move"; from: number; to: number; widgetId?: number }
   | { type: "bank_deposit_inventory" | "bank_deposit_equipment" }
   | { type: "bank_move"; from: number; to: number; mode: "swap" | "insert"; tab?: number }
-  | { type: "ground_item_action"; itemId: number; x: number; y: number; stackId?: number; option?: string; optionIndex?: number }
-  | { type: "item_on_ground"; itemId: number; slot: number; widgetId: number; groundItemId: number; x: number; y: number }
-  | { type: "spell_on_ground"; spellWidget: number; spellChild: number; spellItemId: number; groundItemId: number; x: number; y: number }
+  | { type: "ground_item_action"; itemId: number; x: number; y: number; stackId?: number; option?: string; optionIndex?: number; modifierFlags?: number }
+  | { type: "item_on_ground"; itemId: number; slot: number; widgetId: number; groundItemId: number; x: number; y: number; modifierFlags?: number }
+  | { type: "spell_on_ground"; spellWidget: number; spellChild: number; spellItemId: number; groundItemId: number; x: number; y: number; modifierFlags?: number }
   | { type: "examine_npc"; id: number }
   | { type: "examine_object"; id: number }
   | { type: "appearance"; gender: number; kits: number[]; colors: number[] }
@@ -362,6 +363,11 @@ export type ClientMessage =
   | { type: "character_create"; name: string }
   | { type: "character_delete"; name: string; confirmName: string }
   | { type: "handshake"; name: string; clientType: number; capabilities: number };
+
+/** An interaction click's message, with its Ctrl byte when it is set. */
+function withCtrl<T extends ClientMessage>(message: T, modifierFlags: number): T {
+  return modifierFlags ? { ...message, modifierFlags } : message;
+}
 
 class Reader {
   private offset = 0;
@@ -552,80 +558,81 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       const packed = reader.intIME() >>> 0;
       return { type: "world_map_click", level: packed >>> 28, x: (packed >>> 14) & 0x3fff, y: packed & 0x3fff };
     }
-    case NativeClientPacket.OPPLAYER1:
-      reader.byteSub();
-      return { type: "player_option", index: reader.short(), option: 1 };
-    case NativeClientPacket.OPPLAYER2:
-      reader.byte();
-      return { type: "player_option", index: reader.short(), option: 2 };
-    case NativeClientPacket.OPPLAYER3:
-      reader.byteSub();
-      return { type: "player_option", index: reader.short(), option: 3 };
+    case NativeClientPacket.OPPLAYER1: {
+      const modifierFlags = reader.byteSub();
+      return withCtrl({ type: "player_option", index: reader.short(), option: 1 }, modifierFlags);
+    }
+    case NativeClientPacket.OPPLAYER2: {
+      const modifierFlags = reader.byte();
+      return withCtrl({ type: "player_option", index: reader.short(), option: 2 }, modifierFlags);
+    }
+    case NativeClientPacket.OPPLAYER3: {
+      const modifierFlags = reader.byteSub();
+      return withCtrl({ type: "player_option", index: reader.short(), option: 3 }, modifierFlags);
+    }
     case NativeClientPacket.OPPLAYER4: {
       const index = reader.short();
-      reader.byteNeg();
-      return { type: "player_option", index, option: 4 };
+      return withCtrl({ type: "player_option", index, option: 4 }, reader.byteNeg());
     }
     case NativeClientPacket.OPPLAYER5: {
       const index = reader.shortAddLE();
-      reader.byteSub();
-      return { type: "player_option", index, option: 5 };
+      return withCtrl({ type: "player_option", index, option: 5 }, reader.byteSub());
     }
     case NativeClientPacket.OPPLAYER6: {
       const index = reader.short();
-      reader.byteNeg();
-      return { type: "player_option", index, option: 6 };
+      return withCtrl({ type: "player_option", index, option: 6 }, reader.byteNeg());
     }
     case NativeClientPacket.OPPLAYER7: {
       const index = reader.shortAdd();
-      reader.byteSub();
-      return { type: "player_option", index, option: 7 };
+      return withCtrl({ type: "player_option", index, option: 7 }, reader.byteSub());
     }
-    case NativeClientPacket.OPPLAYER8:
-      reader.byte();
-      return { type: "player_option", index: reader.shortAdd(), option: 8 };
+    case NativeClientPacket.OPPLAYER8: {
+      const modifierFlags = reader.byte();
+      return withCtrl({ type: "player_option", index: reader.shortAdd(), option: 8 }, modifierFlags);
+    }
     case NativeClientPacket.OPPLAYER_U: {
       const targetIndex = reader.shortAddLE();
       const itemId = reader.shortAddLE();
       const slot = reader.shortAdd();
       const widgetId = reader.int();
-      reader.byteAdd();
-      return { type: "item_on_player", targetIndex, itemId, slot, widgetId };
+      const modifierFlags = reader.byteAdd();
+      return withCtrl({ type: "item_on_player", targetIndex, itemId, slot, widgetId }, modifierFlags);
     }
-    case NativeClientPacket.OPPLAYER_T:
-      reader.byteNeg();
-      return {
+    case NativeClientPacket.OPPLAYER_T: {
+      const modifierFlags = reader.byteNeg();
+      return withCtrl({
         type: "spell_on_player",
         spellItemId: reader.shortLE(),
         spellChild: reader.shortLE(),
         spellWidget: reader.intIME(),
         targetIndex: reader.shortLE(),
-      };
+      }, modifierFlags);
+    }
     case NativeClientPacket.OPNPC_T: {
       const targetIndex = reader.short();
       const spellWidget = reader.intLE();
       const spellChild = reader.short();
       const spellItemId = reader.shortAdd();
-      reader.byteAdd();
-      return { type: "spell_on_npc", targetIndex, spellWidget, spellChild, spellItemId };
+      const modifierFlags = reader.byteAdd();
+      return withCtrl({ type: "spell_on_npc", targetIndex, spellWidget, spellChild, spellItemId }, modifierFlags);
     }
     case NativeClientPacket.OPNPC_U: {
       const slot = reader.shortAddLE();
-      reader.byte();
+      const modifierFlags = reader.byte();
       const widgetId = reader.intME();
       const itemId = reader.shortLE();
       const targetIndex = reader.shortAddLE();
-      return { type: "item_on_npc", targetIndex, itemId, slot, widgetId };
+      return withCtrl({ type: "item_on_npc", targetIndex, itemId, slot, widgetId }, modifierFlags);
     }
     case NativeClientPacket.OPLOCU: {
       const slot = reader.shortAddLE();
       const objectId = reader.shortAdd();
       const widgetId = reader.intLE();
-      reader.byteSub();
+      const modifierFlags = reader.byteSub();
       const x = reader.shortLE();
       const y = reader.short();
       const itemId = reader.shortAddLE();
-      return { type: "item_on_object", objectId, x, y, itemId, slot, widgetId };
+      return withCtrl({ type: "item_on_object", objectId, x, y, itemId, slot, widgetId }, modifierFlags);
     }
     case NativeClientPacket.OPLOC_T: {
       const y = reader.shortAddLE();
@@ -634,31 +641,29 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       const spellWidget = reader.intLE();
       const x = reader.short();
       const spellItemId = reader.shortLE();
-      reader.byteNeg();
-      return { type: "spell_on_object", objectId, x, y, spellWidget, spellChild, spellItemId };
+      const modifierFlags = reader.byteNeg();
+      return withCtrl({ type: "spell_on_object", objectId, x, y, spellWidget, spellChild, spellItemId }, modifierFlags);
     }
-    case NativeClientPacket.OPOBJ1:
-      reader.byteSub();
-      return { type: "ground_item_action", y: reader.shortLE(), itemId: reader.shortAdd(), x: reader.shortAdd(), optionIndex: 1 };
+    case NativeClientPacket.OPOBJ1: {
+      const modifierFlags = reader.byteSub();
+      return withCtrl({ type: "ground_item_action", y: reader.shortLE(), itemId: reader.shortAdd(), x: reader.shortAdd(), optionIndex: 1 }, modifierFlags);
+    }
     case NativeClientPacket.OPOBJ2: {
       const x = reader.shortAdd(), y = reader.shortLE(), itemId = reader.short();
-      reader.byte();
-      return { type: "ground_item_action", itemId, x, y, optionIndex: 2 };
+      return withCtrl({ type: "ground_item_action", itemId, x, y, optionIndex: 2 }, reader.byte());
     }
     case NativeClientPacket.OPOBJ3: {
       const itemId = reader.shortLE(), x = reader.shortAdd(), y = reader.shortAddLE();
-      reader.byteSub();
-      return { type: "ground_item_action", itemId, x, y, optionIndex: 3 };
+      return withCtrl({ type: "ground_item_action", itemId, x, y, optionIndex: 3 }, reader.byteSub());
     }
     case NativeClientPacket.OPOBJ4: {
       const itemId = reader.shortAddLE(), y = reader.shortAddLE();
-      reader.byteNeg();
-      return { type: "ground_item_action", itemId, x: reader.shortAdd(), y, optionIndex: 4 };
+      const modifierFlags = reader.byteNeg();
+      return withCtrl({ type: "ground_item_action", itemId, x: reader.shortAdd(), y, optionIndex: 4 }, modifierFlags);
     }
     case NativeClientPacket.OPOBJ5: {
       const itemId = reader.shortAdd(), x = reader.shortLE(), y = reader.shortLE();
-      reader.byteSub();
-      return { type: "ground_item_action", itemId, x, y, optionIndex: 5 };
+      return withCtrl({ type: "ground_item_action", itemId, x, y, optionIndex: 5 }, reader.byteSub());
     }
     case NativeClientPacket.EXAMINE_OBJ:
       return { type: "ground_item_action", itemId: reader.short(), y: reader.shortLE(), x: reader.shortLE(), option: "Examine" };
@@ -668,19 +673,15 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       const widgetId = reader.intME();
       const x = reader.shortAdd();
       const slot = reader.shortAddLE();
-      reader.byteSub();
-      return { type: "item_on_ground", groundItemId, y, widgetId, x, slot, itemId: reader.shortLE() };
+      const modifierFlags = reader.byteSub();
+      return withCtrl({ type: "item_on_ground", groundItemId, y, widgetId, x, slot, itemId: reader.shortLE() }, modifierFlags);
     }
-    case NativeClientPacket.OPLOC_T_ALT:
-      return {
-        type: "spell_on_ground",
-        spellWidget: reader.intLE(),
-        spellChild: reader.shortAdd(),
-        groundItemId: reader.shortAdd(),
-        x: reader.shortAddLE(),
-        y: reader.short(),
-        spellItemId: (reader.byte(), reader.shortAddLE()),
-      };
+    case NativeClientPacket.OPLOC_T_ALT: {
+      const spellWidget = reader.intLE(), spellChild = reader.shortAdd(), groundItemId = reader.shortAdd();
+      const x = reader.shortAddLE(), y = reader.short();
+      const modifierFlags = reader.byte();
+      return withCtrl({ type: "spell_on_ground", spellWidget, spellChild, groundItemId, x, y, spellItemId: reader.shortAddLE() }, modifierFlags);
+    }
     case NativeClientPacket.IF_BUTTONX: {
       // Ops 11-32 carry their op index (live OSRS: a bank item's Examine is IF_BUTTONX op=11).
       const widgetId = reader.int(), slot = reader.short(), itemId = reader.short();
@@ -747,57 +748,56 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
         sourceWidgetId: reader.intME(), targetSlot: reader.shortLE(),
       };
     }
-    case ClientPacket.NPC_OPTION_1:
-      reader.byte();
-      return { type: "npc_option", index: reader.shortAddLE(), clickType: 1 };
+    case ClientPacket.NPC_OPTION_1: {
+      const modifierFlags = reader.byte();
+      return withCtrl({ type: "npc_option", index: reader.shortAddLE(), clickType: 1 }, modifierFlags);
+    }
     case ClientPacket.NPC_OPTION_2: {
       const index = reader.shortAddLE();
-      reader.byte();
-      return { type: "npc_option", index, clickType: 2 };
+      return withCtrl({ type: "npc_option", index, clickType: 2 }, reader.byte());
     }
     case ClientPacket.NPC_OPTION_3: {
       const index = reader.shortAdd();
-      reader.byteNeg();
-      return { type: "npc_option", index, clickType: 3 };
+      return withCtrl({ type: "npc_option", index, clickType: 3 }, reader.byteNeg());
     }
-    case ClientPacket.NPC_OPTION_4:
-      reader.byteNeg();
-      return { type: "npc_option", index: reader.shortLE(), clickType: 4 };
-    case ClientPacket.NPC_OPTION_5:
-      reader.byteAdd();
-      return { type: "npc_option", index: reader.shortLE(), clickType: 5 };
+    case ClientPacket.NPC_OPTION_4: {
+      const modifierFlags = reader.byteNeg();
+      return withCtrl({ type: "npc_option", index: reader.shortLE(), clickType: 4 }, modifierFlags);
+    }
+    case ClientPacket.NPC_OPTION_5: {
+      const modifierFlags = reader.byteAdd();
+      return withCtrl({ type: "npc_option", index: reader.shortLE(), clickType: 5 }, modifierFlags);
+    }
     case ClientPacket.OBJECT_OPTION_1: {
       const x = reader.shortAdd();
       const y = reader.shortLE();
-      reader.byteNeg();
+      const modifierFlags = reader.byteNeg();
       const id = reader.shortAddLE();
-      return { type: "object_option", id, x, y, clickType: 1 };
+      return withCtrl({ type: "object_option", id, x, y, clickType: 1 }, modifierFlags);
     }
     case ClientPacket.OBJECT_OPTION_2: {
       const x = reader.shortAddLE();
       const y = reader.shortAddLE();
-      reader.byteSub();
-      return { type: "object_option", id: reader.short(), x, y, clickType: 2 };
+      const modifierFlags = reader.byteSub();
+      return withCtrl({ type: "object_option", id: reader.short(), x, y, clickType: 2 }, modifierFlags);
     }
     case ClientPacket.OBJECT_OPTION_3: {
       const y = reader.shortLE();
       const id = reader.shortLE();
       const x = reader.shortAddLE();
-      reader.byteSub();
-      return { type: "object_option", id, x, y, clickType: 3 };
+      return withCtrl({ type: "object_option", id, x, y, clickType: 3 }, reader.byteSub());
     }
     case ClientPacket.OBJECT_OPTION_4: {
       const x = reader.shortAdd();
       const id = reader.shortLE();
       const y = reader.shortAdd();
-      reader.byteNeg();
-      return { type: "object_option", id, x, y, clickType: 4 };
+      return withCtrl({ type: "object_option", id, x, y, clickType: 4 }, reader.byteNeg());
     }
     case ClientPacket.OBJECT_OPTION_5: {
       const x = reader.short();
-      reader.byteAdd();
+      const modifierFlags = reader.byteAdd();
       const y = reader.shortAdd();
-      return { type: "object_option", id: reader.shortAdd(), x, y, clickType: 5 };
+      return withCtrl({ type: "object_option", id: reader.shortAdd(), x, y, clickType: 5 }, modifierFlags);
     }
     case ClientPacket.MOVE_GAMECLICK: {
       const worldY = reader.shortAddLE();

@@ -84,6 +84,8 @@ function actor(t) {
     sendEnterAmountPrompt(...args) { packets.push(["prompt", ...args]); return sender; },
     // Examine price info: both settings on; barbarian vial smashing (5668) as the test sets it.
     getVarbit: (id) => (id === AUTO_SMASH_VIALS ? smashVials : 1),
+    // Spam lines land in `messages` marked, so a test sees the type live sends.
+    sendTypedMessage(type, message) { messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : message); return sender; },
   };
   t.mock.method(player, "sendMessage", (message) => messages.push(message));
   t.mock.method(player, "performAnimation", () => {});
@@ -304,10 +306,11 @@ test("Drink skips only the refused potion and plays the barrel sound once (rspro
 
   itemAction(f, BARREL_NAME, "Drink", 0);
   assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the refused divine potion is skipped, the rest drink");
+  // rsprox 238/04242.txt:61023-61030: the drink lines are spam, the divine refusal a game message.
   assert.deepEqual(f.messages, [
-    "You drink some of your prayer potion.",
+    "spam: You drink some of your prayer potion.",
     "You need more than 10 hitpoints to survive the power of a divine potion.",
-    "You drink some of your energy potion.",
+    "spam: You drink some of your energy potion.",
   ]);
   assert.equal(balance(f, "Prayer potion").doses, 2);
   assert.equal(balance(f, divine.potion.name).doses, 2, "a refused potion keeps its dose");

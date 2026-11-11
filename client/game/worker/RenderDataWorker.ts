@@ -461,7 +461,7 @@ const worker = {
                 await writeSquare(key, { data: data as unknown as SdMapData, reads });
             }
             if (cacheable && sdInput.mapProfileEnabled) {
-                console.info(`[map-profile] ${sdInput.mapX},${sdInput.mapY} store: ${shouldStore(outcome.complete, data) ? "written" : `skipped (complete=${outcome.complete}, ${BaseTypeLoader.decodeFailureSummary()})`} reads=${reads.length}`);
+                console.info(`[map-profile] ${sdInput.mapX},${sdInput.mapY} store: ${shouldStore(outcome.complete, data) ? "written" : `skipped (complete=${outcome.complete}${BaseTypeLoader.decodeFailures.size > 0 ? `, ${BaseTypeLoader.decodeFailureSummary()}` : ""})`} reads=${reads.length}`);
             }
             if (cacheable && data) dropLoadedTextures(data as unknown as SdMapData, sdInput.loadedTextureIds);
 

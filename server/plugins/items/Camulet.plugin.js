@@ -13,7 +13,7 @@ const TEMPLE_TASK = "teleport-to-enakhra-s-temple-with-the-camulet";
 
 /** The rub and no-charge texts are from rsprox recordings 3021, 3160, 3165. */
 const RUB_MESSAGE = "You rub the amulet...";
-const OUT_OF_CHARGES_BOX = "Your Camulet has run out of teleport charges. You can renew them by applying camel dung.";
+const OUT_OF_CHARGES_BOX = "Your Camulet has run out of teleport charges.<br>You can renew them by applying camel dung."; // objectbox text, 231/03021.txt
 const CHECK_EMPTY_MESSAGE = "Your Camulet has no charges left.<br>You can recharge it by applying camel dung.";
 const DESTINATION_PROMPT = "Where would you like to teleport to?";
 
@@ -57,6 +57,10 @@ function hasCharges(player) {
   return unlimited(player) || charges(player) > 0;
 }
 
+/** The cache's Rub submenu entries (isubop4). */
+const SUBOP_TEMPLE = "Enakhra's Temple";
+const SUBOP_ENTRANCE = "Enakhra's Temple Entrance";
+
 function teleport(player, destination = TEMPLE) {
   const [x, y, z] = destination;
   const target = new core.Location(x, y, z);
@@ -68,25 +72,35 @@ function teleport(player, destination = TEMPLE) {
   });
 }
 
-/** Every rub says so first; an empty Camulet then explains how to renew it. */
-function startRub(player) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, RUB_MESSAGE);
-  if (hasCharges(player)) return true;
-  const { DialogueChainBuilder, StatementDialogue } = core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, OUT_OF_CHARGES_BOX)));
-  return false;
-}
-
-/** Rub and the worn Teleport (the rev 241 cache has only Check and Teleport worn): the hard diary asks where. */
-function rub(player) {
-  if (!startRub(player)) return;
-  if (!hardDiaryDone(player)) {
-    teleport(player, TEMPLE);
+/**
+ * A teleport, or with no charges left the out-of-charges item box: objectbox (193) with the Camulet
+ * (rsprox 231/03021.txt ticks 4321 and 5260).
+ */
+function chargedTeleport(player, destination) {
+  if (hasCharges(player)) {
+    teleport(player, destination);
     return;
   }
+  const { DialogueChainBuilder, ItemStatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, core.ItemIdentifiers.CAMULET, OUT_OF_CHARGES_BOX)));
+}
+
+/**
+ * Rub and the worn Teleport (the rev 241 cache has only Check and Teleport worn). Every rub says
+ * "You rub the amulet..." first. A Rub submenu entry (cache isubop4: Enakhra's Temple, Enakhra's
+ * Temple Entrance) goes straight there (232/03160.txt tick 194). With the hard diary the bare
+ * option asks where, and only the choice finds the Camulet empty (231/03021.txt ticks 5162-5260).
+ */
+function rub(player, subOption = null) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, RUB_MESSAGE);
+  if (subOption === SUBOP_TEMPLE) return chargedTeleport(player, TEMPLE);
+  // Not captured: the Entrance entry without the hard diary; it goes to the temple, as a bare Rub does.
+  if (subOption === SUBOP_ENTRANCE) return chargedTeleport(player, hardDiaryDone(player) ? ENTRANCE : TEMPLE);
+  if (!hardDiaryDone(player)) return chargedTeleport(player, TEMPLE);
   api.sendMultiChatboxPrompt(player, DESTINATION_PROMPT,
-    "Enakhra's Temple.", () => teleport(player, TEMPLE),
-    "Enakhra's Temple Entrance.", () => teleport(player, ENTRANCE),
+    "Enakhra's Temple.", () => chargedTeleport(player, TEMPLE),
+    "Enakhra's Temple Entrance.", () => chargedTeleport(player, ENTRANCE),
     "Nowhere.", () => player.getPacketSender().sendInterfaceRemoval());
 }
 
@@ -118,7 +132,7 @@ function onItemAction(event) {
   }
   if (option !== "rub" && option !== "teleport") return;
   event.handled = true;
-  rub(event.player);
+  rub(event.player, event.subOption ?? null);
 }
 
 module.exports = {

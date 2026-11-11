@@ -236,6 +236,69 @@ Regression coverage in `server/tests/consumable-edge-cases.test.cjs` dispatches 
 registered drink handler, checks both messages and the returned glass, and checks
 that a second beer during the cooldown produces no success feedback or consumption.
 
+## Ale and spirits
+
+The bar's ales and spirits drink through the same potion path as Beer (`Potions.plugin.js`).
+Potions answers a registered drink's first op, and also any later op the cache names "Drink".
+Karamjan rum's Drink is its fourth op (`inventory:items` op6 on the wire), which the first-op
+hook alone missed.
+
+From [rsprox captures](https://rsprox.net/database). Rec `20261111T225402-5ab63b4` (rev 242, "225402" below) is one
+player with base Attack 64, Defence 61, Strength 58, Magic 70, Cooking 60 and Herblore 50 drinking
+each in turn:
+
+| Drink | Recording (tick) | Lines (spam) | Slot after | Levels sent |
+| --- | --- | --- | --- | --- |
+| Asgarnian ale | 3455 | "You drink the ale. You feel slightly reinvigorated..." / "...and slightly dizzy too." | beer glass | |
+| Karamjan rum | 4287, 1863 (Leagues) | "You drink the rum. You feel slightly reinvigorated..." / "...and slightly dizzy too." | empty | at 99/99: Attack 95, Strength 104 |
+| Rum (28896) | 4101, 4291 | the rum's lines | empty | |
+| Wizard's mind bomb | 225402 (9) | "You drink the Wizard's Mind Bomb." / "You feel very strange." | beer glass | Magic 70→73, Attack 64→60, Defence 61→57, Strength 58→55 |
+| Greenman's ale | 225402 (48) | "You drink the Greenman's Ale." / "It has a strange taste." | beer glass | Attack 57→53, Defence 57→53, Strength 55→51, Herblore 50→51 |
+| Dragon bitter | 225402 (59) | "You drink the Dragon Bitter. You feel slightly reinvigorated..." / "...and slightly dizzy too." | beer glass | Attack 54→50, Strength 52→54 |
+| Grog | 225402 (69) | "You drink the grog. ..." / "...and slightly dizzy too." | beer glass | Attack 50→45, Strength 54→57 |
+| Chef's delight | 225402 (81) | "You drink the ale. ..." / "...and slightly dizzy too." | beer glass | Attack 45→41, Strength 57→53, Cooking 60→64 |
+| Vodka | 225402 (94) | "You drink the vodka. ..." / "...and slightly dizzy too." | empty | Attack 41→38, Strength 53→56 |
+| Brandy | 225402 (111) | "You drink the brandy. ..." / "...and slightly dizzy too." | empty | Attack 38→35, Strength 56→59 |
+| Whisky | 225402 (121) | "You drink the whisky. ..." / "...and slightly dizzy too." | empty | Attack 35→32, Strength 59→61 |
+| Gin | 225402 (129) | "You drink the gin. ..." / "...and slightly dizzy too." | empty | Attack 32→29, Strength 61 (already at the cap) |
+| Keg of beer | 225402 (139) | "You chug the keg. You feel reinvigorated...<br>... but extremely drunk too." (one line) | empty | Attack 29→10, Strength 61→65 |
+
+All send sound 2401 (twice for the keg). The keg also sends a camera shake (3, 0, 20, 2), and a
+camera reset follows 50 ticks later (tick 189); another keg first restarts the sway. The animation is `human_eat` (829), except the keg's
+`viking_keg_drink_full` (1330). The house Greenman's ale and Dragon bitter (`poh_*`,
+`rsprox_transcripts/229/00264.txt`) send their stock ale's lines, leave `poh_beer_glass`, and
+take 99→94 (Greenman's) and Attack 96→90 (Dragon bitter). The house cider in the same recording
+sends "You drink the cider.  You feel slightly reinvigorated..." with two spaces. The five stock
+beer captures have one, and the stock Cider isn't captured.
+
+Effects are the Wiki's, and the levels above agree:
+- **Ales:** Asgarnian ale and Dragon bitter: Strength +2, Attack -(2 + 5% of current).
+- **Chef's delight:** Cooking +(1 + 5%), Attack and Strength -(2 + 5%).
+- **Grog:** heals 3, Strength +(1 + 4% of base), Attack -(3 + 5%).
+- **Spirits:** heal 5, Strength +(1 + 5% of base), Attack -(3 + 2% of current).
+- **Keg of beer:** heals 15, Strength +(2 + 10% of base), Attack -(5 + 50% of current).
+
+Greenman's ale is the exception. The Wiki gives a flat 3, but both captures fit 2 + 4% of current.
+
+Ours:
+- The house Beer, Asgarnian ale and Chef's delight are taken to send their stock lines, as the
+  captured house Greenman's ale and Dragon bitter do.
+- Dwarven stout's lines are the Wiki's.
+- The keg's camera sway is filed under the atmospheric camera shake setting.
+
+### Bottle of wine
+
+`food.json`, rec 225402 tick 26:
+- two game messages, "You drink the wine." and "It makes you feel a bit dizzy.";
+- `human_eat` and sound 2401;
+- the slot becomes an empty wine bottle;
+- Attack 60→57. The Wiki gives heal 14 and Attack -3.
+
+Foods whose option is Drink now send sound 2401, as the wine and the Fruit blast did. Others
+keep the eating sound.
+
+Coverage: `server/tests/alcohol-drinks.test.cjs`.
+
 ## Draynor cabbage
 
 The [Draynor Manor cabbage](https://oldschool.runescape.wiki/w/Cabbage_%28Draynor_Manor%29)

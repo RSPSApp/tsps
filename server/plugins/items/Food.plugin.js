@@ -364,7 +364,9 @@ function eat(event) {
   startTimers(player, food, bite);
   player.getPacketSender().sendInterfaceRemoval();
   player.getSkillManager().stopSkillable();
-  core.Sounds.sendSound(player, core.Sound.FOOD_EAT);
+  // A drink sends the liquid sound, as potions do (rsprox captures: bottle of wine and fruit blast send
+  // 2401, rec 20261111T225402-5ab63b4 ticks 26 and 37).
+  core.Sounds.sendSound(player, food.option === "Drink" ? core.Sound.DRINK : core.Sound.FOOD_EAT);
   player.performAnimation(new core.Animation(EAT_ANIMATION));
 
   const message = eatMessage(food, bite, itemId);

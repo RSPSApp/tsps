@@ -57,6 +57,13 @@ function fakePlayer({ items, waived = false, skulled = false, location = EDGEVIL
   };
 }
 
+/** Whether OrnamentKits answers `player-death:cosmetic` for the item. */
+function isCosmetic(id) {
+  const query = { item: new Item(id, 1), cosmetic: false };
+  PluginManager.emitCustomEvent('player-death:cosmetic', query);
+  return query.cosmetic;
+}
+
 const names = (items) => items.map((item) => item.getDefinition().getName());
 // Bandos godsword, berserker ring and Robin Hood hat outrank a rune defender (t) (an alchemy value
 // of 39,002) and a rune platebody (a Grand Exchange price of about 38,700).
@@ -93,11 +100,6 @@ test('a whip mixed with a tradeable mix is protected like a kit', () => {
 });
 
 test('a Bounty Hunter kit protects though it is untradeable; other untradeable modifications do not', () => {
-  const isCosmetic = (id) => {
-    const query = { item: new Item(id, 1), cosmetic: false };
-    PluginManager.emitCustomEvent('player-death:cosmetic', query);
-    return query.cosmetic;
-  };
   assert.equal(isCosmetic(28031), true, 'Dragon scimitar (cr)');
   assert.equal(isCosmetic(28067), true, 'Fighter torso (or), Bounty Hunter kit');
   assert.equal(isCosmetic(24664), false, 'Twisted ancestral hat: the colour kit is an untradeable modification');
@@ -189,4 +191,47 @@ test('the Items Kept on Death screen marks the protected item kept, and the PvP 
   handlers.get((387 << 16) | 5)({ player: inWilderness });
   assert.equal(stateOf(RUNE_DEFENDER_T), LOST_STATE, 'opened in the Wilderness, the screen shows the death there');
   assert.equal(sent.args[5], 3);
+});
+
+test('a granite maul with both the clamp and the ornate handle is protected, by either order of attaching', () => {
+  const clampOnHandled = require('../plugins/items/data/ornament-kits.json').kits
+    .find((entry) => entry.kit === I.GRANITE_CLAMP && entry.base === I.GRANITE_MAUL_5);
+  // granite_maul_pretty_plus (24227); 24226 is the handled maul's placeholder.
+  assert.equal(clampOnHandled.result, I.GRANITE_MAUL_7, 'the clamp on a handled maul makes the clamped, handled maul');
+  assert.equal(isCosmetic(I.GRANITE_MAUL_3), true, 'Granite maul (clamp)');
+  assert.equal(isCosmetic(I.GRANITE_MAUL_7), true, 'Granite maul (ornate handle, clamp)');
+  assert.equal(isCosmetic(I.GRANITE_MAUL_5), false, 'the ornate handle alone is an upgrade, not an ornament kit');
+});
+
+test('a failed Tombs of Amascut raid leaves the protected item with the player, and sends it to the chest once waived', (t) => {
+  const Shared = require('../plugins/minigames/toa/Shared.TombsOfAmascut');
+  const Retrieval = require('../plugins/minigames/toa/Retrieval.TombsOfAmascut');
+  const previous = Shared.api();
+  Shared.bind({ core: PluginManager.getCoreApi(), emitCustomEvent() {}, getBonusManager: () => ({ update() {} }) });
+  t.after(() => Shared.bind(previous ?? { core: null }));
+
+  const raider = (waived) => {
+    const player = fakePlayer({ items: loadout(), waived });
+    const inventory = player.getInventory();
+    const attributes = new Map();
+    Object.assign(inventory, { setItem(slot, item) { inventory.getItems()[slot] = item; return inventory; } });
+    Object.assign(player.getEquipment(), { setItem() {} });
+    return Object.assign(player, {
+      getAttribute: (key) => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      getUpdateFlag: () => ({ flag() {} }),
+    });
+  };
+  const chest = (player) => player.getAttribute(Retrieval.ATTR_STORED).items.map(({ id }) => new Item(id, 1).getDefinition().getName());
+  const held = (player) => names(player.getInventory().getItems().filter((item) => item && item.getId() > 0));
+
+  const protectedRaider = raider(false);
+  Retrieval.storeLost(protectedRaider);
+  assert.deepEqual(held(protectedRaider), [...TOP_THREE, 'Rune defender (t)']);
+  assert.deepEqual(chest(protectedRaider), ['Rune platebody', 'Graceful hood']);
+
+  const waivedRaider = raider(true);
+  Retrieval.storeLost(waivedRaider);
+  assert.deepEqual(held(waivedRaider), TOP_THREE);
+  assert.deepEqual(chest(waivedRaider), ['Rune defender (t)', 'Rune platebody', 'Graceful hood']);
 });

@@ -57,11 +57,13 @@ function feeFor(player, items) {
 
 /**
  * What a death wouldn't keep moves to the chest, replacing anything already there. Returns how many
- * stacks it holds now.
+ * stacks it holds now. A raid death is a PvM death, so items Death protection from cosmetics
+ * protects (All Settings row 386) stay with the player as they would on any other.
  */
 function storeLost(player) {
   const { Item, Flag, PlayerDeathTask } = Shared.core();
-  const kept = PlayerDeathTask.getItemsToKeep(player);
+  const kept = PlayerDeathTask.getItemsToKeep(player, PlayerDeathTask.getAmountToKeep(player),
+    PlayerDeathTask.protectsCosmetics(player, null));
   const stored = [];
   for (const container of [player.getInventory(), player.getEquipment()]) {
     const items = container.getItems();

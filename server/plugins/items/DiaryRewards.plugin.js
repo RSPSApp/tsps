@@ -20,6 +20,7 @@ module.exports = {
     require("./diaryrewards/FlaxKeeper.DiaryRewards")(api);
     require("./diaryrewards/Battlestaves.DiaryRewards")(api);
     require("./diaryrewards/Robin.DiaryRewards")(api);
+    require("./diaryrewards/Lundail.DiaryRewards")(api);
     require("./diaryrewards/Pickpocketing.DiaryRewards")(api);
     require("./diaryrewards/KaramjaGloves.DiaryRewards")(api);
   },

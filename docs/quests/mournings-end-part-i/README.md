@@ -17,7 +17,15 @@ Deferred on 2026-10-23 as long/complex; no native playthrough recorded.
 
 ## Findings
 
-None recorded.
+- **fixed (handler and test level, not played in game)** Oronwen takes the silk and bear fur item by item. Using
+  silk or bear fur on her while the ripped trousers wait now keeps the item and plays the Wiki transcript's
+  "Using necessary items on Oronwen" variant with the lines for what she still needs; the last item brings the
+  mourner trousers back. The transcript gives the silk box and the four "still needs" lines; the bear fur's own
+  message, the refusal of a third silk or second fur, and the trousers returning at the last item are our wording
+  and rules (inference). No rsprox capture was found (text searches for "bear fur", "I need two pieces of silk"
+  and "Oronwen" returned nothing on 2026-11-11). Her Talk-to menu still says "I need bear fur and two pieces of
+  silk" whatever was handed over. Test: `server/tests/qh728-q078.test.cjs` (handler-level, the transcript start
+  is recorded, not played).
 
 ## Aim and Fire
 

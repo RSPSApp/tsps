@@ -61,10 +61,14 @@ function actor(t, key, stage) {
   const messages = [];
   const sendMessage = p.sendMessage.bind(p);
   t.mock.method(p, "sendMessage", (text) => { messages.push(String(text)); return sendMessage(text); });
-  // Spam lines, kept apart so a test sees the type live sends.
-  const spam = [];
+  // Spam and mesbox lines, kept apart so a test sees the type live sends.
+  const spam = [], mesbox = [];
   const sender = p.getPacketSender(), sendTyped = sender.sendTypedMessage.bind(sender);
-  t.mock.method(sender, "sendTypedMessage", (type, text) => { if (type === core.ChatType.SPAM) spam.push(String(text)); return sendTyped(type, text); });
+  t.mock.method(sender, "sendTypedMessage", (type, text) => {
+    if (type === core.ChatType.SPAM) spam.push(String(text));
+    if (type === core.ChatType.MESBOX) mesbox.push(String(text));
+    return sendTyped(type, text);
+  });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
@@ -72,7 +76,7 @@ function actor(t, key, stage) {
     core.TaskManager.cancelTasks(p);
   });
   quest(key).setStage(p, stage);
-  return { p, c, inv: p.getInventory(), messages, spam };
+  return { p, c, inv: p.getInventory(), messages, spam, mesbox };
 }
 
 const quest = (key) => {
@@ -212,11 +216,12 @@ test("DT2: the Whisperer's remains refuse a full bag and flag nothing; with room
   searchRemains(control);
   assert.equal(control.inv.getAmount(I.WHISPERERS_MEDALLION), 1, "control: the medallion");
   assert.equal(control.p.getAttribute(LASSAR).medallion, true, "control: and the flag");
-  // rsprox 1703 t16262: an item box (objectbox 193) with the medallion, not a chat line.
+  // rsprox 1703 t16262 (341501-341515): the mesbox chat line, then an item box (objectbox 193) with the medallion.
   const box = control.p.getDialogueManager().getCurrent();
   assert.ok(box instanceof core.ItemStatementDialogue, `an item box: ${box?.constructor?.name}`);
   assert.equal(String(box.getText?.() ?? ""), FOUND);
-  assert.equal(control.messages.includes(FOUND), false, "not a chat line");
+  assert.deepEqual(control.mesbox, [FOUND], "the box's mesbox chat line");
+  assert.equal(control.messages.includes(FOUND), false, "and no game-type line");
 
   const f = afterWhisperer(t);
   fill(f);

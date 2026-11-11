@@ -462,6 +462,31 @@ test('Soul Wars lands in the lobby on the Isle of Souls, not the tutorial instan
     assert.ok(!inTemplate, 'never the tutorial instance template');
 });
 
+// Wiki, Minigame Teleport: Barbarian Assault's map is 2531,3577 and Trouble Brewing's 3816,3024. The recorded
+// arrivals (aide_player_teleporting) land within a tile of them: 2530-2532,3576-3577 (rsprox 224/01434,
+// 230/00346) and 3816-3817,3023-3024 (226/01638, 227/00075). The old BA tile, 2521,3570, sat beside the games
+// necklace's Barbarian Outpost landing (224/01533).
+test("Barbarian Assault and Trouble Brewing land on the Wiki's tiles, walkable, at their minigames", async () => {
+    const destinations = require('../plugins/interface/data/minigame-teleports.json').minigames;
+    const ba = destinations['Barbarian Assault'];
+    const tb = destinations['Trouble Brewing'];
+    assert.deepEqual([ba.x, ba.y], [2531, 3577], "the Wiki's Barbarian Assault teleport tile");
+    assert.deepEqual([tb.x, tb.y], [3816, 3024], "the Wiki's Trouble Brewing teleport tile");
+    const { LOBBY_BOUNDS } = require('../plugins/minigames/barbarianassault/Data.BarbarianAssault');
+    assert.ok(ba.x >= LOBBY_BOUNDS.minX && ba.x <= LOBBY_BOUNDS.maxX && ba.y >= LOBBY_BOUNDS.minY && ba.y <= LOBBY_BOUNDS.maxY,
+        'inside the Barbarian Assault lobby bounds');
+    const { ARENA } = require('../plugins/minigames/troublebrewing/Common.TroubleBrewing');
+    assert.ok(!(tb.x >= ARENA.minX && tb.x <= ARENA.maxX && tb.y >= ARENA.minY && tb.y <= ARENA.maxY),
+        "at the Trouble Brewing entrance on Mos Le'Harmless, not inside a game");
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    const { RegionManager } = require('../dist/game/collision/RegionManager');
+    RegionManager.init();
+    for (const [name, tile] of [['Barbarian Assault', ba], ['Trouble Brewing', tb]]) {
+        RegionManager.loadMapFiles(tile.x, tile.y, true);
+        assert.equal(RegionManager.blocked(new Location(tile.x, tile.y, 0), null), false, `${name}'s landing is walkable`);
+    }
+});
+
 test('every quest gate reads the real quest runtime: completing Shades of Mort\'ton unlocks its teleport (#4294)', async (t) => {
   stubWorld(t)(() => {});
   await CachePipeline.initialize(path.resolve(__dirname, '..'));

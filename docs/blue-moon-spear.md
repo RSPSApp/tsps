@@ -15,6 +15,12 @@ freeze timer when the swing starts, clears it, and feeds the ticks it held into 
 `traitsFor` rolls until the hit resolves (the same pattern as the dragon hasta's Unleash).
 Test: `server/tests/blue-moon-spear-special.test.cjs`.
 
-Not implemented: the Frostweaver passive (a free melee attack after bind, ice or grasp spells with
-the full set), the Yama / Verzik "indefinitely bound" handling, and a message for using the special
+Frostweaver (`server/plugins/combat/Frostweaver.plugin.js`, Wiki: Blue Moon armour, set effects): in the
+full Blue Moon armour (broken pieces count) with the spear, a committed Bind, Snare, Entangle or Ancient
+ice cast has a 20% chance, and an Arceuus grasp 50%, to queue one instant ordinary melee hit, whether or
+not the spell bound. The trigger is the paid cast, not its landing (the Wiki says "successful cast"), and
+an armed special is neither used nor spent. Not captured; the Wiki's note on attacking across diagonals
+with the auto option is not implemented. Test: `server/tests/frostweaver-set-effect.test.cjs`.
+
+Not implemented: the Yama / Verzik "indefinitely bound" handling, and a message for using the special
 without the armour.

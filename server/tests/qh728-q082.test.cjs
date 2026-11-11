@@ -156,6 +156,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const clock = { tick: 0 };
   const diaries = new Set();
   let area = null;
+  const areas = [];
 
   class FakeGameObject {
     constructor(id, location, type, face, privateArea) {
@@ -222,7 +223,8 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
       if (key === 'diary:is-complete') event.complete = diaries.has(`${event.diary}:${event.tier}`);
       for (const handler of custom.get(key) ?? []) handler(event);
     },
-    registerArea(next) { area = next; },
+    // The swamp is the first Area the quest registers; the rest (the gate approach strip) are kept in order.
+    registerArea(next) { areas.push(next); area ??= next; },
     spawnNpc(definition) {
       const { id, x, y, z } = definition;
       if (nativeActors) {
@@ -261,7 +263,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const h = {
     player, custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
     diaries, itemActions, itemOnItem, groundPickups, logins, logouts, deaths, spawned, removed, registered,
-    deregistered, worldObjects, quest, clock, get area() { return area; },
+    deregistered, worldObjects, quest, clock, get area() { return area; }, areas,
   };
   if (!firstHarness) firstHarness = h;
   return h;
@@ -1102,11 +1104,13 @@ test('walking through an already-open swamp gate records entry without crediting
   for (const entry of cases) {
     const h = harness(), p = h.player;
     h.quest.setStage(p, 5);
+    // As AreaManager does: only the Area the player stands in is processed.
+    const step = () => h.areas.find(area => area.getBoundaries().some(b => b.inside(p.getLocation())))?.process(p);
     p.setLocation(new core.Location(...entry.from, 0));
-    h.area.process(p);
+    step();
     p.setLocation(new core.Location(...entry.to, 0));
     p.needsPlacement = Boolean(entry.teleport);
-    h.area.process(p);
+    step();
     assert.equal(h.quest.getStage(p), entry.expected, entry.name);
     assert.equal(h.spawned.length, 0, 'crossing never auto-summons the ghost');
     objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });

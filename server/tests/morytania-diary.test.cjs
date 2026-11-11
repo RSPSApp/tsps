@@ -318,6 +318,20 @@ test("Wolfbane credits native human-form Canifis citizens, not transformed werew
 });
 
 
+test("Canifis is not Mort Myre: logging in or moving there does not count; inside the swamp does", () => {
+  const task = "enter-mort-myre-swamp";
+  // Canifis bank (booths at 3513, 3478-3483) and its south street: north of the Gate's fence (y 3458).
+  for (const [x, y] of [[3512, 3479], [3492, 3471]]) {
+    const player = createPlayer({ x, y });
+    emit("onPlayerLogin", { player });
+    emit("onPlayerMapSquareChange", { player, location: { getX: () => x, getY: () => y, getZ: () => 0 } });
+    assert.ok(!has(player, task), `${x},${y} is Canifis`);
+  }
+  const swamp = createPlayer({ x: 3440, y: 3400 });
+  emit("onPlayerLogin", { player: swamp });
+  assert.ok(has(swamp, task), "inside the swamp it counts");
+});
+
 test("Mort Myre entry requires crossing the boundary, not toggling the gate", () => {
   const player = createPlayer({ x: 3443, y: 3481 });
   const task = "enter-mort-myre-swamp";

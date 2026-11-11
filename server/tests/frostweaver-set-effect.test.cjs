@@ -16,12 +16,13 @@ before(async () => {
   PluginManager.createApi("FrostweaverQuest").onCustomEvent("quest:is-complete", (event) => { event.complete = true; });
 });
 
-function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0, at = [1, 0], z = 0, hp = 200, realTarget = false } = {}) {
+function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0, at = [1, 0], z = 0, hp = 200, realTarget = false, enabled = true } = {}) {
   t.mock.method(core.Sounds, "sendSound", () => {});
   t.mock.method(Math, "random", () => roll);
   const queued = [];
   const armedWhenQueued = [];
   const p = new Player(null);
+  if (enabled) p.setAttribute("frostweaver:enabled", true);
   t.mock.method(core.CombatFactory, "addPendingHit", (hit) => { queued.push(hit); armedWhenQueued.push(p.isSpecialActivated()); });
   t.mock.method(p, "getSession", () => ({ sendClientPacket: () => true }));
   t.mock.method(p, "sendMessage", () => {});
@@ -143,4 +144,21 @@ test("an armed special is neither used nor spent by the attack", (t) => {
   assert.equal(swings(f).length, 1);
   assert.deepEqual(f.armedWhenQueued, [false], "the hit is built and queued as an ordinary swing");
   assert.equal(f.p.isSpecialActivated(), true, "and the special stays armed for the next attack");
+});
+
+test("the set effect starts off and the combat tab's Toggle set effect button (593:37) switches it, sending varbit 9870", (t) => {
+  const f = fixture(t, "BIND", { enabled: false });
+  const varbits = [];
+  t.mock.method(f.p.getPacketSender(), "sendVarbit", (id, value) => varbits.push([id, value]));
+  f.cast();
+  assert.equal(swings(f).length, 0, "off by default");
+  const click = () => PluginManager.emitInterfaceActionClick({ player: f.p, buttonId: (593 << 16) | 37, action: 1, groupId: 593, childId: 37, opId: 1, handled: false });
+  assert.equal(click(), true);
+  assert.deepEqual(varbits, [[9870, 1]]);
+  f.cast();
+  assert.equal(swings(f).length, 1, "on after the click");
+  assert.equal(click(), true);
+  assert.deepEqual(varbits, [[9870, 1], [9870, 0]]);
+  f.cast();
+  assert.equal(swings(f).length, 1, "off again after the second click");
 });

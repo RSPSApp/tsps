@@ -6,10 +6,14 @@
  * so the attack is an ordinary melee hit (a special armed on the spear is neither used nor spent).
  * The spear must reach the target as in melee, diagonals included (the Wiki: it "can hit targets across
  * diagonal spaces"), so a cast from range gives no attack. Not implemented: hitting over small fences or walls,
- * and the combat-tab "Toggle set effect" button (the cache's widget 593 child 37, CS2 4907, varbit 9870, 1 = On,
- * which this engine does not handle): the effect is always on.
+ * The combat tab's "Toggle set effect" button (cache widget 593 child 37, CS2 4907 reads varbit 9870: 1 = "Set
+ * Effect (On)", else "(Off)") switches it; the varbit starts at 0, so the effect starts off (the Wiki: "by enabling
+ * it in the combat options menu"). The button is shared by the Moons sets in the client; only Frostweaver reads it here.
  */
 const CHANCE = { standard: 0.2, grasp: 0.5 };
+const ENABLED = "frostweaver:enabled";
+const TOGGLE_VARBIT = 9870;
+const TOGGLE_BUTTON = (593 << 16) | 37;
 let core;
 let pieces;
 let spears;
@@ -43,7 +47,20 @@ function inReach(player, target) {
   return player.getLocation().getZ() === target.getLocation().getZ() && core.CombatRange.beside(player, target);
 }
 
+function toggle(event) {
+  const player = event.player;
+  const on = player.getAttribute(ENABLED) !== true;
+  player.setAttribute(ENABLED, on);
+  player.getPacketSender().sendVarbit(TOGGLE_VARBIT, on ? 1 : 0);
+  return true;
+}
+
+function login({ player }) {
+  if (player.getAttribute(ENABLED) === true) player.getPacketSender().sendVarbit(TOGGLE_VARBIT, 1);
+}
+
 function committed({ player, spell }) {
+  if (player.getAttribute(ENABLED) !== true) return;
   const chance = spellChance.get(spell.spellId());
   if (chance === undefined || !wearsSet(player)) return;
   const target = player.getCombat().getTarget();
@@ -65,6 +82,9 @@ module.exports = {
   description: "Blue Moon set effect: binding and ice casts sometimes add an instant spear attack.",
   register(api) {
     initialize(api);
+    api.persistAttribute(ENABLED, false);
+    api.onInterfaceActionButton(TOGGLE_BUTTON, toggle);
+    api.onPlayerLogin(login);
     api.onCustomEvent("magic:cast-committed", committed);
   },
 };

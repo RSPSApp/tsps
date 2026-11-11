@@ -64,8 +64,10 @@ module.exports = function registerTempleOfIkovQuest(api) {
 
   // World tiles (cache placements): Lucien placeholders, the fire-warrior door,
   // the wall north of the skeletons and the Temple of Ikov ice chest.
-  const INN_LUCIEN_TILE = { x: 3122, y: 3483, z: 0 };
-  const HOUSE_LUCIEN_TILE = { x: 2573, y: 3321, z: 0 };
+  // Wiki: the start is the Flying Horse Inn in East Ardougne (the disguised 3444's placement);
+  // his house, where he is fought or given the staff, is between Edgeville and the GE (3443's).
+  const INN_LUCIEN_TILE = { x: 2573, y: 3321, z: 0 };
+  const HOUSE_LUCIEN_TILE = { x: 3122, y: 3483, z: 0 };
   const FIRE_WARRIOR_DOOR_ID = 93;
   const FIRE_WARRIOR_DOOR_TILE = { x: 2646, y: 9870, z: 0 };
   /** The cache placement: a straight wall piece (shape 0) facing rotation 1. */

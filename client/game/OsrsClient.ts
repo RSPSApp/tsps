@@ -469,6 +469,8 @@ const VARBIT_ACCOUNT_TYPE = 1777;
 const VARBIT_POPOUT_OPEN = 13090;
 const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
 const VARC_CHATBOX_SELECTED_TAB = 41;
+/** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
+const VARC_OSM_CHATBOX_DISABLED = 1220;
 const ACCOUNT_TYPE_MAIN = 0;
 const SCRIPT_HIGHLIGHT_SCREEN_COMPONENT = 2463;
 const SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT = 2465;
@@ -7061,6 +7063,8 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            this.widgetManager.isMobileChatDisabled = () =>
+                (this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) ?? 0) !== 0;
             try {
                 const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
                 if (initialMinimapState !== undefined) {

@@ -144,6 +144,12 @@ export class WidgetManager {
      */
     minimapState = 0;
 
+    /**
+     * Whether the mobile chatbox is toggled off (varc OSM_CHATBOX_DISABLED, 1220). Set by the
+     * client; windows that reserve the chat's height use it to grow into the freed space.
+     */
+    isMobileChatDisabled: (() => boolean) | null = null;
+
     /** The widget with contentType 1339 - compass (rotates with camera yaw) */
     compassWidget: WidgetNode | null = null;
 

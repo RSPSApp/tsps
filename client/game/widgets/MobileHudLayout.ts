@@ -85,25 +85,11 @@ export function combatStatusAnchor(client: OsrsClient):
     };
 }
 
-const mobileUid = (child: number) => ((MOBILE_ROOT << 16) | child) >>> 0;
-/** toplevel_osm:viewport-ish pane (601:10); the chat toggle script moves its raw y down by the chat height. */
-const MOBILE_CHAT_SHIFTED_PANE = mobileUid(10);
-/** toplevel_osm chat_container (601:49) and its cache height. */
-const MOBILE_CHAT_CONTAINER = mobileUid(49);
-const MOBILE_CHAT_HEIGHT = 145;
 /** All Settings (group 134) window; its script sizes it to the canvas minus the chat's height. */
 const ALL_SETTINGS_WINDOW = (134 << 16) | 1;
 /** Gaps kept above and below a window that grows into the space the hidden chat leaves. */
 const HIDDEN_CHAT_WINDOW_TOP = 6;
 const HIDDEN_CHAT_WINDOW_BOTTOM = 15;
-
-/** Whether the mobile chatbox is toggled off: the chat toggle script stops offsetting the 601:10 pane. */
-export function isMobileChatHidden(manager: { getWidgetByUid(uid: number): WidgetLike | undefined }): boolean {
-    const pane = manager.getWidgetByUid(MOBILE_CHAT_SHIFTED_PANE);
-    if (!pane) return false;
-    const chatHeight = manager.getWidgetByUid(MOBILE_CHAT_CONTAINER)?.rawHeight ?? MOBILE_CHAT_HEIGHT;
-    return (pane.rawY ?? 0) < chatHeight;
-}
 
 /**
  * Windows that reserve the chatbox's height keep doing so after the chat is hidden, leaving
@@ -123,11 +109,15 @@ export function adjustMobileHudWidget(
     node: WidgetLike,
     parentW: number,
     parentH: number,
-    manager: { getWidgetByUid(uid: number): WidgetLike | undefined; canvasHeight?: number },
+    manager: {
+        getWidgetByUid(uid: number): WidgetLike | undefined;
+        canvasHeight?: number;
+        isMobileChatDisabled?: (() => boolean) | null;
+    },
 ): void {
     adjustMobilePortraitWidget(node, parentW, parentH);
     const uid = (node as WidgetLike & { uid?: number }).uid;
-    if (uid === ((ALL_SETTINGS_WINDOW) >>> 0) && isMobileChatHidden(manager)) {
+    if (uid === ALL_SETTINGS_WINDOW && manager.isMobileChatDisabled?.()) {
         extendWindowIntoHiddenChat(node, manager.canvasHeight || parentH);
         return;
     }

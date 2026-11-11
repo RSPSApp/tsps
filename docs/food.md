@@ -267,7 +267,9 @@ All send sound 2401 (twice for the keg). The keg also sends a camera shake (3, 0
 camera reset follows 50 ticks later (tick 189); another keg first restarts the sway. The animation is `human_eat` (829), except the keg's
 `viking_keg_drink_full` (1330). The house Greenman's ale and Dragon bitter (`poh_*`,
 `rsprox_transcripts/229/00264.txt`) send their stock ale's lines, leave `poh_beer_glass`, and
-take 99→94 (Greenman's) and Attack 96→90 (Dragon bitter).
+take 99→94 (Greenman's) and Attack 96→90 (Dragon bitter). The house cider in the same recording
+sends "You drink the cider.  You feel slightly reinvigorated..." with two spaces. The five stock
+beer captures have one, and the stock Cider isn't captured.
 
 Effects are the Wiki's, and the levels above agree:
 - **Ales:** Asgarnian ale and Dragon bitter: Strength +2, Attack -(2 + 5% of current).
@@ -279,8 +281,8 @@ Effects are the Wiki's, and the levels above agree:
 Greenman's ale is the exception. The Wiki gives a flat 3, but both captures fit 2 + 4% of current.
 
 Ours:
-- The house Beer, Cider, Asgarnian ale and Chef's delight are taken to send their stock lines, as
-  the two captured house ales do.
+- The house Beer, Asgarnian ale and Chef's delight are taken to send their stock lines, as the
+  captured house Greenman's ale and Dragon bitter do.
 - Dwarven stout's lines are the Wiki's.
 - The keg's camera sway is filed under the atmospheric camera shake setting.
 

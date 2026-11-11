@@ -903,13 +903,15 @@ for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_
     // rsprox: the first line is a game message, the second spam.
     drink: { animation, messages: (itemId) => [{ text: itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", game: true }, "You feel refreshed and ready for more building."] } });
 }
-// The house's own ales (and the stock mind bomb and stout). The house Greenman's ale and Dragon bitter send
-// their stock ale's lines (rsprox_transcripts/229/00264.txt); Ours: the other house ales are taken to do
-// the same. Wizard's mind bomb's lines are captured (rec 20261111T225402-5ab63b4 tick 9: Magic 70 -> 73,
+// The house's own ales (and the stock mind bomb and stout). The house Greenman's ale, Dragon bitter and
+// cider are captured (rsprox_transcripts/229/00264.txt); Ours: the house Beer, Asgarnian ale and Chef's
+// delight are taken to send their stock ale's lines, as the captured Greenman's ale and Dragon bitter do. Wizard's mind bomb's lines are captured (rec 20261111T225402-5ab63b4 tick 9: Magic 70 -> 73,
 // Attack 64 -> 60, Defence 61 -> 57, Strength 58 -> 55); Dwarven stout's are the Wiki's.
 for (const [id, effect, emptyItemId = Items.BEER_GLASS_4, lines = undefined] of [
   [Items.BEER_3, player => { boostSkill(player, Skill.STRENGTH, 1, 0.02); lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06); }, undefined, reinvigoratedLines("beer")],
-  [Items.CIDER_3, player => { boostSkill(player, Skill.FARMING, 1, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0); }, undefined, reinvigoratedLines("cider")],
+  [Items.CIDER_3, player => { boostSkill(player, Skill.FARMING, 1, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0); }, undefined,
+    // rsprox_transcripts/229/00264.txt (poh_cider): two spaces after the first sentence.
+    () => ["You drink the cider.  You feel slightly reinvigorated...", "...and slightly dizzy too."]],
   [Items.ASGARNIAN_ALE_3, drinkAsgarnianAle, undefined, reinvigoratedLines("ale")],
   [Items.GREENMANS_ALE_3, drinkGreenmansAle, undefined, () => ["You drink the Greenman's Ale.", "It has a strange taste."]],
   [Items.DRAGON_BITTER_3, drinkDragonBitter, undefined, reinvigoratedLines("Dragon Bitter")],

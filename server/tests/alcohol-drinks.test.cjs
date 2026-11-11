@@ -316,3 +316,12 @@ test("the keg's reset survives TaskManager.cancelTasks(player) from other system
   for (let tick = 0; tick < 40; tick++) core.TaskManager.process();
   assert.equal(resets.length, 1);
 });
+
+test("the house cider sends its captured line, two spaces after the first sentence", async t => {
+  // rsprox_transcripts/229/00264.txt: poh_cider, "You drink the cider.  You feel slightly reinvigorated...".
+  const f = actor(t);
+  f.inv.setItem(10, new core.Item(I.CIDER_3, 1));
+  await drink(f, 10);
+  assert.equal(slotId(f, 10), I.BEER_GLASS_4);
+  assert.deepEqual(f.spam, ["You drink the cider.  You feel slightly reinvigorated...", "...and slightly dizzy too."]);
+});

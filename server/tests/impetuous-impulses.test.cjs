@@ -345,7 +345,12 @@ test("Elnock's Exchange: a shop_frame slot selects ii_elnex, Confirm trades it",
 test("Puro-Puro roaming implings start invisible, show after two minutes and are replaced when caught", (t) => {
   const roaming = plugin._test.roaming;
   const spawns = [], removed = [];
-  roaming.init({ core, spawnNpc: (def) => { const npc = { def, flags: new Map(), setFlag(key, value) { this.flags.set(key, value); }, setVisible(v) { npc.visible = v; } }; spawns.push(npc); return npc; }, removeNpc: (npc) => removed.push(npc) });
+  roaming.init({ core, spawnNpc: (def) => { const npc = { def, flags: new Map(), getId: () => def.id,
+    getSpawnPosition: () => new Location(def.x, def.y, def.z),
+    getMovementCoordinator: () => ({ getRadius: () => def.wanderRadius, setRadius: radius => { def.wanderRadius = radius; } }),
+    setFlag(key, value) { this.flags.set(key, value); }, setVisible(v) { npc.visible = v; } };
+    // Unit API supplies the entity-added callback; native cases below use World.add.
+    roaming.configureFlight({ npc }); spawns.push(npc); return npc; }, removeNpc: (npc) => removed.push(npc) });
   roaming.start();
   t.after(() => roaming.shutdown());
   assert.equal(spawns.length, 24, "Wiki embedded map: 10 low, 12 mid and 2 high points");
@@ -515,5 +520,159 @@ test("Puro-Puro roaming network uses mapped points, crosses cache wheat and repl
     for (let tick = 0; tick < 199; tick++) core.TaskManager.process();
     assert.equal(replacement.isVisible(), false);
     core.TaskManager.process(); assert.equal(replacement.isVisible(), true);
+  });
+});
+
+test("Puro-Puro fixed implings use world spawns, cross wheat and return after a catch", async (t) => {
+  await core.CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  PluginManager.loadFromDirectory(require("node:path").resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2592, 4320);
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { PathFinder } = require("../dist/game/model/movement/path/PathFinder");
+  const { NPCOptionPacketListener } = require("../dist/net/packet/impl/NPCOptionPacketListener");
+  const roaming = require("../plugins/minigames/impetuousimpulses/Roaming.ImpetuousImpulses");
+  const N = core.NpcIdentifiers, I = core.ItemIdentifiers;
+  const fixedIds = new Set([N.BABY_IMPLING_2, N.YOUNG_IMPLING_2, N.GOURMET_IMPLING_2,
+    N.EARTH_IMPLING_2, N.ESSENCE_IMPLING_2, N.ECLECTIC_IMPLING_2]);
+  const inRealm = at => at.getZ() === 0 && at.getX() >= 2560 && at.getX() <= 2623
+    && at.getY() >= 4288 && at.getY() <= 4351;
+  let index = 19300;
+  function actor(sub) {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(index++); p.setUsername("purofixed" + p.getIndex()); p.setRegistered(true);
+    p.setNeedsPlacement(false); p.setHitpoints(99); p.setAttribute("bot-skip-persistence", true);
+    sub.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+    return p;
+  }
+  // Same producer as ordinary world entry: definitions load into pending regions, then activate nearby.
+  assert.equal(new core.NpcSpawnDefinitionLoader().load(), true);
+  PluginManager.emitServerStartup({});
+  core.NpcSpawnDefinitionLoader.activateNear(new core.Location(2592, 4320, 0));
+  const worldSpawns = [...core.World.getNpcs()].filter(npc =>
+    npc?.getSpawnLineage()?.owner === core.NpcSpawnDefinitionLoader.LINEAGE_OWNER);
+  const lineages = new Set(worldSpawns.map(npc => npc.getSpawnLineage()));
+  t.after(() => { for (const lineage of lineages) lineage.retire(); });
+  const fixed = worldSpawns.filter(npc => inRealm(npc.getSpawnPosition()) && fixedIds.has(npc.getId()));
+  assert.equal(fixed.length, 51, "actual world definitions supply the Wiki's fixed population");
+  const unchangedCount = () => [...core.World.getNpcs()].filter(npc => npc && fixed.includes(npc)).length;
+  const scout = actor(t);
+  let crossing;
+  const wallTypes = new Map();
+  for (const objects of core.MapObjects.mapObjects.values()) {
+    for (const object of objects) {
+      const at = object.getLocation();
+      if (!inRealm(at)) continue;
+      if (object.getType() <= 3) wallTypes.set(object.getId(), (wallTypes.get(object.getId()) ?? 0) + 1);
+      if (crossing || core.ObjectDefinition.forPlayer(object.getId(), scout)?.getName() !== "Magical wheat") continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const from = at.transform(dx, dy);
+        if (inRealm(from) && !core.RegionManager.blocked(from, null)
+          && !core.RegionManager.canMovestart(from, at, 1, 1, null)) {
+          crossing = { object, from, target: at }; break;
+        }
+      }
+    }
+  }
+  assert.ok(crossing, "the active cache supplies an actual clipped wheat edge");
+  console.log("puro-fixed-map-walls", JSON.stringify([...wallTypes]));
+
+  await t.test("all fixed spawns fly with ordinary wander targets contained inside the realm", () => {
+    const outOfBounds = fixed.filter(npc => {
+      const at = npc.getSpawnPosition(), radius = npc.getMovementCoordinator().getRadius();
+      return !inRealm(at.transform(-radius, -radius)) || !inRealm(at.transform(radius, radius));
+    });
+    console.log("puro-fixed-population", JSON.stringify({ count: fixed.length,
+      minRadius: Math.min(...fixed.map(npc => npc.getMovementCoordinator().getRadius())),
+      outOfBounds: outOfBounds.length }));
+    assert.ok(fixed.every(npc => npc.hasFlag("movement:ignore-clipping")));
+    assert.equal(outOfBounds.length, 0);
+    assert.ok(worldSpawns.filter(npc => inRealm(npc.getSpawnPosition()) && !fixedIds.has(npc.getId()))
+      .every(npc => !npc.hasFlag("movement:ignore-clipping")), "other world-spawned realm NPCs keep collision");
+    assert.ok(fixed.every(npc => npc.getMovementCoordinator().getRadius() <= 5), "no wander radius grows");
+  });
+
+  await t.test("a world-spawned impling crosses cache wheat while ordinary actors remain clipped", sub => {
+    const { from, target } = crossing;
+    const p = actor(sub); p.setLocation(from.clone());
+    const ordinary = core.NPC.create(N.MAN, from.clone());
+    assert.equal(core.World.getNpcs().add(ordinary), true);
+    ordinary.setNeedsPlacement(false);
+    sub.after(() => core.World.getNpcs().remove(ordinary));
+    const overworld = core.NPC.create(N.BABY_IMPLING_2, new core.Location(3000, 3200, 0));
+    assert.equal(core.World.getNpcs().add(overworld), true);
+    sub.after(() => core.World.getNpcs().remove(overworld));
+    assert.equal(overworld.hasFlag("movement:ignore-clipping"), false, "other realms are not opted in");
+    for (const mobile of [p, ordinary]) {
+      assert.equal(mobile.hasFlag("movement:ignore-clipping"), false);
+      mobile.getMovementQueue().addCheckpoint(target); mobile.getMovementQueue().process();
+      assert.ok(mobile.getLocation().equals(from));
+    }
+    const npc = fixed.find(npc => npc.getId() === N.GOURMET_IMPLING_2);
+    npc.setLocation(from.clone()); npc.setNeedsPlacement(false);
+    npc.getMovementQueue().addCheckpoint(target); npc.getMovementQueue().process();
+    console.log("puro-fixed-motion", JSON.stringify({ wheatId: crossing.object.getId(),
+      from: [from.getX(), from.getY()], target: [target.getX(), target.getY()],
+      playerBlocked: p.getLocation().equals(from), npcBlocked: ordinary.getLocation().equals(from),
+      implingCrossed: npc.getLocation().equals(target) }));
+    assert.ok(npc.getLocation().equals(target));
+  });
+
+  for (const [label, npcId, jarId, respawnTicks] of [
+    ["baby", N.BABY_IMPLING_2, I.BABY_IMPLING_JAR, 7],
+    ["earth", N.EARTH_IMPLING_2, I.EARTH_IMPLING_JAR, 50],
+  ]) await t.test(`${label}: packet Catch, conservation and ${respawnTicks}-tick return permit another ordinary catch`, sub => {
+    const p = actor(sub), npc = fixed.find(npc => npc.getId() === npcId), home = npc.getSpawnPosition().clone();
+    npc.setLocation(crossing.from.clone()); npc.setNeedsPlacement(false);
+    let reached = false;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      p.setLocation(npc.getLocation().transform(dx, dy));
+      if (inRealm(p.getLocation()) && !core.RegionManager.blocked(p.getLocation(), null)
+        && PathFinder.reachedEntity(p, npc)) { reached = true; break; }
+    }
+    assert.ok(reached, "supplied approach satisfies the real reach predicate");
+    p.getSkillManager().setMaxLevel(core.Skill.HUNTER, 99).setCurrentLevels(core.Skill.HUNTER, 99);
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.BUTTERFLY_NET, 1));
+    p.getInventory().adds(I.IMPLING_JAR, 2);
+    const option = npc.getCurrentDefinition(p).getActions().findIndex(action => action === "Catch") + 1;
+    assert.ok(option > 0); assert.equal(p.busy(), false);
+    const rng = sub.mock.method(Math, "random", () => 0);
+    const click = () => new NPCOptionPacketListener().executeOption(p, npc.getIndex(), option);
+    click(); click();
+    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 1);
+    assert.equal(p.getInventory().getAmount(jarId), 1);
+    assert.equal(roaming.live.has(npc), false, "fixed returns stay owned by Hunter, not the roaming controller");
+    core.TaskManager.process(); assert.equal(npc.isVisible(), true);
+    core.TaskManager.process(); assert.equal(npc.isVisible(), false);
+    click();
+    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 1, "hidden Catch does not use a jar");
+    for (let tick = 0; tick < respawnTicks - 1; tick++) core.TaskManager.process();
+    assert.equal(npc.isVisible(), false);
+    core.TaskManager.process();
+    assert.equal(npc.isVisible(), true);
+    assert.equal(npc.untargetable === true, false);
+    assert.ok(npc.getLocation().equals(home));
+    assert.equal(unchangedCount(), 51, "returns preserve exactly the original fixed actors");
+    // Supply the next reachable approach to its restored home; no travel/client claim.
+    let homeReached = false;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      p.setLocation(home.transform(dx, dy));
+      if (inRealm(p.getLocation()) && !core.RegionManager.blocked(p.getLocation(), null)
+        && PathFinder.reachedEntity(p, npc)) { homeReached = true; break; }
+    }
+    assert.ok(homeReached, "the restored home has a real reachable approach");
+    click();
+    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 0);
+    assert.equal(p.getInventory().getAmount(jarId), 2);
+    rng.mock.restore();
+    for (let tick = 0; tick < respawnTicks + 2; tick++) core.TaskManager.process();
+    assert.equal(npc.isVisible(), true);
+    assert.ok(npc.getLocation().equals(home));
+    assert.equal(npc.hasFlag("movement:ignore-clipping"), true, "flight survives the fixed return path");
+    assert.equal(unchangedCount(), 51);
   });
 });

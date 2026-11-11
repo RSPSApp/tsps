@@ -90,7 +90,9 @@ function open(event) {
   }
   const required = grand ? Common.data.requirements.grandThieving : Common.data.requirements.thieving;
   const thieving = Common.level(player, "THIEVING");
-  const agilityAlternative = grand && Common.level(player, "AGILITY") >= GRAND_AGILITY_REQUIREMENT;
+  // Wiki (Grand Hallowed Coffin): "Thieving 84, or Thieving 66 with Agility 92", all boostable.
+  const agilityAlternative = grand && Common.level(player, "AGILITY") >= GRAND_AGILITY_REQUIREMENT
+    && thieving >= Common.data.requirements.thieving;
   if (thieving < required && !agilityAlternative) {
     player.sendMessage(Common.message("skillLevel", { skill: "Thieving", level: required }));
     return true;

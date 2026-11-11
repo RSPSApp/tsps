@@ -64,7 +64,7 @@ test('moonlight antelope waits exactly seven task ticks to cure poison or downgr
     f.ticks(6); assert.equal(f.hp, 24); assert.equal(f.player.getPoisonDamage(), venom ? 12 : 30);
     assert.equal(f.player.isVenomed(), venom);
     f.ticks(1); assert.equal(f.hp, 36); assert.equal(f.player.isVenomed(), false);
-    assert.equal(f.player.getPoisonDamage(), venom ? 60 : 0);
+    assert.equal(f.player.getPoisonDamage(), venom ? 56 : 0, 'venom 12 becomes poison 5 x 12 - 4 (recorded conversion)');
     assert.equal(f.player.getCombat().getPoisonImmunityTimer().secondsRemaining(), 0);
     f.ticks(5); assert.equal(f.hp, 36);
   }

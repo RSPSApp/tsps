@@ -71,6 +71,7 @@ test('Cure Me downgrades venom at its current damage; a second cast removes pois
     await cast(t, f, 'Cure Me');
     assert.equal(f.player.isVenomed(), false);
     assert.equal(CombatPoisonEffect.damageFromSeverity(f.player.getPoisonDamage()), damage);
+    assert.equal(f.player.getPoisonDamage(), damage * 5 - 4, 'the recorded conversion (6 becomes 26)');
     assert.equal(f.player.getCombat().getPoisonImmunityTimer().secondsRemaining(), 0);
     const hits = [];
     t.mock.method(f.player.getCombat().getHitQueue(), 'addPendingDamage', values => hits.push(...values));

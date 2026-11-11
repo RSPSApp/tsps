@@ -23,7 +23,9 @@ const SKIP_BUTTON_UID = (MUSIC_GROUP_ID << 16) | 17;
 const PLAYLIST_DROPDOWN_UID = (MUSIC_GROUP_ID << 16) | 21;
 const PLAYLIST_DROPDOWN_LAST_SLOT = 7;
 const PLAYLIST_DROPDOWN_FLAGS = 2;
-/** A list row's ops 3, 4 and 5 add the track to, or remove it from, playlist 1, 2 or 3. */
+/** A list row's and the now-playing text's op 2 is Unlock hint. */
+const UNLOCK_HINT_OP = 2;
+/** A list row's and the now-playing text's ops 3, 4 and 5 add the track to, or remove it from, playlist 1, 2 or 3. */
 const FIRST_PLAYLIST_OP = 3;
 /** music_current_playlist, bits 14-17 of varp 19: 0 All music, 1-3 a playlist. */
 const PLAYLIST_SHIFT = 14;
@@ -55,6 +57,8 @@ const HOLIDAY_TRACKS = new Set(JSON.parse(fs.readFileSync(path.join(__dirname, "
 let core;
 let pluginApi;
 let trackNames;
+let unlockHints;
+let trackById;
 let rowIdByTrackId;
 let allTrackIds;
 let nonHolidayTrackIds;
@@ -302,10 +306,8 @@ function onTrackPlayed(event) {
 function selectMusicTrack(event) {
   const op = event.opId ?? event.action;
   if (event.groupId !== MUSIC_GROUP_ID || event.childId !== MUSIC_JUKEBOX_CHILD_ID) return;
-  if (op >= FIRST_PLAYLIST_OP && op < FIRST_PLAYLIST_OP + Playlists.PLAYLIST_COUNT) {
-    togglePlaylistTrack(event.player, event.slot, op - FIRST_PLAYLIST_OP + 1);
-    return;
-  }
+  const listed = Number.isInteger(event.slot) && event.slot >= 0 ? selectableTracks[event.slot] : undefined;
+  if (trackOption(event, listed, op)) return;
   if (op !== 1) return;
   event.handled = true;
   if (!Number.isInteger(event.slot) || event.slot < 0) return;
@@ -471,9 +473,42 @@ function choosePlaylist({ player, slot, opId, action }) {
   if (!keepSingle) shuffleNow(player, tracks);
 }
 
-/** A list row's "Add to playlist" op: adds the unlocked track, or removes it when it is there. */
-function togglePlaylistTrack(player, slot, playlist) {
-  const track = Number.isInteger(slot) && slot >= 0 ? selectableTracks[slot] : undefined;
+/** Unlock hint and the playlist ops, shared by a list row and the now-playing text; true when `op` is one. */
+function trackOption(event, track, op) {
+  if (op === UNLOCK_HINT_OP) {
+    event.handled = true;
+    sendUnlockHint(event.player, track);
+    return true;
+  }
+  if (op >= FIRST_PLAYLIST_OP && op < FIRST_PLAYLIST_OP + Playlists.PLAYLIST_COUNT) {
+    event.handled = true;
+    togglePlaylistTrack(event.player, track, op - FIRST_PLAYLIST_OP + 1);
+    return true;
+  }
+  return false;
+}
+
+/** Unlock hint: where the track unlocks, or, once it is unlocked, where it was. */
+function sendUnlockHint(player, track) {
+  const hint = track && unlockHints[track.id];
+  // Ours: a track without a cache hint says nothing.
+  if (!hint) return;
+  const slot = slotByTrackId[track.id];
+  const unlocked = slot && Progress.isUnlocked(player, canonicalTrackBySlot[slot.key]);
+  player.sendMessage(`This track ${unlocked ? "was unlocked" : "unlocks"} ${hint}`);
+}
+
+/**
+ * The now-playing text's ops act on the track it shows, the one last played. Ours: with nothing
+ * played yet (or the music stopped) they do nothing.
+ */
+function nowPlayingAction(event) {
+  const trackId = event.player.getSession().getCurrentMusicTrack();
+  trackOption(event, Number.isInteger(trackId) && trackId >= 0 ? trackById.get(trackId) : undefined, event.opId ?? event.action);
+}
+
+/** A row's or the now-playing text's "Add to playlist" op: adds the unlocked track, or removes it when it is there. */
+function togglePlaylistTrack(player, track, playlist) {
   const value = Playlists.valueOf(track);
   const unlockSlot = track && slotByTrackId[track.id];
   if (value === undefined || !unlockSlot || !Progress.isUnlocked(player, canonicalTrackBySlot[unlockSlot.key])) return;
@@ -617,6 +652,8 @@ module.exports = {
     const tracks = core.Music.tracks();
     selectableTracks = buildSelectableTracks(tracks);
     trackNames = Object.fromEntries(tracks.map(({ id, name }) => [id, name]));
+    unlockHints = Object.fromEntries(tracks.filter(({ unlockHint }) => unlockHint).map(({ id, unlockHint }) => [id, unlockHint]));
+    trackById = new Map(tracks.map((track) => [track.id, track]));
     rowIdByTrackId = Object.fromEntries(tracks.map(({ id, rowId }) => [id, rowId]));
     slotByTrackId = {};
     const groups = new Map();
@@ -650,6 +687,7 @@ module.exports = {
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
     api.onCustomEvent("gameframe:ready", onMusicWelcomeAction);
     api.onInterfaceActionButton((MUSIC_GROUP_ID << 16) | MUSIC_JUKEBOX_CHILD_ID, selectMusicTrack);
+    api.onInterfaceActionButton((MUSIC_GROUP_ID << 16) | MUSIC_NOW_PLAYING_CHILD_ID, nowPlayingAction);
   // A tab mounted again later (Tutorial Island's unlocks) lost its flags too.
   api.onCustomEvent("gameframe:tab-mounted", ({ player, group }) => {
     if (group === MUSIC_GROUP_ID) queueMicrotask(() => enableMusicActions(player));
@@ -677,6 +715,6 @@ module.exports = {
     canEquipMusicCape, onMusicLogin, onMusicWelcomeAction, answerAirGuitarUnlock,
     onTrackPlayed, questComplete, unlockQuestTracks, onQuestCompleted, unlockCompletedQuestTracks,
     musicSettingsVarp, pickShuffleTrack, chooseMusicMode, skipTrack, selectMusicTrack, chooseMusicSettingOption,
-    choosePlaylist, togglePlaylistTrack, wipePlaylistSetting, shuffleTracks,
+    choosePlaylist, togglePlaylistTrack, wipePlaylistSetting, nowPlayingAction, shuffleTracks,
   },
 };

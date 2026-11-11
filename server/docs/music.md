@@ -15,6 +15,11 @@ The cache's unlock hints (DB table 44, column 2: "in Varrock.", "during the Drag
 say where each track plays. Area tracks unlock from the music area under the player, boss and
 minigame tracks from their own plugins' `music:unlock-track` events.
 
+A list row's op 2, Unlock hint, sends the hint as "This track unlocks in the Port Phasmatys
+brewery." for a locked track and "This track was unlocked in East Ardougne." for an unlocked one
+(rsprox 226/01702 ticks 722-759, 236/03934 tick 3721). The now-playing text (239:4) has the same
+op for the track it shows, the last one played (ours: nothing before a track has played).
+
 ## Music areas
 
 Music follows the Wiki's music maps tile by tile. `data/definitions/music-areas.json` is generated
@@ -144,7 +149,7 @@ of the three playlists", Wiki: Music Player), kept in `Playlists.Music.js` and t
 `music_playlist_<1-3>_track_<1-100>` (varps 5239-5388, sent at login). As captured (rsprox
 236/03934, 236/03935, 236/03925):
 
-- A list row's ops 3, 4 and 5 add the track to playlist 1, 2 or 3, or remove it when it is there:
+- A list row's ops 3, 4 and 5, and the now-playing text's for the track it shows, add the track to playlist 1, 2 or 3, or remove it when it is there:
   "You've added a track to playlist 1: <col=ff3045>Adventure" ("removed a track from"), in the
   unlock message's chatbox colour. A place holds the track's unlock slot as bank * 100 + bit
   (Adventure, bank 1 bit 0, is 100; 7th Realm, bank 9 bit 29, is 929). Removing leaves the place

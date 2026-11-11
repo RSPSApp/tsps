@@ -43,7 +43,7 @@ function buildTable() {
   const mist = { made: I.MIST_RUNE, name: "mist", level: 6 }, dust = { made: I.DUST_RUNE, name: "dust", level: 10 };
   const mud = { made: I.MUD_RUNE, name: "mud", level: 13 }, smoke = { made: I.SMOKE_RUNE, name: "smoke", level: 15 };
   const steam = { made: I.STEAM_RUNE, name: "steam", level: 19 }, lava = { made: I.LAVA_RUNE, name: "lava", level: 23 };
-  const row = (using, rune, xp) => [using.rune, { ...rune, xp, talisman: using.talisman }];
+  const row = (using, rune, xp) => [using.rune, { ...rune, xp, used: using.rune, talisman: using.talisman }];
   return new Map([
     [O.ALTAR_33, new Map([row(water, mist, 8), row(earth, dust, 8.3), row(fire, smoke, 8.5)])],
     [O.ALTAR_35, new Map([row(air, mist, 8.5), row(earth, mud, 9.3), row(fire, steam, 9.3)])],
@@ -114,8 +114,18 @@ function useNecklace(player) {
 /** FreeToPlay's line for a members item. */
 const MEMBERS_MESSAGE = "To use this item please login to a members' world.";
 
+/**
+ * The recipe for the item used on the altar: the elemental rune, or its talisman. Wiki (Combination
+ * rune): "Enter the altar, and use the talisman (not a tiara) on the runecraft altar."
+ */
+function recipeFor(objectId, itemId) {
+  const altar = TABLE.get(objectId);
+  if (!altar) return null;
+  return altar.get(itemId) ?? [...altar.values()].find((recipe) => recipe.talisman === itemId) ?? null;
+}
+
 function combine(event) {
-  const rune = !event.handled && TABLE.get(event.objectId)?.get(event.itemId);
+  const rune = !event.handled && recipeFor(event.objectId, event.itemId);
   if (!rune) return;
   event.handled = true;
   const { player } = event;
@@ -147,7 +157,7 @@ function combine(event) {
     player.sendMessage("You need the talisman of the rune you are using, or Magic Imbue, to combine runes.");
     return;
   }
-  const runeSlots = takeable(inventory, event.itemId);
+  const runeSlots = takeable(inventory, rune.used);
   const amount = Math.min(essence, total(runeSlots));
   if (amount <= 0) return;
   const necklace = wornNecklace(player);

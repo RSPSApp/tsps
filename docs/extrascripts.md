@@ -146,6 +146,8 @@ custom definition registered under its own source,
 `CacheDefinitions.registerCustomDefinitions(rows, "my-plugin")`, which the cache editor's
 document doesn't replace. The cache editor rejects saves that claim an id owned by another source.
 If a saved row conflicts at startup, the editor logs the conflict, skips that row, and keeps it on disk.
+The client receives editor definitions first, then one packet per plugin source. Registration refuses
+a source whose compressed definitions exceed the packet limit, leaving the previously registered rows intact.
 
 ### Custom Widgets
 

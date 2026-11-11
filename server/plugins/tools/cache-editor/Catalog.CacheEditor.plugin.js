@@ -56,9 +56,11 @@ function register(api) {
 
   // Every login replaces the client overlay, including an empty world.
   api.onPlayerLogin(({ player }) => {
-    const rows = core.CacheDefinitions.getCustomDefinitions();
     if (!player.getSession()) return;
-    player.getPacketSender().sendContentData("server", [{ key: "customDefinitions", rows }]);
+    const sender = player.getPacketSender();
+    for (const dataset of core.CacheDefinitions.getCustomDefinitionDatasets()) {
+      sender.sendContentData("server", [dataset]);
+    }
   });
   api.registerContentEndpoint("cache-kinds", () => ({ kinds: inspect.kinds(core) }));
   api.registerContentEndpoint("cache-inspect", (query) => inspect.describe(core, {

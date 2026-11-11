@@ -27,8 +27,25 @@ import { ArchivedTypeLoader } from "./codec/rs/config/ArchivedTypeLoader";
 import { ArchiveTypeLoader } from "./codec/rs/config/TypeLoader";
 import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
+import { encodeContentData } from "../../net/protocol/ClientProtocol";
 
 const STRUCT_PARAMS_OPCODE = 249;
+const CACHE_EDITOR_SOURCE = "cache-editor";
+type CustomDefinitionFields = { baseId: number; fields: Record<string, unknown> };
+
+function customDefinitionRows(definitions: ReadonlyMap<string, CustomDefinitionFields>) {
+    return [...definitions].map(([key, row]) => {
+        const [kind, id] = key.split(":");
+        return { kind, id: Number(id), baseId: row.baseId, fields: structuredClone(row.fields) };
+    });
+}
+
+function customDefinitionDataset(source: string, definitions: ReadonlyMap<string, CustomDefinitionFields>) {
+    return {
+        key: source === CACHE_EDITOR_SOURCE ? "customDefinitions" : "customDefinitionsAppend",
+        rows: customDefinitionRows(definitions),
+    };
+}
 
 export interface ServerCustomItem {
     id: number;
@@ -68,9 +85,9 @@ export class CacheDefinitions {
      * overrides. Kept apart from `customItems`, which is the item loader's own JSON pipeline, so a
      * loc or npc overlay needs no encoder and no cache repack.
      */
-    private static customDefinitions = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    private static customDefinitions = new Map<string, CustomDefinitionFields>();
     /** Each source's rows (the cache editor's document, the custom pets); customDefinitions is all of them. */
-    private static customDefinitionSources = new Map<string, Map<string, { baseId: number; fields: Record<string, unknown> }>>();
+    private static customDefinitionSources = new Map<string, Map<string, CustomDefinitionFields>>();
     private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
@@ -677,9 +694,9 @@ export class CacheDefinitions {
      */
     static registerCustomDefinitions(
         rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[],
-        source = "cache-editor",
+        source = CACHE_EDITOR_SOURCE,
     ): number {
-        const next = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+        const next = new Map<string, CustomDefinitionFields>();
         const counts = this.getBaseCounts();
         for (const row of rows) {
             const count = row?.kind === "loc" ? counts.objects : row?.kind === "npc" ? counts.npcs : counts.items;
@@ -691,6 +708,13 @@ export class CacheDefinitions {
             const fields = structuredClone(row.fields ?? {});
             if (Object.keys(fields).some(key => ["id", "cacheInfo", "cacheType", "__proto__", "constructor", "prototype"].includes(key))) throw new Error("Invalid custom definition field");
             next.set(`${row.kind}:${row.id}`, { baseId: row.baseId, fields });
+        }
+        if (next.size) {
+            try {
+                encodeContentData("server", [customDefinitionDataset(source, next)]);
+            } catch (error) {
+                throw new Error(`Cannot encode custom definitions from ${source}: ${(error as Error).message}`);
+            }
         }
         this.customDefinitionSources.set(source, next);
         this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
@@ -707,10 +731,19 @@ export class CacheDefinitions {
     }
 
     static getCustomDefinitions(): Array<{ kind: string; id: number; baseId: number; fields: Record<string, unknown> }> {
-        return [...this.customDefinitions.entries()].map(([key, row]) => {
-            const [kind, id] = key.split(":");
-            return { kind, id: Number(id), baseId: row.baseId, fields: { ...row.fields } };
-        });
+        return customDefinitionRows(this.customDefinitions);
+    }
+
+    static getCustomDefinitionDatasets() {
+        // Start with a replacement, even on an empty world. Subsequent packets add plugin rows.
+        const editor = this.customDefinitionSources.get(CACHE_EDITOR_SOURCE);
+        const datasets = [customDefinitionDataset(CACHE_EDITOR_SOURCE, editor ?? new Map())];
+        for (const [source, definitions] of this.customDefinitionSources) {
+            if (source !== CACHE_EDITOR_SOURCE && definitions.size) {
+                datasets.push(customDefinitionDataset(source, definitions));
+            }
+        }
+        return datasets;
     }
 
     /** True when this id is authored here rather than read from the cache. */

@@ -3,6 +3,7 @@
 // Every assertion here reads the real copied cache, so a wrong field name or a link that resolves in
 // theory but not against this revision fails here rather than in the editor.
 const assert = require("node:assert/strict");
+const { createHash } = require("node:crypto");
 const { test, before } = require("node:test");
 const path = require("node:path");
 
@@ -16,6 +17,7 @@ const Inspect = require("../plugins/tools/cache-editor/Inspect.CacheEditor");
 const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
+const { encodeContentData } = require("../dist/net/protocol/ClientProtocol");
 
 const core = { CacheDefinitions, ObjectDefinition: require("../dist/game/definition/ObjectDefinition").ObjectDefinition };
 const inspect = (request) => Inspect.describe(core, request);
@@ -584,6 +586,44 @@ test("login sends definitions and resets the client for an empty world", () => {
   CacheDefinitions.registerCustomDefinitions([]);
   login({ player });
   assert.deepEqual(sent[1][1][0].rows, []);
+});
+
+test("login sends editor and plugin definitions even when their combined packet exceeds the limit", (t) => {
+  const root = scratchRoot();
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    CacheDefinitions.registerCustomDefinitions([], "test-plugin");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const noise = (prefix, count) => Array.from({ length: count }, (_, index) =>
+    createHash("sha256").update(`${prefix}${index}`).digest("hex")).join("");
+  const { npcs, objects } = CacheDefinitions.getBaseCounts();
+  const editor = { kind: "loc", id: Math.max(50000, objects), baseId: 1, fields: { desc: noise("editor", 1800) } };
+  const plugin = { kind: "npc", id: Math.max(50000, npcs), baseId: 1, fields: { desc: noise("plugin", 400) } };
+  let login;
+  Catalog.register({ core, registerContentEndpoint() {}, onServerStartup() {}, onPlayerLogin(handler) { login = handler; } });
+  CacheDefinitions.registerCustomDefinitions([plugin], "test-plugin");
+  Document.save(core, root, { row: editor });
+  assert.equal(Document.apply(core, root), 1);
+  assert.throws(() => encodeContentData("server", [{ key: "customDefinitions", rows: [editor, plugin] }]), /exceeds short length/);
+
+  const sent = [];
+  const player = { getSession: () => ({}), getPacketSender: () => ({
+    sendContentData(source, datasets) {
+      const packet = encodeContentData(source, datasets);
+      assert.equal(packet.readUInt16BE(1), packet.length - 3);
+      sent.push(...datasets);
+    },
+  }) };
+  login({ player });
+  assert.deepEqual(sent, [
+    { key: "customDefinitions", rows: [editor] },
+    { key: "customDefinitionsAppend", rows: [plugin] },
+  ]);
+  assert.throws(() => CacheDefinitions.registerCustomDefinitions([
+    { ...plugin, fields: { desc: noise("oversized", 2000) } },
+  ], "test-plugin"), /test-plugin.*exceeds short length/);
+  assert.deepEqual(CacheDefinitions.getCustomDefinitionDatasets(), sent, "oversized replacements preserve registered definitions");
 });
 
 test("model uploads avoid custom item IDs and refuse oversized packets before saving", () => {

@@ -54,7 +54,7 @@ function getPvpLoadout(loadoutId) {
   return PVP_LOADOUTS[loadoutId] ?? PVP_LOADOUTS.edge_main_melee;
 }
 
-/** A free-to-play world (world.json membersWorld false) only gears bots with "f2p" loadouts. */
+/** A free-to-play world only gears bots with "f2p" loadouts. */
 function isLoadoutAvailable(loadoutId) {
   return isMembersWorld() || PVP_LOADOUTS[loadoutId]?.tags.includes("f2p") === true;
 }

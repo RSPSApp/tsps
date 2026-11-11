@@ -5,6 +5,21 @@ function isObject(value: unknown): value is JsonObject {
     return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+export function normalizePluginName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** World mode is known before plugin registration, so members-only content can be skipped. */
+export function isFreeToPlayWorld(world: JsonObject): boolean {
+    let enabled = false;
+    for (const [name, entry] of Object.entries(isObject(world.plugins) ? world.plugins : {})) {
+        if (normalizePluginName(name) !== "freetoplay") continue;
+        const value = isObject(entry) ? entry.enabled : entry;
+        if (typeof value === "boolean") enabled = value;
+    }
+    return enabled;
+}
+
 // The exported names of these plugins differ from their existing setting prefixes.
 const LEGACY_NAMESPACES = new Map([
     ["characters", "characters"],

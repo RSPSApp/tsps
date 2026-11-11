@@ -211,9 +211,12 @@ This prevents stale "ghost" players from remaining visible after disconnects/ref
 
 ## World config page
 
-The server serves a local page for editing world settings, plugin switches and every
-declared `pluginConfig` option. It writes `data/definitions/world.local.json` only, never
-`world.json`. At startup the server prints the URL and where the token is, never the token
+The local panel edits world settings and plugin options, lists players and their saves,
+and lets you browse and upload plugins. Settings are saved in
+`data/definitions/world.local.json`. When launched with the root `yarn start`, the
+panel also provides Start, Stop and Restart controls and stays available while the
+game server is stopped. The panel bundle is built from `rsps-website/host-local`
+and ships in `plugins/tools/worldadmin/panel/`. At startup the server prints the URL and where the token is, never the token
 itself (logs end up in `server.log` and journald):
 
 ```
@@ -248,9 +251,11 @@ Otherwise the page only writes the file and you restart by hand. The page is not
 
 ## Plugins
 
-Runtime plugins are loaded from:
-
-`./plugins`
+Runtime plugins are loaded from `./plugins`. In the local panel, **Plugins → Browse plugins**
+lists releases from the TSPS Plugins catalogue. Download a release, then select
+**Upload plugin ZIP** under **Installed**. The panel stores the package under
+`plugins/imported/` and the server loads it on restart. Plugin ZIPs contain server-side
+JavaScript, so only upload packages from authors you trust.
 
 The native OSRS Character Summary is shown by default. To enable the custom summary,
 merge this into `data/definitions/world.local.json` (or `world.json`) and restart:

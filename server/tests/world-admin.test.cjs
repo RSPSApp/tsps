@@ -4,6 +4,7 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
+const AdmZip = require("adm-zip");
 
 const PLUGIN = path.join(__dirname, "../plugins/tools/WorldAdmin.plugin.js");
 const ENV_KEYS = [
@@ -12,13 +13,13 @@ const ENV_KEYS = [
 ];
 const TOKEN = "test-token-abcdefghijklmnop";
 
-function freshPlugin() {
+function freshPlugin(pluginFile = PLUGIN) {
   for (const key of Object.keys(require.cache)) {
-    if (key.includes(`${path.sep}tools${path.sep}worldadmin${path.sep}`) || key === PLUGIN) {
+    if (key.includes(`${path.sep}tools${path.sep}worldadmin${path.sep}`) || key === pluginFile) {
       delete require.cache[key];
     }
   }
-  return require(PLUGIN);
+  return require(pluginFile);
 }
 
 function captureLogs() {
@@ -64,7 +65,10 @@ async function start(t, env = {}, opts = {}) {
         state.writes.push({ dir, nextLocal, expectedHash });
       },
     },
-    WorldConfigCatalog: { build: () => ({ plugins: [], options: [], world: [], membersWorld: true }) },
+    WorldConfigCatalog: {
+      build: () => ({ plugins: [], options: [], world: [], membersWorld: true }),
+      invalidate: () => {},
+    },
     Server: {
       shutdown: (reason, options) => state.shutdowns.push({ reason, options }),
       isShuttingDown: () => state.shuttingDown,
@@ -98,7 +102,7 @@ async function start(t, env = {}, opts = {}) {
     },
   };
 
-  const plugin = freshPlugin();
+  const plugin = freshPlugin(opts.pluginFile);
   const capture = captureLogs();
   let port = null;
   // The token file goes under <cwd>/data/definitions: tests that start without a token use a temp cwd.
@@ -137,7 +141,7 @@ async function start(t, env = {}, opts = {}) {
 
 function request(port, { method = "GET", path: urlPath = "/", headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
-    const data = body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body);
+    const data = body === undefined || typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
     const req = http.request({
       host: "127.0.0.1", port, method, path: urlPath, agent: false,
       headers: {
@@ -149,10 +153,11 @@ function request(port, { method = "GET", path: urlPath = "/", headers = {}, body
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("end", () => {
-        const text = Buffer.concat(chunks).toString("utf8");
+        const bytes = Buffer.concat(chunks);
+        const text = bytes.toString("utf8");
         let json;
         try { json = JSON.parse(text); } catch { json = undefined; }
-        resolve({ status: res.statusCode, headers: res.headers, text, json });
+        resolve({ status: res.statusCode, headers: res.headers, bytes, text, json });
       });
     });
     req.on("error", reject);
@@ -249,6 +254,61 @@ test("GET /?token= sets an HttpOnly SameSite=Strict cookie and redirects to /; t
   assert.equal((await request(port, { path: "/api/catalog", headers: { Cookie: `wa_token=${TOKEN}` } })).status, 401);
 });
 
+test("the panel serves its bundled assets with authentication", async (t) => {
+  const { port } = await start(t);
+  for (const [file, type] of [
+    ["panel.js", "application/javascript"],
+    ["panel.css", "text/css"],
+    ["skill-icons.json", "application/json"],
+    ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
+  ]) {
+    const asset = `/panel/${file}`;
+    assert.equal((await request(port, { path: asset })).status, 401);
+    const result = await request(port, { path: asset, headers: auth });
+    assert.equal(result.status, 200);
+    assert.ok(result.headers["content-type"].startsWith(type));
+    assert.ok(result.bytes.length > 0);
+  }
+  assert.equal((await request(port, { path: "/plugins", headers: auth })).status, 404);
+  assert.equal((await request(port, { path: "/panel/Access.WorldAdmin.js", headers: auth })).status, 404);
+});
+
+test("plugin ZIP import is authenticated, validates files, and never overwrites an installation", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-plugins-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const tools = path.join(directory, "plugins", "tools");
+  fs.mkdirSync(tools, { recursive: true });
+  const pluginFile = path.join(tools, path.basename(PLUGIN));
+  fs.copyFileSync(PLUGIN, pluginFile);
+  fs.symlinkSync(path.join(path.dirname(PLUGIN), "worldadmin"), path.join(tools, "worldadmin"), "dir");
+  const { port } = await start(t, {}, { pluginFile });
+  const upload = (body, headers = {}) => request(port, {
+    method: "POST", path: "/api/plugins/import", headers: { "Content-Type": "application/zip", ...headers }, body,
+  });
+  const manifest = { format: 1, id: "welcome", name: "Welcome", version: "1.0.0", description: "Greets players" };
+  const makeZip = (source, filename = "Welcome.plugin.js") => {
+    const zip = new AdmZip();
+    zip.addFile("plugin.json", Buffer.from(JSON.stringify(manifest)));
+    zip.addFile(filename, Buffer.from(source));
+    return zip.toBuffer();
+  };
+  const source = 'throw new Error("Must never execute during upload");';
+  const zip = makeZip(source);
+  assert.equal((await upload(zip)).status, 401);
+  assert.equal((await upload(zip, { ...auth, Origin: "http://elsewhere.test" })).status, 403);
+  assert.equal((await upload(zip, { ...auth, "Content-Type": "text/plain" })).status, 415);
+  assert.equal((await upload(makeZip(source, "nested/Welcome.plugin.js"), auth)).status, 400);
+  assert.equal((await upload(makeZip("!"), auth)).status, 400);
+  assert.equal((await upload(Buffer.alloc(0), { ...auth, "Content-Length": 1024 * 1024 + 1 })).status, 413);
+  const response = await upload(zip, auth);
+  assert.equal(response.status, 201);
+  assert.deepEqual(response.json, { name: "Welcome", version: "1.0.0" });
+  assert.equal((await upload(makeZip("module.exports = {}"), auth)).status, 409);
+  const installed = path.join(directory, "plugins", "imported", "welcome");
+  assert.equal(fs.readFileSync(path.join(installed, "Welcome.plugin.js"), "utf8"), source);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(installed, "plugin.json"), "utf8")), manifest);
+});
+
 test("catalog reports layers, mode, online players and countdown", async (t) => {
   const { port, state } = await start(t, { npm_lifecycle_event: "dev" }, { online: 3 });
   const res = await request(port, { path: "/api/catalog", headers: auth });
@@ -259,6 +319,39 @@ test("catalog reports layers, mode, online players and countdown", async (t) => 
   assert.equal(res.json.countdown.remainingSeconds, 0);
   assert.deepEqual(res.json.catalog.plugins, []);
   assert.equal(state.layers.local.shouldNotLeak, undefined);
+});
+
+test("the Players panel reads saved characters and keeps login credentials private", async (t) => {
+  const { DatabaseSync } = require("node:sqlite");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-players-"));
+  const database = path.join(directory, "players.sqlite");
+  const original = process.env.PLAYER_SAVE_DATABASE_PATH;
+  t.after(() => {
+    if (original === undefined) delete process.env.PLAYER_SAVE_DATABASE_PATH;
+    else process.env.PLAYER_SAVE_DATABASE_PATH = original;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const db = new DatabaseSync(database);
+  db.exec("CREATE TABLE player_saves (username TEXT PRIMARY KEY, save_json TEXT)");
+  const insert = db.prepare("INSERT INTO player_saves VALUES (?, ?)");
+  insert.run("test_player", JSON.stringify({
+    username: "Test Player", rights: { id: 1 }, skills: { maxLevel: [1, 1, 1, 10, 1, 1, 1] },
+    passwordHashWithSalt: "private-hash", attributes: { "login-tokens": ["private-token"] },
+  }));
+  insert.run("league:test_player", "{}");
+  db.close();
+  const { port } = await start(t);
+  process.env.PLAYER_SAVE_DATABASE_PATH = database;
+  assert.equal((await request(port, { path: "/api/players" })).status, 401);
+  const list = await request(port, { path: "/api/players", headers: auth });
+  assert.deepEqual(list.json.players, [
+    { username: "Test Player", id: "test player", online: false, rights: 1, banned: false, muted: false, combat: 3, total: 16 },
+  ]);
+  const details = await request(port, { path: "/api/players/save?name=test%20player", headers: auth });
+  assert.equal(details.status, 200);
+  assert.equal(details.json.save.skills.maxLevel[3], 10);
+  assert.doesNotMatch(details.text, /private-hash|private-token/);
+  assert.equal((await request(port, { path: "/api/players/save?name=..", headers: auth })).status, 400);
 });
 
 test("restart mode: nodemon.json's TSPS_RESTARTER=nodemon means dev, with or without npm_lifecycle_event", async (t) => {
@@ -562,7 +655,7 @@ test("input hardening: non-object bodies, prototype keys and oversized bodies ar
 test("GET / without page.html is a 404 text body; unknown routes 404", async (t) => {
   const { port } = await start(t);
   const fs = require("node:fs");
-  const page = path.join(__dirname, "../plugins/tools/worldadmin/page.html");
+  const page = path.join(__dirname, "../plugins/tools/worldadmin/panel/page.html");
   const res = await request(port, { path: "/", headers: auth });
   if (fs.existsSync(page)) {
     assert.equal(res.status, 200);

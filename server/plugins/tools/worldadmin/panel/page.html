@@ -4,178 +4,164 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>World config</title>
+<title>Host local</title>
+<link rel="stylesheet" href="/panel/panel.css">
+<script src="/panel/panel.js"></script>
 <style>
-  /* OSRS-style interface: stone panels with bevelled frames (dark, the default) and a
-     parchment variant for light schemes. Every colour is a token on :root. */
+  @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/panel/fonts/plex-sans-400.woff2") format("woff2"); }
+  @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("/panel/fonts/plex-sans-500.woff2") format("woff2"); }
+  @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url("/panel/fonts/plex-sans-600.woff2") format("woff2"); }
   :root {
     color-scheme: dark;
-    --bg: #1e1913;
-    --panel: #3e3529;
-    --panel-deep: #2b241c;
-    --bevel-light: #645640;
-    --bevel-dark: #120e09;
-    --field: #19140f;
-    --line: #554836;
-    --text: #ffeab8;
-    --muted: #dccb9c;
-    --heading: #ff981f;
-    --heading-shadow: 1px 1px 0 #000;
-    --label-shadow: 1px 1px 0 #000;
-    --focus: #ffff00;
-    --focus-halo: #000000;
-    --accent: #ff981f;
-    --on: #2fbf3a;
-    --on-mark: #0b2a0d;
-    --off-bg: #a8291e;
-    --off-mark: #ffe3dc;
-    --changed: #ffd27a;
-    --changed-bg: #5a4214;
-    --edited: #9df0a4;
-    --edited-bg: #1f4422;
-    --error: #ffb4a8;
-    --error-bg: #4d1c15;
-    --warn: #ffe08a;
-    --warn-bg: #4a3a12;
-    --info: #ffeab8;
-    --info-bg: #2e3a2b;
-    --off: #b8aa88;
-    --badge-warn-bg: #5c1d12;
-    --badge-warn-text: #ffd2b8;
-    --badge-ok-bg: #1f4422;
-    --badge-ok-text: #b4f5b9;
-    --shadow: rgba(0, 0, 0, 0.55);
-    --backdrop: rgba(0, 0, 0, 0.6);
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      color-scheme: light;
-      --bg: #c9b48a;
-      --panel: #eadcb4;
-      --panel-deep: #dccb9c;
-      --bevel-light: #fbf2d8;
-      --bevel-dark: #8c7550;
-      --field: #f8efd6;
-      --line: #b59d72;
-      --text: #3a2812;
-      --muted: #5a4224;
-      --heading: #6e3500;
-      --heading-shadow: 1px 1px 0 rgba(255, 246, 220, 0.6);
-      --label-shadow: 1px 1px 0 rgba(90, 50, 4, 0.18);
-      --focus: #ffff00;
-      --focus-halo: #3a2812;
-      --accent: #8a4400;
-      --on: #2a8f30;
-      --on-mark: #ffffff;
-      --off-bg: #b8352a;
-      --off-mark: #ffffff;
-      --changed: #6b4400;
-      --changed-bg: #f7d98c;
-      --edited: #1d5a22;
-      --edited-bg: #cfe8c2;
-      --error: #8a1d12;
-      --error-bg: #f3c9bd;
-      --warn: #5e4300;
-      --warn-bg: #f4e09a;
-      --info: #3a2812;
-      --info-bg: #d9e2c4;
-      --off: #66553a;
-      --badge-warn-bg: #f1c4b0;
-      --badge-warn-text: #5e1306;
-      --badge-ok-bg: #cfe8c2;
-      --badge-ok-text: #1a4f1e;
-      --shadow: rgba(60, 40, 10, 0.35);
-      --backdrop: rgba(40, 25, 5, 0.45);
-    }
+    --bg: #16171a;
+    --panel: #1c1d21;
+    --panel-deep: #1d1f22;
+    --field: #15171a;
+    --rule: rgba(202, 169, 94, .16);
+    --line: rgba(202, 169, 94, .26);
+    --text: #e4dfd3;
+    --muted: #aaa59a;
+    --accent: #caa95e;
+    --changed: #f6c765;
+    --changed-bg: #383120;
+    --edited: #75d892;
+    --edited-bg: #1e3529;
+    --error: #ff9b94;
+    --error-bg: #361f21;
+    --warn: #f6c765;
+    --warn-bg: #383120;
+    --info: #e4dfd3;
+    --info-bg: #25272b;
+    --off: #aaa59a;
+    --badge-warn-bg: var(--error-bg);
+    --badge-warn-text: var(--error);
+    --badge-ok-bg: var(--edited-bg);
+    --badge-ok-text: var(--edited);
+    --shadow: rgba(0, 0, 0, .45);
+    --backdrop: rgba(0, 0, 0, .5);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 500 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Verdana, sans-serif;
+    font: 13px/1.5 "IBM Plex Sans", system-ui, sans-serif;
   }
-  /* The game's interface frame: light top-left edge, dark bottom-right. */
-  .bevel, header, .rows, .footer, dialog, .overlay-box, .tip, .banner {
-    border: 2px solid;
-    border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  .layout {
+    --server-bar-height: 58px;
+    display: grid; grid-template-columns: 213px minmax(0, 1fr);
+    grid-template-rows: var(--server-bar-height) minmax(0, 1fr);
+    height: 100vh; height: 100dvh;
+  }
+  .server-bar {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 0 34px 0 26px; background: #121315; border-bottom: 1px solid var(--rule);
+  }
+  .sidebar {
+    padding: 28px 16px; background: #121315; border-right: 1px solid var(--rule);
+    overflow: auto;
+  }
+  .brand {
+    margin: 2px 10px 28px; color: #aaa59a; font-size: 14px;
+    line-height: 1; letter-spacing: .12em; text-transform: uppercase;
+  }
+  .tabs { display: grid; gap: 4px; }
+  .tabs button {
+    display: flex; align-items: center; gap: 20px; border: 0; padding: 8px 10px;
+    background: transparent; color: #c4bfb2; font-size: 14px; line-height: 20px; text-align: left;
+  }
+  .tabs button:hover, .tabs button[aria-selected="true"] { background: #2a2c30; color: #fff; }
+  .tabs svg, .menu-toggle svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+  .tabs button[aria-selected="true"] svg { color: var(--accent); }
+  .menu-toggle, .menu-backdrop { display: none; }
+  .workspace {
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+    min-width: 0; min-height: 0; padding: 16px 34px 0;
   }
   header {
-    position: sticky; top: 0; z-index: 5;
-    background: var(--panel);
-    border-width: 0 0 2px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+    padding-bottom: 14px; border-bottom: 1px solid var(--rule);
   }
-  .bar {
-    max-width: 960px; margin: 0 auto; padding: 10px 16px;
-    display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
-  }
-  h1, h2, h3 { color: var(--heading); text-shadow: var(--heading-shadow); font-weight: 700; }
-  h1 { font-size: 24px; line-height: 1.2; margin: 0; flex: 1 1 auto; }
+  h1, h2, h3 { font-weight: 600; }
+  h1 { font-size: 24px; line-height: 1.3; margin: 0; flex: 1 1 auto; }
   h3 { font-size: 16px; margin: 12px 0 4px; }
-  main { max-width: 960px; margin: 0 auto; padding: 12px 16px 84px; }
+  main { overflow: auto; padding: 0 3px 24px; margin-inline: -3px; }
   button, input, select, textarea { font: inherit; color: inherit; }
-  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 4px var(--focus-halo); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* Stone buttons; pressing inverts the bevel. */
   button {
-    background: var(--panel-deep); color: var(--text);
-    border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
-    border-radius: 2px; padding: 5px 12px; cursor: pointer; font-weight: 600;
-    text-shadow: var(--label-shadow);
+    background: var(--panel-deep); color: #eee9dd;
+    border: 1px solid var(--line); border-radius: 5px;
+    min-height: 36px; padding: 0 12px; cursor: pointer;
   }
-  button:hover:not(:disabled) { filter: brightness(1.12); }
-  button:active:not(:disabled), .tabs button[aria-selected="true"] {
-    border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-  }
-  button.primary { color: var(--heading); text-shadow: var(--heading-shadow); }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:hover:not(:disabled) { background: #2a2c30; }
+  button.primary { background: #383120; border-color: var(--accent); color: #f6f2e8; }
+  button.primary:hover:not(:disabled) { background: #494029; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   button.link {
     border: none; background: none; padding: 2px 0; color: var(--accent); text-decoration: underline;
-    font-weight: 500; text-shadow: none; align-self: flex-start;
+    min-height: 0; align-self: flex-start;
   }
-  .tabs { display: flex; gap: 4px; }
-  .tabs button[aria-selected="true"] { background: var(--bg); color: var(--heading); text-shadow: var(--heading-shadow); }
 
-  /* Inset fields. */
   input[type="text"], input[type="search"], input[type="number"], input[type="date"], select, textarea {
     background: var(--field); color: var(--text);
-    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-    border-radius: 2px;
+    border: 1px solid var(--line); border-radius: 5px; min-height: 36px;
   }
-  input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.85; }
-  .search { flex: 1 1 220px; min-width: 0; }
-  .search input { width: 100%; padding: 5px 10px; }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  .search { flex: 0 1 280px; min-width: 0; }
+  .search input { width: 100%; padding: 0 12px; }
 
-  .banner { border-radius: 2px; padding: 10px 12px; margin: 0 0 12px; display: flex; gap: 12px; align-items: flex-start; }
+  dialog, .overlay-box, .tip, .banner, .badge, .map-view { border: 1px solid var(--line); }
+  .banner { border-radius: 8px; padding: 10px 12px; margin: 16px 0 0; display: flex; gap: 12px; align-items: flex-start; }
   .banner > .text { flex: 1 1 auto; overflow-wrap: anywhere; }
   .banner.error { background: var(--error-bg); color: var(--error); }
   .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  #local-host-disclaimer a { color: inherit; }
+  #dismiss-local-host-disclaimer { flex: none; width: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 20px; line-height: 1; }
+  #dismiss-local-host-disclaimer:hover { background: var(--line); }
   .banner.info { background: var(--info-bg); color: var(--info); }
 
-  section.group { margin: 20px 0 0; }
-  section.group > h2 { font-size: 19px; line-height: 1.3; margin: 0 0 8px; }
-  .rows { background: var(--panel); border-radius: 2px; box-shadow: 0 2px 6px var(--shadow); }
-  .row {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 260px);
-    gap: 6px 16px; padding: 10px 12px; border-top: 1px solid var(--line);
+  #panel-settings, #plugins-installed { container-type: inline-size; }
+  .settings-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px; margin-top: 24px;
   }
-  .row:first-child { border-top: none; }
+  .settings-grid > .row { border-radius: 8px; box-shadow: none; }
+  .settings-wide { grid-column: 1 / -1; }
+  details.group { margin-top: 12px; }
+  details.group:first-child { margin-top: 24px; }
+  details.group > summary {
+    padding: 14px 18px; background: var(--panel); border-radius: 8px;
+    color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s ease;
+  }
+  details.group > summary:hover { background: #222328; }
+  details.group[open] > summary { border-radius: 8px 8px 0 0; }
+  details.group > .rows { border-radius: 0 0 8px 8px; }
+  .folder-count { margin-inline-start: 8px; color: var(--muted); font-size: 13px; }
+  .rows { background: var(--panel); border-radius: 8px; }
+  .row { box-shadow: inset 0 1px 0 #2a2b30; }
+  .row > :first-child { overflow-wrap: anywhere; }
+  .toggle-row:has(.switch:not(:disabled)) { cursor: pointer; }
+  .rows > .row:last-child, .rows > .plugin:last-child:not(:has(.plugin-options)) > .row,
+  .rows > .plugin:last-child > .plugin-options > .row:last-child { border-radius: 0 0 8px 8px; }
+  .plugin-options { margin-inline-start: 18px; border-inline-start: 1px solid var(--line); }
+  .plugin-options > .row { padding-inline-start: 16px; }
   .row.inactive .label, .row.inactive .help { color: var(--off); }
-  .label { font-weight: 700; color: var(--text); text-shadow: var(--label-shadow); }
+  .label { font-size: 14px; font-weight: 500; color: var(--text); }
   .title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .info-wrap { position: relative; display: inline-flex; }
   /* Not ".info": that is also a banner kind (.banner.info), which this rule shrank to an icon. */
   .info-button {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 1.5em; height: 1.5em; padding: 0; border: none; border-radius: 50%;
-    background: none; color: var(--muted); cursor: help; text-shadow: none;
+    width: 1.5em; height: 1.5em; min-height: 0; padding: 0; border: none; border-radius: 50%;
+    background: none; color: var(--muted); cursor: help;
   }
-  .info-button:hover, .info-button:focus-visible { color: var(--heading); filter: none; }
+  .info-button:hover, .info-button:focus-visible { color: var(--accent); }
   .info-button svg { width: 1em; height: 1em; display: block; }
   .tip {
     position: absolute; left: 0; top: 100%; z-index: 4;
     width: max-content; max-width: min(320px, 70vw);
-    padding: 4px 8px; border-radius: 2px;
+    padding: 4px 8px; border-radius: 5px;
     background: var(--panel-deep); color: var(--text);
     box-shadow: 0 2px 8px var(--shadow);
     font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -185,55 +171,55 @@
   .info-wrap:hover .tip, .info-wrap:focus-within .tip { visibility: visible; opacity: 1; }
   .badge {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px;
-    padding: 6px 10px; border-radius: 2px; font-weight: 700;
+    padding: 6px 10px; border-radius: 5px; font-weight: 600;
     background: var(--badge-warn-bg); color: var(--badge-warn-text);
-    border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   }
   .badge.pending { background: var(--badge-ok-bg); color: var(--badge-ok-text); }
   .badge-icon { width: 1.1em; height: 1.1em; flex: none; }
   .badge-text { flex: 1 1 12em; }
   .badge button { padding: 3px 10px; }
   .badge button.link { color: inherit; font-weight: 700; padding: 2px 0; }
-  .help { color: var(--muted); font-size: 14px; margin-top: 2px; }
-  .meta { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .help { color: #a8a295; font-size: 13px; line-height: 1.45; margin-top: 5px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
   .tag { font-size: 12px; border-radius: 2px; padding: 0 6px; font-weight: 600; }
   .tag.changed { background: var(--changed-bg); color: var(--changed); }
   .tag.edited { background: var(--edited-bg); color: var(--edited); }
   .tag.note { background: var(--panel-deep); color: var(--muted); border: 1px solid var(--line); }
-  .control { display: flex; flex-direction: column; gap: 4px; align-items: stretch; justify-content: center; }
+  .control { display: flex; flex: 0 1 auto; flex-direction: column; gap: 4px; align-items: flex-end; max-width: 50%; min-width: 0; }
   .control input[type="text"], .control input[type="number"], .control input[type="date"], .control select, .control textarea {
-    width: 100%; padding: 4px 8px;
+    max-width: 100%; min-width: 0; padding: 0 12px; color: #eee9dd;
   }
-  .control textarea { min-height: 80px; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+  .control input[type="text"] { width: 160px; }
+  .control input[type="number"] { width: 84px; appearance: textfield; }
+  .control input[type="number"]::-webkit-inner-spin-button, .control input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+  .control select {
+    appearance: none; padding-right: 34px; cursor: pointer;
+    background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaa497' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center / 12px 12px;
+  }
+  .control textarea { width: 240px; min-height: 80px; padding: 8px 12px; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+  .description-row { flex-wrap: wrap; row-gap: 12px; }
+  .description-row > :first-child { flex: 1 1 220px; }
+  .description-row .control { flex: 1 1 300px; max-width: none; align-items: stretch; }
+  .description-field { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .description-count { flex: none; color: #8f8a80; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .description-field textarea { flex: 1; width: auto; min-height: 0; font: inherit; line-height: 1.45; resize: none; }
+  .control :disabled { opacity: .55; cursor: not-allowed; }
   .control .invalid { border-color: var(--error); }
   .field-error { color: var(--error); font-size: 13px; }
 
-  /* On/off: a stone box with a green tick or a red cross, plus the On/Off text beside it. */
-  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; align-self: flex-start; font-weight: 700; }
-  .switch input {
-    appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer; position: relative;
-    width: 24px; height: 24px; border-radius: 2px;
-    background: var(--off-bg);
-    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-  }
-  .switch input::after {
-    content: "\2715"; position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    font: 700 14px/1 system-ui, sans-serif; color: var(--off-mark);
-  }
-  .switch input:checked { background: var(--on); }
-  .switch input:checked::after { content: "\2713"; color: var(--on-mark); font-size: 16px; }
-  .switch input:disabled { opacity: 0.5; cursor: not-allowed; }
-  .switch-text { text-shadow: var(--label-shadow); min-width: 2em; }
+  .control .link { align-self: flex-end; }
+  .toggle-row .host-switch-control { min-height: 0; cursor: pointer; }
+  .toggle-row .host-switch-control input { inset: 0; width: 100%; height: 100%; margin: 0; z-index: 1; cursor: inherit; }
+  .toggle-row .host-switch-control:has(input:disabled) { opacity: .45; cursor: not-allowed; }
 
   .footer {
-    position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-width: 2px 0 0;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+    gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--rule);
   }
-  .footer .bar { justify-content: flex-end; }
-  .footer .status { flex: 1 1 auto; color: var(--muted); font-size: 14px; }
+  .footer .status { flex: 1 1 auto; color: var(--muted); }
   .empty { color: var(--muted); padding: 24px 0; text-align: center; }
   dialog {
-    border-radius: 2px; background: var(--panel); color: var(--text);
+    border-radius: 8px; background: var(--panel); color: var(--text);
     width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0;
     box-shadow: 0 6px 24px var(--shadow);
   }
@@ -242,12 +228,12 @@
   .dialog-body h2 { margin: 0 0 12px; font-size: 19px; }
   .dialog-actions { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
   table.diff { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--panel-deep); }
-  table.diff th { color: var(--heading); text-shadow: var(--heading-shadow); }
+  table.diff th { color: var(--accent); }
   table.diff th, table.diff td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
   table.diff td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   ul.list { margin: 6px 0 12px; padding-left: 20px; }
   .seconds { display: inline-flex; gap: 6px; align-items: center; }
-  .seconds label { text-shadow: var(--label-shadow); font-weight: 700; }
+  .seconds label { font-weight: 600; }
   .seconds input { width: 90px; padding: 4px 8px; }
   .overlay {
     position: fixed; inset: 0; z-index: 20; background: var(--bg); color: var(--text);
@@ -255,73 +241,117 @@
   }
   .overlay-box {
     display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
-    background: var(--panel); border-radius: 2px; padding: 24px 28px; max-width: 420px;
+    background: var(--panel); border-radius: 8px; padding: 24px 28px; max-width: 420px;
     box-shadow: 0 6px 24px var(--shadow);
   }
-  .overlay-box p { margin: 0; font-size: 19px; line-height: 1.3; font-weight: 700; color: var(--heading); text-shadow: var(--heading-shadow); }
+  .overlay-box p { margin: 0; font-size: 19px; line-height: 1.3; font-weight: 700; color: var(--accent); }
   .spinner {
     width: 28px; height: 28px; border-radius: 50%;
-    border: 3px solid var(--panel-deep); border-top-color: var(--heading);
+    border: 3px solid var(--panel-deep); border-top-color: var(--accent);
     animation: spin 0.9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
-  .map-dialog { width: min(820px, calc(100vw - 24px)); }
-  .map-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .map-toolbar label { font-weight: 700; text-shadow: var(--label-shadow); }
-  .map-toolbar select { padding: 3px 6px; }
-  .map-readout { flex: 1 1 14em; font: 600 13px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text); }
-  .map-view {
-    position: relative; overflow: hidden; height: min(60vh, 480px); touch-action: none; cursor: crosshair;
-    background: var(--field); user-select: none;
-    border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-  }
-  .map-view.dragging { cursor: grabbing; }
-  .map-view img { position: absolute; width: 256px; height: 256px; image-rendering: pixelated; pointer-events: none; }
-  .map-marker {
-    position: absolute; pointer-events: none; transform: translate(-50%, -50%);
-    border: 2px solid #ffff00; outline: 2px solid #000; border-radius: 2px;
-  }
-  .map-marker::after {
-    content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; transform: translate(-50%, -50%);
-    background: #ffff00; border: 1px solid #000; border-radius: 50%;
-  }
-  .map-status { margin: 8px 0 0; font-weight: 600; }
-  .map-attribution { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
-  .spawn-pick { align-self: flex-start; }
   [hidden] { display: none !important; }
-  @media (max-width: 640px) {
-    .row { grid-template-columns: minmax(0, 1fr); }
-    h1 { flex-basis: 100%; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .server-bar { padding-inline: 16px; }
+    .workspace { padding-inline: 16px; }
+    .sidebar {
+      display: none; position: fixed; z-index: 12; inset: var(--server-bar-height) auto 0 0;
+      width: min(280px, calc(100vw - 48px)); padding: 20px 16px;
+      box-shadow: 12px 0 30px var(--shadow);
+    }
+    .sidebar.open { display: block; }
+    .menu-backdrop {
+      display: block; position: fixed; z-index: 11; inset: var(--server-bar-height) 0 0;
+      width: 100%; border: 0; border-radius: 0;
+    }
+    .menu-backdrop, .menu-backdrop:hover:not(:disabled) { background: var(--backdrop); }
+    .menu-toggle {
+      display: grid; place-items: center; width: 34px; padding: 0; margin-left: -4px;
+      border: 0; background: transparent;
+    }
+    h1 { font-size: 21px; }
+  }
+  @container (max-width: 655px) {
+    .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @container (max-width: 400px) {
+    .row:has(textarea) { flex-direction: column; align-items: stretch; gap: 12px; }
+    .row:has(textarea) .control, .control textarea { width: 100%; max-width: 100%; }
+  }
+  @media (max-width: 600px) {
+    .search { flex: 1 0 100%; }
   }
 </style>
 </head>
-<body>
-<header>
-  <div class="bar">
-    <h1>World config</h1>
-    <div class="tabs" role="tablist" aria-label="Sections">
-      <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="true">Settings</button>
-      <button type="button" role="tab" id="tab-plugins" aria-controls="panel-plugins" aria-selected="false" tabindex="-1">Plugins</button>
+<body class="host-page">
+<div class="layout">
+  <section class="server-bar" aria-label="Server controls">
+    <div class="host-status-line" role="status">
+      <span id="server-status" class="host-status-dot host-status-starting">Starting</span>
+      <span id="server-count" class="host-status-meta" hidden></span>
     </div>
-    <div class="search">
-      <input type="search" id="search" placeholder="Search settings" aria-label="Search">
+    <div class="host-header-actions">
+      <button type="button" id="server-power" class="host-power-button" aria-label="Start server" disabled>
+        <svg id="server-start-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v10"/><path d="M6.2 5.8a9 9 0 1 0 11.6 0"/></svg>
+        <span id="server-power-label">Start</span>
+      </button>
+      <button type="button" id="server-restart" class="host-icon-button" aria-label="Restart server" title="Restart server" disabled>↻</button>
     </div>
-  </div>
-</header>
-<main>
-  <div id="flashes" aria-live="polite"></div>
-  <div id="banners" aria-live="polite"></div>
-  <div id="countdown-banner"></div>
-  <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings"></div>
-  <div id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
-  <p id="loading" class="empty">Loading…</p>
-</main>
-<div class="footer">
-  <div class="bar">
-    <span class="status" id="footer-status" aria-live="polite"></span>
-    <button type="button" id="discard" disabled>Discard edits</button>
-    <button type="button" class="primary" id="save" disabled>Save</button>
+  </section>
+  <aside id="sidebar" class="sidebar">
+    <div class="brand">Host local</div>
+    <div class="tabs" role="tablist" aria-label="Sections" aria-orientation="vertical">
+      <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M10 15v4"/></svg>
+        Settings
+      </button>
+      <button type="button" role="tab" id="tab-players" aria-controls="panel-players" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        Players
+      </button>
+      <button type="button" role="tab" id="tab-plugins" aria-controls="panel-plugins" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v4m6-4v4M7 8h10v3a5 5 0 0 1-10 0V8zm5 8v4"/></svg>
+        Plugins
+      </button>
+    </div>
+  </aside>
+  <button type="button" id="menu-backdrop" class="menu-backdrop" aria-label="Close sections menu" tabindex="-1" hidden></button>
+  <div class="workspace">
+    <header>
+      <button type="button" id="menu-toggle" class="menu-toggle" aria-label="Open sections menu" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <h1 id="page-title">Settings</h1>
+      <div class="search">
+        <input type="search" id="search" placeholder="Search settings" aria-label="Search">
+      </div>
+    </header>
+    <main>
+      <div id="flashes" aria-live="polite"></div>
+      <div id="banners" aria-live="polite"></div>
+      <div id="countdown-banner"></div>
+      <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
+        <div id="local-host-disclaimer" class="banner warn">
+          <div class="text">
+            For an easy way to start your RSPS, we recommend <a href="https://rsps.app/host/" target="_blank" rel="noopener">/host</a>. It offers daily updates, custom items, NPCs and objects, a map editor, and simple gameplay toggles.<br>
+            We cannot provide support for this panel or locally hosted servers.
+          </div>
+          <button type="button" id="dismiss-local-host-disclaimer" aria-label="Dismiss local hosting disclaimer">&times;</button>
+        </div>
+        <div id="settings-fields"></div>
+      </div>
+      <div id="panel-players" role="tabpanel" aria-labelledby="tab-players" hidden></div>
+      <div id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+      <p id="loading" class="empty">Loading…</p>
+    </main>
+    <footer class="footer">
+      <span class="status" id="footer-status" aria-live="polite"></span>
+      <button type="button" id="discard" disabled>Discard edits</button>
+      <button type="button" class="primary" id="save" disabled>Save</button>
+    </footer>
   </div>
 </div>
 <div id="overlay" class="overlay" hidden>
@@ -330,33 +360,6 @@
     <p id="overlay-text"></p>
   </div>
 </div>
-<dialog id="map-dialog" class="map-dialog" aria-labelledby="map-title">
-  <div class="dialog-body">
-    <h2 id="map-title">Pick the spawn point</h2>
-    <div class="map-toolbar">
-      <button type="button" id="map-zoom-out" aria-label="Zoom out">&minus;</button>
-      <button type="button" id="map-zoom-in" aria-label="Zoom in">+</button>
-      <label for="map-plane">Plane</label>
-      <select id="map-plane">
-        <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
-      </select>
-      <span class="map-readout" id="map-readout" aria-live="polite"></span>
-    </div>
-    <div class="map-view" id="map-view" tabindex="0" role="application"
-      aria-label="Map. Drag or use the arrow keys to move, plus and minus to zoom, click to mark a tile, Enter to use the marked point."
-      aria-describedby="map-marked">
-      <div id="map-tiles"></div>
-      <div class="map-marker" id="map-marker" hidden></div>
-    </div>
-    <p class="map-status" id="map-marked"></p>
-    <p class="map-status" id="map-error" role="alert" hidden>The map tiles couldn't be loaded (offline, or the wiki's map has moved). You can still type the spawn point into the JSON box.</p>
-    <p class="map-attribution">Map tiles: OSRS Wiki</p>
-  </div>
-  <div class="dialog-actions">
-    <button type="button" id="map-cancel">Cancel</button>
-    <button type="button" class="primary" id="map-use" disabled>Use this point</button>
-  </div>
-</dialog>
 <dialog id="preview" aria-labelledby="preview-title">
   <div class="dialog-body">
     <h2 id="preview-title">Review changes to world.local.json</h2>
@@ -382,6 +385,7 @@
     edits: { world: {}, plugins: {}, pluginConfig: {} },
     rows: [],            // { el, kind, key, search, refresh() }
     tab: "settings",
+    pluginView: new URLSearchParams(window.location.search).get("plugins") === "browse" ? "browse" : "installed",
     dismissedFailure: null,
     pollTimer: null,
     reconnect: null,     // { delay } while the server is down
@@ -390,6 +394,7 @@
     outcomeNote: null,   // the flash saying how the last accepted Apply ended
     lastPlan: null,
   };
+  var hubViews = [];
 
   function el(tag, props, children) {
     var node = document.createElement(tag);
@@ -414,6 +419,34 @@
 
   function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
   function has(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+
+  function pluginUpload() {
+    var input = el("input", { type: "file", accept: ".zip,application/zip", hidden: true });
+    var button = el("button", { type: "button", text: "Upload plugin ZIP", onclick: function () { input.click(); } });
+    input.addEventListener("change", async function () {
+      var file = input.files[0];
+      input.value = "";
+      if (!file) return;
+      button.disabled = true;
+      try {
+        var response = await fetch("/api/plugins/import", {
+          method: "POST", headers: { "Content-Type": "application/zip" }, body: file,
+        });
+        var result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Upload failed.");
+        flash("info", result.name + " v" + result.version + " installed. Restart the server to load it.");
+        await load(true);
+      } catch (error) {
+        flash("error", "Could not import plugin: " + error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    return el("div", { className: "plugin-upload" }, [
+      input, button,
+      el("p", { text: "Import ZIPs from authors you trust. Plugin code runs on the next server start." }),
+    ]);
+  }
 
   function api(path, body) {
     var init = { credentials: "same-origin", headers: {} };
@@ -523,217 +556,11 @@
 
   // ---------- spawn point map picker ----------
 
-  // Tiles from the OSRS Wiki's map server (the same tiles its interactive maps use):
-  //   <base>/<zoom>/<plane>_<tx>_<ty>.png, 256 px, zoom -3..3 = 2^zoom px per game tile,
-  //   tx = floor(x * 2^zoom / 256), ty = floor(y * 2^zoom / 256), ty grows north (image top = north).
-  // The version folder changes when the wiki re-renders its map; update it here if tiles stop loading.
-  var MAP_TILE_BASE = "https://maps.runescape.wiki/osrs/versions/2026-10-20_a/tiles/rendered/0/";
-  var MAP_MIN_ZOOM = -3;
-  var MAP_MAX_ZOOM = 3;
-  var TILE_PX = 256;
   var LUMBRIDGE = { x: 3222, y: 3218, z: 0 };
-
-  var mapDialog = document.getElementById("map-dialog");
-  var mapView = document.getElementById("map-view");
-  var mapTiles = document.getElementById("map-tiles");
-  var mapMarker = document.getElementById("map-marker");
-  var mapReadout = document.getElementById("map-readout");
-  var mapMarked = document.getElementById("map-marked");
-  var mapError = document.getElementById("map-error");
-  var mapPlane = document.getElementById("map-plane");
-  var mapUse = document.getElementById("map-use");
-  var map = null; // { zoom, plane, cx, cy, marker, onUse, loads, errors, drag }
+  var spawnPicker;
 
   function validPoint(v) {
     return v && typeof v === "object" && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y));
-  }
-
-  function mapScale() { return Math.pow(2, map.zoom); }
-
-  /** World pixel of the view's top-left corner (x right, y down = south). */
-  function mapOrigin() {
-    var s = mapScale();
-    return { left: map.cx * s - mapView.clientWidth / 2, top: -map.cy * s - mapView.clientHeight / 2 };
-  }
-
-  function gameAt(offsetX, offsetY) {
-    var s = mapScale();
-    var o = mapOrigin();
-    return { x: Math.floor((o.left + offsetX) / s), y: Math.floor(-(o.top + offsetY) / s) };
-  }
-
-  function renderMap() {
-    if (!map) return;
-    var s = mapScale();
-    var o = mapOrigin();
-    var w = mapView.clientWidth;
-    var h = mapView.clientHeight;
-    mapTiles.textContent = "";
-    var txMin = Math.floor(o.left / TILE_PX);
-    var txMax = Math.floor((o.left + w) / TILE_PX);
-    var tyMin = Math.floor(-(o.top + h) / TILE_PX);
-    var tyMax = Math.floor(-o.top / TILE_PX);
-    for (var tx = txMin; tx <= txMax; tx++) {
-      for (var ty = tyMin; ty <= tyMax; ty++) {
-        if (tx < 0 || ty < 0) continue;
-        var img = document.createElement("img");
-        img.alt = "";
-        img.referrerPolicy = "no-referrer";
-        img.loading = "lazy";
-        img.decoding = "async";
-        img.draggable = false;
-        img.style.left = (tx * TILE_PX - o.left) + "px";
-        img.style.top = (-(ty + 1) * TILE_PX - o.top) + "px";
-        img.addEventListener("load", onTileLoad);
-        img.addEventListener("error", onTileError);
-        img.src = MAP_TILE_BASE + map.zoom + "/" + map.plane + "_" + tx + "_" + ty + ".png";
-        mapTiles.appendChild(img);
-      }
-    }
-    if (map.marker) {
-      var size = Math.max(s, 10);
-      mapMarker.style.width = size + "px";
-      mapMarker.style.height = size + "px";
-      mapMarker.style.left = ((map.marker.x + 0.5) * s - o.left) + "px";
-      mapMarker.style.top = (-(map.marker.y + 0.5) * s - o.top) + "px";
-      mapMarker.style.opacity = map.marker.z === map.plane ? "1" : "0.45";
-      mapMarker.hidden = false;
-      mapMarked.textContent = "Marked: x " + map.marker.x + ", y " + map.marker.y + ", plane " + map.marker.z;
-    } else {
-      mapMarker.hidden = true;
-      mapMarked.textContent = "Click a tile to mark the spawn point.";
-    }
-    mapUse.disabled = !map.marker;
-  }
-
-  function onTileLoad() {
-    if (!map) return;
-    map.loads += 1;
-    mapError.hidden = true;
-  }
-  function onTileError(event) {
-    event.target.hidden = true; // Tiles outside the map are missing on the server too.
-    if (!map) return;
-    map.errors += 1;
-    if (map.loads === 0) mapError.hidden = false;
-  }
-
-  function zoomMap(delta, offsetX, offsetY) {
-    var next = Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, map.zoom + delta));
-    if (next === map.zoom) return;
-    if (offsetX === undefined) { offsetX = mapView.clientWidth / 2; offsetY = mapView.clientHeight / 2; }
-    // Keep the point under the cursor where it is.
-    var s = mapScale();
-    var o = mapOrigin();
-    var gx = (o.left + offsetX) / s;
-    var gy = -(o.top + offsetY) / s;
-    map.zoom = next;
-    s = mapScale();
-    map.cx = gx - (offsetX - mapView.clientWidth / 2) / s;
-    map.cy = gy + (offsetY - mapView.clientHeight / 2) / s;
-    renderMap();
-  }
-
-  function panMap(dxPx, dyPx) {
-    var s = mapScale();
-    map.cx += dxPx / s;
-    map.cy -= dyPx / s;
-    renderMap();
-  }
-
-  function showHover(offsetX, offsetY) {
-    var g = gameAt(offsetX, offsetY);
-    mapReadout.textContent = "x " + g.x + ", y " + g.y + ", plane " + map.plane;
-  }
-
-  mapView.addEventListener("pointerdown", function (event) {
-    if (!map || event.button !== 0) return;
-    mapView.setPointerCapture(event.pointerId);
-    map.drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
-  });
-  mapView.addEventListener("pointermove", function (event) {
-    if (!map) return;
-    var rect = mapView.getBoundingClientRect();
-    showHover(event.clientX - rect.left, event.clientY - rect.top);
-    var drag = map.drag;
-    if (!drag || drag.id !== event.pointerId) return;
-    var dx = event.clientX - drag.x;
-    var dy = event.clientY - drag.y;
-    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
-    drag.moved = true;
-    mapView.classList.add("dragging");
-    drag.x = event.clientX;
-    drag.y = event.clientY;
-    panMap(-dx, -dy);
-  });
-  function endDrag(event, click) {
-    if (!map || !map.drag || map.drag.id !== event.pointerId) return;
-    var drag = map.drag;
-    map.drag = null;
-    mapView.classList.remove("dragging");
-    if (click && !drag.moved) {
-      var rect = mapView.getBoundingClientRect();
-      var g = gameAt(event.clientX - rect.left, event.clientY - rect.top);
-      map.marker = { x: g.x, y: g.y, z: map.plane };
-      renderMap();
-    }
-  }
-  mapView.addEventListener("pointerup", function (event) { endDrag(event, true); });
-  mapView.addEventListener("pointercancel", function (event) { endDrag(event, false); });
-  mapView.addEventListener("pointerleave", function () { if (map && !map.drag) mapReadout.textContent = ""; });
-  mapView.addEventListener("wheel", function (event) {
-    if (!map) return;
-    event.preventDefault();
-    var rect = mapView.getBoundingClientRect();
-    zoomMap(event.deltaY < 0 ? 1 : -1, event.clientX - rect.left, event.clientY - rect.top);
-  }, { passive: false });
-
-  mapDialog.addEventListener("keydown", function (event) {
-    if (!map) return;
-    var inSelect = event.target === mapPlane;
-    var step = Math.round(mapView.clientWidth / 4);
-    if (event.key === "+" || event.key === "=") { zoomMap(1); event.preventDefault(); }
-    else if (event.key === "-" || event.key === "_") { zoomMap(-1); event.preventDefault(); }
-    else if (inSelect) return;
-    else if (event.key === "ArrowLeft") { panMap(-step, 0); event.preventDefault(); }
-    else if (event.key === "ArrowRight") { panMap(step, 0); event.preventDefault(); }
-    else if (event.key === "ArrowUp") { panMap(0, -step); event.preventDefault(); }
-    else if (event.key === "ArrowDown") { panMap(0, step); event.preventDefault(); }
-    else if (event.key === "Enter" && event.target === mapView && map.marker) { useMapPoint(); event.preventDefault(); }
-  });
-
-  document.getElementById("map-zoom-in").addEventListener("click", function () { zoomMap(1); });
-  document.getElementById("map-zoom-out").addEventListener("click", function () { zoomMap(-1); });
-  mapPlane.addEventListener("change", function () { map.plane = Number(mapPlane.value); renderMap(); });
-  document.getElementById("map-cancel").addEventListener("click", function () { mapTiles.textContent = ""; mapDialog.close(); });
-  mapUse.addEventListener("click", useMapPoint);
-  // Escape (the dialog's cancel) and Cancel both close without changing anything; no tiles load while closed.
-  mapDialog.addEventListener("close", function () { map = null; mapTiles.textContent = ""; });
-
-  function useMapPoint() {
-    if (!map || !map.marker) return;
-    var point = { x: map.marker.x, y: map.marker.y, z: map.marker.z };
-    var onUse = map.onUse;
-    mapTiles.textContent = "";
-    mapDialog.close();
-    onUse(point);
-  }
-
-  /** Opens the picker at `start` ({x, y, z}); `onUse(point)` receives the chosen tile. */
-  function openMapPicker(start, onUse) {
-    var origin = validPoint(start) ? start : LUMBRIDGE;
-    var plane = Math.max(0, Math.min(3, Math.floor(Number(origin.z) || 0)));
-    map = {
-      zoom: 2, plane: plane, cx: Number(origin.x) + 0.5, cy: Number(origin.y) + 0.5,
-      marker: validPoint(start) ? { x: Math.floor(Number(start.x)), y: Math.floor(Number(start.y)), z: plane } : null,
-      onUse: onUse, loads: 0, errors: 0, drag: null,
-    };
-    mapPlane.value = String(plane);
-    mapError.hidden = true;
-    mapReadout.textContent = "";
-    if (typeof mapDialog.showModal === "function") mapDialog.showModal(); else mapDialog.setAttribute("open", "");
-    renderMap();
-    mapView.focus();
   }
 
   // ---------- plugin-off badges ----------
@@ -751,14 +578,14 @@
     return svg;
   }
 
-  /** Plugins that are switched off now and must be turned on for `plugin` to load: itself (optional) and its dependencies. */
-  function switchesNeeded(plugin, includeSelf) {
+  /** Dependencies that are switched off and must be turned on for this plugin to load. */
+  function switchesNeeded(plugin) {
     var needed = [];
     var seen = {};
     (function visit(p, self) {
       if (!p || seen[p.name]) return;
       seen[p.name] = true;
-      if ((!self || includeSelf) && !p.enabled) needed.push(p.name);
+      if (!self && !p.enabled) needed.push(p.name);
       (p.dependsOn || []).forEach(function (dep) { visit(state.byName[dep], false); });
     })(plugin, true);
     return needed;
@@ -779,11 +606,8 @@
     return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
   }
 
-  /**
-   * A warning badge for an option whose plugin isn't loaded (`context` "option"), or a plugin
-   * whose dependency is off ("dependency"), with a button that turns the missing switches on.
-   */
-  function pluginOffBadge(plugin, context) {
+  /** A warning on a plugin with disabled dependencies, with a button to turn them on. */
+  function dependencyBadge(plugin) {
     var box = el("div", { className: "badge", role: "status" });
     // The badge is rebuilt on every change; keep keyboard focus on its (new) button.
     function focusBadge() {
@@ -792,9 +616,7 @@
     }
     function refresh() {
       box.textContent = "";
-      var needed = switchesNeeded(plugin, context === "option");
-      var deps = needed.filter(function (n) { return n !== plugin.name; });
-      var selfOff = needed.indexOf(plugin.name) !== -1;
+      var needed = switchesNeeded(plugin);
       var pending = needed.length > 0 && needed.every(function (n) { return state.edits.plugins[n] === true; });
       box.classList.toggle("pending", pending);
       if (pending) {
@@ -804,23 +626,11 @@
           onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, false); }); focusBadge(); } }));
         return;
       }
-      var message;
-      if (context === "dependency") {
-        message = "Needs " + listNames(deps) + ", which " + (deps.length > 1 ? "are" : "is") + " off";
-      } else if (selfOff && deps.length === 0) {
-        message = "Plugin " + plugin.name + " is off — this setting has no effect";
-      } else if (selfOff) {
-        message = "Plugin " + plugin.name + " is off and needs " + listNames(deps) + " — this setting has no effect";
-      } else if (deps.length) {
-        message = "Plugin " + plugin.name + " needs " + listNames(deps) + ", which " + (deps.length > 1 ? "are" : "is") + " off — this setting has no effect";
-      } else {
-        message = "Plugin " + plugin.name + " isn't loaded — this setting has no effect";
-      }
+      var message = "Needs " + listNames(needed) + ", which " + (needed.length > 1 ? "are" : "is") + " off";
       box.appendChild(warnIcon());
       box.appendChild(el("span", { className: "badge-text", text: message }));
       if (needed.length && !readOnly()) {
-        var label = context === "option" && selfOff && deps.length === 0 ? "Turn on" : "Turn on " + listNames(context === "dependency" ? deps : needed);
-        box.appendChild(el("button", { type: "button", text: label, "aria-label": "Turn on " + listNames(needed),
+        box.appendChild(el("button", { type: "button", text: "Turn on " + listNames(needed),
           onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, true); }); focusBadge(); } }));
       }
     }
@@ -828,29 +638,15 @@
     return { el: box, refresh: refresh };
   }
 
-  /** Members-only content on a free world: the fix is the Members world switch. */
   function membersBadge() {
     var box = el("div", { className: "badge", role: "status" }, [
       warnIcon(),
       el("span", { className: "badge-text", text: "Members only — won't load on a free world" }),
-      el("button", { type: "button", className: "link", text: "Go to Members world", onclick: goToMembersWorld }),
     ]);
     return { el: box, refresh: function () {} };
   }
 
-  function goToMembersWorld() {
-    var row = state.rows.filter(function (r) { return r.kind === "world" && r.key === "membersWorld"; })[0];
-    if (!row) return;
-    selectTab("settings");
-    if (row.el.hidden) {
-      document.getElementById("search").value = "";
-      applySearch();
-    }
-    row.el.scrollIntoView({ block: "center" });
-    row.focus();
-  }
-
-  function readOnly() { return !!(state.data && state.data.layers && state.data.layers.localError); }
+  function readOnly() { return !!(state.data && (state.data.layers.localError || (state.data.serverStatus && state.data.serverStatus !== "online"))); }
 
   /**
    * One option row. `owner` is the CatalogPlugin that declares it (or null for world/core).
@@ -858,6 +654,9 @@
    */
   function optionRow(kind, option, owner) {
     var decl = option.decl;
+    var isSpawnPoint = kind === "world" && option.key === "spawn" && decl.type === "json";
+    var isDescription = kind === "world" && option.key === "description";
+    var descriptionMax = 120;
     var section = kind === "world" ? "world" : "pluginConfig";
     var controlId = nextId("opt");
     var helpId = controlId + "-help";
@@ -875,11 +674,11 @@
       changedTag, editedTag,
     ]);
     var membersOff = state.data.catalog.membersWorld === false && (decl.members || (owner && owner.members));
-    var badge = membersOff ? membersBadge()
-      : (!option.ownerEnabled && owner) ? pluginOffBadge(owner, "option") : null;
+    var badge = membersOff ? membersBadge() : null;
 
     var control;
     var input;
+    var descriptionCount;
     function showError(message) {
       row.invalid = !!message;
       errorEl.textContent = message || "";
@@ -892,10 +691,16 @@
     }
     var describedBy = helpId;
 
-    if (decl.type === "boolean") {
-      input = el("input", { type: "checkbox", id: controlId, role: "switch", "aria-describedby": describedBy,
-        onchange: function () { setEdit(section, option, input.checked); refresh(); } });
-      control = el("label", { className: "switch" }, [input, el("span", { className: "switch-text" })]);
+    if (isSpawnPoint) {
+      control = el("div");
+      spawnPicker = LocalPanelComponents.spawnPicker(control);
+    } else if (decl.type === "boolean") {
+      var toggle = LocalPanelComponents.switchControl(controlId, describedBy, function (checked) {
+        setEdit(section, option, checked);
+        refresh();
+      });
+      input = toggle.input;
+      control = toggle.control;
     } else if (decl.type === "enum") {
       input = el("select", { id: controlId, "aria-describedby": describedBy,
         onchange: function () {
@@ -947,10 +752,20 @@
       if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
       control = input;
     } else {
-      input = el("input", { type: "text", id: controlId, "aria-describedby": describedBy,
-        oninput: function () { showError(null); setEdit(section, option, input.value); refreshMarkers(); } });
-      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
-      control = input;
+      if (isDescription) descriptionCount = el("small", { id: controlId + "-count", className: "description-count" });
+      input = el(isDescription ? "textarea" : "input", {
+        type: isDescription ? null : "text", id: controlId,
+        rows: isDescription ? 2 : null, maxlength: isDescription ? String(descriptionMax) : null,
+        placeholder: isDescription ? "What makes your world worth joining?" : decl.defaultText,
+        "aria-describedby": isDescription ? describedBy + " " + descriptionCount.id : describedBy,
+        oninput: function () {
+          if (descriptionCount) descriptionCount.textContent = input.value.length + "/" + descriptionMax;
+          showError(null);
+          setEdit(section, option, input.value);
+          refreshMarkers();
+        },
+      });
+      control = isDescription ? el("div", { className: "description-field" }, [descriptionCount, input]) : input;
     }
 
     resetButton.addEventListener("click", function () {
@@ -963,24 +778,14 @@
     var label = el("label", { className: "label", for: controlId, text: labelText });
     var text = el("div", null, [
       titleLine(label, option.key),
-      el("div", { className: "help", id: helpId, text: decl.help || "" }),
+      el("div", { className: "help", id: helpId, text: isSpawnPoint ? "Where new and stranded players appear." : decl.help || "" }),
       meta,
       badge ? badge.el : null,
     ]);
-    var pickButton = null;
-    if (kind === "world" && option.key === "spawn" && decl.type === "json") {
-      pickButton = el("button", { type: "button", className: "spawn-pick", text: "Pick on map",
-        onclick: function () {
-          openMapPicker(currentValue(section, option), function (point) {
-            input.value = JSON.stringify(point, null, 2);
-            showError(null);
-            setEdit(section, option, point);
-            refreshMarkers();
-          });
-        } });
-    }
-    var controlBox = el("div", { className: "control" }, [control, pickButton, errorEl, resetButton]);
-    var rowEl = el("div", { className: "row" + (membersOff || (!option.ownerEnabled && owner) ? " inactive" : "") }, [text, controlBox]);
+    var controlBox = el("div", { className: "control" }, [control, errorEl, resetButton]);
+    var rowEl = LocalPanelComponents.settingRow("row" + (decl.type === "boolean" ? " toggle-row host-switch-field" : "") +
+      (isDescription ? " description-row" : "") +
+      (membersOff || (!option.ownerEnabled && owner) ? " inactive" : ""), text, controlBox);
 
     function refreshMarkers() {
       var value = currentValue(section, option);
@@ -994,9 +799,15 @@
     /** Puts the control back to the current value (after load, reset or discard). */
     function refresh() {
       var value = currentValue(section, option);
-      if (decl.type === "boolean") {
+      if (isSpawnPoint) {
+        var point = validPoint(value) ? value : LUMBRIDGE;
+        spawnPicker.render({
+          point: { x: Math.floor(Number(point.x)), y: Math.floor(Number(point.y)), z: Math.max(0, Math.min(3, Math.floor(Number(point.z) || 0))) },
+          id: controlId, describedBy: describedBy, disabled: readOnly() || busy(),
+          onPick: function (next) { setEdit(section, option, next); refresh(); },
+        });
+      } else if (decl.type === "boolean") {
         input.checked = value === true;
-        control.lastChild.textContent = value === true ? "On" : "Off";
       } else if (decl.type === "enum") {
         var index = "";
         (decl.values || []).forEach(function (v, i) { if (v.value === value || (typeof v.value === "number" && typeof value === "string" && v.value === Number(value))) index = String(i); });
@@ -1008,35 +819,32 @@
       } else {
         input.value = value === undefined ? "" : String(value);
       }
-      input.disabled = readOnly();
+      if (input) input.disabled = readOnly();
+      if (descriptionCount) descriptionCount.textContent = input.value.length + "/" + descriptionMax;
       showError(null);
       refreshMarkers();
-      if (badge) badge.refresh();
-      if (pickButton) pickButton.disabled = readOnly() || busy();
     }
 
     row.el = rowEl;
     row.search = [labelText, option.key, decl.help, owner ? owner.name : ""].join(" ").toLowerCase();
     row.refresh = refresh;
-    row.refreshPlugins = function () { if (badge) badge.refresh(); };
-    row.focus = function () { input.focus(); };
     refresh();
     return row;
   }
 
-  function pluginRow(plugin) {
+  function pluginRow(plugin, options) {
     var controlId = nextId("plugin");
     var helpId = controlId + "-help";
+    var nameId = controlId + "-name";
     var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from the plugin's default" });
     var editedTag = el("span", { className: "tag edited", text: "unsaved" });
-    var input = el("input", { type: "checkbox", id: controlId, role: "switch", "aria-describedby": helpId });
-    var stateText = el("span", { className: "switch-text" });
+    var toggle = LocalPanelComponents.switchControl(controlId, helpId, function (checked) { setPluginSwitch(plugin.name, checked); });
+    var input = toggle.input;
     var row = { kind: "plugin", key: plugin.name, invalid: false };
 
     function current() {
       return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
     }
-    input.addEventListener("change", function () { setPluginSwitch(plugin.name, input.checked); });
 
     var meta = el("div", { className: "meta" }, [
       el("span", { text: "default: " + (plugin.defaultEnabled ? "on" : "off") }),
@@ -1045,28 +853,32 @@
     ]);
     var membersOff = state.data.catalog.membersWorld === false && plugin.members;
     var badge = membersOff ? membersBadge()
-      : (plugin.enabled && !plugin.loaded) ? pluginOffBadge(plugin, "dependency") : null;
+      : (plugin.enabled && !plugin.loaded && !plugin.awaitingLoad) ? dependencyBadge(plugin) : null;
 
-    var rowEl = el("div", { className: "row" + (membersOff ? " inactive" : "") }, [
+    var rowEl = LocalPanelComponents.settingRow("row toggle-row host-switch-field" + (membersOff ? " inactive" : ""),
       el("div", null, [
-        titleLine(el("label", { className: "label", for: controlId, text: plugin.name }), plugin.file),
+        titleLine(el("label", { className: "label", id: nameId, for: controlId, text: plugin.name }), plugin.file),
         el("div", { className: "help", id: helpId, text: plugin.description || "" }),
         meta,
         badge ? badge.el : null,
       ]),
-      el("div", { className: "control" }, [el("label", { className: "switch" }, [input, stateText])]),
-    ]);
+      el("div", { className: "control" }, [toggle.control]),
+    );
 
     function refresh() {
       var on = current();
       input.checked = on;
       input.disabled = readOnly();
-      stateText.textContent = on ? "On" : "Off";
       changedTag.hidden = on === plugin.defaultEnabled;
       editedTag.hidden = !has(state.edits.plugins, plugin.name);
       if (badge) badge.refresh();
     }
-    row.el = rowEl;
+    row.children = options.map(function (option) { return optionRow("option", option, plugin); });
+    row.el = el("div", { className: "plugin" }, [
+      rowEl,
+      row.children.length ? el("div", { className: "plugin-options", role: "group", "aria-labelledby": nameId },
+        row.children.map(function (child) { return child.el; })) : null,
+    ]);
     row.search = [plugin.name, plugin.file, plugin.description || "", plugin.area].join(" ").toLowerCase();
     row.refresh = refresh;
     row.refreshPlugins = refresh;
@@ -1074,9 +886,13 @@
     return row;
   }
 
-  function group(title, rows) {
-    var section = el("section", { className: "group" }, [
-      el("h2", { text: title }),
+  function group(title, rows, summaryNote) {
+    var heading = el("summary", null, [
+      title,
+      el("span", { className: "folder-count", text: summaryNote }),
+    ]);
+    var section = el("details", { className: "group" }, [
+      heading,
       el("div", { className: "rows" }, rows.map(function (r) { return r.el; })),
     ]);
     return { el: section, rows: rows };
@@ -1089,47 +905,95 @@
 
   function build() {
     var catalog = state.data.catalog;
-    var settings = document.getElementById("panel-settings");
+    var settings = document.getElementById("settings-fields");
     var plugins = document.getElementById("panel-plugins");
+    spawnPicker?.destroy();
+    spawnPicker = undefined;
     settings.textContent = "";
+    hubViews.forEach(function (view) { view.destroy(); });
+    hubViews = [];
     plugins.textContent = "";
     state.rows = [];
     state.groups = { settings: [], plugins: [] };
 
-    var byName = {};
+    var byName = Object.create(null);
     catalog.plugins.forEach(function (p) { byName[p.name] = p; });
     state.byName = byName;
 
-    // Settings: world values first, then options grouped by the owning plugin's area.
-    var worldRows = catalog.world.map(function (o) { return optionRow("world", o, null); });
-    state.groups.settings.push(group("World", worldRows));
-    var areas = {};
+    var installedCount = el("span", { className: "hub-tab-count", text: String(catalog.plugins.length) });
+    var installedTab = el("button", { type: "button", role: "tab", id: "plugin-view-installed", "aria-controls": "plugins-installed",
+      onclick: function () { selectPluginView("installed"); } }, ["Installed", installedCount]);
+    var browseTab = el("button", { type: "button", role: "tab", id: "plugin-view-browse", "aria-controls": "plugins-browse",
+      text: "Browse plugins", onclick: function () { selectPluginView("browse"); } });
+    var viewTabs = el("div", { className: "plugin-view-tabs", role: "tablist", "aria-label": "Plugin views" }, [installedTab, browseTab]);
+    viewTabs.addEventListener("keydown", function (event) {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault();
+      var view = event.key === "Home" ? "installed" : event.key === "End" ? "browse" : state.pluginView === "installed" ? "browse" : "installed";
+      selectPluginView(view);
+      document.getElementById("plugin-view-" + view).focus();
+    });
+    plugins.appendChild(el("div", { className: "plugin-toolbar", hidden: !window.PluginHub }, [viewTabs]));
+    var installedPanel = el("div", { id: "plugins-installed", role: "tabpanel", "aria-labelledby": "plugin-view-installed" });
+    var browsePanel = el("div", { id: "plugins-browse", role: "tabpanel", "aria-labelledby": "plugin-view-browse", hidden: true });
+    installedPanel.appendChild(el("div", { className: "hub-bundled-heading hub-ui" }, [
+      el("h2", { text: "Installed plugins" }),
+      el("p", { text: catalog.plugins.length + " installed plugins · Changes to these switches take effect when you save and restart." }),
+      pluginUpload(),
+    ]));
+    plugins.appendChild(installedPanel);
+    plugins.appendChild(browsePanel);
+
+    var settingOrder = ["name", "experienceMultiplier", "spawn", "gameframe"];
+    var worldOptions = new Map(catalog.world.map(function (option) { return [option.key, option]; }));
+    var settingsRows = settingOrder.filter(function (key) { return worldOptions.has(key); }).map(function (key) {
+      return optionRow("world", worldOptions.get(key), null);
+    });
+    function addWideSetting(kind, option) {
+      var row = optionRow(kind, option, null);
+      row.el.classList.add("settings-wide");
+      settingsRows.push(row);
+    }
+    catalog.world.forEach(function (option) {
+      if (!settingOrder.includes(option.key)) addWideSetting("world", option);
+    });
+    var optionsByPlugin = new Map();
     catalog.options.forEach(function (o) {
-      var owner = o.owner === "core" ? null : byName[o.owner] || null;
-      var area = owner ? owner.area : "core";
-      (areas[area] = areas[area] || []).push(optionRow("option", o, owner));
-    });
-    Object.keys(areas).sort().forEach(function (area) {
-      state.groups.settings.push(group(areaTitle(area), areas[area]));
+      if (o.owner === "core" || !byName[o.owner]) {
+        addWideSetting("option", o);
+      } else {
+        if (!optionsByPlugin.has(o.owner)) optionsByPlugin.set(o.owner, []);
+        optionsByPlugin.get(o.owner).push(o);
+      }
     });
 
-    // Plugins: default-off and described plugins pinned first, then the rest by area.
-    var pinned = [];
-    var pluginAreas = {};
+    // Use the full parent path to keep same-named folders in different areas separate.
+    var pluginFolders = new Map();
     catalog.plugins.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (p) {
-      var row = pluginRow(p);
-      if (!p.defaultEnabled || p.description) pinned.push(row);
-      else (pluginAreas[p.area] = pluginAreas[p.area] || []).push(row);
+      var folder = p.file.split("/").slice(0, -1).join("/");
+      if (!pluginFolders.has(folder)) pluginFolders.set(folder, []);
+      pluginFolders.get(folder).push(pluginRow(p, optionsByPlugin.get(p.name) || []));
     });
-    if (pinned.length) state.groups.plugins.push(group("Common switches", pinned));
-    Object.keys(pluginAreas).sort().forEach(function (area) {
-      state.groups.plugins.push(group(areaTitle(area), pluginAreas[area]));
+    Array.from(pluginFolders.keys()).sort().forEach(function (folder) {
+      var title = folder.split("/").map(areaTitle).join(" / ");
+      var rows = pluginFolders.get(folder);
+      state.groups.plugins.push(group(title, rows, rows.length + (rows.length === 1 ? " plugin" : " plugins")));
     });
 
-    state.groups.settings.forEach(function (g) { settings.appendChild(g.el); state.rows = state.rows.concat(g.rows); });
-    state.groups.plugins.forEach(function (g) { plugins.appendChild(g.el); state.rows = state.rows.concat(g.rows); });
+    var settingsGrid = el("div", { className: "settings-grid" }, settingsRows.map(function (row) { return row.el; }));
+    state.groups.settings = [{ el: settingsGrid, rows: settingsRows }];
+    state.rows = settingsRows.slice();
+    settings.appendChild(settingsGrid);
+    state.groups.plugins.forEach(function (g) {
+      installedPanel.appendChild(g.el);
+      g.rows.forEach(function (r) { state.rows.push(r, ...(r.children || [])); });
+    });
     settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
-    plugins.appendChild(el("p", { className: "empty", id: "plugins-empty", text: "Nothing matches.", hidden: true }));
+    installedPanel.appendChild(el("p", { className: "empty", id: "plugins-empty", text: "Nothing matches.", hidden: true }));
+    if (window.PluginHub) {
+      hubViews.push(PluginHub.mountBrowse(browsePanel, { searchInput: document.getElementById("search") }));
+    }
+    selectPluginView(window.PluginHub ? state.pluginView : "installed");
     document.getElementById("loading").hidden = true;
     applySearch();
     updateFooter();
@@ -1138,44 +1002,172 @@
   function applySearch() {
     if (!state.groups) return;
     var words = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    function matches(search) { return words.every(function (word) { return search.indexOf(word) !== -1; }); }
     ["settings", "plugins"].forEach(function (tab) {
       var any = false;
       state.groups[tab].forEach(function (g) {
-        var visible = 0;
+        var visible = false;
         g.rows.forEach(function (r) {
-          var match = words.every(function (w) { return r.search.indexOf(w) !== -1; });
+          var match = matches(r.search);
+          (r.children || []).forEach(function (child) {
+            var childMatch = matches(r.search + " " + child.search);
+            child.el.hidden = !childMatch;
+            if (childMatch) match = true;
+          });
           r.el.hidden = !match;
-          if (match) visible += 1;
+          if (match) visible = true;
         });
-        g.el.hidden = visible === 0;
+        g.el.hidden = !visible;
+        if (tab === "plugins") {
+          if (words.length) {
+            if (g.openBeforeSearch === undefined) g.openBeforeSearch = g.el.open;
+            g.el.open = visible;
+          } else if (g.openBeforeSearch !== undefined) {
+            g.el.open = g.openBeforeSearch;
+            delete g.openBeforeSearch;
+          }
+        }
         if (visible) any = true;
       });
       document.getElementById(tab + "-empty").hidden = any;
     });
   }
 
-  // ---------- tabs ----------
+  // ---------- navigation ----------
 
+  function selectPluginView(view) {
+    state.pluginView = view;
+    ["installed", "browse"].forEach(function (name) {
+      var selected = name === view;
+      var button = document.getElementById("plugin-view-" + name);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById("plugins-" + name).hidden = !selected;
+    });
+    document.getElementById("search").placeholder = state.tab === "settings" ? "Search settings"
+      : view === "browse" ? "Search Plugin Hub" : "Search installed plugins";
+    applySearch();
+  }
+
+  var sidebar = document.getElementById("sidebar");
+  var menuToggle = document.getElementById("menu-toggle");
+  var menuBackdrop = document.getElementById("menu-backdrop");
+  var workspace = document.querySelector(".workspace");
+  var narrowLayout = window.matchMedia("(max-width: 860px)");
+
+  function setMenuOpen(open) {
+    sidebar.classList.toggle("open", open);
+    menuBackdrop.hidden = !open;
+    workspace.inert = open;
+    menuToggle.setAttribute("aria-expanded", String(open));
+    if (open) document.getElementById("tab-" + state.tab).focus();
+    else if (narrowLayout.matches) menuToggle.focus();
+  }
+  menuToggle.addEventListener("click", function () { setMenuOpen(true); });
+  menuBackdrop.addEventListener("click", function () { setMenuOpen(false); });
+  narrowLayout.addEventListener("change", function (event) {
+    if (!event.matches && sidebar.classList.contains("open")) setMenuOpen(false);
+  });
+
+  var sections = ["settings", "players", "plugins"];
+  var playersPanel;
+  var serverOnline = false;
   function selectTab(tab) {
+    if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
     state.tab = tab;
-    ["settings", "plugins"].forEach(function (name) {
+    sections.forEach(function (name) {
       var button = document.getElementById("tab-" + name);
       var selected = name === tab;
       button.setAttribute("aria-selected", selected ? "true" : "false");
       button.tabIndex = selected ? 0 : -1;
       document.getElementById("panel-" + name).hidden = !selected;
     });
-    document.getElementById("search").placeholder = tab === "settings" ? "Search settings" : "Search plugins";
+    var title = tab[0].toUpperCase() + tab.slice(1);
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("search").placeholder = "Search " + title.toLowerCase();
+    document.querySelector("header .search").hidden = tab === "players";
+    document.querySelector(".workspace > footer").hidden = tab === "players";
+    if (tab === "players") {
+      playersPanel ||= window.LocalPlayers.mount(document.getElementById("panel-players"), el, api, flash);
+      playersPanel.setOnline(serverOnline);
+      playersPanel.refresh();
+    }
+    if (tab === "plugins" && document.getElementById("plugins-installed")) selectPluginView(state.pluginView);
   }
-  document.getElementById("tab-settings").addEventListener("click", function () { selectTab("settings"); });
-  document.getElementById("tab-plugins").addEventListener("click", function () { selectTab("plugins"); });
-  document.querySelector(".tabs").addEventListener("keydown", function (event) {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    var next = state.tab === "settings" ? "plugins" : "settings";
+  sections.forEach(function (tab) {
+    document.getElementById("tab-" + tab).addEventListener("click", function () {
+      selectTab(tab);
+      if (sidebar.classList.contains("open")) setMenuOpen(false);
+    });
+  });
+  sidebar.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && sidebar.classList.contains("open")) {
+      setMenuOpen(false);
+      return;
+    }
+    var next;
+    if (event.key === "Home") next = "settings";
+    else if (event.key === "End") next = "plugins";
+    else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      var step = event.key === "ArrowUp" ? -1 : 1;
+      next = sections[(sections.indexOf(state.tab) + step + sections.length) % sections.length];
+    }
+    else return;
+    event.preventDefault();
     selectTab(next);
     document.getElementById("tab-" + next).focus();
   });
   document.getElementById("search").addEventListener("input", applySearch);
+  document.querySelector("main").addEventListener("click", function (event) {
+    var row = event.target.closest(".toggle-row");
+    if (row && !event.target.closest("button, input, label, a, select, textarea")) {
+      row.querySelector(".switch").click();
+    }
+  });
+
+  function renderServerStatus(data) {
+    var phase = data.serverStatus || "online";
+    var running = phase === "online";
+    serverOnline = running;
+    var status = document.getElementById("server-status");
+    var text = { online: "Online", starting: "Starting", stopping: "Stopping", stopped: "Stopped", failed: "Stopped" }[phase];
+    var busy = phase === "starting" || phase === "stopping";
+    status.className = "host-status-dot host-status-" + (running ? "online" : busy ? "starting" : "offline");
+    if (status.textContent !== text) status.textContent = text;
+    var count = document.getElementById("server-count");
+    count.hidden = !running;
+    var players = data.playerCount ?? 0, bots = data.botCount ?? 0;
+    var countText = players + (players === 1 ? " player" : " players") + " · " + bots + (bots === 1 ? " bot" : " bots");
+    if (count.textContent !== countText) count.textContent = countText;
+    var power = document.getElementById("server-power");
+    var label = running || phase === "stopping" ? "Stop" : "Start";
+    power.setAttribute("aria-label", label + " server");
+    power.classList.toggle("host-stop-button", label === "Stop");
+    document.getElementById("server-start-icon").toggleAttribute("hidden", label === "Stop");
+    document.getElementById("server-power-label").textContent = label === "Stop" ? "■ Stop" : "Start";
+    power.disabled = !data.serverStatus || busy || !!data.pending || !!data.countdown?.scheduled;
+    document.getElementById("server-restart").disabled = power.disabled || !running;
+    if (playersPanel) playersPanel.setOnline(running);
+  }
+
+  async function controlServer(action) {
+    var power = document.getElementById("server-power");
+    var restart = document.getElementById("server-restart");
+    power.disabled = restart.disabled = true;
+    try {
+      var result = await api("/api/server/" + action, {});
+      if (!result.ok) throw new Error(result.body?.error || "The server did not accept the request.");
+      renderServerStatus({ ...state.data, serverStatus: result.body.serverStatus });
+      load(false);
+    } catch (error) {
+      flash("error", error.message);
+      renderServerStatus(state.data);
+    }
+  }
+  document.getElementById("server-power").addEventListener("click", function () {
+    controlServer(this.getAttribute("aria-label") === "Stop server" ? "stop" : "start");
+  });
+  document.getElementById("server-restart").addEventListener("click", function () { controlServer("restart"); });
 
   // ---------- edits, footer ----------
 
@@ -1198,8 +1190,9 @@
     var invalid = anyInvalid();
     save.disabled = !state.data || readOnly() || busy() || count === 0 || invalid;
     discard.disabled = count === 0 && !invalid;
-    document.querySelectorAll(".spawn-pick").forEach(function (button) { button.disabled = !state.data || readOnly() || busy(); });
+    document.querySelectorAll(".host-bot-map-button").forEach(function (button) { button.disabled = !state.data || readOnly() || busy(); });
     if (!state.data) status.textContent = "";
+    else if (state.data.serverStatus && state.data.serverStatus !== "online") status.textContent = "Start the server to edit settings and plugins.";
     else if (readOnly()) status.textContent = "Read only: world.local.json does not parse.";
     else if (invalid) status.textContent = "Fix the highlighted values before saving.";
     else if (busy()) status.textContent = "A restart is pending.";
@@ -1341,7 +1334,7 @@
   /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
   function enterReconnect(unreachable) {
     if (dialog.open) dialog.close();
-    if (mapDialog.open) { mapTiles.textContent = ""; mapDialog.close(); }
+    spawnPicker?.close();
     if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
     if (unreachable) state.reconnect.wasDown = true;
     showOverlay("Restarting the server… reconnecting", true);
@@ -1421,7 +1414,9 @@
         showFatal("Could not load the catalog: " + ((res.body && res.body.error) || "HTTP " + res.status));
         return;
       }
+      renderServerStatus(res.body);
       if (state.reconnect) {
+        if (res.body.serverStatus === "starting") { enterReconnect(true); return; }
         // Still the old process on its way down: keep waiting. A countdown that is still running
         // (a network blip) returns to the page, where its Cancel is.
         var down = res.body.pending;
@@ -1440,11 +1435,13 @@
       }
       var hadData = !!state.data;
       var hashChanged = hadData && state.data.layers.localHash !== res.body.layers.localHash;
+      var statusChanged = hadData && state.data.serverStatus !== res.body.serverStatus;
       state.data = res.body;
-      if (rebuild || !hadData || hashChanged) {
+      if (rebuild || !hadData || hashChanged || statusChanged) {
         if (hashChanged && !rebuild && editCount() > 0) flash("warn", "world.local.json changed on disk; the page reloaded it and kept your unsaved edits where they still apply.");
         build();
       }
+      if (statusChanged && state.tab === "players") playersPanel?.refresh();
       renderBanners();
       updateFooter();
       var pending = res.body.pending;
@@ -1476,8 +1473,11 @@
   }
   function schedulePoll() {
     stopPolling();
-    if (!busy()) return;
-    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, POLL_MS);
+    var status = state.data?.serverStatus;
+    var changing = status === "starting" || status === "stopping";
+    if (!status && !busy()) return;
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); },
+      busy() || changing ? POLL_MS : 5000);
   }
 
   function cancelCountdown() {
@@ -1606,6 +1606,17 @@
     if (editCount() > 0 && !state.reconnect) { event.preventDefault(); event.returnValue = ""; }
   });
 
+  var disclaimer = document.getElementById("local-host-disclaimer");
+  var disclaimerKey = "tsps.localHostingDisclaimer.dismissed";
+  try { disclaimer.hidden = localStorage.getItem(disclaimerKey) === "1"; } catch {}
+  document.getElementById("dismiss-local-host-disclaimer").addEventListener("click", function () {
+    disclaimer.hidden = true;
+    try { localStorage.setItem(disclaimerKey, "1"); } catch {}
+    document.getElementById("search").focus();
+  });
+
+  var initialTab = new URLSearchParams(window.location.search).get("view");
+  if (sections.includes(initialTab)) selectTab(initialTab);
   load(true);
 })();
 </script>

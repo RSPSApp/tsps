@@ -69,10 +69,12 @@ function empty({ player, slot }) {
   return true;
 }
 
-function pour(player, slot, destination) {
+function pour(player, clicked, destination) {
   const { core } = Common;
   const inventory = player.getInventory();
-  if (inventory.get(slot)?.getId() !== core.ItemIdentifiers.ECTOPHIAL) return;
+  // The clicked slot, else wherever the ectophial is now (moved while a warning asked).
+  const slot = inventory.get(clicked)?.getId() === core.ItemIdentifiers.ECTOPHIAL ? clicked : inventory.getSlotForItemId(core.ItemIdentifiers.ECTOPHIAL);
+  if (slot < 0) return;
   inventory.setItem(slot, new core.Item(core.ItemIdentifiers.ECTOPHIAL_2, 1)).refreshItems();
   const movement = player.getMovementQueue();
   movement.setBlockMovement(true).reset();

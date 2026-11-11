@@ -578,3 +578,47 @@ test("a Lunar teleport the player can't cast (no runes, or under 40 Defence) say
   assert.notEqual(pending(weak)?.title, TeleportWarning.QUESTION, "not asked");
   assert.ok(weak.messages.includes("You need at least level 40 Defence to cast Lunar spells."), weak.messages.join(" | "));
 });
+
+// ---------------------------------------------------------------- an item moved to another slot while the warning asks
+
+const slotOf = (f, id) => f.p.getInventory().getSlotForItemId(id);
+/** Moves the item to the last inventory slot, as dragging it there does. */
+function drag(f, id) {
+  const from = slotOf(f, id);
+  const to = f.p.getInventory().capacity() - 1;
+  f.p.getInventory().swap(from, to);
+  assert.equal(slotOf(f, id), to, "moved");
+}
+
+test("a revenant cave teleport asks its own question, then the boat warning; moved to another slot meanwhile, yes still teleports and uses it", (t) => {
+  const f = actor(t);
+  give(f, I.REVENANT_CAVE_TELEPORT, 2);
+  use(f, I.REVENANT_CAVE_TELEPORT, "Teleport");
+  assert.notEqual(pending(f)?.title, TeleportWarning.QUESTION, "its own question first");
+  choose(f, 1);
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION, "then the boat warning");
+  drag(f, I.REVENANT_CAVE_TELEPORT);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 1, `it goes (${f.messages.join(" | ")})`);
+  assert.equal(f.p.getInventory().getAmount(I.REVENANT_CAVE_TELEPORT), 1, "one scroll used");
+});
+
+test("a revenant cave teleport goes at once after its own question with the warning off", (t) => {
+  const f = actor(t, { warning: false });
+  give(f, I.REVENANT_CAVE_TELEPORT);
+  use(f, I.REVENANT_CAVE_TELEPORT, "Teleport");
+  choose(f, 1);
+  assert.notEqual(pending(f)?.title, TeleportWarning.QUESTION);
+  assert.equal(f.teleports.length, 1);
+});
+
+test("the ectophial moved to another slot while the warning asks still pours on yes", (t) => {
+  const f = actor(t);
+  give(f, I.ECTOPHIAL);
+  use(f, I.ECTOPHIAL, "Empty");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  drag(f, I.ECTOPHIAL);
+  choose(f, 1);
+  assert.equal(f.p.getInventory().contains(I.ECTOPHIAL_2), true, "poured");
+  assert.equal(f.p.getInventory().contains(I.ECTOPHIAL), false);
+});

@@ -37,8 +37,19 @@ const BRIMHAVEN_DUNGEON = { minX: 2600, maxX: 2700, minY: 9400, maxY: 9500 };
 const FIGHT_CAVE = { minX: 2368, maxX: 2431, minY: 5056, maxY: 5119 };
 /** Mor Ul Rek and its outskirts, as the Fight Pit plugin bounds them. */
 const MOR_UL_REK = { minX: 2368, maxX: 2559, minY: 5056, maxY: 5183 };
-/** Seaweed spawns on Karamja (Kharazi included), not Entrana/Kourend/Mos Le'Harmless. */
-const KARAMJA = { minX: 2600, maxX: 3050, minY: 2850, maxY: 3350 };
+/**
+ * Wiki: "Collect 5 seaweed from anywhere on Karamja". The island's surface map squares, as the
+ * Karamja league area bounds them (league-areas.json: Brimhaven, Musa Point, the Ship Yard, Tai Bwo
+ * Wannai, the Kharazi Jungle, Shilo Village, Cairn Isle, Crandor), as [minX, minY, maxX, maxY] square
+ * coordinates. The old single box reached Port Sarim, Rimmington and East Ardougne.
+ */
+const KARAMJA_SQUARES = [[42, 44, 46, 47], [42, 48, 45, 49], [46, 49, 46, 49], [42, 50, 44, 50], [44, 51, 44, 51]];
+
+function onKaramja(location) {
+  if (!location) return false;
+  const x = (location.getX?.() ?? location.x) >> 6, y = (location.getY?.() ?? location.y) >> 6;
+  return KARAMJA_SQUARES.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
+}
 
 const METAL_DRAGONS = new Set(["Bronze dragon", "Iron dragon", "Steel dragon"]);
 /** Duradel/Kuradal: slayer_master_task.master_id (skills/data/slayer-masters.json). */
@@ -84,7 +95,7 @@ function bananaPicked({ player, object }) {
 function seaweedTaken({ player, groundItem, source, itemId, amount }) {
   const I = core.ItemIdentifiers;
   if (!player || player.getPrivateArea?.() != null || !["pickup", "telegrab"].includes(source)) return;
-  if (itemId !== I.SEAWEED || amount <= 0 || !inBox(groundItem?.getPosition?.(), KARAMJA)) return;
+  if (itemId !== I.SEAWEED || amount <= 0 || !onKaramja(groundItem?.getPosition?.())) return;
   count(player, SEAWEED_ATTRIBUTE, SEAWEED, SEAWEED_TASK);
 }
 
@@ -224,7 +235,7 @@ module.exports = {
   _test: {
     BANANA_TASK, SEAWEED_TASK,
     BANANA_PLANTATION, BANANA_FISHING_SPOTS, NORTH_BRIMHAVEN_MINE, POTHOLE_DUNGEON, SHAMAN_CAVES,
-    BRIMHAVEN_DUNGEON, FIGHT_CAVE, MOR_UL_REK, KARAMJA,
+    BRIMHAVEN_DUNGEON, FIGHT_CAVE, MOR_UL_REK, KARAMJA_SQUARES, onKaramja,
     bananaPicked, seaweedTaken, mined, caught, cooked, chopped, runecrafted, mixed, eaten,
     equipmentChanged, trapped, slayerAssigned, npcKilled, obstacle, ferried, glided, chartered,
     fightPitEntered, fightCaveEntered, fightPitChampion, taiBwoFavour,

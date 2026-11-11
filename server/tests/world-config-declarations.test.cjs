@@ -27,7 +27,7 @@ test('validateDeclaration reports problems', () => {
 });
 
 test('core declarations cover the keys the server reads', () => {
-  assert.deepEqual(Object.keys(CORE_CONFIG_DECLARATIONS).sort(), ['CrossFloor:combat', 'CrossFloor:visibility', 'commands:permissions']);
+  assert.deepEqual(Object.keys(CORE_CONFIG_DECLARATIONS).sort(), ['commands:permissions']);
   for (const [key, decl] of Object.entries(CORE_CONFIG_DECLARATIONS)) assert.deepEqual(validateDeclaration(key, decl), [], key);
 });
 

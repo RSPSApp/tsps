@@ -2555,6 +2555,7 @@ export class PluginManager {
     const combat = "../game/content/combat";
     const model = "../game/model";
     PluginManager.pluginCoreApi = Object.freeze({
+      CrossFloor: require("../game/CrossFloor").CrossFloor,
       WorldConfigCatalog: require("./WorldConfigCatalog").WorldConfigCatalog,
       WorldConfigStore: require("../game/definition/WorldConfigStore").WorldConfigStore,
       MeleeCombatMethod: require(`${combat}/method/impl/MeleeCombatMethod`).MeleeCombatMethod,

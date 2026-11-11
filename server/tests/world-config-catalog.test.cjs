@@ -65,7 +65,7 @@ test('like the loader, the catalog leaves out invalid declarations and gives a c
     'a/Bad.plugin.js': `module.exports = { name: 'Bad', config: { 'Bad:opt': { type: 'number', label: 'L', help: 'H', default: '5' }, 'Bad:ok': ${JSON.stringify(OPT)} }, register() {} };`,
     'a/Junk.plugin.js': "module.exports = { name: 'Junk', config: [1], register() {} };",
     'a/AOff.plugin.js': `module.exports = { name: 'AOff', enabled: false, config: { 'Shared:opt': ${JSON.stringify(OPT)} }, register() {} };`,
-    'a/BOn.plugin.js': `module.exports = { name: 'BOn', config: { 'Shared:opt': ${JSON.stringify(OPT)}, 'CrossFloor:combat': ${JSON.stringify(OPT)} }, register() {} };`,
+    'a/BOn.plugin.js': `module.exports = { name: 'BOn', config: { 'Shared:opt': ${JSON.stringify(OPT)}, 'commands:permissions': ${JSON.stringify(OPT)} }, register() {} };`,
   });
   try {
     const data = WorldConfigCatalog.build(dir, layers({}, {}, 'clash'));
@@ -74,7 +74,7 @@ test('like the loader, the catalog leaves out invalid declarations and gives a c
     assert.ok(keys.includes('Bad/Bad:ok'));
     assert.ok(!keys.some((k) => k.startsWith('Junk/')));
     assert.deepEqual(data.options.filter((o) => o.key === 'Shared:opt').map((o) => o.owner), ['BOn']);
-    assert.deepEqual(data.options.filter((o) => o.key === 'CrossFloor:combat').map((o) => o.owner), ['core']);
+    assert.deepEqual(data.options.filter((o) => o.key === 'commands:permissions').map((o) => o.owner), ['core']);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

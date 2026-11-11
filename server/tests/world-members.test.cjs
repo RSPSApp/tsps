@@ -66,6 +66,11 @@ test('shipped Rellekka and Hosidius crab coasts allow multicombat without PvP', 
   for (const [x, y] of [[2677, 3711], [2704, 3728], [2736, 3712], [1700, 3589], [1800, 3050]]) {
     assert.equal(Wilderness.isMulti(x, y, 0), false, `preserve the single-combat side at ${x},${y}`);
   }
+  // The Hosidius jetty at x 1726 is single-way from y 3457 south to its boat (3453); 3458 is multi
+  // (rsprox 235/03467.txt:452793-454963, the multiway indicator a tick behind each step).
+  const inMulti = (x, y) => AreaManager.inMulti({ getArea: () => null, getLocation: () => new Location(x, y, 0) });
+  for (const y of [3453, 3454, 3455, 3456, 3457]) assert.equal(inMulti(1726, y), false, `jetty 1726,${y}`);
+  for (const [x, y] of [[1726, 3458], [1726, 3452], [1725, 3455], [1727, 3455]]) assert.equal(inMulti(x, y), true, `${x},${y}`);
 });
 
 test('Fossil Island mapped multicombat coasts retain their boundaries and plane', () => {

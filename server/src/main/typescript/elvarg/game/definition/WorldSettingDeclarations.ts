@@ -180,10 +180,6 @@ export const WORLD_SETTING_DECLARATIONS: Record<string, ConfigOptionDeclaration>
         type: "json", label: "Spawn point", defaultText: "Required: set in world.json",
         help: "Where new and stranded players appear, as { \"x\": 3222, \"y\": 3218, \"z\": 0 }.",
     },
-    membersWorld: {
-        type: "boolean", label: "Members world", default: true,
-        help: "When off, members-only content is not loaded and the spawn must sit inside a zone tagged \"f2p\".",
-    },
     gameframe: {
         type: "enum", label: "Game frame", defaultText: "Client default",
         values: WORLD_GAMEFRAMES.map((value) => ({ value, label: value })),

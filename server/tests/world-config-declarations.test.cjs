@@ -32,7 +32,7 @@ test('core declarations cover the keys the server reads', () => {
 });
 
 test('world settings declare every scalar top-level key parseWorldDefinition reads', () => {
-  for (const key of ['name', 'description', 'experienceMultiplier', 'spawn', 'membersWorld', 'gameframe']) {
+  for (const key of ['name', 'description', 'experienceMultiplier', 'spawn', 'gameframe']) {
     assert.ok(WORLD_SETTING_DECLARATIONS[key], key);
   }
   assert.equal(WORLD_SETTING_DECLARATIONS.spawn.type, 'json');

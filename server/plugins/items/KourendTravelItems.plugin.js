@@ -123,7 +123,7 @@ function teleport(player, item, page) {
   const target = new core.Location(...page.tile);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
   core.TeleportHandler.confirm(player, target, () => {
-    setMemoirCharges(player, item, charges - 1);
+    setMemoirCharges(player, item, memoirCharges(player, item) - 1);
     core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => {
       api.emitCustomEvent("kharedst:teleported", { player, city: page.key });
     });
@@ -246,7 +246,7 @@ function teleportWithTalisman(player, item, destination) {
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
   core.TeleportHandler.confirm(player, target, () => {
     // Spend before starting: Uncharge or equipping during the animation can move/change the item.
-    setXericCharges(player, item, charges - 1);
+    setXericCharges(player, item, xericCharges(item) - 1);
     core.TeleportHandler.teleport(player, target, xericTeleportType(), false, () => {
       api.emitCustomEvent("xerics-talisman:teleported", { player, destination: destination.key });
     });

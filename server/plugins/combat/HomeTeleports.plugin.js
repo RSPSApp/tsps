@@ -100,11 +100,17 @@ function castHomeTeleport(event) {
     player.sendMessage("You can't use this spell during combat.");
     return;
   }
-  core.TeleportHandler.confirm(player, destination, () => startHomeTeleport(core, player, destination, () => {
-    const minute = dateMinutes();
-    player.setAttribute(LAST_HOME_TELEPORT_ATTRIBUTE, minute);
-    player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, minute);
-  }));
+  core.TeleportHandler.confirm(player, destination, () => {
+    if (core.CombatFactory.inCombat(player)) {
+      player.sendMessage("You can't use this spell during combat.");
+      return;
+    }
+    startHomeTeleport(core, player, destination, () => {
+      const minute = dateMinutes();
+      player.setAttribute(LAST_HOME_TELEPORT_ATTRIBUTE, minute);
+      player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, minute);
+    });
+  });
 }
 
 const toggles = (player) => Number(player.getAttribute(TOGGLES_ATTRIBUTE) ?? 1);

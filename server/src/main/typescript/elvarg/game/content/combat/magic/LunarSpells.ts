@@ -295,8 +295,10 @@ export class LunarSpells {
             TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
                 () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
+                // A passenger is asked too (the boat-at-sea warning) before they go.
                 if (TeleportHandler.checkReqs(target, spell.teleport.destination)) {
-                    TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
+                    TeleportHandler.confirm(target, spell.teleport.destination,
+                        () => TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false));
                 }
             });
         }));

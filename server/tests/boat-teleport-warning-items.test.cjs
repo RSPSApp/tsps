@@ -48,12 +48,15 @@ function actor(t, { aboard = true, warning = true } = {}) {
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
   const state = { aboard };
-  t.mock.method(core.Sailing, "instanceAboard", (player) => (player === p && state.aboard ? {} : undefined));
+  const aboardOf = core.Sailing.instanceAboard;
+  t.mock.method(core.Sailing, "instanceAboard", (player) => (player === p ? (state.aboard ? {} : undefined) : aboardOf.call(core.Sailing, player)));
   const teleports = [];
   const real = core.TeleportHandler.teleport;
   t.mock.method(core.TeleportHandler, "teleport", (...args) => {
-    teleports.push(args[1]);
-    state.aboard = false;
+    if (args[0] === p) {
+      teleports.push(args[1]);
+      state.aboard = false;
+    }
     return real.apply(core.TeleportHandler, args);
   });
   if (warning) p.getPacketSender().sendVarbit(TeleportWarning.WARNING_VARBIT, 1);
@@ -272,3 +275,37 @@ for (const teleport of CASES) {
     }
   });
 }
+
+test("a tablet's yes still goes when the player gained an item while the warning was open (a catch, salvage)", (t) => {
+  const f = actor(t);
+  give(f, I.VARROCK_TELEPORT, 2);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  give(f, I.RAW_SHRIMPS);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 1);
+});
+
+test("a tablet's yes does nothing once the tablet has gone", (t) => {
+  const f = actor(t);
+  give(f, I.VARROCK_TELEPORT);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  f.p.getInventory().deleteNumber(I.VARROCK_TELEPORT, 1);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 0);
+});
+
+test("a Lunar group teleport asks a passenger aboard their own boat before taking them, and takes them on yes", (t) => {
+  const passenger = actor(t);
+  const casterPlayer = actor(t, { aboard: false });
+  const spell = core.LunarSpells.GROUP_TELEPORTS.get("tele group catherby");
+  t.mock.method(spell, "pay", () => true);
+  t.mock.method(core.LunarSpells, "forNearbyPlayers", (source, radius, visit) => visit(passenger.p));
+  core.LunarSpells.castGroupTeleport(casterPlayer.p, spell);
+  assert.equal(casterPlayer.teleports.length, 1, "the caster goes");
+  assert.equal(passenger.teleports.length, 0, "the passenger is asked first");
+  assert.equal(pending(passenger)?.title, TeleportWarning.QUESTION);
+  choose(passenger, 1);
+  assert.equal(passenger.teleports.length, 1);
+});

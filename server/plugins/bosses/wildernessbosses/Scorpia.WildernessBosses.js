@@ -38,12 +38,18 @@ let core = null;
 let PrayerHandler = null;
 /** Scorpia npc -> { armed, called, guardians: [{ npc, lastHeal }] } */
 const fights = new WeakMap();
+/** Guardian npc -> the Scorpia it was called to. */
+const guardianOwners = new WeakMap();
+/** Set on Scorpia once one of her guardians is killed (Wiki task "Guardians No More"). */
+const GUARDIAN_KILLED_ATTRIBUTE = "scorpia:guardian-killed";
 
 function fightOf(npc) {
   let fight = fights.get(npc);
   if (!fight) {
     fight = { armed: false, called: false, guardians: [] };
     fights.set(npc, fight);
+    // A respawned Scorpia starts a new fight: an earlier fight's guardian kill does not count.
+    npc.setAttribute?.(GUARDIAN_KILLED_ATTRIBUTE, false);
   }
   return fight;
 }
@@ -96,6 +102,7 @@ function callGuardians(scorpia, fight) {
     guardian.__skipDefaultRespawn = true;
     core.World.getAddNPCQueue().push(guardian);
     fight.guardians.push({ npc: guardian, lastHeal: core.World.getProcessCycle() });
+    guardianOwners.set(guardian, scorpia);
   }
   watch(scorpia, fight);
 }
@@ -156,7 +163,12 @@ function hitResolved({ attacker, target }) {
 }
 
 function died({ npc, preventDeath }) {
-  if (npc?.getId?.() !== SCORPIA || preventDeath) return;
+  if (preventDeath) return;
+  if (npc?.getId?.() === GUARDIAN) {
+    guardianOwners.get(npc)?.setAttribute?.(GUARDIAN_KILLED_ATTRIBUTE, true);
+    return;
+  }
+  if (npc?.getId?.() !== SCORPIA) return;
   const fight = fights.get(npc);
   fights.delete(npc);
   for (const { npc: guardian } of fight?.guardians ?? []) {
@@ -174,4 +186,4 @@ function attach(pluginApi) {
   pluginApi.onNpcBeforeDeath(died);
 }
 
-module.exports = { attach, _test: { WAYS, reach } };
+module.exports = { attach, GUARDIAN_KILLED_ATTRIBUTE, _test: { WAYS, reach, callGuardians, fightOf, died } };

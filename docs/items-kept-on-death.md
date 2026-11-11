@@ -20,6 +20,14 @@ On a PvP death these untradeables are destroyed unless they are among the kept i
 - **PvM deaths are left alone on purpose:** these items still go to the grave there, as before. The Wiki's list has no PvP qualifier for them, so it may apply to every unsafe death; that is a separate change.
 - **Not covered:** the clue box and the degraded amulet of the damned, which the Wiki also lists, and a rune pouch can still take a kept slot on a PvP death.
 
+## Quest rewards that become coins (Wiki: Items Kept on Death, Barrows gloves, Barrelchest anchor)
+
+Untradeable quest rewards with combat stats that are bought from an NPC turn into coins for the killer on a PvP death, unless they are among the kept items. The item is lost, and the coins drop for the killer as the rest of the loot does (an Ironman killer's go to the victim). A preset copy gives no coins.
+
+- **Items** (`QuestRewardDeathCoins.plugin.js`, ids and amounts in `plugins/items/data/quest-reward-death-coins.json`): barrows gloves, 78,000 coins; the barrelchest anchor, 230,000 coins. They are matched by id: the broken barrelchest anchor and a second barrows gloves item share the names but give no coins.
+- **PvM deaths** leave them to the grave, as any other untradeable.
+- **Not covered:** the Wiki names no other items or amounts for this rule. It also says metal gloves become a cash drop, without an amount, so they are left as they were.
+
 ## The Items Kept on Death interface (rsprox captures)
 
 Opened from the Worn Equipment tab (`deathkeep`, group 4), it shows what a death would keep, from the same ranking (`PlayerDeathTask.getItemsToKeep`), for the count its skull and Protect Item toggles give.

@@ -113,25 +113,35 @@ function reasonFor(entry, states, rows) {
   return first(row.prerequisite_direct, 0) > 0 ? REASON_REQUIRED_FOR_OTHERS : REASON_DESCRIPTION;
 }
 
-/** The suggestions, as [kind, quest id, reason] rows: quests to start now, then ones to work towards. */
-function suggestions(player) {
+/**
+ * Every quest the player could be offered, ordered, before the list is cut: `available` can be
+ * started (or is under way), `targets` only lack levels, quest points or combat level.
+ */
+function classify(player) {
   const rows = questRows();
   const states = new Map(rows.map((entry) => [entry, questState(player, entry)]));
-  const byId = new Map(rows.map((entry) => [first(entry.row.id), entry]));
+  // requirement_quests holds quest table row ids, not the id column.
+  const byRow = new Map(rows.map((entry) => [entry.row.rowId, entry]));
   const includeMembers = includesMembers(player);
   const candidates = rows.filter(({ row, quest }) => quest && first(row.cr_can_recommend) === 1
     && first(row.release_type) !== 0 && !row.parent_quest?.length
     && (includeMembers || first(row.members) !== 1));
-  const questsDone = (row) => (row.requirement_quests ?? []).every((id) => byId.has(id) && states.get(byId.get(id)) === "done");
+  const questsDone = (row) => (row.requirement_quests ?? []).every((rowId) => states.get(byRow.get(rowId)) === "done");
   const order = (a, b) => (states.get(b) === "started") - (states.get(a) === "started")
     || first(a.row.starter_order, Infinity) - first(b.row.starter_order, Infinity)
     || String(first(a.row.sortname, "")).localeCompare(String(first(b.row.sortname, "")));
   const open = candidates.filter((entry) => states.get(entry) !== "done");
   const available = open.filter((entry) => states.get(entry) === "started" || (questsDone(entry.row) && meetsStats(player, entry.row)));
   const targets = open.filter((entry) => !available.includes(entry) && questsDone(entry.row));
+  return { rows, states, available: available.sort(order), targets: targets.sort(order) };
+}
+
+/** The suggestions, as [kind, quest id, reason] rows: quests to start now, then ones to work towards. */
+function suggestions(player) {
+  const { rows, states, available, targets } = classify(player);
   return [
-    ...available.sort(order).slice(0, AVAILABLE_LIMIT).map((entry) => [KIND_AVAILABLE, first(entry.row.id), reasonFor(entry, states, rows)]),
-    ...targets.sort(order).slice(0, TARGET_LIMIT).map((entry) => [KIND_TARGET, first(entry.row.id), REASON_DESCRIPTION]),
+    ...available.slice(0, AVAILABLE_LIMIT).map((entry) => [KIND_AVAILABLE, first(entry.row.id), reasonFor(entry, states, rows)]),
+    ...targets.slice(0, TARGET_LIMIT).map((entry) => [KIND_TARGET, first(entry.row.id), REASON_DESCRIPTION]),
   ];
 }
 
@@ -241,4 +251,4 @@ module.exports = {
   },
 };
 
-module.exports._test = { suggestions, serialise, onInterfaceClick, replaced, FLOATER_UID, CR_UI, ORB_BUTTONS };
+module.exports._test = { classify, suggestions, serialise, onInterfaceClick, replaced, FLOATER_UID, CR_UI, ORB_BUTTONS };

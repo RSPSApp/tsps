@@ -12,9 +12,11 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const ActivityAdviser = require("../plugins/interface/ActivityAdviser.plugin");
 
-const { suggestions, serialise, onInterfaceClick, replaced, FLOATER_UID, CR_UI, ORB_BUTTONS } = ActivityAdviser._test;
+const { classify, suggestions, serialise, onInterfaceClick, replaced, FLOATER_UID, CR_UI, ORB_BUTTONS } = ActivityAdviser._test;
 const COOKS_ASSISTANT = 1;
 const DRAGON_SLAYER_I = 17;
+const PLAGUE_CITY = 36;
+const BIOHAZARD = 39;
 const KIND_TARGET = 2;
 
 let core;
@@ -157,4 +159,45 @@ test("another floater interface taking the Adviser's place marks it closed once"
   replaced({ player: p, groupId: 621, targetUid: FLOATER_UID });
   replaced({ player: p, groupId: 621, targetUid: FLOATER_UID });
   assert.deepEqual(sent, [["sendInterfaceScript", 6378]]);
+});
+
+function complete(p, name) {
+  const quest = QuestRuntime.questNamed(name);
+  quest.setStage(p, quest.completionValue ?? 2);
+}
+
+/** The rows of the last list sent to script 2493. */
+function lastList(sent) {
+  const scripts = sent.filter(([method, id]) => method === "sendInterfaceScript" && id === 2493);
+  return parse(scripts[scripts.length - 1][2][0]);
+}
+
+test("finishing a quest's required quest offers it: Plague City opens up Biohazard", () => {
+  const { p } = player();
+  const ids = (entries) => entries.map(({ row }) => row.id[0]);
+  let { available, targets } = classify(p);
+  assert.ok(ids(available).includes(PLAGUE_CITY));
+  assert.equal(ids(available).includes(BIOHAZARD), false, "Plague City comes first");
+  assert.equal(ids(targets).includes(BIOHAZARD), false);
+  complete(p, "Plague City");
+  ({ available, targets } = classify(p));
+  assert.ok(ids(available).includes(BIOHAZARD), "Biohazard can be started now");
+  assert.equal(ids(available).includes(PLAGUE_CITY), false, "a finished quest is not offered");
+  assert.equal(ids(targets).includes(PLAGUE_CITY), false);
+});
+
+test("Refresh after finishing a quest sends a list without it", () => {
+  const { p, sent } = player();
+  click(p, 160, 4);
+  assert.ok(lastList(sent).some(([, id]) => id === COOKS_ASSISTANT), "Cook's Assistant is listed at first");
+  complete(p, "Cook's Assistant");
+  sent.length = 0;
+  assert.equal(click(p, CR_UI, 15, 0).handled, true);
+  const rows = lastList(sent);
+  assert.ok(rows.length > 0);
+  assert.equal(rows.some(([, id]) => id === COOKS_ASSISTANT), false, "the finished quest's row is gone");
+  click(p, 160, 4);
+  sent.length = 0;
+  click(p, 160, 4);
+  assert.equal(lastList(sent).some(([, id]) => id === COOKS_ASSISTANT), false, "and stays gone when reopened");
 });

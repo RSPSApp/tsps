@@ -32,6 +32,13 @@ const TABLE = 24556;
 const TOOLS = 24535;
 const BARNABUS = 1903;
 const DISPLAY_EMPTY = 24550;
+const KUDOS_MESSAGE = "You have earned Kudos with the Museum!";
+const SOUND_KUDOS = 3653;
+// Timeline display varbits (cache gamevals).
+const VM = {
+  staff: 3650, salveKnights: 3651, silverlight: 3653, excalibur: 3655, soa: 3656, ardy: 3659,
+  surok: 3660, soaVisible: 9679,
+};
 const VARBIT = { oldSymbol: 3646, ancientSymbol: 3645, pottery: 3649, ancientCoin: 3647, oldCoin: 3648 };
 
 const MINAS = [
@@ -120,7 +127,7 @@ function makeEquipment(ids = []) {
 function makePlayer(attributes = {}, items = {}, equipped = []) {
   const attrs = new Map(Object.entries(attributes));
   const inventory = makeInventory(items);
-  const messages = [], varbits = [], texts = [], strings = [];
+  const messages = [], varbits = [], texts = [], strings = [], sounds = [];
   const levels = new Map(), experience = new Map();
   const bankCounts = new Map();
   const bank = {
@@ -158,6 +165,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     getDialogueManager: () => player.manager,
     messages,
     varbits,
+    sounds,
     texts,
     strings,
     attrs,
@@ -189,6 +197,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
       return ((varps.get(baseVar) ?? 0) >> startBit) & ((1 << (endBit - startBit + 1)) - 1);
     },
     sendInterfaceRemoval() { return sender; },
+    sendSound(id) { sounds.push(id); return sender; },
     sendString(text, uid) { strings.push([uid, text]); return sender; },
     isChatboxInterface() { return true; },
   }, { get(target, key) { return key in target ? target[key] : () => sender; } });
@@ -312,6 +321,32 @@ function talkToMinas(world, player, choice = "I have some information") {
     definition: world.api.core.NpcDefinition.forId(N.HISTORIAN_MINAS), handled: false,
   });
   play(player, choice);
+}
+
+/** Plays Minas's report conversation, logging each line with the Kudos total when it shows. */
+function talkToMinasLogged(world, player, choice = "I have some information") {
+  const log = [];
+  world.anyNpc["Talk-to"]({
+    player, npc: { getId: () => N.HISTORIAN_MINAS }, npcId: N.HISTORIAN_MINAS,
+    definition: world.api.core.NpcDefinition.forId(N.HISTORIAN_MINAS), handled: false,
+  });
+  for (let guard = 0; guard < 500; guard++) {
+    if (player.menu) {
+      const menu = player.menu;
+      player.menu = null;
+      const index = menu.options.findIndex(([label]) => label.includes(choice));
+      assert.ok(index >= 0, `menu option ${choice} not found`);
+      menu.options[index][1]();
+      continue;
+    }
+    const manager = player.getDialogueManager();
+    const current = manager.getCurrent?.();
+    if (!current) return log;
+    const text = current.getText?.();
+    if (text) log.push({ text: text.replace(/\s+/g, " "), kind: current.constructor.name, kudos: getKudos(world, player) });
+    manager.advance();
+  }
+  assert.fail("dialogue did not finish");
 }
 
 const TOOL_ITEMS = {
@@ -490,19 +525,92 @@ test("Museum: real cache actions, transcript assessment, display cases and Minas
   for (const [itemId] of LAMPS) assert.equal(used.inventory.getAmount(itemId), 0);
 });
 
-test("Museum: What Lies Below pays only with the book; Hazeel's mid-branch gap never pays early", () => {
+test("Museum: What Lies Below pays only with the book", () => {
   const wlb = makeApi(new Set(["the_dig_site", "what_lies_below"]));
   const player = makePlayer({}, {}, []);
   talkToMinas(wlb, player);
   assert.equal(getKudos(wlb, player), 0);
+  assert.equal(player.getVarbit(VM.surok), 0);
   player.inventory.adds(I.DAGONHAI_HISTORY, 1);
   talkToMinas(wlb, player);
   assert.equal(getKudos(wlb, player), 5);
+  assert.equal(player.getVarbit(VM.surok), 1);
+});
 
-  const hazeel = makeApi(new Set(["the_dig_site", "hazeel_cult"]));
-  const hazeelPlayer = makePlayer({}, {}, []);
-  talkToMinas(hazeel, hazeelPlayer);
-  assert.equal(getKudos(hazeel, hazeelPlayer), 0);
+// Issue 4293. rsprox 3278 and 1757: the report's narration is a message box; continuing it sends
+// vm_ardy, the Kudos, "You have earned Kudos with the Museum!" and sound 3653, then Minas's
+// closing display line.
+test("Museum: Hazeel Cult report plays its message box and pays before Minas's closing line", () => {
+  const world = makeApi(new Set(["the_dig_site", "hazeel_cult"]));
+  const player = makePlayer({}, {}, []);
+  const log = talkToMinasLogged(world, player);
+  const box = log.find((entry) => entry.text.startsWith("The historian pulls out his writing implements"));
+  assert.ok(box, log.map((entry) => entry.text).join(" | "));
+  assert.equal(box.kind, "StatementDialogue");
+  assert.equal(box.kudos, 0);
+  const closing = log.find((entry) => entry.text.startsWith("How exciting, I'll get a display put up immediately."));
+  assert.ok(closing, log.map((entry) => entry.text).join(" | "));
+  assert.equal(closing.kind, "NpcDialogue");
+  assert.equal(closing.kudos, 5);
+  assert.equal(getKudos(world, player), 5);
+  assert.equal(player.getVarbit(VM.ardy), 1);
+  assert.deepEqual(player.getAttribute(STATE).minas, ["hazeel_cult"]);
+  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 1);
+  assert.deepEqual(player.sounds, [SOUND_KUDOS]);
+  // Reported once: the next talk has nothing new and pays nothing.
+  talkToMinas(world, player);
+  assert.equal(getKudos(world, player), 5);
+});
+
+// rsprox 3278: a lamp report pays after "You're welcome!", hands out the lamp with a game message and
+// a message box, and the conversation goes on to the next report.
+test("Museum: lamp reports show the lamp box and go on to the next report", () => {
+  const world = makeApi(new Set(["the_dig_site", "shield_of_arrav", "merlins_crystal", "demon_slayer"]));
+  const player = makePlayer({}, {}, []);
+  const log = talkToMinasLogged(world, player);
+  const lampBoxes = log.filter((entry) => entry.text === "You receive an old lamp.");
+  assert.deepEqual(lampBoxes.map((entry) => [entry.kind, entry.kudos]), [["StatementDialogue", 10], ["StatementDialogue", 15]]);
+  const welcome = log.filter((entry) => entry.text === "You're welcome!");
+  assert.deepEqual(welcome.map((entry) => entry.kudos), [5, 10], "each lamp report pays once its last line is continued");
+  // Demon Slayer (no lamp) pays before Minas's closing line shows.
+  const delrith = log.find((entry) => entry.text.startsWith("Delrith! Incredible!"));
+  assert.equal(delrith.kudos, 5);
+  assert.equal(getKudos(world, player), 15);
+  assert.deepEqual(new Set(player.getAttribute(STATE).minas), new Set(["shield_of_arrav", "merlins_crystal", "demon_slayer"]));
+  assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 2);
+  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 3);
+  for (const varbit of [VM.silverlight, VM.soa, VM.soaVisible, VM.excalibur]) assert.equal(player.getVarbit(varbit), 1, `varbit ${varbit}`);
+  assert.equal(player.inventory.getAmount(11186), 1);
+  assert.equal(player.inventory.getAmount(11185), 1);
+});
+
+test("Museum: a report whose lamp the player still holds pays without a second lamp or lamp line", () => {
+  const world = makeApi(new Set(["the_dig_site", "shield_of_arrav", "rune_mysteries"]));
+  const player = makePlayer({}, { 11186: 1 }, []);
+  const log = talkToMinasLogged(world, player);
+  assert.equal(log.some((entry) => entry.text === "You receive an old lamp."), false);
+  assert.equal(player.messages.includes("You receive an old lamp."), false);
+  assert.equal(player.inventory.getAmount(11186), 1);
+  // The conversation still goes on to Rune Mysteries.
+  assert.equal(getKudos(world, player), 10);
+});
+
+test("Museum: shared timeline displays show the later report and come back on login", () => {
+  const world = makeApi(new Set(["the_dig_site", "priest_in_peril", "in_aid_of_the_myreque"]));
+  const player = makePlayer({}, {}, []);
+  talkToMinas(world, player);
+  assert.equal(getKudos(world, player), 10);
+  assert.equal(player.getVarbit(VM.salveKnights), 2);
+  // Whatever order they were reported in, login shows each display at its highest value.
+  const relogged = makePlayer({ [STATE]: { minas: ["curse_of_the_empty_lord", "temple_of_ikov", "hazeel_cult", "priest_in_peril"] } });
+  replay(world, relogged);
+  assert.equal(relogged.getVarbit(VM.staff), 2);
+  assert.equal(relogged.getVarbit(VM.ardy), 1);
+  assert.equal(relogged.getVarbit(VM.salveKnights), 1);
+  assert.equal(relogged.getVarbit(VM.soa), 0);
+  const ikov = makePlayer({ [STATE]: { minas: ["temple_of_ikov"] } });
+  replay(world, ikov);
+  assert.equal(ikov.getVarbit(VM.staff), 1);
 });
 
 test("Museum: Curse of the Empty Lord pays 10 Kudos and its 10,000 XP lamp only with the full ghostly robes", () => {

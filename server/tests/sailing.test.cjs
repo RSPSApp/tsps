@@ -1564,7 +1564,7 @@ test("the combat tab's View button shows the sailing sidepanel aboard, and Comba
       ? (uid, group) => { mounted.push([uid >>> 16, uid & 0xffff, group]); return sender; }
       : key === "sendInterfaceFlagsRange"
         ? (uid, from, to, flags) => { events.push([uid >>> 16, uid & 0xffff, from, to, flags]); return sender; }
-        : () => sender,
+        : key === "getVarbit" ? () => 0 : () => sender,
   });
   player.getPacketSender = () => sender;
 
@@ -1594,6 +1594,54 @@ test("the combat tab's View button shows the sailing sidepanel aboard, and Comba
   assert.equal(restored, 1);
   assert.equal(click(593, 12), false, "other combat buttons are left alone");
   Sailing.disembark(player, "the_pandemonium");
+});
+
+test("off a boat, the combat tab's View button opens the sidepanel while the setting offers it", () => {
+  const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
+  const [switchTab] = registerPlugin("Sailing.plugin").interfaceClicks;
+  const player = sailor();
+  const mounted = [];
+  const events = [];
+  const varbits = new Map();
+  const sender = new Proxy({}, {
+    get: (_t, key) => key === "sendSubInterface"
+      ? (uid, group, _type, bundle) => { mounted.push([uid >>> 16, uid & 0xffff, group, bundle]); return sender; }
+      : key === "sendInterfaceFlagsRange"
+        ? (uid, from, to, flags) => { events.push([uid >>> 16, uid & 0xffff, from, to, flags]); return sender; }
+        : key === "sendVarbit" ? (id, value) => { varbits.set(id, value); return sender; }
+          : key === "getVarbit" ? (id) => varbits.get(id) ?? 0 : () => sender,
+  });
+  player.getPacketSender = () => sender;
+  const SIDEPANEL_VISIBLE = 19151;
+  const ONLY_ON_BOAT = 18131;
+  const SAILING_INTRO = 18314;
+  const click = (groupId, childId) => switchTab({ player, groupId, childId, handled: false });
+
+  click(593, 48);
+  assert.deepEqual(mounted, [], "before The Pandemonium offers it, the button isn't there");
+
+  varbits.set(SAILING_INTRO, 6).set(ONLY_ON_BOAT, 1);
+  click(593, 48);
+  assert.deepEqual(mounted, [], "Only show on boat: no panel off a boat");
+
+  varbits.set(ONLY_ON_BOAT, 0);
+  click(593, 48);
+  assert.equal(mounted.length, 1, "Always show: the panel opens");
+  assert.deepEqual(mounted[0].slice(0, 3), [161, 76, 937], "on the combat tab");
+  assert.equal(varbits.get(SIDEPANEL_VISIBLE), 1);
+  assert.deepEqual(events, [[937, 1, 0, 12, 2], [937, 29, 0, 11, 2], [937, 38, 0, 3, 2]],
+    "View Combat Options and the crew tab's buttons; no facilities without a boat");
+
+  const assign = WeaponInterfaceManager.assign;
+  let restored = 0;
+  WeaponInterfaceManager.assign = () => { restored++; };
+  try {
+    click(937, 1);
+  } finally {
+    WeaponInterfaceManager.assign = assign;
+  }
+  assert.equal(restored, 1, "Combat Options brings the combat tab back");
+  assert.equal(varbits.get(SIDEPANEL_VISIBLE), 0);
 });
 
 // --- Cargo hold.

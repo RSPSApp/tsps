@@ -16,7 +16,7 @@ before(async () => {
   PluginManager.createApi("FrostweaverQuest").onCustomEvent("quest:is-complete", (event) => { event.complete = true; });
 });
 
-function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0 } = {}) {
+function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0, at = [1, 0], z = 0, hp = 200, realTarget = false } = {}) {
   t.mock.method(core.Sounds, "sendSound", () => {});
   t.mock.method(Math, "random", () => roll);
   const queued = [];
@@ -27,10 +27,14 @@ function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", 
   t.mock.method(p, "sendMessage", () => {});
   p.getSkillManager().setMaxLevel(core.Skill.MAGIC, 99);
   p.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 99, false);
-  const target = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3200, 3200));
-  t.mock.method(target, "getHitpoints", () => 200);
+  // The target stands at (3200, 3200); the player at an explicit offset from it ("at"), adjacent by default.
+  const target = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3200, 3200, z));
+  p.setLocation(new core.Location(3200 + at[0], 3200 + at[1], 0));
+  t.mock.method(target, "getHitpoints", () => hp);
   t.mock.method(target, "isRegistered", () => true);
-  t.mock.method(p.getCombat(), "getTarget", () => target);
+  if (realTarget === true) p.getCombat().attack(target); // the real order: the target is set before the cast
+  else if (realTarget === null) t.mock.method(p.getCombat(), "getTarget", () => null);
+  else t.mock.method(p.getCombat(), "getTarget", () => target);
   const I = core.ItemIdentifiers, E = core.Equipment, items = p.getEquipment().getItems();
   const sets = { normal: ["", ""], broken: ["_BROKEN_", "_BROKEN_"], mixed: ["_6", "_BROKEN_"], missing: ["", ""], none: ["", ""] };
   const [a, b] = sets[armour];
@@ -60,6 +64,14 @@ test("a committed binding or ice cast in the full set with the spear queues one 
   }
 });
 
+test("both spears with equipment data work, in the full set", (t) => {
+  for (const weapon of ["BLUE_MOON_SPEAR", "BLUE_MOON_SPEAR_4"]) {
+    const f = fixture(t, "ICE_BARRAGE", { weapon });
+    assert.equal(f.cast(), true, weapon);
+    assert.equal(swings(f).length, 1, weapon);
+  }
+});
+
 test("broken and mixed-tier pieces still count", (t) => {
   for (const armour of ["broken", "mixed"]) {
     const f = fixture(t, "BIND", { armour });
@@ -86,10 +98,42 @@ test("a missing piece, no armour or another weapon gives no attack", (t) => {
   }
 });
 
-test("other spells in the full set give no attack", (t) => {
-  const f = fixture(t, "FIRE_STRIKE");
+test("a different real weapon in the full set gives no attack", (t) => {
+  const f = fixture(t, "BIND", { weapon: "STAFF_OF_AIR" });
   f.cast();
   assert.equal(swings(f).length, 0);
+});
+
+test("other spells give no attack: standard strike, the other Ancient elements, Arceuus non-grasps", (t) => {
+  for (const name of ["FIRE_STRIKE", "SMOKE_RUSH", "SHADOW_BURST", "BLOOD_BARRAGE", "INFERIOR_DEMONBANE"]) {
+    const f = fixture(t, name);
+    f.cast();
+    assert.equal(swings(f).length, 0, name);
+  }
+});
+
+test("the spear must reach the target: adjacent and diagonal hit, two tiles, far away or another floor do not", (t) => {
+  for (const [options, expected] of [[{ at: [1, 0] }, 1], [{ at: [-1, 1] }, 1], [{ at: [1, 1] }, 1], [{ at: [2, 0] }, 0], [{ at: [2, 2] }, 0], [{ at: [9, 0] }, 0], [{ at: [-3000, -3000] }, 0], [{ at: [1, 0], z: 1 }, 0]]) {
+    const f = fixture(t, "ICE_BARRAGE", options);
+    assert.equal(f.cast(), true, JSON.stringify(options));
+    assert.equal(swings(f).length, expected, JSON.stringify(options));
+  }
+});
+
+test("no attack on a dead target or with no target", (t) => {
+  for (const options of [{ hp: 0 }, { realTarget: null }]) {
+    const f = fixture(t, "BIND", options);
+    f.cast();
+    assert.equal(swings(f).length, 0, JSON.stringify(options));
+  }
+});
+
+test("through the real combat entry: the target set by attack() is the one the spear hits", (t) => {
+  const f = fixture(t, "ENTANGLE", { realTarget: true });
+  assert.equal(f.p.getCombat().getTarget(), f.target);
+  assert.equal(f.cast(), true);
+  assert.equal(swings(f).length, 1);
+  assert.equal(swings(f)[0].getTarget(), f.target);
 });
 
 test("an armed special is neither used nor spent by the attack", (t) => {

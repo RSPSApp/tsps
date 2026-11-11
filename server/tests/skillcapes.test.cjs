@@ -242,8 +242,12 @@ test("the Master Crafter's transcript has no hand-out step, so his sale and hood
   assert.equal(buyer.getInventory().contains(obj("skillcape_crafting")), true);
   assert.equal(buyer.getInventory().contains(obj("skillcape_crafting_hood")), true);
 
+  const hood = "Most certainly, and free of charge!";
   const another = player({ ninetyNines: ["CRAFTING"], coins: 0 });
-  sellerLine({ player: another, definition, text: "Most certainly, and free of charge!" });
+  sellerLine({ player: another, definition, text: hood });
+  assert.equal(another.getInventory().contains(obj("skillcape_crafting_hood")), false);
+  another.getInventory().adds(obj("skillcape_crafting"), 1);
+  sellerLine({ player: another, definition, text: hood });
   assert.equal(another.getInventory().contains(obj("skillcape_crafting_hood")), true);
 });
 

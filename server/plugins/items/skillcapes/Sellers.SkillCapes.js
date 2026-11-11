@@ -192,7 +192,7 @@ function sellerLine(event) {
   const master = masterFor(event);
   if (!master || typeof event.text !== "string" || !event.player) return;
   if (master.saleLine && event.text === master.saleLine) sell(event.player, master.cape);
-  else if (master.hoodLine && event.text === master.hoodLine) giveHood(event.player, master.cape);
+  else if (master.hoodLine && event.text === master.hoodLine && ownsCape(event.player, master.cape)) giveHood(event.player, master.cape);
 }
 
 function syncSailingVarbit({ player }) {

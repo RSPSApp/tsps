@@ -211,3 +211,10 @@ test('relics hidden from the buff bar itself, with no row click, stay hidden at 
   assert.equal(click(next, 127), true, 'the Display Relics row click after the client flipped it');
   assert.equal(login(next.attributes).getPacketSender().getVarbit(RELICS_HIDDEN), 0);
 });
+
+test('a transmit that changes none of the rows does not swallow the next row click', () => {
+  const p = login();
+  flipInClient(p, COLLECTION_LOG_NOTIFY, 3);
+  assert.equal(click(p, 115), true);
+  assert.equal(p.getPacketSender().getVarbit(ANTI_DRAG), 1, 'the click still toggles it');
+});

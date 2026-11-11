@@ -918,18 +918,24 @@ function transmittedSettingRows(varpId) {
 function saveTransmittedSettings(transmission) {
   const { player, varpId, value } = transmission;
   if (!player || !TRANSMITTED_SETTING_VARPS.has(varpId)) return;
-  SettingVarpTransmit.remember(player, varpId, value, settingVarpTick());
   const saved = savedSettings(player);
+  let changed = false;
   for (const { settingId, row, key, startBit, mask } of transmittedSettingRows(varpId)) {
     const next = (value >>> startBit) & mask;
     if (next === (saved[key] ?? row.default ?? 0)) continue;
+    changed = true;
     if (!refuseLockedSetting(player, settingId)) setSettingVar(player, key, next);
   }
   if (varpId === ESC_CLOSES_VARP) {
     const { startBit } = CacheDefinitions.getVarbit(ESC_CLOSES_VARBIT);
     const esc = (value >>> startBit) & 1;
-    if (esc !== getEscCloses(player) && !refuseLockedSetting(player, ESC_CLOSES_SETTING)) setKeybind(player, ESC_CLOSES_VARBIT, esc);
+    if (esc !== getEscCloses(player)) {
+      changed = true;
+      if (!refuseLockedSetting(player, ESC_CLOSES_SETTING)) setKeybind(player, ESC_CLOSES_VARBIT, esc);
+    }
   }
+  // Only a change of one of these rows stands for the row click that follows it.
+  if (changed) SettingVarpTransmit.remember(player, varpId, value, settingVarpTick());
   transmission.handled = true;
 }
 

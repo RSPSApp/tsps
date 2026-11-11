@@ -111,7 +111,7 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 | Leagues: Display Combat Masteries | 418 | varbit 11562 `buff_league_masteries_hidden` (1 hides them) | buff bar |
 | Always show chat filters | 430 | varbit 16116 `settings_mobile_show_filter_stones_enabled` | chat filter buttons (scripts 113, 178, 3179) |
 | Enable interface resizing and repositioning | 442 | varbit 17772 `settings_interface_resizing` | resizable interfaces |
-| Disable colourful fade effects | 460 | varbit 18132 `settings_colourful_fade_disabled` | Barracuda Trials |
+| Disable colourful fade effects | 460 | varbit 18132 `settings_colourful_fade_disabled` | Barracuda Trials; Guardians of the Rift's portals |
 | Show charting hints | 464 | varbit 18138 `sailing_show_charting_hints` | the captain's log (scripts 8702, 8706) |
 | Show boat customisation material messages | 466 | varbit 18140 `sailing_show_customisation_material_messages`; a fresh account starts with 1 (sent in all 501 default-state logins since rev 235 that carry it) | the boat customisation materials list (script 8828) |
 | Modern menu interface, and its transparent background | 472, 473 | varbits 19615 `settings_new_menu_interface`, 19646 `settings_new_menu_transparent_interface_disabled` | menu scripts |
@@ -121,9 +121,9 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 
 - **Friend Login/Logout messages.** Script 4487 shows `loginlogout_permanent` when it is set, else `loginlogout_setting`; the chat script (84) reads only `loginlogout_permanent`, for the message timeout. Timeout sets both to 0, Off sets the setting to 2. Ours: On sets both to 1, so the chat script sees it too (no capture has On; live logins send `loginlogout_setting` 2, Off, in 3225 of 4281 recordings).
 - **Show mouseover text.** Login sends the saved value, 0 for a fresh account (it used to force 0). The top-left text and HUD overlays laid out by script 4731 (Wintertodt, ToA...) follow it when they are laid out: with the text on they sit 23px lower, with it off at the top.
-- **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
+- **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login. Guardians of the Rift's portals (the Portal Guardians and the huge-remains portals) fade to black instead of in their colours while it is on, as the Wiki describes the setting and as Barracuda Trials' portals on the same `gotr_overlay` do; the barrier's own Visual-effects off still shows no fade at all.
 - **Not done**:
-  - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
+  - Disable colourful fade effects does not yet change the other `gotr_overlay` portal effects: Moons of Peril, Fallen from Grace and Temple of the Eye.
 
 ## Buff Bar
 
@@ -448,7 +448,8 @@ open. Every shake goes through `CameraShake.send`, so its row and its group's ma
     heavy to very light going down the slope, 227/00075, 227/00091, 234/00787), but the captures do
     not pin down each area's edges, so the server opens none yet.
   - Disable colourful fade effects (460): no capture shows a Guardians of the Rift fade with
-    varbit 18132 set, so the minigame still follows only its own `gotr_colourful_fade_disabled`.
+    varbit 18132 set (the minigame's captures predate it), so its black fade follows Barracuda
+    Trials' portals on the same overlay.
 
 ## Health and modified stats overlays
 

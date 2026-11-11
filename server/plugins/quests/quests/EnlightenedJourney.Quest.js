@@ -526,13 +526,13 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
         return hasTestMaterials(player);
       case "8VDUe9": // has them in noted form
         return hasNotedTestMaterials(player);
-      case "HqA8Gq": // second experiment: two papyrus and a sack of potatoes
+      case "bhVUCf": // second experiment: two papyrus and a sack of potatoes
         return held(player, POTATOES) && held(player, PAPYRUS, EXPERIMENT_TWO_PAPYRUS);
-      case "y8uuFQ":
+      case "_OGIzV": // neither
         return !held(player, POTATOES) && !held(player, PAPYRUS, EXPERIMENT_TWO_PAPYRUS);
-      case "NbTsCS":
+      case "e-wFDO":
         return !held(player, POTATOES);
-      case "YB6Lup":
+      case "iBZETA":
         return !held(player, PAPYRUS, EXPERIMENT_TWO_PAPYRUS);
       case "gxuWQU": // sapling + basket of apples handout
         return !hasFlag(player, BIT_SAPLING_GIVEN) && inventory.getFreeSlots() >= 2;
@@ -712,14 +712,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
         player.getInventory().deleteNumber(BOWL, 1);
         setFlag(player, BIT_BOWL);
         return;
-      case "HqA8Gq": // second experiment takes two papyrus and the potatoes
-        if (!held(player, POTATOES) || !held(player, PAPYRUS, EXPERIMENT_TWO_PAPYRUS)) return;
-        player.getInventory().deleteNumber(PAPYRUS, EXPERIMENT_TWO_PAPYRUS);
-        player.getInventory().deleteNumber(POTATOES, 1);
-        if (quest.getStage(player) < STAGE_SECOND_EXPERIMENT) {
-          quest.setStage(player, STAGE_SECOND_EXPERIMENT);
-        }
-        return;
       case "gxuWQU": // sapling and basket of apples handout
         if (hasFlag(player, BIT_SAPLING_GIVEN) || player.getInventory().getFreeSlots() < 2) return;
         player.getInventory().adds(AUGUSTES_SAPLING, 1);
@@ -790,8 +782,11 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       case "_ZdYV3": // end of cutscene
         event.handled = true;
         return;
-      case "MqDt3v": // second experiment cutscene
+      case "1JQEmc": // second experiment cutscene: Auguste takes two papyrus and the potatoes
         event.handled = true;
+        if (!held(player, POTATOES) || !held(player, PAPYRUS, EXPERIMENT_TWO_PAPYRUS)) return;
+        player.getInventory().deleteNumber(PAPYRUS, EXPERIMENT_TWO_PAPYRUS);
+        player.getInventory().deleteNumber(POTATOES, 1);
         if (quest.getStage(player) < STAGE_SECOND_EXPERIMENT) {
           quest.setStage(player, STAGE_SECOND_EXPERIMENT);
         }

@@ -63,7 +63,7 @@ function die(t, victim, killer, at, { kept = false } = {}) {
   return { floor, lost, kept: keptIds };
 }
 
-const NEVER_KEPT = () => [I.LUNAR_HELM, I.TWISTED_DRAGON_TROPHY, I.CHRONICLE, I.RING_OF_CHAROS, I.STEEL_GAUNTLETS, I.FLAMTAER_BAG];
+const NEVER_KEPT = () => [I.LUNAR_HELM, I.LUNAR_STAFF, I.TWISTED_DRAGON_TROPHY, I.CHRONICLE, I.RING_OF_CHAROS, I.STEEL_GAUNTLETS, I.FLAMTAER_BAG];
 
 test("every never-kept name is an untradeable item in the cache", () => {
   const found = new Set();

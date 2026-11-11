@@ -3,7 +3,7 @@
 /**
  * Untradeables that are never kept on death (https://oldschool.runescape.wiki/w/Items_Kept_on_Death#Items_that_are_never_kept):
  * the Chronicle, League trophies and the items with no ground state (the Flamtaer bag, Lunar
- * equipment, the Ring of Charos, Steel gauntlets and their enchanted forms, the magic butterfly
+ * equipment with its staff, the Ring of Charos, Steel gauntlets and their enchanted forms, the magic butterfly
  * net). A PvP death destroys them unless they are kept: they are neither dropped for the killer
  * nor given back. Items with a death rule of their own (the rune pouch, bolt pouch, looting bag,
  * jar generator, salamanders) handle it in their own plugins.

@@ -17,17 +17,20 @@ const CAUGHT_TICKS = 2;
 // Existing server estimate: Wiki generic range100 is not established here for Puro-Puro.
 const WANDER_RADIUS = 8;
 const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
-// Existing Hunter Puro-Puro rectangle. This caps the estimate to keep ordinary wandering in realm.
+// Existing Hunter Puro-Puro rectangle identifies realm membership.
 const MAZE_BOUNDS = Object.freeze([2560, 2623, 4288, 4351]);
+// Cache242 enclosing walls occupy x2561/2622 and y4289/4350. Keep ordinary targets inside them.
+const WANDER_BOUNDS = Object.freeze([2562, 2621, 4290, 4349]);
 function wanderRadius([x, y]) {
-  return Math.max(0, Math.min(WANDER_RADIUS, x - MAZE_BOUNDS[0], MAZE_BOUNDS[1] - x,
-    y - MAZE_BOUNDS[2], MAZE_BOUNDS[3] - y));
+  return Math.max(0, Math.min(WANDER_RADIUS, x - WANDER_BOUNDS[0], WANDER_BOUNDS[1] - x,
+    y - WANDER_BOUNDS[2], WANDER_BOUNDS[3] - y));
 }
 const PLANE = 0;
 
 let core;
 let api;
 let task;
+let implingIds;
 let tick = 0;
 /** npc -> { tier, point, visibleAt, removeAt } */
 const live = new Map();
@@ -35,6 +38,20 @@ const live = new Map();
 function init(pluginApi) {
   api = pluginApi;
   core = api.core;
+  implingIds = new Set(Object.values(data.tables).flatMap(table =>
+    Object.keys(table).map(key => core.NpcIdentifiers[`${key}_IMPLING_2`])));
+}
+
+/** Every Puro-Puro impling flies, including the fixed population loaded from world definitions. */
+function configureFlight({ npc }) {
+  if (!implingIds.has(npc.getId())) return;
+  const at = npc.getSpawnPosition(), x = at.getX(), y = at.getY();
+  if (at.getZ() !== PLANE || x < MAZE_BOUNDS[0] || x > MAZE_BOUNDS[1]
+    || y < MAZE_BOUNDS[2] || y > MAZE_BOUNDS[3]) return;
+  // The Wiki's scenery-crossing rule applies to implings; ordinary actors keep collision.
+  npc.setFlag(IGNORE_CLIPPING_FLAG, true);
+  const movement = npc.getMovementCoordinator();
+  movement.setRadius(Math.min(movement.getRadius(), wanderRadius([x, y])));
 }
 
 function weighted(table) {
@@ -46,8 +63,6 @@ function spawn(tier, point) {
   const key = weighted(data.tables[tier]);
   const npc = api.spawnNpc({ id: core.NpcIdentifiers[`${key}_IMPLING_2`], x: point[0], y: point[1], z: PLANE, wanderRadius: wanderRadius(point) });
   if (!npc) return;
-  // Implings cross scenery, including water and magical wheat (Wiki Impling, revision 15360701).
-  npc.setFlag(IGNORE_CLIPPING_FLAG, true);
   npc.setVisible(false);
   live.set(npc, { tier, point, visibleAt: tick + MANIFEST_TICKS, removeAt: 0 });
 }
@@ -89,10 +104,11 @@ function shutdown() {
 
 function register(pluginApi) {
   init(pluginApi);
+  pluginApi.onCustomEvent("npc:added", configureFlight);
   pluginApi.onServerStartup(start);
   pluginApi.onServerShutdown(shutdown);
   pluginApi.onCustomEvent("hunter:impling-caught", caught);
 }
 
 module.exports = register;
-Object.assign(module.exports, { init, start, process, caught, shutdown, live, MANIFEST_TICKS, CAUGHT_TICKS, MAZE_BOUNDS, wanderRadius });
+Object.assign(module.exports, { init, start, process, caught, shutdown, live, MANIFEST_TICKS, CAUGHT_TICKS, MAZE_BOUNDS, WANDER_BOUNDS, wanderRadius, configureFlight });

@@ -413,7 +413,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   ]);
   // Gates that let the player through and shut behind them, never staying open. Each leaf is
   // [id, x, y, z, face] of a shape-0 wall loc (a sixth entry names another shape, for a closed
-  // centrepiece); crossX/crossY is the boundary the player crosses. crossBetween [low, high] with
+  // centrepiece); crossX/crossY is the boundary the player crosses. crossDiagonal { outside, inside }
+  // is a diagonal door crossed corner to corner (eastwardFrom says which side is outside). crossBetween [low, high] with
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
@@ -760,23 +761,25 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 71,
     }),
-    // The Ranging Guild's entrance (11665, diagonal, Open only, no open leaf in the cache).
-    // RangingGuild.plugin's 40 Ranged check runs before this (door:toggle). The leaf swings to the
-    // tile north and an inviswall keeps the doorway blocked, so nobody can walk or follow through
-    // it: the opener is carried the two tiles across, from 2657 to 2659 or back.
+    // The Ranging Guild's entrance (11665 at 2658,3438, a diagonal wall, Open only). Three captures agree
+    // (229/02601.txt ticks 59-69, 230/02966.txt ticks 1560-1567, 232/03142.txt): the opener steps to
+    // 2657,3439 off the diagonal's north-west corner, gate_open (67) plays, and on the tick the door
+    // swaps for an inviswall plus inactivepoordoor (1539, no action) at 2658,3439 the opener moves
+    // the two tiles across the diagonal to 2659,3437; the door is back two ticks later. Only entering
+    // was captured; leaving is the same crossing in reverse. RangingGuild.plugin's 40 Ranged check
+    // runs before this (door:toggle). The inviswall keeps anyone else from following.
     Object.freeze({
       closed: [[O.GUILD_DOOR, 2658, 3438, 0, 0, 9]],
       opened: [
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2658, 3438, 0, 0, 9],
-        [O.GUILD_DOOR, 2658, 3439, 0, 1, 9],
+        [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2658, 3439, 0, 1, 9], // inactivepoordoor
       ],
-      crossBetween: [2657, 2659],
-      crossRows: [3438],
+      crossDiagonal: { outside: [2657, 3439], inside: [2659, 3437] },
       // The fence is diagonal, so the side comes from x - y, not x alone: 2658,3439 (the doorman's
-      // tile) shares the leaf's x but is outside, and x alone carried that opener back out.
+      // tile) shares the leaf's x but is outside.
       eastwardFrom: (here) => here.getX() - here.getY() <= 2658 - 3438,
       closeTicks: 2,
-      openSoundId: 62,
+      openSoundId: 67, // gate_open, as captured
     }),
     Object.freeze({
       closed: [[O.WALL_9, 2836, 9600, 0, 3]],
@@ -1885,8 +1888,29 @@ function walkOverGate(player, destination) {
   core.TaskManager.submit(task);
 }
 
+/**
+ * A diagonal door crossed corner to corner (the Ranging Guild's): the opener, on or beside its corner
+ * tile on their side, is set on that tile and moved the two tiles across in one tick, as captured.
+ */
+function carryAcrossDiagonal(player, gate, z) {
+  const here = player.getLocation();
+  const entering = gate.eastwardFrom(here);
+  const [fromX, fromY] = entering ? gate.crossDiagonal.outside : gate.crossDiagonal.inside;
+  const [toX, toY] = entering ? gate.crossDiagonal.inside : gate.crossDiagonal.outside;
+  if (Math.abs(here.getX() - fromX) > 1 || Math.abs(here.getY() - fromY) > 1) return;
+  const from = cloneLocation(fromX, fromY, z);
+  if (!here.equals(from)) player.moveTo(from.clone());
+  core.TaskManager.submit(new core.ForceMovementTask(player, 1,
+    new core.ForceMovement(from.clone(), new core.Location(toX - fromX, toY - fromY, 0), 0, 30,
+      entering ? 1 : 3, GATE_WALK_ANIMATION)));
+}
+
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
 function stepThroughGate(player, gate, x, y, z) {
+  if (gate.crossDiagonal) {
+    carryAcrossDiagonal(player, gate, z);
+    return;
+  }
   if (gate.crossBetween) {
     carryAcrossGate(player, gate, y, z);
     return;

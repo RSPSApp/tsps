@@ -79,7 +79,8 @@ Newest first. Nothing is filed as an issue yet; the fixes are in this branch's P
   Reinitialisation Panel after Waydar's task opens the 5x5 puzzle on `trail_slidepuzzle` (cache
   interface 306, whose CS2 688 calls 690, which picks the inventory by varp `if1` (261): 7 draws
   inventory 221 `reinitialisation_inv`, and the panel sets `if1` to 7; pieces are the
-  objs `reinitialisation_01`-`24`, the inventory RuneLite's Puzzle Solver reads); stage 5 comes when
+  objs `reinitialisation_01`-`24`, which cache enum 1872 lists in piece order and enum 1873 inverts;
+  inventory 221 is the one RuneLite's Puzzle Solver reads); stage 5 comes when
   the last piece slides home. Evidence: Wiki "Monkey Madness I" ("similar to the puzzle boxes") and
   the cache. No rsprox capture of the puzzle was found (searched object 4871, NPC 2021 and the
   text), so the scramble (a puzzle box's 101 random slides) and closing the interface on the last

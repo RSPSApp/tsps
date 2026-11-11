@@ -53,8 +53,8 @@ function player() {
   return { p, sent };
 }
 
-function click(p, groupId, childId, slot = -1) {
-  const event = { player: p, groupId, childId, slot, buttonId: (groupId << 16) | childId, action: 1, handled: false };
+function click(p, groupId, childId, slot = -1, action = 1) {
+  const event = { player: p, groupId, childId, slot, buttonId: (groupId << 16) | childId, action, opId: action, handled: false };
   onInterfaceClick(event);
   return event;
 }
@@ -200,4 +200,16 @@ test("Refresh after finishing a quest sends a list without it", () => {
   sent.length = 0;
   click(p, 160, 4);
   assert.equal(lastList(sent).some(([, id]) => id === COOKS_ASSISTANT), false, "and stays gone when reopened");
+});
+
+test("every layout's Activity Adviser button toggles it, and Esc (the close button's op 2) closes it", () => {
+  for (const button of ORB_BUTTONS) {
+    const { p, sent } = player();
+    assert.equal(click(p, button >>> 16, button & 0xffff).handled, true);
+    assert.equal(p.getPacketSender().isSubInterfaceOpen(CR_UI), true, `button ${button >>> 16}:${button & 0xffff} opens it`);
+    sent.length = 0;
+    assert.equal(click(p, CR_UI, 4, -1, 2).handled, true);
+    assert.deepEqual(sent, [["closeSubInterface", FLOATER_UID], ["sendInterfaceScript", 6378]]);
+    assert.equal(p.getPacketSender().isSubInterfaceOpen(CR_UI), false);
+  }
 });

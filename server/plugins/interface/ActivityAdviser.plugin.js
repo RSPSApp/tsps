@@ -28,8 +28,12 @@ const CR_UI = 372;
 const FLOATER_UID = (161 << 16) | 18;
 const OVERLAY = 1;
 const OP1 = 1 << 1;
+const ORBS_CR_BUTTON = (160 << 16) | 4;
+const ORBS_NOMAP_CR_BUTTON = (895 << 16) | 49;
+const ORBS_OSM_CR_BUTTON = (897 << 16) | 46;
+const ORBS_OSM_NOMAP_CR_BUTTON = (898 << 16) | 52;
 /** orbs:cr_button and its no-map and mobile layouts' copies. */
-const ORB_BUTTONS = new Set([(160 << 16) | 4, (895 << 16) | 49, (897 << 16) | 46, (898 << 16) | 52]);
+const ORB_BUTTONS = new Set([ORBS_CR_BUTTON, ORBS_NOMAP_CR_BUTTON, ORBS_OSM_CR_BUTTON, ORBS_OSM_NOMAP_CR_BUTTON]);
 const CLOSE_BUTTON = 4;
 const TABS = 14;
 const TAB_ALL = 0;

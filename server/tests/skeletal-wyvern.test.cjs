@@ -20,10 +20,11 @@ test("the anti-dragon shield does not cut the breath", () => {
   }
 });
 
-test("only the ranged attacks are used beyond melee reach, and the breath only within 5 tiles", () => {
+test("biting needs melee reach; otherwise only ranged attacks, and the breath only within 5 tiles", () => {
   for (const roll of [0, 0.3, 0.6, 0.99]) {
-    assert.notEqual(chooseAttack(3, roll), Attack.MELEE);
-    assert.equal(chooseAttack(6, roll), Attack.ICEBALL);
+    assert.notEqual(chooseAttack(false, 1, roll), Attack.MELEE); // diagonal off a corner: distance 1, no open edge
+    assert.notEqual(chooseAttack(false, 3, roll), Attack.MELEE);
+    assert.equal(chooseAttack(false, 6, roll), Attack.ICEBALL);
   }
-  assert.equal(chooseAttack(1, 0.1), Attack.MELEE);
+  assert.equal(chooseAttack(true, 1, 0.1), Attack.MELEE);
 });

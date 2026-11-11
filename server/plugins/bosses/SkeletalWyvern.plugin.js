@@ -12,7 +12,6 @@ const BASIC_MAX_HIT = 13;
 const FREEZE_TICKS = 11; // 6.6 seconds
 /** Wiki: with a shield or Protect from Magic the same 1 in 7 as the dragons' special breaths. */
 const FREEZE_DENOMINATOR_PROTECTED = 7;
-const MELEE_DISTANCE = 1;
 const ICEBALL_DISTANCE = 6;
 const BREATH_DISTANCE = 5;
 
@@ -40,9 +39,12 @@ function shieldName(player) {
   return def && !def.isNoted() ? def.getName() : "";
 }
 
-/** Which attack comes next: melee reach bites, otherwise the two ranged attacks alternate at random. */
-function chooseAttack(distance, roll) {
-  if (distance <= MELEE_DISTANCE) {
+/**
+ * Which attack comes next. `canMelee` is whether the wyvern could bite right now (an open shared edge, as for
+ * any one-tile melee), `distance` the gap from its footprint: biting needs `canMelee`, the breath 5 tiles.
+ */
+function chooseAttack(canMelee, distance, roll) {
+  if (canMelee) {
     if (roll < 0.5) return Attack.MELEE;
     return roll < 0.75 ? Attack.ICEBALL : Attack.BREATH;
   }
@@ -51,7 +53,9 @@ function chooseAttack(distance, roll) {
 }
 
 function combatClass(api) {
-  const { Animation, Graphic, CombatMethod, CombatType, PendingHit, Projectile, Misc } = api.core;
+  const { Animation, Graphic, CombatMethod, CombatType, PendingHit, Projectile, Misc, CombatRange } = api.core;
+  // The bite and tail swipe alternate per wyvern; a method is built fresh each cycle, so the count lives here.
+  const swings = new WeakMap();
   const PrayerHandler = api.getPrayerHandler();
   const CombatFactory = api.getCombatFactory();
 
@@ -61,13 +65,16 @@ function combatClass(api) {
       // Not melee: the reach check runs before start(), and a stale melee type with a 6 tile range
       // skips the adjacency check. start() picks the real attack from the distance at that moment.
       this.attack = Attack.ICEBALL;
-      this.melee = 0;
     }
 
     start(character, target) {
-      this.attack = chooseAttack(character.calculateDistance(target), Math.random());
+      const canMelee = CombatRange.canReach(character, CombatFactory.MELEE_COMBAT, target);
+      const distance = CombatRange.footprintDistance(character.getLocation(), character.getSize(), target.getLocation());
+      this.attack = chooseAttack(canMelee, distance, Math.random());
       if (this.attack === Attack.MELEE) {
-        character.performAnimation(new Animation(this.melee++ % 2 === 0 ? SEQ.bite : SEQ.tailSwipe));
+        const swing = swings.get(character) ?? 0;
+        swings.set(character, swing + 1);
+        character.performAnimation(new Animation(swing % 2 === 0 ? SEQ.bite : SEQ.tailSwipe));
         return;
       }
       const iceball = this.attack === Attack.ICEBALL;

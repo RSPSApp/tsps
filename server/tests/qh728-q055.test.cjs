@@ -145,6 +145,12 @@ function harness({ realNpcs = false, withNorth = false, northFirst = false } = {
   return h;
 }
 
+/** The message box (statement) the player is looking at, or null. */
+function box(p) {
+  const current = p.manager.getCurrent?.();
+  return current?.getText?.() ?? null;
+}
+
 function player() {
   const attrs = new Map(), items = new Map(), varps = new Map(), varbits = new Map(), log = [], xp = [];
   const inv = {
@@ -191,6 +197,7 @@ function player() {
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]),
       getCombatLevel: () => 3, getCurrentLevel: () => 99, getMaxLevel: skill => p.levels[skill.getIndex()] ?? 99 }),
     getLocation: () => p.loc, moveTo: loc => { p.loc = loc; }, getUsername: () => 'Q055', getDisplayName: () => 'Q055',
+    getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
     sendMessage: text => p.messages.push(text), isRegistered: () => true, isPlayerBot: () => false,
   };
   p.manager = new DialogueManager(p);
@@ -274,11 +281,13 @@ test('Hazeel side: poison, mark, raft, crate key, hidden wall, ladder, scroll ch
 
   solveValves(h, p);
   h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
+  h.tick(3); // the fade, then the move (rsprox 226/01694.txt ticks 6569-6572)
   assert.equal(p.loc.getX(), 2606);
   h.talk(p, N.ALOMONE); h.finish(p);
   assert.equal(h.quest.getStage(p), 6);
 
   h.object(p, O.RAFT, 'Board');
+  h.tick(3);
   assert.equal(p.loc.getX(), 2568);
 
   p.freeSlots = 0;
@@ -324,6 +333,20 @@ test('Hazeel side: poison, mark, raft, crate key, hidden wall, ladder, scroll ch
   assert.equal(h.quest.getStage(p), 9);
 });
 
+test('before choosing a side Clivet stops the player using the raft (Wiki: "Trying to use the raft")', () => {
+  const h = harness();
+  const p = player();
+  h.quest.setStage(p, 3);
+  const started = [];
+  (h.events['npc-dialogue:start'] ??= []).push((event) => started.push(event.variant));
+  p.setAttribute('quest.hazeel_cult.valve-directions', 27);
+  p.loc = new core.Location(2570, 9682, 0);
+  h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
+  h.tick(4);
+  assert.deepEqual(started, ['starting-off-trying-to-use-the-raft']);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2570, 9682], 'the raft does not move');
+});
+
 test('Hazeel valves prompt both directions, keep state on Do nothing, and drive the raft by leading-correct count', () => {
   const h = harness();
   const p = player();
@@ -336,12 +359,12 @@ test('Hazeel valves prompt both directions, keep state on Do nothing, and drive 
   assert.deepEqual(p.prompt.options, ['Turn it to the right.', 'Do nothing.']);
   h.choose(p, 'Do nothing.');
   assert.equal(p.attrs.get(ATTR), 1 << 2, 'Do nothing leaves the valve orientation alone');
-  assert.equal(p.messages.at(-1), 'You leave the valve alone.');
+  assert.equal(box(p), 'You leave the valve alone.');
 
   h.object(p, O.SEWER_VALVE, 'Turn');
   h.choose(p, 'Turn it to the right.');
   assert.equal(p.attrs.get(ATTR), (1 << 2) | 1);
-  assert.equal(p.messages.at(-1), 'You turn the valve to the right. Beneath your feet you hear the sudden sound of rushing water.');
+  assert.equal(box(p), 'You turn the valve to the right. Beneath your feet you hear the sudden sound of rushing water.');
 
   h.object(p, O.SEWER_VALVE_3, 'Turn');
   assert.equal(p.prompt.title, 'The valve is currently turned to the right.');
@@ -354,30 +377,33 @@ test('Hazeel valves prompt both directions, keep state on Do nothing, and drive 
     p.loc = new core.Location(2570, 9682, 0);
     p.messages = [];
     h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
+    h.tick(4); // the box comes back, continuable, as it fades in (6573)
   };
   board(0);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2570, 9682], 'no correct leading valves leaves the raft on the shore');
-  assert.equal(p.messages.at(-1), "The current is flowing against the raft. It won't move.");
+  assert.equal(box(p), "The current is flowing against the raft. It won't move.");
   board(1);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2578, 9687]);
-  assert.match(p.messages.at(-1), /stops at the first island\./);
+  assert.match(box(p), /stops at the first island\./);
   board(7);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2593, 9694]);
-  assert.match(p.messages.at(-1), /stops at the second island\./);
+  assert.match(box(p), /stops at the second island\./);
   board(3);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2616, 9725]);
-  assert.match(p.messages.at(-1), /stops at the fourth island\./);
+  assert.match(box(p), /stops at the fourth island\./);
   board(11);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2600, 9711]);
-  assert.match(p.messages.at(-1), /stops at the third island\./);
+  assert.match(box(p), /stops at the third island\./);
   board(27);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2606, 9692]);
-  assert.equal(p.messages.at(-1), 'The raft washes up the sewer until it reaches the end of the passage.');
+  assert.equal(box(p), 'The raft washes up the sewer until it reaches the end of the passage.');
 
   p.messages = [];
   h.object(p, O.RAFT, 'Board', { x: 2606, y: 9693, z: 0 });
+  h.tick(4);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2568, 9681]);
-  assert.equal(p.messages.at(-1), 'The raft flows back to the cave entrance.');
+  assert.equal(box(p), 'The raft flows back to the cave entrance.');
+  assert.deepEqual(p.messages, [], 'the raft lines are boxes, not chat');
 
   for (const [x, y] of [[2578, 9687], [2593, 9694], [2616, 9725], [2600, 9711], [2606, 9692], [2568, 9681]]) {
     assert.equal(RegionManager.blocked(new core.Location(x, y, 0), null), false, `raft landing ${x},${y} is walkable`);
@@ -422,6 +448,8 @@ test('Ceril side: Alomone death, armour chest, Ceril hand-in, cupboard accusatio
 
   solveValves(h, p);
   h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
+  h.tick(4); // the ride ends with its second box a tick after the move (6573)
+  h.finish(p);
   h.talk(p, N.ALOMONE); h.finish(p);
   assert.equal(h.quest.getStage(p), 4);
 
@@ -721,4 +749,32 @@ test('both HC endings hand cult actors to SOTN at6/7/13 in either plugin order',
     assert.equal(p.xp.length, 0); assert.equal(p.items.get(I.COINS) ?? 0, 0, 'handoff grants no HC rewards');
     for (const fn of h.hooks.onPlayerLogout ?? []) fn({ player: p });
   }
+});
+
+// rsprox 226/01694.txt ticks 6569-6575, tick by tick: on the click the box (no "Click here to continue")
+// with its mesbox line and the fade out; the teleport three ticks later (6572); a tick after that (6573)
+// the fade in and the box again, now continuable, with its mesbox line; the overlay closes two later.
+test('a raft ride: mesbox lines with both boxes, no continue while fading, the fade in a tick after the move', () => {
+  const h = harness();
+  const p = player();
+  h.quest.setStage(p, 5);
+  p.setAttribute('quest.hazeel_cult.valve-directions', 27);
+  p.loc = new core.Location(2570, 9682, 0);
+  const TEXT = 'The raft washes up the sewer until it reaches the end of the passage.';
+  const mesbox = () => p.log.filter(([key, type, text]) => key === 'sendTypedMessage' && type === core.ChatType.MESBOX && text === TEXT).length;
+  const fadeIns = () => p.log.filter(([key, , , , options]) => key === 'sendSubInterface'
+    && JSON.stringify(options?.postScripts?.[0]?.args) === JSON.stringify([0, 0, 0, 255, 50])).length;
+  const continueTexts = () => p.log.filter(([key, uid]) => key === 'text' && uid === ((229 << 16) | 4)).map(([, , text]) => text);
+  p.log.length = 0;
+  h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
+  assert.equal(mesbox(), 1, 'the first box has its mesbox line');
+  assert.deepEqual(continueTexts(), [''], 'and no "Click here to continue" while it fades');
+  h.tick(3);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2606, 9692], 'moved on the third tick (6572)');
+  assert.equal(fadeIns(), 0, 'not faded in yet');
+  assert.equal(mesbox(), 1);
+  h.tick(1);
+  assert.equal(fadeIns(), 1, 'faded in on the fourth tick (6573)');
+  assert.equal(mesbox(), 2, 'the second box has its mesbox line too');
+  assert.equal(box(p), TEXT, 'the second box can be continued');
 });

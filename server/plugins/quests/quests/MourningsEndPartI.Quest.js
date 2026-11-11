@@ -71,9 +71,9 @@
  *    Oronwen": "You give the silk to Oronwen." and what she still needs). What the
  *    transcript leaves out is ours: the bear fur's own box (a game message), her
  *    refusal of a third piece of silk or a second fur, and the trousers coming back
- *    as soon as the last item is handed over. Her Talk-to menu does not know about
- *    items already handed over (its "I need bear fur and two pieces of silk" line is
- *    fixed), and it still hands the trousers over when 2 silk and bear fur are carried.
+ *    as soon as the last item is handed over. Her Talk-to menu's own lines do not know
+ *    about items already handed over ("I need bear fur and two pieces of silk" is fixed),
+ *    but its hand-over credits them: it takes only what she still wants.
  *  - The 50 Thieving, 60 Ranged, Roving Elves, Big Chompy Bird Hunting and
  *    Sheep Herder start requirements are enforced; the stat drain is not modelled.
  *  - HQ mourners (content 9017) are Attack-only in this cache, so the
@@ -399,8 +399,12 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     return hasCleanTop(player) && hasFixedTrousers(player);
   }
 
+  /** What Oronwen still wants: items handed over item by item are credited. */
+  const oronwenWantsSilk = (player) => SILK_WANTED - (Number(player.getAttribute(ORONWEN_SILK_ATTRIBUTE)) || 0);
+  const oronwenWantsFur = (player) => !player.getAttribute(ORONWEN_FUR_ATTRIBUTE);
+
   function hasTrouserMaterials(player) {
-    return held(player, SILK, 2) && held(player, BEAR_FUR, 1);
+    return held(player, SILK, oronwenWantsSilk(player)) && (!oronwenWantsFur(player) || held(player, BEAR_FUR, 1));
   }
 
   function hasGnomeMaterials(player) {
@@ -679,9 +683,6 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     };
   }
 
-  const oronwenWantsSilk = (player) => SILK_WANTED - (Number(player.getAttribute(ORONWEN_SILK_ATTRIBUTE)) || 0);
-  const oronwenWantsFur = (player) => !player.getAttribute(ORONWEN_FUR_ATTRIBUTE);
-
   /**
    * Silk or bear fur used on Oronwen while the ripped trousers wait for repair: she keeps it, says what is
    * still missing (the transcript's own conditions) and mends them when the last item arrives.
@@ -719,12 +720,15 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   }
 
   function repairTrousers(player) {
+    const wantedSilk = oronwenWantsSilk(player);
+    const wantedFur = oronwenWantsFur(player);
     player.setAttribute(ORONWEN_SILK_ATTRIBUTE, 0);
     player.setAttribute(ORONWEN_FUR_ATTRIBUTE, 0);
     if (!held(player, RIPPED_MOURNER_TROUSERS)) return;
     take(player, RIPPED_MOURNER_TROUSERS, 1);
-    if (held(player, SILK, 2)) take(player, SILK, 2);
-    if (held(player, BEAR_FUR)) take(player, BEAR_FUR, 1);
+    // The Talk-to hand-over takes only what Oronwen has not already been given (read before the counters are cleared).
+    if (wantedSilk > 0 && held(player, SILK, wantedSilk)) take(player, SILK, wantedSilk);
+    if (wantedFur && held(player, BEAR_FUR)) take(player, BEAR_FUR, 1);
     if (!held(player, MOURNER_TROUSERS)) give(player, MOURNER_TROUSERS, 1);
     advance(player, STAGE_TROUSERS);
   }

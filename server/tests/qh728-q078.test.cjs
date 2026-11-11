@@ -57,6 +57,7 @@ function makeHarness({ completed = ['roving_elves', 'big_chompy_bird_hunting', '
   const skillLevels = new Map(Object.entries(levels).map(([skill, level]) => [skill.toUpperCase(), level]));
   let location = new core.Location(2352, 3170, 0);
   let inventoryFull = false;
+  const persisted = new Map();
 
   const sender = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return sender; },
@@ -115,7 +116,7 @@ function makeHarness({ completed = ['roving_elves', 'big_chompy_bird_hunting', '
       ...core,
       TaskManager: { submit: (task) => task.execute(), cancelTasks: noop },
     },
-    persistAttribute: noop,
+    persistAttribute: (key, value) => persisted.set(key, value),
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
     onNpcInteraction(name, handlers) {
@@ -210,7 +211,7 @@ function makeHarness({ completed = ['roving_elves', 'big_chompy_bird_hunting', '
   };
 
   return {
-    api, player, quest, attributes, inventory, equipment, configs, varbits, messages, xp, jingles,
+    api, player, quest, persisted, attributes, inventory, equipment, configs, varbits, messages, xp, jingles,
     spawned, removed, fire, action, choice, hook, itemOnItem, itemOnObject, itemOnNpc, object,
     variant, condition, talk, die, login,
     setFull(value) { inventoryFull = value; },
@@ -532,4 +533,53 @@ test('controls: no ripped trousers, before the disguise stage, another item or a
   assert.equal(h.inventory.get(I.SILK), 1, 'nothing was taken by the controls');
   assert.equal(h.player.getAttribute(SILK_ATTR) ?? 0, 0, 'no hand-in state changed');
   assert.equal(h.player.getAttribute(FUR_ATTR) ?? 0, 0);
+});
+
+test('Oronwen guard branches: trousers already mended, the reporting stage, the order of take and give, and what is saved', () => {
+  const mended = atTrousers();
+  mended.give(I.MOURNER_TROUSERS, 1);
+  mended.give(I.SILK, 1);
+  assert.equal(mended.itemOnNpc(I.SILK, N.ORONWEN).handled, false, 'already holding mended trousers');
+  assert.equal(mended.inventory.get(I.SILK), 1, 'nothing taken');
+
+  const reported = atTrousers();
+  reported.give(I.SILK, 1);
+  reported.quest.setStage(reported.player, 5);
+  assert.equal(reported.itemOnNpc(I.SILK, N.ORONWEN).handled, false, 'the reporting stage is past the hand-ins');
+  assert.equal(reported.inventory.get(I.SILK), 1);
+
+  // The harness inventory has no slot limit, so a full pack cannot be shown directly: the last hand-over frees two
+  // slots (the item and the ripped trousers) before the repaired trousers are added, which is what keeps a full pack safe.
+  const last = atTrousers();
+  last.give(I.SILK, 2);
+  last.give(I.BEAR_FUR, 1);
+  last.itemOnNpc(I.BEAR_FUR, N.ORONWEN);
+  last.itemOnNpc(I.SILK, N.ORONWEN);
+  const calls = [];
+  const inventory = last.player.getInventory();
+  const { deleteNumber, adds } = inventory;
+  inventory.deleteNumber = (id, amount) => { calls.push(['delete', id]); return deleteNumber(id, amount); };
+  inventory.adds = (id, amount) => { calls.push(['add', id]); return adds(id, amount); };
+  last.itemOnNpc(I.SILK, N.ORONWEN);
+  assert.deepEqual(calls, [['delete', I.SILK], ['delete', I.RIPPED_MOURNER_TROUSERS], ['add', I.MOURNER_TROUSERS]]);
+  assert.equal(last.inventory.get(I.MOURNER_TROUSERS), 1);
+
+  assert.equal(last.persisted.get(SILK_ATTR), 0, 'the silk count is saved, default 0');
+  assert.equal(last.persisted.get(FUR_ATTR), 0, 'the fur flag is saved, default 0');
+});
+
+test('Talk-to credits what Oronwen already has: the hand-over takes only what she still wants', () => {
+  const h = atTrousers();
+  h.give(I.SILK, 4);
+  h.give(I.BEAR_FUR, 1);
+  h.itemOnNpc(I.SILK, N.ORONWEN); // she keeps 1 silk; the pack holds 3 silk and the fur
+  assert.equal(h.inventory.get(I.SILK), 3);
+  assert.equal(h.condition('Wamzez', N.ORONWEN), true, 'one silk and the fur are all she still wants');
+  assert.equal(h.variant(N.ORONWEN).variant, 'the-mourner-s-disguise-trousers', 'the "I have all I need" hand-over is offered');
+  h.action('OVpPAl', N.ORONWEN);
+  assert.equal(h.inventory.get(I.SILK), 2, 'one silk taken, not two: she already kept one');
+  assert.equal(h.inventory.get(I.BEAR_FUR) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MOURNER_TROUSERS), 1);
+  assert.equal(h.quest.getStage(h.player), 4);
+  assert.equal(h.player.getAttribute(SILK_ATTR), 0, 'counters cleared');
 });

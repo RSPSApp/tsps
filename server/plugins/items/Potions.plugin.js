@@ -19,6 +19,7 @@ const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/com
 const { HitMask } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ItemIdentifiers: Items } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const CameraShake = require("../interface/CameraShake.plugin");
 const {
   DragonfireProtectionTier,
   processDragonfireProtection,
@@ -836,14 +837,30 @@ for (const [name, id, heals, effect, lines] of [
 }
 
 // Keg of beer (Wiki): heals 15, Strength +(2 + 10% of base), Attack -(5 + 50% of current). rsprox captures
-// (rec 20261111T225402-5ab63b4 tick 139): viking_keg_drink_full, one spam line, the keg gone, Attack 29 -> 10.
+// (rec 20261111T225402-5ab63b4 tick 139): viking_keg_drink_full, one spam line, sound 2401 twice, the keg
+// gone, Attack 29 -> 10, and a camera shake (3, 0, 20, 2) that a camera reset ends 50 ticks later.
+const KEG_SWAY_TICKS = 50;
+const kegSways = new WeakMap();
+function drinkKegOfBeer(player) {
+  heal(player, 15);
+  boostSkill(player, Skill.STRENGTH, 2, 0.1);
+  lowerSkillByCurrent(player, Skill.ATTACK, 5, 0.5);
+  Sounds.sendSound(player, Sound.DRINK);
+  // Ours: the sway is filed under the atmospheric camera shake setting.
+  CameraShake.send(player.getPacketSender(), "atmospheric", 3, 0, 20, 2);
+  // Another keg first starts the sway again, and only the last one's reset ends it.
+  const token = {};
+  kegSways.set(player, token);
+  const { TaskManager, CountdownTask } = pluginApi.core;
+  TaskManager.submit(new CountdownTask(player, KEG_SWAY_TICKS, () => {
+    if (kegSways.get(player) !== token) return;
+    kegSways.delete(player);
+    if (player.isRegistered?.() !== false) player.getPacketSender().sendCameraReset();
+  }));
+}
 registerPotion({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
   drink: { animation: 1330, messages: () => ["You chug the keg. You feel reinvigorated...<br>... but extremely drunk too."] },
-  requiresFoodPermission: true, shareable: false, effect: (player) => {
-    heal(player, 15);
-    boostSkill(player, Skill.STRENGTH, 2, 0.1);
-    lowerSkillByCurrent(player, Skill.ATTACK, 5, 0.5);
-  } });
+  requiresFoodPermission: true, shareable: false, effect: drinkKegOfBeer });
 
 // Spirits (Wiki: Karamjan rum, Vodka, Whisky, Gin, Brandy): heal 5, Strength +(1 + 5% of base),
 // Attack -(3 + 2% of current). rsprox captures (recs 4287, 4101, 4291): human_eat, sound 2401, the two

@@ -263,7 +263,8 @@ each in turn:
 | Gin | 225402 (129) | "You drink the gin. ..." / "...and slightly dizzy too." | empty | Attack 32→29, Strength 61 (already at the cap) |
 | Keg of beer | 225402 (139) | "You chug the keg. You feel reinvigorated...<br>... but extremely drunk too." (one line) | empty | Attack 29→10, Strength 61→65 |
 
-All send sound 2401 (twice for the keg). The animation is `human_eat` (829), except the keg's
+All send sound 2401 (twice for the keg). The keg also sends a camera shake (3, 0, 20, 2), and a
+camera reset follows 50 ticks later (tick 189); another keg first restarts the sway. The animation is `human_eat` (829), except the keg's
 `viking_keg_drink_full` (1330). The house Greenman's ale and Dragon bitter (`poh_*`,
 `rsprox_transcripts/229/00264.txt`) send their stock ale's lines, leave `poh_beer_glass`, and
 take 99→94 (Greenman's) and Attack 96→90 (Dragon bitter).
@@ -281,7 +282,7 @@ Ours:
 - The house Beer, Cider, Asgarnian ale and Chef's delight are taken to send their stock lines, as
   the two captured house ales do.
 - Dwarven stout's lines are the Wiki's.
-- The keg's second 2401 sound is not sent.
+- The keg's camera sway is filed under the atmospheric camera shake setting.
 
 ### Bottle of wine
 

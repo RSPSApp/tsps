@@ -260,3 +260,45 @@ test("Bottle of wine (tick 26): heals 14, Attack -3, two game lines, empty bottl
   assert.deepEqual(f.animations, [829]);
   assert.deepEqual(sounds, [2401]);
 });
+
+test("Keg of beer sways the camera: shake (3, 0, 20, 2), two liquid sounds, reset 50 ticks on", async t => {
+  const f = actor(t);
+  const sender = f.p.getPacketSender();
+  const shakes = [];
+  const resets = [];
+  t.mock.method(sender, "sendCameraShake", (...args) => { shakes.push(args); return sender; });
+  t.mock.method(sender, "sendCameraReset", () => { resets.push(true); return sender; });
+  const sounds = [];
+  const send = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (player, sound) => {
+    sounds.push(sound.getId?.() ?? sound.id);
+    return send(player, sound);
+  });
+  f.inv.setItem(0, new core.Item(I.KEG_OF_BEER_2, 1));
+  await drink(f, 0);
+  assert.deepEqual(shakes, [[3, 0, 20, 2]]);
+  assert.deepEqual(sounds, [2401, 2401]);
+  for (let tick = 0; tick < 49; tick++) core.TaskManager.process();
+  assert.equal(resets.length, 0, "still swaying on tick 49");
+  core.TaskManager.process();
+  assert.equal(resets.length, 1, "rsprox: cam_reset 50 ticks after the keg");
+});
+
+test("a second keg restarts the sway; only its own reset ends it", async t => {
+  const f = actor(t);
+  const sender = f.p.getPacketSender();
+  const resets = [];
+  t.mock.method(sender, "sendCameraShake", () => sender);
+  t.mock.method(sender, "sendCameraReset", () => { resets.push(true); return sender; });
+  f.inv.setItem(0, new core.Item(I.KEG_OF_BEER_2, 1));
+  f.inv.setItem(1, new core.Item(I.KEG_OF_BEER_2, 1));
+  await drink(f, 0);
+  for (let tick = 0; tick < 10; tick++) core.TaskManager.process();
+  f.p.getTimers().process(); f.p.getTimers().process(); f.p.getTimers().process();
+  await drink(f, 1);
+  assert.equal(slotId(f, 1), NOTHING, "the second keg was drunk");
+  for (let tick = 0; tick < 40; tick++) core.TaskManager.process();
+  assert.equal(resets.length, 0, "the first keg's reset is dropped");
+  for (let tick = 0; tick < 10; tick++) core.TaskManager.process();
+  assert.equal(resets.length, 1);
+});

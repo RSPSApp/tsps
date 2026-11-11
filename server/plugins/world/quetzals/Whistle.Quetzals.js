@@ -130,7 +130,8 @@ function chooseSite(event) {
 /** The flight once content has had its say (TeleportHandler.confirm: the boat-at-sea warning). */
 function confirmFlight(player, whistle, site) {
   const at = new Common.core.Location(site.x, site.y, site.z);
-  Common.core.TeleportHandler.confirm(player, at, () => fly(player, whistle, site), WILDERNESS_LIMIT, () => Common.busy(player, false));
+  Common.core.TeleportHandler.confirm(player, at, () => fly(player, whistle, site), WILDERNESS_LIMIT,
+    { item: whistle.id, refused: () => Common.busy(player, false) });
 }
 
 /** The captured whistle flight; the charge goes as the player lands. */

@@ -134,10 +134,10 @@ function teleport(player, item, destination) {
     return;
   }
   const castId = item.getId();
-  TeleportHandler.confirm(player, target, () => TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => {
-    useCharge(player, item, castId);
+  TeleportHandler.confirm(player, target, (carried) => TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => {
+    useCharge(player, carried, castId);
     pluginApi.emitCustomEvent("jewellery:teleport-arrival", { player, key: piece.key, label: destination.label });
-  }), wildernessLevel);
+  }), wildernessLevel, { item });
 }
 
 function questComplete(player, key) {

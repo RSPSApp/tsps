@@ -40,7 +40,7 @@ before(async () => {
       Bank: { getTabForItem: () => 0 },
       TeleportHandler: {
         checkReqs: () => true,
-        confirm: (player, destination, go) => go(),
+        confirm: (player, destination, go, level, { item } = {}) => go(item),
         teleport: (player, to, type) => teleports.push({ to: [to.getX(), to.getY()], delay: type.getStartTick?.() }),
       },
       ItemOnGroundManager: {

@@ -81,7 +81,7 @@ function teleportToClue(event) {
   if (!player.getInventory().contains(contract)) return true;
   const { x, y, z } = step.location;
   Teleports.go(player, KEY, { label: "Current step", location: new core.Location(x, y, z ?? 0), remember: false },
-    { onStart: () => player.getInventory().deleteNumber(contract, 1) });
+    { item: contract, onStart: () => player.getInventory().deleteNumber(contract, 1) });
   return true;
 }
 

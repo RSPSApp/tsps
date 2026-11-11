@@ -135,11 +135,12 @@ function teleport(player, amulet, lair) {
   const { Location, TeleportHandler, TeleportType } = core;
   const target = new Location(...lair.tile);
   if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return;
-  TeleportHandler.confirm(player, target, () => {
+  TeleportHandler.confirm(player, target, (carried) => {
+    if (charges(carried) <= 0) return;
     // Equipping during the animation clones the item, so pay before it can move.
-    useCharge(player, amulet);
+    useCharge(player, carried);
     TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
-  }, WILDERNESS_LEVEL);
+  }, WILDERNESS_LEVEL, { item: amulet });
 }
 
 function useCharge(player, amulet) {

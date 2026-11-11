@@ -245,7 +245,7 @@ function useTablet(event) {
   const useUp = () => player.getInventory().deleteNumber(event.itemId, 1);
   // The Wilderness warning asks first, then any other (the boat-at-sea warning).
   const breakTablet = () => core.TeleportHandler.confirm(player, target.destination,
-    () => core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp));
+    () => core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp), 20, { item: event.itemId });
   const warning = TABLET_WARNINGS.get(name);
   if (!warning || !warningOn(player, warning)) return breakTablet();
   const [title, yes, no] = tabletWarning(warning);
@@ -260,7 +260,7 @@ function readScroll(event, destination) {
   core.TeleportHandler.confirm(player, destination, () => {
     player.getInventory().deleteNumber(event.itemId, 1);
     core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
-  });
+  }, 20, { item: event.itemId });
 }
 
 function syncAlternates({ player }) {

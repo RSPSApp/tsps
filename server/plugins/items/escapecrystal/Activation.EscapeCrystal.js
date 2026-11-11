@@ -75,7 +75,7 @@ function toRespawnPoint(player, cause) {
   const destination = GameConstants.DEFAULT_LOCATION.clone();
   if (!TeleportHandler.checkReqs(player, destination, Common.WILDERNESS_LIMIT)) return false;
   if (cause !== "teleport") return escapeTo(player, destination, cause);
-  TeleportHandler.confirm(player, destination, () => escapeTo(player, destination, cause), Common.WILDERNESS_LIMIT);
+  TeleportHandler.confirm(player, destination, () => escapeTo(player, destination, cause), Common.WILDERNESS_LIMIT, { item: Common.crystalId() });
   return true;
 }
 

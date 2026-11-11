@@ -29,7 +29,7 @@ const api = {
     World: { getProcessCycle: () => cycle },
     Skill: { HITPOINTS: 3 },
     Wilderness: { isInLocation: () => wildernessLevel > 0, levelAt: () => wildernessLevel },
-    TeleportHandler: { checkReqs: () => teleportAllowed, confirm: (player, destination, go) => go() },
+    TeleportHandler: { checkReqs: () => teleportAllowed, confirm: (player, destination, go, level, { item } = {}) => go(item) },
     GameConstants: { DEFAULT_LOCATION: { clone: () => ({ spawn: true }) } },
   },
   emitCustomEvent: (name, payload) => {

@@ -55,7 +55,7 @@ function readScroll({ player, slot }) {
     TeleportHandler.teleport(player, to, scrollTeleport(), false, () => {
       Shared.api().emitCustomEvent("wgs:enter-chasm", { player, tile: to });
     });
-  });
+  }, 20, { item: SCROLL });
 }
 
 function attach(api) {

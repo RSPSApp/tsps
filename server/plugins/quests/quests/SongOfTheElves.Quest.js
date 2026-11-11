@@ -3934,7 +3934,7 @@ module.exports = function registerSongOfTheElves(api) {
     api.core.TeleportHandler.confirm(event.player, destination, () => {
       event.player.getInventory().deleteNumber(event.itemId, 1);
       api.core.TeleportHandler.teleport(event.player, destination, api.core.TeleportType.NORMAL, false);
-    });
+    }, 20, { item: event.itemId });
   }
 
   function placeFallsPillarItem(event) {

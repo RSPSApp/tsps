@@ -130,10 +130,10 @@ function teleport(player, event, item, destination) {
   }
   // The charge goes on arrival, like the other teleport jewellery (Jewellery.plugin.js).
   const ringId = item.getId();
-  TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => {
-    const ring = findRing(player, item, ringId);
+  TeleportHandler.confirm(player, destination, (carried) => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => {
+    const ring = findRing(player, carried, ringId);
     if (ring) consumeCharge(player, ring);
-  }), 30);
+  }), 30, { item });
 }
 
 /**

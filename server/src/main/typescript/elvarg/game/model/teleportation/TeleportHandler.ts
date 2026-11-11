@@ -7,6 +7,7 @@ import { EffectTimer } from "../EffectTimer";
 import { Sound } from "../../Sound";
 import { Sounds } from "../../Sounds";
 import { Location } from "../Location";
+import { Item } from "../Item";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { Wilderness } from "../../content/wilderness/Wilderness";
 import { PlayerRights } from "../rights/PlayerRights";
@@ -14,6 +15,8 @@ import { hasGlobalWorldTag } from "../../definition/WorldDefinition";
 
 /** Varbit busy: set while a teleport tablet works (OSRS capture). */
 const BUSY_VARBIT = 12393;
+/** Ours: a teleport asked about first whose item went before the yes. */
+const ITEM_GONE = "You no longer have the item you were teleporting with.";
 
 class TeleportTask extends Task {
     private teleportTick = 0;
@@ -128,32 +131,46 @@ export class TeleportHandler {
      * A teleport the player chose (an item's, or a spell's outside the spell engine), once `checkReqs` has passed and
      * before anything is used up: content may ask first ("teleport:confirm" { player, proceed, recheck, refused,
      * handled }: the boat-at-sea warning). `go` (use the item up, then `teleport`) runs at once when nothing asks; after
-     * a question it runs on the player's yes, once `checkReqs` passes again and the player still carries every item they did.
-     * `refused` runs instead on a no, or when those checks fail (to clear what the item set, such as varbit busy).
+     * a question it runs on the player's yes, once `checkReqs` passes again.
+     *
+     * `item` is what the teleport spends: an item id the player must still carry, or the Item itself. For an Item, `go`
+     * is given the one the player carries at the yes: the same object, or the copy wearing or removing it made (it
+     * holds the charges now). `refused` runs instead of `go` on a no or a failed check (to clear what the item set, such
+     * as varbit busy).
      */
-    public static confirm(player: Player, destination: Location, go: () => void, wildernessLevelLimit: number = 20, refused?: () => void): void {
-        const carried = TeleportHandler.carried(player);
+    public static confirm(player: Player, destination: Location, go: (item?: Item) => void, wildernessLevelLimit: number = 20,
+        { refused, item }: { refused?: () => void; item?: Item | number } = {}): void {
+        let current = typeof item === "number" ? undefined : item;
+        // The id as asked: a container empties a removed item in place.
+        const itemId = typeof item === "number" ? item : item?.getId?.();
         const request = {
             player,
             handled: false,
-            proceed: go,
-            recheck: () => TeleportHandler.stillCarries(player, carried) && TeleportHandler.checkReqs(player, destination, wildernessLevelLimit),
+            proceed: () => go(current),
+            recheck: () => {
+                if (item !== undefined) {
+                    const found = TeleportHandler.carriedNow(player, item, itemId);
+                    if (!found) {
+                        player.sendMessage(ITEM_GONE);
+                        return false;
+                    }
+                    if (found !== true) current = found;
+                }
+                return TeleportHandler.checkReqs(player, destination, wildernessLevelLimit);
+            },
             refused: () => refused?.(),
         };
         PluginManager.emitCustomEvent("teleport:confirm", request);
         if (!request.handled) request.proceed();
     }
 
-    /** The item ids in the player's inventory and equipment: an item spent on a yes must still be there. */
-    private static carried(player: Player): Set<number> {
-        const items = [...(player.getInventory?.()?.getItems?.() ?? []), ...(player.getEquipment?.()?.getItems?.() ?? [])];
-        return new Set(items.map((item) => Number(item?.getId?.() ?? -1)).filter((id) => id > 0));
-    }
-
-    /** Every item carried before is still carried (anything gained meanwhile, a catch or salvage, doesn't matter). */
-    private static stillCarries(player: Player, before: Set<number>): boolean {
-        const now = TeleportHandler.carried(player);
-        return [...before].every((id) => now.has(id));
+    /** For an id, whether the player carries one; for an Item, that object or else one with its id; false if neither. */
+    private static carriedNow(player: Player, item: Item | number, itemId: number | undefined): Item | boolean {
+        const items = [...(player.getInventory?.()?.getItems?.() ?? []), ...(player.getEquipment?.()?.getItems?.() ?? [])]
+            .filter((carried): carried is Item => carried != null && carried.getId?.() > 0);
+        if (typeof item === "number") return items.some((carried) => carried.getId() === item);
+        return items.find((carried) => carried === item && carried.getId() === itemId)
+            ?? items.find((carried) => carried.getId() === itemId) ?? false;
     }
 
     public static onTeleporting(player: Player, closeInterfaces: boolean = true): void {

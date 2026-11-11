@@ -367,7 +367,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
       else give(player, ItemIdentifiers.CRYSTAL_TELEPORT_SEED, 1);
       TeleportHandler.teleport(player, lletya, TeleportType.NORMAL, false,
         () => player.sendMessage("You activate the teleport crystal and arrive in Lletya."));
-    });
+    }, 20, { item: itemId });
   }
 
   function advance(player, stage) {

@@ -26,6 +26,8 @@ before(async () => {
   core = PM.getCoreApi();
   I = core.ItemIdentifiers;
   core.RegionManager.init();
+  // As the server's start does: Sailing's own hooks (a teleport off your boat at sea sinks it).
+  core.Sailing.initialize();
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -49,7 +51,9 @@ function actor(t, { aboard = true, warning = true } = {}) {
   t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
   const state = { aboard };
   const aboardOf = core.Sailing.instanceAboard;
-  t.mock.method(core.Sailing, "instanceAboard", (player) => (player === p ? (state.aboard ? {} : undefined) : aboardOf.call(core.Sailing, player)));
+  // A stand-in boat (Sailing's own sinking is left to the real-boat tests below): every tile is its deck.
+  const boat = { containsDeckTile: () => true };
+  t.mock.method(core.Sailing, "instanceAboard", (player) => (player === p ? (state.aboard ? boat : undefined) : aboardOf.call(core.Sailing, player)));
   const teleports = [];
   const real = core.TeleportHandler.teleport;
   t.mock.method(core.TeleportHandler, "teleport", (...args) => {
@@ -341,4 +345,204 @@ test("the escape crystal's Auto-afk and ring of life still save the player at on
   assert.equal(Activation.activate(f.p, "ring", 10), true);
   assert.notEqual(pending(f)?.title, TeleportWarning.QUESTION);
   assert.notEqual(f.p.getLocation().getX(), START[0], "saved at once");
+});
+
+// ---------------------------------------------------------------- what the teleport spends, at the yes
+
+const GIANTSOUL_CHARGES = "giantsoul-amulet:charges";
+const chargesOf = (item) => item.getMetaValue(GIANTSOUL_CHARGES);
+
+/** A giantsoul amulet rubbed aboard, its lair picked: the warning is up. */
+function rubbedGiantsoul(t) {
+  const f = actor(t);
+  charged(f, I.GIANTSOUL_AMULET, GIANTSOUL_CHARGES, 5);
+  const amulet = f.p.getInventory().getItems()[f.p.getInventory().getSlotForItemId(I.GIANTSOUL_AMULET)];
+  use(f, I.GIANTSOUL_AMULET, "Rub");
+  pick(f, /./);
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  return { f, amulet };
+}
+
+test("a charged item worn while the warning is open pays from the worn copy on yes", (t) => {
+  const { f, amulet } = rubbedGiantsoul(t);
+  // Wearing it puts a copy in the slot (with its own charges), as equipping does.
+  const worn = amulet.clone();
+  f.p.getInventory().deleteNumber(I.GIANTSOUL_AMULET, 1);
+  f.p.getEquipment().setItem(core.Equipment.AMULET_SLOT, worn);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 1, `it goes (${f.messages.join(" | ")})`);
+  assert.equal(chargesOf(worn), 4, "the amulet the player wears paid");
+});
+
+test("a charged item gone by the yes stays: no teleport, and the player is told", (t) => {
+  const { f, amulet } = rubbedGiantsoul(t);
+  f.p.getInventory().deleteNumber(I.GIANTSOUL_AMULET, 1);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 0);
+  assert.ok(f.messages.includes("You no longer have the item you were teleporting with."), f.messages.join(" | "));
+});
+
+test("a charged item emptied by the yes (Uncharge meanwhile) doesn't teleport for free", (t) => {
+  const { f, amulet } = rubbedGiantsoul(t);
+  amulet.setMetaValue(GIANTSOUL_CHARGES, 0);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 0);
+});
+
+test("anything else used up while the warning is open doesn't cancel the yes (food eaten, salvage deposited)", (t) => {
+  const f = actor(t);
+  give(f, I.VARROCK_TELEPORT, 2);
+  give(f, I.SHRIMPS);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  f.p.getInventory().deleteNumber(I.SHRIMPS, 1);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 1);
+});
+
+test("a teleport item that is used up (a scroll) and gone by the yes stays, and the player is told", (t) => {
+  const f = actor(t);
+  give(f, I.NARDAH_TELEPORT);
+  use(f, I.NARDAH_TELEPORT, "Teleport");
+  f.p.getInventory().deleteNumber(I.NARDAH_TELEPORT, 1);
+  choose(f, 1);
+  assert.equal(f.teleports.length, 0);
+  assert.ok(f.messages.includes("You no longer have the item you were teleporting with."), f.messages.join(" | "));
+});
+
+// ---------------------------------------------------------------- combat begun while the warning is open
+
+test("a home teleport refuses on a yes once combat has begun while the warning was open", async (t) => {
+  const f = actor(t);
+  caster(f, core.MagicSpellbook.NORMAL, []);
+  await cast(f, "Lumbridge Home Teleport");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  t.mock.method(core.CombatFactory, "inCombat", (player) => player === f.p);
+  choose(f, 1);
+  settle(40);
+  assert.equal(f.p.getLocation().getX(), START[0], "stays");
+  assert.ok(f.messages.includes("You can't use this spell during combat."), f.messages.join(" | "));
+});
+
+function leagueArea() {
+  const Common = require("../plugins/modes/leagueareas/Common.LeagueAreaUnlocks");
+  const Teleport = require("../plugins/modes/leagueareas/Teleport.LeagueAreaUnlocks");
+  const type = Number(Object.keys(Common.data.leagues)[0]);
+  return { Common, cast: (player) => Teleport.cast(player, type, { teleport: { x: 3222, y: 3218, z: 0 } }) };
+}
+
+test("a league area teleport refuses on a yes once combat has begun while the warning was open", (t) => {
+  const f = actor(t);
+  const { Common, cast: areaCast } = leagueArea();
+  assert.equal(areaCast(f.p), true);
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  t.mock.method(core.CombatFactory, "inCombat", (player) => player === f.p);
+  choose(f, 1);
+  settle(40);
+  assert.equal(f.p.getLocation().getX(), START[0], "stays");
+  assert.ok(f.messages.includes(Common.message("inCombat")), f.messages.join(" | "));
+});
+
+test("a league area teleport goes on a yes when out of combat", (t) => {
+  const f = actor(t);
+  leagueArea().cast(f.p);
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  choose(f, 1);
+  settle(40);
+  assert.notEqual(f.p.getLocation().getX(), START[0]);
+});
+
+// ---------------------------------------------------------------- a real boat at sea
+
+/** A real sloop of the player's, boarded at the Pandemonium (`guests` board it there too), then out to open sea. */
+function atSea(f, guests = []) {
+  core.Sailing.giveBoat(f.p, "sloop", "the_pandemonium");
+  assert.equal(core.Sailing.board(f.p, "the_pandemonium"), null, "boards");
+  const boat = core.Sailing.instanceAboard(f.p);
+  assert.ok(boat, "aboard");
+  const { landing } = core.Sailing.getDock("the_pandemonium");
+  for (const guest of guests) {
+    guest.p.setLocation(new core.Location(landing.x, landing.y, landing.z));
+    const refusal = core.Sailing.boardAsGuest(guest.p, f.p, "the_pandemonium", 5);
+    assert.equal(refusal, null, `boards as a guest: ${JSON.stringify(refusal)}`);
+    guest.p.needsPlacement = false;
+  }
+  core.BoatManager.teleport(boat, { fineX: 3035 * 128, fineY: 2915 * 128 });
+  // The move aboard is placed on the next tick, as the world would.
+  f.p.needsPlacement = false;
+  return boat;
+}
+
+/** A player with no mocked boat: the real Sailing state decides. */
+function sailor(t, { warning = true } = {}) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++);
+  p.setUsername("sailor" + p.getIndex());
+  p.setRegistered(true);
+  p.setAttribute("bot-skip-persistence", true);
+  core.RegionManager.loadMapFiles(3035, 2915);
+  p.setLocation(new core.Location(...START));
+  p.needsPlacement = false;
+  const messages = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+  if (warning) p.getPacketSender().sendVarbit(TeleportWarning.WARNING_VARBIT, 1);
+  t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); p.setRegistered(false); });
+  return { t, p, messages, teleports: [] };
+}
+
+const owned = (f) => f.p.getSailing().boats[0];
+
+test("aboard a real boat at sea: a tablet asks; no keeps the boat and the tablet, yes teleports and the boat is lost at sea", (t) => {
+  const f = sailor(t);
+  atSea(f);
+  give(f, I.VARROCK_TELEPORT);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION, f.messages.join(" | ") + " busy=" + f.p.busy() + " status=" + f.p.status + " iface=" + f.p.getInterfaceId?.());
+  choose(f, 2);
+  settle();
+  assert.ok(core.Sailing.instanceAboard(f.p), "no: still aboard");
+  assert.notEqual(owned(f).location.kind, "sunk");
+  assert.equal(f.p.getInventory().getAmount(I.VARROCK_TELEPORT), 1, "no: the tablet kept");
+
+  use(f, I.VARROCK_TELEPORT, "Break");
+  choose(f, 1);
+  settle();
+  assert.equal(core.Sailing.instanceAboard(f.p), undefined, "yes: off the boat");
+  assert.equal(owned(f).location.kind, "sunk", "the boat is lost at sea");
+  assert.equal(f.p.getInventory().getAmount(I.VARROCK_TELEPORT), 0, "the tablet used");
+  assert.ok(Math.abs(f.p.getLocation().getX() - 3213) <= 2, `in Varrock (${f.p.getLocation().getX()})`);
+});
+
+test("aboard a real boat at sea with the warning off, a tablet teleports at once and the boat is lost", (t) => {
+  const f = sailor(t, { warning: false });
+  atSea(f);
+  give(f, I.VARROCK_TELEPORT);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.notEqual(pending(f)?.title, TeleportWarning.QUESTION);
+  settle();
+  assert.equal(owned(f).location.kind, "sunk");
+});
+
+test("aboard a real boat at sea, an item teleport (glory) asks before it goes", (t) => {
+  const f = sailor(t);
+  atSea(f);
+  give(f, I.AMULET_OF_GLORY_4_);
+  use(f, I.AMULET_OF_GLORY_4_, "Rub");
+  pick(f, /^Edgeville/);
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
+  choose(f, 2);
+  settle();
+  assert.ok(core.Sailing.instanceAboard(f.p), "no: still aboard");
+  assert.equal(f.p.getInventory().contains(I.AMULET_OF_GLORY_4_), true, "no charge used");
+});
+
+test("a guest on someone else's boat isn't asked: their own boat isn't the one at risk", (t) => {
+  const owner = sailor(t);
+  const guest = sailor(t);
+  atSea(owner, [guest]);
+  assert.ok(core.Sailing.guestBoat(guest.p), "aboard as a guest");
+  give(guest, I.VARROCK_TELEPORT);
+  use(guest, I.VARROCK_TELEPORT, "Break");
+  assert.notEqual(pending(guest)?.title, TeleportWarning.QUESTION);
 });

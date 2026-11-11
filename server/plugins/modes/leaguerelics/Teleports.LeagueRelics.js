@@ -108,9 +108,11 @@ function leagueCast(player) {
  * league's area-teleport cast plays (interrupted as a home teleport is) where the league has one; a
  * cast definition ({ steps, lockTick, landTick }, an item's own recorded cast) plays instead.
  * Content may ask first (TeleportHandler.confirm: the boat-at-sea warning): `onStart` runs as the
- * teleport starts (an item used up), not when it is only asked. True once the checks pass.
+ * teleport starts (`item`, an id the player must still carry then, used up), not when it is only
+ * asked. True once the checks pass, whether or not it was asked and refused: no caller acts on it
+ * as an arrival.
  */
-function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null, cast = false, onStart = null } = {}) {
+function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null, cast = false, onStart = null, item = undefined } = {}) {
   const { TeleportHandler, TeleportType } = Common.core;
   const location = landing(destination.location);
   if (!areaOpen(player, location)) {
@@ -132,7 +134,7 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
     onStart?.();
     if (definition) startHomeTeleport(Common.core, player, location, arrived, castOf(definition));
     else TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, arrived);
-  }, limit);
+  }, limit, { item });
   return true;
 }
 

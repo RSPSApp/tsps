@@ -1214,7 +1214,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
       setStage(player, STAGE_VILLAGE);
       TeleportHandler.teleport(player, VILLAGE_LANDING.clone(), TeleportType.NORMAL, false,
         () => player.sendMessage("The sphere shatters, carrying you and Zanik to the Goblin Village."));
-    });
+    }, 20, { item: GOBLIN_VILLAGE_SPHERE_ITEM_ID });
     return true;
   }
 

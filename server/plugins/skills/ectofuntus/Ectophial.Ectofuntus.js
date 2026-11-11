@@ -65,7 +65,7 @@ function empty({ player, slot }) {
   if (inventory.get(slot)?.getId() !== core.ItemIdentifiers.ECTOPHIAL) return true;
   const destination = landing();
   if (!core.TeleportHandler.checkReqs(player, destination)) return true;
-  core.TeleportHandler.confirm(player, destination, () => pour(player, slot, destination));
+  core.TeleportHandler.confirm(player, destination, () => pour(player, slot, destination), 20, { item: core.ItemIdentifiers.ECTOPHIAL });
   return true;
 }
 

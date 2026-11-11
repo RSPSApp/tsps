@@ -20,26 +20,32 @@ function near({ x, y, spread }) {
   return new Common.core.Location(x + offset(), y + offset(), 0);
 }
 
+/** In combat, which these teleports refuse (again on a yes the boat-at-sea warning waited for). */
+function inCombat(player) {
+  if (!Common.core.CombatFactory.inCombat(player)) return false;
+  player.sendMessage(Common.message("inCombat"));
+  return true;
+}
+
 function allowed(player, target) {
-  const { TeleportHandler, CombatFactory } = Common.core;
-  if (CombatFactory.inCombat(player)) {
-    player.sendMessage(Common.message("inCombat"));
-    return false;
-  }
-  return TeleportHandler.checkReqs(player, target);
+  return !inCombat(player) && Common.core.TeleportHandler.checkReqs(player, target);
 }
 
 function civitas(player, type, home) {
   const target = near(home.civitas);
   if (!allowed(player, target)) return;
-  Common.core.TeleportHandler.confirm(player, target, () => startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast)));
+  Common.core.TeleportHandler.confirm(player, target, () => {
+    if (!inCombat(player)) startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast));
+  });
 }
 
 /** Through Yama's portal: the portal on the tile, the fall two ticks on, the landing at +4. */
 function yama(player, home) {
   const target = near(home.yama);
   if (!allowed(player, target)) return;
-  Common.core.TeleportHandler.confirm(player, target, () => throughPortal(player, home, target));
+  Common.core.TeleportHandler.confirm(player, target, () => {
+    if (!inCombat(player)) throughPortal(player, home, target);
+  });
 }
 
 function throughPortal(player, home, target) {

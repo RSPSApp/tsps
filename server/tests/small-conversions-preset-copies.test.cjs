@@ -492,6 +492,8 @@ test("Elnock jar generator exchange requires the complete payment through Trade 
   assert.equal(f.inv.getAmount(I.ASHES), 22, "unrelated inventory survives the exchange");
   assert.equal(click(7, 9), true);
   assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 1, "repeated Confirm cannot duplicate the reward");
+  f.p.closeInterruptibleInterfaces();
+  assert.equal(f.p.getInterfaceId(), -1, "the player closes Elnock's exchange before using the generator");
   const generator = f.inv.getItems().find(item => item.getId() === I.JAR_GENERATOR);
   assert.equal(generatorAction(f, generator, 1), true);
   assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1, "the purchased generator makes a usable jar");
@@ -505,6 +507,7 @@ test("Elnock jar generator exchange requires the complete payment through Trade 
   const definition = npc.getCurrentDefinition(f.p);
   const clickType = definition.getActions().findIndex(action => action === "Catch") + 1;
   assert.ok(clickType > 0);
+  assert.equal(f.p.busy(), false, "the next Catch action is allowed after closing the exchange");
   const rng = t.mock.method(Math, "random", () => 0);
   PM.emitNpcInteraction({ player: f.p, npc, npcId: npc.getId(), definition, clickType, handled: false });
   rng.mock.restore();
@@ -575,6 +578,8 @@ test("jar generator preserves charge on full bag, restricted copies and stale sl
 test("jar generator recharges the banked instance after a fresh complete payment", (t) => {
   const f = actor(t), generator = new core.Item(I.JAR_GENERATOR, 1);
   generator.setMetaValue(GENERATOR_CHARGES_META, 17);
+  // Tab 2 is valid only when tab 1 is nonempty; refresh compacts sparse tabs.
+  f.p.getBank(1).setItem(0, new core.Item(I.BONES, 1));
   f.p.getBank(2).setItem(0, generator);
   const payment = () => {
     for (let slot = 0; slot < 3; slot++) f.inv.setItem(slot, new core.Item(I.ESSENCE_IMPLING_JAR, 1));
@@ -623,6 +628,9 @@ test("jar generator recharges the banked instance after a fresh complete payment
   core.Bank.withdraw(f.p, I.JAR_GENERATOR, 0, 1, 2);
   const withdrawn = f.inv.getItems().find(item => item.getId() === I.JAR_GENERATOR);
   assert.ok(withdrawn);
+  assert.equal(f.p.getBank(1).getAmount(I.BONES), 1);
+  f.p.closeInterruptibleInterfaces();
+  assert.equal(f.p.busy(), false);
   generatorAction(f, withdrawn, 1);
   assert.equal(withdrawn.getMetaValue(GENERATOR_CHARGES_META), 97);
   assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1);

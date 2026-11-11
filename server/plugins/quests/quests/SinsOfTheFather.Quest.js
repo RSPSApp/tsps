@@ -3685,12 +3685,14 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
         player.setAttribute(TOME_USES_ATTRIBUTE, used);
         if (used >= TOME_MAX_CHAPTERS) player.getInventory().deleteAtSlot(slot, 1);
         sendTomeVarbits(player);
-        // rsprox 226/01637.txt:137520-137521 (ticks 7398, 7424): the award line in chat, then the box;
-        // the last chapter adds "The book crumbles into a dust cloud of knowledge." to both.
+        // rsprox 226/01637.txt:137520-137521 and 138011-138012 (ticks 7398, 7424): the award line in chat,
+        // the box's mesbox line (its <br> a space), then the box; the last chapter adds the crumble to all three.
         const award = `You have been awarded 15,000 ${name} experience!`;
         const crumbles = used >= TOME_MAX_CHAPTERS ? "<br>The book crumbles into a dust cloud of knowledge." : "";
+        const box = `You read a fascinating chapter and earn some experience!<br>${award}${crumbles}`;
         player.sendMessage(award + crumbles);
-        return `You read a fascinating chapter and earn some experience!<br>${award}${crumbles}`;
+        player.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, box.replace(/<br>/g, " "));
+        return box;
       },
     });
     return true;

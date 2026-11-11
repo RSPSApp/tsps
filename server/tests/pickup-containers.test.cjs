@@ -1,8 +1,9 @@
 // Run after `yarn build`: node --test tests/pickup-containers.test.cjs
 //
-// Settings > Gameplay > "Rune-picking behaviour" (306), through the real Take packet, every
-// plugin's pickup hooks and the Fire Altar. The cache's row text: runes picked up or made by
-// Runecrafting "will attempt to go into your rune pouch, if it contains matching runes".
+// Settings > Gameplay > "Rune-picking behaviour" (306) and "Ammo-picking behaviour" (305), through
+// the real Take packet, every plugin's pickup hooks and the Fire Altar. The cache's row texts:
+// runes picked up or made by Runecrafting "will attempt to go into your rune pouch, if it contains
+// matching runes"; ammo "will attempt to equip itself to your quiver".
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -17,6 +18,7 @@ const { State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
 
 const HOME = [3222, 3218];
 const RUNES = "rune-pouch:runes";
+const QUIVER = "dizanas-quiver";
 const REFUSED = "You're an Ironman, so you can't take items that other players have dropped.";
 
 let core;
@@ -180,5 +182,47 @@ test("crafted runes stay in the inventory with the setting off or without that r
     f.inv.add(new core.Item(I.PURE_ESSENCE, 5), true);
     craftFire(f);
     assert.equal(f.inv.getAmount(I.FIRE_RUNE), 5);
+  }
+});
+
+function wearQuiver(f, stored, worn = null) {
+  const equipment = f.p.getEquipment();
+  equipment.set(core.Equipment.CAPE_SLOT, new core.Item(I.DIZANAS_QUIVER, 1));
+  if (worn) equipment.set(core.Equipment.AMMUNITION_SLOT, new core.Item(worn[0], worn[1]));
+  f.p.setAttribute(QUIVER, { id: stored[0], amount: stored[1] });
+}
+
+test("ammo matching a worn Dizana's quiver goes into it", async (t) => {
+  const f = actor(t, { runes: false, ammo: true });
+  wearQuiver(f, [I.IRON_ARROW, 50], [I.BRONZE_ARROW, 30]);
+  const ground = pile(t, f, I.IRON_ARROW, 7);
+  await take(f, I.IRON_ARROW);
+  assert.deepEqual(f.p.getAttribute(QUIVER), { id: I.IRON_ARROW, amount: 57 });
+  assert.equal(f.inv.getAmount(I.IRON_ARROW), 0);
+  assert.equal(ground.isPendingRemoval(), true);
+  assert.equal(f.p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(), 30);
+});
+
+test("ammo matching the worn ammo slot still goes there first", async (t) => {
+  const f = actor(t, { runes: false, ammo: true });
+  wearQuiver(f, [I.IRON_ARROW, 50], [I.IRON_ARROW, 30]);
+  pile(t, f, I.IRON_ARROW, 7);
+  await take(f, I.IRON_ARROW);
+  assert.equal(f.p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(), 37);
+  assert.deepEqual(f.p.getAttribute(QUIVER), { id: I.IRON_ARROW, amount: 50 });
+});
+
+test("a quiver that is only carried, or the setting off, leaves the ammo to the inventory", async (t) => {
+  for (const [ammo, wear] of [[true, false], [false, true]]) {
+    const f = actor(t, { runes: false, ammo });
+    if (wear) wearQuiver(f, [I.IRON_ARROW, 50]);
+    else {
+      f.inv.add(new core.Item(I.DIZANAS_QUIVER, 1), true);
+      f.p.setAttribute(QUIVER, { id: I.IRON_ARROW, amount: 50 });
+    }
+    pile(t, f, I.IRON_ARROW, 7);
+    await take(f, I.IRON_ARROW);
+    assert.equal(f.inv.getAmount(I.IRON_ARROW), 7);
+    assert.equal(f.p.getAttribute(QUIVER).amount, 50);
   }
 });

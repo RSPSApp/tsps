@@ -558,3 +558,13 @@ Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Eac
 | Always empty herb sacks on death | 359 | varbit 15316 `emptyondeath_herbsack` | herb sack and silklined herb sack |
 
 - **Not done:** a seed box lost above level 20 Wilderness is destroyed on live with its seeds kept for the next box (Wiki: Seed box, 14 April 2021); here its seeds go to the bank and the killer like any other PvP death.
+
+### Death protection from cosmetics (row 386)
+
+Row 386 is a `data/settings.json` toggle on varbit 10987 `death_waivecosmeticsprotection`, saved and sent back at login. The varbit is 1 when the player turns protection off, so a fresh account (0) has it on; no rsprox capture ever sets it to 1. Its cache text: "When enabled, cosmetic upgrades such as ornament kits may cause certain items to be protected during a non-PvP death, rather than falling to a grave."
+
+- **What it protects** (Wiki: Ornament kit, Items Kept on Death, Volcanic abyssal whip): an item made with a tradeable ornament kit, mix or paint (`items/data/ornament-kits.json`, answered by `OrnamentKits.plugin.js` on `player-death:cosmetic`). The death ranks it like any other item. If it is among the kept ones it takes that slot; if not, it is kept on top of them, skulled or not (`PlayerDeathTask.getKeptItems`).
+- **When:** not on a death to another player, and not in the Wilderness (`PlayerDeathTask.protectsCosmetics`). With the row off the item ranks normally and, unkept, goes to the grave.
+- **Items Kept on Death** keeps its three (or four) kept slots for the ranked items and lists a protected item with the others, marked kept. Its PvP and Wilderness toggles show the death without the protection.
+- Tests: `tests/cosmetic-death-protection.test.cjs`.
+- **Not done:** recolours made without a kit (Deadman imbued capes) and the untradeable Bounty Hunter kits, which the Wiki also protects, are not in the table yet. The Tombs of Amascut retrieval chest still takes what a death without the protection would lose.

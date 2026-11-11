@@ -931,7 +931,9 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       return;
     }
     if (itemId !== WILLOW_BRANCH || !BASKET_FRAME_OBJECT_IDS.has(objectId)) return;
-    if (quest.getStage(player) !== STAGE_MATERIALS || !saplingRecord(player)) return;
+    // Wiki: the 12 branches may be bought ("buy from the Grand Exchange, or plant a willow
+    // sapling"); what the basket needs is everything already handed to Auguste.
+    if (quest.getStage(player) !== STAGE_MATERIALS || !allMaterialsHanded(player)) return;
     event.handled = true;
     if (!held(player, WILLOW_BRANCH, REQUIRED_BRANCHES)) {
       startTranscript(
@@ -985,7 +987,7 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   function handleItemOnNpc(event) {
     const { player, npcId, itemId } = event;
     if (!AUGUSTE_NPC_IDS.has(npcId) || itemId !== WILLOW_BRANCH) return;
-    if (!allMaterialsHanded(player) || !saplingRecord(player)) return;
+    if (quest.getStage(player) !== STAGE_MATERIALS || !allMaterialsHanded(player)) return;
     event.handled = true;
     startTranscript(
       api,

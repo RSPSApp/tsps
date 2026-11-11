@@ -107,6 +107,23 @@
     "208": { "name": "Desert - Heat damage", "varbit": 13134 },
     "209": { "name": "Show number of options in mouseover tooltips", "varbit": 13133 },
     "213": { "name": "Cannon ammo", "varbit": 13667 },
+    "236": { "name": "Anti Drag - Delay", "varbit": 13830 },
+    "237": {
+      "name": "Anti Drag - Enable Key",
+      "options": [
+        { "varbits": { "13828": 0 } },
+        { "varbits": { "13828": 81 } },
+        { "varbits": { "13828": 82 } }
+      ]
+    },
+    "238": {
+      "name": "Anti Drag - Disable Key",
+      "options": [
+        { "varbits": { "13829": 0 } },
+        { "varbits": { "13829": 81 } },
+        { "varbits": { "13829": 82 } }
+      ]
+    },
     "244": { "name": "Desert - Water available", "varbit": 14166 },
     "246": { "name": "Cannon decay", "varbit": 14173 },
     "248": { "name": "Cannon low on ammo notification", "varbit": 14175 },

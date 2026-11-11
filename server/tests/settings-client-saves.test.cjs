@@ -150,3 +150,50 @@ test('a row sharing varp 1224 with Esc closes is kept from the same transmit', (
   assert.equal(next.getPacketSender().getVarbit(BOSS_KC_FILTER), 1);
   assert.equal(next.getPacketSender().getVarbit(ESC_CLOSES), 1, 'Esc closes is left as it was');
 });
+
+const AntiDragDelay = require('../plugins/interface/AntiDragDelay.plugin')._test;
+const DELAY = 13830;
+const ENABLE_KEY = 13828;
+const DISABLE_KEY = 13829;
+const KEY_OPTIONS_ENUM = 4302;
+
+function choose(p, settingId, option) {
+  click(p, settingId);
+  return handlers.clickDropdownOption({ player: p, slot: option * 3 });
+}
+
+test('Anti Drag - Delay asks for milliseconds and keeps them in 20 ms steps, up to 5000', () => {
+  AntiDragDelay.setApi({ emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); } });
+  for (const [answer, steps] of [[0, 0], [100, 5], [109, 5], [111, 6], [5000, 250], [99999, 250], [-5, 0]]) {
+    const p = login();
+    let action = null;
+    let prompt = null;
+    p.setEnteredAmountAction = (a) => { action = a; };
+    p.getPacketSender().sendEnterAmountPrompt = (text) => { prompt = text; };
+    const request = { player: p, settingId: 236, handled: false };
+    AntiDragDelay.settingClicked(request);
+    assert.equal(request.handled, true);
+    assert.match(prompt, /Anti Drag delay/);
+    action.execute(answer);
+    assert.equal(p.getPacketSender().getVarbit(DELAY), steps, `${answer} ms`);
+    assert.equal(login(p.attributes).getPacketSender().getVarbit(DELAY), steps, `${answer} ms is restored at login`);
+  }
+});
+
+test('Anti Drag enable and disable keys store the key code the cache reads back as the option', () => {
+  // Script 3962 shows the option enum 4302 maps the varbit's key code to.
+  const optionOf = new Map([...CacheDefinitions.getEnumValues(KEY_OPTIONS_ENUM)].map(([key, option]) => [Number(option), Number(key)]));
+  assert.deepEqual([...optionOf.values()], [0, 81, 82]);
+  for (const [settingId, varbit] of [[237, ENABLE_KEY], [238, DISABLE_KEY]]) {
+    for (const option of [1, 2, 0]) {
+      const p = login();
+      assert.equal(choose(p, settingId, option), true, `row ${settingId} option ${option} is handled`);
+      assert.equal(p.getPacketSender().getVarbit(varbit), optionOf.get(option));
+      assert.equal(login(p.attributes).getPacketSender().getVarbit(varbit), optionOf.get(option), 'restored at login');
+    }
+  }
+  const p = login();
+  choose(p, 237, 1);
+  choose(p, 238, 2);
+  assert.equal(p.getPacketSender().getVarbit(ENABLE_KEY), 81, 'the two keys share a varp without clearing each other');
+});

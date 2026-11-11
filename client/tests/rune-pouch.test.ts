@@ -3,7 +3,7 @@ import { GameState } from "@runelite/api/GameState";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { inject } from "@runelite/client/plugins/PluginInjector";
 import { TooltipManager } from "@runelite/client/ui/overlay/tooltip/TooltipManager";
-import { RunePouchPlugin } from "../game/plugins/runepouch/RunePouchPlugin";
+import { RunePouchPlugin, clipOf } from "../game/plugins/runepouch/RunePouchPlugin";
 import { RunePouchOverlayMode } from "../game/plugins/runepouch/RunePouchConfig";
 import {
     RUNE_AMOUNT_VARBITS, RUNE_TYPE_VARBITS, barFor, formatAmount, layoutPouch, pouchContents, tooltipText,
@@ -41,6 +41,12 @@ assert.deepEqual(layout.bars[0], { x: 13, y: 15, w: 2, h: 1, color: "green" });
 layout = layoutPouch([1, 2, 3, 4, 5].map((type) => ({ type, amount: 100 })));
 assert.deepEqual(layout.icons.map((i) => i.y), [-1, -1, 10, 10, 21], "more than four: three rows");
 
+// --- Clipping: only the interface's area limits drawing, never the item's own rect ---------
+const parent = { uid: 7, parentUid: -1, _absX: 0, _absY: 50, _absWidth: 300, _absHeight: 100 };
+const manager = { getWidgetByUid: (uid: number) => (uid === 7 ? parent : undefined), isEffectivelyHidden: () => false };
+assert.deepEqual(clipOf(manager, { parentUid: 7 }, 12), { x: 0, y: 50, w: 300, h: 100 }, "a scrolled bank's view");
+assert.ok(clipOf(manager, { parentUid: -1 }, 149).w > 1e6, "unclipped when nothing clips it");
+
 // --- Tooltip text -----------------------------------------------------------------------------
 assert.equal(tooltipText([{ type: 1, amount: 50 }], () => "Air rune"), "50 <col=ffff00>Air rune</col></br>");
 
@@ -74,11 +80,13 @@ async function pluginChecks(): Promise<void> {
     assert.equal(tooltips.getTooltips().length, 0, "no tooltip off the pouch");
     client.inputManager.mouseX = 110;
 
+    // The rune icons as if already built (no DOM here to build them).
+    for (const id of [AIR, NATURE]) (plugin as any).textureSizes.set(`runepouch:rune:${id}`, { w: 24, h: 24 });
     const drawn = () => {
         const calls: string[] = [];
         const renderer: any = {
             canvas: { width: 800, height: 600 },
-            getTexture: () => undefined,
+            getTexture: () => ({}),
             createTextureFromCanvas: () => undefined,
             drawTexture: () => calls.push("icon"),
             drawRect: () => calls.push("bar"),
@@ -87,7 +95,15 @@ async function pluginChecks(): Promise<void> {
         const rects = plugin.widgetOverlay.draw({ renderer, fontLoader: () => undefined } as any);
         return { calls, rects };
     };
-    assert.deepEqual(drawn().rects, [{ x: 100, y: 200, w: 36, h: 32 }], "drawn over the pouch");
+    let result = drawn();
+    // The list starts a pixel above and left of the item (RuneLite's layout): those pieces must
+    // still draw, as only the interface's own area limits them.
+    assert.deepEqual(result.calls, ["icon", "icon"], "both runes' icons drawn on the pouch");
+    assert.deepEqual(result.rects, [{ x: 98, y: 198, w: 40, h: 36 }], "drawn over the pouch and just around it");
+    setPouch([[1, 500], [10, 2000], [1, 40], [10, 15000]]);
+    result = drawn();
+    assert.deepEqual([...result.calls].sort(), ["bar", "bar", "bar", "icon", "icon", "icon", "icon"], "four runes: icons and bars (40 runes is an empty bar)");
+    setPouch([[1, 500], [10, 2000]]);
     assert.notEqual(plugin.widgetOverlay.signature(), "");
 
     config.setConfiguration("runepouch", "runePouchOverlayMode", RunePouchOverlayMode.INVENTORY);

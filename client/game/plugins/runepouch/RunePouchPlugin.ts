@@ -22,7 +22,11 @@ import {
     RUNEPOUCH_RUNE, RUNE_POUCH_ITEMS, layoutPouch, pouchContents, tooltipText, type Box, type PouchRune,
 } from "./runePouch";
 
-/** A pouch on screen: its item rect and the part of it its interface shows (a scrolled bank clips it). */
+/**
+ * A pouch on screen: its item rect and the area its interface shows (a scrolled bank's view, say).
+ * RuneLite draws past the item's own rect (the list starts a pixel above and left of it, and the
+ * counts run past its right edge), so only the interface's area limits what is drawn.
+ */
 type PouchItem = Box & { clip: Box };
 
 /**
@@ -134,8 +138,8 @@ export class RunePouchPlugin extends Plugin {
             if (RUNE_POUCH_ITEMS.has(itemId)) {
                 const { _absX: x, _absY: y, _absWidth: w, _absHeight: h } = widget;
                 if ([x, y, w, h].every(Number.isFinite) && w > 0 && h > 0) {
-                    const clip = clipOf(manager, widget, group, { x, y, w, h });
-                    if (clip.w > 0 && clip.h > 0) pouches.push({ x, y, w, h, clip });
+                    const clip = clipOf(manager, widget, group);
+                    if (area(intersect({ x, y, w, h }, clip)) > 0) pouches.push({ x, y, w, h, clip });
                 }
             }
             for (const child of widget.children ?? []) visit(child, false, group);
@@ -159,7 +163,10 @@ export class RunePouchPlugin extends Plugin {
         const mx = Number(client.inputManager?.mouseX) * this.inputScale.x;
         const my = Number(client.inputManager?.mouseY) * this.inputScale.y;
         if (!Number.isFinite(mx) || !Number.isFinite(my)) return undefined;
-        const hovered = this.pouches().some(({ clip }) => mx >= clip.x && mx < clip.x + clip.w && my >= clip.y && my < clip.y + clip.h);
+        const hovered = this.pouches().some((pouch) => {
+            const shown = intersect(pouch, pouch.clip);
+            return mx >= shown.x && mx < shown.x + shown.w && my >= shown.y && my < shown.y + shown.h;
+        });
         if (!hovered) return undefined;
         const runes = this.runes();
         return runes.length > 0 ? { text: tooltipText(runes, (type) => this.runeName(type)) } : undefined;
@@ -205,7 +212,9 @@ export class RunePouchPlugin extends Plugin {
                 const box = { x: pouch.x + bar.x * s, y: pouch.y + bar.y * s, w: bar.w * s, h: bar.h * s };
                 if (box.h > 0 && shown(box)) renderer.drawRect(box.x, box.y, box.w, box.h, bar.color === "red" ? RED : GREEN);
             }
-            rects.push(pouch.clip);
+            // What the pieces cover: the item and a couple of pixels around it, within its interface.
+            const covered = intersect({ x: pouch.x - 2 * s, y: pouch.y - 2 * s, w: pouch.w + 4 * s, h: pouch.h + 4 * s }, pouch.clip);
+            if (area(covered) > 0) rects.push(covered);
         }
         return rects;
     }
@@ -237,6 +246,13 @@ export class RunePouchPlugin extends Plugin {
     }
 }
 
+function intersect(a: Box, b: Box): Box {
+    const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+    return { x, y, w: Math.max(0, Math.min(a.x + a.w, b.x + b.w) - x), h: Math.max(0, Math.min(a.y + a.h, b.y + b.h) - y) };
+}
+
+const area = (box: Box) => box.w * box.h;
+
 function inside(box: Box, clip: Box): boolean {
     return box.x >= clip.x - 0.5 && box.y >= clip.y - 0.5 &&
         box.x + box.w <= clip.x + clip.w + 0.5 && box.y + box.h <= clip.y + clip.h + 0.5;
@@ -264,11 +280,13 @@ function trim(source: HTMLCanvasElement): HTMLCanvasElement | undefined {
 }
 
 /**
- * The part of an item its interface shows: the rect cut by each ancestor's rect, up through the
+ * The area an item's interface shows it in: each ancestor's rect cut by the next, up through the
  * container its interface is mounted in (Item Rarity's clipping; a scrolled bank tab cuts items).
+ * Unbounded when nothing clips it.
  */
-export function clipOf(manager: any, widget: any, group: number, rect: Box): Box {
-    let clip: Box = { ...rect };
+export function clipOf(manager: any, widget: any, group: number): Box {
+    const FAR = 1e9;
+    let clip: Box = { x: -FAR, y: -FAR, w: 2 * FAR, h: 2 * FAR };
     const cut = (parent: any): boolean => {
         if (typeof parent.uid === "number" && manager.isEffectivelyHidden?.(parent.uid)) {
             clip = { x: 0, y: 0, w: 0, h: 0 };

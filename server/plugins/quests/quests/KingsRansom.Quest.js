@@ -1459,7 +1459,8 @@ module.exports = function registerKingsRansomQuest(api) {
   api.onPlayerLogin(handleLogin);
   const grailBoxes = require("./Riddle.KingsRansom")(api, {
     onChoose: chooseBox,
-    isActive: (player) => stageOf(player) >= STAGE_CELL_OPEN && stageOf(player) < STAGE_COMPLETE,
+    // Only until the grail is held: from then on the table opens the grail box instead.
+    isActive: (player) => stageOf(player) >= STAGE_CELL_OPEN && stageOf(player) < STAGE_GRAIL,
   });
   api.onPlayerLogout(handleLogout);
 };

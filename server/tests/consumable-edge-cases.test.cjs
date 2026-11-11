@@ -168,7 +168,7 @@ function createPlayer({ base = 99, current = 1, inventory = [], equipment = [] }
     getPrayerActive: () => player.prayerActive,
     getInventory: () => ({ contains: (id) => inventory.includes(id) }),
     getEquipment: () => ({ contains: (id) => equipment.includes(id) }),
-    getPacketSender: () => ({ sendSound() { return this; }, sendPoisonType() {}, sendRunEnergy() {}, sendVarbit(id, value) { varbits.push([id, value]); return this; } }),
+    getPacketSender: () => ({ sendSound() { return this; }, sendPoisonType() {}, sendRunEnergy() {}, sendTypedMessage() { return this; }, sendVarbit(id, value) { varbits.push([id, value]); return this; } }),
     getSession: () => ({ sendClientPacket() {} }),
     setHitpoints(value) { levels.set(Skill.HITPOINTS, value); },
     setPoisonDamage(value) { player.poisonDamage = value; },

@@ -5,6 +5,7 @@ import { GameStateChanged, PluginMessage } from "@runelite/api/events";
 import { CHATINPUT } from "@runelite/api/gameval/VarClientID";
 import { InputManager } from "../game/InputManager";
 import { CHAT_LINE_REDRAW_SCRIPT, WasdCamera, type WasdCameraClient } from "../game/input/WasdCamera";
+import { ChatPastePlugin } from "../game/plugins/chatpaste/ChatPastePlugin";
 import { WasdCameraPreference } from "../game/input/WasdCameraPreference";
 import { AllSettingsToggle, CONTROLS_CATEGORY, ROW_HEIGHT, TOGGLE_OFF_SPRITE, TOGGLE_ON_SPRITE } from "../game/plugins/wasdcamera/AllSettingsToggle";
 import { WASD_CAMERA_CHANNEL, WasdCameraPlugin } from "../game/plugins/wasdcamera/WasdCameraPlugin";
@@ -113,6 +114,11 @@ async function main() {
     const UP = key("ArrowUp", "ArrowUp", 38);
     assert.deepEqual(press(input, UP), { events: [], held: [] }, "the Up arrow doesn't turn the camera");
     assert.deepEqual(release(input, UP), []);
+    // A paste (Chat Paste's Ctrl+V) doesn't slip into the locked line either.
+    const paste = new ChatPastePlugin(input);
+    const clipboard = (text: string) => ({ clipboardData: { getData: () => text }, target: null, preventDefault() {} }) as any;
+    paste.paste(clipboard("hi"));
+    assert.deepEqual(input.keyEvents.splice(0), [], "nothing is pasted under 'Press Enter to Chat...'");
 
     // Enter opens the chat line and goes no further; keys then type as normal.
     assert.deepEqual(press(input, ENTER).events, [], "the Enter that opens chat sends nothing");
@@ -124,6 +130,8 @@ async function main() {
     release(input, W);
     assert.deepEqual(press(input, UP).held, [], "nor while typing");
     release(input, UP);
+    paste.paste(clipboard("hi"));
+    assert.deepEqual(input.keyEvents.splice(0).map((event) => event.keyPressed), [104, 105], "while typing, a paste types");
     // Enter sends the message (the chatbox gets it), then the line locks again.
     assert.deepEqual(press(input, ENTER).events, enter);
     release(input, ENTER);

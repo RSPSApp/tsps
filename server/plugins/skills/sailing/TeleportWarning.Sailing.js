@@ -28,9 +28,6 @@ function confirmTeleport(request) {
 }
 
 module.exports = {
-  name: "SailingTeleportWarning",
-  description: "Warns before a teleport spell takes the player off their boat at sea, when its All Settings row is on.",
-  members: true,
   register(pluginApi) {
     api = pluginApi;
     api.onCustomEvent("spell:teleport-confirm", confirmTeleport);

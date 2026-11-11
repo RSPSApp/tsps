@@ -40,10 +40,10 @@ before(() => {
     onObjectInteraction: (handler) => { if (typeof handler === "function") objectHandlers.push(handler); },
     onBeforeObjectInteraction: (handler) => beforeObjectHandlers.push(handler),
   };
-  require("../plugins/skills/sailing/Sailing.plugin").register(real);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/Panel.Sailing").register(real);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
   require("../plugins/interface/Notifications.plugin").register(real);
-  require("../plugins/skills/sailing/Charting.plugin").register(api);
+  require("../plugins/skills/sailing/Charting.Sailing").register(api);
 });
 
 let nextIndex = 900;

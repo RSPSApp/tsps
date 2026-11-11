@@ -362,9 +362,6 @@ function cargoChanged({ player }) {
 const HOLD_ACTIONS = { Open: openHold, "Deposit-all": depositAllFromLoc, "Deposit-held": depositHeld };
 
 module.exports = {
-  name: "SailingCargoHold",
-  description: "A boat's cargo hold: opening it, withdrawing and depositing cargo and salvage, and the tools compartment.",
-  members: true,
   opAmount,
   register(api) {
     pluginApi = api;

@@ -40,9 +40,9 @@ before(() => {
   const real = PluginManager.createApi("BarracudaTrialsTest");
   api = { ...real, persistAttribute() {}, sendMultiChatboxPrompt: (player, title, ...pairs) => { player.prompt = { title, pairs }; return true; } };
   scoreboard.setFile(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "bt-")), "barracuda-trials.json"));
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require("../plugins/skills/sailing/BarracudaTrials.plugin").register(api);
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/BarracudaTrials.Sailing").register(api);
 });
 
 let nextIndex = 700;
@@ -136,7 +136,7 @@ function atTheHelm(player, parts = {}) {
   return boat;
 }
 
-const helm = require("../plugins/skills/sailing/Helm.plugin");
+const helm = require("../plugins/skills/sailing/Helm.Sailing");
 
 /** A run under way: started, the HUD up (T+2), and the sails set by the player, which starts the timer. */
 function begin(player, trial, rank) {

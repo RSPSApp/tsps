@@ -20,7 +20,7 @@ const {
   isBuildTrigger,
   refusal,
   readOptionRow,
-} = require("./Shipyard.plugin");
+} = require("./Shipyard.Sailing");
 
 const SEQ_BUILD = 3676; // human_poh_build
 const SEQ_REMOVE = 3685; // human_throw_away
@@ -136,9 +136,6 @@ function removeFacility(player, { visit, boat, hotspot }) {
 }
 
 module.exports = {
-  name: "SailingShipyardFacilities",
-  description: "Lets players build, modify and remove facilities such as a range on a boat's hotspots while aboard it in the shipyard, at the cost of materials.",
-  members: true,
   register(api) {
     pluginApi = api;
     api.onObjectInteraction("Facility hotspot", { Build: openHotspot });

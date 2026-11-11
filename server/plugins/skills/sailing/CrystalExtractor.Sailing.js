@@ -201,9 +201,6 @@ function onLeft({ player }) {
 }
 
 module.exports = {
-  name: "SailingCrystalExtractor",
-  description: "The crystal extractor: switched on at sea it makes a crystal mote every 105 ticks, harvested for Sailing XP, a wind mote and sometimes a crystal shard.",
-  members: true,
   MOTE_TICKS,
   register(api) {
     pluginApi = api;

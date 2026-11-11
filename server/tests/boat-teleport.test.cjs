@@ -16,7 +16,7 @@ let plugin;
 
 before(async () => {
   await CachePipeline.initialize();
-  plugin = require("../plugins/skills/sailing/BoatTeleport.plugin");
+  plugin = require("../plugins/skills/sailing/BoatTeleport.Sailing");
   plugin.register({
     core: {
       Location,

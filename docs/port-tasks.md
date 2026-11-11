@@ -4,9 +4,9 @@ Courier tasks: deliver crates of cargo between two ports for Sailing XP and a ba
 loot. Bounty tasks: collect a sea creature's parts by harvesting its corpses, then hand them in at
 a port master for Sailing XP and coins.
 
-Code: `server/plugins/skills/sailing/PortTasks.plugin.js` and its units in `porttasks/`
+Code: `server/plugins/skills/sailing/PortTasks.Sailing.js` and its units in `porttasks/`
 (`Board`, `Ledger`, `PortMaster`, `Bags`, `Bounty`, `Common`); the cargo hold's crate handling is in
-`CargoHold.plugin.js`. Data: `server/plugins/skills/sailing/data/port-tasks.json`. Tests:
+`CargoHold.Sailing.js`. Data: `server/plugins/skills/sailing/data/port-tasks.json`. Tests:
 `server/tests/port-tasks.test.cjs`.
 
 ## Sources

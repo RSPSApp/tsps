@@ -362,7 +362,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CombatAchievements` | CombatAchievements | achievements | yes | Combat Achievements: 655 tasks in six tiers with points, Ghommal's tier rewards, the five interfaces and boss kill counts. |
 | `AgentMcp` | AgentMcp | agent | yes | Runs an MCP server that lets a tool such as Claude Code drive an online player for testing. Active only when AGENT_MCP=1 is set. |
 | `AgilityPyramid` | AgilityPyramid | areas | yes | Moves the Agility Pyramid's sliding blocks on floors 1 and 3, which push players down a floor for 8 damage. The course itself is a separate plugin. (members only) |
-| `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy fire and water spell transformations. (members only) |
+| `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy transformations: fire spells and lit fire arrows set them alight, water spells douse them. (members only) |
 | `BrimhavenDungeon` | BrimhavenDungeon | areas | yes | Brimhaven Dungeon access: Saniboch's entry fee, the dungeon entrance and the vines that need an axe to go deeper. (members only) |
 | `Burthorpe` | Burthorpe | areas | yes | Animates the soldiers drilling, sparring and eating in Burthorpe's square, as captured. (members only) |
 | `CatacombsOfKourend` | CatacombsOfKourend | areas | yes | Catacombs of Kourend access: King Rada's statue, the vine ladder back up, the corner vines and the surface holes they open, and bones restoring Prayer points while buried or crushed there. (members only) |
@@ -563,6 +563,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BarrowsEquipment` | BarrowsEquipment | items | yes | Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers. (members only) |
 | `BladeOfSaeldor` | BladeOfSaeldor | items | yes | Blade of Saeldor: uses one charge per swing and handles the inactive form, built on the shared crystal-weapon charge code. (members only) |
 | `BlightedSpellSacks` | BlightedSpellSacks | items | yes | Blighted spell sacks (ice, entangle, teleblock, surge, vengeance): each supplies a spell's entire rune cost where blighted items are allowed. (members only) |
+| `BoltPouch` | BoltPouch | items | yes | Adds the bolt pouch: four slots of up to 10,000 bolts, stored with Use, the Open interface's Remove and Unwield, and Hirko's sale. (members only) |
 | `Bonds` | Bonds | items | yes | Old school bonds: tradeable and untradeable forms, bond pouch interface, redeeming for membership days, converting and gifting bonds. |
 | `Bonecrusher` | Bonecrusher | items | yes | Bonecrusher: while charged and active in the inventory, crushes the bones a kill drops for Prayer XP, in full with the elite Morytania diary. (members only) |
 | `BountyHunterWeapons` | BountyHunterWeapons | items | yes | Restricts imbued Bounty Hunter weapons, like the dark bow (BH) and abyssal daggers (BH), to permitted PvP minigames and combat rings. (members only) |
@@ -613,6 +614,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
 | `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges. (members only) |
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |
+| `NeverKeptOnDeath` | NeverKeptOnDeath | items | yes | Destroys the untradeables that are never kept on death (League trophies, the Chronicle, items with no ground state) on a PvP death, instead of giving them back. (members only) |
 | `Obligator` | Obligator | items | yes | Adds the Obligator chain mace's multi-roll Thrust with reach behind the target and single-target Smash, plus charging with shards and runes. (members only) |
 | `OilLights` | OilLights | items | yes | Handles oil lamps and lanterns: assembling them, distilling lamp oil at the Rimmington still, lighting with a tinderbox and extinguishing them. (members only) |
 | `OpenableItems` | OpenableItems | items | yes | Gives the Open option on item packs, caskets, oysters, gem bags, sacks and similar items that hand over fixed or random contents. |
@@ -835,31 +837,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RalosRise` | RalosRise | skills | yes | Prayer training at Ralos' Rise: blessing bones and wine at the altar, breaking blessed bones into shards and the libation bowl. (members only) |
 | `Reanimation` | Reanimation | skills | yes | Gives Prayer XP to the caster who kills a creature reanimated by an Arceuus ensouled-head spell. (members only) |
 | `Runecrafting` | Runecrafting | skills | yes | Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals. |
-| `Sailing` | Sailing | skills | yes | The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving; off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says. (members only) |
-| `Anchor` | SailingAnchor | skills | yes | A boat's anchor: dropping it stops the boat and holds it still until it's raised. (members only) |
-| `BarracudaTrials` | SailingBarracudaTrials | skills | yes | Sailing's Barracuda Trials: the Tempor Tantrum, Jubbly Jive and Gwenith Glide timed sea courses, with ranks and rewards. (members only) |
-| `BoatSelection` | SailingBoatSelection | skills | yes | The boat selection interface for choosing which of your boats to board at a gangplank or recover at a shipwright. (members only) |
-| `BoatTeleport` | SailingBoatTeleport | skills | yes | Teleport to boat tablets and the Sailing cape teleport, taking the player to a moored boat's dock without boarding it. (members only) |
-| `CargoHold` | SailingCargoHold | skills | yes | A boat's cargo hold: opening it, withdrawing and depositing cargo and salvage, and the tools compartment. (members only) |
-| `Charting` | SailingCharting | skills | yes | Sailing sea charting: 358 tasks across the seas, logged once each in the Captain's log for Sailing XP and sea bonuses. (members only) |
-| `SailingCommands` | SailingCommands | skills | yes | Developer commands for testing sailing: ::raft, ::skiff and ::sloop to moor boats, ::maxboat, ::boatinfo, ::sailmode and ::heading. (members only) |
-| `Crew` | SailingCrew | skills | yes | Sailing crewmates: recruiting them, the Crew Registrar, jobs at the helm, salvaging, cannons, repairs, banking cargo and courier crates. (members only) |
-| `CrystalExtractor` | SailingCrystalExtractor | skills | yes | The crystal extractor: switched on at sea it makes a crystal mote every 105 ticks, harvested for Sailing XP, a wind mote and sometimes a crystal shard. (members only) |
-| `Gangplank` | SailingGangplank | skills | yes | Boarding and disembarking boats at gangplanks and mooring points, and docking at a port's buoy, with fades and sounds. (members only) |
-| `Helm` | SailingHelm | skills | yes | Taking and leaving a boat's helm, the sidepanel sail buttons, trimming and setting sails, and steering the boat. (members only) |
-| `Kegs` | SailingKegs | skills | yes | Lets players fill a boat's keg with 25 ales, check it, fill glasses from it and empty it, and applies each ale's keg effect while aboard. (members only) |
-| `PortTasks` | SailingPortTasks | skills | yes | Sailing port tasks: courier and bounty tasks from notice boards and ledger tables, port masters and reward bags. (members only) |
-| `Salvaging` | SailingSalvaging | skills | yes | Shipwreck salvaging: a boat's salvaging hook reels salvage from wrecks for Sailing XP, and a salvaging station sorts it into loot. (members only) |
-| `Schematics` | SailingSchematics | skills | yes | Sailing schematics: unlocking boat parts and facilities, and where players acquire them. (members only) |
-| `SeaCombat` | SailingSeaCombat | skills | yes | Sailing boat combat: manning cannons, sea creatures attacking the boat, boat HP and repairs, corpse harvesting and ranged or magic from the deck. (members only) |
-| `Shipwright` | SailingShipwright | skills | yes | Shipwright NPCs' Buy-boat (the Boat Emporium) and Recover-boat, paying from the bank so a Port Wizard brings a boat to the port. (members only) |
-| `ShipwrightRepairs` | SailingShipwrightRepairs | skills | yes | Shipwright repairs for boats, attached from the Sailing repairs unit. (members only) |
-| `Shipyard` | SailingShipyard | skills | yes | Shipwright's Customise-boat takes you to the shipyard to swap a boat's hull, keel, sails or helm for another tier, paying materials for Construction XP. (members only) |
-| `ShipyardFacilities` | SailingShipyardFacilities | skills | yes | Lets players build, modify and remove facilities such as a range on a boat's hotspots while aboard it in the shipyard, at the cost of materials. (members only) |
-| `StaticShips` | SailingStaticShips | skills | yes | Lets players board ships that a quest or plugin spawns as scenery, such as the Barracuda Trials boats, which carry their own NPCs and objects. (members only) |
-| `SummonBoat` | SailingSummonBoat | skills | yes | Summon boat tablets: breaking one near a dock brings a chosen boat with a teleport focus to you, losing its port task cargo, salvage and fish. (members only) |
-| `TeleportWarning` | SailingTeleportWarning | skills | yes | Warns before a teleport spell takes the player off their boat at sea, when its All Settings row is on. (members only) |
-| `ShipwrightsWorkbench` | ShipwrightsWorkbench | skills | yes | The Shipwrights' Workbench: crafting hull parts, large hull parts and repair kits from planks and nails for Construction XP. (members only) |
+| `Sailing` | Sailing | skills | yes | Sailing boats, travel, shipyards, crews, port tasks, sea charting and combat. (members only) |
 | `ShootingStars` | ShootingStars | skills | yes | Crashed stars land around the world on a timer; players mine them layer by layer for stardust and trade it with Dusuri, with an optional landing announcement. |
 | `Slayer` | Slayer | skills | yes | Slayer: tasks, masters, points and rewards, superiors, finishers, and the slaughter and expeditious bracelets, built on the cache's Slayer tables. (members only) |
 | `Smithing` | Smithing | skills | yes | Smelting at furnaces and smithing at anvils, plus cannonballs, godswords, dragon and visage shields, barbarian spears, Varrock armour and Superheat Item. |

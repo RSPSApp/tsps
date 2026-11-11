@@ -14,7 +14,7 @@ before(async () => {
   core = PM.getCoreApi();
   new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
   core.RegionManager.init(); PM.emitServerStartup({});
-  yard = require('../plugins/skills/sailing/Shipyard.plugin');
+  yard = require('../plugins/skills/sailing/Shipyard.Sailing');
   hp = require('../plugins/skills/sailing/seacombat/BoatHp.SeaCombat');
 });
 function actor(t) {

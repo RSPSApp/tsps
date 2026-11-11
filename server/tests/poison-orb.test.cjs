@@ -12,7 +12,7 @@ const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Equipment } = require('../dist/game/model/container/impl/Equipment');
 const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const { curePoisonAndVenom } = require('../plugins/items/ConsumableEffects');
-const SerpentineHelm = require('../plugins/items/SerpentineHelm.plugin');
+const SerpentineHelm = require('../plugins/items/SerpentineHelm.Sailing');
 SerpentineHelm.register({
   core: { ItemIdentifiers, Equipment }, persistAttribute() {}, onItemAction() {},
   onItemOnItem() {}, onCombatHitResolved() {}, onPlayerProcess() {},

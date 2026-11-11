@@ -121,7 +121,7 @@ test('Elder Raley reclaims only a missing unread postquest schematic', t => {
 
 test('native shipyard build refuses unlearned rosewood then consumes materials after Read', t => {
   const parts = require('../plugins/skills/sailing/BoatParts.Sailing');
-  const shipyard = require('../plugins/skills/sailing/Shipyard.plugin');
+  const shipyard = require('../plugins/skills/sailing/Shipyard.Sailing');
   const common = require('../plugins/skills/sailing/schematics/Common.Schematics');
   const row = common.rows().find(row => row.key === 'rosewood_hull');
   for (const learn of [false, true]) {

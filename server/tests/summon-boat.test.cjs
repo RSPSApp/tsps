@@ -19,7 +19,7 @@ let plugin;
 
 before(async () => {
   await CachePipeline.initialize();
-  plugin = require("../plugins/skills/sailing/SummonBoat.plugin");
+  plugin = require("../plugins/skills/sailing/SummonBoat.Sailing");
   plugin.register({
     core: { Animation, Graphic, Task, TaskManager, Sounds: { playAreaSound: (sound) => areaSounds.push(sound) } },
     onItemAction: (name, handlers) => { if (name === "Summon boat") actions = handlers; },

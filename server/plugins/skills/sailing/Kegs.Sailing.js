@@ -252,9 +252,6 @@ function onLeft({ player, reason }) {
 }
 
 module.exports = {
-  name: "SailingKegs",
-  description: "Lets players fill a boat's keg with 25 ales, check it, fill glasses from it and empty it, and applies each ale's keg effect while aboard.",
-  members: true,
   ALES,
   KEG_SIZE,
   aleAt,

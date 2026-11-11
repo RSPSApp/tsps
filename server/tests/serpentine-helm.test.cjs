@@ -9,7 +9,7 @@ const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
 const { ItemIds } = require("../dist/util/IdEnums");
 
-const SerpentineHelm = require("../plugins/items/SerpentineHelm.plugin");
+const SerpentineHelm = require("../plugins/items/SerpentineHelm.Sailing");
 
 const poisoned = [];
 let cycle = 100;

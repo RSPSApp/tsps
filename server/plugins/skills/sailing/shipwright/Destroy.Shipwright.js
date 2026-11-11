@@ -1,6 +1,6 @@
 // Ordinary shipwrights destroy boats; Seb only repairs. Text stays in their canonical pages.
 const { dockNear } = require('../SailingContent.Sailing');
-const { MODE, openBoatSelection } = require('../BoatSelection.plugin');
+const { MODE, openBoatSelection } = require('../BoatSelection.Sailing');
 const { sendBoatVarbits } = require('../BoatVarbits.Sailing');
 const { pandemoniumDone } = require('../crew/Common.Crew');
 const TARGET = 'Destroy Boat';

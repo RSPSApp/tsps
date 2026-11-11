@@ -1,7 +1,7 @@
 // A boat's anchor at sea (docs/sailing.md):
 // - Drop: the player turns to it, "You drop the anchor, bringing the boat to a stop.", the drop
 //   animation on the player and the anchor, and 4 ticks later the lowered anchor. Dropped from the
-//   helm, the helmsman lets go of it first (Helm.plugin.js), so the sails come down.
+//   helm, the helmsman lets go of it first (Helm.Sailing.js), so the sails come down.
 // - Raise: the player turns to it, "You raise the anchor, allowing the boat to move.", the pull
 //   animations, and 3 ticks later the raised anchor.
 // - Clicked again before its loc has changed: "That anchor is already in use!" a tick later.
@@ -148,9 +148,6 @@ function onBoarded({ boat, owned }) {
 }
 
 module.exports = {
-  name: "SailingAnchor",
-  description: "A boat's anchor: dropping it stops the boat and holds it still until it's raised.",
-  members: true,
   ANCHORS,
   register(api) {
     pluginApi = api;

@@ -16,9 +16,9 @@ const { content, playSound } = require("./SailingContent.Sailing");
 const { dropLostOnRecovery } = require("./Cargo.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { recoveryFee } = require("./BoatParts.Sailing");
-const { MODE, openBoatSelection } = require("./BoatSelection.plugin");
+const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
 const BoatShop = require("./BoatShop.Sailing");
-const { customiseBoat } = require("./Shipyard.plugin");
+const { customiseBoat } = require("./Shipyard.Sailing");
 
 const COINS = 995;
 /** Port Wizards Perrie, Peter, Petra and Paulie; one appears for each recovery. */
@@ -169,9 +169,6 @@ function shipwrightDialogue(event) {
 }
 
 module.exports = {
-  name: "SailingShipwright",
-  description: "Shipwright NPCs' Buy-boat (the Boat Emporium) and Recover-boat, paying from the bank so a Port Wizard brings a boat to the port.",
-  members: true,
   recoverSlot,
   register(api) {
     pluginApi = api;

@@ -12,6 +12,7 @@ const ALREADY_SOLVED = "You've already solved this challenge! Go hand it back.";
 const { TIERS } = require("./Tiers.TreasureTrails");
 const SIZE = 5;
 const CELLS = SIZE * SIZE;
+const OPENED_EVENT = "sliding-puzzle:opened";
 const BLANK = -1;
 // Wiki "Treasure Trails/Guide/Puzzle boxes": a box starts 101 random slides from solved,
 // which also keeps every board solvable.
@@ -21,6 +22,8 @@ const PIECES_BY_IMAGE_ENUM = 1864;
 let api;
 let core;
 let boards = new WeakMap();
+/** Who has a box (not another puzzle) on the interface. */
+let shown = new WeakSet();
 
 function solvedBoard() {
   return [...Array(CELLS - 1).keys(), BLANK];
@@ -93,6 +96,11 @@ function open(event) {
   const trail = boxTrail(player, event.slot);
   if (!trail) return false;
   if (trail.state.solved) { Dialogue.mesbox(player, ALREADY_SOLVED); return true; }
+  // The interface is shared with other puzzles (Monkey Madness I's reinitialisation panel): drop their claim on it.
+  api.emitCustomEvent(OPENED_EVENT, { player, source: "box" });
+  shown.add(player);
+  // The panel's puzzle leaves its own inventory on the client, which the Puzzle Solver plugin would read after this one.
+  player.getPacketSender().sendInventoryStopTransmit(core.CacheDefinitions.getInventoryId("reinitialisation_inv"));
   const sender = player.getPacketSender();
   sender.sendConfig(core.CacheDefinitions.getVarpId("if1"), trail.state.image);
   sendBoard(player, trail.state.image, boardFor(player, trail));
@@ -102,6 +110,7 @@ function open(event) {
 }
 
 function click({ player, slot }) {
+  if (!shown.has(player)) return;
   const trail = boxTrail(player);
   const session = boards.get(player);
   if (!trail || !sameBox(session, trail) || !Number.isInteger(slot)) return;
@@ -116,14 +125,17 @@ function click({ player, slot }) {
 
 function leave({ player }) {
   boards.delete(player);
+  shown.delete(player);
 }
 
 module.exports = function attachPuzzles(pluginApi) {
   api = pluginApi;
   core = api.core;
   boards = new WeakMap();
+  shown = new WeakSet();
   for (const tier of TIERS.filter(entry => entry.puzzleImages)) api.onItemAction(`Puzzle box (${tier.name})`, { Open: open });
   api.onInterfaceActionButton(core.CacheDefinitions.getComponentId("trail_slidepuzzle:pieces"), click);
+  api.onCustomEvent(OPENED_EVENT, ({ player, source }) => { if (source !== "box") shown.delete(player); });
   api.onPlayerLogout(leave);
   api.onPlayerDisconnect(leave);
 };

@@ -179,7 +179,8 @@ module.exports = function registerColdWarQuest(api) {
   const HIDE_MULTILOC = 21246; // nameless varbit-3294 multiloc parent
   const AVALANCHE_IDS = new Set([ObjectIdentifiers.AVALANCHE, ObjectIdentifiers.AVALANCHE_2]); // 21158/21159
   const ICEBERG_BOAT = ObjectIdentifiers.BOAT_7; // 21175, iceberg -> Rellekka
-  const COAST_BOAT = ObjectIdentifiers.BOAT_9; // 21177, coast -> iceberg
+  const COAST_BOAT = ObjectIdentifiers.BOAT_9; // 21177, used at both the Rellekka and Weiss coasts
+  const WEISS_BOAT_TILE = [2843, 3967];
   const CONTROL_PANEL = ObjectIdentifiers.CONTROL_PANEL_2; // 21055
   const CHASM = ObjectIdentifiers.CHASM; // 21035
   const CRACK_MULTILOC = 21245; // nameless varbit-3293 multiloc parent (A crack at 130/135)
@@ -443,9 +444,8 @@ module.exports = function registerColdWarQuest(api) {
   }
 
   function resolvedObjectId(event) {
-    if (typeof event.definition?.getId === "function") return event.definition.getId();
     const resolved = ObjectDefinition.forPlayer(event.objectId, event.player);
-    return resolved?.getId?.() ?? event.objectId;
+    return resolved?.id ?? event.definition?.id ?? event.definition?.getId?.() ?? event.objectId;
   }
 
   function isZooPenguinLocation(event) {
@@ -1278,7 +1278,8 @@ module.exports = function registerColdWarQuest(api) {
     }
     if (objectId === COAST_BOAT) {
       event.handled = true;
-      player.moveTo(ICEBERG_LANDING);
+      const atWeiss = event.location?.x === WEISS_BOAT_TILE[0] && event.location?.y === WEISS_BOAT_TILE[1];
+      player.moveTo(atWeiss ? RELLEKKA_PIER : ICEBERG_LANDING);
       return;
     }
     if (objectId === SNOWY_BIRD_HIDE) {

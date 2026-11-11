@@ -283,8 +283,10 @@ export class CombatSpecial {
         player.getPacketSender().sendSpecialAttackState(false);
     }
 
-    public static activate(player: Player) {
-        if (player.getCombatSpecial() == null) {
+    public static activate(player: Player, equipmentSlot?: number) {
+        const selected = equipmentSlot === undefined ? player.getCombatSpecial()
+            : CombatSpecial.getForWeaponId(player.getEquipment().get(equipmentSlot).getId());
+        if (selected == null || (equipmentSlot !== undefined && selected.getTraits()?.skipAttack !== true)) {
             return;
         }
 
@@ -295,9 +297,14 @@ export class CombatSpecial {
         // Loaded lazily, as PrayerHandler does: PluginManager imports Player.
         const { PluginManager } = require("../../../plugins/PluginManager");
         const disabledMessage = PluginManager.emitSpecialAttackDisabled(player);
-        if (!player.isSpecialActivated() && disabledMessage !== null) {
+        if ((equipmentSlot !== undefined || !player.isSpecialActivated()) && disabledMessage !== null) {
             player.sendMessage(disabledMessage);
             CombatSpecial.updateBar(player);
+            return;
+        }
+
+        if (equipmentSlot !== undefined) {
+            CombatSpecial.activateUtility(player, selected, equipmentSlot);
             return;
         }
 
@@ -371,18 +378,20 @@ export class CombatSpecial {
      * OSRS does it: no target and no attack swing (Lumber Up, Rock Knocker,
      * Fishstabber, Rampage, Sanctuary, Power of Death, Virulence, Entice, ...).
      * The plugin's start() owns the drain and the effect, so core only gates on
-     * energy and finishes by clearing the activated state.
+     * energy and clears the activated state unless using a separate equipment slot.
      */
-    private static activateUtility(player: Player, spec: CombatSpecial): void {
-        const equippedWeaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+    private static activateUtility(player: Player, spec: CombatSpecial, equipmentSlot?: number): void {
+        const equippedWeaponId = player.getEquipment().get(equipmentSlot ?? Equipment.WEAPON_SLOT).getId();
         const drainAmount = spec.getDrainAmountForWeaponId(equippedWeaponId);
         if (!CombatSpecial.affordable(player, spec, drainAmount)) {
             player.sendMessage("You don't have enough power left.");
             return;
         }
 
+        const activated = player.isSpecialActivated();
         spec.getCombatMethod().start(player, player);
-        player.setSpecialActivated(false);
+        // An offhand utility must leave the weapon's queued special alone.
+        player.setSpecialActivated(equipmentSlot !== undefined && activated);
         CombatSpecial.updateBar(player);
     }
 

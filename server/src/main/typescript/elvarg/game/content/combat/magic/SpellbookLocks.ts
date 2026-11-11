@@ -15,6 +15,7 @@ export const SPELLBOOK_QUESTS: ReadonlyMap<MagicSpellbook, { key: string; name: 
 
 /** The quest `book` needs that the player hasn't completed, or null when the book is open to them. */
 export function lockingQuest(player: Player, book: MagicSpellbook): { key: string; name: string } | null {
+    if (PluginManager.getPluginConfig<boolean>("quests:equipment-requirements", true) === false) return null;
     const quest = SPELLBOOK_QUESTS.get(book);
     if (!quest) return null;
     const query = { player, key: quest.key, complete: false };

@@ -123,6 +123,8 @@ test("the click's run choice holds through the interaction's re-paths and ends o
   const character = {};
   const queue = queueFor(character);
   queue.setClickRunOverride(true);
+  assert.equal(queue.isRunToggled(), false, 'nothing changes until the click starts its walk');
+  queue.reset(false);
   assert.equal(queue.isRunToggled(), true, 'a Ctrl-click with run off runs');
   queue.reset(false);
   assert.equal(queue.isRunToggled(), true, 'a re-path keeps it');
@@ -149,5 +151,14 @@ test("the click's run choice holds through the interaction's re-paths and ends o
 
   queue.setClickRunOverride(true);
   queue.setClickRunOverride(null);
+  queue.reset(false);
   assert.equal(queue.isRunToggled(), false, 'a plain click replaces a Ctrl-click');
+});
+
+test('a Ctrl-click that walks nowhere leaves a walk in progress as it is', () => {
+  const queue = queueFor({});
+  queue.setClickRunOverride(true);
+  queue.dropPendingClickRunOverride(); // the end of the turn: no walk took it up
+  queue.reset(false);
+  assert.equal(queue.isRunToggled(), false, "a later walk follows the run setting");
 });

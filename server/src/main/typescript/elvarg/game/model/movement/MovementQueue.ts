@@ -124,6 +124,8 @@ export class MovementQueue {
      * ends once the player stops with nothing left to walk to.
      */
     private runOverride: boolean | null = null;
+    /** This turn's interaction click's run choice, until its walk starts; undefined when none. */
+    private pendingClickRunOverride: boolean | null | undefined = undefined;
 
     /**
      * Creates a walking queue for the specified character.
@@ -842,7 +844,12 @@ export class MovementQueue {
     public reset(clearDestination = true): MovementQueue {
         this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
-        // runOverride outlives a reset: interactions reset the queue on every re-path.
+        // runOverride outlives a reset: interactions reset the queue on every re-path. A click's
+        // walk starts with a reset, which is where its run choice takes over.
+        if (this.pendingClickRunOverride !== undefined) {
+            this.runOverride = this.pendingClickRunOverride;
+            this.pendingClickRunOverride = undefined;
+        }
         this.points.clear();
         this.followX = -1;
         this.followY = -1;
@@ -1079,9 +1086,18 @@ export class MovementQueue {
         return this.points.length;
     }
 
-    /** Sets the run choice of an interaction click (see runOverride); null follows the run setting. */
+    /**
+     * Sets the run choice of an interaction click (see runOverride); null follows the run setting.
+     * It takes effect when the click starts its walk (every walk to a target resets the queue
+     * first), so a click that walks nowhere leaves a walk in progress as it is.
+     */
     public setClickRunOverride(run: boolean | null): void {
-        this.runOverride = run;
+        this.pendingClickRunOverride = run;
+    }
+
+    /** Drops a click's run choice that no walk took up this turn. */
+    public dropPendingClickRunOverride(): void {
+        this.pendingClickRunOverride = undefined;
     }
 
     /** Ends a click's run choice once there is no route, no follow and no walk-to interaction left. */

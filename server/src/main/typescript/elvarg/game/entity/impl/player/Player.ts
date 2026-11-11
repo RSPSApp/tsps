@@ -496,6 +496,8 @@ export class Player extends Mobile {
         // Reach checks for walk-to interactions run here, after this cycle's steps,
         // so arriving at an object/npc/ground item resolves on the same cycle.
         timed("walk_to_interaction", () => TaskManager.processWalkTo(this.getIndex()));
+        // A click this turn that started no walk leaves the run mode as it was.
+        movement.dropPendingClickRunOverride();
 
         // Process aggression
         if (!isBot) {

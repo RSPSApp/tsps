@@ -785,9 +785,13 @@ export class Player extends Mobile {
      * interaction (combat target or walk-to callback) but leaves the walk queue intact,
      * so the player keeps walking to the clicked destination without completing the
      * action. osrs-docs: Entity Interactions - Interruptions.
+     *
+     * `keepCombatTarget` leaves an attack running: a weapon or armour switch from the inventory
+     * does not end the fight on live, so the next swing comes off the old weapon's cooldown with
+     * no new click (rsprox captures, docs/weapon-switching.md).
      */
-    clearPendingAction(): void {
-        this.getCombat().clearInteraction();
+    clearPendingAction(keepCombatTarget = false): void {
+        if (!keepCombatTarget) this.getCombat().clearInteraction();
         TaskManager.cancelWalkToTasks(this.getIndex());
         // Following is an interaction too, so an inventory item action ends it.
         const following = this.getFollowing();

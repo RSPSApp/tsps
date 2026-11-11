@@ -131,6 +131,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendEnterAmountPrompt: () => sender,
         sendObjectAnimation: () => sender,
         sendGlobalGraphic: () => sender,
+        sendCameraShake: (...shake) => { (p.camera ??= []).push(shake); return sender; },
+        sendCameraReset: () => { (p.camera ??= []).push('reset'); return sender; },
       };
       return sender;
     },
@@ -725,6 +727,97 @@ test('the Great Olm rises when the barrier is passed: head, claws and a power', 
   assert.equal(olm.zoneWithMostPlayers(), 1, 'the middle');
   raid.destroy();
   Parties.clear();
+});
+
+// rsprox 234/00820 and 234/03282: every volley of falling crystals, between sides and in the final
+// stand, sends cam_shake on slots 0-2 with random 2-5 each; the camera resets as the Olm rises.
+test('the falling crystals shake the Olm chamber every volley, and the rise stills it', () => {
+  Parties.clear();
+  spawned.length = 0;
+  const leader = fakePlayer('Shaken');
+  channelWith('Shaken', leader);
+  Lobby.makeParty(leader);
+  leader.setAttribute(Shared.ATTR.WARNED, true);
+  Lobby.enterChambers({ player: leader });
+  const raid = Parties.partyOf(leader).raid;
+  ticks(5);
+  RaidUnit.startRaid({ player: leader });
+  leader.prompts.at(-1).args[1]();
+  const olm = raid.olmRoom;
+  leader.location = raid.map.olmTile(3232, 5740);
+  leader.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage() {} }) });
+  olm.transitionCrystals(28, false);
+  ticks(32);
+  const camera = leader.camera ?? [];
+  const shakes = camera.filter((entry) => entry !== 'reset');
+  assert.equal(shakes.length, 15 * 3, '15 volleys, three slots each');
+  for (const [i, [slot, random, sine, frequency]] of shakes.entries()) {
+    assert.equal(slot, i % 3);
+    assert.ok(random >= 2 && random <= 5, `random ${random}`);
+    assert.deepEqual([sine, frequency], [0, 0]);
+  }
+  assert.equal(camera.at(-1), 'reset', 'stilled after the last volley');
+  assert.equal(camera.indexOf('reset'), camera.length - 1);
+
+  leader.camera = [];
+  leader.varbits.set(16108, 1); // option_camera_effect_olm_disabled
+  olm.transitionCrystals(4, false);
+  ticks(6);
+  assert.deepEqual(leader.camera, ['reset'], 'no shake with the row off');
+
+  leader.varbits.set(16108, 0);
+  const inside = leader.location;
+  leader.camera = [];
+  olm.transitionCrystals(28, false);
+  ticks(1);
+  leader.location = new Location(1234, 3566, 0);
+  ticks(2);
+  assert.equal(leader.camera.at(-1), 'reset', 'a raider who leaves the chamber mid-volley is stilled');
+  leader.location = inside;
+  leader.camera = [];
+  olm.transitionCrystals(28, false);
+  ticks(1);
+  raid.destroy();
+  ticks(2);
+  assert.equal(leader.camera.at(-1), 'reset', 'a raid ended mid-volley stills its raiders');
+  Parties.clear();
+});
+
+// rsprox 234/03276 (the Molch shamans): a jump landing on the player shakes their camera the tick
+// after (cam_shake slot 0, random 10, sine 5); one landing beside them does not.
+test('a shaman jump shakes the camera of the raiders it lands on, a tick later', () => {
+  const { ShamansRoom } = require('../plugins/minigames/cox/Shamans.ChambersOfXeric');
+  const blocked = RegionManager.blocked;
+  RegionManager.blocked = () => false;
+  try {
+    const target = fakePlayer('Crushed', new Location(3300, 5260, 0));
+    const beside = fakePlayer('Beside', new Location(3302, 5260, 0));
+    const off = fakePlayer('Off', new Location(3301, 5261, 0));
+    off.varbits.set(16107, 1); // option_camera_effect_shamans_disabled
+    const room = Object.create(ShamansRoom.prototype);
+    Object.assign(room, { raid: { map: {} }, hurt: new Set() });
+    room.raiders = () => [target, beside, off];
+    room.hurtBy = () => {};
+    room.engage = () => {};
+    const npc = {
+      location: new Location(3295, 5265, 0),
+      getLocation() { return this.location; },
+      moveTo(location) { this.location = location; },
+      isRegistered: () => true,
+      performAnimation() {},
+      getCombat: () => ({ reset() {}, attack() {} }),
+    };
+    assert.equal(room.jump(npc, target), true);
+    ticks(6);
+    assert.equal(target.camera, undefined, 'nothing on the landing tick');
+    ticks(1);
+    assert.deepEqual(target.camera, [[0, 10, 5, 0]]);
+    assert.equal(beside.camera, undefined, 'two tiles off the landing');
+    assert.equal(off.camera, undefined, 'the row off');
+    ticks(2);
+  } finally {
+    RegionManager.blocked = blocked;
+  }
 });
 
 // ------------------------------------------------------------------ phase 7: rewards

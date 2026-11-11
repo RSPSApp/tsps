@@ -172,3 +172,39 @@ Ceto charged 200 numulite, setting a net consumed one net, one passive catch at 
 77 Fishing XP and no Hunter XP, and taking the harvest delivered one oyster and cleared the
 net. This checks the normal collection path; the rare clue outcomes were verified by the
 regressions, not by that live catch.
+
+## Jar generator and Elnock equipment payment
+
+[Jar generator, revision 15367163](https://oldschool.runescape.wiki/w/Jar_generator?oldid=15367163)
+specifies 100% charge, 3% per impling jar and 1% per butterfly jar, with the generator disappearing
+when exhausted. Charges are stored on the item and survive bank cloning. The final output replaces
+the exhausted item, so it can fit in that slot in a full bag. Earlier uses require an empty slot;
+refused uses preserve charge. Its `Impling-jar`, `Butterfly-jar`, `Check` and `Destroy` options are
+confirmed by revision 242's `ii_jar_generator` item (11258); Destroy uses the existing shared item
+handler. Exact Check, insufficient-charge, full-bag and recharge dialogue wording is not recorded;
+the plugin supplies functional messages. The charge arithmetic comes from the Wiki, without a
+captured generation event. The initial RSProx item-11258 query found no matches; this is not proof
+that no relevant recording exists.
+
+The Wiki specifies one owned generator and a choice to recharge the existing one for the same
+payment when requesting another. Elnock detects it in carried equipment/inventory or non-search
+bank tabs, asks for confirmation, and checks the current item and full payment again. Charge
+updates affect that instance rather than creating another. A generator lost on an unsafe death
+is not kept or dropped. Safe deaths preserve it.
+
+The equipment payment recipes require all three listed stacks. The imported Elnock transcript
+explicitly uses **and**: three baby/two young/one gourmet for repellent; three gourmet/two earth/one
+essence for the net; three essence/two eclectic/one nature for the generator. Cache structs
+1240–1242 bind those item/count pairs; the earlier plugin incorrectly treated them as alternatives.
+The separate offer exchanging one filled jar of any type for three empty jars remains a choice
+of a single jar. Generated dialogue data is unchanged.
+
+Validation extends `impetuous-impulses.test.cjs` for cumulative payment and refusal
+conservation, and `small-conversions-preset-copies.test.cjs` for registered Trade/Confirm and jar
+actions with real Player/Inventory, seeded bank/skills and a registered Hunter catch. The recharge
+choice uses the real dialogue handler. Seeded actors, positions and deterministic catch RNG are
+supplied setup; these checks do not establish natural travel, packet/client rendering, precise
+retail wording or a complete death sequence. From `server/`, after building and obtaining the
+matching cache, run `node --test tests/impetuous-impulses.test.cjs` and
+`node --test tests/small-conversions-preset-copies.test.cjs`. The PR retains the observed execution
+results and their validated revisions.

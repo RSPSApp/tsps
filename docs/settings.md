@@ -124,7 +124,6 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 - **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
 - **Not done**:
   - Show data orbs (8, varbit 4084 `orbs_disabled`): live also leaves the orbs interface (160) closed while it is set and opens it when the player turns them back on (rsprox 229/2375 tick 8), which needs server work.
-  - Friend Login/Logout messages: the server sends no friend login or logout messages yet, so Off has nothing to stop.
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
   - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
 
@@ -154,9 +153,9 @@ Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), whic
 
 - **Not done**:
   - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
-  - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
+  - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, the Staff of the dead special, the Sire stun, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
   - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
-  - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
+  - Modified stats overlay (148-151): now wired, see "Health and modified stats overlays" below.
 
 ## Rows owned by other plugins
 
@@ -195,13 +194,13 @@ and resent at login like any `settings.json` toggle; all start at 0 (on). A shak
 | --- | --- | --- | --- | --- |
 | Toggle all combat camera shake effects | 425 | 16106 `option_camera_effect_combat_disabled` | `combat`, and every combat sub-row | Hueycoatl, Phantom Muspah, Zebak, Nylocas, Obor, the Fractured Archive batteries, Meat and Greet's minotaur |
 | Doom of Mokhaiotl | 445 | 17776 `option_camera_effect_dom_disabled` | `doom` | the burrow |
-| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | none yet |
-| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | none yet |
+| Lizardman Shamans | 427 | 16107 `option_camera_effect_shamans_disabled` | `shamans` | the Chambers of Xeric shamans' jump |
+| Great Olm | 428 | 16108 `option_camera_effect_olm_disabled` | `olm` | the falling crystals |
 | Ape Atoll tunnel rock fall | 429 | 16109 `option_camera_effect_monkey_madness_disabled` | `apeAtollRockfall` | none yet |
 | Toggle all atmospheric camera shake effects | 426 | 16110 `option_camera_effect_atmospherics_disabled` | `atmospheric`, and every atmospheric sub-row | Guardians of the Rift's surge, quest scenes |
 | Baba Yaga's house | 281 | 14197 `option_camera_effect_baba_yaga_disabled` | `babaYaga` | none yet |
 | Fishing Trawler | 282 | 4814 `trawler_camera_static` | `trawler` | none yet |
-| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | none yet |
+| Barrows chest | 283 | 14198 `option_camera_effect_barrows_disabled` | `barrows` | the looted tunnels |
 
 - **Groups.** A sub-row's struct param 1080 names its group (3335 combat, 5198 atmospheric).
   Script 7825 counts a sub-row as off while its master is off, and the settings scripts lock it;
@@ -210,8 +209,8 @@ and resent at login like any `settings.json` toggle; all start at 0 (on). A shak
 - **Fishing Trawler.** Script 1134 (the trawler's own camera button) also sets 4814, in the client
   alone, and says "You have disabled all atmospheric camera effects in your settings. Turn them on
   to enable this button." while the atmospheric master is off.
-- **Not done**: the shamans' jump, the Great Olm, the Ape Atoll rock falls, Baba Yaga's house, the
-  Fishing Trawler and the Barrows chest send no camera shake yet; their rows only save.
+- **Not done**: the Ape Atoll rock falls, Baba Yaga's house and the Fishing Trawler send no camera
+  shake yet; their rows only save (see "Camera shake and visual effect content" below).
 
 ## Level-ups
 
@@ -230,10 +229,10 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 **Combat level.** A tick after the skill's level-up: `Congratulations, you've just advanced your Combat level. You are now level <n>.` with the same graphic and sounds. With pop-ups on, its pop-up comes when the skill's is continued: `<col=000080>Congratulations, you just advanced a combat level.` (or `<n> combat levels.`), `Your combat level is now <n>.`, with the combat icon (233:55 in rev 241).
 
 - **"Show level & unlocks"**: continuing opens a box per level with what it unlocked, straight after that skill's pop-up and before a queued skill's or a combat level's (rsprox 223/00014: Attack's box, then the combat pop-up). As live sends it: a `mesbox` chat line with the box text, the pop-up's skill icon hidden, `toplevel_chatbox_resetbackground` (2379), then `objectbox` (193, one picture: `ItemStatementDialogue`) or `objectbox_double` (11, two: `DoubleItemStatementDialogue`) at zoom 400. The text is server-side and comes from the Wiki's level-up transcripts (`plugins/interface/data/level-up-messages.json`), generated by `server/scripts/dump-level-up-messages.cjs` (`--check` fails if the committed file is stale). The pictures are obj gamevals in `plugins/interface/data/level-up-pictures.json`; Sailing has all 80 levels there (71 from rsprox captures, the rest the skill guide icon of each picture the transcript shows). Other skills' levels use the generated `items` ids instead: a level with a single unlock whose transcript picture names a cache item (resolved by exact cache item name); pictures that are not items, or whose wiki name the cache renamed, keep the plain message box (229).
-- **Level-up chatbox list**: with "Show level & unlocks" on (and pop-ups shown), the unlock text goes to the chat only as the box's `mesbox` line, as live (no capture has a plain "You can now..." game message on a level-up). A level-up given up before its box opens (walking, using an item, logging out, dying) sends the lines as chat messages instead, for the open pop-up's skill and any queued ones (ours), so they are never lost. Otherwise the same lines go to the chatbox on the level-up tick. Varbit 20158 is stored but does not gate them: no capture shows what it sends, so this is our reading of the setting, not a recording.
+- **Level-up chatbox list**: with "Show level & unlocks" on (and pop-ups shown), the unlock text goes to the chat only as the box's `mesbox` line, as live (no capture has a plain "You can now..." game message on a level-up). A level-up given up before its box opens (walking, using an item, logging out, dying) sends the lines as chat messages instead, for the open pop-up's skill and any queued ones (ours), so they are never lost. Otherwise the same lines go to the chatbox on the level-up tick, but only with "Level-up chatbox list" on (varbit 20158); see "Skilling and level-up notices".
 - **Jingles.** Each skill plays its `advance <skill>` jingle (cache gamevals index 24 kind 18); the `...2` one plays on levels that unlock something unless the guide list is disabled (varbit 20159). Hitpoints/Strength switch at 50, Construction every 10th, Hunter on odd levels (the Wiki's Even/Odd order is the only evidence), Sailing at 99, combat 299 with the combat message.
 - **Not done**:
-  - Level-up guide list: nothing lists unlocks in the skill guide.
+  - Level-up guide list (494): no chat invitation to open the skill guide after a level-up, and nothing lists unlocks in the guide. No capture has the invitation's text.
   - "Show level & unlocks": the box text's `<col=000080>` highlights (the dumper strips the Wiki's `{{Colour}}` spans), and the box's `mesbox` lines for a lamp's several levels go out together when the first box opens.
 
 ## Chat colours
@@ -350,7 +349,6 @@ Each row is a toggle in `data/settings.json`, read when its dialogue or message 
 - **Defaults** for 192 and 205: all 918 default-state logins (rev 235+) in the rsprox captures send both varbits as 1. Row 278 ("Display a warning on login if there are items stored in an item retrieval service") is shown by the toggle reader as 1 − varbit 14194 `option_item_retrieval_warning_disabled`, so it now flips 14194 instead of sharing 192's 13113. The gravestone login warning reads 14194 too, so it shows by default.
 - **Ours** (no capture or Wiki text): the Plank Make, gravestone and boat teleport questions and options (the boat one follows live's Escape prompt), and that a click on Accept during the trade delay does nothing and says nothing.
 - **Not done**:
-  - The clue warning for clues from skilling (nests, geodes, bottles, salvage, Agility): those sources skip the roll at capacity, so there is nothing to mention yet.
   - The boat teleport warning for tablets, jewellery and other non-spell teleports; the row's description names teleport spells.
   - Port task cargo deposit (463), port task cargo in hold (467) and Ironman cargo hold (469) warnings: no capture or Wiki text of any of them. 469's varbit (10385) is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
   - The Sailing drop-item warning (465), which builds on the drop warning (42/43).
@@ -380,9 +378,118 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 
 - **Not done**:
   - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
-  - **Level-up chatbox list** (493): no capture shows what it writes.
   - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
-  - **Hit sounds** (382, Type A / Type B): neither the cache nor the Wiki says how the options relate to body type or which is the default.
+
+## Row locks and hit sounds
+
+**Locked rows.** A setting struct with param 1115 can be locked, and param 1116 is its locked text; the cache's settings scripts grey the row out while script 2520 says so. `Settings.refuseLockedSetting(player, settingId)` is the server's check: a click on a locked row, or a dropdown option chosen for one, sends the row's text, sends back the var the row keeps (the client may have flipped it itself) and changes nothing. Its `ROW_UNLOCKS` table says when each row unlocks; any other path that changes a row from the client should ask it first. Rows 380 and 381 keep their own checks in their plugins (see "Rows owned by other plugins").
+
+| Setting | Id | Unlocked by | Asked through |
+| --- | --- | --- | --- |
+| Deep Wilderness lever default option | 296 | Any tier of the Wilderness Diary | `diary:is-complete`. The diaries also send varbit 4470 `wilderness_diary_any_complete` (a bit per tier done, easy first; live logins send 1, 3, 7 and 15), which script 2520 reads for this row |
+| Disable Phantom Muspah messages | 302 | Secrets of the North | `quest:is-complete`. Ours: script 2520 has no case for this row, so the client never greys it out; the row's locked text names the quest |
+| Make-X barbarian potions | 373 | Barbarian Training's Herblore section | `herblore:unlocked` "barbarian_herblore" (script 2520: varbit 3761 `brut_herb_potion` at 3) |
+
+**Hit sounds** (382, a dropdown: Type A / Type B, varbit 10731 `settings_hit_sounds`). `combat/PlayerHitSounds.plugin.js` owns the row through `settings:option-chosen` and saves the choice (`hit-sounds:type`). Type A is the body0 hurt voices (518-521), Type B the body1 ones (509, 510); most captures are body type A characters on Type A. Ours: until the player chooses, the voice follows the body type as before, and a body type B player's login sends Type B so the row shows it. Tests: `tests/player-hit-sounds.test.cjs`, `tests/settings-row-locks.test.cjs`.
+
+**Pronouns.** The Ironman trade refusal and the Surprise Exam's praise follow the player's pronouns (he, she, they), not the body type: "<name> is an Ironman. They stand alone." (the Wiki gives the They form).
+
+- **Not done**: nothing known.
+
+## Chat and social rows
+
+Chat and social rows whose choice the game now follows.
+
+- **Friend Login/Logout messages** (44). The client writes "<name> has logged in." and "... logged out." itself from the friends list, as the official client does (`FriendLoginUpdates.ts`). With Off (`loginlogout_setting` 2, read as script 4487 does, `loginlogout_permanent` first) it writes none.
+- **Show chat effects** (34, varp 171 `option_chat`). While it is 1, every player's overhead chat is drawn plain yellow and static: no colours, patterns or wave, scroll and slide effects (`overlays3.ts`, used by both renderers).
+- **Update clan 'last seen' records** (431, varbit 16118 `clan_disable_lastseen`). While it is 1, logging in leaves the member's last seen day as it was and sends no `member_extra_info` delta for it. The owner's own absence timer (for the ownership hand-over) still runs.
+- **'Did you know?' tips** (433, varbit 16235 `settings_didyouknow_disabled`). `LoginTips.plugin.js` sends one tip at random, as chat type 117, straight after the login greeting (`welcome-screen:greeted`), unless the saved setting is 1; rows 434 and 435 colour it. The 40 tips in `data/login-tips.json` are live's own lines from rev 238 and 239. In the rsprox captures, live sends a tip right after "Welcome to Old School RuneScape." in 1,380 of 1,381 logins since rev 235 (for example 239/4251), none of them with the setting sent as 1. Live's navigator tip is cut short at "</col", and is kept as sent.
+- **Not done**: nothing known.
+
+## Skilling and level-up notices
+
+Tests: `tests/settings-skilling-notices.test.cjs` and `tests/skill-max-level.test.cjs`.
+
+| Setting | Id | Varbit (live default) | While on |
+| --- | --- | --- | --- |
+| Clue scroll warnings, Beginner to Master | 374–379 | 10693–10695, 10723–10725 (off) | A clue rolled by skilling for a player who can't take another of that tier says the "sneaking suspicion" line, as NPC drops do (see "Confirmations and messages") |
+| Level-up chatbox list | 493 | 20158 `option_level_up_chatbox_list` (off) | A level-up with no unlock box writes what the level unlocked in the chat |
+
+- **Skilling clues.** Clue nests (Woodcutting), clue geodes (Mining), clue bottles (Fishing), the Wilderness Agility dispenser's medium clue and salvage clues (Sailing) now roll each tier first and only then check the player's clue capacity; a roll that hits at capacity emits `treasure-trails:missed-clue` `{player, tier}`, which `Capacity.ClueCapacity.js` answers with the tier's warning ("scroll box" once boxes are unlocked). Free worlds never warn about a members tier. Ours: the captured warnings all follow NPC drops (rsprox 224/1445, 231/391, 236/3932); no capture shows a skilling clue missed at capacity.
+- **Level-up chatbox list.** In 775 level-ups at levels that unlock something, from rev 237 recordings with pop-ups disabled and the chatbox list off (for example rsprox 237/1100: Woodcutting 61, Fletching 46 and 47), live sends no unlock line, and no "master of" line at 99. So the lines that go to the chat when no box shows them now need 20158 on. The four recordings with 20158 on have no level-up that unlocks anything, so the wording with it on is ours: the Wiki transcripts' lines, as the box uses. The Wiki's Settings page: "a short list may be written in your chatbox when you level-up a skill".
+- **Not done**:
+  - Hunter's clue sources (bird house clue nests, aerial fishing, implings, drift nets) still check capacity before the roll and stay silent.
+  - Bird nest notification (189): on live this is a desktop (operating system) notification that the official client raises by itself; a nest drop sends only the red chat line and the ground item (rsprox 237/1108), and the web client has no desktop notifications.
+  - Level-up guide list (494): see "Level-ups".
+
+## Camera shake and visual effect content
+
+What each content plugin sends for the camera shake rows above, and the visual effect rows still
+open. Every shake goes through `CameraShake.send`, so its row and its group's master turn it off.
+
+| Row | Content | What it sends |
+| --- | --- | --- |
+| Barrows chest (283) | `Barrows.plugin.js` | Slot 0, random 5 when the chest is looted, and again on each arrival in the tunnels while the run stays looted; the camera resets when the player leaves the tunnels. |
+| Great Olm (428) | `cox/Olm.ChambersOfXeric.js` | Slots 0-2, random 2-5 each, with every volley of falling crystals (between sides and in the final stand); the camera resets with the last volley before the Olm rises, and as it dies. |
+| Lizardman Shamans (427) | `cox/Shamans.ChambersOfXeric.js` | Slot 0, random 10, sine amplitude 5, a tick after a jump lands on the raider (the 3x3 it crushes). |
+
+- **Sources.** rsprox 237/04055 and 227/01885 (Barrows: the looting tick, a teleport back into a
+  looted run's chest room, the reset on leaving); 234/00820 and 234/03282 (the Olm's transitions and
+  final stand); 234/03276 (the Molch shamans: the jump landing on the player at tick 6309 shakes at
+  6310, landings beside them do not).
+- **Not done**:
+  - Lizardman Shamans: in 234/03276 two of the spawns' appearances also shake (slot 0, random 4,
+    sine 2) but most do not; which ones do is not settled, so spawns send none.
+  - Baba Yaga's house (281): live shakes slot 1 with sine amplitude 10, frequency 25 (and sound
+    1692) a tick after arriving inside the house (227/00086, 227/01754), but there is no way into
+    the house here yet (her chicken house is not enterable).
+  - Fishing Trawler (282): no capture has a trawler game.
+  - Show snow overlays (436, varbit 16236): live opens `snow_flakes` (167), `snow_verylight` (176),
+    `snow_medium` (177) and `snow_heavy` (204) in `overlay_atmosphere` in snowy areas (Trollweiss,
+    heavy to very light going down the slope, 227/00075, 227/00091, 234/00787), but the captures do
+    not pin down each area's edges, so the server opens none yet.
+  - Disable colourful fade effects (460): no capture shows a Guardians of the Rift fade with
+    varbit 18132 set, so the minigame still follows only its own `gotr_colourful_fade_disabled`.
+
+## Health and modified stats overlays
+
+**Modified stats overlay** (`stat_boosts_hud`, 708). The login gameframe opens it at `toplevel_osrs_stretch:stat_boosts_hud` (161:5), next to the buff bar, as live does on every layout. Its own scripts draw the boosted and drained stats from the stat updates. Its four rows are `data/settings.json` rows, saved and sent back at login:
+
+| Setting | Id | Variable |
+| --- | --- | --- |
+| Display modified stats overlay | 148 | varbit 12373 `stat_boosts_hud_hidden` |
+| Show tooltips for modified stat overlays | 149 | varbit 12374 `stat_boosts_hud_tooltips_hidden` |
+| Number of modified stats to show (dropdown) | 150 | varbit 12375 `stat_boosts_hud_num_displays` = option; a fresh account gets 5, which live sends at login in every rsprox recording |
+| Display relative stat value | 151 | varbit 12376 `stat_boosts_hud_display_relative` |
+
+**Normal health overlay** (row 111, varbit 12390 `hpbar_hud_standard_disabled`, on by default: no capture sets it). It is the boss health HUD (303) in standard mode (`hpbar_hud_boss` 0), driven by `BossHud.plugin.js` for any NPC no boss plugin drives. A player's attack roll on an NPC shows it: `hpbar_hud_npc`, its hitpoints and maximum, the usual colours, open script 2376 and fade-in 2887. Each hit on it updates the hitpoints. 8 ticks after the player's last attack the HUD fades out (2889) and clears 4 ticks later. This matches rsprox recordings 1382, 2148 and 3979 (a Falador guard, a Canifis man, a calf). The Wiki gives the option to the mobile and Steam clients only, which is why desktop recordings never show it. A boss HUD always wins: an NPC id any boss event has named never gets the standard HUD, and a boss show replaces it. The client's opponent information panel steps aside for either mode while that mode's setting is on.
+
+- **Not done**:
+  - The overlay's stat restore timers (scripts 4517 and 4518, which live sends every 25 ticks) aren't sent, so its restore countdown doesn't run.
+  - The normal health overlay fades in once when it opens. Live runs the fade-in again on the ticks after each hit.
+
+## Buff timers read from a var
+
+The buff bar's script (5923) draws most buffs from a var, in steps set by the buff's struct (param 1541, ticks per step). `BuffTimers.plugin.js` reads each effect's own state every tick and sends the var when it changes; the client starts them at 0 at login, so only running ones go out then. `tests/buff-timers-effects.test.cjs` checks each one.
+
+| Row | Effect | Var | Value |
+| --- | --- | --- | --- |
+| 130 | Charge | varp 272 `magearena_charge` | time left in steps of 2 ticks (350 for a cast, as recorded) |
+| 131 | God Wars altar | varbit 4099 `godwars_altar_delay` | cooldown left in steps of 100 ticks |
+| 137 | Prayer enhance (Chambers of Xeric) | varbits 12397 tier, 5419 rate, 5417 timer | tier 1-3 for (-), plain and (+); rate 6; timer in steps of 6 ticks, as recorded |
+| 138 | Overload (Chambers of Xeric) | varbits 5420 tier, 5418 timer | tier 1-3; timer in steps of 25 ticks, as recorded. The Nightmare Zone overload keeps 3955 |
+| 139 | Magic Imbue | varbit 5438 `magic_imbue_active` | time left in steps of 10 ticks |
+| 143 | Divine potions | varbits 8429-8433 (attack, strength, defence, ranged, magic), 13663-13665 (combat, bastion, battlemage) | ticks left (500 for a dose); a combined potion's while all its skills are locked, as recorded |
+| 152 | Lesser and greater corruption | varbit 12136 `arceuus_corruption`, 12288 cooldown | 1 or 2 while the corruption waits for its hit; the cooldown 1 while it lasts |
+| 154, 156, 157 | Shadow Veil, Ward of Arceuus and Resurrection cooldowns; a thrall | varbits 12291, 12293, 12290; 12413 `arceuus_resurrection_active` | 1 while each cooldown lasts (17 ticks for a thrall, as recorded); 1 while a thrall is up |
+| 170 | Remaining ammo | varps 3158 `buff_bar_ammo_type`, 3159 amount, 3160 weapon | the ammo slot's item (-1 when empty) and count; the weapon -1, as recorded |
+| 213 | Cannon ammo | varp 3 `rockthrower`, with varp 2 at 4 and varbit 1968 `mcannon_world` | the bar shows it only while 1968 is the client's world modulo 128, so it is now 45 (world 301) |
+| 284 | Menaphite remedy | varbit 14448 `statrenewal_potion_timer` | time left in steps of 25 ticks |
+| 363 | Group Woodcutting Bonus | varp 4007, varbits 15347, 15348 | 96 while chopping a tree with the bonus (-1 when not), the players at it, and one less as the value shown (as recorded) |
+
+- **Not done**:
+  - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), the Staff of the dead special (142), the Sire stun (140), freeze (141), poison damage (186), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var: the bar keeps their start or end tick in client vars that only `buff_bar_start` (script 5931, a struct and a value) sets. No capture shows live running it for any of them (it does for burn damage, with 0, at login): a freeze sends only its message, and a thrall only its varbits. So they stay unsent.
+  - Desert water (244): not checked. Its buff (struct 340) reads no var in script 5923, so what drives it is unknown.
 
 ## Containers on death
 

@@ -1,25 +1,35 @@
-import { PluginManager } from "../plugins/PluginManager";
 import type { Location } from "./model/Location";
 
-/** World-configured cross-floor visibility and ranged combat; old environment settings are fallbacks. */
+interface PlanePolicy {
+    supportsPlane(plane: number): boolean;
+    canSeeAcrossPlanes(viewer: number, target: number): boolean;
+    combatEnabled(): boolean;
+}
+
+/** Plane checks shared by entity synchronisation, interactions and combat. */
 export class CrossFloor {
-    /** Legacy combined switch remains supported when the newer switches are unset. */
-    private static legacyEnabled(): boolean { return process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT === "1"; }
+    private static policy?: PlanePolicy;
+
+    static registerPolicy(policy: PlanePolicy): void {
+        CrossFloor.policy = policy;
+    }
+
     static enabled(): boolean {
-        const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:visibility");
-        if (typeof configured === "boolean") return configured;
-        return process.env.CROSS_FLOOR_VISIBILITY === undefined
-            ? CrossFloor.legacyEnabled()
-            : process.env.CROSS_FLOOR_VISIBILITY === "1";
+        return CrossFloor.policy !== undefined;
     }
+
     static combatEnabled(): boolean {
-        if (!CrossFloor.enabled()) return false;
-        const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:combat");
-        if (typeof configured === "boolean") return configured;
-        return process.env.CROSS_FLOOR_COMBAT === undefined
-            ? (process.env.CROSS_FLOOR_VISIBILITY === undefined && CrossFloor.legacyEnabled())
-            : process.env.CROSS_FLOOR_COMBAT === "1";
+        return CrossFloor.policy?.combatEnabled() ?? false;
     }
+
+    static includesOtherPlanes(plane: number): boolean {
+        return CrossFloor.policy?.supportsPlane(plane) ?? false;
+    }
+
+    static visibleOnPlane(viewer: number, target: number): boolean {
+        return viewer === target || (CrossFloor.policy?.canSeeAcrossPlanes(viewer, target) ?? false);
+    }
+
     static distance(a: Location, b: Location): number {
         return Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
     }
@@ -28,15 +38,10 @@ export class CrossFloor {
         return CrossFloor.distance(a, b);
     }
     static canCross(a: Location, b: Location): boolean {
-        return CrossFloor.combatEnabled() && a.getZ() >= 0 && a.getZ() < 4 && b.getZ() >= 0 && b.getZ() < 4;
+        return CrossFloor.combatEnabled() && CrossFloor.includesOtherPlanes(a.getZ()) && CrossFloor.includesOtherPlanes(b.getZ());
     }
-    /** Render entities on the viewer's floor and below it; do not estimate roof occlusion server-side. */
     static visible(viewer: Location, target: Location, range: number): boolean {
-        if (viewer.getZ() === target.getZ()) return CrossFloor.distance(viewer, target) <= range;
-        if (!CrossFloor.enabled() || viewer.getZ() < 0 || viewer.getZ() >= 4 || target.getZ() < 0 || target.getZ() >= 4) {
-            return false;
-        }
-        return target.getZ() < viewer.getZ() && CrossFloor.distance(viewer, target) <= range;
+        return CrossFloor.visibleOnPlane(viewer.getZ(), target.getZ()) && CrossFloor.distance(viewer, target) <= range;
     }
 
     static projectileVisible(viewer: Location, target: Location, range: number): boolean {

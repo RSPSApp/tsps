@@ -296,6 +296,12 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (quest.isComplete(player)
       || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0)) {
       request.destination = HIDEOUT_RING;
+    } else if (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player)) {
+      // Wiki (Fairytale II, Regrouping): with the right sequence but the Cosmic Altar sign skipped,
+      // "Maybe you need to investigate further first.." (the penguin island is for a missing or
+      // unstudied certificate). No recording; the ring keeping the player in place is assumed.
+      request.destination = request.origin ?? player.getLocation().clone();
+      player.sendMessage("Maybe you need to investigate further first..");
     }
   }
 

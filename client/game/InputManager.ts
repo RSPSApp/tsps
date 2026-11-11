@@ -195,6 +195,8 @@ export class InputManager {
     saveClickX: number = -1;
     /** Frame-synchronized click Y position */
     saveClickY: number = -1;
+    /** The middle button turns the camera (mousecam, from varbit 4134 being 0). */
+    mouseCamEnabled: boolean = true;
     /** Middle mouse click X position for the current frame */
     middleClickX: number = -1;
     /** Middle mouse click Y position for the current frame */
@@ -794,11 +796,8 @@ export class InputManager {
         this.clickY = y;
         this.clickTime = Date.now();
 
-        // Middle mouse: camera pan
+        // Middle mouse: camera pan, unless "Middle mouse button controls the camera" is off
         if (event.button === 1) {
-            this.mouseWheelDown = true;
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
             this.middleClickX = x;
             this.middleClickY = y;
             this.middleClickSequence++;
@@ -806,6 +805,10 @@ export class InputManager {
             this.mouseY = y;
             this.isTouch = false;
             event.preventDefault();
+            if (!this.mouseCamEnabled) return;
+            this.mouseWheelDown = true;
+            this.mouseWheelX = x;
+            this.mouseWheelY = y;
             this.installDocumentGrab();
             return;
         }

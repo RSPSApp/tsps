@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
+import { ClientState } from "../game/ClientState";
 import { InputManager } from "../game/InputManager";
 import { processWidgetKeyboardInput } from "../game/widgets/input/widgetKeyboardInput";
 import { Cs2Vm } from "../rs/cs2/Cs2Vm";
@@ -94,3 +96,59 @@ const press = (code: string, key: string, keyCode: number, extra: object = {}) =
     run();
     assert.deepEqual(seen, []);
 }
+
+async function main() {
+    (globalThis as any).self = globalThis;
+    require.extensions[".glsl"] = (module, file) => { module.exports = readFileSync(file, "utf8"); };
+    for (const extension of [".png", ".jpg", ".webp"]) require.extensions[extension] = (module, file) => { module.exports = file; };
+    const { OsrsClient } = await import("../game/OsrsClient");
+
+    // Rows 49 and 50 follow their varbits as soon as they change (and at login).
+    {
+        const varbits = new Map<number, number>();
+        const client: any = Object.create(OsrsClient.prototype);
+        client.inputManager = new InputManager();
+        client.varManager = { getVarbit: (id: number) => varbits.get(id) ?? 0 };
+        client.applyControlSettingVarbits();
+        assert.equal(client.inputManager.mouseCamEnabled, true, "the middle mouse turns the camera by default");
+        assert.equal(ClientState.followerOpsLowPriority, false);
+        client.inputManager.mouseWheelDown = true;
+        varbits.set(4134, 1);
+        varbits.set(5599, 1);
+        client.applyControlSettingVarbits();
+        assert.equal(client.inputManager.mouseCamEnabled, false, "mousecam_disabled turns it off");
+        assert.equal(client.inputManager.mouseWheelDown, false, "a camera drag in progress stops");
+        assert.equal(ClientState.followerOpsLowPriority, true, "followerops_deprioritised lowers follower options");
+        varbits.clear();
+        client.applyControlSettingVarbits();
+        assert.equal(client.mouseCamEnabled, true);
+        assert.equal(ClientState.followerOpsLowPriority, false);
+    }
+
+    // Row 54: the side-panel switch is told whether the open tab's own key closes it.
+    {
+        const runs: [number, number[]][] = [];
+        const client: any = Object.create(OsrsClient.prototype);
+        client.widgetManager = { rootInterface: 161 };
+        client.varManager = { getVarcInt: () => 3, setVarcInt() {} };
+        client.cs2Vm = {
+            context: { loadScript: (id: number) => ({ id }) },
+            run: (script: { id: number }, args: number[]) => runs.push([script.id, args]),
+        };
+        client.switchToTab(3);
+        client.switchToTab(3, false, false);
+        assert.equal(runs[0][0], 914, "a hotkey that may close its panel goes through the stock switch");
+        assert.deepEqual(runs[0][1].slice(2), [3]);
+        assert.equal(runs[1][0], 71, "one that may not calls the switch with closing off");
+        assert.deepEqual([runs[1][1][1], runs[1][1][2]], [3, 0]);
+        assert.equal(runs[1][1][0], runs[0][1][1], "both use the layout's display enum");
+    }
+}
+
+main().then(
+    () => process.exit(0),
+    (error) => {
+        console.error(error);
+        process.exit(1);
+    },
+);

@@ -53,6 +53,9 @@ import {
     VARBIT_LEAGUE_RELIC_8,
     VARBIT_ROOF_REMOVAL,
     VARBIT_ACTIVE_SPELLBOOK,
+    VARBIT_FOLLOWEROPS_DEPRIORITISED,
+    VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL,
+    VARBIT_MOUSECAM_DISABLED,
     VARBIT_STAMINA_ACTIVE,
     VARC_COMBAT_LEVEL,
     VARC_ACTIVE_TAB,
@@ -60,6 +63,7 @@ import {
     VARP_ATTACK_STYLE,
     VARP_MAP_FLAGS_CACHED,
     VARP_MASTER_VOLUME,
+    VARP_MOUSE_BUTTONS,
     VARP_MUSIC_VOLUME,
     VARP_OPTION_ATTACK_PRIORITY_NPC,
     VARP_OPTION_ATTACK_PRIORITY_PLAYER,
@@ -422,6 +426,8 @@ const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
 
 // Enum IDs consumed by the stock tab-switch script (914), per game-frame layout.
 const TAB_SWITCH_SCRIPT = 914;
+// The side-panel switch script 914 calls: (display enum, tab, the open tab's key closes it, 0).
+const TAB_OPEN_SCRIPT = 71;
 const AGILITY_OBSTACLE_HIGHLIGHTS_SCRIPT = 5167;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
@@ -704,10 +710,17 @@ export class OsrsClient {
     showMouseOverText: boolean = true;
 
     /**
-     * Mouse camera enabled/disabled (set by MOUSECAM opcode).
-     * When false, disables mouse-based camera rotation.
+     * Mouse camera enabled/disabled (set by the MOUSECAM opcode and varbit 4134).
+     * When false, the middle mouse button doesn't turn the camera.
      */
-    mouseCamEnabled: boolean = true;
+    get mouseCamEnabled(): boolean {
+        return this.inputManager.mouseCamEnabled;
+    }
+
+    set mouseCamEnabled(enabled: boolean) {
+        this.inputManager.mouseCamEnabled = enabled;
+        if (!enabled) this.inputManager.mouseWheelDown = false;
+    }
 
     /**
      * Render local player model in the 3D scene (set by RENDERSELF opcode).
@@ -1325,7 +1338,11 @@ export class OsrsClient {
                     return;
                 }
 
-                this.switchToTab(shortcut);
+                // A hotkey closes its own open side panel unless "Side panel can be closed by the
+                // hotkeys" is off (script 907 binds the cache's own key handler the same way).
+                const keepsPanelOpen = event.key !== "Escape" &&
+                    this.varManager?.getVarbit(VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL) === 1;
+                this.switchToTab(shortcut, false, !keepsPanelOpen);
                 event.preventDefault();
                 if (event.key !== "Escape") event.stopImmediatePropagation();
             },
@@ -4442,13 +4459,14 @@ export class OsrsClient {
     }
 
     /** Switch the stock side panel through its cache script so all tab widgets update together. */
-    switchToTab(tab: number, forceOpen = false): void {
+    switchToTab(tab: number, forceOpen = false, closesOpenTab = true): void {
         if (forceOpen && this.varManager?.getVarcInt(VARC_ACTIVE_TAB) === tab) return;
         const rootInterface = this.widgetManager?.rootInterface ?? DEFAULT_ROOT_INTERFACE;
         const displayEnum = DISPLAY_ENUM_BY_ROOT_INTERFACE[rootInterface] ?? DEFAULT_DISPLAY_ENUM;
-        const script = this.cs2Vm?.context?.loadScript?.(TAB_SWITCH_SCRIPT);
-        if (script) this.cs2Vm.run(script, [1, displayEnum, tab], []);
-        else this.varManager?.setVarcInt(VARC_ACTIVE_TAB, tab);
+        const script = this.cs2Vm?.context?.loadScript?.(closesOpenTab ? TAB_SWITCH_SCRIPT : TAB_OPEN_SCRIPT);
+        if (!script) this.varManager?.setVarcInt(VARC_ACTIVE_TAB, tab);
+        else if (closesOpenTab) this.cs2Vm.run(script, [1, displayEnum, tab], []);
+        else this.cs2Vm.run(script, [displayEnum, tab, 0, 0], []);
     }
 
     private substituteWidgetScriptMagicArgs(intArgs: number[], widget: any): number[] {
@@ -4613,6 +4631,19 @@ export class OsrsClient {
 
     private applyInterfaceScalingPercentDeviceOption(value: number): void {
         this.audioVarp.applyInterfaceScalingPercentDeviceOption(value);
+    }
+
+    /**
+     * The middle-mouse camera and follower option rows apply as soon as their varbit changes,
+     * and again at login. Varbit changes arrive through their varp, so they are re-read on every
+     * varp update, as the roof varbit is.
+     */
+    private applyControlSettingVarbits(): void {
+        const varManager = this.varManager;
+        if (!varManager) return;
+        const mouseCamEnabled = varManager.getVarbit(VARBIT_MOUSECAM_DISABLED) !== 1;
+        if (this.mouseCamEnabled !== mouseCamEnabled) this.mouseCamEnabled = mouseCamEnabled;
+        ClientState.followerOpsLowPriority = varManager.getVarbit(VARBIT_FOLLOWEROPS_DEPRIORITISED) === 1;
     }
 
     private applyAudioVarpChange(varpId: number, value: number): void {
@@ -6990,7 +7021,10 @@ export class OsrsClient {
                     ClientState.playerAttackOption = clamp(newValue | 0, 0, 4);
                 } else if (varpId === VARP_OPTION_ATTACK_PRIORITY_NPC) {
                     ClientState.npcAttackOption = clamp(newValue | 0, 0, 3);
+                } else if (varpId === VARP_MOUSE_BUTTONS) {
+                    this.settings.leftClickOpensMenu = newValue === 1;
                 }
+                this.applyControlSettingVarbits();
                 // Varbit changes arrive through their underlying varp, so re-read the
                 // roof varbit on every varp update.
                 try {

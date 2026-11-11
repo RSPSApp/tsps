@@ -31,6 +31,9 @@
       ]
     },
     "46": { "name": "Click through transparent chatbox", "varbit": 2570 },
+    "48": { "name": "Single mouse button mode", "varp": 170 },
+    "49": { "name": "Middle mouse button controls the camera", "varbit": 4134 },
+    "50": { "name": "Move follower options lower down", "varbit": 5599 },
     "51": { "name": "Shift click to drop items", "varbit": 11556, "default": 1 },
     "54": { "name": "Modern Layout - Side panel can be closed by the hotkeys", "varbit": 4611 },
     "55": { "name": "Player Attack options", "varp": 1107 },

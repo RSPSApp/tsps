@@ -1053,15 +1053,19 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
-        case ServerPacketId.WIDGET_SET_NPC_HEAD:
+        case ServerPacketId.WIDGET_SET_NPC_HEAD: {
+            // Unsigned: custom NPC ids (50000-65534) are past a signed short. 0xffff is "no head".
+            const uid = reader.readInt();
+            const npcId = reader.readShort();
             return {
                 type: "widget",
                 payload: {
                     action: "set_npc_head",
-                    uid: reader.readInt(),
-                    npcId: reader.readSignedShort(),
+                    uid,
+                    npcId: npcId === 0xffff ? -1 : npcId,
                 },
             };
+        }
 
         case ServerPacketId.WIDGET_SET_FLAGS_RANGE:
             return {

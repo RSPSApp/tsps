@@ -134,9 +134,9 @@ test('showing an owned cape to a guard unlocks later crossings without taking th
   playerOutside.items.add(itemId);
   pass({ player: playerOutside, object });
   assert.deepEqual(playerOutside.steps, [], 'carrying it without showing it grants nothing');
-  const show = { player: playerOutside, npcId: guard, itemId, handled: false };
-  showCape(show);
-  assert.equal(show.handled, true);
+  // Showing a held cape plays the guard's exchange, which grants access at its message box
+  // (mor-ul-rek-cape-on-guard.test.cjs, with a real player); its box step is the dialogue action.
+  dialogueAction({ player: playerOutside, npcId: guard, kind: 'message', stepId: '2-PLAV', handled: false });
   assert.ok(playerOutside.items.delete(itemId), 'the cape was still held');
   pass({ player: playerOutside, object });
   assert.deepEqual(playerOutside.steps, [[2436, 5119]]);

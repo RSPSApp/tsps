@@ -175,6 +175,9 @@ module.exports = function registerNatureSpiritQuest(api) {
    * its bank included (booths at 3513, 3478-3483).
    */
   const SWAMP_BOUNDS = new Boundary(3380, 3590, 3310, 3457, 0);
+  /** North of the fence: the gate leaves' row and the two rows a walk or run through them starts from. */
+  const SWAMP_GATE_APPROACH_BOUNDS = new Boundary(SWAMP_GATE_PASSAGE.minX - 2, SWAMP_GATE_PASSAGE.maxX + 2,
+    SWAMP_GATE_PASSAGE.y, SWAMP_GATE_PASSAGE.y + 2, 0);
 
   let quest;
 
@@ -1117,6 +1120,22 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
+   * The tiles just north of the Gate are outside the swamp, so its process can't see them. This strip only
+   * records the approach for checkSwampGateCrossing (2 rows deep, for a running step); no diary entry, no ghasts.
+   */
+  function createSwampGateApproachArea() {
+    class MortMyreGateApproachArea extends Area {
+      process(mobile) {
+        if (!mobile?.isPlayer?.()) return;
+        const player = mobile.getAsPlayer();
+        if (player.getPrivateArea?.()) return;
+        checkSwampGateCrossing(player);
+      }
+    }
+    return new MortMyreGateApproachArea([SWAMP_GATE_APPROACH_BOUNDS]);
+  }
+
+  /**
    * The swamp gate is the only legitimate way into Mort Myre ("or Filliman will
    * not appear"): passing through it writes stage 10. Doors still swings the gate.
    */
@@ -1295,4 +1314,5 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.registerArea(createSwampArea());
+  api.registerArea(createSwampGateApproachArea());
 };

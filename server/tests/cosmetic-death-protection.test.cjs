@@ -92,6 +92,21 @@ test('a whip mixed with a tradeable mix is protected like a kit', () => {
   assert.deepEqual(names(PlayerDeathTask.getItemsToKeep(player, 0, true)), ['Volcanic abyssal whip']);
 });
 
+test('a Bounty Hunter kit protects though it is untradeable; other untradeable modifications do not', () => {
+  const isCosmetic = (id) => {
+    const query = { item: new Item(id, 1), cosmetic: false };
+    PluginManager.emitCustomEvent('player-death:cosmetic', query);
+    return query.cosmetic;
+  };
+  assert.equal(isCosmetic(28031), true, 'Dragon scimitar (cr)');
+  assert.equal(isCosmetic(28067), true, 'Fighter torso (or), Bounty Hunter kit');
+  assert.equal(isCosmetic(24664), false, 'Twisted ancestral hat: the colour kit is an untradeable modification');
+  assert.equal(isCosmetic(24743), false, 'Graceful hood made with dark dye');
+  assert.equal(isCosmetic(ARCEUUS_GRACEFUL_HOOD), false);
+  // Items the Items Kept on Death screen on live marks lost when outside the kept slots.
+  for (const id of [19641, 21295, 27721, 22322, 13280, 11834]) assert.equal(isCosmetic(id), false, `item ${id}`);
+});
+
 test('no protection when waived (row 386 off), killed by a player or in the Wilderness', () => {
   const killer = {};
   for (const [label, player, by] of [

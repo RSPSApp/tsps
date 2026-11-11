@@ -165,13 +165,17 @@ function cleanDye(event) {
 
 /**
  * Death protection from cosmetics: an item made with a tradeable ornament kit, mix or paint is
- * kept on a non-PvP death outside the Wilderness on top of the kept count (Wiki: Ornament kit,
- * Volcanic abyssal whip). Recolours made without a kit (graceful) are not.
+ * kept on a non-PvP death outside the Wilderness on top of the kept count, and so is one with the
+ * untradeable Bounty Hunter ornament kit (Wiki: Items Kept on Death, Bounty hunter ornament kit).
+ * Other untradeable modifications (the twisted ancestral colour kit, dark dye) and recolours made
+ * without a kit go to the grave as the item would.
  */
 function cosmeticOnDeath(query) {
   const entry = byResult.get(query?.item?.getId?.());
   if (!entry || entry.kit <= 0) return;
-  if (new core.Item(entry.kit, 1).isTradeable()) query.cosmetic = true;
+  if (entry.kit === core.ItemIdentifiers.BOUNTY_HUNTER_ORNAMENT_KIT || new core.Item(entry.kit, 1).isTradeable()) {
+    query.cosmetic = true;
+  }
 }
 
 /** Revert from the item's Revert/Dismantle option, returning the kit for entries that specify it. */

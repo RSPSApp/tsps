@@ -116,7 +116,7 @@ function player(stage = 0) {
 // Production NPC dispatch and transcript playback; this only establishes the
 // first conversation, not retail repeat or interruption semantics. Run this
 // file in its own process: node --test tests/dorgeshuun-optional-tour.test.cjs
-test('optional surface conversations use exact quest pages and preserve fallthrough', () => {
+test('optional surface conversations use exact quest pages and preserve fallthrough', async t => {
   let h, p, other;
   try {
   assert.equal(PluginManager.registerPluginCandidate({ pluginPath: 'NpcDialogues.plugin.js', pluginName: 'NpcDialoguesOptionalTour',
@@ -144,10 +144,11 @@ test('optional surface conversations use exact quest pages and preserve fallthro
   for (const [id, variant, expected, last, kind] of [[N.MILLIE_MILLER, 'a-tour-of-lumbridge-millie-miller', 'Hello Adventurers. Welcome to Mill Lane Mill. Can I help you?', "We don't have any of those things in Dorgesh-Kaan! They sound so interesting!"],
     [N.FATHER_URHNEY, 'a-tour-of-lumbridge-father-urhney', "Go away! I'm meditating!", "I don't care! I'm still meditating!"], [N.GEE, 'a-tour-of-lumbridge-gee-or-donie', 'Hello there, can I help you?', "You'd get used to it!"],
     [N.DONIE, 'a-tour-of-lumbridge-gee-or-donie', 'Hello there, can I help you?', "You'd get used to it!"],
-    [N.FRED_THE_FARMER, 'a-tour-of-lumbridge-fred-the-farmer', 'What are you doing on my land?', 'What are you doing on my land?'],
+    [N.FRED_THE_FARMER, 'a-tour-of-lumbridge-fred-the-farmer', 'What are you doing on my land?', 'What are you doing on my land?', 'menu'],
     [N.CANDLE_SELLER, 'a-tour-of-lumbridge-candle-seller', 'Do you want a lit candle for 1000 gold?', "Oh, that's good! And it's all down to the candles I sold! So do you want to buy another one?", 'menu'],
     [N.BORDER_GUARD, 'a-tour-of-lumbridge-border-guard', 'You may pass if you pay the toll, but your goblin friend must stay on this side.', "I don't think we need to go to Al Kharid anyway!", 'name'],
     [N.BORDER_GUARD_2, 'a-tour-of-lumbridge-border-guard', 'You may pass if you pay the toll, but your goblin friend must stay on this side.', "I don't think we need to go to Al Kharid anyway!", 'name']]) {
+    await t.test(`${variant} (npc ${id})`, () => {
     spoken.length = 0; starts.length = 0;
     assert.equal(talk(p, id).handled, true);
     assert.equal(starts.length, 1);
@@ -157,10 +158,22 @@ test('optional surface conversations use exact quest pages and preserve fallthro
     if (kind === 'name') p.manager.advance();
     assert.ok(spoken.some(line => line.player === p && line.text === expected), `quest line for ${id}`);
     assert.equal(p.manager.getCurrent()?.getNpcId?.(), id, 'the clicked actor supplies the chathead');
-    // The candle seller's transcript ends in a menu (buy another candle?); the menu's options are the generic dialogue
-    // runtime's and are not exercised here, only the lines up to it.
-    for (let i = 0; i < 30 && p.manager.getCurrent(); i++) p.manager.advance();
-    if (kind !== 'menu') assert.equal(p.manager.getCurrent(), undefined, 'conversation completes within 30 advances');
+    // Fred's and the candle seller's transcripts end in a menu: advance until the prompt is pending (stop there, so the
+    // menu is not skipped) and keep a trace of what the runner did, for a failure to be diagnosable.
+    const trace = [];
+    for (let i = 0; i < 30 && p.manager.getCurrent() && !(kind === 'menu' && core.MultiChatboxPrompt.getPending(p)); i++) {
+      p.manager.advance();
+      trace.push(`${p.manager.getCurrent()?.constructor?.name}/${core.MultiChatboxPrompt.getPending(p) ? 'prompt' : 'no-prompt'}`);
+    }
+    if (kind === 'menu') {
+      const pending = core.MultiChatboxPrompt.getPending(p);
+      const transcript = require('../data/definitions/npc-dialogues.json')[PAGE].variants[variant];
+      const choice = transcript.find(step => step.type === 'choice');
+      assert.ok(pending, `the transcript's closing menu is offered for ${id}; trace ${trace.join(' ')}; last spoken ${JSON.stringify(spoken.filter(line => line.player === p).slice(-2).map(line => line.text))}`);
+      assert.deepEqual(pending.options, choice.options.map(option => option.text), `the menu offers the transcript's options for ${id}`);
+    } else {
+      assert.equal(p.manager.getCurrent(), undefined, 'conversation completes within 30 advances');
+    }
     // A transcript line can carry the player's name ("[player name]"): only its fixed ends are compared.
     assert.ok(spoken.some(line => line.player === p && (kind === 'name' ? line.text.endsWith(last) : line.text === last)), `final quest line for ${id}`);
     const expectedLines = require('../data/definitions/npc-dialogues.json')[PAGE].variants[variant].filter(step => step.type === 'line').map(step => step.text);
@@ -176,6 +189,7 @@ test('optional surface conversations use exact quest pages and preserve fallthro
     assert.equal(talk(p, N.HANS).handled, true, 'ordinary next tour interaction is reachable');
     assert.ok(spoken.some(line => line.text === 'Hello. What are you doing here?'), 'Hans uses the tour conversation');
     h.clearChat(p);
+    });
   }
   assert.equal(p.attrs.get(BITS_KEY) ?? 0, 0, 'optional conversations do not change mandatory bits');
   spoken.length = 0; starts.length = 0;

@@ -728,7 +728,8 @@ class OlmRoom extends Raid.Room {
       state.poolKey = key;
       state.poolTick = this.raid.ticks;
       Shared.damage(player, Shared.random(3, 6));
-      CombatFactory.poisonEntity(player, 2);
+      // Severity, which poisonEntity takes: hit x 5 (the first hit is 2).
+      CombatFactory.poisonEntity(player, 10);
     }
   }
 

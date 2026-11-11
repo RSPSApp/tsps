@@ -6,7 +6,8 @@ module.exports = function registerWebweaverBowSpecialAttack(api) {
   const SPECIAL_ANIMATION = new Animation(9964);
   const SPECIAL_VFX = new Graphic(2354);
   const IMPACT_GRAPHIC = new Graphic(2355);
-  const POISON_POTENCY = 4;
+  // Severity, which poisonEntity takes: hit x 5 (the first hit is 4).
+  const POISON_POTENCY = 20;
 
   class WebweaverBowCombatMethod extends RangedCombatMethod {
     hits(character, target) {

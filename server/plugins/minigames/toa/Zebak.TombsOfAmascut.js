@@ -522,7 +522,8 @@ class ZebakRoom extends Raid.Room {
       const top = hits === 0 ? ACID.FIRST_MAX : ACID.MAX;
       const damage = Shared.random(this.maxHit(ACID.MIN), Math.floor(top * this.damageFactor()));
       player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.GREEN)]);
-      CombatFactory.poisonEntity(player, 2);
+      // Severity 10, a 2 first hit (rsprox_transcripts/223/00014.txt tick 445: poison varp 0 -> 10).
+      CombatFactory.poisonEntity(player, 10);
       this.failPerfect(player, "was hit by vomit damage.");
     }
     // Pools placed last tick become harmful this tick.

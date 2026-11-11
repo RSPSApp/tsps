@@ -8,7 +8,8 @@ module.exports = function registerAbyssalTentacleSpecialAttack(api) {
   const ACCURACY_MULTIPLIER = 1.25;
   const BIND_DURATION_TICKS = 8;
   const POISON_CHANCE = 0.5;
-  const POISON_POTENCY = 4;
+  // Severity, which poisonEntity takes: hit x 5 (the first hit is 4).
+  const POISON_POTENCY = 20;
   const POISON_ORB_TYPE = 1;
   const SLASH_BONUS_INDEX = 1;
   const ANIMATION = new Animation(1658);

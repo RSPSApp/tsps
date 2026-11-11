@@ -19,8 +19,6 @@ const COMBINE_WARNING = "<col=7f0000>Warning!</col><br>The tentacle will gradual
   + "won't be able to get the whip out again.<br>The combined item is not tradeable.";
 const COMBINE_SEQUENCE = 713; // human_casthighlvlalchemy
 const COMBINE_SOUND = 2320;
-/** varbit busy: 1 while the warning and menu are up, 0 on the answer (rsprox 237/01151.txt ticks 9416, 9420). */
-const BUSY_VARBIT = 12393;
 
 let core = null;
 let api = null;
@@ -40,19 +38,18 @@ function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlo
   // The cache also names quest and placeholder variants "Abyssal whip".
   if (whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE) return false;
 
-  // rsprox 237/01151.txt ticks 9416-9420: the warning's mesbox chat line (its <br> a space), busy on,
-  // the warning message box, then this menu; either answer clears busy, and Yes plays
-  // human_casthighlvlalchemy (713) and synth 2320, with no further chat line.
+  // rsprox 237/01151.txt ticks 9416-9420: the warning's mesbox chat line (its <br> a space), the warning
+  // message box, then this menu; Yes plays human_casthighlvlalchemy (713) and synth 2320, with no further
+  // chat line. Live also holds busy (12393) while the menu is up; it is left out because the menu has no
+  // close hook to clear it on a walk-away, teleport or logout.
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue, Animation } = core;
   const sender = player.getPacketSender();
   sender.sendTypedMessage(core.ChatType.MESBOX, COMBINE_WARNING.replace(/<br>/g, " "));
-  sender.sendVarbit(BUSY_VARBIT, 1);
   const chain = new DialogueChainBuilder();
   chain.add(new StatementDialogue(0, COMBINE_WARNING));
   chain.add(new ActionDialogue(1, {
     execute: () => api.sendMultiChatboxPrompt(player, "Are you sure you wish to do this?",
       "Yes, let the tentacle consume the whip.", () => {
-        player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
         const inventory = player.getInventory();
         if (inventory.getItems()[whipSlot] !== whip || inventory.getItems()[tentacleSlot] !== tentacle ||
           whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE ||
@@ -63,7 +60,7 @@ function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlo
         player.performAnimation(new Animation(COMBINE_SEQUENCE));
         player.getPacketSender().sendSoundEffect(COMBINE_SOUND, 1, 0, 255);
       },
-      "No, I'll keep my whip.", () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0)),
+      "No, I'll keep my whip.", () => {}),
   }));
   player.getDialogueManager().startDialogues(chain);
 }

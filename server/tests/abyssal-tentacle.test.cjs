@@ -325,9 +325,8 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     const { player, inventory } = setup();
     inventory.getItems()[0].setMeta({ unbankable: true });
     UseItemPacketListener.itemOnItem(player, reversed ? 1 : 0, reversed ? 0 : 1);
-    // rsprox 237/01151.txt ticks 9416-9418: the warning's mesbox chat line and busy on, the warning box, then the menu.
+    // rsprox 237/01151.txt ticks 9416-9418: the warning's mesbox chat line, the warning box, then the menu.
     assert.deepEqual(player.typed, [[PluginManager.getCoreApi().ChatType.MESBOX, WARNING.replace(/<br>/g, " ")]], "the box's mesbox chat line");
-    assert.deepEqual(player.varbits, [[12393, 1]], "busy while the warning and menu are up");
     assert.equal(player.getDialogueManager().getCurrent()?.getText?.(), WARNING);
     assert.equal(MultiChatboxPrompt.getPending(player), null, "the menu waits for the warning");
     player.getDialogueManager().advance();
@@ -335,13 +334,13 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     assert.equal(inventory.getItems()[0].getId(), ItemIds.ABYSSAL_WHIP, "confirmation has not consumed either ingredient");
     assert.equal(inventory.getItems()[1].getId(), ItemIds.KRAKEN_TENTACLE);
     assert.equal(choose(player, 1), true);
-    assert.deepEqual(player.varbits, [[12393, 1], [12393, 0]], "tick 9420: busy clears on the answer");
     assert.equal(inventory.getItems()[0].getId(), ItemIds.ABYSSAL_TENTACLE, "the clicked whip transforms even in a full inventory");
     assert.equal(inventory.getItems()[0].getMetaValue("unbankable"), true, "existing item restrictions survive");
     assert.equal(inventory.getItems()[1].getId(), -1, "only the clicked tentacle is consumed");
     assert.equal(inventory.getItems()[2].getId(), ItemIds.ABYSSAL_WHIP);
     assert.equal(inventory.getItems()[3].getId(), ItemIds.KRAKEN_TENTACLE);
     assert.equal(choose(player, 1), false, "a repeated confirmation cannot consume another pair");
+    assert.deepEqual(player.varbits, [], "no busy varbit: nothing to strand if the box is left");
     // Tick 9420: sequence 713 and synth 2320, and no chat line.
     assert.deepEqual(player.animations, [713]);
     assert.deepEqual(player.sounds, [2320]);
@@ -361,7 +360,7 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     const before = inventory.getItems().map(item => [item.getId(), item.getAmount()]);
     choose(player, change === "cancel" ? 2 : 1);
     assert.deepEqual(inventory.getItems().map(item => [item.getId(), item.getAmount()]), before, change);
-    assert.deepEqual(player.varbits.at(-1), [12393, 0], `${change}: busy clears on either answer`);
+    assert.deepEqual(player.varbits, [], `${change}: no varbit is left set`);
   }
 
   for (const [first, second] of [
@@ -377,7 +376,15 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     assert.equal(MultiChatboxPrompt.getPending(player), null, `invalid pair ${first}/${second}`);
     assert.equal(inventory.getItems()[0].getId(), first);
     assert.equal(inventory.getItems()[1].getId(), second);
-    assert.deepEqual([player.typed, player.varbits], [[], []], `invalid pair ${first}/${second} sends no line or busy`);
+    assert.deepEqual([player.typed, player.varbits], [[], []], `invalid pair ${first}/${second} sends no line or varbit`);
+  }
+  {
+    // Leaving the box (closing, walking off, teleporting) resets the dialogue without an answer.
+    const { player, inventory } = setup();
+    UseItemPacketListener.itemOnItem(player, 0, 1);
+    player.getDialogueManager().reset();
+    assert.deepEqual(player.varbits, [], "nothing is left set when the box is left");
+    assert.equal(inventory.getItems()[0].getId(), ItemIds.ABYSSAL_WHIP);
   }
   assert.deepEqual(hookFailures, [], "no item_on_item hook failed");
 });

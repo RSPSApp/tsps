@@ -150,8 +150,7 @@ The buff bar (interface 651) is mounted at login and drawn by the cache scripts.
 Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too.
 
 - **Not done**:
-  - Freeze: live sends no var and no `buff_bar_start` for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it. See [Buff timers read from a var](#buff-timers-read-from-a-var).
-  - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, the Staff of the dead special, the Sire stun, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
+  - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). The freeze, the Staff of the dead special, poison damage and the Sire stun are in [Buff timers started by buff_bar_start](#buff-timers-started-by-buff_bar_start). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
   - Modified stats overlay (148-151): now wired, see "Health and modified stats overlays" below.
 
 ## Rows owned by other plugins
@@ -490,8 +489,21 @@ The buff bar's script (5923) draws most buffs from a var, in steps set by the bu
 | 363 | Group Woodcutting Bonus | varp 4007, varbits 15347, 15348 | 96 while chopping a tree with the bonus (-1 when not), the players at it, and one less as the value shown (as recorded) |
 
 - **Not done**:
-  - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), the Staff of the dead special (142), the Sire stun (140), freeze (141), poison damage (186), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var. The bar keeps their timer in a client varc that only script 5927 writes, and only `buff_bar_start` (script 5931, a struct and a value) calls it; no cache script calls 5931, so only the server can start them. Most hold the `map_clock` tick the buff ends on (the freeze, "Bound.", struct 3092: varc 476, drawn as varc 476 − `map_clock`); the Sire stun stores the client clock it started at. They stay unsent, because live never sends them: across the rsprox captures `buff_bar_start` appears in 4 recordings only, always with 0 at login or on entering a house, clearing burn damage (struct 989) and bleeding (struct 4499). It is absent from all 45 freeze recordings (rev 226-235), the 31 with a stun and the 22 Tombs of Amascut ones, where a freeze sends only its message and a thrall only its varbits. The Wiki's Settings page lists these rows as buff bar settings, but none of them is driven on live in the recordings.
+  - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var. The bar keeps their timer in a client varc that only script 5927 writes, and only `buff_bar_start` (script 5931, a struct and a value) calls it; no cache script calls 5931, so only the server can start them. Most hold the `map_clock` tick the buff ends on (the freeze, "Bound.", struct 3092: varc 476, drawn as varc 476 − `map_clock`); the Sire stun stores the client clock it started at. They stay unsent, because live never sends them: across the rsprox captures `buff_bar_start` appears in 4 recordings only, always with 0 at login or on entering a house, clearing burn damage (struct 989) and bleeding (struct 4499). It is absent from all 45 freeze recordings (rev 226-235), the 31 with a stun and the 22 Tombs of Amascut ones, where a freeze sends only its message and a thrall only its varbits. The Wiki's Settings page lists these rows as buff bar settings, but none of them is driven on live in the recordings.
   - Desert water (244): not checked. Its buff (struct 340) reads no var in script 5923, so what drives it is unknown.
+
+## Buff timers started by buff_bar_start
+
+The freeze (141), Staff of the dead special (142), poison damage (186) and Abyssal Sire stun (140) buffs keep their timer in a client varc that only `buff_bar_start` (script 5931: a struct and a value) writes, through script 5927. `BuffBarStart.plugin.js` runs it from each effect's own state when the value changes, and at login with 0 for those not running, since the varcs outlive a logout. Script 5923 draws each against varp 3079 `map_clock`, the tick count the server sends every tick. `tests/buff-bar-start.test.cjs` checks each one.
+
+| Row | Effect | Struct, varc | Value |
+| --- | --- | --- | --- |
+| 140 | Abyssal Sire stun | 3091, varc 475 | any: the client stores its own clock and draws 30 seconds from it; a restun starts it again. It can't be cleared, so it runs out by itself |
+| 141 | Freeze, bind, snare, entangle ("Bound.") | 3092, varc 476 | the tick the freeze ends on (script 4678: varc − map_clock); 0 when it ends, or at death, which cancels it |
+| 142 | Staff of the dead special | 3093, varc 477 | the tick it started (script 5940 draws param 1541, 100 ticks, from it); 0 once the minute is up or the effect ends early |
+| 186 | Poison and venom damage | 3740 poison, 3741 venom, varc 983 | the tick the current 30-tick pulse started, so it shows the time to the next hit; shown only while varp 102 `poison` is a poison or venom value; 0 once cured |
+
+- Ours: live has not been recorded sending `buff_bar_start` for any of these (see the "Not done" note above, which still holds for the other varc buffs); the structs, varcs and durations are the cache's.
 
 ## Sailing helm and orb
 

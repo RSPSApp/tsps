@@ -505,6 +505,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BankSpace` | BankSpace | interface | yes | Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins. |
 | `BossHud` | BossHud | interface | yes | The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide, and the normal health overlay for any other NPC a player attacks. |
 | `BossKillCount` | BossKillCount | interface | yes | Sends boss kill-count lines as filterable spam when the player's All Settings row asks for it. |
+| `BuffBarStart` | Buff Bar Start | interface | yes | Starts the buff bar's freeze, Staff of the dead, poison and Abyssal Sire stun timers. |
 | `BuffTimers` | Buff Timers | interface | yes | Sends the effect countdowns the buff bar reads (potions, spells, ammo, group woodcutting) and the client's antifire, Tele Block and stamina infobox timers. |
 | `CameraShake` | CameraShake | interface | yes | Camera shake effects, sent only when the player's combat and atmospheric camera shake settings allow them. |
 | `Clans` | Clans | interface | yes | Clans: the Clan Hub, the player's own clan, // clan chat and the Your Clan tab. |

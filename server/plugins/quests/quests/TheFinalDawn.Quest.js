@@ -1709,8 +1709,10 @@ module.exports = function registerTheFinalDawnQuest(api) {
 
   function emptyPotatoSack(event) {
     const { player, itemId, option } = event;
-    if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return;
-    if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return;
+    // Outside the quest the sack is a plain Potatoes(3): return false so farming's Empty answers it (a name-based
+    // action that returns anything else counts as handled).
+    if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return false;
+    if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return false;
     event.handled = true;
     // The empty sack takes the sack's slot; the three potatoes need three more, or they were lost.
     if (player.getInventory().getFreeSlots() < POTATOES_PER_SACK) {

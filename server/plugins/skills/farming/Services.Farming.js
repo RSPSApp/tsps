@@ -700,6 +700,8 @@ function farmingItemAction(event) {
         }], ["Keep the compost", () => {}]]);
         return;
     }
+    if (action === "fill" && fillProduceContainer(player, event, item, name)) return;
+    if (action === "remove-one" && removeOneProduce(player, event, item, name)) return;
     for (const [produce, plural, capacity] of CONTAINERS) {
         if (!name.startsWith(`${plural}(`) || action !== "empty") continue;
         event.handled = true;
@@ -709,6 +711,56 @@ function farmingItemAction(event) {
         player.getInventory().addItem(new core.Item(Data.itemId(capacity === 10 ? "Empty sack" : "Basket")));
         return;
     }
+}
+
+/** The sack or basket family a container belongs to: capacity, and its fill count (0 when empty), or null. */
+function produceContainer(name) {
+    if (name === "Empty sack") return { capacity: 10, current: 0, rows: CONTAINERS.filter(([, , capacity]) => capacity === 10) };
+    if (name === "Basket") return { capacity: 5, current: 0, rows: CONTAINERS.filter(([, , capacity]) => capacity === 5) };
+    const row = CONTAINERS.find(([, plural]) => name.startsWith(`${plural}(`));
+    const current = row && Number(name.match(/\((\d+)\)$/)?.[1]);
+    return row && current > 0 ? { capacity: row[2], current, rows: [row] } : null;
+}
+/** The container in its own slot becomes `${plural}(count)`, or the empty sack/basket at 0. */
+function setContainerCount(player, item, plural, capacity, count) {
+    item.setId(Data.itemId(count > 0 ? `${plural}(${count})` : capacity === 10 ? "Empty sack" : "Basket"));
+    player.getInventory().refreshItems();
+}
+/**
+ * Fill: an empty sack takes up to 10 vegetables from the inventory, "cabbages first, then onions, and lastly potatoes"
+ * (Wiki, Empty sack), Draynor Manor cabbages excluded (Data.itemId resolves the plain Cabbage). An empty basket takes
+ * up to five of one fruit, silently, in its own slot (rsprox captures: recording 3276, strawberries). A filled one
+ * tops up with its own produce.
+ * Ours: the basket's fruit order (the Wiki gives none) and the full / no-produce messages (no capture or Wiki text).
+ */
+function fillProduceContainer(player, event, item, name) {
+    const container = produceContainer(name);
+    if (!container) return false;
+    event.handled = true;
+    const noun = container.capacity === 10 ? "sack" : "basket";
+    if (container.current >= container.capacity) { player.sendMessage(`The ${noun} is full.`); return true; }
+    const inventory = player.getInventory();
+    const rows = container.capacity === 10 && container.current === 0 ? [...container.rows].reverse() : container.rows;
+    const row = rows.find(([produce]) => inventory.getAmount(Data.itemId(produce)) > 0);
+    if (!row) {
+        player.sendMessage(`You don't have any ${container.current ? container.rows[0][1].toLowerCase() : container.capacity === 10 ? "vegetables" : "fruit"} to put in the ${noun}.`);
+        return true;
+    }
+    const [produce, plural, capacity] = row;
+    const amount = Math.min(capacity - container.current, inventory.getAmount(Data.itemId(produce)));
+    inventory.deleteNumber(Data.itemId(produce), amount);
+    setContainerCount(player, item, plural, capacity, container.current + amount);
+    return true;
+}
+/** Remove-one: one piece of produce comes out and the container drops a count. Needs a free slot (inventory.full()). */
+function removeOneProduce(player, event, item, name) {
+    const container = produceContainer(name);
+    if (!container || container.current === 0) return false;
+    event.handled = true;
+    const [produce, plural, capacity] = container.rows[0];
+    if (!Patches.give(player, Data.itemId(produce))) return true;
+    setContainerCount(player, item, plural, capacity, container.current - 1);
+    return true;
 }
 
 Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep, settingClicked, settingsLogin });

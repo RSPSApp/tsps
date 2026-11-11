@@ -5,6 +5,8 @@ Design for Sailing in tsps: player-owned boats that sail the main world as world
 **Status:** the first PR (engine, raft and saving) is implemented. What live OSRS sends, from wiki pages and live captures, is recorded in [the OSRS reference](sailing-osrs-reference.md).
 
 The `Sailing` plugin switch controls the boat, port, crew and sailing activity modules.
+Remove former module switches such as `SailingHelm` or `SailingCommands` from `world.local.json`.
+Use `"plugins": { "Sailing": false }` to turn off Sailing on that world.
 
 ## Scope
 

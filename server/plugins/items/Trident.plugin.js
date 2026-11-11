@@ -9,7 +9,7 @@
  * least 4), 75 / 78 Magic to wield. 2,500 charges, 20,000 for the (e) versions. A charge is a
  * death rune, a chaos rune, five fire runes and 10 coins (seas) or a Zulrah's scale (swamp);
  * uncharging returns the runes and scales but not the coins. The swamp trident venoms 1 in 4
- * successful hits (a serpentine helm makes it certain, SerpentineHelm.Sailing.js).
+ * successful hits (a serpentine helm makes it certain, SerpentineHelm.plugin.js).
  *
  * The cast (rsprox captures 471-476, 4151, 4288, revisions 233-239): human_castwave_staff_walkmerge
  * (11430), slayer_tots_casting (1251, height 92) and synth sound 178; slayer_tots_projectile (1252)

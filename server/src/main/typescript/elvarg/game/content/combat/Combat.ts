@@ -279,6 +279,8 @@ export class Combat {
         this.cycleState = null;
         if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());
         this.character.getMovementQueue().reset();
+        // A retaliation chase isn't the player's click: it follows the run setting.
+        if (autoRetaliation) this.character.getMovementQueue().endClickRunOverride();
         this.character.setFollowing(null);
         this.faceTarget(target, true);
         if (this.character.isPlayer()) {

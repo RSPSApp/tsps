@@ -120,6 +120,14 @@ export class MovementQueue {
     private lastSentDestY = Number.MIN_SAFE_INTEGER;
     /** Ctrl-click run choice for the current path only; null follows the run setting. */
     private runOverride: boolean | null = null;
+    /**
+     * A Ctrl-clicked interaction's run choice (an NPC, object, ground item or player); null
+     * follows the run setting. It holds through the interaction's re-paths (a walking NPC, a
+     * followed player, a fight's chase) and ends once the player is idle, or at the next click.
+     */
+    private clickRunOverride: boolean | null = null;
+    /** This turn's interaction click's run choice, until its walk starts; undefined when none. */
+    private pendingClickRunOverride: boolean | null | undefined = undefined;
 
     /**
      * Creates a walking queue for the specified character.
@@ -406,6 +414,8 @@ export class MovementQueue {
         }
         this.reset();
         this.walkToReset();
+        // A walk click replaces an interaction's run choice.
+        this.clickRunOverride = null;
         if (this.player && require("../../../plugins/PluginManager").PluginManager.emitWalkRoute({
             player: this.player,
             destination: { x: destination.getX(), y: destination.getY(), z: destination.getZ() },
@@ -801,6 +811,7 @@ export class MovementQueue {
             if (player.getRunEnergyUnits() <= 0) {
                 player.setRunEnergyUnits(0);
                 this.runOverride = null;
+                this.clickRunOverride = null;
                 player.setRunning(false);
                 player.getPacketSender().sendRunStatus();
             }
@@ -837,6 +848,12 @@ export class MovementQueue {
         this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
         this.runOverride = null;
+        // clickRunOverride outlives a reset: interactions reset the queue on every re-path. A
+        // click's walk starts with a reset, which is where its run choice takes over.
+        if (this.pendingClickRunOverride !== undefined) {
+            this.clickRunOverride = this.pendingClickRunOverride;
+            this.pendingClickRunOverride = undefined;
+        }
         this.points.clear();
         this.followX = -1;
         this.followY = -1;
@@ -1075,9 +1092,40 @@ export class MovementQueue {
         return this.points.length;
     }
 
+    /**
+     * Sets the run choice of an interaction click (see clickRunOverride); null follows the run setting.
+     * It takes effect when the click starts its walk (every walk to a target resets the queue
+     * first), so a click that walks nowhere leaves a walk in progress as it is.
+     */
+    public setClickRunOverride(run: boolean | null): void {
+        this.pendingClickRunOverride = run;
+    }
+
+    /** Drops a click's run choice that no walk took up this turn. */
+    public dropPendingClickRunOverride(): void {
+        this.pendingClickRunOverride = undefined;
+    }
+
+    /** Ends an interaction click's run choice, for a walk the click didn't start (a retaliation chase). */
+    public endClickRunOverride(): void {
+        this.clickRunOverride = null;
+        this.pendingClickRunOverride = undefined;
+    }
+
+    /**
+     * Ends an interaction click's run choice once the player is idle: no route, follow, fight
+     * or walk-to interaction left. Checked at the end of every turn, moving or not.
+     */
+    public endClickRunOverrideWhenIdle(): void {
+        if (this.clickRunOverride === null || this.points.length > 0) return;
+        if (this.character.getFollowing() != null || this.character.getCombat().getTarget() != null) return;
+        if (this.character.isPlayer() && TaskManager.hasWalkToTask(this.character.getIndex())) return;
+        this.clickRunOverride = null;
+    }
+
     public isRunToggled(): boolean {
         return this.character.isPlayer()
-            ? this.runOverride ?? (this.character as Player).isRunningReturn()
+            ? this.runOverride ?? this.clickRunOverride ?? (this.character as Player).isRunningReturn()
             : this.character.getAsNpc().getMovementSteps() > 1;
     }
 

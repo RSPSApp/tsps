@@ -891,8 +891,10 @@ export class MovementQueue {
 
         const playerFollowingPlayer = this.character.isPlayer() && following.isPlayer();
 
-        // A pet does not follow its owner into an area that bars followers (a canoe ride, a boss lair):
-        // it waits where it is, still following, and catches up once the owner is somewhere it may go.
+        // A pet does not follow its owner into an area that bars followers (a canoe ride): it waits where it
+        // is, still following, and catches up once the owner is somewhere it may go. An area that only
+        // refuses dropping a pet (allowSummonPet) still takes a pet already following in: Wiki (Pet), the
+        // Chambers of Xeric "with a pet already following you" and the Gauntlet's visible followers.
         if (this.petBarredFrom(following)) {
             this.reset();
             return;
@@ -1033,7 +1035,7 @@ export class MovementQueue {
             return false;
         }
         const area: any = following.getArea();
-        return typeof area?.allowSummonPet === "function" && area.allowSummonPet(following) === false;
+        return typeof area?.barsFollowers === "function" && area.barsFollowers(following) === true;
     }
 
     private tryTeleportPetToFollower(following: Mobile): boolean {

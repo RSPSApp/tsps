@@ -63,6 +63,11 @@ function areaClass() {
       return false;
     }
 
+    /** No follower comes in either (Wiki: Soul Wars): a following pet waits outside. */
+    barsFollowers() {
+      return true;
+    }
+
     /** The instance's copy of a template tile. */
     at([x, y, z]) {
       return this.tile(x - this.origin[0], y - this.origin[1], z ?? 0);

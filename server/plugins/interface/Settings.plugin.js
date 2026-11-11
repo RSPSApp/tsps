@@ -192,9 +192,19 @@ const COLOUR_RESETS = {
   107: varpsOf(OPAQUE_CHAT_COLOURS), 108: varpsOf(TRANSPARENT_CHAT_COLOURS), 109: varpsOf(SPLIT_CHAT_COLOURS),
   228: [3409, 3410, 3411, 3412], 489: [5235, 5236, 5401, 5237],
 };
-const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 2;
+// The picker (colour_pallet) opens as an overlay in All Settings' popup layer, which script 4185
+// sizes it against. Its palette swatches and custom-colour buttons need op1 to be clickable;
+// a swatch or Ok sends the colour as a count reply, Cancel or close sends CANCEL_COLOUR.
+const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 9;
 const SETTINGS_COLOUR_INTERFACE = 288;
 const SETTINGS_COLOUR_SCRIPT = 4185;
+const SETTINGS_COLOUR_PALETTE = (SETTINGS_COLOUR_INTERFACE << 16) | 11;
+const SETTINGS_COLOUR_PALETTE_LAST = 152;
+const SETTINGS_COLOUR_CUSTOM = (SETTINGS_COLOUR_INTERFACE << 16) | 8;
+const SETTINGS_COLOUR_CUSTOM_LAST = 4;
+// settings_colour_modal_opened: 1 while the picker is open.
+const SETTINGS_COLOUR_MODAL_OPENED_VARBIT = 12284;
+const OVERLAY = 1;
 const CANCEL_COLOUR = 2147483647;
 const pendingColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
@@ -772,12 +782,16 @@ function openColour(player, settingId) {
   const sender = player.getPacketSender();
   const [varp, defaultColour] = COLOUR_SETTINGS[settingId];
   const stored = sender.getVarp(varp);
-  sender.sendSubInterface(SETTINGS_COLOUR_MODAL_UID, SETTINGS_COLOUR_INTERFACE, 0);
+  sender.sendVarbit(SETTINGS_COLOUR_MODAL_OPENED_VARBIT, 1);
+  sender.sendSubInterface(SETTINGS_COLOUR_MODAL_UID, SETTINGS_COLOUR_INTERFACE, OVERLAY);
+  sender.sendInterfaceFlagsRange(SETTINGS_COLOUR_PALETTE, 0, SETTINGS_COLOUR_PALETTE_LAST, TRANSMIT_OP1);
+  sender.sendInterfaceFlagsRange(SETTINGS_COLOUR_CUSTOM, 0, SETTINGS_COLOUR_CUSTOM_LAST, TRANSMIT_OP1);
   sender.sendClientScript(SETTINGS_COLOUR_SCRIPT, SETTINGS_COLOUR_MODAL_UID, stored > 0 ? stored - 1 : defaultColour);
   const action = { acceptsZero: true, acceptsNegative: true, execute(value) {
     if (pendingColours.get(player) !== action) return;
     if (player.getEnteredAmountAction && player.getEnteredAmountAction() !== action) return;
     pendingColours.delete(player);
+    sender.sendVarbit(SETTINGS_COLOUR_MODAL_OPENED_VARBIT, 0);
     sender.closeSubInterface(SETTINGS_COLOUR_MODAL_UID);
     if (value === CANCEL_COLOUR) return;
     if (!Number.isInteger(value) || value < -1 || value > 0xffffff) return;
@@ -804,6 +818,7 @@ function endSettingsSearch({ player, interfaceId }) {
     const action = pendingColours.get(player);
     pendingColours.delete(player);
     if (action && player.getEnteredAmountAction?.() === action) player.setEnteredAmountAction(null);
+    if (action) player.getPacketSender().sendVarbit(SETTINGS_COLOUR_MODAL_OPENED_VARBIT, 0);
   }
   if (interfaceId !== ALL_SETTINGS_INTERFACE_ID) return;
   player.getPacketSender()

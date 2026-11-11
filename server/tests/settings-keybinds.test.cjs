@@ -70,6 +70,7 @@ function recordingPlayer() {
     getVarbit: (id) => vars.get(`varbit ${id}`) ?? 0,
     getVarp: (id) => vars.get(`varp ${id}`) ?? 0,
     sendClientScript: (id) => { sent.push(`script ${id}`); return sender; },
+    sendInterfaceFlagsRange: () => sender,
   };
   return { sent, getPacketSender: () => sender, setAttribute: (k, v) => attributes.set(k, v), getAttribute: (k) => attributes.get(k) };
 }

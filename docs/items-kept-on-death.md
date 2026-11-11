@@ -7,9 +7,18 @@ How `PlayerDeathTask` (`server/src/main/typescript/elvarg/game/task/impl/PlayerD
 - **How many:** 3, or 0 when skulled; Protect Item adds one (a red skull keeps none).
 - **Which:** the most valuable items carried, **tradeable and untradeable alike**. An untradeable item among them takes one of the slots. Before, untradeable items were left out of the ranking, so a cheaper tradeable item took the slot: with Protect Item and a skull, a 125k light ballista was kept over a 4.6m volatile Nightmare staff.
 - **Ranked by:** each item's Grand Exchange guide price (`item-prices.json`), or its high alchemy value when it has no price (Wiki: "the highest value determined first by effective Grand Exchange value, and then by alchemy value"). A stack is ranked by one item's price, as before. Before, items were ranked by their cache store value, which can run the other way: unskulled with a rune platebody, platelegs and kiteshield (store 54,400-65,000) and ranger boots, a berserker ring and dragon boots (store 200-20,000, but each worth more on the Grand Exchange), a death kept the rune armour.
-- **Untradeable items outside the kept ones** go to the player's grave on a PvM death ([gravestones](gravestones.md)). On a PvP death, or with graves turned off, they are still kept, as before, unless they split (below) or break ([broken items](broken-items.md)).
+- **Untradeable items outside the kept ones** go to the player's grave on a PvM death ([gravestones](gravestones.md)). On a PvP death, or with graves turned off, they are still kept, as before, unless they split (below), break ([broken items](broken-items.md)) or are never kept (below).
 - **Ornamented items** are kept beyond the count on a non-PvP death outside the Wilderness unless the player turns "Death protection from cosmetics" off ([settings](settings.md#death-protection-from-cosmetics-row-386)).
 - **Preset items** (from `::presets`, flagged with item metadata) are always lost and never take a kept slot. That's by design: they're free.
+
+## Never kept on death (Wiki: Items Kept on Death, "Items that are never kept")
+
+On a PvP death these untradeables are destroyed unless they are among the kept items: they are neither dropped for the killer nor given back.
+
+- **Rune pouch and divine rune pouch** (`runepouch/Death.RunePouch.js`): the runes inside still drop for the killer ([rune pouch](rune-pouch.md)).
+- **The rest** (`NeverKeptOnDeath.plugin.js`, names in `plugins/items/data/never-kept-on-death.json`): the Chronicle, League trophies, and the items with no ground state: the Flamtaer bag, Lunar equipment and staff, the Ring of Charos, Steel gauntlets and their enchanted forms, and the magic butterfly net. Items with a death rule of their own (looting bag, jar generator, salamanders) keep it.
+- **PvM deaths are left alone on purpose:** these items still go to the grave there, as before. The Wiki's list has no PvP qualifier for them, so it may apply to every unsafe death; that is a separate change.
+- **Not covered:** the clue box and the degraded amulet of the damned, which the Wiki also lists, and a rune pouch can still take a kept slot on a PvP death.
 
 ## The Items Kept on Death interface (rsprox captures)
 

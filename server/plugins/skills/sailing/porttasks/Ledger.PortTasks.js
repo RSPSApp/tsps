@@ -169,17 +169,19 @@ function returnToSource(player, crate, dock) {
 function depositWarning(player, crate, dock) {
   const { DialogueChainBuilder, StatementDialogue, OptionDialogue, ChatType, PluginManager } = common.core();
   const text = depositWarningText(crate);
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  const sender = player.getPacketSender();
+  const owner = {};
+  sender.sendTypedMessage(ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, text))
     .add(new OptionDialogue(1, {
       executeOption: (option) => {
+        sender.closeChatboxFor(owner);
         const choice = Number(option);
         if (choice === 2) PluginManager.emitCustomEvent("settings:set", { player, settingId: DEPOSIT_WARNING_SETTING, value: 1 });
         if (choice === 1 || choice === 2) returnToSource(player, crate, dock);
-        else player.getPacketSender().sendInterfaceRemoval();
       },
-    }, ...DEPOSIT_OPTIONS).setTitle(DEPOSIT_TITLE)));
+    }, ...DEPOSIT_OPTIONS).setTitle(DEPOSIT_TITLE)), owner);
 }
 
 function depositWarningText(crate) {

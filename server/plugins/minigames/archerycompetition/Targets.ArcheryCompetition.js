@@ -48,9 +48,17 @@ function fireAt({ player, objectId, object }) {
   player.sendMessage(shot.caption);
 }
 
+function routeBeforeRound(event) {
+  const session = Session.sessionOf(event.player);
+  if (event.objectId !== targetObjectId || (session && !session.finished)) return;
+  const here = event.player.getLocation();
+  event.destination = { x: here.getX(), y: here.getY(), z: here.getZ() };
+}
+
 module.exports = function registerTargets(pluginApi) {
   init(pluginApi);
   api.onObjectInteraction(TARGET_NAME, { "Fire-at": fireAt });
+  api.onObjectRoute(routeBeforeRound);
 };
 
-Object.assign(module.exports, { _test: { init, fireAt } });
+Object.assign(module.exports, { _test: { init, fireAt, routeBeforeRound } });

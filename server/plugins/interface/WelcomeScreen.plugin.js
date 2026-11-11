@@ -51,7 +51,8 @@ function play({ player }) {
   if (!visible.delete(player)) return false;
   const root = api.core.resolveGameframeRoot(player);
   for (const packet of api.core.encodeGameframeBootstrap(player.getUsername(), root,
-      player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true, api.core.GameConstants.WORLD_TYPE.label)) {
+      player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true, api.core.GameConstants.WORLD_TYPE.label,
+      !api.core.dataOrbsHidden(player))) {
     player.getSession().sendClientPacket(packet);
   }
   // The saved spellbook selector and quest varps were sent at login and survive a root swap.

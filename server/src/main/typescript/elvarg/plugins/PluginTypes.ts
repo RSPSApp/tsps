@@ -1624,6 +1624,7 @@ export interface PluginCoreApi {
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;
   resolveGameframeRoot: typeof import("../net/protocol/ClientProtocol").resolveGameframeRoot;
   orbsGroupFor: typeof import("../net/protocol/ClientProtocol").orbsGroupFor;
+  dataOrbsHidden: typeof import("../net/protocol/ClientProtocol").dataOrbsHidden;
   encodeFinePosition: typeof import("../net/protocol/ClientProtocol").encodeFinePosition;
   Boundary: any;
   PolygonalBoundary: any;

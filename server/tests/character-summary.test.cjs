@@ -127,6 +127,7 @@ test("dismissing the real welcome screen restores the custom summary after its s
       GameConstants: { WORLD_TYPE: { label: "REGULAR" } },
       Wilderness: { isInLocation: () => false },
       resolveGameframeRoot: () => 161,
+      dataOrbsHidden: () => false,
       encodeGameframeBootstrap: () => [{ targetUid: contentUid, groupId: 712 }],
     },
     getPluginConfig: (_key, fallback) => fallback,

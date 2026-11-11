@@ -315,6 +315,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     "returned from whence they came. But where did they come from?",
   ];
   const NECROPOLIS_RUBBLE = ObjectIdentifiers.RUBBLE_60; // 44003, climbable
+  const RUBBLE_CROSS_TICKS = 2;
+  const RUBBLE_CROSS_CYCLES = 60;
+  const RUBBLE_CROSS_ANIMATION = 839; // human_walk_style
+  const RUBBLE_CROSS_SOUND = 2454;
   const BLOCKED_ENTRY = 44008; // toa_entrance_blocked, Inspect at the Jaltevas Pyramid
   // Quest Helper DigStep and the Wiki: one tile north of the southern ritual pillar.
   const CHEST_DIG_TILE = new Location(3411, 2786, 0);
@@ -1752,8 +1756,17 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function climbNecropolisRubble(player) {
     if (quest.getStage(player) < STAGE_NECROPOLIS) return;
-    // Capture 101 ticks 9141/10674: the rubble crosses east-west, not south into the wall.
-    player.moveTo(new Location(player.getLocation().getX() > 3348 ? 3347 : 3349, 2759, 0));
+    // Capture 101 ticks 9141/10674: the rubble crosses east-west, not south into the wall. Tick 9141:
+    // busy, an exactmove from 3349 to 3347 over 60 cycles with human_walk_style (839), and sound
+    // 2454 (3 loops, delay 4); the player is free again two ticks later.
+    const { ForceMovement, ForceMovementTask, TaskManager } = api.core;
+    const fromX = player.getLocation().getX() > 3348 ? 3349 : 3347;
+    const from = new Location(fromX, 2759, 0);
+    if (!player.getLocation().equals(from)) player.moveTo(from);
+    const west = fromX === 3349;
+    TaskManager.submit(new ForceMovementTask(player, RUBBLE_CROSS_TICKS,
+      new ForceMovement(from.clone(), new Location(west ? -2 : 2, 0, 0), 0, RUBBLE_CROSS_CYCLES, west ? 3 : 1, RUBBLE_CROSS_ANIMATION)));
+    player.getPacketSender().sendSoundEffect(RUBBLE_CROSS_SOUND, 3, 4, 1);
     if (!entryInspected(player)) {
       flag(player, ENTRY_INSPECTED_ATTRIBUTE, true);
       if (quest.getStage(player) < STAGE_ENTRY_INSPECTED) setStage(player, STAGE_ENTRY_INSPECTED);

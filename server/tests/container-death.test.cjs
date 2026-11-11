@@ -32,6 +32,7 @@ const CONTAINERS = [
     name: "rune pouch", setting: 354, id: 12791, contents: [[AIR_RUNE, 100], [LAW_RUNE, 50]],
     fill: (player) => player.setAttribute("rune-pouch:runes", [[AIR_RUNE, 100], [LAW_RUNE, 50], null, null]),
     stored: (player) => (player.getAttribute("rune-pouch:runes") ?? []).filter(Boolean),
+    lostInPvp: true,
   },
   {
     name: "small pouch", setting: 358, id: 5509, contents: [[PURE_ESSENCE, 3]],
@@ -138,6 +139,8 @@ function die(t, container, { kept, kind, setting = false }) {
     PlayerDeathTask.returnKeptItems(player, PlayerDeathTask.dropItems(player, killer, player.getLocation()));
   }
   const after = owned(player, container, floor);
+  // A PvP death destroys a lost rune pouch; nothing else is created or destroyed.
+  if (kind === "pvp" && !kept && container.lostInPvp) before.delete(container.id);
   assert.deepEqual([...after.all].sort(), [...before].sort(), "nothing created or destroyed");
   t.mock.restoreAll();
   return { player, after };
@@ -199,8 +202,9 @@ for (const container of CONTAINERS) {
     for (const kept of [true, false]) {
       test(named(`${kept ? "kept" : "lost"} on a PvP death, its contents go to the killer`), (t) => {
         const { after } = die(t, container, { kept, kind: "pvp", setting });
-        // Untradeable, the container stays with the player either way.
-        assert.equal(amount(after.carried, container.id), 1);
+        // Untradeable, the container stays with the player either way, except a lost rune pouch: it is never kept
+        // on a PvP death (Wiki: Items Kept on Death).
+        assert.equal(amount(after.carried, container.id), !kept && container.lostInPvp ? 0 : 1);
         assert.equal(after.grave.size, 0, "a PvP death makes no grave");
         assert.equal(held(after.stored, container), 0);
         assert.equal(held(after.carried, container), 0, "the container is empty");

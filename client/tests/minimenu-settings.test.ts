@@ -25,6 +25,7 @@ const world = [
     entry("Take", MenuTargetType.OBJ),
     entry("Examine", MenuTargetType.OBJ),
     entry("Use", MenuTargetType.NPC, { targetName: "Bones -> Thing" }),
+    entry("Use", MenuTargetType.LOC, { targetName: "Crevice" }),
     entry("Follow", MenuTargetType.PLAYER),
     entry("Trade with", MenuTargetType.PLAYER),
 ];
@@ -43,7 +44,7 @@ assert.ok(all.includes("Talk-to") && all.includes("Follow (player)"));
 const noEntity = options(modes(MINIMENU_BLOCK_ENTITY));
 for (const gone of ["Talk-to", "Chop down", "Take"]) assert.ok(!noEntity.includes(gone), `${gone} is an entity option`);
 assert.equal(noEntity.filter((o) => o === "Examine").length, 2, "examine has a filter of its own");
-assert.ok(noEntity.includes("Use"), "Use has a filter of its own");
+assert.equal(noEntity.filter((o) => o === "Use").length, 1, "item use has a filter of its own, a loc's own Use op does not");
 assert.ok(noEntity.includes("Walk here") && noEntity.includes("Follow (player)"));
 
 const noPlayer = options(modes(MINIMENU_BLOCK_PLAYER));

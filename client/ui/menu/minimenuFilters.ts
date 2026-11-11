@@ -15,9 +15,17 @@ function blocked(blockModes: readonly number[] | undefined, slot: number): boole
     return blockModes?.[slot] === 0;
 }
 
-/** The block slot a world menu entry falls under, or -1. Use and Cast have filters of their own. */
+/**
+ * A "Use <item> -> <target>" entry, built while an item is selected. A loc or NPC whose own op is
+ * named Use is an entity option, not one of these.
+ */
+function isSelectedItemUse(entry: OsrsMenuEntry): boolean {
+    return entry.option === "Use" && entry.targetName.includes(" -> ");
+}
+
+/** The block slot a world menu entry falls under, or -1. Item use and Cast have filters of their own. */
 function blockSlotOf(entry: OsrsMenuEntry): number {
-    if (entry.spellCast || entry.option === "Use") return -1;
+    if (entry.spellCast || isSelectedItemUse(entry)) return -1;
     if (entry.option === "Examine" && ENTITY_TARGETS.has(entry.targetType)) return MINIMENU_BLOCK_EXAMINE;
     if (ENTITY_TARGETS.has(entry.targetType)) return MINIMENU_BLOCK_ENTITY;
     if (entry.targetType === MenuTargetType.PLAYER) return MINIMENU_BLOCK_PLAYER;

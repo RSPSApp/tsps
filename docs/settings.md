@@ -234,7 +234,7 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 
 ## Chat colours
 
-The chat colour rows (type 9) open the colour picker as the quest-list rows do (modal 288, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
+The chat colour rows (type 9) open the colour picker as the quest-list rows do (overlay 288 in the settings popup layer 134:9, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
 
 | Chat type | Opaque | Transparent |
 | --- | --- | --- |
@@ -278,7 +278,9 @@ The renderer reads text/shadow settings and colour varps, recomputes row heights
 scroll extents and dragger bounds, and preserves the native scrollbar. CS2 2633 uses
 fonts494/495 for small/large. Reader4181 maps settings224/225/226/227 to varps
 3410/3409/3411/3412, stored as RGB+1; zero selects the struct default. The server
-mounts native colour modal288 in134:2 and calls4185. Scripts4208 →4209 →614
+mounts colour picker 288 as an overlay in the settings popup layer (134:9), sets
+varbit 12284 while it is open, enables op1 on its palette (288:11) and custom buttons
+(288:8), and calls 4185 with that layer. Scripts4208 →4209 →614
 return RGB via resume_countdialog;2147483647 cancels and -1 selects default.
 Amount replies allow zero/negative only when the prompt opts in; plugin validation
 accepts -1..0xffffff. Setting228 resets all four colours. Preferences persist through

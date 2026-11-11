@@ -80,24 +80,30 @@ function colourReaderVarps() {
 function allSettings() {
   const buttons = new Map();
   const logins = [];
+  const events = new Map();
   const ids = (id) => (Array.isArray(id) ? id : [id]);
   const api = {
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onPlayerLogin: (handler) => logins.push(handler),
+    onCustomEvent: (name, handler) => events.set(name, handler),
     core: { CacheDefinitions, orbsGroupFor: require('../dist/net/protocol/ClientProtocol').orbsGroupFor },
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
   const attributes = new Map();
   const varps = new Map();
   const scripts = [];
+  const varbits = new Map();
+  const opened = [];
+  const flags = [];
   const sender = {
-    sendVarbit: () => sender,
+    sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
     sendConfig: (id, value) => { varps.set(id, value); return sender; },
     getVarbit: () => 0,
     getVarp: (id) => varps.get(id) ?? 0,
     sendClientScript: (id, ...args) => { scripts.push([id, ...args]); return sender; },
-    sendSubInterface: () => sender,
+    sendSubInterface: (target, id, type) => { opened.push([target, id, type]); return sender; },
     closeSubInterface: () => sender,
+    sendInterfaceFlagsRange: (uid, from, to, value) => { flags.push([uid, from, to, value]); return sender; },
   };
   let amount;
   const player = {
@@ -113,11 +119,14 @@ function allSettings() {
     player.setAttribute('settings-view', category);
     amount = undefined;
     scripts.length = 0;
+    opened.length = 0;
+    flags.length = 0;
     row({ player, slot });
     return { amount, picker: scripts.find(([id]) => id === COLOUR_PICKER_SCRIPT) };
   };
   const restore = logins.find((login) => login.name === 'restoreSettings');
-  return { player, varps, click, restore };
+  const closed = (interfaceId) => events.get('interface:closed')({ player, interfaceId });
+  return { player, varps, varbits, opened, flags, click, restore, closed };
 }
 
 const colourRows = [...OPAQUE, ...TRANSPARENT, ...SPLIT];
@@ -161,6 +170,24 @@ test('each row opens the picker on its default, saves RGB+1 in the varp the cach
   const { amount } = click(87);
   amount.execute(-1);
   assert.equal(varps.get(readerVarps.get(87)), 0, 'Default selects the struct default');
+});
+
+test('the picker opens as live opens it: an overlay in the settings popup layer, its buttons clickable', () => {
+  const POPUP = (134 << 16) | 9;
+  const OP1 = 1 << 1;
+  const { varbits, opened, flags, click, closed } = allSettings();
+  const { amount, picker } = click(87);
+  assert.deepEqual(opened, [[POPUP, 288, 1]], 'colour_pallet (288) opens as an overlay in settings:popup (134:9)');
+  assert.equal(picker[1], POPUP, 'script 4185 lays the picker out in that layer');
+  assert.deepEqual(flags, [[(288 << 16) | 11, 0, 152, OP1], [(288 << 16) | 8, 0, 4, OP1]], 'the palette and custom-colour buttons take op1');
+  assert.equal(varbits.get(12284), 1, 'settings_colour_modal_opened is set while it is open');
+  amount.execute(0x00d68b);
+  assert.equal(varbits.get(12284), 0, 'and cleared once a colour is chosen');
+  click(87).amount.execute(CANCEL);
+  assert.equal(varbits.get(12284), 0, 'or on Cancel');
+  click(87);
+  closed(134);
+  assert.equal(varbits.get(12284), 0, 'or when All Settings closes under it');
 });
 
 test('chosen colours come back at login', () => {

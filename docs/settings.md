@@ -567,7 +567,7 @@ The rows sit on varp 4503. The cache's own scripts apply them in the client: a c
 | Minimenu spacing (slider) | 393 | varbit 11523 `settings_minimenu_spacing` | game option 14, 0-100; each row is that many pixels taller |
 | Minimenu spacing value (number) | 394 | varbit 11523 | asks for the spacing, then runs 7460 with it |
 | Reset minimenu spacing (button) | 395 | varbit 11523 = 0 | runs 7460 with 0 |
-| Minimenu scrollbar | 419 | varbit 71 `settings_minimenu_scrollbar_toggle` | a menu taller than the screen shows a scrollbar |
+| Minimenu scrollbar | 419 | varbit 71 `settings_minimenu_scrollbar_toggle`, ticked while 0 (param 1084), so on for a new account | the client's scroll flag (`1 - varbit`); a menu taller than the screen then shows a scrollbar |
 | Disable entity options | 398 | varbit 11526 `settings_minimenu_filter_entity` | block slot 2: NPC, object and ground item options leave the world menu |
 | Disable player options | 402 | varbit 11530 `settings_minimenu_filter_player` | block slot 6: player options leave it |
 | Disable examine | 405 | varbit 11533 `settings_minimenu_filter_examine` | block slot 9: Examine on NPCs, objects and ground items leaves it |

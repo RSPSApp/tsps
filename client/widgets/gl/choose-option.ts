@@ -105,8 +105,9 @@ const MENU_HIT_TEST_INSET_PX = 1; // emulate strict comparisons via 1px inset
 /**
  * Interfaces > Minimenu options, as the cache's scripts leave them in the client: game option 13
  * is the entry opened under the mouse (0 off, else entry 1-8; scripts 7458, 7459), game option 14
- * the spacing between entries (0-100; script 7460), and the scroll flag the scrollbar toggle
- * (script 728). Script 7468 applies all three at login.
+ * the spacing between entries (0-100; script 7460), and the scroll flag the scrollbar row (script
+ * 728). Script 7468 applies all three at login. The flag is set while varbit 71 is 0: the row is
+ * ticked then, so a new account has the scrollbar.
  */
 export type ChooseOptionMenuLayout = { startEntry: number; spacing: number; scrollbar: boolean };
 const GAME_OPTION_MINIMENU_START_ENTRY = 13;

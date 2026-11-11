@@ -118,6 +118,8 @@ and the Wiki ([Implings](https://oldschool.runescape.wiki/w/Implings),
   ticks for the others (Wiki). Puro-Puro needs a jar for every catch; outside it a barehanded
   catch without a jar is looted at once.
 
+Impling jar supplies: [Anchovy oil, revision 15186565](https://oldschool.runescape.wiki/w/Anchovy_oil?oldid=15186565) describes eight anchovy paste used on an empty vial with a sieve; [Imp repellent, revision 15185078](https://oldschool.runescape.wiki/w/Imp_repellent?oldid=15185078) gives the flowers, unboostable Herblore 3 and 5 XP. [Impling jar, revision 15183926](https://oldschool.runescape.wiki/w/Impling_jar?oldid=15183926) describes one repellent followed by one butterfly jar at the Rimmington still. The existing Herblore plugin applies its Druidic Ritual gate to the flower mix; its applicability to this recipe is not established here. As a conservative server policy, either still refuses swamp tar while Rimmington holds repellent, and Rimmington refuses repellent while the player has stored lamp oil; retail collision behavior has not been captured.
+
 Not reproduced: the two main-game barehanded loot catches gave 14 (earth, 1510) and 16 (essence,
 2520) Hunter XP, against the Wiki's overworld 27 and 29; no source explains it, so the
 Wiki value stays. 

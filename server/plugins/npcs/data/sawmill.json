@@ -1,6 +1,6 @@
 {
   "meta": {
-    "about": "Sawmill operators' Buy-plank, as captured (rsprox/sawmill): the skillmulti menu (2046 mode 0), plank-by-plank conversion and the operator's two refusals. Vouchers and coupons from the OSRS Wiki (Sawmill, Sawmill voucher, Sawmill coupon): a plank's coupon pays its fee instead of coins and is used before a voucher; rosewood has none."
+    "about": "Sawmill operators' Buy-plank, as captured (rsprox/sawmill): the skillmulti menu (2046 mode 0), plank-by-plank conversion and the operator's two refusals. Vouchers and coupons from the OSRS Wiki (Sawmill, Sawmill voucher, Sawmill coupon): a plank's coupon pays its fee instead of coins and is used before a voucher; rosewood has none. The redeem message is from rsprox 20261105T005429."
   },
   "operators": ["Sawmill operator", "Sawmill Operator"],
   "title": "How many do you wish to make?",
@@ -18,7 +18,8 @@
   "voucher": 28628,
   "messages": {
     "noLogs": "You'll need to bring me some more logs.",
-    "noCoins": "Those planks cost {cost} coins. You don't have enough money for all of them."
+    "noCoins": "Those planks cost {cost} coins. You don't have enough money for all of them.",
+    "couponsRedeemed": "You redeem {count} sawmill coupons to pay for some planks."
   },
   "diary": {
     "anyPlank": { "plank": 960, "diary": "varrock", "task": "make-a-normal-plank-at-the-sawmill" },

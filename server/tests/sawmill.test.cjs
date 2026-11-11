@@ -57,7 +57,8 @@ function createPlayer(slots) {
     getPrivateArea: () => null,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => ({ sendCreationMenu: (value) => { menu = value; }, hasInterruptibleInterface: () => player.interfaceActive }),
+    typed: [],
+    getPacketSender: () => ({ sendCreationMenu: (value) => { menu = value; }, hasInterruptibleInterface: () => player.interfaceActive, sendTypedMessage: (type, text) => player.typed.push([type, text]) }),
     getDialogueManager: () => ({ isActive: () => player.dialogueActive, startDialogues: (builder) => said.push([...builder.getDialogues().values()][0].text ?? [...builder.getDialogues().values()][0].getText?.()) }),
     getInventory: () => ({
       contains: (id) => inventory.some((item) => item?.id === id),
@@ -262,6 +263,17 @@ test("coupons (Wiki): the data - one per plank but rosewood, as the cache names 
   }
 });
 
+test("as captured (rsprox 20261105T005429): 27 oak logs, 30 coupons, no coins - 27 planks in the logs' slots, one spam line, sawdust", () => {
+  const OAK_COUPON = 32085;
+  const player = createPlayer({ 0: { id: OAK_COUPON, amount: 30 }, ...Object.fromEntries(Array.from({ length: 27 }, (_, i) => [1 + i, { id: 1521, amount: 1 }])) });
+  assert.equal(convert(player, 3101, data().planks.find((plank) => plank.name === "Oak"), 27), 27);
+  assert.deepEqual(player.inventory[0], { id: OAK_COUPON, amount: 3 }, "the coupon stack keeps its slot");
+  assert.deepEqual(ids(player).slice(1), Array(27).fill(8778));
+  assert.deepEqual(player.typed, [[core.ChatType.SPAM, "You redeem 27 sawmill coupons to pay for some planks."]]);
+  assert.deepEqual(player.said, [], "the operator says nothing");
+  assert.equal(sawdust.length, 1);
+});
+
 test("coupons (Wiki): each pays one log's fee - no coins needed, then coins once they run out", () => {
   const player = createPlayer({ 0: { id: MAHOGANY_COUPON, amount: 2 }, 1: { id: COINS, amount: 1500 }, ...logs(4) });
   assert.equal(convert(player, 3101, mahogany(), 4), 3);
@@ -270,6 +282,7 @@ test("coupons (Wiki): each pays one log's fee - no coins needed, then coins once
   assert.equal(player.getInventory().getAmount(COINS), 0, "the third plank is paid for");
   assert.equal(player.getInventory().getAmount(MAHOGANY_LOGS), 1);
   assert.deepEqual(player.said, ["Those planks cost 1500 coins. You don't have enough money for all of them."]);
+  assert.deepEqual(player.typed, [[core.ChatType.SPAM, "You redeem 2 sawmill coupons to pay for some planks."]], "counts only the coupons");
   assert.equal(sawdust.length, 1);
 
   const broke = createPlayer({ 0: { id: MAHOGANY_COUPON, amount: 5 }, ...logs(2) });

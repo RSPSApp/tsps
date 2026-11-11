@@ -63,7 +63,18 @@ Each of these ids is followed in the cache by its bank placeholder (32084, 32086
 - Using a log on the operator redeems a coupon in the same way.
 - Coupons don't work with Plank Make (Lunar), which never looks at them.
 
-Not captured: neither the user's rsprox recordings nor the rsprox.net index has a coupon redemption, so the menu keeps its priced labels and no message is sent for a coupon plank. Ours: coupon planks leave sawdust like paid ones (the Wiki's Sawdust page says any conversion does).
+As captured (rsprox 20261105T005429, tick 9698): 27 oak logs and 30 oak coupons, no coins, Buy-plank, Oak ×27.
+- The menu is unchanged, still "Oak - 250gp".
+- On the choice tick:
+  - one spam message, "You redeem 27 sawmill coupons to pay for some planks.";
+  - nothing from the operator;
+  - the coupon stack drops to 3 in its own slot (0), and the 27 planks take the logs' slots;
+  - one sawdust pile (count 1, 199 ticks left), as for paid planks.
+
+Not captured:
+- **A single coupon:** the line keeps the captured wording ("You redeem 1 sawmill coupons …").
+- **Running out mid-choice:** with too few coupons and too few coins, the redeem line comes before the operator's coins line. That order is ours.
+- **A log used on the operator with a coupon:** not captured; it uses the same conversion and the same line.
 
 ## Talk-to and Trade
 - **Talk-to** plays the Wiki transcript, which matches the capture:

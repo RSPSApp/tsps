@@ -101,6 +101,16 @@ label.host-setting.host-switch-field { cursor: pointer; }
 .hub-heading .hub-result-count { color: var(--hub-muted); font-size: 12px; }
 .hub-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--hub-line); border-radius: 8px; overflow: hidden; background: var(--hub-panel); }
 .hub-card:hover { border-color: var(--hub-border); }
+.hub-card { position: relative; }
+.hub-card-screenshot {
+  position: absolute; inset: 0 0 auto; height: 128px; pointer-events: none;
+  mask-image: linear-gradient(#000 10%, transparent);
+}
+.hub-card-screenshot img {
+  display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; opacity: .72;
+  mask-image: linear-gradient(90deg, transparent 14%, #000 90%);
+}
+.hub-card-body { position: relative; }
 .hub-card-body { display: flex; flex: 1; flex-direction: column; padding: 18px; }
 .hub-card-title { display: flex; align-items: center; gap: 11px; }
 .hub-card-title h3 .hub-text-button { color: var(--hub-text); font: inherit; text-align: left; }

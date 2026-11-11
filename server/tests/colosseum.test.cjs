@@ -154,7 +154,7 @@ function fakePlayer(name = 'Gladiator') {
     isPoisoned: () => true,
     getPoisonDamage: () => p.poison.at(-1) ?? 0,
     setPoisonDamage(value) { p.poison.push(value); },
-    location: new Location(1805, 9506, 0), area: null, messages: [], scripts: [], interfaces: [], statements: [],
+    location: new Location(1805, 9506, 0), area: null, messages: [], scripts: [], interfaces: [], statements: [], flags: [],
     getUsername: () => name,
     getIndex: () => 7,
     isPlayer: () => true,
@@ -167,6 +167,9 @@ function fakePlayer(name = 'Gladiator') {
     setArea(area) { p.area = area; },
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
+    getInterfaceId: () => p.interfaceId ?? -1,
+    getEnteredAmountAction: () => p.amountAction,
+    setEnteredAmountAction: (action) => { p.amountAction = action; },
     sendMessage: (message) => p.messages.push(message),
     getDialogueManager: () => ({ startDialogues: (chain) => p.statements.push(chain) }),
     getPacketSender() {
@@ -175,10 +178,12 @@ function fakePlayer(name = 'Gladiator') {
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
         sendSubInterface: (uid, id) => { p.interfaces.push(id); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
-        sendInterfaceRemoval: () => { p.interfaces.push(-1); return sender; },
+        sendInterface: (id) => { p.interfaceId = id; p.interfaces.push(id); return sender; },
+        sendInterfaceRemoval: () => { p.interfaceId = -1; p.interfaces.push(-1); return sender; },
+        sendEnterAmountPrompt: (text) => { p.amountPrompt = text; return sender; },
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
-        sendInterfaceFlagsRange: () => sender,
+        sendInterfaceScript: (id, args) => { p.scripts.push([id, ...args]); return sender; },
+        sendInterfaceFlagsRange: (...args) => { p.flags.push(args); return sender; },
         sendGraphic: () => sender,
         sendProjectile: () => sender,
         sendPoisonType: () => sender,
@@ -211,6 +216,7 @@ before(async () => {
   const api = fakeApi();
   Lobby(api);
   Arena(api);
+  Rewards(api);
 });
 
 beforeEach(() => {
@@ -992,7 +998,10 @@ test('forfeiting between waves brings out the chest; teleporting out loses it al
   run.finish();
   assert.equal(run.stage, 'finished');
   assert.equal(Rewards.openChest({ player }), true);
-  assert.ok(player.interfaces.includes(246));
+  assert.ok(player.interfaces.includes(864), 'the rewards modal from rsprox 1227');
+  assert.ok(player.scripts.some((script) => script[0] === 4923), 'initializes the rewards modal');
+  assert.ok(player.scripts.some((script) => script[0] === 4929 && typeof script[1] === 'bigint'), 'sends the rewards value as a long');
+  assert.ok(player.flags.some(([uid, start, end]) => uid === ((864 << 16) | 17) && start === 0 && end === 30), 'enables the captured reward slots');
   assert.deepEqual(player.inventories[843], [[28924, 80]]);
   assert.equal(player.texts[(246 << 16) | 3], `Total Value: ${Rewards.valueOf(run.loot.rewards).toLocaleString('en-US')}`);
   run.end('left');
@@ -1004,6 +1013,120 @@ test('forfeiting between waves brings out the chest; teleporting out loses it al
   ticks(3);
   assert.equal(away.player.location, before, 'not pulled back to the lobby');
   assert.equal(Shared.gloryOf(away.player), 0, 'no Glory for a teleport');
+});
+
+test('rewards chest supports captured item withdrawals and bank-all (rsprox 4117 and 1227)', () => {
+  const { player, run } = runWith({}, 'Rewards');
+  run.completeWave();
+  run.finish();
+  Rewards.openChest({ player });
+  const received = [];
+  player.getInventory = () => ({
+    getAddableAmount: (item) => item.getAmount(),
+    add: (item) => received.push(item.getAmount()),
+    refreshItems() {},
+  });
+  const banked = [];
+  player.getBank = () => ({ contains: () => true, getAddableAmount: (item) => item.getAmount(), add: (item) => banked.push(item.getAmount()) });
+  const click = (child, opId, slot = 0) => {
+    const buttonId = (864 << 16) | child;
+    const hook = hooks.buttons.find((entry) => entry.ids.includes(buttonId));
+    assert.ok(hook, `handler for ${child}`);
+    hook.handler({ player, buttonId, slot, opId, itemId: 28924 });
+  };
+  click(17, 1);
+  assert.deepEqual(received, [1]);
+  assert.equal(run.loot.rewards[0].amount, 79);
+  click(17, 4);
+  assert.equal(player.amountPrompt, 'Enter amount:');
+  player.amountAction.execute(2);
+  assert.deepEqual(received, [1, 2]);
+  assert.equal(run.loot.rewards[0].amount, 77);
+  click(15, 6);
+  assert.deepEqual(banked, [77]);
+  assert.deepEqual(run.loot.rewards, []);
+  assert.ok(player.scripts.some((script) => script[0] === 4929 && script[1] === 0n));
+  assert.equal(Rewards.openChest({ player }), true);
+  assert.equal(player.messages.at(-1), 'The chest appears to be empty.');
+  run.end('left');
+  assert.equal(player.varbits.get(9802), 0, 'leaving clears the loot-opened state');
+});
+
+test('reward quantities are bounded to the available stack and stale prompts cannot withdraw', () => {
+  const { player, run } = runWith({}, 'Quantity');
+  run.completeWave();
+  run.finish();
+  Rewards.openChest({ player });
+  const received = [];
+  player.getInventory = () => ({ getAddableAmount: (item) => item.getAmount(), add: (item) => received.push(item.getAmount()), refreshItems() {} });
+  const buttonId = (864 << 16) | 17;
+  const handler = hooks.buttons.find((entry) => entry.ids.includes(buttonId)).handler;
+  const click = (opId) => handler({ player, buttonId, slot: 0, itemId: 28924, opId });
+  click(2);
+  assert.deepEqual(received, [5]);
+  click(4);
+  const stale = player.amountAction;
+  player.setEnteredAmountAction(null);
+  stale.execute(20);
+  assert.equal(run.loot.rewards[0].amount, 75);
+  click(3);
+  assert.deepEqual(received, [5, 75]);
+  assert.deepEqual(run.loot.rewards, []);
+  run.end('left');
+});
+
+test('the rewards value retains amounts above a signed 32-bit integer', () => {
+  const { player, run } = runWith({}, 'Value');
+  run.completeWave();
+  run.finish();
+  run.loot.rewards[0].amount = 2147483647;
+  Rewards.openChest({ player });
+  const script = player.scripts.find(([id]) => id === 4929);
+  assert.equal(script[1], BigInt(Rewards.valueOf(run.loot.rewards)));
+  assert.ok(script[1] > 2147483647n);
+  run.end('left');
+});
+
+test('reward clicks reject stale items and leave what does not fit in the chest', () => {
+  const { player, run } = runWith({}, 'Capacity');
+  run.completeWave();
+  run.finish();
+  Rewards.openChest({ player });
+  const received = [];
+  player.getInventory = () => ({ getAddableAmount: () => 2, add: (item) => received.push(item.getAmount()), refreshItems() {} });
+  const buttonId = (864 << 16) | 17;
+  const handler = hooks.buttons.find((entry) => entry.ids.includes(buttonId)).handler;
+  handler({ player, buttonId, slot: 0, itemId: 995, opId: 3 });
+  assert.deepEqual(received, []);
+  handler({ player, buttonId, slot: 0, itemId: 28924, opId: 3 });
+  assert.deepEqual(received, [2]);
+  assert.equal(run.loot.rewards[0].amount, 78);
+  player.getPacketSender().sendInterfaceRemoval();
+  handler({ player, buttonId, slot: 0, itemId: 28924, opId: 3 });
+  assert.deepEqual(received, [2]);
+  run.end('left');
+});
+
+test('discarding the rewards asks for confirmation and cancellation reopens the chest (rsprox 4117)', () => {
+  const { player, run } = runWith({}, 'Discard');
+  run.completeWave();
+  run.finish();
+  Rewards.openChest({ player });
+  const handler = hooks.buttons.find((entry) => entry.ids.includes((864 << 16) | 13)).handler;
+  handler({ player, opId: 6 });
+  let prompt = hooks.prompts.at(-1);
+  assert.equal(prompt.title, "Are you sure? You can't get your discarded rewards back!");
+  assert.equal(prompt.args[0], 'Yes, discard my rewards.');
+  assert.equal(prompt.args[2], 'No, keep my rewards.');
+  prompt.args[3]();
+  assert.equal(player.getInterfaceId(), 864);
+  assert.equal(run.loot.rewards[0].amount, 80);
+  handler({ player, opId: 6 });
+  prompt = hooks.prompts.at(-1);
+  prompt.args[1]();
+  assert.deepEqual(run.loot.rewards, []);
+  assert.ok(player.messages.includes('The chest empties before your eyes...'));
+  run.end('left');
 });
 
 test("a warbander whose tile is under a pillar takes a free side tile, never the player's", () => {

@@ -295,7 +295,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
           // shortcut: quest scaling is documented as roughly 30–40%; capture low-level hits to establish exact rounding.
           const min = Math.min(15, Math.max(1, Math.floor(hp * 0.3)));
           const max = Math.min(19, Math.max(1, Math.floor(hp * 0.4)));
-          const damage = min + Math.floor(Math.random() * (max - min + 1));
+          // Wiki "Demonic Brutus/Strategies": each bull of his specials deals 45-56 (his ghosts are not modelled).
+          const damage = arena.demonic ? 45 + Math.floor(Math.random() * 12) : min + Math.floor(Math.random() * (max - min + 1));
           player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED).setSource(npc)]);
         }
       });
@@ -303,6 +304,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
     hits(npc, target) {
       if (!(npc.getArea() instanceof BullArena)) return super.hits(npc, target);
       if (npc.getArea().special) return [];
+      // Wiki "Demonic Brutus/Strategies": his basic melee hits through Protect from Melee, and the quest's cap of 3 is Brutus'.
+      if (npc.getArea().demonic) return [new PendingHit(npc, target, this, { bypassProtectionPrayer: true })];
       const hit = new PendingHit(npc, target, this);
       hit.setTotalDamage(Math.min(3, hit.getTotalDamage(), quest.isComplete(target) ? 3 : Math.max(0, target.getHitpoints() - 1)));
       return [hit];
@@ -831,6 +834,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
       api.removeNpc(target);
       demonic.__skipDefaultRespawn = true;
       demonic.setCombatXpMultiplier(2);
+      demonic.setStatDrainImmune(true); // Wiki: Demonic Brutus is immune to stat drains
       arena.bull = demonic;
       arena.demonic = true;
       arena.startTick = World.getProcessCycle();

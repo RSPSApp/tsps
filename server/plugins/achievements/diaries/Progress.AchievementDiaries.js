@@ -11,6 +11,11 @@
 const { TIERS, DIARIES, tierOfTask } = require("./Data.AchievementDiaries");
 
 const TIER_COMPLETE_DELAY = 3;
+/**
+ * wilderness_diary_any_complete: a bit per completed tier, easy first (live logins send 1, 3, 7
+ * and 15). The settings scripts read it to unlock the Deep Wilderness lever row.
+ */
+const ANY_COMPLETE_VARBITS = { wilderness: 4470 };
 const tierGenerations = new WeakMap();
 
 /** Done task keys by diary key: { ardougne: ["<task key>", ...] }. */
@@ -87,6 +92,14 @@ function sendDiary(player, diary, options) {
   const started = isStarted(player, diary) ? 1 : 0;
   if (!options?.onlySet || started) player.getPacketSender().sendVarbit(diary.startedVarbit, started);
   for (const tier of TIERS) sendTier(player, diary, tier, options);
+  sendAnyComplete(player, diary, options);
+}
+
+function sendAnyComplete(player, diary, { onlySet = false } = {}) {
+  const varbit = ANY_COMPLETE_VARBITS[diary.key];
+  if (varbit === undefined) return;
+  const mask = TIERS.reduce((bits, tier, index) => (isTierComplete(player, diary, tier) ? bits | (1 << index) : bits), 0);
+  if (!onlySet || mask !== 0) player.getPacketSender().sendVarbit(varbit, mask);
 }
 
 function migrateLegacy(player) {
@@ -121,6 +134,7 @@ function announceTierComplete(player, diary, tier, generation) {
   if (!player.isRegistered() || tierGeneration(player, diary, tier) !== generation || !isTierComplete(player, diary, tier)) return;
   const data = diary.tiers[tier];
   player.getPacketSender().sendVarbit(data.completeVarbit, data.completeValue ?? 1);
+  sendAnyComplete(player, diary);
   api.emitCustomEvent("diary:tier-complete", { player, diary: diary.name, tier });
   if (claimedTiers(player, diary).has(tier) || player.getDialogueManager().isActive?.()
     || core.MultiChatboxPrompt?.getPending?.(player)) return;

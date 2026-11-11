@@ -201,7 +201,7 @@ import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { chatHistory } from "../rs/cs2/ChatHistory";
-import { FriendLoginUpdates } from "./chat/FriendLoginUpdates";
+import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
 import { Opcodes as Cs2Opcodes } from "../rs/cs2/Opcodes";
@@ -469,7 +469,8 @@ const VARBIT_ACCOUNT_TYPE = 1777;
 const VARBIT_POPOUT_OPEN = 13090;
 const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
 const VARC_CHATBOX_SELECTED_TAB = 41;
-const ACCOUNT_TYPE_MAIN = 0;
+/** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
+const VARC_OSM_CHATBOX_DISABLED = 1220;const ACCOUNT_TYPE_MAIN = 0;
 const SCRIPT_HIGHLIGHT_SCREEN_COMPONENT = 2463;
 const SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT = 2465;
 // Chatbox search: its title says whether this one is a spawn search, and 138 closes it.
@@ -4516,6 +4517,10 @@ export class OsrsClient {
             return;
         }
 
+        // An open All Settings window follows the mobile chat toggle (MobileHudLayout). Checked
+        // here, between frames, because the toggle's cs2 runs inside a layout batch.
+        widgetManager.syncMobileChatToggle();
+
         const rootInterface = widgetManager.rootInterface;
         if (rootInterface !== -1 && this.renderer && this.renderer.canvas) {
             // Use dimensions from widgetManager (set by renderer on resize)
@@ -6601,8 +6606,9 @@ export class OsrsClient {
             } catch {}
 
             if (this.isLoggedIn()) {
-                for (const message of this.friendLoginUpdates.drain()) {
-                    chatHistory.addMessage(5, message, "", "");
+                const messages = this.friendLoginUpdates.drain();
+                if (friendLoginNoticesShown((id) => this.varManager.getVarbit(id))) {
+                    for (const message of messages) chatHistory.addMessage(5, message, "", "");
                 }
             }
 
@@ -7061,6 +7067,8 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            this.widgetManager.isMobileChatDisabled = () =>
+                (this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) ?? 0) !== 0;
             try {
                 const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
                 if (initialMinimapState !== undefined) {

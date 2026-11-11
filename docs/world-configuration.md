@@ -463,6 +463,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `AlchemicalHydra` | AlchemicalHydra | bosses | yes | The Alchemical Hydra in Karuulm Slayer Dungeon: its private chamber, four-phase fight with vents, poison, lightning and fire, and the kill. (members only) |
 | `Amoxliatl` | Amoxliatl | bosses | yes | Amoxliatl beneath the Ruins of Tapoyauik: her door after The Heart of Darkness, a private chamber, the fight with unstable ice, and the kill. (members only) |
 | `Araxxor` | Araxxor | bosses | yes | Araxxor in the Morytania spider lair: a solo instance with eggs, acid specials, the 25% enrage, a harvestable corpse and Combat Achievements. (members only) |
+| `Brutus` | Brutus | bosses | yes | Brutus beyond the quest fight: Slayer experience, item messages, the Cow31337Killer message and Demonic Brutus's second phase. |
 | `Cerberus` | Cerberus | bosses | yes | Cerberus in her lair: the winches, arenas and exits, the triple attack with souls and lava, and the kill. (members only) |
 | `ChaosElemental` | ChaosElemental | bosses | yes | The Chaos Elemental's special attacks: discord, disarm and teleport. (members only) |
 | `ChaosFanatic` | ChaosFanatic | bosses | yes | The Chaos Fanatic's attack mix of explosions, a disarming projectile and standard magic. (members only) |
@@ -520,7 +521,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `LunarCures` | LunarCures | combat | yes | The Lunar spells Cure Me, Cure Other and Cure Group, which remove poison and weaken venom. (members only) |
 | `MonsterInspect` | Monster Inspect | combat | yes | The Lunar Monster Inspect spell, which opens a monster's stats panel for 30.5 Magic XP. |
 | `MultiHitWeapons` | MultiHitWeapons | combat | yes | Twin-hit weapons such as sulphur blades, tecpatls and Torag's hammers: independent accuracy rolls and two hitsplats on the same tick. |
-| `PlayerHitSounds` | PlayerHitSounds | combat | yes | Plays the hurt sound to players struck in combat, using male or female variants. |
+| `PlayerHitSounds` | PlayerHitSounds | combat | yes | Plays the hurt sound to players struck in combat, in the voice their Hit sounds setting chooses. |
 | `PvpStatistics` | PvpStatistics | combat | yes | Tracks PvP kills, deaths, kill streaks and Elo rating, separating player and bot opponents. |
 | `Retribution` | Retribution | combat | yes | The Retribution prayer: when its user dies, nearby enemies take damage up to a quarter of their Prayer level, with its graphic and sound. |
 | `SkullPrevention` | SkullPrevention | combat | yes | The PK Skull Prevention setting, which refuses attacks that would skull the player. |
@@ -561,6 +562,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `GrandExchange` | GrandExchange | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
 | `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
 | `ItemsKeptOnDeath` | ItemsKeptOnDeath | interface | yes | Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles. |
+| `LoginTips` | LoginTips | interface | yes | Sends a 'Did you know?' tip after the login greeting, following the All Settings row that turns them off. |
 | `MaxHitThreshold` | MaxHitThreshold | interface | yes | Settings option for the lowest damage that shows a max hit hitsplat. |
 | `MaxHitsInterface` | MaxHitsInterface | interface | yes | Adds the ::maxhits command, an interface of live melee, ranged and per-spell max hits for the player's current gear and levels. |
 | `MinigameTeleports` | MinigameTeleports | interface | yes | Minigame Teleport spell: opens the minigame list, checks requirements, plays the home teleport cast and applies the 20-minute cooldown. |

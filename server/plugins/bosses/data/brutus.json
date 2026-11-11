@@ -1,0 +1,25 @@
+{
+  "_provenance": {
+    "wiki": "OSRS Wiki, read 2026-11-11: Brutus (oldid 15396646), Demonic Brutus (15384017), Brutus/Strategies (15354867), Demonic Brutus/Strategies (15354884); permalinks https://oldschool.runescape.wiki/?title=<page>&oldid=<id>",
+    "slayerXp": "Brutus infobox 'slayxp = 116' (and the generated monsters-complete.json: slayer_xp 116.0 for 15626 and 15627, which the NPC definition does not load yet)",
+    "phaseTwo": "Demonic Brutus/Strategies: 'Once Demonic Brutus' health reaches 0, it will exclaim {{Overhead|moo moo!}} and heal itself for 487 health'",
+    "messages": "Brutus, Trivia: 'Brutus doesn't want that.'; 'You do not want to do that.' (empty bucket); 'You are but an imitation of a true legend.' (Cow31337Killer's outfit)",
+    "outfit": "Brutus, Trivia: rune boots, rune platebody, rune plateskirt, Klank's gauntlets, Dharok's helm, Dharok's greataxe; the cache names the degraded Dharok pieces \"Dharok's helm 75\" and so on",
+    "demonicStomp": "Demonic Brutus/Strategies: 'Getting hit by any of the bulls will deal 45-56 damage each' (used in IdesOfMilk.Quest.js)"
+  },
+  "slayerXp": 116,
+  "phaseTwo": { "heal": 487, "line": "moo moo!" },
+  "messages": {
+    "itemOnBrutus": "Brutus doesn't want that.",
+    "bucketOnBrutus": "You do not want to do that.",
+    "outfit": "You are but an imitation of a true legend."
+  },
+  "outfit": [
+    { "name": "Rune boots" },
+    { "name": "Rune platebody" },
+    { "name": "Rune plateskirt" },
+    { "name": "Klank's gauntlets" },
+    { "namePrefix": "Dharok's helm" },
+    { "namePrefix": "Dharok's greataxe" }
+  ]
+}

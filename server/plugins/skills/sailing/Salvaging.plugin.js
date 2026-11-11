@@ -306,7 +306,10 @@ function clueItem(player, clue) {
 function rollClue(player, clue, random = Math.random) {
   const oneIn = clueOneIn(player, clue);
   if (oneIn <= 0 || random() * oneIn >= 1) return;
-  if (!canReceiveClue(player, clue)) return;
+  if (!canReceiveClue(player, clue)) {
+    pluginApi?.emitCustomEvent("treasure-trails:missed-clue", { player, tier: clue.tier });
+    return;
+  }
   player.getInventory().forceAdd(player, new Item(clueItem(player, clue), 1));
 }
 

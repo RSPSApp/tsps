@@ -824,7 +824,10 @@ export interface PluginItemActionEvent {
   slot: number;
   clickType: number;
   option?: string;
+  /** The submenu entry's index, 1-based (the wire index plus one). */
   subOpId?: number;
+  /** The submenu entry's cache label ("Xeric's Glade" under Rub), set by emitItemAction. */
+  subOption?: string;
   handled: boolean;
 }
 

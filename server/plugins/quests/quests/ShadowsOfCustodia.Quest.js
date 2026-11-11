@@ -1124,6 +1124,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
       { skillId: Skill.CONSTRUCTION.getIndex(), amount: 3000, label: "Construction" },
     ],
     otherRewards: ["Stalker Den Access"],
+    rewardOrder: ["other", "xp"], // rsprox 238/04190.txt:32757-32763
     buildJournal,
     onReward: grantReward,
   });

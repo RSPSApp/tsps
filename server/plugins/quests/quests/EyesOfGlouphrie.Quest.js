@@ -121,6 +121,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const EXCHANGER_OBJECT_ID = ObjectIdentifiers.OAKNOCKS_EXCHANGER; // 17248, Use
   const MACHINE_PANEL_OBJECT_ID = ObjectIdentifiers.MACHINE_PANEL; // 17272, Inspect
   const SINGING_BOWL_OBJECT_ID = ObjectIdentifiers.SINGING_BOWL; // 17239, Inspect / Sing-crystal
+  const SINGING_BOWL_INSPECT_RANGE = 3;
 
   /** Machine and exchanger tiles: the cave map carries only the platform and pipe. */
   const MACHINE_BROKEN_TILE = { x: 2390, y: 9824 };
@@ -761,6 +762,16 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     player.sendMessage("You look into the singing bowl. A faint crystal hum fills the air.");
   }
 
+  function routeBowlInspect(event) {
+    if (event.objectId !== SINGING_BOWL_OBJECT_ID || event.clickType !== 1) return;
+    const at = event.player.getLocation();
+    const bowl = event.object?.getLocation?.();
+    if (!bowl || at.getZ() !== bowl.getZ()) return;
+    const distance = Math.max(Math.abs(at.getX() - bowl.getX()), Math.abs(at.getY() - bowl.getY()));
+    if (distance > SINGING_BOWL_INSPECT_RANGE) return;
+    event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  }
+
   function singCrystal(event) {
     const { player, objectId } = event;
     if (objectId !== SINGING_BOWL_OBJECT_ID) return false;
@@ -1122,6 +1133,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   });
   api.onObjectInteraction("Oaknock's exchanger", { Use: useExchanger });
   api.onObjectInteraction("Singing bowl", { Inspect: inspectBowl, "Sing-crystal": singCrystal });
+  api.onObjectRoute(routeBowlInspect);
   api.onObjectInteraction("Machine panel", { Inspect: inspectPanel });
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onInterfaceActionButton(PANEL_BUTTONS, machineButton);

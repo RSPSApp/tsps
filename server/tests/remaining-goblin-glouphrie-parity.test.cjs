@@ -74,6 +74,31 @@ test('shared scene controls publish and clear the cinematic marker in step with 
   assert.deepEqual(otherHides, [['npc', true], ['obj', true]]);
 });
 
+test('singing bowl Inspect stays on the reachable tile from the pit rim', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  p.moveTo(new core.Location(2391, 9816, 0));
+  const route = h.hooks.onObjectRoute.find((fn) => fn.name === 'routeBowlInspect');
+  const event = {
+    player: p,
+    objectId: core.ObjectIdentifiers.SINGING_BOWL,
+    clickType: 1,
+    object: new core.GameObject(core.ObjectIdentifiers.SINGING_BOWL, new core.Location(2388, 9813, 0), 10, 0),
+  };
+  route(event);
+  assert.deepEqual(event.destination, { x: 2391, y: 9816, z: 0 });
+
+  delete event.destination;
+  event.clickType = 2;
+  route(event);
+  assert.equal(event.destination, undefined, 'Sing-crystal keeps its ordinary route');
+
+  event.clickType = 1;
+  p.moveTo(new core.Location(2392, 9817, 0));
+  route(event);
+  assert.equal(event.destination, undefined, 'distant Inspect keeps its ordinary route');
+});
+
 function harness(pluginName, options = {}) {
   const pluginNames = Array.isArray(pluginName) ? pluginName : [pluginName];
   const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], npcActions = new Map(), areas = [];

@@ -356,9 +356,10 @@ module.exports = function registerSleepingGiantsQuest(api) {
   }
 
   /**
-   * Kovac waits on the plateau as a Hill Giant only until the quest starts: the intro walks him
-   * into the foundry with the player, so his copy belongs to the player and goes with the quest.
-   * A world spawn would stay outside for everyone after the quest was over (issue 4270).
+   * Kovac waits on the plateau as a Hill Giant only until the intro walks him into the foundry
+   * with the player: his copy belongs to the player and goes with the cutscene, and a started
+   * quest never gets one back (login re-syncs). A world spawn would stay outside for everyone
+   * after the quest was over (issue 4270).
    */
   function syncSurfaceKovac(player) {
     if (!player || player.isPlayerBot?.() === true) return;
@@ -517,8 +518,8 @@ module.exports = function registerSleepingGiantsQuest(api) {
   }
 
   function handlePlayerGone({ player }) { clearSurfaceKovac(player); workshops.get(player)?.leave(player, true); }
-  /** A death leaves the foundry, but Kovac waits on the plateau until the quest starts either way. */
-  function handlePlayerDeath({ player }) { workshops.get(player)?.leave(player, true); syncSurfaceKovac(player); }
+  /** A death only leaves the foundry: Kovac waits on the plateau until the cutscene, so a stage-1 player can retry. */
+  function handlePlayerDeath({ player }) { workshops.get(player)?.leave(player, true); }
 
   function answerToolCheck(event) {
     if (quest.getStage(event.player) < STAGE_PREFORM_TAKEN || quest.isComplete(event.player)) return;
@@ -692,7 +693,6 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (quest.getStage(player) !== 0) return;
     resetProgress(player);
     quest.setStage(player, STAGE_STARTED);
-    syncSurfaceKovac(player);
   }
 
   /** The wiki repair menus: "Yes." consumes the materials and repairs the tool. */

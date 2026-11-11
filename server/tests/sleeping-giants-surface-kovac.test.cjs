@@ -66,7 +66,7 @@ test("the spawn file leaves the surface Hill Giant to the quest", () => {
   assert.equal(decisions.ids[String(SURFACE_KOVAC)].skip, true, "a sync run must not add him back");
 });
 
-test("Kovac is the player's own while the quest is unstarted and leaves when it starts", (t) => {
+test("Kovac stays for the intro's surface lines and leaves with the cutscene", (t) => {
   const player = makePlayer(t);
   login(player);
   const spawned = surfaceKovacs(player);
@@ -74,14 +74,26 @@ test("Kovac is the player's own while the quest is unstarted and leaves when it 
   assert.equal(spawned[0].isOwnerOnly(), true, "only the player sees him");
   assert.deepEqual([spawned[0].getLocation().getX(), spawned[0].getLocation().getY()], [3362, 3146], "the plateau tile");
 
+  // "Yes." starts the quest (stage 1) but the branch still has surface lines asking the player to follow.
   PM.emitCustomEvent("npc-dialogue:hook", { player, hook: "quest:sleeping-giants:start" });
-  assert.deepEqual(surfaceKovacs(player), [], "he went into the foundry with the player");
+  assert.equal(surfaceKovacs(player).length, 1, "he must not vanish mid-conversation");
 
-  login(player);
-  assert.deepEqual(surfaceKovacs(player), [], "still gone after a relog");
+  // The cutscene step is where the intro takes him into the foundry.
+  PM.emitCustomEvent("npc-dialogue:action", { player, npcId: core.NpcIdentifiers.KOVAC, stepId: "Y4oYGg", kind: "dialogue" });
+  assert.deepEqual(surfaceKovacs(player), [], "the cutscene takes him inside");
 });
 
-test("starting the quest leaves another player's Kovac alone", (t) => {
+test("a stage-1 player who closed the chat keeps the giant until the next login", (t) => {
+  const player = makePlayer(t);
+  login(player);
+  PM.emitCustomEvent("npc-dialogue:hook", { player, hook: "quest:sleeping-giants:start" });
+  assert.equal(surfaceKovacs(player).length, 1, "the chat can be closed before the cutscene");
+
+  login(player);
+  assert.deepEqual(surfaceKovacs(player), [], "a started quest never gets a surface giant back");
+});
+
+test("the cutscene leaves another player's Kovac alone", (t) => {
   const started = makePlayer(t);
   const waiting = makePlayer(t);
   login(started);
@@ -89,6 +101,7 @@ test("starting the quest leaves another player's Kovac alone", (t) => {
   assert.equal(surfaceKovacs(started).length, 1);
   assert.equal(surfaceKovacs(waiting).length, 1);
   PM.emitCustomEvent("npc-dialogue:hook", { player: started, hook: "quest:sleeping-giants:start" });
+  PM.emitCustomEvent("npc-dialogue:action", { player: started, npcId: core.NpcIdentifiers.KOVAC, stepId: "Y4oYGg", kind: "dialogue" });
   assert.equal(surfaceKovacs(started).length, 0);
   assert.equal(surfaceKovacs(waiting).length, 1, "the other player's quest has not started");
 });

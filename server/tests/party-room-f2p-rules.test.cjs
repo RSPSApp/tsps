@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { test, before, after } = require('node:test');
+const { test, before, after, mock } = require('node:test');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'party-f2p-'));
 process.env.TSPS_PARTY_ROOM_DIR = temp;
@@ -16,7 +16,7 @@ process.env.DISABLE_PLAYER_BOTS = '1';
 const worldFile = path.join(temp, 'data', 'definitions', 'world.json');
 fs.mkdirSync(path.dirname(worldFile), { recursive: true });
 const shippedWorld = require('../data/definitions/world.json');
-fs.writeFileSync(worldFile, JSON.stringify({ ...shippedWorld, membersWorld: false }));
+fs.writeFileSync(worldFile, JSON.stringify({ ...shippedWorld, plugins: { ...shippedWorld.plugins, FreeToPlay: true } }));
 const previousCwd = process.cwd();
 let world;
 try {
@@ -40,10 +40,16 @@ const persistence = { gate: null, flushCalls: 0, requestSave() {}, flush() { thi
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PM.getCoreApi();
+  const read = fs.readFileSync, exists = fs.existsSync;
+  const worldPath = path.resolve('data/definitions/world.json');
+  const localPath = path.resolve('data/definitions/world.local.json');
+  const worldRead = mock.method(fs, 'readFileSync', (file, ...args) => read(file === worldPath ? worldFile : file, ...args));
+  const localExists = mock.method(fs, 'existsSync', file => file !== localPath && exists(file));
   try {
     PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   } finally {
-    // The loader may have installed SQLite even if a later plugin fails to load.
+    worldRead.mock.restore();
+    localExists.mock.restore();
     savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
   }
   core.RegionManager.init();

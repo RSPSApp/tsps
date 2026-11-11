@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { mergeWorldConfig, parseWorldDefinition } from "./WorldDefinition";
-import { normalizeWorldPluginConfig } from "./WorldPluginConfig";
+import { isFreeToPlayWorld, normalizeWorldPluginConfig } from "./WorldPluginConfig";
 import { checkConfigValue, WORLD_SETTING_DECLARATIONS } from "./WorldSettingDeclarations";
 import type { WorldConfigCatalogData } from "../../plugins/WorldConfigCatalog";
 
@@ -184,7 +184,7 @@ export class WorldConfigStore {
         const declared = new Map<string, CatalogOptionLike>(catalog.options.map((o) => [o.key, o]));
         const mergedConfig = isObject(merged.pluginConfig) ? merged.pluginConfig : {};
         const localConfig = isObject(nextLocal.pluginConfig) ? nextLocal.pluginConfig : {};
-        const membersWorld = merged.membersWorld !== false;
+        const membersWorld = !isFreeToPlayWorld(merged);
         for (const [key, value] of Object.entries(mergedConfig)) {
             const option = declared.get(key);
             if (!option) {

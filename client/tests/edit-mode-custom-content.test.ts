@@ -6,6 +6,7 @@ import { IndexModelLoader } from "../rs/model/ModelLoader";
 import { EditModePlugin } from "../game/plugins/editmode/EditModePlugin";
 import { searchEditorCache } from "../game/plugins/editmode/install";
 import { applyEditorCustomContent, connectEditorCustomContent, EDITOR_CUSTOM_CONTENT_MESSAGE, EDITOR_CUSTOM_CONTENT_REQUEST } from "../game/plugins/editmode/EditorCustomContent";
+import { handleInboundUi } from "../network/serverConnection/handlers/inboundUi";
 
 async function main() {
     const dom = new JSDOM('<canvas tabindex="0"></canvas>', { url: "https://editor.rsps.app/", pretendToBeVisual: true });
@@ -45,6 +46,25 @@ async function main() {
     assert.equal(model?.verticesCount, 3, "the game's real model loader decodes the uploaded NPC DAT");
     assert.equal(model?.faceCount, 1);
     assert.deepEqual(workerPayloads[0].datasets.map((row: any) => [row.key, row.rows.length]), [["customModels", 0], ["customModels", 1], ["customDefinitions", 1]]);
+
+    const definitionPacket = (key: string, rows: unknown[]) =>
+        handleInboundUi({ type: "gamemode_data", payload: { gamemodeId: "server", datasets: [{ key, rows }] } });
+    const editorRows = getCustomDefinitions();
+    const pluginRow = { ...editorRows[0], id: 50002, fields: { name: "Plugin pet" } };
+    Object.assign(window, { __osrsClient: client });
+    try {
+        assert.equal(definitionPacket("customDefinitions", editorRows), true);
+        assert.equal(definitionPacket("customDefinitionsAppend", [pluginRow]), true);
+        assert.deepEqual(getCustomDefinitions(), [...editorRows, pluginRow]);
+        assert.equal(types.load(50001).name, "Custom keeper");
+        assert.equal(types.load(50002).name, "Plugin pet");
+        assert.deepEqual(workerPayloads.slice(-2).map(payload => payload.datasets[0].key), ["customDefinitions", "customDefinitionsAppend"]);
+        assert.equal(definitionPacket("customDefinitions", []), true);
+        assert.deepEqual(getCustomDefinitions(), [], "the next world clears editor and plugin definitions");
+    } finally {
+        Reflect.deleteProperty(window, "__osrsClient");
+    }
+    await applyEditorCustomContent(client, content);
 
     const placements: number[] = [];
     const plugin = new EditModePlugin();

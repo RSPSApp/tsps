@@ -74,7 +74,7 @@ The attack options are also dropdowns on the side panel's Controls tab (`setting
 **Sailing side panel.** The combat tab's "View" button for the sailing sidepanel (593:48) shows while 19153 is 1 (script 7593, run as the tab is built); script 8583 also shows it while the option is Always show and The Pandemonium (`sailing_intro`, 18314) is at stage 6 or later. Off a boat, Sailing sets 19153 to 1 for Always show from that stage and to 0 otherwise, at login, on leaving a boat, when the option changes and when The Pandemonium changes stage; boarding sets it to 1. Live sends 1 at login in 352 of the 356 default-state logins off a boat past that stage in the rsprox captures (rev 235+), and 0 before it.
 
 - **Not done**:
-  - Player Trade and Report options: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
+  - Player Trade options: the official client gets no "Trade with" from the server (live sends `set_player_op` 4), so the row only hides the browser client's own entry. See [Player menu options and Ctrl-run](#player-menu-options-and-ctrl-run).
 
 ## Rows the client scripts already apply
 
@@ -543,6 +543,18 @@ The server's item examines all go through `examineItem` (`game/content/ExaminePr
 - **Ours**: the exact red (`<col=ff0000>`) and the two spaces between parts, read off the screenshots.
 - **Not done**: item examines that plugins send themselves (the looting bag, death and boss retrieval chests, the farming vault and similar) have no price line yet. Live sends the Grand Exchange varbit as 0 in 777 of the 995 Ironman logins, so Ironman accounts probably start with it off. Here every account starts with it on.
 
+## Player menu options and Ctrl-run
+
+| Setting | Id | Variable | What it does |
+| --- | --- | --- | --- |
+| Player Trade options | 312 | varbit 6580 `tradeoption_disabled` | while 1, the browser client leaves "Trade with" off the player menu (`client/render/render/interact/playerMenu.ts`) |
+| Player Report options | 372 | varbit 1334 `rightclick_report_abuse_disabled` | while 1, `ReportAbuse.plugin.js` sends player option 8 empty instead of "Report", at login and on the row's click; a slot 8 click is then not a report |
+| Ctrl+click to invert run mode (dropdown) | 207 | varbit 13132 `runinvert_mode` = option | options from enum 4074: 0 Never, 1 Walk -> Run Only, 2 Run -> Walk Only, 3 Always. A Ctrl-click walk (`walk` in `net/NetworkBuilder.ts`) inverts the run mode only in the directions the option allows |
+
+Live sends the player ops at login after the varbits: with 1334 at 1, `set_player_op` 8 is null, otherwise "Report" (rsprox 238/4238, 229/2375); 1334 is 1 at login in 1,813 recordings. `runinvert_mode` is 3 (Always) at login in all 4,281 recordings that send it, so a fresh account starts at Always (`default` in settings.json). No capture changes `tradeoption_disabled`, and none shows the option toggled in game, so sending the option on the click is ours. Tests: `tests/report-abuse.test.cjs`, `tests/run-invert-mode.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/player-follow-menu.test.ts`.
+
+- **Not done**: Ctrl-clicks on NPCs, objects, ground items and players don't invert the run mode at all, whatever the option: their packets' Ctrl byte isn't read.
+
 ## Game client layout and data orbs
 
 Two Interfaces rows that change the gameframe itself, handled in `Settings.plugin.js`.
@@ -570,3 +582,14 @@ Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Eac
 | Always empty herb sacks on death | 359 | varbit 15316 `emptyondeath_herbsack` | herb sack and silklined herb sack |
 
 - **Not done:** a seed box lost above level 20 Wilderness is destroyed on live with its seeds kept for the next box (Wiki: Seed box, 14 April 2021); here its seeds go to the bank and the killer like any other PvP death.
+
+### Death protection from cosmetics (row 386)
+
+Row 386 is a `data/settings.json` toggle on varbit 10987 `death_waivecosmeticsprotection`, saved and sent back at login. The varbit is 1 when the player turns protection off, so a fresh account (0) has it on; no rsprox capture ever sets it to 1. Its cache text: "When enabled, cosmetic upgrades such as ornament kits may cause certain items to be protected during a non-PvP death, rather than falling to a grave."
+
+- **What it protects** (Wiki: Items Kept on Death, the Mechanics table; Ornament kit; Bounty hunter ornament kit; Volcanic abyssal whip): an item in `items/data/ornament-kits.json` made with a tradeable ornament kit, mix or paint, or with the untradeable Bounty Hunter ornament kit (`OrnamentKits.plugin.js` answers `player-death:cosmetic`). Not protected: untradeable modifications (the Wiki's example is the twisted ancestral colour kit) and recolours made at an NPC (Deadman imbued capes), which go to the grave. Ours: the other untradeable kits (dark dye, the Theatre of Blood holy and sanguine kits, the cursed phalanx, Vorkath's head) are treated the same way; their Wiki pages give no PvM rule. The death ranks a protected item like any other. If it is among the kept ones it takes that slot; if not, it is kept on top of them, skulled or not (`PlayerDeathTask.getKeptItems`).
+- **When:** not on a death to another player, and not in the Wilderness (`PlayerDeathTask.protectsCosmetics`). With the row off the item ranks normally and, unkept, goes to the grave.
+- **Items Kept on Death** keeps its three (or four) kept slots for the ranked items and lists a protected item with the others, marked kept. Its PvP and Wilderness toggles show the death without the protection.
+- Tests: `tests/cosmetic-death-protection.test.cjs`.
+- **Evidence:** the cache has no per-item flag for this; only the settings scripts (3965, 6716) read the varbit. In the 24 Items Kept on Death opens with full item lists in the rsprox captures (recordings 430 to 4291, revisions 230-239), no ornamented item sits outside the kept slots, so none confirms the protection directly; none of the items live marks lost there is one this protects (tests/cosmetic-death-protection.test.cjs checks a sample).
+- **Not done:** the Tombs of Amascut retrieval chest and Bounty Hunter risk skulls still rank without the protection.

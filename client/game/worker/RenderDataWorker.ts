@@ -14,7 +14,7 @@ import {
     varReadsMatch,
     writeSquare,
 } from "./MapSquareCache";
-import { loadFromPayload } from "../../common/gamemode/GamemodeContentStore";
+import { isDefinitionDataset, loadFromPayload } from "../../common/gamemode/GamemodeContentStore";
 import { getDefinitionArchiveKey, replaceDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
 import type { ArchivedDefinitionBundle } from "../../rs/config/ArchivedDefinitionRegistry";
 import { TransferDescriptor } from "threads";
@@ -358,7 +358,7 @@ const worker = {
             if (statePromise !== workerStatePromise) return;
             loadFromPayload(payload);
             state?.objTypeLoader.clearCache();
-            if (state && payload.datasets.some(dataset => dataset.key === "definitionArchives" || dataset.key === "customDefinitions")) {
+            if (state && payload.datasets.some(isDefinitionDataset)) {
                 state.locTypeLoader.clearCache();
                 state.npcTypeLoader.clearCache();
                 state.seqTypeLoader.clearCache();

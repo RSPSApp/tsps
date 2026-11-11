@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import * as fs from "fs";
 import * as path from "path";
 import {
     ConfigOptionDeclaration,
@@ -7,6 +8,7 @@ import {
     validateDeclaration,
 } from "../game/definition/WorldSettingDeclarations";
 import { mergeWorldConfig } from "../game/definition/WorldDefinition";
+import { isFreeToPlayWorld } from "../game/definition/WorldPluginConfig";
 import { WorldConfigLayers } from "../game/definition/WorldConfigStore";
 import { PluginModule } from "./PluginTypes";
 import { PluginManager, normalizePluginName, pluginNameFromFile, resolvePluginEnabled } from "./PluginManager";
@@ -26,6 +28,10 @@ export interface CatalogPlugin {
     localSwitch?: boolean;
     enabled: boolean;
     loaded: boolean;
+    /** ZIP source has not been loaded by the runtime. */
+    awaitingLoad?: boolean;
+    /** Package ID for an installed ZIP that the panel can remove. */
+    packageId?: string;
 }
 
 export interface CatalogOption {
@@ -57,6 +63,10 @@ function plainObject(value: unknown): JsonObject {
 export class WorldConfigCatalog {
     private static cache: { key: string; data: WorldConfigCatalogData } | null = null;
 
+    public static invalidate(): void {
+        WorldConfigCatalog.cache = null;
+    }
+
     public static build(pluginDirectory: string, layers: WorldConfigLayers): WorldConfigCatalogData {
         const key = [
             pluginDirectory,
@@ -81,7 +91,7 @@ export class WorldConfigCatalog {
             parsedSwitches = { switches: new Map() };
         }
         const { switches, defaultEnabled } = parsedSwitches;
-        const membersWorld = merged.membersWorld !== false;
+        const membersWorld = !isFreeToPlayWorld(merged);
         const shippedSwitches = new Map<string, boolean>();
         for (const [key, value] of Object.entries(plainObject(layers.shipped.plugins))) {
             if (typeof value === "boolean") shippedSwitches.set(normalizePluginName(key), value);
@@ -92,18 +102,40 @@ export class WorldConfigCatalog {
 
         const found: { plugin: CatalogPlugin; module: PluginModule }[] = [];
         for (const file of PluginManager.discoverPluginFiles(pluginDirectory, PluginManager.MAX_PLUGIN_DEPTH)) {
+            const relative = path.relative(pluginDirectory, file).split(path.sep);
+            const fileName = pluginNameFromFile(file);
+            const importedPackage = relative[0] === "imported";
+            let awaitingLoad = false;
+            let packageId: string | undefined;
             let module: PluginModule;
             try {
-                const imported = require(file);
+                const cached = importedPackage ? require.cache[require.resolve(file)] : undefined;
+                const imported = importedPackage ? cached?.exports : require(file);
                 module = (imported?.default ?? imported) as PluginModule;
+                if (importedPackage) {
+                    const manifestPath = path.join(path.dirname(file), "plugin.json");
+                    const manifest = fs.lstatSync(manifestPath, { throwIfNoEntry: false })?.isFile()
+                        ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : undefined;
+                    if (relative.length === 3 && manifest?.format === 1 && manifest.id === relative[1] &&
+                        /^[a-z][a-z0-9-]{0,63}$/.test(manifest.id) && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(fileName) &&
+                        manifest.name === fileName && relative[2] === `${fileName}.plugin.js` &&
+                        typeof manifest.version === "string" && /^\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(manifest.version) &&
+                        typeof manifest.description === "string" && manifest.description.length <= 500 && fs.lstatSync(file).isFile()) {
+                        packageId = manifest.id;
+                    }
+                    if (!cached?.loaded || typeof module?.register !== "function") {
+                        if (!manifest) continue;
+                        // Only the server's startup loader may execute an imported ZIP's source.
+                        awaitingLoad = true;
+                        module = { name: fileName, description: manifest.description, register() {} };
+                    }
+                }
             } catch (err) {
                 console.warn(`[world-config] could not read ${path.basename(file)}: ${(err as Error).message}`);
                 continue;
             }
             if (!module || typeof module.register !== "function") continue;
-            const fileName = pluginNameFromFile(file);
             const name = typeof module.name === "string" && module.name.trim() ? module.name.trim() : fileName;
-            const relative = path.relative(pluginDirectory, file).split(path.sep);
             found.push({
                 module,
                 plugin: {
@@ -120,6 +152,8 @@ export class WorldConfigCatalog {
                         : undefined,
                     enabled: resolvePluginEnabled(switches, defaultEnabled, name, fileName, module.enabled),
                     loaded: false,
+                    ...(awaitingLoad ? { awaitingLoad: true } : {}),
+                    ...(packageId ? { packageId } : {}),
                 },
             });
         }
@@ -132,7 +166,7 @@ export class WorldConfigCatalog {
             progress = false;
             for (const { plugin } of found) {
                 if (loadedNames.has(plugin.name)) continue;
-                if (!plugin.enabled || (!membersWorld && plugin.members)) continue;
+                if (plugin.awaitingLoad || !plugin.enabled || (!membersWorld && plugin.members)) continue;
                 if (!plugin.dependsOn.every((dependency) => loadedNames.has(dependency))) continue;
                 loadedNames.add(plugin.name);
                 progress = true;

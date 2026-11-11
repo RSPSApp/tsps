@@ -16,6 +16,7 @@ const DragonfireShield = require("../plugins/items/DragonfireShield.plugin");
 
 let cycle = 1000;
 let loginHook = null;
+const events = {};
 const tasks = [];
 DragonfireShield.register({
   core: {
@@ -31,7 +32,7 @@ DragonfireShield.register({
   onItemAction() {},
   onItemOnItem() {},
   registerBonusProvider() {},
-  onCustomEvent() {},
+  onCustomEvent(name, fn) { events[name] = fn; },
   registerCombatMethodResolver() {},
 });
 
@@ -108,6 +109,26 @@ test("a recharge saved before the shield was recorded stays on the Dragonfire sh
   player.setAttribute("dragonfire-shield:recharge", 5);
   loginHook({ player });
   assert.deepEqual(player.varbits, [[6539, 5]]);
+});
+
+test("the welcome screen's Play restarts a running wyvern shield cooldown once the gameframe is open", () => {
+  const player = createPlayer();
+  cycle = 2000;
+  DragonfireShield._test.setRechargeSteps(player, 12, shield(ItemIds.ANCIENT_WYVERN_SHIELD));
+  player.scripts.length = 0;
+  cycle = 2010;
+  events["gameframe:ready"]({ player });
+  assert.deepEqual(player.scripts, [[5931, 840, 2010 + 12 * 8]]);
+  for (const id of [ItemIds.DRAGONFIRE_SHIELD, ItemIds.DRAGONFIRE_WARD]) {
+    const other = createPlayer();
+    DragonfireShield._test.setRechargeSteps(other, 12, shield(id));
+    other.varbits.length = 0;
+    events["gameframe:ready"]({ player: other });
+    assert.deepEqual([other.varbits, other.scripts], [[], []], "a varbit cooldown needs no resend");
+  }
+  const idle = createPlayer();
+  events["gameframe:ready"]({ player: idle });
+  assert.deepEqual(idle.scripts, [], "no cooldown, nothing sent");
 });
 
 test("the login script (876) carries the tick it opens on as its first argument", () => {

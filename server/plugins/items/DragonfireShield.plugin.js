@@ -443,7 +443,10 @@ function login({ player }) {
   startRecharge(player);
 }
 
-/** buff_bar_start needs the buff bar open, and login hooks run before the gameframe goes out. */
+/**
+ * buff_bar_start finds the buff bar before it starts a buff, and login hooks run before the gameframe goes out:
+ * the wyvern shield's goes a tick later, and again when the welcome screen's Play opens the gameframe.
+ */
 function sendRechargeNextTick(player) {
   const { Task, TaskManager } = core;
   TaskManager.submit(new (class extends Task {
@@ -457,6 +460,10 @@ function sendRechargeNextTick(player) {
       if (steps > 0 && player.isRegistered?.()) sendRecharge(player, steps);
     }
   })());
+}
+
+function gameframeReady({ player }) {
+  if (rechargeSteps(player) > 0 && !rechargeShield(player).rechargeVarbit) sendRecharge(player, rechargeSteps(player));
 }
 
 function attach(api) {
@@ -483,6 +490,7 @@ module.exports = {
     api.registerBonusProvider({ apply: chargeDefence });
     api.registerCombatMethodResolver({ resolve: resolveBlast, overridesWeapon: true });
     api.onCustomEvent(DRAGONFIRE_BREATH_EVENT, absorbDragonfire);
+    api.onCustomEvent("gameframe:ready", gameframeReady);
   },
   _test: { login, setRechargeSteps, shieldOf, blastMaxHit, charges, chargeWyvernShield, recharge, chargeDefence, fossilCharges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },
 };

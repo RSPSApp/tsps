@@ -157,7 +157,8 @@ export class MagicOnItemPacketListener {
         (entity: any) => {
           const target = this.findVisibleGroundItem(entity, groundItemId, x, y);
           return !!target && this.withinTelegrabRange(entity, target.getPosition());
-        }
+        },
+        { failWhenUnreachable: true }
       );
       return;
     }

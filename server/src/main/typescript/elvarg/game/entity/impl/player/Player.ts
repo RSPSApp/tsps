@@ -154,6 +154,27 @@ export class Player extends Mobile {
     private multiIcon: number;
     private isRunning = true;
     private playerBot = false;
+    /**
+     * Whether the player's tile blocks NPC movement. Live (LostCity's PLAYER_OCC): a player who
+     * has not moved or teleported since logging in does not block NPCs yet - they walk through -
+     * so a login defers it until the first move. Only NPC movement reads it.
+     */
+    private occupiesTile = true;
+
+    public deferTileOccupancy(): void {
+        this.occupiesTile = false;
+    }
+
+    /** Called when the player first moves: from then on the tile they stand on is occupied. */
+    public claimTileOccupancy(): boolean {
+        const deferred = !this.occupiesTile;
+        this.occupiesTile = true;
+        return deferred;
+    }
+
+    public isOccupyingTile(): boolean {
+        return this.occupiesTile;
+    }
     private botAreaProcessTick = 0;
     /** Run energy in OSRS units (0-10,000; 100 units = 1%). */
     private runEnergy = GameConstants.RUN_ENERGY_MAX_UNITS;

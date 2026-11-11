@@ -47,6 +47,15 @@ export class MapObjects {
     }
 
     public static getPrivateArea(player: Player, id: number, location: Location): GameObject {
+        const object = this.find(player, id, location);
+        if (object == null && player.getRights() == PlayerRights.DEVELOPER) {
+            player.sendMessage("@red@Object with id " + id + " does not exist.");
+        }
+        return object;
+    }
+
+    /** {@link getPrivateArea} without the developer notice, for checks that run every tick. */
+    private static find(player: Player, id: number, location: Location): GameObject {
         const hash = this.getHash(location.getX(), location.getY(), location.getZ());
         const owned = this.ownerObjects.get(player)?.get(hash)?.find((entry) =>
             entry.getLocation().equals(location) && ObjectDefinition.forPlayer(entry.getId(), player)?.id === id
@@ -68,11 +77,6 @@ export class MapObjects {
             object = this.get(id, new Location(location.getX(), location.getY(), location.getZ() - 1), player.getPrivateArea());
         }
         if (object && !ObjectDefinition.forPlayer(object.getId(), player)) return null;
-
-        if (object == null && player.getRights() == PlayerRights.DEVELOPER) {
-            player.sendMessage("@red@Object with id " + id + " does not exist.");
-        }
-
         return object;
     }
 
@@ -80,8 +84,9 @@ export class MapObjects {
      * Whether the loc a player clicked, or one just like it, still stands where they clicked:
      * nobody removed or changed it while they walked there (a door another player opened).
      */
-    public static stillStands(player: Player, id: number, location: Location, object: GameObject): boolean {
-        const current = this.getPrivateArea(player, id, location);
+    public static stillStands(player: Player, id: number, location: Location, object: GameObject, quiet = false): boolean {
+        // quiet: checked every tick of a walk, so no developer notice for a loc that is gone.
+        const current = quiet ? this.find(player, id, location) : this.getPrivateArea(player, id, location);
         return current === object || (current != null && current.getId() === object.getId()
             && current.getType() === object.getType() && current.getFace() === object.getFace());
     }

@@ -542,3 +542,34 @@ test("undead trunks block player steps after deferred creation and spawn reload"
   assert.equal(man.hasFlag(NPC.BLOCKS_PLAYERS_FLAG), false, "ordinary NPCs remain walk-through");
   assert.equal(movement.isDynamicallyOccupied(tile), false);
 });
+
+test("a player who has not moved since logging in does not block NPCs until their first move", () => {
+  // Live (chickens walking through a freshly logged-in player who has not moved) and LostCity:
+  // PLAYER_OCC is only set once the player takes a step or teleports. Only NPC movement reads it:
+  // other occupancy checks (an Agility Pyramid block, arena placement) still see the player.
+  spawnFile([], false);
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const origin = new Location(3236, 3231, 0);
+  const next = new Location(3237, 3231, 0);
+  const player = {
+    getLocation: () => origin,
+    getNpcViewDistance: () => 15,
+    getPrivateArea: () => null,
+    occupiesTile: true,
+    deferTileOccupancy: Player.prototype.deferTileOccupancy,
+    claimTileOccupancy: Player.prototype.claimTileOccupancy,
+    isOccupyingTile: Player.prototype.isOccupyingTile,
+  };
+  player.deferTileOccupancy();
+  World.registerPlayerPosition(player);
+  try {
+    assert.equal(World.isPlayerOccupyingTile(origin, null, 1, undefined, true), false, "NPCs walk through straight after login");
+    assert.equal(World.isPlayerOccupyingTile(origin), true, "still standing there for everything else");
+    World.onPlayerMoved(player, origin, next);
+    assert.equal(World.isPlayerOccupyingTile(next, null, 1, undefined, true), true, "the first step claims the tile");
+    assert.equal(World.isPlayerOccupyingTile(origin), false);
+  } finally {
+    World.unregisterPlayerPosition(player, next);
+    World.unregisterPlayerPosition(player, origin);
+  }
+});

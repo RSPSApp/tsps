@@ -34,7 +34,7 @@ const CURSE = "curse_of_arrav";
 const BIT_LEVER_NORTH_PULLED = 1 << 7;
 const SKELETON_NOTHING = "You search the skeleton, but find nothing of interest.";
 const SHELVES_NOTHING = "You search the shelves, but find nothing of interest.";
-const NO_REACH = "You can't reach that!";
+const NO_REACH = "I can't reach that!";
 
 let core;
 let I;

@@ -38,7 +38,7 @@ const DOOR_NAMES = new Set([
   "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
   // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
   "Curtain",
-  // Tower of Life's entrance (21814): tol_tower_wall_door -> tol_tower_wall_door_open (21815).
+  // Tower of Life's entrance (21814): a pass-through gate (PASS_THROUGH_GATES takes its clicks first).
   // TowerOfLife.Quest.js checks the builder's outfit first (door:toggle).
   "Tower door",
   // Observatory Quest's kitchen gate (keepgate_closed/_left): a pass-through gate below.
@@ -690,6 +690,24 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 46,
+    }),
+    // Tower of Life's entrance (21814 tol_tower_wall_door, a south-edge wall, face 3, at 2649,3225; the
+    // tower is south). The Wiki: the builder's outfit is needed to enter the tower at any time during the
+    // quest, so the door lets only the checked player through and shuts behind them, as the guild doors
+    // do; left open like an ordinary door, anyone could follow. No capture of this door: the layout
+    // mirrors the Champions' Guild door's (same edge, inside to the south), with the cache's open leaf
+    // 21815 (tol_tower_wall_door_open) on the tile inside and the door sound.
+    // TowerOfLife.Quest's stage and outfit checks run before this (door:toggle).
+    Object.freeze({
+      closed: [[O.TOWER_DOOR, 2649, 3225, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2649, 3225, 0, 3],
+        [O.TOWER_DOOR + 1, 2649, 3224, 0, 0], // tol_tower_wall_door_open
+      ],
+      crossY: 3225,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
     }),
     // Witch's House, Taverley (revision 242 capture 20261108T030409): the front door (ticks 154-156),
     // back door (389-391) and shed door (652-654) each swap for INVISWALL on their own tile and an

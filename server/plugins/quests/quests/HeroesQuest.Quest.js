@@ -145,8 +145,16 @@ module.exports = function registerHeroesQuest(api) {
       quest.setStage(player, STAGE_BLACK_HQ);
     } else if (npcId === TROBERT_NPC_ID && option === "I volunteer to undertake that mission!") {
       // Trobert hands over the Id papers here (no item step in the transcript); a lost set comes from him again.
-      if (stage !== STAGE_BLACK_HQ && stage !== STAGE_BLACK_PAPERS) return;
-      if (!has(player, ID_PAPERS)) player.getInventory().forceAdd(player, new Item(ID_PAPERS, 1));
+      // Up to the hand-over to Grip, so a player who loses them on the way to Grip is not stuck.
+      if (stage !== STAGE_BLACK_HQ && stage !== STAGE_BLACK_PAPERS && stage !== STAGE_BLACK_MANSION) return;
+      if (!has(player, ID_PAPERS)) {
+        player.getInventory().forceAdd(player, new Item(ID_PAPERS, 1));
+        // A full bag takes nothing: stay on the same stage, so asking again with room hands them over.
+        if (!has(player, ID_PAPERS)) {
+          player.sendMessage("You don't have room for the I.D. papers. Make some space and ask Trobert again.");
+          return;
+        }
+      }
       if (stage === STAGE_BLACK_HQ) quest.setStage(player, STAGE_BLACK_PAPERS);
     }
   }
@@ -280,7 +288,7 @@ module.exports = function registerHeroesQuest(api) {
       return "master-thieves-armband-phoenix-gang-trying-to-enter-grubor-s-house";
     }
     if (npcId === TROBERT_NPC_ID) {
-      if (stage === STAGE_BLACK_HQ || (stage === STAGE_BLACK_PAPERS && !has(player, ID_PAPERS))) {
+      if (stage === STAGE_BLACK_HQ || ((stage === STAGE_BLACK_PAPERS || stage === STAGE_BLACK_MANSION) && !has(player, ID_PAPERS))) {
         return "master-thieves-armband-black-arm-gang-trobert-s-plan";
       }
       if (stage === STAGE_BLACK_PAPERS) {

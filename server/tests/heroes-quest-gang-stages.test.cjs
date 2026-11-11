@@ -182,3 +182,36 @@ test("opening a gang conversation and leaving it moves nothing; out-of-order tal
   talk(garvEarly, "GARV");
   assert.equal(stage(garvEarly), 8);
 });
+
+test("Trobert hands the papers out again at stage 10 if they were lost after Garv, and Grip then takes them", (t) => {
+  const p = player(t, BLACK_ARM, 10);
+  assert.equal(papers(p), 0);
+  talk(p, "TROBERT", ["So can you help me get Scarface Pete's candlesticks?", "I volunteer to undertake that mission!"]);
+  assert.equal(papers(p), 1);
+  assert.equal(stage(p), 10);
+  talk(p, "GRIP", ["So what do my duties involve?"]);
+  assert.equal(stage(p), 11);
+  assert.equal(papers(p), 0, "Grip keeps the papers");
+  const late = player(t, BLACK_ARM, 11);
+  talk(late, "TROBERT", ["So can you help me get Scarface Pete's candlesticks?", "I volunteer to undertake that mission!"]);
+  assert.equal(papers(late), 0, "after Grip has them Trobert hands out nothing");
+});
+
+test("Trobert with a full bag hands over nothing and the stage stays put", (t) => {
+  const volunteer = ["So can you help me get Scarface Pete's candlesticks?", "I volunteer to undertake that mission!"];
+  const fill = (p) => { while (p.getInventory().getFreeSlots() > 0) p.getInventory().add(new core.Item(core.ItemIdentifiers.SWORDFISH, 1)); };
+  const p = player(t, BLACK_ARM, 8);
+  fill(p);
+  talk(p, "TROBERT", volunteer);
+  assert.equal(papers(p), 0);
+  assert.equal(stage(p), 8, "no papers went in, so 8 stays 8");
+  p.getInventory().deleteNumber(core.ItemIdentifiers.SWORDFISH, 1);
+  talk(p, "TROBERT", volunteer);
+  assert.equal(papers(p), 1);
+  assert.equal(stage(p), 9);
+  const q = player(t, BLACK_ARM, 10);
+  fill(q);
+  talk(q, "TROBERT", volunteer);
+  assert.equal(papers(q), 0);
+  assert.equal(stage(q), 10);
+});

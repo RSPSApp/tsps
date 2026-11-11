@@ -23,6 +23,7 @@ const MAX_MESSAGE_LENGTH = 80;
 const MAX_NAME_LENGTH = 20;
 
 const BUTTON_TIMEOUT_VARBIT = 13806; // clan_transmit_affined_timeout
+const DISABLE_LAST_SEEN_VARBIT = 16118; // clan_disable_lastseen, the "Update clan 'last seen' records" setting
 const YOUR_CLAN_GROUP = 701;
 const CHANNEL_BUTTON = 8; // Chat, or Leave once in the channel (rsprox 2528)
 const SETTINGS_BUTTON = 9;
@@ -77,7 +78,8 @@ function login({ player }) {
     return;
   }
   const member = Core.memberOf(clan, Core.accountOf(player));
-  Core.noteSeen(clan, member);
+  // With "Update clan 'last seen' records" off, the member keeps the last seen day they had.
+  if (player.getPacketSender().getVarbit(DISABLE_LAST_SEEN_VARBIT) !== 1) Core.noteSeen(clan, member);
   if (member.rank === Core.RANK_OWNER) {
     clan.ownerLastSeen = Date.now();
     Store.save();

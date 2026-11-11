@@ -124,7 +124,6 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 - **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
 - **Not done**:
   - Show data orbs (8, varbit 4084 `orbs_disabled`): live also leaves the orbs interface (160) closed while it is set and opens it when the player turns them back on (rsprox 229/2375 tick 8), which needs server work.
-  - Friend Login/Logout messages: the server sends no friend login or logout messages yet, so Off has nothing to stop.
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
   - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
 
@@ -397,6 +396,16 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 
 **Pronouns.** The Ironman trade refusal and the Surprise Exam's praise follow the player's pronouns (he, she, they), not the body type: "<name> is an Ironman. They stand alone." (the Wiki gives the They form).
 
+- **Not done**: nothing known.
+
+## Chat and social rows
+
+Chat and social rows whose choice the game now follows.
+
+- **Friend Login/Logout messages** (44). The client writes "<name> has logged in." and "... logged out." itself from the friends list, as the official client does (`FriendLoginUpdates.ts`). With Off (`loginlogout_setting` 2, read as script 4487 does, `loginlogout_permanent` first) it writes none.
+- **Show chat effects** (34, varp 171 `option_chat`). While it is 1, every player's overhead chat is drawn plain yellow and static: no colours, patterns or wave, scroll and slide effects (`overlays3.ts`, used by both renderers).
+- **Update clan 'last seen' records** (431, varbit 16118 `clan_disable_lastseen`). While it is 1, logging in leaves the member's last seen day as it was and sends no `member_extra_info` delta for it. The owner's own absence timer (for the ownership hand-over) still runs.
+- **'Did you know?' tips** (433, varbit 16235 `settings_didyouknow_disabled`). `LoginTips.plugin.js` sends one tip at random, as chat type 117, straight after the login greeting (`welcome-screen:greeted`), unless the saved setting is 1; rows 434 and 435 colour it. The 40 tips in `data/login-tips.json` are live's own lines from rev 238 and 239. In the rsprox captures, live sends a tip right after "Welcome to Old School RuneScape." in 1,380 of 1,381 logins since rev 235 (for example 239/4251), none of them with the setting sent as 1. Live's navigator tip is cut short at "</col", and is kept as sent.
 - **Not done**: nothing known.
 
 ## Containers on death

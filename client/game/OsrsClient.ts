@@ -201,7 +201,7 @@ import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { chatHistory } from "../rs/cs2/ChatHistory";
-import { FriendLoginUpdates } from "./chat/FriendLoginUpdates";
+import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
 import { Opcodes as Cs2Opcodes } from "../rs/cs2/Opcodes";
@@ -6606,8 +6606,9 @@ export class OsrsClient {
             } catch {}
 
             if (this.isLoggedIn()) {
-                for (const message of this.friendLoginUpdates.drain()) {
-                    chatHistory.addMessage(5, message, "", "");
+                const messages = this.friendLoginUpdates.drain();
+                if (friendLoginNoticesShown((id) => this.varManager.getVarbit(id))) {
+                    for (const message of messages) chatHistory.addMessage(5, message, "", "");
                 }
             }
 

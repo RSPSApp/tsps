@@ -184,6 +184,17 @@ function sellerAction(event) {
   }
 }
 
+/**
+ * A few transcripts (Master Crafter) narrate the sale and the hood with no hand-out step, so
+ * the master's `saleLine` / `hoodLine` in skillcapes.json stand in for it.
+ */
+function sellerLine(event) {
+  const master = masterFor(event);
+  if (!master || typeof event.text !== "string" || !event.player) return;
+  if (master.saleLine && event.text === master.saleLine) sell(event.player, master.cape);
+  else if (master.hoodLine && event.text === master.hoodLine) giveHood(event.player, master.cape);
+}
+
 function syncSailingVarbit({ player }) {
   const id = Capes.core.CacheDefinitions.getVarbitId(SAILING_PURCHASED_VARBIT);
   if (Number.isInteger(id)) player.getPacketSender().sendVarbit(id, player.getAttribute(SAILING_PURCHASED_ATTRIBUTE) === true ? 1 : 0);
@@ -257,10 +268,11 @@ module.exports = function attachSellers(api) {
   api.onNpcDialogueVariant(sellerVariant);
   api.onNpcDialogueCondition(sellerCondition);
   api.onCustomEvent("npc-dialogue:action", sellerAction);
+  api.onCustomEvent("npc-dialogue:line", sellerLine);
   api.onCanShop(openSkillcapeShop);
   api.onCustomEvent("shop:buy-limit", limitCapePurchase);
   api.onCustomEvent("shop:purchase", hoodWithCape);
   api.onPlayerLogin(syncSailingVarbit);
 };
 
-module.exports._test = { MASTERS, SHOP_MASTERS, SHOP_CAPES, CONDITIONS, sellerVariant, sellerCondition, sellerAction, sell, hasRoom, capeFor, shopCopies, openSkillcapeShop, limitCapePurchase };
+module.exports._test = { MASTERS, SHOP_MASTERS, SHOP_CAPES, CONDITIONS, sellerVariant, sellerCondition, sellerAction, sellerLine, sell, hasRoom, capeFor, shopCopies, openSkillcapeShop, limitCapePurchase };

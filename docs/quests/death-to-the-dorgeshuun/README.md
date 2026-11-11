@@ -22,7 +22,7 @@ No native playthrough recorded; natural completion pending.
   Zanik follows the player, like Millie, Father Urhney and Gee/Donie; they give no tour progress. Source: the
   Wiki "Death to the Dorgeshuun" transcript (no rsprox capture of the tour was found; a text search for
   "Zanik of the Dorgeshuun" hit only a Land of the Goblins capture). Test:
-  `server/tests/dorgeshuun-optional-tour.test.cjs`; the candle seller's closing menu is not exercised.
+  `server/tests/dorgeshuun-optional-tour.test.cjs`. The border guard stop is reached by Talk-to on the guard only: its page opens on the player's line ("Can we come through this gate?"), so the live trigger is probably the toll gate, whose click still plays the ordinary toll dialogue here (AlKharidGate.plugin.js); that trigger is inference.
 - **open** The Wiki's skill and combat tutor stops (npc ids 3216-3227: crafting, banking, cooking, woodsman,
   smithing apprentice, ranged/magic/melee combat, prayer, mining, fishing) have transcripts but no spawn in this
   world, so they cannot be reached.

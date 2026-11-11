@@ -30,7 +30,10 @@
  *  - The optional tour stops the world still has (Millie, Father Urhney, Gee/Donie,
  *    Fred the Farmer, the candle seller and the Al Kharid border guards) play their
  *    transcript once Zanik follows; they are stateless, and repeat and interruption
- *    behavior is unverified. The Wiki's skill and combat tutors (NPC ids 3216-3227) have
+ *    behavior is unverified. The border guard's page opens on the player's line ("Can we come
+ *    through this gate?"), so live probably triggers it at the toll gate; here it plays on
+ *    Talk-to with the guard only, and clicking the gate still plays the ordinary toll
+ *    dialogue (AlKharidGate.plugin.js). The Wiki's skill and combat tutors (NPC ids 3216-3227) have
  *    no spawn in this world, so their stops cannot be reached.
  *    The existing tour also handles the
  *    five stops the transcript gates on (Duke, a common man/woman, Father

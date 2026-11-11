@@ -11,7 +11,7 @@ const { TOOLS_UNLOCKED_ATTRIBUTE, sendToolUnlocks } = require("./Cargo.Sailing")
 const { PARTS, partOptions, requirementsOf } = require("./BoatParts.Sailing");
 const { facilityNamed, facilityRequirements, hotspotsOf, setFacility, FACILITY } = require("./BoatFacilities.Sailing");
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
-const { visitedBoat, refreshShownBoat } = require("./Shipyard.plugin");
+const { visitedBoat, refreshShownBoat } = require("./Shipyard.Sailing");
 
 /** Tier names by part, in tier order (hulls and sails by wood, keels and helms by metal). */
 const WOOD_TIERS = ["wooden", "oak", "teak", "mahogany", "camphor", "ironwood", "rosewood"];
@@ -208,9 +208,6 @@ function heading({ player, parts }) {
 }
 
 module.exports = {
-  name: "SailingCommands",
-  description: "Developer commands for testing sailing: ::raft, ::skiff and ::sloop to moor boats, ::maxboat, ::boatinfo, ::sailmode and ::heading.",
-  members: true,
   _test: { loadoutFacilities, LOADOUTS },
   register(api) {
     content();

@@ -4,9 +4,6 @@
 const common = require("./barracudatrials/Common.BarracudaTrials");
 
 module.exports = {
-  name: "SailingBarracudaTrials",
-  description: "Sailing's Barracuda Trials: the Tempor Tantrum, Jubbly Jive and Gwenith Glide timed sea courses, with ranks and rewards.",
-  members: true,
   register(api) {
     common.init(api);
     require("./barracudatrials/Ships.BarracudaTrials")(api);

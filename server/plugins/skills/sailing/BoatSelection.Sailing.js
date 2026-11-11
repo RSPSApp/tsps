@@ -105,9 +105,6 @@ function forgetPending({ player }) {
 }
 
 module.exports = {
-  name: "SailingBoatSelection",
-  description: "The boat selection interface for choosing which of your boats to board at a gangplank or recover at a shipwright.",
-  members: true,
   MODE,
   openBoatSelection,
   register(api) {

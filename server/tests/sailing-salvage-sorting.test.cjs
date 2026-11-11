@@ -36,7 +36,7 @@ before(async () => {
     emitted.push([name, event]);
     handlers[name]?.(event);
   };
-  plugin = require("../plugins/skills/sailing/Salvaging.plugin");
+  plugin = require("../plugins/skills/sailing/Salvaging.Sailing");
   plugin.register({
     core,
     onObjectInteraction: (name, actions) => { hooks[name] = actions; },

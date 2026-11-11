@@ -10,7 +10,7 @@
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
 const { content, dockNear, dockById, boatName } = require("./SailingContent.Sailing");
 const { teleportFocusOf } = require("./BoatFacilities.Sailing");
-const { openBoatSelection, MODE } = require("./BoatSelection.plugin");
+const { openBoatSelection, MODE } = require("./BoatSelection.Sailing");
 const { dropLostOnRecovery } = require("./Cargo.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 
@@ -194,9 +194,6 @@ function capeRenameBoat(request) {
 }
 
 module.exports = {
-  name: "SailingBoatTeleport",
-  description: "Teleport to boat tablets and the Sailing cape teleport, taking the player to a moored boat's dock without boarding it.",
-  members: true,
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

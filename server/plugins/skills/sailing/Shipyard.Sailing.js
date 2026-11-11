@@ -2,7 +2,7 @@
 // boat schematics (interface 939) swap its hull, keel, sails or helm for another tier, and the
 // portal returns them to the dock. Upgrades and downgrades cost the part's materials and give
 // Construction XP; the old part isn't refunded. The boat's own gangplank puts the player on its
-// deck, where facilities are built (ShipyardFacilities.plugin.js). The flow follows live
+// deck, where facilities are built (ShipyardFacilities.Sailing.js). The flow follows live
 // captures (docs/sailing-osrs-reference.md); part options, levels and materials are the cache's.
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
 const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
@@ -20,7 +20,7 @@ const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { sendToolUnlocks } = require("./Cargo.Sailing");
 const parts = require("./BoatParts.Sailing");
 const facilities = require("./BoatFacilities.Sailing");
-const { MODE, openBoatSelection } = require("./BoatSelection.plugin");
+const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
 
 /** Where the player and their boat stand in the shipyard (map square 32, 42), as captured. */
 const SHIPYARD = {
@@ -276,7 +276,7 @@ function build(player, optionRow) {
   });
 }
 
-/** A Build in the parts customisation (facility builds are ShipyardFacilities.plugin.js's). */
+/** A Build in the parts customisation (facility builds are ShipyardFacilities.Sailing.js's). */
 function clickCustomisation(event) {
   if (!isBuildTrigger(event) || visits.get(event.player)?.hotspot !== undefined) return;
   event.handled = true;
@@ -375,9 +375,6 @@ function returnFromShipyard({ player }) {
 }
 
 module.exports = {
-  name: "SailingShipyard",
-  description: "Shipwright's Customise-boat takes you to the shipyard to swap a boat's hull, keel, sails or helm for another tier, paying materials for Construction XP.",
-  members: true,
   readOptionRow,
   customiseBoat,
   beginVisit,

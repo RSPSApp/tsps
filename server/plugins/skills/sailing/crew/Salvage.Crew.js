@@ -10,7 +10,7 @@
 // "Without the Sailing level for the ship", as crew salvage at the captain's level).
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
-const salvaging = require("../Salvaging.plugin");
+const salvaging = require("../Salvaging.Sailing");
 const shipwrecks = require("../Shipwrecks.Salvaging");
 const cargo = require("../Cargo.Sailing");
 const { animateDeckLoc } = require("../SailingContent.Sailing");

@@ -96,7 +96,7 @@ function byNpc(npcId) {
 
 /** A crewmate's stat on a boat (its saved record): their own, raised by a keg of whirlpool surprise. */
 function statOf(owned, crew, stat) {
-  return require("../Kegs.plugin").crewStat(owned, crew.stats[stat], stat);
+  return require("../Kegs.Sailing").crewStat(owned, crew.stats[stat], stat);
 }
 
 /** "Jobless Jim (H2 P1 D3)" as the assignment menu titles them. */

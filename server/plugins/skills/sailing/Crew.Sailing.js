@@ -4,9 +4,6 @@
 const common = require("./crew/Common.Crew");
 
 module.exports = {
-  name: "SailingCrew",
-  description: "Sailing crewmates: recruiting them, the Crew Registrar, jobs at the helm, salvaging, cannons, repairs, banking cargo and courier crates.",
-  members: true,
   register(api) {
     common.init(api);
     require("./crew/Recruit.Crew")(api);

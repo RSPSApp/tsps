@@ -12,7 +12,7 @@
 // option." The refusal was never captured, so its line is this server's.
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
-const { openBoatSelection, MODE } = require("../BoatSelection.plugin");
+const { openBoatSelection, MODE } = require("../BoatSelection.Sailing");
 const { dockNear, fade } = require("../SailingContent.Sailing");
 
 const MOVE_CARGO = "Move Cargo to Bank";

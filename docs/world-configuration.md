@@ -496,6 +496,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SaveHistory` | SaveHistory | commands | yes | Owner commands ::snapshots and ::rollback, which list a player's saved copies and restore an earlier one. |
 | `SeasonalRares` | SeasonalRares | events | yes | Hands out discontinued seasonal rares during the world's own event windows, with ::rares to list what a player can claim. |
 | `AcceptAid` | AcceptAid | interface | yes | The Accept Aid setting that controls whether Lunar spells, cures and shared boosts can affect the player, refused for Ironmen. |
+| `ActivityAdviser` | ActivityAdviser | interface | yes | The Activity Adviser: the minimap button opens its quest suggestions, built from the cache quest table. |
 | `AlchemyWarningThreshold` | AlchemyWarningThreshold | interface | yes | Settings option for the item value above which casting Alchemy asks first. |
 | `AntiDragDelay` | AntiDragDelay | interface | yes | Settings option for the Anti Drag delay, asked as a number of milliseconds. |
 | `BankPin` | BankPin | interface | yes | The Bank PIN: the Banker settings, the keypad, the bank lock, and the guard on other PIN-protected actions. |
@@ -832,32 +833,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RalosRise` | RalosRise | skills | yes | Prayer training at Ralos' Rise: blessing bones and wine at the altar, breaking blessed bones into shards and the libation bowl. (members only) |
 | `Reanimation` | Reanimation | skills | yes | Gives Prayer XP to the caster who kills a creature reanimated by an Arceuus ensouled-head spell. (members only) |
 | `Runecrafting` | Runecrafting | skills | yes | Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals. |
-| `Sailing` | Sailing | skills | yes | The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving; off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says. (members only) |
-| `Anchor` | SailingAnchor | skills | yes | A boat's anchor: dropping it stops the boat and holds it still until it's raised. (members only) |
-| `BarracudaTrials` | SailingBarracudaTrials | skills | yes | Sailing's Barracuda Trials: the Tempor Tantrum, Jubbly Jive and Gwenith Glide timed sea courses, with ranks and rewards. (members only) |
-| `BoatSelection` | SailingBoatSelection | skills | yes | The boat selection interface for choosing which of your boats to board at a gangplank or recover at a shipwright. (members only) |
-| `BoatTeleport` | SailingBoatTeleport | skills | yes | Teleport to boat tablets and the Sailing cape teleport, taking the player to a moored boat's dock without boarding it. (members only) |
-| `CargoHold` | SailingCargoHold | skills | yes | A boat's cargo hold: opening it, withdrawing and depositing cargo and salvage, and the tools compartment. (members only) |
-| `Charting` | SailingCharting | skills | yes | Sailing sea charting: 358 tasks across the seas, logged once each in the Captain's log for Sailing XP and sea bonuses. (members only) |
-| `SailingCommands` | SailingCommands | skills | yes | Developer commands for testing sailing: ::raft, ::skiff and ::sloop to moor boats, ::maxboat, ::boatinfo, ::sailmode and ::heading. (members only) |
-| `Crew` | SailingCrew | skills | yes | Sailing crewmates: recruiting them, the Crew Registrar, jobs at the helm, salvaging, cannons, repairs, banking cargo and courier crates. (members only) |
-| `CrystalExtractor` | SailingCrystalExtractor | skills | yes | The crystal extractor: switched on at sea it makes a crystal mote every 105 ticks, harvested for Sailing XP, a wind mote and sometimes a crystal shard. (members only) |
-| `DropWarning` | SailingDropWarning | skills | yes | Asks before an item is dropped on a boat's deck, unless its All Settings row (465) says not to. (members only) |
-| `Gangplank` | SailingGangplank | skills | yes | Boarding and disembarking boats at gangplanks and mooring points, and docking at a port's buoy, with fades and sounds. (members only) |
-| `Helm` | SailingHelm | skills | yes | Taking and leaving a boat's helm, the sidepanel sail buttons, trimming and setting sails, and steering the boat. (members only) |
-| `Kegs` | SailingKegs | skills | yes | Lets players fill a boat's keg with 25 ales, check it, fill glasses from it and empty it, and applies each ale's keg effect while aboard. (members only) |
-| `PortTasks` | SailingPortTasks | skills | yes | Sailing port tasks: courier and bounty tasks from notice boards and ledger tables, port masters and reward bags. (members only) |
-| `Salvaging` | SailingSalvaging | skills | yes | Shipwreck salvaging: a boat's salvaging hook reels salvage from wrecks for Sailing XP, and a salvaging station sorts it into loot. (members only) |
-| `Schematics` | SailingSchematics | skills | yes | Sailing schematics: unlocking boat parts and facilities, and where players acquire them. (members only) |
-| `SeaCombat` | SailingSeaCombat | skills | yes | Sailing boat combat: manning cannons, sea creatures attacking the boat, boat HP and repairs, corpse harvesting and ranged or magic from the deck. (members only) |
-| `Shipwright` | SailingShipwright | skills | yes | Shipwright NPCs' Buy-boat (the Boat Emporium) and Recover-boat, paying from the bank so a Port Wizard brings a boat to the port. (members only) |
-| `ShipwrightRepairs` | SailingShipwrightRepairs | skills | yes | Shipwright repairs for boats, attached from the Sailing repairs unit. (members only) |
-| `Shipyard` | SailingShipyard | skills | yes | Shipwright's Customise-boat takes you to the shipyard to swap a boat's hull, keel, sails or helm for another tier, paying materials for Construction XP. (members only) |
-| `ShipyardFacilities` | SailingShipyardFacilities | skills | yes | Lets players build, modify and remove facilities such as a range on a boat's hotspots while aboard it in the shipyard, at the cost of materials. (members only) |
-| `StaticShips` | SailingStaticShips | skills | yes | Lets players board ships that a quest or plugin spawns as scenery, such as the Barracuda Trials boats, which carry their own NPCs and objects. (members only) |
-| `SummonBoat` | SailingSummonBoat | skills | yes | Summon boat tablets: breaking one near a dock brings a chosen boat with a teleport focus to you, losing its port task cargo, salvage and fish. (members only) |
-| `TeleportWarning` | SailingTeleportWarning | skills | yes | Warns before a teleport spell takes the player off their boat at sea, when its All Settings row is on. (members only) |
-| `ShipwrightsWorkbench` | ShipwrightsWorkbench | skills | yes | The Shipwrights' Workbench: crafting hull parts, large hull parts and repair kits from planks and nails for Construction XP. (members only) |
+| `Sailing` | Sailing | skills | yes | Sailing boats, travel, shipyards, crews, port tasks, sea charting and combat. (members only) |
 | `ShootingStars` | ShootingStars | skills | yes | Crashed stars land around the world on a timer; players mine them layer by layer for stardust and trade it with Dusuri, with an optional landing announcement. |
 | `Slayer` | Slayer | skills | yes | Slayer: tasks, masters, points and rewards, superiors, finishers, and the slaughter and expeditious bracelets, built on the cache's Slayer tables. (members only) |
 | `Smithing` | Smithing | skills | yes | Smelting at furnaces and smithing at anvils, plus cannonballs, godswords, dragon and visage shields, barbarian spears, Varrock armour and Superheat Item. |

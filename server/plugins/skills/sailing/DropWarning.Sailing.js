@@ -54,9 +54,6 @@ function dropWarning(request) {
 }
 
 module.exports = {
-  name: "SailingDropWarning",
-  description: "Asks before an item is dropped on a boat's deck, unless its All Settings row (465) says not to.",
-  members: true,
   register(pluginApi) {
     api = pluginApi;
     api.onCustomEvent("item:drop-warning", dropWarning);

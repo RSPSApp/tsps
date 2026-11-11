@@ -20,7 +20,7 @@ const Capacity = require("../plugins/treasuretrails/Capacity.ClueCapacity");
 const Stash = require("../plugins/treasuretrails/trails/Stash.TreasureTrails");
 const Grave = require("../plugins/world/gravestones/Grave.Gravestones");
 const GraveInterface = require("../plugins/world/gravestones/Interface.Gravestones");
-const TeleportWarning = require("../plugins/skills/sailing/TeleportWarning.plugin");
+const TeleportWarning = require("../plugins/skills/sailing/TeleportWarning.Sailing");
 
 let core;
 let I;

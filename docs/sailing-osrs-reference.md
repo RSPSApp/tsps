@@ -403,7 +403,7 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 ## Shipwrights' workbench
 
 Locs 59723 (`shipwright_workbench`) and 59724 (`shipwright_workbench_small`) beside the shipwrights:
-Craft, Craft-hull-parts, Craft-repair-kits. Plugin: `plugins/skills/sailing/ShipwrightsWorkbench.plugin.js`,
+Craft, Craft-hull-parts, Craft-repair-kits. Plugin: `plugins/skills/sailing/ShipwrightsWorkbench.Sailing.js`,
 recipes in `plugins/skills/sailing/data/shipwrights-workbench.json`. The cache has no recipe table (only the
 part tables' materials name the products), so recipes, levels, XP and ticks are the OSRS Wiki's item pages.
 

@@ -203,8 +203,8 @@ function setup() {
   const clickInterface = (groupId, childId, slot) => { const event = { player, groupId, childId, slot, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
   // These quest-unit calls still use their direct object hook. Register the real
   // sailing control requests; dispatcher order is outside this quest-unit helper.
-  require('../plugins/skills/sailing/Helm.plugin').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require('../plugins/skills/sailing/Sailing.plugin').register({ ...api, onPlayerLogin() {} });
+  require('../plugins/skills/sailing/Helm.Sailing').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require('../plugins/skills/sailing/Panel.Sailing').register({ ...api, onPlayerLogin() {} });
   unitHelms.add({ player, api, hooks });
   return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, modes, flags, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
 }
@@ -777,7 +777,7 @@ test('stage 28 shipyard UI build consumes materials and advances once through th
   const { Sailing } = require('../dist/game/content/sailing/Sailing');
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
   const BoatFacilities = require('../plugins/skills/sailing/BoatFacilities.Sailing');
-  const Shipyard = require('../plugins/skills/sailing/Shipyard.plugin.js');
+  const Shipyard = require('../plugins/skills/sailing/Shipyard.Sailing.js');
   const raft = Sailing.giveBoat(h.player, 'raft', 'the_pandemonium');
   raft.facilities = [0];
   const hold = BoatFacilities.hotspotsOf('raft')[0].allowed.find((row) =>
@@ -804,7 +804,7 @@ test('stage 28 shipyard UI build consumes materials and advances once through th
   Shipyard.readOptionRow = () => hold;
   Shipyard.refusal = () => null;
   BoatManager.setDeckLoc = () => {};
-  const modulePath = require.resolve('../plugins/skills/sailing/ShipyardFacilities.plugin.js');
+  const modulePath = require.resolve('../plugins/skills/sailing/ShipyardFacilities.Sailing.js');
   delete require.cache[modulePath];
   const Facilities = require(modulePath);
   Facilities.register(h.api);

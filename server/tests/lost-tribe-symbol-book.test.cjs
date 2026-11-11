@@ -16,7 +16,8 @@ const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const QuestRuntime = require('../plugins/quests/QuestRuntime');
 
 const BOOK = 183;
-const SPREADS = [33, 38, 42, 46, 14, 15];
+// As read in rsprox_transcripts/232/03222.txt: titles, page 1-3, directions (15), symbols (14).
+const SPREADS = [33, 38, 42, 46, 15, 14];
 const RIGHT = 16, LEFT = 17, RIGHT_LAYER = 18, LEFT_LAYER = 19;
 const uid = (child) => (BOOK << 16) | child;
 
@@ -63,7 +64,7 @@ test('the goblin symbol book opens its own interface, turns through six spreads 
   assert.equal(hidden.get(uid(RIGHT_LAYER)), true, 'no right arrow on the last spread');
   assert.equal(hidden.get(uid(LEFT_LAYER)), false);
   await send({ type: 'widget_action', widgetId: uid(LEFT), groupId: BOOK, childId: LEFT, slot: -1, buttonNum: 1 });
-  assert.deepEqual(shown(), [14], 'the left arrow turns back');
+  assert.deepEqual(shown(), [15], 'the left arrow turns back from the symbols to the directions');
 
   sender.sendInterfaceRemoval();
   assert.equal(quest.getStage(p), 8, 'closing the book completes the reading step');

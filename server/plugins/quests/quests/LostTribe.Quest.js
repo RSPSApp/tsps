@@ -199,17 +199,19 @@ module.exports = function registerLostTribeQuest(api) {
 
   // The goblin symbol book is its own cache interface, lost_tribe_symbol_book (183), with all its
   // text in the cache (Wiki, Transcript:Goblin symbol book): six spreads, each a layer the server
-  // shows in turn, and two "Turn page" arrows (transmitop) the server answers. No recording shows
-  // the book being read, so the arrows' ends are inferred: no left arrow on the title spread, no
-  // right arrow on the last.
+  // shows in turn, and two "Turn page" arrows (transmitop) the server answers. rsprox_transcripts/
+  // 232/03222.txt reads it (lines 35971-35990, 36008-36040, 36738-36803, 38279): the spreads go
+  // titles, page 1-3, directions, symbols, and the last spread hides the right arrow. Live also
+  // reopens on the saved spread through varbit 541 (lost_tribe_bookmark, 0-5), which this quest
+  // still uses as its 0/1 "book obtained" flag; that isn't done here.
   const SYMBOL_BOOK = 183;
   const SYMBOL_BOOK_SPREADS = [
     33, // lost_tribe_titles: "A History of the Goblin Race" (shown by default)
     38, // lost_tribe_page_1
     42, // lost_tribe_page_2
     46, // lost_tribe_page_3: "In the following pages I present a list of the tribes and their symbols."
-    14, // lost_tribe_symbols: Drogokishuun ... Yurkolgokh
     15, // lost_tribe_directions: Thorobshuun ... Narogoshuun
+    14, // lost_tribe_symbols: Drogokishuun ... Yurkolgokh (the last spread)
   ];
   const SYMBOL_BOOK_RIGHT_ARROW = 16;
   const SYMBOL_BOOK_LEFT_ARROW = 17;

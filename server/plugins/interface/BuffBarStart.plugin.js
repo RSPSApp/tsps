@@ -7,7 +7,8 @@
 //   param 1541 ticks (script 5940: varc + param - map_clock), 100 for the special and 30 for a poison hit;
 // - the Sire stun (3091): the client stamps its own clock and draws 30 seconds from it, whatever the value.
 // A value of 0 hides the buff (except the Sire stun, which runs out by itself).
-// Ours: live has not been recorded sending buff_bar_start for these buffs, only to clear burn and bleed.
+// Live starts poison and venom at each hit, with that tick's map_clock, 30 ticks apart, and sends no clear at a
+// cure. Ours: the freeze, Staff of the dead and Sire stun starts, which live has not been recorded sending.
 const BUFF_BAR_START_SCRIPT = 5931;
 const SIRE_STUN_STRUCT = 3091;
 const FREEZE_STRUCT = 3092;
@@ -51,7 +52,7 @@ function poisonPulse(player, now, prior) {
   return [struct, now + ticksUntilPulse - POISON_PULSE_TICKS];
 }
 
-/** The first tick after a login sends every one, 0 included, since the client's varcs outlive a logout. */
+/** The first tick after a login sends every running one, and 0 for the others, since the varcs outlive a logout. */
 function sync(player) {
   if (player.isUnwatchedBot?.()) return; // no client to draw them
   const now = core.World.getProcessCycle();
@@ -62,8 +63,9 @@ function sync(player) {
   const poison = poisonPulse(player, now, prior?.[2]);
   if (force || prior[0] !== freeze) startBuff(player, FREEZE_STRUCT, freeze);
   if (force || prior[1] !== powerOfDeath) startBuff(player, POWER_OF_DEATH_STRUCT, powerOfDeath);
-  if (force || prior[2][0] !== poison[0] || prior[2][1] !== poison[1]) {
-    // Poison and venom share one varc: clearing one would clear the other, so a switch only starts the new one.
+  // Poison and venom are only ever started, at each hit: the bar shows them only while varp poison holds a poison
+  // or venom value, so a cure needs no clear.
+  if (poison[1] > 0 && (force || prior[2][0] !== poison[0] || prior[2][1] !== poison[1])) {
     startBuff(player, poison[0], poison[1]);
   }
   sentValues.set(player, [freeze, powerOfDeath, poison]);

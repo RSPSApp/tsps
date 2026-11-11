@@ -56,10 +56,10 @@ test("the structs are the cache's buffs, with the durations the bar draws them f
   }
 });
 
-test("the tick after a login clears every buff that is not running, as the client's varcs outlive a logout", () => {
+test("the tick after a login clears the freeze and the special when not running, as the client's varcs outlive a logout", () => {
   const f = fixture();
   f.login();
-  assert.deepEqual(f.sent(), [[FREEZE.struct, 0], [SOTD.struct, 0], [POISON.struct, 0]]);
+  assert.deepEqual(f.sent(), [[FREEZE.struct, 0], [SOTD.struct, 0]], "poison is hidden by varp poison, so it gets no clear");
   f.tick();
   assert.deepEqual(f.sent(), [], "nothing changed");
 });
@@ -103,7 +103,7 @@ test("taking damage without a staff clears the special's attribute, and the buff
   assert.deepEqual(f.sent(), [[SOTD.struct, 0]]);
 });
 
-test("poison sends the tick its 30-tick pulse started, again at each hit, and 0 once cured", () => {
+test("poison sends the tick of each hit, 30 ticks apart, and nothing at a cure, as recorded", () => {
   const f = fixture();
   f.login();
   f.sent();
@@ -118,7 +118,7 @@ test("poison sends the tick its 30-tick pulse started, again at each hit, and 0 
   assert.deepEqual(f.sent(), [[POISON.struct, 5031]]);
   f.state.poison = 0;
   f.tick();
-  assert.deepEqual(f.sent(), [[POISON.struct, 0]]);
+  assert.deepEqual(f.sent(), [], "a cure sends no clear");
 });
 
 test("a pulse held back by an open interface keeps its value; venom uses its own struct", () => {
@@ -164,5 +164,5 @@ test("logout forgets what was sent, so the next login sends it again", () => {
   f.hooks.login({ player: f.player });
   assert.deepEqual(f.sent(), [], "nothing at the login itself, before the bar is built");
   f.hooks.process({ player: f.player });
-  assert.deepEqual(f.sent(), [[FREEZE.struct, 5001 + 10], [SOTD.struct, 0], [POISON.struct, 0]]);
+  assert.deepEqual(f.sent(), [[FREEZE.struct, 5001 + 10], [SOTD.struct, 0]]);
 });

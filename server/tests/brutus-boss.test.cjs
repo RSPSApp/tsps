@@ -1,34 +1,35 @@
 // From server/: node --test tests/brutus-boss.test.cjs (after yarn build and yarn ensure-cache).
 //
 // Brutus beyond the quest fight (plugins/bosses/Brutus.plugin.js): the Wiki's Slayer experience (116), the item
-// messages, the Cow31337Killer message and Demonic Brutus's second phase. The plugin is registered on a real plugin API and
-// driven through the real PluginManager dispatch (item on NPC, custom event, NPC death); the player and NPC are light fakes.
+// messages, the Cow31337Killer message and Demonic Brutus's second phase. The plugins are loaded the way the server loads
+// them (PluginManager.loadFromDirectory) and driven through the real dispatch (item on NPC, custom event, NPC death);
+// the player and NPC are light fakes. Other plugins' hooks (drops, the quest) run on those fakes too and may log errors.
 // The quest plugin's own Demonic changes are in tests/ides-of-milk-parity.test.cjs. Wiki numbers; no capture was found.
 'use strict';
 
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, after, test } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const core = PluginManager.getCoreApi();
 const N = core.NpcIdentifiers;
 const I = core.ItemIdentifiers;
-let api;
-let questDone = false;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
-  api = PluginManager.createApi('BrutusBossTest');
-  api.onCustomEvent('quest:is-complete', request => { if (request.key === 'the_ides_of_milk' && questDone) request.complete = true; });
-  require('../plugins/bosses/Brutus.plugin').register(api);
+  PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  PluginManager.emitServerStartup({});
 });
+after(() => PluginManager.emitServerShutdown({}));
 
 function player(worn = []) {
   const messages = [];
   const p = {
     messages, isPlayer: () => true, sendMessage: text => messages.push(text),
+    // What the quest plugin's own item-on-NPC handler reads when the potato is used.
+    getAttribute: () => undefined, setAttribute() {}, getInventory: () => ({ getAmount: () => 0 }),
     getEquipment: () => ({ getItems: () => worn.map(id => ({ getId: () => id })) }),
   };
   return p;
@@ -48,30 +49,29 @@ test('an item used on Brutus is refused with his message; an empty bucket with t
     assert.equal(PluginManager.emitItemOnNpc(event), true, `npc ${id}`);
     assert.equal(p.messages.at(-1), "Brutus doesn't want that.");
   }
+  const before = p.messages.length;
   const bucket = use(p, N.BRUTUS, I.BUCKET);
   PluginManager.emitItemOnNpc(bucket);
   assert.equal(bucket.handled, true);
   assert.equal(p.messages.at(-1), 'You do not want to do that.');
-  const before = p.messages.length;
   const potato = use(p, N.BRUTUS, I.ABYSSAL_POTATO);
   PluginManager.emitItemOnNpc(potato);
-  assert.equal(potato.handled, false, "the quest plugin's potato handling is left alone");
+  assert.equal(potato.handled, true, "the quest plugin's own potato handling answers it");
+  assert.ok(!p.messages.slice(before).includes("Brutus doesn't want that."), 'not with Brutus\'s refusal');
+  const settled = p.messages.length;
   const cow = use(p, 2793, I.COINS);
   PluginManager.emitItemOnNpc(cow);
   assert.equal(cow.handled, false, 'another NPC');
   const demonic = use(p, N.DEMONIC_BRUTUS, I.COINS);
   PluginManager.emitItemOnNpc(demonic);
   assert.equal(demonic.handled, false, 'the Wiki gives the message for Brutus only');
-  assert.equal(p.messages.length, before);
+  assert.equal(p.messages.length, settled, 'nothing was said for the controls');
 });
 
-test("Brutus' Slayer experience is 116, only after The Ides of Milk and only for Brutus", () => {
+test("Brutus' Slayer experience is 116 (twice his Hitpoints), for Brutus only", () => {
   const p = player();
-  const kill = (id, xp = 58) => { const event = { player: p, npc: npc(id), xp }; PluginManager.emitCustomEvent('slayer:task-kill', event); return event.xp; };
-  questDone = false;
-  assert.equal(kill(N.BRUTUS), 58, 'during the quest his Hitpoints stand');
-  questDone = true;
-  assert.equal(kill(N.BRUTUS), 116);
+  const kill = (id, xp) => { const event = { player: p, npc: npc(id), xp }; PluginManager.emitCustomEvent('slayer:task-kill', event); return event.xp; };
+  assert.equal(kill(N.BRUTUS, 58), 116);
   assert.equal(kill(N.BRUTUS_2, 60), 116, 'the charging form too');
   assert.equal(kill(2793, 8), 8, 'an ordinary cow');
   assert.equal(kill(N.DEMONIC_BRUTUS, 750), 750, 'Demonic Brutus is no Cows task');

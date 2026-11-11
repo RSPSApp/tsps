@@ -705,18 +705,29 @@ test('Demonic Brutus is immune to stat drains, which the regular Brutus is not',
   } finally { f.close(); }
 });
 
+function stompRolls(f, bull, count = 60) {
+  const rolls = new Set();
+  for (let i = 0; i < count; i++) {
+    f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'stomp'; f.arena.stompsRemaining = 0;
+    bull.moveTo(new core.Location(3260, 3286, 0));
+    f.p.moveTo(new core.Location(3260, 3289, 0));
+    f.p.damage.length = 0;
+    f.method.start(bull, f.p); f.h.tick(4);
+    for (const hit of f.p.damage) rolls.add(hit.getDamage());
+  }
+  return rolls;
+}
+
 test('each bull of a Demonic Brutus special deals 45-56, where the regular specials stay at 19 or less', () => {
+  const regular = nativeFight(22);
+  try {
+    const rolls = stompRolls(regular, regular.npc);
+    assert.ok(rolls.size > 0, 'a regular stomp landed');
+    for (const value of rolls) assert.ok(value <= 19, `regular damage ${value}`);
+  } finally { regular.close(); }
   const f = demonicFight();
   try {
-    const rolls = new Set();
-    for (let i = 0; i < 60; i++) {
-      f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'stomp'; f.arena.stompsRemaining = 0;
-      f.demonic.moveTo(new core.Location(3260, 3286, 0));
-      f.p.moveTo(new core.Location(3260, 3289, 0));
-      f.p.damage.length = 0;
-      f.method.start(f.demonic, f.p); f.h.tick(4);
-      for (const hit of f.p.damage) rolls.add(hit.getDamage());
-    }
+    const rolls = stompRolls(f, f.demonic);
     assert.ok(rolls.size > 0, 'a stomp landed');
     for (const value of rolls) assert.ok(value >= 45 && value <= 56, `damage ${value}`);
     assert.ok(Math.max(...rolls) > 45, 'the range is rolled, not fixed');

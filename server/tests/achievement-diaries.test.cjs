@@ -606,8 +606,10 @@ test('diary tasks follow successful native gameplay actions', async t => {
     }
   });
 
-  await t.test('all three Draynor sewer Zombie spawns count through NPCDeathTask', () => {
-    for (const [id, x, y] of [[core.NpcIdentifiers.ZOMBIE_14, 3086, 9674], [core.NpcIdentifiers.ZOMBIE_31, 3088, 9672], [core.NpcIdentifiers.ZOMBIE_33, 3096, 9672]]) {
+  // Wiki (Draynor Sewers): "A total of seven zombies"; the east four are in map square [48,150].
+  await t.test('all seven Draynor sewer Zombie spawns count through NPCDeathTask', () => {
+    for (const [id, x, y] of [[core.NpcIdentifiers.ZOMBIE_14, 3086, 9674], [core.NpcIdentifiers.ZOMBIE_31, 3088, 9672], [core.NpcIdentifiers.ZOMBIE_33, 3096, 9672],
+      [core.NpcIdentifiers.ZOMBIE_13, 3119, 9647], [core.NpcIdentifiers.ZOMBIE_32, 3122, 9658], [core.NpcIdentifiers.ZOMBIE_15, 3124, 9651], [core.NpcIdentifiers.ZOMBIE_30, 3124, 9662]]) {
       assert.equal(CacheDefinitions.getNpc(id).name, 'Zombie');
       const player = actor(x - 1, y), npc = spawn(id, x, y);
       npc.__skipDefaultRespawn = true;
@@ -691,8 +693,9 @@ test('diary tasks follow successful native gameplay actions', async t => {
     }
   });
 
+  // (3122,9658) is the Draynor Sewers' south stretch to the jail entrance, so the Varrock case uses Varrock's sewers.
   await t.test('a Varrock sewer Zombie does not count as a Draynor sewer kill', () => {
-    const player = actor(3121, 9658), npc = spawn(core.NpcIdentifiers.ZOMBIE_32, 3122, 9658);
+    const player = actor(3239, 9866), npc = spawn(core.NpcIdentifiers.ZOMBIE_32, 3240, 9866);
     assert.equal(npc.getCurrentDefinition(player).getName(), 'Zombie');
     npc.__skipDefaultRespawn = true;
     npc.getCombat().addDamage(player, npc.getMaxHitpoints()); npc.setHitpoints(0);

@@ -1141,15 +1141,27 @@ module.exports = function registerNatureSpiritQuest(api) {
    * not appear"): passing through it writes stage 10. Doors still swings the gate.
    */
   function handleSwampGate(request) {
-    if (SWAMP_GATE_IDS.has(request.objectId)) recordSwampEntry(request.player);
+    if (!SWAMP_GATE_IDS.has(request.objectId)) return;
+    const { player } = request;
+    // rsprox 226/01638.txt:21691 (leaving, tick 1005) and :21802 (entering, tick 1014), also
+    // 237/01134.txt:300241/301999: every crossing has its line, whatever the quest stage.
+    if (player.getLocation().getY() < SWAMP_GATE_PASSAGE.y) {
+      player.sendMessage("You skip gladly out of murky Mort Myre.");
+      return;
+    }
+    if (!recordSwampEntry(player)) player.sendMessage(ENTER_SWAMP_MESSAGE);
   }
 
+  const ENTER_SWAMP_MESSAGE = "You walk into the gloomy atmosphere of Mort Myre.";
+
+  /** True when the quest step was recorded (and its line sent). */
   function recordSwampEntry(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) return;
+    if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) return false;
     quest.setStage(player, STAGE_ENTERED_SWAMP);
-    player.sendMessage("You walk into the gloomy atmosphere of Mort Myre.");
+    player.sendMessage(ENTER_SWAMP_MESSAGE);
     ensureWashingBowl(player);
+    return true;
   }
 
   /** Opening credits its actor; walking through another player's open gate must credit the walker. */

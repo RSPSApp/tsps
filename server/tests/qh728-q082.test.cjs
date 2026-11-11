@@ -373,6 +373,7 @@ test('mandatory source route reaches completion through the registered handlers'
   assert.equal(h.quest.getStage(p), 5);
   assert.equal(variant(h, N.DREZEL), 'starting-off-talking-to-drezel-again');
 
+  p.setLocation(new core.Location(3444, 3459, 0)); // opening from the north side enters the swamp
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
   assert.equal(h.quest.getStage(p), 10);
   assert.equal(h.spawned.length, 0, 'entering the swamp does not summon Filliman');
@@ -1032,7 +1033,10 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   await click(O.GROTTO, 3440, 3337);
   assert.ok(player.getLocation().y < 4000, 'before the swamp gate, Enter does not move underground');
   assert.deepEqual(publish(), [], 'no Filliman is granted before the required gate progression');
+  const beforeGate = player.getLocation();
+  player.setLocation(new core.Location(3444, 3459, 0)); // opening from the north side enters the swamp
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
+  player.setLocation(beforeGate);
   assert.equal(h.quest.getStage(player), 10);
   assert.deepEqual(publish(), [], 'passing the swamp gate alone does not summon the ghost');
   for (const handler of h.logins) handler({ player });
@@ -1123,4 +1127,17 @@ test('walking through an already-open swamp gate records entry without crediting
     assert.equal(h.spawned.some(npc => npc.getId() === N.FILLIMAN_TARLOCK),
       entry.expected === 10, entry.name + ': only legitimate entry unlocks the existing summon');
   }
+});
+
+test('every Mort Myre gate crossing has its line, after the quest too (rsprox 226/01638.txt:21691, :21802)', () => {
+  const h = harness();
+  const p = h.player;
+  h.quest.setStage(p, 110);
+  p.setLocation(new core.Location(3443, 3458, 0));
+  emit(h, 'door:toggle', { objectId: O.GATE_73 });
+  assert.deepEqual(p.messages, ['You walk into the gloomy atmosphere of Mort Myre.']);
+  p.setLocation(new core.Location(3443, 3457, 0));
+  emit(h, 'door:toggle', { objectId: O.GATE_73 });
+  assert.deepEqual(p.messages, ['You walk into the gloomy atmosphere of Mort Myre.', 'You skip gladly out of murky Mort Myre.']);
+  assert.equal(h.quest.getStage(p), 110);
 });

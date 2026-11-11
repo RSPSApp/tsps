@@ -121,101 +121,13 @@
   #dismiss-local-host-disclaimer:hover { background: var(--line); }
   .banner.info { background: var(--info-bg); color: var(--info); }
 
-  #panel-settings, #plugins-installed { container-type: inline-size; }
+  #panel-settings { container-type: inline-size; }
   .settings-grid {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px; margin-top: 24px;
   }
   .settings-grid > .row { border-radius: 8px; box-shadow: none; }
   .settings-wide { grid-column: 1 / -1; }
-  details.group { margin-top: 12px; }
-  details.group:first-child { margin-top: 24px; }
-  details.group > summary {
-    padding: 14px 18px; background: var(--panel); border-radius: 8px;
-    color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s ease;
-  }
-  details.group > summary:hover { background: #222328; }
-  details.group[open] > summary { border-radius: 8px 8px 0 0; }
-  details.group > .rows { border-radius: 0 0 8px 8px; }
-  .folder-count { margin-inline-start: 8px; color: var(--muted); font-size: 13px; }
-  .rows { background: var(--panel); border-radius: 8px; }
-  .row { box-shadow: inset 0 1px 0 #2a2b30; }
-  .row > :first-child { overflow-wrap: anywhere; }
-  .toggle-row:has(.switch:not(:disabled)) { cursor: pointer; }
-  .rows > .row:last-child, .rows > .plugin:last-child:not(:has(.plugin-options)) > .row,
-  .rows > .plugin:last-child > .plugin-options > .row:last-child { border-radius: 0 0 8px 8px; }
-  .plugin-options { margin-inline-start: 18px; border-inline-start: 1px solid var(--line); }
-  .plugin-options > .row { padding-inline-start: 16px; }
-  .row.inactive .label, .row.inactive .help { color: var(--off); }
-  .label { font-size: 14px; font-weight: 500; color: var(--text); }
-  .title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .info-wrap { position: relative; display: inline-flex; }
-  /* Not ".info": that is also a banner kind (.banner.info), which this rule shrank to an icon. */
-  .info-button {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 1.5em; height: 1.5em; min-height: 0; padding: 0; border: none; border-radius: 50%;
-    background: none; color: var(--muted); cursor: help;
-  }
-  .info-button:hover, .info-button:focus-visible { color: var(--accent); }
-  .info-button svg { width: 1em; height: 1em; display: block; }
-  .tip {
-    position: absolute; left: 0; top: 100%; z-index: 4;
-    width: max-content; max-width: min(320px, 70vw);
-    padding: 4px 8px; border-radius: 5px;
-    background: var(--panel-deep); color: var(--text);
-    box-shadow: 0 2px 8px var(--shadow);
-    font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
-    overflow-wrap: anywhere; user-select: text; cursor: text;
-    visibility: hidden; opacity: 0;
-  }
-  .info-wrap:hover .tip, .info-wrap:focus-within .tip { visibility: visible; opacity: 1; }
-  .badge {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px;
-    padding: 6px 10px; border-radius: 5px; font-weight: 600;
-    background: var(--badge-warn-bg); color: var(--badge-warn-text);
-  }
-  .badge.pending { background: var(--badge-ok-bg); color: var(--badge-ok-text); }
-  .badge-icon { width: 1.1em; height: 1.1em; flex: none; }
-  .badge-text { flex: 1 1 12em; }
-  .badge button { padding: 3px 10px; }
-  .badge button.link { color: inherit; font-weight: 700; padding: 2px 0; }
-  .help { color: #a8a295; font-size: 13px; line-height: 1.45; margin-top: 5px; }
-  .meta { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
-  .tag { font-size: 12px; border-radius: 2px; padding: 0 6px; font-weight: 600; }
-  .tag.changed { background: var(--changed-bg); color: var(--changed); }
-  .tag.edited { background: var(--edited-bg); color: var(--edited); }
-  .tag.note { background: var(--panel-deep); color: var(--muted); border: 1px solid var(--line); }
-  .control { display: flex; flex: 0 1 auto; flex-direction: column; gap: 4px; align-items: flex-end; max-width: 50%; min-width: 0; }
-  .control input[type="text"], .control input[type="number"], .control input[type="date"], .control select, .control textarea {
-    max-width: 100%; min-width: 0; padding: 0 12px; color: #eee9dd;
-  }
-  .control input[type="text"] { width: 160px; }
-  .control input[type="number"] { width: 84px; appearance: textfield; }
-  .control input[type="number"]::-webkit-inner-spin-button, .control input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
-  .control select {
-    appearance: none; padding-right: 34px; cursor: pointer;
-    background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaa497' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center / 12px 12px;
-  }
-  .control textarea { width: 240px; min-height: 80px; padding: 8px 12px; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
-  .description-row { flex-wrap: wrap; row-gap: 12px; }
-  .description-row > :first-child { flex: 1 1 220px; }
-  .description-row .control { flex: 1 1 300px; max-width: none; align-items: stretch; }
-  .description-field { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .description-count { flex: none; color: #8f8a80; font-size: 12px; font-variant-numeric: tabular-nums; }
-  .description-field textarea { flex: 1; width: auto; min-height: 0; font: inherit; line-height: 1.45; resize: none; }
-  .control :disabled { opacity: .55; cursor: not-allowed; }
-  .control .invalid { border-color: var(--error); }
-  .field-error { color: var(--error); font-size: 13px; }
-
-  .control .link { align-self: flex-end; }
-  .plugin-controls { display: flex; align-items: center; gap: 10px; }
-  .plugin-delete { width: 28px; min-height: 28px; padding: 0; font-size: 19px; line-height: 1; }
-  .plugin-delete:hover:not(:disabled) { color: var(--error); }
-
-  .toggle-row .host-switch-control { min-height: 0; cursor: pointer; }
-  .toggle-row .host-switch-control input { inset: 0; width: 100%; height: 100%; margin: 0; z-index: 1; cursor: inherit; }
-  .toggle-row .host-switch-control:has(input:disabled) { opacity: .45; cursor: not-allowed; }
-
   .footer {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
     gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--rule);
@@ -281,10 +193,6 @@
   @container (max-width: 655px) {
     .settings-grid { grid-template-columns: minmax(0, 1fr); }
   }
-  @container (max-width: 400px) {
-    .row:has(textarea) { flex-direction: column; align-items: stretch; gap: 12px; }
-    .row:has(textarea) .control, .control textarea { width: 100%; max-width: 100%; }
-  }
   @media (max-width: 600px) {
     .search { flex: 1 0 100%; }
   }
@@ -348,7 +256,7 @@
         <div id="settings-fields"></div>
       </div>
       <div id="panel-players" role="tabpanel" aria-labelledby="tab-players" hidden></div>
-      <div id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+      <div id="panel-plugins" class="host-plugin-panel" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
       <p id="loading" class="empty">Loading…</p>
     </main>
     <footer class="footer">
@@ -389,7 +297,6 @@
     edits: { world: {}, plugins: {}, pluginConfig: {} },
     rows: [],            // { el, kind, key, search, refresh() }
     tab: "settings",
-    downloadedOnly: false,
     pluginView: new URLSearchParams(window.location.search).get("plugins") === "browse" ? "browse" : "installed",
     dismissedFailure: null,
     pollTimer: null,
@@ -399,54 +306,25 @@
     outcomeNote: null,   // the flash saying how the last accepted Apply ended
     lastPlan: null,
   };
-  var hubViews = [];
+  var { el, same, has, createPluginPanel, filterGroups } = window.LocalPluginPanel;
+  var search = document.getElementById("search");
+  var pluginPanel = createPluginPanel({
+    state: state, components: LocalPanelComponents, search: search, plugins: document.getElementById("panel-plugins"),
+    uploadPlugin: uploadPlugin, installPlugin: installPlugin, deletePlugin: deletePlugin,
+    updateFooter: updateFooter, readOnly: readOnly, busy: busy,
+  });
 
-  function el(tag, props, children) {
-    var node = document.createElement(tag);
-    if (props) {
-      for (var name in props) {
-        if (!Object.prototype.hasOwnProperty.call(props, name)) continue;
-        var value = props[name];
-        if (value === undefined || value === null || value === false) continue;
-        if (name === "text") node.textContent = value;
-        else if (name === "className") node.className = value;
-        else if (name.indexOf("on") === 0) node.addEventListener(name.slice(2), value);
-        else if (name in node && typeof value !== "string") node[name] = value;
-        else node.setAttribute(name, value === true ? "" : String(value));
-      }
+  async function uploadPlugin(file) {
+    try {
+      var response = await fetch("/api/plugins/import", {
+        method: "POST", headers: { "Content-Type": "application/zip" }, body: file,
+      });
+      var result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Upload failed.");
+      await pluginInstalled(result);
+    } catch (error) {
+      flash("error", "Could not import plugin: " + error.message);
     }
-    (children || []).forEach(function (child) {
-      if (child === null || child === undefined || child === false) return;
-      node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
-    });
-    return node;
-  }
-
-  function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
-  function has(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
-
-  function pluginUpload() {
-    var input = el("input", { type: "file", accept: ".zip,application/zip", hidden: true });
-    var button = el("button", { type: "button", text: "Upload plugin ZIP", onclick: function () { input.click(); } });
-    input.addEventListener("change", async function () {
-      var file = input.files[0];
-      input.value = "";
-      if (!file) return;
-      button.disabled = true;
-      try {
-        var response = await fetch("/api/plugins/import", {
-          method: "POST", headers: { "Content-Type": "application/zip" }, body: file,
-        });
-        var result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Upload failed.");
-        await pluginInstalled(result);
-      } catch (error) {
-        flash("error", "Could not import plugin: " + error.message);
-      } finally {
-        button.disabled = false;
-      }
-    });
-    return el("div", { className: "plugin-upload" }, [input, button]);
   }
 
   function pluginInstalled(result) {
@@ -506,514 +384,26 @@
     });
   }
 
-  // ---------- value helpers ----------
-
-  function formatValue(decl, value) {
-    if (value === undefined) return "(not set)";
-    if (decl && decl.type === "boolean") return value === true ? "on" : value === false ? "off" : JSON.stringify(value);
-    if (decl && decl.type === "enum" && decl.values) {
-      for (var i = 0; i < decl.values.length; i++) {
-        if (decl.values[i].value === value) return decl.values[i].label;
-      }
-    }
-    if (typeof value === "string") return value === "" ? "(empty)" : value;
-    return JSON.stringify(value);
-  }
-
-  function sectionOf(row) { return row.kind === "world" ? "world" : "pluginConfig"; }
-
-  /** The value the world runs with now, before this page's edits. */
-  function savedValue(option) {
-    if (option.local !== undefined) return option.local;
-    if (option.shipped !== undefined) return option.shipped;
-    return option.decl.default;
-  }
-
-  /** What world.json (or the declaration) gives without world.local.json. */
-  function baseValue(option) {
-    return option.shipped !== undefined ? option.shipped : option.decl.default;
-  }
-
-  function currentValue(section, option) {
-    var edits = state.edits[section];
-    if (has(edits, option.key)) {
-      return edits[option.key] === null ? baseValue(option) : edits[option.key];
-    }
-    return savedValue(option);
-  }
-
-  function setEdit(section, option, value) {
-    var edits = state.edits[section];
-    if (value === null) {
-      if (option.local !== undefined) edits[option.key] = null;
-      else delete edits[option.key];
-    } else if (same(value, savedValue(option))) {
-      delete edits[option.key];
-    } else {
-      edits[option.key] = value;
-    }
-    updateFooter();
-  }
-
-  function numberProblem(decl, n) {
-    if (!Number.isFinite(n)) return "Enter a number.";
-    if (decl.integer && !Number.isInteger(n)) return "Must be a whole number.";
-    if (decl.min !== undefined) {
-      if (decl.exclusiveMin ? n <= decl.min : n < decl.min) {
-        return decl.exclusiveMin ? "Must be greater than " + decl.min + "." : "Must be at least " + decl.min + ".";
-      }
-    }
-    if (decl.max !== undefined && n > decl.max) return "Must be at most " + decl.max + ".";
-    return null;
-  }
-
-  // ---------- rows ----------
-
-  var idCounter = 0;
-  function nextId(prefix) { idCounter += 1; return prefix + "-" + idCounter; }
-
-  var SVG_NS = "http://www.w3.org/2000/svg";
-  function svgNode(tag, attrs) {
-    var node = document.createElementNS(SVG_NS, tag);
-    for (var name in attrs) node.setAttribute(name, attrs[name]);
-    return node;
-  }
-  function infoIcon() {
-    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false" });
-    svg.appendChild(svgNode("circle", { cx: "8", cy: "8", r: "7", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }));
-    svg.appendChild(svgNode("rect", { x: "7.25", y: "7", width: "1.5", height: "5", rx: "0.75", fill: "currentColor" }));
-    svg.appendChild(svgNode("circle", { cx: "8", cy: "4.75", r: "1", fill: "currentColor" }));
-    return svg;
-  }
-
-  /** Row title plus an info button whose tooltip holds the key or file (shown on hover and focus). */
-  function titleLine(label, detail) {
-    var tipId = nextId("tip");
-    var button = el("button", { type: "button", className: "info-button", title: detail,
-      "aria-label": "Details: " + detail, "aria-describedby": tipId,
-      onkeydown: function (event) { if (event.key === "Escape") button.blur(); } }, [infoIcon()]);
-    var tip = el("span", { className: "tip", role: "tooltip", id: tipId, text: detail });
-    return el("div", { className: "title-line" }, [label, el("span", { className: "info-wrap" }, [button, tip])]);
-  }
-
-  // ---------- spawn point map picker ----------
-
-  var LUMBRIDGE = { x: 3222, y: 3218, z: 0 };
-  var spawnPicker;
-
-  function validPoint(v) {
-    return v && typeof v === "object" && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y));
-  }
-
-  // ---------- plugin-off badges ----------
-
-  function warnIcon() {
-    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", class: "badge-icon" });
-    svg.appendChild(svgNode("path", { d: "M8 1.5 15 14.5H1z", fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linejoin": "round" }));
-    svg.appendChild(svgNode("rect", { x: "7.2", y: "5.5", width: "1.6", height: "5", rx: "0.8", fill: "currentColor" }));
-    svg.appendChild(svgNode("circle", { cx: "8", cy: "12.3", r: "0.95", fill: "currentColor" }));
-    return svg;
-  }
-  function tickIcon() {
-    var svg = svgNode("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", class: "badge-icon" });
-    svg.appendChild(svgNode("path", { d: "M2.5 8.5 6.5 12.5 13.5 4", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" }));
-    return svg;
-  }
-
-  /** Dependencies that are switched off and must be turned on for this plugin to load. */
-  function switchesNeeded(plugin) {
-    var needed = [];
-    var seen = {};
-    (function visit(p, self) {
-      if (!p || seen[p.name]) return;
-      seen[p.name] = true;
-      if (!self && !p.enabled) needed.push(p.name);
-      (p.dependsOn || []).forEach(function (dep) { visit(state.byName[dep], false); });
-    })(plugin, true);
-    return needed;
-  }
-
-  /** Sets a plugin switch in the pending edits; the Plugins tab toggle and the badges share this. */
-  function setPluginSwitch(name, on) {
-    var plugin = state.byName[name];
-    if (!plugin) return;
-    if (on === plugin.enabled) delete state.edits.plugins[name];
-    else state.edits.plugins[name] = on;
-    updateFooter();
-    state.rows.forEach(function (r) { if (r.refreshPlugins) r.refreshPlugins(); });
-  }
-
-  function listNames(names) {
-    if (names.length <= 1) return names.join("");
-    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
-  }
-
-  /** A warning on a plugin with disabled dependencies, with a button to turn them on. */
-  function dependencyBadge(plugin) {
-    var box = el("div", { className: "badge", role: "status" });
-    // The badge is rebuilt on every change; keep keyboard focus on its (new) button.
-    function focusBadge() {
-      var button = box.querySelector("button");
-      if (button) button.focus();
-    }
-    function refresh() {
-      box.textContent = "";
-      var needed = switchesNeeded(plugin);
-      var pending = needed.length > 0 && needed.every(function (n) { return state.edits.plugins[n] === true; });
-      box.classList.toggle("pending", pending);
-      if (pending) {
-        box.appendChild(tickIcon());
-        box.appendChild(el("span", { className: "badge-text", text: listNames(needed) + " will be turned on when you save" }));
-        box.appendChild(el("button", { type: "button", text: "Undo", "aria-label": "Undo turning on " + listNames(needed),
-          onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, false); }); focusBadge(); } }));
-        return;
-      }
-      var message = "Needs " + listNames(needed) + ", which " + (needed.length > 1 ? "are" : "is") + " off";
-      box.appendChild(warnIcon());
-      box.appendChild(el("span", { className: "badge-text", text: message }));
-      if (needed.length && !readOnly()) {
-        box.appendChild(el("button", { type: "button", text: "Turn on " + listNames(needed),
-          onclick: function () { needed.forEach(function (n) { setPluginSwitch(n, true); }); focusBadge(); } }));
-      }
-    }
-    refresh();
-    return { el: box, refresh: refresh };
-  }
-
-  function membersBadge() {
-    var box = el("div", { className: "badge", role: "status" }, [
-      warnIcon(),
-      el("span", { className: "badge-text", text: "Members only — won't load on a free world" }),
-    ]);
-    return { el: box, refresh: function () {} };
-  }
-
   function readOnly() { return !!(state.data && (state.data.layers.localError || (state.data.serverStatus && state.data.serverStatus !== "online"))); }
-
-  /**
-   * One option row. `owner` is the CatalogPlugin that declares it (or null for world/core).
-   * The control reports invalid input through row.invalid, which blocks Save.
-   */
-  function optionRow(kind, option, owner) {
-    var decl = option.decl;
-    var isSpawnPoint = kind === "world" && option.key === "spawn" && decl.type === "json";
-    var isDescription = kind === "world" && option.key === "description";
-    var descriptionMax = 120;
-    var section = kind === "world" ? "world" : "pluginConfig";
-    var controlId = nextId("opt");
-    var helpId = controlId + "-help";
-    var errorEl = el("div", { className: "field-error", role: "alert", hidden: true });
-    var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from world.json / the shipped default" });
-    var editedTag = el("span", { className: "tag edited", text: "unsaved" });
-    var resetButton = el("button", { type: "button", className: "link", text: "Reset to shipped" });
-    var row = { kind: kind, key: option.key, invalid: false };
-
-    var defaultText = decl.defaultText !== undefined ? decl.defaultText : formatValue(decl, decl.default);
-    var meta = el("div", { className: "meta" }, [
-      el("span", { text: "default: " + defaultText }),
-      option.shipped !== undefined && decl.default !== undefined && !same(option.shipped, decl.default)
-        ? el("span", { text: "world.json: " + formatValue(decl, option.shipped) }) : null,
-      changedTag, editedTag,
-    ]);
-    var membersOff = state.data.catalog.membersWorld === false && (decl.members || (owner && owner.members));
-    var badge = membersOff ? membersBadge() : null;
-
-    var control;
-    var input;
-    var descriptionCount;
-    function showError(message) {
-      row.invalid = !!message;
-      errorEl.textContent = message || "";
-      errorEl.hidden = !message;
-      if (input) {
-        input.classList.toggle("invalid", !!message);
-        input.setAttribute("aria-invalid", message ? "true" : "false");
-      }
-      updateFooter();
-    }
-    var describedBy = helpId;
-
-    if (isSpawnPoint) {
-      control = el("div");
-      spawnPicker = LocalPanelComponents.spawnPicker(control);
-    } else if (decl.type === "boolean") {
-      var toggle = LocalPanelComponents.switchControl(controlId, describedBy, function (checked) {
-        setEdit(section, option, checked);
-        refresh();
-      });
-      input = toggle.input;
-      control = toggle.control;
-    } else if (decl.type === "enum") {
-      input = el("select", { id: controlId, "aria-describedby": describedBy,
-        onchange: function () {
-          if (input.value === "") setEdit(section, option, null);
-          else setEdit(section, option, decl.values[Number(input.value)].value);
-          refresh();
-        } });
-      input.appendChild(el("option", { value: "", text: decl.defaultText !== undefined ? "Default (" + decl.defaultText + ")" : "Shipped value" }));
-      decl.values.forEach(function (v, i) { input.appendChild(el("option", { value: String(i), text: v.label })); });
-      control = input;
-    } else if (decl.type === "number") {
-      input = el("input", { type: "number", id: controlId, "aria-describedby": describedBy, inputMode: decl.integer ? "numeric" : "decimal",
-        step: decl.integer ? "1" : "any",
-        oninput: function () {
-          if (input.value.trim() === "") { showError(null); setEdit(section, option, null); refreshMarkers(); return; }
-          var n = Number(input.value);
-          var problem = input.validity.badInput ? "Enter a number." : numberProblem(decl, n);
-          showError(problem);
-          if (!problem) setEdit(section, option, n);
-          refreshMarkers();
-        } });
-      if (decl.min !== undefined) input.min = String(decl.min);
-      if (decl.max !== undefined) input.max = String(decl.max);
-      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
-      control = input;
-    } else if (decl.type === "date") {
-      input = el("input", { type: "date", id: controlId, "aria-describedby": describedBy,
-        onchange: function () {
-          if (input.value === "") { showError(null); setEdit(section, option, null); }
-          else if (!/^\d{4}-\d{2}-\d{2}$/.test(input.value)) { showError("Enter a date."); }
-          else { showError(null); setEdit(section, option, input.value); }
-          refreshMarkers();
-        } });
-      control = input;
-    } else if (decl.type === "json") {
-      input = el("textarea", { id: controlId, "aria-describedby": describedBy, spellcheck: "false",
-        onblur: function () {
-          var text = input.value.trim();
-          if (text === "") { showError(null); setEdit(section, option, null); refreshMarkers(); return; }
-          try {
-            var parsed = JSON.parse(text);
-            showError(null);
-            setEdit(section, option, parsed);
-          } catch (e) {
-            showError("Not valid JSON: " + e.message);
-          }
-          refreshMarkers();
-        } });
-      if (decl.defaultText !== undefined) input.placeholder = decl.defaultText;
-      control = input;
-    } else {
-      if (isDescription) descriptionCount = el("small", { id: controlId + "-count", className: "description-count" });
-      input = el(isDescription ? "textarea" : "input", {
-        type: isDescription ? null : "text", id: controlId,
-        rows: isDescription ? 2 : null, maxlength: isDescription ? String(descriptionMax) : null,
-        placeholder: isDescription ? "What makes your world worth joining?" : decl.defaultText,
-        "aria-describedby": isDescription ? describedBy + " " + descriptionCount.id : describedBy,
-        oninput: function () {
-          if (descriptionCount) descriptionCount.textContent = input.value.length + "/" + descriptionMax;
-          showError(null);
-          setEdit(section, option, input.value);
-          refreshMarkers();
-        },
-      });
-      control = isDescription ? el("div", { className: "description-field" }, [descriptionCount, input]) : input;
-    }
-
-    resetButton.addEventListener("click", function () {
-      showError(null);
-      setEdit(section, option, null);
-      refresh();
-    });
-
-    var labelText = decl.label || option.key;
-    var label = el("label", { className: "label", for: controlId, text: labelText });
-    var text = el("div", null, [
-      titleLine(label, option.key),
-      el("div", { className: "help", id: helpId, text: isSpawnPoint ? "Where new and stranded players appear." : decl.help || "" }),
-      meta,
-      badge ? badge.el : null,
-    ]);
-    var controlBox = el("div", { className: "control" }, [control, errorEl, resetButton]);
-    var rowEl = LocalPanelComponents.settingRow("row" + (decl.type === "boolean" ? " toggle-row host-switch-field" : "") +
-      (isDescription ? " description-row" : "") +
-      (membersOff || (!option.ownerEnabled && owner) ? " inactive" : ""), text, controlBox);
-
-    function refreshMarkers() {
-      var value = currentValue(section, option);
-      changedTag.hidden = same(value, baseValue(option)) || value === undefined;
-      editedTag.hidden = !has(state.edits[section], option.key);
-      var edited = has(state.edits[section], option.key);
-      var resetPending = edited && state.edits[section][option.key] === null;
-      resetButton.hidden = readOnly() || resetPending || !(edited || option.local !== undefined);
-    }
-
-    /** Puts the control back to the current value (after load, reset or discard). */
-    function refresh() {
-      var value = currentValue(section, option);
-      if (isSpawnPoint) {
-        var point = validPoint(value) ? value : LUMBRIDGE;
-        spawnPicker.render({
-          point: { x: Math.floor(Number(point.x)), y: Math.floor(Number(point.y)), z: Math.max(0, Math.min(3, Math.floor(Number(point.z) || 0))) },
-          id: controlId, describedBy: describedBy, disabled: readOnly() || busy(),
-          onPick: function (next) { setEdit(section, option, next); refresh(); },
-        });
-      } else if (decl.type === "boolean") {
-        input.checked = value === true;
-      } else if (decl.type === "enum") {
-        var index = "";
-        (decl.values || []).forEach(function (v, i) { if (v.value === value || (typeof v.value === "number" && typeof value === "string" && v.value === Number(value))) index = String(i); });
-        input.value = index;
-      } else if (decl.type === "json") {
-        input.value = value === undefined ? "" : JSON.stringify(value, null, 2);
-      } else if (decl.type === "number") {
-        input.value = value === undefined ? "" : String(value);
-      } else {
-        input.value = value === undefined ? "" : String(value);
-      }
-      if (input) input.disabled = readOnly();
-      if (descriptionCount) descriptionCount.textContent = input.value.length + "/" + descriptionMax;
-      showError(null);
-      refreshMarkers();
-    }
-
-    row.el = rowEl;
-    row.search = [labelText, option.key, decl.help, owner ? owner.name : ""].join(" ").toLowerCase();
-    row.refresh = refresh;
-    refresh();
-    return row;
-  }
-
-  function pluginRow(plugin, options) {
-    var controlId = nextId("plugin");
-    var helpId = controlId + "-help";
-    var nameId = controlId + "-name";
-    var changedTag = el("span", { className: "tag changed", text: "changed", title: "Differs from the plugin's default" });
-    var editedTag = el("span", { className: "tag edited", text: "unsaved" });
-    var toggle = LocalPanelComponents.switchControl(controlId, helpId, function (checked) { setPluginSwitch(plugin.name, checked); });
-    var input = toggle.input;
-    var row = { kind: "plugin", key: plugin.name, downloaded: !!plugin.packageId, invalid: false };
-
-    function current() {
-      return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
-    }
-
-    var meta = el("div", { className: "meta" }, [
-      el("span", { text: "default: " + (plugin.defaultEnabled ? "on" : "off") }),
-      plugin.dependsOn && plugin.dependsOn.length ? el("span", { text: "needs " + plugin.dependsOn.join(", ") }) : null,
-      changedTag, editedTag,
-    ]);
-    var membersOff = state.data.catalog.membersWorld === false && plugin.members;
-    var badge = membersOff ? membersBadge()
-      : (plugin.enabled && !plugin.loaded && !plugin.awaitingLoad) ? dependencyBadge(plugin) : null;
-
-    var deleteButton = plugin.packageId ? el("button", {
-      type: "button", className: "plugin-delete", text: "×", title: "Delete " + plugin.name,
-      "aria-label": "Delete " + plugin.name,
-      onclick: function () { void deletePlugin(plugin, options, deleteButton); },
-    }) : null;
-    var rowEl = LocalPanelComponents.settingRow("row toggle-row host-switch-field" + (membersOff ? " inactive" : ""),
-      el("div", null, [
-        titleLine(el("label", { className: "label", id: nameId, for: controlId, text: plugin.name }), plugin.file),
-        el("div", { className: "help", id: helpId, text: plugin.description || "" }),
-        meta,
-        badge ? badge.el : null,
-      ]),
-      el("div", { className: "plugin-controls" }, [toggle.control, deleteButton]),
-    );
-
-    function refresh() {
-      var on = current();
-      input.checked = on;
-      input.disabled = readOnly();
-      if (deleteButton) deleteButton.disabled = readOnly();
-      changedTag.hidden = on === plugin.defaultEnabled;
-      editedTag.hidden = !has(state.edits.plugins, plugin.name);
-      if (badge) badge.refresh();
-    }
-    row.children = options.map(function (option) { return optionRow("option", option, plugin); });
-    row.el = el("div", { className: "plugin" }, [
-      rowEl,
-      row.children.length ? el("div", { className: "plugin-options", role: "group", "aria-labelledby": nameId },
-        row.children.map(function (child) { return child.el; })) : null,
-    ]);
-    row.search = [plugin.name, plugin.file, plugin.description || "", plugin.area].join(" ").toLowerCase();
-    row.refresh = refresh;
-    row.refreshPlugins = refresh;
-    refresh();
-    return row;
-  }
-
-  function group(title, rows, summaryNote) {
-    var heading = el("summary", null, [
-      title,
-      el("span", { className: "folder-count", text: summaryNote }),
-    ]);
-    var section = el("details", { className: "group" }, [
-      heading,
-      el("div", { className: "rows" }, rows.map(function (r) { return r.el; })),
-    ]);
-    return { el: section, rows: rows };
-  }
-
-  function areaTitle(area) {
-    if (!area) return "Other";
-    return area.replace(/[-_]+/g, " ").replace(/(^| )\S/g, function (letter) { return letter.toUpperCase(); });
-  }
 
   function build() {
     var catalog = state.data.catalog;
     var settings = document.getElementById("settings-fields");
-    var plugins = document.getElementById("panel-plugins");
-    spawnPicker?.destroy();
-    spawnPicker = undefined;
+    pluginPanel.clearSpawnPicker();
     settings.textContent = "";
-    hubViews.forEach(function (view) { view.destroy(); });
-    hubViews = [];
-    plugins.textContent = "";
     state.rows = [];
-    state.groups = { settings: [], plugins: [] };
 
     var byName = Object.create(null);
     catalog.plugins.forEach(function (p) { byName[p.name] = p; });
     state.byName = byName;
 
-    var downloadedCount = catalog.plugins.filter(function (plugin) { return !!plugin.packageId; }).length;
-    var installedCount = el("span", { className: "hub-count", text: String(catalog.plugins.length) });
-    var browseCount = el("span", { className: "hub-count", hidden: true });
-    var installedTab = el("button", { type: "button", role: "tab", id: "plugin-view-installed", "aria-controls": "plugins-installed",
-      onclick: function () { selectPluginView("installed"); } }, ["Installed ", installedCount]);
-    var browseTab = el("button", { type: "button", role: "tab", id: "plugin-view-browse", "aria-controls": "plugins-browse",
-      onclick: function () { selectPluginView("browse"); } }, ["Browse plugins ", browseCount]);
-    var viewTabs = el("div", { className: "plugin-view-tabs", role: "tablist", "aria-label": "Plugin views", hidden: !window.PluginHub }, [installedTab, browseTab]);
-    viewTabs.addEventListener("keydown", function (event) {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
-      event.preventDefault();
-      var view = event.key === "Home" ? "installed" : event.key === "End" ? "browse" : state.pluginView === "installed" ? "browse" : "installed";
-      selectPluginView(view);
-      document.getElementById("plugin-view-" + view).focus();
-    });
-    plugins.appendChild(el("div", { className: "plugin-toolbar" }, [viewTabs, pluginUpload()]));
-    var installedPanel = el("div", { id: "plugins-installed", role: "tabpanel", "aria-labelledby": "plugin-view-installed" });
-    var browsePanel = el("div", { id: "plugins-browse", role: "tabpanel", "aria-labelledby": "plugin-view-browse", hidden: true });
-    var installedFilters = el("div", { className: "hub-filter-chips hub-ui", role: "group", "aria-label": "Filter installed plugins" });
-    [false, true].forEach(function (downloaded) {
-      installedFilters.appendChild(el("button", {
-        type: "button",
-        "aria-pressed": String(state.downloadedOnly === downloaded),
-        onclick: function () {
-          state.downloadedOnly = downloaded;
-          Array.from(installedFilters.children).forEach(function (button) {
-            button.setAttribute("aria-pressed", String(button === this));
-          }, this);
-          applySearch();
-        },
-      }, [downloaded ? "Downloaded " : "All plugins ", el("span", {
-        className: "hub-count", text: String(downloaded ? downloadedCount : catalog.plugins.length),
-      })]));
-    });
-    installedPanel.appendChild(installedFilters);
-    installedPanel.appendChild(el("h2", { className: "hub-bundled-heading hub-ui", text: "Installed plugins" }));
-    plugins.appendChild(installedPanel);
-    plugins.appendChild(browsePanel);
-
     var settingOrder = ["name", "experienceMultiplier", "spawn", "gameframe"];
     var worldOptions = new Map(catalog.world.map(function (option) { return [option.key, option]; }));
     var settingsRows = settingOrder.filter(function (key) { return worldOptions.has(key); }).map(function (key) {
-      return optionRow("world", worldOptions.get(key), null);
+      return pluginPanel.optionRow("world", worldOptions.get(key), null);
     });
     function addWideSetting(kind, option) {
-      var row = optionRow(kind, option, null);
+      var row = pluginPanel.optionRow(kind, option, null);
       row.el.classList.add("settings-wide");
       settingsRows.push(row);
     }
@@ -1030,105 +420,24 @@
       }
     });
 
-    // Use the full parent path to keep same-named folders in different areas separate.
-    var pluginFolders = new Map();
-    catalog.plugins.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (p) {
-      var folder = p.file.split("/").slice(0, -1).join("/");
-      if (!pluginFolders.has(folder)) pluginFolders.set(folder, []);
-      pluginFolders.get(folder).push(pluginRow(p, optionsByPlugin.get(p.name) || []));
-    });
-    Array.from(pluginFolders.keys()).sort().forEach(function (folder) {
-      var title = folder.split("/").map(areaTitle).join(" / ");
-      var rows = pluginFolders.get(folder);
-      state.groups.plugins.push(group(title, rows, rows.length + (rows.length === 1 ? " plugin" : " plugins")));
-    });
-
     var settingsGrid = el("div", { className: "settings-grid" }, settingsRows.map(function (row) { return row.el; }));
-    state.groups.settings = [{ el: settingsGrid, rows: settingsRows }];
-    state.rows = settingsRows.slice();
+    state.settingsGroups = [{ el: settingsGrid, rows: settingsRows }];
     settings.appendChild(settingsGrid);
-    state.groups.plugins.forEach(function (g) {
-      installedPanel.appendChild(g.el);
-      g.rows.forEach(function (r) { state.rows.push(r, ...(r.children || [])); });
-    });
     settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
-    installedPanel.appendChild(el("p", { className: "empty", id: "plugins-empty", text: "Nothing matches.", hidden: true }));
-    if (window.PluginHub) {
-      var uninstallById = new Map();
-      catalog.plugins.forEach(function (plugin) {
-        if (plugin.packageId) uninstallById.set(plugin.packageId, function (button) {
-          return deletePlugin(plugin, optionsByPlugin.get(plugin.name) || [], button);
-        });
-      });
-      hubViews.push(PluginHub.mountBrowse(browsePanel, {
-        searchInput: document.getElementById("search"), uninstallById: uninstallById, install: installPlugin,
-        onCount: function (count) {
-          browseCount.textContent = String(count);
-          browseCount.hidden = false;
-        },
-      }));
-    }
-    selectPluginView(window.PluginHub ? state.pluginView : "installed");
+    state.rows = settingsRows.concat(pluginPanel.build(catalog, optionsByPlugin));
+    if (state.tab !== "plugins") search.placeholder = "Search " + state.tab;
     document.getElementById("loading").hidden = true;
     applySearch();
     updateFooter();
   }
 
   function applySearch() {
-    if (!state.groups) return;
-    var words = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    function matches(search) { return words.every(function (word) { return search.indexOf(word) !== -1; }); }
-    ["settings", "plugins"].forEach(function (tab) {
-      var any = false;
-      state.groups[tab].forEach(function (g) {
-        var visible = false;
-        g.rows.forEach(function (r) {
-          if (tab === "plugins" && state.downloadedOnly && !r.downloaded) {
-            r.el.hidden = true;
-            return;
-          }
-          var match = matches(r.search);
-          (r.children || []).forEach(function (child) {
-            var childMatch = matches(r.search + " " + child.search);
-            child.el.hidden = !childMatch;
-            if (childMatch) match = true;
-          });
-          r.el.hidden = !match;
-          if (match) visible = true;
-        });
-        g.el.hidden = !visible;
-        if (tab === "plugins") {
-          if (words.length) {
-            if (g.openBeforeSearch === undefined) g.openBeforeSearch = g.el.open;
-            g.el.open = visible;
-          } else if (g.openBeforeSearch !== undefined) {
-            g.el.open = g.openBeforeSearch;
-            delete g.openBeforeSearch;
-          }
-        }
-        if (visible) any = true;
-      });
-      var empty = document.getElementById(tab + "-empty");
-      empty.hidden = any;
-      if (tab === "plugins") empty.textContent = state.downloadedOnly && !words.length ? "No downloaded plugins." : "Nothing matches.";
-    });
+    if (!state.settingsGroups) return;
+    filterGroups(state.settingsGroups, document.getElementById("settings-empty"), search.value, false);
+    pluginPanel.applyPluginSearch();
   }
 
   // ---------- navigation ----------
-
-  function selectPluginView(view) {
-    state.pluginView = view;
-    ["installed", "browse"].forEach(function (name) {
-      var selected = name === view;
-      var button = document.getElementById("plugin-view-" + name);
-      button.setAttribute("aria-selected", String(selected));
-      button.tabIndex = selected ? 0 : -1;
-      document.getElementById("plugins-" + name).hidden = !selected;
-    });
-    document.getElementById("search").placeholder = state.tab === "settings" ? "Search settings"
-      : view === "browse" ? "Search Plugin Hub" : "Search installed plugins";
-    applySearch();
-  }
 
   var sidebar = document.getElementById("sidebar");
   var menuToggle = document.getElementById("menu-toggle");
@@ -1173,7 +482,7 @@
       playersPanel.setOnline(serverOnline);
       playersPanel.refresh();
     }
-    if (tab === "plugins" && document.getElementById("plugins-installed")) selectPluginView(state.pluginView);
+    if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);
   }
   sections.forEach(function (tab) {
     document.getElementById("tab-" + tab).addEventListener("click", function () {
@@ -1385,14 +694,13 @@
       : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
   }
 
-  function flash(kind, text, dismissAfter) {
+  function flash(kind, text) {
     var box = document.getElementById("flashes");
     var node = el("div", { className: "banner " + kind, role: kind === "error" ? "alert" : "status" }, [
       el("div", { className: "text", text: text }),
       el("button", { type: "button", text: "Dismiss", onclick: function () { node.remove(); } }),
     ]);
     box.insertBefore(node, box.firstChild);
-    if (dismissAfter) setTimeout(function () { node.remove(); }, dismissAfter);
     return node;
   }
 
@@ -1416,7 +724,7 @@
   /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
   function enterReconnect(unreachable) {
     if (dialog.open) dialog.close();
-    spawnPicker?.close();
+    pluginPanel.closeSpawnPicker();
     if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
     if (unreachable) state.reconnect.wasDown = true;
     showOverlay("Restarting the server… reconnecting", true);

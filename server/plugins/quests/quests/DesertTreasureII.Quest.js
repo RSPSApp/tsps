@@ -5827,8 +5827,9 @@ module.exports = function registerDesertTreasureII(api) {
       setLassar(p, { ...state, medallion: true });
       markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
-      // Rsprox 1703 t16262, there in an item box.
-      p.sendMessage("You find a medallion amongst the entrails.");
+      // Rsprox 1703 t16262: an item box (objectbox 193) with the medallion, not a chat line.
+      p.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
+        new api.core.ItemStatementDialogue(0, I.WHISPERERS_MEDALLION, "You find a medallion amongst the entrails.")));
       return true;
     }
     if (inChapter(p, "whisperer") && visibleId === 48310 && p.getAttribute(LASSAR)?.medallion
@@ -5974,7 +5975,8 @@ module.exports = function registerDesertTreasureII(api) {
             return p.sendMessage("You don't have enough inventory space for any more mushrooms.");
           }
           p.getInventory().adds(mushroom, 1);
-          p.sendMessage("You pick a mushroom.");
+          // A spam line, as captured (226/01703.txt:221125, 227/00091.txt:257527).
+          p.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You pick a mushroom.");
           return true;
         }
         if ([O.SALT_DEPOSIT, O.SALT_DEPOSIT_2].includes(visibleId)) {

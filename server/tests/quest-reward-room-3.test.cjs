@@ -61,6 +61,10 @@ function actor(t, key, stage) {
   const messages = [];
   const sendMessage = p.sendMessage.bind(p);
   t.mock.method(p, "sendMessage", (text) => { messages.push(String(text)); return sendMessage(text); });
+  // Spam lines, kept apart so a test sees the type live sends.
+  const spam = [];
+  const sender = p.getPacketSender(), sendTyped = sender.sendTypedMessage.bind(sender);
+  t.mock.method(sender, "sendTypedMessage", (type, text) => { if (type === core.ChatType.SPAM) spam.push(String(text)); return sendTyped(type, text); });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
@@ -68,7 +72,7 @@ function actor(t, key, stage) {
     core.TaskManager.cancelTasks(p);
   });
   quest(key).setStage(p, stage);
-  return { p, c, inv: p.getInventory(), messages };
+  return { p, c, inv: p.getInventory(), messages, spam };
 }
 
 const quest = (key) => {
@@ -208,7 +212,11 @@ test("DT2: the Whisperer's remains refuse a full bag and flag nothing; with room
   searchRemains(control);
   assert.equal(control.inv.getAmount(I.WHISPERERS_MEDALLION), 1, "control: the medallion");
   assert.equal(control.p.getAttribute(LASSAR).medallion, true, "control: and the flag");
-  assert.ok(control.messages.includes(FOUND), JSON.stringify(control.messages));
+  // rsprox 1703 t16262: an item box (objectbox 193) with the medallion, not a chat line.
+  const box = control.p.getDialogueManager().getCurrent();
+  assert.ok(box instanceof core.ItemStatementDialogue, `an item box: ${box?.constructor?.name}`);
+  assert.equal(String(box.getText?.() ?? ""), FOUND);
+  assert.equal(control.messages.includes(FOUND), false, "not a chat line");
 
   const f = afterWhisperer(t);
   fill(f);
@@ -300,7 +308,7 @@ for (const [name, loc, item] of [["Musca", "MUSCA_MUSHROOMS", "MUSCA_MUSHROOM"],
     const start = f.inv.getAmount(I[item]);
     for (let i = 0; i < 5; i++) pick(f, area, O[loc]);
     assert.equal(f.inv.getAmount(I[item]), start + 5, "five picks, five mushrooms");
-    assert.ok(f.messages.includes("You pick a mushroom."), JSON.stringify(f.messages.slice(-2)));
+    assert.ok(f.spam.includes("You pick a mushroom."), "a spam line, as captured: " + JSON.stringify(f.spam.slice(-2)));
 
     fill(f);
     const before = f.inv.getAmount(I[item]);

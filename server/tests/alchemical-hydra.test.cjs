@@ -163,7 +163,7 @@ test('poison: a 3x3 splash (up to 7, poison 6 on the target) leaves pools hittin
   fight.landPoison(player.getLocation(), player);
   assert.equal(player.damage.length, 1);
   assert.ok(player.damage[0] <= Common.data.poison.splashMax);
-  assert.deepEqual(player.poison, [Common.data.poison.poisonTargeted]);
+  assert.deepEqual(player.poison, [Common.data.poison.poisonTargeted * 5], 'severity 30, a first hit of 6');
   assert.equal(fight.pools.length, 9);
   fight.tickCount += 1;
   fight.tickPools([player]);

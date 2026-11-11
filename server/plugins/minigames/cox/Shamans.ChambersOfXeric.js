@@ -226,7 +226,8 @@ class ShamansRoom extends Raid.Room {
         for (const raider of this.raiders()) {
           if (raider.getLocation().getDistance(tile) > 2) continue;
           this.hurtBy(raider, Math.floor(Shared.random(BLOB.MIN, BLOB.MAX) * blobShare(raider)));
-          if (Shared.random(0, 3) === 0) CombatFactory.poisonEntity(raider, BLOB.POISON);
+          // Severity, hit x 5: the Wiki's "Yes (12)" (Lizardman shaman (Chambers of Xeric)). No recording.
+          if (Shared.random(0, 3) === 0) CombatFactory.poisonEntity(raider, BLOB.POISON * 5);
         }
       });
       return;

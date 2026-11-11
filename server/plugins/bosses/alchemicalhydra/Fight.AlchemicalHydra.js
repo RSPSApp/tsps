@@ -177,7 +177,8 @@ class Fight {
     for (const player of players) {
       if (chebyshev(player.getLocation(), centre) > 1) continue;
       Common.hurtPlayer(player, Common.randomInt(0, poison.splashMax), true);
-      Common.core.CombatFactory.poisonEntity(player, player === aimedAt ? poison.poisonTargeted : poison.poisonNear);
+      // Severity, hit x 5: the Wiki's hits are 6 on the target and 4 beside it (Alchemical Hydra/Strategies). No recording.
+      Common.core.CombatFactory.poisonEntity(player, (player === aimedAt ? poison.poisonTargeted : poison.poisonNear) * 5);
     }
     const until = this.tickCount + poison.poolTicks;
     for (let dx = -1; dx <= 1; dx++) {

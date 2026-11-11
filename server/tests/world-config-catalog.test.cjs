@@ -33,7 +33,7 @@ test('a plugin switched off still appears, disabled, with its option owner disab
   });
   try {
     const data = WorldConfigCatalog.build(dir, layers(
-      { membersWorld: false, pluginConfig: { 'On:opt': false } },
+      { plugins: { FreeToPlay: true }, pluginConfig: { 'On:opt': false } },
       { plugins: { Off: false }, pluginConfig: { 'On:opt': true } }, 'a'));
     const byName = Object.fromEntries(data.plugins.map((p) => [p.name, p]));
     assert.equal(byName.On.enabled, true);
@@ -101,6 +101,30 @@ test('the catalog is cached per layers hash', () => {
     assert.equal(WorldConfigCatalog.build(dir, layers({}, {}, 'x')), first);
     assert.notEqual(WorldConfigCatalog.build(dir, layers({}, { plugins: { A: false } }, 'y')), first);
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('imported source is listed from its manifest until the runtime loads it', () => {
+  const entry = 'imported/welcome/Welcome.plugin.js';
+  const dir = fixture({
+    [entry]: plugin('Welcome'),
+    'imported/welcome/plugin.json': JSON.stringify({ description: 'Uploaded welcome message.' }),
+  });
+  const file = require.resolve(path.join(dir, entry));
+  try {
+    const first = WorldConfigCatalog.build(dir, layers());
+    assert.equal(first.plugins[0].description, 'Uploaded welcome message.');
+    assert.equal(first.plugins[0].awaitingLoad, true);
+    assert.equal(first.plugins[0].loaded, false);
+    assert.equal(require.cache[file], undefined);
+    require(file);
+    WorldConfigCatalog.invalidate();
+    const loaded = WorldConfigCatalog.build(dir, layers());
+    assert.equal(loaded.plugins[0].loaded, true);
+    assert.ok(loaded.options.some(option => option.owner === 'Welcome'));
+  } finally {
+    delete require.cache[file];
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

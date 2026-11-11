@@ -57,7 +57,9 @@ function optionTable(options: CatalogOption[]): string[] {
  * a local world.local.json.
  */
 export function renderWorldConfigDocs(catalog: WorldConfigCatalogData): string {
-    const areaByOwner = new Map<string, string>(catalog.plugins.map((p) => [p.name, p.area]));
+    const localImports = new Set(catalog.plugins.filter((plugin) => plugin.area === "imported").map((plugin) => plugin.name));
+    const bundledPlugins = catalog.plugins.filter((plugin) => !localImports.has(plugin.name));
+    const areaByOwner = new Map<string, string>(bundledPlugins.map((p) => [p.name, p.area]));
     // Owner kind and plugin area are separate grouping levels, so a plugin folder named
     // "world" or "core" can never be mistaken for the top-level or core sections.
     const sections: { heading: string; options: CatalogOption[] }[] = [
@@ -66,7 +68,7 @@ export function renderWorldConfigDocs(catalog: WorldConfigCatalogData): string {
     ];
     const byArea = new Map<string, CatalogOption[]>();
     for (const option of catalog.options) {
-        if (option.owner === "core" || option.owner === "world") continue;
+        if (option.owner === "core" || option.owner === "world" || localImports.has(option.owner)) continue;
         const area = areaByOwner.get(option.owner) ?? "other";
         byArea.set(area, [...(byArea.get(area) ?? []), option]);
     }
@@ -80,12 +82,12 @@ export function renderWorldConfigDocs(catalog: WorldConfigCatalogData): string {
         out.push(...optionTable([...section.options].sort((a, b) => compare(a.key, b.key))), "");
     }
 
-    const described = catalog.plugins
+    const described = bundledPlugins
         .filter((p): p is CatalogPlugin & { description: string } => !!p.description)
         .sort((a, b) => compare(a.area, b.area) || compare(a.name, b.name));
     out.push("### Plugin switches", "");
     out.push(
-        "Only plugins that have a description are listed here; the world config page's Plugins tab lists all of them. " +
+        "This table lists bundled plugins that have a description. The world config page also lists locally uploaded plugins. " +
             "The switch key is what goes in `plugins` (matched ignoring case and spaces).",
         "",
     );

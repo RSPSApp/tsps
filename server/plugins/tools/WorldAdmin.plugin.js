@@ -2,7 +2,9 @@ const crypto = require("crypto");
 const http = require("http");
 const path = require("path");
 const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
-const { createRequestHandler } = require("./worldadmin/Http.WorldAdmin");
+const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
+const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
+const { readPluginZip, savePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
 //   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a 24+ character token)
@@ -106,6 +108,8 @@ function catalogAction() {
   const layers = readLayers();
   const status = gameUpdateStatus();
   const pending = pendingApplyNow(status);
+  const players = pluginApi.core.World.getPlayers()?.stream?.().filter(Boolean) ?? [];
+  const bots = players.filter(player => player.isPlayerBot?.()).length;
   return {
     status: 200,
     body: {
@@ -113,6 +117,10 @@ function catalogAction() {
       layers: layerSummary(layers),
       mode: restartMode(),
       onlinePlayers: onlinePlayers(),
+      playerCount: players.length - bots,
+      botCount: bots,
+      playerProfile: pluginApi.core.GameConstants?.WORLD_PROFILE,
+      jsonPlayerSaves: pluginApi.core.GameConstants?.PLAYER_PERSISTENCE?.constructor.name === "JsonPlayerPersistence",
       countdown: {
         remainingSeconds: status.remainingSeconds ?? 0,
         scheduled: status.scheduled === true,
@@ -126,6 +134,18 @@ function catalogAction() {
 
 function previewAction({ changes }) {
   return { status: 200, body: planFor(readLayers(), changes) };
+}
+
+function importPluginAction(body) {
+  const status = gameUpdateStatus();
+  if (pendingApplyNow(status) || status.scheduled || shuttingDown()) {
+    throw new HttpError(409, "Wait for the pending restart before importing a plugin.");
+  }
+  const catalog = pluginApi.core.WorldConfigCatalog;
+  const release = readPluginZip(body);
+  savePluginZip(PLUGIN_DIRECTORY, release, catalog.build(PLUGIN_DIRECTORY, readLayers()).plugins);
+  catalog.invalidate();
+  return { status: 201, body: { name: release.manifest.name, version: release.manifest.version } };
 }
 
 function writeError(err) {
@@ -256,6 +276,21 @@ function cancelAction() {
 }
 
 const actions = {
+  async dispatch(request, response, url) {
+    if (url.pathname === "/api/server/shutdown" && process.env.TSPS_WORLD_ADMIN_SOCKET) {
+      if (request.method !== "POST") throw new HttpError(405, "Method not allowed");
+      if (shuttingDown() || pendingApplyNow(gameUpdateStatus())) throw new HttpError(409, "A restart is already pending.");
+      lastFailure = null;
+      response.once("finish", () => pluginApi.core.Server.shutdown("localPanelStop", {
+        exitCode: 0,
+        onCancelled(reason) { lastFailure = { at: new Date().toISOString(), message: `Stop cancelled: ${reason}` }; },
+      }));
+      send(response, 202, { stopping: true });
+      return true;
+    }
+    return playerRoutes(request, response, url, pluginApi);
+  },
+  importPlugin: importPluginAction,
   catalog: catalogAction,
   preview: previewAction,
   apply: applyAction,
@@ -275,17 +310,21 @@ async function startWorldAdmin() {
     actions,
     pluginApi.core.WorldConfigStore.worldSettingKeys(),
   ));
+  const socket = process.env.TSPS_WORLD_ADMIN_SOCKET;
+  if (socket && process.platform !== "win32") require("fs").rmSync(socket, { force: true });
   const listening = await new Promise((resolve) => {
     server.on("error", (error) => {
       console.error(`[world-admin] server error: ${error.message}`);
       resolve(false);
     });
-    server.listen(access.port, access.host, () => resolve(true));
+    if (socket) server.listen(socket, () => resolve(true));
+    else server.listen(access.port, access.host, () => resolve(true));
   });
   if (!listening) return;
   server.unref();
   httpServer = server;
-  boundPort = server.address().port;
+  boundPort = socket ? 0 : server.address().port;
+  if (socket) return;
   console.info(`[world-admin] listening on ${access.host}:${boundPort}`);
   console.info(`[world-admin] world config page: ${startupLinkMessage(boundPort, access.tokenSource, tokenFile)}`);
 }

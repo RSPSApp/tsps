@@ -11,7 +11,7 @@ const core = PluginManager.getCoreApi();
 
 before(async () => {
   await CachePipeline.initialize(process.cwd());
-  require("../plugins/combat/Frostweaver.plugin").register(PluginManager.createApi("FrostweaverTest"));
+  PluginManager.loadFromDirectory(require("node:path").resolve(__dirname, "../plugins")); // the real loader: the unit is found, or absent
 });
 
 function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0 } = {}) {
@@ -39,6 +39,7 @@ function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", 
   if (armour === "missing") items[E.LEG_SLOT] = new core.Item(-1);
   if (weapon) items[E.WEAPON_SLOT] = new core.Item(I[weapon]);
   const spell = core.CombatSpells[spellName];
+  p.setSpellbook(spell.getSpellbook());
   p.getCombat().setCastSpell(spell);
   for (const rune of spell.itemsRequired(p)) p.getInventory().add(new core.Item(rune.getId(), rune.getAmount() * 10));
   return { p, target, spell, queued, cast: () => spell.canCast(p, true) };

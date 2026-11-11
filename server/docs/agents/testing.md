@@ -14,7 +14,7 @@ links or what references it, see [cache-editor.md](cache-editor.md).
 | Set the scene | `command { player, text }` runs a `::command` as a developer for that call: `tele x y z`, `item id amount`, `master`, `cwar`, `toa` ... |
 | Ask a rule | `can_attack { attacker, target: { player } or { npc } }`, `can_teleport { player, x?, y?, z? }` run the real checks and return the verdict and message, with no fight or teleport |
 | Travel | `travel_to { player, x, y, z }` walks there like a player, through doors, stairs, shortcuts and boats, one normal click per hop (see [quest-testing.md](quest-testing.md)) |
-| Act | `walk_to`, `interact`, `npc_option`, `object_option`, `inventory_option` (Wear/Wield to equip), `use_item`, `player_option` (Attack/Trade/Follow), `cast_spell { spell, target? }` |
+| Act | `walk_to`, `interact`, `npc_option`, `object_option`, `inventory_option` (Wear/Wield to equip; `subOption` picks a submenu entry, e.g. Rub → Air Altar), `use_item`, `player_option` (Attack/Trade/Follow), `cast_spell { spell, target? }` |
 | Skip time | `advance_time { player, minutes }` moves timed content forward (farming, seedlings, bird houses) |
 | Ask the guide | `quest_helper { player, quest, … }` evaluates the real Quest Helper headless for that player: current step text, dialogue choices, targets, and the quest's saved stage with the wire value it mirrors to and the cache's completion threshold (`contract`). `quest_helper_result` reads what a connected client was last told; `quest_helper_quests` lists keys with status and stage. Needs `yarn bridge` (see [quest-helper-testing.md](quest-helper-testing.md)) |
 | Check a step's targets | `quest_helper` also resolves every target against the cache and the scene (`cache: known\|missing`, `scene: on-tile\|nearby\|absent\|carried\|on-ground`), so a step naming an id this cache does not have is caught before any click |
@@ -55,6 +55,11 @@ scene first with the tools above.
   `videos/t<tick>-<label>.mp4`. The tick ties media to the run.log lines.
 - **Inspect:** read the PNGs/videos back; screenshots are also the fastest way to verify
   visual fixes a PR describes.
+- **Decode failures:** a result carries `typeDecodeFailures` (e.g. `{ "locs": 120 }`, distinct
+  types) when config types threw while the page decoded them; a failed capture names them in its
+  error. The client keeps them half-decoded, so they show as
+  missing locs, NPCs or items; see `docs/cache-revision-update.md` step 5. It counts the page
+  only, not the map-building workers.
 - **Toggles:** `VISION_EXPORTS=0` sends captures to the OS temp dir and writes no logs (use
   when probing without wanting to accumulate data); `VISION_KEEP_FRAMES=1` keeps clip frame
   JPEGs after a video builds (they are deleted otherwise); `VISION_CHROME_PATH` picks a

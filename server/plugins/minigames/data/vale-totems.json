@@ -179,5 +179,16 @@
         ]
       }
     ]
+  },
+  "dirtyArrowtips": {
+    "$comment": "Wiki (Dirty arrowtips): up to 50 a click, each one an arrowhead from its Fletching band (boostable; weights out of 8,774). RSProx cleaning-arrowtips (rev 242, Fletching 59): one dirty arrowtip per arrowhead, stopping at the first that has no room.",
+    "perClick": 50,
+    "bands": [
+      { "level": 90, "weights": { "steel_arrowheads": 42, "mithril_arrowheads": 2519, "adamant_arrowheads": 3359, "rune_arrowheads": 1889, "dragon_arrowheads": 965 } },
+      { "level": 80, "weights": { "steel_arrowheads": 360, "mithril_arrowheads": 2484, "adamant_arrowheads": 3214, "rune_arrowheads": 1799, "dragon_arrowheads": 917 } },
+      { "level": 65, "weights": { "steel_arrowheads": 2267, "mithril_arrowheads": 2277, "adamant_arrowheads": 2343, "rune_arrowheads": 1260, "dragon_arrowheads": 627 } },
+      { "level": 50, "weights": { "steel_arrowheads": 5128, "mithril_arrowheads": 1966, "adamant_arrowheads": 1038, "rune_arrowheads": 450, "dragon_arrowheads": 192 } },
+      { "level": 1, "weights": { "steel_arrowheads": 6400, "mithril_arrowheads": 1828, "adamant_arrowheads": 456, "rune_arrowheads": 89, "dragon_arrowheads": 1 } }
+    ]
   }
 }

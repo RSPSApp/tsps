@@ -261,6 +261,7 @@ async function main() {
   const deadline = Date.now() + timeoutMs;
   const viewport = (arg("viewport", "1280x800") || "1280x800").split("x").map(Number);
   let proc = null;
+  let cdp = null;
   try {
     const target = new URL(arg("url", defaultUrl()));
     if (arg("user", null)) {
@@ -275,7 +276,6 @@ async function main() {
     // Reap only this invocation's prior browser candidates before probing.
     killOurBrowserProcesses();
     const tried = [];
-    let cdp = null;
     for (const bin of candidates) {
       if (Date.now() > deadline) throw new Error("deadline passed before a browser was ready");
       const attempt = await tryBrowser(bin, viewport, Math.min(deadline - Date.now(), 45000), target.href);
@@ -327,6 +327,26 @@ async function main() {
         const c = ${CLIENT_JS};
         await c.runeLite.pluginManager.setPluginEnabled(${SMOOTHING_JS}, ${smoothing === "on"});
       })()`);
+    }
+    // --plugin "Name" turns a plugin on (or "A,B" several, in order), and --plugin-config
+    // '{"key":value}' sets the last one's config (by its config group), e.g. to capture the
+    // Isometric Camera, alone or with "117 HD".
+    const pluginName = arg("plugin", null);
+    if (pluginName !== null) {
+      summary.plugin = await cdp.evaluate(`(async () => {
+        const c = ${CLIENT_JS}, pm = c.runeLite.pluginManager;
+        const names = ${JSON.stringify(pluginName)}.split(",").map(n => n.trim()).filter(Boolean);
+        const plugins = names.map(name => pm.getPlugins().find(p => pm.getDescriptor(p).name === name));
+        if (plugins.some(p => !p)) return "no-such-plugin";
+        const last = plugins[plugins.length - 1];
+        const group = last.constructor.config && last.constructor.config.group;
+        const values = ${arg("plugin-config", "{}")};
+        for (const [key, value] of Object.entries(values)) c.runeLite.configManager.setConfiguration(group, key, value);
+        for (const plugin of plugins) await pm.setPluginEnabled(plugin, true);
+        if (${arg("close-modal", "0") === "1"}) c.closeModalInterface?.();
+        return { enabled: names, group, values };
+      })()`);
+      await sleep(1000);
     }
 
 
@@ -836,6 +856,17 @@ async function main() {
   } catch (error) {
     summary.error = String(error?.message ?? error);
   } finally {
+    // Config types that threw while decoding (BaseTypeLoader keeps them half-decoded, so they
+    // show as missing locs, NPCs or items rather than a crash). Read on failed runs too.
+    if (cdp) {
+      try {
+        const failures = await Promise.race([
+          cdp.evaluate("Object.fromEntries(globalThis.__typeDecodeFailures ?? [])"),
+          sleep(3000).then(() => null),
+        ]);
+        if (failures && Object.keys(failures).length) summary.typeDecodeFailures = failures;
+      } catch {}
+    }
     if (proc) killBrowser(proc);
   }
   summary.ms = Date.now() - started;

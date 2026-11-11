@@ -140,10 +140,13 @@ function storeFromTrim(player, boat, { actor = player, crew = false } = {}) {
   return true;
 }
 
-/** A Gwenith Glide crystal mote: a charge if the catcher is on and has room. */
+/**
+ * A crystal mote (a Gwenith Glide's, a crystal extractor's): a charge if the catcher is on and has
+ * room. Returns whether it was stored.
+ */
 function addCrystalMote(player) {
   const aboard = ownBoat(player);
-  if (aboard) addMote(player, aboard);
+  return aboard ? addMote(player, aboard) !== undefined : false;
 }
 
 /** Releases a mote for a burst of speed (rsprox 907 11637). */

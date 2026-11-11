@@ -45,7 +45,10 @@ module.exports = function registerTribalTotemQuest(api) {
   const KANGAI_MAU_NPC_ID = NpcIdentifiers.KANGAI_MAU;
   const GPDT_EMPLOYEE_NPC_ID = NpcIdentifiers.GPDT_EMPLOYEE;
   const HORACIO_NPC_ID = NpcIdentifiers.HORACIO;
+  // The Ardougne spawn is cache id 5314, which NpcIdentifiers omits; 8480/8481 are other copies.
+  const ARDOUGNE_WIZARD_CROMPERTY_NPC_ID = 5314;
   const WIZARD_CROMPERTY_NPC_IDS = new Set([
+    ARDOUGNE_WIZARD_CROMPERTY_NPC_ID,
     NpcIdentifiers.WIZARD_CROMPERTY,
     NpcIdentifiers.WIZARD_CROMPERTY_2,
   ]);
@@ -365,7 +368,7 @@ module.exports = function registerTribalTotemQuest(api) {
     }
     combinationSessions.delete(player);
     player.setAttribute(KURT_DOOR_UNLOCKED_ATTRIBUTE, true);
-    sender.closeInterface();
+    sender.sendInterfaceRemoval();
     player.sendMessage("The combination seems correct!");
   }
 
@@ -390,7 +393,12 @@ module.exports = function registerTribalTotemQuest(api) {
     if (request.handled || request.objectId !== TRAP_STAIRS_ID) return;
     const location = request.object?.getLocation?.();
     if (!location || location.getX() !== TRAP_STAIRS_TILE.x || location.getY() !== TRAP_STAIRS_TILE.y) return;
-    if (Number(request.player.getAttribute(STAIRS_INVESTIGATED_ATTRIBUTE)) === 1) return;
+    if (Number(request.player.getAttribute(STAIRS_INVESTIGATED_ATTRIBUTE)) === 1) {
+      // Stairs are walked, not climbed: take the generic route without the ladder animation.
+      request.handled = true;
+      api.emitCustomEvent("ladders:climbUp", { player: request.player, object: request.object, animate: false });
+      return;
+    }
     request.player.sendMessage("As you climb the stairs you hear a click...");
     request.player.sendMessage("You have fallen through a trap!");
     request.player.moveTo(new Location(SEWER_FALL_TILE.x, SEWER_FALL_TILE.y, SEWER_FALL_TILE.z));

@@ -443,6 +443,16 @@ function nestOrphanConditions(steps) {
   });
 }
 
+/**
+ * The quest start warning ("Before starting this quest, be aware that your combat level is
+ * lower than the recommended level of N") sits under this exact wiki condition. Plugins that
+ * need other wording answer their own conditions first; this only settles the bare form.
+ */
+function combatLevelCondition(player, text) {
+  const match = /^If the player's combat level is lower than (\d+):$/.exec(String(text ?? ""));
+  return match ? player.getSkillManager().getCombatLevel() < Number(match[1]) : null;
+}
+
 /** First-true (else first-unknown, else none) pick for a run of sibling conditions. */
 function chooseCondition(run, resolveCondition) {
   const answers = run.map((condition) => resolveCondition(condition));
@@ -529,6 +539,14 @@ function flatten(steps, opts = {}) {
  * `step.shops` ("Ned's Handmade Rope (100% Wool) (Default)", "... (Fremennik Isles)");
  * "npc-dialogue:shop" lets a plugin pick one by game state, else the Default version opens.
  */
+/** Four 53-character lines a page: the layout before ChatTextLayout, for a core without it. */
+function characterPages(text) {
+  const lines = Misc.wrapText(text, 53);
+  const pages = [];
+  for (let start = 0; start < lines.length; start += 4) pages.push(lines.slice(start, start + 4).join(" "));
+  return pages;
+}
+
 function shopName(api, player, npcId, step) {
   if (!Array.isArray(step.shops)) return step.target;
   const request = { player, npcId, target: step.target, shops: step.shops, shop: null };
@@ -595,7 +613,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     PluginManager.emitNpcDialogueCondition({
       player, npc: event.npc, npcId, definition, pages: context.pages,
       text: step.text, stepId: step.id,
-    });
+    }) ?? combatLevelCondition(player, step.text);
 
   // "shows other/previous/initial options" ({{tact|other}} etc.) replays a menu
   // that has already been shown. "previous2/3" walk further back, "initial" is
@@ -959,7 +977,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return;
         }
         playedAny = true;
-        const lines = Misc.wrapText(formatted, 53);
+        // Pages as the chatbox holds them: four lines of font 497 in 380 pixels (ChatTextLayout).
+        const pages = api.core?.ChatTextLayout?.pages(formatted) ?? characterPages(formatted);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         // An item's own transcript has no NPC; a named speaker still gets their head.
@@ -989,8 +1008,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           : undefined;
         if (hold) chain.add(hold);
         let held;
-        for (let start = 0; start < lines.length; start += 4) {
-          const text = lines.slice(start, start + 4).join(" ");
+        for (const text of pages) {
           const dialogue = isPlayer
             ? new PlayerDialogue(index++, text, expression)
             : new NpcDialogue(index++, speakerId, text, speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
@@ -1141,6 +1159,7 @@ module.exports = {
   pickVariant,
   aliasKeys,
   flatten,
+  combatLevelCondition,
   formatPlayerText,
   startDialogue,
   collectPageLines,

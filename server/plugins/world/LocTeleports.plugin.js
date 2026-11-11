@@ -19,6 +19,10 @@
  * options; the options that lead on move the player, and a ladder direction the captures never
  * saw goes to Ladders (ladders:climbUp / ladders:climbDown), which finds it on the map.
  *
+ * A loc with a warning (`warn`: Cavey Davey at the Mos Le'Harmless cave) plays the captured
+ * conversation and its question until the player turns the warning off; its other option
+ * (`toggle`: Toggle-warning) asks first, then flips the warning, which is kept across logins.
+ *
  * Each plays its captured animation, sound and fade, and moves the player (or swaps the loc) on
  * the captured tick. An entry's `message` (with `messageType` "spam" for the filterable channel)
  * is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
@@ -38,6 +42,8 @@ const FADE_SCRIPT = 948;
 const FADE_CYCLES = 50;
 /** Locs a player has used an item on to pass (a rope tied to a crevice), by gameval name. */
 const TIED_ATTRIBUTE = "loc-teleports:tied";
+/** Warnings a player has turned off (Toggle-warning), by varbit name; the varbit is sent again at login. */
+const WARNINGS_OFF_ATTRIBUTE = "loc-teleports:warnings-off";
 /** The handler runs one tick after the arrival the captured ticks count from. */
 const HANDLER_TICK = 1;
 
@@ -252,6 +258,53 @@ function ask(player, object, entry, destination) {
   pluginApi.sendMultiChatboxPrompt(player, entry.ask.prompt, ...entry.ask.options.flatMap((option) => [option.text, choose(option)]));
 }
 
+function varbitId(name) {
+  return core.CacheDefinitions.getVarbitId(name);
+}
+
+function warningsOff(player) {
+  const value = player.getAttribute(WARNINGS_OFF_ATTRIBUTE);
+  return Array.isArray(value) ? value : [];
+}
+
+/** Whether the player has turned this warning off. */
+function warningOff(player, name) {
+  return warningsOff(player).includes(name);
+}
+
+/** The client's copy of the warnings turned off, which a login starts without. */
+function restoreWarnings({ player }) {
+  for (const name of warningsOff(player)) {
+    const id = varbitId(name);
+    if (id != null) player.getPacketSender().sendVarbit(id, 1);
+  }
+}
+
+/** A loc's warning: the captured conversation, then the question that leads on or closes. */
+function warn(player, object, entry, destination) {
+  const { DialogueChainBuilder, NpcDialogue, PlayerDialogue, ActionDialogue } = core;
+  const chain = new DialogueChainBuilder();
+  const lines = entry.warn.dialogue;
+  lines.forEach((line, index) => chain.add(line.npc !== undefined
+    ? new NpcDialogue(index, line.npc, line.text, undefined, line.expression)
+    : new PlayerDialogue(index, line.text, line.expression)));
+  chain.add(new ActionDialogue(lines.length, { execute: () => ask(player, object, { ...entry, ask: entry.warn.ask }, destination) }));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+/** Toggle-warning: asks, and on Yes turns the warning off, or back on. */
+function toggleWarning(player, toggle) {
+  const id = varbitId(toggle.varbit);
+  if (id == null) return;
+  const off = warningOff(player, toggle.varbit);
+  const flip = () => {
+    const others = warningsOff(player).filter((name) => name !== toggle.varbit);
+    player.setAttribute(WARNINGS_OFF_ATTRIBUTE, off ? others : [...others, toggle.varbit]);
+    player.getPacketSender().sendVarbit(id, off ? 0 : 1);
+  };
+  pluginApi.sendMultiChatboxPrompt(player, off ? toggle.enable : toggle.disable, "Yes.", flip, "No.", () => {});
+}
+
 /** The first gate the player doesn't pass, or null. */
 function failedGate(player, entry) {
   return (entry.requires ?? []).find((requirement) => !meets(player, entry, requirement)) ?? null;
@@ -261,11 +314,19 @@ function failedGate(player, entry) {
 function play(player, object, clickType) {
   const entry = entryFor(object, clickType);
   if (entry) {
+    if (entry.toggle) {
+      toggleWarning(player, entry.toggle);
+      return true;
+    }
     const destination = destinationFor(entry, player.getLocation());
     if (!destination) return false;
     const gate = failedGate(player, entry);
     if (gate) {
       refuse(player, gate.refuse);
+      return true;
+    }
+    if (entry.warn && !warningOff(player, entry.warn.varbit)) {
+      warn(player, object, entry, destination);
       return true;
     }
     if (entry.ask) {
@@ -307,6 +368,11 @@ function claimLadder(request) {
   if (play(request.player, request.object, request.clickType)) request.handled = true;
 }
 
+/** "loc-teleports:captured" { object, clickType, captured }: whether a captured entry covers this placement. */
+function answerCaptured(request) {
+  if (request.object) request.captured = entryFor(request.object, request.clickType) != null;
+}
+
 /** Route to an explicit threshold when surrounding walls block ordinary loc reach. */
 function routeToLoc(event) {
   const approach = entryFor(event.object, event.clickType)?.approach;
@@ -329,10 +395,13 @@ module.exports = {
     entries = loadEntries();
     swaps = loadSwaps();
     api.persistAttribute(TIED_ATTRIBUTE);
+    api.persistAttribute(WARNINGS_OFF_ATTRIBUTE);
+    api.onPlayerLogin(restoreWarnings);
     api.onObjectInteraction(useLoc);
     api.onObjectRoute(routeToLoc);
     api.onItemOnObject(useItemOnLoc);
     api.onCustomEvent("ladders:climb", claimLadder);
+    api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);
   },
 };

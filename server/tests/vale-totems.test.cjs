@@ -15,7 +15,7 @@ const Shared = require("../plugins/minigames/valetotems/Shared.ValeTotems");
 const State = require("../plugins/minigames/valetotems/State.ValeTotems");
 const Ents = require("../plugins/minigames/valetotems/Ents.ValeTotems");
 
-const hooks = { objects: {}, items: {}, events: [] };
+const hooks = { objects: {}, items: {}, npcs: {}, custom: new Map(), events: [] };
 const SITE = 3;
 const SITE_BASE = 57028;
 const SITE_OFFERINGS = 57032;
@@ -28,11 +28,12 @@ function fakeApi() {
     onPlayerLogout() {},
     onPlayerMapSquareChange() {},
     onServerStartup() {},
-    onCustomEvent() {},
+    onCustomEvent: (name, handler) => hooks.custom.set(name, [...(hooks.custom.get(name) ?? []), handler]),
     registerCommand() {},
     spawnNpc() {},
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
     onItemAction: (name, actions) => { hooks.items[name] = actions; },
+    onNpcInteraction: (name, actions) => { hooks.npcs[name] = { ...hooks.npcs[name], ...actions }; },
     emitCustomEvent: (name, payload) => hooks.events.push({ name, ...payload }),
   };
 }
@@ -62,7 +63,12 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
   const attributes = new Map();
   let menu = null;
   let energy = 50;
-  const location = { getX: () => 1386, getY: () => 3276, getZ: () => 0, equals: () => true };
+  const tile = (x, y) => ({
+    x, y, getX: () => x, getY: () => y, getZ: () => 0,
+    equals: (other) => other.getX() === x && other.getY() === y,
+    clone: () => tile(x, y),
+  });
+  let location = tile(1386, 3276);
   const sender = {
     getVarp: (id) => varps.get(id) ?? 0,
     sendConfig: (id, value) => { varps.set(id, value); return sender; },
@@ -84,6 +90,12 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
   const player = {
     inventory, xp, said, dialogueChains, messages, animations, attributes,
     menu: () => menu,
+    clearMenu: () => { menu = null; },
+    // As MovementQueue: `isMoving` is a field, `isMovings()` the query.
+    getMovementQueue: () => ({ isMoving: false, isMovings: () => false }),
+    getInterfaceId: () => -1,
+    isRegistered: () => true,
+    step: (dx, dy) => { location = tile(location.getX() + dx, location.getY() + dy); },
     isPlayerBot: () => false,
     getLocation: () => location,
     getAttribute: (key) => attributes.get(key),
@@ -198,16 +210,37 @@ test("as captured: three carvings - each sets its piece to 9 + the animal; the l
   player.menu().execute(obj("ent_totems_animal_icon_a"));
   assert.equal(site(player, "low"), 10);
   assert.deepEqual(player.messages, ["You carve a buffalo into the totem."]);
-  click(player, "Oak totem", "Carve");
+  // RSProx 20261109T224258-5ab63b4: the menu comes back by itself two ticks after a carving.
+  player.clearMenu();
+  ticks(1);
+  assert.equal(player.menu(), null, "not on the next tick");
+  ticks(1);
   assert.equal(player.menu().getItems()[0], obj("ent_totems_animal_icon_a_disabled"), "a carved animal is greyed out");
   player.menu().execute(obj("ent_totems_animal_icon_a_disabled"));
   assert.equal(site(player, "mid"), 1, "and can't be carved again");
   player.menu().execute(obj("ent_totems_animal_icon_d"));
-  click(player, "Oak totem", "Carve");
+  player.clearMenu();
+  ticks(2);
   player.menu().execute(obj("ent_totems_animal_icon_c"));
   assert.deepEqual([site(player, "mid"), site(player, "top")], [13, 12]);
   assert.deepEqual([site(player, "base_carved"), site(player, "base_multiloc"), site(player, "decay")], [1, 9, 2]);
   assert.equal(player.xp.fletching, 12.5 * 3);
+  // The finished totem says so instead of naming the third animal (ticks 1103, 1317).
+  assert.deepEqual(player.messages, ["You carve a buffalo into the totem.", "You carve a snake into the totem.", "You finish carving the totem."]);
+  player.clearMenu();
+  ticks(3);
+  assert.equal(player.menu(), null, "nothing left to carve");
+});
+
+test("the carve menu doesn't come back once the player walks off", () => {
+  const player = createPlayer({ items: [item("knife")] });
+  State.erect(player, SITE, 1);
+  click(player, "Oak totem", "Carve");
+  player.menu().execute(obj("ent_totems_animal_icon_a"));
+  player.clearMenu();
+  player.step(1, 0);
+  ticks(3);
+  assert.equal(player.menu(), null);
 });
 
 test("as captured: decorating - an item every two ticks, the fourth is the final one, a fifth is refused", () => {
@@ -346,4 +379,113 @@ test("a full inventory can't rummage, even when the loot would join a stack it h
   assert.equal(player.getInventory().getAmount(obj("ent_totems_loot")), 500);
   assert.equal(State.researchPoints(player), 0);
   assert.deepEqual(player.messages, ["You don't have enough inventory space.", "You don't have enough inventory space."]);
+});
+
+const custom = (name, payload) => { for (const handler of hooks.custom.get(name) ?? []) handler(payload); return payload; };
+
+test("as captured: Unpack fills 25 empty slots with flax, or says there aren't 25", () => {
+  const bale = obj("flax_bale");
+  const player = createPlayer({ items: [{ id: bale, amount: 2 }, ...Array.from({ length: 3 }, () => item("oak_logs"))] });
+  hooks.items["Bale of flax"].Unpack({ player, itemId: bale });
+  assert.deepEqual(player.messages, ["You need at least 25 empty spaces to unpack the flax."]);
+  assert.equal(player.getInventory().getAmount(bale), 2);
+  player.inventory[1] = null;
+  hooks.items["Bale of flax"].Unpack({ player, itemId: bale });
+  assert.equal(player.messages.at(-1), "You unpack a bale of flax.");
+  assert.equal(player.getInventory().getAmount(bale), 1);
+  assert.equal(player.getInventory().getAmount(obj("flax")), 25);
+  assert.equal(player.inventory.filter((slot) => slot?.id === obj("flax")).length, 25, "unnoted, a slot each");
+});
+
+test("as captured: the Sacraments of Ent Folk's own notes count totems, rummages and points", () => {
+  const Book = require("../plugins/minigames/valetotems/Book.ValeTotems");
+  const player = createPlayer({ items: [item("oak_logs")] });
+  click(player, "Totem site", "Build", CacheDefinitions.getLocId("ent_totems_site_3_base"));
+  ticks(1);
+  State.setResearchPoints(player, 1);
+  State.count(player, "rummages");
+  assert.deepEqual(Book.myNotes(player).slice(6, 12), [
+    "To date, I've built <col=004d05>1 Vale",
+    "<col=004d05>Totem</col> and rummaged",
+    "through <col=004d05>Vale Offerings once</col>.",
+    "",
+    "I've also earned <col=004d05>1 Vale",
+    "<col=004d05>Research Point</col> which",
+  ]);
+  State.count(player, "rummages");
+  State.setResearchPoints(player, 2);
+  assert.equal(Book.myNotes(player)[8], "through <col=004d05>Vale Offerings 2 times</col>.");
+  assert.equal(Book.myNotes(player)[11], "<col=004d05>Research Points</col> which");
+  const prompt = custom("destroy-item:prompt", { player, item: { getId: () => obj("ent_totems_intro_book") }, warning: "x" });
+  assert.equal(prompt.warning, "Ranulph in Auburnvale can give you another.");
+});
+
+test("as captured: Ranulph's Trade opens the cache omnishop, paid in research points", () => {
+  const player = createPlayer();
+  hooks.npcs.Ranulph.Trade({ player });
+  assert.deepEqual(hooks.events.filter((event) => event.name === "omnishop:open").map((event) => event.shop), ["ent_totems_shop"]);
+  State.setResearchPoints(player, 7);
+  const currency = custom("omnishop:currency", { player, shop: "ent_totems_shop", currency: CacheDefinitions.getDbRowId("omnishop_currency_ent_totems_research_points") });
+  assert.equal(currency.balance, 7);
+  currency.set(2);
+  assert.equal(State.researchPoints(player), 2);
+  const described = custom("omnishop:describe", { player, shop: "ent_totems_shop", stock: "ent_totems_shop_stock_knife", description: "" });
+  assert.equal(described.description, "A crafty looking knife.");
+});
+
+test("as captured (cleaning-arrowtips): Clean turns dirty arrowtips into arrowheads one for one until one has no room", () => {
+  const dirty = obj("dirty_arrowtips");
+  const filler = Array.from({ length: 24 }, () => item("maple_logs"));
+  const player = createPlayer({ fletching: 59, items: [item("knife"), item("ent_totems_loot", 76), { id: dirty, amount: 27 }, null, ...filler] });
+  const random = Math.random;
+  const rolls = (...values) => { const queue = values.map((v) => v / 8774); Math.random = () => queue.shift() ?? 0; };
+  try {
+    player.inventory[3] = item("maple_logs");
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.deepEqual(player.messages, ["You need at least one free inventory space to clean those."]);
+    assert.equal(player.getInventory().getAmount(dirty), 27);
+
+    // One free slot: a steel arrowhead, then a mithril one with no room for it (tick 48).
+    player.inventory[3] = null;
+    rolls(0, 5200);
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 26);
+    assert.equal(player.getInventory().getAmount(obj("steel_arrowheads")), 1);
+
+    // Two more free slots: four steel, an adamant and a mithril, then a rune one has no room (tick 64).
+    player.inventory[4] = null;
+    player.inventory[5] = null;
+    rolls(0, 100, 200, 300, 7100, 5200, 8200);
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 20);
+    assert.deepEqual(["steel_arrowheads", "adamant_arrowheads", "mithril_arrowheads", "rune_arrowheads"].map((name) => player.getInventory().getAmount(obj(name))), [5, 1, 1, 0]);
+    assert.equal(player.messages.length, 1, "no message for a clean stopped by room");
+    assert.deepEqual(player.xp, {}, "and no xp");
+
+    // Room for the rest: all 20, "You clean a batch of arrowtips." (tick 72).
+    for (const slot of [6, 7, 8]) player.inventory[slot] = null;
+    rolls(...Array(20).fill(0));
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 0);
+    assert.equal(player.getInventory().getAmount(obj("steel_arrowheads")), 25);
+    assert.equal(player.messages.at(-1), "You clean a batch of arrowtips.");
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Wiki: a clean takes at most 50, and the arrowhead band follows the boosted Fletching level", () => {
+  const Items = require("../plugins/minigames/valetotems/Items.ValeTotems");
+  const dirty = obj("dirty_arrowtips");
+  const player = createPlayer({ fletching: 99, items: [{ id: dirty, amount: 80 }] });
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    assert.equal(Items.rollArrowhead(player), obj("dragon_arrowheads"));
+    hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
+    assert.equal(player.getInventory().getAmount(dirty), 30);
+    assert.equal(player.getInventory().getAmount(obj("dragon_arrowheads")), 50);
+  } finally {
+    Math.random = random;
+  }
 });

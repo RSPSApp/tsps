@@ -6,6 +6,7 @@ import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 
 type FrameKey = string; // `${spotId}|${frameIdx}|${pass}|${version}` where pass is 0=opaque,1=alpha
 const FRAME_GEOMETRY_VERSION = 3;
+const FISHING_CAPE_SPOT_ANIMATION = 819;
 
 /**
  * Cycles into `frameIdx` (1..its length) for a graphic `ageMs` old (20 ms per cycle), as the game
@@ -65,6 +66,18 @@ export class GfxCache {
             -50,
             -30,
         ) as Model;
+        if (spotId === FISHING_CAPE_SPOT_ANIMATION) {
+            // The water plane shares the terrain's depth. Bias those faces without moving the model.
+            const layers = new Uint8Array(model.faceCount);
+            if (model.faceRenderPriorities) layers.set(model.faceRenderPriorities);
+            const y = model.verticesY;
+            for (let face = 0; face < model.faceCount; face++) {
+                if (y[model.indices1[face]] === 0 && y[model.indices2[face]] === 0 && y[model.indices3[face]] === 0) {
+                    layers[face] = 1;
+                }
+            }
+            model.faceRenderLayers = layers;
+        }
         // Scale and orientation come after the animation (placeAsSpot), as OSRS's spot animation
         // model does: its frames move and scale the model's own axes.
         this.baseBySpot.set(spotId | 0, model);

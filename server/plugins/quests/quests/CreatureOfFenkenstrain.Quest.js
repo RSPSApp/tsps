@@ -910,16 +910,11 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
   function handleSilverOnFurnace(event) {
     if (event.itemId !== ItemIdentifiers.SILVER_BAR) return;
     const { player } = event;
-    // Only the conductor step of this quest owns silver on a furnace; leave the
-    // action to other silver recipes (e.g. Nature Spirit's sickle) otherwise.
-    // Returning false (not undefined) lets the next handler run.
-    if (!quest.isStarted(player) || quest.isComplete(player)) return false;
-    if (!held(player, ItemIdentifiers.CONDUCTOR_MOULD) && held(player, ItemIdentifiers.SICKLE_MOULD)) return false;
+    // Only the conductor step of this quest owns silver on a furnace, and only with the conductor
+    // mould: without it the bar goes on to the other silver recipes (tiaras, holy symbols, jewellery,
+    // Nature Spirit's sickle) for the whole quest. Returning false (not undefined) lets the next handler run.
+    if (!quest.isStarted(player) || quest.isComplete(player) || !held(player, ItemIdentifiers.CONDUCTOR_MOULD)) return false;
     event.handled = true;
-    if (!held(player, ItemIdentifiers.CONDUCTOR_MOULD)) {
-      player.sendMessage("You need a conductor mould to cast anything useful.");
-      return;
-    }
     if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < 20) {
       player.sendMessage("You need level 20 Crafting to cast the conductor.");
       return;

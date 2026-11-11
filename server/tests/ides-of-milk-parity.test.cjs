@@ -119,7 +119,7 @@ test('the low-combat recommendation is a start-menu warning, not a transcript bo
   const lowMenu = { player: low, prompt: 'Start The Ides of Milk quest?', warning: null };
   h.emit('npc-dialogue:menu', lowMenu);
   assert.equal(lowMenu.warning, 'Before starting this quest, be aware that your combat level is lower than the recommended level of 15.');
-  assert.equal(h.action(low, N.CASSIUS_2, 'bkgpn5').handled, true);
+  assert.equal(h.action(low, N.CASSIUS_2, 'kbEA-p').handled, true);
 
   const high = player();
   const highMenu = { player: high, prompt: 'Start The Ides of Milk quest?', warning: null };
@@ -525,7 +525,7 @@ function nativeFight(stage = 22) {
   Object.assign(session, {
     hasReplayedScene: true, replayedSceneBaseX: (at.getX() - 48) & ~7,
     replayedSceneBaseY: (at.getY() - 48) & ~7, replayedSceneLevel: 0,
-    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicRegion: region, lastMusicMode: 1,
+    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicArea: require('../dist/game/Music').Music.tracksAt(at.getX(), at.getY(), 0), lastMusicMode: 1,
   });
   const packets = []; let tick = 0;
   session.sendClientPacket = packet => { packets.push(packet); return true; };

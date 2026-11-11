@@ -56,6 +56,7 @@
  * 10 ticks), the scream's hit, and the water crocodiles' bites (max 8, every 2 ticks).
  */
 
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.TombsOfAmascut");
 const Raid = require("./RaidState.TombsOfAmascut");
 
@@ -1144,7 +1145,7 @@ class ZebakRoom extends Raid.Room {
     const players = this.roomPlayers();
     const rolled = axes.map(([slot, amplitude]) => [slot, Array.isArray(amplitude) ? Shared.random(amplitude[0], amplitude[1]) : amplitude]);
     for (const player of players) {
-      for (const [slot, amplitude] of rolled) player.getPacketSender().sendCameraShake(slot, amplitude);
+      for (const [slot, amplitude] of rolled) CameraShake.send(player.getPacketSender(), "combat", slot, amplitude);
     }
     Shared.later(this.taskKey, resetAfter, () => {
       for (const player of players) player.getPacketSender().sendCameraReset();

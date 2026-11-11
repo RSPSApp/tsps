@@ -144,3 +144,57 @@ test('a refused locked emote does not interrupt an active chop', async t => {
   assert.equal(a.attempts.length,1); assert.equal(draws.cut,1); assert.equal(draws.nest,1); assert.deepEqual(a.gains,[25]); assert.equal(a.logs(),1);
   assert.ok(a.respawn()?.stumpObject, 'the continuing normal tree actually depleted');
 });
+
+// Inventory actions are hard interruptions; equipment-tab actions are exempt:
+// https://osrs-docs.com/docs/mechanics/entity-interactions/#interruptions
+for (const route of ['legacy', 'widget', 'equipment']) test('chopping responds to ' + route + ' item interaction', async t => {
+  const { errors } = randomCut(t);
+  const a = scene(t, 3222), b = scene(t, 3226), ids = core.ItemIdentifiers;
+  t.after(() => assert.deepEqual(errors, [], 'engine and hook errors must not be swallowed'));
+  a.p.setHitpoints(3);
+  a.p.getInventory().add(new core.Item(ids.TROUT), true);
+  if (route === 'equipment') {
+    a.p.getInventory().deleteNumber(ids.BRONZE_AXE, 1);
+    a.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(ids.BRONZE_AXE));
+  }
+  assert.equal(core.CacheDefinitions.getItem(ids.TROUT).inventoryActions[0], 'Eat');
+  await clickTree(a); await clickTree(b);
+  for (let i=0; i<8 && (a.p.getAnimation()?.getId() !== 879 || b.p.getAnimation()?.getId() !== 879); i++) turn(a,b);
+  assert.equal(a.p.getAnimation()?.getId(),879); assert.equal(b.p.getAnimation()?.getId(),879);
+  assert.deepEqual(a.attempts,[]); assert.deepEqual(b.attempts,[]);
+  const slot = a.p.getInventory().getSlotForItemId(ids.TROUT);
+  const widget = core.CacheDefinitions.getComponentId(route === 'equipment' ? 'wornitems:slot3' : 'inventory:items');
+  assert.ok(widget > 0);
+  await a.c.dispatch([route === 'legacy'
+    ? {type:'inventory_action', widgetId:149<<16, slot, itemId:ids.TROUT, option:'Eat', optionIndex:1}
+    : route === 'widget'
+    ? {type:'widget_action', widgetId:widget, groupId:widget>>>16, childId:widget&0xffff, slot, itemId:ids.TROUT, buttonNum:2, opId:2}
+    : {type:'widget_action', widgetId:widget, groupId:widget>>>16, childId:widget&0xffff, buttonNum:1, opId:1}]);
+  turn(a,b);
+  assert.deepEqual(a.attempts,[], 'the item action precedes the first chopping attempt');
+  if (route === 'equipment') {
+    assert.equal(a.p.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId() ?? -1, -1);
+    assert.equal(a.p.getInventory().getAmount(ids.BRONZE_AXE), 1);
+  } else {
+    assert.equal(a.p.getInventory().getAmount(ids.TROUT), 0, 'Eat reaches the food consumer');
+    assert.equal(a.p.getHitpoints(), 10, 'trout heals the player');
+    assert.equal(a.p.getAnimation()?.getId(), 829);
+  }
+  for (let i=0; i<8; i++) turn(a,b);
+  assert.deepEqual(b.gains,[25], 'the other player continues chopping');
+  assert.equal(b.logs(),1); assert.ok(b.respawn()?.stumpObject);
+  if (route === 'equipment') {
+    assert.deepEqual(a.gains,[25], 'removing an axe to inventory keeps chopping');
+    assert.equal(a.logs(),1); assert.ok(a.respawn()?.stumpObject);
+    return;
+  }
+  assert.deepEqual(a.attempts,[], 'eating stops future chop attempts');
+  assert.deepEqual(a.gains,[], 'eating prevents delayed XP');
+  assert.equal(a.logs(),0);
+  assert.equal(core.MapObjects.get(a.tree.getId(), a.tree.getLocation(), null), a.tree);
+  assert.equal(a.p.getInventory().getAmount(ids.BRONZE_AXE),1);
+  await clickTree(a);
+  for (let i=0; i<12 && a.gains.length===0; i++) turn(a,b);
+  assert.deepEqual(a.gains,[25], 'fresh chop still succeeds');
+  assert.equal(a.logs(),1); assert.ok(a.respawn()?.stumpObject);
+});

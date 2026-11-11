@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 27 · ⚠️ passed with issues: 16 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 36 · untested: 105
+193 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 101
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -13,10 +13,10 @@ how to record the result is in [_template/README.md](_template/README.md).
 | --- | --- | --- | --- | --- | --- |
 | [A Kingdom Divided](a-kingdom-divided/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Night at the Theatre](a-night-at-the-theatre/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
-| [A Porcine of Interest](a-porcine-of-interest/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
+| [A Porcine of Interest](a-porcine-of-interest/README.md) | ⚠️ passed with issues | 2026-11-09 | agent | claude-sonnet-5-5 | 1 |
 | [A Ruff Situation](a-ruff-situation/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 |  |
 | [A Soul's Bane](a-souls-bane/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
-| [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Taste of Hope](taste-of-hope/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Alfred Grimhand's Barcrawl | untested |  |  |  |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
@@ -37,7 +37,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Cold War | untested |  |  |  |  |
 | [Contact!](contact/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Cook's Assistant](cooks-assistant/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
-| Crab Quest | untested |  |  |  |  |
+| [Crab Quest](crab-quest/README.md) | ⚠️ passed with issues | 2026-11-09 | agent | claude-opus-5-5 | 3 |
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Curse of the Empty Lord | untested |  |  |  |  |
@@ -67,7 +67,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Ernest the Chicken](ernest-the-chicken/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | DeepSeek V4.1 Flash | 1 |
 | [Ethically Acquired Antiquities](ethically-acquired-antiquities/README.md) | untested |  |  |  |  |
 | [Fairytale I - Growing Pains](fairytale-i-growing-pains/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 1 |
-| [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 2 |
+| [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 1 |
 | [Fallen From Grace](fallen-from-grace/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 8 |
 | Family Crest | untested |  |  |  |  |
 | [Fight Arena](fight-arena/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -111,13 +111,13 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |
-| [Observatory Quest](observatory-quest/README.md) | ⚠️ passed with issues | 2026-10-25 | agent |  | 1 |
+| [Observatory Quest](observatory-quest/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 2 |
 | [Olaf's Quest](olafs-quest/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | One Small Favour | untested |  |  |  |  |
 | Pandemonium | untested |  |  |  |  |
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
-| Plague City | untested |  |  |  |  |
+| [Plague City](plague-city/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 1 |
 | [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-11-07 | agent | claude-opus-5-5 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
@@ -134,7 +134,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Rune Mysteries](rune-mysteries/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 4 |
 | [Scorpion Catcher](scorpion-catcher/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 5 |
 | [Scrambled!](scrambled/README.md) | untested |  |  |  |  |
-| [Sea Slug](sea-slug/README.md) | untested |  |  |  |  |
+| [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 1 |
 | [Secrets of the North](secrets-of-the-north/README.md) | untested |  |  |  |  |
 | Shades of Mort'ton | untested |  |  |  |  |
 | Shadow of the Storm | untested |  |  |  |  |
@@ -145,7 +145,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Shilo Village | untested |  |  |  |  |
 | [Sins of the Father](sins-of-the-father/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | ✅ passed | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
-| [Sleeping Giants](sleeping-giants/README.md) | ⚠️ passed with issues | 2026-11-08 | agent | claude-sonnet-5-5 |  |
+| [Sleeping Giants](sleeping-giants/README.md) | 🔁 needs recheck | 2026-11-08 | agent | claude-sonnet-5-5 |  |
 | [Song of the Elves](song-of-the-elves/README.md) | untested |  |  |  |  |
 | [Spirits of the Elid](spirits-of-the-elid/README.md) | untested |  |  |  |  |
 | Swan Song | untested |  |  |  |  |
@@ -168,7 +168,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | The Fremennik Isles | untested |  |  |  |  |
 | The Fremennik Trials | untested |  |  |  |  |
 | The Garden of Death | untested |  |  |  |  |
-| The Giant Dwarf | untested |  |  |  |  |
+| [The Giant Dwarf](giant-dwarf/README.md) | untested |  |  |  |  |
 | The Golem | untested |  |  |  |  |
 | [The Grand Tree](grand-tree/README.md) | 🔁 needs recheck | 2026-10-29 | agent | claude-haiku-5-5 | 6 |
 | [The Great Brain Robbery](great-brain-robbery/README.md) | untested |  |  |  |  |
@@ -191,12 +191,12 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Troll Romance | untested |  |  |  |  |
 | [Troll Stronghold](troll-stronghold/README.md) | untested |  |  |  |  |
 | [Troubled Tortugans](troubled-tortugans/README.md) | 🔁 needs recheck | 2026-11-03 | agent | deepseek-v4.1-flash | 1 |
-| [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
+| [Twilight's Promise](twilights-promise/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 3 |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
-| Watchtower | untested |  |  |  |  |
+| [Watchtower](watchtower/README.md) | untested |  |  |  |  |
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |
 | [What Lies Below](what-lies-below/README.md) | untested |  |  |  |  |
 | [While Guthix Sleeps](while-guthix-sleeps/README.md) | untested |  |  |  | 1 |

@@ -80,3 +80,25 @@ test('Transparent chatbox stays on after logging in again', () => {
   restoreSettings({ player: again });
   assert.equal(again.varbits.get(CHATBOX_TRANSPARENCY_VARBIT), 0, 'turning it off is saved too');
 });
+
+// "Click through transparent chatbox" (setting 46) is on while varbit 2570
+// (TRANSPARENT_CHATBOX_BLOCKCLICK) is 0, its default: a click blocks the chatbox's clicks again.
+test('Click through transparent chatbox toggles its varbit and is kept at login', () => {
+  const CLICK_THROUGH_SETTING = 46;
+  const BLOCKCLICK_VARBIT = 2570;
+  const slot = displayRow(CLICK_THROUGH_SETTING);
+  assert.ok(slot >= 0, 'setting 46 is a row in the same category');
+
+  const first = player();
+  first.setAttribute('settings-view', DISPLAY_CATEGORY);
+  assert.equal(clickSetting({ player: first, slot }), true);
+  assert.equal(first.varbits.get(BLOCKCLICK_VARBIT), 1, 'turned off: the chatbox blocks clicks');
+
+  const relogged = player(first.attributes);
+  restoreSettings({ player: relogged });
+  assert.equal(relogged.varbits.get(BLOCKCLICK_VARBIT), 1, 'sent again at login');
+
+  relogged.setAttribute('settings-view', DISPLAY_CATEGORY);
+  clickSetting({ player: relogged, slot });
+  assert.equal(relogged.varbits.get(BLOCKCLICK_VARBIT), 0, 'turned back on');
+});

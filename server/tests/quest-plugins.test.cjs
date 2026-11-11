@@ -218,6 +218,93 @@ test('Family Crest only handles gold rocks in Witchaven and Mining recognizes th
   assert.ok(ROCKS.find(rock => rock.objectName === 'Gold rocks').objectIds.includes(GOLD_ROCKS_2));
 });
 
+test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronozon needs all four blasts', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/FamilyCrest.Quest')(api);
+  const { ItemIdentifiers: Items, NpcIdentifiers } = api.core;
+  const items = new Map();
+  const messages = [];
+  const player = {
+    getAttribute: () => 0,
+    sendMessage: m => messages.push(m),
+    getInventory: () => ({
+      getAmount: id => items.get(id) ?? 0,
+      deleteNumber: (id, n) => items.set(id, (items.get(id) ?? 0) - n),
+      adds: (id, n) => items.set(id, (items.get(id) ?? 0) + n),
+    }),
+  };
+  const action = stepId => {
+    const event = { player, stepId, handled: false };
+    for (const handler of handlers.custom.get('npc-dialogue:action')) handler(event);
+    return event;
+  };
+  items.set(Items.STEEL_GAUNTLETS, 1);
+  assert.equal(action('MOcYDq').handled, false);
+  assert.equal(items.get(Items.COOKING_GAUNTLETS), 1);
+  assert.equal(items.get(Items.STEEL_GAUNTLETS), 0, 'the free imbue swaps the steel pair');
+
+  assert.equal(action('aGBezT').handled, true, 'changing without 25,000 coins is refused');
+  assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS) ?? 0, 0);
+  items.set(Items.COINS, 30000);
+  assert.equal(action('aGBezT').handled, false, messages.join('|'));
+  assert.equal(items.get(Items.COINS), 5000);
+  assert.equal(items.get(Items.GOLDSMITH_GAUNTLETS), 1);
+  assert.equal(items.get(Items.COOKING_GAUNTLETS), 0);
+
+  const coinAnswer = handlers.condition.map(h => h({ player, npcId: -1, text: 'If the player does not have enough coins:' })).find(a => typeof a === 'boolean');
+  assert.equal(coinAnswer, undefined, "other NPCs' coin checks are not answered with the 25,000 gauntlet price");
+
+  const { CombatSpells, CombatType } = api.core;
+  const caster = { ...player, isPlayer: () => true, getAsPlayer() { return this; }, getAttribute: () => 10,
+    getCombat: () => ({ getSelectedSpell: () => CombatSpells.FIRE_BLAST, getPreviousCast: () => null }) };
+  const other = { ...caster };
+  let creditedKiller = caster;
+  const npc = {
+    getId: () => NpcIdentifiers.CHRONOZON,
+    getDefinition: () => ({ getHitpoints: () => 170 }),
+    setHitpoints(v) { this.hp = v; },
+    getCombat: () => ({ getKiller: () => creditedKiller }),
+  };
+  const impact = (spell, attacker = caster, damage = 5) => {
+    const hit = { getAttacker: () => attacker, getCombatType: () => CombatType.MAGIC, isAccurate: () => damage > 0, getTotalDamage: () => damage, getSpell: () => spell };
+    for (const handler of handlers.npcHitModify) handler({ npc, hit });
+  };
+  const beforeDeath = () => {
+    const event = { npc, preventDeath: false };
+    for (const handler of handlers.npcBeforeDeath) handler(event);
+    return event.preventDeath;
+  };
+
+  messages.length = 0;
+  impact(null);
+  assert.deepEqual(messages, [], 'spell-less magic damage does not count as the selected Blast');
+  impact(CombatSpells.FIRE_BLAST);
+  impact(CombatSpells.WIND_BLAST);
+  assert.deepEqual(messages, ['Chronozon weakens...', 'Chronozon weakens...'],
+    'a manual Wind Blast counts while Fire Blast is autocast');
+  impact(CombatSpells.WATER_BLAST);
+  assert.equal(beforeDeath(), true, 'Chronozon returns to full health without all four blasts');
+  assert.equal(npc.hp, 170);
+
+  impact(CombatSpells.EARTH_BLAST);
+  impact(null, other, 0);
+  assert.equal(beforeDeath(), false, "another player's splash does not block the qualified credited killer");
+  creditedKiller = other;
+  assert.equal(beforeDeath(), true, 'an unqualified credited killer cannot bypass the gate');
+  creditedKiller = null;
+  assert.equal(beforeDeath(), true, 'Chronozon heals when nobody has damage credit');
+
+  const award = killer => {
+    for (const handler of handlers.npcDeath) handler({ killer, npcId: NpcIdentifiers.CHRONOZON });
+  };
+  award(other);
+  assert.equal(items.get(Items.CREST_PART_3) ?? 0, 0, 'a new killer selected at death still needs all four blasts');
+  award(caster);
+  assert.equal(items.get(Items.CREST_PART_3), 1, 'the qualified killer receives the crest part');
+  creditedKiller = caster;
+  assert.equal(beforeDeath(), true, 'the award consumes the killer’s Blast progress');
+});
+
 test('a shop version named after a quest opens once its quest state matches (#831)', () => {
   const { api } = mockApi();
   require('../plugins/quests/Quests.plugin').register(api);
@@ -18176,6 +18263,54 @@ test('Death Plateau keeps Eohric and Harold dialogue in order', () => {
 });
 
 
+test('Death Plateau reads the held combination in the handwritten scroll', () => {
+  const { api, handlers, player, items, messages } = questScene('DeathPlateau');
+  const itemId = api.core.ItemIdentifiers.COMBINATION;
+  const sent = [];
+  const sender = {
+    sendInterface: id => sent.push(id),
+    sendString: (text, component) => sent.push([component, text]),
+  };
+  player.getPacketSender = () => sender;
+  const read = handlers.namedItemActions.get('Combination').Read;
+  assert.equal(read({ player, itemId }), false);
+  assert.deepEqual(sent, []);
+  items.set(itemId, 1);
+  assert.equal(read({ player, itemId }), true);
+  assert.deepEqual(sent, [
+    222,
+    [(222 << 16) | 5, 'Red is North of Blue. Yellow is South of Purple.'],
+    [(222 << 16) | 6, 'Green is North of Purple. Blue is West of'],
+    [(222 << 16) | 7, 'Yellow. Purple is East of Red.'],
+  ]);
+  assert.equal(items.get(itemId), 1);
+  assert.deepEqual(messages, []);
+});
+
+test("Death Plateau walks the castle and inn stairs without climbing", (t) => {
+  const { api, handlers, player, tile } = questScene('DeathPlateau');
+  const { ObjectIdentifiers: O } = api.core;
+  const [walkStairs] = handlers.custom.get('ladders:climb');
+  const climb = t.mock.method(api, 'emitCustomEvent');
+  for (const [objectId, from, to] of [
+    [O.STAIRS_23, [2897, 3566, 0], [2897, 3569, 1]],
+    [O.STAIRS_22, [2897, 3567, 1], [2897, 3565, 0]],
+    [O.STAIRCASE_79, [2914, 3539, 0], [2914, 3542, 1]],
+    [O.STAIRCASE_82, [2914, 3540, 1], [2914, 3538, 0]],
+  ]) {
+    const object = { getLocation: () => tile(...from) };
+    const request = { player, objectId, object, handled: false };
+    walkStairs(request);
+    assert.equal(request.handled, true);
+    const [event, options] = climb.mock.calls.at(-1).arguments;
+    assert.equal(event, to[2] > from[2] ? 'ladders:climbUp' : 'ladders:climbDown');
+    assert.deepEqual(options, { player, object, destination: tile(...to), animate: false });
+  }
+  const other = { player, objectId: O.STAIRCASE_79, object: { getLocation: () => tile(3200, 3200) }, handled: false };
+  walkStairs(other);
+  assert.equal(other.handled, false);
+});
+
 test("Death Plateau doors require Eohric's hint and the solved puzzle", () => {
   const { api, handlers, quest, player, messages } = questScene('DeathPlateau');
   const door = api.core.ObjectIdentifiers.DOOR_115;
@@ -21362,12 +21497,8 @@ test('Song of the Elves prison entry keeps Elena visible and cannot release her 
 test('Song of the Elves prison stair routes to its open foot, not the exit landing behind the wall', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
-  const route = handlers.routes.find(handler => handler.name === 'routeCastleThroneStairs');
-  const event = { player: { getLocation: () => new api.core.Location(2569, 3298, 0) },
-    object: { getLocation: () => new api.core.Location(2569, 3295, 0) },
-    objectId: 35791, sourceLocation: { x: 2569, y: 3298, z: 0 }, destination: null };
-  route(event);
-  assert.equal(event.destination, null, 'the prison stair keeps the normal walk-to-object route');
+  // No route override: the prison stair (and the castle's main staircase) keep the normal walk-to-object route.
+  assert.equal(handlers.routes.find(handler => handler.name === 'routeCastleThroneStairs'), undefined);
 
   const finder = new api.core.RsmodRouteFinding();
   const spec = { level: 0, srcSize: 1, moveNear: true, maxWaypoints: 25, privateArea: null,
@@ -21692,6 +21823,114 @@ test('Song of the Elves remembers Elena’s earlier answer and fills the cave di
   const line = { player, text: 'Is [Tim/Sue/Sam] here, [Tim/Sue/Sam]?' };
   fillName(line);
   assert.equal(line.text, 'Is Sam here, Sam?', 'the player gives the transcript fake identity instead of their actual name');
+});
+
+test('The Lost Tribe reads its symbol book and advances only when the reader closes', t => {
+  const { api, handlers } = mockApi();
+  const runtimePath = require.resolve('../plugins/quests/QuestRuntime');
+  const previousRuntime = require.cache[runtimePath];
+  delete require.cache[runtimePath];
+  const runtime = require(runtimePath);
+  t.after(() => {
+    if (previousRuntime) require.cache[runtimePath] = previousRuntime;
+    else delete require.cache[runtimePath];
+  });
+  const buttons = new Map(), texts = new Map(), varbits = new Map();
+  let openInterface = -1;
+  api.onInterfaceActionButton = (ids, handler) => {
+    for (const id of Array.isArray(ids) ? ids : [ids]) buttons.set(id, handler);
+  };
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const quest = runtime.getRegisteredQuests().find(entry => entry.key === 'the_lost_tribe');
+  const attrs = new Map([['quest.the_lost_tribe.stage', 7]]);
+  const sender = new Proxy({
+    sendString: (text, uid) => texts.set(uid, text),
+    sendVarbit: (id, value) => varbits.set(id, value),
+    sendInterface: group => { openInterface = group; },
+    sendInterfaceRemoval: () => { openInterface = -1; },
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  const player = {
+    getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getPacketSender: () => sender,
+  };
+  handlers.playerLogin.find((handler) => handler.name === "handleLogin")({ player });
+  handlers.namedItemActions.get('Goblin symbol book').Read({ player });
+  assert.equal(openInterface, 392, 'Read opens the shared book interface');
+  assert.equal(texts.get((392 << 16) | 6), 'A History of the Goblin Race');
+  assert.match(texts.get((392 << 16) | 50), /Rekeshuun.*Idithuun/);
+  assert.equal(quest.getStage(player), 7, 'reading begins without skipping the book');
+  buttons.get((392 << 16) | 7)({ player, buttonId: (392 << 16) | 7 });
+  assert.equal(openInterface, -1);
+  assert.equal(quest.getStage(player), 8, 'closing the book completes the reading step');
+  assert.equal(varbits.get(532), 6);
+});
+
+test('The Lost Tribe login recovers the saved treaty scene exit', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const recovery = 'lost-tribe:treaty-scene-exit';
+  const attrs = new Map([[recovery, [3318, 9616, 0]], ['quest.the_lost_tribe.stage', 10]]);
+  const destinations = [];
+  const player = {
+    getAttribute: (key) => attrs.get(key),
+    setAttribute: (key, value) => attrs.set(key, value),
+    moveTo: (at) => destinations.push([at.getX(), at.getY(), at.getZ()]),
+  };
+  const recover = handlers.playerLogin.find((handler) => handler.name === 'recover');
+  recover({ player });
+  recover({ player });
+  assert.deepEqual(destinations, [[3318, 9616, 0]]);
+  assert.equal(attrs.get(recovery), null);
+  assert.equal(attrs.get('quest.the_lost_tribe.stage'), 10);
+});
+
+test('The Lost Tribe replaces a missing treaty after Kazgar has escorted the player', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const treaty = api.core.ItemIdentifiers.PEACE_TREATY;
+  let amount = 0;
+  const inventory = {
+    getAmount: (id) => id === treaty ? amount : 0,
+    getFreeSlots: () => 28,
+    adds(id, count) {
+      assert.equal(id, treaty);
+      amount += count;
+    },
+  };
+  const player = {
+    getAttribute: (key) => key === 'quest.the_lost_tribe.stage' ? 11 : undefined,
+    getInventory: () => inventory,
+  };
+  const event = { player, npcId: api.core.NpcIdentifiers.DUKE_HORACIO, stepId: 'cXIAOU' };
+  assert.equal(handlers.condition.at(-1)(event), true);
+  handlers.custom.get('npc-dialogue:condition').at(-1)(event);
+  assert.equal(amount, 1);
+  assert.equal(handlers.condition.at(-1)(event), false);
+});
+
+test('The Lost Tribe chest interaction supports the current and legacy castle locations', () => {
+  const { api, handlers } = mockApi();
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const original = runtime.startTranscript;
+  const transcripts = [];
+  runtime.startTranscript = (...args) => transcripts.push(args);
+  try {
+    require('../plugins/quests/quests/LostTribe.Quest')(api);
+    const player = { getAttribute: () => undefined };
+    const interact = handlers.objects.at(-1);
+    for (const [objectId, x, y] of [
+      [api.core.ObjectIdentifiers.CHEST_38, 3209, 3217],
+      [api.core.ObjectIdentifiers.CHEST_38, 3211, 3212],
+    ]) {
+      const event = { player, objectId, definition: { id: objectId }, location: { x, y, z: 1 } };
+      interact(event);
+      assert.equal(event.handled, true);
+    }
+    assert.equal(transcripts.length, 2);
+    assert.ok(transcripts.every(args => args[3] === 'The Lost Tribe' && args[4] === 'property-recovery-opening-sigmund-s-chest'));
+  } finally {
+    runtime.startTranscript = original;
+  }
 });
 
 test('Song of the Elves uses all six real waterfall pillars, reading, clue retries and the awakened Baxtorian',()=>{
@@ -22204,6 +22443,8 @@ test('Curator Haig belongs to the active Golem museum step, then The Dig Site, t
 
   attributes.set('quest.the_golem.stage', 0);
   attributes.set('quest.the_dig_site.stage', 1);
+  // The curator's approval belongs to the letter: stamped, and not yet back with the examiner.
+  attributes.set('quest.the_dig_site.letter_stamped', true);
   assert.equal(select().owner, 'The Dig Site', 'The Dig Site approval remains available through the curator');
 
   attributes.set('quest.the_dig_site.stage', 9);
@@ -23584,4 +23825,46 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
   assert.equal(condition(legacyAgain, first, 'jzxdAM'), true, 'migrated Purple bonus survives another save');
   assert.equal(condition(legacyAgain, blue, 'jzxdAM'), true, 'Blue delivery survives another save');
 
+});
+
+test('Giant Dwarf machine accepts coal or logs as the first used item without consuming repeats', t => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/GiantDwarf.Quest')(api);
+  const core = api.core;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'giant_dwarf');
+  const player = new (require('../dist/game/entity/impl/player/Player').Player)(null);
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  quest.setStage(player, 20); player.setAttribute('quest.giant_dwarf.clothes', 2);
+  const handler = handlers.itemOnObject.find(h => h.name === 'handleItemOnObject');
+  const use = itemId => {
+    const event = { player, itemId, objectId: core.ObjectIdentifiers.SPINNING_MACHINE, handled: false };
+    handler(event); return event;
+  };
+  for (const first of [core.ItemIdentifiers.LOGS, core.ItemIdentifiers.COAL]) {
+    player.setAttribute('quest.giant_dwarf.machine', 0);
+    player.getInventory().resetItems();
+    player.getInventory().adds(core.ItemIdentifiers.LOGS, 2);
+    assert.equal(use(first).handled, true);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOGS), 2);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 0);
+    assert.equal(use(core.ItemIdentifiers.TINDERBOX).handled, true);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 0);
+    player.getInventory().adds(core.ItemIdentifiers.COAL, 2);
+    assert.equal(use(first).handled, true);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 1);
+    use(first);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COAL), 1);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOGS), 1);
+  }
+});
+
+test('RFD Murphy leaves at-sea and wreck copies to their own dialogue handlers', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const core = api.core, attrs = new Map([['quest.recipe_for_disaster.stage', 4]]);
+  const player = { getAttribute: key => attrs.get(key), getInventory: () => ({ getAmount: () => 0 }) };
+  const variant = handlers.variant.at(-1);
+  for (const npcId of [core.NpcIdentifiers.MURPHY_2, core.NpcIdentifiers.MURPHY_3, core.NpcIdentifiers.MURPHY_4]) {
+    assert.equal(variant({ player, npcId, pages: [{ page: 'Recipe for Disaster/Freeing Pirate Pete' }] }), null);
+  }
 });

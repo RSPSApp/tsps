@@ -38,6 +38,11 @@ const DOOR_NAMES = new Set([
   "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
   // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
   "Curtain",
+  // Tower of Life's entrance (21814): tol_tower_wall_door -> tol_tower_wall_door_open (21815).
+  // TowerOfLife.Quest.js checks the builder's outfit first (door:toggle).
+  "Tower door",
+  // Observatory Quest's kitchen gate (keepgate_closed/_left): a pass-through gate below.
+  "Kitchen gate",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
@@ -51,6 +56,8 @@ const DOOR_NAMES = new Set([
 const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
+  PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
+  PLAGUE_HOUSE_DOOR_OPEN: 37322, // plagueelenadooropen
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
   LARGE_DOOR_101_OPEN: 39254,
   GUIDOR_GATE_LEFT_OPEN: 2052, // guidorgatelopen
@@ -62,6 +69,11 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
   PIP_MAUSOLEUM_GATE_OPEN: 3446, // inacpip_underground_door; Priest in Peril capture 2026-11-02
+  // inactivetempledoorl/r: Paterdomus' large doors open onto them (Priest in Peril capture 2026-11-02
+  // ticks 10845, 10980); inactive_pipprisondoor: Drezel's cell gate (capture 2026-10-17 ticks 1312, 1315).
+  PIP_TEMPLE_DOOR_LEFT_OPEN: 3491,
+  PIP_TEMPLE_DOOR_RIGHT_OPEN: 3492,
+  PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
   // inactivepoordoor: Melzar's front door opens onto it (Dragon Slayer I capture 20261106T101002 tick
@@ -90,6 +102,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
   SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
+    O.DOOR_67, // Khazard stronghold: Open-only door 2184 has no paired open loc.
     O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
     // The Ranging Guild's entrance (11665) is Open only; 11666 is a ladder, so there is no
     // open leaf to pair with and the leaf swings in place.
@@ -124,7 +137,12 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Holy Grail: Merlin's workshop door in Camelot (24, merlinworkshop) and the Draynor Manor
     // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
     // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
-    O.DOOR_3, O.DOOR_4]);
+    O.DOOR_3, O.DOOR_4,
+    // Khazard stronghold: Open-only ordinary door models, no distinct open loc.
+    O.DOOR_67,
+    // Ross's house in East Ardougne (40178 at 2610,3316), a Mahogany Homes client: Open/Pick-lock with
+    // the models of Ardougne's picklock doors (11719/11720); its id neighbours are a hotspot and a mirror.
+    O.DOOR_624]);
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
   // the way to the Blast Furnace, shares DOOR_180's model but offers no option). Witch's House's
@@ -137,6 +155,11 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
+    // Witchaven's and the fishing platform's slug2_village_poordoor opens as fai_barbarian_poordooropen,
+    // turned a quarter onto the next tile (Sea Slug capture 20261110T112750 ticks 122, 240): the cache
+    // names differ, so the scan can't pair them. 11617 stays Barbarian Village's 11616's open leaf for
+    // the reverse lookup (a shared leaf keeps the scan's pair, below); an opened 18168 closes from its tracked state.
+    [O.DOOR_389, O.DOOR_279],
     // Games Room experienced variants share the ordinary elf door's reverse
     // open leaf (active rev241 cache; pinned Games Room reference next_loc_stage).
     [O.DOOR_129, O.DOOR_132],
@@ -157,6 +180,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Troll Stronghold's cache has an action-less open loc 3811 with the same
     // model as closed 3810, so it cannot be paired by the normal action scan.
     [O.STOREROOM_DOOR, O.STOREROOM_DOOR + 1],
+    // Tower of Life's door: the open loc 21815 has the same model but no action (cache gameval
+    // tol_tower_wall_door / tol_tower_wall_door_open).
+    [O.TOWER_DOOR, O.TOWER_DOOR + 1],
     // Slepe church crypt gate: its open form 39513 has the same model but no action.
     [O.GATE_210, O.GATE_211],
     // Active cache dump (osrs-241 2026-10-20): 2000/2002 "Door" have Open and
@@ -168,6 +194,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // 11621->11625); 11622/11623 are unused actionless locs.
     [O.LONGHALL_DOOR, O.LONGHALL_DOOR_3],
     [O.LONGHALL_DOOR_2, O.LONGHALL_DOOR_4],
+    // Lumbridge Castle's kitchen door (hundred_lumbridge_door 12348 at 3207,3217): its id+1 is a Large
+    // door, so the scan never pairs it. 1544, the castle door's open leaf, is the same model with Close.
+    [O.DOOR_302, O.DOOR_31],
   ]);
 
   // Curtains do not swing: the open loc is a drawn-back curtain model (1534: 879/880 vs the
@@ -212,6 +241,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     woodenGate(O.GATE_17, O.GATE_167, O.GATE_168, O.GATE_169),
     woodenGate(O.GATE_18, O.GATE_20, O.GATE_19, O.GATE_25),
     woodenGate(O.GATE_21, O.GATE_22, O.GATE_23, O.GATE_24),
+    // Tenzing's gate: RSProx 3252 tick 5732 swings both leaves east.
+    woodenGate(O.GATE_74, O.GATE_75, O.GATE_76, O.GATE_77),
     woodenGate(O.GATE_78, O.GATE_79, O.GATE_80, 4314), // 4314: open extension, nameless in the cache
     woodenGate(O.GATE_83, O.GATE_84, O.GATE_85, O.GATE_86),
     woodenGate(O.GATE_113, O.GATE_114, O.GATE_115, 12819), // 12819: open extension, nameless in the cache
@@ -257,6 +288,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     Object.freeze([O.GATE_40, O.GATE_41, O.GATE_29, O.GATE_30]),
     // Sinclair Mansion: model-639 open leaves have a null cache name but a Close action.
     Object.freeze([O.LARGE_DOOR_79, O.LARGE_DOOR_80, 25749, 25751]),
+    // Murder Mystery's mansion gate (2741/2742,3555): mirrored leaves with different models, so the
+    // generic pairing sees two single gates. 26130/26131 open into 26132/26133 (…openl / …openr).
+    Object.freeze([O.GATE_177, O.GATE_178, O.GATE_179, O.GATE_180]),
     // Sins of the Father Arboretum: closed 39251/39253 "Large door" (Open, model
     // 40489) swing east into the nameless/actionless 39252/39254 leaves on the
     // adjacent tiles (capture 1637; matching cache pair).
@@ -273,7 +307,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     Object.freeze([O.LARGE_DOOR_98, O.LARGE_DOOR_99, O.LARGE_DOOR_16, O.LARGE_DOOR_18]),
     // Paterdomus' two-leaf chapel entrance. Closed leaves 3489/3490 swing into
     // the nameless cache locs 3491/3492; all four use model 3544.
-    Object.freeze([O.LARGE_DOOR_21, O.LARGE_DOOR_22, 3491, 3492]),
+    Object.freeze([O.LARGE_DOOR_21, O.LARGE_DOOR_22,
+      NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN]),
     // Sophanem's north entrance: closed leaves 44036/44038, nameless open leaves 44037/44039.
     Object.freeze([O.GATE_232, O.GATE_233, 44037, 44039]),
     // Lassar residential shadow gate: 48278/48279 open into the paired
@@ -320,6 +355,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_8, O.LARGE_DOOR_10],
     [O.LARGE_DOOR_79, O.LARGE_DOOR_80],
     [25749, 25751],
+    // Murder Mystery mansion gate (issue 4053): closed 26130/26131, open 26132/26133.
+    [O.GATE_177, O.GATE_178],
+    [O.GATE_179, O.GATE_180],
     // Sins of the Father Arboretum double door (capture 1637).
     [O.LARGE_DOOR_100, O.LARGE_DOOR_101],
   ]);
@@ -355,14 +393,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_29, O.LARGE_DOOR_31],
     [O.LARGE_DOOR_28, O.LARGE_DOOR_30],
     [O.LARGE_DOOR_98, O.LARGE_DOOR_16],
-    [O.LARGE_DOOR_21, 3491],
-    [O.LARGE_DOOR_22, 3492],
+    [O.LARGE_DOOR_21, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN],
+    [O.LARGE_DOOR_22, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN],
     [O.GATE_232, 44037],
     [O.GATE_233, 44039],
     [O.DOORS_21, O.DOORS_25],
     [O.DOORS_22, O.DOORS_26],
     [O.DOORS_29, O.DOORS_31],
     [O.DOORS_30, O.DOORS_32],
+    [O.GATE_177, O.GATE_179],
+    [O.GATE_178, O.GATE_180],
     [O.LARGE_DOOR_99, O.LARGE_DOOR_18],
     [O.LARGE_DOOR_7, O.LARGE_DOOR_8],
     [O.LARGE_DOOR_9, O.LARGE_DOOR_10],
@@ -390,6 +430,24 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // Observatory Quest's kitchen gate (keepgate_closed/_left), RSProx 20261110T110141-5ab63b4
+    // ticks 856-858, 888-890 and 914-920 (rev 242): Open puts inviswall 38848 on both doorway
+    // tiles and the open leaves (inacmetalgateopenr/l) on the tiles north, sound 71, the player
+    // steps across in the same tick both ways and the gate is back two ticks later. The key and
+    // guard rules are ObservatoryQuest.Quest's (door:toggle).
+    Object.freeze({
+      closed: [[O.KITCHEN_GATE, 2327, 9393, 0, 1], [O.KITCHEN_GATE_2, 2326, 9393, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2327, 9393, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 2327, 9394, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2326, 9393, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 2326, 9394, 0, 0],
+      ],
+      crossY: 9394,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
     }),
     // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
     // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
@@ -531,6 +589,37 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 69,
     }),
+    // Paterdomus' large doors (Priest in Peril capture 2026-11-02, in at ticks 10840-10847, out at
+    // 10980-10982; issue 4130): Open puts INVISWALL on both doorway tiles and the open leaves on the
+    // tiles east, sound 62, the player steps across in the same tick and the doors are back two
+    // ticks later. The quest decides who may open them (door:toggle).
+    Object.freeze({
+      closed: [[O.LARGE_DOOR_22, 3408, 3488, 0, 2], [O.LARGE_DOOR_21, 3408, 3489, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3408, 3488, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN, 3409, 3488, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3408, 3489, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN, 3409, 3489, 0, 1],
+      ],
+      crossX: 3409,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Drezel's cell gate once unlocked (capture 2026-10-17 ticks 1311-1314 in, 1315-1317 out; rsprox 365): INVISWALL on
+    // the gate's tile and inactive_pipprisondoor on the tile east, sound 71, the player walks across
+    // and the gate is back two ticks later. The quest opens it through door:open.
+    Object.freeze({
+      closed: [[O.CELL_GATE_7, 3415, 3489, 2, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3415, 3489, 2, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_CELL_GATE_OPEN, 3416, 3489, 2, 3],
+      ],
+      crossX: 3416,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
+    }),
     // Dragon Slayer's secret wall into Crandor's dungeon (capture 2951 ticks 85-89): the quest opens it
     // through door:open once the shortcut is unlocked. The player walks 2836,9598 -> 9599 -> 9600 while
     // dragonsecretdoor (2606, 2836,9600 rot 3) becomes dragonsecretdoor_open (25039, 2836,9599 rot 0)
@@ -652,6 +741,13 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.DOOR_91, { open: NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN }],
     [O.RED_DOOR, {}], [O.ORANGE_DOOR, {}], [O.YELLOW_DOOR, {}], [O.BLUE_DOOR, {}],
     [O.MAGENTA_DOOR, {}], [O.GREEN_DOOR, {}], [O.EXIT_DOOR, {}],
+    // Plague City (revision 242 capture 20261110T113734-5ab63b4): the Rehnisons' door (ticks 424-426,
+    // 480-482), Bravek's door (614-616, 695-697), the plague house's two doors (734-736, 838-840) and
+    // Elena's cell door (752-754, 757-759, 788-790). PlagueCity.Quest decides who may pass (door:toggle).
+    [O.DOOR_85, { open: O.DOOR_86 }],
+    [O.DOOR_80, { open: O.DOOR_81 }],
+    [NAMELESS_DOOR_LEAF_IDS.PLAGUE_HOUSE_DOOR, { open: NAMELESS_DOOR_LEAF_IDS.PLAGUE_HOUSE_DOOR_OPEN, openSoundId: 81 }],
+    [O.DOOR_78, { open: O.DOOR_79, openSoundId: 67 }],
   ].map(([closed, family]) => [closed, Object.freeze({ openSoundId: 62, closeTicks: 2, ...family })]));
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
     DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>
@@ -820,7 +916,9 @@ function buildDoorCatalog() {
   }
   for (const [closedId, openId] of SINGLE_DOOR_OPEN_IDS) {
     closedToOpen.set(closedId, openId);
-    openToClosed.set(openId, closedId);
+    // A shared open leaf keeps the door the scan already paired it with (1544 stays 1543's); an
+    // opened door closes by its own state (currentSingleDoorState).
+    if (!openToClosed.has(openId)) openToClosed.set(openId, closedId);
   }
   for (const left of sameModelPairs) {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);

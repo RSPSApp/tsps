@@ -1,10 +1,13 @@
 // Run after `yarn build`: node --test tests/mage-arena.test.cjs
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const path = require("node:path");
+const { before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+before(() => CachePipeline.initialize(path.resolve(__dirname, "..")));
 
 const MageArena = require("../plugins/minigames/MageArena.plugin");
 
@@ -133,7 +136,7 @@ test("register persists one counter per god and the first cape, and wires the ho
   assert.deepEqual(
     persisted.sort(),
     [
-      "mage-arena-ii:components", "mage-arena-ii:location-timer", "mage-arena-ii:locations",
+      "mage-arena-i:staff-received", "mage-arena-ii:components", "mage-arena-ii:location-timer", "mage-arena-ii:locations",
       "mage-arena:cape-received", "mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak",
     ].concat(persisted.filter((key) => key.startsWith("quest")).sort()).sort()
   );
@@ -218,6 +221,7 @@ test("the first cape lands on the statue's tile with the full message", () => {
   assert.deepEqual(spawned.map(({ id, x, y }) => [id, x, y]), [[2414, 2516, 4720]], "captured at the statue's own tile");
   assert.equal(spawned[0].owner, caster);
   assert.equal(caster.getAttribute(statues.CAPE_RECEIVED_ATTRIBUTE), true);
+  assert.equal(caster.getAttribute("quest.mage_arena_i.stage"), 7);
   assert.ok(caster.calls.some(([name, graphic]) => name === "sendGraphic" && graphic.getId() === 188));
   assert.ok(caster.calls.some(([name, text]) => name === "sendString"
     && text === "You kneel and chant to Zamorak... You feel a rush of energy charge through your veins. Suddenly a cape appears before you."));

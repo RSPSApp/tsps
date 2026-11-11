@@ -360,7 +360,9 @@ test("multi-version NPCs: each place has its own version, and quest stages are l
   // One Achilka per stop, each with that stop's id.
   assert.deepEqual([ids(1389, 3075), ids(1259, 3124), ids(1399, 3245)], [[14727], [14728], [14729]]);
   assert.deepEqual([ids(2415, 4451), ids(2410, 4456)], [[5843], [5844]], "Zanaris's grey and light-grey sheep");
-  assert.deepEqual([ids(1703, 3142), ids(3277, 3411)], [[12889], [12888]], "Primio at both ends of his route");
+  // Varrock's Primio is the multi-NPC live spawns (13371, vmq2_first_travel picks 12886/12887/12888;
+  // rev 242 capture tick 408), so she has no Travel before the first trip is agreed.
+  assert.deepEqual([ids(1703, 3142), ids(3277, 3411)], [[12889], [13371]], "Primio at both ends of his route");
 });
 
 test("pairs closest first: a Wiki spawn on an existing one isn't added on top of it", () => {

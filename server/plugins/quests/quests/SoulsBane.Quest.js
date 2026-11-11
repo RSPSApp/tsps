@@ -39,7 +39,7 @@
  *  - OSRS instances the whole rift. This plugin spawns owner-only NPCs in the
  *    shared cave instead and removes them on logout, as the instance would.
  *  - The final arena beyond the hope bridge is built dynamically in OSRS and has
- *    no cache map in this revision: crossing the bridge transports the player to
+ *    no cache map in this revision: using the exit beyond the bridge transports the player to
  *    the open floor at 3078-3096,5290-5308, where Brana and the three Tolna
  *    heads are spawned. Before the bridge appears, walking north is blocked.
  *  - The rage level is filled by kills (mirrored to soulbane_damagedealt as
@@ -214,7 +214,8 @@ module.exports = function registerSoulsBaneQuest(api) {
   const CONFUSION_LEAVE_OBJECT_ID = ObjectIdentifiers.EXIT_9; // 13904
 
   // Exits (13932/13933) and the climb-out rope.
-  const HOPELESS_EXIT_OBJECT_IDS = new Set([ObjectIdentifiers.EXIT_10, ObjectIdentifiers.EXIT_11]); // 13932/13933
+  const HOPELESS_LEAVE_OBJECT_ID = ObjectIdentifiers.EXIT_10; // 13932
+  const HOPELESS_FINAL_EXIT_OBJECT_ID = ObjectIdentifiers.EXIT_11; // 13933
   const RIFT_ROPE_OBJECT_ID = ObjectIdentifiers.ROPE_19; // 13999
   const LEAVE_OBJECT_IDS = new Set([FEAR_LEAVE_OBJECT_ID, CONFUSION_LEAVE_OBJECT_ID]);
 
@@ -1177,11 +1178,7 @@ module.exports = function registerSoulsBaneQuest(api) {
       player.sendMessage("The bridge of hope has not appeared yet.");
       return;
     }
-    if (stage === STAGE_HOPELESS_DONE) {
-      startFinalEncounter(player);
-      return;
-    }
-    ensureFinalNpcs(player);
+    if (stage > STAGE_HOPELESS_DONE) ensureFinalNpcs(player);
   }
 
   // ==========================================================================
@@ -1300,7 +1297,12 @@ module.exports = function registerSoulsBaneQuest(api) {
       leaveRageRoom(event);
       return;
     }
-    if (LEAVE_OBJECT_IDS.has(objectId) || HOPELESS_EXIT_OBJECT_IDS.has(objectId)) {
+    if (objectId === HOPELESS_FINAL_EXIT_OBJECT_ID && quest.getStage(event.player) === STAGE_HOPELESS_DONE) {
+      event.handled = true;
+      startFinalEncounter(event.player);
+      return;
+    }
+    if (LEAVE_OBJECT_IDS.has(objectId) || objectId === HOPELESS_LEAVE_OBJECT_ID || objectId === HOPELESS_FINAL_EXIT_OBJECT_ID) {
       climbOut(event);
       return;
     }

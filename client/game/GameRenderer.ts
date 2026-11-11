@@ -15,7 +15,7 @@ import { IProjectileManager } from "./interfaces/IProjectileManager";
 import type { PlayerSpotAnimationEvent } from "./sync/PlayerSyncTypes";
 import type { WidgetsOverlay } from "../ui/devoverlay/WidgetsOverlay";
 import { gammaFromScreenBrightness, loadScreenBrightness } from "../ui/ScreenBrightness";
-import { multiLocVariants, multiLocVarps } from "../render/loc/MultiLocVarps";
+import { type MultiLocReloadGroup, multiLocVariants, multiLocVarps } from "../render/loc/MultiLocVarps";
 import { getMapPlaneId, getMapSquareId } from "../rs/map/MapFileIndex";
 import type { SdMapData } from "../render/loader/SdMapData";
 import type { SdMapLoaderInput } from "../render/loader/SdMapLoaderInput";
@@ -112,6 +112,13 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
         } finally {
             if (this.minimapRequests.get(key) === request) request.retryAt = Date.now() + 1000;
         }
+    }
+
+    /** cam_skybox: the cache model drawn as the sky, or -1. Only an explicit -1 clears it. */
+    public skyboxModel: number = -1;
+
+    setSkybox(model: number): void {
+        this.skyboxModel = model >= 0 ? model | 0 : -1;
     }
 
     // OSRS camera shake slots (0:X, 1:Y, 2:Z, 3:Yaw, 4:Pitch).
@@ -753,10 +760,12 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
         client.updateVars();
         if (!client.locTypeLoader || !varbitLoader) return;
         for (const map of this.mapManager.mapSquares.values()) {
-            const varps = multiLocVarps((map as { tileLocIdsByLevel?: Int32Array[] }).tileLocIdsByLevel, client.locTypeLoader, varbitLoader);
-            if (![...changed].some((varp) => varps.has(varp))) continue;
-            const mapId = getMapSquareId(map.mapX, map.mapY);
             const ids = (map as { tileLocIdsByLevel?: Int32Array[] }).tileLocIdsByLevel;
+            const varps = multiLocVarps(ids, client.locTypeLoader, varbitLoader);
+            const groups = [...changed].map((varp) => varps.get(varp));
+            const group = groups.includes("full") ? "full" : groups.includes("loc") ? "loc" : undefined;
+            if (!group) continue;
+            const mapId = getMapSquareId(map.mapX, map.mapY);
             const variants = multiLocVariants(ids, client.locTypeLoader, client.varManager);
             const built = this.multiLocBuilds.get(mapId);
             if (built && built.variants === variants && (built.ids === ids || built.pending)) {
@@ -772,12 +781,12 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
                 ? client.worldViewManager.getWorldViewByOverlayMapId(mapId)
                 : undefined;
             if (deck) this.scheduleWorldEntityLocRebuild(deck.id);
-            else this.reloadMultiLocSquare(map.mapX, map.mapY);
+            else this.reloadMultiLocSquare(map.mapX, map.mapY, group);
         }
     }
 
     /** Rebuilds one loaded square's locs (backends override). */
-    protected reloadMultiLocSquare(_mapX: number, _mapY: number): void {}
+    protected reloadMultiLocSquare(_mapX: number, _mapY: number, _group: MultiLocReloadGroup): void {}
 
     /** Rebuilds a world entity's deck scene after its locs changed (backends override). */
     scheduleWorldEntityLocRebuild(_entityIndex: number): void {}

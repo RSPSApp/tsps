@@ -57,8 +57,8 @@ test('handshake decodes the mobile client type byte', () => {
   ]);
 });
 
-function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {}, worldName = "Old School RuneScape" } = {}) {
-  const hooks = {}, events = [], packets = [], messages = [];
+function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {}, worldName = "Old School RuneScape", greeting = null } = {}) {
+  const hooks = {}, events = [], packets = [], messages = [], messageTypes = [];
   const player = {
     getLocation: () => ({ wilderness }),
     isPlayerBot: () => bot,
@@ -67,6 +67,7 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
     getAttribute: key => key === MOBILE_CLIENT_ATTRIBUTE ? mobile : key === 'client-layout-root' ? root : false,
     getSession: () => ({ sendClientPacket: packet => packets.push(['frame', packet]) }),
     getPacketSender: () => ({
+      sendTypedMessage: (type, text) => { if (!bot) messages.push(text); messageTypes.push(type); },
       sendRootInterface: id => packets.push(['root', id]),
       sendInterfaceFlags: (...args) => packets.push(['flags', ...args]),
       sendString: (text, uid) => packets.push(['text', uid, text]),
@@ -74,34 +75,36 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
   };
   require('../plugins/interface/WelcomeScreen.plugin').register({
     core: { WorldDefinition: { getWorldDefinition: () => ({ name: worldName }) }, MOBILE_CLIENT_ATTRIBUTE, XPDROPS_ENABLED_ATTRIBUTE, encodeGameframeBootstrap,
+      ChatType: { WELCOME: 108 }, GameConstants: { WORLD_TYPE: { label: 'REGULAR' } },
       resolveGameframeRoot, Wilderness: { isInLocation: location => location.wilderness } },
     onPlayerLogin: fn => { hooks.login = fn; },
     onCustomEvent: (name, fn) => { hooks[name] = fn; },
     onInterfaceActionButton: (id, fn) => { hooks.play = fn; },
     onPlayerDisconnect: fn => { hooks.disconnect = fn; },
     onPlayerLogout: fn => { hooks.logout = fn; },
-    emitCustomEvent: name => events.push(name),
+    emitCustomEvent: (name, payload) => { events.push(name); if (name === 'welcome-screen:greeting') greeting?.(payload); },
     getPluginConfig: (key, fallback) => key in config ? config[key] : fallback,
     log() {},
   });
   hooks.login({ player, isNewAccount: newAccount });
-  return { hooks, player, packets, events, messages };
+  return { hooks, player, packets, events, messages, messageTypes };
 }
 
 test('welcome screen waits for synchronous login initialization and restores the saved frame once', async () => {
   for (const root of [161, 164, 548]) {
     const h = welcomeHarness({ root });
     assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'the chatbox login line');
+    assert.deepEqual(h.messageTypes, [108], 'sent as the welcome chat type, as live (rsprox type=108)');
     assert.deepEqual(h.packets, [], 'login initializes the frame before the root swap microtask');
     assert.equal(h.hooks['player:gameframe-bootstrap'], undefined, 'core does not delegate bootstrap control to Welcome');
     await Promise.resolve();
     assert.deepEqual(h.packets, [['root', 378], ['flags', (378 << 16) | 72, 2],
       ['text', (378 << 16) | 6, 'Welcome to Old School RuneScape!']]);
-    assert.deepEqual(h.events, ['welcome-screen:shown']);
+    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:shown']);
     h.hooks.play({ player: h.player });
     h.hooks.play({ player: h.player });
     assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
-    assert.deepEqual(h.events, ['welcome-screen:shown', 'gameframe:ready']);
+    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:shown', 'gameframe:ready']);
     assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'Play does not send it again');
   }
 });
@@ -218,4 +221,14 @@ test('welcome chat and default scroll use the configured world name', async () =
   await Promise.resolve();
   assert.ok(h.messages.includes('Welcome to Solaris RSPS.'));
   assert.ok(h.packets.some(packet => packet[0] === 'text' && packet[2] === 'Welcome to Solaris RSPS!'));
+});
+
+test('a game mode rewrites the greeting, and script 876 carries the world type', () => {
+  const h = welcomeHarness({ greeting: (event) => { event.text = `Welcome to Hardcore ${event.worldName}.`; } });
+  assert.deepEqual(h.messages, ['Welcome to Hardcore Old School RuneScape.'], 'the live Hardcore World line');
+  const script876 = (label) => encodeGameframeBootstrap('WelcomeTester', 161, false, label)
+    .find((packet) => packet.includes(Buffer.from(label)));
+  assert.ok(script876('HARDCORE WORLD'), 'the label rides in script 876');
+  assert.ok(encodeGameframeBootstrap('WelcomeTester').some((packet) => packet.includes(Buffer.from('REGULAR'))),
+    'a plain world says REGULAR, as live');
 });

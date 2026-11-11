@@ -104,6 +104,7 @@ function registerPlugin() {
   };
   const pluginName = 'GrandTree728Test';
   const objectHooks = [];
+  const beforeObjectHooks = [];
   const itemOnObjectHooks = [];
   const npcDeathHooks = [];
   const spawned = [];
@@ -115,6 +116,7 @@ function registerPlugin() {
         case 'persistAttribute': return () => {};
         case 'onNpcDialogueVariant': return (handler) => PluginManager.npcDialogueVariantHooks.push({ pluginName, handler });
         case 'onNpcDialogueCondition': return (handler) => PluginManager.npcDialogueConditionHooks.push({ pluginName, handler });
+        case 'onBeforeObjectInteraction': return (handler) => beforeObjectHooks.push(handler);
         case 'onObjectInteraction': return (names, actions) => objectHooks.push({ names, actions });
         case 'onItemOnObject': return (handler) => itemOnObjectHooks.push(handler);
         case 'onNpcDeath': return (handler) => npcDeathHooks.push(handler);
@@ -148,6 +150,7 @@ function registerPlugin() {
     quest,
     spawned,
     itemOnObjectHooks,
+    beforeObjectHooks,
     cleanup() {
       PluginManager.npcDialogueVariantHooks.length = before.variant;
       PluginManager.npcDialogueConditionHooks.length = before.condition;
@@ -308,7 +311,7 @@ test('fresh stage 0 completes the mandatory route through registered handlers an
     action(player, GLOUGH, 'pkr5F6');
     assert.deepEqual(
       { x: player.getLocation().getX(), y: player.getLocation().getY(), z: player.getLocation().getZ() },
-      { x: 2464, y: 3495, z: 3 },
+      { x: 2464, y: 3496, z: 3 },
       'Glough arrests the player into Charlie’s cell'
     );
 
@@ -317,7 +320,7 @@ test('fresh stage 0 completes the mandatory route through registered handlers an
     assert.equal(quest.getStage(player), 80);
     assert.deepEqual(
       { x: player.getLocation().getX(), y: player.getLocation().getY(), z: player.getLocation().getZ() },
-      { x: 2467, y: 3500, z: 3 },
+      { x: 2465, y: 3496, z: 3 },
       'the King releases the player from the cell'
     );
     assert.equal(
@@ -336,6 +339,12 @@ test('fresh stage 0 completes the mandatory route through registered handlers an
     );
 
     assert.equal(variant(player, FOREMAN).variant, 'treachery-revealed-the-shipyard-foreman');
+    player.moveTo(new core.Location(2998, 3043, 0));
+    action(player, FOREMAN, 'eQHe7h');
+    assert.ok(player.getLocation().equals(new core.Location(2954, 3025, 0)), 'the private quiz starts in the office');
+    assert.deepEqual(plugin.spawned.at(-1)?.def, {
+      id: FOREMAN, x: 2954, y: 3024, z: 0, wanderRadius: 0, owner: player, ownerOnly: true,
+    });
     action(player, FOREMAN, 'TXgXt3');
     assert.equal(quest.getStage(player), 90);
     assert.equal(player.inventory.getAmount(I.LUMBER_ORDER), 1);
@@ -371,8 +380,11 @@ test('fresh stage 0 completes the mandatory route through registered handlers an
     plugin.objectOption(player, TRAPDOOR, 'Trapdoor', 'Climb-down');
     assert.deepEqual(
       { x: player.getLocation().getX(), y: player.getLocation().getY(), z: player.getLocation().getZ() },
-      { x: 2491, y: 9861, z: 0 }
+      { x: 2492, y: 9863, z: 0 }
     );
+    core.RegionManager.init();
+    core.RegionManager.loadMapFiles(2492, 9863);
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false, 'trapdoor lands on walkable cave floor');
     const demon = plugin.spawned.at(-1);
     assert.ok(demon, 'the black demon spawns under the trapdoor');
     plugin.npcDeath(player, N.BLACK_DEMON_2, demon);
@@ -637,6 +649,23 @@ test('shipyard password passes only on the correct Ka.Lu.Min. picks', () => {
     action(wrong, WORKER, 'CDM9ud', { npc: { getLocation: () => new core.Location(2945, 3041, 0) } });
     assert.equal(wrong.getLocation().getX(), 2466, 'a wrong password does not open the gate');
     assert.equal(plugin.spawned.at(-1).def.id, 5457, 'a wrong password spawns the angry worker');
+  } finally {
+    plugin.cleanup();
+  }
+});
+
+test('only the broken entrance ladder refuses a climb out of the Grand Tree cave', () => {
+  const plugin = registerPlugin();
+  try {
+    const player = playerFixture();
+    const climb = (objectId, x, y) => {
+      const event = { player, objectId, location: { x, y, z: 0 }, option: 'climb-up', handled: false };
+      for (const handler of plugin.beforeObjectHooks) handler(event);
+      return event.handled;
+    };
+    assert.equal(climb(O.LADDER_206, 2492, 9864), true);
+    assert.match(player.messages.at(-1), /ladder is broken/);
+    assert.equal(climb(O.LADDER_216, 2463, 9897), false, 'the tunnel exit remains available');
   } finally {
     plugin.cleanup();
   }

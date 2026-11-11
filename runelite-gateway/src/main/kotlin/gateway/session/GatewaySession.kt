@@ -319,8 +319,9 @@ class GatewaySession(
         scene = rebuild
         self.updateRootBuildArea(rebuild.zoneX - SCENE_RADIUS_ZONES, rebuild.zoneZ - SCENE_RADIUS_ZONES)
         send(rebuild.toMessage())
+        // Before the ground items: a zone reset clears the zone's objs too.
+        worldUpdates.rebuild(rebuild.zoneX, rebuild.zoneZ, replayed = rebuild is MapRebuild.Region)
         groundItems.rebuild(rebuild.zoneX, rebuild.zoneZ)
-        worldUpdates.rebuild(rebuild.zoneX, rebuild.zoneZ)
     }
 
     private fun onPlayerSync(frame: PlayerSync.Frame) {

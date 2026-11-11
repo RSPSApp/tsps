@@ -24,6 +24,7 @@ const OFFSET = {
   teleportFocus: 12,
   hotspot: 15, // hotspot n: +15 + n
   trim: 26,
+  hotspotData: 27, // hotspot n's extra data: +27 + n
 };
 const STORED_HP = 19458; // + slot
 const STORED_MAX_HP = 19463; // + slot
@@ -32,6 +33,8 @@ const NO_PREVIOUS_PORT = 255;
 const BLOCK_HOTSPOTS = 11;
 const EXTRA_HOTSPOTS = 20207;
 const EXTRA_HOTSPOTS_SIZE = 4;
+/** In that block, after the two hotspots, their extra data. */
+const EXTRA_HOTSPOT_DATA = 2;
 const MAX_HOTSPOTS = 13;
 /**
  * Special `port` values (cache script 8997): 255 bottled, 254 capsized, 253 lost at sea. Port 0
@@ -51,6 +54,13 @@ function hotspotVarbit(slot, hotspot) {
   return hotspot < BLOCK_HOTSPOTS
     ? blockVarbit(slot, OFFSET.hotspot + hotspot)
     : EXTRA_HOTSPOTS + EXTRA_HOTSPOTS_SIZE * slot + hotspot - BLOCK_HOTSPOTS;
+}
+
+/** The per-boat varbit holding a hotspot's extra data (`sailing_boat_N_hotspot_M_extra_data`): a keg's drink. */
+function hotspotDataVarbit(slot, hotspot) {
+  return hotspot < BLOCK_HOTSPOTS
+    ? blockVarbit(slot, OFFSET.hotspotData + hotspot)
+    : EXTRA_HOTSPOTS + EXTRA_HOTSPOTS_SIZE * slot + EXTRA_HOTSPOT_DATA + hotspot - BLOCK_HOTSPOTS;
 }
 
 /**
@@ -78,6 +88,7 @@ function slotVarbits(slot, boat) {
   set(OFFSET.teleportFocus, boat && type ? teleportFocusOf(boat) : 0);
   const facilities = boat && type ? facilitiesOf(boat) : [];
   for (let hotspot = 0; hotspot < MAX_HOTSPOTS; hotspot++) values.set(hotspotVarbit(slot, hotspot), facilities[hotspot] ?? 0);
+  for (let hotspot = 0; hotspot < MAX_HOTSPOTS; hotspot++) values.set(hotspotDataVarbit(slot, hotspot), boat?.hotspotData?.[hotspot] ?? 0);
   const hitpoints = boat ? boatStats(boat).hitpoints : 0;
   values.set(STORED_HP + slot, Math.max(0, hitpoints - (boat?.damage ?? 0)));
   values.set(STORED_MAX_HP + slot, hitpoints);
@@ -98,4 +109,4 @@ function sendBoatVarbits(player) {
   setVarbit(player, VARBIT_LAST_STANDARD_DOCK, dockById(state.lastStandardDock)?.portId ?? 0);
 }
 
-module.exports = { blockVarbit, hotspotVarbit, slotVarbits, sendBoatVarbits };
+module.exports = { blockVarbit, hotspotVarbit, hotspotDataVarbit, slotVarbits, sendBoatVarbits };

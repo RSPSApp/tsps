@@ -1,4 +1,6 @@
 /** The Restless Ghost: captured quest state, coffin/skull encounter and river scene. See docs/f2p-varrock-parity.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerRestlessGhostQuest(api) {
   const { Skill, Equipment, Location, GameObject, ObjectManager, Animation, TemplatedInstanceArea, TaskManager, CountdownTask, DialogueChainBuilder, ItemStatementDialogue, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest } = require("../QuestRuntime");
@@ -353,7 +355,7 @@ module.exports = function registerRestlessGhostQuest(api) {
     const scene = new ReleaseScene(player); scenes.set(player, scene);
     player.getMovementQueue().reset().setBlockMovement(true); player.setUntargetable(true);
     player.getPacketSender().sendVarbit(6719, 2).sendVarbit(12393, 1);
-    for(let axis=0;axis<5;axis++)player.getPacketSender().sendCameraShake(axis,0,0,0);
+    for(let axis=0;axis<5;axis++)CameraShake.send(player.getPacketSender(), "atmospheric", axis,0,0,0);
     fade(player, true);
     player.moveTo(scene.sourceTile(3248, 3192)); scene.enter(player);
     later(scene, 2, () => {

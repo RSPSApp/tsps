@@ -105,6 +105,45 @@ test('refusals use the live text, as chat-channel notifications', () => {
   assert.ok(!ignored.lines.some((line) => line.startsWith('plain:')), 'never a plain game message');
 });
 
+test('refusing to ignore a friend leaves them in the owner’s channel', () => {
+  const owner = player('Owner');
+  const member = player('Member');
+  Manager.setOwnChannelName(owner, 'Blur');
+  Manager.handleAction(owner, { action: 'add_friend', name: 'Member' });
+  Manager.join(owner, 'Owner', false);
+  Manager.join(member, 'Owner', false);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+
+  Manager.handleAction(owner, { action: 'add_ignore', name: 'Member' });
+  assert.match(owner.texts(), /remove Member from your friend list first/);
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), false);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+
+  Manager.handleAction(owner, { action: 'remove_friend', name: 'Member' });
+  Manager.handleAction(owner, { action: 'add_ignore', name: 'Member' });
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), true);
+  assert.equal(Manager.channelOf(member), null);
+  assert.equal(Manager.join(member, 'Owner', true), false);
+  Manager.handleAction(owner, { action: 'remove_ignore', name: 'Member' });
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), false);
+  assert.equal(Manager.join(member, 'Owner', true), true);
+});
+
+test('a full ignore list does not remove the requested member from the channel', () => {
+  const owner = player('Owner');
+  const member = player('Member');
+  Manager.setOwnChannelName(owner, 'Blur');
+  Manager.join(owner, 'Owner', false);
+  Manager.join(member, 'Owner', false);
+  for (let i = 0; i < 100; i++) owner.getRelations().addIgnore(Misc.stringToLongBigInt(`user${i}`));
+  assert.equal(owner.getRelations().getIgnoreList().length, 100);
+
+  Manager.handleAction(owner, { action: 'add_ignore', name: 'Member' });
+  assert.match(owner.texts(), /ignore list is full/i);
+  assert.equal(owner.getRelations().hasIgnore(member.getLongUsername()), false);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+});
+
 test('kick and leave use the live text, and the ban holds', () => {
   const owner = player('Owner');
   const member = player('Member');
@@ -284,6 +323,90 @@ function named(name, sent) {
   self.getSession = () => ({ sendClientPacket: (packet) => { sent.push([self, packet]); return session.sendClientPacket(packet); } });
   return self;
 }
+
+// Decode the friend row sent by the real snapshot encoder; no client is running here.
+function friendRow(who, sent) {
+  const packet = sent.filter(([to, p]) => to === who && p[0] === FRIENDS_CHAT_UPDATE).at(-1)?.[1];
+  assert.ok(packet);
+  let offset = 3; // variable-short frame
+  assert.equal(packet[offset++], 0, 'no channel in this fixture');
+  assert.equal(packet.readUInt16BE(offset), 1); offset += 2;
+  function readString() { const end = packet.indexOf(0, offset); const value = packet.toString('latin1', offset, end); offset = end + 1; return value; }
+  const name = readString(); const previousName = readString();
+  const world = packet.readUInt16BE(offset); offset += 2;
+  const rank = packet.readInt8(offset++); const isOnline = packet[offset++] !== 0;
+  return { name, previousName, world, rank, isOnline };
+}
+
+test('ignored players see an online friend but cannot deliver private messages', () => withDisplayNames(() => {
+  const sent = [];
+  const alice = named('Alice', sent);
+  const bob = named('Bob', sent);
+  Manager.handleAction(alice, { action: 'add_friend', name: 'Bob' });
+  assert.equal(friendRow(alice, sent).world, 1, 'On mode shows Bob before ignore');
+  assert.ok(Manager.handlePrivateMessage(alice, 'Bob', 'before'));
+  Manager.handleAction(bob, { action: 'add_ignore', name: 'Alice' });
+  assert.equal(friendRow(alice, sent).world, 1, 'ignoring does not hide Bob in On mode');
+  assert.equal(friendRow(alice, sent).isOnline, true);
+  const received = bob.lines.length;
+  assert.equal(Manager.handlePrivateMessage(alice, 'Bob', 'blocked'), undefined);
+  assert.equal(bob.lines.length, received, 'ignored message was not delivered');
+  Manager.setChatFilters(bob, 0, 1, 0);
+  assert.equal(friendRow(alice, sent).world, 0, 'Friends hides Bob from a non-friend');
+  Manager.setChatFilters(bob, 0, 2, 0);
+  assert.equal(friendRow(alice, sent).world, 0, 'Off hides Bob');
+  Manager.setChatFilters(bob, 0, 0, 0);
+  Manager.handleAction(bob, { action: 'remove_ignore', name: 'Alice' });
+  assert.equal(friendRow(alice, sent).world, 1);
+  assert.ok(Manager.handlePrivateMessage(alice, 'Bob', 'after'));
+  Manager.setChatFilters(bob, 0, 1, 0);
+  assert.equal(friendRow(alice, sent).world, 0, 'Friends hides a non-friend after unignore');
+  Manager.handleAction(bob, { action: 'add_friend', name: 'Alice' });
+  assert.equal(friendRow(alice, sent).world, 1, 'Friends reveals Bob to a reciprocal friend');
+  assert.ok(Manager.handlePrivateMessage(alice, 'Bob', 'friends'));
+  DisplayNames.set('Bob', 'Zed', Date.now(), 35 * 86400000);
+  Manager.onDisplayNameChanged(bob);
+  assert.equal(friendRow(alice, sent).name, 'Zed');
+  assert.ok(Manager.handlePrivateMessage(alice, 'Zed', 'renamed'));
+}));
+
+test('ignoring does not broadcast either online player offline to other friends', () => {
+  const alice = player('Alice');
+  const bob = player('Bob');
+  const charlie = player('Charlie');
+  const updates = [];
+  for (const p of [alice, bob, charlie]) {
+    p.getPacketSender = () => new Proxy({}, { get: (_, key, sender) => key === 'sendFriend' ? (name, world) => { updates.push([p.getUsername(), name, world]); return sender; } : () => sender });
+  }
+  const originalLookup = World.getPlayerByName;
+  World.getPlayerByName = (name) => online.find(p => p.getUsername().toLowerCase() === name.toLowerCase());
+  try {
+    Manager.handleAction(alice, { action: 'add_friend', name: 'Bob' });
+    Manager.handleAction(charlie, { action: 'add_friend', name: 'Alice' });
+    updates.length = 0;
+    Manager.handleAction(bob, { action: 'add_ignore', name: 'Alice' });
+    const aliceViewsBob = updates.filter(([viewer, name]) => viewer === 'Alice' && name === bob.getLongUsername());
+    const charlieViewsAlice = updates.filter(([viewer, name]) => viewer === 'Charlie' && name === alice.getLongUsername());
+    assert.ok(aliceViewsBob.length > 0 && aliceViewsBob.every(([, , world]) => world === 1));
+    assert.ok(charlieViewsAlice.length > 0 && charlieViewsAlice.every(([, , world]) => world === 1));
+    Manager.setChatFilters(bob, 0, 2, 0);
+    updates.length = 0;
+    bob.getRelations().updateLists(true);
+    assert.deepEqual(updates.filter(([viewer, name]) => viewer === 'Alice' && name === bob.getLongUsername()).at(-1), ['Alice', bob.getLongUsername(), 0]);
+    bob.getRelations().setChatModes(0, 1, 0);
+    updates.length = 0;
+    bob.getRelations().updateLists(true);
+    assert.deepEqual(updates.filter(([viewer, name]) => viewer === 'Alice' && name === bob.getLongUsername()).at(-1), ['Alice', bob.getLongUsername(), 0], 'Friends hides Bob from non-friend Alice');
+    alice.getRelations().setChatModes(0, 1, 0);
+    updates.length = 0;
+    Manager.handleAction(bob, { action: 'remove_ignore', name: 'Alice' });
+    Manager.handleAction(bob, { action: 'add_ignore', name: 'Alice' });
+    const hiddenAlice = updates.filter(([viewer, name]) => viewer === 'Charlie' && name === alice.getLongUsername());
+    assert.ok(hiddenAlice.length > 0 && hiddenAlice.every(([, , world]) => world === 0), 'third-party updates respect Alice’s Friends mode');
+  } finally {
+    World.getPlayerByName = originalLookup;
+  }
+});
 
 test('friends and ignores show display names and the name given up, and refresh on a change', () => withDisplayNames(() => {
   const sent = [];

@@ -2,10 +2,14 @@
  * Primio and Regulus Cento's Travel between Varrock and Civitas illa Fortis, after Children of the
  * Sun, on Renu's captured flight (Renu.Quetzals.js) without a last destination.
  *
- * The first trip goes through Regulus's transcript: Travel opens its first-trip menu
- * (vmq2_first_travel 2, the shorter retry menu once it has been seen), its "Kectpl" action flies,
+ * Outside Varrock's east gate both are multi-NPCs on vmq2_first_travel (spawns 13370 and 13371):
+ * from Children of the Sun (1) Regulus has only Talk-to and Primio no option, and both gain Travel
+ * at 2 (rec 1695). The first trip goes through Regulus's transcript: Talk-to plays it, "Sounds
+ * good." moves 1 to 2 (rec 1695 tick 450), and the shorter retry menu follows once it has been
+ * seen; Travel at 2 opens that retry menu. Its "Kectpl" action flies,
  * and landing records varlamore_visited, sets vmq2_first_travel 3 and resumes the transcript after
- * Kectpl with Regulus in Fortis. Its last welcome line sets vmq2_first_travel 4.
+ * Kectpl with Regulus in Fortis. Its last welcome line sets vmq2_first_travel 4, and so does starting
+ * Twilight's Promise after landing without hearing it (3 -> 4 as the quest starts, rev 242 capture tick 1117).
  */
 const Common = require("./Common.Quetzals");
 const Renu = require("./Renu.Quetzals");
@@ -16,6 +20,9 @@ const FIRST_TRIP_VARIANT = "talking-in-varrock-talking-to-take-the-first-trip";
 const REPEAT_FIRST_TRIP_VARIANT = "talking-in-varrock-talking-again-before-taking-the-first-trip";
 const FIRST_TRIP_ACTION = "Kectpl";
 const WELCOME_END = "Why don't you head on over and introduce yourself?";
+const AFTER_FIRST_TRIP_VARIANT = "talking-in-varrock-talking-after-taking-the-first-trip";
+const TRIP_AGREED = "Sounds good.";
+const REGULUS_VARROCK_FIRST_ID = 12883; // vmq2_quetzal_keeper_1op, before the trip is agreed
 const REGULUS_VARROCK_ID = 12884;
 const REGULUS_FORTIS_ID = 12885;
 const PRIMIO_VARROCK_ID = 12888;
@@ -25,7 +32,6 @@ const VARROCK_LANDING = { id: 0, x: 3281, y: 3413, z: 0 };
 const FORTIS_LANDING = { id: 1, x: 1700, y: 3141, z: 0 };
 
 function startFirstTripMenu(player, firstTime) {
-  if (Common.varbit(player, FIRST_TRIP_STATE) < 2) Common.setVarbits(player, { [FIRST_TRIP_STATE]: 2 });
   Common.api.emitCustomEvent("npc-dialogue:start", {
     player,
     npcId: REGULUS_VARROCK_ID,
@@ -89,16 +95,51 @@ function acceptFirstTrip(event) {
   Renu.fly(event.player, FORTIS_LANDING, { recordDestination: false, onLand: () => arriveInFortis(event.player) });
 }
 
+/** Varrock's Regulus: the first trip's transcript until it is taken, then his after-trip lines. */
+function talkToRegulus(event) {
+  const { player, npcId } = event;
+  if (npcId !== REGULUS_VARROCK_FIRST_ID && npcId !== REGULUS_VARROCK_ID) return false;
+  event.handled = true;
+  if (!Common.questComplete(player, CHILDREN_OF_THE_SUN)) {
+    player.sendMessage(Common.message("childrenOfTheSun"));
+    return true;
+  }
+  const firstTripState = Common.varbit(player, FIRST_TRIP_STATE);
+  if (Common.varbit(player, VARLAMORE_VISITED) === 0 && firstTripState < 3) {
+    startFirstTripMenu(player, firstTripState < 2);
+    return true;
+  }
+  Common.api.emitCustomEvent("npc-dialogue:start", { player, npcId: REGULUS_VARROCK_ID, variant: AFTER_FIRST_TRIP_VARIANT });
+  return true;
+}
+
+/** "Sounds good.": the trip is agreed and both of them can be asked to Travel (1 -> 2). */
+function agreeToTrip(event) {
+  if (event.npcId !== REGULUS_VARROCK_ID || String(event.text) !== TRIP_AGREED) return;
+  const previous = event.after;
+  event.after = () => {
+    previous?.();
+    if (Common.varbit(event.player, FIRST_TRIP_STATE) < 2) Common.setVarbits(event.player, { [FIRST_TRIP_STATE]: 2 });
+  };
+}
+
 function finishWelcome(event) {
   if (event.npcId !== REGULUS_FORTIS_ID || !String(event.text).endsWith(WELCOME_END)) return;
   event.after = () => Common.setVarbits(event.player, { [FIRST_TRIP_STATE]: 4 });
 }
 
-function attach(api) {
-  api.onNpcInteraction("Primio", { Travel: travel });
-  api.onNpcInteraction("Regulus Cento", { Travel: travel });
-  api.onCustomEvent("npc-dialogue:action", acceptFirstTrip);
-  api.onCustomEvent("npc-dialogue:line", finishWelcome);
+/** Twilight's Promise has started: a first trip still waiting on its welcome (3) is done (4). */
+function finishWelcomeOnQuestStart({ player }) {
+  if (Common.varbit(player, FIRST_TRIP_STATE) === 3) Common.setVarbits(player, { [FIRST_TRIP_STATE]: 4 });
 }
 
-module.exports = { attach, travel, acceptFirstTrip, finishWelcome, firstTripArrivalTail };
+function attach(api) {
+  api.onNpcInteraction("Primio", { Travel: travel });
+  api.onNpcInteraction("Regulus Cento", { Travel: travel, "Talk-to": talkToRegulus });
+  api.onCustomEvent("npc-dialogue:action", acceptFirstTrip);
+  api.onCustomEvent("npc-dialogue:line", finishWelcome);
+  api.onCustomEvent("npc-dialogue:line", agreeToTrip);
+  api.onCustomEvent("quetzal:first-trip-welcomed", finishWelcomeOnQuestStart);
+}
+
+module.exports = { attach, travel, talkToRegulus, agreeToTrip, acceptFirstTrip, finishWelcome, finishWelcomeOnQuestStart, firstTripArrivalTail };

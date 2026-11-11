@@ -34,6 +34,7 @@ function offeringsFor(player, site, totem) {
 }
 
 function visit(player, site) {
+  if (Totems.questHolds(player, site)) return;
   const totem = State.totem(player, site);
   if (totem.wood === 0) {
     State.rollAnimals(player, site);

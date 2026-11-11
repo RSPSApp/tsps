@@ -121,7 +121,7 @@ test('NPC facing setters reach native NPC_INFO through the real session sync', (
   Object.assign(session, {
     hasReplayedScene: true, replayedSceneBaseX: baseX, replayedSceneBaseY: baseY,
     replayedSceneLevel: 0, lastGroundItemRegion: region, lastGroundItemLevel: 0,
-    lastMusicRegion: region, lastMusicMode: 1,
+    lastMusicArea: require('../dist/game/Music').Music.tracksAt(location.getX(), location.getY(), 0), lastMusicMode: 1,
   });
   const packets = [];
   session.sendClientPacket = packet => { packets.push(packet); return true; };

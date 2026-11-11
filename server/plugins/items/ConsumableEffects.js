@@ -31,14 +31,20 @@ function curePoison(player, damageReduction = Infinity) {
   player.setVenomed(false);
 }
 
-/** Raises a skill to base + flat + percent of base, unless it is already there. */
+/**
+ * Adds a boost of flat + percent of base to the current level, never past base + that boost. A drained stat gains the
+ * boost from where it stands, as recorded on normal worlds: a super combat potion at 97/99 gives 116, not 118
+ * (rsprox_transcripts/226/01702.txt:105119-105678); a divine super combat at 96 gives 115 and at 98 gives 117
+ * (226/01696.txt, ticks 827 and 977).
+ */
 function boostSkill(player, skill, flat, percent) {
   const skills = player.getSkillManager();
   const max = skills.getMaxLevel(skill);
   const current = skills.getCurrentLevel(skill);
-  const cap = max + Math.floor(max * percent) + flat;
+  const boost = Math.floor(max * percent) + flat;
+  const cap = max + boost;
   if (current < cap) {
-    skills.increaseCurrentLevel(skill, cap - current, cap);
+    skills.increaseCurrentLevel(skill, boost, cap);
   }
 }
 

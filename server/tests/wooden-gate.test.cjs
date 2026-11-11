@@ -952,6 +952,22 @@ test('wooden gate swings hinge + extension panels open from a closed hinge click
   }
 });
 
+test("Tenzing's gate swings both leaves east from either closed panel", () => {
+  for (const [id, y] of [[3725, 3555], [3726, 3554]]) {
+    const h = buildHarness();
+    try {
+      h.place(3725, 2824, 3555, 2);
+      h.place(3726, 2824, 3554, 2);
+      assert.deepEqual(h.click(id, 2824, y, 2), [
+        ['deregister', 3725, 2824, 3555, 2],
+        ['deregister', 3726, 2824, 3554, 2],
+        ['register', 3727, 2825, 3555, 1],
+        ['register', 3728, 2826, 3555, 1],
+      ]);
+    } finally { h.restore(); }
+  }
+});
+
 test('clicking the closed extension opens the same way as the hinge', () => {
   const h = buildHarness();
   try {
@@ -1105,7 +1121,9 @@ test('Castle Wars large doors swing both leaves to the open ids and back', () =>
   }
 });
 
-test('Paterdomus chapel entrance swings both cached leaves into its nameless open locs', () => {
+// Issue 4130: a pass-through door, as captured (Priest in Peril 2026-11-02 ticks 10845-10847): blockers on
+// both doorway tiles, the nameless open leaves on the tiles east, and the doors back two ticks later.
+test('Paterdomus chapel entrance swings both cached leaves into its nameless open locs, over blockers', () => {
   const ids = require('../dist/util/ObjectIdentifiers').ObjectIdentifiers;
   const cacheObjects = new Map([
     [ids.LARGE_DOOR_21, { name: 'Large door', actions: ['Open'], models: [[3544]] }],
@@ -1118,10 +1136,12 @@ test('Paterdomus chapel entrance swings both cached leaves into its nameless ope
     h.place(3490, 3408, 3488, 2);
     h.place(3489, 3408, 3489, 2);
     assert.deepEqual(h.click(3490, 3408, 3488, 2, 'Open', 'Large door'), [
-      ['deregister', 3489, 3408, 3489, 2],
       ['deregister', 3490, 3408, 3488, 2],
-      ['register', 3491, 3409, 3489, 1],
+      ['deregister', 3489, 3408, 3489, 2],
+      ['register', 38848, 3408, 3488, 2],
       ['register', 3492, 3409, 3488, 3],
+      ['register', 38848, 3408, 3489, 2],
+      ['register', 3491, 3409, 3489, 1],
     ], 'the north and south leaves swing east into their real cache open variants');
   } finally {
     h.restore();
@@ -2349,6 +2369,34 @@ test('Murder Mystery mansion Large doors 25748/25750 open their real north thres
     }
     ObjectManager.register(new GameObject(25748, new Location(2740, 3572, 0), 0, 1, null), true);
     ObjectManager.register(new GameObject(25750, new Location(2741, 3572, 0), 0, 1, null), true);
+    h.restore();
+  }
+});
+
+test('Murder Mystery mansion gate 26130/26131 opens both leaves together (issue 4053)', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(2741, 3555, true);
+  const definitions = new Map([26130, 26131, 26132, 26133].map(id => [id, CacheDefinitions.getObject(id)]));
+  const h = buildHarness({ cacheObjects: definitions, objectManager: ObjectManager, realMapObjects: true });
+  const at = (id, x, y) => MapObjects.get(id, new Location(x, y, 0), null);
+  const anyAt = (id, x, y) => [y - 1, y, y + 1].some(yy => [x - 1, x, x + 1].some(xx => at(id, xx, yy)));
+  try {
+    assert.ok(at(26130, 2741, 3555) && at(26131, 2742, 3555), 'cache places both closed gate leaves');
+    h.click(26131, 2742, 3555, 1, 'Open', 'Gate');
+    assert.equal(at(26130, 2741, 3555), null, 'left leaf left its closed tile');
+    assert.equal(at(26131, 2742, 3555), null, 'right leaf left its closed tile');
+    assert.ok(anyAt(26132, 2741, 3555), 'left leaf became its open loc 26132');
+    assert.ok(anyAt(26133, 2742, 3555), 'right leaf became its open loc 26133');
+    h.submitted.at(-1).execute();
+    assert.ok(at(26130, 2741, 3555) && at(26131, 2742, 3555), 'auto-close restores both leaves');
+  } finally {
+    for (const [id, x, y] of [[26132, 2741, 3555], [26133, 2742, 3555]]) {
+      for (const yy of [y - 1, y, y + 1]) for (const xx of [x - 1, x, x + 1]) {
+        const object = at(id, xx, yy); if (object) ObjectManager.deregister(object, true);
+      }
+    }
+    if (!at(26130, 2741, 3555)) ObjectManager.register(new GameObject(26130, new Location(2741, 3555, 0), 0, 1, null), true);
+    if (!at(26131, 2742, 3555)) ObjectManager.register(new GameObject(26131, new Location(2742, 3555, 0), 0, 1, null), true);
     h.restore();
   }
 });

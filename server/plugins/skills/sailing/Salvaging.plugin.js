@@ -56,10 +56,18 @@ const NO_WRECK = "There are no shipwrecks within range of the salvaging hook.";
 const CAST = "You cast out your salvaging hook towards the shipwreck...";
 const REELED = "You reel in some salvage.";
 const SUNK = "You salvage all you can from the shipwreck before it is reclaimed by the sea.";
-const FULL = "Your inventory is too full to hold any more salvage.";
 const SORT_BEGIN = "You begin sorting through your salvage...";
-/** A message box (rsprox captures, rev 235); live sends no line when the last salvage is sorted. */
+/** A message box (rsprox). */
 const NOTHING_TO_SORT = "You do not have any salvage to sort through.";
+/** Sent on the tick the last salvage is sorted. */
+const NO_MORE_TO_SORT = "You have no more salvage to sort.";
+/** Clue chances are 5% better with the tier's combat achievements (Wiki, each salvage's page). */
+const CLUE_TIERS = {
+  beginner: { scroll: "CLUE_SCROLL_BEGINNER_", achievements: false },
+  easy: { scroll: "CLUE_SCROLL_EASY_", achievements: true },
+  medium: { scroll: "CLUE_SCROLL_MEDIUM_", achievements: true },
+  hard: { scroll: "CLUE_SCROLL_HARD_", achievements: true },
+};
 
 /** Per player: what they're doing (salvaging or sorting), so a new action replaces the old. */
 const sessions = new Map();
@@ -97,6 +105,15 @@ function hookAnims(locId) {
 
 function hasFreeSlot(player) {
   return player.getInventory().getFreeSlots() > 0;
+}
+
+function messageBox(player, text) {
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+}
+
+/** A message box naming the salvage: "...hold any more barracuda salvage." (rsprox captures). */
+function inventoryFull(player, type) {
+  messageBox(player, `Your inventory is too full to hold any more ${type.salvageName.toLowerCase()}.`);
 }
 
 function stop(player) {
@@ -165,7 +182,7 @@ function deployHook(event) {
     return;
   }
   if (!hasFreeSlot(player)) {
-    player.sendMessage(FULL);
+    inventoryFull(player, type);
     return;
   }
   const owned = Sailing.instanceAboard(player) === boat ? Sailing.activeBoat(player) : undefined;
@@ -207,7 +224,7 @@ function salvageTick(player, session) {
   const [low, high] = type.success[session.tier];
   if (Math.random() >= successChance(low, high, player.getSkillManager().getCurrentLevel(Skill.SAILING))) return;
   if (!hasFreeSlot(player)) {
-    player.sendMessage(FULL);
+    inventoryFull(player, type);
     return stop(player);
   }
   player.getInventory().addItem(new Item(type.salvage, 1));
@@ -219,18 +236,78 @@ function salvageTick(player, session) {
   }
 }
 
-/** Rolls a salvage's loot: its pre-rolls first, then its main table; undefined is nothing. */
-function rollLoot(salvage, random = Math.random) {
+/**
+ * Rolls a salvage's loot: its pre-rolls first, then its main table; undefined is nothing. A
+ * shared-table line comes back as { table, empty } for rollShared. `owns(ids)` says whether the
+ * player owns any of a pre-roll's `unlessOwned` items, which skips that pre-roll. A pre-roll clue
+ * (one in `clueOneIn`, 0 for none) is rolled first and comes back as { clue: true }.
+ */
+function rollLoot(salvage, random = Math.random, owns = () => false, clueOneIn = 0) {
   const quantity = (line) => line.min + Math.floor(random() * (line.max - line.min + 1));
+  if (clueOneIn > 0 && random() * clueOneIn < 1) return { clue: true };
   for (const line of salvage.preRolls) {
+    if (line.unlessOwned && owns(line.unlessOwned)) continue;
     if (random() < 1 / line.oneIn) return { item: line.item, amount: quantity(line) };
   }
   let roll = Math.floor(random() * salvage.total);
   for (const line of salvage.table) {
-    if (roll < line.weight) return { item: line.item, amount: quantity(line) };
+    if (roll < line.weight) return line.table ? { table: line.table, empty: line.empty } : { item: line.item, amount: quantity(line) };
     roll -= line.weight;
   }
   return undefined;
+}
+
+/**
+ * One roll of a shared drop table (NpcDrops); its empty slot gives `empty`, if any. A ring of
+ * wealth doesn't change it: the salvage variants have no "nothing" slot for the ring to remove.
+ */
+function rollShared(player, loot) {
+  const request = { player, table: loot.table, drops: [], ringOfWealth: false };
+  pluginApi?.emitCustomEvent("npc-drops:roll-shared", request);
+  const [drop] = request.drops;
+  if (drop) return { item: drop.itemId, amount: drop.amount };
+  return loot.empty ? { item: loot.empty.item, amount: loot.empty.amount } : undefined;
+}
+
+/** Whether the player has any of `ids` carried, worn or banked. */
+function ownsAny(player, ids) {
+  const containers = [player.getInventory(), player.getEquipment?.(), ...(player.getBanks?.() ?? [])];
+  return ids.some((id) => containers.some((container) => container?.getAmount?.(id) > 0));
+}
+
+/** A salvage clue's chance, one in this: 95% of it with the tier's combat achievements; 0 for none. */
+function clueOneIn(player, clue) {
+  const tier = CLUE_TIERS[clue?.tier];
+  if (!tier) return 0;
+  if (!tier.achievements) return clue.oneIn;
+  const achievement = { player, tier: clue.tier, currentThresholdMet: false };
+  pluginApi?.emitCustomEvent("combat-achievements:tier", achievement);
+  return achievement.currentThresholdMet === true ? Math.floor((clue.oneIn * 95) / 100) : clue.oneIn;
+}
+
+/** Whether the player can hold another clue of the tier (one per tier unless a scroll case allows more). */
+function canReceiveClue(player, clue) {
+  const allowed = { player, tier: clue.tier, allowed: null };
+  pluginApi?.emitCustomEvent("treasure-trails:can-receive", allowed);
+  return allowed.allowed === true;
+}
+
+/** The clue item to give: the tier's scroll, or its scroll box after X Marks the Spot. */
+function clueItem(player, clue) {
+  const award = { player, itemId: pluginApi.core.ItemIdentifiers[CLUE_TIERS[clue.tier].scroll], box: false };
+  pluginApi.emitCustomEvent("treasure-trails:clue-item", award);
+  return award.itemId;
+}
+
+/**
+ * A salvage's tertiary clue, through the shared clue services. Ours: it goes into the inventory,
+ * or under the player when full, with no line of its own.
+ */
+function rollClue(player, clue, random = Math.random) {
+  const oneIn = clueOneIn(player, clue);
+  if (oneIn <= 0 || random() * oneIn >= 1) return;
+  if (!canReceiveClue(player, clue)) return;
+  player.getInventory().forceAdd(player, new Item(clueItem(player, clue), 1));
 }
 
 /** The first salvage in the inventory, with its sorting data. */
@@ -246,7 +323,7 @@ function nextSalvage(player) {
 /** A salvaging station's Sort-salvage: sorts every salvage in the inventory, one each 3 ticks. */
 function sortSalvage({ player }) {
   if (!nextSalvage(player)) {
-    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, NOTHING_TO_SORT)));
+    messageBox(player, NOTHING_TO_SORT);
     return;
   }
   player.sendMessage(SORT_BEGIN);
@@ -268,7 +345,12 @@ function sortTick(player, session) {
     return stop(player);
   }
   player.getInventory().delete(next.id, 1);
-  const loot = rollLoot(next.data);
+  // A pre-roll clue replaces the sort's loot; it isn't rolled while the player can't hold one.
+  const clue = next.data.clue;
+  const preRollClue = clue?.preRoll && canReceiveClue(player, clue) ? clueOneIn(player, clue) : 0;
+  let loot = rollLoot(next.data, Math.random, (ids) => ownsAny(player, ids), preRollClue);
+  if (loot?.clue) loot = { item: clueItem(player, clue), amount: 1 };
+  if (loot?.table) loot = rollShared(player, loot);
   const salvageName = next.data.name.toLowerCase();
   if (loot) {
     const inventory = player.getInventory();
@@ -282,8 +364,14 @@ function sortTick(player, session) {
     spam(player, `You sort through the ${salvageName} and find nothing.`);
   }
   player.getSkillManager().addExperiences(Skill.SAILING, next.data.xp);
+  if (!clue?.preRoll) rollClue(player, clue);
+  // Soup can also come from sorting, at one chance for every salvage (Wiki, Soup).
+  pluginApi?.emitCustomEvent("sailing:success", { player, skill: Skill.SAILING, petChance: salvageData().sortPetChance });
   playSound(player, SOUND_SORTED);
-  if (!nextSalvage(player)) return stop(player);
+  if (!nextSalvage(player)) {
+    player.sendMessage(NO_MORE_TO_SORT);
+    return stop(player);
+  }
   player.performAnimation(new Animation(SEQ_SORT));
   playSortSound(player);
 }
@@ -307,6 +395,7 @@ module.exports = {
   hookTierOf,
   successChance,
   rollLoot,
+  rollClue,
   outwardFrom,
   hookTile,
   hookAnims,

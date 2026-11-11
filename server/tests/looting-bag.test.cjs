@@ -62,6 +62,7 @@ before(() => {
     onShouldKeepItemOnDeath: (fn) => { hooks.keep = fn; },
     onPlayerDeathItemDrop: (fn) => { hooks.death = fn; },
     onPlayerDefeated: (fn) => { hooks.defeated = fn; },
+    onPlayerLogin: (fn) => { hooks.login = fn; },
     sendMultiChatboxPrompt: (player, title, ...pairs) => {
       player.prompt = { title, options: pairs.filter((_, i) => i % 2 === 0), pairs };
       return true;

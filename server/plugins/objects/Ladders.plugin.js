@@ -27,6 +27,12 @@ const CLIMBABLE_NAMES = [
 /** Option spellings for each direction, as the cache has them. */
 const UP_OPTIONS = ["Climb-up", "Climb up", "Climb Up", "Walk-up", "Walk-Up", "Ascend"];
 const DOWN_OPTIONS = ["Climb-down", "Climb down", "Climb Down", "Walk-down", "Walk-Down", "Descend"];
+/**
+ * Straight to the far end of the shaft. The cache spells these two ways: Lumbridge's staircases
+ * say "Top-floor", the Grand Tree's ladder column (2466,3495) says "Top-Floor".
+ */
+const TOP_FLOOR_OPTIONS = ["Top-floor", "Top-Floor"];
+const BOTTOM_FLOOR_OPTIONS = ["Bottom-floor", "Bottom-Floor"];
 let pluginApi;
 let TaskManager;
 
@@ -106,8 +112,9 @@ function climb({ player, destination, onArrival }, animation) {
 }
 
 /**
- * Callers may pass an explicit `destination` (ladders:climbUp custom event) and an `onArrival`
- * callback, run once the climb has landed, or
+ * Callers may pass an explicit `destination` (ladders:climbUp custom event), an `onArrival`
+ * callback, run once the climb has landed, and `animate: false` for stairs that are walked
+ * rather than climbed, or
  * an object interaction event carrying the ladder's `location` and the tile the
  * player operated from (`sourceLocation`).
  *
@@ -135,21 +142,23 @@ function climbUp(event, toEnd = false) {
   // Explicit destinations (ladders:climbUp custom event) are trusted; then the map's other end;
   // then the same object straight above.
   const mapped = event.destination ? null : mapDestination(event, 1, toEnd);
-  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, CLIMB_UP);
+  const animation = event.animate === false ? null : CLIMB_UP;
+  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, animation);
   const destination = resolveDestination(event, 1);
   if (!destination) return false;
   if (!event.destination && !hasObjectAbove(event.location, interactObjectName(event))) return false;
-  return climb({ player: event.player, destination, onArrival: event.onArrival }, CLIMB_UP);
+  return climb({ player: event.player, destination, onArrival: event.onArrival }, animation);
 }
 
 function climbDown(event, toEnd = false) {
   // Mirror of climbUp.
   const mapped = event.destination ? null : mapDestination(event, -1, toEnd);
-  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, CLIMB_DOWN);
+  const animation = event.animate === false ? null : CLIMB_DOWN;
+  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, animation);
   const destination = resolveDestination(event, -1);
   if (!destination) return false;
   if (!event.destination && !hasObjectBelow(event.location, interactObjectName(event))) return false;
-  return climb({ player: event.player, destination, onArrival: event.onArrival }, CLIMB_DOWN);
+  return climb({ player: event.player, destination, onArrival: event.onArrival }, animation);
 }
 
 /**
@@ -221,7 +230,9 @@ module.exports = {
     TaskManager = api.getTaskManager();
     api.onCustomEvent("ladders:climbUp", climbUp);
     api.onCustomEvent("ladders:climbDown", climbDown);
-    const options = { "Climb": climbOption, "Top-floor": topFloorOption, "Bottom-floor": bottomFloorOption };
+    const options = { "Climb": climbOption };
+    for (const option of TOP_FLOOR_OPTIONS) options[option] = topFloorOption;
+    for (const option of BOTTOM_FLOOR_OPTIONS) options[option] = bottomFloorOption;
     for (const option of UP_OPTIONS) options[option] = climbUpOption;
     for (const option of DOWN_OPTIONS) options[option] = climbDownOption;
     for (const name of CLIMBABLE_NAMES) api.onObjectInteraction(name, options);

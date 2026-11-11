@@ -125,3 +125,24 @@ test("the Jaldraocht altar gives no Ancients before Desert Treasure I, and drain
   Altars.handleJaldraochtAltar(done.p);
   assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "after the quest it switches");
 });
+
+test("disabled requirements unlock Ancient and Lunar altar/cape switches without completing quests", (t) => {
+  const readConfig = PM.getPluginConfig.bind(PM);
+  t.mock.method(PM, "getPluginConfig", (key, fallback) => key === "quests:equipment-requirements" ? false : readConfig(key, fallback));
+  for (const [book, uses] of [
+    [core.MagicSpellbook.ANCIENT, [Altars.ancientAltar, Altars.ancientSpellbook, ({ player }) => Cape.changeSpellbook(player, "Ancient")]],
+    [core.MagicSpellbook.LUNAR, [Altars.lunarAltar, Altars.lunarSpellbook, ({ player }) => Cape.changeSpellbook(player, "Lunar")]],
+  ]) {
+    for (const use of uses) {
+      const f = wizard(t);
+      use({ player: f.p });
+      assert.equal(f.p.getSpellbook(), book);
+      assert.ok(!f.messages.some((message) => message.includes("You need to complete")));
+    }
+  }
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = swapper(t, false);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 3);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT);
+  assert.equal(f.runes(), 7);
+});

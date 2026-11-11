@@ -1040,6 +1040,9 @@ function searchBirdNest(player, nestId) {
 
   if (seed) {
     inventory.adds(seed.id, 1);
+    // "woodcutting:nest-search" { player, itemId }: the seed taken from the nest, for a league's
+    // "Obtain a High level tree seed from a birds nest".
+    pluginApi.emitCustomEvent("woodcutting:nest-search", { player, itemId: seed.id });
     sendSpam(player, `You take ${seed.text} out of the bird's nest.`);
     return true;
   }
@@ -1425,6 +1428,11 @@ function pauseWoodcutting(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopWoodcutting(activeSessionsRef, player, false));
 }
 
+/** Inventory actions clear the player interaction and end that player's chop. */
+function interruptForInteraction({ player }) {
+  stopWoodcutting(activeSessionsRef, player, false);
+}
+
 /** An accepted emote replaces chopping while keeping the new emote animation. */
 function interruptForEmote({ player }) {
   stopWoodcutting(activeSessionsRef, player, false);
@@ -1458,6 +1466,7 @@ module.exports = {
     });
     api.onCustomEvent("level-up:popup-opened", pauseWoodcutting);
     api.onCustomEvent("player:emote", interruptForEmote);
+    api.onCustomEvent("player:interaction-cleared", interruptForInteraction);
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
     api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);

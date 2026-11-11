@@ -217,6 +217,8 @@ function digGout(event) {
     finders.delete(tile);
     player.getInventory().add(tuber);
     Common.spam(player, dig.message);
+    // The tuber found: its own event, for the league's "Find a Gout Tuber" (the plant is dug).
+    Common.api.emitCustomEvent("tai-bwo-wannai-cleanup:gout-tuber", { player });
     Locs.swap(plant, Common.locId(jungle.locs[4]), Common.data.hack.regrowTicks, Common.locId(jungle.locs[0]));
   });
   return true;

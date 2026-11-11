@@ -1665,6 +1665,21 @@ function timeline(player, objectId, objectTile) {
   return ticks;
 }
 
+test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balance, a tile a tick with sound 2470 each", () => {
+  for (const [objectId, start, object, finish, steps] of [
+    [56991, [1453, 3336, 0], [1453, 3335, 0], [1453, 3329], 7],
+    [56990, [1401, 3291, 0], [1401, 3290, 0], [1401, 3283], 8],
+    [56990, [1401, 3283, 0], [1401, 3284, 0], [1401, 3291], 8],
+  ]) {
+    const player = createPlayer(...start, 45);
+    const ticks = timeline(player, objectId, object);
+    assert.deepEqual(tileOf(player).slice(0, 2), finish);
+    assert.equal(ticks.flatMap((entry) => entry.sounds).filter((sound) => (sound.id ?? sound) === 2470).length, steps, `${objectId}: a sound per tile`);
+    assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 19.5);
+    assert.equal(player.state.blocked, false);
+  }
+});
+
 const course = (key) => COURSES.find((entry) => entry.key === key);
 const HIGHLIGHT_VARBIT = 13140;
 const [START_LAP, END_LAP, ADD_XP] = [5173, 5174, 5175];

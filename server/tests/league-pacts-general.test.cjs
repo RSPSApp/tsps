@@ -34,6 +34,11 @@ const mine = (key, modifier) => { if (attachingGeneral) modifiers[key] = modifie
 
 const AIR_RUNE = 556;
 const FIRE_RUNE = 554;
+const EARTH_RUNE = 557;
+const DEATH_RUNE = 560;
+const ASTRAL_RUNE = 9075;
+const WRATH_RUNE = 21880;
+const BLIGHTED_SURGE_SACK = 26705;
 const RUNE_ARROW = 892;
 const DRAGON_DEFENDER = 12954;
 const RUNE_KITESHIELD = 1201;
@@ -41,7 +46,8 @@ const HILL_GIANT = 2098;
 
 /** Node indices of the cache's tree for each effect used here. */
 const NODES = {
-  regenerate50: 0, regenerate30: 9, accuracy25: 6, accuracy50: 10, meleeDamage: 110, defence5: 5, defence15: 50,
+  regenerate50: 0, regenerate30: 9, regenerate30b: 49, regenerate30c: 72, regenerate5: 51, regenerate5b: 75, regenerate5c: 76,
+  accuracy25: 6, accuracy50: 10, meleeDamage: 110, defence5: 5, defence15: 50,
   offhand: 11, overheal30: 48, freeSpec20: 70, penetration25: 55, penetration25b: 74, maxAccuracy: 8,
   prayerRestore: 85, distanceSpec: 73, styleSwap: 54,
 };
@@ -157,10 +163,10 @@ const npcAt = (x, y, id = HILL_GIANT) => new NPC(id, new Location(x, y, 0));
 const rollEvent = (attacker, target, combatType) => ({ attacker, target, combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer: false });
 const ticks = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
 
-/** A cast as Spell.canCast runs it: the cost, the saving question, then the commit. */
-function castSpell(player, items, offensive = true) {
+/** A cast as Spell.canCast runs it: the cost (`covered`: what a staff supplies), the saving question, then the commit. */
+function castSpell(player, items, offensive = true, covered = []) {
   const spell = { spellId: () => 1 };
-  emit("magic:spell-cost", { player, spell, items });
+  emit("magic:spell-cost", { player, spell, items, covered });
   const saving = emit("magic:rune-saving", { player, offensive, saved: false, message: null });
   emit("magic:cast-committed", { player, spell, context: null, runesSaved: saving.saved });
   return saving.saved;
@@ -202,6 +208,120 @@ test("Regenerate: a value% chance to keep a cast's runes, a shot's ammunition or
     assert.equal(emit("combat:consume-charge", { player: other, itemId: 12899, skip: false }).skip, false);
   }
   assert.equal(regenerated.length, 0);
+});
+
+/** 50 + 30 + 30 + 30 + 5: Regenerate 145. */
+const REGENERATE_145 = [NODES.regenerate50, NODES.regenerate30, NODES.regenerate30b, NODES.regenerate30c, NODES.regenerate5];
+const inventoryOf = (player, ...ids) => ids.map((id) => player.getInventory().getAmount(id));
+const rows = (events, ...keys) => events.map((event) => keys.map((key) => event[key]));
+
+test("Regenerate above 100%: the runes are always kept and the rest is a chance of one more copy, a net gain", () => {
+  const pacts = character("regen-145", { pacts: REGENERATE_145 });
+  assert.equal(Common.effect(pacts, "talent_regen_ammo_chance"), 145);
+  const graphic = core.CacheDefinitions.getSpotanimId("leagues_6_regenerating_runes");
+  // Vengeance's runes: 4 astral, 2 death, 10 earth.
+  const vengeance = () => [new core.Item(ASTRAL_RUNE, 4), new core.Item(DEATH_RUNE, 2), new core.Item(EARTH_RUNE, 10)];
+
+  randoms([0.44]);
+  assert.equal(castSpell(pacts, vengeance(), false), true, "44 < 45: a second copy");
+  assert.deepEqual(inventoryOf(pacts, ASTRAL_RUNE, DEATH_RUNE, EARTH_RUNE), [4, 2, 10], "the cost again, on top of the kept runes");
+  assert.deepEqual(rows(regenerated, "itemId", "amount", "extra", "covered", "first"),
+    [[ASTRAL_RUNE, 8, 4, 0, true], [DEATH_RUNE, 4, 2, 0, false], [EARTH_RUNE, 20, 10, 0, false]]);
+  assert.equal(pacts.getSlotGraphics().get(1)?.getId(), graphic, "leagues_6_regenerating_runes in slot 1");
+  regenerated.length = 0;
+
+  randoms([0.45]);
+  assert.equal(castSpell(pacts, vengeance(), false), true, "45 is not under 45, but 145 always keeps them");
+  assert.deepEqual(inventoryOf(pacts, ASTRAL_RUNE, DEATH_RUNE, EARTH_RUNE), [4, 2, 10], "nothing more");
+  assert.deepEqual(rows(regenerated, "itemId", "amount", "extra"), [[ASTRAL_RUNE, 4, 0], [DEATH_RUNE, 2, 0], [EARTH_RUNE, 10, 0]]);
+  regenerated.length = 0;
+
+  // The rune pouch's slot holding a rune takes it first; the rest goes to the inventory.
+  const pouch = (refund) => { if (refund.runeId === EARTH_RUNE) refund.stored = refund.amount; };
+  custom["magic:rune-refund"] = [pouch];
+  randoms([0]);
+  castSpell(pacts, vengeance(), false);
+  delete custom["magic:rune-refund"];
+  assert.deepEqual(inventoryOf(pacts, ASTRAL_RUNE, DEATH_RUNE, EARTH_RUNE), [8, 4, 0], "the kept and the extra earth went to the pouch");
+  regenerated.length = 0;
+
+  // A single copy: the kept runes the inventory paid move to the pouch slot, as far as it has room.
+  const room = { [DEATH_RUNE]: 1 };
+  custom["magic:rune-refund"] = [(refund) => {
+    const taken = Math.min(refund.amount, room[refund.runeId] ?? 0);
+    room[refund.runeId] = (room[refund.runeId] ?? 0) - taken;
+    refund.stored += taken;
+  }];
+  pacts.getInventory().resetItems();
+  pacts.getInventory().add(new core.Item(DEATH_RUNE, 2), false);
+  randoms([0.45]);
+  castSpell(pacts, [new core.Item(DEATH_RUNE, 2)], false);
+  delete custom["magic:rune-refund"];
+  assert.deepEqual(inventoryOf(pacts, DEATH_RUNE), [1], "one fits in the pouch, one stays");
+  assert.deepEqual(rows(regenerated, "itemId", "amount", "extra"), [[DEATH_RUNE, 2, 0]]);
+  regenerated.length = 0;
+
+  // Only runes are made again: a blighted sack is only kept.
+  randoms([0]);
+  assert.equal(castSpell(pacts, [new core.Item(BLIGHTED_SURGE_SACK, 1)]), true);
+  assert.equal(pacts.getInventory().getAmount(BLIGHTED_SURGE_SACK), 0);
+  assert.deepEqual(rows(regenerated, "itemId", "amount", "extra"), [[BLIGHTED_SURGE_SACK, 1, 0]]);
+  regenerated.length = 0;
+
+  // Ammunition: each shot kept, a second copy at the same chance; one event, its amount all of them.
+  randoms([0.44, 0.45, 0]);
+  const shots = emit("ranged:ammo-saving", { player: pacts, itemId: RUNE_ARROW, amount: 3, saved: 0, extra: 0 });
+  assert.deepEqual([shots.saved, shots.extra], [3, 2]);
+  assert.deepEqual(rows(regenerated, "kind", "amount", "extra"), [["ammo", 5, 2]]);
+  regenerated.length = 0;
+
+  randoms([0.44]);
+  const charge = emit("combat:consume-charge", { player: pacts, itemId: 12899, skip: false, extra: 0 });
+  assert.deepEqual([charge.skip, charge.extra], [true, 1]);
+  assert.deepEqual(rows(regenerated, "kind", "weaponId", "amount", "extra"), [["charge", 12899, 2, 1]]);
+  regenerated.length = 0;
+
+  // Another saver (Kodai, staff of the dead) already kept the runes: no roll, nothing made.
+  randoms([0]);
+  emit("magic:spell-cost", { player: pacts, spell: { spellId: () => 1 }, items: vengeance(), covered: [] });
+  const kodai = emit("magic:rune-saving", { player: pacts, offensive: true, saved: true, message: null });
+  emit("magic:cast-committed", { player: pacts, spell: null, context: null, runesSaved: kodai.saved });
+  assert.equal(regenerated.length, 0);
+
+  // The most the tree gives: 50 + 3 x 30 + 3 x 5.
+  const max = character("regen-155", { pacts: [...REGENERATE_145, NODES.regenerate5b, NODES.regenerate5c] });
+  assert.equal(Common.effect(max, "talent_regen_ammo_chance"), 155);
+  randoms([0.54, 0.55]);
+  assert.equal(emit("ranged:ammo-saving", { player: max, itemId: RUNE_ARROW, amount: 2, saved: 0, extra: 0 }).extra, 1, "54 < 55, then 55 is not");
+});
+
+test("Regenerate makes the runes a staff supplied as real runes, below 100% too", () => {
+  const pacts = character("regen-staff", { pacts: [NODES.regenerate50, NODES.regenerate30] });
+  // Earth Surge with an earth battlestaff: the staff covers the 10 earth runes.
+  const paid = [new core.Item(AIR_RUNE, 7), new core.Item(WRATH_RUNE, 1)];
+  const staff = [new core.Item(EARTH_RUNE, 10)];
+  randoms([0.79]);
+  assert.equal(castSpell(pacts, paid, true, staff), true);
+  assert.deepEqual(inventoryOf(pacts, AIR_RUNE, WRATH_RUNE, EARTH_RUNE), [0, 0, 10], "the paid runes kept, 10 earth runes made");
+  assert.deepEqual(rows(regenerated, "itemId", "amount", "extra", "covered"),
+    [[AIR_RUNE, 7, 0, 0], [WRATH_RUNE, 1, 0, 0], [EARTH_RUNE, 10, 0, 10]]);
+  regenerated.length = 0;
+
+  randoms([0.8]);
+  assert.equal(castSpell(pacts, paid, true, staff), false, "no proc: nothing made");
+  assert.equal(pacts.getInventory().getAmount(EARTH_RUNE), 10);
+
+  // A cast the staff covers entirely still procs (it spends nothing, but the runes are made).
+  randoms([0.1]);
+  castSpell(pacts, [], true, [new core.Item(AIR_RUNE, 1)]);
+  assert.equal(pacts.getInventory().getAmount(AIR_RUNE), 1);
+  regenerated.length = 0;
+
+  // Above 100%, every copy of the covered runes: 2 x 10 earth at 145 with a second copy.
+  const over = character("regen-staff-145", { pacts: REGENERATE_145 });
+  randoms([0]);
+  castSpell(over, paid, true, staff);
+  assert.deepEqual(inventoryOf(over, AIR_RUNE, WRATH_RUNE, EARTH_RUNE), [7, 1, 20]);
 });
 
 test("accuracy: +value% to all three attack rolls", () => {

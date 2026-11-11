@@ -77,6 +77,11 @@ test('fully grown crops reject the spell before consuming runes, ash, XP or live
     assert.deepEqual(f.xp, []);
     assert.deepEqual(f.animations, []);
 });
+test('the spell plays its own cast animation, not the bucket pour', t => {
+    const f = prepare(t);
+    f.cast();
+    assert.deepEqual(f.animations.map(animation => animation.id), [4413]);
+});
 test('bucket and bottomless applications retain their tier-specific Farming XP', t => {
     for (const [tier, xp, name] of [[1, 18, 'Compost'], [2, 26, 'Supercompost'], [3, 36, 'Ultracompost']]) {
         const f = prepare(t);

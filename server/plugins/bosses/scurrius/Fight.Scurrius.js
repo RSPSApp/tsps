@@ -12,8 +12,9 @@
  *   above 30%;
  * - the rubble: twelve tiles, one under each player, the rest anywhere on the floor, landing nine
  *   ticks after the stomp for 15-22 (solo) or 15-24 (public);
- * - the rats: at most twelve waves, and none while his last ones live; any hit from a player
- *   kills one, and rat bone weapons hit them without an attack delay.
+ * - the rats: at most twelve waves, and none while his last ones live, each on a tile of its own;
+ *   any hit from a player kills one, rat bone weapons hit them without an attack delay, and they
+ *   hit 0-1 through Protect from Melee.
  */
 const Common = require("./Common.Scurrius");
 
@@ -88,6 +89,14 @@ const RATS_PER_WAVE = 6;
 const RAT_WAVE_LIMIT = 12;
 const RAT_SPAWN_TICKS = 2;
 const RAT_CALL_COOLDOWN_TICKS = 41;
+/** Cache: the giant rat is 2x2. Captured: no two rats of a wave share a tile (203 waves). */
+const RAT_SIZE = 2;
+const RAT_TILE_ATTEMPTS = 40;
+/**
+ * Wiki: the rats "hit 0-1 through Protect from Melee" (up to 4 without). Captured, with the prayer
+ * on: 1 on 73 ticks, 0 on 15, both on 3.
+ */
+const RAT_PROTECTED_MAX_HIT = 1;
 /** Generic engine flags: no turning back to fight on a hit, and no turning to the target. */
 const NO_RETALIATE_FLAG = "combat:no-retaliate";
 const KEEP_FACING_FLAG = "combat:keep-facing";
@@ -129,6 +138,12 @@ const FEEDING = Object.freeze([["magic", 4], ["ranged", 4], ["stomp", 2], ["summ
 const ENRAGED = Object.freeze([["magic", 2], ["ranged", 2], ["stomp", 3], ["summon", 1]]);
 
 const WALK_REPATH_LIMIT = 10;
+/**
+ * Between rounds he walks in to swipe (captured: 26 of 26 turns, including step-offs that ended 2-4
+ * tiles from the player). Only when he has gone an attack cycle without a step while out of reach
+ * (his rats walling him off) does he stomp from range instead.
+ */
+const STUCK_TICKS = ATTACK_SPEED;
 
 let api = null;
 let core = null;
@@ -185,9 +200,37 @@ function pickAction(state, now = core.World.getProcessCycle(), beside = true) {
       && !ratsAlive(state));
   if (state.phase === "feeding") return weighted(FEEDING, canSummon);
   if (state.phase === "enraged") return weighted(ENRAGED, canSummon);
-  if (state.phase === "between") return "melee";
+  // Out of reach here means stuck (attackDistance only lets him attack from range then): he stomps, as
+  // in phase one, so he never waits on a swipe he can't make.
+  if (state.phase === "between") return beside ? "melee" : "stomp";
   return beside ? weighted(PHASE_ONE) : "stomp";
 }
+
+/**
+ * Between rounds: whether he is out of reach of `target` and has not taken a step for STUCK_TICKS,
+ * so walking in has stopped working. Any step or reaching them starts the count again.
+ */
+function stuckBetween(npc, state, target) {
+  if (!target || besideTarget(npc, target)) {
+    state.stall = null;
+    return false;
+  }
+  const now = core.World.getProcessCycle();
+  const at = npc.getLocation();
+  if (!state.stall || !state.stall.at.equals(at)) {
+    state.stall = { at: at.clone(), since: now };
+    return false;
+  }
+  return now - state.stall.since >= STUCK_TICKS;
+}
+
+/** Whether he attacks `target` from range in a phase he otherwise walks in on them: phase one out of reach, or stuck between rounds. */
+function fromRange(npc, state, target) {
+  if (state.phase === "combat") return !besideTarget(npc, target);
+  if (state.phase === "between") return stuckBetween(npc, state, target);
+  return false;
+}
+const closesIn = (phase) => phase === "combat" || phase === "between";
 
 /** Whether `target` stands within a tile of his footprint (or under him). */
 function besideTarget(npc, target) {
@@ -218,6 +261,16 @@ function sendProjectile(npc, target, projectileId, kind, toward = target.getLoca
     handTile(npc, toward, kind), target.getLocation(), target, projectileId, PROJECTILE.start,
     PROJECTILE.end, PROJECTILE.startHeight, PROJECTILE.endHeight, npc.getPrivateArea(),
   ).withAngle(PROJECTILE.angle).withProgress(PROJECTILE.progress).sendProjectile();
+}
+
+/**
+ * Who a bolt or fur ball turn is thrown at: every player in the room, his target among them
+ * (captured, recording 84: one projectile per player in the public lair on each cast, up to six
+ * at once, from the same tile, a player still on the entrance tile included).
+ */
+function volleyTargets(npc, target) {
+  const players = Common.playersInRoom(npc);
+  return target && !players.includes(target) ? [target, ...players] : players;
 }
 
 function areaSound(npc, soundId, [x, y, z], delay, range) {
@@ -264,6 +317,19 @@ function stomp(npc) {
   }, npc);
 }
 
+/** A floor tile for a rat's south-west corner: its whole 2x2 body on open floor, on no other rat's tile. */
+function ratTile(npc, taken) {
+  for (let attempt = 0; attempt < RAT_TILE_ATTEMPTS; attempt++) {
+    const tile = floorTile(npc);
+    const key = `${tile.getX()},${tile.getY()}`;
+    if (!taken.has(key) && roomFor(npc, tile, RAT_SIZE)) {
+      taken.add(key);
+      return tile;
+    }
+  }
+  return floorTile(npc);
+}
+
 function summonRats(npc, state) {
   state.ratWaves++;
   state.lastCallAt = core.World.getProcessCycle();
@@ -272,8 +338,9 @@ function summonRats(npc, state) {
     if (npc.getHitpoints() <= 0 || !npc.isRegistered?.()) return;
     const players = Common.playersInRoom(npc);
     state.rats = [];
+    const taken = new Set();
     for (let i = 0; i < RATS_PER_WAVE; i++) {
-      const tile = floorTile(npc);
+      const tile = ratTile(npc, taken);
       const rat = core.NPC.create(Common.RAT_ID, tile);
       rat.__skipDefaultRespawn = true;
       rat.setMultiCombat?.(true);
@@ -416,6 +483,7 @@ function finishFeeding(npc, state, stomped = false) {
   if (state.phase !== "feeding") return;
   state.phase = "between";
   state.swingsLeft = between(MELEE_BETWEEN_ROUNDS);
+  state.stall = null;
   const delay = stomped ? STEP_OFF_AFTER_STOMP_TICKS : STEP_OFF_TICKS;
   // No swing before he has walked off.
   npc.getCombat().setAttackDelay(delay + 1);
@@ -425,9 +493,8 @@ function finishFeeding(npc, state, stomped = false) {
   }, npc);
 }
 
-/** Whether his whole body fits on the floor with its south-west corner on `tile`. */
-function roomFor(npc, tile) {
-  const size = Math.max(1, npc.getSize?.() ?? 1);
+/** Whether a body of `size` (his own by default) fits on the floor with its south-west corner on `tile`. */
+function roomFor(npc, tile, size = Math.max(1, npc.getSize?.() ?? 1)) {
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       const at = tile.transform(x, y);
@@ -445,10 +512,11 @@ function stepOff(npc, state, spot) {
     .map(([dx, dy]) => at.transform(dx * STEP_OFF_TILES, dy * STEP_OFF_TILES))
     .filter((tile) => roomFor(npc, tile));
   if (ways.length === 0) return;
-  walkTo(npc, state, ways[core.Misc.randomInclusive(0, ways.length - 1)], () => {}, 1);
+  // Off the pile he walks in on his target again, to swipe, or stomps while he can't reach them.
+  walkTo(npc, state, ways[core.Misc.randomInclusive(0, ways.length - 1)], () => npc.setFlag(CLOSE_IN_FLAG, true), 1);
 }
 
-/** A swing between rounds; the last one sends him back to eat. */
+/** A turn between rounds (a swipe, or a stomp out of reach); the last one sends him back to eat. */
 function swungBetweenRounds(npc, state) {
   if (--state.swingsLeft > 0) return;
   Common.later(BACK_TO_EATING_TICKS, () => {
@@ -557,6 +625,24 @@ function oneShotRat(event) {
   hit.updateTotalDamage();
 }
 
+/** Wiki: the rats' bites go through Protect from Melee; ratHitLands caps them as they land. */
+function ratHitRoll(roll) {
+  if (!Common.isRat(roll.attacker) || !roll.target?.isPlayer?.()) return;
+  if (roll.combatType === core.CombatType.MELEE) roll.bypassProtectionPrayer = true;
+}
+
+/**
+ * A rat's bite lands, in the player's turn after their clicks this tick: 0-1 with Protect from
+ * Melee up then, its full roll without.
+ */
+function ratHitLands(event) {
+  const hit = event.hit;
+  if (!Common.isRat(hit?.getAttacker?.()) || hit.getCombatType?.() !== core.CombatType.MELEE) return;
+  if (!core.PrayerHandler.isActivated(event.player, core.PrayerHandler.PROTECT_FROM_MELEE)) return;
+  for (const damage of hit.getHits()) damage.setDamage(Math.min(damage.getDamage(), RAT_PROTECTED_MAX_HIT));
+  hit.updateTotalDamage();
+}
+
 /**
  * A bolt or fur ball lands, in the player's own turn after their clicks this tick: rolled now,
  * against the protection prayer they have up as it hits.
@@ -580,24 +666,26 @@ function defineCombatMethod() {
       this.stance = CombatType.MELEE;
       this.action = "melee";
       this.npc = null;
+      /** The players a bolt or fur ball turn was thrown at, for hits(). */
+      this.volley = null;
     }
 
-    /** In phase one, melee beside his target; out of reach, the stomp works from range. */
+    /** In phase one and between rounds, melee beside his target; out of reach, the stomp works from range. */
     type() {
       const npc = this.npc;
-      if (npc && stateOf(npc).phase === "combat") return besideTarget(npc, targetOf(npc)) ? CombatType.MELEE : CombatType.RANGED;
+      if (npc && closesIn(stateOf(npc).phase)) return fromRange(npc, stateOf(npc), targetOf(npc)) ? CombatType.RANGED : CombatType.MELEE;
       return this.stance;
     }
 
     /**
-     * Phase one: melee beside his target, so he steps round to an edge as usual; further away he
-     * stomps, closing in as he does. Between rounds at the pile he walks in to swipe. Eating and
+     * Phase one and between rounds: melee beside his target, so he steps round to an edge as
+     * usual; further away (or with rats in his way) he stomps, closing in as he does. Eating and
      * in the middle he keeps his place.
      */
     attackDistance(character) {
       this.npc = character;
       const phase = stateOf(character).phase;
-      if (phase === "combat") return besideTarget(character, targetOf(character)) ? 1 : RANGED_DISTANCE;
+      if (closesIn(phase)) return fromRange(character, stateOf(character), targetOf(character)) ? RANGED_DISTANCE : 1;
       return phase === "feeding" || phase === "enraged" ? RANGED_DISTANCE : 1;
     }
 
@@ -631,6 +719,7 @@ function defineCombatMethod() {
           character.setPositionToFace(state.facing);
         }
         stomp(character);
+        if (state.phase === "between") swungBetweenRounds(character, state);
         return;
       }
       if (this.action === "summon") {
@@ -639,19 +728,22 @@ function defineCombatMethod() {
         summonRats(character, state);
         return;
       }
-      const sender = target.isPlayer?.() ? target.getPacketSender() : null;
-      if (this.action === "ranged") {
-        this.stance = CombatType.RANGED;
+      const ranged = this.action === "ranged";
+      this.stance = ranged ? CombatType.RANGED : CombatType.MAGIC;
+      if (ranged) {
         character.performAnimation(new Animation(feeding ? ANIM.feedingRanged : ANIM.ranged));
-        sendProjectile(character, target, GFX.rangedProjectile, "ranged", facingFor(state, target));
-        sender?.sendSound(SOUND.ranged, 1, 0);
-        return;
+      } else {
+        character.performAnimation(new Animation(feeding ? ANIM.feedingMagic : ANIM.magic));
+        character.performGraphic(new Graphic(feeding ? GFX.feedingMagicCast : GFX.magicCast));
       }
-      this.stance = CombatType.MAGIC;
-      character.performAnimation(new Animation(feeding ? ANIM.feedingMagic : ANIM.magic));
-      character.performGraphic(new Graphic(feeding ? GFX.feedingMagicCast : GFX.magicCast));
-      sendProjectile(character, target, GFX.magicProjectile, "magic", facingFor(state, target));
-      sender?.sendSound(SOUND.magic, 1, 0);
+      // One cast, one projectile and cast sound for each player in the room, all from the same
+      // hand tile (he faces the pile or his last turn, never each player).
+      const toward = facingFor(state, target);
+      this.volley = volleyTargets(character, target);
+      for (const victim of this.volley) {
+        sendProjectile(character, victim, ranged ? GFX.rangedProjectile : GFX.magicProjectile, this.action, toward);
+        if (victim.isPlayer?.()) victim.getPacketSender().sendSound(ranged ? SOUND.ranged : SOUND.magic, 1, 0);
+      }
     }
 
     hits(character, target) {
@@ -663,15 +755,19 @@ function defineCombatMethod() {
       }
       if (this.action !== "ranged" && this.action !== "magic") return [];
       const kind = this.action;
-      // Queued at 0 as the flight ends and rolled by distantHitLands in the player's turn, so a
+      const volley = this.volley ?? [target];
+      this.volley = null;
+      // Queued at 0 as the flight ends and rolled by distantHitLands in each player's turn, so a
       // prayer clicked on the landing tick counts (the task runs before the player's clicks).
       Common.later(DISTANT_HIT_DELAY, () => {
         if (character.getHitpoints() <= 0 || !character.isRegistered?.()) return;
-        if (target.getHitpoints() <= 0 || target.isRegistered?.() === false) return;
-        const placeholder = new PendingHit(character, target, DISTANT_STYLES[kind],
-          { delay: 0, rollAccuracy: false, experience: false, damage: 0, bypassProtectionPrayer: true });
-        landing.set(placeholder, maxHits[kind]);
-        core.CombatFactory.addPendingHit(placeholder);
+        for (const victim of volley) {
+          if (victim.getHitpoints() <= 0 || victim.isRegistered?.() === false) continue;
+          const placeholder = new PendingHit(character, victim, DISTANT_STYLES[kind],
+            { delay: 0, rollAccuracy: false, experience: false, damage: 0, bypassProtectionPrayer: true });
+          landing.set(placeholder, maxHits[kind]);
+          core.CombatFactory.addPendingHit(placeholder);
+        }
       }, character);
       return [];
     }
@@ -723,6 +819,8 @@ function attach(pluginApi) {
   api.onPlayerDealtDamage(trackPhase);
   api.onPlayerDealtDamage(removeRatAttackDelay);
   api.onPlayerHitModify(distantHitLands);
+  api.onCombatHitRoll(ratHitRoll);
+  api.onPlayerHitModify(ratHitLands);
   api.registerNpcCombatMethodProvider([Common.PUBLIC_ID, Common.SOLO_ID], defineCombatMethod(), { singleton: false });
 }
 
@@ -735,6 +833,6 @@ module.exports = {
     SOLO_MAX_HITS, PUBLIC_MAX_HITS, PHASE_ONE, FEEDING, ENRAGED, RAT_WAVE_LIMIT, ROCKFALL_TILES,
     RAT_CALL_COOLDOWN_TICKS, FEED_HEALS, MELEE_BETWEEN_ROUNDS, PROJECTILE, pickAction, rockfallTiles, stomp, summonRats,
     FEED_HEAL_AMOUNTS, DISTANT_HIT_DELAY, startFeeding, feedingTurn, finishFeeding, stepOff, ratsAlive, facingFor, heal, goEat, enrage, handTile, oneShotRat, removeRatAttackDelay,
-    defineCombatMethod, distantHitLands, maxHitsFor,
+    defineCombatMethod, distantHitLands, volleyTargets, maxHitsFor, STUCK_TICKS, ratHitRoll, ratHitLands, ratTile, RAT_PROTECTED_MAX_HIT,
   },
 };

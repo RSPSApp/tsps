@@ -1,6 +1,7 @@
 // The client side of being on a boat: the boarded varbits and the sailing sidepanel on the
 // combat tab, applied whenever Sailing puts a player aboard and cleared whenever they leave
-// (disembarking, sinking or logging out). Values follow xrsps's raft port, taken from rsmod's
+// (disembarking, sinking or logging out). Off a boat, the combat tab offers the sidepanel as the
+// Sailing side panel setting says. Values follow xrsps's raft port, taken from rsmod's
 // `applyBoardedState` (https://github.com/rsmod/rsmod, ISC).
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
@@ -35,6 +36,38 @@ function attachCore(api) {
   core = api.core;
 }
 
+/** All Settings' "Sailing side panel" row. */
+const SIDE_PANEL_SETTING = 454;
+const SIDE_PANEL_ONLY_ON_BOAT = 1;
+/** The Pandemonium stage from which the combat tab offers the sidepanel off a boat (script 8583). */
+const OFF_BOAT_SIDEPANEL_STAGE = 6;
+
+/**
+ * sailing_sidepanel_visible_from_combat_tab off a boat. The combat tab shows its "View" button
+ * for the sidepanel while it is 1. Live keeps it at 1 while the Sailing side panel setting is
+ * "Always show", once The Pandemonium has reached the stage the cache offers the panel from;
+ * with "Only show on boat" it is 1 only while aboard.
+ */
+function offBoatCombatTabSidepanel(player, onlyOnBoat = getVarbit(player, VARBIT.SIDE_PANEL_ONLY_ON_BOAT)) {
+  return onlyOnBoat !== SIDE_PANEL_ONLY_ON_BOAT && getVarbit(player, VARBIT.SAILING_INTRO) >= OFF_BOAT_SIDEPANEL_STAGE ? 1 : 0;
+}
+
+/** Off a boat, the combat tab follows a change at once; aboard, it keeps offering the panel. */
+function refreshOffBoatCombatTab(player, onlyOnBoat) {
+  if (getVarbit(player, VARBIT.BOARDED_BOAT) === 1) return;
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player, onlyOnBoat));
+}
+
+/** The Sailing side panel row changed (its varbit is set after this event). */
+function sidePanelSettingChosen({ player, settingId, option }) {
+  if (settingId === SIDE_PANEL_SETTING) refreshOffBoatCombatTab(player, option);
+}
+
+/** The Pandemonium reaching the stage the panel is offered from. */
+function pandemoniumStageChanged({ player, key }) {
+  if (key === "pandemonium") refreshOffBoatCombatTab(player);
+}
+
 /** Values from live OSRS boarding traces (docs/sailing-osrs-reference.md). */
 function boardedVarbits(type, owned) {
   const slot = owned.slot + 1;
@@ -59,6 +92,17 @@ function boardedVarbits(type, owned) {
   };
 }
 
+/** The boarded varbits that describe the player's own boats, which a guest keeps as they were. */
+const OWN_BOAT_VARBITS = [
+  VARBIT.BOAT_SPAWNED,
+  VARBIT.LAST_PERSONAL_BOAT_BOARDED,
+  VARBIT.PREVIOUS_BOAT_DATA_SLOT,
+  VARBIT.PREVIOUS_BOAT_TYPE_ID,
+];
+
+/** Sent to a player who was on somebody else's boat when it left the sea (rsprox 698, on login). */
+const BACK_ON_SHORE = "You find yourself back on shore.";
+
 const COMBAT_OPTIONS_GROUP = 593;
 const VIEW_SAILING_OPTIONS_CHILD = 48;
 /** The sidepanel's "View Combat Options" (see Sidepanel.Sailing.js). */
@@ -80,15 +124,60 @@ const LEFT_VARBITS = [
   ...DESCRIPTION_VARBITS,
 ];
 
-function applyBoarded(player, owned) {
+/**
+ * A guest on somebody else's boat sees that boat in the sidepanel, but none of the varbits that
+ * are about a boat of their own (which slot is out, the last one boarded), and isn't its captain.
+ * The role and head count are not captured for a guest.
+ */
+function guestVarbits(type, owned, aboard) {
+  const varbits = boardedVarbits(type, owned);
+  for (const id of OWN_BOAT_VARBITS) delete varbits[id];
+  varbits[VARBIT.SIDEPANEL_PLAYER_ROLE] = 0;
+  varbits[VARBIT.SIDEPANEL_PLAYERS_ON_BOARD_TOTAL] = aboard;
+  return varbits;
+}
+
+function applyBoarded(player, owned, guestAmong) {
   const type = boatType(owned.type);
   if (!type) return;
-  const varbits = boardedVarbits(type, owned);
+  const varbits = guestAmong ? guestVarbits(type, owned, guestAmong) : boardedVarbits(type, owned);
   const varps = boatVarps(type, owned);
   for (const [id, value] of Object.entries(varbits)) setVarbit(player, Number(id), value);
   const sender = player.getPacketSender();
   for (const [id, value] of Object.entries(varps)) sender.sendConfig(Number(id), value);
   openSidepanel(player, type, varbits, varps);
+}
+
+/** How many players stand on a boat's deck. */
+function playersAboard(boat) {
+  return core.BoatManager.getDeck(boat)?.getPlayers().length ?? 1;
+}
+
+/** The captain's count of people aboard follows guests coming and going. */
+function updateHeadCount(boat) {
+  const owner = Sailing.ownerOf(boat);
+  if (owner && Sailing.instanceAboard(owner) === boat) {
+    setVarbit(owner, VARBIT.SIDEPANEL_PLAYERS_ON_BOARD_TOTAL, playersAboard(boat));
+  }
+}
+
+/** A tick after a guest boards, once their client has the deck scene. */
+function onGuestBoarded({ player, boat, owned }) {
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player); }
+    execute() {
+      this.stop();
+      if (Sailing.guestBoat(player) !== boat) return;
+      applyBoarded(player, owned, playersAboard(boat));
+      updateHeadCount(boat);
+    }
+  })());
+}
+
+function onGuestLeft({ player, boat, reason }) {
+  onLeft({ player, boat, reason });
+  if (reason === "evicted") player.sendMessage(BACK_ON_SHORE);
+  else updateHeadCount(boat);
 }
 
 /** A tick after boarding, once the deck scene (or, on login, the gameframe) is in place. */
@@ -199,6 +288,7 @@ function onLeft({ player, boat, reason }) {
   // Disembarking docks the boat; a teleport or Escape sinks it.
   sendBoatVarbits(player);
   for (const id of LEFT_VARBITS) setVarbit(player, id, 0);
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player));
   clearBoatVarps(player);
   player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   player.getPacketSender().sendTabInterface(0, 0);
@@ -216,7 +306,10 @@ function switchCombatTab(event) {
     const supplied = suppliedPanels.get(player);
     if (supplied && applySuppliedPanel(player, supplied)) return;
     const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
-    if (owned) applyBoarded(player, owned);
+    if (owned) return applyBoarded(player, owned);
+    const visited = Sailing.guestBoat(player);
+    const visitedOwned = visited && Sailing.ownedOf(visited);
+    if (visitedOwned) applyBoarded(player, visitedOwned, playersAboard(visited));
   } else if (event.groupId === SIDEPANEL_GROUP && event.childId === VIEW_COMBAT_OPTIONS_CHILD) {
     event.handled = true;
     WeaponInterfaceManager.assign(player);
@@ -232,11 +325,13 @@ function builtSpec(boat, base) {
 /** Describes owned boats; Schematics restores only recipes the player has learned. */
 function describeBoatsOnLogin({ player }) {
   sendBoatVarbits(player);
+  // A player logging in aboard gets the boarded varbits a tick later.
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE_FROM_COMBAT_TAB, offBoatCombatTabSidepanel(player));
 }
 
 module.exports = {
   name: "Sailing",
-  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving.",
+  description: "The client side of being aboard a boat: boarded varbits and the sailing sidepanel on the combat tab, set on boarding and cleared on leaving; off a boat, the combat tab offers the sidepanel as the Sailing side panel setting says.",
   members: true,
   register(api) {
     attachCore(api);
@@ -245,7 +340,11 @@ module.exports = {
     api.onCustomEvent("sailing:board-supplied-panel", boardSuppliedPanel);
     api.onCustomEvent("sailing:leave-supplied-panel", leaveSuppliedPanel);
     api.onCustomEvent("sailing:left", onLeft);
+    api.onCustomEvent("sailing:guest-boarded", onGuestBoarded);
+    api.onCustomEvent("sailing:guest-left", onGuestLeft);
     api.onPlayerLogin(describeBoatsOnLogin);
+    api.onCustomEvent("settings:option-chosen", sidePanelSettingChosen);
+    api.onCustomEvent("quest:stage-changed", pandemoniumStageChanged);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);
   },

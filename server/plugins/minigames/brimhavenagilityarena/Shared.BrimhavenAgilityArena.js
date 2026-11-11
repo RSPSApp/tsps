@@ -155,6 +155,8 @@ function stateOf(player) {
       /** The tile the player stood on at the end of the previous tick, to tell which way they go. */
       lastAt: null,
       lastTrap: null,
+      /** Tickets won since the last trap hit, for a league's "30 without missing any pillars". */
+      ticketStreak: 0,
       padUses: 0,
       padCooldownUntil: 0,
     };
@@ -211,6 +213,8 @@ function trapDamage(hitpoints) {
 }
 
 function hit(player, amount) {
+  // A trap hit is not a missed pillar: the task counts pillars tagged, so a run carries on through a
+  // clipping (the Wiki has no wording that a hit breaks it); a cycle ending without a tag resets it.
   player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(amount, core.HitMask.RED)]);
 }
 
@@ -237,8 +241,14 @@ function activeTile() {
   return cycle.active;
 }
 
-/** Picks a different dispenser for the new cycle and moves everyone's arrow to it. */
+/**
+ * Picks a different dispenser for the new cycle and moves everyone's arrow to it. A cycle ending
+ * without a tag is a missed pillar: whoever did not tag the pillar it ended on loses the run of clean
+ * tags ("Receive 30 Agility Arena Tickets without missing any pillars"). Leaving the arena or logging
+ * out drops the session (and the streak) already; a trap hit is not a miss (Wiki: nothing says it is).
+ */
 function advanceCycle() {
+  const ended = cycle.index;
   let index = Math.floor(random() * DISPENSER_TILES.length);
   if (cycle.active && DISPENSER_TILES[index] === cycle.active) {
     index = (index + 1) % DISPENSER_TILES.length;
@@ -246,7 +256,9 @@ function advanceCycle() {
   cycle.index++;
   cycle.active = DISPENSER_TILES[index];
   cycle.nextAt = cycle.tick + CYCLE_TICKS;
-  for (const player of sessions.keys()) {
+  for (const [player, state] of sessions) {
+    // A session made after the pillar became active cannot have tagged it, which is a miss.
+    if (state.taggedCycle !== ended) state.ticketStreak = 0;
     if (isInArena(player)) sendArrow(player);
   }
 }
@@ -288,6 +300,10 @@ function rewardTag(player) {
   const count = diaryComplete(player, "elite") && random() < DIARY_DOUBLE_CHANCE ? 2 : 1;
   const award = { player, minigame: "brimhaven-agility-arena", points: count };
   api.emitCustomEvent("minigame:points", award);
+  // "brimhaven-agility-arena:streak" { player, tickets }: the run of clean tags so far, for a
+  // league's "Receive 30 Agility Arena Tickets without missing any pillars".
+  state.ticketStreak += count;
+  api.emitCustomEvent("brimhaven-agility-arena:streak", { player, tickets: state.ticketStreak });
   const laps = (Number(player.getAttribute(LAPS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(LAPS_ATTRIBUTE, laps);
   player.sendMessage(LAP_MESSAGE(laps));

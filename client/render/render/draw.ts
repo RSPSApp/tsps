@@ -174,6 +174,7 @@ import {
     DynamicNpcFrameGeometry,
     DynamicNpcSequenceMeta,
 } from "../npc/DynamicNpcAnimLoader";
+import { usesNpcPriorityPass } from "../npc/NpcPriorityPass";
 import { PlayerRenderer } from "../player/PlayerRenderer";
 import { ProjectileManager } from "../projectiles/ProjectileManager";
 import { ProjectileRenderer } from "../projectiles/ProjectileRenderer";
@@ -188,6 +189,16 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
+
+export function shouldDrawNpcUnbatched(host: WebGLOsrsRendererHost, ecsId: number): boolean {
+    const ecs = host.osrsClient.npcEcs;
+    return host.isNpcSmoothed(ecsId) || (
+        host.unifiedActorData &&
+        usesNpcPriorityPass(ecs.getNpcTypeId(ecsId)) &&
+        ecs.getWorldViewId(ecsId) < 0 &&
+        host.dynamicNpcAnimLoader?.isReady() === true
+    );
+}
 
 export function addNpcRenderData(host: WebGLOsrsRendererHost, map: WebGLMapSquare) {
 
@@ -223,7 +234,7 @@ export function addNpcRenderData(host: WebGLOsrsRendererHost, map: WebGLMapSquar
             for (let i = 0; i < npcCount; i++) {
                 const id = ids[i] | 0;
                 const offset = (baseOffset + i) * 8;
-                if (!host.shouldRenderNpcFromMap(map, id) || host.isNpcSmoothed(id)) {
+                if (!host.shouldRenderNpcFromMap(map, id) || shouldDrawNpcUnbatched(host, id)) {
                     host.actorRenderData[offset + 0] = 0;
                     host.actorRenderData[offset + 1] = 0;
                     host.actorRenderData[offset + 2] = 0;
@@ -301,8 +312,7 @@ export function addUnbatchedNpcRenderData(host: WebGLOsrsRendererHost): void {
             const ids = map?.npcEntityIds;
             if (!map?.drawCallNpc || !ids) continue;
             for (const id of ids) {
-                // A smoothed NPC is drawn below, through the path that can blend frames.
-                if (host.shouldRenderNpcFromMap(map, id | 0) && !host.isNpcSmoothed(id | 0)) {
+                if (host.shouldRenderNpcFromMap(map, id | 0) && !shouldDrawNpcUnbatched(host, id | 0)) {
                     batchedIds.add(id | 0);
                 }
             }

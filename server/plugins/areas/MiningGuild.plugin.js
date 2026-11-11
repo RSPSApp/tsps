@@ -22,6 +22,28 @@ const MEMBERS_AREA_TILES = [
   [3017, 3021, 9729, 9732],
   [3042, 3044, 9729, 9729],
 ];
+/**
+ * Unidentified minerals (https://oldschool.runescape.wiki/w/Unidentified_minerals): one roll per
+ * ore mined in the members' area, at the Wiki's per-rock rate, while Belona's toggle is on. The
+ * toggle is on by default and she flips it from her right-click option or the two dialogue
+ * branches; the shop that spends them is data (shops.json, id 1454).
+ */
+const MINERALS_ATTRIBUTE = "mining-guild:minerals";
+const MINERAL_ITEM = 21341;
+const BELONA = 7719;
+/** Ore item -> the rock's 1-in-N chance (Wiki). Noted forms never come out of a rock. */
+const MINERAL_CHANCE = new Map([
+  [440, 100], // iron
+  [453, 60], // coal
+  [447, 40], // mithril
+  [449, 30], // adamantite
+  [451, 20], // runite
+  [21347, 20], // amethyst
+]);
+const MINERAL_FOUND = "You find some minerals while you mine.";
+// The Wiki gives Belona's dialogue lines but not the game message her right-click option prints.
+const MINERALS_ON = "You will now receive unidentified minerals when you mine here.";
+const MINERALS_OFF = "You will no longer receive unidentified minerals when you mine here.";
 let core;
 let membersArea = null;
 
@@ -85,15 +107,66 @@ function useDoor(request) {
   });
 }
 
+function mineralsEnabled(player) {
+  return player.getAttribute(MINERALS_ATTRIBUTE) !== false;
+}
+
+function setMinerals(player, enabled) {
+  player.setAttribute(MINERALS_ATTRIBUTE, enabled);
+  player.sendMessage(enabled ? MINERALS_ON : MINERALS_OFF);
+}
+
+/** Belona's right-click "Toggle-minerals". */
+function toggleMinerals({ player }) {
+  setMinerals(player, !mineralsEnabled(player));
+  return true;
+}
+
+/** The two dialogue branches are guarded by wiki prose; answer them from the toggle. */
+function answerMineralCondition({ npcId, player, text }) {
+  if (npcId !== BELONA) return null;
+  const value = String(text).toLowerCase();
+  if (value.includes("currently receiving unidentified minerals")) return mineralsEnabled(player);
+  if (value.includes("currently not receiving unidentified minerals")) return !mineralsEnabled(player);
+  return null;
+}
+
+/** The branches carry no action of their own, so the choice itself flips the toggle. */
+function chooseMinerals({ player, npcId, option }) {
+  if (npcId !== BELONA) return;
+  const value = String(option).toLowerCase();
+  if (value.includes("don't want to receive minerals")) setMinerals(player, false);
+  else if (value.includes("like to receive minerals")) setMinerals(player, true);
+}
+
+/** "mining:success": one roll per ore, in the members' area, while the toggle is on. */
+function rollMinerals({ player, itemId, location }) {
+  if (!mineralsEnabled(player)) return;
+  const chance = MINERAL_CHANCE.get(itemId);
+  if (!chance || !inMembersArea(location ?? player.getLocation())) return;
+  if (Math.floor(Math.random() * chance) !== 0) return;
+  // forceAdd drops what does not fit; a container without it (a test stand-in) takes a plain add.
+  const inventory = player.getInventory();
+  if (typeof inventory.forceAdd === "function") inventory.forceAdd(player, new core.Item(MINERAL_ITEM, 1));
+  else inventory.adds(MINERAL_ITEM, 1);
+  player.sendMessage(MINERAL_FOUND);
+}
+
 module.exports = {
   name: "MiningGuild",
-  description: "Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level and halves rock respawn times.",
+  description: "Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level, halves rock respawn times and rolls unidentified minerals.",
+  _test: { mineralsEnabled, setMinerals, toggleMinerals, answerMineralCondition, chooseMinerals, rollMinerals, inMembersArea, MINERALS_ATTRIBUTE, MINERAL_ITEM },
   register(api) {
     core = api.core;
     ObstacleRunner.init(api);
+    api.persistAttribute(MINERALS_ATTRIBUTE, true);
     api.onCustomEvent("ladders:climb", guardLadder);
     api.onCustomEvent("door:toggle", useDoor);
     api.onCustomEvent("mining:level-boost", boostMining);
     api.onCustomEvent("mining:respawn-ticks", halveRespawn);
+    api.onCustomEvent("mining:success", rollMinerals);
+    api.onNpcInteraction("Belona", { "Toggle-minerals": toggleMinerals });
+    api.onNpcDialogueCondition(answerMineralCondition);
+    api.onCustomEvent("npc-dialogue:choice", chooseMinerals);
   },
 };

@@ -96,9 +96,13 @@ function award(player, itemId, bone, scale) {
   restorePrayer(player, itemId, bone);
 }
 
-/** "prayer:bury": a bone buried without the spade (the bonecrusher), or ashes scattered (a league fragment). */
+/**
+ * "prayer:bury": a bone buried without the spade (the bonecrusher), or ashes scattered (a league
+ * fragment). `ashes: true` takes only ashes (the ash sanctifier).
+ */
 function buryRequest(request) {
-  const bone = boneFor(request?.itemId) ?? (request?.crushed ? null : ashFor(request?.itemId));
+  const bone = request?.ashes ? ashFor(request.itemId)
+    : boneFor(request?.itemId) ?? (request?.crushed ? null : ashFor(request?.itemId));
   if (!bone || !request.player) return;
   if (request.crushed && bone.crush === false) return;
   award(request.player, request.itemId, bone, request.scale ?? 1);

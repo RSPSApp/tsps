@@ -118,7 +118,7 @@ test('malformed, duplicate, unreliable and congested auxiliary channels leave ga
 test('public world metadata exposes only the configured name over HTTP and the content channel', t => {
   const world = require('../dist/game/definition/WorldDefinition');
   t.mock.method(world, 'getWorldDefinition', () => ({ name: 'Solaris RSPS', pluginConfig: { secret: 'private' } }));
-  assert.deepEqual(JSON.parse(ContentApi.resolve('GET', '/api/world-info').body), { name: 'Solaris RSPS' });
+  assert.deepEqual(JSON.parse(ContentApi.resolve('GET', '/api/world-info').body), { name: 'Solaris RSPS', flags: 0 }, 'a plain world: no type bits');
   assert.equal(ContentApi.resolve('POST', '/api/world-info').status, 405);
   const h = connect();
   const frames = response(h.channel, { type: 'content-request', id: 100, path: '/api/world-info' });
@@ -141,4 +141,25 @@ test('native world registration uses the world definition name, not the legacy e
   } finally {
     keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index]; });
   }
+});
+
+test('native world registration lists settings-derived tags in the manifest', t => {
+  const world = require('../dist/game/definition/WorldDefinition');
+  const definition = { description: 'World description', spawn: { x: 3089, y: 3524, z: 0 }, membersWorld: false, experienceMultiplier: 10 };
+  t.mock.method(world, 'getWorldDefinition', () => definition);
+  let globalPvp = true;
+  t.mock.method(world, 'hasGlobalWorldTag', tag => tag === 'pvp' && globalPvp);
+  const connector = new WebRtcGameConnector('ws://unused.invalid', 'test', 'test', 'unused', [], () => {});
+  const send = t.mock.method(connector, 'send', () => {});
+
+  connector.handle({ type: 'registered' });
+  assert.deepEqual(send.mock.calls[0].arguments[0], {
+    type: 'world-manifest',
+    manifest: { description: definition.description, spawn: definition.spawn, maxPlayers: null, tags: ['F2P', 'PvP', 'Boosted XP'] },
+  });
+
+  Object.assign(definition, { membersWorld: true, experienceMultiplier: 1 });
+  globalPvp = false;
+  connector.handle({ type: 'registered' });
+  assert.deepEqual(send.mock.calls[1].arguments[0].manifest.tags, ['Members']);
 });

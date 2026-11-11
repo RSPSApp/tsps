@@ -174,6 +174,7 @@ import {
     DynamicNpcFrameGeometry,
     DynamicNpcSequenceMeta,
 } from "../../npc/DynamicNpcAnimLoader";
+import { getNpcPriorityGeometry, usesNpcPriorityPass } from "../../npc/NpcPriorityPass";
 import { PlayerRenderer } from "../../player/PlayerRenderer";
 import { ProjectileManager } from "../../projectiles/ProjectileManager";
 import { ProjectileRenderer } from "../../projectiles/ProjectileRenderer";
@@ -188,6 +189,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS } from "../constants";
+import { shouldDrawNpcUnbatched } from "../draw";
 
 export function renderOpaqueActorPass(host: WebGLOsrsRendererHost, 
         actorDataTextureIndex: number,
@@ -252,7 +254,7 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
 
                     for (let j = 0; j < npcCount; j++) {
                         const id = ids[j] | 0;
-                        if (!host.shouldRenderNpcFromMap(map, id) || host.isNpcSmoothed(id)) {
+                        if (!host.shouldRenderNpcFromMap(map, id) || shouldDrawNpcUnbatched(host, id)) {
                             (drawCall as any).offsets[j] = 0;
                             (drawCall as any).numElements[j] = 0;
                             drawRanges[j] = NULL_DRAW_RANGE;
@@ -461,24 +463,30 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
 
         if (dynamicNpcs.length > 0 && actorDataTexture) {
             // One shared geometry buffer: group identical poses so each is uploaded once, not per NPC.
-            // Opaque only, so draw order is irrelevant.
             dynamicNpcs.sort((a, b) =>
                 a.geometry.key < b.geometry.key ? -1 : a.geometry.key > b.geometry.key ? 1 : 0,
             );
+            const ecs = host.osrsClient.npcEcs;
             for (let i = 0; i < dynamicNpcs.length; i++) {
                 const dyn = dynamicNpcs[i];
                 const npcDataOffset = dyn.dataOffset + dyn.npcIndex;
-                const dynWvId = host.osrsClient.npcEcs.getWorldViewId(dyn.ecsId);
+                const dynWvId = ecs.getWorldViewId(dyn.ecsId);
+                const priorityPass = !host.hdShadowFrustum && dynWvId < 0 &&
+                    usesNpcPriorityPass(ecs.getNpcTypeId(dyn.ecsId));
                 let instances = 1;
-                while (i + 1 < dynamicNpcs.length) {
+                while (!priorityPass && i + 1 < dynamicNpcs.length) {
                     const next = dynamicNpcs[i + 1];
                     if (next.geometry.key !== dyn.geometry.key || next.map !== dyn.map ||
                         next.dataOffset + next.npcIndex !== npcDataOffset + instances ||
-                        host.osrsClient.npcEcs.getWorldViewId(next.ecsId) !== dynWvId) break;
+                        ecs.getWorldViewId(next.ecsId) !== dynWvId ||
+                        usesNpcPriorityPass(ecs.getNpcTypeId(next.ecsId))) break;
                     instances++;
                     i++;
                 }
-                const indexCount = host.uploadDynamicNpcGeometry(dyn.geometry, false);
+                const geometry = priorityPass
+                    ? getNpcPriorityGeometry(dyn.geometry, host.osrsClient.camera.viewMatrix, ecs.getRotation(dyn.ecsId))
+                    : dyn.geometry;
+                const indexCount = host.uploadDynamicNpcGeometry(geometry, false);
                 if (indexCount <= 0 || !host.dynamicNpcDrawCall) {
                     continue;
                 }
@@ -520,8 +528,15 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
                 (dynDrawCall as any).numElements[0] = indexCount | 0;
                 (dynDrawCall as any).numInstances[0] = instances;
                 try {
+                    if (priorityPass) {
+                        // Let the model's face order determine color against the scene's existing depth.
+                        host.app.depthMask(false);
+                        host.draw(dynDrawCall, host.dynamicNpcSingleDrawRanges);
+                        host.app.depthMask(true).colorMask(false, false, false, false);
+                    }
                     host.draw(dynDrawCall, host.dynamicNpcSingleDrawRanges);
                 } finally {
+                    if (priorityPass) host.app.depthMask(true).colorMask(true, true, true, true);
                     host.dynamicNpcSingleDrawRange[2] = 1;
                     (dynDrawCall as any).numInstances[0] = 1;
                 }

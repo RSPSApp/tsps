@@ -636,6 +636,8 @@ class Raid {
     player.setAttribute(ATTR_RAID, null);
     // Kept through a logout: the player is saved inside, and login puts them back out.
     if (!logout) player.setAttribute(Shared.ATTR.INSIDE, null);
+    // Out of the raid: stats go back to base. Not on a logout: the raider may rejoin, and login resets them if not.
+    if (!logout) Shared.restoreStats(player);
     this.dropRaidItems(player, player.getLocation().clone());
     if (logout) this.hideRaidHud(player);
     for (const hook of leaveHooks) hook(this, player, logout);

@@ -13,8 +13,20 @@ function inWilderness(player) {
   return api.core.Wilderness.isInLocation(player?.getLocation?.());
 }
 
+/**
+ * The chatbox greeting, sent as the welcome chat type as live does (rsprox `type=108`). A game mode
+ * with worlds of its own rewrites it through `welcome-screen:greeting` { player, worldName, text }
+ * (a Hardcore world: "Welcome to Hardcore Old School RuneScape.").
+ */
+function greet(player) {
+  const worldName = api.core.WorldDefinition.getWorldDefinition().name;
+  const greeting = { player, worldName, text: `Welcome to ${worldName}.` };
+  api.emitCustomEvent("welcome-screen:greeting", greeting);
+  player.getPacketSender().sendTypedMessage(api.core.ChatType.WELCOME, String(greeting.text));
+}
+
 function login({ player, isNewAccount }) {
-  player.sendMessage(`Welcome to ${api.core.WorldDefinition.getWorldDefinition().name}.`);
+  greet(player);
   // Mobile, new accounts and Wilderness logins enter the world directly.
   if (isNewAccount || player.isPlayerBot?.() === true || inWilderness(player)
       || player.getAttribute(api.core.MOBILE_CLIENT_ATTRIBUTE) === true) return;
@@ -37,7 +49,7 @@ function play({ player }) {
   if (!visible.delete(player)) return false;
   const root = api.core.resolveGameframeRoot(player);
   for (const packet of api.core.encodeGameframeBootstrap(player.getUsername(), root,
-      player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true)) {
+      player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true, api.core.GameConstants.WORLD_TYPE.label)) {
     player.getSession().sendClientPacket(packet);
   }
   // The saved spellbook selector and quest varps were sent at login and survive a root swap.

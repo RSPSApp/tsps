@@ -247,6 +247,18 @@ The player stays aboard and the boat stays where it is. At sea, the `port` varbi
 
 The boat stays where it was docked.
 
+## Boarding somebody else's boat
+
+From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind of boat would you like to board?" with "Board my own boat." and "Board somebody else's boat."; the release cache has Board-friend as the gangplank's third op instead, and script 8624 adds "Board friend's boat" to the boat list at 934:8 in Board mode once script 9022 passes).
+
+- The choice is answered with `runclientscript` 109 "Enter name:"; the client replies `resume_p_namedialog`.
+- Refusals, on the reply's tick or the next:
+  - "That player is offline, or has privacy mode enabled." as a game message (type 4), no box;
+  - "The player is not on their own boat, so you cannot join them.", "There's no space for you on that boat." and "That player does not have a boat for you to board right now." as a message box (229), each also a game message (type 115).
+- Success: the fade (174 on 164:1, minimap state 2) on the reply's tick, and the boat's varps, camera target and world entity on the next. No game message.
+- 698 opens with "You find yourself back on shore." (type 0) at login, after a session on another player's boat.
+- 698 ends with the guest hopping worlds, which is what sends a player to Limbo (Wiki).
+
 ## Recovery (Junior Jim)
 
 - **The fee is taken from the bank**, with the message "Payment has been taken from your bank." Recovery also brings back boats docked at other ports, not only sunk ones.
@@ -427,7 +439,7 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 - 1 gives 60581, whose first op is Deposit-held (when carrying cargo).
 
 **What it holds** (OSRS Wiki, Cargo hold):
-- **Capacity:** by boat and hold tier. A basic hold has 20 slots on the raft, 30 on the skiff and 40 on the sloop; a rosewood hold has 120, 180 and 240.
+- **Capacity:** by boat and hold tier, from the cache: the hold's facility row (table 176, column 20) names a stats row (table 164) whose column 28 is its slots. A basic hold has 20 slots on the raft, 30 on the skiff and 40 on the sloop; a rosewood hold has 120, 180 and 240. Live's hold shows the same (rsprox, 943:5): raft basic 20; skiff basic, oak and teak 30, 45 and 60; sloop mahogany, camphor, ironwood and rosewood 120, 160, 210 and 240.
 - **Slots:** every item takes a slot, except that a stackable item's whole stack takes one.
 - **Which items:** only the wiki's "Storable items": sailing capes and tools, salvage, courier crates, bounty items, repair kits, cannonballs, ship drinks, fish, fish offcuts and crates, and fishing gear. Noted items aren't accepted.
 - **Recovery losses:** courier crates, bounty items, salvage, fish and full fish crates are lost when a shipwright recovers the boat.
@@ -536,7 +548,7 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
 - **Shipyard:**
   - The shown boat, and the owner while aboard it, are shown only to the owner. Other players in the shipyard see neither.
   - "Shipwright assistance" (paying to build without the Construction level) isn't built yet.
-  - Facilities are built, removed and replaced there, but only placed: none of them can be used yet (cooking on the range, firing cannons and so on). A cargo hold's tier doesn't change its capacity yet.
+  - Facilities are built, removed and replaced there. At sea the cargo hold, salvaging hooks and station, wind and gale catchers, cannons, range, anchor and crystal extractor work (docs/sailing.md); the inoculation station, chum stations, nets, fathom stone, bosun's workbench and eternal brazier are only placed.
   - Guessed rather than captured for facilities:
     - "Replace it." opens the hotspot's options, and building over a facility replaces it without a refund;
     - a hotspot's Build and a facility's Modify do nothing away from the shipyard;

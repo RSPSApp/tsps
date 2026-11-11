@@ -70,9 +70,13 @@ function defineCrystalWeapon(api, config) {
     const item = weaponOf(player);
     if (!item || !isCharged(item.getId())) return;
     // Content may spare the charge (a league relic): the question every charged weapon asks.
-    const consume = { player, itemId: item.getId(), skip: false };
+    // `extra`: charges given back on top (Demonic Pacts' Regenerate above 100%), up to 20,000.
+    const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
     api.emitCustomEvent("combat:consume-charge", consume);
-    if (consume.skip) return;
+    if (consume.skip) {
+      if (consume.extra > 0) store(item, Math.min(MAX_CHARGES, chargesOf(item) + consume.extra), usedOf(item));
+      return;
+    }
     const left = Math.max(0, chargesOf(item) - 1);
     if (left === 0) {
       // The shot or swing is rolled with the charged bonuses; the weapon turns inactive after it.

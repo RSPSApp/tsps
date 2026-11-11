@@ -13,6 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const Common = require("./Common.PhantomMuspah");
 const Scoreboard = require("./Scoreboard.PhantomMuspah");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const BOSS_NAME = "Phantom Muspah";
 
 const UNTRADEABLE_DROP = (name) => `<col=ef1020>Untradeable drop: ${name}</col>`;
@@ -35,7 +36,7 @@ function onMuspahDeath({ npc, killer }) {
   const kills = Common.count(player, Common.KILLS_ATTRIBUTE) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, kills);
   player.getPacketSender().sendConfig(Common.data.kill.killCountVarp, kills);
-  player.sendMessage(`Your Phantom Muspah kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Phantom Muspah kill count is: <col=ff0000>${kills}</col>.`);
   // From its appearance to this moment, five ticks into its death (captured: 108 ticks, 1:04.80).
   const ticks = Common.core.World.getProcessCycle() - fight.startCycle;
   const best = Common.count(player, Common.BEST_TICKS_ATTRIBUTE);
@@ -141,6 +142,9 @@ function openCache({ player, itemId }) {
     if (noteId >= 0) rewardId = noteId;
   }
   if (reward.itemId === ItemIdentifiers.FROZEN_CACHE) player.sendMessage(Common.data.frozenCache.anotherCache);
+  // "phantom-muspah:frozen-cache" { player, itemId }: the opened cache gave another cache,
+  // for a league's "Obtain a Frozen Cache from a Cache".
+  Common.api.emitCustomEvent("phantom-muspah:frozen-cache", { player, itemId: reward.itemId });
   inventory.adds(rewardId, reward.amount);
   inventory.refreshItems();
   return true;

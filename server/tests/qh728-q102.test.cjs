@@ -90,7 +90,8 @@ function makePlayer(username = 'sea-slug-test') {
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
     getLocation: () => location,
     moveTo: next => { location = next; moves.push([next.getX(), next.getY(), next.getZ()]); },
-    performAnimation: noop,
+    performAnimation: animation => log.push(['performAnimation', animation.getId?.() ?? animation.id]),
+    performGraphic: graphic => log.push(['performGraphic', graphic.getId?.() ?? graphic.id]),
     sendMessage: text => messages.push(text),
     isRegistered: () => true,
   };
@@ -111,6 +112,7 @@ function harness() {
   const removedNpcs = [];
   const playerLogin = [];
   const playerLogout = [];
+  const trips = [];
   const dampSticksSpawn = groundItemDefinitions.find(entry =>
     entry.id === core.ItemIdentifiers.DAMP_STICKS && entry.location?.x === 2784 && entry.location?.y === 3289);
   assert.ok(dampSticksSpawn, 'the canonical public damp-sticks spawn is configured');
@@ -170,30 +172,53 @@ function harness() {
       },
     }),
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
-    emitCustomEvent: (key, event) => (events[key] ??= []).forEach(handler => handler(event)),
+    emitCustomEvent: (key, event) => {
+      // The Ferries plugin takes Holgart's crossings (ferries:travel): recorded, not sailed.
+      if (key === 'ferries:travel') {
+        trips.push(event.route);
+        event.handled = true;
+      }
+      (events[key] ??= []).forEach(handler => handler(event));
+    },
   }, { get: (target, key) => target[key] ?? noop });
 
   const original = runtime.startTranscript;
-  runtime.startTranscript = (_api, _player, npcId, page, variant) => {
-    transcriptCalls.push({ npcId, page, variant });
+  runtime.startTranscript = (_api, _player, npcId, page, variant, select) => {
+    transcriptCalls.push({ npcId, page, variant, ...(select ? { select } : {}) });
     return true;
   };
+  // The timed scenes have their own test (sea-slug-scenes.test.cjs); here they are recorded.
+  const sceneCalls = [];
+  const sceneHooks = {};
+  const scenesPath = require.resolve('../plugins/quests/seaslug/Scenes.SeaSlug');
+  const realScenes = require.cache[scenesPath];
+  const record = name => (...args) => { sceneCalls.push([name, ...args]); };
+  require.cache[scenesPath] = { id: scenesPath, filename: scenesPath, loaded: true, exports: (_api, hooks) => {
+    Object.assign(sceneHooks, hooks);
+    return {
+      boatRepair: record('boatRepair'), startKent: record('startKent'), kickPanel: record('kickPanel'),
+      crane: record('crane'), interrupted: noop, marker: () => false,
+      PANEL: { kickSeq: 4804, kickSound: 3024 },
+    };
+  } };
   try {
     require('../plugins/quests/quests/SeaSlug.Quest')(api);
   } finally {
     runtime.startTranscript = original;
+    if (realScenes) require.cache[scenesPath] = realScenes;
+    else delete require.cache[scenesPath];
   }
 
   return { events, variants, conditions, objectInteraction, itemOnItem, itemActions, npcInteractions,
     submittedTasks, transcriptCalls, groundItems, worldGroundItems, spawnedNpcs, removedNpcs,
-    playerLogin, playerLogout, quest: runtime.getRegisteredQuests().at(-1) };
+    playerLogin, playerLogout, trips, sceneCalls, sceneHooks, quest: runtime.getRegisteredQuests().at(-1) };
 }
 
 const N = core.NpcIdentifiers;
 const I = core.ItemIdentifiers;
 const VAR_SEA_SLUG = 159;
-// The platform Holgart (cache id 5070) has no world spawn; the mainland Holgart is the
-// spawn parent 5071, which the server resolves per player to 7324 or 7789.
+// The platform Holgart (cache id 5070) is what the world's 6241 shows while slug2_npc_track1 is 0;
+// the mainland Holgart is the spawn parent 5071, which the server resolves per player to 7324 or 7789.
 const PLATFORM_HOLGART = core.NpcIdentifiers.HOLGART_3;
 const MAINLAND_HOLGART = core.NpcIdentifiers.HOLGART_7;
 
@@ -208,12 +233,6 @@ function condition(h, player, text, npcId = N.CAROLINE) {
 function action(h, player, npcId, stepId) {
   const event = { player, npcId, stepId, handled: false };
   h.events['npc-dialogue:action'].forEach(handler => handler(event));
-  return event;
-}
-
-function chosenCondition(h, player, npcId, stepId) {
-  const event = { player, npcId, stepId, handled: false };
-  h.events['npc-dialogue:condition'].forEach(handler => handler(event));
   return event;
 }
 
@@ -312,8 +331,8 @@ function reachTorchStage(h, player) {
   h.events['npc-dialogue:hook'].forEach(handler =>
     handler({ player, npcId: N.CAROLINE, hook: 'quest:sea-slug:start' }));
   assert.equal(variant(h, player, N.HOLGART), 'talking-to-holgart');
-  assert.equal(h.quest.getStage(player), 2);
-  chosenCondition(h, player, N.HOLGART, 'u-qtrY');
+  assert.equal(h.quest.getStage(player), 1);
+  action(h, player, N.HOLGART, 'rSdV8b');
   assert.equal(h.quest.getStage(player), 3);
   action(h, player, N.HOLGART, '46f1OE');
   assert.equal(variant(h, player, N.KENNITH), 'at-the-fishing-platform-talking-to-kennith');
@@ -345,14 +364,20 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   assert.equal(variant(h, p, N.CAROLINE), 'starting-off-talking-to-caroline-again');
 
   assert.equal(variant(h, p, N.HOLGART), 'talking-to-holgart');
-  assert.equal(h.quest.getStage(p), 2, 'first Holgart talk marks the paste request');
-  assert.equal(variant(h, p, N.HOLGART), 'talking-to-holgart', 'holding swamp paste offers the hand-in');
-  chosenCondition(h, p, N.HOLGART, 'u-qtrY');
+  assert.equal(h.quest.getStage(p), 1, 'with the paste in the pack live goes 1 -> 3 (capture tick 38)');
+  assert.equal(condition(h, p, 'If the player already has one swamp paste in their inventory:', N.HOLGART), true);
+  assert.equal(p.items.get(I.SWAMP_PASTE), 1, 'the paste stays until "You give Holgart the swamp paste."');
+  const given = action(h, p, N.HOLGART, 'rSdV8b');
+  assert.equal(given.handled, false, 'the hand-in message still shows');
   assert.equal(p.items.get(I.SWAMP_PASTE) ?? 0, 0, 'one swamp paste is consumed');
   assert.equal(h.quest.getStage(p), 3, 'boat repaired');
+  const repair = action(h, p, N.HOLGART, 'YlJKOo');
+  assert.deepEqual([repair.handled, repair.end], [true, true], 'the conversation ends for the cutscene');
+  assert.deepEqual(h.sceneCalls.at(-1), ['boatRepair', p]);
 
-  action(h, p, N.HOLGART, '46f1OE');
-  assert.deepEqual(p.moves.at(-1), [2784, 3276, 0], 'sail to the fishing platform');
+  const sail = action(h, p, N.HOLGART, '46f1OE');
+  assert.deepEqual([sail.handled, sail.end], [true, true], 'the trip replaces the arrival message');
+  assert.deepEqual(h.trips.at(-1), 'sea-slug-platform', 'Holgart rows to the fishing platform');
 
   assert.equal(variant(h, p, N.KENNITH), 'at-the-fishing-platform-talking-to-kennith');
   assert.equal(h.quest.getStage(p), 4, 'first Kennith talk advances to the Kent search');
@@ -360,16 +385,19 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   assert.equal(variant(h, p, PLATFORM_HOLGART), 'talking-to-holgart-after-talking-to-kennith');
   action(h, p, PLATFORM_HOLGART, 'zUdSJX');
   assert.equal(h.quest.getStage(p), 5, 'sail to the shipwreck island');
-  assert.deepEqual(p.moves.at(-1), [2794, 3320, 0]);
+  assert.equal(h.trips.at(-1), 'sea-slug-island');
 
   assert.equal(variant(h, p, N.KENT), 'at-the-shipwreck-island-talking-to-kent');
-  action(h, p, N.KENT, 'EkOxin');
+  const kent = action(h, p, N.KENT, 'EkOxin');
   assert.equal(h.quest.getStage(p), 6, 'Kent reveals the sea slugs');
+  assert.deepEqual([kent.handled, kent.end], [true, true], 'his first talk closes before the grab');
+  assert.equal(h.sceneCalls.at(-1)[0], 'startKent');
+  assert.equal(h.sceneCalls.at(-1)[4], 'at-the-shipwreck-island-talking-to-kent');
 
   assert.equal(variant(h, p, N.HOLGART_2),
     'at-the-shipwreck-island-talking-to-holgart-again-before-returning-to-the-fishing-platform');
   action(h, p, N.HOLGART_2, 'Jn71UA');
-  assert.deepEqual(p.moves.at(-1), [2784, 3276, 0], 'return to the platform');
+  assert.equal(h.trips.at(-1), 'sea-slug-island-return', 'return to the platform');
 
   assert.equal(variant(h, p, N.BAILEY), 'rescuing-kennith-talking-to-bailey');
   action(h, p, N.BAILEY, 'G6lOss');
@@ -380,9 +408,11 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   const glass = { player: p, usedItemId: I.BROKEN_GLASS_2, usedWithItemId: I.DAMP_STICKS, handled: false };
   h.itemOnItem.forEach(handler => handler(glass));
   assert.equal(glass.handled, true);
-  assert.equal(p.items.get(I.BROKEN_GLASS_2) ?? 0, 0, 'broken glass is consumed');
+  assert.equal(p.items.get(I.BROKEN_GLASS_2), 1, 'the broken glass is kept (capture tick 276)');
   assert.equal(p.items.get(I.DAMP_STICKS) ?? 0, 0, 'damp sticks are consumed');
   assert.equal(p.items.get(I.DRY_STICKS), 1, 'dry sticks are made');
+  assert.ok(p.log.some(row => row[0] === 'performAnimation' && row[1] === 4809), 'seaslug_player_drying_sticks');
+  assert.ok(p.log.some(row => row[0] === 'performGraphic' && row[1] === 791), 'seaslug_drying_sticks');
 
   const random = Math.random;
   Math.random = () => 0;
@@ -396,9 +426,10 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   }
   assert.equal(p.items.get(I.LIT_TORCH), 1, 'the unlit torch becomes lit');
   assert.equal(p.items.get(I.UNLIT_TORCH) ?? 0, 0);
-  assert.equal(p.items.get(I.DRY_STICKS) ?? 0, 0);
+  assert.equal(p.items.get(I.DRY_STICKS), 1, 'the dry sticks stay in the pack (capture tick 297)');
   assert.equal(h.quest.getStage(p), 7, 'torch lit');
   assert.equal(wireValue(p), 7, 'stage 7 is mirrored to varp 159');
+  assert.ok(p.log.some(row => row[0] === 'sendSound' && row[1] === 3028), 'slug_torch_lit');
 
   assert.equal(variant(h, p, N.KENNITH), 'rescuing-kennith-talking-to-kennith');
   assert.equal(h.quest.getStage(p), 8, 'Kennith asks for an escape route');
@@ -408,8 +439,8 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   const panel = { player: p, objectId: 18251, location: { x: 2768, y: 3289, z: 1 }, handled: false };
   h.objectInteraction.forEach(handler => handler(panel));
   assert.equal(panel.handled, true, 'the raw multi-loc panel id is claimed');
-  assert.deepEqual(h.transcriptCalls.at(-1), { npcId: N.BAILEY, page: 'Sea Slug', variant: 'freeing-kennith' });
-  action(h, p, N.BAILEY, 'vJ1GjP');
+  assert.deepEqual(h.sceneCalls.at(-1), ['kickPanel', p], 'the timed kick plays');
+  h.sceneHooks.onPanelOpened(p);
   assert.equal(h.quest.getStage(p), 9, 'the wall panel opens');
 
   assert.equal(variant(h, p, N.KENNITH),
@@ -423,20 +454,26 @@ test('fresh stage 0 reaches completion through the mandatory Quest Helper legs',
   h.objectInteraction.forEach(handler => handler(remoteCrane));
   assert.equal(remoteCrane.handled, false, 'an unrelated crane loc does not start Kennith rescue');
 
-  p.setLocation(2774, 3289, 1);
+  // Live refuses beside the crane's west side (2769,3287, tick 365) and works from its north controls.
+  p.setLocation(2769, 3287, 1);
+  assert.equal(condition(h, p, 'If the player is too far away from the crane:', N.BAILEY), true);
+  const refused = { player: p, objectId: 18327, location: { x: 2770, y: 3287, z: 1 }, handled: false };
+  h.objectInteraction.forEach(handler => handler(refused));
+  assert.deepEqual(h.transcriptCalls.at(-1),
+    { npcId: N.BAILEY, page: 'Sea Slug', variant: 'freeing-kennith-using-the-crane' });
+  p.setLocation(2771, 3291, 1);
   assert.equal(condition(h, p, 'If the player is too far away from the crane:', N.BAILEY), false);
   assert.equal(condition(h, p, 'If the player is one tile from the crane:', N.BAILEY), true);
   const crane = { player: p, objectId: 18327, location: { x: 2770, y: 3287, z: 1 }, handled: false };
   h.objectInteraction.forEach(handler => handler(crane));
   assert.equal(crane.handled, true);
-  assert.deepEqual(h.transcriptCalls.at(-1),
-    { npcId: N.BAILEY, page: 'Sea Slug', variant: 'freeing-kennith-using-the-crane' });
-  action(h, p, N.BAILEY, 'utnJSh');
+  assert.deepEqual(h.sceneCalls.at(-1), ['crane', p], 'the crane cutscene plays');
+  h.sceneHooks.onCraneDone(p);
   assert.equal(h.quest.getStage(p), 11, 'Kennith is lowered to Holgart');
 
   assert.equal(variant(h, p, PLATFORM_HOLGART), 'freeing-kennith-talking-to-holgart');
   action(h, p, PLATFORM_HOLGART, 'i9MI4w');
-  assert.deepEqual(p.moves.at(-1), [2720, 3305, 0], 'return to Witchaven');
+  assert.equal(h.trips.at(-1), 'sea-slug-witchaven', 'return to Witchaven');
 
   assert.equal(variant(h, p, N.CAROLINE), 'freeing-kennith-talking-to-caroline');
   action(h, p, N.CAROLINE, 'U0muMo');
@@ -472,10 +509,15 @@ test('the stage-8 wall multiloc exposes and dispatches its real Kick action', ()
   const event = { player: p, object, objectId: object.getId(), location: { x: 2768, y: 3289, z: 1 }, handled: false };
   h.objectInteraction.forEach(handler => handler(event));
   assert.equal(event.handled, true);
-  assert.deepEqual(h.transcriptCalls.at(-1),
-    { npcId: N.BAILEY, page: 'Sea Slug', variant: 'freeing-kennith' });
-  action(h, p, N.BAILEY, 'vJ1GjP');
-  assert.equal(h.quest.getStage(p), 9, 'the canonical Kick dialogue completes the wall transition');
+  assert.deepEqual(h.sceneCalls.at(-1), ['kickPanel', p], 'stage 8 plays the timed kick');
+  h.sceneHooks.onPanelOpened(p);
+  assert.equal(h.quest.getStage(p), 9, 'the kick completes the wall transition');
+
+  // Before stage 8 the transcript's "But nothing interesting happens." plays, with the kick.
+  h.quest.setStage(p, 6);
+  h.objectInteraction.forEach(handler => handler({ ...event, handled: false }));
+  assert.equal(h.transcriptCalls.at(-1).variant, 'at-the-fishing-platform-subsequent-dialogue-with-kennith');
+  assert.equal(h.quest.getStage(p), 6);
 });
 
 test('helper loadSteps keys map onto durable stages 1-12 and varp 159, including login replay', () => {
@@ -544,7 +586,9 @@ test('early and out-of-order interactions do not reach late stage effects', () =
   assert.equal(condition(h, p, 'If the player is one tile from the crane:', N.BAILEY), false);
   const crane = { player: p, objectId: 18327, location: { x: 2770, y: 3287, z: 1 }, handled: false };
   h.objectInteraction.forEach(handler => handler(crane));
-  action(h, p, N.BAILEY, 'utnJSh');
+  assert.equal(h.sceneCalls.some(([name]) => name === 'crane'), false, 'no cutscene before the crane stage');
+  assert.equal(h.transcriptCalls.at(-1).variant, 'rescuing-kennith-interacting-with-the-items');
+  h.sceneHooks.onCraneDone(p);
   assert.equal(h.quest.getStage(p), 6, 'an early crane rotation does not save Kennith');
 
   h.quest.setStage(p, 7);
@@ -580,6 +624,11 @@ test('Bailey hands the torch over on the free-space branch, not the lost-torch b
   const { page, steps } = runTranscript(h, p, N.BAILEY);
   assert.equal(page, 'Sea Slug');
   assert.deepEqual(actionIds(steps), ['G6lOss'], 'the one-free-space branch is chosen');
+  assert.deepEqual(messageIds(steps), ['05RBJj'], '"Bailey gives you a torch." (capture tick 248)');
+  const box = { player: p, npcId: N.BAILEY, stepId: '05RBJj', kind: 'message', handled: false };
+  h.events['npc-dialogue:action'].forEach(handler => handler(box));
+  assert.deepEqual(box.box, { items: [I.UNLIT_TORCH] }, 'shown as the torch item box');
+  assert.equal(p.items.get(I.UNLIT_TORCH) ?? 0, 0, 'the torch comes after the box');
   assert.ok(lineTexts(steps).includes(
     'I doubt the fishermen will come near you if you can get this torch lit.'));
   assert.ok(!playerLines(steps).includes("I've managed to lose my torch."));
@@ -604,58 +653,36 @@ test('Bailey drops the torch on the floor when the bag is full', () => {
   assert.ok(!actionIds(steps).includes('G6lOss'), 'the hand-out branch is not taken');
 });
 
-test('the platform Holgart is spawned for the player and sails to the island', () => {
+test('the platform Holgart is the world spawn: the quest spawns none of its own', () => {
   const h = harness();
   const p = makePlayer('sea-slug-platform');
-  p.items.set(I.SWAMP_PASTE, 1);
-
-  h.events['npc-dialogue:hook'].forEach(handler =>
-    handler({ player: p, npcId: N.CAROLINE, hook: 'quest:sea-slug:start' }));
-  assert.equal(variant(h, p, N.HOLGART), 'talking-to-holgart');
-  assert.equal(h.quest.getStage(p), 2);
-  assert.equal(h.spawnedNpcs.length, 0, 'no platform Holgart before the platform leg');
-
-  chosenCondition(h, p, N.HOLGART, 'u-qtrY');
-  assert.equal(h.quest.getStage(p), 3);
-  action(h, p, N.HOLGART, '46f1OE');
-  assert.deepEqual(p.moves.at(-1), [2784, 3276, 0], 'the boat lands on the platform');
-
-  // Kennith's talk on the platform is stage 4: the platform Holgart appears for the player.
-  assert.equal(variant(h, p, N.KENNITH), 'at-the-fishing-platform-talking-to-kennith');
-  assert.equal(h.quest.getStage(p), 4);
-  const spawned = h.spawnedNpcs.filter(npc => npc.id === PLATFORM_HOLGART);
-  assert.equal(spawned.length, 1, 'the platform Holgart is spawned once');
-  assert.deepEqual([spawned[0].x, spawned[0].y, spawned[0].z], [2781, 3274, 0]);
-  assert.equal(spawned[0].ownerOnly, true, 'he belongs to the player scene');
-  assert.equal(spawned[0].owner, p);
-
-  // The transcript runner plays the island leg for him.
-  const { page, steps } = runTranscript(h, p, PLATFORM_HOLGART);
-  assert.equal(page, 'Sea Slug');
-  assert.ok(messageIds(steps).includes('zUdSJX'), 'the island arrival is in the transcript');
-  action(h, p, PLATFORM_HOLGART, 'zUdSJX');
-  assert.equal(h.quest.getStage(p), 5, 'the island leg advances the quest');
-  assert.deepEqual(p.moves.at(-1), [2794, 3320, 0], 'the player lands on the shipwreck island');
-
-  h.quest.setStage(p, 8);
-  assert.equal(h.spawnedNpcs.filter(npc => npc.id === PLATFORM_HOLGART).length, 1,
-    'he is not spawned twice');
-
-  // The quest is over: he leaves the platform again.
-  h.quest.setStage(p, 12);
-  assert.equal(h.removedNpcs.length, 1, 'the platform Holgart is removed');
-  assert.equal(h.removedNpcs[0], spawned[0]);
+  for (const stage of [1, 4, 5, 8, 11, 12]) {
+    h.quest.setStage(p, stage);
+    h.playerLogin.forEach(handler => handler({ player: p }));
+  }
+  assert.equal(h.spawnedNpcs.length, 0, "6241 at 2782,3276 shows Holgart (5070) while slug2_npc_track1 is 0");
 });
 
-test('the platform Holgart leaves with the player', () => {
+test("Holgart's Travel rows the leg the stage and dock give, from the boat repair on", () => {
   const h = harness();
-  const p = makePlayer('sea-slug-logout');
-  h.quest.setStage(p, 5);
-  const spawned = h.spawnedNpcs.filter(npc => npc.id === PLATFORM_HOLGART);
-  assert.equal(spawned.length, 1, 'the platform Holgart is spawned for the quest');
-  h.playerLogout.forEach(handler => handler({ player: p, username: p.getUsername() }));
-  assert.equal(h.removedNpcs.length, 1, 'the platform Holgart is removed on logout');
-  assert.equal(h.removedNpcs[0], spawned[0]);
+  const p = makePlayer('sea-slug-travel');
+  const travel = h.npcInteractions.find(entry => entry.name === 'Holgart').actions.Travel;
+  const go = (stage, x, y) => {
+    h.quest.setStage(p, stage);
+    p.setLocation(x, y, 0);
+    const before = h.trips.length;
+    const result = travel({ player: p });
+    return result === false ? null : h.trips.slice(before).at(-1) ?? null;
+  };
+  // Before the repair Holgart is 7324, which has no Travel; the server refuses it too.
+  assert.equal(go(2, 2721, 3305), null);
+  // Live: Travel at stage 3 (capture tick 78), from the island at 6 (220), from the platform at 11 (420).
+  assert.equal(go(3, 2721, 3305), 'sea-slug-platform');
+  assert.equal(go(6, 2797, 3322), 'sea-slug-island-return');
+  assert.equal(go(11, 2781, 3274), 'sea-slug-witchaven');
+  // Ours: the stage 4 platform Travel takes the Talk-to's island leg.
+  assert.equal(go(4, 2781, 3274), 'sea-slug-island');
+  assert.equal(h.quest.getStage(p), 5);
 });
 
 test('a completed player gets the canonical Holgart page, not the Sea Slug lines', () => {
@@ -709,7 +736,7 @@ test('natural torch route uses the damp sticks at the canonical tile and never c
   assert.equal(p.items.get(I.UNLIT_TORCH), 1, 'normal Bailey handout still works');
   rubDrySticks(h, p);
   assert.equal(p.items.get(I.LIT_TORCH), 1);
-  assert.equal(p.items.get(I.DRY_STICKS) ?? 0, 0, 'sticks are consumed only after the torch lights');
+  assert.equal(p.items.get(I.DRY_STICKS), 1, 'the sticks are kept when the torch lights too (capture tick 297)');
   assert.equal(h.quest.getStage(p), 7);
 });
 
@@ -743,6 +770,7 @@ test('Bailey full-bag action ab-u4V drops one recoverable torch and retry hands 
   const h = harness();
   const p = makePlayer('sea-slug-full');
   reachTorchStage(h, p);
+  p.setLocation(2784, 3276, 0);
   p.setFull(true);
 
   assert.equal(condition(h, p, 'If the player has no space in their inventory:', N.BAILEY), true);

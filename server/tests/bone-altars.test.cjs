@@ -277,7 +277,7 @@ test("a house altar stops when the player leaves, refuses low Prayer, and lets t
 
 // Seeded players at the real Chaos altar; queued client actions and selected engine phases,
 // not a natural login, item acquisition or full World.step.
-test("native altar offerings stop when an inventory burial interrupts them", async (t) => {
+test("native altar offerings respond to inventory and equipment actions", async (t) => {
   process.env.DISABLE_PLAYER_BOTS = "1";
   const { Player } = require("../dist/game/entity/impl/player/Player");
   const { PlayerSession } = require("../dist/net/PlayerSession");
@@ -293,7 +293,7 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
   const boneId = CacheDefinitions.getObjId("bones");
   const altarId = CacheDefinitions.getLocId("chaosaltar");
   let index = 1770;
-  for (const mode of ["repeat", "walk", "bury", "widget-bury", "widget-examine"]) await t.test(mode, async (t) => {
+  for (const mode of ["repeat", "walk", "bury", "widget-bury", "widget-examine", "wield", "widget-wield", "equipment-remove"]) await t.test(mode, async (t) => {
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const player = new Player(new PlayerSession(channel));
@@ -324,6 +324,9 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
       return add(skill, amount);
     });
     for (let i = 0; i < 8; i++) player.getInventory().add(new core.Item(boneId, 1), false);
+    const swordId = CacheDefinitions.getObjId("bronze_sword");
+    if (mode === "wield" || mode === "widget-wield") player.getInventory().add(new core.Item(swordId, 1), false);
+    if (mode === "equipment-remove") player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(swordId, 1));
     const amount = () => player.getInventory().getAmount(boneId);
     assert.equal(amount(), 8);
     const location = new core.Location(CHAOS_ALTAR.x, CHAOS_ALTAR.y, 0);
@@ -332,7 +335,7 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
     assert.equal(BoneAltars._test.altarAt(altar.getId(), CHAOS_ALTAR)?.xpScale, 3.5);
     let turns = 0;
     const turn = () => {
-      assert.ok(++turns <= 20, "bounded selected engine turns");
+      assert.ok(++turns <= 30, "bounded selected engine turns");
       player.resetUpdating();
       core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
       core.TaskManager.process();
@@ -364,6 +367,53 @@ test("native altar offerings stop when an inventory burial interrupts them", asy
       console.log("PRAYER_INVENTORY_WIDGET " + JSON.stringify({ mode, widgetId, op, slot, option }));
       await connection.dispatch([{ type: "widget_action", widgetId, groupId: widgetId >>> 16,
         childId: widgetId & 0xffff, buttonNum: op, itemId: boneId, slot }]);
+    }
+    if (mode === "equipment-remove") {
+      assert.ok(Number.isInteger(swordId) && swordId >= 0, "cache resolves bronze sword");
+      assert.equal(core.EquipPacketListener.resolveEquipmentSlot(387, 18), core.Equipment.WEAPON_SLOT);
+      assert.equal(player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), swordId);
+      await connection.dispatch([{ type: "widget_action", widgetId: (387 << 16) | 18,
+        groupId: 387, childId: 18, buttonNum: 1, itemId: swordId, slot: -1 }]);
+      turn();
+      assert.equal(player.getInventory().getAmount(swordId), 1, "equipment removal completed");
+      assert.notEqual(player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), swordId, "weapon slot cleared");
+      assert.equal(player.getInventory().getAmount(swordId) + player.getEquipment().getItems().filter(item => item?.getId() === swordId).length, 1, "sword conserved");
+      for (let i = 0; i < 3; i++) turn();
+      assert.deepEqual(gains, [15.75, 15.75], "equipment-tab removal preserves the offering");
+      assert.ok([before - 1, before].includes(amount()));
+      return;
+    }
+    if (mode === "wield" || mode === "widget-wield") {
+      const slot = player.getInventory().getSlotForItemId(swordId);
+      const wieldIndex = CacheDefinitions.getItem(swordId).inventoryActions.indexOf("Wield") + 1;
+      assert.ok(wieldIndex > 0, "cache supplies the Wield action");
+      if (mode === "widget-wield") {
+        const widgetId = CacheDefinitions.getComponentId("inventory:items");
+        const op = Array.from({ length: 10 }, (_, i) => i + 1).find(candidate =>
+          core.ItemActionPacketListener.resolveInventoryWidgetAction(swordId, candidate)?.option === "Wield");
+        assert.ok(Number.isInteger(op));
+        await connection.dispatch([{ type: "widget_action", widgetId, groupId: widgetId >>> 16,
+          childId: widgetId & 0xffff, buttonNum: op, itemId: swordId, slot }]);
+      } else {
+        await connection.dispatch([{ type: "inventory_action", widgetId: 149 << 16,
+          itemId: swordId, slot, option: "Wield", optionIndex: wieldIndex }]);
+      }
+      turn();
+      assert.equal(player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), swordId, "wield completed");
+      assert.equal(player.getInventory().getAmount(swordId), 0, "sword conserved in equipment");
+      for (let i = 0; i < 5; i++) turn();
+      assert.deepEqual(gains, [15.75], "inventory wield interrupts the offering");
+      assert.equal(amount(), before, "interrupted offerings preserve bones");
+      await connection.dispatch([{ type: "item_on_object", objectId: altarId,
+        x: CHAOS_ALTAR.x, y: CHAOS_ALTAR.y, itemId: boneId,
+        slot: player.getInventory().getSlotForItemId(boneId), widgetId: 149 << 16 }]);
+      for (let i = 0; i < 8 && gains.length === 1; i++) turn();
+      assert.deepEqual(gains, [15.75, 15.75], "a new ordinary offering starts");
+      const resumedAmount = amount();
+      for (let i = 0; i < 4; i++) turn();
+      assert.deepEqual(gains, [15.75, 15.75, 15.75], "one resumed task offers at the normal cadence");
+      assert.ok([resumedAmount - 1, resumedAmount].includes(amount()), "resumed offering consumes at most one bone");
+      return;
     }
     if (mode === "repeat" || mode === "widget-examine") {
       if (mode === "widget-examine") {

@@ -300,7 +300,15 @@ export function getSceneLocs(
                 startLocsOverride ??
                 sourceTile.locs.filter((loc) => loc.startX === tileX && loc.startY === tileY);
 
-            if (sourceTile.floorDecoration) {
+            // A floor decoration on an upper plane with no floor under it is map debris: the tile is
+            // not part of any storey, so nothing stands on it. Falador's park carries one on plane 2
+            // over the mole hill, which showed as a dark strip floating in the air (#2004).
+            const floorlessUpperPlane =
+                renderLevel > 0 &&
+                !scene.tileUnderlays[renderLevel][tileX][tileY] &&
+                !scene.tileOverlays[renderLevel][tileX][tileY];
+
+            if (sourceTile.floorDecoration && !floorlessUpperPlane) {
                 if (sourceTile.floorDecoration.entity instanceof Model) {
                     locs.push(
                         createSceneModel(

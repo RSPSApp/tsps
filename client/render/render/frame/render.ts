@@ -512,6 +512,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
         profiler.startPhase("input");
         host.handleInput(deltaTime);
+        host.osrsClient.updateGroundItemMeshHandoffs();
 
         // Tick mouse cross animation (OSRS-style visual feedback)
         ClientState.tickMouseCross();
@@ -747,6 +748,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         if (!holdScene) {
             let passStartIndices = host._frameIndices;
             let passStartBatches = host._frameBatches;
+            host.drawSkybox(camera);
             host.app.disable(PicoGL.BLEND);
             profiler.startPhase("opaque");
             passStartIndices = host._frameIndices;
@@ -1743,7 +1745,14 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
                     // Single source of truth: all interaction/height queries
                     // on this overlay map use the deck plane.
-                    overlayMap.interactionPlane = basePlane;
+                    if (overlayMap.interactionPlane !== basePlane) {
+                        overlayMap.interactionPlane = basePlane;
+                        // Its ground items were built with the square, before the deck plane
+                        // was known: lay them on the deck.
+                        if (host.rebuildGroundItemsForMap(overlayMap, host.groundItemStacks.get(overlayMapId))) {
+                            host.groundItemStackHashes.delete(overlayMapId);
+                        }
+                    }
 
                     if (overlay.deckHeight !== undefined && overlay.deckHeight !== 0) continue;
                     if (basePlane === 0) {

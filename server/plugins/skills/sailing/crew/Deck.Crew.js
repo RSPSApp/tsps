@@ -29,7 +29,7 @@ function validPosition(owned, member) {
   if (member.position === POSITION.IDLE) return POSITION.IDLE;
   const job = assign.jobAt(owned, member.position);
   const [stat, level] = job?.requirement ?? [];
-  if (!job || (stat && member.crew.stats[stat] < level)) return POSITION.IDLE;
+  if (!job || (stat && common.statOf(owned, member.crew, stat) < level)) return POSITION.IDLE;
   return member.position;
 }
 

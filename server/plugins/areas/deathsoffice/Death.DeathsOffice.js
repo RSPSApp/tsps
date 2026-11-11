@@ -33,9 +33,16 @@ function uid(child) {
 
 // ---------------------------------------------------------------- greetings
 
-/** Talk-to, or Death speaking when the player reaches his desk. */
-function greet(player) {
+/**
+ * Talk-to, or Death speaking when the player reaches his desk. `context` says why: { talk },
+ * { login } (logged in inside) or { arrived } (came through an entrance). A game mode with a
+ * conversation of its own answers `deaths-office:greet` { player, context, handled } first.
+ */
+function greet(player, context = {}) {
   if (override.talk(player)) return;
+  const query = { player, context, handled: false };
+  Common.api().emitCustomEvent("deaths-office:greet", query);
+  if (query.handled) return;
   const state = Common.state(player);
   if (state.ironman === "ultimate") {
     ultimateIronman(player);
@@ -258,16 +265,33 @@ function reachAcrossDesk(event) {
 
 function talkTo({ player, npc }) {
   if (Instance.deathOf(player) !== npc) return false;
-  greet(player);
+  greet(player, { talk: true });
   return true;
 }
 
-/** Collect opens the retrieval interface, even with nothing stored (rsprox recording 4266). */
+/**
+ * Collect opens the retrieval interface, even with nothing stored (rsprox recording 4266). A game
+ * mode with its own answer takes `deaths-office:collect` { player, handled } first.
+ */
 function collect({ player, npc }) {
   if (Instance.deathOf(player) !== npc) return false;
   if (override.collect(player)) return true;
+  const query = { player, handled: false };
+  Common.api().emitCustomEvent("deaths-office:collect", query);
+  if (query.handled) return true;
   Retrieval.open(player);
   return true;
+}
+
+/**
+ * `deaths-office:talk` { player, steps, then }: another plugin has Death (and the player) say
+ * `steps` with the office's own chatheads and moods ({ npc | player: text, mood }, { statement },
+ * { item, text }), then runs `then`.
+ */
+function talkRequest(request) {
+  if (!request?.player || !Array.isArray(request.steps) || request.handled) return;
+  request.handled = true;
+  Common.talk(request.player, request.steps, typeof request.then === "function" ? request.then : null);
 }
 
 function setOverride(handlers) {
@@ -281,6 +305,7 @@ function attach(api) {
   api.onNpcRoute(reachAcrossDesk);
   api.onNpcInteraction("Death", { "Talk-to": talkTo, Collect: collect });
   api.onInterfaceActionButton([uid(STYLE_PICKER.basic), uid(STYLE_PICKER.angel)], pickStyle);
+  api.onCustomEvent("deaths-office:talk", talkRequest);
 }
 
 module.exports = { attach, greet, mainOptions, setOverride };

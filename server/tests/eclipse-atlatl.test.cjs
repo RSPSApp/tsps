@@ -172,6 +172,19 @@ test("Ava's assembler recovers darts with Eclipse armour, while the 20% break ch
 });
 function targetLocation() { return new core.Location(3001, 3000); }
 
+test("shots given back on top of a kept shot (ranged:ammo-saving extra) go back on the worn darts", t => {
+  const p = player();
+  const emitCustom = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "ranged:ammo-saving" && event.player === p) { event.saved = event.amount; event.extra = 2; return; }
+    return emitCustom.call(PluginManager, name, event);
+  });
+  CombatFactory.decrementAmmo(p, targetLocation(), 1);
+  assert.equal(p.items[E.AMMUNITION_SLOT].getAmount(), 12, "the shot kept and two more");
+  assert.deepEqual(drops, []);
+
+});
+
 test("max hits use visible Strength and melee strength, but Ranged prayers and the Accurate stance", () => {
   const p = player();
   assert.equal(maxHit(p), 27);

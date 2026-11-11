@@ -29,6 +29,8 @@ const QUEST_LIST_ENTRY_FLAGS = 0x3e; // Native OP1–5 (RSProx4267); Pin journal
 // Quest journal overlay (xrsps client/common/ui constants).
 const JOURNAL_GROUP = 119;
 const JOURNAL_TITLE_CHILD = 5;
+// The text layer the line widgets hang under (InterfaceID.Questjournal.TEXTLAYER, 119:6).
+const JOURNAL_TEXTLAYER_CHILD = 6;
 const JOURNAL_CLOSE_CHILD = 8;
 const JOURNAL_SWITCH_CHILD = 9;
 const JOURNAL_FIRST_LINE_CHILD = 11;
@@ -282,6 +284,30 @@ function journalText(line) {
 }
 
 /**
+ * The journal widgets a quest's guide reads, for a snapshot with no client attached. Live sends
+ * these when the journal opens (openJournal); a headless evaluation never opens it, so a guide
+ * whose conditions are WidgetTextRequirements (Clock Tower's sync, its cog steps) would see
+ * nothing and report the route unsupported.
+ */
+function journalWidgets(quest, player) {
+  // A quest with no journal of its own has nothing for a guide to read; leave the snapshot alone.
+  if (typeof quest.buildJournal !== "function") return [];
+  // The lines are the text layer's static children, as live mounts them: guides read placed-cog
+  // and other progress lines with WidgetTextRequirement(TEXTLAYER, checkChildren = true), which
+  // walks getStaticChildren() and never looks at a line widget on its own.
+  return [
+    { id: (JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, text: `<col=7f0000>${quest.name}</col>` },
+    {
+      id: (JOURNAL_GROUP << 16) | JOURNAL_TEXTLAYER_CHILD,
+      staticChildren: journalLines(quest, player).map((line, index) => ({
+        id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index),
+        text: journalText(line),
+      })),
+    },
+  ];
+}
+
+/**
  * How the overview says the quest starts, after "I can start this quest by": from the data file
  * (Wiki journal transcripts and live captures), else from the quest's own not-started journal
  * line, which may wrap over several lines. Null when neither has one.
@@ -383,6 +409,10 @@ function openCompletedScroll(player, quest, questPoints) {
     packet.sendString(String(text ?? ""), uid);
   };
   packet.sendInterfaceRemoval();
+  // Live opens the scroll with toplevel_mainmodal_open [-1, -1] (Observatory Quest capture
+  // 20261110T110141-5ab63b4 tick 1644): the main modal's backdrop goes back to none, so one an
+  // earlier modal set (the telescope's black [0, 0], tick 1606) doesn't show around the scroll.
+  packet.sendInterfaceScript(2524, [-1, -1]);
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
@@ -578,7 +608,6 @@ function showBookPage(player) {
  */
 function openIndexedBook(player, { title, spreads, spreadOf }, onClose) {
   if (!spreads.length) return;
-  player.getPacketSender().sendInterface(INDEXED_BOOK_GROUP);
   openBooks.set(player, { indexed: true, title, spreads, spreadOf, page: 0, onClose });
   showIndexedBookPage(player);
 }
@@ -603,6 +632,10 @@ function showIndexedBookPage(player) {
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.previous), page === 0);
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.indexJump), page === 0);
   packet.sendInterfaceScript(2524, [-1, -1]);
+  // Live (Sacraments of Ent Folk, RSProx 20261109T224258-5ab63b4 ticks 826-847) sends each
+  // spread's content first and then opens the book again, the left page in varp pagepos.
+  packet.sendConfig(BOOK_PAGE_VARP, page * 2);
+  packet.sendInterface(INDEXED_BOOK_GROUP);
 }
 
 function turnIndexedBookPage(event) {
@@ -622,8 +655,20 @@ function turnIndexedBookPage(event) {
     page = book.spreadOf(entry.index);
   }
   if (page < 0 || page >= book.spreads.length || page === book.page) return;
+  const forward = page > book.page;
   book.page = page;
+  turnAnimation(player, forward);
   showIndexedBookPage(player);
+}
+
+/** The reader's page-turn animation and spot effect, both books. */
+function turnAnimation(player, forward) {
+  if (!coreApi) return;
+  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
+  player.performAnimation?.(new coreApi.Animation(turn.animation));
+  const graphic = new coreApi.Graphic(turn.graphic);
+  graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
+  player.performGraphic?.(graphic);
 }
 
 function turnBookPage(event) {
@@ -642,13 +687,7 @@ function turnBookPage(event) {
   const page = book.page + (forward ? 1 : -1);
   if (page < 0 || page >= book.pages.length) return;
   book.page = page;
-  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
-  if (coreApi) {
-    player.performAnimation?.(new coreApi.Animation(turn.animation));
-    const graphic = new coreApi.Graphic(turn.graphic);
-    graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
-    player.performGraphic?.(graphic);
-  }
+  turnAnimation(player, forward);
   showBookPage(player);
 }
 
@@ -900,6 +939,7 @@ function giveReward(player, itemId, amount = 1) {
 module.exports = {
   openBook,
   openIndexedBook,
+  journalWidgets,
   QUEST_POINTS_VARP,
   QUEST_POINTS_ATTRIBUTE,
   EXPERIENCE_WITHHELD_ATTRIBUTE,

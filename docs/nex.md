@@ -28,7 +28,7 @@ Changes outside the plugin:
 - **Combat Achievements:** `combat-achievements:tier` `{ player, tier: "Hard" }` comes back with `unlocked`, for content behind a tier (private fights). "Nex" is counted by event (`monsters.json`).
 - **`npc-combat-defs.json`:** Nex's forms (attack 9180, no block, death 9184), the mages (1979/424/836), the prison's minions and both blood reavers (9194/9196/9192).
 - **`npc-spawns.json`:** the prison's spiritual warriors, rangers and mages were the God Wars factions' ids (2210/2242/3161); they are the prison's own (11290/11291/11292), as captured. Ashuelot Reis is 11289, the form with Bank and Collect.
-- **`music-data.json`:** region 11601 (the barrier, safe room and chamber) plays "The Ancient Prison" (709), as captured; the fight changes it.
+- **Music:** the barrier and safe room play "The Ancient Prison" (709), as captured; the Wiki's music map gives the chamber the fight's own tracks, and the fight changes the music itself.
 - **`item-gameplay.json`:** damaged Torva can't be worn (Wiki).
 - **`npc-drops.json`:** her table's paired drops ("dropped together" on the Wiki) are one entry each with a `bonus_drops` item.
 

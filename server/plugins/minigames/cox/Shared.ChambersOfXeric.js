@@ -156,6 +156,19 @@ function isRaidItem(id) {
   return (id >= 20799 && id <= 20801) || (id >= 20853 && id <= 20996) || (id >= 21036 && id <= 21042);
 }
 
+/**
+ * Leaving the raid puts every stat back at its base level, boosted or drained, whether or not a raid potion is
+ * running: rsprox_transcripts/234/00820.txt:322071-322080 (all to 99: Hitpoints from 124, Prayer from 95) and
+ * 234/03285.txt:288215-288224 (Herblore 104 to 92, Crafting 90 to 78). Only the stats that differ are sent, as there.
+ */
+function restoreStats(player) {
+  const skills = player.getSkillManager();
+  for (const skill of core().Skill.values()) {
+    const base = skills.getMaxLevel(skill);
+    if (skills.getCurrentLevel(skill) !== base) skills.setCurrentLevels(skill, base);
+  }
+}
+
 function loc({ x, y, z = 0 }) {
   const { Location } = core();
   return new Location(x, y, z);
@@ -584,7 +597,7 @@ module.exports = {
   bind, core, api,
   OUTSIDE, MOUNT_QUIDAMORTEM, OBJECT, NPC, INTERFACE, VARBIT, VARP, SCRIPT, BOARD_ROWS, MAX_RAIDERS,
   MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, MAIN_MODAL_UID, EVENT,
-  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidNotice, raidMessage, fadeMove, sound,
+  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, restoreStats, loc, inBox, onMount, cycle, later, repeat, statement, options, raidNotice, raidMessage, fadeMove, sound,
   channelOf, channelByKey, joinChannel, leaveChannel, formatTicks, displayName,
   balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, besideFootprint, walkStraight, styleMethod, strike,
   onObjectIds, replaceObject, action, stopAction, level, baseLevel, addXp, has, wielding, give, animate, axeOf, pickaxeOf,

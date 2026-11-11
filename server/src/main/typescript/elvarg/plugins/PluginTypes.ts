@@ -49,7 +49,7 @@ export interface PluginPlayerLoginEvent {
   username: string;
   /** True only when login created a player because no saved account exists (or no save for this profile). */
   isNewAccount?: boolean;
-  /** "main", or "league" for the league character chosen at login (persistence/PlayerProfile). */
+  /** "main", or the world's own character chosen at login: "league" or "hardcore" (persistence/PlayerProfile). */
   profile?: string;
 }
 
@@ -1209,9 +1209,9 @@ export interface PluginApi {
     >
   ): boolean;
   /**
-   * Reads an entry from world.json `pluginConfig` by key, e.g.
-   * `getPluginConfig("TutorialIsland:allowSkip", true)`. Returns `defaultValue`
-   * when the key is not set.
+   * Reads an option from this plugin, e.g. `getPluginConfig("allowSkip", true)`.
+   * Full legacy keys such as `TutorialIsland:allowSkip` also work. Returns
+   * `defaultValue` when the key is not set.
    */
   getPluginConfig<T = unknown>(key: string, defaultValue?: T): T;
   onButton(
@@ -1327,9 +1327,15 @@ export interface PluginApi {
   setExperienceRate(rate: number): void;
   /**
    * Names the character profile every login on this world gets ("main" by default): a game mode
-   * with characters of its own (Leagues) calls it from its plugin config at startup.
+   * with characters of its own (Leagues, Hardcore Worlds) calls it from its plugin config at startup.
    */
-  setWorldProfile(profile: "main" | "league"): void;
+  setWorldProfile(profile: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile): void;
+  /**
+   * Says what kind of world this is (GameConstants.WORLD_TYPE): script 876's world-type label, the
+   * world-list type flags and activity text. A game mode with worlds of its own (Hardcore Worlds)
+   * calls it from its plugin config at startup.
+   */
+  setWorldType(type: Partial<import("../game/GameConstants").WorldType>): void;
   getActiveRegionSnapshot(): PluginActiveRegionsEvent;
   log(message: string, extra?: Record<string, unknown>): void;
   /**
@@ -1528,6 +1534,7 @@ export interface PluginCoreApi {
   CombatSpecial: any;
   CombatFactory: any;
   BonusManager: any;
+  EquipmentRequirements: typeof import("../game/model/equipment/EquipmentRequirements").EquipmentRequirements;
   WeaponInterfaces: any;
   Barrows: any;
   applyPrayerDrainModifiers(entity: any, amount: number, context?: any): number;
@@ -1554,6 +1561,8 @@ export interface PluginCoreApi {
   /** Run shared item alchemy; plugins authorize opaque alternate payment sources via magic:alchemy-payment. */
   castAlchemy: (player: any, spellId: number | string, itemId: number, slot: number, source?: unknown) => boolean;
   ChatType: any;
+  /** `@mes_hl_<colour>@` tags as `<col=...>` for the chatbox's background (ClientProtocol.CHAT_HIGHLIGHTS). */
+  resolveChatHighlights: typeof import("../net/protocol/ClientProtocol").resolveChatHighlights;
   DuelRule: any;
   RegionManager: any;
   Animation: any;
@@ -1584,6 +1593,7 @@ export interface PluginCoreApi {
   ObjectIdentifiers: any;
   ShopIdentifiers: any;
   Misc: any;
+  ChatTextLayout: any;
   TimerKey: any;
   Sound: any;
   Sounds: any;
@@ -1594,6 +1604,9 @@ export interface PluginCoreApi {
   LOGIN_FLAG_CHARACTER_SELECT: number;
   MAIN_PROFILE: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile;
   LEAGUE_PROFILE: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile;
+  HARDCORE_PROFILE: import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile;
+  /** Every character profile, the main one first (persistence/PlayerProfile). */
+  PLAYER_PROFILES: readonly import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile[];
   Skills: any;
   encodePluginMessage: typeof import("../net/protocol/ClientProtocol").encodePluginMessage;
   encodeChatMessage: typeof import("../net/protocol/ClientProtocol").encodeChatMessage;
@@ -1624,6 +1637,7 @@ export interface PluginCoreApi {
   Accounts: any;
   BoatManager: any;
   Sailing: any;
+  BoatMoveMode: typeof import("../game/content/sailing/Boat").BoatMoveMode;
   BOAT_VIEW_DISTANCE: number;
   GameObject: any;
   PrivateArea: any;

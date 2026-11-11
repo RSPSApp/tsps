@@ -11,6 +11,8 @@
  * has read monsters-complete.json (which says aggressive: false).
  */
 
+const { hasUnfinishedDuel } = require("./MageArenaI.MageArena");
+
 const ATTACK_SPEED_TICKS = 4;
 const BATTLE_MAGE_AGGRESSION = Object.freeze({ aggressive: true, aggressiveTolerance: false });
 const ARENA = Object.freeze({ minX: 3089, maxX: 3117, minY: 3921, maxY: 3946, z: 0 });
@@ -96,13 +98,24 @@ function patchBattleMage(npc) {
   if (!god || patched.has(npc)) return;
   patched.add(npc);
   const baseAggressive = core.NPC.prototype.isAggressiveTo;
-  npc.isAggressiveTo = (player) => !wearsCape(player, god) && baseAggressive.call(npc, player) === true;
+  npc.isAggressiveTo = (player) => !hasUnfinishedDuel(player) && !wearsCape(player, god) && baseAggressive.call(npc, player) === true;
 }
 
 function processPlayer({ player }) {
   if (!inArena(player)) return;
   for (const npc of player.getLocalNpcs()) {
     if (npc != null) patchBattleMage(npc);
+  }
+}
+
+/** The public arena remains PvP-enabled. An unfinished duel is exclusive of its battle mages. */
+function keepDuelSeparate(event) {
+  const { attacker, target } = event;
+  if (attacker.isNpc?.() && godForMage(attacker.getId()) && target.isPlayer?.() && hasUnfinishedDuel(target)) {
+    event.allow = false;
+  }
+  if (target.isNpc?.() && godForMage(target.getId()) && attacker.isPlayer?.() && hasUnfinishedDuel(attacker)) {
+    event.allow = false;
   }
 }
 
@@ -118,6 +131,7 @@ module.exports = function registerBattleMages(api) {
   const Npcs = core.NpcIdentifiers;
   api.onServerStartup(configureAggression);
   api.onPlayerProcess(processPlayer);
+  api.onCanAttack(keepDuelSeparate);
   api.registerNpcCombatMethodProvider(Npcs.BATTLE_MAGE, battleMageCombatMethod(gods[Npcs.BATTLE_MAGE].spell));
   api.registerNpcCombatMethodProvider(Npcs.BATTLE_MAGE_2, battleMageCombatMethod(gods[Npcs.BATTLE_MAGE_2].spell));
   api.registerNpcCombatMethodProvider(Npcs.BATTLE_MAGE_3, battleMageCombatMethod(gods[Npcs.BATTLE_MAGE_3].spell));

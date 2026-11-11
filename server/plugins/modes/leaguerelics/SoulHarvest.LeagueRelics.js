@@ -6,13 +6,11 @@
  * with the rest of the drop. Every farming crop harvested comes as shards too: one for each 4
  * Farming XP the harvest pays (not the league's rate; fractions carry to the next pick: ours),
  * and for a health check's XP (`farming:check-health`), to the inventory when they fit (else they
- * stay owed: ours). The shards bind as pure essence at any altar that takes it
- * (`runecrafting:essence`).
- * Not here: Soul shards in the Teomat's libation bowl (100 shards for 550 Prayer XP). The bowl
- * itself is plugins/skills/RalosRise.plugin.js, but it takes only blessed bone shards: no
- * recording shows Soul shards' rate there, so hooking them in is a follow-up. Also not here:
- * the shards as essence at the Ourania Altar, the combination runes and the minigames' altars,
- * which bind their own essence lists.
+ * stay owed: ours). The shards bind as pure essence at any altar that takes it, the Ourania
+ * Altar's and the combination runes' among them, and as dark essence fragments at Kourend's
+ * Blood Altar (`runecrafting:essence`), one shard for one essence (ours: the Wiki gives no rate).
+ * The Teomat's libation bowl takes the shards itself (plugins/skills/ralosrise/LibationBowl.RalosRise.js).
+ * Not here: the minigames' altars, which bind their own essence lists.
  */
 const Common = require("./Common.LeagueRelics");
 const Toggles = require("./Toggles.LeagueRelics");
@@ -93,7 +91,7 @@ function checkedHealth({ player, experience }) {
   else owedXp.set(player, (owedXp.get(player) ?? 0) + shards * effect.farmingXpPerShard);
 }
 
-/** `runecrafting:essence`: the shards bind where pure essence does. */
+/** `runecrafting:essence`: the shards bind where pure essence or dark essence fragments do. */
 function essence(request) {
   if (active(request.player)) request.pure.push(shardId());
 }

@@ -35,6 +35,7 @@
  * big magic nylocas' projectile; Vasilias' forms' timing in Entry (2 rooms).
  */
 
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 const { WAVES, GAPS, parse } = require("./NylocasWaves.TheatreOfBlood");
@@ -441,7 +442,7 @@ class NylocasRoom extends Raid.Room {
     Shared.areaSound(this.area, centre, SOUND.SUPPORT_BREAKS);
     for (const viewer of this.area.getPlayers()) {
       viewer.sendMessage(MESSAGE.SUPPORT);
-      viewer.getPacketSender().sendCameraShake?.(SHAKE.slot, SHAKE.random, SHAKE.sine, SHAKE.frequency);
+      CameraShake.send(viewer.getPacketSender(), "combat", SHAKE.slot, SHAKE.random, SHAKE.sine, SHAKE.frequency);
     }
     this.later(1, () => {
       for (const viewer of this.area.getPlayers()) viewer.getPacketSender().sendObjectAnimation?.(breaking, new Animation(ANIMATION.COLLAPSE));

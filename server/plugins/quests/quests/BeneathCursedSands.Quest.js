@@ -65,6 +65,8 @@
  *    implemented; the owed partisan comes from the camp tent and the owed
  *    circlet from the Sophanem High Priest.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerBeneathCursedSandsQuest(api) {
   const {
     GameObject,
@@ -848,7 +850,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // Condition answers
   // ==========================================================================
 
-  function answerCondition({ player, text, stepId }) {
+  function answerCondition({ player, text, stepId, pages }) {
     const value = String(text ?? "").toLowerCase();
     switch (stepId) {
       case "EG72ae": // requirements not met
@@ -962,7 +964,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       default:
         break;
     }
-    if (value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
+    // Only for an NPC with this quest's page: the same words guard other quests' requirements
+    // (Twilight's Promise's ending, Prince Itzla Arkan's, Garden of Tranquillity's), theirs to answer.
+    const own = Array.isArray(pages) && pages.some((page) => page?.page === PAGE);
+    if (own && value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
     return null;
   }
 
@@ -986,7 +991,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (options.shake) {
       for (const [ticks, axis, random] of options.shake) {
         Scenes.later(player, ticks, () => {
-          if (cameraWatch.get(player) === token) player.getPacketSender().sendCameraShake(axis, random, 0, 0);
+          if (cameraWatch.get(player) === token) CameraShake.send(player.getPacketSender(), "atmospheric", axis, random, 0, 0);
         });
       }
     }

@@ -537,3 +537,21 @@ test("the Accursed sceptre's last charge still pays for its own Wilderness passi
     World.getProcessCycle = cycle;
   }
 });
+
+test("a kept charge with extra charges given back (combat:consume-charge extra) adds them, up to the staff's most", () => {
+  const key = Trident._test.TRIDENT_CHARGE_META_KEY;
+  const saver = (event) => { event.skip = true; event.extra = 3; };
+  trident.events.set("combat:consume-charge", [...(trident.events.get("combat:consume-charge") ?? []), saver]);
+  try {
+    const staff = staffItem(I.TRIDENT_OF_THE_SEAS, key, 100);
+    const seas = player({ weapon: staff });
+    const method = trident.resolvers[0].resolve(seas);
+    assert.equal(method.canAttack(seas, NPC), true);
+    assert.equal(Trident._test.getCharges(staff), 103);
+    staff.setMetaValue(key, 2499);
+    method.canAttack(seas, NPC);
+    assert.equal(Trident._test.getCharges(staff), 2500, "a trident of the seas holds 2,500");
+  } finally {
+    trident.events.set("combat:consume-charge", trident.events.get("combat:consume-charge").filter((each) => each !== saver));
+  }
+});

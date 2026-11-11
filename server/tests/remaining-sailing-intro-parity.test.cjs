@@ -362,31 +362,14 @@ test('Crab Quest uses 5/25/30/45/47/50/55/60/63 and hands in all seven shells', 
   const joins = ['5WiO-g', 'OrHsAs', 'uxsvrh', 'XBEBvy', 'XffNTB', 'MVf-5E', 'yUuVKM', 'nJXHcW', 'ByoUzK', 'UtfH3c', 'beb_BL'];
   for (const stepId of joins) h.action(h.core.NpcIdentifiers.CRAB_9, stepId);
   assert.equal(quest.getStage(h.player), 50);
+  // The dance and ceremony scenes play in the dream (tests/crab-quest-dream.test.cjs).
   h.action(h.core.NpcIdentifiers.CRAB_9, 'uZozUI');
   assert.equal(quest.getStage(h.player), 55);
-  h.tickOnce(); h.tickOnce();
-  assert.ok(h.cameras.some((camera) => camera[0] === 'move' && camera[1] === 3071 && camera[2] === 2637), 'dance camera');
   h.action(h.core.NpcIdentifiers.CRAB_9, 'UOa-Sd');
   assert.equal(quest.getStage(h.player), 60);
-  h.action(h.core.NpcIdentifiers.CRAB_9, 'twF4TG');
-  assert.ok(h.cameras.some((camera) => camera[0] === 'arc' && camera[1] === 3051 && camera[6] === 360), 'final dance arc');
   h.action(h.core.NpcIdentifiers.CRAB_9, 'Wk9imR');
   assert.equal(quest.getStage(h.player), 63);
   assert.equal(quest.isComplete(h.player), true);
-});
-
-test('Crab logout ends an active dance scene and resets the camera', () => {
-  const h = setup();
-  const quest = load(h, 'CrabQuest.Quest.js');
-  quest.setStage(h.player, 60);
-  h.hooks.npcs[0]({ player: h.player, npcId: h.core.NpcIdentifiers.CRAB_9, clickType: 1,
-    definition: { getActions: () => ['Talk-to'], getName: () => 'Crab' } });
-  h.tickOnce(); h.tickOnce();
-  assert.ok(h.cameras.some((camera) => camera[0] === 'arc'), 'ceremony camera is running');
-  const before = h.cameras.filter((camera) => camera[0] === 'reset').length;
-  for (const fn of h.hooks.logout) fn({ player: h.player });
-  assert.ok(h.cameras.filter((camera) => camera[0] === 'reset').length > before,
-    'logout resets the cutscene camera');
 });
 
 test('Fallen From Grace enforces requirements and follows its live stage ladder', () => {

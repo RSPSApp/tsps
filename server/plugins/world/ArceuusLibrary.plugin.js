@@ -19,6 +19,12 @@
  * obtained during that quest, then normally available in the Library); while that quest's own
  * Galana search is active the shelf is left to the quest.
  *
+ * Help (the customers' second option) starts the request directly, and Talk-to with the requested
+ * book in the inventory hands it in. Biblia names the floor and bay of the requested book from the
+ * current layout. The library's stairs have one "Climb" option whose direction depends on the
+ * stair (rsprox 1702: 27853/27851 go up, 27852/27856 go down, with no prompt). A Book of Arcane
+ * Knowledge is read for 15x Magic or 5x Runecraft experience (Wiki: Book of Arcane Knowledge).
+ *
  * The empty-shelf line and the search animation are the live ones (846/207,
  * human_pickuptable); RuneLite detects an empty shelf from "You don't find anything useful
  * here." The found item box follows the format the Bear Your Soul shelf search already uses.
@@ -37,7 +43,21 @@ const SAM = 7049;
 const PROFESSOR_GRACKLEBONE = 7048;
 const VILLIA = 7047;
 const CUSTOMERS = new Set([SAM, PROFESSOR_GRACKLEBONE, VILLIA]);
+const BIBLIA = 7045;
 const BOOK_OF_ARCANE_KNOWLEDGE = 13513;
+const BOOK_OF_ARCANE_KNOWLEDGE_NAME = "Book of Arcane Knowledge";
+const CUSTOMER_NAMES = ["Sam", "Professor Gracklebone", "Villia"];
+const MAGIC_XP_PER_LEVEL = 15;
+const RUNECRAFT_XP_PER_LEVEL = 5;
+// Library stairs (cache name "Stairs", single "Climb" option); direction taken from rsprox 1702.
+const STAIRS_UP = new Set([27851, 27853, 27854]);
+const STAIRS_DOWN = new Set([27852, 27855, 27856]);
+const FLOOR_NAMES = ["bottom", "middle", "top"];
+// The central room sits between the two north-south shelf lines; the bays are the four corners.
+const CENTRE = { x: 1632.5, y: 3807.5, halfWidth: 7, halfHeight: 7 };
+const BIBLIA_FLOOR_PLACEHOLDER = "[bottom/middle/top] floor, [central area/north-eastern bay/south-eastern bay/south-western bay/north-western bay]";
+const BOOK_HINT_PLACEHOLDER = "[book]";
+const HELPING_CONDITION = "If the player is helping NPCs find books in the Arceuus Library:";
 const VARLAMORE_ENVOY = 21756;
 const DEPTHS_OF_DESPAIR = "the_depths_of_despair";
 const DEPTHS_GALANA_STAGE = 3;
@@ -227,6 +247,109 @@ function onItemOnNpc(event) {
   handIn(event);
 }
 
+/** Where the requested book is on this layout: a floor and a bay name, or null. */
+function locateBook(itemId) {
+  if (!arrangement) return null;
+  const position = arrangement.sequence.indexOf(itemId);
+  if (position < 0) return null;
+  const index = (arrangement.zero + position * LIBRARY.step) % LIBRARY.bookcases.length;
+  const key = SHELF_POINTS.get(index);
+  if (!key) return null;
+  const [x, y, z] = key.split(",").map(Number);
+  return { x, y, z, floor: FLOOR_NAMES[z], area: bayOf(x, y) };
+}
+
+function bayOf(x, y) {
+  if (Math.abs(x - CENTRE.x) <= CENTRE.halfWidth && Math.abs(y - CENTRE.y) <= CENTRE.halfHeight) return "central area";
+  return `${y > CENTRE.y ? "north" : "south"}-${x > CENTRE.x ? "eastern" : "western"} bay`;
+}
+
+/** Biblia's two blanks: the player's "[book]" and the floor and bay of the requested book. */
+function onBibliaLine(event) {
+  if (event.npcId !== BIBLIA || typeof event.text !== "string") return;
+  const request = requestOf(event.player);
+  if (!request) return;
+  if (event.text.includes(BOOK_HINT_PLACEHOLDER)) {
+    event.text = event.text.replace(BOOK_HINT_PLACEHOLDER, BOOKS.get(request.itemId));
+  }
+  if (event.text.includes(BIBLIA_FLOOR_PLACEHOLDER)) {
+    const spot = locateBook(request.itemId);
+    if (spot) event.text = event.text.replace(BIBLIA_FLOOR_PLACEHOLDER, `${spot.floor} floor, ${spot.area}`);
+  }
+}
+
+/** Biblia's "I'm looking for a book..." option only shows while the player has a request. */
+function onBibliaCondition(event) {
+  if (event.npcId !== BIBLIA || event.text !== HELPING_CONDITION) return null;
+  return requestOf(event.player) !== null;
+}
+
+/** Talk-to with the requested book in the inventory hands it in, as using it on the customer does. */
+function talkToCustomer(event) {
+  const { player, npc } = event;
+  const npcId = npc.getId();
+  const request = requestOf(player);
+  if (!request || request.npcId !== npcId || !player.getInventory().contains(request.itemId)) return false;
+  handIn({ player, npcId, itemId: request.itemId, target: npc });
+  return true;
+}
+
+/** Help: the customer's request starts straight away, without the intro and menu. */
+function helpCustomer(event) {
+  if (talkToCustomer(event)) return true;
+  const { player, npc } = event;
+  const npcId = npc.getId();
+  const start = { player, npc, npcId, handled: false };
+  const request = requestOf(player);
+  if (request) {
+    start.variant = request.npcId === npcId ? VARIANT.findingThem : VARIANT.findingElsewhere;
+    start.exact = true;
+  } else {
+    assignRequest(player, npcId);
+    start.variant = "standard-dialogue";
+    start.select = (steps) => steps.find((step) => step.type === "choice")
+      ?.options.find((option) => option.text === REQUEST_OPTION)?.steps;
+  }
+  api.emitCustomEvent("npc-dialogue:start", start);
+  if (!start.handled) clearRequest(player);
+  return start.handled;
+}
+
+/** Stairs inside the library that no capture covers: LocTeleports' captured entries keep their own tile, tick and sound. */
+function climbStairs(request) {
+  if (request.handled) return;
+  const up = STAIRS_UP.has(request.objectId);
+  if (!up && !STAIRS_DOWN.has(request.objectId)) return;
+  const location = request.object?.getLocation?.();
+  if (!inLibrary(location)) return;
+  const covered = { object: request.object, clickType: request.clickType, captured: false };
+  api.emitCustomEvent("loc-teleports:captured", covered);
+  if (covered.captured) return;
+  api.emitCustomEvent(up ? "ladders:climbUp" : "ladders:climbDown", {
+    player: request.player, object: request.object, objectId: request.objectId,
+    clickType: request.clickType, location, animate: false,
+  });
+  request.handled = true;
+}
+
+/** Read: spend the book on Magic (15x level) or Runecraft (5x level) experience. */
+function readBook({ player }) {
+  const { Skill } = core;
+  const spend = (skill, perLevel) => () => {
+    const inventory = player.getInventory();
+    if (!inventory.contains(BOOK_OF_ARCANE_KNOWLEDGE)) return;
+    inventory.deleteNumber(BOOK_OF_ARCANE_KNOWLEDGE, 1);
+    player.getSkillManager().addExperiences(skill, perLevel * player.getSkillManager().getMaxLevel(skill));
+  };
+  api.sendMultiChatboxPrompt(
+    player,
+    "Choose the experience you would like to gain:",
+    "Magic", spend(Skill.MAGIC, MAGIC_XP_PER_LEVEL),
+    "Runecraft", spend(Skill.RUNECRAFTING, RUNECRAFT_XP_PER_LEVEL),
+  );
+  return true;
+}
+
 function announceReset() {
   for (const player of core.World?.getPlayers?.() ?? []) {
     if (inLibrary(player.getLocation?.())) player.sendMessage(RESET_MESSAGE);
@@ -254,6 +377,11 @@ function attach(pluginApi) {
   pluginApi.onCustomEvent("npc-dialogue:line", onLine);
   pluginApi.onCustomEvent("arceuus-library:shelf-claim", claimSearch);
   pluginApi.onItemOnNpc(onItemOnNpc);
+  pluginApi.onNpcDialogueCondition(onBibliaCondition);
+  pluginApi.onCustomEvent("npc-dialogue:line", onBibliaLine);
+  pluginApi.onCustomEvent("ladders:climb", climbStairs);
+  pluginApi.onItemAction(BOOK_OF_ARCANE_KNOWLEDGE_NAME, { Read: readBook });
+  for (const name of CUSTOMER_NAMES) pluginApi.onNpcInteraction(name, { Help: helpCustomer, "Talk-to": talkToCustomer });
   pluginApi.onObjectInteraction("Bookshelf", { Search: search });
   pluginApi.getTaskManager().submit(new (class LibraryResetTask extends core.Task {
     constructor() { super(RESET_CHECK_TICKS); }
@@ -276,6 +404,8 @@ module.exports = {
     SAM, PROFESSOR_GRACKLEBONE, VILLIA, CUSTOMERS, BOOK_OF_ARCANE_KNOWLEDGE, BOOKS,
     REQUEST_ATTRIBUTE, REQUEST_OPTION, BOOK_PLACEHOLDER, VARIANT, LIBRARY_ZONE,
     SEARCH_ANIMATION, EMPTY_MESSAGE, RESET_MESSAGE, VARLAMORE_ENVOY, DEPTHS_OF_DESPAIR,
+    BIBLIA, STAIRS_UP, STAIRS_DOWN, locateBook, bayOf, onBibliaLine, onBibliaCondition,
+    talkToCustomer, helpCustomer, climbStairs, readBook,
     isCustomer, requestOf, assignRequest, clearRequest, resetArrangement, bookAt, foundText,
     search, claimSearch, onDialogueVariant, onChoice, onLine, handIn, onItemOnNpc,
     get arrangement() { return arrangement; },

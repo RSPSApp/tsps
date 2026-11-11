@@ -18,6 +18,8 @@ const FADE_SCRIPT = 948;
 const BUSY_VARBIT = 12393;
 const MINIMAP_STATE_VARBIT = 6719;
 const MINIMAP_OFF = 2;
+/** settings_muspah_messages: All Settings "Disable Phantom Muspah messages". */
+const MESSAGES_DISABLED_VARBIT = 14711;
 const CHUNK = 8;
 
 let api = null;
@@ -153,6 +155,12 @@ function areaSound(player, location, [id, delay], radius) {
   player.getPacketSender().sendAreaSound(id, location.getX(), location.getY(), location.getZ(), 1, delay ?? 0, radius ?? 0);
 }
 
+/** One of the fight's chat lines (darkness, prayer shield, corruption), unless the player turned them off. */
+function fightMessage(player, text) {
+  if (player.getPacketSender().getVarbit?.(MESSAGES_DISABLED_VARBIT) === 1) return;
+  player.sendMessage(text);
+}
+
 // ------------------------------------------------------------------ the overlay and the trip
 
 /** The Muspah's darkness overlay (interface 818), set to `value` with its fade script. */
@@ -220,7 +228,7 @@ module.exports = {
   init, later, randomInt, pick, shuffle,
   tileIn, lairTile, arena, fromCentre, onArena,
   graphic, tileGraphic, animate, sound, sounds, areaSound,
-  overlay, overlayFade, closeOverlay, travel, playMusic, count, alive,
+  fightMessage, overlay, overlayFade, closeOverlay, travel, playMusic, count, alive,
   INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE, CHUNK,
   get api() { return api; },
   get core() { return core; },

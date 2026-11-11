@@ -784,6 +784,7 @@ export class WebGPUMapSquare implements MapSquare {
                     loc.y,
                     loc.level,
                     loc.rotation,
+                    loc.preparedOrigin,
                 ),
         );
         LocAnimated.carryOver(previous, this.locsAnimated);

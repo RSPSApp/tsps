@@ -38,7 +38,7 @@ function step(player, state) {
     if (last) {
       running.delete(player);
       setVarbits(player, { base: 0, current: 0, target: 0 });
-      player.sendMessage(corruption.end);
+      Common.fightMessage(player, corruption.end);
     }
     drain(player, state.base * iteration);
   });
@@ -50,7 +50,7 @@ function corrupt(player, base) {
   const { corruption } = Common.data;
   const state = { base, iteration: 1 };
   running.set(player, state);
-  player.sendMessage(corruption.start);
+  Common.fightMessage(player, corruption.start);
   setVarbits(player, { base, current: 1, target: corruption.iterations });
   Common.later(corruption.intervalTicks, () => step(player, state));
 }

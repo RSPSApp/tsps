@@ -71,6 +71,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     setWalkingDirection() {},
     getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, handleRegionChange() {} }),
     getPacketSender: () => ({
+      sendGlobalGraphic() {},
       sendSoundEffect() {},
       sendTypedMessage: (_type, message) => p.messages.push(message),
       sendPositionalHint: (loc) => p.hints.push(loc),
@@ -384,6 +385,46 @@ test("a diagonal rope swing click picks the rope's axis, not the longer offset",
   const event = { player: player({ x: 2804, y: 9587, z: 3 }), object: rope, objectId: 3566, clickType: 1, destination: null };
   routeToObstacle(event);
   assert.deepEqual(event.destination, { x: 2806, y: 9587, z: 3 });
+});
+
+/** Tags whichever dispenser is active, as the click on it would. */
+function tagActive(p) {
+  tagDispenser({ player: p, objectId: 3608, location: { x: cycle.active.x, y: cycle.active.y, z: 3 } });
+}
+
+test("a cycle ending without a tag is a missed pillar and resets the ticket streak", () => {
+  advanceCycle();
+  const clean = player({ agility: 50 });
+  const missed = player({ agility: 50 });
+  // Both tag the pillar of the first cycle: one clean tag each.
+  setActive(tileOfId(3608));
+  tagActive(clean);
+  tagActive(missed);
+  assert.equal(stateOf(clean).ticketStreak, 1);
+  assert.equal(stateOf(missed).ticketStreak, 1);
+  advanceCycle();
+  assert.equal(stateOf(clean).ticketStreak, 1, "tagging the pillar of the ending cycle keeps the run");
+  assert.equal(stateOf(missed).ticketStreak, 1, "and so does the other one");
+
+  // The clean one tags the pillar that just became active; the other does not.
+  setActive(tileOfId(3608));
+  tagActive(clean);
+  assert.equal(stateOf(clean).ticketStreak, 2);
+  advanceCycle();
+  assert.equal(stateOf(clean).ticketStreak, 2, "a tag every cycle keeps the run growing");
+  assert.equal(stateOf(missed).ticketStreak, 0, "a cycle ending with no tag is a missed pillar");
+});
+
+test("a trap hit is not a missed pillar: the run carries on", () => {
+  advanceCycle();
+  const p = player({ agility: 50 });
+  setActive(tileOfId(3608));
+  tagDispenser({ player: p, objectId: 3608, location: { x: cycle.active.x, y: cycle.active.y, z: 3 } });
+  assert.equal(stateOf(p).ticketStreak, 1);
+  // A clipping: the hit queue takes damage, the streak stays.
+  require("../plugins/minigames/brimhavenagilityarena/Shared.BrimhavenAgilityArena").hit(p, 5);
+  assert.equal(p.hits.length, 1);
+  assert.equal(stateOf(p).ticketStreak, 1, "a trap hit is not a missed pillar");
 });
 
 test("the trap spans are the cache's tiles; the blades' spans are the path beside them", () => {

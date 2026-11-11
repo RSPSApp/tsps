@@ -76,8 +76,11 @@ module.exports = function registerLostTribeQuest(api) {
     ObjectManager,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const questRuntime = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = questRuntime;
   const mining = require("../../skills/Mining.plugin.js");
+
+  const treatyScene = require("../losttribe/Treaty.LostTribe")(api, completeTreaty);
 
   const PAGE = "The Lost Tribe";
 
@@ -139,7 +142,10 @@ module.exports = function registerLostTribeQuest(api) {
   const HAM_TRAPDOOR_CLOSED = ObjectIdentifiers.TRAPDOOR_35; // 6434, 3118,3244
   const HAM_TRAPDOOR_OPEN = ObjectIdentifiers.TRAPDOOR_36; // 6435, Climb-down
   const HAM_LADDER = ObjectIdentifiers.LADDER_67; // 6436, 3118,9643
-  const SIGMUND_CHEST = ObjectIdentifiers.CHEST_38; // 6910, 3209,3217,1
+  const SIGMUND_CHEST_LOCATIONS = new Set([
+    `${ObjectIdentifiers.CHEST_38}:3209,3217,1`, // legacy location
+    `${ObjectIdentifiers.CHEST_38}:3211,3212,1`, // current post-3 November 2026 location
+  ]);
   const HAM_CRATE = ObjectIdentifiers.CRATE_65; // 6911, 3152,9645
   const LIBRARY_BOOKCASE = ObjectIdentifiers.BOOKCASE_25; // 6916, 3207,3496
 
@@ -147,7 +153,6 @@ module.exports = function registerLostTribeQuest(api) {
   const CELLAR_WALL_TILES = new Set(["3219,9618", "3221,9618"]);
   const DEEP_HOLE_TILE = "3224,9601";
   const LIBRARY_BOOKCASE_TILE = "3207,3496,0";
-  const SIGMUND_CHEST_TILE = "3209,3217,1";
   const HAM_CRATE_TILE = "3152,9645,0";
   const HAM_TRAPDOOR_TILE = "3118,3244,0";
   const HAM_LADDER_TILE = "3118,9643,0";
@@ -181,7 +186,6 @@ module.exports = function registerLostTribeQuest(api) {
   const SILVERWARE_FOUND_ACTION_ID = "EMSHq8";
   const TREATY_SIGNED_ACTION_ID = "N5kpDk";
   const CUTSCENE_START_ACTION_ID = "oIhMoa";
-  const CUTSCENE_COMPLETE_ACTION_ID = "_c-03w";
   const KAZGAR_ESCORT_ACTION_ID = "m471ps";
   const BROOCH_HELMET_ACTION_ID = "a-40GY";
 
@@ -192,6 +196,19 @@ module.exports = function registerLostTribeQuest(api) {
   const DUKE_RELDO_LINE = "librarian in Varrock";
   const RELDO_BOOK_LINE = "book about ancient goblin tribes";
   const DUKE_SILVERWARE_LINE = "Unless it is returned";
+
+  const SYMBOL_BOOK_PAGES = [{
+    44: "<col=800000>A History of the Goblin Race</col>",
+    46: "Ancient goblin equipment bears symbols that identify",
+    47: "the tribes. The surviving records name twelve tribes.",
+    48: "",
+    49: "The four directions are recorded as:",
+    50: "Rekeshuun — north; Idithuun — south;",
+    51: "Ekeleshuun — east; Narogoshuun — west.",
+    60: "The Dorgeshuun are the goblins of the strong spears.",
+    62: "Compare the symbols in this book with the marks in",
+    63: "the cellar tunnels to find the safe route.",
+  }];
 
   let quest;
 
@@ -609,6 +626,7 @@ module.exports = function registerLostTribeQuest(api) {
   }
 
   function handleDialogueLine(event) {
+    treatyScene.line(event);
     const { player, npcId, text } = event;
     const stage = quest.getStage(player);
     if (npcId === BOB_ID && stage === STAGE_ASK_PEOPLE && text.includes(BOB_RUMOUR_LINE)) {
@@ -639,8 +657,9 @@ module.exports = function registerLostTribeQuest(api) {
       quest.setStage(player, STAGE_MISTAG);
       return;
     }
-    if (stepId === NO_TREATY_CONDITION_ID && quest.getStage(player) === STAGE_TREATY) {
-      giveItem(player, ItemIdentifiers.PEACE_TREATY);
+    if (stepId === NO_TREATY_CONDITION_ID) {
+      const stage = quest.getStage(player);
+      if (stage === STAGE_TREATY || stage === STAGE_ESCORTED) giveItem(player, ItemIdentifiers.PEACE_TREATY);
     }
   }
 
@@ -708,38 +727,30 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === CUTSCENE_START_ACTION_ID) {
-      if (quest.getStage(player) < STAGE_TREATY) return;
-      if (held(player, ItemIdentifiers.PEACE_TREATY)) {
-        player.getInventory().deleteNumber(ItemIdentifiers.PEACE_TREATY, 1);
-      }
+      const stage = quest.getStage(player);
+      if ((stage !== STAGE_TREATY && stage !== STAGE_ESCORTED) || !held(player, ItemIdentifiers.PEACE_TREATY)) return;
       event.handled = true;
       event.end = true;
-      scheduleCutscene(player);
+      treatyScene.start(player);
       return;
     }
-    if (stepId === CUTSCENE_COMPLETE_ACTION_ID) {
-      event.handled = true;
-      event.end = true;
-      if (!quest.isComplete(player)) quest.complete(player);
-      return;
-    }
+    if (treatyScene.action(event)) return;
     if (stepId === BROOCH_HELMET_ACTION_ID) {
       setBit(player, BIT_RETURNED_BROOCH);
     }
   }
 
-  function scheduleCutscene(player) {
-    const { CountdownTask, TaskManager } = api.core;
-    if (!CountdownTask || !TaskManager) {
-      playVariant(player, DUKE_HORACIO_ID, "resolving-tensions-cut-scene-a-meeting-of-leaders");
-      return;
-    }
-    TaskManager.submit(
-      new CountdownTask(player, 1, () => {
-        if (player.isRegistered?.() === false) return;
-        playVariant(player, DUKE_HORACIO_ID, "resolving-tensions-cut-scene-a-meeting-of-leaders");
-      })
-    );
+  function readSymbolBook({ player }) {
+    questRuntime.openBook(player, "A History of the Goblin Race", SYMBOL_BOOK_PAGES, () => {
+      if (quest.getStage(player) === STAGE_FIND_BOOK) quest.setStage(player, STAGE_FIND_GENERALS);
+    });
+  }
+
+  function completeTreaty(player) {
+    const stage = quest.getStage(player);
+    if ((stage !== STAGE_TREATY && stage !== STAGE_ESCORTED) || !held(player, ItemIdentifiers.PEACE_TREATY)) return;
+    player.getInventory().deleteNumber(ItemIdentifiers.PEACE_TREATY, 1);
+    quest.complete(player);
   }
 
   // ==========================================================================
@@ -837,7 +848,7 @@ module.exports = function registerLostTribeQuest(api) {
       stepThroughY(event.player, location);
       return;
     }
-    if (id === SIGMUND_CHEST && tileKey(location, true) === SIGMUND_CHEST_TILE) {
+    if (SIGMUND_CHEST_LOCATIONS.has(`${id}:${tileKey(location, true)}`)) {
       openSigmundChest(event);
       return;
     }
@@ -1044,6 +1055,7 @@ module.exports = function registerLostTribeQuest(api) {
   api.onNpcInteraction("General Wartface", { "Talk-to": talkGenerals });
   api.onNpcInteraction("Mistag", { "Talk-to": talkMistag });
   api.onItemOnNpc(handleItemOnNpc);
+  api.onItemAction("Goblin symbol book", { Read: readSymbolBook });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);

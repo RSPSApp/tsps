@@ -27,17 +27,27 @@ class TeleportSpell extends Spell {
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return this.data.spellbook; }
 
+    /**
+     * A plugin may ask first ("spell:teleport-confirm": the Wilderness teleports' warning). It is asked once the
+     * spell could be cast, and nothing is taken until it says go, when the checks run again.
+     */
     cast(player: Player, name: string, destination: Location = this.data.destination, option?: string): boolean {
         if (!TeleportHandler.checkReqs(player, destination, 20, name) || !this.canCast(player, false)) {
             return true;
         }
-        if (!this.canCast(player, true)) {
-            return true;
+        const request = { player, name, proceed: () => this.complete(player, name, destination, option), handled: false };
+        PluginManager.emitCustomEvent("spell:teleport-confirm", request);
+        if (!request.handled) request.proceed();
+        return true;
+    }
+
+    private complete(player: Player, name: string, destination: Location, option?: string): void {
+        if (!TeleportHandler.checkReqs(player, destination, 20, name) || !this.canCast(player, false) || !this.canCast(player, true)) {
+            return;
         }
         TeleportHandler.teleport(player, destination, this.data.spellbook === MagicSpellbook.ANCIENT ? TeleportType.ANCIENT : TeleportType.NORMAL, false,
             () => PluginManager.emitCustomEvent("spell:teleport-arrival", option === undefined ? { player, name } : { player, name, option }));
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
-        return true;
     }
 }
 

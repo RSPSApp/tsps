@@ -63,3 +63,90 @@ test("the raid's overload is refused at exactly 50 Hitpoints and drunk at 51", a
   await sip(at51);
   assert.notEqual(at51.p.getInventory().getItems()[0]?.getId(), OVERLOAD_4, "51: a dose taken");
 });
+
+// Leaving the raid ends its timed potions with no line: both timers go to 0 as raids_client_indungeon does
+// (rsprox_transcripts/234/03285.txt:288134, 234/00820.txt:321992). Running out inside it:
+// "<col=ef1020>The effects of overload have worn off, and you feel normal again." (234/00820.txt:199330).
+test("the raid's overload ends silently on leaving the raid, and with its recorded line when it runs out inside", async (t) => {
+  const leaver = actor(t, 99);
+  await sip(leaver);
+  assert.ok(leaver.p.getAttribute("potions:overload:state"), "the overload is running");
+  leaver.messages.length = 0;
+  const hitpoints = leaver.p.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
+  leaver.p.__inRaid = false;
+  PM.emitPlayerProcess({ player: leaver.p });
+  assert.equal(leaver.p.getAttribute("potions:overload:state"), null, "gone with the raid");
+  assert.deepEqual(leaver.messages.filter((m) => /overload/i.test(m)), [], "no line");
+  assert.equal(leaver.p.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), hitpoints, "and no end-of-overload heal");
+
+  const stayer = actor(t, 99);
+  await sip(stayer);
+  stayer.messages.length = 0;
+  stayer.p.getAttribute("potions:overload:state").endsAt = Date.now() - 1;
+  PM.emitPlayerProcess({ player: stayer.p });
+  assert.equal(stayer.p.getAttribute("potions:overload:state"), null);
+  assert.ok(stayer.messages.includes("<col=ef1020>The effects of overload have worn off, and you feel normal again."), stayer.messages.join(" | "));
+});
+
+// Leaving the raid resets every stat to base, boosted or drained, potion or not
+// (rsprox_transcripts/234/00820.txt:322071-322080, 234/03285.txt:288215-288224). The raid's own removePlayer, on a
+// real Player; the raid itself is only its bookkeeping here.
+function leaveRaid(p, logout = false) {
+  const { Raid } = require("../plugins/minigames/cox/RaidState.ChambersOfXeric");
+  const raid = { players: new Set([p]), roomOfPlayer: new Map(), raiderState: new Map(), dropRaidItems() {}, hideRaidHud() {} };
+  Raid.prototype.removePlayer.call(raid, p, logout);
+  p.__inRaid = false;
+}
+
+test("leaving the raid puts every stat back at base: an overload's boosts, and drains with no potion running", async (t) => {
+  const S = core.Skill;
+  const combat = [S.ATTACK, S.STRENGTH, S.DEFENCE, S.RANGED, S.MAGIC];
+  const level = (p, skill) => p.getSkillManager().getCurrentLevel(skill);
+
+  const overloaded = actor(t, 99);
+  await sip(overloaded);
+  for (const skill of combat) assert.ok(level(overloaded.p, skill) > 99, `${skill.getName?.() ?? skill} is boosted inside`);
+  overloaded.messages.length = 0;
+  leaveRaid(overloaded.p);
+  for (const skill of combat) assert.equal(level(overloaded.p, skill), 99, `${skill.getName?.() ?? skill} at base outside`);
+  PM.emitPlayerProcess({ player: overloaded.p });
+  assert.equal(overloaded.p.getAttribute("potions:overload:state"), null, "and the overload is gone");
+  for (const skill of combat) assert.equal(level(overloaded.p, skill), 99, "still at base after the potion's own tick");
+  assert.deepEqual(overloaded.messages.filter((m) => /overload/i.test(m)), [], "no line");
+
+  // No potion running: a boost, a drain and damage taken all reset (Hitpoints 124 -> 99 and Prayer 95 -> 99 as recorded).
+  const plain = actor(t, 99);
+  const skills = plain.p.getSkillManager();
+  skills.setCurrentLevels(S.HERBLORE, 111, false);
+  skills.setCurrentLevels(S.PRAYER, 40, false);
+  skills.setCurrentLevels(S.HITPOINTS, 60, false);
+  leaveRaid(plain.p);
+  for (const skill of [S.HERBLORE, S.PRAYER, S.HITPOINTS]) assert.equal(level(plain.p, skill), 99);
+
+  // A logout keeps them (the raider may rejoin); a login with the party gone resets them.
+  const logger = actor(t, 99);
+  logger.p.getSkillManager().setCurrentLevels(S.ATTACK, 120, false);
+  leaveRaid(logger.p, true);
+  assert.equal(level(logger.p, S.ATTACK), 120, "kept through the logout");
+  logger.p.setAttribute(require("../plugins/minigames/cox/Shared.ChambersOfXeric").ATTR.INSIDE, true);
+  require("../plugins/minigames/cox/Raid.ChambersOfXeric").returnOnLogin({ player: logger.p });
+  assert.equal(level(logger.p, S.ATTACK), 99, "reset when login puts them outside");
+});
+
+// The same for prayer enhance (234/03285.txt:288135, its timer zeroed beside the overload's), and its recorded
+// expiry line "<col=ff0000>Your prayer enhance effect has worn off.</col>" (234/03285.txt:265414).
+test("the raid's prayer enhance ends silently on leaving the raid, and with its recorded line inside", (t) => {
+  const running = () => ({ endsAt: Date.now() + 60_000, nextAt: Date.now() + 60_000, area: "chambers-of-xeric" });
+  const leaver = actor(t, 99);
+  leaver.p.setAttribute("potions:prayer-enhance", running());
+  leaver.p.__inRaid = false;
+  PM.emitPlayerProcess({ player: leaver.p });
+  assert.equal(leaver.p.getAttribute("potions:prayer-enhance"), null);
+  assert.deepEqual(leaver.messages.filter((m) => /prayer enhance/i.test(m)), []);
+
+  const stayer = actor(t, 99);
+  stayer.p.setAttribute("potions:prayer-enhance", { ...running(), endsAt: Date.now() - 1 });
+  PM.emitPlayerProcess({ player: stayer.p });
+  assert.equal(stayer.p.getAttribute("potions:prayer-enhance"), null);
+  assert.ok(stayer.messages.includes("<col=ff0000>Your prayer enhance effect has worn off.</col>"), stayer.messages.join(" | "));
+});

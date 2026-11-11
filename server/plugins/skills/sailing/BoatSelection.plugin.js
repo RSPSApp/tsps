@@ -8,6 +8,9 @@ const cargo = require("./Cargo.Sailing");
 
 const SELECTION = 934;
 const BOATS = 5;
+/** "Board friend's boat", which script 8624 shows in Board mode once The Pandemonium is done. */
+const BOARD_FRIEND = 8;
+const IF_EVENT_OP1 = 1 << 1;
 const MAIN_MODAL = (161 << 16) | 16;
 const VARBIT_MODE = 18553;
 const VARP_CURRENT_DOCK = 5005;
@@ -32,9 +35,10 @@ const pending = new Map();
 
 /**
  * Opens the interface in `mode` at `dock`; `onChoose(slot)` runs with the chosen boat's slot
- * (from 0) once the player picks one.
+ * (from 0) once the player picks one. `onBoardFriend`, in Board mode, runs for its "Board
+ * friend's boat" button instead.
  */
-function openBoatSelection(player, mode, dock, onChoose) {
+function openBoatSelection(player, mode, dock, onChoose, onBoardFriend) {
   const sender = player.getPacketSender();
   sendBoatVarbits(player);
   for (const boat of player.getSailing().boats) {
@@ -50,7 +54,8 @@ function openBoatSelection(player, mode, dock, onChoose) {
   sender.sendSubInterface(MAIN_MODAL, SELECTION, 0);
   sender.sendInterfaceScript(SCRIPT_INIT);
   sender.sendInterfaceFlagsRange((SELECTION << 16) | BOATS, 1, MAX_BOATS, IF_EVENT_PAUSEBUTTON_OP1);
-  pending.set(player, { onChoose, mode });
+  if (onBoardFriend) sender.sendInterfaceFlagsRange((SELECTION << 16) | BOARD_FRIEND, -1, -1, IF_EVENT_OP1);
+  pending.set(player, { onChoose, onBoardFriend, mode });
 }
 
 /** Clears what opening set; the interface itself is closed by the caller (or already was). */
@@ -78,11 +83,17 @@ function selectionClosed({ player, interfaceId }) {
 
 /** A choice arrives as a pause-button resume (action = slot) or an op 1 click (slot). */
 function chooseBoat(event) {
-  if (event.groupId !== SELECTION || event.childId !== BOATS) return;
+  if (event.groupId !== SELECTION || (event.childId !== BOATS && event.childId !== BOARD_FRIEND)) return;
   event.handled = true;
   const { player } = event;
   const open = pending.get(player);
   if (!open || player.getInterfaceId?.() !== SELECTION) return;
+  if (event.childId === BOARD_FRIEND) {
+    if (!open.onBoardFriend) return;
+    closeSelection(player, open.mode);
+    open.onBoardFriend();
+    return;
+  }
   const chosen = Number.isInteger(event.slot) && event.slot > 0 ? event.slot : event.action;
   if (!Number.isInteger(chosen) || chosen < 1 || chosen > MAX_BOATS) return;
   closeSelection(player, open.mode);

@@ -88,7 +88,9 @@ function setup(options = {}) {
     hooks.push({ pluginName: TEST_PLUGIN, handler });
     PluginManager.customEventHooks.set(name, hooks);
   };
+  const customInterfaces = new Map();
   const api = new Proxy({
+    registerCustomInterface(definition) { customInterfaces.set(definition.groupId, definition); },
     core: questCore,
     persistAttribute(key, defaultValue) { persistedAttributes.set(key, defaultValue); },
     onNpcDialogueVariant(handler) {
@@ -181,7 +183,7 @@ function setup(options = {}) {
       return sender;
     },
     sendInterfaceDisplayState() { return sender; },
-    sendInterfaceRawModel(uid, model) { rawModels.push([uid, model]); return sender; },
+    sendInterfaceRawModel(uid, model) { rawModels.push([uid, model, interfaceId]); return sender; },
     sendInterfacePosition(uid, x, y) { positions.push([uid, x, y]); return sender; },
     sendString() { return sender; },
   }, { get(target, key) { return key in target ? target[key] : () => sender; } });
@@ -248,7 +250,7 @@ function setup(options = {}) {
   return {
     quest, player, attributes, items, equipment, varbits, messages, xp, rawModels, positions, emitted, transcriptCalls, custom, itemOnNpc, conditions,
     persistedAttributes,
-    interfaceButtons, subInterfaces, subInterfaceSends, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
+    interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
     getInterfaceId: () => interfaceId,
     mindBarOpen: () => subInterfaces.has(MIND_BAR_GROUP),
     modelFor: (uid) => rawModels.filter(([target]) => target === uid).at(-1)?.[1],
@@ -472,19 +474,25 @@ function pressPipe(h, child) {
   return h.interfaceAction((511 << 16) | child);
 }
 
-function solvePipe(h, firstPieceMovedLeft = 0) {
-  const pieces = [
-    { child: 9, dx: 7 + firstPieceMovedLeft, dy: -6 },
-    { child: 10, dx: 3, dy: -5 },
-    { child: 11, dx: 13, dy: -7 },
-    { child: 12, dx: 12, dy: -1, rotate: 1 },
-    { child: 13, dx: 5, dy: -6 },
-  ];
-  for (const piece of pieces) {
+// Quest Helper's solved coordinates, and the rotated (B) green model of each piece.
+const PIPE_TARGETS = [
+  { child: 9, x: 159, y: 69, rotated: 22549 },
+  { child: 10, x: 83, y: 80, rotated: 22533 },
+  { child: 11, x: 256, y: 60, rotated: 22557 },
+  { child: 12, x: 237, y: 155, rotated: 22564 },
+  { child: 13, x: 126, y: 64, rotated: 22540 },
+];
+
+// Walks every piece from wherever it is to its target with the real controls.
+function solvePipe(h) {
+  for (const piece of PIPE_TARGETS) {
     pressPipe(h, piece.child);
-    for (let turn = 0; turn < (piece.rotate ?? 0); turn++) pressPipe(h, 15);
-    for (let move = 0; move < Math.abs(piece.dx); move++) pressPipe(h, piece.dx > 0 ? 19 : 17);
-    for (let move = 0; move < Math.abs(piece.dy); move++) pressPipe(h, piece.dy > 0 ? 23 : 21);
+    if (h.modelFor((511 << 16) | piece.child) === piece.rotated) pressPipe(h, 15);
+    const [x, y] = h.positionFor((511 << 16) | piece.child);
+    const dx = Math.round((piece.x - x) / 16);
+    const dy = Math.round((piece.y - y) / 16);
+    for (let move = 0; move < Math.abs(dx); move++) pressPipe(h, dx > 0 ? 19 : 17);
+    for (let move = 0; move < Math.abs(dy); move++) pressPipe(h, dy > 0 ? 23 : 21);
   }
 }
 
@@ -598,7 +606,7 @@ test('pipe calibration requires selection/rotation/placement, survives cancel/re
   pressPipe(h, 17);
   assert.equal(h.varbits.get(3343), 1, 'relog closed the interface, so a stale pipe control is ignored');
   h.objectAction('Pipe machine', 'Fix', { objectId: O.PIPE_MACHINE });
-  solvePipe(h, 2);
+  solvePipe(h);
   assert.equal(h.varbits.get(3339), 2);
 });
 
@@ -663,6 +671,19 @@ test('machine and mind controls are scoped to their stages and open interface', 
   assert.equal(wrongStageFix.handled, true);
   assert.equal(wrongStageFix.end, true);
   assert.equal(h.quest.getStage(h.player), 13, 'the terminal mind action cannot advance a neighbouring stage');
+});
+
+test('the tower stairs are walked, not climbed', () => {
+  const h = setup();
+  for (const [objectId, name] of [[21871, 'ladders:climbUp'], [21872, 'ladders:climbDown']]) {
+    const object = { getLocation: () => new core.Location(2644, 3219, 0) };
+    const request = { player: h.player, objectId, object, handled: false };
+    PluginManager.emitCustomEvent('ladders:climb', request);
+    assert.equal(request.handled, true);
+    const climb = h.emitted.find((entry) => entry.name === name);
+    assert.equal(climb.event.animate, false, `${name} plays no climbing animation`);
+    assert.equal(climb.event.object, object);
+  }
 });
 
 test('the trapdoor is sealed until the homunculus is freed', () => {
@@ -920,36 +941,75 @@ test('the pressure machine solves along the Quest Helper route, including the th
   assert.equal(h.quest.getStage(h.player), 4, 'the tower is only fixed once all three machines work');
 });
 
-test('the pipe mirrors the piece model, position and rotation varbit and refuses a misoriented piece', () => {
+test('the pipe shows the cache layout, greens only the piece in hand and refuses a misoriented piece', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 4);
+  stockMachineMaterials(h);
+  buildMachine(h, 'Pipe machine', O.PIPE_MACHINE, '7-wU8Y', 'ZkpaiW');
+
+  assert.equal(h.rawModels.findLast(([uid]) => uid === ((511 << 16) | 9))?.[2], 511,
+    'the client opens the interface before the layout arrives');
+  const preview = h.customInterfaces.get(30016);
+  assert.deepEqual(h.subInterfaces.get(30016), { targetUid: (161 << 16) | 74, type: 3 });
+  assert.deepEqual(preview.widgets.slice(-5).map((widget) => widget.modelId), [22538, 22526, 22546, 22554, 22530]);
+  assert.equal(h.modelFor((511 << 16) | 10), 22526, 'a piece that is not in hand is grey');
+  assert.deepEqual(h.positionFor((511 << 16) | 9), [410, 153], 'the pieces start where the cache puts them');
+
+  pressPipe(h, 12);
+  assert.equal(h.varbits.get(3345), 1, 'the piece in hand is the active one');
+  assert.equal(h.varbits.get(3343), 0, 'only one piece is active at a time');
+  assert.equal(h.modelFor((511 << 16) | 12), 22562, 'the piece in hand is green');
+  assert.equal(h.modelFor((511 << 16) | 10), 22526, 'the others stay grey');
+
+  // The 5-piece is the one that has to be turned before it fits.
+  pressPipe(h, 9);
+  assert.equal(h.modelFor((511 << 16) | 9), 22549, 'the 5-piece starts turned');
+  for (let move = 0; move < 16; move++) pressPipe(h, 17);
+  for (let move = 0; move < 5; move++) pressPipe(h, 21);
+  assert.equal(h.positionFor((511 << 16) | 9)[0], 410 - 16 * 16, 'a move is one step');
+  solvePipe(h);
+  assert.equal(h.varbits.get(3339), 2, 'the pipe machine works');
+});
+
+test('a misoriented pipe piece does not lock; turning it does', () => {
   const h = setup();
   h.quest.setStage(h.player, 4);
   stockMachineMaterials(h);
   buildMachine(h, 'Pipe machine', O.PIPE_MACHINE, '7-wU8Y', 'ZkpaiW');
 
   pressPipe(h, 9);
-  assert.equal(h.varbits.get(3343), 1, 'the piece in hand is the active one');
-  assert.equal(h.varbits.get(3341), 0, 'only one piece is active at a time');
-  assert.equal(h.modelFor((511 << 16) | 9), 22547, 'the 5-piece shows its cache model');
-  assert.deepEqual(h.positionFor((511 << 16) | 9), [47, 165], 'the piece position is mirrored');
-
-  pressPipe(h, 15);
-  assert.equal(h.varbits.get(7981), 1, 'the rotation is mirrored on tol_pipe5_rot');
-  assert.equal(h.modelFor((511 << 16) | 9), 22544, 'the rotated piece shows its next model');
-  pressPipe(h, 15); pressPipe(h, 15); pressPipe(h, 15);
-  assert.equal(h.modelFor((511 << 16) | 9), 22547, 'four rotations return to the first model');
-
-  // The big bend has to be turned before it fits into the pipe.
-  pressPipe(h, 12);
-  for (let move = 0; move < 12; move++) pressPipe(h, 19);
-  pressPipe(h, 21);
-  assert.ok(h.messages.includes('That piece does not fit.'), 'a misoriented piece is refused');
+  for (let move = 0; move < 16; move++) pressPipe(h, 17); // 410 -> 154
+  for (let move = 0; move < 5; move++) pressPipe(h, 21); // 153 -> 73
+  assert.ok(h.messages.includes('That piece does not fit.'), 'the turned 5-piece is refused at its target');
   assert.equal(h.varbits.get(3339), 1, 'the pipe is not fixed yet');
+  assert.equal(h.varbits.get(7981), 1, 'the rotation is mirrored on tol_pipe5_rot');
   pressPipe(h, 15);
-  assert.equal(h.modelFor((511 << 16) | 12), 22562, 'the big bend shows its solved model');
-  assert.deepEqual(h.positionFor((511 << 16) | 12), [237, 155], 'the big bend sits on its target');
+  assert.deepEqual(h.positionFor((511 << 16) | 9), [159, 69], 'and locks in place on its target');
+  assert.equal(h.varbits.get(3343), 0, 'a locked piece is no longer in hand');
+  assert.equal(h.modelFor((511 << 16) | 9), 22538, 'a locked piece is grey');
+});
 
-  solvePipe(h);
-  assert.equal(h.varbits.get(3339), 2, 'the pipe machine works');
+test('a saved pipe puzzle keeps the positions and orientations of its pieces', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 4);
+  h.attributes.set('quest.tower_of_life.pipe', 1);
+  const key = 'tower-of-life:pipe-puzzle';
+  h.attributes.set(key, {
+    pieces: [
+      { x: 159, y: 69, rotation: 0, placed: true },
+      { x: 35, y: 160, rotation: 2, placed: false },
+      { x: 48, y: 172, rotation: 0, placed: false },
+      { x: 125, y: 171, rotation: 1, placed: false },
+      { x: 46, y: 160, rotation: 0, placed: false },
+    ],
+    active: 3,
+  });
+  h.login();
+  h.objectAction('Pipe machine', 'Fix', { objectId: O.PIPE_MACHINE });
+  assert.equal(h.modelFor((511 << 16) | 12), 22562, 'the bend keeps its solved orientation');
+  assert.deepEqual(h.positionFor((511 << 16) | 12), [125, 171]);
+  assert.equal(h.attributes.get(key).pieces[0].placed, true);
+  assert.equal(h.attributes.get(key).pieces[1].rotation, 0);
 });
 
 test('a lost builder-costume piece is handed out again', () => {
@@ -998,14 +1058,16 @@ test('a lost builder-costume piece is handed out again', () => {
   // A player who lost a piece can wear the outfit again and enter the tower.
   h.quest.setStage(h.player, 4);
   h.setLocation(2649, 3225, 0);
-  const door = { objectId: O.TOWER_DOOR, location: { x: 2649, y: 3225, z: 0 } };
-  const refused = h.objectAction('Tower door', 'Open', door);
-  assert.equal(refused.handled, true);
+  const toggle = () => {
+    const request = { player: h.player, objectId: O.TOWER_DOOR, location: { x: 2649, y: 3225, z: 0 }, handled: false };
+    PluginManager.emitCustomEvent('door:toggle', request);
+    return request;
+  };
+  assert.equal(toggle().handled, true);
   assert.ok(h.messages.some((message) => message.includes("Come back to me wearin'")),
     'the door still refuses an incomplete outfit');
   h.equipOutfit();
-  const opened = h.objectAction('Tower door', 'Open', door);
-  assert.equal(opened.handled, true, 'the recovered outfit opens the tower');
+  assert.equal(toggle().handled, false, 'the recovered outfit leaves the door to the Doors plugin, which opens it');
 });
 
 test('the dungeon descent sends the canonical tol_prog 17 before the hand-in', () => {

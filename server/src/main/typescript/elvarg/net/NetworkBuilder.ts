@@ -34,6 +34,7 @@ import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacem
 import {
   decodeClientPackets,
   MAIN_INVENTORY_GROUP_ID,
+  MAIN_INVENTORY_WIDGET_UID,
   MOBILE_CLIENT_ATTRIBUTE,
   NATIVE_CLIENT_ATTRIBUTE,
   HANDSHAKE_CAPABILITY_NATIVE_CLIENT,
@@ -85,7 +86,7 @@ import { CombatSpells } from "../game/content/combat/magic/CombatSpells";
 import { TeleportHandler } from "../game/model/teleportation/TeleportHandler";
 import { ArceuusSpells } from "../game/content/combat/magic/ArceuusSpells";
 import { SpellTeleports } from "../game/content/combat/magic/SpellTeleports";
-import { LEAGUE_PROFILE, MAIN_PROFILE, type PlayerProfile } from "../game/entity/impl/player/persistence/PlayerProfile";
+import { MAIN_PROFILE, otherProfiles, type PlayerProfile } from "../game/entity/impl/player/persistence/PlayerProfile";
 import { Accounts } from "../game/entity/impl/player/Accounts";
 import type { PluginLoginExtension, PluginLoginPending } from "../plugins/PluginTypes";
 import {
@@ -184,9 +185,10 @@ const COMBAT_AUTO_RETALIATE_CHILD = 32;
  * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
  */
 const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
+const COMBAT_OFFHAND_SPECIAL_ATTACK_CHILD = 67;
 /**
- * The special-attack orb on the desktop and mobile HUDs. It only sends its native Use button:
- * rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
+ * The special-attack orb on the desktop and mobile HUDs: op1 uses the weapon, op2 the offhand.
+ * Rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
  * decide, as live does.
  */
 const SPECIAL_ATTACK_ORB_COMPONENTS = [
@@ -487,6 +489,7 @@ export class ClientConnection {
 
   private pluginMessageWindow = 0;
   private pluginMessageCount = 0;
+  private warnedUnresolvedInventoryAction = false;
   private closed = false;
   private loginFailure?: string;
   private input = Promise.resolve();
@@ -894,7 +897,10 @@ export class ClientConnection {
           if (action && (packet.amount > 0 || (packet.amount === 0 && action.acceptsZero === true) || (packet.amount < 0 && action.acceptsNegative === true))) {
             action.execute(packet.amount);
           }
-          this.player?.setEnteredAmountAction(null);
+          // The answer may open another amount prompt, such as a Bank PIN keypad.
+          if (this.player?.getEnteredAmountAction() === action) {
+            this.player?.setEnteredAmountAction(null);
+          }
           continue;
         }
         case "dialogue_input": {
@@ -974,8 +980,10 @@ export class ClientConnection {
               );
             } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
               CombatSpecial.activate(this.player);
-            } else if (actionPacket.buttonNum === 1 && isSpecialAttackOrb(actionPacket.widgetId)) {
-              CombatSpecial.activate(this.player);
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_OFFHAND_SPECIAL_ATTACK_CHILD && actionPacket.buttonNum === 1) {
+              CombatSpecial.activate(this.player, Equipment.SHIELD_SLOT);
+            } else if ((actionPacket.buttonNum === 1 || actionPacket.buttonNum === 2) && isSpecialAttackOrb(actionPacket.widgetId)) {
+              CombatSpecial.activate(this.player, actionPacket.buttonNum === 2 ? Equipment.SHIELD_SLOT : undefined);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
             } else if (Autocasting.handleWidgetAction(
@@ -1016,10 +1024,17 @@ export class ClientConnection {
               // Arceuus self-cast spells are identified by their cache spell name.
             } else if (actionPacket.groupId === MAIN_INVENTORY_GROUP_ID && actionPacket.itemId != null && actionPacket.slot != null &&
                 this.player.getInventory().getItems()[actionPacket.slot]?.getId() === actionPacket.itemId) {
-              const inventoryAction = actionPacket.groupId === MAIN_INVENTORY_GROUP_ID
-                ? ItemActionPacketListener.resolveInventoryWidgetAction(actionPacket.itemId, actionPacket.buttonNum)
-                : { optionIndex: actionPacket.buttonNum, option: actionPacket.option };
-              if (!inventoryAction) continue;
+              const inventoryAction = ItemActionPacketListener.resolveInventoryWidgetAction(actionPacket.itemId, actionPacket.buttonNum);
+              if (!inventoryAction) {
+                if (actionPacket.widgetId === MAIN_INVENTORY_WIDGET_UID && !this.warnedUnresolvedInventoryAction) {
+                  this.warnedUnresolvedInventoryAction = true;
+                  console.warn("[network] unresolved inventory widget action", {
+                    itemId: actionPacket.itemId, slot: actionPacket.slot, op: actionPacket.buttonNum,
+                  });
+                  this.player.sendMessage("That backpack action is unavailable. If your client was open during an update, reload and try again.");
+                }
+                continue;
+              }
               if (actionPacket.subOpId && PluginManager.emitItemAction({
                 player: this.player,
                 interfaceId: actionPacket.widgetId,
@@ -1379,15 +1394,21 @@ export class ClientConnection {
 
     // `save` is the primary character's save for this world: it holds the remembered logins.
     let save: any | null = null;
-    // The account's credential is its main character's save; a league character's own hash only
-    // stands in while no main character exists (an account first made on a league world), on
-    // either world. So a name can't be claimed on either world with a password of one's own, and
-    // a password change (PlayerPersistence.changePassword) reaches both characters.
+    // The account's credential is its main character's save; another character's own hash (a
+    // league or hardcore one) only stands in while no main character exists (an account first
+    // made on such a world), on every world. So a name can't be claimed on any world with a
+    // password of one's own, and a password change (PlayerPersistence.changePassword) reaches
+    // every character.
     let credentials: any | null = null;
     try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(primaryName, profile);
-      const main = profile === MAIN_PROFILE ? save : GameConstants.PLAYER_PERSISTENCE.load(primaryName, MAIN_PROFILE);
-      credentials = main ?? save ?? (profile === MAIN_PROFILE ? GameConstants.PLAYER_PERSISTENCE.load(primaryName, LEAGUE_PROFILE) : null);
+      const persistence = GameConstants.PLAYER_PERSISTENCE;
+      save = persistence.load(primaryName, profile);
+      const main = profile === MAIN_PROFILE ? save : persistence.load(primaryName, MAIN_PROFILE);
+      credentials = main ?? save;
+      for (const other of otherProfiles(profile)) {
+        if (credentials) break;
+        if (other !== MAIN_PROFILE) credentials = persistence.load(primaryName, other);
+      }
     } catch (error) {
       console.error(`[login] failed to load ${typedName}`, error);
       this.releasePendingName();
@@ -1470,6 +1491,11 @@ export class ClientConnection {
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now));
         if (save) await this.saveLoginTokens(primaryName, profile, save, loginTokens);
       }
+      // An unmade save (PlayerSave.unmake) enters as a new character, without the save's
+      // attributes: its remembered logins go across here, or the first save would drop them.
+      if (!loginTokens && save?.isUnmade?.() === true) {
+        loginTokens = readLoginTokens(save.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now());
+      }
     } catch (error) {
       console.error(`[login] failed to authenticate ${typedName}`, error);
       this.releasePendingName();
@@ -1485,9 +1511,13 @@ export class ClientConnection {
     }
     let username = primaryName;
     if (!this.loginExtension && account && Accounts.key(typedName) !== Accounts.key(primaryName)) username = typedName;
-    let characterSave = save;
+    // An unmade save (PlayerSave.unmake) vouched for the login above; its character is a new one.
+    let characterSave = save?.isUnmade?.() === true ? null : save;
     if (username !== primaryName) {
-      try { characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null; }
+      try {
+        characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null;
+        if (characterSave?.isUnmade?.() === true) characterSave = null;
+      }
       catch (error) { this.releasePendingName(); this.failLogin(8, "The login server is busy."); return; }
       // The alt enters with the capitals its save was made with, not the typed ones (PlayerSave
       // writes the entered name back as the display name).
@@ -1613,7 +1643,7 @@ export class ClientConnection {
     // stores; the client maps the standard mounts onto the chosen layout.
     // Mobile clients resolve to the stock mobile toplevel (601) instead.
     const layoutRoot = resolveGameframeRoot(player);
-    for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true)) this.send(packet);
+    for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true, GameConstants.WORLD_TYPE.label)) this.send(packet);
     player.getPacketSender()
       // Publish the saved spellbook before the remaining login state and quest recovery.
       .sendTabInterface(6, player.getSpellbook().getInterfaceId())
@@ -1665,6 +1695,8 @@ export class ClientConnection {
       && ItemDefinition.forId(packet.itemId).getEquipmentType().getSlot() >= 0) {
       // As the left-click route refuses (ItemActionPacketListener): no gear swap mid-teleport or while dead.
       if (player.isTeleportingReturn() || player.getHitpoints() <= 0) return;
+      // Inventory item actions clear the current interaction before equip checks.
+      player.clearPendingAction();
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
       return;
     }

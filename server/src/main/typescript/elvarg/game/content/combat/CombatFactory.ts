@@ -257,6 +257,7 @@ export class CombatFactory {
         // We've got our damage. We can now create a HitDamage
         // instance.
         let hitDamage = new HitDamage(damage, damage == 0 ? HitMask.BLUE : HitMask.RED);
+        if (rolls && entity.isPlayer()) hitDamage.setRolledMaximum(range.maximum);
 
         /**
          * Prayers decreasing damage.
@@ -308,8 +309,10 @@ export class CombatFactory {
     /**
      * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
      * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
-     * hit, and before its XP); a hit queued when it lands (Scurrius' bolts, the Leviathan's bite) is read then. The
-     * impact pass only covers hits that skipped the queue (a manipulateHit replacement).
+     * hit, and before its XP), except an NPC's hit on a player whose turn this tick is still to come: HitQueue.process
+     * reads that one in the victim's turn, after their clicks. A hit queued when it lands (Scurrius' bolts, the
+     * Leviathan's bite) is read then. The impact pass only covers hits that skipped the queue (a manipulateHit
+     * replacement).
      */
     public static applyProtectionPrayer(hit: PendingHit): void {
         if (typeof hit.hasAppliedImpactProtection === "function" && hit.hasAppliedImpactProtection()) return;
@@ -922,7 +925,11 @@ export class CombatFactory {
         }
 
         // The protection prayer is read on the attack's tick, before the XP is paid on what the hit deals.
-        CombatFactory.applyProtectionPrayer(qHit);
+        // An NPC's attack on a player who has yet to take this tick's turn (NPCs go first) is read in that
+        // turn, after their clicks: live, a prayer switched on the tick the attack starts blocks it
+        // (rsprox captures: Scurrius' swipes, 23 of 23 such flicks blocked, recordings 3275 and 75).
+        // HitQueue.process reads it.
+        if (!CombatFactory.readsProtectionInVictimTurn(qHit)) CombatFactory.applyProtectionPrayer(qHit);
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
@@ -941,6 +948,14 @@ export class CombatFactory {
             qHit,
             World.getProcessCycle() + qHit.getDelay() + CombatFactory.hitProcessingDelay(qHit),
         );
+    }
+
+    /** An NPC's hit on a player whose turn this tick is still to come: the prayer is read in that turn. */
+    private static readsProtectionInVictimTurn(hit: PendingHit): boolean {
+        const attacker = hit.getAttacker();
+        const target = hit.getTarget();
+        if (!attacker?.isNpc?.() || !target?.isPlayer?.()) return false;
+        return !target.getCombat().getHitQueue().hasProcessed(World.getProcessCycle());
     }
 
     /**
@@ -1060,10 +1075,9 @@ export class CombatFactory {
                     playerAttacker.getWeapon() == WeaponInterfaces.JAVELIN;
 
                 if (combatType == CombatType.MELEE) {
-                    applyPoison = Misc.getRandom(3) === 0;
-                    poisonType = CombatPoisonData.getPoisonType(
-                        playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT)
-                    );
+                    const meleeWeapon = playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT);
+                    applyPoison = Misc.getRandom(CombatPoisonData.getMeleeRollRange(meleeWeapon)) === 0;
+                    poisonType = CombatPoisonData.getPoisonType(meleeWeapon);
                 } else if (combatType == CombatType.RANGED) {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
@@ -1768,9 +1782,11 @@ export class CombatFactory {
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
-                const consume = { player, itemId: currentWeaponId, skip: false };
+                // `extra`: shots given back on top (Demonic Pacts' Regenerate above 100%), within the bow's current stage.
+                const consume = { player, itemId: currentWeaponId, skip: false, extra: 0 };
                 PluginManager.emitCustomEvent("combat:consume-charge", consume);
                 if (consume.skip) {
+                    shotsInStage = Math.max(0, shotsInStage - Math.max(0, consume.extra | 0));
                     continue;
                 }
                 shotsInStage += 1;
@@ -1809,9 +1825,11 @@ export class CombatFactory {
         // the rest is recovered by a plugin (Ava's devices).
         // Content may keep some shots out of the roll altogether (a league relic): `saved` of
         // `amount` are neither broken nor dropped. The device's recovery applies to the rest.
-        const saving = { player, itemId: ammoItem.getId(), amount, saved: 0 };
+        // `extra`: shots the content gives back on top (Demonic Pacts' Regenerate above 100%), added to the same stack.
+        const saving = { player, itemId: ammoItem.getId(), amount, saved: 0, extra: 0 };
         PluginManager.emitCustomEvent("ranged:ammo-saving", saving);
         const rolled = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+        const extra = Math.max(0, saving.extra | 0);
         const recovery = CombatFactory.ammoRecovery(player);
         const dropChance = 80 - recovery;
         let lost = 0;
@@ -1840,6 +1858,12 @@ export class CombatFactory {
                 // still paid from the same ammo. A different stack swapped in is left alone.
                 const inventory = player.getInventory();
                 const at = inventory.getItems().findIndex(sameAmmo);
+                if (extra > 0) {
+                    // The stack is gone from the slot: what comes back goes to the pack (the floor if it is full).
+                    const back = new Item(ammoId, extra, firedMeta);
+                    if (inventory.getAddableAmount(back) >= extra) inventory.add(back, true);
+                    else ItemOnGroundManager.registers(player, back);
+                }
                 if (at < 0 || consumed <= 0) {
                     return;
                 }
@@ -1859,6 +1883,9 @@ export class CombatFactory {
 
             if (consumed > 0) {
                 worn.decrementAmountBy(consumed);
+            }
+            if (extra > 0) {
+                worn.incrementAmountBy(extra);
             }
 
             // If we are at 0 ammo remove the item from the equipment completely.

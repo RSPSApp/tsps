@@ -15,6 +15,9 @@ const {
 } = require("./PersistenceConstants.PlayerBots");
 const { SPAWNS_PER_BATCH, SPAWN_BATCH_DELAY_MS, runPaced } = require("./SpawnPacing.PlayerBots");
 
+// The crater keeps its own BhBot population; PvP-world roamers stay out of it.
+const BOUNTY_HUNTER_ARENA = require("../../minigames/bountyhunter/data/crater.json").arena;
+
 const { generateBotName } = require("../lib/BotNames.PlayerBots");
 const { normalizeRegionDensity } = require("../behaviours/pvp/RegionDensity.PlayerBots");
 
@@ -34,6 +37,7 @@ function createBotRegistry(options) {
     wildernessActiveRegionBotsPerRegion = 0,
     wildernessActiveRegionBotsByRegion,
     wildernessActiveRegionInset = 0,
+    pvpAllowed = () => true,
     botBaseCooldownMs,
     spawn,
     spawnOffsets,
@@ -302,6 +306,10 @@ function createBotRegistry(options) {
     if (!bounds) {
       return false;
     }
+    const a = BOUNTY_HUNTER_ARENA;
+    if (bounds.z === 0 && bounds.minX <= a.maxX && bounds.maxX >= a.minX && bounds.minY <= a.maxY && bounds.maxY >= a.minY) {
+      return false;
+    }
     return Wilderness.intersectsArea(
       bounds.minX,
       bounds.maxX,
@@ -361,6 +369,7 @@ function createBotRegistry(options) {
   function buildRegionalWildernessPlans(snapshot, hotspotCountsByRegion = null) {
     if (
       wildernessRoamerBotCount <= 0 ||
+      !pvpAllowed() ||
       !Array.isArray(snapshot?.regions) ||
       snapshot.regions.length === 0
     ) {
@@ -418,7 +427,7 @@ function createBotRegistry(options) {
   }
 
   function buildPersistentHotspotPlans() {
-    if (wildernessRoamerBotCount <= 0) {
+    if (wildernessRoamerBotCount <= 0 || !pvpAllowed()) {
       return [];
     }
     const plans = [];
@@ -664,7 +673,7 @@ function createBotRegistry(options) {
   }
 
   function reconcilePersistentHotspotBots() {
-    if (wildernessRoamerBotCount <= 0) {
+    if (wildernessRoamerBotCount <= 0 || !pvpAllowed()) {
       return;
     }
     const plans = buildPersistentHotspotPlans();
@@ -737,7 +746,7 @@ function createBotRegistry(options) {
   }
 
   function reconcileRegionalWildernessBots(snapshot = null) {
-    if (wildernessRoamerBotCount <= 0) {
+    if (wildernessRoamerBotCount <= 0 || !pvpAllowed()) {
       return;
     }
     const nextSnapshot =

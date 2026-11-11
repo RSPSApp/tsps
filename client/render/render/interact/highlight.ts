@@ -193,13 +193,82 @@ import {
     isItemHighlightTargetStillPresent,
 } from "./highlightItem";
 
+import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
+import { locHighlightKey } from "../../../game/highlights/ModelHighlightManager";
+import type { LocOutline, NpcOutline } from "../../../game/plugins/ClientPluginManager";
+import { packWorldMapCoord } from "../../../rs/map/WorldMapArea";
+
+const nativeLocOutlines = new WeakMap<Int32Array, {
+    revision: string;
+    outlines: LocOutline[];
+}>();
+
+function modelLocOutlines(host: WebGLOsrsRendererHost): LocOutline[] {
+    const { loc, locType } = host.osrsClient.modelHighlightManager;
+    if (!loc.active && !locType.active) return [];
+    const plane = host.getPlayerBasePlane();
+    const revision = `${loc.revision}:${locType.revision}`;
+    const out: LocOutline[] = [];
+    for (let i = 0; i < host.mapManager.visibleMapCount; i++) {
+        const map = host.mapManager.visibleMaps[i];
+        const ids = map?.tileLocIdsByLevel?.[plane];
+        const offsets = map?.tileLocOffsetsByLevel?.[plane];
+        const rotations = map?.tileLocTypeRotByLevel?.[plane];
+        if (!ids?.length || !offsets || !rotations) continue;
+
+        let cached = nativeLocOutlines.get(ids);
+        if (!cached || cached.revision !== revision) {
+            const outlines: LocOutline[] = [];
+            const baseX = map.getRenderBaseTileX();
+            const baseY = map.getRenderBaseTileY();
+            const span = map.getLocalTileSpan();
+            for (let tile = 0; tile < offsets.length - 1; tile++) {
+                if (offsets[tile] === offsets[tile + 1]) continue;
+                const tileX = baseX + (tile % span);
+                const tileY = baseY + Math.floor(tile / span);
+                const coord = packWorldMapCoord({ x: tileX, y: tileY, plane });
+                for (let index = offsets[tile]; index < offsets[tile + 1]; index++) {
+                    const id = ids[index];
+                    const style = loc.styleFor(locHighlightKey(id, coord)) ?? locType.styleFor(id);
+                    if (!style) continue;
+                    outlines.push({
+                        loc: { id, tileX, tileY, plane, shape: rotations[index] & 0x3f, rotation: rotations[index] >> 6 },
+                        ...style,
+                    });
+                }
+            }
+            cached = { revision, outlines };
+            nativeLocOutlines.set(ids, cached);
+        }
+        for (const outline of cached.outlines) {
+            if (host.getPreferredMapForWorldTile(outline.loc.tileX, outline.loc.tileY) === map) {
+                out.push(outline);
+            }
+        }
+    }
+    return out;
+}
+
+function modelNpcOutlines(host: WebGLOsrsRendererHost): NpcOutline[] {
+    const { modelHighlightManager: { npcType }, npcEcs } = host.osrsClient;
+    if (!npcType.active) return [];
+    const plane = host.getPlayerBasePlane();
+    const out: NpcOutline[] = [];
+    npcEcs.forEachActive((ecsId) => {
+        if (npcEcs.getLevel(ecsId) !== plane || npcEcs.getWorldViewId(ecsId) >= 0) return;
+        const style = npcType.styleFor(baseNpcTypeId(npcEcs.getNpcTypeId(ecsId)));
+        if (style) out.push({ ecsId, serverId: npcEcs.getServerId(ecsId), ...style });
+    });
+    return out;
+}
+
 export function getInteractHighlightDrawTargets(host: WebGLOsrsRendererHost, ): ReadonlyArray<InteractHighlightDrawTarget> {
 
         const out = host.interactHighlightDrawTargets;
         out.length = 0;
 
-        // Plugin loc outlines (Object Markers), drawn whatever Interact Highlight says.
-        for (const outline of host.osrsClient.clientPlugins.locOutlines?.() ?? []) {
+        // Script and plugin outlines draw independently of Interact Highlight settings.
+        for (const outline of [...modelLocOutlines(host), ...(host.osrsClient.clientPlugins.locOutlines?.() ?? [])]) {
             const { loc } = outline;
             const trianglePoints = host.buildLocModelHighlightTriangles({
                 kind: "loc",
@@ -219,8 +288,7 @@ export function getInteractHighlightDrawTargets(host: WebGLOsrsRendererHost, ): 
             });
         }
 
-        // Plugin NPC outlines (NPC Indicators), drawn whatever Interact Highlight says.
-        for (const outline of host.osrsClient.clientPlugins.npcOutlines?.() ?? []) {
+        for (const outline of [...modelNpcOutlines(host), ...(host.osrsClient.clientPlugins.npcOutlines?.() ?? [])]) {
             const npcEcs = host.osrsClient.npcEcs;
             const trianglePoints = host.buildNpcModelHighlightTriangles({
                 kind: "npc",

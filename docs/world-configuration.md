@@ -4,6 +4,37 @@ World settings live in `server/data/definitions/world.json`. A deployment can ov
 `server/data/definitions/world.local.json`; ordinary top-level values in the local file
 replace the shipped values, while `plugins` entries merge by key.
 
+## Plugin settings
+
+A `plugins` entry accepts a boolean or an object. A setting alone keeps the plugin's default
+enabled state. The `enabled` field, when present, must be a boolean.
+
+```json
+{
+  "plugins": {
+    "Characters": { "maxPerAccount": 6 },
+    "Prayer": { "enabled": true, "sequentialBurying": true },
+    "PlayerBots": { "ai": { "enabled": false } }
+  }
+}
+```
+
+Use the plugin's exported name with its exact casing. When a plugin loads, the server warns about
+scoped options that have no matching declaration. Within each file, scoped settings override
+the equivalent `pluginConfig` keys. Then the local file overrides the shipped file. This merges the
+individual switches and settings, with nested values replaced in full. For example, a local
+`"Prayer": false` disables the plugin and keeps its shipped settings. Plugins can read
+their options by short name, such as `api.getPluginConfig("sequentialBurying", false)`.
+
+The existing `pluginConfig` form still works. The Characters, LeagueMode, Quests and
+RandomEvents entries map to the existing `characters`, `league`, `quests` and `random-events`
+namespaces. Shared league readers keep using `league:*`. Core settings such as
+`CrossFloor:visibility` and `commands:permissions` stay in `pluginConfig`.
+Settings literally named `enabled`, such as `Gravestones:enabled`, also stay there so they
+remain distinct from the plugin switch. A legacy `disabledPlugins` list still takes priority
+over the switches. The world config page saves its editable layer in the equivalent flat
+format for compatibility.
+
 ## World config page
 
 **Early version (v0.1).** This is a basic framework that does the basics: list the settings, edit
@@ -118,6 +149,19 @@ Restart the world after changing them.
 Explicit boolean values override the older `CROSS_FLOOR_VISIBILITY`, `CROSS_FLOOR_COMBAT` and
 `CROSS_FLOOR_VISIBILITY_AND_COMBAT` environment flags. Those flags remain fallbacks for existing
 setups, but combat now always requires visibility, including when using the old flags.
+
+## Hardcore World
+
+`pluginConfig` `"HardcoreWorld:enabled": true` makes the server a Hardcore World: every login is
+the account's Hardcore character, a save of its own, with one life. A death that counts is
+announced to the world, and the character then resets or transfers out. The world list and the
+client are told it is a Hardcore world. See [hardcore-worlds.md](hardcore-worlds.md).
+
+```json
+{
+  "pluginConfig": { "HardcoreWorld:enabled": true }
+}
+```
 
 ## Welcome screen message
 
@@ -291,7 +335,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `quests:equipment-requirements` | boolean | `true` | **Quest equipment requirements.** Items tied to a quest cannot be worn until it is finished. Turn off to remove the restriction. Player bots are never held to it. |
+| `quests:equipment-requirements` | boolean | `true` | **Quest equipment and spellbook requirements.** Require quest completion for equipment and spellbook access, and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements. |
 
 #### Plugin area `skills` (`pluginConfig`)
 

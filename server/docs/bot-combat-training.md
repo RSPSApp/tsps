@@ -299,6 +299,10 @@ Hotspot bots count towards that region's target. Persistent Wilderness clusters 
 12 low-level, 10 mid-level and 14 main bots at Edgeville, 40 at Varrock Ditch, and 4 each at
 Green Dragons and the Revenant Caves entrance. Safe tiles and buildings still cannot spawn bots.
 
+A world can turn PvP bots off without editing the sites: the registry asks `bots:pvp-allowed`
+`{ allowed }` as PvP bots come and go, and `allowed: false` keeps them from spawning. A Hardcore
+World answers it ([hardcore-worlds.md](../../docs/hardcore-worlds.md)).
+
 ### Regional density overrides
 
 `pvp.activeRegionBotsByRegion` in `bot-sites.json` optionally sets a target for individual
@@ -522,6 +526,11 @@ The original character stays in the world and can still be attacked. Returning r
 the bot's existing brain. Disconnecting releases the bot and logs out the original
 character. `::botback` needs no rank because it only returns the controlling connection
 to its own character; it grants no access to another account.
+
+Administrators can use `::botstatsme <bot name>` from their own character to copy their
+base skill levels and experience onto an active bot, with current levels set to those
+bases (full hitpoints and prayer). Use `::botback` first if you are driving a bot.
+The bot must unequip any gear whose requirements the copied levels would fail.
 
 Use `::bh <bot username> manual` to keep a bot logged in with its AI stopped.
 Manual mode survives `::botback`; normal walking or Follow performed while driving

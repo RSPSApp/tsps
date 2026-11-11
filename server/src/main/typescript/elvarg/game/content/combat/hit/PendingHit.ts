@@ -378,6 +378,8 @@ export class PendingHit {
                             }, fixedDamage === undefined, false)
                     )
                     : new HitDamage(0, HitMask.BLUE);
+                // A { damage } override is fixed damage: nothing was rolled, so it is never a max hit.
+                if (fixedDamage !== undefined) rolled.setRolledMaximum(0);
                 if (rolled.getDamage() > damage.getDamage() || (resolved.accurate && !this.accurate)) {
                     damage = rolled;
                     this.accurate = resolved.accurate;

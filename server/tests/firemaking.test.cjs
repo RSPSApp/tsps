@@ -234,17 +234,23 @@ async function campfireHarness(t) {
   const objects = new Set();
   const ashes = [];
   const ground = [];
+  const groundChanges = [];
+  let cycle = 0;
   const api = {
     core,
     getTaskManager: () => ({ submit: t => tasks.push(t) }),
     getObjectManager: () => ({
-      register: o => objects.add(o), deregister: o => objects.delete(o),
+      register(o) { groundChanges.push({ cycle, kind: "object-added" }); return objects.add(o); },
+      deregister: o => objects.delete(o),
       objectsAt: () => [],
     }),
     getItemOnGroundManager: () => ({
       getGroundItem: (_owner, id, loc) => ground.find(g => g.item.getId() === id && g.loc.equals(loc)) ?? null,
       registerLocation: (p, item, loc) => (item.getId() === core.ItemIdentifiers.ASHES ? ashes : ground).push({ item, loc }),
-      deregister: g => ground.splice(ground.indexOf(g), 1),
+      deregister(g) {
+        groundChanges.push({ cycle, kind: "ground-item-removed" });
+        return ground.splice(ground.indexOf(g), 1);
+      },
     }),
     getWorld: () => ({ getObjects: () => [...objects] }),
     onCanUseItem() {}, onCustomEvent() {}, emitCustomEvent() {}, emitFiremakingBlocked: () => false,
@@ -279,7 +285,12 @@ async function campfireHarness(t) {
     getPacketSender: () => ({ sendCreationMenu: m => menu = m, sendInterfaceRemoval() {}, sendTypedMessage: (_type, text) => messages.push(text), sendGlobalGraphic: (graphic, tile) => graphics.push({ graphic, tile }) }),
     isRegistered: () => true, isPlayerBot: () => true, getHitpoints: () => 99, getUsername: () => 'campfiretest',
   };
-  const tick = n => { for (let i=0; i<n; i++) tasks[0].execute(); };
+  const tick = n => {
+    for (let i = 0; i < n; i++) {
+      cycle++;
+      tasks[0].execute();
+    }
+  };
   const useLog = (object, itemId = I.LOGS) => {
     const e = { player, object, objectId: object.getId(), itemId, handled: false };
     hooks.use(e); return e;
@@ -296,7 +307,7 @@ async function campfireHarness(t) {
     Math.random = oldRandom;
   });
   return { core, I, O, inventory, loc, player, hooks, objects, ground, ashes, animations, messages, graphics,
-    tick, useLog, menu: () => menu, xp: () => xp, chain: () => chain,
+    tick, useLog, groundChanges, menu: () => menu, xp: () => xp, chain: () => chain,
     light() {
       hooks.combine({ player, usedItemId: I.TINDERBOX, usedWithItemId: I.LOGS });
       tick(4);
@@ -318,6 +329,14 @@ test("first campfire log sets its duration independently of the original fire", 
   h.tick(1);
   assert.ok(!h.objects.has(campfire), 'a long-lived original fire does not extend the timer');
   assert.equal(h.ashes.length, 1);
+});
+
+test("lighting a fire removes the ground log before adding the fire in the same tick", async t => {
+  const h = await campfireHarness(t);
+  h.light();
+  const [removed, added] = h.groundChanges;
+  assert.deepEqual([removed.kind, added.kind], ["ground-item-removed", "object-added"]);
+  assert.equal(added.cycle, removed.cycle);
 });
 
 test("permanent normal and coloured fires convert, restore, and leave ashes", async t => {

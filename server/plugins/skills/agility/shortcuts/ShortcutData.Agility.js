@@ -39,6 +39,9 @@ const MACROS = {
   ropeSwing: builders.ropeSwing,
   hurdle: builders.hurdle,
   climb,
+  /** Puts out every lit light the player carries (a fall into water). */
+  // Required when it runs: the item plugin pulls in the world/cooking plugins.
+  extinguishLights: () => ({ run: (context) => require("../../../items/LightSources.plugin").extinguishAll(context.player) }),
 };
 const ANIMATION_NAME = /^[A-Z][A-Z0-9_]*$/;
 const COORDINATES = {

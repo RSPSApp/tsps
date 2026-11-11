@@ -63,11 +63,14 @@ function message(player, text) {
   player.sendMessage(text);
 }
 
-/** The trial's arrow over its boat (the rum or toad boat), or none (the Gwenith Glide). */
+/**
+ * The trial's arrow over its boat (the rum or toad boat), or none (the Gwenith Glide, or with All
+ * Settings' "Barracuda trials hint arrow" off).
+ */
 function sendHint(player, run) {
   const hint = run.trial.hint;
   const index = hint && ships.entityIndex(hint.ship);
-  if (index === undefined) return;
+  if (index === undefined || sender(player).getVarbit(common.varbit("sailing_barracuda_trials_hintarrow_disabled")) === 1) return;
   sender(player).sendVarbit(common.varbit("current_hint_arrow"), HINT_SLOT);
   sender(player).sendWorldEntityHint(index, hint.height);
 }
@@ -128,7 +131,7 @@ function stopBoat(player) {
 function areaSong(player) {
   const { BoatManager, Music } = common.core();
   const at = BoatManager.rootLocation(player);
-  const track = Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+  const track = Music.areaTrackAt(at.getX(), at.getY(), at.getZ());
   if (track !== undefined) sender(player).sendSong(track);
 }
 

@@ -12,6 +12,16 @@
 const CAVE_EXIT_POSITION = { x: 2479, y: 5176, z: 0 };
 const VOLCANO_DUNGEON_LANDING = [2862, 9572, 0];
 
+const ACCESS_ATTRIBUTE = "mor-ul-rek:access";
+const CAPE_SHOWN_STEP = "2-PLAV";
+const SHOW_CAPE_MESSAGE = "You hold out your fire cape and show it to TzHaar-Ket.";
+
+// The side facing the outer city: north on the three horizontal crossings, west on the other two.
+const ENTRY_SIDE_BY_DOOR = new Map([
+  ["2436,5120", 1], ["2457,5119", 1], ["2474,5137", 1],
+  ["2494,5174", -1], ["2495,5157", -1],
+]);
+
 const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 const PASS_TICKS = 2;
 
@@ -19,6 +29,55 @@ const PASS_TICKS = 2;
 const passes = new WeakMap();
 
 let core;
+
+function hasAccess(player) {
+  return player.getAttribute(ACCESS_ATTRIBUTE) === true;
+}
+
+function grantAccess({ player }) {
+  player.setAttribute(ACCESS_ATTRIBUTE, true);
+}
+
+function isGuard(npcId) {
+  const { TZHAAR_KET_8, TZHAAR_KET_9 } = core.NpcIdentifiers;
+  return npcId === TZHAAR_KET_8 || npcId === TZHAAR_KET_9;
+}
+
+function fireCapes() {
+  const { FIRE_CAPE, FIRE_MAX_CAPE, FIRE_CAPE_L_, FIRE_MAX_CAPE_L_ } = core.ItemIdentifiers;
+  return [FIRE_CAPE, FIRE_MAX_CAPE, FIRE_CAPE_L_, FIRE_MAX_CAPE_L_];
+}
+
+function hasFireCape(player) {
+  const worn = player.getEquipment().get(core.Equipment.CAPE_SLOT)?.getId();
+  return fireCapes().some((id) => id === worn || player.getInventory().contains(id));
+}
+
+function guardCondition({ player, npcId, definition, text }) {
+  if (definition?.getName() !== "TzHaar-Ket") return null;
+  const condition = text.toLowerCase();
+  if (condition.includes("has a firecape with them")) return isGuard(npcId) && hasFireCape(player);
+  if (condition.includes("has access to mor ul rek")) return hasAccess(player);
+  if (condition.includes("does not have access to mor ul rek")) return !hasAccess(player);
+  return null;
+}
+
+function showCapeInDialogue(event) {
+  if (event.kind !== "message" || event.stepId !== CAPE_SHOWN_STEP || !isGuard(event.npcId)) return;
+  if (!hasFireCape(event.player)) {
+    event.end = true;
+    return;
+  }
+  grantAccess(event);
+}
+
+function useCapeOnGuard(event) {
+  if (!isGuard(event.npcId) || !fireCapes().includes(event.itemId)) return;
+  event.handled = true;
+  if (!event.player.getInventory().contains(event.itemId)) return;
+  grantAccess(event);
+  event.player.sendMessage(SHOW_CAPE_MESSAGE);
+}
 
 /** Rotation 0 and 2 doors are passed north-south, 1 and 3 east-west (the cache's placements). */
 function passVentDoor({ player, object }) {
@@ -29,14 +88,19 @@ function passVentDoor({ player, object }) {
     ? new core.Location(door.getX(), door.getY() + offset, door.getZ())
     : new core.Location(door.getX() + offset, door.getY(), door.getZ());
   // Clicked again while on the door tile itself: carry on to the side that pass was heading for.
+  const entrySide = ENTRY_SIDE_BY_DOOR.get(`${door.getX()},${door.getY()}`);
   const previous = passes.get(player);
   const onDoor = at.getX() === door.getX() && at.getY() === door.getY();
   const side = onDoor && previous ? -previous.towards
-    : Math.sign(northSouth ? at.getY() - door.getY() : at.getX() - door.getX()) || 1;
-  const near = beside(side);
-  const far = beside(-side);
+    : Math.sign(northSouth ? at.getY() - door.getY() : at.getX() - door.getX()) || entrySide || 1;
   const movement = player.getMovementQueue();
   movement.reset();
+  if (side === entrySide && !hasAccess(player)) {
+    player.sendMessage("You need to show a fire cape to a TzHaar-Ket guard before entering the inner city.");
+    return true;
+  }
+  const near = beside(side);
+  const far = beside(-side);
   // The door blocks its own tile: the steps go straight through it, then clipping is back. Only the
   // latest pass clears the flag, so a second click doesn't lose it to the first one's cleanup. Steps,
   // not a teleport, so a diagonal arrival walks round to the door (a move would drop the queued step).
@@ -77,6 +141,11 @@ module.exports = {
   passVentDoor,
   register(api) {
     core = api.core;
+    api.persistAttribute(ACCESS_ATTRIBUTE, false);
+    api.onNpcDialogueCondition(guardCondition);
+    api.onItemOnNpc(useCapeOnGuard);
+    api.onCustomEvent("npc-dialogue:action", showCapeInDialogue);
+    api.onCustomEvent("mor-ul-rek:grant-access", grantAccess);
     api.onObjectInteraction("Cave exit", { Enter: exitToVolcano });
     api.onObjectInteraction("Hot vent door", { Pass: passVentDoor });
   },

@@ -338,11 +338,14 @@ export function computeFrameRoofPlaneLimit(host: WebGLOsrsRendererHost, ): numbe
             playerPlane = Math.max(playerPlane, deckPlane);
         }
 
+        // A plugin camera far from the player (Isometric Camera) can steady the roof line.
+        const roofCameraTile =
+            host.osrsClient.clientPlugins?.roofCameraTile?.(cameraTile, playerTile) ?? cameraTile;
         return computeRoofPlaneLimit(host.mapManager, host.maxLevel, {
             playerRawPlane: playerPlane,
             cameraPitch: host.getCameraPitchRs(),
             roofsHidden: host.osrsClient.roofsHidden,
-            cameraTile,
+            cameraTile: roofCameraTile,
             playerTile,
             targetTile: host.getRoofTargetTile(playerTile, cameraTile),
         });

@@ -19,12 +19,16 @@ import {
 } from "../bindings";
 import type { WebGPUMapSquare } from "../WebGPUMapSquare";
 import type { WebGPURenderer } from "../WebGPURenderer";
+import { getWorldEntityIndexForMapId } from "../worldEntity";
 import { getWorldResources } from "./rendererAccess";
 
 const MODEL_INFO_WIDTH = 16;
 const MODEL_INFO_COMPONENTS = 4;
 const MODEL_INFO_BYTES_PER_ROW = MODEL_INFO_WIDTH * MODEL_INFO_COMPONENTS * 2;
 const MAP_UNIFORM_USED_BYTES = 96;
+/** Where a map uniform entry's placement flag sits (see WebGPUMapSquare). */
+const MAP_UNIFORM_TRANSFORM_OFFSET = 92;
+const WORLD_ENTITY_ENABLED = new Uint32Array([1]);
 
 type MeshBatch = {
     vertexBuffer: GPUBuffer;
@@ -40,6 +44,8 @@ type GroundItemMeshMap = {
     alpha: MeshBatch;
     mapUniformsBindGroup: GPUBindGroup;
     mapUniformBuffer: GPUBuffer;
+    /** Uniform entries in mapUniformBuffer, one per draw range. */
+    rangeCount: number;
 };
 
 function createGeometryBuffer(
@@ -173,10 +179,17 @@ export class GroundItemMeshes {
         for (const stack of stacks) {
             const tileX = stack.tile.x | 0;
             const tileY = stack.tile.y | 0;
-            const mapX = tileX >> 6;
-            const mapY = tileY >> 6;
-            if (mapX < 0 || mapY < 0) continue;
-            const mapId = getMapSquareId(mapX, mapY);
+            // A stack on a boat's deck belongs to that boat's own scene square, as in WebGL.
+            const view = this.renderer.osrsClient.worldViewManager?.findWorldViewAt(tileX, tileY);
+            let mapId: number;
+            if (view && !view.isTopLevel()) {
+                mapId = view.overlayMapId;
+            } else {
+                const mapX = tileX >> 6;
+                const mapY = tileY >> 6;
+                if (mapX < 0 || mapY < 0) continue;
+                mapId = getMapSquareId(mapX, mapY);
+            }
             const clone: ClientGroundItemStack = {
                 ...stack,
                 itemId: stack.itemId | 0,
@@ -240,6 +253,7 @@ export class GroundItemMeshes {
     drawWorld(pass: GPURenderPassEncoder): void {
         const world = getWorldResources(this.renderer);
         if (!world || this.maps.size === 0) return;
+        this.placeDeckItems();
 
         let pipelineSet = false;
         for (const mesh of this.maps.values()) {
@@ -457,7 +471,39 @@ export class GroundItemMeshes {
             ],
         });
 
-        return { mapId, opaque, alpha, mapUniformBuffer, mapUniformsBindGroup };
+        return { mapId, opaque, alpha, mapUniformBuffer, mapUniformsBindGroup, rangeCount };
+    }
+
+    /**
+     * Items on a boat's deck move with the boat: their map's entries take this frame's deck
+     * placement matrix, as the deck's own square does (WebGPURenderer hands it to each deck map).
+     */
+    private placeDeckItems(): void {
+        const worldEntityMapIds = this.renderer.mapManager.worldEntityMapIds;
+        for (const mesh of this.maps.values()) {
+            if (!worldEntityMapIds.has(mesh.mapId)) continue;
+            const entityIndex = getWorldEntityIndexForMapId(this.renderer, mesh.mapId);
+            const transform =
+                entityIndex !== undefined
+                    ? this.renderer.worldEntityAnimator?.getTransform(entityIndex)
+                    : undefined;
+            if (!transform) continue;
+            for (let i = 0; i < mesh.rangeCount; i++) {
+                const offset = i * MAP_UNIFORM_STRIDE;
+                this.device.queue.writeBuffer(
+                    mesh.mapUniformBuffer,
+                    offset,
+                    transform.buffer,
+                    transform.byteOffset,
+                    64,
+                );
+                this.device.queue.writeBuffer(
+                    mesh.mapUniformBuffer,
+                    offset + MAP_UNIFORM_TRANSFORM_OFFSET,
+                    WORLD_ENTITY_ENABLED,
+                );
+            }
+        }
     }
 
     private writeMapUniforms(

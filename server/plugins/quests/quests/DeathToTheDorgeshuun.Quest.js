@@ -27,13 +27,15 @@
  * page, plus the cache (object/NPC transforms, varbits, placements) for ids.
  *
  * Gaps / approximations:
- *  - The optional tour stops (the tutors, Fred, Millie, Father Urhney, the
- *    candle seller, Gee/Donie, the border guard) are not implemented; only the
+ *  - Most optional tour stops (the tutors, Fred, the candle seller and the
+ *    border guard) are not implemented. Millie, Father Urhney and Gee/Donie
+ *    have stateless dialogue; repeat and interruption behavior is unverified.
+ *    The existing tour also handles the
  *    five stops the transcript gates on (Duke, a common man/woman, Father
  *    Aereck, goblins, the shopkeeper) plus Cook, Hans, Bob, the Guide, Mistag
  *    and Kazgar.
- *  - The Tears of Guthix collection minigame is skipped: Juna's dialogue hands
- *    the sequence straight to the twenty-tears cutscene.
+ *  - The twenty tears are collected in the Tears of Guthix cave (the minigame's
+ *    quest mode: no time limit, nothing drunk, the weekly visit untouched).
  *  - The water mill tunnel, both quest trapdoors and the working drilling
  *    machine are runtime objects registered by this plugin, because the cache
  *    maps place only the broken machine. Smashing deregisters the working model
@@ -42,7 +44,11 @@
  *    the full patrol/line-of-sight puzzle; the agility crack and lock doors keep
  *    their 23 Agility / Thieving checks.
  *  - No Sigmund prayer switching; the cellar Sigmund is the level-50 cache NPC
- *    (991) and dies to ordinary combat. The three henchmen are optional.
+ *    (991) and dies to ordinary combat. He and his guards attack once he has
+ *    confronted the player.
+ *  - No tunnel loc is placed in the cache for the exit, and the runtime one sat
+ *    inside the wall: walking down the southern exit tunnel after the machine is
+ *    smashed plays the ending, as the Quick guide describes.
  *  - Followers/pets are always allowed, so the transcript's pet condition
  *    answers false; there is no light-source requirement in the caves, and the
  *    end-of-quest torch is only granted when the player carries no light.
@@ -61,6 +67,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const TearsCave = require("../../minigames/tearsofguthix/Cave.TearsOfGuthix");
 
   const PAGE = "Death to the Dorgeshuun";
   const ZANIK_PAGE = "Zanik";
@@ -237,10 +244,21 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   const STORE_ZONE = { minX: 2555, maxX: 2595, minY: 5175, maxY: 5230 };
   const MILL_ZONE = { minX: 3195, maxX: 3255, minY: 3260, maxY: 3315 };
   const CELLAR_ZONE = { minX: 3202, maxX: 3230, minY: 9610, maxY: 9630 };
+  /** The water mill cellar where Sigmund and his guards fight. */
+  const MILL_CELLAR_ZONE = { minX: 3200, maxX: 3250, minY: 9678, maxY: 9715 };
+  /** The southern tunnel out of the mill cellar, towards the Dorgeshuun mine (cache map). */
+  const EXIT_TUNNEL_ZONE = { minX: 3229, maxX: 3243, minY: 9664, maxY: 9676 };
+  const TEARS_GOAL = 20;
+  /** Juna's step: "If the player's hands are free" before collecting the tears. */
+  const TEARS_HANDS_FREE_ID = "QpmtZU";
+  /** Zanik follows: put her back beside the player once this far away (or another plane). */
+  const FOLLOWER_LEASH = 12;
   const LUMBRIDGE_ZONE = { minX: 3190, maxX: 3270, minY: 3185, maxY: 3265 };
 
   const HIDDEN_TRAPDOOR_TILE = { x: 3166, y: 9622 };
-  const STORE_ROOM_TILE = { x: 2566, y: 5186 };
+  // The store room's Climb-up ladder (loc 15747) is at 2567,5185 in a one-tile
+  // corridor; land on the open tile east of it. 2566,5186 is solid rock.
+  const STORE_ROOM_TILE = { x: 2568, y: 5185 };
   const MILL_TRAPDOOR_TILE = { x: 3230, y: 3286 };
   const MILL_CELLAR_TILE = { x: 3217, y: 9692 };
   const JAIL_TILE = { x: 3184, y: 9612 };
@@ -487,6 +505,13 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
         wanderRadius: 0, owner: player, ownerOnly: true });
       if (!npc) return;
       zanikByPlayer.set(player, npc);
+    } else {
+      // After a teleport (the hidden trapdoor, the tunnel) a follower would be left behind,
+      // out of sight with no options: bring her to the player's side.
+      const at = player.getLocation(), here = npc.getLocation();
+      if (here.getZ() !== at.getZ() || Math.max(Math.abs(here.getX() - at.getX()), Math.abs(here.getY() - at.getY())) > FOLLOWER_LEASH) {
+        npc.moveTo(new Location(at.getX() + 1, at.getY(), at.getZ()));
+      }
     }
     npc.setNpcTransformationId(id);
     const wasFollowing = npc.getFollowing() === player;
@@ -561,6 +586,15 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       }
     }
     cellarNpcsByPlayer.set(player, npcs);
+  }
+
+  /** Sigmund and his guards attack the player (as soon as he has confronted them). */
+  function engageCellar(player) {
+    if (quest.getStage(player) !== STAGE_MILL || !inZone(player, MILL_CELLAR_ZONE)) return;
+    for (const npc of cellarNpcsByPlayer.get(player) ?? []) {
+      if (!npc?.isRegistered?.() || npc.getHitpoints?.() <= 0) continue;
+      npc.getCombat?.()?.attack(player);
+    }
   }
 
   function registerObject(objectId, tile, rotation = 0) {
@@ -698,6 +732,26 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
 
   function talkLumbridgeGuide(event) {
     return tourStop(event, "a-tour-of-lumbridge-lumbridge-guide", 0);
+  }
+
+  // The Wiki records these conversations, but does not establish whether they
+  // repeat or when an optional visit is recorded. No tour progress is awarded.
+  function talkOptionalTourStop(event) {
+    const { player, npc, npcId } = event;
+    if (quest.getStage(player) !== STAGE_TOURING) return false;
+    const zanik = zanikByPlayer.get(player);
+    if (!zanik?.isRegistered() || zanik.getFollowing() !== player) return false;
+    const variants = {
+      [NpcIdentifiers.MILLIE_MILLER]: "a-tour-of-lumbridge-millie-miller",
+      [NpcIdentifiers.FATHER_URHNEY]: "a-tour-of-lumbridge-father-urhney",
+      [NpcIdentifiers.GEE]: "a-tour-of-lumbridge-gee-or-donie",
+      [NpcIdentifiers.DONIE]: "a-tour-of-lumbridge-gee-or-donie",
+    };
+    const variant = variants[npcId];
+    if (!variant) return false;
+    const request = { player, npc, npcId, variant: { page: PAGE, variant }, exact: true, handled: false };
+    api.emitCustomEvent("npc-dialogue:start", request);
+    return request.handled === true;
   }
 
   function talkZanik(event) {
@@ -900,10 +954,11 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       return true;
     }
     if (stage === STAGE_TEARS) {
-      if (hasBit(player, BIT_TEARS_READY)) {
+      if (TearsCave.isQuestRun(player)) {
+        playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-trying-to-exit-tears-of-guthix-before-collecting-all-the-tears");
+      } else if (hasBit(player, BIT_TEARS_READY)) {
         playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-upon-collecting-twenty-tears");
       } else {
-        setBit(player, BIT_TEARS_READY);
         playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-talking-to-juna-before-collecting-the-tears");
       }
       return true;
@@ -970,8 +1025,35 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
 
   function handleDialogueCondition(event) {
     const { player, stepId } = event;
+    if (stepId === TEARS_HANDS_FREE_ID) {
+      // "Twenty tears should be sufficient...": Juna lets the player into the cave.
+      if (quest.getStage(player) === STAGE_TEARS && !hasBit(player, BIT_TEARS_READY)) {
+        playAfterChat(player, () => collectTears(player));
+      }
+      return;
+    }
     if (stepId !== TOUR_MARK_CONDITION_ID) return;
     if (quest.getStage(player) === STAGE_TOURING) quest.setStage(player, STAGE_TOUR_DONE);
+  }
+
+  function collectTears(player) {
+    if (quest.getStage(player) !== STAGE_TEARS || hasBit(player, BIT_TEARS_READY) || TearsCave.isPlaying(player)) return;
+    if (!handsFree(player)) return;
+    TearsCave.enter(player, {
+      goal: TEARS_GOAL,
+      onGoal: () => {
+        if (quest.getStage(player) !== STAGE_TEARS) return;
+        setBit(player, BIT_TEARS_READY);
+        playVariant(player, NpcIdentifiers.JUNA, "the-power-of-the-tears-upon-collecting-twenty-tears");
+      },
+    });
+  }
+
+  /** "I want to get out now!" while collecting: Juna lets the player out with nothing. */
+  function handleDialogueChoice(event) {
+    const { player, npcId, option } = event;
+    if (npcId !== NpcIdentifiers.JUNA || option !== "I want to get out now!") return;
+    if (quest.getStage(player) === STAGE_TEARS && TearsCave.isQuestRun(player)) TearsCave.finish(player);
   }
 
   function handleDialogueAction(event) {
@@ -1058,6 +1140,9 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (stage >= STAGE_MILL) {
       player.moveTo(new Location(MILL_CELLAR_TILE.x, MILL_CELLAR_TILE.y, 0));
       spawnCellar(player);
+      TaskManager.submit(new CountdownTask(player, 1, () => {
+        if (player.isRegistered?.() !== false) engageCellar(player);
+      }));
       return;
     }
     if (!wearingHam(player)) {
@@ -1089,6 +1174,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       new CountdownTask(player, 1, () => {
         if (player.isRegistered?.() === false) return;
         playVariant(player, NpcIdentifiers.SIGMUND_2, "showdown-with-sigmund-confronting-sigmund");
+        playAfterChat(player, () => engageCellar(player));
       })
     );
   }
@@ -1157,25 +1243,79 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     playVariant(player, NpcIdentifiers.ZANIK, "the-power-of-the-tears-inspecting-zanik");
   }
 
-  function stepThrough(player, location) {
-    const current = player.getLocation();
-    const dx = current.getX() - location.x;
-    const dy = current.getY() - location.y;
-    const destination =
-      Math.abs(dx) >= Math.abs(dy)
-        ? new Location(location.x - (dx >= 0 ? 1 : -1), location.y, current.getZ())
-        : new Location(location.x, location.y - (dy >= 0 ? 1 : -1), current.getZ());
-    player.moveTo(destination);
+  /**
+   * The store room's cracks (15731) and lock-pick doors (15759) are wall locs: each sits on one
+   * edge of its own tile (rotation 0 west, 1 north, 2 east, 3 south), so its two sides are that
+   * tile and the neighbour across the edge. Cache placements, revision 241.
+   */
+  const STORE_WALL_PASSAGES = new Map([
+    ["15731:2569,5190", 3], ["15731:2569,5194", 1],
+    ["15759:2567,5192", 0], ["15759:2567,5198", 0], ["15759:2576,5192", 2], ["15759:2576,5198", 2],
+  ]);
+  const EDGE_STEP = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+
+  /** The far side of a wall passage from where the player stands, or null for an unknown one. */
+  function acrossWall(player, objectId, location) {
+    const rotation = STORE_WALL_PASSAGES.get(`${objectId}:${location.x},${location.y}`);
+    if (rotation === undefined) return null;
+    const [dx, dy] = EDGE_STEP[rotation];
+    const here = player.getLocation();
+    const own = { x: location.x, y: location.y };
+    const other = { x: location.x + dx, y: location.y + dy };
+    // Whichever side the player is nearer is where they are; the other side is where they go.
+    const distance = (tile) => Math.max(Math.abs(here.getX() - tile.x), Math.abs(here.getY() - tile.y));
+    const target = distance(own) <= distance(other) ? other : own;
+    return new Location(target.x, target.y, here.getZ());
+  }
+
+  function stepThrough(player, objectId, location) {
+    const destination = acrossWall(player, objectId, location);
+    if (destination) player.moveTo(destination);
+  }
+
+  /** "Pick-lock" (23 Thieving) crosses the store-room door; "Open" finds it locked. */
+  function storeRoomDoor(event) {
+    const { player } = event;
+    const location = eventTile(event);
+    if (!location || !acrossWall(player, ObjectIdentifiers.DOOR_362, location)) return false;
+    event.handled = true;
+    const option = String(event.option ?? "").toLowerCase();
+    if (option !== "pick-lock" && event.clickType !== 4) {
+      player.sendMessage("The door is locked.");
+      return true;
+    }
+    if (player.getSkillManager().getCurrentLevel(Skill.THIEVING) < 23) {
+      player.sendMessage("You need a thieving level of 23 to pick the lock of that door.");
+      return true;
+    }
+    stepThrough(player, ObjectIdentifiers.DOOR_362, location);
+    return true;
+  }
+
+  /** Doors.plugin's Open on a store-room door: it stays locked (Pick-lock is the way through). */
+  function lockedStoreRoomDoor(event) {
+    if (!event || event.handled || event.objectId !== ObjectIdentifiers.DOOR_362) return;
+    const location = eventTile(event);
+    if (!location || !acrossWall(event.player, ObjectIdentifiers.DOOR_362, location)) return;
+    event.handled = true;
+    event.player.sendMessage("The door is locked.");
+  }
+
+  function eventTile(event) {
+    const at = event.location ?? event.object?.getLocation?.();
+    if (!at) return null;
+    return { x: at.getX?.() ?? at.x, y: at.getY?.() ?? at.y };
   }
 
   function squeezeCrack(event) {
-    const { player, location } = event;
-    if (quest.getStage(player) !== STAGE_TRAPDOOR) return;
+    const { player } = event;
+    const location = eventTile(event);
+    if (quest.getStage(player) !== STAGE_TRAPDOOR || !location) return;
     if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) < 23) {
       playVariant(player, NpcIdentifiers.ZANIK, "ham-seek-trying-to-squeeze-through-a-crack-without-23-agility");
       return;
     }
-    stepThrough(player, location);
+    stepThrough(player, ObjectIdentifiers.CRACK_8, location);
   }
 
   function handleObjectInteraction(event) {
@@ -1222,6 +1362,10 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       if (quest.getStage(event.player) !== STAGE_TRAPDOOR) return;
       event.handled = true;
       squeezeCrack(event);
+      return;
+    }
+    if (objectId === ObjectIdentifiers.DOOR_362) {
+      storeRoomDoor(event);
     }
   }
 
@@ -1322,6 +1466,13 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (quest.getStage(player) === STAGE_TRAPDOOR) placeZanik(player);
   }
 
+  /** Walking down the southern exit tunnel once the machine is smashed plays the ending. */
+  function handleExitTunnelEnter({ player }) {
+    if (quest.getStage(player) !== STAGE_MACHINE_SMASHED || quest.isComplete(player)) return;
+    if (player.getLocation().getZ() !== 0) return;
+    enterTunnel(player);
+  }
+
   function handleMillZoneEnter({ player }) {
     if (quest.getStage(player) >= STAGE_REVIVED) placeZanik(player);
   }
@@ -1347,11 +1498,15 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     placeTourGoblin(player);
   }
 
-  /** Cache NPC 4507 (the cellar Zanik parent) only resolves once this bit is set. */
+  /**
+   * Cache NPC 4507 (the cellar Zanik parent) only resolves once this bit is set.
+   * She waits in the cellar only until she takes the robes; from then on the
+   * owner-only follower is Zanik, so keeping the bit set left a second Zanik.
+   */
   function syncCellarVarbit(player) {
     player
       .getPacketSender()
-      .sendVarbit(VARBIT_DTTD_ZANIK_IN_CELLAR, quest.getStage(player) >= STAGE_STARTED ? 1 : 0);
+      .sendVarbit(VARBIT_DTTD_ZANIK_IN_CELLAR, quest.getStage(player) === STAGE_STARTED ? 1 : 0);
   }
 
   function handleBootstrap({ player }) {
@@ -1578,6 +1733,10 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onNpcInteraction("Duke Horacio", { "Talk-to": talkDuke });
   api.onNpcInteraction("Cook", { "Talk-to": talkCook });
   api.onNpcInteraction("Hans", { "Talk-to": talkHans });
+  api.onNpcInteraction("Millie Miller", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Father Urhney", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Gee", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Donie", { "Talk-to": talkOptionalTourStop });
   api.onNpcInteraction("Bob", { "Talk-to": talkBob });
   api.onNpcInteraction("Father Aereck", { "Talk-to": talkFatherAereck });
   api.onNpcInteraction("Lumbridge Guide", { "Talk-to": talkLumbridgeGuide });
@@ -1598,10 +1757,12 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleSunLine);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);
+  api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onCustomEvent("quest:stage-changed", handleQuestStageChanged);
   api.onCustomEvent("door:toggle", claimLargeDoor);
+  api.onCustomEvent("door:toggle", lockedStoreRoomDoor);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(ZANIK_BODY_ITEM_ID, { Drop: handleItemAction });
   api.onNpcDeath(handleNpcDeath);
@@ -1610,6 +1771,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onZoneEnter(RUBBLE_ZONE, handleRubbleZoneEnter);
   api.onZoneEnter(STORE_ZONE, handleStoreZoneEnter);
   api.onZoneEnter(MILL_ZONE, handleMillZoneEnter);
+  api.onZoneEnter(EXIT_TUNNEL_ZONE, handleExitTunnelEnter);
   api.onZoneEnter(LUMBRIDGE_ZONE, handleLumbridgeZoneEnter);
   api.onServerStartup(ensureWorldObjects);
   api.onPlayerLogin(handleLogin);

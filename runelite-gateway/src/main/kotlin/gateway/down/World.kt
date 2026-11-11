@@ -13,6 +13,7 @@ import net.rsprot.protocol.game.outgoing.camera.CamReset
 import net.rsprot.protocol.game.outgoing.camera.CamRotateBy
 import net.rsprot.protocol.game.outgoing.camera.CamRotateToCoordinateV3
 import net.rsprot.protocol.game.outgoing.camera.CamShake
+import net.rsprot.protocol.game.outgoing.camera.CamSkybox
 import net.rsprot.protocol.game.outgoing.camera.CamTargetV4
 import net.rsprot.protocol.game.outgoing.camera.CamUnlock
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
@@ -29,6 +30,7 @@ import net.rsprot.protocol.game.outgoing.specific.MapAnimSpecific
 import net.rsprot.protocol.game.outgoing.specific.ProjAnimSpecificV4
 import net.rsprot.protocol.api.util.ZonePartialEnclosedCacheBuffer
 import net.rsprot.protocol.common.client.OldSchoolClientType
+import net.rsprot.protocol.game.outgoing.zone.header.UpdateZoneFullFollows
 import net.rsprot.protocol.game.outgoing.zone.header.UpdateZonePartialEnclosed
 import net.rsprot.protocol.message.ZoneProt
 import net.rsprot.protocol.game.outgoing.zone.payload.LocAddChangeV2
@@ -61,8 +63,15 @@ class World(
     private val pendingDecks = HashMap<Int, LinkedHashMap<Triple<Int, Int, Int>, MutableList<ZoneProt>>>()
     private val zoneBuffers = ZonePartialEnclosedCacheBuffer(listOf(OldSchoolClientType.DESKTOP))
 
+    /** Absolute zones (south-west tile, level) of the root scene the client got loc changes in. */
+    private val changedZones = HashSet<Triple<Int, Int, Int>>()
+
     /** Sends this tick's zone updates, one UPDATE_ZONE_PARTIAL_ENCLOSED per zone. */
     fun flushZones() {
+        for ((zone, payloads) in pending) {
+            val (zoneX, zoneZ, level) = zone
+            if (payloads.any { it is LocAddChangeV2 || it is LocDel }) changedZones += Triple(sceneX + zoneX, sceneZ + zoneZ, level)
+        }
         flush(pending)
     }
 
@@ -86,11 +95,25 @@ class World(
         zoneBuffers.releaseBuffers()
     }
 
-    fun rebuild(zoneX: Int, zoneZ: Int) {
+    /**
+     * A new scene centred on zone [zoneX], [zoneZ]. With [replayed] (an instance's REBUILD_REGION),
+     * tsps sends every loc change the new scene still has again, as the browser client forgets
+     * them all. The official client keeps the ones still inside the scene and puts them back
+     * after it loads, so a loc tsps no longer sends would stay: a removed POH chair stood until
+     * the player left the house. UPDATE_ZONE_FULL_FOLLOWS reverts a zone's loc changes to the
+     * scene's own locs (and clears its objs: the ground items are sent again after this).
+     * A REBUILD_NORMAL resets nothing: the browser keeps its loc changes across one too.
+     */
+    fun rebuild(zoneX: Int, zoneZ: Int, replayed: Boolean = false) {
         // Updates for the old scene would land on the wrong zones of the new one.
         pending.clear()
         sceneX = (zoneX - SCENE_RADIUS_ZONES) shl 3
         sceneZ = (zoneZ - SCENE_RADIUS_ZONES) shl 3
+        // The client drops the loc changes the new scene doesn't cover.
+        changedZones.removeIf { (x, z) -> !inScene(x, z) }
+        if (!replayed) return
+        for ((x, z, level) in changedZones) send(UpdateZoneFullFollows(x - sceneX, z - sceneZ, level))
+        changedZones.clear()
     }
 
     fun handle(packet: TspsPacket): Boolean {
@@ -239,6 +262,7 @@ class World(
             }
             CAM_SHAKE -> send(CamShake(reader.u8(), reader.u16().coerceAtMost(MAX_BYTE), reader.u16().coerceAtMost(MAX_BYTE), reader.u16().coerceAtMost(MAX_BYTE)))
             CAM_UNLOCK -> send(CamUnlock(reader.u8() != 0))
+            CAM_SKYBOX -> send(CamSkybox(reader.i32()))
             CAM_ROTATE_BY -> send(CamRotateBy(reader.s16(), reader.s16(), reader.u16(), EASINGS[reader.u8()]))
             CAM_ROTATE_COORDINATE -> {
                 val rotation = CamRotateToCoordinateV3(reader.u16(), reader.u16(), reader.s16(), reader.u16(), EASINGS[reader.u8()], false, false)
@@ -356,6 +380,7 @@ class World(
         const val CAM_ARC = 11
         const val CAM_TARGET = 12
         const val CAM_ROTATE_COORDINATE = 13
+        const val CAM_SKYBOX = 14
         const val TARGET_TILE = 0
         const val TARGET_PLAYER = 1
         const val TARGET_NPC = 2

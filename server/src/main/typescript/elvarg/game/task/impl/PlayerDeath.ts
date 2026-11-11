@@ -60,6 +60,14 @@ export class PlayerDeathTask extends Task {
         try {
             switch (this.ticks) {
                 case 0: {
+                    // Send death message with jingle 90 on the respawn tick, four ticks after animation 836
+                    // starts (rsprox 426, 431, 732, 1084, 1085, 4028, 4037, 4041, 4095: message, jingle and map
+                    // rebuild share one tick).
+                    if (this.announce) {
+                        this.player.sendMessage("Oh dear, you are dead!");
+                        this.player.getPacketSender().sendJingle(90);
+                    }
+
                     if (this.player.isPlayerBot && this.player.isPlayerBot()) {
                         (this.player as any).getCombatInteraction?.().handleDeath?.(this.killer);
                     }
@@ -100,6 +108,13 @@ export class PlayerDeathTask extends Task {
                         itemsLost: this.loseItems,
                         handled: false,
                     });
+                    // Every observer hears the death, whichever death hook took it: `onPlayerDeath`
+                    // stops at the first handler that sets `handled` (a quest's own respawn).
+                    PluginManager.emitCustomEvent("player:died", {
+                        player: this.player,
+                        killer: this.killer ?? null,
+                        itemsLost: this.loseItems,
+                    });
 
                     if (!handledDeath) {
                         // Respawn policies run after every dangerous-death observer, including Hardcore.
@@ -138,13 +153,6 @@ export class PlayerDeathTask extends Task {
 
                     // Close all open interfaces..
                     this.player.getPacketSender().sendInterfaceRemoval();
-
-                    // Send death message..
-                    if (this.announce) {
-                        this.player.sendMessage("Oh dear, you are dead!");
-                        // RSProx 4028/4037: ordinary deaths play jingle 90 with the death message.
-                        this.player.getPacketSender().sendJingle(90);
-                    }
 
                     // Perform death animation..
                     this.player.performAnimation(new Animation(836));

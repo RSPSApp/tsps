@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Import an audited ordinary subset of the osrsreboxed ItemSpawnLine export.
- * Existing definitions are preserved byte-for-field and order; equality is exact
- * item/x/y/plane, never a two-tile equivalence. Raw/conditional rows remain in the report.
+ * Legacy definitions keep their fields and order except where the source explicitly identifies
+ * a pickup replacement at the same tile. Raw and conditional rows remain in the report.
  *
  * Infobox Item documents respawn in ticks. For these audited ordinary rows with
  * no tile override, apply the item's explicit infobox value as the spawn's timer.
@@ -16,8 +16,8 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const SOURCE_PIN = Object.freeze({
-  revision: "50574b943b447ed8b9c86eb9813f90960757d61b",
-  exportSha256: "251bc25a375029cd746c3fdb8ca21478f87b740473e38dd6828e11595223c924",
+  revision: "e689983a7341e7306de06e5dfb6bc8e7886df238",
+  exportSha256: "ac6ab32e5637ae03595e216fb3385add0b630811abb72535bde160a28abd49f2",
   inputSha256: "3c2de222f445a46dc47aecd7c7bd9fb5857932c3ffb5be52322c21c30169bcaa",
 });
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -46,7 +46,7 @@ function isAuditedEasternConchShell(row) {
     && EASTERN_CONCH_SHELL_TILES.has(`${row.x}:${row.y}`);
 }
 // Exact ordinary rows audited separately from these pages' scenery/quest spawns.
-const AUDITED_MEMBER_COMMON_TOOL_ROWS = new Map([
+const AUDITED_MEMBER_ORDINARY_ROWS = new Map([
   ["Pestle and mortar:233:1667:3068:0", "[[Outer Fortis]]"],
   ["Vial of water:227:1668:3068:0", "[[Outer Fortis]]"],
   ["Bucket:1925:1667:3124:0", "[[Civitas illa Fortis]]"],
@@ -55,15 +55,30 @@ const AUDITED_MEMBER_COMMON_TOOL_ROWS = new Map([
   ["Spade:952:1641:3052:0", "[[Outer Fortis]]"],
   ["Spade:952:1405:2938:0", "[[Aldarin]]"],
   ["Hammer:2347:1373:2949:0", "[[Aldarin]]"],
+  ["Hammer:2347:1770:3114:0", "[[Civitas illa Fortis]]"],
+  ["Hammer:2347:1773:3060:0", "[[Outer Fortis]]"],
+  ["Hammer:2347:1696:3070:0", "[[Outer Fortis]]"],
+  ["Beer glass:1919:1711:3114:0", "[[Civitas illa Fortis]]"],
+  ["Beer glass:1919:1673:3155:1", "[[Civitas illa Fortis]] - [[Sunrise Palace]] ({{FloorNumber|uk=1}})"],
+  ["Beer glass:1919:1724:3073:0", "[[Outer Fortis]]"],
+  ["Logs:1511:1743:3167:0", "[[Civitas illa Fortis]]"],
+  ["Logs:1511:1744:3166:0", "[[Civitas illa Fortis]]"],
+  ["Logs:1511:1742:3166:0", "[[Civitas illa Fortis]]"],
+  ["Logs:1511:1746:3079:0", "[[Outer Fortis]]"],
+  ["Logs:1511:1742:3079:0", "[[Outer Fortis]]"],
+  ["Logs:1511:1697:3060:0", "[[Outer Fortis]]"],
+  ["Logs:1511:1687:3067:0", "[[Outer Fortis]]"],
+  ["Logs:1511:1678:3062:0", "[[Outer Fortis]]"],
+  ["Logs:1511:1678:3066:0", "[[Outer Fortis]]"],
   ["Chisel:1755:1657:3142:0", "[[Civitas illa Fortis]] - on a crate in the [[Fortis Blacksmith]] store"],
   ["Tinderbox:590:1625:3287:0", "[[Salvager Overlook]] - General Store"],
 ]);
-function isAuditedMemberCommonTool(row) {
-  const location = AUDITED_MEMBER_COMMON_TOOL_ROWS.get([row.page,row.id,row.x,row.y,row.plane].join(":"));
+function isAuditedMemberOrdinaryRow(row) {
+  const location = AUDITED_MEMBER_ORDINARY_ROWS.get([row.page,row.id,row.x,row.y,row.plane].join(":"));
   return location !== undefined && row.members === true && row.quantity === 1 && row.infobox_respawn_ticks === 100
     && location === row.location;
 }
-// Only these ordinary Coins placements were audited; other page contexts remain deferred.
+// Individually audited ordinary Coins rows outside the fully audited Corsair Cove Dungeon row.
 const AUDITED_ORDINARY_EXACT = new Map([
   ["995:3003:9801:0", "[[Dwarven Mine]]"],
   ["995:3001:9798:0", "[[Dwarven Mine]]"],
@@ -95,10 +110,46 @@ const definitionKey = (r) => keyOf(r.id, r.location?.x, r.location?.y, r.locatio
 const ownerOf = (r) => OWNED_EXACT.get(rowKey(r))
   ?? (r.location?.includes("[[Hallowed Sepulchre]]") ? "HallowedSepulchre per-player floor template integration required" : null);
 
+function reconcilePickupReplacements(rows, existing) {
+  const statuses = new Map();
+  const replacements = new Map();
+  const projections = new Set();
+  for (const row of rows) {
+    const pickup = row.pickup_replacement;
+    if (!pickup || row.unresolved_reasons.length) continue;
+    const key = rowKey(row);
+    const display = existing.filter(d => definitionKey(d) === key);
+    if (display.length !== 1 || (display[0].amt ?? 1) !== row.quantity
+      || display[0].respawn !== row.infobox_respawn_ticks || (display[0].members === true) !== row.members) continue;
+
+    const rewardKey = keyOf(pickup.id, row.x, row.y, row.plane);
+    const projectionsAtTile = rows.filter(other => rowKey(other) === rewardKey && other.name === row.name
+      && other.location === row.location && other.members === row.members && other.quantity === row.quantity
+      && !other.unresolved_reasons.length && !other.pickup_replacement);
+    if (projectionsAtTile.length !== 1) continue;
+    const [projection] = projectionsAtTile;
+
+    replacements.set(key, {
+      id: pickup.id,
+      ...(pickup.telegrab_denial ? { telegrabDenial: pickup.telegrab_denial } : {}),
+    });
+    projections.add(rewardKey);
+    statuses.set(row, "existing-pickup-replacement");
+    statuses.set(projection, "pickup-reward-projection");
+  }
+  const definitions = existing.filter(d => !projections.has(definitionKey(d))).map(d => {
+    const replacement = replacements.get(definitionKey(d));
+    return replacement ? { ...d, pickupReplacement: replacement } : d;
+  });
+  return { definitions, statuses };
+}
+
 export function importSpawns(source, existing) {
   if (source.schema !== 1 || !Array.isArray(source.rows) || !Array.isArray(existing)) {
     throw new Error("Expected source schema1 and an array of existing definitions");
   }
+  const reconciled = reconcilePickupReplacements(source.rows, existing);
+  existing = reconciled.definitions;
   const definitions = structuredClone(existing);
   const exact = new Map();
   for (const d of existing) {
@@ -110,19 +161,22 @@ export function importSpawns(source, existing) {
   for (const row of source.rows) {
     const entry = { source: row, status: null, reasons: [...row.unresolved_reasons] };
     const owner = ownerOf(row);
-    if (owner) {
+    if (reconciled.statuses.has(row)) {
+      entry.status = reconciled.statuses.get(row);
+    } else if (owner) {
       entry.status = "area-owned-or-instance-integration";
       entry.owner = owner;
     } else if (entry.reasons.length) {
       entry.status = "unresolved-source";
     } else if (row.members !== false
       && !(row.members === true && AUDITED_MEMBER_ORDINARY_ITEMS.get(row.page) === row.id)
-      && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)) {
+      && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row)) {
       entry.status = "members-world-scope-deferred";
-    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberCommonTool(row)
+    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row)
       && !(row.page === "Coins" && row.members === false
-        && AUDITED_ORDINARY_EXACT.has(rowKey(row))
-        && AUDITED_ORDINARY_EXACT.get(rowKey(row)) === row.location)) {
+        && ((AUDITED_ORDINARY_EXACT.has(rowKey(row)) && AUDITED_ORDINARY_EXACT.get(rowKey(row)) === row.location)
+          || (row.id === 995 && row.location === "[[Corsair Cove Dungeon]]" && row.plane === 0
+            && row.quantity === 1 && row.infobox_respawn_ticks === 100)))) {
       entry.status = "ordinary-page-not-yet-audited";
     } else if (![row.id,row.x,row.y,row.plane,row.quantity,row.infobox_respawn_ticks].every(Number.isInteger)
       || row.id < 0 || row.plane < 0 || row.plane > 3 || row.quantity <= 0
@@ -174,7 +228,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member common-tool/container rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows only; explicit infobox ticks applied only without tile override; all legacy entries preserved.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member ordinary rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows and the ordinary Corsair Cove Dungeon Coins row; explicit infobox ticks applied only without tile override; legacy entries preserved except exact source-proven pickup reward projections.",
     counts, rows:report } };
 }
 

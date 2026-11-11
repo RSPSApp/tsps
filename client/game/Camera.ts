@@ -313,6 +313,28 @@ export class Camera {
         }
     }
 
+    /**
+     * The field of view as the engine holds it, not in script units: those round when they
+     * convert, so saving and restoring through them would drift a little each time. Pass `out`
+     * to fill an existing object (no allocation, for per-frame callers).
+     */
+    getViewportFovScale(out: { low: number; high: number } = { low: 0, high: 0 }): { low: number; high: number } {
+        out.low = this.viewportFovLow;
+        out.high = this.viewportFovHigh;
+        return out;
+    }
+
+    setViewportFovScale(low: number, high: number): void {
+        this.viewportFovLow = low;
+        this.viewportFovHigh = high;
+        this.updated = true;
+    }
+
+    /** Whether a server camera shot (cam_moveto, cam_lookat, ...) holds the camera until cam_reset. */
+    isScripted(): boolean {
+        return this.scriptedMove !== undefined || this.scriptedLook !== undefined;
+    }
+
     clearScriptedCamera(): void {
         const wasScripted = this.scriptedMove || this.scriptedLook;
         this.scriptedMove = this.scriptedLook = undefined;

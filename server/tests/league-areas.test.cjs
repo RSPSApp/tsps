@@ -246,6 +246,27 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
   assert.equal(areaAt(3000, 3000, { league: 99 }), null, "no league, no areas");
 });
 
+test("the Citharede Abbey's square (53,49) is the desert; the Abandoned Mine in the square below stays Morytania", () => {
+  // Wiki (Citharede Abbey, leagueRegion = Desert): the abbey and the Giants' Plateau east of Al
+  // Kharid, map square 53,49, tiles 3392-3455 by 3136-3199. That square's cabbage field is the
+  // abbey task's own "in the Citharede Abbey", so the whole square must be the desert.
+  for (const [x, y] of [[3413, 3178], [3400, 3140], [3392, 3136], [3455, 3199]]) {
+    assert.equal(areaAt(x, y), DESERT, `the Giants' Plateau square (${x}, ${y})`);
+  }
+  // The Abandoned Mine is in the surface square below (53,50; its entrance 3451, 3233, the Wiki's
+  // shooting-star pin) and stays Morytania, as do its underground levels: map y + 6400 takes the
+  // surface square (3422, 9625 is Haunted Mine's upper level, square 53,150 -> surface 53,50).
+  assert.equal(areaAt(3451, 3233), MORYTANIA, "the Abandoned Mine's entrance square");
+  assert.equal(areaAt(3422, 9625), MORYTANIA, "the Haunted Mine's levels under that square");
+  assert.equal(areaAt(3413, 3240), MORYTANIA, "the square just south of the plateau");
+  // Every league moves it: it was Morytania before this square was reassigned.
+  for (const league of [4, 5, 6]) {
+    assert.equal(areaAt(3413, 3178, { league }), DESERT, `league ${league}: the abbey`);
+    assert.equal(areaAt(3451, 3233, { league }), MORYTANIA, `league ${league}: the mine`);
+    assert.equal(areaAt(3422, 9625, { league }), MORYTANIA, `league ${league}: the mine's levels`);
+  }
+});
+
 test("a locked area refuses a walk, a teleport and a respawn; open ground and a main character are untouched", () => {
   const league = character("walker");
   const lumbridgeSide = at(3263, 3220);

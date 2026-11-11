@@ -6,6 +6,7 @@
  * table (NpcDrops), the Ikkle hydra roll the pets table's; the chamber's door opens again.
  */
 const Common = require("./Common.AlchemicalHydra");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 /** Combat Achievements' count for the Hydra, or null when it doesn't answer. */
 function countedKills(player) {
@@ -24,7 +25,7 @@ function hydraDeath({ npc, killer }) {
   player.setAttribute(Common.KILLS_ATTRIBUTE, own);
   Common.later(1, () => {
     const kills = Math.max(own, countedKills(player) ?? 0);
-    player.sendMessage(Common.message("killCount", { kills }));
+    sendBossKillCount(player, Common.message("killCount", { kills }));
   });
 }
 

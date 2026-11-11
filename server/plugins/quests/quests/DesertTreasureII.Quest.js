@@ -137,6 +137,13 @@ module.exports = function registerDesertTreasureII(api) {
   };
   // A chapter's varbit value. Before the chapters open it is 0; a placed medallion, the finale
   // and completion read the chapter's done value (post-quest logins: 56/48/70/50, rsprox 3285).
+  /** "desert-treasure-ii:boss-defeated" { player, boss: chapter key }: whether the quest's fight is won. */
+  function answerBossDefeated(request) {
+    const chapter = CHAPTERS[request?.boss];
+    if (!request?.player || !chapter) return;
+    if (chapterValue(request.player, request.boss) >= chapter.killed) request.defeated = true;
+  }
+
   function chapterValue(player, key) {
     const s = stage(player);
     const chapter = CHAPTERS[key];
@@ -9023,6 +9030,7 @@ module.exports = function registerDesertTreasureII(api) {
   api.onCanBankItem(preventBankingMedallions);
   api.onCustomEvent("player:widget-action", onWidgetAction);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("desert-treasure-ii:boss-defeated", answerBossDefeated);
   api.onCustomEvent("interface:closed", closeGolemRecord);
   api.onNpcDialogueCondition(resolveGolemSearchCondition);
   api.onNpcDialogueCondition(resolveSerumSpaceCondition);

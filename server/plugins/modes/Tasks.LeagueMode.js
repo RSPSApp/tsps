@@ -13,10 +13,6 @@
 const Common = require("./leaguetasks/Common.LeagueTasks");
 
 module.exports = {
-  name: "LeagueTasks",
-  description: "Adds the league task lists, awarding League Points from kills, levels, quests and deeds, with the task interface opened from the side panel.",
-  members: true,
-  dependsOn: ["LeagueMode", "LeaguePoints"],
   register(api) {
     Common.init(api);
     require("./leaguetasks/Catalog.LeagueTasks")(api);

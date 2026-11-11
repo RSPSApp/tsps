@@ -66,9 +66,9 @@ before(async () => {
     emitCustomEvent: (name, payload) => emit(name, payload),
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
   require("../plugins/interface/ScreenHighlight.plugin").register(api);
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
 });
 
 beforeEach(() => {

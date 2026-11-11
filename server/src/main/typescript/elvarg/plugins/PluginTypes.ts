@@ -1744,4 +1744,6 @@ export interface PluginModule {
   /** False keeps the plugin off unless world.json `plugins` turns it on. */
   enabled?: boolean;
   register(api: PluginApi): void;
+  /** Additional hooks registered at this plugin's path position in the next dependency pass. */
+  registerDeferred?(api: PluginApi): void;
 }

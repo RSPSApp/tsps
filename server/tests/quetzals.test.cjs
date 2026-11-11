@@ -680,7 +680,7 @@ test("native saved Renu owners can fly to Auburnvale and use its published bird 
   Quetzals.register(nativeApi);
   require("../plugins/modes/league/Common.LeagueMode").init(nativeApi);
   require("../plugins/modes/league/Account.LeagueMode")(nativeApi);
-  require("../plugins/modes/LeagueAreaUnlocks.plugin").register(nativeApi);
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(nativeApi);
   require("../plugins/quests/quests/ChildrenOfTheSun.Quest")(nativeApi);
   const league = require("../plugins/modes/leagueareas/Common.LeagueAreaUnlocks");
   const loader = new NpcSpawnDefinitionLoader();

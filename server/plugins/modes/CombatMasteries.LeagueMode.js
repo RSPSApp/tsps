@@ -10,10 +10,6 @@
 const Common = require("./leaguemasteries/Common.LeagueCombatMasteries");
 
 module.exports = {
-  name: "LeagueCombatMasteries",
-  description: "Adds Raging Echoes combat masteries: three styles of six tiers bought with points from combat challenges, and the passives they grant.",
-  members: true,
-  dependsOn: ["LeagueMode"],
   register(api) {
     Common.init(api);
     require("./leaguemasteries/Points.LeagueCombatMasteries")(api);

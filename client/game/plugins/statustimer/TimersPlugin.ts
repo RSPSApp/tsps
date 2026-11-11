@@ -12,6 +12,24 @@ import { VengeanceTimer } from "../vengeancetimer/VengeanceTimer";
 import { StatusTimer } from "./StatusTimer";
 import { getAttackTimerTicks } from "../attacktimer/attackTimerState";
 import { getCurrentTick } from "../../../network/serverConnection/timing";
+import { CLIENT_TOKEN, inject as injectClient } from "@runelite/client/plugins/PluginInjector";
+import { openConfiguration } from "@runelite/client/plugins/config/configurationRequests";
+import { skillIconSprite } from "../../../rs/skill/skillIcons";
+import { SkillId } from "../../../rs/skill/skills";
+import { formatTimerSeconds, TimersInfoBoxOverlay, type TimerEntry } from "./TimersInfoBoxOverlay";
+import {
+    ANTIFIRE_ITEMS,
+    FREEZE_SPRITES,
+    ITEM_TIMER_FIRST_VARP,
+    ITEM_TIMER_SLOTS,
+    POISON_SPRITES,
+    STAMINA_ITEMS,
+    TELEBLOCK_SPRITES,
+    VENGEANCE_SPRITE_ID,
+} from "./timerIcons";
+
+/** The mobile gameframe (toplevel_osm): its own HTML timer slots, not the corner overlay. */
+const MOBILE_ROOT = 601;
 
 const TimersOverlay = lazy(() =>
     import("./TimersOverlay").then((m) => ({ default: m.TimersOverlay })),
@@ -39,7 +57,9 @@ export function migrateTimersConfig(config: ConfigManager): void {
 export class TimersPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
         name: "Timers",
-        description: "Attack, poison, freeze, antifire, teleblock, stamina and vengeance timers.",
+        description:
+            "Attack, poison, freeze, antifire, teleblock, stamina and vengeance timers, and the other timed potions, " +
+            "the imbued heart and hunter meat's second heal.",
         tags: [
             "combat",
             "timer",
@@ -50,6 +70,10 @@ export class TimersPlugin extends Plugin {
             "teleblock",
             "stamina",
             "vengeance",
+            "potion",
+            "divine",
+            "overload",
+            "heart",
         ],
         configKey: "timersplugin",
     };
@@ -63,6 +87,9 @@ export class TimersPlugin extends Plugin {
     readonly teleblock = new StatusTimer();
     readonly stamina = new StatusTimer();
     readonly vengeance = new VengeanceTimer();
+    /** The server's other timed effects (timerIcons ITEM_TIMER_FIRST_VARP): a timer and the item it shows. */
+    readonly itemTimers = Array.from({ length: ITEM_TIMER_SLOTS }, () => ({ timer: new StatusTimer(), itemId: 0 }));
+    readonly widgetOverlay = new TimersInfoBoxOverlay(this);
     private readonly effects = [
         this.poison,
         this.freeze,
@@ -85,7 +112,64 @@ export class TimersPlugin extends Plugin {
         }
         if (before > 5 && this.vengeance.getRemainingSeconds(now) > 0) count++;
         if (before > 6 && !this.config.showAttackTimer() && this.attackTimerTicks() > 0) count++;
+        for (let i = 0; i < this.itemTimers.length && 7 + i < before; i++) {
+            if (this.itemTimers[i].itemId > 0 && this.itemTimers[i].timer.getRemainingSeconds(now) > 0) count++;
+        }
         return count;
+    }
+
+    /** The item timer slots from their varps (seconds, then item id), as the server sends them. */
+    syncItemTimers(readVarp: (id: number) => number, now = Date.now()): void {
+        this.itemTimers.forEach((slot, i) => {
+            const seconds = readVarp(ITEM_TIMER_FIRST_VARP + i * 2) | 0;
+            const itemId = readVarp(ITEM_TIMER_FIRST_VARP + i * 2 + 1) | 0;
+            slot.itemId = seconds > 0 && itemId > 0 ? itemId : 0;
+            slot.timer.sync(slot.itemId ? seconds : 0, slot.itemId, now);
+        });
+    }
+
+    /** The boxes to draw now, in order: the status timers, vengeance, the attack timer, then the item timers. */
+    timerEntries(now = Date.now()): TimerEntry[] {
+        const entries: TimerEntry[] = [];
+        const status = (key: string, timer: StatusTimer, fallback: string, icon: { sprites?: Record<number, number>; items?: Record<number, number> }) => {
+            const state = timer.getState();
+            const remaining = timer.getRemainingSeconds(now);
+            if (!showAllTimers && (!state.active || (state.endsAt !== null && remaining <= 0))) return;
+            const type = state.type || Number(Object.keys(icon.sprites ?? icon.items ?? {})[0] ?? 1);
+            entries.push({
+                key, fallback, sprite: icon.sprites?.[type], item: icon.items?.[type],
+                text: !state.active ? "0" : state.endsAt === null ? "∞" : formatTimerSeconds(remaining),
+            });
+        };
+        status("poison", this.poison, "P", { sprites: POISON_SPRITES });
+        status("freeze", this.freeze, "F", { sprites: FREEZE_SPRITES });
+        status("antifire", this.antifire, "A", { items: ANTIFIRE_ITEMS });
+        status("teleblock", this.teleblock, "T", { sprites: TELEBLOCK_SPRITES });
+        status("stamina", this.stamina, "S", { items: STAMINA_ITEMS });
+        const vengeance = this.vengeance.getRemainingSeconds(now);
+        if (vengeance > 0 || showAllTimers) entries.push({ key: "vengeance", sprite: VENGEANCE_SPRITE_ID, fallback: "V", text: formatTimerSeconds(vengeance) });
+        const attack = this.attackTimerTicks();
+        if (!this.config.showAttackTimer() && (attack > 0 || showAllTimers)) {
+            entries.push({ key: "attack", sprite: skillIconSprite(SkillId.Attack), fallback: "⚔", text: String(attack) });
+        }
+        this.itemTimers.forEach((slot, i) => {
+            const remaining = slot.timer.getRemainingSeconds(now);
+            if (slot.itemId > 0 && remaining > 0) entries.push({ key: `item${i}:${slot.itemId}`, item: slot.itemId, fallback: "?", text: formatTimerSeconds(remaining) });
+        });
+        return entries;
+    }
+
+    /** Whether the mobile gameframe is up: it keeps the HTML boxes in its own slots. */
+    mobileGameframe(): boolean {
+        try {
+            return injectClient<OsrsClient>(CLIENT_TOKEN)?.widgetManager?.rootInterface === MOBILE_ROOT;
+        } catch {
+            return false;
+        }
+    }
+
+    openSettings(): void {
+        openConfiguration(TimersPlugin);
     }
 
     subscribe(listener: () => void): () => void {

@@ -12,6 +12,7 @@ import { mobileCombatTimerStyle } from "../../widgets/MobileHudLayout";
 import type { TimersPlugin } from "./TimersPlugin";
 import {
     AntifireTimerOverlay,
+    StatusTimerOverlay,
     FreezeTimerOverlay,
     PoisonTimerOverlay,
     StaminaTimerOverlay,
@@ -25,6 +26,11 @@ import {
     STAMINA_TIMER_SECONDS_VARP,
     TELEBLOCK_TIMER_SECONDS_VARP,
 } from "./StatusTimerOverlay";
+
+/** The mobile gameframe (toplevel_osm): its HTML boxes; elsewhere TimersInfoBoxOverlay draws the timers. */
+const MOBILE_ROOT = 601;
+
+const NO_ITEM_SPRITES: Record<number, number> = {};
 
 export function TimersOverlay({
     osrsClient,
@@ -67,6 +73,7 @@ export function TimersOverlay({
                     now,
                 );
             }
+            plugin.syncItemTimers((id) => osrsClient.varManager?.getVarp(id) ?? 0, now);
             plugin.vengeance.syncCooldownVarbit(
                 osrsClient.varManager?.getVarbit(VENGEANCE_TIME_LIMIT_VARBIT) ?? 0,
                 now,
@@ -79,7 +86,8 @@ export function TimersOverlay({
         return () => window.clearInterval(interval);
     }, [osrsClient, plugin]);
 
-    if (!enabled || osrsClient.isOnLoginScreen()) return null;
+    // Kept mounted everywhere for the sync above; only the mobile gameframe draws these HTML boxes.
+    if (!enabled || osrsClient.isOnLoginScreen() || osrsClient.widgetManager?.rootInterface !== MOBILE_ROOT) return null;
     const now = Date.now();
     const attackTicks = plugin.attackTimerTicks();
     const attackStyle = mobileCombatTimerStyle(osrsClient, 6);
@@ -97,6 +105,10 @@ export function TimersOverlay({
                     <span className="status-timer-seconds">{attackTicks}</span>
                 </div>
             )}
+            {plugin.itemTimers.map((slot, i) => slot.itemId > 0 && (
+                <StatusTimerOverlay key={i} className="item-timer-infobox" fallback="?" osrsClient={osrsClient} plugin={slot.timer}
+                    now={now} title="Timer" sprites={NO_ITEM_SPRITES} items={{ [slot.itemId]: slot.itemId }} slot={7 + i} />
+            ))}
         </>
     );
 }

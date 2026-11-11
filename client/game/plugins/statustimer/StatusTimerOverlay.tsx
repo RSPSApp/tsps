@@ -11,32 +11,18 @@ import "./StatusTimerOverlay.css";
 import { mobileCombatTimerStyle } from "../../widgets/MobileHudLayout";
 import "../../widgets/MobileHudLayout.css";
 
-const POISON_SPRITES: Record<number, number> = { 1: 1061, 2: 1102 };
-const FREEZE_SPRITES: Record<number, number> = {
-    1572: 319,
-    1582: 320,
-    1592: 321,
-    12861: 325,
-    12881: 326,
-    12871: 327,
-    12891: 328,
-};
+import { ANTIFIRE_ITEMS, FREEZE_SPRITES, POISON_SPRITES, STAMINA_ITEMS, TELEBLOCK_SPRITES } from "./timerIcons";
+export {
+    ANTIFIRE_TIMER_SECONDS_VARP,
+    ANTIFIRE_TIMER_TYPE_VARP,
+    STAMINA_TIMER_SECONDS_VARP,
+    TELEBLOCK_TIMER_SECONDS_VARP,
+} from "./timerIcons";
 
 export const POISON_TIMER_SECONDS_VARP = 7996;
 export const POISON_TIMER_TYPE_VARP = 7997;
 export const FREEZE_TIMER_SECONDS_VARP = 7998;
 export const FREEZE_TIMER_SPELL_VARP = 7999;
-// Sent by server/plugins/interface/BuffTimers.plugin.js.
-export const ANTIFIRE_TIMER_SECONDS_VARP = 7990;
-export const ANTIFIRE_TIMER_TYPE_VARP = 7991;
-export const TELEBLOCK_TIMER_SECONDS_VARP = 7992;
-export const STAMINA_TIMER_SECONDS_VARP = 7993;
-
-// RuneLite GameTimer icons: antifire (normal and extended) and super antifire (normal and
-// extended) are the 4-dose potions, teleblock is the spell sprite (Magicon2.TELE_BLOCK).
-const ANTIFIRE_ITEMS: Record<number, number> = { 1: 2452, 2: 21978 };
-const TELEBLOCK_SPRITES: Record<number, number> = { 1: 352 };
-const STAMINA_ITEMS: Record<number, number> = { 1: 12625 };
 const NO_SPRITES: Record<number, number> = {};
 const MOBILE_SLOTS: Record<string, number> = {
     "poison-timer-infobox": 0, "freeze-timer-infobox": 1, "antifire-timer-infobox": 2,
@@ -68,6 +54,7 @@ export function StatusTimerOverlay({
     title,
     sprites,
     items,
+    slot,
 }: {
     className: string;
     fallback: string;
@@ -78,6 +65,8 @@ export function StatusTimerOverlay({
     sprites: Record<number, number>;
     /** Item icons, by type, for types without a sprite. */
     items?: Record<number, number>;
+    /** The mobile gameframe slot, for boxes not in MOBILE_SLOTS (the item timers). */
+    slot?: number;
 }): JSX.Element | null {
     const state = plugin.getState();
     const [iconUrl, setIconUrl] = useState<string>();
@@ -105,7 +94,7 @@ export function StatusTimerOverlay({
         return null;
     }
 
-    const mobileStyle = mobileCombatTimerStyle(osrsClient, MOBILE_SLOTS[className]);
+    const mobileStyle = mobileCombatTimerStyle(osrsClient, slot ?? MOBILE_SLOTS[className]);
     return (
         <div className={`status-timer-infobox ${className}${mobileStyle ? " mobile-combat-timer" : ""}`} style={mobileStyle} title={title}>
             {iconUrl ? <img src={iconUrl} alt="" className="status-timer-icon" /> : <span className="status-timer-fallback">{fallback}</span>}

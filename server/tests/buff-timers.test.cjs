@@ -4,6 +4,8 @@ const plugin = require('../plugins/interface/BuffTimers.plugin');
 const { ATTR_DRAGONFIRE_STATE, ATTR_DRAGONFIRE_TIER, DragonfireProtectionTier } = require('../plugins/combat/DragonfireProtection');
 
 const ANTIFIRE_SECONDS = 7990, ANTIFIRE_TYPE = 7991, TELEBLOCK_SECONDS = 7992, STAMINA_SECONDS = 7993;
+/** The other timed effects' slots (seconds, item id) from 7970, sent with the rest at login. */
+const EMPTY_ITEM_SLOTS = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [7970 + i, 0]));
 // The buff bar's own varbits: antifire_potion, super_antifire_potion, teleblock_cycles, stamina_duration, stamina_active.
 const ANTIFIRE = 3981, SUPER_ANTIFIRE = 6101, TELEBLOCK = 4163, STAMINA = 24, STAMINA_ACTIVE = 25;
 
@@ -40,7 +42,7 @@ function fixture() {
 test('login sends every timer varp, cleared when nothing is active', t => {
   const f = fixture();
   f.hooks.login({ player: f.player });
-  assert.deepEqual(f.sent(), { [ANTIFIRE_SECONDS]: 0, [ANTIFIRE_TYPE]: 0, [TELEBLOCK_SECONDS]: 0, [STAMINA_SECONDS]: 0 });
+  assert.deepEqual(f.sent(), { ...EMPTY_ITEM_SLOTS, [ANTIFIRE_SECONDS]: 0, [ANTIFIRE_TYPE]: 0, [TELEBLOCK_SECONDS]: 0, [STAMINA_SECONDS]: 0 });
   assert.deepEqual(f.bits(), { [ANTIFIRE]: 0, [SUPER_ANTIFIRE]: 0, [TELEBLOCK]: 0, [STAMINA]: 0, [STAMINA_ACTIVE]: 0 });
   f.hooks.process({ player: f.player });
   assert.deepEqual(f.sent(), {}, 'unchanged values are not resent each tick');
@@ -104,7 +106,7 @@ test('after a relog antifire falls back to the saved fire immunity timer', t => 
   const f = fixture();
   f.fire.seconds = 300;
   f.hooks.login({ player: f.player });
-  assert.deepEqual(f.sent(), { [ANTIFIRE_SECONDS]: 300, [ANTIFIRE_TYPE]: 1, [TELEBLOCK_SECONDS]: 0, [STAMINA_SECONDS]: 0 });
+  assert.deepEqual(f.sent(), { ...EMPTY_ITEM_SLOTS, [ANTIFIRE_SECONDS]: 300, [ANTIFIRE_TYPE]: 1, [TELEBLOCK_SECONDS]: 0, [STAMINA_SECONDS]: 0 });
   assert.deepEqual(f.bits(), { [ANTIFIRE]: 17, [SUPER_ANTIFIRE]: 0, [TELEBLOCK]: 0, [STAMINA]: 0, [STAMINA_ACTIVE]: 0 }, '500 ticks left');
 });
 
@@ -157,7 +159,7 @@ test('logout forgets the player, so the next login resends everything', t => {
   f.sent();
   f.hooks.logout({ player: f.player });
   f.hooks.process({ player: f.player });
-  assert.equal(Object.keys(f.sent()).length, 4);
+  assert.equal(Object.keys(f.sent()).length, 4 + 20);
   assert.equal(Object.keys(f.bits()).length, 5);
 });
 
@@ -168,4 +170,62 @@ test('player bots get no timer varps', t => {
   f.hooks.process({ player: f.player });
   assert.deepEqual(f.sent(), {});
   assert.deepEqual(f.bits(), {});
+});
+
+// The other timed effects: each slot is the seconds left and the item whose icon the client shows.
+const core = {
+  ItemIdentifiers: {
+    DIVINE_SUPER_COMBAT_POTION_4_: 23685, DIVINE_SUPER_ATTACK_POTION_4_: 23697, DIVINE_SUPER_STRENGTH_POTION_4_: 23709,
+    DIVINE_SUPER_DEFENCE_POTION_4_: 23721, DIVINE_RANGING_POTION_4_: 23733, DIVINE_MAGIC_POTION_4_: 23745,
+    DIVINE_BATTLEMAGE_POTION_4_: 24623, DIVINE_BASTION_POTION_4_: 24635, OVERLOAD_4_: 11730, OVERLOAD_4__4: 20992,
+    MENAPHITE_REMEDY_4_: 27202, PRAYER_REGENERATION_POTION_4_: 30125, PRAYER_ENHANCE_4_: 20968,
+    SUPERANTIPOISON_4_: 2448, GOADING_POTION_4_: 30137, IMBUED_HEART: 20724, SATURATED_HEART: 27641,
+  },
+  Skill: Object.fromEntries(['ATTACK', 'DEFENCE', 'STRENGTH', 'HITPOINTS', 'RANGED', 'PRAYER', 'MAGIC'].map((name, i) => [name, { getIndex: () => i }])),
+  CacheDefinitions: { getVarbitId: name => (name === 'goading_potion_timer' ? 13000 : null) },
+};
+
+test('item timers: divine potions told apart, overloads, Menaphite, prayer regeneration, immunity, goading, the heart', t => {
+  const now = 2_000_000;
+  t.mock.method(Date, 'now', () => now);
+  plugin._test.setCore(core);
+  const attributes = new Map([
+    // Divine super combat (attack, strength, defence) and, later, divine ranging.
+    ['potions:divine:state', { endsAt: now + 300_000, targets: [
+      { skillIndex: 0, endsAt: now + 200_000 }, { skillIndex: 2, endsAt: now + 200_000 }, { skillIndex: 1, endsAt: now + 200_000 },
+      { skillIndex: 4, endsAt: now + 300_000 }] }],
+    ['potions:overload:state', { endsAt: now + 60_000, area: 'raid' }],
+    ['potions:menaphite:state', { endsAt: now + 120_000 }],
+    // 10 steps left, the next in 3 ticks: 3 + 9 * 12 ticks.
+    ['potions:prayer-regen:state', { left: 10, nextRestoreAt: now + 1800 }],
+    ['imbued-heart:ready-at', now + 420_000],
+  ]);
+  const player = {
+    getAttribute: key => attributes.get(key),
+    getCombat: () => ({ getPoisonImmunityTimer: () => ({ secondsRemaining: () => 90, millisRemaining: () => 90_000 }) }),
+    getPacketSender: () => ({ getVarbit: id => (id === 13000 ? 50 : 0) }),
+  };
+  const timers = plugin._test.itemTimers(player, now);
+  assert.deepEqual(timers, [
+    [200_000, 23685], [300_000, 23733], [60_000, 20992], [120_000, 27202],
+    [1800 + 9 * 7200, 30125], [90_000, 2448], [50 * 3600, 30137], [420_000, 20724],
+  ]);
+  const state = Object.fromEntries(plugin._test.getState(player, now).filter(([kind]) => kind === 'varp').map(([, id, value]) => [id, value]));
+  assert.equal(state[7970], 200, 'slot 1: seconds');
+  assert.equal(state[7971], 23685, 'slot 1: the divine super combat potion');
+  assert.equal(state[7986], 0, 'slot 9 is empty');
+  plugin._test.setCore(null);
+});
+
+test('divine potions by their skills: bastion, battlemage and the single-skill ones', t => {
+  const now = 2_000_000;
+  plugin._test.setCore(core);
+  const divine = targets => plugin._test.itemTimers({
+    getAttribute: key => (key === 'potions:divine:state' ? { endsAt: now + 1000, targets } : undefined),
+  }, now).map(([, item]) => item);
+  assert.deepEqual(divine([{ skillIndex: 4, endsAt: now + 1000 }, { skillIndex: 1, endsAt: now + 1000 }]), [24635], 'ranged and defence: bastion');
+  assert.deepEqual(divine([{ skillIndex: 6, endsAt: now + 1000 }, { skillIndex: 1, endsAt: now + 1000 }]), [24623], 'magic and defence: battlemage');
+  assert.deepEqual(divine([{ skillIndex: 2, endsAt: now + 1000 }]), [23709], 'strength alone');
+  assert.deepEqual(divine([{ skillIndex: 6, endsAt: now + 1000 }]), [23745], 'magic alone');
+  plugin._test.setCore(null);
 });

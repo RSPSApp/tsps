@@ -251,9 +251,15 @@ function rollOutcome(outcomes, random) {
   return outcomes.find((outcome) => (roll -= outcome.weight) < 0) ?? outcomes[outcomes.length - 1];
 }
 
+/** The hunter meat whose second heal is still to come ({ dueAt: Date.now() time, itemId }), or undefined. */
+function pendingSecondHeal(player) {
+  const token = pendingSecondHeals.get(player);
+  return token && token.dueAt > Date.now() ? { dueAt: token.dueAt, itemId: token.itemId } : undefined;
+}
+
 /** The second heal of a hunter meat, 7 ticks on; eating another one first replaces it. */
 function scheduleSecondHeal(player, then, itemId) {
-  const token = {};
+  const token = { dueAt: Date.now() + then.ticks * 600, itemId };
   pendingSecondHeals.set(player, token);
   core.TaskManager.submit(new core.CountdownTask(player, then.ticks, () => {
     if (pendingSecondHeals.get(player) !== token || player.getHitpoints() <= 0) return;
@@ -410,6 +416,7 @@ module.exports = {
   description: "Eating: heals, boosts, drains and cures from data/food.json, with eat delays, multi-bite foods, combo foods and the food-eaten counter.",
   ATTACK_DELAY,
   COMBO_ATTACK_DELAY,
+  pendingSecondHeal,
   isFoodItem,
   isComboFoodItem,
   /** Which bite of which food an item id is, and how long that bite takes: bot nodes need both. */

@@ -139,3 +139,17 @@ test('an Araxyte venom sac keeps a stronger poison dose already running', t => {
   f.eat('ARAXYTE_VENOM_SAC');
   assert.equal(f.player.getCombat().getPoisonClock().getCounter(), Math.ceil(1000 / 18));
 });
+
+test('a hunter meat reports its pending second heal for the Timers plugin until it lands', t => {
+  const f = fixture(t, 10);
+  const before = Date.now();
+  // As the eat handler calls it: with the eaten item in the event.
+  const itemId = core.ItemIdentifiers.COOKED_MOONLIGHT_ANTELOPE;
+  Food._test.applyFood(f.player, Food._test.foodBite(itemId).food, Math.random, { itemId });
+  const pending = Food.pendingSecondHeal(f.player);
+  assert.equal(pending?.itemId, core.ItemIdentifiers.COOKED_MOONLIGHT_ANTELOPE, 'the meat, for its icon');
+  assert.ok(pending.dueAt >= before + 7 * 600 && pending.dueAt <= Date.now() + 7 * 600, 'due seven ticks on');
+  f.ticks(7);
+  assert.equal(f.hp, 36, 'the second heal landed');
+  assert.equal(Food.pendingSecondHeal(f.player), undefined, 'and is no longer pending');
+});

@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Boundary } from "../model/Boundary";
 import { Location } from "../model/Location";
-import { normalizeWorldPluginConfig, preserveLegacyCrossFloorDefault, type ScopedPluginSettings } from "./WorldPluginConfig";
+import { isFreeToPlayWorld, normalizeWorldPluginConfig, preserveLegacyCrossFloorDefault, type ScopedPluginSettings } from "./WorldPluginConfig";
 
 export type WorldZoneTag = string;
 
@@ -34,7 +34,7 @@ export interface WorldDefinitionData {
     experienceMultiplier: number;
     /** Optional: when set, players are switched to this layout on login. */
     gameframe?: WorldGameframe;
-    /** False makes this a free-to-play world (FreeToPlay plugin); needs zones tagged "f2p". */
+    /** Derived from the FreeToPlay plugin switch. */
     membersWorld: boolean;
     /** Per-plugin settings, read by PluginManager.getPluginConfig; carried for /api/world. */
     pluginConfig?: Record<string, unknown>;
@@ -184,14 +184,11 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     if (world.gameframe !== undefined && !WORLD_GAMEFRAMES.includes(world.gameframe as WorldGameframe)) {
         throw new WorldDefinitionValidationError(`world.json gameframe must be one of ${WORLD_GAMEFRAMES.join(", ")}`);
     }
-    if (world.membersWorld !== undefined && typeof world.membersWorld !== "boolean") {
-        throw new WorldDefinitionValidationError("world.json membersWorld must be a boolean");
-    }
     const name = world.name === undefined ? "Old School RuneScape" : world.name;
     if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) {
         throw new WorldDefinitionValidationError("world.json name must be plain text between 1 and 64 characters");
     }
-    const membersWorld = world.membersWorld !== false;
+    const membersWorld = !isFreeToPlayWorld(world);
     const description = world.description ?? "";
     if (typeof description !== "string" || description.length > 120) {
         throw new WorldDefinitionValidationError("world.json description must be a string of at most 120 characters");
@@ -202,7 +199,7 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     const spawn = parseWorldPosition(world.spawn, "world.json spawn");
     // Players outside free land are sent to the spawn, so it must be inside.
     if (!membersWorld && !zones.some((zone) => zone.tags.includes("f2p") && zoneContains(zone, spawn.x, spawn.y))) {
-        throw new WorldDefinitionValidationError("world.json membersWorld false needs the spawn inside a zone tagged \"f2p\"");
+        throw new WorldDefinitionValidationError('FreeToPlay needs the spawn inside a zone tagged "f2p"');
     }
     return {
         spawn,

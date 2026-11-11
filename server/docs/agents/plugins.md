@@ -209,7 +209,7 @@ decides (what it lists is off, everything else on).
 ## Members content
 
 Every plugin whose content is members-only in OSRS (members skills, areas, bosses, minigames,
-members items) must export `members: true`. When world.json sets `"membersWorld": false`,
+members items) must export `members: true`. When world.json enables `plugins.FreeToPlay`,
 `PluginManager` skips those plugins entirely.
 
 - Check the OSRS wiki page's "Members" field when unsure; F2P content (e.g. Castle Wars,

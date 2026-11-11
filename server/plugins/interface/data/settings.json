@@ -208,6 +208,7 @@
     "378": { "name": "Elite clue scroll warning", "varbit": 10724 },
     "379": { "name": "Master clue scroll warning", "varbit": 10725 },
     "385": { "name": "Deadman blighted overload", "varbit": 10946 },
+    "386": { "name": "Death protection from cosmetics", "varbit": 10987 },
     "388": { "name": "Prayer Regeneration Duration", "varbit": 11032 },
     "390": { "name": "Goading Potion Duration", "varbit": 10068 },
     "418": { "name": "Leagues: Display Combat Masteries", "varbit": 11562 },

@@ -800,6 +800,45 @@ function awardDroppedPets({ player, npc, npcId, drops, claim }) {
   }
 }
 
+/**
+ * "pets:extensions" { pets, services }: asked once as this plugin registers, before it hooks its
+ * pets' NPC ids, so another plugin can add pets of its own (Plugin Hub plugins load first, from
+ * plugins/imported/). A listener pushes rows like this table's onto `pets`:
+ *   { petId, itemId, enumName?, morphId?, dialogue?, reclaimable?, ... }
+ * petId is the follower's NPC id and itemId the item it is summoned from; any other fields stay
+ * on the row, for the adding plugin to read back (its "pets:interact" handler gets the row as
+ * `pet`). `services` lends the ownership helpers such a plugin needs: getOwnedPetItems(player),
+ * holdsPetItem(player, itemId), getPetForItemId(itemId) and getPetByNpcId(npcId). A second
+ * register (tests) replaces the previous extension pets.
+ */
+function addExtensionPets(api) {
+  for (let index = PETS.length - 1; index >= 0; index--) {
+    const pet = PETS[index];
+    if (!pet.extension) continue;
+    PETS.splice(index, 1);
+    PET_BY_ID.delete(pet.petId);
+    PET_BY_NAME.delete(pet.enumName);
+    if (PET_BY_ITEM_ID.get(pet.itemId) === pet) PET_BY_ITEM_ID.delete(pet.itemId);
+  }
+  const request = { pets: [], services: { getOwnedPetItems, holdsPetItem, getPetForItemId, getPetByNpcId } };
+  api.emitCustomEvent?.("pets:extensions", request);
+  for (const row of Array.isArray(request.pets) ? request.pets : []) {
+    if (!row || !Number.isInteger(row.petId) || !Number.isInteger(row.itemId)) {
+      console.error("[pets] an extension pet needs whole-number petId and itemId; skipped", row);
+      continue;
+    }
+    if (PET_BY_ID.has(row.petId) || PET_BY_ITEM_ID.has(row.itemId)) {
+      console.error(`[pets] extension pet NPC ${row.petId} or item ${row.itemId} is already a pet's; skipped`);
+      continue;
+    }
+    const pet = { morphId: 0, dialogue: -1, ...row, enumName: row.enumName ?? `EXTENSION_${row.petId}`, extension: true };
+    PETS.push(pet);
+    PET_BY_ID.set(pet.petId, pet);
+    PET_BY_NAME.set(pet.enumName, pet);
+    PET_BY_ITEM_ID.set(pet.itemId, pet);
+  }
+}
+
 function getPetByNpcId(id) {
   return PET_BY_ID.get(id) ?? null;
 }
@@ -2183,6 +2222,7 @@ module.exports = {
     NPCRespawnTaskRef = api.core?.NPCRespawnTask ?? null;
     ItemDefinitionClass = api.core?.ItemDefinition ?? null;
     fillSkillPetVariants(api.core);
+    addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
     api.persistAttribute(ACTIVE_PET_ATTRIBUTE, null);
@@ -2234,6 +2274,7 @@ module.exports = {
   // Exposed for tests/pets.test.cjs; nothing else reads them.
   __internals: {
     PETS,
+    addExtensionPets,
     onSkill,
     skillingPetMultiplier,
     PET_BY_ID,

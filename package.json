@@ -7,7 +7,7 @@
   },
   "scripts": {
     "setup": "npm exec --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn install --immutable && npm exec --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn --cwd server install --immutable && npm exec --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn --cwd client install --immutable",
-    "start": "yarn --cwd server ensure-cache && yarn concurrently --kill-others --names server,client \"yarn --cwd server dev\" \"yarn --cwd client start\"",
+    "start": "yarn --cwd server ensure-cache && yarn concurrently --kill-others --names server,client \"yarn --cwd server dev:panel\" \"yarn --cwd client start\"",
     "start:prod": "yarn --cwd server ensure-cache && yarn concurrently --kill-others --names server,client \"yarn --cwd server start:prod\" \"yarn --cwd client serve\"",
     "server": "yarn --cwd server dev",
     "client": "yarn --cwd client start",

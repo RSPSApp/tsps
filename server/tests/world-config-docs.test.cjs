@@ -43,3 +43,12 @@ test('plugin options are not grouped under the top-level world settings', () => 
   assert.ok(!section.includes('Gravestones:enabled'), 'a plugin under plugins/world must not land in the top-level section');
   assert.ok(doc.includes('Gravestones:enabled'));
 });
+
+test('local ZIP plugins and their options stay out of the shipped reference', () => {
+  const out = renderWorldConfigDocs({
+    plugins: [{ name: 'LocalExample', area: 'imported', file: 'imported/example/LocalExample.plugin.js', description: 'Local plugin.' }],
+    world: [], membersWorld: true,
+    options: [{ key: 'LocalExample:test', owner: 'LocalExample', decl: { type: 'boolean', default: true } }],
+  });
+  assert.doesNotMatch(out, /LocalExample/);
+});

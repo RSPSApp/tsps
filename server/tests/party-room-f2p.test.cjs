@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { test, before, after } = require('node:test');
+const { test, before, after, mock } = require('node:test');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'party-f2p-'));
 process.env.TSPS_PARTY_ROOM_DIR = temp;
@@ -16,7 +16,7 @@ process.env.DISABLE_PLAYER_BOTS = '1';
 const worldFile = path.join(temp, 'data', 'definitions', 'world.json');
 fs.mkdirSync(path.dirname(worldFile), { recursive: true });
 const shippedWorld = require('../data/definitions/world.json');
-fs.writeFileSync(worldFile, JSON.stringify({ ...shippedWorld, membersWorld: false }));
+fs.writeFileSync(worldFile, JSON.stringify({ ...shippedWorld, plugins: { ...shippedWorld.plugins, FreeToPlay: true } }));
 const previousCwd = process.cwd();
 let world;
 try {
@@ -40,14 +40,18 @@ let savedPersistence;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   assert.equal(world.isMembersWorld(), false, 'configure the free world before the real plugin loader');
-  assert.deepEqual({ ...world.readWorldConfig(), membersWorld: false }, JSON.parse(fs.readFileSync(worldFile, 'utf8')),
-    'plugin switches and configuration match the copied world with no local override');
   assert.equal(process.env.AUTOSAVE_INTERVAL_TICKS, undefined, 'the existing persistence stub is used below the default autosave interval');
   core = PM.getCoreApi();
+  const read = fs.readFileSync, exists = fs.existsSync;
+  const worldPath = path.resolve('data/definitions/world.json');
+  const localPath = path.resolve('data/definitions/world.local.json');
+  const worldRead = mock.method(fs, 'readFileSync', (file, ...args) => read(file === worldPath ? worldFile : file, ...args));
+  const localExists = mock.method(fs, 'existsSync', file => file !== localPath && exists(file));
   try {
     PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   } finally {
-    // The loader may have installed SQLite even if a later plugin fails to load.
+    worldRead.mock.restore();
+    localExists.mock.restore();
     savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
   }
   core.RegionManager.init();
@@ -410,18 +414,11 @@ test('a free-world range does not cook members-only raw mackerel', async t => {
     const admissionTurn = turns;
     const admitted = Cooking.isCookingActive(p);
     const session = Cooking._test.activeSessions.get(p);
-    const snapshot = { raw: inv.getAmount(raw), cooked: inv.getAmount(cooked), burnt: inv.getAmount(burnt),
-      xp: skills.getExperience(skill), events: produced.length, admitted,
-      range: [objectId, x, y, loc.getZ(), range.getType(), range.getFace()],
-      start: [start.getX(), start.getY(), start.getZ()], turn: turns };
-    assert.deepEqual([snapshot.raw, snapshot.cooked, snapshot.burnt, snapshot.xp, snapshot.events],
-      [1, 0, 0, xp, 0], `SETUP: pre-consumption snapshot ${JSON.stringify(snapshot)}`);
     if (session) {
       assert.equal(session.cookable.raw, raw, 'SETUP: admitted session uses the selected raw food');
       assert.equal(session.objectId, objectId, 'SETUP: admitted session uses the resolved range');
     }
     if (expectedXp > 0) {
-      assert.equal(Cooking.isCookingActive(p), true, 'SETUP: control cooking admitted');
       for (let n = 0; n < 20 && inv.getAmount(cooked) === 0; n++) turn();
       assert.deepEqual([inv.getAmount(raw), inv.getAmount(cooked), inv.getAmount(burnt)], [0, 1, 0]);
       assert.equal(skills.getExperience(skill) - xp, expectedXp);

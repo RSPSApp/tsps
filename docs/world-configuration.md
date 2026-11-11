@@ -6,6 +6,9 @@ replace the shipped values, while `plugins` entries merge by key.
 
 ## Plugin settings
 
+Worlds start in members mode. Set `"FreeToPlay": true` in `plugins` to run a free-to-play
+world. Its spawn must be inside a zone tagged `f2p`. The old `membersWorld` setting is ignored.
+
 A `plugins` entry accepts a boolean or an object. A setting alone keeps the plugin's default
 enabled state. The `enabled` field, when present, must be a boolean.
 
@@ -247,7 +250,6 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `description` | string | `""` | **Description.** Short blurb shown with the world, at most 120 characters. |
 | `experienceMultiplier` | number (> 0) | `1` | **Experience rate.** Global experience rate for all skills. 1 is the normal rate; 5 gives five times the experience. |
 | `gameframe` | enum: `modern-resizable` (modern-resizable), `modern-fixed` (modern-fixed), `317-resizable` (317-resizable), `317-fixed` (317-fixed) | *Client default* | **Game frame.** Interface layout the web client uses for this world. |
-| `membersWorld` | boolean | `true` | **Members world.** When off, members-only content is not loaded and the spawn must sit inside a zone tagged "f2p". |
 | `name` | string | `"Old School RuneScape"` | **World name.** Shown on the world list. Plain text, 1 to 64 characters. |
 | `spawn` | json | *Required: set in world.json* | **Spawn point.** Where new and stranded players appear, as { "x": 3222, "y": 3218, "z": 0 }. |
 
@@ -349,7 +351,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 ### Plugin switches
 
-Only plugins that have a description are listed here; the world config page's Plugins tab lists all of them. The switch key is what goes in `plugins` (matched ignoring case and spaces).
+This table lists bundled plugins that have a description. The world config page also lists locally uploaded plugins. The switch key is what goes in `plugins` (matched ignoring case and spaces).
 
 | Switch key | Plugin | Area | On by default | Effect |
 | --- | --- | --- | --- | --- |
@@ -413,7 +415,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy fire and water spell transformations. (members only) |
 | `BrimhavenDungeon` | BrimhavenDungeon | areas | yes | Brimhaven Dungeon access: Saniboch's entry fee, the dungeon entrance and the vines that need an axe to go deeper. (members only) |
 | `Burthorpe` | Burthorpe | areas | yes | Animates the soldiers drilling, sparring and eating in Burthorpe's square, as captured. (members only) |
-| `CatacombsOfKourend` | CatacombsOfKourend | areas | yes | Catacombs of Kourend access: King Rada's statue, the vine ladder back up, and bones restoring Prayer points while buried or crushed there. (members only) |
+| `CatacombsOfKourend` | CatacombsOfKourend | areas | yes | Catacombs of Kourend access: King Rada's statue, the vine ladder back up, the corner vines and the surface holes they open, and bones restoring Prayer points while buried or crushed there. (members only) |
 | `ChampionsGuild` | ChampionsGuild | areas | yes | Lets players into the Champions' Guild in Varrock only with 32 Quest Points, with the Guildmaster's refusal and greeting. |
 | `ColossalWyrmAgility` | ColossalWyrmAgility | areas | yes | Colossal Wyrm Agility Course rewards: termites spawning on the course and scooped up, and Worm Tongue's Wares. (members only) |
 | `CooksGuild` | CooksGuild | areas | yes | Guards the Cooks' Guild door in Varrock: 32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals. |
@@ -429,6 +431,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `FossilIslandUnderwater` | FossilIslandUnderwater | areas | yes | Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus. (members only) |
 | `FossilStorage` | FossilStorage | areas | yes | Fossil Island Museum Camp's fossil storage crates and the cleaning bench that cleans unidentified fossils. (members only) |
 | `GrandTree` | GrandTree | areas | yes | Opens and shuts the Grand Tree's front doors and walks the player through, as captured. (members only) |
+| `KalphiteCave` | KalphiteCave | areas | yes | Makes the Kalphite Cave multi-combat and lets only players on a kalphite Slayer task attack its kalphites, with Buggie warning the rest off. (members only) |
 | `Karamja` | Karamja | areas | yes | Karamja volcano access: the rocks, cave entrance and climbing rope between the surface and the TzHaar city. |
 | `Keldagrim` | Keldagrim | areas | yes | Keldagrim access: the cave exit to Rellekka, the cave-to-city passage, the house stairs and the ferrymen across the river. (members only) |
 | `McGruborsWood` | McGruborsWood | areas | yes | Keeps McGrubor's Wood's main gate locked, so the wood is entered by the loose railing or a fairy ring. |
@@ -496,6 +499,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `Sarachnis` | Sarachnis | bosses | yes | Sarachnis in Forthos Dungeon: the multi-combat lair, boss HUD, webs, rented private instances, and the fight with spawns at 66% and 33%. (members only) |
 | `Scurrius` | Scurrius | bosses | yes | Scurrius in the Varrock Sewers: the public and private lair, the fight, food piles, kill count, loot and Historian Aldo's lamps. (members only) |
 | `ShellbaneGryphon` | ShellbaneGryphon | bosses | yes | The Shellbane gryphon: its private cave under the Great Conch, its attacks, knockback, spit and whirlwind specials, and the kill. (members only) |
+| `SkeletalWyvern` | SkeletalWyvern | bosses | yes | Skeletal wyverns: bite and tail swipe, the iceball and the icy breath with its freeze. (members only) |
 | `Skotizo` | Skotizo | bosses | yes | Skotizo in the Catacombs of Kourend: dark totems, the altar that opens the lair, awakened altars, spawns, the kill and Combat Achievements. (members only) |
 | `Whisperer` | The Whisperer | bosses | yes | The Whisperer: its site and the fight. (members only) |
 | `ThermonuclearSmokeDevil` | ThermonuclearSmokeDevil | bosses | yes | The Thermonuclear smoke devil boss room by Castle Wars: crevice entrance, 93 Slayer requirement, facemask rule and its single ranged-magic attack. (members only) |
@@ -516,6 +520,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `EnchantedBolts` | EnchantedBolts | combat | yes | Enchanted crossbow bolt effects: gem proc chances, graphics, sounds, poison, drains and leech, plus a ::boltproc testing command. (members only) |
 | `EquipmentEffects` | EquipmentEffects | combat | yes | Worn-gear combat effects: Dharok's, obsidian, Inquisitor's, Justiciar, the Salve amulet, dragon hunter and demonbane gear, and similar sets. |
 | `Freezes` | Freezes | combat | yes | Freeze aftermath: red messages for ice spells, expiry warnings, and releasing a player-applied freeze when the two stray over 10 tiles apart. |
+| `Frostweaver` | Frostweaver | combat | yes | Blue Moon set effect: binding and ice casts sometimes add an instant spear attack. (members only) |
 | `HomeTeleports` | HomeTeleports | combat | yes | The free home teleport of the standard, Ancient, Lunar and Arceuus spellbooks, with the long cast and one shared 30-minute cooldown. |
 | `KillStreaks` | KillStreaks | combat | yes | PvP kill streaks with rewards and glow effects, plus commands to view them. |
 | `LunarCures` | LunarCures | combat | yes | The Lunar spells Cure Me, Cure Other and Cure Group, which remove poison and weaken venom. (members only) |
@@ -542,11 +547,12 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `SeasonalRares` | SeasonalRares | events | yes | Hands out discontinued seasonal rares during the world's own event windows, with ::rares to list what a player can claim. |
 | `AcceptAid` | AcceptAid | interface | yes | The Accept Aid setting that controls whether Lunar spells, cures and shared boosts can affect the player, refused for Ironmen. |
 | `AlchemyWarningThreshold` | AlchemyWarningThreshold | interface | yes | Settings option for the item value above which casting Alchemy asks first. |
+| `AntiDragDelay` | AntiDragDelay | interface | yes | Settings option for the Anti Drag delay, asked as a number of milliseconds. |
 | `BankPin` | BankPin | interface | yes | The Bank PIN: the Banker settings, the keypad, the bank lock, and the guard on other PIN-protected actions. |
 | `BankSpace` | BankSpace | interface | yes | Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins. |
-| `BossHud` | BossHud | interface | yes | The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide. |
+| `BossHud` | BossHud | interface | yes | The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide, and the normal health overlay for any other NPC a player attacks. |
 | `BossKillCount` | BossKillCount | interface | yes | Sends boss kill-count lines as filterable spam when the player's All Settings row asks for it. |
-| `BuffTimers` | Buff Timers | interface | yes | Sends the antifire, Tele Block and stamina countdowns to the buff bar and the client's infobox timers. |
+| `BuffTimers` | Buff Timers | interface | yes | Sends the effect countdowns the buff bar reads (potions, spells, ammo, group woodcutting) and the client's antifire, Tele Block and stamina infobox timers. |
 | `CameraShake` | CameraShake | interface | yes | Camera shake effects, sent only when the player's combat and atmospheric camera shake settings allow them. |
 | `Clans` | Clans | interface | yes | Clans: the Clan Hub, the player's own clan, // clan chat and the Your Clan tab. |
 | `CloseButtons` | CloseButtons | interface | yes | Makes cache Close buttons that have no client script, such as the book and minigame panels, close their interface. |
@@ -678,7 +684,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `RingOfVisibility` | RingOfVisibility | items | yes | Lets a worn ring of visibility or ring of shadows reveal the shadow realm's hidden NPCs and objects by setting the shadow realm varbit. (members only) |
 | `RingOfWealth` | RingOfWealth | items | yes | Handles the ring of wealth: charge counts, imbuing for 50,000 coins, teleport destinations, drop-collection settings and the ring's crumbling. (members only) |
 | `RockCake` | RockCake | items | yes | Adds the Dwarven rock cake, which is never used up: Eat costs 1 Hitpoint and Guzzle costs 10% of current Hitpoints plus 1. (members only) |
-| `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits and loadouts. (members only) |
+| `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting. (members only) |
 | `Salamanders` | Salamanders | items | yes | Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature. (members only) |
 | `SanguinestiStaff` | SanguinestiStaff | items | yes | Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster. (members only) |
 | `ScytheOfVitur` | ScytheOfVitur | items | yes | Adds the Scythe of Vitur's multi-hit sweeps on large targets, charging at the Theatre of Blood vyre well, and reverting to uncharged. (members only) |
@@ -762,7 +768,7 @@ Only plugins that have a description are listed here; the world config page's Pl
 | `ValeTotems` | ValeTotems | minigames | yes | Adds the Vale Totems Fletching minigame in the Auburn Valley: building and decorating totems, ent offerings, loot and research points. (members only) |
 | `VolcanicMine` | VolcanicMine | minigames | yes | Adds the Volcanic Mine on Fossil Island: Petrified Pete, vents, gas, lava, the boulder, hazards and the reward on exit. (members only) |
 | `Wintertodt` | Wintertodt | minigames | yes | Adds Wintertodt: the world-wide round behind the Doors of Dinh, the camp outside and its reward cart. (members only) |
-| `FreeToPlay` | FreeToPlay | modes | yes | Enforces a free-to-play world: members content and areas are blocked through hooks, with free land taken from the world's f2p zones. |
+| `FreeToPlay` | FreeToPlay | modes | no | Switches this world to free-to-play. The spawn must be inside a free-to-play area. |
 | `Ironman` | Ironman | modes | yes | Adds Ironman, Ultimate and Hardcore Ironman accounts, chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command. |
 | `LeagueAreaUnlocks` | LeagueAreaUnlocks | modes | yes | Locks a league character to its unlocked areas, starting in Misthalin and Karamja and opening more as tasks reach each league's thresholds. (members only) |
 | `LeagueCombatMasteries` | LeagueCombatMasteries | modes | yes | Adds Raging Echoes combat masteries: three styles of six tiers bought with points from combat challenges, and the passives they grant. (members only) |

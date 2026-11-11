@@ -22,13 +22,13 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-function shoot(t, arrow, roll) {
+function shoot(t, arrow, roll, weapon = core.ItemIdentifiers.MAGIC_SHORTBOW) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const player = new Player(new PlayerSession(channel)); player.setIndex(2742); player.setUsername('serphelmammo');
   const helm = new core.Item(core.ItemIdentifiers.SERPENTINE_HELM, 1);
   helm.setMetaValue('serpentine-helm', 1000);
   player.getEquipment().setItem(core.Equipment.HEAD_SLOT, helm);
-  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.MAGIC_SHORTBOW, 1));
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(weapon, weapon === core.ItemIdentifiers.MAGIC_SHORTBOW || weapon === core.ItemIdentifiers.CRYSTAL_BOW ? 1 : 100));
   player.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(arrow, 100));
   player.getCombat().setAmmunition(Ammunition.getFor(player));
   const npc = core.NPC.create(core.NpcIdentifiers.GOBLIN, new core.Location(3200, 3200, 0));
@@ -49,4 +49,12 @@ test('poisoned arrows envenom on a roll under 1/2', (t) => {
 test('plain arrows do not, and a roll of 1/2 does not', (t) => {
   assert.equal(shoot(t, core.ItemIdentifiers.RUNE_ARROW, 0), false);
   assert.equal(shoot(t, core.ItemIdentifiers.RUNE_ARROW_P_PLUS_PLUS_, 0.5), false);
+});
+
+// Only a weapon that fires from the ammo slot uses it: a crystal bow fires its own arrows and a chinchompa throws itself,
+// so (p) arrows left in the slot don't count for them. A thrown weapon is its own projectile: a (p) dart counts.
+test("(p) arrows left in the slot don't count for a crystal bow or a chinchompa; a (p) dart does", (t) => {
+  assert.equal(shoot(t, core.ItemIdentifiers.RUNE_ARROW_P_PLUS_PLUS_, 0, core.ItemIdentifiers.CRYSTAL_BOW), false, 'crystal bow');
+  assert.equal(shoot(t, core.ItemIdentifiers.RUNE_ARROW_P_PLUS_PLUS_, 0, core.ItemIdentifiers.RED_CHINCHOMPA_2), false, 'red chinchompa');
+  assert.equal(shoot(t, core.ItemIdentifiers.RUNE_ARROW, 0.4, core.ItemIdentifiers.RUNE_DART_P_), true, 'a (p) dart');
 });

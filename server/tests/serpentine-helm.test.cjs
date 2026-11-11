@@ -35,6 +35,8 @@ SerpentineHelm.register({
     World: { getProcessCycle: () => cycle },
     ItemDefinition: { forId: (id) => ({ getName: () => weaponNames.get(id) ?? "" }) },
     CombatFactory: { poisonEntity: (target, severity, orb) => poisoned.push({ target, severity, orb }) },
+    // These players' ranged weapons fire from the ammo slot (bows and crossbows).
+    Ammunition: { firesFromAmmoSlot: () => true },
   },
   persistAttribute() {},
   onItemAction() {},

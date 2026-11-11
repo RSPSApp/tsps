@@ -81,15 +81,14 @@ function venomChance(player, combatType) {
   const weaponId = Number(player.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId?.() ?? -1);
   const name = String(core.ItemDefinition.forId(weaponId)?.getName?.() ?? "").toLowerCase();
   if (GUARANTEED_WEAPON_NAMES.has(name)) return 1;
-  // The worn projectile, as CombatFactory reads a ranged hit's poison: the weapon for thrown
-  // weapons, else the ammunition slot. Combat.getAmmunition() reports a (p) arrow or bolt as its
-  // plain entry (RangedData's variants), so its id never names the poison.
+  // The worn projectile: the ammunition slot only when the weapon fires from it (a bow or crossbow,
+  // Ammunition.firesFromAmmoSlot); otherwise the weapon itself (a thrown weapon, a chinchompa, a
+  // crystal bow or another self-ammo weapon), whatever (p) ammo is left in the slot.
+  // Combat.getAmmunition() reports a (p) arrow or bolt as its plain entry, so its id never names the poison.
   if (combatType === core.CombatType.RANGED) {
-    const { WeaponInterfaces } = core;
-    const style = player.getWeapon?.();
-    const thrown = [WeaponInterfaces?.DART, WeaponInterfaces?.KNIFE, WeaponInterfaces?.THROWNAXE, WeaponInterfaces?.JAVELIN]
-      .some((type) => type != null && type === style);
-    const shotId = thrown ? weaponId : Number(player.getEquipment().get(core.Equipment.AMMUNITION_SLOT)?.getId?.() ?? -1);
+    const shotId = core.Ammunition.firesFromAmmoSlot(player)
+      ? Number(player.getEquipment().get(core.Equipment.AMMUNITION_SLOT)?.getId?.() ?? -1)
+      : weaponId;
     const shotName = String(core.ItemDefinition.forId(shotId)?.getName?.() ?? "").toLowerCase();
     return /\(p(?:\+\+?)?\)$/.test(shotName) ? 0.5 : 0;
   }

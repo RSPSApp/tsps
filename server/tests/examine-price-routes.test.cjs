@@ -186,3 +186,16 @@ test("Death's office examine (op 10): the stored stack's price line", async (t) 
   await widget(f, core.CacheDefinitions.getComponentId("death_office:items"), EXAMINE_OP, 0, FEATHER);
   assert.deepEqual(f.messages, [examine(FEATHER), FEATHERS_100]);
 });
+
+test("looting bag's bank view examine (op 10): the stored stack's price line, nothing withdrawn", async (t) => {
+  const f = actor(t);
+  const bag = new core.Item(OPEN_LOOTING_BAG, 1);
+  f.p.getInventory().setItem(0, bag);
+  require("../plugins/items/LootingBag.plugin")._test.store(bag, new core.Item(FEATHER, 100));
+  f.p.setStatus(PlayerStatus.BANKING);
+  f.p.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  f.p.getPacketSender().sendVarbit(Bank.VIEW_CONTAINER_VARBIT, 1);
+  await widget(f, core.CacheDefinitions.getComponentId("bankside:lootingbag_items"), EXAMINE_OP, 0, FEATHER);
+  assert.deepEqual(f.messages, [examine(FEATHER), FEATHERS_100]);
+  assert.deepEqual(require("../plugins/items/LootingBag.plugin")._test.bagItems(bag).map((e) => e.amount), [100]);
+});

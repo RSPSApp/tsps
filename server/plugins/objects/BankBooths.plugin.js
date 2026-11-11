@@ -258,8 +258,10 @@ function unnoteOnBanker(api, event) {
 function ownsRunePouch(api, player) {
   const { RUNE_POUCH, RUNE_POUCH_L_, DIVINE_RUNE_POUCH, DIVINE_RUNE_POUCH_L_ } = api.core.ItemIdentifiers;
   const ids = [RUNE_POUCH, RUNE_POUCH_L_, DIVINE_RUNE_POUCH, DIVINE_RUNE_POUCH_L_];
-  return player.getInventory().containsAnyIds(ids)
-    || player.getBanks().some((bank, index) => bank && index !== api.core.Bank.BANK_SEARCH_TAB_INDEX && bank.containsAnyIds(ids));
+  // By amount: an empty bank placeholder keeps the pouch's id with amount 0 and is not a pouch.
+  const held = (container) => ids.some((id) => container.getAmount(id) > 0);
+  return held(player.getInventory())
+    || player.getBanks().some((bank, index) => bank && index !== api.core.Bank.BANK_SEARCH_TAB_INDEX && held(bank));
 }
 
 function exchangeRunePouchNote(api, event, slot) {

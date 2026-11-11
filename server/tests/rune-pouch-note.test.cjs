@@ -16,6 +16,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
 const { Item } = require('../dist/game/model/Item');
 const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+const { Bank } = require('../dist/game/model/container/impl/Bank');
 
 const BANKER = 2897;
 const NOTE = 24587;
@@ -48,8 +49,10 @@ function makePlayer({ inventory = [], bank = [] } = {}) {
   const container = new Inventory(player);
   inventory.forEach((item, slot) => { container.getItems()[slot] = item; });
   player.getInventory = () => container;
-  const bankItems = [...bank];
-  player.getBanks = () => [{ containsAnyIds: (ids) => bankItems.some((item) => ids.includes(item.getId())) }];
+  // The real Bank, so ownership is judged by its own amount logic (placeholders are amount 0).
+  const tab = new Bank(player).resetItems();
+  bank.forEach((item, slot) => { tab.getItems()[slot] = item; });
+  player.getBanks = () => [tab];
   return player;
 }
 
@@ -113,3 +116,13 @@ test('a stack of notes in a full inventory is refused without losing a note', ()
   assert.equal(player.getInventory().getAmount(NOTE), 2);
   assert.deepEqual(player.messages, ["You don't have enough inventory space."]);
 });
+
+for (const [name, use] of [['banker', useOnBanker], ['bank booth', useOnBooth]]) {
+  test(`an empty pouch placeholder in the bank does not block the exchange at a ${name}`, () => {
+    const player = makePlayer({ inventory: [new Item(NOTE, 1)], bank: [new Item(POUCH, 0)] });
+    use(register(), player);
+    assert.equal(player.getInventory().getAmount(NOTE), 0);
+    assert.equal(player.getInventory().getAmount(POUCH), 1);
+    assert.deepEqual(player.messages, ['You exchange the promissory note.']);
+  });
+}

@@ -12,8 +12,10 @@ const Traps = require("./Traps.Hunter");
  *   goes to 2 and the creature plays its fall, with the collapse graphic 933 or 935 and sound 2638. At +11
  *   the pit shows full (3 or 4, the same choice as the graphic) and the creature goes; it is back at its
  *   spawn a tick later, its animation reset. The same pit catches the next creature straight away (1757 ticks 19124, 19143).
- * - Miss (1108 tick 21487): one step towards the pit at +3, the leap animation at +5, then at +7 the creature
- *   lands beyond the pit and follows on. Wiki: "these creatures will not jump the same pit twice in a row",
+ * - The creature crosses on the loc's own row or column and falls on the loc's coord (1108 tick 25272, 1757).
+ * - Miss (1108 tick 21487): one step towards the pit at +3; at +5 the leap animation, sound 2619 and the
+ *   creature's two leap projectiles (start 53, end 90 cycles) four tiles across; at +7 the creature lands beyond
+ *   the pit, knocking a player standing there back two tiles (stumble 5206, sound 513), and follows on. Wiki: "these creatures will not jump the same pit twice in a row",
  *   and 1108 caught that creature at the next, different pit.
  */
 const teased = new Map();
@@ -21,6 +23,14 @@ const lastPit = new WeakMap();
 const runs = new Map();
 const JUMP_SOUND = 2635;
 const COLLAPSE_SOUND = 2638;
+const LEAP_SOUND = 2619;
+const KNOCKBACK = { animation: 5206, sound: 513, delay: 14, start: 10, end: 36, tiles: 2 };
+// RuneLite SpotanimID (hunter_<creature>_leaptrap_proj1/2), validated with dump:spotanim; graahk captured (1108).
+const LEAP_GRAPHICS = { SABRE_TOOTHED_KYATT: [937, 938], SPINED_LARUPIA: [939, 940], HORNED_GRAAHK: [941, 942],
+  SUNLIGHT_ANTELOPE: [2800, 2801], MOONLIGHT_ANTELOPE: [2802, 2803] };
+// The creature's sound with the full pit (+11): kyatt 1757, graahk 1108 and 1858, sunlight antelope 1108 and 4046.
+// No larupia or moonlight antelope catch is captured.
+const FULL_SOUNDS = { SABRE_TOOTHED_KYATT: 836, HORNED_GRAAHK: 667, SUNLIGHT_ANTELOPE: 7890 };
 const TEASE_SOUND = 2524;
 const STEP_TICKS = { catch: [3, 5, 6], leap: [3] };
 const FALL_TICK = 8;
@@ -97,13 +107,18 @@ function beyond(base, from, dir) {
     new H.core.Location(x, f.y0 - 1, f.z), new H.core.Location(f.x0 - 1, y, f.z)][dir];
 }
 
-/** The tiles a creature behind the jumper steps through: the near edge, then into the pit row by row. */
-function crossing(base, from, dir) {
-  const f = footprint(base), x = clamp(from.getX(), f.x0, f.x1), y = clamp(from.getY(), f.y0, f.y1);
-  const L = (a, b) => new H.core.Location(a, b, f.z);
-  return [[L(x, f.y0 - 1), L(x, f.y0), L(x, f.y1)], [L(f.x0 - 1, y), L(f.x0, y), L(f.x1, y)],
-    [L(x, f.y1 + 1), L(x, f.y1), L(x, f.y0)], [L(f.x1 + 1, y), L(f.x1, y), L(f.x0, y)]][dir];
+/**
+ * Where a creature of `size` crosses a pit heading `dir`: on the loc's own row or column, from the tile before the
+ * pit (`edge`) to the loc's coord (`base`, where it falls) or, leaping, to the first tile clear beyond (`landing`).
+ */
+function crossing(base, dir, size) {
+  const f = footprint(base), L = (a, b) => new H.core.Location(a, b, f.z);
+  const edge = [L(f.x0, f.y0 - size), L(f.x0 - size, f.y0), L(f.x0, f.y1 + 1), L(f.x1 + 1, f.y0)][dir];
+  const landing = [L(f.x0, f.y1 + 1), L(f.x1 + 1, f.y0), L(f.x0, f.y0 - size), L(f.x0 - size, f.y0)][dir];
+  return { edge, base: L(f.x0, f.y0), landing };
 }
+
+const STEPS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 
 /** The full pit's varbit value: 3 when the jump runs the loc's own way ((rotation + 2) % 4), 4 the other way. */
 function fullValue(base, dir) {
@@ -155,9 +170,10 @@ function run(state, trap, dir, success, jumpedAt) {
   const npc = state.npc, queue = npc.getMovementQueue();
   queue.resetFollow();
   queue.reset();
-  const path = crossing(trap.base, npc.getLocation(), dir);
-  runs.set(npc, { kind: success ? "catch" : "leap", state, trap, dir, at: jumpedAt, path, blocked: queue.isMovementBlocked(),
-    landing: beyond(trap.base, path[0], dir), value: fullValue(trap.base, dir), fallen: false });
+  const size = npc.getSize?.() ?? 1, line = crossing(trap.base, dir, size);
+  runs.set(npc, { kind: success ? "catch" : "leap", state, trap, dir, at: jumpedAt, size,
+    path: success ? [line.edge, line.base] : [line.edge], blocked: queue.isMovementBlocked(),
+    landing: line.landing, value: fullValue(trap.base, dir), fallen: false });
   queue.setBlockMovement(true);
   if (success) {
     // The creature is the pit's now; the chase ends but it stays reserved until it falls.
@@ -168,13 +184,16 @@ function run(state, trap, dir, success, jumpedAt) {
   } else lastPit.set(npc, trap.base);
 }
 
-/** One tile towards the next tile of the crossing the creature hasn't reached. */
+/**
+ * One tile towards the next tile of the crossing the creature hasn't reached. An exact move keeps it in view:
+ * a plain moveTo drops an NPC from every client for a tick (World.staysInViewWhenPlaced).
+ */
 function step(npc, path) {
   const at = npc.getLocation();
   while (path.length && path[0].equals(at)) path.shift();
   const next = path[0];
   if (!next) return;
-  npc.moveTo(new H.core.Location(at.getX() + Math.sign(next.getX() - at.getX()), at.getY() + Math.sign(next.getY() - at.getY()), at.getZ()));
+  npc.exactMove(new H.core.Location(at.getX() + Math.sign(next.getX() - at.getX()), at.getY() + Math.sign(next.getY() - at.getY()), at.getZ()));
 }
 
 function advance(npc, r) {
@@ -190,15 +209,50 @@ function advance(npc, r) {
     }
     if (STEP_TICKS.catch.includes(elapsed)) step(npc, r.path);
     if (elapsed === FALL_TICK) fall(npc, r);
-    if (elapsed === FULL_TICK) Traps.setPitState(r.trap, "caught", r.state.creature, r.value);
+    if (elapsed === FULL_TICK) {
+      Traps.setPitState(r.trap, "caught", r.state.creature, r.value);
+      const sound = Object.entries(FULL_SOUNDS).find(([key]) => H.core.NpcIdentifiers[key] === r.state.creature.npc)?.[1];
+      if (sound) pitSound(r.trap, sound, r.trap.base.getLocation());
+    }
     return;
   }
   if (STEP_TICKS.leap.includes(elapsed)) step(npc, r.path);
-  if (elapsed === LEAP_TICK) {
-    npc.performAnimation(new H.core.Animation(antelope(r.state.creature) ? LEAP.ANTELOPE : LEAP.CAT));
-    npc.setPositionToFace(r.landing);
-  }
+  if (elapsed === LEAP_TICK) leap(npc, r);
   if (elapsed >= LAND_TICK) land(npc, r);
+}
+
+function leap(npc, r) {
+  npc.performAnimation(new H.core.Animation(antelope(r.state.creature) ? LEAP.ANTELOPE : LEAP.CAT));
+  npc.setPositionToFace(r.landing);
+  const at = npc.getLocation(), [dx, dy] = STEPS[r.dir], far = r.size - 1;
+  const graphics = Object.entries(LEAP_GRAPHICS).find(([key]) => H.core.NpcIdentifiers[key] === npc.getId())?.[1] ?? [];
+  // proj1 from the creature's far corner, proj2 from its own tile, both four tiles across (1108 tick 21492).
+  const starts = [at.clone().add(far, far), at.clone()];
+  for (const viewer of viewers(r.state.player, r.trap)) {
+    graphics.forEach((graphic, i) => viewer.getPacketSender().sendProjectile(starts[i], starts[i].clone().add(dx * 4, dy * 4),
+      0, 90, graphic, 0, 0, null, 53, 0, 0));
+  }
+  H.core.Sounds.playAreaSound({ soundId: LEAP_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 5 });
+}
+
+function viewers(player, trap) {
+  return [...new Set([player, ...(H.core.World.getNearbyPlayersForUpdate?.(player) ?? [])])]
+    .filter(viewer => viewer.getPrivateArea() === trap.area);
+}
+
+/** A creature landing on the player knocks them back two tiles along the leap (1108 tick 21494). */
+function knockBack(player, r) {
+  const at = player.getLocation(), l = r.landing, [dx, dy] = STEPS[r.dir];
+  const under = at.getZ() === l.getZ() && at.getX() >= l.getX() && at.getX() < l.getX() + r.size
+    && at.getY() >= l.getY() && at.getY() < l.getY() + r.size;
+  if (!under || player.getForceMovement() || H.actions.has(player)) return;
+  const to = at.clone().add(dx * KNOCKBACK.tiles, dy * KNOCKBACK.tiles);
+  for (let i = 1; i <= KNOCKBACK.tiles; i++) if (H.core.RegionManager.blocked(at.clone().add(dx * i, dy * i), r.trap.area)) return;
+  player.getMovementQueue().reset();
+  player.setForceMovement(new H.core.ForceMovement(at.clone(), new H.core.Location(to.getX() - at.getX(), to.getY() - at.getY()),
+    KNOCKBACK.start, KNOCKBACK.end, r.dir, KNOCKBACK.animation));
+  player.moveTo(to);
+  player.getPacketSender().sendSound(KNOCKBACK.sound, 1, KNOCKBACK.delay);
 }
 
 function fall(npc, r) {
@@ -223,13 +277,14 @@ function abort(npc, r) {
 function land(npc, r) {
   runs.delete(npc);
   if (!npc.isRegistered()) return;
-  npc.moveTo(r.landing);
+  // Live telejumps it; the exact move (ending at once) keeps it in view on our clients.
+  npc.exactMove(r.landing, { startCycles: 0, endCycles: 1 });
+  if (r.state.player.isRegistered()) knockBack(r.state.player, r);
   npc.getMovementQueue().setBlockMovement(r.blocked);
   if (teased.get(r.state.player) === r.state) npc.setFollowing(r.state.player);
 }
 
-function pitSound(trap, soundId) {
-  const at = center(trap);
+function pitSound(trap, soundId, at = center(trap)) {
   H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 10 });
 }
 
@@ -254,4 +309,14 @@ function process() {
   }
 }
 
-module.exports = { build, tease, jump, clear, process, heading, beyond, fullValue };
+/** Frees every creature mid-run, so a reload never leaves one blocked. */
+function shutdown() {
+  for (const [npc, r] of [...runs]) {
+    if (r.kind === "leap") land(npc, r);
+    else if (!r.fallen) abort(npc, r);
+    else runs.delete(npc);
+  }
+  for (const player of [...teased.keys()]) clear({ player });
+}
+
+module.exports = { build, tease, jump, clear, process, shutdown, heading, beyond, crossing, fullValue };

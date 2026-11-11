@@ -159,16 +159,23 @@ test('a catch falls in 8 ticks after the jump and shows full at 11; the same pit
     const { npc, seen } = larupia(t, [2543, 2911]);
     tease(p, npc);
     const at = jump(p, true);
+    // A bare moveTo drops an NPC from clients for a tick; an exact move keeps it in view.
+    const moves = { exact: 0, bare: 0 };
+    let inExact = false;
+    const exact = npc.exactMove.bind(npc), move = npc.moveTo.bind(npc);
+    t.mock.method(npc, 'exactMove', (...args) => { moves.exact++; inExact = true; try { return exact(...args); } finally { inExact = false; } });
+    t.mock.method(npc, 'moveTo', l => { if (!inExact) moves.bare++; return move(l); });
     assert.equal(npc.isVisible(), true, 'the creature is still there after the jump');
     assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], SOUTH, 'the player lands three tiles from the start');
     tick(at + 7 - H.tick);
     assert.equal(varbit(p), 1, 'not collapsed before +8');
+    assert.deepEqual(moves, { exact: 3, bare: 0 }, 'three steps, each an exact move');
     tick(1);
     assert.equal(varbit(p), 2, '+8: collapsing');
     assert.deepEqual(seen.animations.at(-1), [at + 8, 5234]);
     // The player jumped south across a rotation-2 pit: the other way from the loc's, so state 4 and collapse_2.
     assert.deepEqual(seen.graphics.at(-1), [at + 8, 935]);
-    assert.ok(npc.getLocation().getY() >= PIT.y && npc.getLocation().getY() <= PIT.y + 1, 'the creature stepped onto the pit');
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [PIT.x, PIT.y], 'it falls on the loc coord, along the loc column');
     tick(3);
     assert.equal(varbit(p), 4, '+11: the full pit');
     assert.equal(trap.state, 'caught');
@@ -191,13 +198,22 @@ test('a miss leaps over the pit with no projectile, follows on, and only refuses
   const trap = layPit(p);
   const { npc, seen } = larupia(t, [2543, 2911]);
   tease(p, npc);
+  const projectiles = [];
+  t.mock.method(p.getPacketSender(), 'sendProjectile', (start, end, offset, speed, id, sh, eh, lock, delay) => {
+    projectiles.push([id, start.getX(), start.getY(), end.getX(), end.getY(), delay, speed]); return p.getPacketSender(); });
   const at = jump(p, false);
   tick(at + 5 - H.tick);
   assert.deepEqual(seen.animations.at(-1), [at + 5, 5231], '+5: the big-cat leap');
   assert.equal(npc.isVisible(), true, 'the creature never vanishes');
+  const size = npc.getSize(), from = npc.getLocation();
+  // Both halves of the creature fly four tiles across, 53 to 90 cycles (1108 tick 21492).
+  assert.deepEqual(projectiles, [
+    [939, from.getX() + size - 1, from.getY() + size - 1, from.getX() + size - 1, from.getY() + size - 1 - 4, 53, 90],
+    [940, from.getX(), from.getY(), from.getX(), from.getY() - 4, 53, 90]]);
   tick(2);
-  assert.equal(npc.getLocation().getY(), PIT.y - 1, '+7: landed beyond the pit');
-  assert.equal(sent.projectiles, 0);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [PIT.x, PIT.y - size], '+7: landed beyond the pit');
+  assert.ok(npc.getExactMove(), 'the landing keeps the creature in view');
+  if (size > 1) assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [SOUTH[0], SOUTH[1] - 2], 'the landing knocks the player back two tiles');
   assert.equal(varbit(p), 1, 'the pit is still set');
   assert.equal(trap.state, 'idle');
   tick(1);

@@ -161,3 +161,26 @@ test('snapshot restoration retains independent brief durations and rejects malfo
     assert.equal(timer.getCounter(), 5); assert.equal(timer.snapshot().ticksUntilPulse, 27);
   }
 });
+
+// rsprox_transcripts/223/00014.txt ticks 1748/1778 (poison) and 224/01443.txt ticks 151/181 (venom): purple
+// lines, one 30-tick pulse before each resistance ends and at its end.
+test('the resistance lines come one pulse before and at each end, once each', t => {
+  const f = fixture(t); const lines = [];
+  f.drink(I.ANTI_VENOM_4__3);
+  t.mock.method(f.player, 'sendMessage', m => lines.push(m));
+  const venomWarnAt = -f.value() - 39, poisonWarnAt = -f.value() - 1;
+  assert.ok(venomWarnAt > 0, 'anti-venom+ protects from venom for more than one pulse');
+  f.step(30 * venomWarnAt);
+  assert.equal(f.value(), -39);
+  assert.deepEqual(lines, ['<col=7f007f>Your venom resistance is about to wear off.</col>']);
+  f.step(30);
+  assert.deepEqual(lines.slice(1), ['<col=7f007f>Your venom resistance has worn off, but you are still resistant to poison.</col>']);
+  f.step(30 * (poisonWarnAt - venomWarnAt - 1));
+  assert.equal(f.value(), -1);
+  assert.deepEqual(lines.slice(2), ['<col=7f007f>Your poison resistance is about to wear off.</col>']);
+  f.step(30);
+  assert.equal(f.value(), 0);
+  assert.deepEqual(lines.slice(3), ['<col=7f007f>Your poison resistance has worn off.</col>']);
+  f.step(90);
+  assert.equal(lines.length, 4, 'nothing more');
+});

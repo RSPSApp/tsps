@@ -352,6 +352,20 @@ function saradominStrikeDrain(cast: Mobile, castOn: Mobile): void {
     skills.setCurrentLevelCombat(Skill.PRAYER, current - 1);
 }
 
+/**
+ * Wiki (Shadow spells): a hit lowers the target's Attack by 10% (rush, burst) or 15% (blitz, barrage),
+ * players and monsters alike, unless it is already lowered; an Ancient sceptre's x1.1 arrives as `multiplier`.
+ * The player branch is each spell's own; this is the NPC one.
+ */
+function shadowDrainNpc(castOn: Mobile, percent: number, multiplier: number): void {
+    if (castOn.isPlayer()) return;
+    const npc = castOn.getAsNpc?.();
+    if (!npc) return;
+    const level = npc.getCurrentLevel(Skill.ATTACK);
+    if (level < npc.getMaxLevel(Skill.ATTACK)) return;
+    npc.setCurrentLevels(Skill.ATTACK, level - Math.floor(level * percent * multiplier));
+}
+
 /** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
 function godStaffRequired(player: Player, staves: Set<number>): Item[] {
     const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId() ?? -1;
@@ -1711,6 +1725,7 @@ export class CombatSpells {
         () => { return new Animation(1978); },
         () => { },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.1, multiplier);
             if (castOn.isPlayer()) {
                 const player = castOn as Player;
                 if (player.getSkillManager().getCurrentLevel(Skill.ATTACK) < player.getSkillManager().getMaxLevel(Skill.ATTACK)) {
@@ -1795,6 +1810,7 @@ export class CombatSpells {
         () => { return new Animation(1979); },
         () => { return null; },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.1, multiplier);
             if (castOn.isPlayer()) {
                 const player = castOn as Player;
 
@@ -1878,6 +1894,7 @@ export class CombatSpells {
         () => { return new Animation(1978); },
         () => { return null; },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.15, multiplier);
             if (castOn.isPlayer()) {
                 const player = castOn as Player;
 
@@ -1954,6 +1971,7 @@ export class CombatSpells {
         () => { return new Animation(1979); },
         () => { return null; },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.15, multiplier);
             if (castOn.isPlayer()) {
                 const player: Player = castOn as Player;
 

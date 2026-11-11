@@ -328,6 +328,7 @@ test("a Lunar group teleport asks a passenger aboard their own boat before takin
   const casterPlayer = actor(t, { aboard: false });
   const spell = core.LunarSpells.GROUP_TELEPORTS.get("tele group catherby");
   t.mock.method(spell, "pay", () => true);
+  t.mock.method(spell, "castable", () => true);
   t.mock.method(core.LunarSpells, "forNearbyPlayers", (source, radius, visit) => visit(passenger.p));
   core.LunarSpells.castGroupTeleport(casterPlayer.p, spell);
   assert.equal(casterPlayer.teleports.length, 1, "the caster goes");
@@ -559,4 +560,21 @@ test("the escape crystal's Teleport reports what happened: saved at once ashore,
   assert.equal(Activation.activate(aboard.p, "teleport"), false, "asked: not saved yet");
   assert.equal(pending(aboard)?.title, TeleportWarning.QUESTION);
   assert.equal(aboard.p.getInventory().contains(crystal), true, "the crystal kept until the yes");
+});
+
+test("a Lunar teleport the player can't cast (no runes, or under 40 Defence) says why and doesn't ask, aboard with the warning on", async (t) => {
+  questComplete(["lunar_diplomacy", "dream_mentor"]);
+  const noRunes = actor(t);
+  caster(noRunes, core.MagicSpellbook.LUNAR, []);
+  await cast(noRunes, "Moonclan Teleport");
+  assert.notEqual(pending(noRunes)?.title, TeleportWarning.QUESTION, "not asked");
+  assert.ok(noRunes.messages.length > 0, "told why");
+  assert.equal(noRunes.teleports.length, 0);
+
+  const weak = actor(t);
+  caster(weak, core.MagicSpellbook.LUNAR, [[9075, 10], [563, 10], [557, 10], [555, 10], [554, 10]]);
+  weak.p.getSkillManager().setMaxLevels(core.Skill.DEFENCE, 1, false);
+  await cast(weak, "Moonclan Teleport");
+  assert.notEqual(pending(weak)?.title, TeleportWarning.QUESTION, "not asked");
+  assert.ok(weak.messages.includes("You need at least level 40 Defence to cast Lunar spells."), weak.messages.join(" | "));
 });

@@ -222,12 +222,13 @@ test("Lunar teleport arrival identifies only the caster after a successful landi
   const arrivals = [], events = [], player = caster([]), passenger = caster([]);
   const spells = [LunarSpells.TELEPORTS.get("catherby teleport"), LunarSpells.GROUP_TELEPORTS.get("tele group catherby")];
   const pay = spells.map(spell => spell.pay);
+  const castable = spells.map(spell => spell.castable);
   try {
     TeleportHandler.checkReqs = () => true;
     TeleportHandler.teleport = (target, destination, type, warning, arrived) => arrivals.push({ target, arrived });
     PluginManager.emitCustomEvent = (name, event) => { if (name !== "teleport:confirm") events.push({ channel: name, ...event }); };
     LunarSpells.forNearbyPlayers = (source, radius, visit) => visit(passenger);
-    for (const spell of spells) spell.pay = () => true;
+    for (const spell of spells) { spell.pay = () => true; spell.castable = () => true; }
     spells[0].castTeleport(player);
     assert.deepEqual(events, [], "starting a cast is not an arrival");
     arrivals.shift().arrived();
@@ -245,6 +246,6 @@ test("Lunar teleport arrival identifies only the caster after a successful landi
   } finally {
     TeleportHandler.checkReqs = original.check; TeleportHandler.teleport = original.teleport;
     LunarSpells.forNearbyPlayers = original.nearby; PluginManager.emitCustomEvent = original.emit;
-    spells.forEach((spell, i) => { spell.pay = pay[i]; });
+    spells.forEach((spell, i) => { spell.pay = pay[i]; spell.castable = castable[i]; });
   }
 });

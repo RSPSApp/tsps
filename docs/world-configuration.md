@@ -625,6 +625,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PharaohsSceptre` | PharaohsSceptre | items | yes | Adds the Pharaoh's sceptre: teleports to the great pyramids, charges, Desert Diary capacity and recharging at the guardian mummy. (members only) |
 | `PhoenixNecklace` | PhoenixNecklace | items | yes | Makes a worn Phoenix necklace heal 30% of Hitpoints and break when a hit leaves the wearer at 20% or less, except where food is banned. (members only) |
 | `Potions` | Potions | items | yes | Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers. |
+| `QuestRewardDeathCoins` | QuestRewardDeathCoins | items | yes | Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death. (members only) |
 | `RatBoneWeapons` | RatBoneWeapons | items | yes | Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus. (members only) |
 | `RevenantWeapons` | RevenantWeapons | items | yes | Adds Viggora's chainmace, the Ursine chainmace and Craw's bow: revenant ether charging, Wilderness damage bonus, uncharging and dismantling. (members only) |
 | `RingOfElements` | RingOfElements | items | yes | Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option. (members only) |
@@ -841,6 +842,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SailingCommands` | SailingCommands | skills | yes | Developer commands for testing sailing: ::raft, ::skiff and ::sloop to moor boats, ::maxboat, ::boatinfo, ::sailmode and ::heading. (members only) |
 | `Crew` | SailingCrew | skills | yes | Sailing crewmates: recruiting them, the Crew Registrar, jobs at the helm, salvaging, cannons, repairs, banking cargo and courier crates. (members only) |
 | `CrystalExtractor` | SailingCrystalExtractor | skills | yes | The crystal extractor: switched on at sea it makes a crystal mote every 105 ticks, harvested for Sailing XP, a wind mote and sometimes a crystal shard. (members only) |
+| `DropWarning` | SailingDropWarning | skills | yes | Asks before an item is dropped on a boat's deck, unless its All Settings row (465) says not to. (members only) |
 | `Gangplank` | SailingGangplank | skills | yes | Boarding and disembarking boats at gangplanks and mooring points, and docking at a port's buoy, with fades and sounds. (members only) |
 | `Helm` | SailingHelm | skills | yes | Taking and leaving a boat's helm, the sidepanel sail buttons, trimming and setting sails, and steering the boat. (members only) |
 | `Kegs` | SailingKegs | skills | yes | Lets players fill a boat's keg with 25 ales, check it, fill glasses from it and empty it, and applies each ale's keg effect while aboard. (members only) |

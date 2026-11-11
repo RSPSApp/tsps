@@ -433,7 +433,9 @@ function autoEquipPickedUpAmmo(event) {
   const equipment = player.getEquipment();
   const worn = equipment.get(core.Equipment.AMMUNITION_SLOT);
   if (!worn || worn.getId() !== event.groundItemId) return;
+  // The worn stack's meta (preset ammo) must match, so a pickup never changes what it is.
   takeInto(pluginApi, event, {
+    meta: worn.getMeta?.() ?? null,
     room: () => (equipment.get(core.Equipment.AMMUNITION_SLOT) === worn ? MAX_STACK - worn.getAmount() : 0),
     store: (amount) => {
       worn.incrementAmountBy(amount);

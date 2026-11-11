@@ -12,12 +12,12 @@ const AMMO_PICKUP_ATTRIBUTE = 'ranged:equip-ammo-on-pickup';
 const AMMO_PICKUP_VARBIT = 5697;
 const AMMO_SLOT = 13;
 
-function item(id, amount) {
+function item(id, amount, meta = null) {
   return {
-    id, amount,
+    id, amount, meta,
     getId() { return this.id; },
     getAmount() { return this.amount; },
-    getMeta() { return null; },
+    getMeta() { return this.meta; },
     incrementAmountBy(delta) { this.amount += delta; },
   };
 }
@@ -82,8 +82,8 @@ function harness({ varbit = 0 } = {}) {
     player, worn, varbits, attributes, deregistered, events, emitted,
     choose(option, npcId = RANGED_TUTOR) { for (const handler of events['npc-dialogue:choice'] ?? []) handler({ player, npcId, option }); },
     login() { for (const handler of logins) handler({ player }); },
-    pickup(groundItemId = 884, amount = 5) {
-      const stack = item(groundItemId, amount);
+    pickup(groundItemId = 884, amount = 5, meta = null) {
+      const stack = item(groundItemId, amount, meta);
       const position = { clone: () => position, equals: (other) => other === position };
       const ground = {
         getItem: () => stack, getPosition: () => position, getOwner: () => 'owner',
@@ -207,6 +207,17 @@ test('a pickup that would overflow the worn stack goes to the inventory instead'
   const event = h.pickup(884, 5);
   assert.equal(event.handled, false);
   assert.equal(h.worn.getAmount(), 2147483647 - 2);
+});
+
+test('ground ammo joins the worn stack only when their meta match', () => {
+  const h = harness({ varbit: 1 });
+  assert.equal(h.pickup(884, 5, { preset: true }).handled, false, 'preset ammo is not mixed into a plain stack');
+  assert.equal(h.worn.getAmount(), 100);
+  h.worn.meta = { preset: true };
+  assert.equal(h.pickup(884, 5, { preset: true }).handled, true, 'preset ammo returns to its preset stack');
+  assert.equal(h.worn.getAmount(), 105);
+  assert.equal(h.pickup(884, 5).handled, false, 'plain ammo is not mixed into a preset stack');
+  assert.equal(h.worn.getAmount(), 105);
 });
 
 test('the All Settings catalog maps Ammo-picking behaviour to varbit 5697', () => {

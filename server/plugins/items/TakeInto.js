@@ -13,12 +13,15 @@ const busyPlayers = new WeakSet();
  * Called from an `onGroundItemPickup` hook. `room()` is how many of the item the target can
  * take now; `store(amount)` puts them there and returns how many went in. Returns true when
  * the stack went in. Returns false when it did not: the event is then left alone for the
- * ordinary pickup, unless a guard or policy refused the take, which handles it.
+ * ordinary pickup, unless a guard or policy refused the take, which handles it. Only a stack
+ * whose meta equals `meta` (none by default) goes in, so a target never mixes item states.
  */
-function takeInto(api, event, { room, store }) {
+function takeInto(api, event, { room, store, meta = null }) {
   const { player, groundItem } = event;
   const item = groundItem?.getItem?.();
-  if (!item || item.getMeta() != null) return false;
+  const metaKey = JSON.stringify(meta ?? null);
+  const sameMeta = () => JSON.stringify(item.getMeta() ?? null) === metaKey;
+  if (!item || !sameMeta()) return false;
   const amount = item.getAmount();
   if (!Number.isSafeInteger(amount) || amount <= 0 || room() < amount) return false;
   if (busyItems.has(groundItem) || busyPlayers.has(player)) {
@@ -39,7 +42,7 @@ function takeInto(api, event, { room, store }) {
     api.emitCustomEvent("ground-items:take", request);
     if (request.allow !== true || request.error != null || request.amount !== amount || request.discard !== 0) return false;
     if (!core.World.getItems().includes(groundItem) || !core.ItemOnGroundManager.canSee(player, groundItem)
-      || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== amount || item.getMeta() != null
+      || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== amount || !sameMeta()
       || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
       || groundItem.getPrivateArea() !== area || groundItem.getState() !== state || room() < amount) return false;
     if (store(amount) !== amount) return false;

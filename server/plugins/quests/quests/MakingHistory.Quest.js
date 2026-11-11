@@ -170,10 +170,12 @@ module.exports = function registerMakingHistoryQuest(api) {
 
   const START_HOOK = "quest:making-history:start";
 
+  // Every "A random incorrect dialogue from below is shown." action in talking-to-dron-talking-to-dron-again,
+  // by its id in the regenerated npc-dialogues.json (13 of the old ids no longer exist there).
   const WRONG_ANSWER_STEP_IDS = new Set([
-    "wGDach", "TtGPlq", "GYDiBb", "PgE_Go", "TiHNWS", "greVKf", "ws2VOl",
-    "uqH7Jw", "oYzxwv", "5HcaLu", "8Tv5r2", "6vr4KG", "Swu3NW", "HDQk6C",
-    "gQs5C7", "cFtl46", "_3oMUw", "EnC65O", "4saBHF",
+    "wGDach", "TtGPlq", "GYDiBb", "_3oMUw", "EnC65O", "4saBHF",
+    "YYdPuz", "CHhMLH", "91qTKK", "xtI1KH", "y0an97", "4gV141", "ngmyqv",
+    "rGSYzg", "vuLXYx", "wOkPwO", "VAT5oQ", "UwGEVj", "SlEl4Q",
   ]);
   const DIG_MESSAGE_STEP = "qDSqmk";
   const CHEST_OPENED_MESSAGE_STEP = "CpO-Pc";

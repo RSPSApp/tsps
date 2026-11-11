@@ -6,13 +6,20 @@ const LEAGUE_OPTIONS = [
   ...Object.entries(require("./data/leagues.json").leagues).map(([type, league]) => ({ value: Number(type), label: league.name })),
 ];
 
+function registerLateModules(api) {
+  // Preserve the old second dependency pass so activity handlers keep priority.
+  require("./AreaUnlocks.LeagueMode").register(api);
+  require("./CombatMasteries.LeagueMode").register(api);
+  require("./Pacts.LeagueMode").register(api);
+}
+
 module.exports = {
   name: "LeagueMode",
   description: "Leagues characters, progression, tasks, relics, region unlocks, combat masteries, Demonic Pacts and rewards.",
   config: {
     "league:type": {
       type: "enum", label: "League", default: 0, values: LEAGUE_OPTIONS,
-      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Also read by LeagueAreaUnlocks. Restart to change.",
+      help: "Runs this world as a league: every login is the account's league character, kept apart from its main save. Not a league world is a normal world. The list follows data/leagues.json. Restart to change.",
     },
     "league:start": {
       type: "date", label: "League start date", defaultText: "Not set",
@@ -29,8 +36,6 @@ module.exports = {
     require("./Points.LeagueMode").register(api);
     require("./Relics.LeagueMode").register(api);
     require("./Tasks.LeagueMode").register(api);
-    require("./AreaUnlocks.LeagueMode").register(api);
-    require("./CombatMasteries.LeagueMode").register(api);
-    require("./Pacts.LeagueMode").register(api);
   },
+  registerDeferred: registerLateModules,
 };

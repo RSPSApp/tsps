@@ -127,7 +127,7 @@ function makeEquipment(ids = []) {
 function makePlayer(attributes = {}, items = {}, equipped = []) {
   const attrs = new Map(Object.entries(attributes));
   const inventory = makeInventory(items);
-  const messages = [], varbits = [], texts = [], strings = [], sounds = [];
+  const messages = [], spam = [], varbits = [], texts = [], strings = [], sounds = [];
   const levels = new Map(), experience = new Map();
   const bankCounts = new Map();
   const bank = {
@@ -163,7 +163,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     getAppearance: () => ({ isMale: () => true }),
     getPacketSender: () => sender,
     getDialogueManager: () => player.manager,
-    messages,
+    messages, spam,
     varbits,
     sounds,
     texts,
@@ -181,6 +181,10 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
   };
   const varps = new Map(), configs = [], calls = [];
   const sender = new Proxy({
+    sendTypedMessage(type, message) {
+      if (type === PluginManager.getCoreApi().ChatType.SPAM) spam.push(message); else messages.push(message);
+      return sender;
+    },
     sendVarbit(id, value) {
       varbits.push([id, value]);
       const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
@@ -556,7 +560,7 @@ test("Museum: Hazeel Cult report plays its message box and pays before Minas's c
   assert.equal(getKudos(world, player), 5);
   assert.equal(player.getVarbit(VM.ardy), 1);
   assert.deepEqual(player.getAttribute(STATE).minas, ["hazeel_cult"]);
-  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 1);
+  assert.equal(player.spam.filter((message) => message === KUDOS_MESSAGE).length, 1);
   assert.deepEqual(player.sounds, [SOUND_KUDOS]);
   // Reported once: the next talk has nothing new and pays nothing.
   talkToMinas(world, player);
@@ -581,7 +585,7 @@ test("Museum: lamp reports show the lamp box and go on to the next report", () =
   assert.deepEqual(new Set(player.getAttribute(STATE).minas),
     new Set(["shield_of_arrav", "merlins_crystal", "making_history", "demon_slayer"]));
   assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 3);
-  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 4);
+  assert.equal(player.spam.filter((message) => message === KUDOS_MESSAGE).length, 4);
   for (const varbit of [VM.silverlight, VM.soa, VM.soaVisible, VM.excalibur, VM.lathas]) assert.equal(player.getVarbit(varbit), 1, `varbit ${varbit}`);
   for (const lamp of [11185, 11186, 11187]) assert.equal(player.inventory.getAmount(lamp), 1, `lamp ${lamp}`);
 });

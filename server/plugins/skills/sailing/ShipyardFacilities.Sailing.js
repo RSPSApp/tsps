@@ -101,7 +101,7 @@ function buildFacility(event) {
     if (item !== CAPTURED_WIND_MOTE) player.getInventory().delete(item, count);
   }
   facilities.setFacility(boat, hotspot, facility);
-  closeCustomisation(player, visit);
+  closeCustomisation(player);
   player.performAnimation(new Animation(SEQ_BUILD));
   playSound(player, SOUND_BUILD);
   showHotspot(player, visit, boat, hotspot);

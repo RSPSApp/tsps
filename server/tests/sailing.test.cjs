@@ -2037,12 +2037,22 @@ function shipyardHarness() {
   player.getInterfaceId = () => interfaceId;
   player.setInterfaceId = (id) => { interfaceId = id; return player; };
   const varbits = new Map();
+  const varps = new Map();
   const chatboxes = [];
+  const flags = [];
   const sender = new Proxy({}, {
     get: (_t, key) => (...args) => {
       if (key === "getVarbit") return varbits.get(args[0]) ?? 0;
       if (key === "sendVarbit") varbits.set(args[0], args[1]);
+      if (key === "sendConfig") varps.set(args[0], args[1]);
       if (key === "sendChatboxInterface") chatboxes.push(args[0]);
+      if (key === "sendInterfaceFlagsRange") flags.push(args);
+      // As PacketSender does: the main interface goes and "interface:closed" tells of it.
+      if (key === "sendInterfaceRemoval") {
+        const closed = interfaceId;
+        interfaceId = -1;
+        shipyard.events["interface:closed"]?.({ player, interfaceId: closed });
+      }
       return sender;
     },
   });
@@ -2061,8 +2071,51 @@ function shipyardHarness() {
     shipyard.interfaceClicks.forEach((handler) => handler(event));
     return event.handled;
   };
-  return { Skill, shipyard, player, levels, xp, statements, varbits, chatboxes, buildRow, boat: () => player.getSailing().boats[0] };
+  return { Skill, shipyard, player, levels, xp, statements, varbits, varps, chatboxes, flags, buildRow, boat: () => player.getSailing().boats[0] };
 }
+
+test("the schematics' options carry op 1 and script triggers, as captured, so the official client sends Build", () => {
+  const h = shipyardHarness();
+  h.shipyard.objects["Boat schematics"].Modify({ player: h.player });
+  assert.equal(h.player.getInterfaceId(), 939);
+  // Script 8834 shows the loading spinner, then sends its if_triggeroplocal only with
+  // IF_SCRIPT_TRIGGER (bit 23) on the option; with op 1 alone RuneLite never sent a Build.
+  assert.deepEqual(h.flags.at(-1), [(939 << 16) | 17, 0, 50, (1 << 1) | (1 << 23)]);
+});
+
+test("closing a hotspot's customisation by any route leaves the schematics showing the boat's parts", () => {
+  const h = shipyardHarness();
+  const built = registerPlugin("ShipyardFacilities.Sailing");
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  const gangplank = { x: 2087, y: 2723, z: 0 };
+  h.shipyard.objects.Gangplank.Board({ player: h.player, location: gangplank });
+  const hotspot = facilities.hotspotsOf("skiff")[2];
+  built.objects["Facility hotspot"].Build({ player: h.player, location: { x: shown.deckBaseX + hotspot.x, y: shown.deckBaseY + hotspot.y, z: 0 } });
+  assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524), h.varbits.get(19525)], [1, 2, 1], "facility mode, hotspot 2, slot 1");
+  assert.deepEqual(h.flags.at(-1).slice(0, 2), [(939 << 16) | 17, 0]);
+  assert.equal(h.flags.at(-1)[3], (1 << 1) | (1 << 23), "a hotspot's options can be built too");
+
+  // Closed without building (its close button, walking away): as captured, everything resets.
+  h.player.getPacketSender().sendInterfaceRemoval();
+  assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524), h.varbits.get(19525)], [0, 0, 0]);
+  assert.equal(h.varps.get(5190), -1);
+
+  h.shipyard.objects.Gangplank.Disembark({ player: h.player, location: { ...gangplank, z: 1 } });
+  h.shipyard.objects["Boat schematics"].Modify({ player: h.player });
+  assert.equal(h.varbits.get(19523), 0, "the schematics open on the boat's parts");
+  assert.equal(h.varbits.get(19525), 1);
+  assert.equal(h.varps.get(5190), 8111, "the skiff's boat type row");
+  // And their Build is a part's: an oak hull, refused only for the levels.
+  assert.equal(h.buildRow(8272), true);
+  assert.match(h.player.messages.at(-1), /Sailing level of 20 and a Construction level of 8/);
+
+  // A facility mode left behind by a route that never closed 939 can't leak into the parts either.
+  h.player.getPacketSender().sendInterfaceRemoval();
+  h.varbits.set(19523, 1);
+  h.varbits.set(19524, 4);
+  h.shipyard.objects["Boat schematics"].Modify({ player: h.player });
+  assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524)], [0, 0]);
+});
 
 test("building at the schematics swaps a part for the cache's materials and gives Construction XP", () => {
   const h = shipyardHarness();

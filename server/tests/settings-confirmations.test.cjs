@@ -284,7 +284,7 @@ test("a teleport spell aboard your own boat asks first with the warning on, and 
   const f = actor(t);
   let aboard = {};
   t.mock.method(core.Sailing, "instanceAboard", () => aboard);
-  f.varbit(TeleportWarning.WARNING_VARBIT, 1);
+  // The row ticked (varbit 0, the default).
   const ask = () => {
     const request = teleportRequest(f);
     PM.emitCustomEvent("spell:teleport-confirm", request);
@@ -308,6 +308,7 @@ test("a teleport spell aboard your own boat asks first with the warning on, and 
 test("with the boat teleport warning off, a teleport spell aboard casts at once", (t) => {
   const f = actor(t);
   t.mock.method(core.Sailing, "instanceAboard", () => ({}));
+  f.varbit(TeleportWarning.WARNING_VARBIT, 1); // the row unticked
   const request = teleportRequest(f);
   PM.emitCustomEvent("spell:teleport-confirm", request);
   if (!request.handled) request.proceed();
@@ -317,7 +318,7 @@ test("with the boat teleport warning off, a teleport spell aboard casts at once"
 test("the boat warning follows a Wilderness warning the spell also has", (t) => {
   const f = actor(t);
   t.mock.method(core.Sailing, "instanceAboard", () => ({}));
-  f.varbit(TeleportWarning.WARNING_VARBIT, 1);
+  // The row ticked (varbit 0, the default).
   const request = teleportRequest(f);
   request.name = "ghorrock teleport";
   f.varbit(core.CacheDefinitions.getVarbitId("ghorrock_teleport_warning"), 1);

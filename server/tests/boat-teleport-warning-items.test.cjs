@@ -63,7 +63,8 @@ function actor(t, { aboard = true, warning = true } = {}) {
     }
     return real.apply(core.TeleportHandler, args);
   });
-  if (warning) p.getPacketSender().sendVarbit(TeleportWarning.WARNING_VARBIT, 1);
+  // The row is ticked while the varbit is 0 (the default); 1 turns the warning off.
+  if (!warning) p.getPacketSender().sendVarbit(TeleportWarning.WARNING_VARBIT, 1);
   t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); p.setRegistered(false); });
   return { t, p, conn, messages, state, teleports };
 }
@@ -487,7 +488,8 @@ function sailor(t, { warning = true } = {}) {
   p.needsPlacement = false;
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
-  if (warning) p.getPacketSender().sendVarbit(TeleportWarning.WARNING_VARBIT, 1);
+  // The row is ticked while the varbit is 0 (the default); 1 turns the warning off.
+  if (!warning) p.getPacketSender().sendVarbit(TeleportWarning.WARNING_VARBIT, 1);
   t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); p.setRegistered(false); });
   return { t, p, messages, teleports: [] };
 }
@@ -621,4 +623,31 @@ test("the ectophial moved to another slot while the warning asks still pours on 
   choose(f, 1);
   assert.equal(f.p.getInventory().contains(I.ECTOPHIAL_2), true, "poured");
   assert.equal(f.p.getInventory().contains(I.ECTOPHIAL), false);
+});
+
+// ---------------------------------------------------------------- the row's own sense
+
+test("row 471 is ticked while varbit 16620 is 0 (struct param 1084): a new account is warned, and unticking it stops the warning", (t) => {
+  const struct = (() => {
+    for (let id = 0; id < 20000; id++) {
+      let params;
+      try { params = core.CacheDefinitions.getStructParams(id); } catch { continue; }
+      if (params?.get?.(1077) === 471) return params;
+    }
+    return null;
+  })();
+  assert.ok(struct, "row 471's setting struct");
+  assert.equal(struct.get(1084), 1, "ticked while its varbit is 0");
+
+  const fresh = actor(t);
+  assert.equal(fresh.p.getPacketSender().getVarbit(TeleportWarning.WARNING_VARBIT), 0, "a new account's varbit");
+  give(fresh, I.VARROCK_TELEPORT);
+  use(fresh, I.VARROCK_TELEPORT, "Break");
+  assert.equal(pending(fresh)?.title, TeleportWarning.QUESTION, "warned by default");
+
+  const unticked = actor(t, { warning: false });
+  give(unticked, I.VARROCK_TELEPORT);
+  use(unticked, I.VARROCK_TELEPORT, "Break");
+  assert.notEqual(pending(unticked)?.title, TeleportWarning.QUESTION);
+  assert.equal(unticked.teleports.length, 1, "unticked: goes at once");
 });

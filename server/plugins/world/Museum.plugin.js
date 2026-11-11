@@ -891,12 +891,17 @@ function createMuseumArea(core) {
       return "Varrock Museum";
     }
 
+    // Crossing the boundary owns the HUD: a case closing afterwards must not bring it back outside, or add a second one.
     postEnter(mobile) {
-      if (mobile.isPlayer()) showKudosHud(mobile.getAsPlayer());
+      if (!mobile.isPlayer()) return;
+      hudHiddenForStudy.delete(mobile.getAsPlayer());
+      showKudosHud(mobile.getAsPlayer());
     }
 
     postLeave(mobile, logout) {
-      if (mobile.isPlayer() && !logout) hideKudosHud(mobile.getAsPlayer());
+      if (!mobile.isPlayer()) return;
+      hudHiddenForStudy.delete(mobile.getAsPlayer());
+      if (!logout) hideKudosHud(mobile.getAsPlayer());
     }
   }
   return new MuseumArea(MUSEUM_BOUNDS.map((b) => new core.Boundary(b.minX, b.maxX, b.minY, b.maxY, b.z)));

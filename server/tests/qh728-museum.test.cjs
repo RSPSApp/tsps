@@ -897,8 +897,30 @@ function hudPlayer(t) {
   t.after(()=>{ if(p.getArea())p.getArea().leave(p,true); p.setRegistered(false); AreaManager.areas=previous; });
   const at = (x,y,z=0) => { p.moveTo(new core.Location(x,y,z)); AreaManager.process(p); };
   const mounted = () => p.getPacketSender().getSubInterfaceAt((161<<16)|8)?.groupId === 532;
-  return {p,at,mounted,frames};
+  return {p,at,mounted,frames,world};
 }
+
+const studyCase = (f) => objectAction(f.world, "Display case", "Study", f.p, 24622, 3253, 3442, 1);
+const closeCase = (f) => f.world.api.emitCustomEvent("interface:closed", { player: f.p, interfaceId: 534 });
+const hudOpens = (f) => f.frames.filter((b) => b.equals(require('../dist/net/protocol/ClientProtocol').encodeWidgetOpenSub((161<<16)|8,532,1))).length;
+
+test('Museum: Study hides the Kudos HUD and the case closing brings it back (227/01723.txt ticks 14869-14871)', t => {
+  const f=hudPlayer(t);
+  f.at(3253,3442,1); assert.equal(f.mounted(),true);
+  studyCase(f); assert.equal(f.mounted(),false,'the HUD closes as the case opens');
+  closeCase(f); assert.equal(f.mounted(),true,'and comes back when it closes');
+});
+
+test('Museum: a case closing after leaving the museum leaves the HUD closed; re-entry mounts it once', t => {
+  const f=hudPlayer(t);
+  f.at(3253,3442,1); studyCase(f);
+  f.at(3210,3424); closeCase(f);
+  assert.equal(f.mounted(),false,'no HUD outside the museum');
+  f.at(3253,3442,1); studyCase(f);
+  f.at(3251,3449,1); f.at(3253,3442,1);
+  const opens=hudOpens(f); closeCase(f);
+  assert.equal(f.mounted(),true); assert.equal(hudOpens(f),opens,'re-entry already mounted it; the close adds no second one');
+});
 
 test('Museum: native exterior approach has no Kudos HUD; entry mounts and exit closes the actual packet', t => {
   const {encodeWidgetOpenSub,encodeWidgetCloseSub}=require('../dist/net/protocol/ClientProtocol');

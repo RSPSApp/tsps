@@ -14,6 +14,7 @@
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const ATTR_STORED = "tob:retrieval";
 const OWNER = "tob";
@@ -162,7 +163,7 @@ function clickItem(event) {
   if (!entry) return;
   const op = event.opId ?? event.action;
   if (op === EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (op !== TAKE_OP) return;

@@ -26,6 +26,7 @@
 const Common = require("./Common.DuelArena");
 const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 const { SkillManager } = require("../../../src/main/typescript/elvarg/game/content/skill/SkillManager");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const BUILD_LETTERS = ["a", "b", "c"];
 const INVENTORY_SIZE = 28;
@@ -329,7 +330,7 @@ function discardSound(player) {
 }
 
 function examine(player, id) {
-  if (id > 0) player.sendMessage(Common.core.ItemDefinition.forId(id)?.getExamine() ?? "");
+  if (id > 0) examineItem(player, id, 1);
 }
 
 /**

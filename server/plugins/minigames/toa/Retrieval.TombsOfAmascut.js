@@ -19,6 +19,7 @@
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const ATTR_STORED = "toa:retrieval";
 /** gravestone_retrieval is shared (Vorkath's, the Theatre of Blood's): whichever opened it answers its clicks. */
@@ -171,7 +172,7 @@ function clickItem(event) {
   if (!entry) return;
   const op = event.opId ?? event.action;
   if (op === EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (op !== TAKE_OP) return;

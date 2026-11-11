@@ -11,6 +11,7 @@ const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/defini
 const { MAX_STACK_AMOUNT } = require("../../src/main/typescript/elvarg/game/model/container/StackType");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
+const { examineItem } = require("../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const Food = require("./Food.plugin");
 const Potions = require("./Potions.plugin");
 const { isInsideEnclave } = require("../areas/ferox/Bounds.FeroxEnclave");
@@ -44,10 +45,14 @@ const CHECK_FLAGS = 1 << 10;
 const DEPOSIT_FLAGS = 0b11110 | (1 << 9);
 const STORE_OPS = { 1: 1, 2: 5, 3: Number.MAX_SAFE_INTEGER };
 const STORE_X_OP = 4;
+/** Examine: op 10 on the bag's contents (Check), op 9 on the inventory (Deposit). */
+const CHECK_EXAMINE_OP = 10;
+const DEPOSIT_EXAMINE_OP = 9;
 /** The bank's looting bag view (captured): bank_viewcontainer 1, its items' OP1-OP7 and OP10. */
 const BANK_VIEW = 1;
 const BANK_VIEW_OP = 1;
 const BANK_EMPTY_OP = 9;
+const BANK_EXAMINE_OP = 10;
 const BANK_ITEM_FLAGS = 0b11111110 | (1 << 10);
 const BANK_SIDE = 15;
 const BANK_X_PROMPT_OP = 6;
@@ -253,11 +258,21 @@ function useItemOnBag(event) {
 function clickBagInterface(event) {
   if (event.groupId !== BAG_INTERFACE || event.childId !== 5 || !Number.isInteger(event.slot)) return;
   const { player } = event;
-  if (!depositing.has(player)) return;
-  const item = player.getInventory().getItems()[event.slot];
   const bag = bagFor(player);
-  if (!bag || !item?.isValid?.() || item.getId() !== event.itemId) return;
+  if (!bag) return;
   const op = Number(event.action);
+  if (!depositing.has(player)) {
+    const entry = bagItems(bag)[event.slot];
+    if (op !== CHECK_EXAMINE_OP || !entry || entry.id !== event.itemId) return;
+    event.handled = true;
+    return void examineItem(player, entry.id, entry.amount);
+  }
+  const item = player.getInventory().getItems()[event.slot];
+  if (!item?.isValid?.() || item.getId() !== event.itemId) return;
+  if (op === DEPOSIT_EXAMINE_OP) {
+    event.handled = true;
+    return void examineItem(player, item.getId(), item.getAmount());
+  }
   const key = itemKey(item);
   if (op === STORE_X_OP) {
     event.handled = true;
@@ -487,6 +502,7 @@ function clickBankView(event) {
     const entry = bagItems(bag)[event.slot];
     if (!entry) return;
     const op = Number(event.action);
+    if (op === BANK_EXAMINE_OP) return void examineItem(player, entry.id, entry.amount);
     if (op === BANK_X_PROMPT_OP) {
       const key = entryKey(entry);
       return askAmount(player, (amount) => {

@@ -80,6 +80,7 @@ function actor(t) {
     sendInterfaceFlagsRange(...args) { packets.push(["flags", ...args]); return sender; },
     sendInterfaceScript(...args) { packets.push(["script", ...args]); return sender; },
     sendEnterAmountPrompt(...args) { packets.push(["prompt", ...args]); return sender; },
+    getVarbit: () => 1, // Examine price info: both settings on
   };
   t.mock.method(player, "sendMessage", (message) => messages.push(message));
   t.mock.method(player, "performAnimation", () => {});
@@ -465,6 +466,25 @@ test("Open sends native 886/7338/911 and preserves old excess balances", (t) => 
   put(f, I.PRAYER_POTION_4_, 5);
   ui(f, INVENTORY_WIDGET, 5, I.PRAYER_POTION_4_, 5);
   assert.equal(storedDoses(f), 129, "legacy excess is withdrawable, never truncated or increased");
+});
+
+test("Examine (op 10): a contents row is priced as the stored doses of its 1-dose form; an inventory potion as one", (t) => {
+  const f = actor(t), I = core.ItemIdentifiers;
+  const examine = (id) => core.ItemDefinition.forId(id).getExamine();
+  seed(f.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 130 } });
+  openBarrel(f);
+  f.messages.length = 0;
+  ui(f, CONTENTS_WIDGET, 0, I.PRAYER_POTION_4_, 10);
+  assert.equal(f.messages.length, 2, f.messages.join(" | "));
+  assert.equal(f.messages[0], examine(I.PRAYER_POTION_1_));
+  assert.match(f.messages[1], /^Price of 130 x Prayer potion\(1\): /);
+  assert.equal(storedDoses(f), 130, "examining withdraws nothing");
+  f.messages.length = 0;
+  put(f, I.PRAYER_POTION_4_, 5);
+  ui(f, INVENTORY_WIDGET, 5, I.PRAYER_POTION_4_, 10);
+  assert.equal(f.messages.length, 2, f.messages.join(" | "));
+  assert.equal(f.messages[0], examine(I.PRAYER_POTION_4_));
+  assert.match(f.messages[1], /^Price of Prayer potion\(4\): /);
 });
 
 test("Store counts vials; Fill counts doses and keeps a partial marked vial", (t) => {

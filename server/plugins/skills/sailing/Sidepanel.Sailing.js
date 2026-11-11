@@ -126,7 +126,10 @@ function clearBoatVarps(player) {
   for (const varp of Object.values(VARP_SIDEPANEL_DEFENCE)) sender.sendConfig(varp, 0);
 }
 
-/** Mounts the sidepanel on the combat tab, with the varbits bundled so its onLoad sees them. */
+/**
+ * Mounts the sidepanel on the combat tab, with the varbits bundled so its onLoad sees them.
+ * Without a boat type (off a boat) there are no facility or crew picker slots to enable.
+ */
 function openSidepanel(player, type, varbits, varps) {
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(SCRIPT_SIDEPANEL_INIT, [player.getDisplayName(), 1, "", 1]);
@@ -134,9 +137,11 @@ function openSidepanel(player, type, varbits, varps) {
   sender.sendSubInterface(COMBAT_TAB_UID, SIDEPANEL_GROUP, 1, { varbits, varps });
   sender.sendInterfaceFlagsRange(
     (SIDEPANEL_GROUP << 16) | VIEW_COMBAT_OPTIONS_CHILD, 0, VIEW_COMBAT_OPTIONS_MAX_SLOT, IF_EVENT_OP1);
-  sender.sendInterfaceFlagsRange(
-    (SIDEPANEL_GROUP << 16) | SIDEPANEL_FACILITIES_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_OP1_TO_OP4);
-  sender.sendInterfaceFlagsRange((SIDEPANEL_GROUP << 16) | CREW_PICKER_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_OP1);
+  if (type) {
+    sender.sendInterfaceFlagsRange(
+      (SIDEPANEL_GROUP << 16) | SIDEPANEL_FACILITIES_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_OP1_TO_OP4);
+    sender.sendInterfaceFlagsRange((SIDEPANEL_GROUP << 16) | CREW_PICKER_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_OP1);
+  }
   sender.sendInterfaceFlagsRange(
     (SIDEPANEL_GROUP << 16) | CREW_PICKER_BACK_CHILD, 0, CREW_PICKER_BACK_MAX_SLOT, IF_EVENT_OP1);
   sender.sendInterfaceFlagsRange(

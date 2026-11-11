@@ -295,23 +295,39 @@ function onLeft({ player, boat, reason }) {
 }
 
 /**
- * The combat tab's "View" button (593:48) and the sidepanel's "Combat Options" (937:33) swap
- * the combat tab between the combat options and the sailing sidepanel while aboard; the
- * client only plays a click (script 489), the server remounts the tab.
+ * Off a boat, the sidepanel describes no boat (its title reads "Not on boat"); it is offered
+ * there only while the combat tab shows its "View" button.
+ */
+function openOffBoatSidepanel(player) {
+  if (getVarbit(player, VARBIT.BOARDED_BOAT) === 1 || offBoatCombatTabSidepanel(player) !== 1) return;
+  setVarbit(player, VARBIT.SIDEPANEL_VISIBLE, 1);
+  openSidepanel(player, null, { [VARBIT.SIDEPANEL_VISIBLE]: 1 }, {});
+}
+
+/**
+ * The combat tab's "View" button (593:48) and the sidepanel's "Combat Options" (937:1) swap
+ * the combat tab between the combat options and the sailing sidepanel, aboard or (with the
+ * Sailing side panel setting on "Always show") off a boat; the client only plays a click
+ * (script 489), the server remounts the tab and sets sailing_sidepanel_visible.
  */
 function switchCombatTab(event) {
   const { player } = event;
   if (event.groupId === COMBAT_OPTIONS_GROUP && event.childId === VIEW_SAILING_OPTIONS_CHILD) {
     event.handled = true;
     const supplied = suppliedPanels.get(player);
-    if (supplied && applySuppliedPanel(player, supplied)) return;
+    if (supplied && currentSuppliedPanel(player, supplied)) {
+      setVarbit(player, VARBIT.SIDEPANEL_VISIBLE, 1);
+      if (applySuppliedPanel(player, supplied)) return;
+    }
     const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
     if (owned) return applyBoarded(player, owned);
     const visited = Sailing.guestBoat(player);
     const visitedOwned = visited && Sailing.ownedOf(visited);
-    if (visitedOwned) applyBoarded(player, visitedOwned, playersAboard(visited));
+    if (visitedOwned) return applyBoarded(player, visitedOwned, playersAboard(visited));
+    openOffBoatSidepanel(player);
   } else if (event.groupId === SIDEPANEL_GROUP && event.childId === VIEW_COMBAT_OPTIONS_CHILD) {
     event.handled = true;
+    setVarbit(player, VARBIT.SIDEPANEL_VISIBLE, 0);
     WeaponInterfaceManager.assign(player);
   }
 }

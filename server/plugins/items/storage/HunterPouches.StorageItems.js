@@ -148,8 +148,9 @@ function makeKind(kind) {
       player.sendMessage(lines.EMPTY);
       return;
     }
-    const { left } = Storage.emptyToInventory(player, family);
-    player.sendMessage(left > 0 ? lines.SOME_LEFT : lines.EMPTIED);
+    const { moved, left } = Storage.emptyToInventory(player, family);
+    if (moved === 0) player.getInventory().full();
+    else player.sendMessage(left > 0 ? lines.SOME_LEFT : lines.EMPTIED);
   }
 
   function toggle({ player, item }) {

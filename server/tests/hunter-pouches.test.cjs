@@ -184,3 +184,44 @@ test("the guild's top floor covers its walls on plane 2 only", () => {
   assert.equal(at(1551, 3046, 2), false);
   assert.equal(at(1556, 3046, 1), false);
 });
+
+test("a noose-wand catch puts its fur in an open fur pouch, so a full inventory still takes it", (t) => {
+  const Tracking = require("../plugins/skills/hunter/Tracking.Hunter");
+  const { player, messages } = actor(t, [[I.NOOSE_WAND, 1], [I.SMALL_FUR_POUCH, 1]]);
+  player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 99).setMaxLevel(core.Skill.HUNTER, 99);
+  option(player, I.SMALL_FUR_POUCH, "Open");
+  player.getInventory().adds(I.LOGS, 24); // two slots left: the bones and the beast meat
+  const varbits = new Map();
+  t.mock.method(player.getPacketSender(), "sendVarbit", (id, value) => { varbits.set(id, value); return player.getPacketSender(); });
+  const at = ([x, y, z]) => new core.GameObject(1, new core.Location(x, y, z), 10, 0, null);
+  const segmentOf = (varbit) => Tracking.data.segments.find((s) => s.varbit === varbit);
+  const burrow = at(Tracking.data.segments.find((s) => s.burrow && s.kebbit === "feldip_weasel").start);
+  player.setLocation(burrow.getLocation().clone());
+  Tracking.inspect({ player, object: burrow, definition: { getName: () => "Burrow" } });
+  let searches = 0;
+  while (!messages.at(-1)?.startsWith("Something is moving here") && searches++ < 15) {
+    const varbit = [...varbits.keys()].at(-1), segment = segmentOf(varbit);
+    const forwards = varbits.get(varbit) === (segment.inverted ? 5 : 4);
+    const spot = at(forwards ? segment.end : segment.start);
+    player.setLocation(spot.getLocation().clone());
+    Tracking.inspect({ player, object: spot, definition: { getName: () => "Bush" } });
+  }
+  assert.ok(searches < 15, "the trail ends at the weasel");
+  const here = player.getLocation();
+  Tracking.catchPrey({ player, object: at([here.getX(), here.getY(), here.getZ()]) });
+  for (let i = 0; i < 3; i++) { C.H.tick++; C.processActions(); }
+  assert.equal(Storage.amountOf(player, fur(), I.FELDIP_WEASEL_FUR), 1, "the fur went into the pouch");
+  assert.equal(player.getInventory().getAmount(I.FELDIP_WEASEL_FUR), 0);
+  assert.equal(player.getInventory().getAmount(I.BONES), 1);
+  Tracking.clear({ player });
+});
+
+test("Empty with no inventory room moves nothing and says the inventory is full", (t) => {
+  const { player, messages } = actor(t, [[I.SMALL_MEAT_POUCH, 1]]);
+  player.getInventory().adds(I.LOGS, 27);
+  Storage.store(player, meat(), I.RAW_PYRE_FOX, 2);
+  nearBank = true;
+  option(player, I.SMALL_MEAT_POUCH, "Empty");
+  assert.equal(Storage.total(player, meat()), 2);
+  assert.equal(messages.at(-1), "Not enough space in your inventory.");
+});

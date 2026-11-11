@@ -195,7 +195,9 @@ test("as captured: the cave, the vine and the roots", () => {
 
 function deadEnt(id, killer) {
   let transform = -1;
-  const npc = { getId: () => (transform >= 0 ? transform : id), setNpcTransformationId: (value) => { transform = value; }, isRegistered: () => true, transform: () => transform };
+  const npc = { getId: () => (transform >= 0 ? transform : id), setNpcTransformationId: (value) => { transform = value; }, isRegistered: () => true, transform: () => transform,
+    // The trunk is remains: a locked 1 HP, so it can be walked to and chopped (issue #4357).
+    hp: 0, locked: false, setHitpoints(value) { this.hp = value; }, setHitpointsLocked(value) { this.locked = value; }, setPoisonDamage() {} };
   const event = { killer, npc, npcId: id, remains: null };
   EntTrunk.entDied(event);
   return { npc, event };
@@ -207,6 +209,7 @@ test("as captured: a dead Ent stays, becomes its trunk, and only its killer chop
   assert.deepEqual(event.remains, { ticks: 103, respawnTicks: 50 }, "trunk 4 ticks after the fall, for 101 ticks, then 50 to respawn");
   runTicks(2);
   assert.equal(npc.getId(), 9474);
+  assert.deepEqual([npc.hp, npc.locked], [1, true], "a locked 1 HP, so it can be walked to");
 
   const other = createPlayer(1590, 9890);
   EntTrunk.chopTrunk({ player: other, npc });

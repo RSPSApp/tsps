@@ -58,6 +58,11 @@ function entDied(event) {
   event.remains = { ticks: untilTrunk + ENTS.trunkTicks, respawnTicks: ent.respawnTicks };
   const npc = event.npc;
   later(untilTrunk, () => {
+    // Nothing walks to a 0 HP NPC, so the trunk couldn't be chopped: a locked 1 HP, as the other
+    // remains (RuniteGolem.plugin.js, Araxxor's corpse). The respawn is a new NPC.
+    npc.setHitpoints(1);
+    npc.setHitpointsLocked?.(true);
+    npc.setPoisonDamage?.(0);
     npc.setNpcTransformationId(ENTS.trunk);
     trunks.set(npc, { killer: event.killer, ent, until: now() + ENTS.trunkTicks });
   });

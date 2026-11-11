@@ -457,8 +457,10 @@ function combatLevelCondition(player, text) {
 
 /**
  * The transcripts' bare skill-level wording, "If the player has at least 46 Hunter:" and its
- * siblings "under 46 Hunter" / "less than 60 Smithing", answered from the player's level in that
- * skill (boosts count). Unanswered, a sibling run took its first branch whatever the level, so
+ * siblings "under 46 Hunter" / "less than 60 Smithing", answered from the player's base level in
+ * that skill: the Wiki marks these not boostable (Hunter Guild, Blast Furnace), as Rumours.Hunter.js
+ * and AtFirstLight.Quest.js read them. A plugin answers a boostable one first (Adventurer Ada's Sailing).
+ * Unanswered, a sibling run took its first branch whatever the level, so
  * Pellem and Imia refused every player (issue #4434). Plugins answer their own conditions first.
  */
 function skillLevelCondition(player, text) {
@@ -466,7 +468,7 @@ function skillLevelCondition(player, text) {
   if (!match) return null;
   const skill = Skill.values().find((entry) => entry.getName().toLowerCase() === match[3].toLowerCase());
   if (!skill) return null;
-  const level = player.getSkillManager().getCurrentLevel(skill);
+  const level = player.getSkillManager().getMaxLevel(skill);
   return match[1] === "at least" ? level >= Number(match[2]) : level < Number(match[2]);
 }
 

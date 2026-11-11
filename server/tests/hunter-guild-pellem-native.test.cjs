@@ -31,12 +31,12 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-async function talkAt(t, hunter) {
+async function talkAt(t, hunter, current = hunter) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const player = new Player(new PlayerSession(channel));
   player.setIndex(next++); player.setUsername('pellem' + next); player.setRegistered(true);
   player.setAttribute('bot-skip-persistence', true);
-  player.getSkillManager().setMaxLevel(core.Skill.HUNTER, hunter).setCurrentLevel(core.Skill.HUNTER, hunter);
+  player.getSkillManager().setMaxLevel(core.Skill.HUNTER, hunter).setCurrentLevel(core.Skill.HUNTER, current);
   const at = pellem.getLocation();
   player.setLocation(new core.Location(at.getX() + 1, at.getY(), 0)); player.needsPlacement = false;
   const c = new ClientConnection(channel); c.player = player;
@@ -57,8 +57,14 @@ test('Pellem refuses a player under 46 Hunter', async (t) => {
   assert.equal(await talkAt(t, 45), 'Sorry, but I can only provide services to qualified members of the Hunter Guild.');
 });
 
+// Wiki (Hunters' Guild): the 46 Hunter is not boostable, so the base level decides.
+test("Pellem reads base Hunter: a boost to 46 is refused, a drain below it is greeted", async (t) => {
+  assert.equal(await talkAt(t, 44, 46), 'Sorry, but I can only provide services to qualified members of the Hunter Guild.');
+  assert.equal(await talkAt(t, 46, 44), 'Hi there. How can I help you today?');
+});
+
 test('the bare skill-level wording answers from that skill; other wording is left to plugins', () => {
-  const at = (levels) => ({ getSkillManager: () => ({ getCurrentLevel: (skill) => levels[skill.getName()] ?? 1 }) });
+  const at = (levels) => ({ getSkillManager: () => ({ getMaxLevel: (skill) => levels[skill.getName()] ?? 1 }) });
   assert.equal(skillLevelCondition(at({ Smithing: 60 }), 'If the player has at least 60 Smithing:'), true);
   assert.equal(skillLevelCondition(at({ Smithing: 59 }), 'If the player has less than 60 Smithing:'), true);
   assert.equal(skillLevelCondition(at({ Sailing: 40 }), 'If the player has under 40 Sailing:'), false);

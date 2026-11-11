@@ -2,7 +2,7 @@
 
 const C = require("./Context.Hunter");
 const { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  exchange, drop, xp, chance, begin, hide, removeObject, questComplete, questStage } = C;
+  exchange, catchExchange, drop, xp, chance, begin, hide, removeObject, questComplete, questStage } = C;
 
 // The trap timer the client draws over a laid trap (cache script add_overlaytimer_loc): coord, loc,
 // shape, timer id, ticks, colour, 1. Yellow while it waits, green on a catch, red when it failed
@@ -230,10 +230,10 @@ function collect(event, reset = false, check = true) {
   if (check && trap.state !== "caught") return true;
   const rewards = trap.state === "caught" ? (trap.rewards ??= rewardsFor(player, trap)) : [];
   const items = returnedItems(trap).concat(rewards);
-  if (!exchange(player, [], items, false)) { player.getInventory().full(); return true; }
+  if (!catchExchange(player, [], items, false)) { player.getInventory().full(); return true; }
   const def = H.data.traps[trap.kind];
   if (!begin(player, def.dismantleTicks ?? 2, def.dismantle ?? ANIM.TAKE, () => {
-    if (!H.traps.has(trap) || !owned(player, object) || !exchange(player, [], items)) return;
+    if (!H.traps.has(trap) || !owned(player, object) || !catchExchange(player, [], items)) return;
     if (trap.state === "caught") xp(player, trap.xp ?? trap.creature.xp, trap.kind, trap.creature.npc);
     const { kind, location, base } = trap;
     remove(trap);

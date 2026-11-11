@@ -2,7 +2,7 @@
   "$comment": "Crafting recipes for plugins/skills/crafting/. Items are ItemIdentifiers names (generated from the cache). Levels, XP and materials: OSRS Wiki (Crafting and each item's page). Menus, timings, messages and the silver components: rsprox captures and cache scripts, see docs/crafting.md.",
   "source": "https://oldschool.runescape.wiki/w/Crafting",
   "leather": {
-    "$comment": "Material -> items a needle makes from it, in menu order. `made` completes 'You make ...'.",
+    "$comment": "Material -> items a needle makes from it, in menu order. `made` completes 'You make ...'. `with` is a closed pouch the upgrade also uses up (the Hunters' Guild pouches: Wiki, Large meat pouch, Medium and Large fur pouch).",
     "LEATHER": [
       {
         "item": "LEATHER_GLOVES",
@@ -279,6 +279,59 @@
         "level": 78,
         "xp": 285,
         "made": "a Hueycoatl hide body",
+        "members": true
+      }
+    ],
+    "FOX_FUR": [
+      {
+        "item": "SMALL_MEAT_POUCH",
+        "leather": 4,
+        "level": 35,
+        "xp": 30,
+        "made": "a small meat pouch",
+        "members": true
+      }
+    ],
+    "SUNLIGHT_ANTELOPE_FUR": [
+      {
+        "item": "LARGE_MEAT_POUCH",
+        "leather": 3,
+        "level": 65,
+        "xp": 60,
+        "made": "a large meat pouch",
+        "with": "SMALL_MEAT_POUCH",
+        "members": true
+      }
+    ],
+    "LARUPIA_FUR": [
+      {
+        "item": "SMALL_FUR_POUCH",
+        "leather": 4,
+        "level": 35,
+        "xp": 20,
+        "made": "a small fur pouch",
+        "members": true
+      }
+    ],
+    "GRAAHK_FUR": [
+      {
+        "item": "MEDIUM_FUR_POUCH",
+        "leather": 3,
+        "level": 50,
+        "xp": 40,
+        "made": "a medium fur pouch",
+        "with": "SMALL_FUR_POUCH",
+        "members": true
+      }
+    ],
+    "KYATT_FUR": [
+      {
+        "item": "LARGE_FUR_POUCH",
+        "leather": 3,
+        "level": 65,
+        "xp": 60,
+        "made": "a large fur pouch",
+        "with": "MEDIUM_FUR_POUCH",
         "members": true
       }
     ]

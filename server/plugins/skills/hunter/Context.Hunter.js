@@ -88,6 +88,34 @@ function exchange(player, remove, add, commit = true) {
   return true;
 }
 
+/** Whether an open container (a meat or fur pouch, StorageItems) would take one more of `id` from a catch. */
+function pouchRoom(player, id) {
+  const request = { player, itemId: id, skill: H.core.Skill.HUNTER, room: false };
+  H.api.emitCustomEvent("storage:room", request);
+  return request.room === true;
+}
+
+/**
+ * `exchange` for a catch's loot: single pieces an open meat or fur pouch has room for go into it
+ * (`storage:gather`, skill Hunter), so they need no inventory space; the rest goes to the
+ * inventory as `exchange` would. Nothing moves unless all of it fits.
+ */
+function catchExchange(player, remove, add, commit = true) {
+  const pouched = [];
+  const carried = [];
+  for (const entry of add) (entry[1] === 1 && pouchRoom(player, entry[0]) ? pouched : carried).push(entry);
+  if (!exchange(player, remove, carried, false)) return false;
+  if (!commit) return true;
+  exchange(player, remove, carried);
+  for (const [id, amount] of pouched) {
+    const request = { player, itemId: id, amount, stored: 0, skill: H.core.Skill.HUNTER };
+    H.api.emitCustomEvent("storage:gather", request);
+    const left = amount - request.stored;
+    if (left > 0 && !exchange(player, [], [[id, left]])) drop(player, [[id, left]], player.getLocation());
+  }
+  return true;
+}
+
 function drop(player, items, location, area = player.getPrivateArea()) {
   for (const [id, amount] of items) {
     if (H.core.ItemDefinition.forId(id).isStackable()) {
@@ -243,4 +271,4 @@ function questStage(player, key) {
 }
 
 module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  footprintDistance, exchange, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };
+  footprintDistance, exchange, catchExchange, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

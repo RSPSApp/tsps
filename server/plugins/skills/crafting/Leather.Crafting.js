@@ -1,5 +1,6 @@
 /**
- * Sewing leather, snakeskin, Xerician fabric and hides with a needle, and the armour made by
+ * Sewing leather, snakeskin, Xerician fabric, hides and the Hunters' Guild pouches' furs with a needle (an
+ * upgrade also uses up the closed pouch it grows from, keeping the contents), and the armour made by
  * adding something to a finished piece: studs, kebbit claws, and hides nailed onto a shield.
  *
  * Wiki (Leather, Thread, Crafting#Armour) and rsprox captures (recordings 1854, 1857, 1858,
@@ -29,7 +30,7 @@ function data() {
   if (tables) return tables;
   const { ItemIds: I, Animation } = Shared.getCore();
   const { leather, combine } = Shared.DATA;
-  const needle = (recipe) => ({ ...recipe, itemId: Shared.itemId(recipe.item) });
+  const needle = (recipe) => ({ ...recipe, itemId: Shared.itemId(recipe.item), withId: recipe.with ? Shared.itemId(recipe.with) : null });
   return tables = {
     needles: new Set([I.NEEDLE, I.COSTUME_NEEDLE]),
     leather: new Map(Object.entries(leather).filter(([key]) => key !== "$comment")
@@ -51,7 +52,8 @@ function hasLeatherMaterials(player, materialId, recipe, needleId) {
   const inventory = player.getInventory();
   return inventory.contains(needleId) &&
     (needleId === I.COSTUME_NEEDLE || inventory.contains(I.THREAD)) &&
-    inventory.getAmount(materialId) >= recipe.leather;
+    inventory.getAmount(materialId) >= recipe.leather &&
+    (recipe.withId === null || inventory.contains(recipe.withId));
 }
 
 /** One use of the carried reel; the fifth uses it up. A costume needle needs no thread. */
@@ -74,12 +76,14 @@ function craftLeatherItem(player, materialId, recipe, needleId) {
   if (!hasLeatherMaterials(player, materialId, recipe, needleId)) return false;
   const inventory = player.getInventory();
   inventory.deleteNumber(materialId, recipe.leather);
+  if (recipe.withId !== null) inventory.deleteNumber(recipe.withId, 1);
   inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
   Shared.spam(player, `You make ${recipe.made}.`);
   useThread(player, needleId);
   Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: recipe.itemId });
-  Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", [[materialId, recipe.leather]]);
+  const used = [[materialId, recipe.leather], ...(recipe.withId !== null ? [[recipe.withId, 1]] : [])];
+  Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", used);
   return true;
 }
 
@@ -93,6 +97,11 @@ function tooLowStatement(player, level, made) {
 function startLeatherCrafting(player, materialId, recipe, amount, needleId) {
   if (Shared.craftingLevel(player) < recipe.level) {
     tooLowStatement(player, recipe.level, recipe.made);
+    return;
+  }
+  if (recipe.withId !== null && !player.getInventory().contains(recipe.withId)) {
+    // Ours: no capture or transcript of an upgrade without its (closed) pouch.
+    player.sendMessage(`You need ${Shared.withArticle(Shared.itemName(recipe.withId).toLowerCase())} to make ${recipe.made}.`);
     return;
   }
   // Items on ticks 2, 5, 8 ... after the choice; the animation restarts with each one.

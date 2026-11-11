@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/gertrudes-cat-fluffs-hint.test.cjs
 // Stroke on Fluffs at stage 2 shows "Perhaps the cat wants something?" in a message box
-// (messagebox, 229), not a chat line: rsprox 232/03222.txt tick 12370 (type=mesbox). Real plugins,
-// a real Player, the quest's own stage and the native npc_option packet.
+// (messagebox, 229) and as a mesbox chat line, both on the same tick: rsprox 232/03222.txt tick 12370
+// (type=mesbox, then if_opensub messagebox). Real plugins, a real Player, the quest's own stage and
+// the native npc_option packet.
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -22,7 +23,7 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-test("stroking Fluffs at stage 2 shows the hint in a message box", async (t) => {
+test("stroking Fluffs at stage 2 shows the hint in a message box with its mesbox chat line", async (t) => {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel)); p.setIndex(2761); p.setUsername('fluffshint');
   p.setRegistered(true); p.setLocation(new core.Location(3307, 3511, 1)); p.needsPlacement = false;
@@ -32,6 +33,9 @@ test("stroking Fluffs at stage 2 shows the hint in a message box", async (t) => 
   t.after(() => { core.World.getNpcs().remove(fluffs); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
   const messages = [];
   t.mock.method(p.getPacketSender(), 'sendMessage', (m) => { messages.push(m); return p.getPacketSender(); });
+  const typed = [];
+  const sendTyped = p.getPacketSender().sendTypedMessage.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(), 'sendTypedMessage', (type, m) => { typed.push([type, m]); return sendTyped(type, m); });
   const quest = QuestRuntime.getRegisteredQuests().find((q) => q.name === "Gertrude's Cat");
   quest.setStage(p, 2);
   await c.dispatch([{ type: 'npc_option', index: fluffs.getIndex(), clickType: 3 }]);
@@ -44,5 +48,7 @@ test("stroking Fluffs at stage 2 shows the hint in a message box", async (t) => 
   const current = p.getDialogueManager().getCurrent();
   assert.ok(current instanceof core.StatementDialogue, `a message box: ${current?.constructor?.name}`);
   assert.equal(String(current.getText?.() ?? ''), 'Perhaps the cat wants something?');
-  assert.ok(!messages.includes('Perhaps the cat wants something?'), 'not a chat line');
+  assert.deepEqual(typed.filter(([, m]) => m === 'Perhaps the cat wants something?'),
+    [[core.ChatType.MESBOX, 'Perhaps the cat wants something?']], 'one mesbox chat line with the box');
+  assert.ok(!messages.includes('Perhaps the cat wants something?'), 'not an ordinary game message');
 });

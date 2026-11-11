@@ -249,7 +249,7 @@ test("the judge's finishing dialogue pays once and offers the replay", () => {
 test("starting without 200 coins is refused with the wiki lines", () => {
   const p = player({ coins: 0 });
   Judge._test.talkTo({ player: p });
-  chooseOption(p, 0);
+  chooseOption(p, 1); // the one-based choice native resumes carry: "Sure, I'll give it a go."
   const texts = dialogueTexts(p);
   assert.ok(texts.includes("Oops, I don't have enough coins on me..."));
   assert.ok(texts.includes("Never mind, come back when you've got enough."));

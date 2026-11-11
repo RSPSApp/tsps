@@ -562,12 +562,20 @@ test("Puro-Puro fixed implings use world spawns, cross wheat and return after a 
   const unchangedCount = () => [...core.World.getNpcs()].filter(npc => npc && fixed.includes(npc)).length;
   const scout = actor(t);
   let crossing;
-  const wallTypes = new Map();
+  const wallRecords = [];
   for (const objects of core.MapObjects.mapObjects.values()) {
     for (const object of objects) {
       const at = object.getLocation();
       if (!inRealm(at)) continue;
-      if (object.getType() <= 3) wallTypes.set(object.getId(), (wallTypes.get(object.getId()) ?? 0) + 1);
+      if (object.getType() >= 0 && object.getType() <= 3) {
+        const definition = core.ObjectDefinition.forPlayer(object.getId(), scout);
+        wallRecords.push({ id: object.getId(), name: definition?.getName(), type: object.getType(),
+          face: object.getFace(), position: [at.getX(), at.getY(), at.getZ()], solid: definition?.isSolid(),
+          nearFixedWanderSquare: fixed.some(npc => {
+            const home = npc.getSpawnPosition(), radius = npc.getMovementCoordinator().getRadius();
+            return Math.abs(home.getX() - at.getX()) <= radius + 1 && Math.abs(home.getY() - at.getY()) <= radius + 1;
+          }) });
+      }
       if (crossing || core.ObjectDefinition.forPlayer(object.getId(), scout)?.getName() !== "Magical wheat") continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const from = at.transform(dx, dy);
@@ -579,7 +587,7 @@ test("Puro-Puro fixed implings use world spawns, cross wheat and return after a 
     }
   }
   assert.ok(crossing, "the active cache supplies an actual clipped wheat edge");
-  console.log("puro-fixed-map-walls", JSON.stringify([...wallTypes]));
+  console.log("puro-fixed-map-walls", JSON.stringify(wallRecords));
 
   await t.test("all fixed spawns fly with ordinary wander targets contained inside the realm", () => {
     const outOfBounds = fixed.filter(npc => {
@@ -627,6 +635,8 @@ test("Puro-Puro fixed implings use world spawns, cross wheat and return after a 
     ["earth", N.EARTH_IMPLING_2, I.EARTH_IMPLING_JAR, 50],
   ]) await t.test(`${label}: packet Catch, conservation and ${respawnTicks}-tick return permit another ordinary catch`, sub => {
     const p = actor(sub), npc = fixed.find(npc => npc.getId() === npcId), home = npc.getSpawnPosition().clone();
+    const radiusBefore = npc.getMovementCoordinator().getRadius();
+    assert.equal(npc.getMovementQueue().isMovementBlocked(), false);
     npc.setLocation(crossing.from.clone()); npc.setNeedsPlacement(false);
     let reached = false;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -656,6 +666,8 @@ test("Puro-Puro fixed implings use world spawns, cross wheat and return after a 
     assert.equal(npc.isVisible(), true);
     assert.equal(npc.untargetable === true, false);
     assert.ok(npc.getLocation().equals(home));
+    assert.equal(npc.getMovementQueue().isMovementBlocked(), false, "return restores ordinary movement");
+    assert.equal(npc.getMovementCoordinator().getRadius(), radiusBefore, "return preserves capped radius");
     assert.equal(unchangedCount(), 51, "returns preserve exactly the original fixed actors");
     // Supply the next reachable approach to its restored home; no travel/client claim.
     let homeReached = false;
@@ -672,6 +684,8 @@ test("Puro-Puro fixed implings use world spawns, cross wheat and return after a 
     for (let tick = 0; tick < respawnTicks + 2; tick++) core.TaskManager.process();
     assert.equal(npc.isVisible(), true);
     assert.ok(npc.getLocation().equals(home));
+    assert.equal(npc.getMovementQueue().isMovementBlocked(), false, "return restores ordinary movement");
+    assert.equal(npc.getMovementCoordinator().getRadius(), radiusBefore, "return preserves capped radius");
     assert.equal(npc.hasFlag("movement:ignore-clipping"), true, "flight survives the fixed return path");
     assert.equal(unchangedCount(), 51);
   });

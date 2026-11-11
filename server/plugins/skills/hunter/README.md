@@ -162,6 +162,9 @@ activates the fixed population, checks real wheat collision and NPC/realm contro
 Catch, and completes both seven- and 50-tick return paths through another ordinary Catch.
 Actor placement/equipment/levels/approach and successful RNG are supplied. Natural random
 wandering, client rendering and generic impling teleport/expiry timing remain unverified.
+The Wiki also distinguishes obstacles drawn as minimap lines. The fixture records actual
+wall-type objects and their proximity to current fixed wander squares; its wheat traversal
+assertion does not establish a general rule for crossing line walls.
 
 The existing `impetuous-impulses.test.cjs` suite includes a native roaming route: real plugin
 startup, cache-backed Puro-Puro magical wheat, movement queues with player/ordinary-NPC collision

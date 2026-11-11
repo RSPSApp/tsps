@@ -378,7 +378,10 @@ function eat(event) {
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
   const foodEvent = { player, itemId, hitpointsBefore, meta };
   const after = applyFood(player, food, Math.random, foodEvent);
-  player.sendMessage(message);
+  // A food with `say` is spoken overhead instead of a chat line: the cup of tea's "Aaah, nothing like
+  // a nice cuppa tea!" (Wiki: the player exclaims it; rsprox 227/01863.txt tick 5031 has it as [say]).
+  if (food.say) player.forceChat(food.say);
+  else player.sendMessage(message);
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;

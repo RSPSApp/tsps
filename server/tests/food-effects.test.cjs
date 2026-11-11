@@ -78,8 +78,10 @@ function createPlayer({ hp = 50, maxHp = 99, at = new Location(3222, 3222, 0) } 
   const timers = new TimerRepository();
   let energy = 50;
   let attackDelays = [];
+  const said = [];
   const player = {
-    messages, varps, slots,
+    messages, varps, slots, said,
+    forceChat: (text) => said.push(text),
     give(slot, itemId) { slots[slot] = new core.Item(itemId, 1); },
     eat(slot) { eat({ player, itemId: slots[slot].getId(), slot, clickType: 1, item: slots[slot] }); },
     get hp() { return hp; },
@@ -489,7 +491,9 @@ test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki e
     assert.equal(cup.hp, 43, "a cup of tea heals 3 (Wiki: Cup of tea)");
     assert.equal(cup.level(core.Skill.ATTACK), 63, "and boosts Attack by 2 + 2% (3 from level 50)");
     assert.equal(cup.slots[0].getId(), id("EMPTY_CUP"));
-    assert.deepEqual(cup.messages, ["Aaah, nothing like a nice cuppa tea!"]);
+    // Wiki: the player exclaims it (rsprox 227/01863.txt tick 5031: [say]); no chat line.
+    assert.deepEqual(cup.said, ["Aaah, nothing like a nice cuppa tea!"]);
+    assert.deepEqual(cup.messages, []);
   }
   assert.equal(Food.isFoodItem(id("CUP_OF_TEA_4")), false, "tea with an Empty option is another tea");
 

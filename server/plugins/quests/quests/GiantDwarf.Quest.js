@@ -1225,9 +1225,9 @@ module.exports = function registerGiantDwarfQuest(api) {
         player.setAttribute(PIE_ATTRIBUTE, true);
         syncVarbits(player);
         return;
-      case "z3YxxS":
+      case "e1zjyh": // "Return to Keldagrim immediately.": the fade to Blasidar's house
         event.handled = true;
-        event.end = true; // the parsed variant leaves a stray "Explore" menu after this
+        event.end = true;
         if (skipReturnState.has(player)) {
           skipReturnState.delete(player);
           return;

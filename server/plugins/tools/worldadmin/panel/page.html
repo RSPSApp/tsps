@@ -208,6 +208,10 @@
   .field-error { color: var(--error); font-size: 13px; }
 
   .control .link { align-self: flex-end; }
+  .plugin-controls { display: flex; align-items: center; gap: 10px; }
+  .plugin-delete { width: 28px; min-height: 28px; padding: 0; font-size: 19px; line-height: 1; }
+  .plugin-delete:hover:not(:disabled) { color: var(--error); }
+
   .toggle-row .host-switch-control { min-height: 0; cursor: pointer; }
   .toggle-row .host-switch-control input { inset: 0; width: 100%; height: 100%; margin: 0; z-index: 1; cursor: inherit; }
   .toggle-row .host-switch-control:has(input:disabled) { opacity: .45; cursor: not-allowed; }
@@ -385,6 +389,7 @@
     edits: { world: {}, plugins: {}, pluginConfig: {} },
     rows: [],            // { el, kind, key, search, refresh() }
     tab: "settings",
+    downloadedOnly: false,
     pluginView: new URLSearchParams(window.location.search).get("plugins") === "browse" ? "browse" : "installed",
     dismissedFailure: null,
     pollTimer: null,
@@ -434,18 +439,55 @@
         });
         var result = await response.json();
         if (!response.ok) throw new Error(result.error || "Upload failed.");
-        flash("info", result.name + " v" + result.version + " installed. Restart the server to load it.");
-        await load(true);
+        await pluginInstalled(result);
       } catch (error) {
         flash("error", "Could not import plugin: " + error.message);
       } finally {
         button.disabled = false;
       }
     });
-    return el("div", { className: "plugin-upload" }, [
-      input, button,
-      el("p", { text: "Import ZIPs from authors you trust. Plugin code runs on the next server start." }),
-    ]);
+    return el("div", { className: "plugin-upload" }, [input, button]);
+  }
+
+  function pluginInstalled(result) {
+    flash("info", result.name + " v" + result.version + " installed. Restart the server to load it.", 5000);
+    return load(true);
+  }
+
+  async function installPlugin(plugin, button) {
+    if (readOnly() || busy()) {
+      flash("warn", "Wait until the server is online and idle to install a plugin.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "Installing…";
+    try {
+      var result = await api("/api/plugins/install", { packageId: plugin.id, version: plugin.version });
+      if (!result.ok) throw new Error(result.body?.error || "Install failed.");
+      await pluginInstalled(result.body);
+    } catch (error) {
+      flash("error", "Could not install plugin: " + error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Install";
+    }
+  }
+
+  async function deletePlugin(plugin, options, button) {
+    if (readOnly() || busy() || !window.confirm("Are you sure you want to delete this plugin? This cannot be undone.")) return;
+    button.disabled = true;
+    try {
+      var result = await api("/api/plugins/delete", { packageId: plugin.packageId });
+      if (!result.ok) throw new Error(result.body?.error || "Delete failed.");
+      delete state.edits.plugins[plugin.name];
+      options.forEach(function (option) { delete state.edits.pluginConfig[option.key]; });
+      flash("info", plugin.name + " deleted. Restart the server to unload any running code.", 5000);
+      await load(true);
+    } catch (error) {
+      flash("error", "Could not delete plugin: " + error.message);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function api(path, body) {
@@ -840,7 +882,7 @@
     var editedTag = el("span", { className: "tag edited", text: "unsaved" });
     var toggle = LocalPanelComponents.switchControl(controlId, helpId, function (checked) { setPluginSwitch(plugin.name, checked); });
     var input = toggle.input;
-    var row = { kind: "plugin", key: plugin.name, invalid: false };
+    var row = { kind: "plugin", key: plugin.name, downloaded: !!plugin.packageId, invalid: false };
 
     function current() {
       return has(state.edits.plugins, plugin.name) ? state.edits.plugins[plugin.name] : plugin.enabled;
@@ -855,6 +897,11 @@
     var badge = membersOff ? membersBadge()
       : (plugin.enabled && !plugin.loaded && !plugin.awaitingLoad) ? dependencyBadge(plugin) : null;
 
+    var deleteButton = plugin.packageId ? el("button", {
+      type: "button", className: "plugin-delete", text: "×", title: "Delete " + plugin.name,
+      "aria-label": "Delete " + plugin.name,
+      onclick: function () { void deletePlugin(plugin, options, deleteButton); },
+    }) : null;
     var rowEl = LocalPanelComponents.settingRow("row toggle-row host-switch-field" + (membersOff ? " inactive" : ""),
       el("div", null, [
         titleLine(el("label", { className: "label", id: nameId, for: controlId, text: plugin.name }), plugin.file),
@@ -862,13 +909,14 @@
         meta,
         badge ? badge.el : null,
       ]),
-      el("div", { className: "control" }, [toggle.control]),
+      el("div", { className: "plugin-controls" }, [toggle.control, deleteButton]),
     );
 
     function refresh() {
       var on = current();
       input.checked = on;
       input.disabled = readOnly();
+      if (deleteButton) deleteButton.disabled = readOnly();
       changedTag.hidden = on === plugin.defaultEnabled;
       editedTag.hidden = !has(state.edits.plugins, plugin.name);
       if (badge) badge.refresh();
@@ -900,7 +948,7 @@
 
   function areaTitle(area) {
     if (!area) return "Other";
-    return area.charAt(0).toUpperCase() + area.slice(1);
+    return area.replace(/[-_]+/g, " ").replace(/(^| )\S/g, function (letter) { return letter.toUpperCase(); });
   }
 
   function build() {
@@ -920,12 +968,14 @@
     catalog.plugins.forEach(function (p) { byName[p.name] = p; });
     state.byName = byName;
 
-    var installedCount = el("span", { className: "hub-tab-count", text: String(catalog.plugins.length) });
+    var downloadedCount = catalog.plugins.filter(function (plugin) { return !!plugin.packageId; }).length;
+    var installedCount = el("span", { className: "hub-count", text: String(catalog.plugins.length) });
+    var browseCount = el("span", { className: "hub-count", hidden: true });
     var installedTab = el("button", { type: "button", role: "tab", id: "plugin-view-installed", "aria-controls": "plugins-installed",
-      onclick: function () { selectPluginView("installed"); } }, ["Installed", installedCount]);
+      onclick: function () { selectPluginView("installed"); } }, ["Installed ", installedCount]);
     var browseTab = el("button", { type: "button", role: "tab", id: "plugin-view-browse", "aria-controls": "plugins-browse",
-      text: "Browse plugins", onclick: function () { selectPluginView("browse"); } });
-    var viewTabs = el("div", { className: "plugin-view-tabs", role: "tablist", "aria-label": "Plugin views" }, [installedTab, browseTab]);
+      onclick: function () { selectPluginView("browse"); } }, ["Browse plugins ", browseCount]);
+    var viewTabs = el("div", { className: "plugin-view-tabs", role: "tablist", "aria-label": "Plugin views", hidden: !window.PluginHub }, [installedTab, browseTab]);
     viewTabs.addEventListener("keydown", function (event) {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
       event.preventDefault();
@@ -933,14 +983,27 @@
       selectPluginView(view);
       document.getElementById("plugin-view-" + view).focus();
     });
-    plugins.appendChild(el("div", { className: "plugin-toolbar", hidden: !window.PluginHub }, [viewTabs]));
+    plugins.appendChild(el("div", { className: "plugin-toolbar" }, [viewTabs, pluginUpload()]));
     var installedPanel = el("div", { id: "plugins-installed", role: "tabpanel", "aria-labelledby": "plugin-view-installed" });
     var browsePanel = el("div", { id: "plugins-browse", role: "tabpanel", "aria-labelledby": "plugin-view-browse", hidden: true });
-    installedPanel.appendChild(el("div", { className: "hub-bundled-heading hub-ui" }, [
-      el("h2", { text: "Installed plugins" }),
-      el("p", { text: catalog.plugins.length + " installed plugins · Changes to these switches take effect when you save and restart." }),
-      pluginUpload(),
-    ]));
+    var installedFilters = el("div", { className: "hub-filter-chips hub-ui", role: "group", "aria-label": "Filter installed plugins" });
+    [false, true].forEach(function (downloaded) {
+      installedFilters.appendChild(el("button", {
+        type: "button",
+        "aria-pressed": String(state.downloadedOnly === downloaded),
+        onclick: function () {
+          state.downloadedOnly = downloaded;
+          Array.from(installedFilters.children).forEach(function (button) {
+            button.setAttribute("aria-pressed", String(button === this));
+          }, this);
+          applySearch();
+        },
+      }, [downloaded ? "Downloaded " : "All plugins ", el("span", {
+        className: "hub-count", text: String(downloaded ? downloadedCount : catalog.plugins.length),
+      })]));
+    });
+    installedPanel.appendChild(installedFilters);
+    installedPanel.appendChild(el("h2", { className: "hub-bundled-heading hub-ui", text: "Installed plugins" }));
     plugins.appendChild(installedPanel);
     plugins.appendChild(browsePanel);
 
@@ -991,7 +1054,19 @@
     settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
     installedPanel.appendChild(el("p", { className: "empty", id: "plugins-empty", text: "Nothing matches.", hidden: true }));
     if (window.PluginHub) {
-      hubViews.push(PluginHub.mountBrowse(browsePanel, { searchInput: document.getElementById("search") }));
+      var uninstallById = new Map();
+      catalog.plugins.forEach(function (plugin) {
+        if (plugin.packageId) uninstallById.set(plugin.packageId, function (button) {
+          return deletePlugin(plugin, optionsByPlugin.get(plugin.name) || [], button);
+        });
+      });
+      hubViews.push(PluginHub.mountBrowse(browsePanel, {
+        searchInput: document.getElementById("search"), uninstallById: uninstallById, install: installPlugin,
+        onCount: function (count) {
+          browseCount.textContent = String(count);
+          browseCount.hidden = false;
+        },
+      }));
     }
     selectPluginView(window.PluginHub ? state.pluginView : "installed");
     document.getElementById("loading").hidden = true;
@@ -1008,6 +1083,10 @@
       state.groups[tab].forEach(function (g) {
         var visible = false;
         g.rows.forEach(function (r) {
+          if (tab === "plugins" && state.downloadedOnly && !r.downloaded) {
+            r.el.hidden = true;
+            return;
+          }
           var match = matches(r.search);
           (r.children || []).forEach(function (child) {
             var childMatch = matches(r.search + " " + child.search);
@@ -1029,7 +1108,9 @@
         }
         if (visible) any = true;
       });
-      document.getElementById(tab + "-empty").hidden = any;
+      var empty = document.getElementById(tab + "-empty");
+      empty.hidden = any;
+      if (tab === "plugins") empty.textContent = state.downloadedOnly && !words.length ? "No downloaded plugins." : "Nothing matches.";
     });
   }
 
@@ -1304,13 +1385,14 @@
       : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
   }
 
-  function flash(kind, text) {
+  function flash(kind, text, dismissAfter) {
     var box = document.getElementById("flashes");
     var node = el("div", { className: "banner " + kind, role: kind === "error" ? "alert" : "status" }, [
       el("div", { className: "text", text: text }),
       el("button", { type: "button", text: "Dismiss", onclick: function () { node.remove(); } }),
     ]);
     box.insertBefore(node, box.firstChild);
+    if (dismissAfter) setTimeout(function () { node.remove(); }, dismissAfter);
     return node;
   }
 

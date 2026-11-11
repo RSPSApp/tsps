@@ -4,7 +4,7 @@ const path = require("path");
 const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
 const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
-const { readPluginZip, savePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
+const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
 //   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a 24+ character token)
@@ -136,16 +136,31 @@ function previewAction({ changes }) {
   return { status: 200, body: planFor(readLayers(), changes) };
 }
 
-function importPluginAction(body) {
+function checkPluginMutationAllowed() {
   const status = gameUpdateStatus();
   if (pendingApplyNow(status) || status.scheduled || shuttingDown()) {
-    throw new HttpError(409, "Wait for the pending restart before importing a plugin.");
+    throw new HttpError(409, "Wait for the pending restart before changing installed plugins.");
   }
+}
+
+function installRelease(release) {
+  checkPluginMutationAllowed();
   const catalog = pluginApi.core.WorldConfigCatalog;
-  const release = readPluginZip(body);
   savePluginZip(PLUGIN_DIRECTORY, release, catalog.build(PLUGIN_DIRECTORY, readLayers()).plugins);
   catalog.invalidate();
   return { status: 201, body: { name: release.manifest.name, version: release.manifest.version } };
+}
+
+async function installPluginAction({ packageId, version }) {
+  checkPluginMutationAllowed();
+  return installRelease(await downloadPluginRelease(packageId, version));
+}
+
+function deletePluginAction({ packageId }) {
+  checkPluginMutationAllowed();
+  deletePluginZip(PLUGIN_DIRECTORY, packageId);
+  pluginApi.core.WorldConfigCatalog.invalidate();
+  return { status: 200, body: { deleted: true } };
 }
 
 function writeError(err) {
@@ -290,7 +305,9 @@ const actions = {
     }
     return playerRoutes(request, response, url, pluginApi);
   },
-  importPlugin: importPluginAction,
+  importPlugin: (body) => installRelease(readPluginZip(body)),
+  installPlugin: installPluginAction,
+  deletePlugin: deletePluginAction,
   catalog: catalogAction,
   preview: previewAction,
   apply: applyAction,

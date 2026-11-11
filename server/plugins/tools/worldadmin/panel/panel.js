@@ -6,6 +6,7 @@
   const releasesUrl = "https://github.com/RSPSApp/tsps-plugins/releases/download";
   const icons = {
     chat: ["M4 4h16v12H9l-5 4V4z", "M8 8h8M8 12h5"],
+    download: ["M12 3v12m-4-4 4 4 4-4", "M5 16v4h14v-4"],
     grid: ["M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"],
   };
   let catalogueRequest;
@@ -22,7 +23,7 @@
           throw new Error("Invalid catalogue entry");
         }
         const download = `${releasesUrl}/${id}-v${version}/${id}-${version}.zip`;
-        return {name, author, category, version, description, download};
+        return {id, name, author, category, version, description, download};
       });
     }).catch(error => {
       catalogueRequest = undefined;
@@ -55,8 +56,21 @@
     return node("span", {className: "hub-plugin-icon"}, [icon(plugin.category === "Community" ? "chat" : "grid")]);
   }
   function tag(text, kind = "") { return node("span", {className: "hub-tag " + kind, text}); }
+  function pluginActions(plugin, uninstall, install) {
+    if (uninstall) {
+      const button = node("button", {type: "button", className: "hub-button", text: "Uninstall",
+        "aria-label": "Uninstall " + plugin.name, onclick() { void uninstall(button); }});
+      return button;
+    }
+    const button = node("button", {type: "button", className: "hub-button hub-primary", text: "Install",
+      "aria-label": "Install " + plugin.name, onclick() { void install(plugin, button); }});
+    const download = node("a", {className: "hub-button hub-download", href: plugin.download,
+      download: "", title: "Download ZIP", "aria-label": "Download ZIP for " + plugin.name}, [icon("download")]);
+    return node("div", {className: "hub-release-actions"}, [button, download]);
+  }
+
   let dialog;
-  function showDetails(plugin) {
+  function showDetails(plugin, uninstall, install) {
     if (!dialog) {
       dialog = node("dialog", {className: "hub-dialog hub-ui", "aria-labelledby": "hub-detail-title"});
       document.body.append(dialog);
@@ -71,16 +85,15 @@
       node("p", {text: plugin.description}),
     ]);
     const actions = node("div", {className: "hub-dialog-actions"}, [
-      node("p", {text: "Import the ZIP from your server’s Plugins panel."}),
       node("button", {type: "button", text: "Close", onclick() { dialog.close(); }}),
-      node("a", {className: "hub-button hub-primary", href: plugin.download, download: "", text: "Download ZIP"}),
+      pluginActions(plugin, uninstall, install),
     ]);
     dialog.append(body, actions);
     dialog.showModal();
   }
-  function card(plugin) {
+  function card(plugin, uninstall, install) {
     const title = node("h3", {}, [node("button", {
-      type: "button", className: "hub-text-button", text: plugin.name, onclick() { showDetails(plugin); },
+      type: "button", className: "hub-text-button", text: plugin.name, onclick() { showDetails(plugin, uninstall, install); },
     })]);
     const body = node("div", {className: "hub-card-body"}, [
       node("div", {className: "hub-card-title"}, [
@@ -91,7 +104,7 @@
       node("div", {className: "hub-card-meta"}, [tag(plugin.category)]),
       node("div", {className: "hub-card-actions"}, [
         node("span", {className: "hub-card-version", text: "v" + plugin.version}),
-        node("a", {className: "hub-button", href: plugin.download, download: "", text: "Download ZIP", "aria-label": "Download " + plugin.name + " ZIP"}),
+        pluginActions(plugin, uninstall, install),
       ]),
     ]);
     return node("article", {className: "hub-card"}, [body]);
@@ -110,12 +123,14 @@
       const matches = catalogue.filter(p => (category === "All plugins" || p.category === category)
         && words.every(word => [p.name, p.author, p.category, p.description].join(" ").toLowerCase().includes(word)));
       resultCount.textContent = matches.length + (matches.length === 1 ? " plugin" : " plugins");
-      grid.replaceChildren(...matches.map(card));
+      grid.replaceChildren(...matches.map(plugin => card(plugin, options.uninstallById?.get(plugin.id), options.install)));
       empty.hidden = matches.length > 0;
       for (const button of filters.children) button.setAttribute("aria-pressed", String(button.dataset.category === category));
     }
     for (const name of categories) {
-      filters.append(node("button", {type: "button", "data-category": name, text: name, "aria-pressed": String(name === category), onclick() { chooseCategory(name); }}));
+      const count = name === "All plugins" ? catalogue.length : catalogue.filter(plugin => plugin.category === name).length;
+      filters.append(node("button", {type: "button", "data-category": name, "aria-pressed": String(name === category),
+        onclick() { chooseCategory(name); }}, [name + " ", node("span", {className: "hub-count", text: String(count)})]));
     }
     container.replaceChildren(
       ...(options.searchInput ? [] : [node("div", {className: "hub-search-row"}, [search])]),
@@ -125,6 +140,7 @@
     render();
     return {refresh: render, destroy() {
       search.removeEventListener("input", render);
+      if (dialog?.open) dialog.close();
     }};
   }
   function mountBrowse(container, options = {}) {
@@ -134,7 +150,9 @@
     function load() {
       container.replaceChildren(node("p", {role: "status", text: "Loading plugins…"}));
       loadCatalogue().then(catalogue => {
-        if (!destroyed) view = renderCatalogue(container, options, catalogue);
+        if (destroyed) return;
+        options.onCount?.(catalogue.length);
+        view = renderCatalogue(container, options, catalogue);
       }, () => {
         if (!destroyed) container.replaceChildren(
           node("p", {role: "status", text: "Could not load the Plugin Hub catalogue."}),

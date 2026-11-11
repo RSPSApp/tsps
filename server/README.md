@@ -252,10 +252,13 @@ Otherwise the page only writes the file and you restart by hand. The page is not
 ## Plugins
 
 Runtime plugins are loaded from `./plugins`. In the local panel, **Plugins → Browse plugins**
-lists releases from the TSPS Plugins catalogue. Download a release, then select
-**Upload plugin ZIP** under **Installed**. The panel stores the package under
-`plugins/imported/` and the server loads it on restart. Plugin ZIPs contain server-side
-JavaScript, so only upload packages from authors you trust.
+lists releases from the TSPS Plugins catalogue. Select **Install** to fetch a release
+directly, or use the download icon and **Upload plugin ZIP** for manual installation.
+The panel stores the package under
+`plugins/imported/` and the server loads it on restart. Use the **×** beside an
+uploaded plugin to delete its package files. Restart the server to unload any running
+plugin code. Plugin ZIPs contain server-side JavaScript, so only upload packages from
+authors you trust.
 
 The native OSRS Character Summary is shown by default. To enable the custom summary,
 merge this into `data/definitions/world.local.json` (or `world.json`) and restart:

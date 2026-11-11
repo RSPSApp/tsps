@@ -109,13 +109,14 @@ test('imported source is listed from its manifest until the runtime loads it', (
   const entry = 'imported/welcome/Welcome.plugin.js';
   const dir = fixture({
     [entry]: plugin('Welcome'),
-    'imported/welcome/plugin.json': JSON.stringify({ description: 'Uploaded welcome message.' }),
+    'imported/welcome/plugin.json': JSON.stringify({ format: 1, id: 'welcome', name: 'Welcome', version: '1.0.0', description: 'Uploaded welcome message.' }),
   });
   const file = require.resolve(path.join(dir, entry));
   try {
     const first = WorldConfigCatalog.build(dir, layers());
     assert.equal(first.plugins[0].description, 'Uploaded welcome message.');
     assert.equal(first.plugins[0].awaitingLoad, true);
+    assert.equal(first.plugins[0].packageId, 'welcome');
     assert.equal(first.plugins[0].loaded, false);
     assert.equal(require.cache[file], undefined);
     require(file);

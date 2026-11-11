@@ -1,7 +1,9 @@
 // Run after `yarn build`: node --test tests/god-spell-drains.test.cjs
 // Wiki (Saradomin Strike, Claws of Guthix, Flames of Zamorak): a successful hit lowers Prayer by 1,
 // Defence by 1 + 5% or Magic by 1 + 5%; the percentage drains neither stack nor reapply until the
-// stat is back at its base level. No recording casts a god spell on a target.
+// stat is back at its base level. Only a player's cast drains: the Mage Arena battle mages cast the same spells, and
+// rsprox_transcripts/238/04155.txt (a normal world) has a guthix_mage's Claws of Guthix land on the player at ticks
+// 1865, 1877 and 1889 with no Defence update. 235/03344.txt has zamorak mages casting Claws too.
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
@@ -77,3 +79,31 @@ test('a splash or a 0 drains nothing', t => {
   assert.equal(target.getSkillManager().getCurrentLevel(core.Skill.MAGIC), 99);
   assert.equal(target.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 70);
 });
+
+// The battle mages (1610 Zamorak, 1611 Saradomin, 1612 Guthix) through the Mage Arena's own combat method and the real
+// magic hit path: a landed god spell drains nothing on the player.
+for (const [npcId, skillName, base] of [[1612, 'DEFENCE', 99], [1610, 'MAGIC', 99], [1611, 'PRAYER', 70]]) {
+  test(`a battle mage (${npcId}) landing its god spell on a player leaves ${skillName} alone`, t => {
+    const { battleMages } = require('../plugins/minigames/MageArena.plugin')._test;
+    battleMages.setCore(core);
+    const god = battleMages.godForMage(npcId);
+    const method = new (battleMages.battleMageCombatMethod(god.spell))();
+    const target = player(t, 'bmtarget' + npcId);
+    const skill = core.Skill[skillName];
+    setLevel(target, core.Skill.HITPOINTS, 99);
+    setLevel(target, core.Skill.DEFENCE, skillName === 'DEFENCE' ? base : 1);
+    setLevel(target, skill, base);
+    const npc = new core.NPC(npcId, new core.Location(3225, 3218, 0));
+    t.after(() => World.getNpcs().remove(npc));
+    let landed = null;
+    for (let i = 0; i < 400 && !landed; i++) {
+      npc.getCombat().setCastSpell(god.spell);
+      const [hit] = method.hits(npc, target);
+      if (hit.isAccurate() && hit.getTotalDamage() > 0) landed = hit;
+    }
+    assert.ok(landed, 'an accurate damaging hit was rolled');
+    assert.equal(landed.getSpell(), god.spell, 'the hit carries the god spell');
+    method.handleAfterHitEffects(landed);
+    assert.equal(target.getSkillManager().getCurrentLevel(skill), base);
+  });
+}

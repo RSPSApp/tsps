@@ -44,9 +44,37 @@ A log used on any operator makes **one** plank on the spot, with no menu. It wor
 ## Sawmill vouchers (Wiki)
 While you carry a voucher (28628), each log uses one and makes 2 planks for that log's price, as long as there's room for the second plank. If there isn't, the log makes 1 plank and the voucher is kept.
 
-Out of scope, since neither exists on this server yet:
-- the Sailing log-type coupons;
-- the plank sack.
+## Sawmill coupons (Wiki)
+The Sailing coupons ([Sawmill coupon](https://oldschool.runescape.wiki/w/Sawmill_coupon)) each pay one plank's fee at a sawmill, for their own log only. There's one for every plank except rosewood:
+
+| Coupon | Id | Pays for |
+| --- | --- | --- |
+| Sawmill coupon (wood plank) | 32083 | Logs |
+| Sawmill coupon (oak plank) | 32085 | Oak logs |
+| Sawmill coupon (teak plank) | 34068 | Teak logs |
+| Sawmill coupon (mahogany plank) | 34070 | Mahogany logs |
+| Sawmill coupon (camphor plank) | 34072 | Camphor logs |
+| Sawmill coupon (ironwood plank) | 34074 | Ironwood logs |
+
+Each of these ids is followed in the cache by its bank placeholder (32084, 32086, 34069 ...), which is never redeemed.
+
+- Plank by plank, a log whose coupon you carry spends one coupon instead of the coins and makes one plank. Once the coupons run out, the coins pay for the rest, with the usual "Those planks cost …" line if they run short.
+- A coupon can't be combined with a voucher for two free planks; with both carried, the coupon is used and the voucher kept.
+- Using a log on the operator redeems a coupon in the same way.
+- Coupons don't work with Plank Make (Lunar), which never looks at them.
+
+As captured (rsprox 20261105T005429, tick 9698): 27 oak logs and 30 oak coupons, no coins, Buy-plank, Oak ×27.
+- The menu is unchanged, still "Oak - 250gp".
+- On the choice tick:
+  - one spam message, "You redeem 27 sawmill coupons to pay for some planks.";
+  - nothing from the operator;
+  - the coupon stack drops to 3 in its own slot (0), and the 27 planks take the logs' slots;
+  - one sawdust pile (count 1, 199 ticks left), as for paid planks.
+
+Not captured:
+- **A single coupon:** the line keeps the captured wording ("You redeem 1 sawmill coupons …").
+- **Running out mid-choice:** with too few coupons and too few coins, the redeem line comes before the operator's coins line. That order is ours.
+- **A log used on the operator with a coupon:** not captured; it uses the same conversion and the same line.
 
 ## Talk-to and Trade
 - **Talk-to** plays the Wiki transcript, which matches the capture:

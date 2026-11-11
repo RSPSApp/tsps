@@ -13,11 +13,18 @@ const WORKER_LIFETIME_TICKS = 100;
 const ROPE_LIFETIME_TICKS = 200;
 const SURFACE_ENTRANCE = [3227, 3108, 0];
 const LAIR_ENTRANCE = [3483, 9510, 2];
-const CHAMBER_ENTRANCE = [3508, 9494, 0];
-const CHAMBER_EXIT = [3508, 9494, 2];
+// Live (rsprox 95, 96, 545, 1757, 1864): the Queen's tunnel lands at (3508, 9493, 0) and her rope
+// climbs back to (3508, 9497, 2); docs/kalphite-queen.md.
+const CHAMBER_ENTRANCE = [3508, 9493, 0];
+const CHAMBER_EXIT = [3508, 9497, 2];
 const SURFACE_TUNNEL = 3827;
 const ROPE_TUNNEL = 3828;
-const CHAMBER_TUNNEL = 19053;
+/**
+ * The Queen's tunnel as the map places it: multiloc kalphite_chamber_entrance_update (23609), whose
+ * varbit 11705 shows kalphite_chamber_entrance_norope (19053) until a rope goes in. A rope on it is
+ * used with the map's id, so both are matched.
+ */
+const CHAMBER_TUNNELS = new Set([23609, 19053]);
 const CHAMBER_ROPE_TUNNEL = 10230;
 const SURFACE_EXIT_ROPE = 3829;
 const CHAMBER_EXIT_ROPE = 3832;
@@ -241,7 +248,8 @@ function hatchWorker(event) {
 function attachSurfaceRope(event) {
   const { player, object, item } = event;
   const objectId = object.getId?.();
-  if ((objectId !== SURFACE_TUNNEL && objectId !== CHAMBER_TUNNEL) || item.getId?.() !== core.ItemIdentifiers.ROPE) {
+  const chamber = CHAMBER_TUNNELS.has(objectId);
+  if ((objectId !== SURFACE_TUNNEL && !chamber) || item.getId?.() !== core.ItemIdentifiers.ROPE) {
     return;
   }
   const inventory = player.getInventory();
@@ -249,7 +257,7 @@ function attachSurfaceRope(event) {
     return;
   }
   inventory.delete(core.ItemIdentifiers.ROPE, 1);
-  const ropeId = objectId === SURFACE_TUNNEL ? ROPE_TUNNEL : CHAMBER_ROPE_TUNNEL;
+  const ropeId = chamber ? CHAMBER_ROPE_TUNNEL : ROPE_TUNNEL;
   const replacement = new core.GameObject(
     ropeId,
     object.getLocation().clone(),
@@ -257,10 +265,14 @@ function attachSurfaceRope(event) {
     object.getFace(),
     object.getPrivateArea()
   );
-  core.TaskManager.submit(new core.TimedObjectReplacementTask(object, replacement, ROPE_LIFETIME_TICKS));
-  player.moveTo(objectId === SURFACE_TUNNEL ? new core.Location(...LAIR_ENTRANCE) : new core.Location(...CHAMBER_ENTRANCE));
-  if (objectId === SURFACE_TUNNEL) enterHive(player);
+  // Replace the chamber tunnel now so a second player cannot use a rope on it in the same tick.
+  core.TaskManager.submit(new core.TimedObjectReplacementTask(object, replacement, ROPE_LIFETIME_TICKS, chamber));
   event.handled = true;
+  // Live: the surface rope takes the player down with it; the Queen's only ties the rope on
+  // (kalphite_chamber_entrance_withrope, Climb-down), and climbing it is a separate click.
+  if (chamber) return;
+  player.moveTo(new core.Location(...LAIR_ENTRANCE));
+  enterHive(player);
 }
 
 function enterLair({ player, object }) {

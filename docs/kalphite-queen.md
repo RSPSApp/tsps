@@ -54,3 +54,34 @@ parity audit. A full kill and phase-transition check was not completed: separate
 and regeneration behavior interrupted that attempt. This is a movement-mechanic lead,
 not part of the standard attack correction. Exact projectile flight differences between magic and ranged attacks need capture evidence before changing
 the existing timing. No changes are made to generated definitions or drops.
+
+## The Queen's tunnel (#4292)
+
+The map places the tunnel down to the Queen as `kalphite_chamber_entrance_update` (23609) at
+(3509, 9497, 2). It is a multiloc on varbit `kalphite_chamber_entrance` (11705): 0 shows
+`kalphite_chamber_entrance_norope` (19053, Look-inside), 1 shows `_withrope_normal` (40421) and
+2 shows `_withrope_private` (40422). A rope used on it reaches the server as 23609. The handler
+matched only 19053, so the rope did nothing and the Queen's level couldn't be reached. Both ids
+are matched now.
+
+From the rsprox captures (rev 227 and 234, recordings 95, 96, 545, 1757, 1864, 3276):
+- **Rope on the tunnel:** one rope is used up and the loc changes to
+  `kalphite_chamber_entrance_withrope` (10230; Climb-down through its multiloc). The player doesn't
+  move: that comes in 57 of 58 attempts, with no teleport. Previously the rope took the player
+  straight down. Now it only ties the rope on, for `ROPE_LIFETIME_TICKS`.
+- **Climb-down** on 10230 lands on (3508, 9493, 0) on the click tick, with no animation. This was
+  (3508, 9494, 0).
+- **Climb-up** on the Queen's rope (`kalphite_chamber_exit`, 3832) lands on (3508, 9497, 2). This
+  was (3508, 9494, 2).
+- **The surface rope** (`kalphite_burrow_entrance`, 3827) still takes the player down to
+  (3483, 9510, 2), as captured.
+- **Multi-combat:** the upper level had no multi-combat boundary, only the Queen's plane 0. The
+  captures show the multi icon coming on when the player climbs down from the surface (95, 545,
+  1510, 1511, 1757, 1864, 2952, 4001). `world.json` now has the same box on plane 2. Its walkable
+  tiles (x 3460-3517, y 9475-9530) are inside it.
+
+Not covered: the Hard Desert Diary's permanent ropes (`kalphite_rope_1`/`_2` and varbit 11705 set
+to 1). The private Queen instance (40422, varbit `kalphite_chamber_entrance_rope`) is not covered
+either. The capture's peek (`You peek down and see one adventurer inside the lair.`) is not
+implemented. The surface rope still moves the player on the tick of use; the capture moves them 2
+ticks after arrival.

@@ -51,7 +51,7 @@ The client only reports the click. The server sets the variable and sends it bac
 | Scroll wheel can change zoom distance | 13 | varbit 6357 `camera_zoom_mouse_disabled` |
 | Enable profanity filter | 37 | varp 1074 `option_chatfilter_disabled` |
 | Shift click to drop items | 51 | varbit 11556 `desktop_shiftclickdrop_enabled`; a fresh account starts with it on (live sent 1 at login in all 8 transcribed rsprox recordings). The login script (876, via 7431) passes it to `setshiftclickdrop` on desktop; with Shift held the inventory item's shift-click op is its top entry |
-| Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle`; the Ranged combat tutor's toggle writes the same setting, which is authoritative. A pre-Settings tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into this row at login unless a setting is already saved |
+| Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle`; see [Pickups into containers](#pickups-into-containers) |
 | Sailing side panel (dropdown: Always show, Only show on boat) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option; off a boat, Sailing sets 19153 `sailing_sidepanel_visible_from_combat_tab` from it (see below) |
 | Level-up pop-up notifications (dropdown) | 315 | see below |
 | Level-up chatbox list | 493 | varbit 20158 `option_level_up_chatbox_list` |
@@ -503,6 +503,19 @@ These rows are in `data/settings.json` and are read by the Sailing helm plugins 
 - **Not done**:
   - **Cargo hold access privacy** (470, varbit 19614: Navigators, All players, No players): a guest can't open another player's cargo hold at all yet, and no capture or Wiki text gives the refusal line.
   - Ours: with the catcher switched off, the orb's Release does nothing, as Release-mote does.
+
+## Pickups into containers
+
+Rows 305 and 306 are `data/settings.json` toggles, off for a new account. While one is on, a ground stack goes somewhere other than the inventory when the cache's row text says so; otherwise the ordinary pickup runs. These pickups pass the same Ironman guard and take checks, report `ground-items:taken` and play the pickup sound, as an ordinary pickup does (`plugins/items/TakeInto.js`). All or nothing: a stack that doesn't fit whole goes to the inventory. Tests: `tests/pickup-containers.test.cjs`, `tests/tutors-ammo-pickup.test.cjs`.
+
+| Setting | Id | Variable | Where the stack goes |
+| --- | --- | --- | --- |
+| Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle` | Ammo matching the worn ammo slot stacks there (`npcs/Tutors.plugin.js`); otherwise ammo matching a worn Dizana's quiver goes into it (`items/DizanasQuiver.plugin.js`) |
+| Rune-picking behaviour | 306 | varbit 5698 `take_runes_toggle` | Runes picked up, or made at an altar, go into the carried rune pouch when a slot already holds that rune with room for all of them (`items/runepouch/Pickup.RunePouch.js`, [rune-pouch.md](rune-pouch.md)) |
+
+The tutors write the same rows: the Ranged combat tutor's "Can you toggle my ammo to equip when I pick it up please?" sets 305, and the Magic combat tutor's "Let's discuss how my runes act when I pick them up." sets 306. A pre-Settings Ranged tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into row 305 at login unless a setting is already saved.
+
+- **Not done**: the bolt pouch, the row's other target for ammo, is not in tsps yet (see row 356).
 
 ## Examine price info
 

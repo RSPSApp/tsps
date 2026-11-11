@@ -10,7 +10,7 @@ const Pouch = require("./runepouch/Common.RunePouch");
 
 module.exports = {
   name: "RunePouch",
-  description: "Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits and loadouts.",
+  description: "Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting.",
   members: true,
   register(api) {
     Pouch.init(api);
@@ -19,5 +19,6 @@ module.exports = {
     require("./runepouch/Bank.RunePouch")(api);
     require("./runepouch/Loadouts.RunePouch")(api);
     require("./runepouch/Death.RunePouch")(api);
+    require("./runepouch/Pickup.RunePouch")(api);
   },
 };

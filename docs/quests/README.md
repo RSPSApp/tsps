@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 38 · untested: 101
+193 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 6 · ❌ failed: 1 · 🔁 needs recheck: 39 · untested: 101
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -98,7 +98,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Lost City](lost-city/README.md) | ✅ passed | 2026-10-24 | agent |  |  |
 | Lunar Diplomacy | untested |  |  |  |  |
 | Making Friends with My Arm | untested |  |  |  |  |
-| [Making History](making-history/README.md) | 🔄 in progress |  | agent |  |  |
+| [Making History](making-history/README.md) | ⚠️ passed with issues | 2026-11-11 | agent | claude-opus-5-5 |  |
 | [Meat and Greet](meat-and-greet/README.md) | ✅ passed |  | agent |  |  |
 | [Merlin's Crystal](merlins-crystal/README.md) | untested |  |  |  |  |
 | [Misthalin Mystery](misthalin-mystery/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 1 |
@@ -111,7 +111,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |
-| [Observatory Quest](observatory-quest/README.md) | ⚠️ passed with issues | 2026-11-10 | agent | claude-opus-5-5 | 2 |
+| [Observatory Quest](observatory-quest/README.md) | 🔁 needs recheck | 2026-11-10 | agent | claude-opus-5-5 | 2 |
 | [Olaf's Quest](olafs-quest/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | One Small Favour | untested |  |  |  |  |
 | Pandemonium | untested |  |  |  |  |

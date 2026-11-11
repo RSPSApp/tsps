@@ -111,7 +111,9 @@ function removeOne(player, itemId, slot) {
   else inventory.deleteNumber(itemId, 1);
 }
 
+/** Live sends the box's text as a mesbox chat line first (rsprox 2780 tick 349). */
 function showLocked(player) {
+  player.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, LOCKED_TEXT.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
     new api.core.StatementDialogue(0, LOCKED_TEXT),
   ));

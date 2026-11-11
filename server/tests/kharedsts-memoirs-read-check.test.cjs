@@ -37,7 +37,7 @@ function actor(t) {
   player.setRegistered(true);
   player.setNeedsPlacement(false);
   player.getSession = () => ({ sendClientPacket: () => true, write() {} });
-  const sent = { strings: new Map(), interfaces: [], items: [] };
+  const sent = { strings: new Map(), interfaces: [], items: [], mesboxes: [] };
   const sender = player.getPacketSender();
   const wrap = (name, record) => {
     const original = sender[name].bind(sender);
@@ -46,6 +46,7 @@ function actor(t) {
   wrap("sendString", (text, uid) => sent.strings.set(uid, text));
   wrap("sendInterface", (id) => sent.interfaces.push(id));
   wrap("sendItemOnInterfaces", (uid, itemId) => sent.items.push([uid, itemId]));
+  wrap("sendTypedMessage", (type, text) => { if (type === core.ChatType.MESBOX) sent.mesboxes.push(text); });
   return { player, sent };
 }
 
@@ -82,6 +83,8 @@ test("Check on the Book of the Dead shows the captured line with its charges", (
   const event = inventoryClick(player, BOOK_OF_THE_DEAD, "Check");
   assert.equal(event.handled, true);
   assert.equal(sent.strings.get(OBJECTBOX_TEXT), checkLine(33, 250));
+  // rsprox 363 tick 37: the mesbox chat line comes first, the line break as a space.
+  assert.deepEqual(sent.mesboxes, ["On the inside of the cover a message is displayed in dark ink. It reads: <col=800080>33/250 memories remain.<col=800080>"]);
   assert.deepEqual(sent.items, [[OBJECTBOX_ITEM, BOOK_OF_THE_DEAD]]);
 });
 
@@ -161,4 +164,5 @@ test("Reminisce on an empty book opens live's no-charge messagebox", (t) => {
   PluginManager.emitItemAction(event);
   assert.equal(event.handled, true);
   assert.equal(sent.strings.get((229 << 16) | 3), "Kharedst's Memoirs holds no charge.");
+  assert.deepEqual(sent.mesboxes, ["Kharedst's Memoirs holds no charge."]);
 });

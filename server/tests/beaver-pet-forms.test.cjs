@@ -39,10 +39,12 @@ function actor(t) {
   p.setLocation(new core.Location(3222, 3218, 0));
   p.needsPlacement = false;
   const messages = [];
+  const mesboxes = [];
   const strings = new Map();
   const sender = p.getPacketSender();
   const sendString = sender.sendString.bind(sender);
   t.mock.method(sender, "sendMessage", (m) => { messages.push(m); return sender; });
+  t.mock.method(sender, "sendTypedMessage", (type, m) => { if (type === core.ChatType.MESBOX) mesboxes.push(m); return sender; });
   t.mock.method(sender, "sendString", (text, uid) => { strings.set(uid, text); return sendString(text, uid); });
   const c = new ClientConnection(channel);
   c.player = p;
@@ -52,7 +54,7 @@ function actor(t) {
     core.TaskManager.cancelTasks(p.getIndex());
     for (const n of [...core.World.getNpcs()]) if (n?.getOwner?.() === p) core.World.getNpcs().remove(n);
   });
-  return { p, c, messages, strings, inv: p.getInventory() };
+  return { p, c, messages, mesboxes, strings, inv: p.getInventory() };
 }
 
 async function metamorphosis(f, slot = 0) {
@@ -78,6 +80,8 @@ test("a locked beaver's Metamorphosis opens the captured messagebox and stays a 
   await metamorphosis(f);
   assert.equal(f.strings.get(MESSAGEBOX_TEXT),
     "You can unlock the ability for your pet Beaver to change colour by<br>feeding it a <col=0000b2>Funky shaped log</col>.");
+  assert.deepEqual(f.mesboxes, ["You can unlock the ability for your pet Beaver to change colour by feeding it a <col=0000b2>Funky shaped log</col>."],
+    "rsprox 2780 tick 349: the mesbox chat line first");
   assert.equal(f.inv.get(0).getId(), obj("skillpetwc"));
 });
 

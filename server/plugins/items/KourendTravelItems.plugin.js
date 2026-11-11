@@ -149,10 +149,17 @@ function teleport(player, item, page) {
   return true;
 }
 
+/** Live sends each box's text as a mesbox chat line first, line breaks as spaces (rsprox 363 tick 37). */
+function mesbox(player, text) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
+}
+
 /** Live's messagebox when the book is empty (user capture 20261111T231757-5ab63b4). */
 function noCharge(player, item) {
+  const text = `${BOOK_TITLES.get(item?.getId?.()) ?? BOOK_TITLES.get(MEMOIRS_ID)} holds no charge.`;
+  mesbox(player, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
-    new core.StatementDialogue(0, `${BOOK_TITLES.get(item?.getId?.()) ?? BOOK_TITLES.get(MEMOIRS_ID)} holds no charge.`),
+    new core.StatementDialogue(0, text),
   ));
 }
 
@@ -207,6 +214,7 @@ function memoirsAction(event) {
 function checkMemoirs(player, item) {
   const text = "On the inside of the cover a message is displayed in<br>dark ink. It reads: "
     + `<col=800080>${memoirCharges(player, item)}/${maxCharges(item, player)} memories remain.<col=800080>`;
+  mesbox(player, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.ItemStatementDialogue(0, item.getId(), text),
   ));

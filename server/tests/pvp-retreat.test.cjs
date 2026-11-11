@@ -227,7 +227,7 @@ test('retreat blocks southbound ditch crossings, including queued crossings, but
   assert.equal(crossings, 1, 'returning to the Wilderness is allowed');
 });
 
-test('PvP worlds add 15 to the shared Wilderness level for players and bots', () => {
+test('PvP worlds allow a configurable unlevelled range and keep the +15 Wilderness bonus', () => {
   let globalPvp = false;
   const coreFile = path.resolve(__dirname, '../dist/game/content/wilderness/Wilderness.js');
   const core = { exports: {} }, coreRequire = createRequire(coreFile);
@@ -250,6 +250,7 @@ test('PvP worlds add 15 to the shared Wilderness level for players and bots', ()
         isInSafeBuilding: () => false, isMulti: () => false,
       } };
       if (name.endsWith('/ferox/Bounds.FeroxEnclave')) return { isSafeLocation: () => false };
+      if (name.startsWith('./wilderness/')) return () => {};
       return local(name);
     },
   }, { filename: file });
@@ -285,6 +286,30 @@ test('PvP worlds add 15 to the shared Wilderness level for players and bots', ()
   assert.equal(wildernessAttackRange(player(80, 3200), player(80, 3528)), 15);
   assert.equal(canAttackByWildernessLevel(player(80, 3528), player(97, 3200)), false);
   assert.equal(canAttackByWildernessLevel(player(80, 3200), player(97, 3528)), false);
+
+  for (const difference of [8, 25, 0]) {
+    module.exports.register(new Proxy({
+      getPluginConfig(key) {
+        assert.equal(key, 'Wilderness:pvpWorldLevelDifference');
+        return difference;
+      },
+    }, { get: (target, key) => target[key] ?? (() => {}) }));
+
+    const unlevelled = player(80, 3200);
+    assert.equal(wildernessAttackRange(unlevelled, player(80, 3200)), difference);
+    assert.equal(canAttackByWildernessLevel(unlevelled, player(80 + difference, 3200)), true);
+    assert.equal(canAttackByWildernessLevel(unlevelled, player(81 + difference, 3200)), false);
+
+    const levelOne = player(80, 3520);
+    const levelTwo = player(80, 3528);
+    assert.equal(wildernessAttackRange(levelOne, levelTwo), 16);
+    assert.equal(wildernessAttackRange(unlevelled, levelOne), Math.min(difference, 16));
+    assert.equal(wildernessAttackRange(levelOne, unlevelled), Math.min(difference, 16));
+  }
+
+  globalPvp = false;
+  assert.equal(canAttackByWildernessLevel(player(80, 3200), player(110, 3200)), true);
+  assert.equal(wildernessAttackRange(player(80, 3200), player(80, 3520)), 1);
 });
 
 test('a reachable unlevelled PvP border does not remove the levelled player\'s combat cap', () => {

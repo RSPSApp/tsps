@@ -77,7 +77,8 @@ Newest first. Nothing is filed as an issue yet; the fixes are in this branch's P
   cutscene. Shared dialogue runtime or dumper.
 - **fixed (source and test level, not played in game)** The hangar sliding puzzle. Operating the
   Reinitialisation Panel after Waydar's task opens the 5x5 puzzle on `trail_slidepuzzle` (cache
-  interface 306, whose CS2 688 redraws from inventory 221 `reinitialisation_inv`; pieces are the
+  interface 306, whose CS2 688 calls 690, which picks the inventory by varp `if1` (261): 7 draws
+  inventory 221 `reinitialisation_inv`, and the panel sets `if1` to 7; pieces are the
   objs `reinitialisation_01`-`24`, the inventory RuneLite's Puzzle Solver reads); stage 5 comes when
   the last piece slides home. Evidence: Wiki "Monkey Madness I" ("similar to the puzzle boxes") and
   the cache. No rsprox capture of the puzzle was found (searched object 4871, NPC 2021 and the

@@ -222,19 +222,22 @@ function climbedGiantsDenVine({ player, location }) {
 }
 
 /**
- * Enter on an opened hole or strange passage: down beside its vine. Ours: no capture or Wiki
- * timing; the hole kneels as the statue's does (human_pickupfloor), and both move a tick after.
+ * Enter on an opened hole or strange passage: down beside its vine. None of these was captured;
+ * they play as a captured Hole's Enter does (rsprox captures, ds2_ogre_corsair_vine_ladder_entrance,
+ * recordings 350 and 778): arrival +1 faces it, +2 human_pickupfloor, +3 the move. Ours: a strange
+ * passage plays no animation.
  */
 function enter(event) {
   const { player, location } = event;
   const exit = [...EXITS, GIANTS_DEN].find((candidate) => isAt(location, candidate.entrance));
   if (!exit || !openedExits(player).includes(exit.varbit)) return false;
+  const definition = core.ObjectDefinition.forPlayer(event.objectId, player);
+  const half = (size) => Math.floor(((size ?? 1) - 1) / 2);
+  const centre = new core.Location(exit.entrance.x + half(definition?.getSizeX()), exit.entrance.y + half(definition?.getSizeY()), 0);
   run(player, new Map([
-    [0, [() => {
-      player.setPositionToFace(new core.Location(exit.entrance.x, exit.entrance.y, 0));
-      if (exit.hole) player.performAnimation(new core.Animation(PICKUP_FLOOR));
-    }]],
-    [1, [() => player.moveTo(new core.Location(...exit.bottom))]],
+    [0, [() => player.setPositionToFace(centre)]],
+    [1, [() => exit.hole && player.performAnimation(new core.Animation(PICKUP_FLOOR))]],
+    [2, [() => player.moveTo(new core.Location(...exit.bottom))]],
   ]));
   return true;
 }

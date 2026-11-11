@@ -47,9 +47,9 @@ y 10067. The varbit follows a move by a tick, so the border is accurate to a til
 ## Ours
 
 - **Exit tiles and the way back in:** no capture or Wiki tile for the corner vines' tops or any
-  Enter; the tiles are Shortest Path's transports. Enter on a hole kneels (`human_pickupfloor`, as
-  the statue's hole does) and moves a tick later; a strange passage moves a tick later with no
-  animation.
+  Enter; the tiles are Shortest Path's transports. Enter plays as a captured Hole's Enter does
+  (rsprox captures, `ds2_ogre_corsair_vine_ladder_entrance`, recordings 350 and 778): arrival +1
+  faces it, +2 `human_pickupfloor`, +3 the move. A strange passage plays no animation.
 - **The vine ladder:** the one beside the landing (loc 28894 at 1666, 10051) climbs back to the
   statue's east side (1639, 3673). Nothing was captured for it: the ladder animation (828), the
   tile and the fade are ours.

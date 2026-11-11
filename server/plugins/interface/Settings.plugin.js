@@ -636,9 +636,18 @@ function clickRestoreKeybinds(request) {
   request.handled = restoreDefaultKeybindings(request.player);
 }
 
+/**
+ * Login. A key drives one tab, so when a key the player chose is also another tab's default (a save
+ * made before that default existed), the chosen one keeps it and the defaulted tab is left unbound.
+ */
 function syncPlayerKeybindings(player) {
+  const chosen = new Set(TAB_VARBIT_MAP
+    .filter((tab) => getKeybind(player, tab.varbit) !== tab.defaultKey)
+    .map((tab) => getKeybind(player, tab.varbit)));
   for (const tab of TAB_VARBIT_MAP) {
-    setKeybind(player, tab.varbit, getKeybind(player, tab.varbit));
+    const key = getKeybind(player, tab.varbit);
+    const taken = key !== KEY_NONE && key === tab.defaultKey && chosen.has(key);
+    setKeybind(player, tab.varbit, taken ? KEY_NONE : key);
   }
   setKeybind(player, ESC_CLOSES_VARBIT, getEscCloses(player));
 }

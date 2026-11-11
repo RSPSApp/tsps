@@ -299,3 +299,12 @@ test('a new account starts with the keys live gives one', () => {
   for (const [varbit, key] of Object.entries(keys)) assert.equal(sender.getVarbit(Number(varbit)), key, `varbit ${varbit}`);
   assert.equal(sender.getVarbit(ESC_CLOSES), 1, 'Esc closes the current interface is on');
 });
+
+test('a key saved before it became another tab default stays with the tab the player gave it', () => {
+  const attributes = new Map([['keybind_4678', 5]]); // Inventory on F5, from an older save
+  const sender = login(attributes).getPacketSender();
+  assert.equal(sender.getVarbit(4678), 5, 'Inventory keeps F5');
+  assert.equal(sender.getVarbit(4680), 0, 'Prayer, whose default is F5, is left unbound');
+  assert.equal(sender.getVarbit(4679), 4, 'other defaults are untouched');
+  assert.equal(attributes.get('keybind_4680'), 0, 'and saved that way');
+});

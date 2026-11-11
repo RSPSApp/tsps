@@ -36,6 +36,9 @@ const NO_MODAL_BACKGROUND = [-1, -1];
 const LONGSHIP = { interface: "misc_shipjourney", model: "misc_shipjourney:misc_shipmodel", open: [4404769, 0], jingle: 171 };
 const GALLEON = { interface: "quest_lunar_galleon", model: "quest_lunar_galleon:lunar_galleon", open: [2631714, 0], jingle: 171 };
 const ROWING = { interface: "seaslug_boat_travel", open: [3750175, 42], jingle: 172, travel: 2, arrive: 8, closeOverlay: 10 };
+const LARRY_DEPART_SOUND = 717;
+const LARRY_ROW_SOUND = 2841;
+const LARRY_WEISS_SONG = 203;
 const SEA_SONG = 147;
 const SEA_JINGLE = 171;
 const MINIMAP_STATE_VARBIT = "minimap_state";
@@ -138,7 +141,7 @@ function runTicks(player, steps) {
 }
 
 /** Puts the player on the ship at sea with a modal over it; `land` brings them ashore. */
-function boardShip(player, trip, modal, onLand) {
+function boardShip(player, trip, modal, onLand, onEveryLand) {
   const Ship = shipClass();
   let landed = false;
   const land = (logout) => {
@@ -148,6 +151,7 @@ function boardShip(player, trip, modal, onLand) {
     player.moveTo(Common.toLocation(trip.to));
     Common.arrived(player, trip.routeName);
     hold(player, false);
+    onEveryLand?.();
     if (logout) return;
     reopenShipTabs(player);
     sender(player).sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
@@ -291,7 +295,57 @@ function rowing(player, trip) {
   });
 }
 
-const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, rowing };
+/** Larry's boat uses the same isolated ship, with a different interface for each destination. */
+function larryVoyage(player, trip, weiss) {
+  const out = sender(player);
+  const { CacheDefinitions, DialogueChainBuilder, StatementDialogue } = Common.core;
+  const journeyVarp = CacheDefinitions.getVarpId("journey_number");
+  hold(player, true);
+  const pending = { land: () => {
+    if (!Common.travelling(player)) return;
+    Common.end(player);
+    player.moveTo(Common.toLocation(trip.to));
+    hold(player, false);
+  } };
+  Common.begin(player, pending);
+  if (weiss) {
+    out.sendSoundEffect(LARRY_DEPART_SOUND, 1, 0).sendSoundEffect(LARRY_ROW_SOUND, 1, 20);
+    Common.later(player, 1, () => {
+      if (Common.trips.get(player) !== pending) return;
+      StatementDialogue.send(player, "You navigate Larry's boat to the coast near Weiss...", false);
+      out.sendSong(LARRY_WEISS_SONG);
+      fade(player, true);
+    });
+  } else {
+    fade(player, true);
+  }
+  Common.later(player, 2, () => {
+    if (Common.trips.get(player) !== pending) return;
+    boardShip(player, trip, () => {
+      if (weiss) {
+        if (journeyVarp != null) out.sendConfig(journeyVarp, -1);
+        out.sendSubInterface(OVERLAY_ATMOSPHERE_UID, CacheDefinitions.getInterfaceId("my2arm_boatride"), 1);
+      } else {
+        out.sendInterfaceScript(MAIN_MODAL_OPEN, [0, 0]);
+        out.sendInterface(CacheDefinitions.getInterfaceId("peng_ship_journey"));
+      }
+    }, () => {
+      Common.later(player, 1, () => {
+        if (Common.travelling(player) || !player.getLocation().equals(Common.toLocation(trip.to))) return;
+        fade(player, false);
+        if (weiss) player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+          .add(new StatementDialogue(0, "You navigate Larry's boat to the coast near Weiss...")));
+      });
+    }, () => {
+      if (weiss && journeyVarp != null) out.sendConfig(journeyVarp, 0);
+    });
+  });
+}
+
+function larryWeiss(player, trip) { larryVoyage(player, trip, true); }
+function larryIceberg(player, trip) { larryVoyage(player, trip, false); }
+
+const STYLES = { larry_weiss: larryWeiss, larry_iceberg: larryIceberg, ship_journey: shipJourney, longship, galleon, fade: fadeTrip, rowing };
 
 /**
  * Whether the passenger may go where the route lands: a league area still locked refuses, with its own line, through

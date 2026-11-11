@@ -125,6 +125,8 @@ function become(player, next, { slot, npc }) {
   } else {
     player.getInventory().setItem(slot, new api.core.Item(next.itemId, 1));
     player.getInventory().refreshItems();
+    // The stored variant follows the item too, or the next summon would bring back the old form.
+    services.setStoredVariant(player, pet, next.petId);
     services.recordOwnership(player, pet);
   }
   api.emitCustomEvent("persistence:save", { player, reason: "beaver-form" });

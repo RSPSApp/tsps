@@ -142,3 +142,25 @@ test("the follower's Metamorphosis and a log used on it change the follower and 
   assert.equal(follower.getId(), npcOf("skillpet_wc_oak"));
   assert.equal(f.p.getAttribute("pets:active-item"), obj("skillpet_wc_oak"));
 });
+
+test("a form changed in the inventory is the form the next summon brings out", (t) => {
+  const f = actor(t);
+  f.p.setAttribute("pets:beaver-unlocks", ["colours"]);
+  give(f, 0, "skillpetwc");
+  const Pets = require("../plugins/npcs/Pets.plugin");
+  assert.equal(Pets.__internals.drop(f.p, obj("skillpetwc"), false), true);
+  f.inv.setItem(0, new core.Item(-1, 0));
+  const follower = f.p.getAttribute("pets:current");
+  give(f, 1, "oak_logs");
+  PM.emitItemOnNpc({ player: f.p, target: follower, npcId: follower.getId(), targetIndex: follower.getIndex(),
+    item: f.inv.get(1), itemId: obj("oak_logs"), slot: 1, interfaceId: 3214, handled: false });
+  assert.equal(follower.getId(), npcOf("skillpet_wc_oak"));
+  assert.equal(Pets.__internals.pickup(f.p, follower), true);
+  const slot = f.inv.getSlotForItemId(obj("skillpet_wc_oak"));
+  give(f, slot === 0 ? 1 : 0, "logs");
+  useOn(f, slot === 0 ? 1 : 0, slot);
+  assert.equal(f.inv.get(slot).getId(), obj("skillpetwc"));
+  f.p.setAttribute("pets:current", null);
+  assert.equal(Pets.__internals.drop(f.p, obj("skillpetwc"), false), true);
+  assert.equal(f.p.getAttribute("pets:current").getId(), npcOf("skillpetwc"), "the default beaver follows, not the old oak one");
+});

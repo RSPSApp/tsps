@@ -8,9 +8,11 @@
  * The cache draws it: interface 180 (ii_tracker) has a Surface World tab (scroll layer 180:4,
  * scrollbar 180:3) and a Puro-Puro tab (180:8, 180:7), and clientscript 1327 fills both from two
  * "|"-separated count lists. Script 1329 gives the Nth entry of a list the model enum 1316[N], so
- * a list is every impling's count in that enum's order (IMPLINGS below, matched to the enum's
- * models in game). No capture of this option exists, so the counts start when this server first
- * sees a catch: Ours.
+ * a list is every impling's count in that enum's order (IMPLINGS below). The component order is the
+ * cache's (gamevals surface_grid/_text/_models/_scrollbar and scripts 1328/1329). Ours: which impling
+ * each model is, inferred from the model ids (29604-29613 rise baby to dragon; lucky 31742 and crystal
+ * 38801 follow those implings' own models), as no capture opens the tracker; and the counts start when
+ * this server first sees a catch.
  */
 
 const { H } = require("./Context.Hunter");

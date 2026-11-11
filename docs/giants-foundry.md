@@ -24,7 +24,7 @@ All four recordings with foundry play were made on Leagues V worlds (rev 227): 9
 
 **Changes outside the plugin:**
 - **Kovac** is `kovac_multi` (11560) in `npc-spawns.json`, at the captured tile (3369, 11486) facing north-west. The cache resolves it from varbit 13902: 11470 (Talk-to only) until the quest reads 30, then 11472 with Hand-in, Commission and Shop.
-- **The surface Hill Giant** (11467, Kovac in disguise, "Strike") is no longer a world spawn: he is the player's own (owner-only) copy while their quest is unstarted, and he is gone from the moment the quest starts, because the intro walks him into the foundry with the player. `npc-spawn-sync.json` records the skip so a sync run does not put him back.
+- **The surface Hill Giant** (11467, Kovac in disguise, "Strike") is no longer a world spawn: he is the player's own (owner-only) copy while their quest is unstarted, and he is gone once the intro walks him into the foundry with the player (the cutscene step), never restored for a started quest. `npc-spawn-sync.json` records the skip so a sync run does not put him back.
 - **`npc-dialogues.json`**: "Transcript:Kovac"'s plain "I'm not sure what something does." option is now conditioned on having no commission (id `Gf7nCm`). The live menu with a commission shows only the ", can you help me?" form (recording 565).
 - **Sleeping Giants** makes its tutorial sword on this plugin's crucible, jig, tools and HUD.
   - It hands out the Flat Broad commission through `giants-foundry:start-commission` (`{ player, words, tutorial }`); a tutorial preform's stages are trip hammer, grindstone, polishing wheel.

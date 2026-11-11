@@ -3,9 +3,9 @@
   "routes": {
     "larry-weiss": { "style": "larry_weiss", "ticks": 9, "to": [2849, 3968, 0] },
     "larry-iceberg": { "style": "larry_iceberg", "ticks": 7, "to": [2660, 3989, 1] },
-    "barnaby-ardougne": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2680, 3274, 0] },
-    "barnaby-brimhaven": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2768, 3227, 0] },
-    "barnaby-rimmington": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2916, 3225, 0] },
+    "barnaby-ardougne": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "message": { "at": 3, "text": "You board the ship and sail to Ardougne." }, "to": [2680, 3274, 0] },
+    "barnaby-brimhaven": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "message": { "at": 3, "text": "You board the ship and sail to Brimhaven." }, "to": [2775, 3233, 1] },
+    "barnaby-rimmington": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "message": { "at": 3, "text": "You board the ship and sail to Rimmington." }, "to": [2916, 3225, 0] },
     "entrana": { "style": "ship_journey", "route": 1, "ticks": 14, "board": "After a quick search, the monk smiles at you and allows you to board.", "arrive": "The ship arrives at Entrana.", "to": [2834, 3331, 1] },
     "entrana-back": { "style": "ship_journey", "route": 2, "ticks": 14, "arrive": "The ship arrives at Port Sarim.", "to": [3048, 3231, 1] },
     "outpost": { "style": "ship_journey", "route": 10, "ticks": 11, "arrive": "The ship arrives at the Void Knight outpost.", "to": [2663, 2676, 1] },

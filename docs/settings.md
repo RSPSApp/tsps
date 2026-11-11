@@ -234,7 +234,7 @@ World owners can set `"SkillLevelUp:interruptActions": false` in world.json's `p
 
 ## Chat colours
 
-The chat colour rows (type 9) open the colour picker as the quest-list rows do (modal 288, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
+The chat colour rows (type 9) open the colour picker as the quest-list rows do (overlay 288 in the settings popup layer 134:9, script 4185). Each saves the chosen colour + 1 in the varp the cache's colour reader (script 4181) reads for its row; 0 selects the struct default (param 1230). The chatbox scripts draw each chat type in its varp's colour, so nothing else changes on the server.
 
 | Chat type | Opaque | Transparent |
 | --- | --- | --- |

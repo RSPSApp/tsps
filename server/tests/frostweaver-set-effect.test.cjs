@@ -20,8 +20,9 @@ function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", 
   t.mock.method(core.Sounds, "sendSound", () => {});
   t.mock.method(Math, "random", () => roll);
   const queued = [];
-  t.mock.method(core.CombatFactory, "addPendingHit", (hit) => queued.push(hit));
+  const armedWhenQueued = [];
   const p = new Player(null);
+  t.mock.method(core.CombatFactory, "addPendingHit", (hit) => { queued.push(hit); armedWhenQueued.push(p.isSpecialActivated()); });
   t.mock.method(p, "getSession", () => ({ sendClientPacket: () => true }));
   t.mock.method(p, "sendMessage", () => {});
   p.getSkillManager().setMaxLevel(core.Skill.MAGIC, 99);
@@ -44,7 +45,7 @@ function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", 
   p.setSpellbook(spell.getSpellbook());
   p.getCombat().setCastSpell(spell);
   for (const rune of spell.itemsRequired(p)) p.getInventory().add(new core.Item(rune.getId(), rune.getAmount() * 10));
-  return { p, target, spell, queued, cast: () => spell.canCast(p, true) };
+  return { p, target, spell, queued, armedWhenQueued, cast: () => spell.canCast(p, true) };
 }
 
 function swings(f) {
@@ -96,5 +97,6 @@ test("an armed special is neither used nor spent by the attack", (t) => {
   f.p.setSpecialActivated(true);
   f.cast();
   assert.equal(swings(f).length, 1);
-  assert.equal(f.p.isSpecialActivated(), true);
+  assert.deepEqual(f.armedWhenQueued, [false], "the hit is built and queued as an ordinary swing");
+  assert.equal(f.p.isSpecialActivated(), true, "and the special stays armed for the next attack");
 });

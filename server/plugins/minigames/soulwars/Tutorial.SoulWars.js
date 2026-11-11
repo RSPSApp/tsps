@@ -124,6 +124,11 @@ function areaClass() {
       return false;
     }
 
+    /** No follower comes in either (Wiki: Soul Wars): a following pet waits outside. */
+    barsFollowers() {
+      return true;
+    }
+
     canTeleport() {
       return false;
     }

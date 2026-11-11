@@ -235,6 +235,11 @@ function areaClass() {
       return false;
     }
 
+    /** No follower comes in either (Wiki: Nex): a following pet waits outside. */
+    barsFollowers() {
+      return true;
+    }
+
     postEnter(mobile) {
       if (!mobile.isPlayer()) return;
       const player = mobile.getAsPlayer();

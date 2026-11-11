@@ -13,9 +13,15 @@ const FORM_FLAGS = 0x402; // Op1 (Deposit) and Op10 (Examine), as the capture's 
 const OP_DEPOSIT = 1, OP_EXAMINE = 10;
 const CAN_BANK_SOURCE = "imp-in-a-box";
 /** Items the Wiki lists the imp refusing; it says "including", so this is the listed part only. */
-const REFUSED = new Set(["looting bag", "stick", "karamjan rum", "bloated toad", "glowing fungus", "gnomeball",
-  "skeletal gorilla bones", "book of knowledge", "book of arcane knowledge", "unholy symbol", "ana in a barrel",
+const REFUSED = new Set(["looting bag", "karamjan rum", "bloated toad", "glowing fungus", "gnomeball",
+  "skeletal gorilla bones", "book of knowledge", "book of arcane knowledge", "ana in a barrel",
   "plague sample", "jim's wet cloth"]);
+/**
+ * Listed items whose name other items share: the Wiki links one item each, and only those pages
+ * say "cannot be banked with an imp-in-a-box". The Stick is 4179 (not 9702 or 25285), the
+ * Unholy symbol Icthlarin's Little Helper's 4683 (not the Zamorak symbol, 1724).
+ */
+const REFUSED_IDS = ["STICK", "UNHOLY_SYMBOL_3"];
 
 function isBox(id) {
   const I = H.core.ItemIdentifiers;
@@ -37,7 +43,8 @@ function blocked(player) {
 function refuses(player, itemId) {
   const I = H.core.ItemIdentifiers;
   const name = H.core.ItemDefinition.forId(itemId)?.getName?.()?.toLowerCase();
-  if ([I.MAGIC_BOX, I.IMP_IN_A_BOX_2_, I.IMP_IN_A_BOX_1_].includes(itemId) || REFUSED.has(name)) {
+  if ([I.MAGIC_BOX, I.IMP_IN_A_BOX_2_, I.IMP_IN_A_BOX_1_, ...REFUSED_IDS.map(key => I[key])].includes(itemId)
+    || REFUSED.has(name)) {
     player.sendMessage("The imp refuses to bank that.");
     return true;
   }

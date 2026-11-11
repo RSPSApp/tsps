@@ -550,6 +550,27 @@ test("cache-rotated Kandarin stiles route to the near side and cross their long 
   }
 });
 
+test("Piscatoris falconry stile (19222) crosses its 1x2 footprint both ways at level 1", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  RegionManager.init();
+  const at = [2371, 3620, 0], ends = [[2371, 3619, 0], [2371, 3622, 0]];
+  RegionManager.loadMapFiles(at[0], at[1]);
+  const object = MapObjects.get(19222, new Location(...at), null);
+  assert.ok(object, "cache stile at the falconry fence");
+  for (const side of [0, 1]) {
+    const from = ends[side], to = ends[1 - side];
+    const player = createPlayer(...from, 1);
+    const route = { player, object, objectId: 19222, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: from[0], y: from[1], z: from[2] }, `approach stays on side ${side}`);
+    player.setLocation(new Location(...from));
+    assert.notEqual(operate(player, 19222, at, object.getFace()), false);
+    assert.deepEqual(tileOf(player), to, `crossing from side ${side}`);
+    assert.equal(player.state.xp, 0);
+  }
+});
+
 test("native Lizardman Canyon handholds enter and leave both crossings at level 1", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");

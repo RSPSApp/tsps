@@ -313,6 +313,7 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Not done**:
   - The respawn timer dropdowns (187, 188) and the Sailing drop-item warning (465, default differs between captures).
   - Rows already handled elsewhere: levers 253, Ferox 255 and drink crate 455 are under "Rows owned by other plugins".
+  - The Leagues stepping-stones teleport warning (500, varbit 20362 `league_teleport_dragons_stepping_stones_warning`) is saved, and the settings reader (script 6716) reads it, but nothing asks before a teleport: its destination, the Map of Alacrity's "Catacombs: Dragons stepping stones", is left out of `server/plugins/modes/data/league-map-of-alacrity.json` (no landing side the shortcut data and the Wiki's pin agree on), and there is no capture or Wiki line for the warning's wording. The Leagues category's own rows, Display Relics (127) and Display Combat Masteries (418), are done (see "Rows the client scripts already apply").
 
 ## Wilderness teleport warnings
 

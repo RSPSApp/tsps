@@ -495,6 +495,10 @@ export class NPC extends Mobile {
         return true;
     }
 
+    public isPlayer(): boolean {
+        return false;
+    }
+
     public equals(other: Object): boolean {
         return other instanceof NPC && (other as NPC).getIndex() == this.getIndex() && (other as NPC).getId() == this.getId();
     }

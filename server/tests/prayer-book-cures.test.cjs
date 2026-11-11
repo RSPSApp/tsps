@@ -115,7 +115,7 @@ test('the book downgrades venom using the last hit and charges at most fifty pra
   for (const [prayer, last] of [[99, 6], [50, 18], [1, 20]]) {
     const f = fixture(t, { prayer, damage: 20 }); f.p.setVenomed(true); f.p.setLastVenomDamage(last);
     f.action('hnbBxH');
-    assert.equal(f.p.isVenomed(), false); assert.equal(f.p.getPoisonDamage(), last * 5);
+    assert.equal(f.p.isVenomed(), false); assert.equal(f.p.getPoisonDamage(), last * 5 - 4, 'the antipoison conversion');
     assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), Math.max(0, prayer - 50));
     assert.equal(f.p.getCombat().getPoisonImmunityTimer().secondsRemaining(), 0);
   }
@@ -132,7 +132,7 @@ test('a legacy venom save without historical hit data retains current damage as 
   const f = fixture(t, { damage: 20 }); f.p.setVenomed(true);
   assert.equal(f.p.getLastVenomDamage(), undefined);
   f.action('hnbBxH');
-  assert.equal(f.p.isVenomed(), false); assert.equal(f.p.getPoisonDamage(), 100);
+  assert.equal(f.p.isVenomed(), false); assert.equal(f.p.getPoisonDamage(), 96);
 });
 test('manual recitation and health-orb fallback both apply the treatment without consuming the book', t => {
   for (const orb of [false, true]) {

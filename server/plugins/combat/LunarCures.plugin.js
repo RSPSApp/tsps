@@ -18,7 +18,11 @@ const spells = new WeakMap();
 const lastCureMeCycle = new WeakMap();
 
 function cure(player) {
-  const severity = player.isVenomed() ? player.getPoisonDamage() * POISON_SEVERITY_PER_DAMAGE : 0;
+  // Venom becomes poison of its last hit dealt at the lowest severity giving it, 5 x hit - 4, as an antipoison
+  // does (rsprox_transcripts/234/03280.txt:69820: next 12, last 10, becomes 46; 223/00014.txt tick 3125: venom
+  // yet to hit converts from its first, 6 becomes 26). Read before setVenomed(false) clears the last hit.
+  const lastHit = player.getLastVenomDamage?.() ?? player.getPoisonDamage();
+  const severity = player.isVenomed() ? Math.max(0, lastHit * POISON_SEVERITY_PER_DAMAGE - 4) : 0;
   player.setVenomed(false);
   player.setPoisonDamage(severity);
 }

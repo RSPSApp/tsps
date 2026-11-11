@@ -75,9 +75,10 @@ test('the final due counter stays protective while modal and releases once when 
 });
 
 test('ordinary antipoison downgrades venom first, then a second dose cures and protects', t => {
-  const f = fixture(t, 12); f.player.setVenomed(true);
+  const f = fixture(t, 12); f.player.setVenomed(true); f.player.setLastVenomDamage(10);
   f.drink(I.ANTIPOISON_4_);
-  assert.equal(f.player.isVenomed(), false); assert.equal(f.value(), 60);
+  // From the last hit dealt, 5 x 10 - 4 (rsprox_transcripts/234/03280.txt:69820: 1000003 -> 1000002 -> 46).
+  assert.equal(f.player.isVenomed(), false); assert.equal(f.value(), 46);
   assert.equal(f.timer.finished(), true, 'positive poison and a new negative dose counter are mutually exclusive');
   f.step(5); f.drink(I.ANTIPOISON_4_); assert.equal(f.value(), -5);
   f.step(25); assert.equal(f.value(), -4);

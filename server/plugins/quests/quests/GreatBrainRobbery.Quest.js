@@ -327,7 +327,8 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       // no historical damage. Retain their current damage rather than invent it.
       const lastHit = player.getLastVenomDamage() ?? severity;
       skills.setCurrentLevel(Skill.PRAYER, Math.max(0, prayer - 50), true);
-      player.setPoisonDamage(lastHit * 5);
+      // The same conversion as an antipoison's: 5 x last hit - 4 (rsprox_transcripts/234/03280.txt:69820).
+      player.setPoisonDamage(Math.max(0, lastHit * 5 - 4));
       player.setVenomed(false);
       player.sendMessage("Your venom has been reduced to poison.");
       return;

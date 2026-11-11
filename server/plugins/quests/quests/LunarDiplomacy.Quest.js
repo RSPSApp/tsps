@@ -2351,7 +2351,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   /**
    * The forecastle's walls make walkToObject end its route on the tile the player
    * already stands on, which the reach check then rejects, so a "Climb" click from the
-   * z3 landing dies with "You can't reach that!" before Ladders can claim it. Claim the
+   * z3 landing dies with "I can't reach that!" before Ladders can claim it. Claim the
    * route as well and resolve the interaction in place; climbShipStairs moves the plane.
    */
   function routeShipStairs(event) {

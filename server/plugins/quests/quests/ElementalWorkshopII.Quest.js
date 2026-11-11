@@ -177,7 +177,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     ObjectIdentifiers.PIN, ObjectIdentifiers.PIN_2, ObjectIdentifiers.PIN_3, // 18664-18666
   ]);
   // The wind tunnel pins and the crane's 5x5 base have no walkable tile of their own, and
-  // every adjacent tile fails the walk-to reach check for item use ("You can't reach that!").
+  // every adjacent tile fails the walk-to reach check for item use ("I can't reach that!").
   const ROUTE_ASSIST_IDS = new Set([...PIN_IDS, OLD_CRANE, PIPE_REPAIR]);
   const EXTRACTOR_HAT = ObjectIdentifiers.EXTRACTOR_HAT; // 18690
   const EXTRACTOR_HAT_IDS = new Set([EXTRACTOR_HAT, ObjectIdentifiers.EXTRACTOR_HAT_2]);
@@ -962,7 +962,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
 
   /**
    * The pins and the old crane are set into blocking scenery, so the closest walkable tile
-   * is beside them and `walkToObject` rejects every adjacent tile ("You can't reach that!").
+   * is beside them and `walkToObject` rejects every adjacent tile ("I can't reach that!").
    * When the player is already at the object's footprint, route the use to the player's own
    * tile so the interaction runs (the CurrentAffairs aquarium / Underground Pass guide-rope
    * pattern). Covers both option clicks and item-on-object uses.

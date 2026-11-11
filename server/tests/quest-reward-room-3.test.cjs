@@ -169,14 +169,14 @@ async function clickLoc(t, f, id, answers, walkTicks = 3) {
   return shown;
 }
 
-/** The chest's cache access mask refuses some sides ("You can't reach that!"), so this tries each. */
+/** The chest's cache access mask refuses some sides ("I can't reach that!"), so this tries each. */
 async function clickFromAnySide(t, f, id) {
   const sides = [[0, 0], [2, 0], [1, 1], [1, -1]];
   for (const [dx, dy] of sides) {
     f.p.setLocation(new core.Location(HOME[0] + dx, HOME[1] + dy, 0));
     f.messages.length = 0;
     await clickLoc(t, f, id, [], 12);
-    if (!f.messages.includes("You can't reach that!")) return;
+    if (!f.messages.includes("I can't reach that!")) return;
   }
 }
 

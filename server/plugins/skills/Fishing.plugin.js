@@ -942,7 +942,9 @@ class FishingTask extends Task {
       }
       if (npc.getLocation().getX() !== session.spotX || npc.getLocation().getY() !== session.spotY) {
         stopFishing(this.activeSessions, player);
-        if (continuesFishing(player) && player.getLocation().getZ() === npc.getLocation().getZ() &&
+        // A spot module that moves its own spots (the minnow platform) is never followed: the Wiki's
+        // Endless Harvest notes, "You will not chase minnows, and will stop harvesting when they move."
+        if (!session.tool.spot && continuesFishing(player) && player.getLocation().getZ() === npc.getLocation().getZ() &&
             player.getLocation().isWithinDistance(npc.getLocation(), 24)) {
           // The normal interaction route cancels on a manual click and validates the target.
           movement.walkToEntity(npc, () => {

@@ -334,6 +334,26 @@ test("the arena area covers the map's pillar grid and nothing else", () => {
   assert.equal(isInArena({ getLocation: () => outside }), false);
 });
 
+test("being in the arena turns the Agility helper's obstacle highlights on and leaving turns them off", () => {
+  // varbit 13140 is helper_agility_highlighted_course; enum 3507 gives the arena id 2, whose
+  // obstacle loc types (enum 3997 entry 4000) script 5167 then outlines (rsprox 1735, 1738, 1863).
+  const area = createArea();
+  const inside = player({ x: 2783, y: 9568, z: 3 });
+  const insideMobile = { isPlayer: () => true, getAsPlayer: () => inside, getIndex: () => 1, getArea: () => null };
+  area.enter(insideMobile);
+  assert.equal(inside.varbits.get(13140), 2, "helper_agility_highlighted_course is the arena's course id");
+
+  area.leave(insideMobile, false);
+  assert.equal(inside.varbits.get(13140), 0, "leaving stops the highlights");
+
+  // Logging out inside the arena leaves it too (Player.onLogout calls leave with logout = true).
+  const loggingOut = player({ x: 2783, y: 9568, z: 3 });
+  const loggingOutMobile = { isPlayer: () => true, getAsPlayer: () => loggingOut, getIndex: () => 2, getArea: () => null };
+  area.enter(loggingOutMobile);
+  area.leave(loggingOutMobile, true);
+  assert.equal(loggingOut.varbits.get(13140), 0);
+});
+
 test("every clickable obstacle maps to its family and documented XP", () => {
   const expected = {
     BALANCING_ROPE: 10, LOG_BALANCE: 12, BALANCING_LEDGE: 16, MONKEY_BARS: 14, LOW_WALL: 8,

@@ -20,6 +20,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   const {
     ItemIdentifiers,
     StatementDialogue,
+    DialogueChainBuilder,
+    EndDialogue,
   } = api.core;
   const { registerQuest } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
@@ -531,7 +533,12 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
       return;
     }
     const lines = BARS.map((bar) => `${bar.name}: ${isSigned(player, bar) ? "signed" : "not signed"}`);
-    StatementDialogue.send(player, `Alfred Grimhand's Barcrawl<br><br>${lines.join("<br>")}`);
+    const pages = [lines.slice(0, 4), lines.slice(4, 8), lines.slice(8)];
+    const dialogue = new DialogueChainBuilder().add(
+      ...pages.map((page, index) => new StatementDialogue(index, `Alfred Grimhand's Barcrawl<br>${page.join("<br>")}`)),
+      new EndDialogue(pages.length),
+    );
+    player.getDialogueManager().startDialogues(dialogue);
   }
 
   function handleGateToggle(request) {

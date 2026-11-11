@@ -14,7 +14,7 @@ const data = require("./data/roaming-spawns.json");
 
 const MANIFEST_TICKS = 200;
 const CAUGHT_TICKS = 2;
-// Estimate: the Wiki does not give the wander range.
+// Existing server estimate: Wiki generic range100 is not established here for Puro-Puro.
 const WANDER_RADIUS = 8;
 const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 // Existing Hunter Puro-Puro rectangle. This caps the estimate to keep ordinary wandering in realm.

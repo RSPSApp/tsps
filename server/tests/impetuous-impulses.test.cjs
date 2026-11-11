@@ -461,19 +461,23 @@ test("Puro-Puro roaming network uses mapped points, crosses cache wheat and repl
     assert.ok(reached, "the seeded approach must satisfy the real adjacent-reach predicate");
     p.getSkillManager().setMaxLevel(core.Skill.HUNTER, 99).setCurrentLevels(core.Skill.HUNTER, 99);
     p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.BUTTERFLY_NET, 1));
-    p.getInventory().adds(I.IMPLING_JAR, 1);
+    p.getInventory().adds(I.IMPLING_JAR, 2);
     const definition = npc.getCurrentDefinition(p);
     const option = definition.getActions().findIndex(action => action === "Catch") + 1;
     assert.ok(option > 0); assert.equal(p.busy(), false);
     const rng = sub.mock.method(Math, "random", () => 0);
     new NPCOptionPacketListener().executeOption(p, npc.getIndex(), option);
-    rng.mock.restore();
-    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 0);
+    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 1);
     const filled = [I.BABY_IMPLING_JAR, I.YOUNG_IMPLING_JAR, I.GOURMET_IMPLING_JAR, I.EARTH_IMPLING_JAR,
       I.ESSENCE_IMPLING_JAR, I.ECLECTIC_IMPLING_JAR, I.NATURE_IMPLING_JAR, I.MAGPIE_IMPLING_JAR,
       I.NINJA_IMPLING_JAR, I.DRAGON_IMPLING_JAR, I.LUCKY_IMPLING_JAR];
     assert.equal(filled.reduce((sum, id) => sum + p.getInventory().getAmount(id), 0), 1);
     assert.ok(roaming.live.get(npc).removeAt > 0, "registered catch event gives removal to the roaming controller");
+    new NPCOptionPacketListener().executeOption(p, npc.getIndex(), option);
+    rng.mock.restore();
+    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 1, "a repeated Catch cannot consume another jar");
+    assert.equal(filled.reduce((sum, id) => sum + p.getInventory().getAmount(id), 0), 1);
+    assert.equal(roaming.live.size, count, "repeat click does not create another replacement");
     core.TaskManager.process(); assert.ok(roaming.live.has(npc));
     core.TaskManager.process(); assert.equal(roaming.live.has(npc), false);
     assert.equal(npc.isRegistered(), false);
@@ -483,6 +487,20 @@ test("Puro-Puro roaming network uses mapped points, crosses cache wheat and repl
     assert.equal(replacement.isVisible(), false);
     assert.equal(replacement.hasFlag("movement:ignore-clipping"), true);
     assert.ok(replacement.getSpawnPosition().equals(new core.Location(...originalPoint, 0)));
+    const radius = replacement.getMovementCoordinator().getRadius();
+    assert.ok(inRealm(replacement.getSpawnPosition().transform(-radius, -radius))
+      && inRealm(replacement.getSpawnPosition().transform(radius, radius)));
+    // Supply the same reachable approach; only the replacement's hidden state changes.
+    replacement.setLocation(crossing.from.clone()); replacement.setNeedsPlacement(false);
+    assert.ok(PathFinder.reachedEntity(p, replacement));
+    const hiddenOption = replacement.getCurrentDefinition(p).getActions().findIndex(action => action === "Catch") + 1;
+    assert.ok(hiddenOption > 0);
+    new NPCOptionPacketListener().executeOption(p, replacement.getIndex(), hiddenOption);
+    assert.equal(p.getInventory().getAmount(I.IMPLING_JAR), 1, "pre-manifest Catch preserves the empty jar");
+    assert.equal(filled.reduce((sum, id) => sum + p.getInventory().getAmount(id), 0), 1);
+    assert.equal(roaming.live.get(replacement).removeAt, 0);
+    assert.equal(roaming.live.size, count);
+    replacement.setLocation(replacement.getSpawnPosition().clone());
     for (let tick = 0; tick < 199; tick++) core.TaskManager.process();
     assert.equal(replacement.isVisible(), false);
     core.TaskManager.process(); assert.equal(replacement.isVisible(), true);

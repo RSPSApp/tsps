@@ -36,6 +36,7 @@ import { ImplingsPlugin } from "../../../game/plugins/implings/ImplingsPlugin";
 import { InteractHighlightConfig } from "../../../game/plugins/interacthighlight/InteractHighlightConfig";
 import { InteractHighlightPlugin } from "../../../game/plugins/interacthighlight/InteractHighlightPlugin";
 import { InventoryTagsPlugin } from "../../../game/plugins/inventorytags/InventoryTagsPlugin";
+import { RunePouchPlugin } from "../../../game/plugins/runepouch/RunePouchPlugin";
 import { ItemStatsPlugin } from "../../../game/plugins/itemstats/ItemStatsPlugin";
 import { ItemPricesPlugin } from "../../../game/plugins/itemprices/ItemPricesPlugin";
 import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
@@ -99,6 +100,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ItemStatsPlugin,
     ItemPricesPlugin,
     ItemRarityPlugin,
+    RunePouchPlugin,
     BankTagsPlugin,
     // After Bank Tags: its tag tab title is set before the value joins it.
     BankPlugin,

@@ -392,9 +392,12 @@ function shouldKeepPouch(event) {
   if (isPouch(event.item)) event.keep = false;
 }
 
-/** A PvP death destroys the pouch: it is neither dropped nor given back (Wiki). */
+/**
+ * A PvP death destroys the pouch: it is neither dropped nor given back (Wiki). A death that keeps
+ * everything (an owner's or developer's) keeps it too.
+ */
 function deathItemDrop(event) {
-  if (isPouch(event.item) && isPvpDeath(event)) event.handled = true;
+  if (isPouch(event.item) && isPvpDeath(event) && event.shouldDropItems !== false) event.handled = true;
 }
 
 function login({ player }) {

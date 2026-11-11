@@ -408,9 +408,10 @@ test("with the interface closed or no pouch carried, clicks and drags change not
 // ------------------------------------------------------------------ death (Wiki: Bolt pouch, Items Kept on Death)
 
 /** Dies unskulled (three items kept) carrying the pouch with 400 Runite bolts and 1,000 coins. */
-function die(t, { pvp, setting = false }) {
+function die(t, { pvp, setting = false, rights = null }) {
   const f = actor(t);
   const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  if (rights) f.p.setRights(rights);
   withPouch(f, [[I.RUNITE_BOLTS, 400], null, null, null]);
   f.inv.add(new core.Item(I.COINS, 1000), false);
   if (setting) PM.emitCustomEvent("settings:set", { player: f.p, settingId: 356, value: 1 });
@@ -428,6 +429,13 @@ function die(t, { pvp, setting = false }) {
     pouched: BoltPouch.slots(f.p).filter(Boolean),
   };
 }
+
+test("a PvP death that keeps everything (a developer's) keeps the pouch and its bolts", (t) => {
+  const d = die(t, { pvp: true, rights: core.PlayerRights.DEVELOPER });
+  assert.equal(d.carried(I.BOLT_POUCH), 1);
+  assert.equal(d.floor(I.RUNITE_BOLTS), 0);
+  assert.deepEqual(d.pouched, [{ id: I.RUNITE_BOLTS, amount: 400 }]);
+});
 
 test("a PvP death destroys the pouch, kept slots or not, and drops its bolts for the killer", (t) => {
   const d = die(t, { pvp: true });

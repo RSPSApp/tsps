@@ -85,15 +85,52 @@ export function combatStatusAnchor(client: OsrsClient):
     };
 }
 
+const mobileUid = (child: number) => ((MOBILE_ROOT << 16) | child) >>> 0;
+/** toplevel_osm:viewport-ish pane (601:10); the chat toggle script moves its raw y down by the chat height. */
+const MOBILE_CHAT_SHIFTED_PANE = mobileUid(10);
+/** toplevel_osm chat_container (601:49) and its cache height. */
+const MOBILE_CHAT_CONTAINER = mobileUid(49);
+const MOBILE_CHAT_HEIGHT = 145;
+/** All Settings (group 134) window; its script sizes it to the canvas minus the chat's height. */
+const ALL_SETTINGS_WINDOW = (134 << 16) | 1;
+/** Gaps kept above and below a window that grows into the space the hidden chat leaves. */
+const HIDDEN_CHAT_WINDOW_TOP = 6;
+const HIDDEN_CHAT_WINDOW_BOTTOM = 15;
+
+/** Whether the mobile chatbox is toggled off: the chat toggle script stops offsetting the 601:10 pane. */
+export function isMobileChatHidden(manager: { getWidgetByUid(uid: number): WidgetLike | undefined }): boolean {
+    const pane = manager.getWidgetByUid(MOBILE_CHAT_SHIFTED_PANE);
+    if (!pane) return false;
+    const chatHeight = manager.getWidgetByUid(MOBILE_CHAT_CONTAINER)?.rawHeight ?? MOBILE_CHAT_HEIGHT;
+    return (pane.rawY ?? 0) < chatHeight;
+}
+
+/**
+ * Windows that reserve the chatbox's height keep doing so after the chat is hidden, leaving
+ * the top of the screen empty. With the chat hidden, stretch such a window over the whole
+ * screen height, leaving a small gap at the top and bottom. Never shrinks it.
+ */
+export function extendWindowIntoHiddenChat(node: WidgetLike, screenH: number): void {
+    const height = node.height ?? 0;
+    const extended = screenH - HIDDEN_CHAT_WINDOW_TOP - HIDDEN_CHAT_WINDOW_BOTTOM;
+    if (extended <= height) return;
+    node.height = extended;
+    node.y = HIDDEN_CHAT_WINDOW_TOP;
+}
+
 /** Post-cache alignment: keep the native skull, multi-combat icon, level and combat range. */
 export function adjustMobileHudWidget(
     node: WidgetLike,
     parentW: number,
     parentH: number,
-    manager: { getWidgetByUid(uid: number): WidgetLike | undefined },
+    manager: { getWidgetByUid(uid: number): WidgetLike | undefined; canvasHeight?: number },
 ): void {
     adjustMobilePortraitWidget(node, parentW, parentH);
     const uid = (node as WidgetLike & { uid?: number }).uid;
+    if (uid === ((ALL_SETTINGS_WINDOW) >>> 0) && isMobileChatHidden(manager)) {
+        extendWindowIntoHiddenChat(node, manager.canvasHeight || parentH);
+        return;
+    }
     if (uid === undefined || uid >>> 16 !== PVP_GROUP) return;
     switch (uid & 0xffff) {
         case 43: {

@@ -48,6 +48,29 @@ Quest kills suppress normal loot, return the player from the private field, and 
 
 Cowbell charging, worn actions, Ring sounds and milking are documented in [the Lumbridge/Vampyre evidence notes](f2p-lumbridge-vampyre.md#cowbell-amulet-follow-up).
 
+## Brutus after the quest (2026-11-11)
+
+The progress tracker's Brutus rows (4 November) listed the repeatable post-quest fight, the Demonic variant and the drop
+tables as not built. All three are on main (this page, `npc-drops.json`: `brutus` and `demonic_brutus`, the Wiki's tables),
+so those rows were stale. The Wiki ([Brutus](https://oldschool.runescape.wiki/w/Brutus),
+[Demonic Brutus](https://oldschool.runescape.wiki/w/Demonic_Brutus) and their Strategies pages) names more, built in
+`plugins/bosses/Brutus.plugin.js` and the quest plugin's Demonic branches; no rsprox capture of the post-quest or the Demonic
+fight was found (4153 is the quest route only), so these are the Wiki's numbers and texts:
+
+- Slayer experience on a Cows task is 116, twice his Hitpoints, after the quest (the Slayer plugin gave 58).
+- An item used on Brutus says "Brutus doesn't want that.", an empty bucket "You do not want to do that."; the abyssal
+  potato stays the quest plugin's.
+- Killing Brutus or Demonic Brutus wearing Cow31337Killer's outfit (rune boots, rune platebody, rune plateskirt, Klank's
+  gauntlets, Dharok's helm, Dharok's greataxe, degraded forms included) says "You are but an imitation of a true legend."
+- Demonic Brutus heals 487 and shouts "moo moo!" when first brought to 0 Hitpoints, each bull of his specials deals 45-56,
+  his basic melee ignores Protect from Melee and is not held to the quest's cap of 3, and he is immune to stat drains.
+  The Wiki's strategy page gives his melee maximum as 4 and its infobox as 43; the engine's own stats give 43, which stands.
+
+Not modelled: Demonic Brutus's three ghost bulls and their clockwise order, the faster specials at two thirds of his
+Hitpoints, the counter-clockwise order at one third, the phase-two orbs, his enchanted-bolt immunity (no immunity flag
+exists), the pushing of players away from obstacles, and Brutus's 15-tick anti-safespot behaviour. The Wiki gives no
+tick counts or positions for them.
+
 ## 2026-11-02 audit
 
 A fresh account replayed the complete 4153 route. The captured state sequence, first-sample

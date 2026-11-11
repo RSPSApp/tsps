@@ -735,38 +735,90 @@ module.exports = function registerHazeelCultQuest(api) {
       () => {
         const value = attr(player, VALVES_ATTR);
         setAttr(player, VALVES_ATTR, right ? value & ~(1 << index) : value | (1 << index));
-        player.sendMessage(`You turn the valve to the ${turn}. Beneath your feet you hear the sudden sound of rushing water.`);
+        raftBox(player, `You turn the valve to the ${turn}. Beneath your feet you hear the sudden sound of rushing water.`);
       },
       "Do nothing.",
-      () => player.sendMessage("You leave the valve alone.")
+      () => raftBox(player, "You leave the valve alone.")
     );
     event.handled = true;
+  }
+
+  // The raft's lines are message boxes (Wiki Transcript:Hazeel Cult has them as {{tbox}}). rsprox
+  // 226/01694.txt ticks 6569-6575: the box and the fade out (fade_overlay, 174) with synth 2372 delay 30,
+  // the teleport three ticks later, then the box again as it fades back in; the overlay closes two later.
+  const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
+  const FADE_OVERLAY = 174;
+  const FADE_SCRIPT = 948;
+  const FADE_CYCLES = 50;
+  const RAFT_SOUND = 2372;
+  const RAFT_MOVE_TICKS = 3;
+  const RAFT_CLOSE_OVERLAY_TICKS = 6;
+
+  function raftBox(player, text) {
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  }
+
+  function raftFade(player, out) {
+    const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
+    player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
+  }
+
+  function rideRaft(player, tile, text) {
+    raftBox(player, text);
+    raftFade(player, true);
+    player.getPacketSender().sendSound(RAFT_SOUND, 1, 30);
+    const movement = player.getMovementQueue();
+    movement.setBlockMovement(true).reset();
+    let ticks = 0;
+    TaskManager.submit(new (class extends api.core.Task {
+      constructor() { super(1, player, false); }
+      execute() {
+        ticks++;
+        if (!player.isRegistered()) return void this.stop();
+        if (ticks === RAFT_MOVE_TICKS) {
+          player.moveTo(new Location(tile.x, tile.y, tile.z));
+          movement.setBlockMovement(false);
+          raftFade(player, false);
+          raftBox(player, text);
+        }
+        if (ticks >= RAFT_CLOSE_OVERLAY_TICKS) {
+          player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+          this.stop();
+        }
+      }
+      stop() {
+        movement.setBlockMovement(false);
+        super.stop();
+      }
+    })());
   }
 
   function handleRaft(event) {
     if (event.objectId !== RAFT_ID) return;
     const { player } = event;
+    event.handled = true;
+    // Wiki Transcript:Hazeel Cult, "Trying to use the raft": before the player has chosen a side.
+    if (quest.getStage(player) < STAGE_CHOSEN_SIDE) {
+      api.emitCustomEvent("npc-dialogue:start", { player, npcId: NpcIdentifiers.CLIVET, variant: "starting-off-trying-to-use-the-raft" });
+      return;
+    }
     const tile = objectTileOf(event);
     const atCave = tile && tile.x === CAVE_RAFT_TILE.x && tile.y === CAVE_RAFT_TILE.y
       && (tile.z ?? 0) === CAVE_RAFT_TILE.z;
     if (!atCave) {
-      player.moveTo(new Location(RAFT_RETURN_TILE.x, RAFT_RETURN_TILE.y, RAFT_RETURN_TILE.z));
-      player.sendMessage("The raft flows back to the cave entrance.");
-      event.handled = true;
+      rideRaft(player, RAFT_RETURN_TILE, "The raft flows back to the cave entrance.");
       return;
     }
     const correct = correctValves(attr(player, VALVES_ATTR));
     if (correct === 0) {
-      player.sendMessage("The current is flowing against the raft. It won't move.");
+      raftBox(player, "The current is flowing against the raft. It won't move.");
     } else if (correct === VALVE_IDS.length) {
-      player.moveTo(new Location(HIDEOUT_TILE.x, HIDEOUT_TILE.y, HIDEOUT_TILE.z));
-      player.sendMessage("The raft washes up the sewer until it reaches the end of the passage.");
+      rideRaft(player, HIDEOUT_TILE, "The raft washes up the sewer until it reaches the end of the passage.");
     } else {
       const stop = RAFT_STOPS[correct];
-      player.moveTo(new Location(stop.tile.x, stop.tile.y, stop.tile.z));
-      player.sendMessage(`The raft washes up the sewer and stops at the ${stop.name} island. You'll need to find the right combination of the five sewer valves above if you want to go further.`);
+      rideRaft(player, stop.tile, `The raft washes up the sewer and stops at the ${stop.name} island. You'll need to find the right combination of the five sewer valves above if you want to go further.`);
     }
-    event.handled = true;
   }
 
   /**

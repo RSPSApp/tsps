@@ -57,6 +57,9 @@ function actor(t) {
   const varbits = new Map();
   const sender = p.getPacketSender();
   t.mock.method(sender, "sendMessage", (message) => { messages.push(message); return sender; });
+  // The drink lines are spam, as live sends them (rsprox: type=spam).
+  const spam = [];
+  t.mock.method(sender, "sendTypedMessage", (type, message) => { if (type === core.ChatType.SPAM) spam.push(message); return sender; });
   t.mock.method(sender, "sendVarbit", (id, value) => { varbits.set(id, value); return sender; });
   t.mock.method(sender, "getVarbit", (id) => varbits.get(id) ?? 0);
   t.mock.method(core.World, "getProcessCycle", () => cycle);
@@ -66,7 +69,7 @@ function actor(t) {
     core.TaskManager.cancelTasks(p.getIndex());
   });
   const timer = () => varbits.get(core.CacheDefinitions.getVarbitId("goading_potion_timer")) ?? 0;
-  return { p, c, inv: p.getInventory(), messages, timer };
+  return { p, c, inv: p.getInventory(), messages, spam, timer };
 }
 
 async function drink(f, slot = 0) {
@@ -103,7 +106,7 @@ test("a dose is drunk, starts the timer at 100 and leaves one fewer dose", async
   await drink(f);
   assert.equal(f.inv.getItems()[0].getId(), I.GOADING_POTION_3_);
   assert.equal(f.timer(), 100);
-  assert.deepEqual(f.messages, ["You drink some of your goading potion.", "You have 3 doses of potion left."]);
+  assert.deepEqual(f.spam, ["You drink some of your goading potion.", "You have 3 doses of potion left."]);
 });
 
 test("the doses left are told, down to the last", async (t) => {
@@ -111,12 +114,12 @@ test("the doses left are told, down to the last", async (t) => {
   const told = [];
   for (const [id, line] of [[I.GOADING_POTION_3_, "You have 2 doses of potion left."], [I.GOADING_POTION_2_, "You have 1 dose of potion left."],
     [I.GOADING_POTION_1_, "You have finished your potion."]]) {
-    f.messages.length = 0;
+    f.spam.length = 0;
     f.inv.setItem(0, new core.Item(id, 1));
     tick(f, 3);
     await drink(f);
-    told.push(f.messages[1]);
-    assert.equal(f.messages[1], line);
+    told.push(f.spam[1]);
+    assert.equal(f.spam[1], line);
   }
   assert.equal(told.length, 3);
 });

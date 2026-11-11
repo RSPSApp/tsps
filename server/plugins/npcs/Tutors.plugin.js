@@ -13,6 +13,7 @@
  * Skill-level menus ("If the player has level 1-28 Fishing:") are answered for every tutor.
  */
 const { getRegisteredQuests } = require("../quests/QuestRuntime");
+const { takeInto } = require("../items/TakeInto");
 
 const CLAIM_ATTRIBUTE = "tutors.combat_claim_at";
 // The pre-Settings save of the ammo toggle; migrated into the Setting at login.
@@ -20,6 +21,9 @@ const AUTO_EQUIP_ATTRIBUTE = "ranged:equip-ammo-on-pickup";
 // The same switch as Settings > Gameplay > "Ammo-picking behaviour" (setting id 305).
 const AMMO_PICKUP_SETTING_ID = 305;
 const AMMO_PICKUP_VARBIT = 5697;
+// Settings > Gameplay > "Rune-picking behaviour" (setting id 306); the rune pouch applies it.
+const RUNE_PICKUP_SETTING_ID = 306;
+const MAX_STACK = 2147483647;
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
 const TRAINING_ARROW_COUNT = 25;
@@ -403,6 +407,15 @@ function handleAmmoToggleChoice({ player, npcId, option }) {
   });
 }
 
+/** "Let's discuss how my runes act when I pick them up." on the Magic combat tutor. */
+function handleRuneToggleChoice({ player, npcId, option }) {
+  if (npcId !== NPC.MAGIC) return;
+  if (option !== "Automatically send to rune pouch." && option !== "Place them in my inventory.") return;
+  pluginApi?.emitCustomEvent("settings:set", {
+    player, settingId: RUNE_PICKUP_SETTING_ID, value: option === "Automatically send to rune pouch." ? 1 : 0,
+  });
+}
+
 /** A pre-Settings tutor choice becomes the saved Setting once, unless one is already saved. */
 function migrateLegacyAmmoToggle({ player }) {
   if (player?.getAttribute?.(AUTO_EQUIP_ATTRIBUTE) !== true) return;
@@ -420,14 +433,16 @@ function autoEquipPickedUpAmmo(event) {
   const equipment = player.getEquipment();
   const worn = equipment.get(core.Equipment.AMMUNITION_SLOT);
   if (!worn || worn.getId() !== event.groundItemId) return;
-  const item = event.groundItem?.getItem?.();
-  if (!item || item.getAmount() <= 0) return;
-  core.ItemOnGroundManager.deregister(event.groundItem);
-  worn.incrementAmountBy(item.getAmount());
-  equipment.refreshItems();
-  core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
-  player.getLastItemPickup?.().reset?.();
-  event.handled = true;
+  // The worn stack's meta (preset ammo) must match, so a pickup never changes what it is.
+  takeInto(pluginApi, event, {
+    meta: worn.getMeta?.() ?? null,
+    room: () => (equipment.get(core.Equipment.AMMUNITION_SLOT) === worn ? MAX_STACK - worn.getAmount() : 0),
+    store: (amount) => {
+      worn.incrementAmountBy(amount);
+      equipment.refreshItems();
+      return amount;
+    },
+  });
 }
 
 // --- Using items on the tutors.
@@ -465,6 +480,7 @@ module.exports = {
     api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
     api.onCustomEvent("npc-dialogue:line", handleLine);
     api.onCustomEvent("npc-dialogue:choice", handleAmmoToggleChoice);
+    api.onCustomEvent("npc-dialogue:choice", handleRuneToggleChoice);
     api.onGroundItemPickup(autoEquipPickedUpAmmo);
     api.onNpcInteraction("Ranged combat tutor", { Claim: claimArrows });
     api.onNpcInteraction("Magic combat tutor", { Claim: claimRunes });

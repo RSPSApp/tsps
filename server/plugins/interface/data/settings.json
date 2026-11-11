@@ -144,6 +144,7 @@
     "301": { "name": "Health overlay display type", "varbit": 14708 },
     "302": { "name": "Disable Phantom Muspah messages", "varbit": 14711 },
     "305": { "name": "Ammo-picking behaviour", "varbit": 5697 },
+    "306": { "name": "Rune-picking behaviour", "varbit": 5698 },
     "307": { "name": "Wilderness cave decay", "varbit": 14691 },
     "308": { "name": "Show warning on exiting Ferox Enclave on a High Risk world", "varbit": 14803 },
     "309": { "name": "Show warning on taking a canoe to the Wilderness on a High Risk world", "varbit": 14804 },

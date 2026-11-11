@@ -7,15 +7,17 @@ Server.installProductionPathResolver();
 const plugin = require('../plugins/npcs/Tutors.plugin');
 
 const RANGED_TUTOR = 3217;
+const MAGIC_TUTOR = 3218;
 const AMMO_PICKUP_ATTRIBUTE = 'ranged:equip-ammo-on-pickup';
 const AMMO_PICKUP_VARBIT = 5697;
 const AMMO_SLOT = 13;
 
-function item(id, amount) {
+function item(id, amount, meta = null) {
   return {
-    id, amount,
+    id, amount, meta,
     getId() { return this.id; },
     getAmount() { return this.amount; },
+    getMeta() { return this.meta; },
     incrementAmountBy(delta) { this.amount += delta; },
   };
 }
@@ -25,6 +27,7 @@ function harness({ varbit = 0 } = {}) {
   const varbits = new Map([[AMMO_PICKUP_VARBIT, varbit]]);
   const worn = item(884, 100);
   const deregistered = [];
+  const grounds = [];
   const equipment = {
     get: (slot) => slot === AMMO_SLOT ? worn : item(-1, 0),
     refreshItems() {},
@@ -48,11 +51,12 @@ function harness({ varbit = 0 } = {}) {
   let pickup;
   const api = {
     core: {
-      NpcIdentifiers: { RANGED_COMBAT_TUTOR: RANGED_TUTOR },
+      NpcIdentifiers: { RANGED_COMBAT_TUTOR: RANGED_TUTOR, MAGIC_COMBAT_TUTOR: MAGIC_TUTOR },
       ItemIdentifiers: {},
       Equipment: { AMMUNITION_SLOT: AMMO_SLOT },
       ItemDefinition: { forId: () => ({ getName: () => 'Iron arrow' }) },
-      ItemOnGroundManager: { deregister: (ground) => deregistered.push(ground) },
+      ItemOnGroundManager: { deregister: (ground) => deregistered.push(ground), canSee: () => true },
+      World: { getItems: () => grounds },
       Sounds: { sendSound() {} },
       Sound: { PICK_UP_ITEM: 1 },
       Skill: { values: () => [] },
@@ -76,10 +80,16 @@ function harness({ varbit = 0 } = {}) {
   plugin.register(api);
   return {
     player, worn, varbits, attributes, deregistered, events, emitted,
-    choose(option) { for (const handler of events['npc-dialogue:choice'] ?? []) handler({ player, npcId: RANGED_TUTOR, option }); },
+    choose(option, npcId = RANGED_TUTOR) { for (const handler of events['npc-dialogue:choice'] ?? []) handler({ player, npcId, option }); },
     login() { for (const handler of logins) handler({ player }); },
-    pickup(groundItemId = 884, amount = 5) {
-      const ground = { getItem: () => item(groundItemId, amount) };
+    pickup(groundItemId = 884, amount = 5, meta = null) {
+      const stack = item(groundItemId, amount, meta);
+      const position = { clone: () => position, equals: (other) => other === position };
+      const ground = {
+        getItem: () => stack, getPosition: () => position, getOwner: () => 'owner',
+        getPrivateArea: () => null, getState: () => 0,
+      };
+      grounds.push(ground);
       const event = { player, groundItem: ground, groundItemId, handled: false };
       pickup(event);
       return event;
@@ -168,6 +178,46 @@ test('only matching ammunition is diverted to the quiver', () => {
   const event = h.pickup(882, 5);
   assert.equal(event.handled, false);
   assert.equal(h.worn.getAmount(), 100);
+});
+
+test('the Magic combat tutor toggle sets Settings > Rune-picking behaviour', () => {
+  const h = harness();
+  h.choose('Automatically send to rune pouch.', MAGIC_TUTOR);
+  let setting = h.emitted.filter((entry) => entry.type === 'settings:set').at(-1).payload;
+  assert.deepEqual([setting.settingId, setting.value], [306, 1]);
+  h.choose('Place them in my inventory.', MAGIC_TUTOR);
+  setting = h.emitted.filter((entry) => entry.type === 'settings:set').at(-1).payload;
+  assert.deepEqual([setting.settingId, setting.value], [306, 0]);
+  h.choose('Place them in my inventory.');
+  assert.equal(h.emitted.filter((entry) => entry.type === 'settings:set').length, 2, 'the Ranged tutor has no rune toggle');
+});
+
+test('a take policy that refuses the stack leaves the worn ammo alone', () => {
+  const h = harness({ varbit: 1 });
+  h.events['ground-items:take'] = [(request) => { request.allow = false; }];
+  const event = h.pickup(884, 5);
+  assert.equal(event.handled, true);
+  assert.equal(h.worn.getAmount(), 100);
+  assert.deepEqual(h.deregistered, []);
+});
+
+test('a pickup that would overflow the worn stack goes to the inventory instead', () => {
+  const h = harness({ varbit: 1 });
+  h.worn.amount = 2147483647 - 2;
+  const event = h.pickup(884, 5);
+  assert.equal(event.handled, false);
+  assert.equal(h.worn.getAmount(), 2147483647 - 2);
+});
+
+test('ground ammo joins the worn stack only when their meta match', () => {
+  const h = harness({ varbit: 1 });
+  assert.equal(h.pickup(884, 5, { preset: true }).handled, false, 'preset ammo is not mixed into a plain stack');
+  assert.equal(h.worn.getAmount(), 100);
+  h.worn.meta = { preset: true };
+  assert.equal(h.pickup(884, 5, { preset: true }).handled, true, 'preset ammo returns to its preset stack');
+  assert.equal(h.worn.getAmount(), 105);
+  assert.equal(h.pickup(884, 5).handled, false, 'plain ammo is not mixed into a preset stack');
+  assert.equal(h.worn.getAmount(), 105);
 });
 
 test('the All Settings catalog maps Ammo-picking behaviour to varbit 5697', () => {

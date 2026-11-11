@@ -89,3 +89,35 @@ test("an npc waits for a taken target instead of giving up", () => {
   assert.equal(guard.getCombat().isTransientDenial(CanAttackResponse.TARGET_IN_COMBAT), true);
   assert.equal(you.getCombat().isTransientDenial(CanAttackResponse.TARGET_IN_COMBAT), false);
 });
+
+// Live (a melee player clicking Attack on a cow another player is fighting): the player still walks
+// in, told once on the way and again on arriving, where the attack ends. At range the line only
+// comes once in range (LostCity player_combat.rs2: the approach-stage check runs for melee only).
+test("a player walks in on an NPC someone else is fighting, told on the way in melee", (t) => {
+  const { CombatRange } = require("../dist/game/content/combat/CombatRange");
+  const { CombatType } = require("../dist/game/content/combat/CombatType");
+  let inReach = false;
+  t.mock.method(CombatRange, "canReach", () => inReach);
+  const melee = { type: () => CombatType.MELEE };
+  const ranged = { type: () => CombatType.RANGED };
+  const you = mobile("player", "You");
+  const cow = mobile("npc", "Cow");
+  const combat = you.getCombat();
+
+  assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.TARGET_IN_COMBAT, cow, melee), true, "keeps walking in");
+  assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.TARGET_IN_COMBAT, cow, melee), true);
+  assert.deepEqual(you.messages, ["Someone else is fighting that."], "said once on the approach");
+  inReach = true;
+  assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.TARGET_IN_COMBAT, cow, melee), false,
+    "in reach it is refused, with the line again (handleAttackDenied)");
+
+  const archer = mobile("player", "Archer");
+  inReach = false;
+  assert.equal(archer.getCombat().walksInOnFoughtNpc(CanAttackResponse.TARGET_IN_COMBAT, cow, ranged), true);
+  assert.deepEqual(archer.messages, [], "nothing said at range until in range");
+
+  const opponent = mobile("player", "Opponent");
+  assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.TARGET_IN_COMBAT, opponent, melee), false,
+    "a player target is still turned away on the spot");
+  assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.ALREADY_UNDER_ATTACK, cow, melee), false);
+});

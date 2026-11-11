@@ -80,6 +80,7 @@ export class Combat {
     private previousCast: CombatSpell | null = null;
     private generation = 0;
     private deniedNoticeGeneration = -1;
+    private foughtNpcNoticeGeneration = -1;
     private static combatDebugCache?: boolean;
     /** COMBAT_DEBUG=1. Read lazily so argv/env parsing order cannot defeat it. */
     private static get DEBUG(): boolean {
@@ -346,7 +347,10 @@ export class Combat {
         }
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
-        if (permission !== CanAttackResponse.CAN_ATTACK) {
+        if (permission !== CanAttackResponse.CAN_ATTACK && this.walksInOnFoughtNpc(permission, target, method)) {
+            this.trace(`approach=permission:${CanAttackResponse[permission]}`, target);
+            state.attackBlocked = true;
+        } else if (permission !== CanAttackResponse.CAN_ATTACK) {
             this.trace(`bail=permission:${CanAttackResponse[permission]}`, target);
             this.handleAttackDenied(permission, target, generation);
             if (!this.isTransientDenial(permission) ||
@@ -496,7 +500,9 @@ export class Combat {
         }
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
-        if (permission !== CanAttackResponse.CAN_ATTACK) {
+        // Walking in on an NPC someone else is fighting: out of reach, it is an approach like
+        // any other, so a route that runs out still ends in "I can't reach that!" below.
+        if (permission !== CanAttackResponse.CAN_ATTACK && !this.walksInOnFoughtNpc(permission, target, method, false)) {
             this.handleAttackDenied(permission, target, generation);
             return;
         }
@@ -1054,6 +1060,30 @@ export class Combat {
             response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED ||
             // An npc waits its turn; a player is turned away on the spot.
             (response === CanAttackResponse.TARGET_IN_COMBAT && !this.character.isPlayer());
+    }
+
+    /**
+     * Single combat for a player attacking an NPC someone else is fighting (live, and
+     * LostCity player_combat.rs2): the player still walks in. In melee the refusal is said
+     * once on the approach, and again when they arrive, where the attack ends; at range it is
+     * only said once they are in range. True while the player keeps walking in.
+     */
+    private walksInOnFoughtNpc(
+        permission: CanAttackResponse,
+        target: Mobile,
+        method: CombatMethod,
+        approachNotice = true
+    ): boolean {
+        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !this.character.isPlayer() || !target.isNpc()) {
+            return false;
+        }
+        if (CombatRange.canReach(this.character, method, target)) return false;
+        if (approachNotice && method.type() === CombatType.MELEE &&
+            this.foughtNpcNoticeGeneration !== this.generation) {
+            this.foughtNpcNoticeGeneration = this.generation;
+            this.character.getAsPlayer().sendMessage("Someone else is fighting that.");
+        }
+        return true;
     }
 
     private cancelIfCurrent(target: Mobile, generation: number): void {

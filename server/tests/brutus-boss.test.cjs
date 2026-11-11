@@ -33,6 +33,8 @@ function player(worn = []) {
   };
   return p;
 }
+/** An item used on an NPC as the dispatch builds it: the hook ignores an event without a target and an item. */
+function use(p, id, itemId) { return { player: p, target: npc(id), npcId: id, item: { getId: () => itemId }, itemId, handled: false }; }
 function npc(id) {
   const n = { id, said: [], hp: 100, getId: () => id, setHitpoints: value => { n.hp = value; }, forceChat: text => n.said.push(text) };
   return n;
@@ -42,22 +44,22 @@ const OUTFIT = [I.RUNE_BOOTS, I.RUNE_PLATEBODY, I.RUNE_PLATESKIRT, I.KLANKS_GAUN
 test('an item used on Brutus is refused with his message; an empty bucket with the bucket message; the potato and others are not claimed', () => {
   const p = player();
   for (const id of [N.BRUTUS, N.BRUTUS_2]) {
-    const event = { player: p, npcId: id, itemId: I.COINS, handled: false };
+    const event = use(p, id, I.COINS);
     assert.equal(PluginManager.emitItemOnNpc(event), true, `npc ${id}`);
     assert.equal(p.messages.at(-1), "Brutus doesn't want that.");
   }
-  const bucket = { player: p, npcId: N.BRUTUS, itemId: I.BUCKET, handled: false };
+  const bucket = use(p, N.BRUTUS, I.BUCKET);
   PluginManager.emitItemOnNpc(bucket);
   assert.equal(bucket.handled, true);
   assert.equal(p.messages.at(-1), 'You do not want to do that.');
   const before = p.messages.length;
-  const potato = { player: p, npcId: N.BRUTUS, itemId: I.ABYSSAL_POTATO, handled: false };
+  const potato = use(p, N.BRUTUS, I.ABYSSAL_POTATO);
   PluginManager.emitItemOnNpc(potato);
   assert.equal(potato.handled, false, "the quest plugin's potato handling is left alone");
-  const cow = { player: p, npcId: 2793, itemId: I.COINS, handled: false };
+  const cow = use(p, 2793, I.COINS);
   PluginManager.emitItemOnNpc(cow);
   assert.equal(cow.handled, false, 'another NPC');
-  const demonic = { player: p, npcId: N.DEMONIC_BRUTUS, itemId: I.COINS, handled: false };
+  const demonic = use(p, N.DEMONIC_BRUTUS, I.COINS);
   PluginManager.emitItemOnNpc(demonic);
   assert.equal(demonic.handled, false, 'the Wiki gives the message for Brutus only');
   assert.equal(p.messages.length, before);

@@ -34,7 +34,7 @@
 | varp 3 | balls loaded |
 | varp 4, varp 3551 | the cannon's packed south-west tile `(z << 28) \| (x << 14) \| y` |
 | varbit 2180 | the tick of the last part |
-| varbit 1968 | the world. **Ours:** always 1, since this server has no world number. |
+| varbit 1968 | the world, modulo 128. **Ours:** 45, world 301 (what the client reports), so the buff bar's cannon ammo, which checks it against the client's world, shows. |
 
 Only changed vars are sent, as in the capture; all of them are sent again on login.
 

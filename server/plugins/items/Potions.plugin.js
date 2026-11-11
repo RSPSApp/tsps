@@ -548,8 +548,11 @@ function applyOverloadBoost(player, flat, percent) {
   }
 }
 
-/** `area`: where the effect lives (the raid's potions): it ends, silently, once the player is no longer there. */
-function applyOverload(player, flat = 5, percent = 0.15, area = null) {
+/**
+ * `area`: where the effect lives (the raid's potions): it ends, silently, once the player is no longer there.
+ * `tier`: a raid overload's strength for the buff bar, 1 to 3 for (-), plain and (+).
+ */
+function applyOverload(player, flat = 5, percent = 0.15, area = null, tier = 0) {
   const now = Date.now();
   applyOverloadBoost(player, flat, percent);
   player.setAttribute(ATTR_OVERLOAD_STATE, {
@@ -560,6 +563,7 @@ function applyOverload(player, flat = 5, percent = 0.15, area = null) {
     flat,
     percent,
     ...(area ? { area } : {}),
+    ...(tier ? { tier } : {}),
   });
 }
 
@@ -1356,13 +1360,13 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
   });
   registerGourd(`Prayer enhance${suffix}`, GOURD_FIRST_DOSE.prayerEnhance[tier], (player) => {
     const now = Date.now();
-    player.setAttribute(ATTR_PRAYER_ENHANCE, { endsAt: now + strength.enhanceTicks * 600, nextAt: now + PRAYER_ENHANCE_INTERVAL_MS, area: RAID_AREA });
+    player.setAttribute(ATTR_PRAYER_ENHANCE, { endsAt: now + strength.enhanceTicks * 600, nextAt: now + PRAYER_ENHANCE_INTERVAL_MS, area: RAID_AREA, tier: tier + 1 });
   });
   registerGourd(`Xeric's aid${suffix}`, GOURD_FIRST_DOSE.xericsAid[tier], (player) => applyXericsAid(player, strength.aid));
   const antipoison = suffix ? `Antipoison${suffix}` : "Antipoison potion";
   registerGourd(antipoison, GOURD_FIRST_DOSE.antipoison[tier], (player) => applyPoisonImmunity(player, GOURD_ANTIPOISON_SECONDS[tier]));
   registerGourd(`Overload${suffix} (Chambers of Xeric)`, GOURD_FIRST_DOSE.overload[tier],
-    (player) => applyOverload(player, strength.overload[0], strength.overload[1], RAID_AREA),
+    (player) => applyOverload(player, strength.overload[0], strength.overload[1], RAID_AREA, tier + 1),
     // Wiki (Overload (Chambers of Xeric)): more than 50 Hitpoints, as Overload (+) and the refusal text say.
     (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });

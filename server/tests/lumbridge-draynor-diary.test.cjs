@@ -8,11 +8,11 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const DiaryPlugin = require("../plugins/achievements/diaries/LumbridgeDraynorDiary.plugin");
+const DiaryPlugin = require("../plugins/achievements/diaries/LumbridgeDraynorDiary.AchievementDiaries");
 const DiaryActions = require("../plugins/achievements/diaries/Actions.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
+const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.AchievementDiaries");
 
 let core;
 let emit;

@@ -6,7 +6,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const Fishing = require("../plugins/skills/Fishing.plugin");
-const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneFishingPlatformDiary.plugin");
+const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneFishingPlatformDiary.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");

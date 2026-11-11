@@ -44,7 +44,7 @@ before(async () => {
   tasks = require('../plugins/achievements/AchievementDiaries.plugin')._test.onTask;
   api.onCustomEvent('diary:task', tasks);
   Progress(api);
-  require('../plugins/achievements/diaries/ArdougneBalloonDiary.plugin').register(api);
+  require('../plugins/achievements/diaries/ArdougneBalloonDiary.AchievementDiaries').register(api);
 });
 
 const station = (key) => Common.data.stations.find((entry) => entry.key === key);
@@ -139,7 +139,7 @@ test('a Taverley passenger trip to Castle Wars credits Ardougne medium after lan
 
 test('opening Castle Wars does not credit, and wrong stations or invalid players do not credit', (t) => {
   const { player } = playerFixture(t, { at: [2808, 3354], logs: 10, openedCastle: false });
-  const plugin = require('../plugins/achievements/diaries/ArdougneBalloonDiary.plugin');
+  const plugin = require('../plugins/achievements/diaries/ArdougneBalloonDiary.AchievementDiaries');
   const handler = plugin._test;
   assert.equal(Progress.tierCount(player, diary, 'medium'), 0);
 

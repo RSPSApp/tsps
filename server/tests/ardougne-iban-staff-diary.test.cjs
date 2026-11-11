@@ -8,7 +8,7 @@ const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/Npc
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Item } = require('../dist/game/model/Item');
 const { ItemDefinition } = require('../dist/game/definition/ItemDefinition');
-const diary = require('../plugins/achievements/diaries/ArdougneIbanStaffDiary.plugin');
+const diary = require('../plugins/achievements/diaries/ArdougneIbanStaffDiary.AchievementDiaries');
 const core = PluginManager.getCoreApi();
 
 before(async () => {

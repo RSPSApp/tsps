@@ -76,7 +76,7 @@ test('exit remains available without qualification',async t=>{const f=await atte
 // guild door above. Upper floor and range are seeded; this does not prove a stairs route.
 const diaryData = require('../plugins/achievements/diaries/Data.AchievementDiaries');
 const diaryProgress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
-const varrockTask = require('../plugins/achievements/diaries/VarrockDiary.plugin')._test.TASK.summerPie;
+const varrockTask = require('../plugins/achievements/diaries/VarrockDiary.AchievementDiaries')._test.TASK.summerPie;
 const diary = diaryData.BY_KEY.get('varrock');
 const credited = p => diaryProgress.doneTasks(p, diary).has(varrockTask);
 async function bakeActor(t, atGuild = true, cooking = 99) {

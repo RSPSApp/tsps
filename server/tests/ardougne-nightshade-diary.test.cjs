@@ -9,7 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { State, ItemOnGround } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneNightshadeDiary.plugin");
+const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneNightshadeDiary.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 

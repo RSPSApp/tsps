@@ -11,7 +11,7 @@ const Hunter = require("../plugins/skills/hunter/Context.Hunter");
 const Traps = require("../plugins/skills/hunter/Traps.Hunter");
 const HunterData = require("../plugins/skills/hunter/Data.Hunter");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneRedSalamanderDiary.plugin");
+const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneRedSalamanderDiary.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 

@@ -61,7 +61,7 @@ before(() => {
     onInterfaceActionButton: (ids, fn) => { for (const id of [].concat(ids)) (hooks.buttons ??= new Map()).set(id, fn); },
   };
   require('../plugins/minigames/NightmareZone.plugin').register(api);
-  require('../plugins/achievements/diaries/ArdougneSalveDiary.plugin').register(api);
+  require('../plugins/achievements/diaries/ArdougneSalveDiary.AchievementDiaries').register(api);
   const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
   const AchievementDiaries = require('../plugins/achievements/AchievementDiaries.plugin');
   Progress(api);

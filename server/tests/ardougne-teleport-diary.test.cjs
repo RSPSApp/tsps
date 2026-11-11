@@ -37,7 +37,7 @@ before(async () => {
   diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("ardougne");
   api.onCustomEvent("diary:task", require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask);
   Progress(api);
-  require("../plugins/achievements/diaries/ArdougneTeleportDiary.plugin").register(api);
+  require("../plugins/achievements/diaries/ArdougneTeleportDiary.AchievementDiaries").register(api);
   require("../plugins/combat/SpellTeleports.plugin").register(api);
 
   require("../plugins/quests/quests/PlagueCity.Quest")(api);

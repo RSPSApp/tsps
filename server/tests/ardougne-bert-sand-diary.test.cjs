@@ -11,7 +11,7 @@ const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/Play
 const core = PluginManager.getCoreApi();
 const SAND_ITEM_ID = core.ItemIdentifiers.BUCKET_OF_SAND;
 const YANILLE_SAND_PIT_OBJECT_ID = core.ObjectIdentifiers.SANDPIT;
-const plugin = require("../plugins/achievements/diaries/ArdougneBertSandDiary.plugin");
+const plugin = require("../plugins/achievements/diaries/ArdougneBertSandDiary.AchievementDiaries");
 const dialogueData = require("../data/definitions/npc-dialogues.json").Bert.variants;
 
 const hooks = {};

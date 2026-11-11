@@ -10,7 +10,7 @@ const Smithing = require("../plugins/skills/Smithing.plugin");
 const Data = require("../plugins/skills/smithing/Data.Smithing");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneSmithingDiary.plugin");
+const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneSmithingDiary.AchievementDiaries");
 
 let core;
 let objectActions;

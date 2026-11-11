@@ -6,7 +6,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { AreaManager } = require("../dist/game/model/areas/AreaManager");
-const CampDiary = require("../plugins/achievements/diaries/ArdougneCombatTrainingCampDiary.plugin");
+const CampDiary = require("../plugins/achievements/diaries/ArdougneCombatTrainingCampDiary.AchievementDiaries");
 
 const core = PluginManager.getCoreApi();
 let biohazardComplete = true;

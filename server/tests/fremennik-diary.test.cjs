@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
-const plugin = require("../plugins/achievements/diaries/FremennikDiary.plugin");
+const plugin = require("../plugins/achievements/diaries/FremennikDiary.AchievementDiaries");
 
 const handlers = new Map();
 const zones = [];

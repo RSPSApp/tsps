@@ -9,7 +9,7 @@ const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const core = PluginManager.getCoreApi();
 before(() => CachePipeline.initialize(path.resolve(__dirname, '..')));
-const Western = require('../plugins/achievements/diaries/WesternProvincesDiary.plugin');
+const Western = require('../plugins/achievements/diaries/WesternProvincesDiary.AchievementDiaries');
 const Data = require('../plugins/achievements/diaries/Data.AchievementDiaries');
 const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
 

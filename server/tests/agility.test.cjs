@@ -15,7 +15,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const YanilleGrappleDiary = require("../plugins/achievements/diaries/ArdougneYanilleGrappleDiary.plugin");
+const YanilleGrappleDiary = require("../plugins/achievements/diaries/ArdougneYanilleGrappleDiary.AchievementDiaries");
 
 /** Runs submitted tasks on demand instead of on the game loop. */
 const tasks = [];

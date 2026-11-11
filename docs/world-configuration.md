@@ -358,58 +358,8 @@ This table lists bundled plugins that have a description. The world config page 
 | `Characters` | Characters | accounts | no | Lets one account hold several characters and choose between them at login. Off unless the world turns it on. |
 | `AchievementDiaries` | AchievementDiaries | achievements | yes | Achievement diaries: task lists, progress, tier reward claims and lamps, plus the ::diary command to inspect, complete or reset tiers. (members only) |
 | `AdventurePaths` | AdventurePaths | achievements | yes | Adventure Paths with Adventurer Jon: the Combat and Gatherer paths, task claims, starter kits, the Combat voucher and the Lamp of the Gatherer. |
-| `ArdougneAleckHunterEmporiumDiary` | ArdougneAleckHunterEmporiumDiary | achievements | yes | Credits the Ardougne diary task for viewing Aleck's Hunter Emporium in Yanille. (members only) |
-| `ArdougneBalloonDiary` | ArdougneBalloonDiary | achievements | yes | Credits the Ardougne diary task for travelling to Castle Wars by hot air balloon. (members only) |
-| `ArdougneBertSandDiary` | ArdougneBertSandDiary | achievements | yes | Credits the Ardougne diary task for claiming buckets of sand from Bert in Yanille. (members only) |
-| `ArdougneCastleChestDiary` | ArdougneCastleChestDiary | achievements | yes | Credits the Ardougne diary task for stealing from a chest in Ardougne Castle. (members only) |
-| `ArdougneCombatTrainingCampDiary` | ArdougneCombatTrainingCampDiary | achievements | yes | Credits the Ardougne diary task for entering the Combat Training Camp north of West Ardougne. (members only) |
-| `ArdougneDeathRunesDiary` | ArdougneDeathRunesDiary | achievements | yes | Credits the Ardougne diary task for crafting death runes from essence. (members only) |
-| `ArdougneEliteMantaDiary` | ArdougneEliteMantaDiary | achievements | yes | Credits the Ardougne elite diary task for catching a manta ray in the Fishing Trawler and cooking it. (members only) |
-| `ArdougneEliteRuneCrossbowDiary` | ArdougneEliteRuneCrossbowDiary | achievements | yes | Credits the Ardougne elite diary task for making a rune crossbow from scratch within Yanille. (members only) |
-| `ArdougneEliteTaskProgress` | ArdougneEliteTaskProgress | achievements | yes | Tracks per-session step progress for the Ardougne elite manta ray and rune crossbow tasks, which other diary plugins query. (members only) |
-| `ArdougneFishingPlatformDiary` | ArdougneFishingPlatformDiary | achievements | yes | Credits the Ardougne diary task for catching any fish on the Fishing Platform. (members only) |
-| `ArdougneHeroDiary` | ArdougneHeroDiary | achievements | yes | Credits the Ardougne diary task for pickpocketing a Hero. (members only) |
-| `ArdougneIbanStaffDiary` | ArdougneIbanStaffDiary | achievements | yes | Credits the Ardougne diary task for equipping Iban's upgraded staff or upgrading an Iban's staff. (members only) |
-| `ArdougneIceBarrageDiary` | ArdougneIceBarrageDiary | achievements | yes | Credits the Ardougne diary task for casting Ice Barrage on another player within Castle Wars. (members only) |
-| `ArdougneMagicGuildDiary` | ArdougneMagicGuildDiary | achievements | yes | Credits the Ardougne diary task for entering the Magic Guild. (members only) |
-| `ArdougneMasterFarmerDiary` | ArdougneMasterFarmerDiary | achievements | yes | Credits the Ardougne diary task for pickpocketing the Master Farmer north of Ardougne. (members only) |
-| `ArdougneNecromancerIslandDiary` | ArdougneNecromancerIslandDiary | achievements | yes | Credits the Ardougne diary task for visiting the island east of the Necromancer's tower. (members only) |
-| `ArdougneNightshadeDiary` | ArdougneNightshadeDiary | achievements | yes | Credits the Ardougne diary task for collecting nightshade from the Skavid caves. (members only) |
-| `ArdougnePalmHealthDiary` | ArdougnePalmHealthDiary | achievements | yes | Credits the Ardougne diary task for checking the health of a palm tree near Tree Gnome Village. (members only) |
-| `ArdougnePoisonIvyDiary` | ArdougnePoisonIvyDiary | achievements | yes | Credits the Ardougne diary task for picking poison ivy berries from the patch south of Ardougne. (members only) |
-| `ArdougneRedSalamanderDiary` | ArdougneRedSalamanderDiary | achievements | yes | Credits the Ardougne diary task for catching a red salamander. (members only) |
-| `ArdougneSalveDiary` | ArdougneSalveDiary | achievements | yes | Credits the Ardougne diary task for imbuing a salve amulet at the Nightmare Zone or equipping an imbued one. (members only) |
-| `ArdougneSmithingDiary` | ArdougneSmithingDiary | achievements | yes | Credits the Ardougne diary smithing tasks: a mithril platebody near Ardougne and a dragon sq shield in West Ardougne. (members only) |
-| `ArdougneStrawberryFarmDiary` | ArdougneStrawberryFarmDiary | achievements | yes | Credits the Ardougne diary task for harvesting strawberries from the Ardougne farm. (members only) |
-| `ArdougneTeleportDiary` | ArdougneTeleportDiary | achievements | yes | Credits the Ardougne diary task for casting the Ardougne Teleport spell. (members only) |
-| `ArdougneTorstolDiary` | ArdougneTorstolDiary | achievements | yes | Credits the Ardougne diary task for picking torstol from the patch north of Ardougne. (members only) |
-| `ArdougneUnicornPenFairyRingDiary` | ArdougneUnicornPenFairyRingDiary | achievements | yes | Credits the Ardougne diary task for entering the unicorn pen in Ardougne Zoo using a fairy ring. (members only) |
-| `ArdougneWatchtowerDiary` | ArdougneWatchtowerDiary | achievements | yes | Credits the Ardougne diary task for teleporting to the Watchtower. (members only) |
-| `ArdougneYanilleDoorDiary` | ArdougneYanilleDoorDiary | achievements | yes | Credits the Ardougne diary task for picklocking the door to the basement of Yanille's Agility Dungeon. (members only) |
-| `ArdougneYanilleGrappleDiary` | ArdougneYanilleGrappleDiary | achievements | yes | Credits the Ardougne diary task for grappling over Yanille's south wall. (members only) |
 | `CollectionLog` | CollectionLog | achievements | yes | Collection log: records items obtained from drops and other sources, with the log and overview interfaces, new-item popups and a ::clog command. |
 | `CombatAchievements` | CombatAchievements | achievements | yes | Combat Achievements: 655 tasks in six tiers with points, Ghommal's tier rewards, the five interfaces and boss kill counts. |
-| `DesertFinish.AchievementDiaries` | DesertFinishAchievementDiaries | achievements | yes | Credits two Desert diary tasks: refilling waterskins in the desert with Humidify, and casting Ice Barrage on a foe in the desert. (members only) |
-| `FaladorDiary` | FaladorDiary | achievements | yes | Credits Falador diary tasks from other plugins' successful actions, such as the haircut, mind tiara, Entrana boat and Doric's blurite limbs. (members only) |
-| `FaladorDiaryRemainder` | FaladorDiaryRemainder | achievements | yes | Credits the last Falador diary tasks: Sir Renitee's family crest, the scarecrow, the north wall grapple, Rogues' Den wall safe and magic roots. (members only) |
-| `FremennikDiary` | FremennikDiary | achievements | yes | Credits Fremennik diary tasks from the actions the Wiki names, including the Rellekka tiara and Dagannoth Kings sequences. (members only) |
-| `FremennikLighthouseDiary` | FremennikLighthouseDiary | achievements | yes | Credits the Fremennik diary task for reaching the Lighthouse by the Waterbirth Island dungeon ladder, after Horror from the Deep. (members only) |
-| `KandarinDiary` | KandarinDiary | achievements | yes | Credits Kandarin diary tasks from actions other plugins already perform, in the places the Wiki names, such as the Seers' Village maple shortbow. (members only) |
-| `KandarinDiaryFinish` | KandarinDiaryFinish | achievements | yes | Credits the remaining Kandarin diary tasks, such as the Catherby candle and pet fish, the Hemenster chest, granite body and pyre ship. (members only) |
-| `KaramjaDiary` | KaramjaDiary | achievements | yes | Credits Karamja diary tasks from the gameplay that performs them, such as Musa Point, Brimhaven Dungeon, the TzHaar caves and slayer tasks. (members only) |
-| `KaramjaDiaryFinish` | KaramjaDiaryFinish | achievements | yes | Credits Karamja diary tasks the first pass missed, such as the Musa Point ferry, Crandor, Vigroy and Hajedy's cart and palm leaves. (members only) |
-| `KourendDiaryActivitiesFinish` | KourendDiaryActivitiesFinish | achievements | yes | Credits five Kourend diary tasks: an Arceuus Library book, a Piscarilius crane, Ginea and Khaled deliveries, and a bluegill at Molch Island. (members only) |
-| `KourendDiarySkillsFinish` | KourendDiarySkillsFinish | achievements | yes | Credits Kourend diary tasks for digging saltpetre, mining volcanic sulphur, an Ape Atoll teleport tablet and a battlestaff made in the Farming Guild. (members only) |
-| `KourendDiaryTravelFinish` | KourendDiaryTravelFinish | achievements | yes | Credits Kourend diary travel tasks: the Land's End boat, Tyss's spellbook switch, the Farming Guild, Kharedst's memoirs and Xeric's talisman. (members only) |
-| `KourendKebosDiary` | KourendKebosDiary | achievements | yes | Credits Kourend and Kebos diary tasks whose gameplay already exists, only on the successful action's own event and target. (members only) |
-| `LumbridgeDraynorDiary` | LumbridgeDraynorDiary | achievements | yes | Credits Lumbridge and Draynor diary tasks, such as water runes, anchovies, the River Lum grapple, Chaeldar's tasks and Puro-Puro implings. (members only) |
-| `MorytaniaActivities.AchievementDiaries` | MorytaniaActivitiesDiary | achievements | yes | Credits Morytania diary tasks for snelm crafting, Trouble Brewing, the Swamp Boaty, Guthix balance mixing and barehand shark fishing. (members only) |
-| `VarrockDiary` | VarrockDiary | achievements | yes | Credits Varrock diary tasks such as Thessalia's store, the newspaper, the pottery bowl, the spirit tree and the balloon, from other plugins' successes. (members only) |
-| `VarrockDiaryFinish` | VarrockDiaryFinish | achievements | yes | Credits five Varrock diary tasks: the Apothecary's strength potion, Gertrude's kitten colour, a white tree fruit, the spottier cape and Palace yew roots. (members only) |
-| `WesternProvincesDiary` | WesternProvincesDiary | achievements | yes | Credits Western Provinces diary tasks such as the copper longtail, novice Pest Control, Rantz's chompy hat, spined larupia and the Grand Tree shortcut. (members only) |
-| `WildernessDiary` | WildernessDiary | achievements | yes | Credits Wilderness diary tasks such as God Wars Dungeon bloodvelds, yew from Ent trunks, the Emblem Trader and god spells hitting players. (members only) |
-| `WildernessResourceDiary` | WildernessResourceDiary | achievements | yes | Credits Wilderness diary tasks done in the Resource Area: golden helmet, adamant scimitar, dark crabs and magic logs. (members only) |
-| `WildernessTriosDiary` | WildernessTriosDiary | achievements | yes | Tracks the Wilderness diary boss trios: Crazy archaeologist, Chaos Fanatic and Scorpia (hard), and Callisto, Venenatis and Vet'ion (elite). (members only) |
 | `AgentMcp` | AgentMcp | agent | yes | Runs an MCP server that lets a tool such as Claude Code drive an online player for testing. Active only when AGENT_MCP=1 is set. |
 | `AgilityPyramid` | AgilityPyramid | areas | yes | Moves the Agility Pyramid's sliding blocks on floors 1 and 3, which push players down a floor for 8 damage. The course itself is a separate plugin. (members only) |
 | `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy fire and water spell transformations. (members only) |

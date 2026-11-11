@@ -6,7 +6,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { PluginManager } = require("../dist/plugins/PluginManager");
-const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneCastleChestDiary.plugin");
+const DiaryPlugin = require("../plugins/achievements/diaries/ArdougneCastleChestDiary.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 

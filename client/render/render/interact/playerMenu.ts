@@ -9,6 +9,8 @@ export interface PlayerMenuActionContext {
     localTeam: number;
     targetIsClanMember: boolean;
     canAttackPlayers: boolean;
+    /** All Settings "Player Trade options" (row 312): Trade with is left off when false. */
+    showTradeOption?: boolean;
     localX: number;
     localY: number;
     actions: {
@@ -26,7 +28,7 @@ export interface PlayerMenuActionContext {
 const PLAYER_ACTION_INSERT_ORDER = [7, 6, 5, 4, 3, 1, 2, 0];
 /** Shared native no-selection path. Player-menu plugin arrays mutate this same packet-backed state. */
 export function buildPlayerActionEntries(context: PlayerMenuActionContext): OsrsMenuEntry[] {
-    const { sid, playerLabel, targetCombatLevel, localCombatLevel, targetTeam, localTeam, targetIsClanMember, canAttackPlayers, localX, localY, actions } = context;
+    const { sid, playerLabel, targetCombatLevel, localCombatLevel, targetTeam, localTeam, targetIsClanMember, canAttackPlayers, showTradeOption, localX, localY, actions } = context;
     const entries: OsrsMenuEntry[] = [];
     // No selection: insert player actions in PLAYER_ACTION_INSERT_ORDER.
     for (const actionIdx of PLAYER_ACTION_INSERT_ORDER) {
@@ -67,6 +69,8 @@ export function buildPlayerActionEntries(context: PlayerMenuActionContext): Osrs
             });
         }
         else if (actionIdx === 1) {
+            if (showTradeOption === false)
+                continue;
             // OSRS: Trade is typically a low-priority player option from the server.
             entries.push({
                 option: "Trade with",

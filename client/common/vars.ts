@@ -152,6 +152,9 @@ export const VARBIT_COMBATLEVEL_TRANSMIT = 13027;
 /** Wilderness indicator - 1 when player is in the wilderness, 0 otherwise */
 export const VARBIT_IN_WILDERNESS = 5963;
 
+/** tradeoption_disabled: All Settings "Player Trade options" off, so players have no Trade with. */
+export const VARBIT_TRADE_OPTION_DISABLED = 6580;
+
 /** Multi-combat zone indicator - 1 when player is in a multi-combat zone, 0 otherwise */
 export const VARBIT_MULTICOMBAT_AREA = 4605;
 

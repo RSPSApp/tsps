@@ -6,6 +6,8 @@ import { Item } from "../../model/Item";
 import { HitDamage } from "../../content/combat/hit/HitDamage";
 import { HitMask } from "../../content/combat/hit/HitMask";
 import { TaskManager } from "../TaskManager";
+import { PoisonClock } from "../../content/combat/PoisonClock";
+import type { Player } from "../../entity/impl/player/Player";
 
 export class CombatPoisonEffect extends Task {
   private static readonly active = new WeakMap<Mobile, CombatPoisonEffect>();
@@ -66,8 +68,10 @@ export class CombatPoisonEffect extends Task {
     // Explicit cures clear the affliction fields, handled by isPoisoned above.
     const modal = !!player && (player.getInterfaceId() > 0 || player.getPacketSender().hasInterruptibleInterface());
     if (clock) {
+      const before = clock.getCounter();
       if (!clock.tickPulse(modal)) return;
       if (!afflicted) {
+        if (player && before > clock.getCounter()) CombatPoisonEffect.sendResistanceLine(player, clock.getCounter());
         if (!clock.hasCounter()) this.stop();
         return;
       }
@@ -156,6 +160,19 @@ export class CombatPoisonEffect extends Task {
       return -Math.ceil(immunity / CombatPoisonEffect.ORB_IMMUNITY_STEP_SECONDS);
     }
     return 0;
+  }
+
+  /**
+   * The resistance lines, one pulse (30 ticks) before and at each end (rsprox_transcripts/223/00014.txt ticks
+   * 1748/1778 for poison, 224/01443.txt ticks 151/181 for venom): purple, as recorded.
+   */
+  private static sendResistanceLine(player: Player, counter: number): void {
+    const line = counter === 1 ? "Your poison resistance is about to wear off."
+      : counter === 0 ? "Your poison resistance has worn off."
+      : counter === PoisonClock.VENOM_CUTOFF + 1 ? "Your venom resistance is about to wear off."
+      : counter === PoisonClock.VENOM_CUTOFF ? "Your venom resistance has worn off, but you are still resistant to poison."
+      : null;
+    if (line) player.sendMessage(`<col=7f007f>${line}</col>`);
   }
 
   public static damageFromSeverity(severity: number): number {

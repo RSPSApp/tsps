@@ -844,7 +844,11 @@ module.exports = function registerMakingHistoryQuest(api) {
    * that (capture ticks 1395-1401, 1521-1527).
    */
   function pauseThenPlay(player, atFadeIn, steps) {
+    const from = player.getLocation();
     player.getDialogueManager().reset();
+    // Ours: held still through the black screen (the capture shows no input there); a player
+    // moved away by then (a teleport) does not get the rest of the talk.
+    player.getMovementQueue?.().reset().setBlockMovement(true);
     QuestFade.fade(player, true);
     QuestFade.later(player, PAUSE_FADE_IN_TICKS, () => {
       if (player.isRegistered?.() === false) return;
@@ -852,7 +856,10 @@ module.exports = function registerMakingHistoryQuest(api) {
       QuestFade.fade(player, false);
     });
     QuestFade.later(player, PAUSE_RESUME_TICKS, () => {
+      player.getMovementQueue?.().setBlockMovement(false);
       if (player.isRegistered?.() === false || !steps.length) return;
+      const at = player.getLocation();
+      if (at.getZ() !== from.getZ() || Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) > 1) return;
       playJorralSteps(player, steps);
     });
   }

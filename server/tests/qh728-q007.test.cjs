@@ -42,6 +42,23 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
   const replacements = [];
   let location = new Location(3200, 3200, 0);
   let slots = freeSlots;
+  // Scene timers (CountdownTask) and obstacle tasks are queued; flush() runs the timers.
+  const tasks = [];
+  const taskManager = { submit: (task) => tasks.push(task) };
+  class CountdownTask {
+    constructor(key, ticks, onComplete) { Object.assign(this, { key, ticks, onComplete }); }
+  }
+  function flush() {
+    for (let guard = 0; guard < 100; guard++) {
+      const due = tasks.filter((task) => task instanceof CountdownTask);
+      if (!due.length) return;
+      due.sort((a, b) => a.ticks - b.ticks);
+      const task = due[0];
+      tasks.splice(tasks.indexOf(task), 1);
+      for (const other of due.slice(1)) other.ticks -= task.ticks;
+      task.onComplete();
+    }
+  }
 
   const inventory = {
     getAmount: (itemId) => items.get(itemId) ?? 0,
@@ -69,7 +86,13 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
       return slots > 0 ? Math.min(amount, MAX_STACK) : 0;
     },
   };
-  const packetSender = new Proxy({}, { get: () => () => packetSender });
+  // Box and line text the dialogue runner draws (the capture's message boxes), <br> joined.
+  const strings = [];
+  const packetSender = new Proxy({}, {
+    get: (_, name) => name === 'sendString'
+      ? (text) => { strings.push(String(text).replace(/<br>/g, ' ').replace(/\s+/g, ' ').trim()); return packetSender; }
+      : () => packetSender,
+  });
   const player = {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -86,6 +109,10 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
       messageSources.push(actionDispatchDepth > 0 ? 'action' : 'runner');
     },
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
+    performAnimation: () => {},
+    setPositionToFace: () => {},
+    getPrivateArea: () => null,
+    getMovementQueue: () => ({ reset() {}, setBlockMovement() {} }),
     getUsername: () => 'Q007', getDisplayName: () => 'Q007',
   };
 
@@ -104,7 +131,8 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
   const api = {
     core: {
       ...REAL_CORE,
-      CountdownTask: undefined,
+      CountdownTask,
+      TaskManager: taskManager,
       ObjectManager: { deregister() {}, register: (object) => replacements.push(object) },
       GameObject: class {
         constructor(id, at, type, face, privateArea) {
@@ -113,6 +141,7 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
       },
     },
     persistAttribute() {},
+    getTaskManager: () => taskManager,
     onInterfaceActionButton() {},
     onNpcDialogueVariant: (handler) => handlers.variant.push(handler),
     onNpcDialogueCondition: (handler) => handlers.condition.push(handler),
@@ -158,8 +187,15 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
     onPlayerLogin(handler) {
       handlers.login.push(handler);
     },
+    onPlayerLogout() {},
     onNpcDeath(handler) {
       handlers.npcDeath = handler;
+    },
+    onCanUnequip(handler) {
+      handlers.canUnequip = handler;
+    },
+    onCanEquip(handler) {
+      handlers.canEquip = handler;
     },
     sendMultiChatboxPrompt(player, title, ...pairs) {
       player.prompt = { title, options: pairs.filter((_, index) => index % 2 === 0), pairs };
@@ -194,6 +230,12 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
       handlers.custom.get('npc-dialogue:action').at(-1)(event);
       return event;
     },
+    // A transcript message step as NpcDialogues emits it (kind "message", the Biohazard page).
+    message: (npcId, stepId, text) => {
+      const event = { player, npcId, stepId, text, kind: 'message', pages: [{ page: 'Biohazard' }], handled: false };
+      handlers.custom.get('npc-dialogue:action').at(-1)(event);
+      return event;
+    },
     object: (name, option, event) => {
       const handler = handlers.objects.get(name)?.[option];
       if (!handler) return undefined;
@@ -212,13 +254,11 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
       handlers.custom.get('door:toggle').at(-1)(request);
       return request;
     },
-    zoneEnter: (index = 0) => handlers.zoneEnter[index].handler({ player }),
-    zoneExit: (index = 0) => handlers.zoneExit[index].handler({ player }),
     npcDeath: (event) => handlers.npcDeath(event),
   };
 
   return {
-    api, attributes, items, equipment, messages, messageSources, lineEvents, moves, xp, player, handlers, invoke, replacements, transcriptCalls, inventory, questRequests,
+    api, attributes, items, equipment, messages, messageSources, lineEvents, moves, xp, player, handlers, invoke, replacements, transcriptCalls, inventory, questRequests, tasks, flush, strings,
     setEquipment(slot, itemId) { equipment.set(slot, { getId: () => itemId }); },
     setLocation(x, y, z = 0) { location = new Location(x, y, z); },
     setFreeSlots(value) { slots = value; },
@@ -340,16 +380,23 @@ test('Biohazard stage 0 route reaches completion through its real handlers', () 
   assert.equal(run.invoke.object('Cupboard', 'Open', {
     objectId: 2056, object: cupboardObject(2611, 3326),
   }), true);
+  run.flush();
   assert.equal(run.invoke.object('Cupboard', 'Search', { objectId: 2057 }), true);
+  assert.equal(run.transcriptCalls.at(-1).variant, 'getting-started-searching-the-cupboard');
+  run.invoke.line(N.JERICO, 'Mmm, bird feed! Now what could I do with that?');
   assert.equal(run.items.get(I.BIRD_FEED), 1);
 
   run.items.set(I.PIGEON_CAGE, 1); // ground spawn 424 at 2618,3323-3325
   run.setLocation(2562, 3301);
   assert.equal(run.invoke.object('Watchtower', 'Investigate', { objectId: 37328 }), true);
+  assert.equal(run.transcriptCalls.at(-1).variant, 'getting-started-throwing-bird-feed');
+  run.invoke.message(N.JERICO, 'K9XBDO');
   assert.equal(run.items.get(I.BIRD_FEED), undefined);
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 3);
 
   assert.equal(run.invoke.itemAction('Pigeon cage', 'Open', { itemId: I.PIGEON_CAGE }), true);
+  assert.equal(run.transcriptCalls.at(-1).variant, 'getting-started-opening-pigeon-cage');
+  run.invoke.message(N.JERICO, 'NoNFvc');
   assert.equal(run.items.get(I.PIGEON_CAGE), undefined);
   assert.equal(run.items.get(I.PIGEON_CAGE_2), 1);
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 4);
@@ -358,18 +405,27 @@ test('Biohazard stage 0 route reaches completion through its real handlers', () 
   assert.equal(run.invoke.condition('If the player is not wearing a gas mask:'), true);
   run.setEquipment(REAL_CORE.Equipment.HEAD_SLOT, I.GAS_MASK);
   assert.equal(run.invoke.condition('If the player is not wearing a gas mask:'), false);
-  run.invoke.action(N.OMART, 'v1MvBF');
+  run.invoke.message(N.OMART, '9oMhpG');
+  run.invoke.message(N.OMART, 'vosgpt');
+  run.flush();
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 5);
-  assert.equal(run.moves.at(-1).getX(), 2554);
+  assert.equal(run.moves.at(-1).getX(), 2556);
+  run.invoke.message(N.OMART, 'v1MvBF');
 
-  run.setLocation(2540, 3331);
+  // The squeeze's exact move is biohazard-capture.test.cjs's; here it only starts.
+  run.setLocation(2541, 3331);
   assert.equal(run.invoke.object('Fence', 'Squeeze-through', {
     objectId: 2068, location: new Location(2541, 3331, 0),
   }), true);
-  assert.equal(run.moves.at(-1).getX(), 2542);
+  assert.ok(run.tasks.length > 0, 'the squeeze runs as an obstacle');
+  run.attributes.set('agility.obstacle', null);
+  run.tasks.length = 0;
+  run.setLocation(2542, 3331);
 
   run.items.set(I.ROTTEN_APPLE, 1); // ground spawn 1984 at 2549,3332
   run.invoke.itemOnObject({ itemId: I.ROTTEN_APPLE, objectId: 37327 });
+  assert.equal(run.transcriptCalls.at(-1).variant, 'infiltrating-the-mourner-hq-using-rotten-apple-on-cauldron');
+  run.invoke.message(N.MOURNER_12, 'fCdVDF');
   assert.equal(run.items.get(I.ROTTEN_APPLE), undefined);
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 6);
 
@@ -377,33 +433,47 @@ test('Biohazard stage 0 route reaches completion through its real handlers', () 
     objectId: 2062, object: cupboardObject(2517, 3276),
   }), true);
   assert.equal(run.invoke.object('Cupboard', 'Search', { objectId: 2063 }), true);
+  run.invoke.message(N.NURSE_SARAH, 'sjfA7d');
   assert.equal(run.items.get(I.MEDICAL_GOWN), 1);
 
+  // The front door is the mourner behind it (capture ticks 468-483).
+  run.setLocation(2551, 3319);
   assert.equal(run.invoke.doorToggle({
     objectId: 2036, location: new Location(2551, 3320, 0),
   }).handled, true);
-  assert.match(run.messages.at(-1), /medical gown/);
+  assert.equal(run.transcriptCalls.at(-1).variant,
+    'infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-after-poisoning-the-stew');
   run.setEquipment(REAL_CORE.Equipment.BODY_SLOT, I.MEDICAL_GOWN);
   assert.equal(run.invoke.doorToggle({
     objectId: 2036, location: new Location(2551, 3320, 0),
-  }).handled, false);
+  }).handled, true);
+  assert.equal(run.transcriptCalls.at(-1).variant,
+    'infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown');
 
   assert.equal(run.invoke.doorToggle({ objectId: 2058 }).handled, true);
   assert.match(run.messages.at(-1), /need a key/);
   run.items.set(I.KEY_2, 1); // 9008's guaranteed drop
   assert.equal(run.invoke.doorToggle({ objectId: 2058 }).handled, false);
   assert.equal(run.invoke.object('Crate', 'Search', { objectId: 2064 }), true);
+  run.invoke.message(N.MOURNER_14, 'A6Q5pT');
   assert.equal(run.items.get(I.DISTILLATOR), 1);
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 7);
+  run.setEquipment(REAL_CORE.Equipment.BODY_SLOT, I.MEDICAL_GOWN);
+  assert.equal(run.invoke.doorToggle({
+    objectId: 2036, location: new Location(2551, 3320, 0),
+  }).handled, false, 'later, in the gown, the door just opens (tick 593)');
 
   assert.equal(run.invoke.variant(N.KILRON), 'infiltrating-the-mourner-hq-talking-to-kilron');
-  run.invoke.action(N.KILRON, 'PIRzeQ');
-  assert.equal(run.moves.at(-1).getX(), 2560);
+  run.invoke.message(N.KILRON, 'jQrUuy');
+  run.flush();
+  assert.equal(run.moves.at(-1).getX(), 2559);
 
   assert.equal(run.invoke.variant(N.ELENA_2), 'delivering-the-samples-talking-to-elena-with-the-distillator');
+  assert.equal(run.items.get(I.DISTILLATOR), 1, 'she takes it as she hands out the vials (tick 723)');
+  assert.equal(run.attributes.get(BIOHAZARD_STAGE), 7);
+  run.invoke.message(N.ELENA_2, 'Vpxjql');
   assert.equal(run.items.get(I.DISTILLATOR), undefined);
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 10);
-  run.invoke.action(N.ELENA_2, 'Vpxjql');
   for (const itemId of [I.PLAGUE_SAMPLE, I.ETHENEA, I.LIQUID_HONEY, I.SULPHURIC_BROLINE]) {
     assert.equal(run.items.get(itemId), 1);
   }
@@ -446,12 +516,14 @@ test('Biohazard stage 0 route reaches completion through its real handlers', () 
     run.invoke.variant(N.JULIE),
     'visiting-south-east-varrock-talking-to-julie-while-wearing-priest-gown-top-and-bottom'
   );
+  const transcriptsBeforeDoor = run.transcriptCalls.length;
   const closedBedroomDoor = { ...cupboardObject(3282, 3382), getFace: () => 2 };
   assert.equal(run.invoke.object('Bedroom door', 'Open', {
     objectId: 2032, object: closedBedroomDoor,
   }), true);
   assert.equal(run.replacements.at(-1).id, 2033);
   assert.equal(run.replacements.at(-1).face, 3);
+  assert.equal(run.transcriptCalls.length, transcriptsBeforeDoor, 'in the gown the door opens without a word (tick 1077)');
 
   assert.equal(run.invoke.variant(N.GUIDOR), 'visiting-south-east-varrock-talking-to-guidor');
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 12, 'opening Guidor does not advance the quest');
@@ -465,8 +537,10 @@ test('Biohazard stage 0 route reaches completion through its real handlers', () 
     run.invoke.variant(N.KING_LATHAS),
     'return-to-ardougne-talking-to-king-lathas-after-talking-to-elena-about-the-plague'
   );
+  run.items.set(I.KEY_2, 1);
   run.invoke.action(N.KING_LATHAS, 'vxKtyO');
   assert.equal(run.attributes.get(BIOHAZARD_STAGE), 16);
+  assert.equal(run.items.get(I.KEY_2), undefined, 'the cage key leaves on completion (tick 1241)');
   assert.equal(run.attributes.get('quest.points'), 3);
   assert.equal(run.xp.at(-1)[0], REAL_CORE.Skill.THIEVING);
   assert.equal(run.xp.at(-1)[1], 1250);
@@ -523,16 +597,22 @@ test('Biohazard recovery, full-bag and guard-search branches use the real handle
 
   const stage7 = setup({ stage: 7, completed: ['plague_city'] });
   assert.equal(stage7.invoke.object('Crate', 'Search', { objectId: 2064 }), true);
+  assert.equal(stage7.transcriptCalls.at(-1).variant, 'infiltrating-the-mourner-hq-searching-the-distillator-crate');
+  assert.equal(stage7.invoke.condition('If the player already has the distillator:'), false);
+  stage7.invoke.message(N.MOURNER_14, 'A6Q5pT');
   assert.equal(stage7.items.get(I.DISTILLATOR), 1);
   assert.equal(stage7.attributes.get(BIOHAZARD_STAGE), 7);
   stage7.items.delete(I.DISTILLATOR);
   assert.equal(stage7.invoke.object('Cupboard', 'Search', { objectId: 2063 }), true);
+  assert.equal(stage7.invoke.condition('If the player has not yet poisoned the stew or already has a medical gown:'), false);
+  stage7.invoke.message(N.NURSE_SARAH, 'sjfA7d');
   assert.equal(stage7.items.get(I.MEDICAL_GOWN), 1, 'stage-7 lost gown is recoverable');
 
   const stage7Full = setup({ stage: 7, completed: ['plague_city'], freeSlots: 0 });
   assert.equal(stage7Full.invoke.object('Crate', 'Search', { objectId: 2064 }), true);
+  assert.equal(stage7Full.invoke.condition('If the player has no inventory space:'), true);
+  assert.equal(stage7Full.invoke.message(N.MOURNER_14, 'A6Q5pT').end, true);
   assert.equal(stage7Full.items.get(I.DISTILLATOR), undefined);
-  assert.match(stage7Full.messages.at(-1), /don't have enough room/);
 
   const lateCrate = setup({ stage: 10, completed: ['plague_city'] });
   assert.equal(lateCrate.invoke.object('Crate', 'Search', { objectId: 2064 }), true);
@@ -561,11 +641,11 @@ test('Biohazard recovery, full-bag and guard-search branches use the real handle
   assert.equal(courierRecovery.attributes.get(GIVEN_VIALS_ATTRIBUTE), '');
 
   const fence = setup({ stage: 5, completed: ['plague_city'] });
-  fence.setLocation(2540, 3331);
+  fence.setLocation(2541, 3331);
   assert.equal(fence.invoke.object('Fence', 'Squeeze-through', {
     objectId: 2068, location: new Location(2541, 3331, 0),
   }), true);
-  assert.equal(fence.moves.at(-1).getX(), 2542);
+  assert.ok(fence.tasks.length > 0, 'the squeeze runs as an obstacle (biohazard-capture.test.cjs)');
   const beforeUnrelatedMove = fence.moves.length;
   const unrelated = { player: fence.player, objectId: 2068, location: new Location(2648, 4607, 3), handled: false };
   assert.equal(fence.handlers.objects.get('Fence')['Squeeze-through'](unrelated), false);
@@ -584,15 +664,19 @@ test('Biohazard recovery, full-bag and guard-search branches use the real handle
 
   const fullBag = setup({ stage: 6, completed: ['plague_city'], freeSlots: 0 });
   assert.equal(fullBag.invoke.object('Cupboard', 'Search', { objectId: 2063 }), true);
+  assert.equal(fullBag.invoke.condition('If the player has no inventory space:'), true);
+  assert.equal(fullBag.invoke.message(N.NURSE_SARAH, 'sjfA7d').end, true);
   assert.equal(fullBag.items.get(I.MEDICAL_GOWN), undefined);
-  assert.match(fullBag.messages.at(-1), /don't have enough room/);
   assert.equal(fullBag.invoke.object('Crate', 'Search', { objectId: 2064 }), true);
+  assert.equal(fullBag.invoke.message(N.MOURNER_14, 'A6Q5pT').end, true);
   assert.equal(fullBag.items.get(I.DISTILLATOR), undefined);
-  assert.match(fullBag.messages.at(-1), /don't have enough room/);
 
+  // The search is at south-east Varrock's gate (capture tick 944), coming in from the west.
+  const gate = (x) => ({ objectId: 2051, location: new Location(3264, 3406, 0), object: { getId: () => 2051 } });
   const guard = setup({ stage: 12, completed: ['plague_city'] });
   for (const itemId of [I.ETHENEA, I.LIQUID_HONEY, I.SULPHURIC_BROLINE]) guard.items.set(itemId, 1);
-  guard.invoke.zoneEnter();
+  guard.setLocation(3263, 3406);
+  assert.equal(guard.invoke.doorToggle(gate()).handled, true);
   assert.deepEqual(guard.transcriptCalls.at(-1), {
     npcId: N.GUARD_19,
     page: 'Biohazard',
@@ -606,7 +690,8 @@ test('Biohazard recovery, full-bag and guard-search branches use the real handle
     assert.equal(guard.items.get(itemId), undefined);
   }
   guard.items.set(I.ETHENEA, 1);
-  guard.invoke.zoneExit();
+  guard.setLocation(3264, 3406);
+  assert.equal(guard.invoke.doorToggle(gate()).handled, true);
   assert.deepEqual(guard.transcriptCalls.at(-1), {
     npcId: N.GUARD_19,
     page: 'Biohazard',
@@ -679,7 +764,7 @@ test('a failed courier loan is cleared once Elena replaces that vial', () => {
   );
 });
 
-test("Guidor's bedroom door plays the canonical entry conversation", () => {
+test("Guidor's bedroom door: Julie asks for a priest, and in the gown it opens silently (ticks 1064-1077)", () => {
   const dialogues = require('../data/definitions/npc-dialogues.json');
   const run = setup({ stage: 12, completed: ['plague_city'] });
   run.setEquipment(REAL_CORE.Equipment.BODY_SLOT, I.PRIEST_GOWN);
@@ -688,25 +773,11 @@ test("Guidor's bedroom door plays the canonical entry conversation", () => {
     objectId: 2032,
     object: { ...cupboardObject(3282, 3382), getFace: () => 2 },
   }), true);
-  assert.deepEqual(run.transcriptCalls.at(-1), {
-    npcId: N.JULIE,
-    page: 'Biohazard',
-    variant: 'visiting-south-east-varrock-talking-to-julie-while-wearing-priest-gown-top-and-bottom',
-    player: run.player,
-  });
-  // The played conversation is the canonical acceptance, not the refusal.
-  const acceptance = dialogues['Biohazard'].variants[
-    'visiting-south-east-varrock-talking-to-julie-while-wearing-priest-gown-top-and-bottom'
-  ];
-  assert.equal(
-    acceptance[0].text,
-    "A priest! thank goodness! My husband is very ill! Perhaps you could read him his last rites?",
-    'the imported conversation accepts the priest'
-  );
-  assert.equal(run.replacements.at(-1).id, 2033, 'the door still opens');
+  assert.equal(run.transcriptCalls.length, 0, 'no line in the priest gown');
+  assert.equal(run.replacements.at(-1).id, 2033, 'the door opens');
   assert.equal(run.replacements.at(-1).face, 3);
 
-  // Without the priest gown Julie refuses, which is the other imported page.
+  // Without the priest gown Julie asks for a priest: the quest's own entry conversation.
   const withoutGown = setup({ stage: 12, completed: ['plague_city'] });
   assert.equal(withoutGown.invoke.object('Bedroom door', 'Open', {
     objectId: 2032,
@@ -714,14 +785,17 @@ test("Guidor's bedroom door plays the canonical entry conversation", () => {
   }), true);
   assert.deepEqual(withoutGown.transcriptCalls.at(-1), {
     npcId: N.JULIE,
-    page: 'Julie',
-    variant: 'opening-bedroom-door-without-priest-gown-equipped',
+    page: 'Biohazard',
+    variant: 'visiting-south-east-varrock-entering-guidor-s-room-after-talking-to-the-chemist',
     player: withoutGown.player,
   });
   assert.equal(
-    dialogues['Julie'].variants['opening-bedroom-door-without-priest-gown-equipped'][0].npc,
+    dialogues['Biohazard'].variants['visiting-south-east-varrock-entering-guidor-s-room-after-talking-to-the-chemist'][0].text,
     "Please leave my husband alone. He's very sick, and I don't want anyone bothering him."
   );
+  withoutGown.invoke.line(N.JULIE, 'Thank you, but I just want him to see a priest.');
+  assert.equal(withoutGown.attributes.get('biohazard:met-julie'), 1);
+  assert.equal(withoutGown.replacements.length, 0, 'the door stays shut');
 });
 
 test('the south-east Varrock exit offers the canonical "Leave anyway?" choice', async () => {
@@ -965,8 +1039,9 @@ test('imported mourner-death message renders without inventing the shared key dr
   let guard = 20;
   while (manager.getCurrent?.() && guard-- > 0) manager.advance();
   assert.equal(
-    run.messages.filter((message) => message === 'The mourner drops a key as he dies.').length,
-    1
+    run.strings.filter((text) => text === 'The mourner drops a key as he dies.').length,
+    1,
+    'an item box, as live (tick 543)'
   );
   assert.equal(run.items.get(I.KEY_2), undefined, 'the message does not duplicate the guaranteed drop');
 });
@@ -1022,13 +1097,9 @@ test('canonical handout messages render exactly once after a successful grant', 
     const before = run.messages.length;
     assert.equal(runCanonicalHandout(run, handout), true, handout.name);
     for (const itemId of handout.expected) assert.equal(run.items.get(itemId), 1, `${handout.name} item ${itemId}`);
-    const receiptIndexes = run.messages
-      .map((message, index) => [message, index])
-      .filter(([message]) => message === handout.text)
-      .map(([, index]) => index);
-    assert.equal(receiptIndexes.length, 1, `${handout.name} canonical message once`);
-    assert.equal(run.messageSources[receiptIndexes[0]], 'runner', `${handout.name} receipt comes from transcript runner`);
-    assert.equal(run.messages.length, before + 1, `${handout.name} emits only the canonical receipt`);
+    // Live shows each hand-out as an item box, not a chat line.
+    assert.equal(run.strings.filter((text) => text === handout.text).length, 1, `${handout.name} canonical box once`);
+    assert.equal(run.messages.length, before, `${handout.name} sends no chat line`);
   }
 });
 
@@ -1039,6 +1110,7 @@ test('capacity-blocked handout messages are not emitted falsely', () => {
     assert.equal(runCanonicalHandout(run, handout), true, handout.name);
     for (const itemId of handout.expected) assert.equal(run.items.get(itemId), undefined, `${handout.name} item blocked`);
     assert.ok(!run.messages.some((message) => message === handout.text), `${handout.name} receipt suppressed`);
+    assert.ok(!run.strings.includes(handout.text), `${handout.name} box suppressed`);
     for (const message of run.messages.slice(before)) {
       assert.equal(message, ELENA_CAPACITY_REFUSAL, `${handout.name} only the imported capacity refusal is shown`);
     }
@@ -1054,11 +1126,11 @@ test('Elena partial-capacity handouts refuse canonically and retry after freeing
   assert.equal(runCanonicalHandout(stage10, vpxjql), true);
   for (const itemId of elenaItems) assert.equal(stage10.items.get(itemId), undefined, `stage 10 refuses ${itemId}`);
   assert.equal(stage10.messages.filter((message) => message === refusal).length, 1);
-  assert.ok(!stage10.messages.includes(vpxjql.text), 'stage 10 does not claim delivery');
+  assert.ok(!stage10.strings.includes(vpxjql.text), 'stage 10 does not claim delivery');
   stage10.setFreeSlots(4);
   assert.equal(runCanonicalHandout(stage10, vpxjql), true);
   for (const itemId of elenaItems) assert.equal(stage10.items.get(itemId), 1, `stage 10 retry grants ${itemId}`);
-  assert.equal(stage10.messages.filter((message) => message === vpxjql.text).length, 1);
+  assert.equal(stage10.strings.filter((text) => text === vpxjql.text).length, 1);
   assert.equal(stage10.messages.filter((message) => message === refusal).length, 1);
 
   const variant = 'delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist';
@@ -1066,13 +1138,14 @@ test('Elena partial-capacity handouts refuse canonically and retry after freeing
   const stage12 = setup({ stage: 12, completed: ['plague_city'], freeSlots: 2 });
   runVariantWithChoice(stage12, N.ELENA_2, variant, lostText);
   for (const itemId of elenaItems) assert.equal(stage12.items.get(itemId), undefined, `stage 12 refuses ${itemId}`);
-  assert.equal(stage12.messages.filter((message) => message === refusal).length, 1);
-  assert.ok(!stage12.messages.includes('Elena replaces your lost items.'), 'stage 12 does not claim delivery');
+  // The transcript's own capacity refusal (EYYSjv), a {{tbox}} with the sample and broline.
+  assert.equal(stage12.strings.filter((text) => text === refusal).length, 1);
+  assert.ok(!stage12.strings.includes('Elena replaces your lost items.'), 'stage 12 does not claim delivery');
   stage12.setFreeSlots(4);
   runVariantWithChoice(stage12, N.ELENA_2, variant, lostText);
   for (const itemId of elenaItems) assert.equal(stage12.items.get(itemId), 1, `stage 12 retry grants ${itemId}`);
-  assert.equal(stage12.messages.filter((message) => message === 'Elena replaces your lost items.').length, 1);
-  assert.equal(stage12.messages.filter((message) => message === refusal).length, 1);
+  assert.equal(stage12.strings.filter((text) => text === 'Elena replaces your lost items.').length, 1);
+  assert.equal(stage12.strings.filter((text) => text === refusal).length, 1);
 });
 
 test('Elena lost-item recovery follows the canonical all-items and missing-items branches', () => {
@@ -1099,13 +1172,9 @@ test('Elena lost-item recovery follows the canonical all-items and missing-items
   }
   assert.equal(missingItems.items.get(I.TOUCH_PAPER), undefined);
   assert.equal(
-    missingItems.messages.filter((message) => message === 'Elena replaces your lost items.').length,
+    missingItems.strings.filter((text) => text === 'Elena replaces your lost items.').length,
     1,
-    'the canonical replacement message renders once'
-  );
-  assert.equal(
-    missingItems.messageSources[missingItems.messages.indexOf('Elena replaces your lost items.')],
-    'runner'
+    'the canonical replacement box renders once'
   );
 });
 

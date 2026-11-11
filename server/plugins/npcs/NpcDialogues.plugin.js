@@ -14,7 +14,8 @@
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
- * that box. "npc-dialogue:start" plays a named variant on demand
+ * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
+ * plays, then continue normally or, with `box.advance`, move on by itself. "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -1061,12 +1062,29 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           if (first !== undefined || message.box?.statement === true) {
             const text = formatPlayerText(String(message.text ?? ""), player);
             const box = new DialogueChainBuilder();
-            box.add(message.box?.statement === true
-              ? new api.core.StatementDialogue(0, text)
-              : second === undefined
-                ? new ItemStatementDialogue(0, first, text)
-                : new DoubleItemStatementDialogue(0, first, second, text));
-            box.add(new ActionDialogue(1, { execute: () => {
+            // `box.holdTicks` (statement boxes): the box first shows that many ticks without
+            // "Click here to continue" while a scene plays out, as live sends it; then it gains
+            // its continue, or with `box.advance` the conversation moves on by itself.
+            const holdTicks = message.box?.statement === true && Number.isInteger(message.box.holdTicks)
+              && message.box.holdTicks > 0 ? message.box.holdTicks : 0;
+            let boxIndex = 0;
+            if (holdTicks) {
+              const held = new ActionDialogue(boxIndex++, { execute: () => {
+                presentOwned(() => api.core.StatementDialogue.send(player, text, false));
+                api.core.TaskManager.submit(new api.core.CountdownTask(player, holdTicks, () => {
+                  if (manager.getCurrent?.() === held) manager.advance();
+                }));
+              } }, true);
+              box.add(held);
+            }
+            if (!holdTicks || message.box.advance !== true) {
+              box.add(message.box?.statement === true
+                ? new api.core.StatementDialogue(boxIndex++, text)
+                : second === undefined
+                  ? new ItemStatementDialogue(boxIndex++, first, text)
+                  : new DoubleItemStatementDialogue(boxIndex++, first, second, text));
+            }
+            box.add(new ActionDialogue(boxIndex, { execute: () => {
               message.after?.();
               run(rest, currentRecord);
             } }));

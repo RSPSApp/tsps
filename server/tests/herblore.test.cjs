@@ -36,6 +36,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
   Herblore.register(api);
+  require("../plugins/minigames/impetuousimpulses/Supplies.ImpetuousImpulses")(api);
   Zahur.register(api);
   Potions.register(api);
   AmuletOfChemistry.register(api);
@@ -64,6 +65,7 @@ function inventory(contents) {
     full() { return self; },
     getItems: () => slots.map((item) => item ?? new core.Item(-1, 0)),
     getCopiedItems: () => self.getItems().map((item) => item.clone()),
+    contains: (id) => slots.some(item => item?.getId() === id),
     getAmount: (id) => slots.filter((item) => item?.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
     setItem(slot, item) { slots[slot] = item; return self; },
     refreshItems() { return self; },
@@ -96,7 +98,7 @@ function inventory(contents) {
   return self;
 }
 
-function player(contents, level = 99, { amulet = null, attributes = {} } = {}) {
+function player(contents, level = 99, { amulet = null, attributes = {}, baseLevel = level } = {}) {
   const sent = { messages: [], spam: [], sounds: [], animations: [], xp: 0 };
   const worn = new Map(amulet ? [[core.Equipment.AMULET_SLOT, new core.Item(obj(amulet), 1)]] : []);
   const attrs = new Map(Object.entries(attributes));
@@ -114,6 +116,7 @@ function player(contents, level = 99, { amulet = null, attributes = {} } = {}) {
     getPacketSender: () => sender,
     getSkillManager: () => ({
       getCurrentLevel: () => level,
+      getMaxLevel: () => baseLevel,
       addExperiences(skill, xp) { assert.equal(skill, core.Skill.HERBLORE); sent.xp += xp; },
     }),
     sendMessage(text) { sent.messages.push(text); },
@@ -505,6 +508,50 @@ test("a pestle and mortar grinds at once, two ticks later, then every three", ()
   ticks(10);
   assert.equal(who.inv.count("unicorn_horn_dust"), 4);
   assert.equal(who.sent.xp, 0);
+});
+
+test("eight anchovy paste on a vial uses the sieve and preserves it", () => {
+  const who = player([["ii_anchovy_paste", 8], ["vial_empty"], ["mourning_sieve"]]);
+  const pair = (first, second, actor = who) => {
+    const items = actor.inv.getItems();
+    const usedItemSlot = items.findIndex(item => item.getId() === obj(first));
+    const usedWithItemSlot = items.findIndex(item => item.getId() === obj(second));
+    const event = { player: actor, usedItem: items[usedItemSlot], usedWithItem: items[usedWithItemSlot],
+      usedItemId: obj(first), usedWithItemId: obj(second), usedItemSlot, usedWithItemSlot, handled: false };
+    for (const handler of hooks.itemOnItem) { handler(event); if (event.handled) break; }
+    return event;
+  };
+  assert.equal(pair("vial_empty", "ii_anchovy_paste").handled, false, "direction matters");
+  assert.equal(pair("ii_anchovy_paste", "vial_empty").handled, true);
+  assert.equal(who.inv.count("ii_anchovy_paste"), 0);
+  assert.equal(who.inv.count("ii_anchovy_oil"), 1);
+  assert.equal(who.inv.count("mourning_sieve"), 1);
+  const short = player([["ii_anchovy_paste", 7], ["vial_empty"], ["mourning_sieve"]]);
+  pair("ii_anchovy_paste", "vial_empty", short);
+  assert.equal(short.inv.count("ii_anchovy_paste"), 7);
+  assert.equal(short.inv.count("vial_empty"), 1);
+  const noSieve = player([["ii_anchovy_paste", 8], ["vial_empty"]]);
+  pair("ii_anchovy_paste", "vial_empty", noSieve);
+  assert.equal(noSieve.inv.count("ii_anchovy_paste"), 8);
+  assert.equal(noSieve.inv.count("vial_empty"), 1);
+});
+
+test("anchovies grind into paste and every supported flower makes imp repellent", () => {
+  const ground = player([["anchovies"], ["pestle_and_mortar"]]);
+  assert.equal(use(ground, "pestle_and_mortar", "anchovies"), true);
+  assert.equal(ground.inv.count("ii_anchovy_paste"), 1);
+  assert.equal(ground.inv.count("pestle_and_mortar"), 1);
+  for (const flower of ["marigold", "nasturtium", "rosemary", "flowers_waterfall_quest", "flowers_waterfall_quest_black", "flowers_waterfall_quest_blue", "flowers_waterfall_quest_mixed", "flowers_waterfall_quest_orange", "flowers_waterfall_quest_purple", "flowers_waterfall_quest_red", "flowers_waterfall_quest_white", "flowers_waterfall_quest_yellow"]) {
+    const who = player([["ii_anchovy_oil"], [flower]], 3);
+    assert.equal(use(who, "ii_anchovy_oil", flower), true, flower);
+    assert.equal(who.inv.count("ii_imp_repellent"), 1, flower);
+    assert.equal(who.sent.xp, 5, flower);
+  }
+  const low = player([["ii_anchovy_oil"], ["marigold"]], 5, { baseLevel: 2 });
+  assert.equal(use(low, "ii_anchovy_oil", "marigold"), true);
+  assert.equal(low.inv.count("ii_anchovy_oil"), 1);
+  assert.equal(low.inv.count("marigold"), 1);
+  assert.equal(low.sent.xp, 0);
 });
 
 test("lava scales grind into 3 to 6 shards, half as many again with the hard Wilderness Diary", () => {

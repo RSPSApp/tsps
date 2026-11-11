@@ -20,6 +20,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  core.ObjectDefinition.init();
   I = core.ItemIdentifiers;
   PM.emitServerStartup({});
 });
@@ -644,4 +645,94 @@ test("jar generator death policy never keeps or drops a lost generator", (t) => 
   assert.equal(PM.emitPlayerDeathItemDrop(unsafe), true);
   const safe = { ...unsafe, shouldDropItems: false, handled: false };
   assert.equal(PM.emitPlayerDeathItemDrop(safe), false, "safe deaths preserve items");
+});
+
+test('anchovy supplies make an impling jar that can catch a Puro-Puro impling', (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  questStage(f, 'druidic_ritual');
+  levels(f, core.Skill.HERBLORE, core.Skill.HUNTER);
+  f.p.setHitpoints(99);
+  f.inv.setItem(0, new core.Item(I.ANCHOVY_PASTE, 8));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  f.inv.setItem(2, new core.Item(I.SIEVE, 1));
+  f.inv.setItem(3, new core.Item(I.MARIGOLDS, 1));
+  f.inv.setItem(4, new core.Item(I.BUTTERFLY_JAR, 1));
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_PASTE), 0);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_OIL), 1);
+  assert.equal(f.inv.getAmount(I.SIEVE), 1);
+  UseItemPacketListener.itemOnItem(f.p, slotOf(f, I.ANCHOVY_OIL), slotOf(f, I.MARIGOLDS));
+  assert.equal(f.inv.getAmount(I.IMP_REPELLENT), 1);
+
+  // The map lookup and approach are supplied; the real item-on-object listener and plugin hooks run.
+  const at = new core.Location(2937, 3210, 0);
+  f.p.setLocation(new core.Location(2937, 3209, 0));
+  const still = new core.GameObject(core.ObjectIdentifiers.LAMP_OIL_STILL, at, 10, 0, null);
+  assert.equal(core.ObjectDefinition.forPlayer(still.getId(), f.p)?.getName(), "Lamp oil still");
+  t.mock.method(core.MapObjects, 'getPrivateArea', () => still);
+  t.mock.method(core.MapObjects, 'stillStands', () => true);
+  t.mock.method(f.p.getMovementQueue(), 'walkToObject', (_object, options) => { options.execute(); return true; });
+  const useStill = (id) => UseItemPacketListener.itemOnObject(f.p, 94, still.getId(), id, slotOf(f, id), at.getX(), at.getY());
+  useStill(I.IMP_REPELLENT);
+  assert.equal(f.inv.getAmount(I.IMP_REPELLENT), 0);
+  useStill(I.BUTTERFLY_JAR);
+  assert.equal(f.inv.getAmount(I.BUTTERFLY_JAR), 0);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1);
+
+  // Seed the actor and location; the registered Catch hook and real inventory exchange run.
+  f.p.setLocation(new core.Location(2592, 4320, 0));
+  f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.BUTTERFLY_NET, 1));
+  const npc = core.NPC.create(core.NpcIdentifiers.BABY_IMPLING_2, f.p.getLocation().clone());
+  npc.setRegistered(true); npc.setNeedsPlacement(false);
+  t.after(() => npc.setRegistered(false));
+  const definition = npc.getCurrentDefinition(f.p);
+  const clickType = definition.getActions().findIndex(action => action === 'Catch') + 1;
+  assert.ok(clickType > 0);
+  const rng = t.mock.method(Math, 'random', () => 0);
+  PM.emitNpcInteraction({ player: f.p, npc, npcId: npc.getId(), definition, clickType, handled: false });
+  rng.mock.restore();
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0);
+  assert.equal(f.inv.getAmount(I.BABY_IMPLING_JAR), 1);
+});
+
+test('anchovy oil preserves remaining paste and refuses restricted input in a full inventory', (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  f.inv.setItem(0, new core.Item(I.ANCHOVY_PASTE, 9));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  f.inv.setItem(2, new core.Item(I.SIEVE, 1));
+  for (let slot = 3; slot < 28; slot++) f.inv.setItem(slot, new core.Item(I.BONES, 1));
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_PASTE), 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_OIL), 1);
+  assert.equal(f.inv.getAmount(I.SIEVE), 1);
+  assert.equal(f.inv.getAmount(I.BONES), 25);
+  f.inv.setItem(0, preset(new core.Item(I.ANCHOVY_PASTE, 8)));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.equal(amount(f.inv, I.ANCHOVY_PASTE, true), 8);
+  assert.equal(f.inv.getAmount(I.VIAL), 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_OIL), 0);
+});
+
+test('still ignores a repellent moved while the player walks to it', (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  const at = new core.Location(2937, 3210, 0);
+  const still = new core.GameObject(core.ObjectIdentifiers.LAMP_OIL_STILL, at, 10, 0, null);
+  t.mock.method(core.MapObjects, 'getPrivateArea', () => still);
+  t.mock.method(core.MapObjects, 'stillStands', () => true);
+  let arrive;
+  t.mock.method(f.p.getMovementQueue(), 'walkToObject', (_object, options) => { arrive = options.execute; return true; });
+  const repellent = new core.Item(I.IMP_REPELLENT, 1);
+  f.inv.setItem(0, repellent);
+  UseItemPacketListener.itemOnObject(f.p, 94, still.getId(), I.IMP_REPELLENT, 0, at.getX(), at.getY());
+  assert.equal(typeof arrive, 'function');
+  f.inv.setItem(0, new core.Item(I.BONES, 1));
+  f.inv.setItem(1, repellent);
+  arrive();
+  assert.equal(f.inv.getAmount(I.IMP_REPELLENT), 1);
+  assert.equal(f.inv.getAmount(I.BONES), 1);
+  assert.notEqual(f.p.getAttribute('oil-lights:distilled-oil'), '2937,3210,0:repellent');
 });

@@ -47759,8 +47759,8 @@
               },
               {
                 "type": "action",
-                "action": "open_interface",
-                "target": "Agelus's Farm Shop",
+                "action": "open_shop",
+                "target": "Agelus' Farm Shop",
                 "id": "7fXH5U"
               }
             ]
@@ -130925,6 +130925,24 @@
           "id": "4g3EY1"
         }
       ],
+      "getting-started-talking-to-elena-again": [
+        {
+          "player": "Hello Elena."
+        },
+        {
+          "type": "line",
+          "speaker": "Elena",
+          "text": "Hello friend. Any luck finding my distillator?"
+        },
+        {
+          "player": "No, I'm afraid not."
+        },
+        {
+          "type": "line",
+          "speaker": "Elena",
+          "text": "Speak to Jerico, he might be able to help you cross the wall. He lives in a house south east of here, north of the chapel."
+        }
+      ],
       "getting-started-talking-to-jerico": [
         {
           "player": "Hello Jerico."
@@ -130957,6 +130975,9 @@
         }
       ],
       "getting-started-talking-to-jerico-again": [
+        {
+          "player": "Hello Jerico."
+        },
         {
           "type": "line",
           "speaker": "Jerico",
@@ -132957,7 +132978,7 @@
           "text": "Now you look like someone who goes to a lot of fancy dress parties."
         },
         {
-          "player": "Errr...what are you saying exactly?"
+          "player": "Errr... what are you saying exactly?"
         },
         {
           "type": "line",
@@ -188253,8 +188274,8 @@
                 },
                 {
                   "type": "action",
-                  "action": "open_interface",
-                  "target": "Jennifer's General Field Supplies",
+                  "action": "open_shop",
+                  "target": "Jennifer's General Supplies",
                   "id": "5CeRPR"
                 }
               ]
@@ -190721,8 +190742,8 @@
                 },
                 {
                   "type": "action",
-                  "action": "open_interface",
-                  "target": "Jennifer's General Field Supplies",
+                  "action": "open_shop",
+                  "target": "Jennifer's General Supplies",
                   "id": "5CeRPR"
                 }
               ]
@@ -531635,8 +531656,8 @@
               },
               {
                 "type": "action",
-                "action": "open_interface",
-                "target": "Jennifer's General Field Supplies",
+                "action": "open_shop",
+                "target": "Jennifer's General Supplies",
                 "id": "5CeRPR"
               }
             ]
@@ -536226,6 +536247,9 @@
                       "player": "Tell me more."
                     },
                     {
+                      "npc": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "QNbrzb"
@@ -536238,7 +536262,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -536305,13 +536329,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "9fHaCZ",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-7cd35e89205a4500"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "9fHaCZ"
                                     }
                                   ]
                                 },
@@ -536338,13 +536357,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "CySmbo",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-5a526e163aa93237"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "CySmbo"
                                     }
                                   ]
                                 },
@@ -536560,60 +536574,6 @@
         },
         {
           "npc": "That strange device will guide you in the same way the key did. Feel it, but be careful as it is very powerful. Good luck."
-        }
-      ]
-    },
-    "branches": {
-      "jump-7cd35e89205a4500": [
-        {
-          "npc": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "npc": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "npc": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "CySmbo",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-5a526e163aa93237"
-            }
-          ]
-        }
-      ],
-      "jump-5a526e163aa93237": [
-        {
-          "npc": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "npc": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "npc": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "l9j7rY"
         }
       ]
     }
@@ -647811,6 +647771,11 @@
                       "player": "Tell me more."
                     },
                     {
+                      "type": "line",
+                      "speaker": "Jorral",
+                      "text": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "kXluF_"
@@ -647823,7 +647788,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -647895,13 +647860,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "iZayEM",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-79bf75cd79a02093"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "iZayEM"
                                     }
                                   ]
                                 },
@@ -647934,13 +647894,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "BzGWef",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-df1ff5d3385709dd"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "BzGWef"
                                     }
                                   ]
                                 },
@@ -650169,70 +650124,6 @@
       ]
     },
     "branches": {
-      "jump-79bf75cd79a02093": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "BzGWef",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-df1ff5d3385709dd"
-            }
-          ]
-        }
-      ],
-      "jump-df1ff5d3385709dd": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "ZkS_lE"
-        }
-      ],
       "jump-e0c8ede1de79cc3c": [
         {
           "player": "I don't care about some dusty building."
@@ -784407,6 +784298,50 @@
               "type": "line",
               "speaker": "Jethick",
               "text": "Hello, I don't recognise you. We don't get many newcomers around here."
+            },
+            {
+              "player": "How come?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague of course. Not many people want to come to a place like this and the few that do normally get stopped by the mourners."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "All you'll find here now are the dead and the dying. Even our own king has abandoned us."
+            },
+            {
+              "player": "Your king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Yes, King Tyras of West Ardougne. He's the brother of King Lathas, the ruler of East Ardougne."
+            },
+            {
+              "player": "So where is the king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Well he's always been a bit of an explorer. He's led multiple expeditions into the uncharted lands to the west."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague first started when he came back from one of these expeditions. More than a few suspect that some of his men caught it out there and brought it back with them."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The king didn't care though. He just left on another expedition to the west. He hasn't been seen since. He left the city warder Bravek in charge but he's no better."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Anyway, you clearly didn't come here to talk about kings. So tell me, what brings you to West Ardougne?"
             }
           ],
           "id": "gYdBsh"
@@ -784511,6 +784446,52 @@
           "type": "line",
           "speaker": "Jethick",
           "text": "They live in the small timbered building at the far north side of town. I've not seen her around here in a while, mind."
+        },
+        {
+          "type": "line",
+          "speaker": "Jethick",
+          "text": "I don't suppose you could run me a little errand while you're over there? I borrowed this book from them, can you return it?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes, I'll return it for you.",
+              "steps": [
+                {
+                  "player": "Yes, I'll return it for you."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no inventory space:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Jethick shows you the book, but you don't have room to take it.",
+                      "id": "iU5foK"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "w5QLTg"
+                },
+                {
+                  "type": "message",
+                  "text": "Jethick gives you a book.",
+                  "id": "j0IeQT"
+                }
+              ]
+            },
+            {
+              "text": "No, I don't have time for that.",
+              "steps": [
+                {
+                  "player": "No, I don't have time for that."
+                }
+              ]
+            }
+          ]
         }
       ],
       "finding-elena-returning-the-book-to-ted-rehnison": [
@@ -785014,6 +784995,21 @@
                                   ]
                                 }
                               ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "This is urgent though! Someone's been kidnapped!",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "C6ctb6",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-a431ec56a3a4bb0c"
                             }
                           ]
                         }
@@ -819970,7 +819966,7 @@
                 {
                   "type": "action",
                   "action": "open_shop",
-                  "target": "Armour Shop (Jatizso)",
+                  "target": "Armour Shop",
                   "id": "ElIUsG"
                 }
               ]

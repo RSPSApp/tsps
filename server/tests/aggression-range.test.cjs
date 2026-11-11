@@ -221,10 +221,10 @@ test("a hunter loses interest outside the aggression range and walks home", (t) 
 });
 
 test("an engaged ranged NPC does not retreat from a reachable player on another floor", (t) => {
-  const previous = Object.fromEntries(["CROSS_FLOOR_VISIBILITY", "CROSS_FLOOR_COMBAT"].map(key => [key, process.env[key]]));
-  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-  process.env.CROSS_FLOOR_VISIBILITY = "1";
-  process.env.CROSS_FLOOR_COMBAT = "1";
+  const { CrossFloor } = require('../dist/game/CrossFloor');
+  t.mock.method(CrossFloor, "includesOtherPlanes", () => true);
+  let crossFloorCombat = true;
+  t.mock.method(CrossFloor, "combatEnabled", () => crossFloorCombat);
   const s = scene(t, {
     spawn: new core.Location(FIELD.x, FIELD.y, 0),
     npcAt: new core.Location(FIELD.x, FIELD.y, 0),
@@ -239,9 +239,9 @@ test("an engaged ranged NPC does not retreat from a reachable player on another 
   assert.equal(core.CombatRange.footprintDistance(s.spawn, 1, s.player.getLocation(), true), 2,
     "the ranged retreat check uses horizontal footprint distance");
 
-  process.env.CROSS_FLOOR_COMBAT = "0";
+  crossFloorCombat = false;
   assert.equal(combat.shouldRetreat(ranged), true, "disabling cross-floor combat restores the old leash behavior");
-  process.env.CROSS_FLOOR_COMBAT = "1";
+  crossFloorCombat = true;
   const melee = { type: () => core.CombatType.MELEE, attackDistance: () => 1 };
   assert.equal(combat.shouldRetreat(melee), true, "melee cannot use the cross-floor range exception");
 });

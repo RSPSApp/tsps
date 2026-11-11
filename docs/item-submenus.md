@@ -36,5 +36,5 @@ still asks where.
   option does; no capture shows live's reply.
 - Drakan's medallion's Slepe tile (3166, 7711) is the captured Castle Drakan landing; no capture
   shows a Slepe teleport.
-- Camulet (Rub > Enakhra's Temple / Entrance) and the Giantsoul amulet (Rub > lair) have the
-  same kind of submenu and still open their menus from an entry.
+- The Giantsoul amulet (Rub > lair) has the same kind of submenu and still opens its menu from an
+  entry.

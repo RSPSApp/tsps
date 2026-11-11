@@ -98,8 +98,50 @@ const MENU_TEXT_WIDTH_PADDING_PX = 6;
 // Entry layout (Client.drawLoggedIn menu entry positions)
 const MENU_FIRST_ROW_BASELINE_OFFSET_PX = 31;
 const MENU_ROW_HIT_TOP_OFFSET_PX = 13;
+const MENU_ROW_CENTER_ABOVE_BASELINE_PX = 5; // a row's middle sits this far above its baseline
 const MENU_ROW_HIT_BOTTOM_OFFSET_PX = 3;
 const MENU_HIT_TEST_INSET_PX = 1; // emulate strict comparisons via 1px inset
+
+/**
+ * Interfaces > Minimenu options, as the cache's scripts leave them in the client: game option 13
+ * is the entry opened under the mouse (0 off, else entry 1-8; scripts 7458, 7459), game option 14
+ * the spacing between entries (0-100; script 7460), and the scroll flag the scrollbar toggle
+ * (script 728). Script 7468 applies all three at login.
+ */
+export type ChooseOptionMenuLayout = { startEntry: number; spacing: number; scrollbar: boolean };
+const GAME_OPTION_MINIMENU_START_ENTRY = 13;
+const GAME_OPTION_MINIMENU_SPACING = 14;
+const MAX_MENU_SPACING_PX = 100;
+const DEFAULT_MENU_LAYOUT: ChooseOptionMenuLayout = { startEntry: 0, spacing: 0, scrollbar: false };
+let menuLayout: ChooseOptionMenuLayout = DEFAULT_MENU_LAYOUT;
+
+/** The minimenu layout the client's settings ask for. Ours: the spacing is in pixels. */
+export function readChooseOptionMenuLayout(client: any): ChooseOptionMenuLayout {
+    const option = (id: number): number => {
+        const value = Number(client?.gameOptions?.get?.(id));
+        return Number.isFinite(value) ? value | 0 : 0;
+    };
+    return {
+        startEntry: Math.max(0, option(GAME_OPTION_MINIMENU_START_ENTRY)),
+        spacing: Math.max(0, Math.min(MAX_MENU_SPACING_PX, option(GAME_OPTION_MINIMENU_SPACING))),
+        scrollbar: client?.minimenuScrollEnabled === true,
+    };
+}
+
+/** Sets the layout every menu is measured and drawn with (the draw pass reads it each frame). */
+export function setChooseOptionMenuLayout(layout: ChooseOptionMenuLayout | undefined): void {
+    menuLayout = layout ?? DEFAULT_MENU_LAYOUT;
+}
+
+/** Row pitch with the spacing; the extra space is split above and below the text. */
+const rowHeightPx = (): number => MENU_ROW_HEIGHT_PX + menuLayout.spacing;
+const spacingAbovePx = (): number => menuLayout.spacing >> 1;
+const firstRowBaselinePx = (): number => MENU_FIRST_ROW_BASELINE_OFFSET_PX + spacingAbovePx();
+const rowHitTopPx = (): number => MENU_ROW_HIT_TOP_OFFSET_PX + spacingAbovePx();
+const rowHitBottomPx = (): number => MENU_ROW_HIT_BOTTOM_OFFSET_PX + menuLayout.spacing - spacingAbovePx();
+// Ours: the scrollbar is a thin bar inside the menu's right border.
+const MENU_SCROLLBAR_WIDTH_PX = 3;
+const COL_SCROLLBAR_THUMB: [number, number, number, number] = [0x9e / 255, 0x95 / 255, 0x86 / 255, 1];
 
 // Oversized menus scroll by rows: scrollMax = (menuHeight - canvasHeight + 14) / 15.
 const MENU_SCROLL_HEIGHT_PAD_PX = 14;
@@ -228,7 +270,7 @@ function computeMenuSize(
         if (w > contentW) contentW = w;
     }
     const w = (sp(contentW, uiScale) + sp(MENU_WIDTH_PADDING_PX, uiScale)) | 0;
-    const h = (entries.length * sp(MENU_ROW_HEIGHT_PX, uiScale) +
+    const h = (entries.length * sp(rowHeightPx(), uiScale) +
         sp(MENU_HEIGHT_BASE_PX, uiScale)) | 0;
     return { w, h };
 }
@@ -251,6 +293,11 @@ export function getChooseOptionMenuRect(
     if (left + size.w > (hostW | 0)) left = (hostW | 0) - size.w;
     if (left < 0) left = 0;
     let top = menu.y | 0;
+    // Minimenu start position: the chosen entry (the last, for a shorter menu) opens under the mouse.
+    const startEntry = Math.min(menuLayout.startEntry, menu.entries.length);
+    if (startEntry > 0) {
+        top -= sp(firstRowBaselinePx() + (startEntry - 1) * rowHeightPx() - MENU_ROW_CENTER_ABOVE_BASELINE_PX, s);
+    }
     if (top + size.h > (hostH | 0)) top = (hostH | 0) - size.h;
     if (top < 0) top = 0;
 
@@ -281,7 +328,7 @@ function computeSubMenuRect(
     }
     if (x < 0) x = 0;
 
-    let y = (openIndex - menuScroll) * sp(MENU_ROW_HEIGHT_PX, uiScale) + parentRect.y;
+    let y = (openIndex - menuScroll) * sp(rowHeightPx(), uiScale) + parentRect.y;
     if (y + size.h > (hostH | 0)) y = (hostH | 0) - size.h;
     if (y < 0) y = 0;
 
@@ -293,7 +340,7 @@ function computeMenuScrollMax(menuHeightPx: number, hostH: number, uiScale: numb
     if (menuHeightPx <= (hostH | 0)) return 0;
     return Math.floor(
         (menuHeightPx - (hostH | 0) + sp(MENU_SCROLL_HEIGHT_PAD_PX, uiScale)) /
-            sp(MENU_ROW_HEIGHT_PX, uiScale),
+            sp(rowHeightPx(), uiScale),
     );
 }
 
@@ -319,10 +366,10 @@ function getEntryIndexAt(
     my: number,
     uiScale: number,
 ): number {
-    const sRowH = sp(MENU_ROW_HEIGHT_PX, uiScale);
-    const sFirstRowBase = sp(MENU_FIRST_ROW_BASELINE_OFFSET_PX, uiScale);
-    const sHitTop = sp(MENU_ROW_HIT_TOP_OFFSET_PX, uiScale);
-    const sHitBot = sp(MENU_ROW_HIT_BOTTOM_OFFSET_PX, uiScale);
+    const sRowH = sp(rowHeightPx(), uiScale);
+    const sFirstRowBase = sp(firstRowBaselinePx(), uiScale);
+    const sHitTop = sp(rowHitTopPx(), uiScale);
+    const sHitBot = sp(rowHitBottomPx(), uiScale);
     for (let i = entryCount - 1; i >= 0; i--) {
         const baselineY = rect.y + sFirstRowBase + (i - scroll) * sRowH;
         if (
@@ -446,7 +493,7 @@ function updateMenuHover(
                     // Sub rect is recomputed by the draw pass; the scroll bound only
                     // needs the submenu height.
                     const subH =
-                        (entry.subEntries!.length * sp(MENU_ROW_HEIGHT_PX, uiScale) +
+                        (entry.subEntries!.length * sp(rowHeightPx(), uiScale) +
                             sp(MENU_HEIGHT_BASE_PX, uiScale)) |
                         0;
                     rt.submenuScrollMax = computeMenuScrollMax(subH, hostH, uiScale);
@@ -603,6 +650,7 @@ export function drawChooseOptionMenu(
         typeof renderScale === "number" && renderScale > 0 ? renderScale : getUiScale(cssW, cssH);
     const hostW = glr.width | 0;
     const hostH = glr.height | 0;
+    setChooseOptionMenuLayout(readChooseOptionMenuLayout(globalClient));
     const anchor = getMenuAnchorPoint(canvas, menu);
     const menuRect = getChooseOptionMenuRect(
         opts.fontLoader,
@@ -642,14 +690,14 @@ export function drawChooseOptionMenu(
     if (Number.isInteger(globalClient?.menuKeyboardIndex)) {
         const index = Math.max(0, Math.min(menu.entries.length - 1, globalClient.menuKeyboardIndex));
         globalClient.menuKeyboardIndex = index;
-        const rowHeight = sp(MENU_ROW_HEIGHT_PX, s);
-        const firstBaseline = top + sp(MENU_FIRST_ROW_BASELINE_OFFSET_PX, s);
-        const visibleRows = Math.max(1, Math.floor((hostH - firstBaseline - sp(MENU_ROW_HIT_BOTTOM_OFFSET_PX, s)) / rowHeight) + 1);
+        const rowHeight = sp(rowHeightPx(), s);
+        const firstBaseline = top + sp(firstRowBaselinePx(), s);
+        const visibleRows = Math.max(1, Math.floor((hostH - firstBaseline - sp(rowHitBottomPx(), s)) / rowHeight) + 1);
         if (index < rt.menuScroll) rt.menuScroll = index;
         else if (index >= rt.menuScroll + visibleRows) rt.menuScroll = index - visibleRows + 1;
         rt.menuScroll = Math.max(0, Math.min(rt.menuScrollMax, rt.menuScroll));
         keyboardPoint = { x: left + Math.floor(boxW / 2),
-            y: firstBaseline + (index - rt.menuScroll) * rowHeight - sp(5, s) };
+            y: firstBaseline + (index - rt.menuScroll) * rowHeight - sp(MENU_ROW_CENTER_ABOVE_BASELINE_PX, s) };
         const inputScale = getCanvasInputScale(canvas);
         globalClient.inputManager.mouseX = keyboardPoint.x / inputScale.x;
         globalClient.inputManager.mouseY = keyboardPoint.y / inputScale.y;
@@ -854,6 +902,8 @@ export function drawChooseOptionMenu(
         entries: menu.entries,
         headerText: CHOOSE_OPTION_HEADER(),
         scroll: rt.menuScroll,
+        scrollMax: rt.menuScrollMax,
+        hostH,
         targetIdPrefix: "__menu_opt_",
         targetPriority: MENU_OPTION_PRIORITY_BASE,
         uiScale: s,
@@ -880,6 +930,26 @@ export function drawChooseOptionMenu(
     }
 }
 
+/** The scrollbar's track runs down the visible part of the options area, its thumb the rows in view. */
+function drawMenuScrollbar(
+    glr: GLRenderer,
+    right: number,
+    trackTop: number,
+    optionsHeight: number,
+    hostH: number,
+    entryCount: number,
+    scroll: number,
+    scrollMax: number,
+    s: number,
+): void {
+    const width = sp(MENU_SCROLLBAR_WIDTH_PX, s);
+    const trackH = Math.max(1, Math.min(optionsHeight, (hostH | 0) - trackTop));
+    const visibleRows = Math.max(1, entryCount - scrollMax);
+    const thumbH = Math.max(width, Math.round((trackH * visibleRows) / entryCount));
+    const thumbY = trackTop + Math.round(((trackH - thumbH) * scroll) / scrollMax);
+    glr.drawRect(right - width, thumbY, width, thumbH, COL_SCROLLBAR_THUMB);
+}
+
 function drawMenuLevel(
     glr: GLRenderer,
     opts: {
@@ -894,6 +964,9 @@ function drawMenuLevel(
         entries: MenuEntryLike[];
         headerText: string;
         scroll: number;
+        /** With the scrollbar setting on, an oversized menu shows how far it is scrolled. */
+        scrollMax?: number;
+        hostH?: number;
         targetIdPrefix: string;
         targetPriority: number;
         uiScale: number;
@@ -926,10 +999,10 @@ function drawMenuLevel(
     const sTitleTextBase = sp(MENU_TITLE_TEXT_BASELINE_OFFSET_PX, s);
     const sTextX = sp(MENU_TEXT_X_OFFSET_PX, s);
     const sTextWPad = sp(MENU_TEXT_WIDTH_PADDING_PX, s);
-    const sRowHeight = sp(MENU_ROW_HEIGHT_PX, s);
-    const sFirstRowBase = sp(MENU_FIRST_ROW_BASELINE_OFFSET_PX, s);
-    const sHitTop = sp(MENU_ROW_HIT_TOP_OFFSET_PX, s);
-    const sHitBot = sp(MENU_ROW_HIT_BOTTOM_OFFSET_PX, s);
+    const sRowHeight = sp(rowHeightPx(), s);
+    const sFirstRowBase = sp(firstRowBaselinePx(), s);
+    const sHitTop = sp(rowHitTopPx(), s);
+    const sHitBot = sp(rowHitBottomPx(), s);
     const sHitInset = sp(MENU_HIT_TEST_INSET_PX, s);
     const sStroke = sp(1, s);
 
@@ -946,6 +1019,9 @@ function drawMenuLevel(
     glr.drawRect(optX0, optY0 + optH - sStroke, optW, sStroke, colors.COL_BLACK);
     glr.drawRect(optX0, optY0, sStroke, optH, colors.COL_BLACK);
     glr.drawRect(optX0 + optW - sStroke, optY0, sStroke, optH, colors.COL_BLACK);
+    if (menuLayout.scrollbar && (level.scrollMax ?? 0) > 0 && level.hostH) {
+        drawMenuScrollbar(glr, optX0 + optW - sStroke, optY0, optH, level.hostH, entries.length, scroll, level.scrollMax!, s);
+    }
 
     // Title text baseline at (x+3, y+14)
     {
@@ -985,7 +1061,8 @@ function drawMenuLevel(
         let fullText = entryFullText(e);
         if (hasSubEntries(e)) fullText += SUBMENU_ARROW_DRAW_SUFFIX;
 
-        // OSRS: baseline at menuY + MENU_FIRST_ROW_BASELINE_OFFSET_PX + (row * MENU_ROW_HEIGHT_PX).
+        // OSRS: baseline at menuY + MENU_FIRST_ROW_BASELINE_OFFSET_PX + (row * MENU_ROW_HEIGHT_PX),
+        // with the Minimenu spacing setting's gap added to each row.
         const baselineY = (top + sFirstRowBase + drawnRow * sRowHeight) | 0;
         const textY = (baselineY - Math.round(optMaxAscent * s)) | 0;
 

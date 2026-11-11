@@ -308,7 +308,8 @@ export class CombatAncientSpellExtend extends CombatSpell {
  * the bladed staff of the same god, and for Flames the charged revenant sceptres too.
  */
 const SARADOMIN_STRIKE_STAVES = new Set([ItemIdentifiers.SARADOMIN_STAFF, ItemIdentifiers.STAFF_OF_LIGHT]);
-const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.STAFF_OF_BALANCE]);
+/** Wiki (Claws of Guthix): a Guthix staff, the void knight mace or the staff of balance. */
+const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.STAFF_OF_BALANCE]);
 const FLAMES_OF_ZAMORAK_STAVES = new Set([
     ItemIdentifiers.ZAMORAK_STAFF, ItemIdentifiers.STAFF_OF_THE_DEAD, 12902, ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD,
     ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_,

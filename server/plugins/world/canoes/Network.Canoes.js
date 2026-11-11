@@ -297,7 +297,7 @@ function travel(player, from, to, type) {
   player.setAttribute(RETURN_ATTRIBUTE, [at.getX(), at.getY(), at.getZ()]);
   scenes.fade(player, true);
   later(player, 2, () => {
-    const scene = scenes.open(player, "canoe", [[1792, 1855, 4480, 4543, 0]]);
+    const scene = scenes.open(player, "canoe", [[1792, 1855, 4480, 4543, 0]], { allowSummonPet: false });
     player.moveTo(new core.Location(...RIDE_TILE, 0));
     scenes.controls(player, true, true);
     for (const name of RIDE_VARBITS) setVar(player, name, 1);

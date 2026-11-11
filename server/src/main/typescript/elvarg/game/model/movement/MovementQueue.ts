@@ -891,6 +891,13 @@ export class MovementQueue {
 
         const playerFollowingPlayer = this.character.isPlayer() && following.isPlayer();
 
+        // A pet does not follow its owner into an area that bars followers (a canoe ride, a boss lair):
+        // it waits where it is, still following, and catches up once the owner is somewhere it may go.
+        if (this.petBarredFrom(following)) {
+            this.reset();
+            return;
+        }
+
         if (following.getPrivateArea() != this.character.getPrivateArea()) {
             if (this.tryTeleportPetToFollower(following)) {
                 return;
@@ -1019,6 +1026,14 @@ export class MovementQueue {
         }
 
         return bestTile;
+    }
+
+    private petBarredFrom(following: Mobile): boolean {
+        if (!this.character.isNpc() || !this.character.getAsNpc().isPet()) {
+            return false;
+        }
+        const area: any = following.getArea();
+        return typeof area?.allowSummonPet === "function" && area.allowSummonPet(following) === false;
     }
 
     private tryTeleportPetToFollower(following: Mobile): boolean {

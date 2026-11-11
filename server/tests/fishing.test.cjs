@@ -1302,13 +1302,15 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   function fishOnce({catchRandom = 0.02, bottleRandom = 0, fishId = I.RAW_TROUT,
     baitId = I.FEATHER, npc = spot, action = "Lure", ticks = 4, forceRada = false} = {}) {
     let catchCount = 0, clueCount = 0, radaCount = 0;
+    // Every tier rolls before its capacity is checked: force the first tier the player can still take.
+    const forcedTier = ["beginner", "easy", "medium", "hard", "elite"].findIndex((tier) => capacity(tier) === true);
     Math.random = () => {
       const stack = new Error().stack;
       if (stack.includes("rollCatch")) {
         const position = catchCount++;
         return typeof catchRandom === "function" ? catchRandom(position) : catchRandom;
       }
-      if (stack.includes("rollClueBottles")) return clueCount++ === 0 ? bottleRandom : 0.999999;
+      if (stack.includes("rollClueBottles")) return clueCount++ === forcedTier ? bottleRandom : 0.999999;
       if (stack.includes("rollExtraFish") && forceRada) { radaCount++; return 0; }
       return priorRandom();
     };
@@ -1569,7 +1571,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   assert.equal(radaCatch.fish, 2);
   assert.equal(radaCatch.xp, 50);
   assert.equal(radaCatch.feathers, 1);
-  assert.equal(radaCatch.clueCount, 1);
+  assert.equal(radaCatch.clueCount, 5, "each tier rolls once");
   assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
   player.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new Item(-1, 0));
 
@@ -2039,7 +2041,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
     assert.equal(capacity("beginner"), false);
     const freeCapped = fishOnce();
     caughtTrout(freeCapped);
-    assert.equal(freeCapped.clueCount, 0);
+    assert.equal(freeCapped.clueCount, 1, "the beginner tier still rolls; only members tiers are skipped");
     assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
   } finally {
     core.WorldDefinition.isMembersWorld = originalMembersWorld;
@@ -2074,7 +2076,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   assert.equal(inventory.getAmount(I.RAW_COD), 1);
   assert.equal(inventory.getAmount(I.RAW_BASS), 1);
   assert.ok(bigCatch.xp > 0);
-  assert.equal(bigCatch.clueCount, 1);
+  assert.equal(bigCatch.clueCount, 5);
   assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
 
   // An ordinary big-net junk-only batch remains outside this documented-fish
@@ -2104,7 +2106,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
     fishId: I.BROKEN_GLASS_2, baitId: I.BIG_FISHING_NET});
   assert.equal(parkCatch.fish, 1);
   assert.ok(parkCatch.xp > 0);
-  assert.equal(parkCatch.clueCount, 1);
+  assert.equal(parkCatch.clueCount, 5);
   assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
 
   // Tutorial Island's separate pond remains outside this change's supported

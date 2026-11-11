@@ -3,7 +3,8 @@
 /**
  * Drakan's medallion (https://oldschool.runescape.wiki/w/Drakan%27s_medallion).
  *
- * Inventory "Teleport" asks where; the worn amulet lists the destinations as its own options
+ * Inventory "Teleport" asks where, and its submenu entries (the cache's subops, same four names)
+ * go straight to one (rsprox 4266, 4269, 4288); the worn amulet lists the destinations as its own options
  * (the cache's worn params 451-454: Ver Sinhaza, Darkmeyer, Slepe, Castle Drakan). Each is a
  * standard teleport (rsprox recordings 396, 403, 1429, 4266, 4269, 4288: teleport_casting and
  * human_castteleport on the click, the move on tick 3) that cannot go past level 20 Wilderness.
@@ -20,6 +21,7 @@ const WILDERNESS_LIMIT = 20;
 const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 const PROMPT = "Where would you like to teleport?";
+const LOCKED_MESSAGE = "You haven't unlocked that teleport yet.";
 
 const VER_SINHAZA = { label: "Ver Sinhaza", tile: { x: 3649, y: 3230, z: 0 } };
 const SLEPE = { label: "Slepe", tile: { x: 3166, y: 7711, z: 0 } };
@@ -72,8 +74,19 @@ function teleportWorn(event) {
   return destination !== undefined;
 }
 
+/**
+ * Teleport asks where; one of its submenu entries goes straight there, and an entry the player
+ * has not unlocked says so (rsprox 4288: subop 2, Slepe, before the tablet).
+ */
 function teleportFromInventory(event) {
-  chooseDestination(event.player);
+  const label = event.subOption ? labelOf({ label: event.subOption }) : null;
+  if (!label || !DESTINATION_ORDER.includes(label)) {
+    chooseDestination(event.player);
+    return true;
+  }
+  const destination = destinationsFor(event.player).find((entry) => entry.label === label);
+  if (destination) teleportTo(event.player, destination);
+  else event.player.sendMessage(LOCKED_MESSAGE);
   return true;
 }
 

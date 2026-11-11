@@ -1,5 +1,17 @@
 import type { FriendSnapshot } from "../../common/social/FriendsChat";
 
+/** Varbit 1627 `loginlogout_permanent` and 12274 `loginlogout_setting` (row 44: Timeout, On, Off). */
+export const LOGINLOGOUT_PERMANENT_VARBIT = 1627;
+export const LOGINLOGOUT_SETTING_VARBIT = 12274;
+const LOGINLOGOUT_OFF = 2;
+
+/** Off hides friends' login and logout notices; the permanent varbit wins when set, as in script 4487. */
+export function friendLoginNoticesShown(getVarbit: (id: number) => number): boolean {
+    const permanent = getVarbit(LOGINLOGOUT_PERMANENT_VARBIT) | 0;
+    const setting = permanent !== 0 ? permanent : getVarbit(LOGINLOGOUT_SETTING_VARBIT) | 0;
+    return setting !== LOGINLOGOUT_OFF;
+}
+
 interface LoginUpdate {
     name: string;
     world: number;

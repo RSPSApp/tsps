@@ -72,7 +72,11 @@ function rollClueGeodes({ player, skill, petBase }, random = Math.random) {
     if (tier.name !== "beginner") pluginApi?.emitCustomEvent?.("combat-achievements:tier", achievement);
     const base = geodeChance(petBase, level, tier.modifier, achievement.currentThresholdMet === true);
     const chance = base < 1 ? base : Math.max(1, Math.floor(base / (boost.multiplier > 1 ? boost.multiplier : 1)));
-    if (chance < 1 || Math.floor(random() * chance) !== 0 || ownsClue(player, tier)) {
+    if (chance < 1 || Math.floor(random() * chance) !== 0) {
+      continue;
+    }
+    if (ownsClue(player, tier)) {
+      pluginApi?.emitCustomEvent?.("treasure-trails:missed-clue", { player, tier: tier.name });
       continue;
     }
     giveGeode(player, tier.geodeId);

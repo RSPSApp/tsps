@@ -34,19 +34,26 @@ test('the rubble is crossed by a walking exact-move with its sound, west then ba
   const sounds = [];
   const sender = p.getPacketSender();
   const sfx = sender.sendSoundEffect.bind(sender);
+  const busy = [];
+  const varbit = sender.sendVarbit.bind(sender);
+  t.mock.method(sender, 'sendVarbit', (id, value) => { if (id === 12393) busy.push(value); return varbit(id, value); });
   t.mock.method(sender, 'sendSoundEffect', (id, loops, delay, volume) => { sounds.push([id, loops, delay]); return sfx(id, loops, delay, volume); });
   const rubble = new core.GameObject(44003, new core.Location(3348, 2759, 0), 10, 0, null);
   const click = () => PM.emitObjectInteraction({ player: p, object: rubble, objectId: 44003,
     definition: core.ObjectDefinition.forId(44003), clickType: 1, location: { x: 3348, y: 2759, z: 0 }, handled: false });
   click();
   assert.deepEqual(sounds, [[2454, 3, 4]], 'sound 2454, 3 loops, delay 4');
+  // Busy (12393) on the start tick, cleared when the move ends (rsprox 227/00101.txt [9141]/[9143]).
+  assert.deepEqual(busy, [1], 'busy on the start tick');
   core.TaskManager.process();
   const move = p.getForceMovement?.();
   assert.ok(move, 'an exact-move is running');
   assert.equal(move.getAnimation?.() ?? move.animation, 839);
   for (let i = 0; i < 4; i++) core.TaskManager.process();
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3347, 2759], 'west across the rubble');
+  assert.deepEqual(busy, [1, 0], 'and free again once across');
   click();
   for (let i = 0; i < 4; i++) core.TaskManager.process();
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3349, 2759], 'and back east');
+  assert.deepEqual(busy, [1, 0, 1, 0]);
 });

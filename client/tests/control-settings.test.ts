@@ -51,7 +51,7 @@ function keyFrame(input: InputManager) {
         getCustomInterfaces: () => ({ handleSearchKeyEvents: () => false }),
     };
     const frame: any = { input, mx: 0, my: 0, allRoots: [minimap], visibleMap: new Map(), getStaticChildren: () => [] };
-    return { run: () => processWidgetKeyboardInput(deps, frame, manager), seen, minimap };
+    return { run: () => processWidgetKeyboardInput(deps, frame, manager), seen, minimap, manager };
 }
 
 const press = (code: string, key: string, keyCode: number, extra: object = {}) =>
@@ -85,6 +85,17 @@ const press = (code: string, key: string, keyCode: number, extra: object = {}) =
     input.onKeyDown(press("KeyM", "m", 77));
     run();
     assert.deepEqual(seen, [KEY_M]);
+}
+
+// The construction build menu owns every key: no key-down listener runs while it is open.
+{
+    const input = new InputManager();
+    const { run, seen, manager } = keyFrame(input);
+    manager.rootInterface = 458;
+    input.onKeyDown(press("KeyM", "m", 77, { ctrlKey: true }));
+    input.keyEvents.length = 0; // the build menu's own handler took the key
+    run();
+    assert.deepEqual(seen, []);
 }
 
 // A hidden component's key listeners don't run.

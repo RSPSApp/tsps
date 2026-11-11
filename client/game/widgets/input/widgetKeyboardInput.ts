@@ -7,14 +7,18 @@ import { sendChat } from "../../../network/serverConnection/outgoing/inventoryCh
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 
+/** The construction build menu (458) is open: it owns every key. */
+function isConstructionOpen(widgetManager: WidgetManager): boolean {
+    return widgetManager.rootInterface === 458 || [...widgetManager.interfaceParents.values()]
+        .some((parent) => (parent.group | 0) === 458);
+}
+
 export function processConstructionKeyboardInput(
     deps: WidgetInputControllerDeps,
     input: WidgetInputFrame["input"],
     widgetManager: WidgetManager,
 ): boolean {
-    const constructionOpen = widgetManager.rootInterface === 458 || [...widgetManager.interfaceParents.values()]
-        .some((parent) => (parent.group | 0) === 458);
-    if (constructionOpen) {
+    if (isConstructionOpen(widgetManager)) {
         // Script 73 rejects hidden chat layers before touching VarC 335.
         // The build modal has no text field: keep using the normal chat
         // buffer and sender without depending on its widget visibility.
@@ -240,6 +244,7 @@ function processWidgetKeyDownUpInput(
 ): void {
     const { input } = frame;
     if (input.keyDownCodes.length === 0 && input.keyUpCodes.length === 0) return;
+    if (isConstructionOpen(widgetManager)) return;
     const widgets = collectVisibleKeyWidgets(frame, widgetManager, hasKeyDownOrUpListener);
     if (widgets.size === 0) return;
     const vm = deps.getCs2Vm();

@@ -54,8 +54,9 @@ function getKeptItems(player, settings) {
   return core.PlayerDeathTask.getKeptItems(player, getAmountToKeep(player, settings), cosmetics);
 }
 
+/** One item's grave fee: the client multiplies the marker's count by the stack size. */
 function graveFee(player, item) {
-  const query = { player, items: [{ id: item.getId(), amount: item.getAmount() }], fee: 0 };
+  const query = { player, items: [{ id: item.getId(), amount: 1 }], fee: 0 };
   pluginApi.emitCustomEvent("gravestones:fee", query);
   return Math.max(0, Number(query.fee) || 0);
 }

@@ -257,9 +257,11 @@ test('the Items Kept on Death markers: grave with its fee on PvM, lost on PvP or
   PluginManager.emitShouldKeepItemOnDeath = (owner, item) =>
     item.getDefinition().getName() === 'Looting bag' ? false : keep(owner, item);
 
+  const NOTED_WHIP = 4152;
   const ids = [I.TWISTED_BOW, I.ARMADYL_GODSWORD, I.ABYSSAL_WHIP, I.DRAGON_SCIMITAR, I.RUNE_SCIMITAR, I.SHARK,
-    I.LOOTING_BAG, I.COINS];
-  const items = ids.map(id => new Item(id, id === I.COINS ? 1000000 : 1));
+    I.LOOTING_BAG, I.COINS, NOTED_WHIP];
+  const stacks = { [I.COINS]: 1000000, [NOTED_WHIP]: 10 };
+  const items = ids.map(id => new Item(id, stacks[id] ?? 1));
   let sent;
   const sender = {
     sendSubInterface() { return sender; },
@@ -284,6 +286,10 @@ test('the Items Kept on Death markers: grave with its fee on PvM, lost on PvP or
   assert.deepEqual(pvm[I.TWISTED_BOW], [367, 100001]);
   assert.deepEqual(pvm[I.SHARK], [367, 1]);
   assert.deepEqual(pvm[I.COINS], [367, 1], 'a stack of coins is priced by one coin');
+  // The client counts each item in the stack: ten noted whips owe ten times one whip's fee.
+  assert.deepEqual(pvm[NOTED_WHIP], [367, 1 + fee(NOTED_WHIP)], 'a stack is priced by one item');
+  assert.ok(fee(NOTED_WHIP) > 0 && 10 * fee(NOTED_WHIP) === Fees.graveFee([{ id: NOTED_WHIP, amount: 10 }], false),
+    'the fee the client shows for the stack is the grave fee for it');
   const counts = new Set(Object.values(pvm).map(([, count]) => count));
   assert.ok(counts.size > 2, `the fee bands differ: ${[...counts]}`);
   assert.deepEqual(pvm[I.LOOTING_BAG], [368, 1], 'the looting bag disappears completely');

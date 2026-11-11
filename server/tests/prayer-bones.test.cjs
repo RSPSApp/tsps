@@ -58,6 +58,7 @@ const api = {
   onItemAction() {},
   onItemOnItem() {},
   onObjectInteraction() {},
+  onPlayerLogin() {},
   onCanUseItem(handler) { handlers.set("can-use-item", [handler]); },
   onPlayerLogout(handler) { handlers.set("logout", [handler]); },
   onPlayerDisconnect(handler) { handlers.set("disconnect", [handler]); },

@@ -125,7 +125,6 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 - **Not done**:
   - Show data orbs (8, varbit 4084 `orbs_disabled`): live also leaves the orbs interface (160) closed while it is set and opens it when the player turns them back on (rsprox 229/2375 tick 8), which needs server work.
   - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
-  - Cache scripts 518, 2518 and 3231 (the buff bar's own toggles) also flip the relic and mastery varbits, in the client alone, so a change made there is not saved.
 
 ## Buff Bar
 
@@ -154,7 +153,6 @@ Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), whic
 - **Not done**:
   - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
   - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, the Staff of the dead special, the Sire stun, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
-  - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
   - Modified stats overlay (148-151): now wired, see "Health and modified stats overlays" below.
 
 ## Rows owned by other plugins
@@ -516,6 +514,22 @@ Rows 305 and 306 are `data/settings.json` toggles, off for a new account. While 
 The tutors write the same rows: the Ranged combat tutor's "Can you toggle my ammo to equip when I pick it up please?" sets 305, and the Magic combat tutor's "Let's discuss how my runes act when I pick them up." sets 306. A pre-Settings Ranged tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into row 305 at login unless a setting is already saved.
 
 - **Not done**: the bolt pouch, the row's other target for ammo, is not in tsps yet (see row 356).
+
+## Settings the client changes itself
+
+The cache's toggle script (3965) flips some rows' varbits in the browser before the row click is sent, and the client transmits the whole varp (`TRANSMIT_VARPS` in `client/common/vars.ts`). `Settings.plugin.js` keeps the bits of its own `settings.json` rows from varps 1224, 1734 and 2856 (other bits, like the collection log's on 2856, stay with their plugins), asking `refuseLockedSetting` first. The row click that follows takes the transmitted value (`SettingVarpTransmit`) instead of flipping it back; with no transmit (the official client) the click toggles it on the server as before.
+
+| Setting | Id | Var | Notes |
+| --- | --- | --- | --- |
+| Anti Drag | 115 | varbit 12345 (varp 2856) | toggle; the cache's inventory scripts apply it |
+| Anti Drag - Delay (number) | 236 | varbit 13830, 8 bits | `AntiDragDelay.plugin.js` asks for milliseconds and keeps them in 20 ms steps, up to 5000 ms (the row's description) |
+| Anti Drag - Enable Key / Disable Key | 237, 238 | varbits 13828, 13829 | the option's key code, which script 3962 reads back through enum 4302: 0 none, 81 Shift, 82 Ctrl |
+| Esc closes the current interface | 57 | varbit 4681 (varp 1224, bit 31) | saved in its keybind (`keybind_4681`), as the keybindings panel's toggle; both share one toggle |
+| Display Relics | 127 | varbit 12383 (varp 1734) | the buff bar's relic op (script 3231) flips it with no click; varp 1734 is transmitted for it |
+
+Scripts 518, 2518, 4607 and 4611 are only called by the toggle script for their All Settings rows, which are saved from the click. Live logins send varp 3416 as 1 (no delay, no keys). Tests: `tests/settings-client-saves.test.cjs`, `client/tests/buff-bar-settings-varps.test.ts`.
+
+- **Not done**: the official client transmits no varps, so a relic change made on its buff bar is still not saved. Ours: the delay prompt's wording (no capture of it).
 
 ## Examine price info
 

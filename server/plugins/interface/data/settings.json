@@ -56,6 +56,7 @@
     "86": { "name": "Modern Layout - Side panel visual appearance", "varbit": 12135 },
     "111": { "name": "Show normal health overlay", "varbit": 12390 },
     "114": { "name": "Show mouseover tooltips", "varbit": 12344 },
+    "115": { "name": "Anti Drag", "varbit": 12345 },
     "119": { "name": "Chat timestamps", "varbit": 12384, "script": 4586 },
     "123": { "name": "Show attack style", "varbit": 12352 },
     "124": { "name": "Display buff bar", "varbit": 9528 },
@@ -113,6 +114,23 @@
     "213": { "name": "Cannon ammo", "varbit": 13667 },
     "234": { "name": "Examine price info - Grand Exchange", "varbit": 13826, "default": 1 },
     "235": { "name": "Examine price info - Alchemy", "varbit": 13827, "default": 1 },
+    "236": { "name": "Anti Drag - Delay", "varbit": 13830 },
+    "237": {
+      "name": "Anti Drag - Enable Key",
+      "options": [
+        { "varbits": { "13828": 0 } },
+        { "varbits": { "13828": 81 } },
+        { "varbits": { "13828": 82 } }
+      ]
+    },
+    "238": {
+      "name": "Anti Drag - Disable Key",
+      "options": [
+        { "varbits": { "13829": 0 } },
+        { "varbits": { "13829": 81 } },
+        { "varbits": { "13829": 82 } }
+      ]
+    },
     "244": { "name": "Desert - Water available", "varbit": 14166 },
     "246": { "name": "Cannon decay", "varbit": 14173 },
     "248": { "name": "Cannon low on ammo notification", "varbit": 14175 },

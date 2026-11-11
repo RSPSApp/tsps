@@ -1191,9 +1191,20 @@ test('Secrets North6 cult travel: real cave 2852 lands at the raft and boards to
   }, 2567, 9679, raftDef.getSizeX(), raftDef.getSizeY(), raft.getFace(), raft.getType(), raftDef.getBlockingMask()),
   true, 'approach tile legally reaches the raw raft');
 
-  click(2849, 2567, 9679); // raft Board
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [2606, 9692, 0],
-    'raft lands at the cult hideout');
+  // The ride is a task: it fades out and moves the player three ticks later (capture 1694 ticks
+  // 6569-6572), and stops if the player has gone, so this fixture player is registered for it.
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  p.setRegistered(true);
+  try {
+    click(2849, 2567, 9679); // raft Board
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2570, 9682], 'not moved on the click tick');
+    for (let i = 0; i < 3; i++) TaskManager.process();
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [2606, 9692, 0],
+      'raft lands at the cult hideout');
+  } finally {
+    TaskManager.cancelTasks(p);
+    p.setRegistered(false);
+  }
 });
 
 test('Hazeel basement ladder claim: 46717 down to Claus landing and 46716 back', async () => {

@@ -743,20 +743,25 @@ module.exports = function registerHazeelCultQuest(api) {
     event.handled = true;
   }
 
-  // The raft's lines are message boxes (Wiki Transcript:Hazeel Cult has them as {{tbox}}). rsprox
-  // 226/01694.txt ticks 6569-6575: the box and the fade out (fade_overlay, 174) with synth 2372 delay 30,
-  // the teleport three ticks later, then the box again as it fades back in; the overlay closes two later.
+  // The raft's lines are message boxes (Wiki Transcript:Hazeel Cult has them as {{tbox}}), each with its
+  // mesbox chat line. rsprox 226/01694.txt ticks 6569-6575: the box, with no "Click here to continue",
+  // and the fade out (fade_overlay, 174) with synth 2372 delay 30; the teleport three ticks later (6572);
+  // the fade back in with the box again, now continuable, a tick after that (6573); the overlay closes
+  // two ticks later.
   const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
   const FADE_OVERLAY = 174;
   const FADE_SCRIPT = 948;
   const FADE_CYCLES = 50;
   const RAFT_SOUND = 2372;
   const RAFT_MOVE_TICKS = 3;
+  const RAFT_FADE_IN_TICKS = 4;
   const RAFT_CLOSE_OVERLAY_TICKS = 6;
 
-  function raftBox(player, text) {
-    const { DialogueChainBuilder, StatementDialogue } = api.core;
-    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  function raftBox(player, text, canContinue = true) {
+    const { DialogueChainBuilder, StatementDialogue, ChatType } = api.core;
+    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+    if (canContinue) player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+    else StatementDialogue.send(player, text, false);
   }
 
   function raftFade(player, out) {
@@ -765,7 +770,7 @@ module.exports = function registerHazeelCultQuest(api) {
   }
 
   function rideRaft(player, tile, text) {
-    raftBox(player, text);
+    raftBox(player, text, false);
     raftFade(player, true);
     player.getPacketSender().sendSound(RAFT_SOUND, 1, 30);
     const movement = player.getMovementQueue();
@@ -776,8 +781,8 @@ module.exports = function registerHazeelCultQuest(api) {
       execute() {
         ticks++;
         if (!player.isRegistered()) return void this.stop();
-        if (ticks === RAFT_MOVE_TICKS) {
-          player.moveTo(new Location(tile.x, tile.y, tile.z));
+        if (ticks === RAFT_MOVE_TICKS) player.moveTo(new Location(tile.x, tile.y, tile.z));
+        if (ticks === RAFT_FADE_IN_TICKS) {
           movement.setBlockMovement(false);
           raftFade(player, false);
           raftBox(player, text);

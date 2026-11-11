@@ -155,7 +155,7 @@ Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), whic
   - Freeze: live sends no var for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it.
   - No timer var yet for charge, the God Wars altar, divine potions, magic imbue, the Sire stun, Staff of the dead, prayer enhance, Corruption, Shadow Veil, Ward of Arceuus, Resurrection, the cannon, the Menaphite remedy, the surge potion and the Tombs of Amascut effects, so their rows have nothing to hide yet.
   - The buff bar's own toggle scripts (4607 for freeze, 4611 for antipoison and the like) flip their varbits in the client alone, so a change made there is not saved.
-  - Modified stats overlay (148-151): the cache HUD (708) is not mounted, so its rows stay unwired.
+  - Modified stats overlay (148-151): now wired, see "Health and modified stats overlays" below.
 
 ## Rows owned by other plugins
 
@@ -450,6 +450,23 @@ open. Every shake goes through `CameraShake.send`, so its row and its group's ma
     not pin down each area's edges, so the server opens none yet.
   - Disable colourful fade effects (460): no capture shows a Guardians of the Rift fade with
     varbit 18132 set, so the minigame still follows only its own `gotr_colourful_fade_disabled`.
+
+## Health and modified stats overlays
+
+**Modified stats overlay** (`stat_boosts_hud`, 708). The login gameframe opens it at `toplevel_osrs_stretch:stat_boosts_hud` (161:5), next to the buff bar, as live does on every layout. Its own scripts draw the boosted and drained stats from the stat updates. Its four rows are `data/settings.json` rows, saved and sent back at login:
+
+| Setting | Id | Variable |
+| --- | --- | --- |
+| Display modified stats overlay | 148 | varbit 12373 `stat_boosts_hud_hidden` |
+| Show tooltips for modified stat overlays | 149 | varbit 12374 `stat_boosts_hud_tooltips_hidden` |
+| Number of modified stats to show (dropdown) | 150 | varbit 12375 `stat_boosts_hud_num_displays` = option; a fresh account gets 5, which live sends at login in every rsprox recording |
+| Display relative stat value | 151 | varbit 12376 `stat_boosts_hud_display_relative` |
+
+**Normal health overlay** (row 111, varbit 12390 `hpbar_hud_standard_disabled`, on by default: no capture sets it). It is the boss health HUD (303) in standard mode (`hpbar_hud_boss` 0), driven by `BossHud.plugin.js` for any NPC no boss plugin drives. A player's attack roll on an NPC shows it: `hpbar_hud_npc`, its hitpoints and maximum, the usual colours, open script 2376 and fade-in 2887. Each hit on it updates the hitpoints. 8 ticks after the player's last attack the HUD fades out (2889) and clears 4 ticks later. This matches rsprox recordings 1382, 2148 and 3979 (a Falador guard, a Canifis man, a calf). The Wiki gives the option to the mobile and Steam clients only, which is why desktop recordings never show it. A boss HUD always wins: an NPC id any boss event has named never gets the standard HUD, and a boss show replaces it. The client's opponent information panel steps aside for either mode while that mode's setting is on.
+
+- **Not done**:
+  - The overlay's stat restore timers (scripts 4517 and 4518, which live sends every 25 ticks) aren't sent, so its restore countdown doesn't run.
+  - The normal health overlay fades in once when it opens. Live runs the fade-in again on the ticks after each hit.
 
 ## Containers on death
 

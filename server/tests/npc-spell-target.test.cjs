@@ -231,3 +231,18 @@ test("Crumble Undead still reaches Enakhra's Lament's scripted boneguard", t => 
   assert.equal(f.spell.canCastOnTarget(f.player, f.npc), true);
   assert.deepEqual(f.messages, []);
 });
+
+// rsprox_transcripts/235/03344.txt ticks 4503 and 5691: a god spell without its staff names the staves
+// (the spell's own cast check, which combat runs before the runes are taken).
+for (const [name, message] of [
+  ['Saradomin Strike', 'You must be wielding the Staff of Saradomin or the Staff of Light to cast this spell.'],
+  ['Flames of Zamorak', "You must be wielding the Staff of Zamorak, Staff of the Dead, Thammaron's Sceptre, or the Accursed Sceptre to cast this spell."],
+]) {
+  test(`${name} without its staff is refused with the recorded line, costing nothing`, t => {
+    const f = nativeCast(t, { name, npcId: core.NpcIdentifiers.GOBLIN });
+    const before = JSON.stringify(f.player.getInventory().getItems());
+    assert.equal(f.spell.canCast(f.player, true), false);
+    assert.deepEqual(f.messages, [message]);
+    assert.equal(JSON.stringify(f.player.getInventory().getItems()), before);
+  });
+}

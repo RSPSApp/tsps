@@ -1,8 +1,8 @@
 // Run after `yarn build`: node --test tests/impling-tracker.test.cjs
-// Issue 4463: the butterfly nets' "Check totals" (worn "Check Totals") opens the Impling Tracker (Wiki,
-// Insect net), interface 180 filled by clientscript 1327 from two "|" lists in enum 1316's order, one for
-// the surface and one for Puro-Puro. Catches are counted from hunter:impling-caught. Every plugin is
-// loaded and the click goes through the real inventory dispatch.
+// Issue 4463: the butterfly nets' "Check totals" (worn "Check Totals") opens the Impling Tracker as live does
+// (rsprox 20261111T231757-5ab63b4: script 2524, interface 180, then 1327 with the surface and Puro-Puro lists and
+// the tabs' components). Catches are counted from hunter:impling-caught. Every plugin is loaded and the click
+// goes through the real inventory dispatch.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -59,37 +59,32 @@ async function checkTotals(f, itemId) {
   f.c.processTurnPackets();
 }
 
-test("the tracker's impling order covers enum 1316, one impling per model", () => {
+/** Live's zero lists, verbatim from the capture. */
+const LIVE_SURFACE_ZERO = "Baby:<br><col=ffffff>0|Young:<br><col=ffffff>0|Gourmet:<br><col=ffffff>0|Earth:<br><col=ffffff>0|Essence:<br><col=ffffff>0|Eclectic:<br><col=ffffff>0|Nature:<br><col=ffffff>0|Magpie:<br><col=ffffff>0|Ninja:<br><col=ffffff>0|Crystal:<br><col=ffffff>0|Dragon:<br><col=ffffff>0|Lucky:<br><col=ffffff>0";
+const LIVE_PURO_AFTER = "Baby:<br><col=ffffff>0|Young:<br><col=ffffff>1|Gourmet:<br><col=ffffff>0|Earth:<br><col=ffffff>0|Essence:<br><col=ffffff>1|Eclectic:<br><col=ffffff>0|Nature:<br><col=ffffff>0|Magpie:<br><col=ffffff>0|Ninja:<br><col=ffffff>0|<col=a46c19>Crystal:<br><col=a49f99>-|Dragon:<br><col=ffffff>0|Lucky:<br><col=ffffff>0";
+const LIVE_COMPONENTS = [11796484, 11796486, 11796485, 11796483, 11796488, 11796490, 11796489, 11796487];
+
+test("the tracker has one entry per enum 1316 model", () => {
   assert.equal(Tracker.IMPLINGS.length, core.CacheDefinitions.getEnumValues(1316).size);
-  assert.equal(new Set(Tracker.IMPLINGS).size, Tracker.IMPLINGS.length);
 });
 
-test("catches count per tab, and Check totals opens ii_tracker with both lists", async (t) => {
-  const f = actor(t);
-  caught(f.p, "ii_impling_type_1", false);
-  caught(f.p, "ii_impling_type_1", false);
-  caught(f.p, "ii_impling_type_10_maze", true);
-  caught(f.p, "ii_impling_type_12_johnny", false);
-  const counts = Tracker.totals(f.p);
-  const at = (name) => Tracker.IMPLINGS.indexOf(name);
-  assert.equal(counts.surface[at("Baby impling")], 2);
-  assert.equal(counts.puro[at("Dragon impling")], 1);
-  assert.equal(counts.surface[at("Crystal impling")], 1);
-  assert.equal(counts.surface.reduce((a, b) => a + b), 3);
-
-  await checkTotals(f, core.ItemIdentifiers.BUTTERFLY_NET);
-  assert.deepEqual(f.sent.interfaces, [core.CacheDefinitions.getInterfaceId("ii_tracker")]);
-  const script = f.sent.scripts.find(([id]) => id === 1327);
-  assert.ok(script, "clientscript 1327 builds the tracker");
-  const uid = (child) => (TRACKER << 16) | child;
-  assert.deepEqual(script.slice(1, 9), [...Tracker.SURFACE_COMPONENTS, ...Tracker.PURO_COMPONENTS].map(uid));
-  assert.equal(script[9], counts.surface.join("|"));
-  assert.equal(script[10], counts.puro.join("|"));
-});
-
-test("the magic butterfly net opens the same tracker, and a fresh player's lists are all zero", async (t) => {
+test("a fresh player's tracker is live's zero lists, opened as the main modal", async (t) => {
   const f = actor(t);
   await checkTotals(f, core.ItemIdentifiers.MAGIC_BUTTERFLY_NET);
+  assert.deepEqual(f.sent.interfaces, [TRACKER]);
+  assert.deepEqual(f.sent.scripts.find(([id]) => id === 1327),
+    [1327, LIVE_SURFACE_ZERO, LIVE_PURO_AFTER.replace("Young:<br><col=ffffff>1", "Young:<br><col=ffffff>0").replace("Essence:<br><col=ffffff>1", "Essence:<br><col=ffffff>0"), ...LIVE_COMPONENTS]);
+});
+
+test("Puro-Puro catches of a young and an essence impling give live's Puro-Puro list", async (t) => {
+  const f = actor(t);
+  caught(f.p, "ii_impling_type_5_maze", true);
+  caught(f.p, "ii_impling_type_2_maze", true);
+  caught(f.p, "ii_impling_type_12_johnny", false);
+  caught(f.p, "ii_impling_type_1", false);
+  caught(f.p, "ii_impling_type_1", false);
+  await checkTotals(f, core.ItemIdentifiers.BUTTERFLY_NET);
   const script = f.sent.scripts.find(([id]) => id === 1327);
-  assert.equal(script[9], Tracker.IMPLINGS.map(() => 0).join("|"));
+  assert.equal(script[2], LIVE_PURO_AFTER);
+  assert.equal(script[1], LIVE_SURFACE_ZERO.replace("Baby:<br><col=ffffff>0", "Baby:<br><col=ffffff>2").replace("Crystal:<br><col=ffffff>0", "Crystal:<br><col=ffffff>1"));
 });

@@ -85,18 +85,26 @@ test("Check on the Book of the Dead shows the captured line with its charges", (
   assert.deepEqual(sent.items, [[OBJECTBOX_ITEM, BOOK_OF_THE_DEAD]]);
 });
 
-test("Check on Kharedst's memoirs counts out of 100, inventory and worn", (t) => {
+test("Check on memoirs with no page reads live's 0/0 (rsprox 20261111T231757-5ab63b4)", (t) => {
   const { player, sent } = actor(t);
-  Travel._test.setMemoirCharges(player, new core.Item(MEMOIRS, 1), 40);
   assert.equal(inventoryClick(player, MEMOIRS, "Check").handled, true);
-  assert.equal(sent.strings.get(OBJECTBOX_TEXT), checkLine(40, 100));
+  assert.equal(sent.strings.get(OBJECTBOX_TEXT), checkLine(0, 0));
+  assert.deepEqual(sent.items, [[OBJECTBOX_ITEM, MEMOIRS]]);
+});
+
+test("Check on Kharedst's memoirs counts 20 per attached page, inventory and worn", (t) => {
+  const { player, sent } = actor(t);
+  player.setAttribute("kharedst-memoirs:added-pages", { piscarilius: true, shayzien: true });
+  Travel._test.setMemoirCharges(player, new core.Item(MEMOIRS, 1), 25);
+  assert.equal(inventoryClick(player, MEMOIRS, "Check").handled, true);
+  assert.equal(sent.strings.get(OBJECTBOX_TEXT), checkLine(25, 40));
   sent.strings.clear();
   player.getDialogueManager().reset();
   assert.equal(wornCheck(player, MEMOIRS).handled, true);
-  assert.equal(sent.strings.get(OBJECTBOX_TEXT), checkLine(40, 100));
+  assert.equal(sent.strings.get(OBJECTBOX_TEXT), checkLine(25, 40));
 });
 
-test("Read plays human_readbook and opens the book on the captured first spread", (t) => {
+test("Read plays human_readbook and opens the book on its first spread", (t) => {
   for (const [itemId, title] of [[BOOK_OF_THE_DEAD, "The Book of the Dead"], [MEMOIRS, "Kharedst's Memoirs"]]) {
     const { player, sent } = actor(t);
     const event = inventoryClick(player, itemId, "Read");
@@ -110,8 +118,47 @@ test("Read plays human_readbook and opens the book on the captured first spread"
   }
 });
 
-test("the book data holds the 16 captured spreads, ending with Tread Carefully", () => {
-  const { pages } = require("../plugins/items/data/kharedsts-memoirs-pages.json");
-  assert.equal(pages.length, 16);
-  assert.equal(pages[15]["44"], "Tread Carefully", "page 31 opens the last entry");
+test("memoirs with no page attached read as live's three spreads (rsprox 20261111T231757-5ab63b4)", (t) => {
+  const { player } = actor(t);
+  const spreads = Travel._test.bookSpreads(player, new core.Item(MEMOIRS, 1));
+  const lines = (spread) => Object.fromEntries(Object.entries(spread).filter(([, text]) => text));
+  assert.equal(spreads.length, 3);
+  assert.deepEqual(lines(spreads[1]), {
+    44: "'The Fisher's Flute'", 46: "...", 48: "<col=ff0000> This entry seems to be", 49: "<col=ff0000>missing.<col=ff0000>",
+    60: "History and Hearsay", 62: "...", 64: "<col=ff0000> This entry seems to be", 65: "<col=ff0000>missing.<col=000000>",
+  });
+  assert.deepEqual(lines(spreads[2]), {
+    44: "Jewellery of Jubilation", 46: "...", 48: "<col=ff0000> This entry seems to be", 49: "<col=ff0000>missing.<col=000000>",
+    60: "A Dark Disposition", 62: "...", 64: "<col=ff0000> This entry seems to be", 65: "<col=ff0000>missing.<col=000000>",
+  });
+});
+
+test("the Book of the Dead reads in full, 32 pages ending with Tread Carefully (rsprox 363)", (t) => {
+  const { player } = actor(t);
+  const spreads = Travel._test.bookSpreads(player, new core.Item(BOOK_OF_THE_DEAD, 1));
+  assert.equal(spreads.length, 16);
+  assert.equal(spreads[2][44], "The Fisher's Flute");
+  assert.equal(spreads[15][44], "Tread Carefully");
+});
+
+test("an attached page reads in full in the memoirs, the rest stay missing", (t) => {
+  const { player } = actor(t);
+  player.setAttribute("kharedst-memoirs:added-pages", { piscarilius: true });
+  const spreads = Travel._test.bookSpreads(player, new core.Item(MEMOIRS, 1));
+  // Dedication, Lunch (missing), then The Fisher's Flute's four pages, then three missing pages.
+  assert.equal(spreads.length, 5);
+  assert.equal(spreads[1][44], "The Fisher's Flute");
+  assert.equal(spreads[3][44], "History and Hearsay");
+  assert.equal(spreads[3][60], "Jewellery of Jubilation");
+});
+
+test("Reminisce on an empty book opens live's no-charge messagebox", (t) => {
+  const { player, sent } = actor(t);
+  Travel._test.setMemoirCharges(player, new core.Item(MEMOIRS, 1), 0);
+  player.getInventory().setItem(0, new core.Item(MEMOIRS, 1));
+  const event = { player, interfaceId: MAIN_INVENTORY_WIDGET, item: player.getInventory().getItems()[0], itemId: MEMOIRS, slot: 0,
+    clickType: 1, option: "Reminisce", subOption: "Lunch by the Lancalliums", handled: false };
+  PluginManager.emitItemAction(event);
+  assert.equal(event.handled, true);
+  assert.equal(sent.strings.get((229 << 16) | 3), "Kharedst's Memoirs holds no charge.");
 });

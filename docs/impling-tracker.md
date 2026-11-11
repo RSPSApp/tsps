@@ -3,13 +3,15 @@
 Butterfly net and Magic butterfly net: inventory "Check totals", worn "Check Totals" (cache param 453) open the Impling
 Tracker, which counts implings caught in Puro-Puro and the rest of the world (Wiki, Insect net).
 
-- Interface 180 `ii_tracker`: Surface World tab (scroll layer 180:4, scrollbar 180:3, children 180:5-6) and Puro-Puro tab
-  (180:8, 180:7, children 180:9-10); the tab buttons (180:13, 180:18) run script 1330.
-- Clientscript 1327 takes the two tabs' four components each and then two `|`-separated count lists. Script 1329 gives
-  the Nth entry the model `enum_1316[N]` (12 entries) and the count as its text.
-- `plugins/skills/hunter/ImplingTracker.Hunter.js` counts `hunter:impling-caught` per tab in `hunter:impling-totals`.
+User capture 20261111T231757-5ab63b4 (rev 242), inventory op 4 and worn `wornitems:slot3` op 4:
+- `toplevel_mainmodal_open` (2524) [-1, -1], interface 180 `ii_tracker` as the main modal, then `ii_tracker_build`
+  (1327) with the Surface World list, the Puro-Puro list, and the tabs' components 180:4/6/5/3 and 180:8/10/9/7
+  (scroll layer, text layer, model layer, scrollbar).
+- Each list is twelve `|`-separated entries `<Name>:<br><col=ffffff><count>` in the order Baby, Young, Gourmet, Earth,
+  Essence, Eclectic, Nature, Magpie, Ninja, Crystal, Dragon, Lucky. Puro-Puro's Crystal entry is
+  `<col=a46c19>Crystal:<br><col=a49f99>-`.
+- Catching a young and an essence impling in Puro-Puro raised those two Puro-Puro counts.
+- The tab buttons (180:13, 180:18) are client-side; live also sets `busy` (varbit 12393) while the modal is open.
 
-Not captured: no recording opens the tracker, so the order of enum 1316 (which impling each model is) and the
-component order passed to 1327 are inferred (lucky 31742 and crystal 38801 follow those implings' own model ids; the
-rest is unconfirmed), and whether live's Puro-Puro list omits the crystal impling is unknown. Counts start from this
-server's first catch.
+`plugins/skills/hunter/ImplingTracker.Hunter.js` counts `hunter:impling-caught` per tab in `hunter:impling-totals`.
+Ours: counts start from this server's first catch.

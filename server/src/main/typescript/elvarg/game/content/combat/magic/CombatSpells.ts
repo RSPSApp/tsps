@@ -352,7 +352,6 @@ function saradominStrikeDrain(cast: Mobile, castOn: Mobile): void {
     skills.setCurrentLevelCombat(Skill.PRAYER, current - 1);
 }
 
-/** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
 /**
  * Wiki (Shadow spells): a hit lowers the target's Attack by 10% (rush, burst) or 15% (blitz, barrage),
  * players and monsters alike, unless it is already lowered; an Ancient sceptre's x1.1 arrives as `multiplier`.
@@ -367,6 +366,7 @@ function shadowDrainNpc(castOn: Mobile, percent: number, multiplier: number): vo
     npc.setCurrentLevels(Skill.ATTACK, level - Math.floor(level * percent * multiplier));
 }
 
+/** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
 function godStaffRequired(player: Player, staves: Set<number>): Item[] {
     const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId() ?? -1;
     return [new Item(staves.has(weaponId) ? weaponId : staves.values().next().value as number)];

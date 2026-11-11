@@ -8,6 +8,7 @@
  * Bank-side loadouts and potion storage are separate content.
  */
 const Potions = require("./Potions.plugin");
+const { examineItem } = require("../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const CONTENTS_ATTRIBUTE = "chugging-barrel:potions";
 /** Wiki: a maximum of 100 doses per potion, and up to five different potions. */
@@ -431,7 +432,9 @@ function click(event) {
   const selected = select(player, buttonId, slot, itemId);
   if (!selected) return;
   if (action === 10) {
-    player.sendMessage(core.ItemDefinition.forId(itemId).getExamine());
+    // A contents row shows its potion as the 1-dose form, stacked by the doses stored.
+    if (selected.store) examineItem(player, Number(selected.key), selected.store.doses);
+    else examineItem(player, itemId, 1);
     return;
   }
   if (action < 1 || action > 8) return;

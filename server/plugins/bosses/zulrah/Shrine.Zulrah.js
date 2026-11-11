@@ -24,6 +24,7 @@ const CombatAchievements = require("./CombatAchievements.Zulrah");
 const Fight = require("./Fight.Zulrah");
 const { MeleeSnakeling, MagicSnakeling } = require("./Hazards.Zulrah");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const DAMAGE_CAP = 50;
 const BOSS_NAME = "Zulrah";
@@ -396,7 +397,7 @@ function retrievalItemAction(event) {
   if (!entry) return false;
   const op = event.opId ?? event.action;
   if (op === RETRIEVAL_EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry[0]).getExamine());
+    examineItem(player, entry[0], entry[1]);
     return true;
   }
   if (op !== RETRIEVAL_TAKE_OP) return false;

@@ -100,11 +100,11 @@ test('welcome screen waits for synchronous login initialization and restores the
     await Promise.resolve();
     assert.deepEqual(h.packets, [['root', 378], ['flags', (378 << 16) | 72, 2],
       ['text', (378 << 16) | 6, 'Welcome to Old School RuneScape!']]);
-    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:shown']);
+    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:greeted', 'welcome-screen:shown']);
     h.hooks.play({ player: h.player });
     h.hooks.play({ player: h.player });
     assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
-    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:shown', 'gameframe:ready']);
+    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:greeted', 'welcome-screen:shown', 'gameframe:ready']);
     assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'Play does not send it again');
   }
 });

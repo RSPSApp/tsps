@@ -685,7 +685,7 @@ export class World {
         const radius = Math.max(0, Math.ceil(viewDistance / 8));
         const budget = World.MAX_LOCAL_PLAYERS + World.MAX_NEW_LOCAL_PLAYERS_PER_CYCLE;
         const found: Player[] = [];
-        const planes = CrossFloor.enabled() && origin.getZ() >= 0 && origin.getZ() < 4 ? [origin.getZ(), ...[0, 1, 2, 3].filter(z => z !== origin.getZ())] : [origin.getZ()];
+        const planes = CrossFloor.includesOtherPlanes(origin.getZ()) ? [origin.getZ(), ...[0, 1, 2, 3].filter(z => z !== origin.getZ())] : [origin.getZ()];
         for (const z of planes) {
             found.push(...World.collectFromBuckets(World.playerUpdateBuckets,
                 new Location(origin.getX(), origin.getY(), z), radius, budget - found.length,
@@ -723,7 +723,7 @@ export class World {
     public static getNearbyNpcsForUpdate(player: Player): NPC[] {
         const radius = Math.max(World.UPDATE_BUCKET_RADIUS, Math.ceil(World.npcViewDistance(player) / 8));
         const origin = BoatManager.rootLocation(player);
-        const planes = CrossFloor.enabled() && origin.getZ() >= 0 && origin.getZ() < 4 ? [origin.getZ(), ...[0, 1, 2, 3].filter(z => z !== origin.getZ())] : [origin.getZ()];
+        const planes = CrossFloor.includesOtherPlanes(origin.getZ()) ? [origin.getZ(), ...[0, 1, 2, 3].filter(z => z !== origin.getZ())] : [origin.getZ()];
         const nearby = planes.flatMap(z => World.collectFromBuckets(World.npcUpdateBuckets, new Location(origin.getX(), origin.getY(), z), radius));
         nearby.sort((a, b) =>
             Number(BoatManager.rootLocation(a).getZ() !== origin.getZ()) - Number(BoatManager.rootLocation(b).getZ() !== origin.getZ()) ||

@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Boundary } from "../model/Boundary";
 import { Location } from "../model/Location";
-import { normalizeWorldPluginConfig, type ScopedPluginSettings } from "./WorldPluginConfig";
+import { normalizeWorldPluginConfig, preserveLegacyCrossFloorDefault, type ScopedPluginSettings } from "./WorldPluginConfig";
 
 export type WorldZoneTag = string;
 
@@ -60,7 +60,7 @@ export function readWorldConfig(scopedSettings?: ScopedPluginSettings): JsonObje
     // Optional per-deployment overrides (gitignored), so a live world can differ from the
     // shipped world.json (e.g. its XP rate or tutorial) and still update from main by fast-forward.
     const localFile = path.resolve("data/definitions/world.local.json");
-    if (!fs.existsSync(localFile)) return normalizeWorldPluginConfig(shipped, scopedSettings);
+    if (!fs.existsSync(localFile)) return preserveLegacyCrossFloorDefault(normalizeWorldPluginConfig(shipped, scopedSettings));
     const local = object(JSON.parse(fs.readFileSync(localFile, "utf8")), "world.local.json");
     return mergeWorldConfig(shipped, local, scopedSettings);
 }
@@ -77,7 +77,7 @@ export function mergeWorldConfig(shipped: JsonObject, local: JsonObject, scopedS
             merged[key] = { ...shippedValue, ...localValue };
         }
     }
-    return merged;
+    return preserveLegacyCrossFloorDefault(merged);
 }
 
 function isPlainObject(value: unknown): value is JsonObject {

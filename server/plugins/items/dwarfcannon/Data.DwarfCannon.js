@@ -20,6 +20,11 @@ const VARBIT = {
   LOAD_X: 17870, // option_cannonballs_load_x
   BUSY: 12393,
 };
+/**
+ * mcannon_world: the world the cannon stands on, modulo 128. The buff bar shows the cannon's ammo
+ * only while it matches the client's own world (map_world % 128), and the client reports world 301.
+ */
+const WORLD = 301 % 128;
 const FIRING_FLAG = 1 << 20;
 
 const SOUND = { SETUP: 2876, TURN: 2877, FIRE: 1667, PICK_UP: 2581 };
@@ -85,6 +90,6 @@ function inZone(direction, dx, dy) {
 }
 
 module.exports = {
-  DIRECTIONS, VARP, VARBIT, FIRING_FLAG, SOUND, SETUP_ANIMATION, SETUP_TICKS,
+  DIRECTIONS, VARP, VARBIT, WORLD, FIRING_FLAG, SOUND, SETUP_ANIMATION, SETUP_TICKS,
   CAPACITY, MAX_HIT, RANGED_XP_PER_DAMAGE, PROJECTILE, BREAK_TICKS, LOSE_TICKS, ZONES, NO_CANNON_NPCS, inZone,
 };

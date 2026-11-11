@@ -23,6 +23,8 @@ function greet(player) {
   const greeting = { player, worldName, text: `Welcome to ${worldName}.` };
   api.emitCustomEvent("welcome-screen:greeting", greeting);
   player.getPacketSender().sendTypedMessage(api.core.ChatType.WELCOME, String(greeting.text));
+  // Live's next line is the "Did you know?" tip (LoginTips).
+  api.emitCustomEvent("welcome-screen:greeted", { player });
 }
 
 function login({ player, isNewAccount }) {

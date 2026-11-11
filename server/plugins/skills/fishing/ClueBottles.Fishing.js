@@ -15,11 +15,9 @@ function rollClueBottles(player, base, random = Math.random) {
   const wildernessRing = location && core.Wilderness.isInLocation(location) &&
     core.Wilderness.levelAt(location.getX(), location.getY()) > 0 &&
     imbuedRings.some((id) => player.getEquipment().contains(id));
+  const members = core.WorldDefinition.isMembersWorld();
   for (const tier of tiers) {
-    const capacity = { player, tier: tier.name, allowed: null };
-    api.emitCustomEvent("treasure-trails:can-receive", capacity);
-    if (capacity.allowed !== true) continue;
-
+    if (!members && tier.name !== "beginner") continue;
     const boost = { player, vessel: "bottle", tier: tier.name, multiplier: 1 };
     api.emitCustomEvent("treasure-trails:vessel-chance", boost);
     if (boost.allowed === false) continue;
@@ -32,6 +30,13 @@ function rollClueBottles(player, base, random = Math.random) {
     // https://oldschool.runescape.wiki/w/Clue_bottle_%28beginner%29: no imbued-ring bonus.
     const chanceMultiplier = multiplier * (wildernessRing && tier.name !== "beginner" ? 2 : 1);
     if (random() * denominator >= chanceMultiplier) continue;
+
+    const capacity = { player, tier: tier.name, allowed: null };
+    api.emitCustomEvent("treasure-trails:can-receive", capacity);
+    if (capacity.allowed !== true) {
+      api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: tier.name });
+      continue;
+    }
 
     const reward = { player, itemId: tier.itemId, box: false };
     api.emitCustomEvent("treasure-trails:clue-item", reward);

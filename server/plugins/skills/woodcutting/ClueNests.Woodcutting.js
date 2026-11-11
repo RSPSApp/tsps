@@ -61,7 +61,11 @@ function rollClueNests(player, tree) {
     const base = Math.floor((adjusted / (100 + level)) * tier.modifier);
     const chance = base < 1 ? base : Math.max(1, Math.floor(base / (boost.multiplier > 1 ? boost.multiplier : 1)));
     const ringMultiplier = wildernessRing && tier.name !== "beginner" ? 2 : 1;
-    if (chance < 1 || Math.random() * chance >= ringMultiplier || ownsClue(player, tier)) {
+    if (chance < 1 || Math.random() * chance >= ringMultiplier) {
+      continue;
+    }
+    if (ownsClue(player, tier)) {
+      pluginApi?.emitCustomEvent?.("treasure-trails:missed-clue", { player, tier: tier.name });
       continue;
     }
     const reward = {player, itemId: tier.nestId, box: false};

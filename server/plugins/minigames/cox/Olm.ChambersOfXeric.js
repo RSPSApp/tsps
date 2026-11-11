@@ -112,6 +112,7 @@ const Raid = require("./RaidState.ChambersOfXeric");
 const Monsters = require("./Monsters.ChambersOfXeric");
 
 const Achievements = require("./CombatAchievements.ChambersOfXeric");
+const CameraShake = require("../../interface/CameraShake.plugin");
 
 const NPC = { HEAD: 7554, RIGHT_CLAW: 7553, LEFT_CLAW: 7555, RIGHT_CLAW_DOWN: 7556, LEFT_CLAW_DOWN: 7557, FIRE: 7558 };
 /**
@@ -1484,8 +1485,12 @@ class OlmRoom extends Raid.Room {
     let ticks = 0;
     let atRaider = finalStand;
     const volley = () => {
-      if (this.raid.destroyed || state.stopped || this.dead || ticks > duration) return false;
+      if (this.raid.destroyed || state.stopped || this.dead || ticks > duration) {
+        this.stillCamera();
+        return false;
+      }
       ticks += 2;
+      this.shakeCamera(ticks > duration);
       if (!finalStand) Shared.areaSound(this.viewers(), 3834, centre, { range: 15 });
       if (atRaider) {
         const raider = Shared.randomOf(this.raiders());
@@ -1506,6 +1511,34 @@ class OlmRoom extends Raid.Room {
   }
 
   /**
+   * Each volley of falling crystals shakes the chamber (random 2-5 on each of the first three
+   * slots); the last one before the Olm rises again stills it.
+   */
+  shakeCamera(last) {
+    this.shaken ??= new Set();
+    const viewers = this.viewers();
+    // Ours: a raider who has left the chamber (died, escaped) is stilled with the next volley.
+    for (const player of this.shaken) {
+      if (!viewers.includes(player)) this.stillPlayer(player);
+    }
+    for (const player of viewers) {
+      for (const slot of [0, 1, 2]) CameraShake.send(player.getPacketSender(), "olm", slot, Shared.random(2, 5), 0, 0);
+      this.shaken.add(player);
+    }
+    if (last) this.stillCamera();
+  }
+
+  /** Stills the camera of everyone the falling crystals shook. */
+  stillCamera() {
+    for (const player of [...(this.shaken ?? [])]) this.stillPlayer(player);
+  }
+
+  stillPlayer(player) {
+    this.shaken.delete(player);
+    if (player.isRegistered()) player.getPacketSender().sendCameraReset?.();
+  }
+
+  /**
    * `::coxclear` in the chamber: it dies as the other rooms' encounters do, so a scripted run can
    * reach the chest (the room has no exit crystal for the base cleanup to open).
    */
@@ -1519,6 +1552,7 @@ class OlmRoom extends Raid.Room {
     this.dead = true;
     if (this.fallingCrystals$) this.fallingCrystals$.stopped = true;
     this.animate(this.objects.head, ANIM.HEAD_FALL);
+    this.stillCamera();
     Shared.areaSound(this.viewers(), 3405, this.headSoundTile(), { range: 15 });
     this.completeAchievements();
     const { Animation, GameObject, Location, ObjectManager } = Shared.core();

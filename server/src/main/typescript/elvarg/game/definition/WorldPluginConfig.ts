@@ -19,7 +19,7 @@ export function pluginConfigKey(plugin: string, setting: string): string {
 
 /** Normalize each file separately so either syntax in the local file can override the shipped one. */
 export function normalizeWorldPluginConfig(world: JsonObject, scopedSettings?: ScopedPluginSettings): JsonObject {
-    if (!isObject(world.plugins) || !Object.values(world.plugins).some(isObject)) return world;
+    if (!isObject(world.plugins) || !Object.values(world.plugins).some(isObject)) return migrateCrossFloorVisibility(world);
 
     const switches: [string, unknown][] = [];
     const settings: [string, unknown][] = [];
@@ -40,12 +40,47 @@ export function normalizeWorldPluginConfig(world: JsonObject, scopedSettings?: S
             scopedSettings?.set(flatKey, { plugin, setting: key });
         }
     }
-    return {
+    return migrateCrossFloorVisibility({
         ...world,
         plugins: Object.fromEntries(switches),
         pluginConfig: {
             ...(isObject(world.pluginConfig) ? world.pluginConfig : {}),
             ...Object.fromEntries(settings),
         },
-    };
+    });
+}
+
+function isCrossFloorName(name: string): boolean {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, "") === "crossfloor";
+}
+
+/** Convert visibility in each layer so a local legacy value can still override a shipped switch. */
+function migrateCrossFloorVisibility(world: JsonObject): JsonObject {
+    if (world.plugins !== undefined && !isObject(world.plugins)) return world;
+    const plugins = isObject(world.plugins) ? world.plugins : {};
+    const switches = Object.entries(plugins).filter(([name]) => isCrossFloorName(name));
+    const config = isObject(world.pluginConfig) ? world.pluginConfig : {};
+    const { ["CrossFloor:visibility"]: visibility, ...options } = config;
+    if (visibility === undefined && (switches.length === 0 || (switches.length === 1 && switches[0][0] === "CrossFloor"))) return world;
+
+    const enabled = switches.length ? switches[switches.length - 1][1] : visibility;
+    const result = { ...world };
+    if (visibility !== undefined) result.pluginConfig = options;
+    if (switches.length || typeof enabled === "boolean") {
+        result.plugins = {
+            ...Object.fromEntries(Object.entries(plugins).filter(([name]) => !isCrossFloorName(name))),
+            CrossFloor: enabled,
+        };
+    }
+    return result;
+}
+
+/** The old disabledPlugins list defaulted every plugin on. CrossFloor was opt-in even on those worlds. */
+export function preserveLegacyCrossFloorDefault(world: JsonObject): JsonObject {
+    const disabled = world.disabledPlugins;
+    if (!Array.isArray(disabled) || disabled.some(name => typeof name === "string" && isCrossFloorName(name))) return world;
+    const configured = isObject(world.plugins) ? world.plugins.CrossFloor : undefined;
+    const enabled = typeof configured === "boolean" ? configured
+        : (process.env.CROSS_FLOOR_VISIBILITY ?? process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT) === "1";
+    return enabled ? world : { ...world, disabledPlugins: [...disabled, "CrossFloor"] };
 }

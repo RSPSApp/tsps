@@ -173,11 +173,10 @@ test('structured settings normalize before mixed-format layering and editor writ
     pluginConfig: { 'Prayer:sequentialBurying': false },
   };
   const effective = mergeWorldConfig(shipped, local);
-  assert.deepEqual(effective.plugins, { Base: true, Prayer: true }, 'settings alone do not enable a plugin');
+  assert.deepEqual(effective.plugins, { Base: true, Prayer: true, CrossFloor: true }, 'settings alone do not enable a plugin');
   assert.equal(mergeWorldConfig(shipped, {}).pluginConfig['Prayer:sequentialBurying'], true);
   assert.deepEqual(effective.pluginConfig, {
     'Prayer:sequentialBurying': false,
-    'CrossFloor:visibility': true,
     'characters:maxPerAccount': 6,
     'PlayerBots:ai': { enabled: false },
     'league:type': 6,

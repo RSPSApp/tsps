@@ -568,6 +568,26 @@ Two Interfaces rows that change the gameframe itself, handled in `Settings.plugi
 - **Show data orbs.** A login, the welcome screen's Play and a layout change open the orbs only while the row is on, as live logs in with `orbs_disabled` set (the speedrunning and Leagues tutorial logins in the rsprox captures leave 160 closed and open it at `toplevel:orbs` when the var goes back to 0). The Leagues tutorial hides them while it runs, and its end puts the player's own choice back (`settings:restore-data-orbs`). Tests: `tests/settings-gameframe-orbs.test.cjs`, `tests/settings-wired-rows.test.cjs`.
 - **Not done**: no capture shows the row itself being clicked; ours: a click closes or opens 160 at once, as the tutorial captures do when the var changes.
 
+## Minimenu options and filters
+
+The rows sit on varp 4503. The cache's own scripts apply them in the client: a click runs the row's script there (7458 start position toggle, 7459 start entry, 7460 spacing, 7461 a filter, 728 scrollbar), and the login script (876) runs 7468, which applies them all from the varbits. So the server only keeps them: varp 4503 is one the browser client transmits whole when a script changes it, and the settings.json rows on it are saved from that (the spacing slider sends nothing else), as from a row click.
+
+| Setting | Id | Variable | In the client |
+| --- | --- | --- | --- |
+| Modify minimenu start position | 391 | varbit 11520 `settings_minimenu_start_index_toggle` | game option 13: 0, or the start entry + 1 |
+| Minimenu start position (dropdown: Entry 1-8) | 392 | varbit 11522 `settings_minimenu_start_index` = option | that entry opens under the mouse (the last one, for a shorter menu) |
+| Minimenu spacing (slider) | 393 | varbit 11523 `settings_minimenu_spacing` | game option 14, 0-100; each row is that many pixels taller |
+| Minimenu spacing value (number) | 394 | varbit 11523 | asks for the spacing, then runs 7460 with it |
+| Reset minimenu spacing (button) | 395 | varbit 11523 = 0 | runs 7460 with 0 |
+| Minimenu scrollbar | 419 | varbit 71 `settings_minimenu_scrollbar_toggle`, ticked while 0 (param 1084), so on for a new account | the client's scroll flag (`1 - varbit`); a menu taller than the screen then shows a scrollbar |
+| Disable entity options | 398 | varbit 11526 `settings_minimenu_filter_entity` | block slot 2: NPC, object and ground item options leave the world menu |
+| Disable player options | 402 | varbit 11530 `settings_minimenu_filter_player` | block slot 6: player options leave it |
+| Disable examine | 405 | varbit 11533 `settings_minimenu_filter_examine` | block slot 9: Examine on NPCs, objects and ground items leaves it |
+
+`minimenu_setblockmode(slot, 1 - varbit)` sets the filters, so mode 0 leaves an entry out (`client/ui/menu/minimenuFilters.ts`). Item use ("Use <item> -> <target>", while an item is selected) and spell entries have filters of their own (slots 7 and 1, rows not in the desktop list, enum 422), so the entity and player filters leave them in; a loc or NPC op that is itself named Use is an entity option. The menu's layout is drawn in `client/widgets/gl/choose-option.ts`. No capture shows these rows changed: the minimenu varbits appear only in rev 223-226 recordings, which predate this varp layout, so the start entry and spacing units, the scrollbar's look and the number row's prompt are ours. Tests: `tests/settings-minimenu.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/minimenu-settings.test.ts`.
+
+- **Not done**: Minimenu reordering (406, 407). The other filter rows on the same varp (396, 397, 399-401, 403, 404: visual feedback, target, interface, walk, global click, use, cancel), which the desktop list doesn't show, are not saved or obeyed. The touch controls' tap panel (`client/game/plugins/touchcontrols`) offers its own option list and ignores the filters.
+
 ## Containers on death
 
 Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).

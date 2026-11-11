@@ -20,6 +20,7 @@ const HIRKO = "Hirko";
 const MESSAGE = {
   /** Ours (not captured). */
   CANT_HOLD: "The pouch can't hold that.",
+  PRESET: "Preset items cannot be used for this.",
   NO_SPACE: "You don't have enough inventory space.",
 };
 
@@ -113,6 +114,10 @@ function useOnPouch(event) {
   event.handled = true;
   const inventory = player.getInventory();
   const plain = inventory.getItems().filter((item) => item?.getId() === ammo.getId() && isStorable(item));
+  if (plain.length === 0) {
+    player.sendMessage(MESSAGE.PRESET);
+    return;
+  }
   const moved = store(player, ammo.getId(), plain.reduce((sum, item) => sum + item.getAmount(), 0));
   if (moved <= 0) {
     player.sendMessage(MESSAGE.CANT_HOLD);
@@ -214,7 +219,7 @@ function dialogueCondition({ player, definition, text }) {
 }
 
 function dialogueAction(event) {
-  if (event.action !== "receive" || event.text !== "bolt pouch" || event.npcId !== core.NpcIdentifiers.HIRKO) return;
+  if (event.action !== "receive" || event.text !== "bolt pouch" || core.CacheDefinitions.getNpc(event.npcId)?.name !== HIRKO) return;
   event.handled = true;
   const { player } = event;
   const inventory = player.getInventory();

@@ -172,6 +172,16 @@ test("a fifth bolt type is refused; ammo the pouch can't hold is left to other h
   assert.equal(f.inv.getAmount(I.ADAMANT_BOLTS), 10);
 });
 
+test("bolts carrying item state (preset ammo) stay out of the pouch", (t) => {
+  const f = actor(t);
+  withPouch(f);
+  f.inv.add(new core.Item(I.RUNITE_BOLTS, 50).setMeta({ preset: 1 }), false);
+  assert.equal(use(f, I.RUNITE_BOLTS), true);
+  assert.deepEqual(f.messages, ["Preset items cannot be used for this."]);
+  assert.equal(f.inv.getAmount(I.RUNITE_BOLTS), 50);
+  assert.deepEqual(BoltPouch.slots(f.p), [null, null, null, null]);
+});
+
 test("a slot holds one Mith grapple", (t) => {
   const f = actor(t);
   withPouch(f);

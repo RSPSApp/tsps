@@ -950,6 +950,34 @@ export class PluginManager {
   private static readonly FIRST_WORN_OPTION_CLICK = 2;
   private static readonly MAX_WORN_OPTION_CLICK = 10;
 
+  /** Worn submenus (cache params): the first entry at 661 + op, later entries at 2066 + op + 8 * n. */
+  private static readonly WORN_SUBOP_FIRST_PARAM = 661;
+  private static readonly WORN_SUBOP_PARAM = 2066;
+  private static readonly WORN_SUBOP_STEP = 8;
+
+  /**
+   * The submenu entry an item click picked, as the cache labels it (a Xeric's talisman's Rub >
+   * "Xeric's Glade"), or null. `subOpId` is 1-based (ClientProtocol adds one to the wire index).
+   * Inventory entries are the item's subops, worn ones its params.
+   */
+  public static itemActionSubOption(definition: any, event: PluginItemActionEvent): string | null {
+    if (!definition || !Number.isInteger(event.subOpId) || (event.subOpId as number) <= 0) return null;
+    const sub = (event.subOpId as number) - 1;
+    const { Equipment } = require("../game/model/container/impl/Equipment");
+    let text: unknown;
+    if (event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
+      const op = event.clickType - PluginManager.FIRST_WORN_OPTION_CLICK;
+      const params = definition.params;
+      if (op < 0 || !params?.get) return null;
+      text = sub === 0
+        ? params.get(PluginManager.WORN_SUBOP_FIRST_PARAM + op) ?? params.get(PluginManager.WORN_SUBOP_PARAM + op)
+        : params.get(PluginManager.WORN_SUBOP_PARAM + op + PluginManager.WORN_SUBOP_STEP * sub);
+    } else {
+      text = definition.subops?.[event.clickType - 1]?.[sub];
+    }
+    return typeof text === "string" && text.length > 0 ? text : null;
+  }
+
   /** Inventory items have five options; an equipped item's worn options (params 451+) run past that. */
   private static maxItemActionClick(event: PluginItemActionEvent): number {
     const { Equipment } = require("../game/model/container/impl/Equipment");
@@ -1983,6 +2011,11 @@ export class PluginManager {
   public static emitItemAction(event: PluginItemActionEvent): boolean {
     // The stack the click covered, read before any handler consumes it ("Open-all" empties it).
     const covered = Number.isInteger(event?.itemId) ? Number(event?.player?.getInventory?.().getAmount?.(event.itemId) ?? 1) || 1 : 1;
+    // Name the submenu entry once, so a plugin matching labels never sees a bare "Rub".
+    if (event && event.subOption == null && Number.isInteger(event.itemId)) {
+      const subOption = PluginManager.itemActionSubOption(CacheDefinitions.getItem(event.itemId), event);
+      if (subOption !== null) event.subOption = subOption;
+    }
     for (const hook of PluginManager.itemActionHooks) {
       PluginManager.executeHook(hook, event, "item_action", "item_action");
     }

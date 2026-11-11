@@ -320,6 +320,38 @@ const FLAMES_OF_ZAMORAK_STAVES = new Set([
     ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_,
 ]);
 
+/**
+ * Wiki (Claws of Guthix, Flames of Zamorak): a hit lowers Defence or Magic by 1 + 5%; it neither
+ * stacks nor reapplies until the stat is back to its base level (a boosted stat is drained too).
+ * A player's cast only: the Mage Arena's battle mages cast the same spells and drain nothing
+ * (rsprox_transcripts/238/04155.txt: a guthix_mage's Claws lands at ticks 1865, 1877 and 1889 with no
+ * Defence update).
+ */
+function godSpellDrain(cast: Mobile, castOn: Mobile, skill: Skill): void {
+    if (!cast.isPlayer()) return;
+    if (castOn.isNpc()) {
+        const npc = castOn.getAsNpc();
+        const current = npc.getCurrentLevel(skill);
+        if (current < npc.getMaxLevel(skill)) return;
+        npc.setCurrentLevels(skill, Math.max(0, current - (1 + Math.floor(current * 0.05))));
+    } else if (castOn.isPlayer()) {
+        const skills = castOn.getAsPlayer().getSkillManager();
+        const current = skills.getCurrentLevel(skill);
+        if (current < skills.getMaxLevel(skill)) return;
+        // setCurrentLevelCombat sends the stat itself.
+        skills.setCurrentLevelCombat(skill, Math.max(0, current - (1 + Math.floor(current * 0.05))));
+    }
+}
+
+/** Wiki (Saradomin Strike): a player's hit lowers the target's Prayer points by 1; most NPCs have none. */
+function saradominStrikeDrain(cast: Mobile, castOn: Mobile): void {
+    if (!cast.isPlayer() || !castOn.isPlayer()) return;
+    const skills = castOn.getAsPlayer().getSkillManager();
+    const current = skills.getCurrentLevel(Skill.PRAYER);
+    if (current <= 0) return;
+    skills.setCurrentLevelCombat(Skill.PRAYER, current - 1);
+}
+
 /** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
 function godStaffRequired(player: Player, staves: Set<number>): Item[] {
     const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId() ?? -1;
@@ -1078,6 +1110,7 @@ export class CombatSpells {
         baseExperience: () => {
             return 35;
         },
+        finishCast: (cast: Mobile, castOn: Mobile) => saradominStrikeDrain(cast, castOn),
         equipmentRequired: (player: Player) => godStaffRequired(player, SARADOMIN_STRIKE_STAVES),
         itemsRequired: (player: Player) => {
             return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
@@ -1110,6 +1143,7 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
+        finishCast: (cast: Mobile, castOn: Mobile) => godSpellDrain(cast, castOn, Skill.DEFENCE),
         equipmentRequired: (player: Player): Item[] => godStaffRequired(player, CLAWS_OF_GUTHIX_STAVES),
         itemsRequired: (player: Player): Item[] => {
             return [new Item(556, 4), new Item(565, 2), new Item(554, 1)];
@@ -1142,6 +1176,7 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
+        finishCast: (cast: Mobile, castOn: Mobile) => godSpellDrain(cast, castOn, Skill.MAGIC),
         equipmentRequired: (player: Player): Item[] => godStaffRequired(player, FLAMES_OF_ZAMORAK_STAVES),
         itemsRequired: (player: Player): Item[] => {
             return [new Item(556, 1), new Item(565, 2), new Item(554, 4)];

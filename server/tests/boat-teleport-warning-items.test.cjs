@@ -546,3 +546,17 @@ test("a guest on someone else's boat isn't asked: their own boat isn't the one a
   use(guest, I.VARROCK_TELEPORT, "Break");
   assert.notEqual(pending(guest)?.title, TeleportWarning.QUESTION);
 });
+
+test("the escape crystal's Teleport reports what happened: saved at once ashore, not yet while the warning asks", (t) => {
+  escapeAnywhere();
+  const Activation = require("../plugins/items/escapecrystal/Activation.EscapeCrystal");
+  const crystal = require("../plugins/items/escapecrystal/Common.EscapeCrystal").crystalId();
+  const ashore = actor(t, { aboard: false });
+  give(ashore, crystal);
+  assert.equal(Activation.activate(ashore.p, "teleport"), true, "ashore: saved");
+  const aboard = actor(t);
+  give(aboard, crystal);
+  assert.equal(Activation.activate(aboard.p, "teleport"), false, "asked: not saved yet");
+  assert.equal(pending(aboard)?.title, TeleportWarning.QUESTION);
+  assert.equal(aboard.p.getInventory().contains(crystal), true, "the crystal kept until the yes");
+});

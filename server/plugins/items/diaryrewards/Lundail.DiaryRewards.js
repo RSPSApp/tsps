@@ -53,9 +53,11 @@ const used = (player) => Rewards.dailyUses(player, DAILY_KEY) > 0;
 
 const isLundail = (npcId) => npcId === core.NpcIdentifiers.LUNDAIL;
 
+/** Room for the amount whichever rune is rolled: every kind in the pool must fit, since the pick comes later. */
 function hasRoom(player, amount) {
-  const runes = core.ItemIdentifiers[data().runes[0]];
-  return amount > 0 && player.getInventory().getAddableAmount(new core.Item(runes, amount)) >= amount;
+  const inventory = player.getInventory();
+  return amount > 0 && data().runes.every((name) =>
+    inventory.getAddableAmount(new core.Item(core.ItemIdentifiers[name], amount)) >= amount);
 }
 
 /** The transcript's Wiki prose conditions; a claimed day beats a full inventory, as the Wiki lists it. */

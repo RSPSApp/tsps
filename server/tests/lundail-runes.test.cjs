@@ -169,6 +169,21 @@ test("a full inventory is refused without spending the day's claim", (t) => {
   assert.equal(held(player)[0][1], 40, "the refused try did not use the day");
 });
 
+test("a full inventory holding only mind runes is refused: the roll could land on any rune", (t) => {
+  for (let i = 0; i < 20; i++) {
+    const { player, messages } = actor(t);
+    claimUpTo(player, "easy");
+    const inventory = player.getInventory();
+    inventory.setItem(0, new core.Item(RUNES.mind, 100));
+    for (let slot = 1; slot < inventory.capacity(); slot++) inventory.setItem(slot, new core.Item(1925, 1));
+    assert.equal(click(player, "Claim-runes"), true);
+    assert.match(spoken(player).join("\n"), /need more free space/);
+    assert.deepEqual(held(player), [[RUNES.mind, 100]], "nothing added");
+    assert.ok(!messages.some((m) => /Lundail hands you/.test(m)), "no hand-out message");
+    assert.equal(player.getAttribute("diary-rewards:daily")?.counts?.["lundail-runes"], undefined, "the day is not spent");
+  }
+});
+
 test("a later claim after the day has turned works again", (t) => {
   const { player } = actor(t);
   claimUpTo(player, "easy");

@@ -24,9 +24,11 @@
 const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
 const MAX_CHARGES = 20000;
-const CHARGES_PER_BATCH = 10;
-const NATURE_RUNES_PER_BATCH = 20;
-const DEATH_RUNES_PER_BATCH = 20;
+// Wiki (Obligator): 1 ascension shard, 60 nature runes and 60 death runes give 30 charges, since the
+// 11 November 2026 update ("Increased the number of charges provided by Ascension Shards ... by 3x").
+const CHARGES_PER_BATCH = 30;
+const NATURE_RUNES_PER_BATCH = 60;
+const DEATH_RUNES_PER_BATCH = 60;
 const CHARGES_META_KEY = "obligator-charges";
 const SMASH_FIGHT_TYPE_INDEX = 2;
 const SMASH_ATTACK_SPEED = 3;

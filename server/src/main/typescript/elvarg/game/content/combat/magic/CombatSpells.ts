@@ -767,6 +767,18 @@ export class CombatSpells {
     });
 
     public static CRUMBLE_UNDEAD = new CombatNormalSpell({
+        /**
+         * Wiki (Crumble Undead): it can only be cast on undead enemies; anything else gets this line.
+         * A scripted, unattackable target (Enakhra's Lament's boneguard) is left to its quest's handler.
+         */
+        canCastOnTarget(cast, target) {
+            const definition = target.isNpc() ? target.getAsNpc().getCurrentDefinition() : null;
+            if (definition && (definition.isUndead?.() || !definition.isAttackable?.())) return true;
+            if (cast.isPlayer()) {
+                cast.getAsPlayer().sendMessage("This spell only affects skeletons, zombies, ghosts and shades.");
+            }
+            return false;
+        },
         castAnimation() {
             return new Animation(724);
         },

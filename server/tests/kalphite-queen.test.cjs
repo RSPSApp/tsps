@@ -174,6 +174,7 @@ for (const objectId of [23609, 19053]) test(`a rope on the Queen's tunnel ${obje
   assert.equal(f.submitted.length, 1);
   const task = f.submitted[0];
   assert.ok(task instanceof core.TimedObjectReplacementTask);
+  assert.equal(task.isImmediate(), true);
   assert.equal(task.temp.getId(), 10230);
   assert.ok(task.temp.getLocation().equals(new core.Location(3509, 9497, 2)));
 });
@@ -188,6 +189,7 @@ test('a rope on the surface tunnel still takes the player down to the lair', t =
   const f = ropeScene(t, 3827);
   assert.equal(f.event.handled, true);
   assert.deepEqual(f.moves, [[3483, 9510, 2]]);
+  assert.equal(f.submitted[0].isImmediate(), false);
   assert.equal(f.submitted[0].temp.getId(), 3828);
 });
 

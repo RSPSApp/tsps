@@ -265,7 +265,8 @@ function attachSurfaceRope(event) {
     object.getFace(),
     object.getPrivateArea()
   );
-  core.TaskManager.submit(new core.TimedObjectReplacementTask(object, replacement, ROPE_LIFETIME_TICKS));
+  // Replace the chamber tunnel now so a second player cannot use a rope on it in the same tick.
+  core.TaskManager.submit(new core.TimedObjectReplacementTask(object, replacement, ROPE_LIFETIME_TICKS, chamber));
   event.handled = true;
   // Live: the surface rope takes the player down with it; the Queen's only ties the rope on
   // (kalphite_chamber_entrance_withrope, Climb-down), and climbing it is a separate click.

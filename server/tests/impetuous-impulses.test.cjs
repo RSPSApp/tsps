@@ -356,7 +356,7 @@ test("Puro-Puro roaming implings start invisible, show after two minutes and are
   assert.equal(spawns.length, 24, "Wiki embedded map: 10 low, 12 mid and 2 high points");
   assert.ok(spawns.every(n => n.flags.get("movement:ignore-clipping") === true));
   for (const n of spawns) {
-    const [minX, maxX, minY, maxY] = roaming.MAZE_BOUNDS;
+    const [minX, maxX, minY, maxY] = roaming.WANDER_BOUNDS;
     assert.ok(n.def.x - n.def.wanderRadius >= minX && n.def.x + n.def.wanderRadius <= maxX);
     assert.ok(n.def.y - n.def.wanderRadius >= minY && n.def.y + n.def.wanderRadius <= maxY);
   }
@@ -588,6 +588,56 @@ test("Puro-Puro fixed implings use world spawns, cross wheat and return after a 
   }
   assert.ok(crossing, "the active cache supplies an actual clipped wheat edge");
   console.log("puro-fixed-map-walls", JSON.stringify(wallRecords));
+
+  const insideWalls = at => at.getZ() === 0 && at.getX() >= 2562 && at.getX() <= 2621
+    && at.getY() >= 4290 && at.getY() <= 4349;
+  await t.test("actual perimeter walls block players and bound every fixed and roaming wander square", sub => {
+    for (const [axis, boundary, face, dx, dy] of [
+      [0, 2561, 2, 1, 0], [0, 2622, 0, -1, 0],
+      [1, 4289, 1, 0, 1], [1, 4350, 3, 0, -1],
+    ]) {
+      const wall = wallRecords.find(w => w.type === 0 && w.face === face && w.position[axis] === boundary);
+      assert.ok(wall?.solid, "cache supplies the expected solid enclosing edge and orientation");
+      const target = new core.Location(...wall.position), from = target.transform(dx, dy);
+      assert.ok(insideWalls(from));
+      assert.equal(core.RegionManager.canMovestart(from, target, 1, 1, null), false);
+      const p = actor(sub); p.setLocation(from);
+      p.getMovementQueue().addCheckpoint(target); p.getMovementQueue().process();
+      assert.ok(p.getLocation().equals(from), "ordinary player cannot cross the actual enclosing wall");
+    }
+    const population = [...fixed, ...roaming.live.keys()];
+    const escaping = population.filter(npc => {
+      const home = npc.getSpawnPosition(), radius = npc.getMovementCoordinator().getRadius();
+      return !insideWalls(home.transform(-radius, -radius)) || !insideWalls(home.transform(radius, radius));
+    });
+    console.log("puro-perimeter-containment", JSON.stringify({ fixed: fixed.length,
+      roaming: roaming.live.size, escapingSquares: escaping.length }));
+    assert.equal(escaping.length, 0, "complete sampled destination squares stay inside all enclosing edges");
+  });
+
+  await t.test("the real fixed coordinator keeps supplied extreme wander rolls inside the walls", sub => {
+    const npc = fixed.find(n => n.getSpawnPosition().getX() === 2563 && n.getSpawnPosition().getY() === 4291);
+    assert.ok(npc, "actual southwest edge spawn is present");
+    const home = npc.getSpawnPosition().clone();
+    assert.ok(npc.getMovementCoordinator().getRadius() > 0, "the edge impling can actually wander");
+    // Supply active-region and extreme random rolls; exercise coordinator and queue, not natural timing.
+    sub.mock.method(core.World, "isLocationActive", () => true);
+    for (const roll of [0, 0.999999]) {
+      npc.setLocation(home.clone()); npc.setNeedsPlacement(false); npc.getMovementQueue().reset();
+      const draws = [0, roll, roll];
+      const rng = sub.mock.method(Math, "random", () => draws.shift() ?? roll);
+      npc.getMovementCoordinator().process();
+      rng.mock.restore();
+      for (let tick = 0; tick < 12; tick++) {
+        npc.getMovementQueue().process();
+        assert.ok(insideWalls(npc.getLocation()), "each actual step stays on the interior side of the perimeter");
+      }
+      const radius = npc.getMovementCoordinator().getRadius(), sign = roll === 0 ? -1 : 1;
+      assert.ok(npc.getLocation().equals(home.transform(sign * radius, sign * radius)),
+        "the coordinator completes its supplied extreme destination");
+    }
+    npc.setLocation(home); npc.getMovementQueue().reset();
+  });
 
   await t.test("all fixed spawns fly with ordinary wander targets contained inside the realm", () => {
     const outOfBounds = fixed.filter(npc => {

@@ -113,9 +113,11 @@ function setup(options = {}) {
   };
 
   const fire = (name, payload = {}) => api.emitCustomEvent(name, { player, ...payload });
+  /** Like fire, but the handlers' changes to the payload stay visible to the caller. */
+  const emit = (name, payload) => { payload.player ??= player; api.emitCustomEvent(name, payload); return payload; };
   return {
     core, quest, player, attrs, configs, varbits, inventory, messages, hooks, tasks, spawned, areas, sounds, persisted,
-    fire,
+    fire, emit,
     xp, jingles: () => jingles,
     variant(npcId) {
       for (const fn of hooks.variants) {
@@ -554,7 +556,8 @@ test('the returned kitten goes even when the scene is cut short', () => {
   assert.equal(kitten.removed, true);
 });
 
-test('Fluffs action hints reach chat once at the matching quest stage only', () => {
+test('Fluffs action hints become a message box at the matching quest stage only', () => {
+  // Real-engine coverage of Stroke: gertrudes-cat-fluffs-hint.test.cjs.
   const h = setup(), N = h.core.NpcIdentifiers;
   const record = require('../data/definitions/npc-dialogues.json')["Gertrude's Cat"];
   for (const [stage, variant, id] of [
@@ -567,15 +570,22 @@ test('Fluffs action hints reach chat once at the matching quest stage only', () 
     assert.equal(step.type, 'action');
     h.quest.setStage(h.player, stage);
     h.messages.length = 0;
-    h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
-    assert.deepEqual(h.messages, [step.text], 'the canonical hint is displayed exactly once');
+    const action = { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step };
+    h.emit('npc-dialogue:action', action);
+    assert.equal(action.handled, true);
+    assert.deepEqual(action.steps?.map(s => [s.type, s.text]), [['message', step.text]], 'handed back as one statement step');
+    const box = { npcId: N.GERTRUDES_CAT_2, stepId: action.steps[0].id, text: step.text, kind: 'message' };
+    h.emit('npc-dialogue:action', box);
+    assert.deepEqual(box.box, { statement: true }, 'shown in a message box');
+    assert.deepEqual(h.messages, [], 'not a chat line');
     assert.equal(h.quest.getStage(h.player), stage, 'the hint does not grant quest progress');
-    h.messages.length = 0;
-    h.fire('npc-dialogue:action', { npcId: N.SHILOP, stepId: id, text: step.text, step });
-    assert.deepEqual(h.messages, [], 'another NPC cannot display Fluffs hints');
+    const other = { npcId: N.SHILOP, stepId: id, text: step.text, step };
+    h.emit('npc-dialogue:action', other);
+    assert.equal(other.steps, undefined, 'another NPC cannot display Fluffs hints');
     h.quest.setStage(h.player, 6);
-    h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
-    assert.deepEqual(h.messages, [], 'completed or mismatched stages stay silent');
+    const late = { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step };
+    h.emit('npc-dialogue:action', late);
+    assert.equal(late.steps, undefined, 'completed or mismatched stages stay silent');
   }
 });
 

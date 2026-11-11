@@ -106,11 +106,12 @@ const GROUP_GATHERING_VALUE_VARBIT = 15348;
 
 /**
  * The other timed effects, for the client's Timers plugin: ITEM_TIMER_SLOTS pairs of varps from
- * ITEM_TIMER_FIRST_VARP, each the seconds left (0: an empty slot) and the item whose icon and name
- * the timer shows. Filled in ITEM_TIMERS order; mirrored in client/game/plugins/statustimer.
+ * ITEM_TIMER_FIRST_VARP, each the seconds left (0: an empty slot) and its icon: an item id, or
+ * minus a sprite id (the spells). Filled in itemTimers order; mirrored in
+ * client/game/plugins/statustimer.
  */
-const ITEM_TIMER_FIRST_VARP = 7970;
-const ITEM_TIMER_SLOTS = 10;
+const ITEM_TIMER_FIRST_VARP = 7950;
+const ITEM_TIMER_SLOTS = 20;
 /** Potions.plugin.js's prayer regeneration state (counting steps); the others are above. */
 const ATTR_PRAYER_REGEN_STATE = "potions:prayer-regen:state";
 const PRAYER_REGEN_INTERVAL_MS = 12 * TICK_MS;
@@ -120,6 +121,29 @@ const GOADING_STEP_MS = 6 * TICK_MS;
 /** imbuedheart/Timers.ImbuedHeart.js: when the heart can be used again (a Date.now() time). */
 const ATTR_HEART_READY_AT = "imbued-heart:ready-at";
 const ATTR_HEART_SATURATED_UNTIL = "imbued-heart:saturated-until";
+
+/**
+ * The spells' timers, each a game tick (World.getProcessCycle()) the effect or cooldown lasts until
+ * (CombatSpells, LunarSpells, ArceuusSpells), and the spell's icon: its spellbook sprite (the
+ * spell's enabled icon, obj param 597, rev 242).
+ */
+const SPELL_TIMERS = [
+  { attribute: "charge:until", sprite: 322 }, // Charge
+  { attribute: "lunar:magic-imbue-until", sprite: 552 }, // Magic Imbue
+  { attribute: "arceuus:mark-until", sprite: 1305 }, // Mark of Darkness
+  { attribute: "arceuus:ward-until", sprite: 1306 }, // Ward of Arceuus
+  { attribute: "arceuus:shadow-veil-until", sprite: 1315 }, // Shadow Veil
+  // Death Charge while it waits for a kill, then its cooldown (both start at the cast).
+  { attribute: ["arceuus:death-charge-until", "arceuus:death-charge-cooldown"], sprite: 1310 },
+  { attribute: "arceuus:thrall-until", sprite: 2980 }, // the thralls' shared cooldown (Resurrect Greater Ghost)
+];
+/** HomeTeleports.plugin.js: the minute (Date.now() / 60000) of the last home teleport, 30 minutes apart. */
+const ATTR_HOME_TELEPORT_MINUTE = "home-teleport:last-minute";
+const HOME_TELEPORT_COOLDOWN_MS = 30 * 60_000;
+const HOME_TELEPORT_SPRITE = 356;
+const ARCEUUS_HOME_TELEPORT_SPRITE = 1251;
+/** Supplies.TombsOfAmascut.js: each supply's ticks left. */
+const ATTR_TOA_EFFECTS = "toa:supply-effects";
 
 let core = null;
 
@@ -181,7 +205,7 @@ const endsIn = (state, now) => millisUntil(Number(state?.endsAt), now);
  * Divine potions, one timer each: the skills a potion boosted share their end time, and their
  * set says which potion it was (Potions.plugin.js applyDivine). Soonest first.
  */
-function divineTimers(player, now, I, Skill) {
+function divineItemTimers(player, now, I, Skill) {
   const state = player.getAttribute?.(ATTR_DIVINE_STATE);
   if (!state || !Array.isArray(state.targets)) return [];
   const groups = new Map();
@@ -206,11 +230,39 @@ function divineTimers(player, now, I, Skill) {
   });
 }
 
-/** [milliseconds left, item id] for each timed effect running, in the order the client shows them. */
+const ticksLeft = (ticks) => Number.isFinite(ticks) && ticks > 0 ? ticks * TICK_MS : 0;
+
+/** [milliseconds left, -sprite id] for the spells' effects and cooldowns, then the home teleport's. */
+function spellIconTimers(player, now) {
+  const cycle = Number(core.World?.getProcessCycle?.());
+  const timers = [];
+  if (Number.isFinite(cycle)) {
+    for (const { attribute, sprite } of SPELL_TIMERS) {
+      const until = [].concat(attribute).map((name) => Number(player.getAttribute?.(name))).find((tick) => tick > cycle);
+      timers.push([until ? ticksLeft(until - cycle) : 0, -sprite]);
+    }
+  }
+  const lastMinute = Number(player.getAttribute?.(ATTR_HOME_TELEPORT_MINUTE));
+  if (lastMinute > 0) {
+    const arceuus = core.MagicSpellbook && player.getSpellbook?.() === core.MagicSpellbook.ARCEUUS;
+    timers.push([millisUntil(lastMinute * 60_000 + HOME_TELEPORT_COOLDOWN_MS, now), -(arceuus ? ARCEUUS_HOME_TELEPORT_SPRITE : HOME_TELEPORT_SPRITE)]);
+  }
+  return timers;
+}
+
+/** Until the next special attack energy restore, while the bar isn't full. */
+function specialRestoreMillis(player) {
+  if (!(Number(player.getSpecialPercentage?.() ?? 100) < 100)) return 0;
+  const timer = player.getSpecialAttackRestore?.();
+  const secondsLeft = Math.max(0, Number(timer?.secondsRemaining?.() ?? 0));
+  return secondsLeft > 0 ? Math.max(0, Number(timer.millisRemaining?.() ?? secondsLeft * 1000)) : 0;
+}
+
+/** [milliseconds left, icon] for each timed effect running, in the order the client shows them. */
 function itemTimers(player, now) {
   if (!core) return [];
   const I = core.ItemIdentifiers, Skill = core.Skill;
-  const timers = [...divineTimers(player, now, I, Skill)];
+  const timers = [...divineItemTimers(player, now, I, Skill)];
   const overload = player.getAttribute?.(ATTR_OVERLOAD_STATE);
   // The raid's overloads (with an area) look like the raid's potion; Nightmare Zone's like its own.
   timers.push([endsIn(overload, now), typeof overload?.area === "string" ? I.OVERLOAD_4__4 : I.OVERLOAD_4_]);
@@ -234,7 +286,14 @@ function itemTimers(player, now) {
   timers.push([heartMs, saturated ? I.SATURATED_HEART : I.IMBUED_HEART]);
   const meat = Food.pendingSecondHeal?.(player);
   if (meat) timers.push([millisUntil(meat.dueAt, now), meat.itemId]);
-  return timers.filter(([ms, item]) => ms > 0 && Number.isInteger(item) && item > 0).slice(0, ITEM_TIMER_SLOTS);
+  timers.push(...spellIconTimers(player, now));
+  const toa = player.getAttribute?.(ATTR_TOA_EFFECTS);
+  if (toa) {
+    timers.push([ticksLeft(toa.salts), I.SMELLING_SALTS_2_], [ticksLeft(toa.adrenaline), I.LIQUID_ADRENALINE_2_],
+      [ticksLeft(toa.scarab), I.BLESSED_CRYSTAL_SCARAB_2_], [ticksLeft(toa.silk), I.SILK_DRESSING_2_]);
+  }
+  timers.push([specialRestoreMillis(player), I.DRAGON_DAGGER]);
+  return timers.filter(([ms, icon]) => ms > 0 && Number.isInteger(icon) && icon !== 0).slice(0, ITEM_TIMER_SLOTS);
 }
 
 /** [kind, id, value]: "varp" for the infobox timers, "varbit" for the buff bar. */

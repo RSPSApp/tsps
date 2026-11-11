@@ -31,11 +31,13 @@ const varps = new Map<number, number>([
     [ITEM_TIMER_FIRST_VARP, 300], [ITEM_TIMER_FIRST_VARP + 1, 23685], // divine super combat, 5:00
     [ITEM_TIMER_FIRST_VARP + 2, 5], [ITEM_TIMER_FIRST_VARP + 3, 29143], // moonlight antelope's second heal
     [ITEM_TIMER_FIRST_VARP + 5, 12905], // an item id without seconds: an empty slot
+    [ITEM_TIMER_FIRST_VARP + 6, 42], [ITEM_TIMER_FIRST_VARP + 7, -1305], // Mark of Darkness: minus its sprite
 ]);
 const now = Date.now(); // the overlay draws with the real clock
 plugin.syncItemTimers((id) => varps.get(id) ?? 0, now);
 const entries = plugin.timerEntries(now);
-assert.deepEqual(entries.map((e) => [e.item, e.text]), [[23685, "5:00"], [29143, "5"]], "item timers in slot order");
+assert.deepEqual(entries.map((e) => [e.item, e.sprite, e.text]), [[23685, undefined, "5:00"], [29143, undefined, "5"], [undefined, 1305, "42"]],
+    "item timers in slot order; a negative icon is a sprite");
 plugin.syncItemTimers(() => 0, now + 1000);
 assert.equal(plugin.timerEntries(now + 1000).length, 0, "cleared slots leave no boxes");
 plugin.syncItemTimers((id) => varps.get(id) ?? 0, now);
@@ -91,7 +93,7 @@ setOption("position", TimersPosition.TOP_LEFT);
 setOption("scale", "100");
 const opponent: WidgetOverlay = { signature: () => "", draw: () => [], movable: { name: "OpponentInfoOverlay", position: OverlayPosition.TOP_LEFT } };
 const top = pass(opponent, [129, 38]);
-assert.equal(top.timers.length, 2);
+assert.equal(top.timers.length, 3);
 for (const box of top.timers) {
     assert.ok(!overlaps(box, top.first), "the timers don't cover Opponent Information");
     assert.ok(box.y >= top.first.y + top.first.h, "they sit below it");

@@ -27,9 +27,10 @@ export const TELEBLOCK_TIMER_SECONDS_VARP = 7992;
 export const STAMINA_TIMER_SECONDS_VARP = 7993;
 /**
  * The other timed effects (divine potions, overloads, Menaphite remedy, prayer regeneration and
- * enhance, antipoison immunity, goading, the imbued heart's cooldown and hunter meat's second
- * heal): ITEM_TIMER_SLOTS pairs from ITEM_TIMER_FIRST_VARP, each the seconds left (0: empty)
- * and the item whose icon and name the timer shows.
+ * enhance, antipoison immunity, goading, the imbued heart's cooldown, hunter meat's second heal,
+ * the spells' effects and cooldowns, the home teleport's cooldown, Tombs of Amascut supplies and
+ * special attack regeneration): ITEM_TIMER_SLOTS pairs from ITEM_TIMER_FIRST_VARP, each the
+ * seconds left (0: empty) and the icon: an item id, or minus a sprite id.
  */
-export const ITEM_TIMER_FIRST_VARP = 7970;
-export const ITEM_TIMER_SLOTS = 10;
+export const ITEM_TIMER_FIRST_VARP = 7950;
+export const ITEM_TIMER_SLOTS = 20;

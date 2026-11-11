@@ -87,8 +87,11 @@ export class TimersPlugin extends Plugin {
     readonly teleblock = new StatusTimer();
     readonly stamina = new StatusTimer();
     readonly vengeance = new VengeanceTimer();
-    /** The server's other timed effects (timerIcons ITEM_TIMER_FIRST_VARP): a timer and the item it shows. */
-    readonly itemTimers = Array.from({ length: ITEM_TIMER_SLOTS }, () => ({ timer: new StatusTimer(), itemId: 0 }));
+    /**
+     * The server's other timed effects (timerIcons ITEM_TIMER_FIRST_VARP): a timer and its icon, an
+     * item id or minus a sprite id (0: an empty slot).
+     */
+    readonly itemTimers = Array.from({ length: ITEM_TIMER_SLOTS }, () => ({ timer: new StatusTimer(), icon: 0 }));
     readonly widgetOverlay = new TimersInfoBoxOverlay(this);
     private readonly effects = [
         this.poison,
@@ -113,18 +116,18 @@ export class TimersPlugin extends Plugin {
         if (before > 5 && this.vengeance.getRemainingSeconds(now) > 0) count++;
         if (before > 6 && !this.config.showAttackTimer() && this.attackTimerTicks() > 0) count++;
         for (let i = 0; i < this.itemTimers.length && 7 + i < before; i++) {
-            if (this.itemTimers[i].itemId > 0 && this.itemTimers[i].timer.getRemainingSeconds(now) > 0) count++;
+            if (this.itemTimers[i].icon !== 0 && this.itemTimers[i].timer.getRemainingSeconds(now) > 0) count++;
         }
         return count;
     }
 
-    /** The item timer slots from their varps (seconds, then item id), as the server sends them. */
+    /** The item timer slots from their varps (seconds, then the icon), as the server sends them. */
     syncItemTimers(readVarp: (id: number) => number, now = Date.now()): void {
         this.itemTimers.forEach((slot, i) => {
             const seconds = readVarp(ITEM_TIMER_FIRST_VARP + i * 2) | 0;
-            const itemId = readVarp(ITEM_TIMER_FIRST_VARP + i * 2 + 1) | 0;
-            slot.itemId = seconds > 0 && itemId > 0 ? itemId : 0;
-            slot.timer.sync(slot.itemId ? seconds : 0, slot.itemId, now);
+            const icon = readVarp(ITEM_TIMER_FIRST_VARP + i * 2 + 1) | 0;
+            slot.icon = seconds > 0 ? icon : 0;
+            slot.timer.sync(slot.icon ? seconds : 0, slot.icon, now);
         });
     }
 
@@ -154,7 +157,11 @@ export class TimersPlugin extends Plugin {
         }
         this.itemTimers.forEach((slot, i) => {
             const remaining = slot.timer.getRemainingSeconds(now);
-            if (slot.itemId > 0 && remaining > 0) entries.push({ key: `item${i}:${slot.itemId}`, item: slot.itemId, fallback: "?", text: formatTimerSeconds(remaining) });
+            if (slot.icon === 0 || remaining <= 0) return;
+            entries.push({
+                key: `item${i}:${slot.icon}`, fallback: "?", text: formatTimerSeconds(remaining),
+                ...(slot.icon > 0 ? { item: slot.icon } : { sprite: -slot.icon }),
+            });
         });
         return entries;
     }

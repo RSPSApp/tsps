@@ -105,9 +105,11 @@ export function TimersOverlay({
                     <span className="status-timer-seconds">{attackTicks}</span>
                 </div>
             )}
-            {plugin.itemTimers.map((slot, i) => slot.itemId > 0 && (
+            {plugin.itemTimers.map((slot, i) => slot.icon !== 0 && (
                 <StatusTimerOverlay key={i} className="item-timer-infobox" fallback="?" osrsClient={osrsClient} plugin={slot.timer}
-                    now={now} title="Timer" sprites={NO_ITEM_SPRITES} items={{ [slot.itemId]: slot.itemId }} slot={7 + i} />
+                    now={now} title="Timer" slot={7 + i}
+                    sprites={slot.icon < 0 ? { [slot.icon]: -slot.icon } : NO_ITEM_SPRITES}
+                    items={slot.icon > 0 ? { [slot.icon]: slot.icon } : undefined} />
             ))}
         </>
     );

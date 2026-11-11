@@ -790,14 +790,59 @@ registerPotion({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER
     lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.02);
   } });
 
-// https://oldschool.runescape.wiki/w/Asgarnian_ale: heals 1, Strength +2, Attack -(5% + 2) of the
-// current level. rsprox captures (rec 3455): human_eat, sound 2401, the two spam lines, beer glass left.
-registerPotion({ name: "Asgarnian ale", chains: [[Items.ASGARNIAN_ALE]], emptyItemId: Items.BEER_GLASS,
-  drink: { messages: () => ["You drink the ale. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+/** "You drink the <name>. You feel slightly reinvigorated..." / "...and slightly dizzy too." (spam). */
+const reinvigoratedLines = (drinkName) => () => [`You drink the ${drinkName}. You feel slightly reinvigorated...`, "...and slightly dizzy too."];
+
+// Brewed ales, from the Wiki's effects and rsprox captures of each drink (rec 3455 for Asgarnian ale,
+// rec 20261111T225402-5ab63b4 ticks 9-81 for the rest): human_eat, sound 2401, the lines, a beer glass.
+/** Asgarnian ale (Wiki): Strength +2, Attack -(2 + 5% of current). */
+function drinkAsgarnianAle(player) {
+  boostSkill(player, Skill.STRENGTH, 2, 0);
+  lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
+}
+/**
+ * Greenman's ale: Herblore +1, Attack, Strength and Defence -(2 + 4% of current). The Wiki says 3; two
+ * captures drain 4 at 55-57 (rec 20261111T225402-5ab63b4 tick 48) and 5 at 99 (rsprox_transcripts/229/00264.txt,
+ * the house ale), which 2 + 4% fits.
+ */
+function drinkGreenmansAle(player) {
+  boostSkill(player, Skill.HERBLORE, 1, 0);
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04);
+}
+/** Dragon bitter (Wiki): Strength +2, Attack -(2 + 5% of current); captured 54 -> 50 and 96 -> 90. */
+function drinkDragonBitter(player) {
+  boostSkill(player, Skill.STRENGTH, 2, 0);
+  lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
+}
+/** Chef's delight (Wiki): Cooking +(1 + 5%), Attack and Strength -(2 + 5% of current); captured 60 -> 64 Cooking. */
+function drinkChefsDelight(player) {
+  boostSkill(player, Skill.COOKING, 1, 0.05);
+  lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
+  lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.05);
+}
+for (const [name, id, heals, effect, lines] of [
+  ["Asgarnian ale", Items.ASGARNIAN_ALE, 1, drinkAsgarnianAle, reinvigoratedLines("ale")],
+  ["Greenman's ale", Items.GREENMANS_ALE, 1, drinkGreenmansAle, () => ["You drink the Greenman's Ale.", "It has a strange taste."]],
+  ["Dragon bitter", Items.DRAGON_BITTER, 1, drinkDragonBitter, reinvigoratedLines("Dragon Bitter")],
+  ["Chef's delight", Items.CHEFS_DELIGHT, 1, drinkChefsDelight, reinvigoratedLines("ale")],
+  // Grog (Wiki): heals 3, Strength +(1 + 4% of base), Attack -(3 + 5% of current); captured 50 -> 45, 54 -> 57.
+  ["Grog", Items.GROG, 3, (player) => {
+    boostSkill(player, Skill.STRENGTH, 1, 0.04);
+    lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.05);
+  }, reinvigoratedLines("grog")],
+]) {
+  registerPotion({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: { messages: lines },
+    requiresFoodPermission: true, shareable: false, effect: (player) => { heal(player, heals); effect(player); } });
+}
+
+// Keg of beer (Wiki): heals 15, Strength +(2 + 10% of base), Attack -(5 + 50% of current). rsprox captures
+// (rec 20261111T225402-5ab63b4 tick 139): viking_keg_drink_full, one spam line, the keg gone, Attack 29 -> 10.
+registerPotion({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
+  drink: { animation: 1330, messages: () => ["You chug the keg. You feel reinvigorated...<br>... but extremely drunk too."] },
   requiresFoodPermission: true, shareable: false, effect: (player) => {
-    heal(player, 1);
-    boostSkill(player, Skill.STRENGTH, 2, 0);
-    lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
+    heal(player, 15);
+    boostSkill(player, Skill.STRENGTH, 2, 0.1);
+    lowerSkillByCurrent(player, Skill.ATTACK, 5, 0.5);
   } });
 
 // Spirits (Wiki: Karamjan rum, Vodka, Whisky, Gin, Brandy): heal 5, Strength +(1 + 5% of base),
@@ -811,7 +856,8 @@ function drinkSpirit(player) {
 registerPotion({ name: "Karamjan rum", chains: [[Items.KARAMJAN_RUM], [Items.RUM_5]], emptyItemId: null,
   drink: { messages: () => ["You drink the rum. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
-// Ours: vodka, whisky, gin and brandy are not captured; they follow the rum's lines with their own name.
+// rsprox captures (rec 20261111T225402-5ab63b4, ticks 94-129): "You drink the <name>. ..." and nothing left;
+// at base Strength 58, Attack 41 -> 38 and Strength 53 -> 56 (vodka), capped at 61 (whisky, gin).
 for (const [name, id, drinkName] of [["Vodka", Items.VODKA, "vodka"], ["Whisky", Items.WHISKY, "whisky"],
   ["Gin", Items.GIN, "gin"], ["Brandy", Items.BRANDY, "brandy"]]) {
   registerPotion({ name, chains: [[id]], emptyItemId: null,
@@ -829,23 +875,29 @@ for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_
     // rsprox: the first line is a game message, the second spam.
     drink: { animation, messages: (itemId) => [{ text: itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", game: true }, "You feel refreshed and ready for more building."] } });
 }
-for (const [id, effect, emptyItemId = Items.BEER_GLASS_4] of [
-  [Items.BEER_3, player => { boostSkill(player, Skill.STRENGTH, 1, 0.02); lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06); }],
-  [Items.CIDER_3, player => { boostSkill(player, Skill.FARMING, 1, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0); }],
-  [Items.ASGARNIAN_ALE_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
-  [Items.GREENMANS_ALE_3, player => { boostSkill(player, Skill.HERBLORE, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0); }],
-  [Items.DRAGON_BITTER_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
-  [Items.CHEFS_DELIGHT_3, player => { boostSkill(player, Skill.COOKING, 1, 0.05); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.05); }],
+// The house's own ales (and the stock mind bomb and stout). The house Greenman's ale and Dragon bitter send
+// their stock ale's lines (rsprox_transcripts/229/00264.txt); Ours: the other house ales are taken to do
+// the same. Wizard's mind bomb's lines are captured (rec 20261111T225402-5ab63b4 tick 9: Magic 70 -> 73,
+// Attack 64 -> 60, Defence 61 -> 57, Strength 58 -> 55); Dwarven stout's are the Wiki's.
+for (const [id, effect, emptyItemId = Items.BEER_GLASS_4, lines = undefined] of [
+  [Items.BEER_3, player => { boostSkill(player, Skill.STRENGTH, 1, 0.02); lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06); }, undefined, reinvigoratedLines("beer")],
+  [Items.CIDER_3, player => { boostSkill(player, Skill.FARMING, 1, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0); }, undefined, reinvigoratedLines("cider")],
+  [Items.ASGARNIAN_ALE_3, drinkAsgarnianAle, undefined, reinvigoratedLines("ale")],
+  [Items.GREENMANS_ALE_3, drinkGreenmansAle, undefined, () => ["You drink the Greenman's Ale.", "It has a strange taste."]],
+  [Items.DRAGON_BITTER_3, drinkDragonBitter, undefined, reinvigoratedLines("Dragon Bitter")],
+  [Items.CHEFS_DELIGHT_3, drinkChefsDelight, undefined, reinvigoratedLines("ale")],
   // Wiki: Wizard's mind bomb +2/+3 Magic, -1/-5 Attack, Strength and Defence.
-  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }, Items.BEER_GLASS],
+  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }, Items.BEER_GLASS,
+    () => ["You drink the Wizard's Mind Bomb.", "You feel very strange."]],
   // Wiki: Dwarven stout +1 Mining and Smithing, -4% - 2 Attack, Strength and Defence.
-  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }, Items.BEER_GLASS],
+  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }, Items.BEER_GLASS,
+    () => ["You drink the Dwarven Stout. It tastes foul.", "It tastes pretty strong too."]],
   // Wiki: Axeman's folly +1 Woodcutting, -3 Attack and Strength.
   [Items.AXEMANS_FOLLY, player => { boostSkill(player, Skill.WOODCUTTING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0); }, Items.BEER_GLASS],
   // Wiki: Bandit's brew +1 Thieving and Attack, -6% - 3 Strength and Defence.
   [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }, Items.BEER_GLASS],
 ]) {
-  registerPotion({ name: "House ale", chains: [[id]], emptyItemId,
+  registerPotion({ name: "House ale", chains: [[id]], emptyItemId, drink: lines ? { messages: lines } : undefined,
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
 

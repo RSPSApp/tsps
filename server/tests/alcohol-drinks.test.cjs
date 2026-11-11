@@ -164,3 +164,99 @@ test("a second drink waits for the drink delay, as beer does", async t => {
   assert.equal(slotId(f, 1), I.KARAMJAN_RUM, "the second rum is refused while the timer runs");
   assert.equal(level(f, "STRENGTH"), 104);
 });
+
+// rsprox rec 20261111T225402-5ab63b4: one player (base Attack 64, Defence 61, Strength 58, Magic 70,
+// Cooking 60, Herblore 50) drinks each in turn. Each case sets the levels the capture had just before
+// the drink and checks the levels, lines and slot the server sent after it.
+const BASE = { ATTACK: 64, DEFENCE: 61, STRENGTH: 58, MAGIC: 70, COOKING: 60, HERBLORE: 50, HITPOINTS: 69 };
+
+function capturedActor(t, current) {
+  const f = actor(t);
+  for (const [name, base] of Object.entries(BASE)) {
+    const skill = core.Skill[name];
+    f.skills.setExperience(skill, core.SkillManager.getExperienceForLevel(base));
+    f.skills.setMaxLevel(skill, base);
+    f.skills.setCurrentLevel(skill, current[name] ?? base, false);
+  }
+  return f;
+}
+
+const levels = (f, names) => Object.fromEntries(names.map((name) => [name, level(f, name)]));
+
+for (const { name, id, before, after, lines, left = () => I.BEER_GLASS, animation = 829 } of [
+  { name: "Wizard's mind bomb (tick 9)", id: () => I.WIZARDS_MIND_BOMB, before: {},
+    after: { ATTACK: 60, DEFENCE: 57, STRENGTH: 55, MAGIC: 73 }, lines: ["You drink the Wizard's Mind Bomb.", "You feel very strange."] },
+  { name: "Greenman's ale (tick 48)", id: () => I.GREENMANS_ALE, before: { ATTACK: 57, DEFENCE: 57, STRENGTH: 55 },
+    after: { ATTACK: 53, DEFENCE: 53, STRENGTH: 51, HERBLORE: 51 }, lines: ["You drink the Greenman's Ale.", "It has a strange taste."] },
+  { name: "Dragon bitter (tick 59)", id: () => I.DRAGON_BITTER, before: { ATTACK: 54, STRENGTH: 52 },
+    after: { ATTACK: 50, STRENGTH: 54 }, lines: ["You drink the Dragon Bitter. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  { name: "Grog (tick 69)", id: () => I.GROG, before: { ATTACK: 50, STRENGTH: 54 },
+    after: { ATTACK: 45, STRENGTH: 57 }, lines: ["You drink the grog. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  { name: "Chef's delight (tick 81)", id: () => I.CHEFS_DELIGHT, before: { ATTACK: 45, STRENGTH: 57 },
+    after: { ATTACK: 41, STRENGTH: 53, COOKING: 64 }, lines: ["You drink the ale. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  { name: "Vodka (tick 94)", id: () => I.VODKA, before: { ATTACK: 41, STRENGTH: 53 }, after: { ATTACK: 38, STRENGTH: 56 },
+    lines: ["You drink the vodka. You feel slightly reinvigorated...", "...and slightly dizzy too."], left: () => NOTHING },
+  { name: "Brandy (tick 111)", id: () => I.BRANDY, before: { ATTACK: 38, STRENGTH: 56 }, after: { ATTACK: 35, STRENGTH: 59 },
+    lines: ["You drink the brandy. You feel slightly reinvigorated...", "...and slightly dizzy too."], left: () => NOTHING },
+  { name: "Whisky (tick 121)", id: () => I.WHISKY, before: { ATTACK: 35, STRENGTH: 59 }, after: { ATTACK: 32, STRENGTH: 61 },
+    lines: ["You drink the whisky. You feel slightly reinvigorated...", "...and slightly dizzy too."], left: () => NOTHING },
+  { name: "Gin (tick 129)", id: () => I.GIN, before: { ATTACK: 32, STRENGTH: 61 }, after: { ATTACK: 29, STRENGTH: 61 },
+    lines: ["You drink the gin. You feel slightly reinvigorated...", "...and slightly dizzy too."], left: () => NOTHING },
+  { name: "Keg of beer (tick 139)", id: () => I.KEG_OF_BEER_2, before: { ATTACK: 29, STRENGTH: 61 }, after: { ATTACK: 10, STRENGTH: 65 },
+    lines: ["You chug the keg. You feel reinvigorated...<br>... but extremely drunk too."], left: () => NOTHING, animation: 1330 },
+]) {
+  test(`captured drink: ${name}`, async t => {
+    const f = capturedActor(t, before);
+    const itemId = id();
+    f.inv.setItem(12, new core.Item(itemId, 1));
+    await drink(f, 12);
+    assert.deepEqual(levels(f, Object.keys(after)), after);
+    assert.equal(slotId(f, 12), left());
+    assert.deepEqual(f.spam, lines);
+    assert.deepEqual(f.game, []);
+    assert.deepEqual(f.animations, [animation]);
+  });
+}
+
+test("the house Greenman's ale and Dragon bitter send their stock lines and drain as captured at 99", async t => {
+  // rsprox_transcripts/229/00264.txt: 99 -> 94 Attack, Defence and Strength; Dragon bitter 96 -> 90 Attack.
+  const f = actor(t);
+  f.skills.setExperience(core.Skill.DEFENCE, core.SkillManager.getExperienceForLevel(99));
+  f.skills.setMaxLevel(core.Skill.DEFENCE, 99);
+  f.skills.setCurrentLevel(core.Skill.DEFENCE, 99, false);
+  f.inv.setItem(11, new core.Item(I.GREENMANS_ALE_3, 1));
+  await drink(f, 11);
+  assert.deepEqual(levels(f, ["ATTACK", "DEFENCE", "STRENGTH"]), { ATTACK: 94, DEFENCE: 94, STRENGTH: 94 });
+  assert.equal(slotId(f, 11), I.BEER_GLASS_4);
+  assert.deepEqual(f.spam, ["You drink the Greenman's Ale.", "It has a strange taste."]);
+
+  const g = actor(t);
+  g.skills.setCurrentLevel(core.Skill.ATTACK, 96, false);
+  g.skills.setCurrentLevel(core.Skill.STRENGTH, 96, false);
+  g.inv.setItem(12, new core.Item(I.DRAGON_BITTER_3, 1));
+  await drink(g, 12);
+  assert.deepEqual(levels(g, ["ATTACK", "STRENGTH"]), { ATTACK: 90, STRENGTH: 98 });
+  assert.equal(slotId(g, 12), I.BEER_GLASS_4);
+  assert.deepEqual(g.spam, ["You drink the Dragon Bitter. You feel slightly reinvigorated...", "...and slightly dizzy too."]);
+});
+
+test("Bottle of wine (tick 26): heals 14, Attack -3, two game lines, empty bottle, liquid sound", async t => {
+  const f = capturedActor(t, { ATTACK: 60 });
+  f.p.setHitpoints(50);
+  assert.equal(I.BOTTLE_OF_WINE, 7919);
+  const sounds = [];
+  const send = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (player, sound) => {
+    sounds.push(sound.getId?.() ?? sound.id);
+    return send(player, sound);
+  });
+  f.inv.setItem(13, new core.Item(I.BOTTLE_OF_WINE, 1));
+  await drink(f, 13);
+  assert.equal(level(f, "ATTACK"), 57);
+  assert.equal(f.p.getHitpoints(), 64);
+  assert.equal(slotId(f, 13), I.EMPTY_WINE_BOTTLE);
+  assert.deepEqual(f.game, ["You drink the wine.", "It makes you feel a bit dizzy."]);
+  assert.deepEqual(f.spam, []);
+  assert.deepEqual(f.animations, [829]);
+  assert.deepEqual(sounds, [2401]);
+});

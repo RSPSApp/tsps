@@ -598,7 +598,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ElementalTomes` | Elemental Tomes | items | yes | Tomes of fire and water: charged with burnt or soaked pages, boosting spell damage and saving runes, with page-storing and bank options. (members only) |
 | `ElementalStaves` | ElementalStaves | items | yes | Elemental staves, battlestaves, the Kodai wand, the twinflame staff and the Shadowflame quadrant supply their element's runes to spells automatically. |
 | `Emblems` | Emblems | items | yes | Mysterious emblems: they downgrade a tier when you die to a player and are dropped on the ground instead of kept. |
-| `EmptyContainers` | EmptyContainers | items | yes | Empty option on filled buckets of water, sand and compost: leaves an empty bucket and sends the captured message and sound. |
+| `EmptyContainers` | EmptyContainers | items | yes | Empty option on filled buckets, pots, jugs, bowls and plant cure: leaves the empty container and sends the captured message and sound. |
 | `EyeOfAyak` | EyeOfAyak | items | yes | Eye of Ayak: powered staff charged with demon tears or runes, with Check, Uncharge and Dismantle, casting every 3 ticks. (members only) |
 | `Food` | Food | items | yes | Eating: heals, boosts, drains and cures from data/food.json, with eat delays, multi-bite foods, combo foods and the food-eaten counter. |
 | `GiantsoulAmulet` | GiantsoulAmulet | items | yes | Charges the giantsoul amulet with big bones and law runes and teleports to Bryophyta's, Obor's or the Royal Titans' lairs, one charge each. (members only) |

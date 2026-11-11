@@ -106,6 +106,8 @@
     "208": { "name": "Desert - Heat damage", "varbit": 13134 },
     "209": { "name": "Show number of options in mouseover tooltips", "varbit": 13133 },
     "213": { "name": "Cannon ammo", "varbit": 13667 },
+    "234": { "name": "Examine price info - Grand Exchange", "varbit": 13826, "default": 1 },
+    "235": { "name": "Examine price info - Alchemy", "varbit": 13827, "default": 1 },
     "244": { "name": "Desert - Water available", "varbit": 14166 },
     "246": { "name": "Cannon decay", "varbit": 14173 },
     "248": { "name": "Cannon low on ammo notification", "varbit": 14175 },

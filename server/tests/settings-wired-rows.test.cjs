@@ -36,6 +36,8 @@ const TOGGLES = {
   181: 13037,
   195: 13120,
   209: 13133,
+  234: 13826,
+  235: 13827,
   257: 5368,
   265: 14179,
   311: 14806,
@@ -62,6 +64,8 @@ const DROPDOWNS = {
 // Live defaults that are not zero: the default-state logins in the rsprox captures.
 const LIVE_DEFAULTS = {
   2: 1,
+  234: 1,
+  235: 1,
   257: 1,
   466: 1,
 };

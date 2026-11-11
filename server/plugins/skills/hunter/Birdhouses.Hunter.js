@@ -234,6 +234,7 @@ function loot(player, state) {
   const chance = [0.1, 0.125, 0.128, 0.13, 0.14, 0.15, 0.16, 0.17, 0.175][state.tier]
     * 3 * (hunter <= 50 ? 0.5 : 0.5 + (hunter - 50) / 98);
   let clueGiven = false;
+  const missed = new Set();
   for (let i = 0; i < 5; i++) {
     if (Math.random() >= chance) continue;
     // ponytail: Wiki marks these clue-nest probabilities as approximate.
@@ -244,7 +245,15 @@ function loot(player, state) {
         const boost = { player, vessel: "nest", tier: tier.toLowerCase(), multiplier: 1 };
         H.api.emitCustomEvent("treasure-trails:vessel-chance", boost);
         if (boost.allowed === false) continue;
-        if (!require("./Context.Hunter").ownsClue(player,tier) && roll(1,1500) <= numerator * (boost.multiplier > 1 ? boost.multiplier : 1)) { clue = tier; break; }
+        if (roll(1,1500) > numerator * (boost.multiplier > 1 ? boost.multiplier : 1)) continue;
+        // A hit the player cannot take is lost, and the next tier rolls; the tier's clue scroll warning
+        // mentions it (ours: once a tier per bird house).
+        if (require("./Context.Hunter").ownsClue(player,tier)) {
+          if (!missed.has(tier)) H.api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: tier.toLowerCase() });
+          missed.add(tier);
+          continue;
+        }
+        clue = tier; break;
       }
       if (clue) {
         const boxes = require("./Context.Hunter").questComplete(player,"x_marks_the_spot");

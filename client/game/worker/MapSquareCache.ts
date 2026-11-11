@@ -5,12 +5,16 @@ import type { SdMapLoaderInput } from "../../render/loader/SdMapLoaderInput";
 import type { VarManager } from "../../rs/config/vartype/VarManager";
 import { Scene } from "../../rs/scene/Scene";
 import { isLowEndDevice } from "../../common/utils/DeviceUtil";
+import { BaseTypeLoader } from "../../rs/config/TypeLoader";
 
 /**
  * Bump when SdMapData or the geometry the loader emits changes, so old entries stop matching.
  * 6: loc id 0 is built (Dwarf Cannon's remains multiloc); format 5 squares left it out.
+ * 7: rev 242 multilocs (loc opcodes 97/98) are built. Until #4007/#4135 the browser decoded them
+ *    with a stale ByteBuffer.js and drew none, and the squares stored then kept serving that
+ *    (Edgeville's poll booth and loot chest, issue #4240).
  */
-export const CACHE_FORMAT = 6;
+export const CACHE_FORMAT = 7;
 // Desktop HD scenes can cover 64 squares before walking into the next scene.
 // Retain several scene windows rather than evicting the previous login's squares.
 export const MAX_SQUARES = isLowEndDevice ? 64 : 256;
@@ -69,9 +73,14 @@ export function isCacheable(input: SdMapLoaderInput): boolean {
     return true;
 }
 
-/** A build is storable only if its final pass hit no missing groups (those render as gaps). */
+/**
+ * A build is storable only if its final pass hit no missing groups (those render as gaps), and
+ * while no config type has failed to decode in this worker: a failed type stays cached
+ * half-decoded (BaseTypeLoader), so its locs, NPCs or items are missing from the geometry, and a
+ * stored square would keep them missing after the decoder is fixed.
+ */
 export function shouldStore(complete: boolean, data: unknown): boolean {
-    return complete && !!data;
+    return complete && !!data && BaseTypeLoader.decodeFailures.size === 0;
 }
 
 export function fnv(text: string): string {

@@ -1,7 +1,9 @@
 // Run after `yarn build`: node --test tests/blood-spell-drain-line.test.cjs
 // A blood spell that hits sends one spam line per cast: "You drain some of your opponent's health." for one
 // target and "You drain some of your opponents' health." for two or more (rsprox_transcripts/226/01702.txt and
-// 234/00821.txt: every singular line follows exactly one blood impact; 238/01224.txt tick 3066, Blood Blitz).
+// 234/00821.txt: every singular line follows exactly one blood impact; 238/01224.txt tick 3066, Blood Blitz). The
+// line counts accurate impacts, 0 damage included (234/00821.txt tick 4446: base Magic XP only, the singular line).
+// It goes out on the cast tick, with the runes, the XP and the impact spotanim.
 const assert = require('node:assert/strict');
 const { before, test } = require('node:test');
 const { Server } = require('../dist/Server');
@@ -56,7 +58,7 @@ test('a Blood Blitz that hits one target sends the singular line on the spam cha
   assert.deepEqual(lines, [[ChatType.SPAM, ONE]]);
 });
 
-test('two or more targets drained give the plural line; a splash or a 0 gives none', t => {
+test('two or more accurate impacts give the plural line; a lone accurate 0 the singular; a splash none', t => {
   const { p, lines } = caster(t);
   const method = new MagicCombatMethod();
   const hit = (damage) => {
@@ -64,8 +66,12 @@ test('two or more targets drained give the plural line; a splash or a 0 gives no
     h.setTotalDamage(damage);
     return h;
   };
+  const splash = () => { const h = hit(0); t.mock.method(h, 'isAccurate', () => false); return h; };
   MagicCombatMethod.sendBloodDrainLine(p, core.CombatSpells.BLOOD_BARRAGE, [hit(10), hit(4), hit(0)]);
   MagicCombatMethod.sendBloodDrainLine(p, core.CombatSpells.BLOOD_BARRAGE, [hit(0)]);
+  MagicCombatMethod.sendBloodDrainLine(p, core.CombatSpells.BLOOD_BARRAGE, [splash(), splash()]);
+  MagicCombatMethod.sendBloodDrainLine(p, core.CombatSpells.BLOOD_BARRAGE, [hit(0), splash()]);
   MagicCombatMethod.sendBloodDrainLine(p, core.CombatSpells.ICE_BARRAGE, [hit(10), hit(10)]);
-  assert.deepEqual(lines, [[ChatType.SPAM, MANY]]);
+  assert.deepEqual(lines, [[ChatType.SPAM, MANY], [ChatType.SPAM, ONE], [ChatType.SPAM, ONE]],
+    'three accurate (one a 0): plural; a lone accurate 0: singular; splashes: none; one accurate beside a splash: singular');
 });

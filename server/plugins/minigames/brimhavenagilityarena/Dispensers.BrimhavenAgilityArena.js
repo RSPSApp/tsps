@@ -34,7 +34,8 @@ const IZZY_NO_COINS = "No coins, no entrance!";
 const IZZY_PAID = "May the wind be in ye sails!";
 const REENTRY_DELAY_MS = 60_000;
 const REENTRY_AFTER_ATTRIBUTE = "brimhaven-agility-arena:reenter-after";
-const REENTRY_WAIT_MESSAGE = "You must wait a minute after leaving the Agility Arena before re-entering.";
+/** rsprox 227/01738.txt:3031-3046: only the ladder refuses, in the message box (229). */
+const REENTRY_WAIT_MESSAGE = "You've only just left the arena. You need a wait at least a minute<br>after leaving before re-entering.";
 /** The transcript's hand-over step in "I'd like to use the Agility Arena, please.". */
 const TRANSCRIPT_PAY_STEP = "geqhzb";
 
@@ -51,7 +52,8 @@ function reentryCooldownRemaining(player) {
 
 function refuseReentry(player) {
   if (reentryCooldownRemaining(player) === 0) return false;
-  player.sendMessage(REENTRY_WAIT_MESSAGE);
+  const { DialogueChainBuilder, StatementDialogue } = Shared.core();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, REENTRY_WAIT_MESSAGE)));
   return true;
 }
 
@@ -90,7 +92,7 @@ function izzySays(player, text) {
 
 /** Pay (op3): the coins item box, or Izzy's refusal. */
 function payIzzy({ player }) {
-  if (refuseReentry(player)) return;
+  // Paying during the cooldown is accepted (227/01738.txt:2509-2514); the ladder refuses.
   if (hasPaid(player)) {
     izzySays(player, IZZY_PAID);
     return;
@@ -108,10 +110,6 @@ function payIzzy({ player }) {
 /** The transcript's "You hand Cap'n Izzy 200 coins." takes the fee, shown with the coins. */
 function transcriptPayment(event) {
   if (event.kind !== "message" || event.stepId !== TRANSCRIPT_PAY_STEP) return;
-  if (refuseReentry(event.player)) {
-    event.end = true;
-    return;
-  }
   if (!takeFee(event.player)) {
     event.end = true;
     return;
@@ -191,8 +189,9 @@ function resetOnLeaving(player) {
 }
 
 function climbDown(player) {
-  if (refuseReentry(player)) return;
+  // Unpaid, the parrot answers even during the cooldown (227/01738.txt:2448-2454); paid, the ladder refuses.
   if (hasPaid(player)) {
+    if (refuseReentry(player)) return;
     enterArena(player);
     return;
   }

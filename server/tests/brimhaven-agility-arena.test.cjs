@@ -119,6 +119,21 @@ test("the hut ladder needs the fee; unpaid, the Parrot speaks first", () => {
   assert.deepEqual(paid.animations, [827]);
 });
 
+test("within a minute of leaving, paying works and the ladder refuses in a message box (227/01738.txt)", () => {
+  const back = player({ coins: 500, x: 2808, y: 3193, z: 0 });
+  back.setAttribute("brimhaven-agility-arena:reenter-after", Date.now() + 30_000);
+  climbDown(back);
+  assert.equal(back.dialogues.length, 1, "unpaid: the Parrot, as at 227/01738.txt:2448-2454");
+  payIzzy({ player: back });
+  assert.equal(hasPaid(back), true, "Izzy takes the fee (227/01738.txt:2509-2514)");
+  assert.equal(back.inventory.get(COINS), 300);
+  const before = back.dialogues.length;
+  climbDown(back);
+  assert.equal(back.animations.length, 0, "the ladder refuses");
+  assert.equal(back.dialogues.length, before + 1, "in a message box");
+  assert.equal(back.messages?.some?.((m) => /wait/.test(m)) ?? false, false, "not a chat line");
+});
+
 test("Izzy's transcript takes the fee on its hand-over line", () => {
   const izzy = { getName: () => "Cap'n Izzy No-Beard" };
   const rich = player({ coins: 300 });

@@ -300,6 +300,10 @@ const reportedInConversation = new WeakSet();
 const kudosHudShown = new WeakSet();
 /** Players with a museum display case open (The Golem's case 30 clears its own busy varbit). */
 const studyingDisplay = new WeakSet();
+/** Players whose Kudos HUD Study hid, to show again when the case closes. */
+const hudHiddenForStudy = new WeakSet();
+/** Players reading Check Kudos (busy until it closes). */
+const readingKudosInfo = new WeakSet();
 
 const has = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -801,9 +805,16 @@ function answerAwardKudos(request) {
   request.kudos = awardKudos(request.player, request.amount, request.source);
 }
 
-/** Information booth "Check Kudos": the cache's own activity list (vm_kudos_info, 600). */
+/**
+ * Information booth "Check Kudos": the cache's own activity list (vm_kudos_info, 600). rsprox
+ * 227/01757.txt:292512-292519: busy (12393) set, script 2524 [-1, -1], then the modal.
+ */
 function checkKudos({ player }) {
-  player.getPacketSender().sendInterface(KUDOS_INFO_INTERFACE);
+  const sender = player.getPacketSender();
+  sender.sendVarbit(DISPLAY_BUSY_VARBIT, 1);
+  readingKudosInfo.add(player);
+  sender.sendInterfaceScript(DISPLAY_SCREEN_SCRIPT, [-1, -1]);
+  sender.sendInterface(KUDOS_INFO_INTERFACE);
   return true;
 }
 
@@ -833,6 +844,11 @@ function studyDisplay({ player, objectId, location }) {
   sender.sendVarbit(DISPLAY_BUSY_VARBIT, 1);
   studyingDisplay.add(player);
   player.performAnimation(new api.core.Animation(DISPLAY_STUDY_SEQUENCE));
+  // rsprox 227/01723.txt tick 14869: the Kudos HUD closes as the case opens, and comes back with it closing.
+  if (kudosHudShown.has(player)) {
+    hideKudosHud(player);
+    hudHiddenForStudy.add(player);
+  }
   sender.sendString(displayText(player, entry), (group << 16) | DISPLAY_TEXT_COMPONENT);
   sender.sendString(String(entry.number), (group << 16) | numberComponent);
   const modelId = api.core.CacheDefinitions.getObject(objectId)?.models?.[0]?.[0];
@@ -848,6 +864,12 @@ function studyDisplay({ player, objectId, location }) {
 function resetDisplayBusy({ player, interfaceId }) {
   if ((interfaceId === DIGSITE_INTERFACE || interfaceId === TIMELINE_INTERFACE)
     && studyingDisplay.delete(player)) {
+    // rsprox 227/01723.txt tick 14871: busy off, sequence -1, the case closes and the HUD returns.
+    player.getPacketSender().sendVarbit(DISPLAY_BUSY_VARBIT, 0);
+    player.performAnimation(new api.core.Animation(-1));
+    if (hudHiddenForStudy.delete(player)) showKudosHud(player);
+  }
+  if (interfaceId === KUDOS_INFO_INTERFACE && readingKudosInfo.delete(player)) {
     player.getPacketSender().sendVarbit(DISPLAY_BUSY_VARBIT, 0);
   }
 }
@@ -869,12 +891,17 @@ function createMuseumArea(core) {
       return "Varrock Museum";
     }
 
+    // Crossing the boundary owns the HUD: a case closing afterwards must not bring it back outside, or add a second one.
     postEnter(mobile) {
-      if (mobile.isPlayer()) showKudosHud(mobile.getAsPlayer());
+      if (!mobile.isPlayer()) return;
+      hudHiddenForStudy.delete(mobile.getAsPlayer());
+      showKudosHud(mobile.getAsPlayer());
     }
 
     postLeave(mobile, logout) {
-      if (mobile.isPlayer() && !logout) hideKudosHud(mobile.getAsPlayer());
+      if (!mobile.isPlayer()) return;
+      hudHiddenForStudy.delete(mobile.getAsPlayer());
+      if (!logout) hideKudosHud(mobile.getAsPlayer());
     }
   }
   return new MuseumArea(MUSEUM_BOUNDS.map((b) => new core.Boundary(b.minX, b.maxX, b.minY, b.maxY, b.z)));

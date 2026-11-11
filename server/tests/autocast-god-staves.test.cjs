@@ -111,3 +111,20 @@ test("the void knight mace opens its own list, autocasts Claws of Guthix and mee
   assert.equal(choose(wielding(t, I.VOID_KNIGHT_MACE).p, 20), null, "no Flames of Zamorak");
   assert.ok(f.p.getEquipment().containsAllItem(S.CLAWS_OF_GUTHIX.equipmentRequired(f.p)), "it can cast Claws");
 });
+
+// rsprox_transcripts/234/03297.txt tick 212 (Lunar), 234/00843.txt tick 465 (Ancient book, a bladed staff);
+// none of the 53 recordings that open the selector sends a line (e.g. 236/03914.txt).
+test("the selector's recorded refusals, and no line when it opens", (t) => {
+  const I = core.ItemIdentifiers, B = core.MagicSpellbook;
+  const said = (f) => { const lines = []; t.mock.method(f.p, "sendMessage", (m) => lines.push(m)); return lines; };
+  const ancient = wielding(t, I.STAFF_OF_THE_DEAD, B.ANCIENT), ancientLines = said(ancient);
+  Autocasting.handleWidgetAction(ancient.p, 593, 23);
+  assert.deepEqual(ancientLines, ["You cannot autocast Ancient Magicks with that."]);
+  const lunar = wielding(t, I.STAFF_OF_THE_DEAD, B.LUNAR), lunarLines = said(lunar);
+  Autocasting.handleWidgetAction(lunar.p, 593, 23);
+  assert.deepEqual(lunarLines, ["You cannot autocast Lunar Magicks."]);
+  const normal = wielding(t, I.STAFF_OF_THE_DEAD), normalLines = said(normal);
+  Autocasting.handleWidgetAction(normal.p, 593, 23);
+  assert.equal(normal.list(), I.STAFF_OF_THE_DEAD, "the selector opened");
+  assert.deepEqual(normalLines, []);
+});

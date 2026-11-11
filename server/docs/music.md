@@ -18,7 +18,7 @@ minigame tracks from their own plugins' `music:unlock-track` events.
 A list row's op 2, Unlock hint, sends the hint as "This track unlocks in the Port Phasmatys
 brewery." for a locked track and "This track was unlocked in East Ardougne." for an unlocked one
 (rsprox 226/01702 ticks 722-759, 236/03934 tick 3721). The now-playing text (239:4) has the same
-op for the track it shows, the last one played (ours: nothing before a track has played).
+op for the track it shows (varp 3883, the last track played; ours: nothing before one has played).
 
 ## Music areas
 

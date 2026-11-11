@@ -59,6 +59,8 @@ let pluginApi;
 let trackNames;
 let unlockHints;
 let trackById;
+/** The track the now-playing text shows (varp 3883), by player: the last one played with a list row. */
+const nowPlayingTracks = new WeakMap();
 let rowIdByTrackId;
 let allTrackIds;
 let nonHolidayTrackIds;
@@ -296,6 +298,7 @@ function onTrackPlayed(event) {
   unlockTrack(event);
   const rowId = rowIdByTrackId?.[Number(event.trackId)];
   if (event.player && Number.isInteger(rowId)) {
+    nowPlayingTracks.set(event.player, Number(event.trackId));
     const sender = event.player.getPacketSender();
     sender.sendConfig(CURRENT_MUSIC_TRACK_VARP, rowId);
     sender.sendClientScript(MUSIC_NOW_PLAYING_REFRESH_SCRIPT);
@@ -310,8 +313,7 @@ function selectMusicTrack(event) {
   if (trackOption(event, listed, op)) return;
   if (op !== 1) return;
   event.handled = true;
-  if (!Number.isInteger(event.slot) || event.slot < 0) return;
-  const track = selectableTracks[event.slot];
+  const track = listed;
   if (!track || !track.released) return;
   const { player } = event;
   const slot = slotByTrackId[track.id];
@@ -498,13 +500,9 @@ function sendUnlockHint(player, track) {
   player.sendMessage(`This track ${unlocked ? "was unlocked" : "unlocks"} ${hint}`);
 }
 
-/**
- * The now-playing text's ops act on the track it shows, the one last played. Ours: with nothing
- * played yet (or the music stopped) they do nothing.
- */
+/** The now-playing text's ops act on the track it shows. Ours: before any track has played they do nothing. */
 function nowPlayingAction(event) {
-  const trackId = event.player.getSession().getCurrentMusicTrack();
-  trackOption(event, Number.isInteger(trackId) && trackId >= 0 ? trackById.get(trackId) : undefined, event.opId ?? event.action);
+  trackOption(event, trackById.get(nowPlayingTracks.get(event.player)), event.opId ?? event.action);
 }
 
 /** A row's or the now-playing text's "Add to playlist" op: adds the unlocked track, or removes it when it is there. */

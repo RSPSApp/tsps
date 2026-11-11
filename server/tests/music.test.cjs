@@ -1542,22 +1542,28 @@ test('Unlock hint: a list row and the now-playing text say where the track unloc
   const nowPlaying = opId => MusicPlugin._test.nowPlayingAction({ player, groupId: 239, childId: 4, opId, slot: -1 });
   nowPlaying(2);
   assert.deepEqual(messages, [], 'nothing played yet');
+  player.getPacketSender().sendSong(knightly.track.id);
+  nowPlaying(2);
+  // A song another plugin plays without selecting it is what the text then shows.
   session.setCurrentMusicTrack(knightly.track.id);
+  player.getPacketSender().sendSong(brewHooHoo.track.id);
   nowPlaying(2);
-  session.setCurrentMusicTrack(brewHooHoo.track.id);
-  nowPlaying(2);
-  assert.deepEqual(messages, ['This track was unlocked in East Ardougne.', 'This track unlocks in the Port Phasmatys brewery.']);
+  assert.deepEqual(messages, [
+    'This track was unlocked in East Ardougne.',
+    'You have unlocked a new music track: <col=e00a19>Brew Hoo Hoo!',
+    'This track was unlocked in the Port Phasmatys brewery.',
+  ]);
 });
 
 test('playlists: the now-playing text adds the playing track to playlists 1-3, or removes it, as a list row does', async t => {
-  const { core, session, player, messages } = await musicSession(t, 'musicnowplayingplaylist', new Location(3222, 3218, 0));
+  const { core, player, messages } = await musicSession(t, 'musicnowplayingplaylist', new Location(3222, 3218, 0));
   const Playlists = require('../plugins/world/Playlists.Music');
   const adventure = listTrack(core, 'Adventure');
   const nowPlaying = opId => MusicPlugin._test.nowPlayingAction({ player, groupId: 239, childId: 4, opId, slot: -1 });
-  session.setCurrentMusicTrack(adventure.track.id);
   nowPlaying(3);
-  assert.deepEqual(Playlists.values(player, 1), [], 'a locked track cannot be added');
-  Progress.unlock(player, adventure.track.id);
+  assert.deepEqual(Playlists.values(player, 1), [], 'nothing played yet');
+  player.getPacketSender().sendSong(adventure.track.id); // unlocks it
+  messages.length = 0;
   nowPlaying(3);
   nowPlaying(4);
   nowPlaying(5);

@@ -21,6 +21,11 @@ const CREW_DROP_OFF = "Your crew drop off the cargo that needed to be delivered 
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const NO_CARGO = "There is no cargo available for you to collect here.";
 const LAST_SLOT_ATTRIBUTE = "port-tasks:last-slot";
+const DEPOSIT_WARNING_SETTING = 463;
+/** port_task_loading_bay_warning_dismissed: 1 after "don't ask again" (the row's tick clears it). */
+const DEPOSIT_WARNING_VARBIT = 18137;
+const DEPOSIT_TITLE = "Deposit the cargo?";
+const DEPOSIT_OPTIONS = ["Yes.", "Yes, and don't ask again.", "No."];
 
 function itemBox(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue } = common.core();
@@ -130,6 +135,57 @@ function complete(player, index, task, random = Math.random) {
   itemBox(player, task.crate, `You deliver the ${common.crateName(task.crate)} and complete your courier task!`);
 }
 
+/**
+ * The carried crate's slot when this dock is where it was picked up and it is still owed there,
+ * or -1. Setting it down there makes it collectable again.
+ */
+function returnable(player, crate, dock) {
+  const held = common.slots(player);
+  const carriedIndex = player.getAttribute(common.CARRIED_SLOT_ATTRIBUTE);
+  const carried = Number.isInteger(carriedIndex) ? held[carriedIndex] : null;
+  const source = carried && common.taskById(carried.id);
+  return source?.type === "courier" && source.crate === crate && source.cargoPort === dock?.id
+    && carried.taken > carried.delivered ? carriedIndex : -1;
+}
+
+function returnToSource(player, crate, dock) {
+  if (common.heldCrate(player) !== crate) return;
+  const index = returnable(player, crate, dock);
+  if (index < 0) return;
+  const held = common.slots(player);
+  held[index] = { ...held[index], taken: held[index].taken - 1 };
+  common.setSlots(player, held);
+  common.putDown(player);
+  player.performAnimation(new (common.core().Animation)(SEQ_PICKUP));
+  player.getPacketSender().sendSoundEffect(SOUND_PICKUP, 1, 15);
+  itemBox(player, crate, `You deposit the ${common.crateName(crate)}.`);
+}
+
+/**
+ * All Settings "Port task cargo deposit warning" (463): while varbit 18137 is 0, setting a crate
+ * down anywhere but its destination asks first, a message box then "Deposit the cargo?".
+ * "Yes, and don't ask again." sets 18137.
+ */
+function depositWarning(player, crate, dock) {
+  const { DialogueChainBuilder, StatementDialogue, OptionDialogue, ChatType, PluginManager } = common.core();
+  const text = depositWarningText(crate);
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new StatementDialogue(0, text))
+    .add(new OptionDialogue(1, {
+      executeOption: (option) => {
+        const choice = Number(option);
+        if (choice === 2) PluginManager.emitCustomEvent("settings:set", { player, settingId: DEPOSIT_WARNING_SETTING, value: 1 });
+        if (choice === 1 || choice === 2) returnToSource(player, crate, dock);
+        else player.getPacketSender().sendInterfaceRemoval();
+      },
+    }, ...DEPOSIT_OPTIONS).setTitle(DEPOSIT_TITLE)));
+}
+
+function depositWarningText(crate) {
+  return `Are you sure you wish to deposit the ${common.crateName(crate)} here? If you obtained this cargo from a different port, you will have to return to that port to re-acquire it.`;
+}
+
 function depositCargo({ player, location }) {
   const crate = common.heldCrate(player);
   if (crate === undefined) return;
@@ -140,17 +196,15 @@ function depositCargo({ player, location }) {
     return task?.crate === crate && task.destination === dock?.id && slot.delivered < slot.taken;
   });
   if (index < 0) {
-    const carriedIndex = player.getAttribute(common.CARRIED_SLOT_ATTRIBUTE);
-    const carried = Number.isInteger(carriedIndex) ? held[carriedIndex] : null;
-    const source = carried && common.taskById(carried.id);
-    if (source?.type === "courier" && source.crate === crate && source.cargoPort === dock?.id
-      && carried.taken > carried.delivered) {
-      held[carriedIndex] = { ...carried, taken: carried.taken - 1 };
-      common.setSlots(player, held);
-      common.putDown(player);
+    if (returnable(player, crate, dock) < 0) {
+      player.sendMessage("This cargo isn't for delivery here.");
       return;
     }
-    player.sendMessage("This cargo isn't for delivery here.");
+    if ((Number(player.getPacketSender().getVarbit(DEPOSIT_WARNING_VARBIT)) || 0) !== 0) {
+      returnToSource(player, crate, dock);
+      return;
+    }
+    depositWarning(player, crate, dock);
     return;
   }
   const task = common.taskById(held[index].id);
@@ -194,5 +248,8 @@ module.exports.collectable = collectable;
 module.exports.moreToGo = moreToGo;
 module.exports.give = give;
 module.exports.countCompletion = countCompletion;
+module.exports.depositWarningText = depositWarningText;
+module.exports.DEPOSIT_OPTIONS = DEPOSIT_OPTIONS;
+module.exports.DEPOSIT_WARNING_VARBIT = DEPOSIT_WARNING_VARBIT;
 module.exports.SHARK_PAINT = SHARK_PAINT;
 module.exports.SHARK_PAINT_CHANCE = SHARK_PAINT_CHANCE;

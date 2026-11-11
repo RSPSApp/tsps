@@ -59,6 +59,14 @@ function objectOption(p, object, option) {
     core.TaskManager.process();
   }
 }
+/** Answers the open "Deposit the cargo?" warning: continue past the message box, then pick `choice`. */
+function answerDeposit(p, choice) {
+  const dm = p.getDialogueManager();
+  dm.advance();
+  const options = dm.getCurrent();
+  assert.equal(options.getTitle(), 'Deposit the cargo?');
+  options.execute(choice);
+}
 function outside(p) { p.moveTo(new core.Location(3222, 3218, 0)); }
 function sarimLedger(p) {
   core.RegionManager.loadMapFiles(3028, 3194);
@@ -148,6 +156,7 @@ test('Pandemonium source ledger returns the actual hand crate without a local bo
   assert.equal(p.getAttribute(common.CARRIED_SLOT_ATTRIBUTE), 2);
   assert.equal(p.getInventory().getAmount(task.crate), 0);
   objectOption(p, table, 'Deposit-cargo');
+  answerDeposit(p, 1);
   assert.equal(common.heldCrate(p), undefined, 'the source table is a safe place to set down the crate');
   assert.deepEqual(common.slots(p)[2], { id: task.id, taken: 0, delivered: 0 });
   assert.equal(p.getAttribute(common.CARRIED_SLOT_ATTRIBUTE), -1);
@@ -174,6 +183,7 @@ test('source return preserves other task slots and cargo in the crew and hold', 
   p.getSailing().boats.push({ slot: 0, cargo: hold });
   common.carry(p, task.crate, 1);
   objectOption(p, table, 'Deposit-cargo');
+  answerDeposit(p, 1);
   assert.equal(common.heldCrate(p), undefined);
   assert.deepEqual(common.slots(p)[0], other);
   assert.deepEqual(common.slots(p)[1], { id: task.id, taken: 1, delivered: 0 });
@@ -413,3 +423,54 @@ for (const route of ['bank', 'deposit-box']) {
     assert.equal(p.getBank(0).getAmount(task.crate), 0);
   });
 }
+
+test('setting a crate down at its pickup port asks first (setting 463), with the captured text and options', t => {
+  const p = player(t), table = sarimLedger(p);
+  const task = common.DATA.tasks.find(task => task.type === 'courier' && task.cargoPort === 'port_sarim' && task.amount >= 2);
+  common.setSlots(p, [{ id: task.id, taken: 1, delivered: 0 }]);
+  common.carry(p, task.crate, 0);
+  const typed = [];
+  t.mock.method(p.getPacketSender(), 'sendTypedMessage', (type, text) => { typed.push(text); return p.getPacketSender(); });
+  objectOption(p, table, 'Deposit-cargo');
+  const name = common.crateName(task.crate);
+  const text = `Are you sure you wish to deposit the ${name} here? If you obtained this cargo from a different port, you will have to return to that port to re-acquire it.`;
+  assert.deepEqual(typed, [text]);
+  assert.equal(ledger.depositWarningText(task.crate), text);
+  assert.equal(common.heldCrate(p), task.crate, 'nothing happens before an answer');
+  const dm = p.getDialogueManager();
+  dm.advance();
+  assert.deepEqual(dm.getCurrent().getOptions(), ['Yes.', "Yes, and don't ask again.", 'No.']);
+  dm.getCurrent().execute(3);
+  assert.equal(common.heldCrate(p), task.crate, '"No." keeps the crate');
+  assert.deepEqual(common.slots(p)[0], { id: task.id, taken: 1, delivered: 0 });
+  assert.equal(p.getPacketSender().getVarbit(ledger.DEPOSIT_WARNING_VARBIT), 0);
+});
+
+test("'Yes, and don't ask again.' sets varbit 18137; with it set the crate goes straight down", t => {
+  const p = player(t), table = sarimLedger(p);
+  const task = common.DATA.tasks.find(task => task.type === 'courier' && task.cargoPort === 'port_sarim' && task.amount >= 2);
+  common.setSlots(p, [{ id: task.id, taken: 2, delivered: 0 }]);
+  common.carry(p, task.crate, 0);
+  objectOption(p, table, 'Deposit-cargo');
+  answerDeposit(p, 2);
+  assert.equal(p.getPacketSender().getVarbit(ledger.DEPOSIT_WARNING_VARBIT), 1);
+  assert.equal(common.heldCrate(p), undefined);
+  assert.equal(common.slots(p)[0].taken, 1);
+  common.carry(p, task.crate, 0);
+  objectOption(p, table, 'Deposit-cargo');
+  assert.equal(common.heldCrate(p), undefined, 'no question once dismissed');
+  assert.equal(common.slots(p)[0].taken, 0);
+  const current = p.getDialogueManager().getCurrent();
+  assert.equal(current?.constructor?.name, 'ItemStatementDialogue');
+});
+
+test("a 'Yes.' after the crate left the player's hands changes nothing", t => {
+  const p = player(t), table = sarimLedger(p);
+  const task = common.DATA.tasks.find(task => task.type === 'courier' && task.cargoPort === 'port_sarim');
+  common.setSlots(p, [{ id: task.id, taken: 1, delivered: 0 }]);
+  common.carry(p, task.crate, 0);
+  objectOption(p, table, 'Deposit-cargo');
+  common.putDown(p);
+  answerDeposit(p, 1);
+  assert.deepEqual(common.slots(p)[0], { id: task.id, taken: 1, delivered: 0 });
+});

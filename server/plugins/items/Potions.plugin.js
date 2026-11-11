@@ -1867,18 +1867,17 @@ function pourPotion(event) {
 /** Vials of water, coconut milk and blood empty to a vial too, though no dose enum lists them. */
 const EMPTYABLE_VIALS = ["vial_water", "vial_coconut_milk", "vial_blood"];
 
-/** "Empty" on a potion or a filled vial: the empty vessel, "You empty the vial." (rsprox captures). */
 /**
- * An inventory click on a registered drink: its first op, or whichever op the cache names "Drink"
- * (Karamjan rum's is its fourth, rsprox rec 4287: inventory:items op6).
+ * A registered drink whose "Drink" is not its first op (Karamjan rum's is its fourth, rsprox rec
+ * 4287: inventory:items op6). The first op stays with the onItemFirstAction hook.
  */
-function drinkFromInventory(event) {
+function drinkFromLaterOp(event) {
   const { player, itemId, slot, clickType } = event;
-  if (event.handled || !player || !event.item) return;
-  if (clickType !== 1 && pluginApi.core.CacheDefinitions.getItem(itemId)?.inventoryActions?.[clickType - 1] !== "Drink") return;
+  if (clickType === 1 || pluginApi.core.CacheDefinitions.getItem(itemId)?.inventoryActions?.[clickType - 1] !== "Drink") return;
   if (handlePotionDrink(player, itemId, slot) !== false) event.handled = true;
 }
 
+/** "Empty" on a potion or a filled vial: the empty vessel, "You empty the vial." (rsprox captures). */
 function emptyVessel(event) {
   const { player, itemId, slot, clickType } = event;
   const { CacheDefinitions, Item } = pluginApi.core;
@@ -2059,8 +2058,12 @@ module.exports = {
     api.onPlayerDeath(clearPrayerRegeneration);
     api.onPlayerDeath(clearDivineOnDeath);
     api.onItemOnItem(pourPotion, { noted: false });
+    api.onItemAction(drinkFromLaterOp);
     api.onItemAction(emptyVessel);
-    api.onItemAction(drinkFromInventory);
+    api.onItemFirstAction((event) => {
+      const { player, itemId, slot } = event;
+      return handlePotionDrink(player, itemId, slot);
+    });
     api.onInterfaceActionButton(componentIds(api, HEALTH_ORB_CURE_COMPONENTS), cureFromHealthOrb);
     api.onCustomEvent("skills:current-level-changed", noteDivineDrain);
 

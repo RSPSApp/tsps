@@ -1,6 +1,7 @@
 // Run after `yarn build`: node --test tests/settings-skilling-notices.test.cjs
 // All Settings' skilling notices: the clue scroll warnings (374-379) for clues rolled by skilling
-// (clue nests, geodes, bottles, the Agility dispenser and salvage), and the level-up chatbox list
+// (clue nests, geodes, bottles, the Agility dispenser, salvage and Hunter's bird houses, aerial
+// fishing, implings and drift nets), and the level-up chatbox list
 // (493). Real engine: every plugin loaded and a real Player.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -16,6 +17,10 @@ const ClueGeodes = require("../plugins/skills/mining/ClueGeodes.Mining");
 const ClueBottles = require("../plugins/skills/fishing/ClueBottles.Fishing");
 const AgilityDispenser = require("../plugins/skills/AgilityDispenser.plugin");
 const Salvaging = require("../plugins/skills/sailing/Salvaging.plugin");
+const Aerial = require("../plugins/skills/hunter/Aerial.Hunter");
+const Birdhouses = require("../plugins/skills/hunter/Birdhouses.Hunter");
+const Catching = require("../plugins/skills/hunter/Catching.Hunter");
+const DriftNets = require("../plugins/skills/hunter/DriftNets.Hunter");
 
 let core;
 let I;
@@ -53,7 +58,24 @@ const SOURCES = {
   "a clue bottle": (p) => ClueBottles.rollClueBottles(p, 1000000, () => 0),
   "an Agility dispenser clue": (p) => AgilityDispenser._test.rollClue(p),
   "a salvage clue": (p) => Salvaging.rollClue(p, { tier: "medium", oneIn: 300 }, () => 0),
+  // Hunter's sources roll Math.random; the bird house and jar return their loot, so it must hold no clue.
+  "a bird house clue nest": (p) => assert.ok(!Birdhouses.loot(p, { tier: 0 }).some(([id]) => isClue(id))),
+  "an aerial fishing clue bottle": (p) => Aerial.rollClues(p),
+  "an impling jar clue": (p) => assert.ok(!Catching.rewards(p, { key: "EARTH" }).some(([id]) => isClue(id))),
+  // The first draw misses the drift net's fossil roll; the medium bottle then hits and becomes pufferfish.
+  "a drift net clue bottle": (p) => withDraws([0.5], () =>
+    assert.deepEqual(DriftNets.rewards(p, 1), [[I.PUFFERFISH, 1]])),
 };
+
+function isClue(id) {
+  return /^(Clue (scroll|bottle|nest)|Scroll box) \(/.test(core.ItemDefinition.forId(id).getName());
+}
+
+function withDraws(draws, run) {
+  const random = Math.random;
+  Math.random = () => draws.shift() ?? 0;
+  try { return run(); } finally { Math.random = random; }
+}
 
 for (const [source, roll] of Object.entries(SOURCES)) {
   test(`${source} rolled while the medium clue is already held is mentioned only with the medium warning on`, (t) => {
@@ -104,4 +126,28 @@ test("free worlds never warn about a members clue", (t) => {
   assert.deepEqual(f.messages, []);
   PM.emitCustomEvent("treasure-trails:missed-clue", { player: f.p, tier: "beginner" });
   assert.deepEqual(f.messages, [suspicion("a beginner clue scroll")]);
+});
+
+test("a bird house mentions each missed tier once, though several of its nests roll", (t) => {
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => true);
+  const f = actor(t);
+  for (const tier of ["beginner", "easy", "medium", "hard", "elite"]) f.inv.adds(I[`CLUE_SCROLL_${tier.toUpperCase()}_`], 1);
+  f.varbit(Capacity.WARNING_VARBITS.elite, 1);
+  f.varbit(Capacity.WARNING_VARBITS.medium, 1);
+  t.mock.method(Math, "random", () => 0);
+  Birdhouses.loot(f.p, { tier: 0 });
+  assert.deepEqual(f.messages, [suspicion("an elite clue scroll"), suspicion("a medium clue scroll")]);
+});
+
+test("Hunter clues with room for them are still given", (t) => {
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => true);
+  const f = actor(t);
+  for (const tier of ["beginner", "easy", "medium", "hard", "elite"]) f.varbit(Capacity.WARNING_VARBITS[tier], 1);
+  t.mock.method(Math, "random", () => 0);
+  assert.ok(Birdhouses.loot(f.p, { tier: 0 }).some(([id]) => id === I.CLUE_NEST_ELITE_));
+  assert.ok(Catching.rewards(f.p, { key: "EARTH" }).some(([id]) => id === I.CLUE_SCROLL_MEDIUM_));
+  withDraws([0.5], () => assert.deepEqual(DriftNets.rewards(f.p, 1), [[I.CLUE_BOTTLE_MEDIUM_, 1]]));
+  Aerial.rollClues(f.p);
+  assert.equal(f.inv.getAmount(I.CLUE_BOTTLE_BEGINNER_), 1, "the aerial catch's bottle is given");
+  assert.deepEqual(f.messages, []);
 });

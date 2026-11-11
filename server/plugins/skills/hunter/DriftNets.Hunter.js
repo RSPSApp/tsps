@@ -219,6 +219,8 @@ function rewards(player, count) {
       // Wiki Drift net fishing: a won clue becomes pufferfish when another clue cannot be received.
       const unavailable = C.ownsClue(player, "MEDIUM") || result.some(([id]) => id === clueId);
       result.push([unavailable ? I.PUFFERFISH : clueId, 1]);
+      // The tier's clue scroll warning mentions the lost clue.
+      if (unavailable) H.api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: "medium" });
     }
     else result.push([fish[C.roll(0, fish.length - 1)], 1]);
   }

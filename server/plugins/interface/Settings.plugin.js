@@ -669,7 +669,7 @@ function sendGameframeLayout(player, root) {
   // The client moves the open mounts onto the new root, but live also reopens the orbs on
   // its orbs pane, which re-runs their onLoad scripts that place the Activity Adviser and
   // store orbs for this layout.
-  sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
+  if (!pluginApi.core.dataOrbsHidden(player)) sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
 function receiveGameframeLayout(event) {

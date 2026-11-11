@@ -2672,17 +2672,26 @@ export function orbsGroupFor(root: number): number {
   return root === MOBILE_GAMEFRAME_ROOT ? MOBILE_ORBS_GROUP_ID : ORBS_GROUP_ID;
 }
 
+/** `orbs_disabled`: All Settings' "Show data orbs" (row 8) off, or a tutorial hiding them. */
+export const ORBS_DISABLED_VARBIT = 4084;
+
+/** Whether the orbs pane stays empty: live leaves the orbs closed while `orbs_disabled` is 1. */
+export function dataOrbsHidden(player: { getPacketSender(): { getVarbit(id: number): number } }): boolean {
+  return player.getPacketSender().getVarbit(ORBS_DISABLED_VARBIT) === 1;
+}
+
 /**
  * The gameframe a login (or the welcome screen's Play) opens. Script 876 ends it: its name and
  * world-type strings go to script 5450, which keeps them in varc strings 564 and 944 (live sends
- * "REGULAR", or "HARDCORE WORLD" on a Hardcore world).
+ * "REGULAR", or "HARDCORE WORLD" on a Hardcore world). With `orbsShown` false the orbs are not
+ * opened, as live logs in while `orbs_disabled` is set.
  */
-export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false, worldTypeLabel = "REGULAR"): Buffer[] {
+export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false, worldTypeLabel = "REGULAR", orbsShown = true): Buffer[] {
   const mounts = [
     // pm_chat -> toplevel_osrs_stretch:pm_container (93), xp_drops -> :xp_drops (9).
     // 161:7 (hud_container_back) has no fixed-layout pane, so XP drops mounted there vanished.
     // The modified stats overlay (stat_boosts_hud -> :stat_boosts_hud, 5) opens next to the buff bar.
-    [96, 162], [93, 163], [33, orbsGroupFor(root)], ...(xpDropsEnabled ? [[9, 122]] : []), [6, 651, 5929], [5, 708],
+    [96, 162], [93, 163], ...(orbsShown ? [[33, orbsGroupFor(root)]] : []), ...(xpDropsEnabled ? [[9, 122]] : []), [6, 651, 5929], [5, 708],
     [76, 593], [77, 320], [78, 629], [79, MAIN_INVENTORY_GROUP_ID], [80, 387], [81, 541],
     [82, 218], [83, SIDE_CHANNELS_GROUP_ID], [84, 109], [85, 429], [86, 182], [87, 116],
     [88, 216], [89, 239],

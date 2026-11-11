@@ -44,8 +44,8 @@
  *    cache: the pressure render (clientscript 2763) draws a hole at level 2 for the first
  *    two balls and level 3 for the last two, and every pipe piece's model family is in
  *    the cache next to the ids Quest Helper checks.
- *  - The tower door (21814, open leaf 21815) is in Doors.plugin.js's catalog; the outfit and
- *    stage checks run on its door:toggle, then it swings open like any other door.
+ *  - The tower door (21814, open leaf 21815) is a pass-through gate in Doors.plugin.js; the outfit
+ *    and stage checks run on its door:toggle, then it lets only that player through and shuts.
  *  - The trapdoor to the dungeon opens only once the Homunculus has been freed ("The trapdoor
  *    won't budge." otherwise); its climb-down and the dungeon ladder's climb-up are routed
  *    through the Ladders plugin with explicit destinations ((3038,4376) dungeon landing).
@@ -1446,7 +1446,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
     return true;
   }
 
-  /** The Doors plugin asks door:toggle first; on a pass it swings the door open like any other. */
+  /** The Doors plugin asks door:toggle first; on a pass it lets this player through and shuts. */
   function handleTowerDoorToggle(event) {
     if (event.handled || event.objectId !== TOWER_DOOR_OBJECT_ID || !atTile(event.location, TOWER_DOOR_TILE)) return;
     const { player } = event;

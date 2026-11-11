@@ -678,6 +678,7 @@
       "between": {"ends":[[3759,5670,0],[3765,5671,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {"name":"Stile (Kandarin)","object":993,"level":1,"stile":{}},
+    {"name":"Stile (Piscatoris falconry)","object":19222,"level":1,"stile":{}},
     {
       "name": "Log balance (East Ardougne, heading east)",
       "object": 16546,

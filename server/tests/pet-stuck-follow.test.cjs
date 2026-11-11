@@ -73,3 +73,13 @@ test('automatic recovery preserves the physical form, cat clock, leader dialogue
     assert.equal(f.p.getDialogueManager().getCurrent(),d);assert.equal(selected,0);assert.equal(f.p.getMovementQueue().size(),size);for(let i=0;i<3;i++)core.TaskManager.process();assert.equal(completed,1);
   }
 });
+test('a pet stays out of an area that bars followers (canoe ride) and rejoins its owner afterwards',async t=>{
+  const f=actor(t),n=await follower(f),home=n.getLocation().clone();
+  const area=new class extends core.PrivateArea { allowSummonPet(){return false;} }([new core.Boundary(1792,1855,4480,4543,0)]);
+  t.after(()=>area.destroy());
+  area.enter(f.p);f.p.moveTo(new core.Location(1817,4515,0));cycles(n,30);
+  assert.ok(n.getLocation().equals(home),`pet followed into the barred area to ${n.getLocation()}`);
+  assert.notEqual(n.getArea(),area);assert.equal(n.getFollowing(),f.p);
+  area.leave(f.p,false);f.p.moveTo(new core.Location(3245,3210,0));cycles(n,30);
+  assert.ok(distance(f,n)<=2,`pet did not catch up after the ride: ${n.getLocation()}`);
+});

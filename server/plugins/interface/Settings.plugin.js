@@ -257,6 +257,47 @@ const SETTING_TYPE_TOGGLE = 0;
 const SETTING_TYPE_DROPDOWN = 2;
 const SEARCH_VIEW = -1;
 
+// Row locks. A setting struct with param 1115 set can be locked, and param 1116 is the text a
+// locked row shows. The cache's settings scripts grey the row out while script 2520 says it is
+// locked (from vars the server sends); the server decides with ROW_UNLOCKS. A click on a
+// locked row, or a dropdown option chosen for one, says the row's text and changes nothing.
+const PARAM_SETTING_LOCKABLE = 1115;
+const PARAM_SETTING_LOCKED_TEXT = 1116;
+const DIARY_TIERS = ["easy", "medium", "hard", "elite"];
+
+/** Asks another plugin through a custom event; true when it answered `field` with true. */
+function answered(event, request, field) {
+  pluginApi?.emitCustomEvent(event, request);
+  return request[field] === true;
+}
+
+/** setting id -> whether the player has unlocked the row. Rows not listed are never locked here. */
+const ROW_UNLOCKS = new Map([
+  // Deep Wilderness lever default option: any tier of the Wilderness Diary.
+  [296, (player) => DIARY_TIERS.some((tier) => answered("diary:is-complete", { player, diary: "wilderness", tier, complete: false }, "complete"))],
+  // Disable Phantom Muspah messages: Secrets of the North. Ours: script 2520 has no case for this
+  // row, so the client never greys it out; the row's own locked text names the quest.
+  [302, (player) => answered("quest:is-complete", { player, key: "secrets_of_the_north", complete: false }, "complete")],
+  // Make-X barbarian potions: Barbarian Training's Herblore section (varbit 3761 brut_herb_potion = 3).
+  [373, (player) => answered("herblore:unlocked", { player, unlock: "barbarian_herblore", allowed: null }, "allowed")],
+]);
+
+/**
+ * Whether a row is locked for the player. When it is, the row's locked text is sent and the
+ * caller must leave the setting as it is. Every path that changes a setting from its row (a
+ * click, a dropdown option, a value the client transmits) goes through this first.
+ */
+function refuseLockedSetting(player, settingId) {
+  const lockedText = catalog().settings.get(settingId)?.lockedText;
+  const unlocked = ROW_UNLOCKS.get(settingId);
+  if (lockedText === undefined || !unlocked || unlocked(player)) return false;
+  player.sendMessage(lockedText);
+  // The client may already have flipped the var itself; send the value the row keeps.
+  const row = SETTINGS[settingId];
+  if (row && !row.options) sendSettingVar(player, varKey(row), getSettingVar(player, row));
+  return true;
+}
+
 // The keybind settings (ids 16..29, All Settings > Controls) and the varbit each drives
 // (the varbits are TAB_VARBIT_MAP's).
 const KEYBIND_VARBIT_BY_SETTING = new Map([
@@ -290,6 +331,7 @@ function catalog() {
         category: categoryId,
         type: Number(params.get(PARAM_SETTING_TYPE) ?? SETTING_TYPE_TOGGLE),
         optionCount: options === undefined ? 0 : CacheDefinitions.getEnumValues(Number(options)).size,
+        lockedText: Number(params.get(PARAM_SETTING_LOCKABLE)) === 1 ? params.get(PARAM_SETTING_LOCKED_TEXT) : undefined,
       });
     }
     byCategory.set(categoryId, rows);
@@ -411,6 +453,7 @@ function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
   const setting = catalog().settings.get(settingId);
   if (setting?.type !== SETTING_TYPE_DROPDOWN || !Number.isInteger(option) || option < 0 || option >= setting.optionCount) return false;
+  if (refuseLockedSetting(player, settingId)) return true;
   const request = { player, settingId, option, handled: false };
   pluginApi?.emitCustomEvent("settings:option-chosen", request);
   if (request.handled) return true;
@@ -459,6 +502,7 @@ function clickSetting({ player, slot, argsData, scriptTrigger }) {
   const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
   if (settingId < 0) return false;
   selectSetting(player, settingId);
+  if (refuseLockedSetting(player, settingId)) return true;
   if (COLOUR_SETTINGS[settingId] !== undefined) return openColour(player, settingId);
   if (COLOUR_RESETS[settingId] !== undefined) {
     for (const id of COLOUR_RESETS[settingId]) setSettingVar(player, `varp:${id}`, 0);
@@ -890,6 +934,7 @@ module.exports = {
   openAllSettings,
   openKeybindings,
   keybindVarbitForRow,
+  refuseLockedSetting,
   register(api) {
     api.persistAttribute(XPDROPS_ENABLED_ATTRIBUTE);
     api.onPlayerLogin(syncXpDrops);

@@ -14,6 +14,8 @@
  *   one lizardman fang per charge, 1,000 maximum.
  *   https://oldschool.runescape.wiki/w/Xeric%27s_talisman
  * - Wiki Transcript:Xeric's talisman for the Check, charging and uncharging lines.
+ * - rsprox captures: the Rub and Reminisce submenu entries (cache subops, in destination order)
+ *   teleport straight to that destination (talisman 726, 3942; Book of the Dead 363, 3150).
  * - City and destination tiles: RuneLite TeleportLocationData.
  * - Cache: item gamevals and the kourend_diary_* teleport varbits (7917-7921).
  */
@@ -146,7 +148,9 @@ function memoirsAction(event) {
   const equipped = event.interfaceId === core.Equipment.INVENTORY_INTERFACE_ID;
   const option = normalise(event.option ?? (equipped ? wornOptionName(event.itemId, event.clickType) : null));
   if (!option) return;
-  const page = PAGE_BY_LABEL.get(option);
+  // A Reminisce submenu entry goes straight to its page's city (rsprox 363: subops 1-4 land in
+  // Piscarilius, Shayzien, Lovakengj and Arceuus; 3150: subop 0 in Hosidius).
+  const page = PAGE_BY_LABEL.get(option) ?? (option === "reminisce" ? PAGE_BY_LABEL.get(normalise(event.subOption)) : undefined);
   if (page) {
     event.handled = true;
     teleport(player, item, page);
@@ -311,6 +315,15 @@ function talismanAction(event) {
   if (option === "uncharge") {
     event.handled = true;
     unchargeTalisman(player, item);
+    return;
+  }
+  if (option === "rub" && event.subOption) {
+    // A Rub submenu entry teleports straight there, with no menu (rsprox 726: subop 2 lands at
+    // Xeric's Inferno; 3942: subop 4 at Xeric's Honour).
+    event.handled = true;
+    const destination = talismanDestination(player, event.subOption);
+    // Ours: a locked Honour entry does nothing, as its worn option does; no source shows a reply.
+    if (destination) teleportWithTalisman(player, item, destination);
     return;
   }
   if (option === "rub") {

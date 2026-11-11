@@ -47,9 +47,9 @@
  * No other private-server source was used.
  *
  * Gaps / approximations (documented in the runthrough):
- *  - Waydar's sliding puzzle has no minigame: once Daero has briefed the player
- *    in the hangar (mm_daero 5), operating the Reinitialisation Panel completes
- *    it (or Glough takes 200,000 coins).
+ *  - Waydar's sliding puzzle is Puzzle.MonkeyMadnessI.js: once Daero has briefed
+ *    the player in the hangar (mm_daero 5), operating the Reinitialisation Panel
+ *    opens it (or Glough takes 200,000 coins). Its scramble is not recorded.
  *  - "Monkey form" is the Karamjan monkey greegree equipped in the weapon slot
  *    (item 4031), checked live; the transformation itself is the Greegrees item
  *    plugin's. Monkey NPCs are not made aggressive here.
@@ -1563,7 +1563,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         player.sendMessage("The reinitialisation has already been completed.");
         return;
       }
-      startTranscript(api, player, CRATE_CHATHEAD_ID, PAGE, "chapter-1-the-underground-hangar-upon-solving-the-puzzle");
+      puzzle.operate(player);
       return;
     }
     if (objectId === SPARE_CONTROLS_CRATE_ID && option === "Search") {
@@ -2090,6 +2090,12 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     buildJournal,
     onReward: grantReward,
   });
+
+  /** The last piece slid home: the panel's closing lines, whose "q7BmfR" message sets the stage. */
+  function puzzleSolved(player) {
+    startTranscript(api, player, CRATE_CHATHEAD_ID, PAGE, "chapter-1-the-underground-hangar-upon-solving-the-puzzle");
+  }
+  const puzzle = require("./Puzzle.MonkeyMadnessI")(api, { onSolved: puzzleSolved, isActive: player => stageOf(player) < STAGE_REINITIALISED });
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

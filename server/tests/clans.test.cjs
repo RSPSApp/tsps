@@ -100,6 +100,7 @@ function player(name) {
     sendMessage: (text) => self.messages.push(text),
     getSession: () => ({ sendClientPacket: (packet) => self.packets.push(packet) }),
     getPacketSender: () => ({
+      getVarbit: (id) => self.varbits.get(id) ?? 0,
       sendVarbit(id, value) {
         self.varbits.set(id, value);
         return this;
@@ -1181,6 +1182,17 @@ test('logging in sends last seen and today, as 3886 tick 664', () => {
     { type: 'member_extra_info', index: 1, value: day - 6880, startBit: 0, endBit: 12 },
     { type: 'int_setting', setting: 8, value: day },
   ]));
+});
+
+test("logging in with 'last seen' updates off keeps the old last seen day", () => {
+  const { member, clan } = clanOfThree();
+  hooks.logout({ player: member });
+  clan.members[1].lastSeenDay = 6880 + 5;
+  const before = sent(member, CLAN_SETTINGS_DELTA).length;
+  member.varbits.set(16118, 1);
+  login(member);
+  assert.equal(clan.members[1].lastSeenDay, 6880 + 5);
+  assert.equal(sent(member, CLAN_SETTINGS_DELTA).length, before, 'no last seen delta');
 });
 
 // ---------------------------------------------------------------- phase 4: guests

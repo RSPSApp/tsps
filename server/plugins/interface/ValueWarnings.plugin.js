@@ -15,7 +15,7 @@
  * plugin). Ours: the prompts' wording, from the Alchemy row's "Set value threshold for alchemy
  * warnings:".
  *
- *   hear "item:drop-warning" { player, item, itemId, slot, warned, proceed }
+ *   hear "item:drop-warning" { player, item, itemId, slot, answered, warned, proceed(name) }
  *   hear "magic:alchemy-warning" { player, item, itemId, spellId, high, text }
  *   hear "npc-drops:roll" { player, npc, drops }
  */

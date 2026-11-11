@@ -13,7 +13,7 @@
  * rules (multicombat, attackable). The Wiki gives them no different damage, so each takes its own full
  * hit, with the same rolls as the main target's. Smash hits one target and spends no charge.
  *
- * Charging (Wiki): one ascension shard, 20 nature runes and 20 death runes add 10 charges, up to 20,000.
+ * Charging (Wiki): one ascension shard, 60 nature runes and 60 death runes add 30 charges, up to 20,000.
  * Uncharging returns the unused shards and runes. The Wiki does not say what spends a charge or whether
  * the uncharged weapon keeps the passive: one charge an attack, and no passive uncharged, are estimates.
  *
@@ -24,9 +24,11 @@
 const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
 const MAX_CHARGES = 20000;
-const CHARGES_PER_BATCH = 10;
-const NATURE_RUNES_PER_BATCH = 20;
-const DEATH_RUNES_PER_BATCH = 20;
+// Wiki (Obligator): 1 ascension shard, 60 nature runes and 60 death runes give 30 charges, since the
+// 11 November 2026 update ("Increased the number of charges provided by Ascension Shards ... by 3x").
+const CHARGES_PER_BATCH = 30;
+const NATURE_RUNES_PER_BATCH = 60;
+const DEATH_RUNES_PER_BATCH = 60;
 const CHARGES_META_KEY = "obligator-charges";
 const SMASH_FIGHT_TYPE_INDEX = 2;
 const SMASH_ATTACK_SPEED = 3;
@@ -203,7 +205,7 @@ function resolveObligator(attacker) {
   return (method ??= createMethod());
 }
 
-/** One shard, 20 nature and 20 death runes a batch of 10 charges, as many batches as the inventory affords. */
+/** One shard, 60 nature and 60 death runes a batch of 30 charges, as many batches as the inventory affords. */
 function chargeObligator(event) {
   const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
   const weapon = isObligatorId(usedItemId) ? usedItem : isObligatorId(usedWithItemId) ? usedWithItem : null;

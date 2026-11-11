@@ -256,20 +256,20 @@ test('the boss defences in the monster data give the Wiki roll counts (Phosani 4
     assert.equal(rolls('General Graardor'), 2);
 });
 
-test('charging takes a shard, 20 nature and 20 death runes per 10 charges; uncharging gives them back', () => {
+test('charging takes a shard, 60 nature and 60 death runes per 30 charges (Wiki, 11 Nov 2026); uncharging gives them back', () => {
     const { ASCENSION_SHARDS, NATURE_RUNE, DEATH_RUNE } = ItemIdentifiers;
     const mace = weapon(ItemIdentifiers.OBLIGATOR_UNCHARGED_);
-    const user = player(mace, { stacks: { [ASCENSION_SHARDS]: 3, [NATURE_RUNE]: 100, [DEATH_RUNE]: 50 } });
+    const user = player(mace, { stacks: { [ASCENSION_SHARDS]: 3, [NATURE_RUNE]: 300, [DEATH_RUNE]: 150 } });
     const event = { player: user, usedItem: mace, usedWithItem: {}, usedItemId: mace.getId(), usedWithItemId: ASCENSION_SHARDS };
     Obligator._test.chargeObligator(event);
     assert.equal(event.handled, true);
-    assert.equal(Obligator._test.charges(mace), 20, 'death runes allow two batches');
+    assert.equal(Obligator._test.charges(mace), 60, 'death runes allow two batches');
     assert.equal(mace.getId(), ItemIdentifiers.OBLIGATOR, 'charging makes it the charged item');
-    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [1, 60, 10]);
+    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [1, 180, 30]);
     Obligator._test.uncharge({ player: user, item: mace });
     assert.equal(Obligator._test.charges(mace), 0);
     assert.equal(mace.getId(), ItemIdentifiers.OBLIGATOR_UNCHARGED_);
-    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [3, 100, 50]);
+    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [3, 300, 150]);
     assert.ok(registered.Obligator.Check && registered.Obligator.Uncharge && registered['Obligator (uncharged)'].Charge);
 });
 
@@ -428,12 +428,12 @@ test("real cache-backed inventory refuses capped refunds and accepts exact headr
     function fill(player, headroom) {
         const inv = player.getInventory();
         const mace = new Item(ItemIdentifiers.OBLIGATOR, 1);
-        mace.setMetaValue(Obligator._test.CHARGES_META_KEY, 10);
+        mace.setMetaValue(Obligator._test.CHARGES_META_KEY, 30);
         inv.setItem(0, mace);
         const refunds = [
             [ItemIdentifiers.ASCENSION_SHARDS, 1],
-            [ItemIdentifiers.NATURE_RUNE, 20],
-            [ItemIdentifiers.DEATH_RUNE, 20],
+            [ItemIdentifiers.NATURE_RUNE, 60],
+            [ItemIdentifiers.DEATH_RUNE, 60],
         ];
         refunds.forEach(([id, amount], index) => inv.setItem(index + 1,
             new Item(id, headroom ? MAX_STACK_AMOUNT - amount : MAX_STACK_AMOUNT)));
@@ -444,7 +444,7 @@ test("real cache-backed inventory refuses capped refunds and accepts exact headr
     const capped = fill(blocked, false);
     const before = JSON.stringify(capped.inv.getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]));
     Obligator._test.uncharge({ player: blocked, item: capped.mace });
-    assert.equal(Obligator._test.charges(capped.mace), 10);
+    assert.equal(Obligator._test.charges(capped.mace), 30);
     assert.equal(capped.mace.getId(), ItemIdentifiers.OBLIGATOR);
     assert.equal(JSON.stringify(capped.inv.getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()])), before);
 

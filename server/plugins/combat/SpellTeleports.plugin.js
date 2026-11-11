@@ -5,6 +5,13 @@ let pluginApi;
 
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
+/**
+ * The house tablet's Group option goes to a Group Ironman teammate's house (Wiki). This server has
+ * no Ironman groups, so every player gets live's refusal: the line on the click tick, the tablet
+ * kept and no teleport (rsprox.net capture 2919, tick 2179).
+ */
+const HOUSE_TABLET_GROUP = "group";
+const NOT_IN_GROUP = "You are not in an Ironman Group.";
 /** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
 const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
 const POLLNIVNEACH_REDIRECT_TASK = "teleport-to-pollnivneach-with-a-redirected-telep";
@@ -227,6 +234,7 @@ function useTablet(event) {
     return;
   }
   if (option === "revert" && TABLETS.redirects[name]) return revertTablet(event);
+  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return refuseGroupHouse(event);
   const alternate = ALTERNATES.get(name);
   if (alternate && option === "toggle") return toggleDestination(event, alternate);
   const target = tabletDestination(event, name, option);
@@ -248,6 +256,11 @@ function useTablet(event) {
   if (!warning || !warningOn(player, warning)) return breakTablet();
   const [title, yes, no] = tabletWarning(warning);
   pluginApi.sendMultiChatboxPrompt(player, title, yes, () => usable() && breakTablet(), no, () => {});
+}
+
+function refuseGroupHouse(event) {
+  event.handled = true;
+  event.player.sendMessage(NOT_IN_GROUP);
 }
 
 /** A teleport scroll is used up on the click (docs/teleport-tablets.md). */

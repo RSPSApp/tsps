@@ -56,6 +56,7 @@
  */
 module.exports = function registerKingsRansomQuest(api) {
   const {
+    CacheDefinitions,
     CountdownTask,
     Equipment,
     HitDamage,
@@ -1237,8 +1238,26 @@ module.exports = function registerKingsRansomQuest(api) {
   // Items
   // ==========================================================================
 
+  /**
+   * The quest's two papers open their own cache interfaces, whose text is all in the cache
+   * (Wiki, Transcript:King's Ransom: "Address form interface opens.").
+   */
+  const PAPER_INTERFACES = new Map([
+    [ADDRESS_FORM_ITEM, CacheDefinitions.getInterfaceId("kr_address_form")],
+    [SCRAP_PAPER_ITEM, CacheDefinitions.getInterfaceId("kr_scrap_paper")],
+  ]);
+
+  function readPaper(player, itemId) {
+    player.getPacketSender().sendInterface(PAPER_INTERFACES.get(itemId));
+  }
+
   function handleItemAction(event) {
     const { player, itemId, option, slot, item } = event;
+    if (PAPER_INTERFACES.has(itemId) && option === "Read") {
+      event.handled = true;
+      readPaper(player, itemId);
+      return;
+    }
     if (itemId === ANTIQUE_LAMP_ITEM && option === "Rub") {
       event.handled = true;
       const inventory = player.getInventory();

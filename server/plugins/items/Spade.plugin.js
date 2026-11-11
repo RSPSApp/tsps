@@ -10,11 +10,16 @@
  * The handler deliberately returns false so the event stays open: content with its own dig
  * (treasure trails, Barrows, quest digs, sailing schematics) still runs on the same click and
  * plays its own sequence. Only the spade's option reaches here, so no other item is affected.
+ *
+ * When none of them claims the click, the fallback answers "Nothing interesting happens." on the
+ * same tick as the sequence (rsprox.net captures, obj spade op2: 12 of 19 recordings, e.g. 1698
+ * tick 6941, 1067 tick 209, 3931 tick 4075).
  */
 
 const DIG_SOUND = 1470;
 const HUMAN_DIG = 830;
 const SPADES = ["Spade", "Large spade", "Eastfloor spade"];
+const NOTHING_FOUND = "Nothing interesting happens.";
 
 let core;
 
@@ -26,11 +31,16 @@ function dig(event) {
   return false;
 }
 
+function digFoundNothing({ player }) {
+  player.sendMessage(NOTHING_FOUND);
+}
+
 module.exports = {
   name: "Spade",
-  description: "Plays the digging animation and sound for the Dig option on spades, while leaving the click open for treasure trails and quest digs.",
+  description: "Plays the digging animation and sound for the Dig option on spades, leaves the click open for treasure trails and quest digs, and says nothing was found when none of them claims it.",
   register(api) {
     core = api.core;
     for (const name of SPADES) api.onItemAction(name, { Dig: dig });
+    for (const name of SPADES) api.onItemAction(name, { Dig: digFoundNothing }, { fallback: true });
   },
 };

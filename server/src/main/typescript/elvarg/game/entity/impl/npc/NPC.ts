@@ -284,8 +284,16 @@ export class NPC extends Mobile {
             return false;
         }
         if (this.heldByDialogue !== player) {
+            // Only the NPC speaking is held (live's chatnpc sets the mode on that NPC alone), not
+            // a monster or pet that happens to face a player reading someone else's line.
             const current: any = dialogue.getCurrent();
-            this.heldByDialogue = typeof current?.getNpcId === "function" ? player : null;
+            const speaker = typeof current?.getNpcId === "function" ? current.getNpcId() : null;
+            const speaking = speaker !== null && (
+                player.getInteractingMobile?.() === this
+                || speaker === this.getId()
+                || speaker === this.getNpcTransformationId()
+                || speaker === this.getContentId(player));
+            this.heldByDialogue = speaking ? player : null;
         }
         return this.heldByDialogue !== null;
     }

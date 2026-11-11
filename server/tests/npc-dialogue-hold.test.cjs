@@ -10,20 +10,23 @@ const { NPC } = require("../dist/game/entity/impl/npc/NPC");
 const { Location } = require("../dist/game/model/Location");
 
 function scene() {
-  const state = { current: null, at: new Location(2490, 3305, 0) };
+  const state = { current: null, at: new Location(2490, 3305, 0), talkingTo: null };
   const player = {
     isPlayer: () => true,
     getAsPlayer() { return this; },
     getLocation: () => state.at,
+    getInteractingMobile: () => state.talkingTo,
     getDialogueManager: () => ({ isActive: () => state.current !== null, getCurrent: () => state.current }),
   };
-  const npc = {
+  const npcWith = (id, at) => ({
     heldByDialogue: null,
+    getId: () => id, getNpcTransformationId: () => -1, getContentId: () => id,
     getInteractingMobile: () => player,
-    getLocation: () => new Location(2490, 3306, 0),
-  };
-  const held = () => NPC.prototype.updateDialogueHold.call(npc);
-  return { state, held };
+    getLocation: () => at,
+  });
+  const npc = npcWith(3505, new Location(2490, 3306, 0));
+  const held = (who = npc) => NPC.prototype.updateDialogueHold.call(who);
+  return { state, held, npcWith };
 }
 
 const playerLine = { getText: () => "Hello there." };
@@ -51,4 +54,19 @@ test("a held NPC is released once the player is more than a tile away", () => {
   state.at = new Location(2491, 3305, 0);
   state.current = options;
   assert.equal(held(), false, "not re-held by a later non-NPC line");
+});
+
+test("only the NPC speaking is held, not another NPC facing the player", () => {
+  // A goblin fighting the player (facing them) while they read a banker's line keeps moving:
+  // live's chatnpc sets the mode on the speaking NPC alone.
+  const { state, held, npcWith } = scene();
+  const goblin = npcWith(3029, new Location(2491, 3306, 0));
+  state.current = npcLine;
+  assert.equal(held(goblin), false);
+  assert.equal(held(), true, "the Civilian speaking is held");
+  state.current = { getNpcId: () => 1613 };
+  const banker = npcWith(1613, new Location(2489, 3304, 0));
+  state.talkingTo = banker;
+  assert.equal(held(goblin), false);
+  assert.equal(held(banker), true, "also found by the player's interaction");
 });

@@ -52,19 +52,29 @@ Cowbell charging, worn actions, Ring sounds and milking are documented in [the L
 
 The progress tracker's Brutus rows (4 November) listed the repeatable post-quest fight, the Demonic variant and the drop
 tables as not built. All three are on main (this page, `npc-drops.json`: `brutus` and `demonic_brutus`, the Wiki's tables),
-so those rows were stale. The Wiki ([Brutus](https://oldschool.runescape.wiki/w/Brutus),
-[Demonic Brutus](https://oldschool.runescape.wiki/w/Demonic_Brutus) and their Strategies pages) names more, built in
-`plugins/bosses/Brutus.plugin.js` and the quest plugin's Demonic branches; no rsprox capture of the post-quest or the Demonic
-fight was found (4153 is the quest route only), so these are the Wiki's numbers and texts:
+so those rows were stale. The Wiki names more, built in `plugins/bosses/Brutus.plugin.js` (its numbers and texts are in
+`plugins/bosses/data/brutus.json`) and the quest plugin's Demonic branches. Read on 2026-11-11 from the Wiki revisions
+[Brutus](https://oldschool.runescape.wiki/?title=Brutus&oldid=15396646),
+[Demonic Brutus](https://oldschool.runescape.wiki/?title=Demonic_Brutus&oldid=15384017),
+[Brutus/Strategies](https://oldschool.runescape.wiki/?title=Brutus/Strategies&oldid=15354867) and
+[Demonic Brutus/Strategies](https://oldschool.runescape.wiki/?title=Demonic_Brutus/Strategies&oldid=15354884).
+No rsprox capture of the post-quest or the Demonic fight was found (4153 is the quest route only), so these are the Wiki's
+numbers and texts:
 
-- Slayer experience on a Cows task is 116, twice his Hitpoints, after the quest (the Slayer plugin gave 58).
-- An item used on Brutus says "Brutus doesn't want that.", an empty bucket "You do not want to do that."; the abyssal
-  potato stays the quest plugin's.
+- Slayer experience on a Cows task is 116, twice his Hitpoints (the Slayer plugin gave 58): Brutus infobox "slayxp = 116",
+  and the generated `monsters-complete.json` has `slayer_xp` 116.0 for 15626 and 15627. Nothing says it differs during the
+  quest, so it is not gated on it.
+- An item used on Brutus says "Brutus doesn't want that." and an empty bucket "You do not want to do that." (Brutus,
+  Trivia); the abyssal potato stays the quest plugin's.
 - Killing Brutus or Demonic Brutus wearing Cow31337Killer's outfit (rune boots, rune platebody, rune plateskirt, Klank's
-  gauntlets, Dharok's helm, Dharok's greataxe, degraded forms included) says "You are but an imitation of a true legend."
-- Demonic Brutus heals 487 and shouts "moo moo!" when first brought to 0 Hitpoints, each bull of his specials deals 45-56,
-  his basic melee ignores Protect from Melee and is not held to the quest's cap of 3, and he is immune to stat drains.
-  The Wiki's strategy page gives his melee maximum as 4 and its infobox as 43; the engine's own stats give 43, which stands.
+  gauntlets, Dharok's helm, Dharok's greataxe; degraded forms included) says "You are but an imitation of a true legend."
+  (Brutus, Trivia).
+- Demonic Brutus: "Once Demonic Brutus' health reaches 0, it will exclaim moo moo! and heal itself for 487 health" (he
+  heals 487 and shouts when first brought to 0 Hitpoints), "Getting hit by any of the bulls will deal 45-56 damage each"
+  (each bull of his specials deals 45-56), his basic melee "can hit through Protect from Melee" (it does, and is not held to
+  the quest's cap of 3) and he "is immune to stat drains" (he is). The Strategies page gives his melee maximum as 4; the
+  infobox says 43, and so does `monsters-complete.json` (`max_hit` 43), which stands. With one bull per special, a Demonic
+  special is a single 45-56 hit, so he can kill a low-Hitpoints player in the private field in one or two hits.
 
 Not modelled: Demonic Brutus's three ghost bulls and their clockwise order, the faster specials at two thirds of his
 Hitpoints, the counter-clockwise order at one third, the phase-two orbs, his enchanted-bolt immunity (no immunity flag

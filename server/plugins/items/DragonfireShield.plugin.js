@@ -437,10 +437,26 @@ function chargeDefence({ player, bonuses }) {
 
 function login({ player }) {
   const steps = rechargeSteps(player);
-  if (steps > 0) {
-    sendRecharge(player, steps);
-    startRecharge(player);
-  }
+  if (steps <= 0) return;
+  if (rechargeShield(player).rechargeVarbit) sendRecharge(player, steps);
+  else sendRechargeNextTick(player);
+  startRecharge(player);
+}
+
+/** buff_bar_start needs the buff bar open, and login hooks run before the gameframe goes out. */
+function sendRechargeNextTick(player) {
+  const { Task, TaskManager } = core;
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(1, player, false);
+    }
+
+    execute() {
+      this.stop();
+      const steps = rechargeSteps(player);
+      if (steps > 0 && player.isRegistered?.()) sendRecharge(player, steps);
+    }
+  })());
 }
 
 function attach(api) {

@@ -86,7 +86,7 @@ test("a recharge running at logout comes back on the same shield's cooldown at l
   for (const [id, expect] of [
     [ItemIds.DRAGONFIRE_SHIELD, { varbits: [[6539, 10]], scripts: [] }],
     [ItemIds.DRAGONFIRE_WARD, { varbits: [[6540, 10]], scripts: [] }],
-    [ItemIds.ANCIENT_WYVERN_SHIELD, { varbits: [], scripts: [[5931, 840, 5000 + 10 * 8]] }],
+    [ItemIds.ANCIENT_WYVERN_SHIELD, { varbits: [], scripts: [[5931, 840, 5001 + 10 * 8]] }],
   ]) {
     const saved = createPlayer();
     DragonfireShield._test.setRechargeSteps(saved, 10, shield(id));
@@ -94,7 +94,11 @@ test("a recharge running at logout comes back on the same shield's cooldown at l
     player.setAttribute("dragonfire-shield:recharge", saved.getAttribute("dragonfire-shield:recharge"));
     player.setAttribute("dragonfire-shield:recharge-shield", saved.getAttribute("dragonfire-shield:recharge-shield"));
     cycle = 5000;
+    tasks.length = 0;
     loginHook({ player });
+    // The wyvern shield's buff_bar_start waits a tick for the gameframe (and the buff bar) to open.
+    cycle = 5001;
+    for (const task of tasks.filter((task) => task.delay === 1)) task.execute();
     assert.deepEqual({ varbits: player.varbits, scripts: player.scripts }, expect, `shield ${id}`);
   }
 });

@@ -277,6 +277,9 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
   const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+  const { DialogueManager } = require("../dist/game/model/dialogues/DialogueManager");
+  const WARNING = "<col=7f0000>Warning!</col><br>The tentacle will gradually consume your whip and destroy it. You<br>"
+    + "won't be able to get the whip out again.<br>The combined item is not tradeable.";
 
   assert.equal(CacheDefinitions.getItem(ItemIds.ABYSSAL_WHIP).name, "Abyssal whip");
   assert.equal(CacheDefinitions.getItem(ItemIds.KRAKEN_TENTACLE).name, "Kraken tentacle");
@@ -290,9 +293,14 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
       if (key === "sendChatboxInterface") return (id) => { chatbox = id; };
       if (key === "isChatboxInterface") return (id) => chatbox === id;
       if (key === "sendInterfaceRemoval") return () => { chatbox = null; };
+      if (key === "sendSoundEffect") return (id) => { player.sounds.push(id); return sender; };
       return () => sender;
     } });
-    const player = { getPacketSender: () => sender, sendMessage() {} };
+    const player = { getPacketSender: () => sender, messages: [], sounds: [], animations: [],
+      sendMessage(text) { player.messages.push(text); },
+      performAnimation(animation) { player.animations.push(animation.getId()); } };
+    const manager = new DialogueManager(player);
+    player.getDialogueManager = () => manager;
     const inventory = new Inventory(player);
     player.getInventory = () => inventory;
     for (let slot = 0; slot < 28; slot++) inventory.setItem(slot, new Item(ItemIds.BRONZE_DAGGER, 1));
@@ -312,7 +320,11 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     const { player, inventory } = setup();
     inventory.getItems()[0].setMeta({ unbankable: true });
     UseItemPacketListener.itemOnItem(player, reversed ? 1 : 0, reversed ? 0 : 1);
-    assert.match(MultiChatboxPrompt.getPending(player)?.title ?? "", /irreversible.*untradeable/);
+    // rsprox 237/01151.txt ticks 9416-9418: the warning box, then the menu.
+    assert.equal(player.getDialogueManager().getCurrent()?.getText?.(), WARNING);
+    assert.equal(MultiChatboxPrompt.getPending(player), null, "the menu waits for the warning");
+    player.getDialogueManager().advance();
+    assert.equal(MultiChatboxPrompt.getPending(player)?.title, "Are you sure you wish to do this?");
     assert.equal(inventory.getItems()[0].getId(), ItemIds.ABYSSAL_WHIP, "confirmation has not consumed either ingredient");
     assert.equal(inventory.getItems()[1].getId(), ItemIds.KRAKEN_TENTACLE);
     assert.equal(choose(player, 1), true);
@@ -322,11 +334,16 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     assert.equal(inventory.getItems()[2].getId(), ItemIds.ABYSSAL_WHIP);
     assert.equal(inventory.getItems()[3].getId(), ItemIds.KRAKEN_TENTACLE);
     assert.equal(choose(player, 1), false, "a repeated confirmation cannot consume another pair");
+    // Tick 9420: sequence 713 and synth 2320, and no chat line.
+    assert.deepEqual(player.animations, [713]);
+    assert.deepEqual(player.sounds, [2320]);
+    assert.deepEqual(player.messages, []);
   }
 
   for (const change of ["cancel", "remove-whip", "remove-tentacle", "replace-whip", "change-whip-id", "move-tentacle"]) {
     const { player, inventory } = setup();
     UseItemPacketListener.itemOnItem(player, 0, 1);
+    player.getDialogueManager().advance();
     assert.ok(MultiChatboxPrompt.getPending(player));
     if (change === "remove-whip") inventory.deleteAtSlot(0, 1, false);
     if (change === "remove-tentacle") inventory.deleteAtSlot(1, 1, false);
@@ -347,6 +364,7 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
   ]) {
     const { player, inventory } = setup(first, second);
     UseItemPacketListener.itemOnItem(player, 0, 1);
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, `invalid pair ${first}/${second} opens no box`);
     assert.equal(MultiChatboxPrompt.getPending(player), null, `invalid pair ${first}/${second}`);
     assert.equal(inventory.getItems()[0].getId(), first);
     assert.equal(inventory.getItems()[1].getId(), second);

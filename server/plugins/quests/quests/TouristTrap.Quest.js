@@ -47,7 +47,9 @@ function handleDriverAgreement(stageOf, advance, driverId, coinsId, event) {
 }
 
 module.exports = function registerTouristTrapQuest(api) {
-  const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers, DialogueChainBuilder, ItemStatementDialogue } = api.core;
+  const CAPTAIN_KEY_LINE = "The mercenary captain drops a metal key on the floor. You quickly grab the key and add it to your inventory.";
+  const CAPTAIN_KEY_BOX = "The mercenary captain drops a metal key on the floor.<br>You quickly grab the key and add it to your inventory.";
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const IRENA_NPC_IDS = new Set([
@@ -660,7 +662,11 @@ module.exports = function registerTouristTrapQuest(api) {
       context.handledItemIds.add(METAL_KEY_ITEM_ID);
     } else if (giveItem(player, METAL_KEY_ITEM_ID)) {
       context.handledItemIds.add(METAL_KEY_ITEM_ID);
-      player.sendMessage("The mercenary captain drops a metal key. You pick it up.");
+      // rsprox 235/03792.txt tick 14948 (and the Wiki's Mercenary Captain): the line in chat, then
+      // the same line in an item box (objectbox, 193) showing the key.
+      player.sendMessage(CAPTAIN_KEY_LINE);
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+        new ItemStatementDialogue(0, METAL_KEY_ITEM_ID, CAPTAIN_KEY_BOX)));
     }
   }
 

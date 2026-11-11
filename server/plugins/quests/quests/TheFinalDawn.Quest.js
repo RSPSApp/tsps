@@ -639,6 +639,18 @@ module.exports = function registerTheFinalDawnQuest(api) {
     return player.getInventory().getAmount(itemId) > 0;
   }
 
+  /**
+   * The safehouse sack in any fill: farming's Fill, Remove-one and use-potato change Potatoes(3) to another count,
+   * and that sack must still stop the ground one respawning.
+   */
+  function heldPotatoSack(player) {
+    for (let count = 1; count <= 10; count++) {
+      const id = api.core.CacheDefinitions.getObjId(`sack_potato_${count}`);
+      if (id != null && id >= 0 && held(player, id)) return true;
+    }
+    return false;
+  }
+
   function freeSlots(player) {
     return player.getInventory().getFreeSlots();
   }
@@ -810,7 +822,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
     for (const entry of loot) {
       if (entry.itemId === KNIFE_ITEM && held(player, KNIFE_ITEM)) continue;
       if (entry.itemId === POTATO_SACK_ITEM &&
-        (held(player, POTATO_SACK_ITEM) || held(player, EMPTY_SACK_ITEM))) continue;
+        (heldPotatoSack(player) || held(player, EMPTY_SACK_ITEM))) continue;
       if (entry.itemId === COIN_PURSE_ITEM &&
         (held(player, COIN_PURSE_ITEM) || held(player, EMPTY_COIN_PURSE_ITEM) || held(player, SANDY_COIN_PURSE_ITEM))) continue;
       const tile = new Location(entry.x, entry.y, entry.z);

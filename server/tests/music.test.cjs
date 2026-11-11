@@ -1519,6 +1519,64 @@ test('playlists: a row op adds the unlocked track to the playlist, or removes it
   assert.deepEqual(player.getAttribute(Playlists.PLAYLISTS_ATTRIBUTE), [[], [], [101]]);
 });
 
+test('Unlock hint: a list row and the now-playing text say where the track unlocks, or was unlocked', async t => {
+  const { core, session, player, messages } = await musicSession(t, 'musicunlockhint', new Location(3222, 3218, 0));
+  const knightly = listTrack(core, 'Knightly');
+  const brewHooHoo = listTrack(core, 'Brew Hoo Hoo!');
+  assert.equal(knightly.slot, 326, "live's list slot for Knightly");
+  const row = (slot, opId) => {
+    const event = { player, groupId: 239, childId: 11, opId, slot };
+    MusicPlugin._test.selectMusicTrack(event);
+    return event;
+  };
+  assert.equal(row(brewHooHoo.slot, 2).handled, true);
+  row(knightly.slot, 2);
+  Progress.unlock(player, knightly.track.id);
+  row(knightly.slot, 2);
+  assert.deepEqual(messages, [
+    'This track unlocks in the Port Phasmatys brewery.',
+    'This track unlocks in East Ardougne.',
+    'This track was unlocked in East Ardougne.',
+  ]);
+  messages.length = 0;
+  const nowPlaying = opId => MusicPlugin._test.nowPlayingAction({ player, groupId: 239, childId: 4, opId, slot: -1 });
+  nowPlaying(2);
+  assert.deepEqual(messages, [], 'nothing played yet');
+  player.getPacketSender().sendSong(knightly.track.id);
+  nowPlaying(2);
+  // A song another plugin plays without selecting it is what the text then shows.
+  session.setCurrentMusicTrack(knightly.track.id);
+  player.getPacketSender().sendSong(brewHooHoo.track.id);
+  nowPlaying(2);
+  assert.deepEqual(messages, [
+    'This track was unlocked in East Ardougne.',
+    'You have unlocked a new music track: <col=e00a19>Brew Hoo Hoo!',
+    'This track was unlocked in the Port Phasmatys brewery.',
+  ]);
+});
+
+test('playlists: the now-playing text adds the playing track to playlists 1-3, or removes it, as a list row does', async t => {
+  const { core, player, messages } = await musicSession(t, 'musicnowplayingplaylist', new Location(3222, 3218, 0));
+  const Playlists = require('../plugins/world/Playlists.Music');
+  const adventure = listTrack(core, 'Adventure');
+  const nowPlaying = opId => MusicPlugin._test.nowPlayingAction({ player, groupId: 239, childId: 4, opId, slot: -1 });
+  nowPlaying(3);
+  assert.deepEqual(Playlists.values(player, 1), [], 'nothing played yet');
+  player.getPacketSender().sendSong(adventure.track.id); // unlocks it
+  messages.length = 0;
+  nowPlaying(3);
+  nowPlaying(4);
+  nowPlaying(5);
+  nowPlaying(4);
+  assert.deepEqual([1, 2, 3].map(playlist => Playlists.values(player, playlist)), [[100], [], [100]]);
+  assert.deepEqual(messages, [
+    "You've added a track to playlist 1: <col=e00a19>Adventure",
+    "You've added a track to playlist 2: <col=e00a19>Adventure",
+    "You've added a track to playlist 3: <col=e00a19>Adventure",
+    "You've removed a track from playlist 2: <col=e00a19>Adventure",
+  ]);
+});
+
 test('playlists: choosing one switches to Shuffle and plays from it; an empty one stops the music', async t => {
   const { core, session, player, messages, songs } = await musicSession(t, 'musicplaylistpick', new Location(3222, 3218, 0));
   const Playlists = require('../plugins/world/Playlists.Music');

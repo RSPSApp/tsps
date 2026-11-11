@@ -127,6 +127,8 @@ function player() {
     getHitpoints: () => 100,
     isRegistered: () => true,
     getCombat: () => ({ reset: noop }),
+    setForceMovement: (move) => { p.forceMovement = move; },
+    getForceMovement: () => p.forceMovement ?? null,
     sendMessage: text => messages.push(text),
     getSkillManager: () => ({
       getMaxLevel: () => 99,
@@ -1283,11 +1285,18 @@ test('Beneath Cursed Sands: rubble uses both captured east-west landings and pre
   assert.equal(rubble.transformVarbit, 13841);
   assert.equal(rubble.transforms.at(-1), 44003);
   h.quest.setStage(p, 108);
+  // A two-tick exact-move, busy (12393) 1 on the start tick and 0 when it ends (227/00101.txt [9141]/[9143]).
   for (const [startX, landingX] of [[3349, 3347], [3347, 3349]]) {
     p.moveTo(new core.Location(startX, 2759, 0));
     const event = h.object(p, 44003);
     assert.equal(event.handled, true);
+    assert.ok(p.getForceMovement(), 'the crossing is a queued exact-move');
+    assert.equal(p.varbits.get(12393), 1, 'busy while crossing');
+    assert.equal(p.getLocation().getX(), startX, 'not landed on the click tick');
+    h.tick(2);
     assert.ok(core.Location.isSameTile(p.getLocation(), new core.Location(landingX, 2759, 0)));
+    assert.equal(p.getForceMovement(), null);
+    assert.equal(p.varbits.get(12393), 0, 'free again when the move ends');
     assert.equal(h.quest.getStage(p), 108);
   }
   h.quest.setStage(p, 0);

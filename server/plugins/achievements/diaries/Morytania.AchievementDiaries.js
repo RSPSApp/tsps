@@ -23,8 +23,8 @@ const MAZCHNA_MASTER_ID = 2;
 /** Port Phasmatys objects (cache loc dumps): the town's range and furnace. */
 const PORT_PHASMATYS_RANGE = { id: 16641, x: 3676, y: 3467 };
 const PORT_PHASMATYS_FURNACE = { x: 3688, y: 3478 };
-/** Mort Myre Swamp, from NatureSpirit's Boundary (3380, 3590, 3310, 3480, 0). */
-const SWAMP = { minX: 3380, maxX: 3590, minY: 3310, maxY: 3480, z: 0 };
+/** Mort Myre Swamp, from NatureSpirit's Boundary (3380, 3590, 3310, 3457, 0): south of the Gate's fence, not Canifis. */
+const SWAMP = { minX: 3380, maxX: 3590, minY: 3310, maxY: 3457, z: 0 };
 /** Canifis bank, whose booths are on x=3513, y=3478-3483. */
 const CANIFIS_BANK = { minX: 3504, maxX: 3515, minY: 3474, maxY: 3490 };
 /** The Slayer Tower's two floors (data/slayer-areas.json area 9). */

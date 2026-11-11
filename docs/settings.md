@@ -65,7 +65,7 @@ The client only reports the click. The server sets the variable and sends it bac
 | Show level only | 0 | 0 |
 | Show level & unlocks | 0 | 1 |
 
-The keybind dropdowns (ids 16–29) set their key varbits as before, then clear the selection.
+The keybind dropdowns (ids 16–29) set their key varbits as before, then clear the selection. The client opens each key's side-panel tab from `client/game/keybindingTabs.ts` (tab = toplevel stone, 76 + tab: 8 Account, 9 Friends, 12 Emotes). Restore default keybinds (row 58) does what the keybindings panel's button (121:104) does: every key back to its default, Esc closes back on, saved, with the same message.
 
 The Controls tab's `settings_side:skull_prevention` toggle (116:5) flips the same varbit as its All Settings row 206, and is saved and restored with the other settings.
 
@@ -111,7 +111,7 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 | Leagues: Display Combat Masteries | 418 | varbit 11562 `buff_league_masteries_hidden` (1 hides them) | buff bar |
 | Always show chat filters | 430 | varbit 16116 `settings_mobile_show_filter_stones_enabled` | chat filter buttons (scripts 113, 178, 3179) |
 | Enable interface resizing and repositioning | 442 | varbit 17772 `settings_interface_resizing` | resizable interfaces |
-| Disable colourful fade effects | 460 | varbit 18132 `settings_colourful_fade_disabled` | Barracuda Trials |
+| Disable colourful fade effects | 460 | varbit 18132 `settings_colourful_fade_disabled` | Barracuda Trials; Guardians of the Rift's portals |
 | Show charting hints | 464 | varbit 18138 `sailing_show_charting_hints` | the captain's log (scripts 8702, 8706) |
 | Show boat customisation material messages | 466 | varbit 18140 `sailing_show_customisation_material_messages`; a fresh account starts with 1 (sent in all 501 default-state logins since rev 235 that carry it) | the boat customisation materials list (script 8828) |
 | Modern menu interface, and its transparent background | 472, 473 | varbits 19615 `settings_new_menu_interface`, 19646 `settings_new_menu_transparent_interface_disabled` | menu scripts |
@@ -121,9 +121,9 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 
 - **Friend Login/Logout messages.** Script 4487 shows `loginlogout_permanent` when it is set, else `loginlogout_setting`; the chat script (84) reads only `loginlogout_permanent`, for the message timeout. Timeout sets both to 0, Off sets the setting to 2. Ours: On sets both to 1, so the chat script sees it too (no capture has On; live logins send `loginlogout_setting` 2, Off, in 3225 of 4281 recordings).
 - **Show mouseover text.** Login sends the saved value, 0 for a fresh account (it used to force 0). The top-left text and HUD overlays laid out by script 4731 (Wintertodt, ToA...) follow it when they are laid out: with the text on they sit 23px lower, with it off at the top.
-- **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login.
+- **Disable colourful fade effects.** Barracuda Trials' "Yes" to its effects question sets this row through `settings:set`. A per-trial "effects off" flag saved before the row existed moves into the setting at the next login. Guardians of the Rift's portals (the Portal Guardians and the huge-remains portals) fade to black instead of in their colours while it is on, as the Wiki describes the setting and as Barracuda Trials' portals on the same `gotr_overlay` do; the barrier's own Visual-effects off still shows no fade at all.
 - **Not done**:
-  - Disable colourful fade effects does not change Guardians of the Rift, which keeps its own `gotr_colourful_fade_disabled` (the barrier's Visual-effects option).
+  - Disable colourful fade effects does not yet change the other `gotr_overlay` portal effects: Moons of Peril, Fallen from Grace and Temple of the Eye.
 
 ## Buff Bar
 
@@ -150,8 +150,7 @@ The buff bar (interface 651) is mounted at login and drawn by the cache scripts.
 Poison and venom already go out on varp 102 `poison` (the hitpoints orb's), which the bar reads too.
 
 - **Not done**:
-  - Freeze: live sends no var and no `buff_bar_start` for it (the freeze message comes alone), so the bar's freeze buff isn't driven from the server; the infobox timer (7998/7999) still shows it. See [Buff timers read from a var](#buff-timers-read-from-a-var).
-  - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, the Staff of the dead special, the Sire stun, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
+  - The other effects' vars are in [Buff timers read from a var](#buff-timers-read-from-a-var). The freeze, the Staff of the dead special, poison damage and the Sire stun are in [Buff timers started by buff_bar_start](#buff-timers-started-by-buff_bar_start). Still not drawn: Mark of Darkness, the active Shadow Veil, Ward of Arceuus and Resurrection, cannon decay and the Tombs of Amascut effects (no var: see that section), and the surge potion (no surge potion).
   - Modified stats overlay (148-151): now wired, see "Health and modified stats overlays" below.
 
 ## Rows owned by other plugins
@@ -305,6 +304,8 @@ These rows show, save and resend the player's choice (`data/settings.json`; cach
 - **Value warnings** (`ValueWarnings.plugin.js`, shared pieces in `ValueWarning.js`). An item's worth is the Grand Exchange guide price of the unnoted item times the quantity; an untradeable item is worth nothing. A warning shows when the worth is at least the threshold.
   - Drop item warning (42, 43): before the item lands on the floor, the captured item box "The item you are trying to put down is considered valuable. Are you absolutely sure you want to do that?", then "<name>: Really put it down?" with "Put it down." / "No, don't put it down." (rsprox 1514). Core emits `item:drop-warning` with the warnings already `answered`, so it and the boat warning (465) ask in turn.
   - Drop item warnings on boats (465, `skills/sailing/DropWarning.Sailing.js`): any item dropped on a boat's deck asks first, the captured message box "Are you sure you want to put that down? If you leave the boat, you may not be able to retrieve it." (also a mesbox chat line), then "Select an option": "Put it down.", "Put it down, and don't ask again." (sets varbit 18143 `settings_sailing_dropitem_warning` to 1, saved as the row), "Put it down, and don't ask again this session." (varbit 19114 `sailing_dropitem_warning_temp`, until logout) and "Don't drop it." (rsprox 901, 3792). The row is ticked while 18143 is 0 (struct param 1084), the default; captured logins that send 1 are players who turned it off.
+  - Port task cargo deposit warning (463, `skills/sailing/porttasks/Ledger.PortTasks.js`): Deposit-cargo with a crate at the port it was picked up from asks first, the captured message box (also a mesbox chat line) "Are you sure you wish to deposit the crate of kegs here? If you obtained this cargo from a different port, you will have to return to that port to re-acquire it.", then "Deposit the cargo?": "Yes.", "Yes, and don't ask again." (sets varbit 18137 `port_task_loading_bay_warning_dismissed` to 1, saved as the row) and "No.". Yes sets the crate down (pick-up animation and sound, item box "You deposit the crate of kegs."); it can be taken again (rsprox 2656, 3461, 3467, 672). With the row off it deposits straight away.
+  - Port task cargo in hold warning (467, `skills/sailing/porttasks/HoldWarning.PortTasks.js`): Disembark at a port while your boat's cargo hold has a crate for one of your courier tasks still owed there asks "Some cargo for this port is still in the cargo hold.": "Disembark anyway.", "Disembark anyway, and don't ask again." (sets varbit 18144 `settings_cargo_in_hold_warning`), "Disembark anyway, and don't ask again this session." (varbit 19120 `settings_cargo_in_hold_warning_temp`, until logout) and "Remain on the boat." (rsprox 3467, three times at Musa Point and Hosidius). Ours: which answers set which varbit, by their names; no capture picks one.
   - Alchemy (65, 66): "That item is considered valuable. Really cast High Level Alchemy on it?" (rsprox 338), with the untradeable confirm's options. Untradeable items warn while 65 is on (varbit 6092 `alchemy_warning_untradeables`, 1 in 2,664 of 3,978 captured logins). Core emits `magic:alchemy-warning`.
   - Loot drop notifications (38-40): each stack an NPC drops for the player, from `npc-drops:roll`: `<col=ef1020>Valuable drop: 3 x Spider cave teleport (108,567 coins)</col>` and `<col=ef1020>Untradeable drop: Brimstone key</col>` (rsprox 788, 806 and others). Clicking 40 while 38 is off gives the row's own cache line instead.
   - Grand Exchange (297, 298): a buy offer more than 10 times the guide price, or a sell offer under 10% of it (the rows' cache text), asks before it is placed. The varbits are `option_ge_price_buy/sell_warning_disabled` (14700/14701): 1 turns the warning off (the rows' structs have param 1084, ticked while the varbit is 0), so the captured default leaves the buy warning off and the sell warning on.
@@ -351,7 +352,7 @@ Each row is a toggle in `data/settings.json`, read when its dialogue or message 
 - **Ours** (no capture or Wiki text): the Plank Make, gravestone and boat teleport questions and options (the boat one follows live's Escape prompt), and that a click on Accept during the trade delay does nothing and says nothing.
 - **Not done**:
   - The boat teleport warning for tablets, jewellery and other non-spell teleports; the row's description names teleport spells.
-  - Port task cargo deposit (463), port task cargo in hold (467) and Ironman cargo hold (469) warnings: no capture or Wiki text of any of them. 469's varbit (10385) is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
+  - Ironman cargo hold warning (469, varbit 10385 `settings_ironman_cargo_warning`, session varbit 19612): no capture or Wiki text. 10385 is read by no cache script, and is not the cargo hold panel's own dismissable warning (19123, scripts 8888-8890).
 
 ## Rows that switch existing behaviour
 
@@ -373,6 +374,7 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 | Current duck hint arrow | 458 | 18133 `sailing_current_duck_hintarrow_disabled` | No hint arrow (or `current_hint_arrow`) over a released current duck |
 | Barracuda trials hint arrow | 459 | 18134 `sailing_barracuda_trials_hintarrow_disabled` | No hint arrow over the trial's rum or toad boat. The intro tour's arrows stay |
 | Combat task interface remembers last interface opened | 452 | 17939 `settings_ca_open_last_interface_disabled` | The account summary's row opens the overview instead of the screen used last |
+| Enable new-style skill guide interface | 360 | 15321 `option_skill_guide` | (on by default, as live sends it at login) View guide opens the new guide (860); at 0, the old one (214). See [skill-guide.md](skill-guide.md) |
 
 **Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
 
@@ -447,7 +449,8 @@ open. Every shake goes through `CameraShake.send`, so its row and its group's ma
     heavy to very light going down the slope, 227/00075, 227/00091, 234/00787), but the captures do
     not pin down each area's edges, so the server opens none yet.
   - Disable colourful fade effects (460): no capture shows a Guardians of the Rift fade with
-    varbit 18132 set, so the minigame still follows only its own `gotr_colourful_fade_disabled`.
+    varbit 18132 set (the minigame's captures predate it), so its black fade follows Barracuda
+    Trials' portals on the same overlay.
 
 ## Health and modified stats overlays
 
@@ -491,9 +494,22 @@ The buff bar's script (5923) draws most buffs from a var, in steps set by the bu
 | 363 | Group Woodcutting Bonus | varp 4007, varbits 15347, 15348 | 96 while chopping a tree with the bonus (-1 when not), the players at it, and one less as the value shown (as recorded) |
 
 - **Not done**:
-  - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), the Staff of the dead special (142), the Sire stun (140), freeze (141), poison damage (186), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var. The bar keeps their timer in a client varc that only script 5927 writes, and only `buff_bar_start` (script 5931, a struct and a value) calls it; no cache script calls 5931, so only the server can start them. Most hold the `map_clock` tick the buff ends on (the freeze, "Bound.", struct 3092: varc 476, drawn as varc 476 − `map_clock`); the Sire stun stores the client clock it started at. They stay unsent, because live never sends them: across the rsprox captures `buff_bar_start` appears in 4 recordings only, always with 0 at login or on entering a house, clearing burn damage (struct 989) and bleeding (struct 4499). It is absent from all 45 freeze recordings (rev 226-235), the 31 with a stun and the 22 Tombs of Amascut ones, where a freeze sends only its message and a thrall only its varbits. The Wiki's Settings page lists these rows as buff bar settings, but none of them is driven on live in the recordings.
+  - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var. The bar keeps their timer in a client varc that only script 5927 writes, and only `buff_bar_start` (script 5931, a struct and a value) calls it; no cache script calls 5931, so only the server can start them. Most hold the `map_clock` tick the buff ends on (the freeze, "Bound.", struct 3092: varc 476, drawn as varc 476 − `map_clock`); the Sire stun stores the client clock it started at. They stay unsent, because live has not been recorded sending them: across the rsprox captures `buff_bar_start` appears with 0 at login or on entering a house, clearing burn damage (struct 989) and bleeding (struct 4499), and in one rev 223 recording (223/00014), which also starts poison and venom (see [Buff timers started by buff_bar_start](#buff-timers-started-by-buff_bar_start)), the ammo buff (struct 3659) and three Tombs of Amascut buffs: Apmeken's sight (4368), Akkha's freeze (4371) and the stat boost (4376). It is absent from all 46 freeze recordings and the 31 with a stun, where a freeze sends only its message, and a thrall sends only its varbits. The Wiki's Settings page lists these rows as buff bar settings, but none of them is driven on live in the recordings.
   - Desert water (244): the client works it out. Its buff (struct 340, script 6662) is unlimited while an elite desert amulet is worn, else the water in the inventory's waterskins (enums 4618 and 4619) plus `buff_water_circlet_charges` (14191). It draws only while varc 947 is set, and only `buff_bar_start` for the Desert Heat timer (struct 3763) sets it. Live sends no `buff_bar_start` in the desert: across the rsprox captures `buff_bar_desert_heat_timer_iteration` changes in about 120 recordings (rev 223-238) and `buff_water_circlet_charges` in 34, with no `buff_bar_start` in any of them. So it stays unsent, like the effects above.
   - Cannon decay (246): the bar draws struct 341 ("Cannon decay.", 2490 ticks) and 342 ("Cannon broken.", 1000 ticks, while `mcannon_decayed` 13672 is 1) from varc 1013, the `map_clock` tick the cannon went up. Only `buff_bar_start` sets that varc. Live sends `mcannon_setuptime` (2180) and `mcannon_decayed` but no `buff_bar_start` in its four cannon setups (rsprox 1510, 1511, 2291, 3217, rev 224-232), so it stays unsent too.
+
+## Buff timers started by buff_bar_start
+
+The freeze (141), Staff of the dead special (142), poison damage (186) and Abyssal Sire stun (140) buffs keep their timer in a client varc that only `buff_bar_start` (script 5931: a struct and a value) writes, through script 5927. `BuffBarStart.plugin.js` runs it from each effect's own state when the value changes, and on the first tick after a login for those running, and 0 for a freeze or special that isn't, since the varcs outlive a logout and the bar ignores a start for a buff it hasn't built yet. Script 5923 draws each against varp 3079 `map_clock`, the tick count the server sends every tick. `tests/buff-bar-start.test.cjs` checks each one.
+
+| Row | Effect | Struct, varc | Value |
+| --- | --- | --- | --- |
+| 140 | Abyssal Sire stun | 3091, varc 475 | any: the client stores its own clock and draws 30 seconds from it; a restun starts it again. It can't be cleared, so it runs out by itself, a few seconds after the Sire's 46-tick stun ends |
+| 141 | Freeze, bind, snare, entangle ("Bound.") | 3092, varc 476 | the tick the freeze ends on (script 4678: varc − map_clock); 0 when it ends, or at death, which cancels it |
+| 142 | Staff of the dead special | 3093, varc 477 | the tick it started (script 5940 draws param 1541, 100 ticks, from it); 0 once the minute is up or the effect ends early. A death doesn't end the effect, so the buff runs on through it |
+| 186 | Poison and venom damage | 3740 poison, 3741 venom, varc 983 | the tick of each hit (that tick's `map_clock`), sent at the hit, so it shows the time to the next one; shown only while varp 102 `poison` is a poison or venom value, so a cure sends nothing. As recorded: 12 starts of 3740 and one of 3741 in rsprox 223/00014, each with the hit's tick, 30 ticks apart, and none at the antipoison cure |
+
+- Poison and venom are recorded as above (rev 223). Ours: the freeze, Staff of the dead and Sire stun starts, which no recording shows (46 with a freeze, 43 at the Sire, none with the special); their structs, varcs and durations are the cache's.
 
 ## Sailing helm and orb
 
@@ -612,7 +628,13 @@ The rows sit on varp 4503. The cache's own scripts apply them in the client: a c
 
 `minimenu_setblockmode(slot, 1 - varbit)` sets the filters, so mode 0 leaves an entry out (`client/ui/menu/minimenuFilters.ts`). Item use ("Use <item> -> <target>", while an item is selected) and spell entries have filters of their own (slots 7 and 1, rows not in the desktop list, enum 422), so the entity and player filters leave them in; a loc or NPC op that is itself named Use is an entity option. The menu's layout is drawn in `client/widgets/gl/choose-option.ts`. No capture shows these rows changed: the minimenu varbits appear only in rev 223-226 recordings, which predate this varp layout, so the start entry and spacing units, the scrollbar's look and the number row's prompt are ours. Tests: `tests/settings-minimenu.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/minimenu-settings.test.ts`.
 
-- **Not done**: Minimenu reordering (406, 407). The other filter rows on the same varp (396, 397, 399-401, 403, 404: visual feedback, target, interface, walk, global click, use, cancel), which the desktop list doesn't show, are not saved or obeyed. The touch controls' tap panel (`client/game/plugins/touchcontrols`) offers its own option list and ignores the filters.
+- **Not done: Minimenu reordering (406, 407).** Neither row does anything: 406 isn't in settings.json, so it isn't saved, and nothing in the client reorders a menu. What is known:
+  - **The cache.** Row 406 runs script 7462, which flips varbit 11521 `settings_minimenu_reordering_toggle` (on varp 4503) and calls `minimenu_setorderedit` with it. The login script's 7468 does the same from the saved varbit. Row 407, a button, runs script 7467, which calls `minimenu_resetorder`. In our client `minimenu_setorderedit` only stores the flag (`minimenuOrderEdit`) and `minimenu_resetorder` does nothing (`client/rs/cs2/handlers/ClientOps.ts`).
+  - **Which clients show the rows.** Both rows carry param 1157 and not 740. Script 3955 hides a param 1157 row only on clients that aren't current (script 100), and hides a param 740 row off mobile. So the cache shows these rows on the mobile client and on the current desktop client, and on our desktop layout too.
+  - **Live.** The [Wiki](https://oldschool.runescape.wiki/w/Settings#Minimenu_options) lists the Minimenu options as mobile only, and says only that the reordering button shows at the top right of the minimenu. The mobile client draws its minimenu with a UI of its own, not the desktop menu this client draws.
+  - **What's missing.** How entries are moved, which entries can move and what an order applies to (per target type or per target), whether it changes the left-click, where the order is saved (on the device or on the account), and what Restore shows are all unknown. No capture in the index covers them. Doing this faithfully needs an rsprox capture of the mobile flow: turning the row on, reordering a few menus, relogging, and Restore.
+
+  The other filter rows on the same varp (396, 397, 399-401, 403, 404: visual feedback, target, interface, walk, global click, use, cancel), which the desktop list doesn't show, are not saved or obeyed. The touch controls' tap panel (`client/game/plugins/touchcontrols`) offers its own option list and ignores the filters.
 
 ## Containers on death
 

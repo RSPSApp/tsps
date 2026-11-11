@@ -113,6 +113,16 @@ for (const [altar, used, made, level, xp] of TABLE) {
   });
 }
 
+// Wiki (Combination rune): "Enter the altar, and use the talisman (not a tiara) on the runecraft altar."
+test('using the talisman on the altar crafts the same way as using the rune', async (t) => {
+  const f = actor(t, 13); chance(t, [0.1]);
+  give(f, I.PURE_ESSENCE, 4); give(f, I.EARTH_RUNE, 4); give(f, I.EARTH_TALISMAN, 1);
+  await use(f, WATER, I.EARTH_TALISMAN);
+  assert.equal(count(f, I.MUD_RUNE), 4, 'mud runes from the earth talisman on the water altar');
+  assert.equal(count(f, I.EARTH_RUNE), 0);
+  assert.equal(count(f, I.EARTH_TALISMAN), 0, 'the talisman is spent');
+});
+
 test('the captured case: 6 essence, earth runes, water altar, 2 of 6 bind -> "partially succeed" message (1757 tick 18626)', async (t) => {
   const f = actor(t); chance(t, [0.1, 0.9, 0.9, 0.1, 0.9, 0.9]);
   give(f, I.PURE_ESSENCE, 6); give(f, I.EARTH_RUNE, 6); give(f, I.EARTH_TALISMAN, 1);

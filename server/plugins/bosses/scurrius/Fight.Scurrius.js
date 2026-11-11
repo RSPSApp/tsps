@@ -313,6 +313,8 @@ function stomp(npc) {
       if (!tiles.some((tile) => tile.equals(player.getLocation()))) continue;
       const damage = core.Misc.randomInclusive(ROCKFALL_MIN_HIT, maxHit);
       player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+      // Combat Achievements: Falling Bricks hit them (CombatAchievements.Scurrius).
+      api.emitCustomEvent("scurrius:rockfall-hit", { npc, player, damage });
     }
   }, npc);
 }
@@ -829,6 +831,7 @@ module.exports = {
   reset,
   stateOf,
   advancePhase,
+  ratbaneIds,
   _test: {
     SOLO_MAX_HITS, PUBLIC_MAX_HITS, PHASE_ONE, FEEDING, ENRAGED, RAT_WAVE_LIMIT, ROCKFALL_TILES,
     RAT_CALL_COOLDOWN_TICKS, FEED_HEALS, MELEE_BETWEEN_ROUNDS, PROJECTILE, pickAction, rockfallTiles, stomp, summonRats,

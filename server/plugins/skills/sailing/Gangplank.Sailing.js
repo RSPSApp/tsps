@@ -16,6 +16,7 @@ const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/
 const { content, boatType, dockAtGangplank, dockAtBuoy, fade, playSound, spam } = require("./SailingContent.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
+const holdWarning = require("./porttasks/HoldWarning.PortTasks");
 
 const SOUND_BOARD_BOAT = 10754;
 const SOUND_DOCK = 1794;
@@ -212,6 +213,14 @@ function disembarkBoat({ player, location }) {
     player.sendMessage(refusal);
     return;
   }
+  const leave = () => {
+    if (Sailing.instanceAboard(player)) leaveBoat(player, dock, docked);
+  };
+  if (holdWarning.warn(player, Sailing.activeBoat(player), dock.id, leave)) return;
+  leaveBoat(player, dock, docked);
+}
+
+function leaveBoat(player, dock, docked) {
   fade(player, true);
   later(player, 1, () => {
     const refused = Sailing.disembark(player, dock.id);

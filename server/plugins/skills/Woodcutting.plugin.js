@@ -842,6 +842,8 @@ function rollForesterRationEnergy(player, axe) {
   }
   player.addRunEnergyUnits(2000);
   player.getPacketSender().sendRunEnergy();
+  // Wiki (Forester's ration): "a game message in the chatbox will state" this, with a regular axe.
+  player.sendMessage("You consume a Forester's ration and feel energised.");
   return true;
 }
 

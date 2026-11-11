@@ -127,7 +127,7 @@ function makeEquipment(ids = []) {
 function makePlayer(attributes = {}, items = {}, equipped = []) {
   const attrs = new Map(Object.entries(attributes));
   const inventory = makeInventory(items);
-  const messages = [], varbits = [], texts = [], strings = [], sounds = [];
+  const messages = [], spam = [], varbits = [], texts = [], strings = [], sounds = [];
   const levels = new Map(), experience = new Map();
   const bankCounts = new Map();
   const bank = {
@@ -158,12 +158,12 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     getBank: () => bank,
     getSkillManager: () => skills,
     sendMessage: (message) => messages.push(message),
-    performAnimation() {},
+    performAnimation(animation) { (player.animations ??= []).push(animation.getId()); },
     getUsername: () => "museum-test", getDisplayName: () => "museum-test",
     getAppearance: () => ({ isMale: () => true }),
     getPacketSender: () => sender,
     getDialogueManager: () => player.manager,
-    messages,
+    messages, spam,
     varbits,
     sounds,
     texts,
@@ -179,8 +179,12 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     setLevel(name, level) { levels.set(name, level); },
     getExperience(name) { return experience.get(name) ?? 0; },
   };
-  const varps = new Map(), configs = [];
+  const varps = new Map(), configs = [], calls = [];
   const sender = new Proxy({
+    sendTypedMessage(type, message) {
+      if (type === PluginManager.getCoreApi().ChatType.SPAM) spam.push(message); else messages.push(message);
+      return sender;
+    },
     sendVarbit(id, value) {
       varbits.push([id, value]);
       const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
@@ -200,7 +204,8 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     sendSound(id) { sounds.push(id); return sender; },
     sendString(text, uid) { strings.push([uid, text]); return sender; },
     isChatboxInterface() { return true; },
-  }, { get(target, key) { return key in target ? target[key] : () => sender; } });
+  }, { get(target, key) { return key in target ? target[key] : (...args) => { calls.push([key, ...args]); return sender; }; } });
+  player.calls = calls;
   player.manager = new DialogueManager(player);
   player.getVarbit = (id) => sender.getVarbit(id);
   player.getVarp = (id) => sender.getVarp(id);
@@ -555,7 +560,7 @@ test("Museum: Hazeel Cult report plays its message box and pays before Minas's c
   assert.equal(getKudos(world, player), 5);
   assert.equal(player.getVarbit(VM.ardy), 1);
   assert.deepEqual(player.getAttribute(STATE).minas, ["hazeel_cult"]);
-  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 1);
+  assert.equal(player.spam.filter((message) => message === KUDOS_MESSAGE).length, 1);
   assert.deepEqual(player.sounds, [SOUND_KUDOS]);
   // Reported once: the next talk has nothing new and pays nothing.
   talkToMinas(world, player);
@@ -580,7 +585,7 @@ test("Museum: lamp reports show the lamp box and go on to the next report", () =
   assert.deepEqual(new Set(player.getAttribute(STATE).minas),
     new Set(["shield_of_arrav", "merlins_crystal", "making_history", "demon_slayer"]));
   assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 3);
-  assert.equal(player.messages.filter((message) => message === KUDOS_MESSAGE).length, 4);
+  assert.equal(player.spam.filter((message) => message === KUDOS_MESSAGE).length, 4);
   for (const varbit of [VM.silverlight, VM.soa, VM.soaVisible, VM.excalibur, VM.lathas]) assert.equal(player.getVarbit(varbit), 1, `varbit ${varbit}`);
   for (const lamp of [11185, 11186, 11187]) assert.equal(player.inventory.getAmount(lamp), 1, `lamp ${lamp}`);
 });
@@ -826,6 +831,19 @@ test("Museum: VM_KUDOS wire mirrors persisted Kudos at 0/99/100 and preserves si
   }
 });
 
+test("Museum: Check Kudos and Study as captured (busy, script 2524, the Kudos HUD and the reset sequence)", () => {
+  const world = makeApi(new Set());
+  const player = makePlayer({}, {}, []);
+  // rsprox 227/01757.txt:292512-292519: busy, script 2524 [-1, -1], then vm_kudos_info (600).
+  objectAction(world, "Information booth", "Check Kudos", player, 0, 3256, 3449, 0);
+  assert.deepEqual(player.varbits.at(-1), [12393, 1]);
+  const script = player.calls.findIndex(([key, id, args]) => key === "sendInterfaceScript" && id === 2524 && JSON.stringify(args) === "[-1,-1]");
+  const open = player.calls.findIndex(([key, id]) => key === "sendInterface" && id === 600);
+  assert.ok(script >= 0 && open > script, JSON.stringify(player.calls));
+  world.api.emitCustomEvent("interface:closed", { player, interfaceId: 600 });
+  assert.deepEqual(player.varbits.at(-1), [12393, 0], "busy clears when it closes");
+});
+
 function studyText(world, player, objectId) {
   player.strings.length = 0;
   objectAction(world, "Display case", "Study", player, objectId, 3250, 3450, 1);
@@ -883,8 +901,30 @@ function hudPlayer(t) {
   t.after(()=>{ if(p.getArea())p.getArea().leave(p,true); p.setRegistered(false); AreaManager.areas=previous; });
   const at = (x,y,z=0) => { p.moveTo(new core.Location(x,y,z)); AreaManager.process(p); };
   const mounted = () => p.getPacketSender().getSubInterfaceAt((161<<16)|8)?.groupId === 532;
-  return {p,at,mounted,frames};
+  return {p,at,mounted,frames,world};
 }
+
+const studyCase = (f) => objectAction(f.world, "Display case", "Study", f.p, 24622, 3253, 3442, 1);
+const closeCase = (f) => f.world.api.emitCustomEvent("interface:closed", { player: f.p, interfaceId: 534 });
+const hudOpens = (f) => f.frames.filter((b) => b.equals(require('../dist/net/protocol/ClientProtocol').encodeWidgetOpenSub((161<<16)|8,532,1))).length;
+
+test('Museum: Study hides the Kudos HUD and the case closing brings it back (227/01723.txt ticks 14869-14871)', t => {
+  const f=hudPlayer(t);
+  f.at(3253,3442,1); assert.equal(f.mounted(),true);
+  studyCase(f); assert.equal(f.mounted(),false,'the HUD closes as the case opens');
+  closeCase(f); assert.equal(f.mounted(),true,'and comes back when it closes');
+});
+
+test('Museum: a case closing after leaving the museum leaves the HUD closed; re-entry mounts it once', t => {
+  const f=hudPlayer(t);
+  f.at(3253,3442,1); studyCase(f);
+  f.at(3210,3424); closeCase(f);
+  assert.equal(f.mounted(),false,'no HUD outside the museum');
+  f.at(3253,3442,1); studyCase(f);
+  f.at(3251,3449,1); f.at(3253,3442,1);
+  const opens=hudOpens(f); closeCase(f);
+  assert.equal(f.mounted(),true); assert.equal(hudOpens(f),opens,'re-entry already mounted it; the close adds no second one');
+});
 
 test('Museum: native exterior approach has no Kudos HUD; entry mounts and exit closes the actual packet', t => {
   const {encodeWidgetOpenSub,encodeWidgetCloseSub}=require('../dist/net/protocol/ClientProtocol');

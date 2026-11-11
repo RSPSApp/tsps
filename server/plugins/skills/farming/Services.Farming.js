@@ -729,7 +729,8 @@ function setContainerCount(player, item, plural, capacity, count) {
 /**
  * Fill: an empty sack takes up to 10 vegetables from the inventory, "cabbages first, then onions, and lastly potatoes"
  * (Wiki, Empty sack), Draynor Manor cabbages excluded (Data.itemId resolves the plain Cabbage). An empty basket takes
- * up to five of one fruit, silently, in its own slot (rsprox captures: recording 3276, strawberries). A filled one
+ * up to five of one fruit, silently, in its own slot (rsprox captures: recording 3276, strawberries, the only basket
+ * capture and a Grid Master event world). A filled one
  * tops up with its own produce.
  * Ours: the basket's fruit order (the Wiki gives none) and the full / no-produce messages (no capture or Wiki text).
  */

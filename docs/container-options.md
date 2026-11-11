@@ -30,7 +30,7 @@ vegetables, baskets 5 fruit.
 - **Fill** on an empty sack takes up to 10 of one vegetable from the inventory, "cabbages first, then onions, and
   lastly potatoes"; Draynor Manor cabbages (`magic_cabbage`) can't go in (Wiki, Empty sack).
 - **Fill** on an empty basket takes up to five of one fruit, with no message, and the filled basket takes the
-  basket's slot (rsprox captures: recording 3276, strawberries).
+  basket's slot (rsprox captures: recording 3276, strawberries; a Grid Master event world, the only basket capture).
 - **Fill** on a filled one tops it up with the same produce. **Remove-one** takes one out (needs a free slot).
 - **Empty** gives back the empty container and all the produce, silently (rsprox captures: recording 3128,
   `sack_potato_3`).

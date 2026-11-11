@@ -15,7 +15,7 @@ How `PlayerDeathTask` (`server/src/main/typescript/elvarg/game/task/impl/PlayerD
 
 On a PvP death these untradeables are destroyed unless they are among the kept items: they are neither dropped for the killer nor given back.
 
-- **Rune pouch and divine rune pouch** (`runepouch/Death.RunePouch.js`): the runes inside still drop for the killer ([rune pouch](rune-pouch.md)). The bolt pouch does the same in its own plugin.
+- **Rune pouch and divine rune pouch** (`runepouch/Death.RunePouch.js`): the runes inside still drop for the killer ([rune pouch](rune-pouch.md)).
 - **The rest** (`NeverKeptOnDeath.plugin.js`, names in `plugins/items/data/never-kept-on-death.json`): the Chronicle, League trophies, and the items with no ground state: the Flamtaer bag, Lunar equipment and staff, the Ring of Charos, Steel gauntlets and their enchanted forms, and the magic butterfly net. Items with a death rule of their own (looting bag, jar generator, salamanders) keep it.
 - **PvM deaths are left alone on purpose:** these items still go to the grave there, as before. The Wiki's list has no PvP qualifier for them, so it may apply to every unsafe death; that is a separate change.
 - **Not covered:** the clue box and the degraded amulet of the damned, which the Wiki also lists, and a rune pouch can still take a kept slot on a PvP death.

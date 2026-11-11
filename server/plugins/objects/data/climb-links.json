@@ -13,6 +13,13 @@
       "down": { "id": 2147, "x": 3104, "y": 3162, "z": 0 }
     },
     {
+      "name": "Forthos Ruin spiral staircase (landings match the shortest-path transports)",
+      "up": { "id": 34864, "x": 1798, "y": 9967, "z": 0 },
+      "down": { "id": 34865, "x": 1669, "y": 3567, "z": 0 },
+      "landing": { "x": 1670, "y": 3569, "z": 0 },
+      "downLanding": { "x": 1800, "y": 9968, "z": 0 }
+    },
+    {
       "name": "Grand Tree base staircase (Anita's floor)",
       "up": { "id": 16675, "x": 2389, "y": 3512, "z": 0 },
       "down": { "id": 16677, "x": 2389, "y": 3513, "z": 1 },

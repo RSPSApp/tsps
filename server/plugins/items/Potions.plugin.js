@@ -790,6 +790,35 @@ registerPotion({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER
     lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.02);
   } });
 
+// https://oldschool.runescape.wiki/w/Asgarnian_ale: heals 1, Strength +2, Attack -(5% + 2) of the
+// current level. rsprox captures (rec 3455): human_eat, sound 2401, the two spam lines, beer glass left.
+registerPotion({ name: "Asgarnian ale", chains: [[Items.ASGARNIAN_ALE]], emptyItemId: Items.BEER_GLASS,
+  drink: { messages: () => ["You drink the ale. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  requiresFoodPermission: true, shareable: false, effect: (player) => {
+    heal(player, 1);
+    boostSkill(player, Skill.STRENGTH, 2, 0);
+    lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
+  } });
+
+// Spirits (Wiki: Karamjan rum, Vodka, Whisky, Gin, Brandy): heal 5, Strength +(1 + 5% of base),
+// Attack -(3 + 2% of current). rsprox captures (recs 4287, 4101, 4291): human_eat, sound 2401, the two
+// spam lines, nothing left in the slot, and at 99/99 Attack 95 and Strength 104.
+function drinkSpirit(player) {
+  heal(player, 5);
+  boostSkill(player, Skill.STRENGTH, 1, 0.05);
+  lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.02);
+}
+registerPotion({ name: "Karamjan rum", chains: [[Items.KARAMJAN_RUM], [Items.RUM_5]], emptyItemId: null,
+  drink: { messages: () => ["You drink the rum. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
+  requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
+// Ours: vodka, whisky, gin and brandy are not captured; they follow the rum's lines with their own name.
+for (const [name, id, drinkName] of [["Vodka", Items.VODKA, "vodka"], ["Whisky", Items.WHISKY, "whisky"],
+  ["Gin", Items.GIN, "gin"], ["Brandy", Items.BRANDY, "brandy"]]) {
+  registerPotion({ name, chains: [[id]], emptyItemId: null,
+    drink: { messages: () => [`You drink the ${drinkName}. You feel slightly reinvigorated...`, "...and slightly dizzy too."] },
+    requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
+}
+
 // POH refreshments use the same consumption, cooldown and stat-boost rules as potions, with the
 // cup's own drinking animation and messages (rsprox captures: human_drink_from_teacup_*, "You drink
 // the cup of (milky) tea.", "You feel refreshed and ready for more building.").
@@ -1839,6 +1868,17 @@ function pourPotion(event) {
 const EMPTYABLE_VIALS = ["vial_water", "vial_coconut_milk", "vial_blood"];
 
 /** "Empty" on a potion or a filled vial: the empty vessel, "You empty the vial." (rsprox captures). */
+/**
+ * An inventory click on a registered drink: its first op, or whichever op the cache names "Drink"
+ * (Karamjan rum's is its fourth, rsprox rec 4287: inventory:items op6).
+ */
+function drinkFromInventory(event) {
+  const { player, itemId, slot, clickType } = event;
+  if (event.handled || !player || !event.item) return;
+  if (clickType !== 1 && pluginApi.core.CacheDefinitions.getItem(itemId)?.inventoryActions?.[clickType - 1] !== "Drink") return;
+  if (handlePotionDrink(player, itemId, slot) !== false) event.handled = true;
+}
+
 function emptyVessel(event) {
   const { player, itemId, slot, clickType } = event;
   const { CacheDefinitions, Item } = pluginApi.core;
@@ -2020,10 +2060,7 @@ module.exports = {
     api.onPlayerDeath(clearDivineOnDeath);
     api.onItemOnItem(pourPotion, { noted: false });
     api.onItemAction(emptyVessel);
-    api.onItemFirstAction((event) => {
-      const { player, itemId, slot } = event;
-      return handlePotionDrink(player, itemId, slot);
-    });
+    api.onItemAction(drinkFromInventory);
     api.onInterfaceActionButton(componentIds(api, HEALTH_ORB_CURE_COMPONENTS), cureFromHealthOrb);
     api.onCustomEvent("skills:current-level-changed", noteDivineDrain);
 

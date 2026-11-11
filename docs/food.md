@@ -236,6 +236,33 @@ Regression coverage in `server/tests/consumable-edge-cases.test.cjs` dispatches 
 registered drink handler, checks both messages and the returned glass, and checks
 that a second beer during the cooldown produces no success feedback or consumption.
 
+## Ale and spirits
+
+Asgarnian ale, Karamjan rum, Rum (28896), Vodka, Whisky, Gin and Brandy drink through the
+same potion path as Beer (`Potions.plugin.js`). Potions answers an inventory click on a
+registered drink at its first op or at whichever op the cache names "Drink": Karamjan rum's
+Drink is its fourth op (`inventory:items` op6 on the wire), so the first-op-only hook missed it.
+
+From [rsprox captures](https://rsprox.net/database):
+
+| Drink | Recordings | Lines (spam) | Slot after |
+| --- | --- | --- | --- |
+| Asgarnian ale | 3455 (rev 235) | "You drink the ale. You feel slightly reinvigorated..." / "...and slightly dizzy too." | beer glass |
+| Karamjan rum | 4287 (rev 239), 1863 (Leagues) | "You drink the rum. You feel slightly reinvigorated..." / "...and slightly dizzy too." | empty |
+| Rum (28896) | 4101 (rev 237), 4291 (rev 235) | the rum's two lines | empty |
+
+All send `human_eat` (829) and sound 2401 on the drink tick. Rec 4287 drinks the rum at 99
+Attack / 99 Strength and the server sends Attack 95, Strength 104.
+
+Effects are the Wiki's: Asgarnian ale heals 1, Strength +2, Attack -(2 + 5% of current);
+the spirits heal 5, Strength +(1 + 5% of base), Attack -(3 + 2% of current). The capture's
+95/104 agrees.
+
+Ours: Vodka, Whisky, Gin and Brandy have no capture or Wiki line. They use the rum's two
+lines with their own name and leave nothing behind, as the rum does.
+
+Coverage: `server/tests/alcohol-drinks.test.cjs`.
+
 ## Draynor cabbage
 
 The [Draynor Manor cabbage](https://oldschool.runescape.wiki/w/Cabbage_%28Draynor_Manor%29)

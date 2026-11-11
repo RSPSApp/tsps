@@ -364,7 +364,8 @@ class GuardianRoom extends Raid.Room {
     Shared.areaSound(this.area, mushroom.tile, SOUND.MUSHROOM_POP);
     const { CombatFactory } = Shared.core();
     for (const player of players) {
-      CombatFactory.poisonEntity(player, DAMAGE.POISON);
+      // Severity, hit x 5, for the burst's poison 10 (no recording of the poison varp here).
+      CombatFactory.poisonEntity(player, DAMAGE.POISON * 5);
       Shared.damage(player, DAMAGE.POISON, "GREEN");
     }
     const object = mushroom.object;

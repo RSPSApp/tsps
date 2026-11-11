@@ -93,7 +93,7 @@ test("a successful hit has a 25% chance to poison for 4 damage", () => {
     Math.random = () => 0.24;
     strike(player);
     assert.equal(poisoned.length, 1);
-    assert.equal(poisoned[0].severity, 4);
+    assert.equal(poisoned[0].severity, 20, "severity 20: a 4 first hit");
     assert.equal(poisoned[0].orb, 1);
     Math.random = () => 0.9;
     strike(player);
@@ -111,7 +111,7 @@ test("the abyssal tentacle (or) also poisons", () => {
     Math.random = () => 0.01;
     strike(player);
     assert.equal(poisoned.length, 1);
-    assert.equal(poisoned[0].severity, 4);
+    assert.equal(poisoned[0].severity, 20, "severity 20: a 4 first hit");
     assert.equal(poisoned[0].orb, 1);
   } finally {
     Math.random = original;

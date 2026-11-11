@@ -188,7 +188,8 @@ test("a miasma pool hurts on its 3rd to 5th ticks, less each time, and poisons w
     }
   });
   assert.deepEqual(hurt, [26, 17, 9]);
-  assert.equal(events.filter((event) => event.name === "poison").length, 1);
+  assert.deepEqual(events.filter((event) => event.name === "poison").map((event) => event.severity), [36],
+    "severity 36, a first hit of 8 (rsprox_transcripts/227/00240.txt:9300)");
 });
 
 test("the Font leaves the orphan out for a player who owns it, and repeats no bludgeon piece in a set", () => {

@@ -10,7 +10,8 @@
  * from rsprox captures (docs/dragonfire-shield.md).
  */
 const POISON_CHANCE = 0.25;
-const POISON_SEVERITY = 4;
+/** Severity, which poisonEntity takes: hit x 5 (the first hit is 4). */
+const POISON_SEVERITY = 20;
 const POISON_ORB_TYPE = 1;
 const CHARGES_META_KEY = "abyssal-tentacle";
 const MAX_CHARGES = 10000;

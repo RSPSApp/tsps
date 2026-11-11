@@ -786,7 +786,8 @@ class VerzikRoom extends Raid.Room {
     for (const player of this.fighters()) {
       if (!this.pools.has(key(Shared.tileOf(player)))) continue;
       this.hurt(player, Shared.random(...POOL.damage), "pool of poison", "GREEN");
-      CombatFactory.poisonEntity(player, POOL.poison);
+      // Severity, not the hit: the pool's 4 sets the poison varp 0 -> 16, 5 x 4 - 4 (rsprox_transcripts/227/01852.txt:83927).
+      CombatFactory.poisonEntity(player, POOL.poison * 5 - 4);
     }
   }
 

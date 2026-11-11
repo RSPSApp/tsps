@@ -840,7 +840,13 @@ for (const [name, id, heals, effect, lines] of [
 // (rec 20261111T225402-5ab63b4 tick 139): viking_keg_drink_full, one spam line, sound 2401 twice, the keg
 // gone, Attack 29 -> 10, and a camera shake (3, 0, 20, 2) that a camera reset ends 50 ticks later.
 const KEG_SWAY_TICKS = 50;
-const kegSways = new WeakMap();
+// The reset task has its own key per player: other systems call TaskManager.cancelTasks(player) (quest
+// boats, bots) and would otherwise drop the reset and leave the camera swaying.
+const KEG_SWAY_KEYS = new WeakMap();
+function kegSwayKey(player) {
+  if (!KEG_SWAY_KEYS.has(player)) KEG_SWAY_KEYS.set(player, {});
+  return KEG_SWAY_KEYS.get(player);
+}
 function drinkKegOfBeer(player) {
   heal(player, 15);
   boostSkill(player, Skill.STRENGTH, 2, 0.1);
@@ -848,15 +854,20 @@ function drinkKegOfBeer(player) {
   Sounds.sendSound(player, Sound.DRINK);
   // Ours: the sway is filed under the atmospheric camera shake setting.
   CameraShake.send(player.getPacketSender(), "atmospheric", 3, 0, 20, 2);
-  // Another keg first starts the sway again, and only the last one's reset ends it.
-  const token = {};
-  kegSways.set(player, token);
+  // Another keg first starts the sway again, replacing the earlier reset.
   const { TaskManager, CountdownTask } = pluginApi.core;
-  TaskManager.submit(new CountdownTask(player, KEG_SWAY_TICKS, () => {
-    if (kegSways.get(player) !== token) return;
-    kegSways.delete(player);
-    if (player.isRegistered?.() !== false) player.getPacketSender().sendCameraReset();
+  const key = kegSwayKey(player);
+  TaskManager.cancelTasks(key);
+  TaskManager.submit(new CountdownTask(key, KEG_SWAY_TICKS, () => {
+    KEG_SWAY_KEYS.delete(player);
+    player.getPacketSender().sendCameraReset();
   }));
+}
+/** Logout drops a pending keg reset; the client starts the next session with its camera reset. */
+function cancelKegSway({ player }) {
+  if (!KEG_SWAY_KEYS.has(player)) return;
+  pluginApi.core.TaskManager.cancelTasks(KEG_SWAY_KEYS.get(player));
+  KEG_SWAY_KEYS.delete(player);
 }
 registerPotion({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
   drink: { animation: 1330, messages: () => ["You chug the keg. You feel reinvigorated...<br>... but extremely drunk too."] },
@@ -2122,6 +2133,7 @@ module.exports = {
     PERSISTED_ATTRIBUTES.forEach((key) => api.persistAttribute(key));
     api.persistAttribute(ATTR_PRAYER_REGEN_STATE, null);
     api.onPlayerLogout(pauseTimedEffects);
+    api.onPlayerLogout(cancelKegSway);
     api.onPlayerLogin(resumeTimedEffects);
     api.onPlayerLogin(resumePrayerRegenerationTimer);
     api.onPlayerDeath(clearPrayerRegeneration);

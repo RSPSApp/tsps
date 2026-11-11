@@ -302,3 +302,17 @@ test("a second keg restarts the sway; only its own reset ends it", async t => {
   for (let tick = 0; tick < 10; tick++) core.TaskManager.process();
   assert.equal(resets.length, 1);
 });
+
+test("the keg's reset survives TaskManager.cancelTasks(player) from other systems", async t => {
+  const f = actor(t);
+  const sender = f.p.getPacketSender();
+  const resets = [];
+  t.mock.method(sender, "sendCameraShake", () => sender);
+  t.mock.method(sender, "sendCameraReset", () => { resets.push(true); return sender; });
+  f.inv.setItem(0, new core.Item(I.KEG_OF_BEER_2, 1));
+  await drink(f, 0);
+  for (let tick = 0; tick < 10; tick++) core.TaskManager.process();
+  core.TaskManager.cancelTasks(f.p);
+  for (let tick = 0; tick < 40; tick++) core.TaskManager.process();
+  assert.equal(resets.length, 1);
+});

@@ -158,7 +158,7 @@ test('optional surface conversations use exact quest pages and preserve fallthro
     assert.ok(spoken.some(line => line.player === p && line.text === expected), `quest line for ${id}`);
     assert.equal(p.manager.getCurrent()?.getNpcId?.(), id, 'the clicked actor supplies the chathead');
     for (let i = 0; i < 30 && p.manager.getCurrent() && !(kind === 'menu' && core.MultiChatboxPrompt.getPending(p)); i++) p.manager.advance();
-    if (kind === 'menu') assert.ok(core.MultiChatboxPrompt.getPending(p), `the transcript's closing menu is offered for ${id}`);
+    if (kind === 'menu') assert.ok(core.MultiChatboxPrompt.getPending(p), `the transcript's closing menu is offered for ${id} (current ${p.manager.getCurrent()?.constructor?.name}, last spoken ${JSON.stringify(spoken.filter(line => line.player === p).slice(-2).map(line => line.text))})`);
     else assert.equal(p.manager.getCurrent(), undefined, 'conversation completes within 30 advances');
     // A transcript line can carry the player's name ("[player name]"): only its fixed ends are compared.
     assert.ok(spoken.some(line => line.player === p && (kind === 'name' ? line.text.endsWith(last) : line.text === last)), `final quest line for ${id}`);

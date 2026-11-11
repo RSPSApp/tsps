@@ -129,14 +129,15 @@ function teleport(player, item, destination) {
     return;
   }
   const target = destinationTile(player, destination);
-  if (!TeleportHandler.checkReqs(player, target, piece.wildernessLevel ?? DEFAULT_WILDERNESS_LEVEL)) {
+  const wildernessLevel = piece.wildernessLevel ?? DEFAULT_WILDERNESS_LEVEL;
+  if (!TeleportHandler.checkReqs(player, target, wildernessLevel)) {
     return;
   }
   const castId = item.getId();
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => {
+  TeleportHandler.confirm(player, target, () => TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => {
     useCharge(player, item, castId);
     pluginApi.emitCustomEvent("jewellery:teleport-arrival", { player, key: piece.key, label: destination.label });
-  });
+  }), wildernessLevel);
 }
 
 function questComplete(player, key) {

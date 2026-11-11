@@ -95,7 +95,7 @@ function teleport({ player }) {
   }
   const destination = landingTile();
   if (TeleportHandler.checkReqs(player, destination)) {
-    TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => land(player));
+    TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => land(player)));
   }
   return true;
 }

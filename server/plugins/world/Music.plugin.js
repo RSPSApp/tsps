@@ -260,7 +260,7 @@ function capeAction(event) {
     // teleblock, busy, and the area's and plugins' own refusals (jail, instances, duels).
     const destination = new core.Location(2689, 3550, 0);
     if (!core.TeleportHandler.checkReqs(player, destination)) return;
-    core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
+    core.TeleportHandler.confirm(player, destination, () => core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false));
   } else if (option === (itemId === core.ItemIdentifiers.MUSIC_CAPE ? "trim" : "untrim")) {
     event.handled = true;
     if (!core.WorldDefinition.isMembersWorld()) return;

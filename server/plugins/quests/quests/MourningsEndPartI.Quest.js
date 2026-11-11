@@ -361,11 +361,13 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     // The usual teleport rules (level 20 Wilderness, Tele Block, busy) first, so a refused crystal keeps its charge;
     // the Wiki gives the crystal no Wilderness level of its own.
     if (!TeleportHandler.checkReqs(player, lletya)) return;
-    take(player, itemId, 1);
-    if (itemId < ItemIdentifiers.TELEPORT_CRYSTAL_1_) give(player, itemId + 1, 1);
-    else give(player, ItemIdentifiers.CRYSTAL_TELEPORT_SEED, 1);
-    TeleportHandler.teleport(player, lletya, TeleportType.NORMAL, false,
-      () => player.sendMessage("You activate the teleport crystal and arrive in Lletya."));
+    TeleportHandler.confirm(player, lletya, () => {
+      take(player, itemId, 1);
+      if (itemId < ItemIdentifiers.TELEPORT_CRYSTAL_1_) give(player, itemId + 1, 1);
+      else give(player, ItemIdentifiers.CRYSTAL_TELEPORT_SEED, 1);
+      TeleportHandler.teleport(player, lletya, TeleportType.NORMAL, false,
+        () => player.sendMessage("You activate the teleport crystal and arrive in Lletya."));
+    });
   }
 
   function advance(player, stage) {

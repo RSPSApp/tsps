@@ -13962,6 +13962,7 @@ test('Song of the Elves Iorwerth scroll lands on the walkable camp tile', () => 
     ...base.core,
     TeleportHandler: {
       checkReqs: () => true,
+      confirm: (player, destination, go) => go(),
       teleport: (player, location) => player.moveTo(location),
     },
   };

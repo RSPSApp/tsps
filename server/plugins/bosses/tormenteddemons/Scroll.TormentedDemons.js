@@ -46,13 +46,15 @@ function readScroll({ player, slot }) {
   }
   const to = new Location(...DESTINATION);
   if (!TeleportHandler.checkReqs(player, to)) return;
-  const inventory = player.getInventory();
-  const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
-  if (at < 0) return;
-  inventory.deleteAtSlot(at, 1);
-  player.getPacketSender().sendGlobalGraphic(new Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
-  TeleportHandler.teleport(player, to, scrollTeleport(), false, () => {
-    Shared.api().emitCustomEvent("wgs:enter-chasm", { player, tile: to });
+  TeleportHandler.confirm(player, to, () => {
+    const inventory = player.getInventory();
+    const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
+    if (at < 0) return;
+    inventory.deleteAtSlot(at, 1);
+    player.getPacketSender().sendGlobalGraphic(new Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
+    TeleportHandler.teleport(player, to, scrollTeleport(), false, () => {
+      Shared.api().emitCustomEvent("wgs:enter-chasm", { player, tile: to });
+    });
   });
 }
 

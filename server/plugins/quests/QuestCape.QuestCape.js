@@ -148,7 +148,7 @@ function teleport({ player, itemId }) {
   const { Location, TeleportHandler, TeleportType } = pluginApi.core;
   const destination = new Location(GATE_LOCATION.x, GATE_LOCATION.y, GATE_LOCATION.z);
   if (TeleportHandler.checkReqs(player, destination)) {
-    TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false);
+    TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false));
   }
 }
 

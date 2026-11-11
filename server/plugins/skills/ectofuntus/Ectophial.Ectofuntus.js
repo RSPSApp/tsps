@@ -65,6 +65,14 @@ function empty({ player, slot }) {
   if (inventory.get(slot)?.getId() !== core.ItemIdentifiers.ECTOPHIAL) return true;
   const destination = landing();
   if (!core.TeleportHandler.checkReqs(player, destination)) return true;
+  core.TeleportHandler.confirm(player, destination, () => pour(player, slot, destination));
+  return true;
+}
+
+function pour(player, slot, destination) {
+  const { core } = Common;
+  const inventory = player.getInventory();
+  if (inventory.get(slot)?.getId() !== core.ItemIdentifiers.ECTOPHIAL) return;
   inventory.setItem(slot, new core.Item(core.ItemIdentifiers.ECTOPHIAL_2, 1)).refreshItems();
   const movement = player.getMovementQueue();
   movement.setBlockMovement(true).reset();
@@ -107,7 +115,6 @@ function empty({ player, slot }) {
       super.stop();
     }
   })());
-  return true;
 }
 
 /** The empty phial used on the Ectofuntus. */

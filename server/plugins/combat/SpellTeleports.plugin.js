@@ -243,7 +243,9 @@ function useTablet(event) {
   if (!usable()) return;
   // OSRS uses the tablet up two ticks in, as it is absorbed (docs/teleport-tablets.md).
   const useUp = () => player.getInventory().deleteNumber(event.itemId, 1);
-  const breakTablet = () => core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp);
+  // The Wilderness warning asks first, then any other (the boat-at-sea warning).
+  const breakTablet = () => core.TeleportHandler.confirm(player, target.destination,
+    () => core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp));
   const warning = TABLET_WARNINGS.get(name);
   if (!warning || !warningOn(player, warning)) return breakTablet();
   const [title, yes, no] = tabletWarning(warning);
@@ -255,8 +257,10 @@ function readScroll(event, destination) {
   const { player } = event;
   event.handled = true;
   if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, destination)) return;
-  player.getInventory().deleteNumber(event.itemId, 1);
-  core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
+  core.TeleportHandler.confirm(player, destination, () => {
+    player.getInventory().deleteNumber(event.itemId, 1);
+    core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
+  });
 }
 
 function syncAlternates({ player }) {

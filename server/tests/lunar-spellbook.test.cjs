@@ -225,7 +225,7 @@ test("Lunar teleport arrival identifies only the caster after a successful landi
   try {
     TeleportHandler.checkReqs = () => true;
     TeleportHandler.teleport = (target, destination, type, warning, arrived) => arrivals.push({ target, arrived });
-    PluginManager.emitCustomEvent = (name, event) => events.push({ channel: name, ...event });
+    PluginManager.emitCustomEvent = (name, event) => { if (name !== "teleport:confirm") events.push({ channel: name, ...event }); };
     LunarSpells.forNearbyPlayers = (source, radius, visit) => visit(passenger);
     for (const spell of spells) spell.pay = () => true;
     spells[0].castTeleport(player);

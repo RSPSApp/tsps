@@ -312,6 +312,7 @@ SpellTeleports.register({
     ) }) },
     TeleportHandler: {
       checkReqs: () => allowTeleport,
+      confirm: (player, destination, go) => go(),
       teleport: (player, destination, type, warning, onArrival, onMiddle) =>
         teleports.push({ destination, type, onArrival, onMiddle }),
     },

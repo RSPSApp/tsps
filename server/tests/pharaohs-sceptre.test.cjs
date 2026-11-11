@@ -25,6 +25,7 @@ before(async () => {
       ...core,
       TeleportHandler: {
         checkReqs: (player, tile, level) => { casts.push({ checked: level }); return !refuse; },
+        confirm: (player, destination, go) => go(),
         teleport: (player, tile, type, warn, onArrival) => { casts.push({ tile: [tile.getX(), tile.getY(), tile.getZ()], type }); player.moveTo(tile); onArrival?.(); },
       },
       BonusManager: { update() {} },

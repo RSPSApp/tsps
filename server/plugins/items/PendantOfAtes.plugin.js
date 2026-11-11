@@ -115,11 +115,13 @@ function teleport(player, pendant, destination) {
   const { Location, TeleportHandler, TeleportType } = core;
   const target = new Location(...destination.tile);
   if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return;
-  // Equipping during the animation clones the item, so pay before it can move.
-  const left = charges(pendant) - 1;
-  setCharges(player, pendant, left);
-  if (left === 0) player.sendMessage("Your Pendant of Ates has run out of charges.");
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  TeleportHandler.confirm(player, target, () => {
+    // Equipping during the animation clones the item, so pay before it can move.
+    const left = charges(pendant) - 1;
+    setCharges(player, pendant, left);
+    if (left === 0) player.sendMessage("Your Pendant of Ates has run out of charges.");
+    TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  }, WILDERNESS_LEVEL);
 }
 
 /** A worn option names its destination: the cache holds them as item params from the first worn option on. */

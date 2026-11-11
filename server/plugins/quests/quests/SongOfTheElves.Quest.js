@@ -3931,8 +3931,10 @@ module.exports = function registerSongOfTheElves(api) {
     // on the Cave object's blocked footprint and trapped the player.
     const destination = new Location(2194, 3258, 0);
     if (!api.core.TeleportHandler.checkReqs(event.player, destination)) return;
-    event.player.getInventory().deleteNumber(event.itemId, 1);
-    api.core.TeleportHandler.teleport(event.player, destination, api.core.TeleportType.NORMAL, false);
+    api.core.TeleportHandler.confirm(event.player, destination, () => {
+      event.player.getInventory().deleteNumber(event.itemId, 1);
+      api.core.TeleportHandler.teleport(event.player, destination, api.core.TeleportType.NORMAL, false);
+    });
   }
 
   function placeFallsPillarItem(event) {

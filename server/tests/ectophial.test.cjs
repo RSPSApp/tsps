@@ -22,7 +22,7 @@ beforeEach(() => {
   const api = {
     core: {
       ...core,
-      TeleportHandler: { checkReqs: (p) => p.allowed },
+      TeleportHandler: { checkReqs: (p) => p.allowed, confirm: (player, destination, go) => go(), },
       TaskManager: { submit(t) { t.setRunning(true); tasks.push(t); } },
       Sounds: { playAreaSound: (s) => areaSounds.push(s) },
     },

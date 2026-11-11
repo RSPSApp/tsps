@@ -89,7 +89,7 @@ function teleportTo(player, landing) {
   if (!landing) return;
   const destination = new core.Location(landing.x, landing.y, landing.z);
   if (core.TeleportHandler.checkReqs(player, destination)) {
-    core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
+    core.TeleportHandler.confirm(player, destination, () => core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false));
   }
 }
 

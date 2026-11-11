@@ -182,8 +182,9 @@ class LunarTeleport extends LunarSpell {
     constructor(name: string, readonly teleport: TeleportData) { super(name, { ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
         if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
-        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false,
-            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name })));
+        TeleportHandler.confirm(player, this.teleport.destination, () => this.cast(player, () => TeleportHandler.teleport(player,
+            this.teleport.destination, TeleportType.LUNAR, false, () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name }))));
+        return true;
     }
 }
 
@@ -290,7 +291,7 @@ export class LunarSpells {
 
     private static castGroupTeleport(player: Player, spell: LunarTeleport): boolean {
         if (!TeleportHandler.checkReqs(player, spell.teleport.destination)) return true;
-        return spell.cast(player, () => {
+        TeleportHandler.confirm(player, spell.teleport.destination, () => spell.cast(player, () => {
             TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
                 () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
@@ -298,7 +299,8 @@ export class LunarSpells {
                     TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
                 }
             });
-        });
+        }));
+        return true;
     }
 
     /**

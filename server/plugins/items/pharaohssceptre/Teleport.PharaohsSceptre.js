@@ -69,7 +69,8 @@ function teleport(player, destination) {
   const [x, y, z] = destination.tile;
   const target = new core.Location(x, y, z);
   if (!core.TeleportHandler.checkReqs(player, target, Common.data.wildernessLevel)) return false;
-  core.TeleportHandler.teleport(player, target, teleportType(), false, () => spendCharge(player, destination));
+  core.TeleportHandler.confirm(player, target,
+    () => core.TeleportHandler.teleport(player, target, teleportType(), false, () => spendCharge(player, destination)), Common.data.wildernessLevel);
   return true;
 }
 

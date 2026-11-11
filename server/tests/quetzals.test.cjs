@@ -61,7 +61,7 @@ const api = {
   core: {
     CacheDefinitions, Location, Item, ItemIdentifiers, Task,
     TaskManager: { submit: (task) => tasks.push(task) },
-    TeleportHandler: { checkReqs: () => true },
+    TeleportHandler: { checkReqs: () => true, confirm: (player, destination, go) => go(), },
     Animation: class { constructor(id) { this.id = id; } },
     Graphic: class { constructor(id) { this.id = id; } },
     DialogueChainBuilder, StatementDialogue, EndDialogue: class {},

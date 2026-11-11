@@ -80,7 +80,7 @@ function teleport(player) {
   if (!TeleportHandler.checkReqs(player, target)) return;
   // Leave the game on arrival, as walking out through the barrier does: a teleport from inside the
   // rift does not always pass the temple Area's postLeave (the arrival, by the portal, is south of it).
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => Game.leave(player));
+  TeleportHandler.confirm(player, target, () => TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => Game.leave(player)));
 }
 function wornOption(event) {
   const { CacheDefinitions, Equipment } = Shared.core();

@@ -87,7 +87,7 @@ function signal(event) {
   if (!whistle || flights.has(player) || tooDeep(player) || !charged(player, whistle)) return true;
   if (Common.varbit(player, DEFAULT_TP_VARBIT) === 1) {
     const guild = Common.siteById(HUNTER_GUILD_SITE);
-    if (guild && mayTeleport(player, guild)) fly(player, whistle, guild);
+    if (guild && mayTeleport(player, guild)) confirmFlight(player, whistle, guild);
     return true;
   }
   signalling.set(player, whistle);
@@ -108,7 +108,7 @@ function lastDestination(event) {
   if (!whistle || flights.has(player) || !charged(player, whistle)) return true;
   const site = Common.siteById(Common.varbit(player, Common.LAST_DESTINATION));
   if (!Common.siteUsable(player, site)) return signal(event);
-  if (mayTeleport(player, site)) fly(player, whistle, site);
+  if (mayTeleport(player, site)) confirmFlight(player, whistle, site);
   return true;
 }
 
@@ -124,7 +124,13 @@ function chooseSite(event) {
     Common.busy(player, false);
     return;
   }
-  fly(player, whistle, site);
+  confirmFlight(player, whistle, site);
+}
+
+/** The flight once content has had its say (TeleportHandler.confirm: the boat-at-sea warning). */
+function confirmFlight(player, whistle, site) {
+  const at = new Common.core.Location(site.x, site.y, site.z);
+  Common.core.TeleportHandler.confirm(player, at, () => fly(player, whistle, site), WILDERNESS_LIMIT, () => Common.busy(player, false));
 }
 
 /** The captured whistle flight; the charge goes as the player lands. */

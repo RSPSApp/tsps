@@ -149,12 +149,12 @@ function teleportTo(player, x, y, minigameName) {
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  startHomeTeleport(core, player, destination, () => {
+  core.TeleportHandler.confirm(player, destination, () => startHomeTeleport(core, player, destination, () => {
     const minute = dateMinutes();
     player.setAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE, minute);
     player.getPacketSender().sendConfig(LAST_MINIGAME_TELEPORT_VARP, minute);
     if (minigameName) pluginApi.emitCustomEvent("minigame-teleport:arrived", { player, minigame: minigameName });
-  });
+  }), 20, () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0));
 }
 
 /** The minigames data key of an entry, for the arrival event (Pest Control's diary task). */

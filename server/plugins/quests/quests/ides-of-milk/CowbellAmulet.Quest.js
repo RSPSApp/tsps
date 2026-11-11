@@ -104,11 +104,13 @@ module.exports = function attachCowbellAmulet(api) {
       return true;
     }
     if (!TeleportHandler.checkReqs(player, DESTINATION, 20)) return true;
-    setCharges(player, item, charges(item) - 1);
-    TeleportHandler.teleport(player, DESTINATION.clone(), TELEPORT, false, () => {
-      const nearbyCow = World.getNpcsNear(player.getLocation(), 10, player.getPrivateArea()).find(npc =>
-        /^(Cow|Cow calf)$/.test(npc.getDefinition().getName()));
-      if (nearbyCow) nearbyCow.forceChat(nearbyCow.getDefinition().getName() === "Cow calf" ? "M-Moo?" : "Moo?");
+    TeleportHandler.confirm(player, DESTINATION, () => {
+      setCharges(player, item, charges(item) - 1);
+      TeleportHandler.teleport(player, DESTINATION.clone(), TELEPORT, false, () => {
+        const nearbyCow = World.getNpcsNear(player.getLocation(), 10, player.getPrivateArea()).find(npc =>
+          /^(Cow|Cow calf)$/.test(npc.getDefinition().getName()));
+        if (nearbyCow) nearbyCow.forceChat(nearbyCow.getDefinition().getName() === "Cow calf" ? "M-Moo?" : "Moo?");
+      });
     });
     return true;
   }

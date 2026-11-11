@@ -48,7 +48,8 @@ function destinationsFor(player) {
 function teleportTo(player, destination) {
   const target = new core.Location(destination.tile.x, destination.tile.y, destination.tile.z);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LIMIT)) return;
-  core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => destination.onTeleport?.());
+  core.TeleportHandler.confirm(player, target,
+    () => core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => destination.onTeleport?.()), WILDERNESS_LIMIT);
 }
 
 function chooseDestination(player) {

@@ -124,6 +124,32 @@ export class TeleportHandler {
         player.getClickDelay().reset();
     }
 
+    /**
+     * A teleport the player chose (an item's, or a spell's outside the spell engine), once `checkReqs` has passed and
+     * before anything is used up: content may ask first ("teleport:confirm" { player, proceed, recheck, refused,
+     * handled }: the boat-at-sea warning). `go` (use the item up, then `teleport`) runs at once when nothing asks; after
+     * a question it runs on the player's yes, once `checkReqs` passes again and the player still carries what they did.
+     * `refused` runs instead on a no, or when those checks fail (to clear what the item set, such as varbit busy).
+     */
+    public static confirm(player: Player, destination: Location, go: () => void, wildernessLevelLimit: number = 20, refused?: () => void): void {
+        const carried = TeleportHandler.carried(player);
+        const request = {
+            player,
+            handled: false,
+            proceed: go,
+            recheck: () => TeleportHandler.carried(player) === carried && TeleportHandler.checkReqs(player, destination, wildernessLevelLimit),
+            refused: () => refused?.(),
+        };
+        PluginManager.emitCustomEvent("teleport:confirm", request);
+        if (!request.handled) request.proceed();
+    }
+
+    /** The ids and amounts in the player's inventory and equipment: an item spent on a yes must still be there. */
+    private static carried(player: Player): string {
+        const items = [...(player.getInventory?.()?.getItems?.() ?? []), ...(player.getEquipment?.()?.getItems?.() ?? [])];
+        return items.map((item) => (item ? `${item.getId?.()}x${item.getAmount?.()}` : "")).join(",");
+    }
+
     public static onTeleporting(player: Player, closeInterfaces: boolean = true): void {
         player.getSkillManager().stopSkillable();
         if (closeInterfaces) player.getPacketSender().sendInterfaceRemoval();

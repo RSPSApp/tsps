@@ -7,14 +7,18 @@ import { sendChat } from "../../../network/serverConnection/outgoing/inventoryCh
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 
+/** The construction build menu (458) is open: it owns every key. */
+function isConstructionOpen(widgetManager: WidgetManager): boolean {
+    return widgetManager.rootInterface === 458 || [...widgetManager.interfaceParents.values()]
+        .some((parent) => (parent.group | 0) === 458);
+}
+
 export function processConstructionKeyboardInput(
     deps: WidgetInputControllerDeps,
     input: WidgetInputFrame["input"],
     widgetManager: WidgetManager,
 ): boolean {
-    const constructionOpen = widgetManager.rootInterface === 458 || [...widgetManager.interfaceParents.values()]
-        .some((parent) => (parent.group | 0) === 458);
-    if (constructionOpen) {
+    if (isConstructionOpen(widgetManager)) {
         // Script 73 rejects hidden chat layers before touching VarC 335.
         // The build modal has no text field: keep using the normal chat
         // buffer and sender without depending on its widget visibility.
@@ -54,7 +58,8 @@ export function processWidgetKeyboardInput(
     frame: WidgetInputFrame,
     widgetManager: WidgetManager,
 ): void {
-    const { input, mx, my, allRoots, visibleMap, getStaticChildren } = frame;
+    const { input, mx, my } = frame;
+    processWidgetKeyDownUpInput(deps, frame, widgetManager);
     if (input.keyEvents.length > 0) {
         if (processConstructionKeyboardInput(deps, input, widgetManager)) return;
         const dialogActive = (
@@ -171,42 +176,7 @@ export function processWidgetKeyboardInput(
             if (closeOpenModal(widgetManager, deps.getCs2Vm())) return;
         }
 
-        // Collect ALL widgets with onKey handlers from all roots.
-        // Note: some widget trees can reference the same widget via multiple traversal paths
-        // (e.g., legacy IF1 `children` plus parentUid-indexed children), so de-duplicate by uid.
-        const keyWidgetsByUid = new Map<number, any>();
-        for (const root of allRoots) {
-            const keyWidgets = collectWidgetsWithKeyHandlers(
-                root,
-                visibleMap,
-                getStaticChildren,
-            );
-            for (const w of keyWidgets) {
-                const uid = (w?.uid ?? 0) | 0;
-                if (uid !== 0) keyWidgetsByUid.set(uid, w);
-            }
-        }
-        // Also dispatch keys to InterfaceParent-mounted sub-interfaces
-        // (e.g., chatbox input handlers). Mounted interfaces are separate widget trees.
-        for (const [containerUid, parent] of widgetManager.interfaceParents) {
-            if (!parent) continue;
-            // Skip if the container (or any ancestor) is hidden.
-            if (widgetManager.isEffectivelyHidden(containerUid)) continue;
-            // Root interface is already covered by allRoots.
-            if ((parent.group | 0) === (widgetManager.rootInterface | 0)) continue;
-            const subRoots = widgetManager.getAllGroupRoots(parent.group);
-            for (const root of subRoots) {
-                const keyWidgets = collectWidgetsWithKeyHandlers(
-                    root,
-                    visibleMap,
-                    getStaticChildren,
-                );
-                for (const w of keyWidgets) {
-                    const uid = (w?.uid ?? 0) | 0;
-                    if (uid !== 0) keyWidgetsByUid.set(uid, w);
-                }
-            }
-        }
+        const keyWidgetsByUid = collectVisibleKeyWidgets(frame, widgetManager);
 
         // Widget setters and variable transmit handlers redraw what actually changes.
         // A key listener alone must not force a full repaint (held camera keys repeat).
@@ -226,6 +196,73 @@ export function processWidgetKeyboardInput(
             }
         }
     }
+}
+
+/**
+ * Every visible widget with a key listener, from the root interface and the mounted
+ * sub-interfaces (the chatbox input, for one), which are separate widget trees. Some trees
+ * reach the same widget by two paths (IF1 `children` and parentUid-indexed children), so the
+ * result is keyed by uid.
+ */
+function collectVisibleKeyWidgets(
+    frame: WidgetInputFrame,
+    widgetManager: WidgetManager,
+    hasHandler?: (w: any) => boolean,
+): Map<number, any> {
+    const { allRoots, visibleMap, getStaticChildren } = frame;
+    const keyWidgetsByUid = new Map<number, any>();
+    const collect = (root: any) => {
+        for (const w of collectWidgetsWithKeyHandlers(root, visibleMap, getStaticChildren, hasHandler)) {
+            const uid = (w?.uid ?? 0) | 0;
+            if (uid !== 0) keyWidgetsByUid.set(uid, w);
+        }
+    };
+    for (const root of allRoots) collect(root);
+    for (const [containerUid, parent] of widgetManager.interfaceParents) {
+        if (!parent) continue;
+        // Skip if the container (or any ancestor) is hidden.
+        if (widgetManager.isEffectivelyHidden(containerUid)) continue;
+        // Root interface is already covered by allRoots.
+        if ((parent.group | 0) === (widgetManager.rootInterface | 0)) continue;
+        for (const root of widgetManager.getAllGroupRoots(parent.group)) collect(root);
+    }
+    return keyWidgetsByUid;
+}
+
+const hasKeyDownOrUpListener = (w: any): boolean =>
+    !!(w.eventHandlers?.onKeyDown || w.eventHandlers?.onKeyUp);
+
+/**
+ * Key-down and key-up listeners (if_setonkeydown / if_setonkeyup) run for every key pressed or
+ * released this frame, with the key's code as event_keycode: the minimap's Ctrl+M opens the
+ * World Map this way, and some interfaces follow Shift being held.
+ */
+function processWidgetKeyDownUpInput(
+    deps: WidgetInputControllerDeps,
+    frame: WidgetInputFrame,
+    widgetManager: WidgetManager,
+): void {
+    const { input } = frame;
+    if (input.keyDownCodes.length === 0 && input.keyUpCodes.length === 0) return;
+    if (isConstructionOpen(widgetManager)) return;
+    const widgets = collectVisibleKeyWidgets(frame, widgetManager, hasKeyDownOrUpListener);
+    if (widgets.size === 0) return;
+    const vm = deps.getCs2Vm();
+    const dispatch = (codes: number[], eventType: "onKeyDown" | "onKeyUp") => {
+        for (const keyCode of codes) {
+            for (const w of widgets.values()) {
+                if (!w.eventHandlers?.[eventType]) continue;
+                vm.invokeEventHandler(w, eventType, {
+                    mouseX: frame.mx - (w._absX ?? w.x ?? 0),
+                    mouseY: frame.my - (w._absY ?? w.y ?? 0),
+                    keyTyped: keyCode,
+                    keyPressed: 0,
+                });
+            }
+        }
+    };
+    dispatch(input.keyDownCodes, "onKeyDown");
+    dispatch(input.keyUpCodes, "onKeyUp");
 }
 
 /**

@@ -195,6 +195,8 @@ export class InputManager {
     saveClickX: number = -1;
     /** Frame-synchronized click Y position */
     saveClickY: number = -1;
+    /** The middle button turns the camera (mousecam, from varbit 4134 being 0). */
+    mouseCamEnabled: boolean = true;
     /** Middle mouse click X position for the current frame */
     middleClickX: number = -1;
     /** Middle mouse click Y position for the current frame */
@@ -287,6 +289,10 @@ export class InputManager {
     keys: Map<string, boolean> = new Map();
     /** Key events queued this frame (for widget onKey handlers) */
     keyEvents: { keyTyped: number; keyPressed: number; code: string }[] = [];
+    /** OSRS key codes pressed this frame, for widget key-down listeners (if_setonkeydown). */
+    keyDownCodes: number[] = [];
+    /** OSRS key codes released this frame, for widget key-up listeners (if_setonkeyup). */
+    keyUpCodes: number[] = [];
     /** Shift key state (also OSRS keybind 81, ClientState.isShiftPressed; see setShiftHeld) */
     shiftDown: boolean = false;
     /** Shift went down or up: menus that follow it (shift-click drop) must be rebuilt. */
@@ -619,6 +625,8 @@ export class InputManager {
     flushInput(): void {
         this.readIndex = this.writeIndex;
         this.keyEvents.length = 0;
+        this.keyDownCodes.length = 0;
+        this.keyUpCodes.length = 0;
     }
 
     /**
@@ -788,11 +796,8 @@ export class InputManager {
         this.clickY = y;
         this.clickTime = Date.now();
 
-        // Middle mouse: camera pan
+        // Middle mouse: camera pan, unless "Middle mouse button controls the camera" is off
         if (event.button === 1) {
-            this.mouseWheelDown = true;
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
             this.middleClickX = x;
             this.middleClickY = y;
             this.middleClickSequence++;
@@ -800,6 +805,10 @@ export class InputManager {
             this.mouseY = y;
             this.isTouch = false;
             event.preventDefault();
+            if (!this.mouseCamEnabled) return;
+            this.mouseWheelDown = true;
+            this.mouseWheelX = x;
+            this.mouseWheelY = y;
             this.installDocumentGrab();
             return;
         }
@@ -1179,6 +1188,9 @@ export class InputManager {
             }
             this.osrsKeyState[osrsKeyCode] = 1;
             this.osrsKeyPressedThisFrame.add(osrsKeyCode);
+            // Ours: a held key's auto-repeat doesn't run key-down listeners again, so holding
+            // Ctrl+M opens the World Map once.
+            if (!event.repeat) this.keyDownCodes.push(osrsKeyCode);
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, true);
             }
@@ -1237,6 +1249,7 @@ export class InputManager {
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, false);
             }
+            this.keyUpCodes.push(osrsKeyCode);
         }
 
         this.keys.delete(event.code);
@@ -1254,8 +1267,9 @@ export class InputManager {
         for (let i = 0; i < 128; i++) {
             this.keyArray[i] = 0;
         }
-        // Clear OSRS internal key states
+        // Clear OSRS internal key states; key-up listeners see every held key released.
         for (let i = 0; i < this.osrsKeyState.length; i++) {
+            if (this.osrsKeyState[i] === 1) this.keyUpCodes.push(i);
             this.osrsKeyState[i] = 0;
         }
         this.osrsKeyPressedThisFrame.clear();
@@ -1347,6 +1361,8 @@ export class InputManager {
 
         // Clear key events queue
         this.keyEvents.length = 0;
+        this.keyDownCodes.length = 0;
+        this.keyUpCodes.length = 0;
 
         // Clear per-frame OSRS key pressed tracking (for wasKeyPressed)
         this.osrsKeyPressedThisFrame.clear();

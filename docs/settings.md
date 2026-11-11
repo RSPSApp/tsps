@@ -555,6 +555,23 @@ Live sends the player ops at login after the varbits: with 1334 at 1, `set_playe
 
 - **Not done**: Ctrl-clicks on NPCs, objects, ground items and players don't invert the run mode at all, whatever the option: their packets' Ctrl byte isn't read.
 
+## Mouse, hotkeys and the World Switcher
+
+These rows are `data/settings.json` toggles, off for a new account; the browser client applies them as soon as the var changes, and again at login.
+
+| Setting | Id | Variable | What it does |
+| --- | --- | --- | --- |
+| Single mouse button mode | 48 | varp 170 | while 1, a left click where there is more than one option opens the menu, as a right click does (`settings.leftClickOpensMenu`; the cache's scripts never set it, the engine follows the varp) |
+| Middle mouse button controls the camera | 49 | varbit 4134 `mousecam_disabled` | while 1, the middle button no longer turns the camera (`InputManager.mouseCamEnabled`); script 907 also sets it when the layout is built |
+| Move follower options lower down | 50 | varbit 5599 `followerops_deprioritised` | while 1, a follower's options go below Walk here (`ClientState.followerOpsLowPriority`) |
+| Modern Layout - Side panel can be closed by the hotkeys | 54 | varbit 4611 `hotkey_cannot_close_sidepanel` | while 1, a hotkey (an F-key, or Esc when there is nothing for it to close) for the side panel already open leaves it open. The client handles the F-keys itself and calls the side-panel switch (script 71) with closing off, as the cache's own key handler (script 905, bound by 907) does |
+| World Switcher confirmation | 347 | varbit 4100 `worldswitcher_disable_confirmation` | while 0, choosing another server in the in-game World Switcher asks "Are you sure you wish to switch to <server>?" with Cancel and Switch world first |
+| World Map Hotkey | 441 | varbit 16621 `settings_world_map_hotkey_disabled` | while 0, Ctrl+M opens the World Map: the minimap's key-down listener (script 1492 binds 5141) triggers the orb's op |
+
+Opcodes 1430/2430 and 1431/2431 set a component's key-down and key-up listeners (`if_setonkeydown`, `if_setonkeyup`; the client had them as item-on-item and clan settings). They run for every key pressed or released, with the key's code as `event_keycode`. Live's confirmation is the server's objectbox (193) with "Cancel|Switch world" and the world's number (rsprox 235/3313); here the World Switcher lists servers, not worlds, so the client asks in the list itself and names the server (ours). Tests: `tests/settings-wired-rows.test.cjs`, `client/tests/control-settings.test.ts`.
+
+- **Not done**: with the middle-mouse camera off, a middle click does nothing; whether live then treats it as a left click isn't documented.
+
 ## Game client layout and data orbs
 
 Two Interfaces rows that change the gameframe itself, handled in `Settings.plugin.js`.

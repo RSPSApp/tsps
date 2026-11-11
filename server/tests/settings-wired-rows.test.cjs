@@ -26,6 +26,9 @@ const TOGGLES = {
   8: 4084,
   9: 10113,
   36: 4089,
+  49: 4134,
+  50: 5599,
+  54: 4611,
   83: 11890,
   111: 12390,
   114: 12344,
@@ -51,6 +54,7 @@ const TOGGLES = {
   312: 6580,
   313: 8059,
   314: 8060,
+  347: 4100,
   362: 15323,
   365: 9597,
   372: 1334,
@@ -62,6 +66,7 @@ const TOGGLES = {
   418: 11562,
   419: 71,
   430: 16116,
+  441: 16621,
   442: 17772,
   460: 18132,
   461: 18135,
@@ -241,6 +246,21 @@ test('a fresh account starts with the side panel setting live sends', () => {
   const p = player();
   handlers.restoreSettings({ player: p });
   assert.equal(p.getPacketSender().getVarbit(4609), 1);
+});
+
+test('Single mouse button mode flips varp 170, the var the cache reads it from, and keeps it at the next login', () => {
+  const VARP_MOUSE_BUTTONS = 170;
+  assert.equal(catalog.get(48), TOGGLE);
+  assert.equal(settingsJson[48]?.varp, VARP_MOUSE_BUTTONS);
+  assert.deepEqual(readerCase(TOGGLE_READER, 48)[0], [PUSH_VARP, VARP_MOUSE_BUTTONS]);
+  const p = player();
+  handlers.restoreSettings({ player: p });
+  assert.equal(p.getPacketSender().getVarp(VARP_MOUSE_BUTTONS), 0);
+  assert.equal(click(p, 48), true);
+  assert.equal(p.getPacketSender().getVarp(VARP_MOUSE_BUTTONS), 1);
+  const next = player(p.attributes);
+  handlers.restoreSettings({ player: next });
+  assert.equal(next.getPacketSender().getVarp(VARP_MOUSE_BUTTONS), 1);
 });
 
 const LOGINLOGOUT_PERMANENT = 1627;

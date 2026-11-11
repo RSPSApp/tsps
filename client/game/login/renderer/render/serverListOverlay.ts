@@ -67,7 +67,18 @@ export function drawServerListOverlay(host: LoginRendererHost, ctx: RenderContex
         ctx.fillStyle = "#6b5a3e";
         ctx.fillRect(panelX + 4, panelY + headerH, panelW - 8, 1);
 
-        if (!showRows) {
+        const confirmServer = state.serverSwitchConfirm;
+        if (confirmServer) {
+            // The World Switcher's confirmation, as live's chatbox asks it.
+            drawCenteredText(host,
+                ctx,
+                host.fontPlain12,
+                ellipsis(host, `Are you sure you wish to switch to ${confirmServer.name}?`, panelW - 16),
+                panelX + panelW / 2,
+                panelY + headerH + Math.min(contentH, 60) / 2 + 4,
+                0xffffff,
+            );
+        } else if (!showRows) {
             // First probe not yet complete — show loading
             drawCenteredText(host, 
                 ctx,
@@ -150,7 +161,8 @@ export function drawServerListOverlay(host: LoginRendererHost, ctx: RenderContex
         );
 
         // Buttons below the panel
-        drawButton(host, ctx, panelX + panelW / 2 - 80, panelY + panelH + 30, "Refresh");
-        drawButton(host, ctx, panelX + panelW / 2 + 80, panelY + panelH + 30, "Close");
+        const confirming = !!confirmServer;
+        drawButton(host, ctx, panelX + panelW / 2 - 80, panelY + panelH + 30, confirming ? "Cancel" : "Refresh");
+        drawButton(host, ctx, panelX + panelW / 2 + 80, panelY + panelH + 30, confirming ? "Switch world" : "Close");
     
 }

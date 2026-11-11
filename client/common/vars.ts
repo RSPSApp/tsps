@@ -87,6 +87,18 @@ export const VARP_OPTION_ATTACK_PRIORITY_NPC = 1306;
 export const VARBIT_KEYBINDING_ESC_TO_CLOSE = 4681;
 export const VARP_KEYBINDING_ESC_TO_CLOSE = 1224;
 
+// All Settings rows the browser client applies itself (Controls and Warnings tabs).
+/** "Single mouse button mode": while 1, a left click opens the menu (row 48). */
+export const VARP_MOUSE_BUTTONS = 170;
+/** "Middle mouse button controls the camera": %mousecam_disabled, 1 turns it off (row 49). */
+export const VARBIT_MOUSECAM_DISABLED = 4134;
+/** "Move follower options lower down": %followerops_deprioritised (row 50). */
+export const VARBIT_FOLLOWEROPS_DEPRIORITISED = 5599;
+/** "Side panel can be closed by the hotkeys": %hotkey_cannot_close_sidepanel, 1 keeps it open (row 54). */
+export const VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL = 4611;
+/** "World Switcher confirmation": %worldswitcher_disable_confirmation, 1 skips it (row 347). */
+export const VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION = 4100;
+
 /**
  * Active follower NPC server index.
  * Cache-verified from local rev 236 varp definitions: varp 447 has client option type 17.

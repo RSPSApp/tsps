@@ -53,6 +53,10 @@ import {
     VARBIT_LEAGUE_RELIC_8,
     VARBIT_ROOF_REMOVAL,
     VARBIT_ACTIVE_SPELLBOOK,
+    VARBIT_FOLLOWEROPS_DEPRIORITISED,
+    VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL,
+    VARBIT_MOUSECAM_DISABLED,
+    VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION,
     VARBIT_STAMINA_ACTIVE,
     VARC_COMBAT_LEVEL,
     VARC_ACTIVE_TAB,
@@ -60,6 +64,7 @@ import {
     VARP_ATTACK_STYLE,
     VARP_MAP_FLAGS_CACHED,
     VARP_MASTER_VOLUME,
+    VARP_MOUSE_BUTTONS,
     VARP_MUSIC_VOLUME,
     VARP_OPTION_ATTACK_PRIORITY_NPC,
     VARP_OPTION_ATTACK_PRIORITY_PLAYER,
@@ -422,6 +427,8 @@ const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
 
 // Enum IDs consumed by the stock tab-switch script (914), per game-frame layout.
 const TAB_SWITCH_SCRIPT = 914;
+// The side-panel switch script 914 calls: (display enum, tab, the open tab's key closes it, 0).
+const TAB_OPEN_SCRIPT = 71;
 const AGILITY_OBSTACLE_HIGHLIGHTS_SCRIPT = 5167;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
@@ -704,10 +711,17 @@ export class OsrsClient {
     showMouseOverText: boolean = true;
 
     /**
-     * Mouse camera enabled/disabled (set by MOUSECAM opcode).
-     * When false, disables mouse-based camera rotation.
+     * Mouse camera enabled/disabled (set by the MOUSECAM opcode and varbit 4134).
+     * When false, the middle mouse button doesn't turn the camera.
      */
-    mouseCamEnabled: boolean = true;
+    get mouseCamEnabled(): boolean {
+        return this.inputManager.mouseCamEnabled;
+    }
+
+    set mouseCamEnabled(enabled: boolean) {
+        this.inputManager.mouseCamEnabled = enabled;
+        if (!enabled) this.inputManager.mouseWheelDown = false;
+    }
 
     /**
      * Render local player model in the 3D scene (set by RENDERSELF opcode).
@@ -1320,14 +1334,7 @@ export class OsrsClient {
                     event.stopImmediatePropagation();
                     return;
                 }
-                const shortcut = this.resolveKeyShortcut(event);
-                if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
-                    return;
-                }
-
-                this.switchToTab(shortcut);
-                event.preventDefault();
-                if (event.key !== "Escape") event.stopImmediatePropagation();
+                this.handleSidePanelHotkey(event);
             },
             true,
         );
@@ -4389,27 +4396,53 @@ export class OsrsClient {
         input.saveClickY = -1;
         if (!action) return;
 
+        if (action.type === "cancel_server_switch") {
+            this.loginState.serverSwitchConfirm = null;
+            return;
+        }
+        if (action.type === "confirm_server_switch") {
+            const asked = this.loginState.serverSwitchConfirm;
+            this.loginState.serverSwitchConfirm = null;
+            // The list may have been refreshed while it asked: switch to the server it named.
+            const index = asked ? this.loginRenderer.serverList.findIndex((server) =>
+                server.name === asked.name && server.address === asked.address &&
+                server.worldId === asked.worldId && server.signalUrl === asked.signalUrl) : -1;
+            if (index >= 0) this.switchToServer(index, true);
+            return;
+        }
         if (action.type === "select_server") {
-            const server = this.loginRenderer.serverList[action.index];
-            const transport = server?.transport ?? "websocket";
-            const isCurrent =
-                transport === this.loginState.serverTransport &&
-                (transport === "webrtc"
-                    ? server?.worldId === this.loginState.serverWorldId &&
-                      server?.signalUrl === this.loginState.serverSignalUrl
-                    : server?.address === this.loginState.serverAddress &&
-                      server?.secure === this.loginState.serverSecure);
-            if (isCurrent) {
-                this.processLoginAction({ type: "close_server_list" });
-                return;
-            }
-
-            this.loginState.serverListOpen = false;
-            this.performLogout(() => this.processLoginAction(action));
+            this.switchToServer(action.index, false);
             return;
         }
 
         this.processLoginAction(action);
+    }
+
+    /**
+     * The World Switcher's server chosen in game. While "World Switcher confirmation" is on
+     * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
+     */
+    private switchToServer(index: number, confirmed: boolean): void {
+        const server = this.loginRenderer.serverList[index];
+        const transport = server?.transport ?? "websocket";
+        const isCurrent =
+            transport === this.loginState.serverTransport &&
+            (transport === "webrtc"
+                ? server?.worldId === this.loginState.serverWorldId &&
+                  server?.signalUrl === this.loginState.serverSignalUrl
+                : server?.address === this.loginState.serverAddress &&
+                  server?.secure === this.loginState.serverSecure);
+        if (isCurrent) {
+            this.processLoginAction({ type: "close_server_list" });
+            return;
+        }
+        if (!confirmed && this.varManager?.getVarbit(VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION) !== 1) {
+            this.loginState.serverSwitchConfirm = server ?? null;
+            return;
+        }
+
+        this.loginState.serverListOpen = false;
+        this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {
@@ -4417,6 +4450,21 @@ export class OsrsClient {
         const script = this.cs2Vm.context?.loadScript?.(scriptId | 0);
         if (!script) return;
         this.cs2Vm.run(script, args, []);
+    }
+
+    /** Switch the side panel for a keybinding's key (F-keys and Esc). */
+    private handleSidePanelHotkey(event: KeyboardEvent): void {
+        const shortcut = this.resolveKeyShortcut(event);
+        if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
+            return;
+        }
+
+        // A hotkey, Esc included, closes its own open side panel unless "Side panel can be
+        // closed by the hotkeys" is off (script 907 binds the cache's own key handler the same way).
+        const keepsPanelOpen = this.varManager?.getVarbit(VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL) === 1;
+        this.switchToTab(shortcut, false, !keepsPanelOpen);
+        event.preventDefault();
+        if (event.key !== "Escape") event.stopImmediatePropagation();
     }
 
     /** Resolve a keydown to a side-panel tab using the All Settings keybindings. */
@@ -4442,13 +4490,14 @@ export class OsrsClient {
     }
 
     /** Switch the stock side panel through its cache script so all tab widgets update together. */
-    switchToTab(tab: number, forceOpen = false): void {
+    switchToTab(tab: number, forceOpen = false, closesOpenTab = true): void {
         if (forceOpen && this.varManager?.getVarcInt(VARC_ACTIVE_TAB) === tab) return;
         const rootInterface = this.widgetManager?.rootInterface ?? DEFAULT_ROOT_INTERFACE;
         const displayEnum = DISPLAY_ENUM_BY_ROOT_INTERFACE[rootInterface] ?? DEFAULT_DISPLAY_ENUM;
-        const script = this.cs2Vm?.context?.loadScript?.(TAB_SWITCH_SCRIPT);
-        if (script) this.cs2Vm.run(script, [1, displayEnum, tab], []);
-        else this.varManager?.setVarcInt(VARC_ACTIVE_TAB, tab);
+        const script = this.cs2Vm?.context?.loadScript?.(closesOpenTab ? TAB_SWITCH_SCRIPT : TAB_OPEN_SCRIPT);
+        if (!script) this.varManager?.setVarcInt(VARC_ACTIVE_TAB, tab);
+        else if (closesOpenTab) this.cs2Vm.run(script, [1, displayEnum, tab], []);
+        else this.cs2Vm.run(script, [displayEnum, tab, 0, 0], []);
     }
 
     private substituteWidgetScriptMagicArgs(intArgs: number[], widget: any): number[] {
@@ -4613,6 +4662,21 @@ export class OsrsClient {
 
     private applyInterfaceScalingPercentDeviceOption(value: number): void {
         this.audioVarp.applyInterfaceScalingPercentDeviceOption(value);
+    }
+
+    /**
+     * Single mouse button mode, the middle-mouse camera and follower options apply as soon as
+     * their var changes, and again at login (a logout resets the vars without a change, so a
+     * value left by the last account is replaced by the next login's varps). Varbit changes
+     * arrive through their varp, so they are re-read on every varp update, as the roof varbit is.
+     */
+    private applyControlSettingVars(): void {
+        const varManager = this.varManager;
+        if (!varManager) return;
+        this.settings.leftClickOpensMenu = varManager.getVarp(VARP_MOUSE_BUTTONS) === 1;
+        const mouseCamEnabled = varManager.getVarbit(VARBIT_MOUSECAM_DISABLED) !== 1;
+        if (this.mouseCamEnabled !== mouseCamEnabled) this.mouseCamEnabled = mouseCamEnabled;
+        ClientState.followerOpsLowPriority = varManager.getVarbit(VARBIT_FOLLOWEROPS_DEPRIORITISED) === 1;
     }
 
     private applyAudioVarpChange(varpId: number, value: number): void {
@@ -6268,6 +6332,7 @@ export class OsrsClient {
 
             case "open_server_list":
                 this.loginState.serverListOpen = true;
+                this.loginState.serverSwitchConfirm = null;
                 this.loginState.virtualKeyboardVisible = false;
                 this.loginRenderer
                     .fetchServerList()
@@ -6277,6 +6342,7 @@ export class OsrsClient {
             case "close_server_list":
                 this.loginState.serverListOpen = false;
                 this.loginState.hoveredServerIndex = -1;
+                this.loginState.serverSwitchConfirm = null;
                 return undefined;
 
             case "refresh_server_list":
@@ -6991,6 +7057,7 @@ export class OsrsClient {
                 } else if (varpId === VARP_OPTION_ATTACK_PRIORITY_NPC) {
                     ClientState.npcAttackOption = clamp(newValue | 0, 0, 3);
                 }
+                this.applyControlSettingVars();
                 // Varbit changes arrive through their underlying varp, so re-read the
                 // roof varbit on every varp update.
                 try {

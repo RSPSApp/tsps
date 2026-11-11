@@ -22,6 +22,7 @@ import {
 } from "../preferences/ClientPreferences";
 import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
 import type { LoginScreenExtension } from "./LoginScreenExtension";
+import type { ServerListEntry } from "./renderer/types";
 import { LoginIndex } from "./GameState";
 
 const STORAGE_KEY_IOS_PWA_LOGIN_STATE = "osrs:iosPwaLoginState";
@@ -354,6 +355,9 @@ export class LoginState {
     /** Currently hovered server index (-1 = none) */
     hoveredServerIndex: number = -1;
 
+    /** In game, the server the World Switcher asks to confirm switching to */
+    serverSwitchConfirm: ServerListEntry | null = null;
+
     /** Current server address displayed on the button */
     serverAddress: string = getDefaultServerAddress();
 
@@ -549,6 +553,7 @@ export class LoginState {
         this.currentLoginField = 0;
         this.serverListOpen = false;
         this.hoveredServerIndex = -1;
+        this.serverSwitchConfirm = null;
         this.worldSelectOpen = false;
         this.hoveredWorldId = -1;
         this.worldSelectPage = 0;

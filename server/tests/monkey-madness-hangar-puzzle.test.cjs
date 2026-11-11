@@ -92,7 +92,9 @@ function clickSlot(p, slot) {
 const calls = (p, name) => p.log.filter(row => row[0] === name);
 /** The board as the client was last sent it: piece 0-23 in each slot, -1 for the blank. */
 function board(p) {
-  const [, id, capacity, items] = calls(p, 'sendInventory').filter(row => row[1] === INVENTORY).at(-1);
+  const sends = calls(p, 'sendInventory').filter(row => row[1] === INVENTORY);
+  assert.ok(sends.length > 0, 'the server sent no reinitialisation board');
+  const [, id, capacity, items] = sends.at(-1);
   assert.equal(capacity, 25);
   return items.map(item => item ? PIECES.indexOf(item.id) : -1);
 }
@@ -165,7 +167,7 @@ for (const [name, seed] of [['a scramble whose blank oscillates (Math.random = 0
     assert.equal(calls(p, 'sendInterfaceRemoval').length, 0);
     clickSlot(p, way.at(-1));
     assert.deepEqual(board(p), solvedBoard());
-    assert.equal(calls(p, 'sendInterfaceRemoval').length, 1, 'the puzzle closes');
+    assert.ok(calls(p, 'sendInterfaceRemoval').length >= 1, 'the puzzle closes (the closing lines also clear the chatbox, so not exactly one)');
     for (let guard = 0; quest.getStage(p) < STAGE_REINITIALISED && p.manager.getCurrent() && guard < 80; guard++) p.manager.advance();
     assert.equal(quest.getStage(p), STAGE_REINITIALISED);
     assert.equal(p.getAttribute(DAERO_STATE), 6);

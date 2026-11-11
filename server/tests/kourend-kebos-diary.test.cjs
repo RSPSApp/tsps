@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
-const Plugin = require("../plugins/achievements/diaries/KourendKebosDiary.plugin");
+const Plugin = require("../plugins/achievements/diaries/KourendKebosDiary.AchievementDiaries");
 const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
 const { NpcIdentifiers: N } = require("../dist/util/NpcIdentifiers");
 const { ObjectIdentifiers: O } = require("../dist/util/ObjectIdentifiers");

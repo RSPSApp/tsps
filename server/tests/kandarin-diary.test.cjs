@@ -13,7 +13,7 @@ const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const Kandarin = require("../plugins/achievements/diaries/KandarinDiary.plugin");
+const Kandarin = require("../plugins/achievements/diaries/KandarinDiary.AchievementDiaries");
 const FletchingDiaries = require("../plugins/skills/fletching/Diaries.Fletching");
 const FletchingShared = require("../plugins/skills/fletching/Shared.Fletching");
 

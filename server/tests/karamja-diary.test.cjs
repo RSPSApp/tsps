@@ -9,8 +9,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const KaramjaDiary = require("../plugins/achievements/diaries/KaramjaDiary.plugin");
-const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
+const KaramjaDiary = require("../plugins/achievements/diaries/KaramjaDiary.AchievementDiaries");
+const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.AchievementDiaries");
 
 let core;
 let emit;

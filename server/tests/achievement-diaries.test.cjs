@@ -14,7 +14,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Journal = require("../plugins/achievements/diaries/Journal.AchievementDiaries");
 const Rewards = require("../plugins/achievements/diaries/Rewards.AchievementDiaries");
 const Lamps = require("../plugins/achievements/diaries/Lamps.AchievementDiaries");
-const KourendDiary = require("../plugins/achievements/diaries/KourendKebosDiary.plugin");
+const KourendDiary = require("../plugins/achievements/diaries/KourendKebosDiary.AchievementDiaries");
 const CAPTURED = require("./fixtures/achievement-diary-journals.json").journals;
 
 const tasks = [];
@@ -755,4 +755,26 @@ test("wilderness_diary_any_complete (4470) carries a bit per completed Wildernes
   player.log.length = 0;
   Progress.sendDiary(player, wilderness);
   assert.ok(player.log.includes("varbit 4470=3"));
+});
+
+test("diary task modules share one plugin switch and keep their content dependencies", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const pluginDir = path.resolve(__dirname, "../plugins/achievements");
+  const diaryEntrypoints = PluginManager.discoverPluginFiles(pluginDir, 2)
+    .map((file) => path.relative(pluginDir, file))
+    .filter((file) => file === "AchievementDiaries.plugin.js" || file.startsWith(`diaries${path.sep}`));
+  assert.deepEqual(diaryEntrypoints, ["AchievementDiaries.plugin.js"]);
+
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  for (const thievingEnabled of [false, true]) {
+    const handlers = [];
+    Diaries.register(new Proxy({
+      core: PluginManager.getCoreApi(),
+      onCustomEvent: (name, handler) => handlers.push([name, handler]),
+    }, { get: (target, key) => target[key] ?? (() => {}) }));
+    const [, pluginsLoaded] = handlers.find(([name]) => name === "plugins:loaded");
+    pluginsLoaded({ names: new Set(thievingEnabled ? ["AchievementDiaries", "Thieving"] : ["AchievementDiaries"]) });
+    assert.equal(handlers.filter(([name, handler]) => name === "thieving:done" && handler.name === "pickpocketed").length, thievingEnabled ? 2 : 0);
+  }
 });

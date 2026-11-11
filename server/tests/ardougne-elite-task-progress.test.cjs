@@ -28,7 +28,7 @@ before(async () => {
     emitCustomEvent: dispatch,
   };
   Progress(api);
-  const taskProgress = require('../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin');
+  const taskProgress = require('../plugins/achievements/diaries/ArdougneEliteTaskProgress.AchievementDiaries');
   taskProgress.register({
     onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
     onPlayerLogout: (handler) => handlers.set('player:logout', [...(handlers.get('player:logout') ?? []), handler]),

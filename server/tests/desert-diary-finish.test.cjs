@@ -13,7 +13,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Altars = require("../plugins/objects/Altars.plugin");
 const Camulet = require("../plugins/items/Camulet.plugin");
-const DesertFinish = require("../plugins/achievements/diaries/DesertFinish.AchievementDiaries.plugin");
+const DesertFinish = require("../plugins/achievements/diaries/DesertFinish.AchievementDiaries");
 
 let core = null;
 let api = null;

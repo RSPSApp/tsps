@@ -771,6 +771,7 @@ export class PluginManager {
 
     PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
     PluginManager.warnAboutInvalidConfigValues(scopedSettings);
+    PluginManager.emitCustomEvent("plugins:loaded", { names: new Set(PluginManager.loadedPlugins) });
 
     if (PluginManager.lastPersistenceOverride) {
       console.info(PluginManager.lastPersistenceOverride);

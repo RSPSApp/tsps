@@ -22,7 +22,7 @@ const UNSUPPORTED = new Set([
 ]);
 // Tasks credited by this plugin or already wired elsewhere (crystal chest, rooftop lap).
 const IMPLEMENTED = new Set([
-  ...Object.values(require("../plugins/achievements/diaries/FaladorDiary.plugin")._test.TASK),
+  ...Object.values(require("../plugins/achievements/diaries/FaladorDiary.AchievementDiaries")._test.TASK),
   "unlock-the-crystal-chest-in-taverley",
   "complete-a-lap-of-the-falador-rooftop-agility-co",
 ]);
@@ -110,7 +110,7 @@ before(async () => {
   diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("falador");
   api.onCustomEvent("diary:task", require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask);
   Progress(api);
-  plugin = require("../plugins/achievements/diaries/FaladorDiary.plugin");
+  plugin = require("../plugins/achievements/diaries/FaladorDiary.AchievementDiaries");
   plugin.register(api);
 });
 

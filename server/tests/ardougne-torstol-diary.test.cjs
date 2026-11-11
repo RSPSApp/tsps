@@ -44,7 +44,7 @@ before(async () => {
   diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("ardougne");
   api.core = core;
   require("../plugins/achievements/AchievementDiaries.plugin").register(api);
-  require("../plugins/achievements/diaries/ArdougneTorstolDiary.plugin").register(api);
+  require("../plugins/achievements/diaries/ArdougneTorstolDiary.AchievementDiaries").register(api);
   require("../plugins/skills/Farming.plugin").register(api);
 });
 

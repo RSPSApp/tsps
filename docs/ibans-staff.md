@@ -1,7 +1,7 @@
 # Iban's staff
 
 - **Plugin:** `server/plugins/items/IbansStaff.plugin.js`; the Iban Blast spell itself is `CombatSpells.IBAN_BLAST`. The Dark Mage's
-  upgrade is in `server/plugins/achievements/diaries/ArdougneIbanStaffDiary.plugin.js`.
+  upgrade is in `server/plugins/achievements/diaries/ArdougneIbanStaffDiary.AchievementDiaries.js`.
 - **Test:** `server/tests/ibans-staff.test.cjs`
 
 ## Charges

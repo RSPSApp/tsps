@@ -1262,8 +1262,10 @@ export class CombatFactory {
             }
             // An accepted venom replaces the ordinary negative poison counter.
             if (isVenom) protection.clearCounter();
+            // Live names venom, only when it starts from nothing (rsprox_transcripts/237/01087.txt line 30368;
+            // 275 recorded); a poison turned to venom, or venom reapplied, says nothing.
             if (!alreadyPoisoned) {
-                player.sendMessage("You have been poisoned!");
+                player.sendMessage(isVenom ? "You have been poisoned by venom!" : "You have been poisoned!");
             }
         }
 

@@ -121,6 +121,13 @@ test('a filter row flipped by the client and then clicked flips once', () => {
   assert.equal(p.getPacketSender().getVarbit(ENTITY_FILTER_VARBIT), 0, 'a later click flips it back');
 });
 
+test('a filter row clicked right after a slider change still flips', () => {
+  const p = player();
+  clientSets(p, SPACING_VARBIT, 12);
+  click(p, 405);
+  assert.equal(p.getPacketSender().getVarbit(11533), 1, 'the slider change does not stand for the click');
+});
+
 test('a bit on the varp that is not a row of ours is not saved', () => {
   const p = player();
   clientSets(p, REORDERING_VARBIT, 1);

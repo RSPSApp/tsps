@@ -973,7 +973,8 @@ function saveTransmittedSettings(transmission) {
   for (const { settingId, row, key, startBit, mask } of transmittedSettingRows(varpId)) {
     const next = (value >>> startBit) & mask;
     if (next === (saved[key] ?? row.default ?? 0)) continue;
-    changed = true;
+    // Only a toggle's click follows its transmission (a slider or dropdown change has none to stand for).
+    if (catalog().settings.get(settingId)?.type === SETTING_TYPE_TOGGLE) changed = true;
     if (!refuseLockedSetting(player, settingId)) setSettingVar(player, key, next);
   }
   if (varpId === ESC_CLOSES_VARP) {

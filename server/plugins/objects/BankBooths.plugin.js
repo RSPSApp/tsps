@@ -252,6 +252,46 @@ function unnoteOnBanker(api, event) {
   }, "No", () => {});
 }
 
+// OSRS Wiki Rune_pouch_note: used on a banker or bank booth the note becomes one Rune pouch, or
+// "You already have one of those." when the player owns a pouch. Noted-ness is not filtered: the
+// note shares a cache noteId link with item 24588, so the noted hooks must not see it first.
+function ownsRunePouch(api, player) {
+  const { RUNE_POUCH, RUNE_POUCH_L_, DIVINE_RUNE_POUCH, DIVINE_RUNE_POUCH_L_ } = api.core.ItemIdentifiers;
+  const ids = [RUNE_POUCH, RUNE_POUCH_L_, DIVINE_RUNE_POUCH, DIVINE_RUNE_POUCH_L_];
+  return player.getInventory().containsAnyIds(ids)
+    || player.getBanks().some((bank, index) => bank && index !== api.core.Bank.BANK_SEARCH_TAB_INDEX && bank.containsAnyIds(ids));
+}
+
+function exchangeRunePouchNote(api, event, slot) {
+  const { player, itemId } = event;
+  const { RUNE_POUCH_NOTE, RUNE_POUCH } = api.core.ItemIdentifiers;
+  const inventory = player.getInventory();
+  if (itemId !== RUNE_POUCH_NOTE || !Number.isInteger(slot) || inventory.forSlot(slot)?.getId() !== itemId) return false;
+  event.handled = true;
+  if (ownsRunePouch(api, player)) {
+    player.sendMessage("You already have one of those.");
+    return true;
+  }
+  // A single note frees its own slot; a stack needs a free one for the pouch.
+  if (inventory.forSlot(slot).getAmount() > 1 && inventory.getFreeSlots() <= 0) {
+    player.sendMessage("You don't have enough inventory space.");
+    return true;
+  }
+  inventory.deleteAtSlot(slot, 1, false);
+  inventory.add(new api.core.Item(RUNE_POUCH, 1), false);
+  inventory.refreshItems();
+  player.sendMessage("You exchange the promissory note.");
+  return true;
+}
+
+function useRunePouchNoteOnBanker(api, event) {
+  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() === "Banker") exchangeRunePouchNote(api, event, event.slot);
+}
+
+function useRunePouchNoteOnBankObject(api, event) {
+  if (BANK_OBJECT_NAMES.has(event.object?.getDefinition?.()?.getName?.())) exchangeRunePouchNote(api, event, event.itemSlot);
+}
+
 function useCurrencyOnBankObject(api, event) {
   if (BANK_OBJECT_NAMES.has(event.object?.getDefinition?.()?.getName?.())) confirmExchange(api, event, event.itemSlot);
 }
@@ -267,6 +307,8 @@ module.exports = {
     api.onObjectInteraction("Bank Chest", { Use: openBankFromInteraction.bind(null, api) });
     api.onNpcInteraction("Banker", { "Talk-to": talkToBanker.bind(null, api), Bank: openBankFromInteraction.bind(null, api) });
     api.onCustomEvent("npc-dialogue:action", bankerDialogueAction.bind(null, api));
+    api.onItemOnNpc(useRunePouchNoteOnBanker.bind(null, api));
+    api.onItemOnObject(useRunePouchNoteOnBankObject.bind(null, api));
     api.onItemOnNpc(useCurrencyOnBanker.bind(null, api), { noted: false });
     api.onItemOnNpc(unnoteOnBanker.bind(null, api), { noted: true });
     api.onItemOnObject(useCurrencyOnBankObject.bind(null, api), { noted: false });

@@ -296,6 +296,7 @@ export class World {
 
     public static registerPlayerPosition(player: Player, location: Location | null | undefined = player?.getLocation?.()): void {
         if (location) NpcSpawnDefinitionLoader.activateNear(location, player.getNpcViewDistance?.());
+        if (player?.isOccupyingTile?.() === false) return;
         World.addPlayerToTileOccupants(player, location);
     }
 
@@ -309,6 +310,7 @@ export class World {
         nextLocation: Location | null | undefined
     ): void {
         if (!player || !previousLocation || !nextLocation || previousLocation.equals(nextLocation)) return;
+        player.claimTileOccupancy?.();
         World.removePlayerFromTileOccupants(player, previousLocation);
         World.addPlayerToTileOccupants(player, nextLocation);
         if ((previousLocation.getX() >> 6) !== (nextLocation.getX() >> 6)
@@ -1209,6 +1211,8 @@ export class World {
                 // Bots must not be dropped by a host-imposed human player cap: they
                 // share the list but never take a human slot.
                 NpcSpawnDefinitionLoader.activateNear(player.getLocation(), player.getNpcViewDistance());
+                // NPCs walk through a player who has not moved since logging in.
+                player.deferTileOccupancy?.();
                 World.players.add(player, player.isPlayerBot?.() === true);
                 if (
                     (player.isUnwatchedBot?.() ?? player.isPlayerBot?.()) !== true &&

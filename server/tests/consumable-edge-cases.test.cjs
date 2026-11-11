@@ -507,6 +507,37 @@ test("the modified stats overlay's boost drain timer shows the ticks left in the
   assert.deepEqual(scripts.pop(), [4518, 100, 100], "a cycle ending before the decay has run is followed by a full one");
 });
 
+test("the boost drain timer counts Preserve on a cycle ending before the decay has run", () => {
+  const { PrayerHandler } = core;
+  const ticksTo = (at) => Math.ceil((at - Date.now()) / 600);
+  for (const [preserved, ticks, label] of [
+    [false, 50, "Preserve stretches the ending cycle by 30 seconds"],
+    [true, 150, "the next cycle starts, and Preserve will stretch it too"],
+  ]) {
+    const player = createPlayer({ base: 99, current: 99 });
+    const scripts = [];
+    player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+    player.levels.set(Skill.ATTACK, 110);
+    player.prayerActive[PrayerHandler.PRESERVE] = true;
+    player.setAttribute("potions:preserve-since", Date.now() - 120_000);
+    player.setAttribute("potions:boost-cycle-preserved", preserved);
+    player.setAttribute("potions:boost-cycle", Date.now() - 1);
+    sendBoostDrainTimer({ player });
+    assert.deepEqual(scripts.pop(), [4518, 150, ticks], label);
+    processBoostDecay(player);
+    if (preserved) {
+      // The cycle that just started ends in 100 ticks, when Preserve stretches it.
+      assert.equal(ticksTo(player.getAttribute("potions:boost-cycle")), 100);
+      player.setAttribute("potions:boost-cycle", Date.now() - 1);
+      processBoostDecay(player);
+      assert.equal(player.levels.get(Skill.ATTACK), 109, "one drain for the cycle that ended");
+      assert.equal(ticksTo(player.getAttribute("potions:boost-cycle")), 50, "then 50 more ticks: 150 in all");
+    } else {
+      assert.equal(ticksTo(player.getAttribute("potions:boost-cycle")), ticks, "where the decay puts it");
+    }
+  }
+});
+
 test("the boost drain timer shows a full period where an area holds boosts", () => {
   const player = createPlayer({ base: 99, current: 99 });
   const scripts = [];

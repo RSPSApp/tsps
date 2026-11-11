@@ -508,11 +508,19 @@ function sendBoostDrainTimer({ player }) {
   let remaining = period;
   if (pause.allowed && hasDecayingBoost(player) && Number.isFinite(nextDecayAt) && nextDecayAt > 0) {
     let decayAt = nextDecayAt;
-    // A cycle ending this tick, before the decay has run, is followed by a full one.
+    let cycleStretched = stretched;
+    // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
     if (decayAt <= now) {
-      decayAt += BOOST_DECAY_MS * (Math.floor((now - decayAt) / BOOST_DECAY_MS) + 1);
-    } else if (!stretched && preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
-      // A cycle Preserve is going to stretch ends 30 seconds later.
+      if (preserveStretchesCycle(player, now)) {
+        decayAt += PRESERVE_EXTENSION_MS;
+        cycleStretched = true;
+      } else {
+        decayAt += BOOST_DECAY_MS * (Math.floor((now - decayAt) / BOOST_DECAY_MS) + 1);
+        cycleStretched = false;
+      }
+    }
+    // A cycle Preserve is going to stretch ends 30 seconds later.
+    if (!cycleStretched && preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
       decayAt += PRESERVE_EXTENSION_MS;
     }
     remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);

@@ -57,6 +57,13 @@ function fakePlayer({ items, waived = false, skulled = false, location = EDGEVIL
   };
 }
 
+/** Whether OrnamentKits answers `player-death:cosmetic` for the item. */
+function isCosmetic(id) {
+  const query = { item: new Item(id, 1), cosmetic: false };
+  PluginManager.emitCustomEvent('player-death:cosmetic', query);
+  return query.cosmetic;
+}
+
 const names = (items) => items.map((item) => item.getDefinition().getName());
 // Bandos godsword, berserker ring and Robin Hood hat outrank a rune defender (t) (an alchemy value
 // of 39,002) and a rune platebody (a Grand Exchange price of about 38,700).
@@ -93,11 +100,6 @@ test('a whip mixed with a tradeable mix is protected like a kit', () => {
 });
 
 test('a Bounty Hunter kit protects though it is untradeable; other untradeable modifications do not', () => {
-  const isCosmetic = (id) => {
-    const query = { item: new Item(id, 1), cosmetic: false };
-    PluginManager.emitCustomEvent('player-death:cosmetic', query);
-    return query.cosmetic;
-  };
   assert.equal(isCosmetic(28031), true, 'Dragon scimitar (cr)');
   assert.equal(isCosmetic(28067), true, 'Fighter torso (or), Bounty Hunter kit');
   assert.equal(isCosmetic(24664), false, 'Twisted ancestral hat: the colour kit is an untradeable modification');
@@ -192,11 +194,6 @@ test('the Items Kept on Death screen marks the protected item kept, and the PvP 
 });
 
 test('a granite maul with both the clamp and the ornate handle is protected, by either order of attaching', () => {
-  const isCosmetic = (id) => {
-    const query = { item: new Item(id, 1), cosmetic: false };
-    PluginManager.emitCustomEvent('player-death:cosmetic', query);
-    return query.cosmetic;
-  };
   const clampOnHandled = require('../plugins/items/data/ornament-kits.json').kits
     .find((entry) => entry.kit === I.GRANITE_CLAMP && entry.base === I.GRANITE_MAUL_5);
   // granite_maul_pretty_plus (24227); 24226 is the handled maul's placeholder.
@@ -209,9 +206,9 @@ test('a granite maul with both the clamp and the ornate handle is protected, by 
 test('a failed Tombs of Amascut raid leaves the protected item with the player, and sends it to the chest once waived', (t) => {
   const Shared = require('../plugins/minigames/toa/Shared.TombsOfAmascut');
   const Retrieval = require('../plugins/minigames/toa/Retrieval.TombsOfAmascut');
-  const previous = { api: Shared.api() };
+  const previous = Shared.api();
   Shared.bind({ core: PluginManager.getCoreApi(), emitCustomEvent() {}, getBonusManager: () => ({ update() {} }) });
-  t.after(() => { if (previous.api) Shared.bind(previous.api); });
+  t.after(() => Shared.bind(previous ?? { core: null }));
 
   const raider = (waived) => {
     const player = fakePlayer({ items: loadout(), waived });

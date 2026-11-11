@@ -12,6 +12,8 @@ const core = PluginManager.getCoreApi();
 before(async () => {
   await CachePipeline.initialize(process.cwd());
   PluginManager.loadFromDirectory(require("node:path").resolve(__dirname, "../plugins")); // the real loader: the unit is found, or absent
+  // Skeletal and Undead Grasp need A Kingdom Divided (ArceuusQuestLock); the player here has finished it.
+  PluginManager.createApi("FrostweaverQuest").onCustomEvent("quest:is-complete", (event) => { event.complete = true; });
 });
 
 function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0 } = {}) {

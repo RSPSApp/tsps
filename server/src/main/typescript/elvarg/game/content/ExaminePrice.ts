@@ -65,3 +65,10 @@ export function sendExaminePrice(player: Player, itemId: number, amount: number)
     const line = item && formatExaminePrice(item.name, amount, item.prices, show);
     if (line) player.sendMessage(line);
 }
+
+/** Examines an item the player holds, wears, banks or sees: its examine text, then the price line. */
+export function examineItem(player: Player, itemId: number, amount: number): void {
+    const definition = ItemDefinition.forId(itemId);
+    player.sendMessage(definition.getExamine() || definition.getName());
+    sendExaminePrice(player, itemId, amount);
+}

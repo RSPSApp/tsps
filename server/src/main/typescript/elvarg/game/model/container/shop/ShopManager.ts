@@ -13,6 +13,7 @@ import { ShopIdentifiers } from "../../../../util/ShopIdentifiers";
 import { encodeShopClose, encodeShopOpen } from "../../../../net/protocol/ClientProtocol";
 import { PlayerSave } from "../../../entity/impl/player/persistence/PlayerSave";
 import { Inventory } from "../impl/Inventory";
+import { examineItem } from "../../../content/ExaminePrice";
 
 export interface ShopItemContainerAction {
     kind: "value" | "buy_sell" | "x";
@@ -381,8 +382,7 @@ export class ShopManager {
             // must still hold the item the client showed there.
             if (!item || (packet.itemId != null && packet.itemId > 0 && packet.itemId !== item.itemId)) return true;
             if (examine) {
-                const definition = ItemDefinition.forId(item.itemId);
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, item.itemId, item.amount);
             } else {
                 this.handleItemContainerAction(player, {
                     kind: amount != null ? "buy_sell" : "value",
@@ -399,8 +399,7 @@ export class ShopManager {
             const item = player.getInventory().getItems()[packet.slot];
             if (!item || item.getId() < 0) return true;
             if (examine) {
-                const definition = ItemDefinition.forId(item.getId());
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, item.getId(), item.getAmount());
             } else {
                 this.handleItemContainerAction(player, {
                     kind: amount != null ? "buy_sell" : "value",

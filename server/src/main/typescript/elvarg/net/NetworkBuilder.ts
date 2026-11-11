@@ -67,7 +67,7 @@ import { SwitchItemSlotPacketListener } from "./packet/impl/SwitchItemSlotPacket
 import { PickupItemPacketListener } from "./packet/impl/PickupItemPacketListener";
 import { SecondGroundItemOptionPacketListener } from "./packet/impl/SecondGroundItemOptionPacketListener";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
-import { sendExaminePrice } from "../game/content/ExaminePrice";
+import { examineItem } from "../game/content/ExaminePrice";
 import { ItemOnGroundManager } from "../game/entity/impl/grounditem/ItemOnGroundManager";
 import { BoatManager } from "../game/content/sailing/BoatManager";
 import { Sailing } from "../game/content/sailing/Sailing";
@@ -953,6 +953,8 @@ export class ClientConnection {
                 if (!this.player.isTeleportingReturn() && this.player.getStatus() !== PlayerStatus.TRADING) {
                   EquipPacketListener.unequip(this.player, equipmentSlot);
                 }
+              } else if (!itemActionHandled && item?.getId?.() > 0 && actionPacket.buttonNum === 10) {
+                examineItem(this.player, item.getId(), item.getAmount());
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }
@@ -1708,9 +1710,7 @@ export class ClientConnection {
         DropItemPacketListener.drop(player, packet.itemId, 3214, packet.slot);
       }
     } else if (option === "examine") {
-      const definition = ItemDefinition.forId(packet.itemId);
-      player.sendMessage(definition.getExamine() || definition.getName());
-      sendExaminePrice(player, packet.itemId, item.getAmount());
+      examineItem(player, packet.itemId, item.getAmount());
     } else {
       ItemActionPacketListener.handleAction(player, packet.widgetId, packet.itemId, packet.slot, optionIndex ?? 1, packet.option);
     }
@@ -1767,9 +1767,7 @@ export class ClientConnection {
     const option = packet.option?.toLowerCase() ?? "";
     const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
-      const definition = ItemDefinition.forId(packet.itemId);
-      player.sendMessage(definition.getExamine() || definition.getName());
-      sendExaminePrice(player, packet.itemId, this.examinedGroundStackAmount(packet));
+      examineItem(player, packet.itemId, this.examinedGroundStackAmount(packet));
       return;
     }
     if (option === "take") {

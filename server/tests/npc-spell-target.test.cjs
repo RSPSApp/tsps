@@ -207,6 +207,31 @@ test('unknown NPC target packets cannot supply a utility name outside server cac
   assert.equal(f.player.getCombat().getCastSpell(), null);
 });
 
+// Wiki (Crumble Undead): it can only be cast on undead enemies; on anything else the chatbox reads
+// "This spell only affects skeletons, zombies, ghosts and shades." No recording casts it on a living NPC.
+test('native Crumble Undead on a living NPC is refused before runes are spent', async t => {
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.GOBLIN });
+  assert.equal(f.npc.getCurrentDefinition(f.player).isUndead(), false);
+  await f.cast();
+  assert.deepEqual(f.messages, ['This spell only affects skeletons, zombies, ghosts and shades.']);
+});
+
+test('native Crumble Undead on an undead NPC starts the cast', async t => {
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.ZOMBIE });
+  assert.equal(f.npc.getCurrentDefinition(f.player).isUndead(), true);
+  await f.connection.dispatch([{ type: 'spell_on_npc', targetIndex: f.npc.getIndex(), spellWidget: f.widget.widgetId, spellChild: -1, spellItemId: f.widget.itemId }]);
+  f.connection.processTurnPackets();
+  assert.deepEqual(f.messages, []);
+  assert.equal(f.player.getCombat().getCastSpell(), f.spell);
+});
+
+test("Crumble Undead still reaches Enakhra's Lament's scripted boneguard", t => {
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.BONEGUARD });
+  assert.equal(f.npc.getCurrentDefinition(f.player).isAttackable(), false);
+  assert.equal(f.spell.canCastOnTarget(f.player, f.npc), true);
+  assert.deepEqual(f.messages, []);
+});
+
 // rsprox_transcripts/235/03344.txt ticks 4503 and 5691: a god spell without its staff names the staves
 // (the spell's own cast check, which combat runs before the runes are taken).
 for (const [name, message] of [

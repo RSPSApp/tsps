@@ -74,7 +74,7 @@ The attack options are also dropdowns on the side panel's Controls tab (`setting
 **Sailing side panel.** The combat tab's "View" button for the sailing sidepanel (593:48) shows while 19153 is 1 (script 7593, run as the tab is built); script 8583 also shows it while the option is Always show and The Pandemonium (`sailing_intro`, 18314) is at stage 6 or later. Off a boat, Sailing sets 19153 to 1 for Always show from that stage and to 0 otherwise, at login, on leaving a boat, when the option changes and when The Pandemonium changes stage; boarding sets it to 1. Live sends 1 at login in 352 of the 356 default-state logins off a boat past that stage in the rsprox captures (rev 235+), and 0 before it.
 
 - **Not done**:
-  - Player Trade and Report options: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
+  - Player Trade options: the official client gets no "Trade with" from the server (live sends `set_player_op` 4), so the row only hides the browser client's own entry. See [Player menu options and Ctrl-run](#player-menu-options-and-ctrl-run).
 
 ## Rows the client scripts already apply
 
@@ -543,6 +543,18 @@ The server's item examines all go through `examineItem` (`game/content/ExaminePr
 
 - **Ours**: the exact red (`<col=ff0000>`) and the two spaces between parts, read off the screenshots.
 - **Not done**: item examines that plugins send themselves (the looting bag, death and boss retrieval chests, the farming vault and similar) have no price line yet. Live sends the Grand Exchange varbit as 0 in 777 of the 995 Ironman logins, so Ironman accounts probably start with it off. Here every account starts with it on.
+
+## Player menu options and Ctrl-run
+
+| Setting | Id | Variable | What it does |
+| --- | --- | --- | --- |
+| Player Trade options | 312 | varbit 6580 `tradeoption_disabled` | while 1, the browser client leaves "Trade with" off the player menu (`client/render/render/interact/playerMenu.ts`) |
+| Player Report options | 372 | varbit 1334 `rightclick_report_abuse_disabled` | while 1, `ReportAbuse.plugin.js` sends player option 8 empty instead of "Report", at login and on the row's click; a slot 8 click is then not a report |
+| Ctrl+click to invert run mode (dropdown) | 207 | varbit 13132 `runinvert_mode` = option | options from enum 4074: 0 Never, 1 Walk -> Run Only, 2 Run -> Walk Only, 3 Always. A Ctrl-click walk (`walk` in `net/NetworkBuilder.ts`) inverts the run mode only in the directions the option allows |
+
+Live sends the player ops at login after the varbits: with 1334 at 1, `set_player_op` 8 is null, otherwise "Report" (rsprox 238/4238, 229/2375); 1334 is 1 at login in 1,813 recordings. `runinvert_mode` is 3 (Always) at login in all 4,281 recordings that send it, so a fresh account starts at Always (`default` in settings.json). No capture changes `tradeoption_disabled`, and none shows the option toggled in game, so sending the option on the click is ours. Tests: `tests/report-abuse.test.cjs`, `tests/run-invert-mode.test.cjs`, `tests/settings-wired-rows.test.cjs`, `client/tests/player-follow-menu.test.ts`.
+
+- **Not done**: Ctrl-clicks on NPCs, objects, ground items and players don't invert the run mode at all, whatever the option: their packets' Ctrl byte isn't read.
 
 ## Containers on death
 

@@ -67,11 +67,15 @@ function committed({ player, spell }) {
   if (!target || !target.isRegistered() || target.getHitpoints() <= 0) return;
   if (!inReach(player, target)) return;
   if (Math.random() >= chance) return;
-  // An ordinary melee swing: a special armed since the cast neither shapes it nor is spent on it.
+  // An ordinary melee swing: a special armed since the cast neither shapes it nor is spent on it. The cast
+  // only passed magic's checks, so the hit asks the melee permission itself (duel rules, area policy,
+  // plugin attack vetoes, stun) with the special lowered, as the swing will be rolled.
   const armed = player.isSpecialActivated();
   if (armed) player.setSpecialActivated(false);
   try {
-    core.CombatFactory.addPendingHit(new core.PendingHit(player, target, core.CombatFactory.MELEE_COMBAT, { delay: 0 }));
+    const { CombatFactory, CanAttackResponse } = core;
+    if (CombatFactory.canAttackPermission(player, target, true, CombatFactory.MELEE_COMBAT) !== CanAttackResponse.CAN_ATTACK) return;
+    CombatFactory.addPendingHit(new core.PendingHit(player, target, CombatFactory.MELEE_COMBAT, { delay: 0 }));
   } finally {
     if (armed) player.setSpecialActivated(true);
   }
@@ -80,6 +84,7 @@ function committed({ player, spell }) {
 module.exports = {
   name: "Frostweaver",
   description: "Blue Moon set effect: binding and ice casts sometimes add an instant spear attack.",
+  members: true,
   register(api) {
     initialize(api);
     api.persistAttribute(ENABLED, false);

@@ -16,7 +16,7 @@ before(async () => {
   PluginManager.createApi("FrostweaverQuest").onCustomEvent("quest:is-complete", (event) => { event.complete = true; });
 });
 
-function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0, at = [1, 0], z = 0, hp = 200, realTarget = false, enabled = true } = {}) {
+function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", roll = 0, at = [1, 0], z = 0, hp = 200, realTarget = false, enabled = true, duel = null } = {}) {
   t.mock.method(core.Sounds, "sendSound", () => {});
   t.mock.method(Math, "random", () => roll);
   const queued = [];
@@ -29,7 +29,20 @@ function fixture(t, spellName, { armour = "normal", weapon = "BLUE_MOON_SPEAR", 
   p.getSkillManager().setMaxLevel(core.Skill.MAGIC, 99);
   p.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 99, false);
   // The target stands at (3200, 3200); the player at an explicit offset from it ("at"), adjacent by default.
-  const target = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3200, 3200, z));
+  let target = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3200, 3200, z));
+  if (duel) {
+    // A duel against another player: both in the fight, magic allowed; "no-melee" switches melee off.
+    target = new Player(null);
+    t.mock.method(target, "getSession", () => ({ sendClientPacket: () => true }));
+    t.mock.method(target, "sendMessage", () => {});
+    target.setLocation(new core.Location(3200, 3200, z));
+    const { DuelState } = require("../dist/game/content/Duelling");
+    for (const [a, b] of [[p, target], [target, p]]) {
+      a.getDueling().setState(DuelState.IN_DUEL);
+      a.getDueling().setInteract(b);
+    }
+    if (duel === "no-melee") p.getDueling().getRules()[core.DuelRule.NO_MELEE.getButtonId()] = true;
+  }
   p.setLocation(new core.Location(3200 + at[0], 3200 + at[1], 0));
   t.mock.method(target, "getHitpoints", () => hp);
   t.mock.method(target, "isRegistered", () => true);
@@ -119,6 +132,15 @@ test("the spear must reach the target: adjacent and diagonal hit, two tiles, far
     assert.equal(f.cast(), true, JSON.stringify(options));
     assert.equal(swings(f).length, expected, JSON.stringify(options));
   }
+});
+
+test("a duel with No Melee refuses the extra hit (magic allowed); the same duel without the rule gets it", (t) => {
+  const refused = fixture(t, "ICE_BARRAGE", { duel: "no-melee" });
+  assert.equal(refused.cast(), true, "the cast itself is a magic attack, which the rules allow");
+  assert.equal(swings(refused).length, 0);
+  const allowed = fixture(t, "ICE_BARRAGE", { duel: "allowed" });
+  assert.equal(allowed.cast(), true);
+  assert.equal(swings(allowed).length, 1);
 });
 
 test("no attack on a dead target or with no target", (t) => {

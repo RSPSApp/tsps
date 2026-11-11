@@ -267,9 +267,9 @@ The bonus multiplies the rock's XP (the server then keeps tenths, so iron's 35 b
 XP of each extra ore (the Varrock armour 4 page: "Additional ores gathered by Varrock armour now provide the bonus
 experience from the Prospector's outfit"; the Mining cape's extra ore takes the same path here, which no fetched page states). Content that gives Mining XP outside
 a rock session asks through the `mining:xp-multiplier` custom event: Motherlode pay-dirt (the Motherlode Mine page
-lists the pieces' Exp boost in Percy's shop) and stardust (the Shooting Stars page: 32 becomes 32.8 with the full kit).
-Rockfalls, Volcanic Mine, Guardians of the Rift and quest rewards are not raised: no fetched page says the outfit
-applies there.
+lists the pieces' Exp boost in Percy's shop), stardust (the Shooting Stars page: 32 becomes 32.8 with the full kit)
+and Volcanic Mine (its page: 3.8 Mining XP a point, "3.895 with the prospector kit bonus").
+Rockfalls, Guardians of the Rift and quest rewards are not raised: no fetched page says the outfit applies there.
 
 ## Gems while mining
 

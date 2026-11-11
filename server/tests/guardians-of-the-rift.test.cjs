@@ -1046,8 +1046,6 @@ test('the huge-remains portal fades to black with "Disable colourful fade effect
   Game._game.phase = Game.PHASE.ATTACK;
   Game._game.portal.opensIn = 1;
   ticks(1);
-  const { x, y } = Portals.PORTALS[Game.portal().direction];
-  player.location = new Location(x, y, 0);
   player.getPacketSender().sendVarbit(COLOURFUL_FADE_SETTING(), 1);
   player.interfaces.length = 0;
   player.postScripts.length = 0;

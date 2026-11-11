@@ -261,8 +261,10 @@ test('Monkey Madness I: stage 0 route reaches completion and grants the reward o
   assert.equal(panel.handled, true);
   assert.equal(h.quest.getStage(p), STAGE.daero, 'operating the panel only opens the puzzle');
   const { neighbours, slide, solvedBoard } = require('../plugins/treasuretrails/trails/Puzzle.TreasureTrails');
-  const walk = solvedBoard(), way = [];
-  for (let i = 0; i < 101; i++) { const at = neighbours(walk.indexOf(-1))[0]; way.push(at); slide(walk, at); }
+  // The blank walks slot 24 -> p1 -> ... -> pn; the way back clicks p(n-1) ... slot 24.
+  const walk = solvedBoard(), visited = [24];
+  for (let i = 0; i < 101; i++) { const at = neighbours(walk.indexOf(-1))[0]; visited.push(at); slide(walk, at); }
+  const way = visited.slice(0, -1);
   const pieces = core.CacheDefinitions.getComponentId('trail_slidepuzzle:pieces');
   for (const slot of way.reverse()) {
     (h.hooks.onInterfaceActionButton ?? []).forEach(fn => fn({ player: p, buttonId: pieces, action: 0, slot, handled: false }));

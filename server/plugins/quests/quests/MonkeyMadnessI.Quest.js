@@ -2095,7 +2095,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   function puzzleSolved(player) {
     startTranscript(api, player, CRATE_CHATHEAD_ID, PAGE, "chapter-1-the-underground-hangar-upon-solving-the-puzzle");
   }
-  const puzzle = require("./Puzzle.MonkeyMadnessI")(api, { onSolved: puzzleSolved });
+  const puzzle = require("./Puzzle.MonkeyMadnessI")(api, { onSolved: puzzleSolved, isActive: player => stageOf(player) < STAGE_REINITIALISED });
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

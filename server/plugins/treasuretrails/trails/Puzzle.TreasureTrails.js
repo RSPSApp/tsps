@@ -99,6 +99,8 @@ function open(event) {
   // The interface is shared with other puzzles (Monkey Madness I's reinitialisation panel): drop their claim on it.
   api.emitCustomEvent(OPENED_EVENT, { player, source: "box" });
   shown.add(player);
+  // The panel's puzzle leaves its own inventory on the client, which the Puzzle Solver plugin would read after this one.
+  player.getPacketSender().sendInventoryStopTransmit?.(core.CacheDefinitions.getInventoryId("reinitialisation_inv"));
   const sender = player.getPacketSender();
   sender.sendConfig(core.CacheDefinitions.getVarpId("if1"), trail.state.image);
   sendBoard(player, trail.state.image, boardFor(player, trail));

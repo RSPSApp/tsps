@@ -31,6 +31,7 @@ let PIECES;
 let INVENTORY;
 let INTERFACE;
 let PIECES_BUTTON;
+let IF1;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -45,6 +46,7 @@ before(async () => {
   INVENTORY = ids.getInventoryId('reinitialisation_inv');
   INTERFACE = ids.getInterfaceId('trail_slidepuzzle');
   PIECES_BUTTON = ids.getComponentId('trail_slidepuzzle:pieces');
+  IF1 = ids.getVarpId('if1');
 });
 
 afterEach(() => { Math.random = realRandom; });
@@ -95,17 +97,26 @@ function board(p) {
   return items.map(item => item ? PIECES.indexOf(item.id) : -1);
 }
 
-/** Math.random() = 0 always takes the first neighbour: the blank walks, so the way back is known. */
-function solutionFor() {
-  const trail = [];
+/** A fixed pseudo-random sequence (a linear congruential generator), so a scramble can be replayed. */
+function sequence(seed) {
+  let state = seed;
+  return () => (state = (state * 1664525 + 1013904223) % 4294967296) / 4294967296;
+}
+
+/**
+ * The clicks that undo the 101 slides scramble() makes with this generator: the blank walks p0 (slot 24), p1 ...
+ * pn, each slide moving the piece at p(i) into the blank, so the way back clicks p(n-1) ... p0.
+ */
+function solutionFor(random) {
   const walk = solvedBoard();
+  const visited = [walk.indexOf(-1)];
   for (let i = 0; i < 101; i++) {
-    const blank = walk.indexOf(-1);
-    const at = neighbours(blank)[0];
-    trail.push(at);
+    const options = neighbours(walk.indexOf(-1));
+    const at = options[Math.floor(random() * options.length)];
     slide(walk, at);
+    visited.push(at);
   }
-  return trail.reverse();
+  return visited.slice(0, -1).reverse();
 }
 
 test('operating the panel opens the sliding puzzle and leaves the quest at the briefing', () => {
@@ -113,8 +124,9 @@ test('operating the panel opens the sliding puzzle and leaves the quest at the b
   const p = player(STAGE_DAERO, 5);
   assert.equal(operatePanel(p), true);
   assert.equal(quest.getStage(p), STAGE_DAERO, 'the panel alone no longer reinitialises the hangar');
-  assert.equal(p.manager.getCurrent(), null, 'no closing lines before the puzzle is solved');
+  assert.ok(!p.manager.getCurrent(), 'no closing lines before the puzzle is solved');
   assert.ok(calls(p, 'sendInterface').some(row => row[1] === INTERFACE), 'trail_slidepuzzle opens');
+  assert.ok(calls(p, 'sendConfig').some(row => row[1] === IF1 && row[2] === 7), 'if1 7: CS2 690 draws inventory 221');
   const sent = board(p);
   assert.deepEqual([...sent].sort((a, b) => a - b), [-1, ...Array(24).keys()], 'the 24 pieces and one blank');
   assert.notDeepEqual(sent, solvedBoard(), 'the board is scrambled');
@@ -134,22 +146,41 @@ test('a piece away from the blank does not move; the board is sent again', () =>
   assert.equal(quest.getStage(p), STAGE_DAERO);
 });
 
-test('sliding the last piece home closes the puzzle and plays the closing lines that reinitialise the hangar', () => {
+for (const [name, seed] of [['a scramble whose blank oscillates (Math.random = 0)', null], ['a scramble from a fixed pseudo-random sequence', 7]]) {
+  test(`sliding the last piece home closes the puzzle and plays the closing lines that reinitialise the hangar: ${name}`, () => {
+    const generator = () => seed === null ? () => 0 : sequence(seed);
+    Math.random = generator();
+    const p = player(STAGE_DAERO, 5);
+    operatePanel(p);
+    const way = solutionFor(generator());
+    assert.equal(way.length, 101);
+    let moved = board(p);
+    assert.notDeepEqual(moved, solvedBoard(), 'scrambled');
+    for (const slot of way.slice(0, -1)) {
+      clickSlot(p, slot);
+      assert.notDeepEqual(board(p), moved, `slot ${slot} was a legal slide`);
+      moved = board(p);
+      assert.equal(quest.getStage(p), STAGE_DAERO, 'unsolved until the last slide');
+    }
+    assert.equal(calls(p, 'sendInterfaceRemoval').length, 0);
+    clickSlot(p, way.at(-1));
+    assert.deepEqual(board(p), solvedBoard());
+    assert.equal(calls(p, 'sendInterfaceRemoval').length, 1, 'the puzzle closes');
+    for (let guard = 0; quest.getStage(p) < STAGE_REINITIALISED && p.manager.getCurrent() && guard < 80; guard++) p.manager.advance();
+    assert.equal(quest.getStage(p), STAGE_REINITIALISED);
+    assert.equal(p.getAttribute(DAERO_STATE), 6);
+  });
+}
+
+test('a puzzle left open while Glough reinitialises the hangar does not replay the closing lines', () => {
   Math.random = () => 0;
   const p = player(STAGE_DAERO, 5);
   operatePanel(p);
-  const way = solutionFor();
-  for (const slot of way.slice(0, -1)) {
-    clickSlot(p, slot);
-    assert.equal(quest.getStage(p), STAGE_DAERO, 'unsolved until the last slide');
-  }
+  const way = solutionFor(() => 0);
+  quest.setStage(p, STAGE_REINITIALISED); // Glough's 200,000 coins
+  for (const slot of way) clickSlot(p, slot);
   assert.equal(calls(p, 'sendInterfaceRemoval').length, 0);
-  clickSlot(p, way.at(-1));
-  assert.deepEqual(board(p), solvedBoard());
-  assert.equal(calls(p, 'sendInterfaceRemoval').length, 1, 'the puzzle closes');
-  for (let guard = 0; quest.getStage(p) < STAGE_REINITIALISED && p.manager.getCurrent() && guard < 80; guard++) p.manager.advance();
-  assert.equal(quest.getStage(p), STAGE_REINITIALISED);
-  assert.equal(p.getAttribute(DAERO_STATE), 6);
+  assert.ok(!p.manager.getCurrent());
 });
 
 test('controls: another player, a puzzle box on the shared interface, and a panel not yet asked for', () => {

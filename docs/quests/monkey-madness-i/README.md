@@ -17,8 +17,9 @@ The quest is played to the end across two watched runs: chapter 1 in the first, 
 the rewards, Daero's training, the repeat talk and a relog in the second. The second run fixed eight
 quest bugs, including two soft-locks (the zoo pen and the demon arena) and the mm_main wire values
 Quest Helper keys on. A later focused check covered the jail on every approach, the human
-exit from Marim and the hangar exit. Open findings are the pronoun placeholders, a core varp
-overwrite (#1647), and the sliding puzzle the plugin does not have.
+exit from Marim and the hangar exit. Open findings are the pronoun placeholders and a core varp
+overwrite (#1647). The hangar sliding puzzle was added after those runs (see Findings); it has not
+been played in a client.
 
 ## Findings
 
@@ -74,8 +75,14 @@ Newest first. Nothing is filed as an issue yet; the fixes are in this branch's P
 - **open** Transcript pronoun placeholders show literally: "[He is/She is/They are]" in Daero's
   hangar briefing, "[him/her/them]" in Waydar's Lumdo menu and in Caranock's line in the chapter 4
   cutscene. Shared dialogue runtime or dumper.
-- **open** The hangar sliding puzzle is not implemented. Operating the Reinitialisation Panel
-  completes stage 5, as the plugin documents.
+- **fixed (source and test level, not played in game)** The hangar sliding puzzle. Operating the
+  Reinitialisation Panel after Waydar's task opens the 5x5 puzzle on `trail_slidepuzzle` (cache
+  interface 306, whose CS2 688 redraws from inventory 221 `reinitialisation_inv`; pieces are the
+  objs `reinitialisation_01`-`24`, the inventory RuneLite's Puzzle Solver reads); stage 5 comes when
+  the last piece slides home. Evidence: Wiki "Monkey Madness I" ("similar to the puzzle boxes") and
+  the cache. No rsprox capture of the puzzle was found (searched object 4871, NPC 2021 and the
+  text), so the scramble (a puzzle box's 101 random slides) and closing the interface on the last
+  slide are inference. Test: `server/tests/monkey-madness-hangar-puzzle.test.cjs`.
 - **open** Zooknock's first talk repeats its opening three lines. The Wiki transcript has the same
   repeat, so the export is faithful to it.
 - **open** `travel_to`: the Grand
@@ -134,7 +141,7 @@ Newest first. Nothing is filed as an issue yet; the fixes are in this branch's P
   across the fence, the arena squad (restored by the login after the restart) and Zooknock's way
   out, the Narnode repeat talk. The Zooknock varbit and the sigil first-time line are covered by the
   route test only. This account had passed both points before those fixes loaded.
-- **Not checked:** the hangar sliding puzzle (not implemented), Glough's 200,000-coin skip, the
+- **Not checked:** the hangar sliding puzzle in a client (added later, source and test level only), Glough's 200,000-coin skip, the
   monkey's aunt and the lost-toy talks, the attack-and-defence training choice, Bonzara, a lost
   sigil from Waymottin in game (the route test covers it), teleporting with the monkey, and the
   Quest Helper overlay in a client.

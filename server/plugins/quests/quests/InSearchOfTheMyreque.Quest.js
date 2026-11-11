@@ -146,13 +146,14 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   const START_HOOK = "quest:in-search-of-the-myreque:start";
   const QUIZ_START_ACTION_ID = "sXzRb_";
-  const QUIZ_PASS_CONDITION_ID = "3l6Jxc";
+  const QUIZ_PASS_CONDITION_ID = "P7_hRO"; // "If the player answered three out of three questions correctly:"
   const SHOW_POUCH_MESSAGE_ID = "BKpf08";
   const PLANKS_MESSAGE_ID = "DsO5TF";
   const GIVE_WEAPONS_CONDITION_ID = "VLPyT3";
   const CUTSCENE_START_ACTION_ID = "bLWS_j";
   const SUMMON_HOUND_ACTION_ID = "OFmcmp";
-  const KNOCKOUT_MESSAGE_IDS = new Set(["kDZQpN", "4t7Rpj", "iVqbuD"]);
+  // "Curpile knocks you out and takes you back to Mort'ton." after one, two or three wrong answers.
+  const KNOCKOUT_MESSAGE_IDS = new Set(["OGn3Rx", "Dssih6", "SGfUg5"]);
   const FIRST_SPEAKING_STEP_FLAGS = new Map([
     ["k_vzYt", "met_harold"],
     ["_g5SY-", "met_radigad"],

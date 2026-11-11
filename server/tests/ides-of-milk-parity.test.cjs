@@ -59,7 +59,7 @@ function harness({ npcDrops = false, nativeNpc = false, refuseNpcId = null, pend
         getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; }, exactMove: value => { at = value; },
         setFlag: noop, removeFlag: noop, setMobileInteraction: noop, setNeedsPlacement: noop,
         getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
-        setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
+        setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setStatDrainImmune: value => { npc.statDrainImmune = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
     },
     getItemOnGroundManager: () => ({ registerLocation: (player, item) => groundDrops.push({ player, item }) }),

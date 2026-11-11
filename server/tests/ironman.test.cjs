@@ -84,6 +84,17 @@ test("no trading either way, with the captured lines", () => {
   assert.equal(mains.handled, false, "two normal accounts trade as before");
 });
 
+test("the refusal names an Ironman by their pronouns", () => {
+  const main = account("main");
+  for (const [pronouns, line] of [[1, "iron is an Ironman. She stands alone."], [2, "iron is an Ironman. They stand alone."]]) {
+    const iron = account("iron", "ironman");
+    iron.getAppearance().setPronouns(pronouns);
+    main.messages.length = 0;
+    hooks.onTradeRequest({ player: main, target: iron, handled: false });
+    assert.deepEqual(main.messages, [line]);
+  }
+});
+
 test("onCanTrade refuses the window itself, whichever side is the Ironman", () => {
   const iron = account("iron", "ironman");
   const main = account("main");

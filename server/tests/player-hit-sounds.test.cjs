@@ -243,3 +243,27 @@ test('bot recipients remain suppressed for both recorded and legacy hurt sounds'
   c.CombatFactory.executeHit(f.hit());f.tick();assert.deepEqual(f.frames,[]);
   assert.deepEqual(f.spectator.frames,[],'an unrelated listener does not hear an NPC attacking a bot');
 });
+
+test('the Hit sounds setting picks the voice: Type A is the body0 set, Type B the body1 set, whatever the body',t=>{
+  const api=PluginManager.createApi('HitSoundsSettingTest');
+  const choose=(player,option)=>{const request={player,settingId:382,option,handled:false};api.emitCustomEvent('settings:option-chosen',request);return request.handled;};
+  const f=fixture(t);t.mock.method(c.Misc,'getRandom',()=>0);
+  assert.equal(choose(f.p,1),true,'the plugin owns row 382');
+  assert.equal(f.p.getPacketSender().getVarbit(10731),1);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[hurt(509)],'a body0 player on Type B hears the body1 voice');
+  const g=fixture(t,{gender:1});
+  assert.equal(choose(g.p,0),true);
+  c.CombatFactory.executeHit(g.hit());g.tick();
+  assert.deepEqual(g.frames,[hurt(518)],'a body1 player on Type A hears the body0 voice');
+  assert.equal(choose(g.p,2),false,'only the two options');
+});
+
+test('until the player chooses, Hit sounds follows the body type',t=>{
+  const Plugin=require('../plugins/combat/PlayerHitSounds.plugin');
+  const male=actor(t),female=actor(t,1);
+  assert.equal(Plugin.hitSoundsType(male.p),0);
+  assert.equal(Plugin.hitSoundsType(female.p),1);
+  female.p.setAttribute('hit-sounds:type',0);
+  assert.equal(Plugin.hitSoundsType(female.p),0,'a choice wins over the body type');
+});

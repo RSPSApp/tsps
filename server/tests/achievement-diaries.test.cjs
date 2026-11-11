@@ -742,3 +742,17 @@ test('diary tasks follow successful native gameplay actions', async t => {
     });
   }
 });
+
+test("wilderness_diary_any_complete (4470) carries a bit per completed Wilderness tier, as live logins send it", () => {
+  const wilderness = Data.BY_KEY.get("wilderness");
+  const player = createPlayer();
+  Progress.restore({ player });
+  assert.ok(!player.log.some((line) => line.startsWith("varbit 4470=")), "nothing done: nothing sent");
+  const done = (tier) => wilderness.tiers[tier].tasks.map((task) => task.key);
+  player.setAttribute(Progress.TASKS_ATTRIBUTE, { wilderness: [...done("easy"), ...done("medium")] });
+  Progress.restore({ player });
+  assert.ok(player.log.includes("varbit 4470=3"), "easy and medium");
+  player.log.length = 0;
+  Progress.sendDiary(player, wilderness);
+  assert.ok(player.log.includes("varbit 4470=3"));
+});

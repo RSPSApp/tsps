@@ -541,18 +541,39 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
     return { ...fair, steps: [...inner.slice(0, riddleIndex + 1), { type: "choice", options }] };
   }
 
+  /**
+   * The regenerated dump gives answers 12 and 14 only a "Same as answering 7 (incorrect answer)" action, with answer 7
+   * holding the "Are you sure?" flow (its "Totally positive." loses the cat, its "I don't want to risk my cat." leaves).
+   * The Wiki gives that flow for all three wrong answers, so each plays answer 7's steps after its own "12."/"14." line.
+   */
+  function replaySameAsAnswer(choice) {
+    const options = choice.options ?? [];
+    const byNumber = new Map(options.map((option) => [String(option.text ?? "").replace(/\.$/, "").trim(), option]));
+    return {
+      ...choice,
+      options: options.map((option) => {
+        const only = option.steps?.length === 1 ? option.steps[0] : null;
+        const same = only?.type === "action" && /^Same as answering (\S+?)\b/i.exec(String(only.text ?? ""));
+        const target = same ? byNumber.get(same[1]) : null;
+        if (!target || target === option) return option;
+        const tail = (target.steps ?? []).filter((step, i) => !(i === 0 && typeof step.player === "string"));
+        return { ...option, steps: [{ player: option.text }, ...tail.map(cloneStep)] };
+      }),
+    };
+  }
+
   function mergeSphinxRiddle(steps) {
     if (!Array.isArray(steps)) return steps;
     return steps.map((step) => {
       if (step.type === "choice") {
-        return {
+        return replaySameAsAnswer({
           ...step,
-          options: (step.options ?? []).map((option) =>
-            normText(option.text) === "okaythatsoundsfair"
-              ? mergeSphinxRiddleOption(option)
-              : { ...option, steps: mergeSphinxRiddle(option.steps ?? []) }
-          ),
-        };
+          options: (step.options ?? []).map((option) => {
+            // The riddle's answers sit inside "Okay, that sounds fair.": rebuild an old two-menu layout, then recurse.
+            const own = normText(option.text) === "okaythatsoundsfair" ? mergeSphinxRiddleOption(option) : option;
+            return { ...own, steps: mergeSphinxRiddle(own.steps ?? []) };
+          }),
+        });
       }
       if (Array.isArray(step.steps)) return { ...step, steps: mergeSphinxRiddle(step.steps) };
       return step;
@@ -1018,12 +1039,6 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
 
       // Sphinx riddle.
       case "M40-5y": // "The player's cat runs away."
-        if (quest.getStage(player) !== STAGE_TALK_SPHINX) return;
-        event.handled = true;
-        loseCat(player);
-        return;
-      case "P6olZb": // answers 12 and 14: "Same as answering 7 (incorrect answer)"
-      case "CeMZe1":
         if (quest.getStage(player) !== STAGE_TALK_SPHINX) return;
         event.handled = true;
         loseCat(player);

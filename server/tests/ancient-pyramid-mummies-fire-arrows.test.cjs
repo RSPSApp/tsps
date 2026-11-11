@@ -20,10 +20,10 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-function rangedHit(arrow, damage = 4) {
+function rangedHit(arrow, damage = 4, weapon = core.ItemIdentifiers.MAGIC_SHORTBOW) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const player = new Player(new PlayerSession(channel)); player.setIndex(2741); player.setUsername('mummyarrows');
-  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.MAGIC_SHORTBOW, 1));
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(weapon, weapon === core.ItemIdentifiers.MAGIC_SHORTBOW ? 1 : 100));
   player.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(arrow, 100));
   const mummy = core.NPC.create(core.NpcIdentifiers.MUMMY_3, new core.Location(3227, 2846, 0));
   PM.emitCombatHitDamage({ attacker: player, target: mummy, combatType: core.CombatType.RANGED, hit: {},
@@ -32,7 +32,8 @@ function rangedHit(arrow, damage = 4) {
 }
 
 test('lit fire arrows set an Ancient Pyramid mummy alight', () => {
-  for (const arrow of [core.ItemIdentifiers.BRONZE_FIRE_ARROW_LIT_, core.ItemIdentifiers.RUNE_FIRE_ARROW_LIT_, core.ItemIdentifiers.DRAGON_FIRE_ARROW_LIT_]) {
+  for (const arrow of [core.ItemIdentifiers.BRONZE_FIRE_ARROW_LIT_, core.ItemIdentifiers.RUNE_FIRE_ARROW_LIT_,
+    core.ItemIdentifiers.AMETHYST_FIRE_ARROW_LIT_, core.ItemIdentifiers.DRAGON_FIRE_ARROW_LIT_]) {
     assert.equal(rangedHit(arrow), core.NpcIdentifiers.MUMMY_8, `arrow ${arrow}`);
   }
 });
@@ -42,4 +43,11 @@ test('unlit fire arrows, plain arrows and a zero hit leave it as it is', () => {
     assert.notEqual(rangedHit(arrow), core.NpcIdentifiers.MUMMY_8, `arrow ${arrow}`);
   }
   assert.notEqual(rangedHit(core.ItemIdentifiers.RUNE_FIRE_ARROW_LIT_, 0), core.NpcIdentifiers.MUMMY_8);
+});
+
+// The arrow only counts when the bow fires it: a thrown weapon or a chinchompa fires itself, whatever is worn.
+test('a knife, dart or chinchompa thrown while lit fire arrows are worn leaves it as it is', () => {
+  for (const weapon of [core.ItemIdentifiers.RUNE_KNIFE, core.ItemIdentifiers.RUNE_DART, core.ItemIdentifiers.CHINCHOMPA_2]) {
+    assert.notEqual(rangedHit(core.ItemIdentifiers.RUNE_FIRE_ARROW_LIT_, 4, weapon), core.NpcIdentifiers.MUMMY_8, `weapon ${weapon}`);
+  }
 });

@@ -27,9 +27,14 @@ function spellElement(spell) {
 function hitElement(attacker, hit, combatType) {
   if (combatType === magicType) return spellElement(hit?.getSpellContext?.()?.spell ?? hit?.getSpell?.());
   if (combatType !== rangedType) return null;
-  // The worn arrow, not Combat.getAmmunition(): lit fire arrows fire as their plain arrow's entry.
-  const ammo = attacker.getAsPlayer().getEquipment().get(api.core.Equipment.AMMUNITION_SLOT)?.getId?.();
-  return FIRE_ARROWS.has(ammo) ? "fire" : null;
+  // The worn arrow, not Combat.getAmmunition(): lit fire arrows fire as their plain arrow's entry. It counts only
+  // when the shot is the ammo slot's (a bow): a knife, dart, thrown axe, chinchompa or self-ammo bow fires its own.
+  const player = attacker.getAsPlayer();
+  const ammo = player.getEquipment().get(api.core.Equipment.AMMUNITION_SLOT)?.getId?.();
+  if (!FIRE_ARROWS.has(ammo)) return null;
+  const { Ammunition } = api.core;
+  const fromSlot = Ammunition.getForItem(ammo);
+  return fromSlot != null && Ammunition.getFor(player) === fromSlot ? "fire" : null;
 }
 
 function hitDamage({ attacker, target, hit, damage, accurate, combatType }) {

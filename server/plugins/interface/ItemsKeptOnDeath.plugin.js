@@ -44,7 +44,7 @@ function getAmountToKeep(player, settings) {
  */
 function getKeptItems(player, settings) {
   const cosmetics = !settings.playerKill && settings.wildernessLevel === 0
-    && core.PlayerDeathTask.cosmeticProtectionOn(player);
+    && core.PlayerDeathTask.protectsCosmetics(player, null);
   return core.PlayerDeathTask.getKeptItems(player, getAmountToKeep(player, settings), cosmetics);
 }
 

@@ -169,5 +169,9 @@ test('the Items Kept on Death screen marks the protected item kept, and the PvP 
 
   screen(true);
   assert.equal(stateOf(RUNE_DEFENDER_T), LOST_STATE, 'waived, it falls to the grave');
+
+  const inWilderness = { ...fakePlayer({ items: loadout(), location: WILDERNESS, sender }), busy: () => false, setInterfaceId() {}, getInterfaceId: () => 4 };
+  handlers.get((387 << 16) | 5)({ player: inWilderness });
+  assert.equal(stateOf(RUNE_DEFENDER_T), LOST_STATE, 'opened in the Wilderness, the screen shows the death there');
   assert.equal(sent.args[5], 3);
 });

@@ -178,7 +178,7 @@ function attachPlugins(prompts, quests = [], zones = [], customHooks = [], inter
     onCustomEvent: (name, handler) => customHooks.push({ name, handler }),
     emitCustomEvent: (name, request) => {
       if (name === 'quest:is-complete') {
-        const quest = quests.find((entry) => entry.key === request.key);
+        const quest = quests.find((entry) => (request.key !== undefined ? entry.key === request.key : entry.name === request.name));
         if (quest) request.complete = quest.isComplete(request.player);
         return;
       }
@@ -233,7 +233,7 @@ test("Sorceress Garden Minigame Teleport also requires Osman's unlock", async (t
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   let questComplete = true;
   const customHooks = [];
-  const api = attachPlugins([], [{ key: 'prince_ali_rescue', isComplete: () => questComplete }], [], customHooks);
+  const api = attachPlugins([], [{ key: 'prince_ali_rescue', name: 'Prince Ali Rescue', isComplete: () => questComplete }], [], customHooks);
   require('../plugins/minigames/sorceressgarden/Apprentice.SorceresssGarden')(api);
   const garden = require('../plugins/interface/data/minigame-teleports.json').minigames["Sorceress's Garden"];
   const { refusal } = MinigameTeleports._test;
@@ -308,7 +308,7 @@ test('the spell opens the minigame list with busy set; Rat Pits asks which pit',
     stubWorld(t)(() => {});
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
     const prompts = [];
-    attachPlugins(prompts, [{ key: 'ratcatchers', isComplete: () => true }]);
+    attachPlugins(prompts, [{ name: 'Ratcatchers', isComplete: () => true }]);
     const { player, ticks } = recordingPlayer();
     const spell = CacheDefinitions.getSpellByName('Minigame Teleport');
     MinigameTeleports._test.castMinigameTeleport({ player, buttonId: spell.widgetId, itemId: spell.itemId, handled: false });
@@ -460,4 +460,43 @@ test('Soul Wars lands in the lobby on the Isle of Souls, not the tutorial instan
     const inTemplate = soulWars.x >= templateChunkX * 8 && soulWars.x < (templateChunkX + templateChunksX) * 8
         && soulWars.y >= templateChunkY * 8 && soulWars.y < (templateChunkY + templateChunksY) * 8;
     assert.ok(!inTemplate, 'never the tutorial instance template');
+});
+
+test('every quest gate reads the real quest runtime: completing Shades of Mort\'ton unlocks its teleport (#4294)', async (t) => {
+  stubWorld(t)(() => {});
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const custom = {};
+  const api = new Proxy({
+    core: PluginManager.getCoreApi(),
+    getTaskManager: () => TaskManager,
+    persistAttribute: (key, value) => PlayerSave.persistAttribute(key, value),
+    getPluginConfig: (key, fallback) => fallback,
+    onCustomEvent: (name, handler) => { (custom[name] ??= []).push(handler); },
+    emitCustomEvent: (name, payload) => { for (const handler of custom[name] ?? []) handler(payload); },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require('../plugins/quests/Quests.plugin').register(api);
+  MinigameTeleports.register(api);
+  const QuestRuntime = require('../plugins/quests/QuestRuntime');
+  const { refusal } = MinigameTeleports._test;
+  const data = require('../plugins/interface/data/minigame-teleports.json').minigames;
+
+  const player = new Player(null);
+  player.setUsername('minigames');
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  t.mock.method(player, 'isRegistered', () => true);
+  for (const [label, minigame] of Object.entries(data)) {
+    for (const questName of minigame.quests ?? []) {
+      const quest = QuestRuntime.questNamed(questName);
+      assert.ok(quest, `${label}: "${questName}" names a registered quest`);
+      const gate = { quests: [questName] };
+      assert.equal(refusal(player, gate), `You need to complete ${questName} to go there.`, `${label} before the quest`);
+      quest.setStage(player, quest.completionValue ?? 2);
+      assert.equal(quest.isComplete(player), true, `${questName} completes`);
+      assert.equal(refusal(player, gate), null, `${label} after ${questName}`);
+    }
+  }
+  assert.equal(refusal(player, data["Shades of Mort'ton"]), null, "the Shades of Mort'ton teleport is unlocked");
 });

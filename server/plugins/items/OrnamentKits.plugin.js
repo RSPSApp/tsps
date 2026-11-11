@@ -163,6 +163,17 @@ function cleanDye(event) {
   event.handled = true;
 }
 
+/**
+ * Death protection from cosmetics: an item made with a tradeable ornament kit, mix or paint is
+ * kept on a non-PvP death outside the Wilderness on top of the kept count (Wiki: Ornament kit,
+ * Volcanic abyssal whip). Recolours made without a kit (graceful) are not.
+ */
+function cosmeticOnDeath(query) {
+  const entry = byResult.get(query?.item?.getId?.());
+  if (!entry || entry.kit <= 0) return;
+  if (new core.Item(entry.kit, 1).isTradeable()) query.cosmetic = true;
+}
+
 /** Revert from the item's Revert/Dismantle option, returning the kit for entries that specify it. */
 function revertItem(event) {
   if (event.option !== "Revert" && event.option !== "Dismantle" && event.option !== "Detach") {
@@ -255,6 +266,7 @@ module.exports = {
     api.onItemOnItem(applyKit, { noted: false });
     api.onItemOnItem(cleanDye, { noted: false });
     api.onItemAction(revertItem);
+    api.onCustomEvent("player-death:cosmetic", cosmeticOnDeath);
     api.log("registered", { pairs: byKitAndBase.size, variants: byResult.size });
   },
 };

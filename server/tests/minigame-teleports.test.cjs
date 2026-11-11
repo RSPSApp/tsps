@@ -448,8 +448,8 @@ test('Soul Wars lands in the lobby on the Isle of Souls, not the tutorial instan
     const lobby = soulWarsData.lobby;
     const soulWars = destinations['Soul Wars'];
     assert.ok(soulWars, 'the Soul Wars teleport exists');
-    assert.deepEqual([soulWars.x, soulWars.y], [lobby.arrive[0], lobby.arrive[1]],
-        'the destination is the Soul Wars portal arrival the plugin itself uses');
+    // Wiki, Minigame Teleport: the Soul Wars row's map is 2210,2857 (the portal arrival, 2206,2858, is not it).
+    assert.deepEqual([soulWars.x, soulWars.y], [2210, 2857], "the Wiki's Soul Wars teleport tile");
     const [x0, y0, x1, y1] = lobby.bounds;
     assert.ok(soulWars.x >= x0 && soulWars.x <= x1 && soulWars.y >= y0 && soulWars.y <= y1,
         'the destination is inside the registered Soul Wars lobby Area');

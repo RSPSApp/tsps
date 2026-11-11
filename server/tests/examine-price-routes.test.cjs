@@ -145,3 +145,44 @@ test("both settings off: the examine text alone", async (t) => {
   await send(f, { type: "inventory_action", slot: 0, itemId: FEATHER, widgetId: 3214, option: "Examine" });
   assert.deepEqual(f.messages, [examine(FEATHER)]);
 });
+
+// Item interfaces that plugins handle themselves.
+const OPEN_LOOTING_BAG = 22586;
+const BAG_ITEMS = (81 << 16) | 5; // wilderness_lootingbag:items
+const WILDERNESS = [3090, 3530];
+
+async function widget(f, widgetId, buttonNum, slot, itemId) {
+  await send(f, { type: "widget_action", widgetId, groupId: widgetId >>> 16, childId: widgetId & 0xffff, buttonNum, slot, itemId });
+}
+
+test("looting bag Check view examine (op 10): the stored stack's price line", async (t) => {
+  const f = actor(t);
+  const bag = new core.Item(OPEN_LOOTING_BAG, 1);
+  f.p.getInventory().setItem(0, bag);
+  require("../plugins/items/LootingBag.plugin")._test.store(bag, new core.Item(FEATHER, 100));
+  await send(f, { type: "inventory_action", slot: 0, itemId: OPEN_LOOTING_BAG, widgetId: 3214, option: "Check" });
+  f.messages.length = 0;
+  await widget(f, BAG_ITEMS, EXAMINE_OP, 0, FEATHER);
+  assert.deepEqual(f.messages, [examine(FEATHER), FEATHERS_100]);
+});
+
+test("looting bag Deposit view examine (op 9): the inventory stack's price line", async (t) => {
+  const f = actor(t);
+  f.p.setLocation(new core.Location(...WILDERNESS, 0));
+  f.p.getInventory().setItem(0, new core.Item(OPEN_LOOTING_BAG, 1));
+  f.p.getInventory().setItem(1, new core.Item(FEATHER, 100));
+  await send(f, { type: "inventory_action", slot: 0, itemId: OPEN_LOOTING_BAG, widgetId: 3214, option: "Deposit" });
+  f.messages.length = 0;
+  await widget(f, BAG_ITEMS, 9, 1, FEATHER);
+  assert.deepEqual(f.messages, [examine(FEATHER), FEATHERS_100]);
+  assert.equal(f.p.getInventory().getItems()[1].getAmount(), 100, "examining stores nothing");
+});
+
+test("Death's office examine (op 10): the stored stack's price line", async (t) => {
+  const f = actor(t);
+  require("../plugins/world/gravestones/Storage.Gravestones").setOffice(f.p, [{ id: FEATHER, amount: 100, meta: null }]);
+  require("../plugins/areas/deathsoffice/Retrieval.DeathsOffice").open(f.p);
+  f.messages.length = 0;
+  await widget(f, core.CacheDefinitions.getComponentId("death_office:items"), EXAMINE_OP, 0, FEATHER);
+  assert.deepEqual(f.messages, [examine(FEATHER), FEATHERS_100]);
+});

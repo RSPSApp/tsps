@@ -2,6 +2,16 @@
 // Torfinn's item retrieval (Retrieval.Vorkath) against a stub api: no server boot needed.
 const assert = require("node:assert/strict");
 const { beforeEach, test } = require("node:test");
+const Module = require("node:module");
+
+// The plugin examines through game/content/ExaminePrice; point that at the build and record the
+// calls, since the stub api has no cache to price items from.
+const EXAMINE_PRICE = require.resolve("../dist/game/content/ExaminePrice");
+const resolveFilename = Module._resolveFilename;
+Module._resolveFilename = function (request, ...rest) {
+  return /\/src\/.*\/game\/content\/ExaminePrice$/.test(request) ? EXAMINE_PRICE : resolveFilename.call(this, request, ...rest);
+};
+require(EXAMINE_PRICE).examineItem = (player, id, amount) => player.sendMessage(`Examine ${id} x${amount}.`);
 const Retrieval = require("../plugins/bosses/vorkath/Retrieval.Vorkath");
 const Storage = require("../plugins/items/storage/Common.StorageItems");
 
@@ -240,7 +250,7 @@ test("item ops: Take one stack once paid, Examine; nothing while the interface i
   assert.equal(fees.length, 0, "shut: ignored");
   collect(player);
   click(1, 10);
-  assert.equal(player.messages.at(-1), "Examine 11212.");
+  assert.equal(player.messages.at(-1), "Examine 11212 x50.", "the whole stack, priced by examineItem");
   click(1, 2);
   assert.equal(Retrieval.held(player).paid, true, "Take before paying pays first");
   click(1, 2);

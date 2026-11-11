@@ -8,6 +8,8 @@
  */
 const Common = require("./Common.Gravestones");
 const Grave = require("./Grave.Gravestones");
+const Storage = require("./Storage.Gravestones");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const EXAMINE_OP = 10;
 /** All Settings "Show confirmation when paying for items from gravestone" (192): on while 1. */
@@ -35,7 +37,8 @@ function clickItem(event) {
   if (!Grave.isOpen(player)) return;
   const slot = Number.isInteger(event.slot) ? event.slot : -1;
   if ((event.opId ?? event.action) === EXAMINE_OP) {
-    if (event.itemId > 0) player.sendMessage(Common.definition(event.itemId).getExamine());
+    const entry = Storage.grave(player)?.items[slot];
+    if (event.itemId > 0) examineItem(player, event.itemId, entry?.id === event.itemId ? entry.amount : 1);
     return;
   }
   Grave.takeSlot(player, slot);

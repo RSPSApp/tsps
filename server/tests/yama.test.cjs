@@ -14,6 +14,8 @@ const fakeApi = {
     ItemDefinition: { forId: (id) => ({ getGrandExchangeValue: () => VALUES[id] ?? 0, isStackable: () => id === 995 }) },
     Item: class { constructor(id, amount, meta) { this.id = id; this.amount = amount; this.meta = meta; } },
     ItemIdentifiers: { FORGOTTEN_LOCKBOX: 30763 },
+    DialogueChainBuilder: class { constructor() { this.dialogues = []; } add(...d) { this.dialogues.push(...d); return this; } },
+    ItemStatementDialogue: class { constructor(index, itemId, text) { this.itemId = itemId; this.text = text; } },
   },
   persistAttribute() {},
   onPlayerLogin(handler) { hooks.login.push(handler); },
@@ -312,6 +314,7 @@ test("opening a Forgotten lockbox consumes it and gives its reward", () => {
       refreshItems() {},
     }),
     sendMessage(text) { this.message = text; },
+    getDialogueManager: () => ({ startDialogues(builder) { player.box = builder.dialogues[0]; } }),
   };
   const open = hooks.item["Forgotten lockbox"].Open;
   assert.equal(open({ player, itemId: 30763 }), true);
@@ -321,7 +324,9 @@ test("opening a Forgotten lockbox consumes it and gives its reward", () => {
   const [itemId, amount] = rewards[0];
   const entry = Common.data.lockbox.entries.find((row) => row.itemId === itemId && row.amount === amount);
   assert.ok(entry, `${itemId}x${amount} is on the Wiki table`);
-  assert.equal(player.message, entry.message);
+  // Wiki Transcript:Forgotten lockbox: an item box with the reward, not a chat line.
+  assert.equal(player.message, null);
+  assert.deepEqual([player.box.itemId, player.box.text], [entry.itemId, entry.message]);
   assert.equal(open({ player, itemId: 30764 }), false, "only the lockbox's own Open is handled");
 });
 
@@ -334,4 +339,9 @@ test("Yama's specials use the Wiki's damage numbers", () => {
   assert.deepEqual(flares.damage["1"], [42, 45]);
   assert.deepEqual(flares.damage["3"], [23, 25]);
   assert.equal(judge.surge.maxHit, 30);
+});
+
+test("the oathplate legs line is the transcript's, 1 with no x (Wiki Transcript:Forgotten lockbox)", () => {
+  const legs = Common.data.lockbox.entries.find((row) => row.itemId === 30756);
+  assert.equal(legs.message, "You open the forgotten lockbox and find 1 oathplate legs inside!");
 });

@@ -497,15 +497,22 @@ const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / 600;
 function sendBoostDrainTimer({ player }) {
   if (player?.isPlayerBot?.()) return;
   const { PrayerHandler } = pluginApi.core;
-  const period = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE) ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
+  const preserve = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE);
+  const stretched = Boolean(player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED));
+  const period = preserve || stretched ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   const now = Date.now();
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  // An area holding boosts (Rogues' Den) pauses the cycle: nothing is draining there.
+  const pause = { player, allowed: true };
+  pluginApi.emitCustomEvent("stats:boost-decay", pause);
   let remaining = period;
-  if (hasDecayingBoost(player) && Number.isFinite(nextDecayAt) && nextDecayAt > 0) {
+  if (pause.allowed && hasDecayingBoost(player) && Number.isFinite(nextDecayAt) && nextDecayAt > 0) {
     let decayAt = nextDecayAt;
-    // A cycle Preserve is going to stretch ends 30 seconds later.
-    if (!player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED) && PrayerHandler.isActivated(player, PrayerHandler.PRESERVE)
-        && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
+    // A cycle ending this tick, before the decay has run, is followed by a full one.
+    if (decayAt <= now) {
+      decayAt += BOOST_DECAY_MS * (Math.floor((now - decayAt) / BOOST_DECAY_MS) + 1);
+    } else if (!stretched && preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
+      // A cycle Preserve is going to stretch ends 30 seconds later.
       decayAt += PRESERVE_EXTENSION_MS;
     }
     remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);

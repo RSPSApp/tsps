@@ -27,9 +27,11 @@
  * page, plus the cache (object/NPC transforms, varbits, placements) for ids.
  *
  * Gaps / approximations:
- *  - Most optional tour stops (the tutors, Fred, the candle seller and the
- *    border guard) are not implemented. Millie, Father Urhney and Gee/Donie
- *    have stateless dialogue; repeat and interruption behavior is unverified.
+ *  - The optional tour stops the world still has (Millie, Father Urhney, Gee/Donie,
+ *    Fred the Farmer, the candle seller and the Al Kharid border guards) play their
+ *    transcript once Zanik follows; they are stateless, and repeat and interruption
+ *    behavior is unverified. The Wiki's skill and combat tutors (NPC ids 3216-3227) have
+ *    no spawn in this world, so their stops cannot be reached.
  *    The existing tour also handles the
  *    five stops the transcript gates on (Duke, a common man/woman, Father
  *    Aereck, goblins, the shopkeeper) plus Cook, Hans, Bob, the Guide, Mistag
@@ -746,6 +748,10 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
       [NpcIdentifiers.FATHER_URHNEY]: "a-tour-of-lumbridge-father-urhney",
       [NpcIdentifiers.GEE]: "a-tour-of-lumbridge-gee-or-donie",
       [NpcIdentifiers.DONIE]: "a-tour-of-lumbridge-gee-or-donie",
+      [NpcIdentifiers.FRED_THE_FARMER]: "a-tour-of-lumbridge-fred-the-farmer",
+      [NpcIdentifiers.CANDLE_SELLER]: "a-tour-of-lumbridge-candle-seller",
+      [NpcIdentifiers.BORDER_GUARD]: "a-tour-of-lumbridge-border-guard",
+      [NpcIdentifiers.BORDER_GUARD_2]: "a-tour-of-lumbridge-border-guard",
     };
     const variant = variants[npcId];
     if (!variant) return false;
@@ -1737,6 +1743,9 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onNpcInteraction("Father Urhney", { "Talk-to": talkOptionalTourStop });
   api.onNpcInteraction("Gee", { "Talk-to": talkOptionalTourStop });
   api.onNpcInteraction("Donie", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Fred the Farmer", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Candle seller", { "Talk-to": talkOptionalTourStop });
+  api.onNpcInteraction("Border Guard", { "Talk-to": talkOptionalTourStop });
   api.onNpcInteraction("Bob", { "Talk-to": talkBob });
   api.onNpcInteraction("Father Aereck", { "Talk-to": talkFatherAereck });
   api.onNpcInteraction("Lumbridge Guide", { "Talk-to": talkLumbridgeGuide });

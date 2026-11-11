@@ -141,23 +141,33 @@ test('optional surface conversations use exact quest pages and preserve fallthro
     PluginManager.emitNpcInteraction(event);
     return event;
   }
-  for (const [id, variant, expected, last] of [[N.MILLIE_MILLER, 'a-tour-of-lumbridge-millie-miller', 'Hello Adventurers. Welcome to Mill Lane Mill. Can I help you?', "We don't have any of those things in Dorgesh-Kaan! They sound so interesting!"],
+  for (const [id, variant, expected, last, kind] of [[N.MILLIE_MILLER, 'a-tour-of-lumbridge-millie-miller', 'Hello Adventurers. Welcome to Mill Lane Mill. Can I help you?', "We don't have any of those things in Dorgesh-Kaan! They sound so interesting!"],
     [N.FATHER_URHNEY, 'a-tour-of-lumbridge-father-urhney', "Go away! I'm meditating!", "I don't care! I'm still meditating!"], [N.GEE, 'a-tour-of-lumbridge-gee-or-donie', 'Hello there, can I help you?', "You'd get used to it!"],
-    [N.DONIE, 'a-tour-of-lumbridge-gee-or-donie', 'Hello there, can I help you?', "You'd get used to it!"]]) {
+    [N.DONIE, 'a-tour-of-lumbridge-gee-or-donie', 'Hello there, can I help you?', "You'd get used to it!"],
+    [N.FRED_THE_FARMER, 'a-tour-of-lumbridge-fred-the-farmer', 'What are you doing on my land?', 'What are you doing on my land?'],
+    [N.CANDLE_SELLER, 'a-tour-of-lumbridge-candle-seller', 'Do you want a lit candle for 1000 gold?', "Oh, that's good! And it's all down to the candles I sold! So do you want to buy another one?", 'menu'],
+    [N.BORDER_GUARD, 'a-tour-of-lumbridge-border-guard', 'You may pass if you pay the toll, but your goblin friend must stay on this side.', "I don't think we need to go to Al Kharid anyway!", 'name'],
+    [N.BORDER_GUARD_2, 'a-tour-of-lumbridge-border-guard', 'You may pass if you pay the toll, but your goblin friend must stay on this side.', "I don't think we need to go to Al Kharid anyway!", 'name']]) {
     spoken.length = 0; starts.length = 0;
     assert.equal(talk(p, id).handled, true);
     assert.equal(starts.length, 1);
     assert.equal(starts[0].npcId, id);
     assert.deepEqual(starts[0].variant, { page: PAGE, variant });
+    // The border guard's transcript opens with the player's own line; its guard line follows one Continue later.
+    if (kind === 'name') p.manager.advance();
     assert.ok(spoken.some(line => line.player === p && line.text === expected), `quest line for ${id}`);
     assert.equal(p.manager.getCurrent()?.getNpcId?.(), id, 'the clicked actor supplies the chathead');
-    for (let i = 0; i < 30 && p.manager.getCurrent(); i++) p.manager.advance();
-    assert.equal(p.manager.getCurrent(), undefined, 'conversation completes within 30 advances');
-    assert.ok(spoken.some(line => line.player === p && line.text === last), `final quest line for ${id}`);
+    for (let i = 0; i < 30 && p.manager.getCurrent() && !(kind === 'menu' && core.MultiChatboxPrompt.getPending(p)); i++) p.manager.advance();
+    if (kind === 'menu') assert.ok(core.MultiChatboxPrompt.getPending(p), `the transcript's closing menu is offered for ${id}`);
+    else assert.equal(p.manager.getCurrent(), undefined, 'conversation completes within 30 advances');
+    // A transcript line can carry the player's name ("[player name]"): only its fixed ends are compared.
+    assert.ok(spoken.some(line => line.player === p && (kind === 'name' ? line.text.endsWith(last) : line.text === last)), `final quest line for ${id}`);
     const expectedLines = require('../data/definitions/npc-dialogues.json')[PAGE].variants[variant].filter(step => step.type === 'line').map(step => step.text);
     const actualLines = spoken.filter(line => line.player === p).map(line => line.text);
     let position = 0;
-    for (const line of actualLines) if (line === expectedLines[position]) position++;
+    const fixedEnds = text => text.split('[player name]');
+    const same = (actual, want) => { const [head, tail] = fixedEnds(want); return want.includes('[player name]') ? actual.startsWith(head) && actual.endsWith(tail) : actual === want; };
+    for (const line of actualLines) if (position < expectedLines.length && same(line, expectedLines[position])) position++;
     assert.equal(position, expectedLines.length, `all transcript NPC lines occur in order for ${id}`);
     assert.equal(p.attrs.get(STAGE_KEY), 2, 'optional conversation preserves touring stage');
     assert.equal(p.attrs.get(BITS_KEY) ?? 0, 0, 'optional conversation preserves mandatory tour bits');

@@ -460,10 +460,14 @@ open. Every shake goes through `CameraShake.send`, so its row and its group's ma
 | Number of modified stats to show (dropdown) | 150 | varbit 12375 `stat_boosts_hud_num_displays` = option; a fresh account gets 5, which live sends at login in every rsprox recording |
 | Display relative stat value | 151 | varbit 12376 `stat_boosts_hud_display_relative` |
 
+Its tooltip's "Stats restoring" and "Boosts draining" countdowns run on the client from two scripts, sent at login and every 25 ticks of the stat restore cycle, as live does:
+
+- `stat_boosts_hud_update_restore_up_timer` (4517): `(0, 100, ticks to the next restore)` from the core's restore timer (`Player.processStatRestoration`). Rapid Restore's own timer goes out as `(1, 100, 100)` when the prayer starts and at each of its restores, and `(1, 0, 0)` when it stops.
+- `stat_boosts_hud_update_restore_down_timer` (4518): `(period, ticks to the next boost drain)` from the Potions plugin's boost cycle. The period is 150 while Preserve is on, and a player with nothing boosted gets a full period.
+
 **Normal health overlay** (row 111, varbit 12390 `hpbar_hud_standard_disabled`, on by default: no capture sets it). It is the boss health HUD (303) in standard mode (`hpbar_hud_boss` 0), driven by `BossHud.plugin.js` for any NPC no boss plugin drives. A player's attack roll on an NPC shows it: `hpbar_hud_npc`, its hitpoints and maximum, the usual colours, open script 2376 and fade-in 2887. Each hit on it updates the hitpoints. 8 ticks after the player's last attack the HUD fades out (2889) and clears 4 ticks later. This matches rsprox recordings 1382, 2148 and 3979 (a Falador guard, a Canifis man, a calf). The Wiki gives the option to the mobile and Steam clients only, which is why desktop recordings never show it. A boss HUD always wins: an NPC id any boss event has named never gets the standard HUD, and a boss show replaces it. The client's opponent information panel steps aside for either mode while that mode's setting is on.
 
 - **Not done**:
-  - The overlay's stat restore timers (scripts 4517 and 4518, which live sends every 25 ticks) aren't sent, so its restore countdown doesn't run.
   - The normal health overlay fades in once when it opens. Live runs the fade-in again on the ticks after each hit.
 
 ## Buff timers read from a var

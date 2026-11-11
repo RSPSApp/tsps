@@ -1,5 +1,5 @@
 // Settings: "All Settings" browser (134), the keybindings panel (121) and the
-// side panel's "Game client layout" dropdown (116:40).
+// "Game client layout" dropdown, on the side panel (116:40) and in All Settings.
 // Component ids, varbits and the settings catalog order below are verified
 // against cache rev 237 and cross-checked with RuneLite (InterfaceID.Settings,
 // VarbitID).
@@ -87,6 +87,11 @@ const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
 const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
 const DEFAULT_GAMEFRAME_ROOT = 161;
 const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
+// All Settings > Interfaces: "Game client layout" (12), a dropdown on enum 3509 like the side
+// panel's (its three options, Fixed, Resizable Classic and Resizable Modern, in the same order),
+// and "Show data orbs" (8), a toggle on varbit 4084 orbs_disabled.
+const GAME_CLIENT_LAYOUT_SETTING = 12;
+const SHOW_DATA_ORBS_SETTING = 8;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
 const WORLD_GAMEFRAME_OPTIONS = {
   "modern-fixed": 0,
@@ -672,6 +677,38 @@ function sendGameframeLayout(player, root) {
   if (!pluginApi.core.dataOrbsHidden(player)) sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
+/** "Game client layout" chosen in All Settings: the same switch as the side panel's dropdown. */
+function chooseGameClientLayout(request) {
+  if (request.handled || request.settingId !== GAME_CLIENT_LAYOUT_SETTING) return;
+  const root = selectGameframeOption(request.player, request.option);
+  if (root === undefined) return;
+  request.handled = true;
+  sendGameframeLayout(request.player, root);
+}
+
+/** Live closes the orbs while orbs_disabled is 1 and opens them when it goes back to 0. */
+function showDataOrbs(player) {
+  const sender = player.getPacketSender();
+  if (pluginApi.core.dataOrbsHidden(player)) sender.closeSubInterface(ORBS_PANE_UID);
+  else sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(getGameframeRoot(player)), 1);
+}
+
+function clickShowDataOrbs(request) {
+  if (request.handled || request.settingId !== SHOW_DATA_ORBS_SETTING) return;
+  request.handled = toggleSetting(request.player, SHOW_DATA_ORBS_SETTING);
+  showDataOrbs(request.player);
+}
+
+/**
+ * Something that hid the orbs for a while (the Leagues tutorial) is done with them: the
+ * player's own choice comes back, and the orbs open or stay closed to match.
+ */
+function restoreDataOrbs({ player }) {
+  const key = `varbit:${SETTINGS[SHOW_DATA_ORBS_SETTING].varbit}`;
+  sendSettingVar(player, key, savedSettings(player)[key] ?? 0);
+  showDataOrbs(player);
+}
+
 function receiveGameframeLayout(event) {
   if (event.channel !== "gameframe:layout") return;
   event.handled = true;
@@ -1036,6 +1073,9 @@ module.exports = {
     api.onCustomEvent("settings:set", setSettingValue);
     api.onCustomEvent("settings:setting-clicked", resetVolumeSliders);
     api.onCustomEvent("settings:setting-clicked", clickEscCloses);
+    api.onCustomEvent("settings:setting-clicked", clickShowDataOrbs);
+    api.onCustomEvent("settings:option-chosen", chooseGameClientLayout);
+    api.onCustomEvent("settings:restore-data-orbs", restoreDataOrbs);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);

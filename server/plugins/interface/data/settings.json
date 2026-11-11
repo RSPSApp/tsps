@@ -8,6 +8,7 @@
     "5": { "name": "Hitsplat tinting", "varbit": 10236 },
     "6": { "name": "Show special attack tooltip", "varbit": 5712 },
     "7": { "name": "Hide roofs", "varbit": 12378 },
+    "8": { "name": "Show data orbs", "varbit": 4084 },
     "9": { "name": "Show Wiki entity lookup", "varbit": 10113 },
     "10": { "name": "Show boss health overlay", "varbit": 12389 },
     "11": { "name": "Transparent chatbox", "varbit": 4608 },

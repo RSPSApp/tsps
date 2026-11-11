@@ -14,8 +14,8 @@ const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
 const { HitMask } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
-const { ForceMovement } = require("../../src/main/typescript/elvarg/game/model/ForceMovement");
-const { ForceMovementTask } = require("../../src/main/typescript/elvarg/game/task/impl/ForceMovementTask");
+/** A door's crossing is a walk through its doorway (236/03929): clipping is ignored for that step. */
+const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 const { MagicCombatMethod } = require("../../src/main/typescript/elvarg/game/content/combat/method/impl/MagicCombatMethod");
 const { CombatSpells } = require("../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { MOBILE_CLIENT_ATTRIBUTE } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
@@ -442,11 +442,12 @@ function crossDoor(player, door) {
     Math.abs(entry.x - door.x) + Math.abs(entry.y - door.y) <= 1);
   for (const leaf of leaves) player.getPacketSender().sendObjectRemoval(asObject(leaf));
   state.crossing = { leaves, to, ticks: 3 };
-  const dx = to.getX() - from.getX();
-  const dy = to.getY() - from.getY();
-  const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
-  TaskManager.submit(new ForceMovementTask(player, 2,
-    new ForceMovement(from.clone(), new Location(dx, dy), 0, 30, direction, -1)));
+  // Live walks through the doorway as the door opens (rsprox_transcripts/236/03929.txt: a
+  // walk/run step across barrows_door_o_l at 3562,9678, no exact move), not a slide.
+  player.setFlag(IGNORE_CLIPPING_FLAG, true);
+  const movement = player.getMovementQueue();
+  movement.reset();
+  movement.addSteps(to.clone());
 }
 
 function useDoor(player, door) {
@@ -792,6 +793,7 @@ function processPlayer({ player }) {
   if (state.crossing && --state.crossing.ticks <= 0) {
     const crossing = state.crossing;
     state.crossing = null;
+    player.removeFlag(IGNORE_CLIPPING_FLAG);
     if (phase === "tunnels") {
       for (const leaf of crossing.leaves) player.getPacketSender().sendObject(asObject(leaf));
       if (player.getLocation().equals(crossing.to)) spawnEncounter(player, roomAt(crossing.to));
@@ -812,6 +814,7 @@ function processPlayer({ player }) {
 }
 
 function cleanupPlayer({ player }) {
+  if (sessions.get(player)?.crossing) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
   if (sessions.has(player)) {
     cleanupNpcs(player);
     sessions.delete(player);
@@ -869,5 +872,5 @@ module.exports = {
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
-  _test: { searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig },
+  _test: { searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG },
 };

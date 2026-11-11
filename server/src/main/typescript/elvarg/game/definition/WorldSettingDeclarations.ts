@@ -193,14 +193,6 @@ export const WORLD_SETTING_DECLARATIONS: Record<string, ConfigOptionDeclaration>
 
 /** Options the server core reads from pluginConfig, owned by "core". */
 export const CORE_CONFIG_DECLARATIONS: Record<string, ConfigOptionDeclaration> = {
-    "CrossFloor:visibility": {
-        type: "boolean", label: "Cross-floor visibility", defaultText: "Off unless CROSS_FLOOR_VISIBILITY is set",
-        help: "Players see others on other floors of the same area.",
-    },
-    "CrossFloor:combat": {
-        type: "boolean", label: "Cross-floor combat", defaultText: "Off unless CROSS_FLOOR_COMBAT is set",
-        help: "Ranged and magic attacks work between floors. Needs cross-floor visibility.",
-    },
     "commands:permissions": {
         type: "json", label: "Command permissions", default: {},
         help: "Lowest rank that may run each command, e.g. { \"items\": \"NONE\", \"teleports\": \"OWNER\" }. Ranks: NONE, MODERATOR, ADMINISTRATOR, OWNER, DEVELOPER.",

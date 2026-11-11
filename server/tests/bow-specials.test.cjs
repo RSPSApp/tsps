@@ -245,10 +245,9 @@ test("Descent of Darkness: other arrows hit up to 1.3x, at least 5, uncapped", (
 
 test("Dark bow cross-floor hits use finite horizontal projectile travel delays", (t) => {
   const { CombatPosition, Location, WeaponProfiles } = core;
-  const previous = Object.fromEntries(["CROSS_FLOOR_VISIBILITY", "CROSS_FLOOR_COMBAT"].map(key => [key, process.env[key]]));
-  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-  process.env.CROSS_FLOOR_VISIBILITY = "1";
-  process.env.CROSS_FLOOR_COMBAT = "1";
+  const { CrossFloor } = require('../dist/game/CrossFloor');
+  t.mock.method(CrossFloor, "includesOtherPlanes", () => true);
+  t.mock.method(CrossFloor, "combatEnabled", () => true);
   t.mock.method(WeaponProfiles, "hitDelays", (_player, distance) => distance > 100
     ? [1501199875790166, 3002399751580331]
     : [1, 2]);

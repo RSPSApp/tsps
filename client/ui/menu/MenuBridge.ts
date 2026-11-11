@@ -6,6 +6,7 @@ import { normalizeMenuEntries } from "./MenuEngine";
 import { MenuState } from "./MenuState";
 import { applyMenuTransform } from "./menuTransforms";
 import { preparePluginMenu } from "./menuEvents";
+import { filterMinimenuEntries } from "./minimenuFilters";
 import { hasNativeWidgetOperation, transformWidgetMenuEntries } from "../../widgets/menu/utils";
 
 type WidgetMenuEntryInput = {
@@ -208,6 +209,8 @@ export function worldEntriesToSimple(
         menuState?: MenuState;
         registerWithState?: boolean;
         resetMenuState?: boolean;
+        /** The client's minimenu block modes (Interfaces > Minimenu filters). */
+        blockModes?: readonly number[];
     } = {},
 ): SimpleMenuEntry[] {
     const toEvt = opts.toCssEvent;
@@ -215,7 +218,7 @@ export function worldEntriesToSimple(
     if (register && opts.resetMenuState !== false) {
         opts.menuState?.reset();
     }
-    const intermediate: SimpleMenuEntry[] = (source || []).map((e) => {
+    const intermediate: SimpleMenuEntry[] = filterMinimenuEntries(source || [], opts.blockModes).map((e) => {
         const action = e.spellCast ? MenuAction.Cast : inferMenuAction(e.option, e.targetType);
         // osrsTargetLabel already includes the level text for NPCs/players
         const label = osrsTargetLabel(e, opts.label) || undefined;

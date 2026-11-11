@@ -1835,11 +1835,8 @@ function pourPotion(event) {
   pourMessage(player, `You have combined the liquid into ${DOSE_WORDS[target.doses + transferred]} doses.`);
 }
 
-/**
- * Vials of water, coconut milk and blood, and plant cure (a vial, Wiki), empty to a vial too, though no dose enum
- * lists them. Plant cure's Empty has no capture; it follows the captured vial_water and pillarvial lines.
- */
-const EMPTYABLE_VIALS = ["vial_water", "vial_coconut_milk", "vial_blood", "plant_cure"];
+/** Vials of water, coconut milk and blood empty to a vial too, though no dose enum lists them. */
+const EMPTYABLE_VIALS = ["vial_water", "vial_coconut_milk", "vial_blood"];
 
 /** "Empty" on a potion or a filled vial: the empty vessel, "You empty the vial." (rsprox captures). */
 function emptyVessel(event) {

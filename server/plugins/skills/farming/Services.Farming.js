@@ -726,25 +726,29 @@ function setContainerCount(player, item, plural, capacity, count) {
     item.setId(Data.itemId(count > 0 ? `${plural}(${count})` : capacity === 10 ? "Empty sack" : "Basket"));
     player.getInventory().refreshItems();
 }
+/** Live's line when an empty sack finds nothing to take (rsprox captures: recording 20261111T230428, tick 26). */
+const EMPTY_SACK_NOTHING_MESSAGE = "You don't have any potatoes, onions or cabbages.";
+/** Ours: the basket's counterpart of that line; no capture or Wiki text has one. */
+const EMPTY_BASKET_NOTHING_MESSAGE = "You don't have any apples, bananas, oranges, strawberries or tomatoes.";
 /**
- * Fill: an empty sack takes up to 10 vegetables from the inventory, "cabbages first, then onions, and lastly potatoes"
- * (Wiki, Empty sack), Draynor Manor cabbages excluded (Data.itemId resolves the plain Cabbage). An empty basket takes
- * up to five of one fruit, silently, in its own slot (rsprox captures: recording 3276, strawberries, the only basket
- * capture and a Grid Master event world). A filled one
- * tops up with its own produce.
- * Ours: the basket's fruit order (the Wiki gives none) and the full / no-produce messages (no capture or Wiki text).
+ * Fill. An empty sack takes up to 10 of one vegetable from the inventory, cabbages first, then onions, then potatoes
+ * (Wiki, Empty sack; rsprox captures: recording 20261111T230428, ticks 64-79 and 117). An empty basket takes up to five
+ * of one fruit (ticks 133-153). A filled one tops up with its own produce (tick 43). It takes as many as are held, in
+ * the container's own slot, and says nothing. Noted produce doesn't count (tick 26, noted onions held). Draynor Manor
+ * cabbages are excluded (Wiki); Data.itemId resolves the plain Cabbage. A filled one with none of its produce held does
+ * nothing (ticks 69, 77, 81).
+ * Ours: the basket's fruit order (the Wiki gives none), its no-fruit line, and a full one's Fill doing nothing.
  */
 function fillProduceContainer(player, event, item, name) {
     const container = produceContainer(name);
     if (!container) return false;
     event.handled = true;
-    const noun = container.capacity === 10 ? "sack" : "basket";
-    if (container.current >= container.capacity) { player.sendMessage(`The ${noun} is full.`); return true; }
+    if (container.current >= container.capacity) return true;
     const inventory = player.getInventory();
     const rows = container.capacity === 10 && container.current === 0 ? [...container.rows].reverse() : container.rows;
     const row = rows.find(([produce]) => inventory.getAmount(Data.itemId(produce)) > 0);
     if (!row) {
-        player.sendMessage(`You don't have any ${container.current ? container.rows[0][1].toLowerCase() : container.capacity === 10 ? "vegetables" : "fruit"} to put in the ${noun}.`);
+        if (container.current === 0) player.sendMessage(container.capacity === 10 ? EMPTY_SACK_NOTHING_MESSAGE : EMPTY_BASKET_NOTHING_MESSAGE);
         return true;
     }
     const [produce, plural, capacity] = row;
@@ -753,7 +757,12 @@ function fillProduceContainer(player, event, item, name) {
     setContainerCount(player, item, plural, capacity, container.current + amount);
     return true;
 }
-/** Remove-one: one piece of produce comes out and the container drops a count. Needs a free slot (inventory.full()). */
+/**
+ * Remove-one: one piece of produce comes out into a free slot and the container drops a count. The spam line names it,
+ * "You take an onion out of the onion sack." / "a cabbage ... cabbage sack" / "a potato ... potato sack" /
+ * "a banana out of the banana basket." (rsprox captures: recording 20261111T230428, ticks 37, 58, 59, 127).
+ * Ours: the other fruit follow the same pattern, and a full inventory refuses with the usual full message.
+ */
 function removeOneProduce(player, event, item, name) {
     const container = produceContainer(name);
     if (!container || container.current === 0) return false;
@@ -761,6 +770,8 @@ function removeOneProduce(player, event, item, name) {
     const [produce, plural, capacity] = container.rows[0];
     if (!Patches.give(player, Data.itemId(produce))) return true;
     setContainerCount(player, item, plural, capacity, container.current - 1);
+    const noun = produce.toLowerCase();
+    Patches.spam(player, `You take ${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun} out of the ${noun} ${capacity === 10 ? "sack" : "basket"}.`);
     return true;
 }
 

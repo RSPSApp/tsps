@@ -18,7 +18,8 @@ enabled state. The `enabled` field, when present, must be a boolean.
     "BountyHunter": { "levelDifference": 10 },
     "Characters": { "maxPerAccount": 6 },
     "Prayer": { "enabled": true, "sequentialBurying": true },
-    "PlayerBots": { "ai": { "enabled": false } }
+    "PlayerBots": { "ai": { "enabled": false } },
+    "Wilderness": { "pvpWorldLevelDifference": 10 }
   }
 }
 ```
@@ -29,6 +30,9 @@ the equivalent `pluginConfig` keys. Then the local file overrides the shipped fi
 individual switches and settings, with nested values replaced in full. For example, a local
 `"Prayer": false` disables the plugin and keeps its shipped settings. Plugins can read
 their options by short name, such as `api.getPluginConfig("sequentialBurying", false)`.
+
+On PvP worlds, `plugins.Wilderness.pvpWorldLevelDifference` sets the server's attack limit
+on unlevelled ground. The client overlay still displays the standard 15-level range there.
 
 The existing `pluginConfig` form still works. The Characters, LeagueMode, Quests and
 RandomEvents entries map to the existing `characters`, `league`, `quests` and `random-events`
@@ -271,6 +275,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `TutorialIsland:allowSkip` | boolean | `true` | **Allow skipping Tutorial Island.** The Gielinor Guide offers new players to skip the island, which misses some starter items and steps. Turn off to make everyone complete it. |
+| `Wilderness:pvpWorldLevelDifference` | number (integer, >= 0) | `15` | **Unlevelled PvP combat level difference.** Maximum combat level difference on unlevelled PvP ground on PvP worlds. Levelled Wilderness tiles keep their usual range. |
 
 #### Plugin area `bosses` (`pluginConfig`)
 

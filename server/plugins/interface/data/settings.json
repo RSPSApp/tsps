@@ -55,6 +55,7 @@
     "84": { "name": "Food/Potions can form supply piles on death", "varbit": 11893 },
     "86": { "name": "Modern Layout - Side panel visual appearance", "varbit": 12135 },
     "114": { "name": "Show mouseover tooltips", "varbit": 12344 },
+    "115": { "name": "Anti Drag", "varbit": 12345 },
     "119": { "name": "Chat timestamps", "varbit": 12384, "script": 4586 },
     "123": { "name": "Show attack style", "varbit": 12352 },
     "124": { "name": "Display buff bar", "varbit": 9528 },

@@ -432,8 +432,9 @@ function click(event) {
   const selected = select(player, buttonId, slot, itemId);
   if (!selected) return;
   if (action === 10) {
-    // The contents show each potion as its 1-dose form, stacked by doses.
-    examineItem(player, itemId, selected.store && Number(selected.key) === itemId ? selected.store.doses : 1);
+    // A contents row shows its potion as the 1-dose form, stacked by the doses stored.
+    if (selected.store) examineItem(player, Number(selected.key), selected.store.doses);
+    else examineItem(player, itemId, 1);
     return;
   }
   if (action < 1 || action > 8) return;

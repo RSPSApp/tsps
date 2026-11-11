@@ -252,8 +252,21 @@ test('Monkey Madness I: stage 0 route reaches completion and grants the reward o
   assert.equal(p.getLocation().getX(), 2394);
   assert.equal(h.variant(p, N.DAERO).variant, 'chapter-1-the-underground-hangar-speaking-to-daero-in-the-underground-hangar');
 
+  // The panel opens Waydar's sliding puzzle; the stage moves when its last piece slides home. The scramble is
+  // fixed (Math.random = 0 takes each first neighbour) so the way back is known; the real board is not recorded.
+  const randomBefore = Math.random;
+  Math.random = () => 0;
   const panel = h.object(p, O.REINITIALISATION_PANEL, 'Operate');
+  Math.random = randomBefore;
   assert.equal(panel.handled, true);
+  assert.equal(h.quest.getStage(p), STAGE.daero, 'operating the panel only opens the puzzle');
+  const { neighbours, slide, solvedBoard } = require('../plugins/treasuretrails/trails/Puzzle.TreasureTrails');
+  const walk = solvedBoard(), way = [];
+  for (let i = 0; i < 101; i++) { const at = neighbours(walk.indexOf(-1))[0]; way.push(at); slide(walk, at); }
+  const pieces = core.CacheDefinitions.getComponentId('trail_slidepuzzle:pieces');
+  for (const slot of way.reverse()) {
+    (h.hooks.onInterfaceActionButton ?? []).forEach(fn => fn({ player: p, buttonId: pieces, action: 0, slot, handled: false }));
+  }
   assert.equal(h.quest.getStage(p), STAGE.reinitialised);
   assert.equal(h.variant(p, N.DAERO).variant, 'chapter-1-the-underground-hangar-speaking-to-daero-in-the-underground-hangar-after-the-puzzle-is-complete');
   assert.equal(p.getAttribute('quest.monkey_madness_i.post-puzzle-talk'), undefined,

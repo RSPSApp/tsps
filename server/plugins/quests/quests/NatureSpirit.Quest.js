@@ -169,8 +169,12 @@ module.exports = function registerNatureSpiritQuest(api) {
   const FILLIMAN_CAMP = { x: 3440, y: 3336, z: 0 };
   const NATURE_SPIRIT_CAMP = { x: 3441, y: 9738, z: 0 };
   const WASHING_BOWL_TILE = { x: 3437, y: 3337, z: 0 };
-  /** Mort Myre swamp: the ghasts the pouch can reveal all live inside. */
-  const SWAMP_BOUNDS = new Boundary(3380, 3590, 3310, 3480, 0);
+  /**
+   * Mort Myre swamp: the ghasts the pouch can reveal all live inside. Its north edge is the Gate's
+   * fence (the gate leaves are on y 3458, SWAMP_GATE_PASSAGE): y 3480 took in Canifis's south half,
+   * its bank included (booths at 3513, 3478-3483).
+   */
+  const SWAMP_BOUNDS = new Boundary(3380, 3590, 3310, 3457, 0);
 
   let quest;
 

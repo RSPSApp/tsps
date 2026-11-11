@@ -118,12 +118,14 @@ export class MovementQueue {
     private stepBlockedByEntity = false;
     private lastSentDestX = Number.MIN_SAFE_INTEGER;
     private lastSentDestY = Number.MIN_SAFE_INTEGER;
-    /**
-     * Ctrl-click run choice for the latest click's walk; null follows the run setting. It holds
-     * through the re-paths of the click's interaction (a walking NPC, a followed player) and
-     * ends once the player stops with nothing left to walk to.
-     */
+    /** Ctrl-click run choice for the current path only; null follows the run setting. */
     private runOverride: boolean | null = null;
+    /**
+     * A Ctrl-clicked interaction's run choice (an NPC, object, ground item or player); null
+     * follows the run setting. It holds through the interaction's re-paths (a walking NPC, a
+     * followed player, a fight's chase) and ends once the player is idle, or at the next click.
+     */
+    private clickRunOverride: boolean | null = null;
     /** This turn's interaction click's run choice, until its walk starts; undefined when none. */
     private pendingClickRunOverride: boolean | null | undefined = undefined;
 
@@ -412,7 +414,8 @@ export class MovementQueue {
         }
         this.reset();
         this.walkToReset();
-        this.runOverride = runOverride;
+        // A walk click replaces an interaction's run choice.
+        this.clickRunOverride = null;
         if (this.player && require("../../../plugins/PluginManager").PluginManager.emitWalkRoute({
             player: this.player,
             destination: { x: destination.getX(), y: destination.getY(), z: destination.getZ() },
@@ -546,7 +549,6 @@ export class MovementQueue {
             !this.isMoving &&
             this.character.getFollowing() == null
         ) {
-            this.endRunOverrideWhenIdle();
             return;
         }
 
@@ -634,7 +636,7 @@ export class MovementQueue {
         if (moved) this.lastMoveCycle = World.getProcessCycle();
 
         if (this.points.length === 0) {
-            this.endRunOverrideWhenIdle();
+            this.runOverride = null;
             this.syncDestinationFlagToRoute();
         }
 
@@ -809,6 +811,7 @@ export class MovementQueue {
             if (player.getRunEnergyUnits() <= 0) {
                 player.setRunEnergyUnits(0);
                 this.runOverride = null;
+                this.clickRunOverride = null;
                 player.setRunning(false);
                 player.getPacketSender().sendRunStatus();
             }
@@ -844,10 +847,11 @@ export class MovementQueue {
     public reset(clearDestination = true): MovementQueue {
         this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
-        // runOverride outlives a reset: interactions reset the queue on every re-path. A click's
-        // walk starts with a reset, which is where its run choice takes over.
+        this.runOverride = null;
+        // clickRunOverride outlives a reset: interactions reset the queue on every re-path. A
+        // click's walk starts with a reset, which is where its run choice takes over.
         if (this.pendingClickRunOverride !== undefined) {
-            this.runOverride = this.pendingClickRunOverride;
+            this.clickRunOverride = this.pendingClickRunOverride;
             this.pendingClickRunOverride = undefined;
         }
         this.points.clear();
@@ -1087,7 +1091,7 @@ export class MovementQueue {
     }
 
     /**
-     * Sets the run choice of an interaction click (see runOverride); null follows the run setting.
+     * Sets the run choice of an interaction click (see clickRunOverride); null follows the run setting.
      * It takes effect when the click starts its walk (every walk to a target resets the queue
      * first), so a click that walks nowhere leaves a walk in progress as it is.
      */
@@ -1100,17 +1104,26 @@ export class MovementQueue {
         this.pendingClickRunOverride = undefined;
     }
 
-    /** Ends a click's run choice once there is no route, no follow and no walk-to interaction left. */
-    private endRunOverrideWhenIdle(): void {
-        if (this.runOverride === null || this.points.length > 0) return;
-        if (this.character.getFollowing() != null || this.character.getCombatFollowing() != null) return;
+    /** Ends an interaction click's run choice, for a walk the click didn't start (a retaliation chase). */
+    public endClickRunOverride(): void {
+        this.clickRunOverride = null;
+        this.pendingClickRunOverride = undefined;
+    }
+
+    /**
+     * Ends an interaction click's run choice once the player is idle: no route, follow, fight
+     * or walk-to interaction left. Checked at the end of every turn, moving or not.
+     */
+    public endClickRunOverrideWhenIdle(): void {
+        if (this.clickRunOverride === null || this.points.length > 0) return;
+        if (this.character.getFollowing() != null || this.character.getCombat().getTarget() != null) return;
         if (this.character.isPlayer() && TaskManager.hasWalkToTask(this.character.getIndex())) return;
-        this.runOverride = null;
+        this.clickRunOverride = null;
     }
 
     public isRunToggled(): boolean {
         return this.character.isPlayer()
-            ? this.runOverride ?? (this.character as Player).isRunningReturn()
+            ? this.runOverride ?? this.clickRunOverride ?? (this.character as Player).isRunningReturn()
             : this.character.getAsNpc().getMovementSteps() > 1;
     }
 

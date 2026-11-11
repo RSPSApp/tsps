@@ -58,11 +58,14 @@ function combatClass(api) {
   class SkeletalWyvernCombatMethod extends CombatMethod {
     constructor() {
       super();
-      this.attack = Attack.MELEE;
+      // Not melee: the reach check runs before start(), and a stale melee type with a 6 tile range
+      // skips the adjacency check. start() picks the real attack from the distance at that moment.
+      this.attack = Attack.ICEBALL;
       this.melee = 0;
     }
 
     start(character, target) {
+      this.attack = chooseAttack(character.calculateDistance(target), Math.random());
       if (this.attack === Attack.MELEE) {
         character.performAnimation(new Animation(this.melee++ % 2 === 0 ? SEQ.bite : SEQ.tailSwipe));
         return;
@@ -92,6 +95,7 @@ function combatClass(api) {
       const hit = new PendingHit(character, target, this, { delay, rollAccuracy: false });
       // The breath's own table replaces the generic magic roll and its prayer stage.
       hit.markProtectionBypassed();
+      hit.wyvernBreath = true;
       if (!target.isPlayer()) {
         hit.setTotalDamage(Misc.randomInclusive(0, ICE_BREATH_MAX.unprotected));
         return [hit];
@@ -100,19 +104,24 @@ function combatClass(api) {
       const name = shieldName(player);
       const shield = BREATH_SHIELDS.has(name);
       const prayer = PrayerHandler.isActivated(player, PrayerHandler.PROTECT_FROM_MAGIC);
-      const damage = Misc.randomInclusive(0, iceBreathMax({ shield, prayer }));
-      hit.setTotalDamage(damage);
-      target.performGraphic(new Graphic(SPOTANIM.breathImpact));
+      hit.setTotalDamage(Misc.randomInclusive(0, iceBreathMax({ shield, prayer })));
       if (name !== FREEZE_IMMUNE_SHIELD) {
-        const frozen = shield || prayer ? Misc.randomInclusive(0, FREEZE_DENOMINATOR_PROTECTED - 1) === 0 : true;
-        if (frozen) CombatFactory.freezeTicks(player, FREEZE_TICKS);
+        hit.wyvernFreeze = shield || prayer ? Misc.randomInclusive(0, FREEZE_DENOMINATOR_PROTECTED - 1) === 0 : true;
       }
       return [hit];
     }
 
-    finished(character, target) {
-      this.attack = chooseAttack(character.calculateDistance(target), Math.random());
+    /** The breath's impact graphic and freeze land with the hit, not when the breath launches. */
+    handleAfterHitEffects(hit) {
+      if (!hit || !hit.wyvernBreath) return;
+      const target = hit.getTarget();
+      if (!target) return;
+      target.performGraphic(new Graphic(SPOTANIM.breathImpact));
+      if (hit.wyvernFreeze && target.isPlayer()) CombatFactory.freezeTicks(target.getAsPlayer(), FREEZE_TICKS);
     }
+
+    // Choosing in start() leaves nothing to carry from one attack to the next.
+    finished() {}
   }
 
   return SkeletalWyvernCombatMethod;
@@ -127,6 +136,7 @@ module.exports = {
     api.registerNpcCombatMethodProvider(
       [NpcIdentifiers.SKELETAL_WYVERN, NpcIdentifiers.SKELETAL_WYVERN_2, NpcIdentifiers.SKELETAL_WYVERN_3, NpcIdentifiers.SKELETAL_WYVERN_4],
       combatClass(api),
+      { singleton: false },
     );
   },
   _test: { iceBreathMax, chooseAttack, Attack, BREATH_SHIELDS, BASIC_MAX_HIT },

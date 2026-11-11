@@ -494,13 +494,13 @@ The buff bar's script (5923) draws most buffs from a var, in steps set by the bu
 
 ## Buff timers started by buff_bar_start
 
-The freeze (141), Staff of the dead special (142), poison damage (186) and Abyssal Sire stun (140) buffs keep their timer in a client varc that only `buff_bar_start` (script 5931: a struct and a value) writes, through script 5927. `BuffBarStart.plugin.js` runs it from each effect's own state when the value changes, and at login with 0 for those not running, since the varcs outlive a logout. Script 5923 draws each against varp 3079 `map_clock`, the tick count the server sends every tick. `tests/buff-bar-start.test.cjs` checks each one.
+The freeze (141), Staff of the dead special (142), poison damage (186) and Abyssal Sire stun (140) buffs keep their timer in a client varc that only `buff_bar_start` (script 5931: a struct and a value) writes, through script 5927. `BuffBarStart.plugin.js` runs it from each effect's own state when the value changes, and on the first tick after a login for all four, 0 for those not running, since the varcs outlive a logout and the bar ignores a start for a buff it hasn't built yet. Script 5923 draws each against varp 3079 `map_clock`, the tick count the server sends every tick. `tests/buff-bar-start.test.cjs` checks each one.
 
 | Row | Effect | Struct, varc | Value |
 | --- | --- | --- | --- |
-| 140 | Abyssal Sire stun | 3091, varc 475 | any: the client stores its own clock and draws 30 seconds from it; a restun starts it again. It can't be cleared, so it runs out by itself |
+| 140 | Abyssal Sire stun | 3091, varc 475 | any: the client stores its own clock and draws 30 seconds from it; a restun starts it again. It can't be cleared, so it runs out by itself, a few seconds after the Sire's 46-tick stun ends |
 | 141 | Freeze, bind, snare, entangle ("Bound.") | 3092, varc 476 | the tick the freeze ends on (script 4678: varc − map_clock); 0 when it ends, or at death, which cancels it |
-| 142 | Staff of the dead special | 3093, varc 477 | the tick it started (script 5940 draws param 1541, 100 ticks, from it); 0 once the minute is up or the effect ends early |
+| 142 | Staff of the dead special | 3093, varc 477 | the tick it started (script 5940 draws param 1541, 100 ticks, from it); 0 once the minute is up or the effect ends early. A death doesn't end the effect, so the buff runs on through it |
 | 186 | Poison and venom damage | 3740 poison, 3741 venom, varc 983 | the tick the current 30-tick pulse started, so it shows the time to the next hit; shown only while varp 102 `poison` is a poison or venom value; 0 once cured |
 
 - Ours: live has not been recorded sending `buff_bar_start` for any of these (see the "Not done" note above, which still holds for the other varc buffs); the structs, varcs and durations are the cache's.

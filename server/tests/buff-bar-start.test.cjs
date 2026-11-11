@@ -45,7 +45,7 @@ function fixture() {
   };
   const sent = () => calls.splice(0).map(([id, struct, value]) => (assert.equal(id, SCRIPT), [struct, value]));
   const tick = () => { world.cycle++; hooks.process({ player }); };
-  return { world, hooks, state, attributes, player, sent, tick, login: () => hooks.login({ player }) };
+  return { world, hooks, state, attributes, player, sent, tick, login: () => { hooks.login({ player }); hooks.process({ player }); } };
 }
 
 test("the structs are the cache's buffs, with the durations the bar draws them for", () => {
@@ -56,7 +56,7 @@ test("the structs are the cache's buffs, with the durations the bar draws them f
   }
 });
 
-test("a login clears every buff that is not running, as the client's varcs outlive a logout", () => {
+test("the tick after a login clears every buff that is not running, as the client's varcs outlive a logout", () => {
   const f = fixture();
   f.login();
   assert.deepEqual(f.sent(), [[FREEZE.struct, 0], [SOTD.struct, 0], [POISON.struct, 0]]);
@@ -139,6 +139,15 @@ test("a pulse held back by an open interface keeps its value; venom uses its own
   assert.deepEqual(f.sent(), [[VENOM.struct, 5004]]);
 });
 
+test("an unwatched bot gets none", () => {
+  const f = fixture();
+  f.player.isUnwatchedBot = () => true;
+  f.state.freeze = 10;
+  f.login();
+  f.tick();
+  assert.deepEqual(f.sent(), []);
+});
+
 test("the Sire's stun event starts its buff for that player", () => {
   const f = fixture();
   f.hooks["abyssal-sire:stunned"]({ player: f.player });
@@ -152,6 +161,8 @@ test("logout forgets what was sent, so the next login sends it again", () => {
   f.tick();
   f.sent();
   f.hooks.logout({ player: f.player });
-  f.login();
+  f.hooks.login({ player: f.player });
+  assert.deepEqual(f.sent(), [], "nothing at the login itself, before the bar is built");
+  f.hooks.process({ player: f.player });
   assert.deepEqual(f.sent(), [[FREEZE.struct, 5001 + 10], [SOTD.struct, 0], [POISON.struct, 0]]);
 });

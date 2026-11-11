@@ -17,7 +17,7 @@ const VENOM_STRUCT = 3741;
 /** The ticks the Staff of the dead special and a poison pulse are drawn for (param 1541 of their structs). */
 const POWER_OF_DEATH_TICKS = 100;
 const POISON_PULSE_TICKS = 30;
-const POWER_OF_DEATH_ATTRIBUTE = "power-of-death:until";
+const { POWER_OF_DEATH_ATTRIBUTE } = require("../combat/specials/PowerOfDeath.SpecialAttack");
 
 let core = null;
 /** The last value sent per player: [freeze, Staff of the dead, poison or venom]. */
@@ -51,10 +51,12 @@ function poisonPulse(player, now, prior) {
   return [struct, now + ticksUntilPulse - POISON_PULSE_TICKS];
 }
 
-function sync(player, force = false) {
+/** The first tick after a login sends every one, 0 included, since the client's varcs outlive a logout. */
+function sync(player) {
+  if (player.isUnwatchedBot?.()) return; // no client to draw them
   const now = core.World.getProcessCycle();
   const prior = sentValues.get(player);
-  if (!prior) force = true;
+  const force = !prior;
   const freeze = freezeEnd(player, now);
   const powerOfDeath = powerOfDeathStart(player, now);
   const poison = poisonPulse(player, now, prior?.[2]);
@@ -67,9 +69,12 @@ function sync(player, force = false) {
   sentValues.set(player, [freeze, powerOfDeath, poison]);
 }
 
-/** A login sends every one, 0 included, since the client's varcs outlive a logout. */
+/**
+ * The buff bar drops a start for a buff whose slot it hasn't built yet (script 5931 checks it first), so a login
+ * only forgets what was sent and the next tick, after the gameframe is up, sends them all.
+ */
 function onLogin({ player }) {
-  sync(player, true);
+  sentValues.delete(player);
 }
 
 function onProcess({ player }) {

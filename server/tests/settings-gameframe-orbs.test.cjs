@@ -89,6 +89,17 @@ test('Game client layout in All Settings switches the root and keeps it, for eac
   }
 });
 
+test('Game client layout also takes the two 317 layouts our client adds to the list', () => {
+  for (const [option, root] of [[3, 161], [4, 548]]) {
+    const p = player();
+    assert.equal(choose(p, 12, option), true, `option ${option} is handled`);
+    assert.deepEqual(p.sent.roots, [root]);
+    assert.equal(p.getAttribute('client-layout317'), true);
+    assert.equal(p.getPacketSender().getVarp(7995), 1, 'the 317 layout var');
+  }
+  assert.equal(choose(player(), 12, 5), false, 'nothing past them');
+});
+
 test('Game client layout keeps a mobile client on the mobile layout without saving it', () => {
   const p = player(new Map([[MOBILE_CLIENT_ATTRIBUTE, true], ['client-layout-root', 164]]));
   assert.equal(choose(p, 12, 0), true);

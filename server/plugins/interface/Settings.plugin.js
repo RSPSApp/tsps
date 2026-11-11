@@ -79,7 +79,9 @@ const UNMUTED_DEFAULT_VOLUME = 100;
 // children of 116:40, so clicks only reach us when that range has op1 flags
 // (encodeGameframeFlags sends them).
 const DISPLAY_LAYOUT_DROPDOWN = DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID;
-// Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317.
+// Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317. The cache
+// has the first three; our client adds the two 317 layouts, to both dropdowns.
+const GAMEFRAME_LAYOUT_ENUM = 3509;
 const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548];
 const GAMEFRAME_317_OPTION = 3;
 const GAMEFRAME_317_FIXED_OPTION = 4;
@@ -88,8 +90,7 @@ const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
 const DEFAULT_GAMEFRAME_ROOT = 161;
 const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
 // All Settings > Interfaces: "Game client layout" (12), a dropdown on enum 3509 like the side
-// panel's (its three options, Fixed, Resizable Classic and Resizable Modern, in the same order),
-// and "Show data orbs" (8), a toggle on varbit 4084 orbs_disabled.
+// panel's, and "Show data orbs" (8), a toggle on varbit 4084 orbs_disabled.
 const GAME_CLIENT_LAYOUT_SETTING = 12;
 const SHOW_DATA_ORBS_SETTING = 8;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
@@ -342,7 +343,9 @@ function catalog() {
       settings.set(Number(settingId), {
         category: categoryId,
         type: Number(params.get(PARAM_SETTING_TYPE) ?? SETTING_TYPE_TOGGLE),
-        optionCount: options === undefined ? 0 : CacheDefinitions.getEnumValues(Number(options)).size,
+        optionCount: options === undefined ? 0
+          : Number(options) === GAMEFRAME_LAYOUT_ENUM ? GAMEFRAME_LAYOUT_ROOTS.length
+          : CacheDefinitions.getEnumValues(Number(options)).size,
         lockedText: Number(params.get(PARAM_SETTING_LOCKABLE)) === 1 ? params.get(PARAM_SETTING_LOCKED_TEXT) : undefined,
       });
     }

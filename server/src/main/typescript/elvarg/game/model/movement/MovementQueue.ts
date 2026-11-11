@@ -118,7 +118,11 @@ export class MovementQueue {
     private stepBlockedByEntity = false;
     private lastSentDestX = Number.MIN_SAFE_INTEGER;
     private lastSentDestY = Number.MIN_SAFE_INTEGER;
-    /** Ctrl-click run choice for the current path only; null follows the run setting. */
+    /**
+     * Ctrl-click run choice for the latest click's walk; null follows the run setting. It holds
+     * through the re-paths of the click's interaction (a walking NPC, a followed player) and
+     * ends once the player stops with nothing left to walk to.
+     */
     private runOverride: boolean | null = null;
 
     /**
@@ -406,6 +410,7 @@ export class MovementQueue {
         }
         this.reset();
         this.walkToReset();
+        this.runOverride = runOverride;
         if (this.player && require("../../../plugins/PluginManager").PluginManager.emitWalkRoute({
             player: this.player,
             destination: { x: destination.getX(), y: destination.getY(), z: destination.getZ() },
@@ -539,6 +544,7 @@ export class MovementQueue {
             !this.isMoving &&
             this.character.getFollowing() == null
         ) {
+            this.endRunOverrideWhenIdle();
             return;
         }
 
@@ -626,7 +632,7 @@ export class MovementQueue {
         if (moved) this.lastMoveCycle = World.getProcessCycle();
 
         if (this.points.length === 0) {
-            this.runOverride = null;
+            this.endRunOverrideWhenIdle();
             this.syncDestinationFlagToRoute();
         }
 
@@ -836,7 +842,7 @@ export class MovementQueue {
     public reset(clearDestination = true): MovementQueue {
         this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
-        this.runOverride = null;
+        // runOverride outlives a reset: interactions reset the queue on every re-path.
         this.points.clear();
         this.followX = -1;
         this.followY = -1;
@@ -1071,6 +1077,19 @@ export class MovementQueue {
     // Gets the size of the queue.
     public size(): number {
         return this.points.length;
+    }
+
+    /** Sets the run choice of an interaction click (see runOverride); null follows the run setting. */
+    public setClickRunOverride(run: boolean | null): void {
+        this.runOverride = run;
+    }
+
+    /** Ends a click's run choice once there is no route, no follow and no walk-to interaction left. */
+    private endRunOverrideWhenIdle(): void {
+        if (this.runOverride === null || this.points.length > 0) return;
+        if (this.character.getFollowing() != null || this.character.getCombatFollowing() != null) return;
+        if (this.character.isPlayer() && TaskManager.hasWalkToTask(this.character.getIndex())) return;
+        this.runOverride = null;
     }
 
     public isRunToggled(): boolean {

@@ -273,6 +273,7 @@
     { "minX": 2892, "maxX": 2932, "minY": 4435, "maxY": 4464, "z": 0, "tags": ["multi-combat"] },
     { "minX": 3279, "maxX": 3307, "minY": 3156, "maxY": 3179, "z": 0, "tags": ["multi-combat"] },
     { "minX": 3456, "maxX": 3520, "minY": 9472, "maxY": 9536, "z": 0, "tags": ["multi-combat"] },
+    { "_description": "Kalphite Lair, upper level (rsprox 95, 545, 1510, 1511, 1757, 1864, 2952, 4001: the multi icon comes on when the player climbs down from the surface)", "minX": 3456, "maxX": 3520, "minY": 9472, "maxY": 9536, "z": 2, "tags": ["multi-combat"] },
     { "_description": "Castle Wars arena: both castles and the island", "minX": 2368, "maxX": 2432, "minY": 3072, "maxY": 3136, "z": 0, "tags": ["multi-combat"] },
     { "_description": "Castle Wars arena, first floor", "minX": 2368, "maxX": 2432, "minY": 3072, "maxY": 3136, "z": 1, "tags": ["multi-combat"] },
     { "_description": "Castle Wars arena, second floor", "minX": 2368, "maxX": 2432, "minY": 3072, "maxY": 3136, "z": 2, "tags": ["multi-combat"] },

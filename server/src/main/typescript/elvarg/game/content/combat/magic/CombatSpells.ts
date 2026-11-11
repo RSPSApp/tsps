@@ -60,7 +60,12 @@ class ChargeSpell extends Spell {
         player.getSkillManager().addExperiences(Skill.MAGIC, this.baseExperience());
         const until = World.getProcessCycle() + CombatSpells.CHARGE_TICKS;
         player.setAttribute(CombatSpells.CHARGE_UNTIL, until);
-        player.sendMessage("You feel charged with magic power.");
+        // rsprox_transcripts/235/03344.txt tick 5704: the red line, human_casting (811), teleport_casting
+        // (111) at delay 32 and height 128, and synth sound 1651.
+        player.sendMessage("<col=ef1020>You feel charged with magic power.</col>");
+        player.performAnimation(new Animation(811));
+        player.performGraphic(new Graphic(111, 32, 128 as GraphicHeight));
+        player.getPacketSender().sendSoundEffect(1651, 1, 0, 255);
         // The plugin that says "Your magical charge fades away" schedules itself from this.
         PluginManager.emitCustomEvent("magic:charge-cast", { player, until });
         return true;

@@ -62,7 +62,8 @@ export class EquipPacketListener {
   }
 
   public static resolveEquipmentSlot(groupId: number, childId: number): number {
-    const firstChild = groupId === 387 ? 15 : groupId === 84 ? 10 : -1;
+    // Bankmain's worn slots (enum 2777) follow the same order as the equipment screens.
+    const firstChild = groupId === 387 ? 15 : groupId === 84 ? 10 : groupId === 12 ? 68 : -1;
     return firstChild < 0
       ? -1
       : EquipPacketListener.EQUIPMENT_SLOTS[childId - firstChild] ?? -1;

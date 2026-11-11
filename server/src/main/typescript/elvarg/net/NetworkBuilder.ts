@@ -979,7 +979,10 @@ export class ClientConnection {
             // The dialogue this click can answer: one opened by the click itself (an inventory
             // option's statement) must not take the same click as its option.
             const openDialogue = this.player.getDialogueManager().getCurrent();
-            const equipmentSlot = EquipPacketListener.resolveEquipmentSlot(actionPacket.groupId, actionPacket.childId);
+            const equipmentSlot = actionPacket.groupId === Bank.MAIN_INTERFACE_ID &&
+              (actionPacket.buttonNum !== 1 || !Bank.isOpen(this.player))
+              ? -1
+              : EquipPacketListener.resolveEquipmentSlot(actionPacket.groupId, actionPacket.childId);
             if (isWorldMapOrbWidget(actionPacket.widgetId) && actionPacket.buttonNum === 2) {
               this.player.getPacketSender().toggleWorldMap();
             } else if (actionPacket.widgetId === WORLD_MAP_CLOSE_WIDGET_ID) {

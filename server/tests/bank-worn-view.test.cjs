@@ -13,6 +13,7 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
 
 let core;
 before(async () => {
@@ -66,4 +67,36 @@ test("op 9 deposits that backpack slot; op 10 examines; a stale item id is ignor
   assert.equal(p.getInventory().getAmount(I.RUNE_SCIMITAR), 0);
   assert.equal(p.getBank().getAmount(I.RUNE_SCIMITAR), 1, "the backpack one is banked");
   assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), I.RUNE_SCIMITAR, "the worn one stays on");
+});
+
+test("the bank's worn weapon Remove action moves it to the backpack and keeps the bank open", async (t) => {
+  const { p } = banker(t);
+  const { Equipment, Item, ItemIdentifiers } = core;
+  const weapon = ItemIdentifiers.RUNE_SCIMITAR;
+  p.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weapon));
+  const channel = { isOpen: () => true, send: () => true, onData() {}, onError() {}, onClose() {}, close() {} };
+  const connection = new ClientConnection(channel);
+  connection.player = p;
+  const remove = async () => {
+    await connection.dispatch([{
+      type: "widget_action", widgetId: (12 << 16) | 71, groupId: 12, childId: 71,
+      buttonNum: 1, slot: -1, itemId: -1,
+    }]);
+    connection.processTurnPackets();
+  };
+
+  p.setInterfaceId(-1);
+  await remove();
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), weapon, "the bank must be open");
+  p.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  for (let slot = 0; slot < p.getInventory().capacity(); slot++) {
+    p.getInventory().setItem(slot, new Item(ItemIdentifiers.LOBSTER));
+  }
+  await remove();
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), weapon, "a full backpack cannot receive it");
+  p.getInventory().deleteAtSlot(0, 1, false);
+  await remove();
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), -1);
+  assert.equal(p.getInventory().getAmount(weapon), 1);
+  assert.equal(p.getInterfaceId(), Bank.MAIN_INTERFACE_ID);
 });

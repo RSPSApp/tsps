@@ -558,7 +558,9 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
     - the raft's placeholder id (59661).
   - Guessed rather than captured:
     - the part names in the swap message ("mast and sails");
-    - the level, materials and "already has that" messages.
+    - the level, materials and "already has that" messages;
+    - after a refused Build (parts or a facility), the init (8809) runs again so Build's spinner goes, and 939 stays open. No capture has a refused Build;
+    - a Build that arrives after 939 has closed builds nothing.
   - Materials come from the inventory only.
 - **Ports**, guessed rather than captured:
   - Disembarking at a port's gangplank docks the boat there if it wasn't (the capture docked at the buoy first). It needs the port's level unless the boat is already docked there.

@@ -260,24 +260,24 @@ function refusal(player, requirements) {
   return null;
 }
 
-/** Builds the chosen option on the boat: its part becomes that tier. */
+/** Builds the chosen option on the boat: its part becomes that tier. False if it's refused. */
 function build(player, optionRow) {
   const visit = visits.get(player);
   const boat = visit && ownedBoat(player, visit.slot);
   const option = boat && parts.optionFor(boat, optionRow);
-  if (!option) return;
+  if (!option) return false;
   const schematic = { player, row: optionRow, allow: null };
   pluginApi.emitCustomEvent("sailing:schematic-can-build", schematic);
-  if (schematic.allow === false) return;
+  if (schematic.allow === false) return false;
   if ((boat.parts?.[option.part] ?? 0) === option.tier) {
     player.sendMessage("Your boat already has that.");
-    return;
+    return false;
   }
   const requirements = parts.requirementsOf(option.part, optionRow);
   const refused = refusal(player, requirements);
   if (refused) {
     player.sendMessage(refused);
-    return;
+    return false;
   }
   for (const [item, count] of requirements.materials) player.getInventory().delete(item, count);
   boat.parts = { ...boat.parts, [option.part]: option.tier };
@@ -296,6 +296,7 @@ function build(player, optionRow) {
       new EndDialogue(1),
     ));
   });
+  return true;
 }
 
 /** A Build in the parts customisation (facility builds are ShipyardFacilities.Sailing.js's). */
@@ -303,11 +304,24 @@ function clickCustomisation(event) {
   if (!isBuildTrigger(event) || visits.get(event.player)?.hotspot !== undefined) return;
   event.handled = true;
   const optionRow = readOptionRow(event.argsData);
-  if (optionRow !== undefined) build(event.player, optionRow);
+  if (optionRow === undefined || !build(event.player, optionRow)) refreshCustomisation(event.player);
 }
 
+/**
+ * Script 8834's Build trigger, while the customisation is still open. One that arrives after 939
+ * closed (Build clicked, then walking off) builds nothing.
+ */
 function isBuildTrigger(event) {
-  return event.groupId === CUSTOMISATION && event.childId === CUSTOMISATION_OPTIONS && event.scriptTrigger === true;
+  return event.groupId === CUSTOMISATION && event.childId === CUSTOMISATION_OPTIONS && event.scriptTrigger === true
+    && event.player.getInterfaceId() === CUSTOMISATION;
+}
+
+/**
+ * Redraws the open customisation after a refused Build: Build's spinner (939:23) stays up until
+ * 939 closes or 8811 redraws it, and the init (8809) runs 8811, keeping the selected tab.
+ */
+function refreshCustomisation(player) {
+  player.getPacketSender().sendInterfaceScript(SCRIPT_CUSTOMISATION_INIT);
 }
 
 function atGangplank(location) {
@@ -406,6 +420,7 @@ module.exports = {
   ownedBoat,
   openCustomisation,
   closeCustomisation,
+  refreshCustomisation,
   isBuildTrigger,
   refusal,
   register(api) {

@@ -2040,6 +2040,7 @@ function shipyardHarness() {
   const varps = new Map();
   const chatboxes = [];
   const flags = [];
+  const scripts = [];
   const sender = new Proxy({}, {
     get: (_t, key) => (...args) => {
       if (key === "getVarbit") return varbits.get(args[0]) ?? 0;
@@ -2047,6 +2048,7 @@ function shipyardHarness() {
       if (key === "sendConfig") varps.set(args[0], args[1]);
       if (key === "sendChatboxInterface") chatboxes.push(args[0]);
       if (key === "sendInterfaceFlagsRange") flags.push(args);
+      if (key === "sendInterfaceScript") scripts.push(args[0]);
       // As PacketSender does: the main interface goes and "interface:closed" tells of it.
       if (key === "sendInterfaceRemoval") {
         const closed = interfaceId;
@@ -2071,7 +2073,8 @@ function shipyardHarness() {
     shipyard.interfaceClicks.forEach((handler) => handler(event));
     return event.handled;
   };
-  return { Skill, shipyard, player, levels, xp, statements, varbits, varps, chatboxes, flags, buildRow, boat: () => player.getSailing().boats[0] };
+  const openSchematics = () => shipyard.objects["Boat schematics"].Modify({ player });
+  return { Skill, shipyard, player, levels, xp, statements, varbits, varps, chatboxes, flags, scripts, buildRow, openSchematics, boat: () => player.getSailing().boats[0] };
 }
 
 test("the schematics' options carry op 1 and script triggers, as captured, so the official client sends Build", () => {
@@ -2120,6 +2123,7 @@ test("closing a hotspot's customisation by any route leaves the schematics showi
 test("building at the schematics swaps a part for the cache's materials and gives Construction XP", () => {
   const h = shipyardHarness();
   const OAK_HULL = 8272; // skiff: Sailing 20, Construction 8; 10 oak hull parts, 300 iron nails, 20 swamp tar
+  h.openSchematics();
   assert.equal(h.buildRow(OAK_HULL), true);
   assert.match(h.player.messages.at(-1), /Sailing level of 20 and a Construction level of 8/);
   h.levels.set(h.Skill.SAILING, 20);
@@ -2136,9 +2140,43 @@ test("building at the schematics swaps a part for the cache's materials and give
   for (let tick = 0; tick < 4; tick++) TaskManager.process();
   assert.equal(h.statements.length, 1, "continuable once faded back in");
   // Back to wooden: a downgrade costs its own materials and the oak hull isn't refunded.
+  h.openSchematics();
   h.buildRow(8271);
   assert.equal(h.player.messages.at(-1), "You don't have the materials needed to build that.");
   assert.equal(h.player.getInventory().getAmount(32044), 0);
+});
+
+test("a refused Build redraws the customisation, and one that arrives after it closed builds nothing", () => {
+  const h = shipyardHarness();
+  const OAK_HULL = 8272;
+  h.levels.set(h.Skill.SAILING, 20);
+  h.levels.set(h.Skill.CONSTRUCTION, 8);
+  for (const [item, count] of [[32044, 10], [4820, 300], [1939, 20]]) h.player.getInventory().add(new Item(item, count), false);
+
+  // Build clicked, then walked off before the trigger arrived: 939 is closed, so nothing is built.
+  h.openSchematics();
+  h.player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(h.buildRow(OAK_HULL), false);
+  assert.equal(h.boat().parts?.hull ?? 0, 0, "the hull is still wooden");
+  assert.equal(h.player.getInventory().getAmount(32044), 10, "nothing used up");
+
+  // Refused while open (the boat already has a wooden hull): Build's spinner (939:23) stays up
+  // until 8811 redraws 939, so the init (8809, which runs 8811) is sent again, and 939 stays open.
+  h.openSchematics();
+  const sent = h.scripts.length;
+  assert.equal(h.buildRow(8271), true);
+  assert.equal(h.player.messages.at(-1), "Your boat already has that.");
+  assert.deepEqual(h.scripts.slice(sent), [8809]);
+  assert.equal(h.player.getInterfaceId(), 939);
+
+  // A trigger with no readable row is refused the same way; the next Build still builds.
+  const event = { player: h.player, groupId: 939, childId: 17, scriptTrigger: true, argsData: Buffer.alloc(0), handled: false };
+  h.shipyard.interfaceClicks.forEach((handler) => handler(event));
+  assert.deepEqual(h.scripts.slice(sent), [8809, 8809]);
+  h.buildRow(OAK_HULL);
+  assert.equal(h.boat().parts.hull, 1, "the hull is now oak");
+  assert.deepEqual(h.scripts.slice(sent), [8809, 8809], "a build closes 939 instead");
+  assert.equal(h.player.getInterfaceId(), -1);
 });
 
 test("leaving the shipyard takes its boat away", () => {
@@ -2271,8 +2309,10 @@ test("aboard in the shipyard, a hotspot's Build builds a facility and Modify rem
     for (const handler of [...h.shipyard.interfaceClicks, ...built.interfaceClicks]) handler(event);
     return event.handled;
   };
+  const sent = h.scripts.length;
   assert.equal(trigger(8512), true);
   assert.match(h.player.messages.at(-1), /Sailing level of 16 and a Construction level of 6/);
+  assert.deepEqual(h.scripts.slice(sent), [8809], "the refusal redraws 939, hiding Build's spinner");
   h.levels.set(h.Skill.SAILING, 16);
   h.levels.set(h.Skill.CONSTRUCTION, 6);
   for (const [item, count] of [[2353, 4], [973, 2], [590, 1]]) h.player.getInventory().add(new Item(item, count), false);
@@ -3620,7 +3660,9 @@ function shipyardModify() {
     while (v > 0x7f) { bytes.push((v & 0x7f) | 0x80); v >>>= 7; }
     bytes.push(v, 0);
     const event = { player: h.player, groupId: 939, childId: 17, scriptTrigger: true, argsData: Buffer.from(bytes), handled: false };
+    const sent = h.scripts.length;
     for (const handler of [...h.shipyard.interfaceClicks, ...built.interfaceClicks]) handler(event);
+    return h.scripts.slice(sent);
   };
   const hotspotWith = (name) => facilities.hotspotsOf("skiff").find((candidate) => candidate.allowed
     .some((row) => facilities.facilityRequirements(row).name === name));
@@ -3636,7 +3678,8 @@ test("a smaller hold or none can't hide cargo: replacing or removing it asks for
   facilities.setFacility(h.boat, hotspot.id, teak);
   assert.equal(cargo.store(h.boat, 31964, 50), 50, "a teak hold takes 50 repair kits");
 
-  h.replace(hotspot, basic);
+  // The client can't know the hold's cargo, so this refusal comes after Build's spinner: 939 is redrawn.
+  assert.deepEqual(h.replace(hotspot, basic), [8809]);
   assert.equal(h.player.messages.at(-1), "You'll need to empty your cargo hold first.");
   assert.equal(facilities.facilityAt(h.boat, hotspot.id), teak, "the teak hold stays");
   assert.deepEqual(h.used, [], "nothing used up");
@@ -3647,7 +3690,7 @@ test("a smaller hold or none can't hide cargo: replacing or removing it asks for
 
   // 30 kits left, 20 of them in slots past a basic hold's 30: they move into its free slots.
   for (let slot = 0; slot < 20; slot++) h.boat.cargo[slot] = null;
-  h.replace(hotspot, basic);
+  assert.deepEqual(h.replace(hotspot, basic), [], "a build closes 939 instead");
   assert.equal(facilities.facilityAt(h.boat, hotspot.id), basic);
   assert.equal(cargo.capacityOf(h.boat), 30);
   assert.equal(h.boat.cargo.slice(0, 30).filter(Boolean).length, 30, "all 30 kits in the basic hold's slots");

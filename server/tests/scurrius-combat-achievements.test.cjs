@@ -84,18 +84,54 @@ test("the public Scurrius gives neither Perfect Scurrius nor Sit Rat", () => {
   assert.deepEqual(tasks("public"), []);
 });
 
-test("Sit Rat: the killing blow with a ratbane weapon in a private instance", () => {
+/** A boss with hitpoints, and damage from `source` landing on it as Mobile.decrementHealth reports it. */
+const bossWithHp = (id, hp) => ({ getId: () => id, hp, getHitpoints() { return this.hp; } });
+function damage(boss, source, amount) {
+  const lost = Math.min(boss.hp, amount);
+  boss.hp -= lost;
+  if (lost > 0) api.emitCustomEvent("combat:damage-applied", { target: boss, hit: { getSource: () => source, getHealthLost: () => lost } });
+}
+
+test("Sit Rat: the killing blow with a ratbane weapon in a private instance, on that hit", () => {
   completed.length = 0;
-  const boss = npc(Common.SOLO_ID);
+  const boss = bossWithHp(Common.SOLO_ID, 40);
   const killer = player("killer", { weapon: I.BONE_SHORTBOW });
-  api.emitCustomEvent("scurrius:rockfall-hit", { npc: boss, player: killer, damage: 15 });
+  damage(boss, killer, 25);
+  assert.deepEqual(tasks("killer"), [], "not before he is finished off");
+  damage(boss, killer, 25);
+  assert.deepEqual(tasks("killer"), ["Sit Rat"], "on the tick his hitpoints reach 0, before the death event");
   onNpcDeath({ npc: boss, killer, damagers: [killer] });
-  assert.deepEqual(tasks("killer"), ["Sit Rat"]);
+  assert.deepEqual(tasks("killer"), ["Sit Rat", "Perfect Scurrius"], "the death event doesn't award it again");
+
   const other = player("other", { weapon: I.ABYSSAL_WHIP });
-  const second = npc(Common.SOLO_ID);
-  api.emitCustomEvent("scurrius:rockfall-hit", { npc: second, player: other, damage: 15 });
+  const second = bossWithHp(Common.SOLO_ID, 10);
+  damage(second, other, 15);
   onNpcDeath({ npc: second, killer: other, damagers: [other] });
-  assert.deepEqual(tasks("other"), []);
+  assert.deepEqual(tasks("other"), ["Perfect Scurrius"]);
+});
+
+test("Sit Rat goes by the weapon of the killing hit, not the one held at the death event 5 ticks later", () => {
+  completed.length = 0;
+  // Whip kill, rat bone mace wielded during the death animation: no Sit Rat.
+  const swapper = player("swapper", { weapon: I.ABYSSAL_WHIP });
+  const boss = bossWithHp(Common.SOLO_ID, 20);
+  damage(boss, swapper, 30);
+  swapper.getEquipment = () => ({ get: () => ({ getId: () => I.BONE_MACE }) });
+  onNpcDeath({ npc: boss, killer: swapper, damagers: [swapper] });
+  assert.ok(!tasks("swapper").includes("Sit Rat"));
+
+  // Rat bone mace kill, back to the whip before the death event: Sit Rat.
+  const switcher = player("switcher", { weapon: I.BONE_MACE });
+  const second = bossWithHp(Common.SOLO_ID, 20);
+  damage(second, switcher, 30);
+  switcher.getEquipment = () => ({ get: () => ({ getId: () => I.ABYSSAL_WHIP }) });
+  onNpcDeath({ npc: second, killer: switcher, damagers: [switcher] });
+  assert.ok(tasks("switcher").includes("Sit Rat"));
+
+  // The public Scurrius never gives it, however he is finished off.
+  const crowd = player("crowd", { weapon: I.BONE_MACE });
+  damage(bossWithHp(Common.PUBLIC_ID, 5), crowd, 10);
+  assert.deepEqual(tasks("crowd"), []);
 });
 
 test("Efficient Pest Control: six rats within 5 ticks, not six spread wider", () => {

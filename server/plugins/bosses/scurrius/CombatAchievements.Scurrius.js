@@ -1,7 +1,9 @@
 /**
  * Scurrius' Combat Achievements beyond his kill counts (Wiki: Scurrius/Combat Achievements):
  * - Sit Rat: finish him off in a private instance with a ratbane weapon (the rat bone mace,
- *   shortbow or staff, Fight's ratbaneIds) in hand.
+ *   shortbow or staff, Fight's ratbaneIds) in hand. It is the weapon held when the killing hit
+ *   lands, and the task completes then: on the tick his hitpoints reach 0, before the death
+ *   animation (rsprox_transcripts/227/00083.txt, tick 21236), not at the death event 5 ticks on.
  * - Perfect Scurrius: kill him in a private instance without damage from Tail Swipe (his melee) or
  *   Falling Bricks (the rubble after a stomp), praying correctly as each Flying Fur (ranged) and
  *   Bolt of Electricity (magic) lands: Protect from Missiles or Protect from Magic. The landing is
@@ -52,6 +54,18 @@ function onHitResolved({ attacker, target, hit }) {
   }
 }
 
+/**
+ * Damage taking a private Scurrius to 0 hitpoints (Mobile.decrementHealth, after his hitpoints
+ * are set): the killing hit, the only one that can, since a dead NPC loses no more health.
+ */
+function onDamageApplied({ target, hit }) {
+  if (!Common.isScurrius(target) || Common.isPublic(target) || !(target.getHitpoints?.() <= 0)) return;
+  const killer = hit?.getSource?.();
+  if (!killer?.isPlayer?.()) return;
+  const weapon = killer.getEquipment?.()?.get(core.Equipment.WEAPON_SLOT)?.getId?.();
+  if (Fight.ratbaneIds().has(weapon)) complete(killer, SIT_RAT);
+}
+
 /** The rubble landing on a player (Fight.stomp). */
 function onRockfall({ npc, player }) {
   slip(npc, player);
@@ -64,10 +78,6 @@ function bossDied(npc, killer, damagers) {
   const players = [...new Set([killer, ...(damagers ?? [])])].filter((player) => player?.isPlayer?.());
   for (const player of players) {
     if (!failed?.has(player)) complete(player, PERFECT);
-  }
-  if (killer?.isPlayer?.()) {
-    const weapon = killer.getEquipment?.()?.get(core.Equipment.WEAPON_SLOT)?.getId?.();
-    if (Fight.ratbaneIds().has(weapon)) complete(killer, SIT_RAT);
   }
 }
 
@@ -91,9 +101,10 @@ function attach(pluginApi) {
   api.onCombatHitResolved(onHitResolved);
   api.onNpcDeath(onNpcDeath);
   api.onCustomEvent("scurrius:rockfall-hit", onRockfall);
+  api.onCustomEvent("combat:damage-applied", onDamageApplied);
 }
 
 module.exports = {
   attach,
-  _test: { onHitResolved, onRockfall, onNpcDeath, slips, PEST_CONTROL_TICKS, PEST_CONTROL_RATS },
+  _test: { onHitResolved, onDamageApplied, onRockfall, onNpcDeath, slips, PEST_CONTROL_TICKS, PEST_CONTROL_RATS },
 };

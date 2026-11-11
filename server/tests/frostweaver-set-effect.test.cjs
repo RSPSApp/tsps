@@ -150,15 +150,19 @@ test("the set effect starts off and the combat tab's Toggle set effect button (5
   const f = fixture(t, "BIND", { enabled: false });
   const varbits = [];
   t.mock.method(f.p.getPacketSender(), "sendVarbit", (id, value) => varbits.push([id, value]));
+  let tick = 1000; // each cast waits out the shared spell cast delay
+  t.mock.method(core.World, "getProcessCycle", () => tick);
   f.cast();
   assert.equal(swings(f).length, 0, "off by default");
   const click = () => PluginManager.emitInterfaceActionClick({ player: f.p, buttonId: (593 << 16) | 37, action: 1, groupId: 593, childId: 37, opId: 1, handled: false });
   assert.equal(click(), true);
   assert.deepEqual(varbits, [[9870, 1]]);
+  tick += 10;
   f.cast();
   assert.equal(swings(f).length, 1, "on after the click");
   assert.equal(click(), true);
   assert.deepEqual(varbits, [[9870, 1], [9870, 0]]);
+  tick += 10;
   f.cast();
   assert.equal(swings(f).length, 1, "off again after the second click");
 });

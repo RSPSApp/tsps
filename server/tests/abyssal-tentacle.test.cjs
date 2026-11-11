@@ -268,7 +268,10 @@ test("degrading recalculates the player's equipment bonuses", () => {
   assert.deepEqual(bonusUpdates, [player]);
 });
 
-test("creation through the real item-use dispatcher confirms, consumes one pair and rejects stale ingredients", async () => {
+test("creation through the real item-use dispatcher confirms, consumes one pair and rejects stale ingredients", async (t) => {
+  // A throwing hook is only logged by PluginManager; fail on it instead of letting later assertions hide it.
+  const hookFailures = [];
+  t.mock.method(console, "error", (...args) => { if (/hook failed/.test(String(args[0]))) hookFailures.push(args); });
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
@@ -290,13 +293,15 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
   function setup(first = ItemIds.ABYSSAL_WHIP, second = ItemIds.KRAKEN_TENTACLE) {
     let chatbox;
     const sender = new Proxy({}, { get: (_target, key) => {
-      if (key === "sendChatboxInterface") return (id) => { chatbox = id; };
+      if (key === "sendChatboxInterface") return (id) => { chatbox = id; return sender; };
       if (key === "isChatboxInterface") return (id) => chatbox === id;
-      if (key === "sendInterfaceRemoval") return () => { chatbox = null; };
+      if (key === "sendInterfaceRemoval") return () => { chatbox = null; return sender; };
       if (key === "sendSoundEffect") return (id) => { player.sounds.push(id); return sender; };
+      if (key === "sendTypedMessage") return (type, text) => { player.typed.push([type, text]); return sender; };
+      if (key === "sendVarbit") return (id, value) => { player.varbits.push([id, value]); return sender; };
       return () => sender;
     } });
-    const player = { getPacketSender: () => sender, messages: [], sounds: [], animations: [],
+    const player = { getPacketSender: () => sender, messages: [], sounds: [], animations: [], typed: [], varbits: [],
       sendMessage(text) { player.messages.push(text); },
       performAnimation(animation) { player.animations.push(animation.getId()); } };
     const manager = new DialogueManager(player);
@@ -320,7 +325,9 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     const { player, inventory } = setup();
     inventory.getItems()[0].setMeta({ unbankable: true });
     UseItemPacketListener.itemOnItem(player, reversed ? 1 : 0, reversed ? 0 : 1);
-    // rsprox 237/01151.txt ticks 9416-9418: the warning box, then the menu.
+    // rsprox 237/01151.txt ticks 9416-9418: the warning's mesbox chat line and busy on, the warning box, then the menu.
+    assert.deepEqual(player.typed, [[PluginManager.getCoreApi().ChatType.MESBOX, WARNING.replace(/<br>/g, " ")]], "the box's mesbox chat line");
+    assert.deepEqual(player.varbits, [[12393, 1]], "busy while the warning and menu are up");
     assert.equal(player.getDialogueManager().getCurrent()?.getText?.(), WARNING);
     assert.equal(MultiChatboxPrompt.getPending(player), null, "the menu waits for the warning");
     player.getDialogueManager().advance();
@@ -328,6 +335,7 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     assert.equal(inventory.getItems()[0].getId(), ItemIds.ABYSSAL_WHIP, "confirmation has not consumed either ingredient");
     assert.equal(inventory.getItems()[1].getId(), ItemIds.KRAKEN_TENTACLE);
     assert.equal(choose(player, 1), true);
+    assert.deepEqual(player.varbits, [[12393, 1], [12393, 0]], "tick 9420: busy clears on the answer");
     assert.equal(inventory.getItems()[0].getId(), ItemIds.ABYSSAL_TENTACLE, "the clicked whip transforms even in a full inventory");
     assert.equal(inventory.getItems()[0].getMetaValue("unbankable"), true, "existing item restrictions survive");
     assert.equal(inventory.getItems()[1].getId(), -1, "only the clicked tentacle is consumed");
@@ -353,6 +361,7 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     const before = inventory.getItems().map(item => [item.getId(), item.getAmount()]);
     choose(player, change === "cancel" ? 2 : 1);
     assert.deepEqual(inventory.getItems().map(item => [item.getId(), item.getAmount()]), before, change);
+    assert.deepEqual(player.varbits.at(-1), [12393, 0], `${change}: busy clears on either answer`);
   }
 
   for (const [first, second] of [
@@ -368,7 +377,9 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     assert.equal(MultiChatboxPrompt.getPending(player), null, `invalid pair ${first}/${second}`);
     assert.equal(inventory.getItems()[0].getId(), first);
     assert.equal(inventory.getItems()[1].getId(), second);
+    assert.deepEqual([player.typed, player.varbits], [[], []], `invalid pair ${first}/${second} sends no line or busy`);
   }
+  assert.deepEqual(hookFailures, [], "no item_on_item hook failed");
 });
 
 test("native Dissolve confirms and returns only the clicked normal tentacle, rejecting stale confirmations", async (t) => {

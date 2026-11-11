@@ -139,11 +139,13 @@ work as for real pets. Any other fields stay on the row, and the plugin's `pets:
 handler gets that row back as `pet`. `services` lends `getOwnedPetItems(player)`,
 `holdsPetItem(player, itemId)`, `getPetForItemId(itemId)` and `getPetByNpcId(npcId)`.
 
-Plugin Hub plugins load first (from `plugins/imported/`), so their listener is ready when the
-Pets plugin asks, and custom items are loaded by then. A follower NPC of a plugin's own is a
+Plugin Hub plugins in `plugins/imported/` normally register before Pets, and custom items are
+loaded by then. The listener must be registered before Pets emits the event. A dependency that
+delays the plugin until after Pets registers will miss it. A follower NPC of a plugin's own is a
 custom definition registered under its own source,
 `CacheDefinitions.registerCustomDefinitions(rows, "my-plugin")`, which the cache editor's
-document doesn't replace.
+document doesn't replace. The cache editor rejects saves that claim an id owned by another source.
+If a saved row conflicts at startup, the editor logs the conflict, skips that row, and keeps it on disk.
 
 ### Custom Widgets
 

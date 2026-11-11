@@ -31,11 +31,8 @@ function register(api) {
   const root = path.resolve(__dirname, "../../..");
   let applied = 0;
   try {
-      const document = Document.read(root);
-      const verdict = Document.check(core, document);
-      if (!verdict.ok) throw new Error(verdict.problems.join("; "));
-      // NPC/object spawn loaders run before startup hooks, so definitions must exist at registration.
-      applied = core.CacheDefinitions.registerCustomDefinitions(document.rows);
+    // NPC/object spawn loaders run before startup hooks, so definitions must exist at registration.
+    applied = Document.apply(core, root);
   } catch (error) {
       console.error("[cache-editor] overlay document not applied:", error.message);
   }

@@ -348,6 +348,60 @@ test("an overlay row is applied at load, so an authored loc is a real definition
   assert.equal(CacheDefinitions.getObject(start).seqId, -1, "and the id is a cache default again");
 });
 
+test("custom definition sources merge, reject overlapping ids, and clear independently", (t) => {
+  const source = "test-plugin";
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    CacheDefinitions.registerCustomDefinitions([], source);
+  });
+  const base = CacheDefinitions.getBaseCounts();
+  const pet = { kind: "npc", id: Math.max(50000, base.npcs), baseId: 1, fields: { name: "Plugin pet" } };
+  const loc = { kind: "loc", id: Math.max(50000, base.objects), baseId: 1, fields: { name: "Editor loc" } };
+  assert.equal(CacheDefinitions.registerCustomDefinitions([pet], source), 1);
+  assert.equal(CacheDefinitions.registerCustomDefinitions([loc]), 1);
+  const merged = () => CacheDefinitions.getCustomDefinitions().sort((a, b) => a.kind.localeCompare(b.kind));
+  assert.deepEqual(merged(), [loc, pet]);
+  assert.deepEqual(CacheDefinitions.getCounts(), { ...base, npcs: pet.id + 1, objects: loc.id + 1 });
+
+  assert.throws(() => CacheDefinitions.registerCustomDefinitions([pet]), /already belongs to test-plugin/);
+  assert.deepEqual(merged(), [loc, pet], "a failed replacement preserves both sources");
+  assert.equal(CacheDefinitions.registerCustomDefinitions([]), 0);
+  assert.deepEqual(CacheDefinitions.getCustomDefinitions(), [pet]);
+  assert.deepEqual(CacheDefinitions.getCounts(), { ...base, npcs: pet.id + 1 });
+});
+
+test("the editor refuses a plugin's id on save and skips only the conflicting row on startup", (t) => {
+  const root = scratchRoot();
+  const source = "test-plugin";
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    CacheDefinitions.registerCustomDefinitions([], source);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const warning = t.mock.method(console, "warn", () => {});
+  const { npcs, objects } = CacheDefinitions.getBaseCounts();
+  const pet = { kind: "npc", id: Math.max(50000, npcs), baseId: 1, fields: { name: "Plugin pet" } };
+  const npc = { ...pet, fields: { name: "Editor NPC" } };
+  const loc = { kind: "loc", id: Math.max(50000, objects), baseId: 1, fields: { name: "Editor loc" } };
+  Document.save(core, root, { row: loc });
+  CacheDefinitions.registerCustomDefinitions([pet], source);
+
+  const conflict = new RegExp(`npc ${pet.id}: id already belongs to ${source}`);
+  assert.throws(() => Document.save(core, root, { row: npc }), conflict);
+  assert.deepEqual(Document.read(root).rows, [loc]);
+
+  Document.write(root, { version: 1, rows: [loc, npc] });
+  assert.equal(Document.apply(core, root), 1);
+  assert.equal(CacheDefinitions.getNpc(pet.id).name, pet.fields.name);
+  assert.equal(CacheDefinitions.getObject(loc.id).name, loc.fields.name);
+  assert.deepEqual(Document.read(root).rows, [loc, npc]);
+  assert.equal(warning.mock.callCount(), 1);
+  assert.match(warning.mock.calls[0].arguments[0], conflict);
+  CacheDefinitions.registerCustomDefinitions([], source);
+  assert.doesNotThrow(() => Document.save(core, root, { row: loc }), "the editor can update its own row");
+  assert.equal(Document.apply(core, root), 2, "both saved rows load once the plugin releases the id");
+});
+
 test("the field table is served so a picker can search a target kind by name", () => {
   const endpoints = new Map();
   const api = { core, registerContentEndpoint: (name, handler) => endpoints.set(name, handler), onServerStartup: () => {}, onPlayerLogin: () => {} };

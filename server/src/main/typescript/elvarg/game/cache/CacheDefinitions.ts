@@ -680,15 +680,14 @@ export class CacheDefinitions {
         source = "cache-editor",
     ): number {
         const next = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
-        const others = [...this.customDefinitionSources].filter(([name]) => name !== source);
         const counts = this.getBaseCounts();
         for (const row of rows) {
             const count = row?.kind === "loc" ? counts.objects : row?.kind === "npc" ? counts.npcs : counts.items;
             if (!row || !["loc", "npc", "item"].includes(row.kind) || !Number.isInteger(row.id) || row.id < Math.max(50000, count) || row.id >= 65535 ||
                 !Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= count || next.has(`${row.kind}:${row.id}`)) throw new Error("Invalid custom definition identity");
             if (row.kind === "item" && this.customItems.has(row.id)) throw new Error("Item ID already belongs to custom-items");
-            const owner = others.find(([, defined]) => defined.has(`${row.kind}:${row.id}`));
-            if (owner) throw new Error(`Custom ${row.kind} ${row.id} already belongs to ${owner[0]}`);
+            const owner = this.getCustomDefinitionOwner(row.kind, row.id);
+            if (owner !== undefined && owner !== source) throw new Error(`Custom ${row.kind} ${row.id} already belongs to ${owner}`);
             const fields = structuredClone(row.fields ?? {});
             if (Object.keys(fields).some(key => ["id", "cacheInfo", "cacheType", "__proto__", "constructor", "prototype"].includes(key))) throw new Error("Invalid custom definition field");
             next.set(`${row.kind}:${row.id}`, { baseId: row.baseId, fields });
@@ -697,6 +696,14 @@ export class CacheDefinitions {
         this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
         this.customDefinitionCache = new Map();
         return next.size;
+    }
+
+    static getCustomDefinitionOwner(kind: string, id: number): string | undefined {
+        const key = `${kind}:${id}`;
+        for (const [source, rows] of this.customDefinitionSources) {
+            if (rows.has(key)) return source;
+        }
+        return undefined;
     }
 
     static getCustomDefinitions(): Array<{ kind: string; id: number; baseId: number; fields: Record<string, unknown> }> {

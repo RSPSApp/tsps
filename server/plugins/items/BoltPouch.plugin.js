@@ -133,9 +133,17 @@ function useOnPouch(event) {
   inventory.refreshItems();
 }
 
+/**
+ * Interface 433 has no frame of its own: it fills the side panel in place of the inventory, as
+ * the Wiki's picture shows it.
+ */
 function open({ player }) {
+  const sender = player.getPacketSender();
+  const group = core.CacheDefinitions.getInterfaceId("xbows_pouch");
+  sender.sendInterfaceRemoval();
   sendSlots(player, true);
-  player.getPacketSender().sendInterface(core.CacheDefinitions.getInterfaceId("xbows_pouch"));
+  sender.sendSubInterface(component("toplevel_osrs_stretch:sidemodal"), group, 0);
+  player.setInterfaceId(group);
   return true;
 }
 

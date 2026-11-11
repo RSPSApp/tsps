@@ -76,6 +76,8 @@ function use(f, itemId) {
 function opened(f) {
   open({ player: f.p });
   assert.equal(f.p.getInterfaceId(), 433);
+  const side = f.p.getPacketSender().getSubInterfaceAt(C.getComponentId("toplevel_osrs_stretch:sidemodal"));
+  assert.equal(side?.groupId, 433, "433 fills the side panel");
 }
 
 function press(f, name) {

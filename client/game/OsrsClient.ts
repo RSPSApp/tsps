@@ -1334,18 +1334,7 @@ export class OsrsClient {
                     event.stopImmediatePropagation();
                     return;
                 }
-                const shortcut = this.resolveKeyShortcut(event);
-                if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
-                    return;
-                }
-
-                // A hotkey closes its own open side panel unless "Side panel can be closed by the
-                // hotkeys" is off (script 907 binds the cache's own key handler the same way).
-                const keepsPanelOpen = event.key !== "Escape" &&
-                    this.varManager?.getVarbit(VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL) === 1;
-                this.switchToTab(shortcut, false, !keepsPanelOpen);
-                event.preventDefault();
-                if (event.key !== "Escape") event.stopImmediatePropagation();
+                this.handleSidePanelHotkey(event);
             },
             true,
         );
@@ -4461,6 +4450,21 @@ export class OsrsClient {
         const script = this.cs2Vm.context?.loadScript?.(scriptId | 0);
         if (!script) return;
         this.cs2Vm.run(script, args, []);
+    }
+
+    /** Switch the side panel for a keybinding's key (F-keys and Esc). */
+    private handleSidePanelHotkey(event: KeyboardEvent): void {
+        const shortcut = this.resolveKeyShortcut(event);
+        if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
+            return;
+        }
+
+        // A hotkey, Esc included, closes its own open side panel unless "Side panel can be
+        // closed by the hotkeys" is off (script 907 binds the cache's own key handler the same way).
+        const keepsPanelOpen = this.varManager?.getVarbit(VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL) === 1;
+        this.switchToTab(shortcut, false, !keepsPanelOpen);
+        event.preventDefault();
+        if (event.key !== "Escape") event.stopImmediatePropagation();
     }
 
     /** Resolve a keydown to a side-panel tab using the All Settings keybindings. */

@@ -171,6 +171,22 @@ async function main() {
         assert.equal(runs[1][0], 71, "one that may not calls the switch with closing off");
         assert.deepEqual([runs[1][1][1], runs[1][1][2]], [3, 0]);
         assert.equal(runs[1][1][0], runs[0][1][1], "both use the layout's display enum");
+
+        // The F-keys and Esc both follow the row.
+        let cannotClose = 0;
+        client.isLoggedIn = () => true;
+        client.varManager.getVarbit = (id: number) => (id === 4611 ? cannotClose : id === 4678 ? 4 : 0);
+        const key = (k: string) => client.handleSidePanelHotkey(press(k, k, 0, { stopImmediatePropagation() {} }));
+        runs.length = 0;
+        key("F4");
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [914, 914], "with the row on, F4 and Esc may close the inventory");
+        runs.length = 0;
+        cannotClose = 1;
+        key("F4");
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [71, 71], "with the row off, neither closes it");
+        assert.deepEqual(runs.map(([, args]) => args[1]), [3, 3]);
     }
 
     // Row 347: the in-game server list asks before switching while the confirmation is on.

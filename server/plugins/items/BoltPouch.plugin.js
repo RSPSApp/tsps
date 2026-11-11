@@ -266,6 +266,8 @@ function canWear(player, ammoId) {
  */
 function swapWithAmmo(player, slot, wield) {
   const { Item, Equipment } = core;
+  // As the worn tab's Remove: no gear changes while dead, mid-teleport or trading.
+  if (player.getHitpoints() <= 0 || player.isTeleportingReturn() || player.getStatus() === core.PlayerStatus.TRADING) return;
   const equipment = player.getEquipment();
   const current = slots(player);
   const entry = current[slot];

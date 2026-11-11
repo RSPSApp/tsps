@@ -323,6 +323,17 @@ test("Worn Equipment's extra ammo slot: Wear swaps pouch slot 4 with the worn am
   assert.deepEqual(BoltPouch.slots(f.p)[3], { id: I.DRAGON_BOLTS_2, amount: 120 });
 });
 
+test("no ammo swap while trading, as the worn tab's Remove refuses", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [null, null, null, [I.RUNITE_BOLTS, 40]]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.STEEL_BOLTS, 10));
+  f.p.setStatus(core.PlayerStatus.TRADING);
+  wear(f);
+  assert.equal(worn(f).getId(), I.STEEL_BOLTS);
+  assert.deepEqual(BoltPouch.slots(f.p)[3], { id: I.RUNITE_BOLTS, amount: 40 });
+});
+
 test("Wear over Rada's blessing puts the blessing in the inventory (Wiki)", (t) => {
   const f = actor(t);
   ranged(f, 99);

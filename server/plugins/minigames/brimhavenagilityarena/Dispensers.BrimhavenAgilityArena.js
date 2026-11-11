@@ -52,7 +52,9 @@ function reentryCooldownRemaining(player) {
 
 function refuseReentry(player) {
   if (reentryCooldownRemaining(player) === 0) return false;
-  const { DialogueChainBuilder, StatementDialogue } = Shared.core();
+  const { DialogueChainBuilder, StatementDialogue, ChatType } = Shared.core();
+  // 227/01738.txt:3031-3046: the box's mesbox chat line goes with it, its <br> a space.
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, REENTRY_WAIT_MESSAGE.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, REENTRY_WAIT_MESSAGE)));
   return true;
 }

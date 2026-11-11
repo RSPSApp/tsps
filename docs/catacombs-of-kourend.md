@@ -12,6 +12,28 @@ Ticks count from the player's arrival at the statue.
 | Investigate | +1 faces the statue; +2 `human_pickupfloor` (827) and "You investigate what looks like hinges on the plaque and find it opens."; +3 "You climb down the hole." and the fade out; +5 moved to (1666, 10050, 0); +7 the fade in |
 | Read | +2 `human_use_wom_telecope` (2171); +3 the long scroll (interface 625, script 418) "Kourend the Magnificent" |
 
+## The other exits (#4256)
+
+Four corner vines and the Giants' Den vine climb out. The first climb of each opens its way back in
+for that player: a multiloc on the surface (or in the Forthos Dungeon / Giants' Den) shows a
+`Boulder` or `Strange wall` until its varbit is 1, then a `Hole` or `Strange passage` with Enter.
+The varbits share varp 1345 (`cata_trans`); the plugin keeps the opened ones in
+`catacombs-of-kourend:exits` and sends them again at login.
+
+| Exit (Wiki) | Vine (cache) | Varbit | Way back in | Up to | Back down to |
+| --- | --- | --- | --- | --- | --- |
+| Demon's Run, NE | `zeah_cata_exit_04` (28898) at 1719, 10102 | `cata_hole3` (5089) | Hole, `cata_hole3_multi` at 1696, 3865 (west of the dense essence mine) | 1696, 3864 | 1719, 10101 |
+| Dragon's Den, NW | `zeah_cata_exit_01` (28895) at 1617, 10102 | `cata_hole4` (5090) | Hole, `cata_hole4_multi` at 1563, 3791 (north of The Deeper Lode) | 1562, 3791 | 1617, 10101 |
+| Reeking Cove, SW | `zeah_cata_exit_02` (28896) at 1650, 9986 | `cata_hole2` (5088) | Hole, `cata_hole2_multi` at 1470, 3653 (north-west of the Shayzien bank) | 1469, 3653 | 1650, 9987 |
+| The Shallows, SE | `zeah_cata_exit_03` (28897) at 1726, 9993 | `cata_hole1` (5087) | Strange passage, `cata_hole1_multi` at 1804, 9967 (Forthos Dungeon) | 1803, 9968 | 1726, 9994 |
+| Giants' Den | `zeah_cata_exit_giants_den` (42350) at 1639, 10047 | `cata_hole_giants_den` (12341) | Strange passage, `cata_hole_giants_den_multi` at 1462, 9878 | 1461, 9879 | 1639, 10046 |
+
+From rsprox captures (recording 3024, rev 231, the Giants' Den vine): arrival +1 faces the vine,
++2 `human_reachforladder` (828) and `cata_hole_giants_den` 0→1, +3 the move to (1461, 9879). No
+fade, no message. The Giants' Den vine plays from `loc-teleports.json` (docs/loc-teleports.md); the
+plugin opens its passage on `loc-teleports:arrived`, a tick after the captured varbit. The corner
+vines play the same steps.
+
 ## Multi-combat
 
 Two `multi-combat` zones in `server/data/definitions/world.json` cover the Catacombs (x 1600-1791,
@@ -24,6 +46,10 @@ y 10067. The varbit follows a move by a tick, so the border is accurate to a til
 
 ## Ours
 
+- **Exit tiles and the way back in:** no capture or Wiki tile for the corner vines' tops or any
+  Enter; the tiles are Shortest Path's transports. Enter on a hole kneels (`human_pickupfloor`, as
+  the statue's hole does) and moves a tick later; a strange passage moves a tick later with no
+  animation.
 - **The vine ladder:** the one beside the landing (loc 28894 at 1666, 10051) climbs back to the
   statue's east side (1639, 3673). Nothing was captured for it: the ladder animation (828), the
   tile and the fade are ours.
@@ -42,7 +68,4 @@ drop the totem pieces and ancient shards: see [skotizo.md](skotizo.md).
 
 ## Not built
 
-- **The other exits:** the four corner vine ladders (Wiki: Demon's Run, Dragon's Den, Reeking
-  Cove, The Shallows).
-- **The surface holes** those exits unlock, and the links to the Forthos Dungeon and the Giants'
-  Den.
+- Nothing the exits need; no first-unlock message was captured, so none is sent.

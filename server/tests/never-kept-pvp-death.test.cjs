@@ -67,7 +67,7 @@ const NEVER_KEPT = () => [I.LUNAR_HELM, I.TWISTED_DRAGON_TROPHY, I.CHRONICLE, I.
 
 test("every never-kept name is an untradeable item in the cache", () => {
   const found = new Set();
-  for (let id = 0; id < 32000; id++) {
+  for (let id = 0; id < 40000; id++) {
     const item = new core.Item(id, 1);
     const name = item.getDefinition()?.getName?.();
     if (name && NeverKept._test.NAMES.has(name.toLowerCase()) && !item.isTradeable()) found.add(name.toLowerCase());

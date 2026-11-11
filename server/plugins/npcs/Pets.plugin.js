@@ -24,6 +24,7 @@ const CatchUp = require("./pets/CatchUp.Pets");
 const Dialogue = require("./pets/Dialogue.Pets");
 const RiftGuardian = require("./pets/RiftGuardian.Pets");
 const TombsOfAmascut = require("./pets/TombsOfAmascut.Pets");
+const Beaver = require("./pets/Beaver.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -247,8 +248,10 @@ const PETS = [
     enumName: "BEAVER",
     petId: NpcIdentifiers.BEAVER_11,
     dialogueVariant: "standard-dialogue-normal-variant",
+    // Each recolour, the pheasant and the fox are their own item (pets/Beaver.Pets.js adds them).
     morphId: 0,
     itemId: 13322,
+    familyItemId: 13322,
     dialogue: -1,
     skill: Skill.WOODCUTTING,
     chance: 5000,
@@ -2193,6 +2196,32 @@ function fillSkillPetVariants({ ItemIdentifiers, NpcIdentifiers: Npcs }) {
   SKILL_PET_VARIANTS.set(`npc:${Npcs.BLACK_CHINCHOMPA}`, PET_BY_NAME.get("BLACK_CHINCHOMPA"));
 }
 
+/** The beaver's other forms, each its own item and follower (pets/Beaver.Pets.js). */
+function addBeaverForms({ CacheDefinitions }) {
+  const base = PET_BY_NAME.get("BEAVER");
+  for (const pet of Beaver.rows(base, CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+  }
+}
+
+/** The player's own active follower, free to change form now. */
+function isOwnFollower(player, npc) {
+  return player?.getAttribute?.(CURRENT_PET_ATTRIBUTE) === npc && npc?.getOwner?.() === player
+    && npc.isRegistered?.() !== false && player.busy?.() !== true;
+}
+
+/** Changes the follower to another form of its pet, keeping the item and insurance records in step. */
+function transformFollower(player, npc, next) {
+  const pet = getPetByNpcId(npc.getId());
+  npc.setNpcTransformationId(next.petId);
+  if (pet) setStoredVariant(player, pet, next.petId);
+  player.setAttribute(ACTIVE_PET_ATTRIBUTE, next.itemId);
+  player.setAttribute(LAST_PET_ATTRIBUTE, next.itemId);
+  recordOwnership(player, next);
+  syncFollowerIndex(player, npc);
+}
+
 let World;
 let RegionManager;
 let ItemOnGroundManager;
@@ -2222,6 +2251,7 @@ module.exports = {
     NPCRespawnTaskRef = api.core?.NPCRespawnTask ?? null;
     ItemDefinitionClass = api.core?.ItemDefinition ?? null;
     fillSkillPetVariants(api.core);
+    addBeaverForms(api.core);
     addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
@@ -2262,6 +2292,7 @@ module.exports = {
     api.onPlayerDeath(onCatOwnerDeath);
     RiftGuardian.attach(api, {pets: PETS, skill: Skill.RUNECRAFTING, world: World, currentAttribute: CURRENT_PET_ATTRIBUTE,
       activeAttribute: ACTIVE_PET_ATTRIBUTE, lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant, recordOwnership, syncFollowerIndex});
+    Beaver.attach(api, {getPetForItemId, recordOwnership, transformFollower, isOwnFollower});
     TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
       lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 

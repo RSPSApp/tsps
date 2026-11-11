@@ -18,7 +18,15 @@
  *   teleport straight to that destination (talisman 726, 3942; Book of the Dead 363, 3150).
  * - City and destination tiles: RuneLite TeleportLocationData.
  * - Cache: item gamevals and the kourend_diary_* teleport varbits (7917-7921).
+ * - rsprox capture 363 (Book of the Dead): Check opens the objectbox with the book and its
+ *   "memories remain" line (ticks 37, 3595); Read plays human_readbook and opens book 392 with
+ *   the 16 captured spreads (ticks 494-507, also recordings 1441, 603, 3792), kept in
+ *   data/kharedsts-memoirs-pages.json. Ours: no capture reads the memoirs themselves, so they
+ *   show the same spreads under the title "Kharedst's Memoirs" (the Wiki transcript has the
+ *   same dedication and six entries, but no title).
  */
+const { openBook } = require("../quests/QuestRuntime");
+const BOOK = require("./data/kharedsts-memoirs-pages.json");
 const MEMOIRS_ID = 21760;
 const BOOK_OF_THE_DEAD_ID = 25818;
 const BOOK_OF_THE_DEAD_MAX_CHARGES = 250;
@@ -33,6 +41,8 @@ const XERIC_MAX_CHARGES = 1000;
 const WILDERNESS_LEVEL = 20;
 const PROMPT = "Where would you like to teleport to?";
 const WORN_OPTION_PARAM = 451;
+const READ_BOOK_SEQUENCE = "human_readbook";
+const BOOK_TITLES = new Map([[BOOK_OF_THE_DEAD_ID, "The Book of the Dead"], [MEMOIRS_ID, "Kharedst's Memoirs"]]);
 const FIRST_WORN_OPTION_CLICK = 2;
 
 /**
@@ -159,7 +169,32 @@ function memoirsAction(event) {
   if (option === "reminisce") {
     event.handled = true;
     chooseCity(player, item);
+    return;
   }
+  if (option === "check") {
+    event.handled = true;
+    checkMemoirs(player, item);
+    return;
+  }
+  if (option === "read") {
+    event.handled = true;
+    readMemoirs(player, item);
+  }
+}
+
+/** Live's objectbox line, the count in purple (rsprox 363: "33/250 memories remain."). */
+function checkMemoirs(player, item) {
+  const text = "On the inside of the cover a message is displayed in<br>dark ink. It reads: "
+    + `<col=800080>${memoirCharges(player, item)}/${maxCharges(item)} memories remain.<col=800080>`;
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+    new core.ItemStatementDialogue(0, item.getId(), text),
+  ));
+}
+
+function readMemoirs(player, item) {
+  const sequence = core.CacheDefinitions.getSeqId(READ_BOOK_SEQUENCE);
+  if (sequence != null) player.performAnimation(new core.Animation(sequence));
+  openBook(player, BOOK_TITLES.get(item.getId()), BOOK.pages);
 }
 
 /** These pages are rewarded by their quests but have no quest-owned attachment handler. */
@@ -362,7 +397,7 @@ module.exports = {
   _test: {
     MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, BOOK_OF_THE_DEAD_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,
     memoirCharges, setMemoirCharges, memoirPageUnlocked, unlockedCities, teleport, chooseCity,
-    memoirsAction, addPage, xericCharges, setXericCharges, teleportWithTalisman, talismanAction,
+    memoirsAction, checkMemoirs, readMemoirs, addPage, xericCharges, setXericCharges, teleportWithTalisman, talismanAction,
     chooseTalismanDestination, chargeTalisman, checkTalisman, unchargeTalisman, talismanDestination,
   },
 };

@@ -11,6 +11,7 @@ const { Location } = require("../dist/game/model/Location");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 
 const events = new Map();
 const broadcasts = [];
@@ -37,7 +38,7 @@ npcApi[Symbol.iterator] = function* () {
 
 const Pets = require("../plugins/npcs/Pets.plugin");
 Pets.register({
-  core: { ItemIdentifiers, NpcIdentifiers, ItemDefinition },
+  core: { ItemIdentifiers, NpcIdentifiers, ItemDefinition, CacheDefinitions },
   getWorld: () => world,
   getRegionManager: () => ({ blocked: () => true }),
   getItemOnGroundManager: () => ({ registerNonGlobal() {}, registerLocation() {} }),
@@ -56,6 +57,8 @@ Pets.register({
   },
   onItemDropPolicy() {},
   onItemOnNpc() {},
+  onItemOnItem() {},
+  onItemAction() {},
   onAnyNpcInteraction() {},
   onInterfaceActionClick() {},
   onNpcClick() {},

@@ -138,8 +138,12 @@ const SELECTED_SETTING_ATTRIBUTE = "settings:selected";
 // The values the player chose for the rows in data/settings.json, and the category shown
 // ({ "varbit:<id>": value, "varp:<id>": value }), restored on login as live does.
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
-// The collection-log notification rows (85/171) share varp 2856 with "Enable precise timing" (82).
-const COLLECTION_LOG_NOTIFY_VARP = 2856;
+// The varps the browser client transmits whole when a row changes its varbit in the client: the
+// cache's toggle script (3965) flips Anti Drag (115), precise timing (82) and Esc closes (57)
+// there before the click is sent, and the buff bar's relic op (script 3231) flips Display Relics
+// (127) with no click at all. The rows saved from them are the settings.json rows on these varps;
+// other bits (the collection-log notifications on 2856) belong to their own plugins.
+const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856]);
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
 /** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
 const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
@@ -210,8 +214,11 @@ const KEYBINDINGS_ESC_TOGGLE = (KEYBINDINGS_INTERFACE_ID << 16) | 103;
 // panel), one child per option (0 = None, 1..12 = F1..F12, 13 = Esc).
 const KEYBINDINGS_POPUP_CONTAINER = (KEYBINDINGS_INTERFACE_ID << 16) | 111;
 
-// "Esc closes current interface" toggle and the dropdown's active-row tracker.
+// "Esc closes current interface" toggle (All Settings row 57, on varp 1224) and the dropdown's
+// active-row tracker. It is saved as a keybind (keybind_4681), not in the settings values.
 const ESC_CLOSES_VARBIT = 4681;
+const ESC_CLOSES_SETTING = 57;
+const ESC_CLOSES_VARP = 1224;
 const ACTIVE_KEYBIND_SLOT_VARBIT = 4690;
 
 // WidgetFlags.FLAG_TRANSMIT_OP1 - lets the client send a click to us.
@@ -588,8 +595,28 @@ function syncPlayerKeybindings(player) {
   for (const tab of TAB_VARBIT_MAP) {
     setKeybind(player, tab.varbit, getKeybind(player, tab.varbit));
   }
+  setKeybind(player, ESC_CLOSES_VARBIT, getEscCloses(player));
+}
+
+function getEscCloses(player) {
   const esc = player.getAttribute(keybindAttribute(ESC_CLOSES_VARBIT));
-  setKeybind(player, ESC_CLOSES_VARBIT, typeof esc === "number" ? esc : 1);
+  return typeof esc === "number" ? esc : 1;
+}
+
+/**
+ * "Esc closes the current interface" clicked, in All Settings (row 57) or the keybindings panel.
+ * The browser flips it itself and transmits varp 1224 first, which saved it already.
+ */
+function toggleEscCloses(player) {
+  if (refuseLockedSetting(player, ESC_CLOSES_SETTING)) return true;
+  if (SettingVarpTransmit.take(player, ESC_CLOSES_VARP, settingVarpTick()) !== undefined) return true;
+  setKeybind(player, ESC_CLOSES_VARBIT, getEscCloses(player) === 1 ? 0 : 1);
+  return true;
+}
+
+function clickEscCloses(request) {
+  if (request.handled || request.settingId !== ESC_CLOSES_SETTING) return;
+  request.handled = toggleEscCloses(request.player);
 }
 
 function getGameframeRoot(player) {
@@ -869,29 +896,64 @@ function settingVarpTick() {
   return pluginApi?.core?.World?.getProcessCycle?.() ?? 0;
 }
 
-/** The client's local setting change already arrived as a whole-varp transmission. */
-function rememberSettingVarpTransmit(transmission) {
-  if (transmission.varpId !== COLLECTION_LOG_NOTIFY_VARP || !transmission.player) return;
-  SettingVarpTransmit.remember(transmission.player, transmission.varpId, transmission.value, settingVarpTick());
+/** setting id -> its row, var key and bits, for the settings.json rows on each transmitted varp. */
+let transmittedRows = null;
+
+function transmittedSettingRows(varpId) {
+  if (!transmittedRows) {
+    transmittedRows = new Map([...TRANSMITTED_SETTING_VARPS].map((varp) => [varp, []]));
+    for (const [settingId, row] of Object.entries(SETTINGS)) {
+      if (row.varp !== undefined || row.varbit === undefined || row.options) continue;
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(row.varbit);
+      transmittedRows.get(baseVar)?.push({ settingId: Number(settingId), row, key: varKey(row), startBit, mask: 2 ** (endBit - startBit + 1) - 1 });
+    }
+  }
+  return transmittedRows.get(varpId) ?? [];
+}
+
+/**
+ * The browser changed a row's varbit itself and sent the whole varp: keep each of our rows' bits
+ * that changed, as a click on the row would. A locked row keeps its value.
+ */
+function saveTransmittedSettings(transmission) {
+  const { player, varpId, value } = transmission;
+  if (!player || !TRANSMITTED_SETTING_VARPS.has(varpId)) return;
+  const saved = savedSettings(player);
+  let changed = false;
+  for (const { settingId, row, key, startBit, mask } of transmittedSettingRows(varpId)) {
+    const next = (value >>> startBit) & mask;
+    if (next === (saved[key] ?? row.default ?? 0)) continue;
+    changed = true;
+    if (!refuseLockedSetting(player, settingId)) setSettingVar(player, key, next);
+  }
+  if (varpId === ESC_CLOSES_VARP) {
+    const { startBit } = CacheDefinitions.getVarbit(ESC_CLOSES_VARBIT);
+    const esc = (value >>> startBit) & 1;
+    if (esc !== getEscCloses(player)) {
+      changed = true;
+      if (!refuseLockedSetting(player, ESC_CLOSES_SETTING)) setKeybind(player, ESC_CLOSES_VARBIT, esc);
+    }
+  }
+  // Only a change of one of these rows stands for the row click that follows it.
+  if (changed) SettingVarpTransmit.remember(player, varpId, value, settingVarpTick());
+  transmission.handled = true;
 }
 
 /** One listener for both the XP drops varps and the setting varps the client transmits. */
 function handleSettingsVarpTransmit(transmission) {
-  rememberSettingVarpTransmit(transmission);
+  saveTransmittedSettings(transmission);
   transmitXpDropsSetup(transmission);
 }
 
 /**
- * One row click sends both the local varp change and the row click. When the varp already carries
- * the new value, save it instead of toggling it a second time.
+ * One row click sends both the local varp change and the row click. When the varp already carried
+ * the new value, it was saved then; don't toggle it a second time.
  */
 function consumeTransmittedSettingVarp(player, row) {
   if (row.varp !== undefined || row.varbit === undefined) return false;
   const { baseVar } = CacheDefinitions.getVarbit(row.varbit);
-  if (baseVar !== COLLECTION_LOG_NOTIFY_VARP) return false;
-  if (SettingVarpTransmit.take(player, baseVar, settingVarpTick()) === undefined) return false;
-  setSettingVar(player, varKey(row), getSettingVar(player, row));
-  return true;
+  if (!TRANSMITTED_SETTING_VARPS.has(baseVar)) return false;
+  return SettingVarpTransmit.take(player, baseVar, settingVarpTick()) !== undefined;
 }
 
 /** The official client transmits a row click only once the server enables it, as live does. */
@@ -973,6 +1035,7 @@ module.exports = {
     api.onCustomEvent("interface:closed", endSettingsSearch);
     api.onCustomEvent("settings:set", setSettingValue);
     api.onCustomEvent("settings:setting-clicked", resetVolumeSliders);
+    api.onCustomEvent("settings:setting-clicked", clickEscCloses);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);
@@ -1004,11 +1067,7 @@ module.exports = {
       return applyKeybind(player, varbit, slot);
     });
 
-    api.onInterfaceActionButton(KEYBINDINGS_ESC_TOGGLE, ({ player }) => {
-      const current = getKeybind(player, ESC_CLOSES_VARBIT);
-      setKeybind(player, ESC_CLOSES_VARBIT, current === 1 ? 0 : 1);
-      return true;
-    });
+    api.onInterfaceActionButton(KEYBINDINGS_ESC_TOGGLE, ({ player }) => toggleEscCloses(player));
 
     api.onInterfaceActionButton(KEYBINDINGS_RESTORE_DEFAULTS, ({ player }) => {
       applyDefaultKeybindings(player);

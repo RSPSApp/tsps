@@ -378,7 +378,6 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 
 - **Not done**:
   - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
-  - **Stop the boat when leaving the helm** (461): keeping the boat sailing with nobody at the helm is a new movement state, and no capture shows it.
 
 ## Row locks and hit sounds
 
@@ -490,6 +489,20 @@ The buff bar's script (5923) draws most buffs from a var, in steps set by the bu
 - **Not done**:
   - Mark of Darkness (153), the active Shadow Veil, Ward of Arceuus and Resurrection buffs (154, 156, 157), the Staff of the dead special (142), the Sire stun (140), freeze (141), poison damage (186), cannon decay (246), Apmeken's sight (285) and the Tombs of Amascut effects (286-291) have no var: the bar keeps their start or end tick in client vars that only `buff_bar_start` (script 5931, a struct and a value) sets. No capture shows live running it for any of them (it does for burn damage, with 0, at login): a freeze sends only its message, and a thrall only its varbits. So they stay unsent.
   - Desert water (244): not checked. Its buff (struct 340) reads no var in script 5923, so what drives it is unknown.
+
+## Sailing helm and orb
+
+These rows are in `data/settings.json` and are read by the Sailing helm plugins when the player acts. Each struct has param 1084 apart from 462, so the toggles are ticked while their varbit is 0, which is also a new account's value. Tests: `tests/sailing.test.cjs` ("All Settings 461/462/501") and `tests/settings-wired-rows.test.cjs`.
+
+| Setting | Id | Varbit | Effect |
+| --- | --- | --- | --- |
+| Stop the boat when leaving the helm | 461 | 18135 | At 1, letting go of the helm (Stop-navigating, clicking another loc, a charting spot) frees the helm and walks again, but the sails, move mode and heading stay, so a boat under sail sails on with nobody steering (`Helm.plugin.js` `leaveHelm`). A boat at rest, or a content scene's ship (the Pandemonium's supplied helm), stops as before |
+| Start the boat when setting a heading (dropdown: First time only, Always, Never) | 462 | 18136 `sailing_start_boat_when_setting_heading` = option | First time only: a heading raises full sail only while moored (just after taking the helm). Always: from stopped too. Never: a heading only turns the boat (`raiseSailForHeading`) |
+| Special Attack orb releases wind motes | 501 | 11624 `settings_sailing_wind_on_orb_disabled` | The client's orb script (9482) shows "Release" on "Wind Mote" in place of the special attack while the player is on their own boat with a catcher (11629 set), locked in at the helm, and 11624 is 0. Op1 then releases a mote as the catcher's Release-mote does (rsprox 4151 and 4152, rev 238: "You release the wind mote for a burst of speed!" on the click's tick). 11629 `sailing_sidepanel_boat_max_wind_charges` is the catcher's capacity (2, or 3 for a gale catcher), sent on boarding your own boat and set back to 0 on leaving it, as live does (`WindCatcher.Helm.js`) |
+
+- **Not done**:
+  - **Cargo hold access privacy** (470, varbit 19614: Navigators, All players, No players): a guest can't open another player's cargo hold at all yet, and no capture or Wiki text gives the refusal line.
+  - Ours: with the catcher switched off, the orb's Release does nothing, as Release-mote does.
 
 ## Containers on death
 

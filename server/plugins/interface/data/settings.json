@@ -215,6 +215,8 @@
     "458": { "name": "Current duck hint arrow", "varbit": 18133 },
     "459": { "name": "Barracuda trials hint arrow", "varbit": 18134 },
     "460": { "name": "Disable colourful fade effects", "varbit": 18132 },
+    "461": { "name": "Stop the boat when leaving the helm", "varbit": 18135 },
+    "462": { "name": "Start the boat when setting a heading", "varbit": 18136 },
     "463": { "name": "Port task cargo deposit warning", "varbit": 18137 },
     "464": { "name": "Show charting hints", "varbit": 18138 },
     "466": { "name": "Show boat customisation material messages", "varbit": 18140, "default": 1 },
@@ -228,6 +230,7 @@
     "493": { "name": "Level-up chatbox list", "varbit": 20158 },
     "494": { "name": "Level-up guide list", "varbit": 20159 },
     "500": { "name": "Show warning when using leagues teleport: Catacombs dragons stepping stones", "varbit": 20362 },
+    "501": { "name": "Special Attack orb releases wind motes", "varbit": 11624 },
     "505": { "name": "Show quest rating prompts", "varbit": 16774 }
   }
 }

@@ -373,6 +373,7 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 | Current duck hint arrow | 458 | 18133 `sailing_current_duck_hintarrow_disabled` | No hint arrow (or `current_hint_arrow`) over a released current duck |
 | Barracuda trials hint arrow | 459 | 18134 `sailing_barracuda_trials_hintarrow_disabled` | No hint arrow over the trial's rum or toad boat. The intro tour's arrows stay |
 | Combat task interface remembers last interface opened | 452 | 17939 `settings_ca_open_last_interface_disabled` | The account summary's row opens the overview instead of the screen used last |
+| Enable new-style skill guide interface | 360 | 15321 `option_skill_guide` | (on by default, as live sends it at login) View guide opens the new guide (860); at 0, the old one (214). See [skill-guide.md](skill-guide.md) |
 
 **Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
 

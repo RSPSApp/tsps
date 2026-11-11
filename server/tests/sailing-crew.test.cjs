@@ -710,6 +710,18 @@ test("Bank-cargo needs a recruited crewmate with Deckhandiness 2 (Wiki: Crew Man
   assert.notEqual(other.messages().at(-1), "None of your crew is a good enough deckhand to bank your cargo.", "Jenkins has 4");
 });
 
+test("Bank-cargo counts a keg of whirlpool surprise lifting a Deckhandiness 1 crewmate (Wiki: Crew Management)", () => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const { ALES } = require("../plugins/skills/sailing/Kegs.Sailing");
+  const whirlpool = ALES.find((ale) => ale.key === "whirlpool_surprise");
+  const player = captain({ level: 99 });
+  recruited(player, ADA);
+  assert.equal(bankCargo.hasDeckhand(player, [{ hotspotData: [] }]), false, "Ada alone has Deckhandiness 1");
+  assert.equal(bankCargo.hasDeckhand(player, [{ hotspotData: [0, whirlpool.data] }]), true,
+    "\"can be used to boost any level 1 Deckhandiness crewmates to level 2\"");
+  assert.equal(bankCargo.hasDeckhand(player, []), false, "with no boat docked, her own level stands");
+});
+
 test("crewmates run to a job and walk when they wander (rsprox)", () => {
   const player = captain({ level: 99 });
   const boat = boardSkiff(player, [JIM]);

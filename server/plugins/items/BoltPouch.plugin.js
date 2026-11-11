@@ -6,8 +6,12 @@
  * kept on the player, not the item: slot N is varbits xbows_pouch_slotN (a key of enum 336, pouch
  * type -> ammo, which is also the list of what it can hold) and xbows_pouch_numN. Use bolts on the
  * pouch to store them; Open shows interface 433, where a slot's "Remove" takes its bolts out,
- * and the worn ammo's "Unwield" takes it off.
+ * the worn ammo's "Unwield" takes it off, and dragging moves bolts between the slots and the
+ * worn ammo. Slot 4 is the extra ammo, which Worn Equipment shows beside the ammo slot (cache
+ * script 4039) and swaps with it on "Wear". Dizana's quiver on the player turns the swaps off.
  */
+
+const { takeInto } = require("./TakeInto");
 
 const BOLTS_ATTRIBUTE = "bolt-pouch:bolts";
 const SLOTS = 4;
@@ -16,8 +20,12 @@ const AMMO_TYPE_ENUM = 336;
 const PRICE = 1500;
 const POUCH_NAME = "Bolt pouch";
 const HIRKO = "Hirko";
+const EXTRA_AMMO_SLOT = 3;
+/** Settings > Gameplay > "Ammo-picking behaviour" (setting 305, `take_ammo_toggle`). */
+const AMMO_PICKUP_VARBIT = "take_ammo_toggle";
 
 const MESSAGE = {
+  QUIVER: "You cannot change ammo from your bolt pouch with Dizana's quiver on your person.",
   /** Ours (not captured). */
   CANT_HOLD: "The pouch can't hold that.",
   PRESET: "Preset items cannot be used for this.",
@@ -181,25 +189,134 @@ function remove(player, slot) {
 
 function click(event) {
   const uid = (event.groupId << 16) | event.childId;
+  const { player } = event;
+  if (uid === component("wornitems:extra_ammo_slot")) {
+    event.handled = true;
+    wearExtraAmmo(player);
+    return;
+  }
   const slot = pouchSlotOf(uid);
   if (slot < 0 && !isAmmoSlot(uid)) return;
   event.handled = true;
-  const { player } = event;
   if (!isOpen(player) || !hasPouch(player)) return;
   if (slot >= 0) remove(player, slot);
   else core.EquipPacketListener.unequip(player, core.Equipment.AMMUNITION_SLOT);
 }
 
-/**
- * Dragging bolts between the slots and the worn ammo slot is not handled yet: the drag changes
- * nothing, and the slots are sent again so the client shows the pouch as it is.
- */
+/** Worn Equipment's extra ammo slot: "Wear" swaps it with the worn ammo, mid-fight too (Wiki). */
+function wearExtraAmmo(player) {
+  if (!hasPouch(player) || !slots(player)[EXTRA_AMMO_SLOT]) return;
+  if (quiverOnPerson(player)) player.sendMessage(MESSAGE.QUIVER);
+  else swapWithAmmo(player, EXTRA_AMMO_SLOT, true);
+}
+
+function quiverOnPerson(player) {
+  const isQuiver = (item) => /^(Blessed )?Dizana's quiver/i.test(item?.getDefinition?.()?.getName?.() ?? "");
+  return player.getInventory().getValidItems().some(isQuiver) || player.getEquipment().getValidItems().some(isQuiver);
+}
+
+/** Drags between the pouch slots and the worn ammo slot. */
 function drag(event) {
   const { player, packet } = event;
   const from = Number(packet?.sourceWidgetId), to = Number(packet?.targetWidgetId);
-  if ((pouchSlotOf(from) < 0 && !isAmmoSlot(from)) || (pouchSlotOf(to) < 0 && !isAmmoSlot(to))) return;
+  const fromSlot = pouchSlotOf(from), toSlot = pouchSlotOf(to);
+  if ((fromSlot < 0 && !isAmmoSlot(from)) || (toSlot < 0 && !isAmmoSlot(to))) return;
   event.handled = true;
+  if (from !== to && isOpen(player) && hasPouch(player)) {
+    if (fromSlot >= 0 && toSlot >= 0) moveBetweenSlots(player, fromSlot, toSlot);
+    else if (quiverOnPerson(player)) player.sendMessage(MESSAGE.QUIVER);
+    else swapWithAmmo(player, fromSlot >= 0 ? fromSlot : toSlot, fromSlot >= 0);
+  }
+  // The client moved the icons already; this puts them where the server has them.
   sendSlots(player, true);
+}
+
+/** Bolts of one type merge up to 10,000; anything else swaps places. */
+function moveBetweenSlots(player, fromSlot, toSlot) {
+  const current = slots(player);
+  const source = current[fromSlot], target = current[toSlot];
+  if (!source) return;
+  if (target?.id === source.id) {
+    const moved = Math.min(source.amount, capOf(source.id) - target.amount);
+    target.amount += moved;
+    source.amount -= moved;
+    if (source.amount <= 0) current[fromSlot] = null;
+  } else {
+    [current[fromSlot], current[toSlot]] = [target, source];
+  }
+  setSlots(player, current);
+}
+
+/** Bolts that go on as worn ammo meet its requirements, as any equip does. */
+function canWear(player, ammoId) {
+  const item = new core.Item(ammoId, 1);
+  const unmet = core.EquipmentRequirements.getUnmet(player, item.getDefinition());
+  if (unmet != null) {
+    player.sendMessage(core.EquipmentRequirements.message(unmet));
+    return false;
+  }
+  return core.PluginManager.emitCanEquip(player, core.Equipment.AMMUNITION_SLOT, item) !== false;
+}
+
+/**
+ * Moves bolts between pouch `slot` and the worn ammo slot; `wield` is the pouch -> ammo direction.
+ * The same bolts merge (the pouch side up to 10,000); otherwise the two swap. Worn ammo the pouch
+ * can't hold (Rada's blessing, arrows) comes off into the inventory when bolts are wielded over
+ * it (Wiki); Ours: dragging it into the pouch does nothing.
+ */
+function swapWithAmmo(player, slot, wield) {
+  const { Item, Equipment } = core;
+  const equipment = player.getEquipment();
+  const current = slots(player);
+  const entry = current[slot];
+  const wornNow = equipment.get(Equipment.AMMUNITION_SLOT);
+  let worn = wornNow && wornNow.getId() > 0 ? wornNow : null;
+  if (entry && worn && entry.id === worn.getId() && isStorable(worn)) {
+    if (wield) {
+      const moved = Math.min(entry.amount, 0x7fffffff - worn.getAmount());
+      worn.incrementAmountBy(moved);
+      entry.amount -= moved;
+    } else {
+      const moved = Math.min(worn.getAmount(), capOf(entry.id) - entry.amount);
+      entry.amount += moved;
+      worn.decrementAmountBy(moved);
+      if (worn.getAmount() <= 0) equipment.setItem(Equipment.AMMUNITION_SLOT, new Item(-1, 0));
+    }
+    if (entry.amount <= 0) current[slot] = null;
+  } else {
+    if (entry && !canWear(player, entry.id)) return;
+    if (worn && !isStorable(worn)) {
+      if (!wield || !entry) return player.sendMessage(MESSAGE.CANT_HOLD);
+      if (!core.EquipPacketListener.unequip(player, Equipment.AMMUNITION_SLOT)) return;
+      worn = null;
+    }
+    if (worn && worn.getAmount() > capOf(worn.getId())) return player.sendMessage(MESSAGE.CANT_HOLD);
+    current[slot] = worn ? { id: worn.getId(), amount: worn.getAmount() } : null;
+    equipment.setItem(Equipment.AMMUNITION_SLOT, entry ? new Item(entry.id, entry.amount) : new Item(-1, 0));
+  }
+  setSlots(player, current);
+  equipment.refreshItems();
+  api.getBonusManager().update(player);
+}
+
+// ------------------------------------------------------------------ pickup
+
+/**
+ * Ammo-picking behaviour on: ground bolts matching a pouch slot go into it ("your quiver or bolt
+ * pouch, if those contain matching ammo"). Ammo matching the worn ammo slot goes there first.
+ * Ours: with Dizana's quiver on the player the pouch takes none, as its swaps are off then.
+ */
+function pickupIntoPouch(event) {
+  const { player, groundItemId } = event;
+  if (event.handled || player?.getPacketSender?.().getVarbit?.(varbit(AMMO_PICKUP_VARBIT)) !== 1) return;
+  if (!hasPouch(player) || quiverOnPerson(player)) return;
+  if (player.getEquipment().get(core.Equipment.AMMUNITION_SLOT)?.getId?.() === groundItemId) return;
+  const slot = () => slots(player).findIndex((entry) => entry?.id === groundItemId);
+  if (slot() < 0) return;
+  takeInto(api, event, {
+    room: () => (hasPouch(player) && slot() >= 0 ? capOf(groundItemId) - slots(player)[slot()].amount : 0),
+    store: (amount) => store(player, groundItemId, amount),
+  });
 }
 
 // ------------------------------------------------------------------ Hirko
@@ -308,11 +425,12 @@ module.exports = {
     api.onCustomEvent("storage:death-containers", (query) => query.containers.push(deathContainer));
     api.onShouldKeepItemOnDeath(shouldKeepPouch);
     api.onPlayerDeathItemDrop(deathItemDrop);
+    api.onGroundItemPickup(pickupIntoPouch);
   },
   BOLTS_ATTRIBUTE,
   slots,
   setSlots,
   store,
   isPouch,
-  _test: { typeOf, useOnPouch, open, click, drag, dialogueCondition, dialogueAction, MESSAGE },
+  _test: { typeOf, useOnPouch, open, click, drag, pickupIntoPouch, dialogueCondition, dialogueAction, MESSAGE },
 };

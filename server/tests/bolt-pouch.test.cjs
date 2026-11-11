@@ -11,11 +11,13 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { NpcDialogue } = require("../dist/game/model/dialogues/entries/impl/NpcDialogue");
 const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
 const BoltPouch = require("../plugins/items/BoltPouch.plugin");
 
 const HIRKO_AT = [2885, 10202];
+const LUMBRIDGE = [3222, 3218];
 
 let core;
 let I;
@@ -29,6 +31,9 @@ before(async () => {
   core = PM.getCoreApi();
   I = core.ItemIdentifiers;
   C = core.CacheDefinitions;
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(...LUMBRIDGE);
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -228,18 +233,116 @@ test("Open: Remove takes a slot's bolts out, Unwield takes the worn ammo off", (
   assert.equal(worn(f)?.getId() ?? -1, -1);
 });
 
-test("a drag inside the pouch changes nothing yet, and the slots are sent again", (t) => {
+function ranged(f, level) {
+  f.p.getSkillManager().setMaxLevels(core.Skill.RANGED, level);
+  f.p.getSkillManager().setCurrentLevel(core.Skill.RANGED, level, false);
+}
+
+function wear(f) {
+  const id = C.getComponentId("wornitems:extra_ammo_slot");
+  const event = { player: f.p, groupId: id >>> 16, childId: id & 0xffff, action: 1, handled: false };
+  click(event);
+  return event.handled;
+}
+
+test("drags between slots swap, or merge the same bolts up to 10,000", (t) => {
   const f = actor(t);
-  withPouch(f, [[I.DRAGON_BOLTS_2, 250], [I.BROAD_BOLTS, 5], null, null]);
+  withPouch(f, [[I.RUNITE_BOLTS, 6000], [I.RUNITE_BOLTS, 6000], [I.BROAD_BOLTS, 5], null]);
+  opened(f);
+  assert.equal(dragged(f, "bolt_1", "bolt_2"), true);
+  assert.deepEqual(BoltPouch.slots(f.p).slice(0, 2), [{ id: I.RUNITE_BOLTS, amount: 2000 }, { id: I.RUNITE_BOLTS, amount: 10000 }]);
+  dragged(f, "bolt_3", "bolt_1");
+  assert.deepEqual(BoltPouch.slots(f.p).map((s) => s?.id ?? null), [I.BROAD_BOLTS, I.RUNITE_BOLTS, I.RUNITE_BOLTS, null]);
+});
+
+test("dragging a slot onto the ammo slot wields it, swapping the worn bolts into the pouch", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [[I.DRAGON_BOLTS_2, 250], null, null, null]);
   f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.BROAD_BOLTS, 40));
   opened(f);
-  const sent = [];
-  t.mock.method(f.p.getPacketSender(), "sendVarbit", function (id, value) { sent.push(id); return this; });
-  assert.equal(dragged(f, "bolt_1", "bolt_2"), true);
-  assert.equal(dragged(f, "bolt_1", "current_bolt"), true);
-  assert.deepEqual(BoltPouch.slots(f.p).slice(0, 2), [{ id: I.DRAGON_BOLTS_2, amount: 250 }, { id: I.BROAD_BOLTS, amount: 5 }]);
-  assert.equal(worn(f).getId(), I.BROAD_BOLTS);
-  assert.equal(sent.length, 16, "both drags resend the four slots' two varbits");
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(worn(f).getId(), I.DRAGON_BOLTS_2);
+  assert.equal(worn(f).getAmount(), 250);
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.BROAD_BOLTS, amount: 40 });
+  dragged(f, "current_bolt", "bolt_4");
+  assert.equal(worn(f)?.getId() ?? -1, -1);
+  assert.deepEqual(BoltPouch.slots(f.p)[3], { id: I.DRAGON_BOLTS_2, amount: 250 });
+});
+
+test("bolts are only wielded from the pouch with the Ranged level they need", (t) => {
+  const f = actor(t);
+  ranged(f, 1);
+  withPouch(f, [[I.DRAGON_BOLTS_2, 250], null, null, null]);
+  opened(f);
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(worn(f)?.getId() ?? -1, -1);
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.DRAGON_BOLTS_2, amount: 250 });
+  assert.equal(f.messages.length, 1);
+  assert.match(f.messages[0], /Ranged/);
+});
+
+test("worn ammo the pouch can't hold comes off when bolts are wielded over it, and never goes in", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [[I.DRAGON_BOLTS_2, 250], null, null, null]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.RUNE_ARROW, 40));
+  opened(f);
+  dragged(f, "current_bolt", "bolt_2");
+  assert.equal(worn(f).getId(), I.RUNE_ARROW, "arrows don't go into the pouch");
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(worn(f).getId(), I.DRAGON_BOLTS_2);
+  assert.equal(f.inv.getAmount(I.RUNE_ARROW), 40);
+  assert.equal(BoltPouch.slots(f.p)[0], null);
+});
+
+test("Dizana's quiver on the player turns the pouch's ammo swaps off", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [[I.DRAGON_BOLTS_2, 250], null, null, [I.BROAD_BOLTS, 30]]);
+  f.inv.add(new core.Item(I.DIZANAS_QUIVER, 1), false);
+  opened(f);
+  dragged(f, "bolt_1", "current_bolt");
+  assert.equal(wear(f), true);
+  assert.deepEqual(f.messages, Array(2).fill(BoltPouch._test.MESSAGE.QUIVER));
+  assert.equal(worn(f)?.getId() ?? -1, -1);
+});
+
+test("Worn Equipment's extra ammo slot: Wear swaps pouch slot 4 with the worn ammo, each way", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [null, null, null, [I.DRAGON_BOLTS_2, 120]]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.RUNITE_BOLTS, 40));
+  assert.equal(wear(f), true);
+  assert.equal(worn(f).getId(), I.DRAGON_BOLTS_2);
+  assert.equal(worn(f).getAmount(), 120);
+  assert.deepEqual(BoltPouch.slots(f.p)[3], { id: I.RUNITE_BOLTS, amount: 40 });
+  assert.deepEqual(slotView(f)[3], [typeOf(I.RUNITE_BOLTS), 40], "the client's extra slot shows the swapped bolts");
+  wear(f);
+  assert.equal(worn(f).getId(), I.RUNITE_BOLTS);
+  assert.deepEqual(BoltPouch.slots(f.p)[3], { id: I.DRAGON_BOLTS_2, amount: 120 });
+});
+
+test("Wear over Rada's blessing puts the blessing in the inventory (Wiki)", (t) => {
+  const f = actor(t);
+  ranged(f, 99);
+  withPouch(f, [null, null, null, [I.RUNITE_BOLTS, 40]]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.RADAS_BLESSING_1, 1));
+  wear(f);
+  assert.equal(worn(f).getId(), I.RUNITE_BOLTS);
+  assert.equal(f.inv.getAmount(I.RADAS_BLESSING_1), 1);
+  assert.equal(BoltPouch.slots(f.p)[3], null);
+});
+
+test("an empty extra slot, or no pouch carried, makes Wear do nothing", (t) => {
+  const f = actor(t);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.BROAD_BOLTS, 40));
+  BoltPouch.setSlots(f.p, [null, null, null, { id: I.DRAGON_BOLTS_2, amount: 5 }]);
+  wear(f);
+  assert.equal(worn(f).getId(), I.BROAD_BOLTS, "no pouch carried");
+  withPouch(f, [[I.RUNITE_BOLTS, 5], null, null, null]);
+  wear(f);
+  assert.equal(worn(f).getId(), I.BROAD_BOLTS, "nothing in the extra slot");
 });
 
 test("with the interface closed or no pouch carried, clicks and drags change nothing", (t) => {
@@ -295,4 +398,78 @@ test("Always empty bolt pouches on death (356): a PvM death empties the bolts in
   assert.equal(d.grave(I.BOLT_POUCH), 1);
   assert.equal(d.grave(I.RUNITE_BOLTS), 400);
   assert.deepEqual(d.pouched, []);
+});
+
+// ------------------------------------------------------------------ Ammo-picking behaviour (305)
+
+/** A player in Lumbridge with a live connection, so ground items are taken through the real Take packet. */
+function picker(t, { toggle = true } = {}) {
+  const f = actor(t);
+  f.p.setLocation(new core.Location(...LUMBRIDGE, 0));
+  f.c = new ClientConnection(f.p.getSession().getChannel?.() ?? { kind: "test", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  f.c.player = f.p;
+  PM.emitCustomEvent("settings:set", { player: f.p, settingId: 305, value: toggle ? 1 : 0 });
+  return f;
+}
+
+function pile(t, f, itemId, amount) {
+  const ground = core.ItemOnGroundManager.registers(f.p, new core.Item(itemId, amount));
+  t.after(() => { if (!ground.isPendingRemoval()) core.ItemOnGroundManager.deregister(ground); });
+  return ground;
+}
+
+async function take(f, itemId) {
+  const at = f.p.getLocation();
+  await f.c.dispatch([{ type: "ground_item_action", itemId, x: at.getX(), y: at.getY(), option: "Take" }]);
+  f.c.processTurnPackets();
+  for (let i = 0; i < 4; i++) {
+    f.p.needsPlacement = false;
+    core.TaskManager.processWalkTo(f.p.getIndex());
+    f.p.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+}
+
+test("Ammo-picking on: picked-up bolts matching a pouch slot go into it", async (t) => {
+  const f = picker(t);
+  withPouch(f, [[I.RUNITE_BOLTS, 100], null, null, null]);
+  pile(t, f, I.RUNITE_BOLTS, 25);
+  await take(f, I.RUNITE_BOLTS);
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.RUNITE_BOLTS, amount: 125 });
+  assert.equal(f.inv.getAmount(I.RUNITE_BOLTS), 0);
+});
+
+test("Ammo-picking: with the toggle off, picked-up bolts go to the inventory", async (t) => {
+  const f = picker(t, { toggle: false });
+  withPouch(f, [[I.RUNITE_BOLTS, 100], null, null, null]);
+  pile(t, f, I.RUNITE_BOLTS, 25);
+  await take(f, I.RUNITE_BOLTS);
+  assert.equal(f.inv.getAmount(I.RUNITE_BOLTS), 25);
+});
+
+test("Ammo-picking: bolts no slot holds go to the inventory", async (t) => {
+  const f = picker(t);
+  withPouch(f, [[I.RUNITE_BOLTS, 100], null, null, null]);
+  pile(t, f, I.BROAD_BOLTS, 5);
+  await take(f, I.BROAD_BOLTS);
+  assert.equal(f.inv.getAmount(I.BROAD_BOLTS), 5);
+});
+
+test("Ammo-picking: a stack bigger than the slot's room goes to the inventory whole", async (t) => {
+  const f = picker(t);
+  withPouch(f, [[I.RUNITE_BOLTS, 9990], null, null, null]);
+  pile(t, f, I.RUNITE_BOLTS, 25);
+  await take(f, I.RUNITE_BOLTS);
+  assert.equal(f.inv.getAmount(I.RUNITE_BOLTS), 25);
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.RUNITE_BOLTS, amount: 9990 });
+});
+
+test("Ammo-picking: bolts matching the worn ammo go there, not into the pouch", async (t) => {
+  const f = picker(t);
+  withPouch(f, [[I.RUNITE_BOLTS, 100], null, null, null]);
+  f.p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(I.RUNITE_BOLTS, 10));
+  pile(t, f, I.RUNITE_BOLTS, 25);
+  await take(f, I.RUNITE_BOLTS);
+  assert.equal(worn(f).getAmount(), 35);
+  assert.deepEqual(BoltPouch.slots(f.p)[0], { id: I.RUNITE_BOLTS, amount: 100 });
 });

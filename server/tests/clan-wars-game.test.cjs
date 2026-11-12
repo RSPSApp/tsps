@@ -2534,11 +2534,14 @@ test('native Classic queued movement, full clip restoration and rectangular foot
       assert.equal(game.area.contains(game.area.at(outside)),false);
       assert.equal(core.RegionManager.canMovestart(game.area.at(inside),game.area.at(outside),1,1,game.area),false);
     }
-    const walker=[a,b].find(p=>game.members.get(p)===0),open=game.area.at([3424,4690,0]),across=game.area.at(CLASSIC_LANDINGS[1]);
+    const walker=[a,b].find(p=>game.members.get(p)===0),open=game.area.at([3424,4690,0]),across=game.area.at([3423,4740,0]),northLanding=game.area.at(CLASSIC_LANDINGS[1]);
     await wire(walker,walkClickFrame(open));assert.deepEqual(position(walker),[open.getX(),open.getY(),0]);
+    // RSMOD searches an actor-centered 128-square: this target is only 50 tiles north.
+    assert.equal(reference.getClip(reference.tile(3423-3392,4740-4672,0)),0);
+    assert.ok(Math.abs(across.getX()-walker.getLocation().getX())<64&&Math.abs(across.getY()-walker.getLocation().getY())<64,'staging refusal uses an in-range ordinary request');
     await wire(walker,walkClickFrame(across));tick(60);assert.equal(game.phase,'staging');
     assert.ok(walker.getLocation().getY()<game.area.at([3423,4735,0]).getY(),'decoded queued movement cannot reach north during preparation');
-    const staging={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    const staging={requested:[across.getX(),across.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
     completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
     for(const wall of walls) {
       assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),null);
@@ -2550,7 +2553,12 @@ test('native Classic queued movement, full clip restoration and rectangular foot
     for(const x of [3393,3394]) assert.equal(after[(4735-4672)*64+x-3392],0x200000,'skipped terrain-blocked cells remain unchanged');
     assert.equal(classicReachable(game,CLASSIC_LANDINGS[0],CLASSIC_LANDINGS[1]),true);
     await wire(walker,walkClickFrame(across));tick(320);assert.deepEqual(position(walker),[across.getX(),across.getY(),0]);
-    console.log('CLASSIC_MOVEMENT_QUALIFICATION '+JSON.stringify({staging,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    const combat={requested:[across.getX(),across.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    await wire(walker,walkClickFrame(northLanding));tick(320);assert.deepEqual(position(walker),[northLanding.getX(),northLanding.getY(),0]);
+    console.log('CLASSIC_MOVEMENT_QUALIFICATION '+JSON.stringify({staging,combat,landing:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    // A separate ordinary click returns 57 tiles south, keeping the later tree approach in range.
+    const returnApproach=game.area.at([3424,4730,0]);assert.equal(game.area.getClip(returnApproach),0);
+    await wire(walker,walkClickFrame(returnApproach));tick(320);assert.deepEqual(position(walker),[returnApproach.getX(),returnApproach.getY(),0]);
     for(const specimen of [
       {gameval:'wild6_tree_a',xy:[3410,4686],left:[3409,4686],right:[3412,4686],size:2,face:3,projectile:true},
       {gameval:'wild6_wall_stone_pile1',xy:[3425,4730],left:[3424,4730],right:[3426,4730],size:1,face:2,projectile:false},

@@ -895,6 +895,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `IntelligenceGathering` | IntelligenceGathering | world | yes | Intelligence Gathering: the information board, Captain Ginea's hand-in and the timed gang meetings with a boss and gangsters. (members only) |
 | `KeldagrimMinecarts` | KeldagrimMinecarts | world | yes | Keldagrim minecarts: conductors sell tickets, with rides between Keldagrim, Ice Mountain, White Wolf Mountain and the Grand Exchange. (members only) |
 | `LadyOfTheWaves` | LadyOfTheWaves | world | yes | Captain Shanks on the Lady of the Waves sells a ship ticket after Shilo Village and sails you to Port Khazard or Port Sarim. (members only) |
+| `LakeMolchBoaty` | LakeMolchBoaty | world | yes | Lake Molch's Boaty: Board rows between Molch, Battlefront, Shayzien and Molch Island. (members only) |
 | `LocTeleports` | LocTeleports | world | yes | Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors, with level, item and quest gates. |
 | `LovakengjMinecarts` | LovakengjMinecarts | world | yes | Lovakengj minecart network: twelve stations across Great Kourend and the Kebos Lowlands, 20 coins a ride until The Forsaken Tower makes them free. (members only) |
 | `MagicCarpets` | MagicCarpets | world | yes | Rug Merchants fly riders by magic carpet between Shantay Pass, Pollnivneach and other desert stations, with fares, discounts and captured flight paths. (members only) |

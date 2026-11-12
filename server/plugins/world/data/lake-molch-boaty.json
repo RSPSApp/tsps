@@ -1,0 +1,9 @@
+{
+  "$comment": "Lake Molch's Boaty (loc 33614, Board), plugins/world/LakeMolchBoaty.plugin.js; docs/lake-molch-boaty.md. Docks in menu order (the order live lists them). boat: the cache placement of that dock's Boaty (yarn dump:loc 33614). landing: where the player arrives; Molch Island and Molch are captured (rsprox capture database rec 1692 ticks 328 and 435), Shayzien is the tile the player walked to before boarding there (rec 1692 tick 322), Battlefront is not captured.",
+  "docks": [
+    { "name": "Molch Island", "boat": [1368, 3640, 0], "landing": [1369, 3639, 0] },
+    { "name": "Molch", "boat": [1343, 3645, 0], "landing": [1341, 3645, 0] },
+    { "name": "Battlefront", "boat": [1383, 3662, 0], "landing": [1384, 3665, 0] },
+    { "name": "Shayzien", "boat": [1405, 3611, 0], "landing": [1408, 3612, 0] }
+  ]
+}

@@ -461,7 +461,8 @@ test("Plank Stretcher, Enchanted Jeweler, Rumple-Bow-String and Alchemaniac", ()
     crafter.performAnimation = () => {};
     crafter.getInventory().adds(I.OAK_PLANK, 27); // with the class's scimitar, a full inventory
     Math.random = () => 0.05;
-    Workbench.makeFlatpack(crafter, bench, { key, level: 1, experience: 60 });
+    Workbench.makeFlatpack(crafter, bench, { key, level: 1, experience: 60, materials: [] });
+    for (let tick = 0; tick < Workbench.FLATPACK_TICKS; tick++) core.TaskManager.process();
     assert.equal(crafter.getInventory().getAmount(I.OAK_PLANK), 27, "the planks kept");
     assert.deepEqual(fell, [flatpack], "the flatpack on the floor, not lost");
   } finally {

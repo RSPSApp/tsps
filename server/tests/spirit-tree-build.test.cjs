@@ -104,7 +104,7 @@ test('a beer barrel flatpack needs Cooking 5, and a boost to 5 counts',async t=>
     const materials=barrel.materials.map(m=>[m.itemId??core.ItemIdentifiers.STEEL_NAILS,m.amount]);
     for(const [id,n] of materials) assert.ok(inv.getAmount(id)>=n);
     const before=materials.map(([id])=>inv.getAmount(id)), xp=skills.getExperience(core.Skill.CONSTRUCTION);
-    Workbench.makeFlatpack(f.p,{house:f.house,limit},barrel);
+    Workbench.makeFlatpack(f.p,{house:f.house,limit},barrel);for(let i=0;i<12;i++)turn(f); // the nails go in a tick apart; the flatpack follows
     assert.equal(inv.getAmount(flatpack),allowed?1:0);
     for(let i=0;i<materials.length;i++) assert.equal(inv.getAmount(materials[i][0]),before[i]-(allowed?materials[i][1]:0));
     assert.equal(inv.getAmount(core.ItemIdentifiers.HAMMER),1);assert.equal(inv.getAmount(core.ItemIdentifiers.SAW),1);
@@ -215,7 +215,7 @@ test('Imcando hammers also qualify flatpack creation and installation',async t=>
   const W=require('../plugins/skills/construction/Workbench.Construction')._test,I=core.ItemIdentifiers;
   for(const tool of [I.IMCANDO_HAMMER,I.IMCANDO_HAMMER_OFF_HAND_]) await t.test(String(tool),async t=>{
     const f=chairActor(t,1390+(tool===I.IMCANDO_HAMMER?0:1),tool),flatpack=W.FLATPACK_OF.get(f.buildable.key),xp=f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
-    W.makeFlatpack(f.p,{house:f.house,limit:20},f.buildable);
+    W.makeFlatpack(f.p,{house:f.house,limit:20},f.buildable);for(let i=0;i<12;i++)turn(f);
     assert.equal(f.inv.getAmount(flatpack),1);assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION)-xp,f.buildable.experience);
     await f.conn.dispatch([{type:'inventory_use_on',slot:f.inv.getSlotForItemId(flatpack),itemId:flatpack,target:{kind:'loc',id:f.tile.id,x:f.tile.x,y:f.tile.y}}]);for(let i=0;i<10;i++)turn(f);
     assert.equal(f.house.getFurnitureAtTarget(f.target)?.buildableKey,f.buildable.key);assert.equal(f.inv.getAmount(flatpack),0);assert.equal(f.inv.getAmount(tool),1);

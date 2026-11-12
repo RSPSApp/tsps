@@ -62,7 +62,6 @@ function houseMaterials({ player, parts }) {
   for (const material of target.materials) {
     if (material.itemId != null) give(material.itemId, material.amount);
     else if (material.source === "NAILS") give(Items.STEEL_NAILS, material.amount);
-    else if (material.source === "Tool.TINDER_BOX") { if (!inventory.contains(Items.TINDERBOX)) give(Items.TINDERBOX, 1); }
     else player.sendMessage(`It upgrades ${Data.BUILDABLE_BY_KEY.get(material.source)?.name ?? material.source}: build that first.`);
   }
   player.sendMessage(`${target.name} (level ${target.level}): ${given.join(", ") || "nothing needed"}.`);

@@ -1117,7 +1117,8 @@ function formatBuildable(buildable) {
  * What a build takes (item id -> amount), or why it can't happen: a string for the chat, or a
  * Menu.messageBox. rsprox captures (poh_furniture_creation:contents, rev 226-236): the tools line,
  * the upgrade and occupied-hotspot lines (gamemessage), and a message box listing every material
- * with the missing ones in red ("You don't have the right materials: 2 x Plank, <col=ef1020>2 x Nails</col>").
+ * with the missing ones in red, on a line of its own, each amount kept with its name by non-breaking spaces
+ * ("You don't have the right materials:<br>2 x Plank, <col=ef1020>2 x Nails</col>").
  */
 function getBuildMaterials(player, house, target, buildable) {
   if (buildable.invalidLevels) return "This build has an unsupported skill requirement.";
@@ -1163,13 +1164,11 @@ function getBuildMaterials(player, house, target, buildable) {
       const amount = (requiredItems.get(material.itemId) ?? 0) + material.amount;
       requiredItems.set(material.itemId, amount);
       listed.push({ material, missing: player.getInventory().getAmount(material.itemId) + storedAmount(player, material.itemId) < amount });
-    } else if (material.source === "Tool.TINDER_BOX") {
-      if (!player.getInventory().contains(TINDERBOX_ID)) return "You need a tinderbox to build that.";
     } else if (!Data.BUILDABLE_BY_KEY.has(material.source)) return "This build has an unsupported material requirement.";
   }
   if (listed.some(entry => entry.missing)) {
-    return Menu.messageBox(`You don't have the right materials: ${listed.map(({ material, missing }) => {
-      const label = `${material.amount} x ${materialName(material)}`;
+    return Menu.messageBox(`You don't have the right materials:<br>${listed.map(({ material, missing }) => {
+      const label = `${material.amount} x ${materialName(material)}`;
       return missing ? `<col=ef1020>${label}</col>` : label;
     }).join(", ")}`);
   }
@@ -1217,32 +1216,53 @@ function useMaterials(player, buildable, materials) {
   }
 }
 
-/** The hammer: the piece's build animation with synth 938 (rsprox captures, every build). */
-function hammer(player, animationId = BUILD_ANIMATION) {
+/**
+ * The hammer: the piece's build animation with synth 938. The guards and the oubliette's floor
+ * pieces are prayed into place instead (`buildSound: false`): no hammer sound.
+ */
+function hammer(player, animationId = BUILD_ANIMATION, sound = true) {
   if (animationId >= 0) player.performAnimation(new Animation(animationId));
-  player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
+  if (sound) player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
 }
 
 /**
  * rsprox captures (poh_furniture_creation:contents, rev 226-239): a piece without nails takes its
  * materials and gives its XP on the pick, and shows a tick later. With nails, nothing goes on the
- * pick; each tick after it hammers in one nail ("You use a nail.", spam), the best nails first
- * (Wiki), with the sound every second tick, and the last nail takes the rest and gives the XP.
- * No build sentence. Nails also bend in live OSRS, at a rate neither the captures nor the Wiki give,
- * so they don't here.
+ * pick; each tick after it hammers in one nail (see hammerNails), and the last nail takes the rest
+ * and gives the XP. No build sentence.
  */
 function buildFurniture(player, house, target, buildable) {
   if (houseFor(player) !== house || !isBuildingMode(player)) return;
   const materials = getBuildMaterials(player, house, target, buildable);
   if (!(materials instanceof Map)) return Menu.refuse(player, materials);
-  if (!GardenPlants.animate(player, buildable)) hammer(player, buildable.buildAnimationId);
-  const nails = buildable.materials.find(material => material.source === "NAILS")?.amount ?? 0;
-  if (nails === 0) return completeFurniture(player, house, target, buildable, materials);
+  if (!GardenPlants.animate(player, buildable)) hammer(player, buildable.buildAnimationId, buildable.buildSound !== false);
+  if (nailsOf(buildable) === 0) return completeFurniture(player, house, target, buildable, materials);
+  hammerNails(player, buildable, {
+    building: () => houseFor(player) === house && isBuildingMode(player),
+    rest: (withoutNails) => getBuildMaterials(player, house, target, withoutNails),
+    complete: (rest) => completeFurniture(player, house, target, buildable, rest),
+  });
+}
+
+function nailsOf(buildable) {
+  return buildable.materials.find(material => material.source === "NAILS")?.amount ?? 0;
+}
+
+/**
+ * Hammers a piece's nails in, one a tick from the tick after the pick: "You use a nail." (spam), the
+ * best nails first (Wiki: Nails), the build animation each time and the hammer sound on every
+ * second nail and on the last. A workbench's last nail (`lastNail: false`) is silent and has no
+ * animation of its own: the workbench takes over from it. Once the last nail is in, `rest` checks
+ * the other materials again and `complete` uses them. Nails also bend in live OSRS, at a rate neither
+ * the captures nor the Wiki give, so they don't here.
+ */
+function hammerNails(player, buildable, { building, rest, complete, lastNail = true }) {
+  const nails = nailsOf(buildable);
   let used = 0;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, player.getIndex(), false); }
     execute() {
-      if (!player.isRegistered() || houseFor(player) !== house || !isBuildingMode(player)) return this.stop();
+      if (!player.isRegistered() || !building()) return this.stop();
       const nail = NAIL_IDS.find(id => player.getInventory().contains(id));
       if (nail == null) {
         player.sendMessage("You don't have enough nails left.");
@@ -1251,13 +1271,16 @@ function buildFurniture(player, house, target, buildable) {
       player.getInventory().delete(nail, 1);
       player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You use a nail.");
       used++;
-      if (buildable.buildAnimationId >= 0) player.performAnimation(new Animation(buildable.buildAnimationId));
-      if (used % 2 === 0) player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
-      if (used < nails) return;
+      const last = used >= nails;
+      if (!last || lastNail) {
+        if (buildable.buildAnimationId >= 0) player.performAnimation(new Animation(buildable.buildAnimationId));
+        if (used % 2 === 0 || last) player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
+      }
+      if (!last) return;
       this.stop();
-      const rest = getBuildMaterials(player, house, target, { ...buildable, materials: buildable.materials.filter(material => material.source !== "NAILS") });
-      if (!(rest instanceof Map)) return Menu.refuse(player, rest);
-      completeFurniture(player, house, target, buildable, rest);
+      const materials = rest({ ...buildable, materials: buildable.materials.filter(material => material.source !== "NAILS") });
+      if (!(materials instanceof Map)) return Menu.refuse(player, materials);
+      complete(materials);
     }
   })());
 }
@@ -1825,4 +1848,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

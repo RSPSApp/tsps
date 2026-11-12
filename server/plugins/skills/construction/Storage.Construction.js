@@ -305,7 +305,7 @@ function sendStored(player, furniture) {
 }
 
 /**
- * Opens the storage as recorded: the list as the main modal, and for the owner the inventory as
+ * Opens the storage: the list as the main modal, and for the owner the inventory as
  * the side modal with Store on each item. `reset` clears the search and scroll.
  */
 function openInterface(player, state, reset) {
@@ -393,7 +393,9 @@ function clickSide(event) {
     if (result !== "stored") return;
     player.getPacketSender().sendSoundEffect(STORE_SOUND, 1, 0, 1);
     inventory.refreshItems();
+    // The warning's prompt closes the interface; it comes back once the item is in.
     if (openState(player) === state) sendStored(player, state.furniture);
+    else if (inHouse(player, state.house, state.furniture)) openInterface(player, state, false);
   };
   if (isUltimate(player) && warnsOnDeposit(state.furniture, item)) confirmDeposit(state.event, state, state.position, inventory, store);
   else store();
@@ -442,7 +444,7 @@ function depositBatch(player, state, run) {
 }
 
 /**
- * Deposit inventory, as recorded: the interface closes for a "Searching..." box, the items of up
+ * Deposit inventory: the interface closes for a "Searching..." box, the items of up
  * to four rows go in each tick, and the interface comes back three ticks after the last. With
  * nothing that belongs, the box says so two ticks in.
  */

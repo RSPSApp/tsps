@@ -196,6 +196,22 @@ test("Withdraw on a single item with a full inventory: too full to take it", (t)
   assert.equal(stored(f, TOYS[1]), 0);
 });
 
+test("Ultimates through the interface: no partial set out, and Store warns first then reopens", (t) => {
+  const f = fixture(t, "cosuim", "MAGIC_WARDROBE", "OAK_MAGIC_WARDROBE");
+  require("../plugins/modes/ironman/Common.Ironman").setMode(f.player, "ultimate");
+  f.furniture.storage = { [SPLITBARK[0]]: 1 };
+  f.inventory.addItem(new Item(SPLITBARK[1], 1));
+  open(f);
+  button(f, "poh_costumes:items", 1, rowSlot(SPLITBARK_ROW));
+  assert.deepEqual(f.messages, ["You need the complete set to withdraw it."]);
+  assert.equal(stored(f, SPLITBARK[0]), 1);
+  button(f, "poh_costumes_side:items", 1, 0, SPLITBARK[1]);
+  assert.deepEqual(core.MultiChatboxPrompt.getPending(f.player)?.options, ["Deposit", "Cancel"]);
+  core.MultiChatboxPrompt.handleInterfaceActionClick({ player: f.player, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: 1, action: 1 });
+  assert.equal(stored(f, SPLITBARK[1]), 1);
+  assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+});
+
 test("an oak cape rack refuses a cape of accomplishment", (t) => {
   const f = fixture(t, "coscape", "CAPE_RACK", "OAK_CAPE_RACK");
   const members = core.CacheDefinitions.getEnumValues(3077);

@@ -200,6 +200,29 @@ so limited inventory space is filled from the lowest-level herb first (including
 Huasca before Snapdragon). Regression checks cover both sack variants, partial/repeated
 withdrawals and full inventories. Source: [Herb sack](https://oldschool.runescape.wiki/w/Herb_sack).
 
+The sack's lines (rsprox captures, rev 235 normal worlds: 960, 964, 966, 976, 982, 1016, 4293, 4300, 4302):
+
+| Action | Line | Type |
+| --- | --- | --- |
+| Fill, grimy herbs stored | "You search your inventory for herbs appropriate to put in the sack..." then "You add the herbs to your sack." | spam |
+| Fill, no room for any carried herb | the search line, then "You don't have enough space for the herbs." | spam, game |
+| Fill, no grimy herb carried | "You have no grimy herbs in your inventory that can be stored in the sack." | game |
+| Check | "You look in your herb sack and see:", then "<n> x <herb>" per herb, lowest Herblore level first, or "The herb sack is empty." | game |
+| Empty | "You rummage around to see if you can extract any herbs from your herb sack." | spam |
+| Empty, inventory full | "You have no space to put any herbs!" | game |
+| Empty (inventory or bank), nothing stored | "The herb sack is empty." | game |
+| An item other than a grimy herb used on it | "You can't possibly put that in there, it would spoil your sack." | game |
+
+The rummage line is from Leagues V and Grid Master recordings (86, 1723, 3271), where the Forager's pouch empties
+with it, naming the herb sack; the spoil line is also in the Wiki's trivia. The silklined sack says "silklined herb
+sack" in Check and the empty line (Wiki), and, ours, in the rummage line. Ours: a grimy herb used on a sack with no
+room for it gets Fill's "not enough space" line. A seed box emptied into a full inventory adds "You don't have space
+in your inventory for that." after its Emptied lines (captures 3911, 4300, 4302, 4307).
+
+Not covered (no capture or Wiki line): a herb used on the sack when it has room (no line here), the closed sack's own
+recordings (only the open sack is recorded; the two share these lines here), live's one-tick delay before Check's
+lines, and what a sack does below 58 Herblore.
+
 An open sack also takes grimy herbs picked up from the ground and herbs harvested from a herbiboar,
 as it does from patches, whole or not at all for a pickup and per herb for a harvest, while it has room
 (30 of each type here, 100 in a silklined sack). A closed sack takes none. Wiki: "will automatically

@@ -1,6 +1,6 @@
 /**
  * The configuration offered by this bounded melee team-battle implementation, NOT a claim
- * about OSRS's initial/default settings. The team cap, supported mode and bounded melee restrictions are negotiable.
+ * about OSRS's initial/default settings. The team cap, mode, bounded melee and membership terms are negotiable.
  *
  * Rev242 enum_374/375: last standing is 0 and closes entry when combat starts;
  * enum_929: Plateau is 1; enum_2340: the cap indices below (not the Wiki's older list).
@@ -8,6 +8,7 @@
  * Enums 374/376 map modes 1..8 to kill targets; enum1119 maps 16..20 to minutes.
  * Objective modes remain unsupported.
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
+ * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
  * Staff-of-the-Dead-only, other combat restrictions and modern clans remain deferred.
  */
 const OFFERED_RULES = Object.freeze({
@@ -44,6 +45,8 @@ const RESTRICTIONS = Object.freeze({
   prayer: Object.freeze([0, 1, 2]),
   // "No Staff of the Dead" needs separately qualified variant/effect rules.
   specialattacks: Object.freeze([0, 2]),
+  leavingcc: Object.freeze([0, 1]),
+  rejoiningdelay: Object.freeze([0, 1]),
 });
 const RULE_KEYS = Object.freeze(Object.keys(OFFERED_RULES));
 
@@ -101,17 +104,22 @@ function summary(rules) {
       : target ? `First to ${target.toLocaleString("en-US")} kills on Plateau.` : "Last team standing on Plateau.",
     `Team cap: ${capText}.`,
     "Safe deaths: you keep your items. No prizes or stakes.",
-    respawning ? "Two minutes to prepare. Joining and rejoining remain open during the battle; rejoining is unrestricted."
+    respawning ? "Two minutes to prepare. Joining and rejoining remain open during the battle."
       : "Two minutes to enter and prepare. No joining or rejoining after the battle begins.",
-    respawning ? "Defeated fighters go to jail and may return to battle. Leaving the chat-channel counts as a death."
-      : "The team with no fighters remaining loses. Leaving the chat-channel counts as a death.",
+    respawning ? "Defeated fighters go to jail and may return to battle."
+      : "The team with no fighters remaining loses.",
+    rules.leavingcc ? "Leaving the chat-channel incurs no death penalty." : "Leaving the chat-channel counts as a death.",
+    rules.rejoiningdelay ? "After death, returning to this battle requires a 60-second wait."
+      : "There is no additional rejoining delay.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
     "Melee combat only. Ranged and magical combat are disabled.",
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
     `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
-    `${rules.food || rules.drinks ? "Allowed food" : "Food"} and drinks are consumed normally. Powered staves and Vesta's blighted longsword are not enabled.`,
+    `${rules.food && rules.drinks ? "Food and drinks are disabled." : rules.food
+      ? "Allowed drinks are consumed normally." : rules.drinks ? "Allowed food is consumed normally."
+        : "Food and drinks are consumed normally."} Powered staves and Vesta's blighted longsword are not enabled.`,
   ].join("<br>");
 }
 

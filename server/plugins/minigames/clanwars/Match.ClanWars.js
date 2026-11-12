@@ -10,6 +10,8 @@ const Rules = require("./Rules.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
 const PREPARATION_TICKS = 200;
+// Wiki15379109 and rev242 enum2339: 60 seconds; engine cycle is 600ms.
+const REJOIN_DELAY_TICKS = 100;
 // Rev242 varbits4290/4291 are 16 bits; HUD script595 renders this value as "Lots!".
 const MAX_HUD_KILLS = 65535;
 const ORIGIN = [3264, 4928];
@@ -80,6 +82,7 @@ class Game {
     this.members = new Map();
     this.fighters = new Map();
     this.jailed = new Set();
+    this.returnAt = new Map();
     this.viewers = new Set();
     this.kills = [0, 0];
     this.phase = "staging";
@@ -105,6 +108,7 @@ class Game {
     const side = this.channelKeys.indexOf(channel?.key);
     if (side < 0 || !this.canJoin() || dying.has(player) || this.members.has(player)
       || C.matches.has(player) || !C.inLobby(player) || player.getHitpoints() <= 0 || player.busy()) return false;
+    if (!this.returnReady(player)) return false;
     if ([...this.members.values()].filter((team) => team === side).length >= Rules.teamCap(this.rules)) {
       player.sendMessage("Your team has reached the agreed fighter cap.");
       return false;
@@ -143,13 +147,31 @@ class Game {
     const target = Rules.killTarget(this.rules);
     if (target && this.kills[side] >= target) this.finish(side);
   }
+  returnReady(player) {
+    const key = player.getLongUsername();
+    const until = this.returnAt.get(key);
+    if (until != null && C.now() < until) {
+      player.sendMessage("You must wait 60 seconds after death before returning to this Clan Wars battle.");
+      return false;
+    }
+    this.returnAt.delete(key);
+    return true;
+  }
+  holdDeath(player, scoreResolved = true) {
+    let state = dying.get(player);
+    if (!state) {
+      state = { game: this, side: this.members.get(player), wasFighter: this.fighters.has(player), scoreResolved };
+      dying.set(player, state);
+    }
+    return state;
+  }
   rejoin(player) {
     const view = Viewing.active.get(player);
     if (view?.game === this) Viewing.stop(player, false);
     if (this.phase !== "combat" || this.expired() || !Rules.respawns(this.rules) || !this.jailed.has(player)
       || dying.has(player) || player.getHitpoints() <= 0 || player.busy()
       || player.getArea() !== this.area
-      || C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) {
+      || C.channel(player)?.key !== this.channelKeys[this.members.get(player)] || !this.returnReady(player)) {
       if (view?.game === this && player.getArea() === this.area && this.phase !== "over"
         && !player.isDyingReturn()) player.moveTo(view.location);
       return false;
@@ -166,9 +188,12 @@ class Game {
   channelLeft(player) {
     const side = this.members.get(player);
     if (side == null || this.expire()) return;
-    // Fixed leavingcc=0: a fighter leaving the channel counts as an opposing kill.
-    // A fighter already in a death callback or jail is not a second death.
-    if (this.fighters.has(player)) this.score(1 - side);
+    if (this.fighters.has(player)) {
+      // Retain a real queued death's eligibility before removing its membership.
+      // A counted departure resolves it before score() can finish the match.
+      if (player.isDyingReturn()) this.holdDeath(player, this.rules.leavingcc === 0);
+      if (this.rules.leavingcc === 0) this.score(1 - side);
+    }
     this.remove(player, false);
   }
   tick() {
@@ -207,7 +232,8 @@ class Game {
     // A lethal hit queues its task before player:dying. Preserve safe-death
     // ownership before any departure deletes membership, including match finish.
     if (player.isDyingReturn() && !dying.has(player)) {
-      dying.set(player, { game: this, side: this.members.get(player) });
+      // Other removal paths retain their existing score outcome; this backup owns safety.
+      this.holdDeath(player);
     }
     Viewing.stop(player, false);
     this.eliminate(player);
@@ -227,6 +253,7 @@ class Game {
   finish(winner) {
     if (this.phase === "over") return;
     this.phase = "over";
+    this.returnAt.clear();
     this.task.stop();
     active.delete(this);
     for (const [player, game] of joining) if (game === this) {
@@ -300,16 +327,17 @@ function joinClosed({ player, interfaceId }) {
   if (interfaceId === C.group("clanwars_confirm")) joining.delete(player);
 }
 function dyingStarts({ player, killer }) {
-  const game = C.matches.get(player);
-  if (!game || dying.has(player) || !game.members.has(player)) return;
-  const wasFighter = game.fighters.has(player);
-  const side = game.members.get(player);
+  const held = dying.get(player);
+  const game = held?.game ?? C.matches.get(player);
+  if (!game || !held && !game.members.has(player)) return;
+  const state = held ?? game.holdDeath(player, false);
+  if (game.members.has(player)) game.eliminate(player);
+  if (state.scoreResolved) return;
+  state.scoreResolved = true;
   const scoringSide = game.members.get(killer);
-  dying.set(player, { game, side });
-  game.eliminate(player);
   // Use the death task's captured damage owner, before its reset, and require an
   // opposing participant still owned by this match. Unattributed deaths award no guessed kill.
-  if (wasFighter && scoringSide != null && scoringSide !== side) game.score(scoringSide);
+  if (state.wasFighter && scoringSide != null && scoringSide !== state.side) game.score(scoringSide);
 }
 function keepItems(event) {
   if (C.matches.has(event.player) || dying.has(event.player)) event.shouldDrop = false;
@@ -320,6 +348,11 @@ function died(event) {
   if (!state) return;
   state.game.expire();
   dying.delete(event.player);
+  // The completed death callback is this implementation's explicit clock anchor.
+  // Wiki/cache specify 60 seconds, but not the exact death-animation phase.
+  if (state.game.phase !== "over" && state.game.rules.rejoiningdelay === 1) {
+    state.game.returnAt.set(event.player.getLongUsername(), C.now() + REJOIN_DELAY_TICKS);
+  }
   event.handled = true;
   if (state.game.phase === "over" || !state.game.members.has(event.player)) event.player.moveTo(C.location(C.RETURN));
   else {

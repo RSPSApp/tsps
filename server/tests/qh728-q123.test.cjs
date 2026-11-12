@@ -856,6 +856,9 @@ test('real investigation dialogue earns helper facts and the wilderness meeting 
     assert.equal(h.quest.getStage(p), 9);
     p.items.set(I.PURE_ESSENCE, 20);
     h.dispatchNpc(3229); r.finish();
+    assert.equal(h.quest.getStage(p), 9, 'reopening shared topics does not pay for Solus information');
+    assert.equal(p.items.get(I.PURE_ESSENCE), 20, 'essence stays until the Solus topic is selected');
+    r.choose('Solus Dellagar.');
     assert.equal(h.quest.getStage(p), 10);
     assert.equal(p.items.get(I.PURE_ESSENCE), 0);
     r.sender.sendConfig(492, 4); h.login(); h.bootstrap();

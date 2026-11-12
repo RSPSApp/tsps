@@ -483,7 +483,7 @@ test("lamps: the xpreward interface, offering skills at the lamp's level, and th
   assert.equal(request.onConfirm(attack, "Attack"), null, "and the server refuses them too");
   assert.deepEqual(player.inventory, [13145], "kept");
   Lamps.rub({ player, item: 13145, itemId: 13145, slot: 0 });
-  assert.equal(xpRewards.at(-1).onConfirm(smithing, "Smithing"), "You have been awarded 2,500 Smithing XP!");
+  assert.equal(xpRewards.at(-1).onConfirm(smithing, "Smithing"), "<col=0000ff>Your wish has been granted!</col><br>You have been awarded 2,500 Smithing experience!");
   assert.equal(player.log.at(-1), "xp Smithing 2500");
   assert.deepEqual(player.inventory, []);
 });

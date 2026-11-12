@@ -60,7 +60,8 @@ function fakePlayer(x = 3174, y = 8873, worn = {}) {
     getAttribute: (k) => player.attributes[k],
     setAttribute: (k, v) => { player.attributes[k] = v; },
     getSkillManager: () => ({ getCurrentLevel: () => player.slayer }),
-    getPacketSender: () => ({ sendGraphic() {}, sendConfig: (id, v) => { player.varps[id] = v; } }),
+    getPacketSender: () => ({ sendGraphic() {}, sendConfig: (id, v) => { player.varps[id] = v; },
+      sendTypedMessage: (type, text) => player.messages.push(type === core.ChatType.SPAM ? `spam:${text}` : text) }),
     getEquipment: () => ({ getItems: () => items, get: (slot) => items[slot] }),
     getBonusManager: () => ({ getDefenceBonus: () => [0, 0, 0, 0, player.rangedDefence] }),
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => player.damage.push(...hits.map((h) => h.getDamage())) }) }),
@@ -218,14 +219,24 @@ test('a heavy player gets the knockback less often; no new whirlwinds while some
   assert.deepEqual([...kinds].sort(), ['knockback', 'spit'], 'a light player can still be knocked back during whirlwinds');
 });
 
-test('the spit lands where the player stood: still there, their armour corrodes - 6 hits of one value, 5 ticks apart', () => {
+// rsprox 235/03456.txt:49039-49483: the first hit lands with the message, then one every 6 ticks; varp corrosion (4966)
+// counts the hits left.
+test('the spit lands where the player stood: still there, their armour corrodes - 6 hits of one value, 6 ticks apart', () => {
   const player = fakePlayer(3174, 8873, { 4: 1127 });
   const { fight } = newFight(player);
+  const corrosionVarp = core.CacheDefinitions.getVarpId('corrosion');
   fight.special(player, 'spit');
   ticks(fight, Common.data.spit.landTicks);
   assert.equal(player.messages.at(-1), Common.message('corroding'));
-  ticks(fight, Common.data.spit.hits * Common.data.spit.every);
+  assert.equal(player.damage.length, 1, 'the first hit lands with the spit');
+  assert.equal(player.varps[corrosionVarp], 5);
+  ticks(fight, 5);
+  assert.equal(player.damage.length, 1, 'nothing 5 ticks on');
+  ticks(fight, 1);
+  assert.equal(player.damage.length, 2, 'the next 6 ticks on');
+  ticks(fight, 4 * Common.data.spit.every);
   assert.equal(player.damage.length, 6);
+  assert.equal(player.varps[corrosionVarp], 0);
   assert.ok(player.damage.every((d) => d === player.damage[0] && d >= 3 && d <= 12));
   assert.equal(fight.corrosion, null);
 });
@@ -245,7 +256,7 @@ test('stepping off the tile dodges the spit; taking everything off stops the cor
   player.items[4] = new core.Item(-1);
   fight.tick();
   assert.equal(fight.corrosion, null);
-  assert.equal(player.messages.at(-1), Common.message('stopsCorroding'));
+  assert.equal(player.messages.at(-1), `spam:${Common.message('stopsCorroding')}`, 'spam, as recorded');
 });
 
 test('more ranged defence means smaller corrosion splats (+125 brings them to 3)', () => {

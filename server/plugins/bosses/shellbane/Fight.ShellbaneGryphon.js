@@ -151,23 +151,34 @@ class Fight {
       return;
     }
     const { spit } = Common.data;
-    this.corrosion = { left: spit.hits, next: this.tickCount + spit.every, every: spit.every, damage: this.corrosionHit(player) };
+    // rsprox 235/03456.txt:49039-49483: the first hit lands with the message, then one every 6 ticks; varp corrosion
+    // (4966) counts the hits left (6, then 5 at the first) and goes to 0 when it ends.
+    this.corrosion = { left: spit.hits, next: this.tickCount, every: spit.every, damage: this.corrosionHit(player) };
     player.sendMessage(Common.message("corroding"));
+    setCorrosionVarp(player, spit.hits);
   }
 
   tickCorrosion(player) {
     const corrosion = this.corrosion;
     if (!corrosion) return;
     if (!wearsAnything(player)) {
-      this.corrosion = null;
-      player.sendMessage(Common.message("stopsCorroding"));
+      this.endCorrosion(player);
       return;
     }
     if (this.tickCount < corrosion.next) return;
     Common.hurtPlayer(player, corrosion.damage);
     corrosion.left -= 1;
     corrosion.next = this.tickCount + corrosion.every;
+    setCorrosionVarp(player, corrosion.left);
     if (corrosion.left <= 0) this.corrosion = null;
+  }
+
+  /** Corrosion cut short (armour off, or the gryphon dies): the spam line, as recorded, and the varp back to 0. */
+  endCorrosion(player) {
+    if (!this.corrosion) return;
+    this.corrosion = null;
+    player?.getPacketSender?.().sendTypedMessage(Common.core.ChatType.SPAM, Common.message("stopsCorroding"));
+    setCorrosionVarp(player, 0);
   }
 
   // --- Whirlwinds
@@ -269,7 +280,7 @@ class Fight {
     this.knockback = null;
     this.stun = null;
     this.spit = null;
-    this.corrosion = null;
+    this.endCorrosion(this.player?.());
     this.clearWhirlwinds();
   }
 }
@@ -279,6 +290,11 @@ function walkable(tile) {
   const { RegionManager } = Common.core;
   if (!RegionManager?.getClipping) return true;
   return (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), null) & RegionManager.BLOCKED_MASK) === 0;
+}
+
+function setCorrosionVarp(player, value) {
+  const id = Common.core.CacheDefinitions.getVarpId?.("corrosion");
+  if (player && id != null && id >= 0) player.getPacketSender().sendConfig(id, value);
 }
 
 function wearsAnything(player) {

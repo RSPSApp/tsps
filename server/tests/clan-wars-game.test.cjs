@@ -120,12 +120,13 @@ async function challenge(p, target) {
   frame.writeUInt16BE(target.getIndex(), 1);
   await wire(p, frame);
 }
-async function click(p, name, slot = 0xffff) {
+function clickFrame(name, slot = 0xffff) {
   const frame = Buffer.alloc(9); frame[0] = 23;
   frame.writeInt32BE(C.uid(name), 1);
   frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(0xffff, 7);
-  await wire(p, frame);
+  return frame;
 }
+async function click(p, name, slot = 0xffff) { await wire(p, clickFrame(name,slot)); }
 function channel(owner, members = []) {
   owner.getRelations().setFriendsChatChannelName(`Team${serial}`);
   owner.getRelations().setFriendsChatRanks(-1, -1, 2);
@@ -147,7 +148,8 @@ async function negotiate(a, b, cap = null, mode = 0, restrictions = null) {
     tick(9);
   }
   for (const [key,value] of Object.entries(restrictions ?? {})) {
-    await click(a, `clanwars_setup:dropdown_${key}`, value + 1);
+    await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
+      key==='stragglers'?value*3:value+1);
     assert.equal(C.negotiations.get(a).rules[key],value,'native restriction selection must reach the server offer');
     tick(9);
   }
@@ -159,7 +161,7 @@ async function negotiate(a, b, cap = null, mode = 0, restrictions = null) {
   assert.ok(game, 'native reciprocal challenge and confirmations create the match');
   return game;
 }
-async function join(p, confirm = true) {
+function challengePortal() {
   // The actual cache portal goes through production object dispatch; no synthetic loc.
   const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
   const id = core.CacheDefinitions.getLocId('clanwars_portal');
@@ -168,6 +170,10 @@ async function join(p, confirm = true) {
     && o.getLocation().getX() >= C.LOBBY.minX && o.getLocation().getX() <= C.LOBBY.maxX
     && o.getLocation().getY() >= C.LOBBY.minY && o.getLocation().getY() <= C.LOBBY.maxY);
   assert.ok(portal, `actual challenge portal exists (gameval lookup ${id})`);
+  return portal;
+}
+async function join(p, confirm = true) {
+  const portal=challengePortal();
   const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
   new ObjectActionPacketListener().executeAction(p, portal.getId(), portal.getLocation().getX(), portal.getLocation().getY(), 1);
   tick(15);
@@ -1413,9 +1419,9 @@ function channelFrame(action, name='') {
   assert.deepEqual(decoded.action,action==='leave'?{action}:{action,name});
   return frame;
 }
-function jailPortalFrame(portal, op) {
+function firstObjectFrame(portal, op) {
   const { ClientPacketId }=require('../dist/net/protocol/NativeClientPackets');
-  assert.equal(op,1,'the active mapped jail portal exposes Exit as its first native option');
+  assert.equal(op,1,'the mapped object is being used through its actual first native option');
   const at=portal.getLocation(),id=portal.getId(),frame=Buffer.alloc(8);
   frame[0]=ClientPacketId.OPLOC1;
   // MenuAction OPLOC1 -> PacketBuffer.writeShortAdd(x), writeShortAddLE(id).
@@ -1548,7 +1554,7 @@ for (const mode of [1,16]) {
     const {portal,op}=await jailExit(extra,game);
     assert.ok(checks.some(check=>!check.result));
     assert.equal(game.jailed.has(extra),true); assert.equal(game.members.size,3,'jailed participant retains a cap slot');
-    const frame=jailPortalFrame(portal,op),remaining=completed+98-C.now();
+    const frame=firstObjectFrame(portal,op),remaining=completed+98-C.now();
     assert.ok(remaining>0); tick(remaining);
     await dispatchFrameNow(extra,frame); tick();
     assert.deepEqual(checks.at(-1),{now:completed+99,result:false},'native object callback sees the real refusal tick');
@@ -1571,3 +1577,191 @@ for (const mode of [1,16]) {
     assert.equal(second.canJoin(),false,'delay option cannot reopen Last Team Standing entry');
   });
 }
+
+function varbitCalls(player) {
+  const calls=[],sender=player.getPacketSender(),send=sender.sendVarbit;
+  sender.sendVarbit=function(id,value) { calls.push([id,value]); return send.call(this,id,value); };
+  return calls;
+}
+async function batchJoin(players,game) {
+  const portal=challengePortal();
+  assert.ok(['enter','join'].includes(portal.getDefinition().getInteractions()[0]?.toLowerCase()));
+  // Twelve sequential 18-tick join helpers would overrun the real 200-tick prep.
+  // Ordinary players instead open and confirm their real portals concurrently.
+  for (const p of players) await dispatchFrameNow(p,firstObjectFrame(portal,1));
+  tick(15);
+  for (const p of players) assert.equal(p.getInterfaceId(),C.group('clanwars_confirm'));
+  for (const p of players) await dispatchFrameNow(p,clickFrame('clanwars_confirm:button'));
+  tick(3);
+  for (const p of players) {
+    assert.equal(C.matches.get(p),game); assert.equal(p.getPrivateArea(),game.area);
+    assert.equal(game.fighters.has(p),true);
+  }
+  assert.equal(game.phase,'staging'); assert.ok(C.now()<game.starts,'all entries completed within unchanged preparation');
+}
+async function stragglerGame(perSide,stragglers,cap=3,terms={}) {
+  const teams=[Array.from({length:perSide},()=>actor(true)),Array.from({length:perSide},()=>actor(true))];
+  for (const p of teams.flat()) ruleStats(p);
+  const a=teams[0][0],b=teams[1][0];channel(a,teams[0].slice(1));channel(b,teams[1].slice(1));
+  const game=await negotiate(a,b,cap,0,{...terms,stragglers});
+  await batchJoin(teams.flat(),game);
+  for (let side=0;side<2;side++) {
+    assert.equal([...game.members.values()].filter(value=>value===side).length,perSide);
+    assert.equal([...game.fighters.values()].filter(value=>value===side).length,perSide);
+  }
+  return {a,b,teams,players:teams.flat(),game};
+}
+function completePreparation(game) {
+  const remaining=game.starts-C.now();assert.ok(remaining>0);tick(remaining-1);
+  assert.equal(game.phase,'staging','small teams never end during preparation');assert.ok(game.walls.length>0);
+  tick();assert.equal(game.walls.length,0,'the ordinary combat-start wall removal ran');
+}
+function finishedMatch(game,players) {
+  assert.equal(game.phase,'over');assert.equal(Match.active.has(game),false);
+  assert.equal(game.task.isRunning(),false);assert.equal(game.area.isDestroyed(),true);
+  assert.equal(game.members.size,0);assert.equal(game.fighters.size,0);assert.equal(game.jailed.size,0);
+  assert.equal(game.viewers.size,0);assert.equal(game.returnAt.size,0);
+  for (const key of game.channelKeys) assert.equal(C.channelGames.has(key),false);
+  for (const p of players) {
+    lobby(p);assert.equal(viewingUnit().active.has(p),false);assert.equal(p.getAttribute(C.IN_MATCH_ATTRIBUTE),false);
+    for (const name of ['clanwars_myteam','clanwars_countdown','clanwars_timeremaining','clanwars_players_1','clanwars_players_2','clanwars_kills_1','clanwars_kills_2']) {
+      assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(name)),0,name);
+    }
+  }
+}
+
+test('native stragglers rows preserve terms, refuse incompatible modes in both directions and explain the LTS delay cutoff',async()=>{
+  const a=actor(true),b=actor(true),member=actor(true);channel(a,[member]);channel(b);
+  const scripts=scriptCalls(a),memberScripts=scriptCalls(member),writes=varbitCalls(a);
+  await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:dropdown_playercap',4);tick(9);
+  for (const [name,value] of Object.entries({food:1,drinks:1,prayer:2,specialattacks:2,leavingcc:1,rejoiningdelay:1})) {
+    await click(a,`clanwars_setup:dropdown_${name}`,value+1);tick(9);
+  }
+  const session=C.negotiations.get(a),preserved={...session.rules};
+  for (const value of [1,0,1]) {
+    await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+    await click(a,'clanwars_setup:stragglers',value*3);
+    assert.equal(session.rules.stragglers,value,'native stragglers selection reaches the authoritative offer');
+    for (const [name,term] of Object.entries(preserved)) if (name!=='stragglers') assert.equal(session.rules[name],term,name);
+    assert.equal(session.accepted.size,0);await click(b,'clanwars_setup:accept');
+    assert.equal(session.accepted.has(b),false,'ordinary opponent-change delay still applies');tick(9);
+  }
+  await click(b,'clanwars_setup:accept');const revision=session.revision;
+  await click(a,'clanwars_setup:stragglers',3);
+  assert.equal(session.revision,revision);assert.equal(session.accepted.has(b),true,'duplicate choice is a no-op');
+  const winBit=core.CacheDefinitions.getVarbitId('clanwars_wincondition');
+  const stragglerBit=core.CacheDefinitions.getVarbitId('clanwars_stragglers');
+  writes.length=0;await click(a,'clanwars_setup:wincondition',3);
+  assert.equal(session.rules.wincondition,0);assert.equal(session.rules.stragglers,1);
+  assert.equal(session.revision,revision);assert.equal(session.accepted.has(b),true);
+  assert.ok(writes.some(([id,value])=>id===winBit&&value===0),'actual sender resyncs the refused optimistic mode');
+  assert.ok(writes.some(([id,value])=>id===stragglerBit&&value===1));
+  await click(a,'clanwars_setup:stragglers',0);tick(9);
+  await click(a,'clanwars_setup:wincondition',16*3);tick(9);
+  await click(b,'clanwars_setup:accept');const timedRevision=session.revision;
+  writes.length=0;await click(a,'clanwars_setup:stragglers',3);
+  assert.equal(session.rules.wincondition,16);assert.equal(session.rules.stragglers,0);
+  assert.equal(session.revision,timedRevision);assert.equal(session.accepted.has(b),true);
+  assert.ok(writes.some(([id,value])=>id===stragglerBit&&value===0),'actual sender resets an incompatible stragglers choice');
+  await click(a,'clanwars_setup:wincondition',0);tick(9);
+  await click(a,'clanwars_setup:stragglers',3);tick(9);
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');
+  assert.equal(session.stage,'confirm');const agreed={...session.rules};
+  await click(a,'clanwars_setup:stragglers',0);assert.deepEqual(session.rules,agreed,'stale setup input cannot rewrite confirmation');
+  const summary=scripts.filter(([id])=>id===554).at(-1)[2];
+  assert.match(summary,/Ignore 5.*five or fewer/);assert.match(summary,/60-second rejoining delay cannot reopen entry/);
+  assert.doesNotMatch(summary,/returning to this battle requires a 60-second wait/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.deepEqual(game.rules,agreed);
+  await join(member,false);
+  assert.equal(memberScripts.filter(([id])=>id===554).at(-1)[2],summary,'member sees the same frozen mode-aware terms');
+  await click(member,'clanwars_confirm:button');assert.equal(C.matches.get(member),game);
+  assert.equal(game.phase,'staging');
+});
+
+for (const stragglers of [0,1]) {
+  test(`native six-versus-six real death leaves five fighters under stragglers ${stragglers}`,async()=>{
+    const {a,b,teams,players,game}=await stragglerGame(6,stragglers);
+    const results=scriptCalls(a),victim=teams[1][1];
+    for (const id of [4151,1127,1079,1163,1201,995]) victim.getInventory().add(new core.Item(id,id===995?77:1,{qa:`stragglers-${id}`}),false);
+    const before=carriedItems(victim);assert.equal(before.length,6);
+    completePreparation(game);assert.equal(game.phase,'combat');
+    await lethalMelee(a,victim,game);tick();
+    assert.deepEqual(game.kills,[0,0],'the LTS condition does not invent kill-target credit');
+    if (!stragglers) {
+      assert.equal(game.phase,'combat','Kill all continues with five fighters on the defeated side');
+      assert.equal([...game.fighters.values()].filter(side=>side===game.members.get(b)).length,5);
+      tick(4);assert.equal(game.jailed.has(victim),true);assert.deepEqual(carriedItems(victim),before);
+      game.finish(null);finishedMatch(game,players);
+      return;
+    }
+    assert.equal(game.phase,'over','Ignore 5 ends at the actual five-versus-six boundary');
+    assert.deepEqual(results.filter(([id])=>id===592).at(-1),[592,1,'Your team won the battle.']);
+    assert.equal(Match.dying.has(victim),true,'finish retains the queued death owner');
+    assert.equal(PM.emitShouldDropItemsOnDeath(victim,a),false);
+    finishedMatch(game,players);tick(4);
+    assert.equal(Match.dying.has(victim),false);assert.deepEqual(carriedItems(victim),before);
+    for (const p of players) await wire(p,Buffer.from([VIEW_CLOSE_PACKET]));
+    const second=await negotiate(a,b,3,1,{stragglers:0});
+    await batchJoin(players,second);assert.notEqual(second,game);assert.notEqual(second.area,game.area);
+    assert.deepEqual(carriedItems(victim),before,'second match does not reconstruct carried items');
+  });
+}
+
+for (const [perSide,cap] of [[1,1],[5,2]]) {
+  test(`Ignore 5 permits native ${perSide}v${perSide} caps and resolves both-small rosters only at combat start`,async()=>{
+    const {a,players,game}=await stragglerGame(perSide,1,cap);const results=scriptCalls(a);
+    completePreparation(game);
+    assert.deepEqual(results.filter(([id])=>id===592).at(-1),[592,0,'The battle ended without a winner.']);
+    finishedMatch(game,players);
+  });
+}
+
+test('paired real lethal hits reaching five on both sides use a neutral snapshot and keep both queued deaths safe',async()=>{
+  const {a,b,teams,players,game}=await stragglerGame(6,1);const results=scriptCalls(a);
+  completePreparation(game);
+  const victims=[teams[0][1],teams[1][1]],killers=[b,a];
+  for (const [index,p] of victims.entries()) give(p,core.ItemIdentifiers.SHARK,`paired-stragglers-${index}`);
+  const inventories=victims.map(carriedItems);
+  // Supply adjacent combat placement, then bind both ordinary native Attack targets
+  // before either pre-rolled real hit is enqueued. No death event is synthesized.
+  for (const [index,victim] of victims.entries()) {
+    const killer=killers[index];killer.moveTo(game.area.at([3293,4955+index*2,0]));victim.moveTo(game.area.at([3294,4955+index*2,0]));
+    for (const p of [killer,victim]) {p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);}
+    const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(victim.getIndex(),2);await wire(killer,frame);
+    assert.equal(killer.getCombat().getTarget(),victim);
+  }
+  const { PendingHit }=require('../dist/game/content/combat/hit/PendingHit');
+  const { HitQueue }=require('../dist/game/content/combat/hit/HitQueue');
+  for (const [index,victim] of victims.entries()) CombatFactory.addPendingHit(new PendingHit(killers[index],victim,CombatFactory.MELEE_COMBAT,
+    {damage:victim.getHitpoints(),rollAccuracy:false,handleAfterHitEffects:false,experience:false}));
+  core.World.processCycle++;HitQueue.processAll(core.World.processCycle);
+  for (const p of victims) assert.equal(p.getHitpoints(),0,'actual same-cycle hit queue starts a real death');
+  tick();assert.equal(game.phase,'combat');tick();
+  assert.deepEqual(results.filter(([id])=>id===592).at(-1),[592,0,'The battle ended without a winner.']);
+  for (const p of victims) assert.equal(PM.emitShouldDropItemsOnDeath(p,null),false);
+  finishedMatch(game,players);tick(4);
+  for (const [index,p] of victims.entries()) {assert.equal(Match.dying.has(p),false);assert.deepEqual(carriedItems(p),inventories[index]);}
+});
+
+test('Ignore 5 finishes a No penalty departure without crediting a death',async()=>{
+  const {a,teams,players,game}=await stragglerGame(6,1,3,{leavingcc:1});const results=scriptCalls(a);
+  completePreparation(game);await wire(teams[1][1],channelFrame('leave'));
+  assert.deepEqual(game.kills,[0,0]);assert.deepEqual(results.filter(([id])=>id===592).at(-1),[592,1,'Your team won the battle.']);
+  finishedMatch(game,players);
+});
+
+test('Ignore 5 threshold finish restores an actual jailed viewing owner and releases the whole instance',async()=>{
+  const {b,teams,players,game}=await stragglerGame(7,1);completePreparation(game);
+  const viewer=teams[0][1];await lethalMelee(b,viewer,game);tick(4);
+  assert.equal(game.phase,'combat');assert.equal(game.jailed.has(viewer),true);
+  await openView(viewer,game);assert.equal(viewingUnit().active.get(viewer).game,game);
+  viewer.nativePackets.length=0;
+  await lethalMelee(b,teams[0][2],game);tick();
+  finishedMatch(game,players);
+  assert.equal(viewer.isAppearanceHidden(),false);assert.equal(viewer.getPacketSender().getCameraState().mode,'follow');
+  const { encodeCameraReset }=require('../dist/net/protocol/ClientProtocol');
+  assert.ok(viewer.nativePackets.some(frame=>frame.equals(encodeCameraReset())),'real threshold cleanup emitted a camera reset');
+  tick(4);assert.equal(Match.dying.size,0);
+});

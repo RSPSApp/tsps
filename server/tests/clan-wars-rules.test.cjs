@@ -17,7 +17,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
     wincondition: 15, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 3,
-    food: 2, drinks: 2, specialattacks: 1, stragglers: 1, freezing: 1,
+    food: 2, drinks: 2, specialattacks: 1, stragglers: 2, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
   for (const [key, value] of Object.entries(changes)) {
@@ -125,12 +125,32 @@ test("membership terms preserve each battle family and reject unsupported depart
     assert.equal(Rules.validate(rules),true);
     const text=Rules.summary(rules);
     assert.match(text,leavingcc?/Leaving the chat-channel incurs no death penalty/:/Leaving the chat-channel counts as a death/);
-    assert.match(text,rejoiningdelay?/60-second wait/:/no additional rejoining delay/);
+    assert.match(text,rejoiningdelay ? mode ? /60-second wait/ : /60-second rejoining delay cannot reopen entry/
+      : /no additional rejoining delay/);
+    if (!mode && rejoiningdelay) assert.doesNotMatch(text,/returning to this battle requires a 60-second wait/);
     if (rejoiningdelay) assert.doesNotMatch(text,/rejoining is unrestricted/);
     if (!mode) assert.match(text,/No joining or rejoining after/);
   }
   for (const key of ['leavingcc','rejoiningdelay']) for (const value of [-1,2,0.5,'1',null,NaN,Infinity]) {
     assert.equal(Rules.validate({...Rules.create(),[key]:value}),false);
+  }
+});
+
+test("revision 242 stragglers thresholds are supported only for Last Team Standing", () => {
+  assert.deepEqual(Rules.STRAGGLER_LIMITS,[0,5]);
+  for (const playercap of [0,1,2,3,7]) for (const stragglers of [0,1]) {
+    const rules={...Rules.create(playercap,0),stragglers};
+    assert.equal(Rules.validate(rules),true,'the variant invents no minimum team cap');
+    const text=Rules.summary(rules);
+    assert.match(text,stragglers?/Ignore 5.*five or fewer fighters remaining loses/:/Kill 'em all.*no fighters remaining loses/);
+    if (stragglers) assert.match(text,/both teams have five or fewer fighters.*without a winner/);
+  }
+  for (const mode of [1,8,16,20]) {
+    assert.equal(Rules.validate({...Rules.create(3,mode),stragglers:0}),true);
+    assert.equal(Rules.validate({...Rules.create(3,mode),stragglers:1}),false);
+  }
+  for (const stragglers of [-1,2,0.5,'1',null,NaN,Infinity]) {
+    assert.equal(Rules.validate({...Rules.create(),stragglers}),false);
   }
 });
 

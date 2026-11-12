@@ -9,6 +9,7 @@
  * Objective modes remain unsupported.
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
  * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
+ * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
  * Staff-of-the-Dead-only, other combat restrictions and modern clans remain deferred.
  */
 const OFFERED_RULES = Object.freeze({
@@ -39,6 +40,7 @@ const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 12
 // GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE is 600ms; HUD script213
 // multiplies this tick count by 30 client cycles (script744 uses 50 cycles/s).
 const TICKS_PER_MINUTE = 100;
+const STRAGGLER_LIMITS = Object.freeze([0, 5]);
 const RESTRICTIONS = Object.freeze({
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),
@@ -65,6 +67,9 @@ function validate(rules) {
     } else if (key === "wincondition") {
       if ((descriptor.value < 0 || descriptor.value >= KILL_TARGETS.length)
         && !TIME_LIMIT_MINUTES[descriptor.value]) return false;
+    } else if (key === "stragglers") {
+      if (descriptor.value < 0 || descriptor.value >= STRAGGLER_LIMITS.length
+        || descriptor.value === 1 && Object.getOwnPropertyDescriptor(rules, "wincondition")?.value !== 0) return false;
     } else if (RESTRICTIONS[key]) {
       if (!RESTRICTIONS[key].includes(descriptor.value)) return false;
     } else if (descriptor.value !== OFFERED_RULES[key]) return false;
@@ -107,9 +112,12 @@ function summary(rules) {
     respawning ? "Two minutes to prepare. Joining and rejoining remain open during the battle."
       : "Two minutes to enter and prepare. No joining or rejoining after the battle begins.",
     respawning ? "Defeated fighters go to jail and may return to battle."
-      : "The team with no fighters remaining loses.",
+      : rules.stragglers === 1 ? "Stragglers: Ignore 5. A team with five or fewer fighters remaining loses."
+        : "Stragglers: Kill 'em all. The team with no fighters remaining loses.",
+    ...(!respawning && rules.stragglers === 1 ? ["If both teams have five or fewer fighters when checked, the battle ends without a winner."] : []),
     rules.leavingcc ? "Leaving the chat-channel incurs no death penalty." : "Leaving the chat-channel counts as a death.",
-    rules.rejoiningdelay ? "After death, returning to this battle requires a 60-second wait."
+    rules.rejoiningdelay ? respawning ? "After death, returning to this battle requires a 60-second wait."
+      : "The selected 60-second rejoining delay cannot reopen entry after Last Team Standing begins."
       : "There is no additional rejoining delay.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
     "Melee combat only. Ranged and magical combat are disabled.",
@@ -123,4 +131,4 @@ function summary(rules) {
   ].join("<br>");
 }
 
-module.exports = { OFFERED_RULES, RESTRICTIONS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, validate, create, teamCap, killTarget, timeLimitTicks, respawns, summary };
+module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, validate, create, teamCap, killTarget, timeLimitTicks, respawns, summary };

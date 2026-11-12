@@ -393,6 +393,26 @@ test("free-for-all: in a tick after the click, restored; the arena shows Attack 
   assert.equal(restores(p), 2, "leaving restores again");
 });
 
+// Wiki (Imbued heart): going through the free-for-all portal resets its cooldown ("free-for-all-portal:used").
+test("free-for-all: the portal both ways announces itself for the imbued heart's reset", () => {
+  const Common = require("../plugins/areas/ferox/Common.FeroxEnclave");
+  const used = [];
+  const original = Common.api;
+  const stub = new Proxy({ core: Common.core, emitCustomEvent: (name, event) => { if (name === "free-for-all-portal:used") used.push(event.player); } }, { get: (t, k) => k in t ? t[k] : original?.[k] });
+  Common.init(stub);
+  try {
+    const { enter, FreeForAllArena } = ffaHarness();
+    const p = arenaPlayer(new Location(3127, 3627, 0));
+    enter({ player: p });
+    p.nextTick();
+    runTicks(p, 1);
+    new FreeForAllArena([]).postLeave(p, false);
+    assert.deepEqual(used, [p, p]);
+  } finally {
+    if (original) Common.init(original);
+  }
+});
+
 test("free-for-all: anyone may attack anyone past the line (8875, y 4759-4760); not from the safe zone", () => {
   const { FreeForAllArena } = ffaHarness();
   const arena = new FreeForAllArena([]);

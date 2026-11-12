@@ -22,6 +22,7 @@ const SATURATED_COOLDOWN_MS = 5 * 60 * 1000;
 let invigorate;
 let invigorateSaturated;
 let resetOnDeath;
+const feroxResets = {};
 let processPlayer;
 let holdBoost;
 let useEssence;
@@ -40,7 +41,7 @@ before(async () => {
     },
     onPlayerDeath: (handler) => { resetOnDeath = handler; },
     onPlayerProcess: (handler) => { processPlayer = handler; },
-    onCustomEvent: (name, handler) => { if (name === "stats:boost-held") holdBoost = handler; },
+    onCustomEvent: (name, handler) => { if (name === "stats:boost-held") holdBoost = handler; feroxResets[name] = handler; },
     onItemOnItem: (first, second, handler) => {
       assert.deepEqual([first, second], ["Ancient essence", "Imbued heart"]);
       useEssence = handler;
@@ -145,6 +146,18 @@ test("death clears the wait (Wiki, 15 August 2019)", () => {
   use(player);
   assert.equal(player.messages.length, 0, "no refusal, so the heart was ready again");
   assert.ok(player.attributes.get(READY_AT) > Date.now(), "and a fresh seven minutes started");
+});
+
+// Wiki (Imbued heart): the free-for-all (white) portal or the Pool of Refreshment resets the cooldown.
+test("the Pool of Refreshment and the free-for-all portal clear the wait", () => {
+  for (const event of ["pool-of-refreshment:drunk", "free-for-all-portal:used"]) {
+    const { player } = createPlayer({ base: 99 });
+    use(player);
+    assert.ok(player.attributes.get(READY_AT) > Date.now());
+    assert.equal(typeof feroxResets[event], "function", event);
+    feroxResets[event]({ player });
+    assert.equal(player.attributes.get(READY_AT), 0, event);
+  }
 });
 
 test("only the activatable item offers Invigorate, so notes and placeholders never reach it", () => {

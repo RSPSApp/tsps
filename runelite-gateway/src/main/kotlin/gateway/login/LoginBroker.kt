@@ -34,6 +34,25 @@ class LoginBroker(
             { runnable -> Thread(runnable, "login-utilities-http").apply { isDaemon = true } },
             ThreadPoolExecutor.AbortPolicy(),
         )
+    private val busy = ThreadLocal.withInitial { false }
+    /**
+     * Requests the workers cannot take run here and are answered "busy" at once, so a burst beyond
+     * 36 logins gets a reply instead of a connection the HTTP server drops unanswered.
+     */
+    private val overflow =
+        ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            ArrayBlockingQueue(64),
+            { runnable ->
+                Thread({ busy.set(true); runnable.run() }, "login-utilities-busy").apply {
+                    isDaemon = true
+                }
+            },
+            ThreadPoolExecutor.DiscardPolicy(),
+        )
     private val timer =
         Executors.newSingleThreadScheduledExecutor {
             Thread(it, "login-utilities-expiry").apply { isDaemon = true }
@@ -103,13 +122,20 @@ class LoginBroker(
     }
 
     init {
-        server.executor = workers
+        server.executor = Executor { task ->
+            try {
+                workers.execute(task)
+            } catch (_: RejectedExecutionException) {
+                overflow.execute(task)
+            }
+        }
         server.createContext("/login-utilities/v1/session") { exchange ->
             var socket: TspsSocket? = null
             var retained = false
             try {
                 exchange.responseHeaders.set("Cache-Control", "no-store")
                 exchange.responseHeaders.set("Content-Type", "text/plain; charset=utf-8")
+                require(!busy.get())
                 // Only Caddy may reach this loopback listener. It replaces this header.
                 val ip =
                     normalizeIp(exchange.requestHeaders.getFirst("X-Real-IP") ?: "")
@@ -235,6 +261,7 @@ class LoginBroker(
         server.stop(0)
         timer.shutdownNow()
         workers.shutdownNow()
+        overflow.shutdownNow()
         tickets.values.forEach { it.close() }
         tickets.clear()
     }

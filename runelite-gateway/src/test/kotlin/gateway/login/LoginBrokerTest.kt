@@ -18,9 +18,12 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class LoginBrokerTest {
-    private class Backend : AutoCloseable {
+    /** With [hold], login replies wait for [release] so the broker's workers stay busy. */
+    private class Backend(private val hold: Boolean = false) : AutoCloseable {
         val packets = LinkedBlockingQueue<TspsReader>()
         val flags = LinkedBlockingQueue<Int>()
+        private val held = ArrayList<Pair<ChannelHandlerContext, ByteArray>>()
+        private var released = false
         val group = NioEventLoopGroup(1)
         val channel =
             ServerBootstrap()
@@ -60,6 +63,12 @@ class LoginBrokerTest {
                                                     .string(name)
                                                     .string(if (ok) "a".repeat(43) else "")
                                                     .varByte(TspsServerPacket.LOGIN_RESPONSE)
+                                            synchronized(held) {
+                                                if (hold && !released) {
+                                                    held.add(ctx to response)
+                                                    return
+                                                }
+                                            }
                                             ctx.writeAndFlush(
                                                 BinaryWebSocketFrame(
                                                     Unpooled.wrappedBuffer(response)
@@ -77,6 +86,16 @@ class LoginBrokerTest {
         val port
             get() = (channel.localAddress() as InetSocketAddress).port
 
+        fun release() {
+            val replies =
+                synchronized(held) {
+                    released = true
+                    held.toList().also { held.clear() }
+                }
+            for ((ctx, response) in replies)
+                ctx.writeAndFlush(BinaryWebSocketFrame(Unpooled.wrappedBuffer(response)))
+        }
+
         override fun close() {
             channel.close().syncUninterruptibly()
             group.shutdownGracefully().syncUninterruptibly()
@@ -90,6 +109,7 @@ class LoginBrokerTest {
         kind: String = "password",
         secret: String = "test-password",
         origin: Boolean = false,
+        ip: String = "127.0.0.1",
     ): List<String> {
         val encoder = Base64.getEncoder()
         val body =
@@ -103,7 +123,7 @@ class LoginBrokerTest {
             java.net.http.HttpRequest.newBuilder(
                     URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
                 )
-                .header("X-Real-IP", "127.0.0.1")
+                .header("X-Real-IP", ip)
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
         if (origin) request.header("Origin", "https://untrusted.invalid")
         return HttpClient.newHttpClient()
@@ -165,6 +185,38 @@ class LoginBrokerTest {
                 assertEquals(1, backend.flags.poll(5, TimeUnit.SECONDS))
                 assertEquals(listOf("ERROR", "8"), request(port, origin = true))
                 assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun `requests beyond the worker queue get a busy reply instead of a dropped connection`() {
+        Backend(hold = true).use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(48)
+                try {
+                    // Distinct addresses so the per-address limit is not what refuses them.
+                    val replies =
+                        (0 until 48).map { i ->
+                            pool.submit<Result<List<String>>> {
+                                runCatching { request(port, ip = "192.0.2.${i + 1}") }
+                            }
+                        }
+                    // 4 workers and 32 queue slots can hold at most 36 logins.
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+                    while (replies.count { it.isDone } < 12 && System.nanoTime() < deadline)
+                        Thread.sleep(20)
+                    backend.release()
+                    val results = replies.map { it.get(30, TimeUnit.SECONDS) }
+                    results.forEach { assertTrue(it.isSuccess, "Dropped: ${it.exceptionOrNull()}") }
+                    val bodies = results.map { it.getOrThrow() }
+                    assertTrue(bodies.count { it == listOf("ERROR", "8") } >= 12)
+                    assertTrue(bodies.count { it.firstOrNull() == "OK" } >= 4)
+                    assertTrue(bodies.all { it.firstOrNull() == "OK" || it == listOf("ERROR", "8") })
+                } finally {
+                    pool.shutdownNow()
+                }
             }
         }
     }

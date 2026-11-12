@@ -12,6 +12,11 @@ const { DamageFormulas } = require("../dist/game/content/combat/formula/DamageFo
 const { ItemIds } = require("../dist/util/IdEnums");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
+const { Animation } = require("../dist/game/model/Animation");
+const { Graphic } = require("../dist/game/model/Graphic");
+const { ChatType } = require("../dist/net/protocol/ClientProtocol");
+const { DialogueChainBuilder } = require("../dist/game/model/dialogues/builders/DialogueChainBuilder");
+const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
 
 const plugin = require("../plugins/skills/PrayerUnlocks.plugin");
 
@@ -26,7 +31,10 @@ const itemActions = new Map();
 let prayerDisabledHook = null;
 let prompt = null;
 plugin.register({
-  core: { PrayerData, PrayerHandler, ItemIdentifiers: ItemIds, Skill },
+  core: {
+    PrayerData, PrayerHandler, ItemIdentifiers: ItemIds, Skill,
+    Animation, Graphic, ChatType, DialogueChainBuilder, ItemStatementDialogue,
+  },
   persistAttribute() {},
   onPlayerLogin() {},
   onPrayerDisabled(handler) { prayerDisabledHook = handler; },
@@ -45,14 +53,20 @@ function nativePlayer(t, { prayer = 99, attributes = {}, items = [] } = {}) {
   const player = new Player(null);
   const varbits = [];
   const messages = [];
+  const sent = [];
   const sender = new Proxy({}, {
     get: (_target, name) => (...args) => {
       if (name === "sendVarbit") varbits.push([args[0], args[1]]);
+      else sent.push([name, ...args]);
       return sender;
     },
   });
   t.mock.method(player, "getPacketSender", () => sender);
   t.mock.method(player, "sendMessage", (text) => messages.push(text));
+  t.mock.method(player, "performAnimation", (animation) => sent.push(["seq", animation.getId()]));
+  t.mock.method(player, "performGraphic", (graphic) => sent.push(["spotanim", graphic.getId()]));
+  const dialogues = [];
+  t.mock.method(player, "getDialogueManager", () => ({ startDialogues: (chain) => dialogues.push(chain) }));
   player.setRegistered(true);
   player.getSkillManager().setMaxLevel(Skill.PRAYER, prayer, false);
   player.getSkillManager().setCurrentLevel(Skill.PRAYER, prayer, false);
@@ -68,32 +82,54 @@ function nativePlayer(t, { prayer = 99, attributes = {}, items = [] } = {}) {
       if (index !== -1) inventory.splice(index, 1);
     },
   }));
-  return { player, varbits, messages };
+  return { player, varbits, messages, sent, dialogues };
 }
 
 const vigour = { "prayer:mystic-vigour-unlocked": true };
 const deadeye = { "prayer:deadeye-unlocked": true };
 
 test("the scrolls teach Deadeye and Mystic Vigour without locking Eagle Eye or Mystic Might", (t) => {
-  for (const [name, item, attribute, varbit, learn] of [
-    ["Deadeye prayer scroll", ItemIds.DEADEYE_PRAYER_SCROLL, "prayer:deadeye-unlocked", DEADEYE_UNLOCKED, "Learn Deadeye"],
-    ["Mystic vigour prayer scroll", ItemIds.MYSTIC_VIGOUR_PRAYER_SCROLL, "prayer:mystic-vigour-unlocked", MYSTIC_VIGOUR_UNLOCKED, "Learn Mystic Vigour"],
+  for (const [name, item, attribute, varbit, learn, line, seq, spotanim] of [
+    ["Deadeye prayer scroll", ItemIds.DEADEYE_PRAYER_SCROLL, "prayer:deadeye-unlocked", DEADEYE_UNLOCKED, "Learn Deadeye",
+      "<col=7f0000>Deadeye</col>", 12019, 3228],
+    ["Mystic vigour prayer scroll", ItemIds.MYSTIC_VIGOUR_PRAYER_SCROLL, "prayer:mystic-vigour-unlocked", MYSTIC_VIGOUR_UNLOCKED,
+      "Learn Mystic vigour", "<col=7f0000>Mystic <col=7f0000>Vigour</col>", 12020, 3229],
   ]) {
-    const { player, varbits, messages } = nativePlayer(t, { items: [item] });
+    const { player, varbits, sent, dialogues } = nativePlayer(t, { items: [item] });
     for (const prayer of ["EAGLE_EYE", "MYSTIC_MIGHT"]) {
       const event = { player, prayer: PrayerData[prayer] };
       prayerDisabledHook(event);
       assert.notEqual(event.disabled, true, `${prayer} needs no scroll`);
     }
     prompt = null;
+    sent.length = 0;
     assert.equal(itemActions.get(name).Read({ player, itemId: item }), true);
     assert.match(prompt.title, /archaic invocation of the gods/);
     prompt.options.find((option) => option.text === learn).callback();
     assert.equal(player.getAttribute(attribute), true, name);
     assert.equal(player.getInventory().contains(item), false, "the scroll is consumed");
     assert.deepEqual(varbits, [[varbit, 1]], name);
-    assert.equal(messages.at(-1), `You study the scroll and learn a new prayer: ${learn.slice(6)}`);
+    // rsprox 235/03398.txt [479] (Mystic vigour) and [736] (Deadeye).
+    const text = `You study the scroll and learn a new prayer: ${line}`;
+    assert.deepEqual(sent, [
+      ["sendTypedMessage", ChatType.MESBOX, text],
+      ["seq", seq],
+      ["spotanim", spotanim],
+      ["sendSoundEffect", 2655, 1, 0, 1],
+      ["sendTab", 5],
+    ], name);
+    assert.equal(dialogues.length, 1, "an objectbox of the scroll follows");
   }
+});
+
+test("the Deadeye / Mystic vigour scroll's Learn box shows the scroll with the learned line", (t) => {
+  const { player, dialogues } = nativePlayer(t, { items: [ItemIds.MYSTIC_VIGOUR_PRAYER_SCROLL] });
+  itemActions.get("Mystic vigour prayer scroll").Read({ player, itemId: ItemIds.MYSTIC_VIGOUR_PRAYER_SCROLL });
+  prompt.options.find((option) => option.text === "Learn Mystic vigour").callback();
+  const entry = dialogues[0].getDialogues().get(0);
+  assert.ok(entry instanceof ItemStatementDialogue);
+  assert.equal(entry.getItemId(), ItemIds.MYSTIC_VIGOUR_PRAYER_SCROLL);
+  assert.equal(entry.getText(), "You study the scroll and learn a new prayer: <col=7f0000>Mystic <col=7f0000>Vigour</col>");
 });
 
 test("below 62 / 63 Prayer the scroll can't be read, so Eagle Eye and Mystic Might stay (Wiki)", (t) => {

@@ -47,6 +47,10 @@ const KINGS_RANSOM_KEY = "kings_ransom";
 const SCROLL_INTRO = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods! Would you like to absorb its power? "
   + "This will consume the scroll.";
+// rsprox 235/03398.txt [479]/[736]: the Learn synth, and toplevel_sidebutton_switch's prayer tab.
+const SCROLL_LEARNED_SOUND = 2655;
+const PRAYER_TAB = 5;
+const LEARNED_COLOUR = "<col=7f0000>";
 const ALREADY_LEARNED = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods. However there's nothing more for you to learn.";
 
@@ -71,16 +75,21 @@ function scrolls() {
   ];
 }
 
-/** Scrolls that upgrade a book slot's prayer rather than unlock one (`upgrades` is the slot's prayer id). */
+/**
+ * Scrolls that upgrade a book slot's prayer rather than unlock one (`upgrades` is the slot's prayer id).
+ * rsprox 235/03398.txt ticks [477]-[479] (Mystic vigour) and [735]-[736] (Deadeye): the menu reads
+ * "Learn Mystic vigour" (`prompt`), and Learn plays `learned` (human_male_prayer_scroll_read_01_*,
+ * vfx_human_prayer_scroll_read_0*_*) with synth 2655.
+ */
 function upgradeScrolls() {
   const { ItemIdentifiers, PrayerData, PrayerHandler } = core;
   return [
     { itemId: ItemIdentifiers.DEADEYE_PRAYER_SCROLL, prayer: PrayerData.EAGLE_EYE, name: "Deadeye",
       attribute: PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, varbit: DEADEYE_UNLOCKED_VARBIT, upgrades: PrayerHandler.EAGLE_EYE,
-      readLevel: 62 },
+      readLevel: 62, learned: { seq: 12019, spotanim: 3228 } },
     { itemId: ItemIdentifiers.MYSTIC_VIGOUR_PRAYER_SCROLL, prayer: PrayerData.MYSTIC_MIGHT, name: "Mystic Vigour",
-      attribute: PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, varbit: MYSTIC_VIGOUR_UNLOCKED_VARBIT,
-      upgrades: PrayerHandler.MYSTIC_MIGHT, readLevel: 63 },
+      prompt: "Mystic vigour", attribute: PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, varbit: MYSTIC_VIGOUR_UNLOCKED_VARBIT,
+      upgrades: PrayerHandler.MYSTIC_MIGHT, readLevel: 63, learned: { seq: 12020, spotanim: 3229 } },
   ];
 }
 
@@ -213,9 +222,27 @@ function learnScroll(player, scroll) {
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
   if (scroll.upgrades !== undefined) core.PrayerHandler.syncUpgrade(player, scroll.upgrades);
-  player.sendMessage(`You study the scroll and learn a new prayer: ${scroll.name}`);
+  if (scroll.learned) showLearned(player, scroll);
+  else player.sendMessage(`You study the scroll and learn a new prayer: ${scroll.name}`);
   // "prayer:scroll-read" { player, itemId }: a prayer scroll read, its prayer learnt.
   api.emitCustomEvent("prayer:scroll-read", { player, itemId: scroll.itemId });
+}
+
+/**
+ * rsprox 235/03398.txt [479]/[736]: the line in chat (mesbox) with the name in dark red, the read
+ * animation and graphic, synth 2655, the prayer tab, then the same line in an objectbox of the scroll.
+ */
+function showLearned(player, scroll) {
+  const { Animation, Graphic, ChatType, ItemStatementDialogue, DialogueChainBuilder } = core;
+  const name = scroll.name.split(" ").map((word) => `${LEARNED_COLOUR}${word}`).join(" ");
+  const line = `You study the scroll and learn a new prayer: ${name}</col>`;
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, line);
+  player.performAnimation(new Animation(scroll.learned.seq));
+  player.performGraphic(new Graphic(scroll.learned.spotanim));
+  player.getPacketSender().sendSoundEffect(SCROLL_LEARNED_SOUND, 1, 0, 1);
+  player.getPacketSender().sendTab(PRAYER_TAB);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, scroll.itemId, line)));
 }
 
 function readScroll(event) {
@@ -236,7 +263,7 @@ function readScroll(event) {
   api.sendMultiChatboxPrompt(
     event.player,
     SCROLL_INTRO,
-    `Learn ${scroll.name}`,
+    `Learn ${scroll.prompt ?? scroll.name}`,
     () => learnScroll(event.player, scroll),
     "Cancel",
     () => {},
